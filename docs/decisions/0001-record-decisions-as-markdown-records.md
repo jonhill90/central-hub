@@ -10,12 +10,12 @@ waits-on: []
 supersedes: []
 superseded-by:
 accepted-evidence:
-  quote: "yea i approved the prs i thought you were watching or maybei have a disconnect. was my approval and brnach delete not what i needed to do?"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNHW75whs4vzVTb5uHPycKxi
-  timestamp: 2026-10-11T07:28:13Z
+  quote: "so accept"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNC3VZmTAMC2buEXh8pCC9LJ
+  timestamp: 2026-10-11T07:31:12Z
   approved-commit: 58cd4eac2e491310777d1f18d033b82aee2e5302
   merged: jonhill90 merged PR #1 at 2026-10-11T07:22Z; the merged record matches the approved commit exactly
-  quote-check: the drafting agent read the message in the project thread at 2026-10-11T07:30Z and it matches; an independent check by a reviewing agent is still to do
+  quote-check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and Jon had said "yea i approved the prs" at 07:28:13Z; an independent check by a reviewing agent is still to do
 legacy-id: [W1, W2]
 revisit-when: a knowledge system (K1) is chosen that should own decisions, or the flat folder becomes hard to use
 ---
