@@ -1,7 +1,7 @@
 ---
 id: D-0002
 title: Use one main branch, environments as folders, and type-named short-lived branches
-status: proposed
+status: accepted
 date: 2026-10-11
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -10,6 +10,12 @@ waits-on: [D-0001]
 supersedes: []
 superseded-by:
 accepted-evidence:
+  quote: "yea i approved the prs i thought you were watching or maybei have a disconnect. was my approval and brnach delete not what i needed to do?"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNHW75whs4vzVTb5uHPycKxi
+  timestamp: 2026-10-11T07:28:13Z
+  approved-commit: f502561d0887c5247bc5ec9624e930b0b9e97b4d
+  merged: jonhill90 merged PR #2 at 2026-10-11T07:25Z; the merged record matches the approved commit exactly
+  quote-check: the drafting agent read the message in the project thread at 2026-10-11T07:30Z and it matches; an independent check by a reviewing agent is still to do
 legacy-id: [S4]
 revisit-when: a second person gets merge rights with different trust per environment; rendered per-environment diffs become worth an extra moving part; a contributor appears whose tool can't name branches by type; or a search of real repositories finds environment branches working well for pull-based config (no such search has been run)
 ---
