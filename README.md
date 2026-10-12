@@ -1,5 +1,9 @@
 # central-hub
 
-The Central Hub platform repository. Nothing here is built yet: decisions come first, one at a time, each reviewed and approved by Jon.
+The Central Hub platform repository.
 
-Decisions will live in `docs/decisions/`.
+**Status: Foundation.** Nothing here is built or deployed yet. Decisions come first, one at a time, each reviewed and approved by Jon.
+
+- Decisions: `docs/decisions/`
+- Agents: start with `AGENTS.md`
+- Security reports: `SECURITY.md`
