@@ -1,7 +1,7 @@
 ---
 id: D-0003
 title: Use a few registered global ID families; write every other label with its file name
-status: proposed
+status: accepted
 date: 2026-10-12
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -10,6 +10,12 @@ waits-on: [D-0001]
 supersedes: []
 superseded-by:
 accepted-evidence:
+  quote: "accept. But i am worried about data in the ADRs refering the docs on my macbook. I feel that we are also tieing the system to much to the claude harness. Its fine for now but we will need to got back and remove that noise."
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwN1Gnn97mj1fpLXFxgZq2sb9
+  timestamp: 2026-10-12T05:24:34Z
+  approved-commit: 426ba8fe09c25d09a53d4578499374b1029bf8c2
+  merged: not yet; Jon merges PR #4, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the project thread at 2026-10-12T05:24Z, and the quote matches its opening sentences. It answers "look at PR #4 and write accept again" (same thread, 05:21Z), sent after the diagram commit 426ba8f. An earlier bare "accept" at 05:19:35Z predates the diagram, so it is not counted. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: a family needs numbers faster than one owner can hand them out; agents start citing local labels across repos often enough that they need global IDs; a tool or knowledge system is adopted that brings its own ID scheme; or the registry grows past about 10 families
 ---
