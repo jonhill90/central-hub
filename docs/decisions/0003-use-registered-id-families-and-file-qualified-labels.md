@@ -53,6 +53,20 @@ Chosen option: **1, the hybrid.** It is the only option that meets all six drive
 
 ### The rules
 
+```mermaid
+flowchart LR
+  subgraph G["Global IDs (say them anywhere)"]
+    R["Family registry<br/>D- decisions<br/>SR requirements"]
+  end
+  subgraph L["Local labels (everything else)"]
+    F["FILE#LABEL<br/>e.g. DECISION-MAP#P1"]
+  end
+  D1["Draft<br/>no number"] -->|owner numbers it| N["D-0007<br/>proposed"]
+  N --> A["accepted"] --> S["superseded<br/>kept, never reused"]
+  F -. promoted .-> N
+  N -. legacy-id .-> F
+```
+
 1. **Global IDs are only for things cited across files, repos and chats.** Start with the two families that already exist in active records and have never clashed:
 
    | Family | Pattern | Example | Home register | Who numbers it |
