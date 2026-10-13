@@ -10,7 +10,7 @@ waits-on: [D-0001]
 supersedes: []
 superseded-by:
 accepted-evidence:
-  quote: "accept. But i am worried about data in the ADRs refering the docs on my macbook. I feel that we are also tieing the system to much to the claude harness. Its fine for now but we will need to got back and remove that noise."
+  quote: "Accept. But I am worried about data in the ADRs referring to the docs on my MacBook. I feel that we are also tying the system too much to the Claude harness. It's fine for now, but we will need to go back and remove that noise."
   message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwN1Gnn97mj1fpLXFxgZq2sb9
   timestamp: 2026-10-12T05:24:34Z
   approved-commit: 426ba8fe09c25d09a53d4578499374b1029bf8c2
@@ -132,3 +132,5 @@ flowchart LR
   - agent-estate `register.go:571-591` may reuse a deleted `SRC-` number. Inferred from the code, not tested.
   - INMAPS has two 12-digit note-ID shapes that can look identical.
 - Open question for later: should open backlog items get a global family, or stay `DECISION-MAP#…`?
+
+_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._

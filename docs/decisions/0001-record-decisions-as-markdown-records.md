@@ -15,7 +15,7 @@ accepted-evidence:
   timestamp: 2026-10-11T07:31:12Z
   approved-commit: 58cd4eac2e491310777d1f18d033b82aee2e5302
   merged: jonhill90 merged PR #1 at 2026-10-11T07:22Z; the merged record matches the approved commit exactly
-  quote-check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and Jon had said "yea i approved the prs" at 07:28:13Z; an independent check by a reviewing agent is still to do
+  quote-check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and Jon had said "Yeah, I approved the PRs." at 07:28:13Z; an independent check by a reviewing agent is still to do
 legacy-id: [W1, W2]
 revisit-when: a knowledge system (K1) is chosen that should own decisions, or the flat folder becomes hard to use
 ---
@@ -158,3 +158,5 @@ Until each of these is checked, acceptance stays by convention.
   - Moving the location is a `git mv`.
   - A format change is a script that maps front-matter keys.
   - Moving to the future knowledge system means importing Markdown and front matter. The approval evidence travels inside each record.
+
+_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
