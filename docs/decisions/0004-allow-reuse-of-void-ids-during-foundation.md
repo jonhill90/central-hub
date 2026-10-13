@@ -15,7 +15,7 @@ accepted-evidence:
   timestamp: 2026-10-13T06:18:47Z
   approved-commit: 85ce152e6e105f4406473c5912be63d0e8f3f43b
   merged: not yet; Jon merges PR #7, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the Rules table thread at 2026-10-13T06:18Z, and the quote matches exactly. It answers the agent's message in the same thread, (06:17:02Z), which named PR #7 and head 85ce152 and asked for "accept" naming both. The message itself names neither, so it relies on that context, as D-0003's acceptance did. An independent check by a reviewing agent is still to do.
+  quote-check: the drafting agent read the message in the Rules table thread at 2026-10-13T06:18Z, and the quote matches exactly. It answers the agent's message in the same thread (06:17:02Z), which named PR #7 and head 85ce152 and asked for "accept" naming both. The message itself names neither, so it relies on that context, as D-0003's acceptance did. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: the Activation gate passes; an ID family is referenced from outside Jon's own repositories and project; or a reuse leaves a reference that a search missed
 ---
