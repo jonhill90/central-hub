@@ -15,7 +15,7 @@ accepted-evidence:
   timestamp: 2026-10-11T07:31:12Z
   approved-commit: f502561d0887c5247bc5ec9624e930b0b9e97b4d
   merged: jonhill90 merged PR #2 at 2026-10-11T07:25Z; the merged record matches the approved commit exactly
-  quote-check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and Jon had said "yea i approved the prs" at 07:28:13Z; an independent check by a reviewing agent is still to do
+  quote-check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and Jon had said "Yeah, I approved the PRs." at 07:28:13Z; an independent check by a reviewing agent is still to do
 legacy-id: [S4]
 revisit-when: a second person gets merge rights with different trust per environment; rendered per-environment diffs become worth an extra moving part; a contributor appears whose tool can't name branches by type; or a search of real repositories finds environment branches working well for pull-based config (no such search has been run)
 ---
@@ -24,7 +24,7 @@ revisit-when: a second person gets merge rights with different trust per environ
 
 ## Context and Problem Statement
 
-Jon asked (2026-10-11): "Is it main or is it dev stage prod or dev qa prod or dev prod or what. I know we will start with things like feature/ or bug/ or chore/ etc."
+Jon asked (2026-10-11): "Is it main, or is it dev/stage/prod, or dev/QA/prod, or dev/prod, or what? I know we will start with things like feature/ or bug/ or chore/, etc."
 
 central-hub will be a GitOps repo once the Activation gate passes (Foundation §6): a cluster will pull its desired state from git. It starts with one VPS cluster and grows into home Kubernetes. One person, Jon, merges every PR, and agents open most of them. The repo is still empty, so its first branch needs a name, and the Foundation proposal (§3.1) assumes `main`.
 
@@ -170,3 +170,5 @@ Jon answered all three, the last two on the condition that the rule comes from s
   - To pin prod to a release: point prod at a commit, or at a tag protected from being moved, and compare renders before switching.
   - Any change of source can change what the engine owns or prunes, so each switch is checked, not assumed cheap.
   - To change the type list or spelling: write a successor record and update the check. No cluster reads branch names.
+
+_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
