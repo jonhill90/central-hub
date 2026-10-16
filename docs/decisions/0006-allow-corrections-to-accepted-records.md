@@ -1,5 +1,5 @@
 ---
-id: D-0007
+id: D-0006
 title: Correct an accepted record in place when the decision does not change
 status: proposed
 date: 2026-10-16
@@ -21,7 +21,7 @@ revisit-when: agents get their own GitHub identities (Activation gate item 1); a
 
 D-0001 says an accepted record's body never changes, and "a changed decision is a new record that supersedes the old one". It has no separate path for an error that leaves the decision the same.
 
-D-0005 was accepted on 2026-10-16 with two internal inconsistencies and a wording slip. The decision is unchanged, but D-0001 left only one route: D-0006 (PR #9), a full restatement of D-0005 with three small changes. Jon questioned that (Central Hub project, ADR corrections thread, 2026-10-16 07:56 UTC): "Got words wrong in the first one, so make an almost identical one with small changes. And oops, I got it wrong again, so I need to make a new one. This could be very bad for something that needs to be iterated on a lot."
+D-0005 was accepted on 2026-10-16 with two internal inconsistencies and a wording slip. The decision is unchanged, but D-0001 left only one route: a full restatement of D-0005 with three small changes (drafted in PR #9, closed unmerged). Jon questioned that (Central Hub project, ADR corrections thread, 2026-10-16 07:56 UTC): "Got words wrong in the first one, so make an almost identical one with small changes. And oops, I got it wrong again, so I need to make a new one. This could be very bad for something that needs to be iterated on a lot."
 
 This record decides how an error in an accepted record is fixed. It amends D-0001's immutability rule and does not supersede D-0001.
 
@@ -84,15 +84,15 @@ Spelling and punctuation tidies of Jon's quoted words in a record's body, as in 
 
 ### Change to D-0001
 
-This record amends one bullet of D-0001, "Immutability". From acceptance, it reads in effect: *once a record is accepted, its body changes only through a correction under D-0007 or a new record. A changed decision is a new record that supersedes the old one.*
+This record amends one bullet of D-0001, "Immutability". From acceptance, it reads in effect: *once a record is accepted, its body changes only through a correction under D-0006 or a new record. A changed decision is a new record that supersedes the old one.*
 
-D-0001's own body stays as it is. This record adds two optional fields to D-0001's field contract: `amends` (list of IDs) on a record that changes part of another record without replacing it, and `amended-by` (list of IDs) on the record it changes. The pair follows the `adr-tools` example link "Amends / Amended by". Like `supersedes` / `superseded-by`, they must be symmetric. From acceptance, `amended-by` joins D-0001's lifecycle fields, and D-0001's front matter gains `amended-by: [D-0007]`. The index generator reads both fields.
+D-0001's own body stays as it is. This record adds two optional fields to D-0001's field contract: `amends` (list of IDs) on a record that changes part of another record without replacing it, and `amended-by` (list of IDs) on the record it changes. The pair follows the `adr-tools` example link "Amends / Amended by". Like `supersedes` / `superseded-by`, they must be symmetric. From acceptance, `amended-by` joins D-0001's lifecycle fields, and D-0001's front matter gains `amended-by: [D-0006]`. The index generator reads both fields.
 
 ### What happens to D-0005 and PR #9
 
-D-0005's three changes, as listed in D-0006, fit the definition above. If this record is accepted, D-0005 can be corrected in place. D-0006 then keeps its number and is merged with status `rejected`, as D-0001 requires for a rejected record. That is a separate step for Jon, after this one.
+D-0005's three changes, as listed in the PR #9 draft, fit the definition above. If this record is accepted, D-0005 is corrected in place, as a separate step for Jon.
 
-This record takes D-0007, not D-0006. D-0006 was assigned when PR #9 opened, and it is a valid record, not a void one, so D-0004 does not allow its number to be reused.
+PR #9 is closed unmerged, so its draft never entered the log. This record reuses its number, D-0006, under D-0004: Jon approved the reuse (ADR corrections thread, 2026-10-16 08:25 UTC), and the only references to the old D-0006 were PR #9 itself and project chat, which stay as records. The tombstone is the line under More Information.
 
 ### Consequences
 
@@ -114,7 +114,7 @@ This record takes D-0007, not D-0006. D-0006 was assigned when PR #9 opened, and
 
 ### 2. Supersede only
 - Good: the strictest form, used by AWS, Azure Well-Architected and Fowler.
-- Bad: a full new record for every slip, as with D-0006, and the index fills with near-copies.
+- Bad: a full new record for every slip, as with the PR #9 draft, and the index fills with near-copies.
 
 ### 3. Separate errata list
 - Good: the accepted text never changes.
@@ -128,6 +128,7 @@ This record takes D-0007, not D-0006. D-0006 was assigned when PR #9 opened, and
 ## More Information
 
 - **Research:** Research repo, `areas/documentation/research/adr-corrections/` (SYNTHESIS.md, LEDGER.md with 27 claims, VERIFY.md with an independent quote check: 21 of 21 quotes verbatim).
+- **Former D-0006:** the PR #9 draft, a full restatement of D-0005; closed unmerged on 2026-10-16. Its number is reused here.
 - **Exit path:** to return to strict immutability, a new record supersedes this one; past Corrections entries stay where they are. To switch to an errata list, a new record moves the Corrections entries into one file per record.
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
