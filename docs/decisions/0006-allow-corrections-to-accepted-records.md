@@ -1,7 +1,7 @@
 ---
 id: D-0006
 title: Correct an accepted record in place when the decision does not change
-status: proposed
+status: accepted
 date: 2026-10-16
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -11,6 +11,12 @@ supersedes: []
 superseded-by:
 amends: [D-0001]
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#10 0ae0493"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNTJTUNZbcPsUxG7TCKiX23s
+  timestamp: 2026-10-16T08:28:58Z
+  approved-commit: 0ae0493b4f6eef50aae6caa8a18c97d4515eab91
+  merged: not yet; Jon merges PR #10, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the ADR corrections thread at 2026-10-16T08:29Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: agents get their own GitHub identities (Activation gate item 1); a correction is later found to have changed a decision; or corrections to one record pile up
 ---
