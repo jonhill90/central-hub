@@ -9,6 +9,7 @@ consulted: [reviewing-agent]
 waits-on: []
 supersedes: []
 superseded-by:
+amended-by: [D-0006]
 accepted-evidence:
   quote: "so accept"
   message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNC3VZmTAMC2buEXh8pCC9LJ
