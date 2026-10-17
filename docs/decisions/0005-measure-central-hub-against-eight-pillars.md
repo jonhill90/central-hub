@@ -28,7 +28,7 @@ Jon wants the homelab to be "the prime example of K8s reliability, high availabi
 
 There is no CNCF well-architected framework. Each cloud vendor publishes its own, and they overlap. Central Hub also has goals that no published framework treats as a pillar, above all that every component can be swapped. This record decides which pillars Central Hub is measured against, and where the line sits between adopting a standard and adding our own.
 
-Research: batch R6 in the project Library (`central-hub/research/well-architected/`), a 96-claim ledger with an independent review, and the proposal `central-hub/operating-model/PILLARS.md`. Jon agreed the shape on 2026-10-15: "I love B. As long as we have the mapping distinction I love it. We just need to make sure it is assumed just like everything else that it could be replaced."
+Research: batch R6 in the project Library (`central-hub/research/well-architected/`), a 96-claim ledger with an independent review, and the proposal `central-hub/operating-model/PILLARS.md`. Jon agreed the shape on 2026-10-15, where "B" was the proposal's name for what is option 1 below: "I love B. As long as we have the mapping distinction I love it. We just need to make sure it is assumed just like everything else that it could be replaced."
 
 ## Decision Drivers
 
@@ -72,7 +72,7 @@ flowchart TB
 **The line between standard and ours:**
 1. **Adopt as-is.** A pillar shared by 4 or more of the 5 frameworks compared (Microsoft, AWS, Google, GitHub, HashiCorp) keeps its industry name and checklist. Security is in all 5. Reliability, cost and operations are in 4.
 2. **Extend only where every standard is silent,** and label the result as a Central Hub pillar. None of the five makes replaceability or portability a pillar.
-3. Sustainability is a pillar in AWS and Google; Azure treats it as guidance across pillars. It is adopted with that difference noted.
+3. **One exception to rule 1:** Sustainability is a pillar in only 2 of the 5 (AWS and Google; Azure treats it as guidance across pillars). It is adopted with that difference noted.
 4. Observability stays inside Operational Excellence, as in Azure (OE:07), so the mapping back to Azure Well-Architected is one to one.
 
 **The pillars:**
@@ -81,7 +81,7 @@ flowchart TB
 |---|---|---|---|---|
 | 1 | Reliability | industry | Azure, AWS, Google; HashiCorp "resilient systems" | SR11, SR22 |
 | 2 | Security | industry | all five | SR03, SR19 |
-| 3 | Operational Excellence | industry | Azure, AWS, Google; HashiCorp "automate" | SR05, SR09, SR10, SR12 |
+| 3 | Operational Excellence | industry | Azure, AWS, Google; HashiCorp "automate" | SR05, SR10 |
 | 4 | Cost Optimization | industry | Azure, AWS, Google; HashiCorp "optimize" | SR23 |
 | 5 | Performance Efficiency | industry | Azure, AWS, Google; HashiCorp "optimize" | SR24 |
 | 6 | Sustainability | industry | AWS and Google pillar; Azure guidance | SR25 |
@@ -125,7 +125,7 @@ The register rows are in the Research repo's requirements register (`coordinator
 
 ## More Information
 
-- **Exit path:** to move to plain Azure, AWS or Google Well-Architected, drop or fold pillars 6 to 8. No content is lost, because every item already sits under a standard name or a labelled extension. A new record supersedes this one.
+- **Exit path:** to move to plain Azure Well-Architected, drop or fold pillars 6 to 8. To move to plain AWS or Google Well-Architected, which both have Sustainability, drop or fold pillars 7 and 8 only. No content is lost, because every item already sits under a standard name or a labelled extension. A new record supersedes this one.
 - **Sources** (fetched 2026-10-15):
   - Azure: https://learn.microsoft.com/en-us/azure/well-architected/pillars and the Operational Excellence checklist https://learn.microsoft.com/en-us/azure/well-architected/operational-excellence/checklist
   - AWS: https://docs.aws.amazon.com/wellarchitected/latest/framework/the-pillars-of-the-framework.html
@@ -134,5 +134,25 @@ The register rows are in the Research repo's requirements register (`coordinator
   - HashiCorp: https://developer.hashicorp.com/well-architected-framework/what-is
   - CNCF cloud native definition: https://raw.githubusercontent.com/cncf/toc/main/DEFINITION.md
   - ISO/IEC 25010 (secondary summary): https://quality.arc42.org/standards/iso-25010
+
+## Corrections
+
+Made under D-0006. The decision is unchanged.
+
+- **2026-10-16** (found by a reviewing agent on PR #8 after merge; first drafted as a full restatement in PR #9, closed unmerged):
+  1. Pillar 3's register rows. The table listed SR09 and SR12 under pillar 3, while "Not pillars" says they are working rules. Both are decision-authority rules, so "Not pillars" shows the intent.
+     - Before: `| SR05, SR09, SR10, SR12 |`
+     - After: `| SR05, SR10 |`
+  2. The exit path wrongly said AWS and Google need pillar 6 dropped; both have Sustainability.
+     - Before: "to move to plain Azure, AWS or Google Well-Architected, drop or fold pillars 6 to 8."
+     - After: "to move to plain Azure Well-Architected, drop or fold pillars 6 to 8. To move to plain AWS or Google Well-Architected, which both have Sustainability, drop or fold pillars 7 and 8 only."
+  3. Wording only, so rule 3 reads as the exception to rule 1 that the table already applies. No new reason is added.
+     - Before: "3. Sustainability is a pillar in AWS and Google; Azure treats it as guidance across pillars. It is adopted with that difference noted."
+     - After: "3. **One exception to rule 1:** Sustainability is a pillar in only 2 of the 5 (AWS and Google; Azure treats it as guidance across pillars). It is adopted with that difference noted."
+  4. Wording only, saying which option "B" was.
+     - Before: `Jon agreed the shape on 2026-10-15: "I love B.`
+     - After: `Jon agreed the shape on 2026-10-15, where "B" was the proposal's name for what is option 1 below: "I love B.`
+  - Review: a reviewing agent checked each change before Jon saw it. It confirmed 1, 2 and 4 as unchanged decisions; for 3 it flagged an added reason for adopting Sustainability, which was then removed.
+  - Approval: Jon, "approve #11 59cb507" (project chat, message cmsg_01X43rfNYp4H1dL1V2dkfkwNUkxQV8rtkCyFUjGmKo9bMr, 2026-10-17T00:29:34Z); approved commit 59cb5071dac4613ce3d3db5911525da6a9c1dbd8 (PR #11).
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
