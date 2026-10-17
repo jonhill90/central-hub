@@ -153,6 +153,6 @@ Made under D-0006. The decision is unchanged.
      - Before: `Jon agreed the shape on 2026-10-15: "I love B.`
      - After: `Jon agreed the shape on 2026-10-15, where "B" was the proposal's name for what is option 1 below: "I love B.`
   - Review: a reviewing agent checked each change before Jon saw it. It confirmed 1, 2 and 4 as unchanged decisions; for 3 it flagged an added reason for adopting Sustainability, which was then removed.
-  - Approval: to be added after Jon approves (message ID and approved commit).
+  - Approval: Jon, "approve #11 59cb507" (project chat, message cmsg_01X43rfNYp4H1dL1V2dkfkwNUkxQV8rtkCyFUjGmKo9bMr, 2026-10-17T00:29:34Z); approved commit 59cb5071dac4613ce3d3db5911525da6a9c1dbd8 (PR #11).
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
