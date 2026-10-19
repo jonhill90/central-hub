@@ -11,3 +11,4 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0004 | [During Foundation, allow a void ID's number to be reused, with the owner's approval and a tombstone](0004-allow-reuse-of-void-ids-during-foundation.md) | accepted | D-0003 | 2026-10-13 |
 | D-0005 | [Measure all of Central Hub against six industry pillars plus two labelled Central Hub pillars](0005-measure-central-hub-against-eight-pillars.md) | accepted | D-0001 | 2026-10-16 |
 | D-0006 | [Correct an accepted record in place when the decision does not change](0006-allow-corrections-to-accepted-records.md) | accepted | D-0001 | 2026-10-16 |
+| D-0007 | [Use a one-page PRD and frozen per-change specs as version 1 of Central Hub's requirement records](0007-use-a-one-page-prd-and-frozen-per-change-specs.md) | accepted | D-0001, D-0003 | 2026-10-19 |
