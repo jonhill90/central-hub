@@ -1,7 +1,7 @@
 ---
 id: D-0007
 title: Use a one-page PRD and frozen per-change specs as version 1 of Central Hub's requirement records
-status: proposed
+status: accepted
 date: 2026-10-19
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -9,6 +9,13 @@ consulted: [reviewing-agent]
 waits-on: [D-0001, D-0003]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#12 5a07427"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNTRAgZJF48qYp51Qbbdd9ns
+  timestamp: 2026-10-19T02:53:10Z
+  approved-commit: 5a074271302bdfd7ad048432ce4790d38b40a470
+  merged: not yet; Jon merges PR #12, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the PRD and spec research thread at 2026-10-19T02:53Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: a second person must agree on scope; code lands in this repo; a study measures whether a project-level PRD helps people or agents; or merged specs are being read as current truth
 ---
