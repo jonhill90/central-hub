@@ -1,7 +1,7 @@
 ---
 id: D-0008
 title: Name the PRD docs/PRD.md, keep specs in docs/specs/, and name root folders by job
-status: proposed
+status: accepted
 date: 2026-10-19
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -10,6 +10,12 @@ waits-on: [D-0001, D-0007]
 supersedes: []
 superseded-by:
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#13 86484af"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNLjKFZhnGXTRAmEntnMMFcR
+  timestamp: 2026-10-19T04:04:03Z
+  approved-commit: 86484af7821eaf32afc0407447f6a9b4ae84ce16
+  merged: not yet; Jon merges PR #13, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the PRD and spec research thread at 2026-10-19T04:04Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: a second repo adopts the same standard; a root folder's tool is replaced; Kubernetes stops being the runtime; or a reader cannot find the PRD
 ---
@@ -39,7 +45,7 @@ This record fixes those names. It does not create the folders.
 
 ## Decision Outcome
 
-Chosen option: **1**. Jon said yes to the proposed names on 2026-10-19 at 04:01 UTC, on a decision card that asked: "Keep these central-hub names: docs/PRD.md, docs/specs/, and root folders private-network, hosts, kubernetes, dns, backup?" That answer chose the option. This record still needs his acceptance under D-0001.
+Chosen option: **1**. Jon said yes to the proposed names on 2026-10-19 at 04:01 UTC, on a decision card that asked: "Keep these central-hub names: docs/PRD.md, docs/specs/, and root folders private-network, hosts, kubernetes, dns, backup?" That answer chose the option. Jon accepted this record under D-0001 on 2026-10-19 at 04:04 UTC.
 
 ```
 central-hub/
