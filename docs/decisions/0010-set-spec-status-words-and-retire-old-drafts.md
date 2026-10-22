@@ -37,7 +37,7 @@ On 2026-10-22 at 06:57 UTC Jon asked: "I need some help here. i think we need th
 
 ## Decision Outcome
 
-Chosen option: **1**, if Jon says yes. This record needs his acceptance under D-0001.
+Chosen option: **1**. Jon said yes to the proposed option on 2026-10-22 at 07:02 UTC, on a decision card that asked: "Make the PRD and spec process ready with these four pieces in one PR?" That answer chose the option. This record still needs his acceptance under D-0001.
 
 ### Rules
 
