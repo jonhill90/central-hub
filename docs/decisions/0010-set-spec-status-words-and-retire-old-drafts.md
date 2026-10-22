@@ -1,7 +1,7 @@
 ---
 id: D-0010
 title: Give specs five status words and retire the three October 2026 drafts
-status: proposed
+status: accepted
 date: 2026-10-22
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -10,6 +10,12 @@ waits-on: [D-0001, D-0007, D-0008]
 supersedes: []
 superseded-by:
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#15 b32bd59"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNG5mGAoayYeUHQvQF3FC42W
+  timestamp: 2026-10-22T07:03:02Z
+  approved-commit: b32bd599bdac76aa63f5fdf4c227688e13894513
+  merged: not yet; Jon merges PR #15, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the PRD and spec research thread at 2026-10-22T07:03Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: specs pile up in accepted with no one finishing them; a check script starts reading the status field; or a second repo adopts specs
 ---
@@ -37,7 +43,7 @@ On 2026-10-22 at 06:57 UTC Jon asked: "I need some help here. i think we need th
 
 ## Decision Outcome
 
-Chosen option: **1**. Jon said yes to the proposed option on 2026-10-22 at 07:02 UTC, on a decision card that asked: "Make the PRD and spec process ready with these four pieces in one PR?" That answer chose the option. This record still needs his acceptance under D-0001.
+Chosen option: **1**. Jon said yes to the proposed option on 2026-10-22 at 07:02 UTC, on a decision card that asked: "Make the PRD and spec process ready with these four pieces in one PR?" That answer chose the option. Jon accepted this record under D-0001 on 2026-10-22 at 07:03 UTC.
 
 ### Rules
 
