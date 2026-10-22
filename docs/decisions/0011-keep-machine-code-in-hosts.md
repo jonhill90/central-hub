@@ -1,7 +1,7 @@
 ---
 id: D-0011
 title: Keep the code for every machine below Kubernetes in hosts/, one subfolder per vendor product, with Terraform modules in their own repository
-status: proposed
+status: accepted
 date: 2026-10-22
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -10,6 +10,12 @@ waits-on: [D-0001, D-0008]
 supersedes: []
 superseded-by:
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#18 7dbae2c"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwN9nbb2Y5bBnkgfrLDFWMVnS
+  timestamp: 2026-10-22T07:15:17Z
+  approved-commit: 7dbae2cce2fbb02d5bfdf0e632a363f39f43bb4c
+  merged: not yet; Jon merges PR #18, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the repo layout thread at 2026-10-22T07:15Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: a second machine-building vendor product joins Terraform; the Terraform structure research names the runnable folders; or a machine kind appears that is neither a VM nor bare metal
 ---
@@ -37,7 +43,7 @@ On 2026-10-20 at 03:03 UTC Jon wrote: "I dont want to clickops anything in the p
 
 ## Decision Outcome
 
-Proposed option: **1**. Jon said yes to keeping `hosts/` on 2026-10-20 at 03:25 UTC ("host its is"). In the same message he said Terraform modules will be kept in another repository. He said yes to `terraform/` as a vendor-product subfolder name on 2026-10-19 at 03:51 UTC, in his review of the organize-repository skill changes (item 9).
+Chosen option: **1**. Jon said yes to keeping `hosts/` on 2026-10-20 at 03:25 UTC ("host its is"). In the same message he said Terraform modules will be kept in another repository. He said yes to `terraform/` as a vendor-product subfolder name on 2026-10-19 at 03:51 UTC, in his review of the organize-repository skill changes (item 9). Jon accepted this record under D-0001 on 2026-10-22 at 07:15 UTC.
 
 ```
 central-hub/
