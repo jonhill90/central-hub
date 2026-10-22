@@ -1,13 +1,19 @@
 ---
 id: STD-0001
 title: VM hostnames
-status: proposed
+status: active
 scope: the OS hostname of every VM and physical host, local or cloud
 owner-system: 8 Platform
 why: Jon said yes to the proposed two-letter OS codes on 2026-10-21 at 01:12 UTC, and to the proposed option E (one hostname, no dashes) on 2026-10-21 at 01:13 UTC, in the project's VM naming work
 follows: [NetBIOS computer name limit (15 characters, not all digits), RFC 1123 host name label, Kubernetes node name rules]
 check: none yet in this repo; a reviewing agent checks new names by hand
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#16 1c8bfdd"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNLe3Dm7Jei52vHtd4YLEnZy
+  timestamp: 2026-10-22T07:07:51Z
+  approved-commit: 1c8bfdd412eade4c2470fa7959ecbd6390b25093
+  merged: not yet; Jon merges PR #16, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the Standards system thread at 2026-10-22T07:07Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 ---
 
 # STD-0001: VM hostnames

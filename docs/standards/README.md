@@ -39,4 +39,4 @@ The body holds the rule itself, worded with BCP 14 key words (RFC 2119, RFC 8174
 
 | ID | Title | Status | Scope | Owner system |
 |---|---|---|---|---|
-| STD-0001 | [VM hostnames](0001-vm-hostnames.md) | proposed | every VM and host, local or cloud | 8 Platform |
+| STD-0001 | [VM hostnames](0001-vm-hostnames.md) | active | every VM and host, local or cloud | 8 Platform |
