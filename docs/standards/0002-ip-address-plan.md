@@ -1,13 +1,19 @@
 ---
 id: STD-0002
 title: IP address plan
-status: proposed
+status: active
 scope: every private IPv4 and IPv6 range used by the home lab, VPS providers, clouds and Kubernetes clusters
 owner-system: 8 Platform
 why: Jon said yes to the proposed pod range 10.244.0.0/16 on 2026-10-22 at 01:54 UTC, to layout A (2nd number = place) at 02:50 UTC, to the numbers v0.2 at 04:32 UTC, to keeping ranges in this repo and machine addresses out of it at 04:47 UTC, to the load-balancer reserve at 05:25 UTC, and to the IPv6 option "plan now, switch on later" at 06:13 UTC, in the project's IP address plan work
 follows: [RFC 1918 private IPv4, RFC 6598 shared address space (avoided), RFC 4193 unique local IPv6, RFC 4291 IPv6 addressing (/64 per link), RFC 7381 enterprise IPv6 deployment, Azure IP planning guide (IPv6 subnets exactly /64), Kubernetes dual-stack]
 check: none yet in this repo; an overlap check script exists outside it, and where scripts live here is not decided yet
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#17 5196b18"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNV1uvM92X9ekDHTkxTf1hLf
+  timestamp: 2026-10-22T07:12:48Z
+  approved-commit: 5196b18f87c1b6a209291e62114fd5479833ade1
+  merged: not yet; Jon merges PR #17, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the IP address plan thread at 2026-10-22T07:12Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 ---
 
 # STD-0002: IP address plan
