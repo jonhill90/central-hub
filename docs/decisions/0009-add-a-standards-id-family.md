@@ -1,7 +1,7 @@
 ---
 id: D-0009
 title: Add a STD- family for standards to the ID family registry
-status: proposed
+status: accepted
 date: 2026-10-22
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -10,6 +10,12 @@ waits-on: [D-0001, D-0003]
 supersedes: [D-0003]
 superseded-by:
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#14 a4f0582"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNU91iAKVLo8uUHycWbJs6MY
+  timestamp: 2026-10-22T02:52:24Z
+  approved-commit: a4f05820ec546535d980c8f660cb693c70ca64cf
+  merged: not yet; Jon merges PR #14, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the Standards system thread at 2026-10-22T02:52Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: the same as D-0003, plus: the standards register moves out of this repo; or a second kind of standard needs its own family
 ---

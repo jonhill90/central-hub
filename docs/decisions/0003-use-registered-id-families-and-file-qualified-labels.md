@@ -1,14 +1,14 @@
 ---
 id: D-0003
 title: Use a few registered global ID families; write every other label with its file name
-status: accepted
+status: superseded
 date: 2026-10-12
 decision-makers: [jon]
 proposed-by: drafting-agent
 consulted: [research-agents]
 waits-on: [D-0001]
 supersedes: []
-superseded-by:
+superseded-by: D-0009
 accepted-evidence:
   quote: "Accept. But I am worried about data in the ADRs referring to the docs on my MacBook. I feel that we are also tying the system too much to the Claude harness. It's fine for now, but we will need to go back and remove that noise."
   message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwN1Gnn97mj1fpLXFxgZq2sb9
