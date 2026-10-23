@@ -10,12 +10,13 @@ waits-on: [D-0001, D-0006, D-0014]
 supersedes: [D-0014]
 superseded-by: D-0018
 accepted-evidence:
-  quote: "accept PR jonhill90/central-hub#24 1cce2f8"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNNC2krzzxxNCskiWfAqbKzw
-  timestamp: 2026-10-23T04:21:52Z
+  approved-by: owner
+  approved-at: 2026-10-23T04:21:52Z
   approved-commit: 1cce2f860ae2552047d2ba2b0bc960b45792bfda
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNNC2krzzxxNCskiWfAqbKzw
+  approval-names: "PR #24 and head 1cce2f8, in the message itself"
+  check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T04:21Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #24, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T04:21Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: the Activation gate passes; the Research repo is retired and research moves somewhere with its own numbering; or a batch register check finds a duplicate number
 ---
@@ -26,13 +27,13 @@ revisit-when: the Activation gate passes; the Research repo is retired and resea
 
 A research batch is one piece of research with its own folder and SPEC.md, kept outside this repo (the Research repo and the project files). Batches are cited from this repo, from chats and from each other by a short code such as `R3`, `RR1` or `CKA1`.
 
-Agents made those codes up one at a time. Research batch `research/batch-ids/` (project files; Research repo copy `areas/documentation/research/batch-ids/`) measured them on 2026-10-23:
+Agents made those codes up one at a time. Research batch RB-0074 ([evidence](../research/0015-number-research-batches-rb-nnnn.md)) measured them on 2026-10-23:
 
 - 75 folders carry a code, written in 9 different shapes (`R3`, `RR1`, `R11b`, `ROUT-1`, `ADR-C1`, `cncf-catalogue`, and others). Nothing defines how a code is made.
 - 3 codes name two different batches each: `RR1`, `AT1` and `VN1`.
 - Some codes look like other labels: `SR1` looks like the retired `SR` requirement IDs, and `K1` and `V1` already mean other things.
 
-Under D-0014 rule 5, Jon may approve renaming an agent-made label during Foundation. On 2026-10-23 at 04:16 UTC Jon chose "Yes, RB-0001 style" on the question "Number research batches as RB-0001 style, renamed everywhere?" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNQcYS9um5zKTC7zv6b3o1qM).
+Under D-0014 rule 5, Jon may approve renaming an agent-made label during Foundation. On 2026-10-23 at 04:16 UTC Jon chose the option to use RB-0001 style on the question "Number research batches as RB-0001 style, renamed everywhere?" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNQcYS9um5zKTC7zv6b3o1qM).
 
 Adding a family changes the family registry, so under D-0014 rule 2 it needs a record that supersedes D-0014.
 
@@ -40,7 +41,7 @@ Adding a family changes the family registry, so under D-0014 rule 2 it needs a r
 
 - **One name per thing:** a code that names two batches cannot be cited safely.
 - **Match what exists:** `D-0007`, `REQ-0022` and `STD-0001` use a prefix, a dash and four digits.
-- **How others do it:** Python PEPs, Kubernetes KEPs, IETF RFCs and ClinicalTrials.gov each hand out a plain number from one registry and keep the readable name beside it (batch-ids LEDGER rows 6 to 10).
+- **How others do it:** Python PEPs, Kubernetes KEPs, IETF RFCs and ClinicalTrials.gov each hand out a plain number from one registry and keep the readable name beside it (RB-0074, evidence finding 4).
 - **Greenfield:** renaming is cheapest now.
 - **Replaceable** (REQ-0011).
 
@@ -134,7 +135,19 @@ D-0014's rules all carry over. Rule 1 gains one registry row. They are restated 
 
 ## More Information
 
-- Research (project files outside this repo): `research/batch-ids/` (INVENTORY.md, LEDGER.md, SYNTHESIS.md). Research repo copy: `areas/documentation/research/batch-ids/`.
+- **Evidence:** [../research/0015-number-research-batches-rb-nnnn.md](../research/0015-number-research-batches-rb-nnnn.md): batch RB-0074.
 - Earlier renames handled the same way: requirement IDs (D-0014, corrections log in project files `research/requirement-ids/CORRECTIONS.md`) and research method IDs (2026-10-18, project files `research/method-id-fixes/CORRECTIONS.md`).
 - Related records: D-0001, D-0003, D-0004, D-0006, D-0009, D-0014.
 - On acceptance, D-0014's lifecycle fields change to `status: superseded` and `superseded-by: D-0015`, under D-0001.
+
+## Corrections
+
+- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (7915625) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 7915625). No value changes.
+  2. Context and Problem Statement, second paragraph. Before: "Research batch `research/batch-ids/` (project files; Research repo copy `areas/documentation/research/batch-ids/`) measured them on 2026-10-23:" After: "Research batch RB-0074 ([evidence](../research/0015-number-research-batches-rb-nnnn.md)) measured them on 2026-10-23:" Reason: the old pointer is private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  3. Context and Problem Statement, third paragraph: the quoted decision-card option label Jon chose described instead. Before: Jon chose "Yes, RB-0001 style" on the question. After: Jon chose the option to use RB-0001 style on the question.
+  4. Decision Drivers, third bullet. Before: "(batch-ids LEDGER rows 6 to 10)" After: "(RB-0074, evidence finding 4)" Reason: the old pointer is private.
+  5. More Information, first bullet. Before: "Research (project files outside this repo): `research/batch-ids/` (INVENTORY.md, LEDGER.md, SYNTHESIS.md). Research repo copy: `areas/documentation/research/batch-ids/`." After: "**Evidence:** [../research/0015-number-research-batches-rb-nnnn.md](../research/0015-number-research-batches-rb-nnnn.md): batch RB-0074." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  6. A Corrections section added, holding this entry.
+
+  Approval: the owner, 2026-10-23T06:07:52Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAnCf1qE6ULcTZw9foG87Mc), naming PR #32 and head f994dac; approved commit f994dacd8fb34b10e550664797bf61d12af773a6. Check: the drafting agent read the message at 2026-10-23T06:07Z and confirmed it names that PR and head.

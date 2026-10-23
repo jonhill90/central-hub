@@ -10,12 +10,13 @@ waits-on: [D-0001, D-0004, D-0006, D-0009]
 supersedes: [D-0009]
 superseded-by: D-0015
 accepted-evidence:
-  quote: "accept PR jonhill90/central-hub#22 f62845a"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwN12EqNFjmi5fTVUJmrD9vhd
-  timestamp: 2026-10-23T03:46:26Z
+  approved-by: owner
+  approved-at: 2026-10-23T03:46:26Z
   approved-commit: f62845acd38deb7018acd8f96a2a484677976c8c
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN12EqNFjmi5fTVUJmrD9vhd
+  approval-names: "PR #22 and head f62845a, in the message itself"
+  check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T03:46Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #22, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T03:46Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: the Activation gate passes (rule 5 goes back to "never renamed"); a rename sweep leaves a reference that a search missed; or a requirements tool is adopted that brings its own ID scheme
 ---
@@ -24,16 +25,16 @@ revisit-when: the Activation gate passes (rule 5 goes back to "never renamed"); 
 
 ## Context and Problem Statement
 
-On 2026-10-23 Jon said the requirement IDs (`SR01` to `SR25`) were made up by agents and never got the scrutiny other choices got. The check that followed (research batch RB-0072, project files outside this repo at `research/requirement-ids/`) found:
+On 2026-10-23 Jon said the requirement IDs (`SR01` to `SR25`) were made up by agents and never got the scrutiny other choices got. The check that followed (research batch RB-0072, [evidence](../research/0014-use-req-ids-for-requirements.md)) found:
 
 - An agent coordinator wrote the `SR` format on 2026-10-06, before this project existed. Jon said yes to each requirement's wording, never to the format.
 - The ID research behind D-0003 kept `SR` only because it did not clash, and froze its spelling ("Nothing is respelled"). D-0009 carried it over unchanged.
 - `SR` does not match the house style the other families use (`D-0007`, `STD-0001`: a dash and four digits).
 - Outside the project, NIST SP 800-53 already uses `SR` for its Supply Chain Risk Management controls (`SR-3`). Under D-0009 rule 2, `SR` also blocks any future prefix that starts with `SR`.
 
-Jon chose `REQ-0000` style on 2026-10-23 at 03:38 UTC: "I like REQ-0000 more and because its already oneway in a pretty much greenfield system does not seem like a good reason. its just words. we should fix them if we can. same with the other IDs."
+Jon chose `REQ-0000` style on 2026-10-23 at 03:38 UTC. Jon preferred it, and said that a format already in use is not a good reason to keep it in a system that is still almost greenfield: IDs are only words, they should be fixed where possible, and the same goes for the other IDs.
 
-D-0009 rule 5 ("Old labels are never renamed") would keep `SR11` alive beside `REQ-0011` forever. Jon wants the fix applied everywhere, the way agent-made method IDs were fixed on 2026-10-18 ("like it never happened").
+D-0009 rule 5 ("Old labels are never renamed") would keep `SR11` alive beside `REQ-0011` forever. Jon wants the fix applied everywhere, the way agent-made method IDs were fixed on 2026-10-18, so the files read as if the new name had always been used.
 
 ## Decision Drivers
 
@@ -125,7 +126,7 @@ D-0009's rules 1, 2, 3, 4, 6 and 7 carry over unchanged. Rule 1's registry row f
 
 ## More Information
 
-- Research (project files outside this repo): `research/requirement-ids/` (SYNTHESIS.md, LEDGER.md). Research repo copy: `areas/documentation/research/requirement-ids/`.
+- **Evidence:** [../research/0014-use-req-ids-for-requirements.md](../research/0014-use-req-ids-for-requirements.md): batch RB-0072.
 - Earlier rename handled the same way: research method IDs, 2026-10-18 (batch RB-0055, project files `research/method-id-fixes/CORRECTIONS.md`).
 - Related records: D-0001, D-0003, D-0004, D-0006, D-0009.
 - On acceptance, D-0009's lifecycle fields change to `status: superseded` and `superseded-by: D-0014`, under D-0001.
@@ -133,5 +134,12 @@ D-0009's rules 1, 2, 3, 4, 6 and 7 carry over unchanged. Rule 1's registry row f
 ## Corrections
 
 - **2026-10-23** (research batch IDs under D-0015): 3 research batch citations renamed: `RQ1` to `RB-0072`; `R3` to `RB-0003`; `MF1` to `RB-0055`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
+- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (7915625) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 7915625). No value changes.
+  2. Context and Problem Statement, first paragraph. Before: "(research batch RB-0072, project files outside this repo at `research/requirement-ids/`)" After: "(research batch RB-0072, [evidence](../research/0014-use-req-ids-for-requirements.md))" Reason: the old pointer is private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  3. Context and Problem Statement, third paragraph: the quote of Jon's 03:38 UTC message (at commit 7915625) replaced by a neutral summary. After: "Jon chose `REQ-0000` style on 2026-10-23 at 03:38 UTC. Jon preferred it, and said that a format already in use is not a good reason to keep it in a system that is still almost greenfield: IDs are only words, they should be fixed where possible, and the same goes for the other IDs."
+  4. Context and Problem Statement, fourth paragraph: the quote of Jon's earlier words (at commit 7915625) replaced by a neutral summary. After: "Jon wants the fix applied everywhere, the way agent-made method IDs were fixed on 2026-10-18, so the files read as if the new name had always been used."
+  5. More Information, first bullet. Before: "Research (project files outside this repo): `research/requirement-ids/` (SYNTHESIS.md, LEDGER.md). Research repo copy: `areas/documentation/research/requirement-ids/`." After: "**Evidence:** [../research/0014-use-req-ids-for-requirements.md](../research/0014-use-req-ids-for-requirements.md): batch RB-0072." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  6. The closing note on quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown as he wrote them._" After: none.
 
-_Jon's quoted words are shown as he wrote them._
+  Approval: the owner, 2026-10-23T06:07:52Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAnCf1qE6ULcTZw9foG87Mc), naming PR #32 and head f994dac; approved commit f994dacd8fb34b10e550664797bf61d12af773a6. Check: the drafting agent read the message at 2026-10-23T06:07Z and confirmed it names that PR and head.
