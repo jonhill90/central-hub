@@ -1,6 +1,6 @@
 ---
 record: D-0008
-batch: RB-0036
+batch: RB-0036, with the names question kept in RB-0057's folder
 researched: 2026-10-17
 method: review of the owner's earlier layout research; scoping review of repository standards and template tools (22 source families); repository mining of 28 repositories' move history; a devil's advocate pass; a live placement test with fresh agents
 checks: an independent agent re-checked a seeded random sample of about 22% of the claims in each strand, plus named must-check claims: 94 of 104 passed, 9 were partly right and 1 failed, and the standards strand's 8 were fixed; every move count it re-ran on fresh clones matched
@@ -20,7 +20,7 @@ What common layout should the owner's repositories start from, so a repository c
 2. **Roots named for a tool that was swapped churned most.** onedr0p/home-ops made 1,812 cross-root file moves and onedr0p/cluster-template renamed its template folder 5 times [5, 6]. A stable `kubernetes/` root stopped churning once settled: its cross-root moves fell from 986 in 2023 to 1 in 2026 [5]. (Measured.)
 3. **Empty folders made in advance did not absorb growth.** Day-one placeholder folders in the owner's own repositories were renamed, split or deleted; growth was absorbed by stable names for what each part does (measured).
 4. **One placement rule gave one answer.** In a live test with fresh agents, the rule "by artifact and who runs it" placed all 6 cases the same way, and all 6 runs put the VPS rebuild script in `hosts/` (measured; small sample, not blind-graded).
-5. **The names themselves were not found in a source.** The batch proposed `private-network/`, `hosts/`, `kubernetes/`, `dns/` and `backup/`, and the later names question set `docs/PRD.md` and `docs/specs/`. These were the drafting agent's proposals built from findings 1 to 4, not names a source chose (from the record's own context and the names question).
+5. **The names themselves were not found in a source.** The batch proposed `private-network/`, `hosts/`, `kubernetes/`, `dns/` and `backup/`, and the later names question proposed `docs/PRD.md` and `docs/specs/`. These were the drafting agent's proposals built from findings 1 to 4, not names a source chose (from the record's own context and the names question).
 6. **Counter-evidence on where the PRD sits.** One of the owner's earlier repositories and two of the owner's templates kept the PRD and spec at the root, treating them as inputs to the work rather than documentation of it (from the names question).
 
 ## How the decision used it

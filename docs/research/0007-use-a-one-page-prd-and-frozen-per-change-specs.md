@@ -16,9 +16,9 @@ What document set should Central Hub use in version 1 for "what to build and why
 
 ## Findings
 
-1. **Sources split on one question: what happens to a document after the work merges.** The batch grouped the 44 options its strands found into five shapes (inferred grouping; every option keeps its source's name): a living document kept current, such as Spec Kit's "Living Spec" and OpenSpec [1, 2]; a frozen record per change, such as Python PEPs, Kubernetes KEPs and Spec Kit's "Flow-Forward" [1, 3, 4]; a throw-away working plan [5]; the checks as the spec, as in Specification by Example [6]; and no separate document, where the PR or issue description is the record, as in GitLab and BMAD [7, 8].
+1. **Sources split on one question: what happens to a document after the work merges.** The batch grouped the 44 options its strands found into five shapes (inferred grouping; every option keeps its source's name): a living document kept current, such as Spec Kit's "Living Spec" and OpenSpec [1, 2]; a frozen record per change, such as Python PEPs, Kubernetes KEPs and Spec Kit's "Flow-Forward" [1, 3, 4]; a throw-away working plan [5]; the checks as the spec, as in Specification by Example [6]; and no separate document, where the PR or issue description is the record, as in GitLab and BMAD [16, 8].
 2. **In practice, specs behave as frozen records.** In a study of 266 repositories, 81.5% of spec files had one commit and 98.3% had one author. Even OpenSpec's "living" capability specs had one commit in 47.4% of cases [9].
-3. **Measured gains come from short context and checks, not longer documents.** Rules compiled into checks raised compliance from 67.0% to 88.3% [10]. Curated skills helped by 16.6 points, while self-generated ones hurt by 8 to 11.5 points [11]. Across 88,052 pull requests, specs in PRs showed no measured effect [12].
+3. **Measured gains come from short context and checks, not longer documents.** Rules compiled into checks raised compliance from 67.0% to 88.3% [10]. Curated skills helped by 16.6 points, while self-generated ones hurt by 8 to 11.5 points [11]. Across 88,052 pull requests, specs in PRs showed no measured effect, though there "spec" mostly meant a link to a ticket (97.5%) and the output of spec tools was not tested [12].
 4. **No study of a project-level PRD was found**, for either people or agents (measured: no strand found one). BMAD says a PRD is needed when more than one person must agree, and otherwise to skip it [8].
 5. **Pointing to code instead of copying it is old standard advice.** IEEE 830-1998 says the same requirement "should not appear in more than one place" [13]. arc42 says never to copy code into documentation [14], and GitLab's handbook says to cross-link instead of repeating content [7].
 6. **Two layers at most.** Nielsen Norman Group reports that more than two levels of progressive disclosure typically have low usability [15]. Applying that interface rule to documents is an analogy (inferred).
@@ -59,8 +59,9 @@ Relied on (the decision depends on these):
 13. IEEE 830-1998, section 4.3.7, university-hosted copy. <https://people.eecs.ku.edu/~hossein/Teaching/Stds/0830.pdf>
 14. arc42 FAQ, F-3. <https://faq.arc42.org/questions/F-3/>
 15. Nielsen Norman Group, "Progressive disclosure". <https://www.nngroup.com/articles/progressive-disclosure/>
+16. GitLab handbook, "Product development flow". <https://handbook.gitlab.com/handbook/product-development/how-we-work/product-development-flow/>
 
-Background (read, not relied on): the batch read 294 sources already held in the owner's corpus and many more in its strands; they are listed in the private working files.
+Background (read, not relied on): the batch listed 294 sources already held in the owner's corpus, and its strands read many more; they are listed in the private working files.
 
 All fetched 2026-10-18 or 2026-10-19.
 

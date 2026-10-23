@@ -106,7 +106,7 @@ central-hub/
 
 ## More Information
 
-- **Evidence:** [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md): the repository layout batch RB-0036 and the names question prepared from it.
+- **Evidence:** [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md): the repository layout batch RB-0036, and the names question kept in batch RB-0057.
 - Related records: D-0001, D-0002, D-0003, D-0007.
 
 ## Corrections
@@ -115,8 +115,8 @@ central-hub/
 - **2026-10-23** (research batch IDs under D-0015): 1 research batch citation renamed: `RL4` to `RB-0036`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
 - **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (ba5bb20) instead of copying it (D-0016 rule 7).
   1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit ba5bb20). No value changes.
-  2. Considered Options, option 2: the quote from one of Jon's earlier repositories (at commit ba5bb20) replaced by a neutral summary. After: "Some of Jon's earlier repos kept it there, treating it as an input to the work rather than documentation of it."
-  3. More Information, first bullet. Before: "Research behind the names: Research repo, `areas/documentation/research/prd-spec-ps3/NAMES-QUESTION.md` and the repo layout batch RB-0036 (`labs/central-hub/repo-layout/rl4/`)." After: "**Evidence:** [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md): the repository layout batch RB-0036 and the names question prepared from it." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  2. Considered Options, option 2: a phrase quoted from a file in one of Jon's earlier repositories (at commit ba5bb20), treated here as the owner's words, replaced by a neutral summary. After: "Some of Jon's earlier repos kept it there, treating it as an input to the work rather than documentation of it."
+  3. More Information, first bullet. Before: "Research behind the names: Research repo, `areas/documentation/research/prd-spec-ps3/NAMES-QUESTION.md` and the repo layout batch RB-0036 (`labs/central-hub/repo-layout/rl4/`)." After: "**Evidence:** [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md): the repository layout batch RB-0036, and the names question kept in batch RB-0057." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
   4. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit ba5bb20), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
 
   Approval: to be added after approval (D-0006 step 6).
