@@ -152,4 +152,4 @@ PR #9 is closed unmerged, so its draft never entered the log. This record reuses
   6. The requirement-ID entry above: its approval, which quoted the approval message (at commit edac9fe), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
   7. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
 
-  Approval: to be added after approval (D-0006 step 6).
+  Approval: the owner, 2026-10-23T05:05:33Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNVpXFj2FM54dFP3zuszW4LF), naming PR #28 and head 6bbba58; approved commit 6bbba587177deaeb57b13a828fef497c80af3253. Check: the drafting agent read the message at 2026-10-23T05:05Z and confirmed it names that PR and head.
