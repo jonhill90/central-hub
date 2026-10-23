@@ -18,7 +18,7 @@ accepted-evidence:
   check: the drafting agent read the message in the Standards system thread at 2026-10-22T02:52Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #14, which carries this evidence commit on top of the approved commit
 legacy-id: []
-revisit-when: the same as D-0003, plus: the standards register moves out of this repo; or a second kind of standard needs its own family
+revisit-when: "the same as D-0003, plus: the standards register moves out of this repo; or a second kind of standard needs its own family"
 ---
 
 # Add a STD- family for standards to the ID family registry
@@ -129,3 +129,7 @@ D-0003's rules 1 and 3 to 7 carry over unchanged. Rule 2 gets one more row in th
   4. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit ba5bb20), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
 
   Approval: the owner, 2026-10-23T05:50:25Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNDAeh1xBwykD4qgSUzJ1UcQ), naming PR #31 and head eca96c0; approved commit eca96c04520789ec785fc4fd584c8f37a3b429f9. Check: the drafting agent read the message at 2026-10-23T05:50Z and confirmed it names that PR and head.
+- **2026-10-23** (front matter made valid YAML). Reason: the `revisit-when` value contained ": ", so YAML parsers rejected the whole front matter; no decision changes.
+  1. `revisit-when`: the value put in double quotes. Its text is unchanged.
+
+  Approval: to be added after approval (D-0006 step 6).

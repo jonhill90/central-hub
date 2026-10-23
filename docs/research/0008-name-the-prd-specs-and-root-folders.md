@@ -3,7 +3,7 @@ record: D-0008
 batch: RB-0036, with the names question kept in RB-0057's folder
 researched: 2026-10-17
 method: review of the owner's earlier layout research; scoping review of repository standards and template tools (22 source families); repository mining of 28 repositories' move history; a devil's advocate pass; a live placement test with fresh agents
-checks: an independent agent re-checked a seeded random sample of about 22% of the claims in each strand, plus named must-check claims: 94 of 104 passed, 9 were partly right and 1 failed, and the standards strand's 8 were fixed; every move count it re-ran on fresh clones matched
+checks: "an independent agent re-checked a seeded random sample of about 22% of the claims in each strand, plus named must-check claims: 94 of 104 passed, 9 were partly right and 1 failed, and the standards strand's 8 were fixed; every move count it re-ran on fresh clones matched"
 ---
 
 # Evidence for D-0008: the names of the PRD, the specs folder and the root folders
