@@ -42,7 +42,7 @@ This record decides where evidence files live. What an evidence file holds, and 
 
 ## Decision Outcome
 
-Chosen option: **1**.
+Chosen option: **1**. On 2026-10-23 at 04:33 UTC the owner chose it on a decision card that offered options 1 to 4. That choice is not acceptance; this record still needs acceptance under D-0001.
 
 ```
 docs/
