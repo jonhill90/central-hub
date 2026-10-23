@@ -10,6 +10,7 @@ waits-on: [D-0001, D-0006]
 supersedes: []
 superseded-by:
 amends: [D-0001, D-0006]
+amended-by: [D-0017]
 accepted-evidence:
   approved-by: owner
   approved-at: 2026-10-23T04:25:01Z
@@ -147,7 +148,17 @@ The old quotes stay in git history and in past PR text. This repository is publi
 
 ## More Information
 
-- **Evidence:** [0016-give-records-an-evidence-file-and-neutral-approval/evidence.md](0016-give-records-an-evidence-file-and-neutral-approval/evidence.md).
-- **Worked example:** [0006-allow-corrections-to-accepted-records/evidence.md](0006-allow-corrections-to-accepted-records/evidence.md).
+- **Evidence:** [../research/0016-give-records-an-evidence-file-and-neutral-approval.md](../research/0016-give-records-an-evidence-file-and-neutral-approval.md).
+- **Worked example:** [../research/0006-allow-corrections-to-accepted-records.md](../research/0006-allow-corrections-to-accepted-records.md).
 - **Exit path:** evidence files are plain Markdown in folders beside their records. Delete a folder to drop one, or move the folders into a future knowledge system. The approval fields map back to D-0001's fields one to one, except the quote, which stays in the chat archive.
 - **Related records:** D-0001, D-0006, D-0012.
+
+## Corrections
+
+Made under D-0006. The decision is unchanged.
+
+- **2026-10-23** (evidence files moved to `docs/research/` under D-0017). Reason: the two links pointed to files that D-0017 moves, so they would break; a broken link is a correction under D-0006, and no decision changes.
+  1. More Information, "Evidence". Before: `[0016-give-records-an-evidence-file-and-neutral-approval/evidence.md](0016-give-records-an-evidence-file-and-neutral-approval/evidence.md)`. After: `[../research/0016-give-records-an-evidence-file-and-neutral-approval.md](../research/0016-give-records-an-evidence-file-and-neutral-approval.md)`.
+  2. More Information, "Worked example". Before: `[0006-allow-corrections-to-accepted-records/evidence.md](0006-allow-corrections-to-accepted-records/evidence.md)`. After: `[../research/0006-allow-corrections-to-accepted-records.md](../research/0006-allow-corrections-to-accepted-records.md)`.
+
+  Approval: to be added after approval (D-0006 step 6).
