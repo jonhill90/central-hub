@@ -1,7 +1,7 @@
 ---
 id: D-0017
 title: Keep each record's evidence file in docs/research/, not in a folder beside the record
-status: proposed
+status: accepted
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -11,6 +11,13 @@ supersedes: []
 superseded-by:
 amends: [D-0012, D-0016]
 accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-23T04:58:39Z
+  approved-commit: 5115dcd4f117fafee773e5c258c3c71ccf6e8317
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNT1mFLf6eEyeGKAMDBbAKVd
+  approval-names: "PR #26 and head 5115dcd"
+  check: the drafting agent read the message in the project thread at 2026-10-23T04:58Z; it names PR jonhill90/central-hub#26 and head 5115dcd itself. An independent check by a reviewing agent is still to do.
+  merged: not yet; the owner merges PR #26, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: a knowledge system is chosen that should hold research summaries; or a record needs more than one supporting file
 ---

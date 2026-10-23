@@ -161,4 +161,4 @@ Made under D-0006. The decision is unchanged.
   1. More Information, "Evidence". Before: `[0016-give-records-an-evidence-file-and-neutral-approval/evidence.md](0016-give-records-an-evidence-file-and-neutral-approval/evidence.md)`. After: `[../research/0016-give-records-an-evidence-file-and-neutral-approval.md](../research/0016-give-records-an-evidence-file-and-neutral-approval.md)`.
   2. More Information, "Worked example". Before: `[0006-allow-corrections-to-accepted-records/evidence.md](0006-allow-corrections-to-accepted-records/evidence.md)`. After: `[../research/0006-allow-corrections-to-accepted-records.md](../research/0006-allow-corrections-to-accepted-records.md)`.
 
-  Approval: to be added after approval (D-0006 step 6).
+  Approval: owner, 2026-10-23T04:58:39Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNT1mFLf6eEyeGKAMDBbAKVd, naming PR #26 and head 5115dcd; approved commit 5115dcd4f117fafee773e5c258c3c71ccf6e8317 (PR #26).
