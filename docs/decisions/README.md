@@ -13,8 +13,8 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0006 | [Correct an accepted record in place when the decision does not change](0006-allow-corrections-to-accepted-records.md) | accepted | D-0001 | 2026-10-16 |
 | D-0007 | [Use a one-page PRD and frozen per-change specs as version 1 of Central Hub's requirement records](0007-use-a-one-page-prd-and-frozen-per-change-specs.md) | accepted | D-0001, D-0003 | 2026-10-19 |
 | D-0008 | [Name the PRD docs/PRD.md, keep specs in docs/specs/, and name root folders by job](0008-name-the-prd-specs-and-root-folders.md) | accepted | D-0001, D-0007 | 2026-10-19 |
-| D-0009 | [Add a STD- family for standards to the ID family registry](0009-add-a-standards-id-family.md) | accepted | D-0001, D-0003 | 2026-10-22 |
+| D-0009 | [Add a STD- family for standards to the ID family registry](0009-add-a-standards-id-family.md) | superseded | D-0001, D-0003 | 2026-10-22 |
 | D-0010 | [Give specs five status words and retire the three October 2026 drafts](0010-set-spec-status-words-and-retire-old-drafts.md) | accepted | D-0001, D-0007, D-0008 | 2026-10-22 |
 | D-0011 | [Keep the code for every machine below Kubernetes in hosts/, one subfolder per vendor product, with Terraform modules in their own repository](0011-keep-machine-code-in-hosts.md) | accepted | D-0001, D-0008 | 2026-10-22 |
 | D-0012 | [Sort docs/ by kind of document, add runbooks, architecture, glossary, postmortems and diagrams with their first file, and keep plans and playbooks out](0012-sort-docs-by-kind-of-document.md) | accepted | D-0001, D-0007, D-0008, D-0009, D-0010 | 2026-10-23 |
-| D-0014 | [Spell requirement IDs REQ-NNNN, and during Foundation rename agent-made labels everywhere with the owner's approval](0014-use-req-ids-for-requirements.md) | proposed | D-0001, D-0004, D-0006, D-0009 | 2026-10-23 |
+| D-0014 | [Spell requirement IDs REQ-NNNN, and during Foundation rename agent-made labels everywhere with the owner's approval](0014-use-req-ids-for-requirements.md) | accepted | D-0001, D-0004, D-0006, D-0009 | 2026-10-23 |

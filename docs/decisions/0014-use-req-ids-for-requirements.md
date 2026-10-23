@@ -1,7 +1,7 @@
 ---
 id: D-0014
 title: Spell requirement IDs REQ-NNNN, and during Foundation rename agent-made labels everywhere with the owner's approval
-status: proposed
+status: accepted
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -10,6 +10,12 @@ waits-on: [D-0001, D-0004, D-0006, D-0009]
 supersedes: [D-0009]
 superseded-by:
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#22 f62845a"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwN12EqNFjmi5fTVUJmrD9vhd
+  timestamp: 2026-10-23T03:46:26Z
+  approved-commit: f62845acd38deb7018acd8f96a2a484677976c8c
+  merged: not yet; Jon merges PR #22, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T03:46Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: the Activation gate passes (rule 5 goes back to "never renamed"); a rename sweep leaves a reference that a search missed; or a requirements tool is adopted that brings its own ID scheme
 ---

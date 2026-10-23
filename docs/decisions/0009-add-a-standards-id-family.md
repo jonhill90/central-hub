@@ -1,14 +1,14 @@
 ---
 id: D-0009
 title: Add a STD- family for standards to the ID family registry
-status: accepted
+status: superseded
 date: 2026-10-22
 decision-makers: [jon]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0001, D-0003]
 supersedes: [D-0003]
-superseded-by:
+superseded-by: D-0014
 accepted-evidence:
   quote: "accept PR jonhill90/central-hub#14 a4f0582"
   message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNU91iAKVLo8uUHycWbJs6MY
