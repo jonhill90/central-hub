@@ -132,6 +132,6 @@ D-0009's rules 1, 2, 3, 4, 6 and 7 carry over unchanged. Rule 1's registry row f
 
 ## Corrections
 
-- **2026-10-23** (research batch IDs under D-0015): 3 research batch citations renamed: `RQ1` to `RB-0072`; `R3` to `RB-0003`; `MF1` to `RB-0055`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: pending (D-0006 step 6).
+- **2026-10-23** (research batch IDs under D-0015): 3 research batch citations renamed: `RQ1` to `RB-0072`; `R3` to `RB-0003`; `MF1` to `RB-0055`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
 
 _Jon's quoted words are shown as he wrote them._
