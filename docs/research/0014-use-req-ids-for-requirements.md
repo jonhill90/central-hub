@@ -16,7 +16,7 @@ Should the requirements register keep its `SR` IDs, and how should agent-made ID
 
 ## Findings
 
-1. **The `SR` format was made by an agent.** `SR01` to `SR10` first appear in the register's baseline commit, written by an agent coordinator before this project existed. No message from the owner proposes or chooses the format; the owner's messages about it answer the wording of single rows. (Measured, from git history and the chat archive.)
+1. **The `SR` format was made by an agent.** `SR01` to `SR10` first appear in the register's baseline commit, written by an agent coordinator before this project existed. No message from the owner proposes or chooses the format; the owner's messages about it answer the wording of single rows. (Measured from git history and the chat archive; that an agent wrote it is inferred from them.)
 2. **The format was never compared with alternatives.** The research behind D-0003 kept `SR` because it did not clash and froze its spelling on purpose, and a later register study treated the ID as a given. D-0003 and D-0009 then listed `SRNN` in their registry tables. (From the earlier batches and the records.)
 3. **`SR` does not match the house style.** D-0009's own driver says decisions are written `D-0007`, with a dash and four digits; `SR` has no dash and two digits (from D-0009).
 4. **`SR` clashes outside the project.** NIST SP 800-53 has a control family `SR`, Supply Chain Risk Management, for example `SR-3` [1]. Under D-0009 rule 2, `SR` would also block any future prefix that starts with `SR` (inferred).
@@ -31,7 +31,7 @@ Should the requirements register keep its `SR` IDs, and how should agent-made ID
 
 (Written from the record, not from the batch.)
 
-D-0014 retires `SR` because of findings 1 to 4. It chooses `REQ-NNNN` to match the house style (finding 3), keeps meaning out of the number as D-0009 rule 7 and RTEMS do (finding 6), and renames every live reference during Foundation instead of keeping `SR` as an old label, because of findings 8 and 9. It records the agent's first draft, keeping `SR` (finding 10), as option 3, which the owner did not choose.
+D-0014 retires `SR` because of findings 1 to 4. It chooses `REQ-NNNN` to match the house style (finding 3), keeps type and topic out of the number as D-0009 rule 7 does (finding 6), and renames every live reference during Foundation instead of keeping `SR` as an old label, because of findings 8 and 9. It records the agent's first draft, keeping `SR` (finding 10), as option 3, which the owner did not choose.
 
 ## Limits
 

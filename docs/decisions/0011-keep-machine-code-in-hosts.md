@@ -97,7 +97,7 @@ central-hub/
 
 ## More Information
 
-- **Evidence:** no research batch of its own. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md).
+- **Evidence:** no research batch of its own. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md), finding 2.
 - Related records: D-0001, D-0008. Related standard: STD-0002 (proposed).
 
 ## Corrections
@@ -110,7 +110,7 @@ central-hub/
   3. Considered Options, option 2. Before: "(Research repo, RB-0036 `R1-design-independent.md` line 122; not counted)" After: "(batch RB-0036; not counted)" Reason: the old pointer is private.
   4. Considered Options, option 3. Before: "(Research repo, RB-0033 `S3-jon-repos.md`)" After: "(batch RB-0033)" Reason: the old pointer is private.
   5. Decision Outcome, first paragraph: the quote of Jon's 03:25 UTC answer (at commit 7915625) removed. After: "Jon said yes to keeping `hosts/` on 2026-10-20 at 03:25 UTC."
-  6. More Information, first bullet. Before: "Research behind it: Research repo, `labs/central-hub/repo-layout/rl4/` (`RULES-v4.md` N2, N5, F1; `SYNTHESIS.md`, "Where machine and VM code goes")." After: "**Evidence:** no research batch of its own. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md)." Reason: the old pointer is private; D-0016 rule 2.
+  6. More Information, first bullet. Before: "Research behind it: Research repo, `labs/central-hub/repo-layout/rl4/` (`RULES-v4.md` N2, N5, F1; `SYNTHESIS.md`, "Where machine and VM code goes")." After: "**Evidence:** no research batch of its own. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md), finding 2." Reason: the old pointer is private; D-0016 rule 2.
   7. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit 7915625), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
 
   Approval: to be added after approval (D-0006 step 6).
