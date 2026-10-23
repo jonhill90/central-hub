@@ -11,12 +11,13 @@ supersedes: []
 superseded-by:
 amended-by: [D-0017]
 accepted-evidence:
-  quote: "accept PR jonhill90/central-hub#19 ffd8dca"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNUAoAvcmynir2k9d41h2F3m
-  timestamp: 2026-10-23T02:18:39Z
+  approved-by: owner
+  approved-at: 2026-10-23T02:18:39Z
   approved-commit: ffd8dca206771f391fd5bb71415778a77a228db2
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNUAoAvcmynir2k9d41h2F3m
+  approval-names: "PR #19 and head ffd8dca, in the message itself"
+  check: the drafting agent read the message in the documentation path thread at 2026-10-23T02:18Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #19, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the documentation path thread at 2026-10-23T02:18Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: a kind folder passes about 30 files; a second reader group (not Jon or agents) needs its own docs; a docs site is built; the secret store for private values is chosen; or a document kind turns up that fits no folder here
 ---
@@ -27,7 +28,7 @@ revisit-when: a kind folder passes about 30 files; a second reader group (not Jo
 
 D-0008 names `docs/PRD.md`, `docs/specs/`, `docs/decisions/` and `docs/runbooks/`. D-0009 adds `docs/standards/`. D-0011 leaves "the folders inside `docs/`" to the documentation folder map work.
 
-On 2026-10-22 at 06:58 UTC Jon asked: "what about plans, specs, runbooks, architecture, and what ever other folders are needed for each possible scenarios." He also raised the runbook format as open.
+On 2026-10-22 at 06:58 UTC Jon asked which folders central-hub needs for plans, specs, runbooks, architecture and any other kind of document that each likely scenario calls for. He also raised the runbook format as open.
 
 This record sets which kinds of document central-hub keeps, where each one goes, and the minimum content of a runbook and a postmortem. It creates no folder.
 
@@ -49,7 +50,7 @@ This record sets which kinds of document central-hub keeps, where each one goes,
 
 Chosen option: **1**, with option 3's part READMEs added on top. Jon said yes to writing this map as a decision record on 2026-10-23 at 02:13 UTC, and accepted this record under D-0001 on 2026-10-23 at 02:18 UTC.
 
-No standard or paper names docs folders. ISO/IEC/IEEE 15289 and ISO/IEC 20000-1 say layout is out of their scope, and no paper read tests a folder scheme. In the repos read, 12 of the 18 that have docs give decisions, proposals, runbooks or postmortems a folder of their own, even where their guides are sorted another way. Only 2 of 18 use Diátaxis at the top. Diátaxis itself says it is "not a scheme into which documentation must be placed - four boxes". (Research repo, `areas/documentation/research/repo-docs-kinds/`, batch RB-0069.)
+No standard or paper names docs folders. ISO/IEC/IEEE 15289 and ISO/IEC 20000-1 say layout is out of their scope, and no paper read tests a folder scheme. In the repos read, 12 of the 18 that have docs give decisions, proposals, runbooks or postmortems a folder of their own, even where their guides are sorted another way. Only 2 of 18 use Diátaxis at the top. Diátaxis itself says it is "not a scheme into which documentation must be placed - four boxes". (Batch RB-0069, [evidence](../research/0012-sort-docs-by-kind-of-document.md).)
 
 ```
 central-hub/
@@ -165,7 +166,7 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
 
 ## More Information
 
-- Research behind it: Research repo, `areas/documentation/research/repo-docs-kinds/`. `SYNTHESIS.md` holds the map, the formats and the tests on 5 real items. `CHECK.md`, `RECALL.md` and `DEVIL.md` hold the checks.
+- **Evidence:** [../research/0012-sort-docs-by-kind-of-document.md](../research/0012-sort-docs-by-kind-of-document.md): batch RB-0069, with the map tested on 5 real items, a recall check, a devil's advocate pass and an independent claim check.
 - Sources it rests on:
   - AWS Well-Architected OPS07-BP03, the runbook template;
   - NIST SP 800-34 Rev. 1 chapter 4, for steps, escalation and validation;
@@ -177,5 +178,13 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
 
 ## Corrections
 
-- **2026-10-23** (requirement IDs respelled under D-0014): 3 requirement IDs renamed, `SR05` to `REQ-0005`, `SR06` to `REQ-0006`, `SR11` to `REQ-0011`. Before: `SR05`; after: `REQ-0005`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
+- **2026-10-23** (requirement IDs respelled under D-0014): 3 requirement IDs renamed, `SR05` to `REQ-0005`, `SR06` to `REQ-0006`, `SR11` to `REQ-0011`. Before: `SR05`; after: `REQ-0005`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
 - **2026-10-23** (research batch IDs under D-0015): 1 research batch citation renamed: `DK1` to `RB-0069`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
+- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (7915625) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 7915625). No value changes.
+  2. Context and Problem Statement, second paragraph: the quote of Jon's 06:58 UTC question (at commit 7915625) replaced by a neutral summary. After: "On 2026-10-22 at 06:58 UTC Jon asked which folders central-hub needs for plans, specs, runbooks, architecture and any other kind of document that each likely scenario calls for."
+  3. Decision Outcome, second paragraph. Before: "(Research repo, `areas/documentation/research/repo-docs-kinds/`, batch RB-0069.)" After: "(Batch RB-0069, [evidence](../research/0012-sort-docs-by-kind-of-document.md).)" Reason: the old pointer is private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  4. More Information, first bullet. Before: "Research behind it: Research repo, `areas/documentation/research/repo-docs-kinds/`. `SYNTHESIS.md` holds the map, the formats and the tests on 5 real items. `CHECK.md`, `RECALL.md` and `DEVIL.md` hold the checks." After: "**Evidence:** [../research/0012-sort-docs-by-kind-of-document.md](../research/0012-sort-docs-by-kind-of-document.md): batch RB-0069, with the map tested on 5 real items, a recall check, a devil's advocate pass and an independent claim check." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  5. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit 7915625), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
+
+  Approval: to be added after approval (D-0006 step 6).

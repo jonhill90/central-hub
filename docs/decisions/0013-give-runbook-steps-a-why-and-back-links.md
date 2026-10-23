@@ -11,12 +11,13 @@ supersedes: []
 superseded-by:
 amends: [D-0012]
 accepted-evidence:
-  quote: "accept PR jonhill90/central-hub#21 eb33bd7"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNWc7Mzu6ZFvoYgnxsDKVyKh
-  timestamp: 2026-10-23T03:42:38Z
+  approved-by: owner
+  approved-at: 2026-10-23T03:42:38Z
   approved-commit: eb33bd7b0ceba8560d683b9ff4620fe2a6aa8886
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNWc7Mzu6ZFvoYgnxsDKVyKh
+  approval-names: "PR #21 and head eb33bd7, in the message itself"
+  check: the drafting agent read the message in the documentation path thread at 2026-10-23T03:42Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #21, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the documentation path thread at 2026-10-23T03:42Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: why lines grow into paragraphs; ※ links break often enough to need a link check; or every manual runbook has an automated twin and the manual ones stop being run
 ---
@@ -27,7 +28,7 @@ revisit-when: why lines grow into paragraphs; ※ links break often enough to ne
 
 D-0012 sets the runbook template: a fixed header, then steps that each have an `expect:` line. It says nothing about why a step is done, or how steps connect.
 
-On 2026-10-19 at 02:43 UTC Jon asked of the cluster runbook: "Does the Runbook have the whys? Not to much but at least enough to understand why we are ddoing things this and how it connects. I would like it to read like a story and maybe have asteriks reminders that link back to other parts." In the same message he said: "I want a manual runbook and then we will have the operational excellence runbook using IaC and CaC and such. But how will i know the value of using those things if i start with the abstractions right away."
+On 2026-10-19 at 02:43 UTC Jon asked whether the cluster runbook explains why each step is done: not at length, but enough to understand the reasons and how the steps connect. Jon wanted it to read like a story, with asterisk reminders that link back to other parts. In the same message Jon asked for a manual runbook first, and an automated runbook using infrastructure and configuration as code later, because starting with the abstractions would hide what they are worth.
 
 That request came before D-0012, and D-0012 missed it. This record adds it to the template.
 
@@ -97,5 +98,16 @@ Everything else in D-0012 stays as it is.
 
 ## More Information
 
+- **Evidence:** no research batch. It rests on the owner's request described in the context.
 - Related records: D-0012 (runbook format), D-0001.
 - The cluster build runbook drafts in the Research repo (`RUNBOOK-v3-CKA.md`) already use this style. They are the first that will move under it.
+
+## Corrections
+
+- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (7915625) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 7915625). No value changes.
+  2. Context and Problem Statement, second paragraph: the two quotes of Jon's 02:43 UTC message (at commit 7915625) replaced by a neutral summary. After: "On 2026-10-19 at 02:43 UTC Jon asked whether the cluster runbook explains why each step is done: not at length, but enough to understand the reasons and how the steps connect. Jon wanted it to read like a story, with asterisk reminders that link back to other parts. In the same message Jon asked for a manual runbook first, and an automated runbook using infrastructure and configuration as code later, because starting with the abstractions would hide what they are worth."
+  3. More Information: a first bullet added, "**Evidence:** no research batch. It rests on the owner's request described in the context." Reason: D-0016 rule 2.
+  4. A Corrections section added, holding this entry.
+
+  Approval: to be added after approval (D-0006 step 6).
