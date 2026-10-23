@@ -13,5 +13,7 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0003 | [0003-use-registered-id-families-and-file-qualified-labels.md](0003-use-registered-id-families-and-file-qualified-labels.md) |
 | D-0005 | [0005-measure-central-hub-against-eight-pillars.md](0005-measure-central-hub-against-eight-pillars.md) |
 | D-0006 | [0006-allow-corrections-to-accepted-records.md](0006-allow-corrections-to-accepted-records.md) |
+| D-0007 | [0007-use-a-one-page-prd-and-frozen-per-change-specs.md](0007-use-a-one-page-prd-and-frozen-per-change-specs.md) |
+| D-0008 | [0008-name-the-prd-specs-and-root-folders.md](0008-name-the-prd-specs-and-root-folders.md) |
 | D-0016 | [0016-give-records-an-evidence-file-and-neutral-approval.md](0016-give-records-an-evidence-file-and-neutral-approval.md) |
 | D-0018 | [0018-respell-research-method-ids.md](0018-respell-research-method-ids.md) |
