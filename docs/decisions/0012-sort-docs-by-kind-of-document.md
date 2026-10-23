@@ -9,7 +9,7 @@ consulted: []
 waits-on: [D-0001, D-0007, D-0008, D-0009, D-0010]
 supersedes: []
 superseded-by:
-amended-by: [D-0017]
+amended-by: [D-0013, D-0017]
 accepted-evidence:
   approved-by: owner
   approved-at: 2026-10-23T02:18:39Z
@@ -188,3 +188,7 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
   5. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit 7915625), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
 
   Approval: the owner, 2026-10-23T06:07:52Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAnCf1qE6ULcTZw9foG87Mc), naming PR #32 and head f994dac; approved commit f994dacd8fb34b10e550664797bf61d12af773a6. Check: the drafting agent read the message at 2026-10-23T06:07Z and confirmed it names that PR and head.
+- **2026-10-23** (lifecycle field completed). Reason: D-0013 says `amends: [D-0012]`, but this record's `amended-by` listed only D-0017; no decision changes.
+  1. `amended-by`. Before: `amended-by: [D-0017]` After: `amended-by: [D-0013, D-0017]`
+
+  Approval: the owner, 2026-10-23T21:46:34Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAaxwHhhgPt6cvkvmWyw9yy), naming PR #33 and head e6b7c1c; approved commit e6b7c1c914e07d48a8c0985b2dfbeb119cee1a70. Check: the drafting agent read the message at 2026-10-23T21:46Z and confirmed it names that PR and head.
