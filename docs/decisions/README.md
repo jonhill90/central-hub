@@ -22,3 +22,4 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0015 | [Number research batches RB-NNNN in one batch register, and rename the old batch codes everywhere](0015-number-research-batches-rb-nnnn.md) | accepted | D-0001, D-0006, D-0014 | 2026-10-23 |
 | D-0016 | [Give each decision record a public evidence file, and record the owner's approval and reasons in neutral words](0016-give-records-an-evidence-file-and-neutral-approval.md) | accepted | D-0001, D-0006 | 2026-10-23 |
 | D-0017 | [Keep each record's evidence file in docs/research/, not in a folder beside the record](0017-keep-evidence-files-in-docs-research.md) | accepted | D-0012, D-0016 | 2026-10-23 |
+| D-0018 | [Spell research method IDs RM-NNNN, store each method's number, and rename the old IDs everywhere](0018-respell-research-method-ids.md) | proposed | D-0001, D-0006, D-0015, D-0016 | 2026-10-23 |
