@@ -34,7 +34,7 @@ Adding a family changes the family registry, so under D-0015 rule 2 it needs a r
 ## Decision Drivers
 
 - **One shape for every cited ID:** `D-0007`, `REQ-0022`, `STD-0001`, `RB-0075`.
-- **A number stays with its method:** catalogues such as MITRE ATT&CK and CWE keep an entry's number for its whole life and mark retired entries instead of deleting them.
+- **A number stays with its method:** the published catalogues read, such as MITRE ATT&CK, mark retired entries and point to their replacement instead of deleting them.
 - **Greenfield:** the IDs have no users outside the project. central-hub cites none.
 - **Replaceable** (REQ-0011).
 
