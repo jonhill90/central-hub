@@ -1,7 +1,7 @@
 ---
 id: D-0016
 title: Give each decision record a public evidence file, and record the owner's approval and reasons in neutral words
-status: proposed
+status: accepted
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -11,6 +11,13 @@ supersedes: []
 superseded-by:
 amends: [D-0001, D-0006]
 accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-23T04:25:01Z
+  approved-commit: 0885430a6de4cff9bc8298ce99c13c808fc5ecfd
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNYHFBd31VZNpvPgikzphyKP
+  approval-names: "PR #25 and head 0885430"
+  check: the drafting agent read the message in the project thread at 2026-10-23T04:25Z; it names PR jonhill90/central-hub#25 and head 0885430 itself. An independent check by a reviewing agent is still to do.
+  merged: not yet; the owner merges PR #25, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: a knowledge system is chosen that should hold research and approvals; per-agent identities make GitHub approval the proof (Activation gate item 1); or an evidence file is found to state something its research did not find
 ---

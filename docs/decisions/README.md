@@ -20,4 +20,4 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0013 | [Give every runbook step a short why and ※ links back, and mark each runbook manual or automated](0013-give-runbook-steps-a-why-and-back-links.md) | accepted | D-0001, D-0012 | 2026-10-23 |
 | D-0014 | [Spell requirement IDs REQ-NNNN, and during Foundation rename agent-made labels everywhere with the owner's approval](0014-use-req-ids-for-requirements.md) | superseded | D-0001, D-0004, D-0006, D-0009 | 2026-10-23 |
 | D-0015 | [Number research batches RB-NNNN in one batch register, and rename the old batch codes everywhere](0015-number-research-batches-rb-nnnn.md) | accepted | D-0001, D-0006, D-0014 | 2026-10-23 |
-| D-0016 | [Give each decision record a public evidence file, and record the owner's approval and reasons in neutral words](0016-give-records-an-evidence-file-and-neutral-approval.md) | proposed | D-0001, D-0006 | 2026-10-23 |
+| D-0016 | [Give each decision record a public evidence file, and record the owner's approval and reasons in neutral words](0016-give-records-an-evidence-file-and-neutral-approval.md) | accepted | D-0001, D-0006 | 2026-10-23 |

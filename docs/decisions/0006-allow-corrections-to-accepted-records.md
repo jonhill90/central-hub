@@ -10,6 +10,7 @@ waits-on: [D-0001]
 supersedes: []
 superseded-by:
 amends: [D-0001]
+amended-by: [D-0016]
 accepted-evidence:
   quote: "accept PR jonhill90/central-hub#10 0ae0493"
   message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNTJTUNZbcPsUxG7TCKiX23s
