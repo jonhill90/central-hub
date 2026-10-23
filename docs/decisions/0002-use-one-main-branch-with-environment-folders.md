@@ -68,12 +68,12 @@ Chosen option: **1**.
 - **Engines:** Flux's guide stores every environment's config on the same branch. Both Flux and Argo CD point a cluster at a path at a revision (fetched 2026-10-11), so folders work on either.
 - **Sources that support the habit, not the question:** Kustomize's examples treat environments as overlay variants. Trunk-based development, GitHub flow and DORA favour one trunk with short-lived branches, but none of them discusses environment branches.
 - **Practice (illustrative, not a survey):** of 19 repos read, 17 are cluster repos; 8 are vendor examples and 6 come from one homelab template family. So the sample confirms the documented pattern rather than testing it. In the configurations inspected, none deploys from hand-edited environment branches, and the 10 with several environments or clusters use folders. The branch-name search looked only for certain prefixes, so it could miss names like `env/prod`. The reviewing agent found one repo whose docs describe a `develop` branch for dev and `main` for prod; it is documented, not shown to work well.
-- **Terraform is different:** Google Cloud recommends a branch per environment for push-based Terraform, which matches what Jon described as his work setup (thread, 2026-10-11 06:04 UTC). R2 found no primary source in its search scope that recommends hand-edited environment branches for pull-based GitOps config, and app code reaches environments by promoting an image tag, not by branches.
+- **Terraform is different:** Google Cloud recommends a branch per environment for push-based Terraform, which matches what Jon described as his work setup (thread, 2026-10-11 06:04 UTC). RB-0002 found no primary source in its search scope that recommends hand-edited environment branches for pull-based GitOps config, and app code reaches environments by promoting an image tag, not by branches.
 - **Switching cost (inferred):** moving from folders to branches later is usually cheap, though any change of source is checked (see Exit path). Moving back from hand-edited branches is expensive, because the branches drift apart.
 
 ### What the decision covers
 
-- **Scope:** branches inside central-hub. Whether tenant or application manifests live here or in their own repositories is a separate decision (repo boundaries); that decision may add repositories, not branches. Any push-based infrastructure code added later (Terraform, Ansible) follows the same rule: environments are folders or per-environment variable files, and pipeline stages gate each apply (inferred, R2b §1.3).
+- **Scope:** branches inside central-hub. Whether tenant or application manifests live here or in their own repositories is a separate decision (repo boundaries); that decision may add repositories, not branches. Any push-based infrastructure code added later (Terraform, Ansible) follows the same rule: environments are folders or per-environment variable files, and pipeline stages gate each apply (inferred, RB-0002-gaps.md §1.3).
 - **Long-lived branches:** `main` only. It is the default branch and, after the Activation gate, the state the clusters pull.
 - **Environments:** folders on `main`, never branches.
   - **One deployment target now:** the VPS cluster.
@@ -126,7 +126,7 @@ Jon answered all three, the last two on the condition that the rule comes from s
 - Good: one target branch, one ruleset and one rule for every agent.
 - Good: the difference between environments is a folder diff in one tree.
 - Good: it works with Flux or Argo CD, so this decision doesn't decide the engine.
-- Bad: a one-line change to a base, an overlay or a chart version can change every environment at once, and the PR diff shows the input, not the rendered manifests (R2b §3.2; Kapelonis 2022; Akuity 2025). This is the one drawback that matters today, with Jon reviewing agent PRs. The rendered diff at the Activation gate is the mitigation.
+- Bad: a one-line change to a base, an overlay or a chart version can change every environment at once, and the PR diff shows the input, not the rendered manifests (RB-0002-gaps.md §3.2; Kapelonis 2022; Akuity 2025). This is the one drawback that matters today, with Jon reviewing agent PRs. The rendered diff at the Activation gate is the mitigation.
 - Bad: per-environment access rules are per-path (required code-owner review; GitHub's file-path rules are for private repos only) or need a separate production repository, not per-branch. With one owner that protects nobody from anybody, so it costs nothing today.
 - Bad: promotion is an edit and a PR, not a merge button.
 - Bad: until the Activation gate, the format is a convention Jon checks by eye.
@@ -170,5 +170,9 @@ Jon answered all three, the last two on the condition that the rule comes from s
   - To pin prod to a release: point prod at a commit, or at a tag protected from being moved, and compare renders before switching.
   - Any change of source can change what the engine owns or prunes, so each switch is checked, not assumed cheap.
   - To change the type list or spelling: write a successor record and update the check. No cluster reads branch names.
+
+## Corrections
+
+- **2026-10-23** (research batch IDs under D-0015): 3 research batch citations renamed: `R2` to `RB-0002`; `R2b` to `RB-0002-gaps.md` (2 times). Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: pending (D-0006 step 6).
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._

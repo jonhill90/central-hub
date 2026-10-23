@@ -1,6 +1,6 @@
 ---
 record: D-0016
-batch: DE1
+batch: RB-0073
 researched: 2026-10-23
 method: survey of this repository's decision records; rapid review of published decision-record guidance and open-source decision processes; claim ledger; independent check
 checks: known-item recall 17 of 20 (85%); an independent reviewing agent opened 26 of the 33 first ledger rows (23 supported, 3 partly, 0 not supported, 0 unreachable) and listed 14 fixes, all applied before the record was written
@@ -60,4 +60,4 @@ All fetched 2026-10-23.
 
 ## Working files
 
-The full ledger (40 claims), the record survey, the recall check and the two independent checks are kept in the owner's private research archive as batch DE1. They are not needed to read this file.
+The full ledger (40 claims), the record survey, the recall check and the two independent checks are kept in the owner's private research archive as batch RB-0073. They are not needed to read this file.

@@ -1,6 +1,6 @@
 ---
 record: D-0006
-batch: ADR-C1
+batch: RB-0029
 researched: 2026-10-16
 method: rapid review of published decision-record guidance and comparable record systems; claim ledger; independent quote check
 checks: 21 of 21 quoted passages matched the fetched text; 6 claims found to go further than their sources were reworded before use
@@ -63,4 +63,4 @@ Items 1 to 14 fetched 2026-10-16.
 
 ## Working files
 
-The full ledger (27 claims) and the quote check are kept in the owner's private research archive as batch ADR-C1. They are not needed to read this file.
+The full ledger (27 claims) and the quote check are kept in the owner's private research archive as batch RB-0029. They are not needed to read this file.

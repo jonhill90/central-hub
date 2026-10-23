@@ -113,10 +113,11 @@ D-0003's rules 1 and 3 to 7 carry over unchanged. Rule 2 gets one more row in th
 ## More Information
 
 - Proposal and ID options (project files outside this repo): `plans/standards-system/PROPOSAL-v0.1.md`, §6.
-- Research behind the ID rules: batch R3, `central-hub/research/identifiers/` in the project files, as cited by D-0003.
+- Research behind the ID rules: batch RB-0003, `central-hub/research/identifiers/` in the project files, as cited by D-0003.
 - Related records: D-0001, D-0003, D-0004, D-0008.
 - On acceptance, D-0003's lifecycle fields change to `status: superseded` and `superseded-by: D-0009`, under D-0001.
 
 ## Corrections
 
 - **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
+- **2026-10-23** (research batch IDs under D-0015): 1 research batch citation renamed: `R3` to `RB-0003`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: pending (D-0006 step 6).

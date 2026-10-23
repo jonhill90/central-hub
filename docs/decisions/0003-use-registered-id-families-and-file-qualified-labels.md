@@ -26,7 +26,7 @@ revisit-when: a family needs numbers faster than one owner can hand them out; ag
 
 On 2026-10-12, Jon read a table of IDs and asked: "So what is this system for IDs and why do we need it?" No ID system existed. Each agent had made up labels inside the file it was writing, and those labels now clash across files.
 
-The research batch (R3, in the project files outside this repo at `central-hub/research/identifiers/`, run after Jon chose "Run it" at 02:45 UTC) measured the problem:
+The research batch (RB-0003, in the project files outside this repo at `central-hub/research/identifiers/`, run after Jon chose "Run it" at 02:45 UTC) measured the problem:
 
 - About 75 ID families. About 50 of them restart at 1 in each document.
 - **21 labels clash.** `P1` has 7 meanings, and two of them are in the same file. "ADR 0001" names 3 different records.
@@ -126,11 +126,15 @@ flowchart LR
 
 ## More Information
 
-- Research (project files outside this repo): `central-hub/research/identifiers/`. SPEC.md has the gate, R3-SYNTHESIS.md the recommendation and disagreements, R3-inventory.md every clash with file:line, and SOURCES.md the sources.
+- Research (project files outside this repo): `central-hub/research/identifiers/`. SPEC.md has the gate, RB-0003-SYNTHESIS.md the recommendation and disagreements, RB-0003-inventory.md every clash with file:line, and SOURCES.md the sources.
 - Source limit: this environment blocked several primary sites (w3.org, ietf.org, doi.org and others), so those claims are search-summary only and are labelled.
 - Reported, not fixed (agent-estate is back-burnered; noted only for whoever revives it):
   - agent-estate `register.go:571-591` may reuse a deleted `SRC-` number. Inferred from the code, not tested.
   - INMAPS has two 12-digit note-ID shapes that can look identical.
 - Open question for later: should open backlog items get a global family, or stay `DECISION-MAP#…`?
+
+## Corrections
+
+- **2026-10-23** (research batch IDs under D-0015): 3 research batch citations renamed: `R3` to `RB-0003`; `R3-SYNTHESIS.md` to `RB-0003-SYNTHESIS.md`; `R3-inventory.md` to `RB-0003-inventory.md`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: pending (D-0006 step 6).
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._

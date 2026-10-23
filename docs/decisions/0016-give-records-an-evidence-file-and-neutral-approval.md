@@ -151,3 +151,7 @@ The old quotes stay in git history and in past PR text. This repository is publi
 - **Worked example:** [0006-allow-corrections-to-accepted-records/evidence.md](0006-allow-corrections-to-accepted-records/evidence.md).
 - **Exit path:** evidence files are plain Markdown in folders beside their records. Delete a folder to drop one, or move the folders into a future knowledge system. The approval fields map back to D-0001's fields one to one, except the quote, which stays in the chat archive.
 - **Related records:** D-0001, D-0006, D-0012.
+
+## Corrections
+
+- **2026-10-23** (research batch IDs under D-0015): 2 research batch citations renamed: `DE1` to `RB-0073` (2 times) in `evidence.md`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: pending (D-0006 step 6).
