@@ -12,12 +12,13 @@ superseded-by:
 amends: [D-0001]
 amended-by: [D-0016]
 accepted-evidence:
-  quote: "accept PR jonhill90/central-hub#10 0ae0493"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNTJTUNZbcPsUxG7TCKiX23s
-  timestamp: 2026-10-16T08:28:58Z
+  approved-by: owner
+  approved-at: 2026-10-16T08:28:58Z
   approved-commit: 0ae0493b4f6eef50aae6caa8a18c97d4515eab91
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNTJTUNZbcPsUxG7TCKiX23s
+  approval-names: "PR #10 and head 0ae0493"
+  check: the drafting agent read the message in the ADR corrections thread at 2026-10-16T08:29Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #10, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the ADR corrections thread at 2026-10-16T08:29Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: agents get their own GitHub identities (Activation gate item 1); a correction is later found to have changed a decision; or corrections to one record pile up
 ---
@@ -28,13 +29,13 @@ revisit-when: agents get their own GitHub identities (Activation gate item 1); a
 
 D-0001 says an accepted record's body never changes, and "a changed decision is a new record that supersedes the old one". It has no separate path for an error that leaves the decision the same.
 
-D-0005 was accepted on 2026-10-16 with two internal inconsistencies and a wording slip. The decision is unchanged, but D-0001 left only one route: a full restatement of D-0005 with three small changes (drafted in PR #9, closed unmerged). Jon questioned that (Central Hub project, ADR corrections thread, 2026-10-16 07:56 UTC): "Got words wrong in the first one, so make an almost identical one with small changes. And oops, I got it wrong again, so I need to make a new one. This could be very bad for something that needs to be iterated on a lot."
+D-0005 was accepted on 2026-10-16 with two internal inconsistencies and a wording slip. The decision is unchanged, but D-0001 left only one route: a full restatement of D-0005 with three small changes (drafted in PR #9, closed unmerged). Jon questioned that route on 2026-10-16 (ADR corrections thread, 07:56 UTC): a near-copy record for every slip, and another for a slip in the copy, would not work for records that are revised often.
 
 This record decides how an error in an accepted record is fixed. It amends D-0001's immutability rule and does not supersede D-0001.
 
 ## Decision Drivers
 
-- **Follow published practice.** Research batch RB-0029 (Research repo, `areas/documentation/research/adr-corrections/`) read 14 sources. None asks for a near-copy record to fix an error that leaves the decision the same. Supersede is described for a decision that is reversed or changed.
+- **Follow published practice.** Research batch RB-0029 ([evidence](../research/0006-allow-corrections-to-accepted-records.md)) read 14 sources. None asks for a near-copy record to fix an error that leaves the decision the same. Supersede is described for a decision that is reversed or changed.
 - **Only Jon accepts.** A correction must need the same approval as an acceptance.
 - **Keep the history.** Anyone must be able to see what the record said when Jon accepted it.
 - **Replaceable** (REQ-0011): easy to tighten back to strict immutability.
@@ -108,7 +109,7 @@ PR #9 is closed unmerged, so its draft never entered the log. This record reuses
 - Good: the text Jon accepted is still in git at the approved commit, and the Corrections list says what changed.
 - Bad: goes against the strict "never edit" guidance from AWS, Azure Well-Architected and Fowler.
 - Bad: "the decision did not change" is a judgment call. The guards are that Jon approves each correction, and that anything unsure is treated as a changed decision.
-- Neutral: the 4-digit ID was not a reason for this record. Reading `D-NNNN` as at least four digits, D-10000 still works, as `printf "%04d"` already does (RB-0029 ledger rows 13 to 16).
+- Neutral: the 4-digit ID was not a reason for this record. Reading `D-NNNN` as at least four digits, D-10000 still works, as `printf "%04d"` already does (evidence, finding 4).
 
 ### Confirmation
 
@@ -134,13 +135,21 @@ PR #9 is closed unmerged, so its draft never entered the log. This record reuses
 
 ## More Information
 
-- **Research:** Research repo, `areas/documentation/research/adr-corrections/` (SYNTHESIS.md, LEDGER.md with 27 claims, VERIFY.md with an independent quote check: 21 of 21 quotes verbatim).
+- **Evidence:** [../research/0006-allow-corrections-to-accepted-records.md](../research/0006-allow-corrections-to-accepted-records.md): batch RB-0029, 14 sources read, 21 of 21 quoted passages checked against the fetched text.
 - **Former D-0006:** the PR #9 draft, a full restatement of D-0005; closed unmerged on 2026-10-16. Its number is reused here.
 - **Exit path:** to return to strict immutability, a new record supersedes this one; past Corrections entries stay where they are. To switch to an errata list, a new record moves the Corrections entries into one file per record.
 
 ## Corrections
 
-- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
+- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
 - **2026-10-23** (research batch IDs under D-0015): 5 research batch citations renamed: `ADR-C1` to `RB-0029` (3 times); `ADR-C1` to `RB-0029` (2 times) in its evidence file (now `docs/research/`). Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
+- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (D-0016 rule 7) instead of copying it.
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names: "PR #10 and head 0ae0493"` added; `quote` removed (its text is in `accepted-evidence.quote` at commit edac9fe). No value changes.
+  2. Context and Problem Statement, second paragraph: the quote of Jon's 07:56 UTC message (at commit edac9fe) replaced by a neutral summary. After: "Jon questioned that route on 2026-10-16 (ADR corrections thread, 07:56 UTC): a near-copy record for every slip, and another for a slip in the copy, would not work for records that are revised often."
+  3. Decision Drivers, first bullet. Before: "Research batch RB-0029 (Research repo, `areas/documentation/research/adr-corrections/`) read 14 sources." After: "Research batch RB-0029 ([evidence](../research/0006-allow-corrections-to-accepted-records.md)) read 14 sources." Reason: the old pointer is private.
+  4. Consequences, last bullet. Before: "(RB-0029 ledger rows 13 to 16)". After: "(evidence, finding 4)". Reason: the ledger is private; the evidence file's finding 4 states the same fact.
+  5. More Information, first bullet. Before: "**Research:** Research repo, `areas/documentation/research/adr-corrections/` (SYNTHESIS.md, LEDGER.md with 27 claims, VERIFY.md with an independent quote check: 21 of 21 quotes verbatim)." After: "**Evidence:** [../research/0006-allow-corrections-to-accepted-records.md](../research/0006-allow-corrections-to-accepted-records.md): batch RB-0029, 14 sources read, 21 of 21 quoted passages checked against the fetched text." Reason: links the evidence file (D-0016 rule 1 as amended by D-0017, and D-0006 "What counts as a correction" as amended by D-0016).
+  6. The requirement-ID entry above: its approval, which quoted the approval message (at commit edac9fe), rewritten as D-0016 rule 6 facts. No value changes.
+  7. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
 
-_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
+  Approval: to be added after approval (D-0006 step 6).
