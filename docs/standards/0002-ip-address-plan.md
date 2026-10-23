@@ -8,12 +8,13 @@ why: Jon said yes to the proposed pod range 10.244.0.0/16 on 2026-10-22 at 01:54
 follows: [RFC 1918 private IPv4, RFC 6598 shared address space (avoided), RFC 4193 unique local IPv6, RFC 4291 IPv6 addressing (/64 per link), RFC 7381 enterprise IPv6 deployment, Azure IP planning guide (IPv6 subnets exactly /64), Kubernetes dual-stack]
 check: none yet in this repo; an overlap check script exists outside it, and where scripts live here is not decided yet
 accepted-evidence:
-  quote: "accept PR jonhill90/central-hub#17 5196b18"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNV1uvM92X9ekDHTkxTf1hLf
-  timestamp: 2026-10-22T07:12:48Z
+  approved-by: owner
+  approved-at: 2026-10-22T07:12:48Z
   approved-commit: 5196b18f87c1b6a209291e62114fd5479833ade1
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNV1uvM92X9ekDHTkxTf1hLf
+  approval-names: "PR #17 and head 5196b18, in the message itself"
+  check: the drafting agent read the message in the IP address plan thread at 2026-10-22T07:12Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #17, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the IP address plan thread at 2026-10-22T07:12Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 ---
 
 # STD-0002: IP address plan
@@ -97,3 +98,11 @@ A new dev lab VM on VLAN 11 takes an address from `10.112.11.0/24` by DHCP, belo
 - Which tool answers for the load-balancer addresses. That waits for the ingress decision.
 - Per-machine addresses and DHCP reservations. They live outside this public repository.
 - Public addresses from providers.
+
+## Corrections
+
+- **2026-10-23** (approval recorded in neutral form under D-0016). Reason: D-0016 rules 6 and 7, applied to standards because this register's README gives `accepted-evidence` the same shape as decision records; the rule does not change. The removed text is the owner's words, so this entry names where it was and a commit that holds it (916a972) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 916a972). No value changes.
+  2. A Corrections section added, holding this entry.
+
+  Approval: to be added after approval (D-0006 step 6).

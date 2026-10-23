@@ -8,12 +8,13 @@ why: Jon said yes to the proposed two-letter OS codes on 2026-10-21 at 01:12 UTC
 follows: [NetBIOS computer name limit (15 characters, not all digits), RFC 1123 host name label, Kubernetes node name rules]
 check: none yet in this repo; a reviewing agent checks new names by hand
 accepted-evidence:
-  quote: "accept PR jonhill90/central-hub#16 1c8bfdd"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNLe3Dm7Jei52vHtd4YLEnZy
-  timestamp: 2026-10-22T07:07:51Z
+  approved-by: owner
+  approved-at: 2026-10-22T07:07:51Z
   approved-commit: 1c8bfdd412eade4c2470fa7959ecbd6390b25093
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNLe3Dm7Jei52vHtd4YLEnZy
+  approval-names: "PR #16 and head 1c8bfdd, in the message itself"
+  check: the drafting agent read the message in the Standards system thread at 2026-10-22T07:07Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #16, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the Standards system thread at 2026-10-22T07:07Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 ---
 
 # STD-0001: VM hostnames
@@ -51,3 +52,11 @@ Server and desktop are told apart by the OS code on Windows (`ws` or `wc`), and 
 
 - The platform's own resource name around the hostname (for example an Azure VM resource name), and the tags. The org code and the subscription words are not settled yet.
 - Real machine names. This repository is public, so the names in use live outside it.
+
+## Corrections
+
+- **2026-10-23** (approval recorded in neutral form under D-0016). Reason: D-0016 rules 6 and 7, applied to standards because this register's README gives `accepted-evidence` the same shape as decision records; the rule does not change. The removed text is the owner's words, so this entry names where it was and a commit that holds it (916a972) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 916a972). No value changes.
+  2. A Corrections section added, holding this entry.
+
+  Approval: to be added after approval (D-0006 step 6).

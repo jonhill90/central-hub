@@ -31,7 +31,7 @@ The `STD-NNNN` family is registered in D-0009. Each standard is one file in this
 | `why` | Jon's yes (date and time) or the decision record behind the rule. |
 | `follows` | Outside standards or published guidance the rule follows. |
 | `check` | A script or review step that checks the rule, or `none yet`. |
-| `accepted-evidence` | Required when `status: active`. Same shape as in decision records (D-0001). |
+| `accepted-evidence` | Required when `status: active`. Same shape as in decision records (D-0001, with D-0016 rule 6's fields). |
 
 The body holds the rule itself, worded with BCP 14 key words (RFC 2119, RFC 8174), plus an example that passes.
 
