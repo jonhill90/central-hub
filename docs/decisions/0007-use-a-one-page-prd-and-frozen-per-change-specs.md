@@ -165,4 +165,4 @@ Each of these is a later decision for Jon:
   6. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit ba5bb20), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
   7. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
 
-  Approval: to be added after approval (D-0006 step 6).
+  Approval: the owner, 2026-10-23T05:50:25Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNDAeh1xBwykD4qgSUzJ1UcQ), naming PR #31 and head eca96c0; approved commit eca96c04520789ec785fc4fd584c8f37a3b429f9. Check: the drafting agent read the message at 2026-10-23T05:50Z and confirmed it names that PR and head.
