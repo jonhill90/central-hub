@@ -1,7 +1,7 @@
 ---
 id: D-0012
 title: Sort docs/ by kind of document, add runbooks, architecture, glossary, postmortems and diagrams with their first file, and keep plans and playbooks out
-status: proposed
+status: accepted
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -10,6 +10,12 @@ waits-on: [D-0001, D-0007, D-0008, D-0009, D-0010]
 supersedes: []
 superseded-by:
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#19 ffd8dca"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNUAoAvcmynir2k9d41h2F3m
+  timestamp: 2026-10-23T02:18:39Z
+  approved-commit: ffd8dca206771f391fd5bb71415778a77a228db2
+  merged: not yet; Jon merges PR #19, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the documentation path thread at 2026-10-23T02:18Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: a kind folder passes about 30 files; a second reader group (not Jon or agents) needs its own docs; a docs site is built; the secret store for private values is chosen; or a document kind turns up that fits no folder here
 ---
@@ -40,7 +46,7 @@ This record sets which kinds of document central-hub keeps, where each one goes,
 
 ## Decision Outcome
 
-Chosen option: **1**, with option 3's part READMEs added on top.
+Chosen option: **1**, with option 3's part READMEs added on top. Jon said yes to writing this map as a decision record on 2026-10-23 at 02:13 UTC, and accepted this record under D-0001 on 2026-10-23 at 02:18 UTC.
 
 No standard or paper names docs folders. ISO/IEC/IEEE 15289 and ISO/IEC 20000-1 say layout is out of their scope, and no paper read tests a folder scheme. In the repos read, 12 of the 18 that have docs give decisions, proposals, runbooks or postmortems a folder of their own, even where their guides are sorted another way. Only 2 of 18 use Diátaxis at the top. Diátaxis itself says it is "not a scheme into which documentation must be placed - four boxes". (Research repo, `areas/documentation/research/repo-docs-kinds/`, batch DK1.)
 
