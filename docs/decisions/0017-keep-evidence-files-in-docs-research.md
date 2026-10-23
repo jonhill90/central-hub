@@ -57,7 +57,7 @@ docs/
 ### Rules
 
 1. **Place.** A record's evidence file is `docs/research/NNNN-slug.md`, with the same file name as its record in `docs/decisions/`. This replaces the path in D-0016 rule 1. Everything else in D-0016 rule 1, and rules 2 to 7, are unchanged.
-2. **Kind.** `docs/research/` is a kind folder under D-0012: "what a decision rests on", frozen, as records are. It holds only evidence files built under D-0016 rule 3. It is not a copy of the research batches, which stay outside this repository (D-0016 option 3; D-0012 rule 6 still keeps learning material out of `docs/`).
+2. **Kind.** `docs/research/` is a kind folder under D-0012: "what a decision rests on", frozen, as records are. It holds only evidence files built under D-0016 rule 3, besides its README. It is not a copy of the research batches, which stay outside this repository (D-0016 option 3; D-0012 rule 6 still keeps learning material out of `docs/`).
 3. **Index.** `docs/research/README.md` lists each evidence file with its record, as D-0012 rule 4 asks of every kind folder.
 4. **Links.** A record links its evidence file under More Information as `../research/NNNN-slug.md`. The evidence file's front matter names its record by ID.
 5. **Corrections.** An evidence file is frozen with its record. It changes only by a correction under D-0006, listed in its record's Corrections section.
@@ -65,7 +65,7 @@ docs/
 ### Changes to D-0012 and D-0016
 
 - **D-0012**, the docs map: gains the line `research/  what a decision rests on  frozen  (D-0016, D-0017)`, after `decisions/`. D-0012's `amended-by` becomes `[D-0017]`.
-- **D-0016**, rule 1: the path `docs/decisions/NNNN-slug/evidence.md` becomes `docs/research/NNNN-slug.md`, and "in a folder named like the record" becomes "with the same file name as the record". D-0016's `amended-by` becomes `[D-0017]`.
+- **D-0016**, rule 1: the path `docs/decisions/NNNN-slug/evidence.md` becomes `docs/research/NNNN-slug.md`, and "in a folder named like the record" becomes "with the same file name as the record". The diagram label `NNNN-slug/evidence.md` and the worked-example path in "What happens to the existing records" follow the new path. The Exit path reads, in effect: "evidence files are plain Markdown, one file per record in `docs/research/`. Delete a file to drop one, or move the folder into a future knowledge system." D-0016's `amended-by` becomes `[D-0017]`.
 - The bodies of D-0012 and D-0016 stay as they are, as D-0006 did for D-0001.
 
 ### What changes in this PR
@@ -80,12 +80,12 @@ docs/
 - Good: evidence files are one folder, so they can be read, checked or moved to a future knowledge system together.
 - Bad: a record and its evidence file are in two folders, so each link needs `../research/`.
 - Bad: the name `research` is also the name of the private research repository. The folder's README says what it holds and that the batches are not here.
-- Neutral: practice varies. Backstage keeps a decision record's supporting file in a separate tree, `docs/assets/architecture-decisions/`. MADR keeps supporting files flat beside its records. Python PEPs, Rust RFCs and Kubernetes KEPs use a folder per document ([D-0016's evidence](../research/0016-give-records-an-evidence-file-and-neutral-approval.md), finding 7).
+- Neutral: practice varies. Backstage keeps a decision record's supporting file in a separate tree, `docs/assets/architecture-decisions/`. MADR keeps supporting files flat beside its records. PEP 1 allows a support-file subfolder per PEP, each Kubernetes KEP is a folder, and 3 of the 646 entries in Rust's RFC folder are companion folders ([D-0016's evidence](../research/0016-give-records-an-evidence-file-and-neutral-approval.md), finding 7).
 
 ### Confirmation
 
 - `docs/decisions/` has no subfolders.
-- Every file in `docs/research/` has a record with the same file name, and that record links it.
+- Every file in `docs/research/`, besides its README, has a record with the same file name, and that record links it.
 - The `docs/research/README.md` index lists every file in the folder.
 
 ## Pros and Cons of the Options
