@@ -10,12 +10,13 @@ waits-on: [D-0001, D-0007, D-0008]
 supersedes: []
 superseded-by:
 accepted-evidence:
-  quote: "accept PR jonhill90/central-hub#15 b32bd59"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNG5mGAoayYeUHQvQF3FC42W
-  timestamp: 2026-10-22T07:03:02Z
+  approved-by: owner
+  approved-at: 2026-10-22T07:03:02Z
   approved-commit: b32bd599bdac76aa63f5fdf4c227688e13894513
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNG5mGAoayYeUHQvQF3FC42W
+  approval-names: "PR #15 and head b32bd59, in the message itself"
+  check: the drafting agent read the message in the PRD and spec research thread at 2026-10-22T07:03Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #15, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the PRD and spec research thread at 2026-10-22T07:03Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: specs pile up in accepted with no one finishing them; a check script starts reading the status field; or a second repo adopts specs
 ---
@@ -26,7 +27,7 @@ revisit-when: specs pile up in accepted with no one finishing them; a check scri
 
 D-0007 and D-0008 set the rules and names for the PRD and specs. Two of the points they left open stop a first spec from being written: "the status words for specs" and "what happens to the documentation-contract and first-slice drafts" (D-0007, "Not decided here").
 
-On 2026-10-22 at 06:57 UTC Jon asked: "I need some help here. i think we need this process ready so we can start using it."
+On 2026-10-22 at 06:57 UTC Jon asked for help getting this process ready, so that it could start being used.
 
 ## Decision Drivers
 
@@ -93,9 +94,16 @@ Chosen option: **1**. Jon said yes to the proposed option on 2026-10-22 at 07:02
 
 ## More Information
 
-- Research behind it: Research repo, `areas/documentation/research/prd-spec-ps3/` (SYNTHESIS §1 shape B; ORG-CHECK, "What changes", item 4).
+- **Evidence:** no research batch of its own. It rests on D-0007's research: [../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md), findings 7 and 9.
 - Related records: D-0001, D-0007, D-0008.
 
 ## Corrections
 
-- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
+- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
+- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (ba5bb20) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit ba5bb20). No value changes.
+  2. Context and Problem Statement, second paragraph: the quote of Jon's 06:57 UTC message (at commit ba5bb20) replaced by a neutral summary. After: "On 2026-10-22 at 06:57 UTC Jon asked for help getting this process ready, so that it could start being used."
+  3. More Information, first bullet. Before: "Research behind it: Research repo, `areas/documentation/research/prd-spec-ps3/` (SYNTHESIS §1 shape B; ORG-CHECK, "What changes", item 4)." After: "**Evidence:** no research batch of its own. It rests on D-0007's research: [../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md), findings 7 and 9." Reason: the old pointers are private; D-0016 rule 2.
+  4. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit ba5bb20), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
+
+  Approval: to be added after approval (D-0006 step 6).

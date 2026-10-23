@@ -10,12 +10,13 @@ waits-on: [D-0001, D-0003]
 supersedes: []
 superseded-by:
 accepted-evidence:
-  quote: "accept PR jonhill90/central-hub#12 5a07427"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNTRAgZJF48qYp51Qbbdd9ns
-  timestamp: 2026-10-19T02:53:10Z
+  approved-by: owner
+  approved-at: 2026-10-19T02:53:10Z
   approved-commit: 5a074271302bdfd7ad048432ce4790d38b40a470
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNTRAgZJF48qYp51Qbbdd9ns
+  approval-names: "PR #12 and head 5a07427, in the message itself"
+  check: the drafting agent read the message in the PRD and spec research thread at 2026-10-19T02:53Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #12, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the PRD and spec research thread at 2026-10-19T02:53Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: a second person must agree on scope; code lands in this repo; a study measures whether a project-level PRD helps people or agents; or merged specs are being read as current truth
 ---
@@ -24,19 +25,19 @@ revisit-when: a second person must agree on scope; code lands in this repo; a st
 
 ## Context and Problem Statement
 
-Jon's brief asks for "PRD/specifications" and "maintained indexed documentation with progressive disclosure for humans and agents" (Research repo, `coordinator/platform-startup/BRIEF.md`, line 5). He also asked that a spec point to the code rather than repeat it: "point to the code vs updating the code in 2 places" (Central Hub project, 2026-10-17 21:30 UTC). He said he has to pick something for version 1, knowing it will be replaced (2026-10-17 20:36 UTC).
+Jon's project brief asks for a PRD and specifications, and for maintained, indexed documentation that shows detail step by step to people and agents (Research repo, `coordinator/platform-startup/BRIEF.md`, line 5). Jon also asked that a spec point to the code rather than repeat it, so code is never updated in two places (Central Hub project, 2026-10-17 21:30 UTC). He said he has to pick something for version 1, knowing it will be replaced (2026-10-17 20:36 UTC).
 
 Three drafts exist in the Research repo and none is accepted: a platform PRD, a documentation contract and a first-slice spec. This record decides which documents hold "what and why" and "what changes", and what happens to them after a merge.
 
 ## Decision Drivers
 
-- **What the evidence shows.** Research batch RB-0057 (Research repo, `areas/documentation/research/prd-spec-ps3/`) found:
+- **What the evidence shows.** Research batch RB-0057 ([evidence](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md)) found:
   - 81.5% of spec files in public repos have one commit, so most specs behave as frozen records.
   - Measured gains come from short, curated context and from checks, not from longer spec documents.
   - No study shows that a project-level PRD helps people or agents.
 - **Jon's brief asks for a PRD.** The PRD is kept because Jon asked for it, not because the evidence requires it.
 - **Point to the code.** IEEE 830-1998 says the same requirement "should not appear in more than one place". The modern sources agree.
-- **Fit the accepted rules.** The fit was checked in RB-0057 `ORG-CHECK.md`:
+- **Fit the accepted rules.** The fit was checked in RB-0057 (evidence finding 8):
   - Jon accepts work by a message naming the PR number and head SHA (AGENTS.md rule 1, D-0001).
   - Every document kind sits under `docs/`.
   - Labels are written with the file name (D-0003).
@@ -144,11 +145,7 @@ Each of these is a later decision for Jon:
 
 ## More Information
 
-- **Research:** Research repo, `areas/documentation/research/prd-spec-ps3/`.
-  - `SYNTHESIS.md` holds the options and the recommendation.
-  - `RECALL.md`: 194 of 220 known items found.
-  - `CHECK.md`: an independent check of 150 claims; 140 supported, none false.
-  - `ORG-CHECK.md`: the fit with the organization research.
+- **Evidence:** [../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md): batch RB-0057, with a recall check that found 194 of 220 known items, an independent check of 150 claims (140 supported, none false) and a check of the fit with the organization research.
 - **Earlier proposal A2** (batches RB-0037 and RB-0040) is replaced by this record, which keeps its per-change rules.
 - **Exit path:**
   - Delete the PRD; the requirement rows remain.
@@ -157,7 +154,15 @@ Each of these is a later decision for Jon:
 
 ## Corrections
 
-- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
+- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
 - **2026-10-23** (research batch IDs under D-0015): 4 research batch citations renamed: `PS3` to `RB-0057` (2 times); `PS1` to `RB-0037`; `PS2` to `RB-0040`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
+- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (ba5bb20) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit ba5bb20). No value changes.
+  2. Context and Problem Statement, first paragraph: the quotes of Jon's brief and of Jon's 2026-10-17 21:30 UTC message (at commit ba5bb20) replaced by neutral summaries. After: "Jon's project brief asks for a PRD and specifications, and for maintained, indexed documentation that shows detail step by step to people and agents (Research repo, `coordinator/platform-startup/BRIEF.md`, line 5). Jon also asked that a spec point to the code rather than repeat it, so code is never updated in two places (Central Hub project, 2026-10-17 21:30 UTC)."
+  3. Decision Drivers, first bullet. Before: "Research batch RB-0057 (Research repo, `areas/documentation/research/prd-spec-ps3/`) found:" After: "Research batch RB-0057 ([evidence](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md)) found:" Reason: the old pointer is private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  4. Decision Drivers, fourth bullet. Before: "The fit was checked in RB-0057 `ORG-CHECK.md`:" After: "The fit was checked in RB-0057 (evidence finding 8):" Reason: the old pointer is private.
+  5. More Information, first bullet and its four sub-bullets. Before: "- **Research:** Research repo, `areas/documentation/research/prd-spec-ps3/`.   - `SYNTHESIS.md` holds the options and the recommendation.   - `RECALL.md`: 194 of 220 known items found.   - `CHECK.md`: an independent check of 150 claims; 140 supported, none false.   - `ORG-CHECK.md`: the fit with the organization research." After: "- **Evidence:** [../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md): batch RB-0057, with a recall check that found 194 of 220 known items, an independent check of 150 claims (140 supported, none false) and a check of the fit with the organization research." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  6. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit ba5bb20), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
+  7. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
 
-_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
+  Approval: to be added after approval (D-0006 step 6).
