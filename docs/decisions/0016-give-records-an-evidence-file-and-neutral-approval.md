@@ -1,5 +1,5 @@
 ---
-id: D-0015
+id: D-0016
 title: Give each decision record a public evidence file, and record the owner's approval and reasons in neutral words
 status: proposed
 date: 2026-10-23
@@ -68,7 +68,7 @@ flowchart LR
    - references in two lists, "relied on" and "background", each a public locator with its fetch date (the normative and informative split of RFC 7322);
    - one line naming the research batch and saying its working files are private.
 2. **No research, no file.** A record that rests on no research batch says so in one line under More Information, and names what it rests on instead.
-3. **Nothing invented.** Every line of an evidence file comes from a file that already exists in the batch: a ledger row, the synthesis or a check. Before the owner sees it, a reviewing agent checks every line against the batch and lists anything it could not trace. Lines it cannot trace are removed.
+3. **Nothing invented.** Every finding, number, quote and reference in an evidence file comes from a file that already exists in the batch: a ledger row, the synthesis or a check. One short section, "How the decision used it", is written from the record itself and says so. Before the owner sees it, a reviewing agent checks every line against the batch and lists anything it could not trace. Lines it cannot trace are removed.
 4. **No private material.** An evidence file holds no owner quotes, chat ids, machine paths, hostnames or addresses. Published sources may be quoted.
 5. **The owner's words.** A record and its evidence file never quote the owner. They state the owner's request, answer or reason in neutral third person, with its date, for example: "On 2026-10-22 the owner asked for a map of document kinds for every scenario." The owner's exact words stay in the private chat archive. The note at the end of a record about tidied quotes is no longer used.
 6. **Approval block.** In D-0001's field contract, `accepted-evidence` becomes:
@@ -84,18 +84,24 @@ flowchart LR
      merged: <who merged, and when, or "not yet">
    ```
 
+   `approval-ref` keeps the message id because it is the one exact key into the chat archive. It opens nothing without the owner's account, so it is not a private value under CLAUDE.md rule 4. It does tie the record to one chat product's ids; when the archive moves to another store, a correction can replace the id with that store's key.
+
    This follows the published processes read, none of which quotes the approver. Python's PEP 1 records a date linked to the decision post, Kubernetes KEPs list approvers by handle, and AWS adds "a timestamp, version, and list of stakeholders". The block gives up D-0001's reason for a verbatim quote, which was that the proof would not depend on a link staying live: a public reader now sees the facts but not the message. Until the Activation gate's per-agent identities exist, neither form is proof that an agent could not write. Both rest on convention plus a reviewing agent's check, as D-0001 says.
-7. **Corrections that remove the owner's words.** D-0006 steps 2 and 3 quote the text before and after each change, in the PR body and in the record's Corrections section. When the text removed is the owner's words, the PR body and the Corrections entry name where it was and the commit that still holds it, instead of copying it. Every other correction keeps quoting its before and after text.
+7. **Corrections that remove the owner's words.** D-0006 steps 2 and 3 quote the text before and after each change, in the PR body and in the record's Corrections section. When the text removed is the owner's words, the PR body and the Corrections entry name where it was and the commit that still holds it, instead of copying it. Every other correction keeps quoting its before and after text. The approval of a correction (D-0006 step 6) is recorded with rule 6's facts (time, commit, message id, what the message named), never a quote.
 
 ### Changes to D-0001 and D-0006
 
-- **D-0001**, "Who accepts, and how it's proven": from acceptance, `accepted-evidence` holds the fields in rule 6, and "his message text, verbatim" no longer applies. The quote check becomes a check that the message names the approved PR and head. D-0001's front matter gains `amended-by: [D-0015]`.
-- **D-0006**, "How a correction is made": step 7's "the quote in `accepted-evidence` stays verbatim" no longer applies. A correction under rule 7 above may replace a `quote:` field with the rule 6 fields, keeping `approved-at`, `approved-commit` and the message id unchanged. Steps 2 and 3 gain rule 7's exception. D-0006's front matter gains `amended-by: [D-0015]`.
+- **D-0001**, "Who accepts, and how it's proven": from acceptance, `accepted-evidence` holds the fields in rule 6, and "his message text, verbatim" no longer applies. The `quote-check` field becomes `check`: a check that the message names the approved PR and head. The Confirmation bullet "its quote is checked against the source message" reads, in effect, "its `check` confirms the message names the approved PR and head". D-0001's `amended-by` becomes `[D-0006, D-0016]`.
+- **D-0006**, "What counts as a correction": the list gains one item, adding an evidence file built under rule 3 and its link from the record.
+- **D-0006**, "How a correction is made":
+  - Steps 2, 3 and 6 gain rule 7's exception.
+  - Step 7 keeps "`date` and `accepted-evidence` never change", with one exception: a correction under rule 7 may rewrite the block once into rule 6's fields. The mapping is fixed: `timestamp` becomes `approved-at`, `message-id` becomes `approval-ref`, `approved-commit` and `merged` stay, `quote-check` becomes `check`, `approved-by: owner` and `approval-names` are added, and `quote` is removed. No value changes.
+  - D-0006's `amended-by` becomes `[D-0016]`.
 - The bodies of D-0001 and D-0006 stay as they are, as D-0006 did for D-0001.
 
 ### What happens to the existing records
 
-Nothing changes in D-0001 to D-0014 through this record alone. After acceptance, the owner picks the order. For each group of records, one correction PR under D-0006 does three things: it rewords the owner's words in neutral terms, replaces the `quote:` field, and adds the evidence file and its link. D-0006's own evidence file is already in this PR, as the worked example (`0006-allow-corrections-to-accepted-records/evidence.md`); its link is added by D-0006's correction.
+Nothing changes in D-0001 to D-0014 through this record alone. After acceptance, the owner picks the order. For each group of records, one correction PR under D-0006 does four things: it rewords the owner's words in neutral terms, rewrites the `accepted-evidence` block under rule 6, rewrites any Corrections entry that quotes an approval message (D-0005 has one), and adds the evidence file and its link. D-0006's own evidence file is already in this PR, as the worked example (`0006-allow-corrections-to-accepted-records/evidence.md`); its link is added by D-0006's correction.
 
 The old quotes stay in git history and in past PR text. This repository is public, and a commit cannot be un-published (CLAUDE.md rule 4). The cleanup changes what a reader sees on `main`, not the history.
 
@@ -107,7 +113,7 @@ The old quotes stay in git history and in past PR text. This repository is publi
 - Bad: a second frozen file per record, which has to be built and checked. The largest research batch cites 859 public addresses, so its evidence file has to choose what the decision relied on.
 - Bad: the "every line traced" promise is checked against private files, so a public reader has to trust the reviewing agent's check. A reader can still check each finding against its public reference.
 - Bad: the approval proof moves from a quote in the record to a pointer into a private archive.
-- Neutral: there is little precedent for this exact form. PEP 1 allows a support-file folder per PEP (meant for files such as diagrams), each Kubernetes KEP is a folder, and 3 of the 646 entries in Rust's RFC folder are companion folders, one of them a "Rationale and alternatives" file.
+- Neutral: there is little precedent for this exact form. PEP 1 allows a support-file folder per PEP (meant for files such as diagrams), each Kubernetes KEP is a folder, and 3 of the 646 entries in Rust's RFC folder are companion folders, one of which holds a "Rationale and alternatives" file.
 
 ### Confirmation
 
@@ -134,7 +140,7 @@ The old quotes stay in git history and in past PR text. This repository is publi
 
 ## More Information
 
-- **Evidence:** [0015-give-records-an-evidence-file-and-neutral-approval/evidence.md](0015-give-records-an-evidence-file-and-neutral-approval/evidence.md).
+- **Evidence:** [0016-give-records-an-evidence-file-and-neutral-approval/evidence.md](0016-give-records-an-evidence-file-and-neutral-approval/evidence.md).
 - **Worked example:** [0006-allow-corrections-to-accepted-records/evidence.md](0006-allow-corrections-to-accepted-records/evidence.md).
 - **Exit path:** evidence files are plain Markdown in folders beside their records. Delete a folder to drop one, or move the folders into a future knowledge system. The approval fields map back to D-0001's fields one to one, except the quote, which stays in the chat archive.
 - **Related records:** D-0001, D-0006, D-0012.
