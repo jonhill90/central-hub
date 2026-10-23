@@ -155,7 +155,6 @@ Each of these is a later decision for Jon:
   - Stop writing specs; merged specs stay as history.
   - Nothing here adds a tool.
 
-
 ## Corrections
 
 - **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: pending.

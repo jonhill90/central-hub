@@ -44,7 +44,7 @@ This page says what the platform is for and how we know it works. It holds no "h
 
 ## Links (read when)
 
-- **Requirement rows SR01-SR25:** the requirements register in the Research repo, `coordinator/system/REQUIREMENTS.md`. Read it when a goal above needs its exact wording. The link moves when the register moves.
+- **Requirement rows REQ-0001-REQ-0026:** the requirements register in the Research repo, `coordinator/system/REQUIREMENTS.md`. Read it when a goal above needs its exact wording. The link moves when the register moves.
 - **Decisions:** `docs/decisions/README.md`. Read it when you need to know why something is the way it is.
 - **Changes in progress or finished:** `docs/specs/README.md`. Read it before starting a change that spans several sessions or crosses systems.
 - **Rules in force now:** `docs/standards/README.md`. Read it before naming, numbering or addressing anything.

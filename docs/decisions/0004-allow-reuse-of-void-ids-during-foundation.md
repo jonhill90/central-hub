@@ -100,7 +100,6 @@ Everything else in D-0003 stays in force, and rule 6 still applies to every case
 - **Exit path:** when the Activation gate passes, this exception ends and D-0003 rule 6 applies unchanged; no record needs editing. To end it sooner, a new record supersedes this one.
 - **Relation to D-0003:** this record narrows D-0003 rule 6 and does not supersede D-0003. If the owner prefers a full supersession, a new record would need to restate D-0003 in whole, because D-0001 keeps accepted bodies unchanged.
 
-
 ## Corrections
 
 - **2026-10-23** (requirement IDs respelled under D-0014): 10 requirement IDs renamed, `SR08` to `REQ-0008`, `SR11` to `REQ-0011`, `SR21` to `REQ-0021`, `SR22` to `REQ-0022`. Before: `SR08`; after: `REQ-0008`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: pending.

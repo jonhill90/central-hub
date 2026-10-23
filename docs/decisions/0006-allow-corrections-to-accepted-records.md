@@ -137,6 +137,8 @@ PR #9 is closed unmerged, so its draft never entered the log. This record reuses
 - **Former D-0006:** the PR #9 draft, a full restatement of D-0005; closed unmerged on 2026-10-16. Its number is reused here.
 - **Exit path:** to return to strict immutability, a new record supersedes this one; past Corrections entries stay where they are. To switch to an errata list, a new record moves the Corrections entries into one file per record.
 
-_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
+## Corrections
 
 - **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: pending.
+
+_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
