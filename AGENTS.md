@@ -25,7 +25,7 @@ These rules fit the current stage, while Jon does every step himself so he under
 |---|---|
 | How decisions are recorded and accepted | `docs/decisions/0001-record-decisions-as-markdown-records.md` |
 | Branches, commit and PR titles | `docs/decisions/0002-use-one-main-branch-with-environment-folders.md` |
-| Identifiers and labels | `docs/decisions/0009-add-a-standards-id-family.md` (supersedes D-0003) |
+| Identifiers and labels | `docs/decisions/0015-number-research-batches-rb-nnnn.md` (proposed; supersedes D-0014, which superseded D-0009) |
 | What the platform is for | `docs/PRD.md` |
 | Writing a spec for a change | `docs/specs/README.md` |
 | All decisions | `docs/decisions/README.md` |
