@@ -14,3 +14,4 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0005 | [0005-measure-central-hub-against-eight-pillars.md](0005-measure-central-hub-against-eight-pillars.md) |
 | D-0006 | [0006-allow-corrections-to-accepted-records.md](0006-allow-corrections-to-accepted-records.md) |
 | D-0016 | [0016-give-records-an-evidence-file-and-neutral-approval.md](0016-give-records-an-evidence-file-and-neutral-approval.md) |
+| D-0018 | [0018-respell-research-method-ids.md](0018-respell-research-method-ids.md) |
