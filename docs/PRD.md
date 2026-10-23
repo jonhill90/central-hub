@@ -47,4 +47,11 @@ This page says what the platform is for and how we know it works. It holds no "h
 - **Requirement rows SR01-SR25:** the requirements register in the Research repo, `coordinator/system/REQUIREMENTS.md`. Read it when a goal above needs its exact wording. The link moves when the register moves.
 - **Decisions:** `docs/decisions/README.md`. Read it when you need to know why something is the way it is.
 - **Changes in progress or finished:** `docs/specs/README.md`. Read it before starting a change that spans several sessions or crosses systems.
+- **Rules in force now:** `docs/standards/README.md`. Read it before naming, numbering or addressing anything.
+- **How the parts fit today:** `docs/architecture.md`. Read it before adding or replacing a component.
+- **What our words mean:** `docs/glossary.md`. Read it when a term here is unclear.
+- **How to do one job, step by step:** `docs/runbooks/`. Read the runbook before running any process by hand.
+- **Where each kind of document goes:** D-0012.
 - **The pillars it is measured against:** D-0005.
+
+`docs/architecture.md`, `docs/glossary.md` and `docs/runbooks/` are created with their first real file (D-0012 rule 2). Until then these links have nothing behind them.
