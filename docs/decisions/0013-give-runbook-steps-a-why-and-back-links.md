@@ -1,7 +1,7 @@
 ---
 id: D-0013
 title: Give every runbook step a short why and ※ links back, and mark each runbook manual or automated
-status: proposed
+status: accepted
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -11,6 +11,12 @@ supersedes: []
 superseded-by:
 amends: [D-0012]
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#21 eb33bd7"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNWc7Mzu6ZFvoYgnxsDKVyKh
+  timestamp: 2026-10-23T03:42:38Z
+  approved-commit: eb33bd7b0ceba8560d683b9ff4620fe2a6aa8886
+  merged: not yet; Jon merges PR #21, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the documentation path thread at 2026-10-23T03:42Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: why lines grow into paragraphs; ※ links break often enough to need a link check; or every manual runbook has an automated twin and the manual ones stop being run
 ---
@@ -39,7 +45,7 @@ That request came before D-0012, and D-0012 missed it. This record adds it to th
 
 ## Decision Outcome
 
-Chosen option: **1**.
+Chosen option: **1**. Jon accepted this record under D-0001 on 2026-10-23 at 03:42 UTC.
 
 ### Rules
 
