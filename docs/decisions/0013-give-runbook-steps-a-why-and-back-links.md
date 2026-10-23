@@ -110,4 +110,4 @@ Everything else in D-0012 stays as it is.
   3. More Information: a first bullet added, "**Evidence:** no research batch. It rests on the owner's request described in the context." Reason: D-0016 rule 2.
   4. A Corrections section added, holding this entry.
 
-  Approval: to be added after approval (D-0006 step 6).
+  Approval: the owner, 2026-10-23T06:07:52Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAnCf1qE6ULcTZw9foG87Mc), naming PR #32 and head f994dac; approved commit f994dacd8fb34b10e550664797bf61d12af773a6. Check: the drafting agent read the message at 2026-10-23T06:07Z and confirmed it names that PR and head.

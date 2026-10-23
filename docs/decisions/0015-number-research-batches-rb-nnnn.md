@@ -150,4 +150,4 @@ D-0014's rules all carry over. Rule 1 gains one registry row. They are restated 
   5. More Information, first bullet. Before: "Research (project files outside this repo): `research/batch-ids/` (INVENTORY.md, LEDGER.md, SYNTHESIS.md). Research repo copy: `areas/documentation/research/batch-ids/`." After: "**Evidence:** [../research/0015-number-research-batches-rb-nnnn.md](../research/0015-number-research-batches-rb-nnnn.md): batch RB-0074." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
   6. A Corrections section added, holding this entry.
 
-  Approval: to be added after approval (D-0006 step 6).
+  Approval: the owner, 2026-10-23T06:07:52Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAnCf1qE6ULcTZw9foG87Mc), naming PR #32 and head f994dac; approved commit f994dacd8fb34b10e550664797bf61d12af773a6. Check: the drafting agent read the message at 2026-10-23T06:07Z and confirmed it names that PR and head.

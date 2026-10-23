@@ -142,4 +142,4 @@ D-0009's rules 1, 2, 3, 4, 6 and 7 carry over unchanged. Rule 1's registry row f
   5. More Information, first bullet. Before: "Research (project files outside this repo): `research/requirement-ids/` (SYNTHESIS.md, LEDGER.md). Research repo copy: `areas/documentation/research/requirement-ids/`." After: "**Evidence:** [../research/0014-use-req-ids-for-requirements.md](../research/0014-use-req-ids-for-requirements.md): batch RB-0072." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
   6. The closing note on quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown as he wrote them._" After: none.
 
-  Approval: to be added after approval (D-0006 step 6).
+  Approval: the owner, 2026-10-23T06:07:52Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAnCf1qE6ULcTZw9foG87Mc), naming PR #32 and head f994dac; approved commit f994dacd8fb34b10e550664797bf61d12af773a6. Check: the drafting agent read the message at 2026-10-23T06:07Z and confirmed it names that PR and head.
