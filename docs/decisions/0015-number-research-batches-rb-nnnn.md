@@ -1,7 +1,7 @@
 ---
 id: D-0015
 title: Number research batches RB-NNNN in one batch register, and rename the old batch codes everywhere
-status: proposed
+status: accepted
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -10,6 +10,12 @@ waits-on: [D-0001, D-0006, D-0014]
 supersedes: [D-0014]
 superseded-by:
 accepted-evidence:
+  quote: "accept PR jonhill90/central-hub#24 1cce2f8"
+  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNNC2krzzxxNCskiWfAqbKzw
+  timestamp: 2026-10-23T04:21:52Z
+  approved-commit: 1cce2f860ae2552047d2ba2b0bc960b45792bfda
+  merged: not yet; Jon merges PR #24, which carries this evidence commit on top of the approved commit
+  quote-check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T04:21Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: the Activation gate passes; the Research repo is retired and research moves somewhere with its own numbering; or a batch register check finds a duplicate number
 ---
