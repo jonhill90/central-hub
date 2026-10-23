@@ -29,6 +29,7 @@ These rules fit the current stage, while Jon does every step himself so he under
 | What the platform is for | `docs/PRD.md` |
 | Writing a spec for a change | `docs/specs/README.md` |
 | All decisions | `docs/decisions/README.md` |
+| What a decision rests on | `docs/research/README.md` |
 | Reporting a vulnerability | `SECURITY.md` |
 
 ## Activation gate

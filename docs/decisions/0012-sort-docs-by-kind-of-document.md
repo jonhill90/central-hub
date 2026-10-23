@@ -9,6 +9,7 @@ consulted: []
 waits-on: [D-0001, D-0007, D-0008, D-0009, D-0010]
 supersedes: []
 superseded-by:
+amended-by: [D-0017]
 accepted-evidence:
   quote: "accept PR jonhill90/central-hub#19 ffd8dca"
   message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNUAoAvcmynir2k9d41h2F3m
