@@ -10,12 +10,13 @@ waits-on: [D-0001]
 supersedes: []
 superseded-by: D-0009
 accepted-evidence:
-  quote: "Accept. But I am worried about data in the ADRs referring to the docs on my MacBook. I feel that we are also tying the system too much to the Claude harness. It's fine for now, but we will need to go back and remove that noise."
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwN1Gnn97mj1fpLXFxgZq2sb9
-  timestamp: 2026-10-12T05:24:34Z
+  approved-by: owner
+  approved-at: 2026-10-12T05:24:34Z
   approved-commit: 426ba8fe09c25d09a53d4578499374b1029bf8c2
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN1Gnn97mj1fpLXFxgZq2sb9
+  approval-names: "PR #4 by context; it answers the agent's request to review PR #4 and accept again (05:21Z), sent after commit 426ba8f"
+  check: the drafting agent read the message in the project thread at 2026-10-12T05:24Z, and the quote matches its opening sentences. It answers "look at PR #4 and write accept again" (same thread, 05:21Z), sent after the diagram commit 426ba8f. An earlier one-word acceptance at 05:19:35Z predates the diagram, so it is not counted. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #4, which carries this evidence commit on top of the approved commit
-  quote-check: the drafting agent read the message in the project thread at 2026-10-12T05:24Z, and the quote matches its opening sentences. It answers "look at PR #4 and write accept again" (same thread, 05:21Z), sent after the diagram commit 426ba8f. An earlier bare "accept" at 05:19:35Z predates the diagram, so it is not counted. An independent check by a reviewing agent is still to do.
 legacy-id: []
 revisit-when: a family needs numbers faster than one owner can hand them out; agents start citing local labels across repos often enough that they need global IDs; a tool or knowledge system is adopted that brings its own ID scheme; or the registry grows past about 10 families
 ---
@@ -24,9 +25,9 @@ revisit-when: a family needs numbers faster than one owner can hand them out; ag
 
 ## Context and Problem Statement
 
-On 2026-10-12, Jon read a table of IDs and asked: "So what is this system for IDs and why do we need it?" No ID system existed. Each agent had made up labels inside the file it was writing, and those labels now clash across files.
+On 2026-10-12, after reading a table of IDs, Jon asked what the ID system was for and why it was needed. No ID system existed. Each agent had made up labels inside the file it was writing, and those labels now clash across files.
 
-The research batch (RB-0003, in the project files outside this repo at `central-hub/research/identifiers/`, run after Jon chose "Run it" at 02:45 UTC) measured the problem:
+The research batch (RB-0003, [evidence](../research/0003-use-registered-id-families-and-file-qualified-labels.md), run after Jon chose to run it at 02:45 UTC) measured the problem:
 
 - About 75 ID families. About 50 of them restart at 1 in each document.
 - **21 labels clash.** `P1` has 7 meanings, and two of them are in the same file. "ADR 0001" names 3 different records.
@@ -126,7 +127,7 @@ flowchart LR
 
 ## More Information
 
-- Research (project files outside this repo): `central-hub/research/identifiers/`. SPEC.md has the gate, RB-0003-SYNTHESIS.md the recommendation and disagreements, RB-0003-inventory.md every clash with file:line, and SOURCES.md the sources.
+- **Evidence:** [../research/0003-use-registered-id-families-and-file-qualified-labels.md](../research/0003-use-registered-id-families-and-file-qualified-labels.md): batch RB-0003, an inventory of every ID family, a practice review, 18 projects and an independent design.
 - Source limit: this environment blocked several primary sites (w3.org, ietf.org, doi.org and others), so those claims are search-summary only and are labelled.
 - Reported, not fixed (agent-estate is back-burnered; noted only for whoever revives it):
   - agent-estate `register.go:571-591` may reuse a deleted `SRC-` number. Inferred from the code, not tested.
@@ -136,5 +137,12 @@ flowchart LR
 ## Corrections
 
 - **2026-10-23** (research batch IDs under D-0015): 3 research batch citations renamed: `R3` to `RB-0003`; `R3-SYNTHESIS.md` to `RB-0003-SYNTHESIS.md`; `R3-inventory.md` to `RB-0003-inventory.md`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
+- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (edac9fe) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit edac9fe). The acceptance message also raised two concerns for later: records pointing at files on one machine, and ties to one agent harness. These are tracked outside this record.
+  2. In `check` (formerly `quote-check`), Jon's one-word earlier message (at commit edac9fe) is described instead of quoted. After: "An earlier one-word acceptance at 05:19:35Z". The rest of the value is unchanged.
+  3. Context and Problem Statement, first paragraph: the quote of Jon's 2026-10-12 question (at commit edac9fe) replaced by a neutral summary. After: "On 2026-10-12, after reading a table of IDs, Jon asked what the ID system was for and why it was needed."
+  4. Context and Problem Statement, second paragraph. Before: "The research batch (RB-0003, in the project files outside this repo at `central-hub/research/identifiers/`, run after Jon chose "Run it" at 02:45 UTC) measured the problem:" After: "The research batch (RB-0003, [evidence](../research/0003-use-registered-id-families-and-file-qualified-labels.md), run after Jon chose to run it at 02:45 UTC) measured the problem:" Reason: the old pointer is private; the decision card's option label is described instead of quoted.
+  5. More Information, first bullet. Before: "Research (project files outside this repo): `central-hub/research/identifiers/`. SPEC.md has the gate, RB-0003-SYNTHESIS.md the recommendation and disagreements, RB-0003-inventory.md every clash with file:line, and SOURCES.md the sources." After: "**Evidence:** [../research/0003-use-registered-id-families-and-file-qualified-labels.md](../research/0003-use-registered-id-families-and-file-qualified-labels.md): batch RB-0003, an inventory of every ID family, a practice review, 18 projects and an independent design." Reason: the old pointer is private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  6. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
 
-_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
+  Approval: to be added after approval (D-0006 step 6).

@@ -11,12 +11,13 @@ supersedes: []
 superseded-by:
 amended-by: [D-0006, D-0016]
 accepted-evidence:
-  quote: "so accept"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNC3VZmTAMC2buEXh8pCC9LJ
-  timestamp: 2026-10-11T07:31:12Z
+  approved-by: owner
+  approved-at: 2026-10-11T07:31:12Z
   approved-commit: 58cd4eac2e491310777d1f18d033b82aee2e5302
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNC3VZmTAMC2buEXh8pCC9LJ
+  approval-names: "neither the PR nor the head; it answers the question naming ADR 0001 and ADR 0002 (07:25Z)"
+  check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and at 07:28:13Z Jon had said that he had approved the PRs; an independent check by a reviewing agent is still to do
   merged: jonhill90 merged PR #1 at 2026-10-11T07:22Z; the merged record matches the approved commit exactly
-  quote-check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and Jon had said "Yeah, I approved the PRs." at 07:28:13Z; an independent check by a reviewing agent is still to do
 legacy-id: [W1, W2]
 revisit-when: a knowledge system (K1) is chosen that should own decisions, or the flat folder becomes hard to use
 ---
@@ -35,7 +36,7 @@ Agents work under Jon's GitHub account, so nothing an agent writes can count as 
 - **Only Jon accepts:** agents propose and never accept.
 - **Replaceable:** the data stays in plain, portable form, so the tool, the format or the location can each be swapped.
 - **One at a time, in Jon's order:** Jon picks the next decision. Nothing is bulk-created.
-- **Visual first** (Jon, 2026-10-10: "I am just a visual person"): the shape of a decision is visible at a glance.
+- **Visual first** (Jon, 2026-10-10: he follows structure best from a picture): the shape of a decision is visible at a glance.
 - **Follow established practice** where it exists.
 
 ## Considered Options
@@ -153,7 +154,7 @@ Until each of these is checked, acceptance stays by convention.
 
 ## More Information
 
-- **Research:** `central-hub/research/decision-register/RB-0001-SYNTHESIS.md` in project files. Both independent agent designs are kept there unedited.
+- **Evidence:** [../research/0001-record-decisions-as-markdown-records.md](../research/0001-record-decisions-as-markdown-records.md): batch RB-0001, 10 practice sources, 16 repositories and two independent designs.
 - **Exit path:**
   - Swapping the generator or site doesn't change the records.
   - Moving the location is a `git mv`.
@@ -163,5 +164,11 @@ Until each of these is checked, acceptance stays by convention.
 ## Corrections
 
 - **2026-10-23** (research batch IDs under D-0015): 4 research batch citations renamed: `R1` to `RB-0001` (3 times); `R1-SYNTHESIS.md` to `RB-0001-SYNTHESIS.md`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
+- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (edac9fe) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit edac9fe).
+  2. In `check` (formerly `quote-check`), Jon's quoted words at 07:28:13Z (at commit edac9fe) replaced by a neutral summary, because D-0016 rule 5 bars owner quotes; the rest of the value is unchanged. After: "at 07:28:13Z Jon had said that he had approved the PRs".
+  3. Decision Drivers, "Visual first": the quote of Jon's 2026-10-10 message (at commit edac9fe) replaced by a neutral summary. After: "(Jon, 2026-10-10: he follows structure best from a picture)".
+  4. More Information, first bullet. Before: "**Research:** `central-hub/research/decision-register/RB-0001-SYNTHESIS.md` in project files. Both independent agent designs are kept there unedited." After: "**Evidence:** [../research/0001-record-decisions-as-markdown-records.md](../research/0001-record-decisions-as-markdown-records.md): batch RB-0001, 10 practice sources, 16 repositories and two independent designs." Reason: the old pointer is private; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  5. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
 
-_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
+  Approval: to be added after approval (D-0006 step 6).

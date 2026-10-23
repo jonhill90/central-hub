@@ -10,12 +10,13 @@ waits-on: [D-0001]
 supersedes: []
 superseded-by:
 accepted-evidence:
-  quote: "so accept"
-  message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNC3VZmTAMC2buEXh8pCC9LJ
-  timestamp: 2026-10-11T07:31:12Z
+  approved-by: owner
+  approved-at: 2026-10-11T07:31:12Z
   approved-commit: f502561d0887c5247bc5ec9624e930b0b9e97b4d
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNC3VZmTAMC2buEXh8pCC9LJ
+  approval-names: "neither the PR nor the head; it answers the question naming ADR 0001 and ADR 0002 (07:25Z)"
+  check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and at 07:28:13Z Jon had said that he had approved the PRs; an independent check by a reviewing agent is still to do
   merged: jonhill90 merged PR #2 at 2026-10-11T07:25Z; the merged record matches the approved commit exactly
-  quote-check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and Jon had said "Yeah, I approved the PRs." at 07:28:13Z; an independent check by a reviewing agent is still to do
 legacy-id: [S4]
 revisit-when: a second person gets merge rights with different trust per environment; rendered per-environment diffs become worth an extra moving part; a contributor appears whose tool can't name branches by type; or a search of real repositories finds environment branches working well for pull-based config (no such search has been run)
 ---
@@ -24,7 +25,7 @@ revisit-when: a second person gets merge rights with different trust per environ
 
 ## Context and Problem Statement
 
-Jon asked (2026-10-11): "Is it main, or is it dev/stage/prod, or dev/QA/prod, or dev/prod, or what? I know we will start with things like feature/ or bug/ or chore/, etc."
+On 2026-10-11 Jon asked whether central-hub should have only `main` or environment branches such as dev/stage/prod, dev/QA/prod or dev/prod, and noted that short-lived branches would start with prefixes such as feature/, bug/ or chore/.
 
 central-hub will be a GitOps repo once the Activation gate passes (Foundation §6): a cluster will pull its desired state from git. It starts with one VPS cluster and grows into home Kubernetes. One person, Jon, merges every PR, and agents open most of them. The repo is still empty, so its first branch needs a name, and the Foundation proposal (§3.1) assumes `main`.
 
@@ -117,7 +118,7 @@ Chosen option: **1**.
 
 Jon answered all three, the last two on the condition that the rule comes from something documented, not made up. The source for each:
 
-- **A. `enhance`:** "use Feat". It folds into `feat`.
+- **A. `enhance`:** Jon chose to use `feat` instead. It folds into `feat`.
 - **B. Commit format `<type>: <summary>`, no scope.** Documented in Hill90's `CONTRIBUTING.md` ("Commit Format": `<type>: <short description>`), and it's the subject-line form in Conventional Commits 1.0.0, where a scope is optional. Hill90's practice differs from its own doc: 43 of its 50 most recent commits on `main` add a scope, as in `fix(auth): …` (measured 2026-10-11 with `git log`). So the rule follows the documented form, not Hill90's current habit.
 - **C. `Author-Lane: <lane name>` in the PR body.** Documented in the `skills` repo (`AGENTS.md`, "Merging PRs", and `docs/reference/merge-gate.md`). There it feeds a merge gate. Here it's only a label, not proof, because agents act under Jon's account until the Activation gate (Foundation C1). It is never a vendor name.
 
@@ -164,7 +165,7 @@ Jon answered all three, the last two on the condition that the rule comes from s
 
 ## More Information
 
-- **Research:** `central-hub/research/branching/` in project files: SPEC; R2-practice (about 30 primary sources); R2-repos (19 repos, plus every PR in Jon's 7 readable repos, 2,379 in all); R2-design-independent; R2b-gaps (Terraform, snowballing, counter-evidence); R2-SYNTHESIS. Every source is listed in SOURCES.md. Reviews of this draft: `NEXT-branching-REVIEW.md` (same model), `NEXT-branching-REVIEW-2.md` (a different model, 14 sources spot-checked) and `CROSS-VENDOR-REVIEW.md` (a different vendor, 22 pages opened).
+- **Evidence:** [../research/0002-use-one-main-branch-with-environment-folders.md](../research/0002-use-one-main-branch-with-environment-folders.md): batch RB-0002, about 30 primary sources, 19 repositories, every pull request in Jon's 7 readable repositories, and a gap-fill pass. The draft was reviewed three times before acceptance.
 - **Exit path:**
   - To rendered environment branches: add the render job, compare its output with the current render, then repoint the clusters.
   - To pin prod to a release: point prod at a commit, or at a tag protected from being moved, and compare renders before switching.
@@ -174,5 +175,12 @@ Jon answered all three, the last two on the condition that the rule comes from s
 ## Corrections
 
 - **2026-10-23** (research batch IDs under D-0015): 3 research batch citations renamed: `R2` to `RB-0002`; `R2b` to `RB-0002-gaps.md` (2 times). Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
+- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (edac9fe) instead of copying it (D-0016 rule 7).
+  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit edac9fe).
+  2. In `check` (formerly `quote-check`), Jon's quoted words at 07:28:13Z (at commit edac9fe) replaced by a neutral summary, because D-0016 rule 5 bars owner quotes; the rest of the value is unchanged. After: "at 07:28:13Z Jon had said that he had approved the PRs".
+  3. Context and Problem Statement, first paragraph: the quote of Jon's 2026-10-11 question (at commit edac9fe) replaced by a neutral summary. After: "On 2026-10-11 Jon asked whether central-hub should have only `main` or environment branches such as dev/stage/prod, dev/QA/prod or dev/prod, and noted that short-lived branches would start with prefixes such as feature/, bug/ or chore/."
+  4. "Jon's answers", item A: the quote of Jon's answer (at commit edac9fe) replaced. Before, with the quote left out: "- **A. `enhance`:** [quote]. It folds into `feat`." After: "- **A. `enhance`:** Jon chose to use `feat` instead. It folds into `feat`."
+  5. More Information, first bullet. Before: "**Research:** `central-hub/research/branching/` in project files: SPEC; R2-practice (about 30 primary sources); R2-repos (19 repos, plus every PR in Jon's 7 readable repos, 2,379 in all); R2-design-independent; R2b-gaps (Terraform, snowballing, counter-evidence); R2-SYNTHESIS. Every source is listed in SOURCES.md. Reviews of this draft: `NEXT-branching-REVIEW.md` (same model), `NEXT-branching-REVIEW-2.md` (a different model, 14 sources spot-checked) and `CROSS-VENDOR-REVIEW.md` (a different vendor, 22 pages opened)." After: "**Evidence:** [../research/0002-use-one-main-branch-with-environment-folders.md](../research/0002-use-one-main-branch-with-environment-folders.md): batch RB-0002, about 30 primary sources, 19 repositories, every pull request in Jon's 7 readable repositories, and a gap-fill pass. The draft was reviewed three times before acceptance." Reason: the old pointers are private and named agent makers; links the evidence file (D-0016 rule 1 as amended by D-0017).
+  6. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
 
-_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
+  Approval: to be added after approval (D-0006 step 6).
