@@ -17,10 +17,10 @@ What ID scheme should the owner's files and central-hub use, so a label points a
 ## Findings
 
 1. **The labels in use clash.** The owner's files held about 75 ID families, and about 50 of them restart at 1 in each document. 21 labels clash: `P1` alone has 7 meanings, two of them in one file, and "ADR 0001" names 3 different records. Every clash uses a one-letter prefix; no prefix of two or more letters clashed. (Measured.)
-2. **Practice agrees on the lifecycle rules.** Never reuse or delete an ID, supersede rather than edit, leave a tombstone when withdrawing, keep old IDs resolving after a merge, register prefixes so they stop clashes, and keep meaning out of the number [1, 2, 3, 4, 5, 6, 7, 8].
-3. **Collisions happen where the author mints the number.** In the 18 projects read, nobody renumbers. Collisions appear only where the author picks the next number, as with adr-tools' "highest plus one" [11] and a duplicate number in Kotlin's KEEP. Projects that number late or have one minter (Rust RFCs, PEPs, Backstage) avoid them [14].
-4. **The sturdiest schemes keep identity apart from meaning.** StrictDoc keeps a human ID beside a machine ID, and doorstop keeps the ID apart from the text [14].
-5. **Opaque IDs suit machines, not readers.** ARK and DOI policy prefer opaque identifiers, and UUID guidance says to treat UUIDs "as opaquely as possible" [1, 9, 12]; time-based IDs such as ULIDs, UUIDv7 and timestamps avoid collisions but cannot be read or said [9, 13]; a Crossref community thread argues that opaque DOIs cause harm in practice [10]. The batch weighed this and kept readable family prefixes, with opaque IDs allowed underneath as machine aliases.
+2. **Practice agrees on the lifecycle rules.** Never reuse or delete an ID, supersede rather than edit, leave a tombstone when withdrawing, keep old IDs resolving after a merge, register prefixes so they stop clashes, and keep meaning out of the number [1, 2, 3, 4, 5, 6, 7, 8]. Requirements tools agree: IBM DOORS never reuses a purged object number [15, 16].
+3. **Collisions happen where the author mints the number.** In the 18 projects read, nobody renumbers. Collisions appear only where the author picks the next number, as with adr-tools' highest-plus-one numbering [11] and a duplicate number in Kotlin's KEEP. Projects that number late or have one minter (Rust RFCs, PEPs, Backstage) avoid them [14].
+4. **The sturdiest schemes keep identity apart from meaning.** StrictDoc keeps a human ID beside a machine ID, and doorstop keeps the ID apart from the item's level in the document [14].
+5. **Opaque IDs suit machines, not readers.** ARK and DOI policy prefer opaque identifiers, and UUID guidance says to treat UUIDs "as opaquely as possible" [1, 9, 12]; time-based IDs such as ULIDs, UUIDv7 and timestamps avoid collisions [9, 13] but cannot be read or said (inferred); a Crossref community thread argues that opaque DOIs cause harm in practice [10]. The batch weighed this and kept readable family prefixes, with opaque IDs allowed underneath as machine aliases.
 6. **Project acronyms in prefixes are discouraged.** The ARK draft says "using an acronym representing a project or a department is discouraged" [1].
 7. **An older proposal fits practice but misses two rules.** An earlier unaccepted documentation draft (`platform:ADR-0001`) matched the lifecycle rules, but had no rule for parallel minting and no registry, and it built the parent into the ID, so an ID breaks when its item moves. (Read from the draft.)
 
@@ -55,14 +55,15 @@ Relied on (the decision depends on these):
 12. DOI Handbook, numbering. <https://www-old.doi.org/doi_handbook/2_Numbering.html>
 13. ULID specification. <https://raw.githubusercontent.com/ulid/spec/master/README.md>
 14. The 18 projects read, each at a commit: python/peps (545c670f1e98), rust-lang/rfcs (d2705ad64ba4), kubernetes/enhancements (8659e382efab), golang/proposal (0be13090fdb0), ethereum/EIPs (d394152cc2ef), apple/swift-evolution (f4fa78fe9c8c), Kotlin/KEEP (c3485b0b420e), tc39/proposals (849adcde1775), npryce/adr-tools (b3279baf9be2), adr/madr (ba75bb1b20d4), thomvaill/log4brains (17e32021a8c5), joelparkerhenderson/architecture-decision-record (c15e7b1f8edf), doorstop-dev/doorstop (969c0af355a0), strictdoc-project/strictdoc (cc8be791316a), backstage/backstage (b8a841f2c04f), obsidianmd/obsidian-help (08ef563f07b7), zk-org/zk (4df5a5db2946), and the IETF RFC series at rfc-editor.org (web pages, no commit).
+15. IBM DOORS community, purged object IDs. <https://community.ibm.com/community/user/discussion/is-there-any-way-to-reclaim-purgeddiscarded-object-ids>
+16. IBM DOORS DXL reference, "Next Object Absolute Number". <https://jazz.net/dxl/html/376%20-%20Next%20Object%20Absolute%20Number.html>
 
 Background (read, not relied on):
 
-15. Cloud Posse, proposal to index ADRs by ISO 8601 date (rejected). <https://docs.cloudposse.com/resources/adrs/proposed/proposed-use-iso-8601-date-index-for-adrs/>
-16. clan.lol, ADR numbering process. <https://clan.lol/docs/26.05/decisions/03-adr-numbering-process>
-17. GO FAIR Foundation, principle F1. <https://www.gofair.foundation/f1>
-18. RFC Editor, "Errata in RFCs". <https://www.rfc-editor.org/errata-definitions/>
-19. IBM DOORS community, purged object IDs. <https://community.ibm.com/community/user/discussion/is-there-any-way-to-reclaim-purgeddiscarded-object-ids>
+17. Cloud Posse, proposal to index ADRs by ISO 8601 date (rejected). <https://docs.cloudposse.com/resources/adrs/proposed/proposed-use-iso-8601-date-index-for-adrs/>
+18. clan.lol, ADR numbering process. <https://clan.lol/docs/26.05/decisions/03-adr-numbering-process>
+19. GO FAIR Foundation, principle F1. <https://www.gofair.foundation/f1>
+20. RFC Editor, "Errata in RFCs". <https://www.rfc-editor.org/errata-definitions/>
 
 All fetched 2026-10-12.
 

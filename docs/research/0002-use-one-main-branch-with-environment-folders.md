@@ -23,7 +23,7 @@ Should central-hub use one long-lived branch or one branch per environment, and 
 5. **Applications move by image tag.** Application code reaches environments by promoting an immutable image tag through the configuration repository, not by application branches [18].
 6. **The one live case for environment branches is machine-rendered ones.** The rendered manifests pattern and Argo CD's Source Hydrator (beta) write environment branches by machine, while people edit only `main`. It can be added later on top of folders [10, 11].
 7. **Switching cost.** Moving from folders to branches later is cheap; moving from hand-edited environment branches back to folders is expensive, because the branches drift apart. (Inferred from how the tools work.)
-8. **Branch names.** The owner's repositories already use Conventional Commits types as branch prefixes: `fix/` 812, `feat/` 432, `docs/` 336, `chore/` 70, `test/` 38, `refactor/` 16, `ci/` 10, which is 72% of 2,379 pull requests [19]. The only versioned branch-name specification, Conventional Branch 1.1.0, accepts `feat/` and `fix/` as aliases [12]. Vendor-named prefixes are rare in the owner's repositories (4 of 2,379) [19].
+8. **Branch names.** The owner's repositories already use Conventional Commits types as branch prefixes: `fix/` 812, `feat/` 432, `docs/` 336, `chore/` 70, `test/` 38, `refactor/` 16, `ci/` 10, which is 72% of 2,379 pull requests [19]. The only versioned branch-name specification, Conventional Branch 1.1.0, accepts `feat/` and `fix/` as aliases [12]; `feat` and `fix` are Conventional Commits types, the other types come from commitlint's conventional list, and git's ref-name rules set the hard limits [13, 14, 15]. Vendor-named prefixes are rare in the owner's repositories (4 of 2,379) [19].
 9. **Enforcement.** Whether the free GitHub plan can enforce a branch-name pattern is unverified, because GitHub's documentation disagrees [16, 17].
 
 ## How the decision used it
@@ -36,7 +36,6 @@ D-0002 chooses one `main` branch with environments as folders because of finding
 
 - The GitHub API was blocked for third-party repositories, so their branch names come from merge commits and search, and some windows are only partly resolved.
 - One of the owner's repositories could not be read.
-- 8 of the 19 repositories are vendor examples and 6 come from one homelab template family, so the sample confirms the documented pattern more than it tests it.
 - The branch-name search looked only for certain prefixes, so it could miss names such as `env/prod`.
 
 ## References

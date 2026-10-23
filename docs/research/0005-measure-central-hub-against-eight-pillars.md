@@ -3,7 +3,7 @@ record: D-0005
 batch: RB-0014
 researched: 2026-10-15
 method: rapid review of five well-architected frameworks, CNCF and upstream Kubernetes sources, check tools and seven public cluster repositories; claim ledger of 96 rows; independent review
-checks: the ledger holds 96 rows (78 sourced, 18 inferred, 0 from model knowledge, 0 measured); an independent review checked 63 rows against freshly fetched sources, with verdict "pass with fixes", and all 10 fixes were applied
+checks: the ledger holds 96 rows (78 sourced, 18 inferred, 0 from model knowledge, 0 measured); an independent review checked 63 rows against freshly fetched sources, with verdict "pass with fixes"; fixes 1 to 10 of its 12 were applied, one needed no edit and one was outside the files the review could change
 ---
 
 # Evidence for D-0005: the eight pillars
@@ -33,7 +33,6 @@ D-0005 adopts a pillar as-is where 4 or more of the 5 frameworks share it (findi
 ## Limits
 
 - The batch covered the cluster only. The owner later widened the scope to all of Central Hub, and the shape with two Central Hub pillars was set in a proposal written after the batch.
-- No peer-reviewed papers were searched.
 - ISO/IEC 25010:2023 was read through a secondary summary, not the paid standard.
 - Azure's sustainability position and one HashiCorp naming page were seen only in search excerpts.
 - Nothing was measured: the VPS was out of scope.

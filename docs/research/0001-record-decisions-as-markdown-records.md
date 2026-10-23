@@ -22,13 +22,13 @@ How should central-hub record decisions and keep an index of them, so the index 
 4. **Shared statuses.** Proposed, accepted and superseded appear across the sources; most also have deprecated and rejected. AWS and Azure Well-Architected treat an accepted record as immutable [1, 4, 5].
 5. **Index tools are thin.** About half the repositories write their index by hand; 6 generate it. No maintained off-the-shelf tool validating records was found: MADR runs markdownlint only, adr-tools' table of contents lists titles without status, adr-log's last release was 2020-10-21, and the repositories that validate wrote their own checks [3, 8, 9, 11].
 6. **No source covers this owner's case.** No source read covers a single owner whose agents act under the owner's own account (inferred from their silence).
-7. **The two independent designs agreed on the core.** Both proposed plain Markdown records with flat front matter in git, a permanent ID per decision, a generated index with a drift check, and that nothing an agent can write counts as acceptance. They disagreed on six points (where unwritten questions live, how acceptance is proved, location, file naming, revision snapshots and the dependency field), and each disagreement was resolved against the repository evidence above.
+7. **The two independent designs agreed on the core.** Both proposed plain Markdown records with flat front matter in git, a permanent ID per decision, a generated index with a drift check, and that nothing an agent can write counts as acceptance. They disagreed on six points (where unwritten questions live, how acceptance is proved, location, file naming, revision snapshots and the dependency field), and the synthesis lists and resolves each one.
 
 ## How the decision used it
 
 (Written from the record, not from the batch.)
 
-D-0001 chooses one Markdown file per decision in `docs/decisions/`, with a generated index, because of findings 1 to 3. Its statuses follow finding 4. It accepts writing a small generator and validator because of finding 5, and it ties acceptance to the Foundation phases because of finding 6.
+D-0001 chooses one Markdown file per decision in `docs/decisions/`, with a generated index, because of findings 1 to 3; log4brains is named as a possible reader [10]. Its statuses follow finding 4, as described by the government guidance read [6, 7]. It accepts writing a small generator and validator because of finding 5, and it ties acceptance to the Foundation phases because of finding 6.
 
 ## Limits
 

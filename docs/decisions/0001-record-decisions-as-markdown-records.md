@@ -36,7 +36,7 @@ Agents work under Jon's GitHub account, so nothing an agent writes can count as 
 - **Only Jon accepts:** agents propose and never accept.
 - **Replaceable:** the data stays in plain, portable form, so the tool, the format or the location can each be swapped.
 - **One at a time, in Jon's order:** Jon picks the next decision. Nothing is bulk-created.
-- **Visual first** (Jon, 2026-10-10: he follows structure best from a picture): the shape of a decision is visible at a glance.
+- **Visual first** (Jon, 2026-10-10: he describes himself as a visual person): the shape of a decision is visible at a glance.
 - **Follow established practice** where it exists.
 
 ## Considered Options
@@ -167,7 +167,7 @@ Until each of these is checked, acceptance stays by convention.
 - **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (edac9fe) instead of copying it (D-0016 rule 7).
   1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit edac9fe).
   2. In `check` (formerly `quote-check`), Jon's quoted words at 07:28:13Z (at commit edac9fe) replaced by a neutral summary, because D-0016 rule 5 bars owner quotes; the rest of the value is unchanged. After: "at 07:28:13Z Jon had said that he had approved the PRs".
-  3. Decision Drivers, "Visual first": the quote of Jon's 2026-10-10 message (at commit edac9fe) replaced by a neutral summary. After: "(Jon, 2026-10-10: he follows structure best from a picture)".
+  3. Decision Drivers, "Visual first": the quote of Jon's 2026-10-10 message (at commit edac9fe) replaced by a neutral summary. After: "(Jon, 2026-10-10: he describes himself as a visual person)".
   4. More Information, first bullet. Before: "**Research:** `central-hub/research/decision-register/RB-0001-SYNTHESIS.md` in project files. Both independent agent designs are kept there unedited." After: "**Evidence:** [../research/0001-record-decisions-as-markdown-records.md](../research/0001-record-decisions-as-markdown-records.md): batch RB-0001, 10 practice sources, 16 repositories and two independent designs." Reason: the old pointer is private; links the evidence file (D-0016 rule 1 as amended by D-0017).
   5. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
 
