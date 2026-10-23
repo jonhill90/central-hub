@@ -19,9 +19,9 @@ revisit-when: a knowledge system is chosen that should hold research and approva
 
 ## Context and Problem Statement
 
-The research behind each decision record lives in a private research repository and in project files. This repository is public. Of the 14 records, 13 point to research a public reader cannot open: the private repository returns "not found" to an outside request. That repository is also expected to go away once the knowledge and documentation systems exist (D-0012, "Not decided here").
+The research behind each decision record lives in a private research repository and in project files. This repository is public. Of the 14 records on `main` at 05a48ff, 13 point to research a public reader cannot open: the private repository returns "not found" to an outside request. That repository is also expected to go away once the knowledge and documentation systems exist (D-0012, "Not decided here").
 
-The records also quote the owner's chat messages word for word. 13 of 14 record bodies do so, and every `accepted-evidence` block holds a `quote:` field, as D-0001 requires.
+The records also quote the owner's chat messages word for word. 13 of 14 record bodies do so, and every `accepted-evidence` block holds a `quote:` field, as D-0001 requires. D-0015, accepted later, follows the same pattern.
 
 On 2026-10-23 the owner asked for two changes. The research the records rely on should be included in this repository, with nothing invented. The records should stop quoting the owner, and should state what the owner asked or decided in a neutral, professional tone. An earlier request from 2026-10-12, to remove references to private, machine-local material from the records, points the same way.
 
@@ -101,7 +101,7 @@ flowchart LR
 
 ### What happens to the existing records
 
-Nothing changes in D-0001 to D-0014 through this record alone. After acceptance, the owner picks the order. For each group of records, one correction PR under D-0006 does four things: it rewords the owner's words in neutral terms, rewrites the `accepted-evidence` block under rule 6, rewrites any Corrections entry that quotes an approval message (D-0005 has one), and adds the evidence file and its link. D-0006's own evidence file is already in this PR, as the worked example (`0006-allow-corrections-to-accepted-records/evidence.md`); its link is added by D-0006's correction.
+Nothing changes in D-0001 to D-0015 through this record alone. After acceptance, the owner picks the order. For each group of records, one correction PR under D-0006 does four things: it rewords the owner's words in neutral terms, rewrites the `accepted-evidence` block under rule 6, rewrites any Corrections entry that quotes an approval message (D-0005 has one), and adds the evidence file and its link. D-0006's own evidence file is already in this PR, as the worked example (`0006-allow-corrections-to-accepted-records/evidence.md`); its link is added by D-0006's correction.
 
 The old quotes stay in git history and in past PR text. This repository is public, and a commit cannot be un-published (CLAUDE.md rule 4). The cleanup changes what a reader sees on `main`, not the history.
 

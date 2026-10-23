@@ -1,14 +1,14 @@
 ---
 id: D-0014
 title: Spell requirement IDs REQ-NNNN, and during Foundation rename agent-made labels everywhere with the owner's approval
-status: accepted
+status: superseded
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: [D-0001, D-0004, D-0006, D-0009]
 supersedes: [D-0009]
-superseded-by:
+superseded-by: D-0015
 accepted-evidence:
   quote: "accept PR jonhill90/central-hub#22 f62845a"
   message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwN12EqNFjmi5fTVUJmrD9vhd
