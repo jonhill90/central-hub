@@ -40,7 +40,7 @@ Three drafts exist in the Research repo and none is accepted: a platform PRD, a 
   - Jon accepts work by a message naming the PR number and head SHA (AGENTS.md rule 1, D-0001).
   - Every document kind sits under `docs/`.
   - Labels are written with the file name (D-0003).
-- **Replaceable** (SR11).
+- **Replaceable** (REQ-0011).
 
 ## Considered Options
 
@@ -154,5 +154,9 @@ Each of these is a later decision for Jon:
   - Delete the PRD; the requirement rows remain.
   - Stop writing specs; merged specs stay as history.
   - Nothing here adds a tool.
+
+## Corrections
+
+- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._

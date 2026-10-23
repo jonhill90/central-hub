@@ -36,7 +36,7 @@ This record sets which kinds of document central-hub keeps, where each one goes,
 - **Fit accepted records.** Nothing in D-0007, D-0008, D-0009, D-0010 or D-0011 changes.
 - **Two layers (D-0007).** Every document is one link from README or AGENTS.md.
 - **Public repository** (CLAUDE.md rule 4). Runbooks and postmortems tend to collect hostnames, addresses and contacts.
-- **Replaceable** (SR11). Each folder has a stated way to drop it.
+- **Replaceable** (REQ-0011). Each folder has a stated way to drop it.
 
 ## Considered Options
 
@@ -75,7 +75,7 @@ central-hub/
 5. **Part READMEs.** Each root folder (`hosts/`, `kubernetes/`, `dns/`, `backup/`, `private-network/`) gets a `README.md` with its first file. It says what the part does, which decision record owns it, how it is dropped, and which runbooks run it. It points to records and never copies them.
 6. **Not folders.** There is no `plans/` folder: a plan for one change is a spec (D-0007), and the ordered backlog stays outside this repo. There is no `playbooks/` folder: a response to an alert is a runbook whose trigger is that alert. There are no `how-to/`, `tutorials/` or `reference/` folders: runbooks are the how-tos, learning material stays in the Research repo, and generated reference stays next to the code it describes.
 7. **Decisions folder name.** It stays `docs/decisions/` (MADR, D-0001), not `docs/adr/`.
-8. **Glossary is the one source** for platform terms (SR05). Other copies point to it. Terms about systems other than system 8 stay in the Research repo.
+8. **Glossary is the one source** for platform terms (REQ-0005). Other copies point to it. Terms about systems other than system 8 stay in the Research repo.
 9. **Diagrams.** A drawing written as text stays inside the page that uses it. `docs/diagrams/` holds only source files such as `.d2`, `.drawio` or `.svg`.
 10. **No private values in any document.** Hostnames, single machine addresses, contacts and secrets are never written here. A document names the key that holds the value in the private store, never the value (CLAUDE.md rule 4; STD-0002, proposed).
 11. **Security postmortems wait.** A postmortem for a security incident stays in a private GitHub security advisory until the fix is out, and only then lands in `docs/postmortems/` (SECURITY.md).
@@ -132,7 +132,7 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
 
 - which private store holds the values that runbooks name, which waits on the secrets backend decision;
 - a root `LICENSE` file;
-- where "current state and next step" (SR06) and the requirement rows live once the Research repo goes away;
+- where "current state and next step" (REQ-0006) and the requirement rows live once the Research repo goes away;
 - a changelog, which waits on the versioning decision;
 - recordings of runbooks (for example VHS), a link check, and a docs site in its own repository.
 
@@ -173,3 +173,7 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
   - Diátaxis;
   - the RULES-v4 R1 runbook fields (trigger, runner, files).
 - Related records: D-0001, D-0007, D-0008, D-0009, D-0010, D-0011. Related standard: STD-0002 (proposed).
+
+## Corrections
+
+- **2026-10-23** (requirement IDs respelled under D-0014): 3 requirement IDs renamed, `SR05` to `REQ-0005`, `SR06` to `REQ-0006`, `SR11` to `REQ-0011`. Before: `SR05`; after: `REQ-0005`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).

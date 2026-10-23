@@ -32,7 +32,7 @@ On 2026-10-20 at 03:03 UTC Jon wrote: "I dont want to clickops anything in the p
 
 - **No click-ops.** Every machine is created and configured from code in this repository.
 - **D-0008 rule 3.** Root folders are named for their job. A vendor product is never a root folder name, apart from the stated `kubernetes/` exception.
-- **Replaceable** (SR11). Swapping a vendor product should replace one folder, not rename a root folder.
+- **Replaceable** (REQ-0011). Swapping a vendor product should replace one folder, not rename a root folder.
 - **Public repository** (CLAUDE.md rule 4). Single machine addresses and hostnames never go here. STD-0002 (proposed) holds the rule for addresses.
 
 ## Considered Options
@@ -98,3 +98,7 @@ central-hub/
 
 - Research behind it: Research repo, `labs/central-hub/repo-layout/rl4/` (`RULES-v4.md` N2, N5, F1; `SYNTHESIS.md`, "Where machine and VM code goes").
 - Related records: D-0001, D-0008. Related standard: STD-0002 (proposed).
+
+## Corrections
+
+- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).

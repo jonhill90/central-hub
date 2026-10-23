@@ -36,7 +36,7 @@ This record decides how an error in an accepted record is fixed. It amends D-000
 - **Follow published practice.** Research batch ADR-C1 (Research repo, `areas/documentation/research/adr-corrections/`) read 14 sources. None asks for a near-copy record to fix an error that leaves the decision the same. Supersede is described for a decision that is reversed or changed.
 - **Only Jon accepts.** A correction must need the same approval as an acceptance.
 - **Keep the history.** Anyone must be able to see what the record said when Jon accepted it.
-- **Replaceable** (SR11): easy to tighten back to strict immutability.
+- **Replaceable** (REQ-0011): easy to tighten back to strict immutability.
 
 ## Considered Options
 
@@ -136,5 +136,9 @@ PR #9 is closed unmerged, so its draft never entered the log. This record reuses
 - **Research:** Research repo, `areas/documentation/research/adr-corrections/` (SYNTHESIS.md, LEDGER.md with 27 claims, VERIFY.md with an independent quote check: 21 of 21 quotes verbatim).
 - **Former D-0006:** the PR #9 draft, a full restatement of D-0005; closed unmerged on 2026-10-16. Its number is reused here.
 - **Exit path:** to return to strict immutability, a new record supersedes this one; past Corrections entries stay where they are. To switch to an errata list, a new record moves the Corrections entries into one file per record.
+
+## Corrections
+
+- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
