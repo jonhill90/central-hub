@@ -8,5 +8,9 @@ An evidence file is frozen with its record and changes only by a correction unde
 
 | Record | Evidence file |
 |---|---|
+| D-0001 | [0001-record-decisions-as-markdown-records.md](0001-record-decisions-as-markdown-records.md) |
+| D-0002 | [0002-use-one-main-branch-with-environment-folders.md](0002-use-one-main-branch-with-environment-folders.md) |
+| D-0003 | [0003-use-registered-id-families-and-file-qualified-labels.md](0003-use-registered-id-families-and-file-qualified-labels.md) |
+| D-0005 | [0005-measure-central-hub-against-eight-pillars.md](0005-measure-central-hub-against-eight-pillars.md) |
 | D-0006 | [0006-allow-corrections-to-accepted-records.md](0006-allow-corrections-to-accepted-records.md) |
 | D-0016 | [0016-give-records-an-evidence-file-and-neutral-approval.md](0016-give-records-an-evidence-file-and-neutral-approval.md) |
