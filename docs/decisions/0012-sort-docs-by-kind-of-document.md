@@ -191,4 +191,4 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
 - **2026-10-23** (lifecycle field completed). Reason: D-0013 says `amends: [D-0012]`, but this record's `amended-by` listed only D-0017; no decision changes.
   1. `amended-by`. Before: `amended-by: [D-0017]` After: `amended-by: [D-0013, D-0017]`
 
-  Approval: to be added after approval (D-0006 step 6).
+  Approval: the owner, 2026-10-23T21:46:34Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAaxwHhhgPt6cvkvmWyw9yy), naming PR #33 and head e6b7c1c; approved commit e6b7c1c914e07d48a8c0985b2dfbeb119cee1a70. Check: the drafting agent read the message at 2026-10-23T21:46Z and confirmed it names that PR and head.

@@ -132,4 +132,4 @@ D-0003's rules 1 and 3 to 7 carry over unchanged. Rule 2 gets one more row in th
 - **2026-10-23** (front matter made valid YAML). Reason: the `revisit-when` value contained ": ", so YAML parsers rejected the whole front matter; no decision changes.
   1. `revisit-when`: the value put in double quotes; its text is unchanged. Before: `revisit-when: the same as D-0003, plus: the standards register moves out of this repo; or a second kind of standard needs its own family` After: `revisit-when: "the same as D-0003, plus: the standards register moves out of this repo; or a second kind of standard needs its own family"`
 
-  Approval: to be added after approval (D-0006 step 6).
+  Approval: the owner, 2026-10-23T21:46:34Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAaxwHhhgPt6cvkvmWyw9yy), naming PR #33 and head e6b7c1c; approved commit e6b7c1c914e07d48a8c0985b2dfbeb119cee1a70. Check: the drafting agent read the message at 2026-10-23T21:46Z and confirmed it names that PR and head.
