@@ -49,7 +49,7 @@ This record sets which kinds of document central-hub keeps, where each one goes,
 
 Chosen option: **1**, with option 3's part READMEs added on top. Jon said yes to writing this map as a decision record on 2026-10-23 at 02:13 UTC, and accepted this record under D-0001 on 2026-10-23 at 02:18 UTC.
 
-No standard or paper names docs folders. ISO/IEC/IEEE 15289 and ISO/IEC 20000-1 say layout is out of their scope, and no paper read tests a folder scheme. In the repos read, 12 of the 18 that have docs give decisions, proposals, runbooks or postmortems a folder of their own, even where their guides are sorted another way. Only 2 of 18 use Diátaxis at the top. Diátaxis itself says it is "not a scheme into which documentation must be placed - four boxes". (Research repo, `areas/documentation/research/repo-docs-kinds/`, batch DK1.)
+No standard or paper names docs folders. ISO/IEC/IEEE 15289 and ISO/IEC 20000-1 say layout is out of their scope, and no paper read tests a folder scheme. In the repos read, 12 of the 18 that have docs give decisions, proposals, runbooks or postmortems a folder of their own, even where their guides are sorted another way. Only 2 of 18 use Diátaxis at the top. Diátaxis itself says it is "not a scheme into which documentation must be placed - four boxes". (Research repo, `areas/documentation/research/repo-docs-kinds/`, batch RB-0069.)
 
 ```
 central-hub/
@@ -178,3 +178,4 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
 ## Corrections
 
 - **2026-10-23** (requirement IDs respelled under D-0014): 3 requirement IDs renamed, `SR05` to `REQ-0005`, `SR06` to `REQ-0006`, `SR11` to `REQ-0011`. Before: `SR05`; after: `REQ-0005`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
+- **2026-10-23** (research batch IDs under D-0015): 1 research batch citation renamed: `DK1` to `RB-0069`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.

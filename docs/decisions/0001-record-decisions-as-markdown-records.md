@@ -59,7 +59,7 @@ flowchart LR
 
 *In words:* Jon picks one decision from the backlog. It's researched, then checked independently. Jon reviews it, and it goes back for more research or he approves it. Approval makes it the next numbered record, and the index is regenerated.
 
-Chosen option: **1**. In the R1 sample of 16 repos, decisions under consideration that had been written up appeared in the index as records marked Proposed or Open. None kept them in a separate file. Some sent raw questions or discussion to issues, pull requests or Discussions. One kind of file is the simplest to validate, migrate and replace.
+Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under consideration that had been written up appeared in the index as records marked Proposed or Open. None kept them in a separate file. Some sent raw questions or discussion to issues, pull requests or Discussions. One kind of file is the simplest to validate, migrate and replace.
 
 ### What the decision covers
 
@@ -127,7 +127,7 @@ Until each of these is checked, acceptance stays by convention.
   - Standard MADR structure.
   - log4brains and Backstage are candidate readers, not yet verified with the custom fields.
   - The exit path is plain text in git, with the approval evidence carried inside each record.
-- Bad: a small generator and validator script to maintain. R1 didn't find a maintained tool that validates records.
+- Bad: a small generator and validator script to maintain. RB-0001 didn't find a maintained tool that validates records.
 - Bad: until AG1 is verified, "only Jon accepts" is a convention, with a review check.
 
 ### Confirmation
@@ -140,7 +140,7 @@ Until each of these is checked, acceptance stays by convention.
 
 ### Option 2: YAML list for unwritten questions
 - Good: fewer files.
-- Bad: two places to keep in sync, and no repo in the R1 sample did this.
+- Bad: two places to keep in sync, and no repo in the RB-0001 sample did this.
 
 ### Option 3: Issues
 - Good: suited to discussion.
@@ -153,11 +153,15 @@ Until each of these is checked, acceptance stays by convention.
 
 ## More Information
 
-- **Research:** `central-hub/research/decision-register/R1-SYNTHESIS.md` in project files. Both independent agent designs are kept there unedited.
+- **Research:** `central-hub/research/decision-register/RB-0001-SYNTHESIS.md` in project files. Both independent agent designs are kept there unedited.
 - **Exit path:**
   - Swapping the generator or site doesn't change the records.
   - Moving the location is a `git mv`.
   - A format change is a script that maps front-matter keys.
   - Moving to the future knowledge system means importing Markdown and front matter. The approval evidence travels inside each record.
+
+## Corrections
+
+- **2026-10-23** (research batch IDs under D-0015): 4 research batch citations renamed: `R1` to `RB-0001` (3 times); `R1-SYNTHESIS.md` to `RB-0001-SYNTHESIS.md`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._

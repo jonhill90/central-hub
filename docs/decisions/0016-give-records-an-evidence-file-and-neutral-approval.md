@@ -162,3 +162,5 @@ Made under D-0006. The decision is unchanged.
   2. More Information, "Worked example". Before: `[0006-allow-corrections-to-accepted-records/evidence.md](0006-allow-corrections-to-accepted-records/evidence.md)`. After: `[../research/0006-allow-corrections-to-accepted-records.md](../research/0006-allow-corrections-to-accepted-records.md)`.
 
   Approval: owner, 2026-10-23T04:58:39Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNT1mFLf6eEyeGKAMDBbAKVd, naming PR #26 and head 5115dcd; approved commit 5115dcd4f117fafee773e5c258c3c71ccf6e8317 (PR #26).
+
+- **2026-10-23** (research batch IDs under D-0015): 2 research batch citations renamed: `DE1` to `RB-0073` (2 times) in its evidence file (now `docs/research/`). Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.

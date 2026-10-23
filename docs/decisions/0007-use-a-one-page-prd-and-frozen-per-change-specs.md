@@ -30,13 +30,13 @@ Three drafts exist in the Research repo and none is accepted: a platform PRD, a 
 
 ## Decision Drivers
 
-- **What the evidence shows.** Research batch PS3 (Research repo, `areas/documentation/research/prd-spec-ps3/`) found:
+- **What the evidence shows.** Research batch RB-0057 (Research repo, `areas/documentation/research/prd-spec-ps3/`) found:
   - 81.5% of spec files in public repos have one commit, so most specs behave as frozen records.
   - Measured gains come from short, curated context and from checks, not from longer spec documents.
   - No study shows that a project-level PRD helps people or agents.
 - **Jon's brief asks for a PRD.** The PRD is kept because Jon asked for it, not because the evidence requires it.
 - **Point to the code.** IEEE 830-1998 says the same requirement "should not appear in more than one place". The modern sources agree.
-- **Fit the accepted rules.** The fit was checked in PS3 `ORG-CHECK.md`:
+- **Fit the accepted rules.** The fit was checked in RB-0057 `ORG-CHECK.md`:
   - Jon accepts work by a message naming the PR number and head SHA (AGENTS.md rule 1, D-0001).
   - Every document kind sits under `docs/`.
   - Labels are written with the file name (D-0003).
@@ -149,7 +149,7 @@ Each of these is a later decision for Jon:
   - `RECALL.md`: 194 of 220 known items found.
   - `CHECK.md`: an independent check of 150 claims; 140 supported, none false.
   - `ORG-CHECK.md`: the fit with the organization research.
-- **Earlier proposal A2** (batches PS1 and PS2) is replaced by this record, which keeps its per-change rules.
+- **Earlier proposal A2** (batches RB-0037 and RB-0040) is replaced by this record, which keeps its per-change rules.
 - **Exit path:**
   - Delete the PRD; the requirement rows remain.
   - Stop writing specs; merged specs stay as history.
@@ -158,5 +158,6 @@ Each of these is a later decision for Jon:
 ## Corrections
 
 - **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
+- **2026-10-23** (research batch IDs under D-0015): 4 research batch citations renamed: `PS3` to `RB-0057` (2 times); `PS1` to `RB-0037`; `PS2` to `RB-0040`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._

@@ -24,7 +24,7 @@ revisit-when: the Activation gate passes (rule 5 goes back to "never renamed"); 
 
 ## Context and Problem Statement
 
-On 2026-10-23 Jon said the requirement IDs (`SR01` to `SR25`) were made up by agents and never got the scrutiny other choices got. The check that followed (research batch RQ1, project files outside this repo at `research/requirement-ids/`) found:
+On 2026-10-23 Jon said the requirement IDs (`SR01` to `SR25`) were made up by agents and never got the scrutiny other choices got. The check that followed (research batch RB-0072, project files outside this repo at `research/requirement-ids/`) found:
 
 - An agent coordinator wrote the `SR` format on 2026-10-06, before this project existed. Jon said yes to each requirement's wording, never to the format.
 - The ID research behind D-0003 kept `SR` only because it did not clash, and froze its spelling ("Nothing is respelled"). D-0009 carried it over unchanged.
@@ -38,7 +38,7 @@ D-0009 rule 5 ("Old labels are never renamed") would keep `SR11` alive beside `R
 ## Decision Drivers
 
 - **Match what exists:** `D-0007` and `STD-0001` use a dash and four digits.
-- **One name per thing:** two live names for one requirement is the confusion R3 measured (`P1` had 7 meanings).
+- **One name per thing:** two live names for one requirement is the confusion RB-0003 measured (`P1` had 7 meanings).
 - **Greenfield:** Foundation is the cheapest time to rename. The count of `SR` references grows every day (about 4,700 on 2026-10-23).
 - **Records stay true:** chat archives and git history are records of what was said and must not change.
 - **Replaceable** (requirement SR11, which this record renames `REQ-0011`).
@@ -126,8 +126,12 @@ D-0009's rules 1, 2, 3, 4, 6 and 7 carry over unchanged. Rule 1's registry row f
 ## More Information
 
 - Research (project files outside this repo): `research/requirement-ids/` (SYNTHESIS.md, LEDGER.md). Research repo copy: `areas/documentation/research/requirement-ids/`.
-- Earlier rename handled the same way: research method IDs, 2026-10-18 (batch MF1, project files `research/method-id-fixes/CORRECTIONS.md`).
+- Earlier rename handled the same way: research method IDs, 2026-10-18 (batch RB-0055, project files `research/method-id-fixes/CORRECTIONS.md`).
 - Related records: D-0001, D-0003, D-0004, D-0006, D-0009.
 - On acceptance, D-0009's lifecycle fields change to `status: superseded` and `superseded-by: D-0014`, under D-0001.
+
+## Corrections
+
+- **2026-10-23** (research batch IDs under D-0015): 3 research batch citations renamed: `RQ1` to `RB-0072`; `R3` to `RB-0003`; `MF1` to `RB-0055`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
 
 _Jon's quoted words are shown as he wrote them._

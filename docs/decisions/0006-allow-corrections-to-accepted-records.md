@@ -34,7 +34,7 @@ This record decides how an error in an accepted record is fixed. It amends D-000
 
 ## Decision Drivers
 
-- **Follow published practice.** Research batch ADR-C1 (Research repo, `areas/documentation/research/adr-corrections/`) read 14 sources. None asks for a near-copy record to fix an error that leaves the decision the same. Supersede is described for a decision that is reversed or changed.
+- **Follow published practice.** Research batch RB-0029 (Research repo, `areas/documentation/research/adr-corrections/`) read 14 sources. None asks for a near-copy record to fix an error that leaves the decision the same. Supersede is described for a decision that is reversed or changed.
 - **Only Jon accepts.** A correction must need the same approval as an acceptance.
 - **Keep the history.** Anyone must be able to see what the record said when Jon accepted it.
 - **Replaceable** (REQ-0011): easy to tighten back to strict immutability.
@@ -108,7 +108,7 @@ PR #9 is closed unmerged, so its draft never entered the log. This record reuses
 - Good: the text Jon accepted is still in git at the approved commit, and the Corrections list says what changed.
 - Bad: goes against the strict "never edit" guidance from AWS, Azure Well-Architected and Fowler.
 - Bad: "the decision did not change" is a judgment call. The guards are that Jon approves each correction, and that anything unsure is treated as a changed decision.
-- Neutral: the 4-digit ID was not a reason for this record. Reading `D-NNNN` as at least four digits, D-10000 still works, as `printf "%04d"` already does (ADR-C1 ledger rows 13 to 16).
+- Neutral: the 4-digit ID was not a reason for this record. Reading `D-NNNN` as at least four digits, D-10000 still works, as `printf "%04d"` already does (RB-0029 ledger rows 13 to 16).
 
 ### Confirmation
 
@@ -125,7 +125,7 @@ PR #9 is closed unmerged, so its draft never entered the log. This record reuses
 
 ### 3. Separate errata list
 - Good: the accepted text never changes.
-- Bad: readers must check two places to read a record correctly, and no ADR source in ADR-C1 does this.
+- Bad: readers must check two places to read a record correctly, and no ADR source in RB-0029 does this.
 - Kept as the fallback if in-place corrections ever cause trust problems once agents have their own identities.
 
 ### 4. Living document
@@ -141,5 +141,6 @@ PR #9 is closed unmerged, so its draft never entered the log. This record reuses
 ## Corrections
 
 - **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, "approve PR jonhill90/central-hub#23 cabb14e" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, 2026-10-23T04:04:08Z); approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
+- **2026-10-23** (research batch IDs under D-0015): 5 research batch citations renamed: `ADR-C1` to `RB-0029` (3 times); `ADR-C1` to `RB-0029` (2 times) in its evidence file (now `docs/research/`). Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._
