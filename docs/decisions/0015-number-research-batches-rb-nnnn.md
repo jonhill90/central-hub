@@ -1,14 +1,14 @@
 ---
 id: D-0015
 title: Number research batches RB-NNNN in one batch register, and rename the old batch codes everywhere
-status: accepted
+status: superseded
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: [D-0001, D-0006, D-0014]
 supersedes: [D-0014]
-superseded-by:
+superseded-by: D-0018
 accepted-evidence:
   quote: "accept PR jonhill90/central-hub#24 1cce2f8"
   message-id: cmsg_01X43rfNYp4H1dL1V2dkfkwNNC2krzzxxNCskiWfAqbKzw

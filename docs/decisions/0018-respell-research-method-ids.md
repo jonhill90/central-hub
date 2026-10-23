@@ -1,7 +1,7 @@
 ---
 id: D-0018
 title: Spell research method IDs RM-NNNN, store each method's number, and rename the old IDs everywhere
-status: proposed
+status: accepted
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -10,6 +10,13 @@ waits-on: [D-0001, D-0006, D-0015, D-0016]
 supersedes: [D-0015]
 superseded-by:
 accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-23T05:23:48Z
+  approved-commit: b0925cfa06a2b2c80860328d9bdac47967fb0684
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNQzUuygf7ZccWtDTPe47K57
+  approval-names: "PR #30 and head b0925cf"
+  check: the drafting agent read the message in the project thread at 2026-10-23T05:23Z; it names PR jonhill90/central-hub#30 and head b0925cf itself. An independent check by a reviewing agent is still to do.
+  merged: not yet; the owner merges PR #30, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: the Activation gate passes; the methods catalogue moves into a tool with its own numbering; or the research gate stops citing methods by ID
 ---
