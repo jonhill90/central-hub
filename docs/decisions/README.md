@@ -17,3 +17,4 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0010 | [Give specs five status words and retire the three October 2026 drafts](0010-set-spec-status-words-and-retire-old-drafts.md) | accepted | D-0001, D-0007, D-0008 | 2026-10-22 |
 | D-0011 | [Keep the code for every machine below Kubernetes in hosts/, one subfolder per vendor product, with Terraform modules in their own repository](0011-keep-machine-code-in-hosts.md) | accepted | D-0001, D-0008 | 2026-10-22 |
 | D-0012 | [Sort docs/ by kind of document, add runbooks, architecture, glossary, postmortems and diagrams with their first file, and keep plans and playbooks out](0012-sort-docs-by-kind-of-document.md) | accepted | D-0001, D-0007, D-0008, D-0009, D-0010 | 2026-10-23 |
+| D-0013 | [Give every runbook step a short why and ※ links back, and mark each runbook manual or automated](0013-give-runbook-steps-a-why-and-back-links.md) | accepted | D-0001, D-0012 | 2026-10-23 |
