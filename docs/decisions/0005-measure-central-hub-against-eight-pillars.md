@@ -169,4 +169,4 @@ Made under D-0006. The decision is unchanged.
   7. More Information: a first bullet added linking the evidence file: "**Evidence:** [../research/0005-measure-central-hub-against-eight-pillars.md](../research/0005-measure-central-hub-against-eight-pillars.md): batch RB-0014, a 96-row claim ledger and an independent review." Reason: D-0016 rule 1 as amended by D-0017.
   8. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
 
-  Approval: to be added after approval (D-0006 step 6).
+  Approval: the owner, 2026-10-23T05:22:43Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNJe6kJE76z6YiJbQ9y7Tg3i), naming PR #29 and head 97fd304; approved commit 97fd304459b3976d441c419564b8e082d64a1a47. Check: the drafting agent read the message at 2026-10-23T05:22Z and confirmed it names that PR and head.
