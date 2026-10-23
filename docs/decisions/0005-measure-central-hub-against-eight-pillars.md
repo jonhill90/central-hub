@@ -34,7 +34,7 @@ Research: batch R6 in the project Library (`central-hub/research/well-architecte
 
 - **Use the industry's words.** Someone who knows Azure, AWS or Google Well-Architected should recognise every standard pillar by name.
 - **Whole system.** The pillars apply to the cluster, agents, identity, knowledge, documentation, the repository and the decision process.
-- **Replaceable** (SR11 in the requirements register): this framework, too, must be easy to drop or swap.
+- **Replaceable** (REQ-0011 in the requirements register): this framework, too, must be easy to drop or swap.
 - **Clear line.** Anything that is ours must be labelled as ours.
 
 ## Considered Options
@@ -79,20 +79,20 @@ flowchart TB
 
 | # | Pillar | Group | Origin | Register rows today |
 |---|---|---|---|---|
-| 1 | Reliability | industry | Azure, AWS, Google; HashiCorp "resilient systems" | SR11, SR22 |
-| 2 | Security | industry | all five | SR03, SR19 |
-| 3 | Operational Excellence | industry | Azure, AWS, Google; HashiCorp "automate" | SR05, SR10 |
-| 4 | Cost Optimization | industry | Azure, AWS, Google; HashiCorp "optimize" | SR23 |
-| 5 | Performance Efficiency | industry | Azure, AWS, Google; HashiCorp "optimize" | SR24 |
-| 6 | Sustainability | industry | AWS and Google pillar; Azure guidance | SR25 |
-| 7 | Replaceability | Central Hub | ISO/IEC 25010:2023 "replaceability", under Flexibility | SR02, SR08, SR11 |
-| 8 | Understandability | Central Hub | none as a pillar; documentation is its main area | SR01, SR05, SR06, SR18, SR20, SR21 |
+| 1 | Reliability | industry | Azure, AWS, Google; HashiCorp "resilient systems" | REQ-0011, REQ-0022 |
+| 2 | Security | industry | all five | REQ-0003, REQ-0019 |
+| 3 | Operational Excellence | industry | Azure, AWS, Google; HashiCorp "automate" | REQ-0005, REQ-0010 |
+| 4 | Cost Optimization | industry | Azure, AWS, Google; HashiCorp "optimize" | REQ-0023 |
+| 5 | Performance Efficiency | industry | Azure, AWS, Google; HashiCorp "optimize" | REQ-0024 |
+| 6 | Sustainability | industry | AWS and Google pillar; Azure guidance | REQ-0025 |
+| 7 | Replaceability | Central Hub | ISO/IEC 25010:2023 "replaceability", under Flexibility | REQ-0002, REQ-0008, REQ-0011 |
+| 8 | Understandability | Central Hub | none as a pillar; documentation is its main area | REQ-0001, REQ-0005, REQ-0006, REQ-0018, REQ-0020, REQ-0021 |
 
 The register rows are in the Research repo's requirements register (`coordinator/system/REQUIREMENTS.md`).
 
 **Agent perspective.** Google adds cross-pillar "perspectives" instead of new pillars. Central Hub's perspective asks how each pillar applies when the worker is an agent: one identity per agent (Security), model and token spend per agent (Cost), agent access that survives a rebuild (Reliability), attributed and explained agent actions (Understandability).
 
-**Not pillars.** SR07, SR09, SR12 and SR13 to SR17 describe how agents and decisions work, not how the system is built. They stay as rules in the register. GitHub's "Governance" pillar is the nearest match, and those rules already cover it.
+**Not pillars.** REQ-0007, REQ-0009, REQ-0012 and REQ-0013 to REQ-0017 describe how agents and decisions work, not how the system is built. They stay as rules in the register. GitHub's "Governance" pillar is the nearest match, and those rules already cover it.
 
 ### Consequences
 
@@ -154,5 +154,6 @@ Made under D-0006. The decision is unchanged.
      - After: `Jon agreed the shape on 2026-10-15, where "B" was the proposal's name for what is option 1 below: "I love B.`
   - Review: a reviewing agent checked each change before Jon saw it. It confirmed 1, 2 and 4 as unchanged decisions; for 3 it flagged an added reason for adopting Sustainability, which was then removed.
   - Approval: Jon, "approve #11 59cb507" (project chat, message cmsg_01X43rfNYp4H1dL1V2dkfkwNUkxQV8rtkCyFUjGmKo9bMr, 2026-10-17T00:29:34Z); approved commit 59cb5071dac4613ce3d3db5911525da6a9c1dbd8 (PR #11).
+- **2026-10-23** (requirement IDs respelled under D-0014): 24 requirement IDs renamed, `SR01` to `REQ-0001`, `SR02` to `REQ-0002`, `SR03` to `REQ-0003`, `SR05` to `REQ-0005`, `SR06` to `REQ-0006`, `SR07` to `REQ-0007`, `SR08` to `REQ-0008`, `SR09` to `REQ-0009`, `SR10` to `REQ-0010`, `SR11` to `REQ-0011`, `SR12` to `REQ-0012`, `SR13` to `REQ-0013`, `SR17` to `REQ-0017`, `SR18` to `REQ-0018`, `SR19` to `REQ-0019`, `SR20` to `REQ-0020`, `SR21` to `REQ-0021`, `SR22` to `REQ-0022`, `SR23` to `REQ-0023`, `SR24` to `REQ-0024`, `SR25` to `REQ-0025`. Before: `SR01`; after: `REQ-0001`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Earlier Corrections entries keep their old IDs, because they quote text as it was. Approval: pending.
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._

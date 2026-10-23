@@ -26,21 +26,21 @@ revisit-when: the Activation gate passes; an ID family is referenced from outsid
 
 D-0003 rule 6 says "Never reuse, never delete" for every registered ID family, including `SR` requirements.
 
-On 2026-10-13 the requirements register had a row, SR21, that was a usage limit for one agent product. It broke two of the register's own rules: SR08 (no vendor names) and SR11 (everything replaceable). Jon dropped it at 04:23 UTC: "Drop this. I dont want to talk about Harness or Vendors in the System Requirements."
+On 2026-10-13 the requirements register had a row, REQ-0021, that was a usage limit for one agent product. It broke two of the register's own rules: REQ-0008 (no vendor names) and REQ-0011 (everything replaceable). Jon dropped it at 04:23 UTC: "Drop this. I dont want to talk about Harness or Vendors in the System Requirements."
 
-A new requirement (shared vocabulary) was then added as SR22. Jon asked for the number SR21 back: "We need to reuse that SR21. You know it feels wrong as we said everything needs to be built to be replaced and [that product] should not have been a rule like that in the first place." (Central Hub project, Rules table thread, 2026-10-13 06:09 UTC). The reuse was done as a one-time exception in Research commit `f63ae969`. This record decides whether that exception becomes a rule, and on what conditions.
+A new requirement (shared vocabulary) was then added as REQ-0022. Jon asked for the number REQ-0021 back: "We need to reuse that SR21. You know it feels wrong as we said everything needs to be built to be replaced and [that product] should not have been a rule like that in the first place." (Central Hub project, Rules table thread, 2026-10-13 06:09 UTC). The reuse was done as a one-time exception in Research commit `f63ae969`. This record decides whether that exception becomes a rule, and on what conditions.
 
 ## Decision Drivers
 
 - **The reason for "never reuse":** a reference must never silently point at a different item.
 - **Early stage:** IDs are referenced only inside Jon's own repositories and project, and the number of references can be measured by search.
 - **Gaps from mistakes:** a gap left by an entry that was never valid is noise in a small register.
-- **Replaceable** (SR11): the rule should be easy to tighten again later.
+- **Replaceable** (REQ-0011): the rule should be easy to tighten again later.
 
 ## Considered Options
 
 1. **Reuse void IDs during Foundation only, under conditions** (below).
-2. **Never reuse** (D-0003 rule 6 as written): revert SR21 to SR22.
+2. **Never reuse** (D-0003 rule 6 as written): revert REQ-0021 to REQ-0022.
 3. **Reuse any dropped ID** while early.
 
 ## Decision Outcome
@@ -68,7 +68,7 @@ flowchart LR
    - search every repository and the Library for the old ID;
    - update or annotate every live reference;
    - leave frozen records and chat archives as they are.
-5. The register keeps a **tombstone**: an entry such as "Former SR21 (void)" that gives the old meaning, the reason, and what now holds the number.
+5. The register keeps a **tombstone**: an entry such as "Former REQ-0021 (void)" that gives the old meaning, the reason, and what now holds the number.
 
 Everything else in D-0003 stays in force, and rule 6 still applies to every case these conditions don't cover.
 
@@ -78,7 +78,7 @@ Everything else in D-0003 stays in force, and rule 6 still applies to every case
 - Good: the tombstone and the search keep the reason for "never reuse" intact. Nobody following an old reference is misled without being told.
 - Bad: this goes against published practice. ARK, McMurry, OBO, PEP and DOORS all say never reuse (D-0003 research, R3-practice line 250). McMurry's rule covers identifiers "generated and publicly advertised" (R3-practice line 92), and Foundation IDs are not public in that sense. That reading is inferred, not quoted from a source.
 - Bad: one more condition for a reviewer to check.
-- Neutral: SR21 is the only reuse so far. Its search found 6 files that meant the old entry: the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md`, and the register's own Dropped entry. All 6 were updated or annotated. 3 frozen study files and 20 chat archives were left as records. Results reported to Jon in the Rules table thread, 2026-10-13 06:13 UTC.
+- Neutral: REQ-0021 is the only reuse so far. Its search found 6 files that meant the old entry: the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md`, and the register's own Dropped entry. All 6 were updated or annotated. 3 frozen study files and 20 chat archives were left as records. Results reported to Jon in the Rules table thread, 2026-10-13 06:13 UTC.
 
 ### Confirmation
 
@@ -99,5 +99,10 @@ Everything else in D-0003 stays in force, and rule 6 still applies to every case
 
 - **Exit path:** when the Activation gate passes, this exception ends and D-0003 rule 6 applies unchanged; no record needs editing. To end it sooner, a new record supersedes this one.
 - **Relation to D-0003:** this record narrows D-0003 rule 6 and does not supersede D-0003. If the owner prefers a full supersession, a new record would need to restate D-0003 in whole, because D-0001 keeps accepted bodies unchanged.
+
+
+## Corrections
+
+- **2026-10-23** (requirement IDs respelled under D-0014): 10 requirement IDs renamed, `SR08` to `REQ-0008`, `SR11` to `REQ-0011`, `SR21` to `REQ-0021`, `SR22` to `REQ-0022`. Before: `SR08`; after: `REQ-0008`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: pending.
 
 _Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._

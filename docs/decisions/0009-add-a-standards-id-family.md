@@ -40,7 +40,7 @@ On 2026-10-22 at 02:48 UTC Jon chose option A, `STD-NNNN`, from four ID options:
 - **Fit D-0003.** The new prefix must have at least two characters and must not equal or start with an existing prefix, ignoring case. Meaning stays out of the number.
 - **Match what exists.** Decisions are written `D-0007`, with a dash and four digits.
 - **One standard, one ID**, separate from the decision that set it. One decision can set several standards, and a standard can change while its decision stays as history.
-- **Replaceable** (SR11).
+- **Replaceable** (REQ-0011).
 
 ## Considered Options
 
@@ -116,3 +116,7 @@ D-0003's rules 1 and 3 to 7 carry over unchanged. Rule 2 gets one more row in th
 - Research behind the ID rules: batch R3, `central-hub/research/identifiers/` in the project files, as cited by D-0003.
 - Related records: D-0001, D-0003, D-0004, D-0008.
 - On acceptance, D-0003's lifecycle fields change to `status: superseded` and `superseded-by: D-0009`, under D-0001.
+
+## Corrections
+
+- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: pending.

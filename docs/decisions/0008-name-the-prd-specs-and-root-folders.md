@@ -35,7 +35,7 @@ This record fixes those names. It does not create the folders.
 - **Name for the job, not the vendor product.** Jon said yes to this rule (and to naming clusters by role) on 2026-10-19 during his review of the organize-repository skill.
 - **Keep the root short.** The repository root holds only what a reader needs before going deeper (README, AGENTS, SECURITY). Every document kind sits under `docs/`.
 - **Fit accepted records.** D-0007 rule 3 already places specs in `docs/specs/`.
-- **Replaceable** (SR11).
+- **Replaceable** (REQ-0011).
 
 ## Considered Options
 
@@ -107,3 +107,7 @@ central-hub/
 
 - Research behind the names: Research repo, `areas/documentation/research/prd-spec-ps3/NAMES-QUESTION.md` and the repo layout batch RL4 (`labs/central-hub/repo-layout/rl4/`).
 - Related records: D-0001, D-0002, D-0003, D-0007.
+
+## Corrections
+
+- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: pending.
