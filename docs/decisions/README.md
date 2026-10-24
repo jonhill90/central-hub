@@ -1,7 +1,7 @@
 <!-- Generated from each record's front matter. Do not edit by hand. -->
 # Decision log
 
-Each decision is one record in this folder. Records are written one at a time, in the order Jon picks, and only `proposed` records come from agents. Decisions not yet picked stay in the decision map, a backlog kept in the project files outside this repo.
+Each decision is one record in this folder. Records are written one at a time, in the order Jon picks, and only `proposed` records come from agents. Decisions not yet picked stay in the backlog, kept in the project files outside this repo, with their options in the decision map.
 
 | ID | Title | Status | Waits on | Date |
 |---|---|---|---|---|
