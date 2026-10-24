@@ -14,7 +14,7 @@ superseded-by:
 
 # Set up a Proxmox VE host by hand
 
-**Status:** draft, not yet run end to end on the host. Steps 0 and 2 were run on the host on 2026-10-22. Built from research batch RB-0061; its independent check held for 118 of 120 sampled source rows, and the 2 weaker rows were fixed.
+**Status:** draft, not yet run end to end on the host. Steps 0 and 2 were run on the host on 2026-10-22. Whether step 1 was run as written is not recorded; step 2's upgrade worked, so the host's repositories were usable. Built from research batch RB-0061; its independent check held for 118 of 120 sampled source rows, and the 2 weaker rows were fixed.
 
 ## Before you start
 
@@ -150,6 +150,7 @@ Keep the Debian base repositories (`debian.sources`) untouched; Proxmox always n
 apt update
 apt full-upgrade          # ※U
 apt install intel-microcode   # or amd64-microcode on an AMD CPU; lscpu shows which
+grep -m1 "linux /boot/vmlinuz" /boot/grub/grub.cfg   # before rebooting: GRUB's default entry is the new kernel
 reboot
 # after reboot
 grep microcode /proc/cpuinfo | uniq
@@ -163,7 +164,7 @@ why: Patches go in before any guest exists ※U. Microcode fixes CPU bugs that t
 
 ※ The repositories from [step 1](#1-point-apt-at-repositories-you-can-actually-use) are where these come from.
 
-expect: a newer kernel after the reboot, and the microcode revision loaded early in `dmesg`. On the host on 2026-10-22, the microcode package was already installed by the ISO; the upgrade brought kernel 7.0.14-25-pve and a newer microcode revision. Before rebooting, check GRUB's default entry is the new kernel: `grep -m1 "linux /boot/vmlinuz" /boot/grub/grub.cfg`.
+expect: a newer kernel after the reboot, and the microcode revision loaded early in `dmesg`. On the host on 2026-10-22, the microcode package was already installed by the ISO; the upgrade brought kernel 7.0.14-25-pve and a newer microcode revision.
 
 **If a new kernel misbehaves** (it will happen at some point with a GPU box): pick the older kernel in the boot menu, then pin it until a fix lands, and unpin as soon as possible so security fixes apply [source: <https://pve.proxmox.com/pve-docs/pve-admin-guide.html>, "Override the Kernel-Version for next Boot"]:
 
@@ -222,7 +223,7 @@ Then, by hand in the web UI as root@pam (only the owner does this):
 - **2FA:** Datacenter → Permissions → Two Factor → Add → TOTP in your authenticator app [S1-28].
 - **Recovery keys:** same place, Add → Recovery Keys; print them and keep them with the offline password copy. One set per user, each key works once [S1-32].
 - WebAuthn needs a trusted certificate, which this host doesn't have ※S, so skip it for now [S1-31].
-- **Test it** every 90 days: log in as root@pam with TOTP [source: Microsoft page above, "Validate accounts regularly"].
+- **Test it** every 90 days: log in as root@pam with TOTP [source: Microsoft page below, "Validate accounts regularly"].
 
 why: Everyday logins will go through an identity provider (IdP), and a local emergency ("break-glass") account that does not depend on it is the usual pattern, tested regularly [source: <https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/security-emergency-access>]. If the IdP runs on the cluster that lives on this box, an outage would otherwise lock you out of the machine that fixes it [inferred].
 
@@ -309,15 +310,20 @@ install -d -m 700 /etc/pve-agent
     | python3 -c 'import json,sys; print("PVEAPIToken=agent@pve!ops=" + json.load(sys.stdin)["value"])' \
     > /etc/pve-agent/token )
 
-# give the token (not the user) a role on the pool only
+# give the agents group, then the token, a role on the pool only
 #     NOT PVEVMAdmin: measured on 9.2.21 (2026-10-23), it includes VM.Console and the
 #     VM.GuestAgent.FileRead/FileWrite/Unrestricted privileges this step forbids below.
 #     Custom role = PVEVMAdmin's privileges minus those four; list them first, then build it:
 pveum role list --output-format json | python3 -c 'import json,sys; print(",".join(sorted(next(r["privs"] for r in json.load(sys.stdin) if r["roleid"]=="PVEVMAdmin").replace(" ","").split(","))))'
 pveum role add AgentVMOps -privs "<that list without VM.Console,VM.GuestAgent.FileRead,VM.GuestAgent.FileWrite,VM.GuestAgent.Unrestricted>"
 #     creating VMs probably also needs Datastore.AllocateSpace on the storage and SDN.Use on the bridge [model; check the PVE docs first]
+# a privilege-separated token gets at most what its user has, so the group gets the same roles first
+#     [source: <https://pve.proxmox.com/wiki/User_Management>, "API Tokens" and "Inheritance"]
+#     [model: these group ACLs are not yet run on this host]
+pveum acl modify /pool/k8s -group agents -role AgentVMOps
+pveum acl modify / -group agents -role PVEAuditor              # read-only view of the node, optional
 pveum acl modify /pool/k8s -token 'agent@pve!ops' -role AgentVMOps
-pveum acl modify / -token 'agent@pve!ops' -role PVEAuditor     # read-only view of the node, optional
+pveum acl modify / -token 'agent@pve!ops' -role PVEAuditor     # only if the group has it too
 pveum user token permissions agent@pve ops                      # check what it can really do
 
 # the secret file: one line, PVEAPIToken=agent@pve!ops=<the secret>; check its owner and mode, not its content
