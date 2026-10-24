@@ -140,14 +140,17 @@ flowchart LR
 ## Pros and Cons of the Options
 
 ### 1. BL-NNNN for every backlog item
+
 - Good: one shape for every ID, stable, and no clashes.
 - Bad: numbers are less readable than words without the title beside them.
 
 ### 2. Readable word labels
+
 - Good: readable on their own, and no registry change.
 - Bad: a label goes stale when an item's wording changes, and two threads can pick the same word.
 
 ### 3. Keep the letter codes
+
 - Good: no work.
 - Bad: `D1` and `D-0001` keep looking alike, and three label styles stay in one table.
 

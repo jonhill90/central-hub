@@ -50,7 +50,7 @@ Relied on (the decision depends on these):
 
 Background (read, not relied on):
 
-6. MADR, "Markdown Architectural Decision Records". <https://adr.github.io/madr/>
+- [6] MADR, "Markdown Architectural Decision Records". <https://adr.github.io/madr/>
 
 All six fetched during the batch (2026-10-23).
 

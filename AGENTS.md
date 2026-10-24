@@ -35,6 +35,7 @@ These rules fit the current stage, while Jon does every step himself so he under
 ## Activation gate
 
 Before any cluster reads this repo, all 7 must be true and recorded:
+
 1. Per-agent GitHub identities, with Jon's approval required by GitHub.
 2. A verifier the PR can't edit.
 3. No write tokens in PR code.
