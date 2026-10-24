@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNU91iAKVLo8uUHycWbJs6MY
   approval-names: "PR #14 and head a4f0582, in the message itself"
   check: the drafting agent read the message in the Standards system thread at 2026-10-22T02:52Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; Jon merges PR #14, which carries this evidence commit on top of the approved commit
+  merged: not yet; the owner merges PR #14, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: "the same as D-0003, plus: the standards register moves out of this repo; or a second kind of standard needs its own family"
 ---
@@ -25,11 +25,11 @@ revisit-when: "the same as D-0003, plus: the standards register moves out of thi
 
 ## Context and Problem Statement
 
-On 2026-10-21 Jon asked whether the project needs a system for its standards. The rules he has said yes to are spread across many files, for example VM hostnames (option E), the repo layout rules and the backlog status words. On 2026-10-21 at 02:00 UTC he said yes to the proposed answer: one standards register, a subsystem of system 2 Organization.
+On 2026-10-21 the owner asked whether the project needs a system for its standards. The rules he has said yes to are spread across many files, for example VM hostnames (option E), the repo layout rules and the backlog status words. On 2026-10-21 at 02:00 UTC he said yes to the proposed answer: one standards register, a subsystem of system 2 Organization.
 
 Standards will be cited across files, repos and chats, for example by AGENTS.md, by check scripts and by decision records. D-0003 rule 1 says such items get a global ID. D-0003 rule 2 says a new family is added only with the owner's approval, by its own decision record.
 
-On 2026-10-22 at 02:48 UTC Jon chose option A, `STD-NNNN`, from four ID options:
+On 2026-10-22 at 02:48 UTC the owner chose option A, `STD-NNNN`, from four ID options:
 
 - A. `STD-0001`, a number only.
 - B. `STD-NAME-01`, with the topic inside the ID.
@@ -52,7 +52,7 @@ On 2026-10-22 at 02:48 UTC Jon chose option A, `STD-NNNN`, from four ID options:
 
 ## Decision Outcome
 
-Chosen option: **1, `STD-NNNN`**, which Jon chose on 2026-10-22 at 02:48 UTC.
+Chosen option: **1, `STD-NNNN`**, which the owner chose on 2026-10-22 at 02:48 UTC.
 
 This adds the Standards row to the family registry in D-0003.
 

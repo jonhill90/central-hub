@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNLjKFZhnGXTRAmEntnMMFcR
   approval-names: "PR #13 and head 86484af, in the message itself"
   check: the drafting agent read the message in the PRD and spec research thread at 2026-10-19T04:04Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; Jon merges PR #13, which carries this evidence commit on top of the approved commit
+  merged: not yet; the owner merges PR #13, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: a second repo adopts the same standard; a root folder's tool is replaced; Kubernetes stops being the runtime; or a reader cannot find the PRD
 ---
@@ -27,13 +27,13 @@ revisit-when: a second repo adopts the same standard; a root folder's tool is re
 
 D-0007 settled which requirement documents exist. It left two points to a later decision: the final folder and document names, and whether the PRD sits at the repository root or under `docs/`.
 
-On 2026-10-18 Jon said yes to the repo layout: central-hub is system 8 Platform's repo, and its shared parts are sorted by job. The names in that layout were the drafting agent's own picks. No source chose them, and Jon had not yet confirmed them.
+On 2026-10-18 the owner said yes to the repo layout: central-hub is system 8 Platform's repo, and its shared parts are sorted by job. The names in that layout were the drafting agent's own picks. No source chose them, and the owner had not yet confirmed them.
 
 This record fixes those names. It does not create the folders.
 
 ## Decision Drivers
 
-- **Name for the job, not the vendor product.** Jon said yes to this rule (and to naming clusters by role) on 2026-10-19 during his review of the organize-repository skill.
+- **Name for the job, not the vendor product.** The owner said yes to this rule (and to naming clusters by role) on 2026-10-19 during his review of the organize-repository skill.
 - **Keep the root short.** The repository root holds only what a reader needs before going deeper (README, AGENTS, SECURITY). Every document kind sits under `docs/`.
 - **Fit accepted records.** D-0007 rule 3 already places specs in `docs/specs/`.
 - **Replaceable** (REQ-0011).
@@ -41,12 +41,12 @@ This record fixes those names. It does not create the folders.
 ## Considered Options
 
 1. **The names below, with the PRD under `docs/`.**
-2. **The same names, with `PRD.md` at the root** next to README. Some of Jon's earlier repos kept it there, treating it as an input to the work rather than documentation of it.
+2. **The same names, with `PRD.md` at the root** next to README. Some of the owner's earlier repos kept it there, treating it as an input to the work rather than documentation of it.
 3. **Different names**, picked one by one.
 
 ## Decision Outcome
 
-Chosen option: **1**. Jon said yes to the proposed names on 2026-10-19 at 04:01 UTC, on a decision card that asked: "Keep these central-hub names: docs/PRD.md, docs/specs/, and root folders private-network, hosts, kubernetes, dns, backup?" That answer chose the option. Jon accepted this record under D-0001 on 2026-10-19 at 04:04 UTC.
+Chosen option: **1**. The owner said yes to the proposed names on 2026-10-19 at 04:01 UTC, on a decision card that asked: "Keep these central-hub names: docs/PRD.md, docs/specs/, and root folders private-network, hosts, kubernetes, dns, backup?" That answer chose the option. The owner accepted this record under D-0001 on 2026-10-19 at 04:04 UTC.
 
 ```
 central-hub/
@@ -78,7 +78,7 @@ central-hub/
 - the names inside `kubernetes/infrastructure/` and any other new root folder;
 - where vendor areas (labs) go;
 - where per-system records live;
-- the rest of the layout rules (organize-repository skill), which Jon reviews in that skill's own repo.
+- the rest of the layout rules (organize-repository skill), which the owner reviews in that skill's own repo.
 
 ### Consequences
 

@@ -4,7 +4,7 @@ title: VM hostnames
 status: active
 scope: the OS hostname of every VM and physical host, local or cloud
 owner-system: 8 Platform
-why: Jon said yes to the proposed two-letter OS codes on 2026-10-21 at 01:12 UTC, and to the proposed option E (one hostname, no dashes) on 2026-10-21 at 01:13 UTC, in the project's VM naming work
+why: the owner said yes to the proposed two-letter OS codes on 2026-10-21 at 01:12 UTC, and to the proposed option E (one hostname, no dashes) on 2026-10-21 at 01:13 UTC, in the project's VM naming work
 follows: [NetBIOS computer name limit (15 characters, not all digits), RFC 1123 host name label, Kubernetes node name rules]
 check: none yet in this repo; a reviewing agent checks new names by hand
 accepted-evidence:
@@ -14,7 +14,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNLe3Dm7Jei52vHtd4YLEnZy
   approval-names: "PR #16 and head 1c8bfdd, in the message itself"
   check: the drafting agent read the message in the Standards system thread at 2026-10-22T07:07Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; Jon merges PR #16, which carries this evidence commit on top of the approved commit
+  merged: not yet; the owner merges PR #16, which carries this evidence commit on top of the approved commit
 ---
 
 # STD-0001: VM hostnames
@@ -40,7 +40,7 @@ A hostname MUST be five fields joined with no separator:
 3. A hostname MUST NOT contain dashes, dots or underscores.
 4. A hostname MUST NOT include the provider, the region or the site. Those belong in the platform's resource name or tags.
 5. A hostname SHOULD change only when the machine is rebuilt.
-6. A new code for env, os or role MUST be added to this table, with Jon's approval, before it is used.
+6. A new code for env, os or role MUST be added to this table, with the owner's approval, before it is used.
 
 Server and desktop are told apart by the OS code on Windows (`ws` or `wc`), and by the role on Linux (`dt` means a desktop).
 

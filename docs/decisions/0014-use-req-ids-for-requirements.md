@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN12EqNFjmi5fTVUJmrD9vhd
   approval-names: "PR #22 and head f62845a, in the message itself"
   check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T03:46Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; Jon merges PR #22, which carries this evidence commit on top of the approved commit
+  merged: not yet; the owner merges PR #22, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: the Activation gate passes (D-0003 rule 5 goes back to "never renamed"); a rename sweep leaves a reference that a search missed; or a requirements tool is adopted that brings its own ID scheme
 ---
@@ -25,16 +25,16 @@ revisit-when: the Activation gate passes (D-0003 rule 5 goes back to "never rena
 
 ## Context and Problem Statement
 
-On 2026-10-23 Jon said the requirement IDs (`SR01` to `SR25`) were made up by agents and never got the scrutiny other choices got. The check that followed (research batch RB-0072, [evidence](../research/0014-use-req-ids-for-requirements.md)) found:
+On 2026-10-23 the owner said the requirement IDs (`SR01` to `SR25`) were made up by agents and never got the scrutiny other choices got. The check that followed (research batch RB-0072, [evidence](../research/0014-use-req-ids-for-requirements.md)) found:
 
-- An agent coordinator wrote the `SR` format on 2026-10-06, before this project existed. Jon said yes to each requirement's wording, never to the format.
+- An agent coordinator wrote the `SR` format on 2026-10-06, before this project existed. The owner said yes to each requirement's wording, never to the format.
 - The ID research behind D-0003 kept `SR` only because it did not clash, and froze its spelling ("Nothing is respelled"). The registry kept it when D-0009 added standards.
 - `SR` does not match the house style the other families use (`D-0007`, `STD-0001`: a dash and four digits).
 - Outside the project, NIST SP 800-53 already uses `SR` for its Supply Chain Risk Management controls (`SR-3`). Under D-0003 rule 2, `SR` also blocks any future prefix that starts with `SR`.
 
-Jon chose `REQ-0000` style on 2026-10-23 at 03:38 UTC. Jon preferred it, and said that a format already in use is not a good reason to keep it in a system that is still almost greenfield: IDs are only words, they should be fixed where possible, and the same goes for the other IDs.
+The owner chose `REQ-0000` style on 2026-10-23 at 03:38 UTC. The owner preferred it, and said that a format already in use is not a good reason to keep it in a system that is still almost greenfield: IDs are only words, they should be fixed where possible, and the same goes for the other IDs.
 
-D-0003 rule 5, which then said old labels are never renamed, would keep `SR11` alive beside `REQ-0011` forever. Jon wants the fix applied everywhere, the way agent-made method IDs were fixed on 2026-10-18, so the files read as if the new name had always been used.
+D-0003 rule 5, which then said old labels are never renamed, would keep `SR11` alive beside `REQ-0011` forever. The owner wants the fix applied everywhere, the way agent-made method IDs were fixed on 2026-10-18, so the files read as if the new name had always been used.
 
 ## Decision Drivers
 
@@ -52,7 +52,7 @@ D-0003 rule 5, which then said old labels are never renamed, would keep `SR11` a
 
 ## Decision Outcome
 
-Chosen option: **1**, which Jon chose on 2026-10-23 at 03:38 UTC.
+Chosen option: **1**, which the owner chose on 2026-10-23 at 03:38 UTC.
 
 This changes the Requirements row of D-0003's registry to `REQ-NNNN`, and gives D-0003 rule 5 its Foundation exception: until the Activation gate passes, the owner may approve renaming an agent-made ID or label in every live file, with one corrections log per rename.
 
@@ -65,10 +65,10 @@ This changes the Requirements row of D-0003's registry to `REQ-NNNN`, and gives 
 ### Order of work after acceptance
 
 1. Research: the register, its Library copy, and the register check (`check_register.py` matches `SR\d\d[a-z]?` today), with its tests.
-2. Project instructions: the agent drafts the new text, Jon approves it, and the coordinator saves it.
+2. Project instructions: the agent drafts the new text, the owner approves it, and the coordinator saves it.
 3. central-hub: one correction PR for every `SR` reference (63 on 2026-10-23), under D-0003 rule 5 and D-0006.
 4. Research and project files: the rest of the sweep, proved by a search count of 0 live `SR` IDs.
-5. Other agent-made ID schemes, one at a time in Jon's order, each with its own question.
+5. Other agent-made ID schemes, one at a time in the owner's order, each with its own question.
 
 ### Consequences
 
@@ -96,7 +96,7 @@ This changes the Requirements row of D-0003's registry to `REQ-NNNN`, and gives 
 
 ### 3. Keep the SR IDs
 - Good: no change at all.
-- Bad: keeps an agent-made format Jon never chose, the NIST clash and the blocked prefixes.
+- Bad: keeps an agent-made format the owner never chose, the NIST clash and the blocked prefixes.
 
 ## More Information
 

@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNNC2krzzxxNCskiWfAqbKzw
   approval-names: "PR #24 and head 1cce2f8, in the message itself"
   check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T04:21Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; Jon merges PR #24, which carries this evidence commit on top of the approved commit
+  merged: not yet; the owner merges PR #24, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: the Activation gate passes; the Research repo is retired and research moves somewhere with its own numbering; or a batch register check finds a duplicate number
 ---
@@ -51,7 +51,7 @@ Under D-0003 rule 5, the owner may approve renaming an agent-made label during F
 
 ## Decision Outcome
 
-Chosen option: **1**, which Jon chose on 2026-10-23 at 04:16 UTC.
+Chosen option: **1**, which the owner chose on 2026-10-23 at 04:16 UTC.
 
 This adds the Research batches row to D-0003's registry.
 
@@ -74,7 +74,7 @@ This adds the Research batches row to D-0003's registry.
 
 1. Research: write the batch register and its check.
 2. Research and project files: rename every live batch code, read the clashing ones in context, and prove it with a search count of 0 explicit batch citations with an old code outside the kept records.
-3. Project instructions: the agent drafts any changed text, Jon approves it, and the coordinator saves it.
+3. Project instructions: the agent drafts any changed text, the owner approves it, and the coordinator saves it.
 4. central-hub: one correction PR for every old batch code in accepted records and the PRD, under D-0003 rule 5 and D-0006.
 
 ### Consequences

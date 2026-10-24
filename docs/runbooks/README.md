@@ -17,7 +17,7 @@ title: <task, verb first>
 status: draft            # draft | tested | superseded | retired
 kind: manual             # manual | automated
 trigger: <alert, schedule, event, or "on request">
-runner: <Jon, or an agent lane>
+runner: <the owner, or an agent lane>
 outcome: <what is true when it is done>
 needs: <tools and permissions>
 private-values: [<key names in the private store; never the values>]
@@ -38,7 +38,7 @@ superseded-by:
    expect: <what you should see>
 
 ## If it fails
-<where to stop, how to undo, and when to tell Jon>
+<where to stop, how to undo, and when to tell the owner>
 
 ## Afterwards
 <what to record and where: a postmortem after an incident, a spec's done-evidence after a build>

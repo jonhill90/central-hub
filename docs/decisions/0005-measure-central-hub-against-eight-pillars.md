@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNWohWWHVMqtatyVxFJbMSKg
   approval-names: "PR #8 and head ebc8019 by context; it answers the agent's message (03:00:34Z) that named both"
   check: the drafting agent read the message in the Kubernetes thread at 2026-10-16T03:02Z, and the quote matches exactly. It answers the agent's message in the same thread (03:00:34Z), which named PR #8 and head ebc8019 and asked for "accept" naming both. The message itself names neither, so it relies on that context, as D-0003's and D-0004's acceptances did. An independent check by a reviewing agent is still to do.
-  merged: not yet; Jon merges PR #8, which carries this evidence commit on top of the approved commit
+  merged: not yet; the owner merges PR #8, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: a CNCF document defines its own pillar set; a pillar has no working check after the cluster runs; or two pillars keep producing the same findings
 ---
@@ -25,11 +25,11 @@ revisit-when: a CNCF document defines its own pillar set; a pillar has no workin
 
 ## Context and Problem Statement
 
-On 2026-10-15 (Central Hub project, Kubernetes thread) Jon asked for the homelab to be a leading example of Kubernetes reliability, high availability, resiliency, cost optimisation and the other Microsoft Well-Architected pillars, in a CNCF-based version of Central Hub's own. He scoped it to the whole of Central Hub, not to one cluster or one cloud service.
+On 2026-10-15 (Central Hub project, Kubernetes thread) the owner asked for the homelab to be a leading example of Kubernetes reliability, high availability, resiliency, cost optimisation and the other Microsoft Well-Architected pillars, in a CNCF-based version of Central Hub's own. He scoped it to the whole of Central Hub, not to one cluster or one cloud service.
 
 There is no CNCF well-architected framework. Each cloud vendor publishes its own, and they overlap. Central Hub also has goals that no published framework treats as a pillar, above all that every component can be swapped. This record decides which pillars Central Hub is measured against, and where the line sits between adopting a standard and adding our own.
 
-Research: batch RB-0014 ([evidence](../research/0005-measure-central-hub-against-eight-pillars.md)), a 96-claim ledger with an independent review, and the proposal `central-hub/operating-model/PILLARS.md` in the project Library. Jon agreed the shape on 2026-10-15, where "B" was the proposal's name for what is option 1 below, on two conditions: the mapping between industry pillars and Central Hub pillars stays clear, and the framework is treated as replaceable like everything else.
+Research: batch RB-0014 ([evidence](../research/0005-measure-central-hub-against-eight-pillars.md)), a 96-claim ledger with an independent review, and the proposal `central-hub/operating-model/PILLARS.md` in the project Library. The owner agreed the shape on 2026-10-15, where "B" was the proposal's name for what is option 1 below, on two conditions: the mapping between industry pillars and Central Hub pillars stays clear, and the framework is treated as replaceable like everything else.
 
 ## Decision Drivers
 
@@ -113,7 +113,7 @@ The register rows are in the Research repo's requirements register (`coordinator
 ## Pros and Cons of the Options
 
 ### 2. Azure Well-Architected as-is
-- Good: the framework Jon already knows; no mapping needed.
+- Good: the framework the owner already knows; no mapping needed.
 - Bad: no Sustainability pillar, no replaceability, and it is written for Azure workloads.
 
 ### 3. AWS or Google as-is

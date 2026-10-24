@@ -15,7 +15,7 @@ accepted-evidence:
   approved-commit: 58cd4eac2e491310777d1f18d033b82aee2e5302
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNC3VZmTAMC2buEXh8pCC9LJ
   approval-names: "neither the PR nor the head; it answers the question naming ADR 0001 and ADR 0002 (07:25Z)"
-  check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and at 07:28:13Z Jon had said that he had approved the PRs; an independent check by a reviewing agent is still to do
+  check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and at 07:28:13Z the owner had said that he had approved the PRs; an independent check by a reviewing agent is still to do
   merged: jonhill90 merged PR #1 at 2026-10-11T07:22Z; the merged record matches the approved commit exactly
 legacy-id: [BL-0111, BL-0112]
 revisit-when: a knowledge system (BL-0036) is chosen that should own decisions, or the flat folder becomes hard to use
@@ -27,15 +27,15 @@ revisit-when: a knowledge system (BL-0036) is chosen that should own decisions, 
 
 The Central Hub needs one place where each decision is recorded once, with its status visible, so anyone, human or agent, can tell what's decided and what's proposed. Today, decisions and the material behind them sit in five separate stores: chat threads, project files, two separate agent memories and the Research repo (see the decision map, §1).
 
-Agents work under Jon's GitHub account, so nothing an agent writes can count as Jon's approval. Jon's principle (2026-10-10) is that every part of this must be replaceable later.
+Agents work under the owner's GitHub account, so nothing an agent writes can count as the owner's approval. The owner's principle (2026-10-10) is that every part of this must be replaceable later.
 
 ## Decision Drivers
 
 - **One place to look:** a single index of every recorded decision and its status.
-- **Only Jon accepts:** agents propose and never accept.
+- **Only the owner accepts:** agents propose and never accept.
 - **Replaceable:** the data stays in plain, portable form, so the tool, the format or the location can each be swapped.
-- **One at a time, in Jon's order:** Jon picks the next decision. Nothing is bulk-created.
-- **Visual first** (Jon, 2026-10-10: he describes himself as a visual person): the shape of a decision is visible at a glance.
+- **One at a time, in the owner's order:** the owner picks the next decision. Nothing is bulk-created.
+- **Visual first** (the owner, 2026-10-10: he describes himself as a visual person): the shape of a decision is visible at a glance.
 - **Follow established practice** where it exists.
 
 ## Considered Options
@@ -49,35 +49,35 @@ Agents work under Jon's GitHub account, so nothing an agent writes can count as 
 
 ```mermaid
 flowchart LR
-  B[Backlog] -->|Jon picks one| R[Research]
+  B[Backlog] -->|The owner picks one| R[Research]
   R --> C[Independent check]
-  C --> J{Jon reviews}
+  C --> J{the owner reviews}
   J -->|not yet| R
   J -->|approves| A[Next numbered ADR<br/>docs/decisions/]
   A --> I[Generated index<br/>README.md]
 ```
 
-*In words:* Jon picks one decision from the backlog. It's researched, then checked independently. Jon reviews it, and it goes back for more research or he approves it. Approval makes it the next numbered record, and the index is regenerated.
+*In words:* the owner picks one decision from the backlog. It's researched, then checked independently. The owner reviews it, and it goes back for more research or he approves it. Approval makes it the next numbered record, and the index is regenerated.
 
 Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under consideration that had been written up appeared in the index as records marked Proposed or Open. None kept them in a separate file. Some sent raw questions or discussion to issues, pull requests or Discussions. One kind of file is the simplest to validate, migrate and replace.
 
 ### What the decision covers
 
-- **Location:** `jonhill90/central-hub`, `docs/decisions/NNNN-slug.md`. A record is written only for the decision Jon picks next. It gets the next number when its PR opens, so numbers follow the order Jon picks in. A rejected or parked record keeps its number and is merged with that status, so a number is never reused (D-0004 sets the one Foundation exception for a void number). A draft in project files before that has `id: D-TBD` and sits outside this schema.
+- **Location:** `jonhill90/central-hub`, `docs/decisions/NNNN-slug.md`. A record is written only for the decision the owner picks next. It gets the next number when its PR opens, so numbers follow the order the owner picks in. A rejected or parked record keeps its number and is merged with that status, so a number is never reused (D-0004 sets the one Foundation exception for a void number). A draft in project files before that has `id: D-TBD` and sits outside this schema.
 - **Backlog:** decisions not yet picked stay in the backlog in project files, with their options in the decision map. The index says where the backlog lives (project files aren't reachable from the repo, so it names the place rather than linking). Listing it doesn't set a review order.
 - **Format:** the MADR 4 body and its optional front matter, plus the custom fields below. This file is the template.
 - **Vocabulary:** who does the work is named by role, never by vendor, so any agent can fill any role and swapping one changes no record. Where a product is the subject of a decision (an option, evidence or configuration), the record names it accurately.
   - **Agent:** any AI worker, whoever makes it.
   - **Drafting agent:** the agent that writes the proposed record.
-  - **Reviewing agent:** a different agent that checks the draft independently before Jon sees it.
+  - **Reviewing agent:** a different agent that checks the draft independently before the owner sees it.
   - Which agent filled a role is visible in git and PR history, not in the record.
 - **Statuses:**
   - A record starts as `proposed`.
-  - Jon moves it to `accepted`, `rejected` or `parked`.
+  - The owner moves it to `accepted`, `rejected` or `parked`.
   - An accepted record can later become `superseded` or `deprecated`.
   - Agents write only `proposed`.
-- **What Jon approves:** the whole record at the PR head commit he approves. After that, only the acceptance changes may follow: `status`, `date` and `accepted-evidence`. A reviewing agent compares the merged record with the approved commit; any other difference needs Jon's approval again.
-- **Immutability:** once a record is accepted, its body changes only through a correction under D-0006, which Jon approves the same way. A changed decision is a new record. When a later record changes part of an earlier one, the same PR updates the earlier record's text so it reads as the current rule, and the later record keeps the reasons. A record replaced in whole becomes `superseded`. Lifecycle fields (`status`, `superseded-by`) change only when Jon approves.
+- **What the owner approves:** the whole record at the PR head commit he approves. After that, only the acceptance changes may follow: `status`, `date` and `accepted-evidence`. A reviewing agent compares the merged record with the approved commit; any other difference needs the owner's approval again.
+- **Immutability:** once a record is accepted, its body changes only through a correction under D-0006, which the owner approves the same way. A changed decision is a new record. When a later record changes part of an earlier one, the same PR updates the earlier record's text so it reads as the current rule, and the later record keeps the reasons. A record replaced in whole becomes `superseded`. Lifecycle fields (`status`, `superseded-by`) change only when the owner approves.
 - **Diagrams:** a record includes a Mermaid diagram if the decision defines any of these:
   - two or more components and how they relate;
   - a sequence of three or more steps;
@@ -94,14 +94,14 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
 | `proposed-by` | string | Agent or person who drafted it | Required |
 | `waits-on` | list of IDs | Decisions that must be **accepted** before this one can be decided. The edge points from this record to its prerequisite. IDs may be records (`D-NNNN`) or backlog items (`BL-0111`, `BL-0021`…) | Record IDs resolve to a file; backlog IDs must be well formed, and a reviewing agent checks them against the backlog, because the backlog isn't in the repo; no cycles |
 | `supersedes` / `superseded-by` | list / ID | Replacement links | Symmetric |
-| `accepted-evidence` | block (below) | Proof that Jon approved this exact content | Required when `status: accepted` |
+| `accepted-evidence` | block (below) | Proof that the owner approved this exact content | Required when `status: accepted` |
 | `legacy-id` | list | IDs from the backlog | Optional |
 | `revisit-when` | string | What would make us reopen this decision (the replaceability principle) | Required |
 
 ### Who accepts, and how it's proven
 
 **Now (Foundation): convention.**
-- Jon approves in the project chat, where his messages are marked as written by a human.
+- The owner approves in the project chat, where his messages are marked as written by a human.
 - `accepted-evidence` holds these facts, inside the record itself (D-0016 rule 6), and never a quote of the message:
   - `approved-by`: `owner`;
   - `approved-at`: the UTC time of the approval message;
@@ -117,8 +117,8 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
 - `central-hub` is removed from the GitHub App that all agents share today;
 - each agent has its own GitHub App identity;
 - a ruleset requires one approval and code-owner review, with `require_last_push_approval` and stale approvals dismissed on every push, and no agent can bypass it;
-- CODEOWNERS gives `docs/decisions/` and the CODEOWNERS file itself to Jon, and to nobody else;
-- Jon doesn't push to a decision PR himself (he asks for the change), because with him as the only reviewer, a last push by him can't be approved.
+- CODEOWNERS gives `docs/decisions/` and the CODEOWNERS file itself to the owner, and to nobody else;
+- The owner doesn't push to a decision PR himself (he asks for the change), because with him as the only reviewer, a last push by him can't be approved.
 
 Until each of these is checked, acceptance stays by convention.
 
@@ -130,7 +130,7 @@ Until each of these is checked, acceptance stays by convention.
   - log4brains and Backstage are candidate readers, not yet verified with the custom fields.
   - The exit path is plain text in git, with the approval evidence carried inside each record.
 - Bad: a small generator and validator script to maintain. RB-0001 didn't find a maintained tool that validates records.
-- Bad: until AG1 is verified, "only Jon accepts" is a convention, with a review check.
+- Bad: until AG1 is verified, "only the owner accepts" is a convention, with a review check.
 
 ### Confirmation
 
@@ -149,8 +149,8 @@ Until each of these is checked, acceptance stays by convention.
 - Bad: the data lives outside git and needs an export to move. That adds migration work under the replaceability principle.
 
 ### Option 4: Signed approval events
-- Good: could strengthen the proof of Jon's approval, if agents can't reach the signing key and the verifier is trusted. It can be added on top of Markdown records rather than replacing them.
-- Bad: needs a signing key agents can't reach and an external verifier. It assumes agents share Jon's identity, which AG1 is designed to end.
+- Good: could strengthen the proof of the owner's approval, if agents can't reach the signing key and the verifier is trusted. It can be added on top of Markdown records rather than replacing them.
+- Bad: needs a signing key agents can't reach and an external verifier. It assumes agents share the owner's identity, which AG1 is designed to end.
 - Kept as the upgrade path if the AG1 controls prove too weak.
 
 ## More Information

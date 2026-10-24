@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN9nbb2Y5bBnkgfrLDFWMVnS
   approval-names: "PR #18 and head 7dbae2c, in the message itself"
   check: the drafting agent read the message in the repo layout thread at 2026-10-22T07:15Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; Jon merges PR #18, which carries this evidence commit on top of the approved commit
+  merged: not yet; the owner merges PR #18, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: a second machine-building vendor product joins Terraform; the Terraform structure research names the runnable folders; or a machine kind appears that is neither a VM nor bare metal
 ---
@@ -27,7 +27,7 @@ revisit-when: a second machine-building vendor product joins Terraform; the Terr
 
 D-0008 names the root folder `hosts/` as "machines below Kubernetes". It doesn't say what goes inside that folder, or where machines go when a cloud provider or a hypervisor runs them.
 
-On 2026-10-20 at 03:03 UTC Jon said that nothing on the Proxmox hypervisor should be set up by hand, and asked where its code should go in central-hub, along with VPS machines, cloud VMs, cloud container services and machines still to come.
+On 2026-10-20 at 03:03 UTC the owner said that nothing on the Proxmox hypervisor should be set up by hand, and asked where its code should go in central-hub, along with VPS machines, cloud VMs, cloud container services and machines still to come.
 
 ## Decision Drivers
 
@@ -40,11 +40,11 @@ On 2026-10-20 at 03:03 UTC Jon said that nothing on the Proxmox hypervisor shoul
 
 1. **`hosts/` holds every machine below Kubernetes, wherever it runs, with one subfolder per vendor product** (`hosts/terraform/`, `hosts/ansible/`).
 2. **One root folder per vendor product** (`terraform/`, `ansible/`). This is common in public repositories (batch RB-0036; not counted).
-3. **A root `infra/` folder**, as Jon's earlier Hill90 repository used (batch RB-0033).
+3. **A root `infra/` folder**, as the owner's earlier Hill90 repository used (batch RB-0033).
 
 ## Decision Outcome
 
-Chosen option: **1**. Jon said yes to keeping `hosts/` on 2026-10-20 at 03:25 UTC. In the same message he said Terraform modules will be kept in another repository. He said yes to `terraform/` as a vendor-product subfolder name on 2026-10-19 at 03:51 UTC, in his review of the organize-repository skill changes (item 9). Jon accepted this record under D-0001 on 2026-10-22 at 07:15 UTC.
+Chosen option: **1**. The owner said yes to keeping `hosts/` on 2026-10-20 at 03:25 UTC. In the same message he said Terraform modules will be kept in another repository. He said yes to `terraform/` as a vendor-product subfolder name on 2026-10-19 at 03:51 UTC, in his review of the organize-repository skill changes (item 9). The owner accepted this record under D-0001 on 2026-10-22 at 07:15 UTC.
 
 ```
 central-hub/
@@ -57,7 +57,7 @@ central-hub/
 
 ### Rules
 
-1. **What `hosts/` holds.** Code for every machine below Kubernetes goes in `hosts/`, whoever runs the machine. That covers machines Jon owns, VPS machines, VMs on his own hypervisor, and cloud VMs.
+1. **What `hosts/` holds.** Code for every machine below Kubernetes goes in `hosts/`, whoever runs the machine. That covers machines the owner owns, VPS machines, VMs on his own hypervisor, and cloud VMs.
 2. **One subfolder per vendor product.** Each vendor product that creates or configures machines gets one subfolder in its own native layout, named for the product, for example `hosts/terraform/` or `hosts/ansible/`. Replacing the product replaces only that subfolder.
 3. **Terraform modules live in their own repository.** This repository keeps only the folders that are run. Each one points at a tagged version of the modules repository.
 4. **Not machines, not `hosts/`.** A managed container service with no machines to manage, such as AWS ECS, doesn't go in `hosts/`. It gets its own capability folder when it is first used (D-0008 rule 5).
@@ -90,7 +90,7 @@ central-hub/
 - Bad: replacing a product renames a root folder, against D-0008 rule 3.
 
 ### 3. A root `infra/` folder
-- Good: Jon has used it before.
+- Good: the owner has used it before.
 - Bad: nearly everything in this repository is infrastructure, so the name doesn't say what is inside.
 - Bad: `kubernetes/infrastructure/` already uses the same word for cluster add-ons, in Flux's layout.
 

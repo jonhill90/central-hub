@@ -5,7 +5,7 @@ One file per change, for work that spans several sessions or crosses systems (D-
 ## How a spec moves
 
 ```
-  proposed ──(Jon: "accept PR <repo>#<n> <sha>")──▶ accepted ──(the work is finished)──▶ done
+  proposed ──(the owner: "accept PR <repo>#<n> <sha>")──▶ accepted ──(the work is finished)──▶ done
      │                                                 │
      └──────────────▶ dropped ◀────────────────────────┘        superseded: a newer spec replaces it
 ```
@@ -13,8 +13,8 @@ One file per change, for work that spans several sessions or crosses systems (D-
 | Status | Means | Who sets it |
 |---|---|---|
 | `proposed` | Written on the change's branch; the PR is open | the drafting agent |
-| `accepted` | Jon accepted it with a message naming the PR and its head SHA; work may start | evidence added after Jon's message, as for a decision record |
-| `done` | The change it describes is finished and its acceptance criteria pass | the PR that finishes the work, which Jon accepts the same way |
+| `accepted` | The owner accepted it with a message naming the PR and its head SHA; work may start | evidence added after the owner's message, as for a decision record |
+| `done` | The change it describes is finished and its acceptance criteria pass | the PR that finishes the work, which the owner accepts the same way |
 | `dropped` | Stopped before it was done; the reason is in the decision log | the same way |
 | `superseded` | A newer spec replaces it; `superseded-by` names it | the newer spec's PR |
 
@@ -24,7 +24,7 @@ After `accepted` the body is not edited (D-0007 rule 5). Only the status, the ev
 
 1. Branch per D-0002. Copy the template below to `docs/specs/YYYY-MM-<slug>.md`.
 2. Fill it in. Link to code, requirement rows and decision records; never copy them (D-0007 rule 6).
-3. Open the PR. Jon accepts it with "accept PR jonhill90/central-hub#<n> <sha>".
+3. Open the PR. The owner accepts it with "accept PR jonhill90/central-hub#<n> <sha>".
 4. Do the work. Log choices made along the way in the decision log.
 5. The PR that finishes the work sets `status: done`.
 
@@ -53,7 +53,7 @@ superseded-by:
 ## Acceptance criteria
 ### Automated
 - [ ] `<command>`: <what passing looks like>
-### Manual (what Jon checks)
+### Manual (what the owner checks)
 - [ ] <check>
 
 ## Points to (read when)

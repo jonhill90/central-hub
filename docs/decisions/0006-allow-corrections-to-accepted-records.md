@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNTJTUNZbcPsUxG7TCKiX23s
   approval-names: "PR #10 and head 0ae0493"
   check: the drafting agent read the message in the ADR corrections thread at 2026-10-16T08:29Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; Jon merges PR #10, which carries this evidence commit on top of the approved commit
+  merged: not yet; the owner merges PR #10, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: agents get their own GitHub identities (Activation gate item 1); a correction is later found to have changed a decision; or corrections to one record pile up
 ---
@@ -27,15 +27,15 @@ revisit-when: agents get their own GitHub identities (Activation gate item 1); a
 
 As first written, D-0001 kept an accepted record's body unchanged and made every change a new record that superseded the old one. It had no separate path for an error that leaves the decision the same.
 
-D-0005 was accepted on 2026-10-16 with two internal inconsistencies and a wording slip. The decision is unchanged, but D-0001 left only one route: a full restatement of D-0005 with three small changes (drafted in PR #9, closed unmerged). Jon questioned that route on 2026-10-16 (ADR corrections thread, 07:56 UTC): a near-copy record for every slip, and another for a slip in the copy, could work badly for records that are revised often.
+D-0005 was accepted on 2026-10-16 with two internal inconsistencies and a wording slip. The decision is unchanged, but D-0001 left only one route: a full restatement of D-0005 with three small changes (drafted in PR #9, closed unmerged). The owner questioned that route on 2026-10-16 (ADR corrections thread, 07:56 UTC): a near-copy record for every slip, and another for a slip in the copy, could work badly for records that are revised often.
 
 This record decides how an error in an accepted record is fixed, and where the record of each fix is kept.
 
 ## Decision Drivers
 
 - **Follow published practice.** Research batch RB-0029 ([evidence](../research/0006-allow-corrections-to-accepted-records.md)) read 14 sources. None asks for a near-copy record to fix an error that leaves the decision the same. Supersede is described for a decision that is reversed or changed.
-- **Only Jon accepts.** A correction must need the same approval as an acceptance.
-- **Keep the history.** Anyone must be able to see what the record said when Jon accepted it.
+- **Only the owner accepts.** A correction must need the same approval as an acceptance.
+- **Keep the history.** Anyone must be able to see what the record said when the owner accepted it.
 - **Replaceable** (REQ-0011): easy to tighten back to strict immutability.
 
 ## Considered Options
@@ -56,14 +56,14 @@ flowchart LR
   Q -- no --> P[Correction PR:<br/>each change, before and after]
   P --> R[Reviewing agent:<br/>decision unchanged?]
   R -- no --> N
-  R -- yes --> J{Jon approves<br/>PR number + head SHA}
+  R -- yes --> J{the owner approves<br/>PR number + head SHA}
   J -- no --> X[PR closed]
   J -- yes --> C[Record edited in place<br/>one line in CORRECTIONS.md]
   C --> V[Reviewing agent compares<br/>merged record with approved commit]
   C --> G[git keeps the accepted text]
 ```
 
-*In words:* if the decision would change, or it's unclear, write a new record. Otherwise open a correction PR that lists each change with its before and after text. A reviewing agent first says whether each change leaves the decision unchanged; if not, it becomes a new record. Jon then approves the PR the same way he accepts a record. If he declines, the PR closes, and a new record follows only if he says the decision should change. Once approved, the record is edited in place so it reads as the current text, one line is added to the corrections log, and a reviewing agent compares the merged record with the approved commit. Git keeps the text as it was accepted.
+*In words:* if the decision would change, or it's unclear, write a new record. Otherwise open a correction PR that lists each change with its before and after text. A reviewing agent first says whether each change leaves the decision unchanged; if not, it becomes a new record. The owner then approves the PR the same way he accepts a record. If he declines, the PR closes, and a new record follows only if he says the decision should change. Once approved, the record is edited in place so it reads as the current text, one line is added to the corrections log, and a reviewing agent compares the merged record with the approved commit. Git keeps the text as it was accepted.
 
 ### What counts as a correction
 
@@ -83,8 +83,8 @@ A changed fact that the decision relies on is a changed decision, even if the ch
 1. Branch `docs/correct-d-nnnn-<short>`. PR title `docs: correct D-NNNN: <summary>`.
 2. The PR body lists every change, quoting the text before and after, and says why it is a correction, not a changed decision. Where the text removed is the owner's words, the PR body names where it was and a commit that holds it, instead of copying it (D-0016 rule 7).
 3. The record is edited in place so it reads as the current text, with no Corrections section and no inline old-value notes. The PR adds one line to [`CORRECTIONS.md`](CORRECTIONS.md): the date, the record, what changed and the PR.
-4. Before Jon sees it, a reviewing agent says for each change whether it leaves the decision unchanged. Any change it can't confirm moves to a new record.
-5. Jon approves in the project chat, naming the PR number and head SHA, as for an acceptance.
+4. Before the owner sees it, a reviewing agent says for each change whether it leaves the decision unchanged. Any change it can't confirm moves to a new record.
+5. The owner approves in the project chat, naming the PR number and head SHA, as for an acceptance.
 6. After approval, only the approved head SHA may be added to that line. A reviewing agent compares the merged record with the approved commit, as for an acceptance.
 7. `date` and `accepted-evidence` never change; they still describe the acceptance. Another front-matter field changes only if a listed correction fixes it.
 
@@ -92,16 +92,16 @@ A changed fact that the decision relies on is a changed decision, even if the ch
 
 - Good: fixing a mistake is one small PR, not a near-copy record, so the index lists decisions, not versions of the same decision, and each record reads as the current truth.
 - Good: closest to the UK GDS Way and joelparkerhenderson's ADR guidance, and to the Python PEP 1 rule that resolved PEPs are "no longer substantially modified".
-- Good: the text Jon accepted is still in git at the approved commit, and `CORRECTIONS.md` says what changed and in which PR.
+- Good: the text the owner accepted is still in git at the approved commit, and `CORRECTIONS.md` says what changed and in which PR.
 - Bad: goes against the strict "never edit" guidance from AWS, Azure Well-Architected and Fowler.
-- Bad: "the decision did not change" is a judgment call. The guards are that Jon approves each correction, and that anything unsure is treated as a changed decision.
+- Bad: "the decision did not change" is a judgment call. The guards are that the owner approves each correction, and that anything unsure is treated as a changed decision.
 - Neutral: the 4-digit ID was not a reason for this record. Reading `D-NNNN` as at least four digits, D-10000 still works, as `printf "%04d"` already does (evidence, finding 4).
 
 ### Confirmation
 
 - Every merged change to an accepted record's body has a matching line in `CORRECTIONS.md` with its PR and approved commit.
 - A reviewing agent compares each correction PR's merged diff with its listed changes.
-- Every correction PR has a reviewing agent's note, written before Jon's approval, on whether each change leaves the decision unchanged.
+- Every correction PR has a reviewing agent's note, written before the owner's approval, on whether each change leaves the decision unchanged.
 
 ## Pros and Cons of the Options
 
@@ -116,7 +116,7 @@ A changed fact that the decision relies on is a changed decision, even if the ch
 
 ### 4. Living document
 - Good: least work.
-- Bad: a changed decision could slip in as an edit, which undermines "only Jon accepts".
+- Bad: a changed decision could slip in as an edit, which undermines "only the owner accepts".
 
 ## More Information
 
