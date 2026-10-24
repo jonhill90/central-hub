@@ -157,7 +157,7 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
 - Bad: runbooks can't be used for a real rebuild until the private store is chosen, because their values live there.
 - Bad: why lines make runbooks longer and can go stale when steps change. A step edit already puts the runbook back to `draft`, so the whys are re-read at the next replay.
 - Bad: skills and tools trained on public repos expect `docs/adr/`, so agents need to be told `docs/decisions/` (AGENTS.md already says so).
-- Neutral: none of the new places exists yet. Each one appears with its first file.
+- Neutral: each new place appears with its first file.
 
 ### Confirmation
 

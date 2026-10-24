@@ -54,4 +54,4 @@ This page says what the platform is for and how we know it works. It holds no "h
 - **Where each kind of document goes:** D-0012.
 - **The pillars it is measured against:** D-0005.
 
-`docs/architecture.md`, `docs/glossary.md` and `docs/runbooks/` are created with their first real file (D-0012 rule 2). Until then these links have nothing behind them.
+`docs/architecture.md` is created with its first real file (D-0012 rule 2). Until then that link has nothing behind it.

@@ -40,7 +40,7 @@ On 2026-10-20 at 03:03 UTC the owner asked where the code for the Proxmox hyperv
 
 1. **`hosts/` holds every machine below Kubernetes, wherever it runs, with one subfolder per vendor product** (`hosts/terraform/`, `hosts/ansible/`).
 2. **One root folder per vendor product** (`terraform/`, `ansible/`). This is common in public repositories (batch RB-0036; not counted).
-3. **A root `infra/` folder**, as the owner's earlier Hill90 repository used (batch RB-0033).
+3. **A root `infra/` folder**, as the earlier Hill90 repository used (batch RB-0033).
 
 ## Decision Outcome
 

@@ -98,7 +98,7 @@ flowchart LR
    - Records of what was said are never changed: the chat archive, captured transcripts and git history keep the old names.
    - Accepted decision records are corrected in place under D-0006, because a rename does not change any decision. Each correction PR lists every change, and the owner approves it by PR number and head SHA.
    - After the Activation gate passes, the old rule returns: when an item gets a new ID, its record lists the old one in `legacy-id`.
-6. **Never reuse, never delete.** A superseded or withdrawn item keeps its ID, its status and a link to whatever replaced it. A decision record folded into another record keeps its number: the number is never reused, and [`CORRECTIONS.md`](CORRECTIONS.md) lists it with the record it was folded into. A retired method stays in the catalogue, marked `deprecated` or `replaced by RM-NNNN`. A done backlog item keeps its number and its row. D-0004's Foundation exception for void IDs still applies.
+6. **Never reuse or delete an ID.** A superseded or withdrawn item keeps its ID, its status and a link to whatever replaced it. A decision record folded into another record keeps its number: the number is never reused, and [`CORRECTIONS.md`](CORRECTIONS.md) lists it with the record it was folded into. A retired method stays in the catalogue, marked `deprecated` or `replaced by RM-NNNN`. A done backlog item keeps its number and its row. D-0004's Foundation exception for void IDs still applies.
 7. **Keep meaning out of the number.** The prefix names the family and nothing else. Status, topic and owner go in front matter or in the register's columns. A batch that continues another says so in its SPEC.md ("follows RB-0006"), not in its number.
 
 ### Consequences

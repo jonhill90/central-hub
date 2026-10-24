@@ -73,7 +73,7 @@ This adds the Research batches row to D-0003's registry. `RB-` passes D-0003 rul
 ### Order of work after acceptance
 
 1. Research: write the batch register and its check.
-2. Research and project files: rename every live batch code, read the clashing ones in context, and prove it with a search count of 0 explicit batch citations with an old code outside the kept records.
+2. Research and project files: rename every explicit batch citation with an old code, read the clashing ones in context, and prove it with a search count of 0 explicit batch citations with an old code outside the kept records.
 3. Project instructions: the agent drafts any changed text, the owner approves it, and the coordinator saves it.
 4. central-hub: one correction PR for every old batch code in accepted records and the PRD, under D-0003 rule 5 and D-0006.
 

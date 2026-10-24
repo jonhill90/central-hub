@@ -35,7 +35,7 @@ Agents work under the owner's GitHub account, so nothing an agent writes can cou
 - **Only the owner accepts:** agents propose and never accept.
 - **Replaceable:** the data stays in plain, portable form, so the tool, the format or the location can each be swapped.
 - **One at a time, in the owner's order:** the owner picks the next decision. Nothing is bulk-created.
-- **Visual first** (the owner, 2026-10-10: he describes himself as a visual person): the shape of a decision is visible at a glance.
+- **Visual first** (the owner's request, 2026-10-10): the shape of a decision is visible at a glance.
 - **Follow established practice** where it exists.
 
 ## Considered Options

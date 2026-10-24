@@ -69,7 +69,7 @@ Chosen option: **1**.
 - **Engines:** Flux's guide stores every environment's config on the same branch. Both Flux and Argo CD point a cluster at a path at a revision (fetched 2026-10-11), so folders work on either.
 - **Sources that support the habit, not the question:** Kustomize's examples treat environments as overlay variants. Trunk-based development, GitHub flow and DORA favour one trunk with short-lived branches, but none of them discusses environment branches.
 - **Practice (illustrative, not a survey):** of 19 repos read, 17 are cluster repos; 8 are vendor examples and 6 come from one homelab template family. So the sample confirms the documented pattern rather than testing it. In the configurations inspected, none deploys from hand-edited environment branches, and the 10 with several environments or clusters use folders. The branch-name search looked only for certain prefixes, so it could miss names like `env/prod`. The reviewing agent found one repo whose docs describe a `develop` branch for dev and `main` for prod; it is documented, not shown to work well.
-- **Terraform is different:** Google Cloud recommends a branch per environment for push-based Terraform, which matches what the owner described as his work setup (thread, 2026-10-11 06:04 UTC). RB-0002 found no primary source in its search scope that recommends hand-edited environment branches for pull-based GitOps config, and app code reaches environments by promoting an image tag, not by branches.
+- **Terraform is different:** Google Cloud recommends a branch per environment for push-based Terraform, which matches a setup the owner already knows (thread, 2026-10-11 06:04 UTC). RB-0002 found no primary source in its search scope that recommends hand-edited environment branches for pull-based GitOps config, and app code reaches environments by promoting an image tag, not by branches.
 - **Switching cost (inferred):** moving from folders to branches later is usually cheap, though any change of source is checked (see Exit path). Moving back from hand-edited branches is expensive, because the branches drift apart.
 
 ### What the decision covers
@@ -143,7 +143,7 @@ The owner answered all three, the last two on the condition that the rule comes 
 
 ### Option 2: hand-edited environment branches
 - Good: the host can protect each environment branch differently.
-- Good: Google Cloud recommends it for push-based Terraform, and it's familiar from the owner's work.
+- Good: Google Cloud recommends it for push-based Terraform, and the owner already knows it.
 - Good: a promotion is one visible merge.
 - Bad: merging promotes everything on the branch, including per-environment values. Out-of-order changes need cherry-picks, and urgent fixes drift if they aren't copied back.
 - Bad: one owner reviews the same change once per environment.

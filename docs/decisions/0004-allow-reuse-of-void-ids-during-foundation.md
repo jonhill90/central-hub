@@ -79,7 +79,7 @@ Everything else in D-0003 stays in force, and rule 6 still applies to every case
 - Good: the tombstone and the search keep the reason for "never reuse" intact. Nobody following an old reference is misled without being told.
 - Bad: this goes against published practice. ARK, McMurry, OBO, PEP and DOORS all say never reuse (D-0003's [evidence](../research/0003-use-registered-id-families-and-file-qualified-labels.md), finding 2). McMurry's rule covers identifiers "generated and publicly advertised" (McMurry et al., reference 4 there), and Foundation IDs are not public in that sense. That reading is inferred, not quoted from a source.
 - Bad: one more condition for a reviewer to check.
-- Neutral: REQ-0021 is the only reuse so far. Its search found 6 files that meant the old entry: the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md`, and the register's own Dropped entry. All 6 were updated or annotated. 3 frozen study files and 20 chat archives were left as records. Results reported to the owner in the Rules table thread, 2026-10-13 06:13 UTC.
+- Neutral: two IDs have been reused so far: D-0006 (listed in [`CORRECTIONS.md`](CORRECTIONS.md)) and REQ-0021. REQ-0021's search found 6 files that meant the old entry: the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md`, and the register's own Dropped entry. All 6 were updated or annotated. 3 frozen study files and 20 chat archives were left as records. Results reported to the owner in the Rules table thread, 2026-10-13 06:13 UTC.
 
 ### Confirmation
 
