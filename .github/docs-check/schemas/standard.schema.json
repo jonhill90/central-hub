@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "standard.schema.json",
+  "$comment": "docs/standards/NNNN-slug.md (docs/standards/README.md field table, D-0009).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "status", "scope", "owner-system", "why", "follows", "check"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^STD-\\d{4}$" },
+    "title": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["proposed", "active", "deprecated", "retired"] },
+    "scope": { "type": "string", "minLength": 1 },
+    "owner-system": { "type": "string", "minLength": 1 },
+    "why": { "type": "string", "minLength": 1 },
+    "follows": { "type": "array", "items": { "type": "string" } },
+    "check": { "type": "string", "minLength": 1 },
+    "accepted-evidence": { "oneOf": [ { "$ref": "common.schema.json#/$defs/approval" }, { "$ref": "common.schema.json#/$defs/approvalLegacy" } ] }
+  },
+  "if": { "properties": { "status": { "enum": ["active", "deprecated", "retired"] } } },
+  "then": { "required": ["accepted-evidence"] }
+}

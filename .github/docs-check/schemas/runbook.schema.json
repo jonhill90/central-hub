@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "runbook.schema.json",
+  "$comment": "docs/runbooks/<verb>-<object>.md (D-0012 runbook format, D-0013 kind).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "status", "kind", "trigger", "runner", "outcome", "needs", "private-values", "files", "last-tested"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["draft", "tested", "superseded", "retired"] },
+    "kind": { "enum": ["manual", "automated"] },
+    "trigger": { "type": "string", "minLength": 1 },
+    "runner": { "type": "string", "minLength": 1 },
+    "outcome": { "type": "string", "minLength": 1 },
+    "needs": { "type": "string" },
+    "private-values": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" } },
+    "files": { "type": "array", "items": { "type": "string" } },
+    "last-tested": { "type": ["null", "string"] },
+    "superseded-by": { "type": ["null", "string"] }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "const": "tested" } } }, "then": { "properties": { "last-tested": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}, .+" } } } },
+    { "if": { "properties": { "status": { "const": "superseded" } } }, "then": { "required": ["superseded-by"], "properties": { "superseded-by": { "type": "string" } } } }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "$comment": "Shared definitions for central-hub front matter.",
+  "$defs": {
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "utc": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$" },
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "decisionId": { "type": "string", "pattern": "^D-\\d{4}$" },
+    "nullOrDecisionId": { "oneOf": [ { "type": "null" }, { "$ref": "#/$defs/decisionId" } ] },
+    "decisionIds": { "type": "array", "items": { "$ref": "#/$defs/decisionId" }, "uniqueItems": true },
+    "approval": {
+      "$comment": "D-0016 rule 6.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approved-by", "approved-at", "approved-commit", "approval-ref", "approval-names", "check", "merged"],
+      "properties": {
+        "approved-by": { "const": "owner" },
+        "approved-at": { "$ref": "#/$defs/utc" },
+        "approved-commit": { "$ref": "#/$defs/sha" },
+        "approval-ref": { "type": "string", "minLength": 1 },
+        "approval-names": { "type": "string", "minLength": 1 },
+        "check": { "type": "string", "minLength": 1 },
+        "merged": { "type": "string", "minLength": 1 }
+      }
+    },
+    "approvalLegacy": {
+      "$comment": "D-0001 shape, allowed until each record's D-0016 cleanup lands; the check reports it as a warning.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quote", "message-id", "timestamp", "approved-commit", "quote-check"],
+      "properties": {
+        "quote": { "type": "string" },
+        "message-id": { "type": "string" },
+        "timestamp": { "$ref": "#/$defs/utc" },
+        "approved-commit": { "$ref": "#/$defs/sha" },
+        "merged": { "type": "string" },
+        "quote-check": { "type": "string" }
+      }
+    }
+  }
+}

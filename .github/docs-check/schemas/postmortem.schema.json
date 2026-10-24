@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "postmortem.schema.json",
+  "$comment": "docs/postmortems/YYYY-MM-DD-slug.md (D-0012 postmortem format).",
+  "type": "object",
+  "required": ["date", "status", "runbook"],
+  "properties": {
+    "date": { "$ref": "common.schema.json#/$defs/date" },
+    "status": { "enum": ["proposed", "accepted"] },
+    "runbook": { "type": "string", "pattern": "^(\\.\\./runbooks/|docs/runbooks/)[a-z0-9-]+\\.md$" },
+    "accepted-evidence": { "$ref": "common.schema.json#/$defs/approval" }
+  },
+  "if": { "properties": { "status": { "const": "accepted" } } },
+  "then": { "required": ["accepted-evidence"] }
+}

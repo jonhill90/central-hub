@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision.schema.json",
+  "$comment": "docs/decisions/NNNN-slug.md. Fields: D-0001 custom field contract, MADR 4 front matter, D-0016 rule 6, amends/amended-by.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "status", "date", "decision-makers", "proposed-by", "waits-on", "supersedes", "superseded-by", "revisit-when"],
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/decisionId" },
+    "title": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["proposed", "accepted", "rejected", "parked", "superseded", "deprecated"] },
+    "date": { "$ref": "common.schema.json#/$defs/date" },
+    "decision-makers": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "proposed-by": { "type": "string", "minLength": 1 },
+    "consulted": { "type": "array", "items": { "type": "string" } },
+    "informed": { "type": "array", "items": { "type": "string" } },
+    "waits-on": { "type": "array", "items": { "type": "string", "pattern": "^(D-\\d{4}|[A-Z]{1,3}\\d{1,3})$" }, "uniqueItems": true },
+    "supersedes": { "$ref": "common.schema.json#/$defs/decisionIds" },
+    "superseded-by": { "$ref": "common.schema.json#/$defs/nullOrDecisionId" },
+    "amends": { "$ref": "common.schema.json#/$defs/decisionIds" },
+    "amended-by": { "$ref": "common.schema.json#/$defs/decisionIds" },
+    "accepted-evidence": { "oneOf": [ { "$ref": "common.schema.json#/$defs/approval" }, { "$ref": "common.schema.json#/$defs/approvalLegacy" } ] },
+    "legacy-id": { "type": "array", "items": { "type": "string" } },
+    "revisit-when": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "enum": ["accepted", "superseded", "deprecated"] } } },
+      "then": { "required": ["accepted-evidence"] } },
+    { "if": { "properties": { "status": { "const": "superseded" } } },
+      "then": { "properties": { "superseded-by": { "$ref": "common.schema.json#/$defs/decisionId" } } } }
+  ]
+}

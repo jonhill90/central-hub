@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spec.schema.json",
+  "$comment": "docs/specs/YYYY-MM-slug.md (docs/specs/README.md template, D-0010).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "status", "date", "system", "supersedes", "superseded-by"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["proposed", "accepted", "done", "dropped", "superseded"] },
+    "date": { "$ref": "common.schema.json#/$defs/date" },
+    "system": { "type": ["integer", "string"] },
+    "accepted-evidence": { "oneOf": [ { "type": "null" }, { "$ref": "common.schema.json#/$defs/approval" } ] },
+    "done-evidence": { "oneOf": [ { "type": "null" }, { "$ref": "common.schema.json#/$defs/approval" } ] },
+    "supersedes": { "type": "array", "items": { "type": "string" } },
+    "superseded-by": { "type": ["null", "string"] }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "enum": ["accepted", "done"] } } }, "then": { "required": ["accepted-evidence"], "properties": { "accepted-evidence": { "$ref": "common.schema.json#/$defs/approval" } } } },
+    { "if": { "properties": { "status": { "const": "done" } } }, "then": { "properties": { "done-evidence": { "$ref": "common.schema.json#/$defs/approval" } } } }
+  ]
+}
