@@ -79,10 +79,12 @@ Chosen option: **1**. The owner said yes to the proposed option on 2026-10-22 at
 ## Pros and Cons of the Options
 
 ### 2. Three words
+
 - Good: smallest.
 - Bad: a stopped or replaced spec would have to stay `accepted`, which reads as live work.
 
 ### 3. KEP words
+
 - Good: proven on a large project.
 - Bad: seven new words that differ from the decision record words.
 

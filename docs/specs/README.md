@@ -4,7 +4,7 @@ One file per change, for work that spans several sessions or crosses systems (D-
 
 ## How a spec moves
 
-```
+```text
   proposed ──(the owner: "accept PR <repo>#<n> <sha>")──▶ accepted ──(the work is finished)──▶ done
      │                                                 │
      └──────────────▶ dropped ◀────────────────────────┘        superseded: a newer spec replaces it
@@ -24,7 +24,7 @@ After `accepted` the body is not edited (D-0007 rule 5). Only the status, the ev
 
 1. Branch per D-0002. Copy the template below to `docs/specs/YYYY-MM-<slug>.md`.
 2. Fill it in. Link to code, requirement rows and decision records; never copy them (D-0007 rule 6).
-3. Open the PR. The owner accepts it with "accept PR jonhill90/central-hub#<n> <sha>".
+3. Open the PR. The owner accepts it with `accept PR jonhill90/central-hub#<n> <sha>`.
 4. Do the work. Log choices made along the way in the decision log.
 5. The PR that finishes the work sets `status: done`.
 

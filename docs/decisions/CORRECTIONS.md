@@ -70,3 +70,4 @@ The lines below are PR #42's; its approval facts and merge commit are added afte
 - 2026-10-24 · D-0001 to D-0020, STD-0001, decisions and standards READMEs, runbooks README · the owner named by role, not by first name (D-0016 rule 5) · PR #42
 - 2026-10-24 · D-0003 to D-0020, STD-0001 · `merged` names the merge commit, and `check` no longer refers to the removed quote · PR #42
 - 2026-10-24 · D-0012, standards README, decisions README · D-0016 added to D-0012's related records; the `STD-` family cited at D-0003 rule 1; the index says where folded numbers are listed · PR #42
+- 2026-10-24 · D-0010 · blank lines added around two option headings (Markdown style) · PR #42
