@@ -1,0 +1,14 @@
+# Generated from docs/glossary.md by .github/docs-check/gen_vale_terms.py. Do not edit.
+(?i)check
+(?i)lint
+(?i)linter
+(?i)front matter
+(?i)schema
+(?i)gate
+(?i)report-only check
+(?i)false positive
+(?i)verification
+(?i)validation
+(?i)preferred
+(?i)admitted
+(?i)deprecated term

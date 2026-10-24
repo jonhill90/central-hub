@@ -1,0 +1,11 @@
+# Gate on changed files (D-0019 check 4): a record never quotes the owner and states requests in
+# neutral third person with a date (D-0016 rule 5). docs/specs/README.md holds the approval
+# template, so the gate skips it.
+extends: existence
+message: "Possible owner quote or owner-decided wording: '%s'. State it in neutral third person with a date (D-0016 rule 5)."
+level: error
+scope: raw
+nonword: true
+tokens:
+  - '\bJon\b[^."\n]{0,80}"[^"\n]{3,}"'
+  - '\bJon decided\b'
