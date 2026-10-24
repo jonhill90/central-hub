@@ -52,11 +52,3 @@ Server and desktop are told apart by the OS code on Windows (`ws` or `wc`), and 
 
 - The platform's own resource name around the hostname (for example an Azure VM resource name), and the tags. The org code and the subscription words are not settled yet.
 - Real machine names. This repository is public, so the names in use live outside it.
-
-## Corrections
-
-- **2026-10-23** (approval recorded in neutral form under D-0016). Reason: D-0016 rules 6 and 7, applied to standards because this register's README gives `accepted-evidence` the same shape as decision records; the rule does not change. The removed text is the owner's words, so this entry names where it was and a commit that holds it (916a972) instead of copying it (D-0016 rule 7).
-  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 916a972). No value changes.
-  2. A Corrections section added, holding this entry.
-
-  Approval: the owner, 2026-10-24T01:49:14Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNHByoYueesp8x5JHxzxVb35), naming PR #34 and head ab5af17; approved commit ab5af17c1071414e369d7f83014c10e6fb0e2214. Check: the drafting agent read the message at 2026-10-24T01:49Z and confirmed it names that PR and head.

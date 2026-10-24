@@ -53,11 +53,11 @@ Three drafts exist in the Research repo and none is accepted: a platform PRD, a 
 
 ## Decision Outcome
 
-Chosen option: **2**. Jon said yes to the proposed option on 2026-10-19 at 02:38 UTC, on a decision card that asked: "Use a one-page PRD plus frozen per-change specs in docs/specs/ as version 1?" That answer chose the option. This record still needs his acceptance under D-0001.
+Chosen option: **2**. Jon said yes to the proposed option on 2026-10-19 at 02:38 UTC, on a decision card that asked: "Use a one-page PRD plus frozen per-change specs in docs/specs/ as version 1?" That answer chose the option, and the owner accepted this record under D-0001 on 2026-10-19 at 02:53 UTC.
 
 ```mermaid
 flowchart TB
-  PRD["PRD: one page<br/>names its system first,<br/>goals, non-goals, success signals"] -- links --> SR["Requirement rows (SR)"]
+  PRD["PRD: one page<br/>names its system first,<br/>goals, non-goals, success signals"] -- links --> REQ["Requirement rows (REQ)"]
   B["Branch for a change"] --> S["Spec file in docs/specs/<br/>status: proposed"]
   S --> J{"Jon accepts:<br/>PR number + head SHA"}
   J -- yes --> M["Merge records it<br/>spec status says it is history"]
@@ -99,13 +99,8 @@ flowchart TB
 ### Not decided here
 
 Each of these is a later decision for Jon:
-- the final folder and document names, which follow the vocabulary work;
-- whether the PRD sits at the repository root or under `docs/`;
-- the status words for specs;
 - which store holds one system's PRD and specs about another system;
-- what happens to the documentation-contract and first-slice drafts;
-- whether a decision record may be edited before it is implemented;
-- a check that fails on a dead link to code. Version 1 adds none, because this repo has no code yet.
+- whether a decision record may be edited before it is implemented.
 
 ### Consequences
 
@@ -146,23 +141,7 @@ Each of these is a later decision for Jon:
 ## More Information
 
 - **Evidence:** [../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md): batch RB-0057, with a recall check that found 194 of 220 known items, an independent check of 150 claims (140 supported, none false) and a check of the fit with the organization research.
-- **Earlier proposal A2** (batches RB-0037 and RB-0040) is replaced by this record, which keeps its per-change rules.
 - **Exit path:**
   - Delete the PRD; the requirement rows remain.
   - Stop writing specs; merged specs stay as history.
   - Nothing here adds a tool.
-
-## Corrections
-
-- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
-- **2026-10-23** (research batch IDs under D-0015): 4 research batch citations renamed: `PS3` to `RB-0057` (2 times); `PS1` to `RB-0037`; `PS2` to `RB-0040`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
-- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (ba5bb20) instead of copying it (D-0016 rule 7).
-  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit ba5bb20). No value changes.
-  2. Context and Problem Statement, first paragraph: the quotes of Jon's brief and of Jon's 2026-10-17 21:30 UTC message (at commit ba5bb20) replaced by neutral summaries. After: "Jon's project brief asks for a PRD and specifications, and for maintained, indexed documentation that shows detail step by step to people and agents (Research repo, `coordinator/platform-startup/BRIEF.md`, line 5). Jon also asked that a spec point to the code rather than repeat it, so code is never updated in two places (Central Hub project, 2026-10-17 21:30 UTC)."
-  3. Decision Drivers, first bullet. Before: "Research batch RB-0057 (Research repo, `areas/documentation/research/prd-spec-ps3/`) found:" After: "Research batch RB-0057 ([evidence](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md)) found:" Reason: the old pointer is private; links the evidence file (D-0016 rule 1 as amended by D-0017).
-  4. Decision Drivers, fourth bullet. Before: "The fit was checked in RB-0057 `ORG-CHECK.md`:" After: "The fit was checked in RB-0057 (evidence finding 8):" Reason: the old pointer is private.
-  5. More Information, first bullet and its four sub-bullets. Before: "- **Research:** Research repo, `areas/documentation/research/prd-spec-ps3/`.   - `SYNTHESIS.md` holds the options and the recommendation.   - `RECALL.md`: 194 of 220 known items found.   - `CHECK.md`: an independent check of 150 claims; 140 supported, none false.   - `ORG-CHECK.md`: the fit with the organization research." After: "- **Evidence:** [../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md): batch RB-0057, with a recall check that found 194 of 220 known items, an independent check of 150 claims (140 supported, none false) and a check of the fit with the organization research." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
-  6. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit ba5bb20), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
-  7. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
-
-  Approval: the owner, 2026-10-23T05:50:25Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNDAeh1xBwykD4qgSUzJ1UcQ), naming PR #31 and head eca96c0; approved commit eca96c04520789ec785fc4fd584c8f37a3b429f9. Check: the drafting agent read the message at 2026-10-23T05:50Z and confirmed it names that PR and head.

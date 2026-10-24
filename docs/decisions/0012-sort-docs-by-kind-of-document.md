@@ -9,7 +9,6 @@ consulted: []
 waits-on: [D-0001, D-0007, D-0008, D-0009, D-0010]
 supersedes: []
 superseded-by:
-amended-by: [D-0013, D-0017]
 accepted-evidence:
   approved-by: owner
   approved-at: 2026-10-23T02:18:39Z
@@ -26,9 +25,9 @@ revisit-when: a kind folder passes about 30 files; a second reader group (not Jo
 
 ## Context and Problem Statement
 
-D-0008 names `docs/PRD.md`, `docs/specs/`, `docs/decisions/` and `docs/runbooks/`. D-0009 adds `docs/standards/`. D-0011 leaves "the folders inside `docs/`" to the documentation folder map work.
+D-0008 names `docs/PRD.md`, `docs/specs/`, `docs/decisions/` and `docs/runbooks/`. D-0009 adds `docs/standards/`. D-0011 leaves the folders inside `docs/` to the documentation folder map work.
 
-On 2026-10-22 at 06:58 UTC Jon asked which folders central-hub needs for plans, specs, runbooks, architecture and any other kind of document that each likely scenario calls for. He also raised the runbook format as open.
+On 2026-10-22 at 06:58 UTC Jon asked which folders central-hub needs for plans, specs, runbooks, architecture and any other kind of document that each likely scenario calls for. He also raised the runbook format as open. On 2026-10-19 at 02:43 UTC Jon had asked that a runbook explain why each step is done, briefly, and how the steps connect, so it reads like a story with reminders that link back; and that each job get a manual runbook first and an automated one later, because starting with the abstractions would hide what they are worth.
 
 This record sets which kinds of document central-hub keeps, where each one goes, and the minimum content of a runbook and a postmortem. It creates no folder.
 
@@ -61,6 +60,7 @@ central-hub/
 │   ├── glossary.md         what our words mean                      living   new
 │   ├── specs/              one plan per change                      frozen   (D-0007, D-0010)
 │   ├── decisions/          why we chose something                   frozen   (D-0001)
+│   ├── research/           what a decision rests on                 frozen   (D-0016)
 │   ├── standards/          the rule in force now                    living   (D-0009)
 │   ├── runbooks/           how to do one job, step by step          living   (D-0008)
 │   ├── postmortems/        what went wrong and what changed         frozen   new
@@ -90,6 +90,7 @@ A runbook is a page for one job, named for the task: `docs/runbooks/<verb>-<obje
 ---
 title: <task, verb first>
 status: draft            # draft | tested | superseded | retired
+kind: manual             # manual | automated
 trigger: <alert, schedule, event, or "on request">
 runner: <Jon, or an agent lane>
 outcome: <what is true when it is done>
@@ -107,6 +108,8 @@ superseded-by:
 
 ## Steps
 1. <one action: the exact command, or a link to the script>
+   why: <one or two sentences: why this step, and how it connects to the last one>
+   ※ <optional: what this relies on, linked to where it is explained>
    expect: <what you should see>
 
 ## If it fails
@@ -124,6 +127,13 @@ superseded-by:
 - Any later change to the steps puts the runbook back to `draft` until it is replayed.
 - Jon merges every one of these PRs, as he does every PR.
 
+**Runbook steps.**
+- **Why per step.** Each step in `## Steps` has a `why:` line of one or two sentences, between the action and `expect:`.
+- **※ links back.** When a step relies on something explained in an earlier step or another document, it carries a `※` reminder that links there, for example `※ the pod network range was set in step 3`. A ※ link points to a step anchor or a document, never to a line number.
+- **Reads like a story.** The steps run in the order the work happens, and each why says how the step connects to the one before.
+- **Manual or automated.** A `manual` runbook does each step by hand, and its scope is what the CKA exam tests. An `automated` runbook runs the same job through code in this repo, and links the `manual` runbook it replaces under Related.
+- **Manual first.** For any job, the `manual` runbook is written and `tested` before its `automated` runbook is written.
+
 ### Postmortem format
 
 A postmortem is one file per incident, `docs/postmortems/YYYY-MM-DD-<slug>.md`. Its front matter holds `date`, `status` and `runbook`. `status` is `proposed` or `accepted`, and Jon accepts a postmortem the same way as a decision record (D-0001). `runbook` is required and links the runbook that fixes or prevents the incident.
@@ -136,14 +146,16 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
 - a root `LICENSE` file;
 - where "current state and next step" (REQ-0006) and the requirement rows live once the Research repo goes away;
 - a changelog, which waits on the versioning decision;
-- recordings of runbooks (for example VHS), a link check, and a docs site in its own repository.
+- recordings of runbooks (for example VHS), and a docs site in its own repository.
 
 ### Consequences
 
 - Good: an agent can tell from the folder alone whether a file is a living page or a frozen record.
 - Good: the PRD's success signal, "rebuilt from this repo and its runbooks alone", gets a fixed runbook shape to check against.
 - Good: every kind and folder can be dropped on its own. A folder is deleted, git keeps its history, and `superseded` and `retired` cover single files.
+- Good: a runbook teaches as well as instructs, and the `kind` field shows which jobs are still manual.
 - Bad: runbooks can't be used for a real rebuild until the private store is chosen, because their values live there.
+- Bad: why lines make runbooks longer and can go stale when steps change. A step edit already puts the runbook back to `draft`, so the whys are re-read at the next replay.
 - Bad: skills and tools trained on public repos expect `docs/adr/`, so agents need to be told `docs/decisions/` (AGENTS.md already says so).
 - Neutral: none of the new places exists yet. Each one appears with its first file.
 
@@ -152,6 +164,7 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
 - A reviewing agent checks each PR that adds a file under `docs/` or a root folder README against these rules.
 - No `plans/`, `playbooks/`, `how-to/`, `tutorials/`, `reference/` or `adr/` folder appears under `docs/`.
 - Each new place has its row in the AGENTS.md "Where to look" table.
+- Each runbook has a `kind` value and a `why:` line on every step, and an `automated` runbook links a `tested` `manual` one.
 
 ## Pros and Cons of the Options
 
@@ -175,20 +188,3 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
   - Diátaxis;
   - the RULES-v4 R1 runbook fields (trigger, runner, files).
 - Related records: D-0001, D-0007, D-0008, D-0009, D-0010, D-0011. Related standard: STD-0002 (proposed).
-
-## Corrections
-
-- **2026-10-23** (requirement IDs respelled under D-0014): 3 requirement IDs renamed, `SR05` to `REQ-0005`, `SR06` to `REQ-0006`, `SR11` to `REQ-0011`. Before: `SR05`; after: `REQ-0005`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
-- **2026-10-23** (research batch IDs under D-0015): 1 research batch citation renamed: `DK1` to `RB-0069`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
-- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (7915625) instead of copying it (D-0016 rule 7).
-  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 7915625). No value changes.
-  2. Context and Problem Statement, second paragraph: the quote of Jon's 06:58 UTC question (at commit 7915625) replaced by a neutral summary. After: "On 2026-10-22 at 06:58 UTC Jon asked which folders central-hub needs for plans, specs, runbooks, architecture and any other kind of document that each likely scenario calls for."
-  3. Decision Outcome, second paragraph. Before: "(Research repo, `areas/documentation/research/repo-docs-kinds/`, batch RB-0069.)" After: "(Batch RB-0069, [evidence](../research/0012-sort-docs-by-kind-of-document.md).)" Reason: the old pointer is private; links the evidence file (D-0016 rule 1 as amended by D-0017).
-  4. More Information, first bullet. Before: "Research behind it: Research repo, `areas/documentation/research/repo-docs-kinds/`. `SYNTHESIS.md` holds the map, the formats and the tests on 5 real items. `CHECK.md`, `RECALL.md` and `DEVIL.md` hold the checks." After: "**Evidence:** [../research/0012-sort-docs-by-kind-of-document.md](../research/0012-sort-docs-by-kind-of-document.md): batch RB-0069, with the map tested on 5 real items, a recall check, a devil's advocate pass and an independent claim check." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
-  5. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit 7915625), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
-
-  Approval: the owner, 2026-10-23T06:07:52Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAnCf1qE6ULcTZw9foG87Mc), naming PR #32 and head f994dac; approved commit f994dacd8fb34b10e550664797bf61d12af773a6. Check: the drafting agent read the message at 2026-10-23T06:07Z and confirmed it names that PR and head.
-- **2026-10-23** (lifecycle field completed). Reason: D-0013 says `amends: [D-0012]`, but this record's `amended-by` listed only D-0017; no decision changes.
-  1. `amended-by`. Before: `amended-by: [D-0017]` After: `amended-by: [D-0013, D-0017]`
-
-  Approval: the owner, 2026-10-23T21:46:34Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAaxwHhhgPt6cvkvmWyw9yy), naming PR #33 and head e6b7c1c; approved commit e6b7c1c914e07d48a8c0985b2dfbeb119cee1a70. Check: the drafting agent read the message at 2026-10-23T21:46Z and confirmed it names that PR and head.

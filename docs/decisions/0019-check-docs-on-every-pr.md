@@ -6,7 +6,7 @@ date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
-waits-on: [D-0001, D-0012, D-0016, D-0017]
+waits-on: [D-0001, D-0012, D-0016]
 supersedes: []
 superseded-by:
 accepted-evidence:
@@ -26,11 +26,11 @@ revisit-when: a check gives more false positives than real findings for a month;
 
 ## Context and Problem Statement
 
-Nothing in this repository checks its documents. `.github/` holds only CODEOWNERS and the PR template. D-0001 says the decision index will be checked "once CI exists", and D-0012 leaves "a link check" undecided.
+Nothing in this repository checks its documents. `.github/` holds only CODEOWNERS and the PR template. D-0001 says the decision index will be checked "once CI exists", and no record had set a link check.
 
-The gap showed on `main`. At 7915625 two files had front matter that was not valid YAML: D-0009 and the evidence file for D-0008. Each had a plain value containing ": ", which YAML 1.2.2 §7.3.3 does not allow. D-0012's `amended-by` also missed D-0013, which amends it. All three were found by a draft check and fixed by D-0006 corrections (PR #33).
+The gap showed on `main`. At 7915625 two files had front matter that was not valid YAML: D-0009 and the evidence file for D-0008. Each had a plain value containing ": ", which YAML 1.2.2 §7.3.3 does not allow. One record's back-link field also missed a record that changed it. All three were found by a draft check and fixed by D-0006 corrections (PR #33).
 
-On 2026-10-23 the owner asked for the docs to be linted so that broken front matter cannot merge, and for help with vocabulary. Later the same day the owner asked that the methods, the organization of the checks (what lives where, who owns it, what runs locally and in CI) and the needed words be settled before any linting starts. On 2026-10-23 at 21:51 UTC the owner chose to write this as a decision record. That choice is not acceptance; this record still needs acceptance under D-0001.
+On 2026-10-23 the owner asked for the docs to be linted so that broken front matter cannot merge, and for help with vocabulary. Later the same day the owner asked that the methods, the organization of the checks (what lives where, who owns it, what runs locally and in CI) and the needed words be settled before any linting starts. On 2026-10-23 at 21:51 UTC the owner chose to write this as a decision record, and accepted it on 2026-10-24 at 01:50 UTC. On 2026-10-24 at 05:32 UTC the owner chose, on a decision card, to keep the linter settings under `.github/` rather than in the repository root, which D-0008 keeps for entry points.
 
 This record decides which checks run on the docs, how strict each one is, where they live, and the words used for this work.
 
@@ -41,6 +41,7 @@ This record decides which checks run on the docs, how strict each one is, where 
 - **No flaky gates.** A failure must mean this PR broke something, not that a website was down.
 - **One source for words** (D-0012 rule 8). The glossary decides; checks follow it.
 - **Public repository, no secrets** (CLAUDE.md rules 4 and 5).
+- **Keep the root short** (D-0008). The root holds only what a reader needs before going deeper.
 - **Replaceable** (REQ-0011). Each check can be dropped or swapped on its own.
 
 ## Considered Options
@@ -86,7 +87,7 @@ flowchart LR
 1. **Same commands everywhere.** One command runs all four checks on a laptop or an agent's machine, and CI runs the same command. No commit hooks are added.
 2. **Workflow safety.** The workflow runs on `pull_request` only, with `permissions: contents: read` and `persist-credentials: false`. Every action is pinned to a full commit SHA, and every downloaded binary to a version and checksum. It uses no secrets.
 3. **Frozen records.** Checks 1, 2 and 4 read every file. Check 3 lints a record or evidence file only in the PR that adds it. A real fault in an existing record is fixed by a correction under D-0006.
-4. **Where things live.** Scripts, schemas and tests go in `.github/docs-check/`; Vale styles in `.github/vale/`; the workflow in `.github/workflows/`; linter settings as dotfiles in the repository root. No new root folder and no new `docs/` kind.
+4. **Where things live.** Scripts, schemas and tests go in `.github/docs-check/`; Vale styles in `.github/vale/`; the workflow in `.github/workflows/`. The linter settings are `.github/docs-check/markdownlint.jsonc` and `.github/vale/vale.ini`, and `run.sh` passes each to its tool with `--config`. No settings file in the repository root, no new root folder and no new `docs/` kind.
 5. **Glossary drives the word check.** `docs/glossary.md` is one table: Term, Status, Meaning, Source, Instead of. Status is `preferred`, `admitted` or `deprecated`, the term statuses of ISO 10241-1. A script generates Vale's word lists from it, and CI fails if the generated files differ from the glossary. Nobody edits the generated files by hand.
 6. **A new word.** An agent that meets an unsettled word proposes one glossary row in its own PR. The owner says yes or no. The check enforces only rows on `main`.
 7. **Turning a report into a gate.** A report-only rule becomes a gate only by a new decision record.
@@ -129,6 +130,7 @@ Each step is its own PR and can be dropped without the others.
 - Bad: one more script to maintain, about 200 lines, because no tool found checks rules that cross files.
 - Bad: the checks are a guard against mistakes, not proof. A PR can change a check and a document together until a verifier outside this repository exists.
 - Bad: report-only word findings can be ignored. On today's files 78 of 79 glossary-term findings are in records written before the word was settled.
+- Bad: an editor plugin for markdownlint or Vale does not find the settings by itself; its settings path is set once, as `.github/docs-check/README.md` says.
 - Neutral: Markdown style faults in existing records stay until some correction touches them.
 
 ### Confirmation
@@ -137,6 +139,7 @@ Each step is its own PR and can be dropped without the others.
 - A PR that adds a record with a repeated key or an unquoted ": " fails check 1.
 - No action in the workflow is pinned to a tag or branch, and the workflow has no trigger other than `pull_request` and `schedule`.
 - The generated Vale files match `docs/glossary.md`.
+- No `.markdownlint*` or `.vale.ini` file is in the repository root.
 
 ## Pros and Cons of the Options
 
@@ -159,5 +162,5 @@ Each step is its own PR and can be dropped without the others.
 ## More Information
 
 - **Evidence:** [../research/0019-check-docs-on-every-pr.md](../research/0019-check-docs-on-every-pr.md)
-- **Exit path:** delete `.github/docs-check/`, `.github/vale/`, the workflow and the root dotfiles. The schemas and the glossary stay usable without the scripts. A new record supersedes this one.
-- **Related records:** D-0001 (index and validation column), D-0006, D-0012 (glossary; link check left open), D-0013, D-0016 (no owner quotes), D-0017.
+- **Exit path:** delete `.github/docs-check/`, `.github/vale/` and the workflow. The schemas and the glossary stay usable without the scripts. A new record supersedes this one.
+- **Related records:** D-0001 (index and validation column), D-0006, D-0008 (short root), D-0012 (glossary), D-0016 (no owner quotes; evidence files).

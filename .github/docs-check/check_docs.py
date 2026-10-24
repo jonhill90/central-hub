@@ -105,7 +105,7 @@ def main(root: Path) -> int:
             warnings.append(f"{rel}: accepted-evidence still has the D-0001 quote shape (D-0016 rule 6 cleanup)")
 
         if kind == "evidence":
-            # D-0017 rules 1 and 4: same file name as its record, front matter names it, record links it.
+            # D-0016 rule 1: same file name as its record, front matter names it, record links it.
             twin = rel.replace("docs/research/", "docs/decisions/")
             if twin in unreadable:
                 pass
@@ -121,7 +121,7 @@ def main(root: Path) -> int:
             for ref in fm.get("waits-on") or []:
                 if ref.startswith("D-") and ref not in decisions and ref not in unreadable:
                     errors.append(f"{rel}: waits-on {ref} has no record")
-            # Symmetric links (D-0001 supersedes; D-0016 Confirmation amends).
+            # Symmetric links (D-0001 supersedes; amends is kept for compatibility, no record uses it).
             for fwd, back in (("supersedes", "superseded-by"), ("amends", "amended-by")):
                 for ref in fm.get(fwd) or []:
                     other = decisions.get(ref)
@@ -160,12 +160,12 @@ def main(root: Path) -> int:
         if not state.get(d):
             visit(d, [])
 
-    # docs/decisions/ has no subfolders (D-0017 Confirmation).
+    # docs/decisions/ has no subfolders (D-0016 Confirmation).
     for sub in (root / "docs/decisions").iterdir():
         if sub.is_dir():
-            errors.append(f"docs/decisions/{sub.name}/: subfolder not allowed (D-0017)")
+            errors.append(f"docs/decisions/{sub.name}/: subfolder not allowed (D-0016)")
 
-    # Each kind folder README lists every file in it (D-0012 rule 4, D-0017 rule 3).
+    # Each kind folder README lists every file in it (D-0012 rule 4, D-0016 rule 1).
     for folder in ("decisions", "research", "standards"):
         readme = root / f"docs/{folder}/README.md"
         if not readme.exists():

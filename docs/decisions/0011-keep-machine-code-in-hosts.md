@@ -68,8 +68,7 @@ central-hub/
 - the name and split of the runnable Terraform folders inside `hosts/terraform/` (`stacks/`, `envs/` or something else). This waits on the Terraform structure research;
 - the name and home of the modules repository;
 - which Terraform provider builds the hypervisor VMs;
-- the layout inside `hosts/ansible/`;
-- the folders inside `docs/`, which the documentation folder map work covers.
+- the layout inside `hosts/ansible/`.
 
 ### Consequences
 
@@ -99,18 +98,3 @@ central-hub/
 
 - **Evidence:** no research batch of its own. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md), finding 2.
 - Related records: D-0001, D-0008. Related standard: STD-0002 (proposed).
-
-## Corrections
-
-- **2026-10-23** (requirement IDs respelled under D-0014): 1 requirement ID renamed, `SR11` to `REQ-0011`. Before: `SR11`; after: `REQ-0011`, and the same for each pair listed. Reason: D-0014 retires the `SR` spelling and its rule 5 renames live references in place; no decision changes. Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23).
-- **2026-10-23** (research batch IDs under D-0015): 2 research batch citations renamed: `RL4` to `RB-0036`; `RL2` to `RB-0033`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
-- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (7915625) instead of copying it (D-0016 rule 7).
-  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 7915625). No value changes.
-  2. Context and Problem Statement, second paragraph: the quote of Jon's 03:03 UTC message (at commit 7915625) replaced by a neutral summary. After: "On 2026-10-20 at 03:03 UTC Jon said that nothing on the Proxmox hypervisor should be set up by hand, and asked where its code should go in central-hub, along with VPS machines, cloud VMs, cloud container services and machines still to come."
-  3. Considered Options, option 2. Before: "(Research repo, RB-0036 `R1-design-independent.md` line 122; not counted)" After: "(batch RB-0036; not counted)" Reason: the old pointer is private.
-  4. Considered Options, option 3. Before: "(Research repo, RB-0033 `S3-jon-repos.md`)" After: "(batch RB-0033)" Reason: the old pointer is private.
-  5. Decision Outcome, first paragraph: the quote of Jon's 03:25 UTC answer (at commit 7915625) removed. After: "Jon said yes to keeping `hosts/` on 2026-10-20 at 03:25 UTC."
-  6. More Information, first bullet. Before: "Research behind it: Research repo, `labs/central-hub/repo-layout/rl4/` (`RULES-v4.md` N2, N5, F1; `SYNTHESIS.md`, "Where machine and VM code goes")." After: "**Evidence:** no research batch of its own. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md), finding 2." Reason: the old pointer is private; D-0016 rule 2.
-  7. The 2026-10-23 requirement-ID entry above: its approval, which quoted the approval message (at commit 7915625), rewritten as D-0016 rule 6 facts. After: "Approval: Jon, 2026-10-23T04:04:08Z, message cmsg_01X43rfNYp4H1dL1V2dkfkwNSXxbYGet6tcD4ggBBduwLF, naming PR #23 and head cabb14e; approved commit cabb14e45f92ae73b089de0ce0ffb191dc47feea (PR #23)." No value changes.
-
-  Approval: the owner, 2026-10-23T06:07:52Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAnCf1qE6ULcTZw9foG87Mc), naming PR #32 and head f994dac; approved commit f994dacd8fb34b10e550664797bf61d12af773a6. Check: the drafting agent read the message at 2026-10-23T06:07Z and confirmed it names that PR and head.

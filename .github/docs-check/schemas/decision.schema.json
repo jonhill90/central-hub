@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "decision.schema.json",
-  "$comment": "docs/decisions/NNNN-slug.md. Fields: D-0001 custom field contract, MADR 4 front matter, D-0016 rule 6, amends/amended-by.",
+  "$comment": "docs/decisions/NNNN-slug.md. Fields: D-0001 custom field contract, MADR 4 front matter, D-0016 rule 6; amends/amended-by kept for compatibility, unused.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "title", "status", "date", "decision-makers", "proposed-by", "waits-on", "supersedes", "superseded-by", "revisit-when"],
