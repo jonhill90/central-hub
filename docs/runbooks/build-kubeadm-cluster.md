@@ -5,7 +5,7 @@ kind: manual
 trigger: on request; also after each rebuild of the practice machine
 runner: the owner
 outcome: a one-node Kubernetes 1.36.5 cluster (later 1.37.1) with Cilium, reachable only over the private network, and every CKA topic practised on it
-needs: a fresh AlmaLinux 10 machine with root access; a Tailscale tailnet; a DNS zone for the endpoint name
+needs: a fresh AlmaLinux 10 machine with root access; a Tailscale tailnet; a way to resolve the endpoint name on the tailnet (step 7)
 private-values: [tailscale-auth-key, endpoint-name, node-name, backup-age-public-key]
 files: []
 last-tested:
@@ -14,7 +14,7 @@ superseded-by:
 
 # Build a single-node kubeadm cluster by hand (CKA practice)
 
-**Status:** draft. Steps 0-11 were proven by an agent in proof runs 1-3; practice steps 12-36 were proven on 2026-10-19, except where a step says NOT PROVEN. Not yet run by the owner. This runbook has not been replayed from a fresh rebuild as a whole.
+**Status:** draft. Steps 0-11 were proven by an agent in proof runs 1-3; practice steps 12-36 were proven on 2026-10-19, except where a step says NOT PROVEN. PROVEN means on the versions those runs used; where a pin was raised since (steps 9, 26 and 27), the step names the proven version and says the new pin is not yet run. Not yet run by the owner. This runbook has not been replayed from a fresh rebuild as a whole.
 
 ## Before you start
 
@@ -71,8 +71,8 @@ superseded-by:
 
 Each step has:
 
-- **why**: one to three sentences, in a `why:` line. Why the step exists, and what breaks without it.
 - the commands, in a box. They are the commands the proof runs used.
+- **why**: one or two sentences, in a `why:` line after the commands. Why the step exists, and what breaks without it. A longer story, where there is one, comes before the commands.
 - an **expect** line: what you should see.
 - **page**: the kubernetes.io page the step follows. You may open kubernetes.io during the exam. A few steps also name a project's own page.
 - **status**: PROVEN (the agent ran it on the VPS and it worked) or NOT PROVEN (with the reason).
@@ -103,16 +103,15 @@ The agent found the traps in these steps by running them (PROOF-RUN-1.md), then 
 
 #### 0. Fresh machine
 
-why: every build starts from a clean machine, so the runbook makes the cluster, not leftovers. The machine is greenfield: no snapshot is kept. The private-network client goes on at first boot, so you can reach the machine privately before step 1 closes the public doors.
+The private-network client goes on at first boot, so you can reach the machine privately before step 1 closes the public doors.
 
 - Make a single-use, one-hour, pre-authorized Tailscale auth key with the machine's tag. It is a secret: it lives in the private store under `tailscale-auth-key` and is never written here.
 - Reinstall the machine from the provider's AlmaLinux 10 image with a first-boot script that installs Tailscale and runs `tailscale up --auth-key=<key> --advertise-tags=<tag> --ssh --hostname=<node name>`. The script can run `hostnamectl set-hostname <node name>` first (run 2). Delete the script afterwards.
+- why: every build starts from a clean machine, so the runbook makes the cluster, not leftovers. The machine is greenfield: no snapshot is kept.
 - expect: the node shows in `tailscale status`; `tailscale ssh root@<node name>` works. Takes about 2.5 minutes.
 - status: **PROVEN** (proof runs 1-3, through the provider's API). CKA: CA2.
 
 #### 1. Lock down the host
-
-why: The VPS sits on the public internet. The image ships with no firewall and lets SSH log in with a password and as root (measured, PROOF-RUN-1.md). So before anything else: SSH only over the tailnet, keys only.
 
 ```bash
 hostnamectl set-hostname <node name>            # before kubeadm init; otherwise the node gets the provider's name
@@ -130,12 +129,11 @@ sshd -t && systemctl reload sshd
 
 - The hostname line: kubeadm names the node after the hostname. Proof run 1 skipped it and the node got the provider's name (PROOF-RUN-1.md).
 - Two zones: `public` (the internet) and `tailnet` (your private network). Everything Kubernetes needs will go in `tailnet` only.
+- why: The VPS sits on the public internet, and its image ships with no firewall and allows SSH logins with a password and as root (measured, PROOF-RUN-1.md). So before anything else, SSH goes over the tailnet only, with keys only.
 - expect: `sshd -T | grep -E '^(passwordauthentication|permitrootlogin) '` shows `no` and `without-password`; `firewall-cmd --zone=public --list-services` shows only `dhcpv6-client`; a new `tailscale ssh` login still works.
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2.
 
 #### 2. Host prerequisites
-
-why: The kubelet, containerd and the pod network expect a few Linux settings. Each line below says what one is for.
 
 ```bash
 swapoff -a; sed -i.bak '/\sswap\s/s/^/#/' /etc/fstab        # the image has no swap; harmless
@@ -150,13 +148,14 @@ touch /.autorelabel && systemctl reboot                     # the image ships SE
 - **ip_forward:** by default Linux does not pass packets from one network interface to another (container runtimes page). Pod traffic must cross from the pod's interface to the host's. Most CNIs turn this on themselves; the page says some expect you to.
 - **SELinux permissive:** the OS choice, as the kubeadm install page says (it lets containers reach the host's files, which some network plugins need). The image ships SELinux **Disabled**, not permissive (measured, PROOF-RUN-1.md). Files made while SELinux was off have no labels, so turning it on needs one relabel boot, done in permissive mode (source: <https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_selinux/changing-selinux-states-and-modes>).
 - ※ Later, the agent ran the cluster with SELinux **Enforcing** too (SELINUX-TRIAL-LEVEL1.md). It worked, but pods run unconfined at that level. The OS choice stays permissive.
+- why: The kubelet, containerd and the pod network expect a few Linux settings. Each line above says what one is for.
 - expect after reboot: `getenforce` = Permissive; `lsmod | grep -E '^(overlay|br_netfilter)'`; `sysctl net.ipv4.ip_forward` = 1.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/> ; <https://kubernetes.io/docs/setup/production-environment/container-runtimes/>
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2.
 
 #### 3. DNS that pods can use
 
-why: Pods ask CoreDNS. CoreDNS's default Corefile has `forward . /etc/resolv.conf`: every name outside the cluster goes to the DNS servers it got from the node (source: <https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/>; the link to the node is under Known issues on <https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/>). Two node settings broke pods (measured trap, PROOF-RUN-1.md): Tailscale's MagicDNS server can't be reached from inside a pod, and cloud-init's search domain `localhost` reached the pods, so names resolved to the node itself. Fix the node, and pods get working DNS.
+CoreDNS's default Corefile has `forward . /etc/resolv.conf`. The two settings: Tailscale's MagicDNS server can't be reached from inside a pod, and cloud-init's search domain `localhost` reached the pods, so names resolved to the node itself.
 
 ```bash
 tailscale set --accept-dns=false                            # pods can't reach MagicDNS
@@ -164,12 +163,13 @@ C=$(nmcli -g NAME con show --active | grep -m1 cloud-init)
 nmcli con mod "$C" ipv4.dns-search "" ipv6.dns-search "" && nmcli con up "$C"   # cloud-init adds search "localhost"
 ```
 
+- why: Pods ask CoreDNS, which sends every name outside the cluster to the node's DNS servers (source: <https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/>; the link to the node is under Known issues on <https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/>). Two node settings broke pods (measured trap, PROOF-RUN-1.md), so fixing the node gives pods working DNS.
 - expect: `/etc/resolv.conf` has the provider's nameservers and no `localhost` search domain.
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: TS5 (partly; a found-and-fixed trap).
 
 #### 4. Firewall for Kubernetes and Cilium (tailnet zone only)
 
-why: Each Kubernetes part listens on its own port (measured with `ss` on the proof node). They open only on the tailnet, so the public zone stays closed (but see the NodePort finding in [step 23](#23-services-clusterip-nodeport-loadbalancer-sn3)). And pods must reach the host: without the trusted pod range, firewalld blocked pod-to-host traffic and CoreDNS never became Ready (measured trap, PROOF-RUN-1.md).
+And pods must reach the host: without the trusted pod range, firewalld blocked pod-to-host traffic and CoreDNS never became Ready (measured trap, PROOF-RUN-1.md).
 
 ```bash
 for p in 6443/tcp 2379-2380/tcp 10250/tcp 10256/tcp 10257/tcp 10259/tcp 8472/udp 4240/tcp; do
@@ -182,11 +182,12 @@ firewall-cmd --reload
 - ※ `10.244.0.0/16` is the pod range. You will give the same range to kubeadm in [step 8](#8-init) and to Cilium in [step 9](#9-cilium-1204).
 - note: trusting the whole pod range is broad. Narrowing it is a hardening item.
 - page: <https://kubernetes.io/docs/reference/networking/ports-and-protocols/>
+- why: Each Kubernetes part listens on its own port (measured with `ss` on the proof node). They open only on the tailnet, so the public zone stays closed (but see the NodePort finding in [step 23](#23-services-clusterip-nodeport-loadbalancer-sn3)).
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2, TS5 (partly).
 
 #### 5. containerd 2.3.6
 
-why: Kubernetes does not run containers itself. It asks a container runtime to do it. containerd is that runtime here (the "CRI" in the CKA's "CNI, CSI, CRI"). The 2.3 branch is a long-term (LTS) branch, supported until April 2028, and works with Kubernetes 1.36 and 1.37 (source: <https://github.com/containerd/containerd/blob/main/RELEASES.md>).
+The 2.3 branch is a long-term (LTS) branch, supported until April 2028, and works with Kubernetes 1.36 and 1.37 (source: <https://github.com/containerd/containerd/blob/main/RELEASES.md>).
 
 ```bash
 dnf -y install dnf-plugins-core python3-dnf-plugin-versionlock
@@ -200,14 +201,13 @@ systemctl enable --now containerd
 
 - **versionlock:** dnf stops seeing any other version of the package, so a routine `dnf update` will not move containerd. You choose when it changes (source: <https://dnf-plugins-core.readthedocs.io/en/latest/versionlock.html>).
 - **SystemdCgroup:** the kubelet and containerd must use the same "cgroup driver" (who manages resource limits), and on a systemd host it should be `systemd` (container runtimes page). Since Kubernetes 1.34 the kubelet asks containerd which driver to use, so this line decides it for both (feature gate `KubeletCgroupDriverFromCRI`, <https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/>; the node's kubelet log says "Using cgroup driver setting received from the CRI runtime" cgroupDriver="systemd", measured).
+- why: Kubernetes does not run containers itself. It asks a container runtime to do it. containerd is that runtime here (the "CRI" in the CKA's "CNI, CSI, CRI").
 - expect: `containerd --version` = v2.3.6; `grep SystemdCgroup /etc/containerd/config.toml` = true.
 - note (2026-10-24): upstream containerd 2.3.7 (2026-10-13) fixes four security advisories in 2.3.6 (<https://github.com/containerd/containerd/releases/tag/v2.3.7>). Docker's EL10 repo has no `containerd.io-2.3.7` build yet; its newest 2.3 build is 2.3.6-1 (<https://download.docker.com/linux/centos/10/x86_64/stable/Packages/>). Which containerd to install is an open choice for the owner.
 - page: <https://kubernetes.io/docs/setup/production-environment/container-runtimes/>
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2, CA7 (CRI).
 
 #### 6. kubeadm, kubelet, kubectl 1.36.5
-
-why: Three tools. **kubeadm** builds the cluster. **kubelet** is the agent on the node that runs pods. **kubectl** is how you talk to the cluster. This runbook pins 1.36, one version behind the exam, so you can practise a real upgrade later.
 
 ```bash
 cat > /etc/yum.repos.d/kubernetes.repo <<'EOF'
@@ -228,21 +228,20 @@ systemctl enable --now kubelet
 - **exclude line:** stops a routine `dnf update` from upgrading Kubernetes by surprise, because upgrades need their own procedure (install page; [step 17](#17-upgrade-the-cluster-from-1365-to-1371-ca4)). You lift it on purpose with `--disableexcludes`. (Proof run 1 found DNF 4 is the right flag form, and that `cri-tools` must be named, PROOF-RUN-1.md. The install page now shows a `--setopt=` form for RHEL 10; the form here is the one proven on AlmaLinux 10.2.)
 - **crictl.yaml:** tells `crictl` where containerd listens. `crictl` talks to containerd directly, so it still works when the API server is down.
 - **kubelet now restarts every few seconds.** That is expected: it waits for kubeadm to tell it what to do (install page).
+- why: Three tools: **kubeadm** builds the cluster, **kubelet** is the agent on the node that runs pods, and **kubectl** is how you talk to the cluster. This runbook pins 1.36, one version behind the exam, so you can practise a real upgrade later.
 - expect: `kubeadm version -o short` = v1.36.5; `crictl info` works. k8s repo GPG DE15 B144 86CD 377B 9E87 6E1A 2346 54DA 9A29 6436.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/>
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2.
 
 #### 7. Endpoint name
 
-why: The cluster's address goes into its certificates and every kubeconfig. Use a name, not an IP. Then a rebuilt node only needs the DNS record changed. And kubeadm cannot add high availability later to a cluster made without `--control-plane-endpoint` (create-cluster page, quoted in FIRST-STEPS.md).
-
-- do (the owner): in the DNS provider, a DNS-only A record `<endpoint name>` → the node's tailnet IP (`tailscale ip -4`). Update it after every rebuild.
-- expect: `getent hosts <endpoint name>` returns the tailnet IP. (Proof run 1 used an `/etc/hosts` entry instead.)
-- status: the DNS record is the owner's step. The proof runs used an `/etc/hosts` entry (PROOF-RUN-3.md).
+- do (the owner): make `<endpoint name>` resolve to the node's tailnet IP (`tailscale ip -4`) on every machine that talks to the cluster, and update it after every rebuild. The proof runs used an `/etc/hosts` entry. Do not put the name in public DNS: that would publish the endpoint name and its tailnet address (※S in the Proxmox runbook).
+- open question for the owner: which name the endpoint uses, and where it is published.
+- why: The cluster's address goes into its certificates and every kubeconfig, so use a name, not an IP: a rebuilt node then needs only the name's address changed. kubeadm also cannot add high availability later to a cluster made without `--control-plane-endpoint` (create-cluster page).
+- expect: `getent hosts <endpoint name>` returns the tailnet IP.
+- status: **PROVEN** with an `/etc/hosts` entry (PROOF-RUN-3.md).
 
 #### 8. Init
-
-why: This is the moment the cluster is born. `kubeadm init` makes the cluster's certificates, writes the control plane's pod files, starts etcd and the API server, and writes your admin kubeconfig (source: <https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/>).
 
 ```bash
 kubeadm config images pull --kubernetes-version v1.36.5
@@ -257,6 +256,7 @@ mkdir -p /root/.kube && cp /etc/kubernetes/admin.conf /root/.kube/config
   - `/etc/kubernetes/manifests/`: the control plane's pod files. The kubelet runs whatever is in this folder.
   - `/etc/kubernetes/pki/`: the certificates and the cluster CA.
   - `/etc/kubernetes/admin.conf`: the admin kubeconfig. It can do anything.
+- why: This is the moment the cluster is born. `kubeadm init` makes the cluster's certificates, writes the control plane's pod files, starts etcd and the API server, and writes your admin kubeconfig (source: <https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/>).
 - expect: about 8 seconds; `openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -ext subjectAltName` lists the endpoint name; `grep server: /etc/kubernetes/admin.conf` shows the name, not an IP. Images: etcd 3.6.8-0, coredns v1.14.2, pause 3.10.2.
 - note: the node is not Ready yet, and CoreDNS waits. Both need a network (next step).
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/>
@@ -264,7 +264,7 @@ mkdir -p /root/.kube && cp /etc/kubernetes/admin.conf /root/.kube/config
 
 #### 9. Cilium 1.20.4
 
-why: A CNI gives pods a network: each pod gets an address and a way to reach the others. kubeadm does not install one. Until a CNI is in, CoreDNS will not start (create-cluster page; the kubeadm troubleshooting page calls its Pending state "expected"). This runbook uses Cilium; everything CNI-specific is kept in this one step, so another CNI could replace it here.
+This runbook uses Cilium; everything CNI-specific is kept in this one step, so another CNI could replace it here.
 
 ```bash
 curl -fsSLO https://get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz
@@ -280,14 +280,15 @@ kubectl -n kube-system rollout status ds/cilium && kubectl -n kube-system rollou
 - **Any CNI needs:** the same pod range as step 8. **Helm** installs packaged apps ("charts"); the checksum line proves the download is the real one. Helm is used again in step 26.
 - **Cilium-specific settings:** `devices=tailscale0` (pod traffic goes over the tailnet); `MTU=1230` (the tailnet interface takes packets of at most 1280 bytes, measured, and Cilium's VXLAN wrapper needs room inside that; known limit: 1230 is below IPv6's 1280-byte minimum, so pod IPv6 can't work as built, research batch RB-0068; no change unless the owner picks IPv6); `kubeProxyReplacement=false` (kube-proxy kept for the first builds; step 27 depends on this; note: Cilium's L2 announcements and Cilium's own Gateway API both need `kubeProxyReplacement=true`, research batch RB-0067, so the ingress and load-balancer-address decisions may change this line; no change until the owner decides); `operator.replicas=1` (one node). Cilium also enforces NetworkPolicy (step 25). ※ With more than one node, `devices` alone does not put pod traffic on the tailnet; see the `--node-ip` note in [step 36](#36-high-availability-and-kubeadm-join-ca5-ca3). Swap the CNI and these lines change.
 - ※ CoreDNS gets Ready here only because [step 4](#4-firewall-for-kubernetes-and-cilium-tailnet-zone-only) trusted the pod range: CoreDNS must reach the API server on the host (PROOF-RUN-1.md). Another CNI would likely need the same while firewalld is on; only Cilium was tested.
+- why: A CNI gives pods a network: each pod gets an address and a way to reach the others. kubeadm does not install one. Until a CNI is in, CoreDNS will not start (create-cluster page; the kubeadm troubleshooting page calls its Pending state "expected").
 - expect: node Ready; CoreDNS 2/2. Value keys (`ipam.mode`, `ipam.operator.clusterPoolIPv4PodCIDRList`, `devices`, `MTU`, `kubeProxyReplacement`, `operator.replicas`) checked against the v1.20.4 values.yaml on 2026-10-24 (<https://raw.githubusercontent.com/cilium/cilium/v1.20.4/install/kubernetes/cilium/values.yaml>).
 - versions (checked 2026-10-24): Cilium 1.20.4 (2026-10-23) is an out-of-band security patch (CVE-2026-111943, Go 1.26.10) that also fixes a 1.20.3 Gateway API BackendTLSPolicy regression (<https://github.com/cilium/cilium/releases/tag/v1.20.4>). Helm v4.3.1 (2026-10-15) is the current Helm patch release (<https://github.com/helm/helm/releases/tag/v4.3.1>). The proof runs used Cilium 1.20.3 and Helm v4.3.0; the value keys are the same in 1.20.4.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/> (section on the pod network add-on)
-- status: **PROVEN** (PROOF-RUN-3.md: ready 32 s after install). CKA: CA7 (CNI), CA6 (Helm).
+- status: **PROVEN** on Cilium 1.20.3 and Helm v4.3.0 (PROOF-RUN-3.md: ready 32 s after install). The pins here, Cilium 1.20.4 and Helm v4.3.1, are not yet run. CKA: CA7 (CNI), CA6 (Helm).
 
 #### 10. Single node scheduling and a smoke test
 
-why: By default, the control plane node carries a taint that keeps normal pods off it (create-cluster page). This is our only node, so remove it. Then one test pod proves the three things every app needs: an address, DNS, and a way out to the internet.
+Then one test pod proves the three things every app needs: an address, DNS, and a way out to the internet.
 
 ```bash
 kubectl taint nodes --all node-role.kubernetes.io/control-plane-
@@ -297,13 +298,14 @@ kubectl exec t1 -- sh -c 'wget -q -T 8 -O /dev/null https://pkgs.k8s.io && echo 
 ```
 
 - ※ The DNS lines pass because of [step 3](#3-dns-that-pods-can-use) (the node's DNS) and [step 9](#9-cilium-1204) (CoreDNS up).
+- why: By default, the control plane node carries a taint that keeps normal pods off it (create-cluster page). This is our only node, so remove it.
 - expect: pod IP in 10.244.0.0/16; `kubernetes.default` → 10.96.0.1; egress-ok.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/> (section on control plane node isolation)
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: WS5 (partly), SN1 (partly).
 
 #### 11. Backup and restore
 
-why: etcd is the cluster's memory: it stores all the API server's data (source: <https://kubernetes.io/docs/concepts/overview/components/>). With one control plane, losing that node can lose the cluster's data; the create-cluster page's answer is "Regularly back up etcd". The plan is encrypted off-site backups to Azure Blob storage.
+Off-site backup is not chosen yet: where the encrypted copies go (Azure Blob storage was researched) and when backups start are open decisions for the owner.
 
 - Backup: `etcdctl snapshot save` inside the etcd pod (certs under `/etc/kubernetes/pki/etcd/`, write to `/var/lib/etcd`), then bundle the snapshot, `kubectl -n kube-system get cm kubeadm-config -o yaml` and `/etc/kubernetes/pki`, and `age -r <public key>`. The private key never sits on the VPS. Proof run: 5.2 MB snapshot, 1.1 MB encrypted bundle.
 - Restore: move `/etc/kubernetes/manifests/*.yaml` out; wait for etcd and the apiserver to stop; move `/var/lib/etcd` aside; `etcdutl snapshot restore <db> --data-dir /var/lib/etcd --name <from etcd.yaml> --initial-cluster <name>=<peer url> --initial-advertise-peer-urls <peer url>`; move the manifests back. Proof run: 36 seconds; test data came back.
@@ -312,6 +314,7 @@ why: etcd is the cluster's memory: it stores all the API server's data (source: 
 - Restore onto a rebuilt VPS (proven, PROOF-RUN-2.md): after steps 0-6, copy only the CA files (`ca.*`, `sa.*`, `front-proxy-ca.*`, `etcd/ca.*`) to `/etc/kubernetes/pki`; `etcdutl snapshot restore` with the new node name and `https://<advertise IP>:2380`; then the step 8 `kubeadm init` plus `--ignore-preflight-errors=DirAvailable--var-lib-etcd`; then `kubectl delete node <old node>`. Cilium returns from etcd; skip step 9 except installing Helm.
 - **Not yet proven:** upload to Azure Blob with a short immutability lock. Deferred by the owner on 2026-10-17 until the repo layout and an Azure config-as-code tool are chosen; until then, recovery is a rebuild from configuration.
 - note: after step 17 the cluster runs etcd 3.7.0. The etcdutl 3.6.8 tool above was not tested against a 3.7.0 snapshot.
+- why: etcd is the cluster's memory: it stores all the API server's data (source: <https://kubernetes.io/docs/concepts/overview/components/>). With one control plane, losing that node can lose the cluster's data; the create-cluster page's answer is "Regularly back up etcd".
 - status: local backup and restore **PROVEN** (PROOF-RUN-1.md); restore onto a rebuilt VPS **PROVEN** (PROOF-RUN-2.md); Azure upload **NOT PROVEN** (deferred). CKA: CA4.
 
 ---
@@ -324,7 +327,7 @@ Start here once step 10 passes. Step 11 (backups) is still deferred, so you can 
 
 #### Exam habits (do these once, first)
 
-why: The exam is 15-20 hands-on tasks in 2 hours, and the timer never stops (SYNTHESIS). Speed comes from aliases, dry-run YAML and knowing where the docs are. The exam gives every host a `k` alias, Bash completion and `yq`. Set up the same on your node.
+The exam gives every host a `k` alias, Bash completion and `yq`. Set up the same on your node.
 
 ```bash
 dnf -y install bash-completion
@@ -344,6 +347,7 @@ kubectl api-resources | grep -i netpol                          # short names an
 kubectl config get-contexts                                     # which cluster am I on?
 ```
 
+- why: The exam is 15-20 hands-on tasks in 2 hours, and the timer never stops (SYNTHESIS). Speed comes from aliases, dry-run YAML and knowing where the docs are.
 - expect: `type k` says `k is aliased to kubectl`; `complete -p k` shows the completion line; the `$do` command prints YAML and creates nothing.
 - Using the docs: in the exam you may open kubernetes.io/docs (and its search), the Kubernetes blog, helm.sh/docs and, for the CKA only, gateway-api.sigs.k8s.io (SYNTHESIS, "The exam, in facts"). Every step below names its page: open it while you practise, so you know where things are. Many steps apply the page's own example with `kubectl apply -f https://k8s.io/examples/...`, which is the fastest way to get a correct file.
 - Exam habit: always check the context and namespace first. Working in the wrong one is a common way to lose time.
@@ -352,7 +356,7 @@ kubectl config get-contexts                                     # which cluster 
 
 #### 12. Container logs (TS4)
 
-why: Logs are the first place to look when something is wrong. `kubectl logs` reads them through the API server. When the API server itself is broken, the same logs are still on the node, and `crictl` and `journalctl` can read them.
+When the API server itself is broken, the same logs are still on the node, and `crictl` and `journalctl` can read them.
 
 ```bash
 kubectl apply -f https://k8s.io/examples/debug/counter-pod.yaml
@@ -384,6 +388,7 @@ kubectl delete pod counter --now
 
 - ※ `crictl` works with no extra flags because [step 6](#6-kubeadm-kubelet-kubectl-1365) wrote `/etc/crictl.yaml`.
 - ※ The kubelet logs to the journal because it is a systemd service, not a pod. [Step 6](#6-kubeadm-kubelet-kubectl-1365) started it with `systemctl`.
+- why: Logs are the first place to look when something is wrong. `kubectl logs` reads them through the API server.
 - expect: `kubectl logs counter` prints numbered lines; `--previous` prints `started at ...` and `failing`; `count-log-1` and `count-log-2` print different formats; `/var/log/pods/default_counter_<uid>/` has one folder per container.
 - catch: `--previous` only works while the new container is running. If the pod is in `Error` or `CrashLoopBackOff`, the dead container is the "current" one: use plain `kubectl logs crash` instead (the kubelet keeps only one dead container). (Found in PROOF-RUN-4.md.)
 - catch: the sidecar example is also called `counter`. Delete the first `counter` pod before you apply it.
@@ -391,8 +396,6 @@ kubectl delete pod counter --now
 - status: **PROVEN 2026-10-19**.
 
 #### 13. metrics-server and `kubectl top` (TS3)
-
-why: `kubectl top` and the autoscaler (step 33) need live CPU and memory numbers. Nothing in a kubeadm cluster collects them until you install metrics-server.
 
 **The kubeadm catch.** metrics-server talks to each kubelet over TLS. On kubeadm the kubelet's serving certificate is self-signed, so metrics-server refuses it. metrics-server's README (<https://github.com/kubernetes-sigs/metrics-server>) offers two ways out: a kubelet certificate signed by the cluster CA, or the `--kubelet-insecure-tls` flag ("for testing purposes only"). **This runbook uses the first**, because it is the one kubernetes.io documents ("Enabling signed kubelet serving certificates" on the kubeadm certificates page). It means you must approve one certificate request per node by hand, now and about once a year when it renews.
 
@@ -416,6 +419,7 @@ kubectl top pod -A --sort-by=memory
 
 - ※ The certificate is signed by the cluster CA that [step 8](#8-init) made in `/etc/kubernetes/pki/`.
 - Why two places for one setting: the kubelet reads only `/var/lib/kubelet/config.yaml`. kubeadm keeps the cluster's copy in the `kubelet-config` ConfigMap and writes it over that file at join and at every `kubeadm upgrade`. Change only the file, and the next upgrade undoes it (source: <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-reconfigure/>).
+- why: `kubectl top` and the autoscaler (step 33) need live CPU and memory numbers. Nothing in a kubeadm cluster collects them until you install metrics-server.
 - expect: the request is from `system:node:<node name>` and names only your node (its name and its addresses); after approval it shows `Approved,Issued`; the certificate's issuer is `CN=kubernetes` (the cluster CA), valid one year; `kubectl get apiservice v1beta1.metrics.k8s.io` shows `True`; `kubectl top node` shows CPU and memory.
 - why check the request first: the kubeadm certificates page warns that an approver that does not check the requested names and IPs lets anyone with a kubelet client certificate get a serving certificate for any name. Here you are the approver, so check the names before you approve.
 - note: the agent did step 1 with a one-line `sed` piped to `kubectl apply` instead of `edit`; the result is the same line. After step 17 the setting was still there (the upgrade keeps it).
@@ -424,7 +428,7 @@ kubectl top pod -A --sort-by=memory
 
 #### 14. Drill A: the kubelet is stopped (TS1)
 
-why: The kubelet is the agent that runs pods on the node. If it stops, the node goes `NotReady` and nothing new starts. "Fix a broken kubelet" is a common exam task (SYNTHESIS). Here you break it on purpose, so you learn the symptoms.
+Here you break it on purpose, so you learn the symptoms.
 
 - **break:** `systemctl stop kubelet`
 - **symptom:** after about 45 s, `kubectl get nodes` shows `NotReady`. New pods stay `Pending`. The control plane still answers, because its containers keep running without the kubelet.
@@ -439,6 +443,7 @@ journalctl -u kubelet -n 20              # "Stopped kubelet.service"
 
 - **fix:** `systemctl start kubelet` (and `systemctl enable kubelet` if it was disabled).
 - ※ The control plane survives because its containers belong to containerd ([step 5](#5-containerd-236)), not to the kubelet (the drill showed it: kubectl kept answering, PROOF-RUN-4.md). `systemctl enable` in [step 6](#6-kubeadm-kubelet-kubectl-1365) is what brings the kubelet back after a reboot.
+- why: The kubelet is the agent that runs pods on the node. If it stops, the node goes `NotReady` and nothing new starts. "Fix a broken kubelet" is a common exam task (SYNTHESIS).
 - expect: node `Ready` again within seconds; the pending pod starts.
 - catch: finish within 5 minutes. After 5 minutes of `NotReady`, pods are evicted (the page says so).
 - page: <https://kubernetes.io/docs/tasks/debug/debug-cluster/>
@@ -446,7 +451,7 @@ journalctl -u kubelet -n 20              # "Stopped kubelet.service"
 
 #### 15. Drill B: a broken static pod manifest (TS2)
 
-why: The control plane parts (API server, scheduler, controller-manager, etcd) are "static pods": files the kubelet runs straight from a folder. One typo in a file and that part stops. Learn to find which part and why.
+Learn to find which part and why.
 
 ```bash
 mkdir -p /root/drill && cp /etc/kubernetes/manifests/kube-scheduler.yaml /root/drill/kube-scheduler.yaml.good   # backup OUTSIDE the manifests folder
@@ -466,6 +471,7 @@ journalctl -u kubelet | grep -i scheduler | tail # back-off messages from the ku
 ```
 
 - **fix:** `cp /root/drill/kube-scheduler.yaml.good /etc/kubernetes/manifests/kube-scheduler.yaml` (or correct the typo with an editor). The kubelet watches that folder and restarts the pod by itself.
+- why: The control plane parts (API server, scheduler, controller-manager, etcd) are "static pods": files the kubelet runs straight from a folder. One typo in a file and that part stops.
 - expect: the scheduler pod is `Running`; the pending pod starts. Then `kubectl delete pod p`.
 - catch: never keep backup copies inside `/etc/kubernetes/manifests`. The kubelet runs every manifest in that folder.
 - catch: if `kubectl` itself stops working, the broken component is the API server or etcd. Then only `crictl` and `journalctl` on the node can help. ※ That is why [step 12](#12-container-logs-ts4) practised them.
@@ -474,7 +480,7 @@ journalctl -u kubelet | grep -i scheduler | tail # back-off messages from the ku
 
 #### 16. Drill C: a Service with a wrong selector (TS5)
 
-why: A Service finds its pods by their labels. One wrong letter and it finds none. DNS still works, so it looks like the app is down. It is not. Learn to check each link in the chain, in order.
+Learn to check each link in the chain, in order.
 
 ```bash
 kubectl create deployment hostnames --image=registry.k8s.io/serve_hostname
@@ -496,6 +502,7 @@ kubectl get pods --show-labels                                      # the pods s
 ```
 
 - **fix:** `kubectl patch svc hostnames -p '{"spec":{"selector":{"app":"hostnames"}}}'` (or `kubectl edit svc hostnames`).
+- why: A Service finds its pods by their labels. One wrong letter and it finds none.
 - expect: the EndpointSlice lists 3 addresses on port 9376; `wget` prints pod names again.
 - clean up: `kubectl delete deploy hostnames; kubectl delete svc hostnames; kubectl delete pod tmp`
 - catch: the change takes a second or two to reach kube-proxy. In the proof, a `wget` right after the patch still worked; wait 5 s before you check the symptom.
@@ -504,7 +511,7 @@ kubectl get pods --show-labels                                      # the pods s
 
 #### 17. Upgrade the cluster from 1.36.5 to 1.37.1 (CA4)
 
-why: Kubernetes patches only its three newest minor versions, each for about a year (source: <https://kubernetes.io/releases/>), so every cluster must be upgraded. This runbook started you on 1.36 exactly so you could do this once for real. 1.37 is the exam's version as of 2026-10-24; the exam moves to a new minor about 4-8 weeks after its release, and 1.38.0 is due 2026-12-16 (<https://docs.linuxfoundation.org/tc-docs/certification/faq-cka-ckad-cks> ; <https://github.com/kubernetes/sig-release/tree/master/releases/release-1.38>).
+1.37 is the exam's version as of 2026-10-24; the exam moves to a new minor about 4-8 weeks after its release, and 1.38.0 is due 2026-12-16 (<https://docs.linuxfoundation.org/tc-docs/certification/faq-cka-ckad-cks> ; <https://github.com/kubernetes/sig-release/tree/master/releases/release-1.38>).
 
 Read first: on one node, **draining stops every workload**, and you cannot skip a minor version (1.36 → 1.37 only; upgrade page).
 **Known risk:** as of 2026-10-24, Cilium 1.20's compatibility page (stable, 1.20.4) lists Kubernetes 1.33-1.36 as tested, not 1.37, and Cilium 1.21 is still a pre-release (<https://docs.cilium.io/en/stable/network/kubernetes/compatibility/> ; <https://github.com/cilium/cilium/releases>). It worked in the proof (Cilium 1.20.3), but it is outside what Cilium tests.
@@ -526,6 +533,7 @@ kubectl uncordon <node name>
 
 - The order matters: kubeadm first, then the control plane, then the kubelet. `drain` moves pods off the node before the kubelet restarts; `uncordon` lets them back.
 - ※ The package repo has one folder per minor version, and [step 6](#6-kubeadm-kubelet-kubectl-1365)'s `exclude` line is why every install here needs `--disableexcludes`.
+- why: Kubernetes patches only its three newest minor versions, each for about a year (source: <https://kubernetes.io/releases/>), so every cluster must be upgraded. This runbook started you on 1.36 exactly so you could do this once for real.
 - expect: `kubectl get nodes` shows `Ready` and `v1.37.1`; `kubectl version` shows client and server v1.37.1; every pod in `kubectl get pods -A` is `Running` again (give it a minute); the step 10 smoke test passes; `kubectl top node` works.
 - what you will see: `kubeadm upgrade plan` showed etcd 3.6.8-0 → 3.7.0-0 and CoreDNS v1.14.2 → v1.14.6. `upgrade apply` took 174 s. kubeadm keeps backups of the old manifests and etcd data in `/etc/kubernetes/tmp/` (delete them by hand later).
 - catch: `drain` without `--delete-emptydir-data` stops at metrics-server (it uses an emptyDir). ※ That is the metrics-server from [step 13](#13-metrics-server-and-kubectl-top-ts3).
@@ -538,7 +546,7 @@ kubectl uncordon <node name>
 
 #### 18. Certificates: check and renew (CA4)
 
-why: The parts of the cluster prove who they are with certificates. kubeadm's client certificates expire after 1 year, its CAs after 10 (source: <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/>). The 1-year ones include `admin.conf` (your kubectl) and the scheduler's and controller-manager's. An expired one is refused with `x509: certificate has expired or is not yet valid` (source: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/troubleshooting-kubeadm/>), so whatever uses it can no longer talk to the API server. Know how to check and renew them.
+The CAs last 10 years. The 1-year certificates include `admin.conf` (your kubectl) and the scheduler's and controller-manager's. An expired one fails with `x509: certificate has expired or is not yet valid` (source: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/troubleshooting-kubeadm/>). Know how to check and renew them.
 
 ```bash
 kubeadm certs check-expiration                     # each certificate's expiry; the CAs last 10 years
@@ -552,6 +560,7 @@ kubeadm certs check-expiration
 ```
 
 - ※ These are the certificates [step 8](#8-init) made. The restart is the move-out, move-back trick from [step 15](#15-drill-b-a-broken-static-pod-manifest-ts2). The `cp` is the same line as in step 8.
+- why: The parts of the cluster prove who they are with certificates, and kubeadm's client certificates, `admin.conf` among them, expire after 1 year (source: <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/>). An expired one is refused, so whatever uses it can no longer talk to the API server.
 - expect: `check-expiration` shows new dates (one year from now); `openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -serial` matches `echo | openssl s_client -connect 127.0.0.1:6443 2>/dev/null | openssl x509 -noout -serial` (the API server serves the new certificate); `kubectl get nodes` works.
 - note: `kubeadm upgrade apply` (step 17) already renews all these certificates. Upgrading at least once a year is the simple way to keep them valid.
 - note: the kubelet's own certificates (`/var/lib/kubelet/pki`) are not in this list; the kubelet rotates them. The serving one from step 13 needs a fresh `kubectl certificate approve` each year.
@@ -560,7 +569,7 @@ kubeadm certs check-expiration
 
 #### 19. RBAC: a ServiceAccount, a Role, a RoleBinding (CA1)
 
-why: Until now you used the admin kubeconfig, which can do anything. Apps and people should get only what they need. RBAC is how: a Role says what is allowed, a RoleBinding says who gets it.
+RBAC is how: a Role says what is allowed, a RoleBinding says who gets it.
 
 ```bash
 kubectl create namespace dev
@@ -580,14 +589,13 @@ kubectl delete namespace dev
 ```
 
 - ※ The admin kubeconfig is the `admin.conf` you copied in [step 8](#8-init). `ca.crt` is the cluster CA from the same step.
+- why: Until now you used the admin kubeconfig, which can do anything. Apps and people should get only what they need.
 - expect: the three `can-i` answers are yes, no, no; with the token, `-n dev get pods` works and `-n default get pods` is `Forbidden ... User "system:serviceaccount:dev:dev-sa" cannot list resource "pods"`.
 - catch: `kubectl --token=...` with your normal kubeconfig still sends the admin client certificate, and the certificate wins. The proof hit this; use `--kubeconfig=/dev/null` as above.
 - page: <https://kubernetes.io/docs/reference/access-authn-authz/rbac/> ; `can-i`: <https://kubernetes.io/docs/reference/access-authn-authz/authorization/>
 - status: **PROVEN 2026-10-19**.
 
 #### 20. kubeadm: tokens, a config file, reset (CA3)
-
-why: Three kubeadm skills the exam asks for. A token lets a new node join. A config file replaces step 8's long flags with one file you can keep and re-use. Reset wipes the node so you can start over.
 
 **20a. Tokens** (what a second node needs to join)
 
@@ -640,12 +648,13 @@ mkdir -p /root/.kube && cp /etc/kubernetes/admin.conf /root/.kube/config
 
 - ※ Reset does not touch the host work of [steps 1-6](#1-lock-down-the-host) (firewall, kernel settings, packages). That is why you can init again right away.
 - expect: as steps 8-10; `grep serverTLSBootstrap /var/lib/kubelet/config.yaml` shows `true` without editing anything.
+- why: The exam asks for three kubeadm skills: a token lets a new node join, a config file replaces step 8's long flags with one file you can keep, and reset wipes the node so you can start over.
 - status: `reset --dry-run` **PROVEN 2026-10-19** (it lists: remove the etcd member, empty `/var/lib/etcd`, stop the kubelet, remove containers, empty `/etc/kubernetes/manifests` and `pki`, delete the kubeconfig files; and says it does not clean CNI config, firewall rules or kubeconfig). The real `reset -f` and `init --config` are **NOT PROVEN**: the agent's tool permissions refused `kubeadm reset` on the node, so the agent did not run it.
 - page: <https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-token/> ; <https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-reset/> ; <https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta4/> ; <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/>
 
 #### 21. Kustomize (CA6)
 
-why: You often need the same app in slightly different forms (dev and prod: other names, other namespace). Kustomize keeps one base and layers small changes on top, without copying or editing the base. It is built into kubectl.
+It is built into kubectl.
 
 A base, and a `dev` overlay that changes the name, namespace and labels without editing the base.
 
@@ -704,6 +713,7 @@ kubectl -n kustomize-dev exec deploy/dev-my-nginx -- printenv GREETING     # hi
 kubectl delete -k dev/ && kubectl delete namespace kustomize-dev
 ```
 
+- why: You often need the same app in slightly different forms (dev and prod: other names, other namespace). Kustomize keeps one base and layers small changes on top, without copying or editing the base.
 - expect: names come out as `dev-my-nginx` and `dev-app-config-<hash>` in namespace `kustomize-dev`; changing the literal changes the hash, which rolls the Deployment and the pod sees `hi`.
 - note: Kustomize is built into kubectl (v5.8.1 on 1.37.1). Helm is already used for Cilium (step 9). The same `kubectl apply -k <folder>` installs a cluster component that ships a kustomization. ※ The CKA topic names both tools; you used Helm in [step 9](#9-cilium-1204).
 - page: <https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/>
@@ -711,7 +721,7 @@ kubectl delete -k dev/ && kubectl delete namespace kustomize-dev
 
 #### 22. CustomResourceDefinitions (CA8)
 
-why: Kubernetes can learn new kinds of objects. A CRD teaches it one. Tools like Cilium add their own kinds this way, and an "operator" is a program that watches those objects and acts on them.
+Tools like Cilium add their own kinds this way, and an "operator" is a program that watches those objects and acts on them.
 
 ```bash
 kubectl get crd                                           # Cilium already installed 10 CRDs
@@ -768,6 +778,7 @@ kubectl patch ct my-new-cron-object --type=merge -p '{"spec":{"replicas":"three"
 kubectl delete -f resourcedefinition.yaml                 # also deletes every CronTab
 ```
 
+- why: Kubernetes can learn new kinds of objects. A CRD teaches it one.
 - expect: `kubectl get crontab` lists `my-new-cron-object`; `explain` shows the three fields; the patch fails with `spec.replicas in body must be of type integer`; after the delete, `kubectl get crontab` says the server does not know the resource.
 - operators: cilium-operator (installed in step 9) is an operator. It watches Cilium's CRDs and acts on them. Its options are Helm values, for example `operator.replicas=1` in step 9. ※ See [step 9](#9-cilium-1204).
 - page: <https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/> ; <https://kubernetes.io/docs/concepts/extend-kubernetes/operator/>
@@ -775,7 +786,7 @@ kubectl delete -f resourcedefinition.yaml                 # also deletes every C
 
 #### 23. Services: ClusterIP, NodePort, LoadBalancer (SN3)
 
-why: Pods come and go, and each new pod gets a new address. A Service gives a group of pods one address and name that stay put. The three types decide who can reach it: only the cluster (ClusterIP), a port on the node (NodePort), or an outside load balancer (LoadBalancer).
+The three types decide who can reach it: only the cluster (ClusterIP), a port on the node (NodePort), or an outside load balancer (LoadBalancer).
 
 ```bash
 kubectl apply -f https://k8s.io/examples/service/networking/run-my-nginx.yaml     # Deployment my-nginx, 2 pods
@@ -793,6 +804,7 @@ kubectl patch svc my-nginx -p '{"spec":{"type":"ClusterIP"}}'                   
 ```
 
 - ※ The ClusterIP comes from the `--service-cidr` in [step 8](#8-init). The EndpointSlice is the same list that was empty in [step 16](#16-drill-c-a-service-with-a-wrong-selector-ts5).
+- why: Pods come and go, and each new pod gets a new address. A Service gives a group of pods one address and name that stay put.
 - expect: the EndpointSlice lists both pod IPs; the NodePort answers 200 on the node; the LoadBalancer Service stays `<pending>`, because nothing on this VPS hands out load-balancer addresses.
 - **security note:** do not leave NodePort Services running. firewalld does not list ports 30000-32767, but the proof found that firewalld's forward chain accepts all DNAT'd traffic (`ct status dnat accept`), and kube-proxy reaches a NodePort by DNAT. So a NodePort may be reachable on the VPS's public address. The agent could not test this from outside (no outside test point). See PROOF-RUN-4.md. ※ So [step 1](#1-lock-down-the-host)'s public zone does not cover this path.
 - page: <https://kubernetes.io/docs/concepts/services-networking/service/> ; <https://kubernetes.io/docs/tutorials/services/connect-applications-service/>
@@ -800,7 +812,7 @@ kubectl patch svc my-nginx -p '{"spec":{"type":"ClusterIP"}}'                   
 
 #### 24. Pod-to-pod traffic across namespaces (SN1)
 
-why: In Kubernetes, every pod can reach every other pod by its address, on any node, unless something blocks it on purpose, such as a NetworkPolicy (source: <https://kubernetes.io/docs/concepts/services-networking/>). Namespaces do not block it (this step shows it). Names are different: a short Service name is looked up only in the pod's own namespace (source: <https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/>). Know both.
+Names are different: a short Service name is looked up only in the pod's own namespace (source: <https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/>). Know both.
 
 Needs `my-nginx` from step 23.
 
@@ -815,13 +827,14 @@ kubectl delete namespace other; kubectl delete svc my-nginx; kubectl delete depl
 ```
 
 - ※ The pod addresses come from Cilium ([step 9](#9-cilium-1204)).
+- why: In Kubernetes, every pod can reach every other pod by its address, on any node, unless something blocks it on purpose, such as a NetworkPolicy (source: <https://kubernetes.io/docs/concepts/services-networking/>). Namespaces do not block it (this step shows it).
 - expect: 200 to the pod IP; 200 to the full Service name; the short name fails from another namespace (curl exit code 6, name not found).
 - page: <https://kubernetes.io/docs/tutorials/services/connect-applications-service/>
 - status: **PROVEN 2026-10-19**.
 
 #### 25. NetworkPolicy (SN2)
 
-why: Step 24 showed every pod can reach every pod. A NetworkPolicy closes that down: only the traffic you allow gets through. A policy only works if the CNI enforces it (source: <https://kubernetes.io/docs/concepts/services-networking/network-policies/>). Cilium does, so these work.
+A policy only works if the CNI enforces it (source: <https://kubernetes.io/docs/concepts/services-networking/network-policies/>). Cilium does, so these work.
 
 ```bash
 kubectl create deployment nginx --image=nginx
@@ -842,6 +855,7 @@ kubectl delete namespace np-demo; kubectl delete networkpolicy access-nginx; kub
 ```
 
 - ※ The enforcement comes from the Cilium you installed in [step 9](#9-cilium-1204). The policy selects pods by label, the same way the Service did in [step 16](#16-drill-c-a-service-with-a-wrong-selector-ts5).
+- why: Step 24 showed every pod can reach every pod. A NetworkPolicy closes that down: only the traffic you allow gets through.
 - expect: as the comments say: blocked without the label, allowed with it; in `np-demo`, everything is blocked after the default-deny policy.
 - note: the page recommends two worker nodes; on one node the policy is still enforced (proven here).
 - page: <https://kubernetes.io/docs/tasks/administer-cluster/declare-network-policy/> ; default deny: <https://kubernetes.io/docs/concepts/services-networking/network-policies/>
@@ -849,7 +863,7 @@ kubectl delete namespace np-demo; kubectl delete networkpolicy access-nginx; kub
 
 #### 26. Ingress (SN5)
 
-why: You don't want one open port per app. An Ingress is one front door that sends each request to the right Service by its host name or path. It does nothing without a controller, the program that does the sending (the page says so).
+It does nothing without a controller, the program that does the sending (the page says so).
 
 ingress-nginx is retired (source: <https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/>), so this uses **Traefik**, which also implements the Gateway API (step 27). One install covers both. Cilium is not changed (`kubeProxyReplacement` stays `false`).
 
@@ -890,15 +904,16 @@ kubectl exec client -- curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: nothin
 ```
 
 - ※ Traefik stays ClusterIP because of the NodePort finding in [step 23](#23-services-clusterip-nodeport-loadbalancer-sn3). The Gateway API files are CRDs, like the ones in [step 22](#22-customresourcedefinitions-ca8).
+- why: You don't want one open port per app. An Ingress is one front door that sends each request to the right Service by its host name or path.
 - expect: `kubectl get ingress` lists `web1-ingress`; the request with `Host: web1.lab.test` returns a `web1-...` pod name; an unknown host returns 404.
 - note: `.test` is a name reserved for testing; nothing outside the cluster resolves it, which is why the test sends the `Host` header by hand.
-- choice made by the agent: Traefik chart 42.1.3 (Traefik v3.7.16, chart published 2026-10-22; <https://traefik.github.io/charts/index.yaml>). v3.7.14-v3.7.16 fix 12 security advisories (<https://github.com/traefik/traefik/releases>), so this pin takes the security fixes instead of waiting two weeks. Chart 42 needs Kubernetes 1.30 or later and changes nothing this step sets (<https://github.com/traefik/traefik-helm-chart/releases/tag/v42.0.0>). Envoy Gateway or NGINX Gateway Fabric would also do for step 27; Traefik was picked because one install also covers Ingress.
+- not chosen yet: the platform's ingress controller is an open decision for the owner. Traefik here is for CKA practice only, the agent's pick: chart 42.1.3 (Traefik v3.7.16, chart published 2026-10-22; <https://traefik.github.io/charts/index.yaml>). v3.7.14-v3.7.16 fix 12 security advisories (<https://github.com/traefik/traefik/releases>), so this pin takes the security fixes instead of waiting two weeks. Chart 42 needs Kubernetes 1.30 or later and changes nothing this step sets (<https://github.com/traefik/traefik-helm-chart/releases/tag/v42.0.0>). Envoy Gateway or NGINX Gateway Fabric would also do for step 27; Traefik was picked because one install also covers Ingress.
 - page: <https://kubernetes.io/docs/concepts/services-networking/ingress/> ; <https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/>
 - status: **PROVEN 2026-10-19** on chart 41.6.1 (Traefik v3.7.13) with Gateway API 1.6.1; chart 42.1.3 has not been run yet.
 
 #### 27. Gateway API (SN4)
 
-why: The Gateway API is the newer way to do what Ingress does, with more control. The CKA tests both. It splits the job: a Gateway is the front door, and an HTTPRoute says where each request goes.
+It splits the job: a Gateway is the front door, and an HTTPRoute says where each request goes.
 
 Needs step 26 (Traefik with its Gateway provider, and the Gateway API CRDs). The chart already made a GatewayClass `traefik` and a Gateway `traefik-gateway` in namespace `traefik`.
 
@@ -932,16 +947,17 @@ kubectl delete httproute web2-route; kubectl delete ingress web1-ingress
 kubectl delete deploy web1 web2; kubectl delete svc web1 web2; kubectl delete pod client
 ```
 
+- why: The Gateway API is the newer way to do what Ingress does, with more control. The CKA tests both.
 - expect: the route shows `Accepted=True ResolvedRefs=True`; the request with `Host: web2.lab.test` returns a `web2-...` pod name.
 - catch: the Gateway only accepts routes from its own namespace unless its listener allows others. That is why step 26 sets `gateway.listeners.web.namespacePolicy.from=All`.
 - ※ Why not Cilium's own Gateway API? It needs `kubeProxyReplacement=true`, and [step 9](#9-cilium-1204) set it to `false` (SYNTHESIS).
 - to remove Traefik later: `helm uninstall traefik -n traefik`; the Gateway API CRDs stay until you `kubectl delete -f` the same standard-install.yaml.
 - page: <https://kubernetes.io/docs/concepts/services-networking/gateway/> (and, allowed in the CKA, <https://gateway-api.sigs.k8s.io>)
-- status: **PROVEN 2026-10-19**, with Traefik and without changing Cilium's `kubeProxyReplacement`. Cilium's own Gateway API (which needs `kubeProxyReplacement=true`) was not tried; that would be a decision for the owner.
+- status: **PROVEN 2026-10-19** on Gateway API 1.6.1 and Traefik chart 41.6.1; the 1.6.3 and 42.1.3 pins of step 26 are not yet run. It ran with Traefik and without changing Cilium's `kubeProxyReplacement`. Cilium's own Gateway API (which needs `kubeProxyReplacement=true`) was not tried; that would be a decision for the owner.
 
 #### 28. CoreDNS: read and change the Corefile (SN6)
 
-why: Every Service name you used (`hostnames`, `my-nginx.default.svc.cluster.local`) was answered by CoreDNS. Its settings live in a ConfigMap called the Corefile. When names fail, this is where you look.
+When names fail, this is where you look.
 
 ```bash
 kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}'      # read it; compare with the page's default
@@ -954,6 +970,7 @@ kubectl delete pod dnsutils
 ```
 
 - ※ Look for the `forward . /etc/resolv.conf` line (it is in the page's default Corefile): names outside the cluster go to the DNS servers CoreDNS got from the node. That is why [step 3](#3-dns-that-pods-can-use) had to fix the node's DNS first.
+- why: Every Service name you used (`hostnames`, `my-nginx.default.svc.cluster.local`) was answered by CoreDNS. Its settings live in a ConfigMap called the Corefile.
 - expect: within about a minute (the `reload` plugin re-reads the ConfigMap; the page says to allow up to two minutes), the CoreDNS logs show `"A IN kubernetes.default.svc.cluster.local. udp ..." NOERROR`.
 - also read: the page's stub-domain example (`consul.local:53 { forward . <dns server> }`) sends one domain to its own DNS server. It was not tried: there is no second DNS server to send it to.
 - catch: if you restore the ConfigMap from a saved YAML file, `kubectl replace` fails with "the object has been modified". Edit it, or remove `resourceVersion` from the saved file first.
@@ -962,7 +979,7 @@ kubectl delete pod dnsutils
 
 #### 29. Deployments: rolling update and rollback (WS1)
 
-why: You will change apps: new versions, new settings. A Deployment swaps pods a few at a time and keeps the old ones serving until the new ones work. If the new version is bad, one command rolls back.
+If the new version is bad, one command rolls back.
 
 ```bash
 kubectl apply -f https://k8s.io/examples/controllers/nginx-deployment.yaml          # 3 pods, nginx:1.14.2, RollingUpdate 25%/25%
@@ -981,13 +998,14 @@ kubectl delete deploy nginx-deployment
 ```
 
 - ※ `rollout status` is the same check [step 9](#9-cilium-1204) used to wait for Cilium and CoreDNS.
+- why: You will change apps: new versions, new settings. A Deployment swaps pods a few at a time and keeps the old ones serving until the new ones work.
 - expect: after the bad update, 3 pods keep serving (the rolling update never takes away more than 25%); after `undo`, the image is `nginx:1.16.1` and the rollout completes.
 - page: <https://kubernetes.io/docs/concepts/workloads/controllers/deployment/>
 - status: **PROVEN 2026-10-19**.
 
 #### 30. ConfigMaps and Secrets (WS2)
 
-why: Keep settings out of the container image, so one image runs anywhere with different settings. ConfigMaps hold normal settings; Secrets hold passwords and keys. Both reach the app as environment variables or as files.
+Both reach the app as environment variables or as files.
 
 ```bash
 kubectl create configmap special-config --from-literal=special.how=very
@@ -1010,6 +1028,7 @@ kubectl delete pod secret-test-pod env-single-secret; kubectl delete secret test
 
 - ※ Secrets are stored in etcd ([step 11](#11-backup-and-restore)), unencrypted by default (source: <https://kubernetes.io/docs/concepts/configuration/secret/>). That is one reason the backup bundle is encrypted.
 - ※ You already used a ConfigMap in [step 21](#21-kustomize-ca6) (`configMapGenerator`).
+- why: Keep settings out of the container image, so one image runs anywhere with different settings. ConfigMaps hold normal settings; Secrets hold passwords and keys.
 - expect: the values in the comments.
 - note: the proof used the page's own example password; the value does not matter.
 - page: <https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/> ; <https://kubernetes.io/docs/tasks/inject-data-application/distribute-credentials-secure/>
@@ -1017,7 +1036,7 @@ kubectl delete pod secret-test-pod env-single-secret; kubectl delete secret test
 
 #### 31. Probes and self-healing (WS4)
 
-why: A running process is not always a working app. Probes let the kubelet check: a failed liveness probe restarts the container; a failed readiness probe keeps the pod out of its Service until it is ready. A Deployment also replaces pods that disappear.
+A Deployment also replaces pods that disappear.
 
 ```bash
 kubectl apply -f https://k8s.io/examples/pods/probe/exec-liveness.yaml          # removes its health file after 30 s
@@ -1034,13 +1053,14 @@ kubectl delete deploy heal
 ```
 
 - ※ "Out of its Service" means out of the EndpointSlice you read in [step 16](#16-drill-c-a-service-with-a-wrong-selector-ts5).
+- why: A running process is not always a working app. Probes let the kubelet check: a failed liveness probe restarts the container; a failed readiness probe keeps the pod out of its Service until it is ready.
 - expect: `liveness-exec` restarted after about 75 s; `liveness-http` restarted 3 times in 75 s with "statuscode: 500"; `goproxy` stays Ready; the Deployment is back to 2 pods within seconds.
 - page: <https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/> ; <https://kubernetes.io/docs/concepts/workloads/controllers/deployment/>
 - status: **PROVEN 2026-10-19**.
 
 #### 32. Requests, limits, quotas, node affinity, taints (WS5)
 
-why: The scheduler decides where each pod runs. It looks at what the pod asks for (requests), what a namespace may use (quotas), which nodes the pod wants (affinity), and which nodes push pods away (taints). When a pod is stuck `Pending`, one of these is usually why.
+When a pod is stuck `Pending`, one of these is usually why.
 
 - ※ The owner's reminder ([run-through notes](#how-to-read-this-runbook)): namespaces group things (names, access, quotas); they don't decide where pods run. Placement goes on the app (label + nodeSelector, taint + toleration), naming a role like `site=vps`, so a node can be swapped by moving the label. Plan both here, before real apps.
 
@@ -1068,14 +1088,13 @@ kubectl delete pod taint-test
 
 - ※ You already removed one taint: the control-plane taint in [step 10](#10-single-node-scheduling-and-a-smoke-test). Same mechanism.
 - ※ Without a scheduler, pods stay Pending with no message at all. You saw that in [step 15](#15-drill-b-a-broken-static-pod-manifest-ts2).
+- why: The scheduler decides where each pod runs. It looks at what the pod asks for (requests), what a namespace may use (quotas), which nodes the pod wants (affinity), and which nodes push pods away (taints).
 - expect: quota used shows `requests.memory 600Mi`; the second pod is `Forbidden: exceeded quota: mem-cpu-demo`; the affinity and taint pods are Pending with the messages above, then Running once the label is added or the taint removed.
 - note: with one node, affinity and taints can only show "Pending or Running". Spreading pods across nodes needs more nodes.
 - page: <https://kubernetes.io/docs/tasks/administer-cluster/manage-resources/quota-memory-cpu-namespace/> ; <https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/> ; <https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes-using-node-affinity/>
 - status: **PROVEN 2026-10-19**.
 
 #### 33. HorizontalPodAutoscaler (WS3)
-
-why: Load goes up and down. An autoscaler adds pods when CPU is high and removes them when it falls, so you don't have to watch.
 
 Needs metrics-server (step 13).
 
@@ -1092,6 +1111,7 @@ kubectl delete hpa php-apache; kubectl delete -f https://k8s.io/examples/applica
 ```
 
 - ※ The CPU numbers come from the metrics-server you set up in [step 13](#13-metrics-server-and-kubectl-top-ts3). The autoscaler compares them to the pod's CPU request, the same request as in [step 32](#32-requests-limits-quotas-node-affinity-taints-ws5).
+- why: Load goes up and down. An autoscaler adds pods when CPU is high and removes them when it falls, so you don't have to watch.
 - expect: within about a minute of load, the HPA scales up (proof: 1 → 4 → 5 → 7 replicas, CPU near the 50% target).
 - note: `--cpu=50%` is the 1.37 form used by the page; older pages say `--cpu-percent=50`.
 - page: <https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale-walkthrough/>
@@ -1099,7 +1119,7 @@ kubectl delete hpa php-apache; kubectl delete -f https://k8s.io/examples/applica
 
 #### 34. PersistentVolume and PersistentVolumeClaim, access modes, reclaim policy (ST3, ST2)
 
-why: A container's own files are lost when it restarts (volumes page). Data that must survive needs a volume. A PersistentVolume (PV) is the storage; a PersistentVolumeClaim (PVC) is a pod's request for it. The pod asks for a claim, not a disk, so the app does not care where the storage lives.
+A PersistentVolume (PV) is the storage; a PersistentVolumeClaim (PVC) is a pod's request for it. The pod asks for a claim, not a disk, so the app does not care where the storage lives.
 
 A `hostPath` volume: a folder on the node. Fine on one node for practice, not for real data.
 
@@ -1159,6 +1179,7 @@ kubectl get pv task-pv-volume                              # Available: a new cl
 kubectl delete pv task-pv-volume; rm -rf /mnt/data
 ```
 
+- why: A container's own files are lost when it restarts (volumes page). Data that must survive needs a volume.
 - expect: as the comments say. A 500Mi claim binds the 1Gi volume (a claim gets a volume at least as big as it asks for).
 - note: access modes are RWO (one node read-write), ROX, RWX and RWOP (one pod). Reclaim policies: `Retain` keeps the volume, `Delete` deletes it with its storage, `Recycle` is deprecated.
 - note: the old task page "Configure a Pod to Use a PersistentVolume for Storage" is gone (404, LEDGER P30); this step uses the concept page.
@@ -1168,7 +1189,7 @@ kubectl delete pv task-pv-volume; rm -rf /mnt/data
 
 #### 35. StorageClass and dynamic provisioning (ST1)
 
-why: In step 34 you made the volume by hand before the claim. A StorageClass describes a kind of storage. With a provisioner behind it, a claim creates its own volume (dynamic provisioning). Without one, you still make volumes by hand, but you can practise the class settings.
+With a provisioner behind it, a claim creates its own volume (dynamic provisioning). Without one, you still make volumes by hand, but you can practise the class settings.
 
 The simple documented option: a StorageClass with **no provisioner** for `local` volumes. It shows `WaitForFirstConsumer` and a default class, but you still make each volume by hand.
 
@@ -1227,6 +1248,7 @@ rm -rf /mnt/local-disk1
 ```
 
 - ※ The PV's `nodeAffinity` is the same node affinity you practised in [step 32](#32-requests-limits-quotas-node-affinity-taints-ws5). `WaitForFirstConsumer` waits until the scheduler has placed the pod, so the volume and the pod end up on the same node.
+- why: In step 34 you made the volume by hand before the claim. A StorageClass describes a kind of storage.
 - expect: the claim (with no class named) gets the default class; it stays Pending until a pod uses it, then binds.
 - what is missing: **dynamic provisioning** (a claim that creates its own volume). With no provisioner, a second claim stays Pending ("didn't find available persistent volumes to bind"). Proving it needs a provisioner installed, which this runbook does not do (the task said no heavy storage). Picking one is a choice for the owner.
 - page: <https://kubernetes.io/docs/concepts/storage/storage-classes/> (section "Local") ; <https://kubernetes.io/docs/concepts/storage/dynamic-provisioning/>
@@ -1234,7 +1256,7 @@ rm -rf /mnt/local-disk1
 
 #### 36. High availability and `kubeadm join` (CA5, CA3)
 
-why: One control plane is one point of failure. High availability runs three or more (source: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/ha-topology/>), so the cluster keeps going when one dies. This needs more machines, so here you only read the commands.
+This needs more machines, so here you only read the commands.
 
 - **Needs more machines, not on this VPS.** `kubeadm join` needs a second machine.
 - **Before a second node joins over the tailnet (NOT PROVEN):** `devices=tailscale0` (step 9) does not choose the VXLAN path. Cilium's tunnel goes to each node's Kubernetes address, and the kubelet takes the node's default IPv4 address unless `--node-ip` is set (sources: Cilium helm-values.rst `devices`; kubelet reference; the CNI and lab networking research batches). On a node whose default route is the internet or the home LAN, set the tailnet address before `init` or `join`: `echo "KUBELET_EXTRA_ARGS=--node-ip=$(tailscale ip -4)" > /etc/sysconfig/kubelet`. With home nodes on the LAN and the VPS on the tailnet only, every node needs its tailnet address here, or the home side needs a route to the tailnet; that is a design choice for the first two-node build. A highly-available control plane needs three or more control-plane machines and a load balancer in front of the API server.
@@ -1242,21 +1264,22 @@ why: One control plane is one point of failure. High availability runs three or 
 - ※ This is the payoff of [step 7](#7-endpoint-name): the endpoint is a name, so more control planes can stand behind it later. And [step 4](#4-firewall-for-kubernetes-and-cilium-tailnet-zone-only) already opened etcd's and Cilium's ports on the tailnet for other nodes.
 - The commands, for reading only: on the first node `kubeadm init --control-plane-endpoint <endpoint name>:6443 --upload-certs`; on each other control-plane node `kubeadm join <endpoint name>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash> --control-plane --certificate-key <key>`; on a worker, the same without `--control-plane --certificate-key`.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/> ; <https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-join/>
+- why: One control plane is one point of failure. High availability runs three or more (source: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/ha-topology/>), so the cluster keeps going when one dies.
 - status: **NOT PROVEN**: needs more machines.
 
 #### 37. Teardown
 
-why: Rebuilding often is how you prove the runbook, not memory, makes the cluster.
-
 - Rebuild from step 0. Delete the old node from the tailnet afterwards.
 - ※ Back to [step 0](#0-fresh-machine).
+
+why: Rebuilding often is how you prove the runbook, not memory, makes the cluster.
 
 ## Not in this version
 
 - **CSI driver** (synthesis gap row 9, CA7): not asked for in this round; nothing installed.
 - **LoadBalancer with a real address**: needs a load-balancer implementation (Cilium's LB-IPAM and L2 announcements, or MetalLB). A choice for the owner.
 - **Operators beyond cilium-operator** (CA8): not installed.
-- **Upgrading Cilium** to a release that tests Kubernetes 1.37: not done; Cilium 1.20.3 ran fine on 1.37.1 in the proof.
+- **Upgrading Cilium** to a release that tests Kubernetes 1.37: not done; Cilium 1.20.3 ran fine on 1.37.1 in the proof, and the 1.20.4 pin is not yet run.
 
 ## Where the manual runbook stops
 
@@ -1288,7 +1311,7 @@ Checked 2026-10-19. Every page below was fetched that day.
 
 - **kubernetes.io:** [install-kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/) (swap, SELinux, exclude line, kubelet crashloop), [create-cluster-kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/) (endpoint, pod range overlap, CoreDNS waits for a CNI, control-plane taint, etcd backups), [container-runtimes](https://kubernetes.io/docs/setup/production-environment/container-runtimes/) (ip_forward, cgroup driver), [ports-and-protocols](https://kubernetes.io/docs/reference/networking/ports-and-protocols/), [kube-proxy](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-proxy/) (10256), [feature-gates](https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/) (KubeletCgroupDriverFromCRI), [kubeadm-init](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/), [troubleshooting-kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/troubleshooting-kubeadm/), [kubeadm-reconfigure](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-reconfigure/), [kubelet-integration](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubelet-integration/), [kubeadm-certs](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/), [kubeadm-upgrade](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/), [releases](https://kubernetes.io/releases/), [components](https://kubernetes.io/docs/concepts/overview/components/), [network model](https://kubernetes.io/docs/concepts/services-networking/), [DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/), [dns-custom-nameservers](https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/), [dns-debugging-resolution](https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/), [network-policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/), [logging](https://kubernetes.io/docs/concepts/cluster-administration/logging/), [static-pod](https://kubernetes.io/docs/tasks/configure-pod-container/static-pod/), [debug-cluster](https://kubernetes.io/docs/tasks/debug/debug-cluster/), [ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/), [Ingress NGINX retirement](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/), [secret](https://kubernetes.io/docs/concepts/configuration/secret/), [volumes](https://kubernetes.io/docs/concepts/storage/volumes/), [ha-topology](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/ha-topology/).
 - **Other projects' docs:** [Cilium 1.20 system requirements](https://docs.cilium.io/en/v1.20/operations/system_requirements/) (8472/udp, 4240/tcp); [containerd RELEASES.md](https://github.com/containerd/containerd/blob/main/RELEASES.md) and [snapshotters](https://github.com/containerd/containerd/blob/main/docs/snapshotters/README.md); [metrics-server README](https://github.com/kubernetes-sigs/metrics-server); [dnf versionlock](https://dnf-plugins-core.readthedocs.io/en/latest/versionlock.html); [RHEL 10, changing SELinux states](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_selinux/changing-selinux-states-and-modes); Linux kernel [overlayfs](https://docs.kernel.org/filesystems/overlayfs.html) and [ip-sysctl](https://docs.kernel.org/networking/ip-sysctl.html) (bridge-nf-call-iptables).
-- **Proof files:** PROOF-RUN-1.md to PROOF-RUN-4.md, SELINUX-TRIAL-LEVEL1.md, research/cka-runbook/SYNTHESIS.md (exam facts).
+- **Proof files:** PROOF-RUN-1.md to PROOF-RUN-4.md, SELINUX-TRIAL-LEVEL1.md, the CKA research batch's synthesis (exam facts).
 - **Measured on the proof node** (read only, 2026-10-19, before its rebuild): listening ports (`ss`); Cilium in VXLAN tunnel mode; tailscale0 MTU 1280; overlay mounts and `bridge-nf-call-iptables = 1`; the kubelet log line "Using cgroup driver setting received from the CRI runtime".
 - **Not sourced:** step 8's note that the node is not Ready before a CNI is installed (no page or proof file says it).
 
