@@ -4,7 +4,7 @@ title: IP address plan
 status: active
 scope: every private IPv4 and IPv6 range used by the home lab, VPS providers, clouds and Kubernetes clusters
 owner-system: 8 Platform
-why: Jon said yes to the proposed pod range 10.244.0.0/16 on 2026-10-22 at 01:54 UTC, to layout A (2nd number = place) at 02:50 UTC, to the numbers v0.2 at 04:32 UTC, to keeping ranges in this repo and machine addresses out of it at 04:47 UTC, to the load-balancer reserve at 05:25 UTC, and to the IPv6 option "plan now, switch on later" at 06:13 UTC, in the project's IP address plan work
+why: Jon said yes to the proposed pod range 10.244.0.0/16 on 2026-10-22 at 01:54 UTC, to layout A (2nd number = place) at 02:50 UTC, to keeping ranges in this repo and machine addresses out of it at 04:47 UTC, to the load-balancer reserve at 05:25 UTC, and to the IPv6 option "plan now, switch on later" at 06:13 UTC, in the project's IP address plan work
 follows: [RFC 1918 private IPv4, RFC 6598 shared address space (avoided), RFC 4193 unique local IPv6, RFC 4291 IPv6 addressing (/64 per link), RFC 7381 enterprise IPv6 deployment, Azure IP planning guide (IPv6 subnets exactly /64), Kubernetes dual-stack]
 check: none yet in this repo; an overlap check script exists outside it, and where scripts live here is not decided yet
 accepted-evidence:
@@ -26,7 +26,7 @@ The key words "MUST", "MUST NOT", "SHOULD" and "MAY" in this document are to be 
 ### IPv4 shape
 
 1. Every private IPv4 range MUST come from `10.0.0.0/8`.
-2. The 2nd number MUST be the place. Each place owns a /12 (16 values of the 2nd number).
+2. The 2nd number MUST be the place. Which number each place gets is not chosen yet; the letters H, V and A below stand for them.
 3. The 3rd number MUST be the environment band: 10-19 dev, 20-29 QA, 30-39 prod, 90-99 shared. At home the 3rd number MUST also be the VLAN ID.
 4. A new place, VLAN or environment band MUST be added to the tables below, with Jon's approval, before it is used.
 
@@ -34,36 +34,33 @@ The key words "MUST", "MUST NOT", "SHOULD" and "MAY" in this document are to be 
 
 | Range | Place | Notes |
 |---|---|---|
-| `10.0.0.0/10`, `10.64.0.0/11` (10.0-10.95) | kept empty | MUST NOT be used. Common product defaults sit here (for example AKS `10.0.0.0/16`, k3s `10.42.0.0/16` and `10.43.0.0/16`). |
 | `10.96.0.0/12` | Kubernetes Services | Cluster 1 Services. |
-| `10.112.0.0/12` | on-prem sites | Home lab site `10.112.0.0/16`. |
-| `10.128.0.0/12` | VPS providers | First provider `10.128.0.0/16`, for private ranges on the VPS (for example container networks). |
-| `10.144.0.0/12` | Azure | Region 1 reservation `10.144.0.0/16`. A VNet is a /24 to /20 cut from it, never a /16. |
-| `10.160.0.0/12` | AWS | Later. |
-| `10.176.0.0/12` | Google Cloud | Later. |
-| `10.192.0.0/11`, `10.224.0.0/12` | spare | |
+| `10.H.0.0/16` | home lab | H not chosen yet. |
+| `10.V.0.0/16` | VPS providers | V not chosen yet. For private ranges on the VPS (for example container networks). |
+| `10.A.0.0/16` | Azure | A not chosen yet. A VNet is a /24 to /20 cut from it, never a /16. |
+| AWS, Google Cloud | later | Not chosen yet. |
 | `10.240.0.0/12` | Kubernetes pods, all clusters | Cluster 1 pods `10.244.0.0/16`. `10.245.0.0/16` kept free for a network plugin migration. |
 
 ### Home lab VLANs
 
 | VLAN | Range | Use |
 |---|---|---|
-| 10 | `10.112.10.0/24` | dev: Kubernetes node VMs |
-| 11 | `10.112.11.0/24` | dev: lab VMs |
-| 30 | `10.112.30.0/24` | prod: Kubernetes node VMs |
-| 90 | `10.112.90.0/24` | shared: management |
-| 91 | `10.112.91.0/24` | shared: IoT and guest (after the hardware firewall) |
+| 10 | `10.H.10.0/24` | dev: Kubernetes node VMs |
+| 11 | `10.H.11.0/24` | dev: lab VMs |
+| 30 | `10.H.30.0/24` | prod: Kubernetes node VMs |
+| 90 | `10.H.90.0/24` | shared: management |
+| 91 | `10.H.91.0/24` | shared: IoT and guest (after the hardware firewall) |
 
-On each Kubernetes node VLAN, `.224/27` (`10.112.10.224/27`, `10.112.30.224/27`) is for load-balancer addresses. DHCP MUST NOT hand out addresses from it, so DHCP pools end before `.224`.
+On each Kubernetes node VLAN, `.224/27` (`10.H.10.224/27`, `10.H.30.224/27`) is for load-balancer addresses. DHCP MUST NOT hand out addresses from it, so DHCP pools end before `.224`.
 
 ### Azure environments
 
 | Range | Use |
 |---|---|
-| `10.144.10.0/24` | dev VNet |
-| `10.144.20.0/24` | QA VNet |
-| `10.144.30.0/24` | prod VNet |
-| `10.144.92.0/22` | connectivity hub (shared) |
+| `10.A.10.0/24` | dev VNet |
+| `10.A.20.0/24` | QA VNet |
+| `10.A.30.0/24` | prod VNet |
+| `10.A.92.0/22` | connectivity hub (shared) |
 
 ### Ranges that MUST NOT be used
 
@@ -91,7 +88,7 @@ This repository is public. A single machine's address MUST NOT be written here. 
 
 ## Example that passes
 
-A new dev lab VM on VLAN 11 takes an address from `10.112.11.0/24` by DHCP, below `.224`. The address itself is not written in this repository.
+A new dev lab VM on VLAN 11 takes an address from `10.H.11.0/24` by DHCP, below `.224`. The address itself is not written in this repository.
 
 ## Not covered here
 
@@ -106,4 +103,4 @@ A new dev lab VM on VLAN 11 takes an address from `10.112.11.0/24` by DHCP, belo
   2. A Corrections section added, holding this entry.
 
   Approval: the owner, 2026-10-24T01:49:14Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNHByoYueesp8x5JHxzxVb35), naming PR #34 and head ab5af17; approved commit ab5af17c1071414e369d7f83014c10e6fb0e2214. Check: the drafting agent read the message at 2026-10-24T01:49Z and confirmed it names that PR and head.
-- **2026-10-24**: the reason for the kept-empty block was reworded to product defaults only, per Jon at 05:51 UTC. No numbers change.
+- **2026-10-24**: the place numbers (2nd number per place) and the kept-empty block are removed because they did not come from the owner; they are not chosen yet. Per the owner at 05:56 UTC.
