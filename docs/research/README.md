@@ -21,3 +21,4 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0016 | [0016-give-records-an-evidence-file-and-neutral-approval.md](0016-give-records-an-evidence-file-and-neutral-approval.md) |
 | D-0018 | [0018-respell-research-method-ids.md](0018-respell-research-method-ids.md) |
 | D-0019 | [0019-check-docs-on-every-pr.md](0019-check-docs-on-every-pr.md) |
+| D-0020 | [0020-number-backlog-items-bl-nnnn.md](0020-number-backlog-items-bl-nnnn.md) |
