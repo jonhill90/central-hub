@@ -34,7 +34,7 @@ The key words "MUST", "MUST NOT", "SHOULD" and "MAY" in this document are to be 
 
 | Range | Place | Notes |
 |---|---|---|
-| `10.0.0.0/10`, `10.64.0.0/11` (10.0-10.95) | kept empty | MUST NOT be used. Common product defaults and other networks sit here. |
+| `10.0.0.0/10`, `10.64.0.0/11` (10.0-10.95) | kept empty | MUST NOT be used. Common product defaults sit here (for example AKS `10.0.0.0/16`, k3s `10.42.0.0/16` and `10.43.0.0/16`). |
 | `10.96.0.0/12` | Kubernetes Services | Cluster 1 Services. |
 | `10.112.0.0/12` | on-prem sites | Home lab site `10.112.0.0/16`. |
 | `10.128.0.0/12` | VPS providers | First provider `10.128.0.0/16`, for private ranges on the VPS (for example container networks). |
@@ -106,3 +106,4 @@ A new dev lab VM on VLAN 11 takes an address from `10.112.11.0/24` by DHCP, belo
   2. A Corrections section added, holding this entry.
 
   Approval: the owner, 2026-10-24T01:49:14Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNHByoYueesp8x5JHxzxVb35), naming PR #34 and head ab5af17; approved commit ab5af17c1071414e369d7f83014c10e6fb0e2214. Check: the drafting agent read the message at 2026-10-24T01:49Z and confirmed it names that PR and head.
+- **2026-10-24**: the reason for the kept-empty block was reworded to product defaults only, per Jon at 05:51 UTC. No numbers change.
