@@ -13,7 +13,7 @@ accepted-evidence:
   approved-commit: 5196b18f87c1b6a209291e62114fd5479833ade1
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNV1uvM92X9ekDHTkxTf1hLf
   approval-names: "PR #17 and head 5196b18, in the message itself"
-  check: the drafting agent read the message in the IP address plan thread at 2026-10-22T07:12Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
+  check: the drafting agent read the message in the IP address plan thread at 2026-10-22T07:12Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: PR #17, commit e87667b
 ---
 
@@ -38,7 +38,7 @@ The key words "MUST", "MUST NOT", "SHOULD" and "MAY" in this document are to be 
 | `10.H.0.0/16` | home lab | H not chosen yet. |
 | `10.V.0.0/16` | VPS providers | V not chosen yet. For private ranges on the VPS (for example container networks). |
 | `10.A.0.0/16` | Azure | A not chosen yet. A VNet is a /24 to /20 cut from it, never a /16. |
-| AWS, Google Cloud | later | Not chosen yet. |
+| not chosen yet | AWS, Google Cloud | Later. |
 | `10.240.0.0/12` | Kubernetes pods, all clusters | Cluster 1 pods `10.244.0.0/16`. `10.245.0.0/16` kept free for a network plugin migration. |
 
 ### Home lab VLANs
@@ -69,7 +69,7 @@ On each Kubernetes node VLAN, `.224/27` (`10.H.10.224/27`, `10.H.30.224/27`) is 
 | `100.64.0.0/10` | Tailscale addresses |
 | `169.254.0.0/16` | link-local |
 | `172.17.0.0/16` to `172.31.0.0/16` | container defaults; AKS rejects 172.30-31 |
-| the home router's own LAN | kept in the secret store, not written here |
+| the home router's own LAN | kept in the private store (not chosen yet), not written here |
 | `192.0.2.0/24`, `198.18.0.0/15` | documentation and benchmarking |
 
 A product whose default range lands inside this plan (for example the AKS Service default `10.0.0.0/16`, the k3s defaults `10.42.0.0/16` and `10.43.0.0/16`, or the Cilium default cluster pool `10.0.0.0/8`) MUST be set to a range from this plan when it is installed.
@@ -95,3 +95,4 @@ A new dev lab VM on VLAN 11 takes an address from `10.H.11.0/24` by DHCP, below 
 - Which tool answers for the load-balancer addresses. That waits for the ingress decision.
 - Per-machine addresses and DHCP reservations. They live outside this public repository.
 - Public addresses from providers.
+- When the place numbers are chosen, no range in this plan may overlap another range in this plan.

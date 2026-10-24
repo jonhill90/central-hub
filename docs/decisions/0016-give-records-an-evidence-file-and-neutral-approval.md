@@ -27,7 +27,7 @@ revisit-when: a knowledge system is chosen that should hold research and approva
 
 The research behind each decision record lives in a private research repository and in project files. This repository is public. Of the 14 records on `main` at 05a48ff, 13 point to research a public reader cannot open: the private repository returns "not found" to an outside request. That repository is also expected to go away once the knowledge and documentation systems exist (D-0012, "Not decided here").
 
-The records also quoted the owner's chat messages word for word. 13 of 14 record bodies did so, and every `accepted-evidence` block held a `quote:` field, as D-0001 then required.
+The records also quoted the owner's chat messages word for word. 13 of 14 record bodies did so, and every `accepted-evidence` block held a `quote:` field.
 
 On 2026-10-23 the owner asked for two changes. The research the records rely on should be included in this repository, with nothing invented. The records should stop quoting the owner, and should state what the owner asked or decided in a neutral, professional tone. An earlier request from 2026-10-12, to remove references to private, machine-local material from the records, points the same way. The same day the owner asked for evidence files to sit in a directory of their own, so that the decisions folder holds only records, and chose `docs/research/` at 04:33 UTC on a decision card that offered four places.
 

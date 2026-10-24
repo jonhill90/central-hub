@@ -14,16 +14,19 @@ PR #42's approval facts and merge commit are added after it merges (D-0006 step 
 - 2026-10-24 · D-0001 field contract, D-0019 check 1 · the `amends` and `amended-by` fields, which D-0006 added and no record uses now, are removed · follows the first line of this part
 - 2026-10-24 · D-0003 rule 6 · a decision record folded into another keeps its number: it is never reused, and it is listed below · the owner's request of 2026-10-24, 05:52 to 05:57 UTC
 - 2026-10-24 · D-0013, D-0017, D-0021 · folded into D-0012 (runbook steps), D-0016 rule 1 (`docs/research/`) and D-0019 rule 4 (linter settings), with their rules, reasons, considered options and revisit conditions; the files are removed · the same request
-- 2026-10-24 · D-0003 rule 2 · a new family, or a change to a row (its home, who numbers it, or closing the family), is made by its own record, whose PR updates the row in D-0003; D-0003 is no longer superseded for it · the same request
+- 2026-10-24 · D-0003 rule 2 · a new family, or a change to a row (its home, who numbers it, or closing the family), is made by its own record, whose PR updates the row in D-0003 · the same request
 - 2026-10-24 · D-0004 rule 5 · for a decision number, the tombstone is a line in the numbers list below, because the decisions index is generated (D-0001 "Index") · follows D-0003 rule 6 above
 - 2026-10-24 · D-0010 rule 4 · the three replaced Research drafts no longer need a header line naming what replaced them · the owner's request of 2026-10-24, 05:52 to 05:57 UTC, for no retire or replace notes
-- 2026-10-24 · D-0015 · the rename scope is explicit batch citations with an old code, and its proof is 0 such citations · the owner's choice on the 2026-10-23 04:34 UTC decision card
+- 2026-10-24 · D-0015 · the rename scope is explicit batch citations with an old code, and its proof is 0 such citations · the owner chose "Rename clear batch citations" at 2026-10-23T04:34:26Z on the decision card asked at 2026-10-23T04:32:58Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNC3LPUH1tBJdWGwRMxxkLn9)
 - 2026-10-24 · D-0007, evidence 0007 · the reason for the PRD is the owner's yes to the 2026-10-19 decision card for a one-page PRD and frozen specs; the project brief is named as the coordinator agent's · the brief was agent-written, and the owner asked on 2026-10-24 that premises be checked
 - 2026-10-24 · PRD goal 1 · start with one cluster in the home lab on Proxmox; one rented VPS joins it as an outside worker; cloud sites later · follows the owner's 2026-10-22 answer on the VPS's role
 - 2026-10-24 · PRD goal 6 · everything is controllable from this repo; one-time console steps at the start are fine · follows the owner's 2026-10-14 statement on click-ops
 - 2026-10-24 · D-0002 · the context, diagram and deployment target start with the home-lab cluster, as PRD goal 1 · follows the 2026-10-22 answer above
 - 2026-10-24 · D-0011 · the "no click-ops" driver and its context read as PRD goal 6: controllable from this repo, one-time console steps at the start, and each job done by hand first (D-0012); the `hosts/` decision is unchanged · follows the 2026-10-14 statement above
 - 2026-10-24 · D-0012 · a `manual` runbook may cover any job done by hand; the CKA scope applies to Kubernetes jobs · follows the owner's 2026-10-19 02:43 UTC request for a manual runbook first for each job, then an automated one
+- 2026-10-24 · D-0003, D-0009, D-0014, D-0015, D-0018, D-0020 · the registry chain is unwound: D-0003 holds the family registry and its rules as current text; D-0003, D-0009, D-0014, D-0015 and D-0018 go from superseded to accepted, and D-0020 stays accepted; none has a supersede link, and each keeps only the family or rule change it adds, with its prefix check · the owner's request of 2026-10-24, 05:52 to 05:57 UTC, that records read as current truth with no supersede chains
+- 2026-10-24 · STD-0002 rule 2 and its tables · which number each place gets is not chosen yet, and H, V and A stand for them; the place numbers, the "each place owns a /12" rule, the kept-empty block `10.0.0.0/10` and `10.64.0.0/11`, the spare rows and the approval fact for the numbers are removed; the home router's LAN range is moved out of the public file; one open item is added: when the place numbers are chosen, no range in the plan may overlap another range in it · the owner voided the old place numbers, and asked for the home LAN range to be kept out of the public file, on 2026-10-24 between 05:40 and 05:56 UTC
+- 2026-10-24 · Activation gate item 4 (AGENTS.md, CLAUDE.md), PR template · "a pinned, no-writer Flux install" now reads "a pinned, no-writer GitOps engine install (the engine is not chosen yet)", and the template asks what "the GitOps tool" will change · the engine was never put to the owner as a question, so no record chooses it
 - 2026-10-24 · D-0019 rule 3 and check 4 · the word-check gate adds an owner-name rule (no first name under `docs/`, any case) beside the owner-quote rule, and both now gate every Markdown file a PR adds or changes, edited decision records and evidence files included; Markdown style still skips edits to existing records · records and evidence files are now edited in place (first line of this part), and D-0016 rule 5 says they never quote or name the owner
 
 ## Folded and reused numbers
@@ -52,9 +55,6 @@ These numbers have no file and no row in the index. They are never used again (D
 
 The lines below are PR #42's; its approval facts and merge commit are added after it merges.
 
-- 2026-10-24 · STD-0002 · place numbers, the kept-empty block and the spare rows removed, and the home LAN range moved out of the public file, per the owner's request of 2026-10-24 05:51 and 05:56 UTC; first names replaced with "the owner" · PR #42
-- 2026-10-24 · D-0003 · the family registry and rules brought to the current text from D-0009, D-0014, D-0015, D-0018 and D-0020; status back to accepted · PR #42
-- 2026-10-24 · D-0009, D-0014, D-0015, D-0018, D-0020 · restated rules and supersede links removed; each keeps the family or rule change it adds, with its prefix check; all accepted · PR #42
 - 2026-10-24 · D-0015 · the 2026-10-23 04:16 UTC card described without quoting it · PR #42
 - 2026-10-24 · D-0001 · approval block and index text brought to the current rules (D-0016; the generated index) · PR #42
 - 2026-10-24 · D-0019 · rule 4 states where the linter settings live, as D-0021 decided · PR #42
@@ -68,7 +68,7 @@ The lines below are PR #42's; its approval facts and merge commit are added afte
 - 2026-10-24 · D-0011, D-0012 · STD-0002 named without the old "proposed" note · PR #42
 - 2026-10-24 · D-0003 · the 2026-10-12 clash finding lists `SR` as it was measured · PR #42
 - 2026-10-24 · D-0006, D-0014 · sentences that narrated earlier wording removed · PR #42
-- 2026-10-24 · D-0001 to D-0020, STD-0001, decisions and standards READMEs, runbooks README · the owner named by role, not by first name, in the text and in `decision-makers` (D-0016 rule 5) · PR #42
-- 2026-10-24 · D-0003 to D-0020, STD-0001 · `merged` names the merge commit, and `check` no longer refers to the removed quote · PR #42
+- 2026-10-24 · D-0001 to D-0020, STD-0001, STD-0002, decisions and standards READMEs, runbooks README · the owner named by role, not by first name, in the text and in `decision-makers` (D-0016 rule 5) · PR #42
+- 2026-10-24 · D-0003 to D-0020, STD-0001, STD-0002 · `merged` names the merge commit, and `check` no longer refers to the removed quote · PR #42
 - 2026-10-24 · D-0012, standards README, decisions README · D-0016 added to D-0012's related records; the `STD-` family cited at D-0003 rule 1; the index says where folded numbers are listed · PR #42
 - 2026-10-24 · D-0010 · blank lines added around two option headings (Markdown style) · PR #42
