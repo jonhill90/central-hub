@@ -26,9 +26,9 @@ revisit-when: the Activation gate passes; an ID family is referenced from outsid
 
 D-0003 rule 6 says "Never reuse, never delete" for every registered ID family, including `REQ` requirements.
 
-On 2026-10-13 the requirements register had a row, REQ-0021, that was a usage limit for one agent product. It broke two of the register's own rules: REQ-0008 (no vendor names) and REQ-0011 (everything replaceable). The owner dropped it at 04:23 UTC, because the system requirements should not name agent harnesses or vendors.
+On 2026-10-13 the requirements register had a row that was a usage limit for one agent product. It broke two of the register's own rules: REQ-0008 (no vendor names) and REQ-0011 (everything replaceable). The owner dropped it at 04:23 UTC, because the system requirements should not name agent harnesses or vendors.
 
-A new requirement (shared vocabulary) was then added as REQ-0022. The owner asked for the number REQ-0021 back (Central Hub project, Rules table thread, 2026-10-13 06:09 UTC), because the dropped row should never have been a rule and keeping the gap sat badly with building everything to be replaced. The reuse was done as a one-time exception in Research commit `f63ae969`. This record decides whether that exception becomes a rule, and on what conditions.
+The owner then asked for its number to go to the next new requirement (Central Hub project, Rules table thread, 2026-10-13 06:09 UTC), because the dropped row should never have been a rule and keeping the gap sat badly with building everything to be replaced. This record decides when a void entry's number may be reused, and on what conditions.
 
 ## Decision Drivers
 
@@ -40,7 +40,7 @@ A new requirement (shared vocabulary) was then added as REQ-0022. The owner aske
 ## Considered Options
 
 1. **Reuse void IDs during Foundation only, under conditions** (below).
-2. **Never reuse** (D-0003 rule 6 as written): revert REQ-0021 to REQ-0022.
+2. **Never reuse** (D-0003 rule 6 as written): the void number stays a gap.
 3. **Reuse any dropped ID** while early.
 
 ## Decision Outcome
@@ -78,7 +78,7 @@ Everything else in D-0003 stays in force, and rule 6 still applies to every case
 - Good: the tombstone and the search keep the reason for "never reuse" intact. Nobody following an earlier reference is misled without being told.
 - Bad: this goes against published practice. ARK, McMurry, OBO, PEP and DOORS all say never reuse (D-0003's [evidence](../research/0003-use-registered-id-families-and-file-qualified-labels.md), finding 2). McMurry's rule covers identifiers "generated and publicly advertised" (McMurry et al., reference 4 there), and Foundation IDs are not public in that sense. That reading is inferred, not quoted from a source.
 - Bad: one more condition for a reviewer to check.
-- Neutral: two IDs have been reused so far: D-0006 (listed in [`CORRECTIONS.md`](CORRECTIONS.md)) and REQ-0021. REQ-0021's search found 6 files that meant the void entry: the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md`, and the register's own Dropped entry. All 6 were updated or annotated. 3 frozen study files and 20 chat archives were left as records. Results reported to the owner in the Rules table thread, 2026-10-13 06:13 UTC.
+- Neutral: each reused number is listed in [`CORRECTIONS.md`](CORRECTIONS.md), with its search.
 
 ### Confirmation
 

@@ -15,7 +15,7 @@ accepted-evidence:
   approved-commit: f62845acd38deb7018acd8f96a2a484677976c8c
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN12EqNFjmi5fTVUJmrD9vhd
   approval-names: "PR #22 and head f62845a, in the message itself"
-  check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T03:46Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
+  check: the drafting agent read the message in the requirements register thread at 2026-10-23T03:46Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: PR #22 merged at 2026-10-23T03:50Z as 05a48ff, with this evidence commit on top of the approved commit
 revisit-when: the Activation gate passes (D-0003 rule 5 then stops ID changes); a search finds a requirement cited in another form; or a requirements tool is adopted that brings its own ID scheme
 ---

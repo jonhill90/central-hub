@@ -42,9 +42,10 @@ These IDs were changed during Foundation with the owner's approval (D-0003 rule 
 
 ## Folded and reused numbers
 
-These numbers have no file and no row in the index. They are never used again (D-0003 rule 6, D-0004).
+A folded decision number has no file and no row in the index, and is never used again (D-0003 rule 6). A reused number is a void entry's number given to a new item (D-0004).
 
 - D-0006 (reused) · first used by the PR #9 draft, a full restatement of D-0005, closed unmerged on 2026-10-16; the owner approved the reuse under D-0004 on 2026-10-16 at 08:25 UTC. The current D-0006 was accepted with PR #10: approved 2026-10-16T08:28:58Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNTJTUNZbcPsUxG7TCKiX23s), head 0ae0493; merged as 0517ccf
+- REQ-0021 (reused) · the void row was a usage limit for one agent product, dropped by the owner on 2026-10-13 at 04:23 UTC; at the owner's request (06:09 UTC) the next new requirement, shared vocabulary, took the number instead of `REQ-0022`, in Research commit `f63ae969`. The search found 6 files that meant the void entry (the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md` and the register's Dropped entry), and all 6 were updated or annotated; 3 frozen study files and 20 chat archives were left as records; reported to the owner in the Rules table thread at 06:13 UTC
 - D-0013 · folded into D-0012. It was accepted with PR #21: approved 2026-10-23T03:42:38Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNWc7Mzu6ZFvoYgnxsDKVyKh), head eb33bd7; merged as 5f9fa76
 - D-0017 · folded into D-0016 rule 1. It was accepted with PR #26: approved 2026-10-23T04:58:39Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNT1mFLf6eEyeGKAMDBbAKVd), head 5115dcd; merged as b852f90
 - D-0021 · folded into D-0019 rule 4. It was accepted with PR #41: approved 2026-10-24T06:21:57Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNAqUPkvQ7d3ptmgAjUaDB92), head c62cf99; merged as 8c1b65e
@@ -77,7 +78,7 @@ The lines below are PR #42's; its approval facts and merge commit are added afte
 - 2026-10-24 · evidence 0018 · the NIST source named as SP 800-53 Release 5.2.0, which added `SA-15(13)` · PR #42
 - 2026-10-24 · STD-0001 · sources added for the hostname limits · PR #42
 - 2026-10-24 · D-0011, D-0012 · STD-0002 named without the old "proposed" note · PR #42
-- 2026-10-24 · D-0003, D-0004, D-0009, evidence 0003 · wording that told of earlier IDs replaced by the current text: the clash finding's examples, the tombstone, the prefix check and the lifecycle finding · PR #42
+- 2026-10-24 · D-0003, D-0004, D-0009, D-0014, D-0015, evidence 0003 · wording that told of earlier IDs replaced by the current text: the clash finding's examples, D-0004's context, option 2 and tombstone (the REQ-0021 reuse is now a line in the numbers list), the prefix check, the lifecycle finding, and the thread name in two `check` fields · PR #42
 - 2026-10-24 · D-0006, D-0014, D-0016 · sentences that narrated earlier wording removed · PR #42
 - 2026-10-24 · D-0001 to D-0020, STD-0001, STD-0002, decisions and standards READMEs, runbooks README · the owner named by role, not by first name, in the text and in `decision-makers` (D-0016 rule 5) · PR #42
 - 2026-10-24 · D-0003 to D-0020, STD-0001, STD-0002 · `merged` names the merge commit, and `check` no longer refers to the removed quote · PR #42
