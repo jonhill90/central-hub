@@ -10,6 +10,8 @@ here=.github/docs-check
 
 front_matter() {
   python3 "$here/check_docs.py" .
+  # The decisions index and the standards register match the front matter (D-0001 "Index").
+  python3 "$here/gen_index.py" --check .
   bash "$here/tests/test_check_docs.sh"
 }
 

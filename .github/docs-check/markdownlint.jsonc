@@ -1,4 +1,4 @@
-// Markdown style check (D-0019 check 3, D-0021). run.sh passes this file with --config.
+// Markdown style check (D-0019 check 3 and rule 4). run.sh passes this file with --config.
 {
   "default": true,
   "MD013": false,                          // one line per paragraph; line length is noise in prose
