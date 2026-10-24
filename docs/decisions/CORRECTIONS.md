@@ -24,6 +24,7 @@ PR #42's approval facts and merge commit are added after it merges (D-0006 step 
 - 2026-10-24 · D-0002 · the context, diagram and deployment target start with the home-lab cluster, as PRD goal 1 · follows the 2026-10-22 answer above
 - 2026-10-24 · D-0011 · the "no click-ops" driver and its context read as PRD goal 6: controllable from this repo, one-time console steps at the start, and each job done by hand first (D-0012); the `hosts/` decision is unchanged · follows the 2026-10-14 statement above
 - 2026-10-24 · D-0012 · a `manual` runbook may cover any job done by hand; the CKA scope applies to Kubernetes jobs · follows the owner's 2026-10-19 02:43 UTC request for a manual runbook first for each job, then an automated one
+- 2026-10-24 · D-0019 rule 3 and check 4 · the word-check gate adds an owner-name rule (no first name under `docs/`, any case) beside the owner-quote rule, and both now gate every Markdown file a PR adds or changes, edited decision records and evidence files included; Markdown style still skips edits to existing records · records and evidence files are now edited in place (first line of this part), and D-0016 rule 5 says they never quote or name the owner
 
 ## Folded and reused numbers
 
