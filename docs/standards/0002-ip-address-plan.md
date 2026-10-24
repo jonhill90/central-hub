@@ -29,6 +29,7 @@ The key words "MUST", "MUST NOT", "SHOULD" and "MAY" in this document are to be 
 2. The 2nd number MUST be the place. Which number each place gets is not chosen yet; the letters H, V and A below stand for them.
 3. The 3rd number MUST be the environment band: 10-19 dev, 20-29 QA, 30-39 prod, 90-99 shared. At home the 3rd number MUST also be the VLAN ID.
 4. A new place, VLAN or environment band MUST be added to the tables below, with the owner's approval, before it is used.
+5. When the place numbers are chosen, a range in this plan MUST NOT overlap another range in this plan.
 
 ### IPv4 places
 
@@ -95,4 +96,3 @@ A new dev lab VM on VLAN 11 takes an address from `10.H.11.0/24` by DHCP, below 
 - Which tool answers for the load-balancer addresses. That waits for the ingress decision.
 - Per-machine addresses and DHCP reservations. They live outside this public repository.
 - Public addresses from providers.
-- When the place numbers are chosen, no range in this plan may overlap another range in this plan.
