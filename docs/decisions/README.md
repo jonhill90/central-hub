@@ -25,3 +25,4 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0018 | [Spell research method IDs RM-NNNN, store each method's number, and rename the old IDs everywhere](0018-respell-research-method-ids.md) | superseded | D-0001, D-0006, D-0015, D-0016 | 2026-10-23 |
 | D-0019 | [Check the docs on every PR, with front matter and inside links as gates, Markdown style on changed files, and word checks built from the glossary](0019-check-docs-on-every-pr.md) | accepted | D-0001, D-0012, D-0016, D-0017 | 2026-10-23 |
 | D-0020 | [Number every backlog item BL-NNNN, including open decisions, and rename the old row labels everywhere](0020-number-backlog-items-bl-nnnn.md) | accepted | D-0001, D-0006, D-0016, D-0018 | 2026-10-24 |
+| D-0021 | [Keep the docs linter settings under .github/, not in the repository root](0021-keep-linter-settings-under-github.md) | accepted | D-0008, D-0019 | 2026-10-24 |

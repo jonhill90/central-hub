@@ -31,7 +31,7 @@ markdown() {
   files=$(changed_md)
   if [ -z "$files" ]; then echo "markdown: no Markdown files changed"; return 0; fi
   # shellcheck disable=SC2086
-  "$here/node_modules/.bin/markdownlint-cli2" $files
+  "$here/node_modules/.bin/markdownlint-cli2" --config "$here/markdownlint.jsonc" $files
 }
 
 words() {
@@ -44,13 +44,13 @@ words() {
     return 1
   fi
   # Report only: every rule on every document. Findings never fail the run.
-  "$vale" --no-exit --output line docs AGENTS.md README.md SECURITY.md
+  "$vale" --config .github/vale/vale.ini --no-exit --output line docs AGENTS.md README.md SECURITY.md
   # Gate: the owner-quote rule (D-0016 rule 5) on changed files, except the approval template.
   local files
   files=$(changed_md | grep -v -x 'docs/specs/README.md' || true)
   if [ -z "$files" ]; then echo "words: no Markdown files changed"; return 0; fi
   # shellcheck disable=SC2086
-  "$vale" --output line --filter='.Name=="CentralHub.OwnerWords"' $files
+  "$vale" --config .github/vale/vale.ini --output line --filter='.Name=="CentralHub.OwnerWords"' $files
 }
 
 case "${1:-all}" in
