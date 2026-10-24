@@ -1,0 +1,8 @@
+# Generated from docs/glossary.md by .github/docs-check/gen_vale_terms.py. Do not edit.
+# Report only (D-0019 check 4): a deprecated glossary word.
+extends: substitution
+message: "Use '%s' instead of '%s' (docs/glossary.md)."
+level: warning
+ignorecase: true
+swap:
+  {}

@@ -10,6 +10,8 @@ permissions:
 env:
   LYCHEE_VERSION: "0.24.2"
   LYCHEE_SHA256: "1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a"
+  VALE_VERSION: "3.25.1"
+  VALE_SHA256: "4bf5c5176b682b1da0830f471584d3494f1c2e27ee3029e1ad6f6661d4962182"
 jobs:
   front-matter:            # check 1, gate
     if: github.event_name == 'pull_request'
@@ -51,6 +53,24 @@ jobs:
       - name: Install pinned Node packages
         run: npm ci --ignore-scripts --prefix .github/docs-check
       - run: .github/docs-check/run.sh markdown
+        env:
+          DOCS_BASE: HEAD^1
+
+  words:                   # check 4: glossary words report only; owner-quote rule is a gate on changed files
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2     # the PR merge commit and its first parent, the base
+      - name: Install Vale (pinned version and checksum)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/vale.tgz" "https://github.com/vale-cli/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz"
+          echo "${VALE_SHA256}  $RUNNER_TEMP/vale.tgz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/vale.tgz" -C "$RUNNER_TEMP" vale
+          echo "VALE=$RUNNER_TEMP/vale" >> "$GITHUB_ENV"
+      - run: .github/docs-check/run.sh words
         env:
           DOCS_BASE: HEAD^1
 
