@@ -57,7 +57,6 @@ This sets the Requirements row of D-0003's registry to `REQ-NNNN`. It also adds 
 - Every requirement has one ID, `REQ-NNNN`, with four digits. Its number is assigned only after the owner says yes to the wording, and it is the next free number.
 - A void requirement keeps a tombstone line in the register (D-0004 rule 5).
 - The register check (`check_register.py` in the Research repo, with its tests) fails on a requirement ID that is not in `REQ-NNNN` form, in the register or in the project instructions.
-- Project instructions that cite a requirement are drafted by the agent, approved by the owner and saved by the coordinator.
 
 ### Consequences
 

@@ -24,7 +24,7 @@ revisit-when: the Activation gate passes; the methods catalogue moves into a too
 
 ## Context and Problem Statement
 
-Research specs, ledgers and checks name the methods they use by an ID from the project's research methods catalogue, for example `RM-0033` for an independent check. The catalogue holds 122 methods, and 40 more are proposed. An agent made the first ID scheme, and the owner was never asked about it.
+Research specs, ledgers and checks name the methods they use by an ID from the project's research methods catalogue, for example `RM-0033` for an independent check. The catalogue holds 122 methods, and 40 more are proposed. An agent made up the method IDs, and the owner was never asked about them.
 
 Research batch RB-0075 (evidence: [../research/0018-number-research-methods-rm-nnnn.md](../research/0018-number-research-methods-rm-nnnn.md)) found:
 
@@ -60,8 +60,7 @@ This adds the Research methods row to D-0003's registry, and D-0003 rule 6 says 
 - A new method gets a number only after the owner says yes to adding it. RB-0055's 40 proposed methods have no number until then.
 - The Research repo copy is the only source. Scripts that read another copy are changed to read this one.
 - A check fails on a duplicate number, a number not in `RM-NNNN` form, or a cited ID with no catalogue row.
-- The research gate checks the method IDs in every new SPEC. Its hook runs from a setup script that the owner pastes by hand, so a change to the gate goes to the owner as a new setup script.
-- Project instructions that cite a method ID are drafted by the agent, approved by the owner and saved by the coordinator.
+- The research gate checks the method IDs in every new SPEC. Its hook runs from a setup script that the owner pastes by hand.
 
 ### Consequences
 

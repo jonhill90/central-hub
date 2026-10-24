@@ -28,7 +28,7 @@ D-0003 rule 6 says "Never reuse, never delete" for every registered ID family, i
 
 On 2026-10-13 the requirements register had a row that was a usage limit for one agent product. It broke two of the register's own rules: REQ-0008 (no vendor names) and REQ-0011 (everything replaceable). The owner dropped it at 04:23 UTC, because the system requirements should not name agent harnesses or vendors.
 
-The owner then asked for its number to go to the next new requirement (Central Hub project, Rules table thread, 2026-10-13 06:09 UTC), because the dropped row should never have been a rule and keeping the gap sat badly with building everything to be replaced. This record decides when a void entry's number may be reused, and on what conditions.
+The owner then asked for the new shared-vocabulary requirement to take its number (Central Hub project, Rules table thread, 2026-10-13 06:09 UTC), because the dropped row should never have been a rule and keeping the gap sat badly with building everything to be replaced. This record decides when a void entry's number may be reused, and on what conditions.
 
 ## Decision Drivers
 

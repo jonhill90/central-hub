@@ -57,11 +57,10 @@ This adds the Research batches row to D-0003's registry. `RB-` passes D-0003 rul
 ### The batch register
 
 - One Markdown table, one row per batch: ID, folder, question, SPEC date, status. It lives in the Research repo beside the batch folders.
-- A batch is numbered when its SPEC.md is written, because the SPEC is how a batch is registered. An idea with no SPEC has no number. Each new batch takes the next free number.
+- A batch is numbered when its SPEC.md is written, because the SPEC is how a batch is registered. An idea with no SPEC has no number.
 - The folder name stays the batch's readable name.
 - A batch is cited by its `RB-NNNN` number.
 - A check fails when two rows share a number or a batch folder has no row.
-- Project instructions that cite a batch are drafted by the agent, approved by the owner and saved by the coordinator.
 
 ### Consequences
 

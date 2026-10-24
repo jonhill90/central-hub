@@ -28,7 +28,7 @@ Research methods are cited by an agent-made ID. Should that scheme stay, change 
 
 (Written from the record, not from the batch.)
 
-D-0018 stores each method's number instead of working it out from the list (findings 2, 6 and 7), keeps retired methods with a pointer (finding 6), and gives the IDs the `RM-NNNN` shape by script (finding 4). It sends the setup-script change for the gate to the owner (finding 5).
+D-0018 stores each method's number instead of working it out from the list (findings 2, 6 and 7), keeps retired methods with a pointer (finding 6), and uses the `RM-NNNN` shape (finding 4). Its research gate checks that shape, from the setup script the owner pastes (finding 5).
 
 ## Limits
 

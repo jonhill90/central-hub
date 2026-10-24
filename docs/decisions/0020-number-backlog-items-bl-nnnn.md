@@ -31,7 +31,7 @@ The owner's backlog is one table in the project files. It holds every item that 
 
 Research batch RB-0077 (evidence: [../research/0020-number-backlog-items-bl-nnnn.md](../research/0020-number-backlog-items-bl-nnnn.md)) found:
 
-- A one-letter label such as `D1`, an open question about repo layout, looks like `D-0001`, an accepted record. Other files use their own `D1`, `A2` or `K1` for different things.
+- A one-letter label such as `X1` looks like a registered ID such as `X-0001`, so an open question can look like an accepted record. Other files used the same letter-and-number labels for different things.
 - None of the seven letters could become a registered prefix, because a prefix needs at least two characters (D-0003 rule 2).
 - 24 decision-map rows were not in the backlog, and 15 of them were still open. So the backlog was not yet the one place for open questions.
 - Every tracker the batch read gives each item one key from one sequence, and keeps the topic in the title.
@@ -50,7 +50,7 @@ On 2026-10-23 at 21:50 UTC the owner asked for the reasoning to be weighed witho
 
 1. **`BL-NNNN` for every backlog item.**
 2. **Readable word labels for every row,** such as `repo-layout`, as most rows had. No new family is needed. But a word label changes when the item's wording changes, and two threads can choose the same word.
-3. **Keep the letter codes.** `D1` and `D-0001` keep looking alike.
+3. **Keep the letter codes.** Letter codes and registered IDs keep looking alike.
 
 ## Decision Outcome
 
@@ -75,11 +75,10 @@ flowchart LR
 - In prose, the title goes next to the number: `BL-0012 (repo layout)`. Tables already have an Item column.
 - When the owner decides an open question, the decision gets its own `D-NNNN`. The backlog row links to that record and is marked done.
 - The backlog's render script refuses a duplicate row label and a row label that is not `BL-NNNN`.
-- Project instructions that cite a backlog item are drafted by the agent, approved by the owner and saved by the coordinator.
 
 ### Exit path
 
-If the backlog moves into a task management system, each item moves once and takes that system's key. A mapping table from `BL-NNNN` to the new key is kept in that system, so citations still lead somewhere. The `BL` family is then marked closed in D-0003's registry by its own record.
+If the backlog moves into a task management system, each item moves once and takes that system's key. A mapping table from `BL-NNNN` to the new key is kept, so citations still lead somewhere. The `BL` family is then marked closed in D-0003's registry by its own record.
 
 ### Consequences
 
@@ -109,7 +108,7 @@ If the backlog moves into a task management system, each item moves once and tak
 ### 3. Keep the letter codes
 
 - Good: no work.
-- Bad: `D1` and `D-0001` keep looking alike, and three label styles stay in one table.
+- Bad: letter codes and registered IDs keep looking alike, and three label styles stay in one table.
 
 ## More Information
 
