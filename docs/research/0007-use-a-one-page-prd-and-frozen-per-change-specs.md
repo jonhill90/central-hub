@@ -31,7 +31,7 @@ What document set should Central Hub use in version 1 for "what to build and why
 
 (Written from the record, not from the batch.)
 
-D-0007 chooses a frozen spec per change plus a one-page PRD (option 2) because of findings 1, 2 and 8. Its rule against copying code follows finding 5, and its two-layer limit follows finding 6. It keeps the PRD as the owner's stated preference rather than as something the evidence requires (findings 3 and 4), and it defers executable checks because of finding 10. Its status field follows finding 7, and the choice of status words (finding 9) was left to D-0010.
+D-0007 chooses a frozen spec per change plus a one-page PRD (option 2) because of findings 1, 2 and 8. Its rule against copying code follows finding 5, and its two-layer limit follows finding 6. It keeps the PRD on the owner's answer to the 2026-10-19 decision card rather than as something the evidence requires (findings 3 and 4), and it defers executable checks because of finding 10. Its status field follows finding 7, and the choice of status words (finding 9) was left to D-0010.
 
 ## Limits
 

@@ -8,7 +8,7 @@
 
 ## Deploy impact
 
-- What Flux will change when this merges (Foundation: none):
+- What the GitOps tool will change when this merges (Foundation: none):
 
 ## Validation Evidence
 

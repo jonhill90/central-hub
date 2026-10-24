@@ -48,7 +48,7 @@ D-0003 rule 5, which then said old labels are never renamed, would keep `SR11` a
 
 1. **`REQ-NNNN`, renamed everywhere during Foundation, with one corrections log.**
 2. **`REQ-NNNN` for new citations only, with `SR..` kept as each row's old label** (D-0003 rule 5 with no exception).
-3. **Keep `SRNN`** and only write the format down (the agent's first draft v0.1).
+3. **Keep the `SR` IDs** and only write the format down (the agent's first draft v0.1).
 
 ## Decision Outcome
 
@@ -94,7 +94,7 @@ This changes the Requirements row of D-0003's registry to `REQ-NNNN`, and gives 
 - Good: no old file changes.
 - Bad: two live names per requirement for as long as the old text is read.
 
-### 3. Keep SRNN
+### 3. Keep the SR IDs
 - Good: no change at all.
 - Bad: keeps an agent-made format Jon never chose, the NIST clash and the blocked prefixes.
 

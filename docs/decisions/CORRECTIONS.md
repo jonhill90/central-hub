@@ -17,7 +17,7 @@ One line per correction to an accepted record, an evidence file or an active sta
 - 2026-10-24 · STD-0002 · place numbers and the kept-empty block removed; not chosen yet · PR #42
 - 2026-10-24 · D-0003 · the family registry and rules brought to the current text from D-0009, D-0014, D-0015, D-0018 and D-0020; status back to accepted · PR #42
 - 2026-10-24 · D-0009, D-0014, D-0015, D-0018, D-0020 · restated rules and supersede links removed; each keeps the family or rule change it adds; all accepted · PR #42
-- 2026-10-24 · D-0015 · the rename scope and its 0-count proof stated as the owner chose them on 2026-10-23 at 04:34 UTC · PR #42
+- 2026-10-24 · D-0015 · the rename scope and its 0-count proof stated as the owner chose them on 2026-10-23 at 04:34 UTC; the 04:16 card described without quoting it · PR #42
 - 2026-10-24 · D-0001 · approval block, immutability and index text brought to the current rules (D-0006, D-0016) · PR #42
 - 2026-10-24 · D-0006, D-0016 · corrections are logged in this file, not in records; amend sections and amend links removed · PR #42
 - 2026-10-24 · D-0016 · the `docs/research/` place and its rules folded in from D-0017 · PR #42
@@ -25,5 +25,7 @@ One line per correction to an accepted record, an evidence file or an active sta
 - 2026-10-24 · D-0012 · the `research/` folder and the runbook `why:`, ※ and `kind` lines folded in from D-0013 · PR #42
 - 2026-10-24 · D-0013 · folded into D-0012; file removed; the number stays unused · PR #42
 - 2026-10-24 · D-0019 · rule 4 states where the linter settings live (`.github/docs-check/markdownlint.jsonc`, `.github/vale/vale.ini`), as the owner chose on 2026-10-24 at 05:32 UTC; the change proposed in PR #41 is folded in here · PR #42
-- 2026-10-24 · D-0004, D-0007, D-0008, D-0010, D-0011, D-0012, D-0016, D-0019 · settled "Not decided" items, stale acceptance lines and retire notes removed; D-0010 title and file name shortened · PR #42
+- 2026-10-24 · D-0004, D-0007, D-0008, D-0010, D-0011, D-0012, D-0016, D-0019 · settled "Not decided" items, stale acceptance lines and notes on replaced drafts removed; D-0010 title and file name shortened · PR #42
+- 2026-10-24 · D-0007, evidence 0007 · the reason for the PRD states the owner's answer to the 2026-10-19 decision card, and the project brief is named as the coordinator agent's · PR #42
+- 2026-10-24 · evidence 0012 · the runbook fields and status words described as accepted with the record · PR #42
 - 2026-10-24 · D-0001 to D-0016, STD-0001, STD-0002 · Corrections sections moved to this log · PR #42

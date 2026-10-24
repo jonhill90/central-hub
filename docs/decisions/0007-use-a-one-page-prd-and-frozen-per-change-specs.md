@@ -25,7 +25,7 @@ revisit-when: a second person must agree on scope; code lands in this repo; a st
 
 ## Context and Problem Statement
 
-Jon's project brief asks for a PRD and specifications, and for maintained, indexed documentation that shows detail step by step to people and agents (Research repo, `coordinator/platform-startup/BRIEF.md`, line 5). Jon also asked that a spec point to the code rather than repeat it, so code is never updated in two places (Central Hub project, 2026-10-17 21:30 UTC). He said he has to pick something for version 1, knowing it will be replaced (2026-10-17 20:36 UTC).
+The project brief, written by the coordinator agent on 2026-10-06, asks for a PRD and specifications, and for maintained, indexed documentation that shows detail step by step to people and agents (Research repo, `coordinator/platform-startup/BRIEF.md`, line 5). Jon also asked that a spec point to the code rather than repeat it, so code is never updated in two places (Central Hub project, 2026-10-17 21:30 UTC). He said he has to pick something for version 1, knowing it will be replaced (2026-10-17 20:36 UTC).
 
 Three drafts exist in the Research repo and none is accepted: a platform PRD, a documentation contract and a first-slice spec. This record decides which documents hold "what and why" and "what changes", and what happens to them after a merge.
 
@@ -35,7 +35,7 @@ Three drafts exist in the Research repo and none is accepted: a platform PRD, a 
   - 81.5% of spec files in public repos have one commit, so most specs behave as frozen records.
   - Measured gains come from short, curated context and from checks, not from longer spec documents.
   - No study shows that a project-level PRD helps people or agents.
-- **Jon's brief asks for a PRD.** The PRD is kept because Jon asked for it, not because the evidence requires it.
+- **The owner chose a PRD.** On 2026-10-19 the owner said yes to a decision card for a one-page PRD plus frozen per-change specs. The PRD is kept on that answer, not because the evidence requires it.
 - **Point to the code.** IEEE 830-1998 says the same requirement "should not appear in more than one place". The modern sources agree.
 - **Fit the accepted rules.** The fit was checked in RB-0057 (evidence finding 8):
   - Jon accepts work by a message naming the PR number and head SHA (AGENTS.md rule 1, D-0001).
@@ -108,7 +108,7 @@ Each of these is a later decision for Jon:
 - Good: it fits D-0002 short-lived branches and Jon's PR-and-SHA acceptance.
 - Good: code lives in one place, so nothing is updated twice.
 - Bad: specs do not describe the current system. A reader must look at the code, the PRD and the decision records for that.
-- Bad: the PRD rests on Jon's preference, not on measured evidence. BMAD's guidance would skip it for a one-owner project.
+- Bad: the PRD rests on the owner's answer to the 2026-10-19 card, not on measured evidence. BMAD's guidance would skip it for a one-owner project.
 - Neutral: the rules are prose until code lands. The evidence favours checks, so checks are the next step.
 
 ### Confirmation
@@ -136,7 +136,7 @@ Each of these is a later decision for Jon:
 ### 5. No separate document
 - Good: least to maintain.
 - Bad: the record sits outside git, which D-0001 rejected for decisions.
-- Bad: Jon's brief asks for a PRD.
+- Bad: the owner chose to keep a PRD.
 
 ## More Information
 

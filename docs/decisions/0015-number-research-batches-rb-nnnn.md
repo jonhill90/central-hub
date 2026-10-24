@@ -33,7 +33,7 @@ Agents made those codes up one at a time. Research batch RB-0074 ([evidence](../
 - 3 codes name two different batches each: `RR1`, `AT1` and `VN1`.
 - Some codes look like other labels: `SR1` looks like the old `SR` requirement IDs, and `K1` and `V1` already mean other things.
 
-Under D-0003 rule 5, the owner may approve renaming an agent-made label during Foundation. On 2026-10-23 at 04:16 UTC Jon chose the option to use RB-0001 style on the question "Number research batches as RB-0001 style, renamed everywhere?" (message cmsg_01X43rfNYp4H1dL1V2dkfkwNQcYS9um5zKTC7zv6b3o1qM).
+Under D-0003 rule 5, the owner may approve renaming an agent-made label during Foundation. On 2026-10-23 at 04:16 UTC the owner chose RB-0001 style, renamed everywhere, on a decision card (message cmsg_01X43rfNYp4H1dL1V2dkfkwNQcYS9um5zKTC7zv6b3o1qM).
 
 ## Decision Drivers
 

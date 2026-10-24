@@ -4,7 +4,7 @@
 
 This page says what the platform is for and how we know it works. It holds no "how": how lives in decision records (`docs/decisions/`), specs (`docs/specs/`) and runbooks (`docs/runbooks/`).
 
-```
+```text
    people and agents ──▶ ┌──────────────────────── Central Hub (system 8) ────────────────────────┐
    (each its own         │  identity · secrets · storage · data · networking · backup · monitoring │
     identity)            │  ─────────────────────────────────────────────────────────────────────  │
@@ -21,7 +21,7 @@ This page says what the platform is for and how we know it works. It holds no "h
 3. **Jon understands every piece.** Each one is explained before it is added: purpose, dependencies and how it fails (REQ-0001).
 4. **Every piece can be replaced** without data loss, through portable formats and explicit boundaries. Each decision record names its exit path (REQ-0002, REQ-0011).
 5. **Every human and agent has its own identity,** and every action is attributed to it (REQ-0003).
-6. **Everything is code in this repo.** No change by clicking in a console.
+6. **Everything is controllable from this repo.** One-time console steps at the start are fine; after that, every change is made and kept as code here.
 7. **The current state and the next step are always visible** (REQ-0006).
 
 ## Non-goals

@@ -39,7 +39,7 @@ Before any cluster reads this repo, all 7 must be true and recorded:
 1. Per-agent GitHub identities, with Jon's approval required by GitHub.
 2. A verifier the PR can't edit.
 3. No write tokens in PR code.
-4. A pinned, no-writer Flux install.
+4. A pinned, no-writer GitOps engine install (the engine is not chosen yet).
 5. Defined deploys.
 6. No image automation.
 7. Break-glass recorded.
