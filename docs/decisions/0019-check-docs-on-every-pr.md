@@ -1,7 +1,7 @@
 ---
 id: D-0019
 title: Check the docs on every PR, with front matter and inside links as gates, Markdown style on changed files, and word checks built from the glossary
-status: proposed
+status: accepted
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: [reviewing-agent]
 waits-on: [D-0001, D-0012, D-0016, D-0017]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-24T01:50:19Z
+  approved-commit: 07c3873a75e1ef7ecd66698e0c1d1551707e6016
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNNw9afcLyseACmQBjVznpsQ
+  approval-names: "PR #35 and head 07c3873"
+  check: the drafting agent read the message in the project thread at 2026-10-24T01:50Z; it names PR jonhill90/central-hub#35 and head 07c3873 itself. An independent check by a reviewing agent is still to do.
+  merged: not yet; the owner merges PR #35, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: a check gives more false positives than real findings for a month; a docs site or docs build is added; per-agent identities or a verifier outside this repository exist (Activation gate items 1 and 2); or the glossary outgrows one table
 ---
