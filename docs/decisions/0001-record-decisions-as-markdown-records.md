@@ -180,4 +180,4 @@ Until each of these is checked, acceptance stays by convention.
   5. Custom field contract, `waits-on`. Before: "backlog items (`W1`, `S7`…)" and "checks them against the decision map, because the map isn't in the repo". After: "backlog items (`BL-0111`, `BL-0021`…)" and "checks them against the backlog, because the backlog isn't in the repo".
   6. Custom field contract, `legacy-id`. Before: "IDs from the decision map". After: "IDs from the backlog".
 
-  Approval: to be added after the owner approves this correction's PR.
+  Approval: the owner, 2026-10-24T02:50:34Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN6ZL4axtSm9grZd8Kszxagb), naming PR #40 and head 1453cb1; approved commit 1453cb11874422b8913f72a8687a220752d0d604. Check: the drafting agent read the message at 2026-10-24T02:50Z and confirmed it names that PR and head.
