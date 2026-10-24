@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #35 and head 07c3873"
   check: the drafting agent read the message in the project thread at 2026-10-24T01:50Z; it names PR jonhill90/central-hub#35 and head 07c3873 itself. An independent check by a reviewing agent is still to do.
   merged: not yet; the owner merges PR #35, which carries this evidence commit on top of the approved commit
-amended-by: [D-0021]
 legacy-id: []
 revisit-when: a check gives more false positives than real findings for a month; a docs site or docs build is added; per-agent identities or a verifier outside this repository exist (Activation gate items 1 and 2); or the glossary outgrows one table
 ---
@@ -30,7 +29,7 @@ Nothing in this repository checks its documents. `.github/` holds only CODEOWNER
 
 The gap showed on `main`. At 7915625 two files had front matter that was not valid YAML: D-0009 and the evidence file for D-0008. Each had a plain value containing ": ", which YAML 1.2.2 §7.3.3 does not allow. One record's back-link field also missed a record that changed it. All three were found by a draft check and fixed by D-0006 corrections (PR #33).
 
-On 2026-10-23 the owner asked for the docs to be linted so that broken front matter cannot merge, and for help with vocabulary. Later the same day the owner asked that the methods, the organization of the checks (what lives where, who owns it, what runs locally and in CI) and the needed words be settled before any linting starts. On 2026-10-23 at 21:51 UTC the owner chose to write this as a decision record, and accepted it on 2026-10-24 at 01:50 UTC. On 2026-10-24 at 05:32 UTC the owner chose, on a decision card, to keep the linter settings under `.github/` rather than in the repository root, which D-0008 keeps for entry points.
+On 2026-10-23 the owner asked for the docs to be linted so that broken front matter cannot merge, and for help with vocabulary. Later the same day the owner asked that the methods, the organization of the checks (what lives where, who owns it, what runs locally and in CI) and the needed words be settled before any linting starts. On 2026-10-23 at 21:51 UTC the owner chose to write this as a decision record, and accepted it on 2026-10-24 at 01:50 UTC. On 2026-10-24 at 05:32 UTC the owner chose, on a decision card, to keep the linter settings under `.github/` rather than in the repository root, which D-0008 keeps for entry points. The owner approved that change with PR #41 at head c62cf99 on 2026-10-24 at 06:21 UTC.
 
 This record decides which checks run on the docs, how strict each one is, where they live, and the words used for this work.
 
