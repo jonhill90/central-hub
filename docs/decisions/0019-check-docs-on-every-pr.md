@@ -17,6 +17,7 @@ accepted-evidence:
   approval-names: "PR #35 and head 07c3873"
   check: the drafting agent read the message in the project thread at 2026-10-24T01:50Z; it names PR jonhill90/central-hub#35 and head 07c3873 itself. An independent check by a reviewing agent is still to do.
   merged: not yet; the owner merges PR #35, which carries this evidence commit on top of the approved commit
+amended-by: [D-0021]
 legacy-id: []
 revisit-when: a check gives more false positives than real findings for a month; a docs site or docs build is added; per-agent identities or a verifier outside this repository exist (Activation gate items 1 and 2); or the glossary outgrows one table
 ---
