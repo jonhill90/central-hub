@@ -41,3 +41,6 @@ kubeconfig*
 *.tfstate*
 *.tfvars
 .terraform/
+
+# Docs check tools
+.github/docs-check/node_modules/

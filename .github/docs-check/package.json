@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "Node tools for the docs checks (D-0019). Install with: npm ci --prefix .github/docs-check",
+  "devDependencies": {
+    "markdownlint-cli2": "0.24.0"
+  }
+}
