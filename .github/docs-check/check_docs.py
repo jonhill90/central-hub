@@ -166,7 +166,7 @@ def main(root: Path) -> int:
             errors.append(f"docs/decisions/{sub.name}/: subfolder not allowed (D-0016)")
 
     # Each kind folder README lists every file in it (D-0012 rule 4, D-0016 rule 1).
-    for folder in ("decisions", "research", "standards"):
+    for folder in ("decisions", "research", "standards", "runbooks"):
         readme = root / f"docs/{folder}/README.md"
         if not readme.exists():
             continue

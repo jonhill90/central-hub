@@ -30,6 +30,7 @@ These rules fit the current stage, while Jon does every step himself so he under
 | Writing a spec for a change | `docs/specs/README.md` |
 | All decisions | `docs/decisions/README.md` |
 | What a decision rests on | `docs/research/README.md` |
+| How to do one job, step by step | `docs/runbooks/README.md` |
 | Reporting a vulnerability | `SECURITY.md` |
 
 ## Activation gate
