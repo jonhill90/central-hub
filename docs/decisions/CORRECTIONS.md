@@ -34,3 +34,4 @@ One line per correction to an accepted record, an evidence file or an active sta
 - 2026-10-24 · evidence 0005 · the Azure sustainability source read on its live page; two source URLs updated · PR #42
 - 2026-10-24 · evidence 0018 · the NIST source named as SP 800-53 Release 5.2.0, which added `SA-15(13)` · PR #42
 - 2026-10-24 · STD-0001 · sources added for the hostname limits · PR #42
+- 2026-10-24 · D-0011, D-0012 · STD-0002 named without the old "proposed" note · PR #42

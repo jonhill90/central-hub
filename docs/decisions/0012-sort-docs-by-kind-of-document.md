@@ -79,7 +79,7 @@ central-hub/
 7. **Decisions folder name.** It stays `docs/decisions/` (MADR, D-0001), not `docs/adr/`.
 8. **Glossary is the one source** for platform terms (REQ-0005). Other copies point to it. Terms about systems other than system 8 stay in the Research repo.
 9. **Diagrams.** A drawing written as text stays inside the page that uses it. `docs/diagrams/` holds only source files such as `.d2`, `.drawio` or `.svg`.
-10. **No private values in any document.** Hostnames, single machine addresses, contacts and secrets are never written here. A document names the key that holds the value in the private store, never the value (CLAUDE.md rule 4; STD-0002, proposed).
+10. **No private values in any document.** Hostnames, single machine addresses, contacts and secrets are never written here. A document names the key that holds the value in the private store, never the value (CLAUDE.md rule 4; STD-0002).
 11. **Security postmortems wait.** A postmortem for a security incident stays in a private GitHub security advisory until the fix is out, and only then lands in `docs/postmortems/` (SECURITY.md).
 
 ### Runbook format
@@ -187,4 +187,4 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
   - MADR 4.0.0, for `docs/decisions/`;
   - Diátaxis;
   - the RULES-v4 R1 runbook fields (trigger, runner, files).
-- Related records: D-0001, D-0007, D-0008, D-0009, D-0010, D-0011. Related standard: STD-0002 (proposed).
+- Related records: D-0001, D-0007, D-0008, D-0009, D-0010, D-0011. Related standard: STD-0002.

@@ -34,7 +34,7 @@ On 2026-10-20 at 03:03 UTC Jon said that nothing on the Proxmox hypervisor shoul
 - **No click-ops.** Every machine is created and configured from code in this repository.
 - **D-0008 rule 3.** Root folders are named for their job. A vendor product is never a root folder name, apart from the stated `kubernetes/` exception.
 - **Replaceable** (REQ-0011). Swapping a vendor product should replace one folder, not rename a root folder.
-- **Public repository** (CLAUDE.md rule 4). Single machine addresses and hostnames never go here. STD-0002 (proposed) holds the rule for addresses.
+- **Public repository** (CLAUDE.md rule 4). Single machine addresses and hostnames never go here. STD-0002 holds the rule for addresses.
 
 ## Considered Options
 
@@ -61,7 +61,7 @@ central-hub/
 2. **One subfolder per vendor product.** Each vendor product that creates or configures machines gets one subfolder in its own native layout, named for the product, for example `hosts/terraform/` or `hosts/ansible/`. Replacing the product replaces only that subfolder.
 3. **Terraform modules live in their own repository.** This repository keeps only the folders that are run. Each one points at a tagged version of the modules repository.
 4. **Not machines, not `hosts/`.** A managed container service with no machines to manage, such as AWS ECS, doesn't go in `hosts/`. It gets its own capability folder when it is first used (D-0008 rule 5).
-5. **No private values.** Hostnames and single machine addresses stay blanks, filled in at apply time (CLAUDE.md rule 4; STD-0002, proposed).
+5. **No private values.** Hostnames and single machine addresses stay blanks, filled in at apply time (CLAUDE.md rule 4; STD-0002).
 
 ### Not decided here
 
@@ -97,4 +97,4 @@ central-hub/
 ## More Information
 
 - **Evidence:** no research batch of its own. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md), finding 2.
-- Related records: D-0001, D-0008. Related standard: STD-0002 (proposed).
+- Related records: D-0001, D-0008. Related standard: STD-0002.
