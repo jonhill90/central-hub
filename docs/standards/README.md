@@ -2,13 +2,13 @@
 
 This register lists every standard in force: the current rule, one row per standard. A decision record in `docs/decisions/` says once why a rule was chosen and keeps that history. A standard here says what the rule is now.
 
-The `STD-NNNN` family is registered in D-0009. Each standard is one file in this folder, named `NNNN-slug.md`. A draft has no number and is cited as `STD-TBD` (D-0009 rule 3).
+The `STD-NNNN` family is registered in D-0009. Each standard is one file in this folder, named `NNNN-slug.md`. A draft has no number and is cited as `STD-TBD` (D-0003 rule 3).
 
 ## How a standard changes
 
 - Agents only propose. A standard becomes `active` when Jon accepts its PR by naming the PR number and its head SHA, the same way decision records are accepted (D-0001).
 - Any change to an `active` standard's rule needs Jon's approval again. The change goes in the same file, and git keeps the history.
-- A standard is never deleted, and its number is never reused (D-0009 rule 6). One that is no longer used becomes `deprecated` or `retired` and links to whatever replaced it.
+- A standard is never deleted, and its number is never reused (D-0003 rule 6). One that is no longer used becomes `deprecated` or `retired` and links to whatever replaced it.
 
 ## Status words
 
@@ -24,7 +24,7 @@ The `STD-NNNN` family is registered in D-0009. Each standard is one file in this
 | Field | What it holds |
 |---|---|
 | `id` | `STD-NNNN`. Matches the file name number. |
-| `title` | What the standard is about. The topic goes here, never in the ID (D-0009 rule 7). |
+| `title` | What the standard is about. The topic goes here, never in the ID (D-0003 rule 7). |
 | `status` | One of the status words above. |
 | `scope` | What the rule applies to. |
 | `owner-system` | The system that owns it, from the 13 systems (draft v0.1). |

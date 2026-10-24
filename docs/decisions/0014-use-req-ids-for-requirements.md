@@ -1,14 +1,14 @@
 ---
 id: D-0014
 title: Spell requirement IDs REQ-NNNN, and during Foundation rename agent-made labels everywhere with the owner's approval
-status: superseded
+status: accepted
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
-waits-on: [D-0001, D-0004, D-0006, D-0009]
-supersedes: [D-0009]
-superseded-by: D-0015
+waits-on: [D-0001, D-0003, D-0004, D-0006]
+supersedes: []
+superseded-by:
 accepted-evidence:
   approved-by: owner
   approved-at: 2026-10-23T03:46:26Z
@@ -18,7 +18,7 @@ accepted-evidence:
   check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T03:46Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: not yet; Jon merges PR #22, which carries this evidence commit on top of the approved commit
 legacy-id: []
-revisit-when: the Activation gate passes (rule 5 goes back to "never renamed"); a rename sweep leaves a reference that a search missed; or a requirements tool is adopted that brings its own ID scheme
+revisit-when: the Activation gate passes (D-0003 rule 5 goes back to "never renamed"); a rename sweep leaves a reference that a search missed; or a requirements tool is adopted that brings its own ID scheme
 ---
 
 # Spell requirement IDs REQ-NNNN, and during Foundation rename agent-made labels everywhere with the owner's approval
@@ -28,13 +28,13 @@ revisit-when: the Activation gate passes (rule 5 goes back to "never renamed"); 
 On 2026-10-23 Jon said the requirement IDs (`SR01` to `SR25`) were made up by agents and never got the scrutiny other choices got. The check that followed (research batch RB-0072, [evidence](../research/0014-use-req-ids-for-requirements.md)) found:
 
 - An agent coordinator wrote the `SR` format on 2026-10-06, before this project existed. Jon said yes to each requirement's wording, never to the format.
-- The ID research behind D-0003 kept `SR` only because it did not clash, and froze its spelling ("Nothing is respelled"). D-0009 carried it over unchanged.
+- The ID research behind D-0003 kept `SR` only because it did not clash, and froze its spelling ("Nothing is respelled"). The registry kept it when D-0009 added standards.
 - `SR` does not match the house style the other families use (`D-0007`, `STD-0001`: a dash and four digits).
-- Outside the project, NIST SP 800-53 already uses `SR` for its Supply Chain Risk Management controls (`SR-3`). Under D-0009 rule 2, `SR` also blocks any future prefix that starts with `SR`.
+- Outside the project, NIST SP 800-53 already uses `SR` for its Supply Chain Risk Management controls (`SR-3`). Under D-0003 rule 2, `SR` also blocks any future prefix that starts with `SR`.
 
 Jon chose `REQ-0000` style on 2026-10-23 at 03:38 UTC. Jon preferred it, and said that a format already in use is not a good reason to keep it in a system that is still almost greenfield: IDs are only words, they should be fixed where possible, and the same goes for the other IDs.
 
-D-0009 rule 5 ("Old labels are never renamed") would keep `SR11` alive beside `REQ-0011` forever. Jon wants the fix applied everywhere, the way agent-made method IDs were fixed on 2026-10-18, so the files read as if the new name had always been used.
+D-0003 rule 5, which then said old labels are never renamed, would keep `SR11` alive beside `REQ-0011` forever. Jon wants the fix applied everywhere, the way agent-made method IDs were fixed on 2026-10-18, so the files read as if the new name had always been used.
 
 ## Decision Drivers
 
@@ -42,45 +42,19 @@ D-0009 rule 5 ("Old labels are never renamed") would keep `SR11` alive beside `R
 - **One name per thing:** two live names for one requirement is the confusion RB-0003 measured (`P1` had 7 meanings).
 - **Greenfield:** Foundation is the cheapest time to rename. The count of `SR` references grows every day (about 4,700 on 2026-10-23).
 - **Records stay true:** chat archives and git history are records of what was said and must not change.
-- **Replaceable** (requirement SR11, which this record renames `REQ-0011`).
+- **Replaceable** (REQ-0011).
 
 ## Considered Options
 
 1. **`REQ-NNNN`, renamed everywhere during Foundation, with one corrections log.**
-2. **`REQ-NNNN` for new citations only, with `SR..` kept as each row's old label** (D-0009 rule 5 as written).
+2. **`REQ-NNNN` for new citations only, with `SR..` kept as each row's old label** (D-0003 rule 5 with no exception).
 3. **Keep `SRNN`** and only write the format down (the agent's first draft v0.1).
 
 ## Decision Outcome
 
 Chosen option: **1**, which Jon chose on 2026-10-23 at 03:38 UTC.
 
-D-0009's rules 1, 2, 3, 4, 6 and 7 carry over unchanged. Rule 1's registry row for requirements changes, and rule 5 gets a Foundation exception. All rules are restated here, so this record stands alone once it supersedes D-0009.
-
-### The rules
-
-1. **Global IDs are only for things cited across files, repos and chats.** These are the registered families:
-
-   | Family | Pattern | Example | Home register | Who numbers it |
-   |---|---|---|---|---|
-   | Decisions | `D-NNNN` | `D-0007` | central-hub `docs/decisions/` | Set by D-0001: the number is assigned when the PR opens |
-   | Requirements | `REQ-NNNN` | `REQ-0022` | Research `coordinator/system/REQUIREMENTS.md` | The requirements register owner: the next number is assigned only after Jon says yes to the wording |
-   | Standards | `STD-NNNN` | `STD-0001` | central-hub `docs/standards/` | The standards register owner: the number is assigned when the standard's PR opens |
-
-   The `SR` family is retired. A sources family is still left out.
-
-2. **One family registry.** The table above is the family registry. A change to it is a new decision record that supersedes this one.
-   - A new family is added only with Jon's approval.
-   - A new prefix must have at least two characters and must not equal or start with an existing one, ignoring case. `REQ-` passes this check against `D-` and `STD-`.
-3. **Number late, with one owner per family.** A draft has no number and is cited by its file path (`D-TBD`, `STD-TBD`, `REQ-TBD`). Check that the number is unique before merging. Outside rule 5's Foundation exception, a number never changes after it is assigned.
-4. **Everything else is a local label.** Outside its own file, write it with the file name: `DECISION-MAP#P1`. A bare one-letter label outside its own file is a mistake that reviewers flag.
-5. **Old labels are not renamed, except during Foundation.**
-   - Until the Activation gate passes, Jon may approve renaming an agent-made ID or label. The rename is then applied to every live file in central-hub, the Research repo and the project files, so the files read as if the new name had always been used. No inline "was SR11" notes.
-   - One corrections log per rename holds every old-to-new pair, the date and Jon's approval. Git history keeps the rest.
-   - Records of what was said are never changed: the chat archive, captured transcripts and git history keep the old names.
-   - Accepted decision records are corrected in place under D-0006, because a rename does not change any decision. Each correction PR lists every change, and Jon approves it by PR number and head SHA.
-   - After the Activation gate passes, the old rule returns: when an item gets a new ID, its record lists the old one in `legacy-id`.
-6. **Never reuse, never delete.** A superseded or withdrawn item keeps its ID, its status and a link to whatever replaced it. D-0004's Foundation exception for void IDs still applies.
-7. **Keep meaning out of the number.** The prefix names the family and nothing else.
+This changes the Requirements row of D-0003's registry to `REQ-NNNN`, and gives D-0003 rule 5 its Foundation exception: until the Activation gate passes, the owner may approve renaming an agent-made ID or label in every live file, with one corrections log per rename.
 
 ### The requirements rename
 
@@ -92,7 +66,7 @@ D-0009's rules 1, 2, 3, 4, 6 and 7 carry over unchanged. Rule 1's registry row f
 
 1. Research: the register, its Library copy, and the register check (`check_register.py` matches `SR\d\d[a-z]?` today), with its tests.
 2. Project instructions: the agent drafts the new text, Jon approves it, and the coordinator saves it.
-3. central-hub: one correction PR for every `SR` reference (63 on 2026-10-23), under rule 5 and D-0006.
+3. central-hub: one correction PR for every `SR` reference (63 on 2026-10-23), under D-0003 rule 5 and D-0006.
 4. Research and project files: the rest of the sweep, proved by a search count of 0 live `SR` IDs.
 5. Other agent-made ID schemes, one at a time in Jon's order, each with its own question.
 
@@ -129,17 +103,3 @@ D-0009's rules 1, 2, 3, 4, 6 and 7 carry over unchanged. Rule 1's registry row f
 - **Evidence:** [../research/0014-use-req-ids-for-requirements.md](../research/0014-use-req-ids-for-requirements.md): batch RB-0072.
 - Earlier rename handled the same way: research method IDs, 2026-10-18 (batch RB-0055, project files `research/method-id-fixes/CORRECTIONS.md`).
 - Related records: D-0001, D-0003, D-0004, D-0006, D-0009.
-- On acceptance, D-0009's lifecycle fields change to `status: superseded` and `superseded-by: D-0014`, under D-0001.
-
-## Corrections
-
-- **2026-10-23** (research batch IDs under D-0015): 3 research batch citations renamed: `RQ1` to `RB-0072`; `R3` to `RB-0003`; `MF1` to `RB-0055`. Reason: D-0015 numbers research batches `RB-NNNN`, and its rule 5 renames live references in place; no decision changes. Approval: the owner, 2026-10-23T04:59:42Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN7qM5qKKp8HDEfuF6EYoQkC), naming PR #27 and head 8d63c29; approved commit 8d63c29543a8adccdebb9704146d067b238e1c54. Check: the drafting agent read the message at 2026-10-23T04:59Z and confirmed it names that PR and head.
-- **2026-10-23** (owner's words and approvals recorded in neutral form under D-0016). Reason: D-0016 rules 5 to 7 and its "What happens to the existing records"; no decision changes. Where the text removed is the owner's words, this entry names where it was and a commit that holds it (7915625) instead of copying it (D-0016 rule 7).
-  1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 7915625). No value changes.
-  2. Context and Problem Statement, first paragraph. Before: "(research batch RB-0072, project files outside this repo at `research/requirement-ids/`)" After: "(research batch RB-0072, [evidence](../research/0014-use-req-ids-for-requirements.md))" Reason: the old pointer is private; links the evidence file (D-0016 rule 1 as amended by D-0017).
-  3. Context and Problem Statement, third paragraph: the quote of Jon's 03:38 UTC message (at commit 7915625) replaced by a neutral summary. After: "Jon chose `REQ-0000` style on 2026-10-23 at 03:38 UTC. Jon preferred it, and said that a format already in use is not a good reason to keep it in a system that is still almost greenfield: IDs are only words, they should be fixed where possible, and the same goes for the other IDs."
-  4. Context and Problem Statement, fourth paragraph: the quote of Jon's earlier words (at commit 7915625) replaced by a neutral summary. After: "Jon wants the fix applied everywhere, the way agent-made method IDs were fixed on 2026-10-18, so the files read as if the new name had always been used."
-  5. More Information, first bullet. Before: "Research (project files outside this repo): `research/requirement-ids/` (SYNTHESIS.md, LEDGER.md). Research repo copy: `areas/documentation/research/requirement-ids/`." After: "**Evidence:** [../research/0014-use-req-ids-for-requirements.md](../research/0014-use-req-ids-for-requirements.md): batch RB-0072." Reason: the old pointers are private; links the evidence file (D-0016 rule 1 as amended by D-0017).
-  6. The closing note on quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown as he wrote them._" After: none.
-
-  Approval: the owner, 2026-10-23T06:07:52Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNAnCf1qE6ULcTZw9foG87Mc), naming PR #32 and head f994dac; approved commit f994dacd8fb34b10e550664797bf61d12af773a6. Check: the drafting agent read the message at 2026-10-23T06:07Z and confirmed it names that PR and head.

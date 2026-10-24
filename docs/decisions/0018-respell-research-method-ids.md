@@ -1,14 +1,14 @@
 ---
 id: D-0018
 title: Spell research method IDs RM-NNNN, store each method's number, and rename the old IDs everywhere
-status: superseded
+status: accepted
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
-waits-on: [D-0001, D-0006, D-0015, D-0016]
-supersedes: [D-0015]
-superseded-by: D-0020
+waits-on: [D-0001, D-0003, D-0006, D-0016]
+supersedes: []
+superseded-by:
 accepted-evidence:
   approved-by: owner
   approved-at: 2026-10-23T05:23:48Z
@@ -36,8 +36,6 @@ Research batch RB-0075 (evidence: [../research/0018-respell-research-method-ids.
 
 On 2026-10-23 at 05:18 UTC the owner chose `RM-0001` style, renamed everywhere, on a decision card that offered keeping `RM01` with only the numbering fixed, or leaving it as it is. Earlier that day the owner said that the cost of keeping an agent-made scheme is not a reason to keep it in a greenfield system (D-0014).
 
-Adding a family changes the family registry, so under D-0015 rule 2 it needs a record that supersedes D-0015.
-
 ## Decision Drivers
 
 - **One shape for every cited ID:** `D-0007`, `REQ-0022`, `STD-0001`, `RB-0075`.
@@ -55,35 +53,7 @@ Adding a family changes the family registry, so under D-0015 rule 2 it needs a r
 
 Chosen option: **1**, which the owner chose on 2026-10-23 at 05:18 UTC.
 
-D-0015's rules all carry over. Rule 1 gains one registry row, and rule 6 adds how a retired method is kept. They are restated here so this record stands alone once it supersedes D-0015.
-
-### The rules
-
-1. **Global IDs are only for things cited across files, repos and chats.** These are the registered families:
-
-   | Family | Pattern | Example | Home register | Who numbers it |
-   |---|---|---|---|---|
-   | Decisions | `D-NNNN` | `D-0007` | central-hub `docs/decisions/` | Set by D-0001: the number is assigned when the PR opens |
-   | Requirements | `REQ-NNNN` | `REQ-0022` | Research `coordinator/system/REQUIREMENTS.md` | The requirements register owner: the next number is assigned only after the owner says yes to the wording |
-   | Standards | `STD-NNNN` | `STD-0001` | central-hub `docs/standards/` | The standards register owner: the number is assigned when the standard's PR opens |
-   | Research batches | `RB-NNNN` | `RB-0074` | Research `areas/documentation/research/BATCHES.md` | The batch register owner: the number is assigned when the batch's SPEC.md is written |
-   | Research methods | `RM-NNNN` | `RM-0033` | Research `areas/research-tooling/research/research-methods-crawl/methods/inventory.json` | The methods catalogue owner: the number is stored with the method and assigned only after the owner says yes to adding it, never from its place in the list |
-
-   The `SR` family stays retired. A sources family is still left out.
-
-2. **One family registry.** The table above is the family registry. A change to it is a new decision record that supersedes this one.
-   - A new family is added only with the owner's approval.
-   - A new prefix must have at least two characters and must not equal or start with an existing one, ignoring case. `RM-` passes this check against `D-`, `REQ-`, `STD-` and `RB-`.
-3. **Number late, with one owner per family.** A draft has no number and is cited by its file path (`D-TBD`, `REQ-TBD`, `STD-TBD`, `RB-TBD`, `RM-TBD`). Check that the number is unique before merging. Outside rule 5's Foundation exception, a number never changes after it is assigned.
-4. **Everything else is a local label.** Outside its own file, write it with the file name: `DECISION-MAP#P1`. A bare one-letter label outside its own file is a mistake that reviewers flag.
-5. **Old labels are not renamed, except during Foundation.**
-   - Until the Activation gate passes, the owner may approve renaming an agent-made ID or label. The rename is then applied to every live file in central-hub, the Research repo and the project files, so the files read as if the new name had always been used. No inline "was SR11" notes.
-   - One corrections log per rename holds every old-to-new pair, the date and the owner's approval. Git history keeps the rest.
-   - Records of what was said are never changed: the chat archive, captured transcripts and git history keep the old names.
-   - Accepted decision records are corrected in place under D-0006, because a rename does not change any decision. Each correction PR lists every change, and the owner approves it by PR number and head SHA.
-   - After the Activation gate passes, the old rule returns: when an item gets a new ID, its record lists the old one in `legacy-id`.
-6. **Never reuse, never delete.** A superseded or withdrawn item keeps its ID, its status and a link to whatever replaced it. A retired method stays in the catalogue, marked `deprecated` or `replaced by RM-NNNN`. D-0004's Foundation exception for void IDs still applies.
-7. **Keep meaning out of the number.** The prefix names the family and nothing else. A batch that continues another says so in its SPEC.md ("follows RB-0006"), not in its number.
+This adds the Research methods row to D-0003's registry, and D-0003 rule 6 says how a retired method is kept.
 
 ### The methods catalogue
 
@@ -95,7 +65,7 @@ D-0015's rules all carry over. Rule 1 gains one registry row, and rule 6 adds ho
 ### The method rename
 
 - `RM01` to `RM122` become `RM-0001` to `RM-0122`, keeping their numbers.
-- The rename runs by script over the Research repo and the project files. It skips correction logs, whose "before" text must stay as it was, and the kept records under rule 5.
+- The rename runs by script over the Research repo and the project files. It skips correction logs, whose "before" text must stay as it was, and the kept records under D-0003 rule 5.
 - The research gate checks method IDs in every new SPEC. Its hook runs from the setup script, which the owner pastes by hand, so the new setup script goes to the owner in the same step as the rename. Until it is pasted, new SPECs would fail the gate.
 - The full old-to-new list goes in a corrections log, not in this record.
 
@@ -138,5 +108,4 @@ D-0015's rules all carry over. Rule 1 gains one registry row, and rule 6 adds ho
 
 - **Evidence:** [../research/0018-respell-research-method-ids.md](../research/0018-respell-research-method-ids.md)
 - Earlier renames handled the same way: requirement IDs (D-0014) and research batch codes (D-0015).
-- Related records: D-0001, D-0006, D-0014, D-0015, D-0016, D-0017.
-- On acceptance, D-0015's lifecycle fields change to `status: superseded` and `superseded-by: D-0018`, under D-0001.
+- Related records: D-0001, D-0003, D-0006, D-0014, D-0015, D-0016.

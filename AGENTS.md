@@ -25,7 +25,7 @@ These rules fit the current stage, while Jon does every step himself so he under
 |---|---|
 | How decisions are recorded and accepted | `docs/decisions/0001-record-decisions-as-markdown-records.md` |
 | Branches, commit and PR titles | `docs/decisions/0002-use-one-main-branch-with-environment-folders.md` |
-| Identifiers and labels | `docs/decisions/0020-number-backlog-items-bl-nnnn.md` (supersedes D-0018) |
+| Identifiers and labels | `docs/decisions/0003-use-registered-id-families-and-file-qualified-labels.md` |
 | What the platform is for | `docs/PRD.md` |
 | Writing a spec for a change | `docs/specs/README.md` |
 | All decisions | `docs/decisions/README.md` |
