@@ -45,7 +45,7 @@ Relied on (the decision depends on these):
 1. Flux, "Ways of structuring your repositories". <https://fluxcd.io/flux/guides/repository-structure/>
 2. Kustomize glossary. <https://kubectl.docs.kubernetes.io/references/kustomize/glossary/>
 3. K. Kapelonis, "Stop using branches for deploying to different GitOps environments". <https://octopus.com/blog/stop-using-branches-deploying-different-gitops-environments>
-4. Thoughtworks Technology Radar, "GitOps". <https://thoughtworks.com/radar/techniques/gitops>
+4. Thoughtworks Technology Radar, "GitOps". <https://www.thoughtworks.com/radar/techniques/gitops>
 5. Trunk-based development. <https://trunkbaseddevelopment.com/>
 6. GitHub flow. <https://docs.github.com/en/get-started/using-github/github-flow>
 7. DORA, "Trunk-based development". <https://dora.dev/capabilities/trunk-based-development/>
@@ -69,7 +69,7 @@ Relied on (the decision depends on these):
     - Terragrunt, quick start. <https://docs.terragrunt.com/getting-started/quick-start/>
     - Flux, image update automation. <https://fluxcd.io/flux/guides/image-update/>
     - Argo CD Image Updater, update methods. <https://argocd-image-updater.readthedocs.io/en/stable/basics/update-methods/>
-    - Kargo, core concepts. <https://docs.kargo.io/user-guide/core-concepts/>
+    - Kargo, core concepts. <https://docs.kargo.io/user-guide/core-concepts>
 19. The repositories mined. Official examples: fluxcd/flux2-kustomize-helm-example, fluxcd/flux2-multi-tenancy, fluxcd/flux2-hub-spoke-example, argoproj/argocd-example-apps, argoproj-labs/argocd-autopilot, akuity/kargo-simple, akuity/kargo-advanced, codefresh-contrib/gitops-cert-level-2-examples. Homelabs: onedr0p/home-ops, onedr0p/cluster-template, bjw-s-labs/home-ops, buroa/k8s-gitops, joryirving/home-ops, tyriis/home-ops, billimek/k8s-gitops, khuedoan/homelab. Organisations: argoproj/argoproj-deployments, kubernetes/k8s.io, gitops-bridge-dev/gitops-bridge-argocd-control-plane-template. The owner's 7 readable repositories were counted for branch prefixes only.
 
 Background (read, not relied on):

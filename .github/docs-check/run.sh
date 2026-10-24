@@ -10,6 +10,8 @@ here=.github/docs-check
 
 front_matter() {
   python3 "$here/check_docs.py" .
+  # The decisions index and the standards register match the front matter (D-0001 "Index").
+  python3 "$here/gen_index.py" --check .
   bash "$here/tests/test_check_docs.sh"
 }
 
@@ -19,8 +21,14 @@ links() {
 }
 
 changed_md() {
-  # Markdown files this branch adds or changes. Records and evidence files are frozen, so they
-  # count only in the PR that adds them (D-0019 rule 3).
+  # Markdown files this branch adds or changes, compared with DOCS_BASE.
+  local base=${DOCS_BASE:-$(git merge-base origin/main HEAD)}
+  git diff --name-only --diff-filter=ACMR "$base" HEAD -- '*.md' | sort -u
+}
+
+style_md() {
+  # Check 3 (Markdown style): changed files, except edits to existing records and evidence files,
+  # which are linted only in the PR that adds them (D-0019 rule 3).
   local base=${DOCS_BASE:-$(git merge-base origin/main HEAD)}
   { git diff --name-only --diff-filter=ACMR "$base" HEAD -- '*.md' ':!docs/decisions/0*' ':!docs/research/0*'
     git diff --name-only --diff-filter=A "$base" HEAD -- 'docs/decisions/0*.md' 'docs/research/0*.md'; } | sort -u
@@ -28,7 +36,7 @@ changed_md() {
 
 markdown() {
   local files
-  files=$(changed_md)
+  files=$(style_md)
   if [ -z "$files" ]; then echo "markdown: no Markdown files changed"; return 0; fi
   # shellcheck disable=SC2086
   "$here/node_modules/.bin/markdownlint-cli2" --config "$here/markdownlint.jsonc" $files
@@ -45,12 +53,13 @@ words() {
   fi
   # Report only: every rule on every document. Findings never fail the run.
   "$vale" --config .github/vale/vale.ini --no-exit --output line docs AGENTS.md README.md SECURITY.md
-  # Gate: the owner-quote rule (D-0016 rule 5) on changed files, except the approval template.
+  # Gate: the owner-quote and owner-name rules (D-0016 rule 5) on every changed Markdown file,
+  # edited decision records and evidence files included, except the approval template.
   local files
   files=$(changed_md | grep -v -x 'docs/specs/README.md' || true)
   if [ -z "$files" ]; then echo "words: no Markdown files changed"; return 0; fi
   # shellcheck disable=SC2086
-  "$vale" --config .github/vale/vale.ini --output line --filter='.Name=="CentralHub.OwnerWords"' $files
+  "$vale" --config .github/vale/vale.ini --output line --filter='.Name in ["CentralHub.OwnerWords", "CentralHub.OwnerName"]' $files
 }
 
 case "${1:-all}" in

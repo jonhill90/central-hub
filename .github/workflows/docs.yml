@@ -56,7 +56,7 @@ jobs:
         env:
           DOCS_BASE: HEAD^1
 
-  words:                   # check 4: glossary words report only; owner-quote rule is a gate on changed files
+  words:                   # check 4: glossary words report only; owner-quote and owner-name rules gate changed files
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:

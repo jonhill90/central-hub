@@ -1,27 +1,27 @@
 # Central Hub platform: product requirements
 
-**System:** 8, Platform (runs Central Hub). **Status:** draft for Jon's review. **Rules for this page:** D-0007 rule 1; it sits at `docs/PRD.md` under D-0008.
+**System:** 8, Platform (runs Central Hub). **Status:** draft for the owner's review. **Rules for this page:** D-0007 rule 1; it sits at `docs/PRD.md` under D-0008.
 
 This page says what the platform is for and how we know it works. It holds no "how": how lives in decision records (`docs/decisions/`), specs (`docs/specs/`) and runbooks (`docs/runbooks/`).
 
-```
+```text
    people and agents ──▶ ┌──────────────────────── Central Hub (system 8) ────────────────────────┐
    (each its own         │  identity · secrets · storage · data · networking · backup · monitoring │
     identity)            │  ─────────────────────────────────────────────────────────────────────  │
                          │  upstream Kubernetes, run from this repo (GitOps)                       │
    apps in their own ──▶ │  ─────────────────────────────────────────────────────────────────────  │
-   repos consume it      │  any site: a rented VPS today; home lab and cloud later                 │
+   repos consume it      │  any site: Proxmox home lab now, VPS as outside worker; cloud later     │
                          └─────────────────────────── over a private network ──────────────────────┘
 ```
 
 ## Goals
 
-1. **Run upstream Kubernetes on any site.** Start on one rented VPS; add home and cloud sites without redesign.
+1. **Run upstream Kubernetes on any site.** Start with one cluster whose control plane and workers run in the home lab on Proxmox. One rented VPS joins that cluster as an outside worker for internet-facing apps, once the control plane is up. Add cloud sites without redesign.
 2. **Provide shared services** to the apps and agents that use the platform: identity, secrets, storage, data, networking, backup and monitoring.
-3. **Jon understands every piece.** Each one is explained before it is added: purpose, dependencies and how it fails (REQ-0001).
+3. **The owner understands every piece.** Each one is explained before it is added: purpose, dependencies and how it fails (REQ-0001).
 4. **Every piece can be replaced** without data loss, through portable formats and explicit boundaries. Each decision record names its exit path (REQ-0002, REQ-0011).
 5. **Every human and agent has its own identity,** and every action is attributed to it (REQ-0003).
-6. **Everything is code in this repo.** No change by clicking in a console.
+6. **Everything is controllable from this repo.** One-time console steps at the start are fine; after that, every change is made and kept as code here.
 7. **The current state and the next step are always visible** (REQ-0006).
 
 ## Non-goals
@@ -54,4 +54,4 @@ This page says what the platform is for and how we know it works. It holds no "h
 - **Where each kind of document goes:** D-0012.
 - **The pillars it is measured against:** D-0005.
 
-`docs/architecture.md`, `docs/glossary.md` and `docs/runbooks/` are created with their first real file (D-0012 rule 2). Until then these links have nothing behind them.
+`docs/architecture.md` is created with its first real file (D-0012 rule 2). Until then that link has nothing behind it.

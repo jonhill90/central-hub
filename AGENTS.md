@@ -25,11 +25,14 @@ These rules fit the current stage, while Jon does every step himself so he under
 |---|---|
 | How decisions are recorded and accepted | `docs/decisions/0001-record-decisions-as-markdown-records.md` |
 | Branches, commit and PR titles | `docs/decisions/0002-use-one-main-branch-with-environment-folders.md` |
-| Identifiers and labels | `docs/decisions/0020-number-backlog-items-bl-nnnn.md` (supersedes D-0018) |
+| Identifiers and labels | `docs/decisions/0003-use-registered-id-families-and-file-qualified-labels.md` |
 | What the platform is for | `docs/PRD.md` |
 | Writing a spec for a change | `docs/specs/README.md` |
 | All decisions | `docs/decisions/README.md` |
 | What a decision rests on | `docs/research/README.md` |
+| Standards in force (VM hostnames, IP address plan) | `docs/standards/README.md` |
+| What a word means here | `docs/glossary.md` |
+| How to do one job, step by step | `docs/runbooks/README.md` |
 | Reporting a vulnerability | `SECURITY.md` |
 
 ## Activation gate
@@ -39,7 +42,7 @@ Before any cluster reads this repo, all 7 must be true and recorded:
 1. Per-agent GitHub identities, with Jon's approval required by GitHub.
 2. A verifier the PR can't edit.
 3. No write tokens in PR code.
-4. A pinned, no-writer Flux install.
+4. A pinned, no-writer GitOps engine install (the engine is not chosen yet).
 5. Defined deploys.
 6. No image automation.
 7. Break-glass recorded.

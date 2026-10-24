@@ -48,7 +48,7 @@ Relied on (the decision depends on these):
 6. J. Parker Henderson, architecture-decision-record collection, README. <https://github.com/joelparkerhenderson/architecture-decision-record>
 7. Python PEP 1, "PEP Maintenance". <https://peps.python.org/pep-0001/>
 8. N. Pryce, adr-tools, `src/adr-new`. <https://raw.githubusercontent.com/npryce/adr-tools/master/src/adr-new>
-9. RFC Editor, errata search. <https://www.rfc-editor.org/errata.php>
+9. RFC Editor, errata search. <https://errata.rfc-editor.org/>
 
 Background (read, not relied on):
 
@@ -56,7 +56,7 @@ Background (read, not relied on):
 11. AWS Prescriptive Guidance, "ADR best practices". <https://docs.aws.amazon.com/prescriptive-guidance/latest/architectural-decision-records/best-practices.html>
 12. ThoughtWorks Technology Radar, "Lightweight Architecture Decision Records". <https://www.thoughtworks.com/radar/techniques/lightweight-architecture-decision-records>
 13. O. Zimmermann, "How to create Architectural Decision Records (ADRs) — and how not to", 2023. <https://ozimmer.ch/practices/2023/04/03/ADRCreation.html>
-14. ICSA 2026 paper on ADRs in 921 GitHub repositories (abstract only). <https://conf.researchr.org/details/icsa-2026/icsa-2026-papers/34/> (returned "not found" on 2026-10-23)
+14. ICSA 2026 paper "Architecture Decision Records: Adoption, Impact, and Developer Engagement in Open-Source Software", 921 GitHub repositories (abstract only). <https://conf.researchr.org/details/icsa-2026/icsa-2026-papers/34/Architecture-Decision-Records-Adoption-Impact-and-Developer-Engagement-in-Open-Sou>
 15. G. Buchgeher et al., IEEE Access 11 (2023) 63725-63740, DOI 10.1109/ACCESS.2023.3287654 (search snippet only, not fetched).
 
 Items 1 to 14 fetched 2026-10-16.

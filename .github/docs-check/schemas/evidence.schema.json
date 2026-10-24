@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "evidence.schema.json",
-  "$comment": "docs/research/NNNN-slug.md (D-0016 rule 1, D-0017).",
+  "$comment": "docs/research/NNNN-slug.md (D-0016 rule 1).",
   "type": "object",
   "additionalProperties": false,
   "required": ["record", "batch", "researched", "method", "checks"],

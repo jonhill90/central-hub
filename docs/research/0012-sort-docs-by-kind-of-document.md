@@ -32,7 +32,7 @@ Which kinds of documentation does central-hub need, which folders hold them, and
 
 (Written from the record, not from the batch.)
 
-D-0012 sorts docs by kind of document (option 1) because of findings 1 to 3, and marks each folder living or frozen because of finding 4. It adds a README to each root folder on top, because of finding 8. Its runbook format draws on findings 5 and 6, its postmortem format on finding 7, and its single architecture file on finding 10. It keeps `docs/decisions/` and has no `plans/` or `playbooks/` folder because of findings 2 and 9. Its rule that runbooks name secret keys and never values follows finding 11. The fields and status words themselves are the drafting agent's proposal, which the owner said yes to, because no source agrees on them (finding 6).
+D-0012 sorts docs by kind of document (option 1) because of findings 1 to 3, and marks each folder living or frozen because of finding 4. It adds a README to each root folder on top, because of finding 8. Its runbook format draws on findings 5 and 6, its postmortem format on finding 7, and its single architecture file on finding 10. It keeps `docs/decisions/` and has no `plans/` or `playbooks/` folder because of findings 2 and 9. Its rule that runbooks name secret keys and never values follows finding 11. The fields and status words themselves are the drafting agent's proposal, accepted with the record, because no source agrees on them (finding 6).
 
 ## Limits
 

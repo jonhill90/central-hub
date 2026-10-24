@@ -101,11 +101,9 @@ def main(root: Path) -> int:
             errors.append(f"{rel}: id {fm.get('id')} does not match file name D-{number}")
         if kind == "standard" and fm.get("id") != f"STD-{number}":
             errors.append(f"{rel}: id {fm.get('id')} does not match file name STD-{number}")
-        if isinstance(fm.get("accepted-evidence"), dict) and "quote" in fm["accepted-evidence"]:
-            warnings.append(f"{rel}: accepted-evidence still has the D-0001 quote shape (D-0016 rule 6 cleanup)")
 
         if kind == "evidence":
-            # D-0017 rules 1 and 4: same file name as its record, front matter names it, record links it.
+            # D-0016 rule 1: same file name as its record, front matter names it, record links it.
             twin = rel.replace("docs/research/", "docs/decisions/")
             if twin in unreadable:
                 pass
@@ -121,8 +119,8 @@ def main(root: Path) -> int:
             for ref in fm.get("waits-on") or []:
                 if ref.startswith("D-") and ref not in decisions and ref not in unreadable:
                     errors.append(f"{rel}: waits-on {ref} has no record")
-            # Symmetric links (D-0001 supersedes; D-0016 Confirmation amends).
-            for fwd, back in (("supersedes", "superseded-by"), ("amends", "amended-by")):
+            # Symmetric links (D-0001 supersedes).
+            for fwd, back in (("supersedes", "superseded-by"),):
                 for ref in fm.get(fwd) or []:
                     other = decisions.get(ref)
                     if ref in unreadable:
@@ -134,7 +132,7 @@ def main(root: Path) -> int:
                     theirs = theirs if isinstance(theirs, list) else [theirs]
                     if did not in theirs:
                         errors.append(f"{other[0]}: {back} should include {did} ({rel} says {fwd} {ref})")
-            for back, fwd in (("superseded-by", "supersedes"), ("amended-by", "amends")):
+            for back, fwd in (("superseded-by", "supersedes"),):
                 refs = fm.get(back)
                 for ref in (refs if isinstance(refs, list) else [refs] if refs else []):
                     other = decisions.get(ref)
@@ -160,13 +158,13 @@ def main(root: Path) -> int:
         if not state.get(d):
             visit(d, [])
 
-    # docs/decisions/ has no subfolders (D-0017 Confirmation).
+    # docs/decisions/ has no subfolders (D-0016 Confirmation).
     for sub in (root / "docs/decisions").iterdir():
         if sub.is_dir():
-            errors.append(f"docs/decisions/{sub.name}/: subfolder not allowed (D-0017)")
+            errors.append(f"docs/decisions/{sub.name}/: subfolder not allowed (D-0016)")
 
-    # Each kind folder README lists every file in it (D-0012 rule 4, D-0017 rule 3).
-    for folder in ("decisions", "research", "standards"):
+    # Each kind folder README lists every file in it (D-0012 rule 4, D-0016 rule 1).
+    for folder in ("decisions", "research", "standards", "runbooks"):
         readme = root / f"docs/{folder}/README.md"
         if not readme.exists():
             continue
