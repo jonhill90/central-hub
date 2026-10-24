@@ -26,10 +26,10 @@ Research batch RB-0077 (evidence: [../research/0020-number-backlog-items-bl-nnnn
 
 - `D1`, an open question about repo layout, looks like `D-0001`, an accepted record. Other files use their own `D1`, `A2` or `K1` for different things.
 - None of the seven letters could become a registered prefix, because a prefix needs at least two characters (D-0018 rule 2).
-- 24 decision-map rows are not in the backlog, and 15 of them are still open. So the backlog is not yet the one place for open questions.
+- 24 decision-map rows are not in the backlog, and 15 of them are still open. One of those, D1, is already covered by the backlog's repo-layout row. So the backlog is not yet the one place for open questions.
 - Every tracker the batch read gives each item one key from one sequence, and keeps the topic in the title.
 
-The owner asked for the reasoning to be weighed without the cost of renaming existing files, because the system is new. On that basis the batch recommended numbers over word labels. On 2026-10-24 at 01:57 UTC the owner chose `BL-0001` style on a decision card that also offered readable word labels, or keeping the letter codes.
+On 2026-10-23 at 21:50 UTC the owner asked for the reasoning to be weighed without the cost of renaming existing files, because the system is new. On that basis the batch recommended numbers over word labels. On 2026-10-24 at 01:57 UTC the owner chose `BL-0001` style on a decision card that also offered readable word labels, or keeping the letter codes.
 
 Adding a family changes the family registry, so under D-0018 rule 2 it needs a record that supersedes D-0018.
 
@@ -51,7 +51,7 @@ Adding a family changes the family registry, so under D-0018 rule 2 it needs a r
 
 Chosen option: **1**, which the owner chose on 2026-10-24 at 01:57 UTC.
 
-D-0018's rules all carry over. Rule 1 gains one registry row, and rule 4's example changes because `DECISION-MAP#P1` will no longer exist. They are restated here so this record stands alone once it supersedes D-0018.
+D-0018's rules all carry over. Rule 1 gains one registry row. Rules 2, 3, 6 and 7 each gain a line or an example for the new family. Rule 4's example changes because `DECISION-MAP#P1` will no longer exist, and two examples are brought up to date: `RB-0077` in rule 1 and "was D1" in rule 5. The rules are restated here so this record stands alone once it supersedes D-0018.
 
 ### The rules
 
@@ -86,11 +86,11 @@ D-0018's rules all carry over. Rule 1 gains one registry row, and rule 4's examp
 
 - Every backlog row gets a `BL-NNNN` number, done rows included. Open decisions are backlog items, so they get one too.
 - The decision map keeps its option tables, keyed by the same `BL-NNNN` numbers. The backlog is the one list. The map is where an open decision's options are written down.
-- Every decision-map row becomes a backlog row first. The 15 open rows that are missing are added with their status, and the 9 decided or applied rows are added as done.
+- Every decision-map row becomes a backlog row first. D1 maps to the existing repo-layout row. The other 14 open rows that are missing are added with their status, and the 9 decided or applied rows are added as done.
 - First numbering: rows are numbered in the order of the table after those rows are added, starting at `BL-0001`. After that, each new row takes the next free number.
 - In prose, the title goes next to the number: `BL-0012 (repo layout)`. Tables already have an Item column.
 - When the owner decides an open question, the decision gets its own `D-NNNN`. The backlog row links to that record and is marked done.
-- The table's check refuses a row label that is not `BL-NNNN`, and it refuses a duplicate number.
+- The backlog's render script, which already refuses duplicate labels, also refuses a row label that is not `BL-NNNN`.
 
 ### Exit path
 
@@ -98,10 +98,21 @@ If the backlog moves into a task management system, each item moves once and tak
 
 ### Order of work after acceptance
 
-1. Project files: the backlog owner adds the missing decision-map rows, numbers every row, and updates the table's check.
-2. Research and project files: rename the old labels by script in the same step. That covers the letter codes, the word labels written as `BACKLOG.md:<label>`, and both maps drawn from the table. Prove it with a search count of 0 old labels outside the kept records.
-3. central-hub: one correction PR. D-0001 and D-0002 cite decision-map labels in `legacy-id` and `revisit-when`, and D-0001's field contract gives `W1` and `S7` as examples of backlog IDs.
+1. Project files: the backlog owner adds the missing decision-map rows, numbers every row, and updates the render script's check.
+2. Research and project files: rename the old labels by script in the same step. That covers the letter codes, the word labels written as `BACKLOG.md:<label>`, the decision map, and the dependency map drawn from the table. Prove it with a search count of 0 old labels outside the kept records.
+3. central-hub: one correction PR.
+   - D-0001 cites map labels in `legacy-id` (`W1`, `W2`) and `revisit-when` (`K1`). Its field contract gives `W1` and `S7` as backlog IDs, checked against the decision map, and calls `legacy-id` "IDs from the decision map".
+   - D-0001 and the decisions index say decisions not yet picked stay in the decision map. They become "stay in the backlog", with their options in the decision map.
+   - D-0002 cites `S4` in `legacy-id`.
+   - Superseded records that use `DECISION-MAP#P1` or `DECISION-MAP#W1` only as an example of how to write a local label (D-0003, D-0009, D-0014, D-0015, D-0018) keep it as written, because they describe the old rule and cite no backlog item.
 4. Project instructions, if they cite a row label: the agent drafts, the owner approves, and the coordinator saves.
+
+```mermaid
+flowchart LR
+  A[1 Backlog owner numbers\nevery row] --> B[2 Scripted rename\n0-count proof] --> C[3 central-hub\ncorrection PR] --> D[4 Project instructions,\nif they cite a label]
+```
+
+*In words:* the backlog is numbered first, then the old labels are renamed by script, then accepted records are corrected, then the project instructions if needed.
 
 ### Consequences
 
@@ -114,7 +125,7 @@ If the backlog moves into a task management system, each item moves once and tak
 
 ### Confirmation
 
-- The backlog check passes: every row label is `BL-NNNN`, and there are no duplicates.
+- The backlog render script's check passes: every row label is `BL-NNNN`, and there are no duplicates.
 - Every decision-map row has a backlog row.
 - After the rename, a search finds 0 old row labels outside the kept records and correction logs, and the count goes in the corrections log.
 
