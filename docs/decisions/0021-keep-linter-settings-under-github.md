@@ -1,7 +1,7 @@
 ---
 id: D-0021
 title: Keep the docs linter settings under .github/, not in the repository root
-status: proposed
+status: accepted
 date: 2026-10-24
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0008, D-0019]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-24T06:21:57Z
+  approved-commit: c62cf9982508e3fc8e5a338f98fc8b87dfe92bf2
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNAqUPkvQ7d3ptmgAjUaDB92
+  approval-names: "PR #41 and head c62cf99"
+  check: the drafting agent read the message in the project thread at 2026-10-24T06:21Z; it names PR jonhill90/central-hub#41 and head c62cf99 itself. An independent check by a reviewing agent is still to do.
+  merged: not yet; the owner merges PR #41, which carries this evidence commit on top of the approved commit
 amends: [D-0019]
 legacy-id: []
 revisit-when: a docs tool cannot take a settings path; an editor or CI service that the owner uses needs the settings in the root; or D-0008's rule for the root changes
