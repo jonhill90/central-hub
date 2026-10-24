@@ -59,4 +59,4 @@ Server and desktop are told apart by the OS code on Windows (`ws` or `wc`), and 
   1. `accepted-evidence` rewritten once into D-0016 rule 6 fields with D-0006 step 7's fixed mapping, as amended by D-0016: `timestamp` to `approved-at`, `message-id` to `approval-ref`, `quote-check` to `check`; `approved-by: owner` and `approval-names` added; `quote` removed (its text is in `accepted-evidence.quote` at commit 916a972). No value changes.
   2. A Corrections section added, holding this entry.
 
-  Approval: to be added after approval (D-0006 step 6).
+  Approval: the owner, 2026-10-24T01:49:14Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNHByoYueesp8x5JHxzxVb35), naming PR #34 and head ab5af17; approved commit ab5af17c1071414e369d7f83014c10e6fb0e2214. Check: the drafting agent read the message at 2026-10-24T01:49Z and confirmed it names that PR and head.
