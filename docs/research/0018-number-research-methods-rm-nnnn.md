@@ -12,15 +12,15 @@ This file summarises the research behind D-0018. It adds nothing that the resear
 
 ## Question
 
-Research methods are cited as `RM01` to `RM122`. Should that agent-made scheme stay, be respelled or be replaced, and how should it fit the ID family registry?
+Research methods are cited by an agent-made ID. Should that scheme stay, change shape or be replaced, and how should it fit the ID family registry?
 
 ## Findings
 
-1. **The catalogue has 122 methods,** `RM01` to `RM122`, and 40 more are proposed (measured).
-2. **The number is the method's place in the list.** Three scripts give a new method the ID `RM` plus the list length plus one, so rebuilding or re-sorting the list would renumber methods (measured). The build script reads the catalogue from a copy on one machine, not from the Research repo (measured).
+1. **The catalogue has 122 methods,** and 40 more are proposed (measured).
+2. **The number is the method's place in the list.** Three scripts give a new method the ID made of the prefix plus the list length plus one, so rebuilding or re-sorting the list would renumber methods (measured). The build script reads the catalogue from a copy on one machine, not from the Research repo (measured).
 3. **The IDs are used heavily but only inside the project:** about 6,400 times in the Research repo and 4,300 times in the project files, and not at all in central-hub (measured).
-4. **Every number checked means one method.** A sample of 55 uses from 55 files, and 557 method-table rows, all name the catalogue's method for that number (measured). So a script can rename them.
-5. **The research gate depends on the shape.** The gate template names method IDs (sourced), and the hook that checks new specs matches `RM` followed by digits in three files (measured). The hook runs from a setup script that is pasted by hand (measured). Four more scripts assume the `RMnn` shape when they read or build IDs (measured).
+4. **Every number checked means one method.** A sample of 55 uses from 55 files, and 557 method-table rows, all name the catalogue's method for that number (measured). So a script can change them.
+5. **The research gate depends on the shape.** The gate template names method IDs (sourced), and the hook that checks new specs matches the prefix followed by digits in three files (measured). The hook runs from a setup script that is pasted by hand (measured). Four more scripts assume the agent-made shape when they read or build IDs (measured).
 6. **The published catalogues read tend to keep an entry's number** (inferred from the sources below; NIST's retirement rules were not read, and one ATT&CK reuse is possible [6]). MITRE ATT&CK marks retired entries deprecated or revoked, and a revoked one points to its replacement [1]. ATT&CK versions the catalogue as a whole [2]. NIST SP 800-53 numbers controls by family prefix, number and enhancement, such as `SA-15(13)` [3]. CWE keeps deprecated entries under their number with a pointer to the replacement (search summary only) [5].
 7. **Position-based IDs change.** OWASP ASVS numbers requirements by chapter, section and position, and because "the identifiers may change between versions", it asks others to cite them with the version [4] (sourced).
 
@@ -28,7 +28,7 @@ Research methods are cited as `RM01` to `RM122`. Should that agent-made scheme s
 
 (Written from the record, not from the batch.)
 
-D-0018 stores each method's number instead of working it out from the list (findings 2, 6 and 7), keeps retired methods with a pointer (finding 6), and respells the IDs by script (finding 4). It sends the setup-script change to the owner in the same step as the rename (finding 5).
+D-0018 stores each method's number instead of working it out from the list (findings 2, 6 and 7), keeps retired methods with a pointer (finding 6), and gives the IDs the `RM-NNNN` shape by script (finding 4). It sends the setup-script change for the gate to the owner (finding 5).
 
 ## Limits
 

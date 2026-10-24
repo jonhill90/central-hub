@@ -12,7 +12,7 @@ This file summarises the research behind D-0020. It adds nothing that the resear
 
 ## Question
 
-The decision map and the backlog label their rows with one capital letter plus a number (`D1`, `K1`, `S7`), with lowercase word labels, or with other uppercase labels. How should these rows be identified, given the ID family registry?
+The decision map and the backlog labelled their rows with one capital letter plus a number (`D1`, `K1`, `S7`), with lowercase word labels, or with other uppercase labels. How should these rows be identified, given the ID family registry?
 
 ## Findings
 
@@ -23,19 +23,17 @@ The decision map and the backlog label their rows with one capital letter plus a
 5. **None of the letters could be registered,** because a prefix needs at least two characters (inferred from D-0003 rule 2).
 6. **Trackers give each item one key from one sequence and keep the topic in the title** (inferred from references 1 to 5). Jira forms a key from a space key and a sequential number [1]. GitHub cites issues and pull requests by number [2]. Kubernetes prefixes each enhancement proposal with its tracking issue number [3]. Python PEPs take the next number not already used [4]. Rust RFCs are not numbered until their pull request opens [5].
 7. **Decision-record practice numbers records too** (sourced). MADR names records `NNNN-title-with-dashes` and lists statuses from proposed to superseded [6].
-8. **Renaming the labels is a large change** (measured). The backlog's word labels are cited about 370 times as `BACKLOG.md:<label>`. Map IDs are cited 236 times as "DECISION-MAP" plus an ID (this counts copies twice and includes 11 in the chat archive, which is never renamed), 47 times as `DECISION-MAP#` plus an ID, and 74 times in the backlog table. A map drawn from the table has 118 nodes keyed by label. The scripts that draw the backlog have no label-specific code, so a rename by script is possible (inferred).
 
 ## How the decision used it
 
 (Written from the record, not from the batch.)
 
-D-0020 gives every backlog item a `BL-NNNN` number, as the trackers in finding 6 do. That ends the look-alike in finding 4 and gives the rows a prefix that passes the rule in finding 5. Every decision-map row is added to the backlog first (finding 3). The owner asked for the options to be weighed without the renaming cost in finding 8, and on that basis numbers were recommended.
+D-0020 gives every backlog item a `BL-NNNN` number, as the trackers in finding 6 do. That ends the look-alike in finding 4 and gives the rows a prefix that passes the rule in finding 5. Every decision-map row is added to the backlog first (finding 3). The owner asked for the options to be weighed without the cost of changing existing files, and on that basis numbers were recommended.
 
 ## Limits
 
 - Citations of bare one-letter labels outside the backlog could not be counted reliably, because the same letters mean other things (finding 4).
 - Standards bodies (IETF, W3C) and practitioner writing on decision logs were planned but not searched. The six tracker and record sources met the stop rule.
-- The counts in finding 8 include copies of the same files in two places. The first count script missed the chat archive's location; the independent check corrected the figures.
 - The ISO/IEC/IEEE vocabulary (SEVOCAB) was planned but not searched, and the skills check was not run.
 
 ## References

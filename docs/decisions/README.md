@@ -17,9 +17,9 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0010 | [Give specs five status words](0010-set-spec-status-words.md) | accepted | D-0001, D-0007, D-0008 | 2026-10-22 |
 | D-0011 | [Keep the code for every machine below Kubernetes in hosts/, one subfolder per vendor product, with Terraform modules in their own repository](0011-keep-machine-code-in-hosts.md) | accepted | D-0001, D-0008 | 2026-10-22 |
 | D-0012 | [Sort docs/ by kind of document, add runbooks, architecture, glossary, postmortems and diagrams with their first file, and keep plans and playbooks out](0012-sort-docs-by-kind-of-document.md) | accepted | D-0001, D-0007, D-0008, D-0009, D-0010 | 2026-10-23 |
-| D-0014 | [Spell requirement IDs REQ-NNNN, and during Foundation rename agent-made labels everywhere with the owner's approval](0014-use-req-ids-for-requirements.md) | accepted | D-0001, D-0003, D-0004, D-0006 | 2026-10-23 |
-| D-0015 | [Number research batches RB-NNNN in one batch register, and rename the old batch codes everywhere](0015-number-research-batches-rb-nnnn.md) | accepted | D-0001, D-0003, D-0006 | 2026-10-23 |
+| D-0014 | [Number requirements REQ-NNNN](0014-number-requirements-req-nnnn.md) | accepted | D-0001, D-0003, D-0004, D-0006 | 2026-10-23 |
+| D-0015 | [Number research batches RB-NNNN](0015-number-research-batches-rb-nnnn.md) | accepted | D-0001, D-0003, D-0006 | 2026-10-23 |
 | D-0016 | [Give each decision record a public evidence file, and record the owner's approval and reasons in neutral words](0016-give-records-an-evidence-file-and-neutral-approval.md) | accepted | D-0001, D-0006 | 2026-10-23 |
-| D-0018 | [Spell research method IDs RM-NNNN, store each method's number, and rename the old IDs everywhere](0018-respell-research-method-ids.md) | accepted | D-0001, D-0003, D-0006, D-0016 | 2026-10-23 |
+| D-0018 | [Number research methods RM-NNNN](0018-number-research-methods-rm-nnnn.md) | accepted | D-0001, D-0003, D-0006, D-0016 | 2026-10-23 |
 | D-0019 | [Check the docs on every PR, with front matter and inside links as gates, Markdown style on changed files, and word checks built from the glossary](0019-check-docs-on-every-pr.md) | accepted | D-0001, D-0012, D-0016 | 2026-10-23 |
-| D-0020 | [Number every backlog item BL-NNNN, including open decisions, and rename the old row labels everywhere](0020-number-backlog-items-bl-nnnn.md) | accepted | D-0001, D-0003, D-0006, D-0016 | 2026-10-24 |
+| D-0020 | [Number backlog items BL-NNNN](0020-number-backlog-items-bl-nnnn.md) | accepted | D-0001, D-0003, D-0006, D-0016 | 2026-10-24 |
