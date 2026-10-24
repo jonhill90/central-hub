@@ -1,0 +1,8 @@
+// Markdown style check (D-0019 check 3). Run with .github/docs-check/run.sh markdown.
+{
+  "default": true,
+  "MD013": false,                          // one line per paragraph; line length is noise in prose
+  "MD025": { "front_matter_title": "" },   // front matter `title:` plus the H1 is intended
+  "MD060": false,                          // table pipe alignment: style only, high churn
+  "MD033": { "allowed_elements": ["br"] }  // Mermaid labels use <br/>
+}

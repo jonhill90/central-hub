@@ -40,6 +40,20 @@ jobs:
           echo "LYCHEE=$RUNNER_TEMP/lychee" >> "$GITHUB_ENV"
       - run: .github/docs-check/run.sh links
 
+  markdown:                # check 3, gate: files this PR adds or changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2     # the PR merge commit and its first parent, the base
+      - name: Install pinned Node packages
+        run: npm ci --ignore-scripts --prefix .github/docs-check
+      - run: .github/docs-check/run.sh markdown
+        env:
+          DOCS_BASE: HEAD^1
+
   outside-links:           # report only, never a gate
     if: github.event_name == 'schedule'
     runs-on: ubuntu-24.04

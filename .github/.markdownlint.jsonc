@@ -1,0 +1,5 @@
+// .github/ holds the PR template, which starts at "## Summary" because GitHub adds the title.
+{
+  "extends": "../.markdownlint.jsonc",
+  "MD041": false
+}
