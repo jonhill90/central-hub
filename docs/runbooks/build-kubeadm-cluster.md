@@ -183,6 +183,7 @@ firewall-cmd --reload
 - note: trusting the whole pod range is broad. Narrowing it is a hardening item.
 - page: <https://kubernetes.io/docs/reference/networking/ports-and-protocols/>
 - why: Each Kubernetes part listens on its own port (measured with `ss` on the proof node). They open only on the tailnet, so the public zone stays closed (but see the NodePort finding in [step 23](#23-services-clusterip-nodeport-loadbalancer-sn3)).
+- expect: `firewall-cmd --zone=tailnet --list-ports` shows the 8 ports above; `firewall-cmd --zone=trusted --list-sources` shows `10.244.0.0/16`.
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2, TS5 (partly).
 
 #### 5. containerd 2.3.6
@@ -315,6 +316,7 @@ Off-site backup is not chosen yet: where the encrypted copies go (Azure Blob sto
 - **Not yet proven:** upload to Azure Blob with a short immutability lock. Deferred by the owner on 2026-10-17 until the repo layout and an Azure config-as-code tool are chosen; until then, recovery is a rebuild from configuration.
 - note: after step 17 the cluster runs etcd 3.7.0. The etcdutl 3.6.8 tool above was not tested against a 3.7.0 snapshot.
 - why: etcd is the cluster's memory: it stores all the API server's data (source: <https://kubernetes.io/docs/concepts/overview/components/>). With one control plane, losing that node can lose the cluster's data; the create-cluster page's answer is "Regularly back up etcd".
+- expect: `etcdutl snapshot status <db> -w table` shows a hash, a revision and a size; the bundle decrypts with the private key on another machine; after a restore, the test data is back and `kubectl get nodes` shows `Ready`.
 - status: local backup and restore **PROVEN** (PROOF-RUN-1.md); restore onto a rebuilt VPS **PROVEN** (PROOF-RUN-2.md); Azure upload **NOT PROVEN** (deferred). CKA: CA4.
 
 ---
@@ -1265,6 +1267,7 @@ This needs more machines, so here you only read the commands.
 - The commands, for reading only: on the first node `kubeadm init --control-plane-endpoint <endpoint name>:6443 --upload-certs`; on each other control-plane node `kubeadm join <endpoint name>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash> --control-plane --certificate-key <key>`; on a worker, the same without `--control-plane --certificate-key`.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/> ; <https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-join/>
 - why: One control plane is one point of failure. High availability runs three or more (source: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/ha-topology/>), so the cluster keeps going when one dies.
+- expect: n/a (read only: nothing runs on this VPS).
 - status: **NOT PROVEN**: needs more machines.
 
 #### 37. Teardown
@@ -1273,6 +1276,8 @@ This needs more machines, so here you only read the commands.
 - ※ Back to [step 0](#0-fresh-machine).
 
 why: Rebuilding often is how you prove the runbook, not memory, makes the cluster.
+
+expect: the old node is gone from `tailscale status`, and the rebuilt machine passes step 0's expect line.
 
 ## Not in this version
 
