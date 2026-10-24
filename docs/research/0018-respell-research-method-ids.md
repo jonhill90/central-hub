@@ -43,7 +43,7 @@ Relied on (the decision depends on these):
 
 1. MITRE ATT&CK Python library, "MITRE ATT&CK Data" (revoked and deprecated objects). <https://mitreattack-python.readthedocs.io/en/latest/mitre_attack_data/mitre_attack_data.html>
 2. MITRE ATT&CK, "Versions of ATT&CK". <https://attack.mitre.org/resources/versions/>
-3. NIST, SP 800-53 Rev. 5 Update 1. <https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final>
+3. NIST, SP 800-53 Rev. 5, Release 5.2.0 (2025-08-27), which added `SA-15(13)`. <https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final>
 4. OWASP, Application Security Verification Standard. <https://asvs.owasp.org/>
 
 Background (read, not relied on):

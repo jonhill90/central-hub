@@ -63,7 +63,7 @@ Background (read, not relied on):
 17. Cloud Posse, proposal to index ADRs by ISO 8601 date (rejected). <https://docs.cloudposse.com/resources/adrs/proposed/proposed-use-iso-8601-date-index-for-adrs/>
 18. clan.lol, ADR numbering process. <https://clan.lol/docs/26.05/decisions/03-adr-numbering-process>
 19. GO FAIR Foundation, principle F1. <https://www.gofair.foundation/f1>
-20. RFC Editor, "Errata in RFCs". <https://www.rfc-editor.org/errata-definitions/>
+20. RFC Editor, "Errata in RFCs". <https://www.rfc-editor.org/series/rfc-errata/>
 
 All fetched 2026-10-12.
 

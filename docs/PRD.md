@@ -10,13 +10,13 @@ This page says what the platform is for and how we know it works. It holds no "h
     identity)            │  ─────────────────────────────────────────────────────────────────────  │
                          │  upstream Kubernetes, run from this repo (GitOps)                       │
    apps in their own ──▶ │  ─────────────────────────────────────────────────────────────────────  │
-   repos consume it      │  any site: a rented VPS today; home lab and cloud later                 │
+   repos consume it      │  any site: Proxmox home lab now, VPS as outside worker; cloud later     │
                          └─────────────────────────── over a private network ──────────────────────┘
 ```
 
 ## Goals
 
-1. **Run upstream Kubernetes on any site.** Start on one rented VPS; add home and cloud sites without redesign.
+1. **Run upstream Kubernetes on any site.** Start with one cluster whose control plane and workers run in the home lab on Proxmox. One rented VPS joins that cluster as an outside worker for internet-facing apps, once the control plane is up. Add cloud sites without redesign.
 2. **Provide shared services** to the apps and agents that use the platform: identity, secrets, storage, data, networking, backup and monitoring.
 3. **Jon understands every piece.** Each one is explained before it is added: purpose, dependencies and how it fails (REQ-0001).
 4. **Every piece can be replaced** without data loss, through portable formats and explicit boundaries. Each decision record names its exit path (REQ-0002, REQ-0011).

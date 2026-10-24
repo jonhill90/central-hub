@@ -30,3 +30,7 @@ One line per correction to an accepted record, an evidence file or an active sta
 - 2026-10-24 · D-0007, evidence 0007 · the reason for the PRD states the owner's answer to the 2026-10-19 decision card, and the project brief is named as the coordinator agent's · PR #42
 - 2026-10-24 · evidence 0012 · the runbook fields and status words described as accepted with the record · PR #42
 - 2026-10-24 · D-0001 to D-0016, STD-0001, STD-0002 · Corrections sections moved to this log · PR #42
+- 2026-10-24 · evidence 0002, 0003, 0006, 0020 · moved source URLs updated; the ICSA 2026 paper in 0006 linked by its full title · PR #42
+- 2026-10-24 · evidence 0005 · the Azure sustainability source read on its live page; two source URLs updated · PR #42
+- 2026-10-24 · evidence 0018 · the NIST source named as SP 800-53 Release 5.2.0, which added `SA-15(13)` · PR #42
+- 2026-10-24 · STD-0001 · sources added for the hostname limits · PR #42

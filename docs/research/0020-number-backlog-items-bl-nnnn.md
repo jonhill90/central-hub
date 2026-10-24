@@ -42,7 +42,7 @@ D-0020 gives every backlog item a `BL-NNNN` number, as the trackers in finding 6
 
 Relied on (the decision depends on these):
 
-1. Atlassian, "What is a work item?" (work item keys). <https://support.atlassian.com/jira-software-cloud/docs/what-is-an-issue/>
+1. Atlassian, "What is a work item?" (work item keys). <https://support.atlassian.com/jira-software-cloud/docs/what-is-a-work-item/>
 2. GitHub Docs, "Autolinked references and URLs". <https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/autolinked-references-and-urls>
 3. Kubernetes enhancements, KEP README. <https://github.com/kubernetes/enhancements/blob/master/keps/README.md>
 4. Python, PEP 1. <https://peps.python.org/pep-0001/>

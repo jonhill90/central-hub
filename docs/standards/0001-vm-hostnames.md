@@ -44,6 +44,8 @@ A hostname MUST be five fields joined with no separator:
 
 Server and desktop are told apart by the OS code on Windows (`ws` or `wc`), and by the role on Linux (`dt` means a desktop).
 
+Sources for the limits: NetBIOS computer names, 15 characters and not all digits (<https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/naming-conventions-for-computer-domain-site-ou>); RFC 1123 §2.1 host name labels (<https://www.rfc-editor.org/rfc/rfc1123>); Kubernetes object names (<https://kubernetes.io/docs/concepts/overview/working-with-objects/names/>).
+
 ## Example that passes
 
 `pubapdemo01`: prod, Ubuntu, app, "demo", number 01. It is 11 characters long. The example is made up and is not a real machine.
