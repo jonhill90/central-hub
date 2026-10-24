@@ -51,7 +51,7 @@ These numbers have no file and no row in the index. They are never used again (D
 
 The lines below are PR #42's; its approval facts and merge commit are added after it merges.
 
-- 2026-10-24 · STD-0002 · place numbers and the kept-empty block removed; not chosen yet · PR #42
+- 2026-10-24 · STD-0002 · place numbers, the kept-empty block and the spare rows removed, and the home LAN range moved out of the public file, per the owner's request of 2026-10-24 05:51 and 05:56 UTC; first names replaced with "the owner" · PR #42
 - 2026-10-24 · D-0003 · the family registry and rules brought to the current text from D-0009, D-0014, D-0015, D-0018 and D-0020; status back to accepted · PR #42
 - 2026-10-24 · D-0009, D-0014, D-0015, D-0018, D-0020 · restated rules and supersede links removed; each keeps the family or rule change it adds, with its prefix check; all accepted · PR #42
 - 2026-10-24 · D-0015 · the 2026-10-23 04:16 UTC card described without quoting it · PR #42
