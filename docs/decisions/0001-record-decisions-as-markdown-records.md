@@ -18,8 +18,8 @@ accepted-evidence:
   approval-names: "neither the PR nor the head; it answers the question naming ADR 0001 and ADR 0002 (07:25Z)"
   check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and at 07:28:13Z Jon had said that he had approved the PRs; an independent check by a reviewing agent is still to do
   merged: jonhill90 merged PR #1 at 2026-10-11T07:22Z; the merged record matches the approved commit exactly
-legacy-id: [W1, W2]
-revisit-when: a knowledge system (K1) is chosen that should own decisions, or the flat folder becomes hard to use
+legacy-id: [BL-0111, BL-0112]
+revisit-when: a knowledge system (BL-0036) is chosen that should own decisions, or the flat folder becomes hard to use
 ---
 
 # Record decisions as one Markdown file each, with a generated index
@@ -50,7 +50,7 @@ Agents work under Jon's GitHub account, so nothing an agent writes can count as 
 
 ```mermaid
 flowchart LR
-  B[Backlog<br/>decision map] -->|Jon picks one| R[Research]
+  B[Backlog] -->|Jon picks one| R[Research]
   R --> C[Independent check]
   C --> J{Jon reviews}
   J -->|not yet| R
@@ -65,7 +65,7 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
 ### What the decision covers
 
 - **Location:** `jonhill90/central-hub`, `docs/decisions/NNNN-slug.md`. A record is written only for the decision Jon picks next. It gets the next number when its PR opens, so numbers follow the order Jon picks in. A rejected or parked record keeps its number and is merged with that status, so a number is never reused. A draft in project files before that has `id: D-TBD` and sits outside this schema.
-- **Backlog:** decisions not yet picked stay in the decision map in project files. The index says where the backlog lives (project files aren't reachable from the repo, so it names the place rather than linking). Listing it doesn't set a review order.
+- **Backlog:** decisions not yet picked stay in the backlog in project files, with their options in the decision map. The index says where the backlog lives (project files aren't reachable from the repo, so it names the place rather than linking). Listing it doesn't set a review order.
 - **Format:** the MADR 4 body and its optional front matter, plus the custom fields below. This file is the template.
 - **Vocabulary:** who does the work is named by role, never by vendor, so any agent can fill any role and swapping one changes no record. Where a product is the subject of a decision (an option, evidence or configuration), the record names it accurately.
   - **Agent:** any AI worker, whoever makes it.
@@ -93,10 +93,10 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
 |---|---|---|---|
 | `id` | string `D-NNNN` | Permanent ID, never reused | Unique, matches the filename number |
 | `proposed-by` | string | Agent or person who drafted it | Required |
-| `waits-on` | list of IDs | Decisions that must be **accepted** before this one can be decided. The edge points from this record to its prerequisite. IDs may be records (`D-NNNN`) or backlog items (`W1`, `S7`…) | Record IDs resolve to a file; backlog IDs must be well formed, and a reviewing agent checks them against the decision map, because the map isn't in the repo; no cycles |
+| `waits-on` | list of IDs | Decisions that must be **accepted** before this one can be decided. The edge points from this record to its prerequisite. IDs may be records (`D-NNNN`) or backlog items (`BL-0111`, `BL-0021`…) | Record IDs resolve to a file; backlog IDs must be well formed, and a reviewing agent checks them against the backlog, because the backlog isn't in the repo; no cycles |
 | `supersedes` / `superseded-by` | list / ID | Replacement links | Symmetric |
 | `accepted-evidence` | block (below) | Proof that Jon approved this exact content | Required when `status: accepted` |
-| `legacy-id` | list | IDs from the decision map | Optional |
+| `legacy-id` | list | IDs from the backlog | Optional |
 | `revisit-when` | string | What would make us reopen this decision (the replaceability principle) | Required |
 
 ### Who accepts, and how it's proven
@@ -172,3 +172,12 @@ Until each of these is checked, acceptance stays by convention.
   5. The closing note on tidied quotes removed (D-0016 rule 5). Before: "_Jon's quoted words are shown with spelling and punctuation tidied; his exact wording is kept in the original chat records._" After: none.
 
   Approval: the owner, 2026-10-23T05:22:43Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwNJe6kJE76z6YiJbQ9y7Tg3i), naming PR #29 and head 97fd304; approved commit 97fd304459b3976d441c419564b8e082d64a1a47. Check: the drafting agent read the message at 2026-10-23T05:22Z and confirmed it names that PR and head.
+- **2026-10-24** (backlog item numbers under D-0020): old backlog and decision-map labels renamed to `BL-NNNN`. Reason: D-0020 numbers every backlog item `BL-NNNN` and makes open decisions backlog items, and its rule 5 renames live references in place; no decision changes.
+  1. `legacy-id`. Before: `[W1, W2]`. After: `[BL-0111, BL-0112]`.
+  2. `revisit-when`. Before: "a knowledge system (K1) is chosen". After: "a knowledge system (BL-0036) is chosen".
+  3. Diagram, first node. Before: "Backlog<br/>decision map". After: "Backlog".
+  4. What the decision covers, **Backlog**. Before: "decisions not yet picked stay in the decision map in project files." After: "decisions not yet picked stay in the backlog in project files, with their options in the decision map."
+  5. Custom field contract, `waits-on`. Before: "backlog items (`W1`, `S7`…)" and "checks them against the decision map, because the map isn't in the repo". After: "backlog items (`BL-0111`, `BL-0021`…)" and "checks them against the backlog, because the backlog isn't in the repo".
+  6. Custom field contract, `legacy-id`. Before: "IDs from the decision map". After: "IDs from the backlog".
+
+  Approval: the owner, 2026-10-24T02:50:34Z (approval-ref cmsg_01X43rfNYp4H1dL1V2dkfkwN6ZL4axtSm9grZd8Kszxagb), naming PR #40 and head 1453cb1; approved commit 1453cb11874422b8913f72a8687a220752d0d604. Check: the drafting agent read the message at 2026-10-24T02:50Z and confirmed it names that PR and head.
