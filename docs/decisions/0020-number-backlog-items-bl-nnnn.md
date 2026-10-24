@@ -1,7 +1,7 @@
 ---
 id: D-0020
 title: Number every backlog item BL-NNNN, including open decisions, and rename the old row labels everywhere
-status: proposed
+status: accepted
 date: 2026-10-24
 decision-makers: [jon]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: [reviewing-agent]
 waits-on: [D-0001, D-0006, D-0016, D-0018]
 supersedes: [D-0018]
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-24T02:07:49Z
+  approved-commit: 54b22e3bca549b56e8c70fed13ed8165002466b7
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNB3kCZhysspnoUHmZ4q58Mr
+  approval-names: "PR #38 and head 54b22e3"
+  check: the drafting agent read the message in the project thread at 2026-10-24T02:07Z; it names PR jonhill90/central-hub#38 and head 54b22e3 itself. An independent check by a reviewing agent is still to do.
+  merged: not yet; the owner merges PR #38, which carries this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: the Activation gate passes; the backlog moves into a task management system with its own keys; or the backlog gets a second owner
 ---

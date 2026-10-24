@@ -1,7 +1,7 @@
 ---
 id: D-0018
 title: Spell research method IDs RM-NNNN, store each method's number, and rename the old IDs everywhere
-status: accepted
+status: superseded
 date: 2026-10-23
 decision-makers: [jon]
 proposed-by: drafting-agent
