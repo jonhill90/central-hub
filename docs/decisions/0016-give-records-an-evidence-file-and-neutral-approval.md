@@ -16,9 +16,9 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNYHFBd31VZNpvPgikzphyKP
   approval-names: "PR #25 and head 0885430"
   check: the drafting agent read the message in the project thread at 2026-10-23T04:25Z; it names PR jonhill90/central-hub#25 and head 0885430 itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #25, which carries this evidence commit on top of the approved commit
+  merged: PR #25 merged at 2026-10-23T04:26Z as c0c5b17, with this evidence commit on top of the approved commit
 legacy-id: []
-revisit-when: a knowledge system is chosen that should hold research and approvals; per-agent identities make GitHub approval the proof (Activation gate item 1); or an evidence file is found to state something its research did not find
+revisit-when: a knowledge system is chosen that should hold research and approvals; per-agent identities make GitHub approval the proof (Activation gate item 1); an evidence file is found to state something its research did not find; or a record needs more than one supporting file
 ---
 
 # Give each decision record a public evidence file, and record the owner's approval and reasons in neutral words
@@ -130,6 +130,18 @@ flowchart LR
 ### 4. Keep links to the private research
 - Good: no work.
 - Bad: public readers cannot follow the links, and the links stop working when the private repository goes away.
+
+### Evidence place: `docs/evidence/`
+- Good: no confusion with the private research repository.
+- Bad: the owner suggested `research`, and the files are summaries of research.
+
+### Evidence place: `docs/decisions/evidence/`, one folder holding every evidence file
+- Good: no new kind folder, so D-0012 does not change.
+- Bad: the decisions folder still holds a subfolder, which the owner asked to avoid.
+
+### Evidence place: a folder beside each record
+- Good: a record and its evidence sit together.
+- Bad: a folder per record in `docs/decisions/`, which the owner asked to avoid.
 
 ## More Information
 

@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNQzUuygf7ZccWtDTPe47K57
   approval-names: "PR #30 and head b0925cf"
   check: the drafting agent read the message in the project thread at 2026-10-23T05:23Z; it names PR jonhill90/central-hub#30 and head b0925cf itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #30, which carries this evidence commit on top of the approved commit
+  merged: PR #30 merged at 2026-10-23T05:25Z as 381e1f2, with this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: the Activation gate passes; the methods catalogue moves into a tool with its own numbering; or the research gate stops citing methods by ID
 ---
@@ -53,7 +53,7 @@ On 2026-10-23 at 05:18 UTC the owner chose `RM-0001` style, renamed everywhere, 
 
 Chosen option: **1**, which the owner chose on 2026-10-23 at 05:18 UTC.
 
-This adds the Research methods row to D-0003's registry, and D-0003 rule 6 says how a retired method is kept.
+This adds the Research methods row to D-0003's registry, and D-0003 rule 6 says how a retired method is kept. `RM-` passes D-0003 rule 2's prefix check against `D-`, `REQ-`, `STD-` and `RB-`.
 
 ### The methods catalogue
 

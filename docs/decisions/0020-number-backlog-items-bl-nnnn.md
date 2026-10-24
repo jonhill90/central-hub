@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNPEHhXPUxp5fxDAHKj7GdL2
   approval-names: "PR #38 and head 607a615"
   check: the drafting agent read the message in the project thread at 2026-10-24T02:12Z; it names PR jonhill90/central-hub#38 and head 607a615 itself. It replaces the owner's first acceptance (2026-10-24T02:07:49Z, head 54b22e3), which a Markdown style fix made after it (blank lines, one list marker) superseded. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #38, which carries this evidence commit on top of the approved commit
+  merged: PR #38 merged at 2026-10-24T02:13Z as 3dc230a, with this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: the Activation gate passes; the backlog moves into a task management system with its own keys; or the backlog gets a second owner
 ---
@@ -57,7 +57,7 @@ On 2026-10-23 at 21:50 UTC the owner asked for the reasoning to be weighed witho
 
 Chosen option: **1**, which the owner chose on 2026-10-24 at 01:57 UTC.
 
-This adds the Backlog items row to D-0003's registry, and D-0003 rule 6 says that a done backlog item keeps its number and its row.
+This adds the Backlog items row to D-0003's registry, and D-0003 rule 6 says that a done backlog item keeps its number and its row. `BL-` passes D-0003 rule 2's prefix check against every registered prefix.
 
 ### The backlog numbers
 

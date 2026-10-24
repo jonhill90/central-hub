@@ -16,9 +16,9 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNNw9afcLyseACmQBjVznpsQ
   approval-names: "PR #35 and head 07c3873"
   check: the drafting agent read the message in the project thread at 2026-10-24T01:50Z; it names PR jonhill90/central-hub#35 and head 07c3873 itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #35, which carries this evidence commit on top of the approved commit
+  merged: PR #35 merged at 2026-10-24T01:51Z as 80571c5, with this evidence commit on top of the approved commit
 legacy-id: []
-revisit-when: a check gives more false positives than real findings for a month; a docs site or docs build is added; per-agent identities or a verifier outside this repository exist (Activation gate items 1 and 2); or the glossary outgrows one table
+revisit-when: a check gives more false positives than real findings for a month; a docs site or docs build is added; per-agent identities or a verifier outside this repository exist (Activation gate items 1 and 2); the glossary outgrows one table; a docs tool cannot take a settings path; an editor or CI service that the owner uses needs the settings in the root; or D-0008's rule for the root changes
 ---
 
 # Check the docs on every PR, with front matter and inside links as gates, Markdown style on changed files, and word checks built from the glossary
@@ -86,7 +86,7 @@ flowchart LR
 1. **Same commands everywhere.** One command runs all four checks on a laptop or an agent's machine, and CI runs the same command. No commit hooks are added.
 2. **Workflow safety.** The workflow runs on `pull_request` only, with `permissions: contents: read` and `persist-credentials: false`. Every action is pinned to a full commit SHA, and every downloaded binary to a version and checksum. It uses no secrets.
 3. **Frozen records.** Checks 1, 2 and 4 read every file. Check 3 lints a record or evidence file only in the PR that adds it. A real fault in an existing record is fixed by a correction under D-0006.
-4. **Where things live.** Scripts, schemas and tests go in `.github/docs-check/`; Vale styles in `.github/vale/`; the workflow in `.github/workflows/`. The linter settings are `.github/docs-check/markdownlint.jsonc` and `.github/vale/vale.ini`, and `run.sh` passes each to its tool with `--config`. No settings file in the repository root, no new root folder and no new `docs/` kind.
+4. **Where things live.** Scripts, schemas and tests go in `.github/docs-check/`; Vale styles in `.github/vale/`; the workflow in `.github/workflows/`. The linter settings are `.github/docs-check/markdownlint.jsonc` and `.github/vale/vale.ini`, and `run.sh` passes each to its tool with `--config`. `.github/.markdownlint.jsonc` extends `.github/docs-check/markdownlint.jsonc` and keeps the one exception for the PR template. No settings file in the repository root, no new root folder and no new `docs/` kind.
 5. **Glossary drives the word check.** `docs/glossary.md` is one table: Term, Status, Meaning, Source, Instead of. Status is `preferred`, `admitted` or `deprecated`, the term statuses of ISO 10241-1. A script generates Vale's word lists from it, and CI fails if the generated files differ from the glossary. Nobody edits the generated files by hand.
 6. **A new word.** An agent that meets an unsettled word proposes one glossary row in its own PR. The owner says yes or no. The check enforces only rows on `main`.
 7. **Turning a report into a gate.** A report-only rule becomes a gate only by a new decision record.
@@ -157,6 +157,10 @@ Each step is its own PR and can be dropped without the others.
 
 - Good: no tooling.
 - Bad: the three front-matter faults reached `main` this way.
+
+### Rule 4: linter settings in the repository root
+- Good: tools and editor plugins find them without a flag.
+- Bad: two settings files in a root that D-0008 keeps for entry points.
 
 ## More Information
 

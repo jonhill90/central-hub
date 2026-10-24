@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: 7dbae2cce2fbb02d5bfdf0e632a363f39f43bb4c
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN9nbb2Y5bBnkgfrLDFWMVnS
   approval-names: "PR #18 and head 7dbae2c, in the message itself"
-  check: the drafting agent read the message in the repo layout thread at 2026-10-22T07:15Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #18, which carries this evidence commit on top of the approved commit
+  check: the drafting agent read the message in the repo layout thread at 2026-10-22T07:15Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
+  merged: PR #18 merged at 2026-10-22T07:16Z as 36d6a90, with this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: a second machine-building vendor product joins Terraform; the Terraform structure research names the runnable folders; or a machine kind appears that is neither a VM nor bare metal
 ---
@@ -27,11 +27,11 @@ revisit-when: a second machine-building vendor product joins Terraform; the Terr
 
 D-0008 names the root folder `hosts/` as "machines below Kubernetes". It doesn't say what goes inside that folder, or where machines go when a cloud provider or a hypervisor runs them.
 
-On 2026-10-20 at 03:03 UTC the owner said that nothing on the Proxmox hypervisor should be set up by hand, and asked where its code should go in central-hub, along with VPS machines, cloud VMs, cloud container services and machines still to come.
+On 2026-10-20 at 03:03 UTC the owner asked where the code for the Proxmox hypervisor should go in central-hub, along with VPS machines, cloud VMs, cloud container services and machines still to come. The rule it serves is PRD goal 6: everything is controllable from this repository, and one-time console steps at the start are fine.
 
 ## Decision Drivers
 
-- **No click-ops.** Every machine is created and configured from code in this repository.
+- **Controllable from this repository** (PRD goal 6). After one-time console steps at the start, every machine is created and configured from code here. Each job is first done by hand from a manual runbook, and its code follows (D-0012 "Manual first").
 - **D-0008 rule 3.** Root folders are named for their job. A vendor product is never a root folder name, apart from the stated `kubernetes/` exception.
 - **Replaceable** (REQ-0011). Swapping a vendor product should replace one folder, not rename a root folder.
 - **Public repository** (CLAUDE.md rule 4). Single machine addresses and hostnames never go here. STD-0002 holds the rule for addresses.

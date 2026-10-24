@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: 5a074271302bdfd7ad048432ce4790d38b40a470
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNTRAgZJF48qYp51Qbbdd9ns
   approval-names: "PR #12 and head 5a07427, in the message itself"
-  check: the drafting agent read the message in the PRD and spec research thread at 2026-10-19T02:53Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #12, which carries this evidence commit on top of the approved commit
+  check: the drafting agent read the message in the PRD and spec research thread at 2026-10-19T02:53Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
+  merged: PR #12 merged at 2026-10-19T02:53Z as 4f157f8, with this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: a second person must agree on scope; code lands in this repo; a study measures whether a project-level PRD helps people or agents; or merged specs are being read as current truth
 ---

@@ -13,8 +13,8 @@ accepted-evidence:
   approved-commit: 1c8bfdd412eade4c2470fa7959ecbd6390b25093
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNLe3Dm7Jei52vHtd4YLEnZy
   approval-names: "PR #16 and head 1c8bfdd, in the message itself"
-  check: the drafting agent read the message in the Standards system thread at 2026-10-22T07:07Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #16, which carries this evidence commit on top of the approved commit
+  check: the drafting agent read the message in the Standards system thread at 2026-10-22T07:07Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
+  merged: PR #16 merged at 2026-10-22T07:09Z as 55a0276, with this evidence commit on top of the approved commit
 ---
 
 # STD-0001: VM hostnames

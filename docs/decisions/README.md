@@ -1,7 +1,7 @@
 <!-- Generated from each record's front matter. Do not edit by hand. -->
 # Decision log
 
-Each decision is one record in this folder. Records are written one at a time, in the order the owner picks, and only `proposed` records come from agents. Decisions not yet picked stay in the backlog, kept in the project files outside this repo, with their options in the decision map. A correction to an accepted record is made in place and listed in [CORRECTIONS.md](CORRECTIONS.md) (D-0006).
+Each decision is one record in this folder. Records are written one at a time, in the order the owner picks, and only `proposed` records come from agents. Decisions not yet picked stay in the backlog, kept in the project files outside this repo, with their options in the decision map. A correction or a decision change to an accepted record is made in place and listed in [CORRECTIONS.md](CORRECTIONS.md) (D-0006). A number with no row here was folded into another record; CORRECTIONS.md says which.
 
 | ID | Title | Status | Waits on | Date |
 |---|---|---|---|---|

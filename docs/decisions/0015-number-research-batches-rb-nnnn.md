@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: 1cce2f860ae2552047d2ba2b0bc960b45792bfda
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNNC2krzzxxNCskiWfAqbKzw
   approval-names: "PR #24 and head 1cce2f8, in the message itself"
-  check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T04:21Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #24, which carries this evidence commit on top of the approved commit
+  check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T04:21Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
+  merged: PR #24 merged at 2026-10-23T04:22Z as 7b7a6b6, with this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: the Activation gate passes; the Research repo is retired and research moves somewhere with its own numbering; or a batch register check finds a duplicate number
 ---
@@ -53,7 +53,7 @@ Under D-0003 rule 5, the owner may approve renaming an agent-made label during F
 
 Chosen option: **1**, which the owner chose on 2026-10-23 at 04:16 UTC.
 
-This adds the Research batches row to D-0003's registry.
+This adds the Research batches row to D-0003's registry. `RB-` passes D-0003 rule 2's prefix check against `D-`, `REQ-` and `STD-`.
 
 ### The batch register
 

@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: 426ba8fe09c25d09a53d4578499374b1029bf8c2
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN1Gnn97mj1fpLXFxgZq2sb9
   approval-names: "PR #4 by context; it answers the agent's request to review PR #4 and accept again (05:21Z), sent after commit 426ba8f"
-  check: the drafting agent read the message in the project thread at 2026-10-12T05:24Z, and the quote matches its opening sentences. It answers "look at PR #4 and write accept again" (same thread, 05:21Z), sent after the diagram commit 426ba8f. An earlier one-word acceptance at 05:19:35Z predates the diagram, so it is not counted. An independent check by a reviewing agent is still to do.
-  merged: not yet; Jon merges PR #4, which carries this evidence commit on top of the approved commit
+  check: the drafting agent read the message in the project thread at 2026-10-12T05:24Z, and the recorded wording matched its opening sentences. It answers "look at PR #4 and write accept again" (same thread, 05:21Z), sent after the diagram commit 426ba8f. An earlier one-word acceptance at 05:19:35Z predates the diagram, so it is not counted. An independent check by a reviewing agent is still to do.
+  merged: PR #4 merged at 2026-10-12T05:25Z as aa8ac8c, with this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: a family needs numbers faster than one owner can hand them out; agents start citing local labels across repos often enough that they need global IDs; a tool or knowledge system is adopted that brings its own ID scheme; or the registry grows past about 10 families
 ---
@@ -25,24 +25,24 @@ revisit-when: a family needs numbers faster than one owner can hand them out; ag
 
 ## Context and Problem Statement
 
-On 2026-10-12, after reading a table of IDs, Jon asked what the ID system was for and why it was needed. No ID system existed. Each agent had made up labels inside the file it was writing, and those labels now clash across files.
+On 2026-10-12, after reading a table of IDs, the owner asked what the ID system was for and why it was needed. No ID system existed. Each agent had made up labels inside the file it was writing, and those labels now clash across files.
 
-The research batch (RB-0003, [evidence](../research/0003-use-registered-id-families-and-file-qualified-labels.md), run after Jon chose to run it at 02:45 UTC) measured the problem:
+The research batch (RB-0003, [evidence](../research/0003-use-registered-id-families-and-file-qualified-labels.md), run after the owner chose to run it at 02:45 UTC) measured the problem:
 
 - About 75 ID families. About 50 of them restart at 1 in each document.
 - **21 labels clash.** `P1` has 7 meanings, and two of them are in the same file. "ADR 0001" names 3 different records.
-- Every clash uses a one-letter prefix. No prefix of two or more letters clashed: `D-`, `REQ-`, `SRC-`, `FD`, `RM`, `WP-`, `AG`.
+- Every clash uses a one-letter prefix. No prefix of two or more letters clashed: `D-`, `SR`, `SRC-`, `FD`, `RM`, `WP-`, `AG` (as measured on 2026-10-12; `SR` is now `REQ-`, D-0014).
 
-Jon's records already require stable IDs but never say how:
+The owner's records already require stable IDs but never say how:
 - Research `coordinator/system/REQUIREMENTS.md:75`
 - Research `KNOWLEDGE-CONTRACT.md:7`
-- (agent-estate `contract.md:23` and `inmaps-spec.md:44` say the same, but agent-estate is back-burnered (Jon, 2026-10-12), so they are cited as ideas mined, not as grounding.)
+- (agent-estate `contract.md:23` and `inmaps-spec.md:44` say the same, but agent-estate is back-burnered (the owner, 2026-10-12), so they are cited as ideas mined, not as grounding.)
 
 ## Decision Drivers
 
 - **One label, one thing:** a reference must land on exactly one item (REQUIREMENTS.md:75).
 - **Many agents write in parallel:** two agents must never hand out the same number.
-- **Jon can read and say it:** IDs that Jon sees must be short and recognisable.
+- **The owner can read and say it:** IDs that the owner sees must be short and recognisable.
 - **Nothing breaks:** an existing reference keeps landing on its item.
 - **Replaceable:** everything this decision creates can be swapped out later.
 - **Follow established practice** where it exists (evidence, findings 2 and 3).
@@ -88,7 +88,7 @@ flowchart LR
    A sources family is left out on purpose. Whether sources need a global family goes to the owner later, as its own question.
 
 2. **One family registry.** The table above is the family registry.
-   - A new family is added only with the owner's approval, by its own decision record. That record's PR adds the row here.
+   - A new family, or a change to a row (its home, who numbers it, or closing the family), is made only with the owner's approval, by its own decision record. That record's PR updates the row here.
    - A new prefix must have at least two characters and must not equal or start with an existing one, ignoring case.
 3. **Number late, with one owner per family.** A draft has no number and is cited by its file path (`D-TBD`, `REQ-TBD`, `STD-TBD`, `RB-TBD`, `RM-TBD`, `BL-TBD`). Check that the number is unique before merging. Outside rule 5's Foundation exception, a number never changes after it is assigned.
 4. **Everything else is a local label.** Outside its own file, write it with the file name: `LIVE-PARAMETERS#S1`. A bare one-letter label outside its own file is a mistake that reviewers flag.
@@ -98,7 +98,7 @@ flowchart LR
    - Records of what was said are never changed: the chat archive, captured transcripts and git history keep the old names.
    - Accepted decision records are corrected in place under D-0006, because a rename does not change any decision. Each correction PR lists every change, and the owner approves it by PR number and head SHA.
    - After the Activation gate passes, the old rule returns: when an item gets a new ID, its record lists the old one in `legacy-id`.
-6. **Never reuse, never delete.** A superseded or withdrawn item keeps its ID, its status and a link to whatever replaced it. A retired method stays in the catalogue, marked `deprecated` or `replaced by RM-NNNN`. A done backlog item keeps its number and its row. D-0004's Foundation exception for void IDs still applies.
+6. **Never reuse, never delete.** A superseded or withdrawn item keeps its ID, its status and a link to whatever replaced it. A decision record folded into another record keeps its number: the number is never reused, and [`CORRECTIONS.md`](CORRECTIONS.md) lists it with the record it was folded into. A retired method stays in the catalogue, marked `deprecated` or `replaced by RM-NNNN`. A done backlog item keeps its number and its row. D-0004's Foundation exception for void IDs still applies.
 7. **Keep meaning out of the number.** The prefix names the family and nothing else. Status, topic and owner go in front matter or in the register's columns. A batch that continues another says so in its SPEC.md ("follows RB-0006"), not in its number.
 
 ### Consequences
@@ -133,7 +133,7 @@ flowchart LR
 
 ### 4. Opaque or time-based IDs
 - Good: no collisions, even offline.
-- Bad: Jon cannot read or say them. They are fine as machine aliases underneath, but not as the IDs Jon sees.
+- Bad: the owner cannot read or say them. They are fine as machine aliases underneath, but not as the IDs the owner sees.
 
 ## More Information
 

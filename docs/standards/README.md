@@ -2,7 +2,7 @@
 
 This register lists every standard in force: the current rule, one row per standard. A decision record in `docs/decisions/` says once why a rule was chosen and keeps that history. A standard here says what the rule is now.
 
-The `STD-NNNN` family is registered in D-0009. Each standard is one file in this folder, named `NNNN-slug.md`. A draft has no number and is cited as `STD-TBD` (D-0003 rule 3).
+The `STD-NNNN` family is registered in D-0003 rule 1 (added by D-0009). Each standard is one file in this folder, named `NNNN-slug.md`. A draft has no number and is cited as `STD-TBD` (D-0003 rule 3).
 
 ## How a standard changes
 

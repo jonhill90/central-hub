@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: f62845acd38deb7018acd8f96a2a484677976c8c
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN12EqNFjmi5fTVUJmrD9vhd
   approval-names: "PR #22 and head f62845a, in the message itself"
-  check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T03:46Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #22, which carries this evidence commit on top of the approved commit
+  check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T03:46Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
+  merged: PR #22 merged at 2026-10-23T03:50Z as 05a48ff, with this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: the Activation gate passes (D-0003 rule 5 goes back to "never renamed"); a rename sweep leaves a reference that a search missed; or a requirements tool is adopted that brings its own ID scheme
 ---
@@ -34,7 +34,7 @@ On 2026-10-23 the owner said the requirement IDs (`SR01` to `SR25`) were made up
 
 The owner chose `REQ-0000` style on 2026-10-23 at 03:38 UTC. The owner preferred it, and said that a format already in use is not a good reason to keep it in a system that is still almost greenfield: IDs are only words, they should be fixed where possible, and the same goes for the other IDs.
 
-D-0003 rule 5, which then said old labels are never renamed, would keep `SR11` alive beside `REQ-0011` forever. The owner wants the fix applied everywhere, the way agent-made method IDs were fixed on 2026-10-18, so the files read as if the new name had always been used.
+Without a Foundation exception, D-0003 rule 5 would keep `SR11` alive beside `REQ-0011` forever. The owner wants the fix applied everywhere, the way agent-made method IDs were fixed on 2026-10-18, so the files read as if the new name had always been used.
 
 ## Decision Drivers
 
@@ -54,7 +54,7 @@ D-0003 rule 5, which then said old labels are never renamed, would keep `SR11` a
 
 Chosen option: **1**, which the owner chose on 2026-10-23 at 03:38 UTC.
 
-This changes the Requirements row of D-0003's registry to `REQ-NNNN`, and gives D-0003 rule 5 its Foundation exception: until the Activation gate passes, the owner may approve renaming an agent-made ID or label in every live file, with one corrections log per rename.
+This changes the Requirements row of D-0003's registry to `REQ-NNNN`, and gives D-0003 rule 5 its Foundation exception: until the Activation gate passes, the owner may approve renaming an agent-made ID or label in every live file, with one corrections log per rename. `REQ-` passes D-0003 rule 2's prefix check against `D-` and `STD-`.
 
 ### The requirements rename
 

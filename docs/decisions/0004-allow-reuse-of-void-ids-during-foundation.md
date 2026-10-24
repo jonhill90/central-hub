@@ -15,10 +15,10 @@ accepted-evidence:
   approved-commit: 85ce152e6e105f4406473c5912be63d0e8f3f43b
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN5xYTaeoa5nfZNqfToJKrD7
   approval-names: "PR #7 and head 85ce152 by context; it answers the agent's message (06:17:02Z) that named both"
-  check: the drafting agent read the message in the Rules table thread at 2026-10-13T06:18Z, and the quote matches exactly. It answers the agent's message in the same thread (06:17:02Z), which named PR #7 and head 85ce152 and asked for "accept" naming both. The message itself names neither, so it relies on that context, as D-0003's acceptance did. An independent check by a reviewing agent is still to do.
-  merged: not yet; Jon merges PR #7, which carries this evidence commit on top of the approved commit
+  check: the drafting agent read the message in the Rules table thread at 2026-10-13T06:18Z, and the recorded wording matched it exactly. It answers the agent's message in the same thread (06:17:02Z), which named PR #7 and head 85ce152 and asked for "accept" naming both. The message itself names neither, so it relies on that context, as D-0003's acceptance did. An independent check by a reviewing agent is still to do.
+  merged: PR #7 merged at 2026-10-13T06:20Z as 1c78db7, with this evidence commit on top of the approved commit
 legacy-id: []
-revisit-when: the Activation gate passes; an ID family is referenced from outside Jon's own repositories and project; or a reuse leaves a reference that a search missed
+revisit-when: the Activation gate passes; an ID family is referenced from outside the owner's own repositories and project; or a reuse leaves a reference that a search missed
 ---
 
 # During Foundation, allow a void ID's number to be reused, with the owner's approval and a tombstone
@@ -27,14 +27,14 @@ revisit-when: the Activation gate passes; an ID family is referenced from outsid
 
 D-0003 rule 6 says "Never reuse, never delete" for every registered ID family, including `REQ` requirements.
 
-On 2026-10-13 the requirements register had a row, REQ-0021, that was a usage limit for one agent product. It broke two of the register's own rules: REQ-0008 (no vendor names) and REQ-0011 (everything replaceable). Jon dropped it at 04:23 UTC, because the system requirements should not name agent harnesses or vendors.
+On 2026-10-13 the requirements register had a row, REQ-0021, that was a usage limit for one agent product. It broke two of the register's own rules: REQ-0008 (no vendor names) and REQ-0011 (everything replaceable). The owner dropped it at 04:23 UTC, because the system requirements should not name agent harnesses or vendors.
 
-A new requirement (shared vocabulary) was then added as REQ-0022. Jon asked for the number REQ-0021 back (Central Hub project, Rules table thread, 2026-10-13 06:09 UTC), because the dropped row should never have been a rule and keeping the gap sat badly with building everything to be replaced. The reuse was done as a one-time exception in Research commit `f63ae969`. This record decides whether that exception becomes a rule, and on what conditions.
+A new requirement (shared vocabulary) was then added as REQ-0022. The owner asked for the number REQ-0021 back (Central Hub project, Rules table thread, 2026-10-13 06:09 UTC), because the dropped row should never have been a rule and keeping the gap sat badly with building everything to be replaced. The reuse was done as a one-time exception in Research commit `f63ae969`. This record decides whether that exception becomes a rule, and on what conditions.
 
 ## Decision Drivers
 
 - **The reason for "never reuse":** a reference must never silently point at a different item.
-- **Early stage:** IDs are referenced only inside Jon's own repositories and project, and the number of references can be measured by search.
+- **Early stage:** IDs are referenced only inside the owner's own repositories and project, and the number of references can be measured by search.
 - **Gaps from mistakes:** a gap left by an entry that was never valid is noise in a small register.
 - **Replaceable** (REQ-0011): the rule should be easy to tighten again later.
 
@@ -69,7 +69,7 @@ flowchart LR
    - search every repository and the Library for the old ID;
    - update or annotate every live reference;
    - leave frozen records and chat archives as they are.
-5. The register keeps a **tombstone**: an entry such as "Former REQ-0021 (void)" that gives the old meaning, the reason, and what now holds the number.
+5. The register keeps a **tombstone**: an entry such as "Former REQ-0021 (void)" that gives the old meaning, the reason, and what now holds the number. The decisions index is generated, so for a decision number the tombstone is a line in the numbers list of [`CORRECTIONS.md`](CORRECTIONS.md).
 
 Everything else in D-0003 stays in force, and rule 6 still applies to every case these conditions don't cover.
 
@@ -79,7 +79,7 @@ Everything else in D-0003 stays in force, and rule 6 still applies to every case
 - Good: the tombstone and the search keep the reason for "never reuse" intact. Nobody following an old reference is misled without being told.
 - Bad: this goes against published practice. ARK, McMurry, OBO, PEP and DOORS all say never reuse (D-0003's [evidence](../research/0003-use-registered-id-families-and-file-qualified-labels.md), finding 2). McMurry's rule covers identifiers "generated and publicly advertised" (McMurry et al., reference 4 there), and Foundation IDs are not public in that sense. That reading is inferred, not quoted from a source.
 - Bad: one more condition for a reviewer to check.
-- Neutral: REQ-0021 is the only reuse so far. Its search found 6 files that meant the old entry: the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md`, and the register's own Dropped entry. All 6 were updated or annotated. 3 frozen study files and 20 chat archives were left as records. Results reported to Jon in the Rules table thread, 2026-10-13 06:13 UTC.
+- Neutral: REQ-0021 is the only reuse so far. Its search found 6 files that meant the old entry: the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md`, and the register's own Dropped entry. All 6 were updated or annotated. 3 frozen study files and 20 chat archives were left as records. Results reported to the owner in the Rules table thread, 2026-10-13 06:13 UTC.
 
 ### Confirmation
 

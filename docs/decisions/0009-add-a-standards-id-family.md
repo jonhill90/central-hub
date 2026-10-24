@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: a4f05820ec546535d980c8f660cb693c70ca64cf
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNU91iAKVLo8uUHycWbJs6MY
   approval-names: "PR #14 and head a4f0582, in the message itself"
-  check: the drafting agent read the message in the Standards system thread at 2026-10-22T02:52Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #14, which carries this evidence commit on top of the approved commit
+  check: the drafting agent read the message in the Standards system thread at 2026-10-22T02:52Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
+  merged: PR #14 merged at 2026-10-22T02:53Z as c7ede15, with this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: "the same as D-0003, plus: the standards register moves out of this repo; or a second kind of standard needs its own family"
 ---
@@ -54,7 +54,7 @@ On 2026-10-22 at 02:48 UTC the owner chose option A, `STD-NNNN`, from four ID op
 
 Chosen option: **1, `STD-NNNN`**, which the owner chose on 2026-10-22 at 02:48 UTC.
 
-This adds the Standards row to the family registry in D-0003.
+This adds the Standards row to the family registry in D-0003. `STD-` passes D-0003 rule 2's prefix check against `D-` and `SR`, the families registered then.
 
 ### Not decided here
 

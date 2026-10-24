@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: 0ae0493b4f6eef50aae6caa8a18c97d4515eab91
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNTJTUNZbcPsUxG7TCKiX23s
   approval-names: "PR #10 and head 0ae0493"
-  check: the drafting agent read the message in the ADR corrections thread at 2026-10-16T08:29Z, and the quote matches exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: not yet; the owner merges PR #10, which carries this evidence commit on top of the approved commit
+  check: the drafting agent read the message in the ADR corrections thread at 2026-10-16T08:29Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
+  merged: PR #10 merged at 2026-10-16T08:29Z as 0517ccf, with this evidence commit on top of the approved commit
 legacy-id: []
 revisit-when: agents get their own GitHub identities (Activation gate item 1); a correction is later found to have changed a decision; or corrections to one record pile up
 ---
@@ -25,7 +25,7 @@ revisit-when: agents get their own GitHub identities (Activation gate item 1); a
 
 ## Context and Problem Statement
 
-As first written, D-0001 kept an accepted record's body unchanged and made every change a new record that superseded the old one. It had no separate path for an error that leaves the decision the same.
+Without this record, the only route for an error in an accepted record is a full new record that supersedes the old one, even when the decision stays the same.
 
 D-0005 was accepted on 2026-10-16 with two internal inconsistencies and a wording slip. The decision is unchanged, but D-0001 left only one route: a full restatement of D-0005 with three small changes (drafted in PR #9, closed unmerged). The owner questioned that route on 2026-10-16 (ADR corrections thread, 07:56 UTC): a near-copy record for every slip, and another for a slip in the copy, could work badly for records that are revised often.
 
@@ -40,8 +40,8 @@ This record decides how an error in an accepted record is fixed, and where the r
 
 ## Considered Options
 
-1. **Correct in place, with one corrections log for all records.** A changed decision still gets a new record.
-2. **Supersede only** (D-0001 as first written): every fix is a full new record.
+1. **Correct in place, with one corrections log for all records.** A changed decision is logged apart from corrections.
+2. **Supersede only:** every fix is a full new record.
 3. **Separate errata list** (as IETF RFCs do): the record never changes, and errors are listed in a separate file.
 4. **Living document:** edit accepted records freely, with date-stamped notes.
 
@@ -52,7 +52,7 @@ Chosen option: **1**.
 ```mermaid
 flowchart LR
   E[Error found in an accepted record] --> Q{Does the decision change?}
-  Q -- yes, or unsure --> N[New record]
+  Q -- yes, or unsure --> N[Decision change:<br/>new record, or in place<br/>if the owner accepts it by name]
   Q -- no --> P[Correction PR:<br/>each change, before and after]
   P --> R[Reviewing agent:<br/>decision unchanged?]
   R -- no --> N
@@ -63,7 +63,7 @@ flowchart LR
   C --> G[git keeps the accepted text]
 ```
 
-*In words:* if the decision would change, or it's unclear, write a new record. Otherwise open a correction PR that lists each change with its before and after text. A reviewing agent first says whether each change leaves the decision unchanged; if not, it becomes a new record. The owner then approves the PR the same way he accepts a record. If he declines, the PR closes, and a new record follows only if he says the decision should change. Once approved, the record is edited in place so it reads as the current text, one line is added to the corrections log, and a reviewing agent compares the merged record with the approved commit. Git keeps the text as it was accepted.
+*In words:* if the decision would change, or it's unclear, it is a decision change (below), not a correction. Otherwise open a correction PR that lists each change with its before and after text. A reviewing agent first says whether each change leaves the decision unchanged; if not, it is handled as a decision change. The owner then approves the PR the same way he accepts a record. If he declines, the PR closes, and a decision change follows only if he says the decision should change. Once approved, the record is edited in place so it reads as the current text, one line is added to the corrections log, and a reviewing agent compares the merged record with the approved commit. Git keeps the text as it was accepted.
 
 ### What counts as a correction
 
@@ -76,17 +76,29 @@ A correction fixes an error without changing what was decided:
 - adding an evidence file built under D-0016 rule 3, and its link from the record;
 - updating an earlier record's text so it matches a later accepted record that changed part of it, where the later record keeps the reasons.
 
-A changed fact that the decision relies on is a changed decision, even if the chosen option stays the same. Anything else is a changed decision too: a different chosen option, a changed rule, condition, scope or list that the record sets. That needs a new record.
+A changed fact that the decision relies on is a changed decision, even if the chosen option stays the same. Anything else is a changed decision too: a different chosen option, a changed rule, condition, scope or list that the record sets.
+
+### A changed decision
+
+A changed decision is never logged as a correction. It is made in one of two ways:
+- a new record; or
+- an edit in place, when the owner accepts that change by name in a PR. The record then reads as the current decision, with no "superseded" or "amended" notes.
+
+Either way, the PR adds one line under "Decision changes" in [`CORRECTIONS.md`](CORRECTIONS.md): what changed, and the owner's request or choice it follows.
+
+A record may be folded into another the same way. Its rules, reasons, considered options and revisit conditions move into the other record, and its file is removed. Its number is never reused, and `CORRECTIONS.md` lists it (D-0003 rule 6).
 
 ### How a correction is made
 
 1. Branch `docs/correct-d-nnnn-<short>`. PR title `docs: correct D-NNNN: <summary>`.
 2. The PR body lists every change, quoting the text before and after, and says why it is a correction, not a changed decision. Where the text removed is the owner's words, the PR body names where it was and a commit that holds it, instead of copying it (D-0016 rule 7).
 3. The record is edited in place so it reads as the current text, with no Corrections section and no inline old-value notes. The PR adds one line to [`CORRECTIONS.md`](CORRECTIONS.md): the date, the record, what changed and the PR.
-4. Before the owner sees it, a reviewing agent says for each change whether it leaves the decision unchanged. Any change it can't confirm moves to a new record.
+4. Before the owner sees it, a reviewing agent says for each change whether it leaves the decision unchanged. Any change it can't confirm is treated as a decision change.
 5. The owner approves in the project chat, naming the PR number and head SHA, as for an acceptance.
-6. After approval, only the approved head SHA may be added to that line. A reviewing agent compares the merged record with the approved commit, as for an acceptance.
-7. `date` and `accepted-evidence` never change; they still describe the acceptance. Another front-matter field changes only if a listed correction fixes it.
+6. After the merge, the next PR that edits `CORRECTIONS.md` adds that PR's approval facts (D-0016 rule 7: time, message id, approved head) and its merge commit to its lines. A reviewing agent compares the merged record with the approved commit, as for an acceptance.
+7. `date` and the approval facts in `accepted-evidence` (`approved-by`, `approved-at`, `approved-commit`, `approval-ref`, `approval-names`) never change; they describe the acceptance. `check` and `merged` may be corrected so they state what happened. Another front-matter field changes only if a listed correction fixes it.
+
+This process applies from PR #42 on. Each earlier correction is one line in `CORRECTIONS.md`, with its approval facts and merge commit; its full text is in git before the PR #42 merge.
 
 ### Consequences
 
@@ -99,7 +111,7 @@ A changed fact that the decision relies on is a changed decision, even if the ch
 
 ### Confirmation
 
-- Every merged change to an accepted record's body has a matching line in `CORRECTIONS.md` with its PR and approved commit.
+- Every merged change to an accepted record's body has a matching line in `CORRECTIONS.md`, with its PR, its approval facts and its merge commit.
 - A reviewing agent compares each correction PR's merged diff with its listed changes.
 - Every correction PR has a reviewing agent's note, written before the owner's approval, on whether each change leaves the decision unchanged.
 
