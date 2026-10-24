@@ -1,0 +1,9 @@
+# Gate on changed files under docs/ (D-0019 check 4): records, standards, evidence files, runbooks
+# and READMEs name the owner by role, "the owner", never by first name (D-0016 rule 5).
+# AGENTS.md and CLAUDE.md name him on purpose, so vale.ini turns this rule on for docs/ only.
+extends: existence
+message: "First name '%s' in docs/: write 'the owner' (D-0016 rule 5)."
+level: error
+scope: raw
+tokens:
+  - '\bJon\b'

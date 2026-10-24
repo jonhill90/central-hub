@@ -28,6 +28,6 @@ No settings file sits in the repository root (D-0008, D-0019 rule 4). An editor 
 
 The Markdown check lints only the files your branch adds or changes, compared with `origin/main` (set `DOCS_BASE` to compare with another commit). An existing decision record or evidence file is skipped, because those change only by correction (D-0019 rule 3).
 
-The word check reports glossary findings on every document without failing. It fails only on the owner-quote rule (D-0016 rule 5), in the files your branch adds or changes, and skips `docs/specs/README.md`, which holds the approval template. After you change `docs/glossary.md`, run `python3 .github/docs-check/gen_vale_terms.py` and commit what it writes.
+The word check reports glossary findings on every document without failing. It fails only on the owner-quote rule and, under `docs/`, the owner-name rule (both D-0016 rule 5), in the files your branch adds or changes, and skips `docs/specs/README.md`, which holds the approval template. After you change `docs/glossary.md`, run `python3 .github/docs-check/gen_vale_terms.py` and commit what it writes.
 
 A PR that changes this folder or `.github/workflows/docs.yml` says so in its title (D-0019 rule 9).

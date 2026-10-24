@@ -47,12 +47,12 @@ words() {
   fi
   # Report only: every rule on every document. Findings never fail the run.
   "$vale" --config .github/vale/vale.ini --no-exit --output line docs AGENTS.md README.md SECURITY.md
-  # Gate: the owner-quote rule (D-0016 rule 5) on changed files, except the approval template.
+  # Gate: the owner-quote and owner-name rules (D-0016 rule 5) on changed files, except the approval template.
   local files
   files=$(changed_md | grep -v -x 'docs/specs/README.md' || true)
   if [ -z "$files" ]; then echo "words: no Markdown files changed"; return 0; fi
   # shellcheck disable=SC2086
-  "$vale" --config .github/vale/vale.ini --output line --filter='.Name=="CentralHub.OwnerWords"' $files
+  "$vale" --config .github/vale/vale.ini --output line --filter='.Name in ["CentralHub.OwnerWords", "CentralHub.OwnerName"]' $files
 }
 
 case "${1:-all}" in
