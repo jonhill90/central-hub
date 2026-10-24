@@ -3,7 +3,7 @@ id: D-0008
 title: Name the PRD docs/PRD.md, keep specs in docs/specs/, and name root folders by job
 status: accepted
 date: 2026-10-19
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0001, D-0007]

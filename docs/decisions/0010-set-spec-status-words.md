@@ -3,7 +3,7 @@ id: D-0010
 title: Give specs five status words
 status: accepted
 date: 2026-10-22
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0001, D-0007, D-0008]

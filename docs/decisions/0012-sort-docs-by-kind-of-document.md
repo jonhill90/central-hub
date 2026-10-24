@@ -3,7 +3,7 @@ id: D-0012
 title: Sort docs/ by kind of document, add runbooks, architecture, glossary, postmortems and diagrams with their first file, and keep plans and playbooks out
 status: accepted
 date: 2026-10-23
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0001, D-0007, D-0008, D-0009, D-0010]

@@ -3,7 +3,7 @@ id: D-0011
 title: Keep the code for every machine below Kubernetes in hosts/, one subfolder per vendor product, with Terraform modules in their own repository
 status: accepted
 date: 2026-10-22
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0001, D-0008]

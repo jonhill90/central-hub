@@ -3,7 +3,7 @@ id: D-0003
 title: Use a few registered global ID families; write every other label with its file name
 status: accepted
 date: 2026-10-12
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: [research-agents]
 waits-on: [D-0001]

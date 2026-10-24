@@ -3,7 +3,7 @@ id: D-0009
 title: Add a STD- family for standards to the ID family registry
 status: accepted
 date: 2026-10-22
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0001, D-0003]

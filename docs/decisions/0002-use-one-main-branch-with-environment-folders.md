@@ -3,7 +3,7 @@ id: D-0002
 title: Use one main branch, environments as folders, and type-named short-lived branches
 status: accepted
 date: 2026-10-11
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: [D-0001]

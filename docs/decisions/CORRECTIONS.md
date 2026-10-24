@@ -67,7 +67,7 @@ The lines below are PR #42's; its approval facts and merge commit are added afte
 - 2026-10-24 · D-0011, D-0012 · STD-0002 named without the old "proposed" note · PR #42
 - 2026-10-24 · D-0003 · the 2026-10-12 clash finding lists `SR` as it was measured · PR #42
 - 2026-10-24 · D-0006, D-0014 · sentences that narrated earlier wording removed · PR #42
-- 2026-10-24 · D-0001 to D-0020, STD-0001, decisions and standards READMEs, runbooks README · the owner named by role, not by first name (D-0016 rule 5) · PR #42
+- 2026-10-24 · D-0001 to D-0020, STD-0001, decisions and standards READMEs, runbooks README · the owner named by role, not by first name, in the text and in `decision-makers` (D-0016 rule 5) · PR #42
 - 2026-10-24 · D-0003 to D-0020, STD-0001 · `merged` names the merge commit, and `check` no longer refers to the removed quote · PR #42
 - 2026-10-24 · D-0012, standards README, decisions README · D-0016 added to D-0012's related records; the `STD-` family cited at D-0003 rule 1; the index says where folded numbers are listed · PR #42
 - 2026-10-24 · D-0010 · blank lines added around two option headings (Markdown style) · PR #42

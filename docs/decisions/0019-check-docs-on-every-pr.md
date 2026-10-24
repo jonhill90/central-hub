@@ -3,7 +3,7 @@ id: D-0019
 title: Check the docs on every PR, with front matter and inside links as gates, Markdown style on changed files, and word checks built from the glossary
 status: accepted
 date: 2026-10-23
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: [D-0001, D-0012, D-0016]

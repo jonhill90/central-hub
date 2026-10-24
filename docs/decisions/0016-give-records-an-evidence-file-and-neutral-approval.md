@@ -3,7 +3,7 @@ id: D-0016
 title: Give each decision record a public evidence file, and record the owner's approval and reasons in neutral words
 status: accepted
 date: 2026-10-23
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: [D-0001, D-0006]

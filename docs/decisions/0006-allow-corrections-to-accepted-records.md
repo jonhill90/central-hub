@@ -3,7 +3,7 @@ id: D-0006
 title: Correct an accepted record in place when the decision does not change
 status: accepted
 date: 2026-10-16
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: [D-0001]

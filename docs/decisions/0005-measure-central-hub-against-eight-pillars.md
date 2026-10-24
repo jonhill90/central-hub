@@ -3,7 +3,7 @@ id: D-0005
 title: Measure all of Central Hub against six industry pillars plus two labelled Central Hub pillars
 status: accepted
 date: 2026-10-16
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0001]

@@ -3,7 +3,7 @@ id: D-0015
 title: Number research batches RB-NNNN in one batch register, and rename the old batch codes everywhere
 status: accepted
 date: 2026-10-23
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: [D-0001, D-0003, D-0006]

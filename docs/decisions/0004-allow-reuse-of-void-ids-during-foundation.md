@@ -3,7 +3,7 @@ id: D-0004
 title: During Foundation, allow a void ID's number to be reused, with the owner's approval and a tombstone
 status: accepted
 date: 2026-10-13
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0003]

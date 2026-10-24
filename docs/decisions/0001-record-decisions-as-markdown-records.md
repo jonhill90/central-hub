@@ -3,7 +3,7 @@ id: D-0001
 title: Record decisions as one Markdown file each, with a generated index
 status: accepted
 date: 2026-10-11
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: []

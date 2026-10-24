@@ -8,7 +8,7 @@ id: D-0001
 title: Test
 status: proposed
 date: 2026-10-23
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 waits-on: []
 supersedes: []

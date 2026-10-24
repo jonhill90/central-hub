@@ -3,7 +3,7 @@ id: D-0014
 title: Spell requirement IDs REQ-NNNN, and during Foundation rename agent-made labels everywhere with the owner's approval
 status: accepted
 date: 2026-10-23
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: [D-0001, D-0003, D-0004, D-0006]

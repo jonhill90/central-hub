@@ -3,7 +3,7 @@ id: D-0020
 title: Number every backlog item BL-NNNN, including open decisions, and rename the old row labels everywhere
 status: accepted
 date: 2026-10-24
-decision-makers: [jon]
+decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: [D-0001, D-0003, D-0006, D-0016]
