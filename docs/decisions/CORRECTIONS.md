@@ -73,4 +73,5 @@ The lines below are PR #42's; its approval facts and merge commit are added afte
 - 2026-10-24 · D-0012, standards README, decisions README · D-0016 added to D-0012's related records; the `STD-` family cited at D-0003 rule 1; the index says where folded numbers are listed · PR #42
 - 2026-10-24 · D-0010 · blank lines added around two option headings (Markdown style) · PR #42
 - 2026-10-24 · D-0003, D-0004, D-0012, D-0015, PRD · stale wording brought to the current text: the D-0003 rule 6 heading, D-0004's count of reused IDs, the places D-0012 and the PRD say are not created yet, and D-0015 order-of-work step 2, which now matches its rename scope above · PR #42
+- 2026-10-24 · STD-0002 · the home router's LAN row says the private store is not chosen yet (D-0012); the AWS and Google Cloud row has its place in the Place column · PR #42
 - 2026-10-24 · D-0001, D-0002, D-0011 · personal details about the owner dropped from a driver, an option and a pro; the decisions are unchanged · PR #42
