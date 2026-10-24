@@ -1,0 +1,58 @@
+# Docs checks (D-0019). Read-only token, no secrets, every action pinned to a full commit SHA,
+# every downloaded binary pinned to a version and checksum (D-0019 rule 2).
+name: docs
+on:
+  pull_request:            # never pull_request_target (CLAUDE.md rule 5)
+  schedule:
+    - cron: "17 6 * * 1"   # weekly outside-link report, Mondays 06:17 UTC
+permissions:
+  contents: read
+env:
+  LYCHEE_VERSION: "0.24.2"
+  LYCHEE_SHA256: "1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a"
+jobs:
+  front-matter:            # check 1, gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Python packages
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --require-hashes -r .github/docs-check/requirements.txt
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      - run: .github/docs-check/run.sh front-matter
+
+  links:                   # check 2, gate: links inside the repo only
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install lychee (pinned version and checksum)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/lychee.tgz" "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${LYCHEE_SHA256}  $RUNNER_TEMP/lychee.tgz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/lychee.tgz" -C "$RUNNER_TEMP" --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
+          echo "LYCHEE=$RUNNER_TEMP/lychee" >> "$GITHUB_ENV"
+      - run: .github/docs-check/run.sh links
+
+  outside-links:           # report only, never a gate
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install lychee (pinned version and checksum)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/lychee.tgz" "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${LYCHEE_SHA256}  $RUNNER_TEMP/lychee.tgz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/lychee.tgz" -C "$RUNNER_TEMP" --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
+      - name: Check outside links and write the report
+        run: |
+          "$RUNNER_TEMP/lychee" --no-progress --format markdown --output report.md './**/*.md' || true
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
