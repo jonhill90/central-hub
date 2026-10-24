@@ -8,6 +8,8 @@ by hand. The standards register table is generated the same way. Only the table 
 Usage: gen_index.py [--check] [repo root]   (default: current directory)
 With --check, nothing is written, and the exit code is 1 if a README differs from what would be written.
 Reads only one-line top-level front matter fields, so it needs no packages beyond the standard library.
+It stops with an error on any field it uses that it cannot read for certain: a missing field, a block value
+(a key with nothing after the colon and indented lines below), a quoted value with an escape, or a "|" in a cell.
 """
 import re
 import sys
@@ -43,15 +45,32 @@ def value(raw):
     return raw
 
 
+USED = {"id", "title", "status", "waits-on", "date", "scope", "owner-system"}
+REQUIRED = {"id", "title", "status"}
+
+
 def front_matter(path):
     m = FRONT.match(path.read_text())
     if not m:
-        raise SystemExit(f"{path}: no front matter")
+        raise SystemExit(f"error: {path}: no front matter")
     fields = {}
-    for line in m.group(1).splitlines():
+    lines = m.group(1).splitlines()
+    for i, line in enumerate(lines):
         key, sep, rest = line.partition(":")
-        if sep and key and not key.startswith((" ", "#")):
-            fields[key] = value(rest)
+        if not (sep and key and not key.startswith((" ", "#", "-"))):
+            continue
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        if key in USED:
+            if not rest.strip() and nxt.startswith((" ", "-")):
+                raise SystemExit(f"error: {path}: {key} is a block value; gen_index reads one-line values only")
+            if "\\" in rest:
+                raise SystemExit(f"error: {path}: {key} has an escape; gen_index cannot read it for certain")
+            if "|" in rest:
+                raise SystemExit(f"error: {path}: {key} has a '|', which would break the index table")
+        fields[key] = value(rest)
+    missing = sorted(k for k in REQUIRED if not fields.get(k))
+    if missing:
+        raise SystemExit(f"error: {path}: missing {', '.join(missing)}")
     return fields
 
 
