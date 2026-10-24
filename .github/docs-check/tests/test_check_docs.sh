@@ -37,4 +37,6 @@ case_ "date not YYYY-MM-DD"            's/^date: 2026-10-23/date: 23 Oct 2026/' 
 case_ "accepted without evidence"      's/^status: proposed/status: accepted/'      "accepted-evidence"
 case_ "unknown field"                  's/^title: Test/title: Test\ncolour: blue/'  "Additional properties"
 case_ "waits-on a missing record"      's/^waits-on: \[\]/waits-on: [D-0099]/'      "has no record"
+case_ "waits-on a backlog item"       's/^waits-on: \[\]/waits-on: [BL-0111]/'      ""
+case_ "waits-on a malformed label"     's/^waits-on: \[\]/waits-on: [BL-111]/'       "waits-on"
 echo "$pass passed, $fail failed"; [ $fail -eq 0 ]
