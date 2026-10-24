@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #19 and head ffd8dca, in the message itself"
   check: the drafting agent read the message in the documentation path thread at 2026-10-23T02:18Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: PR #19 merged at 2026-10-23T02:19Z as 007ee02, with this evidence commit on top of the approved commit
-legacy-id: []
 revisit-when: a kind folder passes about 30 files; a second reader group (not the owner or agents) needs its own docs; a docs site is built; the secret store for private values is chosen; a document kind turns up that fits no folder here; why lines in runbook steps grow into paragraphs; ※ links break often enough to need a link check; or every manual runbook has an automated twin and the manual ones stop being run
 ---
 

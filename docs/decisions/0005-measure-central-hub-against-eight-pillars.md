@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #8 and head ebc8019 by context; it answers the agent's message (03:00:34Z) that named both"
   check: the drafting agent read the message in the Kubernetes thread at 2026-10-16T03:02Z, and the recorded wording matched it exactly. It answers the agent's message in the same thread (03:00:34Z), which named PR #8 and head ebc8019 and asked for "accept" naming both. The message itself names neither, so it relies on that context, as D-0003's and D-0004's acceptances did. An independent check by a reviewing agent is still to do.
   merged: PR #8 merged at 2026-10-16T04:55Z as bd50f64, with this evidence commit on top of the approved commit
-legacy-id: []
 revisit-when: a CNCF document defines its own pillar set; a pillar has no working check after the cluster runs; or two pillars keep producing the same findings
 ---
 

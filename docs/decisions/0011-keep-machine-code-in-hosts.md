@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #18 and head 7dbae2c, in the message itself"
   check: the drafting agent read the message in the repo layout thread at 2026-10-22T07:15Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: PR #18 merged at 2026-10-22T07:16Z as 36d6a90, with this evidence commit on top of the approved commit
-legacy-id: []
 revisit-when: a second machine-building vendor product joins Terraform; the Terraform structure research names the runnable folders; or a machine kind appears that is neither a VM nor bare metal
 ---
 

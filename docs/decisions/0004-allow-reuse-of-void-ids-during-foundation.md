@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #7 and head 85ce152 by context; it answers the agent's message (06:17:02Z) that named both"
   check: the drafting agent read the message in the Rules table thread at 2026-10-13T06:18Z, and the recorded wording matched it exactly. It answers the agent's message in the same thread (06:17:02Z), which named PR #7 and head 85ce152 and asked for "accept" naming both. The message itself names neither, so it relies on that context, as D-0003's acceptance did. An independent check by a reviewing agent is still to do.
   merged: PR #7 merged at 2026-10-13T06:20Z as 1c78db7, with this evidence commit on top of the approved commit
-legacy-id: []
 revisit-when: the Activation gate passes; an ID family is referenced from outside the owner's own repositories and project; or a reuse leaves a reference that a search missed
 ---
 
@@ -56,9 +55,9 @@ flowchart LR
   C -- no --> N
   C -- yes --> D{Owner approves<br/>this reuse}
   D -- no --> N
-  D -- yes --> E[Search every repo and the Library<br/>for the old ID]
+  D -- yes --> E[Search every repo and the Library<br/>for the number]
   E --> F[Update or annotate live references;<br/>leave frozen records and chat archives]
-  F --> G[Keep a tombstone:<br/>'Former ID void' in the register]
+  F --> G[Keep a tombstone<br/>in the register]
 ```
 
 *In words:* a dropped entry's number may be reused only if all of these are true:
@@ -66,20 +65,20 @@ flowchart LR
 2. The system is still in **Foundation**: the Activation gate has not passed.
 3. The **owner approves** that specific reuse.
 4. The reuse is **traced**. Before the reuse:
-   - search every repository and the Library for the old ID;
+   - search every repository and the Library for the number;
    - update or annotate every live reference;
    - leave frozen records and chat archives as they are.
-5. The register keeps a **tombstone**: an entry such as "Former REQ-0021 (void)" that gives the old meaning, the reason, and what now holds the number. The decisions index is generated, so for a decision number the tombstone is a line in the numbers list of [`CORRECTIONS.md`](CORRECTIONS.md).
+5. The register keeps a **tombstone**: a line that gives the void entry's meaning, the reason, and what now holds the number. The decisions index is generated, so for a decision number the tombstone is a line in the numbers list of [`CORRECTIONS.md`](CORRECTIONS.md).
 
 Everything else in D-0003 stays in force, and rule 6 still applies to every case these conditions don't cover.
 
 ### Consequences
 
 - Good: a mistake doesn't leave a permanent gap while the system is small.
-- Good: the tombstone and the search keep the reason for "never reuse" intact. Nobody following an old reference is misled without being told.
+- Good: the tombstone and the search keep the reason for "never reuse" intact. Nobody following an earlier reference is misled without being told.
 - Bad: this goes against published practice. ARK, McMurry, OBO, PEP and DOORS all say never reuse (D-0003's [evidence](../research/0003-use-registered-id-families-and-file-qualified-labels.md), finding 2). McMurry's rule covers identifiers "generated and publicly advertised" (McMurry et al., reference 4 there), and Foundation IDs are not public in that sense. That reading is inferred, not quoted from a source.
 - Bad: one more condition for a reviewer to check.
-- Neutral: two IDs have been reused so far: D-0006 (listed in [`CORRECTIONS.md`](CORRECTIONS.md)) and REQ-0021. REQ-0021's search found 6 files that meant the old entry: the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md`, and the register's own Dropped entry. All 6 were updated or annotated. 3 frozen study files and 20 chat archives were left as records. Results reported to the owner in the Rules table thread, 2026-10-13 06:13 UTC.
+- Neutral: two IDs have been reused so far: D-0006 (listed in [`CORRECTIONS.md`](CORRECTIONS.md)) and REQ-0021. REQ-0021's search found 6 files that meant the void entry: the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md`, and the register's own Dropped entry. All 6 were updated or annotated. 3 frozen study files and 20 chat archives were left as records. Results reported to the owner in the Rules table thread, 2026-10-13 06:13 UTC.
 
 ### Confirmation
 
@@ -94,7 +93,7 @@ Everything else in D-0003 stays in force, and rule 6 still applies to every case
 
 ### 3. Reuse any dropped ID while early
 - Good: simplest.
-- Bad: a superseded entry was once a real rule, and old references to it are meaningful. Reusing it would mislead them.
+- Bad: a superseded entry was once a real rule, and earlier references to it are meaningful. Reusing it would mislead them.
 
 ## More Information
 

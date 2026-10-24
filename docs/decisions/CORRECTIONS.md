@@ -28,6 +28,7 @@ PR #42's approval facts and merge commit are added after it merges (D-0006 step 
 - 2026-10-24 · STD-0002 rule 2 and its tables · which number each place gets is not chosen yet, and H, V and A stand for them; the place numbers, the "each place owns a /12" rule, the kept-empty block `10.0.0.0/10` and `10.64.0.0/11`, the spare rows and the approval fact for the numbers are removed; the home router's LAN range is moved out of the public file; one open item is added: when the place numbers are chosen, no range in the plan may overlap another range in it · the owner voided the old place numbers, and asked for the home LAN range to be kept out of the public file, on 2026-10-24 between 05:40 and 05:56 UTC
 - 2026-10-24 · Activation gate item 4 (AGENTS.md, CLAUDE.md), PR template · "a pinned, no-writer Flux install" now reads "a pinned, no-writer GitOps engine install (the engine is not chosen yet)", and the template asks what "the GitOps tool" will change · the engine was never put to the owner as a question, so no record chooses it
 - 2026-10-24 · D-0019 rule 3 and check 4 · the word-check gate adds an owner-name rule (no first name under `docs/`, any case) beside the owner-quote rule, and both now gate every Markdown file a PR adds or changes, edited decision records and evidence files included; Markdown style still skips edits to existing records · records and evidence files are now edited in place (first line of this part), and D-0016 rule 5 says they never quote or name the owner
+- 2026-10-24 · D-0001 field contract, D-0003 rule 5 and its diagram, decision schema · the `legacy-id` field is removed from every record and from the checks, with no replacement; after the Activation gate passes, an assigned ID never changes; each ID change made during Foundation is one line in this file, and records hold no note of the ID used before; the backlog links in D-0001 and D-0002 (BL-0111, BL-0112, BL-0119) are dropped, because each backlog row links to its record (D-0020) · the owner's request of 2026-10-24, 07:31 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNS3eJqhiebhJsDYg2RWM9Qn), for no records or docs that tell how IDs changed
 
 ## Folded and reused numbers
 
@@ -66,7 +67,7 @@ The lines below are PR #42's; its approval facts and merge commit are added afte
 - 2026-10-24 · evidence 0018 · the NIST source named as SP 800-53 Release 5.2.0, which added `SA-15(13)` · PR #42
 - 2026-10-24 · STD-0001 · sources added for the hostname limits · PR #42
 - 2026-10-24 · D-0011, D-0012 · STD-0002 named without the old "proposed" note · PR #42
-- 2026-10-24 · D-0003 · the 2026-10-12 clash finding lists `SR` as it was measured · PR #42
+- 2026-10-24 · D-0003, D-0004, D-0009, evidence 0003 · wording that told of earlier IDs replaced by the current text: the clash finding's examples, the tombstone, the prefix check and the lifecycle finding · PR #42
 - 2026-10-24 · D-0006, D-0014, D-0016 · sentences that narrated earlier wording removed · PR #42
 - 2026-10-24 · D-0001 to D-0020, STD-0001, STD-0002, decisions and standards READMEs, runbooks README · the owner named by role, not by first name, in the text and in `decision-makers` (D-0016 rule 5) · PR #42
 - 2026-10-24 · D-0003 to D-0020, STD-0001, STD-0002 · `merged` names the merge commit, and `check` no longer refers to the removed quote · PR #42

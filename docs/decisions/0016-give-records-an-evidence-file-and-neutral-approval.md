@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #25 and head 0885430"
   check: the drafting agent read the message in the project thread at 2026-10-23T04:25Z; it names PR jonhill90/central-hub#25 and head 0885430 itself. An independent check by a reviewing agent is still to do.
   merged: PR #25 merged at 2026-10-23T04:26Z as c0c5b17, with this evidence commit on top of the approved commit
-legacy-id: []
 revisit-when: a knowledge system is chosen that should hold research and approvals; per-agent identities make GitHub approval the proof (Activation gate item 1); an evidence file is found to state something its research did not find; or a record needs more than one supporting file
 ---
 

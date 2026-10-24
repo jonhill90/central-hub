@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #4 by context; it answers the agent's request to review PR #4 and accept again (05:21Z), sent after commit 426ba8f"
   check: the drafting agent read the message in the project thread at 2026-10-12T05:24Z, and the recorded wording matched its opening sentences. It answers "look at PR #4 and write accept again" (same thread, 05:21Z), sent after the diagram commit 426ba8f. An earlier one-word acceptance at 05:19:35Z predates the diagram, so it is not counted. An independent check by a reviewing agent is still to do.
   merged: PR #4 merged at 2026-10-12T05:25Z as aa8ac8c, with this evidence commit on top of the approved commit
-legacy-id: []
 revisit-when: a family needs numbers faster than one owner can hand them out; agents start citing local labels across repos often enough that they need global IDs; a tool or knowledge system is adopted that brings its own ID scheme; or the registry grows past about 10 families
 ---
 
@@ -31,7 +30,7 @@ The research batch (RB-0003, [evidence](../research/0003-use-registered-id-famil
 
 - About 75 ID families. About 50 of them restart at 1 in each document.
 - **21 labels clash.** `P1` has 7 meanings, and two of them are in the same file. "ADR 0001" names 3 different records.
-- Every clash uses a one-letter prefix. No prefix of two or more letters clashed: `D-`, `SR`, `SRC-`, `FD`, `RM`, `WP-`, `AG` (as measured on 2026-10-12; `SR` is now `REQ-`, D-0014).
+- Every clash uses a one-letter prefix. No prefix of two or more letters clashed, for example `D-`, `SRC-`, `FD`, `WP-` and `AG`.
 
 The owner's records already require stable IDs but never say how:
 - Research `coordinator/system/REQUIREMENTS.md:75`
@@ -71,7 +70,6 @@ flowchart LR
   D1["Draft<br/>no number"] -->|owner numbers it| N["D-0007<br/>proposed"]
   N --> A["accepted"] --> S["superseded<br/>kept, never reused"]
   F -. promoted .-> N
-  N -. legacy-id .-> F
 ```
 
 1. **Global IDs are only for things cited across files, repos and chats.** These are the registered families:
@@ -90,14 +88,14 @@ flowchart LR
 2. **One family registry.** The table above is the family registry.
    - A new family, or a change to a row (its home, who numbers it, or closing the family), is made only with the owner's approval, by its own decision record. That record's PR updates the row here.
    - A new prefix must have at least two characters and must not equal or start with an existing one, ignoring case.
-3. **Number late, with one owner per family.** A draft has no number and is cited by its file path (`D-TBD`, `REQ-TBD`, `STD-TBD`, `RB-TBD`, `RM-TBD`, `BL-TBD`). Check that the number is unique before merging. Outside rule 5's Foundation exception, a number never changes after it is assigned.
+3. **Number late, with one owner per family.** A draft has no number and is cited by its file path (`D-TBD`, `REQ-TBD`, `STD-TBD`, `RB-TBD`, `RM-TBD`, `BL-TBD`). Check that the number is unique before merging. Outside rule 5, a number never changes after it is assigned.
 4. **Everything else is a local label.** Outside its own file, write it with the file name: `LIVE-PARAMETERS#S1`. A bare one-letter label outside its own file is a mistake that reviewers flag.
-5. **Old labels are not renamed, except during Foundation.**
-   - Until the Activation gate passes, the owner may approve renaming an agent-made ID or label. The rename is then applied to every live file in central-hub, the Research repo and the project files, so the files read as if the new name had always been used. No inline "was D1" notes.
-   - One corrections log per rename holds every old-to-new pair, the date and the owner's approval. Git history keeps the rest.
-   - Records of what was said are never changed: the chat archive, captured transcripts and git history keep the old names.
-   - Accepted decision records are corrected in place under D-0006, because a rename does not change any decision. Each correction PR lists every change, and the owner approves it by PR number and head SHA.
-   - After the Activation gate passes, the old rule returns: when an item gets a new ID, its record lists the old one in `legacy-id`.
+5. **An assigned ID changes only during Foundation.**
+   - Until the Activation gate passes, the owner may approve changing an agent-made ID or label. The new ID is then written in every live file in central-hub, the Research repo and the project files, so the files read as if it had always been used. Records hold no note of the ID used before.
+   - Each change is one line in [`CORRECTIONS.md`](CORRECTIONS.md), with the date and the owner's approval; the Research repo and the project files keep their own log for their files. Git history keeps the rest.
+   - Records of what was said are never changed: the chat archive, captured transcripts and git history stay as they are.
+   - Accepted decision records are corrected in place under D-0006, because a changed ID does not change any decision. Each correction PR lists every change, and the owner approves it by PR number and head SHA.
+   - After the Activation gate passes, an assigned ID never changes.
 6. **Never reuse or delete an ID.** A superseded or withdrawn item keeps its ID, its status and a link to whatever replaced it. A decision record folded into another record keeps its number: the number is never reused, and [`CORRECTIONS.md`](CORRECTIONS.md) lists it with the record it was folded into. A retired method stays in the catalogue, marked `deprecated` or `replaced by RM-NNNN`. A done backlog item keeps its number and its row. D-0004's Foundation exception for void IDs still applies.
 7. **Keep meaning out of the number.** The prefix names the family and nothing else. Status, topic and owner go in front matter or in the register's columns. A batch that continues another says so in its SPEC.md ("follows RB-0006"), not in its number.
 
@@ -142,4 +140,4 @@ flowchart LR
 - Reported, not fixed (agent-estate is back-burnered; noted only for whoever revives it):
   - agent-estate `register.go:571-591` may reuse a deleted `SRC-` number. Inferred from the code, not tested.
   - INMAPS has two 12-digit note-ID shapes that can look identical.
-- Related records: D-0004 (void IDs). The records that add a family or change a rule here: D-0009 (standards), D-0014 (requirements, and rule 5's Foundation exception), D-0015 (research batches), D-0018 (research methods) and D-0020 (backlog items).
+- Related records: D-0004 (void IDs). The records that add a family or change a rule here: D-0009 (standards), D-0014 (requirements, and rule 5), D-0015 (research batches), D-0018 (research methods) and D-0020 (backlog items).

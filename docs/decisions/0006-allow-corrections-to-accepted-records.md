@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #10 and head 0ae0493"
   check: the drafting agent read the message in the ADR corrections thread at 2026-10-16T08:29Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: PR #10 merged at 2026-10-16T08:29Z as 0517ccf, with this evidence commit on top of the approved commit
-legacy-id: []
 revisit-when: agents get their own GitHub identities (Activation gate item 1); a correction is later found to have changed a decision; or corrections to one record pile up
 ---
 

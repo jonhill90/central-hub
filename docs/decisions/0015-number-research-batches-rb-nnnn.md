@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #24 and head 1cce2f8, in the message itself"
   check: the drafting agent read the message in the "Requirements register and SR ids" thread at 2026-10-23T04:21Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: PR #24 merged at 2026-10-23T04:22Z as 7b7a6b6, with this evidence commit on top of the approved commit
-legacy-id: []
 revisit-when: the Activation gate passes; the Research repo is retired and research moves somewhere with its own numbering; or a batch register check finds a duplicate number
 ---
 

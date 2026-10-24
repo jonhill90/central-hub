@@ -18,7 +18,6 @@
     "supersedes": { "$ref": "common.schema.json#/$defs/decisionIds" },
     "superseded-by": { "$ref": "common.schema.json#/$defs/nullOrDecisionId" },
     "accepted-evidence": { "oneOf": [ { "$ref": "common.schema.json#/$defs/approval" }, { "$ref": "common.schema.json#/$defs/approvalLegacy" } ] },
-    "legacy-id": { "type": "array", "items": { "type": "string" } },
     "revisit-when": { "type": "string", "minLength": 1 }
   },
   "allOf": [

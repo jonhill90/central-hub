@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #30 and head b0925cf"
   check: the drafting agent read the message in the project thread at 2026-10-23T05:23Z; it names PR jonhill90/central-hub#30 and head b0925cf itself. An independent check by a reviewing agent is still to do.
   merged: PR #30 merged at 2026-10-23T05:25Z as 381e1f2, with this evidence commit on top of the approved commit
-legacy-id: []
 revisit-when: the Activation gate passes; the methods catalogue moves into a tool with its own numbering; or the research gate stops citing methods by ID
 ---
 

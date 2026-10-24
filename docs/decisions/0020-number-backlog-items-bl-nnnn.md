@@ -17,7 +17,6 @@ accepted-evidence:
   approval-names: "PR #38 and head 607a615"
   check: the drafting agent read the message in the project thread at 2026-10-24T02:12Z; it names PR jonhill90/central-hub#38 and head 607a615 itself. It replaces the owner's first acceptance (2026-10-24T02:07:49Z, head 54b22e3), which a Markdown style fix made after it (blank lines, one list marker) superseded. An independent check by a reviewing agent is still to do.
   merged: PR #38 merged at 2026-10-24T02:13Z as 3dc230a, with this evidence commit on top of the approved commit
-legacy-id: []
 revisit-when: the Activation gate passes; the backlog moves into a task management system with its own keys; or the backlog gets a second owner
 ---
 
