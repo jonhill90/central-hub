@@ -96,7 +96,7 @@ flowchart LR
    - Records of what was said are never changed: the chat archive, captured transcripts and git history stay as they are.
    - Accepted decision records are corrected in place under D-0006, because a changed ID does not change any decision. Each correction PR lists every change, and the owner approves it by PR number and head SHA.
    - After the Activation gate passes, an assigned ID never changes.
-6. **Never reuse or delete an ID.** A superseded or withdrawn item keeps its ID, its status and a link to whatever replaced it. A decision record folded into another record keeps its number: the number is never reused, and [`CORRECTIONS.md`](CORRECTIONS.md) lists it with the record it was folded into. A retired method stays in the catalogue, marked `deprecated` or `replaced by RM-NNNN`. A done backlog item keeps its number and its row. D-0004's Foundation exception for void IDs still applies.
+6. **Never delete an ID, and reuse one only as D-0004 allows.** A superseded or withdrawn item keeps its ID, its status and a link to whatever replaced it. A decision record folded into another record frees its number. The next new decision record takes it (D-0004), and [`CORRECTIONS.md`](CORRECTIONS.md) lists it with the record it was folded into and the record that now holds it. A retired method stays in the catalogue, marked `deprecated` or `replaced by RM-NNNN`. A done backlog item keeps its number and its row. D-0004 sets the Foundation exceptions for void IDs and folded decision numbers.
 7. **Keep meaning out of the number.** The prefix names the family and nothing else. Status, topic and owner go in front matter or in the register's columns. A batch that continues another says so in its SPEC.md ("follows RB-0006"), not in its number.
 
 ### Consequences
@@ -123,7 +123,7 @@ flowchart LR
 
 ### 2. File-name qualification only
 - Good: no counter, no registry, nothing to migrate.
-- Bad: file names are not unique (three `SPEC.md` files each have a `Q1`). Files move (LIBRARY.md:18 keeps an old-path column). Moving an item to another file changes its ID. The references are long to say. It also contradicts D-0001's "Permanent ID, never reused".
+- Bad: file names are not unique (three `SPEC.md` files each have a `Q1`). Files move (LIBRARY.md:18 keeps an old-path column). Moving an item to another file changes its ID. The references are long to say. It also contradicts D-0001's "Permanent ID".
 
 ### 3. Namespaced types (`platform:PRD-R001`)
 - Good: its lifecycle rules match practice (evidence finding 7).

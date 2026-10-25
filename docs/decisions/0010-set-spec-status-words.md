@@ -60,8 +60,7 @@ Chosen option: **1**. The owner said yes to the proposed option on 2026-10-22 at
 
 ### Not decided here
 
-- which store holds one system's PRD and specs about another system;
-- whether a decision record may be edited before it is implemented.
+- which store holds one system's PRD and specs about another system.
 
 ### Consequences
 
