@@ -97,9 +97,8 @@ flowchart TB
 
 ### Not decided here
 
-Each of these is a later decision for the owner:
-- which store holds one system's PRD and specs about another system;
-- whether a decision record may be edited before it is implemented.
+This is a later decision for the owner:
+- which store holds one system's PRD and specs about another system.
 
 ### Consequences
 

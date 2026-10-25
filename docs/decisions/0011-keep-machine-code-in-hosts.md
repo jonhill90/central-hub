@@ -28,6 +28,8 @@ D-0008 names the root folder `hosts/` as "machines below Kubernetes". It doesn't
 
 On 2026-10-20 at 03:03 UTC the owner asked where the code for the Proxmox hypervisor should go in central-hub, along with VPS machines, cloud VMs, cloud container services and machines still to come. The rule it serves is PRD goal 6: everything is controllable from this repository, and one-time console steps at the start are fine.
 
+On 2026-10-25 at 02:53 UTC the owner said yes to the proposed home for configuration management code: it lives in this repository, under `hosts/`. At 05:27 UTC he said yes to the proposed split for the home lab: Terraform creates the Proxmox VMs and networks, and Ansible configures the Proxmox host and the settings of the OPNsense firewall.
+
 ## Decision Drivers
 
 - **Controllable from this repository** (PRD goal 6). After one-time console steps at the start, every machine is created and configured from code here. Each job is first done by hand from a manual runbook, and its code follows (D-0012 "Manual first").
@@ -48,9 +50,9 @@ Chosen option: **1**. The owner said yes to keeping `hosts/` on 2026-10-20 at 03
 ```
 central-hub/
 ├── hosts/                     machines below Kubernetes (D-0008)
-│   ├── terraform/             creates the machines: VPS, hypervisor VMs, cloud VMs
+│   ├── terraform/             creates the machines: VPS, hypervisor VMs and networks, cloud VMs
 │   │   └── <runnable folders> one per place; name and split not decided here
-│   └── ansible/               configures the OS on them; each machine pulls
+│   └── ansible/               configures the OS on them, and the firewall's settings
 └── kubernetes/clusters/<role>/   the clusters that run on those machines
 ```
 
@@ -67,7 +69,9 @@ central-hub/
 - the name and split of the runnable Terraform folders inside `hosts/terraform/` (`stacks/`, `envs/` or something else). This waits on the Terraform structure research;
 - the name and home of the modules repository;
 - which Terraform provider builds the hypervisor VMs;
-- the layout inside `hosts/ansible/`.
+- the layout inside `hosts/ansible/`;
+- which Ansible collection configures the OPNsense firewall;
+- whether Ansible runs by push (a runner connects to each machine) or by pull (each machine runs it on itself on a timer).
 
 ### Consequences
 

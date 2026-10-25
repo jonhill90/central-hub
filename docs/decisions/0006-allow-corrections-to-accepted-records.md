@@ -1,6 +1,6 @@
 ---
 id: D-0006
-title: Correct an accepted record in place when the decision does not change
+title: Edit accepted records in place
 status: accepted
 date: 2026-10-16
 decision-makers: [owner]
@@ -20,7 +20,7 @@ accepted-evidence:
 revisit-when: agents get their own GitHub identities (Activation gate item 1); a correction is later found to have changed a decision; or corrections to one record pile up
 ---
 
-# Correct an accepted record in place when the decision does not change
+# Edit accepted records in place
 
 ## Context and Problem Statement
 
@@ -83,9 +83,11 @@ A changed decision is never logged as a correction. It is made in one of two way
 - a new record; or
 - an edit in place, when the owner accepts that change by name in a PR. The record then reads as the current decision, with no "superseded" or "amended" notes.
 
+A record may be edited this way whether or not its decision is built yet. Once it is built, the same PR must change the built thing to match, so the record and what runs never disagree.
+
 Either way, the PR adds one line under "Decision changes" in [`CORRECTIONS.md`](CORRECTIONS.md): what changed, and the owner's request or choice it follows.
 
-A record may be folded into another the same way. Its rules, reasons, considered options and revisit conditions move into the other record, and its file is removed. Its number is never reused, and `CORRECTIONS.md` lists it (D-0003 rule 6).
+A record may be folded into another the same way. Its rules, reasons, considered options and revisit conditions move into the other record, and its file is removed. `CORRECTIONS.md` lists it, and the next new decision record takes its number (D-0004).
 
 ### How a correction is made
 

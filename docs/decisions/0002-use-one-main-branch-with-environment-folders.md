@@ -26,7 +26,7 @@ revisit-when: a second person gets merge rights with different trust per environ
 
 On 2026-10-11 the owner asked whether central-hub should have only `main` or environment branches such as dev/stage/prod, dev/QA/prod or dev/prod, and noted that branches would start with prefixes such as feature/, bug/ or chore/.
 
-central-hub will be a GitOps repo once the Activation gate passes (Foundation §6): a cluster will pull its desired state from git. It starts with one cluster in the home lab on Proxmox, which a rented VPS joins as an outside worker, and adds cloud sites later (PRD goal 1). One person, the owner, merges every PR, and agents open most of them. The repo is still empty, so its first branch needs a name, and the Foundation proposal (§3.1) assumes `main`.
+central-hub will be a GitOps repo once the Activation gate passes (Foundation §6): a cluster will pull its desired state from git. It starts with one cluster in the home lab on Proxmox, and adds the VPS and cloud sites later (PRD goal 1). One person, the owner, merges every PR, and agents open most of them. The repo is still empty, so its first branch needs a name, and the Foundation proposal (§3.1) assumes `main`.
 
 ## Decision Drivers
 
@@ -76,7 +76,7 @@ Chosen option: **1**.
 - **Scope:** branches inside central-hub. Whether tenant or application manifests live here or in their own repositories is a separate decision (repo boundaries); that decision may add repositories, not branches. Any push-based infrastructure code added later (Terraform, Ansible) follows the same rule: environments are folders or per-environment variable files, and pipeline stages gate each apply (inferred, RB-0002-gaps.md §1.3).
 - **Long-lived branches:** `main` only. It is the default branch and, after the Activation gate, the state the clusters pull.
 - **Environments:** folders on `main`, never branches.
-  - **One deployment target now:** the first cluster, in the home lab, with the VPS as an outside worker.
+  - **One deployment target now:** the first cluster, in the home lab.
   - Deferred to the layout and topology decisions: how many environments there are, how they're isolated (namespaces in one cluster, or separate clusters), and whether a later site joins this cluster or forms another. This rule holds either way: environments and clusters are folders on `main`, never branches.
   - Promotion is a PR that changes the target environment's folder. What that PR must show (source revision, target, test results, rollback point) is a follow-up decision. Where no test environment sits in front of production, the PR says so.
   - Secrets: the secrets decision sets which deployment target may decrypt which secrets, and the folder layout follows that policy. A folder isn't the cryptographic boundary; the keys are. It doesn't depend on the branch choice (inferred).

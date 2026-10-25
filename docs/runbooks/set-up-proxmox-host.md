@@ -45,7 +45,7 @@ The networking steps come after the IP address plan: remote access through a con
 
 - Each step has the commands, then a `why:` line of one or two sentences, then an `expect:` line where there is something to see. A longer story, where there is one, comes before the commands.
 - `[S1-12]` and similar labels are rows in the ledger of research batch RB-0061, kept in the owner's private research archive. `[pick]` marks the agent's lean; the owner decides. `[inferred]` is reasoning, and `[model]` is not checked against a source.
-- `<host name>` follows [STD-0001](../standards/0001-vm-hostnames.md). `<host address>` is the host's LAN address. Neither is written here.
+- `<host name>` follows [STD-0001](../standards/0001-names.md). `<host address>` is the host's LAN address. Neither is written here.
 
 Reminders used below:
 
@@ -60,7 +60,7 @@ Reminders used below:
 
 #### 0. Rename the host (before anything else)
 
-The host takes its name from [STD-0001](../standards/0001-vm-hostnames.md) (env `<env>` [pick: `p`; the owner confirms], OS `de` for Debian, role `hv` hypervisor).
+The host takes its name from [STD-0001](../standards/0001-names.md) (env `p` for prod, OS `de` for Debian, role `hv` hypervisor).
 
 ```bash
 # 0a. check the node is empty: both lists must be empty. Delete any test VM first.
@@ -416,7 +416,7 @@ Record a replay in the PR that changes this runbook: set `last-tested` with the 
 ## Not in this version
 
 - The networking steps (see [Not in this runbook](#not-in-this-runbook)).
-- An automated version (the bpg Terraform/OpenTofu provider, community.proxmox Ansible, Packer): researched in batch RB-0061, not picked; it comes after this runbook has been done by hand (D-0012, "Manual first").
+- An automated version: Terraform for the Proxmox VMs and networks, and Ansible for the host (D-0011); the Terraform provider is not chosen yet. Batch RB-0061 compared the bpg Terraform/OpenTofu provider, the community.proxmox Ansible collection and Packer. It comes after this runbook has been done by hand (D-0012, "Manual first").
 - A trusted TLS certificate for the web UI ※S.
 - A separate management VLAN (NIST SP 800-125A asks for one; later) [S2 table].
 - CIS Debian benchmark items that conflict with a hypervisor (at least seven) [S2 summary 8].
@@ -425,5 +425,5 @@ Record a replay in the PR that changes this runbook: set `last-tested` with the 
 ## Related
 
 - [D-0012](../decisions/0012-sort-docs-by-kind-of-document.md): runbook format, manual first.
-- [STD-0001](../standards/0001-vm-hostnames.md): the host name.
+- [STD-0001](../standards/0001-names.md): the host name.
 - Research batch RB-0061 (strands S1 to S4, the ledger and the independent check) is kept in the owner's private research archive.

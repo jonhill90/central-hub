@@ -82,7 +82,7 @@ Each step has:
 
 **What PROVEN means here.** The agent ran the commands over a non-interactive SSH session. So commands that wait for you (`-f`, `-w`, `--watch`, `kubectl edit`, `kubectl run -it`, `exec bash`) were run in their non-waiting form (a loop, `kubectl wait`, a `sed` edit, `-i` without `-t`). The results are the same; the step says so where it matters.
 
-**Rules for practice.** Run everything as root on the node. `<node name>` is your node's hostname, following [STD-0001](../standards/0001-vm-hostnames.md). Real names are not written here. `<endpoint name>` is the DNS name from [step 7](#7-endpoint-name). Most practice steps clean up after themselves. Four leave something behind on purpose: the exam habits (shell settings), step 13 (metrics-server, needed by step 33), step 17 (the cluster is now 1.37.1) and step 26 (Traefik, needed by step 27). Otherwise you can skip any step: nothing on the cluster depends on one.
+**Rules for practice.** Run everything as root on the node. `<node name>` is your node's hostname, following [STD-0001](../standards/0001-names.md). Real names are not written here. `<endpoint name>` is the DNS name from [step 7](#7-endpoint-name). Most practice steps clean up after themselves. Four leave something behind on purpose: the exam habits (shell settings), step 13 (metrics-server, needed by step 33), step 17 (the cluster is now 1.37.1) and step 26 (Traefik, needed by step 27). Otherwise you can skip any step: nothing on the cluster depends on one.
 
 **Versions after step 17.** Step 17 upgrades the cluster from 1.36.5 to 1.37.1, the exam's version as of 2026-10-24 (see step 17). Steps after it ran on 1.37.1.
 
@@ -174,16 +174,16 @@ And pods must reach the host: without the trusted pod range, firewalld blocked p
 ```bash
 for p in 6443/tcp 2379-2380/tcp 10250/tcp 10256/tcp 10257/tcp 10259/tcp 8472/udp 4240/tcp; do
   firewall-cmd --permanent --zone=tailnet --add-port=$p; done
-firewall-cmd --permanent --zone=trusted --add-source=10.244.0.0/16   # pods must reach the API and host; without it CoreDNS never gets Ready
+firewall-cmd --permanent --zone=trusted --add-source=10.240.0.0/16   # pods must reach the API and host; without it CoreDNS never gets Ready
 firewall-cmd --reload
 ```
 
 - the ports: 6443 the API server; 2379-2380 etcd; 10250 the kubelet; 10256 kube-proxy; 10257 the controller-manager; 10259 the scheduler (ports page). 10256 is kube-proxy's health check (source: <https://kubernetes.io/docs/reference/command-line-tools-reference/kube-proxy/>). **Cilium-specific:** 8472/udp carries pod traffic between nodes, wrapped in VXLAN (Cilium's default mode, and this node's, measured); 4240/tcp is Cilium's health check between nodes (source: <https://docs.cilium.io/en/v1.20/operations/system_requirements/>). Another CNI needs its own ports here.
-- ※ `10.244.0.0/16` is the pod range. You will give the same range to kubeadm in [step 8](#8-init) and to Cilium in [step 9](#9-cilium-1204).
+- ※ `10.240.0.0/16` is the pod range. You will give the same range to kubeadm in [step 8](#8-init) and to Cilium in [step 9](#9-cilium-1204). It and the Service range `10.96.0.0/16` are cluster 1's ranges in [STD-0002](../standards/0002-ip-address-plan.md). The proof runs used `10.244.0.0/16` and `10.96.0.0/12`.
 - note: trusting the whole pod range is broad. Narrowing it is a hardening item.
 - page: <https://kubernetes.io/docs/reference/networking/ports-and-protocols/>
 - why: Each Kubernetes part listens on its own port (measured with `ss` on the proof node). They open only on the tailnet, so the public zone stays closed (but see the NodePort finding in [step 23](#23-services-clusterip-nodeport-loadbalancer-sn3)).
-- expect: `firewall-cmd --zone=tailnet --list-ports` shows the 8 ports above; `firewall-cmd --zone=trusted --list-sources` shows `10.244.0.0/16`.
+- expect: `firewall-cmd --zone=tailnet --list-ports` shows the 8 ports above; `firewall-cmd --zone=trusted --list-sources` shows `10.240.0.0/16`.
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2, TS5 (partly).
 
 #### 5. containerd 2.3.6
@@ -236,10 +236,10 @@ systemctl enable --now kubelet
 
 #### 7. Endpoint name
 
-- do (the owner): make `<endpoint name>` resolve to the node's tailnet IP (`tailscale ip -4`) on every machine that talks to the cluster, and update it after every rebuild. The proof runs used an `/etc/hosts` entry. Do not put the name in public DNS: that would publish the endpoint name and its tailnet address (※S in the Proxmox runbook).
-- open question for the owner: which name the endpoint uses, and where it is published.
+- do (the owner): make `<endpoint name>` resolve to the node's address on every machine that talks to the cluster, and update it after every rebuild. The proof runs used the node's tailnet IP (`tailscale ip -4`) in an `/etc/hosts` entry. Do not put the name in public DNS: that would publish the endpoint name and its address (※S in the Proxmox runbook).
+- the name: `api.c1.prod.<zone>` ([STD-0001](../standards/0001-names.md), "Service names"), published in the lab's own DNS, not in public DNS.
 - why: The cluster's address goes into its certificates and every kubeconfig, so use a name, not an IP: a rebuilt node then needs only the name's address changed. kubeadm also cannot add high availability later to a cluster made without `--control-plane-endpoint` (create-cluster page).
-- expect: `getent hosts <endpoint name>` returns the tailnet IP.
+- expect: `getent hosts <endpoint name>` returns the node's address.
 - status: **PROVEN** with an `/etc/hosts` entry (PROOF-RUN-3.md).
 
 #### 8. Init
@@ -247,7 +247,7 @@ systemctl enable --now kubelet
 ```bash
 kubeadm config images pull --kubernetes-version v1.36.5
 kubeadm init --kubernetes-version v1.36.5 --control-plane-endpoint <endpoint name>:6443 \
-  --pod-network-cidr 10.244.0.0/16 --service-cidr 10.96.0.0/12
+  --pod-network-cidr 10.240.0.0/16 --service-cidr 10.96.0.0/16
 mkdir -p /root/.kube && cp /etc/kubernetes/admin.conf /root/.kube/config
 ```
 
@@ -273,7 +273,7 @@ curl -fsSL https://get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz.sha256sum | sha256
 tar xzf helm-v4.3.1-linux-amd64.tar.gz && install -m 0755 linux-amd64/helm /usr/local/bin/helm
 helm repo add cilium https://helm.cilium.io/ && helm repo update
 helm install cilium cilium/cilium --version 1.20.4 -n kube-system \
-  --set ipam.mode=cluster-pool --set "ipam.operator.clusterPoolIPv4PodCIDRList={10.244.0.0/16}" \
+  --set ipam.mode=cluster-pool --set "ipam.operator.clusterPoolIPv4PodCIDRList={10.240.0.0/16}" \
   --set devices=tailscale0 --set MTU=1230 --set kubeProxyReplacement=false --set operator.replicas=1
 kubectl -n kube-system rollout status ds/cilium && kubectl -n kube-system rollout status deploy/coredns
 ```
@@ -300,7 +300,7 @@ kubectl exec t1 -- sh -c 'wget -q -T 8 -O /dev/null https://pkgs.k8s.io && echo 
 
 - ※ The DNS lines pass because of [step 3](#3-dns-that-pods-can-use) (the node's DNS) and [step 9](#9-cilium-1204) (CoreDNS up).
 - why: By default, the control plane node carries a taint that keeps normal pods off it (create-cluster page). This is our only node, so remove it.
-- expect: pod IP in 10.244.0.0/16; `kubernetes.default` → 10.96.0.1; egress-ok.
+- expect: pod IP in 10.240.0.0/16; `kubernetes.default` → 10.96.0.1; egress-ok.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/> (section on control plane node isolation)
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: WS5 (partly), SN1 (partly).
 
@@ -622,8 +622,8 @@ kind: ClusterConfiguration
 kubernetesVersion: v1.37.1
 controlPlaneEndpoint: "<endpoint name>:6443"
 networking:
-  podSubnet: 10.244.0.0/16
-  serviceSubnet: 10.96.0.0/12
+  podSubnet: 10.240.0.0/16
+  serviceSubnet: 10.96.0.0/16
 ---
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
@@ -1331,5 +1331,5 @@ Record a replay in the PR that changes this runbook: set `last-tested` with the 
 ## Related
 
 - [D-0012](../decisions/0012-sort-docs-by-kind-of-document.md): runbook format, manual first.
-- [STD-0001](../standards/0001-vm-hostnames.md): node names.
+- [STD-0001](../standards/0001-names.md): node names.
 - The proof runs (PROOF-RUN-1 to PROOF-RUN-4, the SELinux trial, FIRST-STEPS) and the CKA research batch (SYNTHESIS, LEDGER) are kept in the owner's private research archive. They are named here, not linked.

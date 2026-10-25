@@ -1,6 +1,6 @@
 ---
 id: D-0004
-title: During Foundation, allow a void ID's number to be reused, with the owner's approval and a tombstone
+title: During Foundation, allow a void or folded ID's number to be reused, with the owner's approval and a tombstone
 status: accepted
 date: 2026-10-13
 decision-makers: [owner]
@@ -20,7 +20,7 @@ accepted-evidence:
 revisit-when: the Activation gate passes; an ID family is referenced from outside the owner's own repositories and project; or a reuse leaves a reference that a search missed
 ---
 
-# During Foundation, allow a void ID's number to be reused, with the owner's approval and a tombstone
+# During Foundation, allow a void or folded ID's number to be reused, with the owner's approval and a tombstone
 
 ## Context and Problem Statement
 
@@ -29,6 +29,8 @@ D-0003 rule 6 says "Never reuse, never delete" for every registered ID family, i
 On 2026-10-13 the requirements register had a row that was a usage limit for one agent product. It broke two of the register's own rules: REQ-0008 (no vendor names) and REQ-0011 (everything replaceable). The owner dropped it at 04:23 UTC, because the system requirements should not name agent harnesses or vendors.
 
 The owner then asked for the new shared-vocabulary requirement to take its number (Central Hub project, Rules table thread, 2026-10-13 06:09 UTC), because the dropped row should never have been a rule and keeping the gap sat badly with building everything to be replaced. This record decides when a void entry's number may be reused, and on what conditions.
+
+On 2026-10-25 the owner asked that decision numbers have no gaps after D-0013, D-0017 and D-0021 were folded into other records (D-0006). The folded numbers had held accepted decisions, so the tombstone matters most there: an older reference to D-0013 means the folded runbook-steps record, and the tombstone line says so.
 
 ## Decision Drivers
 
@@ -49,7 +51,7 @@ Chosen option: **1**.
 
 ```mermaid
 flowchart LR
-  A[Entry dropped] --> B{Was it void?<br/>never valid in its family}
+  A[Entry dropped] --> B{Void, or a folded<br/>decision number?}
   B -- no: superseded or withdrawn --> N[Never reuse<br/>D-0003 rule 6]
   B -- yes --> C{Foundation stage?}
   C -- no --> N
@@ -61,14 +63,14 @@ flowchart LR
 ```
 
 *In words:* a dropped entry's number may be reused only if all of these are true:
-1. The entry was **void**: it never met its family's own rules. A superseded or withdrawn entry that was once valid is never reused.
+1. The entry was **void** (it never met its family's own rules), or it is a **decision record folded into another record** (D-0006). A folded decision number is reused by the next new decision record, lowest free number first, so decision numbers have no gaps. A superseded or withdrawn entry that was once valid is never reused.
 2. The system is still in **Foundation**: the Activation gate has not passed.
-3. The **owner approves** that specific reuse.
+3. The **owner approves** that specific reuse. For folded decision numbers, the owner approved reuse on 2026-10-25 at 01:21 UTC, covering every folded number during Foundation.
 4. The reuse is **traced**. Before the reuse:
    - search every repository and the Library for the number;
    - update or annotate every live reference;
    - leave frozen records and chat archives as they are.
-5. The register keeps a **tombstone**: a line that gives the void entry's meaning, the reason, and what now holds the number. The decisions index is generated, so for a decision number the tombstone is a line in the numbers list of [`CORRECTIONS.md`](CORRECTIONS.md).
+5. The register keeps a **tombstone**: a line that gives the void or folded entry's meaning, the reason, and what now holds the number. The decisions index is generated, so for a decision number the tombstone is a line in the numbers list of [`CORRECTIONS.md`](CORRECTIONS.md).
 
 Everything else in D-0003 stays in force, and rule 6 still applies to every case these conditions don't cover.
 

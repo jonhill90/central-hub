@@ -62,7 +62,7 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
 
 ### What the decision covers
 
-- **Location:** `jonhill90/central-hub`, `docs/decisions/NNNN-slug.md`. A record is written only for the decision the owner picks next. It gets the next number when its PR opens, so numbers follow the order the owner picks in. A rejected or parked record keeps its number and is merged with that status, so a number is never reused (D-0004 sets the one Foundation exception for a void number). A draft in project files before that has `id: D-TBD` and sits outside this schema.
+- **Location:** `jonhill90/central-hub`, `docs/decisions/NNNN-slug.md`. A record is written only for the decision the owner picks next. It gets the lowest free number when its PR opens. A rejected or parked record keeps its number and is merged with that status, so a number is never reused (D-0004 sets the Foundation exceptions for a void or folded number). A draft in project files before that has `id: D-TBD` and sits outside this schema.
 - **Backlog:** decisions not yet picked stay in the backlog in project files, with their options in the decision map. The index says where the backlog lives (project files aren't reachable from the repo, so it names the place rather than linking). Listing it doesn't set a review order.
 - **Format:** the MADR 4 body and its optional front matter, plus the custom fields below. This file is the template.
 - **Vocabulary:** who does the work is named by role, never by vendor, so any agent can fill any role and swapping one changes no record. Where a product is the subject of a decision (an option, evidence or configuration), the record names it accurately.
@@ -89,7 +89,7 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
 
 | Field | Type | Meaning | Validation |
 |---|---|---|---|
-| `id` | string `D-NNNN` | Permanent ID, never reused | Unique, matches the filename number |
+| `id` | string `D-NNNN` | Permanent ID; reused only as D-0004 allows | Unique, matches the filename number |
 | `proposed-by` | string | Agent or person who drafted it | Required |
 | `waits-on` | list of IDs | Decisions that must be **accepted** before this one can be decided. The edge points from this record to its prerequisite. IDs may be records (`D-NNNN`) or backlog items (`BL-0111`, `BL-0021`…) | Record IDs resolve to a file; backlog IDs must be well formed, and a reviewing agent checks them against the backlog, because the backlog isn't in the repo; no cycles |
 | `supersedes` / `superseded-by` | list / ID | Replacement links | Symmetric |
