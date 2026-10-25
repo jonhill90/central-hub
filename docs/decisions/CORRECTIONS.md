@@ -6,9 +6,9 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
-### Accepted with this PR
+### Accepted with PR #43
 
-This PR's approval facts and merge commit are added after it merges (D-0006 step 6).
+PR #43's approval facts and merge commit are added after it merges (D-0006 step 6).
 
 - 2026-10-25 · D-0001, D-0003 rule 6, D-0004, D-0006, decisions index · folded decision numbers are reused by the next new decision records, lowest first, so decision numbers have no gaps; the tombstone in this file names the folded record and the new holder · the owner's answer "No gaps" of 2026-10-25 01:21 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNDgxPz45GdTSdyXaq2MTQPo)
 - 2026-10-25 · STD-0002 rules and tables · terms are NetBox's (aggregate, prefix, container prefix); the aggregate `10.0.0.0/8` holds one /12 container prefix per kind of place, bit-aligned (RFC 4632), with one /16 prefix per site or region inside it, in order: on-prem `10.0.0.0/12` (home `10.1.0.0/16`), Azure `10.16.0.0/12` (East US 2 `10.16.0.0/16`, Central US `10.17.0.0/16`), AWS `10.32.0.0/12` and Google Cloud `10.48.0.0/12` (regions not chosen yet); a VPS has no prefix of its own; Kubernetes Services `10.96.0.0/12`, BGP load-balancer addresses `10.224.0.0/12` and pods `10.240.0.0/12`, one /16 per cluster in order; each home VLAN keeps `.224/27` out of DHCP for load-balancer addresses, except management; the first cluster is home only and uses VLAN addresses, not tailnet addresses; the binary-step place numbers are removed · the owner said yes to one /12 container prefix per kind of place on 2026-10-24 at 20:00 UTC, the pod and Service ranges at 20:05 and 20:09, the load-balancer addresses at 23:32 and 23:38, and on 2026-10-25 to a home-only first cluster (00:22), the ranges never used (00:29) and this text (00:50), in the IP address plan thread
@@ -103,6 +103,6 @@ A folded decision number has no file and no row in the index until the next new 
 - 2026-10-24 · D-0003, D-0004, D-0012, D-0015, PRD · stale wording brought to the current text: the D-0003 rule 6 heading, D-0004's count of reused IDs, the places D-0012 and the PRD say are not created yet · PR #42: approved 2026-10-24T08:11:52Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNTiBFoqS52EtmcEgLF5hv1u), head 5147806; merged as 8976367
 - 2026-10-24 · STD-0002 · the home router's LAN row says the private store is not chosen yet (D-0012); the AWS and Google Cloud row has its place in the Place column · PR #42: approved 2026-10-24T08:11:52Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNTiBFoqS52EtmcEgLF5hv1u), head 5147806; merged as 8976367
 - 2026-10-24 · D-0001, D-0002, D-0011 · personal details about the owner dropped from a driver, an option and a pro; the decisions are unchanged · PR #42: approved 2026-10-24T08:11:52Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNTiBFoqS52EtmcEgLF5hv1u), head 5147806; merged as 8976367
-- 2026-10-25 · D-0006 · title "Correct an accepted record in place when the decision does not change" becomes "Edit accepted records in place", which names both routes the record already sets; the file name is unchanged · the owner's answer of 2026-10-25 05:06 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNMeR63CFGQFTV4X6e7m2FvU) · this PR
-- 2026-10-25 · this file, the PR #42 STD-0002 line · a word an agent made up for a /16 replaced by NetBox's "prefix" · the owner's request of 2026-10-24 23:19 UTC to use standard terms, not made-up words · this PR
-- 2026-10-25 · this file · PR #42's approval facts and merge commit added to its lines · this PR
+- 2026-10-25 · D-0006 · title "Correct an accepted record in place when the decision does not change" becomes "Edit accepted records in place", which names both routes the record already sets; the file name is unchanged · the owner's answer of 2026-10-25 05:06 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNMeR63CFGQFTV4X6e7m2FvU) · PR #43
+- 2026-10-25 · this file, the PR #42 STD-0002 line · a word an agent made up for a /16 replaced by NetBox's "prefix" · the owner's request of 2026-10-24 23:19 UTC to use standard terms, not made-up words · PR #43
+- 2026-10-25 · this file · PR #42's approval facts and merge commit added to its lines · PR #43
