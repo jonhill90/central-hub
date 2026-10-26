@@ -18,9 +18,15 @@ variable "node_vnet" {
 }
 
 variable "almalinux_image_url" {
-  description = "AlmaLinux 10 GenericCloud qcow2 image."
+  description = "AlmaLinux 10 GenericCloud qcow2 image, pinned to one build (the owner said yes to a pinned image on 2026-10-26 at 07:32 UTC). 10.2-20261012.0 was released 2026-10-12, two weeks before it was pinned (STD-0003 rule 1)."
   type        = string
-  default     = "https://repo.almalinux.org/almalinux/10/cloud/x86_64/images/AlmaLinux-10-GenericCloud-latest.x86_64.qcow2"
+  default     = "https://repo.almalinux.org/almalinux/10/cloud/x86_64/images/AlmaLinux-10-GenericCloud-10.2-20261012.0.x86_64.qcow2"
+}
+
+variable "almalinux_image_sha256" {
+  description = "SHA-256 of that build, from the repository's CHECKSUM file."
+  type        = string
+  default     = "cbee4726fc0f5a60694bb4f289003cc221e715dfbacebcce76b54daf386d8eca"
 }
 
 variable "node_admin_user" {

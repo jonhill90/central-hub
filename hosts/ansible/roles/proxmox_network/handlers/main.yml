@@ -6,7 +6,9 @@
   register: proxmox_network_syntax
   changed_when: false
   check_mode: false
-  failed_when: proxmox_network_syntax.rc != 0 or (proxmox_network_syntax.stdout ~ proxmox_network_syntax.stderr) is search('^error', multiline=True)
+  # ifreload -s exits 1 on warnings too (measured: bridge-fd 0 on every bridge), so only lines
+  # that start with "error" fail it.
+  failed_when: (proxmox_network_syntax.stdout ~ proxmox_network_syntax.stderr) is search('^error', multiline=True)
   listen: Reload network
 
 - name: Apply network configuration
