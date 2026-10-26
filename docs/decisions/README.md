@@ -17,6 +17,7 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0010 | [Give specs five status words](0010-set-spec-status-words.md) | accepted | D-0001, D-0007, D-0008 | 2026-10-22 |
 | D-0011 | [Keep the code for every machine below Kubernetes in hosts/, one subfolder per vendor product, and no Terraform modules of its own until code is reused](0011-keep-machine-code-in-hosts.md) | accepted | D-0001, D-0008 | 2026-10-22 |
 | D-0012 | [Sort docs/ by kind of document, add runbooks, architecture, glossary, postmortems and diagrams with their first file, and keep plans and playbooks out](0012-sort-docs-by-kind-of-document.md) | accepted | D-0001, D-0007, D-0008, D-0009, D-0010 | 2026-10-23 |
+| D-0013 | [Keep central-hub public, and name each exception to best practice with what keeps it secure](0013-keep-central-hub-public.md) | proposed | D-0001 | 2026-10-26 |
 | D-0014 | [Number requirements REQ-NNNN](0014-number-requirements-req-nnnn.md) | accepted | D-0001, D-0003, D-0004, D-0006 | 2026-10-23 |
 | D-0015 | [Number research batches RB-NNNN](0015-number-research-batches-rb-nnnn.md) | accepted | D-0001, D-0003, D-0006 | 2026-10-23 |
 | D-0016 | [Give each decision record a public evidence file, and record the owner's approval and reasons in neutral words](0016-give-records-an-evidence-file-and-neutral-approval.md) | accepted | D-0001, D-0006 | 2026-10-23 |
