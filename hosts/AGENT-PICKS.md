@@ -43,4 +43,6 @@ Every choice here was made by an agent, not by the owner. Any of them can change
 - 2026-10-26 05:54 to 06:06 UTC: yes to one Proxmox pool per workload; names by job, not product, with folders using the same words (`network`, `firewall`, `remote-access`); STD-0001 covers containers and appliances, with new codes OS `op` (OPNsense) and role `nw` (network). Machine names are required variables; the real ones live only in git-ignored tfvars.
 - 2026-10-26 06:08 UTC: yes to one shared VLAN data file that Terraform and Ansible both read (picks 15-17).
 - 2026-10-26 06:28 to 06:48 UTC: go for agents to run and measure the lab code (greenfield), including applying the tofu plans.
+- 2026-10-26 07:33 UTC: yes to STD-0002 staying the VLAN rule, with `inventories/home/group_vars/all/vlans.yml` as its copy in code and a docs check that fails when they differ; yes to pool names by job in STD-0001.
+- 2026-10-26 07:35 UTC: yes to layout A, `hosts/terraform/<place>/<workload>/`, as decided (D-0011 rule 8); yes to STD-0003 covering `hosts/` code and cluster manifests.
 - Earlier: Ansible for OPNsense with `oxlorg.opnsense`; `bpg/proxmox`; local state now; Terraform modules in their own repository (D-0011, being fixed in place to local modules first).

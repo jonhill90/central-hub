@@ -4,7 +4,7 @@ title: Names
 status: active
 scope: the OS hostname of every VM and physical host, local or cloud, and the DNS name of every service the platform runs
 owner-system: 8 Platform
-why: the owner said yes to the proposed two-letter OS codes on 2026-10-21 at 01:12 UTC, and to the proposed option E (one hostname, no dashes) on 2026-10-21 at 01:13 UTC, in the project's VM naming work; to a 3 to 8 letter "what" field on 2026-10-25 at 02:58 UTC; to rule 4 (no provider, region or site in the hostname) on 2026-10-25 at 03:00 UTC; to holding service DNS names in this standard on 2026-10-25 at 03:43 UTC; to the proposed service-name pattern on 2026-10-25 at 03:54 UTC; and to its env level, numbered cluster names and short aliases on 2026-10-25 at 04:08 UTC, in the project's premise review
+why: the owner said yes to the proposed two-letter OS codes on 2026-10-21 at 01:12 UTC, and to the proposed option E (one hostname, no dashes) on 2026-10-21 at 01:13 UTC, in the project's VM naming work; to a 3 to 8 letter "what" field on 2026-10-25 at 02:58 UTC; to rule 4 (no provider, region or site in the hostname) on 2026-10-25 at 03:00 UTC; to holding service DNS names in this standard on 2026-10-25 at 03:43 UTC; to the proposed service-name pattern on 2026-10-25 at 03:54 UTC; and to its env level, numbered cluster names and short aliases on 2026-10-25 at 04:08 UTC, in the project's premise review; and to naming Proxmox resource pools by job on 2026-10-26 at 07:33 UTC
 follows: [NetBIOS computer name limit (15 characters, not all digits), RFC 1123 host name label, Kubernetes node name rules, RFC 1035 CNAME records, RFC 9525 §6.3 wildcard certificates, Red Hat OpenShift cluster DNS names, kubeadm control-plane endpoint]
 check: none yet in this repo; a reviewing agent checks new names and service-name patterns by hand
 accepted-evidence:
@@ -61,6 +61,10 @@ Example that passes: `pubapdemo01`: prod, Ubuntu, app, "demo", number 01. It is 
 Sources: OpenShift DNS names (<https://github.com/openshift/openshift-docs/blob/main/modules/installation-dns-user-infra.adoc>); kubeadm `--control-plane-endpoint` (<https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/>); CNAME (<https://www.rfc-editor.org/rfc/rfc1035>); wildcard certificates (<https://www.rfc-editor.org/rfc/rfc9525#section-6.3>).
 
 Example that passes: `api.c1.prod.<zone>` is cluster 1's API in prod; `grafana.<zone>` is a short alias for Grafana in prod, and `grafana.dev.<zone>` for Grafana in dev.
+
+## Proxmox resource pools
+
+A Proxmox resource pool is named by job, the workload it holds, for example `firewall`, `remote-access` or `k8s`.
 
 ## Not covered here
 

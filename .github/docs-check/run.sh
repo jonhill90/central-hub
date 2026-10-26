@@ -12,6 +12,8 @@ front_matter() {
   python3 "$here/check_docs.py" .
   # The decisions index and the standards register match the front matter (D-0001 "Index").
   python3 "$here/gen_index.py" --check .
+  # The home VLAN file in hosts/ matches STD-0002's Home VLANs table (STD-0002 "Copy in code").
+  python3 "$here/check_vlans.py" .
   bash "$here/tests/test_check_docs.sh"
 }
 

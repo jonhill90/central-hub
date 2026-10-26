@@ -17,7 +17,7 @@ accepted-evidence:
   approval-names: "PR #18 and head 7dbae2c, in the message itself"
   check: the drafting agent read the message in the repo layout thread at 2026-10-22T07:15Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
   merged: PR #18 merged at 2026-10-22T07:16Z as 36d6a90, with this evidence commit on top of the approved commit
-revisit-when: a second machine-building vendor product joins Terraform; the Terraform structure research names the runnable folders; or a machine kind appears that is neither a VM nor bare metal
+revisit-when: the hosts/ code standard is written
 ---
 
 # Keep the code for every machine below Kubernetes in hosts/, one subfolder per vendor product, and no Terraform modules of its own until code is reused
@@ -28,7 +28,7 @@ D-0008 names the root folder `hosts/` as "machines below Kubernetes". It doesn't
 
 On 2026-10-20 at 03:03 UTC the owner asked where the code for the Proxmox hypervisor should go in central-hub, along with VPS machines, cloud VMs, cloud container services and machines still to come. The rule it serves is PRD goal 6: everything is controllable from this repository, and one-time console steps at the start are fine.
 
-On 2026-10-25 at 02:53 UTC the owner said yes to the proposed home for configuration management code: it lives in this repository, under `hosts/`. At 05:27 UTC he said yes to the proposed split for the home lab: Terraform creates the Proxmox VMs and networks, and Ansible configures the Proxmox host and the settings of the OPNsense firewall. At 05:59 UTC he said yes to the proposed Terraform provider, `bpg/proxmox`, and at 06:04 UTC to the proposed Ansible collection for the firewall, `oxlorg.opnsense`. On 2026-10-26 at 00:18 UTC he said yes to the proposed layout inside `hosts/ansible/`.
+On 2026-10-25 at 02:53 UTC the owner said yes to the proposed home for configuration management code: it lives in this repository, under `hosts/`. At 05:27 UTC he said yes to the proposed split for the home lab: Terraform creates the Proxmox VMs and networks, and Ansible configures the Proxmox host and the settings of the OPNsense firewall. At 05:59 UTC he said yes to the proposed Terraform provider, `bpg/proxmox`, and at 06:04 UTC to the proposed Ansible collection for the firewall, `oxlorg.opnsense`. On 2026-10-26 at 00:18 UTC he said yes to the proposed layout inside `hosts/ansible/`, and at 07:35 UTC to one runnable Terraform folder per workload inside each place.
 
 ## Decision Drivers
 
@@ -55,7 +55,7 @@ Chosen option: **1**. The owner said yes to keeping `hosts/` on 2026-10-20 at 03
 central-hub/
 ├── hosts/                     machines below Kubernetes (D-0008)
 │   ├── terraform/             creates the machines: VPS, hypervisor VMs and networks, cloud VMs
-│   │   ├── <runnable folders> one per place; split inside a place not decided here
+│   │   ├── <place>/<workload>/ one runnable folder per workload in each place (rule 8)
 │   │   └── modules/<name>/    only once code is reused (rule 3)
 │   └── ansible/               configures the OS on them, and the firewall's settings
 │       ├── inventories/<place>/
@@ -73,10 +73,10 @@ central-hub/
 5. **No private values.** Hostnames and single machine addresses stay blanks, filled in at apply time (CLAUDE.md rule 4; STD-0002).
 6. **Home-lab tools.** Terraform builds the Proxmox VMs and networks with the `bpg/proxmox` provider. Ansible configures the OPNsense firewall's settings with the `oxlorg.opnsense` collection.
 7. **Ansible layout.** `hosts/ansible/` holds one inventory folder per place (`inventories/<place>/`), one `playbooks/` folder and one plain `roles/` folder.
+8. **Terraform layout.** Each runnable Terraform folder is `hosts/terraform/<place>/<workload>/`: one folder per workload inside each place, each a root module with its own state.
 
 ### Not decided here
 
-- the name and split of the runnable Terraform folders inside `hosts/terraform/`, for example one folder per workload inside each place (`hosts/terraform/<place>/<workload>/`). Research batch RB-0083 sets out the options;
 - the name and home of a modules repository, once another repository needs one;
 - whether Ansible runs by push (a runner connects to each machine) or by pull (each machine runs it on itself on a timer).
 

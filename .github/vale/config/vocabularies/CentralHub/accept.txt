@@ -12,3 +12,8 @@
 (?i)preferred
 (?i)admitted
 (?i)deprecated term
+(?i)resource pool
+(?i)workload
+VNet
+API token
+(?i)break-glass account

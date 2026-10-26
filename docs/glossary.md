@@ -24,3 +24,8 @@ To add a word, propose one row in your own PR. The owner says yes or no. The che
 | verification | preferred | Confirmation, through objective evidence, that specified requirements are fulfilled. | ISO 9000:2015, via NIST SP 800-160v1r1 | |
 | validation | preferred | Confirmation, through objective evidence, that the requirements for a specific intended use are fulfilled. | ISO 9000:2015, via NIST | |
 | preferred, admitted, deprecated term | preferred | A glossary word's status: use it; allowed, but a better word exists; do not use it. | ISO 10241-1 | |
+| resource pool | preferred | A Proxmox set of VMs, containers and storage that one permission can be granted on. Here, one per workload, named by job (STD-0001). | Proxmox VE Administration Guide, "Pools" | |
+| workload | preferred | A set of resources, code and data that work together for one job, such as the firewall or a cluster. Here its pool and its Terraform folder share its name. | Azure Well-Architected Framework, "Workloads" | |
+| VNet | preferred | A Proxmox SDN virtual network that belongs to a zone. Here, one per home VLAN. | Proxmox VE Administration Guide, "Software-Defined Network" | |
+| API token | preferred | A credential made for one user, with its own permissions and expiry, that gives automation access to an API without the user's password; it can be revoked on its own. | Proxmox VE Administration Guide, "API Tokens" | |
+| break-glass account | preferred | An account kept for emergencies only, when normal administrative accounts can't be used, never for everyday work. | Microsoft Entra, "Manage emergency access admin accounts" | |

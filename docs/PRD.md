@@ -16,7 +16,7 @@ This page says what the platform is for and how we know it works. It holds no "h
 
 ## Goals
 
-1. **Run upstream Kubernetes on any site.** Start with one cluster whose control plane and workers run in the home lab on Proxmox. The rented VPS is not a worker for now; whether and how it joins is decided later. Add cloud sites without redesign.
+1. **Run upstream Kubernetes on any site,** to learn Kubernetes and prove that knowledge. Start with one cluster whose control plane and workers run in the home lab on Proxmox. The rented VPS is not a worker for now; whether and how it joins is decided later. Add cloud sites without redesign.
 2. **Provide shared services** to the apps and agents that use the platform: identity, secrets, storage, data, networking, backup and monitoring.
 3. **The owner understands every piece.** Each one is explained before it is added: purpose, dependencies and how it fails (REQ-0001).
 4. **Every piece can be replaced** without data loss, through portable formats and explicit boundaries. Each decision record names its exit path (REQ-0002, REQ-0011).
@@ -48,10 +48,8 @@ This page says what the platform is for and how we know it works. It holds no "h
 - **Decisions:** `docs/decisions/README.md`. Read it when you need to know why something is the way it is.
 - **Changes in progress or finished:** `docs/specs/README.md`. Read it before starting a change that spans several sessions or crosses systems.
 - **Rules in force now:** `docs/standards/README.md`. Read it before naming, numbering or addressing anything.
-- **How the parts fit today:** `docs/architecture.md`. Read it before adding or replacing a component.
+- **How the parts fit today:** [`docs/architecture.md`](architecture.md). Read it before adding or replacing a component.
 - **What our words mean:** `docs/glossary.md`. Read it when a term here is unclear.
 - **How to do one job, step by step:** `docs/runbooks/`. Read the runbook before running any process by hand.
 - **Where each kind of document goes:** D-0012.
 - **The pillars it is measured against:** D-0005.
-
-`docs/architecture.md` is created with its first real file (D-0012 rule 2). Until then that link has nothing behind it.

@@ -1,7 +1,9 @@
 ---
-# Home lab VLANs from STD-0002 (home = 10.1.0.0/16, third number = VLAN ID). The ONE place
-# these live (the owner, 2026-10-26 06:08 UTC): Ansible loads this file for every host in the home
-# inventory, and terraform/home/network reads it with yamldecode(file(var.vlans_file)).
+# Home lab VLANs: the copy in code of STD-0002's Home VLANs table, which stays the rule
+# (home = 10.1.0.0/16, third number = VLAN ID). The one file both tools read (the owner,
+# 2026-10-26 06:08 UTC): Ansible loads it for every host in the home inventory, and
+# terraform/home/network reads it with yamldecode(file(var.vlans_file)).
+# .github/docs-check/check_vlans.py fails when id, alias (STD-0002's "Use") or cidr differ from STD-0002.
 # Ranges only, no single host addresses (CLAUDE.md rule 4).
 lab_vlans:
   - { id: 10, name: prod, alias: prod, cidr: 10.1.10.0/24 }
