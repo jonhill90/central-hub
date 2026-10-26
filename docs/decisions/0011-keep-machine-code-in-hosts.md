@@ -42,10 +42,14 @@ On 2026-10-25 at 02:53 UTC the owner said yes to the proposed home for configura
 1. **`hosts/` holds every machine below Kubernetes, wherever it runs, with one subfolder per vendor product** (`hosts/terraform/`, `hosts/ansible/`).
 2. **One root folder per vendor product** (`terraform/`, `ansible/`). This is common in public repositories (batch RB-0036; not counted).
 3. **A root `infra/` folder**, as the earlier Hill90 repository used (batch RB-0033).
+4. **Place first under `hosts/`** (`hosts/<place>/<tool>/`): one folder shows everything a place runs; 4 of the 8 eligible repositories in batch RB-0086 do this.
+5. **Workload first under `hosts/`** (`hosts/<workload>/<tool>/`): a workload and its configuration sit together.
+6. **Layer first under `hosts/`**, in run order (`hosts/1-network/`, `hosts/2-machines/`): the folder order shows the run order.
+7. **Mixed under `hosts/`**: code shared across places sorted by tool in a catalog folder, and each place in a folder of its own.
 
 ## Decision Outcome
 
-Chosen option: **1**. The owner said yes to keeping `hosts/` on 2026-10-20 at 03:25 UTC. He said yes to `terraform/` as a vendor-product subfolder name on 2026-10-19 at 03:51 UTC, in his review of the organize-repository skill changes (item 9). The owner accepted this record under D-0001 on 2026-10-22 at 07:15 UTC. On 2026-10-26 at 04:51 UTC he said yes to the proposed rule for Terraform modules (rule 3): none of our own yet, and shared code stays in this repository until another repository needs it.
+Chosen option: **1**. The owner said yes to keeping `hosts/` on 2026-10-20 at 03:25 UTC. On 2026-10-26 at 04:11 UTC, after research batch RB-0086 set out options 4 to 7, he said yes to keeping the tool first. He said yes to `terraform/` as a vendor-product subfolder name on 2026-10-19 at 03:51 UTC, in his review of the organize-repository skill changes (item 9). The owner accepted this record under D-0001 on 2026-10-22 at 07:15 UTC. On 2026-10-26 at 04:51 UTC he said yes to the proposed rule for Terraform modules (rule 3): none of our own yet, and shared code stays in this repository until another repository needs it.
 
 ```
 central-hub/
@@ -103,6 +107,6 @@ central-hub/
 
 ## More Information
 
-- **Evidence:** no research batch of its own. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md), finding 2.
+- **Evidence:** [../research/0011-keep-machine-code-in-hosts.md](../research/0011-keep-machine-code-in-hosts.md): batch RB-0086, the folder order under `hosts/`, with 29 repositories read at pinned commits and options 4 to 7 with their pros and cons. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md), finding 2.
 - **Modules guidance:** HashiCorp, "Creating modules", the section on when to write a module: <https://developer.hashicorp.com/terraform/language/modules/develop#when-to-write-a-module>, read in research batch RB-0083 on 2026-10-25.
 - Related records: D-0001, D-0008. Related standard: STD-0002.
