@@ -9,3 +9,5 @@ argument_specs:
       k8s_control_plane_service_cidr: {type: str, default: 10.96.0.0/16, description: Service range.}
       k8s_control_plane_helm_version: {type: str, default: v4.3.1, description: Helm release.}
       k8s_control_plane_cilium_version: {type: str, default: 1.20.4, description: Cilium chart version.}
+      k8s_control_plane_lb_cidr: {type: str, default: 10.1.10.224/27, description: Load-balancer addresses Cilium hands out and announces on L2.}
+      k8s_control_plane_lb_pool_name: {type: str, default: prod, description: Name of the Cilium address pool and L2 announcement policy.}
