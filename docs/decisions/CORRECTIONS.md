@@ -18,6 +18,7 @@ This PR's approval facts and merge commit are added after it merges (D-0006 step
 - 2026-10-26 · STD-0001 "Proxmox resource pools" · a Proxmox resource pool is named by job, for example `firewall`, `remote-access` or `k8s` · the owner said yes to this on 2026-10-26 at 07:33 UTC
 - 2026-10-26 · PRD goal 1 · the goal names its reason: to learn Kubernetes and prove that knowledge · the owner said yes to this on 2026-10-26 at 07:33 UTC
 - 2026-10-26 · D-0011 context, diagram, rule 8, "Not decided here" and `revisit-when` · each runnable Terraform folder is `hosts/terraform/<place>/<workload>/`, removed from "Not decided here"; `revisit-when` becomes "the hosts/ code standard is written" · the owner said yes to this on 2026-10-26 at 07:35 UTC
+- 2026-10-26 · STD-0001 scope, VM hostnames and its codes table · hostnames cover containers and appliance VMs; new OS code `op` (OPNsense) and role code `nw` (network), with made-up examples `popnwdemo01` and `pdenwdemo01` · the owner said yes to covering containers and appliance VMs on 2026-10-26 at 06:04 UTC and to the two codes at 06:06 UTC
 
 ### Accepted with PR #43
 
@@ -121,3 +122,4 @@ A folded decision number has no file and no row in the index until the next new 
 - 2026-10-25 · this file · PR #42's approval facts and merge commit added to its lines · PR #43: approved 2026-10-25T05:56:06Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNQLr3w88Kg2RVjfk7KCcBrW), head 1df1054; merged as 6a7defe
 - 2026-10-26 · this file · PR #43's approval facts and merge commit added to its lines · PR #44
 - 2026-10-26 · D-0011, evidence 0011, research index · the four folder orders weighed in research batch RB-0086 (place first, workload first, layer first, mixed) added to Considered Options; "no research batch of its own" replaced by a link to a new evidence file built from RB-0086 (D-0016 rule 3); the chosen option is unchanged · PR #44
+- 2026-10-26 · D-0011 Consequences · "none of these folders exists yet" replaced by the current state: `hosts/terraform/` and `hosts/ansible/` exist, `hosts/terraform/modules/` does not · PR #44

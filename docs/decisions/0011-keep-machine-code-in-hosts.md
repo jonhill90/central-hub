@@ -87,7 +87,7 @@ central-hub/
 - Bad: two vendor-product names appear one level down, so the "job, not product" naming applies only at the root.
 - Bad: until code is reused, two runnable folders may hold similar resources written twice.
 - Good: a change to shared code needs no release in a second repository while only this repository uses it.
-- Neutral: none of these folders exists yet. Each one appears with its first file.
+- Neutral: each folder appears with its first file; `hosts/terraform/` and `hosts/ansible/` exist, and `hosts/terraform/modules/` does not yet.
 
 ### Confirmation
 

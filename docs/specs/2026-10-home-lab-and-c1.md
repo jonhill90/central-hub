@@ -65,7 +65,7 @@ Parts, in order:
 ## Decision log
 
 - 2026-10-26: Resource pools, one per workload, named by job: `firewall`, `remote-access`, `k8s`; the network folder has no pool (owner's yes; STD-0001 names pools by job).
-- 2026-10-26: STD-0001 covers containers and appliance VMs; new codes OS `op`, role `nw` (owner's yes; the STD-0001 edit is not made yet).
+- 2026-10-26: STD-0001 covers containers and appliance VMs; new codes OS `op`, role `nw` (owner's yes; the STD-0001 edit rides in this PR).
 - 2026-10-26: One VLAN data file per place, read by both Terraform and Ansible (owner's yes); STD-0002 stays the rule and the docs check compares the two.
 - 2026-10-26: Terraform's Proxmox account is `iac@pve`, group `iac`, role `IacOps`, token `apply`, limited and expiring; `root@pam` is break-glass only (owner's yes).
 - 2026-10-26: An agent runs `tofu apply` on the owner's machine, to prove and measure it; the owner's learning focus is Kubernetes (owner's yes).
