@@ -43,7 +43,7 @@ Diagram: not applicable. The record sets one choice and two rules, with no compo
 ### Rules
 
 1. **Public.** central-hub is a public repository.
-2. **Nothing private in it.** Secrets, encrypted secrets with weak keys, kubeconfigs, private keys, hostnames, single machine addresses, tailnet names and the owner's domain stay out of it, as CLAUDE.md rule 4 sets. Where code or a document needs one, it holds a blank that is filled in at apply time (D-0011 rule 5, STD-0001, STD-0002).
+2. **Nothing private in it.** Secrets, encrypted secrets with weak keys, kubeconfigs, private keys, hostnames, single machine addresses and tailnet names stay out of it, as CLAUDE.md rule 4 sets, and so does the DNS zone (STD-0001). Where code or a document needs one, it holds a blank that is filled in at apply time (D-0011 rule 5, STD-0001, STD-0002).
 3. **Name each exception.** Where a record, standard, runbook or piece of code departs from a best practice, it says so where the choice is made, and names the compensating control: the control used in its place that gives equivalent or comparable protection (NIST SP 800-37 Rev. 2, Appendix B).
 
 ### Not decided here
