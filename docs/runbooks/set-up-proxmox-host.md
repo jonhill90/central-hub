@@ -323,14 +323,14 @@ why: Terraform needs its own account, so a bad run is capped at what that accoun
 
 ※ The admins group from [step 4](#4-break-glass-login-and-the-admins-group) is for people; this step makes a separate group for automation.
 
-expect: `pveum user token permissions iac@pve apply` lists only the pools, the SDN and storage paths and the node in the script's `acl` lines; `ls -l <token file>` shows `-rw-------` and your user.
+expect: `pveum user token permissions iac@pve apply` lists only the paths in the script's `acl` lines: the three pools, the SDN paths, the planned k8s VM IDs, two storages and the node; `ls -l <token file>` shows `-rw-------` and your user.
 
 What this buys:
 
 | Threat | Result |
 |---|---|
 | Agent session prints its environment | Nothing: the secret is only in `<token file>` and, during a run, in the apply's own environment [inferred] |
-| Token leaks anyway | Only the three pools, the lab SDN zone, two storages and a read of the node; expires in 90 days; one command revokes it: `pveum user token remove iac@pve apply` [S1-37, S1-38] |
+| Token leaks anyway | Only the paths in the script's `acl` lines (the three pools, the SDN paths, the planned k8s VM IDs, two storages, the node); expires in 90 days; one command revokes it: `pveum user token remove iac@pve apply` [S1-37, S1-38] |
 | Token tries the VM console | Tokens can't use console endpoints [S1-36] |
 
 Proxmox 9.2 can rotate a token's secret in place without losing its ACLs [S1-38].
