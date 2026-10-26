@@ -15,7 +15,7 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0008 | [Name the PRD docs/PRD.md, keep specs in docs/specs/, and name root folders by job](0008-name-the-prd-specs-and-root-folders.md) | accepted | D-0001, D-0007 | 2026-10-19 |
 | D-0009 | [Add a STD- family for standards to the ID family registry](0009-add-a-standards-id-family.md) | accepted | D-0001, D-0003 | 2026-10-22 |
 | D-0010 | [Give specs five status words](0010-set-spec-status-words.md) | accepted | D-0001, D-0007, D-0008 | 2026-10-22 |
-| D-0011 | [Keep the code for every machine below Kubernetes in hosts/, one subfolder per vendor product, with Terraform modules in their own repository](0011-keep-machine-code-in-hosts.md) | accepted | D-0001, D-0008 | 2026-10-22 |
+| D-0011 | [Keep the code for every machine below Kubernetes in hosts/, one subfolder per vendor product, and no Terraform modules of its own until code is reused](0011-keep-machine-code-in-hosts.md) | accepted | D-0001, D-0008 | 2026-10-22 |
 | D-0012 | [Sort docs/ by kind of document, add runbooks, architecture, glossary, postmortems and diagrams with their first file, and keep plans and playbooks out](0012-sort-docs-by-kind-of-document.md) | accepted | D-0001, D-0007, D-0008, D-0009, D-0010 | 2026-10-23 |
 | D-0014 | [Number requirements REQ-NNNN](0014-number-requirements-req-nnnn.md) | accepted | D-0001, D-0003, D-0004, D-0006 | 2026-10-23 |
 | D-0015 | [Number research batches RB-NNNN](0015-number-research-batches-rb-nnnn.md) | accepted | D-0001, D-0003, D-0006 | 2026-10-23 |

@@ -416,7 +416,7 @@ Record a replay in the PR that changes this runbook: set `last-tested` with the 
 ## Not in this version
 
 - The networking steps (see [Not in this runbook](#not-in-this-runbook)).
-- An automated version: Terraform for the Proxmox VMs and networks, and Ansible for the host (D-0011); the Terraform provider is not chosen yet. Batch RB-0061 compared the bpg Terraform/OpenTofu provider, the community.proxmox Ansible collection and Packer. It comes after this runbook has been done by hand (D-0012, "Manual first").
+- An automated version: Terraform for the Proxmox VMs and networks, and Ansible for the host (D-0011), with the `bpg/proxmox` Terraform provider (D-0011 rule 6). Batch RB-0061 compared the bpg Terraform/OpenTofu provider, the community.proxmox Ansible collection and Packer. It comes after this runbook has been done by hand (D-0012, "Manual first").
 - A trusted TLS certificate for the web UI ※S.
 - A separate management VLAN (NIST SP 800-125A asks for one; later) [S2 table].
 - CIS Debian benchmark items that conflict with a hypervisor (at least seven) [S2 summary 8].

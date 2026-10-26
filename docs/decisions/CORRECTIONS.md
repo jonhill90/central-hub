@@ -6,6 +6,14 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
+### Accepted with PR #TBD
+
+This PR's approval facts and merge commit are added after it merges (D-0006 step 6).
+
+- 2026-10-26 · D-0011 context, rule 6 and "Not decided here", runbook `set-up-proxmox-host.md` · Terraform builds the home lab's Proxmox VMs and networks with the `bpg/proxmox` provider, and Ansible configures the OPNsense firewall's settings with the `oxlorg.opnsense` collection; both are removed from "Not decided here" · the owner's yes to the proposed provider on 2026-10-25 at 05:59 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN6BE3e6HrbNbRKnsPiqjb64) and to the proposed collection at 06:04 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNL3gPwAHfu8khtNggMrsWBW), and his answer of 2026-10-26 01:35 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNUwoz4d5qn3nrUZSi5tveyy) to fix D-0011 in place
+- 2026-10-26 · D-0011 context, diagram, rule 7 and "Not decided here" · `hosts/ansible/` holds one `inventories/<place>/` folder per place, one `playbooks/` folder and one plain `roles/` folder; the layout is removed from "Not decided here"; how the runnable Terraform folders are split inside a place stays not decided · the owner's yes of 2026-10-26 00:18 UTC to the proposed layout B
+- 2026-10-26 · D-0011 title, Decision Outcome, diagram, rule 3, "Not decided here", Consequences and Confirmation, decisions index · no Terraform modules of our own yet; code that two or more runnable folders use goes in `hosts/terraform/modules/<name>/`, called by a local path, and moves to its own repository with tagged versions only when another repository needs it; a module only when it bundles real logic, never a thin wrapper around one resource; this replaces "Terraform modules live in their own repository", which followed the owner's statement of 2026-10-20 03:25 UTC; the check "no `modules/` folder" becomes a check that each module is shared and holds more than one resource; the file name is unchanged · the owner's yes of 2026-10-26 04:51 UTC to the proposed option B for Terraform modules
+
 ### Accepted with PR #43
 
 PR #43's approval facts and merge commit are added after it merges (D-0006 step 6).
