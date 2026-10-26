@@ -52,3 +52,27 @@
   loop_control:
     label: "{{ item.0.ifname }} rule {{ item.1.n }}"
   notify: Apply rule changes
+
+# The mgmt VLAN manages the others: it may open connections into every lab VLAN (for example the
+# Proxmox host as Ansible's jump host to the Kubernetes nodes). The lab VLANs can't reach mgmt:
+# their own rules allow only ping and DNS to the firewall. Measured 2026-10-26: without this
+# rule, mgmt -> prod was dropped by mgmt's "to internet (not RFC 1918)" rule.
+- name: Management VLAN into the other lab VLANs
+  oxlorg.opnsense.rule:
+    description: "Allow management VLAN {{ opnsense_lab_mgmt_tag }} to {{ item.label }} VLAN {{ item.tag }}"
+    match_fields: [description]
+    sequence: "{{ 5 + opnsense_lab_mgmt_rule_index }}"
+    action: pass
+    quick: true
+    interface: ["{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | first).ifname }}"]
+    direction: in
+    ip_protocol: inet
+    protocol: any
+    source_net: "{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | first).ifname }}"
+    destination_net: "{{ item.cidr }}"
+    log: false
+  loop: "{{ opnsense_lab_vlans | rejectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | list }}"
+  loop_control:
+    label: "mgmt to VLAN {{ item.tag }}"
+    index_var: opnsense_lab_mgmt_rule_index
+  notify: Apply rule changes

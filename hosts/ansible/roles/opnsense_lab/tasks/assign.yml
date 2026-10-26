@@ -39,3 +39,8 @@
     or current_if != ('vlan0.' ~ slot.item.tag)
     or (current.ipaddr | default('')) != want_addr
   notify: Apply interface changes
+
+# Apply the slot changes now: Dnsmasq lists only applied interfaces, so the DHCP ranges in the
+# next file fail with "Provided interface 'opt1' was not found!" until they are (measured).
+- name: Apply interface changes before DHCP
+  ansible.builtin.meta: flush_handlers

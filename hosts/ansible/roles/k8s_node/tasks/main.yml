@@ -68,6 +68,22 @@
     content: "overlay\nbr_netfilter\n"
     mode: "0644"
 
+# The GenericCloud image ships only kernel-modules-core, which has no br_netfilter (measured:
+# "Module br_netfilter not found"). The mirror no longer has kernel-modules for the image's own
+# kernel, so dnf brings a newer kernel with it; boot into that one before loading modules.
+- name: step2 | Full kernel module set
+  ansible.builtin.dnf: {name: kernel-modules, state: latest}
+
+- name: step2 | Is br_netfilter there for the running kernel?
+  ansible.builtin.shell: modinfo -n br_netfilter
+  register: k8s_node_brnf
+  changed_when: false
+  failed_when: false
+
+- name: step2 | Boot into the kernel that has it
+  ansible.builtin.reboot: {reboot_timeout: 900}
+  when: k8s_node_brnf.rc != 0
+
 - name: step2 | Kernel modules now
   community.general.modprobe: {name: "{{ item }}", state: present}
   loop: [overlay, br_netfilter]

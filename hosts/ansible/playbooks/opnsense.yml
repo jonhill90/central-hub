@@ -5,6 +5,9 @@
 - name: OPNsense lab settings
   hosts: opnsense
   gather_facts: false
+  # Apply what changed even if a later task fails (measured: a failed DNS task left rule and
+  # interface changes saved but not applied).
+  force_handlers: true
   module_defaults:
     group/oxlorg.opnsense.all:
       firewall: "{{ opnsense_api_host }}"
