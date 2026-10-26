@@ -34,6 +34,6 @@ variable "trunk_bridge" {
 }
 
 variable "firewall_vm_name" {
-  description = "Proxmox VM name of the firewall, an STD-0001 hostname (Jon 2026-10-26 06:06 UTC: OS code op, role nw). No default: the real name stays out of this public repository (CLAUDE.md rule 4); set it in the git-ignored home.tfvars."
+  description = "Proxmox VM name of the firewall, an STD-0001 hostname (the owner, 2026-10-26 06:06 UTC: OS code op, role nw). No default: the real name stays out of this public repository (CLAUDE.md rule 4); set it in the git-ignored home.tfvars."
   type        = string
 }

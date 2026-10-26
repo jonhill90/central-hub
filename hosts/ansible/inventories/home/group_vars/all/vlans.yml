@@ -1,6 +1,6 @@
 ---
 # Home lab VLANs from STD-0002 (home = 10.1.0.0/16, third number = VLAN ID). The ONE place
-# these live (Jon 2026-10-26 06:08 UTC): Ansible loads this file for every host in the home
+# these live (the owner, 2026-10-26 06:08 UTC): Ansible loads this file for every host in the home
 # inventory, and terraform/home/network reads it with yamldecode(file(var.vlans_file)).
 # Ranges only, no single host addresses (CLAUDE.md rule 4).
 lab_vlans:

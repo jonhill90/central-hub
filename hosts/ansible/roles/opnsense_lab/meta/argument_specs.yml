@@ -1,6 +1,6 @@
 ---
 # Inputs of the opnsense_lab role. Ansible checks these before the role runs and stops if a
-# required one is missing or has the wrong type (Jon 2026-10-26 02:49 UTC). required: true does
+# required one is missing or has the wrong type (the owner, 2026-10-26 02:49 UTC). required: true does
 # not reject an empty string, so tasks/main.yml still checks the private values are not blank.
 argument_specs:
   main:

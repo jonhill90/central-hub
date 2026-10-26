@@ -7,6 +7,6 @@ variable "proxmox_node_name" {
 }
 
 variable "vlans_file" {
-  description = "Path to the place's shared VLAN file, which Ansible reads too (Jon 2026-10-26 06:08 UTC: one data file). For home: ../../../ansible/inventories/home/group_vars/all/vlans.yml. Each entry in lab_vlans has id, name, alias and cidr. No default."
+  description = "Path to the place's shared VLAN file, which Ansible reads too (the owner, 2026-10-26 06:08 UTC: one data file). For home: ../../../ansible/inventories/home/group_vars/all/vlans.yml. Each entry in lab_vlans has id, name, alias and cidr. No default."
   type        = string
 }

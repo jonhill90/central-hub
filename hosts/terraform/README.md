@@ -10,7 +10,7 @@ Run folders laid out as `<place>/<workload>/` (layout A from RB-0083; the owner 
 
 Every run folder has the same files: `main.tf` (the resources), `variables.tf`, `outputs.tf`, `providers.tf`, `versions.tf`, `backend.tf`, `imports.tf` (adopts the running lab's objects) and its own `.terraform.lock.hcl`.
 
-Run folders don't read each other's state. A value one folder needs from another, such as the VNet name `mgmt`, is an input variable with the same value as the producer's output (`home/network` output `vnet_ids`). That choice, the place name `home` and the rest are listed in [../AGENT-PICKS.md](../AGENT-PICKS.md) for Jon's review.
+Run folders don't read each other's state. A value one folder needs from another, such as the VNet name `mgmt`, is an input variable with the same value as the producer's output (`home/network` output `vnet_ids`). That choice, the place name `home` and the rest are listed in [../AGENT-PICKS.md](../AGENT-PICKS.md) for the owner's review.
 
 ## Run one folder
 

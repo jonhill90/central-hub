@@ -1,13 +1,13 @@
 ---
 # Every input of this role is listed here (Red Hat CoP roles README L424-436). An input with no
 # meaningful default is listed commented out: the role stops with an error if the inventory
-# doesn't set it (Jon 2026-10-26 00:35 UTC: "yes" to the CoP rule).
+# doesn't set it (the owner said yes to the CoP rule on 2026-10-26 at 00:35 UTC).
 #
 # Private, no default, from the secret store through the inventory:
 # opnsense_api_host, opnsense_api_key, opnsense_api_secret, opnsense_home_lan_cidr,
 # opnsense_dns_zone.
 
-# REQUIRED, from the one shared VLAN file (inventories/<place>/group_vars/all/vlans.yml, Jon
+# REQUIRED, from the one shared VLAN file (inventories/<place>/group_vars/all/vlans.yml, the owner,
 # 2026-10-26 06:08 UTC): lab_vlans, one entry per VLAN with id, name, alias, cidr.
 # lab_vlans: [...]
 

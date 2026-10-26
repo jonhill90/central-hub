@@ -35,6 +35,6 @@ variable "mgmt_vnet" {
 }
 
 variable "connector_hostname" {
-  description = "Hostname of the connector container, an STD-0001 hostname (Jon 2026-10-26 06:06 UTC: role nw). No default: the real name stays out of this public repository (CLAUDE.md rule 4); set it in the git-ignored home.tfvars."
+  description = "Hostname of the connector container, an STD-0001 hostname (the owner, 2026-10-26 06:06 UTC: role nw). No default: the real name stays out of this public repository (CLAUDE.md rule 4); set it in the git-ignored home.tfvars."
   type        = string
 }

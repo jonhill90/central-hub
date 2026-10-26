@@ -21,7 +21,7 @@ all:
           opnsense_home_lan_cidr: ""   # the home router's LAN range
           opnsense_dns_zone: ""   # DNS zone for the opnsense.<zone> override
           # The VLAN list itself is in group_vars/all/vlans.yml (the one shared VLAN file).
-          # These are this firewall's own settings (Red Hat CoP rule, Jon 2026-10-26 00:35 UTC).
+          # These are this firewall's own settings (Red Hat CoP rule, the owner, 2026-10-26 00:35 UTC).
           opnsense_lab_mgmt_tag: 50
           opnsense_lab_dhcp_first: 100
           opnsense_lab_dhcp_last: 199   # ends before the .224/27 load-balancer reserve
