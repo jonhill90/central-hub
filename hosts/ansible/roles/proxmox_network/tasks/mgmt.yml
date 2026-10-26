@@ -1,0 +1,61 @@
+---
+# Run after Terraform has created and applied the SDN, because the mgmt VNet bridge must exist.
+# The host gets an address there and no gateway; its home LAN address on vmbr0 is not touched.
+- name: Check that the host's mgmt address is set
+  ansible.builtin.assert:
+    that:
+      - proxmox_host_mgmt_address is defined
+      - proxmox_host_mgmt_address | length > 0
+      - "'/' not in proxmox_host_mgmt_address"
+    fail_msg: proxmox_host_mgmt_address is a private value (address only, no /24); fill it from the secret store.
+    quiet: true
+
+- name: Check that the mgmt VNet bridge exists
+  ansible.builtin.command:
+    cmd: ip -br link show {{ proxmox_network_mgmt_vnet }}
+  changed_when: false
+  check_mode: false
+
+- name: Read the network configuration
+  ansible.builtin.slurp:
+    src: "{{ proxmox_network_interfaces_file }}"
+  register: proxmox_network_current
+
+- name: Add the host's mgmt address when it has none
+  ansible.builtin.blockinfile:
+    path: "{{ proxmox_network_interfaces_file }}"
+    marker: "# {mark} {{ proxmox_network_mgmt_vnet }} host address (hosts/ansible proxmox_network)"
+    backup: true
+    block: |
+      auto {{ proxmox_network_mgmt_vnet }}
+      iface {{ proxmox_network_mgmt_vnet }} inet static
+          address {{ proxmox_host_mgmt_address }}/{{ proxmox_network_mgmt_prefix_len }}
+  when: not (proxmox_network_current.content | b64decode is search('^iface ' ~ proxmox_network_mgmt_vnet ~ ' ', multiline=True))
+  notify: Reload network
+
+- name: Set the address on the existing mgmt stanza
+  community.general.interfaces_file:
+    dest: "{{ proxmox_network_interfaces_file }}"
+    iface: "{{ proxmox_network_mgmt_vnet }}"
+    option: address
+    value: "{{ proxmox_host_mgmt_address }}/{{ proxmox_network_mgmt_prefix_len }}"
+    backup: true
+  when: proxmox_network_current.content | b64decode is search('^iface ' ~ proxmox_network_mgmt_vnet ~ ' ', multiline=True)
+  notify: Reload network
+
+- name: Apply network changes now
+  ansible.builtin.meta: flush_handlers
+
+- name: Read the mgmt address
+  ansible.builtin.command:
+    cmd: ip -4 -br addr show {{ proxmox_network_mgmt_vnet }}
+  register: proxmox_network_mgmt_addr
+  changed_when: false
+  check_mode: false
+
+- name: Check that the mgmt address is up
+  ansible.builtin.assert:
+    that:
+      - (proxmox_host_mgmt_address ~ '/' ~ proxmox_network_mgmt_prefix_len) in proxmox_network_mgmt_addr.stdout
+    quiet: true
+  when: not ansible_check_mode

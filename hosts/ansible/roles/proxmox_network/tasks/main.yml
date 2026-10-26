@@ -1,0 +1,8 @@
+---
+- name: Bridge vmbr1 with a fixed MAC
+  ansible.builtin.import_tasks: vmbr1.yml
+  tags: [vmbr1]
+
+- name: Host address on VNet mgmt
+  ansible.builtin.import_tasks: mgmt.yml
+  tags: [mgmt]

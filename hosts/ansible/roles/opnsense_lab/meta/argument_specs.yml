@@ -1,0 +1,98 @@
+---
+# Inputs of the opnsense_lab role. Ansible checks these before the role runs and stops if a
+# required one is missing or has the wrong type (Jon 2026-10-26 02:49 UTC). required: true does
+# not reject an empty string, so tasks/main.yml still checks the private values are not blank.
+argument_specs:
+  main:
+    short_description: OPNsense lab VLANs, DHCP, firewall rules and DNS override, through the OPNsense API
+    options:
+      # Private, from the secret store through the inventory
+      opnsense_api_host:
+        type: str
+        required: true
+        description: Address or name the OPNsense API is reached on.
+      opnsense_api_key:
+        type: str
+        required: true
+        description: OPNsense API key. Secret.
+      opnsense_api_secret:
+        type: str
+        required: true
+        description: OPNsense API secret. Secret.
+      opnsense_home_lan_cidr:
+        type: str
+        required: true
+        description: The home router's LAN range, used in the WAN and block rules.
+      opnsense_dns_zone:
+        type: str
+        required: true
+        description: DNS zone for the opnsense.<zone> host override.
+      # Place values from the IP plan, set per place in the inventory
+      lab_vlans:
+        type: list
+        elements: dict
+        required: true
+        description: The place's VLANs, from the one shared VLAN file group_vars/all/vlans.yml.
+        options:
+          id:
+            type: int
+            required: true
+            description: VLAN ID.
+          name:
+            type: str
+            required: true
+            description: Short name, for example prod.
+          alias:
+            type: str
+            required: true
+            description: Longer name, used in rule descriptions.
+          cidr:
+            type: str
+            required: true
+            description: The VLAN's /24 range.
+      opnsense_lab_vlan_settings:
+        type: dict
+        required: true
+        description: This firewall's settings per VLAN name (ifname, dhcp, bootstrap).
+      opnsense_lab_mgmt_tag:
+        type: int
+        required: true
+        description: VLAN ID of the mgmt VLAN (OPNsense LAN, web GUI and API).
+      opnsense_lab_dhcp_first:
+        type: int
+        required: true
+        description: First host number of each DHCP pool.
+      opnsense_lab_dhcp_last:
+        type: int
+        required: true
+        description: Last host number of each DHCP pool, below the .224/27 load-balancer reserve.
+      # Defaults in defaults/main.yml
+      opnsense_lab_host_overrides:
+        type: list
+        elements: dict
+        default: []
+        description: Lab-only DNS names (Unbound host overrides), each relative to opnsense_dns_zone.
+        options:
+          hostname:
+            type: str
+            required: true
+            description: Name relative to the zone, for example api.c1.prod.
+          address:
+            type: str
+            required: true
+            description: The IPv4 address the name points at. Private.
+          description:
+            type: str
+            required: true
+            description: What the name is for.
+      opnsense_lab_parent:
+        type: str
+        default: vtnet0
+        description: The trunk port inside OPNsense (net0 on vmbr1).
+      opnsense_lab_ssl_verify:
+        type: bool
+        default: true
+        description: Check the GUI certificate.
+      opnsense_lab_ssl_ca_file:
+        type: str
+        description: CA file for the GUI certificate while it is self-signed. Optional.

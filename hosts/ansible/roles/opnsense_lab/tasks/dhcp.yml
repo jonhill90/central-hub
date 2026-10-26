@@ -1,0 +1,22 @@
+---
+# DHCP comes from dnsmasq, on the VLANs marked dhcp: true only (10 and 30).
+# The pool is .100-.199, ending before the .224/27 load-balancer reserve.
+- name: DHCP ranges
+  oxlorg.opnsense.dnsmasq_range:
+    description: "{{ item.label }} VLAN {{ item.tag }} pool"
+    interface: "{{ item.ifname }}"
+    start_addr: "{{ item.base }}.{{ opnsense_lab_dhcp_first }}"
+    end_addr: "{{ item.base }}.{{ opnsense_lab_dhcp_last }}"
+    reload: true
+  loop: "{{ opnsense_lab_vlans | selectattr('dhcp') | list }}"
+  loop_control:
+    label: "VLAN {{ item.tag }}"
+
+# dnsmasq listens on the DHCP VLANs and mgmt only, never on WAN. This module sets every
+# general dnsmasq setting; the ones not named here go to the collection's defaults.
+- name: Limit dnsmasq to the lab interfaces
+  oxlorg.opnsense.dnsmasq_general:
+    interfaces: >-
+      {{ (opnsense_lab_vlans | selectattr('dhcp') | map(attribute='ifname') | list)
+         + (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | map(attribute='ifname') | list) }}
+    reload: true

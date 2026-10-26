@@ -1,0 +1,14 @@
+---
+# Ansible collections, pinned. Install with:
+#   ansible-galaxy collection install -r requirements.yml -p ./collections
+collections:
+  # OPNsense API modules. 26.1.11 is the newest release seen; it is tested on OPNsense 26.1,
+  # and no release for OPNsense 26.7 has been seen yet.
+  - name: oxlorg.opnsense
+    version: "26.1.11"
+  # interfaces_file, used for /etc/network/interfaces on the Proxmox host.
+  - name: community.general
+    version: "13.5.0"
+  # firewalld, sysctl and SELinux modules for the Kubernetes node roles.
+  - name: ansible.posix
+    version: "2.1.0"

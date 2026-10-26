@@ -1,0 +1,52 @@
+---
+# Inventory template. Every blank is a private value, filled from the secret store at run time.
+# Save the filled-in copy as hosts.yml in this folder (git-ignored) and pass this folder with -i,
+# so Ansible also loads group_vars/ here.
+all:
+  children:
+    proxmox:
+      hosts:
+        proxmox_host:
+          ansible_host: ""   # host address on the home LAN
+          ansible_user: root
+          proxmox_vmbr1_mac: ""   # fixed MAC for vmbr1
+          proxmox_host_mgmt_address: ""   # host address in VNet mgmt, without /24
+    opnsense:
+      hosts:
+        opnsense_fw:
+          ansible_connection: local   # the modules call the OPNsense API from the controller
+          opnsense_api_host: ""   # address or name the API is reached on
+          opnsense_api_key: ""   # secret
+          opnsense_api_secret: ""   # secret
+          opnsense_home_lan_cidr: ""   # the home router's LAN range
+          opnsense_dns_zone: ""   # DNS zone for the opnsense.<zone> override
+          # The VLAN list itself is in group_vars/all/vlans.yml (the one shared VLAN file).
+          # These are this firewall's own settings (Red Hat CoP rule, Jon 2026-10-26 00:35 UTC).
+          opnsense_lab_mgmt_tag: 50
+          opnsense_lab_dhcp_first: 100
+          opnsense_lab_dhcp_last: 199   # ends before the .224/27 load-balancer reserve
+          opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
+            - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
+          opnsense_lab_vlan_settings:
+            prod: { ifname: opt1, dhcp: true, bootstrap: false }
+            qa: { ifname: opt2, dhcp: false, bootstrap: false }
+            dev: { ifname: opt3, dhcp: true, bootstrap: false }
+            mgmt: { ifname: lan, dhcp: false, bootstrap: true }
+    # Kubernetes cluster c1 (BUILD-PATH S06-S08). Hostnames follow STD-0001; the real ones and
+    # their addresses go only in the filled-in copy. Reached through the Proxmox host, which has an
+    # address on VNet mgmt (OPNsense routes mgmt to prod).
+    k8s_nodes:
+      children:
+        k8s_control_plane:
+          hosts:
+            palcpdemo01:
+              ansible_host: ""   # the node's address on VNet prod
+        k8s_workers:
+          hosts:
+            palwkdemo01:
+              ansible_host: ""
+      vars:
+        ansible_user: almalinux
+        ansible_ssh_private_key_file: ""   # the key whose public half terraform/home/k8s put on the nodes
+        ansible_ssh_common_args: ""        # for example -o ProxyJump=root@<Proxmox host address>
+        k8s_control_plane_endpoint: ""     # api.c1.prod.<zone>

@@ -1,0 +1,82 @@
+---
+# Step 7. The endpoint name must resolve to this node (OPNsense Unbound override, BUILD-PATH S07;
+# the runbook used an /etc/hosts entry).
+- name: step7 | Endpoint name resolves to this node
+  ansible.builtin.command: getent hosts {{ k8s_control_plane_endpoint }}
+  register: k8s_cp_getent
+  changed_when: false
+  failed_when: ansible_default_ipv4.address not in k8s_cp_getent.stdout
+
+# Step 8. Init
+- name: step8 | Already initialised?
+  ansible.builtin.stat: {path: /etc/kubernetes/admin.conf}
+  register: k8s_cp_admin
+
+- name: step8 | Pull images
+  ansible.builtin.command: kubeadm config images pull --kubernetes-version v{{ k8s_control_plane_kubernetes_version }}
+  when: not k8s_cp_admin.stat.exists
+  changed_when: true
+
+- name: step8 | kubeadm init
+  ansible.builtin.command: >-
+    kubeadm init --kubernetes-version v{{ k8s_control_plane_kubernetes_version }}
+    --control-plane-endpoint {{ k8s_control_plane_endpoint }}:6443
+    --pod-network-cidr {{ k8s_control_plane_pod_cidr }}
+    --service-cidr {{ k8s_control_plane_service_cidr }}
+  when: not k8s_cp_admin.stat.exists
+  changed_when: true
+
+- name: step8 | root's kubeconfig
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: true
+    mode: "0600"
+
+# Step 9. Cilium, by Helm. Changes from the runbook: devices = the lab NIC (not tailscale0) and
+# no MTU override (the lab NIC has 1500; 1230 was for the tailnet's 1280).
+- name: step9 | Helm tarball, checked against its published checksum
+  ansible.builtin.get_url:
+    url: "https://get.helm.sh/helm-{{ k8s_control_plane_helm_version }}-linux-amd64.tar.gz"
+    dest: "/root/helm-{{ k8s_control_plane_helm_version }}-linux-amd64.tar.gz"
+    checksum: "sha256:https://get.helm.sh/helm-{{ k8s_control_plane_helm_version }}-linux-amd64.tar.gz.sha256sum"
+    mode: "0644"
+
+- name: step9 | Unpack Helm
+  ansible.builtin.unarchive:
+    src: "/root/helm-{{ k8s_control_plane_helm_version }}-linux-amd64.tar.gz"
+    dest: /root
+    remote_src: true
+    creates: /root/linux-amd64/helm
+
+- name: step9 | Install Helm
+  ansible.builtin.copy: {src: /root/linux-amd64/helm, dest: /usr/local/bin/helm, remote_src: true, mode: "0755"}
+
+- name: step9 | Cilium repo
+  ansible.builtin.shell: helm repo add cilium https://helm.cilium.io/ --force-update && helm repo update cilium
+  changed_when: false
+
+- name: step9 | Cilium installed?
+  ansible.builtin.command: helm -n kube-system status cilium
+  register: k8s_cp_cilium
+  changed_when: false
+  failed_when: false
+
+- name: step9 | Install Cilium
+  when: k8s_cp_cilium.rc != 0
+  ansible.builtin.command: >-
+    helm install cilium cilium/cilium --version {{ k8s_control_plane_cilium_version }} -n kube-system
+    --set ipam.mode=cluster-pool
+    --set "ipam.operator.clusterPoolIPv4PodCIDRList={{ '{' }}{{ k8s_control_plane_pod_cidr }}{{ '}' }}"
+    --set devices={{ ansible_default_ipv4.interface }}
+    --set kubeProxyReplacement=false --set operator.replicas=1
+  changed_when: true
+
+- name: step9 | Cilium and CoreDNS ready
+  ansible.builtin.shell: >-
+    kubectl -n kube-system rollout status ds/cilium --timeout=300s &&
+    kubectl -n kube-system rollout status deploy/coredns --timeout=300s
+  changed_when: false
+
+# Step 10. With a worker in this cluster the control-plane taint stays (the runbook's single node
+# removed it). The smoke test runs after the worker joins (playbooks/k8s.yml).

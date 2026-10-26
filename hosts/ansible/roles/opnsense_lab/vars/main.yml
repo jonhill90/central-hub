@@ -1,0 +1,52 @@
+---
+# The VLANs this role works on: the shared lab_vlans (group_vars/all/vlans.yml, the one VLAN
+# file) joined with this firewall's own settings per VLAN (opnsense_lab_vlan_settings).
+# base = the /24's first three numbers, for example 10.1.10.
+opnsense_lab_vlans: >-
+  {%- set out = [] -%}
+  {%- for v in lab_vlans -%}
+  {%- set x = opnsense_lab_vlan_settings[v.name] -%}
+  {%- set _ = out.append({'tag': v.id, 'name': v.name, 'label': v.alias, 'cidr': v.cidr,
+      'base': v.cidr.split('/')[0].rsplit('.', 1)[0],
+      'ifname': x.ifname, 'dhcp': x.dhcp, 'bootstrap': x.bootstrap}) -%}
+  {%- endfor -%}
+  {{ out }}
+
+# Derived values. The gateway of each lab /24 is .1 (IP plan); the mgmt one is the firewall's
+# GUI, DNS and API address.
+opnsense_lab_mgmt_gateway: "{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | first).base }}.1"
+
+# The four rules every lab VLAN gets, in this order.
+opnsense_lab_rule_kinds:
+  - n: 0
+    text: "Block {} to home LAN"
+    action: block
+    protocol: any
+    destination: home
+    port: ""
+    icmp: []
+    invert: false
+  - n: 1
+    text: "Allow {} ping to firewall"
+    action: pass
+    protocol: ICMP
+    destination: "(self)"
+    port: ""
+    icmp: [echoreq]
+    invert: false
+  - n: 2
+    text: "Allow {} DNS to firewall"
+    action: pass
+    protocol: TCP/UDP
+    destination: "(self)"
+    port: "53"
+    icmp: []
+    invert: false
+  - n: 3
+    text: "Allow {} to internet"
+    action: pass
+    protocol: any
+    destination: RFC1918
+    port: ""
+    icmp: []
+    invert: true

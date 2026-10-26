@@ -1,0 +1,59 @@
+---
+# The home LAN reaches the lab through a static route on the home router to the OPNsense WAN.
+# It may reach only the mgmt gateway: tcp 443 (GUI), tcp/udp 53 (DNS) and ping. Lab VLANs stay
+# closed to it. Home clients share WAN's subnet, so replies go straight back (reply-to off).
+
+# Every home client has a private address, so WAN must stop blocking private sources.
+# Same unverified assignment API as assign.yml.
+- name: Read the WAN slot
+  oxlorg.opnsense.raw:
+    url: interfaces/assignment/get_item/wan
+  register: opnsense_lab_wan
+  check_mode: false
+
+- name: Stop blocking private sources on WAN
+  oxlorg.opnsense.raw:
+    url: interfaces/assignment/set_item/wan
+    action: post
+    data:
+      interface:
+        blockpriv: "0"
+  when: (opnsense_lab_wan.response.interface.blockpriv | default('0')) | string == '1'
+  notify: Apply interface changes
+
+- name: Home LAN to the mgmt gateway
+  oxlorg.opnsense.rule:
+    description: "{{ item.description }}"
+    match_fields: [description]
+    sequence: "{{ item.seq }}"
+    action: pass
+    quick: true
+    interface: [wan]
+    direction: in
+    ip_protocol: inet
+    protocol: "{{ item.protocol }}"
+    source_net: "{{ opnsense_home_lan_cidr }}"
+    destination_net: "{{ opnsense_lab_mgmt_gateway }}"
+    destination_port: "{{ item.port }}"
+    icmp_type: "{{ item.icmp }}"
+    disable_replyto: true
+    log: false
+  loop:
+    - seq: 1
+      protocol: TCP
+      port: "443"
+      icmp: []
+      description: "Allow home LAN to OPNsense GUI ({{ opnsense_lab_mgmt_gateway }}:443)"
+    - seq: 2
+      protocol: TCP/UDP
+      port: "53"
+      icmp: []
+      description: "Allow home LAN to OPNsense DNS ({{ opnsense_lab_mgmt_gateway }}:53)"
+    - seq: 3
+      protocol: ICMP
+      port: ""
+      icmp: [echoreq]
+      description: "Allow home LAN ping to {{ opnsense_lab_mgmt_gateway }}"
+  loop_control:
+    label: "{{ item.seq }}"
+  notify: Apply rule changes

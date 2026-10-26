@@ -1,0 +1,51 @@
+---
+# A bridge with no ports falls back to MAC 00:00:00:00:00:00, and then the SDN's vmbr1.<tag>
+# devices can't come up. So vmbr1 gets a fixed MAC.
+- name: Check that the vmbr1 MAC is set
+  ansible.builtin.assert:
+    that:
+      - proxmox_vmbr1_mac is defined
+      - proxmox_vmbr1_mac | length > 0
+    fail_msg: proxmox_vmbr1_mac is a private value; fill it from the secret store.
+    quiet: true
+
+- name: Read the network configuration
+  ansible.builtin.slurp:
+    src: "{{ proxmox_network_interfaces_file }}"
+  register: proxmox_network_current
+
+- name: Add vmbr1 when the host has none
+  ansible.builtin.blockinfile:
+    path: "{{ proxmox_network_interfaces_file }}"
+    marker: "# {mark} {{ proxmox_network_bridge }} (hosts/ansible proxmox_network)"
+    backup: true
+    block: |
+      auto {{ proxmox_network_bridge }}
+      iface {{ proxmox_network_bridge }} inet manual
+          bridge-ports none
+          bridge-stp off
+          bridge-fd 0
+          bridge-vlan-aware yes
+          bridge-vids {{ proxmox_network_bridge_vids }}
+          hwaddress {{ proxmox_vmbr1_mac }}
+  when: not (proxmox_network_current.content | b64decode is search('^iface ' ~ proxmox_network_bridge ~ ' ', multiline=True))
+  notify: Reload network
+
+- name: Set the options on the existing vmbr1
+  community.general.interfaces_file:
+    dest: "{{ proxmox_network_interfaces_file }}"
+    iface: "{{ proxmox_network_bridge }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: true
+  loop:
+    - { option: bridge-vlan-aware, value: "yes" }
+    - { option: bridge-vids, value: "{{ proxmox_network_bridge_vids }}" }
+    - { option: hwaddress, value: "{{ proxmox_vmbr1_mac }}" }
+  loop_control:
+    label: "{{ item.option }}"
+  when: proxmox_network_current.content | b64decode is search('^iface ' ~ proxmox_network_bridge ~ ' ', multiline=True)
+  notify: Reload network
+
+- name: Apply network changes now
+  ansible.builtin.meta: flush_handlers

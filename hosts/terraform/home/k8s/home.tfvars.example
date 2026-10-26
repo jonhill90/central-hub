@@ -1,0 +1,9 @@
+# Made-up example. The real hostnames and addresses go only in home.tfvars (git-ignored).
+# Hostnames follow STD-0001: p (prod) al (AlmaLinux) cp/wk (control plane/worker) what nn.
+proxmox_node_name   = "examplehv01"
+vlans_file          = "../../../ansible/inventories/home/group_vars/all/vlans.yml"
+node_ssh_public_key = "ssh-ed25519 AAAA...example"
+nodes = {
+  palcpdemo01 = { vm_id = 200, role = "control-plane", cores = 2, memory_mb = 4096, disk_gb = 40, address = "192.0.2.11" }
+  palwkdemo01 = { vm_id = 201, role = "worker", cores = 2, memory_mb = 4096, disk_gb = 40, address = "192.0.2.21" }
+}

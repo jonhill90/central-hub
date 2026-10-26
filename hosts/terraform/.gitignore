@@ -1,0 +1,5 @@
+# Real variable files can hold place or private values; only *.tfvars.example files are tracked.
+*.tfvars
+*.tfvars.json
+# Provider downloads from tofu init
+.terraform/

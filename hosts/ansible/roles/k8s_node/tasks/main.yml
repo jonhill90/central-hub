@@ -1,0 +1,196 @@
+---
+# Runbook steps 1-6 for a home-lab node. Changes from the runbook (a VPS on the tailnet):
+# no Tailscale (the node sits on lab VLAN prod), so firewalld's Kubernetes zone is on the lab NIC,
+# and step 3's `tailscale set` line is dropped.
+
+# Step 1. Hostname and host lock-down
+- name: step1 | Hostname (kubeadm names the node after it)
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: step1 | firewalld
+  ansible.builtin.dnf: {name: firewalld, state: present}
+
+- name: step1 | firewalld running
+  ansible.builtin.systemd: {name: firewalld, state: started, enabled: true}
+
+- name: step1 | Zone for the lab NIC
+  ansible.posix.firewalld:
+    zone: "{{ k8s_node_firewall_zone }}"
+    state: present
+    permanent: true
+  notify: Reload firewalld
+
+- name: step1 | Flush the zone change before using it
+  ansible.builtin.meta: flush_handlers
+
+- name: step1 | Lab NIC in that zone
+  ansible.posix.firewalld:
+    zone: "{{ k8s_node_firewall_zone }}"
+    interface: "{{ ansible_default_ipv4.interface }}"
+    permanent: true
+    immediate: true
+    state: enabled
+
+- name: step1 | SSH in that zone
+  ansible.posix.firewalld:
+    zone: "{{ k8s_node_firewall_zone }}"
+    service: ssh
+    permanent: true
+    immediate: true
+    state: enabled
+
+- name: step1 | SSH keys only, no root password login
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/01-central-hub-hardening.conf   # sorts before cloud-init's 50- file
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin prohibit-password
+      KbdInteractiveAuthentication no
+    mode: "0600"
+    validate: sshd -t -f %s
+  notify: Reload sshd
+
+# Step 2. Host prerequisites
+- name: step2 | Swap off now
+  ansible.builtin.command: swapoff -a
+  changed_when: false
+
+- name: step2 | Swap off after reboots
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    replace: '# \1'
+
+- name: step2 | Kernel modules at boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: "overlay\nbr_netfilter\n"
+    mode: "0644"
+
+- name: step2 | Kernel modules now
+  community.general.modprobe: {name: "{{ item }}", state: present}
+  loop: [overlay, br_netfilter]
+
+- name: step2 | IP forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_file: /etc/sysctl.d/k8s.conf
+    reload: true
+
+- name: step2 | SELinux permissive (relabel boot if it was disabled)
+  ansible.posix.selinux: {policy: targeted, state: permissive}
+  register: k8s_node_selinux
+
+- name: step2 | Relabel and reboot when SELinux was disabled
+  when: k8s_node_selinux.reboot_required | default(false)
+  block:
+    - name: step2 | Relabel flag
+      ansible.builtin.file: {path: /.autorelabel, state: touch, mode: "0644"}
+    - name: step2 | Reboot
+      ansible.builtin.reboot: {reboot_timeout: 900}
+
+# Step 3. DNS that pods can use (cloud-init adds search "localhost", which reached the pods)
+- name: step3 | Active cloud-init connection
+  ansible.builtin.shell: nmcli -g NAME con show --active | grep -m1 cloud-init
+  register: k8s_node_con
+  changed_when: false
+  failed_when: false
+
+- name: step3 | No search domain on that connection
+  when: k8s_node_con.stdout | length > 0
+  ansible.builtin.shell: |
+    set -e
+    cur=$(nmcli -g ipv4.dns-search con show "{{ k8s_node_con.stdout }}")
+    [ -z "$cur" ] && exit 0
+    nmcli con mod "{{ k8s_node_con.stdout }}" ipv4.dns-search "" ipv6.dns-search ""
+    nmcli con up "{{ k8s_node_con.stdout }}" >/dev/null
+    echo changed
+  register: k8s_node_dns
+  changed_when: "'changed' in k8s_node_dns.stdout"
+
+# Step 4. Firewall for Kubernetes and Cilium (lab zone only)
+- name: step4 | Kubernetes and Cilium ports
+  ansible.posix.firewalld:
+    zone: "{{ k8s_node_firewall_zone }}"
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ k8s_node_ports }}"
+
+- name: step4 | Trust the pod range (else CoreDNS never gets Ready)
+  ansible.posix.firewalld:
+    zone: trusted
+    source: "{{ k8s_node_pod_cidr }}"
+    permanent: true
+    immediate: true
+    state: enabled
+
+# Step 5. containerd
+- name: step5 | DNF plugins
+  ansible.builtin.dnf: {name: [dnf-plugins-core, python3-dnf-plugin-versionlock], state: present}
+
+- name: step5 | Docker CE repo (it ships containerd.io)
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/centos/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    mode: "0644"
+
+- name: step5 | containerd
+  ansible.builtin.dnf: {name: "{{ k8s_node_containerd_package }}", state: present}
+  register: k8s_node_containerd
+
+- name: step5 | Lock its version
+  ansible.builtin.command: dnf versionlock add containerd.io
+  when: k8s_node_containerd is changed
+  changed_when: true
+
+- name: step5 | Default config
+  ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+  args: {creates: /etc/containerd/.central-hub-config}
+  notify: Restart containerd
+
+- name: step5 | systemd cgroup driver
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: '^(\s*)SystemdCgroup = false'
+    replace: '\1SystemdCgroup = true'
+  notify: Restart containerd
+
+- name: step5 | Mark the config as written once
+  ansible.builtin.file: {path: /etc/containerd/.central-hub-config, state: touch, mode: "0644", modification_time: preserve, access_time: preserve}
+
+- name: step5 | containerd running
+  ansible.builtin.systemd: {name: containerd, state: started, enabled: true}
+
+# Step 6. kubeadm, kubelet, kubectl
+- name: step6 | Kubernetes package repo (excluded from routine updates)
+  ansible.builtin.yum_repository:
+    name: kubernetes
+    description: Kubernetes
+    baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_node_kubernetes_minor }}/rpm/"
+    gpgcheck: true
+    gpgkey: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_node_kubernetes_minor }}/rpm/repodata/repomd.xml.key"
+    exclude: [kubelet, kubeadm, kubectl, cri-tools, kubernetes-cni]
+
+- name: step6 | kubeadm, kubelet, kubectl, cri-tools
+  ansible.builtin.dnf:
+    name:
+      - "kubelet-{{ k8s_node_kubernetes_version }}"
+      - "kubeadm-{{ k8s_node_kubernetes_version }}"
+      - "kubectl-{{ k8s_node_kubernetes_version }}"
+      - "cri-tools-{{ k8s_node_kubernetes_minor }}.*"
+    disable_excludes: kubernetes
+    install_weak_deps: false
+    state: present
+
+- name: step6 | crictl talks to containerd
+  ansible.builtin.copy:
+    dest: /etc/crictl.yaml
+    content: "runtime-endpoint: unix:///run/containerd/containerd.sock\n"
+    mode: "0644"
+
+- name: step6 | kubelet enabled (it restarts until kubeadm configures it)
+  ansible.builtin.systemd: {name: kubelet, enabled: true, state: started}

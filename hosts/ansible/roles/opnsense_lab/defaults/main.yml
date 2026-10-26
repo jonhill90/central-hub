@@ -1,0 +1,38 @@
+---
+# Every input of this role is listed here (Red Hat CoP roles README L424-436). An input with no
+# meaningful default is listed commented out: the role stops with an error if the inventory
+# doesn't set it (Jon 2026-10-26 00:35 UTC: "yes" to the CoP rule).
+#
+# Private, no default, from the secret store through the inventory:
+# opnsense_api_host, opnsense_api_key, opnsense_api_secret, opnsense_home_lan_cidr,
+# opnsense_dns_zone.
+
+# REQUIRED, from the one shared VLAN file (inventories/<place>/group_vars/all/vlans.yml, Jon
+# 2026-10-26 06:08 UTC): lab_vlans, one entry per VLAN with id, name, alias, cidr.
+# lab_vlans: [...]
+
+# The trunk port inside OPNsense (net0 on vmbr1).
+opnsense_lab_parent: vtnet0
+
+# REQUIRED, set per firewall in the inventory. This firewall's settings for each VLAN in
+# lab_vlans, by VLAN name. ifname is the OPNsense interface slot; bootstrap: true marks the mgmt
+# VLAN, made at the console before the API can be reached, so this role leaves its VLAN and
+# slot alone.
+# opnsense_lab_vlan_settings:
+#   prod: { ifname: opt1, dhcp: true, bootstrap: false }
+#   mgmt: { ifname: lan, dhcp: false, bootstrap: true }
+
+# REQUIRED, set per place in the inventory. The mgmt VLAN: OPNsense LAN, web GUI and API.
+# opnsense_lab_mgmt_tag: <VLAN ID>
+
+# REQUIRED, set per place in the inventory. DHCP pool host numbers (the last number of the
+# address). Keep the pool below the .224/27 load-balancer reserve.
+# opnsense_lab_dhcp_first: <number>
+# opnsense_lab_dhcp_last: <number>
+
+# Lab-only DNS names (Unbound host overrides), for example the cluster API. hostname is relative
+# to opnsense_dns_zone; address is private, so the real list goes in the inventory.
+opnsense_lab_host_overrides: []
+
+# Check the GUI certificate. Set opnsense_lab_ssl_ca_file to the CA file while it is self-signed.
+opnsense_lab_ssl_verify: true

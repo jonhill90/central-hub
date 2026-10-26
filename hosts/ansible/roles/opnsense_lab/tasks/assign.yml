@@ -1,0 +1,41 @@
+---
+# oxlorg.opnsense 26.1.11 has no module for interface assignment. These tasks call the
+# interfaces/assignment API (AssignmentController, in the current OPNsense API docs) through
+# oxlorg.opnsense.raw. Unverified: that this API ships in 26.7, and the shape of its replies.
+- name: Read each lab slot
+  oxlorg.opnsense.raw:
+    url: "interfaces/assignment/get_item/{{ item.ifname }}"
+  loop: "{{ opnsense_lab_vlans | rejectattr('bootstrap') | list }}"
+  loop_control:
+    label: "{{ item.ifname }}"
+  register: opnsense_lab_slots
+  check_mode: false
+
+- name: Assign each VLAN device to its slot, with the gateway address .1/24
+  oxlorg.opnsense.raw:
+    url: >-
+      {{ 'interfaces/assignment/set_item/' ~ slot.item.ifname if slot_exists else 'interfaces/assignment/add_item' }}
+    action: post
+    data:
+      interface:
+        if: "vlan0.{{ slot.item.tag }}"
+        descr: "{{ slot.item.name }}"
+        enable: "1"
+        type4: staticv4
+        ipaddr: "{{ want_addr }}"
+  loop: "{{ opnsense_lab_slots.results }}"
+  loop_control:
+    loop_var: slot
+    label: "{{ slot.item.ifname }} = vlan0.{{ slot.item.tag }}"
+  vars:
+    current: "{{ slot.response.interface | default({}) }}"
+    slot_exists: "{{ current | length > 0 }}"
+    current_if: >-
+      {{ (current['if'] | default({})) | dict2items | selectattr('value.selected', 'equalto', 1)
+         | map(attribute='key') | first | default('') }}
+    want_addr: "{{ slot.item.base }}.1/24"
+  when: >-
+    not slot_exists
+    or current_if != ('vlan0.' ~ slot.item.tag)
+    or (current.ipaddr | default('')) != want_addr
+  notify: Apply interface changes

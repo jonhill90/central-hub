@@ -1,0 +1,50 @@
+---
+# meta/argument_specs.yml already stops the run when a value is missing. It accepts an empty
+# string, and the inventory template has "" blanks for these five, so this check stays.
+- name: Check that the private values are not blank
+  ansible.builtin.assert:
+    that:
+      - lookup('vars', item, default='') | length > 0
+    fail_msg: "{{ item }} is a private value; fill it from the secret store."
+    quiet: true
+  loop:
+    - opnsense_api_host
+    - opnsense_api_key
+    - opnsense_api_secret
+    - opnsense_home_lan_cidr
+    - opnsense_dns_zone
+  no_log: "{{ item in ['opnsense_api_key', 'opnsense_api_secret'] }}"
+
+# "is defined" and the types are checked by meta/argument_specs.yml; it doesn't reject an empty
+# list, and every shared VLAN needs this firewall's settings, so these stay.
+- name: Check that the VLAN values are not empty and match
+  ansible.builtin.assert:
+    that:
+      - lab_vlans | length > 0
+      - lab_vlans | map(attribute='name') | difference(opnsense_lab_vlan_settings.keys() | list) | length == 0
+    fail_msg: lab_vlans (group_vars/all/vlans.yml) is empty, or a VLAN in it has no entry in opnsense_lab_vlan_settings.
+    quiet: true
+
+- name: VLANs
+  ansible.builtin.import_tasks: vlans.yml
+  tags: [vlans]
+
+- name: Interface assignment
+  ansible.builtin.import_tasks: assign.yml
+  tags: [assign]
+
+- name: DHCP
+  ansible.builtin.import_tasks: dhcp.yml
+  tags: [dhcp]
+
+- name: Lab rules
+  ansible.builtin.import_tasks: rules.yml
+  tags: [rules]
+
+- name: DNS override
+  ansible.builtin.import_tasks: dns.yml
+  tags: [dns]
+
+- name: Home LAN access on WAN
+  ansible.builtin.import_tasks: wan.yml
+  tags: [wan]

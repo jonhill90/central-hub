@@ -1,0 +1,11 @@
+---
+- name: VLAN devices on the trunk port
+  oxlorg.opnsense.interface_vlan:
+    description: "{{ item.name }}"
+    interface: "{{ opnsense_lab_parent }}"
+    vlan: "{{ item.tag }}"
+    device: "vlan0.{{ item.tag }}"
+    reload: true
+  loop: "{{ opnsense_lab_vlans | rejectattr('bootstrap') | list }}"
+  loop_control:
+    label: "VLAN {{ item.tag }} {{ item.name }}"
