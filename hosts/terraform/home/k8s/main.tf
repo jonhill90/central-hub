@@ -4,12 +4,14 @@
 
 # The AlmaLinux 10 GenericCloud image, stored as an "import" file on the host's local storage.
 resource "proxmox_download_file" "almalinux10" {
-  node_name    = var.proxmox_node_name
-  datastore_id = "local"
-  content_type = "import"
-  url          = var.almalinux_image_url
-  file_name    = "almalinux-10-genericcloud.qcow2"
-  overwrite    = false
+  node_name          = var.proxmox_node_name
+  datastore_id       = "local"
+  content_type       = "import"
+  url                = var.almalinux_image_url
+  file_name          = "almalinux-10.2-20261012.0-genericcloud.qcow2"
+  checksum           = var.almalinux_image_sha256
+  checksum_algorithm = "sha256"
+  overwrite          = false
 }
 
 # The template every node is cloned from. Never started.
@@ -64,6 +66,12 @@ resource "proxmox_virtual_environment_vm" "template" {
 
   initialization {
     datastore_id = "local-lvm"
+  }
+
+  lifecycle {
+    # The image is read only when the disk is first made. A new pinned image takes effect when
+    # the template is rebuilt (tofu apply -replace=proxmox_virtual_environment_vm.template).
+    ignore_changes = [disk[0].import_from]
   }
 }
 

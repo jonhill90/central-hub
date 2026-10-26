@@ -11,6 +11,7 @@ all:
           ansible_user: root
           proxmox_vmbr1_mac: ""   # fixed MAC for vmbr1
           proxmox_host_mgmt_address: ""   # host address in VNet mgmt, without /24
+          proxmox_network_lab_supernet: 10.1.0.0/16   # STD-0002 home prefix; routed via the mgmt gateway
     opnsense:
       hosts:
         opnsense_fw:

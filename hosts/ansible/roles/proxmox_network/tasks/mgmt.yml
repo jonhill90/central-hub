@@ -43,6 +43,20 @@
   when: proxmox_network_current.content | b64decode is search('^iface ' ~ proxmox_network_mgmt_vnet ~ ' ', multiline=True)
   notify: Reload network
 
+# The host reaches the other lab VLANs through OPNsense (the mgmt VLAN's .1), so Ansible can use
+# it as the jump host to the Kubernetes nodes on VNet prod (measured 2026-10-26: without this
+# route the host had no path to 10.1.10.0/24).
+- name: Route to the other lab VLANs through the firewall
+  community.general.interfaces_file:
+    dest: "{{ proxmox_network_interfaces_file }}"
+    iface: "{{ proxmox_network_mgmt_vnet }}"
+    option: post-up
+    value: >-
+      ip route replace {{ proxmox_network_lab_supernet }} via
+      {{ (lab_vlans | selectattr('name', 'equalto', proxmox_network_mgmt_vnet) | first).cidr.split('/')[0].rsplit('.', 1)[0] }}.1
+    backup: true
+  notify: Reload network
+
 - name: Apply network changes now
   ansible.builtin.meta: flush_handlers
 
