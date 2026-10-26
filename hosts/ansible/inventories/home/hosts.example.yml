@@ -16,6 +16,7 @@ all:
       hosts:
         opnsense_fw:
           ansible_connection: local   # the modules call the OPNsense API from the controller
+          ansible_python_interpreter: ""   # a controller Python that has httpx (requirements.txt)
           opnsense_api_host: ""   # address or name the API is reached on
           opnsense_api_key: ""   # secret
           opnsense_api_secret: ""   # secret

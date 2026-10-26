@@ -32,6 +32,9 @@ Every choice here was made by an agent, not by the owner. Any of them can change
 | 26 | Ansible reaches the nodes through the Proxmox host (ProxyJump), not Tailscale | `inventories/home/hosts.example.yml` | The Mac can't reach VNet prod directly | Tailscale on each node, as in the VPS runbook |
 | 27 | The Proxmox host routes the whole lab range (10.1.0.0/16, STD-0002) through the mgmt gateway, so it can be Ansible's jump host to the nodes | `proxmox_network` role, `post-up` on the mgmt stanza | Measured: without it the host had no route to VNet prod | a host address on VNet prod; Tailscale on the nodes |
 | 28 | `proxmox_network`'s syntax-check handler fails only on lines that start with "error", because `ifreload -a -s` exits 1 on the normal bridge-fd warnings | `proxmox_network/handlers/main.yml` | Measured on the host | ignore the exit code entirely |
+| 29 | The OPNsense API user `ansible` (8 privileges, random unknown password) is made by `ansible/bootstrap/opnsense-ansible-user.php` through the QEMU guest agent; the key and secret are made on the Mac, and OPNsense only gets the hash | `ansible/bootstrap/`, `~/.config/central-hub/opnsense-api.txt` | No login and no password typed; the secret never leaves the controller | make the key in the GUI by hand |
+| 30 | `opnsense_lab_ssl_verify: false` in the filled inventory while the GUI certificate is self-signed and is reached by address | `inventories/home/hosts.yml` | The certificate name doesn't match the address | trust the self-signed certificate as `opnsense_lab_ssl_ca_file` and connect by name |
+| 31 | `ansible_python_interpreter` for the OPNsense host points at a controller Python with httpx | `inventories/home/hosts.yml` | Ansible's own Python lacks httpx | install httpx into Ansible's Python |
 
 ## The owner's decisions so far
 
