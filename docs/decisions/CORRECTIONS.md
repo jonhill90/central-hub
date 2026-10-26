@@ -6,7 +6,7 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
-### Accepted with PR #TBD
+### Accepted with PR #44
 
 This PR's approval facts and merge commit are added after it merges (D-0006 step 6).
 
@@ -73,7 +73,7 @@ A folded decision number has no file and no row in the index until the next new 
 
 - D-0006 (reused) · first used by the PR #9 draft, a full restatement of D-0005, closed unmerged on 2026-10-16; the owner approved the reuse under D-0004 on 2026-10-16 at 08:25 UTC. The current D-0006 was accepted with PR #10: approved 2026-10-16T08:28:58Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNTJTUNZbcPsUxG7TCKiX23s), head 0ae0493; merged as 0517ccf
 - REQ-0021 (reused) · the void row was a usage limit for one agent product, dropped by the owner on 2026-10-13 at 04:23 UTC; at the owner's request (06:09 UTC) the next new requirement, shared vocabulary, took the number instead of `REQ-0022`, in Research commit `f63ae969`. The search found 6 files that meant the void entry (the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md` and the register's Dropped entry), and all 6 were updated or annotated; 3 frozen study files and 20 chat archives were left as records; reported to the owner in the Rules table thread at 06:13 UTC
-- D-0013 (reused) · first held the runbook-steps record, folded into D-0012. That record was accepted with PR #21: approved 2026-10-23T03:42:38Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNWc7Mzu6ZFvoYgnxsDKVyKh), head eb33bd7; merged as 5f9fa76. Now held by "Keep central-hub public, and name each exception to best practice with what keeps it secure", proposed in PR #TBD; the search for D-0013 found only references to the folded record, in this file, D-0004's context and frozen plan files, and none was changed
+- D-0013 (reused) · first held the runbook-steps record, folded into D-0012. That record was accepted with PR #21: approved 2026-10-23T03:42:38Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNWc7Mzu6ZFvoYgnxsDKVyKh), head eb33bd7; merged as 5f9fa76. Now held by "Keep central-hub public, and name each exception to best practice with what keeps it secure", proposed in PR #44; the search for D-0013 found only references to the folded record, in this file, D-0004's context and frozen plan files, and none was changed
 - D-0017 · folded into D-0016 rule 1. It was accepted with PR #26: approved 2026-10-23T04:58:39Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNT1mFLf6eEyeGKAMDBbAKVd), head 5115dcd; merged as b852f90
 - D-0021 · folded into D-0019 rule 4. It was accepted with PR #41: approved 2026-10-24T06:21:57Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNAqUPkvQ7d3ptmgAjUaDB92), head c62cf99; merged as 8c1b65e
 
@@ -115,5 +115,5 @@ A folded decision number has no file and no row in the index until the next new 
 - 2026-10-25 · D-0006 · title "Correct an accepted record in place when the decision does not change" becomes "Edit accepted records in place", which names both routes the record already sets; the file name is unchanged · the owner's answer of 2026-10-25 05:06 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNMeR63CFGQFTV4X6e7m2FvU) · PR #43: approved 2026-10-25T05:56:06Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNQLr3w88Kg2RVjfk7KCcBrW), head 1df1054; merged as 6a7defe
 - 2026-10-25 · this file, the PR #42 STD-0002 line · a word an agent made up for a /16 replaced by NetBox's "prefix" · the owner's request of 2026-10-24 23:19 UTC to use standard terms, not made-up words · PR #43: approved 2026-10-25T05:56:06Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNQLr3w88Kg2RVjfk7KCcBrW), head 1df1054; merged as 6a7defe
 - 2026-10-25 · this file · PR #42's approval facts and merge commit added to its lines · PR #43: approved 2026-10-25T05:56:06Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNQLr3w88Kg2RVjfk7KCcBrW), head 1df1054; merged as 6a7defe
-- 2026-10-26 · this file · PR #43's approval facts and merge commit added to its lines · PR #TBD
-- 2026-10-26 · D-0011, evidence 0011, research index · the four folder orders weighed in research batch RB-0086 (place first, workload first, layer first, mixed) added to Considered Options; "no research batch of its own" replaced by a link to a new evidence file built from RB-0086 (D-0016 rule 3); the chosen option is unchanged · PR #TBD
+- 2026-10-26 · this file · PR #43's approval facts and merge commit added to its lines · PR #44
+- 2026-10-26 · D-0011, evidence 0011, research index · the four folder orders weighed in research batch RB-0086 (place first, workload first, layer first, mixed) added to Considered Options; "no research batch of its own" replaced by a link to a new evidence file built from RB-0086 (D-0016 rule 3); the chosen option is unchanged · PR #44

@@ -14,7 +14,7 @@ Every choice here was made by an agent, not by Jon. Change any of them; nothing 
 | 8 | One state file per folder named `home-<workload>.tfstate` | every `backend.tf` comment | Matches the folder path | any name; one path per folder is what matters (RB-0083 §6) |
 | 9 | Ansible playbooks moved into `playbooks/`, inventory into `inventories/<place>/` | `ansible/` | Mirrors `terraform/<place>/` (RB-0084 L4) | playbooks at the top level (Ansible sample layout) |
 | 10 | No handoff files yet (no cloud-init template, no `ansible.tf`, no `ansible_pull` role) | `terraform/home/*`, `ansible/roles/` | None of today's three workloads needs them: CT 900 and OPNsense can't use cloud-init or pull; they appear with the first VM workload (for example k8s nodes) | add them now as switched-off examples (RB-0084 visuals README) |
-| 11 | ~~Each role has `meta/main.yml` with `galaxy_info`~~ **Jon 2026-10-26 00:18:49 UTC: drop meta/ ("yes"). Done: both `meta/` folders deleted.** | `ansible/roles/*/meta/` | Habit from the `ansible-galaxy init` skeleton; `dependencies: []` is the only part Ansible uses here | Delete `meta/`: the docs say `galaxy_info` is needed only for a Galaxy upload (playbooks_reuse_roles.rst L33) |
+| 11 | ~~Each role has `meta/main.yml` with `galaxy_info`~~ **The owner said yes to dropping `meta/` on 2026-10-26 at 00:18 UTC. Done: both `meta/` folders deleted.** | `ansible/roles/*/meta/` | Habit from the `ansible-galaxy init` skeleton; `dependencies: []` is the only part Ansible uses here | Delete `meta/`: the docs say `galaxy_info` is needed only for a Galaxy upload (playbooks_reuse_roles.rst L33) |
 | 12 | Derived values and the rule list in `vars/main.yml` (kept as is, 00:35 UTC), separate from `defaults/` | `ansible/roles/opnsense_lab/vars/` | `vars/` beats the inventory, so these can't be overridden by accident | Put everything in `defaults/` (overridable), or compute the values inside the tasks |
 | 13 | `terraform/.gitignore` also ignores `.terraform/` (provider downloads from `tofu init`) | `terraform/.gitignore` | `tofu init` creates it in every run folder | leave it out; add it at the repository root instead |
 | 14 | Kept a non-empty check for `opnsense_lab_prefix` and `opnsense_lab_vlans` beside argument_specs | `opnsense_lab/tasks/main.yml` | argument_specs doesn't reject `""` (measured by the thread) or `[]` (inferred) | drop it; the inventory example carries real values for these |
@@ -32,6 +32,7 @@ Every choice here was made by an agent, not by Jon. Change any of them; nothing 
 | 26 | Ansible reaches the nodes through the Proxmox host (ProxyJump), not Tailscale | `inventories/home/hosts.example.yml` | The Mac can't reach VNet prod directly | Tailscale on each node, as in the VPS runbook |
 
 ## Jon's decisions so far (2026-10-25)
+
 - 18:30 UTC: split by app/workload; Tailscale not in the OPNsense code; backend in `backend.tf`.
 - 18:33 UTC: change the folder name `home-lab`.
 - 20:57 UTC: layout A, `hosts/terraform/<place>/<workload>/`.

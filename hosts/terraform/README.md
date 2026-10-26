@@ -1,6 +1,6 @@
 # hosts/terraform
 
-Run folders laid out as `<place>/<workload>/` (Jon, 2026-10-25 20:57 UTC: "1 seems right", layout A from RB-0083). Each run folder is one root module with its own state and its own `backend.tf`.
+Run folders laid out as `<place>/<workload>/` (layout A from RB-0083; the owner leaned to it on 2026-10-25 at 20:57 UTC, not yet a yes). Each run folder is one root module with its own state and its own `backend.tf`.
 
 | Run folder | What it makes | Needs first |
 |---|---|---|
