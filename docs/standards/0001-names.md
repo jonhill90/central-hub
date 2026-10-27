@@ -4,7 +4,7 @@ title: Names
 status: active
 scope: the OS hostname of every VM, container and physical host, appliance VMs included, local or cloud, and the DNS name of every service the platform runs
 owner-system: 8 Platform
-why: the owner said yes to the proposed two-letter OS codes on 2026-10-21 at 01:12 UTC, and to the proposed option E (one hostname, no dashes) on 2026-10-21 at 01:13 UTC, in the project's VM naming work; to a 3 to 8 letter "what" field on 2026-10-25 at 02:58 UTC; to rule 4 (no provider, region or site in the hostname) on 2026-10-25 at 03:00 UTC; to holding service DNS names in this standard on 2026-10-25 at 03:43 UTC; to the proposed service-name pattern on 2026-10-25 at 03:54 UTC; and to its env level, numbered cluster names and short aliases on 2026-10-25 at 04:08 UTC, in the project's premise review; to covering containers and appliance VMs on 2026-10-26 at 06:04 UTC; to OS code `op` and role code `nw` on 2026-10-26 at 06:06 UTC; and to naming Proxmox resource pools by job on 2026-10-26 at 07:33 UTC
+why: the owner said yes to the proposed two-letter OS codes on 2026-10-21 at 01:12 UTC, and to the proposed option E (one hostname, no dashes) on 2026-10-21 at 01:13 UTC, in the project's VM naming work; to a 3 to 8 letter "what" field on 2026-10-25 at 02:58 UTC; to rule 4 (no provider, region or site in the hostname) on 2026-10-25 at 03:00 UTC; to holding service DNS names in this standard on 2026-10-25 at 03:43 UTC; to the proposed service-name pattern on 2026-10-25 at 03:54 UTC; and to its env level, numbered cluster names and short aliases on 2026-10-25 at 04:08 UTC, in the project's premise review; to covering containers and appliance VMs on 2026-10-26 at 06:04 UTC; to OS code `op` and role code `nw` on 2026-10-26 at 06:06 UTC; to naming Proxmox resource pools by job on 2026-10-26 at 07:33 UTC; and to the proposed Proxmox VM ID ranges by job on 2026-10-26 at 07:29 UTC, in the project's build questions
 follows: [NetBIOS computer name limit (15 characters, not all digits), RFC 1123 host name label, Kubernetes node name rules, RFC 1035 CNAME records, RFC 9525 §6.3 wildcard certificates, Red Hat OpenShift cluster DNS names, kubeadm control-plane endpoint]
 check: none yet in this repo; a reviewing agent checks new names and service-name patterns by hand
 accepted-evidence:
@@ -67,6 +67,18 @@ Example that passes: `api.c1.prod.<zone>` is cluster 1's API in prod; `grafana.<
 ## Proxmox resource pools
 
 A Proxmox resource pool is named by job, the workload it holds, for example `firewall`, `remote-access` or `k8s`.
+
+## Proxmox VM IDs
+
+A Proxmox guest's numeric ID is chosen by job, from these ranges:
+
+| Range | Job |
+|---|---|
+| 100-199 | network and appliances, for example the firewall VM |
+| 200-299 | Kubernetes nodes |
+| 9000 and up | templates |
+
+A new job gets the next free hundred below 9000 (agent pick). The remote-access container, made before these ranges, keeps its ID 900 until it is rebuilt (agent pick).
 
 ## Not covered here
 
