@@ -7,3 +7,10 @@
   ansible.builtin.import_tasks: source.yml
   when: k8s_gitops_source_enabled | bool
   tags: [source]
+
+# The web UI through the shared Gateway (k8s_gitops_ui_route). With the route off it only undoes
+# what an earlier run made, so it runs for Argo CD only.
+- name: Argo CD web UI through the shared Gateway
+  ansible.builtin.import_tasks: ui.yml
+  when: k8s_gitops_ui_route | bool or k8s_gitops_engine == 'argocd'
+  tags: [ui]

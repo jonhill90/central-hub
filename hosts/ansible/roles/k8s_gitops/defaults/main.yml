@@ -15,3 +15,28 @@ k8s_gitops_source_url: https://github.com/jonhill90/central-hub
 k8s_gitops_source_branch: main
 k8s_gitops_source_path: kubernetes/clusters/c1
 k8s_gitops_source_interval: 5m
+
+# The Argo CD web UI through the shared Gateway (tag ui), a follow-on to BUILD-PATH S12: the owner
+# said (2026-10-27 03:52 UTC, relayed) the UI waits until DNS is up, with no port-forward. On, it
+# serves https://<name>.apps.<cluster>.<env>.<zone>/ on Gateway `apps`'s HTTPS listener only, ends
+# TLS at the Gateway (Argo CD's server.insecure: "true"), and sends plain HTTP for that name to
+# HTTPS. Off (the default), a run removes the routes and puts server.insecure back to "false" if an
+# earlier run set it. Argo CD only (engine argocd); it adds no git source (Activation gate).
+k8s_gitops_ui_route: false
+# Private, no default, needed only with the route on; the inventory template sets it to
+# k8s_gateway_zone:
+# k8s_gitops_ui_zone: <zone>
+k8s_gitops_ui_name: argocd
+k8s_gitops_ui_cluster: c1
+k8s_gitops_ui_env: prod
+# The shared Gateway (role k8s_gateway) and its certificate Secret (role k8s_certs).
+k8s_gitops_ui_gateway_name: apps
+k8s_gitops_ui_gateway_namespace: gateway
+k8s_gitops_ui_tls_secret: apps-tls
+# Whether the Gateway has its HTTPS listener; the inventory template sets it to k8s_gateway_https.
+# The run also checks the live listener.
+k8s_gitops_ui_gateway_https: false
+# A second route on the HTTP listener that answers 301 to https:// for the UI's name only.
+k8s_gitops_ui_https_redirect: true
+# The machine that proves the UI answers, by name through the lab's DNS: a node.
+k8s_gitops_ui_proof_client: "{{ groups['k8s_workers'] | first }}"

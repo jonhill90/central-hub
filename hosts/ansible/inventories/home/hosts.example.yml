@@ -79,6 +79,10 @@ all:
         # The GitOps engine (playbooks/k8s-gitops.yml, BUILD-PATH S13): the owner said yes to the
         # proposed Argo CD with its web UI on 2026-10-27 at 02:23 UTC. Not private.
         k8s_gitops_engine: argocd
+        # The Argo CD web UI at https://argocd.apps.c1.prod.<zone>/ through Gateway apps (tag ui).
+        k8s_gitops_ui_route: false           # true once k8s_gateway_https is true
+        k8s_gitops_ui_zone: "{{ k8s_gateway_zone }}"
+        k8s_gitops_ui_gateway_https: "{{ k8s_gateway_https }}"
         # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
         # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
         # k8s_control_plane_kubernetes_version.
