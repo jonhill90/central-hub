@@ -40,8 +40,9 @@ spec:
           - {type: password, value: "${OWNER_INITIAL_PASSWORD}", temporary: true}
         requiredActions: [UPDATE_PASSWORD]
     clients:
-      # Grafana (k8s_observability): a confidential client with the authorization code flow and
-      # PKCE (Grafana docs, "Configure Keycloak OAuth2 authentication"). The realm roles go into a
+      # Grafana (k8s_observability): a confidential client with the authorization code flow
+      # (Grafana docs, "Configure Keycloak OAuth2 authentication") and PKCE S256 (Grafana docs,
+      # "Configure generic OAuth2 authentication", use_pkce). The realm roles go into a
       # `roles` claim in the ID token and userinfo, which Grafana's role_attribute_path reads.
       - clientId: grafana
         name: Grafana

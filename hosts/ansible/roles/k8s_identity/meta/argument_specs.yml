@@ -1,10 +1,12 @@
 ---
 argument_specs:
   main:
-    short_description: Keycloak through its operator, with PostgreSQL, realm lab and Grafana's client, served through the shared Gateway (BUILD-PATH S15, BL-0019)
+    short_description: >-
+      Keycloak through its operator, with PostgreSQL, realm lab and Grafana's client, served through
+      the shared Gateway (BUILD-PATH S15, BL-0019)
     options:
       k8s_identity_version: {type: str, default: 26.8.1, description: "Keycloak and operator version (STD-0003); vars/main.yml pins the files for it."}
-      k8s_identity_namespace: {type: str, default: identity, description: Namespace for the operator, Keycloak and its database.}
+      k8s_identity_namespace: {type: str, default: identity, description: "Namespace for the operator, Keycloak and its database."}
       k8s_identity_name: {type: str, default: sso, description: "The Keycloak object's name and the first label of its hostname."}
       k8s_identity_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}
       k8s_identity_realm: {type: str, default: lab, description: The realm lab apps sign in to.}

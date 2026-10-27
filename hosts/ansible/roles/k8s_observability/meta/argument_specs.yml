@@ -16,9 +16,15 @@ argument_specs:
       k8s_observability_loki_volume_size: {type: str, default: 6Gi, description: "Size limit of Loki's emptyDir."}
       k8s_observability_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}
       k8s_observability_grafana_name: {type: str, default: grafana, description: "First label of Grafana's hostname."}
-      k8s_observability_grafana_sso: {type: bool, default: false, description: "Sign in to Grafana through the lab identity provider (needs playbooks/k8s-identity.yml first)."}
+      k8s_observability_grafana_sso:
+        type: bool
+        default: false
+        description: "Sign in to Grafana through the lab identity provider (needs playbooks/k8s-identity.yml first)."
       k8s_observability_sso_auth_url: {type: str, description: "The provider's authorization endpoint, public name. Default: Keycloak realm lab."}
       k8s_observability_sso_token_url: {type: str, description: "The provider's token endpoint, in-cluster. Default: Keycloak realm lab."}
       k8s_observability_sso_api_url: {type: str, description: "The provider's userinfo endpoint, in-cluster. Default: Keycloak realm lab."}
       k8s_observability_sso_client_id: {type: str, default: grafana, description: "Grafana's client ID at the provider."}
-      k8s_observability_sso_secret: {type: str, default: grafana-sso, description: "Secret in the metrics namespace holding key client-secret (made by k8s_identity)."}
+      k8s_observability_sso_secret:
+        type: str
+        default: grafana-sso
+        description: "Secret in the metrics namespace holding key client-secret (made by k8s_identity)."

@@ -15,14 +15,16 @@
     - name: proof | Prometheus scrape targets that are up and down
       ansible.builtin.command: >-
         kubectl get --raw
-        /api/v1/namespaces/{{ k8s_observability_metrics_namespace }}/services/kube-prometheus-stack-prometheus:http-web/proxy/api/v1/targets?state=active
+        /api/v1/namespaces/{{ k8s_observability_metrics_namespace }}/services/{{ __svc }}/proxy/api/v1/targets?state=active
       register: k8s_observability_targets
       changed_when: false
+      vars:
+        __svc: kube-prometheus-stack-prometheus:http-web
 
     - name: proof | Loki has log lines from kube-system in the last 10 minutes
       ansible.builtin.command: >-
         kubectl get --raw
-        '/api/v1/namespaces/{{ k8s_observability_logs_namespace }}/services/loki:http-metrics/proxy/loki/api/v1/query_range?query=%7Bnamespace%3D%22kube-system%22%7D&limit=5&since=10m'
+        '/api/v1/namespaces/{{ k8s_observability_logs_namespace }}/services/loki:http-metrics/proxy/loki/api/v1/{{ __query }}'
       register: k8s_observability_logs
       until: >-
         k8s_observability_logs.rc == 0
@@ -30,11 +32,13 @@
       retries: 12
       delay: 10
       changed_when: false
+      vars:
+        __query: query_range?query=%7Bnamespace%3D%22kube-system%22%7D&limit=5&since=10m
 
     # With sign-in on, Grafana's sign-in URL sends the browser to the provider's authorization
     # endpoint with Grafana's client ID: the client and the endpoint match.
     - name: proof | Grafana's sign-in sends the browser to the identity provider
-      ansible.builtin.command: >-  # noqa: command-instead-of-module
+      ansible.builtin.command: >-  # noqa: command-instead-of-module (the node's own curl and trust store, as in k8s_app_route)
         curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}'
         https://{{ k8s_observability_grafana_host }}/login/generic_oauth
       delegate_to: "{{ groups['k8s_workers'] | first }}"
