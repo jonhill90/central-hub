@@ -24,3 +24,4 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0018 | [Number research methods RM-NNNN](0018-number-research-methods-rm-nnnn.md) | accepted | D-0001, D-0003, D-0006, D-0016 | 2026-10-23 |
 | D-0019 | [Check the docs on every PR, with front matter and inside links as gates, Markdown style on changed files, and word checks built from the glossary](0019-check-docs-on-every-pr.md) | accepted | D-0001, D-0012, D-0016 | 2026-10-23 |
 | D-0020 | [Number backlog items BL-NNNN](0020-number-backlog-items-bl-nnnn.md) | accepted | D-0001, D-0003, D-0006, D-0016 | 2026-10-24 |
+| D-0023 | [Use Argo CD with its web UI as the GitOps engine on c1, installed from the pinned upstream manifest with no git credential](0023-use-argo-cd-as-the-gitops-engine.md) | proposed | D-0001, D-0002, D-0011 | 2026-10-27 |

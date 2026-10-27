@@ -23,3 +23,4 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0018 | [0018-number-research-methods-rm-nnnn.md](0018-number-research-methods-rm-nnnn.md) |
 | D-0019 | [0019-check-docs-on-every-pr.md](0019-check-docs-on-every-pr.md) |
 | D-0020 | [0020-number-backlog-items-bl-nnnn.md](0020-number-backlog-items-bl-nnnn.md) |
+| D-0023 | [0023-use-argo-cd-as-the-gitops-engine.md](0023-use-argo-cd-as-the-gitops-engine.md) |
