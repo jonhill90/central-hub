@@ -58,7 +58,7 @@ The role then makes target `central-hub-gotify`, points the matcher at it and le
 
 ### Backups
 
-The disk step runs only when `lsblk` and `wipefs` see nothing on the disk: no partition, no filesystem, no partition table. A disk this role already formatted (one ext4 partition, storage `hdd-backup` present) is left as it is. Anything else stops the run before anything is written. Proxmox's Disks > Directory API checks again that the disk is unused before it partitions it. The mount unit is wanted by `multi-user.target`, not required, so a dead HDD doesn't stop the host from booting.
+The disk step runs only when `lsblk` and `wipefs` see nothing on the disk: no partition, no filesystem, no partition table. A disk that already holds one ext4 partition with storage `hdd-backup` present is left as it is, whether this role formatted it or it was set up earlier by hand and is mounted by an `fstab` line (the home lab's disk: `defaults,nofail`, from an earlier build session). The role doesn't reformat it or replace its mount. Anything else stops the run before anything is written. Proxmox's Disks > Directory API checks again that the disk is unused before it partitions it. The mount unit is wanted by `multi-user.target`, not required, so a dead HDD doesn't stop the host from booting.
 
 After the run, prove one backup and one restore source by hand on the host: `vzdump 900 --storage hdd-backup --mode snapshot --compress zstd`, then `pvesm list hdd-backup`.
 
