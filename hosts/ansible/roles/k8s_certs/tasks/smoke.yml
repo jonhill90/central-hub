@@ -47,7 +47,7 @@
 - name: smoke | Gateway's HTTPS listener is programmed
   ansible.builtin.command: >-
     kubectl -n {{ k8s_certs_gateway_namespace }} get gateway {{ k8s_certs_gateway_name }}
-    -o jsonpath={.status.listeners[?(@.name=="https")].conditions[?(@.type=="Programmed")].status}
+    -o jsonpath='{.status.listeners[?(@.name=="https")].conditions[?(@.type=="Programmed")].status}'
   register: k8s_certs_smoke_listener
   changed_when: false
   failed_when: k8s_certs_smoke_listener.stdout != 'True'
