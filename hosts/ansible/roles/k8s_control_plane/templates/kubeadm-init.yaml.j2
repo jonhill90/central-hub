@@ -1,0 +1,20 @@
+# Written by central-hub hosts/ansible role k8s_control_plane for `kubeadm init` (runbook step 8).
+# The same settings as the runbook's flags, plus Secrets encrypted at rest (step 8a). kubeadm keeps
+# the ClusterConfiguration in ConfigMap kube-system/kubeadm-config, so `kubeadm upgrade` keeps it.
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+skipPhases:
+  - addon/kube-proxy
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: v{{ k8s_control_plane_kubernetes_version }}
+controlPlaneEndpoint: "{{ k8s_control_plane_endpoint }}:6443"
+networking:
+  podSubnet: {{ k8s_control_plane_pod_cidr }}
+  serviceSubnet: {{ k8s_control_plane_service_cidr }}
+apiServer:
+  extraArgs:
+    - {{ k8s_cp_enc_arg | to_json }}
+  extraVolumes:
+    - {{ k8s_cp_enc_volume | to_json }}

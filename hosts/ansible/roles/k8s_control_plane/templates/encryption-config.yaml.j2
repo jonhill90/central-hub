@@ -1,0 +1,13 @@
+# Written by central-hub hosts/ansible role k8s_control_plane. Holds the key: mode 0600, root only.
+# Secrets are written with secretbox; identity reads Secrets written before encryption was on.
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+  - resources:
+      - secrets
+    providers:
+      - secretbox:
+          keys:
+            - name: {{ k8s_control_plane_encryption_key_name }}
+              secret: {{ k8s_cp_enc_key }}
+      - identity: {}

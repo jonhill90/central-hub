@@ -18,3 +18,12 @@ k8s_control_plane_gateway_api: true
 # on 2026-10-27, so a changed file stops the run.
 k8s_control_plane_gateway_api_version: v1.6.3
 k8s_control_plane_gateway_api_crds_sha256: 356c2b8e286a964dc20995435659ad1095386329974793af10bbfe3eff977fe5
+# Runbook step 8a. Secrets encrypted at rest in etcd with secretbox, before the first real secret
+# (the Cloudflare token of BUILD-PATH S12; research batch RB-0012 "Now" step 4, RB-0089 G28-G29).
+# Private, no default, set in the inventory:
+# k8s_control_plane_encryption_key_file: <path>  # on the controller, mode 0600: 32 random bytes,
+#                                                # base64 (one line); a copy in the password manager
+k8s_control_plane_encryption_dir: /etc/kubernetes/enc
+k8s_control_plane_encryption_key_name: key1
+# A Secret written and read back straight from etcd after the API server restarts, then deleted.
+k8s_control_plane_encryption_canary: central-hub-encryption-canary

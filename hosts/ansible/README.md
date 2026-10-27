@@ -32,6 +32,23 @@ Run each playbook with `--check --diff` first: against the running lab it should
 
 Checked so far: `ansible-playbook --syntax-check` passes for every playbook, and `ansible-lint` passes the production profile. Its only warnings say that the API connection arguments are missing, because they are set once in the playbook, not in each task. It has never run against the lab. `proxmox-safety.yml` was also run end to end against stand-in commands on a test machine (check mode, both firewall runs, a second run with no changes, the disk guard), not against Proxmox.
 
+## Secrets at rest on c1
+
+`playbooks/k8s.yml` (role `k8s_control_plane`, tag `encryption`, runbook step 8a) makes the API server store Secrets in etcd encrypted with secretbox, with plain storage (`identity`) kept only to read Secrets written before. The key is 32 random bytes, base64, in a 0600 file on the controller; the filled-in inventory names the file in `k8s_control_plane_encryption_key_file`. Make it once and keep a copy in the password manager, because a restored etcd backup can't be read without it:
+
+```sh
+mkdir -p ~/.config/central-hub && (umask 077; head -c 32 /dev/urandom | base64 > ~/.config/central-hub/c1-secrets-encryption.key)
+```
+
+The run stops if the file is missing, empty, not mode 0600 or 0400, or not 44 base64 characters. On the node the key sits in `/etc/kubernetes/enc/encryption-config.yaml` (mode 0600), written with `no_log`. The role adds the flag and its folder to kubeadm's own `ClusterConfiguration` (ConfigMap `kube-system/kubeadm-config`), so `kubeadm upgrade` keeps them, and writes the API server manifest from it with `kubeadm init phase control-plane apiserver`; a new cluster gets both from `kubeadm init`'s config file. Then it writes every Secret again and reads every one straight from etcd: each value must start with `k8s:enc:secretbox:v1:`. It never changes the key: if the node holds a different one, it stops (rotation is a separate job).
+
+On the running c1, run only this part (`--limit` skips the workers play, whose join command comes from a task this tag skips):
+
+```sh
+ansible-playbook -i inventories/home/ playbooks/k8s.yml --tags encryption --limit k8s_control_plane --check --diff
+ansible-playbook -i inventories/home/ playbooks/k8s.yml --tags encryption --limit k8s_control_plane
+```
+
 ## Host safety net
 
 `playbooks/proxmox-safety.yml` is its own playbook, apart from `proxmox-host.yml`: Ansible checks a role's inputs with any `--tags`, so the safety net's required values would otherwise block a network-only run. It needs two more private values in the filled-in inventory, under the Proxmox host:

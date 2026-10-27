@@ -1,7 +1,7 @@
 ---
 argument_specs:
   main:
-    short_description: kubeadm init, Cilium and its Gateway API controller on the first control-plane node (runbook steps 7-10)
+    short_description: kubeadm init with Secrets encrypted at rest, Cilium and its Gateway API controller on the first control-plane node (runbook steps 7-10)
     options:
       k8s_control_plane_endpoint: {type: str, required: true, description: "The API name, api.c1.prod.<zone>. Private zone."}
       k8s_control_plane_kubernetes_version: {type: str, default: "1.36.5", description: Kubernetes version for kubeadm init.}
@@ -20,3 +20,19 @@ argument_specs:
         type: str
         default: 356c2b8e286a964dc20995435659ad1095386329974793af10bbfe3eff977fe5
         description: SHA-256 of that release's standard-install.yaml.
+      k8s_control_plane_encryption_key_file:
+        type: str
+        required: true
+        description: "Path on the controller to a 0600 file holding the secretbox key: 32 random bytes, base64. Private; never in the repository."
+      k8s_control_plane_encryption_dir:
+        type: str
+        default: /etc/kubernetes/enc
+        description: Folder on the node for the encryption config; mounted read-only into the API server.
+      k8s_control_plane_encryption_key_name:
+        type: str
+        default: key1
+        description: "Name of the secretbox key; etcd values start with k8s:enc:secretbox:v1:<name>:."
+      k8s_control_plane_encryption_canary:
+        type: str
+        default: central-hub-encryption-canary
+        description: "Throwaway Secret in kube-system, written and read back from etcd after the API server restarts, then deleted."

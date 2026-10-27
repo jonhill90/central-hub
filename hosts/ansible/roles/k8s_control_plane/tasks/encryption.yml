@@ -1,0 +1,152 @@
+---
+# Step 8a, part 2: point the running API server at the encryption config, the kubeadm way, so
+# `kubeadm upgrade` keeps it (kubernetes.io, "Reconfiguring a kubeadm cluster"): the flag and the
+# folder go into the ClusterConfiguration in ConfigMap kube-system/kubeadm-config, and
+# `kubeadm init phase control-plane apiserver` writes the static pod manifest from it. A cluster
+# made from kubeadm-init.yaml.j2 already has both, and this changes nothing.
+- name: step8a | kubeadm's stored ClusterConfiguration
+  ansible.builtin.command: >-
+    kubectl -n kube-system get configmap kubeadm-config -o jsonpath={.data.ClusterConfiguration}
+  register: k8s_cp_kubeadm_cc
+  changed_when: false
+  check_mode: false
+
+- name: step8a | Folder for the files the role writes
+  ansible.builtin.file: {path: /root/central-hub, state: directory, mode: "0700"}
+
+- name: step8a | ClusterConfiguration with the encryption flag and folder
+  ansible.builtin.copy:
+    dest: /root/central-hub/kubeadm-cluster-configuration.yaml
+    mode: "0600"
+    content: "{{ k8s_cp_cc_want | to_nice_yaml(indent=2) }}"
+
+- name: step8a | Patch for ConfigMap kubeadm-config
+  ansible.builtin.copy:
+    dest: /root/central-hub/kubeadm-config-patch.json
+    mode: "0600"
+    content: "{{ {'data': {'ClusterConfiguration': k8s_cp_cc_want | to_nice_yaml(indent=2)}} | to_json }}"
+
+# The ConfigMap is a YAML string that nothing validates (the reconfigure page), so the new text is
+# the stored one, parsed, with two list entries added, and written back whole.
+- name: step8a | Add them to ConfigMap kubeadm-config
+  ansible.builtin.command: >-
+    kubectl -n kube-system patch configmap kubeadm-config --type merge
+    --patch-file /root/central-hub/kubeadm-config-patch.json
+  when: not k8s_cp_cc_has_enc
+  changed_when: true
+
+- name: step8a | API server manifest now
+  ansible.builtin.slurp:
+    src: /etc/kubernetes/manifests/kube-apiserver.yaml
+  register: k8s_cp_apiserver_manifest
+
+- name: step8a | Does the API server manifest have the flag and the folder?
+  ansible.builtin.set_fact:
+    k8s_cp_apiserver_has_enc: >-
+      {{ ('--' ~ k8s_cp_enc_arg.name ~ '=' ~ k8s_cp_enc_arg.value) in __pod.spec.containers[0].command
+         and k8s_control_plane_encryption_dir in (__pod.spec.volumes | selectattr('hostPath', 'defined')
+         | map(attribute='hostPath.path') | list) }}
+  vars:
+    __pod: "{{ k8s_cp_apiserver_manifest.content | b64decode | from_yaml }}"
+
+# The reconfigure page says to back up /etc/kubernetes first. The copy goes outside the manifests
+# folder: the kubelet runs every file in it.
+- name: step8a | Copy of the API server manifest before the change
+  ansible.builtin.copy:
+    src: /etc/kubernetes/manifests/kube-apiserver.yaml
+    dest: /root/central-hub/kube-apiserver.yaml.before-encryption
+    remote_src: true
+    force: false
+    mode: "0600"
+  when: not k8s_cp_apiserver_has_enc
+
+# The kubelet sees the new manifest and restarts the API server; the API is away for a minute.
+- name: step8a | Write the API server manifest from the ClusterConfiguration
+  ansible.builtin.command: >-
+    kubeadm init phase control-plane apiserver --config /root/central-hub/kubeadm-cluster-configuration.yaml
+  when: not k8s_cp_apiserver_has_enc
+  register: k8s_cp_apiserver_phase
+  changed_when: true
+
+# The API server reads the encryption config only when it starts. If the file changed while the
+# manifest already had the flag, stop the container; the kubelet starts it again.
+- name: step8a | Restart the API server for a changed encryption config
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps --name '^kube-apiserver$' -q
+    | xargs -r crictl --runtime-endpoint unix:///run/containerd/containerd.sock stop
+  when: k8s_cp_enc_config is changed and k8s_cp_apiserver_has_enc
+  register: k8s_cp_apiserver_restart
+  changed_when: true
+
+# Proof that the running API server encrypts: write a throwaway Secret and read it straight from
+# etcd. While the old API server still answers, the value is plain, so it tries again.
+- name: step8a | A new Secret is stored encrypted (canary, read from etcd)
+  ansible.builtin.shell: |
+    set -o pipefail
+    kubectl -n kube-system delete secret {{ k8s_control_plane_encryption_canary }} --ignore-not-found >/dev/null
+    kubectl -n kube-system create secret generic {{ k8s_control_plane_encryption_canary }} --from-literal=canary=not-secret >/dev/null
+    {{ k8s_cp_etcdctl }} /registry/secrets/kube-system/{{ k8s_control_plane_encryption_canary }}
+  register: k8s_cp_enc_canary
+  until: >-
+    k8s_cp_enc_canary.rc == 0
+    and (k8s_cp_enc_canary.stdout | from_json).kvs | default([]) | length == 1
+    and (k8s_cp_enc_canary.stdout | from_json).kvs[0].value.startswith(k8s_cp_enc_prefix_b64)
+  retries: 30
+  delay: 10
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - k8s_cp_apiserver_phase is changed or k8s_cp_apiserver_restart is changed
+
+- name: step8a | Remove the canary
+  ansible.builtin.command: >-
+    kubectl -n kube-system delete secret {{ k8s_control_plane_encryption_canary }} --ignore-not-found
+  register: k8s_cp_enc_canary_rm
+  changed_when: "'deleted' in k8s_cp_enc_canary_rm.stdout"
+  when: not ansible_check_mode
+
+# Every Secret, straight from etcd. no_log: a Secret written before encryption is plain there.
+- name: step8a | Secrets in etcd now
+  ansible.builtin.shell: "{{ k8s_cp_etcdctl }} /registry/secrets/ --prefix"  # noqa: command-instead-of-shell (k8s_cp_etcdctl uses $(...))
+  register: k8s_cp_etcd_secrets
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+- name: step8a | Secrets that etcd still holds in plain text
+  ansible.builtin.set_fact:
+    k8s_cp_plain_secrets: >-
+      {{ (k8s_cp_etcd_secrets.stdout | from_json).kvs | default([])
+         | rejectattr('value', 'match', k8s_cp_enc_prefix_b64 | regex_escape)
+         | map(attribute='key') | map('b64decode') | list }}
+
+# Secrets written before step 8a stay plain until they are written again (the encrypt-data page).
+- name: step8a | Write every Secret again, so it is stored encrypted
+  ansible.builtin.shell: >-
+    set -o pipefail; kubectl get secrets --all-namespaces -o json | kubectl replace -f -
+  register: k8s_cp_enc_rewrite
+  until: k8s_cp_enc_rewrite.rc == 0
+  retries: 3
+  delay: 5
+  when: k8s_cp_plain_secrets | length > 0
+  changed_when: true
+
+- name: step8a | Every Secret in etcd is encrypted with secretbox
+  ansible.builtin.shell: "{{ k8s_cp_etcdctl }} /registry/secrets/ --prefix"  # noqa: command-instead-of-shell (k8s_cp_etcdctl uses $(...))
+  register: k8s_cp_etcd_secrets_after
+  changed_when: false
+  failed_when: >-
+    k8s_cp_etcd_secrets_after.rc != 0
+    or (k8s_cp_etcd_secrets_after.stdout | from_json).kvs | default([]) | length == 0
+    or (k8s_cp_etcd_secrets_after.stdout | from_json).kvs
+       | rejectattr('value', 'match', k8s_cp_enc_prefix_b64 | regex_escape) | list | length > 0
+  no_log: true
+  when: not ansible_check_mode
+
+- name: step8a | Proof
+  ansible.builtin.debug:
+    msg: >-
+      {{ (k8s_cp_etcd_secrets_after.stdout | from_json).kvs | length }} Secrets in etcd, every
+      value starts with k8s:enc:secretbox:v1:{{ k8s_control_plane_encryption_key_name }}:
+  when: not ansible_check_mode

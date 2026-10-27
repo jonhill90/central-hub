@@ -1,0 +1,83 @@
+---
+# Step 8a, part 1: the encryption key file on the node, before `kubeadm init` needs it (a new
+# build) or before the live API server is pointed at it. The key comes from a 0600 file on the
+# controller, like the Terraform token (AGENT-PICKS 19); it is never in the repository.
+- name: step8a | Key file on the controller
+  ansible.builtin.stat:
+    path: "{{ k8s_control_plane_encryption_key_file }}"
+  delegate_to: localhost
+  become: false
+  register: k8s_cp_enc_key_stat
+  check_mode: false
+
+- name: step8a | Key file is there, not empty, and readable only by its owner
+  ansible.builtin.assert:
+    that:
+      - k8s_cp_enc_key_stat.stat.exists
+      - k8s_cp_enc_key_stat.stat.isreg
+      - k8s_cp_enc_key_stat.stat.size > 0
+      - k8s_cp_enc_key_stat.stat.mode in ['0600', '0400']
+    fail_msg: >-
+      k8s_control_plane_encryption_key_file ({{ k8s_control_plane_encryption_key_file }}) is
+      missing, empty or not mode 0600 on the controller. Make it once with
+      (umask 077; head -c 32 /dev/urandom | base64 > <path>) and keep a copy in the password
+      manager: without it, a restored etcd backup can't be read.
+    quiet: true
+
+- name: step8a | Read the key
+  ansible.builtin.set_fact:
+    k8s_cp_enc_key: "{{ lookup('ansible.builtin.file', k8s_control_plane_encryption_key_file | expanduser) | trim }}"
+  no_log: true
+
+# secretbox takes a 32-byte key, written base64 (kubernetes.io, Encrypting Confidential Data at Rest).
+- name: step8a | Key is 32 bytes, base64
+  ansible.builtin.assert:
+    that:
+      - k8s_cp_enc_key is match('^[A-Za-z0-9+/]{43}=$')
+    fail_msg: >-
+      The key file must hold one line: 32 random bytes in base64 (44 characters ending in =),
+      as (umask 077; head -c 32 /dev/urandom | base64 > <path>) writes it.
+    quiet: true
+  no_log: true
+
+- name: step8a | Folder for the encryption config
+  ansible.builtin.file:
+    path: "{{ k8s_control_plane_encryption_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# A different key in the file on the node would make every Secret written with the old key
+# unreadable. Changing the key is a rotation (add the new key first, rewrite, then remove the old
+# one), which this role doesn't do; it stops instead.
+- name: step8a | Encryption config on the node now
+  ansible.builtin.slurp:
+    src: "{{ k8s_cp_enc_file }}"
+  register: k8s_cp_enc_now
+  failed_when: false
+  no_log: true
+
+- name: step8a | Stop if the node already has a different key
+  ansible.builtin.fail:
+    msg: >-
+      {{ k8s_cp_enc_file }} holds a different key from k8s_control_plane_encryption_key_file.
+      Changing the key is a rotation, which this role doesn't do (kubernetes.io, Encrypting
+      Confidential Data at Rest, "Rotate a decryption key"). Use the key that is on the node.
+  when:
+    - k8s_cp_enc_now.content is defined
+    - >-
+      k8s_cp_enc_key not in ((k8s_cp_enc_now.content | b64decode | from_yaml).resources
+      | map(attribute='providers') | flatten | selectattr('secretbox', 'defined')
+      | map(attribute='secretbox.keys') | flatten | map(attribute='secret') | list)
+
+- name: step8a | Encryption config
+  ansible.builtin.template:
+    src: encryption-config.yaml.j2
+    dest: "{{ k8s_cp_enc_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  register: k8s_cp_enc_config
+  no_log: true
+  diff: false

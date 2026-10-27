@@ -64,6 +64,9 @@ all:
         ansible_ssh_common_args: ""        # for example -o ProxyJump=root@<Proxmox host address>
         k8s_control_plane_endpoint: ""     # api.c1.prod.<zone>
         k8s_gateway_zone: ""               # <zone>; the Gateway takes *.apps.c1.prod.<zone>
+        # Runbook step 8a: the secretbox key for Secrets at rest, a 0600 file on the controller,
+        # for example ~/.config/central-hub/c1-secrets-encryption.key (hosts/ansible/README.md).
+        k8s_control_plane_encryption_key_file: ""
         # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
         # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
         # k8s_control_plane_kubernetes_version.

@@ -6,7 +6,7 @@ trigger: on request; also after each rebuild of the practice machine
 runner: the owner
 outcome: a one-node Kubernetes 1.36.5 cluster (later 1.37.1) with Cilium, reachable only over the private network, and every CKA topic practised on it
 needs: a fresh AlmaLinux 10 machine with root access; a Tailscale tailnet; a way to resolve the endpoint name on the tailnet (step 7)
-private-values: [tailscale-auth-key, endpoint-name, node-name, backup-age-public-key, gateway-address]
+private-values: [tailscale-auth-key, endpoint-name, node-name, backup-age-public-key, gateway-address, secrets-encryption-key]
 files: []
 last-tested:
 superseded-by:
@@ -268,7 +268,67 @@ mkdir -p /root/.kube && cp /etc/kubernetes/admin.conf /root/.kube/config
 - note: the node is not Ready yet, and CoreDNS waits. Both need a network (next step).
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/>
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA3.
-- place (home lab, proven 2026-10-26): `kubeadm init` also takes `--skip-phases addon/kube-proxy`, because Cilium replaces kube-proxy there (see step 9).
+- place (home lab, proven 2026-10-26): `kubeadm init` also takes `--skip-phases addon/kube-proxy`, because Cilium replaces kube-proxy there (see step 9). Since step 8a (not yet run) the role gives `kubeadm init` the same settings as a config file, `skipPhases: [addon/kube-proxy]` included, plus the encryption flag; a cluster made before that gets the flag through step 8a.
+
+#### 8a. Secrets encrypted at rest
+
+By default the API server stores a Secret in etcd as plain text: anyone with an etcd backup or the etcd files can read it. This step turns on encryption for Secrets before the first real secret goes in (the Cloudflare token for certificates, BUILD-PATH S12).
+
+```bash
+# 1. a key: 32 random bytes, base64. Keep a copy outside the cluster (the password manager):
+#    without it, an etcd backup can't be read back
+mkdir -m 0700 -p /etc/kubernetes/enc
+key=$(head -c 32 /dev/urandom | base64)
+cat > /etc/kubernetes/enc/encryption-config.yaml <<YAML
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+  - resources: [secrets]
+    providers:
+      - secretbox:
+          keys:
+            - name: key1
+              secret: $key
+      - identity: {}
+YAML
+chmod 0600 /etc/kubernetes/enc/encryption-config.yaml; unset key
+# 2. tell kubeadm, so `kubeadm upgrade` keeps it: under apiServer, add
+#      extraArgs:
+#      - name: encryption-provider-config
+#        value: /etc/kubernetes/enc/encryption-config.yaml
+#      extraVolumes:
+#      - name: encryption-config
+#        hostPath: /etc/kubernetes/enc
+#        mountPath: /etc/kubernetes/enc
+#        readOnly: true
+#        pathType: DirectoryOrCreate
+kubectl -n kube-system edit configmap kubeadm-config
+# 3. write the API server's manifest from it; the kubelet restarts the API server
+kubectl -n kube-system get configmap kubeadm-config -o jsonpath='{.data.ClusterConfiguration}' > /root/cluster-config.yaml
+cp /etc/kubernetes/manifests/kube-apiserver.yaml /root/kube-apiserver.yaml.before-encryption
+kubeadm init phase control-plane apiserver --config /root/cluster-config.yaml
+until kubectl get --raw /readyz >/dev/null 2>&1; do sleep 5; done
+# 4. Secrets written before now stay plain until they are written again
+kubectl get secrets --all-namespaces -o json | kubectl replace -f -
+# 5. proof: a test Secret, read straight from etcd
+kubectl create secret generic enc-test --from-literal=k=v
+kubectl -n kube-system exec etcd-<node name> -- etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
+  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key get /registry/secrets/default/enc-test | hexdump -C | head -3
+kubectl get secret enc-test -o jsonpath='{.data.k}' | base64 -d; echo
+kubectl delete secret enc-test
+```
+
+- ※ The API server is one of the static pods from [step 8](#8-init): the kubelet restarts it when its file in `/etc/kubernetes/manifests/` changes. The copy goes outside that folder, because the kubelet runs every file in it ([step 15](#15-drill-b-a-broken-static-pod-manifest-ts2)).
+- The providers are tried in order: the first one writes, and every one can read. `identity` (no encryption) comes last, so Secrets written before this step can still be read until step 4 writes them again.
+- secretbox, not aescbc: the kubernetes.io page rates secretbox "Strong" and aescbc "Weak" ("Not recommended due to CBC's vulnerability to padding oracle attacks"). A KMS plugin would keep the key off the node, but needs a key service the lab doesn't have (research batch RB-0012, "Now" step 4). With every local provider, the key sits on the control-plane host.
+- why: etcd holds every Secret, and its files and its backups ([step 11](#11-backup-and-restore)) go wherever they are copied. Encrypted, they are useless without the key, which lives only in `/etc/kubernetes/enc/` on the node and in the password manager (source: <https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/>).
+- expect: the hexdump shows `/registry/secrets/default/enc-test` and then `k8s:enc:secretbox:v1:key1:` (the page's example shows the same shape for aescbc, `k8s:enc:aescbc:v1:key1`), followed by unreadable bytes; `kubectl get secret` still prints `v`; `grep encryption-provider /etc/kubernetes/manifests/kube-apiserver.yaml` shows the flag, and `kubectl -n kube-system get configmap kubeadm-config -o yaml | grep -A1 encryption-provider` shows it in kubeadm's copy.
+- catch: the key changes only by rotation: add the new key first in the list, restart, write every Secret again, then remove the old key. Replacing the key in place makes every Secret unreadable.
+- catch: a restored etcd backup needs the same key in the same file, or the API server can't read any Secret.
+- page: <https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/> ; kubeadm: <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-reconfigure/>
+- status: **NOT PROVEN** (written 2026-10-27; not yet run). CKA: CA4 (partly).
+- place (home lab): `hosts/ansible`, role `k8s_control_plane`, tag `encryption` (`playbooks/k8s.yml --tags encryption --limit k8s_control_plane`). The key comes from a 0600 file on the controller, `k8s_control_plane_encryption_key_file` in the git-ignored inventory. A new build gets the flag at `kubeadm init`, from a config file (`templates/kubeadm-init.yaml.j2`) that replaces step 8's flags. On the running c1 the role adds the flag and the folder to the `kubeadm-config` ConfigMap, runs `kubeadm init phase control-plane apiserver`, waits until a throwaway Secret reads back encrypted from etcd, writes every Secret again, and then checks every Secret in etcd. It stops, rather than rotating, if the node already has a different key.
 
 #### 9. Cilium 1.20.4
 
@@ -383,6 +443,7 @@ Off-site backup is not chosen yet: where the encrypted copies go (Azure Blob sto
 - Restore onto a rebuilt VPS (proven, PROOF-RUN-2.md): after steps 0-6, copy only the CA files (`ca.*`, `sa.*`, `front-proxy-ca.*`, `etcd/ca.*`) to `/etc/kubernetes/pki`; `etcdutl snapshot restore` with the new node name and `https://<advertise IP>:2380`; then the step 8 `kubeadm init` plus `--ignore-preflight-errors=DirAvailable--var-lib-etcd`; then `kubectl delete node <old node>`. Cilium returns from etcd; skip step 9 except installing Helm.
 - **Not yet proven:** upload to Azure Blob with a short immutability lock. Deferred by the owner on 2026-10-17 until the repo layout and an Azure config-as-code tool are chosen; until then, recovery is a rebuild from configuration.
 - note: after step 17 the cluster runs etcd 3.7.0. The etcdutl 3.6.8 tool above was not tested against a 3.7.0 snapshot.
+- note: after [step 8a](#8a-secrets-encrypted-at-rest), Secrets in a snapshot are encrypted. A restore needs the same key in `/etc/kubernetes/enc/encryption-config.yaml`; keep the key with the bundle's private key, not inside the bundle.
 - why: etcd is the cluster's memory: it stores all the API server's data (source: <https://kubernetes.io/docs/concepts/overview/components/>). With one control plane, losing that node can lose the cluster's data; the create-cluster page's answer is "Regularly back up etcd".
 - expect: `etcdutl snapshot status <db> -w table` shows a hash, a revision and a size; the bundle decrypts with the private key on another machine; after a restore, the test data is back and `kubectl get nodes` shows `Ready`.
 - status: local backup and restore **PROVEN** (PROOF-RUN-1.md); restore onto a rebuilt VPS **PROVEN** (PROOF-RUN-2.md); Azure upload **NOT PROVEN** (deferred). CKA: CA4.
