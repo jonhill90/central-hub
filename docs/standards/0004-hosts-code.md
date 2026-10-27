@@ -1,12 +1,20 @@
 ---
 id: STD-0004
 title: Code under hosts/
-status: proposed
+status: active
 scope: how Terraform run folders and Ansible roles, playbooks and inventories under `hosts/` are written; where they sit is D-0011
 owner-system: 8 Platform
 why: the owner said yes on 2026-10-26 at 04:34 UTC to the proposed step of one standard for how `hosts/` code is laid out and written, written after the first real `tofu apply` and Ansible run, and on 2026-10-26 at 01:55 UTC to writing it as a standard with a skill that points at it; each rule below names its own origin
 follows: [Ansible role argument validation (meta/argument_specs.yml), Red Hat Communities of Practice "Ansible Good Practices" (roles README), HashiCorp Terraform style guide, OpenTofu backend configuration]
 check: none yet; a reviewing agent checks each PR that changes `hosts/` against the rules by hand. A check script is planned (the owner's yes of 2026-10-26 at 04:34 UTC)
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-27T02:55:47Z
+  approved-commit: 0622e3b6cb3db944c2d7b27933a95df09064196b
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop
+  approval-names: "PR #47 and head 0622e3b, in the message itself"
+  check: the Gaming PC thread read the message in the records thread on 2026-10-27; it names PR jonhill90/central-hub#47 and head 0622e3b itself. An independent check by a reviewing agent is still to do.
+  merged: PR #47 merged at 2026-10-27T02:56:35Z as b52d931
 ---
 
 # STD-0004: Code under hosts/

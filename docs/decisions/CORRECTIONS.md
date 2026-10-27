@@ -14,7 +14,7 @@ This PR's approval facts and merge commit are added after it merges (D-0006 step
 
 ### Accepted with PR #47
 
-This PR's approval facts and merge commit are added after it merges (D-0006 step 6).
+PR #47: approved 2026-10-27T02:55:47Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop), head 0622e3b; merged as b52d931.
 
 - 2026-10-27 · STD-0001 "Proxmox VM IDs" and `why` · a Proxmox guest's ID is chosen by job: 100-199 network and appliances, 200-299 Kubernetes nodes, 9000 and up templates; the remote-access container keeps ID 900 until it is rebuilt · the owner's yes of 2026-10-26 at 07:29 UTC to the proposed ranges; writing them in STD-0001 is an agent pick
 
@@ -137,5 +137,6 @@ A folded decision number has no file and no row in the index until the next new 
 - 2026-10-26 · D-0011 Consequences · "none of these folders exists yet" replaced by the current state: `hosts/terraform/` and `hosts/ansible/` exist, `hosts/terraform/modules/` does not · PR #44: approved 2026-10-27T00:07:43Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNUTitXeZeY3yfPfFn3ia17p), head 0bee55a, re-signed with the same tree as f190fb0 on the owner's go of 2026-10-27T00:12:51Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN47cYg7DjBjdfnn1xkU88Qe); merged as 3195033
 - 2026-10-27 · this file · PR #44's approval facts and merge commit added to its lines · PR #45: approved 2026-10-27T01:10:02Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN1S6WFZV7KmpszgC6k6KfyA), head b526bc1; merged as c14b4d6
 - 2026-10-27 · this file · PR #45's approval facts and merge commit added to its lines · PR #46: approved 2026-10-27T01:50:09Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNQhkcYHohg7BrN3Nb1DKQYG), head db12921; merged as cea140f
-- 2026-10-27 · this file · PR #46's approval facts and merge commit added to its lines · PR #47
-- 2026-10-27 · D-0002 "Scope" · a pointer to D-0011 rules 7 and 8, which set the `hosts/` folders that the scope line's "folders or per-environment variable files" covers; the decision is unchanged · PR #47
+- 2026-10-27 · this file · PR #46's approval facts and merge commit added to its lines · PR #47: approved 2026-10-27T02:55:47Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop), head 0622e3b; merged as b52d931
+- 2026-10-27 · D-0002 "Scope" · a pointer to D-0011 rules 7 and 8, which set the `hosts/` folders that the scope line's "folders or per-environment variable files" covers; the decision is unchanged · PR #47: approved 2026-10-27T02:55:47Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop), head 0622e3b; merged as b52d931
+- 2026-10-27 · this file · PR #47's approval facts and merge commit added to its lines · PR #49

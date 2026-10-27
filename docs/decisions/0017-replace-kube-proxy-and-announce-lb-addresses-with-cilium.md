@@ -1,7 +1,7 @@
 ---
 id: D-0017
 title: On home-lab clusters, let Cilium replace kube-proxy and announce load-balancer addresses on the node VLAN with L2 announcements
-status: proposed
+status: accepted
 date: 2026-10-27
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0001]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-27T02:55:47Z
+  approved-commit: 0622e3b6cb3db944c2d7b27933a95df09064196b
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop
+  approval-names: "PR #47 and head 0622e3b, in the message itself"
+  check: the Gaming PC thread read the message in the records thread on 2026-10-27; it names PR jonhill90/central-hub#47 and head 0622e3b itself. An independent check by a reviewing agent is still to do.
+  merged: PR #47 merged at 2026-10-27T02:56:35Z as b52d931
 revisit-when: Cilium L2 announcements leave beta or are dropped; a cluster needs the Local external traffic policy, SCTP, or traffic spread over several nodes for one address; the lab gets BGP on its router; or the CNI is replaced
 ---
 

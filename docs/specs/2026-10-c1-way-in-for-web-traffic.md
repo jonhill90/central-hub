@@ -1,9 +1,16 @@
 ---
 title: Let web traffic into c1's apps, with certificates browsers trust
-status: proposed
+status: accepted
 date: 2026-10-27
 system: 8
 accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-27T02:55:47Z
+  approved-commit: 0622e3b6cb3db944c2d7b27933a95df09064196b
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop
+  approval-names: "PR #47 and head 0622e3b, in the message itself"
+  check: the Gaming PC thread read the message in the records thread on 2026-10-27; it names PR jonhill90/central-hub#47 and head 0622e3b itself. An independent check by a reviewing agent is still to do.
+  merged: PR #47 merged at 2026-10-27T02:56:35Z as b52d931
 done-evidence:
 supersedes: []
 superseded-by:
@@ -66,3 +73,6 @@ Parts, in order:
 - 2026-10-26: Cilium's Gateway API is the way in for web traffic (owner's yes, 22:47 UTC; D-0021).
 - 2026-10-26: Certificates from Let's Encrypt through cert-manager (owner's yes, 23:05 UTC).
 - 2026-10-26: Agent choices for the owner's review: one shared Gateway `apps` in namespace `gateway`, its pinned address, the wildcard DNS override, Gateway API CRDs v1.6.3 on the standard channel, tcp 80 open in the nodes' firewall zone (`hosts/AGENT-PICKS.md` rows 48 to 56).
+- 2026-10-27: One Let's Encrypt wildcard certificate for `*.apps.c1.prod.<zone>`, with a private certificate authority later as its own step (owner's pick of option C, 02:20 UTC).
+- 2026-10-27: The DNS-01 token is an account-owned Cloudflare token that OpenTofu makes in `hosts/terraform/home/certificates/`, limited to DNS edits on the one zone and replaced every 76 days; OpenTofu reads a bootstrap token from the environment, never from the repository (the owner's 02:49 UTC ask that this live in code; `hosts/AGENT-PICKS.md` rows 72 to 80).
+- 2026-10-27: Agent choices for the owner's review: cert-manager v1.21.3 under STD-0003's security exception, the HTTPS listener and its Secret, the smoke test (`hosts/AGENT-PICKS.md` rows 63 to 71); the Argo CD web UI on its own name through the Gateway, with plain HTTP redirected (rows 81 to 88).
