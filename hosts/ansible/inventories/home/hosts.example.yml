@@ -72,7 +72,7 @@ all:
         # BUILD-PATH S12 (playbooks/k8s-certs.yml, hosts/ansible/README.md "Certificates on c1").
         k8s_certs_zone: "{{ k8s_gateway_zone }}"
         k8s_certs_acme_email: ""             # the ACME account's contact address
-        k8s_certs_cloudflare_token_file: ""  # 0600 file on the controller with the zone's API token
+        k8s_certs_cloudflare_token_file: ""  # 0600 file with the zone's API token, written by terraform/home/certificates
         k8s_certs_issue: false               # true talks to Let's Encrypt; staging first
         k8s_certs_issuer: letsencrypt-staging
         k8s_gateway_https: false             # true once the certificate is issued (HTTPS on 443)

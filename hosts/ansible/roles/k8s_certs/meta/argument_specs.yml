@@ -10,7 +10,8 @@ argument_specs:
         type: str
         description: >-
           Path on the controller to a 0600 file holding the Cloudflare API token (this zone only,
-          Zone DNS Edit and Zone Zone Read). Private; needed when k8s_certs_issue is true.
+          Zone DNS Edit and Zone Zone Read), written by hosts/terraform/home/certificates.
+          Private; needed when k8s_certs_issue is true.
       k8s_certs_gateway_address: {type: str, description: "The Gateway's address (k8s_gateway_address), for the smoke test. Private."}
       # Defaults in defaults/main.yml
       k8s_certs_issue:

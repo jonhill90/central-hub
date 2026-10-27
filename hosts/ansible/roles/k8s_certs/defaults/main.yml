@@ -10,7 +10,8 @@
 # Needed only when k8s_certs_issue is true:
 # k8s_certs_acme_email: <address>         # the ACME account's contact address
 # k8s_certs_cloudflare_token_file: <path> # on the controller, mode 0600: the Cloudflare API token,
-#                                         # this one zone only, Zone DNS Edit + Zone Zone Read
+#                                         # this one zone only, Zone DNS Edit + Zone Zone Read,
+#                                         # written by hosts/terraform/home/certificates (tofu apply)
 # k8s_certs_gateway_address: <address>    # the Gateway's address (k8s_gateway_address); smoke only
 
 # The switch. While false, nothing talks to Let's Encrypt: no ClusterIssuer (making one registers

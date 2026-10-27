@@ -60,7 +60,7 @@ Values in the filled-in inventory (the template has them):
 |---|---|
 | `k8s_certs_zone` | The public zone at Cloudflare; the template sets it to `k8s_gateway_zone`. |
 | `k8s_certs_acme_email` | The ACME account's contact address. |
-| `k8s_certs_cloudflare_token_file` | A 0600 file on the controller holding a Cloudflare API token for this zone only, with Zone / DNS / Edit and Zone / Zone / Read (cert-manager's Cloudflare page). Make the token in the Cloudflare dashboard (My Profile > API Tokens > Create Token > Custom token); it is shown once. The run stops if the file is missing, empty or not 0600. |
+| `k8s_certs_cloudflare_token_file` | A 0600 file on the controller holding a Cloudflare API token for this zone only, with Zone / DNS / Edit and Zone / Zone / Read (cert-manager's Cloudflare page). `tofu apply` in [../terraform/home/certificates/](../terraform/home/certificates/) makes the token and writes this file, so run it first and give it the same path ([../terraform/README.md](../terraform/README.md#homecertificates-the-cert-manager-token)). The run stops if the file is missing, empty or not 0600. |
 | `k8s_certs_issue` | `false` until you want Let's Encrypt to be asked. With `false` nothing talks to Let's Encrypt, and a run removes the token, the issuers and the Certificate (the issued Secret stays). |
 | `k8s_certs_issuer` | `letsencrypt-staging` first, then `letsencrypt-prod`. |
 | `k8s_gateway_https` | `true` once the certificate is issued: the Gateway gets its HTTPS listener and the nodes open tcp 443. |

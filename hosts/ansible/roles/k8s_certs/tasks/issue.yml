@@ -25,7 +25,7 @@
         quiet: true
 
     # The token file on the controller, like the Terraform token (AGENT-PICKS 19): never in the
-    # repository, never written to a file on the node.
+    # repository, never written to a file on the node. hosts/terraform/home/certificates writes it.
     - name: issue | Token file on the controller
       ansible.builtin.stat:
         path: "{{ k8s_certs_cloudflare_token_file }}"
@@ -43,9 +43,10 @@
           - k8s_certs_token_stat.stat.mode in ['0600', '0400']
         fail_msg: >-
           k8s_certs_cloudflare_token_file ({{ k8s_certs_cloudflare_token_file }}) is missing,
-          empty or not mode 0600 on the controller. Make a Cloudflare API token for this zone
-          only, with Zone / DNS / Edit and Zone / Zone / Read, and save it there with
-          (umask 077; pbpaste > <path>) or an editor, then chmod 600 <path>.
+          empty or not mode 0600 on the controller. Run tofu apply in
+          hosts/terraform/home/certificates first, with token_file set to this same path: it
+          makes the Cloudflare API token (this zone only, Zone / DNS / Edit and Zone / Zone /
+          Read) and writes it there with mode 0600.
         quiet: true
 
     - name: issue | Read the token

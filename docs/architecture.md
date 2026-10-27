@@ -30,6 +30,7 @@ Created with the first real files in `hosts/` (D-0012 rule 2). Status: home lab,
 | Firewall VM | OpenTofu (VM), Ansible oxlorg.opnsense (config) | `hosts/terraform/home/firewall/`, `hosts/ansible/roles/` | another router appliance; addresses stay per STD-0002 |
 | Remote-access container | OpenTofu | `hosts/terraform/home/remote-access/` | any subnet router |
 | c1 node VMs | OpenTofu | `hosts/terraform/home/k8s/` | bare-metal nodes later |
+| Cloudflare token for cert-manager's DNS-01 challenge | OpenTofu, cloudflare/cloudflare, from one hand-made bootstrap token | `hosts/terraform/home/certificates/` | another DNS host's credential; the issuer's solver changes, not the certificate |
 | c1 cluster | kubeadm, by runbook | `docs/runbooks/build-kubeadm-cluster.md` | another distribution; upstream Kubernetes APIs stay |
 
 ## What reads what
