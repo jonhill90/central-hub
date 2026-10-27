@@ -1,0 +1,84 @@
+---
+- name: Private inputs are set
+  ansible.builtin.assert:
+    that: [k8s_observability_zone | length > 0]
+    fail_msg: Set k8s_observability_zone in the filled-in inventory (the template sets it to k8s_gateway_zone).
+    quiet: true
+  tags: [always]
+
+- name: metrics-server, so kubectl top works
+  ansible.builtin.include_role:
+    name: k8s_helm_release
+    apply: {tags: [metrics_server]}
+  vars:
+    k8s_helm_release_name: metrics-server
+    k8s_helm_release_namespace: kube-system
+    k8s_helm_release_repo_name: metrics-server
+    k8s_helm_release_repo_url: https://kubernetes-sigs.github.io/metrics-server/
+    k8s_helm_release_chart: metrics-server
+    k8s_helm_release_version: "{{ k8s_observability_metrics_server_version }}"
+    k8s_helm_release_values: "{{ k8s_observability_metrics_server_values }}"
+  tags: [metrics_server]
+
+# The chart installs its CRDs on the first install only; Helm never upgrades them (chart README).
+# Raising k8s_observability_kps_version past a Prometheus Operator minor needs the new CRDs applied
+# first (hosts/ansible/README.md "Metrics and logs on c1").
+- name: Metrics (Prometheus Operator, Prometheus, Grafana)
+  ansible.builtin.include_role:
+    name: k8s_helm_release
+    apply: {tags: [metrics]}
+  vars:
+    k8s_helm_release_name: kube-prometheus-stack
+    k8s_helm_release_namespace: "{{ k8s_observability_metrics_namespace }}"
+    k8s_helm_release_repo_name: prometheus-community
+    k8s_helm_release_repo_url: https://prometheus-community.github.io/helm-charts
+    k8s_helm_release_chart: kube-prometheus-stack
+    k8s_helm_release_version: "{{ k8s_observability_kps_version }}"
+    k8s_helm_release_values: "{{ k8s_observability_kps_values }}"
+  tags: [metrics]
+
+- name: Logs store (Loki, monolithic)
+  ansible.builtin.include_role:
+    name: k8s_helm_release
+    apply: {tags: [logs]}
+  vars:
+    k8s_helm_release_name: loki
+    k8s_helm_release_namespace: "{{ k8s_observability_logs_namespace }}"
+    k8s_helm_release_repo_name: grafana-community
+    k8s_helm_release_repo_url: https://grafana-community.github.io/helm-charts
+    k8s_helm_release_chart: loki
+    k8s_helm_release_version: "{{ k8s_observability_loki_version }}"
+    k8s_helm_release_values: "{{ k8s_observability_loki_values }}"
+  tags: [logs]
+
+- name: Log collector (Alloy)
+  ansible.builtin.include_role:
+    name: k8s_helm_release
+    apply: {tags: [logs]}
+  vars:
+    k8s_helm_release_name: alloy
+    k8s_helm_release_namespace: "{{ k8s_observability_logs_namespace }}"
+    k8s_helm_release_repo_name: grafana
+    k8s_helm_release_repo_url: https://grafana.github.io/helm-charts
+    k8s_helm_release_chart: alloy
+    k8s_helm_release_version: "{{ k8s_observability_alloy_version }}"
+    k8s_helm_release_values: "{{ k8s_observability_alloy_values }}"
+  tags: [logs]
+
+- name: Grafana through the shared Gateway
+  ansible.builtin.include_role:
+    name: k8s_app_route
+    apply: {tags: [route]}
+  vars:
+    k8s_app_route_name: "{{ k8s_observability_grafana_name }}"
+    k8s_app_route_namespace: "{{ k8s_observability_metrics_namespace }}"
+    k8s_app_route_service: kube-prometheus-stack-grafana
+    k8s_app_route_port: 80
+    k8s_app_route_path: /login
+    k8s_app_route_expect: <title>Grafana</title>
+    k8s_app_route_zone: "{{ k8s_observability_zone }}"
+  tags: [route]
+
+- name: Proof
+  ansible.builtin.import_tasks: proof.yml
+  tags: [proof]

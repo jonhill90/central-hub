@@ -1,0 +1,73 @@
+# {{ ansible_managed }}
+# Realm {{ k8s_identity_realm }}, as code. KeycloakRealmImport only creates a realm that doesn't exist;
+# it never updates or deletes one (Keycloak operator docs, "Automating a realm import"). So this is
+# the realm's first state; a change to it after the import is made in Keycloak, or by deleting the
+# realm and importing again (greenfield). The ${...} placeholders come from Secret
+# {{ k8s_identity_realm_secret }}, so no secret value is in this file.
+apiVersion: k8s.keycloak.org/v2beta1
+kind: KeycloakRealmImport
+metadata:
+  name: realm-{{ k8s_identity_realm }}
+  namespace: {{ k8s_identity_namespace }}
+spec:
+  keycloakCRName: {{ k8s_identity_name }}
+  placeholders:
+    GRAFANA_CLIENT_SECRET:
+      secret: {name: {{ k8s_identity_realm_secret }}, key: GRAFANA_CLIENT_SECRET}
+    OWNER_INITIAL_PASSWORD:
+      secret: {name: {{ k8s_identity_realm_secret }}, key: OWNER_INITIAL_PASSWORD}
+  realm:
+    realm: {{ k8s_identity_realm }}
+    displayName: Lab sign-in
+    enabled: true
+    sslRequired: external
+    registrationAllowed: false
+    resetPasswordAllowed: false
+    bruteForceProtected: true
+    roles:
+      realm:
+        - {name: admin, description: "Admin in lab apps (Grafana Admin)"}
+        - {name: viewer, description: "Read-only in lab apps"}
+    users:
+      - username: {{ k8s_identity_owner_username }}
+{% if k8s_identity_owner_email | length > 0 %}
+        email: {{ k8s_identity_owner_email }}
+        emailVerified: true
+{% endif %}
+        enabled: true
+        realmRoles: [admin]
+        credentials:
+          - {type: password, value: "${OWNER_INITIAL_PASSWORD}", temporary: true}
+        requiredActions: [UPDATE_PASSWORD]
+    clients:
+      # Grafana (k8s_observability): a confidential client with the authorization code flow and
+      # PKCE (Grafana docs, "Configure Keycloak OAuth2 authentication"). The realm roles go into a
+      # `roles` claim in the ID token and userinfo, which Grafana's role_attribute_path reads.
+      - clientId: grafana
+        name: Grafana
+        protocol: openid-connect
+        publicClient: false
+        clientAuthenticatorType: client-secret
+        secret: "${GRAFANA_CLIENT_SECRET}"
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
+        rootUrl: https://{{ k8s_identity_grafana_host }}
+        baseUrl: /
+        redirectUris: ["https://{{ k8s_identity_grafana_host }}/login/generic_oauth"]
+        webOrigins: ["https://{{ k8s_identity_grafana_host }}"]
+        attributes:
+          pkce.code.challenge.method: S256
+          post.logout.redirect.uris: "https://{{ k8s_identity_grafana_host }}/login"
+        protocolMappers:
+          - name: realm roles
+            protocol: openid-connect
+            protocolMapper: oidc-usermodel-realm-role-mapper
+            config:
+              claim.name: roles
+              multivalued: "true"
+              jsonType.label: String
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"

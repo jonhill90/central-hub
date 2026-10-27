@@ -1,0 +1,19 @@
+---
+argument_specs:
+  main:
+    short_description: One app's HTTPS route on the shared Gateway, with a 301 from HTTP and a proof by name (BUILD-PATH S15)
+    options:
+      k8s_app_route_name: {type: str, required: true, description: "First label of the hostname and the route's name."}
+      k8s_app_route_namespace: {type: str, required: true, description: The app's namespace; the route lives there.}
+      k8s_app_route_service: {type: str, required: true, description: The app's Service.}
+      k8s_app_route_port: {type: int, required: true, description: The Service port that speaks plain HTTP.}
+      k8s_app_route_expect: {type: str, required: true, description: "Text the page at the route's path must contain (the proof)."}
+      k8s_app_route_path: {type: str, default: /, description: Path the proof fetches.}
+      k8s_app_route_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}
+      k8s_app_route_cluster: {type: str, default: c1, description: Cluster name in the hostname.}
+      k8s_app_route_env: {type: str, default: prod, description: Environment name in the hostname.}
+      k8s_app_route_gateway_name: {type: str, default: apps, description: "The shared Gateway (k8s_gateway_name), also a label of the hostname."}
+      k8s_app_route_gateway_namespace: {type: str, default: gateway, description: "The Gateway's namespace (k8s_gateway_namespace)."}
+      k8s_app_route_tls_secret: {type: str, default: apps-tls, description: "The HTTPS listener's certificate Secret; only its name and issuer annotation are read."}
+      k8s_app_route_https_redirect: {type: bool, default: true, description: "Answer plain HTTP for the name with 301 to https://."}
+      k8s_app_route_proof_client: {type: str, description: "Inventory host that proves the route by name, through the lab's DNS. Default: the first host of group k8s_workers."}

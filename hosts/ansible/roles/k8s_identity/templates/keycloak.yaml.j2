@@ -1,0 +1,31 @@
+# {{ ansible_managed }}
+# Keycloak behind the shared Gateway: TLS ends at the Gateway, Keycloak serves plain HTTP inside
+# the cluster and trusts the X-Forwarded-* headers the Gateway's Envoy sets (Keycloak operator docs,
+# "Basic Keycloak deployment": httpEnabled and proxy.headers for edge TLS). The operator makes no
+# Ingress; the HTTPRoute comes from k8s_app_route. The operator's first admin account sits in
+# Secret {{ k8s_identity_name }}-initial-admin (break-glass, master realm); nothing here reads it.
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: {{ k8s_identity_name }}
+  namespace: {{ k8s_identity_namespace }}
+spec:
+  instances: 1
+  db:
+    vendor: postgres
+    host: {{ k8s_identity_name }}-postgres
+    port: 5432
+    database: keycloak
+    usernameSecret: {name: {{ k8s_identity_db_secret }}, key: username}
+    passwordSecret: {name: {{ k8s_identity_db_secret }}, key: password}
+  http:
+    httpEnabled: true
+  hostname:
+    hostname: https://{{ k8s_identity_host }}
+  proxy:
+    headers: xforwarded
+  ingress:
+    enabled: false
+  resources:
+    requests: {cpu: 200m, memory: 768Mi}
+    limits: {memory: 1536Mi}

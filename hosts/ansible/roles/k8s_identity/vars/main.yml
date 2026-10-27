@@ -1,0 +1,19 @@
+---
+# The upstream operator files for k8s_identity_version, each checked against its sha256 (measured
+# on the files at tag 26.8.1 of keycloak/keycloak-k8s-resources, 2026-10-27). Research: Library
+# research/c1-observability/ (RB-0091) rows L21-L22.
+k8s_identity_operator_base: https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/{{ k8s_identity_version }}/kubernetes
+k8s_identity_operator_files:
+  - {name: keycloaks.k8s.keycloak.org-v1.yml, sha256: 20c51247cb6cbc6158098caabeaf6b429dc8c016e35829f5ddd9c468b7582667}
+  - {name: keycloakrealmimports.k8s.keycloak.org-v1.yml, sha256: 8d552e1864d78117a07e535479ddb36e16a42b2695726c875f44828e1323edd4}
+  - {name: keycloakoidcclients.k8s.keycloak.org-v1.yml, sha256: 15d9199822d1918438bd1d093eee3ec8406e7f9d0837c4527fd6da99c63b058a}
+  - {name: keycloaksamlclients.k8s.keycloak.org-v1.yml, sha256: 7c69d146f610f3c40acf4466518e89615b6fce7ee2a03d75cd93b7a9a7bf259e}
+  - {name: kubernetes.yml, sha256: 2b95907f094e7a274647ba2db22bcc2f9397e33836768990dc4e4b39437e2cba}
+
+# Derived values, not inputs.
+k8s_identity_dir: /root/central-hub/identity
+k8s_identity_host: "{{ k8s_identity_name }}.apps.c1.prod.{{ k8s_identity_zone }}"
+k8s_identity_grafana_host: "{{ k8s_identity_grafana_name }}.apps.c1.prod.{{ k8s_identity_zone }}"
+k8s_identity_issuer: https://{{ k8s_identity_host }}/realms/{{ k8s_identity_realm }}
+k8s_identity_db_secret: "{{ k8s_identity_name }}-db"
+k8s_identity_realm_secret: realm-{{ k8s_identity_realm }}-secrets

@@ -1,0 +1,14 @@
+---
+argument_specs:
+  main:
+    short_description: One pinned Helm release, upgraded only when its chart version or values differ (BUILD-PATH S15)
+    options:
+      k8s_helm_release_name: {type: str, required: true, description: Release name.}
+      k8s_helm_release_namespace: {type: str, required: true, description: "Namespace; made if missing."}
+      k8s_helm_release_repo_name: {type: str, required: true, description: Local name of the chart repository.}
+      k8s_helm_release_repo_url: {type: str, required: true, description: Chart repository URL.}
+      k8s_helm_release_chart: {type: str, required: true, description: Chart name in that repository.}
+      k8s_helm_release_version: {type: str, required: true, description: "Chart version (STD-0003)."}
+      k8s_helm_release_values: {type: dict, required: true, description: "The release's values, as a dict the calling role builds."}
+      k8s_helm_release_timeout: {type: str, default: 10m, description: How long helm waits for the release to be ready.}
+      k8s_helm_release_dir: {type: str, default: /root/central-hub/helm, description: Folder on the node for the values files.}

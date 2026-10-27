@@ -1,0 +1,21 @@
+---
+- name: keycloak | Keycloak
+  ansible.builtin.import_tasks: apply.yml
+  vars: {__manifest: keycloak.yaml}
+
+- name: keycloak | Keycloak ready
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_identity_namespace }} wait keycloak/{{ k8s_identity_name }} --for=condition=Ready --timeout=600s
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: keycloak | Realm {{ k8s_identity_realm }}
+  ansible.builtin.import_tasks: apply.yml
+  vars: {__manifest: realm.yaml}
+
+- name: keycloak | Realm imported
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_identity_namespace }} wait keycloakrealmimport/realm-{{ k8s_identity_realm }}
+    --for=condition=Done --timeout=600s
+  changed_when: false
+  when: not ansible_check_mode

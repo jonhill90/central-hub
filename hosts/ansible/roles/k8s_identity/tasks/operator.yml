@@ -1,0 +1,48 @@
+---
+- name: operator | Folder for the operator files
+  ansible.builtin.file: {path: "{{ k8s_identity_dir }}/operator", state: directory, mode: "0700"}
+  check_mode: false
+
+# The pinned upstream files, each checked against the sha256 in vars/main.yml.
+- name: operator | Upstream files, checked against their pinned sha256
+  ansible.builtin.get_url:
+    url: "{{ k8s_identity_operator_base }}/{{ item.name }}"
+    dest: "{{ k8s_identity_dir }}/operator/{{ item.name }}"
+    checksum: "sha256:{{ item.sha256 }}"
+    mode: "0600"
+  loop: "{{ k8s_identity_operator_files }}"
+  loop_control: {label: "{{ item.name }}"}
+
+- name: operator | Kustomization over the upstream files
+  ansible.builtin.template:
+    src: kustomization.yaml.j2
+    dest: "{{ k8s_identity_dir }}/operator/kustomization.yaml"
+    mode: "0600"
+
+- name: operator | Namespace
+  ansible.builtin.import_tasks: apply.yml
+  vars: {__manifest: namespace.yaml}
+
+# Server-side, because the Keycloak CRDs are too big for the client-side annotation (as Argo CD's).
+- name: operator | Kustomization on the node?
+  ansible.builtin.stat: {path: "{{ k8s_identity_dir }}/operator/kustomization.yaml"}
+  register: k8s_identity_kustomization
+
+- name: operator | Operator differs from the cluster?
+  ansible.builtin.command: kubectl diff --server-side -k {{ k8s_identity_dir }}/operator
+  register: k8s_identity_operator_diff
+  changed_when: false
+  failed_when: k8s_identity_operator_diff.rc > 1 and 'namespaces' not in k8s_identity_operator_diff.stderr
+  check_mode: false
+  when: k8s_identity_kustomization.stat.exists
+
+- name: operator | Apply the operator
+  ansible.builtin.command: kubectl apply --server-side --force-conflicts -k {{ k8s_identity_dir }}/operator
+  when: (k8s_identity_operator_diff.rc | default(1)) != 0
+  changed_when: true
+
+- name: operator | Operator ready
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_identity_namespace }} rollout status deployment/keycloak-operator --timeout=300s
+  changed_when: false
+  when: not ansible_check_mode

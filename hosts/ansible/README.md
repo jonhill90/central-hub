@@ -12,6 +12,8 @@ Ansible code that configures the Proxmox host's network and safety net (host fir
 | `playbooks/k8s-certs.yml` | `k8s_certs` | Tag `certmanager`: cert-manager v1.21.3 by Helm, from the chart file checked against its SHA-256, with its CRDs, Gateway API support, and public resolvers for the DNS-01 check. Tag `issue`, only with `k8s_certs_issue: true`: the Cloudflare token as a Secret, ClusterIssuers `letsencrypt-staging` and `letsencrypt-prod` (DNS-01 at Cloudflare for the zone), and Certificate `apps` for `*.apps.c1.prod.<zone>` in namespace `gateway` from `k8s_certs_issuer`; with it false, those are removed. Tag `smoke`: an echo app on the HTTPS listener, called from the Proxmox host, then deleted. See [Certificates on c1](#certificates-on-c1). |
 | `playbooks/k8s-gitops.yml` | `k8s_gitops` | Tag `install`: the GitOps engine on c1 (BUILD-PATH S13) from its pinned upstream manifest, checked against a sha256 in `vars/main.yml`, with no git credential. `k8s_gitops_engine` (flux, argocd or argocd-core) has no default: it is the owner's choice (BL-0021). For Flux the image automation controllers are dropped (Activation gate item 6). Tag `source`: points the engine at `kubernetes/clusters/c1/` in this repository over anonymous HTTPS; it runs only with `k8s_gitops_source_enabled: true`, which waits for the Activation gate. Tag `ui`, with `k8s_gitops_ui_route: true`: the Argo CD web UI at `https://argocd.apps.c1.prod.<zone>/` through the shared Gateway, then a proof from a node. See [Argo CD web UI on c1](#argo-cd-web-ui-on-c1). |
 | `playbooks/k8s-secrets.yml` | `k8s_secrets` | Tag `eso`: External Secrets Operator by Helm (BUILD-PATH S14), chart 2.14.0, the first that lists Kubernetes 1.37; the role stops before 2026-11-06, when that chart is two weeks old (STD-0003). Tag `store`: namespace `secret-source`, seeded by hand from the password manager, and one ClusterSecretStore `c1` on ESO's Kubernetes provider that reads only that namespace. No secret values come from this repository. |
+| `playbooks/k8s-observability.yml` | `k8s_observability` | Metrics and logs on c1 (BUILD-PATH S15), all agent picks (`../AGENT-PICKS.md`). Tag `metrics_server`: metrics-server so `kubectl top` works. Tag `metrics`: kube-prometheus-stack in namespace `monitoring` (Prometheus Operator, Prometheus, Grafana, kube-state-metrics, node-exporter). Tag `logs`: Loki in monolithic mode and one Alloy pod in namespace `logging`. Tag `route`: Grafana at `https://grafana.apps.c1.prod.<zone>/` through the shared Gateway, with a proof from a node. Tag `proof`: `kubectl top`, Prometheus's up and down targets, and Loki log lines from `kube-system`. Each Helm release goes through role `k8s_helm_release`, and the route through role `k8s_app_route`. See [Metrics and logs on c1](#metrics-and-logs-on-c1). |
+| `playbooks/k8s-identity.yml` | `k8s_identity` | Sign-in for lab apps on c1 (BUILD-PATH S15), an agent pick. Tag `operator`: the Keycloak operator from its pinned upstream files, checked against a sha256 each, in namespace `identity`. Tag `secrets`: random values made on the node straight into Secrets. Tag `database`: PostgreSQL on a static local volume on the first worker. Tag `keycloak`: Keycloak and realm `lab` with the owner's account and Grafana's client. Tag `route`: `https://sso.apps.c1.prod.<zone>/` through the shared Gateway, proved by the realm's OIDC discovery document. See [Sign-in on c1](#sign-in-on-c1). |
 | `playbooks/proxmox-safety.yml` | `proxmox_notify` | Tag `notify`: a notification matcher `central-hub-errors` that sends every notification of severity error (failed backup jobs, HA fencing, other system errors) to one target. Until an endpoint is picked, the target is `central-hub-off`, a sendmail target that is switched off, so nothing new is sent. Proxmox's own default matcher and `mail-to-root` are left alone. |
 | `playbooks/proxmox-safety.yml` | `proxmox_backup` | Tag `backup`: the empty HDD becomes directory storage `hdd-backup` (content backup only), through Proxmox's own Disks > Directory API: one GPT partition, ext4, a systemd mount unit at `/mnt/pve/hdd-backup` by UUID. It runs only while the disk has no partition, filesystem or signature. Then backup job `nightly-guests` in `/etc/pve/jobs.cfg`: VMs 100, 200, 201 and CT 900, daily at 03:00, snapshot mode, zstd, keep-last 3 and keep-daily 7, repeat missed. |
 | `playbooks/proxmox-safety.yml` | `proxmox_firewall` | Tag `firewall`: Proxmox's own firewall at datacenter and host level only. Inbound DROP; SSH 22 and the GUI/API 8006 only from IPSet `management` (the home LAN range and VNet mgmt); ICMP and ICMPv6 from anywhere; outbound ACCEPT. Guest firewalls stay off. Two runs: the switch off first, then on, with a dead-man timer (see [Host firewall](#host-firewall)). |
@@ -85,6 +87,40 @@ Set the switches in the inventory rather than with `-e`: a later run without the
 | `k8s_gitops_ui_gateway_https` | The template sets it to `k8s_gateway_https`. |
 
 The `argocd` CLI over this name needs `--grpc-web`: there is no GRPCRoute.
+
+## Metrics and logs on c1
+
+`playbooks/k8s-observability.yml` (role `k8s_observability`, BUILD-PATH S15) adds metrics and logs to c1. Every part is an agent pick, listed in [../AGENT-PICKS.md](../AGENT-PICKS.md); the research is batch RB-0091. Versions are the newest release at least two weeks old on 2026-10-27 (STD-0003), in the role's defaults.
+
+- **Metrics.** kube-prometheus-stack 92.3.1. Prometheus reads every ServiceMonitor, PodMonitor and rule in the cluster. Off on purpose: Alertmanager (no notification target is picked yet), and the kube-proxy, etcd, controller manager and scheduler scrapes (c1 has no kube-proxy, and kubeadm binds the other three to 127.0.0.1).
+- **Logs.** Loki 3.7.8 in monolithic mode, from the grafana-community chart (Grafana's own install page uses it). One Alloy pod reads every pod's logs through the Kubernetes API (`loki.source.kubernetes`), so it needs no host paths and no DaemonSet.
+- **No StorageClass yet.** Prometheus and Loki keep their data in `emptyDir`, with a size limit and a short retention (3 days and 72 hours). Their data survives a container restart, not a pod being moved or deleted. Storage is BUILD-PATH S17.
+- **metrics-server** runs with `--kubelet-insecure-tls`, because kubeadm's kubelets serve self-signed certificates. The metrics-server README allows this "for testing purposes only"; the fix is kubelet serving certificates signed by the cluster CA.
+- **Grafana** answers at `https://grafana.apps.c1.prod.<zone>/` through the shared Gateway (role `k8s_app_route`, the same shape as the Argo CD UI route). Its own admin account is in Secret `monitoring/kube-prometheus-stack-grafana`, made by the chart; agents don't read it.
+- **Raising the kube-prometheus-stack version.** Helm installs the chart's CRDs once and never upgrades them (chart README). Before raising the version past a new Prometheus Operator minor, apply the new CRDs first.
+
+| Variable | What it is |
+|---|---|
+| `k8s_observability_zone` | The zone; the template sets it to `k8s_gateway_zone`. |
+| `k8s_observability_grafana_sso` | `true` after [Sign-in on c1](#sign-in-on-c1): Grafana gets a "Lab sign-in" button that signs in through realm `lab`. Users with the `admin` realm role become Grafana Admins, everyone else Viewer. |
+
+## Sign-in on c1
+
+`playbooks/k8s-identity.yml` (role `k8s_identity`, BUILD-PATH S15) runs Keycloak 26.8.1 for lab apps. Keycloak is an agent pick from batch RB-0087, made while the owner's choice between Keycloak and authentik is open. Apps see only OIDC, so a swap changes this role and Grafana's three endpoint URLs, nothing in the apps.
+
+- **Operator.** The upstream files at tag 26.8.1 of `keycloak-k8s-resources`, each checked against a sha256 in `vars/main.yml`, put in namespace `identity` with the same namespace transformer as upstream's own kustomization.
+- **Database.** PostgreSQL 18.6, one pod, on a static local volume: the folder `/var/lib/central-hub/identity-postgres` on the first worker, bound by name with no StorageClass, reclaim policy `Retain`. Exit path: `pg_dump`, then restore onto the storage S17 picks.
+- **Keycloak.** TLS ends at the Gateway; Keycloak serves plain HTTP inside the cluster with `proxy.headers: xforwarded`, and its hostname is `https://sso.apps.c1.prod.<zone>`. The operator's first admin account (master realm) is in Secret `identity/sso-initial-admin`; it is the break-glass account, and agents don't read it.
+- **Realm `lab`.** Made once by a KeycloakRealmImport, which only creates a realm that doesn't exist. It holds the owner's account (role `admin`) and Grafana's client. A later change to the realm is made in Keycloak, or by deleting the realm and importing it again.
+- **Secrets.** The role makes three random values on the node, straight into Secrets: the database password (`identity/sso-db`), Grafana's client secret (`identity/realm-lab-secrets`, copied to `monitoring/grafana-sso`) and the owner's first password (`identity/realm-lab-secrets`, key `OWNER_INITIAL_PASSWORD`). No value passes through Ansible's output or this repository. Anyone with cluster-admin on c1 can read them, agents included; the owner's first password is temporary, and Keycloak asks for a new one at the first sign-in.
+
+First sign-in: read the first password with `kubectl -n identity get secret realm-lab-secrets -o jsonpath='{.data.OWNER_INITIAL_PASSWORD}' | base64 -d`, open Grafana, choose "Lab sign-in", and set a new password when Keycloak asks.
+
+| Variable | What it is |
+|---|---|
+| `k8s_identity_zone` | The zone; the template sets it to `k8s_gateway_zone`. |
+| `k8s_identity_owner_username` | The owner's user name in realm `lab`. Private, no default. |
+| `k8s_identity_owner_email` | Optional. Without it, Grafana uses `<user name>@lab.invalid`. |
 
 ## Host safety net
 

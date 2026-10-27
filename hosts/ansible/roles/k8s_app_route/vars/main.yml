@@ -1,0 +1,5 @@
+---
+# Derived values, not inputs.
+k8s_app_route_host: >-
+  {{ k8s_app_route_name }}.{{ k8s_app_route_gateway_name }}.{{ k8s_app_route_cluster }}.{{ k8s_app_route_env }}.{{ k8s_app_route_zone }}
+k8s_app_route_manifest: /root/central-hub/routes/{{ k8s_app_route_name }}.yaml

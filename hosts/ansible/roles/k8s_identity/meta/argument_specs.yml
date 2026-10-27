@@ -1,0 +1,18 @@
+---
+argument_specs:
+  main:
+    short_description: Keycloak through its operator, with PostgreSQL, realm lab and Grafana's client, served through the shared Gateway (BUILD-PATH S15, BL-0019)
+    options:
+      k8s_identity_version: {type: str, default: 26.8.1, description: "Keycloak and operator version (STD-0003); vars/main.yml pins the files for it."}
+      k8s_identity_namespace: {type: str, default: identity, description: Namespace for the operator, Keycloak and its database.}
+      k8s_identity_name: {type: str, default: sso, description: "The Keycloak object's name and the first label of its hostname."}
+      k8s_identity_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}
+      k8s_identity_realm: {type: str, default: lab, description: The realm lab apps sign in to.}
+      k8s_identity_owner_username: {type: str, required: true, description: "The owner's user name in the realm. Private."}
+      k8s_identity_owner_email: {type: str, default: "", description: "The owner's email in the realm. Private, optional."}
+      k8s_identity_grafana_name: {type: str, default: grafana, description: "First label of Grafana's hostname (k8s_observability_grafana_name)."}
+      k8s_identity_grafana_namespace: {type: str, default: monitoring, description: "Grafana's namespace (k8s_observability_metrics_namespace)."}
+      k8s_identity_postgres_image: {type: str, default: docker.io/library/postgres:18.6, description: "PostgreSQL image (STD-0003)."}
+      k8s_identity_db_host: {type: str, description: "Inventory host whose disk holds the database folder. Default: the first host of group k8s_workers."}
+      k8s_identity_db_path: {type: str, default: /var/lib/central-hub/identity-postgres, description: Folder on that host for the database.}
+      k8s_identity_db_size: {type: str, default: 2Gi, description: Size of the static volume.}

@@ -1,0 +1,16 @@
+---
+# Metrics and logs on cluster c1 (BUILD-PATH S15, BL-0020): metrics-server, kube-prometheus-stack
+# (Prometheus Operator, Prometheus, Grafana), Loki in monolithic mode and one Alloy pod. Grafana is
+# served at https://grafana.apps.c1.prod.<zone>/ through the shared Gateway, so it needs
+# k8s-gateway.yml with k8s_gateway_https: true and the wildcard certificate (k8s-certs.yml) first.
+# Every part is an agent pick (hosts/AGENT-PICKS.md); research in RB-0091.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics_server,metrics,logs
+#   ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags route,proof
+# Sign-in through the lab identity provider, after k8s-identity.yml (inventory:
+# k8s_observability_grafana_sso: true):
+#   ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics,proof
+- name: Metrics and logs
+  hosts: k8s_control_plane[0]
+  become: true
+  roles:
+    - role: k8s_observability
