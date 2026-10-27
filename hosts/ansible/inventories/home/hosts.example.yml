@@ -12,6 +12,11 @@ all:
           proxmox_vmbr1_mac: ""   # fixed MAC for vmbr1
           proxmox_host_mgmt_address: ""   # host address in VNet mgmt, without /24
           proxmox_network_lab_supernet: 10.1.0.0/16   # STD-0002 home prefix; routed via the mgmt gateway
+          # playbooks/proxmox-safety.yml (README "Host safety net")
+          proxmox_firewall_home_lan_cidr: ""   # the home router's LAN range, a.b.c.d/nn
+          proxmox_backup_disk: ""   # the empty HDD, /dev/disk/by-id/<id> (whole disk)
+          proxmox_firewall_enable: false   # true only after the first run's ruleset was read
+          # proxmox_notify_endpoint: {type: <smtp|gotify|webhook|sendmail>, options: {...}}   # not picked yet
     opnsense:
       hosts:
         opnsense_fw:

@@ -1,0 +1,58 @@
+---
+# Probe the paths that must survive the firewall, and keep the result as
+# proxmox_firewall_probes[proxmox_firewall_phase]. A probe that fails here only records the
+# failure; verify.yml compares "after" with "before".
+
+- name: Probe | Remote-access container, tailnet client state, {{ proxmox_firewall_phase }}
+  ansible.builtin.command:
+    argv: [pct, exec, "{{ proxmox_firewall_remote_access_ct }}", --, tailscale, status, --json]
+  register: proxmox_firewall_probe_ts
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# CT 900's eth1 to OPNsense across VNet mgmt: guest-to-guest traffic over a bridge, which is what
+# pve-firewall's FORWARD chain sees once it is on.
+- name: Probe | Remote-access container reaches the firewall VM on VNet mgmt, {{ proxmox_firewall_phase }}
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ proxmox_firewall_remote_access_ct }}"
+      - --
+      - timeout
+      - "5"
+      - bash
+      - -c
+      - "exec 3<>/dev/tcp/{{ proxmox_firewall_ct_probe_host }}/{{ proxmox_firewall_ct_probe_port }}"
+  register: proxmox_firewall_probe_ct
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# The host to each check target (by default the c1 nodes on VNet prod), routed through OPNsense.
+- name: Probe | Host reaches each check target, {{ proxmox_firewall_phase }}
+  ansible.builtin.command:
+    argv: [timeout, "5", bash, -c, "exec 3<>/dev/tcp/{{ item }}/{{ proxmox_firewall_check_port }}"]
+  loop: "{{ proxmox_firewall_check_targets }}"
+  register: proxmox_firewall_probe_targets
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Probe | Keep the results, {{ proxmox_firewall_phase }}
+  ansible.builtin.set_fact:
+    proxmox_firewall_probes: >-
+      {{ proxmox_firewall_probes | default({}) | combine({
+           proxmox_firewall_phase: {
+             'tailscale': (proxmox_firewall_probe_ts.rc == 0
+                           and (proxmox_firewall_probe_ts.stdout | from_json).BackendState | default('') == 'Running'),
+             'ct_mgmt': proxmox_firewall_probe_ct.rc == 0,
+             'targets_down': proxmox_firewall_probe_targets.results | default([])
+                             | rejectattr('rc', 'equalto', 0) | map(attribute='item') | list
+           }
+         }) }}
+
+- name: Probe | Show the results, {{ proxmox_firewall_phase }}
+  ansible.builtin.debug:
+    var: proxmox_firewall_probes[proxmox_firewall_phase]

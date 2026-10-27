@@ -1,0 +1,18 @@
+---
+# The Proxmox host's safety net (BUILD-PATH S10): notifications, backups, then the host firewall.
+# Separate from proxmox-host.yml so its required inputs never block a network-only run (a role's
+# argument check runs with any --tags). Order and the two-run firewall rollout: README.md.
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-safety.yml --tags notify,backup --check --diff
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-safety.yml --tags firewall            # switch off: shows the ruleset
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-safety.yml --tags firewall -e proxmox_firewall_enable=true
+- name: Proxmox host safety net
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  roles:
+    - role: proxmox_notify
+      tags: [notify]
+    - role: proxmox_backup
+      tags: [backup]
+    - role: proxmox_firewall
+      tags: [firewall]

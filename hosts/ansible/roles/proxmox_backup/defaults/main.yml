@@ -1,0 +1,21 @@
+---
+# Not private. The private value, proxmox_backup_disk (the empty HDD's /dev/disk/by-id/ path, which
+# holds its serial number), has no default here on purpose: it comes through the inventory.
+
+# Proxmox storage on that disk. Proxmox's own "Disks > Directory" API makes the partition, the
+# ext4 filesystem, a systemd mount unit at /mnt/pve/<name> and the storage entry.
+proxmox_backup_storage: hdd-backup
+proxmox_backup_filesystem: ext4
+proxmox_backup_content: backup
+
+# The vzdump job, in /etc/pve/jobs.cfg through the API (agent picks; hosts/AGENT-PICKS.md).
+proxmox_backup_job_id: nightly-guests
+proxmox_backup_vmids: [100, 200, 201, 900]   # OPNsense, the c1 nodes, the remote-access container
+proxmox_backup_schedule: "03:00"
+proxmox_backup_mode: snapshot
+proxmox_backup_compress: zstd
+proxmox_backup_prune:
+  keep-last: 3
+  keep-daily: 7
+proxmox_backup_repeat_missed: true   # the PC is often off at night; run at the next boot instead
+proxmox_backup_comment: Nightly guest backups to the HDD (central-hub hosts/ansible proxmox_backup)

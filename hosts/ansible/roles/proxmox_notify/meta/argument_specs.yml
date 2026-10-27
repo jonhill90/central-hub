@@ -1,0 +1,30 @@
+---
+# Inputs of the proxmox_notify role. The check is tagged always, so it runs with any --tags.
+argument_specs:
+  main:
+    short_description: A Proxmox notification target and matcher for errors (failed backups, fencing, system errors)
+    options:
+      # Optional, private, through the inventory. Unset = the matcher points at a switched-off placeholder.
+      proxmox_notify_endpoint:
+        type: dict
+        required: false
+        description: Where alerts go. Not picked yet, so no default.
+        options:
+          type:
+            type: str
+            required: true
+            choices: [smtp, gotify, webhook, sendmail]
+            description: Proxmox endpoint type.
+          options:
+            type: dict
+            required: true
+            description: >-
+              The API's fields for that type, for example server and token for gotify. A list
+              value is sent as a repeated option. Webhook body, header and secret values are base64,
+              as the API expects.
+      # Defaults in defaults/main.yml
+      proxmox_notify_placeholder: {type: str, default: central-hub-off, description: Name of the switched-off sendmail placeholder target.}
+      proxmox_notify_target_prefix: {type: str, default: central-hub, description: The real target is named <prefix>-<type>.}
+      proxmox_notify_matcher: {type: str, default: central-hub-errors, description: Matcher name.}
+      proxmox_notify_severities: {type: list, elements: str, default: [error], description: Severities the matcher sends.}
+      proxmox_notify_secret_keys: {type: list, elements: str, default: [password, token, secret, header], description: Option names never logged or compared.}

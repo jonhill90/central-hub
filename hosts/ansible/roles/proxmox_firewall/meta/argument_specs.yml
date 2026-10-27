@@ -1,0 +1,78 @@
+---
+# Inputs of the proxmox_firewall role. Ansible checks these before the role runs (the check is
+# tagged always, so it runs with any --tags). required: true does not reject an empty string, so
+# tasks/main.yml still checks the private value is a range.
+argument_specs:
+  main:
+    short_description: Proxmox's own firewall on the host, datacenter and host level only, with a two-run rollout
+    options:
+      # Private, from the secret store through the inventory
+      proxmox_firewall_home_lan_cidr:
+        type: str
+        required: true
+        description: The home router's LAN range, the owner's path to the host and CT 900's eth0. Private.
+      # Defaults in defaults/main.yml
+      proxmox_firewall_enable:
+        type: bool
+        default: false
+        description: The datacenter and host switch. false writes the rules and shows them; true turns them on.
+      proxmox_firewall_mgmt_vnet:
+        type: str
+        default: mgmt
+        description: Name of the mgmt VLAN in lab_vlans.
+      proxmox_firewall_mgmt_cidr:
+        type: str
+        description: VNet mgmt's range. Default taken from lab_vlans (STD-0002).
+      proxmox_firewall_rules:
+        type: list
+        elements: dict
+        description: Host IN rules (action, proto, optional source and dport, comment).
+        options:
+          action: {type: str, required: true, choices: [ACCEPT, DROP, REJECT], description: Rule action.}
+          proto: {type: str, required: true, description: "Protocol, for example tcp, icmp or icmpv6."}
+          source: {type: str, description: "Source range, alias or +IPSet. Leave out for any."}
+          dport: {type: str, description: Destination port or range.}
+          comment: {type: str, required: true, description: Why the rule is there.}
+      proxmox_firewall_conntrack_allow_invalid:
+        type: bool
+        default: true
+        description: Skip pve-firewall's conntrack-INVALID drop for bridged guest traffic (host option nf_conntrack_allow_invalid).
+      proxmox_firewall_log_level_in:
+        type: str
+        default: nolog
+        description: Log level for dropped inbound host traffic.
+      proxmox_firewall_deadman_minutes:
+        type: int
+        default: 10
+        description: Minutes until the host turns the datacenter firewall off by itself, unless the run passes its checks.
+      proxmox_firewall_deadman_unit:
+        type: str
+        default: central-hub-fw-deadman
+        description: Name of the transient systemd timer.
+      proxmox_firewall_remote_access_ct:
+        type: int
+        default: 900
+        description: The remote-access container whose paths are probed before and after.
+      proxmox_firewall_ct_probe_host:
+        type: str
+        description: Address the container must still reach over VNet mgmt. Default the mgmt gateway (.1).
+      proxmox_firewall_ct_probe_port:
+        type: int
+        default: 443
+        description: TCP port for that probe.
+      proxmox_firewall_check_targets:
+        type: list
+        elements: str
+        description: Addresses the host must still reach. Default the ansible_host of every k8s_nodes host.
+      proxmox_firewall_check_port:
+        type: int
+        default: 22
+        description: TCP port for those probes.
+      proxmox_firewall_cluster_fw:
+        type: str
+        default: /etc/pve/firewall/cluster.fw
+        description: Datacenter firewall file.
+      proxmox_firewall_host_fw:
+        type: str
+        default: /etc/pve/local/host.fw
+        description: This node's host firewall file.

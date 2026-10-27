@@ -1,0 +1,26 @@
+---
+# Inputs of the proxmox_backup role. The check is tagged always, so it runs with any --tags.
+argument_specs:
+  main:
+    short_description: A backup storage on the empty HDD, and one nightly vzdump job for the lab guests
+    options:
+      # Private, through the inventory
+      proxmox_backup_disk:
+        type: str
+        required: true
+        description: >-
+          The empty HDD as /dev/disk/by-id/<id>, the whole disk, never a -partN path. The role
+          formats it only while it has no partition, no filesystem and no other signature.
+          The id holds the serial number, so it stays out of the repository.
+      # Defaults in defaults/main.yml
+      proxmox_backup_storage: {type: str, default: hdd-backup, description: Proxmox storage name; mounted at /mnt/pve/<name>.}
+      proxmox_backup_filesystem: {type: str, default: ext4, choices: [ext4, xfs], description: Filesystem the Disks API makes.}
+      proxmox_backup_content: {type: str, default: backup, description: Storage content types (comma list).}
+      proxmox_backup_job_id: {type: str, default: nightly-guests, description: Backup job ID in /etc/pve/jobs.cfg.}
+      proxmox_backup_vmids: {type: list, elements: int, default: [100, 200, 201, 900], description: Guests the job backs up.}
+      proxmox_backup_schedule: {type: str, default: "03:00", description: systemd-style calendar event.}
+      proxmox_backup_mode: {type: str, default: snapshot, choices: [snapshot, suspend, stop], description: vzdump mode.}
+      proxmox_backup_compress: {type: str, default: zstd, choices: ["0", gzip, lzo, zstd], description: vzdump compression.}
+      proxmox_backup_prune: {type: dict, default: {keep-last: 3, keep-daily: 7}, description: Retention for this job (prune-backups).}
+      proxmox_backup_repeat_missed: {type: bool, default: true, description: Run a missed job at the next boot.}
+      proxmox_backup_comment: {type: str, description: Job comment.}

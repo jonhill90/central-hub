@@ -1,0 +1,158 @@
+---
+# Proxmox's own firewall (pve-firewall) on the host: inbound DROP except SSH and the GUI/API from
+# the management IPSet, plus ICMP. Guest firewalls stay off, so guest traffic is not filtered.
+# Two runs: first with proxmox_firewall_enable false (rules written, firewall off, ruleset shown),
+# then with true (README "Host firewall"). --check --diff shows the file changes and nothing else.
+
+- name: Check the private and place inputs
+  ansible.builtin.assert:
+    that:
+      - proxmox_firewall_home_lan_cidr | length > 0
+      - proxmox_firewall_home_lan_cidr is match('^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$')
+      - proxmox_firewall_mgmt_cidr is match('^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$')
+    fail_msg: >-
+      proxmox_firewall_home_lan_cidr is a private value (a range such as <a.b.c.0/22>); fill it
+      from the secret store. proxmox_firewall_mgmt_cidr comes from lab_vlans.
+    quiet: true
+
+# Guest traffic must not change: no VM or CT may have its own firewall switched on.
+- name: Read guest firewall switches
+  ansible.builtin.shell: |
+    set -o pipefail
+    shopt -s nullglob
+    for f in /etc/pve/firewall/[0-9]*.fw; do
+      grep -Eq '^enable:[[:space:]]*1' "$f" && echo "$f"
+    done
+    true
+  args:
+    executable: /bin/bash
+  register: proxmox_firewall_guest_fw
+  changed_when: false
+  check_mode: false
+
+- name: Check that every guest firewall is off
+  ansible.builtin.assert:
+    that: proxmox_firewall_guest_fw.stdout | trim | length == 0
+    fail_msg: "A guest has its own firewall on, which this role does not manage: {{ proxmox_firewall_guest_fw.stdout_lines }}"
+    quiet: true
+
+# Will this run change the firewall files? Asked in check mode, so nothing is written yet.
+- name: Compare the firewall files with what this run writes
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: www-data
+    mode: "0640"
+  check_mode: true
+  diff: false
+  loop:
+    - { src: cluster.fw.j2, dest: "{{ proxmox_firewall_cluster_fw }}" }
+    - { src: host.fw.j2, dest: "{{ proxmox_firewall_host_fw }}" }
+  loop_control:
+    label: "{{ item.dest }}"
+  register: proxmox_firewall_pending
+
+- name: Decide whether to arm the dead-man timer
+  ansible.builtin.set_fact:
+    proxmox_firewall_arm: >-
+      {{ (proxmox_firewall_enable | bool) and not ansible_check_mode
+         and (proxmox_firewall_pending.results | selectattr('changed') | list | length > 0) }}
+
+- name: Record what is reachable before the change
+  ansible.builtin.include_tasks: probe.yml
+  vars:
+    proxmox_firewall_phase: before
+  when: proxmox_firewall_arm | bool
+
+- name: Arm the dead-man timer (turns the datacenter firewall off unless this run cancels it)
+  ansible.builtin.shell: |  # noqa: command-instead-of-module (systemd-run has no module)
+    systemctl stop {{ proxmox_firewall_deadman_unit }}.timer 2>/dev/null || true
+    systemctl reset-failed {{ proxmox_firewall_deadman_unit }}.service 2>/dev/null || true
+    systemd-run --unit={{ proxmox_firewall_deadman_unit }} \
+      --on-active={{ proxmox_firewall_deadman_minutes }}min --timer-property=AccuracySec=1s \
+      /usr/bin/pvesh set /cluster/firewall/options --enable 0
+  changed_when: true
+  when: proxmox_firewall_arm | bool
+
+# pmxcfs (/etc/pve) refuses the chmod Ansible makes on a new file, so a missing file is first
+# made through the API, with the switch off; the template then only rewrites it.
+- name: Check which firewall files exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ proxmox_firewall_cluster_fw }}"
+    - "{{ proxmox_firewall_host_fw }}"
+  register: proxmox_firewall_files
+
+- name: Make a missing firewall file through the API, switched off
+  ansible.builtin.command:
+    cmd: "pvesh set {{ item.1 }} --enable 0"
+  loop: "{{ proxmox_firewall_files.results | zip(['/cluster/firewall/options', '/nodes/localhost/firewall/options']) | list }}"
+  loop_control:
+    label: "{{ item.1 }}"
+  when: not item.0.stat.exists
+  changed_when: true
+
+- name: Write the datacenter firewall (cluster.fw)
+  ansible.builtin.template:
+    src: cluster.fw.j2
+    dest: "{{ proxmox_firewall_cluster_fw }}"
+    owner: root
+    group: www-data
+    mode: "0640"
+    unsafe_writes: true   # pmxcfs: fall back to an in-place write if the rename is refused
+
+- name: Write the host firewall (host.fw)
+  ansible.builtin.template:
+    src: host.fw.j2
+    dest: "{{ proxmox_firewall_host_fw }}"
+    owner: root
+    group: www-data
+    mode: "0640"
+    unsafe_writes: true
+
+# The daemon reads the files about every 10 s; "no changes" means the live rules match them.
+- name: Wait until pve-firewall has loaded the files
+  ansible.builtin.command:
+    cmd: pve-firewall compile
+  register: proxmox_firewall_compile
+  until: "'no changes' in proxmox_firewall_compile.stdout"
+  retries: 12
+  delay: 5
+  changed_when: false
+  failed_when: >-
+    proxmox_firewall_compile.rc != 0 or
+    (proxmox_firewall_compile.stderr is search('unable to parse|parse error|can.t parse'))
+  when: not ansible_check_mode
+
+- name: Show the compiled ruleset (pve-firewall compile; empty while the switch is off)
+  ansible.builtin.debug:
+    var: proxmox_firewall_compile.stdout_lines
+  when: not ansible_check_mode and proxmox_firewall_enable | bool
+
+- name: Compile the ruleset the switch would load (read-only preview while it is off)
+  ansible.builtin.script:
+    cmd: pve-firewall-preview.pl
+    executable: /usr/bin/perl
+  register: proxmox_firewall_preview
+  changed_when: false
+  failed_when: >-
+    proxmox_firewall_preview.rc != 0 or
+    (proxmox_firewall_preview.stderr is search('unable to parse|parse error|can.t parse'))
+  when: not ansible_check_mode and not (proxmox_firewall_enable | bool)
+
+- name: Show the ruleset the switch would load
+  ansible.builtin.debug:
+    var: proxmox_firewall_preview.stdout_lines
+  when: not ansible_check_mode and not (proxmox_firewall_enable | bool)
+
+- name: Prove every way in still works
+  ansible.builtin.include_tasks: verify.yml
+  when: (proxmox_firewall_enable | bool) and not ansible_check_mode
+
+- name: Cancel the dead-man timer
+  ansible.builtin.systemd:
+    name: "{{ proxmox_firewall_deadman_unit }}.timer"
+    state: stopped
+  when: proxmox_firewall_arm | bool

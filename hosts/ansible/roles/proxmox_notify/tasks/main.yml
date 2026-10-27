@@ -1,0 +1,155 @@
+---
+# Proxmox 9 notifications (/etc/pve/notifications.cfg, secrets in /etc/pve/priv/notifications.cfg),
+# set through the API. One target and one matcher: every notification of severity error goes to
+# the target. Without proxmox_notify_endpoint the target is a switched-off placeholder.
+
+- name: Pick the target name
+  ansible.builtin.set_fact:
+    proxmox_notify_target: >-
+      {{ proxmox_notify_placeholder if proxmox_notify_endpoint is not defined
+         else proxmox_notify_target_prefix ~ '-' ~ proxmox_notify_endpoint.type }}
+
+# Placeholder: a sendmail target to root@pam that is switched off, so a matcher can exist before
+# an endpoint is picked. It sends nothing.
+- name: Read the placeholder target
+  ansible.builtin.command:
+    argv: [pvesh, get, "/cluster/notifications/endpoints/sendmail/{{ proxmox_notify_placeholder }}", --output-format, json]
+  register: proxmox_notify_placeholder_get
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: proxmox_notify_endpoint is not defined
+
+- name: Create the switched-off placeholder target
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - create
+      - /cluster/notifications/endpoints/sendmail
+      - --name
+      - "{{ proxmox_notify_placeholder }}"
+      - --mailto-user
+      - root@pam
+      - --disable
+      - "1"
+      - --comment
+      - Placeholder until an endpoint is picked (central-hub hosts/ansible proxmox_notify)
+  changed_when: true
+  when:
+    - proxmox_notify_endpoint is not defined
+    - proxmox_notify_placeholder_get.rc != 0
+
+- name: Keep the placeholder switched off
+  ansible.builtin.command:
+    argv: [pvesh, set, "/cluster/notifications/endpoints/sendmail/{{ proxmox_notify_placeholder }}", --disable, "1"]
+  changed_when: true
+  when:
+    - proxmox_notify_endpoint is not defined
+    - proxmox_notify_placeholder_get.rc == 0
+    - (proxmox_notify_placeholder_get.stdout | from_json).disable | default(0) | int != 1
+
+# The real endpoint, once picked.
+- name: Read the endpoint
+  ansible.builtin.command:
+    argv: [pvesh, get, "/cluster/notifications/endpoints/{{ proxmox_notify_endpoint.type }}/{{ proxmox_notify_target }}", --output-format, json]
+  register: proxmox_notify_endpoint_get
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: proxmox_notify_endpoint is defined
+
+- name: Work out the endpoint's options
+  ansible.builtin.set_fact:
+    proxmox_notify_endpoint_args: >-
+      {%- set args = [] -%}
+      {%- for key, value in proxmox_notify_endpoint.options.items() -%}
+      {%- for one in (value if (value is sequence and value is not string) else [value]) -%}
+      {%- set _ = args.extend(['--' ~ key, (one | ternary('1', '0')) if one is boolean else (one | string)]) -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ args + ['--disable', '0'] }}
+    proxmox_notify_endpoint_differs: >-
+      {%- if proxmox_notify_endpoint_get.rc != 0 -%}
+      False
+      {%- else -%}
+      {%- set cur = proxmox_notify_endpoint_get.stdout | from_json -%}
+      {%- set ns = namespace(differs=false) -%}
+      {%- for key, value in proxmox_notify_endpoint.options.items() if key not in proxmox_notify_secret_keys -%}
+      {%- set want = (value if (value is sequence and value is not string) else [value]) | map('string') -%}
+      {%- set want = want | map('replace', 'True', '1') | map('replace', 'False', '0') | sort | list -%}
+      {%- set now = cur[key] | default([]) -%}
+      {%- set have = (now if (now is sequence and now is not string) else [now]) | map('string') -%}
+      {%- set have = have | map('replace', 'True', '1') | map('replace', 'False', '0') | sort | list -%}
+      {%- if want != have -%}
+      {%- set ns.differs = true -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ ns.differs or (cur.disable | default(0) | int) != 0 }}
+      {%- endif -%}
+  no_log: true
+  when: proxmox_notify_endpoint is defined
+
+- name: Create the endpoint
+  ansible.builtin.command:
+    argv: >-
+      {{ ['pvesh', 'create', '/cluster/notifications/endpoints/' ~ proxmox_notify_endpoint.type,
+          '--name', proxmox_notify_target] + proxmox_notify_endpoint_args }}
+  changed_when: true
+  no_log: true
+  when:
+    - proxmox_notify_endpoint is defined
+    - proxmox_notify_endpoint_get.rc != 0
+
+- name: Update the endpoint
+  ansible.builtin.command:
+    argv: >-
+      {{ ['pvesh', 'set', '/cluster/notifications/endpoints/' ~ proxmox_notify_endpoint.type ~ '/' ~ proxmox_notify_target]
+         + proxmox_notify_endpoint_args }}
+  changed_when: true
+  no_log: true
+  when:
+    - proxmox_notify_endpoint is defined
+    - proxmox_notify_endpoint_differs | bool
+
+# The matcher.
+- name: Read the matcher
+  ansible.builtin.command:
+    argv: [pvesh, get, "/cluster/notifications/matchers/{{ proxmox_notify_matcher }}", --output-format, json]
+  register: proxmox_notify_matcher_get
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Work out the matcher's options
+  ansible.builtin.set_fact:
+    proxmox_notify_matcher_args: >-
+      {%- set args = ['--target', proxmox_notify_target, '--mode', 'all', '--disable', '0'] -%}
+      {%- for severity in proxmox_notify_severities -%}
+      {%- set _ = args.extend(['--match-severity', severity]) -%}
+      {%- endfor -%}
+      {{ args }}
+    proxmox_notify_matcher_differs: >-
+      {%- if proxmox_notify_matcher_get.rc != 0 -%}
+      False
+      {%- else -%}
+      {%- set cur = proxmox_notify_matcher_get.stdout | from_json -%}
+      {{ cur.target | default([]) | sort != [proxmox_notify_target]
+         or cur['match-severity'] | default([]) | sort != proxmox_notify_severities | sort
+         or cur.mode | default('all') != 'all'
+         or cur.disable | default(0) | int != 0 }}
+      {%- endif -%}
+
+- name: Create the matcher
+  ansible.builtin.command:
+    argv: >-
+      {{ ['pvesh', 'create', '/cluster/notifications/matchers', '--name', proxmox_notify_matcher,
+          '--comment', 'Errors: failed backups, fencing, system (central-hub hosts/ansible proxmox_notify)']
+         + proxmox_notify_matcher_args }}
+  changed_when: true
+  when: proxmox_notify_matcher_get.rc != 0
+
+- name: Update the matcher
+  ansible.builtin.command:
+    argv: "{{ ['pvesh', 'set', '/cluster/notifications/matchers/' ~ proxmox_notify_matcher] + proxmox_notify_matcher_args }}"
+  changed_when: true
+  when: proxmox_notify_matcher_differs | bool

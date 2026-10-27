@@ -1,0 +1,13 @@
+# Proxmox datacenter firewall. Written by central-hub hosts/ansible, role proxmox_firewall.
+# Guest firewalls stay off: no <vmid>.fw sets enable, so only the host is filtered.
+
+[OPTIONS]
+
+enable: {{ 1 if proxmox_firewall_enable | bool else 0 }}
+policy_in: DROP
+policy_out: ACCEPT
+
+[IPSET management] # Sources allowed to manage this host. Proxmox adds the host's own LAN too.
+
+{{ proxmox_firewall_home_lan_cidr }} # home LAN (owner's path; CT 900 eth0)
+{{ proxmox_firewall_mgmt_cidr }} # VNet mgmt (CT 900 eth1, OPNsense)
