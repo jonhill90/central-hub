@@ -1,0 +1,58 @@
+---
+# Run with the switch on. Every check here must pass before main.yml cancels the dead-man timer.
+
+- name: Verify | pve-firewall is running and enabled
+  ansible.builtin.command:
+    cmd: pve-firewall status
+  register: proxmox_firewall_status
+  changed_when: false
+  failed_when: "'enabled/running' not in proxmox_firewall_status.stdout"
+
+# A new SSH connection from the controller, not the one opened before the change.
+- name: Verify | Drop the open SSH connection
+  ansible.builtin.meta: reset_connection
+
+- name: Verify | A new SSH connection from the controller works
+  ansible.builtin.wait_for_connection:
+    timeout: 60
+
+- name: Verify | The API on 8006 answers the controller
+  ansible.builtin.uri:
+    url: "https://{{ ansible_host }}:8006/api2/json/version"
+    validate_certs: false   # self-signed GUI certificate, reached by address
+    status_code: [200, 401]
+    timeout: 10
+  delegate_to: localhost
+  become: false
+
+- name: Verify | Read the home LAN address on vmbr0
+  ansible.builtin.command:
+    cmd: ip -4 -br addr show vmbr0
+  register: proxmox_firewall_vmbr0
+  changed_when: false
+
+- name: Verify | vmbr0 is up with its address
+  ansible.builtin.assert:
+    that:
+      - proxmox_firewall_vmbr0.stdout is search('UP')
+      - proxmox_firewall_vmbr0.stdout is search('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+')
+    quiet: true
+
+- name: Verify | Probe again
+  ansible.builtin.include_tasks: probe.yml
+  vars:
+    proxmox_firewall_phase: after
+
+# What worked before the change must work after it. With no "before" (nothing changed this run),
+# the probes are only shown.
+- name: Verify | Nothing that worked before is cut off
+  ansible.builtin.assert:
+    that:
+      - proxmox_firewall_probes.after.tailscale or not proxmox_firewall_probes.before.tailscale
+      - proxmox_firewall_probes.after.ct_mgmt or not proxmox_firewall_probes.before.ct_mgmt
+      - proxmox_firewall_probes.after.targets_down | difference(proxmox_firewall_probes.before.targets_down) | length == 0
+    fail_msg: >-
+      A path that worked before the firewall change fails now. The dead-man timer turns the
+      firewall off in {{ proxmox_firewall_deadman_minutes }} minutes from arming; or at the console:
+      pve-firewall stop. Before: {{ proxmox_firewall_probes.before }}. After: {{ proxmox_firewall_probes.after }}.
+  when: proxmox_firewall_probes.before is defined

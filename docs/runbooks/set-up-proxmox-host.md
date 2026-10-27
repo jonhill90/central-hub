@@ -4,10 +4,10 @@ status: draft
 kind: manual
 trigger: on request; after a fresh Proxmox VE 9 install
 runner: the owner
-outcome: a Proxmox VE 9 host on the no-subscription repositories, fully upgraded, with a tested break-glass login, key-only SSH, a least-privilege agent account and API token, backups and notifications
+outcome: a Proxmox VE 9 host on the no-subscription repositories, fully upgraded, with a tested break-glass login, key-only SSH, a least-privilege agent account and API token, notifications, backups and a host firewall
 needs: console or LAN access to the host as root@pam; a password manager with an offline copy; a TOTP app
-private-values: [host-name, host-address, root-pam-password, root-pam-recovery-keys, pve-iac-token]
-files: []
+private-values: [host-name, host-address, root-pam-password, root-pam-recovery-keys, pve-iac-token, home-lan-range, backup-disk-id]
+files: [hosts/ansible/playbooks/proxmox-safety.yml]
 last-tested:
 superseded-by:
 ---
@@ -32,14 +32,14 @@ The runbook walks the box through three parts, each one depending on the one bef
     │      Linux user `agent` → Terraform account `iac@pve`, its pools and a token only you can read
     ▼
  Part 3  Give it a safety net
-           backups (+ "repeat missed": the PC is often off) → notifications
+           notifications → backups (+ "repeat missed": the PC is often off) → host firewall
 ```
 
 Why this order: updates first, because Proxmox published guest-reachable qemu-server advisories on the day of the install, so no VM goes on the box before a full upgrade [S2 summary; S1-83]. The agent comes in only after your own login is locked down, so the agent never has more than you deliberately gave it.
 
 ### Not in this runbook
 
-The networking steps come after the IP address plan: remote access through a connector container and the tailnet policy, the Proxmox firewall (it needs the management address range), GPU passthrough, and the Kubernetes node VMs on the lab network. They join this runbook, or a runbook of their own, once the plan exists.
+The networking steps come after the IP address plan: remote access through a connector container and the tailnet policy, GPU passthrough, and the Kubernetes node VMs on the lab network. They join this runbook, or a runbook of their own, once the plan exists.
 
 ### How to read this runbook
 
@@ -350,6 +350,8 @@ Other "use but not read" options, for later (not picked; the secrets backend is 
 
 ### Part 3. Give it a safety net
 
+Steps 7 to 9 are also code: `hosts/ansible/playbooks/proxmox-safety.yml`, tags `notify`, `backup` and `firewall`, run from the controller as [hosts/ansible/README.md](../../hosts/ansible/README.md#host-safety-net) shows. Each step says what the code does, so you can do it by hand or read what the code did. The agent's picks for these steps are rows 36 to 47 of [hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md).
+
 #### 7. Notifications
 
 Datacenter → Notifications: the root@pam email given to the installer is the default target [S1-02]. Mail from a home IP often needs Postfix pointed at a relay (smart host), or use an SMTP target directly, or a webhook to ntfy or Discord [S1-68].
@@ -359,6 +361,8 @@ why: Updates, failed backups and disk warnings only help if you see them [S1-13,
 ※ This is where the daily update mail from [step 2](#2-update-everything-add-cpu-microcode-reboot) lands.
 
 expect: a test notification arrives.
+
+**In code** (tag `notify`): matcher `central-hub-errors` sends every notification of severity `error` (failed backup jobs, fencing, other system errors) to one target [pick]. No endpoint (SMTP, Gotify, webhook) has been picked yet, so until one is set the target is `central-hub-off`, a sendmail target that is switched off: the run can't fail and nothing new is sent. The built-in default matcher and `mail-to-root` stay as they are. By hand: Datacenter → Notifications → add a target, then add a matcher with severity `error` and that target. Test a target from the shell: `pvesh create /cluster/notifications/targets/<target>/test`.
 
 #### 8. Backups
 
@@ -370,8 +374,9 @@ Targets, as options [S1-60, S1-65, S1-66]:
 | A USB disk added as a Directory storage | Off the main disk; cheap |
 | Proxmox Backup Server on another machine | What the docs recommend; dedupe, encryption; needs a second box |
 | NFS share | The docs' "good alternative" |
+| The host's second disk (the empty HDD) as a Directory storage | Off the main disk, still in the same box |
 
-[pick] `local` now for change-rollback, plus a USB or Proxmox Backup Server target before any VM holds data you care about.
+[pick] the empty HDD as Directory storage `hdd-backup` now, and Proxmox Backup Server or an off-box copy before any VM holds data you can't rebuild.
 
 Datacenter → Backup → Add: schedule, mode `snapshot`, retention on the storage (`keep-last=3,keep-daily=7` for example; `maxfiles` is gone in 9.x) [S1-61, S1-63], and tick **Repeat missed**: the PC is often off at backup time [S1-62].
 
@@ -383,9 +388,90 @@ why: Proxmox backs up whole guests (config + disks) [S1-60]. A backup on the sam
 
 expect: the job shows under Datacenter → Backup, and a first run (Run now) finishes with status OK.
 
+**In code** (tag `backup`): the HDD named by `proxmox_backup_disk` (`/dev/disk/by-id/<id>`, private: the id holds the serial number) becomes storage `hdd-backup` through Proxmox's own Disks → Directory API: one GPT partition, ext4, a mount unit by UUID at `/mnt/pve/hdd-backup`, content `backup` only. That runs only while `lsblk` and `wipefs` see nothing on the disk; a disk with any partition, filesystem or partition table stops the run before anything is written. Then job `nightly-guests` backs up VMs 100, 200, 201 and CT 900 at 03:00 every day, snapshot mode, zstd, keep-last 3 and keep-daily 7, repeat missed [pick]. By hand: node → Disks → Directory → Create (ext4, name `hdd-backup`), then the job as above.
+
+Run the first backups by hand and watch VM 100: snapshot mode asks the guest agent inside OPNsense to freeze its filesystems, and that agent hung on large requests during the build [inferred].
+
+```bash
+vzdump 900 --storage hdd-backup --mode snapshot --compress zstd   # the small one first
+vzdump 100 --storage hdd-backup --mode snapshot --compress zstd   # watch the lab while it runs
+pvesm list hdd-backup
+```
+
+#### 9. Host firewall
+
+The host gets Proxmox's own firewall (pve-firewall) at two levels only: datacenter (`/etc/pve/firewall/cluster.fw`) and host (`/etc/pve/local/host.fw`). Guests keep theirs off, so traffic to and from OPNsense, CT 900 and the c1 nodes is not filtered by the host. Inbound is DROP except:
+
+| From | To | Why |
+|---|---|---|
+| IPSet `management`: the home LAN range and VNet mgmt `10.1.50.0/24` | tcp 22, 8006 | Your path from home, CT 900 (eth0 on the home LAN, eth1 on mgmt), and Ansible and Terraform from your workstation. Proxmox adds the host's own LAN to this IPSet and opens 22, 8006, VNC and SPICE from it by itself (pve-firewall source, `enable_host_firewall`) |
+| anywhere | ICMP, ICMPv6, IPv6 neighbour discovery | Ping, unreachable and time-exceeded messages. Other IPv6 is dropped too, as STD-0002 asks |
+
+Outbound stays ACCEPT. One host option keeps guest traffic as it is: once the firewall is on, every bridged guest packet passes pve-firewall's FORWARD chain, which drops packets conntrack calls INVALID; `nf_conntrack_allow_invalid: 1` skips that drop (pve-firewall 6.0.6 source, `compile_iptables_filter`) [pick].
+
+※F Keep the web UI Shell or the console open the whole time; it is your way back in if the rules are wrong.
+
+```bash
+# 9a. write the rules with the datacenter switch off; nothing is filtered yet
+cat > /etc/pve/firewall/cluster.fw <<'FW'
+[OPTIONS]
+enable: 0
+policy_in: DROP
+policy_out: ACCEPT
+
+[IPSET management]
+<home LAN range> # home LAN
+10.1.50.0/24 # VNet mgmt
+FW
+cat > /etc/pve/local/host.fw <<'FW'
+[OPTIONS]
+enable: 1
+nf_conntrack_allow_invalid: 1
+ndp: 1
+
+[RULES]
+IN ACCEPT -source +management -p tcp -dport 22 # SSH
+IN ACCEPT -source +management -p tcp -dport 8006 # GUI and API
+IN ACCEPT -p icmp # ICMP
+IN ACCEPT -p icmpv6 # ICMPv6
+FW
+
+# 9b. read the ruleset it would load. pve-firewall compile prints nothing while the switch is off,
+#     so use the preview script from hosts/ansible/roles/proxmox_firewall/files/ (read-only)
+perl pve-firewall-preview.pl | less    # the management IPSet, and tcp 22 and 8006 in PVEFW-HOST-IN
+
+# 9c. a dead-man timer: in 10 minutes the host switches the firewall off by itself
+systemd-run --unit=central-hub-fw-deadman --on-active=10min /usr/bin/pvesh set /cluster/firewall/options --enable 0
+
+# 9d. switch on, then check it loaded
+pvesh set /cluster/firewall/options --enable 1
+pve-firewall status                    # Status: enabled/running
+pve-firewall compile | tail -1         # "no changes": the live rules match the files
+```
+
+Then, from your workstation in a NEW terminal ※F, prove every way in:
+
+```bash
+ssh root@<host address> 'pve-firewall status'                         # home path, a new SSH connection
+curl -sk -o /dev/null -w '%{http_code}\n' https://<host address>:8006/api2/json/version   # 401: the API answers
+ssh root@<host address> 'pct exec 900 -- tailscale status --peers=false'   # CT 900's client is up
+tailscale ping <connector tailnet name>                                # CT 900 over the tailnet
+ssh -J root@<host address> almalinux@<c1 node address> true            # host to the lab through OPNsense
+```
+
+Last, on the host: `systemctl stop central-hub-fw-deadman.timer`. The code (tag `firewall`) does 9a to 9d in two runs, switch off and then on, with the same timer and checks, and cancels the timer only when all pass ([hosts/ansible/README.md](../../hosts/ansible/README.md#host-firewall)).
+
+why: Until now every port the host listens on is open to the home LAN. The IP address plan gives the management range, so the rules can name their sources, and the dead-man timer means a wrong rule costs ten minutes, not a trip to the console [inferred].
+
+※ The key login from [step 5](#5-ssh-for-you-keys-not-passwords) and the API token from [step 6](#6-the-linux-user-agent-and-the-terraform-account-and-its-api-token) are what the rules must keep working.
+
+expect: every proof above still works with the switch on; `pve-firewall status` says enabled/running.
+
+**Rollback:** at the console or a session that still works, `pve-firewall stop` removes every Proxmox rule now (the service starts again at the next boot), or `pvesh set /cluster/firewall/options --enable 0` switches it off for good; the daemon removes the rules within about 10 seconds.
+
 ## If it fails
 
-Stop at the step that fails. If SSH or a login breaks, use the session ※F kept open, or the physical console as root@pam ※R. Undo a change in step 5 by removing `/etc/ssh/sshd_config.d/00-hardening.conf` and reloading `ssh`. Undo step 6 with `pveum user token remove iac@pve apply`, then `pveum user delete iac@pve; pveum role delete IacOps; pveum group delete iac` (the script's exit path), and `deluser agent`. Tell the owner before changing a command, and fix the runbook text in the same change.
+Stop at the step that fails. If SSH or a login breaks, use the session ※F kept open, or the physical console as root@pam ※R. Undo a change in step 5 by removing `/etc/ssh/sshd_config.d/00-hardening.conf` and reloading `ssh`. Undo step 9 with `pve-firewall stop` or `pvesh set /cluster/firewall/options --enable 0`; the dead-man timer from step 9c does the second by itself. Undo step 6 with `pveum user token remove iac@pve apply`, then `pveum user delete iac@pve; pveum role delete IacOps; pveum group delete iac` (the script's exit path), and `deluser agent`. Tell the owner before changing a command, and fix the runbook text in the same change.
 
 ## Afterwards
 
@@ -397,6 +483,9 @@ Record a replay in the PR that changes this runbook: set `last-tested` with the 
 |---|---|
 | Terraform access | `pveum user token remove iac@pve apply`; `pveum user delete iac@pve; pveum role delete IacOps; pveum group delete iac` |
 | Agent access | `deluser agent` |
+| Host firewall | `pvesh set /cluster/firewall/options --enable 0`, then delete `cluster.fw` and `host.fw` |
+| Backups | `pvesh delete /cluster/backup/nightly-guests`; `pvesm remove hdd-backup` leaves the files on the disk; copy them off first if they are wanted |
+| Notifications | `pvesh delete /cluster/notifications/matchers/central-hub-errors`, then its target |
 | The token file | Moves behind whatever secrets backend is picked later |
 | Proxmox itself | Back up guests, then reinstall the PC as a bare-metal AlmaLinux worker or Talos |
 

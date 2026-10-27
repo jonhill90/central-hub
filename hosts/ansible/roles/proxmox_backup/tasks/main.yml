@@ -1,0 +1,183 @@
+---
+# A backup storage on the empty HDD and one nightly vzdump job. The disk is formatted only when it
+# has no partition, no filesystem and no other signature; a disk this role already formatted is
+# left as it is; any other disk stops the run before anything is written.
+
+- name: Check the backup disk input
+  ansible.builtin.assert:
+    that:
+      - proxmox_backup_disk is match('^/dev/disk/by-id/[^/]+$')
+      - proxmox_backup_disk is not search('-part[0-9]+$')
+    fail_msg: >-
+      proxmox_backup_disk is a private value: the whole HDD as /dev/disk/by-id/<id> (not a -partN
+      path). Find it on the host with: ls -l /dev/disk/by-id/ | grep -v -- -part
+    quiet: true
+
+- name: Check that the disk exists
+  ansible.builtin.stat:
+    path: "{{ proxmox_backup_disk }}"
+    follow: true
+  register: proxmox_backup_disk_stat
+  failed_when: not proxmox_backup_disk_stat.stat.exists or not proxmox_backup_disk_stat.stat.isblk
+
+- name: Read the disk's partitions and filesystems
+  ansible.builtin.command:
+    argv: [lsblk, --json, --paths, --output, "NAME,TYPE,FSTYPE,LABEL,MOUNTPOINT", "{{ proxmox_backup_disk }}"]
+  register: proxmox_backup_lsblk
+  changed_when: false
+  check_mode: false
+
+# wipefs (listing only, nothing is wiped) also sees partition tables and signatures lsblk may miss.
+- name: Read any signature on the whole disk
+  ansible.builtin.command:
+    argv: [wipefs, --no-act, --noheadings, --output, TYPE, "{{ proxmox_backup_disk }}"]
+  register: proxmox_backup_wipefs
+  changed_when: false
+  check_mode: false
+
+- name: Read the backup storage, if it exists
+  ansible.builtin.command:
+    argv: [pvesh, get, "/storage/{{ proxmox_backup_storage }}", --output-format, json]
+  register: proxmox_backup_storage_get
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Sort the disk into empty, already ours, or something else
+  ansible.builtin.set_fact:
+    proxmox_backup_disk_state: >-
+      {%- set dev = (proxmox_backup_lsblk.stdout | from_json).blockdevices[0] -%}
+      {%- set kids = dev.children | default([]) -%}
+      {%- if kids | length == 0 and not dev.fstype and proxmox_backup_wipefs.stdout | trim | length == 0 -%}
+      empty
+      {%- elif kids | length == 1 and kids[0].fstype == proxmox_backup_filesystem and proxmox_backup_storage_get.rc == 0 -%}
+      ours
+      {%- else -%}
+      other
+      {%- endif -%}
+
+- name: Stop if the disk holds anything this role did not make
+  ansible.builtin.assert:
+    that: proxmox_backup_disk_state != 'other'
+    fail_msg: >-
+      {{ proxmox_backup_disk }} has partitions, a filesystem or a signature this role did not make,
+      or storage {{ proxmox_backup_storage }} is missing. Nothing was changed. lsblk:
+      {{ proxmox_backup_lsblk.stdout | from_json }}; wipefs: {{ proxmox_backup_wipefs.stdout_lines }}
+    quiet: true
+
+- name: Say what check mode would do to the empty disk
+  ansible.builtin.debug:
+    msg: >-
+      Would make one GPT partition, {{ proxmox_backup_filesystem }} on it, a mount unit at
+      /mnt/pve/{{ proxmox_backup_storage }} and directory storage {{ proxmox_backup_storage }}.
+  when: proxmox_backup_disk_state == 'empty' and ansible_check_mode
+
+# Proxmox's Disks > Directory API (pve-storage API2/Disks/Directory.pm): it checks again that the
+# disk is unused, then runs sgdisk, mkfs and a systemd mount unit by UUID, and adds the storage.
+- name: Partition, format and mount the empty disk, and add it as a storage
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - create
+      - /nodes/localhost/disks/directory
+      - --name
+      - "{{ proxmox_backup_storage }}"
+      - --device
+      - "{{ proxmox_backup_disk }}"
+      - --filesystem
+      - "{{ proxmox_backup_filesystem }}"
+      - --add_storage
+      - "1"
+  changed_when: true
+  when: proxmox_backup_disk_state == 'empty' and not ansible_check_mode
+
+- name: Wait until the storage is active
+  ansible.builtin.command:
+    argv: [pvesm, status, --storage, "{{ proxmox_backup_storage }}"]
+  register: proxmox_backup_pvesm_status
+  until: proxmox_backup_pvesm_status.stdout is search('\sactive\s')
+  retries: 12
+  delay: 5
+  changed_when: false
+  when: not (ansible_check_mode and proxmox_backup_disk_state == 'empty')
+
+- name: Read the storage settings
+  ansible.builtin.command:
+    argv: [pvesh, get, "/storage/{{ proxmox_backup_storage }}", --output-format, json]
+  register: proxmox_backup_storage_now
+  changed_when: false
+  check_mode: false
+  when: not (ansible_check_mode and proxmox_backup_disk_state == 'empty')
+
+# The API adds the storage with every content type; this storage holds backups only.
+- name: Limit the storage to backups
+  ansible.builtin.command:
+    argv: [pvesh, set, "/storage/{{ proxmox_backup_storage }}", --content, "{{ proxmox_backup_content }}"]
+  changed_when: true
+  when:
+    - not (ansible_check_mode and proxmox_backup_disk_state == 'empty')
+    - (proxmox_backup_storage_now.stdout | from_json).content.split(',') | sort != proxmox_backup_content.split(',') | sort
+
+# The job, in /etc/pve/jobs.cfg through the API.
+- name: Read the backup job, if it exists
+  ansible.builtin.command:
+    argv: [pvesh, get, "/cluster/backup/{{ proxmox_backup_job_id }}", --output-format, json]
+  register: proxmox_backup_job_get
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Work out the job's settings
+  ansible.builtin.set_fact:
+    proxmox_backup_prune_str: "{{ proxmox_backup_prune.items() | map('join', '=') | sort | join(',') }}"
+    proxmox_backup_job_args:
+      - --schedule
+      - "{{ proxmox_backup_schedule }}"
+      - --storage
+      - "{{ proxmox_backup_storage }}"
+      - --vmid
+      - "{{ proxmox_backup_vmids | join(',') }}"
+      - --mode
+      - "{{ proxmox_backup_mode }}"
+      - --compress
+      - "{{ proxmox_backup_compress }}"
+      - --prune-backups
+      - "{{ proxmox_backup_prune.items() | map('join', '=') | sort | join(',') }}"
+      - --repeat-missed
+      - "{{ proxmox_backup_repeat_missed | ternary('1', '0') }}"
+      - --enabled
+      - "1"
+      - --comment
+      - "{{ proxmox_backup_comment }}"
+
+- name: Compare the live job with these settings
+  ansible.builtin.set_fact:
+    proxmox_backup_job_differs: >-
+      {%- if proxmox_backup_job_get.rc != 0 -%}
+      False
+      {%- else -%}
+      {%- set cur = proxmox_backup_job_get.stdout | from_json -%}
+      {%- set p = cur['prune-backups'] | default('') -%}
+      {%- set cur_prune = (p.items() | map('join', '=') | sort | join(',')) if p is mapping else ((p | string).split(',') | sort | join(',')) -%}
+      {{ cur.schedule | default('') != proxmox_backup_schedule
+         or cur.storage | default('') != proxmox_backup_storage
+         or (cur.vmid | default('') | string).split(',') | map('trim') | reject('equalto', '') | map('int') | sort != proxmox_backup_vmids | sort
+         or cur.mode | default('snapshot') != proxmox_backup_mode
+         or cur.compress | default('0') | string != proxmox_backup_compress
+         or cur_prune != proxmox_backup_prune_str
+         or cur['repeat-missed'] | default(0) | int != (proxmox_backup_repeat_missed | ternary(1, 0))
+         or cur.enabled | default(1) | int != 1
+         or cur.comment | default('') != proxmox_backup_comment }}
+      {%- endif -%}
+
+- name: Create the backup job
+  ansible.builtin.command:
+    argv: "{{ ['pvesh', 'create', '/cluster/backup', '--id', proxmox_backup_job_id] + proxmox_backup_job_args }}"
+  changed_when: true
+  when: proxmox_backup_job_get.rc != 0
+
+- name: Update the backup job
+  ansible.builtin.command:
+    argv: "{{ ['pvesh', 'set', '/cluster/backup/' ~ proxmox_backup_job_id] + proxmox_backup_job_args }}"
+  changed_when: true
+  when: proxmox_backup_job_differs | bool

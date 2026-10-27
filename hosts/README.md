@@ -5,7 +5,7 @@ Code for every machine below Kubernetes ([D-0011](../docs/decisions/0011-keep-ma
 | Folder | What it does |
 |---|---|
 | [terraform/](terraform/) | Creates Proxmox objects: the lab SDN, the OPNsense VM and the connector container. |
-| [ansible/](ansible/) | Configures the Proxmox host's network and the OPNsense firewall's settings. |
+| [ansible/](ansible/) | Configures the Proxmox host's network and safety net (host firewall, backups, notifications) and the OPNsense firewall's settings. |
 
 Status: first draft. Nothing here has been applied to the lab yet.
 
@@ -16,6 +16,7 @@ Status: first draft. Nothing here has been applied to the lab yet.
 3. Ansible, `playbooks/proxmox-host.yml --tags mgmt`: adds the host's address on VNet mgmt, which needs the SDN from step 2.
 4. At the OPNsense console, by hand: root password, the mgmt VLAN as LAN with its address, and an API key. Ansible reaches the firewall through that address, so it has to exist first.
 5. Ansible, `playbooks/opnsense.yml`: the other VLANs, interface assignment, DHCP, rules and the DNS override.
+6. Ansible, `playbooks/proxmox-safety.yml`: notifications and backups, then the Proxmox host firewall in two runs, switched off and then on ([ansible/README.md](ansible/README.md#host-firewall)). It goes last, because its checks probe CT 900 and the paths through OPNsense that steps 2 to 5 make.
 
 ## Private values
 

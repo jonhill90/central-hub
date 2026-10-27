@@ -1,0 +1,14 @@
+# Proxmox host firewall for this node. Written by central-hub hosts/ansible, role proxmox_firewall.
+
+[OPTIONS]
+
+enable: {{ 1 if proxmox_firewall_enable | bool else 0 }}
+nf_conntrack_allow_invalid: {{ 1 if proxmox_firewall_conntrack_allow_invalid | bool else 0 }}
+ndp: 1
+log_level_in: {{ proxmox_firewall_log_level_in }}
+
+[RULES]
+
+{% for rule in proxmox_firewall_rules %}
+IN {{ rule.action }}{% if rule.source is defined %} -source {{ rule.source }}{% endif %} -p {{ rule.proto }}{% if rule.dport is defined %} -dport {{ rule.dport }}{% endif %} # {{ rule.comment }}
+{% endfor %}

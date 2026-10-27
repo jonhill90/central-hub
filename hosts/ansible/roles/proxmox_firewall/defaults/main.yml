@@ -1,0 +1,43 @@
+---
+# Not private. The private value, proxmox_firewall_home_lan_cidr (the home router's LAN range),
+# has no default here on purpose: it comes from the secret store through the inventory.
+
+# The datacenter and host switch. false writes the rules and leaves the firewall off, so the first
+# run only shows what would load (README "Host firewall"). Set true for the second run; keep it true
+# in the filled-in inventory after that, or the next run turns the firewall off again.
+proxmox_firewall_enable: false
+
+# VNet mgmt's range, from the one shared VLAN file (group_vars/all/vlans.yml, STD-0002).
+proxmox_firewall_mgmt_vnet: mgmt
+proxmox_firewall_mgmt_cidr: "{{ (lab_vlans | selectattr('name', 'equalto', proxmox_firewall_mgmt_vnet) | first).cidr }}"
+
+# Host rules, IN only (outbound stays ACCEPT). +management is the datacenter IPSet that holds the
+# home LAN range and VNet mgmt; Proxmox adds the host's own LAN (local_network) to it by itself.
+proxmox_firewall_rules:
+  - { action: ACCEPT, source: +management, proto: tcp, dport: "22", comment: "SSH from the home LAN and VNet mgmt" }
+  - { action: ACCEPT, source: +management, proto: tcp, dport: "8006", comment: "GUI and API from the home LAN and VNet mgmt" }
+  - { action: ACCEPT, proto: icmp, comment: "IPv4 ICMP: ping, unreachable, time exceeded" }
+  - { action: ACCEPT, proto: icmpv6, comment: "IPv6 ICMP; neighbour discovery is on through ndp" }
+
+# pve-firewall drops conntrack-INVALID packets in its FORWARD chain, which every bridged guest
+# packet passes through once the firewall is on (bridge-nf-call-iptables). 1 skips that drop,
+# so guest traffic (OPNsense routing, CT 900) is filtered exactly as before. Host input keeps
+# its own INVALID drop either way.
+proxmox_firewall_conntrack_allow_invalid: true
+proxmox_firewall_log_level_in: nolog
+
+# Dead-man timer: armed on the host before a change while the switch is on, cancelled once every
+# check passes. If the run is cut off, the host turns the datacenter firewall off by itself.
+proxmox_firewall_deadman_minutes: 10
+proxmox_firewall_deadman_unit: central-hub-fw-deadman
+
+# Checks before and after a change: what was reachable before must still be reachable after.
+proxmox_firewall_remote_access_ct: 900
+proxmox_firewall_ct_probe_host: "{{ proxmox_firewall_mgmt_cidr.split('/')[0].rsplit('.', 1)[0] }}.1"
+proxmox_firewall_ct_probe_port: 443
+proxmox_firewall_check_targets: >-
+  {{ (groups['k8s_nodes'] | default([])) | map('extract', hostvars) | map(attribute='ansible_host', default='') | select | list }}
+proxmox_firewall_check_port: 22
+
+proxmox_firewall_cluster_fw: /etc/pve/firewall/cluster.fw
+proxmox_firewall_host_fw: /etc/pve/local/host.fw

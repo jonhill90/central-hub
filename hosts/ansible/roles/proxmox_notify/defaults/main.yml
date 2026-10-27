@@ -1,0 +1,20 @@
+---
+# Not private. proxmox_notify_endpoint (where alerts go) has no default on purpose: no endpoint
+# has been picked yet. While it is unset, the matcher points at a switched-off placeholder, so the
+# role runs and nothing is sent anywhere new. Proxmox's built-in default matcher and mail-to-root
+# target are left as they are.
+#
+# To turn alerts on, set it in the filled-in inventory, for example (made-up values):
+#   proxmox_notify_endpoint:
+#     type: gotify          # smtp, gotify, webhook or sendmail
+#     options:              # the API's own fields for that type (pvesh usage
+#       server: https://push.example.invalid    #   /cluster/notifications/endpoints/<type>)
+#       token: "<from the secret store>"
+# Secrets in options (password, token, secret, header) are sent but never shown or compared.
+
+proxmox_notify_placeholder: central-hub-off
+proxmox_notify_target_prefix: central-hub
+proxmox_notify_matcher: central-hub-errors
+# Severity "error" covers failed backup jobs, HA fencing and other system errors.
+proxmox_notify_severities: [error]
+proxmox_notify_secret_keys: [password, token, secret, header]
