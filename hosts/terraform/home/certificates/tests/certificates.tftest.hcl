@@ -87,6 +87,9 @@ run "renews_before_expiry" {
 
 # With a permission group missing, the precondition stops the run before any token is made.
 run "missing_permission_group_stops" {
+  # Plan, because the precondition stops the plan; expect_failures is checked there.
+  command = plan
+
   override_data {
     target = data.cloudflare_account_api_token_permission_groups_list.all
     values = {
