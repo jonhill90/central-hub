@@ -30,17 +30,19 @@
     dest: /root/central-hub/gateway.yaml
     mode: "0600"
 
-# kubectl diff exits 0 with no difference, 1 with one, more on an error.
+# kubectl diff exits 0 with no difference, 1 with one, more on an error. On the first run the
+# Gateway's namespace doesn't exist yet, and the diff of the Gateway in it fails with
+# "namespaces ... not found" (measured); that also means "apply".
 - name: gateway | Gateway differs from the cluster?
   ansible.builtin.command: kubectl diff -f /root/central-hub/gateway.yaml
   register: k8s_gateway_diff
   changed_when: false
-  failed_when: k8s_gateway_diff.rc > 1
+  failed_when: k8s_gateway_diff.rc > 1 and 'namespaces' not in k8s_gateway_diff.stderr
   check_mode: false
 
 - name: gateway | Apply the Gateway
   ansible.builtin.command: kubectl apply -f /root/central-hub/gateway.yaml
-  when: k8s_gateway_diff.rc == 1
+  when: k8s_gateway_diff.rc != 0
   changed_when: true
 
 - name: gateway | Gateway programmed

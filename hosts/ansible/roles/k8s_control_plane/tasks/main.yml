@@ -79,8 +79,15 @@
     mode: "0644"
   when: k8s_control_plane_gateway_api
 
+- name: step9 | Gateway API CRD file present?
+  ansible.builtin.stat:
+    path: "/root/gateway-api-{{ k8s_control_plane_gateway_api_version }}-standard-install.yaml"
+  register: k8s_cp_gwapi_file
+  when: k8s_control_plane_gateway_api
+
 # kubectl diff exits 0 with no difference, 1 with one, more on an error. A read, so it runs in
-# check mode too.
+# check mode too, once the file is there (in check mode on a first run, get_url hasn't fetched
+# it: measured "error: the path ... does not exist").
 - name: step9 | Gateway API CRDs differ from the cluster?
   ansible.builtin.command: >-
     kubectl diff --server-side -f /root/gateway-api-{{ k8s_control_plane_gateway_api_version }}-standard-install.yaml
@@ -88,13 +95,13 @@
   changed_when: false
   failed_when: k8s_cp_gwapi_diff.rc > 1
   check_mode: false
-  when: k8s_control_plane_gateway_api
+  when: k8s_control_plane_gateway_api and k8s_cp_gwapi_file.stat.exists
 
 - name: step9 | Apply the Gateway API CRDs
   ansible.builtin.command: >-
     kubectl apply --server-side -f /root/gateway-api-{{ k8s_control_plane_gateway_api_version }}-standard-install.yaml
   changed_when: true
-  when: k8s_control_plane_gateway_api and k8s_cp_gwapi_diff.rc == 1
+  when: k8s_control_plane_gateway_api and (k8s_cp_gwapi_diff.rc | default(1)) == 1
 
 - name: step9 | Gateway API CRDs established
   ansible.builtin.command: >-
