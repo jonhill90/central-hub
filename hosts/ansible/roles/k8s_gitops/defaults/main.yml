@@ -1,0 +1,17 @@
+---
+# BUILD-PATH S13: the GitOps engine on cluster c1. Every input is listed here (Red Hat CoP rule).
+#
+# The engine is the owner's choice (BL-0021), so it has no default: set it in the inventory to
+# flux, argocd (with the web UI) or argocd-core (no UI, no API server).
+# k8s_gitops_engine: <engine>
+
+# Activation gate (CLAUDE.md): no cluster reads central-hub until all 7 items are true and
+# recorded. While this is false the engine runs with no source, so nothing is pulled from git.
+k8s_gitops_source_enabled: false
+
+# Where the cluster reads its desired state once the gate passes: anonymous HTTPS, the main branch,
+# one folder per cluster (D-0002, D-0011 `kubernetes/clusters/<role>/`).
+k8s_gitops_source_url: https://github.com/jonhill90/central-hub
+k8s_gitops_source_branch: main
+k8s_gitops_source_path: kubernetes/clusters/c1
+k8s_gitops_source_interval: 5m

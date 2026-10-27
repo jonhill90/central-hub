@@ -1,0 +1,24 @@
+---
+# Helm is on the first control plane already (k8s_control_plane step 9).
+- name: eso | Chart repo
+  ansible.builtin.shell: >-
+    /usr/local/bin/helm repo add external-secrets https://charts.external-secrets.io --force-update
+    && /usr/local/bin/helm repo update external-secrets
+  changed_when: false
+
+- name: eso | Release now
+  ansible.builtin.command: >-
+    /usr/local/bin/helm -n {{ k8s_secrets_eso_namespace }} list --filter ^external-secrets$ -o json
+  register: k8s_secrets_eso_list
+  changed_when: false
+  check_mode: false
+
+- name: eso | Install or upgrade ESO
+  ansible.builtin.command: >-
+    /usr/local/bin/helm upgrade --install external-secrets external-secrets/external-secrets
+    --version {{ k8s_secrets_eso_version }} -n {{ k8s_secrets_eso_namespace }} --create-namespace
+    --set installCRDs=true --wait --timeout 5m
+  when: >-
+    (k8s_secrets_eso_list.stdout | from_json | length == 0)
+    or (k8s_secrets_eso_list.stdout | from_json | first).chart != 'external-secrets-' ~ k8s_secrets_eso_version
+  changed_when: true
