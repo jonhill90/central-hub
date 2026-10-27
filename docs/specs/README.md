@@ -70,4 +70,4 @@ The agent that writes the code does not edit the acceptance criteria in the same
 <!-- Kept by hand from each spec's front matter until the index generator covers specs. -->
 | Spec | Status | Date |
 |---|---|---|
-| [Build the home lab from code and the first cluster c1](2026-10-home-lab-and-c1.md) | proposed | 2026-10-26 |
+| [Build the home lab from code and the first cluster c1](2026-10-home-lab-and-c1.md) | accepted | 2026-10-26 |
