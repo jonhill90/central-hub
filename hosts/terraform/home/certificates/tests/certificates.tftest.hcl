@@ -6,18 +6,19 @@ mock_provider "cloudflare" {
   mock_data "cloudflare_zone" {
     defaults = {
       id      = "zone0example"
-      account = { id = "account0example" }
+      account = { id = "account0example", name = "Example account" }
     }
   }
 
+  # Each object gives every attribute of its schema, as a mock must.
   # The two zone-scoped groups the token needs, and an account-scoped group with the same name
   # as one of them, which must not be picked.
   mock_data "cloudflare_account_api_token_permission_groups_list" {
     defaults = {
       result = [
-        { id = "group-dns-write", name = "DNS Write", scopes = ["com.cloudflare.api.account.zone"] },
-        { id = "group-zone-read", name = "Zone Read", scopes = ["com.cloudflare.api.account.zone"] },
-        { id = "group-dns-write-account", name = "DNS Write", scopes = ["com.cloudflare.api.account"] },
+        { id = "group-dns-write", name = "DNS Write", scopes = ["com.cloudflare.api.account.zone"], category = "dns_and_zones", is_selectable = true },
+        { id = "group-zone-read", name = "Zone Read", scopes = ["com.cloudflare.api.account.zone"], category = "dns_and_zones", is_selectable = true },
+        { id = "group-dns-write-account", name = "DNS Write", scopes = ["com.cloudflare.api.account"], category = "dns_and_zones", is_selectable = true },
       ]
     }
   }
@@ -77,7 +78,7 @@ run "missing_permission_group_stops" {
     target = data.cloudflare_account_api_token_permission_groups_list.all
     values = {
       result = [
-        { id = "group-dns-write", name = "DNS Write", scopes = ["com.cloudflare.api.account.zone"] },
+        { id = "group-dns-write", name = "DNS Write", scopes = ["com.cloudflare.api.account.zone"], category = "dns_and_zones", is_selectable = true },
       ]
     }
   }
