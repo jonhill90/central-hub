@@ -6,6 +6,7 @@ The checks D-0019 decides. This folder holds check 1 (front matter), the index g
 |---|---|
 | `run.sh` | The one command. `run.sh front-matter`, `run.sh links`, `run.sh markdown`, `run.sh words`, or no argument for all four. CI runs the same command. |
 | `check_docs.py` | Check 1: reads each record's front matter as YAML 1.2, checks it against its kind's schema, then checks the rules that cross files. |
+| `check_vlans.py` | Part of check 1: fails when the home VLAN file in `hosts/` differs from STD-0002's Home VLANs table in a VLAN ID, use or prefix. |
 | `schemas/` | One JSON Schema 2020-12 file per kind of document, plus `common.schema.json`. |
 | `tests/test_check_docs.sh` | Test cases: each breaks a good record one way and expects check 1 to fail. |
 | `gen_index.py` | Writes the index tables in `docs/decisions/README.md` and `docs/standards/README.md` from each file's front matter (D-0001 "Index"). Check 1 fails if a committed table differs; run it and commit what it writes. |

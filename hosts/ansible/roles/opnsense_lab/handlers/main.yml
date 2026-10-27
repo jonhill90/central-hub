@@ -1,0 +1,9 @@
+---
+- name: Apply interface changes
+  oxlorg.opnsense.raw:
+    url: interfaces/assignment/reconfigure
+    action: post
+
+- name: Apply rule changes
+  oxlorg.opnsense.reload:
+    target: rule

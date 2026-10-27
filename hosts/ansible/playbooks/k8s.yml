@@ -1,0 +1,59 @@
+---
+# Cluster c1 with kubeadm (BUILD-PATH S08), following central-hub docs/runbooks/
+# build-kubeadm-cluster.md steps 1-10 and step 36's worker join, changed for the home lab (see
+# each role's comments). Needs: terraform/home/k8s applied (the node VMs) and the API name in the
+# lab DNS (opnsense.yml, opnsense_lab_host_overrides).
+- name: Kubernetes nodes (runbook steps 1-6)
+  hosts: k8s_nodes
+  become: true
+  roles:
+    - role: k8s_node
+
+- name: First control plane (runbook steps 7-9)
+  hosts: k8s_control_plane[0]
+  become: true
+  roles:
+    - role: k8s_control_plane
+  tasks:
+    - name: join | Print a join command for the workers
+      ansible.builtin.command: kubeadm token create --print-join-command --ttl 30m
+      register: c1_join
+      changed_when: true
+      no_log: true
+
+- name: Workers (runbook step 36, worker form)
+  hosts: k8s_workers
+  become: true
+  roles:
+    - role: k8s_worker
+      vars:
+        k8s_worker_join_command: "{{ hostvars[groups['k8s_control_plane'][0]].c1_join.stdout }}"
+
+- name: Smoke test (runbook step 10)
+  hosts: k8s_control_plane[0]
+  become: true
+  gather_facts: false
+  tasks:
+    - name: step10 | Nodes Ready
+      ansible.builtin.command: kubectl wait --for=condition=Ready node --all --timeout=300s
+      changed_when: false
+
+    - name: step10 | Test pod
+      ansible.builtin.shell: |
+        kubectl delete pod t1 --ignore-not-found --wait=true >/dev/null
+        kubectl run t1 --image=registry.k8s.io/e2e-test-images/agnhost:2.53 --restart=Never --command -- sleep 600
+        kubectl wait --for=condition=Ready pod/t1 --timeout=180s
+      changed_when: true
+
+    - name: step10 | DNS and a way out
+      ansible.builtin.shell: |
+        kubectl exec t1 -- nslookup kubernetes.default
+        kubectl exec t1 -- sh -c 'wget -q -T 8 -O /dev/null https://pkgs.k8s.io && echo egress-ok'
+      register: c1_smoke
+      changed_when: false
+      failed_when: "'egress-ok' not in c1_smoke.stdout or '10.96.0.1' not in c1_smoke.stdout"
+
+    # A bare pod blocks `kubectl drain` (measured during the 1.37 upgrade), so the test pod goes.
+    - name: step10 | Remove the test pod
+      ansible.builtin.command: kubectl delete pod t1 --ignore-not-found
+      changed_when: true

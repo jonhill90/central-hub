@@ -1,0 +1,43 @@
+---
+# The Dnsmasq modules match interfaces by display name ("prod", "LAN"), not by slot (opt1), so
+# read Dnsmasq's own slot -> name list first (measured: passing opt1 fails with "not found").
+- name: Dnsmasq's interface names
+  oxlorg.opnsense.raw:
+    url: dnsmasq/settings/get
+    action: get
+  register: opnsense_lab_dnsmasq_settings
+  check_mode: false
+
+- name: Map each slot to its Dnsmasq name
+  ansible.builtin.set_fact:
+    __opnsense_lab_dns_ifname: >-
+      {{ dict(__d | dict2items | map(attribute='key')
+              | zip(__d | dict2items | map(attribute='value') | map(attribute='value'))) }}
+  vars:
+    __d: "{{ opnsense_lab_dnsmasq_settings.response.dnsmasq.interface }}"
+
+# DHCP comes from dnsmasq, on the VLANs marked dhcp: true only (10 and 30).
+# The pool is .100-.199, ending before the .224/27 load-balancer reserve.
+- name: DHCP ranges
+  oxlorg.opnsense.dnsmasq_range:
+    description: "{{ item.label }} VLAN {{ item.tag }} pool"
+    interface: "{{ __opnsense_lab_dns_ifname[item.ifname] }}"
+    start_addr: "{{ item.base }}.{{ opnsense_lab_dhcp_first }}"
+    end_addr: "{{ item.base }}.{{ opnsense_lab_dhcp_last }}"
+    reload: true
+  loop: "{{ opnsense_lab_vlans | selectattr('dhcp') | list }}"
+  loop_control:
+    label: "VLAN {{ item.tag }}"
+
+# dnsmasq listens on the DHCP VLANs and mgmt only, never on WAN. This module sets every
+# general dnsmasq setting; the ones not named here go to the collection's defaults.
+- name: Limit dnsmasq to the lab interfaces
+  oxlorg.opnsense.dnsmasq_general:
+    interfaces: >-
+      {{ ((opnsense_lab_vlans | selectattr('dhcp') | map(attribute='ifname') | list)
+         + (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | map(attribute='ifname') | list))
+         | map('extract', __opnsense_lab_dns_ifname) | list }}
+    # Unbound answers DNS on 53; dnsmasq only hands out leases, so its DNS listener moves out of
+    # the way (the running lab's value; the collection's default 53 is refused).
+    port: 53053
+    reload: true

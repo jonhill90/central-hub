@@ -1,0 +1,6 @@
+---
+argument_specs:
+  main:
+    short_description: Join a worker node (runbook step 36, worker form)
+    options:
+      k8s_worker_join_command: {type: str, required: true, description: The join command printed by the control plane. Secret (it holds a token).}

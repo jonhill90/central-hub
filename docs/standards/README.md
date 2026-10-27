@@ -39,5 +39,6 @@ The body holds the rule itself, worded with BCP 14 key words (RFC 2119, RFC 8174
 
 | ID | Title | Status | Scope | Owner system |
 |---|---|---|---|---|
-| STD-0001 | [Names](0001-names.md) | active | the OS hostname of every VM and physical host, local or cloud, and the DNS name of every service the platform runs | 8 Platform |
+| STD-0001 | [Names](0001-names.md) | active | the OS hostname of every VM, container and physical host, appliance VMs included, local or cloud, and the DNS name of every service the platform runs | 8 Platform |
 | STD-0002 | [IP address plan](0002-ip-address-plan.md) | active | every private IPv4 and IPv6 range used by the home lab, VPS providers, clouds and Kubernetes clusters | 8 Platform |
+| STD-0003 | [Version choice](0003-version-choice.md) | proposed | the version of every outside tool, package, chart or image that a runbook, code under `hosts/` or a cluster manifest installs or pins | 8 Platform |

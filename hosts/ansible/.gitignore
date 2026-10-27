@@ -1,0 +1,5 @@
+# Collections installed from requirements.yml
+collections/
+# A filled-in inventory never goes in the repository; only the *.example.yml templates are tracked
+inventories/*/*.yml
+!inventories/*/*.example.yml

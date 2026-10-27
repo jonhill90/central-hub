@@ -110,6 +110,7 @@ The private-network client goes on at first boot, so you can reach the machine p
 - why: every build starts from a clean machine, so the runbook makes the cluster, not leftovers. The machine is greenfield: no snapshot is kept.
 - expect: the node shows in `tailscale status`; `tailscale ssh root@<node name>` works. Takes about 2.5 minutes.
 - status: **PROVEN** (proof runs 1-3, through the provider's API). CKA: CA2.
+- place (home lab, proven 2026-10-26): the node is a Proxmox VM cloned from template 9000 (AlmaLinux 10.2 GenericCloud 10.2-20261012.0), with a fixed address on VNet prod (VLAN 10) and an SSH key from cloud-init (`hosts/terraform/home/k8s`). No Tailscale on the node; Ansible reaches it through the Proxmox host, whose mgmt VLAN may open connections into the lab VLANs (`opnsense_lab` rules).
 
 #### 1. Lock down the host
 
@@ -132,6 +133,7 @@ sshd -t && systemctl reload sshd
 - why: The VPS sits on the public internet, and its image ships with no firewall and allows SSH logins with a password and as root (measured, PROOF-RUN-1.md). So before anything else, SSH goes over the tailnet only, with keys only.
 - expect: `sshd -T | grep -E '^(passwordauthentication|permitrootlogin) '` shows `no` and `without-password`; `firewall-cmd --zone=public --list-services` shows only `dhcpv6-client`; a new `tailscale ssh` login still works.
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2.
+- place (home lab, proven 2026-10-26): the Kubernetes firewalld zone is `lab`, bound to the lab NIC (`eth0`), with ssh in it; there is no public zone to close (`k8s_node` role).
 
 #### 2. Host prerequisites
 
@@ -152,6 +154,7 @@ touch /.autorelabel && systemctl reboot                     # the image ships SE
 - expect after reboot: `getenforce` = Permissive; `lsmod | grep -E '^(overlay|br_netfilter)'`; `sysctl net.ipv4.ip_forward` = 1.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/> ; <https://kubernetes.io/docs/setup/production-environment/container-runtimes/>
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2.
+- place (home lab, proven 2026-10-26): the GenericCloud image ships only `kernel-modules-core`, which has no `br_netfilter`, and the mirror no longer carries modules for the image's own kernel. `dnf install kernel-modules` brings a newer kernel; reboot into it before `modprobe`. The image's SELinux is already on, so no relabel boot is needed.
 
 #### 3. DNS that pods can use
 
@@ -166,6 +169,7 @@ nmcli con mod "$C" ipv4.dns-search "" ipv6.dns-search "" && nmcli con up "$C"   
 - why: Pods ask CoreDNS, which sends every name outside the cluster to the node's DNS servers (source: <https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/>; the link to the node is under Known issues on <https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/>). Two node settings broke pods (measured trap, PROOF-RUN-1.md), so fixing the node gives pods working DNS.
 - expect: `/etc/resolv.conf` has the provider's nameservers and no `localhost` search domain.
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: TS5 (partly; a found-and-fixed trap).
+- place (home lab, proven 2026-10-26): skip `tailscale set --accept-dns=false`. The node's DNS is its VLAN's `.1` (OPNsense Unbound).
 
 #### 4. Firewall for Kubernetes and Cilium (tailnet zone only)
 
@@ -185,6 +189,7 @@ firewall-cmd --reload
 - why: Each Kubernetes part listens on its own port (measured with `ss` on the proof node). They open only on the tailnet, so the public zone stays closed (but see the NodePort finding in [step 23](#23-services-clusterip-nodeport-loadbalancer-sn3)).
 - expect: `firewall-cmd --zone=tailnet --list-ports` shows the 8 ports above; `firewall-cmd --zone=trusted --list-sources` shows `10.240.0.0/16`.
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2, TS5 (partly).
+- place (home lab, proven 2026-10-26): the same ports and the trusted pod range, in zone `lab`.
 
 #### 5. containerd 2.3.6
 
@@ -241,6 +246,7 @@ systemctl enable --now kubelet
 - why: The cluster's address goes into its certificates and every kubeconfig, so use a name, not an IP: a rebuilt node then needs only the name's address changed. kubeadm also cannot add high availability later to a cluster made without `--control-plane-endpoint` (create-cluster page).
 - expect: `getent hosts <endpoint name>` returns the node's address.
 - status: **PROVEN** with an `/etc/hosts` entry (PROOF-RUN-3.md).
+- place (home lab, proven 2026-10-26): `api.c1.prod.<zone>` is an OPNsense Unbound host override pointing at the control-plane node (`opnsense_lab_host_overrides`), not an `/etc/hosts` line. It resolves from every node in the lab.
 
 #### 8. Init
 
@@ -262,6 +268,7 @@ mkdir -p /root/.kube && cp /etc/kubernetes/admin.conf /root/.kube/config
 - note: the node is not Ready yet, and CoreDNS waits. Both need a network (next step).
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/>
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA3.
+- place (home lab, proven 2026-10-26): `kubeadm init` also takes `--skip-phases addon/kube-proxy`, because Cilium replaces kube-proxy there (see step 9).
 
 #### 9. Cilium 1.20.4
 
@@ -286,6 +293,7 @@ kubectl -n kube-system rollout status ds/cilium && kubectl -n kube-system rollou
 - versions (checked 2026-10-24): Cilium 1.20.4 (2026-10-23) is an out-of-band security patch (CVE-2026-111943, Go 1.26.10) that also fixes a 1.20.3 Gateway API BackendTLSPolicy regression (<https://github.com/cilium/cilium/releases/tag/v1.20.4>). Helm v4.3.1 (2026-10-15) is the current Helm patch release (<https://github.com/helm/helm/releases/tag/v4.3.1>). The proof runs used Cilium 1.20.3 and Helm v4.3.0; the value keys are the same in 1.20.4.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/> (section on the pod network add-on)
 - status: **PROVEN** on Cilium 1.20.3 and Helm v4.3.0 (PROOF-RUN-3.md: ready 32 s after install). The pins here, Cilium 1.20.4 and Helm v4.3.1, are not yet run. CKA: CA7 (CNI), CA6 (Helm).
+- place (home lab, proven 2026-10-26): `kubeProxyReplacement=true` with `k8sServiceHost=<endpoint name>` and `k8sServicePort=6443`, `l2announcements.enabled=true`, `devices=<lab NIC>`, no `MTU` override (the lab NIC carries 1500), then a `CiliumLoadBalancerIPPool` on VLAN 10's `.224/27` (STD-0002) and an L2 announcement policy. A LoadBalancer Service got `.224` and answered from the worker and from the mgmt VLAN.
 
 #### 10. Single node scheduling and a smoke test
 
@@ -303,6 +311,7 @@ kubectl exec t1 -- sh -c 'wget -q -T 8 -O /dev/null https://pkgs.k8s.io && echo 
 - expect: pod IP in 10.240.0.0/16; `kubernetes.default` → 10.96.0.1; egress-ok.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/> (section on control plane node isolation)
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: WS5 (partly), SN1 (partly).
+- place (home lab, proven 2026-10-26): the control-plane taint stays, because c1 has a worker. The test pod is deleted afterwards: a bare pod blocks `kubectl drain` in step 17.
 
 #### 11. Backup and restore
 
@@ -545,6 +554,7 @@ kubectl uncordon <node name>
 - note: Cilium is a separate Helm release. kubeadm does not upgrade it; the page says to check your CNI's own upgrade notes. ※ It was installed by Helm in [step 9](#9-cilium-1204), outside kubeadm.
 - page: <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/> ; <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/change-package-repository/> ; <https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/>
 - status: **PROVEN 2026-10-19** (zero new SELinux denials under Enforcing).
+- place (home lab, proven 2026-10-26): `kubeadm upgrade apply` and `kubeadm upgrade node` take `--skip-phases addon/kube-proxy`; afterwards no kube-proxy pod exists. The worker is upgraded with `kubeadm upgrade node`, drained from the control plane (`hosts/ansible/playbooks/k8s-upgrade.yml`). The upgrade took 204 s for both nodes.
 
 #### 18. Certificates: check and renew (CA4)
 
@@ -1269,6 +1279,7 @@ This needs more machines, so here you only read the commands.
 - why: One control plane is one point of failure. High availability runs three or more (source: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/ha-topology/>), so the cluster keeps going when one dies.
 - expect: n/a (read only: nothing runs on this VPS).
 - status: **NOT PROVEN**: needs more machines.
+- place (home lab, proven 2026-10-26): the worker join runs for real (`k8s_worker` role, with a 30-minute token printed by the control plane). With one NIC per node, no `--node-ip` is needed.
 
 #### 37. Teardown
 

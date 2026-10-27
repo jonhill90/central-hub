@@ -1,0 +1,78 @@
+---
+- name: Alias for the private IPv4 ranges
+  oxlorg.opnsense.alias:
+    name: RFC1918
+    type: network
+    content:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+    description: Private IPv4 ranges
+    reload: true
+
+# OPNsense's default "allow LAN to any" rules are switched off; the lab rules replace them.
+# Unchecked: that these defaults are rules this API manages on 26.7.
+- name: Switch off the default allow LAN rules
+  oxlorg.opnsense.rule:
+    description: "{{ item.description }}"
+    match_fields: [description]
+    enabled: false
+    action: pass
+    interface: [lan]
+    ip_protocol: "{{ item.ip }}"
+    source_net: lan
+    destination_net: any
+    log: false
+  loop:
+    - { description: Default allow LAN to any rule, ip: inet }
+    - { description: Default allow LAN IPv6 to any rule, ip: inet6 }
+  loop_control:
+    label: "{{ item.description }}"
+  notify: Apply rule changes
+
+# Four rules per lab VLAN, sequence 10, 20, 30 ... in the order of opnsense_lab_vlans.
+- name: Lab rules per VLAN
+  oxlorg.opnsense.rule:
+    description: "{{ item.1.text | replace('{}', item.0.label ~ ' VLAN ' ~ item.0.tag) }}"
+    match_fields: [description]
+    sequence: "{{ 10 + (opnsense_lab_vlans.index(item.0) * 4 + item.1.n) * 10 }}"
+    action: "{{ item.1.action }}"
+    quick: true
+    interface: ["{{ item.0.ifname }}"]
+    direction: in
+    ip_protocol: inet
+    protocol: "{{ item.1.protocol }}"
+    source_net: "{{ item.0.ifname }}"
+    destination_net: "{{ opnsense_home_lan_cidr if item.1.destination == 'home' else item.1.destination }}"
+    destination_invert: "{{ item.1.invert }}"
+    destination_port: "{{ item.1.port }}"
+    icmp_type: "{{ item.1.icmp }}"
+    log: false
+  loop: "{{ opnsense_lab_vlans | product(opnsense_lab_rule_kinds) | list }}"
+  loop_control:
+    label: "{{ item.0.ifname }} rule {{ item.1.n }}"
+  notify: Apply rule changes
+
+# The mgmt VLAN manages the others: it may open connections into every lab VLAN (for example the
+# Proxmox host as Ansible's jump host to the Kubernetes nodes). The lab VLANs can't reach mgmt:
+# their own rules allow only ping and DNS to the firewall. Measured 2026-10-26: without this
+# rule, mgmt -> prod was dropped by mgmt's "to internet (not RFC 1918)" rule.
+- name: Management VLAN into the other lab VLANs
+  oxlorg.opnsense.rule:
+    description: "Allow management VLAN {{ opnsense_lab_mgmt_tag }} to {{ item.label }} VLAN {{ item.tag }}"
+    match_fields: [description]
+    sequence: "{{ 5 + opnsense_lab_mgmt_rule_index }}"
+    action: pass
+    quick: true
+    interface: ["{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | first).ifname }}"]
+    direction: in
+    ip_protocol: inet
+    protocol: any
+    source_net: "{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | first).ifname }}"
+    destination_net: "{{ item.cidr }}"
+    log: false
+  loop: "{{ opnsense_lab_vlans | rejectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | list }}"
+  loop_control:
+    label: "mgmt to VLAN {{ item.tag }}"
+    index_var: opnsense_lab_mgmt_rule_index
+  notify: Apply rule changes

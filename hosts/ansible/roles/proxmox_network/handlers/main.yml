@@ -1,0 +1,35 @@
+---
+# Check the syntax first and stop on errors. Proxmox's "bridge-fd 0" warnings are normal.
+- name: Check network syntax
+  ansible.builtin.command:
+    cmd: ifreload -a -s
+  register: proxmox_network_syntax
+  changed_when: false
+  check_mode: false
+  # ifreload -s exits 1 on warnings too (measured: bridge-fd 0 on every bridge), so only lines
+  # that start with "error" fail it.
+  failed_when: (proxmox_network_syntax.stdout ~ proxmox_network_syntax.stderr) is search('^error', multiline=True)
+  listen: Reload network
+
+- name: Apply network configuration
+  ansible.builtin.command:
+    cmd: ifreload -a
+  changed_when: true
+  listen: Reload network
+
+# The host's home LAN address on vmbr0 must survive every reload.
+- name: Read vmbr0 address
+  ansible.builtin.command:
+    cmd: ip -4 -br addr show vmbr0
+  register: proxmox_network_vmbr0
+  changed_when: false
+  check_mode: false
+  listen: Reload network
+
+- name: Check that vmbr0 still has its address
+  ansible.builtin.assert:
+    that:
+      - proxmox_network_vmbr0.stdout is search('UP')
+      - proxmox_network_vmbr0.stdout is search('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+')
+    fail_msg: vmbr0 lost its address after the network reload; fix it at the console.
+  listen: Reload network

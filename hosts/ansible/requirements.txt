@@ -1,0 +1,5 @@
+# Python packages for the machine that runs the playbooks (the controller).
+# Install with: pip install -r requirements.txt
+ansible-core==2.21.5
+# oxlorg.opnsense talks to the OPNsense API with httpx.
+httpx==0.28.1

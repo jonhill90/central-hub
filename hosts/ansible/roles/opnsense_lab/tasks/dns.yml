@@ -1,0 +1,28 @@
+---
+# opnsense.<zone> answers with the mgmt gateway inside the lab; every other name in the zone
+# still resolves publicly.
+- name: Unbound host override for the firewall's GUI name
+  oxlorg.opnsense.unbound_host:
+    hostname: opnsense
+    domain: "{{ opnsense_dns_zone }}"
+    record_type: A
+    value: "{{ opnsense_lab_mgmt_gateway }}"
+    description: OPNsense GUI (mgmt VLAN {{ opnsense_lab_mgmt_tag }})
+    match_fields: [hostname, domain]
+    reload: true
+
+# Lab-only names for things the lab runs, for example the cluster API api.c1.prod.<zone>
+# (STD-0001 rule 4) pointing at the control-plane node (BUILD-PATH S07). Each entry's
+# hostname is relative to the zone (api.c1.prod); its address is a private value.
+- name: Unbound host overrides for lab services
+  oxlorg.opnsense.unbound_host:
+    hostname: "{{ item.hostname }}"
+    domain: "{{ opnsense_dns_zone }}"
+    record_type: A
+    value: "{{ item.address }}"
+    description: "{{ item.description }}"
+    match_fields: [hostname, domain]
+    reload: true
+  loop: "{{ opnsense_lab_host_overrides }}"
+  loop_control:
+    label: "{{ item.hostname }}.<zone>"

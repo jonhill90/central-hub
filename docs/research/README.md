@@ -15,6 +15,7 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0006 | [0006-allow-corrections-to-accepted-records.md](0006-allow-corrections-to-accepted-records.md) |
 | D-0007 | [0007-use-a-one-page-prd-and-frozen-per-change-specs.md](0007-use-a-one-page-prd-and-frozen-per-change-specs.md) |
 | D-0008 | [0008-name-the-prd-specs-and-root-folders.md](0008-name-the-prd-specs-and-root-folders.md) |
+| D-0011 | [0011-keep-machine-code-in-hosts.md](0011-keep-machine-code-in-hosts.md) |
 | D-0012 | [0012-sort-docs-by-kind-of-document.md](0012-sort-docs-by-kind-of-document.md) |
 | D-0014 | [0014-number-requirements-req-nnnn.md](0014-number-requirements-req-nnnn.md) |
 | D-0015 | [0015-number-research-batches-rb-nnnn.md](0015-number-research-batches-rb-nnnn.md) |

@@ -1,0 +1,3 @@
+# Made-up example in the STD-0001 shape (env p, os de, role nw, what, nn). Not a real machine.
+# Copy to home.tfvars (git-ignored), put the real name there, and pass -var-file=home.tfvars.
+connector_hostname = "pdenwdemo01"

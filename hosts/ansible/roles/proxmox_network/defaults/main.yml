@@ -1,0 +1,12 @@
+---
+# Not private. The private values (proxmox_vmbr1_mac, proxmox_host_mgmt_address) have no
+# default here on purpose: they come from the secret store through the inventory.
+proxmox_network_interfaces_file: /etc/network/interfaces
+proxmox_network_bridge: vmbr1
+proxmox_network_bridge_vids: "2-4094"
+# The SDN VNet that carries the mgmt VLAN (50); Terraform creates it.
+proxmox_network_mgmt_vnet: mgmt
+proxmox_network_mgmt_prefix_len: 24
+# REQUIRED, set per place in the inventory: the place's whole lab range (STD-0002), routed
+# through the firewall's mgmt address so the host reaches every lab VLAN.
+# proxmox_network_lab_supernet: <prefix>/16

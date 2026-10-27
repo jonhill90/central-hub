@@ -6,7 +6,7 @@ trigger: on request; after a fresh Proxmox VE 9 install
 runner: the owner
 outcome: a Proxmox VE 9 host on the no-subscription repositories, fully upgraded, with a tested break-glass login, key-only SSH, a least-privilege agent account and API token, backups and notifications
 needs: console or LAN access to the host as root@pam; a password manager with an offline copy; a TOTP app
-private-values: [host-name, host-address, root-pam-password, root-pam-recovery-keys, pve-agent-token]
+private-values: [host-name, host-address, root-pam-password, root-pam-recovery-keys, pve-iac-token]
 files: []
 last-tested:
 superseded-by:
@@ -29,7 +29,7 @@ The runbook walks the box through three parts, each one depending on the one bef
     │      rename → repos → updates + microcode → time → break-glass login + 2FA → SSH keys
     ▼
  Part 2  Let the agent in, with least privilege
-    │      Linux user `agent` → a Proxmox API token the agent can USE but not READ
+    │      Linux user `agent` → Terraform account `iac@pve`, its pools and a token only you can read
     ▼
  Part 3  Give it a safety net
            backups (+ "repeat missed": the PC is often off) → notifications
@@ -277,7 +277,7 @@ sed -i '1i case $- in *i*) ;; *) return;; esac' /root/.bashrc
 
 How the agent reaches the host over the network comes with the networking steps (see [Not in this runbook](#not-in-this-runbook)). These two steps make the accounts it will use.
 
-#### 6. The Linux user `agent`, and a Proxmox API token the agent can use but not read
+#### 6. The Linux user `agent`, and the Terraform account and its API token
 
 The owner asked for secrets that the agent can use but not read.
 
@@ -290,62 +290,48 @@ adduser --disabled-password --gecos "agent (automation)" agent
 
 **sudo:** start with none. Each command the agent needs as root gets its own fixed script in `/usr/local/sbin/`, and sudoers allows exactly that script with no wildcards. The sudoers manual itself says deny-lists on `ALL` are "advisory at best" and wildcards match across words [S4-61]. Never give `agent` sudo for `pvesh`: it runs as root and skips Proxmox permission checks, which is the same as giving root [S4-45].
 
-**6b. The API token.** A network-injected secret does not work here: an agent proxy can inject secrets only into requests that go out to the internet, and the host is reached through the private network's encrypted tunnel, which a proxy can't add a header to [S4-02, S4-03, S4-62].
+**6b. The Terraform account and its API token.** Terraform (OpenTofu) builds the lab's VMs and networks (D-0011 rule 6), so it gets its own Proxmox account, a role with only the privileges it uses, and a token that expires. The script [`hosts/terraform/home/bootstrap/iac-access.sh`](../../hosts/terraform/home/bootstrap/iac-access.sh) makes all of it except the token, and it is safe to run again. Read it before you run it.
+
+| Piece | Name | What it is |
+|---|---|---|
+| user | `iac@pve` | Proxmox's built-in `pve` realm: no Linux login |
+| group | `iac` | the user is its only member; ACLs go on the group |
+| role | `IacOps` | the script's own least-privilege list, not a built-in role |
+| token | `iac@pve!apply` | privilege-separated, expires after 90 days |
+| pools | `firewall`, `remote-access`, `k8s` | one per workload, named by job (STD-0001); the ACLs give the role on each pool, so the token reaches only those guests |
 
 ```bash
-# a pool that holds only what the agent may touch [S1-35]
-pveum pool add k8s --comment "Kubernetes worker VMs"
+# 1. copy the script to the host, then on the host, as root: the group, role, user, pools and the group's ACLs
+sh iac-access.sh
 
-# an agent identity in the PVE realm (no Linux login), and a group
-pveum group add agents -comment "Automation"
-pveum user add agent@pve -comment "Agent sessions" -groups agents
-
-# a privilege-separated token that expires (here: 90 days) [S1-36, S1-37, S1-38]
-#     the owner runs this in the web UI Shell. The command returns the secret once; here it goes straight
-#     into a root-only file and is never printed, so it never passes through an agent session or its log.
-#     [model: the JSON output form is not yet run on this host; check `pveum help user token add` first]
-install -d -m 700 /etc/pve-agent
+# 2. the token. Run it from your own machine over SSH, so the secret goes straight into a file
+#    there that only you can read, and is never printed or seen by an agent session.
 ( umask 077
-  pveum user token add agent@pve ops -privsep 1 -expire "$(date -d '+90 days' +%s)" --output-format json \
-    | python3 -c 'import json,sys; print("PVEAPIToken=agent@pve!ops=" + json.load(sys.stdin)["value"])' \
-    > /etc/pve-agent/token )
+  ssh root@<host address> "pveum user token add iac@pve apply --privsep 1 --expire $(date -d '+90 days' +%s) --output-format json" \
+    | python3 -c 'import json,sys; print("iac@pve!apply=" + json.load(sys.stdin)["value"])' \
+    > <token file> )
 
-# give the agents group, then the token, a role on the pool only
-#     NOT PVEVMAdmin: measured on 9.2.21 (2026-10-23), it includes VM.Console and the
-#     VM.GuestAgent.FileRead/FileWrite/Unrestricted privileges this step forbids below.
-#     Custom role = PVEVMAdmin's privileges minus those four; list them first, then build it:
-pveum role list --output-format json | python3 -c 'import json,sys; print(",".join(sorted(next(r["privs"] for r in json.load(sys.stdin) if r["roleid"]=="PVEVMAdmin").replace(" ","").split(","))))'
-pveum role add AgentVMOps -privs "<that list without VM.Console,VM.GuestAgent.FileRead,VM.GuestAgent.FileWrite,VM.GuestAgent.Unrestricted>"
-#     creating VMs probably also needs Datastore.AllocateSpace on the storage and SDN.Use on the bridge [model; check the PVE docs first]
-# a privilege-separated token gets at most what its user has, so the group gets the same roles first
-#     [source: <https://pve.proxmox.com/wiki/User_Management>, "API Tokens" and "Inheritance"]
-#     [model: these group ACLs are not yet run on this host]
-pveum acl modify /pool/k8s -group agents -role AgentVMOps
-pveum acl modify / -group agents -role PVEAuditor              # read-only view of the node, optional
-pveum acl modify /pool/k8s -token 'agent@pve!ops' -role AgentVMOps
-pveum acl modify / -token 'agent@pve!ops' -role PVEAuditor     # only if the group has it too
-pveum user token permissions agent@pve ops                      # check what it can really do
-
-# the secret file: one line, PVEAPIToken=agent@pve!ops=<the secret>; check its owner and mode, not its content
-ls -l /etc/pve-agent/token
+# 3. on the host again: now that the token exists, the script gives it the same ACLs as the group
+#    (a privilege-separated token gets at most what its user has, and needs its own ACLs)
+sh iac-access.sh
+pveum user token permissions iac@pve apply      # check what it can really do
 ```
 
-Then one fixed wrapper, `/usr/local/sbin/pve-api`, that reads the file and calls `https://localhost:8006/api2/json/...` for an allowed list of paths, plus one sudoers line `agent ALL=(root) NOPASSWD: /usr/local/sbin/pve-api` [S4 drawing]. The agent drafts the script for the owner to read before it is installed.
+At apply time `PROXMOX_VE_API_TOKEN` is filled from `<token file>` (see `hosts/terraform/README.md`).
 
-why: The agent needs its own account, so a bad session is capped at what that account may do (NIST IR 7966: least privilege and command restriction for automated access [S2 summary 10]). Its secret stays on the host, readable only by root, and the agent may only run a fixed script that uses it [S4 summary 6].
+why: Terraform needs its own account, so a bad run is capped at what that account may do (NIST IR 7966: least privilege for automated access [S2 summary 10]). root@pam stays break-glass only ※R. The role is the script's own list, not `PVEVMAdmin`, which includes `VM.Console` and the `VM.GuestAgent.FileRead/FileWrite/Unrestricted` privileges this step forbids below (measured on 9.2.21, 2026-10-23).
 
 ※ The admins group from [step 4](#4-break-glass-login-and-the-admins-group) is for people; this step makes a separate group for automation.
 
-expect: `pveum user token permissions agent@pve ops` lists only the pool and the read-only view; `ls -l /etc/pve-agent/token` shows `-rw------- root root`.
+expect: `pveum user token permissions iac@pve apply` lists only the paths in the script's `acl` lines: the three pools, the SDN paths, the planned k8s VM IDs, two storages and the node; `ls -l <token file>` shows `-rw-------` and your user.
 
 What this buys:
 
 | Threat | Result |
 |---|---|
-| Agent session prints its environment | Nothing: no Proxmox secret is in the session [S4-01, inferred] |
-| Agent runs `cat /etc/pve-agent/token` | Permission denied: `agent` isn't root [inferred] |
-| Token leaks anyway | Only pool `k8s` + read-only; expires in 90 days; one command revokes it: `pveum user token remove agent@pve ops` [S1-37, S1-38] |
-| Agent tries the VM console | Tokens can't use console endpoints [S1-36] |
+| Agent session prints its environment | Nothing: the secret is only in `<token file>` and, during a run, in the apply's own environment [inferred] |
+| Token leaks anyway | Only the paths in the script's `acl` lines (the three pools, the SDN paths, the planned k8s VM IDs, two storages, the node); expires in 90 days; one command revokes it: `pveum user token remove iac@pve apply` [S1-37, S1-38] |
+| Token tries the VM console | Tokens can't use console endpoints [S1-36] |
 
 Proxmox 9.2 can rotate a token's secret in place without losing its ACLs [S1-38].
 
@@ -355,7 +341,7 @@ Other "use but not read" options, for later (not picked; the secrets backend is 
 
 | Mechanism | Agent sees the value? | Fits this host? |
 |---|---|---|
-| Root-only file + fixed sudo script (this step) | No | Yes, in use |
+| Root-only file on the host + fixed sudo script | No | Yes, if an agent on the host needs a secret |
 | systemd `LoadCredential=` for a service | No (kernel-enforced per service) [S4-60] | Yes, when a service needs it |
 | Cloud environment network secret | No | Only for internet-reachable APIs, not this host [S4-03] |
 | Cloud environment variable | **Yes** | No [S4-01] |
@@ -389,7 +375,7 @@ Targets, as options [S1-60, S1-65, S1-66]:
 
 Datacenter → Backup → Add: schedule, mode `snapshot`, retention on the storage (`keep-last=3,keep-daily=7` for example; `maxfiles` is gone in 9.x) [S1-61, S1-63], and tick **Repeat missed**: the PC is often off at backup time [S1-62].
 
-The host's own config (`/etc/pve`, `/etc/network/interfaces`, `/etc/ssh/sshd_config.d`, `/etc/pve-agent`) is not in guest backups; a small tar of those to the USB target covers it [S1 gaps; S2 table, backups row].
+The host's own config (`/etc/pve`, `/etc/network/interfaces`, `/etc/ssh/sshd_config.d`) is not in guest backups; a small tar of those to the USB target covers it [S1 gaps; S2 table, backups row].
 
 why: Proxmox backs up whole guests (config + disks) [S1-60]. A backup on the same disk as the VMs is not a backup, but it may be the only target available at first [inferred].
 
@@ -399,7 +385,7 @@ expect: the job shows under Datacenter → Backup, and a first run (Run now) fin
 
 ## If it fails
 
-Stop at the step that fails. If SSH or a login breaks, use the session ※F kept open, or the physical console as root@pam ※R. Undo a change in step 5 by removing `/etc/ssh/sshd_config.d/00-hardening.conf` and reloading `ssh`. Undo step 6 with `pveum user token remove agent@pve ops`, `pveum user delete agent@pve` and `deluser agent`. Tell the owner before changing a command, and fix the runbook text in the same change.
+Stop at the step that fails. If SSH or a login breaks, use the session ※F kept open, or the physical console as root@pam ※R. Undo a change in step 5 by removing `/etc/ssh/sshd_config.d/00-hardening.conf` and reloading `ssh`. Undo step 6 with `pveum user token remove iac@pve apply`, then `pveum user delete iac@pve; pveum role delete IacOps; pveum group delete iac` (the script's exit path), and `deluser agent`. Tell the owner before changing a command, and fix the runbook text in the same change.
 
 ## Afterwards
 
@@ -409,14 +395,15 @@ Record a replay in the PR that changes this runbook: set `last-tested` with the 
 
 | Piece | How it comes out |
 |---|---|
-| Agent access | `pveum user token remove agent@pve ops`; `deluser agent` |
-| Secrets on the host | The file + wrapper move behind whatever secrets backend is picked later |
+| Terraform access | `pveum user token remove iac@pve apply`; `pveum user delete iac@pve; pveum role delete IacOps; pveum group delete iac` |
+| Agent access | `deluser agent` |
+| The token file | Moves behind whatever secrets backend is picked later |
 | Proxmox itself | Back up guests, then reinstall the PC as a bare-metal AlmaLinux worker or Talos |
 
 ## Not in this version
 
 - The networking steps (see [Not in this runbook](#not-in-this-runbook)).
-- An automated version: Terraform for the Proxmox VMs and networks, and Ansible for the host (D-0011); the Terraform provider is not chosen yet. Batch RB-0061 compared the bpg Terraform/OpenTofu provider, the community.proxmox Ansible collection and Packer. It comes after this runbook has been done by hand (D-0012, "Manual first").
+- An automated version: Terraform for the Proxmox VMs and networks, and Ansible for the host (D-0011), with the `bpg/proxmox` Terraform provider (D-0011 rule 6). Batch RB-0061 compared the bpg Terraform/OpenTofu provider, the community.proxmox Ansible collection and Packer. It comes after this runbook has been done by hand (D-0012, "Manual first").
 - A trusted TLS certificate for the web UI ※S.
 - A separate management VLAN (NIST SP 800-125A asks for one; later) [S2 table].
 - CIS Debian benchmark items that conflict with a hypervisor (at least seven) [S2 summary 8].

@@ -6,7 +6,7 @@ scope: every private IPv4 and IPv6 range used by the home lab, VPS providers, cl
 owner-system: 8 Platform
 why: the owner said yes to the proposed pool `10.0.0.0/8`, one /16 prefix per site or region, the home prefix and the home VLANs on 2026-10-24 between 06:29 and 07:22 UTC; to one /12 container prefix per kind of place on 2026-10-24 at 20:00 UTC; to the Kubernetes pod and Service ranges at 20:05 and 20:09 UTC; to the load-balancer addresses at 23:32 and 23:38 UTC; to a home-only first cluster on 2026-10-25 at 00:22 UTC; and to the ranges never used on 2026-10-25 at 00:29 UTC, in the project's IP address plan work. Also to keeping ranges in this repo and machine addresses out of it on 2026-10-22 at 04:47 UTC, and to the IPv6 option "plan now, switch on later" on 2026-10-22 at 06:13 UTC
 follows: [RFC 1918 private IPv4, RFC 4632 CIDR (bit-aligned prefixes), RFC 6598 shared address space (avoided), RFC 4193 unique local IPv6, RFC 4291 IPv6 addressing (/64 per link), RFC 7381 enterprise IPv6 deployment, IEEE 802.1Q VLAN IDs, NetBox IPAM terms (aggregate, prefix, container prefix), Azure IP planning guide, kubeadm init, Kubernetes dual-stack]
-check: none yet in this repo; an overlap check script exists outside it, and where scripts live here is not decided yet
+check: the home VLAN table is checked against its copy in code by `.github/docs-check/check_vlans.py`, run with the docs check on every PR; the overlap check script exists outside this repo
 accepted-evidence:
   approved-by: owner
   approved-at: 2026-10-22T07:12:48Z
@@ -64,6 +64,8 @@ kubeadm MUST be given `--service-cidr` and the CNI its pod range from this table
 | 20 | `10.1.20.0/24` | QA and stage | `10.1.20.224/27` |
 | 30 | `10.1.30.0/24` | dev | `10.1.30.224/27` |
 | 50 | `10.1.50.0/24` | management | none |
+
+The copy in code of this table is `hosts/ansible/inventories/home/group_vars/all/vlans.yml` (list `lab_vlans`), which Terraform and Ansible both read. This table is the rule. The docs check (`.github/docs-check/check_vlans.py`) fails when the file differs from it in a VLAN ID, use or prefix, so a VLAN change edits both in one PR.
 
 The load-balancer addresses work in ARP or BGP mode; the mode is chosen with the ingress decision.
 

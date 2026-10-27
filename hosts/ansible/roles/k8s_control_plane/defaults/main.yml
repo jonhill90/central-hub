@@ -1,0 +1,11 @@
+---
+# Runbook steps 7-10. The endpoint name is api.<cluster>.<env>.<zone> (STD-0001); the zone is
+# private, so k8s_control_plane_endpoint has no default.
+# k8s_control_plane_endpoint: api.c1.prod.<zone>
+k8s_control_plane_kubernetes_version: "1.36.5"
+k8s_control_plane_pod_cidr: 10.240.0.0/16      # STD-0002 cluster 1
+k8s_control_plane_service_cidr: 10.96.0.0/16   # STD-0002 cluster 1
+k8s_control_plane_helm_version: v4.3.1
+k8s_control_plane_cilium_version: 1.20.4
+k8s_control_plane_lb_cidr: 10.1.10.224/27      # STD-0002 VLAN 10 load-balancer range
+k8s_control_plane_lb_pool_name: prod

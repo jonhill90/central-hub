@@ -67,5 +67,7 @@ The agent that writes the code does not edit the acceptance criteria in the same
 
 ## Index
 
-<!-- Generated from each spec's front matter once the first spec exists. -->
-No specs yet.
+<!-- Kept by hand from each spec's front matter until the index generator covers specs. -->
+| Spec | Status | Date |
+|---|---|---|
+| [Build the home lab from code and the first cluster c1](2026-10-home-lab-and-c1.md) | proposed | 2026-10-26 |
