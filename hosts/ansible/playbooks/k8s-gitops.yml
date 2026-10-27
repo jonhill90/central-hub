@@ -1,0 +1,11 @@
+---
+# The GitOps engine on cluster c1 (BUILD-PATH S13): the pinned upstream install, with no git
+# credential and no image automation (Activation gate items 3, 4 and 6). Set k8s_gitops_engine in
+# the inventory first. The source stays off until the Activation gate passes.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags install
+#   ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_enabled=true
+- name: GitOps engine
+  hosts: k8s_control_plane[0]
+  become: true
+  roles:
+    - role: k8s_gitops

@@ -1,0 +1,17 @@
+---
+# STD-0003 rule 1: the newest release at least two weeks old. A security fix (rule 2) is the only
+# reason to lower k8s_secrets_eso_not_before, and the change must link the advisory.
+- name: The pinned ESO chart is two weeks old
+  ansible.builtin.assert:
+    that: (now(utc=true).strftime('%Y-%m-%d')) >= k8s_secrets_eso_not_before
+    fail_msg: "ESO chart {{ k8s_secrets_eso_version }} may be pinned from {{ k8s_secrets_eso_not_before }} (STD-0003)."
+    quiet: true
+  tags: [always]
+
+- name: ESO
+  ansible.builtin.import_tasks: eso.yml
+  tags: [eso]
+
+- name: Store
+  ansible.builtin.import_tasks: store.yml
+  tags: [store]

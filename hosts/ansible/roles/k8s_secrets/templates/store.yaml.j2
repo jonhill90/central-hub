@@ -1,0 +1,64 @@
+# {{ ansible_managed }}
+# The namespace the store reads from. Only cluster admins write here: seed each Secret by hand from
+# the password manager, named <app>-<field> so the move to a vault later maps one to one (RB-0012).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ k8s_secrets_source_namespace }}
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+# The store's own identity; ESO won't use its own service account for this provider, by design.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: store-{{ k8s_secrets_store_name }}
+  namespace: {{ k8s_secrets_eso_namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: store-{{ k8s_secrets_store_name }}-read
+  namespace: {{ k8s_secrets_source_namespace }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, watch]
+  - apiGroups: [authorization.k8s.io]
+    resources: [selfsubjectrulesreviews]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: store-{{ k8s_secrets_store_name }}-read
+  namespace: {{ k8s_secrets_source_namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: store-{{ k8s_secrets_store_name }}-read
+subjects:
+  - kind: ServiceAccount
+    name: store-{{ k8s_secrets_store_name }}
+    namespace: {{ k8s_secrets_eso_namespace }}
+---
+# The only object that names a backend. Swapping the backend replaces this object; every
+# ExternalSecret and every app Secret keeps its name (RB-0012 exit path).
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: {{ k8s_secrets_store_name }}
+spec:
+  provider:
+    kubernetes:
+      remoteNamespace: {{ k8s_secrets_source_namespace }}
+      server:
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+          namespace: {{ k8s_secrets_eso_namespace }}
+      auth:
+        serviceAccount:
+          name: store-{{ k8s_secrets_store_name }}
+          namespace: {{ k8s_secrets_eso_namespace }}
