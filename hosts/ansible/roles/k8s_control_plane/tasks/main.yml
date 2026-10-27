@@ -37,7 +37,7 @@
     remote_src: true
     mode: "0600"
 
-# Step 9. Cilium, by Helm. Changes from the runbook: devices = the lab NIC (not tailscale0),
+# Step 9. Cilium, by Helm, with its Gateway API controller (BUILD-PATH S11). Changes from the runbook: devices = the lab NIC (not tailscale0),
 # no MTU override (the lab NIC has 1500; 1230 was for the tailnet's 1280), and Cilium replaces
 # kube-proxy (skipped at init) so L2 announcements can hand out load-balancer addresses
 # (owner's yes 2026-10-26 22:46 UTC; research/k8s-lb-addresses LEDGER B13).
@@ -62,23 +62,99 @@
   ansible.builtin.shell: /usr/local/bin/helm repo add cilium https://helm.cilium.io/ --force-update && /usr/local/bin/helm repo update cilium
   changed_when: false
 
-- name: step9 | Cilium installed?
-  ansible.builtin.command: /usr/local/bin/helm -n kube-system status cilium
-  register: k8s_cp_cilium
+# BUILD-PATH S11. Cilium's Gateway API controller needs the Gateway API CRDs in the cluster
+# before it is turned on; its GatewayClass `cilium` is made only when the CRD is there
+# (values.yaml gatewayAPI.gatewayClass.create: auto). Standard channel: it holds every CRD
+# Cilium 1.20 needs and the optional ones (ListenerSet, TCPRoute, UDPRoute), and nothing here
+# uses an experimental field. Cilium docs: network/servicemesh/gateway-api/installation.rst.
+- name: step9 | kubectl diff needs diff
+  ansible.builtin.dnf: {name: diffutils, state: present}
+  when: k8s_control_plane_gateway_api
+
+- name: step9 | Gateway API CRDs, checked against the pinned checksum
+  ansible.builtin.get_url:
+    url: "https://github.com/kubernetes-sigs/gateway-api/releases/download/{{ k8s_control_plane_gateway_api_version }}/standard-install.yaml"
+    dest: "/root/gateway-api-{{ k8s_control_plane_gateway_api_version }}-standard-install.yaml"
+    checksum: "sha256:{{ k8s_control_plane_gateway_api_crds_sha256 }}"
+    mode: "0644"
+  when: k8s_control_plane_gateway_api
+
+- name: step9 | Gateway API CRD file present?
+  ansible.builtin.stat:
+    path: "/root/gateway-api-{{ k8s_control_plane_gateway_api_version }}-standard-install.yaml"
+  register: k8s_cp_gwapi_file
+  when: k8s_control_plane_gateway_api
+
+# kubectl diff exits 0 with no difference, 1 with one, more on an error. A read, so it runs in
+# check mode too, once the file is there (in check mode on a first run, get_url hasn't fetched
+# it: measured "error: the path ... does not exist").
+- name: step9 | Gateway API CRDs differ from the cluster?
+  ansible.builtin.command: >-
+    kubectl diff --server-side -f /root/gateway-api-{{ k8s_control_plane_gateway_api_version }}-standard-install.yaml
+  register: k8s_cp_gwapi_diff
+  changed_when: false
+  failed_when: k8s_cp_gwapi_diff.rc > 1
+  check_mode: false
+  when: k8s_control_plane_gateway_api and k8s_cp_gwapi_file.stat.exists
+
+- name: step9 | Apply the Gateway API CRDs
+  ansible.builtin.command: >-
+    kubectl apply --server-side -f /root/gateway-api-{{ k8s_control_plane_gateway_api_version }}-standard-install.yaml
+  changed_when: true
+  when: k8s_control_plane_gateway_api and (k8s_cp_gwapi_diff.rc | default(1)) == 1
+
+- name: step9 | Gateway API CRDs established
+  ansible.builtin.command: >-
+    kubectl wait --for=condition=Established --timeout=60s
+    crd/gatewayclasses.gateway.networking.k8s.io crd/gateways.gateway.networking.k8s.io
+    crd/httproutes.gateway.networking.k8s.io
+  changed_when: false
+  when: k8s_control_plane_gateway_api and not ansible_check_mode
+
+# Every Cilium value is in vars/main.yml (k8s_cp_cilium_values), so one `helm upgrade --install`
+# both installs and changes Cilium, and --reset-values keeps exactly these values (the docs'
+# --reuse-values would keep values set by hand). gatewayAPI needs kubeProxyReplacement=true (set)
+# and l7Proxy=true (the chart's default).
+- name: step9 | Cilium values file
+  ansible.builtin.copy:
+    dest: /root/cilium-values.yaml
+    mode: "0600"
+    content: "{{ k8s_cp_cilium_values | to_nice_yaml(indent=2) }}"
+
+- name: step9 | Cilium release now
+  ansible.builtin.command: /usr/local/bin/helm -n kube-system list --filter ^cilium$ -o json
+  register: k8s_cp_cilium_list
   changed_when: false
   failed_when: false
+  check_mode: false
 
-- name: step9 | Install Cilium
-  when: k8s_cp_cilium.rc != 0
+- name: step9 | Cilium values now
+  ansible.builtin.command: /usr/local/bin/helm -n kube-system get values cilium -o json
+  register: k8s_cp_cilium_now
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Upgrade only when the chart version or a value differs, so a re-run reports no change.
+- name: step9 | Install or upgrade Cilium
   ansible.builtin.command: >-
-    /usr/local/bin/helm install cilium cilium/cilium --version {{ k8s_control_plane_cilium_version }} -n kube-system
-    --set ipam.mode=cluster-pool
-    --set "ipam.operator.clusterPoolIPv4PodCIDRList={{ '{' }}{{ k8s_control_plane_pod_cidr }}{{ '}' }}"
-    --set devices={{ ansible_default_ipv4.interface }}
-    --set kubeProxyReplacement=true
-    --set k8sServiceHost={{ k8s_control_plane_endpoint }} --set k8sServicePort=6443
-    --set l2announcements.enabled=true
-    --set operator.replicas=1
+    /usr/local/bin/helm upgrade --install cilium cilium/cilium --version {{ k8s_control_plane_cilium_version }}
+    -n kube-system --reset-values -f /root/cilium-values.yaml
+  when: >-
+    k8s_cp_cilium_releases | map(attribute='chart') | list != ['cilium-' ~ k8s_control_plane_cilium_version]
+    or k8s_cp_cilium_now.rc != 0
+    or (k8s_cp_cilium_now.stdout | from_json) != k8s_cp_cilium_values
+  register: k8s_cp_cilium_upgrade
+  changed_when: true
+
+# Cilium's Gateway API page restarts the operator and the agents after the upgrade that turns
+# the controller on, so both pick up the new settings. Not needed after a first install.
+- name: step9 | Restart the Cilium operator and agents after an upgrade
+  ansible.builtin.shell: >-
+    kubectl -n kube-system rollout restart deployment/cilium-operator &&
+    kubectl -n kube-system rollout restart ds/cilium &&
+    kubectl -n kube-system rollout status deployment/cilium-operator --timeout=300s
+  when: k8s_cp_cilium_upgrade is changed and k8s_cp_cilium_releases | length > 0
   changed_when: true
 
 - name: step9 | Cilium and CoreDNS ready

@@ -1,0 +1,53 @@
+---
+# An echo app behind an HTTPRoute for <smoke name>.apps.<cluster>.<env>.<zone>, called through
+# the Gateway address from outside the cluster, then deleted (like the LoadBalancer test of
+# runbook step 9's place note). The DNS check needs the wildcard override from opnsense.yml
+# (opnsense_lab_host_overrides) first.
+- name: smoke | Test app and route
+  block:
+    - name: smoke | Test app manifest
+      ansible.builtin.template:
+        src: smoke.yaml.j2
+        dest: /root/central-hub/gateway-smoke.yaml
+        mode: "0600"
+
+    - name: smoke | Apply the test app
+      ansible.builtin.shell: |
+        kubectl apply -f /root/central-hub/gateway-smoke.yaml
+        kubectl -n {{ k8s_gateway_smoke_namespace }} rollout status deploy/{{ k8s_gateway_smoke_name }} --timeout=180s
+        kubectl -n {{ k8s_gateway_smoke_namespace }} wait httproute/{{ k8s_gateway_smoke_name }} --timeout=60s \
+          --for=jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}'=True
+      changed_when: true
+
+    - name: smoke | The test name answers through the Gateway address, from outside the cluster
+      ansible.builtin.uri:
+        url: "http://{{ k8s_gateway_address }}/hostname"
+        headers: {Host: "{{ k8s_gateway_smoke_host }}"}
+        return_content: true
+        timeout: 5
+      delegate_to: "{{ k8s_gateway_smoke_client }}"
+      register: k8s_gateway_smoke_get
+      until: k8s_gateway_smoke_get.status == 200 and k8s_gateway_smoke_get.content.startswith(k8s_gateway_smoke_name ~ '-')
+      retries: 12
+      delay: 5
+
+    - name: smoke | A name with no route gets 404 from the Gateway
+      ansible.builtin.uri:
+        url: "http://{{ k8s_gateway_address }}/"
+        headers: {Host: "nothing.{{ k8s_gateway_apps_domain }}"}
+        status_code: 404
+        timeout: 5
+      delegate_to: "{{ k8s_gateway_smoke_client }}"
+
+    - name: smoke | The test name resolves to the Gateway address in the lab (wildcard override)
+      ansible.builtin.command: getent hosts {{ k8s_gateway_smoke_host }}
+      delegate_to: "{{ groups['k8s_workers'] | first }}"
+      register: k8s_gateway_smoke_dns
+      changed_when: false
+      failed_when: k8s_gateway_smoke_dns.rc != 0 or k8s_gateway_address not in k8s_gateway_smoke_dns.stdout.split()
+
+  always:
+    - name: smoke | Remove the test app
+      ansible.builtin.command: >-
+        kubectl delete namespace {{ k8s_gateway_smoke_namespace }} --ignore-not-found --wait=true --timeout=180s
+      changed_when: true

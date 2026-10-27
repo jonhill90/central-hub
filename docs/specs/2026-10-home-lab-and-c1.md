@@ -84,4 +84,5 @@ Parts, in order:
 - 2026-10-26: The node template uses a pinned AlmaLinux 10 cloud image URL, not "latest" (owner's yes).
 - 2026-10-26: Role `IacOps` keeps its own least-privilege list rather than built-in roles (owner's yes).
 - 2026-10-26: Home-lab changes fold into the one kubeadm runbook, with a place note per step (owner's yes).
+- 2026-10-26: Cilium's Gateway API is the way in for web traffic (owner's yes, 22:47 UTC); ingress stays out of this spec's scope and is built as BUILD-PATH step S11.
 - 2026-10-26: Agent choices for the owner's review: VM ID ranges, node sizes, node VLAN (prod, VLAN 10), lab DNS tool for the API name, token expiry.

@@ -1,0 +1,4 @@
+---
+# Derived values, not inputs.
+k8s_gateway_apps_domain: "{{ k8s_gateway_name }}.{{ k8s_gateway_cluster }}.{{ k8s_gateway_env }}.{{ k8s_gateway_zone }}"
+k8s_gateway_smoke_host: "{{ k8s_gateway_smoke_name }}.{{ k8s_gateway_apps_domain }}"

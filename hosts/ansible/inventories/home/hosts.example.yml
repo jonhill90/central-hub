@@ -3,6 +3,10 @@
 # Save the filled-in copy as hosts.yml in this folder (git-ignored) and pass this folder with -i,
 # so Ansible also loads group_vars/ here.
 all:
+  vars:
+    # The c1 Gateway's address (playbooks/k8s-gateway.yml): one address from VLAN 10's .224/27
+    # load-balancer pool (STD-0002). Set once here, so the Gateway and its DNS override match.
+    k8s_gateway_address: ""
   children:
     proxmox:
       hosts:
@@ -34,6 +38,8 @@ all:
           opnsense_lab_dhcp_last: 199   # ends before the .224/27 load-balancer reserve
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
+            # Wildcard: every name under apps.c1.prod.<zone> answers with the c1 Gateway.
+            - { hostname: "*", subdomain: apps.c1.prod, address: "{{ k8s_gateway_address }}", description: "Kubernetes c1 Gateway apps (*.apps.c1.prod)" }
           opnsense_lab_vlan_settings:
             prod: { ifname: opt1, dhcp: true, bootstrap: false }
             qa: { ifname: opt2, dhcp: false, bootstrap: false }
@@ -57,6 +63,7 @@ all:
         ansible_ssh_private_key_file: ""   # the key whose public half terraform/home/k8s put on the nodes
         ansible_ssh_common_args: ""        # for example -o ProxyJump=root@<Proxmox host address>
         k8s_control_plane_endpoint: ""     # api.c1.prod.<zone>
+        k8s_gateway_zone: ""               # <zone>; the Gateway takes *.apps.c1.prod.<zone>
         # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
         # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
         # k8s_control_plane_kubernetes_version.

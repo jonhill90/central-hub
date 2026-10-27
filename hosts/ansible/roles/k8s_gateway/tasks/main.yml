@@ -1,0 +1,18 @@
+---
+# argument_specs accepts an empty string, and the inventory template has "" blanks for these.
+- name: Check that the private values are not blank
+  ansible.builtin.assert:
+    that:
+      - lookup('vars', item, default='') | length > 0
+    fail_msg: "{{ item }} is a private value; fill it from the secret store."
+    quiet: true
+  loop: [k8s_gateway_zone, k8s_gateway_address]
+  tags: [always]
+
+- name: Gateway
+  ansible.builtin.import_tasks: gateway.yml
+  tags: [gateway]
+
+- name: Smoke test
+  ansible.builtin.import_tasks: smoke.yml
+  tags: [smoke]

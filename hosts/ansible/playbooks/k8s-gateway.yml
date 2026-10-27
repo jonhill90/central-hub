@@ -1,0 +1,14 @@
+---
+# The way in for web traffic on cluster c1 (BUILD-PATH S11): one shared Cilium Gateway `apps`
+# for *.apps.c1.prod.<zone>, HTTP on port 80, at a pinned address from the load-balancer pool.
+# Needs k8s.yml first (the Gateway API CRDs and Cilium's Gateway API controller, runbook step 9)
+# and, for the smoke test's DNS check, the wildcard override from opnsense.yml.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-gateway.yml --tags gateway
+#   ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags dns
+#   ansible-playbook -i inventories/home/ playbooks/k8s-gateway.yml --tags smoke
+# HTTPS waits for certificates (BUILD-PATH S12).
+- name: Shared Gateway and its smoke test (runbook step 10a)
+  hosts: k8s_control_plane[0]
+  become: true
+  roles:
+    - role: k8s_gateway

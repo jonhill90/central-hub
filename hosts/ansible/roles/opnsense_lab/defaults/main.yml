@@ -31,7 +31,9 @@ opnsense_lab_parent: vtnet0
 # opnsense_lab_dhcp_last: <number>
 
 # Lab-only DNS names (Unbound host overrides), for example the cluster API. hostname is relative
-# to opnsense_dns_zone; address is private, so the real list goes in the inventory.
+# to opnsense_dns_zone, or to subdomain.<zone> when an entry sets subdomain; hostname "*" with a
+# subdomain is a wildcard (the c1 Gateway's *.apps.c1.prod). address is private, so the real list
+# goes in the inventory.
 opnsense_lab_host_overrides: []
 
 # Check the GUI certificate. Set opnsense_lab_ssl_ca_file to the CA file while it is self-signed.
