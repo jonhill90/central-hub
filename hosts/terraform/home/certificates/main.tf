@@ -18,21 +18,7 @@ data "cloudflare_zone" "this" {
 # Every permission group an account token can use. Filtered here by exact name and scope instead
 # of with the data source's own name filter, whose value the API wants URL-encoded.
 data "cloudflare_account_api_token_permission_groups_list" "all" {
-  account_id = local.account_id
-}
-
-locals {
   account_id = data.cloudflare_zone.this.account.id
-  zone_scope = "com.cloudflare.api.account.zone"
-
-  # API names of the dashboard's "Zone / DNS / Edit" and "Zone / Zone / Read". one() stops the run
-  # if a name matches more than one zone-scoped group.
-  permission_group_ids = {
-    for name in ["DNS Write", "Zone Read"] : name => one([
-      for g in data.cloudflare_account_api_token_permission_groups_list.all.result : g.id
-      if g.name == name && contains(g.scopes, local.zone_scope)
-    ])
-  }
 }
 
 # The rotation clock. It starts when the token is made and runs out token_renew_days before the
@@ -42,16 +28,23 @@ resource "time_rotating" "token" {
 }
 
 resource "cloudflare_account_token" "cert_manager" {
-  account_id = local.account_id
+  account_id = data.cloudflare_zone.this.account.id
   name       = var.token_name
 
   policies = [{
     effect = "allow"
+    # API names of the dashboard's "Zone / DNS / Edit" and "Zone / Zone / Read", zone-scoped only.
+    # one() stops the run if a name matches more than one zone-scoped group.
     permission_groups = [
-      for name in ["DNS Write", "Zone Read"] : { id = local.permission_group_ids[name] }
+      for name in ["DNS Write", "Zone Read"] : {
+        id = one([
+          for g in data.cloudflare_account_api_token_permission_groups_list.all.result : g.id
+          if g.name == name && contains(g.scopes, "com.cloudflare.api.account.zone")
+        ])
+      }
     ]
     resources = jsonencode({
-      "${local.zone_scope}.${data.cloudflare_zone.this.id}" = "*"
+      "com.cloudflare.api.account.zone.${data.cloudflare_zone.this.id}" = "*"
     })
   }]
 
@@ -68,7 +61,11 @@ resource "cloudflare_account_token" "cert_manager" {
     create_before_destroy = true
 
     precondition {
-      condition     = alltrue([for id in values(local.permission_group_ids) : id != null])
+      # Exactly one zone-scoped group for each of the two names.
+      condition = length([
+        for g in data.cloudflare_account_api_token_permission_groups_list.all.result : g.id
+        if contains(["DNS Write", "Zone Read"], g.name) && contains(g.scopes, "com.cloudflare.api.account.zone")
+      ]) == 2
       error_message = "Permission group \"DNS Write\" or \"Zone Read\" (scope com.cloudflare.api.account.zone) was not found, or the bootstrap token can't list permission groups."
     }
   }
