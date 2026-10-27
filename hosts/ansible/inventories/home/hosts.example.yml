@@ -7,6 +7,8 @@ all:
     # The c1 Gateway's address (playbooks/k8s-gateway.yml): one address from VLAN 10's .224/27
     # load-balancer pool (STD-0002). Set once here, so the Gateway and its DNS override match.
     k8s_gateway_address: ""
+    # The same address for the certificate smoke test (playbooks/k8s-certs.yml).
+    k8s_certs_gateway_address: "{{ k8s_gateway_address }}"
   children:
     proxmox:
       hosts:
@@ -67,6 +69,13 @@ all:
         # Runbook step 8a: the secretbox key for Secrets at rest, a 0600 file on the controller,
         # for example ~/.config/central-hub/c1-secrets-encryption.key (hosts/ansible/README.md).
         k8s_control_plane_encryption_key_file: ""
+        # BUILD-PATH S12 (playbooks/k8s-certs.yml, hosts/ansible/README.md "Certificates on c1").
+        k8s_certs_zone: "{{ k8s_gateway_zone }}"
+        k8s_certs_acme_email: ""             # the ACME account's contact address
+        k8s_certs_cloudflare_token_file: ""  # 0600 file on the controller with the zone's API token
+        k8s_certs_issue: false               # true talks to Let's Encrypt; staging first
+        k8s_certs_issuer: letsencrypt-staging
+        k8s_gateway_https: false             # true once the certificate is issued (HTTPS on 443)
         # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
         # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
         # k8s_control_plane_kubernetes_version.

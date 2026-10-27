@@ -1,0 +1,50 @@
+---
+# Derived values, not inputs: change the inputs in defaults/main.yml or the inventory instead.
+k8s_certs_apps_domain: "{{ k8s_certs_gateway_name }}.{{ k8s_certs_cluster }}.{{ k8s_certs_env }}.{{ k8s_certs_zone }}"
+k8s_certs_wildcard: "*.{{ k8s_certs_apps_domain }}"
+k8s_certs_smoke_host: "{{ k8s_certs_smoke_name }}.{{ k8s_certs_apps_domain }}"
+k8s_certs_chart_file: /root/central-hub/cert-manager-{{ k8s_certs_cert_manager_version }}.tgz
+
+# Let's Encrypt's two ACME directories (letsencrypt.org/docs/staging-environment/). Every staging
+# CA name starts with "(STAGING)"; the smoke test uses that to tell the two apart.
+k8s_certs_acme_servers:
+  letsencrypt-staging: https://acme-staging-v02.api.letsencrypt.org/directory
+  letsencrypt-prod: https://acme-v02.api.letsencrypt.org/directory
+
+# Every cert-manager Helm value this role sets. The role compares them with `helm get values` and
+# upgrades only when they differ (the same way as k8s_control_plane does Cilium).
+# - crds: the chart installs the CRDs and keeps them if the release is ever uninstalled, because
+#   removing them deletes every Certificate and Issuer with them (values.yaml).
+# - config.gatewayAPI.enabled: turns on cert-manager's Gateway API support (gateway-shim), which
+#   reads `cert-manager.io/cluster-issuer` annotations on Gateways
+#   (cert-manager.io/docs/usage/gateway/; no feature gate since 1.15). This role doesn't annotate
+#   the Gateway; it asks for one Certificate itself. Turned on so an app's own Gateway can use the
+#   annotation later. The Gateway API CRDs must be in the cluster before cert-manager starts
+#   (k8s.yml applies them), or cert-manager needs a restart.
+# - apiVersion and kind are what the chart fills in when left out (templates/controller-config.yaml);
+#   set here so `helm get values` returns exactly this.
+# - dns01RecursiveNameservers: see k8s_certs_dns01_nameservers.
+k8s_certs_cert_manager_values:
+  crds:
+    enabled: true
+    keep: true
+  config:
+    apiVersion: controller.config.cert-manager.io/v1alpha1
+    kind: ControllerConfiguration
+    gatewayAPI:
+      enabled: true
+  dns01RecursiveNameservers: "{{ k8s_certs_dns01_nameservers | join(',') }}"
+  dns01RecursiveNameserversOnly: false
+
+# The installed release, as `helm list -o json` gives it; empty before the first install.
+k8s_certs_releases: "{{ (k8s_certs_helm_list.stdout | default('', true) or '[]') | from_json }}"
+
+# etcdctl inside the etcd pod (the same read as k8s_control_plane step 8a), to prove the token
+# Secret is stored encrypted. etcdctl -w json gives values in base64; "k8s:enc:secretbox:v1:" is
+# 21 bytes, so its base64 is exactly the first 28 characters of an encrypted value.
+k8s_certs_etcdctl: >-
+  kubectl -n kube-system exec "$(kubectl -n kube-system get pod -l component=etcd
+  -o jsonpath='{.items[0].metadata.name}')" -- etcdctl --endpoints=https://127.0.0.1:2379
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt
+  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key -w json get
+k8s_certs_enc_prefix_b64: "{{ 'k8s:enc:secretbox:v1:' | b64encode }}"

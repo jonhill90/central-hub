@@ -1,0 +1,19 @@
+---
+# Certificates for app names on cluster c1 (BUILD-PATH S12, runbook step 10b): cert-manager by
+# Helm, two Let's Encrypt ClusterIssuers with DNS-01 at Cloudflare, and one wildcard certificate
+# *.apps.c1.prod.<zone> for the shared Gateway `apps`. Needs k8s.yml first, with Secrets encrypted
+# at rest (runbook step 8a), and k8s-gateway.yml (the Gateway). Nothing talks to Let's Encrypt
+# until k8s_certs_issue is true; staging first (k8s_certs_issuer), then prod. Set the switches in
+# the filled-in inventory, not with -e: a later run without them removes the issuers and the
+# certificate (k8s_certs_issue false) or the HTTPS listener (k8s_gateway_https false).
+#   ansible-playbook -i inventories/home/ playbooks/k8s-certs.yml --tags certmanager
+#   (inventory: k8s_certs_issue: true)
+#   ansible-playbook -i inventories/home/ playbooks/k8s-certs.yml --tags issue
+#   (inventory: k8s_gateway_https: true)
+#   ansible-playbook -i inventories/home/ playbooks/k8s-gateway.yml --tags gateway
+#   ansible-playbook -i inventories/home/ playbooks/k8s-certs.yml --tags smoke
+- name: cert-manager, issuers and the Gateway's certificate (runbook step 10b)
+  hosts: k8s_control_plane[0]
+  become: true
+  roles:
+    - role: k8s_certs

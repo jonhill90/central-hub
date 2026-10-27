@@ -1,0 +1,48 @@
+---
+argument_specs:
+  main:
+    short_description: cert-manager, Let's Encrypt issuers and one wildcard certificate for the shared Gateway (BUILD-PATH S12)
+    options:
+      # Private, through the inventory
+      k8s_certs_zone: {type: str, required: true, description: "The public DNS zone, at Cloudflare. Private."}
+      k8s_certs_acme_email: {type: str, description: "ACME account contact address. Private; needed when k8s_certs_issue is true."}
+      k8s_certs_cloudflare_token_file:
+        type: str
+        description: >-
+          Path on the controller to a 0600 file holding the Cloudflare API token (this zone only,
+          Zone DNS Edit and Zone Zone Read). Private; needed when k8s_certs_issue is true.
+      k8s_certs_gateway_address: {type: str, description: "The Gateway's address (k8s_gateway_address), for the smoke test. Private."}
+      # Defaults in defaults/main.yml
+      k8s_certs_issue:
+        type: bool
+        default: false
+        description: "Talk to Let's Encrypt: the token Secret, both ClusterIssuers and the Certificate. False removes them."
+      k8s_certs_issuer:
+        type: str
+        default: letsencrypt-staging
+        choices: [letsencrypt-staging, letsencrypt-prod]
+        description: ClusterIssuer the certificate comes from.
+      k8s_certs_cert_manager_version: {type: str, default: v1.21.3, description: cert-manager chart version.}
+      k8s_certs_cert_manager_chart_sha256:
+        type: str
+        default: 9ec67938b2981d8b333af61b3fcf53e26b4f6f5deb7ccda3de4ea116bb373a17
+        description: SHA-256 of that chart file, as the Jetstack Helm index gives it.
+      k8s_certs_namespace: {type: str, default: cert-manager, description: Namespace of cert-manager and the token Secret.}
+      k8s_certs_dns01_nameservers:
+        type: list
+        elements: str
+        default: ["1.1.1.1:53", "9.9.9.9:53"]
+        description: "Public recursive resolvers (host:port) cert-manager uses for the DNS-01 self-check."
+      k8s_certs_cluster: {type: str, default: c1, description: Cluster name in the hostname.}
+      k8s_certs_env: {type: str, default: prod, description: Environment name in the hostname.}
+      k8s_certs_gateway_name: {type: str, default: apps, description: "Gateway name, also the label under the cluster: *.apps.<cluster>.<env>.<zone>."}
+      k8s_certs_gateway_namespace: {type: str, default: gateway, description: Namespace of the Gateway; the Certificate and its Secret go there.}
+      k8s_certs_certificate_name: {type: str, default: apps, description: Name of the Certificate.}
+      k8s_certs_secret_name: {type: str, default: apps-tls, description: TLS Secret the certificate is written to; k8s_gateway_tls_secret names it too.}
+      k8s_certs_token_secret_name: {type: str, default: cloudflare-api-token, description: Secret holding the Cloudflare token.}
+      k8s_certs_smoke_name: {type: str, default: hello, description: First label of the smoke test's hostname.}
+      k8s_certs_smoke_namespace: {type: str, default: certs-smoke, description: "Namespace of the smoke test app, deleted afterwards."}
+      k8s_certs_smoke_image: {type: str, default: "registry.k8s.io/e2e-test-images/agnhost:2.53", description: Echo app image.}
+      k8s_certs_smoke_client:
+        type: str
+        description: "Inventory host that calls the Gateway from outside the cluster. Default: the first host of group proxmox."

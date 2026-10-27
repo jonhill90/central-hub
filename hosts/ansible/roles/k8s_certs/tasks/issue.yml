@@ -1,0 +1,164 @@
+---
+# Issuing on: the Cloudflare token as a Secret, two ClusterIssuers and one Certificate, then a wait
+# until the certificate is issued by the chosen issuer. Issuing off: they are removed.
+- name: issue | Issuing on
+  when: k8s_certs_issue
+  block:
+    # The token is the cluster's first real secret, so Secrets must already be encrypted at rest
+    # (k8s_control_plane, runbook step 8a).
+    - name: issue | API server command line
+      ansible.builtin.command: >-
+        kubectl -n kube-system get pod -l component=kube-apiserver
+        -o jsonpath={.items[0].spec.containers[0].command}
+      register: k8s_certs_apiserver_cmd
+      changed_when: false
+      check_mode: false
+
+    - name: issue | Secrets are encrypted at rest
+      ansible.builtin.assert:
+        that:
+          - "'--encryption-provider-config=' in k8s_certs_apiserver_cmd.stdout"
+        fail_msg: >-
+          The API server has no --encryption-provider-config, so the Cloudflare token would be
+          stored in plain text in etcd. Run playbooks/k8s.yml --tags encryption --limit
+          k8s_control_plane first (runbook step 8a).
+        quiet: true
+
+    # The token file on the controller, like the Terraform token (AGENT-PICKS 19): never in the
+    # repository, never written to a file on the node.
+    - name: issue | Token file on the controller
+      ansible.builtin.stat:
+        path: "{{ k8s_certs_cloudflare_token_file }}"
+      delegate_to: localhost
+      become: false
+      register: k8s_certs_token_stat
+      check_mode: false
+
+    - name: issue | Token file is there, not empty, and readable only by its owner
+      ansible.builtin.assert:
+        that:
+          - k8s_certs_token_stat.stat.exists
+          - k8s_certs_token_stat.stat.isreg
+          - k8s_certs_token_stat.stat.size > 0
+          - k8s_certs_token_stat.stat.mode in ['0600', '0400']
+        fail_msg: >-
+          k8s_certs_cloudflare_token_file ({{ k8s_certs_cloudflare_token_file }}) is missing,
+          empty or not mode 0600 on the controller. Make a Cloudflare API token for this zone
+          only, with Zone / DNS / Edit and Zone / Zone / Read, and save it there with
+          (umask 077; pbpaste > <path>) or an editor, then chmod 600 <path>.
+        quiet: true
+
+    - name: issue | Read the token
+      ansible.builtin.set_fact:
+        k8s_certs_token: "{{ lookup('ansible.builtin.file', k8s_certs_cloudflare_token_file | expanduser) | trim }}"
+      no_log: true
+
+    - name: issue | Token is not blank
+      ansible.builtin.assert:
+        that: [k8s_certs_token | length > 0]
+        fail_msg: k8s_certs_cloudflare_token_file holds only whitespace.
+        quiet: true
+      no_log: true
+
+    - name: issue | Token in the cluster now
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_certs_namespace }} get secret {{ k8s_certs_token_secret_name }}
+        -o jsonpath={.data.api-token}
+      register: k8s_certs_token_now
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      no_log: true
+
+    # Server-side apply, so no copy of the token lands in a last-applied annotation; only when
+    # the value differs, so a re-run reports no change. The token goes in on stdin.
+    - name: issue | Token as a Secret in the cert-manager namespace
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        kubectl -n {{ k8s_certs_namespace }} create secret generic {{ k8s_certs_token_secret_name }}
+        --from-file=api-token=/dev/stdin --dry-run=client -o yaml
+        | kubectl apply --server-side --field-manager=central-hub -f -
+      args:
+        stdin: "{{ k8s_certs_token }}"
+        stdin_add_newline: false
+      when: k8s_certs_token_now.stdout | default('') != (k8s_certs_token | b64encode)
+      changed_when: true
+      no_log: true
+
+    - name: issue | The token is stored encrypted (read from etcd)
+      ansible.builtin.shell: >-  # noqa: command-instead-of-shell (k8s_certs_etcdctl uses $(...))
+        {{ k8s_certs_etcdctl }}
+        /registry/secrets/{{ k8s_certs_namespace }}/{{ k8s_certs_token_secret_name }}
+      register: k8s_certs_token_etcd
+      changed_when: false
+      failed_when: >-
+        k8s_certs_token_etcd.rc != 0
+        or (k8s_certs_token_etcd.stdout | from_json).kvs | default([]) | length != 1
+        or not (k8s_certs_token_etcd.stdout | from_json).kvs[0].value.startswith(k8s_certs_enc_prefix_b64)
+      no_log: true
+      when: not ansible_check_mode
+
+    - name: issue | Issuers and certificate manifest
+      ansible.builtin.template:
+        src: issuers.yaml.j2
+        dest: /root/central-hub/certs.yaml
+        mode: "0600"
+
+    # kubectl diff exits 0 with no difference, 1 with one, more on an error. In check mode before
+    # cert-manager is installed, its kinds are unknown ("no matches for kind"); that also means
+    # "apply".
+    - name: issue | Issuers and certificate differ from the cluster?
+      ansible.builtin.command: kubectl diff -f /root/central-hub/certs.yaml
+      register: k8s_certs_diff
+      changed_when: false
+      failed_when: >-
+        k8s_certs_diff.rc > 1 and not ('no matches for kind' in k8s_certs_diff.stderr
+        or 'ensure CRDs are installed' in k8s_certs_diff.stderr)
+      check_mode: false
+
+    - name: issue | Apply the issuers and the certificate
+      ansible.builtin.command: kubectl apply -f /root/central-hub/certs.yaml
+      when: k8s_certs_diff.rc != 0
+      changed_when: true
+
+    # Ready means the ACME account is registered with Let's Encrypt.
+    - name: issue | Both issuers ready
+      ansible.builtin.command: >-
+        kubectl wait --for=condition=Ready --timeout=180s
+        {{ k8s_certs_acme_servers.keys() | map('regex_replace', '^', 'clusterissuer/') | join(' ') }}
+      changed_when: false
+      when: not ansible_check_mode
+
+    # After a switch of issuer the old certificate stays Ready until the new one is issued, so the
+    # wait also checks which issuer the Secret's certificate came from.
+    # DNS-01 takes a few minutes: cert-manager waits until the TXT record is visible.
+    - name: issue | Certificate issued by {{ k8s_certs_issuer }}
+      ansible.builtin.shell: >-
+        kubectl -n {{ k8s_certs_gateway_namespace }} get certificate {{ k8s_certs_certificate_name }}
+        -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' &&
+        echo &&
+        kubectl -n {{ k8s_certs_gateway_namespace }} get secret {{ k8s_certs_secret_name }}
+        -o jsonpath='{.metadata.annotations.cert-manager\.io/issuer-name}'
+      register: k8s_certs_ready
+      until: k8s_certs_ready.rc == 0 and k8s_certs_ready.stdout_lines == ['True', k8s_certs_issuer]
+      retries: 60
+      delay: 10
+      changed_when: false
+      when: not ansible_check_mode
+
+- name: issue | Issuing off, remove the certificate (its TLS Secret stays)
+  ansible.builtin.command: >-
+    kubectl delete --ignore-not-found
+    -n {{ k8s_certs_gateway_namespace }} certificate/{{ k8s_certs_certificate_name }}
+  register: k8s_certs_rm_cert
+  changed_when: "'deleted' in k8s_certs_rm_cert.stdout"
+  when: not k8s_certs_issue
+
+- name: issue | Issuing off, remove the issuers and the token
+  ansible.builtin.command: >-
+    kubectl delete --ignore-not-found
+    {{ k8s_certs_acme_servers.keys() | map('regex_replace', '^', 'clusterissuer/') | join(' ') }}
+    secret/{{ k8s_certs_token_secret_name }} -n {{ k8s_certs_namespace }}
+  register: k8s_certs_rm_issuers
+  changed_when: "'deleted' in k8s_certs_rm_issuers.stdout"
+  when: not k8s_certs_issue

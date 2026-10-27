@@ -17,12 +17,31 @@
     immediate: true
     state: enabled
   delegate_to: "{{ item.0 }}"
-  loop: "{{ groups['k8s_nodes'] | product(k8s_gateway_node_ports) | list }}"
+  loop: "{{ groups['k8s_nodes'] | product(k8s_gateway_open_ports) | list }}"
   loop_control:
     label: "{{ item.0 }} {{ item.1 }}"
 
 - name: gateway | Folder for the manifests
   ansible.builtin.file: {path: /root/central-hub, state: directory, mode: "0700"}
+
+# A listener whose Secret is missing isn't programmed, so HTTPS waits for the certificate.
+- name: gateway | The certificate's Secret is there for the HTTPS listener
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_gateway_namespace }} get secret {{ k8s_gateway_tls_secret }} -o name
+  register: k8s_gateway_tls_present
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: k8s_gateway_https
+
+- name: gateway | Stop if HTTPS is on without its Secret
+  ansible.builtin.assert:
+    that: [k8s_gateway_tls_present.rc == 0]
+    fail_msg: >-
+      Secret {{ k8s_gateway_namespace }}/{{ k8s_gateway_tls_secret }} doesn't exist. Issue the
+      certificate first: playbooks/k8s-certs.yml --tags issue with k8s_certs_issue true.
+    quiet: true
+  when: k8s_gateway_https and not ansible_check_mode
 
 - name: gateway | Gateway manifest
   ansible.builtin.template:

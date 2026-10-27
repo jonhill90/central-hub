@@ -1,0 +1,61 @@
+---
+# BUILD-PATH S12: certificates for app names. One Let's Encrypt wildcard certificate,
+# *.apps.<cluster>.<env>.<zone>, through cert-manager with a DNS-01 challenge at Cloudflare, for
+# the shared Gateway's HTTPS listener (the owner's yes to option C, 2026-10-27 02:20 UTC: Let's
+# Encrypt for app names now, a private CA later as its own step). Every input is listed here (Red
+# Hat CoP rule); the private ones have no default and are listed commented out.
+#
+# Private, no default, set in the inventory:
+# k8s_certs_zone: <zone>                  # the public DNS zone, hosted at Cloudflare
+# Needed only when k8s_certs_issue is true:
+# k8s_certs_acme_email: <address>         # the ACME account's contact address
+# k8s_certs_cloudflare_token_file: <path> # on the controller, mode 0600: the Cloudflare API token,
+#                                         # this one zone only, Zone DNS Edit + Zone Zone Read
+# k8s_certs_gateway_address: <address>    # the Gateway's address (k8s_gateway_address); smoke only
+
+# The switch. While false, nothing talks to Let's Encrypt: no ClusterIssuer (making one registers
+# an ACME account), no Certificate, and no Cloudflare token in the cluster; a run removes them if
+# an earlier run made them (the issued TLS Secret stays). cert-manager itself is installed either way.
+k8s_certs_issue: false
+# letsencrypt-staging first: untrusted "(STAGING)" certificates, much higher rate limits. Switch to
+# letsencrypt-prod once staging has issued; cert-manager then issues again from prod.
+k8s_certs_issuer: letsencrypt-staging
+
+# cert-manager, by Helm, from the chart file on charts.jetstack.io checked against the SHA-256 the
+# Jetstack Helm index publishes for it. v1.21.3 (2026-10-23) is newer than two weeks: STD-0003
+# rule 2, it is a security release ("All users should upgrade"): Go 1.26.10 for CVE-2026-111943
+# (GO-2026-6809, the same fix Cilium 1.20.4 takes), Go 1.26.9 crypto/tls and net/http fixes, and
+# base images without the distrusted eMudhra root
+# (https://github.com/cert-manager/cert-manager/releases/tag/v1.21.3). The newest release at least
+# two weeks old is v1.21.2 (2026-09-11, chart SHA-256
+# 73a56e1728edd6c99f1f31082618c3259d279a76b7ebd3d4bdc5475c2442d34a). cert-manager 1.21 supports
+# Kubernetes 1.33-1.36; no release lists 1.37, which c1 runs (cert-manager.io/docs/releases/,
+# 2026-10-27).
+k8s_certs_cert_manager_version: v1.21.3
+k8s_certs_cert_manager_chart_sha256: 9ec67938b2981d8b333af61b3fcf53e26b4f6f5deb7ccda3de4ea116bb373a17
+k8s_certs_namespace: cert-manager
+
+# Where cert-manager looks up the zone before it checks that the challenge's TXT record is there:
+# public resolvers, not the lab's. OPNsense's Unbound answers apps.c1.prod.<zone> itself (the
+# wildcard override, a local-zone redirect), so the lab's view of that name is not the public one.
+# cert-manager then asks the zone's own nameservers for the TXT record (dns01RecursiveNameserversOnly
+# stays false: the docs warn that resolver caching makes the check slower).
+k8s_certs_dns01_nameservers: ["1.1.1.1:53", "9.9.9.9:53"]
+
+# What the certificate covers (STD-0001 "Service names": one wildcard per cluster and env, so app
+# names stay out of the public Certificate Transparency logs; only apps.<cluster>.<env>.<zone> is
+# published). The Secret sits next to the Gateway, the only namespace its listener reads from.
+k8s_certs_cluster: c1
+k8s_certs_env: prod
+k8s_certs_gateway_name: apps
+k8s_certs_gateway_namespace: gateway
+k8s_certs_certificate_name: apps
+k8s_certs_secret_name: apps-tls   # k8s_gateway_tls_secret must name the same Secret
+k8s_certs_token_secret_name: cloudflare-api-token
+
+# Smoke test: an echo app at <name>.apps.<cluster>.<env>.<zone>, called over HTTPS through the
+# Gateway address from the Proxmox host (outside the cluster), then deleted.
+k8s_certs_smoke_name: hello
+k8s_certs_smoke_namespace: certs-smoke
+k8s_certs_smoke_image: registry.k8s.io/e2e-test-images/agnhost:2.53
+k8s_certs_smoke_client: "{{ groups['proxmox'] | first }}"

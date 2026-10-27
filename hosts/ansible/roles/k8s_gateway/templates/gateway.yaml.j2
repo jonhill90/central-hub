@@ -4,9 +4,9 @@ kind: Namespace
 metadata:
   name: {{ k8s_gateway_namespace }}
 ---
-# One shared Gateway for the cluster's web apps. HTTP only for now: the HTTPS listener comes
-# with certificates (BUILD-PATH S12). Its address comes from Cilium LB IPAM, pinned with
-# spec.addresses (Cilium docs, Gateway API Addresses Support).
+# One shared Gateway for the cluster's web apps. HTTP on 80, and with k8s_gateway_https HTTPS on
+# 443 with the wildcard certificate (BUILD-PATH S12). Its address comes from Cilium LB IPAM,
+# pinned with spec.addresses (Cilium docs, Gateway API Addresses Support).
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -25,3 +25,18 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+{% if k8s_gateway_https %}
+    # TLS ends here (mode Terminate) with the certificate Secret next to the Gateway.
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.{{ k8s_gateway_apps_domain }}"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ k8s_gateway_tls_secret }}
+      allowedRoutes:
+        namespaces:
+          from: All
+{% endif %}

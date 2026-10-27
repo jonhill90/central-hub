@@ -6,7 +6,7 @@
 #   ansible-playbook -i inventories/home/ playbooks/k8s-gateway.yml --tags gateway
 #   ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags dns
 #   ansible-playbook -i inventories/home/ playbooks/k8s-gateway.yml --tags smoke
-# HTTPS waits for certificates (BUILD-PATH S12).
+# HTTPS (k8s_gateway_https) needs the certificate from playbooks/k8s-certs.yml first (BUILD-PATH S12).
 - name: Shared Gateway and its smoke test (runbook step 10a)
   hosts: k8s_control_plane[0]
   become: true

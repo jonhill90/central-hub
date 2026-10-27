@@ -8,7 +8,8 @@ Ansible code that configures the Proxmox host's network and safety net (host fir
 |---|---|---|
 | `playbooks/proxmox-host.yml` | `proxmox_network` | Tag `vmbr1`: bridge vmbr1 with no ports, VLAN-aware 2-4094, and a fixed MAC. A bridge with no ports otherwise gets an all-zero MAC, and then the SDN's VLAN devices on it can't come up. Tag `mgmt`: the host's address on VNet mgmt, with no gateway. The host's home LAN address on vmbr0 is checked after every reload and never changed. |
 | `playbooks/opnsense.yml` | `opnsense_lab` | VLANs 10, 20 and 30 on the trunk port, and their interface slots with the `.1/24` gateway address. DHCP pools `.100` to `.199` on VLANs 10 and 30 only, ending before the `.224/27` load-balancer reserve. Four rules per lab VLAN: block the home LAN, allow ping and DNS to the firewall, allow everything that isn't RFC 1918. An Unbound host override `opnsense.<zone>` pointing at the mgmt gateway, plus the lab names in `opnsense_lab_host_overrides`: the c1 API name, and the wildcard `*.apps.c1.prod.<zone>` (host `*` with `subdomain: apps.c1.prod`) pointing at the c1 Gateway. On WAN: home LAN to the mgmt gateway on tcp 443, tcp/udp 53 and ping, and private sources no longer blocked. |
-| `playbooks/k8s-gateway.yml` | `k8s_gateway` | Tag `gateway`: one shared Cilium Gateway `apps` in namespace `gateway` for `*.apps.c1.prod.<zone>`, HTTP on port 80, at the pinned address `k8s_gateway_address` from the load-balancer pool, and tcp 80 in the nodes' `lab` firewalld zone. Tag `smoke`: an echo app and its HTTPRoute, called from the Proxmox host through the Gateway address, a 404 check, a DNS check from the worker, then deleted. Needs `playbooks/k8s.yml` first, which applies the Gateway API CRDs and turns on Cilium's Gateway API controller. HTTPS waits for certificates (BUILD-PATH S12). |
+| `playbooks/k8s-gateway.yml` | `k8s_gateway` | Tag `gateway`: one shared Cilium Gateway `apps` in namespace `gateway` for `*.apps.c1.prod.<zone>`, HTTP on port 80, at the pinned address `k8s_gateway_address` from the load-balancer pool, and tcp 80 in the nodes' `lab` firewalld zone. Tag `smoke`: an echo app and its HTTPRoute, called from the Proxmox host through the Gateway address, a 404 check, a DNS check from the worker, then deleted. Needs `playbooks/k8s.yml` first, which applies the Gateway API CRDs and turns on Cilium's Gateway API controller. With `k8s_gateway_https: true` (BUILD-PATH S12), also an HTTPS listener on 443 with the certificate Secret `apps-tls`, and tcp 443 in the same zone; the run stops if that Secret doesn't exist yet. |
+| `playbooks/k8s-certs.yml` | `k8s_certs` | Tag `certmanager`: cert-manager v1.21.3 by Helm, from the chart file checked against its SHA-256, with its CRDs, Gateway API support, and public resolvers for the DNS-01 check. Tag `issue`, only with `k8s_certs_issue: true`: the Cloudflare token as a Secret, ClusterIssuers `letsencrypt-staging` and `letsencrypt-prod` (DNS-01 at Cloudflare for the zone), and Certificate `apps` for `*.apps.c1.prod.<zone>` in namespace `gateway` from `k8s_certs_issuer`; with it false, those are removed. Tag `smoke`: an echo app on the HTTPS listener, called from the Proxmox host, then deleted. See [Certificates on c1](#certificates-on-c1). |
 | `playbooks/proxmox-safety.yml` | `proxmox_notify` | Tag `notify`: a notification matcher `central-hub-errors` that sends every notification of severity error (failed backup jobs, HA fencing, other system errors) to one target. Until an endpoint is picked, the target is `central-hub-off`, a sendmail target that is switched off, so nothing new is sent. Proxmox's own default matcher and `mail-to-root` are left alone. |
 | `playbooks/proxmox-safety.yml` | `proxmox_backup` | Tag `backup`: the empty HDD becomes directory storage `hdd-backup` (content backup only), through Proxmox's own Disks > Directory API: one GPT partition, ext4, a systemd mount unit at `/mnt/pve/hdd-backup` by UUID. It runs only while the disk has no partition, filesystem or signature. Then backup job `nightly-guests` in `/etc/pve/jobs.cfg`: VMs 100, 200, 201 and CT 900, daily at 03:00, snapshot mode, zstd, keep-last 3 and keep-daily 7, repeat missed. |
 | `playbooks/proxmox-safety.yml` | `proxmox_firewall` | Tag `firewall`: Proxmox's own firewall at datacenter and host level only. Inbound DROP; SSH 22 and the GUI/API 8006 only from IPSet `management` (the home LAN range and VNet mgmt); ICMP and ICMPv6 from anywhere; outbound ACCEPT. Guest firewalls stay off. Two runs: the switch off first, then on, with a dead-man timer (see [Host firewall](#host-firewall)). |
@@ -48,6 +49,23 @@ On the running c1, run only this part (`--limit` skips the workers play, whose j
 ansible-playbook -i inventories/home/ playbooks/k8s.yml --tags encryption --limit k8s_control_plane --check --diff
 ansible-playbook -i inventories/home/ playbooks/k8s.yml --tags encryption --limit k8s_control_plane
 ```
+
+## Certificates on c1
+
+`playbooks/k8s-certs.yml` (role `k8s_certs`, runbook step 10b) gets one Let's Encrypt certificate for `*.apps.c1.prod.<zone>` and puts it on the shared Gateway's HTTPS listener. Only the label `apps.c1.prod` reaches the public Certificate Transparency logs, never an app's name. It needs [Secrets at rest on c1](#secrets-at-rest-on-c1) first: the `issue` tag stops if the API server has no encryption config, and reads the token back from etcd to check it is stored encrypted.
+
+Values in the filled-in inventory (the template has them):
+
+| Variable | What it is |
+|---|---|
+| `k8s_certs_zone` | The public zone at Cloudflare; the template sets it to `k8s_gateway_zone`. |
+| `k8s_certs_acme_email` | The ACME account's contact address. |
+| `k8s_certs_cloudflare_token_file` | A 0600 file on the controller holding a Cloudflare API token for this zone only, with Zone / DNS / Edit and Zone / Zone / Read (cert-manager's Cloudflare page). Make the token in the Cloudflare dashboard (My Profile > API Tokens > Create Token > Custom token); it is shown once. The run stops if the file is missing, empty or not 0600. |
+| `k8s_certs_issue` | `false` until you want Let's Encrypt to be asked. With `false` nothing talks to Let's Encrypt, and a run removes the token, the issuers and the Certificate (the issued Secret stays). |
+| `k8s_certs_issuer` | `letsencrypt-staging` first, then `letsencrypt-prod`. |
+| `k8s_gateway_https` | `true` once the certificate is issued: the Gateway gets its HTTPS listener and the nodes open tcp 443. |
+
+Set the switches in the inventory rather than with `-e`: a later run without them removes what they made.
 
 ## Host safety net
 
