@@ -35,6 +35,10 @@ Every choice here was made by an agent, not by the owner. Any of them can change
 | 29 | The OPNsense API user `ansible` (8 privileges, random unknown password) is made by `ansible/bootstrap/opnsense-ansible-user.php` through the QEMU guest agent; the key and secret are made on the Mac, and OPNsense only gets the hash | `ansible/bootstrap/`, `~/.config/central-hub/opnsense-api.txt` | No login and no password typed; the secret never leaves the controller | make the key in the GUI by hand |
 | 30 | `opnsense_lab_ssl_verify: false` in the filled inventory while the GUI certificate is self-signed and is reached by address | `inventories/home/hosts.yml` | The certificate name doesn't match the address | trust the self-signed certificate as `opnsense_lab_ssl_ca_file` and connect by name |
 | 31 | `ansible_python_interpreter` for the OPNsense host points at a controller Python with httpx | `inventories/home/hosts.yml` | Ansible's own Python lacks httpx | install httpx into Ansible's Python |
+| 32 | `playbooks/k8s-upgrade.yml`: one minor version per run, control plane then each worker, `--skip-phases addon/kube-proxy` on `upgrade apply` and `upgrade node` | `ansible/playbooks/` | Runbook step 17 plus a worker; without the skip, kubeadm would install kube-proxy again | a role per node type |
+| 33 | After an upgrade, the running versions go in the filled inventory (`k8s_node_kubernetes_minor`, `_version`, `k8s_control_plane_kubernetes_version`); role defaults stay at the runbook's start versions | `inventories/home/hosts.yml`, `hosts.example.yml` comment | A re-run of k8s.yml would otherwise try to go back to 1.36.5 | bump the role defaults |
+| 34 | `page-services-unbound` added to the ansible user (all of `api/unbound/*`); no narrower OPNsense privilege grants `settings/get` | `ansible/bootstrap/opnsense-ansible-user.php` | Measured 403 without it; the owner said yes to it on 2026-10-26 at 23:50 UTC | none narrower exists in 26.7 |
+| 35 | k8s.yml deletes the smoke-test pod at the end | `playbooks/k8s.yml` | A bare pod blocks `kubectl drain` | keep it and drain with `--force` |
 
 ## The owner's decisions so far
 
@@ -54,4 +58,5 @@ Every choice here was made by an agent, not by the owner. Any of them can change
 - 2026-10-26 07:35 UTC: yes to layout A, `hosts/terraform/<place>/<workload>/`, as decided (D-0011 rule 8); yes to STD-0003 covering `hosts/` code and cluster manifests.
 - 2026-10-26 21:22 UTC: yes to reaching c1 by SSH to the control plane for now, with the owner's own limited user and kubeconfig made in runbook step 19; the admin kubeconfig stays on the node as break-glass and is never copied off it.
 - 2026-10-26 22:46 UTC: yes to load-balancer addresses from Cilium LB IPAM with L2 announcements on prod `10.1.10.224/27` (STD-0002). So `k8s_control_plane` skips kube-proxy at `kubeadm init` and installs Cilium with `kubeProxyReplacement=true` and `l2announcements.enabled=true`, built that way the first time rather than rebuilt.
+- 2026-10-26 23:08 UTC: go to rebuild the OPNsense lab VLANs 10/20/30 through the API and run opnsense.yml. 23:50 UTC: go to give the OPNsense ansible user the Unbound privilege.
 - Earlier: Ansible for OPNsense with `oxlorg.opnsense`; `bpg/proxmox`; local state now; Terraform modules in their own repository (D-0011, being fixed in place to local modules first).

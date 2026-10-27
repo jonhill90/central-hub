@@ -52,3 +52,8 @@
       register: c1_smoke
       changed_when: false
       failed_when: "'egress-ok' not in c1_smoke.stdout or '10.96.0.1' not in c1_smoke.stdout"
+
+    # A bare pod blocks `kubectl drain` (measured during the 1.37 upgrade), so the test pod goes.
+    - name: step10 | Remove the test pod
+      ansible.builtin.command: kubectl delete pod t1 --ignore-not-found
+      changed_when: true

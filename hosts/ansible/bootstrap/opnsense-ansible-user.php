@@ -16,6 +16,7 @@ $privs = [
     'page-firewall-rules', 'page-filter-api', // api/firewall/filter (rules, apply)
     'page-firewall-alias-edit', 'page-firewall-aliases', // api/firewall/alias
     'page-services-dnsresolver-overrides',  // api/unbound host overrides
+    'page-services-unbound',                // api/unbound/* (unbound_host reads settings/get; measured 403 without it)
 ];
 $line = trim(file_get_contents('/root/ansible-apikey.line'));
 if (substr_count($line, '|') != 1 || strpos($line, '$6$') === false) { echo "bad key line\n"; exit(1); }

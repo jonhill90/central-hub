@@ -52,3 +52,6 @@ all:
         ansible_ssh_private_key_file: ""   # the key whose public half terraform/home/k8s put on the nodes
         ansible_ssh_common_args: ""        # for example -o ProxyJump=root@<Proxmox host address>
         k8s_control_plane_endpoint: ""     # api.c1.prod.<zone>
+        # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
+        # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
+        # k8s_control_plane_kubernetes_version.

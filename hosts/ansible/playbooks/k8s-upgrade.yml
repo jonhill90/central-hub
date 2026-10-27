@@ -1,0 +1,86 @@
+---
+# Upgrade cluster c1 one minor version (runbook step 17), control plane first, then each worker.
+# kube-proxy was skipped at init (Cilium replaces it), so the upgrade skips its add-on phase too;
+# otherwise kubeadm would install kube-proxy again.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-upgrade.yml -e k8s_upgrade_minor=1.37 -e k8s_upgrade_version=1.37.1
+- name: Upgrade the first control plane
+  hosts: k8s_control_plane[0]
+  become: true
+  serial: 1
+  vars: &upgrade_vars
+    k8s_upgrade_minor: "1.37"
+    k8s_upgrade_version: "1.37.1"
+    __kc: "KUBECONFIG=/etc/kubernetes/admin.conf"
+  tasks:
+    - name: upgrade | Package repo to the new minor
+      ansible.builtin.replace:
+        path: /etc/yum.repos.d/kubernetes.repo
+        regexp: '/v1\.[0-9]+/'
+        replace: "/v{{ k8s_upgrade_minor }}/"
+
+    - name: upgrade | kubeadm
+      ansible.builtin.dnf: {name: "kubeadm-{{ k8s_upgrade_version }}", disable_excludes: kubernetes, state: present}
+
+    - name: upgrade | Plan
+      ansible.builtin.command: kubeadm upgrade plan v{{ k8s_upgrade_version }}
+      changed_when: false
+
+    - name: upgrade | Apply (kube-proxy add-on skipped)
+      ansible.builtin.command: kubeadm upgrade apply v{{ k8s_upgrade_version }} --yes --skip-phases addon/kube-proxy
+      register: k8s_upgrade_apply
+      changed_when: "'SUCCESS' in k8s_upgrade_apply.stdout"
+
+    - name: upgrade | Drain
+      ansible.builtin.command: "env {{ __kc }} kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data"
+      changed_when: true
+
+    - name: upgrade | kubelet and kubectl
+      ansible.builtin.dnf:
+        name: ["kubelet-{{ k8s_upgrade_version }}", "kubectl-{{ k8s_upgrade_version }}"]
+        disable_excludes: kubernetes
+        state: present
+
+    - name: upgrade | Restart kubelet
+      ansible.builtin.systemd: {name: kubelet, state: restarted, daemon_reload: true}
+
+    - name: upgrade | Uncordon
+      ansible.builtin.command: "env {{ __kc }} kubectl uncordon {{ inventory_hostname }}"
+      changed_when: true
+
+- name: Upgrade each worker
+  hosts: k8s_workers
+  become: true
+  serial: 1
+  vars: *upgrade_vars
+  tasks:
+    - name: upgrade | Package repo to the new minor
+      ansible.builtin.replace:
+        path: /etc/yum.repos.d/kubernetes.repo
+        regexp: '/v1\.[0-9]+/'
+        replace: "/v{{ k8s_upgrade_minor }}/"
+
+    - name: upgrade | kubeadm
+      ansible.builtin.dnf: {name: "kubeadm-{{ k8s_upgrade_version }}", disable_excludes: kubernetes, state: present}
+
+    - name: upgrade | kubeadm upgrade node
+      ansible.builtin.command: kubeadm upgrade node --skip-phases addon/kube-proxy
+      changed_when: true
+
+    - name: upgrade | Drain (from the control plane)
+      ansible.builtin.command: "env {{ __kc }} kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data"
+      delegate_to: "{{ groups['k8s_control_plane'][0] }}"
+      changed_when: true
+
+    - name: upgrade | kubelet and kubectl
+      ansible.builtin.dnf:
+        name: ["kubelet-{{ k8s_upgrade_version }}", "kubectl-{{ k8s_upgrade_version }}"]
+        disable_excludes: kubernetes
+        state: present
+
+    - name: upgrade | Restart kubelet
+      ansible.builtin.systemd: {name: kubelet, state: restarted, daemon_reload: true}
+
+    - name: upgrade | Uncordon (from the control plane)
+      ansible.builtin.command: "env {{ __kc }} kubectl uncordon {{ inventory_hostname }}"
+      delegate_to: "{{ groups['k8s_control_plane'][0] }}"
+      changed_when: true
