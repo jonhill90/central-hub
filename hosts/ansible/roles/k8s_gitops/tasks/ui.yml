@@ -203,6 +203,7 @@
       vars:
         __issuer: "{{ k8s_gitops_ui_facts.stdout_lines[1] }}"
 
+    # Cilium's Envoy writes the default port into the redirect (measured: https://<name>:443/).
     - name: ui | Plain HTTP for the name never serves the UI
       ansible.builtin.command: >-  # noqa: command-instead-of-module
         curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' http://{{ k8s_gitops_ui_host }}/
@@ -210,7 +211,7 @@
       register: k8s_gitops_ui_plain
       until: >-
         k8s_gitops_ui_plain.rc == 0 and
-        (k8s_gitops_ui_plain.stdout.startswith('301 https://' ~ k8s_gitops_ui_host ~ '/')
+        (k8s_gitops_ui_plain.stdout is match('301 https://' ~ (k8s_gitops_ui_host | regex_escape) ~ '(:443)?/')
          if k8s_gitops_ui_https_redirect | bool else k8s_gitops_ui_plain.stdout.startswith('404'))
       retries: 6
       delay: 5
