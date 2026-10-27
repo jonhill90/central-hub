@@ -1,0 +1,9 @@
+---
+- name: Install the engine
+  ansible.builtin.import_tasks: install.yml
+  tags: [install]
+
+- name: Point the engine at central-hub (only after the Activation gate)
+  ansible.builtin.import_tasks: source.yml
+  when: k8s_gitops_source_enabled | bool
+  tags: [source]

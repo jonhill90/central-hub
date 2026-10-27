@@ -1,0 +1,25 @@
+# {{ ansible_managed }}
+# Anonymous HTTPS, no secretRef: the cluster holds no git credential (Activation gate item 3).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: central-hub
+  namespace: flux-system
+spec:
+  url: {{ k8s_gitops_source_url }}
+  ref:
+    branch: {{ k8s_gitops_source_branch }}
+  interval: {{ k8s_gitops_source_interval }}
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cluster
+  namespace: flux-system
+spec:
+  sourceRef:
+    kind: GitRepository
+    name: central-hub
+  path: ./{{ k8s_gitops_source_path }}
+  prune: true
+  interval: {{ k8s_gitops_source_interval }}

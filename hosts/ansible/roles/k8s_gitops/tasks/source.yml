@@ -1,0 +1,19 @@
+---
+# Activation gate (CLAUDE.md): all 7 items true and recorded before this runs.
+- name: source | Source manifest
+  ansible.builtin.template:
+    src: "source-{{ 'flux' if k8s_gitops_engine == 'flux' else 'argocd' }}.yaml.j2"
+    dest: "{{ k8s_gitops_dir }}/source.yaml"
+    mode: "0600"
+
+- name: source | Source differs from the cluster?
+  ansible.builtin.command: kubectl diff -f {{ k8s_gitops_dir }}/source.yaml
+  register: k8s_gitops_source_diff
+  changed_when: false
+  failed_when: k8s_gitops_source_diff.rc > 1
+  check_mode: false
+
+- name: source | Apply the source
+  ansible.builtin.command: kubectl apply -f {{ k8s_gitops_dir }}/source.yaml
+  when: k8s_gitops_source_diff.rc != 0
+  changed_when: true

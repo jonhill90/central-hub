@@ -1,0 +1,36 @@
+---
+# One row per engine: the newest release at least two weeks old on 2026-10-27 (STD-0003), the
+# upstream install manifest, and its sha256 (measured on the downloaded file; Flux's matches the
+# release's flux_2.9.6_checksums.txt). Research: Library research/gitops-secrets-c1/ (RB-0089).
+k8s_gitops_engines:
+  flux:
+    version: v2.9.6
+    url: https://github.com/fluxcd/flux2/releases/download/v2.9.6/install.yaml
+    sha256: 9c1fda7e401429531ed1478f67ba06b3edff6513b75da7ee47bde9f1c4d4251c
+    namespace: flux-system
+    deployments: [source-controller, kustomize-controller, helm-controller, notification-controller, source-watcher]
+    statefulsets: []
+  argocd:
+    version: v3.5.5
+    url: https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/manifests/install.yaml
+    sha256: 90dc9094bf4c5964afd9c0e35d735e1c2fcbbda4f8e36799c092d9864ed65f50
+    namespace: argocd
+    deployments:
+      - argocd-applicationset-controller
+      - argocd-dex-server
+      - argocd-notifications-controller
+      - argocd-redis
+      - argocd-repo-server
+      - argocd-server
+    statefulsets: [argocd-application-controller]
+  argocd-core:
+    version: v3.5.5
+    url: https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/manifests/core-install.yaml
+    sha256: 0d5cf7e6fb9123cd0ac74678cad514ec5b9881dd55cdf5149a1a55d40f1689fb
+    namespace: argocd
+    deployments: [argocd-applicationset-controller, argocd-redis, argocd-repo-server]
+    statefulsets: [argocd-application-controller]
+
+# Derived values, not inputs.
+k8s_gitops_pick: "{{ k8s_gitops_engines[k8s_gitops_engine] }}"
+k8s_gitops_dir: /root/central-hub/gitops

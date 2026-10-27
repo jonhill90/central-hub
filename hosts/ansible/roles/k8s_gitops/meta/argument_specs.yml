@@ -1,0 +1,18 @@
+---
+argument_specs:
+  main:
+    short_description: The GitOps engine on c1, pinned and with no git write credential (BUILD-PATH S13, Activation gate item 4)
+    options:
+      k8s_gitops_engine:
+        type: str
+        required: true
+        choices: [flux, argocd, argocd-core]
+        description: "The engine. The owner's choice (BL-0021); no default."
+      k8s_gitops_source_enabled:
+        type: bool
+        default: false
+        description: "Point the engine at central-hub. Keep false until the Activation gate passes."
+      k8s_gitops_source_url: {type: str, default: "https://github.com/jonhill90/central-hub", description: Repository read over anonymous HTTPS.}
+      k8s_gitops_source_branch: {type: str, default: main, description: Branch the cluster follows (D-0002).}
+      k8s_gitops_source_path: {type: str, default: kubernetes/clusters/c1, description: Folder the cluster reads.}
+      k8s_gitops_source_interval: {type: str, default: 5m, description: How often the engine checks git.}

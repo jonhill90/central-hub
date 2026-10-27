@@ -1,0 +1,29 @@
+---
+- name: store | Folder for the manifests
+  ansible.builtin.file: {path: /root/central-hub, state: directory, mode: "0700"}
+
+- name: store | Store manifest
+  ansible.builtin.template:
+    src: store.yaml.j2
+    dest: /root/central-hub/secret-store.yaml
+    mode: "0600"
+
+# Same diff-then-apply as k8s_gateway: rc 0 no difference, 1 a difference, more an error; a
+# missing namespace on the first run also means "apply".
+- name: store | Store differs from the cluster?
+  ansible.builtin.command: kubectl diff -f /root/central-hub/secret-store.yaml
+  register: k8s_secrets_store_diff
+  changed_when: false
+  failed_when: k8s_secrets_store_diff.rc > 1 and 'namespaces' not in k8s_secrets_store_diff.stderr
+  check_mode: false
+
+- name: store | Apply the store
+  ansible.builtin.command: kubectl apply -f /root/central-hub/secret-store.yaml
+  when: k8s_secrets_store_diff.rc != 0
+  changed_when: true
+
+- name: store | Store ready
+  ansible.builtin.command: >-
+    kubectl wait --for=condition=Ready clustersecretstore/{{ k8s_secrets_store_name }} --timeout=60s
+  changed_when: false
+  when: not ansible_check_mode

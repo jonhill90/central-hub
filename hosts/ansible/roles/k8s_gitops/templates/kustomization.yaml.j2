@@ -1,0 +1,33 @@
+# {{ ansible_managed }}
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+{% if k8s_gitops_engine == 'flux' %}
+resources:
+  - install.yaml
+# Activation gate item 6: no image automation.
+patches:
+{% for kind, name in [
+  ('Deployment', 'image-automation-controller'),
+  ('Deployment', 'image-reflector-controller'),
+  ('ServiceAccount', 'image-automation-controller'),
+  ('ServiceAccount', 'image-reflector-controller'),
+  ('CustomResourceDefinition', 'imagepolicies.image.toolkit.fluxcd.io'),
+  ('CustomResourceDefinition', 'imagerepositories.image.toolkit.fluxcd.io'),
+  ('CustomResourceDefinition', 'imageupdateautomations.image.toolkit.fluxcd.io')] %}
+  - patch: |-
+      $patch: delete
+      apiVersion: {{ {'Deployment': 'apps/v1', 'ServiceAccount': 'v1'}.get(kind, 'apiextensions.k8s.io/v1') }}
+      kind: {{ kind }}
+      metadata:
+        name: {{ name }}
+{% if kind != 'CustomResourceDefinition' %}
+        namespace: flux-system
+{% endif %}
+{% endfor %}
+{% else %}
+# Argo CD's manifest has no namespace of its own; its docs install it into `argocd`.
+namespace: argocd
+resources:
+  - namespace.yaml
+  - install.yaml
+{% endif %}

@@ -1,0 +1,18 @@
+---
+# BUILD-PATH S14: the secrets layer on cluster c1, in the shape the owner said yes to on
+# 2026-10-15 01:58 UTC (Library research/secrets/, RB-0012): External Secrets Operator (ESO) in the
+# middle, apps read plain Kubernetes Secrets, and no secret values or ciphertext in this repo.
+# The store behind ESO is ESO's own Kubernetes provider for now (an agent pick, RB-0012 v2). The
+# backend question is parked by the owner (2026-10-17 21:14 UTC). Every input is listed here.
+
+# ESO chart. 2.14.0 is the first release that lists Kubernetes 1.37 (c1 runs 1.37.1), and it was
+# published on 2026-10-23, so STD-0003 rule 1 allows it from 2026-11-06. The role stops before
+# that date. ESO supports only its newest minor; upgrade one minor at a time, as an ordinary PR.
+k8s_secrets_eso_version: 2.14.0
+k8s_secrets_eso_not_before: "2026-11-06"
+k8s_secrets_eso_namespace: external-secrets
+
+# The one store every ExternalSecret names. It reads Secrets from one locked namespace, which is
+# seeded by hand from the password manager (no values in git).
+k8s_secrets_store_name: c1
+k8s_secrets_source_namespace: secret-source
