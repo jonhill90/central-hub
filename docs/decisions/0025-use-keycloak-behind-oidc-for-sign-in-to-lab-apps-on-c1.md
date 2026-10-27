@@ -16,7 +16,7 @@ revisit-when: the owner answers the open question Keycloak or authentik; c1 gets
 
 ## Context and Problem Statement
 
-BUILD-PATH S15 asks for sign-in for lab apps on c1 (BL-0019). Research batch RB-0087 (Library `research/central-identity/`) compared self-hosted identity providers for people, machines and agents, and made no pick. On 2026-10-27 at 04:14 UTC the owner was asked Keycloak or authentik, and the question is still open. The owner asked for the build to keep moving, and the lab is greenfield, so Keycloak was built as an agent pick (hosts/AGENT-PICKS.md picks 96-102). Research batch RB-0091 added how Keycloak is installed on c1.
+BUILD-PATH S15 asks for sign-in for lab apps on c1 (BL-0019). Research batch RB-0087 (Library `research/central-identity/`) compared self-hosted identity providers for people, machines and agents, and made no pick. On 2026-10-27 at 04:14 UTC the owner was asked Keycloak or authentik, and the question is still open. The owner asked for the build to keep moving, and the lab is greenfield, so Keycloak was built as an agent pick (hosts/AGENT-PICKS.md picks 96-102). Research batch RB-0092 added how Keycloak is installed on c1.
 
 This record is proposed. If the owner picks authentik, this record is rejected and a new one records that choice.
 
@@ -69,5 +69,5 @@ flowchart LR
 
 ## More Information
 
-- Research: RB-0087 (Library `research/central-identity/`), RB-0091 rows L20-L29.
+- Research: RB-0087 (Library `research/central-identity/`), RB-0092 rows L20-L29.
 - Agent picks 96-102 in `hosts/AGENT-PICKS.md`.

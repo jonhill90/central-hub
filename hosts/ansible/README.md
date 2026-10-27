@@ -90,7 +90,7 @@ The `argocd` CLI over this name needs `--grpc-web`: there is no GRPCRoute.
 
 ## Metrics and logs on c1
 
-`playbooks/k8s-observability.yml` (role `k8s_observability`, BUILD-PATH S15) adds metrics and logs to c1. Every part is an agent pick, listed in [../AGENT-PICKS.md](../AGENT-PICKS.md); the research is batch RB-0091. Versions are the newest release at least two weeks old on 2026-10-27 (STD-0003), in the role's defaults.
+`playbooks/k8s-observability.yml` (role `k8s_observability`, BUILD-PATH S15) adds metrics and logs to c1. Every part is an agent pick, listed in [../AGENT-PICKS.md](../AGENT-PICKS.md); the research is batch RB-0092. Versions are the newest release at least two weeks old on 2026-10-27 (STD-0003), in the role's defaults.
 
 - **Metrics.** kube-prometheus-stack 92.3.1. Prometheus reads every ServiceMonitor, PodMonitor and rule in the cluster. Off on purpose: Alertmanager (no notification target is picked yet), and the kube-proxy, etcd, controller manager and scheduler scrapes (c1 has no kube-proxy, and kubeadm binds the other three to 127.0.0.1).
 - **Logs.** Loki 3.7.8 in monolithic mode, from the grafana-community chart (Grafana's own install page uses it). One Alloy pod reads every pod's logs through the Kubernetes API (`loki.source.kubernetes`), so it needs no host paths and no DaemonSet.
