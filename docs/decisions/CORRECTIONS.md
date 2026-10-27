@@ -6,6 +6,12 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
+### Accepted with PR #49
+
+This PR's approval facts and merge commit are added after it merges (D-0006 step 6).
+
+- 2026-10-27 · D-0023 rule 6, diagram and Consequences, its evidence file, AGENTS.md Activation gate item 4 · the Argo CD UI is used only on its own lab DNS name through the cluster's Gateway with the lab's certificate, with no port-forward step; the compensating control reads "reachable only from the lab network"; gate item 4 names Argo CD and D-0023 · the owner's statement of 2026-10-27 at 03:52 UTC that the UI waits until DNS is up; D-0023 was accepted with PR #48 (approved 2026-10-27T02:58:08Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNUgBcgq1CnfEaBLT5BNZCVN, head b138450, merged as e68202c)
+
 ### Accepted with PR #47
 
 This PR's approval facts and merge commit are added after it merges (D-0006 step 6).
