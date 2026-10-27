@@ -30,7 +30,7 @@ Flux or Argo CD as c1's GitOps engine, installed with no git credential, and wha
 
 (Written from the record, not from the batch.)
 
-D-0023 takes option 1. Finding 6 sets rule 6 (port-forward only, change and store the password, delete the initial Secret). Finding 2 is the first "Bad" consequence and the first revisit trigger. Findings 4 and 5 support rules 2 and 4 and Activation gate items 3, 4 and 6.
+D-0023 takes option 1. Finding 6 sets rule 6 (change and store the password, delete the initial Secret); the owner's statement of 2026-10-27 at 03:52 UTC sets the rest of rule 6, a DNS name through the Gateway instead of port-forward. Finding 2 is the first "Bad" consequence and the first revisit trigger. Findings 4 and 5 support rules 2 and 4 and Activation gate items 3, 4 and 6.
 
 ## Limits
 
