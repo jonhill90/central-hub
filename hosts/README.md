@@ -4,10 +4,10 @@ Code for every machine below Kubernetes ([D-0011](../docs/decisions/0011-keep-ma
 
 | Folder | What it does |
 |---|---|
-| [terraform/](terraform/) | Creates Proxmox objects: the lab SDN, the OPNsense VM and the connector container. |
+| [terraform/](terraform/) | Creates Proxmox objects: the lab SDN, the OPNsense VM, the connector container and the c1 node VMs. Also the Cloudflare API token cert-manager uses (`home/certificates/`). |
 | [ansible/](ansible/) | Configures the Proxmox host's network and safety net (host firewall, backups, notifications) and the OPNsense firewall's settings. |
 
-Status: first draft. Nothing here has been applied to the lab yet.
+Status: first draft. The Terraform run folders have been applied to the home lab ([terraform/README.md](terraform/README.md)).
 
 ## Order for the home lab
 

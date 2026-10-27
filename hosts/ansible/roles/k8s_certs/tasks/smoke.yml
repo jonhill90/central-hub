@@ -1,0 +1,112 @@
+---
+# With issuing on and the Gateway's HTTPS listener on (k8s_gateway_https): the certificate is
+# ready and from the chosen issuer, the Gateway serves exactly that certificate for an app name,
+# and an HTTPS request through the Gateway address reaches an echo app. The client is the Proxmox
+# host, outside the cluster; it reaches the name with curl --resolve, so the check doesn't depend
+# on DNS. The test app is deleted afterwards.
+- name: smoke | Issuing is on
+  ansible.builtin.assert:
+    that: [k8s_certs_issue]
+    fail_msg: k8s_certs_issue is false, so there is no certificate to test.
+    quiet: true
+
+- name: smoke | Certificate ready, from {{ k8s_certs_issuer }}
+  ansible.builtin.shell: >-
+    kubectl -n {{ k8s_certs_gateway_namespace }} get certificate {{ k8s_certs_certificate_name }}
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' &&
+    echo &&
+    kubectl -n {{ k8s_certs_gateway_namespace }} get secret {{ k8s_certs_secret_name }}
+    -o jsonpath='{.metadata.annotations.cert-manager\.io/issuer-name}'
+  register: k8s_certs_smoke_ready
+  until: k8s_certs_smoke_ready.rc == 0 and k8s_certs_smoke_ready.stdout_lines == ['True', k8s_certs_issuer]
+  retries: 60
+  delay: 10
+  changed_when: false
+
+# tls.crt is the public certificate (with its chain); the key is not read.
+- name: smoke | The certificate in the Secret
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    kubectl -n {{ k8s_certs_gateway_namespace }} get secret {{ k8s_certs_secret_name }}
+    -o jsonpath='{.data.tls\.crt}' | base64 -d
+    | openssl x509 -noout -fingerprint -sha256 -issuer -ext subjectAltName
+  register: k8s_certs_smoke_secret_cert
+  changed_when: false
+
+- name: smoke | It covers the wildcard name and comes from the expected Let's Encrypt
+  ansible.builtin.assert:
+    that:
+      - ('DNS:' ~ k8s_certs_wildcard) in k8s_certs_smoke_secret_cert.stdout
+      - ("Let's Encrypt" in __issuer) or ('ISRG' in __issuer) or ('(STAGING)' in __issuer)
+      - (k8s_certs_issuer == 'letsencrypt-staging') == ('(STAGING)' in __issuer)
+    fail_msg: "Unexpected certificate: {{ k8s_certs_smoke_secret_cert.stdout }}"
+    quiet: true
+  vars:
+    __issuer: "{{ k8s_certs_smoke_secret_cert.stdout_lines | select('match', '^issuer=') | first | default('') }}"
+
+- name: smoke | Gateway's HTTPS listener is programmed
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_certs_gateway_namespace }} get gateway {{ k8s_certs_gateway_name }}
+    -o jsonpath='{.status.listeners[?(@.name=="https")].conditions[?(@.type=="Programmed")].status}'
+  register: k8s_certs_smoke_listener
+  changed_when: false
+  failed_when: k8s_certs_smoke_listener.stdout != 'True'
+
+- name: smoke | Test app and route
+  block:
+    - name: smoke | Test app manifest
+      ansible.builtin.template:
+        src: smoke.yaml.j2
+        dest: /root/central-hub/certs-smoke.yaml
+        mode: "0600"
+
+    - name: smoke | Apply the test app
+      ansible.builtin.shell: |
+        kubectl apply -f /root/central-hub/certs-smoke.yaml
+        kubectl -n {{ k8s_certs_smoke_namespace }} rollout status deploy/{{ k8s_certs_smoke_name }} --timeout=180s
+        kubectl -n {{ k8s_certs_smoke_namespace }} wait httproute/{{ k8s_certs_smoke_name }} --timeout=60s \
+          --for=jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}'=True
+      changed_when: true
+
+    # The certificate the Gateway hands out for the app name, seen from outside the cluster, must
+    # be the one in the Secret (the same SHA-256 fingerprint).
+    - name: smoke | The Gateway serves that certificate for the test name
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        openssl s_client -connect {{ k8s_certs_gateway_address }}:443 -servername {{ k8s_certs_smoke_host }}
+        </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256
+      delegate_to: "{{ k8s_certs_smoke_client }}"
+      register: k8s_certs_smoke_served
+      until: >-
+        k8s_certs_smoke_served.rc == 0 and k8s_certs_smoke_served.stdout | upper
+        == (k8s_certs_smoke_secret_cert.stdout_lines | select('search', 'Fingerprint=') | first | upper)
+      retries: 12
+      delay: 5
+      changed_when: false
+
+    # Staging certificates chain to a root no machine trusts (that is the point of staging), so
+    # curl skips verification there; for production it must verify against the client's own
+    # trust store.
+    - name: smoke | An HTTPS request through the Gateway reaches the test app
+      ansible.builtin.command: >-  # noqa: command-instead-of-module (uri has no --resolve)
+        curl -sS --max-time 5 {{ '-k' if k8s_certs_issuer == 'letsencrypt-staging' else '' }}
+        --resolve {{ k8s_certs_smoke_host }}:443:{{ k8s_certs_gateway_address }}
+        https://{{ k8s_certs_smoke_host }}/hostname
+      delegate_to: "{{ k8s_certs_smoke_client }}"
+      register: k8s_certs_smoke_get
+      until: k8s_certs_smoke_get.rc == 0 and k8s_certs_smoke_get.stdout.startswith(k8s_certs_smoke_name ~ '-')
+      retries: 12
+      delay: 5
+      changed_when: false
+
+    - name: smoke | Proof
+      ansible.builtin.debug:
+        msg: >-
+          https://{{ k8s_certs_smoke_host }} answered {{ k8s_certs_smoke_get.stdout }} with
+          {{ k8s_certs_smoke_secret_cert.stdout_lines | join('; ') }}
+
+  always:
+    - name: smoke | Remove the test app
+      ansible.builtin.command: >-
+        kubectl delete namespace {{ k8s_certs_smoke_namespace }} --ignore-not-found --wait=true --timeout=180s
+      changed_when: true

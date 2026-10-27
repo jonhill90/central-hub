@@ -1,0 +1,62 @@
+---
+# Needs k8s.yml first: Helm in /usr/local/bin and the Gateway API CRDs, which cert-manager looks
+# for only when it starts (cert-manager.io/docs/usage/gateway/).
+- name: certmanager | Gateway API CRDs are in the cluster
+  ansible.builtin.command: kubectl get crd gateways.gateway.networking.k8s.io
+  changed_when: false
+  check_mode: false
+
+- name: certmanager | Folder for the chart and manifests
+  ansible.builtin.file: {path: /root/central-hub, state: directory, mode: "0700"}
+
+# The chart file itself, checked against the digest the Jetstack Helm index publishes for it, so
+# a changed file stops the run (a `helm repo add` install would trust whatever the repo serves).
+- name: certmanager | Chart, checked against the pinned checksum
+  ansible.builtin.get_url:
+    url: "https://charts.jetstack.io/charts/cert-manager-{{ k8s_certs_cert_manager_version }}.tgz"
+    dest: "{{ k8s_certs_chart_file }}"
+    checksum: "sha256:{{ k8s_certs_cert_manager_chart_sha256 }}"
+    mode: "0644"
+
+- name: certmanager | Values file
+  ansible.builtin.copy:
+    dest: /root/central-hub/cert-manager-values.yaml
+    mode: "0600"
+    content: "{{ k8s_certs_cert_manager_values | to_nice_yaml(indent=2) }}"
+
+- name: certmanager | Release now
+  ansible.builtin.command: >-
+    /usr/local/bin/helm -n {{ k8s_certs_namespace }} list --filter ^cert-manager$ -o json
+  register: k8s_certs_helm_list
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: certmanager | Values now
+  ansible.builtin.command: /usr/local/bin/helm -n {{ k8s_certs_namespace }} get values cert-manager -o json
+  register: k8s_certs_helm_values
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Upgrade only when the chart version or a value differs, so a re-run reports no change. --wait
+# also waits for the chart's startupapicheck job, which proves the webhook answers, so the
+# issuers can be applied straight after.
+- name: certmanager | Install or upgrade cert-manager
+  ansible.builtin.command: >-
+    /usr/local/bin/helm upgrade --install cert-manager {{ k8s_certs_chart_file }}
+    -n {{ k8s_certs_namespace }} --create-namespace --reset-values
+    -f /root/central-hub/cert-manager-values.yaml --wait --timeout 10m
+  when: >-
+    k8s_certs_releases | map(attribute='chart') | list != ['cert-manager-' ~ k8s_certs_cert_manager_version]
+    or k8s_certs_helm_values.rc != 0
+    or (k8s_certs_helm_values.stdout | from_json) != k8s_certs_cert_manager_values
+  changed_when: true
+
+- name: certmanager | Controller, webhook and cainjector ready
+  ansible.builtin.shell: >-
+    kubectl -n {{ k8s_certs_namespace }} rollout status deploy/cert-manager --timeout=300s &&
+    kubectl -n {{ k8s_certs_namespace }} rollout status deploy/cert-manager-webhook --timeout=300s &&
+    kubectl -n {{ k8s_certs_namespace }} rollout status deploy/cert-manager-cainjector --timeout=300s
+  changed_when: false
+  when: not ansible_check_mode

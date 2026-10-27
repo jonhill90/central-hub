@@ -21,6 +21,13 @@ k8s_gateway_class: cilium
 k8s_gateway_firewall_zone: lab
 k8s_gateway_node_ports: [80/tcp]
 
+# BUILD-PATH S12: an HTTPS listener on 443 for the same names, ending TLS at the Gateway with the
+# wildcard certificate role k8s_certs issues into this Secret (in the Gateway's namespace). Off
+# until that Secret exists (playbooks/k8s-certs.yml --tags issue); on, it also opens tcp 443 in
+# the zone above. The HTTP listener on 80 stays.
+k8s_gateway_https: false
+k8s_gateway_tls_secret: apps-tls
+
 # Smoke test: an echo app at <name>.apps.<cluster>.<env>.<zone>, called through the Gateway
 # address from a machine outside the cluster (the Proxmox host, Ansible's jump host), then
 # deleted. k8s_gateway_smoke_client defaults to the first host of the inventory group proxmox.

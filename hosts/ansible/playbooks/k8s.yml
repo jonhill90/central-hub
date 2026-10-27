@@ -5,6 +5,10 @@
 # lab DNS (opnsense.yml, opnsense_lab_host_overrides).
 # Since BUILD-PATH S11 the first control plane also applies the Gateway API CRDs and turns on
 # Cilium's Gateway API controller (runbook step 10a); the Gateway itself is playbooks/k8s-gateway.yml.
+# Since BUILD-PATH S12 the first control plane also encrypts Secrets at rest (runbook step 8a),
+# with the key from k8s_control_plane_encryption_key_file; on a running cluster, run that alone:
+#   ansible-playbook -i inventories/home/ playbooks/k8s.yml --tags encryption --limit k8s_control_plane
+# (--limit skips the workers play, whose join command comes from a task this tag skips).
 - name: Kubernetes nodes (runbook steps 1-6)
   hosts: k8s_nodes
   become: true

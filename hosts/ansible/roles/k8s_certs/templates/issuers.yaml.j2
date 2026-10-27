@@ -1,0 +1,45 @@
+# Two ACME ClusterIssuers, Let's Encrypt staging and production, both answering DNS-01 at
+# Cloudflare for the one zone (cert-manager.io/docs/configuration/acme/dns01/cloudflare/). Making
+# one registers an ACME account; its key is kept in <issuer>-account in the cert-manager namespace.
+{% for name, server in k8s_certs_acme_servers.items() %}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ name }}
+spec:
+  acme:
+    server: {{ server }}
+    email: {{ k8s_certs_acme_email }}
+    privateKeySecretRef:
+      name: {{ name }}-account
+    solvers:
+      - selector:
+          dnsZones:
+            - {{ k8s_certs_zone }}
+        dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: {{ k8s_certs_token_secret_name }}
+              key: api-token
+{% endfor %}
+---
+# The one wildcard certificate for the shared Gateway. A plain kubernetes.io/tls Secret, so any
+# other issuer (a private CA later) can replace this one by changing issuerRef only.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ k8s_certs_certificate_name }}
+  namespace: {{ k8s_certs_gateway_namespace }}
+spec:
+  secretName: {{ k8s_certs_secret_name }}
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: {{ k8s_certs_issuer }}
+  dnsNames:
+    - "{{ k8s_certs_wildcard }}"
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always

@@ -24,3 +24,39 @@ k8s_cp_cilium_values:
 # The installed Cilium release, as `helm list -o json` gives it; empty before the first install
 # (and in check mode before Helm is there).
 k8s_cp_cilium_releases: "{{ (k8s_cp_cilium_list.stdout | default('', true) or '[]') | from_json }}"
+
+# Step 8a, Secrets encrypted at rest. The kube-apiserver flag and the folder it reads, in kubeadm's
+# v1beta4 shapes (Arg and HostPathMount), for the init config and the kubeadm-config ConfigMap.
+k8s_cp_enc_file: "{{ k8s_control_plane_encryption_dir }}/encryption-config.yaml"
+k8s_cp_enc_arg: {name: encryption-provider-config, value: "{{ k8s_cp_enc_file }}"}
+k8s_cp_enc_volume:
+  name: encryption-config
+  hostPath: "{{ k8s_control_plane_encryption_dir }}"
+  mountPath: "{{ k8s_control_plane_encryption_dir }}"
+  readOnly: true
+  pathType: DirectoryOrCreate
+# etcd stores a secretbox-encrypted value as "k8s:enc:secretbox:v1:<key name>:<bytes>"
+# (kubernetes.io, Encrypting Confidential Data at Rest). etcdctl -w json gives values in base64;
+# the 21-byte prefix encodes to exactly 28 characters, so the check compares the base64 text.
+k8s_cp_enc_prefix_b64: "{{ 'k8s:enc:secretbox:v1:' | b64encode }}"
+# etcdctl inside the etcd pod, with the client certificate kubeadm makes for etcd's health checks
+# (the pod mounts /etc/kubernetes/pki/etcd). The read used by the proofs; append the key.
+k8s_cp_etcdctl: >-
+  kubectl -n kube-system exec "$(kubectl -n kube-system get pod -l component=etcd
+  -o jsonpath='{.items[0].metadata.name}')" -- etcdctl --endpoints=https://127.0.0.1:2379
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt
+  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key -w json get
+
+# kubeadm's stored ClusterConfiguration now, and the same with the flag and the folder added, any
+# earlier entry of the same name replaced (the live cluster, made before step 8a, has neither).
+k8s_cp_cc_now: "{{ k8s_cp_kubeadm_cc.stdout | default('', true) | from_yaml or {} }}"
+k8s_cp_cc_apiserver_now: "{{ k8s_cp_cc_now.apiServer | default({}, true) }}"
+k8s_cp_cc_want: >-
+  {{ k8s_cp_cc_now | combine({'apiServer': k8s_cp_cc_apiserver_now | combine({
+       'extraArgs': (k8s_cp_cc_apiserver_now.extraArgs | default([], true)
+                     | rejectattr('name', 'equalto', k8s_cp_enc_arg.name) | list) + [k8s_cp_enc_arg],
+       'extraVolumes': (k8s_cp_cc_apiserver_now.extraVolumes | default([], true)
+                        | rejectattr('name', 'equalto', k8s_cp_enc_volume.name) | list) + [k8s_cp_enc_volume]})}) }}
+k8s_cp_cc_has_enc: >-
+  {{ k8s_cp_enc_arg in (k8s_cp_cc_apiserver_now.extraArgs | default([], true))
+     and k8s_cp_enc_volume in (k8s_cp_cc_apiserver_now.extraVolumes | default([], true)) }}

@@ -7,6 +7,11 @@
   changed_when: false
   failed_when: ansible_default_ipv4.address not in k8s_cp_getent.stdout
 
+# Step 8a, part 1. The encryption key file, which the API server reads from its first start.
+- name: Secrets encrypted at rest, the key file
+  ansible.builtin.import_tasks: encryption-key.yml
+  tags: [encryption]
+
 # Step 8. Init
 - name: step8 | Already initialised?
   ansible.builtin.stat: {path: /etc/kubernetes/admin.conf}
@@ -17,13 +22,19 @@
   when: not k8s_cp_admin.stat.exists
   changed_when: true
 
+- name: step8 | Folder for the files the role writes
+  ansible.builtin.file: {path: /root/central-hub, state: directory, mode: "0700"}
+
+# The runbook's flags as a config file, because the encryption flag and its folder (step 8a) can
+# only be given to `kubeadm init` that way; kubeadm doesn't mix --config with those flags.
+- name: step8 | kubeadm init config
+  ansible.builtin.template:
+    src: kubeadm-init.yaml.j2
+    dest: /root/central-hub/kubeadm-init.yaml
+    mode: "0600"
+
 - name: step8 | kubeadm init
-  ansible.builtin.command: >-
-    kubeadm init --kubernetes-version v{{ k8s_control_plane_kubernetes_version }}
-    --control-plane-endpoint {{ k8s_control_plane_endpoint }}:6443
-    --pod-network-cidr {{ k8s_control_plane_pod_cidr }}
-    --service-cidr {{ k8s_control_plane_service_cidr }}
-    --skip-phases addon/kube-proxy
+  ansible.builtin.command: kubeadm init --config /root/central-hub/kubeadm-init.yaml
   when: not k8s_cp_admin.stat.exists
   changed_when: true
 
@@ -36,6 +47,11 @@
     dest: /root/.kube/config
     remote_src: true
     mode: "0600"
+
+# Step 8a, part 2. The API server reads the encryption config; every Secret is stored encrypted.
+- name: Secrets encrypted at rest, the API server
+  ansible.builtin.import_tasks: encryption.yml
+  tags: [encryption]
 
 # Step 9. Cilium, by Helm, with its Gateway API controller (BUILD-PATH S11). Changes from the runbook: devices = the lab NIC (not tailscale0),
 # no MTU override (the lab NIC has 1500; 1230 was for the tailnet's 1280), and Cilium replaces

@@ -1,7 +1,7 @@
 ---
 argument_specs:
   main:
-    short_description: One shared Cilium Gateway for web traffic, and its smoke test (BUILD-PATH S11)
+    short_description: One shared Cilium Gateway for web traffic, HTTP and optional HTTPS, and its smoke test (BUILD-PATH S11, S12)
     options:
       k8s_gateway_zone: {type: str, required: true, description: "The DNS zone. Private."}
       k8s_gateway_address: {type: str, required: true, description: "The Gateway's address, one address from the load-balancer pool. Private."}
@@ -15,6 +15,11 @@ argument_specs:
       k8s_gateway_class: {type: str, default: cilium, description: GatewayClass; Cilium makes `cilium` when its Gateway API controller is on.}
       k8s_gateway_firewall_zone: {type: str, default: lab, description: firewalld zone of the lab NIC on every node.}
       k8s_gateway_node_ports: {type: list, elements: str, default: [80/tcp], description: Listener ports that zone accepts.}
+      k8s_gateway_https: {type: bool, default: false, description: "Add the HTTPS listener on 443 and open tcp 443 (BUILD-PATH S12)."}
+      k8s_gateway_tls_secret:
+        type: str
+        default: apps-tls
+        description: "TLS Secret in the Gateway's namespace that the HTTPS listener uses (k8s_certs_secret_name)."
       k8s_gateway_smoke_name: {type: str, default: hello, description: First label of the smoke test's hostname.}
       k8s_gateway_smoke_namespace: {type: str, default: gateway-smoke, description: "Namespace of the smoke test app, deleted afterwards."}
       k8s_gateway_smoke_image: {type: str, default: "registry.k8s.io/e2e-test-images/agnhost:2.53", description: Echo app image.}

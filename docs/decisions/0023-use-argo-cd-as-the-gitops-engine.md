@@ -1,7 +1,7 @@
 ---
 id: D-0023
 title: Use Argo CD with its web UI as the GitOps engine on c1, installed from the pinned upstream manifest with no git credential
-status: proposed
+status: accepted
 date: 2026-10-27
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0001, D-0002, D-0011]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-27T02:58:08Z
+  approved-commit: b138450045c7922c3084a8070558a5063f863ec5
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNUgBcgq1CnfEaBLT5BNZCVN
+  approval-names: "PR #48 and head b138450"
+  check: the drafting agent read the message in the project thread at 2026-10-27T02:58Z; it names PR jonhill90/central-hub#48 and head b138450 itself. The owner first approved head 972a8ee at 2026-10-27T02:56:19Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNG7LsdmAda7mFVVzz26S7dz); b138450 merges main into it and regenerates the two indexes only. An independent check by a reviewing agent is still to do.
+  merged: PR #48 merged at 2026-10-27T02:58:42Z as e68202c
 revisit-when: an Argo CD release lists the cluster's Kubernetes minor as tested, or a release in use fails on it; the planned head-to-head GitOps test on a real workload; a second cluster needs one engine to manage several clusters; or the web UI's login can't be kept off the internet
 ---
 
@@ -43,7 +51,7 @@ Chosen option: **1**. The owner said yes to the proposed Argo CD with its web UI
 flowchart LR
   repo["central-hub main<br/>kubernetes/clusters/c1/"] -. "anonymous HTTPS,<br/>only after the Activation gate" .-> argo["Argo CD on c1<br/>(pinned v3.5.5)"]
   ansible["hosts/ansible<br/>playbooks/k8s-gitops.yml"] -- "installs, sha256-checked" --> argo
-  mac["owner's Mac"] -- "kubectl port-forward" --> ui["Argo CD web UI"]
+  mac["owner's Mac"] -- "HTTPS to its lab DNS name,<br/>through the Gateway" --> ui["Argo CD web UI"]
   argo --- ui
 ```
 
@@ -54,7 +62,7 @@ flowchart LR
 3. **Version.** The pin follows STD-0003. The first pin is v3.5.5.
 4. **No source before the gate.** The engine runs with no Application pointing at central-hub until the Activation gate passes. The role turns the source on only with `k8s_gitops_source_enabled: true`.
 5. **Source, once allowed.** One Application reads `kubernetes/clusters/c1/` on `main` over anonymous HTTPS, with no repository secret (D-0002; D-0011 diagram).
-6. **UI access.** The UI is reached from the owner's Mac with `kubectl port-forward`, not through the cluster's Gateway, until the identity provider (BUILD-PATH S15) and lab certificates (S12) exist. Exception to best practice (D-0013 rule 3): the initial admin password is stored in clear text in the `argocd-initial-admin-secret` Secret until it is changed. Compensating controls: the UI is not exposed outside the cluster, the password is changed at first sign-in and kept in the password manager, and that Secret is then deleted, as Argo CD's getting-started guide says.
+6. **UI access.** The UI is used only once it has its own DNS name: `argocd.apps.c1.prod.<zone>` under the cluster's apps names (STD-0001), routed through the cluster's Gateway (D-0021) with the lab's certificate (BUILD-PATH S11 and S12). There is no `kubectl port-forward` step. TLS ends at the Gateway, so the Argo CD server runs with `server.insecure` set. The name is in the lab's own DNS only and its address is on the lab network, never on the internet. Exception to best practice (D-0013 rule 3): the initial admin password is stored in clear text in the `argocd-initial-admin-secret` Secret until it is changed. Compensating controls: the UI is reachable only from the lab network, the password is changed at first sign-in and kept in the password manager, and that Secret is then deleted, as Argo CD's getting-started guide says.
 
 ### Not decided here
 
@@ -71,7 +79,7 @@ flowchart LR
 - Bad: Argo CD 3.5 lists Kubernetes 1.33 to 1.36 as tested, and c1 runs 1.37.1. The first install on c1 is the test.
 - Bad: the full install adds an API server, a UI and a local admin login to protect (rule 6).
 - Bad: Argo CD renders Helm charts with `helm template`, so the Helm CLI does not see releases Argo CD manages (RB-0009).
-- Neutral: Activation gate wording that named Flux was already changed to "GitOps engine" on 2026-10-24 (CORRECTIONS.md); AGENTS.md and CLAUDE.md item 4 still say the engine is not chosen and need a correction when this record is accepted.
+- Neutral: Activation gate wording that named Flux was already changed to "GitOps engine" on 2026-10-24 (CORRECTIONS.md); AGENTS.md and CLAUDE.md item 4 name Argo CD and this record.
 
 ### Confirmation
 

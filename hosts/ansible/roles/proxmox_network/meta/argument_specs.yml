@@ -1,0 +1,26 @@
+---
+# Inputs of the proxmox_network role. Ansible checks them with any --tags, so the private values
+# must be set (the inventory template has them, blank until filled) even for a vmbr1-only run.
+argument_specs:
+  main:
+    short_description: The Proxmox host's network, bridge vmbr1 with a fixed MAC and the host's address on VNet mgmt
+    options:
+      # Private, through the inventory
+      proxmox_vmbr1_mac: {type: str, required: true, description: "Fixed MAC for vmbr1, so the SDN's VLAN devices on it come up. Private."}
+      proxmox_host_mgmt_address: {type: str, required: true, description: "The host's address on VNet mgmt, without the prefix length. Private."}
+      proxmox_network_lab_supernet:
+        type: str
+        required: true
+        description: "The place's whole lab range (STD-0002), routed through the firewall's mgmt address, for example 10.1.0.0/16."
+      # From the shared VLAN file, inventories/<place>/group_vars/all/vlans.yml
+      lab_vlans:
+        type: list
+        elements: dict
+        required: true
+        description: The place's VLAN list; the mgmt gateway address comes from the entry named by proxmox_network_mgmt_vnet.
+      # Defaults in defaults/main.yml
+      proxmox_network_interfaces_file: {type: str, default: /etc/network/interfaces, description: The host's ifupdown2 file.}
+      proxmox_network_bridge: {type: str, default: vmbr1, description: The bridge with no ports that carries the lab VLANs.}
+      proxmox_network_bridge_vids: {type: str, default: "2-4094", description: VLAN IDs the VLAN-aware bridge accepts.}
+      proxmox_network_mgmt_vnet: {type: str, default: mgmt, description: The SDN VNet that carries the mgmt VLAN (50); Terraform makes it.}
+      proxmox_network_mgmt_prefix_len: {type: int, default: 24, description: Prefix length of the host's mgmt address.}

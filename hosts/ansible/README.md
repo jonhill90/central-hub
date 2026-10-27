@@ -8,8 +8,9 @@ Ansible code that configures the Proxmox host's network and safety net (host fir
 |---|---|---|
 | `playbooks/proxmox-host.yml` | `proxmox_network` | Tag `vmbr1`: bridge vmbr1 with no ports, VLAN-aware 2-4094, and a fixed MAC. A bridge with no ports otherwise gets an all-zero MAC, and then the SDN's VLAN devices on it can't come up. Tag `mgmt`: the host's address on VNet mgmt, with no gateway. The host's home LAN address on vmbr0 is checked after every reload and never changed. |
 | `playbooks/opnsense.yml` | `opnsense_lab` | VLANs 10, 20 and 30 on the trunk port, and their interface slots with the `.1/24` gateway address. DHCP pools `.100` to `.199` on VLANs 10 and 30 only, ending before the `.224/27` load-balancer reserve. Four rules per lab VLAN: block the home LAN, allow ping and DNS to the firewall, allow everything that isn't RFC 1918. An Unbound host override `opnsense.<zone>` pointing at the mgmt gateway, plus the lab names in `opnsense_lab_host_overrides`: the c1 API name, and the wildcard `*.apps.c1.prod.<zone>` (host `*` with `subdomain: apps.c1.prod`) pointing at the c1 Gateway. On WAN: home LAN to the mgmt gateway on tcp 443, tcp/udp 53 and ping, and private sources no longer blocked. |
-| `playbooks/k8s-gateway.yml` | `k8s_gateway` | Tag `gateway`: one shared Cilium Gateway `apps` in namespace `gateway` for `*.apps.c1.prod.<zone>`, HTTP on port 80, at the pinned address `k8s_gateway_address` from the load-balancer pool, and tcp 80 in the nodes' `lab` firewalld zone. Tag `smoke`: an echo app and its HTTPRoute, called from the Proxmox host through the Gateway address, a 404 check, a DNS check from the worker, then deleted. Needs `playbooks/k8s.yml` first, which applies the Gateway API CRDs and turns on Cilium's Gateway API controller. HTTPS waits for certificates (BUILD-PATH S12). |
-| `playbooks/k8s-gitops.yml` | `k8s_gitops` | Tag `install`: the GitOps engine on c1 (BUILD-PATH S13) from its pinned upstream manifest, checked against a sha256 in `vars/main.yml`, with no git credential. `k8s_gitops_engine` (flux, argocd or argocd-core) has no default: it is the owner's choice (BL-0021). For Flux the image automation controllers are dropped (Activation gate item 6). Tag `source`: points the engine at `kubernetes/clusters/c1/` in this repository over anonymous HTTPS; it runs only with `k8s_gitops_source_enabled: true`, which waits for the Activation gate. |
+| `playbooks/k8s-gateway.yml` | `k8s_gateway` | Tag `gateway`: one shared Cilium Gateway `apps` in namespace `gateway` for `*.apps.c1.prod.<zone>`, HTTP on port 80, at the pinned address `k8s_gateway_address` from the load-balancer pool, and tcp 80 in the nodes' `lab` firewalld zone. Tag `smoke`: an echo app and its HTTPRoute, called from the Proxmox host through the Gateway address, a 404 check, a DNS check from the worker, then deleted. Needs `playbooks/k8s.yml` first, which applies the Gateway API CRDs and turns on Cilium's Gateway API controller. With `k8s_gateway_https: true` (BUILD-PATH S12), also an HTTPS listener on 443 with the certificate Secret `apps-tls`, and tcp 443 in the same zone; the run stops if that Secret doesn't exist yet. |
+| `playbooks/k8s-certs.yml` | `k8s_certs` | Tag `certmanager`: cert-manager v1.21.3 by Helm, from the chart file checked against its SHA-256, with its CRDs, Gateway API support, and public resolvers for the DNS-01 check. Tag `issue`, only with `k8s_certs_issue: true`: the Cloudflare token as a Secret, ClusterIssuers `letsencrypt-staging` and `letsencrypt-prod` (DNS-01 at Cloudflare for the zone), and Certificate `apps` for `*.apps.c1.prod.<zone>` in namespace `gateway` from `k8s_certs_issuer`; with it false, those are removed. Tag `smoke`: an echo app on the HTTPS listener, called from the Proxmox host, then deleted. See [Certificates on c1](#certificates-on-c1). |
+| `playbooks/k8s-gitops.yml` | `k8s_gitops` | Tag `install`: the GitOps engine on c1 (BUILD-PATH S13) from its pinned upstream manifest, checked against a sha256 in `vars/main.yml`, with no git credential. `k8s_gitops_engine` (flux, argocd or argocd-core) has no default: it is the owner's choice (BL-0021). For Flux the image automation controllers are dropped (Activation gate item 6). Tag `source`: points the engine at `kubernetes/clusters/c1/` in this repository over anonymous HTTPS; it runs only with `k8s_gitops_source_enabled: true`, which waits for the Activation gate. Tag `ui`, with `k8s_gitops_ui_route: true`: the Argo CD web UI at `https://argocd.apps.c1.prod.<zone>/` through the shared Gateway, then a proof from a node. See [Argo CD web UI on c1](#argo-cd-web-ui-on-c1). |
 | `playbooks/k8s-secrets.yml` | `k8s_secrets` | Tag `eso`: External Secrets Operator by Helm (BUILD-PATH S14), chart 2.14.0, the first that lists Kubernetes 1.37; the role stops before 2026-11-06, when that chart is two weeks old (STD-0003). Tag `store`: namespace `secret-source`, seeded by hand from the password manager, and one ClusterSecretStore `c1` on ESO's Kubernetes provider that reads only that namespace. No secret values come from this repository. |
 | `playbooks/proxmox-safety.yml` | `proxmox_notify` | Tag `notify`: a notification matcher `central-hub-errors` that sends every notification of severity error (failed backup jobs, HA fencing, other system errors) to one target. Until an endpoint is picked, the target is `central-hub-off`, a sendmail target that is switched off, so nothing new is sent. Proxmox's own default matcher and `mail-to-root` are left alone. |
 | `playbooks/proxmox-safety.yml` | `proxmox_backup` | Tag `backup`: the empty HDD becomes directory storage `hdd-backup` (content backup only), through Proxmox's own Disks > Directory API: one GPT partition, ext4, a systemd mount unit at `/mnt/pve/hdd-backup` by UUID. It runs only while the disk has no partition, filesystem or signature. Then backup job `nightly-guests` in `/etc/pve/jobs.cfg`: VMs 100, 200, 201 and CT 900, daily at 03:00, snapshot mode, zstd, keep-last 3 and keep-daily 7, repeat missed. |
@@ -33,6 +34,57 @@ ansible-playbook -i <filled-in inventory> playbooks/opnsense.yml --check --diff
 Run each playbook with `--check --diff` first: against the running lab it should report no changes. The order with Terraform is in [../README.md](../README.md).
 
 Checked so far: `ansible-playbook --syntax-check` passes for every playbook, and `ansible-lint` passes the production profile. Its only warnings say that the API connection arguments are missing, because they are set once in the playbook, not in each task. It has never run against the lab. `proxmox-safety.yml` was also run end to end against stand-in commands on a test machine (check mode, both firewall runs, a second run with no changes, the disk guard), not against Proxmox.
+
+## Secrets at rest on c1
+
+`playbooks/k8s.yml` (role `k8s_control_plane`, tag `encryption`, runbook step 8a) makes the API server store Secrets in etcd encrypted with secretbox, with plain storage (`identity`) kept only to read Secrets written before. The key is 32 random bytes, base64, in a 0600 file on the controller; the filled-in inventory names the file in `k8s_control_plane_encryption_key_file`. Make it once and keep a copy in the password manager, because a restored etcd backup can't be read without it:
+
+```sh
+mkdir -p ~/.config/central-hub && (umask 077; head -c 32 /dev/urandom | base64 > ~/.config/central-hub/c1-secrets-encryption.key)
+```
+
+The run stops if the file is missing, empty, not mode 0600 or 0400, or not 44 base64 characters. On the node the key sits in `/etc/kubernetes/enc/encryption-config.yaml` (mode 0600), written with `no_log`. The role adds the flag and its folder to kubeadm's own `ClusterConfiguration` (ConfigMap `kube-system/kubeadm-config`), so `kubeadm upgrade` keeps them, and writes the API server manifest from it with `kubeadm init phase control-plane apiserver`; a new cluster gets both from `kubeadm init`'s config file. Then it writes every Secret again and reads every one straight from etcd: each value must start with `k8s:enc:secretbox:v1:`. It never changes the key: if the node holds a different one, it stops (rotation is a separate job).
+
+On the running c1, run only this part (`--limit` skips the workers play, whose join command comes from a task this tag skips):
+
+```sh
+ansible-playbook -i inventories/home/ playbooks/k8s.yml --tags encryption --limit k8s_control_plane --check --diff
+ansible-playbook -i inventories/home/ playbooks/k8s.yml --tags encryption --limit k8s_control_plane
+```
+
+## Certificates on c1
+
+`playbooks/k8s-certs.yml` (role `k8s_certs`, runbook step 10b) gets one Let's Encrypt certificate for `*.apps.c1.prod.<zone>` and puts it on the shared Gateway's HTTPS listener. Only the label `apps.c1.prod` reaches the public Certificate Transparency logs, never an app's name. It needs [Secrets at rest on c1](#secrets-at-rest-on-c1) first: the `issue` tag stops if the API server has no encryption config, and reads the token back from etcd to check it is stored encrypted.
+
+Values in the filled-in inventory (the template has them):
+
+| Variable | What it is |
+|---|---|
+| `k8s_certs_zone` | The public zone at Cloudflare; the template sets it to `k8s_gateway_zone`. |
+| `k8s_certs_acme_email` | The ACME account's contact address. |
+| `k8s_certs_cloudflare_token_file` | A 0600 file on the controller holding a Cloudflare API token for this zone only, with Zone / DNS / Edit and Zone / Zone / Read (cert-manager's Cloudflare page). `tofu apply` in [../terraform/home/certificates/](../terraform/home/certificates/) makes the token and writes this file, so run it first and give it the same path ([../terraform/README.md](../terraform/README.md#homecertificates-the-cert-manager-token)). The run stops if the file is missing, empty or not 0600. |
+| `k8s_certs_issue` | `false` until you want Let's Encrypt to be asked. With `false` nothing talks to Let's Encrypt, and a run removes the token, the issuers and the Certificate (the issued Secret stays). |
+| `k8s_certs_issuer` | `letsencrypt-staging` first, then `letsencrypt-prod`. |
+| `k8s_gateway_https` | `true` once the certificate is issued: the Gateway gets its HTTPS listener and the nodes open tcp 443. |
+
+Set the switches in the inventory rather than with `-e`: a later run without them removes what they made.
+
+## Argo CD web UI on c1
+
+`playbooks/k8s-gitops.yml --tags ui` (role `k8s_gitops`) serves the Argo CD web UI at `https://argocd.apps.c1.prod.<zone>/` through the shared Gateway `apps`, so the owner opens it by name, with no `kubectl port-forward`. The lab's wildcard DNS override already sends the name to the Gateway. It needs [Certificates on c1](#certificates-on-c1) first: the run stops if `k8s_gateway_https` is false, the Secret `gateway/apps-tls` is missing or the Gateway's `https` listener is not programmed.
+
+- TLS ends at the Gateway with the wildcard certificate. Argo CD's server then runs with `server.insecure: "true"` in ConfigMap `argocd/argocd-cmd-params-cm`, so the Gateway talks plain HTTP to Service `argocd-server` port 80 inside the cluster (Argo CD's "Gateway API Example"). The run restarts `argocd-server` only when that value changes, because the server reads it once at start.
+- HTTPRoute `argocd/argocd-ui` attaches only to the `https` listener (`sectionName: https`). HTTPRoute `argocd/argocd-ui-redirect` on the `http` listener answers `301` to `https://` for that name only; it has no backend. The Gateway's listeners already allow routes from every namespace (`from: All`), so the Gateway is unchanged.
+- The run ends with a proof from the first worker: the name resolves to the Gateway's address, `https://argocd.apps.c1.prod.<zone>/` returns `200` with Argo CD's page, and plain HTTP returns the `301`. The certificate is verified against the node's trust store when it comes from `letsencrypt-prod`; with `letsencrypt-staging` curl skips verification (`-k`).
+- Nothing reads `argocd-initial-admin-secret`, and Argo CD gets no git source. Signing in and changing the admin password stay with the owner.
+
+| Variable | What it is |
+|---|---|
+| `k8s_gitops_ui_route` | `true` once `k8s_gateway_https` is `true`. With `false` (the default), a run removes the two routes and puts `server.insecure` back to `"false"` if an earlier run set it. |
+| `k8s_gitops_ui_zone` | The zone; the template sets it to `k8s_gateway_zone`. |
+| `k8s_gitops_ui_gateway_https` | The template sets it to `k8s_gateway_https`. |
+
+The `argocd` CLI over this name needs `--grpc-web`: there is no GRPCRoute.
 
 ## Host safety net
 

@@ -6,7 +6,7 @@ trigger: on request; also after each rebuild of the practice machine
 runner: the owner
 outcome: a one-node Kubernetes 1.36.5 cluster (later 1.37.1) with Cilium, reachable only over the private network, and every CKA topic practised on it
 needs: a fresh AlmaLinux 10 machine with root access; a Tailscale tailnet; a way to resolve the endpoint name on the tailnet (step 7)
-private-values: [tailscale-auth-key, endpoint-name, node-name, backup-age-public-key, gateway-address]
+private-values: [tailscale-auth-key, endpoint-name, node-name, backup-age-public-key, gateway-address, secrets-encryption-key, cloudflare-api-token, acme-email]
 files: []
 last-tested:
 superseded-by:
@@ -268,7 +268,67 @@ mkdir -p /root/.kube && cp /etc/kubernetes/admin.conf /root/.kube/config
 - note: the node is not Ready yet, and CoreDNS waits. Both need a network (next step).
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/>
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA3.
-- place (home lab, proven 2026-10-26): `kubeadm init` also takes `--skip-phases addon/kube-proxy`, because Cilium replaces kube-proxy there (see step 9).
+- place (home lab, proven 2026-10-26): `kubeadm init` also takes `--skip-phases addon/kube-proxy`, because Cilium replaces kube-proxy there (see step 9). Since step 8a (not yet run) the role gives `kubeadm init` the same settings as a config file, `skipPhases: [addon/kube-proxy]` included, plus the encryption flag; a cluster made before that gets the flag through step 8a.
+
+#### 8a. Secrets encrypted at rest
+
+By default the API server stores a Secret in etcd as plain text: anyone with an etcd backup or the etcd files can read it. This step turns on encryption for Secrets before the first real secret goes in (the Cloudflare token of [step 10b](#10b-certificates-for-app-names-home-lab)).
+
+```bash
+# 1. a key: 32 random bytes, base64. Keep a copy outside the cluster (the password manager):
+#    without it, an etcd backup can't be read back
+mkdir -m 0700 -p /etc/kubernetes/enc
+key=$(head -c 32 /dev/urandom | base64)
+cat > /etc/kubernetes/enc/encryption-config.yaml <<YAML
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+  - resources: [secrets]
+    providers:
+      - secretbox:
+          keys:
+            - name: key1
+              secret: $key
+      - identity: {}
+YAML
+chmod 0600 /etc/kubernetes/enc/encryption-config.yaml; unset key
+# 2. tell kubeadm, so `kubeadm upgrade` keeps it: under apiServer, add
+#      extraArgs:
+#      - name: encryption-provider-config
+#        value: /etc/kubernetes/enc/encryption-config.yaml
+#      extraVolumes:
+#      - name: encryption-config
+#        hostPath: /etc/kubernetes/enc
+#        mountPath: /etc/kubernetes/enc
+#        readOnly: true
+#        pathType: DirectoryOrCreate
+kubectl -n kube-system edit configmap kubeadm-config
+# 3. write the API server's manifest from it; the kubelet restarts the API server
+kubectl -n kube-system get configmap kubeadm-config -o jsonpath='{.data.ClusterConfiguration}' > /root/cluster-config.yaml
+cp /etc/kubernetes/manifests/kube-apiserver.yaml /root/kube-apiserver.yaml.before-encryption
+kubeadm init phase control-plane apiserver --config /root/cluster-config.yaml
+until kubectl get --raw /readyz >/dev/null 2>&1; do sleep 5; done
+# 4. Secrets written before now stay plain until they are written again
+kubectl get secrets --all-namespaces -o json | kubectl replace -f -
+# 5. proof: a test Secret, read straight from etcd
+kubectl create secret generic enc-test --from-literal=k=v
+kubectl -n kube-system exec etcd-<node name> -- etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
+  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key get /registry/secrets/default/enc-test | hexdump -C | head -3
+kubectl get secret enc-test -o jsonpath='{.data.k}' | base64 -d; echo
+kubectl delete secret enc-test
+```
+
+- ※ The API server is one of the static pods from [step 8](#8-init): the kubelet restarts it when its file in `/etc/kubernetes/manifests/` changes. The copy goes outside that folder, because the kubelet runs every file in it ([step 15](#15-drill-b-a-broken-static-pod-manifest-ts2)).
+- The providers are tried in order: the first one writes, and every one can read. `identity` (no encryption) comes last, so Secrets written before this step can still be read until step 4 writes them again.
+- secretbox, not aescbc: the kubernetes.io page rates secretbox "Strong" and aescbc "Weak" ("Not recommended due to CBC's vulnerability to padding oracle attacks"). A KMS plugin would keep the key off the node, but needs a key service the lab doesn't have (research batch RB-0012, "Now" step 4). With every local provider, the key sits on the control-plane host.
+- why: etcd holds every Secret, and its files and its backups ([step 11](#11-backup-and-restore)) go wherever they are copied. Encrypted, they are useless without the key, which lives only in `/etc/kubernetes/enc/` on the node and in the password manager (source: <https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/>).
+- expect: the hexdump shows `/registry/secrets/default/enc-test` and then `k8s:enc:secretbox:v1:key1:` (the page's example shows the same shape for aescbc, `k8s:enc:aescbc:v1:key1`), followed by unreadable bytes; `kubectl get secret` still prints `v`; `grep encryption-provider /etc/kubernetes/manifests/kube-apiserver.yaml` shows the flag, and `kubectl -n kube-system get configmap kubeadm-config -o yaml | grep -A1 encryption-provider` shows it in kubeadm's copy.
+- catch: the key changes only by rotation: add the new key first in the list, restart, write every Secret again, then remove the old key. Replacing the key in place makes every Secret unreadable.
+- catch: a restored etcd backup needs the same key in the same file, or the API server can't read any Secret.
+- page: <https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/> ; kubeadm: <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-reconfigure/>
+- status: **NOT PROVEN** (written 2026-10-27; not yet run). CKA: CA4 (partly).
+- place (home lab): `hosts/ansible`, role `k8s_control_plane`, tag `encryption` (`playbooks/k8s.yml --tags encryption --limit k8s_control_plane`). The key comes from a 0600 file on the controller, `k8s_control_plane_encryption_key_file` in the git-ignored inventory. A new build gets the flag at `kubeadm init`, from a config file (`templates/kubeadm-init.yaml.j2`) that replaces step 8's flags. On the running c1 the role adds the flag and the folder to the `kubeadm-config` ConfigMap, runs `kubeadm init phase control-plane apiserver`, waits until a throwaway Secret reads back encrypted from etcd, writes every Secret again, and then checks every Secret in etcd. It stops, rather than rotating, if the node already has a different key.
 
 #### 9. Cilium 1.20.4
 
@@ -365,12 +425,107 @@ curl -s -H 'Host: hello.apps.c1.prod.<zone>' http://<gateway address>/hostname
 - the address: pinned with `spec.addresses` (Cilium's "Gateway API Addresses Support", which works with LB IPAM), so the lab DNS name can point at it before the Gateway exists and keeps pointing at it after a rebuild.
 - DNS: one OPNsense Unbound host override with host `*` and domain `apps.c1.prod.<zone>`, a wildcard (the OPNsense manual's Unbound page; OPNsense writes it as a `local-zone ... redirect`). Every app name under it answers with the Gateway's address, with no new DNS entry per app.
 - firewall: the nodes' firewalld zone accepts tcp 80. Cilium hands Gateway traffic to Envoy on the node with TPROXY, so it passes the node's input filter (inferred from Cilium's L7 proxy requirements; not yet measured).
-- HTTPS: not yet. The HTTPS listener on 443 comes with certificates (BUILD-PATH S12).
+- HTTPS: the listener on 443 comes with its certificate in [step 10b](#10b-certificates-for-app-names-home-lab).
 - expect: GatewayClass `cilium` ACCEPTED True; Gateway `apps` PROGRAMMED True with the pinned address; the curl returns the app's pod name; a name with no route returns 404; `getent hosts hello.apps.c1.prod.<zone>` on a node returns the Gateway's address.
 - page: <https://kubernetes.io/docs/concepts/services-networking/gateway/> ; Cilium: <https://docs.cilium.io/en/v1.20/network/servicemesh/gateway-api/gateway-api/>
 - versions (checked 2026-10-27): Gateway API v1.6.3, published 2026-10-06, is the newest release at least two weeks old (v1.7.0 is still a release candidate) and the version Cilium 1.20.4's docs name (`Documentation/conf.py`, `gateway_api_version`). Cilium 1.20 needs v1.6.1 at least (its upgrade notes). The project publishes no checksum; the one above is the file's SHA-256 as fetched on 2026-10-27.
 - status: **NOT PROVEN** (written 2026-10-27; not yet run on c1). CKA: SN4.
 - place (home lab): `hosts/ansible`. `playbooks/k8s.yml` applies the CRDs and upgrades Cilium (role `k8s_control_plane`); then `playbooks/k8s-gateway.yml --tags gateway` (role `k8s_gateway`), `playbooks/opnsense.yml --tags dns` (the wildcard override) and `playbooks/k8s-gateway.yml --tags smoke` (an echo app and its HTTPRoute, called from the Proxmox host, then deleted). The role writes every Cilium value to one file and runs `helm upgrade --install --reset-values` only when the chart version or a value differs, so a second run changes nothing.
+
+#### 10b. Certificates for app names (home lab)
+
+Home lab only. One Let's Encrypt certificate for `*.apps.c1.prod.<zone>` lets every app behind the Gateway from [step 10a](#10a-a-way-in-for-web-traffic-home-lab) answer HTTPS with a certificate every browser trusts. cert-manager gets it and renews it. Let's Encrypt checks that you own the zone with a DNS-01 challenge: cert-manager writes a TXT record through the Cloudflare API, where the zone's public DNS is.
+
+```bash
+# 1. a Cloudflare API token: Zone / DNS / Edit and Zone / Zone / Read, for this one zone only.
+#    By hand: dashboard, My Profile > API Tokens; it is shown once. The home lab makes it with
+#    code instead (hosts/terraform/home/certificates, see "place" below). Into a Secret, never a
+#    file here. Needs step 8a first: the token is the cluster's first real secret.
+read -rs CF_TOKEN
+kubectl create namespace cert-manager
+kubectl -n cert-manager create secret generic cloudflare-api-token --from-literal=api-token="$CF_TOKEN"; unset CF_TOKEN
+# 2. cert-manager v1.21.3, its CRDs and its Gateway API support, from the chart file checked against
+#    the Jetstack index's SHA-256
+curl -fsSLO https://charts.jetstack.io/charts/cert-manager-v1.21.3.tgz
+echo "9ec67938b2981d8b333af61b3fcf53e26b4f6f5deb7ccda3de4ea116bb373a17  cert-manager-v1.21.3.tgz" | sha256sum -c -
+helm upgrade --install cert-manager ./cert-manager-v1.21.3.tgz -n cert-manager \
+  --set crds.enabled=true --set config.gatewayAPI.enabled=true \
+  --set dns01RecursiveNameservers='1.1.1.1:53\,9.9.9.9:53' --wait
+# 3. an issuer for Let's Encrypt staging (untrusted test certificates, high limits) and a certificate from it
+cat <<'YAML' | kubectl apply -f -
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: <acme email>
+    privateKeySecretRef:
+      name: letsencrypt-staging-account
+    solvers:
+    - selector:
+        dnsZones: ["<zone>"]
+      dns01:
+        cloudflare:
+          apiTokenSecretRef:
+            name: cloudflare-api-token
+            key: api-token
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: apps
+  namespace: gateway
+spec:
+  secretName: apps-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-staging
+  dnsNames: ["*.apps.c1.prod.<zone>"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+YAML
+kubectl -n gateway wait certificate/apps --for=condition=Ready --timeout=10m
+# 4. an HTTPS listener on the Gateway with that Secret: add it under spec.listeners
+#    - name: https
+#      protocol: HTTPS
+#      port: 443
+#      hostname: "*.apps.c1.prod.<zone>"
+#      tls:
+#        mode: Terminate
+#        certificateRefs:
+#        - kind: Secret
+#          name: apps-tls
+#      allowedRoutes:
+#        namespaces:
+#          from: All
+kubectl -n gateway edit gateway apps
+firewall-cmd --permanent --zone=lab --add-port=443/tcp && firewall-cmd --reload    # on every node
+# 5. from a machine outside the cluster, once an app has an HTTPRoute for hello.apps.c1.prod.<zone>
+openssl s_client -connect <gateway address>:443 -servername hello.apps.c1.prod.<zone> </dev/null 2>/dev/null \
+  | openssl x509 -noout -issuer -ext subjectAltName
+curl -sk --resolve hello.apps.c1.prod.<zone>:443:<gateway address> https://hello.apps.c1.prod.<zone>/hostname
+# 6. staging worked: make letsencrypt-prod (the same issuer with server https://acme-v02.api.letsencrypt.org/directory
+#    and its own account Secret), point the Certificate's issuerRef at it, wait again, and curl without -k
+```
+
+- ※ The Secret lives in the Gateway's namespace, next to the listener that uses it: cert-manager's Gateway page allows nothing else. The Gateway is the one from [step 10a](#10a-a-way-in-for-web-traffic-home-lab).
+- ※ The token Secret is stored encrypted because of [step 8a](#8a-secrets-encrypted-at-rest).
+- DNS-01, not HTTP-01: only DNS-01 gives wildcards, and it works while the lab is not reachable from the internet (Let's Encrypt's challenge types page).
+- One wildcard, not a name per app: every certificate Let's Encrypt issues goes to the public Certificate Transparency logs. With one wildcard, only `apps.c1.prod.<zone>` is published, never an app's name ([STD-0001](../standards/0001-names.md), "Service names").
+- The resolvers: the lab's own DNS answers every name under `apps.c1.prod.<zone>` itself (the wildcard override from step 10a), so cert-manager's check that the TXT record is visible would ask the wrong server. `dns01RecursiveNameservers` points it at public resolvers; cert-manager then asks the zone's own nameservers (cert-manager's DNS01 page: the flags exist "for example with multiple authoritative nameservers or split-horizon DNS").
+- Staging first: production allows 5 certificates for the same names per week (Let's Encrypt's rate limits page); staging is for getting it right.
+- Swappable: the certificate is a plain `kubernetes.io/tls` Secret. A private CA later replaces the issuer and `issuerRef`, not the Gateway.
+- why: browsers and tools trust the certificate with no setup on any device, and cert-manager renews it long before it expires, which matters because public certificate lifetimes are getting shorter.
+- expect: `kubectl get clusterissuer` READY True; `kubectl -n gateway get certificate apps` READY True after a few minutes; the openssl line shows `subjectAltName` `DNS:*.apps.c1.prod.<zone>` and an issuer starting with `(STAGING)`; after step 6, an issuer without `(STAGING)`, and `curl` without `-k` succeeds and prints the app's pod name.
+- versions (checked 2026-10-27): cert-manager v1.21.3 (Jetstack Helm index, 2026-10-23) is newer than two weeks; it is a security release (Go 1.26.10 for CVE-2026-111943, the fix Cilium 1.20.4 also takes, and the distrusted eMudhra root removed; <https://github.com/cert-manager/cert-manager/releases/tag/v1.21.3>), so [STD-0003](../standards/0003-version-choice.md) rule 2 applies. The newest release at least two weeks old is v1.21.2 (2026-09-11). **No cert-manager release supports Kubernetes 1.37 yet:** 1.21 lists 1.33 to 1.36, and 1.22 (due about November 2026) has no list yet (<https://cert-manager.io/docs/releases/>). c1 runs 1.37.1, so this runs outside the project's tested range until 1.22.
+- page: <https://cert-manager.io/docs/configuration/acme/dns01/cloudflare/> ; <https://cert-manager.io/docs/usage/gateway/> ; <https://letsencrypt.org/docs/challenge-types/>
+- status: **NOT PROVEN** (written 2026-10-27; not yet run). Not a CKA topic.
+- place (home lab): `hosts/terraform/home/certificates`, then `hosts/ansible`. `tofu apply` in the Terraform folder makes the Cloudflare token (one zone, Zone / DNS / Edit and Zone / Zone / Read, 90-day expiry, replaced by the first apply in its last 14 days) from one hand-made bootstrap token that can only make tokens, and writes it to the 0600 file `k8s_certs_cloudflare_token_file` names; nothing is made by hand in the dashboard except that bootstrap token. `playbooks/k8s-certs.yml` (role `k8s_certs`): tag `certmanager` installs the chart with every value in one file; tag `issue`, with `k8s_certs_issue: true`, checks that step 8a is on, makes the token Secret from a 0600 file on the controller (`k8s_certs_cloudflare_token_file`, server-side apply, `no_log`) and reads it back from etcd encrypted, then applies both ClusterIssuers (staging and prod) and the Certificate from `k8s_certs_issuer`, and waits until the Secret's certificate comes from that issuer. With `k8s_certs_issue: false` (the default) nothing talks to Let's Encrypt, and a run removes the token, the issuers and the Certificate. Then `playbooks/k8s-gateway.yml --tags gateway` with `k8s_gateway_https: true` adds the listener and opens tcp 443, and `playbooks/k8s-certs.yml --tags smoke` deploys an echo app with an HTTPRoute on the HTTPS listener and checks from the Proxmox host that the Gateway serves the Secret's certificate (same SHA-256 fingerprint) and answers HTTPS, then deletes the app.
+- note (home lab): the Argo CD web UI uses the same HTTPS listener, at `https://argocd.apps.c1.prod.<zone>/`, once this step is done: `playbooks/k8s-gitops.yml --tags ui` with `k8s_gitops_ui_route: true` (role `k8s_gitops`, [hosts/ansible/README.md](../../hosts/ansible/README.md#argo-cd-web-ui-on-c1)). TLS ends at the Gateway and Argo CD runs with `server.insecure: "true"`; HTTPRoute `argocd-ui` sits on the `https` listener only, and `argocd-ui-redirect` sends plain HTTP for that name to HTTPS. The run proves from a worker that the name resolves to the Gateway and the page answers `200`. Signing in stays with the owner. **NOT PROVEN** (written 2026-10-27).
 
 #### 11. Backup and restore
 
@@ -383,6 +538,7 @@ Off-site backup is not chosen yet: where the encrypted copies go (Azure Blob sto
 - Restore onto a rebuilt VPS (proven, PROOF-RUN-2.md): after steps 0-6, copy only the CA files (`ca.*`, `sa.*`, `front-proxy-ca.*`, `etcd/ca.*`) to `/etc/kubernetes/pki`; `etcdutl snapshot restore` with the new node name and `https://<advertise IP>:2380`; then the step 8 `kubeadm init` plus `--ignore-preflight-errors=DirAvailable--var-lib-etcd`; then `kubectl delete node <old node>`. Cilium returns from etcd; skip step 9 except installing Helm.
 - **Not yet proven:** upload to Azure Blob with a short immutability lock. Deferred by the owner on 2026-10-17 until the repo layout and an Azure config-as-code tool are chosen; until then, recovery is a rebuild from configuration.
 - note: after step 17 the cluster runs etcd 3.7.0. The etcdutl 3.6.8 tool above was not tested against a 3.7.0 snapshot.
+- note: after [step 8a](#8a-secrets-encrypted-at-rest), Secrets in a snapshot are encrypted. A restore needs the same key in `/etc/kubernetes/enc/encryption-config.yaml`; keep the key with the bundle's private key, not inside the bundle.
 - why: etcd is the cluster's memory: it stores all the API server's data (source: <https://kubernetes.io/docs/concepts/overview/components/>). With one control plane, losing that node can lose the cluster's data; the create-cluster page's answer is "Regularly back up etcd".
 - expect: `etcdutl snapshot status <db> -w table` shows a hash, a revision and a size; the bundle decrypts with the private key on another machine; after a restore, the test data is back and `kubectl get nodes` shows `Ready`.
 - status: local backup and restore **PROVEN** (PROOF-RUN-1.md); restore onto a rebuilt VPS **PROVEN** (PROOF-RUN-2.md); Azure upload **NOT PROVEN** (deferred). CKA: CA4.

@@ -34,3 +34,16 @@ k8s_gitops_engines:
 # Derived values, not inputs.
 k8s_gitops_pick: "{{ k8s_gitops_engines[k8s_gitops_engine] }}"
 k8s_gitops_dir: /root/central-hub/gitops
+
+# The web UI route (tag ui). Derived values, not inputs.
+k8s_gitops_ui_host: >-
+  {{ k8s_gitops_ui_name }}.{{ k8s_gitops_ui_gateway_name }}.{{ k8s_gitops_ui_cluster }}.{{ k8s_gitops_ui_env }}.{{ k8s_gitops_ui_zone }}
+# server.insecure as the run wants it: "true" only with the route on.
+k8s_gitops_ui_insecure: "{{ 'true' if k8s_gitops_ui_route | bool else 'false' }}"
+# A pod template annotation that records the server.insecure value argocd-server's pods started
+# with. argocd-server reads the key into an environment variable (ARGOCD_SERVER_INSECURE, from a
+# configMapKeyRef in install.yaml), so a changed value needs new pods; changing this annotation
+# rolls them out, and only when the value differs.
+# No dots in the key: the task reads it with a kubectl JSONPath.
+k8s_gitops_ui_restart_annotation: central-hub/server-insecure
+k8s_gitops_ui_manifest: "{{ k8s_gitops_dir }}/argocd-ui-route.yaml"

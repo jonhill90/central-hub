@@ -7,6 +7,8 @@ all:
     # The c1 Gateway's address (playbooks/k8s-gateway.yml): one address from VLAN 10's .224/27
     # load-balancer pool (STD-0002). Set once here, so the Gateway and its DNS override match.
     k8s_gateway_address: ""
+    # The same address for the certificate smoke test (playbooks/k8s-certs.yml).
+    k8s_certs_gateway_address: "{{ k8s_gateway_address }}"
   children:
     proxmox:
       hosts:
@@ -64,9 +66,23 @@ all:
         ansible_ssh_common_args: ""        # for example -o ProxyJump=root@<Proxmox host address>
         k8s_control_plane_endpoint: ""     # api.c1.prod.<zone>
         k8s_gateway_zone: ""               # <zone>; the Gateway takes *.apps.c1.prod.<zone>
+        # Runbook step 8a: the secretbox key for Secrets at rest, a 0600 file on the controller,
+        # for example ~/.config/central-hub/c1-secrets-encryption.key (hosts/ansible/README.md).
+        k8s_control_plane_encryption_key_file: ""
+        # BUILD-PATH S12 (playbooks/k8s-certs.yml, hosts/ansible/README.md "Certificates on c1").
+        k8s_certs_zone: "{{ k8s_gateway_zone }}"
+        k8s_certs_acme_email: ""             # the ACME account's contact address
+        k8s_certs_cloudflare_token_file: ""  # 0600 file with the zone's API token, written by terraform/home/certificates
+        k8s_certs_issue: false               # true talks to Let's Encrypt; staging first
+        k8s_certs_issuer: letsencrypt-staging
+        k8s_gateway_https: false             # true once the certificate is issued (HTTPS on 443)
         # The GitOps engine (playbooks/k8s-gitops.yml, BUILD-PATH S13): the owner said yes to the
         # proposed Argo CD with its web UI on 2026-10-27 at 02:23 UTC. Not private.
         k8s_gitops_engine: argocd
+        # The Argo CD web UI at https://argocd.apps.c1.prod.<zone>/ through Gateway apps (tag ui).
+        k8s_gitops_ui_route: false           # true once k8s_gateway_https is true
+        k8s_gitops_ui_zone: "{{ k8s_gateway_zone }}"
+        k8s_gitops_ui_gateway_https: "{{ k8s_gateway_https }}"
         # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
         # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
         # k8s_control_plane_kubernetes_version.

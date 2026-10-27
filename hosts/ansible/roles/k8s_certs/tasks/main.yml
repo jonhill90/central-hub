@@ -1,0 +1,25 @@
+---
+# argument_specs accepts an empty string, and the inventory template has "" blanks for these.
+- name: Check that the private values are not blank
+  ansible.builtin.assert:
+    that:
+      - lookup('vars', item, default='') | length > 0
+    fail_msg: "{{ item }} is a private value; fill it from the secret store."
+    quiet: true
+  loop: >-
+    {{ ['k8s_certs_zone']
+       + (['k8s_certs_acme_email', 'k8s_certs_cloudflare_token_file', 'k8s_certs_gateway_address']
+          if k8s_certs_issue else []) }}
+  tags: [always]
+
+- name: cert-manager
+  ansible.builtin.import_tasks: install.yml
+  tags: [certmanager]
+
+- name: Issuers and the certificate, or their removal while issuing is off
+  ansible.builtin.import_tasks: issue.yml
+  tags: [issue]
+
+- name: Smoke test
+  ansible.builtin.import_tasks: smoke.yml
+  tags: [smoke]

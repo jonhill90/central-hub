@@ -1,0 +1,4 @@
+# Made-up example. The real zone goes only in home.tfvars (git-ignored).
+# Copy to home.tfvars and pass -var-file=home.tfvars.
+zone_name  = "example.com"
+token_file = "~/.config/central-hub/cloudflare-dns01-token.txt" # same as k8s_certs_cloudflare_token_file

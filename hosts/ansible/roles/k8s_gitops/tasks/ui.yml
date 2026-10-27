@@ -1,0 +1,229 @@
+---
+# The Argo CD web UI through the shared Gateway `apps` (k8s_gitops_ui_route). Needs the engine
+# installed (tag install), the Gateway with its HTTPS listener (playbooks/k8s-gateway.yml with
+# k8s_gateway_https: true) and the wildcard certificate (playbooks/k8s-certs.yml). Nothing here
+# reads argocd-initial-admin-secret: signing in stays with the owner.
+- name: ui | Preconditions with the route on
+  when: k8s_gitops_ui_route | bool
+  block:
+    - name: ui | Engine is the full Argo CD install, the zone is set and the Gateway has HTTPS
+      ansible.builtin.assert:
+        that:
+          - k8s_gitops_engine == 'argocd'
+          - k8s_gitops_ui_zone | default('') | length > 0
+          - k8s_gitops_ui_gateway_https | bool
+        fail_msg: >-
+          The UI route needs k8s_gitops_engine argocd (argocd-core has no UI),
+          k8s_gitops_ui_zone set (the template sets it to k8s_gateway_zone), and
+          k8s_gitops_ui_gateway_https true (the template sets it to k8s_gateway_https): run
+          playbooks/k8s-gateway.yml --tags gateway with k8s_gateway_https true first.
+        quiet: true
+
+    # Only the name: the Secret's data is not read.
+    - name: ui | The certificate's Secret is there
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_gitops_ui_gateway_namespace }} get secret {{ k8s_gitops_ui_tls_secret }} -o name
+      register: k8s_gitops_ui_tls_present
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: ui | Stop if the Secret is missing
+      ansible.builtin.assert:
+        that: [k8s_gitops_ui_tls_present.rc == 0]
+        fail_msg: >-
+          Secret {{ k8s_gitops_ui_gateway_namespace }}/{{ k8s_gitops_ui_tls_secret }} doesn't exist.
+          Issue the certificate first: playbooks/k8s-certs.yml --tags issue with k8s_certs_issue true.
+        quiet: true
+
+    - name: ui | The Gateway's HTTPS listener is programmed
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_gitops_ui_gateway_namespace }} get gateway {{ k8s_gitops_ui_gateway_name }}
+        -o jsonpath='{.status.listeners[?(@.name=="https")].conditions[?(@.type=="Programmed")].status}'
+      register: k8s_gitops_ui_listener
+      changed_when: false
+      failed_when: k8s_gitops_ui_listener.rc != 0 or k8s_gitops_ui_listener.stdout != 'True'
+      check_mode: false
+
+# server.insecure: "true" in argocd-cmd-params-cm makes argocd-server serve plain HTTP, so TLS ends
+# at the Gateway (Argo CD 3.5 docs, operator-manual/ingress.md "Securing traffic between Argo CD
+# and the gateway"; server-commands/additional-configuration-method.md). With TLS on, argocd-server
+# answers plain HTTP with a redirect to HTTPS, which loops behind a Gateway that ends TLS. A missing
+# key counts as "false" (argocd-cmd-params-cm.yaml), so with the route off a fresh install is left
+# as it is. The key gets its own patch, not the engine's server-side apply, whose manifest has no
+# data for this ConfigMap, so the install never takes it back.
+- name: ui | server.insecure now
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_gitops_engines.argocd.namespace }} get configmap argocd-cmd-params-cm
+    -o jsonpath='{.data.server\.insecure}'
+  register: k8s_gitops_ui_insecure_now
+  changed_when: false
+  # With the route off and no Argo CD yet (a first run), there is nothing to put back.
+  failed_when: >-
+    k8s_gitops_ui_insecure_now.rc != 0
+    and (k8s_gitops_ui_route | bool or 'NotFound' not in k8s_gitops_ui_insecure_now.stderr)
+  check_mode: false
+
+- name: ui | Set server.insecure to {{ k8s_gitops_ui_insecure }}
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_gitops_engines.argocd.namespace }} patch configmap argocd-cmd-params-cm
+    --type merge -p {{ {'data': {'server.insecure': k8s_gitops_ui_insecure}} | to_json | quote }}
+  when: (k8s_gitops_ui_insecure_now.stdout | default('', true) or 'false') != k8s_gitops_ui_insecure
+  changed_when: true
+
+# argocd-server reads the key once, at start (environment variable ARGOCD_SERVER_INSECURE from a
+# configMapKeyRef in install.yaml; Kubernetes ConfigMap docs: ConfigMaps used as environment
+# variables are not updated in a running pod, it needs a restart). The pod template annotation
+# records the value the pods started with; changing it rolls them out. So a run restarts
+# argocd-server only when the value changes, also when an earlier run stopped between the two steps.
+- name: ui | Value argocd-server's pods started with
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_gitops_engines.argocd.namespace }} get deployment argocd-server
+    -o jsonpath='{.spec.template.metadata.annotations.{{ k8s_gitops_ui_restart_annotation }}}'
+  register: k8s_gitops_ui_started_with
+  changed_when: false
+  failed_when: >-
+    k8s_gitops_ui_started_with.rc != 0
+    and (k8s_gitops_ui_route | bool or 'NotFound' not in k8s_gitops_ui_started_with.stderr)
+  check_mode: false
+
+- name: ui | Restart argocd-server with server.insecure {{ k8s_gitops_ui_insecure }}
+  when: (k8s_gitops_ui_started_with.stdout | default('', true) or 'false') != k8s_gitops_ui_insecure
+  block:
+    - name: ui | New pods for argocd-server
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_gitops_engines.argocd.namespace }} patch deployment argocd-server --type merge
+        -p {{ {'spec': {'template': {'metadata': {'annotations': {k8s_gitops_ui_restart_annotation: k8s_gitops_ui_insecure}}}}}
+        | to_json | quote }}
+      changed_when: true
+
+    - name: ui | argocd-server rolled out
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_gitops_engines.argocd.namespace }} rollout status deployment/argocd-server --timeout=300s
+      changed_when: false
+      when: not ansible_check_mode
+
+- name: ui | The routes
+  when: k8s_gitops_ui_route | bool
+  block:
+    - name: ui | Folder for the manifests
+      ansible.builtin.file: {path: "{{ k8s_gitops_dir }}", state: directory, mode: "0700"}
+      check_mode: false
+
+    - name: ui | Route manifest
+      ansible.builtin.template:
+        src: argocd-ui-route.yaml.j2
+        dest: "{{ k8s_gitops_ui_manifest }}"
+        mode: "0600"
+
+    # kubectl diff exits 0 with no difference, 1 with one, more on an error; "namespaces ... not
+    # found" also means "apply". A first --check run writes no manifest, so there is nothing to
+    # diff yet; the diff is skipped and the apply counts as needed.
+    - name: ui | Route manifest on the node?
+      ansible.builtin.stat: {path: "{{ k8s_gitops_ui_manifest }}"}
+      register: k8s_gitops_ui_manifest_stat
+
+    - name: ui | Routes differ from the cluster?
+      ansible.builtin.command: kubectl diff -f {{ k8s_gitops_ui_manifest }}
+      register: k8s_gitops_ui_diff
+      changed_when: false
+      failed_when: k8s_gitops_ui_diff.rc > 1 and 'namespaces' not in k8s_gitops_ui_diff.stderr
+      check_mode: false
+      when: k8s_gitops_ui_manifest_stat.stat.exists
+
+    - name: ui | Apply the routes
+      ansible.builtin.command: kubectl apply -f {{ k8s_gitops_ui_manifest }}
+      when: (k8s_gitops_ui_diff.rc | default(1)) != 0
+      changed_when: true
+
+    - name: ui | Remove the redirect route when it is switched off
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_gitops_engines.argocd.namespace }} delete httproute argocd-ui-redirect --ignore-not-found
+      register: k8s_gitops_ui_rm_redirect
+      changed_when: "'deleted' in k8s_gitops_ui_rm_redirect.stdout"
+      when: not k8s_gitops_ui_https_redirect | bool
+
+    - name: ui | Routes accepted by the Gateway, with their backend found
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_gitops_engines.argocd.namespace }} wait httproute/{{ item.0 }} --timeout=60s
+        '--for=jsonpath={.status.parents[0].conditions[?(@.type=="{{ item.1 }}")].status}=True'
+      loop: "{{ (['argocd-ui'] + (['argocd-ui-redirect'] if k8s_gitops_ui_https_redirect | bool else []))
+        | product(['Accepted', 'ResolvedRefs']) | list }}"
+      loop_control:
+        label: "{{ item.0 }} {{ item.1 }}"
+      changed_when: false
+      when: not ansible_check_mode
+
+- name: ui | Route off, remove the routes
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_gitops_engines.argocd.namespace }} delete httproute argocd-ui argocd-ui-redirect --ignore-not-found
+  register: k8s_gitops_ui_rm_routes
+  changed_when: "'deleted' in k8s_gitops_ui_rm_routes.stdout"
+  when: not k8s_gitops_ui_route | bool
+
+# Proof: from a node, the UI's name resolves through the lab's wildcard override to the Gateway's
+# address, and https://<name>/ returns Argo CD's page (HTTP 200, its <title>). The certificate is
+# verified against the node's own trust store when it comes from letsencrypt-prod; a staging
+# certificate chains to a root nobody trusts, so curl skips verification (-k) only then. Plain
+# HTTP for the name gets a 301 to https:// (or 404 with the redirect off): never the UI.
+- name: ui | Proof
+  when: k8s_gitops_ui_route | bool and not ansible_check_mode
+  block:
+    - name: ui | Gateway address and the certificate's issuer
+      ansible.builtin.shell: >-
+        kubectl -n {{ k8s_gitops_ui_gateway_namespace }} get gateway {{ k8s_gitops_ui_gateway_name }}
+        -o jsonpath='{.status.addresses[0].value}' &&
+        echo &&
+        kubectl -n {{ k8s_gitops_ui_gateway_namespace }} get secret {{ k8s_gitops_ui_tls_secret }}
+        -o jsonpath='{.metadata.annotations.cert-manager\.io/issuer-name}'
+      register: k8s_gitops_ui_facts
+      changed_when: false
+      failed_when: k8s_gitops_ui_facts.rc != 0 or k8s_gitops_ui_facts.stdout_lines | length != 2
+
+    - name: ui | The name resolves to the Gateway address (wildcard override)
+      ansible.builtin.command: getent hosts {{ k8s_gitops_ui_host }}
+      delegate_to: "{{ k8s_gitops_ui_proof_client }}"
+      register: k8s_gitops_ui_dns
+      changed_when: false
+      failed_when: >-
+        k8s_gitops_ui_dns.rc != 0 or k8s_gitops_ui_facts.stdout_lines[0] not in k8s_gitops_ui_dns.stdout.split()
+
+    - name: ui | https://{{ k8s_gitops_ui_host }}/ returns Argo CD's page
+      ansible.builtin.command: >-  # noqa: command-instead-of-module (curl's own trust store and -k rule, as in k8s_certs smoke)
+        curl -sS --max-time 10 {{ '-k' if __issuer == 'letsencrypt-staging' else '' }}
+        -w '\n%{http_code}' https://{{ k8s_gitops_ui_host }}/
+      delegate_to: "{{ k8s_gitops_ui_proof_client }}"
+      register: k8s_gitops_ui_get
+      until: >-
+        k8s_gitops_ui_get.rc == 0 and k8s_gitops_ui_get.stdout_lines[-1] == '200'
+        and '<title>Argo CD</title>' in k8s_gitops_ui_get.stdout
+      retries: 12
+      delay: 5
+      changed_when: false
+      vars:
+        __issuer: "{{ k8s_gitops_ui_facts.stdout_lines[1] }}"
+
+    # Cilium's Envoy writes the default port into the redirect (measured: https://<name>:443/).
+    - name: ui | Plain HTTP for the name never serves the UI
+      ansible.builtin.command: >-  # noqa: command-instead-of-module
+        curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' http://{{ k8s_gitops_ui_host }}/
+      delegate_to: "{{ k8s_gitops_ui_proof_client }}"
+      register: k8s_gitops_ui_plain
+      until: >-
+        k8s_gitops_ui_plain.rc == 0 and
+        (k8s_gitops_ui_plain.stdout is match('301 https://' ~ (k8s_gitops_ui_host | regex_escape) ~ '(:443)?/')
+         if k8s_gitops_ui_https_redirect | bool else k8s_gitops_ui_plain.stdout.startswith('404'))
+      retries: 6
+      delay: 5
+      changed_when: false
+
+    - name: ui | Proof
+      ansible.builtin.debug:
+        msg: >-
+          {{ k8s_gitops_ui_host }} resolves to {{ k8s_gitops_ui_facts.stdout_lines[0] }} on
+          {{ k8s_gitops_ui_proof_client }}; https://{{ k8s_gitops_ui_host }}/ answered
+          {{ k8s_gitops_ui_get.stdout_lines[-1] }} with Argo CD's page, certificate from
+          {{ k8s_gitops_ui_facts.stdout_lines[1] }}
+          ({{ 'not verified: staging' if k8s_gitops_ui_facts.stdout_lines[1] == 'letsencrypt-staging'
+          else 'verified against the node trust store' }}); plain HTTP answered
+          {{ k8s_gitops_ui_plain.stdout }}.

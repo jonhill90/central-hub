@@ -9,6 +9,8 @@ collections:
   # interfaces_file, used for /etc/network/interfaces on the Proxmox host.
   - name: community.general
     version: "13.5.0"
-  # firewalld, sysctl and SELinux modules for the Kubernetes node roles.
+  # firewalld, sysctl and SELinux modules for the Kubernetes node roles. 2.2.2 (Galaxy,
+  # 2026-07-13) is the newest release at least two weeks old (STD-0003); its firewalld, selinux and
+  # firewalld module_utils files are the same as 2.1.0's, and sysctl changed only for FreeBSD.
   - name: ansible.posix
-    version: "2.1.0"
+    version: "2.2.2"

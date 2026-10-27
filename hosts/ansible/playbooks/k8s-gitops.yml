@@ -4,6 +4,10 @@
 # the inventory first. The source stays off until the Activation gate passes.
 #   ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags install
 #   ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_enabled=true
+# The web UI at https://argocd.apps.c1.prod.<zone>/ through the shared Gateway, once the Gateway has
+# its HTTPS listener (k8s-certs.yml, then k8s-gateway.yml with k8s_gateway_https: true) and with
+# k8s_gitops_ui_route: true in the inventory; the run ends with a proof from a node:
+#   ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags ui
 - name: GitOps engine
   hosts: k8s_control_plane[0]
   become: true
