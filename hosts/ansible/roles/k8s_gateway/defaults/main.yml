@@ -1,0 +1,30 @@
+---
+# BUILD-PATH S11: one shared Gateway, the cluster's way in for web traffic (Cilium Gateway API,
+# the owner's yes 2026-10-26 22:47 UTC). Every input is listed here (Red Hat CoP rule); the
+# private ones have no default and are listed commented out.
+#
+# Private, no default, set in the inventory:
+# k8s_gateway_zone: <zone>        # the DNS zone; the listener takes *.apps.<cluster>.<env>.<zone>
+# k8s_gateway_address: <address>  # one address from the cluster's load-balancer pool (STD-0002
+#                                 # VLAN 10 .224/27), pinned so the DNS override can point at it
+
+# Names (STD-0001 "Service names": <component>.<cluster>.<env>.<zone>, with *.apps. per cluster).
+k8s_gateway_cluster: c1
+k8s_gateway_env: prod
+k8s_gateway_name: apps
+k8s_gateway_namespace: gateway
+k8s_gateway_class: cilium
+
+# The node firewalld zone the lab NIC is in (k8s_node_firewall_zone), and the listener port that
+# zone must accept for Envoy (Cilium hands Gateway traffic to Envoy on the node with TPROXY, so it
+# goes through the node's input filter).
+k8s_gateway_firewall_zone: lab
+k8s_gateway_node_ports: [80/tcp]
+
+# Smoke test: an echo app at <name>.apps.<cluster>.<env>.<zone>, called through the Gateway
+# address from a machine outside the cluster (the Proxmox host, Ansible's jump host), then
+# deleted. k8s_gateway_smoke_client defaults to the first host of the inventory group proxmox.
+k8s_gateway_smoke_name: hello
+k8s_gateway_smoke_namespace: gateway-smoke
+k8s_gateway_smoke_image: registry.k8s.io/e2e-test-images/agnhost:2.53
+k8s_gateway_smoke_client: "{{ groups['proxmox'] | first }}"

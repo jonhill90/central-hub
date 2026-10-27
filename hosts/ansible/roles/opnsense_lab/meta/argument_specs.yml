@@ -76,7 +76,10 @@ argument_specs:
           hostname:
             type: str
             required: true
-            description: Name relative to the zone, for example api.c1.prod.
+            description: Name relative to the domain, for example api.c1.prod; "*" makes a wildcard for the whole subdomain.
+          subdomain:
+            type: str
+            description: Optional. The record's domain becomes subdomain.<zone>, for example apps.c1.prod. Required with hostname "*".
           address:
             type: str
             required: true

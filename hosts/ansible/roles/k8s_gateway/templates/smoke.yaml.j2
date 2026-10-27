@@ -1,0 +1,52 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ k8s_gateway_smoke_namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ k8s_gateway_smoke_name }}
+  namespace: {{ k8s_gateway_smoke_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: {{ k8s_gateway_smoke_name }}}
+  template:
+    metadata:
+      labels: {app: {{ k8s_gateway_smoke_name }}}
+    spec:
+      containers:
+        - name: echo
+          image: {{ k8s_gateway_smoke_image }}
+          args: [netexec, --http-port=8080]
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ k8s_gateway_smoke_name }}
+  namespace: {{ k8s_gateway_smoke_namespace }}
+spec:
+  selector: {app: {{ k8s_gateway_smoke_name }}}
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ k8s_gateway_smoke_name }}
+  namespace: {{ k8s_gateway_smoke_namespace }}
+spec:
+  parentRefs:
+    - name: {{ k8s_gateway_name }}
+      namespace: {{ k8s_gateway_namespace }}
+  hostnames:
+    - {{ k8s_gateway_smoke_host }}
+  rules:
+    - backendRefs:
+        - name: {{ k8s_gateway_smoke_name }}
+          port: 80

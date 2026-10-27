@@ -1,7 +1,7 @@
 ---
 argument_specs:
   main:
-    short_description: kubeadm init and Cilium on the first control-plane node (runbook steps 7-10)
+    short_description: kubeadm init, Cilium and its Gateway API controller on the first control-plane node (runbook steps 7-10)
     options:
       k8s_control_plane_endpoint: {type: str, required: true, description: "The API name, api.c1.prod.<zone>. Private zone."}
       k8s_control_plane_kubernetes_version: {type: str, default: "1.36.5", description: Kubernetes version for kubeadm init.}
@@ -11,3 +11,12 @@ argument_specs:
       k8s_control_plane_cilium_version: {type: str, default: 1.20.4, description: Cilium chart version.}
       k8s_control_plane_lb_cidr: {type: str, default: 10.1.10.224/27, description: Load-balancer addresses Cilium hands out and announces on L2.}
       k8s_control_plane_lb_pool_name: {type: str, default: prod, description: Name of the Cilium address pool and L2 announcement policy.}
+      k8s_control_plane_gateway_api:
+        type: bool
+        default: true
+        description: "Apply the Gateway API CRDs and turn on Cilium's Gateway API controller (BUILD-PATH S11)."
+      k8s_control_plane_gateway_api_version: {type: str, default: v1.6.3, description: Gateway API release whose standard-channel CRDs are applied.}
+      k8s_control_plane_gateway_api_crds_sha256:
+        type: str
+        default: 356c2b8e286a964dc20995435659ad1095386329974793af10bbfe3eff977fe5
+        description: SHA-256 of that release's standard-install.yaml.

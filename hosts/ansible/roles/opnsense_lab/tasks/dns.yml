@@ -13,11 +13,26 @@
 
 # Lab-only names for things the lab runs, for example the cluster API api.c1.prod.<zone>
 # (STD-0001 rule 4) pointing at the control-plane node (BUILD-PATH S07). Each entry's
-# hostname is relative to the zone (api.c1.prod); its address is a private value.
+# hostname is relative to the zone (api.c1.prod), or to subdomain.<zone> when subdomain is set;
+# its address is a private value.
+#
+# Hostname "*" makes a wildcard: OPNsense writes `local-zone: "<domain>" redirect` plus one A
+# record, so every name under that domain answers with the address (opnsense/core
+# src/etc/inc/plugins.inc.d/unbound.inc; the Unbound page of the OPNsense manual: 'Use "*" to
+# create a wildcard entry'). Without a subdomain that would take over the whole zone, so the
+# check below stops it.
+- name: A wildcard override needs a subdomain
+  ansible.builtin.assert:
+    that:
+      - opnsense_lab_host_overrides | selectattr('hostname', 'equalto', '*') | rejectattr('subdomain', 'defined') | list | length == 0
+      - opnsense_lab_host_overrides | selectattr('hostname', 'equalto', '*') | selectattr('subdomain', 'equalto', '') | list | length == 0
+    fail_msg: An opnsense_lab_host_overrides entry with hostname "*" has no subdomain; it would redirect the whole zone.
+    quiet: true
+
 - name: Unbound host overrides for lab services
   oxlorg.opnsense.unbound_host:
     hostname: "{{ item.hostname }}"
-    domain: "{{ opnsense_dns_zone }}"
+    domain: "{{ (item.subdomain ~ '.' ~ opnsense_dns_zone) if item.subdomain | default('') | length > 0 else opnsense_dns_zone }}"
     record_type: A
     value: "{{ item.address }}"
     description: "{{ item.description }}"
@@ -25,4 +40,4 @@
     reload: true
   loop: "{{ opnsense_lab_host_overrides }}"
   loop_control:
-    label: "{{ item.hostname }}.<zone>"
+    label: "{{ item.hostname }}.{{ (item.subdomain ~ '.') if item.subdomain | default('') | length > 0 else '' }}<zone>"

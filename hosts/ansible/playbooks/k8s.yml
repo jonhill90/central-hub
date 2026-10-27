@@ -3,6 +3,8 @@
 # build-kubeadm-cluster.md steps 1-10 and step 36's worker join, changed for the home lab (see
 # each role's comments). Needs: terraform/home/k8s applied (the node VMs) and the API name in the
 # lab DNS (opnsense.yml, opnsense_lab_host_overrides).
+# Since BUILD-PATH S11 the first control plane also applies the Gateway API CRDs and turns on
+# Cilium's Gateway API controller (runbook step 10a); the Gateway itself is playbooks/k8s-gateway.yml.
 - name: Kubernetes nodes (runbook steps 1-6)
   hosts: k8s_nodes
   become: true

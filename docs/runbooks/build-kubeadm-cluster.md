@@ -6,7 +6,7 @@ trigger: on request; also after each rebuild of the practice machine
 runner: the owner
 outcome: a one-node Kubernetes 1.36.5 cluster (later 1.37.1) with Cilium, reachable only over the private network, and every CKA topic practised on it
 needs: a fresh AlmaLinux 10 machine with root access; a Tailscale tailnet; a way to resolve the endpoint name on the tailnet (step 7)
-private-values: [tailscale-auth-key, endpoint-name, node-name, backup-age-public-key]
+private-values: [tailscale-auth-key, endpoint-name, node-name, backup-age-public-key, gateway-address]
 files: []
 last-tested:
 superseded-by:
@@ -293,7 +293,7 @@ kubectl -n kube-system rollout status ds/cilium && kubectl -n kube-system rollou
 - versions (checked 2026-10-24): Cilium 1.20.4 (2026-10-23) is an out-of-band security patch (CVE-2026-111943, Go 1.26.10) that also fixes a 1.20.3 Gateway API BackendTLSPolicy regression (<https://github.com/cilium/cilium/releases/tag/v1.20.4>). Helm v4.3.1 (2026-10-15) is the current Helm patch release (<https://github.com/helm/helm/releases/tag/v4.3.1>). The proof runs used Cilium 1.20.3 and Helm v4.3.0; the value keys are the same in 1.20.4.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/> (section on the pod network add-on)
 - status: **PROVEN** on Cilium 1.20.3 and Helm v4.3.0 (PROOF-RUN-3.md: ready 32 s after install). The pins here, Cilium 1.20.4 and Helm v4.3.1, are not yet run. CKA: CA7 (CNI), CA6 (Helm).
-- place (home lab, proven 2026-10-26): `kubeProxyReplacement=true` with `k8sServiceHost=<endpoint name>` and `k8sServicePort=6443`, `l2announcements.enabled=true`, `devices=<lab NIC>`, no `MTU` override (the lab NIC carries 1500), then a `CiliumLoadBalancerIPPool` on VLAN 10's `.224/27` (STD-0002) and an L2 announcement policy. A LoadBalancer Service got `.224` and answered from the worker and from the mgmt VLAN.
+- place (home lab, proven 2026-10-26): `kubeProxyReplacement=true` with `k8sServiceHost=<endpoint name>` and `k8sServicePort=6443`, `l2announcements.enabled=true`, `devices=<lab NIC>`, no `MTU` override (the lab NIC carries 1500), then a `CiliumLoadBalancerIPPool` on VLAN 10's `.224/27` (STD-0002) and an L2 announcement policy. A LoadBalancer Service got `.224` and answered from the worker and from the mgmt VLAN. From BUILD-PATH S11 (not yet run) the same values also carry `gatewayAPI.enabled=true`, after the Gateway API CRDs, all applied with one `helm upgrade --install --reset-values`; see [step 10a](#10a-a-way-in-for-web-traffic-home-lab).
 
 #### 10. Single node scheduling and a smoke test
 
@@ -312,6 +312,65 @@ kubectl exec t1 -- sh -c 'wget -q -T 8 -O /dev/null https://pkgs.k8s.io && echo 
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/> (section on control plane node isolation)
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: WS5 (partly), SN1 (partly).
 - place (home lab, proven 2026-10-26): the control-plane taint stays, because c1 has a worker. The test pod is deleted afterwards: a bare pod blocks `kubectl drain` in step 17.
+
+#### 10a. A way in for web traffic (home lab)
+
+Home lab only; the VPS has no load-balancer addresses ([step 23](#23-services-clusterip-nodeport-loadbalancer-sn3)). One shared Gateway is the front door for every web app on c1: a request for `<app>.apps.c1.prod.<zone>` reaches the Gateway's address, and an HTTPRoute sends it to the app's Service.
+
+```bash
+# 1. the Gateway API CRDs, v1.6.3, standard channel (the version Cilium 1.20.4's docs name)
+curl -fsSLO https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/standard-install.yaml
+echo "356c2b8e286a964dc20995435659ad1095386329974793af10bbfe3eff977fe5  standard-install.yaml" | sha256sum -c -
+kubectl apply --server-side -f standard-install.yaml
+# 2. Cilium's Gateway API controller: step 9's values plus gatewayAPI.enabled=true, then the restarts Cilium's page gives
+helm upgrade cilium cilium/cilium --version 1.20.4 -n kube-system --reuse-values --set gatewayAPI.enabled=true
+kubectl -n kube-system rollout restart deployment/cilium-operator && kubectl -n kube-system rollout restart ds/cilium
+kubectl -n kube-system rollout status ds/cilium
+kubectl get gatewayclass cilium                          # ACCEPTED True
+# 3. one shared Gateway at a pinned address from the load-balancer pool
+cat <<'YAML' | kubectl apply -f -
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: apps
+  namespace: gateway
+spec:
+  gatewayClassName: cilium
+  addresses:
+  - type: IPAddress
+    value: <gateway address>
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    hostname: "*.apps.c1.prod.<zone>"
+    allowedRoutes:
+      namespaces:
+        from: All
+YAML
+kubectl -n gateway get gateway apps                      # ADDRESS <gateway address>, PROGRAMMED True
+# 4. from a machine outside the cluster, once an app has an HTTPRoute for hello.apps.c1.prod.<zone>
+curl -s -H 'Host: hello.apps.c1.prod.<zone>' http://<gateway address>/hostname
+```
+
+- ※ It needs `kubeProxyReplacement=true` and the load-balancer pool from [step 9](#9-cilium-1204): the Gateway is a LoadBalancer Service underneath, and its address is announced on the VLAN like any other.
+- why: one front door with one address, instead of one address per app. Routes are standard Gateway API objects, the same kind as in [step 27](#27-gateway-api-sn4), so another controller could replace Cilium's without changing them.
+- the CRDs come first: Cilium makes the GatewayClass `cilium` only when the GatewayClass CRD is already there (chart value `gatewayAPI.gatewayClass.create: auto`), and its page restarts the operator and the agents after turning the controller on.
+- standard channel: it holds every CRD Cilium 1.20 needs (GatewayClass, Gateway, HTTPRoute, GRPCRoute, ReferenceGrant, BackendTLSPolicy, TLSRoute) and the optional ListenerSet, TCPRoute and UDPRoute. The experimental channel adds fields still on trial, which nothing here uses.
+- the address: pinned with `spec.addresses` (Cilium's "Gateway API Addresses Support", which works with LB IPAM), so the lab DNS name can point at it before the Gateway exists and keeps pointing at it after a rebuild.
+- DNS: one OPNsense Unbound host override with host `*` and domain `apps.c1.prod.<zone>`, a wildcard (the OPNsense manual's Unbound page; OPNsense writes it as a `local-zone ... redirect`). Every app name under it answers with the Gateway's address, with no new DNS entry per app.
+- firewall: the nodes' firewalld zone accepts tcp 80. Cilium hands Gateway traffic to Envoy on the node with TPROXY, so it passes the node's input filter (inferred from Cilium's L7 proxy requirements; not yet measured).
+- HTTPS: not yet. The HTTPS listener on 443 comes with certificates (BUILD-PATH S12).
+- expect: GatewayClass `cilium` ACCEPTED True; Gateway `apps` PROGRAMMED True with the pinned address; the curl returns the app's pod name; a name with no route returns 404; `getent hosts hello.apps.c1.prod.<zone>` on a node returns the Gateway's address.
+- page: <https://kubernetes.io/docs/concepts/services-networking/gateway/> ; Cilium: <https://docs.cilium.io/en/v1.20/network/servicemesh/gateway-api/gateway-api/>
+- versions (checked 2026-10-27): Gateway API v1.6.3, published 2026-10-06, is the newest release at least two weeks old (v1.7.0 is still a release candidate) and the version Cilium 1.20.4's docs name (`Documentation/conf.py`, `gateway_api_version`). Cilium 1.20 needs v1.6.1 at least (its upgrade notes). The project publishes no checksum; the one above is the file's SHA-256 as fetched on 2026-10-27.
+- status: **NOT PROVEN** (written 2026-10-27; not yet run on c1). CKA: SN4.
+- place (home lab): `hosts/ansible`. `playbooks/k8s.yml` applies the CRDs and upgrades Cilium (role `k8s_control_plane`); then `playbooks/k8s-gateway.yml --tags gateway` (role `k8s_gateway`), `playbooks/opnsense.yml --tags dns` (the wildcard override) and `playbooks/k8s-gateway.yml --tags smoke` (an echo app and its HTTPRoute, called from the Proxmox host, then deleted). The role writes every Cilium value to one file and runs `helm upgrade --install --reset-values` only when the chart version or a value differs, so a second run changes nothing.
 
 #### 11. Backup and restore
 
@@ -922,6 +981,7 @@ kubectl exec client -- curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: nothin
 - not chosen yet: the platform's ingress controller is an open decision for the owner. Traefik here is for CKA practice only, the agent's pick: chart 42.1.3 (Traefik v3.7.16, chart published 2026-10-22; <https://traefik.github.io/charts/index.yaml>). v3.7.14-v3.7.16 fix 12 security advisories (<https://github.com/traefik/traefik/releases>), so this pin takes the security fixes instead of waiting two weeks. Chart 42 needs Kubernetes 1.30 or later and changes nothing this step sets (<https://github.com/traefik/traefik-helm-chart/releases/tag/v42.0.0>). Envoy Gateway or NGINX Gateway Fabric would also do for step 27; Traefik was picked because one install also covers Ingress.
 - page: <https://kubernetes.io/docs/concepts/services-networking/ingress/> ; <https://kubernetes.io/docs/concepts/services-networking/ingress-controllers/>
 - status: **PROVEN 2026-10-19** on chart 41.6.1 (Traefik v3.7.13) with Gateway API 1.6.1; chart 42.1.3 has not been run yet.
+- place (home lab): on c1 the Gateway API CRDs are already in from [step 10a](#10a-a-way-in-for-web-traffic-home-lab), at the same v1.6.3, so the first command changes nothing. Traefik stays practice; Cilium's Gateway is the platform's way in.
 
 #### 27. Gateway API (SN4)
 
@@ -963,6 +1023,7 @@ kubectl delete deploy web1 web2; kubectl delete svc web1 web2; kubectl delete po
 - expect: the route shows `Accepted=True ResolvedRefs=True`; the request with `Host: web2.lab.test` returns a `web2-...` pod name.
 - catch: the Gateway only accepts routes from its own namespace unless its listener allows others. That is why step 26 sets `gateway.listeners.web.namespacePolicy.from=All`.
 - ※ Why not Cilium's own Gateway API? It needs `kubeProxyReplacement=true`, and [step 9](#9-cilium-1204) set it to `false` (SYNTHESIS).
+- place (home lab): c1 runs with `kubeProxyReplacement=true`, and Cilium's Gateway API is the platform's way in for web traffic ([step 10a](#10a-a-way-in-for-web-traffic-home-lab)). Traefik's Gateway here is practice beside it.
 - to remove Traefik later: `helm uninstall traefik -n traefik`; the Gateway API CRDs stay until you `kubectl delete -f` the same standard-install.yaml.
 - page: <https://kubernetes.io/docs/concepts/services-networking/gateway/> (and, allowed in the CKA, <https://gateway-api.sigs.k8s.io>)
 - status: **PROVEN 2026-10-19** on Gateway API 1.6.1 and Traefik chart 41.6.1; the 1.6.3 and 42.1.3 pins of step 26 are not yet run. It ran with Traefik and without changing Cilium's `kubeProxyReplacement`. Cilium's own Gateway API (which needs `kubeProxyReplacement=true`) was not tried; that would be a decision for the owner.

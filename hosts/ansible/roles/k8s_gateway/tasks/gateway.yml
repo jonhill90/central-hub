@@ -1,0 +1,60 @@
+---
+# Needs k8s_control_plane with k8s_control_plane_gateway_api: true (the Gateway API CRDs and
+# Cilium's controller), which makes GatewayClass cilium.
+- name: gateway | GatewayClass accepted
+  ansible.builtin.command: >-
+    kubectl wait --for=condition=Accepted gatewayclass/{{ k8s_gateway_class }} --timeout=120s
+  changed_when: false
+  check_mode: false
+
+# Envoy on the node takes the Gateway's traffic through TPROXY, so the node's own input filter
+# sees it; the lab zone has only the Kubernetes ports open (k8s_node step 4).
+- name: gateway | Listener ports in the lab zone on every node
+  ansible.posix.firewalld:
+    zone: "{{ k8s_gateway_firewall_zone }}"
+    port: "{{ item.1 }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  delegate_to: "{{ item.0 }}"
+  loop: "{{ groups['k8s_nodes'] | product(k8s_gateway_node_ports) | list }}"
+  loop_control:
+    label: "{{ item.0 }} {{ item.1 }}"
+
+- name: gateway | Folder for the manifests
+  ansible.builtin.file: {path: /root/central-hub, state: directory, mode: "0700"}
+
+- name: gateway | Gateway manifest
+  ansible.builtin.template:
+    src: gateway.yaml.j2
+    dest: /root/central-hub/gateway.yaml
+    mode: "0600"
+
+# kubectl diff exits 0 with no difference, 1 with one, more on an error.
+- name: gateway | Gateway differs from the cluster?
+  ansible.builtin.command: kubectl diff -f /root/central-hub/gateway.yaml
+  register: k8s_gateway_diff
+  changed_when: false
+  failed_when: k8s_gateway_diff.rc > 1
+  check_mode: false
+
+- name: gateway | Apply the Gateway
+  ansible.builtin.command: kubectl apply -f /root/central-hub/gateway.yaml
+  when: k8s_gateway_diff.rc == 1
+  changed_when: true
+
+- name: gateway | Gateway programmed
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_gateway_namespace }} wait --for=condition=Programmed
+    gateway/{{ k8s_gateway_name }} --timeout=180s
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: gateway | Gateway has the pinned address
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_gateway_namespace }} get gateway {{ k8s_gateway_name }}
+    -o jsonpath={.status.addresses[*].value}
+  register: k8s_gateway_status_address
+  changed_when: false
+  failed_when: k8s_gateway_status_address.stdout != k8s_gateway_address
+  when: not ansible_check_mode
