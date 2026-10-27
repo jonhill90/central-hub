@@ -1,6 +1,8 @@
 ---
+# Made in check mode too (an empty folder), so --check can fetch and diff the manifest into it.
 - name: install | Folder for the manifests
   ansible.builtin.file: {path: "{{ k8s_gitops_dir }}/{{ k8s_gitops_engine }}", state: directory, mode: "0700"}
+  check_mode: false
 
 # The pinned upstream manifest, checked against the sha256 in vars/main.yml. Nothing here holds a
 # git credential and nothing pushes to git (Activation gate item 4); `flux bootstrap` would.
@@ -33,17 +35,24 @@
 # kubectl diff exits 0 with no difference, 1 with one, more on an error. On the first run Argo CD's
 # namespace doesn't exist yet, and the diff fails with "namespaces ... not found"; that also means
 # "apply". Server-side, because Argo CD's CRDs are too big for the client-side annotation.
+# A first --check run writes no manifest, so there is nothing to diff yet; the diff is skipped
+# and the apply counts as needed.
+- name: install | Kustomization on the node?
+  ansible.builtin.stat: {path: "{{ k8s_gitops_dir }}/{{ k8s_gitops_engine }}/kustomization.yaml"}
+  register: k8s_gitops_kustomization
+
 - name: install | Engine differs from the cluster?
   ansible.builtin.command: kubectl diff --server-side -k {{ k8s_gitops_dir }}/{{ k8s_gitops_engine }}
   register: k8s_gitops_diff
   changed_when: false
   failed_when: k8s_gitops_diff.rc > 1 and 'namespaces' not in k8s_gitops_diff.stderr
   check_mode: false
+  when: k8s_gitops_kustomization.stat.exists
 
 - name: install | Apply the engine
   ansible.builtin.command: >-
     kubectl apply --server-side --force-conflicts -k {{ k8s_gitops_dir }}/{{ k8s_gitops_engine }}
-  when: k8s_gitops_diff.rc != 0
+  when: (k8s_gitops_diff.rc | default(1)) != 0
   changed_when: true
 
 - name: install | Deployments ready
