@@ -21,6 +21,9 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0014 | [Number requirements REQ-NNNN](0014-number-requirements-req-nnnn.md) | accepted | D-0001, D-0003, D-0004, D-0006 | 2026-10-23 |
 | D-0015 | [Number research batches RB-NNNN](0015-number-research-batches-rb-nnnn.md) | accepted | D-0001, D-0003, D-0006 | 2026-10-23 |
 | D-0016 | [Give each decision record a public evidence file, and record the owner's approval and reasons in neutral words](0016-give-records-an-evidence-file-and-neutral-approval.md) | accepted | D-0001, D-0006 | 2026-10-23 |
+| D-0017 | [On home-lab clusters, let Cilium replace kube-proxy and announce load-balancer addresses on the node VLAN with L2 announcements](0017-replace-kube-proxy-and-announce-lb-addresses-with-cilium.md) | proposed | D-0001 | 2026-10-27 |
 | D-0018 | [Number research methods RM-NNNN](0018-number-research-methods-rm-nnnn.md) | accepted | D-0001, D-0003, D-0006, D-0016 | 2026-10-23 |
 | D-0019 | [Check the docs on every PR, with front matter and inside links as gates, Markdown style on changed files, and word checks built from the glossary](0019-check-docs-on-every-pr.md) | accepted | D-0001, D-0012, D-0016 | 2026-10-23 |
 | D-0020 | [Number backlog items BL-NNNN](0020-number-backlog-items-bl-nnnn.md) | accepted | D-0001, D-0003, D-0006, D-0016 | 2026-10-24 |
+| D-0021 | [Use the Kubernetes Gateway API as the way in for web traffic, served on home-lab clusters by Cilium's Gateway API controller through one shared Gateway](0021-use-gateway-api-on-cilium-as-the-way-in-for-web-traffic.md) | proposed | D-0001, D-0017 | 2026-10-27 |
+| D-0022 | [Reach home-lab clusters by SSH to the control plane for now, keep the admin kubeconfigs on the node for break-glass, and give the owner a least-privilege user of their own next](0022-reach-clusters-by-ssh-now-and-keep-admin-kubeconfigs-for-break-glass.md) | proposed | D-0001 | 2026-10-27 |
