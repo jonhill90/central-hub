@@ -24,7 +24,14 @@ mock_provider "cloudflare" {
   }
 }
 
-mock_provider "time" {}
+# timeadd() needs a real timestamp from the clock, not a random string.
+mock_provider "time" {
+  mock_resource "time_rotating" {
+    defaults = {
+      rfc3339 = "2026-10-27T00:00:00Z"
+    }
+  }
+}
 mock_provider "local" {}
 
 variables {
@@ -64,8 +71,14 @@ run "token_file_private" {
   }
 }
 
-# The rotation clock runs out token_renew_days before the token expires.
+# The rotation clock runs out token_renew_days before the token expires, and the token's expiry
+# is the clock's start plus its full lifetime.
 run "renews_before_expiry" {
+  assert {
+    condition     = cloudflare_account_token.cert_manager.expires_on == "2027-01-25T00:00:00Z"
+    error_message = "The token must expire 90 days after the clock starts."
+  }
+
   assert {
     condition     = time_rotating.token.rotation_days == 76
     error_message = "With the defaults (90-day token, renew 14 days before), the clock must run 76 days."
