@@ -73,7 +73,7 @@ Chosen option: **1**.
 
 ### What the decision covers
 
-- **Scope:** branches inside central-hub. Whether tenant or application manifests live here or in their own repositories is a separate decision (repo boundaries); that decision may add repositories, not branches. Any push-based infrastructure code added later (Terraform, Ansible) follows the same rule: environments are folders or per-environment variable files, and pipeline stages gate each apply (inferred, RB-0002-gaps.md §1.3).
+- **Scope:** branches inside central-hub. Whether tenant or application manifests live here or in their own repositories is a separate decision (repo boundaries); that decision may add repositories, not branches. Any push-based infrastructure code added later (Terraform, Ansible) follows the same rule: environments are folders or per-environment variable files, and pipeline stages gate each apply (inferred, RB-0002-gaps.md §1.3). Under `hosts/`, D-0011 rules 7 and 8 set those folders: `hosts/terraform/<place>/<workload>/` and `hosts/ansible/inventories/<place>/`, with each place's values in its own variable files.
 - **Long-lived branches:** `main` only. It is the default branch and, after the Activation gate, the state the clusters pull.
 - **Environments:** folders on `main`, never branches.
   - **One deployment target now:** the first cluster, in the home lab.

@@ -71,3 +71,4 @@ The agent that writes the code does not edit the acceptance criteria in the same
 | Spec | Status | Date |
 |---|---|---|
 | [Build the home lab from code and the first cluster c1](2026-10-home-lab-and-c1.md) | accepted | 2026-10-26 |
+| [Let web traffic into c1's apps, with certificates browsers trust](2026-10-c1-way-in-for-web-traffic.md) | proposed | 2026-10-27 |

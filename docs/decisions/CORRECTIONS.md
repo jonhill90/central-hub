@@ -6,6 +6,12 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
+### Accepted with PR #47
+
+This PR's approval facts and merge commit are added after it merges (D-0006 step 6).
+
+- 2026-10-27 · STD-0001 "Proxmox VM IDs" and `why` · a Proxmox guest's ID is chosen by job: 100-199 network and appliances, 200-299 Kubernetes nodes, 9000 and up templates; the remote-access container keeps ID 900 until it is rebuilt · the owner's yes of 2026-10-26 at 07:29 UTC to the proposed ranges; writing them in STD-0001 is an agent pick
+
 ### Accepted with PR #44
 
 PR #44: approved 2026-10-27T00:07:43Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNUTitXeZeY3yfPfFn3ia17p), head 0bee55a, re-signed with the same tree as f190fb0 on the owner's go of 2026-10-27T00:12:51Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN47cYg7DjBjdfnn1xkU88Qe); merged as 3195033.
@@ -79,8 +85,8 @@ A folded decision number has no file and no row in the index until the next new 
 - D-0006 (reused) · first used by the PR #9 draft, a full restatement of D-0005, closed unmerged on 2026-10-16; the owner approved the reuse under D-0004 on 2026-10-16 at 08:25 UTC. The current D-0006 was accepted with PR #10: approved 2026-10-16T08:28:58Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNTJTUNZbcPsUxG7TCKiX23s), head 0ae0493; merged as 0517ccf
 - REQ-0021 (reused) · the void row was a usage limit for one agent product, dropped by the owner on 2026-10-13 at 04:23 UTC; at the owner's request (06:09 UTC) the next new requirement, shared vocabulary, took the number instead of `REQ-0022`, in Research commit `f63ae969`. The search found 6 files that meant the void entry (the 3 Rules table review files, the inbox row, Research `CURRENT-STATE.md` and the register's Dropped entry), and all 6 were updated or annotated; 3 frozen study files and 20 chat archives were left as records; reported to the owner in the Rules table thread at 06:13 UTC
 - D-0013 (reused) · first held the runbook-steps record, folded into D-0012. That record was accepted with PR #21: approved 2026-10-23T03:42:38Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNWc7Mzu6ZFvoYgnxsDKVyKh), head eb33bd7; merged as 5f9fa76. Now held by "Keep central-hub public, and name each exception to best practice with what keeps it secure", proposed in PR #44; the search for D-0013 found only references to the folded record, in this file, D-0004's context and frozen plan files, and none was changed
-- D-0017 · folded into D-0016 rule 1. It was accepted with PR #26: approved 2026-10-23T04:58:39Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNT1mFLf6eEyeGKAMDBbAKVd), head 5115dcd; merged as b852f90
-- D-0021 · folded into D-0019 rule 4. It was accepted with PR #41: approved 2026-10-24T06:21:57Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNAqUPkvQ7d3ptmgAjUaDB92), head c62cf99; merged as 8c1b65e
+- D-0017 (reused) · first held the `docs/research/` record, folded into D-0016 rule 1. That record was accepted with PR #26: approved 2026-10-23T04:58:39Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNT1mFLf6eEyeGKAMDBbAKVd), head 5115dcd; merged as b852f90. Now held by "On home-lab clusters, let Cilium replace kube-proxy and announce load-balancer addresses on the node VLAN with L2 announcements", proposed in PR #47; the search for D-0017 found references to the folded record only, in this file, D-0004's context, Research chat archives and plans, and frozen Library plan and review files, and none was changed
+- D-0021 (reused) · first held the linter-settings record, folded into D-0019 rule 4. That record was accepted with PR #41: approved 2026-10-24T06:21:57Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNAqUPkvQ7d3ptmgAjUaDB92), head c62cf99; merged as 8c1b65e. Now held by "Use the Kubernetes Gateway API as the way in for web traffic, served on home-lab clusters by Cilium's Gateway API controller through one shared Gateway", proposed in PR #47; the search for D-0021 found references to the folded record only, in this file, D-0004's context, Research chat archives and plans, and frozen Library plan and review files, and none was changed
 
 ## Corrections
 
@@ -124,4 +130,6 @@ A folded decision number has no file and no row in the index until the next new 
 - 2026-10-26 · D-0011, evidence 0011, research index · the four folder orders weighed in research batch RB-0086 (place first, workload first, layer first, mixed) added to Considered Options; "no research batch of its own" replaced by a link to a new evidence file built from RB-0086 (D-0016 rule 3); the chosen option is unchanged · PR #44: approved 2026-10-27T00:07:43Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNUTitXeZeY3yfPfFn3ia17p), head 0bee55a, re-signed with the same tree as f190fb0 on the owner's go of 2026-10-27T00:12:51Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN47cYg7DjBjdfnn1xkU88Qe); merged as 3195033
 - 2026-10-26 · D-0011 Consequences · "none of these folders exists yet" replaced by the current state: `hosts/terraform/` and `hosts/ansible/` exist, `hosts/terraform/modules/` does not · PR #44: approved 2026-10-27T00:07:43Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNUTitXeZeY3yfPfFn3ia17p), head 0bee55a, re-signed with the same tree as f190fb0 on the owner's go of 2026-10-27T00:12:51Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN47cYg7DjBjdfnn1xkU88Qe); merged as 3195033
 - 2026-10-27 · this file · PR #44's approval facts and merge commit added to its lines · PR #45: approved 2026-10-27T01:10:02Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN1S6WFZV7KmpszgC6k6KfyA), head b526bc1; merged as c14b4d6
-- 2026-10-27 · this file · PR #45's approval facts and merge commit added to its lines · PR #46
+- 2026-10-27 · this file · PR #45's approval facts and merge commit added to its lines · PR #46: approved 2026-10-27T01:50:09Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNQhkcYHohg7BrN3Nb1DKQYG), head db12921; merged as cea140f
+- 2026-10-27 · this file · PR #46's approval facts and merge commit added to its lines · PR #47
+- 2026-10-27 · D-0002 "Scope" · a pointer to D-0011 rules 7 and 8, which set the `hosts/` folders that the scope line's "folders or per-environment variable files" covers; the decision is unchanged · PR #47
