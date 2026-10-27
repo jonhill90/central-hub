@@ -44,3 +44,6 @@ kubeconfig*
 
 # Docs check tools
 .github/docs-check/node_modules/
+
+# Hosts check tools built by .github/hosts-check/install-tools.sh
+.github/hosts-check/.tools/

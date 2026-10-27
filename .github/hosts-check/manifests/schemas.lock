@@ -1,0 +1,20 @@
+# JSON Schemas kubeconform checks the rendered templates against: path under the schema folder,
+# where it comes from, and its SHA-256. run.sh downloads each file and stops if a checksum differs.
+# Built-in kinds: Kubernetes v1.36 (the runbook's target minor), strict variant, from
+# yannh/kubernetes-json-schema. Custom resources: datreeio/CRDs-catalog.
+# A checksum that stops matching means the upstream file changed: read the change, then update
+# the line. Kinds with no schema here (kubeadm and kustomize configs) are not rendered.
+core/namespace-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/namespace-v1.json 324fae677b98d1a6d54340db0c334d053e8ffbafceb3f73326e41de2610d5843
+core/service-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/service-v1.json 8bf019854daed511e7c174896a898173fa65d88ec5937c687a37303d4cc9351b
+core/serviceaccount-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/serviceaccount-v1.json 8193d6c3561475c6d3d5c44e1faedb1df53905373d904bc17015694326d659cf
+core/deployment-apps-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/deployment-apps-v1.json 3725782fb01e3f27d8be2da565e2d653d7b78bf6debe5440804cea993c87b8f9
+core/role-rbac-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/role-rbac-v1.json dfe8fb03b1642f985b57b12edd1727b6867c13ed4b6761ef81bdd51b1d236711
+core/rolebinding-rbac-v1.json https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.36.0-standalone-strict/rolebinding-rbac-v1.json b12ea4163fc37df2e02192b4291b1b7c28836e3e7665d989dd538bfcffa10076
+crd/gateway.networking.k8s.io/gateway_v1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/gateway.networking.k8s.io/gateway_v1.json 85575b3a7d79416f8b09658cf6a3f9a6b79544bbf10c4c465c78bdaab1ea0364
+crd/gateway.networking.k8s.io/httproute_v1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/gateway.networking.k8s.io/httproute_v1.json e5692e62edd9b8a14bd2527d0a732e174a649131aa4d47159737dc6527c59ca5
+crd/cert-manager.io/certificate_v1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/cert-manager.io/certificate_v1.json fe38e572b5fd9ec49631044b6c4207863126d0465ce9b6e0673ce200fca471ba
+crd/cert-manager.io/clusterissuer_v1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/cert-manager.io/clusterissuer_v1.json aaf42075335898ef5889e0370bec84325113e388635be1b8f720d11691cdfcba
+crd/external-secrets.io/clustersecretstore_v1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/external-secrets.io/clustersecretstore_v1.json 4663eec2ce289250a318f298c31cce79d6e299f9fea97f25c5513f7681a2dfdb
+crd/argoproj.io/application_v1alpha1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/argoproj.io/application_v1alpha1.json 99c37877b0626eaf21f42f70f4fc432a4b820de548d88ed90cc75381adf5192c
+crd/source.toolkit.fluxcd.io/gitrepository_v1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/source.toolkit.fluxcd.io/gitrepository_v1.json a2d45b725be48be738a88c5496b6091404aa3c1f7b2de43fc18001847ff09172
+crd/kustomize.toolkit.fluxcd.io/kustomization_v1.json https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/kustomize.toolkit.fluxcd.io/kustomization_v1.json cd96ea111d7714520858e28fc9491d3c814edc5d3262281d2faaf8179e327bbb

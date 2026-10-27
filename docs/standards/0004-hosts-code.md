@@ -6,7 +6,7 @@ scope: how Terraform run folders and Ansible roles, playbooks and inventories un
 owner-system: 8 Platform
 why: the owner said yes on 2026-10-26 at 04:34 UTC to the proposed step of one standard for how `hosts/` code is laid out and written, written after the first real `tofu apply` and Ansible run, and on 2026-10-26 at 01:55 UTC to writing it as a standard with a skill that points at it; each rule below names its own origin
 follows: [Ansible role argument validation (meta/argument_specs.yml), Red Hat Communities of Practice "Ansible Good Practices" (roles README), HashiCorp Terraform style guide, OpenTofu backend configuration]
-check: none yet; a reviewing agent checks each PR that changes `hosts/` against the rules by hand. A check script is planned (the owner's yes of 2026-10-26 at 04:34 UTC)
+check: "`.github/hosts-check/check_hosts.py` (run by workflow `hosts`, STD-0005) checks Terraform rules 1, 2 and 5 and Ansible rules 1, 2 and 4; a reviewing agent checks the other rules on each PR that changes `hosts/` by hand"
 accepted-evidence:
   approved-by: owner
   approved-at: 2026-10-27T02:55:47Z
@@ -51,7 +51,7 @@ This standard is a draft written by an agent from what the first real `tofu appl
 
 Example that passes: `hosts/terraform/home/network/` has the seven files of Terraform rule 1, no `locals`, and reads its VLANs from the shared VLAN file through `var.vlans_file`, which has no default; its second `tofu plan` after the first apply reported "No changes".
 
-Known gap: the `proxmox_network` role has no `meta/argument_specs.yml` yet, so it does not meet Ansible rule 1.
+Known gap: `hosts/terraform/home/certificates/main.tf` has a `locals` block, so it does not meet Terraform rule 2; `check_hosts.py` lists it as a known gap until the code is changed.
 
 ## Not covered here
 
