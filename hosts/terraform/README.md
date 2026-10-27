@@ -43,12 +43,12 @@ cert-manager proves to Let's Encrypt that it controls the zone by writing a TXT 
 
 Cloudflare has no API call that makes the first token, so one credential is made by hand, once, in the same way as the Proxmox bootstrap ([home/bootstrap/](home/bootstrap/) makes `iac@pve` and its token):
 
-1. In the Cloudflare dashboard: My Profile > API Tokens > Create Token, template **Create additional tokens**. It holds one permission, **User > API Tokens > Edit**, and nothing else. Leave it with no other permission. Give it an expiry (for example 1 year) and, if the Mac has a stable public address, a client IP filter.
-2. Save it on the Mac, never in the repository: `(umask 077; pbpaste > ~/.config/central-hub/cloudflare-bootstrap-token.txt)`, then `chmod 600` that file and clear the clipboard.
+1. In the Cloudflare dashboard's account API tokens page: Create Token, template **Create Account Tokens** (one permission, **Account API Tokens Write**, on the account). Add one more policy: **Zone Read**, scoped to the one zone, so the code finds the zone and its account by name and no ID is copied by hand. Name it so it is recognisable (for example `central-hub-terraform-bootstrap`), give it an expiry (90 days, like the Proxmox token), and leave the client IP filter empty unless the Mac has a stable public address.
+2. Save it on the Mac, never in the repository, in a 0600 file (for example `~/.config/central-hub/cloudflare-bootstrap-token.txt`), and clear the clipboard.
 
-This token can make tokens with any permission the owner's user has, so it is as strong as the owner's Cloudflare login for every zone. Keep it out of the cluster and out of every other tool. The token it makes has only the two zone permissions.
+This token can make account tokens with any permission the account has, so it is as strong as an account admin for every zone. Keep it out of the cluster and out of every other tool. The token it makes has only the two zone permissions.
 
-The Cloudflare provider would also make an account-owned token (`cloudflare_account_token`). That needs the account ID as one more private variable and a bootstrap token with Account > Account API Tokens > Edit. This folder uses a user-owned token, which is what cert-manager's page describes and what the role's earlier text told the owner to make.
+The token this folder makes is account-owned (`cloudflare_account_token`), so it keeps working if a user leaves the account. A user-owned token (`cloudflare_api_token`, bootstrap template **Create additional tokens**, User > API Tokens > Edit) works the same way and is the kind cert-manager's page describes.
 
 ### Run it on the Mac
 

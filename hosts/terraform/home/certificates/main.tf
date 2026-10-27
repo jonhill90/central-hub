@@ -4,9 +4,9 @@
 # issue` puts it in the cluster. Permissions as cert-manager's Cloudflare page lists them
 # (Zone / DNS / Edit and Zone / Zone / Read), limited to the one zone instead of all zones.
 #
-# A user-owned token (POST /user/tokens), like the one the dashboard's My Profile > API Tokens
-# makes and cert-manager's page describes. An account-owned token (cloudflare_account_token)
-# would need the private account ID and a bootstrap token with Account API Tokens Edit instead.
+# An account-owned token (cloudflare_account_token), made with the account-owned bootstrap token
+# (Account API Tokens Write on the account, plus Zone Read on the one zone so the zone and its
+# account are looked up by name). It outlives any one user's membership of the account.
 
 # The zone, looked up by name, so its ID is never written here.
 data "cloudflare_zone" "this" {
@@ -15,18 +15,21 @@ data "cloudflare_zone" "this" {
   }
 }
 
-# Every permission group a user token can use. Filtered here by exact name and scope instead of
-# with the data source's own name filter, whose value the API wants URL-encoded.
-data "cloudflare_api_token_permission_groups_list" "all" {}
+# Every permission group an account token can use. Filtered here by exact name and scope instead
+# of with the data source's own name filter, whose value the API wants URL-encoded.
+data "cloudflare_account_api_token_permission_groups_list" "all" {
+  account_id = local.account_id
+}
 
 locals {
+  account_id = data.cloudflare_zone.this.account.id
   zone_scope = "com.cloudflare.api.account.zone"
 
   # API names of the dashboard's "Zone / DNS / Edit" and "Zone / Zone / Read". one() stops the run
   # if a name matches more than one zone-scoped group.
   permission_group_ids = {
     for name in ["DNS Write", "Zone Read"] : name => one([
-      for g in data.cloudflare_api_token_permission_groups_list.all.result : g.id
+      for g in data.cloudflare_account_api_token_permission_groups_list.all.result : g.id
       if g.name == name && contains(g.scopes, local.zone_scope)
     ])
   }
@@ -38,8 +41,9 @@ resource "time_rotating" "token" {
   rotation_days = var.token_lifetime_days - var.token_renew_days
 }
 
-resource "cloudflare_api_token" "cert_manager" {
-  name = var.token_name
+resource "cloudflare_account_token" "cert_manager" {
+  account_id = local.account_id
+  name       = var.token_name
 
   policies = [{
     effect = "allow"
@@ -74,7 +78,7 @@ resource "cloudflare_api_token" "cert_manager" {
 # A changed or missing file is written again on the next apply.
 resource "local_sensitive_file" "token" {
   filename             = pathexpand(var.token_file)
-  content              = cloudflare_api_token.cert_manager.value
+  content              = cloudflare_account_token.cert_manager.value
   file_permission      = "0600"
   directory_permission = "0700"
 }
