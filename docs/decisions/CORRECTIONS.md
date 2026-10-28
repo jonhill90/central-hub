@@ -8,7 +8,7 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ### Accepted with PR #49
 
-This PR's approval facts and merge commit are added after it merges (D-0006 step 6).
+PR #49: approved 2026-10-27T04:13:09Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNRhqewJex9F94nbCBTi8P4i), head 9a76530; merged as 53c756d.
 
 - 2026-10-27 · D-0023 rule 6, diagram and Consequences, its evidence file, AGENTS.md Activation gate item 4 · the Argo CD UI is used only on its own lab DNS name through the cluster's Gateway with the lab's certificate, with no port-forward step; the compensating control reads "reachable only from the lab network"; gate item 4 names Argo CD and D-0023 · the owner's statement of 2026-10-27 at 03:52 UTC that the UI waits until DNS is up; D-0023 was accepted with PR #48 (approved 2026-10-27T02:58:08Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNUgBcgq1CnfEaBLT5BNZCVN, head b138450, merged as e68202c)
 
@@ -139,4 +139,5 @@ A folded decision number has no file and no row in the index until the next new 
 - 2026-10-27 · this file · PR #45's approval facts and merge commit added to its lines · PR #46: approved 2026-10-27T01:50:09Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNQhkcYHohg7BrN3Nb1DKQYG), head db12921; merged as cea140f
 - 2026-10-27 · this file · PR #46's approval facts and merge commit added to its lines · PR #47: approved 2026-10-27T02:55:47Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop), head 0622e3b; merged as b52d931
 - 2026-10-27 · D-0002 "Scope" · a pointer to D-0011 rules 7 and 8, which set the `hosts/` folders that the scope line's "folders or per-environment variable files" covers; the decision is unchanged · PR #47: approved 2026-10-27T02:55:47Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop), head 0622e3b; merged as b52d931
-- 2026-10-27 · this file · PR #47's approval facts and merge commit added to its lines · PR #49
+- 2026-10-27 · this file · PR #47's approval facts and merge commit added to its lines · PR #49: approved 2026-10-27T04:13:09Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNRhqewJex9F94nbCBTi8P4i), head 9a76530; merged as 53c756d
+- 2026-10-28 · this file · PR #49's approval facts and merge commit added to its lines · PR #NN
