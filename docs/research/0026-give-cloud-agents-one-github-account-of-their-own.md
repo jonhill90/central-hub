@@ -50,7 +50,7 @@ Relied on (the decision depends on these):
 
 Background:
 
-5. Microsoft Learn, "Recommendations for enabling automation in your workload". <https://learn.microsoft.com/power-platform/well-architected/operational-excellence/enable-automation>, fetched 2026-10-28.
-6. GitHub, "About rulesets". <https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets>, fetched 2026-10-28 by the independent check.
+- [5] Microsoft Learn, "Recommendations for enabling automation in your workload". <https://learn.microsoft.com/power-platform/well-architected/operational-excellence/enable-automation>, fetched 2026-10-28.
+- [6] GitHub, "About rulesets". <https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets>, fetched 2026-10-28 by the independent check.
 
 The research batches' working files are private.
