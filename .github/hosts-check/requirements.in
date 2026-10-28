@@ -1,0 +1,7 @@
+# Python tools for the hosts checks. Compile requirements.txt from this file with hashes:
+#   uv pip compile --generate-hashes --python-version 3.12 --exclude-newer <date two weeks ago> -o requirements.txt requirements.in
+# Versions: the newest release at least two weeks old on 2026-10-27 (STD-0003 rule 1).
+ansible-core==2.21.5      # the same as hosts/ansible/requirements.txt
+ansible-lint==26.9.0      # 2026-09-22; 26.10.1 (2026-10-13) is under two weeks old
+shellcheck-py==0.11.0.1   # ShellCheck 0.11.0, 2025-08-09
+actionlint-py==1.7.12.24  # actionlint 1.7.12, 2026-03-31

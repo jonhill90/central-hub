@@ -72,10 +72,10 @@
 # "Module br_netfilter not found"). The mirror no longer has kernel-modules for the image's own
 # kernel, so dnf brings a newer kernel with it; boot into that one before loading modules.
 - name: step2 | Full kernel module set
-  ansible.builtin.dnf: {name: kernel-modules, state: latest}
+  ansible.builtin.dnf: {name: kernel-modules, state: latest}  # noqa: package-latest (must match the newer kernel dnf brings)
 
 - name: step2 | Is br_netfilter there for the running kernel?
-  ansible.builtin.shell: modinfo -n br_netfilter
+  ansible.builtin.command: modinfo -n br_netfilter
   register: k8s_node_brnf
   changed_when: false
   failed_when: false
@@ -109,7 +109,7 @@
 
 # Step 3. DNS that pods can use (cloud-init adds search "localhost", which reached the pods)
 - name: step3 | Active cloud-init connection
-  ansible.builtin.shell: nmcli -g NAME con show --active | grep -m1 cloud-init
+  ansible.builtin.shell: set -o pipefail && nmcli -g NAME con show --active | grep -m1 cloud-init
   register: k8s_node_con
   changed_when: false
   failed_when: false
@@ -176,7 +176,7 @@
 
 - name: step5 | Lock its version
   ansible.builtin.command: dnf versionlock add containerd.io
-  when: k8s_node_containerd is changed
+  when: k8s_node_containerd is changed  # noqa: no-handler (the lock must hold before later steps run dnf)
   changed_when: true
 
 - name: step5 | Default config

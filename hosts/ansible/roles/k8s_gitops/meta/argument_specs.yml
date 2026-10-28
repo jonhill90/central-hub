@@ -1,7 +1,9 @@
 ---
 argument_specs:
   main:
-    short_description: The GitOps engine on c1, pinned and with no git write credential (BUILD-PATH S13, Activation gate item 4), and its web UI through the shared Gateway
+    short_description: >-
+      The GitOps engine on c1, pinned and with no git write credential (BUILD-PATH S13, Activation gate item 4),
+      and its web UI through the shared Gateway
     options:
       k8s_gitops_engine:
         type: str
@@ -19,14 +21,19 @@ argument_specs:
       k8s_gitops_ui_route:
         type: bool
         default: false
-        description: "Serve the Argo CD UI at https://argocd.apps.<cluster>.<env>.<zone>/ through Gateway apps (tag ui). False removes the routes and sets server.insecure back."
+        description: >-
+          Serve the Argo CD UI at https://argocd.apps.<cluster>.<env>.<zone>/ through Gateway apps (tag ui).
+          False removes the routes and sets server.insecure back.
       k8s_gitops_ui_zone: {type: str, description: "The DNS zone. Private; needed only with the route on. The inventory template sets it to k8s_gateway_zone."}
       k8s_gitops_ui_name: {type: str, default: argocd, description: First label of the UI's hostname.}
       k8s_gitops_ui_cluster: {type: str, default: c1, description: Cluster name in the hostname.}
       k8s_gitops_ui_env: {type: str, default: prod, description: Environment name in the hostname.}
       k8s_gitops_ui_gateway_name: {type: str, default: apps, description: "The shared Gateway (k8s_gateway_name), also a label of the hostname."}
       k8s_gitops_ui_gateway_namespace: {type: str, default: gateway, description: "The Gateway's namespace (k8s_gateway_namespace)."}
-      k8s_gitops_ui_tls_secret: {type: str, default: apps-tls, description: "The HTTPS listener's certificate Secret (k8s_gateway_tls_secret); only its name and issuer annotation are read."}
+      k8s_gitops_ui_tls_secret:
+        type: str
+        default: apps-tls
+        description: "The HTTPS listener's certificate Secret (k8s_gateway_tls_secret); only its name and issuer annotation are read."
       k8s_gitops_ui_gateway_https:
         type: bool
         default: false
