@@ -17,6 +17,7 @@ Ansible code that configures the Proxmox host's network and safety net (host fir
 | `playbooks/proxmox-safety.yml` | `proxmox_notify` | Tag `notify`: a notification matcher `central-hub-errors` that sends every notification of severity error (failed backup jobs, HA fencing, other system errors) to one target. Until an endpoint is picked, the target is `central-hub-off`, a sendmail target that is switched off, so nothing new is sent. Proxmox's own default matcher and `mail-to-root` are left alone. |
 | `playbooks/proxmox-safety.yml` | `proxmox_backup` | Tag `backup`: the empty HDD becomes directory storage `hdd-backup` (content backup only), through Proxmox's own Disks > Directory API: one GPT partition, ext4, a systemd mount unit at `/mnt/pve/hdd-backup` by UUID. It runs only while the disk has no partition, filesystem or signature. Then backup job `nightly-guests` in `/etc/pve/jobs.cfg`: VMs 100, 200, 201 and CT 900, daily at 03:00, snapshot mode, zstd, keep-last 3 and keep-daily 7, repeat missed. |
 | `playbooks/proxmox-safety.yml` | `proxmox_firewall` | Tag `firewall`: Proxmox's own firewall at datacenter and host level only. Inbound DROP; SSH 22 and the GUI/API 8006 only from IPSet `management` (the home LAN range and VNet mgmt); ICMP and ICMPv6 from anywhere; outbound ACCEPT. Guest firewalls stay off. Two runs: the switch off first, then on, with a dead-man timer (see [Host firewall](#host-firewall)). |
+| `playbooks/controller-trust.yml` | `controller_trust` | Tag `trust`: copies the Proxmox host's own CA (`/etc/pve/pve-root-ca.pem`) to the controller and adds it to the macOS System keychain, trusted for TLS only, so OpenTofu verifies the host's API certificate. It asks for the Mac password once (`--ask-become-pass`); a second run finds the CA by its SHA-256 and changes nothing. See [Proxmox CA on the controller](#proxmox-ca-on-the-controller). |
 
 The OPNsense role uses the `oxlorg.opnsense` collection, which calls the OPNsense API from the controller. The mgmt VLAN and its LAN slot are made at the console before the API can be reached, so the role leaves them alone.
 
@@ -122,6 +123,22 @@ First sign-in: read the first password with `kubectl -n identity get secret real
 | `k8s_identity_zone` | The zone; the template sets it to `k8s_gateway_zone`. |
 | `k8s_identity_owner_username` | The owner's user name in realm `lab`. Private, no default. |
 | `k8s_identity_owner_email` | Optional. Without it, Grafana uses `<user name>@lab.invalid`. |
+
+## Proxmox CA on the controller
+
+OpenTofu's Proxmox provider has no setting for a CA file: its only TLS settings are `insecure` and `min_tls` (bpg/proxmox v0.116.0 `docs/index.md`). On macOS, Go programs check certificates with the system's verifier, and Go before 1.27 ignores `SSL_CERT_FILE` there (pkg.go.dev `crypto/x509`, `SystemCertPool`); the v0.116.0 provider is built with go1.26.8. So the Mac trusts the host's CA in the System keychain, and `PROXMOX_VE_INSECURE` stays unset.
+
+- The host's API certificate (`/etc/pve/local/pve-ssl.pem`) is signed by this CA and lists the host's addresses and names, so the endpoint matches. A private CA replaces this later.
+- The trust is `-p ssl`: the CA is trusted for TLS server checks only, not for code signing or mail (`man security`, `add-trusted-cert`).
+- Run it with `--ask-become-pass`; the password is your Mac password, asked once in the terminal:
+  `ansible-playbook -i inventories/home/ playbooks/controller-trust.yml --tags trust --ask-become-pass`.
+  Only the task that adds the CA runs as root: writing `/Library/Keychains/System.keychain` as your user fails with "SecCertificateAddToKeychain: Write permissions error." (measured 2026-10-28).
+- Removal: `sudo security remove-trusted-cert -d <CA file>` (the admin trust setting), then `sudo security delete-certificate -Z <SHA-1> /Library/Keychains/System.keychain` (the certificate) (`man security`). The run's proof line prints both.
+- If the host's CA ever changes, the next run adds the new one; remove the old one by hand with the command above.
+
+| Variable | What it is |
+|---|---|
+| `controller_trust_ca_file` | Where the CA is saved on the controller, for example `~/.config/central-hub/pve-root-ca.pem`. No default. |
 
 ## Host safety net
 

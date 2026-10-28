@@ -1,0 +1,72 @@
+---
+# The Proxmox host's CA in the macOS System keychain, trusted for TLS only, so OpenTofu on the Mac
+# verifies the host's API certificate without PROXMOX_VE_INSECURE. Runs on the Proxmox host (the
+# fetch) and on the controller (the keychain). Only the add needs root: writing the System keychain
+# as the operator fails with "SecCertificateAddToKeychain: Write permissions error." (measured), so
+# that one task has become, with the Mac password asked once by --ask-become-pass.
+
+- name: CA from the Proxmox host to the controller
+  ansible.builtin.fetch:
+    src: "{{ controller_trust_source }}"
+    dest: "{{ controller_trust_ca_file | expanduser }}"
+    flat: true
+
+- name: The CA file on the controller
+  ansible.builtin.stat:
+    path: "{{ controller_trust_ca_file | expanduser }}"
+  delegate_to: localhost
+  register: controller_trust_ca_stat
+
+# A first --check run fetches nothing, so there is nothing to look up yet.
+- name: CA fingerprints (SHA-256 to find it, SHA-1 for the removal command)
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    openssl x509 -in {{ controller_trust_ca_file | expanduser | quote }} -outform der | shasum -a 256 | cut -d' ' -f1;
+    openssl x509 -in {{ controller_trust_ca_file | expanduser | quote }} -outform der | shasum -a 1 | cut -d' ' -f1
+  args:
+    executable: /bin/bash
+  delegate_to: localhost
+  register: controller_trust_hashes
+  changed_when: false
+  check_mode: false
+  when: controller_trust_ca_stat.stat.exists
+
+- name: Certificates in the keychain now
+  ansible.builtin.command:
+    argv: [security, find-certificate, -a, -Z, "{{ controller_trust_keychain | expanduser }}"]
+  delegate_to: localhost
+  register: controller_trust_keychain_now
+  changed_when: false
+  check_mode: false
+  when: controller_trust_ca_stat.stat.exists
+
+# -d: admin trust settings (every user on the Mac), -r trustRoot, -p ssl: TLS server checks only.
+- name: Trust the CA for TLS (as root)
+  ansible.builtin.command:
+    argv:
+      - security
+      - add-trusted-cert
+      - -d
+      - -r
+      - trustRoot
+      - -p
+      - "{{ controller_trust_policy }}"
+      - -k
+      - "{{ controller_trust_keychain | expanduser }}"
+      - "{{ controller_trust_ca_file | expanduser }}"
+  delegate_to: localhost
+  become: true
+  changed_when: true
+  when:
+    - controller_trust_ca_stat.stat.exists
+    - "('SHA-256 hash: ' ~ (controller_trust_hashes.stdout_lines[0] | upper)) not in controller_trust_keychain_now.stdout"
+
+- name: Proof
+  ansible.builtin.debug:
+    msg: >-
+      CA SHA-256 {{ controller_trust_hashes.stdout_lines[0] | upper }} is in {{ controller_trust_keychain | expanduser }},
+      trusted for {{ controller_trust_policy }}. To remove it:
+      sudo security remove-trusted-cert -d {{ controller_trust_ca_file | expanduser }};
+      sudo security delete-certificate -Z {{ controller_trust_hashes.stdout_lines[1] | upper }}
+      {{ controller_trust_keychain | expanduser }}
+  when: controller_trust_ca_stat.stat.exists

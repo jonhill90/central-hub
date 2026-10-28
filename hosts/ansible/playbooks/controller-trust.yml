@@ -1,0 +1,12 @@
+---
+# The Proxmox host's CA trusted on the macOS controller, so OpenTofu verifies the host's API
+# certificate (README "Proxmox CA on the controller"). Asks for the Mac password once (become).
+#   ansible-playbook -i inventories/home/ playbooks/controller-trust.yml --tags trust --check --diff
+#   ansible-playbook -i inventories/home/ playbooks/controller-trust.yml --tags trust --ask-become-pass
+- name: Proxmox CA on the controller
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  roles:
+    - role: controller_trust
+      tags: [trust]
