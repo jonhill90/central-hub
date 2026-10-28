@@ -37,6 +37,14 @@ spec:
     - group: "{{ item.group }}"
       kind: {{ item.kind }}
 {% endfor %}
+  # The allow list above names no Namespace, so the namespaces the cluster runs on are denied by
+  # name: the project can't create, relabel or prune them.
+  clusterResourceBlacklist:
+{% for name in k8s_gitops_project_denied_namespace_names %}
+    - group: ""
+      kind: Namespace
+      name: "{{ name }}"
+{% endfor %}
 {% if k8s_gitops_sync_paused | bool %}
   # The pause switch: a deny window that is always active stops automated and manual syncs.
   syncWindows:

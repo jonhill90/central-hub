@@ -24,6 +24,8 @@ k8s_gitops_project_denied_namespaces: [kube-system, argocd]
 # Cluster-scoped kinds the project may create (an allow list). Each new kind is a PR.
 k8s_gitops_project_cluster_kinds:
   - {group: "", kind: Namespace}
+# Namespace objects the project may never create, change or prune (names may use * wildcards).
+k8s_gitops_project_denied_namespace_names: ["kube-*", argocd]
 # The pause switch for gate item 5's suspend test and for break-glass: true adds a deny sync
 # window that is always active, so Argo CD changes nothing until it is false again.
 k8s_gitops_sync_paused: false

@@ -29,6 +29,11 @@ argument_specs:
         elements: dict
         default: [{group: "", kind: Namespace}]
         description: "Cluster-scoped kinds the project may create, as {group, kind}."
+      k8s_gitops_project_denied_namespace_names:
+        type: list
+        elements: str
+        default: ["kube-*", argocd]
+        description: Namespace objects the project may never create, change or prune.
       k8s_gitops_sync_paused:
         type: bool
         default: false

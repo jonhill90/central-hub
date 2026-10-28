@@ -6,7 +6,7 @@ trigger: on request; when the normal path is broken or a change must stop now
 runner: the owner
 outcome: the emergency change is made, the normal path is back, and the use is recorded in the owner's own words where no agent can write as the owner
 needs: the owner's own GitHub login (repository admin); SSH to the control-plane node through the Proxmox host; the Proxmox root@pam password and its second factor from the password manager
-private-values: [github-owner-login-2fa, control-plane-ssh-key, root-pam-password, root-pam-recovery-keys]
+private-values: [github-owner-login-2fa, control-plane-ssh-key, root-pam-password, root-pam-recovery-keys, argocd-admin-password]
 files: [hosts/ansible/playbooks/k8s-gitops.yml, hosts/ansible/roles/k8s_gitops/defaults/main.yml]
 last-tested:
 superseded-by:
@@ -18,7 +18,7 @@ superseded-by:
 
 ## Before you start
 
-A break-glass path is one kept for emergencies only, when the normal way in can't be used, never for everyday work (glossary, "break-glass account"). This system has four:
+A break-glass path is one kept for emergencies only, when the normal way in can't be used, never for everyday work (glossary, "break-glass account"). This system has five:
 
 | Path | What it gets past | Normal path it replaces |
 |---|---|---|
@@ -26,9 +26,10 @@ A break-glass path is one kept for emergencies only, when the normal way in can'
 | B. Pause Argo CD | every sync from `main` to c1 | Argo CD applying `main` |
 | C. The admin kubeconfig on the control-plane node | RBAC | the owner's own least-privilege user (D-0022 rule 3) |
 | D. `root@pam` on the Proxmox host | the host's own logins | the owner's day-to-day admin login |
+| E. Argo CD's local `admin` account | Argo CD's sign-in | sign-in through the lab's identity provider |
 
 - Use the smallest path that fixes the problem. Pausing Argo CD (B) stops a bad change reaching c1 without touching GitHub.
-- Only the owner runs these steps. An agent never turns a ruleset off, and agents can't: their GitHub credential has no Administration right, and reading a ruleset's history returns 403 to them (measured 2026-10-28, RB-0093).
+- Only the owner runs these steps. An agent never turns a ruleset off. Reading a ruleset's history returns 403 to agents (measured 2026-10-28, RB-0093), but whether their credential could change a ruleset is not known until Foundation check V8, so treat it as possible.
 - Stop if you can't say in one line what is broken and which path fixes it.
 
 ## Steps
@@ -39,7 +40,7 @@ A break-glass path is one kept for emergencies only, when the normal way in can'
 
 2. Take the path.
    - **A. GitHub ruleset.** In the repository's Settings, Rules, Rulesets, open the ruleset, set Enforcement status to Disabled and save. Make the one change. Set it back to Active and save.
-     why: the ruleset has no bypass actors, so turning it off is the only way past it (Foundation proposal §3.4).
+     why: `protect-main` has no bypass actors, so turning it off is the only way past it (Foundation proposal §3.4). A review-only ruleset with the owner's bypass, if added for gate item 1, needs no break-glass for the owner's own PRs.
      expect: the ruleset shows Active again.
    - **B. Pause Argo CD.** Set `k8s_gitops_sync_paused: true` in the inventory and run `ansible-playbook playbooks/k8s-gitops.yml --tags source` from `hosts/ansible`. To resume, set it to `false` and run the same command.
      why: it adds a deny sync window that is always active, so Argo CD syncs nothing while it is on (Argo CD sync windows; role `k8s_gitops`).
@@ -51,6 +52,9 @@ A break-glass path is one kept for emergencies only, when the normal way in can'
    - **D. Proxmox `root@pam`.** Log in to the Proxmox web UI or console as `root@pam` with its password and second factor.
      ※ [Set up a Proxmox VE host, step 4](set-up-proxmox-host.md#4-break-glass-login-and-the-admins-group)
      expect: the Datacenter view.
+   - **E. Argo CD `admin`.** Sign in to the Argo CD UI as `admin` with the password from the password manager.
+     why: the local admin works when single sign-on doesn't (D-0023 rule 6 keeps its password out of the cluster).
+     expect: the Applications page.
 
 3. Put the normal path back, then write the end line in the project chat: what was changed, and the time the normal path was back.
    why: an emergency path left open is a standing hole, and the end line closes the record from step 1.

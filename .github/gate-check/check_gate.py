@@ -24,7 +24,7 @@ BANNED_TRIGGERS = {"pull_request_target", "workflow_run", "issue_comment", "issu
 READ_ONLY = {"read", "none"}
 SHA_PIN = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 IMAGE_AUTOMATION = re.compile(
-    r"argocd-image-updater|kind:\s*(ImageUpdateAutomation|ImagePolicy|ImageRepository)\b"
+    r"argocd-image-updater|kind:\s*[\"']?(ImageUpdateAutomation|ImagePolicy|ImageRepository)\b"
 )
 
 
@@ -45,7 +45,8 @@ def check_workflow(path):
     names = set(triggers) if isinstance(triggers, (dict, list)) else {triggers}
     fails += [f"{path}: trigger {t}" for t in sorted(names & BANNED_TRIGGERS)]
     fails += permission_failures(f"{path}: top level", doc.get("permissions"))
-    if "secrets." in text:
+    # Any use of the secrets context: secrets.X, secrets['X'] or toJSON(secrets).
+    if re.search(r"\bsecrets\b\s*[.\[)]", text):
         fails.append(f"{path}: reads a secret")
     for job_name, job in (doc.get("jobs") or {}).items():
         where = f"{path}: job {job_name}"

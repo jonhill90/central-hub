@@ -66,4 +66,16 @@ fresh
 printf 'url: https://example.invalid/argocd-image-updater/install.yaml\n' > "$work/repo/hosts/ansible/roles/k8s_gitops/templates/y.yml"
 expect fail "the Argo CD Image Updater (item 6)"
 
+fresh
+sed -i "0,/        env:/s//        env:\n          TOKEN: \${{ secrets['SOME_TOKEN'] }}/" "$work/repo/$wf"
+expect fail "a secret read by index"
+
+fresh
+sed -i '0,/        env:/s//        env:\n          ALL: ${{ toJSON(secrets) }}/' "$work/repo/$wf"
+expect fail "every secret read at once"
+
+fresh
+printf 'apiVersion: image.toolkit.fluxcd.io/v1\nkind: "ImagePolicy"\n' > "$work/repo/hosts/ansible/roles/k8s_gitops/templates/z.yaml.j2"
+expect fail "a quoted image automation kind (item 6)"
+
 exit $failed

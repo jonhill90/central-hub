@@ -13,7 +13,7 @@ superseded-by:
 
 ## What and why
 
-c1 runs Argo CD with no source: nothing on the cluster reads this repository (D-0023 rule 4). AGENTS.md lists 7 things that must be true and recorded before any cluster reads it, because a GitOps engine applies whatever lands on `main`. Today an agent acts on GitHub as the owner, so GitHub can't tell the owner's approval from an agent's, and an agent's merge could change a live cluster. On 2026-10-28 the owner chose to keep the gate: Argo CD stays idle until all 7 items are recorded.
+c1 runs Argo CD with no source: nothing on the cluster reads this repository (D-0023 rule 4). AGENTS.md lists 7 things that must be true and recorded before any cluster reads it, because a GitOps engine applies whatever lands on `main`. Today an agent acts on GitHub as the owner, so GitHub can't tell the owner's approval from an agent's, and an agent's merge could change a live cluster. On 2026-10-28 at 04:29 UTC the owner said yes to the proposed option on a decision card to keep the gate: Argo CD stays idle until all 7 items are recorded.
 
 This change makes each item true, records the evidence for each, and only then lets c1 read `kubernetes/clusters/c1/`. It serves PRD goal 5 (every human and agent has its own identity) and goal 6 (everything controllable from this repo), and the success signal "The Activation gate holds before any cluster reads this repo". It spans several sessions and crosses GitHub, the agents' environment and c1, so it gets a spec (D-0007 rule 2).
 
@@ -39,12 +39,12 @@ The plan behind the items is the Foundation proposal's §6 (v0.4.3, accepted for
 | Item | State | What this change adds | The owner's part |
 |---|---|---|---|
 | 1. Per-agent GitHub identities, with the owner's approval required by GitHub | Not true. Every agent session acts as the owner's account, and the agents' environment replaces any other GitHub key an agent sends. `protect-main` asks for 0 approvals. | The ruleset change (below) and a test plan, once the identity route is chosen | Choose the route; create the identity; change the settings |
-| 2. A verifier the PR can't edit | Partly. The four docs checks are required and pinned to the GitHub Actions app. The hosts and gate checks are not required. Agents can push workflow files, so a PR can change the checks that judge it. | The required-check list for the ruleset | Choose where the verifier lives; add the checks to the ruleset |
-| 3. No write tokens in PR code | True. Every workflow runs on `pull_request` with a read-only token, no secrets and no persisted checkout credential. | `.github/gate-check/check_gate.py`, run by the `gate` workflow on every PR, with its own test cases | Accept |
+| 2. A verifier the PR can't edit | Partly. The four docs checks are required and pinned to the GitHub Actions app. The hosts and gate checks are not required. Agents can push workflow files, so a PR can change the checks that judge it. On a public repository GitHub can't block pushes to workflow files with a ruleset. | Nothing yet: making checks required does not meet this item while the checks run from the PR's own files | Choose where the verifier lives (another repository, pinned by commit); add the checks to the ruleset |
+| 3. No write tokens in PR code | True. Every workflow runs PR code only on `pull_request` (the docs workflow's weekly schedule checks out `main`), with a read-only token, no secrets and no persisted checkout credential. | `.github/gate-check/check_gate.py`, run by the `gate` workflow on every PR, with its own test cases | Read the three Actions settings agents can't read; accept |
 | 4. A pinned, no-writer GitOps engine install | True. Argo CD v3.5.5 from the upstream manifest, checked by SHA-256, no git credential (D-0023). | Evidence only | Accept |
-| 5. Defined deploys | Not true. The Application would use Argo CD's `default` project, which allows any repository, destination and kind, and the application controller's ClusterRole allows every verb on every resource. | AppProject `c1` (central-hub only, this cluster only, no `kube-system` or `argocd`, cluster-scoped kinds by allow list); `default` emptied; a pause switch (`k8s_gitops_sync_paused`) | Choose how far to cut the controller's own rights |
+| 5. Defined deploys | Not true. The Application would use Argo CD's `default` project, which allows any repository, destination and kind, and the application controller's ClusterRole allows every verb on every resource. | AppProject `c1` (central-hub only, this cluster only, no `kube-system` or `argocd`, cluster-scoped kinds by allow list, the cluster's own Namespace objects denied by name); `default` emptied; a pause switch (`k8s_gitops_sync_paused`) | Choose how far to cut the controller's own rights; which namespaces the project may write; whether images are pinned by digest |
 | 6. No image automation | True. The install has no Image Updater, and Flux's image controllers are deleted by the role's kustomization. | The same check as item 3 fails on any image automation | Accept |
-| 7. Break-glass recorded outside agents' reach, ruleset history confirmed | Partly. Agents get 403 on ruleset history. The admin kubeconfigs stay on the node (D-0022). | The runbook [Use break-glass access](../runbooks/use-break-glass-access.md) | Run the ruleset-history check once with the owner's own login; record each break-glass use in the project chat |
+| 7. Break-glass recorded outside agents' reach, ruleset history confirmed | Partly. Agents get 403 on ruleset history; whether their credential can change a ruleset is not known (Foundation V8). The admin kubeconfigs stay on the node (D-0022). | The runbook [Use break-glass access](../runbooks/use-break-glass-access.md) | Run the ruleset-history check once with the owner's own login; record each break-glass use in the project chat |
 
 ### Item 1: ruleset change, whichever identity route is chosen
 
@@ -57,10 +57,11 @@ That bypass is safe only when the owner's login is the only admin principal, so 
 
 ### Item 5: what the Argo CD limits are
 
-- **Project `c1`.** Source: central-hub only. Destination: this cluster, any namespace except `kube-system` and `argocd`. Cluster-scoped kinds: `Namespace` only; each new kind is a PR.
+- **Project `c1`.** Source: central-hub only. Destination: this cluster, any namespace except `kube-system` and `argocd`, checked for every namespaced object, not only the Application's destination. Cluster-scoped kinds: `Namespace` only, and never the Namespace objects `kube-*` or `argocd`; each new kind is a PR.
 - **`default` emptied.** As Argo CD's projects guide shows, so an Application without a project is refused.
 - **Pause switch.** `k8s_gitops_sync_paused: true` adds a deny sync window that is always active, so Argo CD syncs nothing until it is false again. This is the suspend half of item 5's "a tested suspend and recovery", and the cluster half of break-glass.
 - **Synced revision.** Each activation run and each sync test records the Application's synced commit and health in its run report, kept apart from `main`.
+- **Not yet covered.** The Foundation plan's item 5 also asks for external inputs pinned by digest or version, render, schema and policy checks in item 2's verifier, and readiness evidence. Each is added here before this spec is `done`, or the owner defers it in the decision log.
 
 ## Out of scope
 
@@ -71,26 +72,28 @@ That bypass is safe only when the owner's login is the only admin principal, so 
 
 ## Acceptance criteria
 
-The criteria below were written by the agent that wrote the gate check and the Argo CD limits. An agent that wrote neither still has to review them (D-0007 rule 4).
+The criteria below were first written by the agent that wrote the gate check and the Argo CD limits, then rewritten from an independent agent's review on 2026-10-28 (RB-0093 CHECK.md, fix 5). The owner's review still applies (D-0007 rule 4).
 
 ### Automated
 
 - [ ] `python3 .github/gate-check/check_gate.py .`: prints `gate: items 3 and 6 pass`.
-- [ ] `bash .github/gate-check/tests/test_check_gate.sh`: every case prints `ok`. The cases are a `pull_request_target` trigger, a write permission at the top and in a job, a checkout that keeps its token, an action pinned to a tag, a secret read, a Flux image automation object and the Argo CD Image Updater.
+- [ ] `bash .github/gate-check/tests/test_check_gate.sh`: every case prints `ok`. The cases include a `pull_request_target` trigger, write permissions at the top and in a job, a checkout that keeps its token, an action pinned to a tag, a secret read three ways, and Flux image automation and the Argo CD Image Updater.
 - [ ] `.github/hosts-check/run.sh manifests`: AppProject `c1` and the emptied `default`, with and without the pause switch, pass kubeconform against the pinned AppProject schema.
-- [ ] The `gate` workflow and the four `hosts` jobs are required checks on `main`, pinned to the GitHub Actions app (item 2).
 
 ### Manual (what the owner checks)
 
-- [ ] Item 1: an agent's commit and PR show the agent's identity, not the owner's; a PR an agent opened can't merge until the owner approves its last push; a PR with a failing required check can't merge, even through the owner's bypass (Foundation V12).
-- [ ] Item 2: a test PR that changes a check to always pass does not turn the required check green, or is refused at push.
-- [ ] Item 5, on c1 after the source is on: an Application aimed at another repository or at `kube-system` is refused; with the pause switch on, a new commit under `kubernetes/clusters/c1/` is not synced; with it off again, it syncs, and the run report records the synced commit.
-- [ ] Item 7: the owner reads `GET /repos/jonhill90/central-hub/rulesets/<id>/history` with their own login and it returns versions (Foundation V11); the runbook is followed once as a drill.
+- [ ] Item 1: an agent's commit and PR show the agent's identity, not the owner's; a PR an agent opened can't merge until the owner approves its last push; a PR with a failing required check can't merge, even through the owner's bypass (Foundation V12). The Foundation-era token is revoked.
+- [ ] Item 2: (a) the `gate`, `hosts` and docs checks are required on `main` and pinned to the GitHub Actions app; (b) a test PR that edits `check_gate.py` to always pass leaves the required check red or pending, because the check runs from a pinned revision outside the PR; (c) an agent's push that changes a file under `.github/workflows/` is refused by GitHub.
+- [ ] Item 3: for each required job's latest run, the "Set up job" log lists only `read` scopes under `GITHUB_TOKEN Permissions`; in Settings, Actions, the owner reads: default workflow permissions Read, "Allow GitHub Actions to create and approve pull requests" off, approval required for fork PRs from all outside contributors.
+- [ ] Item 4: the c1 install run shows `install.yaml`'s SHA-256 equal to the role's pin; no Secret in `argocd` has type label `repository` or `repo-creds`; every Argo CD pod is Ready.
+- [ ] Item 5, on c1 after the source is on: a manifest with `metadata.namespace: kube-system` or `argocd` fails its sync as not permitted; a `ClusterRoleBinding`, and a Namespace named `argocd`, fail as not permitted in project `c1`; with the pause on, the project shows the deny window Active, a manual sync is refused and a hand edit to a managed object is not reverted; with the pause off, the project has no sync window and the run report's synced commit equals `main`'s head.
+- [ ] Item 6: on c1, `kubectl get crd` lists nothing in `image.toolkit.fluxcd.io` and nothing from the Argo CD Image Updater.
+- [ ] Item 7: the owner reads the ruleset history with their own login and it returns versions (Foundation V11); the owner confirms their login is the only admin on the repository and that no local agent can reach it; path B of the runbook is run once on c1 as a drill.
 
 ## Decision log
 
-- 2026-10-28: the owner chose to keep the gate, so Argo CD on c1 stays with no source until all 7 items are recorded.
-- 2026-10-28: the agents' environment was measured to replace any GitHub key an agent sends with the owner's, which rules out per-agent GitHub Apps from cloud threads as they run today. The identity route is the owner's open question.
+- 2026-10-28 04:29 UTC: the owner said yes to keeping the gate, on a decision card in the GitOps thread, so Argo CD on c1 stays with no source until all 7 items are recorded.
+- 2026-10-28: in the agents' environment, a request sent with a made-up GitHub token still came back as the owner's account. A real App token was not tried; it is likely replaced the same way. The identity route is the owner's open question.
 
 ## Points to (read when)
 
