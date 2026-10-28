@@ -99,7 +99,7 @@
       failed_when: >-
         k8s_app_route_dns.rc != 0 or k8s_app_route_facts.stdout_lines[0] not in k8s_app_route_dns.stdout.split()
 
-    - name: route | https://{{ k8s_app_route_host }}{{ k8s_app_route_path }} answers with the app's page
+    - name: route | The app's page answers on its name, {{ k8s_app_route_host }}
       ansible.builtin.command: >-  # noqa: command-instead-of-module (curl's own trust store and -k rule, as in k8s_certs smoke)
         curl -sS -L --max-time 10 {{ '-k' if __issuer == 'letsencrypt-staging' else '' }}
         -w '\n%{http_code}' https://{{ k8s_app_route_host }}{{ k8s_app_route_path }}
@@ -116,7 +116,7 @@
 
     # Cilium's Envoy writes the default port into the redirect (measured for Argo CD: https://<name>:443/).
     - name: route | Plain HTTP for the name never serves the app
-      ansible.builtin.command: >-  # noqa: command-instead-of-module
+      ansible.builtin.command: >-  # noqa: command-instead-of-module (curl, as in the task above)
         curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' http://{{ k8s_app_route_host }}/
       delegate_to: "{{ k8s_app_route_proof_client }}"
       register: k8s_app_route_plain

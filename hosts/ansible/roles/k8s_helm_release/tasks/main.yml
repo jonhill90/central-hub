@@ -17,7 +17,7 @@
     content: "{{ k8s_helm_release_values | to_nice_yaml(indent=2) }}"
     mode: "0600"
 
-- name: helm | Release {{ k8s_helm_release_name }} now
+- name: helm | The release now, {{ k8s_helm_release_name }}
   ansible.builtin.command: >-
     /usr/local/bin/helm -n {{ k8s_helm_release_namespace }} list
     --filter ^{{ k8s_helm_release_name }}$ -o json
@@ -27,7 +27,7 @@
 
 # The values the release was last installed with (user-supplied only), compared as data, so key
 # order and formatting don't count as a change.
-- name: helm | Values {{ k8s_helm_release_name }} runs with
+- name: helm | Values the release runs with, {{ k8s_helm_release_name }}
   ansible.builtin.command: >-
     /usr/local/bin/helm -n {{ k8s_helm_release_namespace }} get values {{ k8s_helm_release_name }} -o json
   register: k8s_helm_release_running
