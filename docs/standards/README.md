@@ -43,3 +43,4 @@ The body holds the rule itself, worded with BCP 14 key words (RFC 2119, RFC 8174
 | STD-0002 | [IP address plan](0002-ip-address-plan.md) | active | every private IPv4 and IPv6 range used by the home lab, VPS providers, clouds and Kubernetes clusters | 8 Platform |
 | STD-0003 | [Version choice](0003-version-choice.md) | proposed | the version of every outside tool, package, chart or image that a runbook, code under `hosts/` or a cluster manifest installs or pins | 8 Platform |
 | STD-0004 | [Code under hosts/](0004-hosts-code.md) | active | how Terraform run folders and Ansible roles, playbooks and inventories under `hosts/` are written; where they sit is D-0011 | 8 Platform |
+| STD-0005 | [Tests for specs and hosts code](0005-tests.md) | proposed | how each acceptance criterion in a spec under `docs/specs/` names the test that proves it, and which lints and tests run on every PR that changes code under `hosts/` | 8 Platform |

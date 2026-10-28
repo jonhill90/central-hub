@@ -1,0 +1,9 @@
+---
+# Made-up values for rendering the Kubernetes templates in hosts/ansible/roles/ (STD-0005).
+# Not real: example.com is reserved for examples (RFC 2606) and 192.0.2.0/24 for documentation
+# (RFC 5737), so nothing private is written here (CLAUDE.md rule 4).
+k8s_certs_zone: example.com
+k8s_certs_acme_email: certs@example.com
+k8s_gateway_zone: example.com
+k8s_gateway_address: 192.0.2.10
+k8s_gitops_ui_zone: example.com
