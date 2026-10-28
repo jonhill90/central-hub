@@ -23,6 +23,8 @@ all:
           proxmox_backup_disk: ""   # the empty HDD, /dev/disk/by-id/<id> (whole disk)
           proxmox_firewall_enable: false   # true only after the first run's ruleset was read
           # proxmox_notify_endpoint: {type: <smtp|gotify|webhook|sendmail>, options: {...}}   # not picked yet
+          # playbooks/controller-trust.yml (README "Proxmox CA on the controller")
+          controller_trust_ca_file: ""   # path on the controller, e.g. ~/.config/central-hub/pve-root-ca.pem
     opnsense:
       hosts:
         opnsense_fw:

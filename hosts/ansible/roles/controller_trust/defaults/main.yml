@@ -1,0 +1,12 @@
+---
+# Not private. controller_trust_ca_file (where the CA lands on the controller) has no default: it
+# is a path on the operator's Mac, set in the filled-in inventory.
+
+# The Proxmox host's own CA, the one that signs its API certificate (pve-ssl.pem).
+controller_trust_source: /etc/pve/pve-root-ca.pem
+# macOS admin trust settings and the System keychain: Go programs on macOS (OpenTofu's bpg/proxmox
+# provider, go1.26) check certificates through the system's verifier, which ignores SSL_CERT_FILE.
+controller_trust_keychain: /Library/Keychains/System.keychain
+# Trust it for TLS server checks only (`security add-trusted-cert -p ssl`), not for code signing,
+# mail or anything else.
+controller_trust_policy: ssl

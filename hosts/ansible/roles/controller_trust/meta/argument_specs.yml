@@ -1,0 +1,15 @@
+---
+# Inputs of the controller_trust role.
+argument_specs:
+  main:
+    short_description: The Proxmox host's CA trusted on the macOS controller, for TLS only, so OpenTofu verifies the host's API
+    options:
+      # Private, through the inventory.
+      controller_trust_ca_file:
+        type: str
+        required: true
+        description: Where the CA is saved on the controller, for example ~/.config/central-hub/pve-root-ca.pem.
+      # Defaults in defaults/main.yml
+      controller_trust_source: {type: str, default: /etc/pve/pve-root-ca.pem, description: The CA file on the Proxmox host.}
+      controller_trust_keychain: {type: str, default: /Library/Keychains/System.keychain, description: The macOS keychain the CA goes in.}
+      controller_trust_policy: {type: str, default: ssl, description: "The one trust policy it gets (security add-trusted-cert -p)."}
