@@ -8,6 +8,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 |---|---|---|
 | [Build a single-node kubeadm cluster by hand (CKA practice)](build-kubeadm-cluster.md) | manual | draft |
 | [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) | manual | draft |
+| [Use break-glass access](use-break-glass-access.md) | manual | draft |
 
 ## Template
 

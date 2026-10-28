@@ -6,6 +6,8 @@ k8s_gateway gateway.yaml.j2 gateway-http.yaml {"k8s_gateway_https":false}
 k8s_gateway gateway.yaml.j2 gateway-https.yaml {"k8s_gateway_https":true}
 k8s_gateway smoke.yaml.j2 gateway-smoke.yaml {}
 k8s_gitops source-argocd.yaml.j2 gitops-source-argocd.yaml {"k8s_gitops_engine":"argocd"}
+k8s_gitops project-argocd.yaml.j2 gitops-project-argocd.yaml {"k8s_gitops_engine":"argocd"}
+k8s_gitops project-argocd.yaml.j2 gitops-project-argocd-paused.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_sync_paused":true}
 k8s_gitops source-flux.yaml.j2 gitops-source-flux.yaml {"k8s_gitops_engine":"flux"}
 k8s_gitops argocd-ui-route.yaml.j2 gitops-ui-route.yaml {"k8s_gitops_engine":"argocd"}
 k8s_gitops argocd-ui-route.yaml.j2 gitops-ui-route-no-redirect.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_ui_https_redirect":false}

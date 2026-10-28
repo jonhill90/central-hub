@@ -1,5 +1,26 @@
 ---
 # Activation gate (CLAUDE.md): all 7 items true and recorded before this runs.
+# Argo CD: the projects first (gate item 5), so the Application never lands in the open `default`.
+- name: source | Project manifest
+  ansible.builtin.template:
+    src: project-argocd.yaml.j2
+    dest: "{{ k8s_gitops_dir }}/project.yaml"
+    mode: "0600"
+  when: k8s_gitops_engine != 'flux'
+
+- name: source | Projects differ from the cluster?
+  ansible.builtin.command: kubectl diff -f {{ k8s_gitops_dir }}/project.yaml
+  register: k8s_gitops_project_diff
+  changed_when: false
+  failed_when: k8s_gitops_project_diff.rc > 1
+  check_mode: false
+  when: k8s_gitops_engine != 'flux'
+
+- name: source | Apply the projects
+  ansible.builtin.command: kubectl apply -f {{ k8s_gitops_dir }}/project.yaml
+  when: k8s_gitops_engine != 'flux' and k8s_gitops_project_diff.rc != 0
+  changed_when: true
+
 - name: source | Source manifest
   ansible.builtin.template:
     src: "source-{{ 'flux' if k8s_gitops_engine == 'flux' else 'argocd' }}.yaml.j2"

@@ -1,0 +1,22 @@
+# Activation gate checks (docs/specs/2026-10-activation-gate.md): item 3, no write tokens in PR
+# code, and item 6, no image automation. Read-only token, no secrets, every action pinned to a
+# full commit SHA, Python packages installed with hashes.
+name: gate
+on:
+  pull_request:            # never pull_request_target (CLAUDE.md rule 5)
+permissions:
+  contents: read
+jobs:
+  gate-items:              # items 3 and 6, with the check's own test cases
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Python packages
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --require-hashes -r .github/hosts-check/requirements.txt
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      - run: python3 .github/gate-check/check_gate.py .
+      - run: bash .github/gate-check/tests/test_check_gate.sh

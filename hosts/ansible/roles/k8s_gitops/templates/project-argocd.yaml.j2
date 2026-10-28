@@ -1,0 +1,48 @@
+# {{ ansible_managed }}
+# Activation gate item 5, defined deploys. Argo CD's `default` project allows any repository, any
+# destination and every kind, so it is emptied as Argo CD's projects guide shows, and the cluster's
+# Application uses its own project, limited to central-hub, this cluster and the kinds listed in
+# k8s_gitops_project_cluster_kinds.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  sourceRepos: []
+  sourceNamespaces: []
+  destinations: []
+  namespaceResourceBlacklist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ k8s_gitops_project }}
+  namespace: argocd
+spec:
+  description: Desired state of cluster {{ k8s_gitops_project }} from central-hub {{ k8s_gitops_source_path }}
+  sourceRepos:
+    - {{ k8s_gitops_source_url }}
+  destinations:
+{% for namespace in k8s_gitops_project_denied_namespaces %}
+    - server: https://kubernetes.default.svc
+      namespace: "!{{ namespace }}"
+{% endfor %}
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+{% for item in k8s_gitops_project_cluster_kinds %}
+    - group: "{{ item.group }}"
+      kind: {{ item.kind }}
+{% endfor %}
+{% if k8s_gitops_sync_paused | bool %}
+  # The pause switch: a deny window that is always active stops automated and manual syncs.
+  syncWindows:
+    - kind: deny
+      schedule: "* * * * *"
+      duration: 1h
+      applications: ["*"]
+      manualSync: false
+{% endif %}

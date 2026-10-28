@@ -16,6 +16,18 @@ k8s_gitops_source_branch: main
 k8s_gitops_source_path: kubernetes/clusters/c1
 k8s_gitops_source_interval: 5m
 
+# Activation gate item 5, defined deploys (Argo CD only). The cluster's Application uses its own
+# AppProject, limited to the source above and this cluster; Argo CD's `default` project is emptied.
+k8s_gitops_project: c1
+# Namespaces the project may never deploy into.
+k8s_gitops_project_denied_namespaces: [kube-system, argocd]
+# Cluster-scoped kinds the project may create (an allow list). Each new kind is a PR.
+k8s_gitops_project_cluster_kinds:
+  - {group: "", kind: Namespace}
+# The pause switch for gate item 5's suspend test and for break-glass: true adds a deny sync
+# window that is always active, so Argo CD changes nothing until it is false again.
+k8s_gitops_sync_paused: false
+
 # The Argo CD web UI through the shared Gateway (tag ui), a follow-on to BUILD-PATH S12: the owner
 # said (2026-10-27 03:52 UTC, relayed) the UI waits until DNS is up, with no port-forward. On, it
 # serves https://<name>.apps.<cluster>.<env>.<zone>/ on Gateway `apps`'s HTTPS listener only, ends

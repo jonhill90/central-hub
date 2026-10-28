@@ -18,6 +18,21 @@ argument_specs:
       k8s_gitops_source_branch: {type: str, default: main, description: Branch the cluster follows (D-0002).}
       k8s_gitops_source_path: {type: str, default: kubernetes/clusters/c1, description: Folder the cluster reads.}
       k8s_gitops_source_interval: {type: str, default: 5m, description: How often the engine checks git.}
+      k8s_gitops_project: {type: str, default: c1, description: "Argo CD AppProject for the cluster's Application (Activation gate item 5)."}
+      k8s_gitops_project_denied_namespaces:
+        type: list
+        elements: str
+        default: [kube-system, argocd]
+        description: Namespaces the project may never deploy into.
+      k8s_gitops_project_cluster_kinds:
+        type: list
+        elements: dict
+        default: [{group: "", kind: Namespace}]
+        description: "Cluster-scoped kinds the project may create, as {group, kind}."
+      k8s_gitops_sync_paused:
+        type: bool
+        default: false
+        description: "Add an always-active deny sync window, so Argo CD syncs nothing (pause switch)."
       k8s_gitops_ui_route:
         type: bool
         default: false
