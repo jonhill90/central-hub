@@ -1,10 +1,9 @@
 ---
-# BUILD-PATH S15 (BL-0019): sign-in for lab apps on cluster c1. Keycloak is an agent pick from the
-# research batch RB-0087 (Library research/central-identity/): fully Apache-2.0, while authentik
-# keeps agent accounts and mTLS client auth in its paid tier. The owner was asked Keycloak or
-# authentik on 2026-10-27 at 04:14 UTC and has not answered; everything apps see is plain OIDC, so
-# a swap changes this role and the three endpoint URLs in k8s_observability, nothing in the apps.
-# Listed in hosts/AGENT-PICKS.md. Every input is listed here (Red Hat CoP rule).
+# BUILD-PATH S15 (BL-0019): sign-in for lab apps on cluster c1. The owner said yes to the proposed
+# Keycloak on 2026-10-28 (D-0025), after research batch RB-0087 (Library research/central-identity/):
+# fully Apache-2.0, while authentik keeps agent accounts and mTLS client auth in its paid tier.
+# Everything apps see is plain OIDC, so a swap changes this role and the three endpoint URLs in
+# k8s_observability, nothing in the apps. How it is installed is listed in hosts/AGENT-PICKS.md. Every input is listed here (Red Hat CoP rule).
 
 # Keycloak and its operator, the newest release at least two weeks old on 2026-10-27 (26.8.1, 13
 # October 2026, STD-0003 rule 1). The upstream manifests are pinned by sha256 in vars/main.yml.

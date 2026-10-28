@@ -9,16 +9,14 @@ consulted: []
 waits-on: [D-0011, D-0021, BL-0019]
 supersedes: []
 superseded-by:
-revisit-when: the owner answers the open question Keycloak or authentik; c1 gets a StorageClass (BUILD-PATH S17), so the database can move off the static local volume; or machine and agent identities (RB-0087) need features Keycloak lacks
+revisit-when: c1 gets a StorageClass (BUILD-PATH S17), so the database can move off the static local volume; or machine and agent identities (RB-0087) need features Keycloak lacks
 ---
 
 # Use Keycloak, reached by apps only over OIDC, for sign-in to lab apps on c1
 
 ## Context and Problem Statement
 
-BUILD-PATH S15 asks for sign-in for lab apps on c1 (BL-0019). Research batch RB-0087 (Library `research/central-identity/`) compared self-hosted identity providers for people, machines and agents, and made no pick. On 2026-10-27 at 04:14 UTC the owner was asked Keycloak or authentik, and the question is still open. The owner asked for the build to keep moving, and the lab is greenfield, so Keycloak was built as an agent pick (hosts/AGENT-PICKS.md picks 96-102). Research batch RB-0092 added how Keycloak is installed on c1.
-
-This record is proposed. If the owner picks authentik, this record is rejected and a new one records that choice.
+BUILD-PATH S15 asks for sign-in for lab apps on c1 (BL-0019). Research batch RB-0087 (Library `research/central-identity/`) compared self-hosted identity providers for people, machines and agents, and made no pick. On 2026-10-27 at 04:14 UTC the owner was asked Keycloak or authentik, and on 2026-10-28 at 02:17 UTC the owner said yes to the proposed Keycloak. How it is installed and wired is agent picks 96 and 98-102 in hosts/AGENT-PICKS.md. Research batch RB-0092 added how Keycloak is installed on c1.
 
 ## Decision Drivers
 
@@ -35,7 +33,7 @@ This record is proposed. If the owner picks authentik, this record is rejected a
 
 ## Decision Outcome
 
-Proposed option: **1**, built as an agent pick while the owner's answer is open.
+Proposed option: **1**. The owner said yes to the proposed Keycloak on 2026-10-28 at 02:17 UTC.
 
 ```mermaid
 flowchart LR
@@ -56,7 +54,6 @@ flowchart LR
 
 ### Not decided here
 
-- Keycloak or authentik for the long term (open with the owner).
 - Machine and agent identities (RB-0087 M2-M6), and Kubernetes API sign-in with OIDC.
 - Multi-factor sign-in and Argo CD's sign-in through Keycloak.
 
@@ -70,4 +67,4 @@ flowchart LR
 ## More Information
 
 - Research: RB-0087 (Library `research/central-identity/`), RB-0092 rows L20-L29.
-- Agent picks 96-102 in `hosts/AGENT-PICKS.md`.
+- Agent picks 96 and 98-102 in `hosts/AGENT-PICKS.md`.
