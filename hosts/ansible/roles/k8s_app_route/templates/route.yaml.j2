@@ -1,0 +1,46 @@
+# {{ ansible_managed }}
+# {{ k8s_app_route_name }} through the shared Gateway. TLS ends at the Gateway's HTTPS listener with
+# the wildcard certificate; the Gateway talks plain HTTP to the Service. sectionName pins the app to
+# the https listener, so it is never served over plain HTTP (same shape as k8s_gitops ui).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ k8s_app_route_name }}
+  namespace: {{ k8s_app_route_namespace }}
+spec:
+  parentRefs:
+    - name: {{ k8s_app_route_gateway_name }}
+      namespace: {{ k8s_app_route_gateway_namespace }}
+      sectionName: https
+  hostnames:
+    - {{ k8s_app_route_host }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ k8s_app_route_service }}
+          port: {{ k8s_app_route_port }}
+{% if k8s_app_route_https_redirect %}
+---
+# Plain HTTP for the name gets a 301 to the same URL on https://; no backend.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ k8s_app_route_name }}-redirect
+  namespace: {{ k8s_app_route_namespace }}
+spec:
+  parentRefs:
+    - name: {{ k8s_app_route_gateway_name }}
+      namespace: {{ k8s_app_route_gateway_namespace }}
+      sectionName: http
+  hostnames:
+    - {{ k8s_app_route_host }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+{% endif %}

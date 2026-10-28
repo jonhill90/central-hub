@@ -1,0 +1,26 @@
+---
+# Render one Kubernetes template from hosts/ansible/roles/ the way its role would: the role's
+# defaults and vars, the made-up values in values.yml, and the case's own settings as extra vars.
+# run.sh runs it once per line of cases.txt, so no case's settings leak into the next.
+#   ansible-playbook render.yml -e role=<role> -e template=<file> -e dest=<file> [-e '<json>']
+- name: Render a Kubernetes template
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    roles_dir: "{{ playbook_dir }}/../../../hosts/ansible/roles"
+  tasks:
+    - name: Load the role's defaults and vars
+      ansible.builtin.include_vars:
+        file: "{{ item }}"
+      loop:
+        - "{{ playbook_dir }}/values.yml"
+        - "{{ roles_dir }}/{{ role }}/defaults/main.yml"
+        - "{{ roles_dir }}/{{ role }}/vars/main.yml"
+      when: item is file
+
+    - name: Render the template
+      ansible.builtin.template:
+        src: "{{ roles_dir }}/{{ role }}/templates/{{ template }}"
+        dest: "{{ dest }}"
+        mode: "0644"

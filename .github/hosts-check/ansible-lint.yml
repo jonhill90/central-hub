@@ -1,0 +1,14 @@
+# ansible-lint settings for hosts/ansible/, passed with -c (no settings file in the repo root,
+# D-0019 rule 4). The strictest profile, production.
+profile: production
+offline: true
+
+# Skipped until a later change renames them (an agent pick, the owner's review pending): 121 task
+# names that do not start with a capital letter (STD-0004's "<part> | <what>" names), and 34 role
+# inputs whose names do not start with the full role name (k8s_cp_* in k8s_control_plane).
+skip_list:
+  - name[casing]
+  - var-naming[no-role-prefix]
+
+exclude_paths:
+  - collections/

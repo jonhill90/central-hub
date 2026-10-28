@@ -1,0 +1,39 @@
+---
+# BUILD-PATH S15 (BL-0019): sign-in for lab apps on cluster c1. The owner said yes to the proposed
+# Keycloak on 2026-10-28 (D-0025), after research batch RB-0087 (Library research/central-identity/):
+# fully Apache-2.0, while authentik keeps agent accounts and mTLS client auth in its paid tier.
+# Everything apps see is plain OIDC, so a swap changes this role and the three endpoint URLs in
+# k8s_observability, nothing in the apps. How it is installed is listed in hosts/AGENT-PICKS.md. Every input is listed here (Red Hat CoP rule).
+
+# Keycloak and its operator, the newest release at least two weeks old on 2026-10-27 (26.8.1, 13
+# October 2026, STD-0003 rule 1). The upstream manifests are pinned by sha256 in vars/main.yml.
+k8s_identity_version: 26.8.1
+k8s_identity_namespace: identity
+
+# The Keycloak object's name, also the first label of its hostname: https://sso.apps.c1.prod.<zone>/.
+# Named by job, so the issuer URL can stay when the provider changes.
+k8s_identity_name: sso
+# Private, no default; the inventory template sets it to k8s_gateway_zone.
+# k8s_identity_zone: <zone>
+
+# The realm lab apps sign in to.
+k8s_identity_realm: lab
+
+# The owner's account in that realm. The user name is private, no default. Its first password is
+# random, in Secret identity/realm-lab-secrets key OWNER_INITIAL_PASSWORD, and Keycloak makes the
+# owner change it at the first sign-in (hosts/ansible/README.md "Sign-in on c1"). The email is
+# optional; without one, Grafana uses <user name>@lab.invalid (k8s_observability).
+# k8s_identity_owner_username: <name>
+k8s_identity_owner_email: ""
+
+# Grafana's client (k8s_observability). Its secret is copied to Secret <metrics ns>/grafana-sso.
+k8s_identity_grafana_name: grafana
+k8s_identity_grafana_namespace: monitoring
+
+# Keycloak's database: PostgreSQL 18.6 (2026-08-13; Keycloak 26.8 tests 18), one pod. c1 has no
+# StorageClass yet (storage is BUILD-PATH S17), so its data sits on a static local volume: a folder
+# on one worker, kept when the pod or the volume object is deleted (reclaim policy Retain).
+k8s_identity_postgres_image: docker.io/library/postgres:18.6
+k8s_identity_db_host: "{{ groups['k8s_workers'] | first }}"
+k8s_identity_db_path: /var/lib/central-hub/identity-postgres
+k8s_identity_db_size: 2Gi

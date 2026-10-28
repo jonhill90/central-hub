@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+# The upstream Keycloak operator files for {{ k8s_identity_version }} (sha256-checked), in namespace
+# {{ k8s_identity_namespace }} instead of upstream's "keycloak". Same transformer as upstream's own
+# kustomization.yml, so the ClusterRoleBinding's ServiceAccount moves with it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: {{ k8s_identity_namespace }}
+resources:
+{% for f in k8s_identity_operator_files %}
+  - {{ f.name }}
+{% endfor %}
+transformers:
+  - |-
+    apiVersion: builtin
+    kind: NamespaceTransformer
+    metadata:
+      name: identity-namespace
+      namespace: {{ k8s_identity_namespace }}
+    setRoleBindingSubjects: allServiceAccounts
+    fieldSpecs:
+    - path: metadata/namespace
+      create: true

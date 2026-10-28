@@ -1,0 +1,8 @@
+---
+# One pinned Helm release with its values written as a file on the node (BUILD-PATH S15). Included
+# by k8s_observability and k8s_identity; not run on its own. A run installs or upgrades only when
+# the chart version or the values differ from what the cluster runs, so a second run changes
+# nothing (STD-0004 Ansible rule 6). The calling role sets every input except these two.
+# k8s_helm_release_name, _namespace, _repo_name, _repo_url, _chart, _version, _values
+k8s_helm_release_timeout: 10m
+k8s_helm_release_dir: /root/central-hub/helm

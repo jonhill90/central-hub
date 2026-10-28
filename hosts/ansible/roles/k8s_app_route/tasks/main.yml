@@ -1,0 +1,137 @@
+---
+# Preconditions: the Gateway's HTTPS listener is programmed and its certificate Secret exists.
+# Only the Secret's name and issuer annotation are read, never its data.
+- name: route | The certificate's Secret is there
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_app_route_gateway_namespace }} get secret {{ k8s_app_route_tls_secret }} -o name
+  register: k8s_app_route_tls_present
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: route | Stop if the Secret is missing
+  ansible.builtin.assert:
+    that: [k8s_app_route_tls_present.rc == 0]
+    fail_msg: >-
+      Secret {{ k8s_app_route_gateway_namespace }}/{{ k8s_app_route_tls_secret }} doesn't exist.
+      Issue the certificate first: playbooks/k8s-certs.yml --tags issue with k8s_certs_issue true.
+    quiet: true
+
+- name: route | The Gateway's HTTPS listener is programmed
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_app_route_gateway_namespace }} get gateway {{ k8s_app_route_gateway_name }}
+    -o jsonpath='{.status.listeners[?(@.name=="https")].conditions[?(@.type=="Programmed")].status}'
+  register: k8s_app_route_listener
+  changed_when: false
+  failed_when: k8s_app_route_listener.rc != 0 or k8s_app_route_listener.stdout != 'True'
+  check_mode: false
+
+- name: route | Folder for the manifests
+  ansible.builtin.file: {path: "{{ k8s_app_route_manifest | dirname }}", state: directory, mode: "0700"}
+  check_mode: false
+
+- name: route | Route manifest for {{ k8s_app_route_name }}
+  ansible.builtin.template:
+    src: route.yaml.j2
+    dest: "{{ k8s_app_route_manifest }}"
+    mode: "0600"
+
+# kubectl diff exits 0 with no difference, 1 with one, more on an error. A first --check run writes
+# no manifest, so the diff is skipped and the apply counts as needed.
+- name: route | Route manifest on the node?
+  ansible.builtin.stat: {path: "{{ k8s_app_route_manifest }}"}
+  register: k8s_app_route_manifest_stat
+
+- name: route | Routes differ from the cluster?
+  ansible.builtin.command: kubectl diff -f {{ k8s_app_route_manifest }}
+  register: k8s_app_route_diff
+  changed_when: false
+  failed_when: k8s_app_route_diff.rc > 1 and 'namespaces' not in k8s_app_route_diff.stderr
+  check_mode: false
+  when: k8s_app_route_manifest_stat.stat.exists
+
+- name: route | Apply the routes
+  ansible.builtin.command: kubectl apply -f {{ k8s_app_route_manifest }}
+  when: (k8s_app_route_diff.rc | default(1)) != 0
+  changed_when: true
+
+- name: route | Remove the redirect route when it is switched off
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_app_route_namespace }} delete httproute {{ k8s_app_route_name }}-redirect --ignore-not-found
+  register: k8s_app_route_rm_redirect
+  changed_when: "'deleted' in k8s_app_route_rm_redirect.stdout"
+  when: not k8s_app_route_https_redirect | bool
+
+- name: route | Routes accepted by the Gateway, with their backend found
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_app_route_namespace }} wait httproute/{{ item.0 }} --timeout=60s
+    '--for=jsonpath={.status.parents[0].conditions[?(@.type=="{{ item.1 }}")].status}=True'
+  loop: "{{ ([k8s_app_route_name] + ([k8s_app_route_name ~ '-redirect'] if k8s_app_route_https_redirect | bool else []))
+    | product(['Accepted', 'ResolvedRefs']) | list }}"
+  loop_control:
+    label: "{{ item.0 }} {{ item.1 }}"
+  changed_when: false
+  when: not ansible_check_mode
+
+# Proof, as in k8s_gitops ui: from a node, the name resolves through the lab's wildcard override to
+# the Gateway's address; https://<name><path> answers 200 with the expected text, the certificate
+# verified against the node's trust store unless it is from letsencrypt-staging; plain HTTP answers
+# 301 to https:// (or 404 with the redirect off).
+- name: route | Proof
+  when: not ansible_check_mode
+  block:
+    - name: route | Gateway address and the certificate's issuer
+      ansible.builtin.shell: >-
+        kubectl -n {{ k8s_app_route_gateway_namespace }} get gateway {{ k8s_app_route_gateway_name }}
+        -o jsonpath='{.status.addresses[0].value}' &&
+        echo &&
+        kubectl -n {{ k8s_app_route_gateway_namespace }} get secret {{ k8s_app_route_tls_secret }}
+        -o jsonpath='{.metadata.annotations.cert-manager\.io/issuer-name}'
+      register: k8s_app_route_facts
+      changed_when: false
+      failed_when: k8s_app_route_facts.rc != 0 or k8s_app_route_facts.stdout_lines | length != 2
+
+    - name: route | The name resolves to the Gateway address (wildcard override)
+      ansible.builtin.command: getent hosts {{ k8s_app_route_host }}
+      delegate_to: "{{ k8s_app_route_proof_client }}"
+      register: k8s_app_route_dns
+      changed_when: false
+      failed_when: >-
+        k8s_app_route_dns.rc != 0 or k8s_app_route_facts.stdout_lines[0] not in k8s_app_route_dns.stdout.split()
+
+    - name: route | The app's page answers on its name, {{ k8s_app_route_host }}
+      ansible.builtin.command: >-  # noqa: command-instead-of-module (curl's own trust store and -k rule, as in k8s_certs smoke)
+        curl -sS -L --max-time 10 {{ '-k' if __issuer == 'letsencrypt-staging' else '' }}
+        -w '\n%{http_code}' https://{{ k8s_app_route_host }}{{ k8s_app_route_path }}
+      delegate_to: "{{ k8s_app_route_proof_client }}"
+      register: k8s_app_route_get
+      until: >-
+        k8s_app_route_get.rc == 0 and k8s_app_route_get.stdout_lines[-1] == '200'
+        and k8s_app_route_expect in k8s_app_route_get.stdout
+      retries: 12
+      delay: 5
+      changed_when: false
+      vars:
+        __issuer: "{{ k8s_app_route_facts.stdout_lines[1] }}"
+
+    # Cilium's Envoy writes the default port into the redirect (measured for Argo CD: https://<name>:443/).
+    - name: route | Plain HTTP for the name never serves the app
+      ansible.builtin.command: >-  # noqa: command-instead-of-module (curl, as in the task above)
+        curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}' http://{{ k8s_app_route_host }}/
+      delegate_to: "{{ k8s_app_route_proof_client }}"
+      register: k8s_app_route_plain
+      until: >-
+        k8s_app_route_plain.rc == 0 and
+        (k8s_app_route_plain.stdout is match('301 https://' ~ (k8s_app_route_host | regex_escape) ~ '(:443)?/')
+         if k8s_app_route_https_redirect | bool else k8s_app_route_plain.stdout.startswith('404'))
+      retries: 6
+      delay: 5
+      changed_when: false
+
+    - name: route | Proof
+      ansible.builtin.debug:
+        msg: >-
+          {{ k8s_app_route_host }} resolves to {{ k8s_app_route_facts.stdout_lines[0] }} on
+          {{ k8s_app_route_proof_client }}; https://{{ k8s_app_route_host }}{{ k8s_app_route_path }} answered
+          {{ k8s_app_route_get.stdout_lines[-1] }} with "{{ k8s_app_route_expect }}", certificate from
+          {{ k8s_app_route_facts.stdout_lines[1] }}; plain HTTP answered {{ k8s_app_route_plain.stdout }}.

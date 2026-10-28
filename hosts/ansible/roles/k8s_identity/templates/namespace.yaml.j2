@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ k8s_identity_namespace }}
+  labels:
+    pod-security.kubernetes.io/enforce: baseline

@@ -83,6 +83,14 @@ all:
         k8s_gitops_ui_route: false           # true once k8s_gateway_https is true
         k8s_gitops_ui_zone: "{{ k8s_gateway_zone }}"
         k8s_gitops_ui_gateway_https: "{{ k8s_gateway_https }}"
+        # Metrics and logs (playbooks/k8s-observability.yml, BUILD-PATH S15): Grafana at
+        # https://grafana.apps.c1.prod.<zone>/ through Gateway apps.
+        k8s_observability_zone: "{{ k8s_gateway_zone }}"
+        k8s_observability_grafana_sso: false   # true after playbooks/k8s-identity.yml
+        # Sign-in for lab apps (playbooks/k8s-identity.yml): https://sso.apps.c1.prod.<zone>/.
+        k8s_identity_zone: "{{ k8s_gateway_zone }}"
+        k8s_identity_owner_username: ""      # the owner's account in realm lab
+        k8s_identity_owner_email: ""         # optional
         # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
         # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
         # k8s_control_plane_kubernetes_version.

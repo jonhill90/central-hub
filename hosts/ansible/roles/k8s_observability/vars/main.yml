@@ -1,0 +1,165 @@
+---
+# Derived values, not inputs: the Helm values each release gets. Fixed rules live here so the
+# inventory can't override one by accident (STD-0004 Ansible rule 3).
+k8s_observability_grafana_host: >-
+  {{ k8s_observability_grafana_name }}.apps.c1.prod.{{ k8s_observability_zone }}
+k8s_observability_loki_url: >-
+  http://loki.{{ k8s_observability_logs_namespace }}.svc.cluster.local:3100
+
+# metrics-server checks no kubelet serving certificate: kubeadm's kubelets serve self-signed
+# certificates, which the metrics-server README allows only "for testing purposes only". The fix
+# is kubelet serverTLSBootstrap with approved CSRs (known gap, hosts/AGENT-PICKS.md).
+k8s_observability_metrics_server_values:
+  args: [--kubelet-insecure-tls]
+
+k8s_observability_kps_values:
+  # No receiver is picked yet (proxmox_notify's endpoint is still open), so no Alertmanager.
+  alertmanager: {enabled: false}
+  # c1 has no kube-proxy (Cilium replaces it, D-0017). kubeadm binds the controller manager and the
+  # scheduler to 127.0.0.1 and etcd's metrics to 127.0.0.1:2381, so in-cluster scrapes of them fail;
+  # turned off until k8s_control_plane opens those ports (known gap).
+  kubeProxy: {enabled: false}
+  kubeEtcd: {enabled: false}
+  kubeControllerManager: {enabled: false}
+  kubeScheduler: {enabled: false}
+  defaultRules:
+    rules:
+      alertmanager: false
+      etcd: false
+      kubeControllerManager: false
+      kubeProxy: false
+      kubeSchedulerAlerting: false
+      kubeSchedulerRecording: false
+      windows: false
+  windowsMonitoring: {enabled: false}
+  prometheus:
+    prometheusSpec:
+      retention: "{{ k8s_observability_prometheus_retention }}"
+      retentionSize: "{{ k8s_observability_prometheus_retention_size }}"
+      # Read every ServiceMonitor, PodMonitor and rule in the cluster, not only this release's.
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+      probeSelectorNilUsesHelmValues: false
+      scrapeConfigSelectorNilUsesHelmValues: false
+      resources:
+        requests: {cpu: 200m, memory: 512Mi}
+        limits: {memory: 1536Mi}
+      storageSpec:
+        emptyDir: {sizeLimit: "{{ k8s_observability_prometheus_volume_size }}"}
+  grafana:
+    persistence: {enabled: false}
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {memory: 384Mi}
+    additionalDataSources:
+      - name: Loki
+        type: loki
+        uid: loki
+        access: proxy
+        url: "{{ k8s_observability_loki_url }}"
+    envValueFrom: >-
+      {{ {'GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET': {'secretKeyRef': {'name': k8s_observability_sso_secret,
+      'key': 'client-secret', 'optional': true}}} if k8s_observability_grafana_sso | bool else {} }}
+    grafana.ini: >-
+      {{ {'server': {'root_url': 'https://' ~ k8s_observability_grafana_host ~ '/'}}
+      | combine(k8s_observability_grafana_sso_ini if k8s_observability_grafana_sso | bool else {}) }}
+
+# Grafana's OIDC sign-in (Grafana docs, "Configure Keycloak OAuth2 authentication"). Roles come
+# from the provider's `roles` claim: admin maps to Grafana Admin, anyone else to Viewer.
+k8s_observability_grafana_sso_ini:
+  auth.generic_oauth:
+    enabled: true
+    name: Lab sign-in
+    allow_sign_up: true
+    client_id: "{{ k8s_observability_sso_client_id }}"
+    scopes: openid profile email
+    auth_url: "{{ k8s_observability_sso_auth_url }}"
+    token_url: "{{ k8s_observability_sso_token_url }}"
+    api_url: "{{ k8s_observability_sso_api_url }}"
+    use_pkce: true
+    login_attribute_path: preferred_username
+    # An account with no email gets <user name>@lab.invalid (RFC 2606 reserves .invalid).
+    email_attribute_path: "email || join('', [preferred_username, '@lab.invalid'])"
+    role_attribute_path: "contains(roles[*], 'admin') && 'Admin' || 'Viewer'"
+    role_attribute_strict: false
+
+k8s_observability_loki_values:
+  deploymentMode: Monolithic
+  loki:
+    auth_enabled: false
+    commonConfig: {replication_factor: 1}
+    storage: {type: filesystem}
+    schemaConfig:
+      configs:
+        - from: "2026-10-27"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index: {prefix: loki_index_, period: 24h}
+    limits_config: {retention_period: "{{ k8s_observability_loki_retention }}"}
+    compactor: {retention_enabled: true, delete_request_store: filesystem}
+  singleBinary:
+    replicas: 1
+    persistence:
+      enabled: false
+      dataVolumeParameters:
+        emptyDir: {sizeLimit: "{{ k8s_observability_loki_volume_size }}"}
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 1Gi}
+  # Monolithic only: the other targets at 0, and none of the extras a small lab doesn't need.
+  backend: {replicas: 0}
+  read: {replicas: 0}
+  write: {replicas: 0}
+  gateway: {enabled: false}
+  chunksCache: {enabled: false}
+  resultsCache: {enabled: false}
+  lokiCanary: {enabled: false}
+  test: {enabled: false}
+
+# One Alloy pod reads every pod's logs through the Kubernetes API (loki.source.kubernetes: no host
+# paths, no DaemonSet) and pushes them to Loki. Swapping Loki for another store that takes the Loki
+# push API (VictoriaLogs does) changes only the URL.
+k8s_observability_alloy_values:
+  controller: {type: deployment, replicas: 1}
+  alloy:
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {memory: 512Mi}
+    configMap:
+      content: |
+        discovery.kubernetes "pods" {
+          role = "pod"
+        }
+
+        discovery.relabel "pods" {
+          targets = discovery.kubernetes.pods.targets
+          rule {
+            source_labels = ["__meta_kubernetes_namespace"]
+            target_label  = "namespace"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_name"]
+            target_label  = "pod"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_container_name"]
+            target_label  = "container"
+          }
+          rule {
+            source_labels = ["__meta_kubernetes_pod_node_name"]
+            target_label  = "node"
+          }
+        }
+
+        loki.source.kubernetes "pods" {
+          targets    = discovery.relabel.pods.output
+          forward_to = [loki.write.lab.receiver]
+        }
+
+        loki.write "lab" {
+          endpoint {
+            url = "{{ k8s_observability_loki_url }}/loki/api/v1/push"
+          }
+        }

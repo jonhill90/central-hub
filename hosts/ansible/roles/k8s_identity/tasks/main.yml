@@ -1,0 +1,41 @@
+---
+- name: Private inputs are set
+  ansible.builtin.assert:
+    that:
+      - k8s_identity_zone | length > 0
+      - k8s_identity_owner_username | length > 0
+    fail_msg: Set k8s_identity_zone and k8s_identity_owner_username in the filled-in inventory.
+    quiet: true
+  tags: [always]
+
+- name: Operator (pinned upstream files)
+  ansible.builtin.import_tasks: operator.yml
+  tags: [operator]
+
+- name: Secrets made on the node
+  ansible.builtin.import_tasks: secrets.yml
+  tags: [secrets]
+
+- name: Database
+  ansible.builtin.import_tasks: database.yml
+  tags: [database]
+
+- name: Keycloak and realm
+  ansible.builtin.import_tasks: keycloak.yml
+  tags: [keycloak]
+
+# The route's proof fetches the realm's OIDC discovery document by its public name: it answers 200
+# and names the realm's issuer, which is what every client checks.
+- name: Keycloak through the shared Gateway
+  ansible.builtin.include_role:
+    name: k8s_app_route
+    apply: {tags: [route]}
+  vars:
+    k8s_app_route_name: "{{ k8s_identity_name }}"
+    k8s_app_route_namespace: "{{ k8s_identity_namespace }}"
+    k8s_app_route_service: "{{ k8s_identity_name }}-service"
+    k8s_app_route_port: 8080
+    k8s_app_route_path: /realms/{{ k8s_identity_realm }}/.well-known/openid-configuration
+    k8s_app_route_expect: '"issuer":"{{ k8s_identity_issuer }}"'
+    k8s_app_route_zone: "{{ k8s_identity_zone }}"
+  tags: [route]
