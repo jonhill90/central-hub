@@ -38,7 +38,7 @@ The plan behind the items is the Foundation proposal's §6 (v0.4.3, accepted for
 
 | Item | State | What this change adds | The owner's part |
 |---|---|---|---|
-| 1. Per-agent GitHub identities, with the owner's approval required by GitHub | Not true. Every agent session acts as the owner's account, and the agents' environment replaces any other GitHub key an agent sends. `protect-main` asks for 0 approvals. | The ruleset change (below) and a test plan, once the identity route is chosen | Choose the route; create the identity; change the settings |
+| 1. Per-agent GitHub identities, with the owner's approval required by GitHub | Not true. Every agent session acts as the owner's account, and the agents' environment replaces any other GitHub key an agent sends. `protect-main` asks for 0 approvals. | The ruleset change (below) and a test plan, once the identity route is chosen | Route chosen (D-0026); create the account, invite it, run the test, then switch |
 | 2. A verifier the PR can't edit | Partly. The four docs checks are required and pinned to the GitHub Actions app. The hosts and gate checks are not required. Agents can push workflow files, so a PR can change the checks that judge it. On a public repository GitHub can't block pushes to workflow files with a ruleset. | Nothing yet: making checks required does not meet this item while the checks run from the PR's own files | Choose where the verifier lives (another repository, pinned by commit); add the checks to the ruleset |
 | 3. No write tokens in PR code | True. Every workflow runs PR code only on `pull_request` (the docs workflow's weekly schedule checks out `main`), with a read-only token, no secrets and no persisted checkout credential. | `.github/gate-check/check_gate.py`, run by the `gate` workflow on every PR, with its own test cases | Read the three Actions settings agents can't read; accept |
 | 4. A pinned, no-writer GitOps engine install | True. Argo CD v3.5.5 from the upstream manifest, checked by SHA-256, no git credential (D-0023). | Evidence only | Accept |
@@ -93,7 +93,8 @@ The criteria below were first written by the agent that wrote the gate check and
 ## Decision log
 
 - 2026-10-28 04:29 UTC: the owner said yes to keeping the gate, on a decision card in the GitOps thread, so Argo CD on c1 stays with no source until all 7 items are recorded.
-- 2026-10-28: in the agents' environment, a request sent with a made-up GitHub token still came back as the owner's account. A real App token was not tried; it is likely replaced the same way. The identity route is the owner's open question.
+- 2026-10-28: in the agents' environment, a request sent with a made-up GitHub token still came back as the owner's account. A real App token was not tried; it is likely replaced the same way.
+- 2026-10-28 05:12 UTC: the owner said yes to one GitHub account for the cloud agents, connected in place of the owner's, tested before the switch (D-0026, proposed).
 
 ## Points to (read when)
 
