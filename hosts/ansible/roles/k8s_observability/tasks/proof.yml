@@ -12,11 +12,18 @@
       changed_when: false
 
     # Prometheus's own API through the API server's service proxy: no port-forward, no route.
-    - name: proof | Prometheus scrape targets that are up and down
+    # Every active target is up: a down one (a closed port, a wrong selector) fails the proof.
+    - name: proof | Prometheus scrape targets are all up
       ansible.builtin.command: >-
         kubectl get --raw
         /api/v1/namespaces/{{ k8s_observability_metrics_namespace }}/services/{{ __svc }}/proxy/api/v1/targets?state=active
       register: k8s_observability_targets
+      until: >-
+        k8s_observability_targets.rc == 0
+        and (k8s_observability_targets.stdout | from_json).data.activeTargets | length > 0
+        and (k8s_observability_targets.stdout | from_json).data.activeTargets | rejectattr('health', 'eq', 'up') | list | length == 0
+      retries: 12
+      delay: 10
       changed_when: false
       vars:
         __svc: kube-prometheus-stack-prometheus:http-web
@@ -60,6 +67,6 @@
           of {{ __targets | length }}
           (down: {{ __targets | rejectattr('health', 'eq', 'up') | map(attribute='scrapePool') | unique | list }});
           Loki returned {{ (k8s_observability_logs.stdout | from_json).data.result | length }} kube-system log streams;
-          sign-in redirect: {{ k8s_observability_sso_redirect.stdout | default('off') | regex_replace('\\?.*$', '') }}.
+          sign-in redirect: {{ (k8s_observability_sso_redirect.stdout | regex_replace('\\?.*$', '')) if k8s_observability_grafana_sso | bool else 'off' }}.
       vars:
         __targets: "{{ (k8s_observability_targets.stdout | from_json).data.activeTargets }}"

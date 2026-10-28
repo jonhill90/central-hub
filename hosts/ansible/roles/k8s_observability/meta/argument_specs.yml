@@ -14,6 +14,12 @@ argument_specs:
       k8s_observability_prometheus_volume_size: {type: str, default: 6Gi, description: "Size limit of Prometheus's emptyDir."}
       k8s_observability_loki_retention: {type: str, default: 72h, description: How long Loki keeps logs.}
       k8s_observability_loki_volume_size: {type: str, default: 6Gi, description: "Size limit of Loki's emptyDir."}
+      k8s_observability_firewall_zone: {type: str, default: lab, description: "firewalld zone of the lab NIC (k8s_node_firewall_zone)."}
+      k8s_observability_node_ports:
+        type: list
+        elements: str
+        default: [9100/tcp]
+        description: "Ports opened in that zone on every node, for node-exporter's scrape."
       k8s_observability_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}
       k8s_observability_grafana_name: {type: str, default: grafana, description: "First label of Grafana's hostname."}
       k8s_observability_grafana_sso:

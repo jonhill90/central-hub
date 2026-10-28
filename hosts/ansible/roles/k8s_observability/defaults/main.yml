@@ -14,6 +14,13 @@ k8s_observability_kps_version: 92.3.1              # Prometheus Operator v0.94.1
 k8s_observability_loki_version: 18.15.1            # Loki 3.7.8, 2026-10-09 (grafana-community)
 k8s_observability_alloy_version: 1.13.1            # Alloy v1.20.1, 2026-10-08
 
+# node-exporter listens on each node's own address (host network). Prometheus runs on the worker,
+# so the control plane's lab zone must accept its scrape; the lab zone has only the Kubernetes ports
+# open (k8s_node step 4). Measured 2026-10-28: without this, the control plane's target is down
+# with "no route to host". Same zone as k8s_node_firewall_zone.
+k8s_observability_firewall_zone: lab
+k8s_observability_node_ports: [9100/tcp]
+
 # Namespaces, named by job so a tool can be swapped without renaming them.
 k8s_observability_metrics_namespace: monitoring
 k8s_observability_logs_namespace: logging

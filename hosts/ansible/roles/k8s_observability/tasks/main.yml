@@ -20,6 +20,21 @@
     k8s_helm_release_values: "{{ k8s_observability_metrics_server_values }}"
   tags: [metrics_server]
 
+# node-exporter uses the host network, so the scrape from Prometheus on another node goes through
+# that node's input filter.
+- name: node-exporter's port in the lab zone on every node
+  ansible.posix.firewalld:
+    zone: "{{ k8s_observability_firewall_zone }}"
+    port: "{{ item.1 }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  delegate_to: "{{ item.0 }}"
+  loop: "{{ groups['k8s_nodes'] | product(k8s_observability_node_ports) | list }}"
+  loop_control:
+    label: "{{ item.0 }} {{ item.1 }}"
+  tags: [metrics]
+
 # The chart installs its CRDs on the first install only; Helm never upgrades them (chart README).
 # Raising k8s_observability_kps_version past a Prometheus Operator minor needs the new CRDs applied
 # first (hosts/ansible/README.md "Metrics and logs on c1").
