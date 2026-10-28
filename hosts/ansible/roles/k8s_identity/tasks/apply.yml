@@ -1,0 +1,32 @@
+---
+# One manifest, written to the node, then the same diff-then-apply as k8s_secrets: kubectl diff
+# exits 0 with no difference, 1 with one, more on an error; a missing namespace also means "apply".
+# A first --check run writes no manifest, so the diff is skipped and the apply counts as needed.
+# Input: __manifest (template name without .j2), __server_side (bool).
+- name: "apply | Manifest {{ __manifest }}"
+  ansible.builtin.template:
+    src: "{{ __manifest }}.j2"
+    dest: "{{ k8s_identity_dir }}/{{ __manifest }}"
+    mode: "0600"
+
+- name: "apply | Manifest on the node, {{ __manifest }}"
+  ansible.builtin.stat: {path: "{{ k8s_identity_dir }}/{{ __manifest }}"}
+  register: k8s_identity_manifest_stat
+
+- name: "apply | Differs from the cluster, {{ __manifest }}"
+  ansible.builtin.command: >-
+    kubectl diff {{ '--server-side' if __server_side | default(false) else '' }} -f {{ k8s_identity_dir }}/{{ __manifest }}
+  register: k8s_identity_diff
+  changed_when: false
+  failed_when: >-
+    k8s_identity_diff.rc > 1 and 'namespaces' not in k8s_identity_diff.stderr
+    and 'the server could not find the requested resource' not in k8s_identity_diff.stderr
+    and 'no matches for kind' not in k8s_identity_diff.stderr
+  check_mode: false
+  when: k8s_identity_manifest_stat.stat.exists
+
+- name: "apply | Apply {{ __manifest }}"
+  ansible.builtin.command: >-
+    kubectl apply {{ '--server-side --force-conflicts' if __server_side | default(false) else '' }} -f {{ k8s_identity_dir }}/{{ __manifest }}
+  when: (k8s_identity_diff.rc | default(1)) != 0
+  changed_when: true

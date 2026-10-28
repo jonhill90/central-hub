@@ -1,0 +1,36 @@
+---
+# The folder for the static volume, on the worker that holds it, owned by the image's postgres
+# user. SELinux is permissive on the c1 nodes (k8s_node step 2), so no relabel is needed.
+- name: database | Folder on the worker
+  ansible.builtin.file:
+    path: "{{ k8s_identity_db_path }}"
+    state: directory
+    owner: "999"
+    group: "999"
+    mode: "0700"
+  delegate_to: "{{ k8s_identity_db_host }}"
+
+# The node's Kubernetes name, found by the address Ansible reaches it on, so no machine name is
+# written in this repository.
+- name: database | The worker's node name
+  ansible.builtin.command: >-
+    kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}'
+  register: k8s_identity_nodes
+  changed_when: false
+  check_mode: false
+
+- name: database | Remember it
+  ansible.builtin.set_fact:
+    k8s_identity_db_node: >-
+      {{ (k8s_identity_nodes.stdout_lines | select('search', ' ' ~ hostvars[k8s_identity_db_host].ansible_host ~ '$')
+      | first).split(' ') | first }}
+
+- name: database | PostgreSQL
+  ansible.builtin.import_tasks: apply.yml
+  vars: {__manifest: database.yaml}
+
+- name: database | PostgreSQL ready
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_identity_namespace }} rollout status statefulset/{{ k8s_identity_name }}-postgres --timeout=300s
+  changed_when: false
+  when: not ansible_check_mode

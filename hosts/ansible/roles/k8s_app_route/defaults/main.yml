@@ -1,0 +1,24 @@
+---
+# One web app on the shared Gateway `apps` (BUILD-PATH S15): an HTTPRoute on the HTTPS listener for
+# https://<name>.apps.<cluster>.<env>.<zone>/, a 301 from plain HTTP, and a proof from a node.
+# The same shape as the Argo CD UI route in k8s_gitops (tag ui), made reusable so each app role
+# calls it with its own Service instead of copying it. Included by k8s_observability and
+# k8s_identity; not run on its own. Every input is listed here.
+
+# The app. No defaults: the calling role sets them.
+# k8s_app_route_name: <first label of the hostname, also the route's name>
+# k8s_app_route_namespace: <the app's namespace>
+# k8s_app_route_service: <the app's Service>
+# k8s_app_route_port: <the Service port that speaks plain HTTP>
+# k8s_app_route_expect: <text the app's page must contain, for the proof>
+k8s_app_route_path: /
+
+# Private, no default; the inventory template sets it to k8s_gateway_zone.
+# k8s_app_route_zone: <zone>
+k8s_app_route_cluster: c1
+k8s_app_route_env: prod
+k8s_app_route_gateway_name: apps
+k8s_app_route_gateway_namespace: gateway
+k8s_app_route_tls_secret: apps-tls
+k8s_app_route_https_redirect: true
+k8s_app_route_proof_client: "{{ groups['k8s_workers'] | first }}"

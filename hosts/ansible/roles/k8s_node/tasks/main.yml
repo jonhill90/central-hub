@@ -126,6 +126,22 @@
   register: k8s_node_dns
   changed_when: "'changed' in k8s_node_dns.stdout"
 
+# NetworkManager hands each connection's zone to firewalld when it brings the NIC up, and an empty
+# zone means firewalld's default zone (public). So the zone from step 1 lasted only until a reboot
+# (measured on c1's worker 2026-10-28: eth0 back in public, the control plane cut off from 10250).
+# The zone goes on the connection itself; `device reapply` applies it without dropping the link.
+- name: step3 | The lab zone on that connection, so it survives a reboot
+  when: k8s_node_con.stdout | length > 0
+  ansible.builtin.shell: |
+    set -e
+    cur=$(nmcli -g connection.zone con show "{{ k8s_node_con.stdout }}")
+    [ "$cur" = "{{ k8s_node_firewall_zone }}" ] && exit 0
+    nmcli con mod "{{ k8s_node_con.stdout }}" connection.zone "{{ k8s_node_firewall_zone }}"
+    nmcli device reapply "{{ ansible_default_ipv4.interface }}" >/dev/null
+    echo changed
+  register: k8s_node_nm_zone
+  changed_when: "'changed' in k8s_node_nm_zone.stdout"
+
 # Step 4. Firewall for Kubernetes and Cilium (lab zone only)
 - name: step4 | Kubernetes and Cilium ports
   ansible.posix.firewalld:

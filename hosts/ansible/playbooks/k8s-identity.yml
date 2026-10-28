@@ -1,0 +1,13 @@
+---
+# Sign-in for lab apps on cluster c1 (BUILD-PATH S15, BL-0019): the Keycloak operator from its
+# pinned upstream files, PostgreSQL on a static local volume, Keycloak, realm lab with the owner's
+# account and Grafana's client, and the route https://sso.apps.c1.prod.<zone>/ through the shared
+# Gateway. Keycloak is an agent pick (RB-0087); apps see only OIDC. Needs k8s-gateway.yml with
+# HTTPS and k8s-certs.yml first, and k8s_identity_owner_username and _email in the inventory.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags operator,secrets,database
+#   ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags keycloak,route
+- name: Sign-in for lab apps
+  hosts: k8s_control_plane[0]
+  become: true
+  roles:
+    - role: k8s_identity

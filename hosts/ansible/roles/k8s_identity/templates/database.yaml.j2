@@ -1,0 +1,97 @@
+# {{ ansible_managed }}
+# Keycloak's PostgreSQL. A static local volume: a folder on one worker, bound by name, no
+# provisioner and no StorageClass (c1 has none yet). Retain keeps the folder's data when the volume
+# object is deleted. Exit path: pg_dump, then restore onto whatever storage S17 picks.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ k8s_identity_name }}-postgres
+spec:
+  capacity:
+    storage: {{ k8s_identity_db_size }}
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: {{ k8s_identity_namespace }}
+    name: data-{{ k8s_identity_name }}-postgres-0
+  local:
+    path: {{ k8s_identity_db_path }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [{{ k8s_identity_db_node }}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ k8s_identity_name }}-postgres
+  namespace: {{ k8s_identity_namespace }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ k8s_identity_name }}-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ k8s_identity_name }}-postgres
+  namespace: {{ k8s_identity_namespace }}
+spec:
+  serviceName: {{ k8s_identity_name }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ k8s_identity_name }}-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ k8s_identity_name }}-postgres
+    spec:
+      # The image's postgres user (uid 999 in the Debian-based image); the folder on the node is
+      # made with that owner, so the entrypoint runs without root.
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        runAsNonRoot: true
+        fsGroup: 999
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: postgres
+          image: {{ k8s_identity_postgres_image }}
+          env:
+            - {name: POSTGRES_DB, value: keycloak}
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: {{ k8s_identity_db_secret }}, key: username}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ k8s_identity_db_secret }}, key: password}}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          ports:
+            - {name: postgres, containerPort: 5432}
+          readinessProbe:
+            exec: {command: [pg_isready, -U, keycloak, -d, keycloak]}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: ""
+        volumeName: {{ k8s_identity_name }}-postgres
+        resources:
+          requests:
+            storage: {{ k8s_identity_db_size }}

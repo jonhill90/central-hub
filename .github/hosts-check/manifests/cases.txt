@@ -10,3 +10,8 @@ k8s_gitops source-flux.yaml.j2 gitops-source-flux.yaml {"k8s_gitops_engine":"flu
 k8s_gitops argocd-ui-route.yaml.j2 gitops-ui-route.yaml {"k8s_gitops_engine":"argocd"}
 k8s_gitops argocd-ui-route.yaml.j2 gitops-ui-route-no-redirect.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_ui_https_redirect":false}
 k8s_secrets store.yaml.j2 secrets-store.yaml {}
+k8s_app_route route.yaml.j2 app-route.yaml {"k8s_app_route_name":"grafana","k8s_app_route_namespace":"monitoring","k8s_app_route_service":"kube-prometheus-stack-grafana","k8s_app_route_port":80,"k8s_app_route_zone":"example.com"}
+k8s_identity namespace.yaml.j2 identity-namespace.yaml {}
+k8s_identity database.yaml.j2 identity-database.yaml {"k8s_identity_db_node":"node-1"}
+k8s_identity keycloak.yaml.j2 identity-keycloak.yaml {}
+k8s_identity realm.yaml.j2 identity-realm.yaml {}

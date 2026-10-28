@@ -1,19 +1,27 @@
 ---
 id: STD-0005
 title: Tests for specs and hosts code
-status: proposed
+status: active
 scope: how each acceptance criterion in a spec under `docs/specs/` names the test that proves it, and which lints and tests run on every PR that changes code under `hosts/`
 owner-system: 8 Platform
-why: an agent draft for the owner's review, written after the owner asked on 2026-10-27 at 04:22 UTC whether central-hub is missing tests and lints and said they expected test-driven development alongside spec-driven development; no rule here has the owner's yes yet, and each rule names its own origin
+why: written after the owner asked on 2026-10-27 at 04:22 UTC whether central-hub is missing tests and lints and said they expected test-driven development alongside spec-driven development; the owner accepted it with PR #50 on 2026-10-28, and each rule names its own origin
 follows: [Kent Beck's test-driven development (Martin Fowler, "Test Driven Development", 2023), Martin Fowler "Specification By Example", HashiCorp "Testing HashiCorp Terraform" (Rosemary Wang, 2024), OpenTofu "Command test", GitHub Spec Kit "Specification-Driven Development" Article III, ansible-lint profiles]
 check: "`.github/hosts-check/run.sh`, run by workflow `hosts` on every PR; rule 3 is checked by `run.sh terraform`; rules 1 and 2 by a reviewing agent"
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-10-28T02:22:38Z
+  approved-commit: aafa317908f19ce1fd74f9c52e971b6930661463
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNVYXFo9DJzkW59rqaB2NZqG
+  approval-names: "PR #50 and head aafa317, in the message itself"
+  check: the thread that drafted it read the message in its project thread; it names PR jonhill90/central-hub#50 and head aafa317 itself, and the head was still aafa317, mergeable and green at 2026-10-28T02:23Z. The skip of name[casing] and var-naming[no-role-prefix] in ansible-lint was listed in the PR as agent pick 1 and is accepted with the PR. An independent check by a reviewing agent is still to do.
+  merged: PR #50 merged at 2026-10-28T02:41:25Z as 58893c2
 ---
 
 # STD-0005: Tests for specs and hosts code
 
 The key words "MUST", "MUST NOT", "SHOULD" and "MAY" in this document are to be interpreted as described in BCP 14 (RFC 2119, RFC 8174) when, and only when, they appear in all capitals.
 
-This standard is a draft written by an agent. The owner has not said yes to any of it. Each rule names where it came from, and any rule can change after the owner's review.
+An agent wrote this standard, and the owner accepted it with PR #50. Each rule names where it came from.
 
 ## Levels
 

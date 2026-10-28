@@ -1,0 +1,53 @@
+---
+# BUILD-PATH S15 (BL-0020): metrics and logs on cluster c1. Agent picks, listed in
+# hosts/AGENT-PICKS.md; research in the Library research/c1-observability/ (RB-0092). Every input is
+# listed here (Red Hat CoP rule).
+#
+# Metrics: kube-prometheus-stack (Prometheus Operator, Prometheus, Grafana, kube-state-metrics,
+# node-exporter). Logs: Loki in monolithic mode, fed by one Alloy pod that reads pod logs through
+# the Kubernetes API. Plus metrics-server, so `kubectl top` works.
+#
+# Versions: the newest release at least two weeks old on 2026-10-27 (STD-0003 rule 1), measured
+# from each chart repository's index.yaml.
+k8s_observability_metrics_server_version: 3.14.0   # metrics-server 0.9.0, 2026-08-19
+k8s_observability_kps_version: 92.3.1              # Prometheus Operator v0.94.1, 2026-10-13
+k8s_observability_loki_version: 18.15.1            # Loki 3.7.8, 2026-10-09 (grafana-community)
+k8s_observability_alloy_version: 1.13.1            # Alloy v1.20.1, 2026-10-08
+
+# node-exporter listens on each node's own address (host network). Prometheus runs on the worker,
+# so the control plane's lab zone must accept its scrape; the lab zone has only the Kubernetes ports
+# open (k8s_node step 4). Measured 2026-10-28: without this, the control plane's target is down
+# with "no route to host". Same zone as k8s_node_firewall_zone.
+k8s_observability_firewall_zone: lab
+k8s_observability_node_ports: [9100/tcp]
+
+# Namespaces, named by job so a tool can be swapped without renaming them.
+k8s_observability_metrics_namespace: monitoring
+k8s_observability_logs_namespace: logging
+
+# No StorageClass on c1 yet (storage is BUILD-PATH S17, the owner's choice J8/J9), so Prometheus
+# and Loki keep their data in emptyDir: it survives container restarts, not a pod move or delete.
+# Short retention keeps it inside the node's disk.
+k8s_observability_prometheus_retention: 3d
+k8s_observability_prometheus_retention_size: 4GB
+k8s_observability_prometheus_volume_size: 6Gi
+k8s_observability_loki_retention: 72h
+k8s_observability_loki_volume_size: 6Gi
+
+# Grafana at https://grafana.apps.c1.prod.<zone>/ through Gateway apps (tag route). Private, no
+# default; the inventory template sets it to k8s_gateway_zone.
+# k8s_observability_zone: <zone>
+k8s_observability_grafana_name: grafana
+
+# Sign-in to Grafana through the lab's identity provider (OIDC), once playbooks/k8s-identity.yml
+# made the client and its Secret. Off: Grafana has only its own admin account (Secret
+# monitoring/kube-prometheus-stack-grafana, made by the chart).
+k8s_observability_grafana_sso: false
+# The provider's three endpoints. The defaults are Keycloak's paths for realm `lab` (k8s_identity);
+# swapping the provider means changing these three and the client in its role (RB-0087 M2 exit).
+# The browser goes to the public name; Grafana's server calls the in-cluster Service.
+k8s_observability_sso_auth_url: "https://sso.apps.c1.prod.{{ k8s_observability_zone }}/realms/lab/protocol/openid-connect/auth"
+k8s_observability_sso_token_url: http://sso-service.identity.svc:8080/realms/lab/protocol/openid-connect/token
+k8s_observability_sso_api_url: http://sso-service.identity.svc:8080/realms/lab/protocol/openid-connect/userinfo
+k8s_observability_sso_client_id: grafana
+k8s_observability_sso_secret: grafana-sso   # Secret in the metrics namespace, key client-secret

@@ -1,0 +1,72 @@
+---
+# Proof that each part works, read from the cluster itself; changes nothing.
+- name: proof | Checks
+  when: not ansible_check_mode
+  block:
+    - name: proof | kubectl top answers (metrics-server)
+      ansible.builtin.command: kubectl top nodes --no-headers
+      register: k8s_observability_top
+      until: k8s_observability_top.rc == 0
+      retries: 12
+      delay: 10
+      changed_when: false
+
+    # Prometheus's own API through the API server's service proxy: no port-forward, no route.
+    # Every active target is up: a down one (a closed port, a wrong selector) fails the proof.
+    - name: proof | Prometheus scrape targets are all up
+      ansible.builtin.command: >-
+        kubectl get --raw
+        /api/v1/namespaces/{{ k8s_observability_metrics_namespace }}/services/{{ __svc }}/proxy/api/v1/targets?state=active
+      register: k8s_observability_targets
+      until: >-
+        k8s_observability_targets.rc == 0
+        and (k8s_observability_targets.stdout | from_json).data.activeTargets | length > 0
+        and (k8s_observability_targets.stdout | from_json).data.activeTargets | rejectattr('health', 'eq', 'up') | list | length == 0
+      retries: 12
+      delay: 10
+      changed_when: false
+      vars:
+        __svc: kube-prometheus-stack-prometheus:http-web
+
+    - name: proof | Loki has log lines from kube-system in the last 10 minutes
+      ansible.builtin.command: >-
+        kubectl get --raw
+        '/api/v1/namespaces/{{ k8s_observability_logs_namespace }}/services/loki:http-metrics/proxy/loki/api/v1/{{ __query }}'
+      register: k8s_observability_logs
+      until: >-
+        k8s_observability_logs.rc == 0
+        and (k8s_observability_logs.stdout | from_json).data.result | length > 0
+      retries: 12
+      delay: 10
+      changed_when: false
+      vars:
+        __query: query_range?query=%7Bnamespace%3D%22kube-system%22%7D&limit=5&since=10m
+
+    # With sign-in on, Grafana's sign-in URL sends the browser to the provider's authorization
+    # endpoint with Grafana's client ID: the client and the endpoint match.
+    - name: proof | Grafana's sign-in sends the browser to the identity provider
+      ansible.builtin.command: >-  # noqa: command-instead-of-module (the node's own curl and trust store, as in k8s_app_route)
+        curl -sS --max-time 10 -o /dev/null -w '%{http_code} %{redirect_url}'
+        https://{{ k8s_observability_grafana_host }}/login/generic_oauth
+      delegate_to: "{{ groups['k8s_workers'] | first }}"
+      register: k8s_observability_sso_redirect
+      until: >-
+        k8s_observability_sso_redirect.rc == 0
+        and k8s_observability_sso_redirect.stdout.startswith('302 ' ~ k8s_observability_sso_auth_url)
+        and ('client_id=' ~ k8s_observability_sso_client_id) in k8s_observability_sso_redirect.stdout
+      retries: 12
+      delay: 10
+      changed_when: false
+      when: k8s_observability_grafana_sso | bool
+
+    - name: proof | Result
+      ansible.builtin.debug:
+        msg: >-
+          kubectl top: {{ k8s_observability_top.stdout_lines | length }} nodes;
+          Prometheus targets up {{ __targets | selectattr('health', 'eq', 'up') | list | length }}
+          of {{ __targets | length }}
+          (down: {{ __targets | rejectattr('health', 'eq', 'up') | map(attribute='scrapePool') | unique | list }});
+          Loki returned {{ (k8s_observability_logs.stdout | from_json).data.result | length }} kube-system log streams;
+          sign-in redirect: {{ (k8s_observability_sso_redirect.stdout.split('?') | first) if k8s_observability_grafana_sso | bool else 'off' }}.
+      vars:
+        __targets: "{{ (k8s_observability_targets.stdout | from_json).data.activeTargets }}"
