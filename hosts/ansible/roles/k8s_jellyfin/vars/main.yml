@@ -1,0 +1,7 @@
+---
+# Derived values, not inputs.
+k8s_jellyfin_dir: /root/central-hub/jellyfin
+# The server's HTTP port (image EXPOSE 8096) and its health page (Jellyfin.Server/Startup.cs,
+# MapHealthChecks("/health"); the image's own HEALTHCHECK_URL).
+k8s_jellyfin_port: 8096
+k8s_jellyfin_health_path: /health

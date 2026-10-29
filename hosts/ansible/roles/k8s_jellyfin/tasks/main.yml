@@ -1,0 +1,64 @@
+---
+- name: Private inputs are set
+  ansible.builtin.assert:
+    that: k8s_jellyfin_zone | length > 0
+    fail_msg: Set k8s_jellyfin_zone in the filled-in inventory.
+    quiet: true
+  tags: [always]
+
+# One manifest, written to the node, then the same diff-then-apply as k8s_identity: kubectl diff
+# exits 0 with no difference, 1 with one, more on an error; a missing namespace also means "apply".
+# A first --check run writes no manifest, so the diff is skipped and the apply counts as needed.
+- name: Folder for the manifest
+  ansible.builtin.file: {path: "{{ k8s_jellyfin_dir }}", state: directory, mode: "0700"}
+  check_mode: false
+  tags: [app]
+
+- name: Manifest
+  ansible.builtin.template:
+    src: jellyfin.yaml.j2
+    dest: "{{ k8s_jellyfin_dir }}/jellyfin.yaml"
+    mode: "0600"
+  tags: [app]
+
+- name: Manifest on the node?
+  ansible.builtin.stat: {path: "{{ k8s_jellyfin_dir }}/jellyfin.yaml"}
+  register: k8s_jellyfin_manifest_stat
+  tags: [app]
+
+- name: Differs from the cluster?
+  ansible.builtin.command: kubectl diff -f {{ k8s_jellyfin_dir }}/jellyfin.yaml
+  register: k8s_jellyfin_diff
+  changed_when: false
+  failed_when: k8s_jellyfin_diff.rc > 1 and 'namespaces' not in k8s_jellyfin_diff.stderr
+  check_mode: false
+  when: k8s_jellyfin_manifest_stat.stat.exists
+  tags: [app]
+
+- name: Apply
+  ansible.builtin.command: kubectl apply -f {{ k8s_jellyfin_dir }}/jellyfin.yaml
+  when: (k8s_jellyfin_diff.rc | default(1)) != 0
+  changed_when: true
+  tags: [app]
+
+- name: Ready
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_jellyfin_namespace }} rollout status deployment/{{ k8s_jellyfin_name }} --timeout=300s
+  changed_when: false
+  when: not ansible_check_mode
+  tags: [app]
+
+# The route's proof fetches the server's health page by its public name.
+- name: Jellyfin through the shared Gateway
+  ansible.builtin.include_role:
+    name: k8s_app_route
+    apply: {tags: [route]}
+  vars:
+    k8s_app_route_name: "{{ k8s_jellyfin_name }}"
+    k8s_app_route_namespace: "{{ k8s_jellyfin_namespace }}"
+    k8s_app_route_service: "{{ k8s_jellyfin_name }}"
+    k8s_app_route_port: "{{ k8s_jellyfin_port }}"
+    k8s_app_route_path: "{{ k8s_jellyfin_health_path }}"
+    k8s_app_route_expect: Healthy
+    k8s_app_route_zone: "{{ k8s_jellyfin_zone }}"
+  tags: [route]

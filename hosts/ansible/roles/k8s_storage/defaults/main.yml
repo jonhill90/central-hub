@@ -1,0 +1,28 @@
+---
+# Persistent volumes for cluster c1 (BUILD-PATH S17, BL-0029): an empty data disk on each node that
+# has one (Terraform home/k8s, data_disk_gb) becomes an ext4 file system mounted at
+# k8s_storage_mount, and the Local Path Provisioner makes each volume a folder under it. Every part
+# is an agent pick, listed in hosts/AGENT-PICKS.md; the research is batch RB-0082 (Library
+# research/local-storage/, Area 4). A volume lives on one node and is lost with that disk, so the
+# Proxmox backup job (proxmox_backup) is its copy. Exit path: NFS CSI or Proxmox CSI later, data
+# moved by hand (RB-0082 L53, L55, L57). Every input is listed here (Red Hat CoP rule).
+
+# The data disk as the node sees it: Proxmox's scsi1 on the VirtIO SCSI controller.
+k8s_storage_device: /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1
+k8s_storage_fstype: ext4
+k8s_storage_mount: /var/lib/c1-data
+
+# Local Path Provisioner, the newest release at least two weeks old on 2026-10-29 (v0.0.37,
+# 2026-08-05, STD-0003 rule 1), from its upstream deploy file, with the images pinned by digest.
+k8s_storage_version: v0.0.37
+k8s_storage_image: docker.io/rancher/local-path-provisioner:v0.0.37@sha256:e757967a5ec338f6a9b371c5a9688bedaa8c3578ea3dd4db329ea0084be0a86f
+# The helper pod that makes and removes each volume's folder. Upstream leaves it at busybox
+# "latest"; pinned here.
+k8s_storage_helper_image: docker.io/library/busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+k8s_storage_namespace: local-path-storage
+
+# The StorageClass every claim without one gets. Retain keeps a volume's folder when its claim is
+# deleted, so removing an app never removes its data; the folder is cleaned up by hand.
+k8s_storage_class: local-path
+k8s_storage_class_default: true
+k8s_storage_reclaim_policy: Retain

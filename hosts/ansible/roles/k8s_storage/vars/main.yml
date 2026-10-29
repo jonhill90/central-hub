@@ -1,0 +1,7 @@
+---
+# Derived values, not inputs.
+k8s_storage_dir: /root/central-hub/storage
+# Each volume's folder sits under this path on the node (Local Path Provisioner's nodePathMap).
+k8s_storage_path: "{{ k8s_storage_mount }}/local-path"
+# The node label that marks a node whose data disk is mounted; the StorageClass allows only those.
+k8s_storage_node_label: central-hub/data-disk

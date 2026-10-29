@@ -1,0 +1,42 @@
+# {{ ansible_managed }}
+# Storage proof (role k8s_storage, tag proof): a claim on the default StorageClass and a pod that
+# writes a line to it and reads it back. Deleted by the same run.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: storage-smoke
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: proof
+  namespace: storage-smoke
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 64Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: writer
+  namespace: storage-smoke
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: writer
+      image: {{ k8s_storage_helper_image }}
+      command: [sh, -c, "echo c1-storage-proof > /data/proof && cat /data/proof"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      volumeMounts:
+        - {name: data, mountPath: /data}
+  volumes:
+    - name: data
+      persistentVolumeClaim: {claimName: proof}

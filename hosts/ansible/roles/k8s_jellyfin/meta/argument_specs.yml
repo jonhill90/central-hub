@@ -1,0 +1,20 @@
+---
+argument_specs:
+  main:
+    short_description: Jellyfin on c1 on the default StorageClass, with its HTTPS route (BUILD-PATH S17)
+    options:
+      k8s_jellyfin_image:
+        type: str
+        default: docker.io/jellyfin/jellyfin:12.2@sha256:357724bf0ae27a672c7cbaa899db2d9abeb13dbd8657ccce750258a4c059d037
+        description: "The server's image, pinned by digest (STD-0003)."
+      k8s_jellyfin_namespace: {type: str, default: media, description: The app's namespace.}
+      k8s_jellyfin_name: {type: str, default: jellyfin, description: "Name of the app's objects and the hostname's first label."}
+      k8s_jellyfin_storage_class: {type: str, default: "", description: "StorageClass of both claims; empty means the cluster's default."}
+      k8s_jellyfin_config_size: {type: str, default: 5Gi, description: "Size asked for /config (settings, users, library database)."}
+      k8s_jellyfin_media_size: {type: str, default: 100Gi, description: Size asked for /media (the media files).}
+      k8s_jellyfin_cache_limit: {type: str, default: 8Gi, description: "Size limit of the /cache emptyDir (images, transcodes)."}
+      k8s_jellyfin_uid: {type: int, default: 1000, description: User and group id the server runs as.}
+      k8s_jellyfin_cpu_request: {type: str, default: 250m, description: CPU request.}
+      k8s_jellyfin_memory_request: {type: str, default: 512Mi, description: Memory request.}
+      k8s_jellyfin_memory_limit: {type: str, default: 2Gi, description: Memory limit.}
+      k8s_jellyfin_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}

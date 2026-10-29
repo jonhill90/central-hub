@@ -1,0 +1,69 @@
+---
+# A throwaway claim in namespace storage-smoke and a pod that writes a line to it and reads it
+# back. The volume's folder must sit under the data disk's mount on the node that ran the pod.
+# Everything is deleted afterwards; with reclaim policy Retain the PersistentVolume and its folder
+# stay, so the proof deletes them too.
+- name: proof | Manifest
+  ansible.builtin.template:
+    src: proof.yaml.j2
+    dest: "{{ k8s_storage_dir }}/proof.yaml"
+    mode: "0600"
+
+- name: proof | Claim and pod
+  ansible.builtin.command: kubectl apply -f {{ k8s_storage_dir }}/proof.yaml
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: proof | The pod wrote and read its file
+  ansible.builtin.command: kubectl -n storage-smoke wait pod/writer --for=jsonpath='{.status.phase}'=Succeeded --timeout=180s
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: proof | What the pod read back, and where the volume is
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    kubectl -n storage-smoke logs writer;
+    pv=$(kubectl -n storage-smoke get pvc proof -o jsonpath='{.spec.volumeName}');
+    echo "$pv";
+    kubectl get pv "$pv" -o jsonpath='{.spec.hostPath.path}{.spec.local.path}{" "}{.spec.storageClassName}{" "}{.spec.persistentVolumeReclaimPolicy}{"\n"}';
+    node=$(kubectl -n storage-smoke get pod writer -o jsonpath='{.spec.nodeName}');
+    kubectl get node "$node" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}'
+  args:
+    executable: /bin/bash
+  register: k8s_storage_proof
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: proof | Check it
+  ansible.builtin.assert:
+    that:
+      - k8s_storage_proof.stdout_lines[0] == 'c1-storage-proof'
+      - k8s_storage_proof.stdout_lines[2].startswith(k8s_storage_path ~ '/')
+      - k8s_storage_proof.stdout_lines[2].split(' ')[1] == k8s_storage_class
+    fail_msg: "Proof failed: {{ k8s_storage_proof.stdout_lines }}"
+    success_msg: >-
+      Volume {{ k8s_storage_proof.stdout_lines[1] }} at {{ k8s_storage_proof.stdout_lines[2] }}:
+      the pod wrote and read back "{{ k8s_storage_proof.stdout_lines[0] }}".
+  when: not ansible_check_mode
+
+- name: proof | Clean up the claim, the pod and the namespace
+  ansible.builtin.command: kubectl delete -f {{ k8s_storage_dir }}/proof.yaml --wait=true
+  changed_when: false
+  when: not ansible_check_mode
+
+# Retain keeps the volume and its folder after the claim is gone; the proof removes its own, on the
+# node found by the address Ansible reaches it on, so no machine name is written here.
+- name: proof | Remove the proof's volume
+  ansible.builtin.command: kubectl delete pv {{ k8s_storage_proof.stdout_lines[1] }} --ignore-not-found
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: proof | Remove the proof's folder on its node
+  ansible.builtin.file:
+    path: "{{ k8s_storage_proof.stdout_lines[2].split(' ')[0] }}"
+    state: absent
+  delegate_to: >-
+    {{ groups['k8s_nodes'] | map('extract', hostvars) | selectattr('ansible_host', 'equalto', k8s_storage_proof.stdout_lines[3])
+    | map(attribute='inventory_hostname') | first }}
+  changed_when: false
+  when: not ansible_check_mode
