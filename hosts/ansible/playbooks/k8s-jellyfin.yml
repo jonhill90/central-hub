@@ -1,0 +1,12 @@
+---
+# Jellyfin on cluster c1 (BUILD-PATH S17), the first app on c1's storage: one pod with its settings
+# and media on the default StorageClass, and https://jellyfin.apps.c1.prod.<zone>/ through the
+# shared Gateway. Agent picks, listed in hosts/AGENT-PICKS.md. Needs k8s-storage.yml,
+# k8s-gateway.yml with HTTPS and k8s-certs.yml first, and k8s_jellyfin_zone in the inventory.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-jellyfin.yml --check --diff
+#   ansible-playbook -i inventories/home/ playbooks/k8s-jellyfin.yml
+- name: Jellyfin
+  hosts: k8s_control_plane[0]
+  become: true
+  roles:
+    - role: k8s_jellyfin

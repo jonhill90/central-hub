@@ -93,6 +93,8 @@ all:
         k8s_identity_zone: "{{ k8s_gateway_zone }}"
         k8s_identity_owner_username: ""      # the owner's account in realm lab
         k8s_identity_owner_email: ""         # optional
+        # Jellyfin (playbooks/k8s-jellyfin.yml, BUILD-PATH S17): https://jellyfin.apps.c1.prod.<zone>/.
+        k8s_jellyfin_zone: "{{ k8s_gateway_zone }}"
         # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
         # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
         # k8s_control_plane_kubernetes_version.

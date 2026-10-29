@@ -1,0 +1,34 @@
+---
+# Jellyfin on cluster c1 (BUILD-PATH S17, the first app on c1's storage): one pod with its
+# settings and its media library on volumes from the default StorageClass (role k8s_storage), and
+# https://<name>.apps.c1.prod.<zone>/ through the shared Gateway (role k8s_app_route). Plain
+# manifests, applied with kubectl like k8s_identity; no Helm chart and no GitOps engine yet. Every
+# part is an agent pick, listed in hosts/AGENT-PICKS.md. Every input is listed here.
+
+# The image: tag 12.2 (2026-10-05, the newest at least two weeks old on 2026-10-29, STD-0003
+# rule 1), pinned by its multi-arch index digest from Docker Hub.
+k8s_jellyfin_image: docker.io/jellyfin/jellyfin:12.2@sha256:357724bf0ae27a672c7cbaa899db2d9abeb13dbd8657ccce750258a4c059d037
+
+# Names by job (pick 96): the namespace and the hostname's first label.
+k8s_jellyfin_namespace: media
+k8s_jellyfin_name: jellyfin
+
+# Volumes. Settings, users and the library database live in /config; the media files in /media.
+# The sizes are requests only: the Local Path Provisioner doesn't enforce them. Empty StorageClass
+# means the cluster's default.
+k8s_jellyfin_storage_class: ""
+k8s_jellyfin_config_size: 5Gi
+k8s_jellyfin_media_size: 100Gi
+# /cache (images and transcodes) can be rebuilt, so it is an emptyDir on the node's OS disk.
+k8s_jellyfin_cache_limit: 8Gi
+
+# The user the server runs as; the volume folders are 0777 (k8s_storage), so any uid can write.
+k8s_jellyfin_uid: 1000
+
+# Requests and a memory limit for the 2-vCPU, 8 GB worker; no CPU limit, so playback can burst.
+k8s_jellyfin_cpu_request: 250m
+k8s_jellyfin_memory_request: 512Mi
+k8s_jellyfin_memory_limit: 2Gi
+
+# Private, no default; the inventory template sets it to k8s_gateway_zone.
+# k8s_jellyfin_zone: <zone>
