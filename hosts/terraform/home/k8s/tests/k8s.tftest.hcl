@@ -87,3 +87,26 @@ run "gateway_follows_vnet" {
     error_message = "On VNet dev the gateway must be dev's .1 address."
   }
 }
+
+# BUILD-PATH S17: a node with data_disk_gb gets an empty scsi1 for Kubernetes volumes; one
+# without it keeps only its OS disk.
+run "data_disk_only_where_asked" {
+  command = plan
+
+  variables {
+    nodes = {
+      palcpdemo01 = { vm_id = 200, role = "control-plane", cores = 2, memory_mb = 4096, disk_gb = 40, address = "10.1.10.11" }
+      palwkdemo01 = { vm_id = 201, role = "worker", cores = 2, memory_mb = 4096, disk_gb = 40, data_disk_gb = 200, address = "10.1.10.21" }
+    }
+  }
+
+  assert {
+    condition     = length(proxmox_virtual_environment_vm.node["palcpdemo01"].disk) == 1
+    error_message = "A node without data_disk_gb must have only its OS disk."
+  }
+
+  assert {
+    condition     = anytrue([for d in proxmox_virtual_environment_vm.node["palwkdemo01"].disk : d.interface == "scsi1" && d.size == 200 && d.datastore_id == "local-lvm"])
+    error_message = "A node with data_disk_gb must get a scsi1 data disk of that size on local-lvm."
+  }
+}

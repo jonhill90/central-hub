@@ -127,6 +127,19 @@ resource "proxmox_virtual_environment_vm" "node" {
     discard      = "on"
   }
 
+  # The data disk for Kubernetes volumes, apart from the OS disk so a node rebuild or a move to
+  # other storage keeps it (BUILD-PATH S17). Ansible formats and mounts it (role k8s_storage).
+  dynamic "disk" {
+    for_each = each.value.data_disk_gb > 0 ? [each.value.data_disk_gb] : []
+    content {
+      interface    = "scsi1"
+      datastore_id = "local-lvm"
+      size         = disk.value
+      iothread     = true
+      discard      = "on"
+    }
+  }
+
   network_device {
     bridge = var.node_vnet
     model  = "virtio"

@@ -41,7 +41,7 @@ variable "node_ssh_public_key" {
 }
 
 variable "nodes" {
-  description = "One entry per node, keyed by its STD-0001 hostname. address is the node's fixed address on node_vnet, without /24. Private: set it in the git-ignored home.tfvars."
+  description = "One entry per node, keyed by its STD-0001 hostname. data_disk_gb adds an empty data disk for Kubernetes volumes (0 or unset: none). address is the node's fixed address on node_vnet, without /24. Private: set it in the git-ignored home.tfvars."
   type = map(object({
     vm_id     = number
     role      = string # control-plane or worker
@@ -49,5 +49,7 @@ variable "nodes" {
     memory_mb = number
     disk_gb   = number
     address   = string
+    # A second, empty disk (scsi1) for Kubernetes volumes; 0 means none (BUILD-PATH S17).
+    data_disk_gb = optional(number, 0)
   }))
 }

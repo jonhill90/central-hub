@@ -15,3 +15,5 @@ k8s_identity namespace.yaml.j2 identity-namespace.yaml {}
 k8s_identity database.yaml.j2 identity-database.yaml {"k8s_identity_db_node":"node-1"}
 k8s_identity keycloak.yaml.j2 identity-keycloak.yaml {}
 k8s_identity realm.yaml.j2 identity-realm.yaml {}
+k8s_storage local-path.yaml.j2 storage-local-path.yaml {}
+k8s_storage proof.yaml.j2 storage-proof.yaml {}

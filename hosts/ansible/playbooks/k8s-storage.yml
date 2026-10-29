@@ -1,0 +1,23 @@
+---
+# Persistent volumes on c1 (BUILD-PATH S17): each node's data disk (terraform/home/k8s,
+# data_disk_gb) formatted and mounted, then the Local Path Provisioner with a default StorageClass
+# that puts each volume in a folder on those disks. Agent picks, listed in hosts/AGENT-PICKS.md.
+# Needs the data disk applied by terraform/home/k8s first.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-storage.yml --check --diff
+#   ansible-playbook -i inventories/home/ playbooks/k8s-storage.yml
+- name: Data disks on the nodes
+  hosts: k8s_nodes
+  become: true
+  tasks:
+    - name: Data disk
+      ansible.builtin.include_role:
+        name: k8s_storage
+        tasks_from: disk
+        apply: {tags: [disk]}
+      tags: [disk]
+
+- name: Provisioner and StorageClass
+  hosts: k8s_control_plane[0]
+  become: true
+  roles:
+    - role: k8s_storage

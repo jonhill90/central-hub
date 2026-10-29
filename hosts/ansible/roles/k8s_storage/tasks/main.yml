@@ -1,0 +1,9 @@
+---
+- name: Provisioner and StorageClass
+  ansible.builtin.import_tasks: provisioner.yml
+  tags: [provisioner]
+
+# A claim, a pod that writes and reads a file on it, and the volume's folder on the data disk.
+- name: Proof
+  ansible.builtin.import_tasks: proof.yml
+  tags: [proof]

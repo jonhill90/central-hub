@@ -1,0 +1,79 @@
+---
+# Runs on each node that has a data disk (playbooks/k8s-storage.yml, tag disk). A node without one
+# is skipped, so the role can run on every node. A file system is made only on a disk with no
+# signature at all (blkid finds nothing), so a second run, or a disk that already holds data, is
+# never formatted.
+- name: disk | The data disk
+  ansible.builtin.stat:
+    path: "{{ k8s_storage_device }}"
+  register: k8s_storage_device_stat
+
+- name: disk | Nodes without a data disk stop here
+  ansible.builtin.meta: end_host
+  when: not k8s_storage_device_stat.stat.exists
+
+# blkid exits 2 when it finds no signature on the device.
+- name: disk | What is on it now
+  ansible.builtin.command: blkid -o value -s TYPE {{ k8s_storage_device }}
+  register: k8s_storage_blkid
+  changed_when: false
+  failed_when: k8s_storage_blkid.rc not in [0, 2]
+  check_mode: false
+
+- name: disk | Stop if it holds another file system
+  ansible.builtin.assert:
+    that: k8s_storage_blkid.rc == 2 or k8s_storage_blkid.stdout == k8s_storage_fstype
+    fail_msg: >-
+      {{ k8s_storage_device }} holds "{{ k8s_storage_blkid.stdout }}", not {{ k8s_storage_fstype }}.
+      Nothing was changed; look at the disk by hand.
+    quiet: true
+
+- name: disk | Make the file system on the empty disk
+  ansible.builtin.command: mkfs.{{ k8s_storage_fstype }} -L c1-data {{ k8s_storage_device }}
+  when: k8s_storage_blkid.rc == 2
+  changed_when: true
+
+- name: disk | The file system's UUID
+  ansible.builtin.command: blkid -o value -s UUID {{ k8s_storage_device }}
+  register: k8s_storage_uuid
+  changed_when: false
+  check_mode: false
+  when: not (ansible_check_mode and k8s_storage_blkid.rc == 2)
+
+# Mounted by UUID, so a change in device order can't mount the wrong disk. nofail lets the node
+# boot if the disk is missing; its volumes then fail to start instead.
+- name: disk | Mounted at {{ k8s_storage_mount }}
+  ansible.posix.mount:
+    path: "{{ k8s_storage_mount }}"
+    src: UUID={{ k8s_storage_uuid.stdout }}
+    fstype: "{{ k8s_storage_fstype }}"
+    opts: defaults,nofail
+    state: mounted
+  when: k8s_storage_uuid.stdout is defined
+
+- name: disk | Folder for the volumes
+  ansible.builtin.file:
+    path: "{{ k8s_storage_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Marks the node for the StorageClass's allowedTopologies, from the first control plane, with the
+# node found by the address Ansible reaches it on, so no machine name is written here.
+- name: disk | The node's Kubernetes name
+  ansible.builtin.command: >-
+    kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}'
+  delegate_to: "{{ groups['k8s_control_plane'] | first }}"
+  register: k8s_storage_nodes
+  changed_when: false
+  check_mode: false
+
+- name: disk | Label it as having a mounted data disk
+  ansible.builtin.command: >-
+    kubectl label node {{ (k8s_storage_nodes.stdout_lines | select('search', ' ' ~ ansible_host ~ '$') | first).split(' ') | first }}
+    {{ k8s_storage_node_label }}=true
+  delegate_to: "{{ groups['k8s_control_plane'] | first }}"
+  register: k8s_storage_label
+  changed_when: "'labeled' in k8s_storage_label.stdout"
+  failed_when: k8s_storage_label.rc != 0 and 'already has a value' not in k8s_storage_label.stderr
