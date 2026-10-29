@@ -140,4 +140,5 @@ A folded decision number has no file and no row in the index until the next new 
 - 2026-10-27 · this file · PR #46's approval facts and merge commit added to its lines · PR #47: approved 2026-10-27T02:55:47Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop), head 0622e3b; merged as b52d931
 - 2026-10-27 · D-0002 "Scope" · a pointer to D-0011 rules 7 and 8, which set the `hosts/` folders that the scope line's "folders or per-environment variable files" covers; the decision is unchanged · PR #47: approved 2026-10-27T02:55:47Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop), head 0622e3b; merged as b52d931
 - 2026-10-27 · this file · PR #47's approval facts and merge commit added to its lines · PR #49: approved 2026-10-27T04:13:09Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNRhqewJex9F94nbCBTi8P4i), head 9a76530; merged as 53c756d
-- 2026-10-28 · this file · PR #49's approval facts and merge commit added to its lines · PR #53
+- 2026-10-28 · this file · PR #49's approval facts and merge commit added to its lines · PR #53: approved 2026-10-28T05:56:40Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNNoaWE3uGdBqfKR2vDJxLGp), head ebb231c; merged as 4775bf0
+- 2026-10-29 · this file · PR #53's approval facts and merge commit added to its lines · PR #54
