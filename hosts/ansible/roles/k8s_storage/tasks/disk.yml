@@ -75,5 +75,7 @@
     {{ k8s_storage_node_label }}=true
   delegate_to: "{{ groups['k8s_control_plane'] | first }}"
   register: k8s_storage_label
-  changed_when: "'labeled' in k8s_storage_label.stdout"
+  # kubectl prints "node/<name> labeled" when it adds the label and "node/<name> not labeled" when
+  # the node already has it, so "labeled" alone would match both.
+  changed_when: k8s_storage_label.rc == 0 and 'not labeled' not in k8s_storage_label.stdout
   failed_when: k8s_storage_label.rc != 0 and 'already has a value' not in k8s_storage_label.stderr
