@@ -33,7 +33,8 @@ style_md() {
   # which are linted only in the PR that adds them (D-0019 rule 3).
   local base=${DOCS_BASE:-$(git merge-base origin/main HEAD)}
   { git diff --name-only --diff-filter=ACMR "$base" HEAD -- '*.md' ':!docs/decisions/0*' ':!docs/evidence/0*'
-    git diff --name-only --diff-filter=A "$base" HEAD -- 'docs/decisions/0*.md' 'docs/evidence/0*.md'; } | sort -u
+    # A moved record or evidence file counts as moved, not added: diff all of docs/ so git pairs the rename.
+    git diff --name-only --diff-filter=A -M "$base" HEAD -- docs | grep -E '^docs/(decisions|evidence)/0[^/]*\.md$' || true; } | sort -u
 }
 
 markdown() {
