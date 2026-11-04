@@ -48,7 +48,7 @@ This record sets which kinds of document central-hub keeps, where each one goes,
 
 Chosen option: **1**, with option 3's part READMEs added on top. The owner said yes to writing this map as a decision record on 2026-10-23 at 02:13 UTC, and accepted this record under D-0001 on 2026-10-23 at 02:18 UTC.
 
-No standard or paper names docs folders. ISO/IEC/IEEE 15289 and ISO/IEC 20000-1 say layout is out of their scope, and no paper read tests a folder scheme. In the repos read, 12 of the 18 that have docs give decisions, proposals, runbooks or postmortems a folder of their own, even where their guides are sorted another way. Only 2 of 18 use Diátaxis at the top. Diátaxis itself says it is "not a scheme into which documentation must be placed - four boxes". (Batch RB-0069, [evidence](../research/0012-sort-docs-by-kind-of-document.md).)
+No standard or paper names docs folders. ISO/IEC/IEEE 15289 and ISO/IEC 20000-1 say layout is out of their scope, and no paper read tests a folder scheme. In the repos read, 12 of the 18 that have docs give decisions, proposals, runbooks or postmortems a folder of their own, even where their guides are sorted another way. Only 2 of 18 use Diátaxis at the top. Diátaxis itself says it is "not a scheme into which documentation must be placed - four boxes". (Batch RB-0069, [evidence](../evidence/0012-sort-docs-by-kind-of-document.md).)
 
 ```
 central-hub/
@@ -59,11 +59,12 @@ central-hub/
 │   ├── glossary.md         what our words mean                      living   new
 │   ├── specs/              one plan per change                      frozen   (D-0007, D-0010)
 │   ├── decisions/          why we chose something                   frozen   (D-0001)
-│   ├── research/           what a decision rests on                 frozen   (D-0016)
+│   ├── evidence/           what a decision rests on                 frozen   (D-0016)
 │   ├── standards/          the rule in force now                    living   (D-0009)
 │   ├── runbooks/           how to do one job, step by step          living   (D-0008)
 │   ├── postmortems/        what went wrong and what changed         frozen   new
-│   └── diagrams/           drawing source files only                living   new
+│   ├── diagrams/           drawing source files only                living   new
+│   └── knowledge/          what we learned or gathered              living   (D-0026)
 └── <each root folder>/README.md   what this part is, the record that owns it, its runbooks
 ```
 
@@ -74,12 +75,13 @@ central-hub/
 3. **One file until it grows.** `architecture.md` and `glossary.md` stay single files. A file becomes a folder of the same name, with a README, only when a second document on that kind arrives.
 4. **Every kind folder has a README** that indexes it, as `decisions/`, `specs/` and `standards/` do now.
 5. **Part READMEs.** Each root folder (`hosts/`, `kubernetes/`, `dns/`, `backup/`, `private-network/`) gets a `README.md` with its first file. It says what the part does, which decision record owns it, how it is dropped, and which runbooks run it. It points to records and never copies them.
-6. **Not folders.** There is no `plans/` folder: a plan for one change is a spec (D-0007), and the ordered backlog stays outside this repo. There is no `playbooks/` folder: a response to an alert is a runbook whose trigger is that alert. There are no `how-to/`, `tutorials/` or `reference/` folders: runbooks are the how-tos, learning material stays in the Research repo, and generated reference stays next to the code it describes.
+6. **Not folders.** There is no `plans/` folder: a plan for one change is a spec (D-0007), and the ordered backlog stays outside this repo. There is no `playbooks/` folder: a response to an alert is a runbook whose trigger is that alert. There are no `how-to/`, `tutorials/` or `reference/` folders: runbooks are the how-tos, learning material goes in `docs/knowledge/` (rule 12), and generated reference stays next to the code it describes.
 7. **Decisions folder name.** It stays `docs/decisions/` (MADR, D-0001), not `docs/adr/`.
 8. **Glossary is the one source** for platform terms (REQ-0005). Other copies point to it. Terms about systems other than system 8 stay in the Research repo.
 9. **Diagrams.** A drawing written as text stays inside the page that uses it. `docs/diagrams/` holds only source files such as `.d2`, `.drawio` or `.svg`.
 10. **No private values in any document.** Hostnames, single machine addresses, contacts and secrets are never written here. A document names the key that holds the value in the private store, never the value (CLAUDE.md rule 4; STD-0002).
 11. **Security postmortems wait.** A postmortem for a security incident stays in a private GitHub security advisory until the fix is out, and only then lands in `docs/postmortems/` (SECURITY.md).
+12. **Documentation or knowledge.** Before placing a file, ask: "Is it about this repository's system, saying why it is so, what it is, or how to run or change it?" If yes, rules 1 to 11 place it. If no, it is knowledge, and it goes in `docs/knowledge/`, which is laid out by the organization standard, not by kind of document (D-0026).
 
 ### Runbook format
 
@@ -186,7 +188,7 @@ The sections are: Summary, Impact, How we found out, Timeline, Causes, What fixe
 
 ## More Information
 
-- **Evidence:** [../research/0012-sort-docs-by-kind-of-document.md](../research/0012-sort-docs-by-kind-of-document.md): batch RB-0069, with the map tested on 5 real items, a recall check, a devil's advocate pass and an independent claim check.
+- **Evidence:** [../evidence/0012-sort-docs-by-kind-of-document.md](../evidence/0012-sort-docs-by-kind-of-document.md): batch RB-0069, with the map tested on 5 real items, a recall check, a devil's advocate pass and an independent claim check.
 - Sources it rests on:
   - AWS Well-Architected OPS07-BP03, the runbook template;
   - NIST SP 800-34 Rev. 1 chapter 4, for steps, escalation and validation;

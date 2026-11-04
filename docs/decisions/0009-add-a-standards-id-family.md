@@ -89,5 +89,5 @@ This adds the Standards row to the family registry in D-0003. `STD-` passes D-00
 ## More Information
 
 - Proposal and ID options (project files outside this repo): `plans/standards-system/PROPOSAL-v0.1.md`, §6.
-- **Evidence:** no research batch of its own. Its ID rules rest on D-0003's research: [../research/0003-use-registered-id-families-and-file-qualified-labels.md](../research/0003-use-registered-id-families-and-file-qualified-labels.md).
+- **Evidence:** no research batch of its own. Its ID rules rest on D-0003's research: [../evidence/0003-use-registered-id-families-and-file-qualified-labels.md](../evidence/0003-use-registered-id-families-and-file-qualified-labels.md).
 - Related records: D-0001, D-0003, D-0004, D-0008.

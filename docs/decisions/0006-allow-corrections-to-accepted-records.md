@@ -32,7 +32,7 @@ This record decides how an error in an accepted record is fixed, and where the r
 
 ## Decision Drivers
 
-- **Follow published practice.** Research batch RB-0029 ([evidence](../research/0006-allow-corrections-to-accepted-records.md)) read 14 sources. None asks for a near-copy record to fix an error that leaves the decision the same. Supersede is described for a decision that is reversed or changed.
+- **Follow published practice.** Research batch RB-0029 ([evidence](../evidence/0006-allow-corrections-to-accepted-records.md)) read 14 sources. None asks for a near-copy record to fix an error that leaves the decision the same. Supersede is described for a decision that is reversed or changed.
 - **Only the owner accepts.** A correction must need the same approval as an acceptance.
 - **Keep the history.** Anyone must be able to see what the record said when the owner accepted it.
 - **Replaceable** (REQ-0011): easy to tighten back to strict immutability.
@@ -133,5 +133,5 @@ This process applies from PR #42 on. Each earlier correction is one line in `COR
 
 ## More Information
 
-- **Evidence:** [../research/0006-allow-corrections-to-accepted-records.md](../research/0006-allow-corrections-to-accepted-records.md): batch RB-0029, 14 sources read, 21 of 21 quoted passages matched the fetched text.
+- **Evidence:** [../evidence/0006-allow-corrections-to-accepted-records.md](../evidence/0006-allow-corrections-to-accepted-records.md): batch RB-0029, 14 sources read, 21 of 21 quoted passages matched the fetched text.
 - **Exit path:** to return to strict immutability, a new record replaces this one; `CORRECTIONS.md` stays as the history. To switch to an errata list, the log's lines move into one file per record.

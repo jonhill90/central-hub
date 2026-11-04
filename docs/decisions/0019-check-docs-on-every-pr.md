@@ -163,6 +163,6 @@ Each step is its own PR and can be dropped without the others.
 
 ## More Information
 
-- **Evidence:** [../research/0019-check-docs-on-every-pr.md](../research/0019-check-docs-on-every-pr.md)
+- **Evidence:** [../evidence/0019-check-docs-on-every-pr.md](../evidence/0019-check-docs-on-every-pr.md)
 - **Exit path:** delete `.github/docs-check/`, `.github/vale/` and the workflow. The schemas and the glossary stay usable without the scripts. A new record supersedes this one.
 - **Related records:** D-0001 (index and validation column), D-0006, D-0008 (short root), D-0012 (glossary), D-0016 (no owner quotes; evidence files).

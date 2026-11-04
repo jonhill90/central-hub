@@ -97,6 +97,6 @@ flowchart LR
 
 ## More Information
 
-- **Evidence:** [../research/0022-reach-clusters-by-ssh-now-and-keep-admin-kubeconfigs-for-break-glass.md](../research/0022-reach-clusters-by-ssh-now-and-keep-admin-kubeconfigs-for-break-glass.md), from research batch RB-0088, with research batch RB-0078 behind it.
+- **Evidence:** [../evidence/0022-reach-clusters-by-ssh-now-and-keep-admin-kubeconfigs-for-break-glass.md](../evidence/0022-reach-clusters-by-ssh-now-and-keep-admin-kubeconfigs-for-break-glass.md), from research batch RB-0088, with research batch RB-0078 behind it.
 - **Exit path:** delete the user's RBAC binding (the certificate then has no rights) and let it expire; or move to identity-provider sign-in. The admin kubeconfigs are untouched either way.
 - Related records: D-0013, D-0017. Related runbooks: `docs/runbooks/build-kubeadm-cluster.md` steps 8 and 19.

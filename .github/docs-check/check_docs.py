@@ -24,7 +24,7 @@ FRONT = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 # Which schema each file gets. Files outside these patterns are not checked here.
 KINDS = [
     ("decision", re.compile(r"^docs/decisions/(\d{4})-[a-z0-9-]+\.md$")),
-    ("evidence", re.compile(r"^docs/research/(\d{4})-[a-z0-9-]+\.md$")),
+    ("evidence", re.compile(r"^docs/evidence/(\d{4})-[a-z0-9-]+\.md$")),
     ("standard", re.compile(r"^docs/standards/(\d{4})-[a-z0-9-]+\.md$")),
     ("spec", re.compile(r"^docs/specs/(\d{4}-\d{2})-[a-z0-9-]+\.md$")),
     ("runbook", re.compile(r"^docs/runbooks/(?!README)[a-z0-9-]+\.md$")),
@@ -104,15 +104,15 @@ def main(root: Path) -> int:
 
         if kind == "evidence":
             # D-0016 rule 1: same file name as its record, front matter names it, record links it.
-            twin = rel.replace("docs/research/", "docs/decisions/")
+            twin = rel.replace("docs/evidence/", "docs/decisions/")
             if twin in unreadable:
                 pass
             elif twin not in docs:
                 errors.append(f"{rel}: no record with the same file name in docs/decisions/")
             elif docs[twin][2].get("id") != fm.get("record"):
                 errors.append(f"{rel}: record {fm.get('record')} is not the id of {twin}")
-            elif f"../research/{Path(rel).name}" not in docs[twin][3]:
-                errors.append(f"{twin}: does not link its evidence file ../research/{Path(rel).name}")
+            elif f"../evidence/{Path(rel).name}" not in docs[twin][3]:
+                errors.append(f"{twin}: does not link its evidence file ../evidence/{Path(rel).name}")
 
         if kind == "decision":
             did = fm.get("id")

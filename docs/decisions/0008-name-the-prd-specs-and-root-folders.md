@@ -104,5 +104,5 @@ central-hub/
 
 ## More Information
 
-- **Evidence:** [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md): the repository layout batch RB-0036, and the names question kept in batch RB-0057.
+- **Evidence:** [../evidence/0008-name-the-prd-specs-and-root-folders.md](../evidence/0008-name-the-prd-specs-and-root-folders.md): the repository layout batch RB-0036, and the names question kept in batch RB-0057.
 - Related records: D-0001, D-0002, D-0003, D-0007.

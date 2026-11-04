@@ -26,7 +26,7 @@ revisit-when: the Activation gate passes; the methods catalogue moves into a too
 
 Research specs, ledgers and checks name the methods they use by an ID from the project's research methods catalogue, for example `RM-0033` for an independent check. The catalogue holds 122 methods, and 40 more are proposed. An agent made up the method IDs, and the owner was never asked about them.
 
-Research batch RB-0075 (evidence: [../research/0018-number-research-methods-rm-nnnn.md](../research/0018-number-research-methods-rm-nnnn.md)) found:
+Research batch RB-0075 (evidence: [../evidence/0018-number-research-methods-rm-nnnn.md](../evidence/0018-number-research-methods-rm-nnnn.md)) found:
 
 - The build scripts gave a method its number from its place in the list, so rebuilding or re-sorting the list would renumber methods.
 - The scripts read the catalogue from a copy on one machine, not from the Research repo.
@@ -93,5 +93,5 @@ This adds the Research methods row to D-0003's registry, and D-0003 rule 6 says 
 
 ## More Information
 
-- **Evidence:** [../research/0018-number-research-methods-rm-nnnn.md](../research/0018-number-research-methods-rm-nnnn.md)
+- **Evidence:** [../evidence/0018-number-research-methods-rm-nnnn.md](../evidence/0018-number-research-methods-rm-nnnn.md)
 - Related records: D-0001, D-0003, D-0006, D-0014, D-0015, D-0016.

@@ -29,7 +29,7 @@ These rules fit the current stage, while Jon does every step himself so he under
 | What the platform is for | `docs/PRD.md` |
 | Writing a spec for a change | `docs/specs/README.md` |
 | All decisions | `docs/decisions/README.md` |
-| What a decision rests on | `docs/research/README.md` |
+| What a decision rests on | `docs/evidence/README.md` |
 | Standards in force (names, IP address plan) | `docs/standards/README.md` |
 | What a word means here | `docs/glossary.md` |
 | How to do one job, step by step | `docs/runbooks/README.md` |

@@ -28,7 +28,7 @@ On 2026-10-15 (Central Hub project, Kubernetes thread) the owner asked for the h
 
 There is no CNCF well-architected framework. Each cloud vendor publishes its own, and they overlap. Central Hub also has goals that no published framework treats as a pillar, above all that every component can be swapped. This record decides which pillars Central Hub is measured against, and where the line sits between adopting a standard and adding our own.
 
-Research: batch RB-0014 ([evidence](../research/0005-measure-central-hub-against-eight-pillars.md)), a 96-claim ledger with an independent review, and the proposal `central-hub/operating-model/PILLARS.md` in the project Library. The owner agreed the shape on 2026-10-15, where "B" was the proposal's name for what is option 1 below, on two conditions: the mapping between industry pillars and Central Hub pillars stays clear, and the framework is treated as replaceable like everything else.
+Research: batch RB-0014 ([evidence](../evidence/0005-measure-central-hub-against-eight-pillars.md)), a 96-claim ledger with an independent review, and the proposal `central-hub/operating-model/PILLARS.md` in the project Library. The owner agreed the shape on 2026-10-15, where "B" was the proposal's name for what is option 1 below, on two conditions: the mapping between industry pillars and Central Hub pillars stays clear, and the framework is treated as replaceable like everything else.
 
 ## Decision Drivers
 
@@ -125,7 +125,7 @@ The register rows are in the Research repo's requirements register (`coordinator
 
 ## More Information
 
-- **Evidence:** [../research/0005-measure-central-hub-against-eight-pillars.md](../research/0005-measure-central-hub-against-eight-pillars.md): batch RB-0014, a 96-row claim ledger and an independent review.
+- **Evidence:** [../evidence/0005-measure-central-hub-against-eight-pillars.md](../evidence/0005-measure-central-hub-against-eight-pillars.md): batch RB-0014, a 96-row claim ledger and an independent review.
 - **Exit path:** to move to plain Azure Well-Architected, drop or fold pillars 6 to 8. To move to plain AWS or Google Well-Architected, which both have Sustainability, drop or fold pillars 7 and 8 only. No content is lost, because every item already sits under a standard name or a labelled extension. A new record supersedes this one.
 - **Sources** (fetched 2026-10-15):
   - Azure: https://learn.microsoft.com/en-us/azure/well-architected/pillars and the Operational Excellence checklist https://learn.microsoft.com/en-us/azure/well-architected/operational-excellence/checklist

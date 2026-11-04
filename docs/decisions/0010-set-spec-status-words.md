@@ -88,5 +88,5 @@ Chosen option: **1**. The owner said yes to the proposed option on 2026-10-22 at
 
 ## More Information
 
-- **Evidence:** no research batch of its own. It rests on D-0007's research: [../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md), findings 7 and 9.
+- **Evidence:** no research batch of its own. It rests on D-0007's research: [../evidence/0007-use-a-one-page-prd-and-frozen-per-change-specs.md](../evidence/0007-use-a-one-page-prd-and-frozen-per-change-specs.md), findings 7 and 9.
 - Related records: D-0001, D-0007, D-0008.

@@ -32,8 +32,8 @@ style_md() {
   # Check 3 (Markdown style): changed files, except edits to existing records and evidence files,
   # which are linted only in the PR that adds them (D-0019 rule 3).
   local base=${DOCS_BASE:-$(git merge-base origin/main HEAD)}
-  { git diff --name-only --diff-filter=ACMR "$base" HEAD -- '*.md' ':!docs/decisions/0*' ':!docs/research/0*'
-    git diff --name-only --diff-filter=A "$base" HEAD -- 'docs/decisions/0*.md' 'docs/research/0*.md'; } | sort -u
+  { git diff --name-only --diff-filter=ACMR "$base" HEAD -- '*.md' ':!docs/decisions/0*' ':!docs/evidence/0*'
+    git diff --name-only --diff-filter=A "$base" HEAD -- 'docs/decisions/0*.md' 'docs/evidence/0*.md'; } | sort -u
 }
 
 markdown() {

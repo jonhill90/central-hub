@@ -114,7 +114,7 @@ flowchart LR
 
 ## More Information
 
-- **Evidence:** [../research/0021-use-gateway-api-on-cilium-as-the-way-in-for-web-traffic.md](../research/0021-use-gateway-api-on-cilium-as-the-way-in-for-web-traffic.md), from research batch RB-0088, with RB-0067 and the Kubernetes tool map behind it.
+- **Evidence:** [../evidence/0021-use-gateway-api-on-cilium-as-the-way-in-for-web-traffic.md](../evidence/0021-use-gateway-api-on-cilium-as-the-way-in-for-web-traffic.md), from research batch RB-0088, with RB-0067 and the Kubernetes tool map behind it.
 - **Exit path:** keep the Gateway and HTTPRoutes, install another conformant controller, and change `gatewayClassName`; routes that use only core features move unchanged, and any extended feature is checked against the new controller's conformance report first. The address moves with the pool (D-0017). Under option 5 the routes would need rewriting, which is why it was not picked.
 - **Where it is built:** `hosts/ansible/roles/k8s_control_plane/` (CRDs and Cilium values), `hosts/ansible/roles/k8s_gateway/` (Gateway and smoke test), the OPNsense role's DNS override, and the kubeadm runbook's step 10a.
 - Related records: D-0011, D-0017. Related standards: STD-0001, STD-0002, STD-0003.

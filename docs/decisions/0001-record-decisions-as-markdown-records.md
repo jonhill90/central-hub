@@ -153,7 +153,7 @@ Until each of these is checked, acceptance stays by convention.
 
 ## More Information
 
-- **Evidence:** [../research/0001-record-decisions-as-markdown-records.md](../research/0001-record-decisions-as-markdown-records.md): batch RB-0001, 10 practice sources, 16 repositories and two independent designs.
+- **Evidence:** [../evidence/0001-record-decisions-as-markdown-records.md](../evidence/0001-record-decisions-as-markdown-records.md): batch RB-0001, 10 practice sources, 16 repositories and two independent designs.
 - **Exit path:**
   - Swapping the generator or site doesn't change the records.
   - Moving the location is a `git mv`.
