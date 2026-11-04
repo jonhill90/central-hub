@@ -19,7 +19,10 @@ front_matter() {
 
 links() {
   # Links inside the repo only, with #anchors. Outside links are a weekly report, never a gate.
-  "${LYCHEE:-lychee}" --offline --include-fragments --no-progress './**/*.md'
+  # Captured material in docs/knowledge/ is skipped: we did not write it (D-0026 rule 3).
+  "${LYCHEE:-lychee}" --offline --include-fragments --no-progress \
+    --exclude-path '^(\./)?docs/knowledge/(04-resources|05-archive)/' --exclude-path '^(\./)?docs/knowledge/(.*/)?(sources|data)/' \
+    './**/*.md'
 }
 
 changed_md() {
@@ -37,9 +40,14 @@ style_md() {
     git diff --name-only --diff-filter=A -M "$base" HEAD -- docs | grep -E '^docs/(decisions|evidence)/0[^/]*\.md$' || true; } | sort -u
 }
 
+captured() {
+  # Captured material in docs/knowledge/, which we did not write (D-0026 rule 3).
+  grep -v -E '^docs/knowledge/((04-resources|05-archive)/|(.*/)?(sources|data)/)' || true
+}
+
 markdown() {
   local files
-  files=$(style_md)
+  files=$(style_md | captured)
   if [ -z "$files" ]; then echo "markdown: no Markdown files changed"; return 0; fi
   # shellcheck disable=SC2086
   "$here/node_modules/.bin/markdownlint-cli2" --config "$here/markdownlint.jsonc" $files

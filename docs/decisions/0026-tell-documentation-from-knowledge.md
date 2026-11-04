@@ -39,7 +39,7 @@ The project is still greenfield. On 2026-11-04 the owner asked that records be c
 
 ## Decision Outcome
 
-Chosen option: **1**. The owner chose the two-store plan on 2026-11-04 at 00:36 UTC, and chose `docs/knowledge/` over a root folder at 02:14 UTC, each on a decision card. This record waits for the owner's acceptance under D-0001.
+Chosen option: **1**. The owner's own messages set it: on 2026-11-03 at 23:55 UTC, that documentation and knowledge are different and the standard must tell them apart; on 2026-11-04 at 02:12 UTC, that documentation belongs in `docs/` at the root and a root knowledge folder is not usual; and at 02:14 UTC, that records change in place while the project is greenfield. The owner then picked this plan on decision cards at 00:36 and 02:14 UTC. This record waits for the owner's acceptance under D-0001.
 
 ```text
 docs/
@@ -59,7 +59,7 @@ docs/
 
 1. **Layout.** It follows the organization standard. The standard's one home is the Research repository, `99-meta/ORGANIZE.md`. `docs/knowledge/99-meta/ORGANIZE.md` holds only a pointer to it and its version, never a copy.
 2. **Creation.** The folder appears with its first real file (D-0012 rule 2), together with its README, the pointer file and a CI step that runs the standard's check on it.
-3. **Checks.** The docs checks place files only by D-0012's kind patterns, so knowledge files get no record schema. Links and Markdown style are checked as everywhere else.
+3. **Checks.** The docs checks place files only by D-0012's kind patterns, so knowledge files get no record schema. Knowledge we wrote gets the same link and Markdown style checks as every other page. Captured material we did not write (`docs/knowledge/04-resources/`, `docs/knowledge/05-archive/`, and any `sources/` or `data/` folder inside it) is skipped by the style and link checks, as the standard's own check skips it.
 4. **Names.** Files in `docs/knowledge/` follow the standard's naming rule, which allows no IDs or dates in names. Frozen records keep their `NNNN-` numbers (D-0003).
 5. **No private material** (CLAUDE.md rule 4).
 
