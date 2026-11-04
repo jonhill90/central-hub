@@ -40,7 +40,7 @@ This record sets the test that sends a file to one store or the other, renames `
 
 Chosen option: **1**. The owner chose this plan on a decision card on 2026-11-04 at 00:36 UTC. The card asked: "Use this plan for central-hub docs/ and its own knowledge?" This record waits for the owner's acceptance under D-0001.
 
-```
+```text
 central-hub/
 ├── docs/              documentation store: about this repo's system   (D-0012)
 │   ├── PRD.md  architecture.md  glossary.md
