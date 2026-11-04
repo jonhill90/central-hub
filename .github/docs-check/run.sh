@@ -19,7 +19,10 @@ front_matter() {
 
 links() {
   # Links inside the repo only, with #anchors. Outside links are a weekly report, never a gate.
-  "${LYCHEE:-lychee}" --offline --include-fragments --no-progress './**/*.md'
+  # Captured material in docs/knowledge/ is skipped: we did not write it (D-0026 rule 3).
+  "${LYCHEE:-lychee}" --offline --include-fragments --no-progress \
+    --exclude-path '^(\./)?docs/knowledge/(04-resources|05-archive)/' --exclude-path '^(\./)?docs/knowledge/(.*/)?(sources|data)/' \
+    './**/*.md'
 }
 
 changed_md() {
@@ -32,13 +35,19 @@ style_md() {
   # Check 3 (Markdown style): changed files, except edits to existing records and evidence files,
   # which are linted only in the PR that adds them (D-0019 rule 3).
   local base=${DOCS_BASE:-$(git merge-base origin/main HEAD)}
-  { git diff --name-only --diff-filter=ACMR "$base" HEAD -- '*.md' ':!docs/decisions/0*' ':!docs/research/0*'
-    git diff --name-only --diff-filter=A "$base" HEAD -- 'docs/decisions/0*.md' 'docs/research/0*.md'; } | sort -u
+  { git diff --name-only --diff-filter=ACMR "$base" HEAD -- '*.md' ':!docs/decisions/0*' ':!docs/evidence/0*'
+    # A moved record or evidence file counts as moved, not added: diff all of docs/ so git pairs the rename.
+    git diff --name-only --diff-filter=A -M "$base" HEAD -- docs | grep -E '^docs/(decisions|evidence)/0[^/]*\.md$' || true; } | sort -u
+}
+
+captured() {
+  # Captured material in docs/knowledge/, which we did not write (D-0026 rule 3).
+  grep -v -E '^docs/knowledge/((04-resources|05-archive)/|(.*/)?(sources|data)/)' || true
 }
 
 markdown() {
   local files
-  files=$(style_md)
+  files=$(style_md | captured)
   if [ -z "$files" ]; then echo "markdown: no Markdown files changed"; return 0; fi
   # shellcheck disable=SC2086
   "$here/node_modules/.bin/markdownlint-cli2" --config "$here/markdownlint.jsonc" $files

@@ -26,7 +26,7 @@ revisit-when: the Activation gate passes; the Research repo is retired and resea
 
 A research batch is one piece of research with its own folder and SPEC.md, kept outside this repo (the Research repo and the project files). Batches are cited from this repo, from chats and from each other.
 
-Agents made up the batch codes one at a time. Research batch RB-0074 ([evidence](../research/0015-number-research-batches-rb-nnnn.md)) measured them on 2026-10-23:
+Agents made up the batch codes one at a time. Research batch RB-0074 ([evidence](../evidence/0015-number-research-batches-rb-nnnn.md)) measured them on 2026-10-23:
 
 - 75 folders carried a code, written in 9 different shapes. Nothing defined how a code is made.
 - 3 codes each named two different batches.
@@ -93,5 +93,5 @@ This adds the Research batches row to D-0003's registry. `RB-` passes D-0003 rul
 
 ## More Information
 
-- **Evidence:** [../research/0015-number-research-batches-rb-nnnn.md](../research/0015-number-research-batches-rb-nnnn.md): batch RB-0074.
+- **Evidence:** [../evidence/0015-number-research-batches-rb-nnnn.md](../evidence/0015-number-research-batches-rb-nnnn.md): batch RB-0074.
 - Related records: D-0001, D-0003, D-0004, D-0006, D-0009, D-0014.

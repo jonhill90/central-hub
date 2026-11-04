@@ -107,6 +107,6 @@ central-hub/
 
 ## More Information
 
-- **Evidence:** [../research/0011-keep-machine-code-in-hosts.md](../research/0011-keep-machine-code-in-hosts.md): batch RB-0086, the folder order under `hosts/`, with 29 repositories read at pinned commits and options 4 to 7 with their pros and cons. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../research/0008-name-the-prd-specs-and-root-folders.md](../research/0008-name-the-prd-specs-and-root-folders.md), finding 2.
+- **Evidence:** [../evidence/0011-keep-machine-code-in-hosts.md](../evidence/0011-keep-machine-code-in-hosts.md): batch RB-0086, the folder order under `hosts/`, with 29 repositories read at pinned commits and options 4 to 7 with their pros and cons. Its naming rules come from the repository layout batch RB-0036, which D-0008 rests on: [../evidence/0008-name-the-prd-specs-and-root-folders.md](../evidence/0008-name-the-prd-specs-and-root-folders.md), finding 2.
 - **Modules guidance:** HashiCorp, "Creating modules", the section on when to write a module: <https://developer.hashicorp.com/terraform/language/modules/develop#when-to-write-a-module>, read in research batch RB-0083 on 2026-10-25.
 - Related records: D-0001, D-0008. Related standard: STD-0002.

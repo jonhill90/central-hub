@@ -29,7 +29,7 @@ The owner's backlog is one table in the project files. It holds every item that 
 - 49 decision-map rows used one capital letter plus a number. An agent made this scheme on 2026-10-10.
 - 110 backlog rows used one of three label styles: decision-map labels, lowercase word labels such as `k8s-access-4a`, and other uppercase labels.
 
-Research batch RB-0077 (evidence: [../research/0020-number-backlog-items-bl-nnnn.md](../research/0020-number-backlog-items-bl-nnnn.md)) found:
+Research batch RB-0077 (evidence: [../evidence/0020-number-backlog-items-bl-nnnn.md](../evidence/0020-number-backlog-items-bl-nnnn.md)) found:
 
 - A one-letter label such as `X1` looks like a registered ID such as `X-0001`, so an open question can look like an accepted record. Other files used the same letter-and-number labels for different things.
 - None of the seven letters could become a registered prefix, because a prefix needs at least two characters (D-0003 rule 2).
@@ -112,5 +112,5 @@ If the backlog moves into a task management system, each item moves once and tak
 
 ## More Information
 
-- **Evidence:** [../research/0020-number-backlog-items-bl-nnnn.md](../research/0020-number-backlog-items-bl-nnnn.md)
+- **Evidence:** [../evidence/0020-number-backlog-items-bl-nnnn.md](../evidence/0020-number-backlog-items-bl-nnnn.md)
 - Related records: D-0001, D-0003, D-0006, D-0016, D-0018.

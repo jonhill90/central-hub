@@ -114,7 +114,7 @@ flowchart LR
 
 ## More Information
 
-- **Evidence:** [../research/0017-replace-kube-proxy-and-announce-lb-addresses-with-cilium.md](../research/0017-replace-kube-proxy-and-announce-lb-addresses-with-cilium.md), from research batches RB-0067 and RB-0088.
+- **Evidence:** [../evidence/0017-replace-kube-proxy-and-announce-lb-addresses-with-cilium.md](../evidence/0017-replace-kube-proxy-and-announce-lb-addresses-with-cilium.md), from research batches RB-0067 and RB-0088.
 - **Exit path:** the pool's range moves to MetalLB (option 3) or to BGP (option 2) without changing the Services. Bringing kube-proxy back is a cluster rebuild with the kube-proxy addon, which is cheap while clusters hold no data.
 - **Where it is built:** `hosts/ansible/roles/k8s_control_plane/`, and the kubeadm runbook's steps 8, 9 and 17 with their home-lab place notes.
 - Related records: D-0011, D-0021. Related standards: STD-0001, STD-0002, STD-0003.

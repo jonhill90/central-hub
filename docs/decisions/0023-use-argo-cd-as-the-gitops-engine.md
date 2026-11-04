@@ -103,5 +103,5 @@ flowchart LR
 
 ## More Information
 
-- **Evidence:** [../research/0023-use-argo-cd-as-the-gitops-engine.md](../research/0023-use-argo-cd-as-the-gitops-engine.md), batches RB-0009 and RB-0089.
+- **Evidence:** [../evidence/0023-use-argo-cd-as-the-gitops-engine.md](../evidence/0023-use-argo-cd-as-the-gitops-engine.md), batches RB-0009 and RB-0089.
 - Related records: D-0002, D-0011, D-0013. Related standard: STD-0003.

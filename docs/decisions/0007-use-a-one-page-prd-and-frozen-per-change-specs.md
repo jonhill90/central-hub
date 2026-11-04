@@ -30,7 +30,7 @@ Three drafts exist in the Research repo and none is accepted: a platform PRD, a 
 
 ## Decision Drivers
 
-- **What the evidence shows.** Research batch RB-0057 ([evidence](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md)) found:
+- **What the evidence shows.** Research batch RB-0057 ([evidence](../evidence/0007-use-a-one-page-prd-and-frozen-per-change-specs.md)) found:
   - 81.5% of spec files in public repos have one commit, so most specs behave as frozen records.
   - Measured gains come from short, curated context and from checks, not from longer spec documents.
   - No study shows that a project-level PRD helps people or agents.
@@ -138,7 +138,7 @@ This is a later decision for the owner:
 
 ## More Information
 
-- **Evidence:** [../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md](../research/0007-use-a-one-page-prd-and-frozen-per-change-specs.md): batch RB-0057, with a recall check that found 194 of 220 known items, an independent check of 150 claims (140 supported, none false) and a check of the fit with the organization research.
+- **Evidence:** [../evidence/0007-use-a-one-page-prd-and-frozen-per-change-specs.md](../evidence/0007-use-a-one-page-prd-and-frozen-per-change-specs.md): batch RB-0057, with a recall check that found 194 of 220 known items, an independent check of 150 claims (140 supported, none false) and a check of the fit with the organization research.
 - **Exit path:**
   - Delete the PRD; the requirement rows remain.
   - Stop writing specs; merged specs stay as history.

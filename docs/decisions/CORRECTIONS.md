@@ -6,6 +6,13 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
+### Accepted with PR #55
+
+PR #55: approval facts and merge commit are added here when the owner accepts it.
+
+- 2026-11-04 · D-0012 tree, rule 6 and new rule 12 · a store test sends a file either to D-0012's kind folders or, if it is knowledge, to `docs/knowledge/`, laid out by the organization standard; learning material goes in `docs/knowledge/` · D-0026; the owner's statements of 2026-11-03 at 23:55 UTC and 2026-11-04 at 02:12 UTC, and the owner's picks on decision cards at 00:36 and 02:14 UTC
+- 2026-11-04 · D-0016 context, rule 1, diagram, Consequences, Confirmation, options and exit path; every record's evidence link; the evidence README; AGENTS.md; the docs checks · the evidence folder is renamed from `docs/research/` to `docs/evidence/`, so that "research" names only the knowledge store · D-0026; the owner's pick on a decision card at 00:36 UTC
+
 ### Accepted with PR #49
 
 PR #49: approved 2026-10-27T04:13:09Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNRhqewJex9F94nbCBTi8P4i), head 9a76530; merged as 53c756d.

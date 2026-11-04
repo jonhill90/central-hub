@@ -164,7 +164,7 @@ The owner answered all three, the last two on the condition that the rule comes 
 
 ## More Information
 
-- **Evidence:** [../research/0002-use-one-main-branch-with-environment-folders.md](../research/0002-use-one-main-branch-with-environment-folders.md): batch RB-0002, about 30 primary sources, 19 repositories, every pull request in the owner's 7 readable repositories, and a gap-fill pass. The draft was reviewed three times before acceptance.
+- **Evidence:** [../evidence/0002-use-one-main-branch-with-environment-folders.md](../evidence/0002-use-one-main-branch-with-environment-folders.md): batch RB-0002, about 30 primary sources, 19 repositories, every pull request in the owner's 7 readable repositories, and a gap-fill pass. The draft was reviewed three times before acceptance.
 - **Exit path:**
   - To rendered environment branches: add the render job, compare its output with the current render, then repoint the clusters.
   - To pin prod to a release: point prod at a commit, or at a tag protected from being moved, and compare renders before switching.

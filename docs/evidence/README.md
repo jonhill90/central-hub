@@ -1,4 +1,4 @@
-# Research behind decisions
+# Evidence behind decisions
 
 One evidence file per decision record, with the same file name as the record in [`../decisions/`](../decisions/README.md) (D-0016 rule 1). Each file summarises the research the decision rests on: the question, method, findings, checks, limits and public references. Nothing in it goes beyond what the research found.
 
@@ -27,3 +27,4 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0021 | [0021-use-gateway-api-on-cilium-as-the-way-in-for-web-traffic.md](0021-use-gateway-api-on-cilium-as-the-way-in-for-web-traffic.md) |
 | D-0022 | [0022-reach-clusters-by-ssh-now-and-keep-admin-kubeconfigs-for-break-glass.md](0022-reach-clusters-by-ssh-now-and-keep-admin-kubeconfigs-for-break-glass.md) |
 | D-0023 | [0023-use-argo-cd-as-the-gitops-engine.md](0023-use-argo-cd-as-the-gitops-engine.md) |
+| D-0026 | [0026-tell-documentation-from-knowledge.md](0026-tell-documentation-from-knowledge.md) |

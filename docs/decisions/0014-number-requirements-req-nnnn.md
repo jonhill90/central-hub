@@ -24,7 +24,7 @@ revisit-when: the Activation gate passes (D-0003 rule 5 then stops ID changes); 
 
 ## Context and Problem Statement
 
-Requirements are kept in one register in the Research repo, and they are cited from this repo, from chats and from each other. On 2026-10-23 the owner said the requirement ID format had been made up by agents and had never had the scrutiny other choices got. The check that followed (research batch RB-0072, [evidence](../research/0014-number-requirements-req-nnnn.md)) found:
+Requirements are kept in one register in the Research repo, and they are cited from this repo, from chats and from each other. On 2026-10-23 the owner said the requirement ID format had been made up by agents and had never had the scrutiny other choices got. The check that followed (research batch RB-0072, [evidence](../evidence/0014-number-requirements-req-nnnn.md)) found:
 
 - An agent coordinator wrote the format on 2026-10-06, before this project existed. The owner said yes to each requirement's wording, never to the format.
 - The format had no dash and two digits, unlike the house style the other families use (`D-0007`, `STD-0001`: a prefix, a dash and four digits).
@@ -90,5 +90,5 @@ This sets the Requirements row of D-0003's registry to `REQ-NNNN`. It also adds 
 
 ## More Information
 
-- **Evidence:** [../research/0014-number-requirements-req-nnnn.md](../research/0014-number-requirements-req-nnnn.md): batch RB-0072.
+- **Evidence:** [../evidence/0014-number-requirements-req-nnnn.md](../evidence/0014-number-requirements-req-nnnn.md): batch RB-0072.
 - Related records: D-0001, D-0003, D-0004, D-0006, D-0009.

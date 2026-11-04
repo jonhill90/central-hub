@@ -28,7 +28,7 @@ The research behind each decision record lives in a private research repository 
 
 The records also quoted the owner's chat messages word for word. 13 of 14 record bodies did so, and every `accepted-evidence` block held a `quote:` field.
 
-On 2026-10-23 the owner asked for two changes. The research the records rely on should be included in this repository, with nothing invented. The records should stop quoting the owner, and should state what the owner asked or decided in a neutral, professional tone. An earlier request from 2026-10-12, to remove references to private, machine-local material from the records, points the same way. The same day the owner asked for evidence files to sit in a directory of their own, so that the decisions folder holds only records, and chose `docs/research/` at 04:33 UTC on a decision card that offered four places.
+On 2026-10-23 the owner asked for two changes. The research the records rely on should be included in this repository, with nothing invented. The records should stop quoting the owner, and should state what the owner asked or decided in a neutral, professional tone. An earlier request from 2026-10-12, to remove references to private, machine-local material from the records, points the same way. The same day the owner asked for evidence files to sit in a directory of their own, so that the decisions folder holds only records, and chose `docs/research/` at 04:33 UTC on a decision card that offered four places. On 2026-11-04 the owner chose to rename it `docs/evidence/`, so that "research" names only the knowledge store.
 
 This record decides what a decision record carries about its research, and how it records the owner's approval and reasons.
 
@@ -55,7 +55,7 @@ Chosen option: **1**. On 2026-10-23 at 04:11 UTC the owner chose to write this a
 
 ```mermaid
 flowchart LR
-  R[Research batch<br/>private archive] -->|summarised, each line traced| E[docs/research/NNNN-slug.md<br/>public]
+  R[Research batch<br/>private archive] -->|summarised, each line traced| E[docs/evidence/NNNN-slug.md<br/>public]
   D[Decision record<br/>short, neutral, no quotes] -->|More Information links| E
   E -->|references| P[Public sources<br/>with fetch dates]
   A[Owner's approval message<br/>private chat archive] -.->|time, commit, what it named| D
@@ -65,7 +65,7 @@ flowchart LR
 
 ### Rules
 
-1. **Evidence file.** A record that rests on research gets one evidence file, `docs/research/NNNN-slug.md`, with the same file name as its record in `docs/decisions/`. `docs/research/` holds only these files and a README that lists each one with its record. The record links its evidence file under More Information as `../research/NNNN-slug.md`, and the evidence file's front matter names its record by ID. The file is created with the record, or later by a correction under D-0006, and is frozen with its record. It holds:
+1. **Evidence file.** A record that rests on research gets one evidence file, `docs/evidence/NNNN-slug.md`, with the same file name as its record in `docs/decisions/`. `docs/evidence/` holds only these files and a README that lists each one with its record. The record links its evidence file under More Information as `../evidence/NNNN-slug.md`, and the evidence file's front matter names its record by ID. The file is created with the record, or later by a correction under D-0006, and is frozen with its record. It holds:
    - the question the research answered;
    - the method and the date;
    - the findings, each with its label (sourced, measured or inferred) and a reference number;
@@ -104,7 +104,7 @@ flowchart LR
 - Bad: the "every line traced" promise is checked against private files, so a public reader has to trust the reviewing agent's check. A reader can still check each finding against its public reference.
 - Bad: the approval proof moves from a quote in the record to a pointer into a private archive.
 - Bad: the old quotes stay in git history and in past PR text. This repository is public, and a commit cannot be un-published (CLAUDE.md rule 4). Removing them changes what a reader sees on `main`, not the history.
-- Bad: a record and its evidence file sit in two folders, so each link needs `../research/`. The name `research` is also the name of the private research repository; the folder's README says what it holds and that the batches are not there.
+- Bad: a record and its evidence file sit in two folders, so each link needs `../evidence/`. The folder's README says what it holds and that the batches are not there.
 - Neutral: there is little precedent for this exact form. PEP 1 allows a support-file folder per PEP (meant for files such as diagrams), each Kubernetes KEP is a folder, and 3 of the 646 entries in Rust's RFC folder are companion folders, one of which holds a "Rationale and alternatives" file. Backstage keeps a record's supporting file in a separate tree, and MADR keeps supporting files flat beside its records.
 
 ### Confirmation
@@ -112,7 +112,7 @@ flowchart LR
 - A reviewing agent checks every evidence file line against its batch before the owner sees it, and lists what it could not trace.
 - A search of `docs/` finds no owner quotes and no `quote:` field.
 - Every record either links an evidence file or says in one line that it rests on no research.
-- `docs/decisions/` has no subfolders. Every file in `docs/research/` besides its README has a record with the same file name, that record links it, and the README lists it.
+- `docs/decisions/` has no subfolders. Every file in `docs/evidence/` besides its README has a record with the same file name, that record links it, and the README lists it.
 
 ## Pros and Cons of the Options
 
@@ -130,9 +130,9 @@ flowchart LR
 - Good: no work.
 - Bad: public readers cannot follow the links, and the links stop working when the private repository goes away.
 
-### Evidence place: `docs/evidence/`
-- Good: no confusion with the private research repository.
-- Bad: the owner suggested `research`, and the files are summaries of research.
+### Evidence place: `docs/research/`
+- Good: the files are summaries of research.
+- Bad: "research" is the name of the knowledge store, so one word would name two things.
 
 ### Evidence place: `docs/decisions/evidence/`, one folder holding every evidence file
 - Good: no new kind folder, so D-0012 does not change.
@@ -144,8 +144,8 @@ flowchart LR
 
 ## More Information
 
-- **Evidence:** [../research/0016-give-records-an-evidence-file-and-neutral-approval.md](../research/0016-give-records-an-evidence-file-and-neutral-approval.md).
-- **Worked example:** [../research/0006-allow-corrections-to-accepted-records.md](../research/0006-allow-corrections-to-accepted-records.md).
+- **Evidence:** [../evidence/0016-give-records-an-evidence-file-and-neutral-approval.md](../evidence/0016-give-records-an-evidence-file-and-neutral-approval.md).
+- **Worked example:** [../evidence/0006-allow-corrections-to-accepted-records.md](../evidence/0006-allow-corrections-to-accepted-records.md).
 - **Layout facts:** read on 2026-10-23 from public repositories: `backstage/backstage` at d723272 (`docs/assets/architecture-decisions/catalog-core-entities.png`, linked from `docs/architecture-decisions/adr005-catalog-core-entities.md`) and `adr/madr` at ba75bb1 (`docs/decisions/0008-example-table.png` and others, flat beside the records).
-- **Exit path:** evidence files are plain Markdown, one file per record in `docs/research/`. Delete a file to drop one, or move the folder into a future knowledge system. The approval fields map one to one to the earlier quote form, except the quote itself, which stays in the chat archive.
+- **Exit path:** evidence files are plain Markdown, one file per record in `docs/evidence/`. Delete a file to drop one, or move the folder into a future knowledge system. The approval fields map one to one to the earlier quote form, except the quote itself, which stays in the chat archive.
 - **Related records:** D-0001, D-0006, D-0012.

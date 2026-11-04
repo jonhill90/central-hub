@@ -26,7 +26,7 @@ revisit-when: a family needs numbers faster than one owner can hand them out; ag
 
 On 2026-10-12, after reading a table of IDs, the owner asked what the ID system was for and why it was needed. No ID system existed. Each agent had made up labels inside the file it was writing, and those labels now clash across files.
 
-The research batch (RB-0003, [evidence](../research/0003-use-registered-id-families-and-file-qualified-labels.md), run after the owner chose to run it at 02:45 UTC) measured the problem:
+The research batch (RB-0003, [evidence](../evidence/0003-use-registered-id-families-and-file-qualified-labels.md), run after the owner chose to run it at 02:45 UTC) measured the problem:
 
 - About 75 ID families. About 50 of them restart at 1 in each document.
 - **21 labels clash.** `P1` has 7 meanings, and two of them are in the same file. "ADR 0001" names 3 different records.
@@ -135,7 +135,7 @@ flowchart LR
 
 ## More Information
 
-- **Evidence:** [../research/0003-use-registered-id-families-and-file-qualified-labels.md](../research/0003-use-registered-id-families-and-file-qualified-labels.md): batch RB-0003, an inventory of every ID family, a practice review, 18 projects and an independent design.
+- **Evidence:** [../evidence/0003-use-registered-id-families-and-file-qualified-labels.md](../evidence/0003-use-registered-id-families-and-file-qualified-labels.md): batch RB-0003, an inventory of every ID family, a practice review, 18 projects and an independent design.
 - Source limit: this environment blocked several primary sites (w3.org, ietf.org, doi.org and others), so those claims are search-summary only and are labelled.
 - Reported, not fixed (agent-estate is back-burnered; noted only for whoever revives it):
   - agent-estate `register.go:571-591` may reuse a deleted `SRC-` number. Inferred from the code, not tested.

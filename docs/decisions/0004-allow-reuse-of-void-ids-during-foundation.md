@@ -78,7 +78,7 @@ Everything else in D-0003 stays in force, and rule 6 still applies to every case
 
 - Good: a mistake doesn't leave a permanent gap while the system is small.
 - Good: the tombstone and the search keep the reason for "never reuse" intact. Nobody following an earlier reference is misled without being told.
-- Bad: this goes against published practice. ARK, McMurry, OBO, PEP and DOORS all say never reuse (D-0003's [evidence](../research/0003-use-registered-id-families-and-file-qualified-labels.md), finding 2). McMurry's rule covers identifiers "generated and publicly advertised" (McMurry et al., reference 4 there), and Foundation IDs are not public in that sense. That reading is inferred, not quoted from a source.
+- Bad: this goes against published practice. ARK, McMurry, OBO, PEP and DOORS all say never reuse (D-0003's [evidence](../evidence/0003-use-registered-id-families-and-file-qualified-labels.md), finding 2). McMurry's rule covers identifiers "generated and publicly advertised" (McMurry et al., reference 4 there), and Foundation IDs are not public in that sense. That reading is inferred, not quoted from a source.
 - Bad: one more condition for a reviewer to check.
 - Neutral: each reused number is listed in [`CORRECTIONS.md`](CORRECTIONS.md), with its search.
 
@@ -99,5 +99,5 @@ Everything else in D-0003 stays in force, and rule 6 still applies to every case
 
 ## More Information
 
-- **Evidence:** no research batch of its own. It rests on D-0003's research: [../research/0003-use-registered-id-families-and-file-qualified-labels.md](../research/0003-use-registered-id-families-and-file-qualified-labels.md).
+- **Evidence:** no research batch of its own. It rests on D-0003's research: [../evidence/0003-use-registered-id-families-and-file-qualified-labels.md](../evidence/0003-use-registered-id-families-and-file-qualified-labels.md).
 - **Exit path:** when the Activation gate passes, this exception ends and D-0003 rule 6 applies unchanged; no record needs editing. To end it sooner, a new record supersedes this one.
