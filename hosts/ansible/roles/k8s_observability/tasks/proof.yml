@@ -59,25 +59,22 @@
       changed_when: false
       when: k8s_observability_grafana_sso | bool
 
-    # Each store's data is on a claim, and every claim is bound to a volume: Prometheus and Grafana
-    # in the metrics namespace (2), Loki in the logs namespace (1).
+    # Each store's data is on its own claim, named by the chart or the operator, and bound.
     - name: proof | Prometheus, Loki and Grafana claims are bound
       ansible.builtin.command: >-
-        kubectl get pvc -n {{ item.namespace }}
-        -o jsonpath='{range .items[*]}{.metadata.name}={.status.phase}{"\n"}{end}'
+        kubectl get pvc -n {{ item.namespace }} {{ item.name }} -o jsonpath='{.status.phase}'
       register: k8s_observability_claims
-      until: >-
-        k8s_observability_claims.rc == 0
-        and k8s_observability_claims.stdout_lines | length >= item.claims
-        and k8s_observability_claims.stdout_lines | reject('match', '.*=Bound$') | list | length == 0
+      until: k8s_observability_claims.rc == 0 and k8s_observability_claims.stdout == 'Bound'
       retries: 12
       delay: 10
       changed_when: false
       loop:
-        - {namespace: "{{ k8s_observability_metrics_namespace }}", claims: 2}
-        - {namespace: "{{ k8s_observability_logs_namespace }}", claims: 1}
+        - namespace: "{{ k8s_observability_metrics_namespace }}"
+          name: prometheus-kube-prometheus-stack-prometheus-db-prometheus-kube-prometheus-stack-prometheus-0
+        - {namespace: "{{ k8s_observability_metrics_namespace }}", name: kube-prometheus-stack-grafana}
+        - {namespace: "{{ k8s_observability_logs_namespace }}", name: storage-loki-0}
       loop_control:
-        label: "{{ item.namespace }}"
+        label: "{{ item.namespace }}/{{ item.name }}"
 
     - name: proof | Result
       ansible.builtin.debug:
@@ -87,7 +84,8 @@
           of {{ __targets | length }}
           (down: {{ __targets | rejectattr('health', 'eq', 'up') | map(attribute='scrapePool') | unique | list }});
           Loki returned {{ (k8s_observability_logs.stdout | from_json).data.result | length }} kube-system log streams;
-          claims: {{ k8s_observability_claims.results | map(attribute='stdout_lines') | flatten | join(', ') }};
+          claims: {{ k8s_observability_claims.results | map(attribute='item.name')
+          | zip(k8s_observability_claims.results | map(attribute='stdout')) | map('join', '=') | join(', ') }};
           sign-in redirect: {{ (k8s_observability_sso_redirect.stdout.split('?') | first) if k8s_observability_grafana_sso | bool else 'off' }}.
       vars:
         __targets: "{{ (k8s_observability_targets.stdout | from_json).data.activeTargets }}"
