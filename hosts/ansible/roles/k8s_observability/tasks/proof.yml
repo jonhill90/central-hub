@@ -59,6 +59,26 @@
       changed_when: false
       when: k8s_observability_grafana_sso | bool
 
+    # Each store's data is on a claim, and every claim is bound to a volume: Prometheus and Grafana
+    # in the metrics namespace (2), Loki in the logs namespace (1).
+    - name: proof | Prometheus, Loki and Grafana claims are bound
+      ansible.builtin.command: >-
+        kubectl get pvc -n {{ item.namespace }}
+        -o jsonpath='{range .items[*]}{.metadata.name}={.status.phase}{"\n"}{end}'
+      register: k8s_observability_claims
+      until: >-
+        k8s_observability_claims.rc == 0
+        and k8s_observability_claims.stdout_lines | length >= item.claims
+        and k8s_observability_claims.stdout_lines | reject('match', '.*=Bound$') | list | length == 0
+      retries: 12
+      delay: 10
+      changed_when: false
+      loop:
+        - {namespace: "{{ k8s_observability_metrics_namespace }}", claims: 2}
+        - {namespace: "{{ k8s_observability_logs_namespace }}", claims: 1}
+      loop_control:
+        label: "{{ item.namespace }}"
+
     - name: proof | Result
       ansible.builtin.debug:
         msg: >-
@@ -67,6 +87,7 @@
           of {{ __targets | length }}
           (down: {{ __targets | rejectattr('health', 'eq', 'up') | map(attribute='scrapePool') | unique | list }});
           Loki returned {{ (k8s_observability_logs.stdout | from_json).data.result | length }} kube-system log streams;
+          claims: {{ k8s_observability_claims.results | map(attribute='stdout_lines') | flatten | join(', ') }};
           sign-in redirect: {{ (k8s_observability_sso_redirect.stdout.split('?') | first) if k8s_observability_grafana_sso | bool else 'off' }}.
       vars:
         __targets: "{{ (k8s_observability_targets.stdout | from_json).data.activeTargets }}"

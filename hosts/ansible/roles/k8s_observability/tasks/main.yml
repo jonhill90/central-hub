@@ -52,6 +52,27 @@
     k8s_helm_release_values: "{{ k8s_observability_kps_values }}"
   tags: [metrics]
 
+# Loki's chart makes a StatefulSet, and Kubernetes forbids changing a StatefulSet's volume claim
+# templates, so a Helm upgrade from the emptyDir install to one with a claim fails. A StatefulSet
+# without claim templates is the old emptyDir install: it is deleted, with its pod, and Helm makes
+# it again with the claim. The logs it held in emptyDir are lost, once. (Prometheus needs no such
+# step: its operator deletes and makes its StatefulSet again when the storage changes.)
+- name: Loki's claim templates now
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_observability_logs_namespace }} get statefulset loki
+    --ignore-not-found -o jsonpath='{.metadata.name} {.spec.volumeClaimTemplates[*].metadata.name}'
+  register: k8s_observability_loki_sts
+  changed_when: false
+  check_mode: false
+  tags: [logs]
+
+- name: Loki's emptyDir StatefulSet is deleted, so Helm can make it again with a claim
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_observability_logs_namespace }} delete statefulset loki --wait=true --timeout=180s
+  when: k8s_observability_loki_sts.stdout | trim == 'loki'
+  changed_when: true
+  tags: [logs]
+
 - name: Logs store (Loki, monolithic)
   ansible.builtin.include_role:
     name: k8s_helm_release

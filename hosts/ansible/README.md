@@ -98,7 +98,8 @@ The `argocd` CLI over this name needs `--grpc-web`: there is no GRPCRoute.
 - **Metrics.** kube-prometheus-stack 92.3.1. Prometheus reads every ServiceMonitor, PodMonitor and rule in the cluster. Off on purpose: Alertmanager (no notification target is picked yet), and the kube-proxy, etcd, controller manager and scheduler scrapes (c1 has no kube-proxy, and kubeadm binds the other three to 127.0.0.1).
 - **node-exporter's port.** node-exporter listens on each node's own address, and Prometheus runs on the worker, so the role opens tcp 9100 in the lab zone on every node. Anything on lab VLAN prod can then read node metrics, as it can already reach the Kubernetes ports.
 - **Logs.** Loki 3.7.8 in monolithic mode, from the grafana-community chart (Grafana's own install page uses it). One Alloy pod reads every pod's logs through the Kubernetes API (`loki.source.kubernetes`), so it needs no host paths and no DaemonSet.
-- **No volumes.** Prometheus and Loki keep their data in `emptyDir`, with a size limit and a short retention (3 days and 72 hours). Their data survives a container restart, not a pod being moved or deleted. c1 has a StorageClass since BUILD-PATH S17 ([Storage on c1](#storage-on-c1)); moving them onto it is a later step.
+- **Volumes.** Prometheus (20Gi asked), Loki (20Gi) and Grafana (1Gi, its SQLite database of users and dashboards) keep their data on claims from the default StorageClass ([Storage on c1](#storage-on-c1)), so it outlives a pod move and is in the nightly VM backup. The provisioner doesn't enforce sizes, so Prometheus's `retentionSize` (16GB) bounds its disk; retention is 15 days for metrics and 168 hours for logs. Grafana runs with strategy `Recreate`, one pod at a time on its file. Run `playbooks/k8s-storage.yml` first.
+- **Moving off `emptyDir`.** Kubernetes forbids changing a StatefulSet's claim templates, so on the first run with claims the role deletes Loki's old StatefulSet (only when it has none) and Helm makes it again; the logs held in `emptyDir` are lost once. The Prometheus Operator does the same for Prometheus by itself. Each claim keeps its volume when a release is removed (reclaim `Retain`).
 - **metrics-server** runs with `--kubelet-insecure-tls`, because kubeadm's kubelets serve self-signed certificates. The metrics-server README allows this "for testing purposes only"; the fix is kubelet serving certificates signed by the cluster CA.
 - **Grafana** answers at `https://grafana.apps.c1.prod.<zone>/` through the shared Gateway (role `k8s_app_route`, the same shape as the Argo CD UI route). Its own admin account is in Secret `monitoring/kube-prometheus-stack-grafana`, made by the chart; agents don't read it.
 - **Raising the kube-prometheus-stack version.** Helm installs the chart's CRDs once and never upgrades them (chart README). Before raising the version past a new Prometheus Operator minor, apply the new CRDs first.
@@ -106,6 +107,7 @@ The `argocd` CLI over this name needs `--grpc-web`: there is no GRPCRoute.
 | Variable | What it is |
 |---|---|
 | `k8s_observability_zone` | The zone; the template sets it to `k8s_gateway_zone`. |
+| `k8s_observability_storage_class` | StorageClass of the three claims, default empty: the cluster's default. |
 | `k8s_observability_grafana_sso` | `true` after [Sign-in on c1](#sign-in-on-c1): Grafana gets a "Lab sign-in" button that signs in through realm `lab`. Users with the `admin` realm role become Grafana Admins, everyone else Viewer. |
 
 ## Sign-in on c1
@@ -134,7 +136,7 @@ First sign-in: read the first password with `kubectl -n identity get secret real
 - **Provisioner.** The Local Path Provisioner makes each volume a folder under `/var/lib/c1-data/local-path` on the node where its pod is first scheduled (`WaitForFirstConsumer`). The StorageClass lists only nodes labelled `central-hub/data-disk=true`, so no volume lands on a node's OS disk.
 - **What a volume is.** A folder on one node's disk: the pod that uses it always runs on that node, and the data is lost with that disk (RB-0082 L53, L54). Two nodes on one Proxmox host give no copy, so there is no replication (L59). The copy is the nightly Proxmox backup of the VM (`proxmox_backup`), which holds the data disk too.
 - **Deleting.** Reclaim policy `Retain`: deleting a claim keeps its folder and its PersistentVolume, so removing an app never removes its data. Clean up by hand with `kubectl delete pv <name>`, then remove the folder on the node.
-- **Not on it.** Keycloak's database keeps its static volume (`storageClassName: ""`, pick 99), and Prometheus and Loki keep `emptyDir` (pick 93), until each is moved on purpose.
+- **Not on it.** Keycloak's database keeps its static volume (`storageClassName: ""`, pick 99) until it is moved on purpose, with `pg_dump` and a restore.
 - **Exit path.** The NFS CSI driver once a NAS exists, or the Proxmox CSI plugin, with the data moved by hand (L55, L57).
 
 | Variable | What it is |
