@@ -28,7 +28,7 @@ On 2026-10-15 (Central Hub project, Kubernetes thread) the owner asked for the h
 
 There is no CNCF well-architected framework. Each cloud vendor publishes its own, and they overlap. Central Hub also has goals that no published framework treats as a pillar, above all that every component can be swapped. This record decides which pillars Central Hub is measured against, and where the line sits between adopting a standard and adding our own.
 
-Research: batch RB-0014 ([evidence](../evidence/0005-measure-central-hub-against-eight-pillars.md)), a 96-claim ledger with an independent review, and the proposal `central-hub/operating-model/PILLARS.md` in the project Library. The owner agreed the shape on 2026-10-15, where "B" was the proposal's name for what is option 1 below, on two conditions: the mapping between industry pillars and Central Hub pillars stays clear, and the framework is treated as replaceable like everything else.
+Research: batch RB-0014 ([evidence](../evidence/0005-measure-central-hub-against-eight-pillars.md)), a 96-claim ledger with an independent review, and the proposal `01-notes/01r-research/operating-model/pillars.md` in the Research repo. The owner agreed the shape on 2026-10-15, where "B" was the proposal's name for what is option 1 below, on two conditions: the mapping between industry pillars and Central Hub pillars stays clear, and the framework is treated as replaceable like everything else.
 
 ## Decision Drivers
 
@@ -88,7 +88,7 @@ flowchart TB
 | 7 | Replaceability | Central Hub | ISO/IEC 25010:2023 "replaceability", under Flexibility | REQ-0002, REQ-0008, REQ-0011 |
 | 8 | Understandability | Central Hub | none as a pillar; documentation is its main area | REQ-0001, REQ-0005, REQ-0006, REQ-0018, REQ-0020, REQ-0021 |
 
-The register rows are in the Research repo's requirements register (`coordinator/system/REQUIREMENTS.md`).
+The register rows are in the Research repo's requirements register (`99-meta/REQUIREMENTS.md`).
 
 **Agent perspective.** Google adds cross-pillar "perspectives" instead of new pillars. Central Hub's perspective asks how each pillar applies when the worker is an agent: one identity per agent (Security), model and token spend per agent (Cost), agent access that survives a rebuild (Reliability), attributed and explained agent actions (Understandability).
 
@@ -105,9 +105,9 @@ The register rows are in the Research repo's requirements register (`coordinator
 
 ### Confirmation
 
-- Each pillar has at least one requirement in the register; the register check (`areas/documentation/research/requirements-register/check/` in the Research repo) catches broken rows.
+- Each pillar has at least one requirement in the register; the register check (`01-notes/01r-research/0008-requirements-register/check/` in the Research repo) catches broken rows.
 - A future record proposing a component names how it affects each pillar.
-- A reviewing agent checks that the pillar table here matches `PILLARS.md` in the Library.
+- A reviewing agent checks that the pillar table here matches `pillars.md` in the Research repo.
 
 ## Pros and Cons of the Options
 

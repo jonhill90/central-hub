@@ -24,7 +24,7 @@ revisit-when: a second person must agree on scope; code lands in this repo; a st
 
 ## Context and Problem Statement
 
-The project brief, written by the coordinator agent on 2026-10-06, asks for a PRD and specifications, and for maintained, indexed documentation that shows detail step by step to people and agents (Research repo, `coordinator/platform-startup/BRIEF.md`, line 5). The owner also asked that a spec point to the code rather than repeat it, so code is never updated in two places (Central Hub project, 2026-10-17 21:30 UTC). He said he has to pick something for version 1, knowing it will be replaced (2026-10-17 20:36 UTC).
+The project brief, written by the coordinator agent on 2026-10-06, asks for a PRD and specifications, and for maintained, indexed documentation that shows detail step by step to people and agents (Research repo, `02-projects/central-hub/platform-startup/brief.md`, line 5). The owner also asked that a spec point to the code rather than repeat it, so code is never updated in two places (Central Hub project, 2026-10-17 21:30 UTC). He said he has to pick something for version 1, knowing it will be replaced (2026-10-17 20:36 UTC).
 
 Three drafts exist in the Research repo and none is accepted: a platform PRD, a documentation contract and a first-slice spec. This record decides which documents hold "what and why" and "what changes", and what happens to them after a merge.
 

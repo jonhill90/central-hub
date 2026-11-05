@@ -85,7 +85,7 @@ Everything else in D-0003 stays in force, and rule 6 still applies to every case
 ### Confirmation
 
 - A reviewing agent checks every reused ID for a tombstone in its register and for a recorded search.
-- The requirements register check (Research `areas/documentation/research/requirements-register/check/`) catches a duplicate REQ ID; it does not check reuse conditions.
+- The requirements register check (Research `01-notes/01r-research/0008-requirements-register/check/`) catches a duplicate REQ ID; it does not check reuse conditions.
 
 ## Pros and Cons of the Options
 

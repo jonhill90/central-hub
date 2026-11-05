@@ -42,7 +42,7 @@ D-0023 takes option 1. Finding 6 sets rule 6 (change and store the password, del
 
 Relied on (the decision depends on these):
 
-1. RB-0009 synthesis and ledger (Library `research/gitops-engine/`; Research repository `labs/central-hub/gitops-engine/`).
+1. RB-0009 synthesis and ledger (Research repository `01-notes/01r-research/0009-gitops-engine/`).
 2. Argo CD, "Installation" (Tested versions). <https://argo-cd.readthedocs.io/en/stable/operator-manual/installation/>
 3. Flux, "Releases" (supported Kubernetes versions). <https://fluxcd.io/flux/releases/>
 4. Flux, "Installation". <https://fluxcd.io/flux/installation/>

@@ -128,7 +128,7 @@ First sign-in: read the first password with `kubectl -n identity get secret real
 
 ## Storage on c1
 
-`playbooks/k8s-storage.yml` (role `k8s_storage`, BUILD-PATH S17) gives c1 a default StorageClass, so an app asks for a volume with a plain PersistentVolumeClaim. Every part is an agent pick (`../AGENT-PICKS.md`, picks 107-112), after batch RB-0082 (Library `research/local-storage/`).
+`playbooks/k8s-storage.yml` (role `k8s_storage`, BUILD-PATH S17) gives c1 a default StorageClass, so an app asks for a volume with a plain PersistentVolumeClaim. Every part is an agent pick (`../AGENT-PICKS.md`, picks 107-112), after batch RB-0082 (Research `01-notes/01r-research/0082-local-storage/`).
 
 - **Disk.** Each node VM can get a second, empty disk `scsi1` on `local-lvm` (`data_disk_gb` in `terraform/home/k8s`); only the worker has one. It is apart from the OS disk, so rebuilding a node keeps it. The role formats it ext4 only while `blkid` finds nothing on it, and stops if it finds another file system. It mounts it by UUID at `/var/lib/c1-data` with `nofail`, so a missing disk can't stop a node from booting.
 - **Provisioner.** The Local Path Provisioner makes each volume a folder under `/var/lib/c1-data/local-path` on the node where its pod is first scheduled (`WaitForFirstConsumer`). The StorageClass lists only nodes labelled `central-hub/data-disk=true`, so no volume lands on a node's OS disk.

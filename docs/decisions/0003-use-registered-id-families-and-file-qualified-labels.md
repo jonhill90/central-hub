@@ -33,13 +33,13 @@ The research batch (RB-0003, [evidence](../evidence/0003-use-registered-id-famil
 - Every clash uses a one-letter prefix. No prefix of two or more letters clashed, for example `D-`, `SRC-`, `FD`, `WP-` and `AG`.
 
 The owner's records already require stable IDs but never say how:
-- Research `coordinator/system/REQUIREMENTS.md:75`
-- Research `KNOWLEDGE-CONTRACT.md:7`
+- Research `99-meta/REQUIREMENTS.md:103`
+- Research `99-meta/KNOWLEDGE-CONTRACT.md:7`
 - (agent-estate `contract.md:23` and `inmaps-spec.md:44` say the same, but agent-estate is back-burnered (the owner, 2026-10-12), so they are cited as ideas mined, not as grounding.)
 
 ## Decision Drivers
 
-- **One label, one thing:** a reference must land on exactly one item (REQUIREMENTS.md:75).
+- **One label, one thing:** a reference must land on exactly one item (REQUIREMENTS.md:103).
 - **Many agents write in parallel:** two agents must never hand out the same number.
 - **The owner can read and say it:** IDs that the owner sees must be short and recognisable.
 - **Nothing breaks:** an existing reference keeps landing on its item.
@@ -77,10 +77,10 @@ flowchart LR
    | Family | Pattern | Example | Home register | Who numbers it |
    |---|---|---|---|---|
    | Decisions | `D-NNNN` | `D-0007` | central-hub `docs/decisions/` | Set by D-0001: the number is assigned when the PR opens |
-   | Requirements | `REQ-NNNN` | `REQ-0022` | Research `coordinator/system/REQUIREMENTS.md` | The requirements register owner: the next number is assigned only after the owner says yes to the wording |
+   | Requirements | `REQ-NNNN` | `REQ-0022` | Research `99-meta/REQUIREMENTS.md` | The requirements register owner: the next number is assigned only after the owner says yes to the wording |
    | Standards | `STD-NNNN` | `STD-0001` | central-hub `docs/standards/` | The standards register owner: the number is assigned when the standard's PR opens |
-   | Research batches | `RB-NNNN` | `RB-0077` | Research `areas/documentation/research/BATCHES.md` | The batch register owner: the number is assigned when the batch's SPEC.md is written |
-   | Research methods | `RM-NNNN` | `RM-0033` | Research `areas/research-tooling/research/research-methods-crawl/methods/inventory.json` | The methods catalogue owner: the number is stored with the method and assigned only after the owner says yes to adding it, never from its place in the list |
+   | Research batches | `RB-NNNN` | `RB-0077` | Research `99-meta/BATCHES.md` | The batch register owner: the number is assigned when the batch's SPEC.md is written |
+   | Research methods | `RM-NNNN` | `RM-0033` | Research `01-notes/01r-research/research-methods-crawl/methods/inventory.json` | The methods catalogue owner: the number is stored with the method and assigned only after the owner says yes to adding it, never from its place in the list |
    | Backlog items | `BL-NNNN` | `BL-0012` | project files `backlog/BACKLOG.md` | The backlog owner: the number is assigned when the row is added |
 
    A sources family is left out on purpose. Whether sources need a global family goes to the owner later, as its own question.

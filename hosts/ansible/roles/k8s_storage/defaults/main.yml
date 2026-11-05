@@ -2,8 +2,8 @@
 # Persistent volumes for cluster c1 (BUILD-PATH S17, BL-0029): an empty data disk on each node that
 # has one (Terraform home/k8s, data_disk_gb) becomes an ext4 file system mounted at
 # k8s_storage_mount, and the Local Path Provisioner makes each volume a folder under it. Every part
-# is an agent pick, listed in hosts/AGENT-PICKS.md; the research is batch RB-0082 (Library
-# research/local-storage/, Area 4). A volume lives on one node and is lost with that disk, so the
+# is an agent pick, listed in hosts/AGENT-PICKS.md; the research is batch RB-0082 (Research
+# 01-notes/01r-research/0082-local-storage/, Area 4). A volume lives on one node and is lost with that disk, so the
 # Proxmox backup job (proxmox_backup) is its copy. Exit path: NFS CSI or Proxmox CSI later, data
 # moved by hand (RB-0082 L53, L55, L57). Every input is listed here (Red Hat CoP rule).
 
