@@ -69,6 +69,11 @@ check_manifests() {
   # Pinned schemas, each checked against its SHA-256.
   while read -r path url sum; do
     case $path in ''|'#'*) continue ;; esac
+    # A branch name in the URL lets upstream change the file under the lock: only commit SHAs.
+    if [[ ! $url =~ ^https://raw\.githubusercontent\.com/[^/]+/[^/]+/[0-9a-f]{40}/ ]]; then
+      echo "schemas.lock: $path is not pinned to a 40-character commit SHA: $url" >&2
+      return 1
+    fi
     mkdir -p "$work/schemas/$(dirname "$path")"
     curl -fsSL -o "$work/schemas/$path" "$url"
     echo "$sum  $work/schemas/$path" | sha256sum --check --quiet
