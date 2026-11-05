@@ -1,7 +1,8 @@
 ---
 # A backup storage on the empty HDD and one nightly vzdump job. The disk is formatted only when it
-# has no partition, no filesystem and no other signature; a disk this role already formatted is
-# left as it is; any other disk stops the run before anything is written.
+# has no partition, no filesystem and no other signature; a disk with one ext4 partition and the
+# storage already present (made by this role, or by hand like the home lab's) is left as it is;
+# any other disk stops the run before anything is written.
 
 - name: Check the backup disk input
   ansible.builtin.assert:
@@ -60,8 +61,8 @@
   ansible.builtin.assert:
     that: proxmox_backup_disk_state != 'other'
     fail_msg: >-
-      {{ proxmox_backup_disk }} has partitions, a filesystem or a signature this role did not make,
-      or storage {{ proxmox_backup_storage }} is missing. Nothing was changed. lsblk:
+      {{ proxmox_backup_disk }} is not empty and is not one {{ proxmox_backup_filesystem }} partition
+      with storage {{ proxmox_backup_storage }} present. Nothing was changed. lsblk:
       {{ proxmox_backup_lsblk.stdout | from_json }}; wipefs: {{ proxmox_backup_wipefs.stdout_lines }}
     quiet: true
 
