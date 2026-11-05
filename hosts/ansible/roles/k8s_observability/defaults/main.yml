@@ -25,14 +25,19 @@ k8s_observability_node_ports: [9100/tcp]
 k8s_observability_metrics_namespace: monitoring
 k8s_observability_logs_namespace: logging
 
-# No StorageClass on c1 yet (storage is BUILD-PATH S17, the owner's choice J8/J9), so Prometheus
-# and Loki keep their data in emptyDir: it survives container restarts, not a pod move or delete.
-# Short retention keeps it inside the node's disk.
-k8s_observability_prometheus_retention: 3d
-k8s_observability_prometheus_retention_size: 4GB
-k8s_observability_prometheus_volume_size: 6Gi
-k8s_observability_loki_retention: 72h
-k8s_observability_loki_volume_size: 6Gi
+# Volumes. Prometheus, Loki and Grafana keep their data on claims from the cluster's StorageClass
+# (role k8s_storage, BUILD-PATH S17): folders on the worker's data disk, kept when a pod is moved or
+# deleted, and in the nightly Proxmox backup of the VM. Empty StorageClass means the cluster's
+# default. The sizes are requests only: the Local Path Provisioner doesn't enforce them, so the
+# retention size is what keeps Prometheus inside its share of the disk.
+k8s_observability_storage_class: ""
+k8s_observability_prometheus_retention: 15d
+k8s_observability_prometheus_retention_size: 16GB
+k8s_observability_prometheus_volume_size: 20Gi
+k8s_observability_loki_retention: 168h
+k8s_observability_loki_volume_size: 20Gi
+# Grafana's own database (users, dashboards made in the UI, sign-in sessions).
+k8s_observability_grafana_volume_size: 1Gi
 
 # Grafana at https://grafana.apps.c1.prod.<zone>/ through Gateway apps (tag route). Private, no
 # default; the inventory template sets it to k8s_gateway_zone.

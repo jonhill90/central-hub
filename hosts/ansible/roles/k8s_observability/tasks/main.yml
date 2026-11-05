@@ -35,6 +35,40 @@
     label: "{{ item.0 }} {{ item.1 }}"
   tags: [metrics]
 
+# The claims ask for the cluster's default StorageClass (playbooks/k8s-storage.yml). Without one
+# they stay Pending, Helm's --wait times out, and Loki would be down after the step below.
+- name: A default StorageClass exists
+  ansible.builtin.command: >-
+    kubectl get storageclass -o
+    jsonpath='{range .items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")]}{.metadata.name}{"\n"}{end}'
+  register: k8s_observability_default_class
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    k8s_observability_default_class.rc != 0
+    or (k8s_observability_storage_class | length == 0 and k8s_observability_default_class.stdout | trim | length == 0)
+  tags: [metrics, logs]
+
+# Grafana moves to strategy Recreate. The live Deployment carries the API server's defaulted
+# rollingUpdate block, which a server-side apply from Helm doesn't own and so doesn't remove, and
+# the API server refuses Recreate with rollingUpdate set. A merge patch with null removes it first.
+- name: Grafana's Deployment now
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_observability_metrics_namespace }} get deployment kube-prometheus-stack-grafana
+    --ignore-not-found -o jsonpath='{.spec.strategy.type}'
+  register: k8s_observability_grafana_strategy
+  changed_when: false
+  check_mode: false
+  tags: [metrics]
+
+- name: Grafana's Deployment is switched to Recreate, without the rollingUpdate block
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_observability_metrics_namespace }} patch deployment kube-prometheus-stack-grafana
+    --type merge -p '{"spec":{"strategy":{"type":"Recreate","rollingUpdate":null}}}'
+  when: k8s_observability_grafana_strategy.stdout | trim not in ['', 'Recreate']
+  changed_when: true
+  tags: [metrics]
+
 # The chart installs its CRDs on the first install only; Helm never upgrades them (chart README).
 # Raising k8s_observability_kps_version past a Prometheus Operator minor needs the new CRDs applied
 # first (hosts/ansible/README.md "Metrics and logs on c1").
@@ -51,6 +85,28 @@
     k8s_helm_release_version: "{{ k8s_observability_kps_version }}"
     k8s_helm_release_values: "{{ k8s_observability_kps_values }}"
   tags: [metrics]
+
+# Loki's chart makes a StatefulSet, and Kubernetes forbids changing a StatefulSet's volume claim
+# templates, so a Helm upgrade from the emptyDir install to one with a claim fails. A StatefulSet
+# without claim templates is the old emptyDir install: it is deleted, with its pod, and Helm makes
+# it again with the claim. The logs it held in emptyDir are lost, once. Prometheus gets no such
+# step: its operator makes its own StatefulSet and makes it again when the storage changes (the
+# proof checks Prometheus's claim by name). Its emptyDir samples are lost once too.
+- name: Loki's claim templates now
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_observability_logs_namespace }} get statefulset loki
+    --ignore-not-found -o jsonpath='{.metadata.name} {.spec.volumeClaimTemplates[*].metadata.name}'
+  register: k8s_observability_loki_sts
+  changed_when: false
+  check_mode: false
+  tags: [logs]
+
+- name: Loki's emptyDir StatefulSet is deleted, so Helm can make it again with a claim
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_observability_logs_namespace }} delete statefulset loki --wait=true --timeout=180s
+  when: k8s_observability_loki_sts.stdout | trim == 'loki'
+  changed_when: true
+  tags: [logs]
 
 - name: Logs store (Loki, monolithic)
   ansible.builtin.include_role:
