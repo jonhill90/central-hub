@@ -1,6 +1,6 @@
 ---
 # BUILD-PATH S14: the secrets layer on cluster c1, in the shape the owner said yes to on
-# 2026-10-15 01:58 UTC (Library research/secrets/, RB-0012): External Secrets Operator (ESO) in the
+# 2026-10-15 01:58 UTC (Research 01-notes/01r-research/0012-secrets/, RB-0012): External Secrets Operator (ESO) in the
 # middle, apps read plain Kubernetes Secrets, and no secret values or ciphertext in this repo.
 # The store behind ESO is ESO's own Kubernetes provider for now (an agent pick, RB-0012 v2). The
 # backend question is parked by the owner (2026-10-17 21:14 UTC). Every input is listed here.
