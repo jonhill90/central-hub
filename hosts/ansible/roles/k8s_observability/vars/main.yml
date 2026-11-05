@@ -5,6 +5,10 @@ k8s_observability_grafana_host: >-
   {{ k8s_observability_grafana_name }}.apps.c1.prod.{{ k8s_observability_zone }}
 k8s_observability_loki_url: >-
   http://loki.{{ k8s_observability_logs_namespace }}.svc.cluster.local:3100
+# No storageClassName in a claim means the cluster's default StorageClass.
+k8s_observability_storage_class_spec: >-
+  {{ {'storageClassName': k8s_observability_storage_class}
+  if k8s_observability_storage_class | length > 0 else {} }}
 
 # metrics-server checks no kubelet serving certificate: kubeadm's kubelets serve self-signed
 # certificates, which the metrics-server README allows only "for testing purposes only". The fix
@@ -46,9 +50,18 @@ k8s_observability_kps_values:
         requests: {cpu: 200m, memory: 512Mi}
         limits: {memory: 1536Mi}
       storageSpec:
-        emptyDir: {sizeLimit: "{{ k8s_observability_prometheus_volume_size }}"}
+        volumeClaimTemplate:
+          spec: >-
+            {{ {'accessModes': ['ReadWriteOnce'],
+            'resources': {'requests': {'storage': k8s_observability_prometheus_volume_size}}}
+            | combine(k8s_observability_storage_class_spec) }}
   grafana:
-    persistence: {enabled: false}
+    # One pod at a time on its volume: Grafana's database is one SQLite file.
+    deploymentStrategy: {type: Recreate}
+    persistence: >-
+      {{ {'enabled': true, 'type': 'pvc', 'size': k8s_observability_grafana_volume_size}
+      | combine({'storageClassName': k8s_observability_storage_class}
+      if k8s_observability_storage_class | length > 0 else {}) }}
     resources:
       requests: {cpu: 50m, memory: 128Mi}
       limits: {memory: 384Mi}
@@ -101,10 +114,10 @@ k8s_observability_loki_values:
     compactor: {retention_enabled: true, delete_request_store: filesystem}
   singleBinary:
     replicas: 1
-    persistence:
-      enabled: false
-      dataVolumeParameters:
-        emptyDir: {sizeLimit: "{{ k8s_observability_loki_volume_size }}"}
+    persistence: >-
+      {{ {'enabled': true, 'size': k8s_observability_loki_volume_size}
+      | combine({'storageClass': k8s_observability_storage_class}
+      if k8s_observability_storage_class | length > 0 else {}) }}
     resources:
       requests: {cpu: 100m, memory: 256Mi}
       limits: {memory: 1Gi}

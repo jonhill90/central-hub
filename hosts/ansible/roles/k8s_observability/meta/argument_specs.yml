@@ -9,11 +9,16 @@ argument_specs:
       k8s_observability_alloy_version: {type: str, default: 1.13.1, description: "grafana/alloy chart version (STD-0003)."}
       k8s_observability_metrics_namespace: {type: str, default: monitoring, description: Namespace for Prometheus and Grafana.}
       k8s_observability_logs_namespace: {type: str, default: logging, description: Namespace for Loki and Alloy.}
-      k8s_observability_prometheus_retention: {type: str, default: 3d, description: How long Prometheus keeps samples.}
-      k8s_observability_prometheus_retention_size: {type: str, default: 4GB, description: Most disk Prometheus keeps.}
-      k8s_observability_prometheus_volume_size: {type: str, default: 6Gi, description: "Size limit of Prometheus's emptyDir."}
-      k8s_observability_loki_retention: {type: str, default: 72h, description: How long Loki keeps logs.}
-      k8s_observability_loki_volume_size: {type: str, default: 6Gi, description: "Size limit of Loki's emptyDir."}
+      k8s_observability_storage_class:
+        type: str
+        default: ""
+        description: "StorageClass of the Prometheus, Loki and Grafana claims; empty means the cluster's default."
+      k8s_observability_prometheus_retention: {type: str, default: 15d, description: How long Prometheus keeps samples.}
+      k8s_observability_prometheus_retention_size: {type: str, default: 16GB, description: Most disk Prometheus keeps.}
+      k8s_observability_prometheus_volume_size: {type: str, default: 20Gi, description: "Size asked for Prometheus's claim."}
+      k8s_observability_loki_retention: {type: str, default: 168h, description: How long Loki keeps logs.}
+      k8s_observability_loki_volume_size: {type: str, default: 20Gi, description: "Size asked for Loki's claim."}
+      k8s_observability_grafana_volume_size: {type: str, default: 1Gi, description: "Size asked for Grafana's claim (its SQLite database)."}
       k8s_observability_firewall_zone: {type: str, default: lab, description: "firewalld zone of the lab NIC (k8s_node_firewall_zone)."}
       k8s_observability_node_ports:
         type: list
