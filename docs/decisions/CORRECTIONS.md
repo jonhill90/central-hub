@@ -8,7 +8,7 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ### Accepted with PR #55
 
-PR #55: approval facts and merge commit are added here when the owner accepts it.
+PR #55: merged 2026-11-04T03:16:15Z as c2e932c, head bf085ea; D-0026 accepted afterwards, 2026-11-05T07:18:12Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNCYF3SKyBWQWXbhUNPppNvz), a message naming D-0026, not the PR or head.
 
 - 2026-11-04 · D-0012 tree, rule 6 and new rule 12 · a store test sends a file either to D-0012's kind folders or, if it is knowledge, to `docs/knowledge/`, laid out by the organization standard; learning material goes in `docs/knowledge/` · D-0026; the owner's statements of 2026-11-03 at 23:55 UTC and 2026-11-04 at 02:12 UTC, and the owner's picks on decision cards at 00:36 and 02:14 UTC
 - 2026-11-04 · D-0016 context, rule 1, diagram, Consequences, Confirmation, options and exit path; every record's evidence link; the evidence README; AGENTS.md; the docs checks · the evidence folder is renamed from `docs/research/` to `docs/evidence/`, so that "research" names only the knowledge store · D-0026; the owner's pick on a decision card at 00:36 UTC
@@ -148,4 +148,5 @@ A folded decision number has no file and no row in the index until the next new 
 - 2026-10-27 · D-0002 "Scope" · a pointer to D-0011 rules 7 and 8, which set the `hosts/` folders that the scope line's "folders or per-environment variable files" covers; the decision is unchanged · PR #47: approved 2026-10-27T02:55:47Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop), head 0622e3b; merged as b52d931
 - 2026-10-27 · this file · PR #47's approval facts and merge commit added to its lines · PR #49: approved 2026-10-27T04:13:09Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNRhqewJex9F94nbCBTi8P4i), head 9a76530; merged as 53c756d
 - 2026-10-28 · this file · PR #49's approval facts and merge commit added to its lines · PR #53: approved 2026-10-28T05:56:40Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNNoaWE3uGdBqfKR2vDJxLGp), head ebb231c; merged as 4775bf0
-- 2026-10-29 · this file · PR #53's approval facts and merge commit added to its lines · PR #54
+- 2026-10-29 · this file · PR #53's approval facts and merge commit added to its lines · PR #54: approved 2026-10-29T06:34:30Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNN6tBvVUiFAHc9CHa3DQf2N), head a55ab05; merged as 694d0dd
+- 2026-11-05 · this file · PR #54's approval facts and merge commit added to its lines, and PR #55's merge and the owner's later acceptance of D-0026 added to its section · this PR

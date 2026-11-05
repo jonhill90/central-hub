@@ -1,7 +1,7 @@
 ---
 id: D-0026
 title: Tell documentation from knowledge, keep knowledge in docs/knowledge/, and rename docs/research to docs/evidence
-status: proposed
+status: accepted
 date: 2026-11-04
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0001, D-0012, D-0016]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-05T07:18:12Z
+  approved-commit: bf085eae2fa04cfc57e32a1943e14af8bf743607
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNCYF3SKyBWQWXbhUNPppNvz
+  approval-names: "D-0026 by its ID; neither the PR nor the head"
+  check: the drafting agent read the message in its project thread at 2026-11-05T07:18Z; it names D-0026 and nothing else. PR #55 had already merged, and its head bf085ea and the merge commit c2e932c hold the same record, which was unchanged on main at the time of the message, so the record accepted is the one approved here. The record rests on the owner's statements of 2026-11-03 at 23:55 UTC and 2026-11-04 at 02:12 UTC, and on the owner's instruction of 2026-11-04 at 02:50 UTC to clean only current text. An independent check by a reviewing agent is still to do
+  merged: jonhill90 merged PR #55 at 2026-11-04T03:16:15Z as c2e932c, before this acceptance
 revisit-when: the Research repository is retired and its knowledge moves; a document fits neither store; the organization standard reaches a new major version; docs/knowledge/ needs material that cannot be public; or the decision records are refactored as a set
 ---
 
