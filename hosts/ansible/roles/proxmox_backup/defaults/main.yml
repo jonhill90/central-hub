@@ -4,6 +4,8 @@
 
 # Proxmox storage on that disk. Proxmox's own "Disks > Directory" API makes the partition, the
 # ext4 filesystem, a systemd mount unit at /mnt/pve/<name> and the storage entry.
+# A disk that already holds the storage keeps its own mount: the home lab's HDD was set up by
+# hand on 2026-10-23 and is mounted by an fstab line at /mnt/hdd-backup. The role leaves it there.
 proxmox_backup_storage: hdd-backup
 proxmox_backup_filesystem: ext4
 proxmox_backup_content: backup

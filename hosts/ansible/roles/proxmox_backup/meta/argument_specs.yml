@@ -13,7 +13,10 @@ argument_specs:
           formats it only while it has no partition, no filesystem and no other signature.
           The id holds the serial number, so it stays out of the repository.
       # Defaults in defaults/main.yml
-      proxmox_backup_storage: {type: str, default: hdd-backup, description: Proxmox storage name; mounted at /mnt/pve/<name>.}
+      proxmox_backup_storage:
+        type: str
+        default: hdd-backup
+        description: "Proxmox storage name; a disk this role formats is mounted at /mnt/pve/<name>, an existing storage keeps its own path."
       proxmox_backup_filesystem: {type: str, default: ext4, choices: [ext4, xfs], description: Filesystem the Disks API makes.}
       proxmox_backup_content: {type: str, default: backup, description: Storage content types (comma list).}
       proxmox_backup_job_id: {type: str, default: nightly-guests, description: Backup job ID in /etc/pve/jobs.cfg.}
