@@ -1,5 +1,5 @@
 ---
-# Persistent volumes for cluster c1 (BUILD-PATH S17, BL-0029): an empty data disk on each node that
+# Persistent volumes for cluster c1 (BUILD-PATH S17, BL-0030): an empty data disk on each node that
 # has one (Terraform home/k8s, data_disk_gb) becomes an ext4 file system mounted at
 # k8s_storage_mount, and the Local Path Provisioner makes each volume a folder under it. Every part
 # is an agent pick, listed in hosts/AGENT-PICKS.md; the research is batch RB-0082 (Research
@@ -26,3 +26,8 @@ k8s_storage_namespace: local-path-storage
 k8s_storage_class: local-path
 k8s_storage_class_default: true
 k8s_storage_reclaim_policy: Retain
+
+# Argo CD manages the provisioner and the StorageClass from hosts/kubernetes/clusters/c1/apps/local-path/
+# (spec 2026-11-c1-apps-under-argo-cd, step 2). True once its Application is Synced; the role then
+# leaves them alone. False keeps Ansible in charge, which is also the way back.
+k8s_storage_provisioner_by_argocd: false

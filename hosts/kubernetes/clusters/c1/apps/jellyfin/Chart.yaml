@@ -1,0 +1,6 @@
+apiVersion: v2
+name: jellyfin
+description: Jellyfin on c1, with its first-run setup as code (spec 2026-11-c1-apps-under-argo-cd, step 8)
+type: application
+version: 0.1.0
+appVersion: "12.2"

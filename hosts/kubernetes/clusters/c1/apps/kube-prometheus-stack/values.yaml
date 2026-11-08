@@ -1,0 +1,54 @@
+# kube-prometheus-stack on c1 (Prometheus Operator, Prometheus, Grafana, kube-state-metrics,
+# node-exporter). The same values k8s_observability gave Helm (k8s_observability_kps_values), with
+# its defaults filled in. Grafana's root_url needs the private zone, so the root chart sets
+# grafana."grafana.ini".server.root_url as a parameter (root values, zoneParameters).
+# Grafana's sign-in through Keycloak is in values-sso.yaml, used when the root lists it.
+alertmanager: {enabled: false}
+# c1 has no kube-proxy (Cilium replaces it, D-0017). kubeadm binds the controller manager and the
+# scheduler to 127.0.0.1 and etcd's metrics to 127.0.0.1:2381, so in-cluster scrapes of them fail;
+# turned off until k8s_control_plane opens those ports (known gap).
+kubeProxy: {enabled: false}
+kubeEtcd: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeScheduler: {enabled: false}
+defaultRules:
+  rules:
+    alertmanager: false
+    etcd: false
+    kubeControllerManager: false
+    kubeProxy: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    windows: false
+windowsMonitoring: {enabled: false}
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: 16GB
+    # Read every ServiceMonitor, PodMonitor and rule in the cluster, not only this release's.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    scrapeConfigSelectorNilUsesHelmValues: false
+    resources:
+      requests: {cpu: 200m, memory: 512Mi}
+      limits: {memory: 1536Mi}
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources: {requests: {storage: 20Gi}}
+grafana:
+  # One pod at a time on its volume: Grafana's database is one SQLite file.
+  deploymentStrategy: {type: Recreate}
+  persistence: {enabled: true, type: pvc, size: 1Gi}
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 384Mi}
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki.logging.svc.cluster.local:3100

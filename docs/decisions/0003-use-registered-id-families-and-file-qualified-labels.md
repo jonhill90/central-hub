@@ -81,7 +81,7 @@ flowchart LR
    | Standards | `STD-NNNN` | `STD-0001` | central-hub `docs/standards/` | The standards register owner: the number is assigned when the standard's PR opens |
    | Research batches | `RB-NNNN` | `RB-0077` | Research `99-meta/BATCHES.md` | The batch register owner: the number is assigned when the batch's SPEC.md is written |
    | Research methods | `RM-NNNN` | `RM-0033` | Research `01-notes/01r-research/research-methods-crawl/methods/inventory.json` | The methods catalogue owner: the number is stored with the method and assigned only after the owner says yes to adding it, never from its place in the list |
-   | Backlog items | `BL-NNNN` | `BL-0012` | project files `backlog/BACKLOG.md` | The backlog owner: the number is assigned when the row is added |
+   | Backlog items | `BL-NNNN` | `BL-0012` | Research `01-notes/01t-tasks/`, one note per item | The backlog owner: the number is assigned when the row is added |
 
    A sources family is left out on purpose. Whether sources need a global family goes to the owner later, as its own question.
 

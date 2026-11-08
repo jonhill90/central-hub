@@ -1,24 +1,15 @@
 ---
-# Helm is on the first control plane already (k8s_control_plane step 9).
-- name: eso | Chart repo
-  ansible.builtin.shell: >-
-    /usr/local/bin/helm repo add external-secrets https://charts.external-secrets.io --force-update
-    && /usr/local/bin/helm repo update external-secrets
-  changed_when: false
-
-- name: eso | Release now
-  ansible.builtin.command: >-
-    /usr/local/bin/helm -n {{ k8s_secrets_eso_namespace }} list --filter ^external-secrets$ -o json
-  register: k8s_secrets_eso_list
-  changed_when: false
-  check_mode: false
-
+# The shared Helm task (role k8s_helm_release), which upgrades only when the chart version or a
+# value differs. The values are the same ones the old `--set installCRDs=true` gave.
 - name: eso | Install or upgrade ESO
-  ansible.builtin.command: >-
-    /usr/local/bin/helm upgrade --install external-secrets external-secrets/external-secrets
-    --version {{ k8s_secrets_eso_version }} -n {{ k8s_secrets_eso_namespace }} --create-namespace
-    --set installCRDs=true --wait --timeout 5m
-  when: >-
-    (k8s_secrets_eso_list.stdout | from_json | length == 0)
-    or (k8s_secrets_eso_list.stdout | from_json | first).chart != 'external-secrets-' ~ k8s_secrets_eso_version
-  changed_when: true
+  ansible.builtin.include_role:
+    name: k8s_helm_release
+  vars:
+    k8s_helm_release_name: external-secrets
+    k8s_helm_release_namespace: "{{ k8s_secrets_eso_namespace }}"
+    k8s_helm_release_repo_name: external-secrets
+    k8s_helm_release_repo_url: https://charts.external-secrets.io
+    k8s_helm_release_chart: external-secrets
+    k8s_helm_release_version: "{{ k8s_secrets_eso_version }}"
+    k8s_helm_release_values: "{{ k8s_secrets_eso_values }}"
+    k8s_helm_release_timeout: 5m

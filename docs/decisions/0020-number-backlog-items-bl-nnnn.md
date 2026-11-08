@@ -62,7 +62,7 @@ This adds the Backlog items row to D-0003's registry, and D-0003 rule 6 says tha
 
 ```mermaid
 flowchart LR
-  B["Backlog row<br/>BL-0012 (repo layout)"] -->|options kept in| M["Decision map<br/>keyed by BL-0012"]
+  B["Backlog row<br/>BL-0057 (repo layout)"] -->|options kept in| M["Decision map<br/>keyed by BL-0057"]
   B -->|owner decides| D["Decision record<br/>D-NNNN"]
   D -.->|row links to it, marked done| B
 ```
@@ -72,7 +72,7 @@ flowchart LR
 - Every backlog row has a `BL-NNNN` number, done rows included. Open decisions are backlog items, so they have one too.
 - The decision map keeps its option tables, keyed by the same `BL-NNNN` numbers. The backlog is the one list. The map is where an open decision's options are written down. Every decision-map row has a backlog row.
 - Each new row takes the next free number.
-- In prose, the title goes next to the number: `BL-0012 (repo layout)`. Tables already have an Item column.
+- In prose, the title goes next to the number: `BL-0057 (repo layout)`. Tables already have an Item column.
 - When the owner decides an open question, the decision gets its own `D-NNNN`. The backlog row links to that record and is marked done.
 - The backlog's render script refuses a duplicate row label and a row label that is not `BL-NNNN`.
 

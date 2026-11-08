@@ -35,6 +35,10 @@ k8s_certs_issuer: letsencrypt-staging
 k8s_certs_cert_manager_version: v1.21.3
 k8s_certs_cert_manager_chart_sha256: 9ec67938b2981d8b333af61b3fcf53e26b4f6f5deb7ccda3de4ea116bb373a17
 k8s_certs_namespace: cert-manager
+# Argo CD installs cert-manager from hosts/kubernetes/clusters/c1/apps/cert-manager/ (spec
+# 2026-11-c1-apps-under-argo-cd, step 6). True once its Application is Synced; the role then skips
+# the install and keeps only the issuers, the certificate and the smoke test.
+k8s_certs_cert_manager_by_argocd: false
 
 # Where cert-manager looks up the zone before it checks that the challenge's TXT record is there:
 # public resolvers, not the lab's. OPNsense's Unbound answers apps.c1.prod.<zone> itself (the

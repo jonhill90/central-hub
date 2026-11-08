@@ -1,0 +1,23 @@
+# Parity between what an Ansible role applies today and what Argo CD will apply from
+# hosts/kubernetes/clusters/<cluster>/apps/ (spec 2026-11-c1-apps-under-argo-cd, "Taking over a
+# running component", step 3). parity.py renders both sides and fails on any difference, so a
+# take-over's first diff on the cluster is empty. One case per line:
+#   manifest <cluster> <app> <role> <template> [<role settings as JSON>] [set=<value>=<text>]...
+#       every object the role's template makes must come out the same from the local chart
+#       (rendered with zone=example.com and any set= values)
+#   values <cluster> <app> <role> <variable> [<role settings as JSON>] [files=a.yaml,b.yaml] [param=<path>=<text>]... [ignore=<Kind>/<name>:<dotted.path>]...
+#       the upstream chart (repo and version from the root values) rendered with the role's values
+#       and with the values files in git must match; "{zone}" in a param becomes example.com
+# Ignored everywhere: Argo CD's and Helm's own annotations.
+manifest c1 local-path k8s_storage local-path.yaml.j2
+manifest c1 jellyfin k8s_jellyfin jellyfin.yaml.j2
+values c1 metrics-server k8s_observability k8s_observability_metrics_server_values
+values c1 loki k8s_observability k8s_observability_loki_values
+values c1 alloy k8s_observability k8s_observability_alloy_values
+values c1 kube-prometheus-stack k8s_observability k8s_observability_kps_values {"k8s_observability_grafana_sso":false} ignore=Secret/kube-prometheus-stack-grafana:data.admin-password ignore=Deployment/kube-prometheus-stack-grafana:spec.template.metadata.annotations.checksum/secret
+values c1 kube-prometheus-stack k8s_observability k8s_observability_kps_values {"k8s_observability_grafana_sso":true} files=values.yaml,values-sso.yaml param=grafana.grafana\.ini.auth\.generic_oauth.auth_url=https://sso.apps.c1.prod.{zone}/realms/lab/protocol/openid-connect/auth ignore=Secret/kube-prometheus-stack-grafana:data.admin-password ignore=Deployment/kube-prometheus-stack-grafana:spec.template.metadata.annotations.checksum/secret
+values c1 external-secrets k8s_secrets k8s_secrets_eso_values
+values c1 cert-manager k8s_certs k8s_certs_cert_manager_values
+manifest c1 secret-store k8s_secrets store.yaml.j2
+manifest c1 gateway k8s_gateway gateway.yaml.j2 {"k8s_gateway_https":true} set=address=192.0.2.10
+manifest c1 gateway k8s_app_route route.yaml.j2 {"k8s_app_route_name":"grafana","k8s_app_route_namespace":"monitoring","k8s_app_route_service":"kube-prometheus-stack-grafana","k8s_app_route_port":80,"k8s_app_route_zone":"example.com"} set=address=192.0.2.10

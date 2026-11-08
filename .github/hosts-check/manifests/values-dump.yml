@@ -1,0 +1,25 @@
+---
+# Write one variable of a role (its defaults and vars, the made-up values in values.yml, and the
+# case's own settings) as JSON, for parity.py to hand to Helm the way the role does.
+#   ansible-playbook values-dump.yml -e role=<role> -e var=<variable> -e dest=<file> [-e '<json>']
+- name: Dump a role's Helm values
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    roles_dir: "{{ playbook_dir }}/../../../hosts/ansible/roles"
+  tasks:
+    - name: Load the role's defaults and vars
+      ansible.builtin.include_vars:
+        file: "{{ item }}"
+      loop:
+        - "{{ playbook_dir }}/values.yml"
+        - "{{ roles_dir }}/{{ role }}/defaults/main.yml"
+        - "{{ roles_dir }}/{{ role }}/vars/main.yml"
+      when: item is file
+
+    - name: Write the variable
+      ansible.builtin.copy:
+        content: "{{ lookup('ansible.builtin.vars', var) | to_nice_json }}"
+        dest: "{{ dest }}"
+        mode: "0644"
