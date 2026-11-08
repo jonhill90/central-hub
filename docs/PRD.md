@@ -27,7 +27,7 @@ This page says what the platform is for and how we know it works. It holds no "h
 ## Non-goals
 
 - The apps themselves. They live in their own repos and consume the platform.
-- Research and knowledge. That is the Research repo's job, not this one's.
+- Research and knowledge. That is the agent notebook's job ([jonhill90/agent-notebook](https://github.com/jonhill90/agent-notebook), named Research until 2026-11-08), not this one's.
 - Depending on one vendor (REQ-0008).
 - Agents running unattended on personal devices (REQ-0019).
 - Running other people's workloads; for now it runs only the owner's own. It may later become a free and open-source (FOSS) platform that others run themselves. Nothing is built for that yet, but every part stays replaceable and modular (REQ-0011), so that path stays open.
@@ -44,7 +44,7 @@ This page says what the platform is for and how we know it works. It holds no "h
 
 ## Links (read when)
 
-- **Requirement rows REQ-0001-REQ-0026:** the requirements register in the Research repo, `99-meta/REQUIREMENTS.md`. Read it when a goal above needs its exact wording. The link moves when the register moves.
+- **Requirement rows REQ-0001-REQ-0026:** the requirements register in the agent notebook, `99-meta/requirements.md`. Read it when a goal above needs its exact wording. The link moves when the register moves.
 - **Decisions:** `docs/decisions/README.md`. Read it when you need to know why something is the way it is.
 - **Changes in progress or finished:** `docs/specs/README.md`. Read it before starting a change that spans several sessions or crosses systems.
 - **Rules in force now:** `docs/standards/README.md`. Read it before naming, numbering or addressing anything.

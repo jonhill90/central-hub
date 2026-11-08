@@ -5,4 +5,5 @@ message: "Use '%s' instead of '%s' (docs/glossary.md)."
 level: warning
 ignorecase: true
 swap:
-  {}
+  'Research\ repo': 'agent notebook'
+  'Research\ repository': 'agent notebook'
