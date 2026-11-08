@@ -73,3 +73,4 @@ The agent that writes the code does not edit the acceptance criteria in the same
 | [Build the home lab from code and the first cluster c1](2026-10-home-lab-and-c1.md) | accepted | 2026-10-26 |
 | [Let web traffic into c1's apps, with certificates browsers trust](2026-10-c1-way-in-for-web-traffic.md) | proposed | 2026-10-27 |
 | [Move c1's apps and add-ons under Argo CD, with a runbook for each](2026-11-c1-apps-under-argo-cd.md) | accepted | 2026-11-08 |
+| [Give the home lab its own certificate authority that survives rebuilds](2026-11-lab-pki.md) | proposed | 2026-11-08 |
