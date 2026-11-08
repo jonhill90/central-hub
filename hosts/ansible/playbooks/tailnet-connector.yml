@@ -1,0 +1,10 @@
+---
+# CT 900, the tailnet connector: route the lab range through the mgmt gateway and advertise every
+# lab VLAN, so tailnet devices reach the lab and its DNS server (docs/runbooks/set-up-lab-dns.md).
+# Then turn the routes on and point split DNS at the lab: tofu apply in hosts/terraform/home/tailnet/.
+- name: Tailnet connector
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  roles:
+    - role: tailnet_connector

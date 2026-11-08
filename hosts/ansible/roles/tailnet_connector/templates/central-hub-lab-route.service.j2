@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# Role tailnet_connector: the lab range goes through the firewall's mgmt address, so traffic the
+# tailnet sends into the lab leaves on {{ tailnet_connector_mgmt_interface }}, not the home LAN default route.
+[Unit]
+Description=Route the lab range through the mgmt gateway
+After=network-online.target
+Wants=network-online.target
+Before=tailscaled.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ip route replace {{ tailnet_connector_lab_supernet }} via {{ tailnet_connector_gateway }} dev {{ tailnet_connector_mgmt_interface }}
+ExecStop=/sbin/ip route del {{ tailnet_connector_lab_supernet }} via {{ tailnet_connector_gateway }} dev {{ tailnet_connector_mgmt_interface }}
+
+[Install]
+WantedBy=multi-user.target
