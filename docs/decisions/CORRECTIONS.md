@@ -6,13 +6,20 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
-### Accepted on 2026-11-08 by message (D-0028, D-0030)
+### Accepted with PR #89 (D-0028 accepted, D-0030 parked)
 
-The owner's message of 2026-11-08T22:43:28Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK) answers a message that named D-0028 and D-0030, not a PR and head. Both records were on main at ddc001b. The owner said every record gets re-checked at the rebuild.
+PR #89: approved 2026-11-08T22:58:40Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN3pm9VMkokaWXswED1D5mcj), head 7b0a662, a message that also says D-0030 is parked. An earlier message of 2026-11-08T22:43:28Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK) had said both records are approved without naming a PR or head. The owner said every record gets re-checked at the rebuild.
 
-- 2026-11-08 · D-0028 and D-0030 status and accepted-evidence · moved from proposed to accepted · the owner's message above
+- 2026-11-08 · D-0028 status and accepted-evidence · moved from proposed to accepted · the owner's message above
+- 2026-11-08 · D-0030 status · moved from proposed to parked; the record is to be rewritten so its gaps are closed · the owner's message above
 - 2026-11-08 · D-0028 Decision Outcome and Consequences, evidence 0028 · the owner's 07:42 UTC answer is written as a lean, not a choice, and his 07:58 UTC statement as changing passwords at a rebuild, not replacing every key; the decision is unchanged · an independent check of 2026-11-08 against the owner's messages
 - 2026-11-08 · D-0030 Context and Decision Outcome · the 10-28 05:12 UTC answer is written as a card tap with no typed words, which the owner's rule of 2026-11-08 19:01 UTC counts as an agent pick; the decision is unchanged · the same check
+
+### Accepted with PR #86
+
+PR #86: approved 2026-11-08T22:58:40Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN3pm9VMkokaWXswED1D5mcj), head 28422d9; merged as 087cdda. An earlier approval of 2026-11-08T22:41:00Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN3RXBrfbsYqiRtQHFBtL6DE) named head 16d13e4.
+
+- 2026-11-08 · AGENTS.md rule 2, D-0002 diagram and "In words", D-0012 runbook status rules, D-0027 Consequences · an agent may squash-merge a PR once every check passes; a PR that accepts a record, activates a standard or loosens the rules for now still waits for the owner's named approval · D-0031; the owner's statement of 2026-11-08 at 07:55 UTC in the project chat
 
 ### Accepted with PR #55
 

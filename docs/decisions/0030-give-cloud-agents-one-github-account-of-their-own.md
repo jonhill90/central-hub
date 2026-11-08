@@ -1,7 +1,7 @@
 ---
 id: D-0030
 title: Give the cloud agents one GitHub account of their own, separate from the owner's, so GitHub can require the owner's approval
-status: accepted
+status: parked
 date: 2026-10-28
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,14 +9,6 @@ consulted: [reviewing-agent]
 waits-on: [D-0001, D-0013, D-0027]
 supersedes: []
 superseded-by:
-accepted-evidence:
-  approved-by: owner
-  approved-at: 2026-11-08T22:43:28Z
-  approved-commit: ddc001b405bfcd423281c4d9271edabb30c82670
-  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK
-  approval-names: "no PR or head; the owner's message answers the drafting agent's message cmsg_01X43rfNYp4H1dL1V2dkfkwNSQHpWZiEeSnhHvABY4ep7n, which named D-0028 and D-0030 on central-hub main (main was at ddc001b; the message names no SHA), and says those are approved; that message had recommended parking D-0030"
-  check: the drafting agent read both messages in the project thread at 2026-11-08T22:43Z. The owner also said every record gets re-checked at the rebuild. An independent check by a reviewing agent is still to do
-  merged: the record merged as proposed with PR #70 as 384d01a; accepted with the PR that adds this block
 revisit-when: a second agent lane needs write access; the agents' environment can carry a GitHub App token of an agent's own; the test in rule 2 fails; or the repository moves to an organization
 ---
 
@@ -47,7 +39,7 @@ Since then, D-0027 lets the lab cluster c1 read central-hub before the gate pass
 
 ## Decision Outcome
 
-Chosen option: **1**. The owner tapped it on a decision card on 2026-10-28 at 05:12 UTC, with no typed words; the card was posted after a correction that option 1 had not been tested and does not meet gate item 2 on its own. The owner accepted the record in words on 2026-11-08 at 22:43 UTC.
+Chosen option: **1**. The owner tapped it on a decision card on 2026-10-28 at 05:12 UTC, with no typed words; the card was posted after a correction that option 1 had not been tested and does not meet gate item 2 on its own. On 2026-11-08 at 22:58 UTC the owner parked the record in words, to be rewritten so its gaps are closed.
 
 ```mermaid
 flowchart LR

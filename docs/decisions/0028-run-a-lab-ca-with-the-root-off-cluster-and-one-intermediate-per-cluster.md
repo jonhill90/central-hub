@@ -11,12 +11,12 @@ supersedes: []
 superseded-by:
 accepted-evidence:
   approved-by: owner
-  approved-at: 2026-11-08T22:43:28Z
-  approved-commit: ddc001b405bfcd423281c4d9271edabb30c82670
-  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK
-  approval-names: "no PR or head; the owner's message answers the drafting agent's message cmsg_01X43rfNYp4H1dL1V2dkfkwNSQHpWZiEeSnhHvABY4ep7n, which named D-0028 and D-0030 on central-hub main (main was at ddc001b; the message names no SHA), and says those are approved; that message had recommended parking D-0030"
-  check: the drafting agent read both messages in the project thread at 2026-11-08T22:43Z. The owner also said every record gets re-checked at the rebuild. An independent check by a reviewing agent is still to do
-  merged: the record merged as proposed with PR #65 as 1ceb885; accepted with the PR that adds this block
+  approved-at: 2026-11-08T22:58:40Z
+  approved-commit: 7b0a6625d7f1df3cd056ea1060f7f6b99fc7986c
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN3pm9VMkokaWXswED1D5mcj
+  approval-names: "PR jonhill90/central-hub#89 and head 7b0a662, in the message itself; an earlier message of 2026-11-08T22:43:28Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK) said the record is approved without naming a PR or head"
+  check: the drafting agent read the message in the project thread at 2026-11-08T22:58Z; it reads "accept #86 28422d9 and #89 7b0a662, D-0030 park", and that head holds this record. The owner also said every record gets re-checked at the rebuild. An independent check by a reviewing agent is still to do
+  merged: the record merged as proposed with PR #65 as 1ceb885; accepted with PR #89
 revisit-when: a device outside Kubernetes needs to order its own certificates (an ACME server such as step-ca would then get a new intermediate under the same root); a second cluster joins; the intermediate is within a year of expiry; or cert-manager's CA issuer stops being supported on c1's Kubernetes version
 ---
 

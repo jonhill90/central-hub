@@ -53,15 +53,15 @@ flowchart LR
     X["fix/cert-renewal"]
     D["docs/adr-branching"]
   end
-  F -->|PR, the owner merges| M
-  X -->|PR, the owner merges| M
-  D -->|PR, the owner merges| M
+  F -->|PR, merged when green| M
+  X -->|PR, merged when green| M
+  D -->|PR, merged when green| M
   M[("main<br/>the only long-lived branch")]
   M -->|folder for cluster 1| C1["home-lab cluster<br/>first"]
   M -.->|another folder, if needed| C2["Another target<br/>later"]
 ```
 
-*In words:* every change starts on a short-lived branch named for its type, goes through a PR to `main`, and the owner merges it. `main` is the only long-lived branch. Each deployment target reads its own folder on `main`.
+*In words:* every change starts on a short-lived branch named for its type, goes through a PR to `main`, and is merged once its checks pass (D-0031). `main` is the only long-lived branch. Each deployment target reads its own folder on `main`.
 
 Chosen option: **1**.
 - **Mechanism:** promoting config by merging carries unwanted per-environment values and drifts. Kapelonis (2021) calls branches for environments an anti-pattern for config repos for that reason. Thoughtworks' 2021 Hold on GitOps named branch-per-environment drift as its concern (the blip moved to Assess in 2023 and is no longer on the radar).
