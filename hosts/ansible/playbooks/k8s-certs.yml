@@ -12,8 +12,18 @@
 #   (inventory: k8s_gateway_https: true)
 #   ansible-playbook -i inventories/home/ playbooks/k8s-gateway.yml --tags gateway
 #   ansible-playbook -i inventories/home/ playbooks/k8s-certs.yml --tags smoke
+# With the lab CA (k8s_certs_lab_ca: true), every node trusts its root (tag nodetrust, also run
+# by labca), so the route proofs' curl on the nodes verifies lab-signed names:
+#   ansible-playbook -i inventories/home/ playbooks/k8s-certs.yml --tags nodetrust
 - name: cert-manager, issuers and the Gateway's certificate (runbook step 10b)
   hosts: k8s_control_plane[0]
   become: true
   roles:
     - role: k8s_certs
+
+- name: The lab root in every node's trust store (D-0028)
+  hosts: k8s_nodes
+  become: true
+  tags: [nodetrust, labca]
+  roles:
+    - role: k8s_node_trust

@@ -54,6 +54,9 @@ This is the step that makes the PKI survive a rebuild. It puts the same intermed
    why: this is the rebuild test in the spec.
    expect: the same SHA-256 fingerprint.
 
+6. Make the nodes trust the lab root, so checks run on the nodes verify lab-signed names: from `hosts/ansible`, `ansible-playbook -i inventories/home/ playbooks/k8s-certs.yml --tags nodetrust`.
+   expect: one change per node the first time; a second run reports `changed=0`.
+
 ## If it fails
 
 - `READY False` with "secret not found": the Secret is in the wrong namespace or has the wrong name.
