@@ -1,0 +1,5 @@
+apiVersion: v2
+name: secret-store
+description: The ClusterSecretStore c1 and the namespace it reads from (spec 2026-11-c1-apps-under-argo-cd, step 5)
+type: application
+version: 0.1.0

@@ -1,0 +1,18 @@
+# The shared Gateway and the routes of apps whose own charts make none. The same inputs as the
+# Ansible roles k8s_gateway and k8s_app_route. Two values are private and come only from the root
+# Application, which Ansible sets from the inventory (CLAUDE.md rule 4):
+zone: ""      # the DNS zone; names are <app>.apps.c1.prod.<zone>
+address: ""   # the Gateway's address from Cilium LB IPAM (STD-0002 VLAN 10 .224/27)
+
+name: apps
+className: cilium
+appsDomain: apps.c1.prod
+# HTTPS on 443 with the wildcard certificate cert-manager issues into tlsSecret (k8s_certs). The
+# HTTP listener on 80 stays; each route below redirects it to HTTPS.
+https: true
+tlsSecret: apps-tls
+
+# One HTTPRoute (https) plus a redirect route (http) per entry: <key>.apps.c1.prod.<zone> to the
+# Service. Same shape as role k8s_app_route.
+routes:
+  grafana: {namespace: monitoring, service: kube-prometheus-stack-grafana, port: 80}

@@ -10,3 +10,6 @@ k8s_gitops_ui_zone: example.com
 k8s_gitops_source_zone: example.com
 k8s_identity_zone: example.com
 k8s_identity_owner_username: owner
+k8s_jellyfin_zone: example.com
+k8s_observability_zone: example.com
+k8s_gitops_source_gateway_address: 192.0.2.10
