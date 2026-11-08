@@ -9,9 +9,6 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Build a single-node kubeadm cluster by hand (CKA practice)](build-kubeadm-cluster.md) | manual | draft |
 | [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) | manual | draft |
 | [Move metrics-server on c1 from Ansible to Argo CD](move-metrics-server-to-argo-cd.md) | automated | draft |
-<<<<<<< HEAD
-| [Set up lab DNS and make the owner's Mac resolve lab names](set-up-lab-dns.md) | automated | draft |
-=======
 | [Move c1's volume provisioner and default StorageClass from Ansible to Argo CD](move-local-path-to-argo-cd.md) | automated | draft |
 | [Move Jellyfin on c1 from Ansible to Argo CD, with its first-run setup as code](move-jellyfin-to-argo-cd.md) | automated | draft |
 | [Move logging on c1 (Loki and Alloy) from Ansible to Argo CD](move-logging-to-argo-cd.md) | automated | draft |
@@ -19,7 +16,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Move c1's External Secrets and its store from Ansible to Argo CD](move-external-secrets-to-argo-cd.md) | automated | draft |
 | [Move cert-manager on c1 from Ansible to Argo CD](move-cert-manager-to-argo-cd.md) | automated | draft |
 | [Move c1's Gateway and app routes from Ansible to Argo CD](move-gateway-to-argo-cd.md) | automated | draft |
->>>>>>> origin/main
+| [Set up lab DNS and make the owner's Mac resolve lab names](set-up-lab-dns.md) | automated | draft |
 
 ## Template
 
