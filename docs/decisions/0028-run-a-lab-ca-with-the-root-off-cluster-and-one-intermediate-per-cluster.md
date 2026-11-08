@@ -11,12 +11,12 @@ supersedes: []
 superseded-by:
 accepted-evidence:
   approved-by: owner
-  approved-at: 2026-11-08T22:58:40Z
-  approved-commit: 7b0a6625d7f1df3cd056ea1060f7f6b99fc7986c
-  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN3pm9VMkokaWXswED1D5mcj
-  approval-names: "PR jonhill90/central-hub#89 and head 7b0a662, in the message itself; an earlier message of 2026-11-08T22:43:28Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK) said the record is approved without naming a PR or head"
-  check: the drafting agent read the message in the project thread at 2026-11-08T22:58Z; it reads "accept #86 28422d9 and #89 7b0a662, D-0030 park", and that head holds this record. The owner also said every record gets re-checked at the rebuild. An independent check by a reviewing agent is still to do
-  merged: the record merged as proposed with PR #65 as 1ceb885; accepted with PR #89
+  approved-at: 2026-11-08T23:15:11Z
+  approved-commit: c962f1545a6139acac61a5a07b3aeaff53b4eef8
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNJy1cMgtyxSZNPLcvtSJaYU
+  approval-names: "PR jonhill90/central-hub#89 and head c962f15, in the message itself; earlier messages of 2026-11-08T22:58:40Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN3pm9VMkokaWXswED1D5mcj, head 7b0a662) and 22:43:28Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK, no PR or head) also approved it"
+  check: the drafting agent read the message in the project thread at 2026-11-08T23:15Z; it reads "accept #89 c962f15", and that head holds this record. The owner also said every record gets re-checked at the rebuild. An independent check by a reviewing agent is still to do
+  merged: the record merged as proposed with PR #65 as 1ceb885; accepted with PR #89 as 99a2679
 revisit-when: a device outside Kubernetes needs to order its own certificates (an ACME server such as step-ca would then get a new intermediate under the same root); a second cluster joins; the intermediate is within a year of expiry; or cert-manager's CA issuer stops being supported on c1's Kubernetes version
 ---
 
