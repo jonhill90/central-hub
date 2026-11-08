@@ -117,7 +117,7 @@ Build the lab network, the OPNsense firewall VM and the tailnet connector contai
 why: the c1 nodes sit on VNet `prod` behind OPNsense, and the controller reaches them through the host's address on VNet `mgmt`.
 runbook: [Set up the lab network and firewall](set-up-lab-network-and-firewall.md) (new in this PR, written from `hosts/README.md` "Order for the home lab" and the code).
 expect: that runbook's last step: `tofu plan` shows no changes in the three run folders, and `opnsense.yml --check` reports `changed=0`.
-gaps: getting the OPNsense nano image and the Debian 13 container template onto the host is by hand and not written down anywhere; see that runbook's "Before you start".
+first: [Put the OPNsense image and the Debian 13 template on the host](stage-lab-images-on-proxmox.md) (new in this PR), because the firewall and remote-access run folders don't download them.
 
 ### Tailscale
 
@@ -125,7 +125,7 @@ gaps: getting the OPNsense nano image and the Debian 13 container template onto 
 
 Put the tailnet client in CT 900, then turn on its routes for every lab VLAN and split DNS for the lab names.
 why: the owner's Mac reaches the lab, at home or away, only through CT 900 on the tailnet (D-0022 for how agents reach c1).
-runbook, first half: **missing.** Installing and logging in the tailnet client inside CT 900 is not in code and has no runbook. `hosts/terraform/home/remote-access/main.tf` says what runs inside the container "is not done here".
+runbook, first half: [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md) (new in this PR).
 runbook, second half: `set-up-lab-dns.md` (PR #67), steps 2-5: the OAuth client in `hosts/.env`, `playbooks/tailnet-connector.yml`, then `hosts/terraform/home/tailnet`.
 expect: from the Mac, `dig api.c1.prod.<zone>` answers with the control plane's address (it will answer once step 6 has made the node).
 
@@ -205,7 +205,7 @@ Turn on the backups and prove a restore.
 why: two copies: the nightly Proxmox backup of every guest on the HDD in the same PC, and restic snapshots of etcd and the volume folders off the box (BL-0139).
 runbook, on the host: [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) step 8, done as code by `playbooks/proxmox-safety.yml --tags backup` in step 4. Its proof is `vzdump 900 --storage hdd-backup` then `pvesm list hdd-backup` ([hosts/ansible/README.md, Backups](../../hosts/ansible/README.md#backups)).
 runbook, off the box: `back-up-c1-off-box.md` and `test-etcd-restore.md` (PR #68). Blocked until an off-box target exists.
-runbook, full restore of the lab from these backups: **missing.** Nothing written says how to bring the lab back from `hdd-backup` or from the restic repository onto a new host. `test-etcd-restore.md` restores into a temporary etcd only, never into c1.
+runbook, full restore of the lab from these backups: [Restore the home lab from its backups](restore-home-lab-from-backups.md) (new in this PR): whole guests from `hdd-backup`, or c1 from restic.
 expect: the drill in `back-up-c1-off-box.md` prints two PASS lines.
 
 ### Apps under Argo CD
@@ -219,16 +219,15 @@ expect: `kubectl -n argocd get applications` shows each one Synced and Healthy.
 
 ## If it fails
 
-Stop at the step that fails and use that step's own runbook's "If it fails". Two failures are specific to a rebuild from bare metal:
+Stop at the step that fails and use that step's own runbook's "If it fails". Two failures are specific to a rebuild:
 
-- **`tofu plan` fails with "Cannot import non-existent remote object".** `hosts/terraform/home/network`, `home/firewall` and `home/remote-access` each have an `imports.tf` that adopts objects built before the code. On an empty host there is nothing to adopt. On a bare-metal rebuild, delete those three `imports.tf` files in a branch first. That code change is not made yet; it is named under [Afterwards](#afterwards).
-- **State lost, lab still running.** Keep the `imports.tf` files and run `tofu plan` with an empty state: they adopt the running objects again. `home/k8s` and `home/certificates` have no imports; adopt with `tofu import` by hand, or rebuild those parts.
+- **The whole lab is gone, but its backups are not.** Use [Restore the home lab from its backups](restore-home-lab-from-backups.md) instead of building everything again: it brings the guests back from the HDD, or c1's etcd and volumes from restic.
+- **State lost, lab still running.** Adopt the running objects into a new state with `tofu import` ([hosts/terraform/README.md, Adopt a running lab after state is lost](../../hosts/terraform/README.md#adopt-a-running-lab-after-state-is-lost)). The old `imports.tf` files that did this on every plan were removed on 2026-11-08, so an empty host now plans clean.
 
 ## Afterwards
 
 - Set `last-tested` here and in each step runbook you ran, with the date, who ran it and on what.
-- Fill in the missing runbooks named above: the tailnet client in CT 900, getting the OPNsense image and the container template onto the host, and a full restore of the lab from its backups.
-- Remove the three `imports.tf` files once the owner agrees, so a bare-metal plan works without a manual edit.
+- Two things are still not written down: what the firewall's "WAN safety check" checks, and what seeds namespace `secret-source` (see those steps' runbooks).
 
 ## Picks in this runbook
 

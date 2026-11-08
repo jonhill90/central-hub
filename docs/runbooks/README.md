@@ -9,7 +9,10 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Rebuild the home lab from bare metal (top-level order)](rebuild-home-lab-from-scratch.md) | manual | draft |
 | [Set up the lab controller](set-up-lab-controller.md) | manual | draft |
 | [Set up the lab network, the OPNsense firewall and the tailnet connector container from code](set-up-lab-network-and-firewall.md) | automated | draft |
+| [Put the OPNsense image and the Debian 13 template on the Proxmox host](stage-lab-images-on-proxmox.md) | manual | draft |
+| [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md) | manual | draft |
 | [Create the c1 node VMs on Proxmox from code](create-c1-node-vms.md) | automated | draft |
+| [Restore the home lab from its backups](restore-home-lab-from-backups.md) | manual | draft |
 | [Build cluster c1 with Ansible](build-c1-with-ansible.md) | automated | draft |
 | [Issue c1's wildcard app certificate](issue-c1-app-certificate.md) | automated | draft |
 | [Install Argo CD on c1](install-argo-cd-on-c1.md) | automated | draft |

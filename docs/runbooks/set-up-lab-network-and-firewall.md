@@ -14,7 +14,7 @@ superseded-by:
 
 # Set up the lab network, the OPNsense firewall and the tailnet connector container
 
-**Status:** draft. Written on 2026-11-08 from [hosts/README.md](../../hosts/README.md) "Order for the home lab" and the code. The run folders were applied to the running lab, which already existed, through their `imports.tf` files. This order has never run on an empty host.
+**Status:** draft. Written on 2026-11-08 from [hosts/README.md](../../hosts/README.md) "Order for the home lab" and the code. The run folders were applied to the running lab, which already existed, by adopting its objects; those import blocks were removed on 2026-11-08 so an empty host plans clean. This order has never run on an empty host.
 
 ```mermaid
 flowchart LR
@@ -25,9 +25,7 @@ flowchart LR
 ## Before you start
 
 - The host is set up through step 6 of [Set up a Proxmox VE host by hand](set-up-proxmox-host.md): `iac@pve`, its pools and the token exist.
-- The OPNsense nano image is on the host as an import file, and its file ID is in `hosts/terraform/home/firewall/home.tfvars` as `opnsense_image_file_id` (for example `local:import/<image>.img`). **No runbook says how to get it there.** Download the nano image for the OPNsense version the role is tested on (26.1, `hosts/ansible/requirements.yml`) from OPNsense's own mirror, check its checksum, and upload it to the host's `import` content.
-- The Debian 13 container template is on the host, and its file ID is in `hosts/terraform/home/remote-access/home.tfvars` as `connector_template_file_id`. **No runbook says how to get it there** either; Proxmox's own template list offers it (`pveam`).
-- On an empty host, delete the `imports.tf` files in `home/network`, `home/firewall` and `home/remote-access` in a branch first. They adopt objects that existed before the code; with nothing to adopt, `tofu plan` stops ([Rebuild the home lab, If it fails](rebuild-home-lab-from-scratch.md#if-it-fails)).
+- The OPNsense nano image and the Debian 13 container template are on the host, and their file IDs are in `hosts/terraform/home/firewall/home.tfvars` (`opnsense_image_file_id`) and `hosts/terraform/home/remote-access/home.tfvars` (`connector_template_file_id`): [Put the OPNsense image and the Debian 13 template on the host](stage-lab-images-on-proxmox.md).
 - Load the Proxmox provider's settings into the shell for every `tofu` step: `PROXMOX_VE_ENDPOINT` (the host's API URL) and `PROXMOX_VE_API_TOKEN` from the token file ([hosts/terraform/README.md](../../hosts/terraform/README.md#run-one-folder)).
 
 Stop if the image or the template is missing: step 3 can't make VM 100 or CT 900 without them.
@@ -114,7 +112,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
 
    why: it goes last because the firewall run's checks probe CT 900 and the paths through OPNsense that steps 2 to 7 make. The second firewall run arms a 10-minute dead-man timer before it switches on ([hosts/ansible/README.md, Host firewall](../../hosts/ansible/README.md#host-firewall)).
    expect: the run ends with the timer cancelled; then set `proxmox_firewall_enable: true` in the inventory. Prove one backup by hand: `vzdump 900 --storage hdd-backup --mode snapshot --compress zstd`, then `pvesm list hdd-backup`.
-   note: the CT 900 probe expects the tailnet client to run in CT 900. On a fresh build it doesn't yet ([Rebuild the home lab](rebuild-home-lab-from-scratch.md), Tailscale step), so the firewall runs wait until that is done.
+   note: the CT 900 probe expects the tailnet client to run in CT 900. On a fresh build, run [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md) first.
 
 ## If it fails
 
