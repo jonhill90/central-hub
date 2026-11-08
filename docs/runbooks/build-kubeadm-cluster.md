@@ -308,15 +308,26 @@ kubectl -n kube-system edit configmap kubeadm-config
 kubectl -n kube-system get configmap kubeadm-config -o jsonpath='{.data.ClusterConfiguration}' > /root/cluster-config.yaml
 cp /etc/kubernetes/manifests/kube-apiserver.yaml /root/kube-apiserver.yaml.before-encryption
 kubeadm init phase control-plane apiserver --config /root/cluster-config.yaml
-until kubectl get --raw /readyz >/dev/null 2>&1; do sleep 5; done
+# wait for the NEW API server: /readyz alone can answer from the old one before the kubelet
+# replaces it. Only the new one stores a Secret starting with k8s:enc:, so write a throwaway
+# Secret and read it straight from etcd until it does (about a minute; the kubectl calls fail
+# while the API server restarts, and the loop goes on)
+etcdget() { kubectl -n kube-system exec etcd-<node name> -- etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
+  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key get "$@"; }
+until kubectl -n kube-system delete secret central-hub-encryption-canary --ignore-not-found >/dev/null 2>&1 &&
+  kubectl -n kube-system create secret generic central-hub-encryption-canary --from-literal=canary=not-secret >/dev/null 2>&1 &&
+  etcdget /registry/secrets/kube-system/central-hub-encryption-canary --print-value-only | head -c 8 | grep -q '^k8s:enc:'
+do sleep 10; done
+kubectl -n kube-system delete secret central-hub-encryption-canary
 # 4. Secrets written before now stay plain until they are written again
 kubectl get secrets --all-namespaces -o json | kubectl replace -f -
-# 5. proof: a test Secret, read straight from etcd
+# 5. proof: a test Secret, read straight from etcd; the last line is the pass/fail check
 kubectl create secret generic enc-test --from-literal=k=v
-kubectl -n kube-system exec etcd-<node name> -- etcdctl --endpoints=https://127.0.0.1:2379 \
-  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt \
-  --key=/etc/kubernetes/pki/etcd/healthcheck-client.key get /registry/secrets/default/enc-test | hexdump -C | head -3
+etcdget /registry/secrets/default/enc-test | hexdump -C | head -3
 kubectl get secret enc-test -o jsonpath='{.data.k}' | base64 -d; echo
+etcdget /registry/secrets/default/enc-test --print-value-only | head -c 26 | grep -q '^k8s:enc:secretbox:v1:key1' \
+  && echo ENCRYPTED || echo 'NOT ENCRYPTED: stop, and do not go on to step 9'
 kubectl delete secret enc-test
 ```
 
@@ -324,11 +335,12 @@ kubectl delete secret enc-test
 - The providers are tried in order: the first one writes, and every one can read. `identity` (no encryption) comes last, so Secrets written before this step can still be read until step 4 writes them again.
 - secretbox, not aescbc: the kubernetes.io page rates secretbox "Strong" and aescbc "Weak" ("Not recommended due to CBC's vulnerability to padding oracle attacks"). A KMS plugin would keep the key off the node, but needs a key service the lab doesn't have (research batch RB-0012, "Now" step 4). With every local provider, the key sits on the control-plane host.
 - why: etcd holds every Secret, and its files and its backups ([step 11](#11-backup-and-restore)) go wherever they are copied. Encrypted, they are useless without the key, which lives only in `/etc/kubernetes/enc/` on the node and in the password manager (source: <https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/>).
-- expect: the hexdump shows `/registry/secrets/default/enc-test` and then `k8s:enc:secretbox:v1:key1:` (the page's example shows the same shape for aescbc, `k8s:enc:aescbc:v1:key1`), followed by unreadable bytes; `kubectl get secret` still prints `v`; `grep encryption-provider /etc/kubernetes/manifests/kube-apiserver.yaml` shows the flag, and `kubectl -n kube-system get configmap kubeadm-config -o yaml | grep -A1 encryption-provider` shows it in kubeadm's copy.
+- expect: the last check prints `ENCRYPTED`. The hexdump shows `/registry/secrets/default/enc-test` and then `k8s:enc:secretbox:v1:key1:` (the page's example shows the same shape for aescbc, `k8s:enc:aescbc:v1:key1`), followed by unreadable bytes; a plain Secret starts `k8s` and a zero byte instead. `kubectl get secret` still prints `v`. `grep encryption-provider /etc/kubernetes/manifests/kube-apiserver.yaml` shows the flag, and `kubectl -n kube-system get configmap kubeadm-config -o yaml | grep -A1 encryption-provider` shows it in kubeadm's copy; these two only show the flag is set, not that the running API server uses it.
+- catch: `/readyz` is not a wait for the new API server. In R2 rehearsal run 2 it answered from the old one within a second, parts 4 and 5 ran before encryption was on, the hexdump showed a plain Secret, and both `grep` checks still passed. Step 9's `helm install` then failed with connection refused while the new API server started. The canary loop above is the same wait role `k8s_control_plane` uses (`tasks/encryption.yml`, the canary task).
 - catch: the key changes only by rotation: add the new key first in the list, restart, write every Secret again, then remove the old key. Replacing the key in place makes every Secret unreadable.
 - catch: a restored etcd backup needs the same key in the same file, or the API server can't read any Secret.
 - page: <https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/> ; kubeadm: <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-reconfigure/>
-- status: **PROVEN 2026-11-08** by an agent on a two-node rehearsal cluster beside c1 (R2 rehearsal run 1): the hexdump showed `k8s:enc:secretbox:v1:key1`, and the flag was in the manifest and in `kubeadm-config`. The `kubectl edit` ran through `KUBE_EDITOR` set to a script making the same change (non-interactive SSH); the typed form is not yet run. CKA: CA4 (partly).
+- status: **NOT PROVEN** as written now. R2 rehearsal run 1 (2026-11-08) passed only because the agent added `sleep 10` before the `/readyz` loop; run 2 showed that loop does not wait for the new API server (see the catch above). The canary wait and the `ENCRYPTED` check replace it and are not yet run by hand. The `kubectl edit` ran through `KUBE_EDITOR` set to a script making the same change (non-interactive SSH); the typed form is not yet run. CKA: CA4 (partly).
 - place (home lab): `hosts/ansible`, role `k8s_control_plane`, tag `encryption` (`playbooks/k8s.yml --tags encryption --limit k8s_control_plane`). The key comes from a 0600 file on the controller, `k8s_control_plane_encryption_key_file` in the git-ignored inventory. A new build gets the flag at `kubeadm init`, from a config file (`templates/kubeadm-init.yaml.j2`) that replaces step 8's flags. On the running c1 the role adds the flag and the folder to the `kubeadm-config` ConfigMap, runs `kubeadm init phase control-plane apiserver`, waits until a throwaway Secret reads back encrypted from etcd, writes every Secret again, and then checks every Secret in etcd. It stops, rather than rotating, if the node already has a different key.
 
 #### 9. Cilium 1.20.4
