@@ -125,7 +125,8 @@ def main():
             elif word.startswith("ignore="):
                 kind_name, _, path = word[7:].partition(":")
                 ignores.append((kind_name, path))
-        top = root / "hosts/kubernetes/clusters" / cluster
+        # hosts/kubernetes/<place>/<cluster>/ (D-0011 rule 1); a cluster name is unique across places.
+        top = next((root / "hosts/kubernetes").glob(f"*/{cluster}"))
         entry = yaml.safe_load((top / "root/values.yaml").read_text())["apps"][app]
         ns, release = entry["namespace"], entry.get("releaseName", app)
         case = f"parity.txt:{n} {mode} {app}"

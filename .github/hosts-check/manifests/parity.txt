@@ -1,5 +1,5 @@
 # Parity between what an Ansible role applies today and what Argo CD will apply from
-# hosts/kubernetes/clusters/<cluster>/apps/ (spec 2026-11-c1-apps-under-argo-cd, "Taking over a
+# hosts/kubernetes/<place>/<cluster>/apps/ (spec 2026-11-c1-apps-under-argo-cd, "Taking over a
 # running component", step 3). parity.py renders both sides and fails on any difference, so a
 # take-over's first diff on the cluster is empty. One case per line:
 #   manifest <cluster> <app> <role> <template> [<role settings as JSON>] [set=<value>=<text>]...

@@ -17,7 +17,7 @@ k8s_secrets_eso_namespace: external-secrets
 k8s_secrets_store_name: c1
 k8s_secrets_source_namespace: secret-source
 
-# Argo CD manages ESO and the store from hosts/kubernetes/clusters/c1/apps/ (spec
+# Argo CD manages ESO and the store from hosts/kubernetes/home/c1/apps/ (spec
 # 2026-11-c1-apps-under-argo-cd, step 5). True once both Applications are Synced; false keeps
 # Ansible in charge, which is also the way back.
 k8s_secrets_by_argocd: false

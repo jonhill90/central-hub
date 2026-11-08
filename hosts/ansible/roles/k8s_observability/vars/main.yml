@@ -17,7 +17,7 @@ k8s_observability_metrics_server_values:
   args: [--kubelet-insecure-tls]
 
 k8s_observability_kps_values:
-  # Alertmanager sends every alert to ntfy on c1 (app alerts, hosts/kubernetes/clusters/c1/apps/alerts/)
+  # Alertmanager sends every alert to ntfy on c1 (app alerts, hosts/kubernetes/home/c1/apps/alerts/)
   # with ntfy's built-in Alertmanager format; Watchdog goes nowhere (pick 171).
   alertmanager:
     enabled: true

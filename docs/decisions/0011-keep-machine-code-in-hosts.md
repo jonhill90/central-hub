@@ -61,12 +61,12 @@ central-hub/
 │   │   ├── inventories/<place>/
 │   │   ├── playbooks/
 │   │   └── roles/
-│   └── kubernetes/clusters/<role>/  what the clusters on those machines run (read by Argo CD, D-0023)
+│   └── kubernetes/<place>/<cluster>/  what each cluster in a place runs (read by Argo CD, D-0023)
 ```
 
 ### Rules
 
-1. **What `hosts/` holds.** Code for every machine below Kubernetes goes in `hosts/`, whoever runs the machine, and so does what the clusters run, in `hosts/kubernetes/clusters/<role>/` (the owner, 2026-11-08 07:51 UTC: no root `kubernetes/` folder). That covers machines the owner owns, VPS machines, VMs on his own hypervisor, and cloud VMs.
+1. **What `hosts/` holds.** Code for every machine below Kubernetes goes in `hosts/`, whoever runs the machine, and so does what the clusters run (the owner, 2026-11-08 07:51 UTC: no root `kubernetes/` folder). Kubernetes follows the same order as the other tools: tool, then place, then cluster, as `hosts/kubernetes/<place>/<cluster>/` (the owner, 2026-11-08 23:44 UTC: "something like Kubernetes/home"). That covers machines the owner owns, VPS machines, VMs on his own hypervisor, and cloud VMs.
 2. **One subfolder per vendor product.** Each vendor product that creates or configures machines gets one subfolder in its own native layout, named for the product, for example `hosts/terraform/` or `hosts/ansible/`. Replacing the product replaces only that subfolder.
 3. **No Terraform modules of our own until code is reused.** A runnable folder holds its own resources. Code that two or more runnable folders use goes in `hosts/terraform/modules/<name>/`, called by a local path. It moves to its own repository, called by a tagged version, only when another repository needs it. A module is written only when it bundles real logic, such as a whole VM, and never as a thin wrapper around one resource, as HashiCorp's module guidance advises.
 4. **Not machines, not `hosts/`.** A managed container service with no machines to manage, such as AWS ECS, doesn't go in `hosts/`. It gets its own capability folder when it is first used (D-0008 rule 5).

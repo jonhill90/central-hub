@@ -14,7 +14,7 @@ Lints and offline tests for the code under `hosts/` (STD-0005). Workflow `hosts`
 | `ansible-lint.yml` | ansible-lint settings: the production profile, with two style rules off and the reason. |
 | `identity/` | The realm test: `test_realm.sh` imports the rendered realm `lab` into Keycloak 26.8.1 in a container (pinned by digest), `realm_to_json.py` turns the KeycloakRealmImport into the JSON Keycloak reads and fails on a placeholder that is used but not declared or the other way round, and `check_realm.py` checks every client, every user's password and the claims in each app's ID token. |
 | `manifests/` | How the Kubernetes templates in the roles are rendered (`render.yml`, `cases.txt`, made-up `values.yml`) and the pinned schemas kubeconform checks them against (`schemas.lock`). `parity.txt` and `values-dump.yml` feed the parity check. |
-| `parity.py` | The parity check: for each line of `manifests/parity.txt`, renders what an Ansible role applies today and what Argo CD will apply from `hosts/kubernetes/clusters/`, and fails on any difference. |
+| `parity.py` | The parity check: for each line of `manifests/parity.txt`, renders what an Ansible role applies today and what Argo CD will apply from `hosts/kubernetes/<place>/<cluster>/`, and fails on any difference. |
 
 The tests themselves sit next to the code: `hosts/terraform/<place>/<workload>/tests/*.tftest.hcl`.
 
@@ -24,7 +24,7 @@ The tests themselves sit next to the code: `hosts/terraform/<place>/<workload>/t
 |---|---|
 | `terraform` | `check_hosts.py` and its tests; `tofu fmt -check`; then for each run folder, in a copy without `imports.tf`: `tofu init -backend=false`, `tofu validate`, tflint and `tofu test` |
 | `ansible` | `ansible-playbook --syntax-check` on every playbook; ansible-lint on playbooks and roles |
-| `manifests` | renders each line of `manifests/cases.txt`, each `hosts/kubernetes/clusters/*/root` chart and each local chart under `clusters/*/apps/` (`helm lint`, `helm template`); runs `parity.py` (downloads the upstream charts named in the root values, with retries; `PARITY_CHART_CACHE=<dir>` keeps them, and CI caches that folder); then `kubeconform -strict` on the output |
+| `manifests` | renders each line of `manifests/cases.txt`, each `hosts/kubernetes/*/*/root` chart and each local chart under `hosts/kubernetes/*/*/apps/` (`helm lint`, `helm template`); runs `parity.py` (downloads the upstream charts named in the root values, with retries; `PARITY_CHART_CACHE=<dir>` keeps them, and CI caches that folder); then `kubeconform -strict` on the output |
 | `identity` | renders realm `lab` with an extra user, imports it into Keycloak in a container, checks clients, passwords and the `groups` and `roles` claims, then runs the role's `files/delete-realm.sh` and imports it again (STD-0005 level 3) |
 | `scripts` | ShellCheck (warnings and errors) on every tracked `*.sh`; actionlint on every workflow |
 | `backup` | `tests/test_backup.sh`: downloads restic and etcd from their releases, each checked against a SHA-256 (the role's own versions), and runs the role's scripts |

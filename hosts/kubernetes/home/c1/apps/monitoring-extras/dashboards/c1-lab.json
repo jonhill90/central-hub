@@ -537,5 +537,5 @@
       "id": 15
     }
   ],
-  "description": "Built from hosts/kubernetes/clusters/c1/apps/monitoring-extras/dashboards/c1-lab.json; edits in the UI are lost on the next sync."
+  "description": "Built from hosts/kubernetes/home/c1/apps/monitoring-extras/dashboards/c1-lab.json; edits in the UI are lost on the next sync."
 }

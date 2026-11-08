@@ -10,7 +10,7 @@ gatewayAddress: ""
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
 targetRevision: main
-appsPath: hosts/kubernetes/clusters/c1/apps
+appsPath: hosts/kubernetes/home/c1/apps
 # The Argo CD project every child Application belongs to. An AppProject `c1` that limits what the
 # children may touch can take over here once it exists (Activation gate work).
 project: default

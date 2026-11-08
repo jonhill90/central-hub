@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: Argo CD's Applications `external-secrets` and `secret-store` are Synced and Healthy, ClusterSecretStore `c1` is Ready, and Ansible no longer installs either
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/clusters/c1/apps/external-secrets/values.yaml, hosts/kubernetes/clusters/c1/apps/secret-store/, hosts/kubernetes/clusters/c1/root/values.yaml, hosts/ansible/roles/k8s_secrets/, hosts/ansible/playbooks/k8s-secrets.yml]
+files: [hosts/kubernetes/home/c1/apps/external-secrets/values.yaml, hosts/kubernetes/home/c1/apps/secret-store/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_secrets/, hosts/ansible/playbooks/k8s-secrets.yml]
 last-tested: not yet run on c1. CI's parity check finds the chart values and the store manifest the same as the role's
 superseded-by:
 ---

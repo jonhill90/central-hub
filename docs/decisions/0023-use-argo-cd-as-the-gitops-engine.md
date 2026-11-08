@@ -49,7 +49,7 @@ Chosen option: **1**. The owner said yes to the proposed Argo CD with its web UI
 
 ```mermaid
 flowchart LR
-  repo["central-hub main<br/>hosts/kubernetes/clusters/c1/"] -. "anonymous HTTPS,<br/>only after the Activation gate" .-> argo["Argo CD on c1<br/>(pinned v3.5.5)"]
+  repo["central-hub main<br/>hosts/kubernetes/home/c1/"] -. "anonymous HTTPS,<br/>only after the Activation gate" .-> argo["Argo CD on c1<br/>(pinned v3.5.5)"]
   ansible["hosts/ansible<br/>playbooks/k8s-gitops.yml"] -- "installs, sha256-checked" --> argo
   mac["owner's Mac"] -- "HTTPS to its lab DNS name,<br/>through the Gateway" --> ui["Argo CD web UI"]
   argo --- ui
@@ -61,7 +61,7 @@ flowchart LR
 2. **Install.** Ansible installs it (`hosts/ansible/roles/k8s_gitops`) from the release's manifest at a pinned version, checked against a SHA-256 kept in the role. `kubectl apply` adds no git credential, and nothing writes to git.
 3. **Version.** The pin follows STD-0003. The first pin is v3.5.5.
 4. **No source before the gate.** The engine runs with no Application pointing at central-hub until the Activation gate passes. The role turns the source on only with `k8s_gitops_source_enabled: true`.
-5. **Source, once allowed.** One Application reads `hosts/kubernetes/clusters/c1/` on `main` over anonymous HTTPS, with no repository secret (D-0002; D-0011 diagram).
+5. **Source, once allowed.** One Application reads `hosts/kubernetes/home/c1/` on `main` over anonymous HTTPS, with no repository secret (D-0002; D-0011 diagram).
 6. **UI access.** The UI is used only once it has its own DNS name: `argocd.apps.c1.prod.<zone>` under the cluster's apps names (STD-0001), routed through the cluster's Gateway (D-0021) with the lab's certificate (BUILD-PATH S11 and S12). There is no `kubectl port-forward` step. TLS ends at the Gateway, so the Argo CD server runs with `server.insecure` set. The name is in the lab's own DNS only and its address is on the lab network, never on the internet. Exception to best practice (D-0013 rule 3): the initial admin password is stored in clear text in the `argocd-initial-admin-secret` Secret until it is changed. Compensating controls: the UI is reachable only from the lab network, the password is changed at first sign-in and kept in the password manager, and that Secret is then deleted, as Argo CD's getting-started guide says.
 
 ### Not decided here

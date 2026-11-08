@@ -96,14 +96,14 @@ check_manifests() {
   done < "$here/manifests/cases.txt"
   # Each cluster's root chart, rendered as Argo CD renders it, with the made-up zone (values.yml).
   local root
-  for root in hosts/kubernetes/clusters/*/root; do
+  for root in hosts/kubernetes/*/*/root; do
     [ -f "$root/Chart.yaml" ] || continue
     helm lint --quiet "$root" --set zone=example.com --set gatewayAddress=192.0.2.10
     helm template root "$root" --set zone=example.com --set gatewayAddress=192.0.2.10 > "$work/rendered/root-$(basename "$(dirname "$root")").yaml"
   done
   # Charts kept in this repository (root values `local: true`), rendered the same way.
   local chart
-  for chart in hosts/kubernetes/clusters/*/apps/*/Chart.yaml; do
+  for chart in hosts/kubernetes/*/*/apps/*/Chart.yaml; do
     [ -f "$chart" ] || continue
     chart=$(dirname "$chart")
     helm lint --quiet "$chart" --set zone=example.com --set address=192.0.2.10
@@ -113,7 +113,7 @@ check_manifests() {
   # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
   if command -v promtool >/dev/null; then
     mkdir -p "$work/rules"
-    helm template x hosts/kubernetes/clusters/c1/apps/monitoring-extras -n monitoring \
+    helm template x hosts/kubernetes/home/c1/apps/monitoring-extras -n monitoring \
       -s templates/rules.yaml | python3 -c 'import sys, yaml; d = yaml.safe_load(sys.stdin); yaml.safe_dump({"groups": d["spec"]["groups"]}, sys.stdout)' \
       > "$work/rules/c1-lab.rules.yml"
     cp "$here/rules-tests/c1-lab.test.yml" "$work/rules/"
