@@ -1536,7 +1536,7 @@ expect: the old node is gone from `tailscale status`, and the rebuilt machine pa
 - **What stays the same.** The `kubectl` work (RBAC, apps, Services, policies, storage, logs) is the same whether the cluster was built by hand, by Ansible or by Kubespray (SYNTHESIS).
 - **What changes.** Join, upgrade, certificates and HA change with each rung. Talos has no SSH and no kubeadm, so kubeadm practice ends before that rung (SYNTHESIS).
 
-**And the repo.** A hand-built cluster that does not read central-hub is allowed now. No cluster reads the repo until the Activation gate's 7 checks pass ([AGENTS.md, Activation gate](../../AGENTS.md#activation-gate)).
+**And the repo.** A hand-built cluster that does not read central-hub is allowed now. Only the lab cluster c1 may read the repo before the Activation gate's 7 checks pass (D-0027, [AGENTS.md, Activation gate](../../AGENTS.md#activation-gate)).
 
 ## Sources for the whys
 

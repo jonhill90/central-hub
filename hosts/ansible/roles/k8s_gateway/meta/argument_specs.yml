@@ -26,3 +26,7 @@ argument_specs:
       k8s_gateway_smoke_client:
         type: str
         description: "Inventory host that calls the Gateway from outside the cluster. Default: the first host of group proxmox."
+      k8s_gateway_by_argocd:
+        type: bool
+        default: false
+        description: "True once Argo CD manages the Gateway; the role then only opens the firewall ports and checks it."

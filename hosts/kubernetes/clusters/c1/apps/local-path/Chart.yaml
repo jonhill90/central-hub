@@ -1,0 +1,6 @@
+apiVersion: v2
+name: local-path
+description: Local Path Provisioner and the default StorageClass on c1 (spec 2026-11-c1-apps-under-argo-cd, step 2)
+type: application
+version: 0.1.0
+appVersion: v0.0.37

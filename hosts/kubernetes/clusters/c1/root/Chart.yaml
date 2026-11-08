@@ -1,0 +1,9 @@
+# The root of cluster c1's apps (spec docs/specs/2026-11-c1-apps-under-argo-cd.md, D-0023 rule 5).
+# Argo CD renders this chart from the one Application that Ansible makes (role k8s_gitops); each
+# entry in values.yaml becomes one child Application. Only the chart's own files are read: no
+# dependencies, nothing fetched.
+apiVersion: v2
+name: c1
+description: One Argo CD Application per component on cluster c1
+type: application
+version: 0.1.0

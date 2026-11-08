@@ -1,0 +1,5 @@
+# The one store every ExternalSecret names, and the locked namespace it reads from. The same inputs
+# as the Ansible role k8s_secrets (defaults/main.yml). The Secrets in the source namespace are
+# seeded by hand; none are in git.
+storeName: c1
+sourceNamespace: secret-source

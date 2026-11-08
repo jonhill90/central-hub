@@ -1,0 +1,45 @@
+# Jellyfin on c1. The same objects the Ansible role k8s_jellyfin applied, plus the first-run setup
+# as code (spec "Jellyfin's first-run setup as code"). Every value here is public; the zone comes
+# only from the root Application's `zone` parameter (CLAUDE.md rule 4).
+zone: ""
+
+name: jellyfin
+
+# Same image as k8s_jellyfin/defaults/main.yml: tag 12.2 (2026-10-05), multi-arch index digest.
+image: docker.io/jellyfin/jellyfin:12.2@sha256:357724bf0ae27a672c7cbaa899db2d9abeb13dbd8657ccce750258a4c059d037
+uid: 1000
+port: 8096
+healthPath: /health
+
+storage:
+  className: ""      # empty: the cluster's default StorageClass
+  configSize: 5Gi
+  mediaSize: 100Gi
+  cacheLimit: 8Gi
+
+resources:
+  requests: {cpu: 250m, memory: 512Mi}
+  limits: {memory: 2Gi}
+
+# The shared Gateway (role k8s_gateway) and the name under it: <name>.apps.c1.prod.<zone>.
+gateway:
+  name: apps
+  namespace: gateway
+  hostSuffix: apps.c1.prod
+
+# First-run setup (templates/setup-*.yaml). The admin password is made once by External Secrets'
+# Password generator and kept in the Secret <name>-admin (keys: username, password); nothing
+# prints it. The Job runs after every sync and changes nothing once the wizard is done.
+setup:
+  enabled: true
+  adminUser: admin
+  serverName: jellyfin
+  uiCulture: en-US
+  metadataCountryCode: US
+  metadataLanguage: en
+  library:
+    name: Media
+    collectionType: mixed
+    path: /media
+  # curl 8.22.0 (2026-09-02, STD-0003: at least two weeks old), multi-arch index digest.
+  image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777

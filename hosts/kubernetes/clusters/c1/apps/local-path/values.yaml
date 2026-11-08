@@ -1,0 +1,17 @@
+# Local Path Provisioner on c1: each volume is a folder on a node's data disk. The same inputs as
+# the Ansible role k8s_storage (defaults/main.yml, vars/main.yml). The data disk itself (format,
+# mount, node label) stays with Ansible (role k8s_storage, tag disk): it is the machine, not the
+# cluster.
+version: v0.0.37   # 2026-08-05 (STD-0003 rule 1)
+image: docker.io/rancher/local-path-provisioner:v0.0.37@sha256:e757967a5ec338f6a9b371c5a9688bedaa8c3578ea3dd4db329ea0084be0a86f
+# The helper pod that makes and removes each volume's folder; upstream leaves it at "latest".
+helperImage: docker.io/library/busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+# Each volume's folder sits under this path on the node (k8s_storage_mount + /local-path).
+path: /var/lib/c1-data/local-path
+storageClass:
+  name: local-path
+  default: true
+  # Retain keeps a volume's folder when its claim is deleted; the folder is cleaned up by hand.
+  reclaimPolicy: Retain
+  # Only nodes whose data disk is mounted carry this label (k8s_storage, tag disk).
+  nodeLabel: central-hub/data-disk

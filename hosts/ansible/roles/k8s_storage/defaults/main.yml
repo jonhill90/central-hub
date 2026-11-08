@@ -26,3 +26,8 @@ k8s_storage_namespace: local-path-storage
 k8s_storage_class: local-path
 k8s_storage_class_default: true
 k8s_storage_reclaim_policy: Retain
+
+# Argo CD manages the provisioner and the StorageClass from hosts/kubernetes/clusters/c1/apps/local-path/
+# (spec 2026-11-c1-apps-under-argo-cd, step 2). True once its Application is Synced; the role then
+# leaves them alone. False keeps Ansible in charge, which is also the way back.
+k8s_storage_provisioner_by_argocd: false

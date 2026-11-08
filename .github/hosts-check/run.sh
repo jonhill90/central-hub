@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the hosts checks (STD-0005). CI runs the same commands.
 # Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|scripts|all]   (default: all)
-# Needs: python3 with requirements.txt installed; tofu, tflint and kubeconform on PATH, or
+# Needs: python3 with requirements.txt installed; tofu, tflint, kubeconform and helm on PATH, or
 # TOOLS=<dir> holding them (install-tools.sh builds them); for ansible and manifests, the
 # collections in hosts/ansible/requirements.yml (this script installs them when missing).
 # TOFU_PLUGIN_DIR=<dir> makes tofu init read providers from that folder instead of the registry,
@@ -85,6 +85,24 @@ check_manifests() {
       "$here/manifests/render.yml" -e role="$role" -e template="$template" \
       -e dest="$work/rendered/$out" -e "$extra" >/dev/null)
   done < "$here/manifests/cases.txt"
+  # Each cluster's root chart, rendered as Argo CD renders it, with the made-up zone (values.yml).
+  local root
+  for root in hosts/kubernetes/clusters/*/root; do
+    [ -f "$root/Chart.yaml" ] || continue
+    helm lint --quiet "$root" --set zone=example.com --set gatewayAddress=192.0.2.10
+    helm template root "$root" --set zone=example.com --set gatewayAddress=192.0.2.10 > "$work/rendered/root-$(basename "$(dirname "$root")").yaml"
+  done
+  # Charts kept in this repository (root values `local: true`), rendered the same way.
+  local chart
+  for chart in hosts/kubernetes/clusters/*/apps/*/Chart.yaml; do
+    [ -f "$chart" ] || continue
+    chart=$(dirname "$chart")
+    helm lint --quiet "$chart" --set zone=example.com --set address=192.0.2.10
+    helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com --set address=192.0.2.10 \
+      > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
+  done
+  # What Argo CD will apply must equal what the roles apply today (parity.txt).
+  python3 "$here/parity.py" . "$work"
   kubeconform -strict -summary -output text \
     -schema-location "$work/schemas/core/{{ .ResourceKind }}{{ .KindSuffix }}.json" \
     -schema-location "$work/schemas/crd/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json" \

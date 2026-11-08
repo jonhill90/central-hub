@@ -1,0 +1,3 @@
+# External Secrets on c1. The same values k8s_secrets gives Helm (vars/main.yml,
+# k8s_secrets_eso_values): the chart installs its CRDs.
+installCRDs: true

@@ -1,0 +1,8 @@
+# metrics-server on c1, so `kubectl top` works. Same values Ansible gave it
+# (hosts/ansible/roles/k8s_observability/vars/main.yml, k8s_observability_metrics_server_values).
+#
+# metrics-server checks no kubelet serving certificate: kubeadm's kubelets serve self-signed
+# certificates, which the metrics-server README allows only "for testing purposes only". The fix is
+# kubelet serverTLSBootstrap with approved CSRs (known gap, hosts/AGENT-PICKS.md).
+args:
+  - --kubelet-insecure-tls
