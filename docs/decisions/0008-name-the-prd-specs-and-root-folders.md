@@ -56,8 +56,7 @@ central-hub/
 │   ├── decisions/
 │   └── runbooks/
 ├── private-network/              the tailnet policy, tags only
-├── hosts/                        machines below Kubernetes
-├── kubernetes/                   clusters/<role>/, infrastructure/<capability>/, apps/
+├── hosts/                        machines below Kubernetes, and kubernetes/clusters/<role>/ for what runs on them
 ├── dns/
 └── backup/
 ```
@@ -66,15 +65,15 @@ central-hub/
 
 1. **PRD.** The PRD is `docs/PRD.md`. README and AGENTS link to it, so it stays within D-0007's two layers.
 2. **Specs.** Specs live in `docs/specs/`, as D-0007 rule 3 says.
-3. **Root folders.** The root folders for platform parts are `private-network/`, `hosts/`, `kubernetes/`, `dns/` and `backup/`.
+3. **Root folders.** The root folders for platform parts are `private-network/`, `hosts/`, `dns/` and `backup/`.
    - Each one is named for its job, never for a vendor product.
-   - `kubernetes/` is named for a tool on purpose. Kubernetes owns every file in it, so replacing Kubernetes would rewrite them all anyway.
-4. **Clusters.** A cluster folder is named for its role, for example `kubernetes/clusters/main/`, never for the machine or provider it runs on.
+   - There is no root `kubernetes/` folder: what the clusters run lives in `hosts/kubernetes/` (the owner, 2026-11-08 07:51 UTC).
+4. **Clusters.** A cluster folder is named for its role, for example `hosts/kubernetes/clusters/main/`, never for the machine or provider it runs on.
 5. **Creation.** A folder is created with its first real file. None is created empty.
 
 ### Not decided here
 
-- the names inside `kubernetes/infrastructure/` and any other new root folder;
+- the names inside `hosts/kubernetes/` beyond `clusters/<role>/`, and any other new root folder;
 - where vendor areas (labs) go;
 - where per-system records live;
 - the rest of the layout rules (organize-repository skill), which the owner reviews in that skill's own repo.
@@ -83,7 +82,6 @@ central-hub/
 
 - Good: a reader or agent can tell from the name alone what a root folder holds.
 - Good: replacing a vendor product leaves every root folder name unchanged.
-- Bad: `kubernetes/` breaks the "never a vendor product" rule, as a stated exception.
 - Bad: the PRD is one click further from the root than it would be at the top level.
 - Neutral: none of these folders exists yet. Each one appears with its first file.
 

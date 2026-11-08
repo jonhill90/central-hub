@@ -1,6 +1,6 @@
 # Cluster c1
 
-What Argo CD on c1 reads from this repository (D-0023 rule 5, D-0027). The plan and the order are in the spec [Move c1's apps and add-ons under Argo CD](../../../docs/specs/2026-11-c1-apps-under-argo-cd.md).
+What Argo CD on c1 reads from this repository (D-0023 rule 5, D-0027). The plan and the order are in the spec [Move c1's apps and add-ons under Argo CD](../../../../docs/specs/2026-11-c1-apps-under-argo-cd.md).
 
 | Folder | What |
 |---|---|
@@ -13,4 +13,4 @@ No private names go here (CLAUDE.md rule 4). The lab zone reaches the cluster on
 
 | Component | Namespace | Runbook | State |
 |---|---|---|---|
-| metrics-server | kube-system | [move-metrics-server-to-argo-cd.md](../../../docs/runbooks/move-metrics-server-to-argo-cd.md) | in git, not yet synced |
+| metrics-server | kube-system | [move-metrics-server-to-argo-cd.md](../../../../docs/runbooks/move-metrics-server-to-argo-cd.md) | in git, not yet synced |

@@ -21,7 +21,7 @@
   when: not k8s_observability_metrics_server_by_argocd | bool
   tags: [metrics_server]
 
-# Once Argo CD manages metrics-server (kubernetes/clusters/c1/apps/metrics-server/), Ansible stops
+# Once Argo CD manages metrics-server (hosts/kubernetes/clusters/c1/apps/metrics-server/), Ansible stops
 # installing it and removes Helm's old release records, which Argo CD does not use (it renders
 # charts with `helm template`, D-0023). The objects stay: Argo CD owns them now.
 - name: metrics-server's old Helm release records, once Argo CD manages it

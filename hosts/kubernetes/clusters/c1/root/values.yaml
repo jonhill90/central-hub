@@ -7,7 +7,7 @@ zone: ""
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
 targetRevision: main
-appsPath: kubernetes/clusters/c1/apps
+appsPath: hosts/kubernetes/clusters/c1/apps
 
 # One entry per component, in the order they moved (spec, "Order"). Each one:
 #   namespace    where the chart installs

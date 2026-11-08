@@ -33,7 +33,7 @@ On 2026-10-25 at 02:53 UTC the owner said yes to the proposed home for configura
 ## Decision Drivers
 
 - **Controllable from this repository** (PRD goal 6). After one-time console steps at the start, every machine is created and configured from code here. Each job is first done by hand from a manual runbook, and its code follows (D-0012 "Manual first").
-- **D-0008 rule 3.** Root folders are named for their job. A vendor product is never a root folder name, apart from the stated `kubernetes/` exception.
+- **D-0008 rule 3.** Root folders are named for their job. A vendor product is never a root folder name.
 - **Replaceable** (REQ-0011). Swapping a vendor product should replace one folder, not rename a root folder.
 - **Public repository** (CLAUDE.md rule 4). Single machine addresses and hostnames never go here. STD-0002 holds the rule for addresses.
 
@@ -57,16 +57,16 @@ central-hub/
 │   ├── terraform/             creates the machines: VPS, hypervisor VMs and networks, cloud VMs
 │   │   ├── <place>/<workload>/ one runnable folder per workload in each place (rule 8)
 │   │   └── modules/<name>/    only once code is reused (rule 3)
-│   └── ansible/               configures the OS on them, and the firewall's settings
-│       ├── inventories/<place>/
-│       ├── playbooks/
-│       └── roles/
-└── kubernetes/clusters/<role>/   the clusters that run on those machines
+│   ├── ansible/               configures the OS on them, and the firewall's settings
+│   │   ├── inventories/<place>/
+│   │   ├── playbooks/
+│   │   └── roles/
+│   └── kubernetes/clusters/<role>/  what the clusters on those machines run (read by Argo CD, D-0023)
 ```
 
 ### Rules
 
-1. **What `hosts/` holds.** Code for every machine below Kubernetes goes in `hosts/`, whoever runs the machine. That covers machines the owner owns, VPS machines, VMs on his own hypervisor, and cloud VMs.
+1. **What `hosts/` holds.** Code for every machine below Kubernetes goes in `hosts/`, whoever runs the machine, and so does what the clusters run, in `hosts/kubernetes/clusters/<role>/` (the owner, 2026-11-08 07:51 UTC: no root `kubernetes/` folder). That covers machines the owner owns, VPS machines, VMs on his own hypervisor, and cloud VMs.
 2. **One subfolder per vendor product.** Each vendor product that creates or configures machines gets one subfolder in its own native layout, named for the product, for example `hosts/terraform/` or `hosts/ansible/`. Replacing the product replaces only that subfolder.
 3. **No Terraform modules of our own until code is reused.** A runnable folder holds its own resources. Code that two or more runnable folders use goes in `hosts/terraform/modules/<name>/`, called by a local path. It moves to its own repository, called by a tagged version, only when another repository needs it. A module is written only when it bundles real logic, such as a whole VM, and never as a thin wrapper around one resource, as HashiCorp's module guidance advises.
 4. **Not machines, not `hosts/`.** A managed container service with no machines to manage, such as AWS ECS, doesn't go in `hosts/`. It gets its own capability folder when it is first used (D-0008 rule 5).

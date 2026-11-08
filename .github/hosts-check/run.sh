@@ -87,7 +87,7 @@ check_manifests() {
   done < "$here/manifests/cases.txt"
   # Each cluster's root chart, rendered as Argo CD renders it, with the made-up zone (values.yml).
   local root
-  for root in kubernetes/clusters/*/root; do
+  for root in hosts/kubernetes/clusters/*/root; do
     [ -f "$root/Chart.yaml" ] || continue
     helm lint --quiet "$root" --set zone=example.com
     helm template root "$root" --set zone=example.com > "$work/rendered/root-$(basename "$(dirname "$root")").yaml"
