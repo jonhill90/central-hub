@@ -63,7 +63,7 @@
 # node found by the address Ansible reaches it on, so no machine name is written here.
 - name: disk | The node's Kubernetes name
   ansible.builtin.command: >-
-    kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}'
+    {{ k8s_storage_kubectl }} get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}'
   delegate_to: "{{ groups['k8s_control_plane'] | first }}"
   register: k8s_storage_nodes
   changed_when: false
@@ -71,7 +71,7 @@
 
 - name: disk | Label it as having a mounted data disk
   ansible.builtin.command: >-
-    kubectl label node {{ (k8s_storage_nodes.stdout_lines | select('search', ' ' ~ ansible_host ~ '$') | first).split(' ') | first }}
+    {{ k8s_storage_kubectl }} label node {{ (k8s_storage_nodes.stdout_lines | select('search', ' ' ~ ansible_host ~ '$') | first).split(' ') | first }}
     {{ k8s_storage_node_label }}=true
   delegate_to: "{{ groups['k8s_control_plane'] | first }}"
   register: k8s_storage_label
