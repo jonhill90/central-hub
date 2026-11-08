@@ -75,7 +75,7 @@ check_manifests() {
       return 1
     fi
     mkdir -p "$work/schemas/$(dirname "$path")"
-    curl -fsSL -o "$work/schemas/$path" "$url"
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 15 -o "$work/schemas/$path" "$url"
     echo "$sum  $work/schemas/$path" | sha256sum --check --quiet
   done < "$here/manifests/schemas.lock"
   mkdir -p "$work/rendered"
