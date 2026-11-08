@@ -6,6 +6,14 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 
 | Runbook | Kind | Status |
 |---|---|---|
+| [Rebuild the home lab from bare metal (top-level order)](rebuild-home-lab-from-scratch.md) | manual | draft |
+| [Set up the lab controller](set-up-lab-controller.md) | manual | draft |
+| [Set up the lab network, the OPNsense firewall and the tailnet connector container from code](set-up-lab-network-and-firewall.md) | automated | draft |
+| [Create the c1 node VMs on Proxmox from code](create-c1-node-vms.md) | automated | draft |
+| [Build cluster c1 with Ansible](build-c1-with-ansible.md) | automated | draft |
+| [Issue c1's wildcard app certificate](issue-c1-app-certificate.md) | automated | draft |
+| [Install Argo CD on c1](install-argo-cd-on-c1.md) | automated | draft |
+| [Install c1's add-ons and apps with Ansible](install-c1-add-ons-with-ansible.md) | automated | draft |
 | [Build a single-node kubeadm cluster by hand (CKA practice)](build-kubeadm-cluster.md) | manual | draft |
 | [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) | manual | draft |
 | [Move metrics-server on c1 from Ansible to Argo CD](move-metrics-server-to-argo-cd.md) | automated | draft |
