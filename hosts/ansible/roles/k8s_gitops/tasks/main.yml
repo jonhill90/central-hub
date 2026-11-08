@@ -14,3 +14,10 @@
   ansible.builtin.import_tasks: ui.yml
   when: k8s_gitops_ui_route | bool or k8s_gitops_engine == 'argocd'
   tags: [ui]
+
+# Sign-in through Keycloak (k8s_gitops_sso). Off, it removes what an earlier run set, so it runs
+# for Argo CD whenever Argo CD is the engine.
+- name: Argo CD sign-in through Keycloak
+  ansible.builtin.import_tasks: sso.yml
+  when: k8s_gitops_engine == 'argocd'
+  tags: [sso]

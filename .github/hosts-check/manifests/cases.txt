@@ -19,3 +19,5 @@ k8s_storage local-path.yaml.j2 storage-local-path.yaml {}
 k8s_storage proof.yaml.j2 storage-proof.yaml {}
 k8s_jellyfin jellyfin.yaml.j2 jellyfin.yaml {"k8s_jellyfin_zone":"example.com"}
 k8s_jellyfin jellyfin.yaml.j2 jellyfin-named-class.yaml {"k8s_jellyfin_zone":"example.com","k8s_jellyfin_storage_class":"local-path"}
+k8s_gitops argocd-sso.yaml.j2 gitops-sso-on.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_sso":true}
+k8s_gitops argocd-sso.yaml.j2 gitops-sso-off.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_sso":false}

@@ -1,0 +1,51 @@
+---
+# Sign-in to Argo CD through Keycloak (templates/argocd-sso.yaml.j2). Same diff-then-apply as the
+# other manifests, server-side with this role's own field manager.
+- name: sso | The UI route is on
+  ansible.builtin.assert:
+    that: k8s_gitops_ui_route | bool
+    fail_msg: k8s_gitops_sso needs k8s_gitops_ui_route true (Keycloak sends people back to the UI's public URL).
+    quiet: true
+  when: k8s_gitops_sso | bool
+
+- name: sso | The client secret is in the cluster
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_gitops_engines.argocd.namespace }} get secret argocd-sso
+    -o jsonpath={.metadata.labels.app\.kubernetes\.io/part-of}
+  register: k8s_gitops_sso_secret
+  changed_when: false
+  failed_when: k8s_gitops_sso_secret.rc != 0 or k8s_gitops_sso_secret.stdout != 'argocd'
+  check_mode: false
+  when: k8s_gitops_sso | bool and not ansible_check_mode
+
+- name: sso | Folder for the manifests
+  ansible.builtin.file: {path: "{{ k8s_gitops_dir }}", state: directory, mode: "0700"}
+  check_mode: false
+
+- name: sso | Manifest
+  ansible.builtin.template:
+    src: argocd-sso.yaml.j2
+    dest: "{{ k8s_gitops_dir }}/argocd-sso.yaml"
+    mode: "0600"
+
+- name: sso | Manifest on the node?
+  ansible.builtin.stat: {path: "{{ k8s_gitops_dir }}/argocd-sso.yaml"}
+  register: k8s_gitops_sso_file
+
+# kubectl diff exits 0 with no difference, 1 with one, more on an error.
+- name: sso | Differs from the cluster?
+  ansible.builtin.command: >-
+    kubectl diff --server-side --field-manager={{ k8s_gitops_sso_field_manager }}
+    -f {{ k8s_gitops_dir }}/argocd-sso.yaml
+  register: k8s_gitops_sso_diff
+  changed_when: false
+  failed_when: k8s_gitops_sso_diff.rc > 1
+  check_mode: false
+  when: k8s_gitops_sso_file.stat.exists
+
+- name: sso | Apply
+  ansible.builtin.command: >-
+    kubectl apply --server-side --field-manager={{ k8s_gitops_sso_field_manager }}
+    -f {{ k8s_gitops_dir }}/argocd-sso.yaml
+  when: (k8s_gitops_sso_diff.rc | default(1)) != 0
+  changed_when: true
