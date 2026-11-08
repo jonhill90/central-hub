@@ -4,11 +4,12 @@
 Usage: parity.py <repo root> <work dir>. Reads .github/hosts-check/manifests/parity.txt; needs
 helm and ansible-playbook on PATH. Exits 1 on any difference, printing each one.
 """
-import json
+import os
 import pathlib
 import shlex
 import subprocess
 import sys
+import time
 
 import yaml
 
@@ -17,6 +18,29 @@ ZONE = "example.com"
 
 def run(args, cwd=None):
     return subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True).stdout
+
+
+def pull(chart, dest):
+    """Download an upstream chart once: from PARITY_CHART_CACHE when it holds this name and version
+    (CI keeps that folder with actions/cache), else from its repository, with retries and backoff,
+    so a short outage upstream doesn't fail the check."""
+    cache = os.environ.get("PARITY_CHART_CACHE")
+    folder = pathlib.Path(cache) / f"{chart['name']}-{chart['version']}" if cache else dest
+    if not (folder / chart["name"] / "Chart.yaml").exists():
+        for attempt in range(5):
+            try:
+                run(["helm", "pull", chart["name"], "--repo", chart["repoURL"], "--version",
+                     str(chart["version"]), "--untar", "--untardir", str(folder)])
+                break
+            except subprocess.CalledProcessError as err:
+                if attempt == 4:
+                    sys.stderr.write(err.stderr)
+                    raise
+                wait = 2 ** (attempt + 1)
+                print(f"helm pull {chart['name']} {chart['version']} failed, retrying in {wait}s",
+                      file=sys.stderr)
+                time.sleep(wait)
+    return folder / chart["name"]
 
 
 def objects(text):
@@ -115,12 +139,7 @@ def main():
             out = dest / "values.json"
             run(["ansible-playbook", "-i", "localhost,", str(here / "values-dump.yml"), "-e", f"role={role}",
                  "-e", f"var={source}", "-e", f"dest={out}", "-e", settings], cwd=ansible)
-            chart = entry["chart"]
-            tgz = dest / "chart"
-            if not tgz.exists():
-                run(["helm", "pull", chart["name"], "--repo", chart["repoURL"], "--version",
-                     str(chart["version"]), "--untar", "--untardir", str(tgz)])
-            path = str(tgz / chart["name"])
+            path = str(pull(entry["chart"], dest / "chart"))
             left = objects(run(["helm", "template", release, path, "-n", ns, "-f", str(out), *kube]))
             sets = []
             for p, text in (entry.get("zoneParameters") or {}).items():

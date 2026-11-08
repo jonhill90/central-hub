@@ -22,7 +22,7 @@ The tests themselves sit next to the code: `hosts/terraform/<place>/<workload>/t
 |---|---|
 | `terraform` | `check_hosts.py` and its tests; `tofu fmt -check`; then for each run folder, in a copy without `imports.tf`: `tofu init -backend=false`, `tofu validate`, tflint and `tofu test` |
 | `ansible` | `ansible-playbook --syntax-check` on every playbook; ansible-lint on playbooks and roles |
-| `manifests` | renders each line of `manifests/cases.txt`, each `hosts/kubernetes/clusters/*/root` chart and each local chart under `clusters/*/apps/` (`helm lint`, `helm template`); runs `parity.py` (downloads the upstream charts named in the root values); then `kubeconform -strict` on the output |
+| `manifests` | renders each line of `manifests/cases.txt`, each `hosts/kubernetes/clusters/*/root` chart and each local chart under `clusters/*/apps/` (`helm lint`, `helm template`); runs `parity.py` (downloads the upstream charts named in the root values, with retries; `PARITY_CHART_CACHE=<dir>` keeps them, and CI caches that folder); then `kubeconform -strict` on the output |
 | `scripts` | ShellCheck (warnings and errors) on every tracked `*.sh`; actionlint on every workflow |
 
 ## Run it locally
