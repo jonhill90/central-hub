@@ -1,7 +1,7 @@
 ---
 id: D-0028
 title: Run the lab's own certificate authority with the root kept off every cluster and one intermediate per cluster, restored into cert-manager on each rebuild
-status: proposed
+status: accepted
 date: 2026-11-08
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0021, D-0023, D-0027]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-08T22:58:40Z
+  approved-commit: 7b0a6625d7f1df3cd056ea1060f7f6b99fc7986c
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN3pm9VMkokaWXswED1D5mcj
+  approval-names: "PR jonhill90/central-hub#89 and head 7b0a662, in the message itself; an earlier message of 2026-11-08T22:43:28Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK) said the record is approved without naming a PR or head"
+  check: the drafting agent read the message in the project thread at 2026-11-08T22:58Z; it reads "accept #86 28422d9 and #89 7b0a662, D-0030 park", and that head holds this record. The owner also said every record gets re-checked at the rebuild. An independent check by a reviewing agent is still to do
+  merged: the record merged as proposed with PR #65 as 1ceb885; accepted with PR #89
 revisit-when: a device outside Kubernetes needs to order its own certificates (an ACME server such as step-ca would then get a new intermediate under the same root); a second cluster joins; the intermediate is within a year of expiry; or cert-manager's CA issuer stops being supported on c1's Kubernetes version
 ---
 
@@ -36,7 +44,7 @@ On 2026-11-08 at 07:08 UTC the owner asked for that step: a PKI that still works
 
 ## Decision Outcome
 
-Proposed option: **1**. The owner chose it on 2026-11-08 at 07:42 UTC ("i feel b", the card's option for this shape).
+Proposed option: **1**. The owner leaned to it on 2026-11-08 at 07:42 UTC, typing that he felt it was b but might be wrong (b was this shape on the card); the drafting agent closed the card as this option.
 
 ```mermaid
 flowchart TB
@@ -72,7 +80,7 @@ flowchart TB
 - Good: no CA server to run, patch or back up.
 - Good: lab names stay out of public Certificate Transparency logs.
 - Bad: Proxmox and OPNsense depend on c1 to renew their certificates. Leaf certificates last 90 days and renew 30 days early, so c1 can be down for up to 30 days before one lapses.
-- Neutral: for the greenfield lab the keys sit in a local env folder on the owner's Mac, not a password manager, and every key is replaced at the first full rebuild (the owner, 2026-11-08 07:58 UTC).
+- Neutral: for the greenfield lab the keys sit in a local env folder on the owner's Mac, not a password manager, and the owner said all the passwords get changed at a lab rebuild once everything is code (2026-11-08 07:58 UTC).
 - Bad: the CA issuer doesn't rotate its own intermediate. That is a manual step before it expires, written in the root runbook.
 - Bad: cert-manager v1.21 lists Kubernetes 1.33 to 1.36 as supported, and c1 runs 1.37.
 - Neutral: devices that don't trust the root see a warning. That is why the Let's Encrypt issuer stays as the exit path.

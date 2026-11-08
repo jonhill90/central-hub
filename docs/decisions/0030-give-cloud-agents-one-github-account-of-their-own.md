@@ -1,7 +1,7 @@
 ---
 id: D-0030
 title: Give the cloud agents one GitHub account of their own, separate from the owner's, so GitHub can require the owner's approval
-status: proposed
+status: parked
 date: 2026-10-28
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -20,7 +20,7 @@ Activation gate item 1 asks for per-agent GitHub identities, with the owner's ap
 
 The Foundation proposal (v0.4.3 §6, AG1) planned one GitHub App per agent, with the Claude GitHub App removed from this repository. On 2026-10-28 research batch RB-0093 measured that the agents' cloud environment replaces the GitHub token a request carries with the owner's: a request sent with a made-up token still came back as the owner's account. A real App token was not tried, and it is likely replaced the same way, so per-agent Apps would leave the cloud agents with no way to write here.
 
-On 2026-10-28 at 05:12 UTC the owner said yes to the proposed option a on a decision card: one agent account, connected in place of the owner's, with the owner approving from their own login. This record writes that down and replaces Foundation AG1 (a), (b), (c) and (e).
+On 2026-10-28 at 05:12 UTC the owner tapped the recommended option a on a decision card, with no typed words (an agent pick under the owner's rule of 2026-11-08 19:01 UTC): one agent account, connected in place of the owner's, with the owner approving from their own login. This record writes that down and replaces Foundation AG1 (a), (b), (c) and (e).
 
 Since then, D-0027 lets the lab cluster c1 read central-hub before the gate passes. Item 1 still holds for every other cluster, and D-0027 names it as one of its revisit triggers.
 
@@ -39,7 +39,7 @@ Since then, D-0027 lets the lab cluster c1 read central-hub before the gate pass
 
 ## Decision Outcome
 
-Chosen option: **1**. The owner said yes to it on 2026-10-28 at 05:12 UTC, after reading the agent's pick (option 1 now, option 2 later), GitHub's and Microsoft's practice, and a correction that option 1 had not been tested and does not meet gate item 2 on its own.
+Chosen option: **1**. The owner tapped it on a decision card on 2026-10-28 at 05:12 UTC, with no typed words; the card was posted after a correction that option 1 had not been tested and does not meet gate item 2 on its own. On 2026-11-08 at 22:58 UTC the owner parked the record in words, to be rewritten so its gaps are closed.
 
 ```mermaid
 flowchart LR
