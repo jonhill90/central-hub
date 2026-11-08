@@ -139,6 +139,8 @@ Every choice here was made by an agent, not by the owner. Any of them can change
 | 133 | A value that holds the zone is passed as a Helm parameter from root values `zoneParameters` ("{zone}" swapped in), first Grafana's `root_url` | root chart `_helpers.tpl` | the zone stays out of git (pick 122) while upstream charts need whole URLs | a local wrapper chart per component |
 | 134 | kube-prometheus-stack syncs with `ServerSideApply=true`, and Argo CD ignores the data of Secret `kube-prometheus-stack-grafana` | `root/values.yaml` | the CRDs are too big for a client-side apply; the chart makes a new random admin password at each render | set `grafana.admin.existingSecret` to a Secret made by External Secrets |
 | 135 | Ansible hands logs and metrics over with `k8s_observability_logs_by_argocd` and `k8s_observability_metrics_by_argocd`; Grafana's route stays with Ansible until spec step 9 | `k8s_observability` defaults and tasks | same shape as pick 125 | set them back to false |
+| 136 | The Local Path Provisioner and its StorageClass move as a local chart ported line for line from the role's template; the data disk stays with Ansible (`k8s_storage_provisioner_by_argocd`) | `apps/local-path/`, `k8s_storage` | the disk is the machine, not the cluster (D-0011) | set the switch back to false |
+| 137 | CI's parity check (`parity.py`, `parity.txt`) renders each role's manifest or Helm values and the matching Argo CD files, and fails on any difference; Argo CD's and Helm's own annotations are ignored | `.github/hosts-check/` | the take-over's first diff on the cluster is then known to be empty before anyone syncs (spec step 3) | drop the call in `run.sh` |
 
 ## The owner's decisions so far
 

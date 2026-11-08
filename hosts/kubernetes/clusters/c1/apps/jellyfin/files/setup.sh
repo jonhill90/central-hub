@@ -1,3 +1,4 @@
+#!/bin/sh
 # Jellyfin first-run setup (startup API, Jellyfin 12.2: StartupController and
 # LibraryStructureController, both open to anonymous calls only until the wizard completes).
 # Safe to run again: it stops as soon as the server says the wizard is done.

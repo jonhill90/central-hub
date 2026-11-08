@@ -17,3 +17,4 @@ No private names go here (CLAUDE.md rule 4). The lab zone reaches the cluster on
 | jellyfin | media | [move-jellyfin-to-argo-cd.md](../../../../docs/runbooks/move-jellyfin-to-argo-cd.md) | in git, not yet synced |
 | loki, alloy | logging | [move-logging-to-argo-cd.md](../../../../docs/runbooks/move-logging-to-argo-cd.md) | in git, not yet synced |
 | kube-prometheus-stack | monitoring | [move-monitoring-to-argo-cd.md](../../../../docs/runbooks/move-monitoring-to-argo-cd.md) | in git, not yet synced |
+| local-path | local-path-storage | [move-local-path-to-argo-cd.md](../../../../docs/runbooks/move-local-path-to-argo-cd.md) | in git, not yet synced |

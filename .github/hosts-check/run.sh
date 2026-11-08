@@ -101,6 +101,8 @@ check_manifests() {
     helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com \
       > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
   done
+  # What Argo CD will apply must equal what the roles apply today (parity.txt).
+  python3 "$here/parity.py" . "$work"
   kubeconform -strict -summary -output text \
     -schema-location "$work/schemas/core/{{ .ResourceKind }}{{ .KindSuffix }}.json" \
     -schema-location "$work/schemas/crd/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json" \

@@ -11,7 +11,8 @@ Lints and offline tests for the code under `hosts/` (STD-0005). Workflow `hosts`
 | `tests/test_check_hosts.sh` | Test cases: each breaks a copy of `hosts/` one way and expects `check_hosts.py` to fail. |
 | `tflint.hcl` | tflint settings: every bundled Terraform rule. |
 | `ansible-lint.yml` | ansible-lint settings: the production profile, with two style rules off and the reason. |
-| `manifests/` | How the Kubernetes templates in the roles are rendered (`render.yml`, `cases.txt`, made-up `values.yml`) and the pinned schemas kubeconform checks them against (`schemas.lock`). |
+| `manifests/` | How the Kubernetes templates in the roles are rendered (`render.yml`, `cases.txt`, made-up `values.yml`) and the pinned schemas kubeconform checks them against (`schemas.lock`). `parity.txt` and `values-dump.yml` feed the parity check. |
+| `parity.py` | The parity check: for each line of `manifests/parity.txt`, renders what an Ansible role applies today and what Argo CD will apply from `hosts/kubernetes/clusters/`, and fails on any difference. |
 
 The tests themselves sit next to the code: `hosts/terraform/<place>/<workload>/tests/*.tftest.hcl`.
 
@@ -21,7 +22,7 @@ The tests themselves sit next to the code: `hosts/terraform/<place>/<workload>/t
 |---|---|
 | `terraform` | `check_hosts.py` and its tests; `tofu fmt -check`; then for each run folder, in a copy without `imports.tf`: `tofu init -backend=false`, `tofu validate`, tflint and `tofu test` |
 | `ansible` | `ansible-playbook --syntax-check` on every playbook; ansible-lint on playbooks and roles |
-| `manifests` | renders each line of `manifests/cases.txt` and each `hosts/kubernetes/clusters/*/root` chart (`helm lint`, `helm template`), then `kubeconform -strict` on the output |
+| `manifests` | renders each line of `manifests/cases.txt`, each `hosts/kubernetes/clusters/*/root` chart and each local chart under `clusters/*/apps/` (`helm lint`, `helm template`); runs `parity.py` (downloads the upstream charts named in the root values); then `kubeconform -strict` on the output |
 | `scripts` | ShellCheck (warnings and errors) on every tracked `*.sh`; actionlint on every workflow |
 
 ## Run it locally

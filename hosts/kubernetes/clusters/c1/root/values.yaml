@@ -34,6 +34,13 @@ apps:
       version: 3.14.0   # metrics-server 0.9.0, 2026-08-19; same as k8s_observability today
     autoSync: false
     prune: false
+  # Volumes (spec step 2): the provisioner and the default StorageClass. The data disk itself stays
+  # with Ansible (k8s_storage, tag disk).
+  local-path:
+    namespace: local-path-storage
+    local: true
+    autoSync: false
+    prune: false
   jellyfin:
     namespace: media
     local: true
