@@ -3,3 +3,5 @@
 *.tfvars.json
 # Provider downloads from tofu init
 .terraform/
+# Saved plans (tofu plan -out=...) hold the planned values, private ones included
+*.tfplan

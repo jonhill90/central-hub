@@ -1,6 +1,6 @@
 ---
 title: Set up lab DNS and make the owner's Mac resolve lab names
-status: draft
+status: tested
 kind: automated
 trigger: on request; again after a lab rebuild, a new lab name, or a new tailnet device that should resolve lab names
 runner: an agent lane, through the owner's Mac
@@ -8,7 +8,7 @@ outcome: every lab name (the c1 API, every app under apps.c1.prod, the firewall 
 needs: the lab clone of central-hub with its private inventory and home.tfvars; hosts/.env with a tailnet OAuth client; OpenTofu; dig on the Mac; root SSH to the Proxmox host
 private-values: [opnsense_dns_zone, opnsense_lab_host_overrides, tailnet_connector_extra_routes, connector_hostname, TAILSCALE_OAUTH_CLIENT_ID, TAILSCALE_OAUTH_CLIENT_SECRET]
 files: [hosts/ansible/playbooks/opnsense.yml, hosts/ansible/roles/opnsense_lab/tasks/dns.yml, hosts/ansible/roles/opnsense_lab/tasks/dns_proof.yml, hosts/ansible/playbooks/tailnet-connector.yml, hosts/ansible/roles/tailnet_connector/, hosts/terraform/home/tailnet/, hosts/.env.example]
-last-tested: not yet run against the lab; the code passed the hosts checks and stand-in runs on 2026-11-08
+last-tested: 2026-11-08, an agent lane on the owner's Mac, steps 1-6 against the home lab (OPNsense, CT 900, the tailnet); second runs changed nothing
 superseded-by:
 ---
 
@@ -105,13 +105,13 @@ Stop if any of these is not true.
 6. Prove it from the Mac:
 
    ```sh
-   scutil --dns | grep -B1 -A3 'c1.prod'                 # a resolver for c1.prod.<zone> with nameserver 100.100.100.100
+   tailscale dns status | grep 'c1.prod'                  # the split DNS names the Tailscale client uses
    dscacheutil -q host -a name api.c1.prod.<zone>          # the system resolver, which browsers use
    ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags dns_proof -e opnsense_lab_dns_proof_server=100.100.100.100
    ```
 
    Then open `https://grafana.apps.c1.prod.<zone>/` in a browser.
-   why: plain `dig` on macOS skips the system resolver and asks the first server in `/etc/resolv.conf`, so it does not show what apps see. `dscacheutil` does. The proof run asks Tailscale's resolver on the Mac, which forwards the lab names through CT 900.
+   why: plain `dig` on macOS skips the system resolver and asks the first server in `/etc/resolv.conf`, so it does not show what apps see. `dscacheutil` does. `scutil --dns` shows no entry for the split names on the owner's Mac (measured 2026-11-08): the Tailscale app answers them without a per-domain resolver entry, so check `tailscale dns status` instead. The proof run asks Tailscale's resolver on the Mac, which forwards the lab names through CT 900.
    expect: `dscacheutil` prints the c1 node's address; every proof item is `ok`; the page loads. Then tell the PKI thread, whose certificate checks need this.
 
 ## If it fails
