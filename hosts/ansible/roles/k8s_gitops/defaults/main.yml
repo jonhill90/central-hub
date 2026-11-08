@@ -1,8 +1,8 @@
 ---
 # BUILD-PATH S13: the GitOps engine on cluster c1. Every input is listed here (Red Hat CoP rule).
 #
-# The engine is the owner's choice (BL-0021), so it has no default: set it in the inventory to
-# flux, argocd (with the web UI) or argocd-core (no UI, no API server).
+# The engine has no default: set it in the inventory. The owner chose argocd, with the web UI
+# (D-0023); flux and argocd-core (no UI, no API server) stay as choices for the exit path.
 # k8s_gitops_engine: <engine>
 
 # Activation gate (CLAUDE.md): no cluster reads central-hub until all 7 items are true and

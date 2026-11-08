@@ -9,7 +9,7 @@ argument_specs:
         type: str
         required: true
         choices: [flux, argocd, argocd-core]
-        description: "The engine. The owner's choice (BL-0021); no default."
+        description: "The engine; no default. The owner chose argocd (D-0023)."
       k8s_gitops_source_enabled:
         type: bool
         default: false
