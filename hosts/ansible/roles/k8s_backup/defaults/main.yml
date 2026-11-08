@@ -1,6 +1,6 @@
 ---
 # Off-box backups of c1 and the tests that prove they restore (BL-0139 volumes, BL-0094 etcd).
-# Every part is an agent pick, listed in hosts/AGENT-PICKS.md (picks 127-135); runbooks
+# Every part is an agent pick, listed in hosts/AGENT-PICKS.md (picks 144-152); runbooks
 # docs/runbooks/back-up-c1-off-box.md and docs/runbooks/test-etcd-restore.md.
 #
 # restic writes encrypted, deduplicated snapshots to one repository off the Proxmox box. Where that

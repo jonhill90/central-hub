@@ -84,9 +84,10 @@ all:
         # The Argo CD web UI at https://argocd.apps.c1.prod.<zone>/ through Gateway apps (tag ui).
         k8s_gitops_ui_route: false           # true once k8s_gateway_https is true
         k8s_gitops_ui_zone: "{{ k8s_gateway_zone }}"
-        # Argo CD reads central-hub (D-0027): turn on with the first component in kubernetes/clusters/c1/.
+        # Argo CD reads central-hub (D-0027): turn on with the first component in hosts/kubernetes/clusters/c1/.
         k8s_gitops_source_enabled: false
         k8s_gitops_source_zone: "{{ k8s_gateway_zone }}"
+        k8s_gitops_source_gateway_address: "{{ k8s_gateway_address }}"
         k8s_gitops_ui_gateway_https: "{{ k8s_gateway_https }}"
         # Metrics and logs (playbooks/k8s-observability.yml, BUILD-PATH S15): Grafana at
         # https://grafana.apps.c1.prod.<zone>/ through Gateway apps.

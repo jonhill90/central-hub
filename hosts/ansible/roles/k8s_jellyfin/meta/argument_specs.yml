@@ -17,4 +17,5 @@ argument_specs:
       k8s_jellyfin_cpu_request: {type: str, default: 250m, description: CPU request.}
       k8s_jellyfin_memory_request: {type: str, default: 512Mi, description: Memory request.}
       k8s_jellyfin_memory_limit: {type: str, default: 2Gi, description: Memory limit.}
+      k8s_jellyfin_by_argocd: {type: bool, default: false, description: "True once Argo CD manages Jellyfin; the role then changes nothing."}
       k8s_jellyfin_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}

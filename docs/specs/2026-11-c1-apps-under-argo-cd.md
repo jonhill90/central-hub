@@ -22,7 +22,7 @@ superseded-by:
 
 Everything on c1 today was put there by Ansible: seven Helm releases and several sets of plain manifests. Argo CD v3.5.5 is installed but manages nothing: it has no Application and no repository. This was measured on c1 on 2026-11-08 at about 07:15 UTC, read-only. On 2026-11-08 at 07:06 UTC the owner asked to switch all of the Kubernetes work to GitOps as soon as possible, with runbooks written from doing it. At 07:09 UTC the owner asked that every piece be replaceable and documented, so it can be walked through later.
 
-This change moves each component from "Ansible applies it" to "Argo CD reads it from `kubernetes/clusters/c1/` on `main`" (D-0023 rule 5, D-0011). It moves one component per PR, and each PR adds a runbook. It serves PRD goal 1 (upstream Kubernetes, starting with one home-lab cluster) and goal 6 (everything controllable from this repo). It crosses systems (Ansible, Argo CD, the cluster) and spans several sessions, so it gets a spec (D-0007 rule 2).
+This change moves each component from "Ansible applies it" to "Argo CD reads it from `hosts/kubernetes/clusters/c1/` on `main`" (D-0023 rule 5, D-0011). It moves one component per PR, and each PR adds a runbook. It serves PRD goal 1 (upstream Kubernetes, starting with one home-lab cluster) and goal 6 (everything controllable from this repo). It crosses systems (Ansible, Argo CD, the cluster) and spans several sessions, so it gets a spec (D-0007 rule 2).
 
 **What blocks it.** Under the Activation gate (AGENTS.md), no cluster may read this repository until all 7 checks pass. D-0023 leaves open whether c1 may read central-hub before then. This spec's PRs can merge before that question is answered, because nothing reads the folder until `k8s_gitops_source_enabled` is set to true. That one switch waits for the owner's answer and the decision record that follows it.
 
@@ -30,7 +30,7 @@ This change moves each component from "Ansible applies it" to "Argo CD reads it 
 flowchart LR
   inv["private inventory<br/>(zone, addresses)"] --> ansible["Ansible<br/>k8s-gitops.yml"]
   ansible -- "creates, with the zone<br/>as a Helm parameter" --> root["root Application 'c1'<br/>(in the cluster only)"]
-  repo["central-hub main<br/>kubernetes/clusters/c1/"] -. "anonymous HTTPS, read-only" .-> root
+  repo["central-hub main<br/>hosts/kubernetes/clusters/c1/"] -. "anonymous HTTPS, read-only" .-> root
   root --> apps["one child Application per component<br/>(metrics-server, logging, monitoring,<br/>secrets, certs, identity, media ...)"]
   apps --> c1["objects on c1"]
 ```
@@ -38,7 +38,7 @@ flowchart LR
 ### Layout (agent pick)
 
 ```text
-kubernetes/clusters/c1/
+hosts/kubernetes/clusters/c1/
 ├── README.md              what each folder is, and the order the components moved
 ├── root/                  a small Helm chart: one Application template per component
 │   ├── Chart.yaml
@@ -101,7 +101,7 @@ Today Jellyfin's setup wizard has not run (measured: `StartupWizardCompleted: fa
 
 ### Automated
 
-- [ ] CI's manifest check (`.github/hosts-check/`) renders `kubernetes/clusters/c1/root` with `helm template` and validates every child Application against its schema.
+- [ ] CI's manifest check (`.github/hosts-check/`) renders `hosts/kubernetes/clusters/c1/root` with `helm template` and validates every child Application against its schema.
 - [ ] `grep -rE` for the private-name patterns over `kubernetes/` finds nothing.
 - [ ] After each component's PR, on c1: `kubectl -n argocd get application <component>` shows `Synced` and `Healthy`.
 - [ ] After each component's PR, a second run of that component's Ansible playbook reports `changed=0`, and it does not fight Argo CD.
@@ -125,3 +125,5 @@ Today Jellyfin's setup wizard has not run (measured: `StartupWizardCompleted: fa
 
 - 2026-11-08: The spec was drafted while the owner's answer on reading the repo before the gate was still pending. Merging it turns nothing on.
 - 2026-11-08: The owner said yes to c1 reading central-hub before the Activation gate, for c1 only (card, 07:16 UTC); D-0027 records it.
+- 2026-11-08: Jellyfin moved ahead of its place in the order, because it is the app people use and it holds no data that the move touches (the claims are kept, `Delete=false`). The root chart gained a `local` kind for charts kept in this repository. Agent pick, picks 127-131.
+- 2026-11-08: Steps 2 to 6 and 9 are in git, each with a runbook, and CI checks that each renders the same objects as its Ansible role. Two private values reach the cluster through the root Application: the zone and the Gateway's address. Agent picks 132-143.
