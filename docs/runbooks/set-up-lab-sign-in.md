@@ -48,11 +48,11 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 
 1. See what would change: `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,keycloak --check --diff`
    why: the first run writes `inventories/home/identity.env` with a random value for each missing key, even in check mode, because nothing after it can be checked without the values; it never changes a line that is there.
-   ※ `hosts/AGENT-PICKS.md` pick 145.
+   ※ `hosts/AGENT-PICKS.md` pick 154.
    expect: `identity.env` exists, mode 0600, with `GRAFANA_CLIENT_SECRET`, `ARGOCD_CLIENT_SECRET`, `JELLYFIN_CLIENT_SECRET` and one `PASSWORD_<USER NAME>` per user.
 2. Apply: `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,keycloak`
    why: the Secrets are made from the values file, then the realm import. When the import differs from the one on c1, the role deletes realm `lab` in Keycloak (`files/delete-realm.sh`, inside the Keycloak pod) and imports it again, because a KeycloakRealmImport never updates a realm that exists. Open sessions end; nothing else is lost, since every part of the realm is code.
-   ※ `hosts/AGENT-PICKS.md` picks 144 and 148.
+   ※ `hosts/AGENT-PICKS.md` picks 153 and 157.
    expect: `kubectl -n identity get keycloakrealmimport realm-lab` shows condition `Done` True; Grafana's pod restarts if its secret changed.
 3. Run it again: same command as step 2.
    why: proves the run is idempotent.
@@ -85,5 +85,5 @@ Fill in `last-tested` above with the date, who ran it and on what, and set `stat
 
 - D-0025, Keycloak behind OIDC for sign-in to lab apps on c1.
 - `hosts/ansible/README.md`, "Sign-in on c1".
-- `hosts/AGENT-PICKS.md`, picks 144 to 150.
+- `hosts/AGENT-PICKS.md`, picks 153 to 159.
 - `.github/hosts-check/identity/`, the realm test.
