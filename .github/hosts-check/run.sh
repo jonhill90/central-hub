@@ -52,7 +52,15 @@ check_terraform() {
 
 collections() {
   [ -d hosts/ansible/collections/ansible_collections ] && return 0
-  ansible-galaxy collection install -r hosts/ansible/requirements.yml -p hosts/ansible/collections >/dev/null
+  # Galaxy sometimes answers without its results list, and ansible-galaxy then keeps that broken
+  # answer in its cache (seen in CI on 2026-11-08), so each try skips the cache and waits longer.
+  local try
+  for try in 1 2 3 4 5; do
+    ansible-galaxy collection install --no-cache -r hosts/ansible/requirements.yml \
+      -p hosts/ansible/collections >/dev/null && return 0
+    [ "$try" = 5 ] && return 1
+    sleep $((try * 15))
+  done
 }
 
 check_ansible() {
