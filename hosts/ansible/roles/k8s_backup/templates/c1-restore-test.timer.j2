@@ -1,0 +1,11 @@
+# {{ ansible_managed }} (role k8s_backup)
+[Unit]
+Description=Prove the newest c1 off-box backups restore, weekly
+
+[Timer]
+OnCalendar={{ k8s_backup_restore_test_schedule }}
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

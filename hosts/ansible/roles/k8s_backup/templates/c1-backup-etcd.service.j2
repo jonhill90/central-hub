@@ -1,0 +1,17 @@
+# {{ ansible_managed }} (role k8s_backup)
+[Unit]
+Description=Back up c1 etcd off the box (restic)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=CENTRAL_HUB_BACKUP_ENV={{ k8s_backup_node_env_file }}
+Environment=BACKUP_STATE={{ k8s_backup_state_dir }}
+Environment=RESTIC_CACHE_DIR=/var/cache/central-hub-backup
+Environment=BACKUP_KEEP_DAILY={{ k8s_backup_keep_daily }}
+Environment=BACKUP_KEEP_WEEKLY={{ k8s_backup_keep_weekly }}
+Environment=BACKUP_KEEP_MONTHLY={{ k8s_backup_keep_monthly }}
+ExecStart={{ k8s_backup_bin_dir }}/c1-backup-etcd.sh
+Nice=10
+IOSchedulingClass=idle

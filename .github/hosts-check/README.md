@@ -4,10 +4,11 @@ Lints and offline tests for the code under `hosts/` (STD-0005). Workflow `hosts`
 
 | Path | What it is |
 |---|---|
-| `run.sh` | The one command: `run.sh terraform`, `run.sh ansible`, `run.sh manifests`, `run.sh scripts`, or no argument for all four. |
+| `run.sh` | The one command: `run.sh terraform`, `run.sh ansible`, `run.sh manifests`, `run.sh scripts`, `run.sh backup`, or no argument for all five. |
 | `install-tools.sh` | Builds tofu, tflint, kubeconform and helm from source at pinned versions. |
 | `requirements.in`, `requirements.txt` | ansible-core, ansible-lint, ShellCheck and actionlint, pinned with hashes. |
 | `check_hosts.py` | The STD-0004 rules a script can see: run folder files, no `locals`, no tracked real variable files or inventories, `meta/argument_specs.yml` in every role and no `meta/main.yml`. |
+| `tests/test_backup.sh` | The c1 backup and restore-test scripts (role `k8s_backup`) end to end: etcd 3.7.0 with test keys, a local restic repository, a volume folder; plus a missing key and a damaged pack file, which must fail. |
 | `tests/test_check_hosts.sh` | Test cases: each breaks a copy of `hosts/` one way and expects `check_hosts.py` to fail. |
 | `tflint.hcl` | tflint settings: every bundled Terraform rule. |
 | `ansible-lint.yml` | ansible-lint settings: the production profile, with two style rules off and the reason. |
@@ -23,6 +24,7 @@ The tests themselves sit next to the code: `hosts/terraform/<place>/<workload>/t
 | `ansible` | `ansible-playbook --syntax-check` on every playbook; ansible-lint on playbooks and roles |
 | `manifests` | renders each line of `manifests/cases.txt` and each `kubernetes/clusters/*/root` chart (`helm lint`, `helm template`), then `kubeconform -strict` on the output |
 | `scripts` | ShellCheck (warnings and errors) on every tracked `*.sh`; actionlint on every workflow |
+| `backup` | `tests/test_backup.sh`: downloads restic and etcd from their releases, each checked against a SHA-256 (the role's own versions), and runs the role's scripts |
 
 ## Run it locally
 

@@ -1,0 +1,49 @@
+---
+argument_specs:
+  main:
+    short_description: >-
+      Off-box backups of c1's etcd and volumes with restic, and weekly restore tests (BL-0139, BL-0094)
+    options:
+      k8s_backup_enabled:
+        type: bool
+        default: false
+        description: >-
+          Copy the env file to the nodes and run the timers. With false, tools and scripts are
+          installed and the timers are off.
+      k8s_backup_env_file:
+        type: str
+        default: ""
+        description: >-
+          The 0600 env file on the controller with RESTIC_REPOSITORY, RESTIC_PASSWORD and the
+          target's credentials. Private, no default; needed when k8s_backup_enabled is true.
+      k8s_backup_bin_dir: {type: str, default: /usr/local/libexec/central-hub-backup, description: Where the tools and scripts go on the nodes.}
+      k8s_backup_node_env_file: {type: str, default: /etc/central-hub/backup.env, description: The env file's path on the nodes.}
+      k8s_backup_state_dir: {type: str, default: /var/lib/central-hub-backup, description: Local state on the nodes (the canary record).}
+      k8s_backup_restic_version: {type: str, default: 0.19.1, description: "restic release (STD-0003)."}
+      k8s_backup_restic_sha256:
+        type: str
+        default: f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
+        description: SHA-256 of that release's linux_amd64 file.
+      k8s_backup_etcd_version:
+        type: str
+        default: 3.7.2
+        description: "etcd release for etcdctl, etcdutl and etcd; same minor as c1's etcd (STD-0003)."
+      k8s_backup_etcd_sha256:
+        type: str
+        default: 3a3679bc51a4ee9d30bccea1da7cd4fe62c6fc1d2ca1255068d2c53bf3026135
+        description: SHA-256 of that release's linux-amd64 tarball.
+      k8s_backup_etcd_schedule: {type: str, default: "*-*-* 02:10:00", description: systemd OnCalendar for the etcd backup.}
+      k8s_backup_volumes_schedule: {type: str, default: "*-*-* 02:25:00", description: systemd OnCalendar for the volume backup.}
+      k8s_backup_restore_test_schedule: {type: str, default: "Sun *-*-* 04:30:00", description: systemd OnCalendar for the restore tests.}
+      k8s_backup_volume_paths:
+        type: list
+        elements: str
+        default: [/var/lib/c1-data/local-path, /var/lib/central-hub/identity-postgres]
+        description: Folders backed up on each node; missing ones are skipped.
+      k8s_backup_keep_daily: {type: int, default: 7, description: Daily snapshots kept per host and tag.}
+      k8s_backup_keep_weekly: {type: int, default: 4, description: Weekly snapshots kept per host and tag.}
+      k8s_backup_keep_monthly: {type: int, default: 6, description: Monthly snapshots kept per host and tag.}
+      k8s_backup_drill:
+        type: bool
+        default: false
+        description: With tag drill, back up now and run the restore tests, and fail unless they pass.
