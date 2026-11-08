@@ -10,7 +10,9 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 The owner's message of 2026-11-08T22:43:28Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK) answers a message that named D-0028 and D-0030, not a PR and head. Both records were on main at ddc001b. The owner said every record gets re-checked at the rebuild.
 
-- 2026-11-08 · D-0028 and D-0030 status and accepted-evidence · moved from proposed to accepted; the text is unchanged · the owner's message above
+- 2026-11-08 · D-0028 and D-0030 status and accepted-evidence · moved from proposed to accepted · the owner's message above
+- 2026-11-08 · D-0028 Decision Outcome and Consequences, evidence 0028 · the owner's 07:42 UTC answer is written as a lean, not a choice, and his 07:58 UTC statement as changing passwords at a rebuild, not replacing every key; the decision is unchanged · an independent check of 2026-11-08 against the owner's messages
+- 2026-11-08 · D-0030 Context and Decision Outcome · the 10-28 05:12 UTC answer is written as a card tap with no typed words, which the owner's rule of 2026-11-08 19:01 UTC counts as an agent pick; the decision is unchanged · the same check
 
 ### Accepted with PR #55
 

@@ -28,4 +28,4 @@ Which private CA shape keeps one root across rebuilds of c1, issues certificates
 
 ## How the decision used it
 
-Findings 1 to 3 give rules 1 to 3: the root stays off the cluster, each cluster gets its own intermediate, and a rebuild restores rather than re-creates. Findings 5 to 7 are why option 2 needs a CA server and option 1 pushes certificates to Proxmox and OPNsense instead; the owner chose not to run the server. Findings 4 and 8 are the record's "Bad" consequences. Finding 9 is the exit path in rule 8.
+Findings 1 to 3 give rules 1 to 3: the root stays off the cluster, each cluster gets its own intermediate, and a rebuild restores rather than re-creates. Findings 5 to 7 are why option 2 needs a CA server and option 1 pushes certificates to Proxmox and OPNsense instead; the owner leaned against running a server (2026-11-08 07:41 UTC, with "maybe i am wrong"). Findings 4 and 8 are the record's "Bad" consequences. Finding 9 is the exit path in rule 8.

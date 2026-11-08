@@ -14,7 +14,7 @@ accepted-evidence:
   approved-at: 2026-11-08T22:43:28Z
   approved-commit: ddc001b405bfcd423281c4d9271edabb30c82670
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK
-  approval-names: "no PR or head; the owner's message answers the drafting agent's message cmsg_01X43rfNYp4H1dL1V2dkfkwNSQHpWZiEeSnhHvABY4ep7n, which named D-0028 and D-0030 as they stand on main at ddc001b, and says those are approved"
+  approval-names: "no PR or head; the owner's message answers the drafting agent's message cmsg_01X43rfNYp4H1dL1V2dkfkwNSQHpWZiEeSnhHvABY4ep7n, which named D-0028 and D-0030 on central-hub main (main was at ddc001b; the message names no SHA), and says those are approved; that message had recommended parking D-0030"
   check: the drafting agent read both messages in the project thread at 2026-11-08T22:43Z. The owner also said every record gets re-checked at the rebuild. An independent check by a reviewing agent is still to do
   merged: the record merged as proposed with PR #65 as 1ceb885; accepted with the PR that adds this block
 revisit-when: a device outside Kubernetes needs to order its own certificates (an ACME server such as step-ca would then get a new intermediate under the same root); a second cluster joins; the intermediate is within a year of expiry; or cert-manager's CA issuer stops being supported on c1's Kubernetes version
@@ -44,7 +44,7 @@ On 2026-11-08 at 07:08 UTC the owner asked for that step: a PKI that still works
 
 ## Decision Outcome
 
-Proposed option: **1**. The owner chose it on 2026-11-08 at 07:42 UTC ("i feel b", the card's option for this shape).
+Proposed option: **1**. The owner leaned to it on 2026-11-08 at 07:42 UTC, typing that he felt it was b but might be wrong (b was this shape on the card); the drafting agent closed the card as this option.
 
 ```mermaid
 flowchart TB
@@ -80,7 +80,7 @@ flowchart TB
 - Good: no CA server to run, patch or back up.
 - Good: lab names stay out of public Certificate Transparency logs.
 - Bad: Proxmox and OPNsense depend on c1 to renew their certificates. Leaf certificates last 90 days and renew 30 days early, so c1 can be down for up to 30 days before one lapses.
-- Neutral: for the greenfield lab the keys sit in a local env folder on the owner's Mac, not a password manager, and every key is replaced at the first full rebuild (the owner, 2026-11-08 07:58 UTC).
+- Neutral: for the greenfield lab the keys sit in a local env folder on the owner's Mac, not a password manager, and the owner said all the passwords get changed at a lab rebuild once everything is code (2026-11-08 07:58 UTC).
 - Bad: the CA issuer doesn't rotate its own intermediate. That is a manual step before it expires, written in the root runbook.
 - Bad: cert-manager v1.21 lists Kubernetes 1.33 to 1.36 as supported, and c1 runs 1.37.
 - Neutral: devices that don't trust the root see a warning. That is why the Let's Encrypt issuer stays as the exit path.
