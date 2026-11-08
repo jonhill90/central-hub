@@ -79,7 +79,7 @@ Run from `hosts/ansible/`, each first with `--check --diff`.
    ```
 
    why: c1's first app with data that survives a pod restart ([hosts/ansible/README.md, Jellyfin on c1](../../hosts/ansible/README.md#jellyfin-on-c1)).
-   expect: `https://jellyfin.apps.c1.prod.<zone>/health` answers. Run Jellyfin's setup wizard at once: until then anyone on the lab network who reaches the name can run it. PR #64's `move-jellyfin-to-argo-cd.md` makes that first-run setup code.
+   expect: `https://jellyfin.apps.c1.prod.<zone>/health` answers. Run Jellyfin's setup wizard at once: until then anyone on the lab network who reaches the name can run it. [Move Jellyfin to Argo CD](move-jellyfin-to-argo-cd.md) makes that first-run setup code.
 
 ## If it fails
 

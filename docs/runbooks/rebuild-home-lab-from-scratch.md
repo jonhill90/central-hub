@@ -14,7 +14,7 @@ superseded-by:
 
 # Rebuild the home lab from bare metal
 
-**Status:** draft. No part of this order has been run end to end from bare metal. It is put together from the step runbooks and the code on `main` on 2026-11-08, plus open PRs #64 to #69 as they stood that day. Each step says which runbook covers it, or says plainly that none exists yet.
+**Status:** draft. No part of this order has been run end to end from bare metal. It is put together from the step runbooks and the code on `main` on 2026-11-08, plus PRs #64 to #69 as they stood that day (#64 and #66 have since merged). Each step says which runbook covers it, or says plainly that none exists yet.
 
 This is the top-level runbook. It holds no commands of its own: each step points at the runbook or README section that does the work, in the order the code needs. Read a step's runbook before you run it.
 
@@ -73,9 +73,9 @@ These were open on 2026-11-08. Until each one merges, the step that names it run
 
 | PR | What it adds | Used in step |
 |---|---|---|
-| #64 | moves `kubernetes/` to `hosts/kubernetes/`; seven `move-*-to-argo-cd.md` runbooks; check-mode fix for `k8s_gitops` | 7, 12 |
+| #64 (merged) | moves `kubernetes/` to `hosts/kubernetes/`; seven `move-*-to-argo-cd.md` runbooks; check-mode fix for `k8s_gitops` | 15 |
 | #65 | lab PKI: D-0028, spec `2026-11-lab-pki`, runbooks `create-lab-root-ca.md`, `trust-lab-root-ca-on-mac.md`, `restore-c1-intermediate-ca.md`; on its branch also roles for the `lab-ca` issuer and host certificates | 8 |
-| #66 | label fixes in D-0003, D-0020 and two roles | none (corrections only) |
+| #66 (merged) | label fixes in D-0003, D-0020 and two roles | none (corrections only) |
 | #67 | lab DNS: `home/tailnet`, role `tailnet_connector`, `dns_proof`, runbook `set-up-lab-dns.md` | 3, 9 |
 | #68 | c1 backups off the box: role `k8s_backup`, runbooks `back-up-c1-off-box.md`, `test-etcd-restore.md` | 11 |
 | #69 | realm `lab` as code, `identity.env`, runbook `set-up-lab-sign-in.md` | 10 |
@@ -214,7 +214,7 @@ expect: the drill in `back-up-c1-off-box.md` prints two PASS lines.
 
 Turn on Argo CD's source and move each component from Ansible to Argo CD, one at a time.
 why: the target state is that Argo CD, reading `hosts/kubernetes/clusters/c1/`, owns c1's add-ons and apps (spec `2026-11-c1-apps-under-argo-cd`).
-runbook: [Move metrics-server to Argo CD](move-metrics-server-to-argo-cd.md) first (it turns the source on), then from PR #64, in the spec's order: `move-local-path-to-argo-cd.md`, `move-logging-to-argo-cd.md`, `move-monitoring-to-argo-cd.md`, `move-external-secrets-to-argo-cd.md`, `move-cert-manager-to-argo-cd.md`, `move-jellyfin-to-argo-cd.md`, `move-gateway-to-argo-cd.md`.
+runbook: [Move metrics-server to Argo CD](move-metrics-server-to-argo-cd.md) first (it turns the source on), then, in the spec's order: [volumes](move-local-path-to-argo-cd.md), [logging](move-logging-to-argo-cd.md), [monitoring](move-monitoring-to-argo-cd.md), [External Secrets](move-external-secrets-to-argo-cd.md), [cert-manager](move-cert-manager-to-argo-cd.md), [Jellyfin](move-jellyfin-to-argo-cd.md), [the Gateway](move-gateway-to-argo-cd.md).
 expect: `kubectl -n argocd get applications` shows each one Synced and Healthy.
 
 ## If it fails
@@ -244,3 +244,4 @@ Every item below is an agent pick, not a decision by the owner.
 - [Spec: Move c1's apps and add-ons under Argo CD](../specs/2026-11-c1-apps-under-argo-cd.md).
 - [D-0011](../decisions/0011-keep-machine-code-in-hosts.md): machine code in `hosts/`. [D-0012](../decisions/0012-sort-docs-by-kind-of-document.md): runbook format.
 - [hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md): every agent pick in the code.
+- [Use break-glass access](use-break-glass-access.md): when the normal ways in are gone during a rebuild.
