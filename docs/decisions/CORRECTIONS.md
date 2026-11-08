@@ -6,6 +6,12 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
+### Accepted on 2026-11-08 by message (D-0028, D-0030)
+
+The owner's message of 2026-11-08T22:43:28Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK) answers a message that named D-0028 and D-0030, not a PR and head. Both records were on main at ddc001b. The owner said every record gets re-checked at the rebuild.
+
+- 2026-11-08 · D-0028 and D-0030 status and accepted-evidence · moved from proposed to accepted; the text is unchanged · the owner's message above
+
 ### Accepted with PR #55
 
 PR #55: merged 2026-11-04T03:16:15Z as c2e932c, head bf085ea; D-0026 accepted afterwards, 2026-11-05T07:18:12Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNCYF3SKyBWQWXbhUNPppNvz), a message naming D-0026, not the PR or head.
