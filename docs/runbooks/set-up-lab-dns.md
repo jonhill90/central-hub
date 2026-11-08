@@ -137,6 +137,18 @@ dscacheutil -q host -a name api.c1.prod.<zone>      # the c1 node's address
 
 Undo: `sudo rm /etc/resolver/c1.prod.<zone> /etc/resolver/opnsense.<zone> /etc/resolver/pve.<zone>`. Remove the files once split DNS works, so there is one path to keep.
 
+## Exit path: without Tailscale
+
+The lab's names live in one place, the Unbound host overrides on OPNsense, written from `opnsense_lab_host_overrides`. Tailscale holds no names. It only carries the route to the lab and tells the Mac which domains to ask Unbound about. Replacing it touches only `hosts/terraform/home/tailnet/` and role `tailnet_connector`; the names, the role `opnsense_lab` and the proof stay as they are. Each replacement below is an agent pick, not a decision.
+
+| Where the Mac is | Replacement | What changes |
+|---|---|---|
+| On a lab VLAN, or on a network whose DHCP is OPNsense | Nothing to add: OPNsense's DHCP gives the VLAN's `.1` as the DNS server, and Unbound answers there. The home LAN gets this only when OPNsense, or the planned hardware firewall, hands out the home LAN's addresses; today the home router does | the DHCP settings in role `opnsense_lab` |
+| Away, through another VPN, for example WireGuard on OPNsense | The VPN client config names Unbound as its DNS server. In a `wg-quick` config that is the `DNS =` line of `[Interface]`, which sets the interface's DNS servers when the tunnel comes up (wg-quick(8)). `AllowedIPs` carries the lab range, as the subnet routes do today | a new VPN role and client config replace `home/tailnet` and `tailnet_connector` |
+| Anywhere the Mac has a route to the lab, with no VPN DNS setting | The [resolver file fallback](#fallback-a-resolver-file-on-the-mac): macOS sends every name under a domain to the server in `/etc/resolver/<domain>`, where the file name is the domain (resolver(5)) | one file per lab domain on the Mac |
+
+To leave Tailscale: first set up the replacement and prove it with the `dns_proof` tag, using `opnsense_lab_dns_proof_server` set to the replacement's DNS server. Then remove split DNS (`tofu destroy -target=tailscale_dns_split_nameservers.lab`) and take the lab routes off CT 900, as in [If it fails](#if-it-fails).
+
 ## Afterwards
 
 - Set `last-tested` here, with the date, who ran it and on what, and `status: tested` once every step has passed.
@@ -144,7 +156,8 @@ Undo: `sudo rm /etc/resolver/c1.prod.<zone> /etc/resolver/opnsense.<zone> /etc/r
 
 ## Related
 
-- `hosts/AGENT-PICKS.md` picks 160-165 (Unbound over AdGuard Home, split DNS for the Mac, and how they are built)
+- `hosts/AGENT-PICKS.md` picks 160-166 (Unbound over AdGuard Home, split DNS for the Mac, how they are built, and the exit path from Tailscale)
 - [Spec: the home lab and c1](../specs/2026-10-home-lab-and-c1.md), decision log 2026-10-26 (the API name as an Unbound override)
 - [D-0021](../decisions/0021-use-gateway-api-on-cilium-as-the-way-in-for-web-traffic.md) (the wildcard name for apps)
 - [Build a single-node kubeadm cluster](build-kubeadm-cluster.md) step 7 (the endpoint name)
+- wg-quick(8), `DNS` under `[Interface]` (wireguard-tools, `src/man/wg-quick.8`); resolver(5), the `/etc/resolver` directory (Apple libresolv, `resolver.5`)
