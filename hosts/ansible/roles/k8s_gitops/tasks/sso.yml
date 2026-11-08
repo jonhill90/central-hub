@@ -11,7 +11,7 @@
 - name: sso | The client secret is in the cluster
   ansible.builtin.command: >-
     kubectl -n {{ k8s_gitops_engines.argocd.namespace }} get secret argocd-sso
-    -o jsonpath={.metadata.labels.app\.kubernetes\.io/part-of}
+    -o 'jsonpath={.metadata.labels.app\.kubernetes\.io/part-of}'
   register: k8s_gitops_sso_secret
   changed_when: false
   failed_when: k8s_gitops_sso_secret.rc != 0 or k8s_gitops_sso_secret.stdout != 'argocd'
