@@ -9,9 +9,67 @@
   changed_when: false
   when: not ansible_check_mode
 
+# KeycloakRealmImport only creates a realm that doesn't exist (Keycloak operator docs, "Automating a
+# realm import"). So when the import differs from the one on the cluster (the realm's code, or the
+# hash of its values), the realm is deleted in Keycloak and the import made again. The delete is
+# files/delete-realm.sh, run inside the Keycloak pod (CI runs the same file against a real Keycloak).
+- name: keycloak | Realm manifest
+  ansible.builtin.template:
+    src: realm.yaml.j2
+    dest: "{{ k8s_identity_dir }}/realm.yaml"
+    mode: "0600"
+
+- name: keycloak | Realm manifest on the node
+  ansible.builtin.stat: {path: "{{ k8s_identity_dir }}/realm.yaml"}
+  register: k8s_identity_realm_stat
+
+- name: keycloak | Realm import differs from the cluster
+  ansible.builtin.command: kubectl diff -f {{ k8s_identity_dir }}/realm.yaml
+  register: k8s_identity_realm_diff
+  changed_when: false
+  failed_when: k8s_identity_realm_diff.rc > 1 and 'namespaces' not in k8s_identity_realm_diff.stderr
+  check_mode: false
+  when: k8s_identity_realm_stat.stat.exists
+
+- name: keycloak | Realm import on the cluster now
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_identity_namespace }} get keycloakrealmimport realm-{{ k8s_identity_realm }} --ignore-not-found -o name
+  register: k8s_identity_realm_import_now
+  changed_when: false
+  check_mode: false
+
+- name: keycloak | Replace realm {{ k8s_identity_realm }}
+  when:
+    - (k8s_identity_realm_diff.rc | default(1)) != 0
+    - k8s_identity_realm_import_now.stdout | length > 0
+    - k8s_identity_realm_replace | bool
+    - not ansible_check_mode
+  block:
+    - name: keycloak | Delete the old import
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_identity_namespace }} delete keycloakrealmimport realm-{{ k8s_identity_realm }} --wait=true
+      changed_when: true
+
+    # The operator names the import's Job after it; a Job left from the old import would make the
+    # new one look done.
+    - name: keycloak | Delete the old import's Job
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_identity_namespace }} delete job realm-{{ k8s_identity_realm }} --ignore-not-found --wait=true
+      changed_when: true
+
+    - name: keycloak | Delete the realm in Keycloak with files/delete-realm.sh, realm {{ k8s_identity_realm }}
+      ansible.builtin.command:
+        argv: [kubectl, -n, "{{ k8s_identity_namespace }}", exec, -i, "{{ k8s_identity_name }}-0", --, bash, -s, "{{ k8s_identity_realm }}"]
+        stdin: "{{ lookup('ansible.builtin.file', 'delete-realm.sh') }}"
+      register: k8s_identity_realm_deleted
+      changed_when: "'deleted' in k8s_identity_realm_deleted.stdout"
+
 - name: keycloak | Realm {{ k8s_identity_realm }}
-  ansible.builtin.import_tasks: apply.yml
-  vars: {__manifest: realm.yaml}
+  ansible.builtin.command: kubectl apply -f {{ k8s_identity_dir }}/realm.yaml
+  when: >-
+    (k8s_identity_realm_diff.rc | default(1)) != 0
+    and (k8s_identity_realm_import_now.stdout | length == 0 or k8s_identity_realm_replace | bool)
+  changed_when: true
 
 - name: keycloak | Realm imported
   ansible.builtin.command: >-

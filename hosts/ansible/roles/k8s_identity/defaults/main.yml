@@ -19,16 +19,44 @@ k8s_identity_name: sso
 # The realm lab apps sign in to.
 k8s_identity_realm: lab
 
-# The owner's account in that realm. The user name is private, no default. Its first password is
-# random, in Secret identity/realm-lab-secrets key OWNER_INITIAL_PASSWORD, and Keycloak makes the
-# owner change it at the first sign-in (hosts/ansible/README.md "Sign-in on c1"). The email is
-# optional; without one, Grafana uses <user name>@lab.invalid (k8s_observability).
+# The owner's account in that realm, in group lab-admins. The user name is private, no default.
+# Its password is in the values file below (key PASSWORD_<USER NAME>). The email is optional;
+# without one, Grafana uses <user name>@lab.invalid (k8s_observability).
 # k8s_identity_owner_username: <name>
 k8s_identity_owner_email: ""
+
+# More people in realm lab, beside the owner. Each item: username, optional email, and groups
+# (lab-admins or lab-viewers). Every user's password is a line in the values file below.
+k8s_identity_extra_users: []
+
+# The values file on the controller (the machine that runs Ansible), git-ignored by
+# hosts/ansible/.gitignore: every password and client secret in realm lab, one KEY=value per line.
+# The role adds a random value for any key that is missing and never changes one that is there, so
+# the owner reads a password there and changes one by editing the file and running the role again.
+k8s_identity_values_file: "{{ inventory_dir }}/identity.env"
+
+# When the realm's code or a value in the file changes, delete realm lab and import it again
+# (KeycloakRealmImport never updates a realm that exists). Sessions end; nothing else is lost,
+# because every part of the realm comes from this role. false: only create the realm once.
+k8s_identity_realm_replace: true
 
 # Grafana's client (k8s_observability). Its secret is copied to Secret <metrics ns>/grafana-sso.
 k8s_identity_grafana_name: grafana
 k8s_identity_grafana_namespace: monitoring
+k8s_identity_grafana_deployment: kube-prometheus-stack-grafana
+
+# Argo CD's clients (k8s_gitops): argocd for the web UI, argocd-cli (public, PKCE) for
+# `argocd login --sso`. The secret is copied to Secret <argocd ns>/argocd-sso, key clientSecret,
+# labelled part-of argocd so argocd-cm can name it as $argocd-sso:clientSecret.
+k8s_identity_argocd_name: argocd
+k8s_identity_argocd_namespace: argocd
+
+# Jellyfin's client (k8s_jellyfin), for the SSO plugin; Jellyfin has no OIDC of its own. The secret
+# is copied to Secret <media ns>/jellyfin-sso, key client-secret. The plugin's provider name is the
+# last part of its redirect paths.
+k8s_identity_jellyfin_name: jellyfin
+k8s_identity_jellyfin_namespace: media
+k8s_identity_jellyfin_provider: keycloak
 
 # Keycloak's database: PostgreSQL 18.6 (2026-08-13; Keycloak 26.8 tests 18), one pod. c1 has no
 # StorageClass yet (storage is BUILD-PATH S17), so its data sits on a static local volume: a folder
