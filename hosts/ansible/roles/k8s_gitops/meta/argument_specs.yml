@@ -50,5 +50,8 @@ argument_specs:
       k8s_gitops_sso_issuer: {type: str, description: "OIDC issuer URL. Default: realm lab on sso.apps.<cluster>.<env>.<zone>."}
       k8s_gitops_sso_client_id: {type: str, default: argocd, description: Keycloak client for the web UI.}
       k8s_gitops_sso_cli_client_id: {type: str, default: argocd-cli, description: "Public Keycloak client for argocd login --sso."}
-      k8s_gitops_sso_root_ca_file: {type: str, default: "", description: "PEM file on the controller with the CA behind Keycloak's certificate (the lab CA). Empty: Argo CD's own trust store."}
+      k8s_gitops_sso_root_ca_file:
+        type: str
+        default: ""
+        description: "PEM file on the controller with the CA behind Keycloak's certificate (the lab CA). Empty: Argo CD's own trust store."
       k8s_gitops_sso_group_roles: {type: dict, description: "Realm group to Argo CD role. Default: lab-admins admin, lab-viewers readonly."}
