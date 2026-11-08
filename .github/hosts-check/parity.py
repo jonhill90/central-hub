@@ -26,11 +26,17 @@ def pull(chart, dest):
     so a short outage upstream doesn't fail the check."""
     cache = os.environ.get("PARITY_CHART_CACHE")
     folder = pathlib.Path(cache) / f"{chart['name']}-{chart['version']}" if cache else dest
+    # A chart with an `oci` copy (root values) is pulled from there: the same file, without the
+    # repository index and GitHub release download that an outage can take away.
+    if chart.get("oci"):
+        args = ["helm", "pull", chart["oci"], "--version", str(chart["version"])]
+    else:
+        args = ["helm", "pull", chart["name"], "--repo", chart["repoURL"], "--version",
+                str(chart["version"])]
     if not (folder / chart["name"] / "Chart.yaml").exists():
         for attempt in range(5):
             try:
-                run(["helm", "pull", chart["name"], "--repo", chart["repoURL"], "--version",
-                     str(chart["version"]), "--untar", "--untardir", str(folder)])
+                run([*args, "--untar", "--untardir", str(folder)])
                 break
             except subprocess.CalledProcessError as err:
                 if attempt == 4:

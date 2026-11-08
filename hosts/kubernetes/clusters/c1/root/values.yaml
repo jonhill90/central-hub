@@ -17,7 +17,8 @@ project: default
 
 # One entry per component, in the order they moved (spec, "Order"). Each one:
 #   namespace    where the chart installs
-#   chart        repoURL, name and version of the upstream Helm chart (version per STD-0003)
+#   chart        repoURL, name and version of the upstream Helm chart (version per STD-0003);
+#                optional `oci`, an OCI copy of the same file that CI's parity check pulls instead
 #   local        true: a chart kept in this repository at appsPath/<name>/ instead of `chart`
 #   releaseName  the Helm release name today, so the objects keep their names (default: the key)
 #   needsZone    pass `zone` to the chart as a value
@@ -60,6 +61,10 @@ apps:
       repoURL: https://grafana-community.github.io/helm-charts
       name: loki
       version: 18.15.1   # Loki 3.7.8, 2026-10-09; same as k8s_observability today
+      # The same chart file, published by the same project as OCI. Only CI's parity check reads it
+      # (the GitHub release download behind repoURL returned 504 for hours on 2026-11-08); the bytes
+      # matched (SHA-256 bfa76744...edbe0a) on 2026-11-08. Argo CD and Ansible still use repoURL.
+      oci: oci://ghcr.io/grafana-community/helm-charts/loki
     autoSync: false
     prune: false
   alloy:
