@@ -1,0 +1,25 @@
+---
+argument_specs:
+  main:
+    short_description: CT 900 routes the lab VLANs for the tailnet, so tailnet devices reach the lab and its DNS server
+    options:
+      # Private, through the inventory
+      tailnet_connector_extra_routes:
+        type: list
+        elements: str
+        required: true
+        description: Routes CT 900 advertises besides the lab VLANs, for example the Proxmox host's home LAN address as a /32. Private.
+      tailnet_connector_lab_supernet:
+        type: str
+        required: true
+        description: The place's whole lab range (STD-0002), routed from CT 900 through the mgmt gateway, for example 10.1.0.0/16.
+      # From the shared VLAN file
+      lab_vlans:
+        type: list
+        elements: dict
+        required: true
+        description: The place's VLAN list. Each cidr is advertised; the mgmt gateway comes from the entry named by tailnet_connector_mgmt_vlan.
+      # Defaults in defaults/main.yml
+      tailnet_connector_vmid: {type: int, default: 900, description: The connector container's ID.}
+      tailnet_connector_mgmt_vlan: {type: str, default: mgmt, description: The VLAN CT 900's eth1 sits on.}
+      tailnet_connector_mgmt_interface: {type: str, default: eth1, description: CT 900's interface on that VLAN.}

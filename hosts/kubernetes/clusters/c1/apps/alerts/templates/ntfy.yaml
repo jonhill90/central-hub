@@ -18,7 +18,7 @@ spec:
       storage: {{ $v.cacheSize }}
 ---
 # Anyone who can reach the name can read and post (ntfy's default access): the Gateway is reachable
-# only from the lab network and the tailnet. Adding users is ntfy's auth-users setting (pick 170).
+# only from the lab network and the tailnet. Adding users is ntfy's auth-users setting (pick 171).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

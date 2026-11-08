@@ -36,5 +36,9 @@ opnsense_lab_parent: vtnet0
 # goes in the inventory.
 opnsense_lab_host_overrides: []
 
+# The DNS server the proof (tag dns_proof) asks. Empty means the mgmt gateway, Unbound itself; on a
+# tailnet device, 100.100.100.100 proves split DNS end to end.
+opnsense_lab_dns_proof_server: ""
+
 # Check the GUI certificate. Set opnsense_lab_ssl_ca_file to the CA file while it is self-signed.
 opnsense_lab_ssl_verify: true

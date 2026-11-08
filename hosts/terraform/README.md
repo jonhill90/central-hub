@@ -10,9 +10,11 @@ Run folders laid out as `<place>/<workload>/` (layout A from RB-0083; decided in
 | [home/k8s/](home/k8s/) | Cluster c1's node VMs: template 9000 from a pinned AlmaLinux 10 cloud image, and nodes 200 (control plane) and 201 (worker) cloned from it onto VNet prod | home/network |
 | [home/certificates/](home/certificates/) | The Cloudflare API token cert-manager uses for its Let's Encrypt DNS-01 challenge (one zone, Zone / DNS / Edit and Zone / Zone / Read, 90-day expiry), written to the 0600 file the Ansible inventory names. Not Proxmox: it talks to Cloudflare only | the c1 cluster and Secrets at rest (runbook steps 8 and 8a); run it before `playbooks/k8s-certs.yml --tags issue` |
 
+| [home/tailnet/](home/tailnet/) | Tailnet settings, not Proxmox: CT 900's subnet routes for every lab VLAN turned on, and split DNS that sends the lab names to OPNsense Unbound on the mgmt gateway, so the owner's Mac resolves them ([runbook](../../docs/runbooks/set-up-lab-dns.md)). Logs in with a tailnet OAuth client from the git-ignored `hosts/.env` | `playbooks/tailnet-connector.yml`, which makes CT 900 advertise the same routes |
+
 [home/bootstrap/](home/bootstrap/) is not a run folder: `iac-access.sh` makes the limited Proxmox account and token that Terraform uses, once, on the host.
 
-Every run folder has the same files: `main.tf` (the resources), `variables.tf`, `outputs.tf`, `providers.tf`, `versions.tf`, `backend.tf` and its own `.terraform.lock.hcl`. `home/network`, `home/firewall` and `home/remote-access` also have `imports.tf`, which adopts the objects the lab had before this code; `home/k8s` and `home/certificates` made new objects, so they have none.
+Every run folder has the same files: `main.tf` (the resources), `variables.tf`, `outputs.tf`, `providers.tf`, `versions.tf`, `backend.tf` and its own `.terraform.lock.hcl`. `home/network`, `home/firewall` and `home/remote-access` had an `imports.tf` that adopted the objects the lab had before this code. The adoption was applied, so those files were removed on 2026-11-08 (STD-0004 rule 1 allows the file only while a folder adopts objects): import blocks for objects that don't exist stop `tofu plan` on an empty host, and a rebuild from bare metal has to plan clean. To adopt running objects again after state is lost, see [Adopt a running lab after state is lost](#adopt-a-running-lab-after-state-is-lost).
 
 Run folders don't read each other's state. A value one folder needs from another, such as the VNet name `mgmt`, is an input variable with the same value as the producer's output (`home/network` output `vnet_ids`). That choice, the place name `home` and the rest are listed in [../AGENT-PICKS.md](../AGENT-PICKS.md) for the owner's review.
 
@@ -29,6 +31,26 @@ tofu plan -var vlans_file=../../../ansible/inventories/home/group_vars/all/vlans
 `home/firewall` and `home/remote-access` have no default for the machine's name (`firewall_vm_name`, `connector_hostname`), and `home/k8s` none for its node names and addresses (`nodes`). Their `home.tfvars.example` files hold made-up STD-0001-shaped names; the real names go only in the git-ignored `home.tfvars`.
 
 Private values (node name, MACs, the connector's mgmt address) come from the secret store as `TF_VAR_<name>`, and the provider reads `PROXMOX_VE_ENDPOINT` and `PROXMOX_VE_API_TOKEN`. The four Proxmox run folders, `home/network`, `home/firewall`, `home/remote-access` and `home/k8s`, have been planned and applied against the home lab from the operator's Mac, with local state. `home/certificates` has not been planned or applied yet.
+
+## Adopt a running lab after state is lost
+
+If a state file is lost while the lab still runs, a plain `apply` would try to make every object again, and Proxmox would refuse the IDs it already has. Adopt the objects into a new state with `tofu import` instead, in each folder, after `tofu init` with the usual backend path. The IDs are the ones the removed `imports.tf` files used (in git history before 2026-11-08):
+
+```sh
+# home/network (VLAN names and ranges from the shared VLAN file; one vnet and one subnet per VLAN)
+tofu import -var vlans_file=<VLAN file> proxmox_sdn_zone_vlan.lab lab
+tofu import -var vlans_file=<VLAN file> 'proxmox_sdn_vnet.lab["prod"]' prod
+tofu import -var vlans_file=<VLAN file> 'proxmox_sdn_subnet.lab["prod"]' prod/lab-10.1.10.0-24
+# home/firewall
+tofu import -var-file=home.tfvars proxmox_virtual_environment_vm.opnsense <node name>/100
+# home/remote-access
+tofu import -var-file=home.tfvars proxmox_virtual_environment_container.ts_connector <node name>/900
+# home/k8s, one line per node, plus the template
+tofu import -var-file=home.tfvars 'proxmox_virtual_environment_vm.node["<node hostname>"]' <node name>/200
+tofu import -var-file=home.tfvars proxmox_virtual_environment_vm.template <node name>/9000
+```
+
+Then `tofu plan` must show no changes, or only changes you expect, before any apply. `home/k8s`'s downloaded image (`proxmox_download_file.almalinux10`) and the network folder's `proxmox_sdn_applier` were never imported before; read what the plan does to them, and stop if it would replace the template or a node. `home/certificates` holds only a Cloudflare token, which is simpler to make again: delete the old token in the dashboard and apply.
 
 ## home/certificates: the cert-manager token
 

@@ -1,0 +1,5 @@
+# Copy to home.tfvars (git-ignored, 0600) and fill in. Made-up values in STD-0001 shape.
+vlans_file             = "../../../ansible/inventories/home/group_vars/all/vlans.yml"
+zone                   = "example.com"
+connector_hostname     = "examplenw01"
+connector_extra_routes = ["192.0.2.10/32"] # the Proxmox host's home LAN address, as advertised today

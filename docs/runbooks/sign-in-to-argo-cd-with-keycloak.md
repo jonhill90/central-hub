@@ -58,4 +58,4 @@ Stop if any of these is not true.
 ## Related
 
 - `docs/decisions/0023-use-argo-cd-as-the-gitops-engine.md`
-- `hosts/AGENT-PICKS.md` pick 169
+- `hosts/AGENT-PICKS.md` pick 170
