@@ -35,7 +35,7 @@ The ntfy page is reachable only from the lab network and the tailnet, through th
    expect: the message shows on every subscriber within seconds.
 
 4. Check Alertmanager's side: in Grafana, Alerting, then Contact points, or `kubectl -n monitoring get alertmanager`.
-   expect: Alertmanager is running. The next firing alert arrives as "[FIRING] <alert name>", and later "[RESOLVED]".
+   expect: Alertmanager is running. The next firing alert arrives as `[FIRING] <alert name>`, and later `[RESOLVED]`.
 
 ## Change it
 
