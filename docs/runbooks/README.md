@@ -13,6 +13,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md) | manual | draft |
 | [Create the c1 node VMs on Proxmox from code](create-c1-node-vms.md) | automated | draft |
 | [Restore the home lab from its backups](restore-home-lab-from-backups.md) | manual | draft |
+| [Seed namespace secret-source on c1 from the controller](seed-secret-source.md) | manual | draft |
 | [Build cluster c1 with Ansible](build-c1-with-ansible.md) | automated | draft |
 | [Issue c1's wildcard app certificate](issue-c1-app-certificate.md) | automated | draft |
 | [Install Argo CD on c1](install-argo-cd-on-c1.md) | automated | draft |
