@@ -37,6 +37,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Test the etcd restore](test-etcd-restore.md) | automated | draft |
 | [Set up lab DNS and make the owner's Mac resolve lab names](set-up-lab-dns.md) | automated | draft |
 | [Use break-glass access](use-break-glass-access.md) | manual | draft |
+| [Set up sign-in for lab apps on c1](set-up-lab-sign-in.md) | automated | draft |
 
 ## Template
 

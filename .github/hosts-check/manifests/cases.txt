@@ -15,6 +15,7 @@ k8s_identity namespace.yaml.j2 identity-namespace.yaml {}
 k8s_identity database.yaml.j2 identity-database.yaml {"k8s_identity_db_node":"node-1"}
 k8s_identity keycloak.yaml.j2 identity-keycloak.yaml {}
 k8s_identity realm.yaml.j2 identity-realm.yaml {}
+k8s_identity realm.yaml.j2 identity-realm-more-users.yaml {"k8s_identity_owner_email":"owner@example.com","k8s_identity_values_sha256":"0000","k8s_identity_extra_users":[{"username":"viewer.one","groups":["lab-viewers"]},{"username":"admin.two","email":"two@example.com","first_name":"Two","last_name":"Admin","groups":["lab-admins","lab-viewers"]}]}
 k8s_storage local-path.yaml.j2 storage-local-path.yaml {}
 k8s_storage proof.yaml.j2 storage-proof.yaml {}
 k8s_jellyfin jellyfin.yaml.j2 jellyfin.yaml {"k8s_jellyfin_zone":"example.com"}

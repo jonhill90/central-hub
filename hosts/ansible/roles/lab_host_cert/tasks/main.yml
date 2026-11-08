@@ -15,13 +15,28 @@
   delegate_to: "{{ lab_host_cert_issuer_host }}"
   become: true
 
+# kubectl diff fails with "namespaces ... not found" before the namespace exists, so make it first.
+- name: The namespace on c1
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    kubectl get namespace {{ lab_host_cert_namespace }} -o name 2>/dev/null
+    || kubectl create namespace {{ lab_host_cert_namespace }}
+  args:
+    executable: /bin/bash
+  delegate_to: "{{ lab_host_cert_issuer_host }}"
+  become: true
+  register: lab_host_cert_ns
+  changed_when: "'created' in lab_host_cert_ns.stdout"
+  when: not ansible_check_mode
+
 - name: Certificate differs on c1?
   ansible.builtin.command: kubectl diff -f /root/central-hub/host-cert-{{ lab_host_cert_name }}.yaml
   delegate_to: "{{ lab_host_cert_issuer_host }}"
   become: true
   register: lab_host_cert_diff
   changed_when: false
-  failed_when: lab_host_cert_diff.rc > 1
+  failed_when: >-
+    lab_host_cert_diff.rc > 1 and not (ansible_check_mode and 'not found' in lab_host_cert_diff.stderr)
   check_mode: false
 
 - name: Apply the Certificate on c1

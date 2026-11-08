@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Run the hosts checks (STD-0005). CI runs the same commands.
-# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|scripts|backup|all]   (default: all)
+# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|all]   (default: all)
 # Needs: python3 with requirements.txt installed; tofu, tflint, kubeconform and helm on PATH, or
 # TOOLS=<dir> holding them (install-tools.sh builds them); for ansible and manifests, the
-# collections in hosts/ansible/requirements.yml (this script installs them when missing).
+# collections in hosts/ansible/requirements.yml (this script installs them when missing); for
+# identity, docker.
 # TOFU_PLUGIN_DIR=<dir> makes tofu init read providers from that folder instead of the registry,
 # for machines that can't download them; the copies then skip the lock file's hash check.
 set -euo pipefail
@@ -121,6 +122,18 @@ check_manifests() {
     "$work/rendered"
 }
 
+check_identity() {
+  # Realm lab imported into a real Keycloak in a container (identity/test_realm.sh), rendered with
+  # an extra user so the users loop is tested with more than the owner.
+  collections
+  mkdir -p "$work/identity"
+  (cd hosts/ansible && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i localhost, \
+    "$here/manifests/render.yml" -e role=k8s_identity -e template=realm.yaml.j2 \
+    -e dest="$work/identity/realm.yaml" \
+    -e '{"k8s_identity_owner_email":"owner@example.com","k8s_identity_extra_users":[{"username":"viewer.one","groups":["lab-viewers"]}]}' >/dev/null)
+  bash "$here/identity/test_realm.sh" "$work/identity/realm.yaml"
+}
+
 check_backup() {
   # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository.
   bash "$here/tests/test_backup.sh"
@@ -138,8 +151,9 @@ case "${1:-all}" in
   terraform) check_terraform ;;
   ansible) check_ansible ;;
   manifests) check_manifests ;;
+  identity) check_identity ;;
   scripts) check_scripts ;;
   backup) check_backup ;;
-  all) check_terraform; check_ansible; check_manifests; check_scripts; check_backup ;;
-  *) echo "usage: $0 [terraform|ansible|manifests|scripts|backup|all]" >&2; exit 2 ;;
+  all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts; check_backup ;;
+  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|all]" >&2; exit 2 ;;
 esac
