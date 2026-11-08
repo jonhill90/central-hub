@@ -1,0 +1,8 @@
+# Made-up example. The real hostnames go only in home.tfvars (git-ignored).
+# Hostnames follow STD-0001: d (dev) ta (Talos) cp/wk (control plane/worker) what nn.
+proxmox_node_name = "examplehv01"
+node_vnet         = "dev"
+nodes = {
+  dtacpdemo01 = { vm_id = 252, role = "control-plane", cores = 2, memory_mb = 4096, disk_gb = 20 }
+  dtawkdemo01 = { vm_id = 253, role = "worker", cores = 2, memory_mb = 4096, disk_gb = 20 }
+}
