@@ -100,7 +100,14 @@ Stop if you can't sign in as a Global Administrator: nothing below works without
 
 - The secret from step 4 expires; note its end date (`az ad app credential list --id <appId>`) and reset it before then.
 - Each new kind of job (for example an Entra app registration for Keycloak) needs its own Microsoft Graph permission, added by the owner with admin consent, one at a time. Record each one here.
-- Later, the secret can be replaced by a federated credential that trusts Keycloak as issuer, so no Azure secret is stored at all (research batch RB-0087, "Workload identity federation").
+- This secret is a bootstrap step, not the end state. The owner wants no plaintext secret that a person or an agent can read once the infrastructure exists (owner, 2026-11-08 23:42 UTC). The way off it is workload identity federation: a federated identity credential on an app registration trusts an outside token issuer, so nothing in Azure holds a secret (research batch RB-0087, "Workload identity federation"):
+
+  | Who signs in | Token issuer Entra would trust | Replaces |
+  |---|---|---|
+  | c1 workloads (restic backups first) | c1's service-account token issuer | the short-lived SAS that `agent-azure` signs today |
+  | agents | Keycloak, through a client in the realm | `AZURE_CLIENT_SECRET` |
+
+  Both need the issuer's discovery document and signing keys to be reachable by Entra, so this waits on that being built and tested. Azure Arc is the fallback for c1 if federation can't be used.
 
 ## Related
 
