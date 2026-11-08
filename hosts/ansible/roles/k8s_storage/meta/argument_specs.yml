@@ -9,6 +9,7 @@ argument_specs:
         description: The data disk as the node sees it.
       k8s_storage_fstype: {type: str, default: ext4, description: File system made on an empty data disk.}
       k8s_storage_mount: {type: str, default: /var/lib/c1-data, description: Where the data disk is mounted.}
+      k8s_storage_kubectl: {type: str, default: kubectl, description: "kubectl to run on the first control plane: a name on the PATH or a full path."}
   main:
     short_description: Local Path Provisioner on c1 with a default StorageClass on the data disks, and a proof (BUILD-PATH S17)
     options:
@@ -23,6 +24,7 @@ argument_specs:
         default: docker.io/library/busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
         description: The helper pod's image, pinned by digest.
       k8s_storage_namespace: {type: str, default: local-path-storage, description: The provisioner's namespace.}
+      k8s_storage_kubectl: {type: str, default: kubectl, description: "kubectl to run on the first control plane: a name on the PATH or a full path."}
       k8s_storage_class: {type: str, default: local-path, description: The StorageClass's name.}
       k8s_storage_provisioner_by_argocd:
         type: bool
