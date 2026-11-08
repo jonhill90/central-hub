@@ -9,12 +9,8 @@
 # Where the Certificate is issued: c1's first control-plane node (k8s_certs makes lab-ca there).
 proxmox_cert_issuer_host: "{{ groups['k8s_control_plane'] | first }}"
 proxmox_cert_issuer: lab-ca
-proxmox_cert_namespace: host-certs
 proxmox_cert_name: proxmox
-# 90 days, renewed by cert-manager 30 days early (spec 2026-11-lab-pki "Lifetimes"). cert-manager
-# renews on c1; a run of this role then copies the new certificate to the host, so run it at
-# least once every 30 days.
-proxmox_cert_duration: 2160h
-proxmox_cert_renew_before: 720h
+# Lifetime and renewal: role lab_host_cert. cert-manager renews on c1; run this at least every
+# 30 days to copy the renewed certificate to the host.
 # The lab root in the host's own trust store (Debian's update-ca-certificates).
 proxmox_cert_root_file: /usr/local/share/ca-certificates/central-hub-lab-root-ca.crt

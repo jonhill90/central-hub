@@ -1,67 +1,16 @@
 ---
-- name: The names are not blank
-  ansible.builtin.assert:
-    that:
-      - proxmox_cert_names | length > 0
-      - proxmox_cert_names | select('match', '^\s*$') | list | length == 0
-    fail_msg: proxmox_cert_names is a private value; fill it in the inventory.
-    quiet: true
-
-- name: Certificate manifest on c1
-  ansible.builtin.template:
-    src: certificate.yaml.j2
-    dest: /root/central-hub/proxmox-cert.yaml
-    mode: "0600"
-  delegate_to: "{{ proxmox_cert_issuer_host }}"
-  become: true
-
-- name: Certificate differs on c1?
-  ansible.builtin.command: kubectl diff -f /root/central-hub/proxmox-cert.yaml
-  delegate_to: "{{ proxmox_cert_issuer_host }}"
-  become: true
-  register: proxmox_cert_diff
-  changed_when: false
-  failed_when: proxmox_cert_diff.rc > 1
-  check_mode: false
-
-- name: Apply the Certificate on c1
-  ansible.builtin.command: kubectl apply -f /root/central-hub/proxmox-cert.yaml
-  delegate_to: "{{ proxmox_cert_issuer_host }}"
-  become: true
-  when: proxmox_cert_diff.rc != 0
-  changed_when: true
-
-- name: Certificate issued by {{ proxmox_cert_issuer }}
-  ansible.builtin.command: >-
-    kubectl -n {{ proxmox_cert_namespace }} wait --for=condition=Ready --timeout=120s
-    certificate/{{ proxmox_cert_name }}
-  delegate_to: "{{ proxmox_cert_issuer_host }}"
-  become: true
-  changed_when: false
-  when: not ansible_check_mode
-
-- name: Read the issued Secret
-  ansible.builtin.command: >-
-    kubectl -n {{ proxmox_cert_namespace }} get secret {{ proxmox_cert_name }}-tls -o json
-  delegate_to: "{{ proxmox_cert_issuer_host }}"
-  become: true
-  register: proxmox_cert_secret
-  changed_when: false
-  check_mode: false
-  no_log: true
-  when: not ansible_check_mode
-
-- name: Certificate, key and root
-  ansible.builtin.set_fact:
-    proxmox_cert_crt: "{{ (proxmox_cert_secret.stdout | from_json).data['tls.crt'] | b64decode }}"
-    proxmox_cert_key: "{{ (proxmox_cert_secret.stdout | from_json).data['tls.key'] | b64decode }}"
-    proxmox_cert_root: "{{ (proxmox_cert_secret.stdout | from_json).data['ca.crt'] | b64decode }}"
-  no_log: true
-  when: not ansible_check_mode
+- name: Issue the certificate on c1
+  ansible.builtin.include_role:
+    name: lab_host_cert
+  vars:
+    lab_host_cert_name: "{{ proxmox_cert_name }}"
+    lab_host_cert_names: "{{ proxmox_cert_names }}"
+    lab_host_cert_issuer_host: "{{ proxmox_cert_issuer_host }}"
+    lab_host_cert_issuer: "{{ proxmox_cert_issuer }}"
 
 - name: The lab root in the host's trust store
   ansible.builtin.copy:
-    content: "{{ proxmox_cert_root }}"
+    content: "{{ lab_host_cert_root }}"
     dest: "{{ proxmox_cert_root_file }}"
     mode: "0644"
   notify: Rebuild the host's trust store
@@ -80,7 +29,7 @@
 - name: The issued certificate's fingerprint
   ansible.builtin.command: openssl x509 -noout -fingerprint -sha256
   args:
-    stdin: "{{ proxmox_cert_crt }}"
+    stdin: "{{ lab_host_cert_crt }}"
   register: proxmox_cert_new
   changed_when: false
   check_mode: false
@@ -104,8 +53,8 @@
         dest: "{{ proxmox_cert_tmp.path }}/{{ item.name }}"
         mode: "0600"
       loop:
-        - { name: cert.pem, content: "{{ proxmox_cert_crt }}" }
-        - { name: key.pem, content: "{{ proxmox_cert_key }}" }
+        - { name: cert.pem, content: "{{ lab_host_cert_crt }}" }
+        - { name: key.pem, content: "{{ lab_host_cert_key }}" }
       loop_control:
         label: "{{ item.name }}"
       no_log: true

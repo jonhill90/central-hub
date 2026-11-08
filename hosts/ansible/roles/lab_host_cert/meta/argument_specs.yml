@@ -1,0 +1,16 @@
+---
+argument_specs:
+  main:
+    short_description: Issue a certificate for a host outside Kubernetes from the lab CA on c1, and return it as facts (D-0028)
+    options:
+      lab_host_cert_name: {type: str, required: true, description: Name of the Certificate on c1; its Secret is <name>-tls.}
+      lab_host_cert_names:
+        type: list
+        elements: str
+        required: true
+        description: DNS names for the host, under the lab zone. Private.
+      lab_host_cert_issuer_host: {type: str, description: "Inventory host where kubectl reaches c1. Default: the first k8s_control_plane host."}
+      lab_host_cert_issuer: {type: str, default: lab-ca, description: ClusterIssuer the certificate comes from.}
+      lab_host_cert_namespace: {type: str, default: host-certs, description: Namespace of the Certificate and its Secret on c1.}
+      lab_host_cert_duration: {type: str, default: 2160h, description: Certificate lifetime.}
+      lab_host_cert_renew_before: {type: str, default: 720h, description: How long before expiry cert-manager renews it.}

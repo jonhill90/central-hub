@@ -12,10 +12,7 @@ argument_specs:
       # Defaults in defaults/main.yml
       proxmox_cert_issuer_host: {type: str, description: "Inventory host where kubectl reaches c1. Default: the first k8s_control_plane host."}
       proxmox_cert_issuer: {type: str, default: lab-ca, description: ClusterIssuer the certificate comes from.}
-      proxmox_cert_namespace: {type: str, default: host-certs, description: Namespace of the Certificate and its Secret on c1.}
       proxmox_cert_name: {type: str, default: proxmox, description: Name of the Certificate and its Secret.}
-      proxmox_cert_duration: {type: str, default: 2160h, description: Certificate lifetime.}
-      proxmox_cert_renew_before: {type: str, default: 720h, description: How long before expiry cert-manager renews it.}
       proxmox_cert_root_file:
         type: str
         default: /usr/local/share/ca-certificates/central-hub-lab-root-ca.crt

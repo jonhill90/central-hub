@@ -37,6 +37,7 @@ all:
           opnsense_api_secret: ""   # secret
           opnsense_home_lan_cidr: ""   # the home router's LAN range
           opnsense_dns_zone: ""   # DNS zone for the opnsense.<zone> override
+          opnsense_cert_names: []   # playbooks/opnsense-cert.yml (D-0028): e.g. ["opnsense.<zone>"]; private
           # The VLAN list itself is in group_vars/all/vlans.yml (the one shared VLAN file).
           # These are this firewall's own settings (Red Hat CoP rule, the owner, 2026-10-26 00:35 UTC).
           opnsense_lab_mgmt_tag: 50
