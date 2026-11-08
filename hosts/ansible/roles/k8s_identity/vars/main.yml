@@ -14,6 +14,27 @@ k8s_identity_operator_files:
 k8s_identity_dir: /root/central-hub/identity
 k8s_identity_host: "{{ k8s_identity_name }}.apps.c1.prod.{{ k8s_identity_zone }}"
 k8s_identity_grafana_host: "{{ k8s_identity_grafana_name }}.apps.c1.prod.{{ k8s_identity_zone }}"
+k8s_identity_argocd_host: "{{ k8s_identity_argocd_name }}.apps.c1.prod.{{ k8s_identity_zone }}"
+k8s_identity_jellyfin_host: "{{ k8s_identity_jellyfin_name }}.apps.c1.prod.{{ k8s_identity_zone }}"
 k8s_identity_issuer: https://{{ k8s_identity_host }}/realms/{{ k8s_identity_realm }}
 k8s_identity_db_secret: "{{ k8s_identity_name }}-db"
 k8s_identity_realm_secret: realm-{{ k8s_identity_realm }}-secrets
+
+# The groups in realm lab and the realm role each gives. Apps read both claims: `groups` (Argo CD,
+# the Jellyfin plugin) and `roles` (Grafana).
+k8s_identity_groups:
+  - {name: lab-admins, role: admin}
+  - {name: lab-viewers, role: viewer}
+
+# Every user, the owner first. The password key is PASSWORD_ and the user name in capitals, with
+# anything that is not a letter or digit as an underscore.
+k8s_identity_users: >-
+  {{ [{'username': k8s_identity_owner_username, 'email': k8s_identity_owner_email, 'groups': ['lab-admins']}]
+  + k8s_identity_extra_users }}
+k8s_identity_password_keys: >-
+  {{ k8s_identity_users | map(attribute='username') | map('upper') | map('regex_replace', '[^A-Z0-9]', '_')
+  | map('regex_replace', '^', 'PASSWORD_') | list }}
+
+# Client secrets, one per confidential client, and every key the values file must hold.
+k8s_identity_client_secret_keys: [GRAFANA_CLIENT_SECRET, ARGOCD_CLIENT_SECRET, JELLYFIN_CLIENT_SECRET]
+k8s_identity_value_keys: "{{ k8s_identity_client_secret_keys + k8s_identity_password_keys }}"
