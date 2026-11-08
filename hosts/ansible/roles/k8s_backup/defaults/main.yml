@@ -1,0 +1,57 @@
+---
+# Off-box backups of c1 and the tests that prove they restore (BL-0139 volumes, BL-0094 etcd).
+# Every part is an agent pick, listed in hosts/AGENT-PICKS.md (picks 144-152); runbooks
+# docs/runbooks/back-up-c1-off-box.md and docs/runbooks/test-etcd-restore.md.
+#
+# restic writes encrypted, deduplicated snapshots to one repository off the Proxmox box. Where that
+# repository is (RESTIC_REPOSITORY) and its password are private: they live only in a 0600 env file
+# on the controller, copied to each node. Exit path: restic's repository format is open and
+# documented; `restic restore` or `restic mount` gets every file back without this role.
+# Every input is listed here (Red Hat CoP rule).
+
+# false (the default): tools and scripts are installed, the timers are off and no env file is
+# needed. true: the env file is copied to the nodes and the timers run.
+k8s_backup_enabled: false
+
+# The env file on the controller, mode 0600, for example ~/.config/central-hub/c1-backup.env. No
+# default: it is private. Its lines are KEY=value: RESTIC_REPOSITORY, RESTIC_PASSWORD, and the
+# target's own credentials (restic's docs, "Preparing a new repository").
+k8s_backup_env_file: ""
+
+# Where the tools and scripts go on the nodes, apart from the PATH so nothing else picks up this
+# etcd binary.
+k8s_backup_bin_dir: /usr/local/libexec/central-hub-backup
+k8s_backup_node_env_file: /etc/central-hub/backup.env
+k8s_backup_state_dir: /var/lib/central-hub-backup
+
+# restic, the newest release at least two weeks old on 2026-11-08 (v0.19.1, 2026-07-05, STD-0003
+# rule 1), from its GitHub release, checked against the release's SHA256SUMS.
+k8s_backup_restic_version: 0.19.1
+k8s_backup_restic_sha256: f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
+
+# etcdctl, etcdutl and etcd from one etcd release. Same minor as the etcd c1 runs (3.7.0-0 after
+# runbook step 17), because a snapshot restores only within its minor; v3.7.2 (2026-09-22) is the
+# newest 3.7 release at least two weeks old on 2026-11-08 (STD-0003 rule 1). CI restores a
+# snapshot taken by etcd 3.7.0 with these tools.
+k8s_backup_etcd_version: 3.7.2
+k8s_backup_etcd_sha256: 3a3679bc51a4ee9d30bccea1da7cd4fe62c6fc1d2ca1255068d2c53bf3026135
+
+# Times (systemd OnCalendar, the node's local time), before the Proxmox job nightly-guests at
+# 03:00 so the two don't read the disks at once. Persistent=true runs a missed one at boot.
+k8s_backup_etcd_schedule: "*-*-* 02:10:00"
+k8s_backup_volumes_schedule: "*-*-* 02:25:00"
+k8s_backup_restore_test_schedule: "Sun *-*-* 04:30:00"
+
+# Folders backed up on each node; a node that has none backs up nothing.
+k8s_backup_volume_paths:
+  - /var/lib/c1-data/local-path
+  - /var/lib/central-hub/identity-postgres
+
+# Retention per host and tag: restic forget --keep-daily/--keep-weekly/--keep-monthly, then prune.
+k8s_backup_keep_daily: 7
+k8s_backup_keep_weekly: 4
+k8s_backup_keep_monthly: 6
+
+# Run the restore tests at the end of a playbook run (tag drill). They need k8s_backup_enabled and
+# at least one backup.
+k8s_backup_drill: false

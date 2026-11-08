@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the hosts checks (STD-0005). CI runs the same commands.
-# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|all]   (default: all)
+# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|all]   (default: all)
 # Needs: python3 with requirements.txt installed; tofu, tflint, kubeconform and helm on PATH, or
 # TOOLS=<dir> holding them (install-tools.sh builds them); for ansible and manifests, the
 # collections in hosts/ansible/requirements.yml (this script installs them when missing); for
@@ -122,6 +122,11 @@ check_identity() {
   bash "$here/identity/test_realm.sh" "$work/identity/realm.yaml"
 }
 
+check_backup() {
+  # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository.
+  bash "$here/tests/test_backup.sh"
+}
+
 check_scripts() {
   # Warnings and errors fail; style notes do not (an agent pick, STD-0005).
   git ls-files -z -- '*.sh' | xargs -0 shellcheck --severity=warning
@@ -136,6 +141,7 @@ case "${1:-all}" in
   manifests) check_manifests ;;
   identity) check_identity ;;
   scripts) check_scripts ;;
-  all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts ;;
-  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|all]" >&2; exit 2 ;;
+  backup) check_backup ;;
+  all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts; check_backup ;;
+  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|all]" >&2; exit 2 ;;
 esac

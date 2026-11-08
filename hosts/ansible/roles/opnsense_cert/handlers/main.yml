@@ -1,0 +1,14 @@
+---
+# The GUI drops the connection while it restarts; that is the expected answer.
+- name: Restart the web GUI
+  ansible.builtin.uri:
+    url: "https://{{ opnsense_api_host }}/api/core/service/restart/webgui"
+    method: POST
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_cert_validate }}"
+    ca_path: "{{ opnsense_lab_ssl_ca_file | default(omit) }}"
+    body_format: json
+    body: {}
+  failed_when: false

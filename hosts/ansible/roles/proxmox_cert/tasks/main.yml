@@ -1,0 +1,77 @@
+---
+- name: Issue the certificate on c1
+  ansible.builtin.include_role:
+    name: lab_host_cert
+  vars:
+    lab_host_cert_name: "{{ proxmox_cert_name }}"
+    lab_host_cert_names: "{{ proxmox_cert_names }}"
+    lab_host_cert_issuer_host: "{{ proxmox_cert_issuer_host }}"
+    lab_host_cert_issuer: "{{ proxmox_cert_issuer }}"
+
+- name: The lab root in the host's trust store
+  ansible.builtin.copy:
+    content: "{{ lab_host_cert_root }}"
+    dest: "{{ proxmox_cert_root_file }}"
+    mode: "0644"
+  notify: Rebuild the host's trust store
+  when: not ansible_check_mode
+
+- name: The certificate the web UI serves now
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    openssl x509 -in /etc/pve/local/pveproxy-ssl.pem -noout -fingerprint -sha256 2>/dev/null || true
+  args:
+    executable: /bin/bash
+  register: proxmox_cert_now
+  changed_when: false
+  check_mode: false
+
+- name: The issued certificate's fingerprint
+  ansible.builtin.command: openssl x509 -noout -fingerprint -sha256
+  args:
+    stdin: "{{ lab_host_cert_crt }}"
+  register: proxmox_cert_new
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+# pvenode cert set writes /etc/pve/local/pveproxy-ssl.{pem,key} and restarts pveproxy. The key
+# goes through a 0600 temp file, removed straight after.
+- name: Set the certificate on the host
+  when:
+    - not ansible_check_mode
+    - proxmox_cert_now.stdout | trim != proxmox_cert_new.stdout | trim
+  block:
+    - name: Temp folder for the certificate files
+      ansible.builtin.tempfile:
+        state: directory
+      register: proxmox_cert_tmp
+
+    - name: Certificate and key in the temp folder
+      ansible.builtin.copy:
+        content: "{{ item.content }}"
+        dest: "{{ proxmox_cert_tmp.path }}/{{ item.name }}"
+        mode: "0600"
+      loop:
+        - { name: cert.pem, content: "{{ lab_host_cert_crt }}" }
+        - { name: key.pem, content: "{{ lab_host_cert_key }}" }
+      loop_control:
+        label: "{{ item.name }}"
+      no_log: true
+
+    - name: Pvenode cert set
+      ansible.builtin.command: >-
+        pvenode cert set {{ proxmox_cert_tmp.path }}/cert.pem {{ proxmox_cert_tmp.path }}/key.pem
+        --force 1 --restart 1
+      changed_when: true
+
+  always:
+    - name: Remove the temp folder
+      ansible.builtin.file:
+        path: "{{ proxmox_cert_tmp.path }}"
+        state: absent
+      when: proxmox_cert_tmp.path is defined
+
+- name: Proof
+  ansible.builtin.debug:
+    msg: "The Proxmox web UI serves {{ proxmox_cert_new.stdout | default('(check mode)') }} for {{ proxmox_cert_names | join(', ') }}"

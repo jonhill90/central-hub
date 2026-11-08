@@ -4,10 +4,11 @@ Lints and offline tests for the code under `hosts/` (STD-0005). Workflow `hosts`
 
 | Path | What it is |
 |---|---|
-| `run.sh` | The one command: `run.sh terraform`, `run.sh ansible`, `run.sh manifests`, `run.sh identity`, `run.sh scripts`, or no argument for all five. |
+| `run.sh` | The one command: `run.sh terraform`, `run.sh ansible`, `run.sh manifests`, `run.sh identity`, `run.sh scripts`, `run.sh backup`, or no argument for all six. |
 | `install-tools.sh` | Builds tofu, tflint, kubeconform and helm from source at pinned versions. |
 | `requirements.in`, `requirements.txt` | ansible-core, ansible-lint, ShellCheck and actionlint, pinned with hashes. |
 | `check_hosts.py` | The STD-0004 rules a script can see: run folder files, no `locals`, no tracked real variable files or inventories, `meta/argument_specs.yml` in every role and no `meta/main.yml`. |
+| `tests/test_backup.sh` | The c1 backup and restore-test scripts (role `k8s_backup`) end to end: etcd 3.7.0 with test keys, a local restic repository, a volume folder; plus a missing key and a damaged pack file, which must fail. |
 | `tests/test_check_hosts.sh` | Test cases: each breaks a copy of `hosts/` one way and expects `check_hosts.py` to fail. |
 | `tflint.hcl` | tflint settings: every bundled Terraform rule. |
 | `ansible-lint.yml` | ansible-lint settings: the production profile, with two style rules off and the reason. |
@@ -26,6 +27,7 @@ The tests themselves sit next to the code: `hosts/terraform/<place>/<workload>/t
 | `manifests` | renders each line of `manifests/cases.txt`, each `hosts/kubernetes/clusters/*/root` chart and each local chart under `clusters/*/apps/` (`helm lint`, `helm template`); runs `parity.py` (downloads the upstream charts named in the root values); then `kubeconform -strict` on the output |
 | `identity` | renders realm `lab` with an extra user, imports it into Keycloak in a container, checks clients, passwords and the `groups` and `roles` claims, then runs the role's `files/delete-realm.sh` and imports it again (STD-0005 level 3) |
 | `scripts` | ShellCheck (warnings and errors) on every tracked `*.sh`; actionlint on every workflow |
+| `backup` | `tests/test_backup.sh`: downloads restic and etcd from their releases, each checked against a SHA-256 (the role's own versions), and runs the role's scripts |
 
 ## Run it locally
 

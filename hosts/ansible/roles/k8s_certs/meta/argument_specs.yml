@@ -13,7 +13,18 @@ argument_specs:
           Zone DNS Edit and Zone Zone Read), written by hosts/terraform/home/certificates.
           Private; needed when k8s_certs_issue is true.
       k8s_certs_gateway_address: {type: str, description: "The Gateway's address (k8s_gateway_address), for the smoke test. Private."}
+      k8s_certs_lab_ca_cert_file:
+        type: str
+        description: "Path on the controller to c1's intermediate CA certificate with the root appended. Needed when k8s_certs_lab_ca is true."
+      k8s_certs_lab_ca_key_file:
+        type: str
+        description: "Path on the controller to a 0600 file holding c1's intermediate CA key. Private; needed when k8s_certs_lab_ca is true."
       # Defaults in defaults/main.yml
+      k8s_certs_lab_ca:
+        type: bool
+        default: false
+        description: "Restore the lab CA's c1 intermediate into a Secret and make its ClusterIssuer (D-0028). False removes them."
+      k8s_certs_lab_ca_name: {type: str, default: lab-ca, description: Name of the lab CA's ClusterIssuer and of its Secret in the cert-manager namespace.}
       k8s_certs_issue:
         type: bool
         default: false
@@ -21,7 +32,7 @@ argument_specs:
       k8s_certs_issuer:
         type: str
         default: letsencrypt-staging
-        choices: [letsencrypt-staging, letsencrypt-prod]
+        choices: [letsencrypt-staging, letsencrypt-prod, lab-ca]
         description: ClusterIssuer the certificate comes from.
       k8s_certs_cert_manager_version: {type: str, default: v1.21.3, description: cert-manager chart version.}
       k8s_certs_cert_manager_chart_sha256:
