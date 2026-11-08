@@ -7,18 +7,18 @@ runner: the owner, or an agent lane with cluster-admin on c1
 outcome: realm lab in Keycloak matches the code; Grafana, Argo CD and Jellyfin each have their client and their client secret in their own namespace; every user signs in with the password in the values file
 needs: the filled-in inventory, SSH to the c1 control plane, HTTPS on Gateway apps (playbooks/k8s-gateway.yml, k8s-certs.yml)
 private-values: [k8s_identity_zone, k8s_identity_owner_username, k8s_identity_owner_email, PASSWORD_USER_NAME, GRAFANA_CLIENT_SECRET, ARGOCD_CLIENT_SECRET, JELLYFIN_CLIENT_SECRET]
-files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/ansible/roles/k8s_identity/, hosts/ansible/inventories/home/identity.env]
-last-tested: 2026-11-08, an agent lane, realm test in CI only (Keycloak 26.8.1 in a container); not yet run on c1
+files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/ansible/roles/k8s_identity/, ~/.config/central-hub/identity.env]
+last-tested: 2026-11-08, an agent lane on the owner's Mac, steps 1-3 on c1 at commit b20c975 (run 1 ok=38 changed=11 failed=0 with one realm re-import, run 2 changed=0); step 4 not yet done
 superseded-by:
 ---
 
 # Set up sign-in for lab apps on c1
 
-Realm `lab` in Keycloak is code: its groups, users and the OIDC clients of every lab app are in `hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2`, and every password and client secret is a line in a git-ignored values file on the machine that runs Ansible. This runbook applies them to c1. Run it from `hosts/ansible` in the lab clone.
+Realm `lab` in Keycloak is code: its groups, users and the OIDC clients of every lab app are in `hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2`, and every password and client secret is a line in `~/.config/central-hub/identity.env` on the machine that runs Ansible, outside the repository. This runbook applies them to c1. Run it from `hosts/ansible` in the lab clone.
 
 ```mermaid
 flowchart LR
-  env["inventories/home/identity.env<br/>(git-ignored, on the controller)"] --> s1["identity/realm-lab-secrets"]
+  env["~/.config/central-hub/identity.env<br/>(on the controller, outside the repo)"] --> s1["identity/realm-lab-secrets"]
   env --> g["monitoring/grafana-sso"]
   env --> a["argocd/argocd-sso"]
   env --> j["media/jellyfin-sso"]
@@ -47,7 +47,7 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 ## Steps
 
 1. See what would change: `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,keycloak --check --diff`
-   why: the first run writes `inventories/home/identity.env` with a random value for each missing key, even in check mode, because nothing after it can be checked without the values; it never changes a line that is there.
+   why: the first run writes `~/.config/central-hub/identity.env` (mode 0600) with a random value for each missing key, even in check mode, because nothing after it can be checked without the values; it never changes a line that is there.
    ※ `hosts/AGENT-PICKS.md` pick 154.
    expect: `identity.env` exists, mode 0600, with `GRAFANA_CLIENT_SECRET`, `ARGOCD_CLIENT_SECRET`, `JELLYFIN_CLIENT_SECRET` and one `PASSWORD_<USER NAME>` per user.
 2. Apply: `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,keycloak`

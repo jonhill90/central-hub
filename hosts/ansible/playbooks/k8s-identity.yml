@@ -3,7 +3,7 @@
 # pinned upstream files, PostgreSQL on a static local volume, Keycloak, realm lab as code (groups,
 # users, and the clients of Grafana, Argo CD and Jellyfin), and the route
 # https://sso.apps.c1.prod.<zone>/ through the shared Gateway. Passwords and client secrets come from
-# the git-ignored inventories/home/identity.env, which the role fills on first run. Runbook:
+# ~/.config/central-hub/identity.env on the controller, which the role fills on first run. Runbook:
 # docs/runbooks/set-up-lab-sign-in.md. Needs k8s-gateway.yml with HTTPS and k8s-certs.yml first,
 # and k8s_identity_owner_username in the inventory.
 #   ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags operator,secrets,database

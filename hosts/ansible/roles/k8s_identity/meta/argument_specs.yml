@@ -19,7 +19,7 @@ argument_specs:
         description: "More users in realm lab: username, groups (lab-admins, lab-viewers), optional email, first_name, last_name."
       k8s_identity_values_file:
         type: str
-        description: "The git-ignored KEY=value file on the controller with every password and client secret. Default: identity.env next to the inventory."
+        description: "KEY=value file on the controller, outside the repo, with every password and client secret. Default: ~/.config/central-hub/identity.env."
       k8s_identity_realm_replace: {type: bool, default: true, description: "Delete and import realm lab again when its code or a value changes."}
       k8s_identity_grafana_name: {type: str, default: grafana, description: "First label of Grafana's hostname (k8s_observability_grafana_name)."}
       k8s_identity_grafana_namespace: {type: str, default: monitoring, description: "Grafana's namespace (k8s_observability_metrics_namespace)."}

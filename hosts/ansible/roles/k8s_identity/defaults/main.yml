@@ -29,11 +29,12 @@ k8s_identity_owner_email: ""
 # (lab-admins or lab-viewers). Every user's password is a line in the values file below.
 k8s_identity_extra_users: []
 
-# The values file on the controller (the machine that runs Ansible), git-ignored by
-# hosts/ansible/.gitignore: every password and client secret in realm lab, one KEY=value per line.
+# The values file on the controller (the machine that runs Ansible), outside the repository next to
+# c1's encryption key (~/.config/central-hub/): every password and client secret in realm lab, one
+# KEY=value per line.
 # The role adds a random value for any key that is missing and never changes one that is there, so
 # the owner reads a password there and changes one by editing the file and running the role again.
-k8s_identity_values_file: "{{ inventory_dir }}/identity.env"
+k8s_identity_values_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/central-hub/identity.env"
 
 # When the realm's code or a value in the file changes, delete realm lab and import it again
 # (KeycloakRealmImport never updates a realm that exists). Sessions end; nothing else is lost,
