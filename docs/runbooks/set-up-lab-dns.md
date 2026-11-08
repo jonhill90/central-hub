@@ -119,7 +119,7 @@ Stop if any of these is not true.
 
 ## Related
 
-- `hosts/AGENT-PICKS.md` picks 144-149 (Unbound over AdGuard Home, split DNS for the Mac, and how they are built)
+- `hosts/AGENT-PICKS.md` picks 160-165 (Unbound over AdGuard Home, split DNS for the Mac, and how they are built)
 - [Spec: the home lab and c1](../specs/2026-10-home-lab-and-c1.md), decision log 2026-10-26 (the API name as an Unbound override)
 - [D-0021](../decisions/0021-use-gateway-api-on-cilium-as-the-way-in-for-web-traffic.md) (the wildcard name for apps)
 - [Build a single-node kubeadm cluster](build-kubeadm-cluster.md) step 7 (the endpoint name)
