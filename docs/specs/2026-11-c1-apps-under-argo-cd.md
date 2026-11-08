@@ -1,9 +1,16 @@
 ---
 title: Move c1's apps and add-ons under Argo CD, with a runbook for each
-status: proposed
+status: accepted
 date: 2026-11-08
 system: 8
 accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-08T07:16:16Z
+  approved-commit: b470fd8c1ad14c0f75d5bacd5afd8088a188291a
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNKYAVtofLbtfdhkN9JkMKtd
+  approval-names: "PR #62 and head b470fd8, in the message itself"
+  check: the drafting agent read the message in the project thread at 2026-11-08T07:16Z; it reads "accept PR #62 b470fd8". An independent check by a reviewing agent is still to do.
+  merged: PR #62 merged at 2026-11-08T07:30:48Z as b50aaf5
 done-evidence:
 supersedes: []
 superseded-by:
@@ -117,3 +124,4 @@ Today Jellyfin's setup wizard has not run (measured: `StartupWizardCompleted: fa
 ## Decision log
 
 - 2026-11-08: The spec was drafted while the owner's answer on reading the repo before the gate was still pending. Merging it turns nothing on.
+- 2026-11-08: The owner said yes to c1 reading central-hub before the Activation gate, for c1 only (card, 07:16 UTC); D-0027 records it.

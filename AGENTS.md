@@ -2,7 +2,7 @@
 
 *(`CLAUDE.md` is a symlink to this file.)*
 
-**What this is:** the Central Hub platform repository. Status: **Foundation**. Nothing here deploys, and no cluster reads this repo until the Activation gate passes.
+**What this is:** the Central Hub platform repository. Status: **Foundation**. Only the lab cluster c1 reads this repo (D-0027); no other cluster reads it until the Activation gate passes.
 
 ## Rules for now
 
@@ -37,7 +37,7 @@ These rules fit the current stage, while Jon does every step himself so he under
 
 ## Activation gate
 
-Before any cluster reads this repo, all 7 must be true and recorded:
+Before any cluster other than the lab cluster c1 reads this repo, all 7 must be true and recorded. c1 may read it now, read-only, under D-0027.
 
 1. Per-agent GitHub identities, with Jon's approval required by GitHub.
 2. A verifier the PR can't edit.

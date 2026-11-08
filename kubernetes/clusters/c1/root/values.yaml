@@ -1,0 +1,27 @@
+# Inputs of the root chart. Private names are never written here (CLAUDE.md rule 4).
+
+# The lab DNS zone. Ansible sets it as a Helm parameter on the root Application, from the private
+# inventory (k8s_gitops_source_zone). Children that need a hostname get it as their own `zone`.
+zone: ""
+
+# Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
+repoURL: https://github.com/jonhill90/central-hub
+targetRevision: main
+appsPath: kubernetes/clusters/c1/apps
+
+# One entry per component, in the order they moved (spec, "Order"). Each one:
+#   namespace    where the chart installs
+#   chart        repoURL, name and version of the upstream Helm chart (version per STD-0003)
+#   releaseName  the Helm release name today, so the objects keep their names (default: the key)
+#   needsZone    pass `zone` to the chart as a value
+#   autoSync     false while the take-over diff is checked; true after the first clean sync
+#   prune        delete objects that leave git; false until one cycle runs clean
+apps:
+  metrics-server:
+    namespace: kube-system
+    chart:
+      repoURL: https://kubernetes-sigs.github.io/metrics-server/
+      name: metrics-server
+      version: 3.14.0   # metrics-server 0.9.0, 2026-08-19; same as k8s_observability today
+    autoSync: false
+    prune: false

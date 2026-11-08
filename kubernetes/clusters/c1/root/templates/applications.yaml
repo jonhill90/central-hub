@@ -1,0 +1,43 @@
+{{- /*
+One child Application per entry in .Values.apps. The chart comes from its upstream Helm repository,
+and its values file from this repository (Argo CD multiple sources, `ref: values`).
+No resources finalizer: deleting a child Application leaves its objects on the cluster, which is the
+way back to Ansible for every component (spec, "Taking over a running component").
+*/ -}}
+{{- range $name, $app := .Values.apps }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $name }}
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: c1
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $app.namespace }}
+  sources:
+    - repoURL: {{ $app.chart.repoURL }}
+      chart: {{ $app.chart.name }}
+      targetRevision: {{ $app.chart.version | quote }}
+      helm:
+        releaseName: {{ $app.releaseName | default $name }}
+        valueFiles:
+          - $values/{{ $.Values.appsPath }}/{{ $name }}/values.yaml
+        {{- if $app.needsZone }}
+        parameters:
+          - name: zone
+            value: {{ required "zone: the root Application must set it (k8s_gitops_source_zone)" $.Values.zone | quote }}
+        {{- end }}
+    - repoURL: {{ $.Values.repoURL }}
+      targetRevision: {{ $.Values.targetRevision }}
+      ref: values
+  {{- if $app.autoSync }}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: {{ $app.prune | default false }}
+  {{- end }}
+{{- end }}

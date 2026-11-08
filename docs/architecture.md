@@ -36,4 +36,4 @@ Created with the first real files in `hosts/` (D-0012 rule 2). Status: home lab,
 ## What reads what
 
 - Terraform and Ansible both read the VLAN data file for this place (one file, two readers). It is the copy in code of STD-0002's Home VLANs table, and the docs check fails when they differ.
-- Nothing reads this repo on its own. Every apply is run by hand until the Activation gate passes (AGENTS.md).
+- Only the lab cluster c1 reads this repo, through Argo CD and read-only (D-0027). Everything else is applied by hand until the Activation gate passes (AGENTS.md).
