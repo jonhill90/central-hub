@@ -17,3 +17,4 @@
 VNet
 API token
 (?i)break-glass account
+(?i)agent notebook
