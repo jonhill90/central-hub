@@ -28,4 +28,5 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0022 | [0022-reach-clusters-by-ssh-now-and-keep-admin-kubeconfigs-for-break-glass.md](0022-reach-clusters-by-ssh-now-and-keep-admin-kubeconfigs-for-break-glass.md) |
 | D-0023 | [0023-use-argo-cd-as-the-gitops-engine.md](0023-use-argo-cd-as-the-gitops-engine.md) |
 | D-0026 | [0026-tell-documentation-from-knowledge.md](0026-tell-documentation-from-knowledge.md) |
+| D-0028 | [0028-run-a-lab-ca-with-the-root-off-cluster-and-one-intermediate-per-cluster.md](0028-run-a-lab-ca-with-the-root-off-cluster-and-one-intermediate-per-cluster.md) |
 | D-0030 | [0030-give-cloud-agents-one-github-account-of-their-own.md](0030-give-cloud-agents-one-github-account-of-their-own.md) |

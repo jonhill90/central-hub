@@ -1,0 +1,14 @@
+---
+# The Proxmox host's web UI certificate from the lab CA on c1 (D-0028 rule 5, spec
+# docs/specs/2026-11-lab-pki.md part 6). Needs playbooks/k8s-certs.yml first with
+# k8s_certs_lab_ca: true. cert-manager renews on c1; run this at least every 30 days to copy the
+# renewed certificate to the host.
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-cert.yml --check --diff
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-cert.yml
+- name: Proxmox web UI certificate from the lab CA
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  roles:
+    - role: proxmox_cert
+      tags: [cert]

@@ -1,0 +1,13 @@
+---
+# Issue a certificate for a host outside Kubernetes on c1, from ClusterIssuer lab-ca (D-0028
+# rule 5), and hand it back as facts: lab_host_cert_crt (leaf and intermediate), lab_host_cert_key
+# and lab_host_cert_root. Used by proxmox_cert and opnsense_cert.
+#
+# Set by the caller: lab_host_cert_name, lab_host_cert_names.
+lab_host_cert_issuer_host: "{{ groups['k8s_control_plane'] | first }}"
+lab_host_cert_issuer: lab-ca
+lab_host_cert_namespace: host-certs
+# 90 days, renewed by cert-manager 30 days early (spec 2026-11-lab-pki "Lifetimes"). The caller's
+# playbook copies a renewed certificate to its host, so run it at least every 30 days.
+lab_host_cert_duration: 2160h
+lab_host_cert_renew_before: 720h

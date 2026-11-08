@@ -1,0 +1,28 @@
+# A certificate for a host outside Kubernetes, from the lab CA (D-0028 rule 5). Its Secret holds
+# tls.crt (with the c1 intermediate), tls.key and ca.crt (the lab root).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ lab_host_cert_namespace }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ lab_host_cert_name }}
+  namespace: {{ lab_host_cert_namespace }}
+spec:
+  secretName: {{ lab_host_cert_name }}-tls
+  duration: {{ lab_host_cert_duration }}
+  renewBefore: {{ lab_host_cert_renew_before }}
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: {{ lab_host_cert_issuer }}
+  dnsNames:
+{% for name in lab_host_cert_names %}
+    - "{{ name }}"
+{% endfor %}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always

@@ -1,0 +1,125 @@
+---
+- name: Issue the certificate on c1
+  ansible.builtin.include_role:
+    name: lab_host_cert
+  vars:
+    lab_host_cert_name: "{{ opnsense_cert_name }}"
+    lab_host_cert_names: "{{ opnsense_cert_names }}"
+    lab_host_cert_issuer_host: "{{ opnsense_cert_issuer_host }}"
+    lab_host_cert_issuer: "{{ opnsense_cert_issuer }}"
+
+- name: API call settings
+  ansible.builtin.set_fact:
+    opnsense_cert_api: "https://{{ opnsense_api_host }}/api"
+    opnsense_cert_pems: >-
+      {{ lab_host_cert_crt | default('')
+         | regex_findall('-----BEGIN CERTIFICATE-----[^-]+-----END CERTIFICATE-----') }}
+
+- name: Authorities on the firewall now
+  ansible.builtin.uri:
+    url: "{{ opnsense_cert_api }}/trust/ca/search"
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_cert_validate }}"
+    ca_path: "{{ opnsense_lab_ssl_ca_file | default(omit) }}"
+  register: opnsense_cert_cas
+  check_mode: false
+
+# The root, then the intermediate, each only if the firewall doesn't hold that exact PEM yet.
+- name: Add the lab root and the c1 intermediate as authorities
+  ansible.builtin.uri:
+    url: "{{ opnsense_cert_api }}/trust/ca/add"
+    method: POST
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_cert_validate }}"
+    ca_path: "{{ opnsense_lab_ssl_ca_file | default(omit) }}"
+    body_format: json
+    body:
+      ca:
+        action: existing
+        crt_payload: "{{ item.pem }}"
+        descr: "{{ item.descr }}"
+  loop:
+    - { descr: Home Lab Root CA, pem: "{{ lab_host_cert_root | default('') | trim }}" }
+    - { descr: Home Lab c1 Intermediate CA, pem: "{{ opnsense_cert_pems[1] | default('') }}" }
+  loop_control:
+    label: "{{ item.descr }}"
+  when:
+    - not ansible_check_mode
+    - item.descr not in (opnsense_cert_cas.json.rows | default([]) | map(attribute='descr') | list)
+  changed_when: true
+
+- name: Certificates on the firewall now
+  ansible.builtin.uri:
+    url: "{{ opnsense_cert_api }}/trust/cert/search"
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_cert_validate }}"
+    ca_path: "{{ opnsense_lab_ssl_ca_file | default(omit) }}"
+  register: opnsense_cert_certs
+  check_mode: false
+
+- name: The certificate the web GUI uses
+  ansible.builtin.set_fact:
+    opnsense_cert_target: >-
+      {{ opnsense_cert_certs.json.rows | default([])
+         | selectattr('descr', 'in', opnsense_cert_target_descrs)
+         | rejectattr('in_use', 'in', ['0', 0, ''])
+         | first | default({}) }}
+
+- name: There is one to replace
+  ansible.builtin.assert:
+    that: opnsense_cert_target.uuid is defined
+    fail_msg: >-
+      No certificate in use on the firewall is named one of {{ opnsense_cert_target_descrs }}.
+      Check System > Trust > Certificates and set opnsense_cert_target_descrs.
+    quiet: true
+
+# The web GUI serves the certificate under this uuid; writing over it keeps the GUI's setting.
+- name: The certificate the web GUI serves now, and the issued one
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    openssl s_client -connect {{ opnsense_api_host }}:{{ opnsense_cert_gui_port }}
+    -servername {{ opnsense_cert_names | first }} </dev/null 2>/dev/null
+    | openssl x509 -noout -fingerprint -sha256 || true;
+    printf '%s\n' "$ISSUED" | openssl x509 -noout -fingerprint -sha256
+  args:
+    executable: /bin/bash
+  environment:
+    ISSUED: "{{ opnsense_cert_pems[0] | default('') }}"
+  register: opnsense_cert_fps
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Write the issued certificate over it, when the served one differs
+  ansible.builtin.uri:
+    url: "{{ opnsense_cert_api }}/trust/cert/set/{{ opnsense_cert_target.uuid }}"
+    method: POST
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_cert_validate }}"
+    ca_path: "{{ opnsense_lab_ssl_ca_file | default(omit) }}"
+    body_format: json
+    body:
+      cert:
+        action: import
+        descr: "{{ opnsense_cert_names | first }}"
+        cert_type: usr_cert
+        private_key_location: firewall
+        crt_payload: "{{ opnsense_cert_pems[0] }}"
+        prv_payload: "{{ lab_host_cert_key }}"
+        csr_payload: ""
+  when:
+    - not ansible_check_mode
+    - opnsense_cert_fps.stdout_lines | length < 2
+      or opnsense_cert_fps.stdout_lines[0] != opnsense_cert_fps.stdout_lines[-1]
+  register: opnsense_cert_set
+  changed_when: true
+  no_log: true
+  notify: Restart the web GUI

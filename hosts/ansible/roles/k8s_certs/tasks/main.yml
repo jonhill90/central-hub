@@ -9,7 +9,15 @@
   loop: >-
     {{ ['k8s_certs_zone']
        + (['k8s_certs_acme_email', 'k8s_certs_cloudflare_token_file', 'k8s_certs_gateway_address']
-          if k8s_certs_issue else []) }}
+          if k8s_certs_issue else [])
+       + (['k8s_certs_lab_ca_cert_file', 'k8s_certs_lab_ca_key_file'] if k8s_certs_lab_ca else []) }}
+  tags: [always]
+
+- name: The issuer the certificate comes from is turned on
+  ansible.builtin.assert:
+    that: k8s_certs_issuer != k8s_certs_lab_ca_name or k8s_certs_lab_ca
+    fail_msg: k8s_certs_issuer is {{ k8s_certs_lab_ca_name }} but k8s_certs_lab_ca is false.
+    quiet: true
   tags: [always]
 
 # Skipped once Argo CD manages cert-manager (app cert-manager); the issuers and the certificate
@@ -27,6 +35,10 @@
   changed_when: k8s_certs_helm_records.stdout | length > 0
   when: k8s_certs_cert_manager_by_argocd | bool
   tags: [certmanager]
+
+- name: The lab CA's intermediate and its ClusterIssuer, or their removal while it is off
+  ansible.builtin.import_tasks: lab_ca.yml
+  tags: [labca, issue]
 
 - name: Issuers and the certificate, or their removal while issuing is off
   ansible.builtin.import_tasks: issue.yml

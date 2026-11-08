@@ -1,0 +1,16 @@
+---
+# The Proxmox host's web UI and API certificate from the lab CA (D-0028 rule 5). Issued on c1 by
+# ClusterIssuer lab-ca, read back on c1's first control-plane node, and set on the host with
+# `pvenode cert set`. The host also trusts the lab root, so it can verify lab names itself.
+#
+# Private, no default, set in the inventory:
+# proxmox_cert_names: [<name>, ...]   # DNS names for the host's web UI, under the lab zone (STD-0001)
+
+# Where the Certificate is issued: c1's first control-plane node (k8s_certs makes lab-ca there).
+proxmox_cert_issuer_host: "{{ groups['k8s_control_plane'] | first }}"
+proxmox_cert_issuer: lab-ca
+proxmox_cert_name: proxmox
+# Lifetime and renewal: role lab_host_cert. cert-manager renews on c1; run this at least every
+# 30 days to copy the renewed certificate to the host.
+# The lab root in the host's own trust store (Debian's update-ca-certificates).
+proxmox_cert_root_file: /usr/local/share/ca-certificates/central-hub-lab-root-ca.crt
