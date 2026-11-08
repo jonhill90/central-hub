@@ -6,7 +6,7 @@ trigger: on request, once for the root; once per new cluster for an intermediate
 runner: the owner
 outcome: a root certificate trusted by the lab, an intermediate for c1 signed by it, and both private keys stored off every cluster
 needs: a terminal on the owner's Mac with openssl
-private-values: [LAB_ROOT_CA_KEY_PASSPHRASE in ~/.config/central-hub/lab-ca/lab-ca.env, root.key, c1-intermediate.key]
+private-values: [LAB_ROOT_CA_KEY_PASSPHRASE, root.key, c1-intermediate.key]
 files: []
 last-tested: not yet run
 superseded-by:
