@@ -7,7 +7,7 @@ runner: the owner, with an agent lane on the owner's Mac for the automated runbo
 outcome: the Proxmox host, the lab network and firewall, the tailnet way in, cluster c1 with Cilium, Argo CD, certificates, lab DNS, sign-in, backups and the apps all run again, built from this repository and the private files on the controller
 needs: the Proxmox host's hardware and a Proxmox VE 9 installer; the controller (the owner's Mac) with the private files listed below, or the means to make them again; accounts at the DNS provider, the tailnet and the backup target
 private-values: [controller-private-folder, ansible-inventory, ansible-env-files, terraform-tfvars, terraform-state, hosts-env]
-files: [hosts/README.md, hosts/terraform/, hosts/ansible/, hosts/kubernetes/clusters/c1/]
+files: [hosts/README.md, hosts/terraform/, hosts/ansible/, hosts/kubernetes/home/c1/]
 last-tested:
 superseded-by:
 ---
@@ -213,7 +213,7 @@ expect: the drill in `back-up-c1-off-box.md` prints two PASS lines.
 #### Step 15
 
 Turn on Argo CD's source and move each component from Ansible to Argo CD, one at a time.
-why: the target state is that Argo CD, reading `hosts/kubernetes/clusters/c1/`, owns c1's add-ons and apps (spec `2026-11-c1-apps-under-argo-cd`).
+why: the target state is that Argo CD, reading `hosts/kubernetes/home/c1/`, owns c1's add-ons and apps (spec `2026-11-c1-apps-under-argo-cd`).
 runbook: [Move metrics-server to Argo CD](move-metrics-server-to-argo-cd.md) first (it turns the source on), then, in the spec's order: [volumes](move-local-path-to-argo-cd.md), [logging](move-logging-to-argo-cd.md), [monitoring](move-monitoring-to-argo-cd.md), [External Secrets](move-external-secrets-to-argo-cd.md), [cert-manager](move-cert-manager-to-argo-cd.md), [Jellyfin](move-jellyfin-to-argo-cd.md), [the Gateway](move-gateway-to-argo-cd.md).
 expect: `kubectl -n argocd get applications` shows each one Synced and Healthy.
 

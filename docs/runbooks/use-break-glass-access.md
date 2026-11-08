@@ -44,7 +44,7 @@ A break-glass path is one kept for emergencies only, when the normal way in can'
      expect: the ruleset shows Active again.
    - **B. Stop Argo CD reading `main`.** With the admin kubeconfig (path C), delete the root Application: `kubectl -n argocd delete application c1`. To resume, run `ansible-playbook playbooks/k8s-gitops.yml --tags source` from `hosts/ansible`.
      why: D-0027 rule 5: the Applications have no resources finalizer, so the objects stay, and nothing reads `main` until the root Application is back. A pause switch that keeps the Application is planned for gate item 5 (docs/specs/2026-10-activation-gate.md).
-     expect: `kubectl -n argocd get application c1` returns NotFound, and a new commit under `hosts/kubernetes/clusters/c1/` is not applied.
+     expect: `kubectl -n argocd get application c1` returns NotFound, and a new commit under `hosts/kubernetes/home/c1/` is not applied.
    - **C. Admin kubeconfig.** SSH to the control-plane node through the Proxmox host and run kubectl there as root, which reads `admin.conf`. Use `super-admin.conf` only if `admin.conf` itself is broken.
      why: both files can do anything and never leave the node (D-0022 rule 1).
      ※ [Build a kubeadm cluster, step 8](build-kubeadm-cluster.md#8-init)

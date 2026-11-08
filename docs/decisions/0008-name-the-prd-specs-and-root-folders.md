@@ -56,7 +56,7 @@ central-hub/
 │   ├── decisions/
 │   └── runbooks/
 ├── private-network/              the tailnet policy, tags only
-├── hosts/                        machines below Kubernetes, and kubernetes/clusters/<role>/ for what runs on them
+├── hosts/                        machines below Kubernetes, and kubernetes/<place>/<cluster>/ for what runs on them
 ├── dns/
 └── backup/
 ```
@@ -68,12 +68,12 @@ central-hub/
 3. **Root folders.** The root folders for platform parts are `private-network/`, `hosts/`, `dns/` and `backup/`.
    - Each one is named for its job, never for a vendor product.
    - There is no root `kubernetes/` folder: what the clusters run lives in `hosts/kubernetes/` (the owner, 2026-11-08 07:51 UTC).
-4. **Clusters.** A cluster folder is named for its role, for example `hosts/kubernetes/clusters/main/`, never for the machine or provider it runs on.
+4. **Clusters.** A cluster folder is named for its role, for example `hosts/kubernetes/home/main/`, never for the machine or provider it runs on.
 5. **Creation.** A folder is created with its first real file. None is created empty.
 
 ### Not decided here
 
-- the names inside `hosts/kubernetes/` beyond `clusters/<role>/`, and any other new root folder;
+- the names inside `hosts/kubernetes/` beyond `<place>/<cluster>/`, and any other new root folder;
 - where vendor areas (labs) go;
 - where per-system records live;
 - the rest of the layout rules (organize-repository skill), which the owner reviews in that skill's own repo.

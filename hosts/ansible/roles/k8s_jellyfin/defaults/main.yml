@@ -30,7 +30,7 @@ k8s_jellyfin_cpu_request: 250m
 k8s_jellyfin_memory_request: 512Mi
 k8s_jellyfin_memory_limit: 2Gi
 
-# Argo CD manages Jellyfin from hosts/kubernetes/clusters/c1/apps/jellyfin/ (spec
+# Argo CD manages Jellyfin from hosts/kubernetes/home/c1/apps/jellyfin/ (spec
 # 2026-11-c1-apps-under-argo-cd, step 8). Set true in the inventory once its Application is Synced;
 # the role then changes nothing. False keeps Ansible in charge, which is also the way back.
 k8s_jellyfin_by_argocd: false
