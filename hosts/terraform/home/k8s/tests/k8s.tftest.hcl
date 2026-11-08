@@ -46,7 +46,7 @@ run "everything_in_pool_k8s" {
   command = plan
 
   assert {
-    condition     = proxmox_virtual_environment_vm.template.pool_id == "k8s" && alltrue([for k, n in proxmox_virtual_environment_vm.node : n.pool_id == "k8s"])
+    condition     = proxmox_virtual_environment_vm.template[0].pool_id == "k8s" && alltrue([for k, n in proxmox_virtual_environment_vm.node : n.pool_id == "k8s"])
     error_message = "The template and every node must be in pool k8s."
   }
 
@@ -66,7 +66,7 @@ run "image_pinned_with_checksum" {
   }
 
   assert {
-    condition     = proxmox_virtual_environment_vm.template.template && !proxmox_virtual_environment_vm.template.started
+    condition     = proxmox_virtual_environment_vm.template[0].template && !proxmox_virtual_environment_vm.template[0].started
     error_message = "The template must be a template and never started."
   }
 }
@@ -108,5 +108,34 @@ run "data_disk_only_where_asked" {
   assert {
     condition     = anytrue([for d in proxmox_virtual_environment_vm.node["palwkdemo01"].disk : d.interface == "scsi1" && d.size == 200 && d.datastore_id == "local-lvm"])
     error_message = "A node with data_disk_gb must get a scsi1 data disk of that size on local-lvm."
+  }
+}
+
+# A rehearsal cluster beside c1: its own state clones the template c1's state owns, makes no
+# template or image of its own, and tags its nodes with its VNet.
+run "second_cluster_clones_existing_template" {
+  command = plan
+
+  variables {
+    create_template = false
+    node_vnet       = "dev"
+    nodes = {
+      dalcprehearse01 = { vm_id = 250, role = "control-plane", cores = 2, memory_mb = 4096, disk_gb = 40, address = "10.1.30.11" }
+    }
+  }
+
+  assert {
+    condition     = length(proxmox_virtual_environment_vm.template) == 0 && length(proxmox_download_file.almalinux10) == 0
+    error_message = "With create_template = false the state must make no template and download no image."
+  }
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.node["dalcprehearse01"].clone[0].vm_id == 9000
+    error_message = "The nodes must clone template_vm_id."
+  }
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.node["dalcprehearse01"].tags == tolist(["almalinux", "dev", "selfhosted", "control-plane"])
+    error_message = "A node's tags must name its VNet."
   }
 }
