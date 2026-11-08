@@ -1,0 +1,72 @@
+{{- /*
+One child Application per entry in .Values.apps. The chart comes from its upstream Helm repository,
+and its values files from this repository (Argo CD multiple sources, `ref: values`); or, with
+`local: true`, the chart itself is in this repository at appsPath/<name>/.
+No resources finalizer: deleting a child Application leaves its objects on the cluster, which is the
+way back to Ansible for every component (spec, "Taking over a running component").
+*/ -}}
+{{- range $name, $app := .Values.apps }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $name }}
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: c1
+  {{- with $app.wave }}
+  annotations:
+    # Lower waves sync first when the root syncs: storage and CRDs before what uses them.
+    argocd.argoproj.io/sync-wave: {{ . | quote }}
+  {{- end }}
+spec:
+  project: {{ $.Values.project | default "default" }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $app.namespace }}
+  {{- if $app.local }}
+  # A chart kept in this repository, at appsPath/<name>/ (Chart.yaml, values.yaml, templates/).
+  source:
+    repoURL: {{ $.Values.repoURL }}
+    targetRevision: {{ $.Values.targetRevision }}
+    path: {{ $.Values.appsPath }}/{{ $name }}
+    helm:
+      releaseName: {{ $app.releaseName | default $name }}
+      {{- with include "c1.parameters" (dict "app" $app "root" $) | trim }}
+      {{- . | nindent 6 }}
+      {{- end }}
+  {{- else }}
+  sources:
+    - repoURL: {{ $app.chart.repoURL }}
+      chart: {{ $app.chart.name }}
+      targetRevision: {{ $app.chart.version | quote }}
+      helm:
+        releaseName: {{ $app.releaseName | default $name }}
+        valueFiles:
+          {{- range $file := $app.valueFiles | default (list "values.yaml") }}
+          - $values/{{ $.Values.appsPath }}/{{ $name }}/{{ $file }}
+          {{- end }}
+        {{- with include "c1.parameters" (dict "app" $app "root" $) | trim }}
+        {{- . | nindent 8 }}
+        {{- end }}
+    - repoURL: {{ $.Values.repoURL }}
+      targetRevision: {{ $.Values.targetRevision }}
+      ref: values
+  {{- end }}
+  {{- with $app.ignoreDifferences }}
+  ignoreDifferences:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if or $app.autoSync $app.syncOptions }}
+  syncPolicy:
+    {{- if $app.autoSync }}
+    automated:
+      selfHeal: true
+      prune: {{ $app.prune | default false }}
+    {{- end }}
+    {{- with $app.syncOptions }}
+    syncOptions:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- end }}
+{{- end }}

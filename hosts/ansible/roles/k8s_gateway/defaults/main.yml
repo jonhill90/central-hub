@@ -27,6 +27,10 @@ k8s_gateway_node_ports: [80/tcp]
 # the zone above. The HTTP listener on 80 stays.
 k8s_gateway_https: false
 k8s_gateway_tls_secret: apps-tls
+# Argo CD manages the Gateway from hosts/kubernetes/clusters/c1/apps/gateway/ (spec
+# 2026-11-c1-apps-under-argo-cd, step 9). True once its Application is Synced: the role then only
+# opens the node firewall ports and checks the Gateway. False keeps Ansible in charge (the way back).
+k8s_gateway_by_argocd: false
 
 # Smoke test: an echo app at <name>.apps.<cluster>.<env>.<zone>, called through the Gateway
 # address from a machine outside the cluster (the Proxmox host, Ansible's jump host), then

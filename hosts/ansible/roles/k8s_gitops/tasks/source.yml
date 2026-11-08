@@ -12,11 +12,14 @@
     dest: "{{ k8s_gitops_dir }}/source.yaml"
     mode: "0600"
 
+# kubectl diff exits 0 with no difference, 1 with one, more on an error. In check mode the template
+# task above writes nothing, so on a first run the file isn't there yet: the diff then counts as a
+# difference, and check mode skips the apply anyway (found on c1, 2026-11-08).
 - name: source | Source differs from the cluster?
   ansible.builtin.command: kubectl diff -f {{ k8s_gitops_dir }}/source.yaml
   register: k8s_gitops_source_diff
   changed_when: false
-  failed_when: k8s_gitops_source_diff.rc > 1
+  failed_when: k8s_gitops_source_diff.rc > 1 and not ansible_check_mode
   check_mode: false
 
 - name: source | Apply the source

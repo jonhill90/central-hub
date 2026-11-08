@@ -20,8 +20,20 @@
     quiet: true
   tags: [always]
 
+# Skipped once Argo CD manages cert-manager (app cert-manager); the issuers and the certificate
+# below stay with this role until the lab PKI work moves them.
 - name: cert-manager
   ansible.builtin.import_tasks: install.yml
+  when: not k8s_certs_cert_manager_by_argocd | bool
+  tags: [certmanager]
+
+- name: cert-manager's old Helm release records, once Argo CD manages it
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_certs_namespace }} delete secret -l owner=helm,name=cert-manager
+    --ignore-not-found -o name
+  register: k8s_certs_helm_records
+  changed_when: k8s_certs_helm_records.stdout | length > 0
+  when: k8s_certs_cert_manager_by_argocd | bool
   tags: [certmanager]
 
 - name: The lab CA's intermediate and its ClusterIssuer, or their removal while it is off

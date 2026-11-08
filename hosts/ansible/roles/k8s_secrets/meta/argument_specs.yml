@@ -14,3 +14,7 @@ argument_specs:
         type: str
         default: secret-source
         description: "Namespace the store reads from, seeded by hand from the password manager."
+      k8s_secrets_by_argocd:
+        type: bool
+        default: false
+        description: "True once Argo CD manages ESO and the store; the role leaves them alone."

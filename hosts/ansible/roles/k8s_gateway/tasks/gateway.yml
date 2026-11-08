@@ -48,6 +48,7 @@
     src: gateway.yaml.j2
     dest: /root/central-hub/gateway.yaml
     mode: "0600"
+  when: not k8s_gateway_by_argocd | bool
 
 # kubectl diff exits 0 with no difference, 1 with one, more on an error. On the first run the
 # Gateway's namespace doesn't exist yet, and the diff of the Gateway in it fails with
@@ -58,10 +59,13 @@
   changed_when: false
   failed_when: k8s_gateway_diff.rc > 1 and 'namespaces' not in k8s_gateway_diff.stderr
   check_mode: false
+  when: not k8s_gateway_by_argocd | bool
 
 - name: gateway | Apply the Gateway
   ansible.builtin.command: kubectl apply -f /root/central-hub/gateway.yaml
-  when: k8s_gateway_diff.rc != 0
+  when:
+    - not k8s_gateway_by_argocd | bool
+    - k8s_gateway_diff.rc != 0
   changed_when: true
 
 - name: gateway | Gateway programmed

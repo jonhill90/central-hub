@@ -1,0 +1,5 @@
+apiVersion: v2
+name: gateway
+description: c1's shared Gateway `apps` and the HTTPRoutes of apps whose charts can't make their own (spec 2026-11-c1-apps-under-argo-cd, step 9)
+type: application
+version: 0.1.0

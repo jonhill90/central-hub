@@ -1,0 +1,13 @@
+# cert-manager on c1. The same values k8s_certs gives Helm (vars/main.yml,
+# k8s_certs_cert_manager_values); see the comments there for each one.
+crds:
+  enabled: true
+  keep: true
+config:
+  apiVersion: controller.config.cert-manager.io/v1alpha1
+  kind: ControllerConfiguration
+  gatewayAPI:
+    enabled: true
+# Public resolvers for the zone lookup before the DNS-01 check (k8s_certs_dns01_nameservers).
+dns01RecursiveNameservers: 1.1.1.1:53,9.9.9.9:53
+dns01RecursiveNameserversOnly: false

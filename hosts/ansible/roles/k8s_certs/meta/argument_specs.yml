@@ -40,6 +40,10 @@ argument_specs:
         default: 9ec67938b2981d8b333af61b3fcf53e26b4f6f5deb7ccda3de4ea116bb373a17
         description: SHA-256 of that chart file, as the Jetstack Helm index gives it.
       k8s_certs_namespace: {type: str, default: cert-manager, description: Namespace of cert-manager and the token Secret.}
+      k8s_certs_cert_manager_by_argocd:
+        type: bool
+        default: false
+        description: "True once Argo CD installs cert-manager; the role keeps only the issuers, certificate and smoke test."
       k8s_certs_dns01_nameservers:
         type: list
         elements: str
