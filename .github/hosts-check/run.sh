@@ -101,6 +101,18 @@ check_manifests() {
     helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com --set address=192.0.2.10 \
       > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
   done
+  # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
+  if command -v promtool >/dev/null; then
+    mkdir -p "$work/rules"
+    helm template x hosts/kubernetes/clusters/c1/apps/monitoring-extras -n monitoring \
+      -s templates/rules.yaml | python3 -c 'import sys, yaml; d = yaml.safe_load(sys.stdin); yaml.safe_dump({"groups": d["spec"]["groups"]}, sys.stdout)' \
+      > "$work/rules/c1-lab.rules.yml"
+    cp "$here/rules-tests/c1-lab.test.yml" "$work/rules/"
+    promtool check rules "$work/rules/c1-lab.rules.yml"
+    (cd "$work/rules" && promtool test rules c1-lab.test.yml)
+  else
+    echo "manifests: promtool not on PATH, rule tests skipped (install-tools.sh builds it)" >&2
+  fi
   # What Argo CD will apply must equal what the roles apply today (parity.txt).
   python3 "$here/parity.py" . "$work"
   kubeconform -strict -summary -output text \
