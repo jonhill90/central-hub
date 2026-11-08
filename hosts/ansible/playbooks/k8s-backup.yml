@@ -1,0 +1,13 @@
+---
+# Off-box backups of c1 (BL-0139 volumes, BL-0094 etcd restore test), all agent picks listed in
+# hosts/AGENT-PICKS.md. restic snapshots to the repository named in the private env file; weekly
+# restore tests prove they come back. Runbooks: docs/runbooks/back-up-c1-off-box.md and
+# docs/runbooks/test-etcd-restore.md.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-backup.yml --check --diff
+#   ansible-playbook -i inventories/home/ playbooks/k8s-backup.yml
+#   ansible-playbook -i inventories/home/ playbooks/k8s-backup.yml --tags drill -e k8s_backup_drill=true
+- name: Off-box backups and restore tests
+  hosts: k8s_nodes
+  become: true
+  roles:
+    - role: k8s_backup

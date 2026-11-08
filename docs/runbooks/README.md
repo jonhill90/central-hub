@@ -30,6 +30,8 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Move c1's External Secrets and its store from Ansible to Argo CD](move-external-secrets-to-argo-cd.md) | automated | draft |
 | [Move cert-manager on c1 from Ansible to Argo CD](move-cert-manager-to-argo-cd.md) | automated | draft |
 | [Move c1's Gateway and app routes from Ansible to Argo CD](move-gateway-to-argo-cd.md) | automated | draft |
+| [Back up c1 off the box](back-up-c1-off-box.md) | automated | draft |
+| [Test the etcd restore](test-etcd-restore.md) | automated | draft |
 | [Set up lab DNS and make the owner's Mac resolve lab names](set-up-lab-dns.md) | automated | draft |
 | [Use break-glass access](use-break-glass-access.md) | manual | draft |
 
