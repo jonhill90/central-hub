@@ -99,8 +99,35 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
    ```
 
    why: this is the firewall's whole lab setup as code ([hosts/ansible/README.md](../../hosts/ansible/README.md#what-it-builds), row `opnsense.yml`). The host overrides include `api.c1.prod` and the `*.apps.c1.prod` wildcard, so the names exist before c1 does.
-   expect: a second run reports `changed=0`. Then set `opnsense_wan_connected = true` in the firewall's `home.tfvars` and apply step 3's firewall folder again, so WAN comes up.
-   gap: the code names a "WAN safety check" before WAN is connected, but no file says what it checks. Agent pick until it is written: WAN comes up only after this step's rules are in place and the home router has the reservation for `opnsense_wan_mac`.
+   expect: a second run reports `changed=0`. WAN is still link-down; the WAN safety check below brings it up.
+
+   Then the WAN safety check, and WAN up.
+   VM 100's WAN (net1) sits on vmbr0, the home LAN. A firewall that answers there as a DHCP server or an IPv6 router hands home devices a wrong gateway, so WAN stays link-down (`opnsense_wan_connected = false`) until this check passes (`hosts/terraform/home/firewall/main.tf`). It checks three things.
+
+   1. Before link-up, inside VM 100: WAN is a DHCP client and nothing else, and the lab's DHCP service is not on it.
+
+      ```sh
+      qm guest exec 100 -- pgrep -lf 'dhclient|dhcp6c|radvd|kea|dnsmasq'
+      ```
+
+      expect: `dhclient` for the WAN interface (`vtnet1`), and `dnsmasq`, which the role limits to the DHCP VLANs and mgmt, "never on WAN" (`hosts/ansible/roles/opnsense_lab/tasks/dhcp.yml`). No `radvd`, `kea` or `dhcp6c`.
+   2. Link-up while you watch: on the host, start a 60-second capture of server-type packets from the WAN's MAC on vmbr0, then bring WAN up from the controller.
+
+      ```sh
+      # on the host, first
+      timeout 60 tcpdump -n -e -i vmbr0 'ether src <opnsense_wan_mac> and (udp src port 67 or udp src port 547 or (icmp6 and ip6[40] == 134))' | tee /root/wan-check.txt
+      # on the controller, at once: set opnsense_wan_connected = true in home.tfvars, then
+      cd hosts/terraform/home/firewall && tofu plan -var-file=home.tfvars -out=firewall.tfplan && tofu apply firewall.tfplan
+      ```
+
+      why: UDP from port 67 is a DHCPv4 server's offer or ack, UDP from port 547 a DHCPv6 server's reply, and ICMPv6 type 134 a router advertisement; a WAN that is only a client sends none of them.
+      expect: the capture ends with 0 packets (`wc -l /root/wan-check.txt` prints 0), and VM 100 gets its WAN address by DHCP from the home router's reservation for `opnsense_wan_mac`.
+   3. Repeat the capture after a reboot of VM 100 (`qm reboot 100`): the boot is when a wrong default (the nano image's LAN DHCP server on the wrong port) would show.
+      expect: 0 packets again.
+
+   why: this is the check the build session ran on 2026-10-23 and 2026-10-24, at link-up, after a reboot, after the rules and after a firmware update, each time with 0 server-type packets (the owner's private build log; no values from it are copied here). The OPNsense nano image starts with LAN on the first NIC at 192.168.1.1/24 with its own DHCP server and WAN as a DHCP client (OPNsense manual, "Installation"), which is why net0, the trunk, must stay first.
+   If it fails: set `opnsense_wan_connected = false` and apply at once, which takes WAN link-down; then fix the interface assignment at the console before trying again.
+   Agent pick: the capture filter and the three moments to check; the build session watched the same packet types by hand.
 
 8. Turn on the host's safety net: notifications, backups, then the host firewall in two runs.
 

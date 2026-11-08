@@ -41,7 +41,7 @@ Run from `hosts/ansible/`, each first with `--check --diff`.
 
    why: apps read secrets through ExternalSecrets that name store `c1`; the store reads only namespace `secret-source`, and no secret value comes from this repository ([hosts/ansible/README.md](../../hosts/ansible/README.md#what-it-builds), row `k8s-secrets.yml`).
    expect: `kubectl get clustersecretstore c1` shows `Ready`.
-   note: the playbook says to seed `secret-source` by hand from the password manager. Since 2026-11-08 the lab's private values live in files on the controller instead (see the rebuild runbook's table); what goes in `secret-source`, and from where, is not written down yet.
+   then: [Seed namespace secret-source](seed-secret-source.md). Nothing reads store `c1` yet, so today it has nothing to seed.
 
 2. Metrics and logs, then Grafana's route and the proof.
 

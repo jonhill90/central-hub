@@ -13,7 +13,7 @@ k8s_secrets_eso_not_before: "2026-11-06"
 k8s_secrets_eso_namespace: external-secrets
 
 # The one store every ExternalSecret names. It reads Secrets from one locked namespace, which is
-# seeded by hand from the password manager (no values in git).
+# seeded from the controller by docs/runbooks/seed-secret-source.md (no values in git).
 k8s_secrets_store_name: c1
 k8s_secrets_source_namespace: secret-source
 

@@ -1,6 +1,6 @@
 # Ported from hosts/ansible/roles/k8s_secrets/templates/store.yaml.j2 (role k8s_secrets).
-# The namespace the store reads from. Only cluster admins write here: seed each Secret by hand from
-# the password manager, named <app>-<field> so the move to a vault later maps one to one (RB-0012).
+# The namespace the store reads from. Only cluster admins write here: seed each Secret from the controller's
+# secret-source.env (docs/runbooks/seed-secret-source.md), named <app>-<field> so the move to a vault later maps one to one (RB-0012).
 apiVersion: v1
 kind: Namespace
 metadata:

@@ -113,11 +113,11 @@ expect: a second run reports no change.
 
 #### Step 4
 
-Build the lab network, the OPNsense firewall VM and the tailnet connector container, then configure OPNsense and the host's safety net.
+Build the lab network, the OPNsense firewall VM and the tailnet connector container, then configure OPNsense, pass the WAN safety check and turn on the host's safety net.
 why: the c1 nodes sit on VNet `prod` behind OPNsense, and the controller reaches them through the host's address on VNet `mgmt`.
-runbook: [Set up the lab network and firewall](set-up-lab-network-and-firewall.md) (new in this PR, written from `hosts/README.md` "Order for the home lab" and the code).
+runbook: [Set up the lab network and firewall](set-up-lab-network-and-firewall.md) (written from `hosts/README.md` "Order for the home lab" and the code).
 expect: that runbook's last step: `tofu plan` shows no changes in the three run folders, and `opnsense.yml --check` reports `changed=0`.
-first: [Put the OPNsense image and the Debian 13 template on the host](stage-lab-images-on-proxmox.md) (new in this PR), because the firewall and remote-access run folders don't download them.
+first: [Put the OPNsense image and the Debian 13 template on the host](stage-lab-images-on-proxmox.md), because the firewall and remote-access run folders don't download them.
 
 ### Tailscale
 
@@ -125,7 +125,7 @@ first: [Put the OPNsense image and the Debian 13 template on the host](stage-lab
 
 Put the tailnet client in CT 900, then turn on its routes for every lab VLAN and split DNS for the lab names.
 why: the owner's Mac reaches the lab, at home or away, only through CT 900 on the tailnet (D-0022 for how agents reach c1).
-runbook, first half: [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md) (new in this PR).
+runbook, first half: [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md).
 runbook, second half: `set-up-lab-dns.md` (PR #67), steps 2-5: the OAuth client in `hosts/.env`, `playbooks/tailnet-connector.yml`, then `hosts/terraform/home/tailnet`.
 expect: from the Mac, `dig api.c1.prod.<zone>` answers with the control plane's address (it will answer once step 6 has made the node).
 
@@ -135,7 +135,7 @@ expect: from the Mac, `dig api.c1.prod.<zone>` answers with the control plane's 
 
 Make the c1 node VMs: the AlmaLinux 10 template and the nodes.
 why: c1 runs on Proxmox VMs on VNet `prod` (spec `2026-10-home-lab-and-c1`).
-runbook: [Create the c1 node VMs](create-c1-node-vms.md) (new in this PR).
+runbook: [Create the c1 node VMs](create-c1-node-vms.md).
 expect: `tofu plan` in `hosts/terraform/home/k8s` shows no changes, and both nodes answer SSH through the host.
 
 ### kubeadm c1 and Cilium
@@ -144,7 +144,7 @@ expect: `tofu plan` in `hosts/terraform/home/k8s` shows no changes, and both nod
 
 Build c1 with Ansible: node preparation, `kubeadm init`, Secrets at rest, Cilium with kube-proxy replacement and its Gateway API controller, the worker join and a smoke test. Then the shared Gateway (HTTP) and the volumes.
 why: `playbooks/k8s.yml` is the by-hand runbook's steps 1-10 and 36 as code; Cilium is installed inside it (role `k8s_control_plane`, step 9), so it has no separate runbook (D-0017).
-runbook: [Build c1 with Ansible](build-c1-with-ansible.md) (new in this PR). For why each step exists, read [Build a single-node kubeadm cluster by hand](build-kubeadm-cluster.md) steps 1-10.
+runbook: [Build c1 with Ansible](build-c1-with-ansible.md). For why each step exists, read [Build a single-node kubeadm cluster by hand](build-kubeadm-cluster.md) steps 1-10.
 expect: `kubectl get nodes` shows both nodes `Ready`; `cilium status --wait` is all OK.
 
 ### Certificates, the lab CA and Argo CD
@@ -155,7 +155,7 @@ The order here differs from a plain list on purpose. Argo CD can be installed ri
 
 Get the wildcard certificate for `*.apps.c1.prod.<zone>` from Let's Encrypt (staging, then prod) and turn on the Gateway's HTTPS listener.
 why: every lab app is served over HTTPS through the one Gateway ([D-0021](../decisions/0021-use-gateway-api-on-cilium-as-the-way-in-for-web-traffic.md)).
-runbook: [Issue c1's app certificate](issue-c1-app-certificate.md) (new in this PR, from `hosts/terraform/README.md` and `hosts/ansible/README.md`).
+runbook: [Issue c1's app certificate](issue-c1-app-certificate.md) (from `hosts/terraform/README.md` and `hosts/ansible/README.md`).
 expect: `kubectl -n gateway get certificate apps` shows `Ready=True`.
 
 #### Step 9
@@ -169,7 +169,7 @@ expect: `kubectl get clusterissuer lab-ca` shows `Ready=True`.
 
 Install Argo CD, then its web UI.
 why: Argo CD is the GitOps engine ([D-0023](../decisions/0023-use-argo-cd-as-the-gitops-engine.md)); c1 may read this repository before the Activation gate ([D-0027](../decisions/0027-let-c1-read-central-hub-before-the-activation-gate.md)).
-runbook: [Install Argo CD on c1](install-argo-cd-on-c1.md) (new in this PR). It stops before the source is turned on; that happens in step 15.
+runbook: [Install Argo CD on c1](install-argo-cd-on-c1.md). It stops before the source is turned on; that happens in step 15.
 expect: `https://argocd.apps.c1.prod.<zone>/` answers with Argo CD's page.
 
 ### DNS
@@ -187,7 +187,7 @@ expect: each `dig` in that step answers with the right address.
 
 Install the add-ons and apps with Ansible: External Secrets, metrics and logs with Grafana, Keycloak with realm `lab`, Grafana's sign-in through it, and Jellyfin.
 why: this is how they are installed today, and Keycloak sits in the middle because Grafana's sign-in needs both; Argo CD takes the add-ons and apps over in step 15.
-runbook: [Install c1's add-ons and apps with Ansible](install-c1-add-ons-with-ansible.md) (new in this PR). Its Keycloak step becomes `set-up-lab-sign-in.md` (PR #69) once that merges; on `main` today the procedure is [hosts/ansible/README.md, Sign-in on c1](../../hosts/ansible/README.md#sign-in-on-c1).
+runbook: [Install c1's add-ons and apps with Ansible](install-c1-add-ons-with-ansible.md), then [Seed namespace secret-source](seed-secret-source.md) only if its file has lines (nothing reads store `c1` today). Its Keycloak step becomes `set-up-lab-sign-in.md` (PR #69) once that merges; on `main` today the procedure is [hosts/ansible/README.md, Sign-in on c1](../../hosts/ansible/README.md#sign-in-on-c1).
 expect: Grafana's "Lab sign-in" button signs the owner in, and Jellyfin answers at its name.
 
 #### Step 13
@@ -205,7 +205,7 @@ Turn on the backups and prove a restore.
 why: two copies: the nightly Proxmox backup of every guest on the HDD in the same PC, and restic snapshots of etcd and the volume folders off the box (BL-0139).
 runbook, on the host: [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) step 8, done as code by `playbooks/proxmox-safety.yml --tags backup` in step 4. Its proof is `vzdump 900 --storage hdd-backup` then `pvesm list hdd-backup` ([hosts/ansible/README.md, Backups](../../hosts/ansible/README.md#backups)).
 runbook, off the box: `back-up-c1-off-box.md` and `test-etcd-restore.md` (PR #68). Blocked until an off-box target exists.
-runbook, full restore of the lab from these backups: [Restore the home lab from its backups](restore-home-lab-from-backups.md) (new in this PR): whole guests from `hdd-backup`, or c1 from restic.
+runbook, full restore of the lab from these backups: [Restore the home lab from its backups](restore-home-lab-from-backups.md): whole guests from `hdd-backup`, or c1 from restic.
 expect: the drill in `back-up-c1-off-box.md` prints two PASS lines.
 
 ### Apps under Argo CD
@@ -227,7 +227,6 @@ Stop at the step that fails and use that step's own runbook's "If it fails". Two
 ## Afterwards
 
 - Set `last-tested` here and in each step runbook you ran, with the date, who ran it and on what.
-- Two things are still not written down: what the firewall's "WAN safety check" checks, and what seeds namespace `secret-source` (see those steps' runbooks).
 
 ## Picks in this runbook
 

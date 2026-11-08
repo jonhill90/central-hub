@@ -14,7 +14,7 @@ superseded-by:
 
 # Move c1's External Secrets and its store from Ansible to Argo CD
 
-External Secrets (ESO) copies secrets from a store into plain Kubernetes Secrets that apps read. On c1 the store is ClusterSecretStore `c1`, ESO's Kubernetes provider, reading Secrets from the locked namespace `secret-source`. Those source Secrets are seeded by hand and are not in git. Jellyfin's admin password generator also runs on ESO.
+External Secrets (ESO) copies secrets from a store into plain Kubernetes Secrets that apps read. On c1 the store is ClusterSecretStore `c1`, ESO's Kubernetes provider, reading Secrets from the locked namespace `secret-source`. Those source Secrets come from a file on the controller ([Seed namespace secret-source](seed-secret-source.md)) and are not in git. Jellyfin's admin password generator also runs on ESO.
 
 ## What is in git
 
@@ -53,7 +53,7 @@ ESO supports only its newest minor: raise the chart one minor at a time, by PR, 
 
 ## Rebuild from nothing
 
-Argo CD installs ESO (wave -2) and then the store (wave -1). Seed the source Secrets in `secret-source` by hand again: their values are not in git. Generated secrets, such as Jellyfin's admin password, are made again.
+Argo CD installs ESO (wave -2) and then the store (wave -1). Seed the source Secrets in `secret-source` again with [Seed namespace secret-source](seed-secret-source.md): their values are not in git. Generated secrets, such as Jellyfin's admin password, are made again.
 
 ## If it fails
 
