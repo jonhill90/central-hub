@@ -56,4 +56,4 @@ Argo CD makes ntfy and Alertmanager again. Phones keep their subscription, becau
 ## Related
 
 - [Check c1's health from its dashboard and alerts](check-c1-alerts-and-dashboard.md)
-- `hosts/AGENT-PICKS.md` pick 148
+- `hosts/AGENT-PICKS.md` pick 170

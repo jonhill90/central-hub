@@ -5,7 +5,7 @@
 # Grafana's sign-in through Keycloak is in values-sso.yaml, used when the root lists it.
 # Alertmanager sends every alert to ntfy (app alerts) on topic c1-alerts, with ntfy's built-in
 # Alertmanager message format. Watchdog (always firing, by design) goes nowhere. Swapping the
-# receiver means changing only `receivers` here (pick 148).
+# receiver means changing only `receivers` here (pick 170).
 alertmanager:
   enabled: true
   config:

@@ -53,4 +53,4 @@ Alertmanager sends every alert to ntfy on c1 ([Get c1's alerts on a phone](get-c
 ## Related
 
 - [Move monitoring on c1 from Ansible to Argo CD](move-monitoring-to-argo-cd.md)
-- `hosts/AGENT-PICKS.md` picks 144-146
+- `hosts/AGENT-PICKS.md` picks 166-168
