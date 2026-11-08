@@ -14,7 +14,7 @@ superseded-by:
 
 # Build a single-node kubeadm cluster by hand (CKA practice)
 
-**Status:** draft. Steps 0-11 were proven by an agent in proof runs 1-3; practice steps 12-36 were proven on 2026-10-19, except where a step says NOT PROVEN. PROVEN means on the versions those runs used; where a pin was raised since (steps 9, 26 and 27), the step names the proven version and says the new pin is not yet run. Not yet run by the owner. This runbook has not been replayed from a fresh rebuild as a whole.
+**Status:** draft. Steps 0-11 were proven by an agent in proof runs 1-3; practice steps 12-36 were proven on 2026-10-19, except where a step says NOT PROVEN. PROVEN means on the versions those runs used; where a pin was raised since (steps 9, 26 and 27), the step names the proven version and says the new pin is not yet run. Not yet run by the owner. On 2026-11-08 an agent ran steps 0-10 and step 36's worker join by hand, as written with the home-lab "place" lines, twice in a row on fresh VMs on VNet dev (R2 rehearsal runs 3 and 4): 6 min 40 s and 7 min 25 s from `tofu apply` to a passing smoke test. Runs 1 and 2 found the faults fixed in steps 0, 2, 3, 8a and 10. The rest of the runbook has not been replayed from a fresh rebuild as a whole.
 
 ## Before you start
 
@@ -340,7 +340,7 @@ kubectl delete secret enc-test
 - catch: the key changes only by rotation: add the new key first in the list, restart, write every Secret again, then remove the old key. Replacing the key in place makes every Secret unreadable.
 - catch: a restored etcd backup needs the same key in the same file, or the API server can't read any Secret.
 - page: <https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/> ; kubeadm: <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-reconfigure/>
-- status: **NOT PROVEN** as written now. R2 rehearsal run 1 (2026-11-08) passed only because the agent added `sleep 10` before the `/readyz` loop; run 2 showed that loop does not wait for the new API server (see the catch above). The canary wait and the `ENCRYPTED` check replace it and are not yet run by hand. The `kubectl edit` ran through `KUBE_EDITOR` set to a script making the same change (non-interactive SSH); the typed form is not yet run. CKA: CA4 (partly).
+- status: **PROVEN 2026-11-08** as written, by an agent by hand over SSH on a two-node cluster on VNet dev (R2 rehearsal runs 3 and 4): the canary wait and parts 4-5 took 42 s each time, the hexdump showed `k8s:enc:secretbox`, the Secret read back `v`, and the check printed `ENCRYPTED`. Run 2 had shown that the earlier `/readyz` wait did not work (see the catch above). The `kubectl edit` ran through `KUBE_EDITOR` set to a script making the same change (non-interactive SSH); the typed form is not yet run. CKA: CA4 (partly).
 - place (home lab): `hosts/ansible`, role `k8s_control_plane`, tag `encryption` (`playbooks/k8s.yml --tags encryption --limit k8s_control_plane`). The key comes from a 0600 file on the controller, `k8s_control_plane_encryption_key_file` in the git-ignored inventory. A new build gets the flag at `kubeadm init`, from a config file (`templates/kubeadm-init.yaml.j2`) that replaces step 8's flags. On the running c1 the role adds the flag and the folder to the `kubeadm-config` ConfigMap, runs `kubeadm init phase control-plane apiserver`, waits until a throwaway Secret reads back encrypted from etcd, writes every Secret again, and then checks every Secret in etcd. It stops, rather than rotating, if the node already has a different key.
 
 #### 9. Cilium 1.20.4
@@ -365,7 +365,7 @@ kubectl -n kube-system rollout status ds/cilium && kubectl -n kube-system rollou
 - expect: node Ready; CoreDNS 2/2. Value keys (`ipam.mode`, `ipam.operator.clusterPoolIPv4PodCIDRList`, `devices`, `MTU`, `kubeProxyReplacement`, `operator.replicas`) checked against the v1.20.4 values.yaml on 2026-10-24 (<https://raw.githubusercontent.com/cilium/cilium/v1.20.4/install/kubernetes/cilium/values.yaml>).
 - versions (checked 2026-10-24): Cilium 1.20.4 (2026-10-23) is an out-of-band security patch (CVE-2026-111943, Go 1.26.10) that also fixes a 1.20.3 Gateway API BackendTLSPolicy regression (<https://github.com/cilium/cilium/releases/tag/v1.20.4>). Helm v4.3.1 (2026-10-15) is the current Helm patch release (<https://github.com/helm/helm/releases/tag/v4.3.1>). The proof runs used Cilium 1.20.3 and Helm v4.3.0; the value keys are the same in 1.20.4.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/> (section on the pod network add-on)
-- status: **PROVEN** on Cilium 1.20.3 and Helm v4.3.0 (PROOF-RUN-3.md: ready 32 s after install). The pins here, Cilium 1.20.4 and Helm v4.3.1, ran on 2026-11-08 with the home-lab values below (R2 rehearsal run 1: ready 87 s after the Helm download started); with the written VPS values they are not yet run. CKA: CA7 (CNI), CA6 (Helm).
+- status: **PROVEN** on Cilium 1.20.3 and Helm v4.3.0 (PROOF-RUN-3.md: ready 32 s after install). The pins here, Cilium 1.20.4 and Helm v4.3.1, ran on 2026-11-08 with the home-lab values below (R2 rehearsal runs 1, 3 and 4; in runs 3 and 4 the step took 60 s and 39 s); with the written VPS values they are not yet run. CKA: CA7 (CNI), CA6 (Helm).
 - place (home lab, proven 2026-10-26): `kubeProxyReplacement=true` with `k8sServiceHost=<endpoint name>` and `k8sServicePort=6443`, `l2announcements.enabled=true`, `devices=<lab NIC>`, no `MTU` override (the lab NIC carries 1500), then a `CiliumLoadBalancerIPPool` on VLAN 10's `.224/27` (STD-0002) and an L2 announcement policy. A LoadBalancer Service got `.224` and answered from the worker and from the mgmt VLAN. From BUILD-PATH S11 (not yet run) the same values also carry `gatewayAPI.enabled=true`, after the Gateway API CRDs, all applied with one `helm upgrade --install --reset-values`; see [step 10a](#10a-a-way-in-for-web-traffic-home-lab).
 
 #### 10. Single node scheduling and a smoke test
@@ -1510,8 +1510,8 @@ This needs more machines, so here you only read the commands.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/> ; <https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-join/>
 - why: One control plane is one point of failure. High availability runs three or more (source: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/ha-topology/>), so the cluster keeps going when one dies.
 - expect: n/a (read only: nothing runs on this VPS).
-- status: **NOT PROVEN**: needs more machines.
-- place (home lab, proven 2026-10-26): the worker join runs for real (`k8s_worker` role, with a 30-minute token printed by the control plane). With one NIC per node, no `--node-ip` is needed.
+- status: **NOT PROVEN**: needs more machines. The worker join alone is proven in the home lab (below).
+- place (home lab, proven 2026-10-26; by hand as written in R2 rehearsal runs 3 and 4, 2026-11-08, `kubeadm token create --print-join-command --ttl 30m` on the control plane and the printed `kubeadm join` on the worker, 2 s): the worker join runs for real (`k8s_worker` role, with a 30-minute token printed by the control plane). With one NIC per node, no `--node-ip` is needed.
 
 #### 37. Teardown
 
