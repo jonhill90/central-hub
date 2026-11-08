@@ -8,7 +8,7 @@ outcome: a root certificate trusted by the lab, an intermediate for c1 signed by
 needs: a terminal on the owner's Mac with openssl
 private-values: [LAB_ROOT_CA_KEY_PASSPHRASE, root.key, c1-intermediate.key]
 files: []
-last-tested: not yet run
+last-tested: 2026-11-08, an agent lane on the owner's Mac, steps 1-6; found the missing export fixed here
 superseded-by:
 ---
 
@@ -35,11 +35,11 @@ flowchart LR
    ```sh
    umask 077
    printf 'LAB_ROOT_CA_KEY_PASSPHRASE=%s\n' "$(openssl rand -hex 32)" > lab-ca.env
-   . ./lab-ca.env
+   set -a; . ./lab-ca.env; set +a
    openssl ecparam -name secp384r1 -genkey | openssl ec -aes256 -passout env:LAB_ROOT_CA_KEY_PASSPHRASE -out root.key
    ```
 
-   why: P-384 matches the strength the owner's earlier labs used, and the passphrase means the key file alone is useless.
+   why: `set -a` exports the passphrase so openssl can read it with `env:`. P-384 matches the strength the owner's earlier labs used, and the passphrase means the key file alone is useless.
    ※ [D-0028 rule 1](../decisions/0028-run-a-lab-ca-with-the-root-off-cluster-and-one-intermediate-per-cluster.md)
    expect: `root.key` and `lab-ca.env` exist, both mode 0600.
 
@@ -127,7 +127,7 @@ flowchart LR
 
 - Set `last-tested` here, with the date and on what.
 - Continue with [Trust the lab root CA on a Mac](trust-lab-root-ca-on-mac.md) and [Restore c1's intermediate CA](restore-c1-intermediate-ca.md).
-- To renew the intermediate later, `. ./lab-ca.env`, run steps 3, 4 and 6 again, then the restore runbook.
+- To renew the intermediate later, `set -a; . ./lab-ca.env; set +a`, run steps 3, 4 and 6 again, then the restore runbook.
 
 ## Related
 
