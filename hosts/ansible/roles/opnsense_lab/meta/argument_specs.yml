@@ -88,6 +88,10 @@ argument_specs:
             type: str
             required: true
             description: What the name is for.
+      opnsense_lab_dns_proof_server:
+        type: str
+        default: ""
+        description: The DNS server the proof (tag dns_proof) asks; empty means the mgmt gateway, 100.100.100.100 proves tailnet split DNS.
       opnsense_lab_parent:
         type: str
         default: vtnet0
