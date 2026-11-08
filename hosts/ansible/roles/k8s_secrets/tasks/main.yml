@@ -8,10 +8,23 @@
     quiet: true
   tags: [always]
 
+# Both skipped once Argo CD manages them (apps external-secrets and secret-store); then the role
+# only removes ESO's old Helm release records, which Argo CD doesn't use.
 - name: ESO
   ansible.builtin.import_tasks: eso.yml
+  when: not k8s_secrets_by_argocd | bool
   tags: [eso]
 
 - name: Store
   ansible.builtin.import_tasks: store.yml
+  when: not k8s_secrets_by_argocd | bool
   tags: [store]
+
+- name: ESO's old Helm release records, once Argo CD manages it
+  ansible.builtin.command: >-
+    kubectl -n {{ k8s_secrets_eso_namespace }} delete secret -l owner=helm,name=external-secrets
+    --ignore-not-found -o name
+  register: k8s_secrets_helm_records
+  changed_when: k8s_secrets_helm_records.stdout | length > 0
+  when: k8s_secrets_by_argocd | bool
+  tags: [eso]

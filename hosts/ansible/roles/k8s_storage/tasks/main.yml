@@ -1,6 +1,9 @@
 ---
+# Skipped once Argo CD manages them (hosts/kubernetes/clusters/c1/apps/local-path/); the data disk
+# (disk.yml) stays with Ansible.
 - name: Provisioner and StorageClass
   ansible.builtin.import_tasks: provisioner.yml
+  when: not k8s_storage_provisioner_by_argocd | bool
   tags: [provisioner]
 
 # A claim, a pod that writes and reads a file on it, and the volume's folder on the data disk.

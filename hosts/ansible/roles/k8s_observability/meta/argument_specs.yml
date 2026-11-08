@@ -7,6 +7,19 @@ argument_specs:
       k8s_observability_kps_version: {type: str, default: 92.3.1, description: "kube-prometheus-stack chart version (STD-0003)."}
       k8s_observability_loki_version: {type: str, default: 18.15.1, description: "grafana-community/loki chart version (STD-0003)."}
       k8s_observability_alloy_version: {type: str, default: 1.13.1, description: "grafana/alloy chart version (STD-0003)."}
+      k8s_observability_metrics_server_by_argocd:
+        type: bool
+        default: false
+        description: "True once Argo CD manages metrics-server; the role stops installing it."
+      k8s_observability_logs_by_argocd: {type: bool, default: false, description: "True once Argo CD manages Loki and Alloy; the role stops installing them."}
+      k8s_observability_metrics_by_argocd:
+        type: bool
+        default: false
+        description: "True once Argo CD manages kube-prometheus-stack; the role stops installing it."
+      k8s_observability_grafana_route_by_argocd:
+        type: bool
+        default: false
+        description: "True once Argo CD's gateway app makes Grafana's route; the role stops making it."
       k8s_observability_metrics_namespace: {type: str, default: monitoring, description: Namespace for Prometheus and Grafana.}
       k8s_observability_logs_namespace: {type: str, default: logging, description: Namespace for Loki and Alloy.}
       k8s_observability_storage_class:

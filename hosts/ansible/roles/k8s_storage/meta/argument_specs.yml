@@ -24,6 +24,10 @@ argument_specs:
         description: The helper pod's image, pinned by digest.
       k8s_storage_namespace: {type: str, default: local-path-storage, description: The provisioner's namespace.}
       k8s_storage_class: {type: str, default: local-path, description: The StorageClass's name.}
+      k8s_storage_provisioner_by_argocd:
+        type: bool
+        default: false
+        description: "True once Argo CD manages the provisioner and StorageClass; the role leaves them alone."
       k8s_storage_class_default: {type: bool, default: true, description: Make it the cluster's default StorageClass.}
       k8s_storage_reclaim_policy:
         type: str

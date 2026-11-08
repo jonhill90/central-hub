@@ -1,0 +1,23 @@
+# Grafana's sign-in through the lab's Keycloak (realm `lab`), the same settings k8s_observability
+# adds when k8s_observability_grafana_sso is true. The browser goes to the public name, whose URL
+# the root chart sets as a parameter (it holds the zone); Grafana's server calls the in-cluster
+# Service. Roles come from the `roles` claim: admin maps to Grafana Admin, anyone else to Viewer.
+grafana:
+  envValueFrom:
+    GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+      secretKeyRef: {name: grafana-sso, key: client-secret, optional: true}
+  grafana.ini:
+    auth.generic_oauth:
+      enabled: true
+      name: Lab sign-in
+      allow_sign_up: true
+      client_id: grafana
+      scopes: openid profile email
+      token_url: http://sso-service.identity.svc:8080/realms/lab/protocol/openid-connect/token
+      api_url: http://sso-service.identity.svc:8080/realms/lab/protocol/openid-connect/userinfo
+      use_pkce: true
+      login_attribute_path: preferred_username
+      # An account with no email gets <user name>@lab.invalid (RFC 2606 reserves .invalid).
+      email_attribute_path: "email || join('', [preferred_username, '@lab.invalid'])"
+      role_attribute_path: "contains(roles[*], 'admin') && 'Admin' || 'Viewer'"
+      role_attribute_strict: false
