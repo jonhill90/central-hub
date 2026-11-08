@@ -36,6 +36,16 @@ Which parts are code:
 | Those routes turned on, and split DNS for the lab names | `hosts/terraform/home/tailnet/` | `tofu apply` |
 | Tailnet OAuth client | made by hand once (bootstrap) | step 2 |
 
+## What needs the owner's hands
+
+No new DNS server is needed: Unbound on the firewall already answers the lab names. The Mac only has to reach it. Three things need the owner, everything else is code an agent runs:
+
+1. Make the tailnet OAuth client and put it in `hosts/.env` (step 2, about 2 minutes in the Tailscale admin console).
+2. Check that the Tailscale app on the Mac has **Use Tailscale DNS settings** and **Use Tailscale subnets** on.
+3. Say go for steps 3 to 6, which change the firewall, CT 900 and the tailnet.
+
+Only if split DNS can't be used, the [fallback](#fallback-a-resolver-file-on-the-mac) needs one `sudo` command on the Mac.
+
 ## Before you start
 
 - `playbooks/opnsense.yml` has run against the firewall, so the mgmt VLAN, its `.1` and Unbound are up.
@@ -111,6 +121,21 @@ Stop if any of these is not true.
 - **Undo split DNS only:** `tofu destroy -var-file=home.tfvars -target=tailscale_dns_split_nameservers.lab`. The Mac goes back to asking the home router.
 - **Undo the routes:** never `tofu destroy` the route set as it is, because that also turns off the extra route the Proxmox host is reached by. Set the route list to the extra route alone by hand in the admin console, then `tofu state rm tailscale_device_subnet_routes.connector`. In CT 900: `tailscale set --advertise-routes=<the extra route>` and `systemctl disable --now central-hub-lab-route`.
 - Tell the owner before trying anything not written here.
+
+## Fallback: a resolver file on the Mac
+
+Use this only when split DNS is off (step 5 not applied, or the Tailscale app's DNS setting off). macOS sends every name under a domain to the server named in `/etc/resolver/<domain>`. The Mac still needs a route to the mgmt gateway, from step 4 and 5's subnet routes or a home router route to the lab.
+
+```sh
+# one file per lab domain, the same names as split_dns_names; the server is the mgmt VLAN's .1
+for d in c1.prod.<zone> opnsense.<zone> pve.<zone>; do
+  printf 'nameserver 10.1.50.1\ntimeout 3\n' | sudo tee /etc/resolver/$d >/dev/null
+done
+scutil --dns | grep -A3 'c1.prod'                  # a resolver for c1.prod.<zone>, nameserver 10.1.50.1
+dscacheutil -q host -a name api.c1.prod.<zone>      # the c1 node's address
+```
+
+Undo: `sudo rm /etc/resolver/c1.prod.<zone> /etc/resolver/opnsense.<zone> /etc/resolver/pve.<zone>`. Remove the files once split DNS works, so there is one path to keep.
 
 ## Afterwards
 
