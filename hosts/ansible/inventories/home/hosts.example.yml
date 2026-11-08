@@ -76,7 +76,12 @@ all:
         k8s_certs_acme_email: ""             # the ACME account's contact address
         k8s_certs_cloudflare_token_file: ""  # 0600 file with the zone's API token, written by terraform/home/certificates
         k8s_certs_issue: false               # true talks to Let's Encrypt; staging first
-        k8s_certs_issuer: letsencrypt-staging
+        k8s_certs_issuer: letsencrypt-staging   # or lab-ca once k8s_certs_lab_ca is true (D-0028)
+        # The lab CA (D-0028, runbook restore-c1-intermediate-ca): files on the controller, from the
+        # private store items lab-c1-intermediate-ca-cert and lab-c1-intermediate-ca-key.
+        k8s_certs_lab_ca: false
+        k8s_certs_lab_ca_cert_file: ""       # c1's intermediate with the root appended
+        k8s_certs_lab_ca_key_file: ""        # its key, mode 0600
         k8s_gateway_https: false             # true once the certificate is issued (HTTPS on 443)
         # The GitOps engine (playbooks/k8s-gitops.yml, BUILD-PATH S13): the owner said yes to the
         # proposed Argo CD with its web UI on 2026-10-27 at 02:23 UTC. Not private.

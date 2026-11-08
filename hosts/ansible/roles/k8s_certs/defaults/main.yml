@@ -13,6 +13,11 @@
 #                                         # this one zone only, Zone DNS Edit + Zone Zone Read,
 #                                         # written by hosts/terraform/home/certificates (tofu apply)
 # k8s_certs_gateway_address: <address>    # the Gateway's address (k8s_gateway_address); smoke only
+# Needed only when k8s_certs_lab_ca is true (D-0028, runbook restore-c1-intermediate-ca):
+# k8s_certs_lab_ca_cert_file: <path>      # on the controller: c1's intermediate with the root appended,
+#                                         # from the private store item lab-c1-intermediate-ca-cert
+# k8s_certs_lab_ca_key_file: <path>       # on the controller, mode 0600: the intermediate's key,
+#                                         # from the private store item lab-c1-intermediate-ca-key
 
 # The switch. While false, nothing talks to Let's Encrypt: no ClusterIssuer (making one registers
 # an ACME account), no Certificate, and no Cloudflare token in the cluster; a run removes them if
@@ -21,6 +26,13 @@ k8s_certs_issue: false
 # letsencrypt-staging first: untrusted "(STAGING)" certificates, much higher rate limits. Switch to
 # letsencrypt-prod once staging has issued; cert-manager then issues again from prod.
 k8s_certs_issuer: letsencrypt-staging
+
+# The lab's own CA (D-0028): the c1 intermediate restored from two files on the controller into
+# the Secret lab-ca, and the ClusterIssuer lab-ca that signs with it. Set k8s_certs_issuer: lab-ca
+# to move the Gateway's certificate onto it; the Let's Encrypt issuers stay as the exit path.
+# False removes the ClusterIssuer and the Secret (certificates it issued stay until they expire).
+k8s_certs_lab_ca: false
+k8s_certs_lab_ca_name: lab-ca
 
 # cert-manager, by Helm, from the chart file on charts.jetstack.io checked against the SHA-256 the
 # Jetstack Helm index publishes for it. v1.21.3 (2026-10-23) is newer than two weeks: STD-0003

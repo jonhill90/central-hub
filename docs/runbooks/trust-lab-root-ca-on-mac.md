@@ -23,13 +23,13 @@ The Mac trusts the root, never the intermediate, so a c1 rebuild or a new interm
 
 ## Steps
 
-1. Add the root to the System keychain as trusted for everything.
+1. Add the root to the System keychain, trusted for TLS.
 
    ```sh
-   sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain root.crt
+   sudo security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain root.crt
    ```
 
-   why: the System keychain is what Safari, Chrome and the system's own TLS library read; `-d` makes it an admin-level trust setting for all users.
+   why: the System keychain is what Safari, Chrome and the system's own TLS library read; `-d` makes it an admin-level trust setting for all users, and `-p ssl` trusts it for TLS only, as `playbooks/controller-trust.yml` does for the Proxmox CA.
    ※ [D-0028 rule 6](../decisions/0028-run-a-lab-ca-with-the-root-off-cluster-and-one-intermediate-per-cluster.md)
    expect: macOS asks for your password, then returns with no output.
 

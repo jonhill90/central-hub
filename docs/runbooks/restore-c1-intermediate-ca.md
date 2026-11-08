@@ -14,7 +14,7 @@ superseded-by:
 
 # Restore c1's intermediate CA into cert-manager
 
-This is the step that makes the PKI survive a rebuild. It puts the same intermediate back, so every device that trusts the root keeps working. An automated version, through External Secrets from the private store, replaces it later; this manual one comes first.
+This is the step that makes the PKI survive a rebuild. It puts the same intermediate back, so every device that trusts the root keeps working. The automated version is `playbooks/k8s-certs.yml --tags labca` with `k8s_certs_lab_ca: true` (`hosts/ansible/README.md`, "Certificates on c1"), which does steps 2 and 4 from two files on the controller.
 
 ## Before you start
 
@@ -42,7 +42,7 @@ This is the step that makes the PKI survive a rebuild. It puts the same intermed
    why: the key now lives only in the private store and the cluster.
    expect: the folder is empty.
 
-4. Check the issuer. Argo CD applies the ClusterIssuer `lab-ca` from the `certs` component; if it ran before the Secret existed, it turns Ready within a minute.
+4. Check the issuer. The ClusterIssuer `lab-ca` comes from the `k8s_certs` role; if it was made before the Secret existed, it turns Ready within a minute.
 
    ```sh
    kubectl get clusterissuer lab-ca

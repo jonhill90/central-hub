@@ -1,0 +1,128 @@
+---
+# The lab's own CA on c1 (D-0028; runbook docs/runbooks/restore-c1-intermediate-ca.md does the
+# same by hand). The c1 intermediate is never made here: it is made once off the cluster (runbook
+# create-lab-root-ca) and restored from two files on the controller on every run, so a rebuilt
+# cluster signs with the same intermediate under the same root.
+- name: lab_ca | Lab CA on
+  when: k8s_certs_lab_ca
+  block:
+    # The intermediate's key is a secret, so Secrets must already be encrypted at rest.
+    - name: lab_ca | API server command line
+      ansible.builtin.command: >-
+        kubectl -n kube-system get pod -l component=kube-apiserver
+        -o jsonpath={.items[0].spec.containers[0].command}
+      register: k8s_certs_lab_ca_apiserver_cmd
+      changed_when: false
+      check_mode: false
+
+    - name: lab_ca | Secrets are encrypted at rest
+      ansible.builtin.assert:
+        that:
+          - "'--encryption-provider-config=' in k8s_certs_lab_ca_apiserver_cmd.stdout"
+        fail_msg: >-
+          The API server has no --encryption-provider-config, so the CA key would be stored in
+          plain text in etcd. Run playbooks/k8s.yml --tags encryption --limit k8s_control_plane
+          first (runbook step 8a).
+        quiet: true
+
+    - name: lab_ca | Key file on the controller
+      ansible.builtin.stat:
+        path: "{{ k8s_certs_lab_ca_key_file }}"
+      delegate_to: localhost
+      become: false
+      register: k8s_certs_lab_ca_key_stat
+      check_mode: false
+
+    - name: lab_ca | Key file is there and readable only by its owner
+      ansible.builtin.assert:
+        that:
+          - k8s_certs_lab_ca_key_stat.stat.exists
+          - k8s_certs_lab_ca_key_stat.stat.isreg
+          - k8s_certs_lab_ca_key_stat.stat.mode in ['0600', '0400']
+        fail_msg: >-
+          k8s_certs_lab_ca_key_file ({{ k8s_certs_lab_ca_key_file }}) is missing or not mode 0600
+          on the controller. Save the private store item lab-c1-intermediate-ca-key there with
+          mode 0600 (runbook create-lab-root-ca, step 6).
+        quiet: true
+
+    - name: lab_ca | Read the intermediate and its key
+      ansible.builtin.set_fact:
+        k8s_certs_lab_ca_chain: "{{ lookup('ansible.builtin.file', k8s_certs_lab_ca_cert_file | expanduser) | trim }}"
+        k8s_certs_lab_ca_key: "{{ lookup('ansible.builtin.file', k8s_certs_lab_ca_key_file | expanduser) | trim }}"
+      no_log: true
+
+    # tls.crt must hold the intermediate and the root (cert-manager.io/docs/configuration/ca/);
+    # the last certificate in the file is the root, which also goes in ca.crt.
+    - name: lab_ca | The files hold a chain of two or more certificates and one private key
+      ansible.builtin.set_fact:
+        k8s_certs_lab_ca_pems: >-
+          {{ k8s_certs_lab_ca_chain | regex_findall('-----BEGIN CERTIFICATE-----[^-]+-----END CERTIFICATE-----') }}
+      failed_when: >-
+        k8s_certs_lab_ca_pems | length < 2
+        or 'PRIVATE KEY-----' not in k8s_certs_lab_ca_key
+      no_log: true
+
+    - name: lab_ca | The Secret as it should be
+      ansible.builtin.set_fact:
+        k8s_certs_lab_ca_data:
+          tls.crt: "{{ (k8s_certs_lab_ca_chain ~ '\n') | b64encode }}"
+          tls.key: "{{ (k8s_certs_lab_ca_key ~ '\n') | b64encode }}"
+          ca.crt: "{{ (k8s_certs_lab_ca_pems | last ~ '\n') | b64encode }}"
+      no_log: true
+
+    - name: lab_ca | The Secret in the cluster now
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_certs_namespace }} get secret {{ k8s_certs_lab_ca_name }} -o json
+      register: k8s_certs_lab_ca_now
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      no_log: true
+
+    # Server-side apply from stdin: no copy of the key on the node's disk or in an annotation.
+    - name: lab_ca | Restore the intermediate as the Secret {{ k8s_certs_lab_ca_name }}
+      ansible.builtin.command: kubectl apply --server-side --field-manager=central-hub -f -
+      args:
+        stdin: >-
+          {{ {'apiVersion': 'v1', 'kind': 'Secret', 'type': 'kubernetes.io/tls',
+              'metadata': {'name': k8s_certs_lab_ca_name, 'namespace': k8s_certs_namespace},
+              'data': k8s_certs_lab_ca_data} | to_json }}
+      when: >-
+        k8s_certs_lab_ca_now.rc != 0
+        or (k8s_certs_lab_ca_now.stdout | from_json).data | default({}) != k8s_certs_lab_ca_data
+      changed_when: true
+      no_log: true
+
+    - name: lab_ca | ClusterIssuer manifest
+      ansible.builtin.template:
+        src: lab-ca.yaml.j2
+        dest: /root/central-hub/lab-ca.yaml
+        mode: "0600"
+
+    - name: lab_ca | ClusterIssuer differs from the cluster?
+      ansible.builtin.command: kubectl diff -f /root/central-hub/lab-ca.yaml
+      register: k8s_certs_lab_ca_diff
+      changed_when: false
+      failed_when: >-
+        k8s_certs_lab_ca_diff.rc > 1 and not ('no matches for kind' in k8s_certs_lab_ca_diff.stderr
+        or 'ensure CRDs are installed' in k8s_certs_lab_ca_diff.stderr)
+      check_mode: false
+
+    - name: lab_ca | Apply the ClusterIssuer
+      ansible.builtin.command: kubectl apply -f /root/central-hub/lab-ca.yaml
+      when: k8s_certs_lab_ca_diff.rc != 0
+      changed_when: true
+
+    - name: lab_ca | ClusterIssuer ready
+      ansible.builtin.command: >-
+        kubectl wait --for=condition=Ready --timeout=120s clusterissuer/{{ k8s_certs_lab_ca_name }}
+      changed_when: false
+      when: not ansible_check_mode
+
+- name: lab_ca | Lab CA off, remove the ClusterIssuer and the Secret
+  ansible.builtin.command: >-
+    kubectl delete --ignore-not-found clusterissuer/{{ k8s_certs_lab_ca_name }}
+    secret/{{ k8s_certs_lab_ca_name }} -n {{ k8s_certs_namespace }}
+  register: k8s_certs_lab_ca_rm
+  changed_when: "'deleted' in k8s_certs_lab_ca_rm.stdout"
+  when: not k8s_certs_lab_ca
