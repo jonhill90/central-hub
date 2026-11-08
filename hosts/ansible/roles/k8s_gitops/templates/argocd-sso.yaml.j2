@@ -27,6 +27,10 @@ data:
     cliClientID: {{ k8s_gitops_sso_cli_client_id }}
     enablePKCEAuthentication: true
     requestedScopes: [openid, profile, email]
+{% if k8s_gitops_sso_root_ca_file | length > 0 %}
+    rootCA: |
+      {{ lookup('ansible.builtin.file', k8s_gitops_sso_root_ca_file) | indent(6) }}
+{% endif %}
 {% endif %}
 ---
 apiVersion: v1

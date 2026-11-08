@@ -26,7 +26,7 @@ Argo CD stays installed by Ansible (D-0023 rule 2), so its sign-in settings live
 
 - `k8s_gitops_ui_route` is true, and `https://argocd.apps.c1.prod.<zone>/` opens.
 - `kubectl -n argocd get secret argocd-sso` exists, labelled `app.kubernetes.io/part-of=argocd`. It comes from `playbooks/k8s-identity.yml` (realm lab as code).
-- `https://sso.apps.c1.prod.<zone>/realms/lab/.well-known/openid-configuration` answers from a pod in the cluster, over a certificate the pod trusts. Argo CD's server fetches it itself. With the Let's Encrypt staging certificate it can't, because staging isn't trusted: issue from production first (`k8s_certs_issuer: letsencrypt-prod`).
+- `https://sso.apps.c1.prod.<zone>/realms/lab/.well-known/openid-configuration` answers from a pod in the cluster, over a certificate the pod trusts. Argo CD's server fetches it itself. With the Let's Encrypt staging certificate it can't, because staging isn't trusted: issue from production first (`k8s_certs_issuer: letsencrypt-prod`). With the lab CA (`k8s_certs_issuer: lab-ca`, D-0028), set `k8s_gitops_sso_root_ca_file` to the lab root's PEM file on the controller, and Argo CD trusts it for this sign-in only.
 
 Stop if any of these is not true.
 

@@ -18,6 +18,13 @@
   check_mode: false
   when: k8s_gitops_sso | bool and not ansible_check_mode
 
+- name: sso | The CA file is a certificate
+  ansible.builtin.assert:
+    that: "'-----BEGIN CERTIFICATE-----' in lookup('ansible.builtin.file', k8s_gitops_sso_root_ca_file)"
+    fail_msg: k8s_gitops_sso_root_ca_file must hold PEM certificates only.
+    quiet: true
+  when: k8s_gitops_sso | bool and k8s_gitops_sso_root_ca_file | length > 0
+
 - name: sso | Folder for the manifests
   ansible.builtin.file: {path: "{{ k8s_gitops_dir }}", state: directory, mode: "0700"}
   check_mode: false
