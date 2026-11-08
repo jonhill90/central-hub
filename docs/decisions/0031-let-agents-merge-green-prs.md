@@ -31,7 +31,7 @@ On 2026-11-08 at 07:55 UTC the owner said in the project chat that agents may me
 ## Decision Drivers
 
 - **The owner's order of 2026-11-08 at 07:55 UTC**, given during the lab build, together with the owner's statement at 07:51 UTC that the first build should go ahead without process questions, and that the records get rewritten in order once it is built.
-- **The owner's earlier plan for autonomy.** On 2026-10-12 at 06:20 UTC the owner said the rules are for now, and that once the system is trusted it could be allowed to do things like auto-merge. AGENTS.md carries the same intent.
+- **The owner's earlier plan for autonomy.** On 2026-10-12 at 06:20 UTC the owner said the rules are for now, and that once the owner understands all of it and trusts the system, it could be allowed to do things like auto-merge. AGENTS.md carries the same intent.
 - **What decides stays with the owner** (AGENTS.md rule 1, D-0001). Merging a PR is not the same as accepting a record in it.
 - **Replaceable** (REQ-0011): the change can be undone by editing one rule and removing one allow rule.
 
@@ -43,7 +43,7 @@ On 2026-11-08 at 07:55 UTC the owner said in the project chat that agents may me
 
 ## Decision Outcome
 
-Chosen option: **1**. It is what the owner ordered on 2026-11-08 at 07:55 UTC. The split between merging and accepting, the squash method and the exceptions in rules 3 and 4 are agent picks, for the owner to accept or change with this record.
+Chosen option: **1**. It is what the owner ordered on 2026-11-08 at 07:55 UTC. The definition of green in rule 1, the ban on auto-merge, the split between merging and accepting, the squash method and the exceptions in rules 3 and 4 are agent picks, for the owner to accept or change with this record.
 
 ```mermaid
 flowchart LR
@@ -91,6 +91,6 @@ flowchart LR
 
 ## More Information
 
-- **Evidence:** no research batch of its own. It rests on the owner's statements in the project chat of 2026-11-08 at 07:55 UTC (the order) and 07:51 UTC (build first, rewrite the records after), and of 2026-10-12 at 06:20 UTC (the rules are for now; auto-merge once the system is trusted). It also rests on these measurements of 2026-11-08: the `protect-main` ruleset requires 0 reviews (read from the owner's Mac at about 07:58 UTC); the first agent merge after the order was central-hub #64, squash, at about 08:35 UTC; and AGENTS.md rule 2 still said agents don't merge at 22:30 UTC, on `main` at 2da68dd.
+- **Evidence:** no research batch of its own. It rests on the owner's statements of 2026-11-08 at 07:55 UTC in the project chat (the order), of 2026-11-08 at 07:51 UTC in the thread "Finish lab setup and move k8s to GitOps" (build first, rewrite the records after), and of 2026-10-12 at 06:20 UTC in the Central Hub Foundation thread (the rules are for now; auto-merge once the owner understands all of it and trusts the system). It also rests on these measurements of 2026-11-08: the `protect-main` ruleset requires 0 reviews (read from the owner's Mac at about 07:58 UTC); the first agent merge after the order was central-hub #64, squash, at about 08:35 UTC; and AGENTS.md rule 2 still said agents don't merge at 22:30 UTC, on `main` at 2da68dd.
 - **Exit path:** put rule 2 back to "the owner merges" and remove the agents' `gh pr merge` allow rule on the owner's machine. Nothing else depends on this record.
 - Related records: D-0001, D-0002, D-0012, D-0027, D-0030.
