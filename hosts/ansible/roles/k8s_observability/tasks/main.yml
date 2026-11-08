@@ -18,6 +18,19 @@
     k8s_helm_release_chart: metrics-server
     k8s_helm_release_version: "{{ k8s_observability_metrics_server_version }}"
     k8s_helm_release_values: "{{ k8s_observability_metrics_server_values }}"
+  when: not k8s_observability_metrics_server_by_argocd | bool
+  tags: [metrics_server]
+
+# Once Argo CD manages metrics-server (kubernetes/clusters/c1/apps/metrics-server/), Ansible stops
+# installing it and removes Helm's old release records, which Argo CD does not use (it renders
+# charts with `helm template`, D-0023). The objects stay: Argo CD owns them now.
+- name: metrics-server's old Helm release records, once Argo CD manages it
+  ansible.builtin.command: >-
+    kubectl -n kube-system delete secret -l owner=helm,name=metrics-server
+    --ignore-not-found -o name
+  register: k8s_observability_metrics_server_helm_records
+  changed_when: k8s_observability_metrics_server_helm_records.stdout | length > 0
+  when: k8s_observability_metrics_server_by_argocd | bool
   tags: [metrics_server]
 
 # node-exporter uses the host network, so the scrape from Prometheus on another node goes through
