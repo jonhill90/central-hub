@@ -1,0 +1,19 @@
+---
+argument_specs:
+  main:
+    short_description: The Proxmox host's web UI certificate from the lab CA on c1, and the lab root in the host's trust store (D-0028)
+    options:
+      # Private, through the inventory.
+      proxmox_cert_names:
+        type: list
+        elements: str
+        required: true
+        description: DNS names for the host's web UI, under the lab zone. Private.
+      # Defaults in defaults/main.yml
+      proxmox_cert_issuer_host: {type: str, description: "Inventory host where kubectl reaches c1. Default: the first k8s_control_plane host."}
+      proxmox_cert_issuer: {type: str, default: lab-ca, description: ClusterIssuer the certificate comes from.}
+      proxmox_cert_name: {type: str, default: proxmox, description: Name of the Certificate and its Secret.}
+      proxmox_cert_root_file:
+        type: str
+        default: /usr/local/share/ca-certificates/central-hub-lab-root-ca.crt
+        description: Where the lab root goes on the host.

@@ -1,0 +1,22 @@
+---
+argument_specs:
+  main:
+    short_description: OPNsense's web GUI certificate from the lab CA on c1, through the OPNsense API (D-0028)
+    options:
+      opnsense_cert_names:
+        type: list
+        elements: str
+        required: true
+        description: DNS names for the web GUI, under the lab zone. Private.
+      opnsense_api_host: {type: str, required: true, description: Address or name the API is reached on. Private.}
+      opnsense_api_key: {type: str, required: true, description: API key. Secret.}
+      opnsense_api_secret: {type: str, required: true, description: API secret. Secret.}
+      opnsense_cert_issuer_host: {type: str, description: "Inventory host where kubectl reaches c1. Default: the first k8s_control_plane host."}
+      opnsense_cert_issuer: {type: str, default: lab-ca, description: ClusterIssuer the certificate comes from.}
+      opnsense_cert_name: {type: str, default: opnsense, description: Name of the Certificate on c1.}
+      opnsense_cert_gui_port: {type: int, default: 443, description: Port of the web GUI.}
+      opnsense_cert_target_descrs:
+        type: list
+        elements: str
+        description: Descriptions of the firewall certificate to replace; the first in use that matches wins.
+      opnsense_cert_validate: {type: bool, description: "Check the GUI's certificate on API calls. Default: opnsense_lab_ssl_verify."}

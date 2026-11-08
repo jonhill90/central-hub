@@ -1,0 +1,14 @@
+---
+# OPNsense's web GUI certificate from the lab CA on c1 (D-0028 rule 5, spec
+# docs/specs/2026-11-lab-pki.md part 6), through the OPNsense API from the controller. Needs
+# playbooks/k8s-certs.yml first with k8s_certs_lab_ca: true, and an API key with System: Trust:
+# Authorities, System: Trust: Certificates and Status: Services. cert-manager renews on c1; run
+# this at least every 30 days to copy the renewed certificate to the firewall.
+#   ansible-playbook -i inventories/home/ playbooks/opnsense-cert.yml --check
+#   ansible-playbook -i inventories/home/ playbooks/opnsense-cert.yml
+- name: OPNsense web GUI certificate from the lab CA
+  hosts: opnsense
+  gather_facts: false
+  roles:
+    - role: opnsense_cert
+      tags: [cert]

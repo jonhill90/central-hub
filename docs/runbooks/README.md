@@ -19,6 +19,9 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Install c1's add-ons and apps with Ansible](install-c1-add-ons-with-ansible.md) | automated | draft |
 | [Build a single-node kubeadm cluster by hand (CKA practice)](build-kubeadm-cluster.md) | manual | draft |
 | [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) | manual | draft |
+| [Create the lab root CA and c1's intermediate by hand](create-lab-root-ca.md) | manual | draft |
+| [Trust the lab root CA on a Mac](trust-lab-root-ca-on-mac.md) | manual | draft |
+| [Restore c1's intermediate CA into cert-manager](restore-c1-intermediate-ca.md) | manual | draft |
 | [Move metrics-server on c1 from Ansible to Argo CD](move-metrics-server-to-argo-cd.md) | automated | draft |
 | [Move c1's volume provisioner and default StorageClass from Ansible to Argo CD](move-local-path-to-argo-cd.md) | automated | draft |
 | [Move Jellyfin on c1 from Ansible to Argo CD, with its first-run setup as code](move-jellyfin-to-argo-cd.md) | automated | draft |
@@ -30,6 +33,8 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Check c1's health from its dashboard and alerts](check-c1-alerts-and-dashboard.md) | manual | draft |
 | [Get c1's alerts on a phone or in a browser](get-c1-alerts-on-your-phone.md) | manual | draft |
 | [Turn on sign-in to Argo CD through the lab's Keycloak](sign-in-to-argo-cd-with-keycloak.md) | automated | draft |
+| [Back up c1 off the box](back-up-c1-off-box.md) | automated | draft |
+| [Test the etcd restore](test-etcd-restore.md) | automated | draft |
 | [Set up lab DNS and make the owner's Mac resolve lab names](set-up-lab-dns.md) | automated | draft |
 | [Use break-glass access](use-break-glass-access.md) | manual | draft |
 

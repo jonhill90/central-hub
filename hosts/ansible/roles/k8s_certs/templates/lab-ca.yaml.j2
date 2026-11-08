@@ -1,0 +1,10 @@
+# The lab's own CA (D-0028): cert-manager's CA issuer, signing with c1's intermediate from the
+# Secret of the same name in the cert-manager namespace (cert-manager.io/docs/configuration/ca/).
+# A ClusterIssuer reads its Secret from cert-manager's own namespace.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ k8s_certs_lab_ca_name }}
+spec:
+  ca:
+    secretName: {{ k8s_certs_lab_ca_name }}

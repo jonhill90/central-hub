@@ -33,11 +33,13 @@
   register: k8s_certs_smoke_secret_cert
   changed_when: false
 
-- name: smoke | It covers the wildcard name and comes from the expected Let's Encrypt
+- name: smoke | It covers the wildcard name and comes from the expected CA
   ansible.builtin.assert:
     that:
       - ('DNS:' ~ k8s_certs_wildcard) in k8s_certs_smoke_secret_cert.stdout
-      - ("Let's Encrypt" in __issuer) or ('ISRG' in __issuer) or ('(STAGING)' in __issuer)
+      - >-
+        (k8s_certs_issuer == k8s_certs_lab_ca_name)
+        != (("Let's Encrypt" in __issuer) or ('ISRG' in __issuer) or ('(STAGING)' in __issuer))
       - (k8s_certs_issuer == 'letsencrypt-staging') == ('(STAGING)' in __issuer)
     fail_msg: "Unexpected certificate: {{ k8s_certs_smoke_secret_cert.stdout }}"
     quiet: true
@@ -84,12 +86,30 @@
       delay: 5
       changed_when: false
 
+    # The lab CA's root, from the Secret's ca.crt (public), so curl can verify against it.
+    - name: smoke | The lab root, for the client
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_certs_gateway_namespace }} get secret {{ k8s_certs_secret_name }}
+        -o jsonpath={.data.ca\\.crt}
+      register: k8s_certs_smoke_root
+      changed_when: false
+      when: k8s_certs_issuer == k8s_certs_lab_ca_name
+
+    - name: smoke | Lab root on the client
+      ansible.builtin.copy:
+        content: "{{ k8s_certs_smoke_root.stdout | b64decode }}"
+        dest: /root/central-hub-lab-root-ca.crt
+        mode: "0644"
+      delegate_to: "{{ k8s_certs_smoke_client }}"
+      when: k8s_certs_issuer == k8s_certs_lab_ca_name
+
     # Staging certificates chain to a root no machine trusts (that is the point of staging), so
     # curl skips verification there; for production it must verify against the client's own
-    # trust store.
+    # trust store, and for the lab CA against the lab root.
     - name: smoke | An HTTPS request through the Gateway reaches the test app
       ansible.builtin.command: >-  # noqa: command-instead-of-module (uri has no --resolve)
         curl -sS --max-time 5 {{ '-k' if k8s_certs_issuer == 'letsencrypt-staging' else '' }}
+        {{ '--cacert /root/central-hub-lab-root-ca.crt' if k8s_certs_issuer == k8s_certs_lab_ca_name else '' }}
         --resolve {{ k8s_certs_smoke_host }}:443:{{ k8s_certs_gateway_address }}
         https://{{ k8s_certs_smoke_host }}/hostname
       delegate_to: "{{ k8s_certs_smoke_client }}"
