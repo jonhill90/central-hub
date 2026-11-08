@@ -42,3 +42,12 @@ argument_specs:
       k8s_gitops_ui_proof_client:
         type: str
         description: "Inventory host that proves the UI answers by name, through the lab's DNS. Default: the first host of group k8s_workers."
+      k8s_gitops_sso:
+        type: bool
+        default: false
+        description: "Sign-in to Argo CD through Keycloak realm lab (tag sso). Needs the UI route and Secret argocd/argocd-sso."
+      k8s_gitops_sso_name: {type: str, default: Lab sign-in, description: Button text on Argo CD's sign-in page.}
+      k8s_gitops_sso_issuer: {type: str, description: "OIDC issuer URL. Default: realm lab on sso.apps.<cluster>.<env>.<zone>."}
+      k8s_gitops_sso_client_id: {type: str, default: argocd, description: Keycloak client for the web UI.}
+      k8s_gitops_sso_cli_client_id: {type: str, default: argocd-cli, description: "Public Keycloak client for argocd login --sso."}
+      k8s_gitops_sso_group_roles: {type: dict, description: "Realm group to Argo CD role. Default: lab-admins admin, lab-viewers readonly."}

@@ -54,3 +54,17 @@ k8s_gitops_ui_gateway_https: false
 k8s_gitops_ui_https_redirect: true
 # The machine that proves the UI answers, by name through the lab's DNS: a node.
 k8s_gitops_ui_proof_client: "{{ groups['k8s_workers'] | first }}"
+
+# Sign-in to Argo CD through the lab's Keycloak (tag sso), with the clients role k8s_identity makes
+# in realm lab (argocd, and argocd-cli for `argocd login --sso`). Needs the UI route on and Secret
+# argocd/argocd-sso from k8s_identity. Off (the default), a run removes the keys an earlier run set.
+# The built-in admin account stays, as the way in when Keycloak is down.
+k8s_gitops_sso: false
+k8s_gitops_sso_name: Lab sign-in
+k8s_gitops_sso_issuer: "https://sso.apps.{{ k8s_gitops_ui_cluster }}.{{ k8s_gitops_ui_env }}.{{ k8s_gitops_ui_zone | default('') }}/realms/lab"
+k8s_gitops_sso_client_id: argocd
+k8s_gitops_sso_cli_client_id: argocd-cli
+# Realm group to Argo CD role (k8s_identity_groups).
+k8s_gitops_sso_group_roles:
+  lab-admins: role:admin
+  lab-viewers: role:readonly

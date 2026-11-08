@@ -150,6 +150,7 @@ Every choice here was made by an agent, not by the owner. Any of them can change
 | 144 | A local chart `monitoring-extras` (wave 1, auto-sync and prune on, since it is new and holds no data) adds a ServiceMonitor for Argo CD's metrics, c1's own PrometheusRule and the dashboards | `apps/monitoring-extras/` | kube-prometheus-stack covers Kubernetes itself; nothing watched Argo CD, the data disk or the apps | delete the Application |
 | 145 | Seven c1 alerts: Argo CD out of sync (30m) or unhealthy (15m), Argo CD not scraped, data disk under 15% free, Jellyfin or Loki down (10m), a container restarting more than 5 times in 30m | `templates/rules.yaml` | the failures a person would otherwise find only when an app stops; thresholds are first guesses to tune | edit the rule |
 | 146 | One dashboard, `c1 lab overview` (uid `c1-lab`), made from git and loaded by Grafana's sidecar; UI edits are lost on sync | `dashboards/c1-lab.json` | a rebuild brings it back (the owner's 07:30 UTC rebuild-from-repo rule) | delete the file |
+| 147 | Argo CD signs in through Keycloak realm lab (clients argocd and argocd-cli, PKCE), set by `k8s_gitops` tag `sso` as a server-side apply with field manager `central-hub-sso`; lab-admins get admin, lab-viewers read-only, anyone else nothing; the built-in admin stays | `k8s_gitops` `sso.yml`, `argocd-sso.yaml.j2` | Argo CD stays with Ansible (D-0023 rule 2); its own field manager means off removes exactly these keys | `k8s_gitops_sso: false` |
 
 ## The owner's decisions so far
 
