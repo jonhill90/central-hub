@@ -126,7 +126,7 @@ superseded-by:
 **Runbook status words.** `superseded` and `retired` mean what they mean for specs and standards (D-0010, D-0009). `tested` is the one new word. A runbook is living, so `accepted` would not say whether it still works, and `tested` does. These are the rules for setting it:
 - Only a PR that records a replay on a fresh machine sets `tested`. That PR fills `last-tested` with the date, who ran it, and a link to the output.
 - Any later change to the steps puts the runbook back to `draft` until it is replayed.
-- The owner merges every one of these PRs, as he does every PR.
+- These PRs are merged like every other PR (D-0031).
 
 **Runbook steps.**
 - **Why per step.** Each step in `## Steps` has a `why:` line of one or two sentences, between the action and `expect:`.

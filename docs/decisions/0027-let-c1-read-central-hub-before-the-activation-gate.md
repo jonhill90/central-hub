@@ -64,7 +64,7 @@ flowchart LR
 
 - Good: each component moves to GitOps one PR at a time, with a runbook, and the owner sees it in the Argo CD UI.
 - Good: drift on c1 is visible, and self-heal puts it back.
-- Bad: until gate item 1 exists, anything that can merge to `main` can change c1. Compensating controls: the owner merges every PR (AGENTS.md rule 2); c1 is greenfield and holds nothing that can't be rebuilt; the way back (rule 5) is one deletion; the UI and the cluster are reachable only from the lab network (D-0023 rule 6).
+- Bad: until gate item 1 exists, anything that can merge to `main` can change c1. Compensating controls: a PR merges only when every check passes, and a record is accepted only on the owner's named approval (D-0031); c1 is greenfield and holds nothing that can't be rebuilt; the way back (rule 5) is one deletion; the UI and the cluster are reachable only from the lab network (D-0023 rule 6).
 - Neutral: the Activation gate's wording now names this exception (AGENTS.md).
 
 ### Confirmation
