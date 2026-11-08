@@ -72,13 +72,16 @@
   register: k8s_observability_grafana_strategy
   changed_when: false
   check_mode: false
+  when: not k8s_observability_metrics_by_argocd | bool
   tags: [metrics]
 
 - name: Grafana's Deployment is switched to Recreate, without the rollingUpdate block
   ansible.builtin.command: >-
     kubectl -n {{ k8s_observability_metrics_namespace }} patch deployment kube-prometheus-stack-grafana
     --type merge -p '{"spec":{"strategy":{"type":"Recreate","rollingUpdate":null}}}'
-  when: k8s_observability_grafana_strategy.stdout | trim not in ['', 'Recreate']
+  when:
+    - not k8s_observability_metrics_by_argocd | bool
+    - k8s_observability_grafana_strategy.stdout | trim not in ['', 'Recreate']
   changed_when: true
   tags: [metrics]
 
@@ -97,6 +100,7 @@
     k8s_helm_release_chart: kube-prometheus-stack
     k8s_helm_release_version: "{{ k8s_observability_kps_version }}"
     k8s_helm_release_values: "{{ k8s_observability_kps_values }}"
+  when: not k8s_observability_metrics_by_argocd | bool
   tags: [metrics]
 
 # Loki's chart makes a StatefulSet, and Kubernetes forbids changing a StatefulSet's volume claim
@@ -112,12 +116,15 @@
   register: k8s_observability_loki_sts
   changed_when: false
   check_mode: false
+  when: not k8s_observability_logs_by_argocd | bool
   tags: [logs]
 
 - name: Loki's emptyDir StatefulSet is deleted, so Helm can make it again with a claim
   ansible.builtin.command: >-
     kubectl -n {{ k8s_observability_logs_namespace }} delete statefulset loki --wait=true --timeout=180s
-  when: k8s_observability_loki_sts.stdout | trim == 'loki'
+  when:
+    - not k8s_observability_logs_by_argocd | bool
+    - k8s_observability_loki_sts.stdout | trim == 'loki'
   changed_when: true
   tags: [logs]
 
@@ -133,6 +140,7 @@
     k8s_helm_release_chart: loki
     k8s_helm_release_version: "{{ k8s_observability_loki_version }}"
     k8s_helm_release_values: "{{ k8s_observability_loki_values }}"
+  when: not k8s_observability_logs_by_argocd | bool
   tags: [logs]
 
 - name: Log collector (Alloy)
@@ -147,7 +155,25 @@
     k8s_helm_release_chart: alloy
     k8s_helm_release_version: "{{ k8s_observability_alloy_version }}"
     k8s_helm_release_values: "{{ k8s_observability_alloy_values }}"
+  when: not k8s_observability_logs_by_argocd | bool
   tags: [logs]
+
+# Once Argo CD manages logs (apps loki, alloy) or metrics (app kube-prometheus-stack), Ansible stops
+# installing them and removes Helm's old release records, as for metrics-server above. Grafana's
+# route stays here until the routes move (spec step 9).
+- name: Old Helm release records, for each release Argo CD now manages
+  ansible.builtin.command: >-
+    kubectl -n {{ item.namespace }} delete secret -l owner=helm,name={{ item.name }}
+    --ignore-not-found -o name
+  loop:
+    - {name: loki, namespace: "{{ k8s_observability_logs_namespace }}", by_argocd: "{{ k8s_observability_logs_by_argocd }}"}
+    - {name: alloy, namespace: "{{ k8s_observability_logs_namespace }}", by_argocd: "{{ k8s_observability_logs_by_argocd }}"}
+    - {name: kube-prometheus-stack, namespace: "{{ k8s_observability_metrics_namespace }}", by_argocd: "{{ k8s_observability_metrics_by_argocd }}"}
+  loop_control: {label: "{{ item.name }}"}
+  register: k8s_observability_helm_records
+  changed_when: k8s_observability_helm_records.stdout | length > 0
+  when: item.by_argocd | bool
+  tags: [metrics, logs]
 
 - name: Grafana through the shared Gateway
   ansible.builtin.include_role:

@@ -1,6 +1,7 @@
 {{- /*
 One child Application per entry in .Values.apps. The chart comes from its upstream Helm repository,
-and its values file from this repository (Argo CD multiple sources, `ref: values`).
+and its values files from this repository (Argo CD multiple sources, `ref: values`); or, with
+`local: true`, the chart itself is in this repository at appsPath/<name>/.
 No resources finalizer: deleting a child Application leaves its objects on the cluster, which is the
 way back to Ansible for every component (spec, "Taking over a running component").
 */ -}}
@@ -14,7 +15,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: c1
 spec:
-  project: default
+  project: {{ $.Values.project | default "default" }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ $app.namespace }}
@@ -26,10 +27,8 @@ spec:
     path: {{ $.Values.appsPath }}/{{ $name }}
     helm:
       releaseName: {{ $app.releaseName | default $name }}
-      {{- if $app.needsZone }}
-      parameters:
-        - name: zone
-          value: {{ required "zone: the root Application must set it (k8s_gitops_source_zone)" $.Values.zone | quote }}
+      {{- with include "c1.parameters" (dict "app" $app "root" $) | trim }}
+      {{- . | nindent 6 }}
       {{- end }}
   {{- else }}
   sources:
@@ -39,20 +38,30 @@ spec:
       helm:
         releaseName: {{ $app.releaseName | default $name }}
         valueFiles:
-          - $values/{{ $.Values.appsPath }}/{{ $name }}/values.yaml
-        {{- if $app.needsZone }}
-        parameters:
-          - name: zone
-            value: {{ required "zone: the root Application must set it (k8s_gitops_source_zone)" $.Values.zone | quote }}
+          {{- range $file := $app.valueFiles | default (list "values.yaml") }}
+          - $values/{{ $.Values.appsPath }}/{{ $name }}/{{ $file }}
+          {{- end }}
+        {{- with include "c1.parameters" (dict "app" $app "root" $) | trim }}
+        {{- . | nindent 8 }}
         {{- end }}
     - repoURL: {{ $.Values.repoURL }}
       targetRevision: {{ $.Values.targetRevision }}
       ref: values
   {{- end }}
-  {{- if $app.autoSync }}
+  {{- with $app.ignoreDifferences }}
+  ignoreDifferences:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if or $app.autoSync $app.syncOptions }}
   syncPolicy:
+    {{- if $app.autoSync }}
     automated:
       selfHeal: true
       prune: {{ $app.prune | default false }}
+    {{- end }}
+    {{- with $app.syncOptions }}
+    syncOptions:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
   {{- end }}
 {{- end }}

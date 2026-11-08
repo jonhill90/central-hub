@@ -10,6 +10,8 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) | manual | draft |
 | [Move metrics-server on c1 from Ansible to Argo CD](move-metrics-server-to-argo-cd.md) | automated | draft |
 | [Move Jellyfin on c1 from Ansible to Argo CD, with its first-run setup as code](move-jellyfin-to-argo-cd.md) | automated | draft |
+| [Move logging on c1 (Loki and Alloy) from Ansible to Argo CD](move-logging-to-argo-cd.md) | automated | draft |
+| [Move monitoring on c1 (kube-prometheus-stack) from Ansible to Argo CD](move-monitoring-to-argo-cd.md) | automated | draft |
 
 ## Template
 
