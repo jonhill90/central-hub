@@ -13,10 +13,9 @@ from pathlib import Path
 # STD-0004 Terraform rule 1: the files every run folder has.
 RUN_FOLDER_FILES = ["versions.tf", "providers.tf", "variables.tf", "main.tf", "outputs.tf", "backend.tf"]
 
-# Gaps found when this check was written (2026-10-27), left for the code's owner to fix.
-KNOWN_GAPS = {
-    ("hosts/terraform/home/certificates", "terraform-2"): "main.tf has a locals block",
-}
+# Gaps left for the code's owner to fix, as {(folder, rule): what}. Empty: the one found when this
+# check was written (2026-10-27, a locals block in home/certificates) was fixed by PR #53.
+KNOWN_GAPS: dict[tuple[str, str], str] = {}
 
 
 def tracked(root: Path, pattern: str) -> list[str]:

@@ -12,6 +12,7 @@ Run folders laid out as `<place>/<workload>/` (layout A from RB-0083; decided in
 | [home/certificates/](home/certificates/) | The Cloudflare API token cert-manager uses for its Let's Encrypt DNS-01 challenge (one zone, Zone / DNS / Edit and Zone / Zone / Read, 90-day expiry), written to the 0600 file the Ansible inventory names. Not Proxmox: it talks to Cloudflare only | the c1 cluster and Secrets at rest (runbook steps 8 and 8a); run it before `playbooks/k8s-certs.yml --tags issue` |
 
 | [home/tailnet/](home/tailnet/) | Tailnet settings, not Proxmox: CT 900's subnet routes for every lab VLAN turned on, and split DNS that sends the lab names to OPNsense Unbound on the mgmt gateway, so the owner's Mac resolves them ([runbook](../../docs/runbooks/set-up-lab-dns.md)). Logs in with a tailnet OAuth client from the git-ignored `hosts/.env` | `playbooks/tailnet-connector.yml`, which makes CT 900 advertise the same routes |
+| [home/tailnet-policy/](home/tailnet-policy/) | The tailnet policy file (tag owners, grants, SSH rules and tests), rendered from `policy.hujson.tftpl` with the Proxmox host's address filled in at apply time. Not applied yet: adopt the live policy first ([below](#hometailnet-policy-the-tailnet-policy-file)). Logs in with its own OAuth client, scope `policy_file` | home/tailnet's routes, which the policy auto-approves |
 
 [home/bootstrap/](home/bootstrap/) is not a run folder: `iac-access.sh` makes the limited Proxmox account and token that Terraform uses, once, on the host.
 
@@ -105,3 +106,16 @@ Nothing runs the apply on a schedule yet. If no one applies within the 14 days, 
 ### Later, not in this folder
 
 A CAA record on the zone that allows only `letsencrypt.org` would stop other certificate authorities from issuing for the zone. It is left out: it changes the whole public zone, not only the lab's names, and it is the owner's decision.
+
+## home/tailnet-policy: the tailnet policy file
+
+The policy says who on the tailnet may reach what. It was edited by hand in the admin console until now, and this folder has never been applied, so the live policy may differ from the file. `overwrite_existing_content` is false, so the first apply would stop with an error rather than replace it. Adopt it, then read the difference:
+
+```sh
+cd home/tailnet-policy
+tofu init -backend-config="path=<folder outside the repo>/home-tailnet-policy.tfstate"
+tofu import -var-file=home.tfvars tailscale_acl.policy acl
+tofu plan -var-file=home.tfvars
+```
+
+The plan shows every line the file would change in the live policy. Apply only after the owner reads it: a grant the file drops cuts off whatever used it. The tailnet runs the policy's `tests` on save and refuses a policy that fails them. To undo, apply the previous version of `policy.hujson.tftpl` from git, or paste the old policy in the admin console.

@@ -51,8 +51,6 @@ This standard is a draft written by an agent from what the first real `tofu appl
 
 Example that passes: `hosts/terraform/home/network/` has the seven files of Terraform rule 1, no `locals`, and reads its VLANs from the shared VLAN file through `var.vlans_file`, which has no default; its second `tofu plan` after the first apply reported "No changes".
 
-Known gap: `hosts/terraform/home/certificates/main.tf` has a `locals` block, so it does not meet Terraform rule 2; `check_hosts.py` lists it as a known gap until the code is changed.
-
 ## Not covered here
 
 - Whether Ansible runs by push or by pull (D-0011 "Not decided here").

@@ -1,0 +1,57 @@
+// Tailnet policy file, rendered by hosts/terraform/home/tailnet-policy (tailscale_acl).
+// Built from the 2026-10-23 draft for the connector design, which was not applied then.
+// Tags and the lab's ranges only; the Proxmox host's address is filled in at apply time.
+{
+	"tagOwners": {
+		"tag:github-actions": ["autogroup:admin"],
+		"tag:vps":            ["autogroup:admin", "tag:vps"],
+		"tag:agent":          ["autogroup:admin", "tag:agent"],
+		// The tailnet connector, CT 900 (home/remote-access)
+		"tag:connector":      ["autogroup:admin"],
+	},
+
+	// The connector's routes are turned on without a click: the Proxmox host's address and every
+	// lab VLAN from the shared VLAN file. home/tailnet turns the same list on through the API.
+	"autoApprovers": {
+		"routes": {
+			"${proxmox_host_address}/32": ["tag:connector"],
+%{ for r in lab_ranges ~}
+			"${r}": ["tag:connector"],
+%{ endfor ~}
+		},
+	},
+
+	"grants": [
+		// Admins reach everything, including the lab through the connector
+		{"src": ["autogroup:admin"], "dst": ["*"], "ip": ["*"]},
+
+		// Each member's own devices reach each other
+		{"src": ["autogroup:member"], "dst": ["autogroup:self"], "ip": ["*"]},
+
+		// Agent cloud sessions: the VPS on SSH and the Kubernetes API
+		{"src": ["tag:agent"], "dst": ["tag:vps"], "ip": ["tcp:22", "tcp:6443"]},
+
+		// Agent cloud sessions: the Proxmox host on SSH only, through the connector
+		{"src": ["tag:agent"], "dst": ["${proxmox_host_address}/32"], "ip": ["tcp:22"]},
+
+		// GitHub Actions runners: the VPS on SSH only
+		{"src": ["tag:github-actions"], "dst": ["tag:vps"], "ip": ["tcp:22"]},
+	],
+
+	"ssh": [
+		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:vps"], "users": ["root", "autogroup:nonroot"]},
+		{"action": "accept", "src": ["tag:github-actions"], "dst": ["tag:vps"], "users": ["root", "deploy", "autogroup:nonroot"]},
+		{"action": "accept", "src": ["autogroup:admin"], "dst": ["tag:vps"], "users": ["root", "deploy", "autogroup:nonroot"]},
+		{"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"], "users": ["autogroup:nonroot", "root"]},
+	],
+
+	// The tailnet refuses to save the policy if any of these fail, so an open grant can't come
+	// back unnoticed.
+	"tests": [
+		{
+			"src":    "tag:agent",
+			"accept": ["${proxmox_host_address}:22"],
+			"deny":   ["${proxmox_host_address}:8006", "${proxmox_host_address}:3389"],
+		},
+	],
+}
