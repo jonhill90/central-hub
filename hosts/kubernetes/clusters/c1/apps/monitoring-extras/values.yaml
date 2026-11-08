@@ -1,8 +1,7 @@
 # What c1 watches beyond kube-prometheus-stack's built-in rules and dashboards. Prometheus reads
 # every ServiceMonitor and rule in the cluster (kube-prometheus-stack values, *NilUsesHelmValues
 # false), and Grafana's sidecar loads every ConfigMap labelled grafana_dashboard: "1".
-# Alertmanager is off until a receiver is picked, so firing alerts show in Grafana (Alerting) and
-# in Prometheus's Alerts page only.
+# Alertmanager sends firing alerts to ntfy (app alerts).
 
 argocd:
   namespace: argocd   # where Argo CD runs (role k8s_gitops)

@@ -17,8 +17,32 @@ k8s_observability_metrics_server_values:
   args: [--kubelet-insecure-tls]
 
 k8s_observability_kps_values:
-  # No receiver is picked yet (proxmox_notify's endpoint is still open), so no Alertmanager.
-  alertmanager: {enabled: false}
+  # Alertmanager sends every alert to ntfy on c1 (app alerts, hosts/kubernetes/clusters/c1/apps/alerts/)
+  # with ntfy's built-in Alertmanager format; Watchdog goes nowhere (pick 148).
+  alertmanager:
+    enabled: true
+    config:
+      route:
+        receiver: ntfy
+        group_by: [alertname, namespace]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        routes:
+          - receiver: "null"
+            matchers: ['alertname = "Watchdog"']
+          - receiver: "null"
+            matchers: ['alertname = "InfoInhibitor"']
+      receivers:
+        - name: "null"
+        - name: ntfy
+          webhook_configs:
+            - url: http://ntfy.alerts.svc.cluster.local/c1-alerts?template=alertmanager
+              send_resolved: true
+    alertmanagerSpec:
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {memory: 128Mi}
   # c1 has no kube-proxy (Cilium replaces it, D-0017). kubeadm binds the controller manager and the
   # scheduler to 127.0.0.1 and etcd's metrics to 127.0.0.1:2381, so in-cluster scrapes of them fail;
   # turned off until k8s_control_plane opens those ports (known gap).

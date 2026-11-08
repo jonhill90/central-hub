@@ -27,6 +27,14 @@ spec:
           labels: {severity: warning}
           annotations:
             summary: Prometheus can't read Argo CD's metrics, so the two alerts above can't fire
+    - name: c1-alerting
+      rules:
+        - alert: C1AlertsNotDelivered
+          expr: increase(alertmanager_notifications_failed_total{integration="webhook"}[15m]) > 0
+          for: 5m
+          labels: {severity: warning}
+          annotations:
+            summary: Alertmanager could not deliver alerts to ntfy; check the alerts app (runbook get-c1-alerts-on-your-phone.md)
     - name: c1-storage
       rules:
         - alert: C1DataDiskFillingUp

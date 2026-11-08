@@ -1,0 +1,82 @@
+{{- $v := .Values }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $v.name }}-cache
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-options: Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ $v.cacheSize }}
+---
+# Anyone who can reach the name can read and post (ntfy's default access): the Gateway is reachable
+# only from the lab network and the tailnet. Adding users is ntfy's auth-users setting (pick 148).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+  labels: {app.kubernetes.io/name: ntfy}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: ntfy}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: ntfy}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $v.uid }}
+        runAsGroup: {{ $v.uid }}
+        fsGroup: {{ $v.uid }}
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: ntfy
+          image: {{ $v.image }}
+          args: [serve]
+          env:
+            - {name: NTFY_BASE_URL, value: "https://{{ $v.name }}.apps.c1.prod.{{ required "zone: set by the root Application" $v.zone }}"}
+            - {name: NTFY_LISTEN_HTTP, value: ":{{ $v.port }}"}
+            - {name: NTFY_BEHIND_PROXY, value: "true"}
+            - {name: NTFY_CACHE_FILE, value: /var/cache/ntfy/cache.db}
+            - {name: NTFY_CACHE_DURATION, value: {{ $v.cacheDuration | quote }}}
+          ports:
+            - {name: http, containerPort: {{ $v.port }}}
+          readinessProbe:
+            httpGet: {path: /v1/health, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /v1/health, port: http}
+            periodSeconds: 30
+          resources:
+            requests: {cpu: {{ $v.resources.requests.cpu }}, memory: {{ $v.resources.requests.memory }}}
+            limits: {memory: {{ $v.resources.limits.memory }}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: cache, mountPath: /var/cache/ntfy}
+      volumes:
+        - name: cache
+          persistentVolumeClaim: {claimName: {{ $v.name }}-cache}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector: {app.kubernetes.io/name: ntfy}
+  ports:
+    - {name: http, port: 80, targetPort: http}

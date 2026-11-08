@@ -145,4 +145,11 @@ apps:
     wave: 1
     autoSync: true
     prune: true
+  # Where c1's alerts go (ntfy); Alertmanager in kube-prometheus-stack posts to it.
+  alerts:
+    namespace: alerts
+    local: true
+    needsZone: true
+    autoSync: true
+    prune: true
 

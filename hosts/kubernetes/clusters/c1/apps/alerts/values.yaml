@@ -1,0 +1,19 @@
+# ntfy, a small self-hosted push service: Alertmanager posts each alert to one topic, and the ntfy
+# app on a phone (or the web page) subscribed to that topic shows it. Swapping it for another
+# receiver changes only Alertmanager's receiver in kube-prometheus-stack's values.
+zone: ""   # set by the root Application; the web page is at https://ntfy.apps.c1.prod.<zone>/
+
+name: ntfy
+# v2.35.0 (2026-10-30): newer than two weeks, allowed by STD-0003 rule 2 for its security fix
+# (Matrix push gateway topic check); multi-arch index digest from Docker Hub.
+image: docker.io/binwiederhier/ntfy:v2.35.0@sha256:6f0c9abab7b99a978d816611cc90dabb4849b81f60c53114e91cd07931085dc0
+uid: 1000
+port: 8080
+# Messages kept for subscribers who were away (ntfy's cache), on a claim.
+cacheSize: 1Gi
+cacheDuration: 72h
+# The topic Alertmanager posts to.
+topic: c1-alerts
+resources:
+  requests: {cpu: 10m, memory: 32Mi}
+  limits: {memory: 128Mi}

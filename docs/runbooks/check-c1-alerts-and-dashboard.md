@@ -16,7 +16,7 @@ superseded-by:
 
 Grafana at `https://grafana.apps.c1.prod.<zone>/` has a dashboard made for this cluster, **c1 lab overview**, and Prometheus has a small set of c1 alerts. Both come from git (`apps/monitoring-extras/`), so a rebuild brings them back. A change made by hand in the Grafana UI is lost on the next sync: change the JSON file by PR instead.
 
-Alertmanager is off until a place to send alerts is picked, so alerts are not sent anywhere yet. They show in Grafana under Alerting, and in the dashboard's "Alerts firing" tile.
+Alertmanager sends every alert to ntfy on c1 ([Get c1's alerts on a phone](get-c1-alerts-on-your-phone.md)). They also show in Grafana under Alerting, and in the dashboard's "Alerts firing" tile.
 
 ## Steps
 
@@ -41,6 +41,7 @@ Alertmanager is off until a place to send alerts is picked, so alerts are not se
 | C1DataDiskFillingUp | Less than 15% free on a node's data disk, where every volume lives | Prometheus and Loki retention, Jellyfin's media |
 | C1JellyfinDown | Jellyfin has no ready pod for 10 minutes | [Jellyfin runbook](move-jellyfin-to-argo-cd.md) |
 | C1LokiDown | Loki has no ready pod; new logs are lost | [logging runbook](move-logging-to-argo-cd.md) |
+| C1AlertsNotDelivered | Alertmanager failed to hand alerts to ntfy | [alerts runbook](get-c1-alerts-on-your-phone.md) |
 | C1PodCrashLooping | A container restarted more than 5 times in 30 minutes | `kubectl -n <namespace> logs <pod> --previous` |
 
 ## Change it
