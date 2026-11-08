@@ -10,6 +10,8 @@ Run folders laid out as `<place>/<workload>/` (layout A from RB-0083; decided in
 | [home/k8s/](home/k8s/) | Cluster c1's node VMs: template 9000 from a pinned AlmaLinux 10 cloud image, and nodes 200 (control plane) and 201 (worker) cloned from it onto VNet prod | home/network |
 | [home/certificates/](home/certificates/) | The Cloudflare API token cert-manager uses for its Let's Encrypt DNS-01 challenge (one zone, Zone / DNS / Edit and Zone / Zone / Read, 90-day expiry), written to the 0600 file the Ansible inventory names. Not Proxmox: it talks to Cloudflare only | the c1 cluster and Secrets at rest (runbook steps 8 and 8a); run it before `playbooks/k8s-certs.yml --tags issue` |
 
+| [home/tailnet/](home/tailnet/) | Tailnet settings, not Proxmox: CT 900's subnet routes for every lab VLAN turned on, and split DNS that sends the lab names to OPNsense Unbound on the mgmt gateway, so the owner's Mac resolves them ([runbook](../../docs/runbooks/set-up-lab-dns.md)). Logs in with a tailnet OAuth client from the git-ignored `hosts/.env` | `playbooks/tailnet-connector.yml`, which makes CT 900 advertise the same routes |
+
 [home/bootstrap/](home/bootstrap/) is not a run folder: `iac-access.sh` makes the limited Proxmox account and token that Terraform uses, once, on the host.
 
 Every run folder has the same files: `main.tf` (the resources), `variables.tf`, `outputs.tf`, `providers.tf`, `versions.tf`, `backend.tf` and its own `.terraform.lock.hcl`. `home/network`, `home/firewall` and `home/remote-access` also have `imports.tf`, which adopts the objects the lab had before this code; `home/k8s` and `home/certificates` made new objects, so they have none.

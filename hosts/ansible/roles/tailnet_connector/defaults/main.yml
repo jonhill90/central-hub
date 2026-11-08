@@ -1,0 +1,22 @@
+---
+# Every input of this role is listed here (Red Hat CoP roles README L424-436). An input with no
+# meaningful default is listed commented out: the role stops if the inventory doesn't set it.
+#
+# REQUIRED, private, from the inventory: routes CT 900 already advertises besides the lab VLANs,
+# for example the Proxmox host's home LAN address as a /32. The same list as home/tailnet's
+# connector_extra_routes.
+# tailnet_connector_extra_routes: ["<address>/32"]
+#
+# REQUIRED, from the inventory: the place's whole lab range (STD-0002), for example 10.1.0.0/16.
+# tailnet_connector_lab_supernet: "{{ proxmox_network_lab_supernet }}"
+#
+# REQUIRED, from the shared VLAN file (inventories/<place>/group_vars/all/vlans.yml): lab_vlans.
+
+# The connector container's ID (hosts/terraform/home/remote-access).
+tailnet_connector_vmid: 900
+
+# The VLAN eth1 sits on; its .1 is the firewall, the next hop into the other lab VLANs.
+tailnet_connector_mgmt_vlan: mgmt
+
+# The connector's interface on that VLAN.
+tailnet_connector_mgmt_interface: eth1

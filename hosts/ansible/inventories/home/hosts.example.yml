@@ -27,6 +27,10 @@ all:
           controller_trust_ca_file: ""   # path on the controller, e.g. ~/.config/central-hub/pve-root-ca.pem
           # playbooks/proxmox-cert.yml (D-0028): the web UI certificate from the lab CA on c1
           proxmox_cert_names: []   # e.g. ["<host>.<zone>"]; private
+          # playbooks/tailnet-connector.yml (docs/runbooks/set-up-lab-dns.md): CT 900 advertises
+          # every lab VLAN plus these; the same list as home/tailnet's connector_extra_routes.
+          tailnet_connector_extra_routes: [""]   # the host's home LAN address as a /32, as advertised today
+          tailnet_connector_lab_supernet: "{{ proxmox_network_lab_supernet }}"
     opnsense:
       hosts:
         opnsense_fw:
@@ -45,6 +49,7 @@ all:
           opnsense_lab_dhcp_last: 199   # ends before the .224/27 load-balancer reserve
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
+            - { hostname: pve, address: "", description: "Proxmox host GUI (its mgmt address)" }
             # Wildcard: every name under apps.c1.prod.<zone> answers with the c1 Gateway.
             - { hostname: "*", subdomain: apps.c1.prod, address: "{{ k8s_gateway_address }}", description: "Kubernetes c1 Gateway apps (*.apps.c1.prod)" }
           opnsense_lab_vlan_settings:
