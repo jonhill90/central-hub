@@ -1,7 +1,7 @@
 ---
 id: D-0031
 title: Let agents squash-merge a PR once every check on it passes, while the owner still accepts every decision record
-status: proposed
+status: accepted
 date: 2026-11-08
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0001, D-0002]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-08T22:41:00Z
+  approved-commit: 16d13e401d68cea07d998cdd1a94e032c1372d4b
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN3RXBrfbsYqiRtQHFBtL6DE
+  approval-names: "PR jonhill90/central-hub#86 and head 16d13e4, in the message itself"
+  check: the drafting agent read the message in the project thread at 2026-11-08T22:41Z; it reads "accept PR jonhill90/central-hub#86 16d13e4", and that head holds this record. An independent check by a reviewing agent is still to do
+  merged: PR #86, squash-merged after this acceptance commit; the merge commit is added to CORRECTIONS.md by the next PR
 revisit-when: the lab is torn down and rebuilt and the records are rewritten in order; an agent merge breaks main or c1; the agents get a GitHub identity of their own (D-0030, Activation gate item 1); or a cluster other than c1 reads the repository
 ---
 

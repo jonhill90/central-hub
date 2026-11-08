@@ -6,7 +6,9 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
-### With D-0031 (proposed; waits on the owner's accept)
+### Accepted with PR #86
+
+PR #86: approved 2026-11-08T22:41:00Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN3RXBrfbsYqiRtQHFBtL6DE), head 16d13e4.
 
 - 2026-11-08 · AGENTS.md rule 2, D-0002 diagram and "In words", D-0012 runbook status rules, D-0027 Consequences · an agent may squash-merge a PR once every check passes; a PR that accepts a record, activates a standard or loosens the rules for now still waits for the owner's named approval · D-0031; the owner's statement of 2026-11-08 at 07:55 UTC in the project chat
 
