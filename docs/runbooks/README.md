@@ -13,6 +13,8 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Move Jellyfin on c1 from Ansible to Argo CD, with its first-run setup as code](move-jellyfin-to-argo-cd.md) | automated | draft |
 | [Move logging on c1 (Loki and Alloy) from Ansible to Argo CD](move-logging-to-argo-cd.md) | automated | draft |
 | [Move monitoring on c1 (kube-prometheus-stack) from Ansible to Argo CD](move-monitoring-to-argo-cd.md) | automated | draft |
+| [Move c1's External Secrets and its store from Ansible to Argo CD](move-external-secrets-to-argo-cd.md) | automated | draft |
+| [Move cert-manager on c1 from Ansible to Argo CD](move-cert-manager-to-argo-cd.md) | automated | draft |
 
 ## Template
 

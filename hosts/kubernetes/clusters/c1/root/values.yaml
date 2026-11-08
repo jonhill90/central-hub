@@ -23,6 +23,8 @@ project: default
 #   valueFiles   the values files in appsPath/<name>/, in order (default: values.yaml)
 #   syncOptions  Argo CD sync options, for example ServerSideApply=true for charts with large CRDs
 #   ignoreDifferences  fields Argo CD leaves alone, for example a password the chart makes at random
+#   wave         sync order when the root syncs, lowest first (default 0): -3 storage, -2 operators
+#                and their CRDs, -1 what they serve (the secret store), 0 apps
 #   autoSync     false while the take-over diff is checked; true after the first clean sync
 #   prune        delete objects that leave git; false until one cycle runs clean
 apps:
@@ -39,6 +41,7 @@ apps:
   local-path:
     namespace: local-path-storage
     local: true
+    wave: -3
     autoSync: false
     prune: false
   jellyfin:
@@ -84,5 +87,34 @@ apps:
         name: kube-prometheus-stack-grafana
         namespace: monitoring
         jsonPointers: [/data]
+    autoSync: false
+    prune: false
+  # Secrets (spec step 5): External Secrets and the one store `c1` every ExternalSecret names.
+  external-secrets:
+    namespace: external-secrets
+    chart:
+      repoURL: https://charts.external-secrets.io
+      name: external-secrets
+      version: 2.14.0   # 2026-10-23, the first to list Kubernetes 1.37; same as k8s_secrets today
+    wave: -2
+    syncOptions: [ServerSideApply=true]
+    autoSync: false
+    prune: false
+  secret-store:
+    namespace: external-secrets
+    local: true
+    wave: -1
+    autoSync: false
+    prune: false
+  # Certificates (spec step 6): cert-manager itself. The issuers and the Gateway's certificate stay
+  # with Ansible (k8s_certs, tag issue) until the lab PKI work gives them a `certs` app here.
+  cert-manager:
+    namespace: cert-manager
+    chart:
+      repoURL: https://charts.jetstack.io
+      name: cert-manager
+      version: v1.21.3   # security release, STD-0003 rule 2; same as k8s_certs today
+    wave: -2
+    syncOptions: [ServerSideApply=true]
     autoSync: false
     prune: false
