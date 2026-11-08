@@ -110,7 +110,7 @@ The private-network client goes on at first boot, so you can reach the machine p
 - why: every build starts from a clean machine, so the runbook makes the cluster, not leftovers. The machine is greenfield: no snapshot is kept.
 - expect: the node shows in `tailscale status`; `tailscale ssh root@<node name>` works. Takes about 2.5 minutes.
 - status: **PROVEN** (proof runs 1-3, through the provider's API). CKA: CA2.
-- place (home lab, proven 2026-10-26): the node is a Proxmox VM cloned from template 9000 (AlmaLinux 10.2 GenericCloud 10.2-20261012.0), with a fixed address on VNet prod (VLAN 10) and an SSH key from cloud-init (`hosts/terraform/home/k8s`). No Tailscale on the node; Ansible reaches it through the Proxmox host, whose mgmt VLAN may open connections into the lab VLANs (`opnsense_lab` rules).
+- place (home lab, proven 2026-10-26): the node is a Proxmox VM cloned from template 9000 (AlmaLinux 10.2 GenericCloud 10.2-20261012.0), with a fixed address on VNet prod (VLAN 10) and an SSH key from cloud-init (`hosts/terraform/home/k8s`). Before step 1, wait for first boot to finish on every node: `sudo cloud-init status --wait` (exit code 2 means it finished with recoverable errors, which is fine). Package installs during first boot race with step 1's `dnf` (R1 rehearsal run 2; the `k8s_node` role waits the same way). No Tailscale on the node; Ansible reaches it through the Proxmox host, whose mgmt VLAN may open connections into the lab VLANs (`opnsense_lab` rules).
 
 #### 1. Lock down the host
 
@@ -154,7 +154,7 @@ touch /.autorelabel && systemctl reboot                     # the image ships SE
 - expect after reboot: `getenforce` = Permissive; `lsmod | grep -E '^(overlay|br_netfilter)'`; `sysctl net.ipv4.ip_forward` = 1.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/> ; <https://kubernetes.io/docs/setup/production-environment/container-runtimes/>
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: CA2.
-- place (home lab, proven 2026-10-26): the GenericCloud image ships only `kernel-modules-core`, which has no `br_netfilter`, and the mirror no longer carries modules for the image's own kernel. `dnf install kernel-modules` brings a newer kernel; reboot into it before `modprobe`. The image's SELinux is already on, so no relabel boot is needed.
+- place (home lab, proven 2026-10-26): the GenericCloud image ships only `kernel-modules-core`, which has no `br_netfilter`, and the mirror no longer carries modules for the image's own kernel. `dnf install kernel-modules` brings a newer kernel; reboot into it before `modprobe`. On a VM cloned on 2026-11-08, first boot had already installed the newer kernel with `kernel-modules-extra`, where `br_netfilter` lives, but the node still ran the old kernel, so the written order failed with `modprobe: FATAL: Module br_netfilter not found` (R2 rehearsal run 1). Write the `modules-load.d` file, skip `modprobe br_netfilter`, and reboot: the file loads it at boot. The image's SELinux is already on (Enforcing), so no relabel boot is needed; the written relabel boot is harmless and took under a minute.
 
 #### 3. DNS that pods can use
 
@@ -169,7 +169,7 @@ nmcli con mod "$C" ipv4.dns-search "" ipv6.dns-search "" && nmcli con up "$C"   
 - why: Pods ask CoreDNS, which sends every name outside the cluster to the node's DNS servers (source: <https://kubernetes.io/docs/tasks/administer-cluster/dns-custom-nameservers/>; the link to the node is under Known issues on <https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/>). Two node settings broke pods (measured trap, PROOF-RUN-1.md), so fixing the node gives pods working DNS.
 - expect: `/etc/resolv.conf` has the provider's nameservers and no `localhost` search domain.
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: TS5 (partly; a found-and-fixed trap).
-- place (home lab, proven 2026-10-26): skip `tailscale set --accept-dns=false`. The node's DNS is its VLAN's `.1` (OPNsense Unbound).
+- place (home lab, proven 2026-10-26): skip `tailscale set --accept-dns=false`. The node's DNS is its VLAN's `.1` (OPNsense Unbound). There the search domain the `nmcli` line clears is `home.arpa`, not `localhost` (R2 rehearsal run 1).
 
 #### 4. Firewall for Kubernetes and Cilium (tailnet zone only)
 
@@ -292,7 +292,8 @@ resources:
       - identity: {}
 YAML
 chmod 0600 /etc/kubernetes/enc/encryption-config.yaml; unset key
-# 2. tell kubeadm, so `kubeadm upgrade` keeps it: under apiServer, add
+# 2. tell kubeadm, so `kubeadm upgrade` keeps it: under apiServer, add (a fresh cluster has
+#    `apiServer: {}`; replace the `{}` with these lines)
 #      extraArgs:
 #      - name: encryption-provider-config
 #        value: /etc/kubernetes/enc/encryption-config.yaml
@@ -327,7 +328,7 @@ kubectl delete secret enc-test
 - catch: the key changes only by rotation: add the new key first in the list, restart, write every Secret again, then remove the old key. Replacing the key in place makes every Secret unreadable.
 - catch: a restored etcd backup needs the same key in the same file, or the API server can't read any Secret.
 - page: <https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/> ; kubeadm: <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-reconfigure/>
-- status: **NOT PROVEN** (written 2026-10-27; not yet run). CKA: CA4 (partly).
+- status: **PROVEN 2026-11-08** by an agent on a two-node rehearsal cluster beside c1 (R2 rehearsal run 1): the hexdump showed `k8s:enc:secretbox:v1:key1`, and the flag was in the manifest and in `kubeadm-config`. The `kubectl edit` ran through `KUBE_EDITOR` set to a script making the same change (non-interactive SSH); the typed form is not yet run. CKA: CA4 (partly).
 - place (home lab): `hosts/ansible`, role `k8s_control_plane`, tag `encryption` (`playbooks/k8s.yml --tags encryption --limit k8s_control_plane`). The key comes from a 0600 file on the controller, `k8s_control_plane_encryption_key_file` in the git-ignored inventory. A new build gets the flag at `kubeadm init`, from a config file (`templates/kubeadm-init.yaml.j2`) that replaces step 8's flags. On the running c1 the role adds the flag and the folder to the `kubeadm-config` ConfigMap, runs `kubeadm init phase control-plane apiserver`, waits until a throwaway Secret reads back encrypted from etcd, writes every Secret again, and then checks every Secret in etcd. It stops, rather than rotating, if the node already has a different key.
 
 #### 9. Cilium 1.20.4
@@ -352,7 +353,7 @@ kubectl -n kube-system rollout status ds/cilium && kubectl -n kube-system rollou
 - expect: node Ready; CoreDNS 2/2. Value keys (`ipam.mode`, `ipam.operator.clusterPoolIPv4PodCIDRList`, `devices`, `MTU`, `kubeProxyReplacement`, `operator.replicas`) checked against the v1.20.4 values.yaml on 2026-10-24 (<https://raw.githubusercontent.com/cilium/cilium/v1.20.4/install/kubernetes/cilium/values.yaml>).
 - versions (checked 2026-10-24): Cilium 1.20.4 (2026-10-23) is an out-of-band security patch (CVE-2026-111943, Go 1.26.10) that also fixes a 1.20.3 Gateway API BackendTLSPolicy regression (<https://github.com/cilium/cilium/releases/tag/v1.20.4>). Helm v4.3.1 (2026-10-15) is the current Helm patch release (<https://github.com/helm/helm/releases/tag/v4.3.1>). The proof runs used Cilium 1.20.3 and Helm v4.3.0; the value keys are the same in 1.20.4.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/> (section on the pod network add-on)
-- status: **PROVEN** on Cilium 1.20.3 and Helm v4.3.0 (PROOF-RUN-3.md: ready 32 s after install). The pins here, Cilium 1.20.4 and Helm v4.3.1, are not yet run. CKA: CA7 (CNI), CA6 (Helm).
+- status: **PROVEN** on Cilium 1.20.3 and Helm v4.3.0 (PROOF-RUN-3.md: ready 32 s after install). The pins here, Cilium 1.20.4 and Helm v4.3.1, ran on 2026-11-08 with the home-lab values below (R2 rehearsal run 1: ready 87 s after the Helm download started); with the written VPS values they are not yet run. CKA: CA7 (CNI), CA6 (Helm).
 - place (home lab, proven 2026-10-26): `kubeProxyReplacement=true` with `k8sServiceHost=<endpoint name>` and `k8sServicePort=6443`, `l2announcements.enabled=true`, `devices=<lab NIC>`, no `MTU` override (the lab NIC carries 1500), then a `CiliumLoadBalancerIPPool` on VLAN 10's `.224/27` (STD-0002) and an L2 announcement policy. A LoadBalancer Service got `.224` and answered from the worker and from the mgmt VLAN. From BUILD-PATH S11 (not yet run) the same values also carry `gatewayAPI.enabled=true`, after the Gateway API CRDs, all applied with one `helm upgrade --install --reset-values`; see [step 10a](#10a-a-way-in-for-web-traffic-home-lab).
 
 #### 10. Single node scheduling and a smoke test
@@ -371,7 +372,7 @@ kubectl exec t1 -- sh -c 'wget -q -T 8 -O /dev/null https://pkgs.k8s.io && echo 
 - expect: pod IP in 10.240.0.0/16; `kubernetes.default` → 10.96.0.1; egress-ok.
 - page: <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/> (section on control plane node isolation)
 - status: **PROVEN** (PROOF-RUN-3.md). CKA: WS5 (partly), SN1 (partly).
-- place (home lab, proven 2026-10-26): the control-plane taint stays, because c1 has a worker. The test pod is deleted afterwards: a bare pod blocks `kubectl drain` in step 17.
+- place (home lab, proven 2026-10-26): the control-plane taint stays, because c1 has a worker. So join the worker first (step 36's "place" line), then run the test pod; with the taint and no worker, `t1` has no node to run on. The test pod is deleted afterwards: a bare pod blocks `kubectl drain` in step 17.
 
 #### 10a. A way in for web traffic (home lab)
 
