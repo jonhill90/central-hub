@@ -6,8 +6,22 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 
 | Runbook | Kind | Status |
 |---|---|---|
+| [Rebuild the home lab from bare metal (top-level order)](rebuild-home-lab-from-scratch.md) | manual | draft |
+| [Set up the lab controller](set-up-lab-controller.md) | manual | draft |
+| [Set up the lab network, the OPNsense firewall and the tailnet connector container from code](set-up-lab-network-and-firewall.md) | automated | draft |
+| [Put the OPNsense image and the Debian 13 template on the Proxmox host](stage-lab-images-on-proxmox.md) | manual | draft |
+| [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md) | manual | draft |
+| [Create the c1 node VMs on Proxmox from code](create-c1-node-vms.md) | automated | draft |
+| [Restore the home lab from its backups](restore-home-lab-from-backups.md) | manual | draft |
+| [Build cluster c1 with Ansible](build-c1-with-ansible.md) | automated | draft |
+| [Issue c1's wildcard app certificate](issue-c1-app-certificate.md) | automated | draft |
+| [Install Argo CD on c1](install-argo-cd-on-c1.md) | automated | draft |
+| [Install c1's add-ons and apps with Ansible](install-c1-add-ons-with-ansible.md) | automated | draft |
 | [Build a single-node kubeadm cluster by hand (CKA practice)](build-kubeadm-cluster.md) | manual | draft |
 | [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) | manual | draft |
+| [Create the lab root CA and c1's intermediate by hand](create-lab-root-ca.md) | manual | draft |
+| [Trust the lab root CA on a Mac](trust-lab-root-ca-on-mac.md) | manual | draft |
+| [Restore c1's intermediate CA into cert-manager](restore-c1-intermediate-ca.md) | manual | draft |
 | [Move metrics-server on c1 from Ansible to Argo CD](move-metrics-server-to-argo-cd.md) | automated | draft |
 | [Move c1's volume provisioner and default StorageClass from Ansible to Argo CD](move-local-path-to-argo-cd.md) | automated | draft |
 | [Move Jellyfin on c1 from Ansible to Argo CD, with its first-run setup as code](move-jellyfin-to-argo-cd.md) | automated | draft |
@@ -16,6 +30,8 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Move c1's External Secrets and its store from Ansible to Argo CD](move-external-secrets-to-argo-cd.md) | automated | draft |
 | [Move cert-manager on c1 from Ansible to Argo CD](move-cert-manager-to-argo-cd.md) | automated | draft |
 | [Move c1's Gateway and app routes from Ansible to Argo CD](move-gateway-to-argo-cd.md) | automated | draft |
+| [Back up c1 off the box](back-up-c1-off-box.md) | automated | draft |
+| [Test the etcd restore](test-etcd-restore.md) | automated | draft |
 | [Set up lab DNS and make the owner's Mac resolve lab names](set-up-lab-dns.md) | automated | draft |
 | [Use break-glass access](use-break-glass-access.md) | manual | draft |
 

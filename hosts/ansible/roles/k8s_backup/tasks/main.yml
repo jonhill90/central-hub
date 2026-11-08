@@ -1,0 +1,181 @@
+---
+# Off-box backups of c1 (BL-0139, BL-0094). Runs on every node (playbooks/k8s-backup.yml): the
+# control plane backs up etcd, every node backs up the volume folders it holds. Tags: install
+# (tools and scripts), timers (env file and systemd timers), drill (back up now, then run the
+# restore tests).
+
+- name: install | Settings are complete when backups are on
+  ansible.builtin.assert:
+    that:
+      - k8s_backup_env_file | length > 0
+    fail_msg: >-
+      k8s_backup_enabled is true but k8s_backup_env_file is empty. Make the env file on the
+      controller first (docs/runbooks/back-up-c1-off-box.md, step 1).
+    quiet: true
+  when: k8s_backup_enabled
+  tags: [install, timers, drill]
+
+- name: install | The env file on the controller
+  ansible.builtin.stat:
+    path: "{{ k8s_backup_env_file }}"
+  register: k8s_backup_env_stat
+  delegate_to: localhost
+  become: false
+  run_once: true
+  when: k8s_backup_enabled
+  tags: [install, timers, drill]
+
+# The file holds the repository password, so only its owner may read it.
+- name: install | Stop if the env file is missing or readable by others
+  ansible.builtin.assert:
+    that:
+      - k8s_backup_env_stat.stat.exists
+      - k8s_backup_env_stat.stat.size > 0
+      - k8s_backup_env_stat.stat.mode in ['0600', '0400']
+    fail_msg: >-
+      {{ k8s_backup_env_file }} must exist on the controller, not be empty, and be mode 0600 or
+      0400. Nothing was changed.
+    quiet: true
+  when: k8s_backup_enabled
+  tags: [install, timers, drill]
+
+- name: install | bzip2 for the restic release file
+  ansible.builtin.dnf:
+    name: bzip2
+    state: present
+  tags: [install]
+
+- name: install | Folders
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ k8s_backup_bin_dir }}"
+    - "{{ k8s_backup_bin_dir }}/downloads"
+    - "{{ k8s_backup_node_env_file | dirname }}"
+    - "{{ k8s_backup_state_dir }}"
+  tags: [install]
+
+- name: install | restic release file, checked against its SHA-256
+  ansible.builtin.get_url:
+    url: "https://github.com/restic/restic/releases/download/v{{ k8s_backup_restic_version }}/restic_{{ k8s_backup_restic_version }}_linux_amd64.bz2"
+    dest: "{{ k8s_backup_bin_dir }}/downloads/restic_{{ k8s_backup_restic_version }}.bz2"
+    checksum: "sha256:{{ k8s_backup_restic_sha256 }}"
+    mode: "0600"
+  tags: [install]
+
+# One file per version, so a version change never leaves a half-written binary in use.
+- name: install | restic {{ k8s_backup_restic_version }}
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    bunzip2 -c {{ k8s_backup_bin_dir }}/downloads/restic_{{ k8s_backup_restic_version }}.bz2
+    > {{ k8s_backup_bin_dir }}/restic-{{ k8s_backup_restic_version }}.new &&
+    chmod 0755 {{ k8s_backup_bin_dir }}/restic-{{ k8s_backup_restic_version }}.new &&
+    mv {{ k8s_backup_bin_dir }}/restic-{{ k8s_backup_restic_version }}.new {{ k8s_backup_bin_dir }}/restic-{{ k8s_backup_restic_version }}
+  args:
+    executable: /bin/bash
+    creates: "{{ k8s_backup_bin_dir }}/restic-{{ k8s_backup_restic_version }}"
+  tags: [install]
+
+- name: install | restic points at that version
+  ansible.builtin.file:
+    src: restic-{{ k8s_backup_restic_version }}
+    dest: "{{ k8s_backup_bin_dir }}/restic"
+    state: link
+    force: "{{ not ansible_check_mode }}"
+  tags: [install]
+
+- name: install | etcd release file, checked against its SHA-256
+  ansible.builtin.get_url:
+    url: "https://github.com/etcd-io/etcd/releases/download/v{{ k8s_backup_etcd_version }}/etcd-v{{ k8s_backup_etcd_version }}-linux-amd64.tar.gz"
+    dest: "{{ k8s_backup_bin_dir }}/downloads/etcd-v{{ k8s_backup_etcd_version }}.tar.gz"
+    checksum: "sha256:{{ k8s_backup_etcd_sha256 }}"
+    mode: "0600"
+  when: k8s_backup_is_control_plane
+  tags: [install]
+
+# Only the control plane needs them. They go in the role's own folder, not on the PATH, so nothing
+# else runs this etcd.
+- name: install | etcd, etcdctl and etcdutl {{ k8s_backup_etcd_version }}
+  ansible.builtin.unarchive:
+    src: "{{ k8s_backup_bin_dir }}/downloads/etcd-v{{ k8s_backup_etcd_version }}.tar.gz"
+    dest: "{{ k8s_backup_bin_dir }}"
+    remote_src: true
+    creates: "{{ k8s_backup_bin_dir }}/etcd-v{{ k8s_backup_etcd_version }}-linux-amd64/etcdutl"
+    owner: root
+    group: root
+  when: k8s_backup_is_control_plane
+  tags: [install]
+
+- name: install | etcd tools point at that version
+  ansible.builtin.file:
+    src: etcd-v{{ k8s_backup_etcd_version }}-linux-amd64/{{ item }}
+    dest: "{{ k8s_backup_bin_dir }}/{{ item }}"
+    state: link
+    force: "{{ not ansible_check_mode }}"
+  loop: [etcd, etcdctl, etcdutl]
+  when: k8s_backup_is_control_plane
+  tags: [install]
+
+- name: install | Scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ k8s_backup_bin_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - c1-backup-lib.sh
+    - c1-backup-etcd.sh
+    - c1-backup-volumes.sh
+    - c1-restore-test-etcd.sh
+    - c1-restore-test-volumes.sh
+  tags: [install]
+
+- name: timers | The env file on the node
+  ansible.builtin.copy:
+    src: "{{ k8s_backup_env_file }}"
+    dest: "{{ k8s_backup_node_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: k8s_backup_enabled
+  tags: [timers]
+
+- name: timers | No env file on the node when backups are off
+  ansible.builtin.file:
+    path: "{{ k8s_backup_node_env_file }}"
+    state: absent
+  when: not k8s_backup_enabled
+  tags: [timers]
+
+- name: timers | systemd units
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: /etc/systemd/system/{{ item.dest }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ k8s_backup_units }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  register: k8s_backup_units_written
+  tags: [timers]
+
+- name: timers | Timers on or off
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: "{{ k8s_backup_enabled }}"
+    state: "{{ 'started' if k8s_backup_enabled else 'stopped' }}"
+    daemon_reload: "{{ k8s_backup_units_written is changed }}"
+  loop: "{{ k8s_backup_timers }}"
+  tags: [timers]
+
+- name: drill | Back up now, then run the restore tests
+  ansible.builtin.include_tasks: drill.yml
+  when: k8s_backup_enabled and k8s_backup_drill
+  tags: [drill]

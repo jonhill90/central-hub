@@ -1,0 +1,19 @@
+---
+# Derived from the inventory group, not settings.
+k8s_backup_is_control_plane: "{{ inventory_hostname in groups['k8s_control_plane'] }}"
+k8s_backup_units: >-
+  {{ [{'src': 'c1-backup-volumes.service.j2', 'dest': 'c1-backup-volumes.service'},
+      {'src': 'c1-backup-volumes.timer.j2', 'dest': 'c1-backup-volumes.timer'},
+      {'src': 'c1-restore-test.service.j2', 'dest': 'c1-restore-test.service'},
+      {'src': 'c1-restore-test.timer.j2', 'dest': 'c1-restore-test.timer'}]
+     + ([{'src': 'c1-backup-etcd.service.j2', 'dest': 'c1-backup-etcd.service'},
+         {'src': 'c1-backup-etcd.timer.j2', 'dest': 'c1-backup-etcd.timer'}]
+        if k8s_backup_is_control_plane else []) }}
+k8s_backup_timers: >-
+  {{ ['c1-backup-volumes.timer', 'c1-restore-test.timer']
+     + (['c1-backup-etcd.timer'] if k8s_backup_is_control_plane else []) }}
+k8s_backup_backup_services: >-
+  {{ ['c1-backup-volumes.service']
+     + (['c1-backup-etcd.service'] if k8s_backup_is_control_plane else []) }}
+# PASS lines the drill expects: volumes on every node, plus etcd on the control plane.
+k8s_backup_drill_expected: "{{ 2 if k8s_backup_is_control_plane else 1 }}"

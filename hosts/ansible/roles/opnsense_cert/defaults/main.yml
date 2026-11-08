@@ -1,0 +1,23 @@
+---
+# OPNsense's web GUI certificate from the lab CA (D-0028 rule 5), through the OPNsense API from
+# the controller: the lab root and the c1 intermediate as Trust > Authorities, the issued
+# certificate written over the certificate the web GUI uses now, then a web GUI restart. The API
+# key needs the privileges System: Trust: Authorities, System: Trust: Certificates and
+# Status: Services. API calls follow https://github.com/0xabu/opnsense-cert (opened 2026-11-08).
+#
+# Private, no default, set in the inventory:
+# opnsense_cert_names: [<name>, ...]   # DNS names for the web GUI, e.g. opnsense.<zone>
+# opnsense_api_host, opnsense_api_key, opnsense_api_secret: as for playbooks/opnsense.yml
+
+opnsense_cert_issuer_host: "{{ groups['k8s_control_plane'] | first }}"
+opnsense_cert_issuer: lab-ca
+opnsense_cert_name: opnsense
+# The port the web GUI listens on, to read the certificate it serves.
+opnsense_cert_gui_port: 443
+# Which certificate on the firewall to replace: the first one in use whose description is one of
+# these. A fresh OPNsense names its own "Web GUI TLS certificate"; after the first run it carries
+# the first of opnsense_cert_names.
+opnsense_cert_target_descrs: ["Web GUI TLS certificate", "{{ opnsense_cert_names | first }}"]
+# Check the web GUI's certificate on the API calls. Until the first run swaps it, the GUI still
+# has its self-signed one; set opnsense_lab_ssl_ca_file for that, as playbooks/opnsense.yml does.
+opnsense_cert_validate: "{{ opnsense_lab_ssl_verify | default(true) }}"

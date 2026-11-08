@@ -1,0 +1,11 @@
+# {{ ansible_managed }} (role k8s_backup)
+[Unit]
+Description=Back up c1 etcd off the box, nightly
+
+[Timer]
+OnCalendar={{ k8s_backup_etcd_schedule }}
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
