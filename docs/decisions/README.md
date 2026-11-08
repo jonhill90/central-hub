@@ -32,3 +32,4 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0025 | [Use Keycloak, reached by apps only over OIDC, for sign-in to lab apps on c1](0025-use-keycloak-behind-oidc-for-sign-in-to-lab-apps-on-c1.md) | accepted | D-0011, D-0021, BL-0019 | 2026-10-27 |
 | D-0026 | [Tell documentation from knowledge, keep knowledge in docs/knowledge/, and rename docs/research to docs/evidence](0026-tell-documentation-from-knowledge.md) | accepted | D-0001, D-0012, D-0016 | 2026-11-04 |
 | D-0027 | [Let the lab cluster c1 read central-hub through Argo CD before the Activation gate passes](0027-let-c1-read-central-hub-before-the-activation-gate.md) | accepted | D-0002, D-0011, D-0023 | 2026-11-08 |
+| D-0030 | [Give the cloud agents one GitHub account of their own, separate from the owner's, so GitHub can require the owner's approval](0030-give-cloud-agents-one-github-account-of-their-own.md) | proposed | D-0001, D-0013, D-0027 | 2026-10-28 |
