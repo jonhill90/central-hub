@@ -21,3 +21,5 @@ No private names go here (CLAUDE.md rule 4). The lab zone and the Gateway's addr
 | external-secrets, secret-store | external-secrets | [move-external-secrets-to-argo-cd.md](../../../../docs/runbooks/move-external-secrets-to-argo-cd.md) | in git, not yet synced |
 | cert-manager | cert-manager | [move-cert-manager-to-argo-cd.md](../../../../docs/runbooks/move-cert-manager-to-argo-cd.md) | in git, not yet synced |
 | gateway | gateway | [move-gateway-to-argo-cd.md](../../../../docs/runbooks/move-gateway-to-argo-cd.md) | in git, not yet synced |
+| monitoring-extras (alerts, Argo CD scrape, dashboard) | monitoring | [check-c1-alerts-and-dashboard.md](../../../../docs/runbooks/check-c1-alerts-and-dashboard.md) | in git, new (nothing to take over) |
+| alerts (ntfy) | alerts | [get-c1-alerts-on-your-phone.md](../../../../docs/runbooks/get-c1-alerts-on-your-phone.md) | in git, new |

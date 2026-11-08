@@ -23,7 +23,13 @@ jobs:
       - name: Install pinned Python packages
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install --require-hashes -r .github/docs-check/requirements.txt
+          # GitHub release downloads (actionlint-py fetches its binary from one) can return 504
+          # for a while, so the install is tried 5 times with a growing wait.
+          for try in 1 2 3 4 5; do
+            "$RUNNER_TEMP/venv/bin/pip" install --require-hashes -r .github/docs-check/requirements.txt && break
+            [ "$try" = 5 ] && exit 1
+            sleep $((try * 15))
+          done
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
       - run: .github/docs-check/run.sh front-matter
 
@@ -36,7 +42,7 @@ jobs:
           persist-credentials: false
       - name: Install lychee (pinned version and checksum)
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/lychee.tgz" "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 15 -o "$RUNNER_TEMP/lychee.tgz" "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz"
           echo "${LYCHEE_SHA256}  $RUNNER_TEMP/lychee.tgz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/lychee.tgz" -C "$RUNNER_TEMP" --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
           echo "LYCHEE=$RUNNER_TEMP/lychee" >> "$GITHUB_ENV"
@@ -66,7 +72,7 @@ jobs:
           fetch-depth: 2     # the PR merge commit and its first parent, the base
       - name: Install Vale (pinned version and checksum)
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/vale.tgz" "https://github.com/vale-cli/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 15 -o "$RUNNER_TEMP/vale.tgz" "https://github.com/vale-cli/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz"
           echo "${VALE_SHA256}  $RUNNER_TEMP/vale.tgz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/vale.tgz" -C "$RUNNER_TEMP" vale
           echo "VALE=$RUNNER_TEMP/vale" >> "$GITHUB_ENV"
@@ -83,7 +89,7 @@ jobs:
           persist-credentials: false
       - name: Install lychee (pinned version and checksum)
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/lychee.tgz" "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 15 -o "$RUNNER_TEMP/lychee.tgz" "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz"
           echo "${LYCHEE_SHA256}  $RUNNER_TEMP/lychee.tgz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/lychee.tgz" -C "$RUNNER_TEMP" --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
       - name: Check outside links and write the report

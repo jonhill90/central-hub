@@ -52,7 +52,15 @@ check_terraform() {
 
 collections() {
   [ -d hosts/ansible/collections/ansible_collections ] && return 0
-  ansible-galaxy collection install -r hosts/ansible/requirements.yml -p hosts/ansible/collections >/dev/null
+  # Galaxy sometimes answers without its results list, and ansible-galaxy then keeps that broken
+  # answer in its cache (seen in CI on 2026-11-08), so each try skips the cache and waits longer.
+  local try
+  for try in 1 2 3 4 5; do
+    ansible-galaxy collection install --no-cache -r hosts/ansible/requirements.yml \
+      -p hosts/ansible/collections >/dev/null && return 0
+    [ "$try" = 5 ] && return 1
+    sleep $((try * 15))
+  done
 }
 
 check_ansible() {
@@ -76,7 +84,7 @@ check_manifests() {
       return 1
     fi
     mkdir -p "$work/schemas/$(dirname "$path")"
-    curl -fsSL -o "$work/schemas/$path" "$url"
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 15 -o "$work/schemas/$path" "$url"
     echo "$sum  $work/schemas/$path" | sha256sum --check --quiet
   done < "$here/manifests/schemas.lock"
   mkdir -p "$work/rendered"
@@ -102,6 +110,18 @@ check_manifests() {
     helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com --set address=192.0.2.10 \
       > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
   done
+  # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
+  if command -v promtool >/dev/null; then
+    mkdir -p "$work/rules"
+    helm template x hosts/kubernetes/clusters/c1/apps/monitoring-extras -n monitoring \
+      -s templates/rules.yaml | python3 -c 'import sys, yaml; d = yaml.safe_load(sys.stdin); yaml.safe_dump({"groups": d["spec"]["groups"]}, sys.stdout)' \
+      > "$work/rules/c1-lab.rules.yml"
+    cp "$here/rules-tests/c1-lab.test.yml" "$work/rules/"
+    promtool check rules "$work/rules/c1-lab.rules.yml"
+    (cd "$work/rules" && promtool test rules c1-lab.test.yml)
+  else
+    echo "manifests: promtool not on PATH, rule tests skipped (install-tools.sh builds it)" >&2
+  fi
   # What Argo CD will apply must equal what the roles apply today (parity.txt).
   python3 "$here/parity.py" . "$work"
   kubeconform -strict -summary -output text \

@@ -16,3 +16,4 @@ tlsSecret: apps-tls
 # Service. Same shape as role k8s_app_route.
 routes:
   grafana: {namespace: monitoring, service: kube-prometheus-stack-grafana, port: 80}
+  ntfy: {namespace: alerts, service: ntfy, port: 80}

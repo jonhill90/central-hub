@@ -1,0 +1,53 @@
+# {{ ansible_managed }}
+# Sign-in to Argo CD through the lab's Keycloak (realm lab), applied server-side with its own field
+# manager, so only these keys belong to this role and the engine's install never takes them back.
+# With k8s_gitops_sso off the data is empty, and the same apply removes the keys an earlier run set.
+# Argo CD reads both ConfigMaps live; no restart (Argo CD 3.5 docs, operator-manual/user-management,
+# "Existing OIDC Provider"; operator-manual/rbac.md).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: {{ k8s_gitops_engines.argocd.namespace }}
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+{% if k8s_gitops_sso %}
+data:
+  # The UI's public URL; Keycloak's client allows only https://<this>/auth/callback.
+  url: https://{{ k8s_gitops_ui_host }}
+  # clientSecret names Secret argocd-sso, key clientSecret, which role k8s_identity copies from the
+  # realm (labelled part-of argocd, so Argo CD may read it). argocd-cli is the public client for
+  # `argocd login --sso`.
+  oidc.config: |
+    name: {{ k8s_gitops_sso_name }}
+    issuer: {{ k8s_gitops_sso_issuer }}
+    clientID: {{ k8s_gitops_sso_client_id }}
+    clientSecret: $argocd-sso:clientSecret
+    cliClientID: {{ k8s_gitops_sso_cli_client_id }}
+    enablePKCEAuthentication: true
+    requestedScopes: [openid, profile, email]
+{% if k8s_gitops_sso_root_ca_file | length > 0 %}
+    rootCA: |
+      {{ lookup('ansible.builtin.file', k8s_gitops_sso_root_ca_file) | indent(6) }}
+{% endif %}
+{% endif %}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: {{ k8s_gitops_engines.argocd.namespace }}
+  labels:
+    app.kubernetes.io/name: argocd-rbac-cm
+    app.kubernetes.io/part-of: argocd
+{% if k8s_gitops_sso %}
+data:
+  # Realm groups to Argo CD roles; anyone else who signs in sees nothing (empty default).
+  policy.csv: |
+{% for group, role in k8s_gitops_sso_group_roles.items() %}
+    g, {{ group }}, {{ role }}
+{% endfor %}
+  policy.default: ""
+  scopes: "[groups]"
+{% endif %}

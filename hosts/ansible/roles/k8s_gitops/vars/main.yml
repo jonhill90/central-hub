@@ -47,3 +47,6 @@ k8s_gitops_ui_insecure: "{{ 'true' if k8s_gitops_ui_route | bool else 'false' }}
 # No dots in the key: the task reads it with a kubectl JSONPath.
 k8s_gitops_ui_restart_annotation: central-hub/server-insecure
 k8s_gitops_ui_manifest: "{{ k8s_gitops_dir }}/argocd-ui-route.yaml"
+
+# The field manager that owns the sign-in keys in argocd-cm and argocd-rbac-cm (tag sso).
+k8s_gitops_sso_field_manager: central-hub-sso
