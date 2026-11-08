@@ -12,6 +12,7 @@ appsPath: hosts/kubernetes/clusters/c1/apps
 # One entry per component, in the order they moved (spec, "Order"). Each one:
 #   namespace    where the chart installs
 #   chart        repoURL, name and version of the upstream Helm chart (version per STD-0003)
+#   local        true: a chart kept in this repository at appsPath/<name>/ instead of `chart`
 #   releaseName  the Helm release name today, so the objects keep their names (default: the key)
 #   needsZone    pass `zone` to the chart as a value
 #   autoSync     false while the take-over diff is checked; true after the first clean sync
@@ -23,5 +24,11 @@ apps:
       repoURL: https://kubernetes-sigs.github.io/metrics-server/
       name: metrics-server
       version: 3.14.0   # metrics-server 0.9.0, 2026-08-19; same as k8s_observability today
+    autoSync: false
+    prune: false
+  jellyfin:
+    namespace: media
+    local: true
+    needsZone: true
     autoSync: false
     prune: false

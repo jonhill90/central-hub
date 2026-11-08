@@ -9,6 +9,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Build a single-node kubeadm cluster by hand (CKA practice)](build-kubeadm-cluster.md) | manual | draft |
 | [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) | manual | draft |
 | [Move metrics-server on c1 from Ansible to Argo CD](move-metrics-server-to-argo-cd.md) | automated | draft |
+| [Move Jellyfin on c1 from Ansible to Argo CD, with its first-run setup as code](move-jellyfin-to-argo-cd.md) | automated | draft |
 
 ## Template
 

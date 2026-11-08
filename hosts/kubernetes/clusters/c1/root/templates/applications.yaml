@@ -18,6 +18,20 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ $app.namespace }}
+  {{- if $app.local }}
+  # A chart kept in this repository, at appsPath/<name>/ (Chart.yaml, values.yaml, templates/).
+  source:
+    repoURL: {{ $.Values.repoURL }}
+    targetRevision: {{ $.Values.targetRevision }}
+    path: {{ $.Values.appsPath }}/{{ $name }}
+    helm:
+      releaseName: {{ $app.releaseName | default $name }}
+      {{- if $app.needsZone }}
+      parameters:
+        - name: zone
+          value: {{ required "zone: the root Application must set it (k8s_gitops_source_zone)" $.Values.zone | quote }}
+      {{- end }}
+  {{- else }}
   sources:
     - repoURL: {{ $app.chart.repoURL }}
       chart: {{ $app.chart.name }}
@@ -34,6 +48,7 @@ spec:
     - repoURL: {{ $.Values.repoURL }}
       targetRevision: {{ $.Values.targetRevision }}
       ref: values
+  {{- end }}
   {{- if $app.autoSync }}
   syncPolicy:
     automated:

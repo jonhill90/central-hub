@@ -92,6 +92,15 @@ check_manifests() {
     helm lint --quiet "$root" --set zone=example.com
     helm template root "$root" --set zone=example.com > "$work/rendered/root-$(basename "$(dirname "$root")").yaml"
   done
+  # Charts kept in this repository (root values `local: true`), rendered the same way.
+  local chart
+  for chart in hosts/kubernetes/clusters/*/apps/*/Chart.yaml; do
+    [ -f "$chart" ] || continue
+    chart=$(dirname "$chart")
+    helm lint --quiet "$chart" --set zone=example.com
+    helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com \
+      > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
+  done
   kubeconform -strict -summary -output text \
     -schema-location "$work/schemas/core/{{ .ResourceKind }}{{ .KindSuffix }}.json" \
     -schema-location "$work/schemas/crd/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json" \
