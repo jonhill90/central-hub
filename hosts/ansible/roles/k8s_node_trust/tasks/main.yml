@@ -1,0 +1,34 @@
+---
+- name: The lab root, from the controller's chain file
+  when: k8s_node_trust_enabled | bool
+  block:
+    - name: The chain file is named
+      ansible.builtin.assert:
+        that: k8s_node_trust_chain_file | length > 0
+        fail_msg: >-
+          k8s_node_trust_chain_file is empty. Set k8s_certs_lab_ca_cert_file in the inventory
+          (docs/runbooks/create-lab-root-ca.md writes that file).
+        quiet: true
+
+    # The last certificate in the file is the root, as in k8s_certs lab_ca.yml.
+    - name: Read the root
+      ansible.builtin.set_fact:
+        k8s_node_trust_root: >-
+          {{ lookup('ansible.builtin.file', k8s_node_trust_chain_file | expanduser)
+          | regex_findall('-----BEGIN CERTIFICATE-----[^-]+-----END CERTIFICATE-----') | last }}
+
+    - name: The root in the node's trust store
+      ansible.builtin.copy:
+        content: "{{ k8s_node_trust_root }}\n"
+        dest: "{{ k8s_node_trust_anchor }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Rebuild the node's trust store
+
+- name: No lab root when the lab CA is off
+  ansible.builtin.file:
+    path: "{{ k8s_node_trust_anchor }}"
+    state: absent
+  when: not (k8s_node_trust_enabled | bool)
+  notify: Rebuild the node's trust store
