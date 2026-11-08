@@ -35,11 +35,3 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0028 | [Run the lab's own certificate authority with the root kept off every cluster and one intermediate per cluster, restored into cert-manager on each rebuild](0028-run-a-lab-ca-with-the-root-off-cluster-and-one-intermediate-per-cluster.md) | accepted | D-0021, D-0023, D-0027 | 2026-11-08 |
 | D-0030 | [Give the cloud agents one GitHub account of their own, separate from the owner's, so GitHub can require the owner's approval](0030-give-cloud-agents-one-github-account-of-their-own.md) | parked | D-0001, D-0013, D-0027, D-0031 | 2026-10-28 |
 | D-0031 | [Let agents squash-merge a PR once every check on it passes, while the owner still accepts every decision record](0031-let-agents-merge-green-prs.md) | accepted | D-0001, D-0002 | 2026-11-08 |
-<<<<<<< HEAD
-| D-0028 | [Run the lab's own certificate authority with the root kept off every cluster and one intermediate per cluster, restored into cert-manager on each rebuild](0028-run-a-lab-ca-with-the-root-off-cluster-and-one-intermediate-per-cluster.md) | accepted | D-0021, D-0023, D-0027 | 2026-11-08 |
-| D-0030 | [Give the cloud agents one GitHub account of their own, separate from the owner's, so GitHub can require the owner's approval](0030-give-cloud-agents-one-github-account-of-their-own.md) | parked | D-0001, D-0013, D-0027 | 2026-10-28 |
-=======
-| D-0028 | [Run the lab's own certificate authority with the root kept off every cluster and one intermediate per cluster, restored into cert-manager on each rebuild](0028-run-a-lab-ca-with-the-root-off-cluster-and-one-intermediate-per-cluster.md) | proposed | D-0021, D-0023, D-0027 | 2026-11-08 |
-| D-0030 | [Give the cloud agents one GitHub account of their own, separate from the owner's, so GitHub can require the owner's approval](0030-give-cloud-agents-one-github-account-of-their-own.md) | proposed | D-0001, D-0013, D-0027, D-0031 | 2026-10-28 |
->>>>>>> 4341569 (docs: rewrite D-0030 to close its gaps (agent GitHub account))
-| D-0031 | [Let agents squash-merge a PR once every check on it passes, while the owner still accepts every decision record](0031-let-agents-merge-green-prs.md) | accepted | D-0001, D-0002 | 2026-11-08 |
