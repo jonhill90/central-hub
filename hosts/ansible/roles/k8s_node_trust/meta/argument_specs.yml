@@ -1,0 +1,15 @@
+---
+argument_specs:
+  main:
+    short_description: The lab root CA in each c1 node's own trust store (D-0028)
+    options:
+      k8s_node_trust_enabled:
+        type: bool
+        description: "Put the lab root on the nodes. Default: k8s_certs_lab_ca. False removes it."
+      k8s_node_trust_chain_file:
+        type: str
+        description: "File on the controller with c1's intermediate and the root last. Default: k8s_certs_lab_ca_cert_file."
+      k8s_node_trust_anchor:
+        type: str
+        default: /etc/pki/ca-trust/source/anchors/central-hub-lab-root-ca.crt
+        description: Where the root goes on each node.

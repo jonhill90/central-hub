@@ -1,0 +1,10 @@
+---
+# The lab root in each c1 node's own trust store (AlmaLinux's ca-trust), so programs on the nodes
+# (curl in the route proofs, the container runtime pulling from a lab-signed registry) trust
+# names whose certificate comes from ClusterIssuer lab-ca (D-0028). Pods keep their own images'
+# trust stores; this changes only the nodes.
+# On with the lab CA: the root is the last certificate in the same controller file that k8s_certs
+# restores the intermediate from. Off, a run removes the file an earlier run put there.
+k8s_node_trust_enabled: "{{ k8s_certs_lab_ca | default(false) }}"
+k8s_node_trust_chain_file: "{{ k8s_certs_lab_ca_cert_file | default('') }}"
+k8s_node_trust_anchor: /etc/pki/ca-trust/source/anchors/central-hub-lab-root-ca.crt
