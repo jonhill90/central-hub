@@ -41,7 +41,7 @@
           - k8s_certs_lab_ca_key_stat.stat.mode in ['0600', '0400']
         fail_msg: >-
           k8s_certs_lab_ca_key_file ({{ k8s_certs_lab_ca_key_file }}) is missing or not mode 0600
-          on the controller. Save the private store item lab-c1-intermediate-ca-key there with
+          on the controller. Run docs/runbooks/create-lab-root-ca.md, which writes it with
           mode 0600 (runbook create-lab-root-ca, step 6).
         quiet: true
 

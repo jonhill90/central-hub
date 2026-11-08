@@ -63,7 +63,6 @@ flowchart TB
 
 ### Not decided here
 
-- Where the root's private key is kept (the owner's question, open on 2026-11-08).
 - Name constraints on the intermediate (limiting it to the lab zone), until a test shows macOS and iOS accept them.
 - Trust on devices other than the owner's Mac.
 
@@ -73,6 +72,7 @@ flowchart TB
 - Good: no CA server to run, patch or back up.
 - Good: lab names stay out of public Certificate Transparency logs.
 - Bad: Proxmox and OPNsense depend on c1 to renew their certificates. Leaf certificates last 90 days and renew 30 days early, so c1 can be down for up to 30 days before one lapses.
+- Neutral: for the greenfield lab the keys sit in a local env folder on the owner's Mac, not a password manager, and every key is replaced at the first full rebuild (the owner, 2026-11-08 07:58 UTC).
 - Bad: the CA issuer doesn't rotate its own intermediate. That is a manual step before it expires, written in the root runbook.
 - Bad: cert-manager v1.21 lists Kubernetes 1.33 to 1.36 as supported, and c1 runs 1.37.
 - Neutral: devices that don't trust the root see a warning. That is why the Let's Encrypt issuer stays as the exit path.

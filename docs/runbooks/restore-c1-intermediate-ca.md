@@ -5,8 +5,8 @@ kind: manual
 trigger: after every rebuild of c1, before any app needs a certificate; after the intermediate is renewed
 runner: the owner, through SSH to c1's control plane (D-0022)
 outcome: the Secret `lab-ca` in namespace `cert-manager` holds c1's intermediate, and the ClusterIssuer `lab-ca` is Ready
-needs: SSH to c1's control plane; `kubectl` there; the private store
-private-values: [lab-c1-intermediate-ca-cert, lab-c1-intermediate-ca-key]
+needs: SSH to c1's control plane; `kubectl` there; the folder ~/.config/central-hub/lab-ca on the owner's Mac
+private-values: [c1-intermediate.key]
 files: []
 last-tested: not yet run
 superseded-by:
@@ -23,7 +23,7 @@ This is the step that makes the PKI survive a rebuild. It puts the same intermed
 
 ## Steps
 
-1. Copy the two items from the private store into a folder on the control plane that only you can read: `lab-c1-intermediate-ca-cert` as `tls.crt`, `lab-c1-intermediate-ca-key` as `tls.key`.
+1. Copy `c1-intermediate-chain.crt` and `c1-intermediate.key` from `~/.config/central-hub/lab-ca/` on the Mac into a folder on the control plane that only you can read, as `tls.crt` and `tls.key`.
    why: these are the intermediate with the root appended, and its key, exactly as the root ceremony stored them.
    ※ [D-0028 rule 3](../decisions/0028-run-a-lab-ca-with-the-root-off-cluster-and-one-intermediate-per-cluster.md)
    expect: `openssl x509 -in tls.crt -noout -subject` shows the c1 intermediate.
@@ -39,7 +39,7 @@ This is the step that makes the PKI survive a rebuild. It puts the same intermed
    expect: `secret/lab-ca created`.
 
 3. Delete the copies: `shred -u tls.crt tls.key`.
-   why: the key now lives only in the private store and the cluster.
+   why: the key now lives only in the Mac's lab-ca folder and the cluster.
    expect: the folder is empty.
 
 4. Check the issuer. The ClusterIssuer `lab-ca` comes from the `k8s_certs` role; if it was made before the Secret existed, it turns Ready within a minute.
@@ -57,7 +57,7 @@ This is the step that makes the PKI survive a rebuild. It puts the same intermed
 ## If it fails
 
 - `READY False` with "secret not found": the Secret is in the wrong namespace or has the wrong name.
-- "error decoding certificate" or a chain error: `tls.crt` is missing the root; put the chain file back from the private store.
+- "error decoding certificate" or a chain error: `tls.crt` is missing the root; copy `c1-intermediate-chain.crt` again.
 - To go back to public certificates while this is fixed, point the Gateway certificate's `issuerRef` back at the Let's Encrypt ClusterIssuer.
 
 ## Afterwards
