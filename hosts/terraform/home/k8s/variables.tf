@@ -17,6 +17,18 @@ variable "node_vnet" {
   default     = "prod"
 }
 
+variable "create_template" {
+  description = "true: this state downloads the pinned image and owns the template (c1). false: the nodes clone template_vm_id, which another state owns (a rehearsal cluster beside c1)."
+  type        = bool
+  default     = true
+}
+
+variable "template_vm_id" {
+  description = "VM ID of the node template (Proxmox VM IDs 9000+ are templates, spec home-lab-and-c1)."
+  type        = number
+  default     = 9000
+}
+
 variable "almalinux_image_url" {
   description = "AlmaLinux 10 GenericCloud qcow2 image, pinned to one build (the owner said yes to a pinned image on 2026-10-26 at 07:32 UTC). 10.2-20261012.0 was released 2026-10-12, two weeks before it was pinned (STD-0003 rule 1)."
   type        = string

@@ -7,7 +7,7 @@ Run folders laid out as `<place>/<workload>/` (layout A from RB-0083; decided in
 | [home/network/](home/network/) | SDN zone `lab` on vmbr1, VNets `prod` (10), `qa` (20), `dev` (30), `mgmt` (50), one `10.1.<tag>.0/24` subnet each, and the SDN applier | vmbr1 with a fixed MAC (Ansible, `proxmox-host.yml --tags vmbr1`) |
 | [home/firewall/](home/firewall/) | VM 100, the OPNsense firewall (net0 trunk on vmbr1, net1 WAN on vmbr0) | home/network |
 | [home/remote-access/](home/remote-access/) | CT 900, the tailnet connector (eth0 on vmbr0, eth1 on VNet mgmt) | home/network |
-| [home/k8s/](home/k8s/) | Cluster c1's node VMs: template 9000 from a pinned AlmaLinux 10 cloud image, and nodes 200 (control plane) and 201 (worker) cloned from it onto VNet prod | home/network |
+| [home/k8s/](home/k8s/) | Cluster c1's node VMs: template 9000 from a pinned AlmaLinux 10 cloud image, and nodes 200 (control plane) and 201 (worker) cloned from it onto VNet prod. A rehearsal cluster beside c1 uses the same folder with its own state file and tfvars and `create_template = false`, so it clones template 9000 without owning it | home/network |
 | [home/certificates/](home/certificates/) | The Cloudflare API token cert-manager uses for its Let's Encrypt DNS-01 challenge (one zone, Zone / DNS / Edit and Zone / Zone / Read, 90-day expiry), written to the 0600 file the Ansible inventory names. Not Proxmox: it talks to Cloudflare only | the c1 cluster and Secrets at rest (runbook steps 8 and 8a); run it before `playbooks/k8s-certs.yml --tags issue` |
 
 | [home/tailnet/](home/tailnet/) | Tailnet settings, not Proxmox: CT 900's subnet routes for every lab VLAN turned on, and split DNS that sends the lab names to OPNsense Unbound on the mgmt gateway, so the owner's Mac resolves them ([runbook](../../docs/runbooks/set-up-lab-dns.md)). Logs in with a tailnet OAuth client from the git-ignored `hosts/.env` | `playbooks/tailnet-connector.yml`, which makes CT 900 advertise the same routes |
@@ -47,10 +47,10 @@ tofu import -var-file=home.tfvars proxmox_virtual_environment_vm.opnsense <node 
 tofu import -var-file=home.tfvars proxmox_virtual_environment_container.ts_connector <node name>/900
 # home/k8s, one line per node, plus the template
 tofu import -var-file=home.tfvars 'proxmox_virtual_environment_vm.node["<node hostname>"]' <node name>/200
-tofu import -var-file=home.tfvars proxmox_virtual_environment_vm.template <node name>/9000
+tofu import -var-file=home.tfvars 'proxmox_virtual_environment_vm.template[0]' <node name>/9000
 ```
 
-Then `tofu plan` must show no changes, or only changes you expect, before any apply. `home/k8s`'s downloaded image (`proxmox_download_file.almalinux10`) and the network folder's `proxmox_sdn_applier` were never imported before; read what the plan does to them, and stop if it would replace the template or a node. `home/certificates` holds only a Cloudflare token, which is simpler to make again: delete the old token in the dashboard and apply.
+Then `tofu plan` must show no changes, or only changes you expect, before any apply. `home/k8s`'s downloaded image (`proxmox_download_file.almalinux10[0]`) and the network folder's `proxmox_sdn_applier` were never imported before; read what the plan does to them, and stop if it would replace the template or a node. `home/certificates` holds only a Cloudflare token, which is simpler to make again: delete the old token in the dashboard and apply.
 
 ## home/certificates: the cert-manager token
 

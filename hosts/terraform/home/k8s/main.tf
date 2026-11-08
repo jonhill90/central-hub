@@ -1,9 +1,14 @@
 # Kubernetes cluster c1, its node VMs (BUILD-PATH S06). One AlmaLinux 10 cloud-image template,
 # and the nodes cloned from it onto VNet prod (VLAN 10, STD-0002). Needs home/network applied
 # first. What runs inside the nodes (kubeadm, containerd, Cilium) is Ansible's job, not this.
+#
+# A second cluster (a rehearsal cluster beside c1) uses this same folder with its own state file
+# and tfvars, create_template = false, and clones the template c1's state already owns.
 
 # The AlmaLinux 10 GenericCloud image, stored as an "import" file on the host's local storage.
 resource "proxmox_download_file" "almalinux10" {
+  count = var.create_template ? 1 : 0
+
   node_name          = var.proxmox_node_name
   datastore_id       = "local"
   content_type       = "import"
@@ -16,8 +21,10 @@ resource "proxmox_download_file" "almalinux10" {
 
 # The template every node is cloned from. Never started.
 resource "proxmox_virtual_environment_vm" "template" {
+  count = var.create_template ? 1 : 0
+
   node_name = var.proxmox_node_name
-  vm_id     = 9000
+  vm_id     = var.template_vm_id
   name      = "almalinux10-template"
   pool_id   = "k8s"
   tags      = ["almalinux", "template"]
@@ -53,7 +60,7 @@ resource "proxmox_virtual_environment_vm" "template" {
   disk {
     interface    = "scsi0"
     datastore_id = "local-lvm"
-    import_from  = proxmox_download_file.almalinux10.id
+    import_from  = proxmox_download_file.almalinux10[0].id
     size         = 20
     iothread     = true
     discard      = "on"
@@ -70,7 +77,7 @@ resource "proxmox_virtual_environment_vm" "template" {
 
   lifecycle {
     # The image is read only when the disk is first made. A new pinned image takes effect when
-    # the template is rebuilt (tofu apply -replace=proxmox_virtual_environment_vm.template).
+    # the template is rebuilt (tofu apply -replace='proxmox_virtual_environment_vm.template[0]').
     ignore_changes = [disk[0].import_from]
   }
 }
@@ -83,13 +90,14 @@ resource "proxmox_virtual_environment_vm" "node" {
   vm_id     = each.value.vm_id
   name      = each.key
   pool_id   = "k8s"
-  tags      = ["almalinux", "prod", "selfhosted", each.value.role]
+  tags      = ["almalinux", var.node_vnet, "selfhosted", each.value.role]
 
   on_boot = true
   started = true
 
   clone {
-    vm_id = proxmox_virtual_environment_vm.template.vm_id
+    # Through the resource when this state owns the template, so the clone waits for it.
+    vm_id = var.create_template ? proxmox_virtual_environment_vm.template[0].vm_id : var.template_vm_id
     full  = true
   }
 
@@ -166,4 +174,16 @@ resource "proxmox_virtual_environment_vm" "node" {
       keys     = [var.node_ssh_public_key]
     }
   }
+}
+
+# The template and its image became counted resources (create_template). c1's existing state
+# moves to index 0 with no change on the host.
+moved {
+  from = proxmox_download_file.almalinux10
+  to   = proxmox_download_file.almalinux10[0]
+}
+
+moved {
+  from = proxmox_virtual_environment_vm.template
+  to   = proxmox_virtual_environment_vm.template[0]
 }
