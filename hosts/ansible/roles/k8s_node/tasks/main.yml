@@ -3,6 +3,16 @@
 # no Tailscale (the node sits on lab VLAN prod), so firewalld's Kubernetes zone is on the lab NIC,
 # and step 3's `tailscale set` line is dropped.
 
+# Step 0. A freshly cloned node is still running cloud-init on its first boot, and cloud-init's own
+# package work can empty dnf's cache under a dnf run that starts at the same time. A rehearsal run
+# failed that way: the firewalld install below lost the kernel-core rpm from the cache. So wait
+# for cloud-init to finish first. rc 2 means it finished with recoverable errors, which is fine here.
+- name: step0 | Wait for cloud-init to finish its first boot
+  ansible.builtin.command: cloud-init status --wait
+  register: k8s_node_cloud_init
+  changed_when: false
+  failed_when: k8s_node_cloud_init.rc not in [0, 2]
+
 # Step 1. Hostname and host lock-down
 - name: step1 | Hostname (kubeadm names the node after it)
   ansible.builtin.hostname:
@@ -10,6 +20,10 @@
 
 - name: step1 | firewalld
   ansible.builtin.dnf: {name: firewalld, state: present}
+  register: k8s_node_firewalld_pkg
+  until: k8s_node_firewalld_pkg is succeeded   # the first install on a fresh node also refreshes the cache
+  retries: 3
+  delay: 10
 
 - name: step1 | firewalld running
   ansible.builtin.systemd: {name: firewalld, state: started, enabled: true}
