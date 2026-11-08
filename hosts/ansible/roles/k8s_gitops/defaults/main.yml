@@ -25,6 +25,10 @@ k8s_gitops_root_path: hosts/kubernetes/clusters/c1/root
 # Private, no default, needed only with the source on; the inventory template sets it to
 # k8s_gateway_zone. It is passed to the root chart as its `zone` value.
 # k8s_gitops_source_zone: <zone>
+# Private, no default: the Gateway's address, passed to the root chart as `gatewayAddress` for the
+# gateway app (spec step 9). The inventory template sets it to k8s_gateway_address. Left unset, only
+# the gateway app fails to render.
+# k8s_gitops_source_gateway_address: <address>
 
 # The Argo CD web UI through the shared Gateway (tag ui), a follow-on to BUILD-PATH S12: the owner
 # said (2026-10-27 03:52 UTC, relayed) the UI waits until DNS is up, with no port-forward. On, it

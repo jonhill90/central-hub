@@ -22,6 +22,8 @@ k8s_observability_metrics_server_by_argocd: false
 # (kube-prometheus-stack): true once their Applications are Synced (spec steps 3 and 4).
 k8s_observability_logs_by_argocd: false
 k8s_observability_metrics_by_argocd: false
+# Grafana's route, which Argo CD's gateway app makes once it is Synced (spec step 9).
+k8s_observability_grafana_route_by_argocd: false
 
 # node-exporter listens on each node's own address (host network). Prometheus runs on the worker,
 # so the control plane's lab zone must accept its scrape; the lab zone has only the Kubernetes ports

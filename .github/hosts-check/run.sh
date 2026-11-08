@@ -89,16 +89,16 @@ check_manifests() {
   local root
   for root in hosts/kubernetes/clusters/*/root; do
     [ -f "$root/Chart.yaml" ] || continue
-    helm lint --quiet "$root" --set zone=example.com
-    helm template root "$root" --set zone=example.com > "$work/rendered/root-$(basename "$(dirname "$root")").yaml"
+    helm lint --quiet "$root" --set zone=example.com --set gatewayAddress=192.0.2.10
+    helm template root "$root" --set zone=example.com --set gatewayAddress=192.0.2.10 > "$work/rendered/root-$(basename "$(dirname "$root")").yaml"
   done
   # Charts kept in this repository (root values `local: true`), rendered the same way.
   local chart
   for chart in hosts/kubernetes/clusters/*/apps/*/Chart.yaml; do
     [ -f "$chart" ] || continue
     chart=$(dirname "$chart")
-    helm lint --quiet "$chart" --set zone=example.com
-    helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com \
+    helm lint --quiet "$chart" --set zone=example.com --set address=192.0.2.10
+    helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com --set address=192.0.2.10 \
       > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
   done
   # What Argo CD will apply must equal what the roles apply today (parity.txt).

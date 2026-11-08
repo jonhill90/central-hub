@@ -16,6 +16,10 @@ argument_specs:
         type: bool
         default: false
         description: "True once Argo CD manages kube-prometheus-stack; the role stops installing it."
+      k8s_observability_grafana_route_by_argocd:
+        type: bool
+        default: false
+        description: "True once Argo CD's gateway app makes Grafana's route; the role stops making it."
       k8s_observability_metrics_namespace: {type: str, default: monitoring, description: Namespace for Prometheus and Grafana.}
       k8s_observability_logs_namespace: {type: str, default: logging, description: Namespace for Loki and Alloy.}
       k8s_observability_storage_class:

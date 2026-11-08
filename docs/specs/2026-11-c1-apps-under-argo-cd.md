@@ -126,3 +126,4 @@ Today Jellyfin's setup wizard has not run (measured: `StartupWizardCompleted: fa
 - 2026-11-08: The spec was drafted while the owner's answer on reading the repo before the gate was still pending. Merging it turns nothing on.
 - 2026-11-08: The owner said yes to c1 reading central-hub before the Activation gate, for c1 only (card, 07:16 UTC); D-0027 records it.
 - 2026-11-08: Jellyfin moved ahead of its place in the order, because it is the app people use and it holds no data that the move touches (the claims are kept, `Delete=false`). The root chart gained a `local` kind for charts kept in this repository. Agent pick, picks 127-131.
+- 2026-11-08: Steps 2 to 6 and 9 are in git, each with a runbook, and CI checks that each renders the same objects as its Ansible role. Two private values reach the cluster through the root Application: the zone and the Gateway's address. Agent picks 132-143.

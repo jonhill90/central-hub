@@ -90,6 +90,8 @@ def main():
             elif word.startswith("param="):
                 path, _, text = word[6:].partition("=")
                 params.append(f"{path}={text.replace('{zone}', ZONE)}")
+            elif word.startswith("set="):
+                params.append(word[4:])
             elif word.startswith("ignore="):
                 kind_name, _, path = word[7:].partition(":")
                 ignores.append((kind_name, path))
@@ -105,8 +107,9 @@ def main():
             run(["ansible-playbook", "-i", "localhost,", str(here / "render.yml"), "-e", f"role={role}",
                  "-e", f"template={source}", "-e", f"dest={out}", "-e", settings], cwd=ansible)
             left = objects(out.read_text())
+            sets = [x for p in params for x in ("--set", p)]
             right = objects(run(["helm", "template", release, str(top / "apps" / app), "-n", ns,
-                                 "--set", f"zone={ZONE}", *kube]))
+                                 "--set", f"zone={ZONE}", *sets, *kube]))
             failures += compare(case, left, right, True, ignores)
         elif mode == "values":
             out = dest / "values.json"

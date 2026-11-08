@@ -3,6 +3,9 @@
 # The lab DNS zone. Ansible sets it as a Helm parameter on the root Application, from the private
 # inventory (k8s_gitops_source_zone). Children that need a hostname get it as their own `zone`.
 zone: ""
+# The Gateway's address, also private and also set by Ansible (k8s_gitops_source_gateway_address);
+# only the gateway app uses it.
+gatewayAddress: ""
 
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
@@ -116,5 +119,16 @@ apps:
       version: v1.21.3   # security release, STD-0003 rule 2; same as k8s_certs today
     wave: -2
     syncOptions: [ServerSideApply=true]
+    autoSync: false
+    prune: false
+  # The way in (spec step 9): Gateway `apps` and the routes of apps whose charts make none. The
+  # node firewall ports stay with Ansible (k8s_gateway).
+  gateway:
+    namespace: gateway
+    local: true
+    needsZone: true
+    zoneParameters:
+      address: "{gatewayAddress}"
+    wave: -1
     autoSync: false
     prune: false

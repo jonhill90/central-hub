@@ -1,0 +1,44 @@
+# Ported from hosts/ansible/roles/k8s_app_route/templates/route.yaml.j2: TLS ends at the Gateway's
+# https listener; plain http for the same name gets a 301 to https.
+{{- range $name, $r := .Values.routes }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}
+  namespace: {{ $r.namespace }}
+spec:
+  parentRefs:
+    - name: {{ $.Values.name }}
+      namespace: {{ $.Release.Namespace }}
+      sectionName: https
+  hostnames:
+    - {{ $name }}.{{ include "gateway.domain" $ }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ $r.service }}
+          port: {{ $r.port }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}-redirect
+  namespace: {{ $r.namespace }}
+spec:
+  parentRefs:
+    - name: {{ $.Values.name }}
+      namespace: {{ $.Release.Namespace }}
+      sectionName: http
+  hostnames:
+    - {{ $name }}.{{ include "gateway.domain" $ }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+{{- end }}

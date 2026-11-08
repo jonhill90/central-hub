@@ -7,7 +7,7 @@ What Argo CD on c1 reads from this repository (D-0023 rule 5, D-0027). The plan 
 | `root/` | A small Helm chart. Argo CD renders it from the one root Application `c1`, which Ansible makes (role `k8s_gitops`), and it makes one child Application per entry in `root/values.yaml`. |
 | `apps/<component>/` | That component's Helm values, read by its child Application. A component with no upstream chart is a small chart of its own here (`local: true` in `root/values.yaml`), such as `apps/jellyfin/`. |
 
-No private names go here (CLAUDE.md rule 4). The lab zone reaches the cluster only as the root Application's `zone` parameter.
+No private names go here (CLAUDE.md rule 4). The lab zone and the Gateway's address reach the cluster only as the root Application's `zone` and `gatewayAddress` parameters, which Ansible sets from the private inventory.
 
 ## Components moved so far
 
@@ -20,3 +20,4 @@ No private names go here (CLAUDE.md rule 4). The lab zone reaches the cluster on
 | local-path | local-path-storage | [move-local-path-to-argo-cd.md](../../../../docs/runbooks/move-local-path-to-argo-cd.md) | in git, not yet synced |
 | external-secrets, secret-store | external-secrets | [move-external-secrets-to-argo-cd.md](../../../../docs/runbooks/move-external-secrets-to-argo-cd.md) | in git, not yet synced |
 | cert-manager | cert-manager | [move-cert-manager-to-argo-cd.md](../../../../docs/runbooks/move-cert-manager-to-argo-cd.md) | in git, not yet synced |
+| gateway | gateway | [move-gateway-to-argo-cd.md](../../../../docs/runbooks/move-gateway-to-argo-cd.md) | in git, not yet synced |

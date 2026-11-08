@@ -45,7 +45,7 @@ Stop if any of these is not true.
    expect: Synced and Healthy. Grafana at `https://grafana.apps.c1.prod.<zone>/` signs in with the same admin password as before (Secret `monitoring/kube-prometheus-stack-grafana`). Prometheus's claim is the same one, and old graphs still show.
 
 4. By PR, set `autoSync: true` in `root/values.yaml`. In the private inventory, set `k8s_observability_metrics_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics,proof`.
-   why: Ansible stops installing the chart and deletes Helm's old release records. Grafana's route stays with Ansible until the routes move (spec step 9).
+   why: Ansible stops installing the chart and deletes Helm's old release records. Grafana's route moves with the Gateway ([gateway runbook](move-gateway-to-argo-cd.md)).
    expect: the first run reports the Helm records deleted; a second run reports `changed=0`.
 
 ## Change it

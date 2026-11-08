@@ -160,7 +160,7 @@
 
 # Once Argo CD manages logs (apps loki, alloy) or metrics (app kube-prometheus-stack), Ansible stops
 # installing them and removes Helm's old release records, as for metrics-server above. Grafana's
-# route stays here until the routes move (spec step 9).
+# route moves with the Gateway (app gateway, spec step 9): k8s_observability_grafana_route_by_argocd.
 - name: Old Helm release records, for each release Argo CD now manages
   ansible.builtin.command: >-
     kubectl -n {{ item.namespace }} delete secret -l owner=helm,name={{ item.name }}
@@ -187,6 +187,7 @@
     k8s_app_route_path: /login
     k8s_app_route_expect: <title>Grafana</title>
     k8s_app_route_zone: "{{ k8s_observability_zone }}"
+  when: not k8s_observability_grafana_route_by_argocd | bool
   tags: [route]
 
 - name: Proof
