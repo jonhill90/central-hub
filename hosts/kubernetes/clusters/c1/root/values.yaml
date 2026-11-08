@@ -132,3 +132,12 @@ apps:
     wave: -1
     autoSync: false
     prune: false
+  # c1's own alert rules, the Argo CD scrape and the lab dashboard (needs the CRDs from
+  # kube-prometheus-stack, so it waits for it).
+  monitoring-extras:
+    namespace: monitoring
+    local: true
+    wave: 1
+    autoSync: true
+    prune: true
+

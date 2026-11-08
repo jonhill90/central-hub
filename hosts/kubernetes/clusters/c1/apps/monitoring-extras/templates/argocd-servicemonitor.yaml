@@ -1,0 +1,18 @@
+# Argo CD's own metrics (the controller's argocd_app_info, the API server's request counts). Its
+# install (k8s_gitops, upstream install.yaml v3.5.5) has the Services; nothing scraped them.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: argocd
+  namespace: {{ .Release.Namespace }}
+spec:
+  namespaceSelector:
+    matchNames: [{{ .Values.argocd.namespace }}]
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [argocd-metrics, argocd-server-metrics]
+  endpoints:
+    - port: metrics
+      interval: 60s

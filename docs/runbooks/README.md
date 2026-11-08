@@ -16,6 +16,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Move c1's External Secrets and its store from Ansible to Argo CD](move-external-secrets-to-argo-cd.md) | automated | draft |
 | [Move cert-manager on c1 from Ansible to Argo CD](move-cert-manager-to-argo-cd.md) | automated | draft |
 | [Move c1's Gateway and app routes from Ansible to Argo CD](move-gateway-to-argo-cd.md) | automated | draft |
+| [Check c1's health from its dashboard and alerts](check-c1-alerts-and-dashboard.md) | manual | draft |
 
 ## Template
 

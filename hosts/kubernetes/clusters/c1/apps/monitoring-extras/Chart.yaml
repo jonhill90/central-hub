@@ -1,0 +1,5 @@
+apiVersion: v2
+name: monitoring-extras
+description: c1's own alert rules, the Argo CD scrape and the lab dashboard, on top of kube-prometheus-stack
+type: application
+version: 0.1.0

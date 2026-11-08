@@ -1,0 +1,59 @@
+# c1's own alerts: the things a person notices only when an app stops working.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: c1-lab
+  namespace: {{ .Release.Namespace }}
+spec:
+  groups:
+    - name: c1-gitops
+      rules:
+        - alert: C1ArgoAppNotSynced
+          expr: max by (name) (argocd_app_info{sync_status!="Synced"}) == 1
+          for: 30m
+          labels: {severity: warning}
+          annotations:
+            summary: "Argo CD Application {{ "{{" }} $labels.name {{ "}}" }} has not matched git for 30 minutes"
+            runbook: docs/runbooks/README.md (the component's move-*-to-argo-cd.md)
+        - alert: C1ArgoAppUnhealthy
+          expr: max by (name, health_status) (argocd_app_info{health_status!~"Healthy|Progressing"}) == 1
+          for: 15m
+          labels: {severity: critical}
+          annotations:
+            summary: "Argo CD Application {{ "{{" }} $labels.name {{ "}}" }} is {{ "{{" }} $labels.health_status {{ "}}" }}"
+        - alert: C1ArgoCDNotScraped
+          expr: absent(up{namespace="{{ .Values.argocd.namespace }}", service="argocd-metrics"} == 1)
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Prometheus can't read Argo CD's metrics, so the two alerts above can't fire
+    - name: c1-storage
+      rules:
+        - alert: C1DataDiskFillingUp
+          expr: |
+            node_filesystem_avail_bytes{mountpoint="{{ .Values.dataMount }}"}
+              / node_filesystem_size_bytes{mountpoint="{{ .Values.dataMount }}"} < {{ .Values.dataFreeWarnRatio }}
+          for: 30m
+          labels: {severity: warning}
+          annotations:
+            summary: "The data disk on {{ "{{" }} $labels.instance {{ "}}" }} has less than {{ mulf .Values.dataFreeWarnRatio 100 }}% free; every volume lives there"
+    - name: c1-apps
+      rules:
+        - alert: C1JellyfinDown
+          expr: kube_deployment_status_replicas_available{namespace="media", deployment="jellyfin"} < 1
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Jellyfin has no ready pod
+        - alert: C1LokiDown
+          expr: kube_statefulset_status_replicas_ready{namespace="logging", statefulset="loki"} < 1
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: Loki has no ready pod, so new logs are being lost
+        - alert: C1PodCrashLooping
+          expr: increase(kube_pod_container_status_restarts_total[30m]) > 5
+          for: 10m
+          labels: {severity: warning}
+          annotations:
+            summary: "{{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} restarted more than 5 times in 30 minutes"
