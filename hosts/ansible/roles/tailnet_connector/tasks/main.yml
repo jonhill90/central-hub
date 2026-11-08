@@ -1,0 +1,89 @@
+---
+# CT 900 is reached through the Proxmox host with `pct exec` and `pct push`, the same way the
+# Proxmox runbook checks it, so no new SSH path into the container is needed.
+- name: Check the private values and the mgmt VLAN
+  ansible.builtin.assert:
+    that:
+      - tailnet_connector_lab_supernet | length > 0
+      - tailnet_connector_extra_routes | select('equalto', '') | list | length == 0
+      - lab_vlans | selectattr('name', 'equalto', tailnet_connector_mgmt_vlan) | list | length == 1
+    fail_msg: >-
+      tailnet_connector_lab_supernet or an entry of tailnet_connector_extra_routes is blank,
+      or lab_vlans has no VLAN named {{ tailnet_connector_mgmt_vlan }}.
+    quiet: true
+
+- name: Work out the gateway and the routes to advertise
+  ansible.builtin.set_fact:
+    # The mgmt /24's .1 (STD-0002: every lab /24's gateway is .1).
+    tailnet_connector_gateway: >-
+      {{ (lab_vlans | selectattr('name', 'equalto', tailnet_connector_mgmt_vlan) | first).cidr.split('/')[0].rsplit('.', 1)[0] }}.1
+    # The same list home/tailnet turns on: the extra routes plus every lab VLAN.
+    tailnet_connector_routes: "{{ (tailnet_connector_extra_routes + lab_vlans | map(attribute='cidr') | list) | unique | sort }}"
+
+- name: IP forwarding is on in CT 900
+  ansible.builtin.command: pct exec {{ tailnet_connector_vmid }} -- sysctl -n net.ipv4.ip_forward
+  register: tailnet_connector_forward
+  changed_when: false
+  check_mode: false
+  failed_when: tailnet_connector_forward.rc != 0 or tailnet_connector_forward.stdout | trim != '1'
+
+# The route: a systemd unit in the container. Proxmox writes the container's
+# /etc/network/interfaces from its own config at every start, so a route there would be lost.
+- name: Render the route unit on the host
+  ansible.builtin.template:
+    src: central-hub-lab-route.service.j2
+    dest: /root/central-hub-lab-route.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: tailnet_connector_unit_file
+
+- name: Read the unit in CT 900
+  ansible.builtin.command: pct exec {{ tailnet_connector_vmid }} -- sha256sum /etc/systemd/system/central-hub-lab-route.service
+  register: tailnet_connector_unit_ct
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Read the rendered unit's checksum
+  ansible.builtin.stat:
+    path: /root/central-hub-lab-route.service
+    checksum_algorithm: sha256
+  register: tailnet_connector_unit_host
+
+- name: Copy the unit into CT 900 and start it
+  ansible.builtin.shell: |
+    set -eu
+    pct push {{ tailnet_connector_vmid }} /root/central-hub-lab-route.service /etc/systemd/system/central-hub-lab-route.service --perms 0644
+    pct exec {{ tailnet_connector_vmid }} -- systemctl daemon-reload
+    pct exec {{ tailnet_connector_vmid }} -- systemctl enable central-hub-lab-route.service
+    pct exec {{ tailnet_connector_vmid }} -- systemctl restart central-hub-lab-route.service
+  args:
+    executable: /bin/bash
+  when: >-
+    tailnet_connector_unit_ct.rc != 0 or
+    (tailnet_connector_unit_ct.stdout.split() | first) != tailnet_connector_unit_host.stat.checksum | default('')
+  changed_when: true
+
+- name: Advertised routes now
+  ansible.builtin.command: pct exec {{ tailnet_connector_vmid }} -- tailscale debug prefs
+  register: tailnet_connector_prefs
+  changed_when: false
+  check_mode: false
+
+# `tailscale set --advertise-routes` replaces the whole list, so the extra routes are always in it.
+- name: Advertise the lab VLANs
+  ansible.builtin.command: >-
+    pct exec {{ tailnet_connector_vmid }} -- tailscale set --advertise-routes={{ tailnet_connector_routes | join(',') }}
+  when: (tailnet_connector_prefs.stdout | from_json).AdvertiseRoutes | default([], true) | sort != tailnet_connector_routes
+  changed_when: true
+
+# Proof (read only): the route is in place and the mgmt gateway answers DNS from the container.
+- name: The lab range goes through the mgmt gateway
+  ansible.builtin.command: pct exec {{ tailnet_connector_vmid }} -- ip -4 route show {{ tailnet_connector_lab_supernet }}
+  register: tailnet_connector_route
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    not ansible_check_mode and
+    ('via ' ~ tailnet_connector_gateway ~ ' dev ' ~ tailnet_connector_mgmt_interface) not in tailnet_connector_route.stdout

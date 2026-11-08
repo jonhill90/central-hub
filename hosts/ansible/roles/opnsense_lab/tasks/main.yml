@@ -45,6 +45,10 @@
   ansible.builtin.import_tasks: dns.yml
   tags: [dns]
 
+- name: DNS proof
+  ansible.builtin.import_tasks: dns_proof.yml
+  tags: [dns, dns_proof]
+
 - name: Home LAN access on WAN
   ansible.builtin.import_tasks: wan.yml
   tags: [wan]

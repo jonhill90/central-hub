@@ -1,0 +1,22 @@
+---
+# Proof, read only: every lab name answers with its address. Runs `dig` on the controller, so it
+# also proves the controller's own path to the DNS server. With the default server it asks Unbound
+# on the mgmt gateway directly; set opnsense_lab_dns_proof_server to 100.100.100.100 on a tailnet
+# device to prove split DNS end to end (docs/runbooks/set-up-lab-dns.md). Skipped in check mode,
+# where the overrides may not exist yet.
+- name: Ask the lab DNS server for every lab name
+  ansible.builtin.command: >-
+    dig +short +time=3 +tries=2 A
+    {{ (('dns-proof.' if item.hostname == '*' else item.hostname ~ '.') ~
+        ((item.subdomain ~ '.') if item.subdomain | default('') | length > 0 else '') ~ opnsense_dns_zone) | quote }}
+    @{{ opnsense_lab_dns_proof_server | default(opnsense_lab_mgmt_gateway, true) }}
+  loop: "{{ [{'hostname': 'opnsense', 'address': opnsense_lab_mgmt_gateway}] + opnsense_lab_host_overrides }}"
+  loop_control:
+    label: "{{ item.hostname }}.{{ (item.subdomain ~ '.') if item.subdomain | default('') | length > 0 else '' }}<zone>"
+  register: opnsense_lab_dns_proof
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+  failed_when: >-
+    opnsense_lab_dns_proof.rc != 0 or
+    item.address not in opnsense_lab_dns_proof.stdout_lines
