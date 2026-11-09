@@ -1,6 +1,6 @@
 ---
 title: Move c1's Gateway and app routes from Ansible to Argo CD
-status: draft
+status: tested
 kind: automated
 trigger: on request (step 9 of spec 2026-11-c1-apps-under-argo-cd)
 runner: an agent lane, through the owner's Mac (D-0022)
@@ -8,7 +8,7 @@ outcome: Argo CD's Application `gateway` is Synced and Healthy, Gateway `apps` k
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone, k8s_gateway_address]
 files: [hosts/kubernetes/home/c1/apps/gateway/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_gitops/templates/source-argocd.yaml.j2, hosts/ansible/roles/k8s_gateway/, hosts/ansible/playbooks/k8s-gateway.yml, hosts/ansible/playbooks/k8s-observability.yml]
-last-tested: 2026-11-09, an agent lane on the owner's Mac, steps 1-4 on c1 at main db8b158 (diff only the ntfy routes and the namespace annotation; one hand sync, Synced and Healthy; four listeners Programmed; k8s-gateway.yml changed=2 from its smoke test only, k8s-observability.yml --tags route changed=0); autoSync for gateway waits for the owner's go)
+last-tested: 2026-11-09, an agent lane on the owner's Mac, steps 1-4 on c1 at main db8b158 (diff only the ntfy routes and the namespace annotation; one hand sync, Synced and Healthy; four listeners Programmed; k8s-gateway.yml changed=2 from its smoke test only, k8s-observability.yml --tags route changed=0); autoSync on by PR after the owner's go at 06:46 UTC)
 superseded-by:
 ---
 
