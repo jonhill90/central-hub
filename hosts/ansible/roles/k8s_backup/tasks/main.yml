@@ -135,9 +135,18 @@
     - c1-restore-test-volumes.sh
   tags: [install]
 
+- name: timers | Azure SAS from the controller
+  ansible.builtin.include_tasks:
+    file: azure_sas.yml
+    apply:
+      tags: [timers]
+  when: k8s_backup_enabled and k8s_backup_azure_sas
+  tags: [timers]
+
+# The controller's env file, plus the Azure lines when the SAS is on.
 - name: timers | The env file on the node
   ansible.builtin.copy:
-    src: "{{ k8s_backup_env_file }}"
+    content: "{{ lookup('ansible.builtin.file', k8s_backup_env_file) }}\n{{ k8s_backup_azure_env_lines | default('') }}"
     dest: "{{ k8s_backup_node_env_file }}"
     owner: root
     group: root

@@ -4,7 +4,7 @@
 #
 #   CENTRAL_HUB_BACKUP_ENV  the env file (default /etc/central-hub/backup.env, mode 0600). It holds
 #                           RESTIC_REPOSITORY, RESTIC_PASSWORD and the target's own credentials,
-#                           for example AZURE_ACCOUNT_NAME and AZURE_ACCOUNT_KEY for azure:<container>:/c1.
+#                           for example AZURE_ACCOUNT_NAME and AZURE_ACCOUNT_SAS for azure:<container>:/c1.
 #   BACKUP_BIN              folder with restic, etcdctl, etcdutl and etcd (default: the folder of this file)
 #   BACKUP_HOST             the name snapshots are filed under (default: the short host name)
 #   BACKUP_STATE            local state: the last canary values (default /var/lib/central-hub-backup)

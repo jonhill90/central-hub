@@ -18,6 +18,18 @@ k8s_backup_enabled: false
 # target's own credentials (restic's docs, "Preparing a new repository").
 k8s_backup_env_file: ""
 
+# Azure Blob target without a key (agent pick 181, interim). true: each run of the timers tag
+# mints a user delegation SAS for the container on the controller (the Azure CLI, signed in as the
+# agents' service principal) and adds AZURE_ACCOUNT_NAME and AZURE_ACCOUNT_SAS to the node env
+# file; the controller's env file then holds only RESTIC_REPOSITORY and RESTIC_PASSWORD. The SAS
+# lasts k8s_backup_azure_sas_days (Azure allows 7 at most), so the timers tag must run again
+# before then. Storage: hosts/terraform/azure/backup.
+k8s_backup_azure_sas: false
+k8s_backup_azure_account: ""
+k8s_backup_azure_container: c1-backup
+k8s_backup_azure_sas_days: 7
+k8s_backup_az: az
+
 # Where the tools and scripts go on the nodes, apart from the PATH so nothing else picks up this
 # etcd binary.
 k8s_backup_bin_dir: /usr/local/libexec/central-hub-backup
