@@ -8,7 +8,7 @@ proposed-by: drafting-agent
 consulted: [reviewing-agent]
 waits-on: [D-0001, D-0003, D-0006, D-0016]
 supersedes: []
-superseded-by:
+superseded-by: D-0032
 accepted-evidence:
   approved-by: owner
   approved-at: 2026-10-24T02:12:01Z
