@@ -164,6 +164,27 @@
   when: not k8s_backup_enabled
   tags: [timers]
 
+# The repository is made here, once, from one node, before any timer or drill can start a backup.
+# When every node made it on its first backup, two nodes ran `restic init` at the same second
+# (c1, 2026-11-09 04:11:25 UTC): each wrote its own key, and the repository failed with
+# "ciphertext verification failed". The scripts still make a missing repository (for CI's local
+# one), but on the cluster it already exists by then.
+- name: timers | Make the restic repository once, if it is not there
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    set -a && . {{ k8s_backup_node_env_file }} && set +a &&
+    if {{ k8s_backup_bin_dir }}/restic cat config >/dev/null 2>&1; then echo exists;
+    else {{ k8s_backup_bin_dir }}/restic init >/dev/null && echo made; fi
+  args:
+    executable: /bin/bash
+  environment:
+    RESTIC_CACHE_DIR: /var/cache/central-hub-backup
+  register: k8s_backup_repo_init
+  changed_when: k8s_backup_repo_init.stdout == 'made'
+  run_once: true
+  when: k8s_backup_enabled and not ansible_check_mode
+  tags: [timers, drill]
+
 - name: timers | systemd units
   ansible.builtin.template:
     src: "{{ item.src }}"
@@ -186,7 +207,12 @@
   loop: "{{ k8s_backup_timers }}"
   tags: [timers]
 
+# apply: a tag on include_tasks is not passed to the tasks it includes, so without it
+# `--tags drill` ran nothing (measured on c1, 2026-11-09).
 - name: drill | Back up now, then run the restore tests
-  ansible.builtin.include_tasks: drill.yml
+  ansible.builtin.include_tasks:
+    file: drill.yml
+    apply:
+      tags: [drill]
   when: k8s_backup_enabled and k8s_backup_drill
   tags: [drill]

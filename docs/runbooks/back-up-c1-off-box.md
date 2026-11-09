@@ -118,6 +118,7 @@ The way off the SAS is workload identity federation, or Azure Arc for the nodes 
 
    why: the role puts restic 0.19.1 on every node and etcd 3.7.2's `etcdctl`, `etcdutl` and `etcd` on the control plane, each checked against its SHA-256, in `/usr/local/libexec/central-hub-backup` (off the `PATH`). It copies the env file to `/etc/central-hub/backup.env` (0600) and turns on three timers.
    ※ [hosts/ansible/README.md, "Backups of c1"](../../hosts/ansible/README.md#backups-of-c1)
+   Step 2 also makes the restic repository, once, from one node, if it isn't there yet. Two nodes making it at the same time leave a repository that can't be read (seen on c1, 2026-11-09).
    expect: `systemctl list-timers 'c1-*'` on the control plane lists `c1-backup-etcd`, `c1-backup-volumes` and `c1-restore-test`; on the worker, the last two.
 
 3. Run a backup and the restore tests now, instead of waiting for the night:
@@ -126,7 +127,7 @@ The way off the SAS is workload identity federation, or Azure Arc for the nodes 
    ansible-playbook -i inventories/home/ playbooks/k8s-backup.yml --tags drill -e k8s_backup_drill=true
    ```
 
-   why: a backup counts only once a restore of it has worked. The drill starts the same services the timers start, so it tests what runs every night. The first run makes the repository.
+   why: a backup counts only once a restore of it has worked. The drill starts the same services the timers start, one node at a time, so it tests what runs every night.
    ※ [Test the etcd restore](test-etcd-restore.md)
    expect: the last task shows `PASS: etcd restore test, revision …` on the control plane and `PASS: volume restore test, N folders` on the worker. The control plane has no volume folders, so its volume test says `nothing to test`.
 
@@ -162,6 +163,7 @@ why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansi
 - **The env file check stops the run:** the file is missing, empty, or readable by others. Fix it on the controller; nothing on the nodes was changed.
 - **A backup fails at night:** `journalctl -u c1-backup-etcd -u c1-backup-volumes --since yesterday` on the node. The timers retry the next night; `Persistent=true` runs a missed one at boot.
 - **`AuthorizationFailure` or 403 from Azure:** the SAS ran out (see `AZURE_ACCOUNT_SAS_EXPIRES` in the node env file; run step A4), the home's public address changed (set the new one in `azure.tfvars` and apply step A1 again), or the role from step A2 is missing or not yet in effect.
+- **`ciphertext verification failed`** on every restic command: the repository holds keys from two `restic init` runs. If it holds no backup you need, tell the owner, delete the `c1/` folder in the container, and run step 2 again to make it once.
 - **The repository is locked** (a run was cut off): `restic unlock` with the env file loaded, as in step 4.
 - **The way back:** set `k8s_backup_enabled: false` and run step 2 again. The timers stop and the env file is removed from the nodes; the tools stay, and the repository and its snapshots are untouched.
 - Tell the owner before deleting snapshots or the repository.
