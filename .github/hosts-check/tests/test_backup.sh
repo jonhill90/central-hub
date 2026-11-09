@@ -8,18 +8,25 @@
 #   3. c1-backup-volumes.sh backs up two folders and a PostgreSQL dump (stand-in crictl); the source
 #      changes afterwards; c1-restore-test-volumes.sh must pass, a full restore must equal the source
 #      as backed up, and a dump that does not finish must fail the backup.
-#   4. One pack file in the repository damaged: the volume restore test must fail.
+#   4. Keycloak's PostgreSQL image (the one role k8s_identity runs, under Docker with the kubelet's
+#      labels, reached through a stand-in for crictl): a real pg_dumpall goes into the snapshot, and
+#      the runbook's "Restore Keycloak's database" steps load it into a new database whose password
+#      changed since the dump: every row comes back, and the new password still signs in.
+#   5. One pack file in the repository damaged: the volume restore test must fail.
 #
 # Tools come from their GitHub releases, each checked against a SHA-256: the versions and sums the
 # role installs are read from its defaults/main.yml, so CI tests what goes on the nodes.
-# Usage: .github/hosts-check/tests/test_backup.sh   (needs curl, python3 with PyYAML, bunzip2, tar)
+# Usage: .github/hosts-check/tests/test_backup.sh   (needs curl, python3 with PyYAML, bunzip2, tar,
+# docker)
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 root=$PWD
 role=$root/hosts/ansible/roles/k8s_backup
 work=$(mktemp -d)
+pg_containers=()
 cleanup() {
   [ -n "${etcd_pid:-}" ] && kill "$etcd_pid" 2>/dev/null
+  [ ${#pg_containers[@]} -gt 0 ] && docker rm -f "${pg_containers[@]}" >/dev/null 2>&1
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -80,7 +87,10 @@ echo "fake-ca" > "$work/kube/pki/ca.crt"
 echo "fake-manifest" > "$work/kube/manifests/etcd.yaml"
 ETCDCTL_ENDPOINTS=http://127.0.0.1:12379 ETCD_CACERT='' KUBE_DIR=$work/kube "$bin/c1-backup-etcd.sh"
 ok "c1-backup-etcd.sh backed up etcd $CLUSTER_ETCD_VERSION with etcdctl $etcd_v"
-"$bin/restic" ls latest --tag etcd | grep -qx '/kubernetes/pki/ca.crt' || fail "pki/ca.crt is not in the snapshot"
+# The listing goes in a variable first: grep -q stops at the first match, and with pipefail a
+# restic still printing dies of SIGPIPE and fails the check (seen locally, 2026-11-09).
+listing=$("$bin/restic" ls latest --tag etcd)
+grep -qx '/kubernetes/pki/ca.crt' <<< "$listing" || fail "pki/ca.crt is not in the snapshot"
 ok "the snapshot holds kubernetes/pki"
 out=$("$bin/c1-restore-test-etcd.sh")
 echo "$out"
@@ -136,7 +146,83 @@ grep -q 'a database dump failed; the files were backed up' "$work/short.log" || 
 rm "$work/crictl.mode"
 ok "a database dump that does not finish fails the volume backup"
 
-echo "== 4. a damaged repository fails the volume restore test"
+echo "== 4. a real PostgreSQL: the dump restores by the runbook and keeps the current password"
+pg_image=$(python3 -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1]))["k8s_identity_postgres_image"])' \
+  "$root/hosts/ansible/roles/k8s_identity/defaults/main.yml")
+for try in 1 2 3 4 5; do
+  docker pull -q "$pg_image" >/dev/null && break
+  [ "$try" = 5 ] && fail "could not pull $pg_image"
+  sleep $((try * 15))
+done
+# A database as role k8s_identity runs it: uid 999, PGDATA in a subfolder, the kubelet's labels.
+pg_run() { # container-name password [docker run flags]
+  local name=$1 password=$2
+  shift 2
+  pg_containers+=("$name")
+  docker run -d --name "$name" --user 999:999 -e POSTGRES_DB=keycloak -e POSTGRES_USER=keycloak \
+    -e POSTGRES_PASSWORD="$password" -e PGDATA=/var/lib/postgresql/data/pgdata "$@" "$pg_image" >/dev/null
+  for _ in $(seq 60); do
+    docker exec "$name" pg_isready -h 127.0.0.1 -U keycloak -d keycloak >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  fail "PostgreSQL in $name did not start"
+}
+# Signs in over the network with a password, as Keycloak's pod does. Inside the container,
+# 127.0.0.1 is trusted without one, so this runs from a second container.
+pg_login() { # container-name password
+  local ip
+  ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$1")
+  docker run --rm -e PGPASSWORD="$2" "$pg_image" psql -h "$ip" -U keycloak -d keycloak -tAc 'select count(*) from realm'
+}
+# crictl ps -o json and crictl exec, answered from Docker's containers and their kubelet labels.
+cat > "$work/crictl-docker" <<'CRI'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  ps) ids=$(docker ps -q --no-trunc --filter label=io.kubernetes.container.name=postgres)
+      if [ -z "$ids" ]; then echo '{"containers": []}'; exit 0; fi
+      # shellcheck disable=SC2086  # one argument per container ID
+      docker inspect $ids | python3 -c 'import json, sys
+print(json.dumps({"containers": [{"id": c["Id"], "labels": c["Config"]["Labels"]} for c in json.load(sys.stdin)]}))' ;;
+  exec) shift; exec docker exec "$@" ;;
+  *) exit 2 ;;
+esac
+CRI
+chmod +x "$work/crictl-docker"
+export BACKUP_CRICTL=$work/crictl-docker
+db=ci-backup-db-$$
+pg_run "$db" password-at-dump --label io.kubernetes.pod.namespace=identity \
+  --label io.kubernetes.pod.name=sso-postgres-0 --label io.kubernetes.container.name=postgres
+docker exec "$db" psql -q -U keycloak -d keycloak -v ON_ERROR_STOP=1 \
+  -c "create table realm (id int primary key, name text)" \
+  -c "insert into realm select g, 'realm-' || g from generate_series(1, 500) g"
+"$bin/c1-backup-volumes.sh"
+out=$("$bin/c1-restore-test-volumes.sh")
+echo "$out"
+grep -q 'identity_sso-postgres-0.sql: complete' <<< "$out" || fail "the restore test did not check the real dump"
+ok "c1-backup-volumes.sh dumped a real PostgreSQL through crictl, and the restore test found the dump complete"
+# Runbook "Restore Keycloak's database", steps 2 and 3, with docker exec in place of kubectl exec,
+# into a new database whose password changed after the dump (a rotated or rebuilt Secret).
+"$bin/restic" restore latest --host ci-node --tag volumes --include "$BACKUP_STATE/db-dumps" \
+  --target "$work/db-restore" >/dev/null
+dump=$work/db-restore$BACKUP_STATE/db-dumps/identity_sso-postgres-0.sql
+if grep -q "^ALTER ROLE .* PASSWORD " "$dump"; then
+  fail "the dump holds a role's password"
+fi
+db2=ci-backup-db2-$$
+pg_run "$db2" password-now
+# shellcheck disable=SC2016  # $POSTGRES_USER is the container's
+docker exec -i "$db2" sh -c 'dropdb -U "$POSTGRES_USER" --if-exists keycloak'
+# shellcheck disable=SC2016
+docker exec -i "$db2" sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=0' < "$dump" > "$work/load.log" 2>&1
+if grep -q FATAL "$work/load.log"; then cat "$work/load.log"; fail "psql stopped with FATAL"; fi
+rows=$(pg_login "$db2" password-now 2>&1) || { echo "$rows"; fail "the database's current password no longer signs in after the restore"; }
+[ "$rows" = 500 ] || fail "the restored database has $rows rows, want 500"
+ok "the runbook's restore brings back all 500 rows, and the current password still signs in"
+docker rm -f "$db" "$db2" >/dev/null
+unset BACKUP_CRICTL
+
+echo "== 5. a damaged repository fails the volume restore test"
 pack=$(find "$RESTIC_REPOSITORY/data" -type f -size +1M -print -quit)
 [ -n "$pack" ] || fail "no pack file to damage"
 chmod u+w "$pack"
