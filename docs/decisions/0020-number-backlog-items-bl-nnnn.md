@@ -1,7 +1,7 @@
 ---
 id: D-0020
 title: Number backlog items BL-NNNN
-status: accepted
+status: superseded
 date: 2026-10-24
 decision-makers: [owner]
 proposed-by: drafting-agent

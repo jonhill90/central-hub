@@ -1,7 +1,7 @@
 ---
 id: D-0032
 title: Number tasks TASK-NNNN, and keep other trackers' keys as references
-status: proposed
+status: accepted
 date: 2026-11-09
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,13 @@ consulted: []
 waits-on: [D-0003, D-0020]
 supersedes: [D-0020]
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-09T01:31:18Z
+  approved-commit: 753d6d2b798a2e84e31f2d915ff98017c94e0e9c
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNBTy45aLfCkayPE6NZD2Bh1
+  approval-names: "PR #102 and head 753d6d2"
+  check: the drafting agent read the message in the project thread at 2026-11-09T01:31Z; it names PR jonhill90/central-hub 102 and head 753d6d2 itself, and that head holds this record. The owner's pick of TASK-NNNN on the decision card matches. An independent check by a reviewing agent is still to do
 revisit-when: a second tracker is synced into the notebook; the Activation gate passes; or tasks get a second numbering owner
 ---
 
@@ -40,7 +47,7 @@ Evidence: [../evidence/0032-number-tasks-task-nnnn-and-keep-tracker-keys-as-refe
 
 ## Decision Outcome
 
-Proposed option: **1**. The prefix, keeping the numbers and the reference field's shape are agent picks, for the owner to accept or change with this record.
+Chosen option: **1**, which the owner accepted on 2026-11-09 at 01:31 UTC. The prefix, keeping the numbers and the reference field's shape were agent picks.
 
 ```mermaid
 flowchart LR
