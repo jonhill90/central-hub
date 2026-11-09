@@ -7,9 +7,19 @@
   ansible.builtin.import_tasks: apply.yml
   vars: {__manifest: keycloak.yaml}
 
-- name: keycloak | Keycloak ready
-  ansible.builtin.command: >-
+# A changed Keycloak (a new theme, hostname or resources) restarts its pod, and the old status can
+# still say Ready for a moment. So: wait until the operator has seen this generation, then until the
+# StatefulSet's rollout is done, then Ready. Without it the realm delete below can hit the pod while
+# it restarts (measured on c1 2026-11-09: "Connection refused" on localhost:8080).
+- name: keycloak | Keycloak ready, at this generation
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    gen=$(kubectl -n {{ k8s_identity_namespace }} get keycloak/{{ k8s_identity_name }} -o jsonpath='{.metadata.generation}') &&
+    kubectl -n {{ k8s_identity_namespace }} wait keycloak/{{ k8s_identity_name }} --timeout=600s
+    "--for=jsonpath={.status.observedGeneration}=$gen" &&
+    kubectl -n {{ k8s_identity_namespace }} rollout status statefulset/{{ k8s_identity_name }} --timeout=600s &&
     kubectl -n {{ k8s_identity_namespace }} wait keycloak/{{ k8s_identity_name }} --for=condition=Ready --timeout=600s
+  args: {executable: /bin/bash}
   changed_when: false
   when: not ansible_check_mode
 
@@ -42,24 +52,27 @@
   changed_when: false
   check_mode: false
 
+# Also when the import is gone but the realm is not (a run that stopped after deleting the import):
+# the delete script is a no-op when the realm isn't there, as on a first install.
 - name: keycloak | Replace realm {{ k8s_identity_realm }}
   when:
     - (k8s_identity_realm_diff.rc | default(1)) != 0
-    - k8s_identity_realm_import_now.stdout | length > 0
     - k8s_identity_realm_replace | bool
     - not ansible_check_mode
   block:
     - name: keycloak | Delete the old import
       ansible.builtin.command: >-
-        kubectl -n {{ k8s_identity_namespace }} delete keycloakrealmimport realm-{{ k8s_identity_realm }} --wait=true
-      changed_when: true
+        kubectl -n {{ k8s_identity_namespace }} delete keycloakrealmimport realm-{{ k8s_identity_realm }} --ignore-not-found --wait=true
+      register: k8s_identity_import_deleted
+      changed_when: "'deleted' in k8s_identity_import_deleted.stdout"
 
     # The operator names the import's Job after it; a Job left from the old import would make the
     # new one look done.
     - name: keycloak | Delete the old import's Job
       ansible.builtin.command: >-
         kubectl -n {{ k8s_identity_namespace }} delete job realm-{{ k8s_identity_realm }} --ignore-not-found --wait=true
-      changed_when: true
+      register: k8s_identity_job_deleted
+      changed_when: "'deleted' in k8s_identity_job_deleted.stdout"
 
     - name: keycloak | Delete the realm in Keycloak with files/delete-realm.sh, realm {{ k8s_identity_realm }}
       ansible.builtin.command:
