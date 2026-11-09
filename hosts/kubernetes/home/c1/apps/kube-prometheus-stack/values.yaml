@@ -70,8 +70,8 @@ grafana:
   deploymentStrategy: {type: Recreate}
   persistence: {enabled: true, type: pvc, size: 1Gi}
   resources:
-    requests: {cpu: 50m, memory: 128Mi}
-    limits: {memory: 384Mi}
+    requests: {cpu: 50m, memory: 256Mi}
+    limits: {memory: 768Mi}
   additionalDataSources:
     - name: Loki
       type: loki
