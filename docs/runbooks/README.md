@@ -37,7 +37,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Back up c1 off the box](back-up-c1-off-box.md) | automated | draft |
 | [Test the etcd restore](test-etcd-restore.md) | automated | draft |
 | [Set up lab DNS and make the owner's Mac resolve lab names](set-up-lab-dns.md) | automated | draft |
-| [Manage the public zone's DNS records with OpenTofu](manage-public-dns-records.md) | automated | draft |
+| [Manage the public zone's DNS records with OpenTofu](manage-public-dns-records.md) | automated | tested |
 | [Use break-glass access](use-break-glass-access.md) | manual | draft |
 | [Give agents their own access to the owner's Azure tenant](give-agents-access-to-azure.md) | manual | draft |
 | [Set up sign-in for lab apps on c1](set-up-lab-sign-in.md) | automated | tested |
