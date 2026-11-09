@@ -151,7 +151,7 @@ A4. Nothing runs by hand after that. Each certificate lasts 90 days. Every day a
 
    why: a backup counts only once a restore of it has worked. The drill starts the same services the timers start, one node at a time, so it tests what runs every night.
    ※ [Test the etcd restore](test-etcd-restore.md)
-   expect: the last task shows `PASS: etcd restore test, revision …` on the control plane and `PASS: volume restore test, N folders` on the worker. The control plane has no volume folders, so its volume test says `nothing to test`.
+   expect: the last task shows `PASS: etcd restore test, revision …` on the control plane and `PASS: volume restore test, N folders, M database dumps` on the worker. The test restores only each folder's canary file and the database dumps, not the whole snapshot, so it never fills the node's OS disk; `restic check` reads a 2% sample of the rest each week. The control plane has no volume folders, so its volume test says `nothing to test`.
 
 4. Look at the repository from the control plane:
 
@@ -188,6 +188,31 @@ The restore test never writes over a volume. To bring one back for real:
 4. Scale the app back up.
 
 why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansible/README.md#storage-on-c1)), so restoring the folder is restoring the volume. The copy was taken while the app ran: for PostgreSQL that is like a power cut, and it replays its log on start.
+
+## Restore Keycloak's database
+
+The copy of `/var/lib/central-hub/identity-postgres` in a snapshot is read file by file while PostgreSQL runs, so it is not a usable backup on its own: PostgreSQL's docs say a file-level copy needs the server stopped or one atomic snapshot (<https://www.postgresql.org/docs/current/backup-file.html>). Each volume backup therefore first dumps every running PostgreSQL container on the node with `pg_dumpall` into `/var/lib/central-hub-backup/db-dumps/<namespace>_<pod>.sql`, in the same snapshot. Restore from that dump:
+
+1. Stop Keycloak through its operator: `kubectl -n identity patch keycloak sso --type merge -p '{"spec":{"instances":0}}'`. Note the old `instances` value first (`kubectl -n identity get keycloak sso -o jsonpath='{.spec.instances}'`).
+2. On the node that holds the database, bring the dump back from the newest snapshot into a temporary folder:
+
+   ```sh
+   sudo bash -c 'set -a; . /etc/central-hub/backup.env; /usr/local/libexec/central-hub-backup/restic restore latest \
+     --host "$(hostname -s)" --tag volumes --include /var/lib/central-hub-backup/db-dumps --target /var/tmp/db-restore'
+   ```
+
+3. Load it into the running PostgreSQL. Drop the Keycloak database first, so the dump makes it again:
+
+   ```sh
+   kubectl -n identity exec -i sso-postgres-0 -- sh -c 'dropdb -U "$POSTGRES_USER" --if-exists keycloak'
+   sudo cat /var/tmp/db-restore/var/lib/central-hub-backup/db-dumps/identity_sso-postgres-0.sql \
+     | kubectl -n identity exec -i sso-postgres-0 -- sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=0'
+   ```
+
+   expect: `psql` ends without `FATAL`. Errors that a role already exists are expected, because `pg_dumpall` includes the roles.
+4. Set `instances` back to its old value, sign in, and delete `/var/tmp/db-restore`.
+
+why: a dump is consistent by itself, so it restores the database whatever was happening on disk at the time (agent pick 190). The weekly restore test checks that each dump came back whole.
 
 ## If it fails
 
