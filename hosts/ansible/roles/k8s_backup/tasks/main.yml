@@ -1,5 +1,5 @@
 ---
-# Off-box backups of c1 (TASK-0139, TASK-0094). Runs on every node (playbooks/k8s-backup.yml): the
+# Off-box backups of c1 (TASK-0194, TASK-0094). Runs on every node (playbooks/k8s-backup.yml): the
 # control plane backs up etcd, every node backs up the volume folders it holds. Tags: install
 # (tools and scripts), timers (env file and systemd timers), drill (back up now, then run the
 # restore tests).

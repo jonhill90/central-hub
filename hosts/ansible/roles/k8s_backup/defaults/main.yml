@@ -1,5 +1,5 @@
 ---
-# Off-box backups of c1 and the tests that prove they restore (TASK-0139 volumes, TASK-0094 etcd).
+# Off-box backups of c1 and the tests that prove they restore (TASK-0194 volumes, TASK-0094 etcd).
 # Every part is an agent pick, listed in hosts/AGENT-PICKS.md (picks 144-152); runbooks
 # docs/runbooks/back-up-c1-off-box.md and docs/runbooks/test-etcd-restore.md.
 #

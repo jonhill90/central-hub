@@ -94,7 +94,7 @@ Today Jellyfin's setup wizard has not run (measured: `StartupWizardCompleted: fa
 - Turning on the source before the owner answers the Activation gate question, and the decision record for that answer.
 - Single sign-on for the Argo CD UI.
 - New apps beyond those on c1 today. Each new app gets its own PR in this layout.
-- Off-box backups of the claims (TASK-0139) and the etcd restore test (TASK-0094). Both are needed before "replaceable" fully holds for data, and both are tracked separately.
+- Off-box backups of the claims (TASK-0194) and the etcd restore test (TASK-0094). Both are needed before "replaceable" fully holds for data, and both are tracked separately.
 - The VPS and cloud clusters.
 
 ## Acceptance criteria

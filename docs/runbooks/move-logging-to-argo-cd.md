@@ -56,7 +56,7 @@ Edit the values files or the chart version in `root/values.yaml` by PR. Read the
 
 ## Rebuild from nothing
 
-On a new cluster with the root Application made, Argo CD installs both. The logs themselves are on the claim; they come back only from a backup of it (TASK-0139, not built yet). Losing them loses at most 7 days of logs.
+On a new cluster with the root Application made, Argo CD installs both. The logs themselves are on the claim; they come back only from a backup of it (TASK-0194, `back-up-c1-off-box.md`). Losing them loses at most 7 days of logs.
 
 ## If it fails
 

@@ -180,7 +180,7 @@ why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansi
 ## Afterwards
 
 - Set `last-tested` here, with the date, who ran it and on what.
-- Close TASK-0139's off-box part once step 3 passes on c1.
+- Close TASK-0194 once step 3 passes on c1 (done 2026-11-09).
 - Replace the SAS with a workload identity once c1's token issuer can be reached by Entra ID.
 
 ## Related
