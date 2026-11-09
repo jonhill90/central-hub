@@ -27,6 +27,20 @@ run "policy_fills_in_the_host_and_every_lab_vlan" {
   }
 }
 
+run "jumpbox_gets_ssh_from_agents_and_no_path_out" {
+  command = plan
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "{\"action\": \"accept\", \"src\": [\"tag:agent\"], \"dst\": [\"tag:jumpbox\"], \"users\": [\"claude\"]}")
+    error_message = "Agents must reach the jumpbox by Tailscale SSH as user claude only."
+  }
+
+  assert {
+    condition     = !strcontains(tailscale_acl.policy.acl, "\"src\": [\"tag:jumpbox\"]")
+    error_message = "tag:jumpbox must have no grant or SSH rule of its own (no path to the Mac or the lab)."
+  }
+}
+
 run "policy_never_replaces_a_policy_it_has_not_adopted" {
   command = plan
 
