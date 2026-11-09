@@ -6,6 +6,12 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
+### Waiting for the owner: this PR (D-0026 moves knowledge to the agent notebook)
+
+Not accepted yet. The owner accepts it with a message naming this PR and its head SHA (AGENTS.md rule 2); this heading then names the PR and the approval facts.
+
+- 2026-11-09 · D-0026 title, option 4, Decision Outcome, its rules, Consequences, Confirmation and revisit-when; D-0012 tree, rule 6 and rule 12; the decisions README row; evidence 0026 Limits; the docs checks' skip rules for `docs/knowledge/` · knowledge goes in the agent notebook, `jonhill90/agent-notebook`, not in `docs/knowledge/`, which was never created; the store test and the `docs/evidence/` rename are unchanged · the owner's message of 2026-11-09 at 00:29 UTC
+
 ### Accepted with PR #89 (D-0028 accepted, D-0030 parked)
 
 PR #89: approved 2026-11-08T23:15:11Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJy1cMgtyxSZNPLcvtSJaYU), head c962f15; merged as 99a2679. It also parks D-0030, as the owner's message of 2026-11-08T22:58:40Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN3pm9VMkokaWXswED1D5mcj, head 7b0a662) said. An earlier message of 2026-11-08T22:43:28Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK) had said both records are approved without naming a PR or head. The owner said every record gets re-checked at the rebuild.

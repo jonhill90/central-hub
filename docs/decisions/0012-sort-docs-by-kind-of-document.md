@@ -63,8 +63,7 @@ central-hub/
 │   ├── standards/          the rule in force now                    living   (D-0009)
 │   ├── runbooks/           how to do one job, step by step          living   (D-0008)
 │   ├── postmortems/        what went wrong and what changed         frozen   new
-│   ├── diagrams/           drawing source files only                living   new
-│   └── knowledge/          what we learned or gathered              living   (D-0026)
+│   └── diagrams/           drawing source files only                living   new
 └── <each root folder>/README.md   what this part is, the record that owns it, its runbooks
 ```
 
@@ -75,13 +74,13 @@ central-hub/
 3. **One file until it grows.** `architecture.md` and `glossary.md` stay single files. A file becomes a folder of the same name, with a README, only when a second document on that kind arrives.
 4. **Every kind folder has a README** that indexes it, as `decisions/`, `specs/` and `standards/` do now.
 5. **Part READMEs.** Each root folder (`hosts/`, `kubernetes/`, `dns/`, `backup/`, `private-network/`) gets a `README.md` with its first file. It says what the part does, which decision record owns it, how it is dropped, and which runbooks run it. It points to records and never copies them.
-6. **Not folders.** There is no `plans/` folder: a plan for one change is a spec (D-0007), and the ordered backlog stays outside this repo. There is no `playbooks/` folder: a response to an alert is a runbook whose trigger is that alert. There are no `how-to/`, `tutorials/` or `reference/` folders: runbooks are the how-tos, learning material goes in `docs/knowledge/` (rule 12), and generated reference stays next to the code it describes.
+6. **Not folders.** There is no `plans/` folder: a plan for one change is a spec (D-0007), and the ordered backlog stays outside this repo. There is no `playbooks/` folder: a response to an alert is a runbook whose trigger is that alert. There are no `how-to/`, `tutorials/` or `reference/` folders: runbooks are the how-tos, learning material goes in the agent notebook (rule 12), and generated reference stays next to the code it describes.
 7. **Decisions folder name.** It stays `docs/decisions/` (MADR, D-0001), not `docs/adr/`.
 8. **Glossary is the one source** for platform terms (REQ-0005). Other copies point to it. Terms about systems other than system 8 stay in the Research repo.
 9. **Diagrams.** A drawing written as text stays inside the page that uses it. `docs/diagrams/` holds only source files such as `.d2`, `.drawio` or `.svg`.
 10. **No private values in any document.** Hostnames, single machine addresses, contacts and secrets are never written here. A document names the key that holds the value in the private store, never the value (CLAUDE.md rule 4; STD-0002).
 11. **Security postmortems wait.** A postmortem for a security incident stays in a private GitHub security advisory until the fix is out, and only then lands in `docs/postmortems/` (SECURITY.md).
-12. **Documentation or knowledge.** Before placing a file, ask: "Is it about this repository's system, saying why it is so, what it is, or how to run or change it?" If yes, rules 1 to 11 place it. If no, it is knowledge, and it goes in `docs/knowledge/`, which is laid out by the organization standard, not by kind of document (D-0026).
+12. **Documentation or knowledge.** Before placing a file, ask: "Is it about this repository's system, saying why it is so, what it is, or how to run or change it?" If yes, rules 1 to 11 place it. If no, it is knowledge, and it goes in the agent notebook, `jonhill90/agent-notebook`, which is laid out by the organization standard, not by kind of document (D-0026).
 
 ### Runbook format
 

@@ -24,5 +24,6 @@ Should a repository keep its documentation and its knowledge in one store or two
 
 ## Limits
 
-- No published source sets the folders of a knowledge store inside a code repository. The `docs/knowledge/` layout comes from the owner's own method, the organization standard, and is not tested by outside research.
+- No published source sets the folders of a knowledge store inside a code repository. The notebook's layout comes from the owner's own method, the organization standard, and is not tested by outside research.
+- The move from `docs/knowledge/` to the agent notebook rests on the owner's message of 2026-11-09 at 00:29 UTC, not on new research.
 - The findability test ran on this project's own content, at its current size.

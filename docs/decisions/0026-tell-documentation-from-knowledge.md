@@ -1,6 +1,6 @@
 ---
 id: D-0026
-title: Tell documentation from knowledge, keep knowledge in docs/knowledge/, and rename docs/research to docs/evidence
+title: Tell documentation from knowledge, keep knowledge in the agent notebook, and rename docs/research to docs/evidence
 status: accepted
 date: 2026-11-04
 decision-makers: [owner]
@@ -17,10 +17,10 @@ accepted-evidence:
   approval-names: "D-0026 by its ID; neither the PR nor the head"
   check: the drafting agent read the message in its project thread at 2026-11-05T07:18Z; it names D-0026 and nothing else. PR #55 had already merged, and its head bf085ea and the merge commit c2e932c hold the same record, which was unchanged on main at the time of the message, so the record accepted is the one approved here. An independent check by a reviewing agent is still to do
   merged: jonhill90 merged PR #55 at 2026-11-04T03:16:15Z as c2e932c, before this acceptance
-revisit-when: the Research repository is retired and its knowledge moves; a document fits neither store; the organization standard reaches a new major version; docs/knowledge/ needs material that cannot be public; or the decision records are refactored as a set
+revisit-when: the agent notebook is retired or moves; a document fits neither store; the organization standard reaches a new major version; or the decision records are refactored as a set
 ---
 
-# Tell documentation from knowledge, keep knowledge in docs/knowledge/, and rename docs/research to docs/evidence
+# Tell documentation from knowledge, keep knowledge in the agent notebook, and rename docs/research to docs/evidence
 
 ## Context and Problem Statement
 
@@ -44,47 +44,56 @@ The project is still greenfield. On 2026-11-04 the owner asked that records be c
 1. **`docs/knowledge/`:** a store test, knowledge in `docs/knowledge/` laid out by the organization standard, and `docs/research/` renamed `docs/evidence/`.
 2. **A root `knowledge/` folder** beside `docs/`, with the same test and rename.
 3. **Step 0 only:** the store test, with no knowledge folder and no rename.
+4. **The agent notebook:** the same store test and rename, with knowledge kept in a separate repository, `jonhill90/agent-notebook`, laid out by the organization standard.
 
 ## Decision Outcome
 
-Chosen option: **1**. The owner's own messages set it: on 2026-11-03 at 23:55 UTC, that documentation and knowledge are different and the standard must tell them apart; on 2026-11-04 at 02:12 UTC, that documentation belongs in `docs/` at the root and a root knowledge folder is not usual; and at 02:14 UTC, that records change in place while the project is greenfield. The owner then picked this plan on decision cards at 00:36 and 02:14 UTC. This record waits for the owner's acceptance under D-0001.
+Chosen option: **4**, the agent notebook. Option 1 was chosen first, but `docs/knowledge/` was never created, and the agent notebook took its role. On 2026-11-09 at 00:29 UTC the owner said: "we have to make sure the documentation still goes into the central hub and all the other repos along with the notebook. There is a difference between the agent notebook and the docs directory." This change waits for the owner's acceptance by PR number and head SHA (AGENTS.md rule 2).
+
+Option 1 was first chosen on the owner's own messages: on 2026-11-03 at 23:55 UTC, that documentation and knowledge are different and the standard must tell them apart; on 2026-11-04 at 02:12 UTC, that documentation belongs in `docs/` at the root and a root knowledge folder is not usual; and at 02:14 UTC, that records change in place while the project is greenfield. The owner then picked this plan on decision cards at 00:36 and 02:14 UTC. The store test and the rename from that choice stand.
 
 ```text
 docs/
 ├── PRD.md  architecture.md  glossary.md
 ├── decisions/  specs/  standards/  runbooks/  postmortems/  diagrams/
-├── evidence/      one summary per decision record   (D-0016)
-└── knowledge/     what we learned or gathered, laid out by the organization standard
+└── evidence/      one summary per decision record   (D-0016)
+
+jonhill90/agent-notebook   what agents learned or gathered, laid out by the organization standard
 ```
 
 ### What changes, in place
 
-1. **D-0012** gains rule 12, the store test: "Is it about this repository's system, saying why it is so, what it is, or how to run or change it?" If yes, D-0012's kind folders place it. If no, it goes in `docs/knowledge/`. Its tree shows `evidence/` and `knowledge/`, and rule 6 sends learning material to `docs/knowledge/`.
+1. **D-0012** gains rule 12, the store test: "Is it about this repository's system, saying why it is so, what it is, or how to run or change it?" If yes, D-0012's kind folders place it. If no, it goes in the agent notebook. Its tree shows `evidence/`, and rule 6 sends learning material to the agent notebook.
 2. **D-0016** names `docs/evidence/` in rule 1. A record links its evidence file as `../evidence/NNNN-slug.md`.
 3. **The same PR** renames `docs/research/` to `docs/evidence/` with `git mv`, rewrites every link, and updates the docs checks and `AGENTS.md`. No old path is kept anywhere it would be read as current.
 
-### Rules for `docs/knowledge/`
+### Rules for the agent notebook
 
-1. **Layout.** It follows the organization standard. The standard's one home is the Research repository, `99-meta/ORGANIZE.md`. `docs/knowledge/99-meta/ORGANIZE.md` holds only a pointer to it and its version, never a copy.
-2. **Creation.** The folder appears with its first real file (D-0012 rule 2), together with its README, the pointer file and a CI step that runs the standard's check on it.
-3. **Checks.** The docs checks place files only by D-0012's kind patterns, so knowledge files get no record schema. Knowledge we wrote gets the same link and Markdown style checks as every other page. Captured material we did not write (`docs/knowledge/04-resources/`, `docs/knowledge/05-archive/`, and any `sources/` or `data/` folder inside it) is skipped by the style and link checks, as the standard's own check skips it.
-4. **Names.** Files in `docs/knowledge/` follow the standard's naming rule, which allows no IDs or dates in names. Frozen records keep their `NNNN-` numbers (D-0003).
-5. **No private material** (CLAUDE.md rule 4).
+1. **Layout.** It follows the organization standard in its own `99-meta/ORGANIZE.md`.
+2. **Links, not copies.** A notebook note may link to a page here, but never copies its steps. A page here may link to a notebook note as evidence.
+3. **Docs travel with the work.** A change that alters how to run or rebuild something updates its runbook here in the same PR, even when the learning behind it lives in the notebook.
+4. **No private material** in either store while both are public (CLAUDE.md rule 4).
 
 ### Consequences
 
 - Good: an agent decides between the two stores with one question, then uses one store's rules.
 - Good: "research" names one thing, the knowledge store.
 - Good: everything written about the repository stays under one root folder.
-- Bad: two layouts live under `docs/`, so an agent has to read which store it is in.
-- Neutral: nothing moves into `docs/knowledge/` until a real file needs it.
+- Good: `docs/` holds one layout, D-0012's kinds.
+- Bad: learning and documentation sit in two repositories, so a link between them can break when either moves.
 
 ### Confirmation
 
 - No link in the repository points to `docs/research/`, and the docs checks pass on this PR.
-- The organization standard's check passes on `docs/knowledge/` from its first file.
+- No folder or check in this repository uses `docs/knowledge/`; only this record and the corrections log name it, as history.
+- The organization standard's check passes in the agent notebook.
 
 ## Pros and Cons of the Options
+
+### 1. `docs/knowledge/`
+
+- Good: documentation and knowledge share one repository.
+- Bad: two layouts under `docs/`, and knowledge here is public with every commit; the folder was never created.
 
 ### 2. A root `knowledge/` folder
 
