@@ -1,0 +1,78 @@
+---
+# Interim Azure credential (agent pick 177): a user delegation SAS for the one backup container,
+# minted on the controller by the agents' service principal through the Azure CLI, valid for
+# k8s_backup_azure_sas_days. The storage account allows no shared key, so this is the only kind of
+# SAS it accepts: an Entra ID identity signs it, and it can be revoked by revoking that identity's
+# user delegation keys. It replaces AZURE_ACCOUNT_KEY; the way off it is workload identity
+# federation (docs/runbooks/give-agents-access-to-azure.md, "Afterwards").
+#
+# The controller must reach the account's data endpoint, so it runs from the home network that the
+# account's network rule allows (hosts/terraform/azure/backup, var.allowed_ip_addresses).
+
+- name: timers | Azure settings are complete
+  ansible.builtin.assert:
+    that:
+      - k8s_backup_azure_account | length > 0
+      - k8s_backup_azure_container | length > 0
+      - k8s_backup_azure_sas_days | int >= 1
+      - k8s_backup_azure_sas_days | int <= 7
+    fail_msg: >-
+      k8s_backup_azure_sas needs k8s_backup_azure_account (the tofu output storage_account_name),
+      k8s_backup_azure_container, and k8s_backup_azure_sas_days from 1 to 7 (Azure's limit for a
+      user delegation SAS).
+    quiet: true
+
+# Start 15 minutes back, so a node clock a little behind still accepts it.
+- name: timers | Mint the container SAS on the controller
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_backup_az }}"
+      - storage
+      - container
+      - generate-sas
+      - --account-name
+      - "{{ k8s_backup_azure_account }}"
+      - --name
+      - "{{ k8s_backup_azure_container }}"
+      - --permissions
+      - racwdl
+      - --start
+      - "{{ '%Y-%m-%dT%H:%MZ' | strftime((now(utc=true).timestamp() | int) - 900, utc=true) }}"
+      - --expiry
+      - "{{ k8s_backup_azure_sas_expiry }}"
+      - --https-only
+      - --auth-mode
+      - login
+      - --as-user
+      - --output
+      - tsv
+  vars:
+    k8s_backup_azure_sas_expiry: "{{ '%Y-%m-%dT%H:%MZ' | strftime((now(utc=true).timestamp() | int) + (k8s_backup_azure_sas_days | int) * 86400, utc=true) }}"
+  register: k8s_backup_azure_sas_out
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+- name: timers | The SAS came back
+  ansible.builtin.assert:
+    that:
+      - k8s_backup_azure_sas_out.stdout | trim is search('(^|&)sig=')
+      - k8s_backup_azure_sas_out.stdout | trim is search('(^|&)skoid=')
+    fail_msg: >-
+      az did not return a user delegation SAS. Check that az is signed in as agent-azure
+      (az account show), that it has Storage Blob Data Contributor on the storage account, and that this
+      machine's public address is in the account's network rule.
+    quiet: true
+  run_once: true
+  no_log: true
+
+- name: timers | Keep the SAS for the node env file
+  ansible.builtin.set_fact:
+    k8s_backup_azure_env_lines: |
+      AZURE_ACCOUNT_NAME={{ k8s_backup_azure_account }}
+      AZURE_ACCOUNT_SAS='{{ k8s_backup_azure_sas_out.stdout | trim }}'
+      AZURE_ACCOUNT_SAS_EXPIRES={{ k8s_backup_azure_sas_out.stdout | trim | regex_search('(?:^|&)se=([^&]+)', '\\1') | first | urldecode }}
+  no_log: true

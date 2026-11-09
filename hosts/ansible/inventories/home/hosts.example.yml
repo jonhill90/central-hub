@@ -118,6 +118,8 @@ all:
         # (docs/runbooks/back-up-c1-off-box.md). false installs the tools with the timers off.
         k8s_backup_enabled: false
         k8s_backup_env_file: ""
+        k8s_backup_azure_sas: false
+        k8s_backup_azure_account: ""
         # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
         # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
         # k8s_control_plane_kubernetes_version.

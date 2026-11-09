@@ -5,10 +5,10 @@ kind: automated
 trigger: nightly timers on the c1 nodes; the playbook on request
 runner: an agent lane, through the owner's Mac (D-0022)
 outcome: every night restic writes an encrypted snapshot of c1's etcd and of every volume folder to a repository off the Proxmox host, and every week a restore test proves the newest snapshots come back
-needs: the lab clone of central-hub with its private inventory; SSH to the c1 nodes as D-0022 says; a restic repository off the Proxmox host and its credentials
-private-values: [c1-backup-restic-repository, c1-backup-restic-password, c1-backup-target-credentials]
-files: [hosts/ansible/playbooks/k8s-backup.yml, hosts/ansible/roles/k8s_backup/, .github/hosts-check/tests/test_backup.sh]
-last-tested: 2026-11-08, an agent, the scripts end to end in CI's test (etcd 3.7.0, local restic repository); not yet run on c1
+needs: the lab clone of central-hub with its private inventory; SSH to the c1 nodes as D-0022 says; a restic repository off the Proxmox host and its credentials; for Azure, the agents' service principal signed in to `az` on the Mac (give-agents-access-to-azure.md)
+private-values: [c1-backup-restic-repository, c1-backup-restic-password, c1-backup-target-credentials, c1-backup-azure-storage-account, home-public-ip]
+files: [hosts/terraform/azure/backup/, hosts/ansible/playbooks/k8s-backup.yml, hosts/ansible/roles/k8s_backup/, .github/hosts-check/tests/test_backup.sh]
+last-tested: 2026-11-08, an agent, the scripts end to end in CI's test (etcd 3.7.0, local restic repository); 2026-11-09, an agent, terraform/azure/backup's offline tests (mocked provider); not yet run on c1 or in Azure
 superseded-by:
 ---
 
@@ -29,7 +29,7 @@ flowchart LR
   r --> t["Sunday 04:30 c1-restore-test<br/>restore into a temp folder, check"]
 ```
 
-Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md), picks 144-152).
+Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md), picks 144-152, and 175-178 for the Azure storage).
 
 ## Before you start
 
@@ -39,7 +39,7 @@ Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md),
 
   | Target | `RESTIC_REPOSITORY` | Extra lines in the env file |
   |---|---|---|
-  | Azure Blob storage (researched for off-site etcd backups, 2026-10-16) | `azure:<container>:/c1` | `AZURE_ACCOUNT_NAME`, `AZURE_ACCOUNT_KEY` |
+  | Azure Blob storage, the owner's pick (2026-10-16), made by [the Azure steps below](#azure-blob-without-a-key) | `azure:c1-backup:/c1` | none: the playbook adds `AZURE_ACCOUNT_NAME` and a short-lived `AZURE_ACCOUNT_SAS` |
   | Any S3-compatible store | `s3:https://<endpoint>/<bucket>/c1` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
   | A restic REST server on another machine | `rest:https://<user>:<password>@<host>:8000/c1` | none |
   | An SFTP account on another machine | `sftp:<user>@<host>:/srv/restic/c1` | none (an SSH key for root on each node) |
@@ -47,6 +47,56 @@ Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md),
   (restic's docs, "Preparing a new repository": <https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html>)
 
 Stop if c1 is not up. Without a target you can still run step 2 with `k8s_backup_enabled: false`: it installs the tools and nothing runs.
+
+## Azure Blob without a key
+
+The owner wants no raw key that a person or an agent can read (2026-11-08 23:42 UTC). So the storage account refuses its own keys (shared key access off) and answers only the home's public address. c1 gets a user delegation SAS instead: a token for the one container, signed by the agents' service principal `agent-azure` through Entra ID, that lasts at most 7 days. The playbook mints a new one on the Mac at each run and copies it to the nodes.
+
+```mermaid
+flowchart LR
+  tofu["tofu apply<br/>terraform/azure/backup"] --> sa[("storage account<br/>no shared key<br/>home address only")]
+  owner["owner: one role<br/>Storage Blob Data Contributor<br/>on the account"] --> sp["agent-azure"]
+  sp -->|"az ... generate-sas --as-user<br/>on the Mac, each timers run"| sas["SAS, 7 days,<br/>one container"]
+  sas --> nodes["/etc/central-hub/backup.env<br/>on each node"]
+  nodes -->|restic| sa
+```
+
+A1. (Agent, on the Mac) Make the storage:
+
+   ```sh
+   cd hosts/terraform/azure/backup
+   cp azure.tfvars.example azure.tfvars && chmod 600 azure.tfvars   # git-ignored
+   # in azure.tfvars: location, a free storage_account_name, and the home's public address:
+   curl -s https://api.ipify.org; echo
+   export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"   # az is signed in as agent-azure
+   tofu init -backend-config="path=$HOME/.local/state/central-hub/azure-backup.tfstate"
+   tofu plan -var-file=azure.tfvars -out=backup.tfplan
+   tofu apply backup.tfplan
+   tofu output
+   ```
+
+   why: everything about the account is code, so a rebuild makes it the same way. All of it is management-plane work, which the network rule doesn't block, and the state holds no secret because no key is ever read.
+   ※ [hosts/terraform/README.md](../../hosts/terraform/README.md); azurerm `azurerm_storage_account` 5.11.0, "shared_access_key_enabled" and "network_rules"
+   expect: three resources added; outputs `storage_account_name`, `restic_repository` (`azure:c1-backup:/c1`) and `storage_account_id`.
+
+A2. (Owner, once) Let `agent-azure` read and write blobs in that account. Its Contributor role can't grant roles, so this step is yours. Paste `storage_account_id` from step A1:
+
+   ```sh
+   az login        # as yourself, in a separate terminal or after az logout
+   az role assignment create --assignee <agent-azure appId> \
+     --role "Storage Blob Data Contributor" --scope <storage_account_id>
+   az logout       # then the Mac's az holds only the agent's login again
+   ```
+
+   why: a user delegation SAS can only do what its signer may do, and the signer needs a data role. Azure lets the signer request its signing key only with a role at the account or wider, and this account holds only the backup container.
+   ※ Microsoft Learn, "Create a user delegation SAS for a container or blob with the Azure CLI" (<https://learn.microsoft.com/azure/storage/blobs/storage-blob-user-delegation-sas-create-cli>)
+   expect: JSON with `roleDefinitionName` `Storage Blob Data Contributor` and that `scope`. It can take a few minutes to apply.
+
+A3. In step 1, leave out the `AZURE_` lines: the env file holds only `RESTIC_REPOSITORY=azure:c1-backup:/c1` and `RESTIC_PASSWORD`. In step 2, also set `k8s_backup_azure_sas: true` and `k8s_backup_azure_account: <storage_account_name>` in the private inventory. Run the playbook from the home network, since the account answers only that address.
+
+A4. Run `ansible-playbook -i inventories/home/ playbooks/k8s-backup.yml --tags timers` again at least every 6 days, so the SAS on the nodes never runs out. `AZURE_ACCOUNT_SAS_EXPIRES` in the node env file shows when it does. Nothing schedules this yet.
+
+The way off the SAS is workload identity federation, or Azure Arc for the nodes ([Give agents access to Azure, "Afterwards"](give-agents-access-to-azure.md#afterwards)). The restic password stays a plaintext value in the env file until then.
 
 ## Steps
 
@@ -57,12 +107,11 @@ Stop if c1 is not up. Without a target you can still run step 2 with `k8s_backup
    (umask 077; cat > ~/.config/central-hub/c1-backup.env <<EOF
    RESTIC_REPOSITORY=azure:c1-backup:/c1
    RESTIC_PASSWORD=$(head -c 32 /dev/urandom | base64)
-   AZURE_ACCOUNT_NAME=<account>
-   AZURE_ACCOUNT_KEY=<key>
    EOF
    )
    ```
 
+   For a target other than Azure, add its lines from the table above.
    why: the repository's address and password are private, so they never go in git. The password encrypts every snapshot; without it the backups can't be read, so keep a copy of this file somewhere other than the Mac.
    ※ CLAUDE.md rule 4; restic encrypts everything it writes with a key derived from the password (restic's docs, "Design")
    expect: `ls -l ~/.config/central-hub/c1-backup.env` shows `-rw-------`.
@@ -119,6 +168,7 @@ why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansi
 
 - **The env file check stops the run:** the file is missing, empty, or readable by others. Fix it on the controller; nothing on the nodes was changed.
 - **A backup fails at night:** `journalctl -u c1-backup-etcd -u c1-backup-volumes --since yesterday` on the node. The timers retry the next night; `Persistent=true` runs a missed one at boot.
+- **`AuthorizationFailure` or 403 from Azure:** the SAS ran out (see `AZURE_ACCOUNT_SAS_EXPIRES` in the node env file; run step A4), the home's public address changed (set the new one in `azure.tfvars` and apply step A1 again), or step A2's role is missing.
 - **The repository is locked** (a run was cut off): `restic unlock` with the env file loaded, as in step 4.
 - **The way back:** set `k8s_backup_enabled: false` and run step 2 again. The timers stop and the env file is removed from the nodes; the tools stay, and the repository and its snapshots are untouched.
 - Tell the owner before deleting snapshots or the repository.
@@ -127,6 +177,7 @@ why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansi
 
 - Set `last-tested` here, with the date, who ran it and on what.
 - Close BL-0139's off-box part once step 3 passes on c1.
+- Replace the SAS with a workload identity once c1's token issuer can be reached by Entra ID.
 
 ## Related
 
