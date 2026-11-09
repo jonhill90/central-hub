@@ -1,0 +1,10 @@
+# {{ ansible_managed }} (role k8s_backup)
+[Unit]
+Description=Roll c1's backup certificate for Azure before it expires
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=CENTRAL_HUB_BACKUP_ENV={{ k8s_backup_node_env_file }}
+ExecStart={{ k8s_backup_bin_dir }}/c1-backup-azure-cert.py renew

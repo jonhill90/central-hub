@@ -18,16 +18,24 @@ k8s_backup_enabled: false
 # target's own credentials (restic's docs, "Preparing a new repository").
 k8s_backup_env_file: ""
 
-# Azure Blob target without a key (agent pick 181, interim). true: each run of the timers tag
-# mints a user delegation SAS for the container on the controller (the Azure CLI, signed in as the
-# agents' service principal) and adds AZURE_ACCOUNT_NAME and AZURE_ACCOUNT_SAS to the node env
-# file; the controller's env file then holds only RESTIC_REPOSITORY and RESTIC_PASSWORD. The SAS
-# lasts k8s_backup_azure_sas_days (Azure allows 7 at most), so the timers tag must run again
-# before then. Storage: hosts/terraform/azure/backup.
-k8s_backup_azure_sas: false
+# Azure Blob target with no stored secret (agent pick 191). true: each node makes its own key and
+# certificate (never leaving the node), the controller uploads the public certificate to the backup
+# app the first time (the Azure CLI, signed in as agent-azure), a daily timer on the node rolls it
+# before it expires, and the node env file gets the sign-in lines restic reads
+# (AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_CERTIFICATE_PATH). The controller's env file then
+# holds only RESTIC_REPOSITORY and RESTIC_PASSWORD. The IDs are the tofu outputs of
+# hosts/terraform/azure/backup; none of them is a secret, but they stay out of this repository.
+k8s_backup_azure_identity: false
 k8s_backup_azure_account: ""
-k8s_backup_azure_container: c1-backup
-k8s_backup_azure_sas_days: 7
+k8s_backup_azure_client_id: ""
+k8s_backup_azure_tenant_id: ""
+k8s_backup_azure_app_object_id: ""
+k8s_backup_azure_cert_file: /etc/central-hub/azure/backup.pem
+# A certificate lasts 90 days and is rolled once 30 or fewer are left, so a node that is off for up
+# to 60 days still rolls it by itself; after longer, the timers tag uploads a new one.
+k8s_backup_azure_cert_days: 90
+k8s_backup_azure_cert_renew_days: 30
+k8s_backup_azure_cert_schedule: "*-*-* 01:40:00"
 k8s_backup_az: az
 
 # Where the tools and scripts go on the nodes, apart from the PATH so nothing else picks up this

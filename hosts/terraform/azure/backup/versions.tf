@@ -8,5 +8,11 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "5.11.0"
     }
+    # 3.10.0 (2026-09-24) is the newest release, and at least two weeks old on 2026-11-09 (STD-0003
+    # rule 1). It makes the backup's own app registration in Entra ID.
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "3.10.0"
+    }
   }
 }

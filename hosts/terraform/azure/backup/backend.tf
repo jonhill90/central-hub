@@ -3,7 +3,7 @@
 # Give the path at init:
 #   tofu init -backend-config="path=$HOME/.local/state/central-hub/azure-backup.tfstate"
 # No secret lands in this state: shared key access is off, so the provider never reads the
-# account's keys, and nothing here makes a SAS.
+# account's keys; the backup app has no secret, and its certificates live only on the nodes.
 terraform {
   backend "local" {}
 }

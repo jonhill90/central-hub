@@ -1,0 +1,166 @@
+---
+# The nodes' own Azure sign-in (agent pick 191). Each node makes its own key and certificate
+# (c1-backup-azure-cert.py init), which never leave the node. The first time, or after a
+# certificate expired, the controller uploads the public certificate to the backup app with the
+# Azure CLI, signed in as agent-azure, the app's owner. After that the node's daily timer rolls the
+# certificate itself (Microsoft Graph addKey), so nothing here has to run on a schedule.
+# Storage and the app: hosts/terraform/azure/backup.
+
+- name: timers | Azure settings are complete
+  ansible.builtin.assert:
+    that:
+      - k8s_backup_azure_account | length > 0
+      - k8s_backup_azure_client_id | length > 0
+      - k8s_backup_azure_tenant_id | length > 0
+      - k8s_backup_azure_app_object_id | length > 0
+      - k8s_backup_azure_cert_renew_days | int < k8s_backup_azure_cert_days | int
+    fail_msg: >-
+      k8s_backup_azure_identity needs k8s_backup_azure_account, k8s_backup_azure_client_id,
+      k8s_backup_azure_tenant_id and k8s_backup_azure_app_object_id (the tofu outputs of
+      hosts/terraform/azure/backup), and fewer renewal days than certificate days.
+    quiet: true
+
+- name: timers | The node's certificate and its upload
+  when: not ansible_check_mode
+  environment: "{{ k8s_backup_azure_script_env }}"
+  block:
+    - name: timers | The node's key and certificate, made on the node once
+      ansible.builtin.command:
+        argv: ["{{ k8s_backup_bin_dir }}/c1-backup-azure-cert.py", init]
+      register: k8s_backup_azure_cert
+      changed_when: (k8s_backup_azure_cert.stdout | from_json).made
+
+    - name: timers | Entra ID accepts the node's certificate
+      ansible.builtin.command:
+        argv: ["{{ k8s_backup_bin_dir }}/c1-backup-azure-cert.py", check]
+      register: k8s_backup_azure_check
+      changed_when: false
+      failed_when: k8s_backup_azure_check.rc not in [0, 3]
+
+    # Exit 3: Entra ID does not know this certificate. Only the public certificate leaves the node.
+    - name: timers | Upload the node's public certificate to the backup app
+      when: k8s_backup_azure_check.rc == 3
+      delegate_to: localhost
+      become: false
+      throttle: 1
+      block:
+        - name: timers | A file for the public certificate on the controller
+          ansible.builtin.tempfile:
+            suffix: .pem
+          register: k8s_backup_azure_upload
+
+        - name: timers | Write the public certificate
+          ansible.builtin.copy:
+            content: "{{ (k8s_backup_azure_cert.stdout | from_json).certificate }}"
+            dest: "{{ k8s_backup_azure_upload.path }}"
+            mode: "0600"
+
+        # --append keeps the other nodes' certificates.
+        - name: timers | Add it to the app's certificates
+          ansible.builtin.command:
+            argv:
+              - "{{ k8s_backup_az }}"
+              - ad
+              - app
+              - credential
+              - reset
+              - --id
+              - "{{ k8s_backup_azure_client_id }}"
+              - --cert
+              - "@{{ k8s_backup_azure_upload.path }}"
+              - --append
+              - --only-show-errors
+              - --output
+              - none
+          changed_when: true
+      always:
+        - name: timers | Remove the file
+          ansible.builtin.file:
+            path: "{{ k8s_backup_azure_upload.path }}"
+            state: absent
+          delegate_to: localhost
+          become: false
+          when: k8s_backup_azure_upload.path is defined
+
+    # A new certificate takes a short while to work everywhere in Entra ID.
+    - name: timers | Wait until Entra ID accepts the uploaded certificate
+      ansible.builtin.command:
+        argv: ["{{ k8s_backup_bin_dir }}/c1-backup-azure-cert.py", check]
+      register: k8s_backup_azure_wait
+      until: k8s_backup_azure_wait.rc == 0
+      retries: 40
+      delay: 15
+      changed_when: false
+      when: k8s_backup_azure_check.rc == 3
+
+    - name: timers | The app's certificates
+      ansible.builtin.command:
+        argv:
+          - "{{ k8s_backup_az }}"
+          - ad
+          - app
+          - credential
+          - list
+          - --id
+          - "{{ k8s_backup_azure_client_id }}"
+          - --cert
+          - --only-show-errors
+          - --output
+          - json
+      register: k8s_backup_azure_creds
+      delegate_to: localhost
+      become: false
+      run_once: true
+      changed_when: false
+
+    # The key ID lets the node remove its old certificate after it rolls it. Graph gives the
+    # thumbprint in customKeyIdentifier; the forms differ by client, so each is tried.
+    - name: timers | Record the key ID of the node's certificate
+      ansible.builtin.copy:
+        content: "{{ k8s_backup_azure_mine[0].keyId }}\n"
+        dest: "{{ k8s_backup_azure_cert_file }}.keyid"
+        mode: "0600"
+      vars:
+        k8s_backup_azure_thumb: "{{ k8s_backup_azure_cert.stdout | from_json }}"
+        k8s_backup_azure_mine: >-
+          {{ k8s_backup_azure_creds.stdout | from_json | selectattr('customKeyIdentifier', 'in',
+             [k8s_backup_azure_thumb.thumbprint, k8s_backup_azure_thumb.thumbprint | lower,
+              k8s_backup_azure_thumb.thumbprint_b64, k8s_backup_azure_thumb.thumbprint | b64encode]) | list }}
+      when: k8s_backup_azure_mine | length == 1
+
+    # Expired certificates do nothing but fill the list: one is left behind when a node is rebuilt,
+    # or when its old key ID was not known at a roll.
+    - name: timers | Remove the app's expired certificates
+      ansible.builtin.command:
+        argv:
+          - "{{ k8s_backup_az }}"
+          - ad
+          - app
+          - credential
+          - delete
+          - --id
+          - "{{ k8s_backup_azure_client_id }}"
+          - --key-id
+          - "{{ item.keyId }}"
+          - --cert
+          - --only-show-errors
+      loop: >-
+        {{ k8s_backup_azure_creds.stdout | from_json
+           | selectattr('endDateTime', 'lt', now(utc=true).strftime('%Y-%m-%dT%H:%M:%SZ')) | list }}
+      loop_control:
+        label: "{{ item.keyId }} (ended {{ item.endDateTime }})"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      changed_when: true
+
+- name: timers | Keep the sign-in settings for the node env file
+  ansible.builtin.set_fact:
+    k8s_backup_azure_env_lines: |
+      AZURE_ACCOUNT_NAME={{ k8s_backup_azure_account }}
+      AZURE_CLIENT_ID={{ k8s_backup_azure_client_id }}
+      AZURE_TENANT_ID={{ k8s_backup_azure_tenant_id }}
+      AZURE_APP_OBJECT_ID={{ k8s_backup_azure_app_object_id }}
+      AZURE_CLIENT_CERTIFICATE_PATH={{ k8s_backup_azure_cert_file }}
+      BACKUP_CERT_DAYS={{ k8s_backup_azure_cert_days }}
+      BACKUP_CERT_RENEW_DAYS={{ k8s_backup_azure_cert_renew_days }}

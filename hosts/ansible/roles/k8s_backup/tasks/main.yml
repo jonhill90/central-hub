@@ -39,9 +39,9 @@
   when: k8s_backup_enabled
   tags: [install, timers, drill]
 
-- name: install | bzip2 for the restic release file
+- name: install | bzip2 for the restic release file, openssl for the Azure certificate
   ansible.builtin.dnf:
-    name: bzip2
+    name: [bzip2, openssl]
     state: present
   tags: [install]
 
@@ -135,17 +135,32 @@
     - c1-backup-volumes.sh
     - c1-restore-test-etcd.sh
     - c1-restore-test-volumes.sh
+    - c1-backup-azure-cert.py
   tags: [install]
 
-- name: timers | Azure SAS from the controller
-  ansible.builtin.include_tasks:
-    file: azure_sas.yml
-    apply:
-      tags: [timers]
-  when: k8s_backup_enabled and k8s_backup_azure_sas
+# restic uses an account key or SAS when one is set, before any other sign-in, so neither may come
+# from the controller's env file once the nodes have their own identity.
+- name: timers | No Azure key or SAS in the controller's env file
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.file', k8s_backup_env_file) is not search('(?m)^\\s*(export\\s+)?AZURE_ACCOUNT_(KEY|SAS)=')
+    fail_msg: >-
+      {{ k8s_backup_env_file }} sets AZURE_ACCOUNT_KEY or AZURE_ACCOUNT_SAS. Remove the line: the
+      nodes sign in with their own certificate. Nothing was changed.
+    quiet: true
+  no_log: true
+  when: k8s_backup_enabled and k8s_backup_azure_identity
   tags: [timers]
 
-# The controller's env file, plus the Azure lines when the SAS is on.
+- name: timers | Azure sign-in for the nodes
+  ansible.builtin.include_tasks:
+    file: azure_identity.yml
+    apply:
+      tags: [timers]
+  when: k8s_backup_enabled and k8s_backup_azure_identity
+  tags: [timers]
+
+# The controller's env file, plus the Azure sign-in lines when the identity is on.
 - name: timers | The env file on the node
   ansible.builtin.copy:
     content: "{{ lookup('ansible.builtin.file', k8s_backup_env_file) }}\n{{ k8s_backup_azure_env_lines | default('') }}"

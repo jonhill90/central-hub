@@ -5,8 +5,9 @@
 #   1. etcd 3.7.0, the version c1 runs, holds test keys; c1-backup-etcd.sh backs it up with the
 #      etcdctl and etcdutl the role installs (v3.7.2). c1-restore-test-etcd.sh must pass (TASK-0094).
 #   2. The same restore test with a key that isn't there must fail.
-#   3. c1-backup-volumes.sh backs up two folders; the source changes afterwards;
-#      c1-restore-test-volumes.sh must pass, and a full restore must equal the source as backed up.
+#   3. c1-backup-volumes.sh backs up two folders and a PostgreSQL dump (stand-in crictl); the source
+#      changes afterwards; c1-restore-test-volumes.sh must pass, a full restore must equal the source
+#      as backed up, and a dump that does not finish must fail the backup.
 #   4. One pack file in the repository damaged: the volume restore test must fail.
 #
 # Tools come from their GitHub releases, each checked against a SHA-256: the versions and sums the
@@ -102,17 +103,38 @@ head -c 3000000 /dev/urandom > "$v1/sub/blob.bin"
 echo "jellyfin settings" > "$v1/settings.xml"
 head -c 100000 /dev/urandom > "$v2/16384"
 export BACKUP_VOLUME_PATHS="$work/data/local-path $v2 $work/data/not-there"
+# A stand-in for crictl with one running PostgreSQL container, whose pg_dumpall prints a dump
+# shaped like the real one (or one cut short, in mode "short").
+cat > "$work/crictl" <<'CRI'
+#!/usr/bin/env bash
+case "$1" in
+  ps) echo '{"containers":[{"id":"abc123","labels":{"io.kubernetes.pod.namespace":"identity","io.kubernetes.pod.name":"sso-postgres-0"}}]}' ;;
+  exec) [ "$2" = abc123 ] || exit 1
+        printf -- '--\n-- PostgreSQL database cluster dump\n--\nCREATE ROLE keycloak;\n'
+        [ "$(cat "$0.mode" 2>/dev/null)" = short ] && exit 1
+        printf -- '\n--\n-- PostgreSQL database cluster dump complete\n--\n\n' ;;
+  *) exit 2 ;;
+esac
+CRI
+chmod +x "$work/crictl"
+export BACKUP_CRICTL=$work/crictl
 "$bin/c1-backup-volumes.sh"
 ok "c1-backup-volumes.sh backed up two folders and skipped the missing one"
 cp -a "$work/data" "$work/as-backed-up"
 echo "changed after the backup" >> "$v1/settings.xml"
 out=$("$bin/c1-restore-test-volumes.sh")
 echo "$out"
-grep -q 'PASS: volume restore test, 2 folders' <<< "$out" || fail "c1-restore-test-volumes.sh did not pass"
-ok "c1-restore-test-volumes.sh passed, canaries match"
+grep -q 'PASS: volume restore test, 2 folders, 1 database dumps' <<< "$out" || fail "c1-restore-test-volumes.sh did not pass"
+grep -q 'identity_sso-postgres-0.sql: complete' <<< "$out" || fail "the database dump was not checked"
+ok "c1-restore-test-volumes.sh passed, canaries match, the database dump came back complete"
 "$bin/restic" restore latest --host ci-node --tag volumes --target "$work/full" >/dev/null
 diff -r "$work/as-backed-up" "$work/full$work/data" || fail "a full restore differs from the source at backup time"
 ok "a full restore equals the folders as they were backed up"
+echo short > "$work/crictl.mode"
+if "$bin/c1-backup-volumes.sh" > "$work/short.log" 2>&1; then fail "a cut-short database dump passed"; fi
+grep -q 'a database dump failed; the files were backed up' "$work/short.log" || { cat "$work/short.log"; fail "wrong failure"; }
+rm "$work/crictl.mode"
+ok "a database dump that does not finish fails the volume backup"
 
 echo "== 4. a damaged repository fails the volume restore test"
 pack=$(find "$RESTIC_REPOSITORY/data" -type f -size +1M -print -quit)

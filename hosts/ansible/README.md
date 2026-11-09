@@ -141,19 +141,21 @@ Runbook: [Set up sign-in for lab apps](../../docs/runbooks/set-up-lab-sign-in.md
 
 ## Backups of c1
 
-`playbooks/k8s-backup.yml` (role `k8s_backup`) sends c1's etcd and every volume folder to a restic repository off the Proxmox host each night, and proves every week that the newest snapshots restore. Runbooks: [Back up c1 off the box](../../docs/runbooks/back-up-c1-off-box.md) and [Test the etcd restore](../../docs/runbooks/test-etcd-restore.md). Every part is an agent pick (`../AGENT-PICKS.md`, picks 144-152, and 179-182 for the Azure storage).
+`playbooks/k8s-backup.yml` (role `k8s_backup`) sends c1's etcd and every volume folder to a restic repository off the Proxmox host each night, and proves every week that the newest snapshots restore. Runbooks: [Back up c1 off the box](../../docs/runbooks/back-up-c1-off-box.md) and [Test the etcd restore](../../docs/runbooks/test-etcd-restore.md). Every part is an agent pick (`../AGENT-PICKS.md`, picks 144-152, 179-181 for the Azure storage, and 189 for the nodes' Azure sign-in).
 
 - **What goes.** From the control plane, tag `etcd`: an `etcdctl snapshot save`, its status, `/etc/kubernetes/pki`, the static pod manifests and ConfigMap `kubeadm-config`. From each node, tag `volumes`: `/var/lib/c1-data/local-path` and `/var/lib/central-hub/identity-postgres`, whichever it has. The key for Secrets at rest is never in a backup.
 - **Where.** Only the env file says: `RESTIC_REPOSITORY`, `RESTIC_PASSWORD` and the target's credentials (Azure Blob, S3, SFTP or a REST server). restic encrypts on the node, so the target sees only ciphertext.
-- **The tests.** `c1-restore-test-etcd.sh` restores the newest etcd snapshot into a temporary folder and starts it as a separate etcd on `127.0.0.1:23790`, then checks its revision and the key `/registry/namespaces/kube-system`. `c1-restore-test-volumes.sh` runs `restic check`, restores the newest volume snapshot with `--verify` into a temporary folder, and checks the canary file each backup writes. Neither touches c1's etcd or a volume. CI job `backup` runs the same scripts against etcd 3.7.0 on every PR, and runs `azure_sas.yml` against a stand-in `az` in US Eastern time (`tests/test_backup_azure_sas.sh`).
+- **The tests.** `c1-restore-test-etcd.sh` restores the newest etcd snapshot into a temporary folder and starts it as a separate etcd on `127.0.0.1:23790`, then checks its revision and the key `/registry/namespaces/kube-system`. `c1-restore-test-volumes.sh` runs `restic check` with a 2% data sample, restores only the canary files and database dumps of the newest volume snapshot with `--verify` into a temporary folder (a full restore would fill the OS disk once the volumes grow), checks each canary, and checks that each `pg_dumpall` dump is complete. Neither touches c1's etcd or a volume. CI job `backup` runs the same scripts against etcd 3.7.0 on every PR, and runs `c1-backup-azure-cert.py` and `azure_identity.yml` against a stand-in for Entra ID, Microsoft Graph and `az` that checks every signature (`tests/test_backup_azure_cert.sh`).
 
 | Variable | What it is |
 |---|---|
 | `k8s_backup_enabled` | `false` (the default) installs the tools with the timers off and removes the env file from the nodes. `true` turns the timers on. |
 | `k8s_backup_env_file` | The 0600 env file on the controller, for example `~/.config/central-hub/c1-backup.env`. Private, no default; the run stops if it is missing, empty or readable by others. |
 | `k8s_backup_drill` | `true` with `--tags drill`: back up now and run the restore tests. |
-| `k8s_backup_azure_sas` | `true`: each `timers` run mints a user delegation SAS for the Azure container on the controller (`az`, signed in as `agent-azure`) and adds `AZURE_ACCOUNT_NAME` and `AZURE_ACCOUNT_SAS` to the node env file, so no account key exists anywhere (pick 181). The SAS lasts `k8s_backup_azure_sas_days` (7 at most), so run `--tags timers` again within that. |
+| `k8s_backup_azure_identity` | `true`: the nodes sign in to Azure Blob as the app `c1-backup` with a certificate each node makes and keeps (`k8s_backup_azure_cert_file`, 0600). A `timers` run uploads a node's public certificate with `az` (signed in as `agent-azure`, the app's owner) when Entra ID doesn't know it, and the daily `c1-backup-azure-cert.timer` rolls it 30 days before its 90 days end (Graph `addKey` and `removeKey`), so nothing has to run again on a schedule (pick 191). |
 | `k8s_backup_azure_account` | The storage account (tofu output `storage_account_name` of `terraform/azure/backup`). Private. |
+| `k8s_backup_azure_client_id`, `k8s_backup_azure_tenant_id`, `k8s_backup_azure_app_object_id` | The backup app's IDs (tofu outputs `client_id`, `tenant_id`, `app_object_id`). Not secrets, but kept in the private inventory. |
+| `k8s_backup_azure_cert_days`, `k8s_backup_azure_cert_renew_days` | 90 and 30: how long a certificate lasts, and how many days before its end the node rolls it. |
 
 ## Storage on c1
 

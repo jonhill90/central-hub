@@ -108,6 +108,11 @@ check_manifests() {
     [ -f "$root/Chart.yaml" ] || continue
     helm lint --quiet "$root" --set zone=example.com --set gatewayAddress=192.0.2.10
     helm template root "$root" --set zone=example.com --set gatewayAddress=192.0.2.10 > "$work/rendered/root-$(basename "$(dirname "$root")").yaml"
+    # The same with the pause switch on, so its sync window is schema-checked too.
+    if grep -q '^  syncPaused:' "$root/values.yaml"; then
+      helm template root "$root" --set zone=example.com --set gatewayAddress=192.0.2.10 --set c1Project.syncPaused=true \
+        > "$work/rendered/root-$(basename "$(dirname "$root")")-paused.yaml"
+    fi
   done
   # Charts kept in this repository (root values `local: true`), rendered the same way.
   local chart
@@ -157,7 +162,7 @@ check_identity() {
 check_backup() {
   # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository.
   bash "$here/tests/test_backup.sh"
-  bash "$here/tests/test_backup_azure_sas.sh"
+  bash "$here/tests/test_backup_azure_cert.sh"
 }
 
 check_scripts() {

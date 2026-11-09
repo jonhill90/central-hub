@@ -37,3 +37,12 @@ spec:
     {{- end }}
   clusterResourceWhitelist:
     {{- toYaml .Values.c1Project.clusterResources | nindent 4 }}
+  {{- if .Values.c1Project.syncPaused }}
+  # Pause switch on: a deny window that is always open, for every Application, manual syncs included.
+  syncWindows:
+    - kind: deny
+      schedule: "* * * * *"
+      duration: 1h
+      applications: ["*"]
+      manualSync: false
+  {{- end }}

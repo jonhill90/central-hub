@@ -1,8 +1,8 @@
 # Off-box storage for c1's restic backups (TASK-0194; runbook docs/runbooks/back-up-c1-off-box.md).
-# Agent picks 179-182 in hosts/AGENT-PICKS.md.
+# Agent picks 179-181 and 189 in hosts/AGENT-PICKS.md.
 #
 # No key, no anonymous access: shared key access is off, so every request must carry an Entra ID
-# token or a user delegation SAS (which an Entra ID identity signs). The data endpoint answers
+# token (the nodes sign in as their own app registration, below). The data endpoint answers
 # only the addresses in var.allowed_ip_addresses. All of this is management plane, so tofu works
 # from anywhere; only reading or writing blobs needs an allowed address.
 
@@ -56,14 +56,30 @@ resource "azurerm_storage_container" "backup" {
   container_access_type = "private"
 }
 
-# The identity that signs the SAS (agent pick 182) needs a data role: a user delegation SAS can do
-# only what its signer may do, and the key that signs it can be requested only with a role on the
-# account or wider. By default that is the identity running tofu, the agents' service principal.
-data "azurerm_client_config" "current" {}
+# The nodes' own identity (agent pick 191): an app registration with a service principal, holding
+# Storage Blob Data Contributor on the backup container only. It has no secret. Each node makes its
+# own key and certificate, which never leave the node; the playbook uploads the first public
+# certificate, and the node rolls it itself before it expires (Microsoft Graph addKey, which needs
+# no permission for an app's own keys). So no certificate is managed here, and none is in state.
+#
+# The app's owner is the identity running tofu (agent-azure), which may change only apps it owns
+# (Graph Application.ReadWrite.OwnedBy, docs/runbooks/give-agents-access-to-azure.md).
+data "azuread_client_config" "current" {}
 
-resource "azurerm_role_assignment" "sas_signer" {
-  scope                = azurerm_storage_account.backup.id
+resource "azuread_application" "backup" {
+  display_name     = var.app_display_name
+  sign_in_audience = "AzureADMyOrg"
+  owners           = [data.azuread_client_config.current.object_id]
+}
+
+resource "azuread_service_principal" "backup" {
+  client_id = azuread_application.backup.client_id
+  owners    = [data.azuread_client_config.current.object_id]
+}
+
+resource "azurerm_role_assignment" "backup" {
+  scope                = azurerm_storage_container.backup.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = coalesce(var.sas_signer_object_id, data.azurerm_client_config.current.object_id)
+  principal_id         = azuread_service_principal.backup.object_id
   principal_type       = "ServicePrincipal"
 }

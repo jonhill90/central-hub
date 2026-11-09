@@ -1,6 +1,6 @@
 ---
 id: D-0033
-title: Keep c1's off-box backups in one Azure Blob container with restic, reached only through Entra ID, and leave the long-term credential to its own decision
+title: Keep c1's off-box backups in one Azure Blob container with restic, reached only through Entra ID with a certificate each node makes and rolls itself
 status: proposed
 date: 2026-11-09
 decision-makers: [owner]
@@ -9,10 +9,10 @@ consulted: []
 waits-on: [D-0011, TASK-0194]
 supersedes: []
 superseded-by:
-revisit-when: the credential decision in TASK-0202 is made; a SAS renewal is missed and a nightly backup fails; the storage account costs more than a few dollars a month; a second cluster needs off-box backups; the home's public address changes often enough to break backups; or restic or Azure changes the repository format, the SAS limits or the prices this record uses
+revisit-when: TASK-0224 finds Azure Arc or workload identity federation ready for c1; a node's certificate roll fails and a nightly backup fails; the storage account costs more than a few dollars a month; a second cluster needs off-box backups; the home's public address changes often enough to break backups; or restic or Azure changes the repository format, the Graph rules for rolling an app's own certificate or the prices this record uses
 ---
 
-# Keep c1's off-box backups in one Azure Blob container with restic, reached only through Entra ID, and leave the long-term credential to its own decision
+# Keep c1's off-box backups in one Azure Blob container with restic, reached only through Entra ID with a certificate each node makes and rolls itself
 
 ## Context and Problem Statement
 
@@ -46,25 +46,25 @@ Option 2 gives the same protection, but the owner already chose Azure and its id
 ### Rules
 
 1. **One repository.** c1's etcd bundle and every volume folder go to one restic repository in container `c1-backup` of a storage account in resource group `rg-c1-backup`. That account is built only from `hosts/terraform/azure/backup`. The account's name is a private value.
-2. **No keys.** Shared key access stays off, so no account key or key-signed SAS works. Every request carries an Entra ID token or a user delegation SAS that an Entra ID identity signs.
+2. **No keys.** Shared key access stays off, so no account key or key-signed SAS works. Every request carries an Entra ID token.
 3. **One door.** The data endpoint answers only the home's public address, with no bypass. Managing the account works from anywhere.
 4. **Retention and proof.** The policy keeps 7 daily, 4 weekly and 6 monthly snapshots. A restore test runs every Sunday without touching the live system. The playbook's `drill` tag backs up and restores on request.
 5. **Spend.** This storage account is the only billable Azure resource. Anything else in Azure needs the owner's approval first.
-6. **Interim credential.** Until TASK-0202's decision, the nodes hold a user delegation SAS for the container only, valid for at most 7 days. An agent lane renews it from the owner's Mac at least every 5 days.
+6. **The nodes' credential.** The nodes sign in as the app registration `c1-backup`, which holds Storage Blob Data Contributor on the backup container only. Each node makes its own key and a 90-day certificate, and the key never leaves the node. The playbook uploads the first public certificate. After that a daily timer on the node rolls it through Microsoft Graph 30 days before it ends, so no person or agent renews anything (the owner's rule of 2026-11-09 06:50 UTC: no agent in place of a deterministic process). This was the owner's choice of 2026-11-09 07:07 UTC between this and workload identity federation, left to the agents, which picked the certificate (pick 191). Azure Arc and federation are to be looked at again in TASK-0224.
 
 ### Not decided here
 
-- **The long-term credential.** The options are to keep the SAS, use a backup-only service principal, use an Azure Arc managed identity, or use workload identity federation. They are parked in TASK-0202 for the owner, and federation is part of TASK-0200. Only the last two meet the owner's request of 2026-11-08 in full.
-- **Protection against deletion.** The SAS can delete, because restic's `forget` and `prune` need to. Soft delete keeps deleted blobs and containers for 7 days. There is no versioning or immutability policy: research on 2026-10-16 proposed a short lock, and pick 180 left it out because it can't be undone before its date. If the owner wants one, a separate prune-only credential is the usual pair for it (model).
+- **A credential with no key on the node at all.** Azure Arc's managed identity or workload identity federation would leave no private key that the node keeps. Both are backlogged in TASK-0224.
+- **Protection against deletion.** The nodes' identity can delete, because restic's `forget` and `prune` need to. Soft delete keeps deleted blobs and containers for 7 days. There is no versioning or immutability policy: research on 2026-10-16 proposed a short lock, and pick 180 left it out because it can't be undone before its date. If the owner wants one, a separate prune-only credential is the usual pair for it (model).
 - **The access tier.** The account uses Hot, because restic's weekly check and prune read data back. Cool or Cold cost less to store but charge to read and to delete early (see Cost).
 - **Proxmox's own backups.** These stay with TASK-0139.
 
 ### Consequences
 
 - Good: a copy off the host exists, and on 2026-11-09 a restore of both etcd and the volumes was proven from it (see Evidence).
-- Good: no one holds a key that opens the account. The SAS can't outlive 7 days, and Azure ties each SAS to the identity that signed it.
+- Good: no one holds a key that opens the account. Each node's private key stays on that node, lasts at most 90 days, and opens only the backup container.
 - Good: the repository is encrypted on the node before it leaves, so the storage account holds only ciphertext.
-- Bad: the SAS needs renewing every 5 days. A missed renewal stops the nightly backups after 7 days, and no alert says so yet.
+- Bad: a node keeps a private key on its disk, readable by root. A node that is off for more than 60 days, or whose roll keeps failing, has to have its certificate uploaded again by the playbook. A failed roll fails a systemd unit, but no alert says so yet.
 - Bad: if the home's public address changes, backups fail until `tofu apply` sets the new address. A restore from anywhere else needs that address added first.
 - Bad: one region, LRS. That's three copies in one Azure datacenter, which is enough as the second copy of data whose first copy is at home (pick 180).
 
@@ -86,7 +86,7 @@ The repository's size has not been measured yet. Read it from the account's `Use
 restic's repository format is documented and doesn't depend on the backend. `restic copy` moves snapshots into a new repository on any target restic supports, such as S3, SFTP, a REST server or a local disk. Any blob copy tool can also move the container's objects as they are. The role reads only `RESTIC_REPOSITORY`, `RESTIC_PASSWORD` and the target's credentials. So moving off Azure means three steps:
 
 1. Copy the repository to the new target.
-2. Point the env file at it and set `k8s_backup_azure_sas: false`.
+2. Point the env file at it and set `k8s_backup_azure_identity: false`.
 3. Run `tofu destroy` in `hosts/terraform/azure/backup` once the copy has passed a drill.
 
 Leaving restic means restoring the newest snapshots with restic and backing them up again with the new tool.

@@ -58,8 +58,8 @@ variable "tags" {
   }
 }
 
-variable "sas_signer_object_id" {
-  description = "Object ID of the service principal that mints the backup SAS (Storage Blob Data Contributor on the account). null (the default) means the identity running tofu, which is agent-azure when run as the runbook says."
+variable "app_display_name" {
+  description = "Display name of the backup's app registration in Entra ID, the identity the nodes sign in as."
   type        = string
-  default     = null
+  default     = "c1-backup"
 }

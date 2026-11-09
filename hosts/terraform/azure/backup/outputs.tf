@@ -9,6 +9,21 @@ output "restic_repository" {
 }
 
 output "storage_account_id" {
-  description = "Resource ID of the storage account: the scope of the one role assignment the owner makes (Storage Blob Data Contributor for agent-azure). Azure allows the user delegation key only at account scope or wider."
+  description = "Resource ID of the storage account."
   value       = azurerm_storage_account.backup.id
+}
+
+output "client_id" {
+  description = "k8s_backup_azure_client_id: the backup app's client ID, which the nodes sign in with. Not a secret."
+  value       = azuread_application.backup.client_id
+}
+
+output "app_object_id" {
+  description = "k8s_backup_azure_app_object_id: the backup app's object ID, which Graph addKey and removeKey take."
+  value       = azuread_application.backup.object_id
+}
+
+output "tenant_id" {
+  description = "k8s_backup_azure_tenant_id: the Entra ID tenant."
+  value       = data.azuread_client_config.current.tenant_id
 }
