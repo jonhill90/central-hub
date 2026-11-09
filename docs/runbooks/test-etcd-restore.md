@@ -8,7 +8,7 @@ outcome: the newest off-box etcd snapshot of c1 has been restored into a separat
 needs: Back up c1 off the box done first; SSH to c1's control plane as D-0022 says
 private-values: [c1-backup-restic-repository, c1-backup-restic-password, c1-backup-target-credentials]
 files: [hosts/ansible/roles/k8s_backup/files/c1-restore-test-etcd.sh, hosts/ansible/playbooks/k8s-backup.yml, .github/hosts-check/tests/test_backup.sh]
-last-tested: 2026-11-08, an agent, CI's test (a snapshot from etcd 3.7.0 restored with etcdutl 3.7.2, 201 keys back); not yet run on c1
+last-tested: 2026-11-08, an agent, CI's test (a snapshot from etcd 3.7.0 restored with etcdutl 3.7.2, 201 keys back); 2026-11-09, an agent lane through the owner's Mac, the playbook's drill on c1's control plane against the Azure repository (PASS: revision 3014172, 1072 keys back)
 superseded-by:
 ---
 

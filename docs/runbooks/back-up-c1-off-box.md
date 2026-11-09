@@ -8,7 +8,7 @@ outcome: every night restic writes an encrypted snapshot of c1's etcd and of eve
 needs: the lab clone of central-hub with its private inventory; SSH to the c1 nodes as D-0022 says; a restic repository off the Proxmox host and its credentials; for Azure, the agents' service principal signed in to `az` on the Mac (give-agents-access-to-azure.md)
 private-values: [c1-backup-restic-repository, c1-backup-restic-password, c1-backup-target-credentials, c1-backup-azure-storage-account, home-public-ip]
 files: [hosts/terraform/azure/backup/, hosts/ansible/playbooks/k8s-backup.yml, hosts/ansible/roles/k8s_backup/, .github/hosts-check/tests/test_backup.sh]
-last-tested: 2026-11-08, an agent, the scripts end to end in CI's test (etcd 3.7.0, local restic repository); 2026-11-09, an agent, terraform/azure/backup's offline tests (mocked provider); not yet run on c1 or in Azure
+last-tested: 2026-11-08, an agent, the scripts end to end in CI's test (etcd 3.7.0, local restic repository); 2026-11-09, an agent, terraform/azure/backup's offline tests (mocked provider); 2026-11-09, an agent lane through the owner's Mac, the full apply and the playbook's drill on c1 against Azure Blob with a user delegation SAS (backups OK, restic check clean, etcd restore test PASS, volume restore test PASS on 2 folders)
 superseded-by:
 ---
 
