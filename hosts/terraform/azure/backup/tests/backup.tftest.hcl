@@ -3,6 +3,11 @@
 # use apply, which with a mocked provider only fills in values.
 
 mock_provider "azurerm" {
+  mock_data "azurerm_client_config" {
+    defaults = {
+      object_id = "11111111-1111-1111-1111-111111111111"
+    }
+  }
   mock_resource "azurerm_storage_account" {
     defaults = {
       id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-c1-backup/providers/Microsoft.Storage/storageAccounts/examplec1backup"
@@ -119,4 +124,22 @@ run "refuses_a_bad_account_name" {
   }
 
   expect_failures = [var.storage_account_name]
+}
+
+# The signer gets blob data access on this account only, and by default it is the identity running tofu.
+run "sas_signer_role_on_the_account" {
+  assert {
+    condition     = azurerm_role_assignment.sas_signer.role_definition_name == "Storage Blob Data Contributor"
+    error_message = "The signer needs Storage Blob Data Contributor."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.sas_signer.scope == azurerm_storage_account.backup.id
+    error_message = "The role must be scoped to the backup storage account only."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.sas_signer.principal_id == "11111111-1111-1111-1111-111111111111"
+    error_message = "By default the signer is the identity running tofu."
+  }
 }

@@ -55,3 +55,15 @@ resource "azurerm_storage_container" "backup" {
   storage_account_id    = azurerm_storage_account.backup.id
   container_access_type = "private"
 }
+
+# The identity that signs the SAS (agent pick 182) needs a data role: a user delegation SAS can do
+# only what its signer may do, and the key that signs it can be requested only with a role on the
+# account or wider. By default that is the identity running tofu, the agents' service principal.
+data "azurerm_client_config" "current" {}
+
+resource "azurerm_role_assignment" "sas_signer" {
+  scope                = azurerm_storage_account.backup.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = coalesce(var.sas_signer_object_id, data.azurerm_client_config.current.object_id)
+  principal_type       = "ServicePrincipal"
+}

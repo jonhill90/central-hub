@@ -57,3 +57,9 @@ variable "tags" {
     managed-by = "central-hub/hosts/terraform/azure/backup"
   }
 }
+
+variable "sas_signer_object_id" {
+  description = "Object ID of the service principal that mints the backup SAS (Storage Blob Data Contributor on the account). null (the default) means the identity running tofu, which is agent-azure when run as the runbook says."
+  type        = string
+  default     = null
+}
