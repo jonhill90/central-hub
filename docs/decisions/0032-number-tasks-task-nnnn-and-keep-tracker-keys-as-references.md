@@ -16,6 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNBTy45aLfCkayPE6NZD2Bh1
   approval-names: "PR #102 and head 753d6d2"
   check: the drafting agent read the message in the project thread at 2026-11-09T01:31Z; it names PR jonhill90/central-hub 102 and head 753d6d2 itself, and that head holds this record. The owner's pick of TASK-NNNN on the decision card matches. An independent check by a reviewing agent is still to do
+  merged: to be squash-merged with this evidence commit on top of the approved commit
 revisit-when: a second tracker is synced into the notebook; the Activation gate passes; or tasks get a second numbering owner
 ---
 
