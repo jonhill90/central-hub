@@ -1,0 +1,39 @@
+{{- /*
+AppProject `c1` (Activation gate item 5): the child Applications may read only this repository and
+their own chart repositories, write only to this cluster in the namespaces the charts use, and make
+only the cluster-scoped kinds listed in values `c1Project.clusterResources`. Sources and namespaces
+are built from .Values.apps, so a new app widens the project in the same change.
+The children still use `.Values.project`; this file only makes the project.
+*/ -}}
+{{- $repos := list .Values.repoURL }}
+{{- $namespaces := .Values.c1Project.extraNamespaces | default list }}
+{{- range $name, $app := .Values.apps }}
+{{- if not $app.local }}
+{{- $repos = append $repos $app.chart.repoURL }}
+{{- end }}
+{{- $namespaces = append $namespaces $app.namespace }}
+{{- end }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: c1
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: c1
+  annotations:
+    # Before every child, so the project exists when a child first names it.
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  description: Components of cluster c1 that Argo CD installs from central-hub (D-0027).
+  sourceRepos:
+    {{- range $repos | uniq | sortAlpha }}
+    - {{ . }}
+    {{- end }}
+  destinations:
+    {{- range $namespaces | uniq | sortAlpha }}
+    - server: https://kubernetes.default.svc
+      namespace: {{ . }}
+    {{- end }}
+  clusterResourceWhitelist:
+    {{- toYaml .Values.c1Project.clusterResources | nindent 4 }}

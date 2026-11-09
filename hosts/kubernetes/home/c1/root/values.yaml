@@ -11,9 +11,31 @@ gatewayAddress: ""
 repoURL: https://github.com/jonhill90/central-hub
 targetRevision: main
 appsPath: hosts/kubernetes/home/c1/apps
-# The Argo CD project every child Application belongs to. An AppProject `c1` that limits what the
-# children may touch can take over here once it exists (Activation gate work).
+# The Argo CD project every child Application belongs to. The root chart makes AppProject `c1`
+# (templates/project.yaml, Activation gate item 5); the children move to it by setting `c1` here,
+# in its own PR once the project exists on c1 and its Applications show no permission error.
 project: default
+
+# What AppProject `c1` allows. Source repositories and destination namespaces come from `apps`
+# (this repository, each `chart.repoURL`, each `namespace`), plus the lists below.
+c1Project:
+  # Namespaces that a chart writes to besides the `namespace` of some app. Checked against the
+  # rendered charts on 2026-11-09: secret-store makes `secret-source`, where its source secret sits.
+  # Not `argocd`: the child Application objects are the root's, and the root stays in `default`.
+  extraNamespaces:
+    - secret-source
+  # Cluster-scoped kinds the charts make, and nothing else (Argo CD refuses any other). Each new
+  # kind is a PR. Checked against the rendered charts on 2026-11-09.
+  clusterResources:
+    - {group: "", kind: Namespace}
+    - {group: apiextensions.k8s.io, kind: CustomResourceDefinition}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRole}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding}
+    - {group: admissionregistration.k8s.io, kind: MutatingWebhookConfiguration}
+    - {group: admissionregistration.k8s.io, kind: ValidatingWebhookConfiguration}
+    - {group: apiregistration.k8s.io, kind: APIService}
+    - {group: storage.k8s.io, kind: StorageClass}
+    - {group: external-secrets.io, kind: ClusterSecretStore}
 
 # One entry per component, in the order they moved (spec, "Order"). Each one:
 #   namespace    where the chart installs
