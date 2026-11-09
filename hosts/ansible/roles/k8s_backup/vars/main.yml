@@ -8,12 +8,24 @@ k8s_backup_units: >-
       {'src': 'c1-restore-test.timer.j2', 'dest': 'c1-restore-test.timer'}]
      + ([{'src': 'c1-backup-etcd.service.j2', 'dest': 'c1-backup-etcd.service'},
          {'src': 'c1-backup-etcd.timer.j2', 'dest': 'c1-backup-etcd.timer'}]
-        if k8s_backup_is_control_plane else []) }}
+        if k8s_backup_is_control_plane else [])
+     + ([{'src': 'c1-backup-azure-cert.service.j2', 'dest': 'c1-backup-azure-cert.service'},
+         {'src': 'c1-backup-azure-cert.timer.j2', 'dest': 'c1-backup-azure-cert.timer'}]
+        if k8s_backup_azure_identity else []) }}
 k8s_backup_timers: >-
   {{ ['c1-backup-volumes.timer', 'c1-restore-test.timer']
-     + (['c1-backup-etcd.timer'] if k8s_backup_is_control_plane else []) }}
+     + (['c1-backup-etcd.timer'] if k8s_backup_is_control_plane else [])
+     + (['c1-backup-azure-cert.timer'] if k8s_backup_azure_identity else []) }}
 k8s_backup_backup_services: >-
   {{ ['c1-backup-volumes.service']
      + (['c1-backup-etcd.service'] if k8s_backup_is_control_plane else []) }}
 # PASS lines the drill expects: volumes on every node, plus etcd on the control plane.
 k8s_backup_drill_expected: "{{ 2 if k8s_backup_is_control_plane else 1 }}"
+# What c1-backup-azure-cert.py reads when the playbook runs it, before the node env file has these.
+k8s_backup_azure_script_env:
+  AZURE_CLIENT_ID: "{{ k8s_backup_azure_client_id }}"
+  AZURE_TENANT_ID: "{{ k8s_backup_azure_tenant_id }}"
+  AZURE_APP_OBJECT_ID: "{{ k8s_backup_azure_app_object_id }}"
+  AZURE_CLIENT_CERTIFICATE_PATH: "{{ k8s_backup_azure_cert_file }}"
+  BACKUP_CERT_DAYS: "{{ k8s_backup_azure_cert_days }}"
+  BACKUP_CERT_RENEW_DAYS: "{{ k8s_backup_azure_cert_renew_days }}"

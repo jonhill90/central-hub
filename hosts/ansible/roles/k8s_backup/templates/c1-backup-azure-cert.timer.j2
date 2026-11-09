@@ -1,0 +1,11 @@
+# {{ ansible_managed }} (role k8s_backup)
+[Unit]
+Description=Roll c1's backup certificate for Azure before it expires, checked daily
+
+[Timer]
+OnCalendar={{ k8s_backup_azure_cert_schedule }}
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

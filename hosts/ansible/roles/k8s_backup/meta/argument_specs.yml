@@ -16,15 +16,21 @@ argument_specs:
         description: >-
           The 0600 env file on the controller with RESTIC_REPOSITORY, RESTIC_PASSWORD and the
           target's credentials. Private, no default; needed when k8s_backup_enabled is true.
-      k8s_backup_azure_sas:
+      k8s_backup_azure_identity:
         type: bool
         default: false
         description: >-
-          Mint a user delegation SAS for the Azure container on the controller and add
-          AZURE_ACCOUNT_NAME and AZURE_ACCOUNT_SAS to the node env file, instead of an account key.
+          Sign in to Azure Blob as the backup app with a certificate made on each node, uploaded
+          once by the controller and rolled by a daily timer on the node; adds the sign-in lines to
+          the node env file.
       k8s_backup_azure_account: {type: str, default: "", description: "Storage account name (tofu output storage_account_name). Private."}
-      k8s_backup_azure_container: {type: str, default: c1-backup, description: Blob container that holds the restic repository.}
-      k8s_backup_azure_sas_days: {type: int, default: 7, description: "Days the SAS lasts, 1 to 7."}
+      k8s_backup_azure_client_id: {type: str, default: "", description: "The backup app's client ID (tofu output client_id)."}
+      k8s_backup_azure_tenant_id: {type: str, default: "", description: "The Entra ID tenant (tofu output tenant_id)."}
+      k8s_backup_azure_app_object_id: {type: str, default: "", description: "The backup app's object ID (tofu output app_object_id)."}
+      k8s_backup_azure_cert_file: {type: str, default: /etc/central-hub/azure/backup.pem, description: "The node's key and certificate, one 0600 PEM file."}
+      k8s_backup_azure_cert_days: {type: int, default: 90, description: Days each certificate lasts.}
+      k8s_backup_azure_cert_renew_days: {type: int, default: 30, description: Days left at which the node rolls its certificate.}
+      k8s_backup_azure_cert_schedule: {type: str, default: "*-*-* 01:40:00", description: systemd OnCalendar for the daily renewal check.}
       k8s_backup_az: {type: str, default: az, description: The Azure CLI on the controller.}
       k8s_backup_bin_dir: {type: str, default: /usr/local/libexec/central-hub-backup, description: Where the tools and scripts go on the nodes.}
       k8s_backup_node_env_file: {type: str, default: /etc/central-hub/backup.env, description: The env file's path on the nodes.}

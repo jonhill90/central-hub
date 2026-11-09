@@ -3,11 +3,6 @@
 # use apply, which with a mocked provider only fills in values.
 
 mock_provider "azurerm" {
-  mock_data "azurerm_client_config" {
-    defaults = {
-      object_id = "11111111-1111-1111-1111-111111111111"
-    }
-  }
   mock_resource "azurerm_storage_account" {
     defaults = {
       id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-c1-backup/providers/Microsoft.Storage/storageAccounts/examplec1backup"
@@ -16,6 +11,26 @@ mock_provider "azurerm" {
   mock_resource "azurerm_storage_container" {
     defaults = {
       id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-c1-backup/providers/Microsoft.Storage/storageAccounts/examplec1backup/blobServices/default/containers/c1-backup"
+    }
+  }
+}
+
+mock_provider "azuread" {
+  mock_data "azuread_client_config" {
+    defaults = {
+      object_id = "11111111-1111-1111-1111-111111111111"
+      tenant_id = "22222222-2222-2222-2222-222222222222"
+    }
+  }
+  mock_resource "azuread_application" {
+    defaults = {
+      client_id = "33333333-3333-3333-3333-333333333333"
+      object_id = "44444444-4444-4444-4444-444444444444"
+    }
+  }
+  mock_resource "azuread_service_principal" {
+    defaults = {
+      object_id = "55555555-5555-5555-5555-555555555555"
     }
   }
 }
@@ -92,7 +107,7 @@ run "outputs_for_restic" {
 
   assert {
     condition     = endswith(output.storage_account_id, "/storageAccounts/examplec1backup")
-    error_message = "storage_account_id must be the account's resource ID, the role assignment's scope."
+    error_message = "storage_account_id must be the account's resource ID."
   }
 }
 
@@ -126,20 +141,40 @@ run "refuses_a_bad_account_name" {
   expect_failures = [var.storage_account_name]
 }
 
-# The signer gets blob data access on this account only, and by default it is the identity running tofu.
-run "sas_signer_role_on_the_account" {
+# The nodes sign in as the backup app, whose service principal gets blob data access on the backup
+# container only, and nothing else in this folder holds a data role.
+run "backup_app_role_on_the_container_only" {
   assert {
-    condition     = azurerm_role_assignment.sas_signer.role_definition_name == "Storage Blob Data Contributor"
-    error_message = "The signer needs Storage Blob Data Contributor."
+    condition     = azurerm_role_assignment.backup.role_definition_name == "Storage Blob Data Contributor"
+    error_message = "The backup app needs Storage Blob Data Contributor."
   }
 
   assert {
-    condition     = azurerm_role_assignment.sas_signer.scope == azurerm_storage_account.backup.id
-    error_message = "The role must be scoped to the backup storage account only."
+    condition     = azurerm_role_assignment.backup.scope == azurerm_storage_container.backup.id
+    error_message = "The role must be scoped to the backup container only."
   }
 
   assert {
-    condition     = azurerm_role_assignment.sas_signer.principal_id == "11111111-1111-1111-1111-111111111111"
-    error_message = "By default the signer is the identity running tofu."
+    condition     = azurerm_role_assignment.backup.principal_id == "55555555-5555-5555-5555-555555555555" && azurerm_role_assignment.backup.principal_type == "ServicePrincipal"
+    error_message = "The role must go to the backup app's service principal."
+  }
+}
+
+# agent-azure, which runs tofu, owns the app, so it can upload a node's first certificate with
+# Application.ReadWrite.OwnedBy; the app itself is single-tenant.
+run "backup_app_owned_by_the_runner" {
+  assert {
+    condition     = contains(azuread_application.backup.owners, "11111111-1111-1111-1111-111111111111") && length(azuread_application.backup.owners) == 1
+    error_message = "The app's one owner must be the identity running tofu."
+  }
+
+  assert {
+    condition     = azuread_application.backup.sign_in_audience == "AzureADMyOrg"
+    error_message = "The app must be single-tenant."
+  }
+
+  assert {
+    condition     = output.client_id == "33333333-3333-3333-3333-333333333333" && output.app_object_id == "44444444-4444-4444-4444-444444444444" && output.tenant_id == "22222222-2222-2222-2222-222222222222"
+    error_message = "The outputs must give the app's client ID, object ID and the tenant for the inventory."
   }
 }
