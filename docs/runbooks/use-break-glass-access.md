@@ -43,8 +43,11 @@ A break-glass path is one kept for emergencies only, when the normal way in can'
      why: `protect-main` has no bypass actors, so turning it off is the only way past it (Foundation proposal §3.4). A review-only ruleset with the owner's bypass, if added for gate item 1, needs no break-glass for the owner's own PRs.
      expect: the ruleset shows Active again.
    - **B. Stop Argo CD reading `main`.** With the admin kubeconfig (path C), delete the root Application: `kubectl -n argocd delete application c1`. To resume, run `ansible-playbook playbooks/k8s-gitops.yml --tags source` from `hosts/ansible`.
-     why: D-0027 rule 5: the Applications have no resources finalizer, so the objects stay, and nothing reads `main` until the root Application is back. A pause switch that keeps the Application is planned for gate item 5 (docs/specs/2026-10-activation-gate.md).
+     why: D-0027 rule 5: the Applications have no resources finalizer, so the objects stay, and nothing reads `main` until the root Application is back. To pause without deleting anything, use path D instead.
      expect: `kubectl -n argocd get application c1` returns NotFound, and a new commit under `hosts/kubernetes/home/c1/` is not applied.
+   - **D. Pause Argo CD's syncs.** By PR, set `c1Project.syncPaused: true` in `hosts/kubernetes/home/c1/root/values.yaml`. To resume, set it back to `false` by PR.
+     why: it puts an always-open deny window on project `c1`, so no child Application syncs, by hand or on its own; the root Application, in project `default`, still syncs the switch itself (gate item 5).
+     expect: `kubectl -n argocd get appproject c1 -o jsonpath='{.spec.syncWindows}'` shows one deny window, and the Argo CD UI shows each child's sync as blocked by a window.
    - **C. Admin kubeconfig.** SSH to the control-plane node through the Proxmox host and run kubectl there as root, which reads `admin.conf`. Use `super-admin.conf` only if `admin.conf` itself is broken.
      why: both files can do anything and never leave the node (D-0022 rule 1).
      ※ [Build a kubeadm cluster, step 8](build-kubeadm-cluster.md#8-init)
