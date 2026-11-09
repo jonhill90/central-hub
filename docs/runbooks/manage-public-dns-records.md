@@ -1,6 +1,6 @@
 ---
 title: Manage the public zone's DNS records with OpenTofu
-status: draft
+status: tested
 kind: automated
 trigger: once, to adopt the zone; then on every record change (add, change or delete a name in the public zone)
 runner: an agent lane, through the owner's Mac
@@ -8,7 +8,7 @@ outcome: every record in the public zone at Cloudflare is in OpenTofu state, and
 needs: the lab clone of central-hub; OpenTofu; python3 and curl on the Mac; the Cloudflare bootstrap token file (hosts/terraform/README.md, "The bootstrap token")
 private-values: [zone_name, bootstrap_token_file, token_file, home.records.tfvars.json]
 files: [hosts/terraform/home/dns-token/, hosts/terraform/home/dns/, hosts/terraform/home/dns/export-records.sh]
-last-tested:
+last-tested: 2026-11-09, an agent lane on the owner's Mac, steps 1 and 3 to 6 (26 records imported with the cert-manager token as a stopgap, the owner's pick of 06:46 UTC; then grafana deleted, the owner's yes of 07:06 UTC; each second plan showed no changes); step 2 not yet run, the bootstrap token is not in a file on the Mac
 superseded-by:
 ---
 
@@ -87,7 +87,7 @@ Nothing. The bootstrap token that made the cert-manager token on 2026-10-27 also
    why: the plan is the review. A record left out of the file is deleted, so read every `destroy` line before applying.
    expect: the plan shows only the change you made; a second plan shows no changes.
 
-6. After the first import is applied, delete `imports.tf` by pull request and delete `import_ids` from the records file (its variable goes with `imports.tf`).
+6. After the first import is applied, delete `imports.tf` by pull request (done 2026-11-09; to adopt the zone again, restore it from git history) and delete `import_ids` from the records file (its variable goes with `imports.tf`).
    why: STD-0004 Terraform rule 1 allows `imports.tf` only while a folder adopts objects.
    expect: a plan shows no changes.
 
