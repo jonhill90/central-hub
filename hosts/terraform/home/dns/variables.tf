@@ -38,9 +38,3 @@ variable "records" {
     error_message = "Each record needs exactly one of content or data."
   }
 }
-
-variable "import_ids" {
-  description = "Only while adopting the zone (imports.tf): record key to \"<zone id>/<record id>\", as export-records.sh writes it. Empty after the adoption is applied."
-  type        = map(string)
-  default     = {}
-}

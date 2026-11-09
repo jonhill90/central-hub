@@ -87,7 +87,7 @@ Nothing. The bootstrap token that made the cert-manager token on 2026-10-27 also
    why: the plan is the review. A record left out of the file is deleted, so read every `destroy` line before applying.
    expect: the plan shows only the change you made; a second plan shows no changes.
 
-6. After the first import is applied, delete `imports.tf` by pull request and empty `import_ids` in the records file.
+6. After the first import is applied, delete `imports.tf` by pull request and delete `import_ids` from the records file (its variable goes with `imports.tf`).
    why: STD-0004 Terraform rule 1 allows `imports.tf` only while a folder adopts objects.
    expect: a plan shows no changes.
 
