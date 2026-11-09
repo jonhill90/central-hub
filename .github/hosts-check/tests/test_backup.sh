@@ -34,7 +34,8 @@ print(d["k8s_backup_restic_version"], d["k8s_backup_restic_sha256"], d["k8s_back
 ' "$role/defaults/main.yml")
 
 fetch() { # url sha256 out
-  curl -fsSL --retry 3 -o "$3" "$1"
+  # Same retry policy as run.sh and docs.yml: GitHub release downloads return 504s for minutes at a time.
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 15 -o "$3" "$1"
   echo "$2  $3" | sha256sum --check --quiet
 }
 bin=$work/bin

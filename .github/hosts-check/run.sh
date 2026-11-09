@@ -39,7 +39,15 @@ check_terraform() {
     # The shared VLAN file sits at the same path relative to the copy.
     mkdir -p "$work/hosts/ansible/inventories"
     cp -r hosts/ansible/inventories/. "$work/hosts/ansible/inventories"
-    (cd "$copy" && tofu init "${init_args[@]}" >/dev/null && tofu validate -no-color)
+    # The provider registry serves checksums from GitHub releases, which can return 504 for a while,
+    # so init is tried 5 times with a growing wait, like the pip installs in hosts.yml.
+    local try
+    for try in 1 2 3 4 5; do
+      (cd "$copy" && tofu init "${init_args[@]}" >/dev/null) && break
+      [ "$try" = 5 ] && return 1
+      sleep $((try * 15))
+    done
+    (cd "$copy" && tofu validate -no-color)
     (cd "$copy" && tflint --config "$here/tflint.hcl" --format compact)
     if ls "$copy"/tests/*.tftest.hcl >/dev/null 2>&1; then
       (cd "$copy" && tofu test -no-color)
