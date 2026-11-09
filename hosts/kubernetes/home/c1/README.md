@@ -7,6 +7,8 @@ What Argo CD on c1 reads from this repository (D-0023 rule 5, D-0027). The plan 
 | `root/` | A small Helm chart. Argo CD renders it from the one root Application `c1`, which Ansible makes (role `k8s_gitops`), and it makes one child Application per entry in `root/values.yaml`. |
 | `apps/<component>/` | That component's Helm values, read by its child Application. A component with no upstream chart is a small chart of its own here (`local: true` in `root/values.yaml`), such as `apps/jellyfin/`. |
 
+The folder is `<place>/<cluster>/` (D-0011 rule 1). The name `c1` is a counter; what the cluster is (place, provider, hardware, env, purpose) is in labels on its Argo CD cluster Secret `cluster-c1`, which role `k8s_gitops` makes with tag `source` (STD-0001 "Cluster labels").
+
 No private names go here (CLAUDE.md rule 4). The lab zone and the Gateway's address reach the cluster only as the root Application's `zone` and `gatewayAddress` parameters, which Ansible sets from the private inventory.
 
 ## Components moved so far
