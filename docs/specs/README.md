@@ -74,4 +74,5 @@ The agent that writes the code does not edit the acceptance criteria in the same
 | [Let web traffic into c1's apps, with certificates browsers trust](2026-10-c1-way-in-for-web-traffic.md) | proposed | 2026-10-27 |
 | [Move c1's apps and add-ons under Argo CD, with a runbook for each](2026-11-c1-apps-under-argo-cd.md) | accepted | 2026-11-08 |
 | [Give the home lab its own certificate authority that survives rebuilds](2026-11-lab-pki.md) | proposed | 2026-11-08 |
+| [Let c1's backups sign in to Azure with c1's own service-account tokens, so nothing has to renew a token](2026-11-c1-backups-without-a-renewed-token.md) | proposed | 2026-11-09 |
 | [Pass the Activation gate, so a cluster may read central-hub](2026-10-activation-gate.md) | proposed | 2026-10-28 |
