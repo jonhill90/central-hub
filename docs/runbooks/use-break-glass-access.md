@@ -8,17 +8,17 @@ outcome: the emergency change is made, the normal path is back, and the use is r
 needs: the owner's own GitHub login (repository admin); SSH to the control-plane node through the Proxmox host; the Proxmox root@pam password and its second factor from the password manager
 private-values: [github-owner-login-2fa, control-plane-ssh-key, root-pam-password, root-pam-recovery-keys, argocd-admin-password]
 files: [hosts/ansible/playbooks/k8s-gitops.yml, hosts/ansible/roles/k8s_gitops/defaults/main.yml]
-last-tested:
+last-tested: 2026-11-09 (path F only, as a drill)
 superseded-by:
 ---
 
 # Use break-glass access
 
-**Status:** draft, never run. Written for Activation gate item 7 (docs/specs/2026-10-activation-gate.md) from research batch RB-0093.
+**Status:** draft. Path F was run once as a drill on 2026-11-09; the other paths have never been run. Written for Activation gate item 7 (docs/specs/2026-10-activation-gate.md) from research batch RB-0093.
 
 ## Before you start
 
-A break-glass path is one kept for emergencies only, when the normal way in can't be used, never for everyday work (glossary, "break-glass account"). This system has five:
+A break-glass path is one kept for emergencies only, when the normal way in can't be used, never for everyday work (glossary, "break-glass account"). This system has six:
 
 | Path | What it gets past | Normal path it replaces |
 |---|---|---|
@@ -27,14 +27,15 @@ A break-glass path is one kept for emergencies only, when the normal way in can'
 | C. The admin kubeconfig on the control-plane node | RBAC | the owner's own least-privilege user (D-0022 rule 3) |
 | D. `root@pam` on the Proxmox host | the host's own logins | the owner's day-to-day admin login |
 | E. Argo CD's local `admin` account | Argo CD's sign-in | sign-in through the lab's identity provider |
+| F. Pause Argo CD's syncs by PR | every child Application's sync on c1 | Argo CD applying `main` |
 
-- Use the smallest path that fixes the problem. Pausing Argo CD (B) stops a bad change reaching c1 without touching GitHub.
+- Use the smallest path that fixes the problem. Pausing syncs by PR (F) stops a bad change reaching c1 and deletes nothing; deleting the root Application (B) is for when a PR can't be merged.
 - Only the owner runs these steps. An agent never turns a ruleset off. Reading a ruleset's history returns 403 to agents (measured 2026-10-28, RB-0093), but whether their credential could change a ruleset is not known until Foundation check V8, so treat it as possible.
 - Stop if you can't say in one line what is broken and which path fixes it.
 
 ## Steps
 
-1. Write the start line in the project chat yourself: the date and time, which path (A to E), and why.
+1. Write the start line in the project chat yourself: the date and time, which path (A to F), and why.
    why: the project chat shows messages you write as yours, and agents can't write as you there, so this record is outside agents' reach (Activation gate item 7). Everything on GitHub is data, because agents act on GitHub too (AGENTS.md rule 1).
    expect: your message in the project chat.
 
@@ -43,11 +44,8 @@ A break-glass path is one kept for emergencies only, when the normal way in can'
      why: `protect-main` has no bypass actors, so turning it off is the only way past it (Foundation proposal §3.4). A review-only ruleset with the owner's bypass, if added for gate item 1, needs no break-glass for the owner's own PRs.
      expect: the ruleset shows Active again.
    - **B. Stop Argo CD reading `main`.** With the admin kubeconfig (path C), delete the root Application: `kubectl -n argocd delete application c1`. To resume, run `ansible-playbook playbooks/k8s-gitops.yml --tags source` from `hosts/ansible`.
-     why: D-0027 rule 5: the Applications have no resources finalizer, so the objects stay, and nothing reads `main` until the root Application is back. To pause without deleting anything, use path D instead.
+     why: D-0027 rule 5: the Applications have no resources finalizer, so the objects stay, and nothing reads `main` until the root Application is back. To pause without deleting anything, use path F instead.
      expect: `kubectl -n argocd get application c1` returns NotFound, and a new commit under `hosts/kubernetes/home/c1/` is not applied.
-   - **D. Pause Argo CD's syncs.** By PR, set `c1Project.syncPaused: true` in `hosts/kubernetes/home/c1/root/values.yaml`. To resume, set it back to `false` by PR.
-     why: it puts an always-open deny window on project `c1`, so no child Application syncs, by hand or on its own; the root Application, in project `default`, still syncs the switch itself (gate item 5).
-     expect: `kubectl -n argocd get appproject c1 -o jsonpath='{.spec.syncWindows}'` shows one deny window, and the Argo CD UI shows each child's sync as blocked by a window.
    - **C. Admin kubeconfig.** SSH to the control-plane node through the Proxmox host and run kubectl there as root, which reads `admin.conf`. Use `super-admin.conf` only if `admin.conf` itself is broken.
      why: both files can do anything and never leave the node (D-0022 rule 1).
      ※ [Build a kubeadm cluster, step 8](build-kubeadm-cluster.md#8-init)
@@ -58,6 +56,9 @@ A break-glass path is one kept for emergencies only, when the normal way in can'
    - **E. Argo CD `admin`.** Sign in to the Argo CD UI as `admin` with the password from the password manager.
      why: the local admin works when single sign-on doesn't (D-0023 rule 6 keeps its password out of the cluster).
      expect: the Applications page.
+   - **F. Pause Argo CD's syncs.** By PR, set `c1Project.syncPaused: true` in `hosts/kubernetes/home/c1/root/values.yaml`. To resume, set it back to `false` by PR.
+     why: it puts an always-open deny window on project `c1`, so no child Application syncs, by hand or on its own; the root Application, in project `default`, still syncs the switch itself (gate item 5).
+     expect: about 3 minutes after the merge, `kubectl -n argocd get appproject c1 -o jsonpath='{.spec.syncWindows}'` shows one deny window, and the Argo CD UI shows each child's sync as blocked by a window. After the resume merge, the same command prints `[]` and the children are back to their state before the pause.
 
 3. Put the normal path back, then write the end line in the project chat: what was changed, and the time the normal path was back.
    why: an emergency path left open is a standing hole, and the end line closes the record from step 1.
