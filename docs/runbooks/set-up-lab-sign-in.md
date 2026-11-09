@@ -1,6 +1,6 @@
 ---
 title: Set up sign-in for lab apps on c1
-status: draft
+status: tested
 kind: automated
 trigger: on request; again after any change to role k8s_identity or the values file
 runner: the owner, or an agent lane with cluster-admin on c1
@@ -8,7 +8,7 @@ outcome: realm lab in Keycloak matches the code; Grafana, Argo CD and Jellyfin e
 needs: the filled-in inventory, SSH to the c1 control plane, HTTPS on Gateway apps (playbooks/k8s-gateway.yml, k8s-certs.yml)
 private-values: [k8s_identity_zone, k8s_identity_owner_username, k8s_identity_owner_email, PASSWORD_USER_NAME, GRAFANA_CLIENT_SECRET, ARGOCD_CLIENT_SECRET, JELLYFIN_CLIENT_SECRET]
 files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/ansible/roles/k8s_identity/, ~/.config/central-hub/identity.env]
-last-tested: 2026-11-08, an agent lane on the owner's Mac, steps 1-3 on c1 at commit b20c975 (run 1 ok=38 changed=11 failed=0 with one realm re-import, run 2 changed=0); step 4 not yet done
+last-tested: 2026-11-09, the owner on the Mac, step 4 at https://grafana.<zone>/ after an agent lane ran steps 1-3 on c1 (2026-11-08 at b20c975; again 2026-11-09 for user jon and the sign-in theme); step 5 not yet done
 superseded-by:
 ---
 
@@ -57,7 +57,7 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 3. Run it again: same command as step 2.
    why: proves the run is idempotent.
    expect: `changed=0`.
-4. Sign in: open `https://grafana.apps.c1.prod.<zone>/`, choose "Lab sign-in", and sign in with your user name and the `PASSWORD_<USER NAME>` line from `identity.env`.
+4. Sign in: open `https://grafana.<zone>/` (or `https://grafana.apps.c1.prod.<zone>/` without short names), choose "Lab sign-in", and sign in with your user name and the `PASSWORD_<USER NAME>` line from `identity.env`.
    why: proves the user, the password and Grafana's client end to end.
    expect: Grafana opens with the Admin role for a member of `lab-admins`.
 5. Argo CD and Jellyfin: once their own config points at the issuer and the secrets above (the c1 GitOps work owns `argocd-cm` and the Jellyfin plugin), sign in to each the same way.
