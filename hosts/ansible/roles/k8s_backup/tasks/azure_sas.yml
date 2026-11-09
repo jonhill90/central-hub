@@ -22,7 +22,11 @@
       user delegation SAS).
     quiet: true
 
-# Start 15 minutes back, so a node clock a little behind still accepts it.
+# Start 15 minutes back, so a node clock a little behind still accepts it. End 5 minutes short of
+# the days asked for: az refuses an expiry of exactly 7 days from now (measured on the Mac,
+# 2026-11-09: "--expiry should be within 7 days from now").
+# The epoch comes from now(), not now(utc=true): the latter is a naive UTC time that .timestamp()
+# reads as local time, which put both dates 5 hours late on a Mac in US Eastern time.
 - name: timers | Mint the container SAS on the controller
   ansible.builtin.command:
     argv:
@@ -37,7 +41,7 @@
       - --permissions
       - racwdl
       - --start
-      - "{{ '%Y-%m-%dT%H:%MZ' | strftime((now(utc=true).timestamp() | int) - 900, utc=true) }}"
+      - "{{ '%Y-%m-%dT%H:%MZ' | strftime((now().timestamp() | int) - 900, utc=true) }}"
       - --expiry
       - "{{ k8s_backup_azure_sas_expiry }}"
       - --https-only
@@ -47,7 +51,7 @@
       - --output
       - tsv
   vars:
-    k8s_backup_azure_sas_expiry: "{{ '%Y-%m-%dT%H:%MZ' | strftime((now(utc=true).timestamp() | int) + (k8s_backup_azure_sas_days | int) * 86400, utc=true) }}"
+    k8s_backup_azure_sas_expiry: "{{ '%Y-%m-%dT%H:%MZ' | strftime((now().timestamp() | int) + (k8s_backup_azure_sas_days | int) * 86400 - 300, utc=true) }}"
   register: k8s_backup_azure_sas_out
   delegate_to: localhost
   become: false
@@ -74,5 +78,5 @@
     k8s_backup_azure_env_lines: |
       AZURE_ACCOUNT_NAME={{ k8s_backup_azure_account }}
       AZURE_ACCOUNT_SAS='{{ k8s_backup_azure_sas_out.stdout | trim }}'
-      AZURE_ACCOUNT_SAS_EXPIRES={{ k8s_backup_azure_sas_out.stdout | trim | regex_search('(?:^|&)se=([^&]+)', '\\1') | first | urldecode }}
+      AZURE_ACCOUNT_SAS_EXPIRES={{ k8s_backup_azure_sas_out.stdout | trim | regex_search('(?:^|&)se=([^&]+)', '\1') | first | urldecode }}
   no_log: true
