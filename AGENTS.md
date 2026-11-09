@@ -2,7 +2,7 @@
 
 *(`CLAUDE.md` is a symlink to this file.)*
 
-**What this is:** the Central Hub platform repository. Status: **Foundation**. Only the lab cluster c1 reads this repo (D-0027); no other cluster reads it until the Activation gate passes.
+**What this is:** the Central Hub platform repository. Status: **Foundation**. Only cluster c1 reads this repo (D-0027); no other cluster reads it until the Activation gate passes.
 
 ## Rules for now
 
@@ -18,6 +18,15 @@ These rules fit the current stage, while Jon does every step himself so he under
 4. **Don't write secrets or private names.** This repo is public, and a commit can't be un-published. That includes encrypted secrets with weak keys, kubeconfigs, private keys, hostnames and tailnet names.
 5. **Don't add workflows on `pull_request_target`, `issue_comment` or `issues`** that run an agent or touch secrets.
 6. **Assume everything will be replaced.** Build so each piece can be swapped.
+
+## Docs or notebook?
+
+Before saving anything, ask D-0026's store test: is it about this repository's system, saying why it is so, what it is, or how to run or change it?
+
+- **Yes:** it is documentation. It goes in `docs/` here, in the kind folder D-0012 gives (runbook, decision, spec, standard), by pull request. A runbook people follow belongs here even when an agent wrote it while learning.
+- **No:** it is what agents learned (research, measurements, notes, thinking). It goes in the agent notebook, `jonhill90/agent-notebook`, which may link to the doc here but never copies its steps.
+
+When you do work on this system, its doc here is part of the work: a change that alters how to run or rebuild something updates the runbook in the same PR.
 
 ## Where to look
 
@@ -37,7 +46,7 @@ These rules fit the current stage, while Jon does every step himself so he under
 
 ## Activation gate
 
-Before any cluster other than the lab cluster c1 reads this repo, all 7 must be true and recorded. c1 may read it now, read-only, under D-0027.
+Before any cluster other than c1 reads this repo, all 7 must be true and recorded. c1 may read it now, read-only, under D-0027.
 
 1. Per-agent GitHub identities, with Jon's approval required by GitHub.
 2. A verifier the PR can't edit.
