@@ -99,13 +99,26 @@ Stop if you can't sign in as a Global Administrator: nothing below works without
 ## Afterwards
 
 - The secret from step 4 expires; note its end date (`az ad app credential list --id <appId>`) and reset it before then.
-- On 2026-11-09 at 03:33 UTC the owner also gave `agent-azure` **Owner** on the subscription, so agents can assign the roles their code needs (for example the backup signer's data role in `hosts/terraform/azure/backup`). The owner's words: "make you owner for now ... you need to be able to flesh the things out. It does not have a cc" and "just dont charge anything strange. like all we need is this storage account" (2026-11-09 03:32-03:33 UTC). So agents make no other billable resource there without the owner's yes. To go back to Contributor only: `az role assignment delete --assignee <appId> --role Owner --scope <scope>`.
-- Each new kind of job (for example an Entra app registration for Keycloak) needs its own Microsoft Graph permission, added by the owner with admin consent, one at a time. Record each one here.
+- On 2026-11-09 at 03:33 UTC the owner also gave `agent-azure` **Owner** on the subscription, so agents can assign the roles their code needs (for example the backup app's data role in `hosts/terraform/azure/backup`). The owner's words: "make you owner for now ... you need to be able to flesh the things out. It does not have a cc" and "just dont charge anything strange. like all we need is this storage account" (2026-11-09 03:32-03:33 UTC). So agents make no other billable resource there without the owner's yes. To go back to Contributor only: `az role assignment delete --assignee <appId> --role Owner --scope <scope>`.
+- Each new kind of job (for example an Entra app registration for Keycloak) needs its own Microsoft Graph permission, added by the owner with admin consent, one at a time. Record each one here:
+
+  | Graph application permission | Given | For | What it allows |
+  |---|---|---|---|
+  | `Application.ReadWrite.OwnedBy` (`18a4783c-866b-4cc7-a460-3d5e5662c884`) | the owner, 2026-11-09 07:09 UTC, with admin consent | c1's backup app `c1-backup` ([Back up c1 off the box](back-up-c1-off-box.md#azure-blob-without-a-key), steps A1-A3) | make app registrations, and change only the ones `agent-azure` owns, such as uploading a node's first certificate |
+
+  The owner ran, on the Mac:
+
+  ```sh
+  az ad app permission add --id <agent-azure appId> --api 00000003-0000-0000-c000-000000000000 \
+    --api-permissions 18a4783c-866b-4cc7-a460-3d5e5662c884=Role
+  az ad app permission admin-consent --id <agent-azure appId>
+  ```
+
 - This secret is a bootstrap step, not the end state. The owner wants no plaintext secret that a person or an agent can read once the infrastructure exists (owner, 2026-11-08 23:42 UTC). The way off it is workload identity federation: a federated identity credential on an app registration trusts an outside token issuer, so nothing in Azure holds a secret (research batch RB-0087, "Workload identity federation"):
 
   | Who signs in | Token issuer Entra would trust | Replaces |
   |---|---|---|
-  | c1 workloads (restic backups first) | c1's service-account token issuer | the short-lived SAS that `agent-azure` signs today |
+  | c1 workloads (restic backups first) | c1's service-account token issuer | the backup app's node certificates, which roll themselves (since 2026-11-09; revisit in TASK-0223) |
   | agents | Keycloak, through a client in the realm | `AZURE_CLIENT_SECRET` |
 
   Both need the issuer's discovery document and signing keys to be reachable by Entra, so this waits on that being built and tested. Azure Arc is the fallback for c1 if federation can't be used.

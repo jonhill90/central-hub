@@ -125,8 +125,12 @@ all:
         # (docs/runbooks/back-up-c1-off-box.md). false installs the tools with the timers off.
         k8s_backup_enabled: false
         k8s_backup_env_file: ""
-        k8s_backup_azure_sas: false
+        # Azure Blob with the nodes' own certificate (tofu outputs of terraform/azure/backup).
+        k8s_backup_azure_identity: false
         k8s_backup_azure_account: ""
+        k8s_backup_azure_client_id: ""
+        k8s_backup_azure_tenant_id: ""
+        k8s_backup_azure_app_object_id: ""
         # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
         # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
         # k8s_control_plane_kubernetes_version.
