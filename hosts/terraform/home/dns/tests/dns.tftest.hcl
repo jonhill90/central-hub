@@ -45,6 +45,11 @@ run "one_resource_per_record" {
   }
 
   assert {
+    condition     = cloudflare_dns_record.this["srv-autodiscover"].priority == 0
+    error_message = "An SRV record without a top-level priority must take it from data."
+  }
+
+  assert {
     condition     = output.record_types == { A = 1, MX = 1, SRV = 1 }
     error_message = "record_types must count the records by type."
   }
