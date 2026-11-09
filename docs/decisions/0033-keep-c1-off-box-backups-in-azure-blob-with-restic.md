@@ -9,7 +9,7 @@ consulted: []
 waits-on: [D-0011, TASK-0194]
 supersedes: []
 superseded-by:
-revisit-when: TASK-0223 finds Azure Arc or workload identity federation ready for c1; a node's certificate roll fails and a nightly backup fails; the storage account costs more than a few dollars a month; a second cluster needs off-box backups; the home's public address changes often enough to break backups; or restic or Azure changes the repository format, the Graph rules for rolling an app's own certificate or the prices this record uses
+revisit-when: TASK-0224 finds Azure Arc or workload identity federation ready for c1; a node's certificate roll fails and a nightly backup fails; the storage account costs more than a few dollars a month; a second cluster needs off-box backups; the home's public address changes often enough to break backups; or restic or Azure changes the repository format, the Graph rules for rolling an app's own certificate or the prices this record uses
 ---
 
 # Keep c1's off-box backups in one Azure Blob container with restic, reached only through Entra ID with a certificate each node makes and rolls itself
@@ -50,11 +50,11 @@ Option 2 gives the same protection, but the owner already chose Azure and its id
 3. **One door.** The data endpoint answers only the home's public address, with no bypass. Managing the account works from anywhere.
 4. **Retention and proof.** The policy keeps 7 daily, 4 weekly and 6 monthly snapshots. A restore test runs every Sunday without touching the live system. The playbook's `drill` tag backs up and restores on request.
 5. **Spend.** This storage account is the only billable Azure resource. Anything else in Azure needs the owner's approval first.
-6. **The nodes' credential.** The nodes sign in as the app registration `c1-backup`, which holds Storage Blob Data Contributor on the backup container only. Each node makes its own key and a 90-day certificate, and the key never leaves the node. The playbook uploads the first public certificate. After that a daily timer on the node rolls it through Microsoft Graph 30 days before it ends, so no person or agent renews anything (the owner's rule of 2026-11-09 06:50 UTC: no agent in place of a deterministic process). This was the owner's choice of 2026-11-09 07:07 UTC between this and workload identity federation, left to the agents, which picked the certificate (pick 189). Azure Arc and federation are to be looked at again in TASK-0223.
+6. **The nodes' credential.** The nodes sign in as the app registration `c1-backup`, which holds Storage Blob Data Contributor on the backup container only. Each node makes its own key and a 90-day certificate, and the key never leaves the node. The playbook uploads the first public certificate. After that a daily timer on the node rolls it through Microsoft Graph 30 days before it ends, so no person or agent renews anything (the owner's rule of 2026-11-09 06:50 UTC: no agent in place of a deterministic process). This was the owner's choice of 2026-11-09 07:07 UTC between this and workload identity federation, left to the agents, which picked the certificate (pick 189). Azure Arc and federation are to be looked at again in TASK-0224.
 
 ### Not decided here
 
-- **A credential with no key on the node at all.** Azure Arc's managed identity or workload identity federation would leave no private key that the node keeps. Both are backlogged in TASK-0223.
+- **A credential with no key on the node at all.** Azure Arc's managed identity or workload identity federation would leave no private key that the node keeps. Both are backlogged in TASK-0224.
 - **Protection against deletion.** The nodes' identity can delete, because restic's `forget` and `prune` need to. Soft delete keeps deleted blobs and containers for 7 days. There is no versioning or immutability policy: research on 2026-10-16 proposed a short lock, and pick 180 left it out because it can't be undone before its date. If the owner wants one, a separate prune-only credential is the usual pair for it (model).
 - **The access tier.** The account uses Hot, because restic's weekly check and prune read data back. Cool or Cold cost less to store but charge to read and to delete early (see Cost).
 - **Proxmox's own backups.** These stay with TASK-0139.

@@ -68,7 +68,7 @@ This serves the PRD's goal that every piece can be rebuilt from the repository a
 ## Decision log
 
 - 2026-11-09: drafted after the owner ruled out agent renewals (06:50 UTC). The owner chooses the identity on a decision card in the backups thread. Federation is the drafting agent's recommendation. Azure Arc on the nodes was weighed: its supported list has AlmaLinux 8 and 9 but not 10, which c1 runs, and its agent is closed source. A service principal certificate was also weighed, but it is a long-lived secret that expires.
-- 2026-11-09, 07:07 UTC: the owner left the choice between this and a service principal certificate to the agents, asked for a deterministic process, and asked for a revisit to be backlogged. The agents built the certificate, which each node makes and rolls itself (pick 189 in `hosts/AGENT-PICKS.md`). This spec stays proposed as the design to look at again in TASK-0223.
+- 2026-11-09, 07:07 UTC: the owner left the choice between this and a service principal certificate to the agents, asked for a deterministic process, and asked for a revisit to be backlogged. The agents built the certificate, which each node makes and rolls itself (pick 189 in `hosts/AGENT-PICKS.md`). This spec stays proposed as the design to look at again in TASK-0224.
 - Open, for the owner: where the issuer documents are served. They need a stable public HTTPS name that Entra ID can reach. Two candidates:
   - a static page under the owner's DNS zone
   - the repository's GitHub Pages site

@@ -118,7 +118,7 @@ Stop if you can't sign in as a Global Administrator: nothing below works without
 
   | Who signs in | Token issuer Entra would trust | Replaces |
   |---|---|---|
-  | c1 workloads (restic backups first) | c1's service-account token issuer | the backup app's node certificates, which roll themselves (since 2026-11-09; revisit in TASK-0223) |
+  | c1 workloads (restic backups first) | c1's service-account token issuer | the backup app's node certificates, which roll themselves (since 2026-11-09; revisit in TASK-0224) |
   | agents | Keycloak, through a client in the realm | `AZURE_CLIENT_SECRET` |
 
   Both need the issuer's discovery document and signing keys to be reachable by Entra, so this waits on that being built and tested. Azure Arc is the fallback for c1 if federation can't be used.

@@ -204,7 +204,7 @@ why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansi
 
 - Set `last-tested` here, with the date, who ran it and on what.
 - Close TASK-0194 once step 3 passes on c1 (done 2026-11-09).
-- A revisit of Azure Arc or workload identity federation for the nodes' sign-in is backlogged (TASK-0223, agent notebook).
+- A revisit of Azure Arc or workload identity federation for the nodes' sign-in is backlogged (TASK-0224, agent notebook).
 
 ## Related
 
