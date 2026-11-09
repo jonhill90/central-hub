@@ -21,7 +21,7 @@ c1Project:
   # The pause switch (Activation gate item 5, and the cluster half of break-glass): true adds a deny
   # sync window that is always open, so Argo CD syncs no child Application, by hand or on its own,
   # until it is false again. The root Application is in project `default`, so it still syncs this.
-  syncPaused: true
+  syncPaused: false
   # Namespaces that a chart writes to besides the `namespace` of some app. Checked against the
   # rendered charts on 2026-11-09: secret-store makes `secret-source`, where its source secret sits.
   # Not `argocd`: the child Application objects are the root's, and the root stays in `default`.
