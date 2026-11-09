@@ -14,7 +14,7 @@ superseded-by:
 
 # Back up c1 off the box
 
-Until now the only copy of c1's data is the nightly Proxmox backup on one old HDD in the same PC (BL-0139). This runbook adds a second copy somewhere else: restic snapshots of etcd and of every volume folder, sent off the Proxmox host each night, and a weekly test that restores them.
+Until now the only copy of c1's data is the nightly Proxmox backup on one old HDD in the same PC (TASK-0139). This runbook adds a second copy somewhere else: restic snapshots of etcd and of every volume folder, sent off the Proxmox host each night, and a weekly test that restores them.
 
 ```mermaid
 flowchart LR
@@ -176,7 +176,7 @@ why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansi
 ## Afterwards
 
 - Set `last-tested` here, with the date, who ran it and on what.
-- Close BL-0139's off-box part once step 3 passes on c1.
+- Close TASK-0139's off-box part once step 3 passes on c1.
 - Replace the SAS with a workload identity once c1's token issuer can be reached by Entra ID.
 
 ## Related

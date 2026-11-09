@@ -72,7 +72,7 @@ flowchart LR
 - certificates and HTTPS listeners (BUILD-PATH step S12, its own record);
 - whether any app is reachable from the internet;
 - per-tenant Gateways;
-- the DNS tool that replaces the OPNsense override (AdGuard Home is planned, BL-0164).
+- the DNS tool that replaces the OPNsense override (AdGuard Home is planned, TASK-0164).
 
 ### Consequences
 

@@ -14,7 +14,7 @@ superseded-by:
 
 # Test the etcd restore
 
-etcd holds everything the API server knows. c1 has one control plane, so losing that node can lose the cluster's data; Kubernetes' answer is "Regularly back up etcd" (create-cluster-kubeadm page). A backup counts only once a restore of it has worked, and c1's etcd went from 3.6.8 to 3.7.0 with the upgrade to Kubernetes 1.37 (runbook step 17), and the restore had only been tried with 3.6 tools (BL-0094). This runbook proves the restore every week, without stopping c1.
+etcd holds everything the API server knows. c1 has one control plane, so losing that node can lose the cluster's data; Kubernetes' answer is "Regularly back up etcd" (create-cluster-kubeadm page). A backup counts only once a restore of it has worked, and c1's etcd went from 3.6.8 to 3.7.0 with the upgrade to Kubernetes 1.37 (runbook step 17), and the restore had only been tried with 3.6 tools (TASK-0094). This runbook proves the restore every week, without stopping c1.
 
 ```mermaid
 flowchart LR
@@ -69,7 +69,7 @@ On a rebuilt node, restore the CA files from `kubernetes/pki/` first and add `--
 ## Afterwards
 
 - Set `last-tested` here.
-- Close BL-0094 once step 1 passes on c1.
+- Close TASK-0094 once step 1 passes on c1.
 
 ## Related
 

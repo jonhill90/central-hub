@@ -1,5 +1,5 @@
 ---
-# Sign-in for lab apps on cluster c1 (BUILD-PATH S15, BL-0019): the Keycloak operator from its
+# Sign-in for lab apps on cluster c1 (BUILD-PATH S15, TASK-0019): the Keycloak operator from its
 # pinned upstream files, PostgreSQL on a static local volume, Keycloak, realm lab as code (groups,
 # users, and the clients of Grafana, Argo CD and Jellyfin), and the route
 # https://sso.apps.c1.prod.<zone>/ through the shared Gateway. Passwords and client secrets come from

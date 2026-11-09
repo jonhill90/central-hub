@@ -14,7 +14,7 @@
     "proposed-by": { "type": "string", "minLength": 1 },
     "consulted": { "type": "array", "items": { "type": "string" } },
     "informed": { "type": "array", "items": { "type": "string" } },
-    "waits-on": { "type": "array", "items": { "type": "string", "pattern": "^(D-\\d{4}|BL-\\d{4})$" }, "uniqueItems": true },
+    "waits-on": { "type": "array", "items": { "type": "string", "pattern": "^(D-\\d{4}|TASK-\\d{4})$" }, "uniqueItems": true },
     "supersedes": { "$ref": "common.schema.json#/$defs/decisionIds" },
     "superseded-by": { "$ref": "common.schema.json#/$defs/nullOrDecisionId" },
     "accepted-evidence": { "oneOf": [ { "$ref": "common.schema.json#/$defs/approval" }, { "$ref": "common.schema.json#/$defs/approvalLegacy" } ] },

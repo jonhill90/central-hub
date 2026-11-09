@@ -6,7 +6,7 @@ date: 2026-10-27
 decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
-waits-on: [D-0011, D-0021, BL-0019]
+waits-on: [D-0011, D-0021, TASK-0019]
 supersedes: []
 superseded-by:
 accepted-evidence:
@@ -24,7 +24,7 @@ revisit-when: c1 gets a StorageClass (BUILD-PATH S17), so the database can move 
 
 ## Context and Problem Statement
 
-BUILD-PATH S15 asks for sign-in for lab apps on c1 (BL-0019). Research batch RB-0087 (Research `01-notes/01r-research/0087-central-identity/`) compared self-hosted identity providers for people, machines and agents, and made no pick. On 2026-10-27 at 04:14 UTC the owner was asked Keycloak or authentik, and on 2026-10-28 at 02:17 UTC the owner said yes to the proposed Keycloak. How it is installed and wired is agent picks 96 and 98-102 in hosts/AGENT-PICKS.md. Research batch RB-0092 added how Keycloak is installed on c1.
+BUILD-PATH S15 asks for sign-in for lab apps on c1 (TASK-0019). Research batch RB-0087 (Research `01-notes/01r-research/0087-central-identity/`) compared self-hosted identity providers for people, machines and agents, and made no pick. On 2026-10-27 at 04:14 UTC the owner was asked Keycloak or authentik, and on 2026-10-28 at 02:17 UTC the owner said yes to the proposed Keycloak. How it is installed and wired is agent picks 96 and 98-102 in hosts/AGENT-PICKS.md. Research batch RB-0092 added how Keycloak is installed on c1.
 
 ## Decision Drivers
 

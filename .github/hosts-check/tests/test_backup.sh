@@ -3,7 +3,7 @@
 # no cluster: the scripts the role installs run against a real etcd and a local restic repository.
 #
 #   1. etcd 3.7.0, the version c1 runs, holds test keys; c1-backup-etcd.sh backs it up with the
-#      etcdctl and etcdutl the role installs (v3.7.2). c1-restore-test-etcd.sh must pass (BL-0094).
+#      etcdctl and etcdutl the role installs (v3.7.2). c1-restore-test-etcd.sh must pass (TASK-0094).
 #   2. The same restore test with a key that isn't there must fail.
 #   3. c1-backup-volumes.sh backs up two folders; the source changes afterwards;
 #      c1-restore-test-volumes.sh must pass, and a full restore must equal the source as backed up.
