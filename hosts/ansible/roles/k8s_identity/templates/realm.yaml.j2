@@ -55,6 +55,9 @@ spec:
     registrationAllowed: false
     resetPasswordAllowed: false
     bruteForceProtected: true
+{% if k8s_identity_theme | length > 0 %}
+    loginTheme: {{ k8s_identity_theme }}
+{% endif %}
     roles:
       realm:
         - {name: admin, description: "Admin in lab apps"}

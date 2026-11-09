@@ -1,0 +1,2 @@
+/* Test theme for the realm test: proves a theme folder from k8s_identity_theme_dir loads. */
+.pf-v5-c-login { background-color: #0f1720; }

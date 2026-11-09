@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# The sign-in theme's files (k8s_identity_theme_dir), mounted into the Keycloak pod by
+# keycloak.yaml. Every file as binaryData, so images and text go the same way.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-theme
+  namespace: {{ k8s_identity_namespace }}
+binaryData:
+{% for f in k8s_identity_theme_files %}
+  {{ f.key }}: {{ f.b64 }}
+{% endfor %}

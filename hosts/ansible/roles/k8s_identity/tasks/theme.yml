@@ -1,0 +1,51 @@
+---
+# The sign-in theme from k8s_identity_theme_dir on the controller: the files under its login/
+# folder below 500 KB, read on the controller, become ConfigMap keycloak-theme. keycloak.yaml mounts
+# them at the same paths and realm.yaml.j2 names the theme.
+- name: theme | Files of the sign-in theme on the controller
+  ansible.builtin.find:
+    paths: "{{ k8s_identity_theme_dir }}/login"
+    recurse: true
+    size: "-500k"
+  register: k8s_identity_theme_found
+  delegate_to: localhost
+  become: false
+  run_once: true
+  check_mode: false
+
+- name: theme | Read them
+  ansible.builtin.slurp: {src: "{{ item.path }}"}
+  loop: "{{ k8s_identity_theme_found.files | sort(attribute='path') }}"
+  loop_control:
+    label: "{{ item.path | relpath(k8s_identity_theme_dir) }}"
+  register: k8s_identity_theme_read
+  delegate_to: localhost
+  become: false
+  run_once: true
+  check_mode: false
+
+# A ConfigMap key takes letters, digits, '-', '_' and '.', so each key is its number and file name;
+# the mount puts it back at its path.
+- name: theme | The files as ConfigMap entries
+  ansible.builtin.set_fact:
+    k8s_identity_theme_files: >-
+      {%- set out = [] -%}
+      {%- for r in k8s_identity_theme_read.results -%}
+      {%- set _ = out.append({'key': 'f' ~ loop.index ~ '-' ~ (r.source | basename | regex_replace('[^-._a-zA-Z0-9]', '_')),
+          'path': r.source | relpath(k8s_identity_theme_dir), 'b64': r.content}) -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: theme | The theme has a login/theme.properties and fits in a ConfigMap
+  ansible.builtin.assert:
+    that:
+      - k8s_identity_theme_files | selectattr('path', 'equalto', 'login/theme.properties') | list | length == 1
+      - k8s_identity_theme_files | map(attribute='b64') | map('length') | sum < 1300000
+    fail_msg: >-
+      {{ k8s_identity_theme_dir }} needs login/theme.properties, and its login/ files below 500 KB must
+      come to less than about 950 KB together (a ConfigMap holds at most 1 MiB).
+    quiet: true
+
+- name: theme | ConfigMap keycloak-theme
+  ansible.builtin.import_tasks: apply.yml
+  vars: {__manifest: theme.yaml}

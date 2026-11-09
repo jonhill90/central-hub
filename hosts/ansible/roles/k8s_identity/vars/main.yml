@@ -25,6 +25,12 @@ k8s_identity_jellyfin_hosts: >-
   {{ ([k8s_identity_jellyfin_name ~ '.' ~ k8s_identity_zone] if k8s_identity_short_names | bool else [])
   + [k8s_identity_jellyfin_name ~ '.apps.c1.prod.' ~ k8s_identity_zone] }}
 k8s_identity_issuer: https://{{ k8s_identity_host }}/realms/{{ k8s_identity_realm }}
+# The sign-in theme (k8s_identity_theme_dir): its name, its files as ConfigMap entries (tasks/theme.yml
+# fills them in; each is {key, path under the theme folder, b64}), and a hash that restarts the pod
+# when a file changes.
+k8s_identity_theme: "{{ k8s_identity_theme_dir | regex_replace('/+$', '') | basename if k8s_identity_theme_dir | length > 0 else '' }}"
+k8s_identity_theme_files: []
+k8s_identity_theme_sha256: "{{ k8s_identity_theme_files | map(attribute='b64') | join('\n') | hash('sha256') }}"
 k8s_identity_db_secret: "{{ k8s_identity_name }}-db"
 k8s_identity_realm_secret: realm-{{ k8s_identity_realm }}-secrets
 
