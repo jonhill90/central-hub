@@ -1,5 +1,5 @@
 ---
-# The nodes' own Azure sign-in (agent pick 191). Each node makes its own key and certificate
+# The nodes' own Azure sign-in (agent pick 189). Each node makes its own key and certificate
 # (c1-backup-azure-cert.py init), which never leave the node. The first time, or after a
 # certificate expired, the controller uploads the public certificate to the backup app with the
 # Azure CLI, signed in as agent-azure, the app's owner. After that the node's daily timer rolls the

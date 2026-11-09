@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""The node's own Azure sign-in for c1's backups (role k8s_backup, agent pick 191).
+"""The node's own Azure sign-in for c1's backups (role k8s_backup, agent pick 189).
 
 restic signs in to Azure Blob as the backup app registration with a certificate whose key is made
 on this node and never leaves it (azidentity's EnvironmentCredential reads AZURE_CLIENT_ID,

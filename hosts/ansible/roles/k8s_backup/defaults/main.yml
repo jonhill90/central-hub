@@ -18,7 +18,7 @@ k8s_backup_enabled: false
 # target's own credentials (restic's docs, "Preparing a new repository").
 k8s_backup_env_file: ""
 
-# Azure Blob target with no stored secret (agent pick 191). true: each node makes its own key and
+# Azure Blob target with no stored secret (agent pick 189). true: each node makes its own key and
 # certificate (never leaving the node), the controller uploads the public certificate to the backup
 # app the first time (the Azure CLI, signed in as agent-azure), a daily timer on the node rolls it
 # before it expires, and the node env file gets the sign-in lines restic reads

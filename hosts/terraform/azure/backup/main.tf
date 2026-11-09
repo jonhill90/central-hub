@@ -56,7 +56,7 @@ resource "azurerm_storage_container" "backup" {
   container_access_type = "private"
 }
 
-# The nodes' own identity (agent pick 191): an app registration with a service principal, holding
+# The nodes' own identity (agent pick 189): an app registration with a service principal, holding
 # Storage Blob Data Contributor on the backup container only. It has no secret. Each node makes its
 # own key and certificate, which never leave the node; the playbook uploads the first public
 # certificate, and the node rolls it itself before it expires (Microsoft Graph addKey, which needs
