@@ -7,6 +7,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | Runbook | Kind | Status |
 |---|---|---|
 | [Rebuild the home lab from bare metal (top-level order)](rebuild-home-lab-from-scratch.md) | manual | draft |
+| [Rebuild one cluster's Kubernetes layer with one command](rebuild-k8s-layer-with-one-command.md) | automated | draft |
 | [Set up the lab controller](set-up-lab-controller.md) | manual | draft |
 | [Set up the lab network, the OPNsense firewall and the tailnet connector container from code](set-up-lab-network-and-firewall.md) | automated | draft |
 | [Put the OPNsense image and the Debian 13 template on the Proxmox host](stage-lab-images-on-proxmox.md) | manual | draft |

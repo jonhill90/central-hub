@@ -244,3 +244,4 @@ Every item below is an agent pick, not a decision by the owner.
 - [D-0011](../decisions/0011-keep-machine-code-in-hosts.md): machine code in `hosts/`. [D-0012](../decisions/0012-sort-docs-by-kind-of-document.md): runbook format.
 - [hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md): every agent pick in the code.
 - [Use break-glass access](use-break-glass-access.md): when the normal ways in are gone during a rebuild.
+- [Rebuild one cluster's Kubernetes layer with one command](rebuild-k8s-layer-with-one-command.md): steps 6 to 15 for one cluster as one script, draft until proven on dev.
