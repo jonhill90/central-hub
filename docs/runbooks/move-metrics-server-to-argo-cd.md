@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: Argo CD's Application `metrics-server` is Synced and Healthy, `kubectl top nodes` answers, and Ansible no longer installs it
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the Argo CD web UI or `kubectl` there
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/clusters/c1/root/, hosts/kubernetes/clusters/c1/apps/metrics-server/values.yaml, hosts/ansible/playbooks/k8s-gitops.yml, hosts/ansible/playbooks/k8s-observability.yml]
+files: [hosts/kubernetes/home/c1/root/, hosts/kubernetes/home/c1/apps/metrics-server/values.yaml, hosts/ansible/playbooks/k8s-gitops.yml, hosts/ansible/playbooks/k8s-observability.yml]
 last-tested: not yet run
 superseded-by:
 ---
@@ -25,14 +25,14 @@ flowchart LR
 
 - `kubectl -n kube-system get deploy metrics-server` shows 1/1 ready, and `kubectl top nodes` lists both nodes.
 - `kubectl -n argocd get applications` lists no Application named `metrics-server`.
-- The lab clone is on a `main` that includes `hosts/kubernetes/clusters/c1/apps/metrics-server/`.
+- The lab clone is on a `main` that includes `hosts/kubernetes/home/c1/apps/metrics-server/`.
 
 Stop if any of these is not true.
 
 ## Steps
 
 1. In the private inventory, set `k8s_gitops_source_enabled: true` (once, for the first component only), then run `ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags source`.
-   why: this makes the one root Application `c1`, which reads `hosts/kubernetes/clusters/c1/root/` from `main` and makes a child Application for each component listed there.
+   why: this makes the one root Application `c1`, which reads `hosts/kubernetes/home/c1/root/` from `main` and makes a child Application for each component listed there.
    ※ [D-0027](../decisions/0027-let-c1-read-central-hub-before-the-activation-gate.md), [D-0023 rule 5](../decisions/0023-use-argo-cd-as-the-gitops-engine.md)
    expect: `kubectl -n argocd get application c1` shows Synced and Healthy, and `metrics-server` appears as OutOfSync or Synced.
 
@@ -45,7 +45,7 @@ Stop if any of these is not true.
    why: Argo CD applies the same objects and marks them as its own.
    expect: Synced, Healthy; the pod is not restarted when nothing changed; `kubectl top nodes` still answers.
 
-4. By PR, set `autoSync: true` for `metrics-server` in `hosts/kubernetes/clusters/c1/root/values.yaml`. In the private inventory, set `k8s_observability_metrics_server_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics_server,proof`.
+4. By PR, set `autoSync: true` for `metrics-server` in `hosts/kubernetes/home/c1/root/values.yaml`. In the private inventory, set `k8s_observability_metrics_server_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics_server,proof`.
    why: from now on git is the source of truth, and self-heal puts back any drift. Ansible stops installing metrics-server and deletes Helm's old release records, which Argo CD doesn't use.
    expect: the first run reports one change (the Helm records deleted), and a second run reports `changed=0`. The proof's `kubectl top` passes.
 

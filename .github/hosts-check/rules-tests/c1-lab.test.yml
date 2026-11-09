@@ -1,5 +1,5 @@
 # promtool unit tests for c1's own alert rules (PrometheusRule c1-lab in
-# hosts/kubernetes/clusters/c1/apps/monitoring-extras/). run.sh renders the chart, writes its rule
+# hosts/kubernetes/home/c1/apps/monitoring-extras/). run.sh renders the chart, writes its rule
 # groups to c1-lab.rules.yml next to a copy of this file, and runs `promtool test rules`.
 rule_files: [c1-lab.rules.yml]
 evaluation_interval: 1m

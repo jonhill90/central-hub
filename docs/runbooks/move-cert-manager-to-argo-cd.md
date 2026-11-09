@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: Argo CD's Application `cert-manager` is Synced and Healthy, the Gateway's certificate is still Ready, and Ansible no longer installs cert-manager
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone, k8s_certs_zone, k8s_certs_acme_email, k8s_certs_cloudflare_token_file]
-files: [hosts/kubernetes/clusters/c1/apps/cert-manager/values.yaml, hosts/kubernetes/clusters/c1/root/values.yaml, hosts/ansible/roles/k8s_certs/, hosts/ansible/playbooks/k8s-certs.yml]
+files: [hosts/kubernetes/home/c1/apps/cert-manager/values.yaml, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_certs/, hosts/ansible/playbooks/k8s-certs.yml]
 last-tested: not yet run on c1. CI's parity check finds the chart values the same as the role's
 superseded-by:
 ---

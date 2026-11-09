@@ -32,3 +32,21 @@ spec:
     automated:
       prune: true
       selfHeal: true
+---
+# The cluster's own entry: a cluster Secret for the local cluster, so it has a name and labels
+# (STD-0001 "Cluster labels"). No credential in it: Argo CD uses its own service account in-cluster.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cluster-{{ k8s_gitops_cluster_name }}
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: cluster
+{% for key, value in k8s_gitops_cluster_labels | dictsort %}
+    {{ key }}: "{{ value }}"
+{% endfor %}
+type: Opaque
+stringData:
+  name: {{ k8s_gitops_cluster_name }}
+  server: https://kubernetes.default.svc
+  config: '{"tlsClientConfig":{"insecure":false}}'

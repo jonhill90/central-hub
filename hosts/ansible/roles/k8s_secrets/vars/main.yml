@@ -1,6 +1,6 @@
 ---
 # Derived values, not inputs. The Helm values ESO is installed with; Argo CD reads the same values
-# from hosts/kubernetes/clusters/c1/apps/external-secrets/values.yaml, and CI checks the two match
+# from hosts/kubernetes/home/c1/apps/external-secrets/values.yaml, and CI checks the two match
 # (.github/hosts-check/manifests/parity.txt). The chart installs its CRDs.
 k8s_secrets_eso_values:
   installCRDs: true

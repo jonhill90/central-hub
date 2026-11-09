@@ -55,7 +55,7 @@ flowchart LR
 ### Rules
 
 1. **Scope.** Only cluster c1 in the home lab may read central-hub before the Activation gate passes. Every other cluster still waits for all 7 checks.
-2. **How it reads.** It reads as D-0023 rule 5 says: one root Application reads `hosts/kubernetes/clusters/c1/` on `main` over anonymous HTTPS, with no repository credential in the cluster. Nothing writes to git (gate item 3), and there is no image automation (gate item 6).
+2. **How it reads.** It reads as D-0023 rule 5 says: one root Application reads `hosts/kubernetes/home/c1/` on `main` over anonymous HTTPS, with no repository credential in the cluster. Nothing writes to git (gate item 3), and there is no image automation (gate item 6).
 3. **Switch.** The Ansible switch `k8s_gitops_source_enabled` is set to true only in c1's inventory.
 4. **Private names stay out of git.** The lab zone reaches the cluster only as a Helm parameter on the root Application, set from the private inventory (CLAUDE.md rule 4).
 5. **Way back.** Deleting the root Application stops all reading at once. The Applications have no resources finalizer, so the objects stay, and the Ansible roles take over again.

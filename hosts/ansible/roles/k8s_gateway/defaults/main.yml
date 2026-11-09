@@ -33,7 +33,7 @@ k8s_gateway_tls_secret: apps-tls
 # certificate must name *.<zone> too (k8s_certs_short_names), and the lab DNS must answer each
 # short name (docs/runbooks/set-up-short-app-names.md).
 k8s_gateway_short_names: true
-# Argo CD manages the Gateway from hosts/kubernetes/clusters/c1/apps/gateway/ (spec
+# Argo CD manages the Gateway from hosts/kubernetes/home/c1/apps/gateway/ (spec
 # 2026-11-c1-apps-under-argo-cd, step 9). True once its Application is Synced: the role then only
 # opens the node firewall ports and checks the Gateway. False keeps Ansible in charge (the way back).
 k8s_gateway_by_argocd: false

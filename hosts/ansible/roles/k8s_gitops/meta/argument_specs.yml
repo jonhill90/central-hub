@@ -16,8 +16,17 @@ argument_specs:
         description: "Point the engine at central-hub. Keep false until the Activation gate passes."
       k8s_gitops_source_url: {type: str, default: "https://github.com/jonhill90/central-hub", description: Repository read over anonymous HTTPS.}
       k8s_gitops_source_branch: {type: str, default: main, description: Branch the cluster follows (D-0002).}
-      k8s_gitops_source_path: {type: str, default: hosts/kubernetes/clusters/c1, description: Folder the cluster reads.}
+      k8s_gitops_source_path: {type: str, default: hosts/kubernetes/home/c1, description: Folder the cluster reads.}
       k8s_gitops_source_interval: {type: str, default: 5m, description: How often the engine checks git.}
+      k8s_gitops_cluster_name:
+        type: str
+        default: c1
+        description: The cluster's name in Argo CD (STD-0001 Service names rule 3).
+      k8s_gitops_cluster_labels:
+        type: dict
+        description: >-
+          What the cluster is, as labels on its Argo CD cluster Secret (STD-0001 Cluster labels):
+          place, provider, hardware, env, purpose.
       k8s_gitops_ui_route:
         type: bool
         default: false

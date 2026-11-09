@@ -6,7 +6,7 @@
     quiet: true
   tags: [always]
 
-# Once Argo CD manages Jellyfin (hosts/kubernetes/clusters/c1/apps/jellyfin/), every task below is
+# Once Argo CD manages Jellyfin (hosts/kubernetes/home/c1/apps/jellyfin/), every task below is
 # skipped: k8s_jellyfin_by_argocd true in the inventory. False keeps Ansible in charge (the way back).
 
 # One manifest, written to the node, then the same diff-then-apply as k8s_identity: kubectl diff

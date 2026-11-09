@@ -7,7 +7,7 @@ runner: the owner, or an agent lane with the Grafana URL
 outcome: you know whether every node, Argo CD Application and app on c1 is healthy, and which runbook to open if not
 needs: a browser on the lab network; Grafana's admin password (Secret monitoring/kube-prometheus-stack-grafana) or a lab sign-in once Grafana uses Keycloak
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/clusters/c1/apps/monitoring-extras/]
+files: [hosts/kubernetes/home/c1/apps/monitoring-extras/]
 last-tested: not yet run on c1
 superseded-by:
 ---
