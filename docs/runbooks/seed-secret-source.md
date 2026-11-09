@@ -7,7 +7,7 @@ runner: the owner, or an agent lane through the owner's Mac (D-0022)
 outcome: every line of the controller's secret-source file is a Secret named after it in namespace secret-source, and store c1 can hand it to an ExternalSecret
 needs: ClusterSecretStore c1 Ready (install-c1-add-ons-with-ansible.md step 1, or move-external-secrets-to-argo-cd.md); SSH to c1's control plane as D-0022 says; kubectl on the controller
 private-values: [secret-source.env, c1-control-plane]
-files: [hosts/kubernetes/clusters/c1/apps/secret-store/templates/store.yaml, hosts/ansible/roles/k8s_secrets/templates/store.yaml.j2, hosts/ansible/roles/k8s_secrets/defaults/main.yml]
+files: [hosts/kubernetes/home/c1/apps/secret-store/templates/store.yaml, hosts/ansible/roles/k8s_secrets/templates/store.yaml.j2, hosts/ansible/roles/k8s_secrets/defaults/main.yml]
 last-tested: not yet run; nothing on c1 reads store c1 yet
 superseded-by:
 ---
@@ -18,7 +18,7 @@ superseded-by:
 
 ## What goes in `secret-source` today: nothing
 
-On 2026-11-08 no ExternalSecret in this repository names store `c1`. The only ExternalSecret on c1, Jellyfin's admin password ([setup-secret.yaml](../../hosts/kubernetes/clusters/c1/apps/jellyfin/templates/setup-secret.yaml)), comes from an ESO `Password` generator, not from the store. Sign-in reads its values from `inventories/home/identity.env` through Ansible (PR #69), and the lab CA keeps its own files (PR #65). So at a rebuild there is nothing to seed: skip this runbook while the file below is empty or missing.
+On 2026-11-08 no ExternalSecret in this repository names store `c1`. The only ExternalSecret on c1, Jellyfin's admin password ([setup-secret.yaml](../../hosts/kubernetes/home/c1/apps/jellyfin/templates/setup-secret.yaml)), comes from an ESO `Password` generator, not from the store. Sign-in reads its values from `inventories/home/identity.env` through Ansible (PR #69), and the lab CA keeps its own files (PR #65). So at a rebuild there is nothing to seed: skip this runbook while the file below is empty or missing.
 
 Check before you trust that sentence, because a later change can add a user of the store:
 
@@ -30,7 +30,7 @@ expect: no hit (true on 2026-11-08). Every hit is an ExternalSecret whose `remot
 
 ## How the store reads it
 
-- Store `c1` is ESO's Kubernetes provider. It reads Secrets from namespace `secret-source` and nothing else, through service account `store-c1` with get, list and watch on Secrets there ([store.yaml](../../hosts/kubernetes/clusters/c1/apps/secret-store/templates/store.yaml)).
+- Store `c1` is ESO's Kubernetes provider. It reads Secrets from namespace `secret-source` and nothing else, through service account `store-c1` with get, list and watch on Secrets there ([store.yaml](../../hosts/kubernetes/home/c1/apps/secret-store/templates/store.yaml)).
 - Each Secret is named `<app>-<field>`, so one Secret maps to one entry when a vault replaces this store (the store's own header comment).
 - The namespace carries `argocd.argoproj.io/sync-options: Delete=false`: Argo CD never deletes it, because its Secrets exist only on the cluster and on the controller.
 - An ExternalSecret reads one with `remoteRef: {key: <app>-<field>, property: value}`.

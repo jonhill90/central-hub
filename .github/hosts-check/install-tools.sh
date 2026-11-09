@@ -16,7 +16,7 @@ export GOTOOLCHAIN=auto GOFLAGS=-mod=mod
 TOFU_VERSION=v1.13.1         # 2026-10-01; v1.13.2 and v1.12.9 (2026-10-21) are under two weeks old
 TFLINT_VERSION=v0.64.0       # 2026-07-17; v0.65.0 (2026-10-22) is under two weeks old
 KUBECONFORM_VERSION=v0.8.0   # 2026-06-04
-HELM_VERSION=v3.22.1         # 2026-10-15; renders hosts/kubernetes/clusters/*/root, as Argo CD does
+HELM_VERSION=v3.22.1         # 2026-10-15; renders hosts/kubernetes/*/*/root, as Argo CD does
 # Prometheus 3.15.1 (Go module v0.315.1, 2026-10-21): promtool checks and unit-tests the alert rules.
 PROMETHEUS_VERSION=v0.315.1
 

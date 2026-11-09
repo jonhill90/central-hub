@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: Argo CD's Application `kube-prometheus-stack` is Synced and Healthy, Grafana opens with the same admin password, Prometheus keeps its data, and Ansible no longer installs the chart
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/clusters/c1/root/values.yaml, hosts/kubernetes/clusters/c1/apps/kube-prometheus-stack/, hosts/ansible/playbooks/k8s-observability.yml]
+files: [hosts/kubernetes/home/c1/root/values.yaml, hosts/kubernetes/home/c1/apps/kube-prometheus-stack/, hosts/ansible/playbooks/k8s-observability.yml]
 last-tested: not yet run on c1. On 2026-11-08 the git values and the role's values were each rendered with chart 92.3.1, with sign-in off and on; the output was the same except Grafana's random admin password, which Argo CD is told to leave alone
 superseded-by:
 ---

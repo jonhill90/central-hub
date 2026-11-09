@@ -8,9 +8,14 @@ realm=$1
 kcadm=/opt/keycloak/bin/kcadm.sh
 config=$(mktemp)
 trap 'rm -f "$config"' EXIT
-"$kcadm" config credentials --config "$config" --server http://localhost:8080 --realm master \
-  --user "${KC_BOOTSTRAP_ADMIN_USERNAME:-${KEYCLOAK_ADMIN:-}}" \
-  --password "${KC_BOOTSTRAP_ADMIN_PASSWORD:-${KEYCLOAK_ADMIN_PASSWORD:-}}" >/dev/null
+# Keycloak may still be starting (the HTTP port opens late), so sign-in is tried for up to 5 minutes.
+for try in $(seq 1 60); do
+  "$kcadm" config credentials --config "$config" --server http://localhost:8080 --realm master \
+    --user "${KC_BOOTSTRAP_ADMIN_USERNAME:-${KEYCLOAK_ADMIN:-}}" \
+    --password "${KC_BOOTSTRAP_ADMIN_PASSWORD:-${KEYCLOAK_ADMIN_PASSWORD:-}}" >/dev/null 2>&1 && break
+  [ "$try" = 60 ] && { echo "could not sign in to Keycloak at localhost:8080" >&2; exit 1; }
+  sleep 5
+done
 if "$kcadm" get "realms/$realm" --config "$config" >/dev/null 2>&1; then
   "$kcadm" delete "realms/$realm" --config "$config"
   echo deleted

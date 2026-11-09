@@ -1,5 +1,5 @@
 ---
-# Interim Azure credential (agent pick 179): a user delegation SAS for the one backup container,
+# Interim Azure credential (agent pick 181): a user delegation SAS for the one backup container,
 # minted on the controller by the agents' service principal through the Azure CLI, valid for
 # k8s_backup_azure_sas_days. The storage account allows no shared key, so this is the only kind of
 # SAS it accepts: an Entra ID identity signs it, and it can be revoked by revoking that identity's

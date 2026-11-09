@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac
 outcome: Grafana, Argo CD, Keycloak, Jellyfin and ntfy open at https://<app>.<zone>/ on the owner's Mac and in the lab, with a trusted certificate, and sign-in goes through https://sso.<zone>/; every long name <app>.apps.c1.prod.<zone> keeps working
 needs: the lab DNS runbook done (set-up-lab-dns.md), the lab clone of central-hub with its private inventory and home.tfvars, hosts/.env with the tailnet OAuth client, cluster-admin on c1
 private-values: [opnsense_dns_zone, opnsense_lab_host_overrides, k8s_gateway_zone, k8s_gateway_address]
-files: [hosts/ansible/inventories/home/hosts.example.yml, hosts/terraform/home/tailnet/variables.tf, hosts/ansible/roles/k8s_gateway/, hosts/ansible/roles/k8s_certs/, hosts/ansible/roles/k8s_app_route/, hosts/ansible/roles/k8s_identity/, hosts/ansible/roles/k8s_gitops/, hosts/ansible/roles/k8s_observability/, hosts/kubernetes/clusters/c1/apps/gateway/, hosts/kubernetes/clusters/c1/apps/jellyfin/, hosts/kubernetes/clusters/c1/apps/alerts/, hosts/kubernetes/clusters/c1/root/values.yaml]
+files: [hosts/ansible/inventories/home/hosts.example.yml, hosts/terraform/home/tailnet/variables.tf, hosts/ansible/roles/k8s_gateway/, hosts/ansible/roles/k8s_certs/, hosts/ansible/roles/k8s_app_route/, hosts/ansible/roles/k8s_identity/, hosts/ansible/roles/k8s_gitops/, hosts/ansible/roles/k8s_observability/, hosts/kubernetes/home/c1/apps/gateway/, hosts/kubernetes/home/c1/apps/jellyfin/, hosts/kubernetes/home/c1/apps/alerts/, hosts/kubernetes/home/c1/root/values.yaml]
 last-tested: never; CI renders and lints every part (hosts workflow), and the realm test imports realm lab with the short names into a real Keycloak
 superseded-by:
 ---

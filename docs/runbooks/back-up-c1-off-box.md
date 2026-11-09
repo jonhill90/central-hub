@@ -29,7 +29,7 @@ flowchart LR
   r --> t["Sunday 04:30 c1-restore-test<br/>restore into a temp folder, check"]
 ```
 
-Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md), picks 144-152, and 177-180 for the Azure storage).
+Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md), picks 144-152, and 179-182 for the Azure storage).
 
 ## Before you start
 
