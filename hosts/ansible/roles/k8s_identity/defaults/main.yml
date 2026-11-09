@@ -40,6 +40,19 @@ k8s_identity_values_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/c
 # (KeycloakRealmImport never updates a realm that exists). Sessions end; nothing else is lost,
 # because every part of the realm comes from this role. false: only create the realm once.
 k8s_identity_realm_replace: true
+# Short aliases (STD-0001 rules 5 and 7): Keycloak's own name, and so the issuer, is sso.<zone>, and
+# every client also accepts its app's short name <app>.<zone> next to the long one. Needs the
+# short names in the lab DNS and on the Gateway first (docs/runbooks/set-up-short-app-names.md).
+# Off: everything stays on <name>.apps.c1.prod.<zone>.
+k8s_identity_short_names: true
+
+# The sign-in pages' look: a Keycloak theme folder on the controller, outside this repository (for
+# example in a clone of the owner's own branding repository). The folder's name is the theme's
+# name; only its login/ part is used, without files of 500 KB or more (a ConfigMap holds at most
+# 1 MiB). The role puts those files in ConfigMap keycloak-theme, the Keycloak pod mounts it under
+# /opt/keycloak/themes/<name>, and the realm sets loginTheme to it. Private: the path and the
+# theme's name can name the owner's domain (CLAUDE.md rule 4). Empty: Keycloak's own look.
+k8s_identity_theme_dir: ""
 
 # Grafana's client (k8s_observability). Its secret is copied to Secret <metrics ns>/grafana-sso.
 k8s_identity_grafana_name: grafana

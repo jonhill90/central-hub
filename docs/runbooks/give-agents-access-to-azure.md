@@ -8,7 +8,7 @@ outcome: two emergency access accounts protect the tenant, and agents sign in to
 needs: the owner's Global Administrator account and its MFA; Azure CLI on the owner's Mac; two FIDO2 security keys or passkeys
 private-values: [azure-tenant-id, azure-agent-client-id, azure-agent-client-secret, azure-break-glass-1-upn, azure-break-glass-2-upn]
 files: []
-last-tested:
+last-tested: 2026-11-09, an agent on the owner's Mac, step 7 only (steps 1-6 run by the owner); the service principal signed in, and its one role was Contributor on the subscription
 superseded-by:
 ---
 
@@ -71,10 +71,10 @@ Stop if you can't sign in as a Global Administrator: nothing below works without
    | `password` | `AZURE_CLIENT_SECRET` |
 
    - Cloud agent sessions: the project's cloud environment settings, as environment variables. New sessions pick them up.
-   - The Mac: `~/.config/central-hub/azure.env`, mode 0600, one `KEY=value` per line.
+   - The Mac: `~/.config/central-hub/azure.env`, one `KEY=value` per line, then `chmod 600 ~/.config/central-hub/azure.env`.
 
    why: each place an agent runs reads its own copy. Any agent in those places can read the secret, so what limits the risk is the role's scope (step 4) and that the secret can be removed in one command (see "If it fails").
-   expect: `ls -l ~/.config/central-hub/azure.env` shows `-rw-------`.
+   expect: `ls -l ~/.config/central-hub/azure.env` shows `-rw-------`. A new file starts as `-rw-r--r--`, readable by every account on the Mac, so the `chmod` is not optional.
 
 6. Sign your own account out of the CLI: `az logout`.
    why: from now on the Mac's `az` must only ever hold the agent's login, so nothing an agent runs acts as you.

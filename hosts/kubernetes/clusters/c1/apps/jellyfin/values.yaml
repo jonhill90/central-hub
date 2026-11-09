@@ -26,6 +26,8 @@ gateway:
   name: apps
   namespace: gateway
   hostSuffix: apps.c1.prod
+  # Also answer on the short alias <name>.<zone> (STD-0001 rule 5; the Gateway's shortNames).
+  shortNames: true
 
 # First-run setup (templates/setup-*.yaml). The admin password is made once by External Secrets'
 # Password generator and kept in the Secret <name>-admin (keys: username, password); nothing

@@ -18,7 +18,7 @@ k8s_backup_enabled: false
 # target's own credentials (restic's docs, "Preparing a new repository").
 k8s_backup_env_file: ""
 
-# Azure Blob target without a key (agent pick 177, interim). true: each run of the timers tag
+# Azure Blob target without a key (agent pick 179, interim). true: each run of the timers tag
 # mints a user delegation SAS for the container on the controller (the Azure CLI, signed in as the
 # agents' service principal) and adds AZURE_ACCOUNT_NAME and AZURE_ACCOUNT_SAS to the node env
 # file; the controller's env file then holds only RESTIC_REPOSITORY and RESTIC_PASSWORD. The SAS

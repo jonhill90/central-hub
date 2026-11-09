@@ -27,6 +27,12 @@ k8s_gateway_node_ports: [80/tcp]
 # the zone above. The HTTP listener on 80 stays.
 k8s_gateway_https: false
 k8s_gateway_tls_secret: apps-tls
+# STD-0001 rule 5: short aliases <app>.<zone> for prod, next to the service names. On, the Gateway
+# gets a second pair of listeners, http-short and https-short, for *.<zone>; app routes attach to
+# them with their short name (k8s_app_route_short_names and the charts' shortNames). The
+# certificate must name *.<zone> too (k8s_certs_short_names), and the lab DNS must answer each
+# short name (docs/runbooks/set-up-short-app-names.md).
+k8s_gateway_short_names: true
 # Argo CD manages the Gateway from hosts/kubernetes/clusters/c1/apps/gateway/ (spec
 # 2026-11-c1-apps-under-argo-cd, step 9). True once its Application is Synced: the role then only
 # opens the node firewall ports and checks the Gateway. False keeps Ansible in charge (the way back).

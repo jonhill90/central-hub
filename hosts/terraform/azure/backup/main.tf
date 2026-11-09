@@ -1,5 +1,5 @@
 # Off-box storage for c1's restic backups (BL-0139; runbook docs/runbooks/back-up-c1-off-box.md).
-# Agent picks 175-178 in hosts/AGENT-PICKS.md.
+# Agent picks 177-180 in hosts/AGENT-PICKS.md.
 #
 # No key, no anonymous access: shared key access is off, so every request must carry an Entra ID
 # token or a user delegation SAS (which an Entra ID identity signs). The data endpoint answers

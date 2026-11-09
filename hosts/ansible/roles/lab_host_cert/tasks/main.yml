@@ -29,8 +29,11 @@
   changed_when: "'created' in lab_host_cert_ns.stdout"
   when: not ansible_check_mode
 
+# The manifest goes in on stdin, so check mode can diff it before the file above is written.
 - name: Certificate differs on c1?
-  ansible.builtin.command: kubectl diff -f /root/central-hub/host-cert-{{ lab_host_cert_name }}.yaml
+  ansible.builtin.command:
+    cmd: kubectl diff -f -
+    stdin: "{{ lookup('ansible.builtin.template', 'certificate.yaml.j2') }}"
   delegate_to: "{{ lab_host_cert_issuer_host }}"
   become: true
   register: lab_host_cert_diff

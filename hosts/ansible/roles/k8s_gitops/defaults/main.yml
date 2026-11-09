@@ -52,6 +52,10 @@ k8s_gitops_ui_tls_secret: apps-tls
 k8s_gitops_ui_gateway_https: false
 # A second route on the HTTP listener that answers 301 to https:// for the UI's name only.
 k8s_gitops_ui_https_redirect: true
+# Short aliases (STD-0001 rules 5 and 7): the UI also answers on argocd.<zone> through the Gateway's
+# short listeners, Argo CD builds its links with that name, and sign-in uses Keycloak at sso.<zone>
+# (k8s_identity_short_names). Needs the short names in the lab DNS first.
+k8s_gitops_ui_short_names: true
 # The machine that proves the UI answers, by name through the lab's DNS: a node.
 k8s_gitops_ui_proof_client: "{{ groups['k8s_workers'] | first }}"
 
@@ -61,7 +65,9 @@ k8s_gitops_ui_proof_client: "{{ groups['k8s_workers'] | first }}"
 # The built-in admin account stays, as the way in when Keycloak is down.
 k8s_gitops_sso: false
 k8s_gitops_sso_name: Lab sign-in
-k8s_gitops_sso_issuer: "https://sso.apps.{{ k8s_gitops_ui_cluster }}.{{ k8s_gitops_ui_env }}.{{ k8s_gitops_ui_zone | default('') }}/realms/lab"
+k8s_gitops_sso_issuer: >-
+  https://sso.{{ '' if k8s_gitops_ui_short_names | bool else 'apps.' ~ k8s_gitops_ui_cluster ~ '.' ~ k8s_gitops_ui_env ~ '.'
+  }}{{ k8s_gitops_ui_zone | default('') }}/realms/lab
 k8s_gitops_sso_client_id: argocd
 k8s_gitops_sso_cli_client_id: argocd-cli
 # A PEM file on the controller with the CA that signed Keycloak's certificate, for when that is the

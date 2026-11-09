@@ -132,14 +132,16 @@ check_manifests() {
 
 check_identity() {
   # Realm lab imported into a real Keycloak in a container (identity/test_realm.sh), rendered with
-  # an extra user so the users loop is tested with more than the owner.
+  # an extra user so the users loop is tested with more than the owner, and with the test sign-in
+  # theme identity/theme/lab mounted the way the role mounts k8s_identity_theme_dir.
   collections
   mkdir -p "$work/identity"
   (cd hosts/ansible && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i localhost, \
     "$here/manifests/render.yml" -e role=k8s_identity -e template=realm.yaml.j2 \
     -e dest="$work/identity/realm.yaml" \
-    -e '{"k8s_identity_owner_email":"owner@example.com","k8s_identity_extra_users":[{"username":"viewer.one","groups":["lab-viewers"]}]}' >/dev/null)
-  bash "$here/identity/test_realm.sh" "$work/identity/realm.yaml"
+    -e '{"k8s_identity_owner_email":"owner@example.com","k8s_identity_extra_users":[{"username":"viewer.one","groups":["lab-viewers"]}]}' \
+    -e k8s_identity_theme_dir="$here/identity/theme/lab" >/dev/null)
+  bash "$here/identity/test_realm.sh" "$work/identity/realm.yaml" "$here/identity/theme/lab"
 }
 
 check_backup() {

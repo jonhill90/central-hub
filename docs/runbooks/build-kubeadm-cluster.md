@@ -1563,6 +1563,36 @@ Checked 2026-10-19. Every page below was fetched that day.
 - **Measured on the proof node** (read only, 2026-10-19, before its rebuild): listening ports (`ss`); Cilium in VXLAN tunnel mode; tailscale0 MTU 1280; overlay mounts and `bridge-nf-call-iptables = 1`; the kubelet log line "Using cgroup driver setting received from the CRI runtime".
 - **Not sourced:** step 8's note that the node is not Ready before a CNI is installed (no page or proof file says it).
 
+## Proven runs
+
+R2 rehearsal, 2026-11-08, by an agent: steps 0-10 and step 36's worker join, by hand as written with the home-lab "place" lines, on fresh 2-node VMs from `hosts/terraform/home/k8s` on VNet dev (VLAN 30). Times are measured from the run logs.
+
+| Step | What | Run 3 | Run 4 |
+|---|---|---|---|
+| 0 | `tofu apply`, then `sudo cloud-init status --wait` on both nodes | 35 s + 70 s | 37 s + 69 s |
+| 1 | lock-down | 19 s | 17 s |
+| 2 | kernel modules: module file first, then reboot | 45 s | 48 s |
+| 3-7 | DNS, firewall, containerd v2.3.6, kubeadm v1.36.5, endpoint name | about 50 s | about 50 s |
+| 8 | `kubeadm init --skip-phases addon/kube-proxy` | 22 s | 21 s |
+| 8a | Secrets at rest, with the canary wait and the `ENCRYPTED` check | 42 s | 42 s |
+| 9 | Helm v4.3.1, Cilium 1.20.4 replacing kube-proxy | 60 s | 39 s |
+| 36 | worker join | 2 s | 2 s |
+| 10 | smoke test, taint kept | 30 s | 29 s |
+| teardown | `tofu destroy` | 94 s | 93 s |
+
+Result: Kubernetes v1.36.5 on AlmaLinux 10.2, both nodes Ready, Cilium v1.20.4 replacing kube-proxy, Secrets encrypted at rest with secretbox. At rest the control plane used about 1.55 GB and the worker about 0.87 GB of 3.9 GB each.
+
+What runs 1 and 2 found, and the fix:
+
+| Run | Fault | Fix |
+|---|---|---|
+| 1 | step 2's `modprobe br_netfilter` fails before the reboot | write the module file and reboot first (PR #83) |
+| 1 | no cloud-init wait before step 1 | step 0 waits, with `sudo`, accepting exit 2 (PR #83) |
+| 1 | step 10's smoke test has no node to run on with the taint kept | join the worker first (PR #83) |
+| 2 | step 8a's `/readyz` wait passes against the old API server, so Secrets stay plain while its checks pass | wait on a canary Secret read from etcd; the etcd value is the pass or fail check (PR #84) |
+
+The agents' run logs and worklogs are kept in the agent notebook; this section is the record.
+
 ## If it fails
 
 Stop at the step that fails and compare with its `expect:` line and its catches. Steps 1-11 can be undone only by a rebuild from step 0; practice steps 12-36 clean up after themselves, except the four named under "Rules for practice". Tell the owner before changing a command, and fix the runbook text in the same change.

@@ -38,6 +38,9 @@ k8s_gitops_dir: /root/central-hub/gitops
 # The web UI route (tag ui). Derived values, not inputs.
 k8s_gitops_ui_host: >-
   {{ k8s_gitops_ui_name }}.{{ k8s_gitops_ui_gateway_name }}.{{ k8s_gitops_ui_cluster }}.{{ k8s_gitops_ui_env }}.{{ k8s_gitops_ui_zone }}
+k8s_gitops_ui_short_host: "{{ k8s_gitops_ui_name }}.{{ k8s_gitops_ui_zone }}"
+# The name Argo CD builds its links with (argocd-cm url): the short alias with short names on.
+k8s_gitops_ui_url_host: "{{ k8s_gitops_ui_short_host if k8s_gitops_ui_short_names | bool else k8s_gitops_ui_host }}"
 # server.insecure as the run wants it: "true" only with the route on.
 k8s_gitops_ui_insecure: "{{ 'true' if k8s_gitops_ui_route | bool else 'false' }}"
 # A pod template annotation that records the server.insecure value argocd-server's pods started

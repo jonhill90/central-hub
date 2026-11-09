@@ -1,4 +1,8 @@
 ---
+- name: keycloak | Sign-in theme
+  ansible.builtin.import_tasks: theme.yml
+  when: k8s_identity_theme_dir | length > 0
+
 - name: keycloak | Keycloak
   ansible.builtin.import_tasks: apply.yml
   vars: {__manifest: keycloak.yaml}

@@ -20,6 +20,8 @@ argument_specs:
       k8s_identity_values_file:
         type: str
         description: "KEY=value file on the controller, outside the repo, with every password and client secret. Default: ~/.config/central-hub/identity.env."
+      k8s_identity_short_names: {type: bool, default: true, description: "Keycloak at sso.<zone>, and each client also accepts <app>.<zone> (STD-0001 rule 5)."}
+      k8s_identity_theme_dir: {type: str, default: "", description: "Keycloak theme folder on the controller for the sign-in look. Private."}
       k8s_identity_realm_replace: {type: bool, default: true, description: "Delete and import realm lab again when its code or a value changes."}
       k8s_identity_grafana_name: {type: str, default: grafana, description: "First label of Grafana's hostname (k8s_observability_grafana_name)."}
       k8s_identity_grafana_namespace: {type: str, default: monitoring, description: "Grafana's namespace (k8s_observability_metrics_namespace)."}

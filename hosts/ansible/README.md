@@ -141,7 +141,7 @@ Runbook: [Set up sign-in for lab apps](../../docs/runbooks/set-up-lab-sign-in.md
 
 ## Backups of c1
 
-`playbooks/k8s-backup.yml` (role `k8s_backup`) sends c1's etcd and every volume folder to a restic repository off the Proxmox host each night, and proves every week that the newest snapshots restore. Runbooks: [Back up c1 off the box](../../docs/runbooks/back-up-c1-off-box.md) and [Test the etcd restore](../../docs/runbooks/test-etcd-restore.md). Every part is an agent pick (`../AGENT-PICKS.md`, picks 144-152, and 175-178 for the Azure storage).
+`playbooks/k8s-backup.yml` (role `k8s_backup`) sends c1's etcd and every volume folder to a restic repository off the Proxmox host each night, and proves every week that the newest snapshots restore. Runbooks: [Back up c1 off the box](../../docs/runbooks/back-up-c1-off-box.md) and [Test the etcd restore](../../docs/runbooks/test-etcd-restore.md). Every part is an agent pick (`../AGENT-PICKS.md`, picks 144-152, and 177-180 for the Azure storage).
 
 - **What goes.** From the control plane, tag `etcd`: an `etcdctl snapshot save`, its status, `/etc/kubernetes/pki`, the static pod manifests and ConfigMap `kubeadm-config`. From each node, tag `volumes`: `/var/lib/c1-data/local-path` and `/var/lib/central-hub/identity-postgres`, whichever it has. The key for Secrets at rest is never in a backup.
 - **Where.** Only the env file says: `RESTIC_REPOSITORY`, `RESTIC_PASSWORD` and the target's credentials (Azure Blob, S3, SFTP or a REST server). restic encrypts on the node, so the target sees only ciphertext.
@@ -152,7 +152,7 @@ Runbook: [Set up sign-in for lab apps](../../docs/runbooks/set-up-lab-sign-in.md
 | `k8s_backup_enabled` | `false` (the default) installs the tools with the timers off and removes the env file from the nodes. `true` turns the timers on. |
 | `k8s_backup_env_file` | The 0600 env file on the controller, for example `~/.config/central-hub/c1-backup.env`. Private, no default; the run stops if it is missing, empty or readable by others. |
 | `k8s_backup_drill` | `true` with `--tags drill`: back up now and run the restore tests. |
-| `k8s_backup_azure_sas` | `true`: each `timers` run mints a user delegation SAS for the Azure container on the controller (`az`, signed in as `agent-azure`) and adds `AZURE_ACCOUNT_NAME` and `AZURE_ACCOUNT_SAS` to the node env file, so no account key exists anywhere (pick 177). The SAS lasts `k8s_backup_azure_sas_days` (7 at most), so run `--tags timers` again within that. |
+| `k8s_backup_azure_sas` | `true`: each `timers` run mints a user delegation SAS for the Azure container on the controller (`az`, signed in as `agent-azure`) and adds `AZURE_ACCOUNT_NAME` and `AZURE_ACCOUNT_SAS` to the node env file, so no account key exists anywhere (pick 179). The SAS lasts `k8s_backup_azure_sas_days` (7 at most), so run `--tags timers` again within that. |
 | `k8s_backup_azure_account` | The storage account (tofu output `storage_account_name` of `terraform/azure/backup`). Private. |
 
 ## Storage on c1
