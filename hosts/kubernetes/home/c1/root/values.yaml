@@ -158,7 +158,7 @@ apps:
     zoneParameters:
       address: "{gatewayAddress}"
     wave: -1
-    autoSync: false
+    autoSync: true
     prune: false
   # c1's own alert rules, the Argo CD scrape and the lab dashboard (needs the CRDs from
   # kube-prometheus-stack, so it waits for it).
