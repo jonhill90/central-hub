@@ -124,6 +124,8 @@ check_manifests() {
   fi
   # What Argo CD will apply must equal what the roles apply today (parity.txt).
   python3 "$here/parity.py" . "$work"
+  # What the AppProject allows must cover what every child renders (project_check.py).
+  python3 "$here/project_check.py" . "$work"
   kubeconform -strict -summary -output text \
     -schema-location "$work/schemas/core/{{ .ResourceKind }}{{ .KindSuffix }}.json" \
     -schema-location "$work/schemas/crd/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json" \
