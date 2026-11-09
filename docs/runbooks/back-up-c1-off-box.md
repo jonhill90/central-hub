@@ -8,7 +8,7 @@ outcome: every night restic writes an encrypted snapshot of c1's etcd and of eve
 needs: the lab clone of central-hub with its private inventory; SSH to the c1 nodes as D-0022 says; a restic repository off the Proxmox host and its credentials; for Azure, the agents' service principal signed in to `az` on the Mac, with Graph `Application.ReadWrite.OwnedBy` (give-agents-access-to-azure.md)
 private-values: [c1-backup-restic-repository, c1-backup-restic-password, c1-backup-target-credentials, c1-backup-azure-storage-account, home-public-ip]
 files: [hosts/terraform/azure/backup/, hosts/ansible/playbooks/k8s-backup.yml, hosts/ansible/roles/k8s_backup/, .github/hosts-check/tests/test_backup.sh, .github/hosts-check/tests/test_backup_azure_cert.sh]
-last-tested: 2026-11-08, an agent, the scripts end to end in CI's test (etcd 3.7.0, local restic repository); 2026-11-09, an agent, terraform/azure/backup's offline tests (mocked provider); 2026-11-09, an agent lane through the owner's Mac, the full apply and the playbook's drill on c1 against Azure Blob with a user delegation SAS (backups OK, restic check clean, etcd restore test PASS, volume restore test PASS on 2 folders); 2026-11-09, an agent, the node certificate script and azure_identity.yml against a stand-in for Entra ID and Graph in CI (test_backup_azure_cert.sh); the sign-in by certificate on c1 is not tested yet
+last-tested: 2026-11-08, an agent, the scripts end to end in CI's test (etcd 3.7.0, local restic repository); 2026-11-09, an agent, terraform/azure/backup's offline tests (mocked provider); 2026-11-09, an agent lane through the owner's Mac, the full apply and the playbook's drill on c1 against Azure Blob with a user delegation SAS (backups OK, restic check clean, etcd restore test PASS, volume restore test PASS on 2 folders); 2026-11-09, an agent, the node certificate script and azure_identity.yml against a stand-in for Entra ID and Graph in CI (test_backup_azure_cert.sh); the sign-in by certificate on c1 is not tested yet; 2026-11-09, an agent, CI's test with Keycloak's PostgreSQL image (18.6), a real `pg_dumpall` through a stand-in for crictl, then steps 2 and 3 of "Restore Keycloak's database" into a new database whose password had changed (all rows back, the new password still signs in)
 superseded-by:
 ---
 
@@ -29,7 +29,7 @@ flowchart LR
   r --> t["Sunday 04:30 c1-restore-test<br/>restore into a temp folder, check"]
 ```
 
-Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md), picks 144-152, 179-181 for the Azure storage, and 189 for the nodes' sign-in).
+Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md), picks 144-152, 179-181 for the Azure storage, 189 for the nodes' sign-in, and 190 and 192 for the database dumps).
 
 ## Before you start
 
@@ -187,7 +187,7 @@ The restore test never writes over a volume. To bring one back for real:
    expect: both lines show the same label. The weekly restore test leaves the labels out on purpose (`--exclude-xattr security.selinux`), because SELinux refuses them in its temporary folder (c1's worker, 2026-11-09).
 4. Scale the app back up.
 
-why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansible/README.md#storage-on-c1)), so restoring the folder is restoring the volume. The copy was taken while the app ran: for PostgreSQL that is like a power cut, and it replays its log on start.
+why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansible/README.md#storage-on-c1)), so restoring the folder is restoring the volume. The copy was taken while the app ran, which suits apps that keep plain files; a database comes back from its dump instead ([Restore Keycloak's database](#restore-keycloaks-database)).
 
 ## Restore Keycloak's database
 
@@ -209,7 +209,12 @@ The copy of `/var/lib/central-hub/identity-postgres` in a snapshot is read file 
      | kubectl -n identity exec -i sso-postgres-0 -- sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=0'
    ```
 
-   expect: `psql` ends without `FATAL`. Errors that a role already exists are expected, because `pg_dumpall` includes the roles.
+   expect: `psql` ends without `FATAL`. Errors that a role already exists are expected, because `pg_dumpall` includes the roles. It leaves out their passwords (`--no-role-passwords`, agent pick 192), so the database user keeps the password it has now, the one in Keycloak's Secret `sso-db`, even if that changed after the dump. A dump made before pick 192 still holds the old password. If Keycloak can't sign in to its database after loading one, set the password from the Secret again:
+
+   ```sh
+   kubectl -n identity exec -i sso-postgres-0 -- sh -c 'psql -U "$POSTGRES_USER" -d postgres -v u="$POSTGRES_USER" -v pw="$POSTGRES_PASSWORD"' <<< "ALTER ROLE :\"u\" PASSWORD :'pw';"
+   ```
+
 4. Set `instances` back to its old value, sign in, and delete `/var/tmp/db-restore`.
 
 why: a dump is consistent by itself, so it restores the database whatever was happening on disk at the time (agent pick 190). The weekly restore test checks that each dump came back whole.

@@ -37,7 +37,10 @@ if [ ${#paths[@]} -eq 0 ]; then
 fi
 
 # Dump every running PostgreSQL container on this node. The official image trusts its own Unix
-# socket, so pg_dumpall needs no password. A failed dump fails the run, after the file backup.
+# socket, so pg_dumpall needs no password. --no-role-passwords leaves the roles' password hashes
+# out of the dump: a restore then keeps the password the running database has, the one its app's
+# Secret holds, instead of putting back the password of the night of the dump (agent pick 192).
+# A failed dump fails the run, after the file backup.
 dumps=$BACKUP_STATE/db-dumps
 dump_failed=0
 mkdir -p "$dumps"
@@ -50,7 +53,7 @@ if [ -n "$crictl_bin" ]; then
     out="$dumps/${ns}_${pod}.sql"
     log "dumping PostgreSQL in $ns/$pod"
     # shellcheck disable=SC2016  # $POSTGRES_USER is the container's, not this shell's
-    if "$crictl_bin" exec "$id" sh -c 'pg_dumpall -U "$POSTGRES_USER"' > "$out.part" \
+    if "$crictl_bin" exec "$id" sh -c 'pg_dumpall --no-role-passwords -U "$POSTGRES_USER"' > "$out.part" \
       && grep -q '^-- PostgreSQL database cluster dump complete' "$out.part"; then
       mv "$out.part" "$out"
       log "   $(wc -c < "$out") bytes"
