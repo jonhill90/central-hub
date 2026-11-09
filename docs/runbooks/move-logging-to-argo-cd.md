@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: Argo CD's Applications `loki` and `alloy` are Synced and Healthy, Grafana still shows new pod logs, and Ansible no longer installs either chart
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/clusters/c1/root/values.yaml, hosts/kubernetes/clusters/c1/apps/loki/values.yaml, hosts/kubernetes/clusters/c1/apps/alloy/values.yaml, hosts/ansible/playbooks/k8s-observability.yml]
+files: [hosts/kubernetes/home/c1/root/values.yaml, hosts/kubernetes/home/c1/apps/loki/values.yaml, hosts/kubernetes/home/c1/apps/alloy/values.yaml, hosts/ansible/playbooks/k8s-observability.yml]
 last-tested: not yet run on c1. On 2026-11-08 the git values and the role's values were each rendered with the same chart versions, and the output was the same, line for line
 superseded-by:
 ---

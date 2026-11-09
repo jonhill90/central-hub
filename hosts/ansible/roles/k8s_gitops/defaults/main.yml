@@ -11,17 +11,29 @@
 k8s_gitops_source_enabled: false
 
 # Where the cluster reads its desired state once the gate passes: anonymous HTTPS, the main branch,
-# one folder per cluster (D-0002, D-0011 `hosts/kubernetes/clusters/<role>/`).
+# one folder per cluster (D-0002, D-0011 `hosts/kubernetes/<place>/<cluster>/`).
 k8s_gitops_source_url: https://github.com/jonhill90/central-hub
 k8s_gitops_source_branch: main
-k8s_gitops_source_path: hosts/kubernetes/clusters/c1
+k8s_gitops_source_path: hosts/kubernetes/home/c1
 k8s_gitops_source_interval: 5m
 
 # Argo CD only: the root Application and the Helm chart it renders, which makes one child
 # Application per component (spec docs/specs/2026-11-c1-apps-under-argo-cd.md). Flux reads
 # k8s_gitops_source_path above instead.
 k8s_gitops_root_name: c1
-k8s_gitops_root_path: hosts/kubernetes/clusters/c1/root
+k8s_gitops_root_path: hosts/kubernetes/home/c1/root
+# The cluster's own entry in Argo CD (Argo CD only, tag source): a cluster Secret for the local
+# cluster, named after the cluster, with what the cluster is as labels (STD-0001 "Cluster labels";
+# the owner's yes of 2026-11-09 01:10 UTC to keeping the name c1 and labelling what it is). It holds
+# no credential: Argo CD reaches its own cluster with its own service account. ApplicationSets can
+# then pick clusters by these labels.
+k8s_gitops_cluster_name: c1
+k8s_gitops_cluster_labels:
+  place: home
+  provider: proxmox
+  hardware: old-pc
+  env: prod
+  purpose: apps
 # Private, no default, needed only with the source on; the inventory template sets it to
 # k8s_gateway_zone. It is passed to the root chart as its `zone` value.
 # k8s_gitops_source_zone: <zone>

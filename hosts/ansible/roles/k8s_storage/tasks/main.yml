@@ -1,5 +1,5 @@
 ---
-# Skipped once Argo CD manages them (hosts/kubernetes/clusters/c1/apps/local-path/); the data disk
+# Skipped once Argo CD manages them (hosts/kubernetes/home/c1/apps/local-path/); the data disk
 # (disk.yml) stays with Ansible.
 - name: Provisioner and StorageClass
   ansible.builtin.import_tasks: provisioner.yml

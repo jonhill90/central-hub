@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: Argo CD's Application `jellyfin` is Synced and Healthy, the setup Job has finished the first-run wizard, the admin password from Secret `jellyfin-admin` signs in, and Ansible no longer applies Jellyfin
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1); External Secrets running on c1
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/clusters/c1/apps/jellyfin/, hosts/kubernetes/clusters/c1/root/values.yaml, hosts/ansible/roles/k8s_jellyfin/, hosts/ansible/playbooks/k8s-jellyfin.yml]
+files: [hosts/kubernetes/home/c1/apps/jellyfin/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_jellyfin/, hosts/ansible/playbooks/k8s-jellyfin.yml]
 last-tested: not yet run on c1; the setup script was run twice against a stand-in server in CI's sandbox on 2026-11-08 (first run finished the wizard, second run changed nothing)
 superseded-by:
 ---
@@ -40,7 +40,7 @@ flowchart LR
 - `kubectl -n media get deploy jellyfin` shows 1/1 ready.
 - `kubectl -n argocd get application c1` shows Synced (the root Application exists).
 - `kubectl get crd passwords.generators.external-secrets.io externalsecrets.external-secrets.io` finds both.
-- The lab clone is on a `main` that includes `hosts/kubernetes/clusters/c1/apps/jellyfin/`.
+- The lab clone is on a `main` that includes `hosts/kubernetes/home/c1/apps/jellyfin/`.
 
 Stop if any of these is not true.
 
@@ -67,7 +67,7 @@ Stop if any of these is not true.
 5. Sign in at `https://jellyfin.apps.c1.prod.<zone>/` as `admin` with that password.
    expect: the home page shows the library `Media`.
 
-6. By PR, set `autoSync: true` for `jellyfin` in `hosts/kubernetes/clusters/c1/root/values.yaml`. In the private inventory, set `k8s_jellyfin_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-jellyfin.yml`.
+6. By PR, set `autoSync: true` for `jellyfin` in `hosts/kubernetes/home/c1/root/values.yaml`. In the private inventory, set `k8s_jellyfin_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-jellyfin.yml`.
    why: from now on git is the source of truth. The role skips every task, so it never fights Argo CD.
    expect: the play reports `changed=0`, and a second run reports `changed=0` too.
 

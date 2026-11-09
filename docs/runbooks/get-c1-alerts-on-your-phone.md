@@ -7,7 +7,7 @@ runner: the owner
 outcome: a test message and every new c1 alert show up in the ntfy app or web page, and resolved alerts say so
 needs: a phone or computer on the lab network or the tailnet; the ntfy app (Android, iOS) or a browser
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/clusters/c1/apps/alerts/, hosts/kubernetes/clusters/c1/apps/kube-prometheus-stack/values.yaml, hosts/ansible/roles/k8s_observability/vars/main.yml]
+files: [hosts/kubernetes/home/c1/apps/alerts/, hosts/kubernetes/home/c1/apps/kube-prometheus-stack/values.yaml, hosts/ansible/roles/k8s_observability/vars/main.yml]
 last-tested: not yet run on c1. CI renders the alerts chart and checks Alertmanager's values match the role's
 superseded-by:
 ---

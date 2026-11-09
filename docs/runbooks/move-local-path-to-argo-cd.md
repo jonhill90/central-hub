@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: Argo CD's Application `local-path` is Synced and Healthy, a new claim still binds, every existing claim is untouched, and Ansible no longer applies the provisioner
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/clusters/c1/apps/local-path/, hosts/kubernetes/clusters/c1/root/values.yaml, hosts/ansible/roles/k8s_storage/, hosts/ansible/playbooks/k8s-storage.yml]
+files: [hosts/kubernetes/home/c1/apps/local-path/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_storage/, hosts/ansible/playbooks/k8s-storage.yml]
 last-tested: not yet run on c1. CI's parity check renders the role's manifest and this chart and finds them the same, object for object
 superseded-by:
 ---

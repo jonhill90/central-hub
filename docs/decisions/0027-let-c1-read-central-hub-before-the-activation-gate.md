@@ -1,6 +1,6 @@
 ---
 id: D-0027
-title: Let the lab cluster c1 read central-hub through Argo CD before the Activation gate passes
+title: Let cluster c1 read central-hub through Argo CD before the Activation gate passes
 status: accepted
 date: 2026-11-08
 decision-makers: [owner]
@@ -20,7 +20,7 @@ accepted-evidence:
 revisit-when: c1 holds data that can't be rebuilt or that someone other than the owner relies on; a second cluster (the VPS or a cloud site) is about to read the repository; an agent gets its own GitHub identity (Activation gate item 1); or anything other than the owner merges to main
 ---
 
-# Let the lab cluster c1 read central-hub through Argo CD before the Activation gate passes
+# Let cluster c1 read central-hub through Argo CD before the Activation gate passes
 
 ## Context and Problem Statement
 
@@ -55,7 +55,7 @@ flowchart LR
 ### Rules
 
 1. **Scope.** Only cluster c1 in the home lab may read central-hub before the Activation gate passes. Every other cluster still waits for all 7 checks.
-2. **How it reads.** It reads as D-0023 rule 5 says: one root Application reads `hosts/kubernetes/clusters/c1/` on `main` over anonymous HTTPS, with no repository credential in the cluster. Nothing writes to git (gate item 3), and there is no image automation (gate item 6).
+2. **How it reads.** It reads as D-0023 rule 5 says: one root Application reads `hosts/kubernetes/home/c1/` on `main` over anonymous HTTPS, with no repository credential in the cluster. Nothing writes to git (gate item 3), and there is no image automation (gate item 6).
 3. **Switch.** The Ansible switch `k8s_gitops_source_enabled` is set to true only in c1's inventory.
 4. **Private names stay out of git.** The lab zone reaches the cluster only as a Helm parameter on the root Application, set from the private inventory (CLAUDE.md rule 4).
 5. **Way back.** Deleting the root Application stops all reading at once. The Applications have no resources finalizer, so the objects stay, and the Ansible roles take over again.
