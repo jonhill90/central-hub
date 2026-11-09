@@ -8,7 +8,7 @@ outcome: the OPNsense web UI serves a certificate issued by ClusterIssuer `lab-c
 needs: the lab controller with the filled-in inventory (CLI path), or a browser signed in to the OPNsense web UI as an administrator (web UI path); `kubectl` access to c1 for both
 private-values: [opnsense_api_key, opnsense_api_secret, opnsense_cert_names]
 files: [hosts/ansible/playbooks/opnsense-cert.yml, hosts/ansible/roles/opnsense_cert, hosts/ansible/roles/lab_host_cert]
-last-tested: not yet run
+last-tested: 2026-11-09, an agent lane on the owner's Mac, Path A steps 1-4 (four runs, each changed=0 after the first swap)
 superseded-by:
 ---
 
@@ -127,6 +127,10 @@ B5. Check it in the browser.
 
 - Set `last-tested` here, with the date, the path (A or B) and who ran it.
 - cert-manager renews the certificate on c1 30 days before it ends; OPNsense does not fetch it. Run Path A at least every 30 days, or repeat B0, B3 and B4.
+
+## Proven runs
+
+- 2026-11-09, Path A, an agent lane on the owner's Mac, central-hub main with PR #96. Check mode first failed at "Certificate differs on c1?" (no manifest file in check mode), fixed by #96. The first real run stopped with HTTP 403 on `trust/ca/search` until the API user got the three privileges in step B1. After that the web UI served leaf, c1 intermediate, lab root (not before 00:22 UTC). Runs at 08:2x and 19:1x UTC each reported `ok=16 changed=0 failed=0 skipped=3`. `curl` from the Mac with no `-k`: `SSL certificate verify ok`, issuer `Home Lab c1 Intermediate CA`.
 
 ## Related
 
