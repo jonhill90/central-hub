@@ -1,5 +1,5 @@
 ---
-# Off-box backups of c1 (BL-0139 volumes, BL-0094 etcd restore test), all agent picks listed in
+# Off-box backups of c1 (TASK-0139 volumes, TASK-0094 etcd restore test), all agent picks listed in
 # hosts/AGENT-PICKS.md. restic snapshots to the repository named in the private env file; weekly
 # restore tests prove they come back. Runbooks: docs/runbooks/back-up-c1-off-box.md and
 # docs/runbooks/test-etcd-restore.md.

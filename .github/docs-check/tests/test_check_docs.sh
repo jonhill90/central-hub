@@ -37,8 +37,8 @@ case_ "date not YYYY-MM-DD"            's/^date: 2026-10-23/date: 23 Oct 2026/' 
 case_ "accepted without evidence"      's/^status: proposed/status: accepted/'      "accepted-evidence"
 case_ "unknown field"                  's/^title: Test/title: Test\ncolour: blue/'  "Additional properties"
 case_ "waits-on a missing record"      's/^waits-on: \[\]/waits-on: [D-0099]/'      "has no record"
-case_ "waits-on a backlog item"       's/^waits-on: \[\]/waits-on: [BL-0111]/'      ""
-case_ "waits-on a malformed label"     's/^waits-on: \[\]/waits-on: [BL-111]/'       "waits-on"
+case_ "waits-on a backlog item"       's/^waits-on: \[\]/waits-on: [TASK-0111]/'      ""
+case_ "waits-on a malformed label"     's/^waits-on: \[\]/waits-on: [TASK-111]/'       "waits-on"
 gen_case() { # name, sed expression applied to the good record, expected text: gen_index.py --check must fail with it
   d=$(mktemp -d); mkdir -p "$d/docs/decisions" "$d/docs/standards"
   printf '%s' "$good" | sed "$2" > "$d/docs/decisions/0001-test.md"

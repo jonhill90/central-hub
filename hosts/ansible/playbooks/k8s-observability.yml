@@ -1,5 +1,5 @@
 ---
-# Metrics and logs on cluster c1 (BUILD-PATH S15, BL-0020): metrics-server, kube-prometheus-stack
+# Metrics and logs on cluster c1 (BUILD-PATH S15, TASK-0020): metrics-server, kube-prometheus-stack
 # (Prometheus Operator, Prometheus, Grafana), Loki in monolithic mode and one Alloy pod. Grafana is
 # served at https://grafana.apps.c1.prod.<zone>/ through the shared Gateway, so it needs
 # k8s-gateway.yml with k8s_gateway_https: true and the wildcard certificate (k8s-certs.yml) first.

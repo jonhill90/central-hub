@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prove the newest off-box etcd backup restores (role k8s_backup, BL-0094, runbook
+# Prove the newest off-box etcd backup restores (role k8s_backup, TASK-0094, runbook
 # docs/runbooks/test-etcd-restore.md). Runs on the control-plane node as root, from timer
 # c1-restore-test.timer or by hand. It never touches the running etcd: the copy is restored into a
 # temporary folder and started as a separate one-member etcd on 127.0.0.1 only, on its own ports.

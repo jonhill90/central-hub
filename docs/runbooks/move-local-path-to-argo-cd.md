@@ -54,7 +54,7 @@ Edit `apps/local-path/values.yaml` or the template by PR. To move to a newer pro
 
 ## Rebuild from nothing
 
-The VMs come from Terraform, the data disks from `k8s-storage.yml --tags disk`, then Argo CD installs the provisioner and the StorageClass. The data in the volumes comes back only from a backup (BL-0139, not built yet; today the nightly Proxmox backup of the VM holds it).
+The VMs come from Terraform, the data disks from `k8s-storage.yml --tags disk`, then Argo CD installs the provisioner and the StorageClass. The data in the volumes comes back only from a backup (TASK-0139, not built yet; today the nightly Proxmox backup of the VM holds it).
 
 ## If it fails
 

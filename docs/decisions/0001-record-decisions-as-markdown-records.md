@@ -17,7 +17,7 @@ accepted-evidence:
   approval-names: "neither the PR nor the head; it answers the question naming ADR 0001 and ADR 0002 (07:25Z)"
   check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and at 07:28:13Z the owner had said that he had approved the PRs; an independent check by a reviewing agent is still to do
   merged: jonhill90 merged PR #1 at 2026-10-11T07:22Z; the merged record matches the approved commit exactly
-revisit-when: a knowledge system (BL-0036) is chosen that should own decisions, or the flat folder becomes hard to use
+revisit-when: a knowledge system (TASK-0036) is chosen that should own decisions, or the flat folder becomes hard to use
 ---
 
 # Record decisions as one Markdown file each, with a generated index
@@ -91,7 +91,7 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
 |---|---|---|---|
 | `id` | string `D-NNNN` | Permanent ID; reused only as D-0004 allows | Unique, matches the filename number |
 | `proposed-by` | string | Agent or person who drafted it | Required |
-| `waits-on` | list of IDs | Decisions that must be **accepted** before this one can be decided. The edge points from this record to its prerequisite. IDs may be records (`D-NNNN`) or backlog items (`BL-0111`, `BL-0021`…) | Record IDs resolve to a file; backlog IDs must be well formed, and a reviewing agent checks them against the backlog, because the backlog isn't in the repo; no cycles |
+| `waits-on` | list of IDs | Decisions that must be **accepted** before this one can be decided. The edge points from this record to its prerequisite. IDs may be records (`D-NNNN`) or backlog items (`TASK-0111`, `TASK-0021`…) | Record IDs resolve to a file; backlog IDs must be well formed, and a reviewing agent checks them against the backlog, because the backlog isn't in the repo; no cycles |
 | `supersedes` / `superseded-by` | list / ID | Replacement links | Symmetric |
 | `accepted-evidence` | block (below) | Proof that the owner approved this exact content | Required when `status: accepted` |
 | `revisit-when` | string | What would make us reopen this decision (the replaceability principle) | Required |
