@@ -8,7 +8,7 @@ outcome: Argo CD's Application `gateway` is Synced and Healthy, Gateway `apps` k
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone, k8s_gateway_address]
 files: [hosts/kubernetes/home/c1/apps/gateway/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_gitops/templates/source-argocd.yaml.j2, hosts/ansible/roles/k8s_gateway/, hosts/ansible/playbooks/k8s-gateway.yml, hosts/ansible/playbooks/k8s-observability.yml]
-last-tested: not yet run on c1. CI's parity check finds the Gateway (HTTPS on) and Grafana's routes the same as the roles render them
+last-tested: 2026-11-09, an agent lane on the owner's Mac, steps 1-4 on c1 at main db8b158 (diff only the ntfy routes and the namespace annotation; one hand sync, Synced and Healthy; four listeners Programmed; k8s-gateway.yml changed=2 from its smoke test only, k8s-observability.yml --tags route changed=0); autoSync for gateway waits for the owner's go)
 superseded-by:
 ---
 
@@ -51,7 +51,7 @@ Stop if any of these is not true.
    expect: Synced and Healthy. The Gateway is still Programmed at the same address. `https://grafana.apps.c1.prod.<zone>/login` opens, and `http://` for the same name answers 301.
 
 4. By PR, set `autoSync: true` for `gateway` in `root/values.yaml`. In the private inventory, set `k8s_gateway_by_argocd: true` and `k8s_observability_grafana_route_by_argocd: true`. Then run `ansible-playbook -i inventories/home/ playbooks/k8s-gateway.yml` and `playbooks/k8s-observability.yml --tags route`.
-   expect: both report `changed=0`. The gateway play still opens the firewall ports and checks the Gateway; its smoke test still passes.
+   expect: the Gateway and route apply tasks are skipped. The route play reports `changed=0`; the gateway play reports only its smoke-test app as changed (it is applied and removed on every run), still opens the firewall ports and checks the Gateway, and its smoke test passes.
 
 ## Change it
 

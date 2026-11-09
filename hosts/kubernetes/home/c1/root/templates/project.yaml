@@ -3,7 +3,7 @@ AppProject `c1` (Activation gate item 5): the child Applications may read only t
 their own chart repositories, write only to this cluster in the namespaces the charts use, and make
 only the cluster-scoped kinds listed in values `c1Project.clusterResources`. Sources and namespaces
 are built from .Values.apps, so a new app widens the project in the same change.
-The children still use `.Values.project`; this file only makes the project.
+The children name it through `.Values.project`.
 */ -}}
 {{- $repos := list .Values.repoURL }}
 {{- $namespaces := .Values.c1Project.extraNamespaces | default list }}

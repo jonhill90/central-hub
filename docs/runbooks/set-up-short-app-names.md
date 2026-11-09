@@ -8,7 +8,7 @@ outcome: Grafana, Argo CD, Keycloak, Jellyfin and ntfy open at https://<app>.<zo
 needs: the lab DNS runbook done (set-up-lab-dns.md), the lab clone of central-hub with its private inventory and home.tfvars, hosts/.env with the tailnet OAuth client, cluster-admin on c1
 private-values: [opnsense_dns_zone, opnsense_lab_host_overrides, k8s_gateway_zone, k8s_gateway_address]
 files: [hosts/ansible/inventories/home/hosts.example.yml, hosts/terraform/home/tailnet/variables.tf, hosts/ansible/roles/k8s_gateway/, hosts/ansible/roles/k8s_certs/, hosts/ansible/roles/k8s_app_route/, hosts/ansible/roles/k8s_identity/, hosts/ansible/roles/k8s_gitops/, hosts/ansible/roles/k8s_observability/, hosts/kubernetes/home/c1/apps/gateway/, hosts/kubernetes/home/c1/apps/jellyfin/, hosts/kubernetes/home/c1/apps/alerts/, hosts/kubernetes/home/c1/root/values.yaml]
-last-tested: 2026-11-09, an agent lane on the owner's Mac on c1, steps 1-4, 6 and 7, and step 5 with Ansible for the Gateway and the Jellyfin route; the owner signed in at https://grafana.<zone>/ through https://sso.<zone>/ (Grafana needed 768 Mi first, PR #108); not yet done, the ntfy routes (Argo CD app gateway) and Argo CD on its short name
+last-tested: 2026-11-09, an agent lane on the owner's Mac on c1, steps 1-4, 6 and 7, and step 5 with Ansible for the Gateway and the Jellyfin route; the owner signed in at https://grafana.<zone>/ through https://sso.<zone>/ (Grafana needed 768 Mi first, PR #108); the ntfy routes followed on 2026-11-09 06:12 UTC through Argo CD app gateway; not yet done, Argo CD on its short name
 superseded-by:
 ---
 

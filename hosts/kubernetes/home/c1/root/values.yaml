@@ -11,10 +11,9 @@ gatewayAddress: ""
 repoURL: https://github.com/jonhill90/central-hub
 targetRevision: main
 appsPath: hosts/kubernetes/home/c1/apps
-# The Argo CD project every child Application belongs to. The root chart makes AppProject `c1`
-# (templates/project.yaml, Activation gate item 5); the children move to it by setting `c1` here,
-# in its own PR once the project exists on c1 and its Applications show no permission error.
-project: default
+# The Argo CD project every child Application belongs to: AppProject `c1`, which the root chart
+# makes (templates/project.yaml, Activation gate item 5). `default` puts them back.
+project: c1
 
 # What AppProject `c1` allows. Source repositories and destination namespaces come from `apps`
 # (this repository, each `chart.repoURL`, each `namespace`), plus the lists below.
