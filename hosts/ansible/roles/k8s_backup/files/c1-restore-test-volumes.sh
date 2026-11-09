@@ -31,7 +31,12 @@ log "1. restic check"
 "$RESTIC" check --read-data-subset "${RESTORE_READ_DATA_SUBSET:-2%}"
 
 log "2. restoring the newest volume snapshot for $BACKUP_HOST"
-"$RESTIC" restore latest --host "$BACKUP_HOST" --tag volumes --target "$work" --verify
+# SELinux labels are left out: the test copy goes in a temporary folder, where SELinux refuses
+# restic setting a volume's label (c1's worker, 2026-11-09: "security.selinux" could not be set on
+# /var/lib/c1-data, 1 of 3790 files, exit 1). Files and contents are still checked; a real restore
+# keeps the labels (docs/runbooks/back-up-c1-off-box.md, "Restore a volume").
+"$RESTIC" restore latest --host "$BACKUP_HOST" --tag volumes --target "$work" --verify \
+  --exclude-xattr 'security.selinux'
 
 log "3. checking each folder's canary"
 n=0

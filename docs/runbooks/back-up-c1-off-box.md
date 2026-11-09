@@ -87,7 +87,7 @@ A2. Nothing to do by hand: step A1's apply also gives `agent-azure` (the identit
 
 A3. In step 1, leave out the `AZURE_` lines: the env file holds only `RESTIC_REPOSITORY=azure:c1-backup:/c1` and `RESTIC_PASSWORD`. In step 2, also set `k8s_backup_azure_sas: true` and `k8s_backup_azure_account: <storage_account_name>` in the private inventory. Run the playbook from the home network, since the account answers only that address.
 
-A4. Run `ansible-playbook -i inventories/home/ playbooks/k8s-backup.yml --tags timers` again at least every 6 days, so the SAS on the nodes never runs out. `AZURE_ACCOUNT_SAS_EXPIRES` in the node env file shows when it does. Nothing schedules this yet.
+A4. Run `ansible-playbook -i inventories/home/ playbooks/k8s-backup.yml --tags timers` again at least every 6 days, from the Mac at home, so the SAS on the nodes never runs out. `AZURE_ACCOUNT_SAS_EXPIRES` in the node env file shows when it does. No scheduler on the Mac does this (the owner's rule: no launchd jobs there), so an agent lane runs it.
 
 The way off the SAS is workload identity federation, or Azure Arc for the nodes ([Give agents access to Azure, "Afterwards"](give-agents-access-to-azure.md#afterwards)). The restic password stays a plaintext value in the env file until then.
 
@@ -154,6 +154,15 @@ The restore test never writes over a volume. To bring one back for real:
    ```
 
    Snapshots keep each folder's full path, so `--target /` puts it back where it was. Pick an older snapshot by its ID from `restic snapshots` instead of `latest`. Delete `<folder>.broken` once the app works.
+
+   If restic exits 1 saying it can't set `security.selinux`, the files are back but some SELinux labels are not. Copy the labels from the folder you moved aside, so the app can read them as before:
+
+   ```sh
+   sudo chcon -R --reference=<folder>.broken <folder>
+   ls -Zd <folder> <folder>.broken
+   ```
+
+   expect: both lines show the same label. The weekly restore test leaves the labels out on purpose (`--exclude-xattr security.selinux`), because SELinux refuses them in its temporary folder (c1's worker, 2026-11-09).
 4. Scale the app back up.
 
 why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansible/README.md#storage-on-c1)), so restoring the folder is restoring the volume. The copy was taken while the app ran: for PostgreSQL that is like a power cut, and it replays its log on start.
