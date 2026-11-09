@@ -1,5 +1,5 @@
 ---
-title: Give lab apps short names (grafana.<zone>)
+title: Give lab apps short names under the zone
 status: draft
 kind: automated
 trigger: on request; again after a lab rebuild, or when an app gets a short name
@@ -12,7 +12,7 @@ last-tested: never; CI renders and lints every part (hosts workflow), and the re
 superseded-by:
 ---
 
-# Give lab apps short names (grafana.<zone>)
+# Give lab apps short names under the zone
 
 STD-0001 rule 5 lets each prod app have a short alias, `<app>.<zone>`, next to its service name `<app>.apps.c1.prod.<zone>`. Rule 7 says an app builds its links with the name people use. This runbook turns the short names on for the five apps on c1 (`grafana`, `argocd`, `sso`, `jellyfin`, `ntfy`).
 
