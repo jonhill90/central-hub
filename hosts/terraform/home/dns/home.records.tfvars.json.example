@@ -1,0 +1,11 @@
+{
+  "records": {
+    "a-apex": { "type": "A", "name": "example.com", "content": "192.0.2.10", "ttl": 3600 },
+    "cname-www": { "type": "CNAME", "name": "www.example.com", "content": "example.com", "ttl": 3600 },
+    "mx-apex-1": { "type": "MX", "name": "example.com", "content": "mx1.example.net", "priority": 5, "ttl": 3600 },
+    "txt-apex-1": { "type": "TXT", "name": "example.com", "content": "\"v=spf1 include:example.net ~all\"", "ttl": 3600 }
+  },
+  "import_ids": {
+    "a-apex": "zone0example/record0apex"
+  }
+}

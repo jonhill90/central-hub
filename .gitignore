@@ -40,6 +40,7 @@ kubeconfig*
 # Terraform state and variables (if ever used)
 *.tfstate*
 *.tfvars
+*.tfvars.json
 .terraform/
 
 # Docs check tools
