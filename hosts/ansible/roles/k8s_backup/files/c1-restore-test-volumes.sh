@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prove the newest off-box volume backup of this node restores (role k8s_backup, TASK-0139, runbook
+# Prove the newest off-box volume backup of this node restores (role k8s_backup, TASK-0194, runbook
 # docs/runbooks/back-up-c1-off-box.md). Runs on every node as root, from timer
 # c1-restore-test.timer or by hand. It restores into a temporary folder, never over a volume.
 #

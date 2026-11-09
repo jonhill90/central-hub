@@ -2,7 +2,7 @@
 argument_specs:
   main:
     short_description: >-
-      Off-box backups of c1's etcd and volumes with restic, and weekly restore tests (TASK-0139, TASK-0094)
+      Off-box backups of c1's etcd and volumes with restic, and weekly restore tests (TASK-0194, TASK-0094)
     options:
       k8s_backup_enabled:
         type: bool

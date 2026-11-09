@@ -78,7 +78,7 @@ Stop if any of these is not true.
 
 ## Rebuild from nothing
 
-On a new cluster with the root Application made, Argo CD makes every object, External Secrets makes a new password, and the Job runs the wizard. Then do step 4 for the new password. The media files are not in git: they come back only from a backup of `jellyfin-media` (TASK-0139, not built yet).
+On a new cluster with the root Application made, Argo CD makes every object, External Secrets makes a new password, and the Job runs the wizard. Then do step 4 for the new password. The media files are not in git: they come back only from a backup of `jellyfin-media` (TASK-0194, `back-up-c1-off-box.md`).
 
 ## If it fails
 

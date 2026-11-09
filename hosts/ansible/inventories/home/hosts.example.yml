@@ -120,7 +120,7 @@ all:
         k8s_identity_owner_email: ""         # optional
         # Jellyfin (playbooks/k8s-jellyfin.yml, BUILD-PATH S17): https://jellyfin.apps.c1.prod.<zone>/.
         k8s_jellyfin_zone: "{{ k8s_gateway_zone }}"
-        # Off-box backups (playbooks/k8s-backup.yml, TASK-0139, TASK-0094): restic to the repository in
+        # Off-box backups (playbooks/k8s-backup.yml, TASK-0194, TASK-0094): restic to the repository in
         # a 0600 env file on the controller, for example ~/.config/central-hub/c1-backup.env
         # (docs/runbooks/back-up-c1-off-box.md). false installs the tools with the timers off.
         k8s_backup_enabled: false
