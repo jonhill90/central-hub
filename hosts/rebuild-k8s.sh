@@ -22,7 +22,9 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
-default_stages="vms cluster storage gateway gitops apps certs identity ui restore checks"
+# gateway runs after apps: with k8s_gateway_by_argocd true, Argo CD makes the Gateway, and the
+# playbook's "programmed" wait and smoke test then check it.
+default_stages="vms cluster storage gitops apps gateway certs identity ui restore checks"
 
 die() { echo "rebuild: $*" >&2; exit 1; }
 

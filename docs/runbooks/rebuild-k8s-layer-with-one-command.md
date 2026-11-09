@@ -21,8 +21,8 @@ This covers the Kubernetes layer only. The Proxmox host, OPNsense, the tailnet c
 ```mermaid
 flowchart LR
   td["teardown<br/>(--teardown)"] --> vms["vms<br/>tofu apply"] --> cl["cluster<br/>k8s.yml"] --> st["storage<br/>data disks"]
-  st --> gw["gateway<br/>k8s-gateway.yml"] --> go["gitops<br/>Argo CD + root app"] --> ap["apps<br/>wait for Synced + Healthy"]
-  ap --> ce["certs"] --> id["identity"] --> ui["ui<br/>Argo CD UI + SSO"] --> re["restore<br/>(hook)"] --> ck["checks"]
+  st --> go["gitops<br/>Argo CD + root app"] --> ap["apps<br/>wait for Synced + Healthy"] --> gw["gateway<br/>k8s-gateway.yml"]
+  gw --> ce["certs"] --> id["identity"] --> ui["ui<br/>Argo CD UI + SSO"] --> re["restore<br/>(hook)"] --> ck["checks"]
 ```
 
 ## Stages
@@ -33,9 +33,9 @@ flowchart LR
 | `vms` | `PRE_VMS_HOOK`, then `tofu apply` in the same folder | the hook re-adds the Proxmox `/vms` ACLs, which Proxmox removes on every destroy |
 | `cluster` | `playbooks/k8s.yml` | |
 | `storage` | `playbooks/k8s-storage.yml --tags disk` | the data disks only; Argo CD installs the provisioner |
-| `gateway` | `playbooks/k8s-gateway.yml` | |
 | `gitops` | `playbooks/k8s-gitops.yml --tags install,source` | the inventory sets `k8s_gitops_source_enabled: true` |
 | `apps` | waits until every Argo CD app is Synced and Healthy (`APPS_TIMEOUT`, default 1200 s) | see "Apps and auto-sync" |
+| `gateway` | `playbooks/k8s-gateway.yml` | after `apps`: with `k8s_gateway_by_argocd: true`, Argo CD makes the Gateway and the playbook checks it |
 | `certs` | `playbooks/k8s-certs.yml` | staging issuer on dev |
 | `identity` | `playbooks/k8s-identity.yml` | throwaway users on dev |
 | `ui` | `playbooks/k8s-gitops.yml --tags ui,sso` | |
@@ -47,7 +47,10 @@ flowchart LR
 
 - The env folder exists on the controller, outside the repository, mode `0700`, and holds `rebuild.env` (mode `0600`). The script's header lists every variable. For dev: `ENV_NAME=dev`, `VM_ID_MIN=250`, `VM_ID_MAX=259`, and a tfvars with `node_vnet = "dev"`.
 - Every node `vm_id` in the tfvars sits in the env's range. The script stops before any stage if one does not.
-- The dev inventory sets `k8s_gitops_cluster_labels.env: dev`, so dev's Argo CD cluster labels don't say `prod`.
+- The env's inventory sets the values the root app needs. For dev:
+  - `k8s_gitops_source_enabled: true`, or the `gitops` stage installs Argo CD with no root app.
+  - `k8s_gitops_source_zone` and `k8s_gitops_source_gateway_address`: dev's zone and gateway address (private values).
+  - `k8s_gitops_cluster_labels.env: dev`, so dev's Argo CD cluster labels don't say `prod`.
 - The Mac has an allow rule for `hosts/rebuild-k8s.sh` ([Let agents run a new command](allow-a-command-for-agents.md)). The owner approves it.
 
 ## Steps
