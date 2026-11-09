@@ -91,8 +91,8 @@ k8s_observability_kps_values:
       | combine({'storageClassName': k8s_observability_storage_class}
       if k8s_observability_storage_class | length > 0 else {}) }}
     resources:
-      requests: {cpu: 50m, memory: 128Mi}
-      limits: {memory: 384Mi}
+      requests: {cpu: 50m, memory: 256Mi}
+      limits: {memory: 768Mi}
     additionalDataSources:
       - name: Loki
         type: loki
