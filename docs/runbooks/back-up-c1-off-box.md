@@ -55,7 +55,7 @@ The owner wants no raw key that a person or an agent can read (2026-11-08 23:42 
 ```mermaid
 flowchart LR
   tofu["tofu apply<br/>terraform/azure/backup"] --> sa[("storage account<br/>no shared key<br/>home address only")]
-  owner["owner: one role<br/>Storage Blob Data Contributor<br/>on the account"] --> sp["agent-azure"]
+  tofu --> sp["agent-azure: Storage Blob Data<br/>Contributor on the account"]
   sp -->|"az ... generate-sas --as-user<br/>on the Mac, each timers run"| sas["SAS, 7 days,<br/>one container"]
   sas --> nodes["/etc/central-hub/backup.env<br/>on each node"]
   nodes -->|restic| sa
@@ -79,18 +79,11 @@ A1. (Agent, on the Mac) Make the storage:
    ※ [hosts/terraform/README.md](../../hosts/terraform/README.md); azurerm `azurerm_storage_account` 5.11.0, "shared_access_key_enabled" and "network_rules"
    expect: three resources added; outputs `storage_account_name`, `restic_repository` (`azure:c1-backup:/c1`) and `storage_account_id`.
 
-A2. (Owner, once) Let `agent-azure` read and write blobs in that account. Its Contributor role can't grant roles, so this step is yours. Paste `storage_account_id` from step A1:
-
-   ```sh
-   az login        # as yourself, in a separate terminal or after az logout
-   az role assignment create --assignee <agent-azure appId> \
-     --role "Storage Blob Data Contributor" --scope <storage_account_id>
-   az logout       # then the Mac's az holds only the agent's login again
-   ```
+A2. Nothing to do by hand: step A1's apply also gives `agent-azure` (the identity running tofu) Storage Blob Data Contributor on the account. That needs `agent-azure` to hold Owner, or another role that may assign roles, on the subscription; the owner gave it Owner on 2026-11-09 at 03:33 UTC, for agent work in a subscription with no payment method (owner, 2026-11-09 03:32 UTC). Agents make nothing else billable there without the owner's yes (03:33 UTC).
 
    why: a user delegation SAS can only do what its signer may do, and the signer needs a data role. Azure lets the signer request its signing key only with a role at the account or wider, and this account holds only the backup container.
    ※ Microsoft Learn, "Create a user delegation SAS for a container or blob with the Azure CLI" (<https://learn.microsoft.com/azure/storage/blobs/storage-blob-user-delegation-sas-create-cli>)
-   expect: JSON with `roleDefinitionName` `Storage Blob Data Contributor` and that `scope`. It can take a few minutes to apply.
+   expect: the apply shows `azurerm_role_assignment.sas_signer` created. Role assignments can take a few minutes to take effect.
 
 A3. In step 1, leave out the `AZURE_` lines: the env file holds only `RESTIC_REPOSITORY=azure:c1-backup:/c1` and `RESTIC_PASSWORD`. In step 2, also set `k8s_backup_azure_sas: true` and `k8s_backup_azure_account: <storage_account_name>` in the private inventory. Run the playbook from the home network, since the account answers only that address.
 
@@ -168,7 +161,7 @@ why: each volume is a plain folder on one node ([Storage on c1](../../hosts/ansi
 
 - **The env file check stops the run:** the file is missing, empty, or readable by others. Fix it on the controller; nothing on the nodes was changed.
 - **A backup fails at night:** `journalctl -u c1-backup-etcd -u c1-backup-volumes --since yesterday` on the node. The timers retry the next night; `Persistent=true` runs a missed one at boot.
-- **`AuthorizationFailure` or 403 from Azure:** the SAS ran out (see `AZURE_ACCOUNT_SAS_EXPIRES` in the node env file; run step A4), the home's public address changed (set the new one in `azure.tfvars` and apply step A1 again), or step A2's role is missing.
+- **`AuthorizationFailure` or 403 from Azure:** the SAS ran out (see `AZURE_ACCOUNT_SAS_EXPIRES` in the node env file; run step A4), the home's public address changed (set the new one in `azure.tfvars` and apply step A1 again), or the role from step A2 is missing or not yet in effect.
 - **The repository is locked** (a run was cut off): `restic unlock` with the env file loaded, as in step 4.
 - **The way back:** set `k8s_backup_enabled: false` and run step 2 again. The timers stop and the env file is removed from the nodes; the tools stay, and the repository and its snapshots are untouched.
 - Tell the owner before deleting snapshots or the repository.
