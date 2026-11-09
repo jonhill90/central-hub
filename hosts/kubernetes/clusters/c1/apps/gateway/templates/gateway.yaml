@@ -43,3 +43,29 @@ spec:
         namespaces:
           from: All
 {{- end }}
+{{- if .Values.shortNames }}
+    # Short aliases <app>.<zone> (STD-0001 rule 5). A listener hostname *.<zone> is a suffix match
+    # (Gateway API, Listener.hostname), so a route attaches here with its short name only; each
+    # long name keeps the listener above, the more specific one.
+    - name: http-short
+      protocol: HTTP
+      port: 80
+      hostname: "*.{{ .Values.zone }}"
+      allowedRoutes:
+        namespaces:
+          from: All
+{{- if .Values.https }}
+    - name: https-short
+      protocol: HTTPS
+      port: 443
+      hostname: "*.{{ .Values.zone }}"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ .Values.tlsSecret }}
+      allowedRoutes:
+        namespaces:
+          from: All
+{{- end }}
+{{- end }}

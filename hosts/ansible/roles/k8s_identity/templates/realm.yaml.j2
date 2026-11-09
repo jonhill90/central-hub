@@ -92,13 +92,14 @@ spec:
         directAccessGrantsEnabled: false
         implicitFlowEnabled: false
         serviceAccountsEnabled: false
-        rootUrl: https://{{ k8s_identity_grafana_host }}
+        rootUrl: https://{{ k8s_identity_grafana_hosts | first }}
         baseUrl: /
-        redirectUris: ["https://{{ k8s_identity_grafana_host }}/login/generic_oauth"]
-        webOrigins: ["https://{{ k8s_identity_grafana_host }}"]
+        redirectUris: {{ k8s_identity_grafana_hosts | map('regex_replace', '^(.*)$', 'https://\\1/login/generic_oauth') | list | to_json }}
+        webOrigins: {{ k8s_identity_grafana_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
         attributes:
           pkce.code.challenge.method: S256
-          post.logout.redirect.uris: "https://{{ k8s_identity_grafana_host }}/login"
+          # Keycloak separates several post-logout redirect URIs with "##".
+          post.logout.redirect.uris: "{{ k8s_identity_grafana_hosts | map('regex_replace', '^(.*)$', 'https://\\1/login') | join('##') }}"
 {{ mappers }}
       # Argo CD's web UI (Argo CD docs, "Keycloak"): confidential, code flow. PKCE is allowed, not
       # required, so it works whether or not argocd-cm sets enablePKCEAuthentication. Argo CD's
@@ -113,12 +114,12 @@ spec:
         directAccessGrantsEnabled: false
         implicitFlowEnabled: false
         serviceAccountsEnabled: false
-        rootUrl: https://{{ k8s_identity_argocd_host }}
+        rootUrl: https://{{ k8s_identity_argocd_hosts | first }}
         baseUrl: /applications
-        redirectUris: ["https://{{ k8s_identity_argocd_host }}/auth/callback"]
-        webOrigins: ["https://{{ k8s_identity_argocd_host }}"]
+        redirectUris: {{ k8s_identity_argocd_hosts | map('regex_replace', '^(.*)$', 'https://\\1/auth/callback') | list | to_json }}
+        webOrigins: {{ k8s_identity_argocd_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
         attributes:
-          post.logout.redirect.uris: "https://{{ k8s_identity_argocd_host }}/applications"
+          post.logout.redirect.uris: "{{ k8s_identity_argocd_hosts | map('regex_replace', '^(.*)$', 'https://\\1/applications') | join('##') }}"
 {{ mappers }}
       # Argo CD's command line, `argocd login --sso`: a public client (no secret on a laptop) with
       # PKCE, calling back to the CLI's own listener on localhost port 8085.
@@ -147,10 +148,12 @@ spec:
         directAccessGrantsEnabled: false
         implicitFlowEnabled: false
         serviceAccountsEnabled: false
-        rootUrl: https://{{ k8s_identity_jellyfin_host }}
+        rootUrl: https://{{ k8s_identity_jellyfin_hosts | first }}
         baseUrl: /
         redirectUris:
-          - "https://{{ k8s_identity_jellyfin_host }}/sso/OID/redirect/{{ k8s_identity_jellyfin_provider }}"
-          - "https://{{ k8s_identity_jellyfin_host }}/sso/OID/r/{{ k8s_identity_jellyfin_provider }}"
-        webOrigins: ["https://{{ k8s_identity_jellyfin_host }}"]
+{% for host in k8s_identity_jellyfin_hosts %}
+          - "https://{{ host }}/sso/OID/redirect/{{ k8s_identity_jellyfin_provider }}"
+          - "https://{{ host }}/sso/OID/r/{{ k8s_identity_jellyfin_provider }}"
+{% endfor %}
+        webOrigins: {{ k8s_identity_jellyfin_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
 {{ mappers }}

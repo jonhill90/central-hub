@@ -40,6 +40,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Use break-glass access](use-break-glass-access.md) | manual | draft |
 | [Give agents their own access to the owner's Azure tenant](give-agents-access-to-azure.md) | manual | draft |
 | [Set up sign-in for lab apps on c1](set-up-lab-sign-in.md) | automated | draft |
+| [Give lab apps short names (grafana.<zone>)](set-up-short-app-names.md) | automated | draft |
 
 ## Template
 

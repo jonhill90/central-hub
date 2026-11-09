@@ -52,6 +52,7 @@ argument_specs:
       k8s_certs_cluster: {type: str, default: c1, description: Cluster name in the hostname.}
       k8s_certs_env: {type: str, default: prod, description: Environment name in the hostname.}
       k8s_certs_gateway_name: {type: str, default: apps, description: "Gateway name, also the label under the cluster: *.apps.<cluster>.<env>.<zone>."}
+      k8s_certs_short_names: {type: bool, default: true, description: "Also name *.<zone>, for short aliases (STD-0001 rule 5)."}
       k8s_certs_gateway_namespace: {type: str, default: gateway, description: Namespace of the Gateway; the Certificate and its Secret go there.}
       k8s_certs_certificate_name: {type: str, default: apps, description: Name of the Certificate.}
       k8s_certs_secret_name: {type: str, default: apps-tls, description: TLS Secret the certificate is written to; k8s_gateway_tls_secret names it too.}

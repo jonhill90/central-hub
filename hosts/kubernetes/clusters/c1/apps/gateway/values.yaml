@@ -11,9 +11,12 @@ appsDomain: apps.c1.prod
 # HTTP listener on 80 stays; each route below redirects it to HTTPS.
 https: true
 tlsSecret: apps-tls
+# Short aliases <app>.<zone> (STD-0001 rule 5): listeners http-short and https-short for *.<zone>,
+# and each route below also answers on <key>.<zone>. Same as k8s_gateway_short_names.
+shortNames: true
 
-# One HTTPRoute (https) plus a redirect route (http) per entry: <key>.apps.c1.prod.<zone> to the
-# Service. Same shape as role k8s_app_route.
+# One HTTPRoute (https) plus a redirect route (http) per entry: <key>.apps.c1.prod.<zone>, and
+# <key>.<zone> with shortNames on, to the Service. Same shape as role k8s_app_route.
 routes:
   grafana: {namespace: monitoring, service: kube-prometheus-stack-grafana, port: 80}
   ntfy: {namespace: alerts, service: ntfy, port: 80}

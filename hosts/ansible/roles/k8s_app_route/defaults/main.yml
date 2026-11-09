@@ -21,4 +21,7 @@ k8s_app_route_gateway_name: apps
 k8s_app_route_gateway_namespace: gateway
 k8s_app_route_tls_secret: apps-tls
 k8s_app_route_https_redirect: true
+# Also answer on the short alias <name>.<zone> (STD-0001 rule 5), through the Gateway's http-short
+# and https-short listeners (k8s_gateway_short_names).
+k8s_app_route_short_names: true
 k8s_app_route_proof_client: "{{ groups['k8s_workers'] | first }}"

@@ -39,6 +39,10 @@ spec:
     name: {{ k8s_certs_issuer }}
   dnsNames:
     - "{{ k8s_certs_wildcard }}"
+{% if k8s_certs_short_names %}
+    # Short aliases <app>.<zone> (STD-0001 rules 5 and 6), served by the Gateway's https-short listener.
+    - "*.{{ k8s_certs_zone }}"
+{% endif %}
   privateKey:
     algorithm: ECDSA
     size: 256

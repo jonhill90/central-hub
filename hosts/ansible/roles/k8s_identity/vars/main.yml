@@ -12,10 +12,18 @@ k8s_identity_operator_files:
 
 # Derived values, not inputs.
 k8s_identity_dir: /root/central-hub/identity
-k8s_identity_host: "{{ k8s_identity_name }}.apps.c1.prod.{{ k8s_identity_zone }}"
-k8s_identity_grafana_host: "{{ k8s_identity_grafana_name }}.apps.c1.prod.{{ k8s_identity_zone }}"
-k8s_identity_argocd_host: "{{ k8s_identity_argocd_name }}.apps.c1.prod.{{ k8s_identity_zone }}"
-k8s_identity_jellyfin_host: "{{ k8s_identity_jellyfin_name }}.apps.c1.prod.{{ k8s_identity_zone }}"
+# Each app's names, the one it builds its links with first: the short alias <app>.<zone> with
+# k8s_identity_short_names on (STD-0001 rule 7), then the service name <app>.apps.c1.prod.<zone>.
+k8s_identity_host: "{{ k8s_identity_name ~ ('.' if k8s_identity_short_names | bool else '.apps.c1.prod.') ~ k8s_identity_zone }}"
+k8s_identity_grafana_hosts: >-
+  {{ ([k8s_identity_grafana_name ~ '.' ~ k8s_identity_zone] if k8s_identity_short_names | bool else [])
+  + [k8s_identity_grafana_name ~ '.apps.c1.prod.' ~ k8s_identity_zone] }}
+k8s_identity_argocd_hosts: >-
+  {{ ([k8s_identity_argocd_name ~ '.' ~ k8s_identity_zone] if k8s_identity_short_names | bool else [])
+  + [k8s_identity_argocd_name ~ '.apps.c1.prod.' ~ k8s_identity_zone] }}
+k8s_identity_jellyfin_hosts: >-
+  {{ ([k8s_identity_jellyfin_name ~ '.' ~ k8s_identity_zone] if k8s_identity_short_names | bool else [])
+  + [k8s_identity_jellyfin_name ~ '.apps.c1.prod.' ~ k8s_identity_zone] }}
 k8s_identity_issuer: https://{{ k8s_identity_host }}/realms/{{ k8s_identity_realm }}
 k8s_identity_db_secret: "{{ k8s_identity_name }}-db"
 k8s_identity_realm_secret: realm-{{ k8s_identity_realm }}-secrets

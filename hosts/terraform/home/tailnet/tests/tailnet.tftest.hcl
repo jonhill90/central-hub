@@ -39,13 +39,18 @@ run "split_dns_goes_to_the_mgmt_gateway" {
   command = plan
 
   assert {
-    condition     = toset(keys(tailscale_dns_split_nameservers.lab)) == toset(["c1.prod", "opnsense", "pve"])
+    condition     = toset(keys(tailscale_dns_split_nameservers.lab)) == toset(["c1.prod", "opnsense", "pve", "grafana", "argocd", "sso", "jellyfin", "ntfy"])
     error_message = "One split DNS entry per name in split_dns_names."
   }
 
   assert {
     condition     = tailscale_dns_split_nameservers.lab["c1.prod"].domain == "c1.prod.example.com"
     error_message = "Each split DNS domain is the name under the zone."
+  }
+
+  assert {
+    condition     = tailscale_dns_split_nameservers.lab["grafana"].domain == "grafana.example.com"
+    error_message = "A short alias is split on its own name only, not the whole zone."
   }
 
   assert {

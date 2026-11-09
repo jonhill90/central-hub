@@ -14,7 +14,7 @@ realm_yaml=$1
 # image published 2026-10-23, the newest build of it at least two weeks old (STD-0003 rule 1).
 image=quay.io/keycloak/keycloak@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
 name=central-hub-realm-test-$$
-host=https://sso.apps.c1.prod.example.com
+host=https://sso.example.com
 work=$(mktemp -d)
 trap 'docker rm -f "$name" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 
