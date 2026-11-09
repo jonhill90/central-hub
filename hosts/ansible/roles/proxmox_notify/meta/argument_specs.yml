@@ -22,9 +22,20 @@ argument_specs:
               The API's fields for that type, for example server and token for gotify. A list
               value is sent as a repeated option. Webhook body, header and secret values are base64,
               as the API expects.
+      # Optional, private (holds the zone), through the inventory. Empty = unset. Builds proxmox_notify_endpoint.
+      proxmox_notify_ntfy_url:
+        type: str
+        required: false
+        description: >-
+          An ntfy topic URL, for example https://ntfy.<zone>/c1-alerts. When set, the target is a
+          webhook that posts each matched notification there. Not together with proxmox_notify_endpoint.
       # Defaults in defaults/main.yml
       proxmox_notify_placeholder: {type: str, default: central-hub-off, description: Name of the switched-off sendmail placeholder target.}
       proxmox_notify_target_prefix: {type: str, default: central-hub, description: The real target is named <prefix>-<type>.}
       proxmox_notify_matcher: {type: str, default: central-hub-errors, description: Matcher name.}
       proxmox_notify_severities: {type: list, elements: str, default: [error], description: Severities the matcher sends.}
       proxmox_notify_secret_keys: {type: list, elements: str, default: [password, token, secret, header], description: Option names never logged or compared.}
+      proxmox_notify_ntfy_title: {type: str, description: "ntfy Title header; a Proxmox Handlebars template."}
+      proxmox_notify_ntfy_body: {type: str, description: "ntfy message body; a Proxmox Handlebars template."}
+      proxmox_notify_ntfy_priority: {type: str, default: high, description: ntfy Priority header.}
+      proxmox_notify_ntfy_tags: {type: str, default: "warning,proxmox", description: "ntfy Tags header, comma-separated."}

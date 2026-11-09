@@ -3,6 +3,30 @@
 # set through the API. One target and one matcher: every notification of severity error goes to
 # the target. Without proxmox_notify_endpoint the target is a switched-off placeholder.
 
+# ntfy shortcut: turn the topic URL into a webhook endpoint. Proxmox wants header values and the
+# body in base64.
+- name: Refuse both ntfy and a hand-written endpoint
+  ansible.builtin.assert:
+    that: proxmox_notify_endpoint is not defined
+    fail_msg: Set proxmox_notify_ntfy_url or proxmox_notify_endpoint, not both.
+    quiet: true
+  when: proxmox_notify_ntfy_url | default("", true) | length > 0
+
+- name: Build the ntfy webhook endpoint
+  ansible.builtin.set_fact:
+    proxmox_notify_endpoint:
+      type: webhook
+      options:
+        url: "{{ proxmox_notify_ntfy_url }}"
+        method: post
+        header:
+          - "name=Title,value={{ proxmox_notify_ntfy_title | b64encode }}"
+          - "name=Priority,value={{ proxmox_notify_ntfy_priority | b64encode }}"
+          - "name=Tags,value={{ proxmox_notify_ntfy_tags | b64encode }}"
+        body: "{{ proxmox_notify_ntfy_body | b64encode }}"
+        comment: ntfy on c1 (central-hub hosts/ansible proxmox_notify)
+  when: proxmox_notify_ntfy_url | default("", true) | length > 0
+
 - name: Pick the target name
   ansible.builtin.set_fact:
     proxmox_notify_target: >-
