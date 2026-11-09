@@ -62,7 +62,7 @@ Chosen option: **1, the hybrid.** It is the only option that meets all six drive
 ```mermaid
 flowchart LR
   subgraph G["Global IDs (say them anywhere)"]
-    R["Family registry<br/>D- REQ- STD- RB- RM- BL-"]
+    R["Family registry<br/>D- REQ- STD- RB- RM- TASK-"]
   end
   subgraph L["Local labels (everything else)"]
     F["FILE#LABEL<br/>e.g. LIVE-PARAMETERS#S1"]
@@ -81,14 +81,14 @@ flowchart LR
    | Standards | `STD-NNNN` | `STD-0001` | central-hub `docs/standards/` | The standards register owner: the number is assigned when the standard's PR opens |
    | Research batches | `RB-NNNN` | `RB-0077` | Research `99-meta/BATCHES.md` | The batch register owner: the number is assigned when the batch's SPEC.md is written |
    | Research methods | `RM-NNNN` | `RM-0033` | Research `01-notes/01r-research/research-methods-crawl/methods/inventory.json` | The methods catalogue owner: the number is stored with the method and assigned only after the owner says yes to adding it, never from its place in the list |
-   | Backlog items | `BL-NNNN` | `BL-0012` | Research `01-notes/01t-tasks/`, one note per item | The backlog owner: the number is assigned when the row is added |
+   | Tasks | `TASK-NNNN` | `TASK-0012` | Research `01-notes/01t-tasks/`, one note per task | The task owner: the number is assigned when the note is added, whatever tracker the task came from (D-0032) |
 
    A sources family is left out on purpose. Whether sources need a global family goes to the owner later, as its own question.
 
 2. **One family registry.** The table above is the family registry.
    - A new family, or a change to a row (its home, who numbers it, or closing the family), is made only with the owner's approval, by its own decision record. That record's PR updates the row here.
    - A new prefix must have at least two characters and must not equal or start with an existing one, ignoring case.
-3. **Number late, with one owner per family.** A draft has no number and is cited by its file path (`D-TBD`, `REQ-TBD`, `STD-TBD`, `RB-TBD`, `RM-TBD`, `BL-TBD`). Check that the number is unique before merging. Outside rule 5, a number never changes after it is assigned.
+3. **Number late, with one owner per family.** A draft has no number and is cited by its file path (`D-TBD`, `REQ-TBD`, `STD-TBD`, `RB-TBD`, `RM-TBD`, `TASK-TBD`). Check that the number is unique before merging. Outside rule 5, a number never changes after it is assigned.
 4. **Everything else is a local label.** Outside its own file, write it with the file name: `LIVE-PARAMETERS#S1`. A bare one-letter label outside its own file is a mistake that reviewers flag.
 5. **An assigned ID changes only during Foundation.**
    - Until the Activation gate passes, the owner may approve changing an agent-made ID or label. The new ID is then written in every live file in central-hub, the Research repo and the project files, so the files read as if it had always been used. Records hold no note of the ID used before.
