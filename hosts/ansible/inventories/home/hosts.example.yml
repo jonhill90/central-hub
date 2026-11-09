@@ -52,6 +52,13 @@ all:
             - { hostname: pve, address: "", description: "Proxmox host GUI (its mgmt address)" }
             # Wildcard: every name under apps.c1.prod.<zone> answers with the c1 Gateway.
             - { hostname: "*", subdomain: apps.c1.prod, address: "{{ k8s_gateway_address }}", description: "Kubernetes c1 Gateway apps (*.apps.c1.prod)" }
+            # Short aliases <app>.<zone> (STD-0001 rule 5), each on its own so the rest of the zone
+            # stays public; the same list as the tailnet's split_dns_names.
+            - { hostname: grafana, address: "{{ k8s_gateway_address }}", description: "Short alias, Grafana on c1" }
+            - { hostname: argocd, address: "{{ k8s_gateway_address }}", description: "Short alias, Argo CD on c1" }
+            - { hostname: sso, address: "{{ k8s_gateway_address }}", description: "Short alias, Keycloak on c1" }
+            - { hostname: jellyfin, address: "{{ k8s_gateway_address }}", description: "Short alias, Jellyfin on c1" }
+            - { hostname: ntfy, address: "{{ k8s_gateway_address }}", description: "Short alias, ntfy on c1" }
           opnsense_lab_vlan_settings:
             prod: { ifname: opt1, dhcp: true, bootstrap: false }
             qa: { ifname: opt2, dhcp: false, bootstrap: false }

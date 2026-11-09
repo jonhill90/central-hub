@@ -3,6 +3,10 @@
 # inventory can't override one by accident (STD-0004 Ansible rule 3).
 k8s_observability_grafana_host: >-
   {{ k8s_observability_grafana_name }}.apps.c1.prod.{{ k8s_observability_zone }}
+# The name Grafana builds its links with (root_url): the short alias with short names on.
+k8s_observability_grafana_url_host: >-
+  {{ (k8s_observability_grafana_name ~ '.' ~ k8s_observability_zone) if k8s_observability_short_names | bool
+  else k8s_observability_grafana_host }}
 k8s_observability_loki_url: >-
   http://loki.{{ k8s_observability_logs_namespace }}.svc.cluster.local:3100
 # No storageClassName in a claim means the cluster's default StorageClass.
@@ -99,7 +103,7 @@ k8s_observability_kps_values:
       {{ {'GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET': {'secretKeyRef': {'name': k8s_observability_sso_secret,
       'key': 'client-secret', 'optional': true}}} if k8s_observability_grafana_sso | bool else {} }}
     grafana.ini: >-
-      {{ {'server': {'root_url': 'https://' ~ k8s_observability_grafana_host ~ '/'}}
+      {{ {'server': {'root_url': 'https://' ~ k8s_observability_grafana_url_host ~ '/'}}
       | combine(k8s_observability_grafana_sso_ini if k8s_observability_grafana_sso | bool else {}) }}
 
 # Grafana's OIDC sign-in (Grafana docs, "Configure Keycloak OAuth2 authentication"). Roles come

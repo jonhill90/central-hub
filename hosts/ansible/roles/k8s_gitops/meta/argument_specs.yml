@@ -47,6 +47,7 @@ argument_specs:
         type: bool
         default: false
         description: "Whether the Gateway has its HTTPS listener (k8s_gateway_https). The route needs it true."
+      k8s_gitops_ui_short_names: {type: bool, default: true, description: "UI on argocd.<zone>, sign-in at sso.<zone> (STD-0001 rule 5)."}
       k8s_gitops_ui_https_redirect: {type: bool, default: true, description: "Add a route on the HTTP listener that answers 301 to https:// for the UI's name."}
       k8s_gitops_ui_proof_client:
         type: str
@@ -56,7 +57,7 @@ argument_specs:
         default: false
         description: "Sign-in to Argo CD through Keycloak realm lab (tag sso). Needs the UI route and Secret argocd/argocd-sso."
       k8s_gitops_sso_name: {type: str, default: Lab sign-in, description: Button text on Argo CD's sign-in page.}
-      k8s_gitops_sso_issuer: {type: str, description: "OIDC issuer URL. Default: realm lab on sso.apps.<cluster>.<env>.<zone>."}
+      k8s_gitops_sso_issuer: {type: str, description: "Issuer URL. Default: realm lab on sso.<zone> (on sso.apps.<cluster>.<env>.<zone> without short names)."}
       k8s_gitops_sso_client_id: {type: str, default: argocd, description: Keycloak client for the web UI.}
       k8s_gitops_sso_cli_client_id: {type: str, default: argocd-cli, description: "Public Keycloak client for argocd login --sso."}
       k8s_gitops_sso_root_ca_file:

@@ -38,4 +38,5 @@
     k8s_app_route_path: /realms/{{ k8s_identity_realm }}/.well-known/openid-configuration
     k8s_app_route_expect: '"issuer":"{{ k8s_identity_issuer }}"'
     k8s_app_route_zone: "{{ k8s_identity_zone }}"
+    k8s_app_route_short_names: "{{ k8s_identity_short_names }}"
   tags: [route]

@@ -13,8 +13,16 @@ spec:
     - name: {{ k8s_gitops_ui_gateway_name }}
       namespace: {{ k8s_gitops_ui_gateway_namespace }}
       sectionName: https
+{% if k8s_gitops_ui_short_names %}
+    - name: {{ k8s_gitops_ui_gateway_name }}
+      namespace: {{ k8s_gitops_ui_gateway_namespace }}
+      sectionName: https-short
+{% endif %}
   hostnames:
     - {{ k8s_gitops_ui_host }}
+{% if k8s_gitops_ui_short_names %}
+    - {{ k8s_gitops_ui_short_host }}
+{% endif %}
   rules:
     - matches:
         - path:
@@ -38,8 +46,16 @@ spec:
     - name: {{ k8s_gitops_ui_gateway_name }}
       namespace: {{ k8s_gitops_ui_gateway_namespace }}
       sectionName: http
+{% if k8s_gitops_ui_short_names %}
+    - name: {{ k8s_gitops_ui_gateway_name }}
+      namespace: {{ k8s_gitops_ui_gateway_namespace }}
+      sectionName: http-short
+{% endif %}
   hostnames:
     - {{ k8s_gitops_ui_host }}
+{% if k8s_gitops_ui_short_names %}
+    - {{ k8s_gitops_ui_short_host }}
+{% endif %}
   rules:
     - filters:
         - type: RequestRedirect

@@ -15,7 +15,7 @@ metadata:
 {% if k8s_gitops_sso %}
 data:
   # The UI's public URL; Keycloak's client allows only https://<this>/auth/callback.
-  url: https://{{ k8s_gitops_ui_host }}
+  url: https://{{ k8s_gitops_ui_url_host }}
   # clientSecret names Secret argocd-sso, key clientSecret, which role k8s_identity copies from the
   # realm (labelled part-of argocd, so Argo CD may read it). argocd-cli is the public client for
   # `argocd login --sso`.

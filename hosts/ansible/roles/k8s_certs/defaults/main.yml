@@ -69,6 +69,10 @@ k8s_certs_gateway_namespace: gateway
 k8s_certs_certificate_name: apps
 k8s_certs_secret_name: apps-tls   # k8s_gateway_tls_secret must name the same Secret
 k8s_certs_token_secret_name: cloudflare-api-token
+# Also cover the short aliases <app>.<zone> (STD-0001 rules 5 and 6) with a second wildcard,
+# *.<zone>, for the Gateway's https-short listener (k8s_gateway_short_names). A wildcard still
+# keeps app names out of the Certificate Transparency logs.
+k8s_certs_short_names: true
 
 # Smoke test: an echo app at <name>.apps.<cluster>.<env>.<zone>, called over HTTPS through the
 # Gateway address from the Proxmox host (outside the cluster), then deleted.

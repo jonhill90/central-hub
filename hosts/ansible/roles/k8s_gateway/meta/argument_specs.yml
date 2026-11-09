@@ -16,6 +16,7 @@ argument_specs:
       k8s_gateway_firewall_zone: {type: str, default: lab, description: firewalld zone of the lab NIC on every node.}
       k8s_gateway_node_ports: {type: list, elements: str, default: [80/tcp], description: Listener ports that zone accepts.}
       k8s_gateway_https: {type: bool, default: false, description: "Add the HTTPS listener on 443 and open tcp 443 (BUILD-PATH S12)."}
+      k8s_gateway_short_names: {type: bool, default: true, description: "Listeners http-short, https-short on *.<zone> (STD-0001 rule 5)."}
       k8s_gateway_tls_secret:
         type: str
         default: apps-tls

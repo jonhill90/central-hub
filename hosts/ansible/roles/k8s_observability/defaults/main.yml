@@ -54,6 +54,10 @@ k8s_observability_grafana_volume_size: 1Gi
 # default; the inventory template sets it to k8s_gateway_zone.
 # k8s_observability_zone: <zone>
 k8s_observability_grafana_name: grafana
+# Short aliases (STD-0001 rules 5 and 7): Grafana builds its links with grafana.<zone>, the route
+# also answers there (k8s_app_route_short_names), and the sign-in goes to Keycloak at sso.<zone>
+# (k8s_identity_short_names). Needs the short names in the lab DNS first.
+k8s_observability_short_names: true
 
 # Sign-in to Grafana through the lab's identity provider (OIDC), once playbooks/k8s-identity.yml
 # made the client and its Secret. Off: Grafana has only its own admin account (Secret
@@ -62,7 +66,9 @@ k8s_observability_grafana_sso: false
 # The provider's three endpoints. The defaults are Keycloak's paths for realm `lab` (k8s_identity);
 # swapping the provider means changing these three and the client in its role (RB-0087 M2 exit).
 # The browser goes to the public name; Grafana's server calls the in-cluster Service.
-k8s_observability_sso_auth_url: "https://sso.apps.c1.prod.{{ k8s_observability_zone }}/realms/lab/protocol/openid-connect/auth"
+k8s_observability_sso_auth_url: >-
+  https://sso.{{ '' if k8s_observability_short_names | bool else 'apps.c1.prod.' }}{{ k8s_observability_zone
+  }}/realms/lab/protocol/openid-connect/auth
 k8s_observability_sso_token_url: http://sso-service.identity.svc:8080/realms/lab/protocol/openid-connect/token
 k8s_observability_sso_api_url: http://sso-service.identity.svc:8080/realms/lab/protocol/openid-connect/userinfo
 k8s_observability_sso_client_id: grafana

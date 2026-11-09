@@ -187,6 +187,7 @@
     k8s_app_route_path: /login
     k8s_app_route_expect: <title>Grafana</title>
     k8s_app_route_zone: "{{ k8s_observability_zone }}"
+    k8s_app_route_short_names: "{{ k8s_observability_short_names }}"
   when: not k8s_observability_grafana_route_by_argocd | bool
   tags: [route]
 

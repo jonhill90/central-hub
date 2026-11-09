@@ -85,8 +85,9 @@ apps:
       version: 92.3.1   # Prometheus Operator v0.94.1, 2026-10-13; same as k8s_observability today
     valueFiles: [values.yaml]
     zoneParameters:
-      grafana.grafana\.ini.server.root_url: "https://grafana.apps.c1.prod.{zone}/"
-      # grafana.grafana\.ini.auth\.generic_oauth.auth_url: "https://sso.apps.c1.prod.{zone}/realms/lab/protocol/openid-connect/auth"
+      # Short aliases (STD-0001 rules 5 and 7), as k8s_observability_short_names.
+      grafana.grafana\.ini.server.root_url: "https://grafana.{zone}/"
+      # grafana.grafana\.ini.auth\.generic_oauth.auth_url: "https://sso.{zone}/realms/lab/protocol/openid-connect/auth"
     # The CRDs are too large for a client-side apply's annotation.
     syncOptions: [ServerSideApply=true, RespectIgnoreDifferences=true]
     # Grafana's chart makes a new random admin password at every render; keep the one on the cluster.

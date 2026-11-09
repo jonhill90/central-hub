@@ -40,6 +40,7 @@ argument_specs:
         description: "Ports opened in that zone on every node, for node-exporter's scrape."
       k8s_observability_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}
       k8s_observability_grafana_name: {type: str, default: grafana, description: "First label of Grafana's hostname."}
+      k8s_observability_short_names: {type: bool, default: true, description: "Grafana's links on grafana.<zone>, sign-in at sso.<zone> (STD-0001 rule 5)."}
       k8s_observability_grafana_sso:
         type: bool
         default: false
