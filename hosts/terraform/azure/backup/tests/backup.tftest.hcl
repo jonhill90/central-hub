@@ -3,6 +3,11 @@
 # use apply, which with a mocked provider only fills in values.
 
 mock_provider "azurerm" {
+  mock_data "azurerm_client_config" {
+    defaults = {
+      object_id = "11111111-1111-1111-1111-111111111111"
+    }
+  }
   mock_resource "azurerm_storage_account" {
     defaults = {
       id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-c1-backup/providers/Microsoft.Storage/storageAccounts/examplec1backup"
@@ -176,5 +181,24 @@ run "backup_app_owned_by_the_runner" {
   assert {
     condition     = output.client_id == "33333333-3333-3333-3333-333333333333" && output.app_object_id == "44444444-4444-4444-4444-444444444444" && output.tenant_id == "22222222-2222-2222-2222-222222222222"
     error_message = "The outputs must give the app's client ID, object ID and the tenant for the inventory."
+  }
+}
+
+# The way back to the SAS is off unless asked for, and then sits on the account for the runner only.
+run "no_sas_signer_by_default" {
+  assert {
+    condition     = length(azurerm_role_assignment.sas_signer) == 0
+    error_message = "The SAS signer's role must not exist unless keep_sas_signer is true."
+  }
+}
+
+run "sas_signer_on_rollback" {
+  variables {
+    keep_sas_signer = true
+  }
+
+  assert {
+    condition     = length(azurerm_role_assignment.sas_signer) == 1 && azurerm_role_assignment.sas_signer[0].scope == azurerm_storage_account.backup.id && azurerm_role_assignment.sas_signer[0].principal_id == "11111111-1111-1111-1111-111111111111"
+    error_message = "With keep_sas_signer the runner gets the role on the account."
   }
 }

@@ -63,3 +63,9 @@ variable "app_display_name" {
   type        = string
   default     = "c1-backup"
 }
+
+variable "keep_sas_signer" {
+  description = "Rollback only: true gives the identity running tofu Storage Blob Data Contributor on the account again, so the nodes' old user delegation SAS works until it expires (runbook back-up-c1-off-box.md, If it fails)."
+  type        = bool
+  default     = false
+}

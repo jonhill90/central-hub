@@ -83,3 +83,17 @@ resource "azurerm_role_assignment" "backup" {
   principal_id         = azuread_service_principal.backup.object_id
   principal_type       = "ServicePrincipal"
 }
+
+# Way back to the SAS (agent pick 182, kept switched off). With keep_sas_signer = true the identity
+# running tofu, agent-azure, gets Storage Blob Data Contributor on the account again, so the user
+# delegation SAS it signed for the nodes works again until it expires. Only for a rollback while the
+# nodes still hold that SAS; the nodes' own certificate (pick 189) needs none of this.
+data "azurerm_client_config" "current" {}
+
+resource "azurerm_role_assignment" "sas_signer" {
+  count                = var.keep_sas_signer ? 1 : 0
+  scope                = azurerm_storage_account.backup.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
+  principal_type       = "ServicePrincipal"
+}
