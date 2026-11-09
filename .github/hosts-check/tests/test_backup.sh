@@ -47,9 +47,11 @@ fetch "https://github.com/etcd-io/etcd/releases/download/v$CLUSTER_ETCD_VERSION/
 tar -xzf "$work/cluster-etcd.tgz" -C "$work/cluster" --strip-components=1 "etcd-v$CLUSTER_ETCD_VERSION-linux-amd64/etcd"
 cp "$role"/files/*.sh "$bin/"
 chmod 0755 "$bin"/*
+# sed -n 1p, not head -1: head exits early and, with pipefail, a writer still printing dies of
+# SIGPIPE (exit 141 in CI on 2026-11-09).
 "$bin/restic" version
-"$bin/etcdutl" version | head -1
-"$work/cluster/etcd" --version | head -1
+"$bin/etcdutl" version | sed -n 1p
+"$work/cluster/etcd" --version | sed -n 1p
 
 # What the env file gives the scripts on a node, here set directly.
 export BACKUP_BIN=$bin BACKUP_HOST=ci-node BACKUP_STATE=$work/state TMPDIR=$work
@@ -112,7 +114,7 @@ diff -r "$work/as-backed-up" "$work/full$work/data" || fail "a full restore diff
 ok "a full restore equals the folders as they were backed up"
 
 echo "== 4. a damaged repository fails the volume restore test"
-pack=$(find "$RESTIC_REPOSITORY/data" -type f -size +1M | head -1)
+pack=$(find "$RESTIC_REPOSITORY/data" -type f -size +1M -print -quit)
 [ -n "$pack" ] || fail "no pack file to damage"
 chmod u+w "$pack"
 printf 'XXXXXXXX' | dd of="$pack" bs=1 seek=4096 conv=notrunc status=none
