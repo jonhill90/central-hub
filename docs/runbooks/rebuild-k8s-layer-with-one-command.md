@@ -45,7 +45,7 @@ flowchart LR
 
 ## Before you start
 
-- The env folder exists on the controller, outside the repository, mode `0700`, and holds `rebuild.env` (mode `0600`). The script's header lists every variable. For dev: `ENV_NAME=dev`, `VM_ID_MIN=250`, `VM_ID_MAX=259`, and a tfvars with `node_vnet = "dev"`.
+- The env folder exists on the controller, outside the repository, mode `0700`, and holds `rebuild.env` (mode `0600`). The script's header lists every variable. For dev: `ENV_NAME=dev`, `VM_ID_MIN=250`, `VM_ID_MAX=257`, and a tfvars with `node_vnet = "dev"`. VM 258 and CT 259 are the jumpboxes, which stay (the owner, 2026-11-09 23:04 UTC), so the dev range stops at 257.
 - Every node `vm_id` in the tfvars sits in the env's range. The script stops before any stage if one does not.
 - The env's inventory sets the values the root app needs. For dev:
   - `k8s_gitops_source_enabled: true`, or the `gitops` stage installs Argo CD with no root app.

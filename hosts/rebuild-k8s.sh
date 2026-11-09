@@ -9,7 +9,7 @@
 # rebuild.env (mode 0600), which sets:
 #   ENV_NAME      dev or prod
 #   VM_ID_MIN     lowest VM ID this env may touch (dev: 250)
-#   VM_ID_MAX     highest VM ID this env may touch (dev: 259)
+#   VM_ID_MAX     highest VM ID this env may touch (dev: 257; 258 and 259 are the jumpboxes)
 #   TFVARS        the k8s run folder's tfvars for this env
 #   TFSTATE       its OpenTofu state file
 #   TOFU_ENV      a file that exports PROXMOX_VE_ENDPOINT, PROXMOX_VE_API_TOKEN (and _INSECURE)
