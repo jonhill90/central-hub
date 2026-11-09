@@ -152,7 +152,7 @@ Runbook: [Set up sign-in for lab apps](../../docs/runbooks/set-up-lab-sign-in.md
 | `k8s_backup_enabled` | `false` (the default) installs the tools with the timers off and removes the env file from the nodes. `true` turns the timers on. |
 | `k8s_backup_env_file` | The 0600 env file on the controller, for example `~/.config/central-hub/c1-backup.env`. Private, no default; the run stops if it is missing, empty or readable by others. |
 | `k8s_backup_drill` | `true` with `--tags drill`: back up now and run the restore tests. |
-| `k8s_backup_azure_sas` | `true`: each `timers` run mints a user delegation SAS for the Azure container on the controller (`az`, signed in as `agent-azure`) and adds `AZURE_ACCOUNT_NAME` and `AZURE_ACCOUNT_SAS` to the node env file, so no account key exists anywhere (pick 181). The SAS lasts `k8s_backup_azure_sas_days` (7 at most), so run `--tags timers` again within that. |
+| `k8s_backup_azure_sas` | `true`: each `timers` run mints a user delegation SAS for the Azure container on the controller (`az`, signed in as `agent-azure`) and adds `AZURE_ACCOUNT_NAME` and `AZURE_ACCOUNT_SAS` to the node env file, so no account key exists anywhere (pick 181). The SAS lasts `k8s_backup_azure_sas_days` (7 at most); `playbooks/controller-backup-refresh.yml` installs a launchd agent on the Mac that runs `--tags timers` daily (pick 184). |
 | `k8s_backup_azure_account` | The storage account (tofu output `storage_account_name` of `terraform/azure/backup`). Private. |
 
 ## Storage on c1

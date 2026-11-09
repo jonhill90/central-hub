@@ -1,0 +1,71 @@
+---
+# Renews c1's backup SAS every day without a person (agent pick 184): a launchd agent on the macOS
+# controller runs `k8s-backup.yml --tags timers` daily, which mints a new 7-day user delegation SAS
+# and copies it to the nodes (role k8s_backup, azure_sas.yml). The SAS lasts 7 days, so six missed
+# days in a row are needed before backups stop. Nothing new runs in Azure, so it costs nothing there.
+# Runbook: docs/runbooks/back-up-c1-off-box.md, step A4.
+#   ansible-playbook -i inventories/home/ playbooks/controller-backup-refresh.yml --check --diff
+#   ansible-playbook -i inventories/home/ playbooks/controller-backup-refresh.yml
+# Off: -e controller_backup_refresh=false (unloads and removes the agent).
+- name: Daily backup SAS renewal on the controller
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    controller_backup_refresh: true
+    controller_backup_refresh_label: com.central-hub.c1-backup-refresh
+    controller_backup_refresh_hour: 12
+    controller_backup_refresh_plist: "{{ lookup('env', 'HOME') }}/Library/LaunchAgents/{{ controller_backup_refresh_label }}.plist"
+    controller_backup_refresh_log: "{{ lookup('env', 'HOME') }}/Library/Logs/central-hub/c1-backup-refresh.log"
+    # The ansible-playbook beside the Python running this play, so the agent uses the same install.
+    controller_backup_refresh_ansible: "{{ ansible_playbook_python | dirname }}/ansible-playbook"
+    # launchd starts jobs with a bare PATH; az, ssh and the rest are found through this one.
+    controller_backup_refresh_path: "{{ lookup('env', 'PATH') }}"
+    controller_backup_refresh_dir: "{{ playbook_dir | dirname }}"
+  tasks:
+    - name: Only on macOS
+      ansible.builtin.command: uname -s
+      register: controller_backup_refresh_os
+      changed_when: false
+      check_mode: false
+
+    - name: Stop if this is not a Mac
+      ansible.builtin.assert:
+        that: controller_backup_refresh_os.stdout == 'Darwin'
+        fail_msg: This playbook installs a launchd agent and runs only on the macOS controller.
+        quiet: true
+
+    - name: Log folder
+      ansible.builtin.file:
+        path: "{{ controller_backup_refresh_log | dirname }}"
+        state: directory
+        mode: "0700"
+      when: controller_backup_refresh
+
+    - name: The launchd agent
+      ansible.builtin.template:
+        src: templates/c1-backup-refresh.plist.j2
+        dest: "{{ controller_backup_refresh_plist }}"
+        mode: "0600"
+      register: controller_backup_refresh_written
+      when: controller_backup_refresh
+
+    - name: Load it again when it changed
+      ansible.builtin.shell: >-
+        launchctl bootout gui/$(id -u)/{{ controller_backup_refresh_label }} 2>/dev/null;
+        launchctl bootstrap gui/$(id -u) {{ controller_backup_refresh_plist }}
+      changed_when: true
+      when: controller_backup_refresh and controller_backup_refresh_written is changed
+
+    - name: Unload it when off
+      ansible.builtin.shell: >-
+        launchctl bootout gui/$(id -u)/{{ controller_backup_refresh_label }} 2>/dev/null; true
+      changed_when: false
+      when: not controller_backup_refresh
+
+    - name: No agent file when off
+      ansible.builtin.file:
+        path: "{{ controller_backup_refresh_plist }}"
+        state: absent
+      when: not controller_backup_refresh
