@@ -1,0 +1,5 @@
+# Made-up example. The real values go only in azure.tfvars (git-ignored).
+# Copy to azure.tfvars and pass -var-file=azure.tfvars.
+location             = "eastus2"
+storage_account_name = "examplec1backup"
+allowed_ip_addresses = ["203.0.113.10"] # documentation address (RFC 5737); use the home's public address
