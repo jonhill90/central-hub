@@ -11,8 +11,16 @@ spec:
     - name: {{ $v.gateway.name }}
       namespace: {{ $v.gateway.namespace }}
       sectionName: https
+{{- if $v.gateway.shortNames }}
+    - name: {{ $v.gateway.name }}
+      namespace: {{ $v.gateway.namespace }}
+      sectionName: https-short
+{{- end }}
   hostnames:
     - {{ include "jellyfin.host" . }}
+{{- if $v.gateway.shortNames }}
+    - {{ $v.name }}.{{ $v.zone }}
+{{- end }}
   rules:
     - matches:
         - path:
@@ -32,8 +40,16 @@ spec:
     - name: {{ $v.gateway.name }}
       namespace: {{ $v.gateway.namespace }}
       sectionName: http
+{{- if $v.gateway.shortNames }}
+    - name: {{ $v.gateway.name }}
+      namespace: {{ $v.gateway.namespace }}
+      sectionName: http-short
+{{- end }}
   hostnames:
     - {{ include "jellyfin.host" . }}
+{{- if $v.gateway.shortNames }}
+    - {{ $v.name }}.{{ $v.zone }}
+{{- end }}
   rules:
     - filters:
         - type: RequestRedirect

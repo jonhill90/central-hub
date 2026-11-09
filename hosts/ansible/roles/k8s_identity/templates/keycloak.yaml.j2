@@ -29,3 +29,26 @@ spec:
   resources:
     requests: {cpu: 200m, memory: 768Mi}
     limits: {memory: 1536Mi}
+{% if k8s_identity_theme | length > 0 %}
+  # The sign-in theme (k8s_identity_theme_dir), from ConfigMap keycloak-theme. The operator has no
+  # field for themes, so the volume goes through its pod template (Keycloak operator docs,
+  # "Advanced configuration", unsupported podTemplate). The hash restarts the pod when a file
+  # changes, since Keycloak caches themes.
+  unsupported:
+    podTemplate:
+      metadata:
+        annotations:
+          central-hub/theme-sha256: "{{ k8s_identity_theme_sha256 }}"
+      spec:
+        containers:
+          - volumeMounts:
+              - {name: theme, mountPath: /opt/keycloak/themes/{{ k8s_identity_theme }}, readOnly: true}
+        volumes:
+          - name: theme
+            configMap:
+              name: keycloak-theme
+              items:
+{% for f in k8s_identity_theme_files %}
+                - {key: {{ f.key }}, path: {{ f.path }}}
+{% endfor %}
+{% endif %}

@@ -45,7 +45,7 @@ spec:
           image: {{ $v.image }}
           args: [serve]
           env:
-            - {name: NTFY_BASE_URL, value: "https://{{ $v.name }}.apps.c1.prod.{{ required "zone: set by the root Application" $v.zone }}"}
+            - {name: NTFY_BASE_URL, value: "https://{{ $v.name }}.{{ if not $v.shortNames }}apps.c1.prod.{{ end }}{{ required "zone: set by the root Application" $v.zone }}"}
             - {name: NTFY_LISTEN_HTTP, value: ":{{ $v.port }}"}
             - {name: NTFY_BEHIND_PROXY, value: "true"}
             - {name: NTFY_CACHE_FILE, value: /var/cache/ntfy/cache.db}

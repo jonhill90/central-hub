@@ -2,6 +2,9 @@
 # app on a phone (or the web page) subscribed to that topic shows it. Swapping it for another
 # receiver changes only Alertmanager's receiver in kube-prometheus-stack's values.
 zone: ""   # set by the root Application; the web page is at https://ntfy.apps.c1.prod.<zone>/
+# The name ntfy builds its links with: ntfy.<zone> (STD-0001 rules 5 and 7), which the gateway
+# app's route also answers; false keeps ntfy.apps.c1.prod.<zone>.
+shortNames: true
 
 name: ntfy
 # v2.35.0 (2026-10-30): newer than two weeks, allowed by STD-0003 rule 2 for its security fix

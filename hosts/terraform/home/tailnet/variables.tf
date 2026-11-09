@@ -18,9 +18,9 @@ variable "zone" {
 }
 
 variable "split_dns_names" {
-  description = "Names under var.zone that tailnet devices ask the lab's DNS server for, each relative to the zone. A name covers itself and every name below it, so c1.prod covers api.c1.prod and *.apps.c1.prod. Every other name in the zone still goes to public DNS."
+  description = "Names under var.zone that tailnet devices ask the lab's DNS server for, each relative to the zone. A name covers itself and every name below it, so c1.prod covers api.c1.prod and *.apps.c1.prod. The app names are the short aliases <app>.<zone> (STD-0001 rule 5), one entry each so the rest of the zone stays public. Every other name in the zone still goes to public DNS."
   type        = list(string)
-  default     = ["c1.prod", "opnsense", "pve"]
+  default     = ["c1.prod", "opnsense", "pve", "grafana", "argocd", "sso", "jellyfin", "ntfy"]
 
   validation {
     condition     = length(var.split_dns_names) > 0 && alltrue([for n in var.split_dns_names : can(regex("^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", n))])

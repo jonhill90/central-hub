@@ -14,7 +14,7 @@ import os
 import subprocess
 import sys
 
-HOST = "https://sso.apps.c1.prod.example.com"
+HOST = "https://sso.example.com"
 CONTAINER = os.environ["name"]
 failures = []
 
