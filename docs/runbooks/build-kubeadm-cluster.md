@@ -1593,6 +1593,8 @@ What runs 1 and 2 found, and the fix:
 
 The agents' run logs and worklogs are kept in the agent notebook; this section is the record.
 
+How this build compares with the others rehearsed for c1 (Kubespray, Talos): [Cluster builds compared](rebuild-home-lab-from-scratch.md#cluster-builds-compared-step-7).
+
 ## If it fails
 
 Stop at the step that fails and compare with its `expect:` line and its catches. Steps 1-11 can be undone only by a rebuild from step 0; practice steps 12-36 clean up after themselves, except the four named under "Rules for practice". Tell the owner before changing a command, and fix the runbook text in the same change.

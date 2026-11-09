@@ -144,7 +144,7 @@ expect: `tofu plan` in `hosts/terraform/home/k8s` shows no changes, and both nod
 
 Build c1 with Ansible: node preparation, `kubeadm init`, Secrets at rest, Cilium with kube-proxy replacement and its Gateway API controller, the worker join and a smoke test. Then the shared Gateway (HTTP) and the volumes.
 why: `playbooks/k8s.yml` is the by-hand runbook's steps 1-10 and 36 as code; Cilium is installed inside it (role `k8s_control_plane`, step 9), so it has no separate runbook (D-0017).
-runbook: [Build c1 with Ansible](build-c1-with-ansible.md). For why each step exists, read [Build a single-node kubeadm cluster by hand](build-kubeadm-cluster.md) steps 1-10.
+runbook: [Build c1 with Ansible](build-c1-with-ansible.md). For why each step exists, read [Build a single-node kubeadm cluster by hand](build-kubeadm-cluster.md) steps 1-10. The other builds rehearsed for this step, with their measured results, are under [Cluster builds compared](#cluster-builds-compared-step-7).
 expect: `kubectl get nodes` shows both nodes `Ready`; `cilium status --wait` is all OK.
 
 ### Certificates, the lab CA and Argo CD
@@ -216,6 +216,34 @@ Turn on Argo CD's source and move each component from Ansible to Argo CD, one at
 why: the target state is that Argo CD, reading `hosts/kubernetes/home/c1/`, owns c1's add-ons and apps (spec `2026-11-c1-apps-under-argo-cd`).
 runbook: [Move metrics-server to Argo CD](move-metrics-server-to-argo-cd.md) first (it turns the source on), then, in the spec's order: [volumes](move-local-path-to-argo-cd.md), [logging](move-logging-to-argo-cd.md), [monitoring](move-monitoring-to-argo-cd.md), [External Secrets](move-external-secrets-to-argo-cd.md), [cert-manager](move-cert-manager-to-argo-cd.md), [Jellyfin](move-jellyfin-to-argo-cd.md), [the Gateway](move-gateway-to-argo-cd.md).
 expect: `kubectl -n argocd get applications` shows each one Synced and Healthy.
+
+## Cluster builds compared (step 7)
+
+Step 7 builds c1 one way: kubeadm by this repository's Ansible. Before the owner fixes that for the prod rebuild, agents rehearsed each candidate build on a 2-node cluster (1 control plane, 1 worker, 4 GB each) on VNet dev (VLAN 30), from empty VMs to a working cluster and back, until two runs in a row needed no fix. Every number below is measured from the run logs of 2026-11-08 and comes from the two clean runs of each build. Talos has not run yet; its column fills in when it has two clean runs.
+
+| | R1: kubeadm by this repo's Ansible | R2: kubeadm by hand | R3: Kubespray | R4: Talos |
+|---|---|---|---|---|
+| What runs | `playbooks/k8s.yml` | [build-kubeadm-cluster.md](build-kubeadm-cluster.md) steps 0-10 and the worker join from step 36 | Kubespray v2.32.0 (commit 9751ea6f) `cluster.yml`, run from outside this repository | Talos v1.14.5 on VMs from `hosts/terraform/home/k8s-talos`, configured with `talosctl` |
+| Where the build lives | this repository | this repository | an outside project; only the settings are ours | this repository for the VMs; the rest not yet written |
+| Runs to two clean | 4 | 4 | 4 | not run |
+| Cluster step | 284 s, 316 s | about 6 to 7 min from `tofu apply` to the smoke test, by hand | 310 s, 309 s, plus about 50 s for the cloud-init wait | not run |
+| Kubernetes | v1.36.5 | v1.36.5 | v1.36.4, the newest 1.36 Kubespray v2.32.0 has checksums for | Talos v1.14.5 installs 1.37.1 by default |
+| Node OS | AlmaLinux 10.2 | AlmaLinux 10.2 | AlmaLinux 10.2 | Talos |
+| Cilium | v1.20.4, replacing kube-proxy | v1.20.4, replacing kube-proxy | v1.20.2 (Kubespray's own pin), replacing kube-proxy | not run |
+| Secrets at rest | on (role `k8s_control_plane`) | on, proven from etcd (step 8a) | left at Kubespray's default, not checked | not run |
+| Volumes (`playbooks/k8s-storage.yml`) | passes | not part of the runbook | failed: kubectl is in `/usr/local/bin`; fixed by PR #82, not yet run again | needs a different way: no SSH on Talos |
+| Control plane memory at rest | 1618 MB | 1549 MB, 1556 MB | 1395 MB, 1405 MB | not run |
+| Worker memory at rest | 884 MB | 869 MB, 883 MB | 1045 MB, 1099 MB | not run |
+| Faults the runs found | wrong SSH key in the inventory; the first `dnf` raced cloud-init (PR #78) | kernel module before the reboot, no cloud-init wait, smoke test before the worker (PR #83); step 8a checked Secrets before encryption was on (PR #84) | two faults in the rehearsal's own script (cloud-init without `sudo`, exit code 2); the volumes role's kubectl path (PR #82); 2 pods not Running in one run, names not recorded | not run |
+
+Read with care:
+
+- Each build ran four times in one evening on one host. The times show the size of each step, not a benchmark.
+- R1 and R2 install the same cluster, one as code and one by hand; R2 is the "why" behind R1.
+- R3's settings were chosen to match c1 (Cilium with kube-proxy replacement, Gateway API, the second cluster's address ranges from STD-0002). Its other defaults were left alone on purpose, so the runs show Kubespray as it comes.
+- Talos needs VirtIO SCSI (not VirtIO SCSI Single), UEFI and its own ISO, so it has its own VM folder (PR #79).
+
+The proof for R1 and R2 is in each runbook's "Proven runs" section: [Build c1 with Ansible](build-c1-with-ansible.md#proven-runs), [Build a single-node kubeadm cluster by hand](build-kubeadm-cluster.md#proven-runs). The agents' run logs are kept in the agent notebook.
 
 ## If it fails
 

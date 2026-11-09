@@ -99,6 +99,8 @@ What runs 1 and 2 found, and the fix:
 
 The agents' run logs and worklogs are kept in the agent notebook; this section is the record.
 
+How this build compares with the others rehearsed for c1 (Kubespray, Talos): [Cluster builds compared](rebuild-home-lab-from-scratch.md#cluster-builds-compared-step-7).
+
 ## If it fails
 
 - `k8s.yml` stops before `kubeadm init`: fix and run it again; the node roles are safe to repeat.
