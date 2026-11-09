@@ -57,6 +57,8 @@
     - "{{ k8s_backup_bin_dir }}/downloads"
     - "{{ k8s_backup_node_env_file | dirname }}"
     - "{{ k8s_backup_state_dir }}"
+  # Made in --check too, so the downloads into them can be checked (empty, root-only folders).
+  check_mode: false
   tags: [install]
 
 - name: install | restic release file, checked against its SHA-256
