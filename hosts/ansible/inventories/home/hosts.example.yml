@@ -22,7 +22,8 @@ all:
           proxmox_firewall_home_lan_cidr: ""   # the home router's LAN range, a.b.c.d/nn
           proxmox_backup_disk: ""   # the empty HDD, /dev/disk/by-id/<id> (whole disk)
           proxmox_firewall_enable: false   # true only after the first run's ruleset was read
-          # proxmox_notify_endpoint: {type: <smtp|gotify|webhook|sendmail>, options: {...}}   # not picked yet
+          proxmox_notify_ntfy_url: ""   # errors (failed backups) to ntfy on c1: https://ntfy.<zone>/c1-alerts; private
+          # or proxmox_notify_endpoint: {type: <smtp|gotify|webhook|sendmail>, options: {...}}, not both
           # playbooks/controller-trust.yml (README "Proxmox CA on the controller")
           controller_trust_ca_file: ""   # path on the controller, e.g. ~/.config/central-hub/pve-root-ca.pem
           # playbooks/proxmox-cert.yml (D-0028): the web UI certificate from the lab CA on c1
