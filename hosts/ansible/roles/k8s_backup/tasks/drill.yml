@@ -7,12 +7,16 @@
     state: started
   loop: "{{ k8s_backup_backup_services }}"
   changed_when: true
+  # One node at a time: starting a oneshot service waits until it ends, so no two backups write to
+  # the repository at once.
+  throttle: 1
 
 - name: drill | Run the restore tests
   ansible.builtin.systemd_service:
     name: c1-restore-test.service
     state: started
   changed_when: true
+  throttle: 1
 
 - name: drill | What the restore tests said
   ansible.builtin.command: journalctl -u c1-restore-test.service --since -30min --no-pager -o cat
