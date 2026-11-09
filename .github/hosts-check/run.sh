@@ -147,6 +147,7 @@ check_identity() {
 check_backup() {
   # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository.
   bash "$here/tests/test_backup.sh"
+  bash "$here/tests/test_backup_azure_sas.sh"
 }
 
 check_scripts() {
