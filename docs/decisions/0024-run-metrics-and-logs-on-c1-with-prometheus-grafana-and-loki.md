@@ -6,7 +6,7 @@ date: 2026-10-27
 decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
-waits-on: [D-0011, D-0021, BL-0020]
+waits-on: [D-0011, D-0021, TASK-0020]
 supersedes: []
 superseded-by:
 accepted-evidence:
@@ -24,7 +24,7 @@ revisit-when: c1 gets a StorageClass (BUILD-PATH S17), so Prometheus and Loki ca
 
 ## Context and Problem Statement
 
-BUILD-PATH S15 asks for metrics and logs on cluster c1 (BL-0020). The decision queue marked the observability stack "thin" (Q24), and the choice walk (J10) listed kube-prometheus-stack plus Loki, VictoriaMetrics plus VictoriaLogs, or waiting for the first app. On 2026-10-27 the owner asked for the build to keep moving while he is away, and the lab is greenfield. Research batch RB-0092 (Research `01-notes/01r-research/0092-c1-observability/`) compared the two stacks for c1: licences, maintainers, versions allowed by STD-0003 and fit with c1 (kubeadm, no kube-proxy, no StorageClass, 2-vCPU nodes).
+BUILD-PATH S15 asks for metrics and logs on cluster c1 (TASK-0020). The decision queue marked the observability stack "thin" (Q24), and the choice walk (J10) listed kube-prometheus-stack plus Loki, VictoriaMetrics plus VictoriaLogs, or waiting for the first app. On 2026-10-27 the owner asked for the build to keep moving while he is away, and the lab is greenfield. Research batch RB-0092 (Research `01-notes/01r-research/0092-c1-observability/`) compared the two stacks for c1: licences, maintainers, versions allowed by STD-0003 and fit with c1 (kubeadm, no kube-proxy, no StorageClass, 2-vCPU nodes).
 
 This record is proposed: the stack was built as agent picks (hosts/AGENT-PICKS.md picks 89-96), and the owner has not said yes to it.
 

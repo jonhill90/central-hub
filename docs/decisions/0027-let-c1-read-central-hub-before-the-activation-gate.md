@@ -77,7 +77,7 @@ flowchart LR
 ### 2. Finish the gate first
 
 - Good: no exception to the gate.
-- Bad: GitOps waits for per-agent identities, which are parked (BL-0022), so the move the owner asked for "as soon as we can" waits indefinitely.
+- Bad: GitOps waits for per-agent identities, which are parked (TASK-0022), so the move the owner asked for "as soon as we can" waits indefinitely.
 
 ### 3. Read now, sync by hand
 

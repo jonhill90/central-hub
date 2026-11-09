@@ -1,7 +1,7 @@
 ---
 argument_specs:
   main:
-    short_description: Metrics and logs on c1, with Grafana through the shared Gateway (BUILD-PATH S15, BL-0020)
+    short_description: Metrics and logs on c1, with Grafana through the shared Gateway (BUILD-PATH S15, TASK-0020)
     options:
       k8s_observability_metrics_server_version: {type: str, default: 3.14.0, description: "metrics-server chart version (STD-0003)."}
       k8s_observability_kps_version: {type: str, default: 92.3.1, description: "kube-prometheus-stack chart version (STD-0003)."}

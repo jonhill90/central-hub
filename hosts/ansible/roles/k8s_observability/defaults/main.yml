@@ -1,5 +1,5 @@
 ---
-# BUILD-PATH S15 (BL-0020): metrics and logs on cluster c1. Agent picks, listed in
+# BUILD-PATH S15 (TASK-0020): metrics and logs on cluster c1. Agent picks, listed in
 # hosts/AGENT-PICKS.md; research in Research 01-notes/01r-research/0092-c1-observability/ (RB-0092). Every input is
 # listed here (Red Hat CoP rule).
 #

@@ -202,7 +202,7 @@ expect: Grafana, Keycloak, Argo CD and Jellyfin open in the Mac's browser by nam
 #### Step 14
 
 Turn on the backups and prove a restore.
-why: two copies: the nightly Proxmox backup of every guest on the HDD in the same PC, and restic snapshots of etcd and the volume folders off the box (BL-0139).
+why: two copies: the nightly Proxmox backup of every guest on the HDD in the same PC, and restic snapshots of etcd and the volume folders off the box (TASK-0139).
 runbook, on the host: [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) step 8, done as code by `playbooks/proxmox-safety.yml --tags backup` in step 4. Its proof is `vzdump 900 --storage hdd-backup` then `pvesm list hdd-backup` ([hosts/ansible/README.md, Backups](../../hosts/ansible/README.md#backups)).
 runbook, off the box: `back-up-c1-off-box.md` and `test-etcd-restore.md` (PR #68). Blocked until an off-box target exists.
 runbook, full restore of the lab from these backups: [Restore the home lab from its backups](restore-home-lab-from-backups.md): whole guests from `hdd-backup`, or c1 from restic.

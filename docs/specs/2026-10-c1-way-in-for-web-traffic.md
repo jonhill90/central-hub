@@ -34,7 +34,7 @@ Parts, in order:
 ## Out of scope
 
 - Reaching any app from the internet. Names resolve only inside the lab.
-- ExternalDNS and the DNS tool that replaces the OPNsense override (AdGuard Home, BL-0164).
+- ExternalDNS and the DNS tool that replaces the OPNsense override (AdGuard Home, TASK-0164).
 - A private certificate authority.
 - Other clusters and the VPS.
 
