@@ -1,6 +1,6 @@
 ---
 id: D-0027
-title: Let the lab cluster c1 read central-hub through Argo CD before the Activation gate passes
+title: Let cluster c1 read central-hub through Argo CD before the Activation gate passes
 status: accepted
 date: 2026-11-08
 decision-makers: [owner]
@@ -20,7 +20,7 @@ accepted-evidence:
 revisit-when: c1 holds data that can't be rebuilt or that someone other than the owner relies on; a second cluster (the VPS or a cloud site) is about to read the repository; an agent gets its own GitHub identity (Activation gate item 1); or anything other than the owner merges to main
 ---
 
-# Let the lab cluster c1 read central-hub through Argo CD before the Activation gate passes
+# Let cluster c1 read central-hub through Argo CD before the Activation gate passes
 
 ## Context and Problem Statement
 
