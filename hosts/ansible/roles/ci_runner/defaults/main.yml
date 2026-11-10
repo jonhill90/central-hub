@@ -1,0 +1,25 @@
+---
+# Not private. The notebook's self-hosted CI runner (docs/runbooks/set-up-the-ci-runner.md): the
+# GitHub Actions runner as its own unprivileged user and a systemd service. The VM is
+# hosts/terraform/home/ci-runner. Agent picks, hosts/AGENT-PICKS.md.
+
+ci_runner_user: github-runner
+ci_runner_home: /var/lib/github-runner
+# The one repository this runner takes jobs from, and the label its workflows ask for.
+ci_runner_repo_url: https://github.com/jonhill90/agent-notebook
+ci_runner_labels: [notebook]
+
+# The newest release at least two weeks old when pinned (STD-0003): v2.338.2, 2026-10-26.
+# SHA-256 of actions-runner-linux-x64-2.338.2.tar.gz, from the release notes and checked against a
+# download on 2026-11-10. The runner updates itself after this, as GitHub requires.
+ci_runner_version: 2.338.2
+ci_runner_sha256: baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
+
+# What the runner's .NET needs on RHEL-family systems (its bin/installdependencies.sh, without the
+# optional lttng-ust), plus what the notebook's jobs run: git and python3. acl lets Ansible become
+# the runner user.
+ci_runner_packages: [git, python3, tar, gzip, acl, libicu, krb5-libs, openssl-libs, zlib]
+
+# A one-hour registration token, needed only the first time (the agent box's ci-runner wrapper
+# mints one). Secret; never logged.
+ci_runner_registration_token: ""

@@ -7,7 +7,7 @@
 
 - name: Install what the wrappers need
   ansible.builtin.package:
-    name: [git, sudo, unzip]
+    name: [git, sudo, unzip, openssl, openssh-clients, python3, ansible-core]
     state: present
   tags: [users, wrappers]
 
@@ -297,6 +297,16 @@
   loop: "{{ agent_box_wrappers }}"
   loop_control:
     label: "{{ item.name }}"
+  tags: [wrappers]
+
+- name: The ci-runner wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/ci-runner.json"
+    content: "{{ agent_box_ci_runner | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_ci_runner | length > 0
   tags: [wrappers]
 
 - name: One sudoers line per wrapper, checked by visudo before it is written

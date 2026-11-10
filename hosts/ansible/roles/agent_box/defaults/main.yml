@@ -17,6 +17,8 @@ agent_box_repo_url: https://github.com/jonhill90/central-hub.git
 agent_box_wrappers:
   - name: dev-vms
     args: [plan, apply, destroy]
+  - name: ci-runner
+    args: [plan, apply, configure, destroy]
 
 # OpenTofu for the wrappers, the same version CI uses (.github/hosts-check/install-tools.sh),
 # checked against the release's SHA256SUMS.
@@ -74,3 +76,7 @@ agent_box_ca_files: []
 agent_box_tls_check_url: ""
 # Any other top-level settings, merged over the rest (for example autoUpdatesChannel).
 agent_box_managed_settings_extra: {}
+# The notebook's CI runner VM that the ci-runner wrapper builds (docs/runbooks/set-up-the-ci-runner.md).
+# Private, through the inventory: name, vm_id, address, cores, memory_mb, disk_gb, proxmox_node_name,
+# vnet, template_vm_id, github_app_id, repo_owner, repo_name. Empty leaves the wrapper unset up.
+agent_box_ci_runner: {}

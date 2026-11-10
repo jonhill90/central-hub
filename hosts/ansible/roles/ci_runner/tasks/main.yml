@@ -1,0 +1,161 @@
+---
+# The notebook's self-hosted CI runner (docs/runbooks/set-up-the-ci-runner.md). The runner and its
+# jobs run as an unprivileged user with no sudo; the VM holds no lab keys. Registration happens
+# once, with a one-hour token the agent box's ci-runner wrapper mints; after that the runner keeps
+# its own credential in its home.
+
+- name: Check the hostname against STD-0001 (at most 15 characters, a-z and 0-9, starts with a letter)
+  ansible.builtin.assert:
+    that: ci_runner_hostname is match('^[a-z][a-z0-9]{10,14}$')
+    fail_msg: "{{ ci_runner_hostname }} is not a STD-0001 hostname."
+    quiet: true
+  tags: [hostname]
+
+- name: The runner's OS hostname
+  ansible.builtin.hostname:
+    name: "{{ ci_runner_hostname }}"
+  tags: [hostname]
+
+# Same reason as the agent_box role: a Proxmox rename must not look like a new cloud-init instance.
+- name: Keep the hostname, and the first boot's keys, across renames and reboots (cloud-init)
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-keep-hostname.cfg
+    content: |
+      # Managed by the ci_runner role (central-hub hosts/ansible): keep the STD-0001 hostname,
+      # and never treat a Proxmox rename as a new instance.
+      preserve_hostname: true
+      manual_cache_clean: true
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [hostname]
+
+- name: What the runner and the notebook's jobs need
+  ansible.builtin.package:
+    name: "{{ ci_runner_packages }}"
+    state: present
+  tags: [runner]
+
+- name: Runner user, unprivileged, no sudo
+  ansible.builtin.user:
+    name: "{{ ci_runner_user }}"
+    system: true
+    shell: /bin/bash
+    home: "{{ ci_runner_home }}"
+    create_home: true
+    groups: ""
+    append: false
+  tags: [runner]
+
+- name: Runner folders
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ci_runner_user }}"
+    group: "{{ ci_runner_user }}"
+    mode: "0750"
+  loop:
+    - "{{ ci_runner_home }}"
+    - "{{ ci_runner_home }}/downloads"
+    - "{{ ci_runner_home }}/runner"
+  register: ci_runner_dirs
+  tags: [runner]
+
+- name: Download the runner, checked against its SHA-256
+  ansible.builtin.get_url:
+    url: "https://github.com/actions/runner/releases/download/v{{ ci_runner_version }}/actions-runner-linux-x64-{{ ci_runner_version }}.tar.gz"
+    dest: "{{ ci_runner_home }}/downloads/actions-runner-linux-x64-{{ ci_runner_version }}.tar.gz"
+    checksum: "sha256:{{ ci_runner_sha256 }}"
+    owner: "{{ ci_runner_user }}"
+    group: "{{ ci_runner_user }}"
+    mode: "0640"
+  when: not (ansible_check_mode and ci_runner_dirs is changed)
+  tags: [runner]
+
+# Unpacked once. The runner updates itself later, so a newer pin applies only to a fresh VM.
+- name: Unpack the runner
+  ansible.builtin.unarchive:
+    src: "{{ ci_runner_home }}/downloads/actions-runner-linux-x64-{{ ci_runner_version }}.tar.gz"
+    dest: "{{ ci_runner_home }}/runner"
+    remote_src: true
+    creates: "{{ ci_runner_home }}/runner/config.sh"
+    owner: "{{ ci_runner_user }}"
+    group: "{{ ci_runner_user }}"
+  when: not (ansible_check_mode and ci_runner_dirs is changed)
+  tags: [runner]
+
+- name: Is the runner registered already?
+  ansible.builtin.stat:
+    path: "{{ ci_runner_home }}/runner/.runner"
+  register: ci_runner_registered
+  tags: [runner]
+
+- name: A registration token is needed the first time
+  ansible.builtin.assert:
+    that: ci_runner_registration_token | length > 0
+    fail_msg: "The runner isn't registered yet. Run it through the agent box's ci-runner wrapper, which mints a one-hour registration token."
+    quiet: true
+  when: not ci_runner_registered.stat.exists and not ansible_check_mode
+  tags: [runner]
+
+- name: Register the runner with the repository, once
+  ansible.builtin.command:
+    argv:
+      - ./config.sh
+      - --unattended
+      - --url
+      - "{{ ci_runner_repo_url }}"
+      - --token
+      - "{{ ci_runner_registration_token }}"
+      - --name
+      - "{{ ci_runner_hostname }}"
+      - --labels
+      - "{{ ci_runner_labels | join(',') }}"
+      - --work
+      - _work
+      - --replace
+    chdir: "{{ ci_runner_home }}/runner"
+    creates: "{{ ci_runner_home }}/runner/.runner"
+  become: true
+  become_user: "{{ ci_runner_user }}"
+  no_log: true
+  when: not ansible_check_mode
+  notify: Restart the runner
+  tags: [runner]
+
+- name: Runner service
+  ansible.builtin.template:
+    src: github-runner.service.j2
+    dest: /etc/systemd/system/github-runner.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the runner
+  tags: [runner]
+
+- name: Runner on at boot
+  ansible.builtin.systemd_service:
+    name: github-runner
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode
+  tags: [runner]
+
+# --- Proofs ----------------------------------------------------------------------------------
+
+- name: Proofs
+  tags: [verify]
+  when: not ansible_check_mode
+  block:
+    - name: Proof, the runner service is running
+      ansible.builtin.systemd_service:
+        name: github-runner
+      register: ci_runner_active
+      failed_when: ci_runner_active.status.ActiveState != "active"
+
+    - name: Proof, the runner user has no sudo
+      ansible.builtin.command: sudo -l -U {{ ci_runner_user }}
+      register: ci_runner_sudo
+      changed_when: false
+      failed_when: "'is not allowed to run sudo' not in ci_runner_sudo.stdout"

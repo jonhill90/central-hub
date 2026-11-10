@@ -1,0 +1,25 @@
+---
+# Inputs of the ci_runner role.
+argument_specs:
+  main:
+    short_description: The notebook's self-hosted GitHub Actions runner, as an unprivileged user and a systemd service
+    options:
+      # Required, private (a real machine name), through the inventory the wrapper writes.
+      ci_runner_hostname:
+        type: str
+        required: true
+        description: >-
+          The runner VM's OS hostname by STD-0001, for example dalapdemo01 (made up). The same as the
+          VM's name in hosts/terraform/home/ci-runner, and the runner's name on GitHub.
+      ci_runner_user: {type: str, default: github-runner, description: The unprivileged user the runner and its jobs run as. No sudo.}
+      ci_runner_home: {type: path, default: /var/lib/github-runner, description: "The runner user's home: the runner's files and its job workspaces."}
+      ci_runner_repo_url: {type: str, description: The one repository the runner takes jobs from.}
+      ci_runner_labels: {type: list, elements: str, description: Labels the workflows ask for in runs-on.}
+      ci_runner_version: {type: str, description: Runner release to install.}
+      ci_runner_sha256: {type: str, description: SHA-256 of that release's linux-x64 tarball.}
+      ci_runner_packages: {type: list, elements: str, description: Packages the runner and its jobs need.}
+      ci_runner_registration_token:
+        type: str
+        default: ""
+        no_log: true
+        description: "One-hour registration token; needed only when the runner isn't registered yet."

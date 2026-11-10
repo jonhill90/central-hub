@@ -39,3 +39,11 @@ argument_specs:
         description: "Absolute paths of public CA certificate files on the controller (no folders, no patterns, no keys), each trusted on the box; private."
       agent_box_tls_check_url: {type: str, default: "", description: "HTTPS URL the verify tag fetches with certificate checks on; private; empty skips it."}
       agent_box_managed_settings_extra: {type: dict, default: {}, description: "Other top-level managed settings, merged over the rest."}
+      agent_box_ci_runner:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the ci-runner wrapper, written to <work_dir>/ci-runner.json (0600, the keys user's):
+          the runner VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
+          vnet, template_vm_id) and the GitHub App and repository it registers with (github_app_id,
+          repo_owner, repo_name). No key goes in it. Empty skips the file.
