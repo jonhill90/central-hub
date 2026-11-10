@@ -27,14 +27,14 @@ kube-prometheus-stack is Prometheus, its operator, Grafana, kube-state-metrics a
 ## Before you start
 
 - `kubectl -n monitoring get pods` shows Prometheus, Grafana, the operator and kube-state-metrics ready.
-- Check `k8s_observability_grafana_sso` in the private inventory. If it is true, first add `values-sso.yaml` to `valueFiles` and uncomment the `auth_url` parameter in `root/values.yaml`, by PR.
+- Check `k8s_observability_grafana_sso` in the private inventory. It is true for c1, so `root/values.yaml` lists `values-sso.yaml` and the `auth_url` parameter. If it is false on another cluster, leave both out.
 - `kubectl -n argocd get application c1` shows Synced.
 
 Stop if any of these is not true.
 
 ## Steps
 
-The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `kube-prometheus-stack`'s auto-sync stays off for now, because it was OutOfSync on c1 at 02:54 UTC, so turning it on would change live objects. Run steps 1 to 3 first: read the diff and reconcile it, then step 4 turns auto-sync on.
+The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `kube-prometheus-stack` was OutOfSync on c1 at 02:54 UTC. The read at 03:08 UTC found Grafana's sign-in on the cluster but not in git (only the ConfigMap and the Deployment differed), so `values-sso.yaml` and the `auth_url` parameter are now in `root/values.yaml`, and auto-sync is on. Its first automatic sync is step 3. Step 4's inventory switch is still needed, so the role stops installing the chart.
 
 1. Refresh the root Application `c1`.
    expect: Application `kube-prometheus-stack` appears, OutOfSync, automatic sync off.

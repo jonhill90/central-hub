@@ -34,7 +34,7 @@ Stop if any of these is not true.
 
 ## Steps
 
-Since 2026-11-10, `autoSync` is on for `external-secrets` (the owner's card, 02:50 UTC); it was already Synced on c1. `secret-store` stays off for now, because it was OutOfSync on c1 at 02:54 UTC, so turning it on would change live objects: read its diff and reconcile it (steps 2 and 3), then step 4 turns it on. Step 4's Ansible switch is still needed, so the role stops applying the same objects.
+Since 2026-11-10, `autoSync` is on for `external-secrets` (the owner's card, 02:50 UTC); it was already Synced on c1. `secret-store` was OutOfSync on c1 at 02:54 UTC. The read at 03:08 UTC found that the only differences were Argo CD's tracking and the chart's `Delete=false` annotation on Namespace `secret-source`, so its auto-sync is on too, and its first automatic sync is step 3. Step 4's Ansible switch is still needed, so the role stops applying the same objects.
 
 1. Refresh the root Application `c1`.
    expect: `external-secrets` and `secret-store` appear: `external-secrets` synced on its own, `secret-store` OutOfSync with automatic sync off.
