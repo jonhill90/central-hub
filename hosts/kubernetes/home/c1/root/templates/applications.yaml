@@ -57,16 +57,21 @@ spec:
   ignoreDifferences:
     {{- toYaml . | nindent 4 }}
   {{- end }}
-  {{- if or $app.autoSync $app.syncOptions }}
   syncPolicy:
     {{- if $app.autoSync }}
     automated:
       selfHeal: true
       prune: {{ $app.prune | default false }}
+    # A fresh cluster syncs every app at once, so an app whose CRDs or webhook come from another app
+    # (monitoring-extras on the Prometheus Operator, jellyfin and secret-store on External Secrets)
+    # fails until that app is up. Retrying with backoff lets them converge without hand syncs.
+    retry:
+      {{- toYaml $.Values.syncRetry | nindent 6 }}
     {{- end }}
-    {{- with $app.syncOptions }}
     syncOptions:
+      # Make the app's namespace when it is missing, as Ansible's Helm installs did on c1.
+      - CreateNamespace=true
+      {{- with $app.syncOptions }}
       {{- toYaml . | nindent 6 }}
-    {{- end }}
-  {{- end }}
+      {{- end }}
 {{- end }}
