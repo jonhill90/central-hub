@@ -9,6 +9,6 @@ log_level_in: {{ proxmox_firewall_log_level_in }}
 
 [RULES]
 
-{% for rule in proxmox_firewall_rules %}
+{% for rule in proxmox_firewall_rules + proxmox_firewall_extra_rules %}
 IN {{ rule.action }}{% if rule.source is defined %} -source {{ rule.source }}{% endif %} -p {{ rule.proto }}{% if rule.dport is defined %} -dport {{ rule.dport }}{% endif %} # {{ rule.comment }}
 {% endfor %}
