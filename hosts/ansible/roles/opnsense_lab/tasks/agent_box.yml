@@ -1,0 +1,37 @@
+---
+# The agent box (VM 258 on VNet dev) may open two connections into the lab, and nothing else:
+# the Proxmox API and c1's Kubernetes API. The owner's yes, 2026-11-10 05:16 UTC: one rule from
+# the box's address only, to those two ports, once a reach test showed them blocked (measured
+# 07:47 UTC: both timed out). The dev VLAN's own rules still block the rest of RFC 1918.
+# Sequence 1 and up, ahead of the management rules (5 and up) and the per-VLAN rules (10 and up).
+- name: Agent box to its lab APIs
+  oxlorg.opnsense.rule:
+    description: "Allow agent box to {{ item.name }}"
+    match_fields: [description]
+    sequence: "{{ 1 + opnsense_lab_agent_box_index }}"
+    action: pass
+    quick: true
+    interface: ["{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_agent_box.vlan) | first).ifname }}"]
+    direction: in
+    ip_protocol: inet
+    protocol: TCP
+    source_net: "{{ opnsense_lab_agent_box.source }}/32"
+    destination_net: "{{ item.address }}/32"
+    destination_port: "{{ item.port | string }}"
+    log: false
+  loop: "{{ opnsense_lab_agent_box.targets }}"
+  loop_control:
+    label: "agent box to {{ item.name }}"
+    index_var: opnsense_lab_agent_box_index
+  when: opnsense_lab_agent_box is defined
+  notify: Apply rule changes
+
+# Unset in the inventory = no agent box rules: remove any left from before.
+- name: No agent box, no agent box rules
+  oxlorg.opnsense.rule:
+    description: "Allow agent box to {{ item }}"
+    match_fields: [description]
+    state: absent
+  loop: "{{ opnsense_lab_agent_box_target_names }}"
+  when: opnsense_lab_agent_box is not defined
+  notify: Apply rule changes
