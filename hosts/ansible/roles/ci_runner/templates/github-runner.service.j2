@@ -1,0 +1,26 @@
+# Managed by the ci_runner role (central-hub hosts/ansible). The notebook's self-hosted runner.
+[Unit]
+Description=GitHub Actions runner for {{ ci_runner_repo_url }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ ci_runner_user }}
+Group={{ ci_runner_user }}
+WorkingDirectory={{ ci_runner_home }}/runner
+ExecStart={{ ci_runner_home }}/runner/run.sh
+Restart=always
+RestartSec=15
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=5min
+# The jobs run the code in each pull request, so they get no way to gain privileges and see the
+# system's files read-only, apart from the runner's home and /tmp.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ ci_runner_home }}
+
+[Install]
+WantedBy=multi-user.target

@@ -41,7 +41,7 @@ flowchart LR
 
 CT 259, the jumpbox rehearsal's container, is not the agent box. This runbook doesn't touch it. It stays up by the owner's call (2026-11-09 23:04 UTC) until the platform's architecture is settled, and it lives in the rehearsal kit's state ([Grow the agent jumpbox](grow-the-agent-jumpbox.md)).
 
-Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/terraform/home/k8s` for the dev rebuild VMs (250-257), with the agents' own token `agent@pve!dev` (`hosts/terraform/home/bootstrap/agent-access.sh`). It runs only the code on `main`: it moves the `keys` user's own checkout to `origin/main` first, so a session can't change what runs with the token.
+There are two wrappers. `ci-runner plan|apply|configure|destroy` builds the notebook's CI runner VM and registers it ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md)). The other is `dev-vms plan|apply|destroy`: OpenTofu on `hosts/terraform/home/k8s` for the dev rebuild VMs (250-257), with the agents' own token `agent@pve!dev` (`hosts/terraform/home/bootstrap/agent-access.sh`). It runs only the code on `main`: it moves the `keys` user's own checkout to `origin/main` first, so a session can't change what runs with the token.
 
 ## Before you start
 

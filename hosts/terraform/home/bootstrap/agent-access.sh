@@ -1,10 +1,12 @@
 #!/bin/sh
 # Bootstrap, run as root on the Proxmox host. Safe to run again.
 # It gives agents their own Proxmox user for the dev rebuild VMs only (the owner's yes of
-# 2026-11-10 05:16 UTC: "dev pool only", VMs 250-257, nothing on c1, the firewall, 258 or 259):
+# 2026-11-10 05:16 UTC: "dev pool only", VMs 250-257, nothing on c1, the firewall, 258 or 259),
+# and the notebook's CI runner, VM 300 in pool ci (the owner's go of 2026-11-10 20:05 UTC to move the
+# notebook's CI off GitHub-hosted minutes; the VM and its ID are agent picks, docs/runbooks/set-up-the-ci-runner.md):
 #   - group agents, role AgentDev (IacOps's list without SDN.Allocate), role AgentClone
 #     (clone the AlmaLinux template, nothing else), user agent@pve in agents
-#   - pool dev, with any of VMs 250-257 that exist moved in
+#   - pool dev, with any of VMs 250-257 that exist moved in; pool ci, with VM 300 if it exists
 #   - ACLs for the group and for token agent@pve!dev (privilege-separated)
 # The token is made separately so its secret goes straight to a file and is never printed:
 #   pveum user token add agent@pve dev --privsep 1 --expire <epoch> --output-format json
@@ -12,7 +14,7 @@
 # Proxmox drops /vms/<id> ACLs when that VM is destroyed. So the per-ID ACLs below must be
 # re-added after each destroy, by running this script again.
 # Exit path: `pveum user delete agent@pve; pveum role delete AgentDev; pveum role delete AgentClone;
-# pveum group delete agents; pveum pool delete dev` (after the pool is empty).
+# pveum group delete agents; pveum pool delete dev; pveum pool delete ci` (after the pools are empty).
 set -eu
 
 NODE=$(hostname)
@@ -35,6 +37,10 @@ for id in 250 251 252 253 254 255 256 257; do
   qm status "$id" >/dev/null 2>&1 || continue
   pvesh get /pools/dev --output-format json | grep -q "\"vmid\":$id" || pvesh set /pools/dev --vms "$id" --allow-move 1
 done
+pveum pool list --output-format json | grep -q '"poolid":"ci"' || pveum pool add ci --comment "The notebook's CI runner, VM 300"
+if qm status 300 >/dev/null 2>&1; then
+  pvesh get /pools/ci --output-format json | grep -q '"vmid":300' || pvesh set /pools/ci --vms 300 --allow-move 1
+fi
 
 # One ACL line per path: <path> <role> <propagate>
 acl() {
@@ -48,6 +54,8 @@ acl() {
 }
 acl /pool/dev AgentDev 1
 for id in 250 251 252 253 254 255 256 257; do acl "/vms/$id" AgentDev 0; done
+acl /pool/ci AgentDev 1
+acl /vms/300 AgentDev 0                  # the CI runner
 acl /vms/9000 AgentClone 0               # clone the AlmaLinux template; can't change or delete it
 acl /sdn/zones/lab/dev AgentDev 0        # attach guests to VNet dev only
 acl /storage/local-lvm AgentDev 0        # guest disks

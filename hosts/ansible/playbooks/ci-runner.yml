@@ -1,0 +1,10 @@
+---
+# The notebook's self-hosted CI runner (VM hosts/terraform/home/ci-runner). Run by the agent box's
+# ci-runner wrapper, which writes the inventory and mints the registration token; order and proofs:
+# docs/runbooks/set-up-the-ci-runner.md.
+- name: CI runner
+  hosts: ci_runner
+  become: true
+  gather_facts: false
+  roles:
+    - role: ci_runner
