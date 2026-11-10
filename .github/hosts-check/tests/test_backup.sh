@@ -30,6 +30,8 @@ pg_containers=()
 cleanup() {
   [ -n "${etcd_pid:-}" ] && kill "$etcd_pid" 2>/dev/null
   [ ${#pg_containers[@]} -gt 0 ] && docker rm -f "${pg_containers[@]}" >/dev/null 2>&1
+  # Section 6 makes a repository read-only; a failure there must not leave it undeletable.
+  chmod -R u+w "$work" 2>/dev/null
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -249,7 +251,7 @@ for i in $(seq 1 40); do echo "chunk $i" > "$prod_path/logging/storage-loki-0/ch
 ln -s system.xml "$prod_path/media/jellyfin-config/link.xml"
 BACKUP_HOST=ci-prod BACKUP_STATE=$work/prod-state BACKUP_VOLUME_PATHS=$prod_path \
   "$bin/c1-backup-volumes.sh" > "$work/prod-backup.log" 2>&1 || { cat "$work/prod-backup.log"; fail "prod's volume backup failed"; }
-cp -a "$prod_path" "$work/as-backed-up"
+cp -a "$prod_path" "$work/prod-as-backed-up"
 # Dev starts with an empty data disk.
 rm -rf "$prod_path" && mkdir -p "$prod_path"
 # Read-only: with the repository unwritable, any lock or other write would fail the restore.
@@ -260,7 +262,7 @@ out=$(env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" restore 2>&1) || { echo "
 echo "$out"
 grep -q '^PASS: restored snapshot .* 3 folders, 42 files' <<< "$out" || fail "the restore did not report 3 folders and 42 files"
 grep -qP '^folder\tmedia/jellyfin-config\t2\t' <<< "$out" || fail "the restore did not log jellyfin-config's count"
-diff -r "$work/as-backed-up" "$prod_path" || fail "the restored folders differ from prod's as backed up"
+diff -r "$work/prod-as-backed-up" "$prod_path" || fail "the restored folders differ from prod's as backed up"
 repo_after=$(cd "$RESTIC_REPOSITORY" && find . -type f | sort | xargs sha256sum | sha256sum)
 [ "$repo_before" = "$repo_after" ] || fail "the restore changed the repository"
 ok "c1-restore-volumes.sh restored every folder from an unwritable repository, counts and canary match, the repository is unchanged"
@@ -274,7 +276,7 @@ ok "a second run does nothing, and check passes"
 echo "changed" > "$prod_path/.central-hub-backup-canary"
 if env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check > /dev/null 2>&1; then fail "check passed with a wrong canary"; fi
 rm -rf "$prod_path/logging/storage-loki-0"
-cp "$work/as-backed-up/.central-hub-backup-canary" "$prod_path/"
+cp "$work/prod-as-backed-up/.central-hub-backup-canary" "$prod_path/"
 if env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check > /dev/null 2>&1; then fail "check passed with a folder gone"; fi
 ok "check fails on a wrong canary and on a missing folder"
 
