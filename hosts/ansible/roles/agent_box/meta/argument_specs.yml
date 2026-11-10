@@ -32,4 +32,10 @@ argument_specs:
       agent_box_deny: {type: list, elements: str, description: permissions.deny in the managed settings.}
       agent_box_allow: {type: list, elements: str, default: [], description: permissions.allow in the managed settings; private.}
       agent_box_auto_mode: {type: dict, default: {}, description: The autoMode block in the managed settings; private.}
+      agent_box_ca_files:
+        type: list
+        elements: path
+        default: []
+        description: "Absolute paths of public CA certificate files on the controller (no folders, no patterns, no keys), each trusted on the box; private."
+      agent_box_tls_check_url: {type: str, default: "", description: "HTTPS URL the verify tag fetches with certificate checks on; private; empty skips it."}
       agent_box_managed_settings_extra: {type: dict, default: {}, description: "Other top-level managed settings, merged over the rest."}
