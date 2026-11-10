@@ -148,7 +148,8 @@
     - c1-restore-test-volumes.sh
     - c1-backup-azure-cert.py
     - c1-restore-volumes.sh
-  tags: [install]
+  # Also with --tags restore or restore_check alone, so a check run gets the script it calls.
+  tags: [install, restore, restore_check]
 
 # restic uses an account key or SAS when one is set, before any other sign-in, so neither may come
 # from the controller's env file once the nodes have their own identity.
