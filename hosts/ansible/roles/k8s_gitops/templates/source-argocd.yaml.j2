@@ -29,6 +29,10 @@ spec:
         - name: gatewayHttps
           value: "false"
 {% endif %}
+{% if k8s_gitops_source_local_path_stable_folders | bool %}
+        - name: localPathStableFolders
+          value: "true"
+{% endif %}
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

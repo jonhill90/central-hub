@@ -10,6 +10,8 @@
 #       and with the values files in git must match; "{zone}" in a param becomes example.com
 # Ignored everywhere: Argo CD's and Helm's own annotations.
 manifest c1 local-path k8s_storage local-path.yaml.j2
+# Dev turns stable folder names on (TASK-0240); both sides must still agree.
+manifest c1 local-path k8s_storage local-path.yaml.j2 {"k8s_storage_stable_folders":true} set=storageClass.stableFolders=true
 manifest c1 jellyfin k8s_jellyfin jellyfin.yaml.j2
 values c1 metrics-server k8s_observability k8s_observability_metrics_server_values
 values c1 loki k8s_observability k8s_observability_loki_values

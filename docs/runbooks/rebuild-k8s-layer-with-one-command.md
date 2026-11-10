@@ -91,7 +91,9 @@ flowchart LR
 
 What comes back: only `/var/lib/c1-data/local-path`, every app volume. Not etcd: dev's cluster is built from code, which is what is being proven, and prod's snapshot carries prod's certificates and node names. Not Keycloak's database: the identity stage doesn't run on dev (D-0028).
 
-Why it works without fighting Argo CD: local-path names each volume's folder `<namespace>/<claim>` (its `pathPattern`, from upstream's README at v0.0.37), so a folder has the same name on prod and on every dev rebuild. The restore puts the folders in place before Argo CD exists; when Argo CD makes a claim, the provisioner's setup script runs `mkdir -m 0777 -p`, which keeps the folder and its files. Nothing is scaled down.
+Why it works without fighting Argo CD: on dev, local-path names each volume's folder `<namespace>/<claim>` (its `pathPattern`, from upstream's README at v0.0.37), so a folder has the same name on every dev rebuild. The restore puts the folders in place before Argo CD exists; when Argo CD makes a claim, the provisioner's setup script runs `mkdir -m 0777 -p`, which keeps the folder and its files. Nothing is scaled down.
+
+c1 needs no change for this. It keeps upstream's folder names, `pvc-<uid>_<namespace>_<claim>`, and the restore maps each one to `<namespace>/<claim>` itself: namespaces, claim names and `pvc-<uid>` are DNS names with no `_`, so each name splits into exactly those three parts. A folder already named `<namespace>/<claim>` passes through. Any other name, or two folders for the same claim (a deleted claim's folder kept by reclaim policy `Retain`), stops the restore before it writes anything. The switch that turns `pathPattern` on is per cluster and off by default: `k8s_gitops_source_local_path_stable_folders` (root value `localPathStableFolders`, chart value `storageClass.stableFolders`). c1 leaves it off, because a StorageClass's parameters can't change in place; a rebuilt c1 may turn it on.
 
 Read-only, twice over: dev's worker signs in as its own app registration, `c1-backup-reader`, which holds Storage Blob Data Reader on the backup container only, and every restic call runs with `--no-lock`, which restic needs to read a repository it can't write. Known limit: restic has no read-only keys, so dev's worker holds the repository password, as prod's nodes do. It is on the access register, and it is rotated with every other secret once the secrets store exists.
 
@@ -104,10 +106,10 @@ These run through the Mac lane, in this order. Nothing here needs the owner exce
    why: the reader identity is code, like the backup app.
    expect: `Plan: 3 to add, 0 to change, 0 to destroy.`
 
-2. Move c1's volumes to the new folder names ([below](#move-c1s-volumes-to-the-new-folder-names)), then run one volume backup on prod: [Back up c1 off the box](back-up-c1-off-box.md), step 3.
+2. Check that prod has a volume snapshot of its worker: [Back up c1 off the box](back-up-c1-off-box.md), step 4. If the newest is older than you want on dev, run one backup first (step 3 there).
 
-   why: a snapshot taken before the move holds `pvc-<uid>_<namespace>_<claim>` folders, which no claim on dev would find. The restore stops on such a snapshot rather than guess a mapping.
-   expect: the drill passes; `restic ls latest --host <prod worker> /var/lib/c1-data/local-path` lists `<namespace>` folders and no `pvc-` ones.
+   why: dev restores the newest volume snapshot of `k8s_backup_restore_source_host`, as it is.
+   expect: a snapshot tagged `volumes` for the prod worker.
 
 3. In dev's private inventory, under `k8s_nodes` `vars`, set:
 
@@ -119,65 +121,19 @@ These run through the Mac lane, in this order. Nothing here needs the owner exce
    k8s_backup_azure_tenant_id: <tenant_id>
    k8s_backup_azure_app_object_id: <reader_app_object_id>
    k8s_backup_restore_source_host: <prod worker's short host name, as restic snapshots lists it>
+   k8s_gitops_source_local_path_stable_folders: true
    ```
 
    Leave `k8s_backup_enabled` unset or `false`: `playbooks/k8s-restore.yml` refuses an inventory that turns the backup timers on, or whose `k8s_gitops_cluster_labels.env` is not `dev`.
-   why: the reader app's IDs, never the backup app's, so dev can't write; the playbook also never makes the repository and runs no timer.
+   why: the reader app's IDs, never the backup app's, so dev can't write; the playbook also never makes the repository and runs no timer. The last line gives dev's local-path the `<namespace>/<claim>` folder names, so its claims find the restored folders.
 
 4. In dev's `rebuild.env`, set `STAGES`, `RESTORE_HOOK` and `RESTORE_CHECK_HOOK` as in [hosts/rebuild.env.example](../../hosts/rebuild.env.example).
 
 ### What the stage does and how it is proven
 
-- `restore` runs `playbooks/k8s-restore.yml` on dev's workers: the backup tools, the node's own key and certificate (uploaded to the reader app the first time, as for prod's nodes), the env file, then `c1-restore-volumes.sh restore`. It restores the newest volume snapshot of `k8s_backup_restore_source_host` with `--verify`, then compares each `<namespace>/<claim>` folder's file count and bytes on disk with `restic ls` of the same snapshot, and the canary file with the snapshot's copy. Any mismatch fails the run. A node without its data disk mounted says `SKIP`; at least one node must restore. It never writes over a folder it didn't restore: a non-empty folder with no record stops it, and a second run on the same snapshot says `ALREADY` and does nothing.
+- `restore` runs `playbooks/k8s-restore.yml` on dev's workers: the backup tools, the node's own key and certificate (uploaded to the reader app the first time, as for prod's nodes), the env file, then `c1-restore-volumes.sh restore`. It maps each folder in the newest volume snapshot of `k8s_backup_restore_source_host` to `<namespace>/<claim>` (and stops on a name it can't map or two folders for one claim), restores the snapshot with `--verify` into a staging folder on the same disk, renames each folder into place (logged as `mapped <from> -> <to>`), then compares each `<namespace>/<claim>` folder's file count and bytes on disk with `restic ls` of the same snapshot, and the canary file with the snapshot's copy. Any mismatch fails the run. A node without its data disk mounted says `SKIP`; at least one node must restore. It never writes over a folder it didn't restore: a non-empty folder with no record stops it, and a second run on the same snapshot says `ALREADY` and does nothing.
 - `checks` runs `RESTORE_CHECK_HOOK`, the same playbook with `--tags restore_check`, after the apps synced: each node's restore is still in place, `media/jellyfin` is rolled out with a Ready pod that mounts `jellyfin-config`, that claim's volume is the restored folder `local-path/media/jellyfin-config`, and the folder belongs to the Deployment's `runAsUser`.
 - The run's `.log` gets the snapshot ID, the canary and one `folder <namespace>/<claim> <files> <bytes>` line per folder, so the run's worklog can quote them.
-
-### Move c1's volumes to the new folder names
-
-Once, on c1, after the PR that set `pathPattern` merged. The owner said c1 holds no real data and is "safe to destroy and rebuild, do anything" (2026-11-10 03:08 UTC), so this is an agent step. Every command runs on c1's control-plane node with its `admin.conf`, as the rebuild's `kc` does. For each claim, the folder keeps its files and only its name changes.
-
-1. Delete the StorageClass, so Argo CD makes it again with `pathPattern`:
-
-   ```sh
-   kubectl delete storageclass local-path
-   kubectl -n argocd get application local-path -o jsonpath='{.status.sync.status}{"\n"}'
-   kubectl get storageclass local-path -o jsonpath='{.parameters.pathPattern}{"\n"}'
-   ```
-
-   why: a StorageClass's parameters can't change in place (Kubernetes rejects it: "updates to parameters are forbidden"), so Argo CD's sync of `local-path` fails until the old one is gone. Bound volumes don't depend on their StorageClass object.
-   expect: `Synced`, then `{{ .PVC.Namespace }}/{{ .PVC.Name }}/`.
-
-2. List the local-path volumes and their folders:
-
-   ```sh
-   kubectl get pv -o custom-columns=PV:.metadata.name,CLAIM:.spec.claimRef.namespace,NAME:.spec.claimRef.name,PATH:.spec.hostPath.path,SC:.spec.storageClassName | awk 'NR==1 || $5=="local-path"'
-   ```
-
-   expect: one line per claim, each `PATH` ending in `pvc-<uid>_<namespace>_<claim>`.
-
-3. Pause syncing, so Argo CD's self-heal doesn't start the apps again mid-move: set `c1Project.syncPaused: true` in `hosts/kubernetes/home/c1/root/values.yaml` by PR, merge, and wait until the root app is Synced. Then scale every workload that mounts a local-path claim to 0 (`kubectl -n <namespace> scale deploy/<name> --replicas=0`, or `statefulset/<name>`).
-
-   why: a folder must not change while its app writes to it, and the pause switch is the cluster's own way to hold Argo CD ([use-break-glass-access.md](use-break-glass-access.md)).
-   expect: `kubectl get pods -A` shows none of those pods.
-
-4. For each claim from step 2: delete the claim and its volume (reclaim policy `Retain` keeps the folder), then move the folder on the worker:
-
-   ```sh
-   kubectl -n <namespace> delete pvc <claim> --wait=false
-   kubectl delete pv <pv>
-   # on the worker:
-   sudo mkdir -p /var/lib/c1-data/local-path/<namespace>
-   sudo mv /var/lib/c1-data/local-path/pvc-<uid>_<namespace>_<claim> /var/lib/c1-data/local-path/<namespace>/<claim>
-   ```
-
-   A claim made by a StatefulSet's `volumeClaimTemplates` stays `Terminating` until its pod is gone, which step 3 did.
-   expect: `/var/lib/c1-data/local-path` holds only `<namespace>` folders and `.central-hub-backup-canary`.
-
-5. Set `c1Project.syncPaused: false` by PR and merge. Argo CD makes each claim again; local-path provisions it at `<namespace>/<claim>` and keeps the moved files. Scale the workloads back to their replicas from git (Argo CD's self-heal does it).
-
-   expect: every app Synced and Healthy; each local-path PV's `PATH` is `/var/lib/c1-data/local-path/<namespace>/<claim>`.
-
-If anything in a move goes wrong, c1 may instead start empty: delete the claims and the old folders and let Argo CD make new ones (the owner's words of 2026-11-10 03:08 UTC).
 
 ## Apps and auto-sync
 
@@ -188,10 +144,10 @@ On a fresh cluster, Argo CD installs an app only if its `autoSync` is on in `hos
 - The script prints the stage, its `rc` and the last 20 lines of the `.raw` file. Fix the cause, then run again from that stage with `--only <stage>,<next>,...`.
 - `vm_id ... is outside` or `a dev run needs node_vnet`: the tfvars is for the wrong env. Nothing has run.
 - On dev, `--teardown` puts the env back to empty. On prod, stop and tell the owner before any teardown.
-- `restore` fails with `taken before local-path's pathPattern change`: prod's newest snapshot is from before the move. Do [Once, before the first dev restore](#once-before-the-first-dev-restore), step 2.
+- `restore` fails with `can't be mapped`, `UNKNOWN` or `DUPLICATE`: prod's snapshot holds a folder that is not a volume, or two folders for one claim (a deleted claim's folder, kept by `Retain`). The message names them. Nothing was written. Remove the stray folder on prod, run one volume backup, and run again.
 - `restore` fails with `is not empty and holds no recorded restore`: dev's data disk holds data this restore didn't put there. Run again with `--teardown`.
 - `restore` fails with `AuthorizationFailure` or `AADSTS700027`: the reader app's role or its certificate isn't in effect yet; see [Back up c1 off the box](back-up-c1-off-box.md), "If it fails".
-- `checks` fails on the restore proof: its message names the claim, the folder the volume uses and the folder the restore made. A volume at a `pvc-...` folder means the StorageClass in the env has no `pathPattern`.
+- `checks` fails on the restore proof: its message names the claim, the folder the volume uses and the folder the restore made. A volume at a `pvc-...` folder means dev's StorageClass has no `pathPattern`: set `k8s_gitops_source_local_path_stable_folders: true` in dev's inventory, run `--teardown`, and rebuild (the parameter can't change in place).
 
 ## Afterwards
 

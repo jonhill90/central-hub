@@ -9,6 +9,11 @@ gatewayAddress: ""
 # Whether the Gateway has its HTTPS listeners. Ansible sets it to false only for a cluster with no
 # certificate (k8s_gitops_source_gateway_https, from k8s_gateway_https); c1 keeps true.
 gatewayHttps: true
+# Whether local-path names each volume's folder <namespace>/<claim> (its chart's
+# storageClass.stableFolders). Ansible sets it to true only for a cluster that asks
+# (k8s_gitops_source_local_path_stable_folders): dev, which restores prod's backup before its apps
+# (TASK-0240). c1 keeps false.
+localPathStableFolders: false
 
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
@@ -62,6 +67,8 @@ c1Project:
 #   needsZone    pass `zone` to the chart as a value
 #   zoneParameters  value path -> text with "{zone}" in it, passed as a Helm parameter (the zone is
 #                private, so a URL that holds it can't sit in a values file)
+#   switchParameters  value path -> name of a true/false root value; the parameter "true" is passed
+#                only when that root value is true, so a cluster that leaves it false renders as before
 #   valueFiles   the values files in appsPath/<name>/, in order (default: values.yaml)
 #   syncOptions  Argo CD sync options, for example ServerSideApply=true for charts with large CRDs
 #   ignoreDifferences  fields Argo CD leaves alone, for example a password the chart makes at random
@@ -85,6 +92,9 @@ apps:
   local-path:
     namespace: local-path-storage
     local: true
+    # Root value -> this chart's value, passed only when the root value is true.
+    switchParameters:
+      storageClass.stableFolders: localPathStableFolders
     wave: -3
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false

@@ -13,14 +13,15 @@ storageClass:
   default: true
   # Retain keeps a volume's folder when its claim is deleted; the folder is cleaned up by hand.
   reclaimPolicy: Retain
-  # Each volume's folder under `path` is <namespace>/<claim>, not upstream's
-  # pvc-<uid>_<namespace>_<claim>: the same on every rebuild and on dev and prod, so dev can restore
-  # prod's backup before Argo CD makes the claims, and the provisioner's setup (mkdir -p) keeps the
-  # restored folder (TASK-0240, agent pick 205). Upstream's own example (README at v0.0.37,
-  # "pathPattern"); v0.0.37 refuses a pattern that doesn't start with <namespace>/<claim>/. Values
-  # aren't templated, so Helm passes it through as written. A StorageClass's parameters can't change
-  # in place, so a running cluster deletes its StorageClass once for this (rebuild runbook,
-  # "Move c1's volumes to the new folder names").
+  # true: each volume's folder under `path` is <namespace>/<claim> (pathPattern below), not
+  # upstream's pvc-<uid>_<namespace>_<claim>, so it has the same name on every rebuild and dev can
+  # restore prod's backup before Argo CD makes the claims; the provisioner's setup (mkdir -p) keeps
+  # the restored folder (TASK-0240, agent pick 205). Set per cluster by the root Application
+  # (root value localPathStableFolders, from k8s_gitops_source_local_path_stable_folders): dev
+  # turns it on; c1 keeps false, because a StorageClass's parameters can't change in place.
+  stableFolders: false
+  # Upstream's own example (README at v0.0.37, "pathPattern"); v0.0.37 refuses a pattern that
+  # doesn't start with <namespace>/<claim>/. Values aren't templated, so Helm passes it as written.
   pathPattern: "{{ .PVC.Namespace }}/{{ .PVC.Name }}/"
   # Only nodes whose data disk is mounted carry this label (k8s_storage, tag disk).
   nodeLabel: central-hub/data-disk

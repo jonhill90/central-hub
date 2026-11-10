@@ -3,7 +3,8 @@
 # (rancher/local-path-provisioner, Apache-2.0, sha256 9781b39c24f3f651bd6d6e41b561e04e4904bbdb6d4f8c7a6009df3a702dcd65
 # measured 2026-10-29), changed only here: the namespace, both images pinned by digest, each
 # volume's folder under the data disk's mount, and the StorageClass's name, default flag, reclaim
-# policy, allowed nodes and folder names (pathPattern).
+# policy and allowed nodes.
+{{- /* On a cluster that turns storageClass.stableFolders on, also the folder names (pathPattern). */}}
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -154,9 +155,11 @@ metadata:
 provisioner: rancher.io/local-path
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: {{ .Values.storageClass.reclaimPolicy }}
+{{- if .Values.storageClass.stableFolders }}
 # Each volume's folder is <namespace>/<claim>, the same on every rebuild (TASK-0240).
 parameters:
   pathPattern: {{ .Values.storageClass.pathPattern | quote }}
+{{- end }}
 # Only nodes whose data disk is mounted (role k8s_storage, tag disk, sets the label), so no volume
 # lands on a node's OS disk.
 allowedTopologies:

@@ -170,7 +170,7 @@ A4. Nothing runs by hand after that. Each certificate lasts 90 days. Every day a
 The restore test never writes over a volume. To bring one back for real:
 
 1. Stop the app that uses it: `kubectl -n <namespace> scale deploy/<name> --replicas=0` (or the StatefulSet).
-2. On the node that holds it, find the folder: `kubectl get pv <pv> -o jsonpath='{.spec.hostPath.path}{.spec.local.path}'`. Since local-path's `pathPattern` (TASK-0240) it is `/var/lib/c1-data/local-path/<namespace>/<claim>`; snapshots from before 2026-11-10's move hold `pvc-<uid>_<namespace>_<claim>` instead.
+2. On the node that holds it, find the folder: `kubectl get pv <pv> -o jsonpath='{.spec.hostPath.path}{.spec.local.path}'`. On c1 it is `/var/lib/c1-data/local-path/pvc-<uid>_<namespace>_<claim>` (local-path's default names); on a cluster with stable folder names on, such as dev, `/var/lib/c1-data/local-path/<namespace>/<claim>`.
 3. Move the broken folder aside, then restore it from the newest snapshot of this node, into place:
 
    ```sh
