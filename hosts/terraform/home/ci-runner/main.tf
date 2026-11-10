@@ -1,7 +1,7 @@
 # The notebook's self-hosted CI runner (the owner's go of 2026-11-10 20:05 UTC to move the notebook's
 # CI off GitHub-hosted minutes; the VM is an agent pick, hosts/AGENT-PICKS.md). One small AlmaLinux 10
-# VM on VNet dev, cloned from template 9000. It holds no lab keys and can't reach the Proxmox API:
-# the host firewall lets only the agent box reach 8006. What runs inside it is the ci_runner role.
+# VM on VNet dev, cloned from template 9001, the agents' copy of 9000 on VNet dev. It holds no lab
+# keys and can't reach the Proxmox API: the host firewall lets only the agent box reach 8006. What runs inside it is the ci_runner role.
 # Applied from the agent box by the ci-runner wrapper (docs/runbooks/set-up-the-ci-runner.md).
 # Exit: tofu destroy with this folder's state, after removing the runner from the repository.
 

@@ -3,6 +3,6 @@
 proxmox_node_name = "examplehv01"
 vnet              = "dev"
 vlans_file        = "/var/lib/agent-box/central-hub/hosts/ansible/inventories/home/group_vars/all/vlans.yml"
-template_vm_id    = 9000
+template_vm_id    = 9001
 ssh_public_key    = "ssh-ed25519 AAAA... keys@agentbox"
 runner = { name = "dalapdemo01", vm_id = 300, address = "10.1.30.90", cores = 1, memory_mb = 2048, disk_gb = 20 }
