@@ -83,13 +83,13 @@ B0. Save the issued certificate as files on your computer.
 
 B1. Check the API user's privileges (only needed for Path A, shown here so both paths match).
 
-   In **System > Access > Users**, edit the user that owns the API key. Under **Effective Privileges**, it needs **System: Trust: Authorities**, **System: Trust: Certificates** and **Status: Services**. A member of the `admins` group already has every privilege.
+   In **System > Access > Users**, click the pencil on the user that owns the API key. In the **Edit User** dialog, type `System: Trust` in the **Privileges** field and tick **System: Trust: Authorities** and **System: Trust: Certificates**, then type `Status: Services` and tick it, and click **Save**. A member of the `admins` group already has every privilege.
 
    ![The user's privileges](img/opnsense-cert/01-user-privileges.png)
 
 B2. Add the lab root and the c1 intermediate as authorities.
 
-   In **System > Trust > Authorities**, click **+**. Set **Method** to **Import an existing Certificate Authority**, **Description** to `Home Lab Root CA`, paste `lab-root.crt` into **Certificate data**, and save. Do it again with **Description** `Home Lab c1 Intermediate CA` and the second certificate block of `opnsense.crt`.
+   In **System > Trust > Authorities**, click **+**. In the **Edit Certificate** dialog, set **Method** to **Import an existing Certificate Authority**, **Description** to `Home Lab Root CA`, paste `lab-root.crt` into **Certificate data**, and save. Do it again with **Description** `Home Lab c1 Intermediate CA` and the second certificate block of `opnsense.crt`.
 
    why: the firewall then sends the full chain, and it trusts the lab root for its own outbound checks.
    expect: both rows in the list. Skip either one that is already there.
@@ -98,7 +98,7 @@ B2. Add the lab root and the c1 intermediate as authorities.
 
 B3. Import the certificate.
 
-   In **System > Trust > Certificates**, click **+**. Set **Method** to **Import an existing Certificate**, **Description** to the web UI's name (`opnsense.<zone>`), paste the first certificate block of `opnsense.crt` into **Certificate data** and `opnsense.key` into **Private key data**, and save.
+   In **System > Trust > Certificates**, click **+**. In the **Edit Certificate** dialog, set **Method** to **Import an existing Certificate**, **Description** to the web UI's name (`opnsense.<zone>`), paste the first certificate block of `opnsense.crt` into **Certificate data** and `opnsense.key` into **Private key data**, and save.
 
    expect: a row whose issuer is `Home Lab c1 Intermediate CA`.
 
@@ -112,9 +112,9 @@ B4. Point the web UI at it.
 
 B5. Check it in the browser.
 
-   Open `https://opnsense.<zone>/` on the Mac. The padlock shows no warning, and the certificate viewer shows the chain lab root, c1 intermediate, `opnsense.<zone>`.
+   Open `https://opnsense.<zone>/` on the Mac. The padlock shows no warning, and the browser's certificate details show the chain lab root, c1 intermediate, then the web UI's certificate with `opnsense.<zone>` as its alternative name. From a terminal the same check is Path A step 4.
 
-   ![The browser's certificate viewer](img/opnsense-cert/05-browser-chain.png)
+   expect: no certificate warning. A warning means this computer does not trust the lab root yet.
 
 ## If it fails
 
