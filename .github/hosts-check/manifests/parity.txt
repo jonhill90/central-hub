@@ -14,8 +14,9 @@ manifest c1 jellyfin k8s_jellyfin jellyfin.yaml.j2
 values c1 metrics-server k8s_observability k8s_observability_metrics_server_values
 values c1 loki k8s_observability k8s_observability_loki_values
 values c1 alloy k8s_observability k8s_observability_alloy_values
-values c1 kube-prometheus-stack k8s_observability k8s_observability_kps_values {"k8s_observability_grafana_sso":false} ignore=Secret/kube-prometheus-stack-grafana:data.admin-password ignore=Deployment/kube-prometheus-stack-grafana:spec.template.metadata.annotations.checksum/secret
-values c1 kube-prometheus-stack k8s_observability k8s_observability_kps_values {"k8s_observability_grafana_sso":true} files=values.yaml,values-sso.yaml param=grafana.grafana\.ini.auth\.generic_oauth.auth_url=https://sso.{zone}/realms/lab/protocol/openid-connect/auth ignore=Secret/kube-prometheus-stack-grafana:data.admin-password ignore=Deployment/kube-prometheus-stack-grafana:spec.template.metadata.annotations.checksum/secret
+# kube-prometheus-stack is checked with sign-in on only: c1's root values carry the sign-in's auth_url
+# parameter, which every case for an app gets, and c1 runs with k8s_observability_grafana_sso true.
+values c1 kube-prometheus-stack k8s_observability k8s_observability_kps_values {"k8s_observability_grafana_sso":true} files=values.yaml,values-sso.yaml ignore=Secret/kube-prometheus-stack-grafana:data.admin-password ignore=Deployment/kube-prometheus-stack-grafana:spec.template.metadata.annotations.checksum/secret
 values c1 external-secrets k8s_secrets k8s_secrets_eso_values
 values c1 cert-manager k8s_certs k8s_certs_cert_manager_values
 manifest c1 secret-store k8s_secrets store.yaml.j2

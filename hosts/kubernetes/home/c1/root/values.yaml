@@ -73,13 +73,13 @@ apps:
     namespace: local-path-storage
     local: true
     wave: -3
-    autoSync: false   # OutOfSync on c1 (2026-11-10 02:54 UTC): on once its diff is reconciled
+    autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
   jellyfin:
     namespace: media
     local: true
     needsZone: true
-    autoSync: false   # OutOfSync on c1 (2026-11-10 02:54 UTC): on once its diff is reconciled
+    autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
   # Logs (spec step 3): two releases in namespace logging, as k8s_observability installed them.
   loki:
@@ -102,19 +102,19 @@ apps:
       version: 1.13.1   # Alloy v1.20.1, 2026-10-08; same as k8s_observability today
     autoSync: true
     prune: false
-  # Metrics (spec step 4). Add values-sso.yaml to valueFiles, and the auth_url parameter below,
-  # when k8s_observability_grafana_sso is true in the inventory (Grafana signs in through Keycloak).
+  # Metrics (spec step 4). values-sso.yaml and the auth_url parameter give Grafana its sign-in
+  # through Keycloak, as k8s_observability_grafana_sso does in the inventory (on for c1 since 2026-11-09).
   kube-prometheus-stack:
     namespace: monitoring
     chart:
       repoURL: https://prometheus-community.github.io/helm-charts
       name: kube-prometheus-stack
       version: 92.3.1   # Prometheus Operator v0.94.1, 2026-10-13; same as k8s_observability today
-    valueFiles: [values.yaml]
+    valueFiles: [values.yaml, values-sso.yaml]
     zoneParameters:
       # Short aliases (STD-0001 rules 5 and 7), as k8s_observability_short_names.
       grafana.grafana\.ini.server.root_url: "https://grafana.{zone}/"
-      # grafana.grafana\.ini.auth\.generic_oauth.auth_url: "https://sso.{zone}/realms/lab/protocol/openid-connect/auth"
+      grafana.grafana\.ini.auth\.generic_oauth.auth_url: "https://sso.{zone}/realms/lab/protocol/openid-connect/auth"
     # The CRDs are too large for a client-side apply's annotation.
     syncOptions: [ServerSideApply=true, RespectIgnoreDifferences=true]
     # Grafana's chart makes a new random admin password at every render; keep the one on the cluster.
@@ -123,7 +123,7 @@ apps:
         name: kube-prometheus-stack-grafana
         namespace: monitoring
         jsonPointers: [/data]
-    autoSync: false   # OutOfSync on c1 (2026-11-10 02:54 UTC): on once its diff is reconciled
+    autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was the sign-in, now in valueFiles
     prune: false
   # Secrets (spec step 5): External Secrets and the one store `c1` every ExternalSecret names.
   external-secrets:
@@ -140,7 +140,7 @@ apps:
     namespace: external-secrets
     local: true
     wave: -1
-    autoSync: false   # OutOfSync on c1 (2026-11-10 02:54 UTC): on once its diff is reconciled
+    autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
   # Certificates (spec step 6): cert-manager itself. The issuers and the Gateway's certificate stay
   # with Ansible (k8s_certs, tag issue) until the lab PKI work gives them a `certs` app here.

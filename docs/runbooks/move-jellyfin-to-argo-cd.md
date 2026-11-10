@@ -46,7 +46,7 @@ Stop if any of these is not true.
 
 ## Steps
 
-The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `jellyfin`'s auto-sync stays off for now, because it was OutOfSync on c1 at 02:54 UTC, so turning it on would change live objects. Run steps 1 to 3 first: read the diff and reconcile it, then step 4 turns auto-sync on.
+The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `jellyfin` was OutOfSync on c1 at 02:54 UTC. The read at 03:08 UTC found that the only difference from git was Argo CD's tracking, because Ansible made the objects, so its auto-sync is on in `root/values.yaml` too. Its first automatic sync is step 3. Step 4's inventory switch is still needed, so the role stops applying the same objects.
 
 1. Wait for the root Application to pick up `main`, or press Refresh on `c1` in the Argo CD UI.
    why: the root chart lists `jellyfin` with `local: true`, so the root makes the child Application `jellyfin`, which renders the chart in this repository.
