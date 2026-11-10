@@ -34,10 +34,10 @@ Stop if any of these is not true.
 
 ## Steps
 
-Since 2026-11-10, `autoSync` is on for every app in `root/values.yaml` (the owner's card, 02:50 UTC), so Argo CD syncs this app on its own and a fresh cluster installs it from git. On a cluster where Ansible already runs it, steps 1 to 3 are now a check after the fact: read the app's sync result instead of syncing by hand. Step 4's Ansible switch is still needed, so the role stops applying the same objects.
+Since 2026-11-10, `autoSync` is on for `external-secrets` (the owner's card, 02:50 UTC); it was already Synced on c1. `secret-store` stays off for now, because it was OutOfSync on c1 at 02:54 UTC, so turning it on would change live objects: read its diff and reconcile it (steps 2 and 3), then step 4 turns it on. Step 4's Ansible switch is still needed, so the role stops applying the same objects.
 
 1. Refresh the root Application `c1`.
-   expect: `external-secrets` and `secret-store` appear, OutOfSync, or already synced now that auto-sync is on.
+   expect: `external-secrets` and `secret-store` appear: `external-secrets` synced on its own, `secret-store` OutOfSync with automatic sync off.
 
 2. Read both diffs.
    ※ [spec, "Taking over a running component"](../specs/2026-11-c1-apps-under-argo-cd.md#taking-over-a-running-component-agent-pick)

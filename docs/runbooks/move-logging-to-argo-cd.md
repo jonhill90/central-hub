@@ -36,7 +36,7 @@ Stop if any of these is not true.
 
 ## Steps
 
-Since 2026-11-10, `autoSync` is on for every app in `root/values.yaml` (the owner's card, 02:50 UTC), so Argo CD syncs this app on its own and a fresh cluster installs it from git. On a cluster where Ansible already runs it, steps 1 to 3 are now a check after the fact: read the app's sync result instead of syncing by hand. Step 4's Ansible switch is still needed, so the role stops applying the same objects.
+Since 2026-11-10, `autoSync` is on for this app in `root/values.yaml` (the owner's card, 02:50 UTC), so Argo CD syncs it on its own and a fresh cluster installs it from git. It was already Synced on c1 when the switch went on. On a cluster where Ansible already runs it, steps 1 to 3 are now a check after the fact: read the app's sync result instead of syncing by hand. Step 4's Ansible switch is still needed, so the role stops applying the same objects.
 
 1. Refresh the root Application `c1` in the Argo CD UI.
    expect: Applications `loki` and `alloy` appear, OutOfSync, or already synced now that auto-sync is on.

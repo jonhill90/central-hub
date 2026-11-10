@@ -34,10 +34,10 @@ Stop if any of these is not true.
 
 ## Steps
 
-Since 2026-11-10, `autoSync` is on for every app in `root/values.yaml` (the owner's card, 02:50 UTC), so Argo CD syncs this app on its own and a fresh cluster installs it from git. On a cluster where Ansible already runs it, steps 1 to 3 are now a check after the fact: read the app's sync result instead of syncing by hand. Step 4's Ansible switch is still needed, so the role stops applying the same objects.
+The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `kube-prometheus-stack`'s auto-sync stays off for now, because it was OutOfSync on c1 at 02:54 UTC, so turning it on would change live objects. Run steps 1 to 3 first: read the diff and reconcile it, then step 4 turns auto-sync on.
 
 1. Refresh the root Application `c1`.
-   expect: Application `kube-prometheus-stack` appears, OutOfSync, or already synced now that auto-sync is on.
+   expect: Application `kube-prometheus-stack` appears, OutOfSync, automatic sync off.
 
 2. Read the diff.
    ※ [spec, "Taking over a running component"](../specs/2026-11-c1-apps-under-argo-cd.md#taking-over-a-running-component-agent-pick)
