@@ -30,7 +30,7 @@ flowchart LR
 
 | Piece | Where |
 |---|---|
-| VM | `hosts/terraform/home/ci-runner`: VM 300 in pool `ci`, cloned from template 9000, on VNet dev |
+| VM | `hosts/terraform/home/ci-runner`: VM 300 in pool `ci`, cloned from template 9001 (the agents' copy of 9000, on VNet dev), on VNet dev |
 | Runner | role `ci_runner`: user `github-runner` (no sudo), `/var/lib/github-runner/runner`, unit `github-runner.service` |
 | Wrapper | `ci-runner plan\|apply\|configure\|destroy` on the agent box, from role `agent_box` |
 | Private values | `agent_box_ci_runner` in the inventory, written to `/var/lib/agent-box/ci-runner.json` (the keys user's, 0600) |
@@ -47,9 +47,9 @@ The dev VLAN reaches the internet and no other lab network (role `opnsense_lab`,
 
 ## Steps
 
-1. Give the agents' Proxmox user pool `ci` and VM 300, from the Mac: `proxmox-agent-access.sh run`.
-   why: the agents' token may create guests only in its pools, and Proxmox checks a new VM's `/vms/<id>` before the VM joins its pool.
-   expect: `agent-access: done`.
+1. Give the agents' Proxmox user pool `ci`, VM 300 and template 9001, from the Mac: `proxmox-agent-access.sh run`. Then set `template_vm_id: 9001` in `agent_box_ci_runner`.
+   why: the agents' token may create guests only in its pools, and Proxmox checks a new VM's `/vms/<id>` before the VM joins its pool. Proxmox also checks SDN.Use on the network of the VM being cloned, and template 9000 is on VNet prod, which the agents may not use; the script makes template 9001, a copy on VNet dev.
+   expect: `agent-access: done`, and `qm config 9001` shows `template: 1` and `bridge=dev`.
 
 2. Install the wrapper on the box, from the Mac: `ansible-agent-box.sh apply`.
    expect: `failed=0`; `ci-runner` is in `/usr/local/bin`, its sudoers line is in `/etc/sudoers.d/agent-box`, and `/var/lib/agent-box/ci-runner.json` exists.
@@ -70,9 +70,10 @@ The dev VLAN reaches the internet and no other lab network (role `opnsense_lab`,
 
 - `ci-runner configure` warns "no registration token" and the role stops with "isn't registered yet": the App lacks Administration (write), or its installation hasn't accepted the new permission.
 - The play stops on a changed host key after a rebuild: check the new key on the VM's console, then remove its line from `/var/lib/agent-box/.ssh/known_hosts`.
+- `ci-runner apply` stops with 403 "Permission check failed (/sdn/zones/lab/prod, SDN.Use)": the settings still clone template 9000. Set `template_vm_id: 9001` and run `ansible-agent-box.sh apply` again (step 2).
 - `ci-runner plan` can't create VM 300 after a destroy: Proxmox dropped the `/vms/300` ACL (as for 250-257), so run step 1 again.
 - A job fails for a missing tool: add the package to `ci_runner_packages`, then run `ci-runner configure` again.
 
 ## Exit
 
-Remove the runner on the repository's runner page, run `ci-runner destroy`, put `runs-on: ubuntu-24.04` back in the notebook's workflows, delete `/etc/agent-keys/ci-runner-ssh`, and remove pool `ci` and the `/vms/300` lines from `agent-access.sh`.
+Remove the runner on the repository's runner page, run `ci-runner destroy`, put `runs-on: ubuntu-24.04` back in the notebook's workflows, delete `/etc/agent-keys/ci-runner-ssh`, and remove pool `ci`, template 9001 (`qm destroy 9001`, if no dev rebuild uses it) and the `/vms/300` lines from `agent-access.sh`.

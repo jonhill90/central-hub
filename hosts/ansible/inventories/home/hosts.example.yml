@@ -46,7 +46,7 @@ all:
           agent_box_tls_check_url: ""   # e.g. https://<Proxmox API name>:8006/api2/json/version; private
           agent_box_ci_runner: {}   # the CI runner VM the ci-runner wrapper builds; private; shape:
           #   { name: dalapdemo01, vm_id: 300, address: "", cores: 1, memory_mb: 2048, disk_gb: 20,
-          #     proxmox_node_name: "", vnet: dev, template_vm_id: 9000,
+          #     proxmox_node_name: "", vnet: dev, template_vm_id: 9001,
           #     github_app_id: "", repo_owner: jonhill90, repo_name: agent-notebook }
     opnsense:
       hosts:

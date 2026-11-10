@@ -14,7 +14,7 @@ variable "vnet" {
 }
 
 variable "template_vm_id" {
-  description = "The AlmaLinux 10 VM template home/k8s owns (9000)."
+  description = "The agents' AlmaLinux 10 template on VNet dev (9001), a copy of the one home/k8s owns, made by home/bootstrap/agent-access.sh."
   type        = number
 }
 

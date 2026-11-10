@@ -5,7 +5,8 @@
 # and the notebook's CI runner, VM 300 in pool ci (the owner's go of 2026-11-10 20:05 UTC to move the
 # notebook's CI off GitHub-hosted minutes; the VM and its ID are agent picks, docs/runbooks/set-up-the-ci-runner.md):
 #   - group agents, role AgentDev (IacOps's list without SDN.Allocate), role AgentClone
-#     (clone the AlmaLinux template, nothing else), user agent@pve in agents
+#     (clone the agents' template, nothing else), user agent@pve in agents
+#   - template 9001: a copy of template 9000 with its network on VNet dev, for the agents to clone
 #   - pool dev, with any of VMs 250-257 that exist moved in; pool ci, with VM 300 if it exists
 #   - ACLs for the group and for token agent@pve!dev (privilege-separated)
 # The token is made separately so its secret goes straight to a file and is never printed:
@@ -14,7 +15,7 @@
 # Proxmox drops /vms/<id> ACLs when that VM is destroyed. So the per-ID ACLs below must be
 # re-added after each destroy, by running this script again.
 # Exit path: `pveum user delete agent@pve; pveum role delete AgentDev; pveum role delete AgentClone;
-# pveum group delete agents; pveum pool delete dev; pveum pool delete ci` (after the pools are empty).
+# pveum group delete agents; pveum pool delete dev; pveum pool delete ci; qm destroy 9001` (after the pools are empty).
 set -eu
 
 NODE=$(hostname)
@@ -42,6 +43,17 @@ if qm status 300 >/dev/null 2>&1; then
   pvesh get /pools/ci --output-format json | grep -q '"vmid":300' || pvesh set /pools/ci --vms 300 --allow-move 1
 fi
 
+# Template 9001, the agents' copy of template 9000 on VNet dev. Proxmox checks SDN.Use on the
+# source's network when it clones: agent@pve!dev cloning 9000 (on VNet prod) got 403 "Permission
+# check failed (/sdn/zones/lab/prod, SDN.Use)", measured 2026-11-10. The agents get no use of prod,
+# so they clone this copy. It is made once: after template 9000 is rebuilt, run
+# `qm destroy 9001` and then this script again.
+if ! qm status 9001 >/dev/null 2>&1; then
+  qm clone 9000 9001 --name almalinux10-dev-template --full 1
+  qm set 9001 --net0 virtio,bridge=dev
+  qm template 9001
+fi
+
 # One ACL line per path: <path> <role> <propagate>
 acl() {
   for who in "--groups agents" "--tokens agent@pve!dev"; do
@@ -56,9 +68,12 @@ acl /pool/dev AgentDev 1
 for id in 250 251 252 253 254 255 256 257; do acl "/vms/$id" AgentDev 0; done
 acl /pool/ci AgentDev 1
 acl /vms/300 AgentDev 0                  # the CI runner
-acl /vms/9000 AgentClone 0               # clone the AlmaLinux template; can't change or delete it
+acl /vms/9001 AgentClone 0               # clone the agents' template; can't change or delete it
 acl /sdn/zones/lab/dev AgentDev 0        # attach guests to VNet dev only
 acl /storage/local-lvm AgentDev 0        # guest disks
 acl /storage/local AgentDev 0            # images the rebuild downloads
 acl "/nodes/$NODE" AgentDev 0            # read the node; download-url needs Sys.AccessNetwork here
+# Template 9000 is on VNet prod, which the agents may not use, so they no longer need it.
+pveum acl delete /vms/9000 --groups agents --roles AgentClone 2>/dev/null || true
+pveum acl delete /vms/9000 --tokens 'agent@pve!dev' --roles AgentClone 2>/dev/null || true
 echo "agent-access: done (node $NODE)"

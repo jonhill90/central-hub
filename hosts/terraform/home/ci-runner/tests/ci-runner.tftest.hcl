@@ -7,7 +7,7 @@ variables {
   proxmox_node_name = "examplehv01"
   vnet              = "dev"
   vlans_file        = "../../../ansible/inventories/home/group_vars/all/vlans.yml"
-  template_vm_id    = 9000
+  template_vm_id    = 9001
   ssh_public_key    = "ssh-ed25519 AAAAexample keys"
   runner            = { name = "dalapdemo01", vm_id = 300, address = "10.1.30.90", cores = 1, memory_mb = 2048, disk_gb = 20 }
 }
@@ -26,8 +26,8 @@ run "runner_on_dev_in_pool_ci" {
   }
 
   assert {
-    condition     = proxmox_virtual_environment_vm.runner.clone[0].vm_id == 9000
-    error_message = "The runner must be cloned from the AlmaLinux template 9000."
+    condition     = proxmox_virtual_environment_vm.runner.clone[0].vm_id == 9001
+    error_message = "The runner must be cloned from the agents' template 9001."
   }
 
   assert {
