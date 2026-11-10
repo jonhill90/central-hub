@@ -233,11 +233,16 @@ def cmd_check(conf):
     die(f"no token: {err}")
 
 
-def wait_accepted(conf, cert, seconds):
+def wait_accepted(conf, cert, seconds, scope=STORAGE_SCOPE):
+    """Wait until Entra ID accepts the certificate steadily: BACKUP_CERT_STEADY answers in a row,
+    BACKUP_CERT_WAIT_STEP seconds apart. One accepted request is not enough: on c1 (2026-11-10)
+    a new certificate was accepted once, then refused for about 20 seconds by other replicas."""
     deadline = time.time() + seconds
+    steady, need_steady, err = 0, int(conf.get("BACKUP_CERT_STEADY", "4")), ""
     while True:
-        got, err = token(conf, cert, STORAGE_SCOPE)
-        if got:
+        got, err = token(conf, cert, scope)
+        steady = steady + 1 if got else 0
+        if steady >= need_steady:
             return True, ""
         if time.time() > deadline:
             return False, err
@@ -296,16 +301,21 @@ def cmd_renew(conf):
         log(f"WARN: the old certificate's key ID is not known, so it stays on the app until it expires on "
             f"{cur.not_after:%Y-%m-%d}; the playbook's timers tag removes expired ones")
         return
-    bearer, err = token(conf, new, GRAPH_SCOPE)
-    if not bearer:
-        log(f"WARN: no Graph token with the new certificate to remove the old one: {err}")
-        return
-    status, answer = graph(conf, bearer, "removeKey", {"keyId": old_keyid, "proof": proof(conf, new)})
-    if status in (200, 204):
-        log(f"removed the old certificate {cur.thumbprint} (key {old_keyid})")
-    else:
-        log(f"WARN: removeKey answered {status}: {json.dumps(answer)[:300]}; the old certificate expires on "
-            f"{cur.not_after:%Y-%m-%d}")
+    # Removal is retried until the deadline: the token endpoint and Graph may each lag behind.
+    deadline = time.time() + int(conf.get("BACKUP_CERT_WAIT_SECONDS", "900"))
+    while True:
+        bearer, err = token(conf, new, GRAPH_SCOPE)
+        if bearer:
+            status, answer = graph(conf, bearer, "removeKey", {"keyId": old_keyid, "proof": proof(conf, new)})
+            if status in (200, 204):
+                log(f"removed the old certificate {cur.thumbprint} (key {old_keyid})")
+                return
+            err = f"removeKey answered {status}: {json.dumps(answer)[:300]}"
+        if time.time() > deadline:
+            log(f"WARN: the old certificate {cur.thumbprint} was not removed ({err}); the playbook's timers tag "
+                f"removes it, or it expires on {cur.not_after:%Y-%m-%d}")
+            return
+        time.sleep(float(conf.get("BACKUP_CERT_WAIT_STEP", "15")))
 
 
 def main():

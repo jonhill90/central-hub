@@ -5,12 +5,13 @@
 #   1. init makes a key and certificate in one 0600 file, and a second init leaves it alone.
 #   2. check says "not registered" (exit 3) before the first upload, and passes after it.
 #   3. renew does nothing while more than BACKUP_CERT_RENEW_DAYS are left.
-#   4. renew inside that window adds a new certificate with a valid proof, switches the file, and
-#      removes the old certificate from the app; the new one signs in.
+#   4. renew inside that window adds a new certificate with a valid proof, waits until the stand-in
+#      accepts it steadily (it answers yes, no, no, then yes, as Entra ID did on c1), switches the
+#      file, and removes the old certificate from the app; the new one signs in.
 #   5. a refused addKey fails the run and leaves the current file in use.
 #   6. a missing file fails renew with a clear error.
 #   7. role tasks azure_identity.yml, with a stand-in az, make the file, upload the certificate
-#      once, record its key ID, remove an expired certificate, and write the env lines restic reads.
+#      once, record its key ID, remove a certificate no node holds, and write the env lines restic reads.
 # Usage: .github/hosts-check/tests/test_backup_azure_cert.sh   (needs python3, openssl, ansible-core)
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
@@ -47,7 +48,7 @@ while read -r name; do unset "$name"; done < <(env | sed -n 's/^\(\(AZURE\|BACKU
 export CENTRAL_HUB_BACKUP_ENV=$work/etc/backup.env
 export AZURE_AUTHORITY_HOST=http://127.0.0.1:$port
 export BACKUP_GRAPH_ENDPOINT=http://127.0.0.1:$port
-export BACKUP_CERT_WAIT_SECONDS=5 BACKUP_CERT_WAIT_STEP=1
+export BACKUP_CERT_WAIT_SECONDS=30 BACKUP_CERT_WAIT_STEP=0.3
 pem=$work/etc/azure/backup.pem
 
 # 1
@@ -90,6 +91,12 @@ echo "ok   3. renew with more than 30 days left does nothing"
 
 # 4
 old_thumb=$(python3 -c "import json; print(json.load(open('$work/init1.json'))['thumbprint'])")
+# The new certificate is accepted once, refused twice, then accepted: renew must not switch or
+# remove the old one on the first answer.
+python3 - "$work/state.json" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1])); s["flaky"] = True; json.dump(s, open(sys.argv[1], "w"))
+PY
 BACKUP_CERT_RENEW_DAYS=200 python3 "$script" renew > "$work/renew.log" 2>&1 || { cat "$work/renew.log"; fail "renew in the window"; }
 [ "$(sha256sum "$pem")" != "$before" ] || fail "renew did not switch the file"
 [ "$(stat -c %a "$pem")" = 600 ] || fail "new file mode"
@@ -98,7 +105,11 @@ new_keyid=$(cat "$pem.keyid")
 [ "$(state 'sorted(s["keys"])')" = "['$new_keyid']" ] || { cat "$work/renew.log"; fail "app keys after renew: $(state 'sorted(s["keys"])')"; }
 grep -q "removed the old certificate $old_thumb" "$work/renew.log" || { cat "$work/renew.log"; fail "old certificate not removed"; }
 python3 "$script" check > "$work/check.log" 2>&1 || { cat "$work/check.log"; fail "check after renew"; }
-echo "ok   4. renew adds a new certificate with a valid proof, switches, and removes the old one"
+python3 - "$work/state.json" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1])); s["flaky"] = False; json.dump(s, open(sys.argv[1], "w"))
+PY
+echo "ok   4. renew adds a new certificate, waits until Entra ID accepts it steadily, switches, and removes the old one"
 
 # 5
 python3 - "$work/state.json" <<'PY'
@@ -187,7 +198,7 @@ run_play() {
 run_play > "$work/play.log" 2>&1 || { cat "$work/play.log"; fail "azure_identity.yml, first run"; }
 python3 "$script" check >/dev/null 2>&1 || fail "check after the play"
 [ "$(grep -c '^ad app credential reset' "$work/state.json.az.log")" = 1 ] || fail "az upload count"
-[ "$(state 'len(s["expired"])')" = 0 ] || fail "the expired certificate was not removed"
+[ "$(state 'len(s["expired"])')" = 0 ] || fail "the certificate no node holds was not removed"
 [ "$(cat "$pem.keyid")" = "$(state 'list(s["keys"])[0]')" ] || fail "key ID not recorded"
 run_play > "$work/play.log" 2>&1 || { cat "$work/play.log"; fail "azure_identity.yml, second run"; }
 [ "$(grep -c '^ad app credential reset' "$work/state.json.az.log")" = 1 ] || fail "a second run uploaded again"
@@ -196,5 +207,5 @@ for line in "AZURE_ACCOUNT_NAME=exampleaccount" "AZURE_CLIENT_ID=$client" "AZURE
   grep -qx "$line" "$work/env.lines" || { cat "$work/env.lines"; fail "env line $line"; }
 done
 grep -q SAS "$work/env.lines" && fail "env lines still name a SAS"
-echo "ok   7. azure_identity.yml uploads once, records the key ID, removes an expired certificate, writes the env lines"
+echo "ok   7. azure_identity.yml uploads once, records the key ID, removes a certificate no node holds, writes the env lines"
 echo "backup azure cert: 7 checks passed"
