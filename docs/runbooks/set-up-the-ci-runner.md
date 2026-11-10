@@ -8,13 +8,13 @@ outcome: VM 300 runs the GitHub Actions runner for agent-notebook as an unprivil
 needs: the agent box with the ci-runner wrapper; agent_box_ci_runner in the private inventory; the GitHub App with the repository permission Administration (write)
 private-values: [agent_box_ci_runner]
 files: [hosts/terraform/home/ci-runner/, hosts/ansible/roles/ci_runner/, hosts/ansible/playbooks/ci-runner.yml, hosts/ansible/roles/agent_box/files/ci-runner.sh, hosts/terraform/home/bootstrap/agent-access.sh]
-last-tested:
+last-tested: 2026-11-10, an agent session through the agent box, steps 3-6 (steps 1-2 by the owner's Mac lane); the first run needed #170, #172, #173 and #174, then `ci-runner configure` passed twice (the second changed nothing) and agent-notebook #265's three jobs ran on the runner and passed
 superseded-by:
 ---
 
 # Set up the notebook's self-hosted CI runner
 
-**Status:** draft, not yet run. Written 2026-11-10, after the owner's go at 20:05 UTC to move the notebook's CI off GitHub-hosted minutes. GitHub-hosted minutes ran out: the notebook's org-check started about 400 runs in 18 hours (measured from the Actions runs API on 2026-11-10), and a self-hosted runner doesn't use the plan's included minutes ([GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)).
+**Status:** draft; first run 2026-11-10 (see `last-tested`), not yet replayed on a fresh VM. Written 2026-11-10, after the owner's go at 20:05 UTC to move the notebook's CI off GitHub-hosted minutes. GitHub-hosted minutes ran out: the notebook's org-check started about 400 runs in 18 hours (measured from the Actions runs API on 2026-11-10), and a self-hosted runner doesn't use the plan's included minutes ([GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)).
 
 CI runs the code in each pull request, so the runner gets its own VM, away from the agent box's keys and from the Proxmox API:
 
