@@ -85,21 +85,49 @@ registration_token() {
   now=$(date +%s)
   jwt="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url).$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((now - 60)) $((now + 540)) "$app_id" | b64url)"
   jwt="$jwt.$(printf '%s' "$jwt" | openssl dgst -sha256 -sign "$keys/github-app.pem" | b64url)"
-  api() { curl -fsS -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$@"; }
-  inst=$(api -H "Authorization: Bearer $jwt" "https://api.github.com/repos/$owner/$name/installation" |
-    python3 -I -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-  tok=$(api -X POST -H "Authorization: Bearer $jwt" "https://api.github.com/app/installations/$inst/access_tokens" \
-    -d "{\"repositories\":[\"$name\"],\"permissions\":{\"administration\":\"write\"}}" |
-    python3 -I -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+  inst=$(api -H "Authorization: Bearer $jwt" "https://api.github.com/repos/$owner/$name/installation" | field id) ||
+    {
+      # GET /app works with any valid JWT, so it tells a wrong ID or key from a missing install.
+      if api -H "Authorization: Bearer $jwt" "https://api.github.com/app" >/dev/null; then
+        echo "ci-runner: the App's ID and key work, but the App is not installed on $owner/$name" >&2
+      else
+        echo "ci-runner: GitHub refused the App's ID or key" >&2
+      fi
+      return 1
+    }
+  tok=$(api -X POST -H "Authorization: Bearer $jwt" \
+    -d "{\"repositories\":[\"$name\"],\"permissions\":{\"administration\":\"write\"}}" \
+    "https://api.github.com/app/installations/$inst/access_tokens" | field token) ||
+    { echo "ci-runner: no installation token (has the installation accepted Administration: write?)" >&2; return 1; }
   api -X POST -H "Authorization: Bearer $tok" "https://api.github.com/repos/$owner/$name/actions/runners/registration-token" |
-    python3 -I -c 'import json,sys; print(json.load(sys.stdin)["token"])'
+    field token
 }
+
+# One GitHub API call. On an error it prints the status and GitHub's message (never a token) and fails.
+api() {
+  local out code
+  out=$(curl -sS -w '\n%{http_code}' -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$@") || return 1
+  code=${out##*$'\n'}
+  out=${out%$'\n'*}
+  if [[ $code != 2* ]]; then
+    printf 'ci-runner: GitHub returned %s for %s: %s\n' "$code" "${*: -1}" \
+      "$(printf '%s' "$out" | python3 -I -c 'import json,sys; print(json.load(sys.stdin).get("message", ""))' 2>/dev/null)" >&2
+    return 1
+  fi
+  printf '%s' "$out"
+}
+
+# Quiet on bad input: api() has already said what went wrong.
+field() { python3 -I -c 'import json,sys; print(json.load(sys.stdin)[sys.argv[1]])' "$1" 2>/dev/null; }
 
 configure() {
   local extra inventory
-  extra=$(mktemp "$work/state/ci-runner-extra.XXXXXX")
-  inventory=$(mktemp "$work/state/ci-runner-inventory.XXXXXX")
-  trap 'rm -f "$extra" "$inventory"' EXIT
+  extra=$(mktemp --suffix=.json "$work/state/ci-runner-extra.XXXXXX")
+  # The .json suffix makes Ansible read the inventory as YAML (JSON), not INI.
+  inventory=$(mktemp --suffix=.json "$work/state/ci-runner-inventory.XXXXXX")
+  # Expanded now: the trap runs after configure returns, when its locals are gone.
+  # shellcheck disable=SC2064
+  trap "rm -f '$extra' '$inventory'" EXIT
   python3 -I - "$settings" "$inventory" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1]))
