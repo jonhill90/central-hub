@@ -64,6 +64,7 @@ flowchart LR
    ```
 
    expect: `0 to add, 1 to change, 0 to destroy`, changing `memory.dedicated` to 8192, `disk.size` to 40, the tags, and `name` from the rehearsal's name to the STD-0001 name. Proxmox renames a VM in place, so the name change is not a replace.
+   why: Proxmox makes cloud-init's instance-id from a hash of the user-data it generates, and the user-data holds the VM's name (and the user, SSH keys and addresses). So the rename looks like a new instance to cloud-init, which runs its first-boot steps again at the reboot: new SSH host keys, a rewritten `/etc/hosts`. The agent_box role stops that with `manual_cache_clean: true` ([set-up-the-agent-box.md](set-up-the-agent-box.md)); on a VM the role has not run on, expect it, and see "If it fails".
    If the plan says **must be replaced**, stop and apply nothing.
 
 5. Apply the saved plan.
@@ -118,6 +119,17 @@ flowchart LR
 ## If it fails
 
 - The plan wants to replace the VM: run `tofu state mv` in reverse to put the entry back into the rehearsal state, and report the plan.
+- SSH says the host key changed, after a rename on a VM the agent_box role had not run on: cloud-init ran its first boot again (step 4). Don't accept the new key until you have read it without the network, from the Proxmox host as root, with the VM shut down:
+
+  ```sh
+  qm shutdown <vmid>
+  losetup -rfP --show "$(pvesm path <disk volume from qm config>)"   # prints /dev/loopN
+  mount -o ro,norecovery,nouuid /dev/loopNp<root partition> /mnt
+  ssh-keygen -lf /mnt/etc/ssh/ssh_host_ed25519_key.pub
+  umount /mnt && losetup -d /dev/loopN && qm start <vmid>
+  ```
+
+  expect: the same fingerprint as SSH shows. Then run the agent_box role (it sets `manual_cache_clean`), and redo [set-up-the-agent-box.md](set-up-the-agent-box.md) step 4 if `tailscale status` says it is logged out.
 - `growpart` says `NOCHANGE`: cloud-init already grew the partition at boot; go straight to `xfs_growfs /`.
 
 ## Exit
