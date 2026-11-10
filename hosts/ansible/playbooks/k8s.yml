@@ -14,6 +14,12 @@
   become: true
   roles:
     - role: k8s_node
+  tasks:
+    # kubeadm join writes kubelet.conf, and k8s_worker skips its join when the file exists.
+    - name: join | Has this worker joined?
+      ansible.builtin.stat: {path: /etc/kubernetes/kubelet.conf}
+      register: c1_kubelet_conf
+      when: inventory_hostname in groups['k8s_workers']
 
 - name: First control plane (runbook steps 7-9)
   hosts: k8s_control_plane[0]
@@ -21,11 +27,17 @@
   roles:
     - role: k8s_control_plane
   tasks:
+    # A token is minted only while some worker still has to join, so a second run changes
+    # nothing. A worker outside the play (--limit) counts as not joined, as before.
     - name: join | Print a join command for the workers
       ansible.builtin.command: kubeadm token create --print-join-command --ttl 30m
       register: c1_join
       changed_when: true
       no_log: true
+      when: >-
+        groups['k8s_workers'] | map('extract', hostvars)
+        | map(attribute='c1_kubelet_conf.stat.exists', default=false)
+        | reject | list | length > 0
 
 - name: Workers (runbook step 36, worker form)
   hosts: k8s_workers
@@ -33,7 +45,8 @@
   roles:
     - role: k8s_worker
       vars:
-        k8s_worker_join_command: "{{ hostvars[groups['k8s_control_plane'][0]].c1_join.stdout }}"
+        # Empty when no token was minted; every worker has then joined and skips the join.
+        k8s_worker_join_command: "{{ hostvars[groups['k8s_control_plane'][0]].c1_join.stdout | default('') }}"
 
 - name: Smoke test (runbook step 10)
   hosts: k8s_control_plane[0]
@@ -44,12 +57,14 @@
       ansible.builtin.command: kubectl wait --for=condition=Ready node --all --timeout=300s
       changed_when: false
 
+    # The test pod and its removal leave the cluster as they found it, so the pair is a check,
+    # not a change, and a second run of this playbook still reports nothing changed.
     - name: step10 | Test pod
       ansible.builtin.shell: |
         kubectl delete pod t1 --ignore-not-found --wait=true >/dev/null
         kubectl run t1 --image=registry.k8s.io/e2e-test-images/agnhost:2.53 --restart=Never --command -- sleep 600
         kubectl wait --for=condition=Ready pod/t1 --timeout=180s
-      changed_when: true
+      changed_when: false
 
     - name: step10 | DNS and a way out
       ansible.builtin.shell: |
@@ -62,4 +77,4 @@
     # A bare pod blocks `kubectl drain` (measured during the 1.37 upgrade), so the test pod goes.
     - name: step10 | Remove the test pod
       ansible.builtin.command: kubectl delete pod t1 --ignore-not-found
-      changed_when: true
+      changed_when: false
