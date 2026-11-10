@@ -34,8 +34,10 @@ Stop if any of these is not true.
 
 ## Steps
 
+Since 2026-11-10, `autoSync` is on for `external-secrets` (the owner's card, 02:50 UTC); it was already Synced on c1. `secret-store` stays off for now, because it was OutOfSync on c1 at 02:54 UTC, so turning it on would change live objects: read its diff and reconcile it (steps 2 and 3), then step 4 turns it on. Step 4's Ansible switch is still needed, so the role stops applying the same objects.
+
 1. Refresh the root Application `c1`.
-   expect: `external-secrets` and `secret-store` appear, OutOfSync, automatic sync off.
+   expect: `external-secrets` and `secret-store` appear: `external-secrets` synced on its own, `secret-store` OutOfSync with automatic sync off.
 
 2. Read both diffs.
    ※ [spec, "Taking over a running component"](../specs/2026-11-c1-apps-under-argo-cd.md#taking-over-a-running-component-agent-pick)

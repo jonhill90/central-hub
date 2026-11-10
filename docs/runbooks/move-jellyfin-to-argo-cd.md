@@ -46,6 +46,8 @@ Stop if any of these is not true.
 
 ## Steps
 
+The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `jellyfin`'s auto-sync stays off for now, because it was OutOfSync on c1 at 02:54 UTC, so turning it on would change live objects. Run steps 1 to 3 first: read the diff and reconcile it, then step 4 turns auto-sync on.
+
 1. Wait for the root Application to pick up `main`, or press Refresh on `c1` in the Argo CD UI.
    why: the root chart lists `jellyfin` with `local: true`, so the root makes the child Application `jellyfin`, which renders the chart in this repository.
    expect: `kubectl -n argocd get application jellyfin` exists and shows OutOfSync. Automatic sync is off.

@@ -74,7 +74,7 @@ flowchart LR
 
 ## Apps and auto-sync
 
-On a fresh cluster Argo CD installs an app only if its `autoSync` is on in `hosts/kubernetes/home/c1/root/values.yaml`. On 2026-11-09, 9 of 12 apps have it off, so the `apps` stage times out. Turning auto-sync on is the owner's decision (card pending). Until then, leave `apps` out with `STAGES` in `rebuild.env`, and the later stages and `checks` show what is missing.
+On a fresh cluster, Argo CD installs an app only if its `autoSync` is on in `hosts/kubernetes/home/c1/root/values.yaml`. The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). It is on for 8 of 12; `jellyfin`, `kube-prometheus-stack`, `local-path` and `secret-store` follow once their diffs on c1 are reconciled. Until then, the `apps` stage times out on a fresh cluster. `prune` stays off except for `monitoring-extras` and `alerts`. To leave the stage out, set `STAGES` in `rebuild.env`.
 
 ## If it fails
 
