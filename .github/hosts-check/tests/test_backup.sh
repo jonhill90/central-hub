@@ -15,8 +15,9 @@
 #   5. One pack file in the repository damaged: the volume restore test must fail.
 #   6. Dev's restore (c1-restore-volumes.sh): prod's folders, named as local-path names them on c1
 #      (pvc-<uid>_<namespace>_<claim>), come back whole at <namespace>/<claim> from a repository it
-#      can't write to; a second run does nothing, check catches a changed restore, and it refuses a
-#      folder that already holds data, two folders for one claim and a name it can't map.
+#      can't write to; a second run does nothing, check catches a changed restore, owner checks
+#      one folder as the checks stage does, and it refuses a folder that already holds data, two
+#      folders for one claim and a name it can't map.
 #
 # Tools come from their GitHub releases, each checked against a SHA-256: the versions and sums the
 # role installs are read from its defaults/main.yml, so CI tests what goes on the nodes.
@@ -294,6 +295,42 @@ rm -rf "$prod_path/logging/storage-loki-0"
 cp "$work/prod-as-backed-up/.central-hub-backup-canary" "$prod_path/"
 if env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check > /dev/null 2>&1; then fail "check passed with a folder gone"; fi
 ok "check fails on a wrong canary and on a missing folder"
+
+# owner: the checks stage's test of one folder. local-path makes the folder as root, mode 0777;
+# the app's files inside belong to its user (run 18, 2026-11-10: prod and dev both so). Changing
+# owners needs root: CI's runner has passwordless sudo.
+jcfg=$prod_path/media/jellyfin-config
+own() { env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" owner "$@"; }
+if [ "$(id -u)" = 0 ]; then asroot=(); elif sudo -n true 2>/dev/null; then asroot=(sudo -n); else asroot=(none); fi
+if [ "${asroot[0]:-}" != none ]; then
+  "${asroot[@]}" chown -R -h 1000:1000 "$jcfg"
+  "${asroot[@]}" chown 0:0 "$jcfg"
+  "${asroot[@]}" chmod 0777 "$jcfg"
+  out=$(own media/jellyfin-config 1000 2>&1) || { echo "$out"; fail "owner failed on a folder as local-path makes it"; }
+  grep -q '^PASS: .* all 3 entries in it belong to uid 1000' <<< "$out" || { echo "$out"; fail "owner did not pass"; }
+  "${asroot[@]}" chown 0:0 "$jcfg/system.xml"
+  if out=$(own media/jellyfin-config 1000 2>&1); then fail "owner passed with a file owned by root inside"; fi
+  grep -q 'not owned by uid 1000: system.xml (uid 0)' <<< "$out" || { echo "$out"; fail "it failed for another reason"; }
+  "${asroot[@]}" chown 1000:1000 "$jcfg/system.xml" "$jcfg"
+  if out=$(own media/jellyfin-config 1000 2>&1); then fail "owner passed with the folder owned by the app, not root"; fi
+  grep -q 'is 1000:1000 777 (owner:group mode), local-path makes it 0:0 777' <<< "$out" || { echo "$out"; fail "it failed for another reason"; }
+  "${asroot[@]}" chown 0:0 "$jcfg"
+  "${asroot[@]}" chmod 0755 "$jcfg"
+  if out=$(own media/jellyfin-config 1000 2>&1); then fail "owner passed with mode 755"; fi
+  grep -q 'is 0:0 755 (owner:group mode)' <<< "$out" || { echo "$out"; fail "it failed for another reason"; }
+  "${asroot[@]}" mkdir -m 0777 "$prod_path/media/empty-claim"
+  if out=$(own media/empty-claim 1000 2>&1); then fail "owner passed on an empty folder"; fi
+  grep -q 'is empty' <<< "$out" || { echo "$out"; fail "it failed for another reason"; }
+  # Back to this user, so the later cases and the cleanup can write.
+  "${asroot[@]}" rmdir "$prod_path/media/empty-claim"
+  "${asroot[@]}" chown -R -h "$(id -u):$(id -g)" "$jcfg"
+  "${asroot[@]}" chmod 0777 "$jcfg"
+  out=$(own media/not-here 1000 2>&1) || { echo "$out"; fail "owner failed on a node without the folder"; }
+  grep -q '^SKIP: ' <<< "$out" || fail "a node without the folder did not SKIP"
+  ok "owner passes on a folder that is 0:0 777 with the app's files inside, fails on a file of another user, an app-owned folder, mode 755 and an empty folder, and skips a node without it"
+else
+  echo "   owner cases skipped: they change owners, which needs root or passwordless sudo"
+fi
 
 # Never over data it didn't restore: a non-empty folder with no record of this restore.
 if env "${dev_env[@]}" BACKUP_STATE="$work/dev-state-2" "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1; then

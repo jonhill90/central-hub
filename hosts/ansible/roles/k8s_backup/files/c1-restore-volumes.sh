@@ -5,6 +5,12 @@
 #
 #   c1-restore-volumes.sh restore   restore the snapshot, then prove every folder came back whole
 #   c1-restore-volumes.sh check     prove the restore is still in place (the rebuild's checks stage)
+#   c1-restore-volumes.sh owner <namespace>/<claim> <uid>
+#                                   prove one restored folder is as the app needs it (checks stage):
+#                                   the folder itself as local-path makes it (root, mode 0777: its
+#                                   setup runs mkdir -m 0777 -p as root), not empty, and every entry
+#                                   directly inside it owned by <uid>, the Deployment's runAsUser.
+#                                   A node that doesn't hold the folder says SKIP.
 #
 # Every restic call has --no-lock, so nothing is written to the repository, and the node signs in
 # as a read-only identity, so nothing could be (agent pick 205).
@@ -42,7 +48,7 @@ set -euo pipefail
 . "$(dirname "$0")/c1-backup-lib.sh"
 
 cmd=${1:-}
-case $cmd in restore|check) ;; *) echo "usage: $0 restore|check" >&2; exit 2 ;; esac
+case $cmd in restore|check|owner) ;; *) echo "usage: $0 restore|check|owner <namespace>/<claim> <uid>" >&2; exit 2 ;; esac
 
 backup_lib_init
 path=${RESTORE_PATH:-/var/lib/c1-data/local-path}
@@ -62,6 +68,30 @@ disk_counts() {
       "$(find "$d" -type f -printf '%s\n' | awk '{s+=$1} END{print s+0}')"
   done
 }
+
+if [ "$cmd" = owner ]; then
+  rel=${2:?usage: $0 owner <namespace>/<claim> <uid>}
+  uid=${3:?usage: $0 owner <namespace>/<claim> <uid>}
+  case $uid in ''|*[!0-9]*) die "uid '$uid' is not a number" ;; esac
+  dir=$path/$rel
+  if [ ! -d "$dir" ]; then
+    echo "SKIP: $dir is not on $BACKUP_HOST"
+    exit 0
+  fi
+  got=$(stat -c '%u:%g %a' "$dir")
+  [ "$got" = "0:0 777" ] || die "$dir is $got (owner:group mode), local-path makes it 0:0 777"
+  n=0
+  bad=()
+  while IFS= read -r -d '' e; do
+    n=$((n + 1))
+    o=$(stat -c '%u' "$e")
+    [ "$o" = "$uid" ] || bad+=("${e#"$dir"/} (uid $o)")
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -print0)
+  [ "$n" -gt 0 ] || die "$dir is empty"
+  [ "${#bad[@]}" -eq 0 ] || die "in $dir, not owned by uid $uid: ${bad[*]}"
+  echo "PASS: $dir is 0:0 777 as local-path makes it, and all $n entries in it belong to uid $uid"
+  exit 0
+fi
 
 if [ "$cmd" = check ]; then
   [ -s "$record" ] || die "no restore recorded on $BACKUP_HOST ($record)"
