@@ -8,8 +8,8 @@
 		"tag:agent":          ["autogroup:admin", "tag:agent"],
 		// The tailnet connector, CT 900 (home/remote-access)
 		"tag:connector":      ["autogroup:admin"],
-		// The Claude jumpbox test guests on dev (the owner's yes of 2026-11-09 at 08:14 UTC)
-		"tag:jumpbox":        ["autogroup:admin"],
+		// The agent box on dev (the owner's yes of 2026-11-09 at 08:14 UTC; tag name chosen 2026-11-10 at 06:18 UTC)
+		"tag:agent-box":      ["autogroup:admin"],
 	},
 
 	// The connector's routes are turned on without a click: the Proxmox host's address and every
@@ -36,9 +36,9 @@
 		// Agent cloud sessions: the Proxmox host on SSH only, through the connector
 		{"src": ["tag:agent"], "dst": ["${proxmox_host_address}/32"], "ip": ["tcp:22"]},
 
-		// Agent cloud sessions: the jumpbox on SSH only (the owner's yes of 2026-11-09 at 08:14 UTC).
-		// tag:jumpbox gets no destination of its own, so it has no path to the Mac or the lab.
-		{"src": ["tag:agent"], "dst": ["tag:jumpbox"], "ip": ["tcp:22"]},
+		// Agent cloud sessions: the agent box on SSH only (the owner's yes of 2026-11-09 at 08:14 UTC).
+		// tag:agent-box gets no destination of its own, so it has no path to the Mac or the lab.
+		{"src": ["tag:agent"], "dst": ["tag:agent-box"], "ip": ["tcp:22"]},
 
 		// GitHub Actions runners: the VPS on SSH only
 		{"src": ["tag:github-actions"], "dst": ["tag:vps"], "ip": ["tcp:22"]},
@@ -46,7 +46,7 @@
 
 	"ssh": [
 		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:vps"], "users": ["root", "autogroup:nonroot"]},
-		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:jumpbox"], "users": ["claude"]},
+		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:agent-box"], "users": ["claude"]},
 		{"action": "accept", "src": ["tag:github-actions"], "dst": ["tag:vps"], "users": ["root", "deploy", "autogroup:nonroot"]},
 		{"action": "accept", "src": ["autogroup:admin"], "dst": ["tag:vps"], "users": ["root", "deploy", "autogroup:nonroot"]},
 		{"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"], "users": ["autogroup:nonroot", "root"]},
@@ -61,7 +61,7 @@
 			"deny":   ["${proxmox_host_address}:8006", "${proxmox_host_address}:3389"],
 		},
 		{
-			"src":  "tag:jumpbox",
+			"src":  "tag:agent-box",
 			"deny": ["${proxmox_host_address}:22", "tag:vps:22"],
 		},
 	],
