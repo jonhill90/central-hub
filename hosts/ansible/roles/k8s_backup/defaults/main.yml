@@ -103,3 +103,12 @@ k8s_backup_restore_snapshot: latest
 k8s_backup_restore_check_namespace: media
 k8s_backup_restore_check_deployment: jellyfin
 k8s_backup_restore_check_claim: jellyfin-config
+# Keycloak's database (tag restore_check, RB1 part D): prod's pg_dumpall dump from the same snapshot
+# is loaded into a throwaway PostgreSQL in this namespace, then the pinned Keycloak is started on it.
+# The images are role k8s_identity's (k8s_identity_postgres_image; quay.io/keycloak/keycloak at
+# k8s_identity_version, the image its operator runs); CI checks they match.
+k8s_backup_restore_check_identity: true
+k8s_backup_restore_check_identity_namespace: restore-check-identity
+k8s_backup_restore_identity_dump: /var/lib/central-hub-backup/db-dumps/identity_sso-postgres-0.sql
+k8s_backup_restore_check_postgres_image: docker.io/library/postgres:18.6
+k8s_backup_restore_check_keycloak_image: quay.io/keycloak/keycloak:26.8.1

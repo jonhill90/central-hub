@@ -1,0 +1,118 @@
+# {{ ansible_managed }}
+# RB1 part D (tag restore_check, dev's checks stage): a throwaway PostgreSQL, then the pinned
+# Keycloak on it, to prove prod's Keycloak database comes back. No Service, Ingress or route: the
+# only way in is Keycloak's pod to PostgreSQL's pod IP, and nothing reaches Keycloak. The whole
+# namespace is deleted at the end of the check, pass or fail (tasks/restore_check.yml).
+{% if k8s_backup_identity_part == 'postgres' %}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ k8s_backup_restore_check_identity_namespace }}
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+# Ingress to PostgreSQL only from the Keycloak pod; none to Keycloak.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: only-keycloak-to-postgres
+  namespace: {{ k8s_backup_restore_check_identity_namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: keycloak}}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: postgres
+  namespace: {{ k8s_backup_restore_check_identity_namespace }}
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  # On the worker that brings the dump back, so it loads through that node's crictl.
+  nodeName: {{ k8s_backup_identity_node }}
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  # As role k8s_identity runs it: the image's postgres user, uid 999.
+  securityContext:
+    runAsUser: 999
+    runAsGroup: 999
+    runAsNonRoot: true
+    fsGroup: 999
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: postgres
+      image: {{ k8s_backup_restore_check_postgres_image }}
+      env:
+        - {name: POSTGRES_DB, value: keycloak}
+        - name: POSTGRES_USER
+          valueFrom: {secretKeyRef: {name: db, key: username}}
+        - name: POSTGRES_PASSWORD
+          valueFrom: {secretKeyRef: {name: db, key: password}}
+        - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+      readinessProbe:
+        exec: {command: [pg_isready, -U, keycloak, -d, postgres]}
+        periodSeconds: 5
+      resources:
+        requests: {cpu: 50m, memory: 128Mi}
+        limits: {memory: 512Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      volumeMounts:
+        - {name: data, mountPath: /var/lib/postgresql/data}
+  volumes:
+    - name: data
+      emptyDir: {sizeLimit: 4Gi}
+{% else %}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: keycloak
+  namespace: {{ k8s_backup_restore_check_identity_namespace }}
+  labels:
+    app.kubernetes.io/name: keycloak
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  # The image's keycloak user.
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 0
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: keycloak
+      image: {{ k8s_backup_restore_check_keycloak_image }}
+      args: [start]
+      env:
+        - {name: KC_DB, value: postgres}
+        - {name: KC_DB_URL_HOST, value: "{{ k8s_backup_identity_postgres_ip }}"}
+        - {name: KC_DB_URL_DATABASE, value: keycloak}
+        - name: KC_DB_USERNAME
+          valueFrom: {secretKeyRef: {name: db, key: username}}
+        - name: KC_DB_PASSWORD
+          valueFrom: {secretKeyRef: {name: db, key: password}}
+        # Plain HTTP, no hostname, one node: nothing reaches it, and only its readiness is read.
+        - {name: KC_HTTP_ENABLED, value: "true"}
+        - {name: KC_HOSTNAME_STRICT, value: "false"}
+        - {name: KC_HEALTH_ENABLED, value: "true"}
+        - {name: KC_CACHE, value: local}
+      # Ready once Keycloak has opened the database and its schema checks passed (management
+      # interface, port 9000).
+      readinessProbe:
+        httpGet: {path: /health/ready, port: 9000}
+        periodSeconds: 10
+        failureThreshold: 60
+      resources:
+        requests: {cpu: 200m, memory: 768Mi}
+        limits: {memory: 1536Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+{% endif %}

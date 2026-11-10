@@ -132,3 +132,193 @@
       {{ ansible_play_hosts | map('extract', hostvars, ['k8s_backup_check_owner', 'stdout'])
          | select('match', '^PASS') | list }}
   run_once: true
+
+# Keycloak's database (RB1 part D; Plan thread's option C, 2026-11-10): prod's pg_dumpall dump from
+# the same snapshot, loaded by the runbook's step 3 into a throwaway PostgreSQL, then the pinned
+# Keycloak started on it. Proves the dump is whole, loads into the pinned PostgreSQL, and that the
+# pinned Keycloak opens it. Only counts are logged. The namespace and the dump are removed at the
+# end, pass or fail, and the run fails if that cleanup doesn't finish.
+- name: restore_check | identity | Keycloak's database comes back
+  when: k8s_backup_restore_check_identity | bool
+  run_once: true
+  check_mode: false
+  vars:
+    k8s_backup_identity_host: "{{ ansible_play_hosts | first }}"
+    k8s_backup_identity_cp: "{{ groups['k8s_control_plane'] | first }}"
+    k8s_backup_identity_kc: >-
+      kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_backup_restore_check_identity_namespace }}
+    k8s_backup_identity_manifest: /root/central-hub-restore-check-identity.yaml
+    k8s_backup_identity_env:
+      CENTRAL_HUB_BACKUP_ENV: "{{ k8s_backup_node_env_file }}"
+      BACKUP_STATE: "{{ k8s_backup_state_dir }}"
+      RESTIC_CACHE_DIR: /var/cache/central-hub-backup
+      RESTORE_DUMP: "{{ k8s_backup_restore_identity_dump }}"
+  block:
+    - name: restore_check | identity | The loading worker's node name
+      ansible.builtin.command: >-
+        kubectl --kubeconfig /etc/kubernetes/admin.conf get nodes
+        -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.addresses[?(@.type=="InternalIP")].address}{"\n"}{end}'
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+      register: k8s_backup_identity_nodes
+      changed_when: false
+
+    - name: restore_check | identity | Remember it
+      ansible.builtin.set_fact:
+        k8s_backup_identity_node: >-
+          {{ (k8s_backup_identity_nodes.stdout_lines
+          | select('search', ' ' ~ hostvars[k8s_backup_identity_host].ansible_host ~ '$') | first).split(' ') | first }}
+
+    - name: restore_check | identity | No namespace left from an earlier run
+      ansible.builtin.command: >-
+        kubectl --kubeconfig /etc/kubernetes/admin.conf delete namespace
+        {{ k8s_backup_restore_check_identity_namespace }} --ignore-not-found --wait=true --timeout=300s
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+      changed_when: false
+
+    - name: restore_check | identity | The throwaway PostgreSQL's manifest
+      ansible.builtin.template:
+        src: identity-check.yaml.j2
+        dest: "{{ k8s_backup_identity_manifest }}"
+        owner: root
+        group: root
+        mode: "0600"
+      vars:
+        k8s_backup_identity_part: postgres
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+
+    # The password is made on the node and never read back (as role k8s_identity's sso-db).
+    - name: restore_check | identity | Namespace, its database account, the PostgreSQL pod
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        kubectl --kubeconfig /etc/kubernetes/admin.conf create namespace {{ k8s_backup_restore_check_identity_namespace }} &&
+        {{ k8s_backup_identity_kc }} create secret generic db --from-literal=username=keycloak
+        --from-literal=password="$(openssl rand -hex 24)" >/dev/null &&
+        {{ k8s_backup_identity_kc }} apply -f {{ k8s_backup_identity_manifest }} --server-side &&
+        {{ k8s_backup_identity_kc }} wait pod/postgres --for=condition=Ready --timeout=300s
+      args:
+        executable: /bin/bash
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+      changed_when: true
+
+    - name: restore_check | identity | Load prod's dump by the runbook's step 3, and count
+      ansible.builtin.command:
+        argv:
+          - "{{ k8s_backup_bin_dir }}/c1-restore-identity.sh"
+          - load
+          - "{{ k8s_backup_restore_check_identity_namespace }}"
+      environment: "{{ k8s_backup_identity_env }}"
+      delegate_to: "{{ k8s_backup_identity_host }}"
+      register: k8s_backup_identity_load
+      changed_when: true
+
+    - name: restore_check | identity | What came back (counts only)
+      ansible.builtin.debug:
+        msg: "{{ k8s_backup_identity_load.stdout_lines }}"
+
+    - name: restore_check | identity | PostgreSQL's pod address
+      ansible.builtin.command: >-
+        {{ k8s_backup_identity_kc }} get pod postgres -o jsonpath={.status.podIP}
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+      register: k8s_backup_identity_pg_ip
+      changed_when: false
+
+    - name: restore_check | identity | The Keycloak pod's manifest
+      ansible.builtin.template:
+        src: identity-check.yaml.j2
+        dest: "{{ k8s_backup_identity_manifest }}"
+        owner: root
+        group: root
+        mode: "0600"
+      vars:
+        k8s_backup_identity_part: keycloak
+        k8s_backup_identity_postgres_ip: "{{ k8s_backup_identity_pg_ip.stdout }}"
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+
+    - name: restore_check | identity | The pinned Keycloak starts on prod's data
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        {{ k8s_backup_identity_kc }} apply -f {{ k8s_backup_identity_manifest }} --server-side &&
+        {{ k8s_backup_identity_kc }} wait pod/keycloak --for=condition=Ready --timeout=900s
+      args:
+        executable: /bin/bash
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+      changed_when: true
+
+    - name: restore_check | identity | The data is unchanged after Keycloak opened it
+      ansible.builtin.command:
+        argv:
+          - "{{ k8s_backup_bin_dir }}/c1-restore-identity.sh"
+          - recount
+          - "{{ k8s_backup_restore_check_identity_namespace }}"
+      environment: "{{ k8s_backup_identity_env }}"
+      delegate_to: "{{ k8s_backup_identity_host }}"
+      register: k8s_backup_identity_recount
+      changed_when: false
+
+    - name: restore_check | identity | PASS
+      ansible.builtin.debug:
+        msg: >-
+          {{ k8s_backup_identity_recount.stdout_lines + ['PASS: Keycloak ' ~
+          (k8s_backup_restore_check_keycloak_image | regex_replace('^.*:', '')) ~ ' is Ready on prod''s database'] }}
+
+  rescue:
+    # The pods' states only: their logs can quote realm content, which the run's log must not hold.
+    - name: restore_check | identity | The pods' states
+      ansible.builtin.command: >-
+        {{ k8s_backup_identity_kc }} get pods -o custom-columns={{ cols | join(',') }}
+      vars:
+        cols:
+          - POD:.metadata.name
+          - READY:.status.containerStatuses[0].ready
+          - RESTARTS:.status.containerStatuses[0].restartCount
+          - WAITING:.status.containerStatuses[0].state.waiting.reason
+          - EXITED:.status.containerStatuses[0].state.terminated.reason
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+      register: k8s_backup_identity_pods
+      changed_when: false
+      failed_when: false
+
+    - name: restore_check | identity | Their states
+      ansible.builtin.debug:
+        msg: "{{ k8s_backup_identity_pods.stdout_lines | default([]) }}"
+
+    - name: restore_check | identity | Failed
+      ansible.builtin.fail:
+        msg: >-
+          Keycloak's database check failed at "{{ ansible_failed_task.name | default('?') }}":
+          {{ ansible_failed_result.msg | default('') }} {{ ansible_failed_result.stderr | default('') }}
+
+  always:
+    - name: restore_check | identity | Delete the namespace (PostgreSQL, Keycloak, the account)
+      ansible.builtin.command: >-
+        kubectl --kubeconfig /etc/kubernetes/admin.conf delete namespace
+        {{ k8s_backup_restore_check_identity_namespace }} --ignore-not-found --wait=true --timeout=300s
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+      changed_when: true
+
+    - name: restore_check | identity | Remove the manifests
+      ansible.builtin.file:
+        path: "{{ k8s_backup_identity_manifest }}"
+        state: absent
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+
+    - name: restore_check | identity | Remove the dump and the counts from the worker
+      ansible.builtin.command:
+        argv: ["{{ k8s_backup_bin_dir }}/c1-restore-identity.sh", clean]
+      environment: "{{ k8s_backup_identity_env }}"
+      delegate_to: "{{ k8s_backup_identity_host }}"
+      register: k8s_backup_identity_clean
+      changed_when: true
+
+    - name: restore_check | identity | The namespace is gone
+      ansible.builtin.command: >-
+        kubectl --kubeconfig /etc/kubernetes/admin.conf get namespace
+        {{ k8s_backup_restore_check_identity_namespace }} --ignore-not-found -o name
+      delegate_to: "{{ k8s_backup_identity_cp }}"
+      register: k8s_backup_identity_ns_left
+      changed_when: false
+      failed_when: k8s_backup_identity_ns_left.stdout | length > 0
+
+    - name: restore_check | identity | Cleanup done
+      ansible.builtin.debug:
+        msg: "{{ k8s_backup_identity_clean.stdout_lines + ['PASS: namespace ' ~ k8s_backup_restore_check_identity_namespace ~ ' deleted'] }}"

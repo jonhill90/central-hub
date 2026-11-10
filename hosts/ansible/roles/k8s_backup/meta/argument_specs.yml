@@ -82,3 +82,23 @@ argument_specs:
       k8s_backup_restore_check_namespace: {type: str, default: media, description: Namespace of the app-level restore check.}
       k8s_backup_restore_check_deployment: {type: str, default: jellyfin, description: Deployment of the app-level restore check.}
       k8s_backup_restore_check_claim: {type: str, default: jellyfin-config, description: Claim of the app-level restore check.}
+      k8s_backup_restore_check_identity:
+        type: bool
+        default: true
+        description: In the restore check, also load prod's Keycloak database dump into a throwaway PostgreSQL and start the pinned Keycloak on it.
+      k8s_backup_restore_check_identity_namespace:
+        type: str
+        default: restore-check-identity
+        description: The throwaway namespace of the Keycloak database check, deleted at its end.
+      k8s_backup_restore_identity_dump:
+        type: str
+        default: /var/lib/central-hub-backup/db-dumps/identity_sso-postgres-0.sql
+        description: The path of Keycloak's database dump in prod's snapshot.
+      k8s_backup_restore_check_postgres_image:
+        type: str
+        default: docker.io/library/postgres:18.6
+        description: PostgreSQL image of the Keycloak database check (role k8s_identity's).
+      k8s_backup_restore_check_keycloak_image:
+        type: str
+        default: quay.io/keycloak/keycloak:26.8.1
+        description: Keycloak image of the Keycloak database check (the one k8s_identity's operator runs).

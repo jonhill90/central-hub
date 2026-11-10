@@ -148,6 +148,7 @@
     - c1-restore-test-volumes.sh
     - c1-backup-azure-cert.py
     - c1-restore-volumes.sh
+    - c1-restore-identity.sh
   # Also with --tags restore or restore_check alone, so a check run gets the script it calls.
   tags: [install, restore, restore_check]
 
