@@ -95,3 +95,8 @@ k8s_gitops_sso_root_ca_file: ""
 k8s_gitops_sso_group_roles:
   lab-admins: role:admin
   lab-viewers: role:readonly
+# Whether the lab's wildcard DNS override sends this cluster's names to this cluster's Gateway. True
+# for c1. False in the dev inventory: a dev rebuild uses c1's names while the wildcard still points
+# at prod's Gateway, so a name check there would test prod. The checks that call the Gateway by its
+# address with a Host header stay on either way.
+k8s_lab_dns_points_here: true

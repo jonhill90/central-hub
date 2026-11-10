@@ -187,6 +187,14 @@
       changed_when: false
       failed_when: >-
         k8s_gitops_ui_dns.rc != 0 or k8s_gitops_ui_facts.stdout_lines[0] not in k8s_gitops_ui_dns.stdout.split()
+      when: k8s_lab_dns_points_here | bool
+
+    - name: ui | Name check skipped, the lab DNS points elsewhere
+      ansible.builtin.debug:
+        msg: >-
+          k8s_lab_dns_points_here is false: this cluster uses names the lab's wildcard DNS sends
+          to another cluster's Gateway (a dev rebuild), so the name is not checked here.
+      when: not (k8s_lab_dns_points_here | bool)
 
     - name: ui | Argo CD's page answers at https://{{ k8s_gitops_ui_host }}/
       ansible.builtin.command: >-  # noqa: command-instead-of-module (curl's own trust store and -k rule, as in k8s_certs smoke)
