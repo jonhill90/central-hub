@@ -40,7 +40,7 @@ all:
           agent_box_hostname: ""   # its STD-0001 name, the same as the VM's name in home/jumpbox
           agent_box_allow: []   # permissions.allow copied from the Mac's settings; private
           agent_box_auto_mode: {}   # autoMode block copied from the Mac's settings; private
-          agent_box_ca_files: []   # controller paths of PEM CAs to trust, e.g. the Proxmox host's own CA; private
+          agent_box_ca_files: []   # controller paths of PEM CAs to trust, the public lab root only, by full path, never a key file; private
           agent_box_tls_check_url: ""   # e.g. https://<Proxmox API name>:8006/api2/json/version; private
     opnsense:
       hosts:

@@ -126,8 +126,60 @@
   tags: [users]
 
 # --- Private CAs ---------------------------------------------------------------------------
-# The Proxmox host signs its API certificate with its own CA, which the box does not trust, so
-# tofu would refuse it. Trust that CA rather than turn certificate checks off.
+# The Proxmox API's certificate comes from the lab CA, which the box does not trust, so tofu
+# would refuse it. Trust that CA rather than turn certificate checks off.
+# Only public certificates go to the box. The owner's CA folder also holds private keys, so each
+# entry must be one named file, checked on the controller before anything is copied.
+- name: Check each CA entry is one named file, not a folder or a pattern
+  ansible.builtin.assert:
+    that:
+      - item is match('^/')
+      - item is not search('[*?\\[\\]{}]')
+    fail_msg: "agent_box_ca_files takes absolute file paths only: {{ item }}"
+    quiet: true
+  loop: "{{ agent_box_ca_files }}"
+  tags: [ca]
+
+- name: Look at each CA file on the controller
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop: "{{ agent_box_ca_files }}"
+  register: agent_box_ca_stat
+  delegate_to: localhost
+  become: false
+  tags: [ca]
+
+- name: Check each CA file is a regular file
+  ansible.builtin.assert:
+    that: item.stat.exists and item.stat.isreg
+    fail_msg: "{{ item.item }} is not a regular file (missing, a folder or a link)."
+    quiet: true
+  loop: "{{ agent_box_ca_stat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  tags: [ca]
+
+- name: Check each CA file holds no private key
+  ansible.builtin.command:
+    argv: [grep, -c, PRIVATE KEY, "{{ item }}"]
+  loop: "{{ agent_box_ca_files }}"
+  register: agent_box_ca_keys
+  failed_when: agent_box_ca_keys.rc != 1
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  tags: [ca]
+
+- name: Check each CA file parses as a certificate
+  ansible.builtin.command:
+    argv: [openssl, x509, -noout, -in, "{{ item }}"]
+  loop: "{{ agent_box_ca_files }}"
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  tags: [ca]
+
 - name: Add each private CA to the trust store
   ansible.builtin.copy:
     src: "{{ item }}"

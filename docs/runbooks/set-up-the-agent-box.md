@@ -45,7 +45,7 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
 
 - The VM is grown and its plan names it by STD-0001 ([grow-the-agent-jumpbox.md](grow-the-agent-jumpbox.md)).
 - The filled-in inventory has group `agent_box` with the VM's address, its admin user, `agent_box_hostname` (the same name as the VM's name in `home/jumpbox`), and the Mac's allow rules and `autoMode` block in `agent_box_allow` and `agent_box_auto_mode`. Copy rules only, never secrets ([hosts.example.yml](../../hosts/ansible/inventories/home/hosts.example.yml)).
-- The Proxmox host signs its API certificate with its own CA. Put that CA's PEM file (a certificate, not a secret) on the controller and list its path in `agent_box_ca_files`, and set `agent_box_tls_check_url` to the API's version path on the name the wrappers use. That name must be in the host's certificate.
+- The Proxmox API's certificate is issued by the lab CA, which the box doesn't trust yet. List only the public root certificate's file in `agent_box_ca_files`, by its full path: no folder, no pattern, never a file that holds a key. The role checks each file on the controller first, and stops unless it is a regular file that parses as a certificate and holds no `PRIVATE KEY` block. Set `agent_box_tls_check_url` to the API's version path on the name the wrappers use; that name must be in the certificate.
 
 ## Steps
 
