@@ -8,7 +8,7 @@ outcome: Argo CD's Application `jellyfin` is Synced and Healthy, the setup Job h
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1); External Secrets running on c1
 private-values: [k8s_gateway_zone]
 files: [hosts/kubernetes/home/c1/apps/jellyfin/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_jellyfin/, hosts/ansible/playbooks/k8s-jellyfin.yml]
-last-tested: not yet run on c1; the setup script was run twice against a stand-in server in CI's sandbox on 2026-11-08 (first run finished the wizard, second run changed nothing)
+last-tested: 2026-11-10, steps 1 to 3 and 6 on c1: auto-sync took over at 03:31 UTC (#140), Synced and Healthy, the setup Job ran and the pod did not restart; k8s-jellyfin.yml changed=0 twice. Steps 4 and 5 (password to the env file, sign in) not yet run
 superseded-by:
 ---
 
