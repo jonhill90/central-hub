@@ -16,18 +16,25 @@
 #   INVENTORY     the Ansible inventory for this env
 #   STAGES        optional: the stages to run, in order (default below)
 #   PRE_VMS_HOOK  optional: a command run before the VMs are made (Proxmox /vms ACLs, R4 step 0)
-#   RESTORE_HOOK  optional: the restore command for stage `restore`
+#   RESTORE_HOOK  the restore command for stage `restore`; required on dev, where it restores a
+#                 read-only copy of prod's newest volume snapshot (hosts/rebuild.env.example)
+#   RESTORE_CHECK_HOOK  the command the `checks` stage runs to prove the restore; required with
+#                 RESTORE_HOOK
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
 #
 # No kubeconfig leaves the cluster: every kubectl call runs on the first control-plane node through
 # Ansible, with that node's /etc/kubernetes/admin.conf (kc below). A KUBECONFIG in rebuild.env is
 # ignored.
+#
+# The hooks run in bash with REPO (this repository) and INVENTORY exported.
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
 # gateway runs after apps: with k8s_gateway_by_argocd true, Argo CD makes the Gateway, and the
-# playbook's "programmed" wait and smoke test then check it.
-default_stages="vms cluster storage gitops apps gateway certs identity ui restore checks"
+# playbook's "programmed" wait and smoke test then check it. restore runs after storage made the data
+# disk and before gitops: once Argo CD reads the repo it syncs every app, and local-path then finds
+# each volume's folder already there (TASK-0240, agent pick 202).
+default_stages="vms cluster storage restore gitops apps gateway certs identity ui checks"
 
 die() { echo "rebuild: $*" >&2; exit 1; }
 
@@ -135,7 +142,15 @@ checks() {
   # And OpenTofu must see no drift (exit 0 = no changes, 2 = changes).
   tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE" >> "$raw" 2>&1
   tofu_k8s plan -detailed-exitcode -input=false -var-file="$TFVARS" >> "$raw" 2>&1
+  # The restored data is what the apps use (TASK-0240).
+  if [ -n "${RESTORE_HOOK:-}" ]; then
+    [ -n "${RESTORE_CHECK_HOOK:-}" ] || { echo "RESTORE_HOOK is set but RESTORE_CHECK_HOOK is not: nothing proves the restore"; return 1; }
+    hook "$RESTORE_CHECK_HOOK"
+  fi
 }
+
+# A hook from rebuild.env, with the repository and the inventory it needs.
+hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 
 run_stage() {
   case $1 in
@@ -160,8 +175,12 @@ run_stage() {
       [ "$ENV_NAME" = prod ] || { echo "backup timers run on prod only"; return 1; }
       ap playbooks/k8s-backup.yml ;;
     restore)
-      if [ -z "${RESTORE_HOOK:-}" ]; then echo "no RESTORE_HOOK set: restore skipped"; return 0; fi
-      bash -c "$RESTORE_HOOK" ;;
+      if [ -z "${RESTORE_HOOK:-}" ]; then
+        # Dev proves the rebuild with prod's data in it; a skipped restore proves nothing.
+        [ "$ENV_NAME" = prod ] || { echo "a dev rebuild restores prod's backup: set RESTORE_HOOK (hosts/rebuild.env.example)"; return 1; }
+        echo "no RESTORE_HOOK set: restore skipped"; return 0
+      fi
+      hook "$RESTORE_HOOK" ;;
     checks) checks ;;
     *) echo "unknown stage: $1"; return 1 ;;
   esac
@@ -182,6 +201,12 @@ for s in $stages; do
   rc=$?
   set -e
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
+  # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
+  # short log too, so the run's worklog can quote it.
+  if [ "$s" = restore ] || [ "$s" = checks ]; then
+    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)' \
+      | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
+  fi
   if [ "$rc" -ne 0 ]; then
     echo "rebuild: stage $s failed; last lines of $raw:" >&2
     tail -n 20 "$raw" >&2

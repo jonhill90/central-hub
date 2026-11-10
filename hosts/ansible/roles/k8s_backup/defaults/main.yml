@@ -75,3 +75,31 @@ k8s_backup_keep_monthly: 6
 # Run the restore tests at the end of a playbook run (tag drill). They need k8s_backup_enabled and
 # at least one backup.
 k8s_backup_drill: false
+
+# Reader mode, for dev (TASK-0240, agent pick 202; playbooks/k8s-restore.yml). true: the node gets
+# the tools, its Azure sign-in and the env file, as above, but no timer runs, the repository is never
+# made, and restic runs with --no-lock, so nothing is written to the repository. With Azure, the
+# sign-in is the read-only app (tofu outputs reader_client_id and reader_app_object_id of
+# hosts/terraform/azure/backup), which can't write either. Never true together with
+# k8s_backup_enabled.
+k8s_backup_reader: false
+
+# The inventory group whose nodes all hold a certificate on the app. A run over every node of it
+# removes the app's certificates no node holds (agent pick 193). playbooks/k8s-restore.yml sets
+# k8s_workers, since only the nodes with a data disk sign in there.
+k8s_backup_azure_cert_group: k8s_nodes
+
+# What a reader restores (tag restore): the newest volume snapshot of this host name, the prod node
+# that holds the volumes. Its short host name, so private: no default.
+k8s_backup_restore_source_host: ""
+# The local-path folder to bring back. Only this folder: not Keycloak's database folder, not the
+# database dumps (the identity stage doesn't run on dev, D-0028).
+k8s_backup_restore_path: /var/lib/c1-data/local-path
+# A snapshot ID instead of the newest one.
+k8s_backup_restore_snapshot: latest
+# The app-level proof (tag restore_check): this Deployment is Ready with this claim mounted, the
+# claim's volume is the restored folder <path>/<namespace>/<claim>, and the folder belongs to the
+# Deployment's runAsUser.
+k8s_backup_restore_check_namespace: media
+k8s_backup_restore_check_deployment: jellyfin
+k8s_backup_restore_check_claim: jellyfin-config

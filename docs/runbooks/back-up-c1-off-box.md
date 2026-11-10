@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: every night restic writes an encrypted snapshot of c1's etcd and of every volume folder to a repository off the Proxmox host, and every week a restore test proves the newest snapshots come back
 needs: the lab clone of central-hub with its private inventory; SSH to the c1 nodes as D-0022 says; a restic repository off the Proxmox host and its credentials; for Azure, the agents' service principal signed in to `az` on the Mac, with Graph `Application.ReadWrite.OwnedBy` (give-agents-access-to-azure.md)
 private-values: [c1-backup-restic-repository, c1-backup-restic-password, c1-backup-target-credentials, c1-backup-azure-storage-account, home-public-ip]
-files: [hosts/terraform/azure/backup/, hosts/ansible/playbooks/k8s-backup.yml, hosts/ansible/roles/k8s_backup/, .github/hosts-check/tests/test_backup.sh, .github/hosts-check/tests/test_backup_azure_cert.sh]
+files: [hosts/terraform/azure/backup/, hosts/ansible/playbooks/k8s-backup.yml, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/, .github/hosts-check/tests/test_backup.sh, .github/hosts-check/tests/test_backup_azure_cert.sh]
 last-tested: 2026-11-08, an agent, the scripts end to end in CI's test (etcd 3.7.0, local restic repository); 2026-11-09, an agent, terraform/azure/backup's offline tests (mocked provider); 2026-11-09, an agent lane through the owner's Mac, the full apply and the playbook's drill on c1 against Azure Blob with a user delegation SAS (backups OK, restic check clean, etcd restore test PASS, volume restore test PASS on 2 folders); 2026-11-09, an agent, the node certificate script and azure_identity.yml against a stand-in for Entra ID and Graph in CI (test_backup_azure_cert.sh); the sign-in by certificate on c1 is not tested yet; 2026-11-09, an agent, CI's test with Keycloak's PostgreSQL image (18.6), a real `pg_dumpall` through a stand-in for crictl, then steps 2 and 3 of "Restore Keycloak's database" into a new database whose password had changed (all rows back, the new password still signs in)
 superseded-by:
 ---
@@ -77,7 +77,7 @@ A1. (Agent, on the Mac) Make the storage and the app:
 
    why: everything about the account and the app is code, so a rebuild makes it the same way. All of it is management-plane work, which the network rule doesn't block, and the state holds no secret: no account key is read, and the app's certificates are not in tofu.
    ※ [hosts/terraform/README.md](../../hosts/terraform/README.md); azurerm `azurerm_storage_account` 5.11.0, "shared_access_key_enabled" and "network_rules"; azuread 3.10.0, `azuread_application`
-   expect: outputs `storage_account_name`, `restic_repository` (`azure:c1-backup:/c1`), `storage_account_id`, `client_id`, `app_object_id` and `tenant_id`. The plan for a folder applied before 2026-11-09's change also destroys `azurerm_role_assignment.sas_signer`. That ends the old SAS on the nodes at once, so run step A3 straight after.
+   expect: outputs `storage_account_name`, `restic_repository` (`azure:c1-backup:/c1`), `storage_account_id`, `client_id`, `app_object_id`, `tenant_id`, and `reader_client_id` and `reader_app_object_id` for dev's read-only app ([below](#dev-reads-a-copy)). The plan for a folder applied before 2026-11-09's change also destroys `azurerm_role_assignment.sas_signer`. That ends the old SAS on the nodes at once, so run step A3 straight after.
 
 A2. Nothing to do by hand, but two grants make step A1 work:
 
@@ -103,6 +103,10 @@ A3. In step 1, leave out the `AZURE_` lines: the env file holds only `RESTIC_REP
    why: the `timers` tag makes each node's key and certificate (`/etc/central-hub/azure/backup.pem`, 0600), uploads the public certificate with `az ad app credential reset --append` when Entra ID doesn't know it yet, one node at a time, and waits until Entra ID lists it. After every node's upload it removes each certificate on the app that no node holds, but only when the run covers every node in `k8s_nodes` (agent pick 193). It writes `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_CLIENT_CERTIFICATE_PATH` into the node env file, which restic's Azure sign-in reads.
    ※ restic 0.19.1, `internal/backend/azure/azure.go`: with no account key or SAS it signs in through azidentity's default credential chain, whose first link reads those three variables.
    expect: the drill passes; `systemctl list-timers c1-backup-azure-cert` on each node shows the daily check; the node env file has no `AZURE_ACCOUNT_SAS`.
+
+### Dev reads a copy
+
+The same folder also makes `c1-backup-reader`, a second app registration with Storage Blob Data Reader on the container only (agent pick 202). Dev's worker signs in as it, with its own certificate made and uploaded the same way, and restores prod's newest volume snapshot at each dev rebuild, with `restic --no-lock`. It can list and read blobs and can't write or delete any. The steps are in [Rebuild one cluster's Kubernetes layer with one command, "Restore on dev"](rebuild-k8s-layer-with-one-command.md#restore-on-dev). Dev runs no timer, so its certificate isn't rolled: each rebuild makes a new node, which uploads a new certificate and removes the ones no dev worker holds.
 
 A4. Nothing runs by hand after that. Each certificate lasts 90 days. Every day at 01:40 `c1-backup-azure-cert.timer` checks it, and with 30 or fewer days left it makes a new key and certificate, adds it to the app with Graph `addKey`, waits until Entra ID accepts it four times in a row, switches the file, and removes the old one with `removeKey`, trying again for up to 15 minutes. If the old one can't be removed in that time, the unit logs a `WARN` and the next full `timers` run removes it (agent pick 193). A failure leaves the current certificate in use and fails the unit, so `systemctl --failed` on the node shows it. The next day's run tries again. Check it with:
 
@@ -166,7 +170,7 @@ A4. Nothing runs by hand after that. Each certificate lasts 90 days. Every day a
 The restore test never writes over a volume. To bring one back for real:
 
 1. Stop the app that uses it: `kubectl -n <namespace> scale deploy/<name> --replicas=0` (or the StatefulSet).
-2. On the node that holds it, find the folder: `kubectl get pv <pv> -o jsonpath='{.spec.hostPath.path}{.spec.local.path}'`.
+2. On the node that holds it, find the folder: `kubectl get pv <pv> -o jsonpath='{.spec.hostPath.path}{.spec.local.path}'`. Since local-path's `pathPattern` (TASK-0240) it is `/var/lib/c1-data/local-path/<namespace>/<claim>`; snapshots from before 2026-11-10's move hold `pvc-<uid>_<namespace>_<claim>` instead.
 3. Move the broken folder aside, then restore it from the newest snapshot of this node, into place:
 
    ```sh
