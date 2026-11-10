@@ -41,6 +41,15 @@ run "agent_box_gets_ssh_from_agents_and_no_path_out" {
   }
 }
 
+run "agents_are_denied_the_host_web_and_desktop_ports" {
+  command = plan
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"deny\":   [\"192.0.2.10:8006\", \"192.0.2.10:443\", \"192.0.2.10:3389\"]")
+    error_message = "The policy test must deny tag:agent the Proxmox host's ports 8006, 443 and 3389."
+  }
+}
+
 run "policy_never_replaces_a_policy_it_has_not_adopted" {
   command = plan
 
