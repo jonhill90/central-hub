@@ -41,7 +41,7 @@ variable "jumpbox" {
   })
 
   validation {
-    condition     = var.jumpbox.memory_mb >= 8192 && var.jumpbox.disk_gb >= 40
-    error_message = "The agent jumpbox needs at least 8 GiB of RAM and 40 GB of disk for its desktop and browser (owner's choice, 2026-11-10)."
+    condition     = var.jumpbox.memory_mb >= 4096 && var.jumpbox.disk_gb >= 40
+    error_message = "The agent jumpbox needs at least 4 GiB of RAM (its size in the rehearsal) and 40 GB of disk. Set the RAM from the measurement in docs/runbooks/grow-the-agent-jumpbox.md step 8."
   }
 }

@@ -4,7 +4,7 @@ status: draft
 kind: automated
 trigger: once, after the owner chose on 2026-11-10 to grow the rehearsal's VM into the agents' own box; again to resize it
 runner: an agent lane, through the owner's Mac
-outcome: the jumpbox VM (258) runs with 8 GiB of RAM and a 40 GB disk, owned by `hosts/terraform/home/jumpbox`'s state, with its root file system grown and Claude Code Remote Control connected again
+outcome: the jumpbox VM (258) runs with a 40 GB disk and RAM sized from a measurement (8 GiB to start), owned by `hosts/terraform/home/jumpbox`'s state, with its root file system grown and Claude Code Remote Control connected again
 needs: the jumpbox rehearsal state on the Mac; the iac@pve!apply token; SSH to the VM as its admin user
 private-values: [proxmox_node_name, jumpbox, ssh_public_key]
 files: [hosts/terraform/home/jumpbox/]
@@ -27,7 +27,7 @@ flowchart LR
 
 ## Before you start
 
-- `hosts/terraform/home/jumpbox/home.tfvars` holds the VM's real name (STD-0001), ID 258, its address, and the admin public key, all the same values as the rehearsal's `vm` input, with `memory_mb = 8192` and `disk_gb = 40`.
+- `hosts/terraform/home/jumpbox/home.tfvars` holds the VM's real name (STD-0001), ID 258, its address, and the admin public key, all the same values as the rehearsal's `vm` input, with `memory_mb = 8192` and `disk_gb = 40`. The 8192 is a starting estimate, not a measurement; step 8 replaces it with a measured size.
 - `PROXMOX_VE_ENDPOINT` and `PROXMOX_VE_API_TOKEN` are set in the shell.
 - Host RAM has room for 4 GiB more: `pvesh get /nodes/<node>/status` shows at least 6 GiB free.
 
@@ -92,6 +92,17 @@ flowchart LR
    ```
 
    expect: `active (running)`, and the session `jumpbox` is listed at claude.ai/code.
+
+8. Right-size the RAM from a measurement, once the desktop, Obsidian and the screenshot tool are installed on the VM.
+   why: 8 GiB was an estimate (owner's question, 2026-11-10 05:24 UTC). Only a measurement of the real load sets the size.
+
+   ```sh
+   free -m                     # at rest: desktop and Obsidian open, no agent work
+   vmstat 5 60 > /tmp/ram.log  # during a screenshot run: start this, then run the screenshot job
+   ```
+
+   Read the peak used memory from both (`total - available`). Set `memory_mb` in `home.tfvars` to the peak plus 25 %, rounded up to the next 512 MiB, and not under 4096. Plan and apply as in steps 4 and 5; expect `1 to change`, `memory.dedicated` only.
+   expect: the two peaks, the new `memory_mb` and the date are recorded in `hosts/AGENT-PICKS.md` pick 194, and this runbook's `outcome` line names the size.
 
 ## If it fails
 

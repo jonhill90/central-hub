@@ -9,7 +9,7 @@ variables {
   vlans_file        = "../../../ansible/inventories/home/group_vars/all/vlans.yml"
   template_vm_id    = 9000
   ssh_public_key    = "ssh-ed25519 AAAAexample admin"
-  jumpbox           = { name = "ddeapdemo01", vm_id = 258, address = "10.1.30.90", cores = 2, memory_mb = 8192, disk_gb = 40 }
+  jumpbox           = { name = "daldtdemo01", vm_id = 258, address = "10.1.30.90", cores = 2, memory_mb = 8192, disk_gb = 40 }
 }
 
 run "jumpbox_on_dev_with_its_size" {
@@ -35,7 +35,7 @@ run "too_small_is_refused" {
   command = plan
 
   variables {
-    jumpbox = { name = "ddeapdemo01", vm_id = 258, address = "10.1.30.90", cores = 2, memory_mb = 4096, disk_gb = 20 }
+    jumpbox = { name = "daldtdemo01", vm_id = 258, address = "10.1.30.90", cores = 2, memory_mb = 2048, disk_gb = 20 }
   }
 
   expect_failures = [var.jumpbox]

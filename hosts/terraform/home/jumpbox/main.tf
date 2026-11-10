@@ -1,7 +1,7 @@
-# The agent jumpbox (J1 of the jumpbox rehearsal, research RB-0179): one AlmaLinux 10 VM on which
+# The agent jumpbox (VM 258 of the jumpbox rehearsal, research RB-0179): one AlmaLinux 10 VM on which
 # agents run Claude Code Remote Control, with their own narrow keys and hard deny rules.
-# The owner chose on 2026-11-10 to grow J1 into this box (8 GiB RAM, 40 GB disk) rather than build
-# a new VM. The VM was first made by the rehearsal kit; its state is moved here, not re-created
+# The owner chose on 2026-11-10 to grow VM 258 into this box rather than build a new VM. Its RAM is a
+# starting estimate, right-sized from a measurement (docs/runbooks/grow-the-agent-jumpbox.md step 8). The VM was first made by the rehearsal kit; its state is moved here, not re-created
 # (docs/runbooks/grow-the-agent-jumpbox.md). What runs inside it is not done here.
 # Exit: tofu destroy with this folder's state, after `claude auth logout` on the box.
 
