@@ -89,7 +89,7 @@ flowchart LR
   dev --> argo["gitops: Argo CD makes the claims;<br/>local-path's mkdir -p keeps each folder"]
 ```
 
-What comes back: only `/var/lib/c1-data/local-path`, every app volume. Not etcd: dev's cluster is built from code, which is what is being proven, and prod's snapshot carries prod's certificates and node names. Not Keycloak's database: the identity stage doesn't run on dev (D-0028).
+What comes back: only `/var/lib/c1-data/local-path`, every app volume. Not etcd: dev's cluster is built from code, which is what is being proven, and prod's snapshot carries prod's certificates and node names. Keycloak's database is not restored into a running Keycloak, because the identity stage doesn't run on dev (D-0028). The checks stage proves its dump instead ([below](#keycloaks-database-on-dev)).
 
 Why it works without fighting Argo CD: on dev, local-path names each volume's folder `<namespace>/<claim>` (its `pathPattern`, from upstream's README at v0.0.37), so a folder has the same name on every dev rebuild. The restore puts the folders in place before Argo CD exists; when Argo CD makes a claim, the provisioner's setup script runs `mkdir -m 0777 -p`, which keeps the folder and its files. Nothing is scaled down.
 
@@ -133,7 +133,20 @@ These run through the Mac lane, in this order. Nothing here needs the owner exce
 
 - `restore` runs `playbooks/k8s-restore.yml` on dev's workers: the backup tools, the node's own key and certificate (uploaded to the reader app the first time, as for prod's nodes), the env file, then `c1-restore-volumes.sh restore`. It maps each folder in the newest volume snapshot of `k8s_backup_restore_source_host` to `<namespace>/<claim>` (and stops on a name it can't map or two folders for one claim), restores the snapshot with `--verify` into a staging folder on the same disk, renames each folder into place (logged as `mapped <from> -> <to>`), then compares each `<namespace>/<claim>` folder's file count and bytes on disk with `restic ls` of the same snapshot, and the canary file with the snapshot's copy. Any mismatch fails the run. A node without its data disk mounted says `SKIP`; at least one node must restore. It never writes over a folder it didn't restore: a non-empty folder with no record stops it, and a second run on the same snapshot says `ALREADY` and does nothing.
 - `checks` runs `RESTORE_CHECK_HOOK`, the same playbook with `--tags restore_check`, after the apps synced: each node's restore is still in place, `media/jellyfin` is rolled out with a Ready pod that mounts `jellyfin-config`, that claim's volume is the restored folder `local-path/media/jellyfin-config`, the folder's own owner and mode equal its copy in the restored snapshot (most of prod's are `0:0 777` as local-path makes them, Grafana's `472:472`), it is not empty, and every entry directly inside it belongs to the Deployment's `runAsUser`.
+- `checks` also proves Keycloak's database ([below](#keycloaks-database-on-dev)).
 - The run's `.log` gets the snapshot ID, the canary and one `folder <namespace>/<claim> <files> <bytes>` line per folder, so the run's worklog can quote them.
+
+### Keycloak's database on dev
+
+After a real loss, prod comes back by [Back up c1 off the box](back-up-c1-off-box.md), "Restore Keycloak's database": the identity stage makes an empty Keycloak, and its `pg_dumpall` dump from the newest snapshot is loaded into it. The checks stage proves that path on prod's own data, without the identity stage, certificates or sign-in on dev (the owner's card of 2026-11-10 10:11 UTC; the Plan thread's option C; agent pick 206):
+
+1. A throwaway namespace, `restore-check-identity`, with one PostgreSQL pod from role `k8s_identity`'s image on the first worker, its account's password made on the control-plane node and never read back. No Service, Ingress or route; a NetworkPolicy lets only the Keycloak pod reach it.
+2. `c1-restore-identity.sh load` on that worker brings the dump back with `restic dump --no-lock` from the same snapshot the volume restore used, checks its size and its end line, counts the rows of `realm`, `user_entity` and `client` in it, then does the runbook's step 3 through `crictl exec`: drop `keycloak`, load the whole dump. The counts in the database must equal the dump's.
+3. A pod of the pinned Keycloak, the image role `k8s_identity`'s operator runs, starts on that database over plain HTTP with nothing reaching it. It must turn Ready (`/health/ready`), which it does only once it opened the database and its schema checks passed.
+4. `c1-restore-identity.sh recount`: the counts are still the dump's.
+5. Always, pass or fail: the namespace is deleted, the manifests and the counts are removed, and the run fails if any of that doesn't finish.
+
+The dump holds prod's realm, its client secrets and its users' password hashes. It lives only in a mode-0700 folder for the minutes `load` takes, the log carries counts only, and its stay on dev is on the access register. Not proven here: the operator's wiring and a sign-in through Entra, which knows only prod's address.
 
 ## Apps and auto-sync
 
@@ -147,6 +160,7 @@ On a fresh cluster, Argo CD installs an app only if its `autoSync` is on in `hos
 - `restore` fails with `can't be mapped`, `UNKNOWN` or `DUPLICATE`: prod's snapshot holds a folder that is not a volume, or two folders for one claim (a deleted claim's folder, kept by `Retain`). The message names them. Nothing was written. Remove the stray folder on prod, run one volume backup, and run again.
 - `restore` fails with `is not empty and holds no recorded restore`: dev's data disk holds data this restore didn't put there. Run again with `--teardown`.
 - `restore` fails with `AuthorizationFailure` or `AADSTS700027`: the reader app's role or its certificate isn't in effect yet; see [Back up c1 off the box](back-up-c1-off-box.md), "If it fails".
+- `checks` fails at `identity`: the message says which step. `has no dump`: prod's snapshot of that host holds no Keycloak dump (the node that runs `sso-postgres-0` is another host). `cut short` or a count that differs: the dump or the load lost rows; the backup's own restore test checks the same dump weekly. `keycloak` not Ready: the pods' states are printed (never their logs, which can quote the realm); a Keycloak version that can't open the dump fails here. The namespace is deleted either way.
 - `checks` fails with `its copy in snapshot` or `not owned by uid`: the restored folder or an entry in it has another owner or mode than the app needs or prod had. The message names each one.
 - `checks` fails on the restore proof: its message names the claim, the folder the volume uses and the folder the restore made. A volume at a `pvc-...` folder means dev's StorageClass has no `pathPattern`: set `k8s_gitops_source_local_path_stable_folders: true` in dev's inventory, run `--teardown`, and rebuild (the parameter can't change in place).
 

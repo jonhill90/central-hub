@@ -11,7 +11,8 @@
 #   4. Keycloak's PostgreSQL image (the one role k8s_identity runs, under Docker with the kubelet's
 #      labels, reached through a stand-in for crictl): a real pg_dumpall goes into the snapshot, and
 #      the runbook's "Restore Keycloak's database" steps load it into a new database whose password
-#      changed since the dump: every row comes back, and the new password still signs in.
+#      changed since the dump: every row comes back, and the new password still signs in. Dev's
+#      check (c1-restore-identity.sh) loads the same dump into a throwaway database and counts it.
 #   5. One pack file in the repository damaged: the volume restore test must fail.
 #   6. Dev's restore (c1-restore-volumes.sh): prod's folders, named as local-path names them on c1
 #      (pvc-<uid>_<namespace>_<claim>), come back whole at <namespace>/<claim> from a repository it
@@ -156,6 +157,19 @@ ok "a database dump that does not finish fails the volume backup"
 echo "== 4. a real PostgreSQL: the dump restores by the runbook and keeps the current password"
 pg_image=$(python3 -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1]))["k8s_identity_postgres_image"])' \
   "$root/hosts/ansible/roles/k8s_identity/defaults/main.yml")
+# Dev's Keycloak database check (role k8s_backup) must run the images role k8s_identity runs.
+python3 - "$root/hosts/ansible/roles" <<'PY' || fail "k8s_backup's restore-check images differ from k8s_identity's"
+import sys, yaml
+roles = sys.argv[1]
+ident = yaml.safe_load(open(roles + "/k8s_identity/defaults/main.yml"))
+back = yaml.safe_load(open(roles + "/k8s_backup/defaults/main.yml"))
+want = {"k8s_backup_restore_check_postgres_image": ident["k8s_identity_postgres_image"],
+        "k8s_backup_restore_check_keycloak_image": "quay.io/keycloak/keycloak:" + ident["k8s_identity_version"]}
+bad = ["%s is %s, want %s" % (k, back.get(k), v) for k, v in want.items() if back.get(k) != v]
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+PY
+ok "dev's Keycloak database check runs k8s_identity's PostgreSQL and Keycloak images"
 for try in 1 2 3 4 5; do
   docker pull -q "$pg_image" >/dev/null && break
   [ "$try" = 5 ] && fail "could not pull $pg_image"
@@ -202,7 +216,11 @@ pg_run "$db" password-at-dump --label io.kubernetes.pod.namespace=identity \
   --label io.kubernetes.pod.name=sso-postgres-0 --label io.kubernetes.container.name=postgres
 docker exec "$db" psql -q -U keycloak -d keycloak -v ON_ERROR_STOP=1 \
   -c "create table realm (id int primary key, name text)" \
-  -c "insert into realm select g, 'realm-' || g from generate_series(1, 500) g"
+  -c "insert into realm select g, 'realm-' || g from generate_series(1, 500) g" \
+  -c "create table user_entity (id int primary key, realm_id int)" \
+  -c "insert into user_entity select g, 1 from generate_series(1, 30) g" \
+  -c "create table client (id int primary key, realm_id int)" \
+  -c "insert into client select g, 1 from generate_series(1, 12) g"
 "$bin/c1-backup-volumes.sh"
 out=$("$bin/c1-restore-test-volumes.sh")
 echo "$out"
@@ -226,6 +244,36 @@ if grep -q FATAL "$work/load.log"; then cat "$work/load.log"; fail "psql stopped
 rows=$(pg_login "$db2" password-now 2>&1) || { echo "$rows"; fail "the database's current password no longer signs in after the restore"; }
 [ "$rows" = 500 ] || fail "the restored database has $rows rows, want 500"
 ok "the runbook's restore brings back all 500 rows, and the current password still signs in"
+
+# Dev's check of the same dump (c1-restore-identity.sh, RB1 part D): a throwaway PostgreSQL of
+# namespace restore-check-identity, the dump loaded by the runbook's step 3 through crictl, its
+# realms, users and clients counted against the dump; then cleaned away.
+db3=ci-backup-db3-$$
+pg_run "$db3" password-check --label io.kubernetes.pod.namespace=restore-check-identity \
+  --label io.kubernetes.pod.name=postgres --label io.kubernetes.container.name=postgres
+snap=$("$bin/restic" snapshots --json --host ci-node --tag volumes --latest 1 | python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["id"])')
+mkdir -p "$work/id-state"
+printf 'snapshot\t%s\tci-node\tnow\n' "$snap" > "$work/id-state/restored-volumes"
+id_env=(BACKUP_HOST=ci-dev "BACKUP_STATE=$work/id-state" "RESTORE_DUMP=$BACKUP_STATE/db-dumps/identity_sso-postgres-0.sql"
+  "RESTORE_DUMP_STAGE=$work/id-stage")
+out=$(env "${id_env[@]}" "$bin/c1-restore-identity.sh" load restore-check-identity 2>&1) || { echo "$out"; fail "the identity load failed"; }
+echo "$out"
+grep -q '^PASS: .* realms, users, clients 500 30 12, as the dump' <<< "$out" || fail "the identity load did not count 500 30 12"
+grep -q 'realm-' <<< "$out" && fail "the identity load printed a row"
+[ ! -e "$work/id-stage" ] || fail "the dump was left in its stage folder"
+[ "$(stat -c %a "$work/id-state/identity-counts")" = 600 ] || fail "the counts file is not mode 600"
+out=$(env "${id_env[@]}" "$bin/c1-restore-identity.sh" recount restore-check-identity 2>&1) || { echo "$out"; fail "recount failed"; }
+docker exec "$db3" psql -q -U keycloak -d keycloak -c "delete from client where id = 1"
+if env "${id_env[@]}" "$bin/c1-restore-identity.sh" recount restore-check-identity > /dev/null 2>&1; then
+  fail "recount passed with a row gone"
+fi
+env "${id_env[@]}" "$bin/c1-restore-identity.sh" clean > /dev/null
+[ ! -e "$work/id-state/identity-counts" ] || fail "clean left the counts"
+if env "${id_env[@]}" "$bin/c1-restore-identity.sh" load no-such-namespace > /dev/null 2>&1; then
+  fail "the identity load passed with no postgres container of its namespace"
+fi
+ok "c1-restore-identity.sh loads the dump into a throwaway PostgreSQL by the runbook, counts match, a changed count fails, and nothing is left"
+docker rm -f "$db3" >/dev/null
 docker rm -f "$db" "$db2" >/dev/null
 unset BACKUP_CRICTL
 
