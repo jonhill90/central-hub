@@ -65,5 +65,11 @@ agent_box_deny:
 # the Mac's settings (they name private paths). Empty lists are fine.
 agent_box_allow: []
 agent_box_auto_mode: {}
+# Private CA certificates (PEM files on the controller) the box must trust, for example the
+# Proxmox host's own CA. Each is added to the system trust store. Empty is fine.
+agent_box_ca_files: []
+# An HTTPS URL the verify tag fetches with normal certificate checks, for example the Proxmox
+# API's version path. Private. Empty skips the check.
+agent_box_tls_check_url: ""
 # Any other top-level settings, merged over the rest (for example autoUpdatesChannel).
 agent_box_managed_settings_extra: {}

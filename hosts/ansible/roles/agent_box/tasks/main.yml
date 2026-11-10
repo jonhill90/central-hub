@@ -125,6 +125,25 @@
     label: "{{ item.path | basename }}"
   tags: [users]
 
+# --- Private CAs ---------------------------------------------------------------------------
+# The Proxmox host signs its API certificate with its own CA, which the box does not trust, so
+# tofu would refuse it. Trust that CA rather than turn certificate checks off.
+- name: Add each private CA to the trust store
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/pki/ca-trust/source/anchors/agent-box-{{ item | basename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ agent_box_ca_files }}"
+  notify: Rebuild the trust store
+  tags: [ca]
+
+# Now, not at the end of the play, so the verify tag's TLS proof sees the new store.
+- name: Rebuild the trust store now if a CA changed
+  ansible.builtin.meta: flush_handlers
+  tags: [ca]
+
 # --- Wrappers ------------------------------------------------------------------------------
 
 - name: Wrapper folder, root's
@@ -296,4 +315,13 @@
       - agent_box_hosts_own | length >= 1
     fail_msg: "/etc/hosts repeats a line or an address for {{ agent_box_hostname }}: {{ agent_box_hosts_own }}"
     quiet: true
+  tags: [verify]
+
+- name: Proof, the Proxmox API's certificate is trusted, with normal certificate checks
+  ansible.builtin.uri:
+    url: "{{ agent_box_tls_check_url }}"
+    validate_certs: true
+    status_code: [200, 401]
+  when: agent_box_tls_check_url | length > 0
+  changed_when: false
   tags: [verify]

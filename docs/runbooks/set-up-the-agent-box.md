@@ -45,6 +45,7 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
 
 - The VM is grown and its plan names it by STD-0001 ([grow-the-agent-jumpbox.md](grow-the-agent-jumpbox.md)).
 - The filled-in inventory has group `agent_box` with the VM's address, its admin user, `agent_box_hostname` (the same name as the VM's name in `home/jumpbox`), and the Mac's allow rules and `autoMode` block in `agent_box_allow` and `agent_box_auto_mode`. Copy rules only, never secrets ([hosts.example.yml](../../hosts/ansible/inventories/home/hosts.example.yml)).
+- The Proxmox host signs its API certificate with its own CA. Put that CA's PEM file (a certificate, not a secret) on the controller and list its path in `agent_box_ca_files`, and set `agent_box_tls_check_url` to the API's version path on the name the wrappers use. That name must be in the host's certificate.
 
 ## Steps
 
@@ -64,7 +65,7 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
    ansible-playbook -i inventories/home/ playbooks/agent-box.yml
    ```
 
-   expect: `failed=0`. The hostname is the STD-0001 name and stays so after a reboot (cloud-init keeps it), and cloud-init no longer runs its first boot again when the VM is renamed (`manual_cache_clean: true`). The last tasks are the proofs: user `claude` can't open `/etc/agent-keys`, `sudo -l -U claude` lists only the wrappers, as `keys`, and `/etc/hosts` names the box once per address with no repeated line.
+   expect: `failed=0`. The hostname is the STD-0001 name and stays so after a reboot (cloud-init keeps it), and cloud-init no longer runs its first boot again when the VM is renamed (`manual_cache_clean: true`). The last tasks are the proofs: user `claude` can't open `/etc/agent-keys`, `sudo -l -U claude` lists only the wrappers, as `keys`, and `/etc/hosts` names the box once per address with no repeated line. When `agent_box_tls_check_url` is set, the last proof fetches it with certificate checks on and gets 200 or 401: the box trusts the Proxmox CA, so tofu will too.
    A backup of the old settings file stays beside it (`managed-settings.json.<date>~`).
 
 3. Restart Remote Control so new sessions read the new hostname and settings.
@@ -116,6 +117,8 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
 - `visudo` rejects the sudoers file: the task fails and the old file stays; nothing else in sudo changes.
 - `dev-vms` says there is no saved plan: run `dev-vms plan` first; `apply` only applies the saved plan.
 - After a dev teardown, `dev-vms plan` can't create VMs: Proxmox dropped the `/vms/<id>` ACLs when the VMs were destroyed (pick 18), so `agent-access.sh` must run again as root.
+- The TLS proof fails with `CERTIFICATE_VERIFY_FAILED`: the CA file is the wrong one, or `update-ca-trust` didn't run. Fix the file and run again with `--tags ca,verify`; never turn certificate checks off.
+- It fails with a hostname mismatch: the URL's name is not in the host's certificate. Use a name the certificate lists, or reissue the certificate with that name.
 
 ## Exit
 
