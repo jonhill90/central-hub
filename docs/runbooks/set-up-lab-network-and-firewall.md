@@ -140,7 +140,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
    ```
 
    expect: two pass rules on the dev interface, `Allow agent box to Proxmox API` and `Allow agent box to c1 API`, at sequence 1 and 2. From the box, `curl -sk -o /dev/null -w '%{http_code}' https://<mgmt address>:8006/` prints `200` and `curl -sk https://<c1 API address>:6443/version` answers. A connection from the box to any other lab address still times out.
-   If 8006 still times out while 6443 answers, and the host firewall is on (step 8), the host's own rules allow 8006 only from its `management` IPSet. Stop and ask the owner before adding the box there: it is a second firewall change.
+   If 8006 still times out while 6443 answers, and the host firewall is on (step 8), the host's own rules allow 8006 only from its `management` IPSet. Stop and ask the owner: it is a second firewall change. With their words, don't add the box to `management` (that would also open 22). Add one rule to `proxmox_firewall_extra_rules` in the inventory instead, `{ action: ACCEPT, source: "<box address>/32", proto: tcp, dport: "8006", comment: "agent box to the Proxmox API" }`, and run step 8's firewall commands (`proxmox-safety.yml --tags firewall`, `--check --diff` first). expect: the diff adds that one `IN ACCEPT` line to `host.fw`, and the box's `curl` to 8006 then answers.
    To remove the rules: delete `opnsense_lab_agent_box` from the inventory and run the same command.
 
 8. Turn on the host's safety net: notifications, backups, then the host firewall in two runs.
