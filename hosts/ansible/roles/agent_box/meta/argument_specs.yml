@@ -1,0 +1,35 @@
+---
+# Inputs of the agent_box role. The check is tagged always, so it runs with any --tags.
+argument_specs:
+  main:
+    short_description: Users, key folder, key wrappers, sudoers and Claude Code managed settings on the agent box
+    options:
+      # Required, private (a real machine name), through the inventory.
+      agent_box_hostname:
+        type: str
+        required: true
+        description: >-
+          The box's OS hostname by STD-0001, for example daldtdemo01 (made up). Proxmox shows the
+          VM under this name too, so the VM's name in OpenTofu must match it.
+      agent_box_user: {type: str, default: claude, description: The user that runs Claude Code sessions.}
+      agent_box_keys_user: {type: str, default: keys, description: The user that owns the lab keys.}
+      agent_box_keys_dir: {type: path, default: /etc/agent-keys, description: "Key folder, owned by the keys user, mode 0700; every file in it 0600."}
+      agent_box_work_dir: {type: path, default: /var/lib/agent-box, description: "The keys user's home: the central-hub checkout, tofu state and data."}
+      agent_box_libexec_dir: {type: path, default: /usr/local/libexec/agent-box, description: Where the root-owned wrappers go.}
+      agent_box_front_dir: {type: path, default: /usr/local/bin, description: Where the front scripts sessions run go.}
+      agent_box_repo_url: {type: str, description: The public central-hub repository the wrappers run from.}
+      agent_box_wrappers:
+        type: list
+        elements: dict
+        description: One entry per wrapper; files/<name>.sh must exist in the role.
+        options:
+          name: {type: str, required: true, description: Wrapper name.}
+          args: {type: list, elements: str, required: true, description: The only first arguments sudo allows.}
+      agent_box_tofu_version: {type: str, description: OpenTofu version for the wrappers.}
+      agent_box_tofu_sha256: {type: str, description: SHA-256 of the linux_amd64 zip of that version.}
+      agent_box_tailscale_version: {type: str, description: Tailscale client version.}
+      agent_box_rhel_major: {type: int, description: "RHEL-family major version, for the Tailscale repository path."}
+      agent_box_deny: {type: list, elements: str, description: permissions.deny in the managed settings.}
+      agent_box_allow: {type: list, elements: str, default: [], description: permissions.allow in the managed settings; private.}
+      agent_box_auto_mode: {type: dict, default: {}, description: The autoMode block in the managed settings; private.}
+      agent_box_managed_settings_extra: {type: dict, default: {}, description: "Other top-level managed settings, merged over the rest."}

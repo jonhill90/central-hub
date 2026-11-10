@@ -1,0 +1,5 @@
+#!/bin/sh
+# {{ agent_box_front_dir }}/{{ item.name }}: what a session runs. It hands the call to the
+# root-owned wrapper as user {{ agent_box_keys_user }}; sudoers allows only these arguments.
+# Managed by the agent_box role (central-hub hosts/ansible).
+exec sudo -n -u {{ agent_box_keys_user }} {{ agent_box_libexec_dir }}/{{ item.name }}.sh "$@"

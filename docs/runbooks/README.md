@@ -13,6 +13,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Put the OPNsense image and the Debian 13 template on the Proxmox host](stage-lab-images-on-proxmox.md) | manual | draft |
 | [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md) | manual | draft |
 | [Grow the jumpbox VM into the agent jumpbox](grow-the-agent-jumpbox.md) | automated | draft |
+| [Set up the agent box's users, keys, wrappers and guard rules](set-up-the-agent-box.md) | automated | draft |
 | [Create the c1 node VMs on Proxmox from code](create-c1-node-vms.md) | automated | draft |
 | [Restore the home lab from its backups](restore-home-lab-from-backups.md) | manual | draft |
 | [Seed namespace secret-source on c1 from the controller](seed-secret-source.md) | manual | draft |

@@ -1,0 +1,270 @@
+---
+# The agent box's base setup (Library plans/agent-workstation/PLAN.md step 4): sessions run as
+# agent_box_user, keys belong to agent_box_keys_user, and the only bridge between them is a set of
+# root-owned wrappers that sudo runs with fixed arguments. File modes, not deny rules, keep the
+# keys from sessions; the deny rules in the managed settings are the floor for everything else.
+# Order and proofs: docs/runbooks/set-up-the-agent-box.md.
+
+- name: Install what the wrappers need
+  ansible.builtin.package:
+    name: [git, sudo, unzip]
+    state: present
+  tags: [users, wrappers]
+
+# --- Hostname ------------------------------------------------------------------------------
+
+- name: Check the hostname against STD-0001 (at most 15 characters, a-z and 0-9, starts with a letter)
+  ansible.builtin.assert:
+    that: agent_box_hostname is match('^[a-z][a-z0-9]{10,14}$')
+    fail_msg: "{{ agent_box_hostname }} is not a STD-0001 hostname."
+    quiet: true
+  tags: [hostname]
+
+- name: The box's OS hostname
+  ansible.builtin.hostname:
+    name: "{{ agent_box_hostname }}"
+  tags: [hostname]
+
+# The clone's cloud-init would set the template's name back at the next boot.
+- name: Keep the hostname across reboots (cloud-init)
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-keep-hostname.cfg
+    content: |
+      # Managed by the agent_box role (central-hub hosts/ansible): keep the STD-0001 hostname.
+      preserve_hostname: true
+      manage_etc_hosts: false
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [hostname]
+
+# --- Tailscale -----------------------------------------------------------------------------
+# The client only. Joining (tailscale up --advertise-tags=tag:agent-box --ssh) needs a login
+# link an admin opens once, so it is a runbook step, not a task.
+
+- name: Tailscale's package repository (RHEL family)
+  ansible.builtin.get_url:
+    url: "https://pkgs.tailscale.com/stable/rhel/{{ agent_box_rhel_major }}/tailscale.repo"
+    dest: /etc/yum.repos.d/tailscale.repo
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [tailscale]
+
+- name: Tailscale client, at the pinned version
+  ansible.builtin.dnf:
+    name: "tailscale-{{ agent_box_tailscale_version }}"
+    state: present
+  tags: [tailscale]
+
+- name: Tailscale daemon on at boot
+  ansible.builtin.systemd_service:
+    name: tailscaled
+    enabled: true
+    state: started
+  tags: [tailscale]
+
+# --- Users ---------------------------------------------------------------------------------
+
+- name: Session user, with no extra groups (no wheel, no sudo group)
+  ansible.builtin.user:
+    name: "{{ agent_box_user }}"
+    shell: /bin/bash
+    groups: ""
+    append: false
+  tags: [users]
+
+- name: Keys user, a system user that can't log in
+  ansible.builtin.user:
+    name: "{{ agent_box_keys_user }}"
+    system: true
+    shell: /sbin/nologin
+    home: "{{ agent_box_work_dir }}"
+    create_home: false
+  tags: [users]
+
+- name: Key folder and the keys user's work folders
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0700"
+  loop:
+    - "{{ agent_box_keys_dir }}"
+    - "{{ agent_box_work_dir }}"
+    - "{{ agent_box_work_dir }}/state"
+    - "{{ agent_box_work_dir }}/tofu-data"
+  tags: [users]
+
+# The role never writes a key. It only makes sure every file already in the key folder belongs to
+# the keys user and is readable by it alone.
+- name: Find the key files
+  ansible.builtin.find:
+    paths: "{{ agent_box_keys_dir }}"
+    file_type: file
+    hidden: true
+  register: agent_box_key_files
+  tags: [users]
+
+- name: Every key file is the keys user's, mode 0600
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  loop: "{{ agent_box_key_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  tags: [users]
+
+# --- Wrappers ------------------------------------------------------------------------------
+
+- name: Wrapper folder, root's
+  ansible.builtin.file:
+    path: "{{ agent_box_libexec_dir }}/downloads"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+- name: Download OpenTofu, checked against its SHA-256
+  ansible.builtin.get_url:
+    url: "https://github.com/opentofu/opentofu/releases/download/v{{ agent_box_tofu_version }}/tofu_{{ agent_box_tofu_version }}_linux_amd64.zip"
+    dest: "{{ agent_box_libexec_dir }}/downloads/tofu_{{ agent_box_tofu_version }}.zip"
+    checksum: "sha256:{{ agent_box_tofu_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [wrappers]
+
+- name: OpenTofu's folder
+  ansible.builtin.file:
+    path: "{{ agent_box_libexec_dir }}/tofu-{{ agent_box_tofu_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+- name: Unpack OpenTofu
+  ansible.builtin.unarchive:
+    src: "{{ agent_box_libexec_dir }}/downloads/tofu_{{ agent_box_tofu_version }}.zip"
+    dest: "{{ agent_box_libexec_dir }}/tofu-{{ agent_box_tofu_version }}"
+    remote_src: true
+    include: [tofu]
+    creates: "{{ agent_box_libexec_dir }}/tofu-{{ agent_box_tofu_version }}/tofu"
+    owner: root
+    group: root
+  tags: [wrappers]
+
+- name: Put tofu on the path
+  ansible.builtin.file:
+    src: "{{ agent_box_libexec_dir }}/tofu-{{ agent_box_tofu_version }}/tofu"
+    dest: /usr/local/bin/tofu
+    state: link
+    force: true
+  tags: [wrappers]
+
+- name: The keys user's checkout of central-hub, which the wrappers move to origin/main on each run
+  ansible.builtin.git:
+    repo: "{{ agent_box_repo_url }}"
+    dest: "{{ agent_box_work_dir }}/central-hub"
+    version: main
+    update: false
+  tags: [wrappers]
+
+- name: The checkout belongs to the keys user
+  ansible.builtin.file:
+    path: "{{ agent_box_work_dir }}/central-hub"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    recurse: true
+  tags: [wrappers]
+
+- name: Wrappers, root-owned
+  ansible.builtin.copy:
+    src: "{{ item.name }}.sh"
+    dest: "{{ agent_box_libexec_dir }}/{{ item.name }}.sh"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ agent_box_wrappers }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: [wrappers]
+
+- name: Front scripts that sessions run
+  ansible.builtin.template:
+    src: front.sh.j2
+    dest: "{{ agent_box_front_dir }}/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ agent_box_wrappers }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: [wrappers]
+
+- name: One sudoers line per wrapper, checked by visudo before it is written
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/agent-box
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+  tags: [wrappers]
+
+# --- Claude Code managed settings ----------------------------------------------------------
+
+- name: Managed settings folder, root's
+  ansible.builtin.file:
+    path: /etc/claude-code
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [settings]
+
+- name: Managed settings, root-owned, readable by sessions
+  ansible.builtin.template:
+    src: managed-settings.json.j2
+    dest: /etc/claude-code/managed-settings.json
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  vars:
+    agent_box_managed_settings: >-
+      {{ {'permissions': {'disableBypassPermissionsMode': 'disable',
+                          'allow': agent_box_allow, 'deny': agent_box_deny},
+          'autoMode': agent_box_auto_mode} | combine(agent_box_managed_settings_extra, recursive=true) }}
+  tags: [settings]
+
+# --- Proofs --------------------------------------------------------------------------------
+
+- name: Proof, the session user can't open the key folder
+  ansible.builtin.command:
+    argv: [runuser, -u, "{{ agent_box_user }}", --, test, -x, "{{ agent_box_keys_dir }}"]
+  register: agent_box_key_read
+  changed_when: false
+  failed_when: agent_box_key_read.rc == 0
+  tags: [verify]
+
+- name: Proof, sudo lets the session user run the wrappers and nothing else
+  ansible.builtin.command:
+    argv: [sudo, -l, -U, "{{ agent_box_user }}"]
+  register: agent_box_sudo_list
+  changed_when: false
+  tags: [verify]
+
+- name: Check the sudo list
+  ansible.builtin.assert:
+    that:
+      - agent_box_sudo_list.stdout is search('\(' ~ agent_box_keys_user ~ '\) NOPASSWD')
+      - agent_box_sudo_list.stdout is not search('\((root|ALL)(\s*:\s*ALL)?\)')
+    fail_msg: "{{ agent_box_user }} may run more than the wrappers as {{ agent_box_keys_user }}: {{ agent_box_sudo_list.stdout }}"
+    quiet: true
+  tags: [verify]
