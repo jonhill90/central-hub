@@ -29,7 +29,7 @@ flowchart LR
   r --> t["Sunday 04:30 c1-restore-test<br/>restore into a temp folder, check"]
 ```
 
-Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md), picks 144-152, 179-181 for the Azure storage, 189 for the nodes' sign-in, and 190 and 192 for the database dumps).
+Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md), picks 144-152, 179-181 for the Azure storage, 189 and 193 for the nodes' sign-in, and 190 and 192 for the database dumps).
 
 ## Before you start
 
@@ -100,11 +100,11 @@ A3. In step 1, leave out the `AZURE_` lines: the env file holds only `RESTIC_REP
    ```
 
    Run the playbook from the home network, since the account answers only that address. Then run step 3's drill.
-   why: the `timers` tag makes each node's key and certificate (`/etc/central-hub/azure/backup.pem`, 0600), uploads the public certificate with `az ad app credential reset --append` when Entra ID doesn't know it yet, waits until Entra ID takes it, and removes the app's expired certificates. It writes `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_CLIENT_CERTIFICATE_PATH` into the node env file, which restic's Azure sign-in reads.
+   why: the `timers` tag makes each node's key and certificate (`/etc/central-hub/azure/backup.pem`, 0600), uploads the public certificate with `az ad app credential reset --append` when Entra ID doesn't know it yet, one node at a time, and waits until Entra ID lists it. After every node's upload it removes each certificate on the app that no node holds, but only when the run covers every node in `k8s_nodes` (agent pick 193). It writes `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_CLIENT_CERTIFICATE_PATH` into the node env file, which restic's Azure sign-in reads.
    ※ restic 0.19.1, `internal/backend/azure/azure.go`: with no account key or SAS it signs in through azidentity's default credential chain, whose first link reads those three variables.
    expect: the drill passes; `systemctl list-timers c1-backup-azure-cert` on each node shows the daily check; the node env file has no `AZURE_ACCOUNT_SAS`.
 
-A4. Nothing runs by hand after that. Each certificate lasts 90 days. Every day at 01:40 `c1-backup-azure-cert.timer` checks it, and with 30 or fewer days left it makes a new key and certificate, adds it to the app with Graph `addKey`, waits until Entra ID takes it, switches the file, and removes the old one with `removeKey`. A failure leaves the current certificate in use and fails the unit, so `systemctl --failed` on the node shows it. The next day's run tries again. Check it with:
+A4. Nothing runs by hand after that. Each certificate lasts 90 days. Every day at 01:40 `c1-backup-azure-cert.timer` checks it, and with 30 or fewer days left it makes a new key and certificate, adds it to the app with Graph `addKey`, waits until Entra ID accepts it four times in a row, switches the file, and removes the old one with `removeKey`, trying again for up to 15 minutes. If the old one can't be removed in that time, the unit logs a `WARN` and the next full `timers` run removes it (agent pick 193). A failure leaves the current certificate in use and fails the unit, so `systemctl --failed` on the node shows it. The next day's run tries again. Check it with:
 
    ```sh
    sudo /usr/local/libexec/central-hub-backup/c1-backup-azure-cert.py check

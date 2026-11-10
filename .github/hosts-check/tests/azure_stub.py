@@ -66,6 +66,14 @@ def verify(jwt, state):
         now = time.time()
         if not (claims["nbf"] - 300 <= now <= claims["exp"]):
             raise ValueError("token not valid now")
+        # "flaky": a just-added key is accepted, refused twice, then accepted for good, as Entra
+        # ID's replicas did on c1 (2026-11-10).
+        pattern = state.get("pending", {}).get(key_id)
+        if pattern:
+            ok = pattern.pop(0)
+            save(state)
+            if not ok:
+                raise LookupError("certificate not registered on this replica yet")
         return claims, key_id
     raise LookupError("certificate not registered")
 
@@ -131,6 +139,8 @@ class Handler(BaseHTTPRequestHandler):
             assert body["passwordCredential"] is None
             key_id = str(uuid.uuid4())
             state["keys"][key_id] = cred["key"]
+            if state.get("flaky"):
+                state.setdefault("pending", {})[key_id] = [True, False, False]
             save(state)
             return self.answer(200, {"keyId": key_id, "type": "AsymmetricX509Cert", "usage": "Verify"})
         if body["keyId"] not in state["keys"]:
