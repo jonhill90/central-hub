@@ -18,6 +18,9 @@ proxmox_firewall_rules:
   - { action: ACCEPT, source: +management, proto: tcp, dport: "8006", comment: "GUI and API from the home LAN and VNet mgmt" }
   - { action: ACCEPT, proto: icmp, comment: "IPv4 ICMP: ping, unreachable, time exceeded" }
   - { action: ACCEPT, proto: icmpv6, comment: "IPv6 ICMP; neighbour discovery is on through ndp" }
+# Private, through the inventory: more host IN rules in the same shape, written after the ones
+# above. Each one is a firewall change, so it is added only on the owner's words.
+proxmox_firewall_extra_rules: []
 
 # pve-firewall drops conntrack-INVALID packets in its FORWARD chain, which every bridged guest
 # packet passes through once the firewall is on (bridge-nf-call-iptables). 1 skips that drop,

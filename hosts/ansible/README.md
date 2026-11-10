@@ -245,6 +245,7 @@ Proxmox's own firewall (pve-firewall), at datacenter (`/etc/pve/firewall/cluster
 |---|---|---|
 | in | policy DROP | Default for the host |
 | in | tcp 22 and 8006 from IPSet `management` | `management` holds `proxmox_firewall_home_lan_cidr` and VNet mgmt (`10.1.50.0/24`). Proxmox adds the host's own LAN (`local_network`) to it and opens 22, 8006, 3128 (SPICE), 5900-5999 (VNC) and 60000-60050 (migration) from it by itself |
+| in | `proxmox_firewall_extra_rules`, after the rules above | Private rules from the inventory, the same shape as `proxmox_firewall_rules`; empty by default. Each one is a firewall change, added only on the owner's words. For example, tcp 8006 from the agent box's /32 alone, rather than adding the box to `management`, which would also open 22 (pick 204) |
 | in | ICMP and ICMPv6 from anywhere; neighbour discovery (`ndp: 1`) | Ping, unreachable and time-exceeded messages; IPv6 neighbour discovery |
 | out | policy ACCEPT | The host's own updates, DNS, NTP and the routes to the lab |
 | forward | `nf_conntrack_allow_invalid: 1` | Once on, pve-firewall sends every bridged guest packet through its FORWARD chain and drops conntrack-INVALID ones there. Skipping that drop keeps guest traffic (OPNsense routing, CT 900) as it is today |

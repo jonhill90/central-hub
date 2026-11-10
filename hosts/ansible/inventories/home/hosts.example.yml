@@ -22,6 +22,8 @@ all:
           proxmox_firewall_home_lan_cidr: ""   # the home router's LAN range, a.b.c.d/nn
           proxmox_backup_disk: ""   # the empty HDD, /dev/disk/by-id/<id> (whole disk)
           proxmox_firewall_enable: false   # true only after the first run's ruleset was read
+          proxmox_firewall_extra_rules: []   # more host IN rules, private; each one needs the owner's words, e.g.
+          #   - { action: ACCEPT, source: "<agent box address>/32", proto: tcp, dport: "8006", comment: "agent box to the Proxmox API (owner's words pending)" }
           proxmox_notify_ntfy_url: ""   # errors (failed backups) to ntfy on c1: https://ntfy.<zone>/c1-alerts; private
           # or proxmox_notify_endpoint: {type: <smtp|gotify|webhook|sendmail>, options: {...}}, not both
           # playbooks/controller-trust.yml (README "Proxmox CA on the controller")

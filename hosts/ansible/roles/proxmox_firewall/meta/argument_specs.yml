@@ -33,6 +33,17 @@ argument_specs:
           source: {type: str, description: "Source range, alias or +IPSet. Leave out for any."}
           dport: {type: str, description: Destination port or range.}
           comment: {type: str, required: true, description: Why the rule is there.}
+      proxmox_firewall_extra_rules:
+        type: list
+        elements: dict
+        default: []
+        description: "More host IN rules in the same shape, written after proxmox_firewall_rules; private."
+        options:
+          action: {type: str, required: true, choices: [ACCEPT, DROP, REJECT], description: Rule action.}
+          proto: {type: str, required: true, description: "Protocol, for example tcp, icmp or icmpv6."}
+          source: {type: str, description: "Source range, alias or +IPSet. Leave out for any."}
+          dport: {type: str, description: Destination port or range.}
+          comment: {type: str, required: true, description: Why the rule is there.}
       proxmox_firewall_conntrack_allow_invalid:
         type: bool
         default: true
