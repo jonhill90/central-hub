@@ -84,6 +84,32 @@ flowchart LR
 
 Record the rule you added, and the denial it fixed, in the task note that needed it, so the next agent can find why the rule exists. When the task no longer needs the rule, delete the line.
 
+## The wrappers on the owner's Mac today
+
+These live only on the owner's Mac, in `~/.config/central-hub/` (mode 0700), not in this repository, because they name private paths and lab addresses. Each does one job with fixed arguments and prints no secret. The owner installs or changes them (2026-11-10 08:29 UTC). Agents may change exactly one thing, a wrapper's `PIN` line, and only to a commit already merged on `main`, and they report each move (the owner's card, 2026-11-10 09:42 UTC).
+
+| Wrapper | Arguments | Job | Pinned |
+|---|---|---|---|
+| `tofu-azure.sh` | `<stack> check\|plan\|apply\|output` | OpenTofu on one `hosts/terraform/azure/<stack>` as the agents' service principal | no, shared checkout |
+| `az-login-agent.sh` | none | sign `az` in as the agents' service principal | no |
+| `tofu-plan-check.sh` | `network\|firewall\|remote-access\|k8s` | read-only drift check: `tofu plan -lock=false`, summary line only | no |
+| `tofu-home-jumpbox.sh` | `init\|plan\|apply` | `hosts/terraform/home/jumpbox` (VM 258); apply runs only the saved plan | no |
+| `tofu-jumpbox.sh` | `init\|plan\|apply\|destroy` | the jumpbox rehearsal kit (VM 258 and CT 259) | no |
+| `tofu-tailnet-policy.sh` | `init\|import\|plan\|apply` | `hosts/terraform/home/tailnet-policy` | no |
+| `jumpbox-claude-install.sh` | `j1\|j2` | install Claude Code on one jumpbox test guest | no |
+| `ansible-agent-box.sh` | `check\|apply\|verify` | `playbooks/agent-box.yml` ([Set up the agent box](set-up-the-agent-box.md)) | yes |
+| `ansible-opnsense.sh` | `agent-box-check\|agent-box-apply` | the agent box's OPNsense pass rules | yes |
+| `proxmox-firewall.sh` | `check\|apply` | `playbooks/proxmox-safety.yml --tags firewall` on the Proxmox host | yes |
+| `proxmox-agent-access.sh` | `run\|mint-token` | `hosts/terraform/home/bootstrap/agent-access.sh` on the Proxmox host, then the agents' token; order run, mint-token, run | yes |
+| `agent-box-keys.sh` | `put-proxmox-dev\|put-dev-tfvars\|put-github-app\|put-c1-readonly` | put one private file into the agent box's `/etc/agent-keys/` over SSH stdin | uses the shared library, no pin |
+| `c1-kubectl.sh` | any kubectl arguments | kubectl on c1's control plane over SSH | no; see below |
+
+A pinned wrapper sources `lib/pinned.zsh`. That library moves a separate checkout of `main` to the wrapper's `PIN`. It refuses to run unless that commit is on `origin/main` and no tracked file differs. Then it copies the git-ignored home inventory in, with mode 0600, for that one run. Each run appends one line and its output to a log under `~/.config/central-hub/rehearsal/logs/`.
+
+`c1-kubectl.sh` is the exception to the pattern. It passes any arguments to kubectl with c1's admin kubeconfig, and it doesn't check the host key. The permission guard has refused every write sent through it. It is on the access register, to be replaced by fixed subcommands or retired.
+
+The wrappers go away as the agent box takes over their jobs with its own root-owned wrappers ([Set up the agent box](set-up-the-agent-box.md)).
+
 ## Related
 
 - [D-0031](../decisions/0031-let-agents-merge-green-prs.md): the rule on when agents may merge a PR, which no allow rule changes.
