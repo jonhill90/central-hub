@@ -68,6 +68,7 @@ The dev VLAN reaches the internet and no other lab network (role `opnsense_lab`,
 
 ## If it fails
 
+- `ci-runner configure` says "the App's ID and key work, but the App is not installed on" the repository: add that repository to the App's installation (the App's settings, Install App, Configure, Repository access). "GitHub refused the App's ID or key" means `github_app_id` or `/etc/agent-keys/github-app.pem` is wrong.
 - `ci-runner configure` warns "no registration token" and the role stops with "isn't registered yet": the App lacks Administration (write), or its installation hasn't accepted the new permission.
 - The play stops on a changed host key after a rebuild: check the new key on the VM's console, then remove its line from `/var/lib/agent-box/.ssh/known_hosts`.
 - `ci-runner apply` stops with 403 "Permission check failed (/sdn/zones/lab/prod, SDN.Use)": the settings still clone template 9000. Set `template_vm_id: 9001` and run `ansible-agent-box.sh apply` again (step 2).
