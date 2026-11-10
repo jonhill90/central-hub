@@ -2,13 +2,16 @@
 # The upstream operator files for k8s_identity_version, each checked against its sha256 (measured
 # on the files at tag 26.8.1 of keycloak/keycloak-k8s-resources, 2026-10-27). Research:
 # 01-notes/01r-research/0092-c1-observability/ (RB-0092) rows L21-L22.
+# kubernetes.yml re-measured 2026-11-10: upstream rebuilt the tag on 2026-10-31 from the same
+# Keycloak source (commit-id 24ed1dad, tag 26.8.1). The only change is the four
+# app.quarkus.io/build-timestamp annotations (2026-10-23 09:44:51 to 2026-10-31 10:44:15 UTC).
 k8s_identity_operator_base: https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/{{ k8s_identity_version }}/kubernetes
 k8s_identity_operator_files:
   - {name: keycloaks.k8s.keycloak.org-v1.yml, sha256: 20c51247cb6cbc6158098caabeaf6b429dc8c016e35829f5ddd9c468b7582667}
   - {name: keycloakrealmimports.k8s.keycloak.org-v1.yml, sha256: 8d552e1864d78117a07e535479ddb36e16a42b2695726c875f44828e1323edd4}
   - {name: keycloakoidcclients.k8s.keycloak.org-v1.yml, sha256: 15d9199822d1918438bd1d093eee3ec8406e7f9d0837c4527fd6da99c63b058a}
   - {name: keycloaksamlclients.k8s.keycloak.org-v1.yml, sha256: 7c69d146f610f3c40acf4466518e89615b6fce7ee2a03d75cd93b7a9a7bf259e}
-  - {name: kubernetes.yml, sha256: 2b95907f094e7a274647ba2db22bcc2f9397e33836768990dc4e4b39437e2cba}
+  - {name: kubernetes.yml, sha256: 18d4f940294bd9b2f73fe7a52c84d6b21e8fc6e5be771dce5453304c6923b28c}
 
 # Derived values, not inputs.
 k8s_identity_dir: /root/central-hub/identity
