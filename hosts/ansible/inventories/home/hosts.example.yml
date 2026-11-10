@@ -48,6 +48,15 @@ all:
           opnsense_lab_mgmt_tag: 50
           opnsense_lab_dhcp_first: 100
           opnsense_lab_dhcp_last: 199   # ends before the .224/27 load-balancer reserve
+          # The agent box's two pass rules into the lab (owner's yes 2026-11-10 05:16 UTC); private.
+          # Remove the whole block to remove the rules. The Proxmox API is reached on its mgmt
+          # address: the dev VLAN's own rule blocks the home LAN, and pve.<zone> points at mgmt.
+          opnsense_lab_agent_box:
+            source: ""   # VM 258's address on VNet dev
+            vlan: 30
+            targets:
+              - { name: Proxmox API, address: "", port: 8006 }   # the host's mgmt address
+              - { name: c1 API, address: "", port: 6443 }   # c1's control-plane node
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
             - { hostname: pve, address: "", description: "Proxmox host GUI (its mgmt address)" }

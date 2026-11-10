@@ -67,6 +67,28 @@ argument_specs:
         required: true
         description: Last host number of each DHCP pool, below the .224/27 load-balancer reserve.
       # Defaults in defaults/main.yml
+      # Optional, private (addresses), through the inventory. Unset = no agent box rules.
+      opnsense_lab_agent_box:
+        type: dict
+        required: false
+        description: The agent box's own pass rules into the lab (tasks/agent_box.yml).
+        options:
+          source: {type: str, required: true, description: "The box's address, without a prefix."}
+          vlan: {type: int, required: true, description: "The box's VLAN tag, for example 30 (dev)."}
+          targets:
+            type: list
+            elements: dict
+            required: true
+            description: One rule each.
+            options:
+              name: {type: str, required: true, description: "Rule name; one of opnsense_lab_agent_box_target_names."}
+              address: {type: str, required: true, description: "Destination address, without a prefix."}
+              port: {type: int, required: true, description: Destination TCP port.}
+      opnsense_lab_agent_box_target_names:
+        type: list
+        elements: str
+        default: [Proxmox API, c1 API]
+        description: Rule names removed when opnsense_lab_agent_box is unset.
       opnsense_lab_host_overrides:
         type: list
         elements: dict

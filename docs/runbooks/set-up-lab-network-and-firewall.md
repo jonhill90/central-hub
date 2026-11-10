@@ -129,6 +129,20 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
    If it fails: set `opnsense_wan_connected = false` and apply at once, which takes WAN link-down; then fix the interface assignment at the console before trying again.
    Agent pick: the capture filter and the three moments to check; the build session watched the same packet types by hand.
 
+7b. Let the agent box (VM 258 on VNet dev) reach the Proxmox API and c1's API, and nothing else in the lab. Only when the box exists.
+   why: the dev VLAN's own rules allow only the internet, ping and DNS, so the box's tools can't reach the APIs they run against. The owner said yes on 2026-11-10 at 05:16 UTC to one rule from the box's address only, to those two ports, once a reach test showed them blocked. Lane C measured that at 07:47 UTC: both timed out.
+   Fill `opnsense_lab_agent_box` in the inventory: the box's address, VLAN 30, and the two targets. The Proxmox API is the host's **mgmt** address (agent pick): the dev VLAN's rule 0 blocks the home LAN, so the home-LAN address can't be reached from dev, and `pve.<zone>` and its lab certificate already point at mgmt.
+
+   ```sh
+   cd hosts/ansible
+   ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags agent_box --check --diff
+   ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags agent_box
+   ```
+
+   expect: two pass rules on the dev interface, `Allow agent box to Proxmox API` and `Allow agent box to c1 API`, at sequence 1 and 2. From the box, `curl -sk -o /dev/null -w '%{http_code}' https://<mgmt address>:8006/` prints `200` and `curl -sk https://<c1 API address>:6443/version` answers. A connection from the box to any other lab address still times out.
+   If 8006 still times out while 6443 answers, and the host firewall is on (step 8), the host's own rules allow 8006 only from its `management` IPSet. Stop and ask the owner before adding the box there: it is a second firewall change.
+   To remove the rules: delete `opnsense_lab_agent_box` from the inventory and run the same command.
+
 8. Turn on the host's safety net: notifications, backups, then the host firewall in two runs.
 
    ```sh
