@@ -1,0 +1,103 @@
+---
+title: Grow the jumpbox VM into the agent jumpbox
+status: draft
+kind: automated
+trigger: once, after the owner chose on 2026-11-10 to grow the rehearsal's VM into the agents' own box; again to resize it
+runner: an agent lane, through the owner's Mac
+outcome: the jumpbox VM (258) runs with 8 GiB of RAM and a 40 GB disk, owned by `hosts/terraform/home/jumpbox`'s state, with its root file system grown and Claude Code Remote Control connected again
+needs: the jumpbox rehearsal state on the Mac; the iac@pve!apply token; SSH to the VM as its admin user
+private-values: [proxmox_node_name, jumpbox, ssh_public_key]
+files: [hosts/terraform/home/jumpbox/]
+last-tested:
+superseded-by:
+---
+
+# Grow the jumpbox VM into the agent jumpbox
+
+**Status:** draft, not yet run. Written 2026-11-10 from the code in `hosts/terraform/home/jumpbox`.
+
+The VM was first built by the jumpbox rehearsal kit, whose state also holds the rehearsal's container (CT 259). This runbook moves only the VM's entry into this folder's own state, then grows the VM. The container stays in the rehearsal state, untouched.
+
+```mermaid
+flowchart LR
+  r["rehearsal state<br/>VM 258 + CT 259"] -- "tofu state mv<br/>(VM only)" --> j["home-jumpbox.tfstate<br/>VM 258"]
+  r --> c["rehearsal state<br/>CT 259 only"]
+  j -- "plan: 1 to change" --> g["VM 258<br/>8 GiB, 40 GB"]
+```
+
+## Before you start
+
+- `hosts/terraform/home/jumpbox/home.tfvars` holds the VM's real name (STD-0001), ID 258, its address, and the admin public key, all the same values as the rehearsal's `vm` input, with `memory_mb = 8192` and `disk_gb = 40`.
+- `PROXMOX_VE_ENDPOINT` and `PROXMOX_VE_API_TOKEN` are set in the shell.
+- Host RAM has room for 4 GiB more: `pvesh get /nodes/<node>/status` shows at least 6 GiB free.
+
+## Steps
+
+1. Copy both state files before touching them.
+   why: `tofu state mv` rewrites both files; a copy is the way back.
+
+   ```sh
+   cp <rehearsal state> <rehearsal state>.bak-$(date -u +%Y%m%dT%H%M%SZ)
+   ```
+
+2. Move the VM's entry into this folder's state.
+   why: a moved entry keeps the clone record, so the next plan changes the VM in place instead of replacing it (hosts/AGENT-PICKS.md pick 194).
+
+   ```sh
+   tofu -chdir=<rehearsal kit folder> state mv \
+     -state=<rehearsal state> -state-out=<folder outside the repo>/home-jumpbox.tfstate \
+     proxmox_virtual_environment_vm.j1 proxmox_virtual_environment_vm.jumpbox
+   ```
+
+   expect: `Successfully moved 1 object(s).`
+
+3. Take the VM out of the rehearsal kit's code, then plan the kit.
+   why: otherwise the kit's next apply would build a second VM 258.
+   expect: the kit's plan shows `No changes.` for CT 259.
+
+4. Plan this folder and read the plan.
+
+   ```sh
+   cd hosts/terraform/home/jumpbox
+   tofu init -backend-config="path=<folder outside the repo>/home-jumpbox.tfstate"
+   tofu plan -var-file=home.tfvars -out=jumpbox.tfplan
+   ```
+
+   expect: `0 to add, 1 to change, 0 to destroy`, changing `memory.dedicated` to 8192, `disk.size` to 40 and the tags.
+   If the plan says **must be replaced**, stop and apply nothing.
+
+5. Apply the saved plan.
+
+   ```sh
+   tofu apply jumpbox.tfplan
+   ```
+
+   expect: the VM reboots once to take the new memory, and comes back in under a minute (J run 1: 23 s to connected).
+
+6. Grow the root file system, as the admin user on the VM.
+   why: Proxmox grows the disk, not the partition or the file system inside it.
+
+   ```sh
+   df -h /
+   sudo growpart /dev/sda <root partition number>   # only if df still shows about 20 GB
+   sudo xfs_growfs /
+   ```
+
+   expect: `df -h /` shows about 40 GB, and `free -m` shows about 7,900 MiB total.
+
+7. Check that Remote Control came back.
+
+   ```sh
+   systemctl status claude-rc --no-pager
+   ```
+
+   expect: `active (running)`, and the session `jumpbox` is listed at claude.ai/code.
+
+## If it fails
+
+- The plan wants to replace the VM: run `tofu state mv` in reverse to put the entry back into the rehearsal state, and report the plan.
+- `growpart` says `NOCHANGE`: cloud-init already grew the partition at boot; go straight to `xfs_growfs /`.
+
+## Exit
+
+`claude auth logout` as user `claude` on the VM, then `tofu destroy` with this folder's state. Nothing else depends on the VM.

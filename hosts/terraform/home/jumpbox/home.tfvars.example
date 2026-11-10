@@ -1,0 +1,7 @@
+# Copy to home.tfvars (git-ignored) and fill in. Made-up values shaped by STD-0001.
+proxmox_node_name = "examplehv01"
+vnet              = "dev"
+vlans_file        = "../../../ansible/inventories/home/group_vars/all/vlans.yml"
+template_vm_id    = 9000
+ssh_public_key    = "ssh-ed25519 AAAA... admin"
+jumpbox = { name = "ddeapdemo01", vm_id = 258, address = "10.1.30.90", cores = 2, memory_mb = 8192, disk_gb = 40 }
