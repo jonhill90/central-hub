@@ -15,6 +15,16 @@ appsPath: hosts/kubernetes/home/c1/apps
 # makes (templates/project.yaml, Activation gate item 5). `default` puts them back.
 project: c1
 
+# How an automatically synced child retries a failed sync: 15 tries, waiting 15 s, then twice as
+# long each time up to 5 min, about an hour in all. Enough for a fresh cluster, where apps wait on
+# another app's CRDs or webhook (RB1 run 8, 2026-11-10); an app still failing after that needs a look.
+syncRetry:
+  limit: 15
+  backoff:
+    duration: 15s
+    factor: 2
+    maxDuration: 5m
+
 # What AppProject `c1` allows. Source repositories and destination namespaces come from `apps`
 # (this repository, each `chart.repoURL`, each `namespace`), plus the lists below.
 c1Project:
