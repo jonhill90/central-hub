@@ -152,7 +152,28 @@
       ansible.builtin.systemd_service:
         name: github-runner
       register: ci_runner_active
-      failed_when: ci_runner_active.status.ActiveState != "active"
+
+    - name: Why the runner service is not running
+      when: ci_runner_active.status.ActiveState != "active"
+      block:
+        # The agent box can't log in to the VM, so the play brings back what systemd and SELinux
+        # said: the service's last log lines, and any denials from the last ten minutes.
+        - name: The service's log and SELinux denials
+          ansible.builtin.shell: |
+            journalctl -u github-runner -n 15 --no-pager
+            echo '--- SELinux denials (ausearch) ---'
+            ausearch -m AVC,USER_AVC,SELINUX_ERR -ts recent -i 2>&1
+          register: ci_runner_why
+          changed_when: false
+          failed_when: false
+
+        - name: Stop, the runner service is not running
+          ansible.builtin.fail:
+            msg: >-
+              github-runner is {{ ci_runner_active.status.ActiveState }}
+              ({{ ci_runner_active.status.SubState }}), last exit status
+              {{ ci_runner_active.status.ExecMainStatus }}.
+              {{ ci_runner_why.stdout_lines | join(' | ') }}
 
     - name: Proof, the runner user has no sudo
       ansible.builtin.command: sudo -l -U {{ ci_runner_user }}
