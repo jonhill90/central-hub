@@ -49,6 +49,7 @@ argument_specs:
         description: "Whether the Gateway has its HTTPS listener (k8s_gateway_https). The route needs it true."
       k8s_gitops_ui_short_names: {type: bool, default: true, description: "UI on argocd.<zone>, sign-in at sso.<zone> (STD-0001 rule 5)."}
       k8s_gitops_ui_https_redirect: {type: bool, default: true, description: "Add a route on the HTTP listener that answers 301 to https:// for the UI's name."}
+      k8s_lab_dns_points_here: {type: bool, default: true, description: "False when the lab wildcard DNS points at another cluster (dev rebuilds); the check that a name resolves to this Gateway is skipped."}
       k8s_gitops_ui_proof_client:
         type: str
         description: "Inventory host that proves the UI answers by name, through the lab's DNS. Default: the first host of group k8s_workers."

@@ -25,3 +25,8 @@ k8s_app_route_https_redirect: true
 # and https-short listeners (k8s_gateway_short_names).
 k8s_app_route_short_names: true
 k8s_app_route_proof_client: "{{ groups['k8s_workers'] | first }}"
+# Whether the lab's wildcard DNS override sends this cluster's names to this cluster's Gateway. True
+# for c1. False in the dev inventory: a dev rebuild uses c1's names while the wildcard still points
+# at prod's Gateway, so a name check there would test prod. The checks that call the Gateway by its
+# address with a Host header stay on either way.
+k8s_lab_dns_points_here: true

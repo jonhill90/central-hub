@@ -45,6 +45,14 @@
       register: k8s_gateway_smoke_dns
       changed_when: false
       failed_when: k8s_gateway_smoke_dns.rc != 0 or k8s_gateway_address not in k8s_gateway_smoke_dns.stdout.split()
+      when: k8s_lab_dns_points_here | bool
+
+    - name: smoke | Name check skipped, the lab DNS points elsewhere
+      ansible.builtin.debug:
+        msg: >-
+          k8s_lab_dns_points_here is false: this cluster uses names the lab's wildcard DNS sends
+          to another cluster's Gateway (a dev rebuild), so the name is not checked here.
+      when: not (k8s_lab_dns_points_here | bool)
 
   always:
     - name: smoke | Remove the test app
