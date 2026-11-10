@@ -27,7 +27,7 @@ flowchart LR
 
 ## Before you start
 
-- `hosts/terraform/home/jumpbox/home.tfvars` holds the VM's real name (STD-0001), ID 258, its address, and the admin public key, all the same values as the rehearsal's `vm` input, with `memory_mb = 8192` and `disk_gb = 40`. The 8192 is a starting estimate, not a measurement; step 8 replaces it with a measured size.
+- `hosts/terraform/home/jumpbox/home.tfvars` holds the VM's real name (STD-0001), ID 258, its address, and the admin public key. The address and key are the same as the rehearsal's `vm` input; the name is the STD-0001 name, not the rehearsal's, with `memory_mb = 8192` and `disk_gb = 40`. The 8192 is a starting estimate, not a measurement; step 8 replaces it with a measured size.
 - `PROXMOX_VE_ENDPOINT` and `PROXMOX_VE_API_TOKEN` are set in the shell.
 - Host RAM has room for 4 GiB more: `pvesh get /nodes/<node>/status` shows at least 6 GiB free.
 
@@ -63,7 +63,7 @@ flowchart LR
    tofu plan -var-file=home.tfvars -out=jumpbox.tfplan
    ```
 
-   expect: `0 to add, 1 to change, 0 to destroy`, changing `memory.dedicated` to 8192, `disk.size` to 40 and the tags.
+   expect: `0 to add, 1 to change, 0 to destroy`, changing `memory.dedicated` to 8192, `disk.size` to 40, the tags, and `name` from the rehearsal's name to the STD-0001 name. Proxmox renames a VM in place, so the name change is not a replace.
    If the plan says **must be replaced**, stop and apply nothing.
 
 5. Apply the saved plan.
@@ -92,6 +92,17 @@ flowchart LR
    ```
 
    expect: `active (running)`, and the session `jumpbox` is listed at claude.ai/code.
+
+   Then give the OS the same STD-0001 hostname.
+   why: Proxmox's VM name and the OS hostname are separate. Remote Control lists the box at claude.ai/code by its OS hostname, which is still the rehearsal's name until this step.
+   Run [set-up-the-agent-box.md](set-up-the-agent-box.md): its role sets the hostname from `agent_box_hostname` first. For the hostname alone:
+
+   ```sh
+   cd hosts/ansible
+   ansible-playbook -i inventories/home/ playbooks/agent-box.yml --tags hostname
+   ```
+
+   expect: `hostnamectl --static` on the VM prints the same name as `home.tfvars`.
 
 8. Right-size the RAM from a measurement, once the desktop, Obsidian and the screenshot tool are installed on the VM.
    why: 8 GiB was an estimate (owner's question, 2026-11-10 05:24 UTC). Only a measurement of the real load sets the size.

@@ -1,0 +1,13 @@
+---
+# The agent box's base setup (Library plans/agent-workstation/PLAN.md step 4): users claude and
+# keys, the key folder, root-owned key wrappers with one sudoers line each, and Claude Code's
+# managed settings with the hard deny rules. Order and proofs: docs/runbooks/set-up-the-agent-box.md.
+#   ansible-playbook -i inventories/home/ playbooks/agent-box.yml --check --diff
+#   ansible-playbook -i inventories/home/ playbooks/agent-box.yml
+#   ansible-playbook -i inventories/home/ playbooks/agent-box.yml --tags verify
+- name: Agent box base setup
+  hosts: agent_box
+  become: true
+  gather_facts: false
+  roles:
+    - role: agent_box

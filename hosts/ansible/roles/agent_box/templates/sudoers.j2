@@ -1,0 +1,7 @@
+# /etc/sudoers.d/agent-box: user {{ agent_box_user }} may run each wrapper as {{ agent_box_keys_user }},
+# with these arguments only, and nothing else. Managed by the agent_box role (central-hub
+# hosts/ansible); checked with visudo before it is written.
+Defaults:{{ agent_box_user }} env_reset
+{% for w in agent_box_wrappers %}
+{{ agent_box_user }} ALL=({{ agent_box_keys_user }}) NOPASSWD: {{ w.args | map('regex_replace', '^', agent_box_libexec_dir ~ '/' ~ w.name ~ '.sh ') | join(', ') }}
+{% endfor %}

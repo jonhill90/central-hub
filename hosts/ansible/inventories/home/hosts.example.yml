@@ -32,6 +32,14 @@ all:
           # every lab VLAN plus these; the same list as home/tailnet's connector_extra_routes.
           tailnet_connector_extra_routes: [""]   # the host's home LAN address as a /32, as advertised today
           tailnet_connector_lab_supernet: "{{ proxmox_network_lab_supernet }}"
+    agent_box:
+      hosts:
+        agent_box_vm:   # VM 258 (playbooks/agent-box.yml, docs/runbooks/set-up-the-agent-box.md)
+          ansible_host: ""   # its address on VNet dev
+          ansible_user: ""   # its admin user (the clone's cloud-init user), which has sudo
+          agent_box_hostname: ""   # its STD-0001 name, the same as the VM's name in home/jumpbox
+          agent_box_allow: []   # permissions.allow copied from the Mac's settings; private
+          agent_box_auto_mode: {}   # autoMode block copied from the Mac's settings; private
     opnsense:
       hosts:
         opnsense_fw:
