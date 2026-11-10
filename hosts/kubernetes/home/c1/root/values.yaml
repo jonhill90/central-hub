@@ -54,7 +54,9 @@ c1Project:
 #   ignoreDifferences  fields Argo CD leaves alone, for example a password the chart makes at random
 #   wave         sync order when the root syncs, lowest first (default 0): -3 storage, -2 operators
 #                and their CRDs, -1 what they serve (the secret store), 0 apps
-#   autoSync     false while the take-over diff is checked; true after the first clean sync
+#   autoSync     true: Argo CD syncs the app on its own, so a fresh cluster installs every app
+#                from git (the owner's card, 2026-11-10 02:50 UTC). false only while a new
+#                app's take-over diff is checked
 #   prune        delete objects that leave git; false until one cycle runs clean
 apps:
   metrics-server:
@@ -63,7 +65,7 @@ apps:
       repoURL: https://kubernetes-sigs.github.io/metrics-server/
       name: metrics-server
       version: 3.14.0   # metrics-server 0.9.0, 2026-08-19; same as k8s_observability today
-    autoSync: false
+    autoSync: true
     prune: false
   # Volumes (spec step 2): the provisioner and the default StorageClass. The data disk itself stays
   # with Ansible (k8s_storage, tag disk).
@@ -71,13 +73,13 @@ apps:
     namespace: local-path-storage
     local: true
     wave: -3
-    autoSync: false
+    autoSync: true
     prune: false
   jellyfin:
     namespace: media
     local: true
     needsZone: true
-    autoSync: false
+    autoSync: true
     prune: false
   # Logs (spec step 3): two releases in namespace logging, as k8s_observability installed them.
   loki:
@@ -90,7 +92,7 @@ apps:
       # (the GitHub release download behind repoURL returned 504 for hours on 2026-11-08); the bytes
       # matched (SHA-256 bfa76744...edbe0a) on 2026-11-08. Argo CD and Ansible still use repoURL.
       oci: oci://ghcr.io/grafana-community/helm-charts/loki
-    autoSync: false
+    autoSync: true
     prune: false
   alloy:
     namespace: logging
@@ -98,7 +100,7 @@ apps:
       repoURL: https://grafana.github.io/helm-charts
       name: alloy
       version: 1.13.1   # Alloy v1.20.1, 2026-10-08; same as k8s_observability today
-    autoSync: false
+    autoSync: true
     prune: false
   # Metrics (spec step 4). Add values-sso.yaml to valueFiles, and the auth_url parameter below,
   # when k8s_observability_grafana_sso is true in the inventory (Grafana signs in through Keycloak).
@@ -121,7 +123,7 @@ apps:
         name: kube-prometheus-stack-grafana
         namespace: monitoring
         jsonPointers: [/data]
-    autoSync: false
+    autoSync: true
     prune: false
   # Secrets (spec step 5): External Secrets and the one store `c1` every ExternalSecret names.
   external-secrets:
@@ -132,13 +134,13 @@ apps:
       version: 2.14.0   # 2026-10-23, the first to list Kubernetes 1.37; same as k8s_secrets today
     wave: -2
     syncOptions: [ServerSideApply=true]
-    autoSync: false
+    autoSync: true
     prune: false
   secret-store:
     namespace: external-secrets
     local: true
     wave: -1
-    autoSync: false
+    autoSync: true
     prune: false
   # Certificates (spec step 6): cert-manager itself. The issuers and the Gateway's certificate stay
   # with Ansible (k8s_certs, tag issue) until the lab PKI work gives them a `certs` app here.
@@ -150,7 +152,7 @@ apps:
       version: v1.21.3   # security release, STD-0003 rule 2; same as k8s_certs today
     wave: -2
     syncOptions: [ServerSideApply=true]
-    autoSync: false
+    autoSync: true
     prune: false
   # The way in (spec step 9): Gateway `apps` and the routes of apps whose charts make none. The
   # node firewall ports stay with Ansible (k8s_gateway).

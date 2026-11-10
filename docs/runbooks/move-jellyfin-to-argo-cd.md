@@ -46,6 +46,8 @@ Stop if any of these is not true.
 
 ## Steps
 
+Since 2026-11-10, `autoSync` is on for every app in `root/values.yaml` (the owner's card, 02:50 UTC), so Argo CD syncs this app on its own and a fresh cluster installs it from git. On a cluster where Ansible already runs it, steps 1 to 3 are now a check after the fact: read the app's sync result instead of syncing by hand. Step 4's Ansible switch is still needed, so the role stops applying the same objects.
+
 1. Wait for the root Application to pick up `main`, or press Refresh on `c1` in the Argo CD UI.
    why: the root chart lists `jellyfin` with `local: true`, so the root makes the child Application `jellyfin`, which renders the chart in this repository.
    expect: `kubectl -n argocd get application jellyfin` exists and shows OutOfSync. Automatic sync is off.
