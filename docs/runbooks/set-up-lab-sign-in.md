@@ -76,6 +76,7 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 
 - The realm import never reaches `Done`: `kubectl -n identity logs job/realm-lab` shows Keycloak's import error. Fix the template; CI's `identity` job reproduces most import errors without a cluster (`.github/hosts-check/run.sh identity`).
 - The delete step fails to sign in: the operator's first admin account (Secret `identity/sso-initial-admin`) was removed or changed in Keycloak. Set `k8s_identity_realm_replace: false` to stop the delete, and tell the owner.
+- The operator step stops at "Upstream files, checked against their pinned sha256": upstream rebuilt or changed a file at the pinned tag. Don't just copy the new hash. Download the file at the tag, diff it against the pinned content (from the controller's earlier download in `/root/central-hub/identity/operator/` on the control plane, which the next run overwrites, or the live objects on c1), and move the pin in `vars/main.yml` by pull request only when the diff is harmless, such as build annotations. Write what changed in the comment above the pins and in the pull request.
 - To undo: check out the previous commit of the role and run step 2; the realm is imported again from that code.
 
 ## Afterwards
