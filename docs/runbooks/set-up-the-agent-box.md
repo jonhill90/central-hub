@@ -116,6 +116,7 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
 ## If it fails
 
 - `visudo` rejects the sudoers file: the task fails and the old file stays; nothing else in sudo changes.
+- `dev-vms` stops with `Failed to determine current working directory: stat .: permission denied`: it was started from a folder the `keys` user can't read, such as the admin user's home, on a box set up before the front script began with `cd /`. Run the role's `wrappers` tag again, or start `dev-vms` from `/` or the `claude` user's home.
 - `dev-vms` says there is no saved plan: run `dev-vms plan` first; `apply` only applies the saved plan.
 - After a dev teardown, `dev-vms plan` can't create VMs: Proxmox dropped the `/vms/<id>` ACLs when the VMs were destroyed (pick 18), so `agent-access.sh` must run again as root.
 - The TLS proof fails with `CERTIFICATE_VERIFY_FAILED`: the CA file is the wrong one, or `update-ca-trust` didn't run. Fix the file and run again with `--tags ca,verify`; never turn certificate checks off.
