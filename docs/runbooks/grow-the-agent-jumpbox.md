@@ -93,7 +93,7 @@ flowchart LR
 
    expect: `active (running)`, and the session `jumpbox` is listed at claude.ai/code.
 
-7a. Give the OS the same STD-0001 hostname.
+   Then give the OS the same STD-0001 hostname.
    why: Proxmox's VM name and the OS hostname are separate. Remote Control lists the box at claude.ai/code by its OS hostname, which is still the rehearsal's name until this step.
    Run [set-up-the-agent-box.md](set-up-the-agent-box.md): its role sets the hostname from `agent_box_hostname` first. For the hostname alone:
 

@@ -76,7 +76,7 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
 
    expect: the STD-0001 name. At claude.ai/code the box comes back under an entry with the new name. The old entry, under the rehearsal name, goes stale and can be ignored.
 
-3a. Join the tailnet as `tag:agent-box`, as the admin user.
+4. Join the tailnet as `tag:agent-box`, as the admin user.
    why: cloud sessions reach the box by Tailscale SSH as `claude` (the tailnet policy's SSH rule from `tag:agent` to `tag:agent-box`, `hosts/terraform/home/tailnet-policy`). The policy's OAuth client can't mint auth keys, so the join uses a login link.
 
    ```sh
@@ -86,7 +86,7 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
    It prints a login link. The owner opens it once, signed in as a tailnet admin. `--ssh` stays on: the policy's SSH rule needs Tailscale SSH on the box.
    expect: `tailscale status` shows the box with `tag:agent-box`, and `ssh claude@<box>` from a cloud session gets a shell, while `ssh root@<box>` is refused.
 
-4. Put the dev rebuild keys in place, as the admin user. The files never pass through a session or a repository.
+5. Put the dev rebuild keys in place, as the admin user. The files never pass through a session or a repository.
    why: `dev-vms` reads them, and only the `keys` user can.
 
    ```sh
@@ -99,7 +99,7 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
 
    In `dev-vms.tfvars`, `vlans_file` points into the keys user's checkout: `/var/lib/agent-box/central-hub/hosts/ansible/inventories/home/group_vars/all/vlans.yml`.
 
-5. Prove it as a session would, from a Remote Control session on the box.
+6. Prove it as a session would, from a Remote Control session on the box.
 
    ```sh
    dev-vms plan
@@ -109,7 +109,7 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
 
    expect: `dev-vms plan` prints the central-hub commit and a plan; the `cat` fails with permission denied; the `sudo` line is refused by the deny rule `Bash(sudo:*)` before it runs.
 
-6. Guard test: the owner sends each blocked line from their phone, as for the rehearsal (PLAN step 12). Each must be refused.
+7. Guard test: the owner sends each blocked line from their phone, as for the rehearsal (PLAN step 12). Each must be refused.
 
 ## If it fails
 
