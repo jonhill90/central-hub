@@ -28,6 +28,9 @@ gateway:
   hostSuffix: apps.c1.prod
   # Also answer on the short alias <name>.<zone> (STD-0001 rule 5; the Gateway's shortNames).
   shortNames: true
+  # Whether the Gateway has its HTTPS listeners (the root's gatewayHttps). Off, the route serves
+  # on the http listeners and there is no redirect route.
+  https: true
 
 # First-run setup (templates/setup-*.yaml). The admin password is made once by External Secrets'
 # Password generator and kept in the Secret <name>-admin (keys: username, password); nothing
