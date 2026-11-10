@@ -14,11 +14,14 @@
 #   TFSTATE       its OpenTofu state file
 #   TOFU_ENV      a file that exports PROXMOX_VE_ENDPOINT, PROXMOX_VE_API_TOKEN (and _INSECURE)
 #   INVENTORY     the Ansible inventory for this env
-#   KUBECONFIG    the kubeconfig for this env's cluster
 #   STAGES        optional: the stages to run, in order (default below)
 #   PRE_VMS_HOOK  optional: a command run before the VMs are made (Proxmox /vms ACLs, R4 step 0)
 #   RESTORE_HOOK  optional: the restore command for stage `restore`
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
+#
+# No kubeconfig leaves the cluster: every kubectl call runs on the first control-plane node through
+# Ansible, with that node's /etc/kubernetes/admin.conf (kc below). A KUBECONFIG in rebuild.env is
+# ignored.
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -44,10 +47,9 @@ done
 [ "$(stat -c %a "$env_dir" 2>/dev/null || stat -f %Lp "$env_dir")" = 700 ] || die "$env_dir must be mode 0700"
 # shellcheck source=/dev/null
 . "$env_dir/rebuild.env"
-for v in ENV_NAME VM_ID_MIN VM_ID_MAX TFVARS TFSTATE TOFU_ENV INVENTORY KUBECONFIG; do
+for v in ENV_NAME VM_ID_MIN VM_ID_MAX TFVARS TFSTATE TOFU_ENV INVENTORY; do
   [ -n "${!v:-}" ] || die "$v is not set in rebuild.env"
 done
-export KUBECONFIG
 case $ENV_NAME in dev|prod) ;; *) die "ENV_NAME must be dev or prod" ;; esac
 
 # Every node's VM ID in the tfvars must sit in this env's range, so a dev run can't touch prod's
@@ -74,19 +76,42 @@ tofu_k8s() {
   (set -a; . "$TOFU_ENV"; set +a; tofu -chdir="$tf" "$@")
 }
 
+# kubectl on the first control-plane node, through Ansible, so no admin kubeconfig is copied off
+# the node. Prints the command's stdout, sends its stderr to stderr, and returns its exit code.
+# The arguments are split on spaces on the node, so pass no argument that holds a space or quote.
+kc() {
+  local json rc=0
+  # ansible.posix.json (pinned in hosts/ansible/requirements.yml) prints the run as one JSON document.
+  json=$(cd "$repo/hosts/ansible" && ANSIBLE_LOAD_CALLBACK_PLUGINS=1 ANSIBLE_STDOUT_CALLBACK=ansible.posix.json \
+    ansible 'k8s_control_plane[0]' -i "$INVENTORY" -b -m ansible.builtin.command \
+    -a "kubectl --kubeconfig /etc/kubernetes/admin.conf $*") || rc=$?
+  printf '%s' "$json" | python3 -I -c '
+import json, sys
+try:
+    res = list(json.load(sys.stdin)["plays"][0]["tasks"][0]["hosts"].values())[0]
+except Exception as e:
+    print("kc: no result from Ansible: %s" % e, file=sys.stderr); sys.exit(1)
+if res.get("stdout"): print(res["stdout"])
+err = res.get("stderr") or ("" if "rc" in res else res.get("msg", ""))
+if err: print(err, file=sys.stderr)
+sys.exit(res.get("rc", 1))
+' || rc=$?
+  return "$rc"
+}
+
 # The recap's "changed=" counts, summed over every host, from the last playbook run in $raw.
 changed_total() {
   awk '/PLAY RECAP/{n=0} /changed=/{for(i=1;i<=NF;i++) if($i ~ /^changed=/){split($i,a,"="); n+=a[2]}} END{print n+0}' "$raw"
 }
 
 wait_apps() {
-  local timeout=${APPS_TIMEOUT:-1200} start bad
+  local timeout=${APPS_TIMEOUT:-1200} start apps bad
   start=$(date +%s)
   while :; do
-    bad=$(kubectl -n argocd get applications.argoproj.io \
-      -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status}{"\n"}{end}' \
-      | awk '$2 != "Synced" || $3 != "Healthy"')
-    if [ -z "$bad" ] && [ "$(kubectl -n argocd get applications.argoproj.io --no-headers | wc -l)" -gt 1 ]; then
+    apps=$(kc -n argocd get applications.argoproj.io --no-headers \
+      -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status)
+    bad=$(printf '%s\n' "$apps" | awk 'NF && ($2 != "Synced" || $3 != "Healthy")')
+    if [ -z "$bad" ] && [ "$(printf '%s\n' "$apps" | awk 'NF' | wc -l)" -gt 1 ]; then
       return 0
     fi
     if [ $(( $(date +%s) - start )) -ge "$timeout" ]; then
@@ -99,9 +124,9 @@ wait_apps() {
 
 checks() {
   local notready pods
-  notready=$(kubectl get nodes --no-headers | awk '$2 != "Ready"')
+  notready=$(kc get nodes --no-headers | awk '$2 != "Ready"')
   [ -z "$notready" ] || { echo "nodes not Ready: $notready"; return 1; }
-  pods=$(kubectl get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"')
+  pods=$(kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"')
   [ -z "$pods" ] || { echo "pods not Running or Completed:"; echo "$pods"; return 1; }
   wait_apps
   # A second run of the cluster playbook must change nothing.
