@@ -1,6 +1,8 @@
 # Ported from hosts/ansible/roles/k8s_app_route/templates/route.yaml.j2: TLS ends at the shared
-# Gateway's https listener; plain http for the same name gets a 301 to https.
+# Gateway's https listener; plain http for the same name gets a 301 to https. With gateway.https
+# off (a cluster with no certificate), the route serves on the http listeners and there is no redirect.
 {{- $v := .Values }}
+{{- $section := ternary "https" "http" (eq (toString $v.gateway.https) "true") }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -10,11 +12,11 @@ spec:
   parentRefs:
     - name: {{ $v.gateway.name }}
       namespace: {{ $v.gateway.namespace }}
-      sectionName: https
+      sectionName: {{ $section }}
 {{- if $v.gateway.shortNames }}
     - name: {{ $v.gateway.name }}
       namespace: {{ $v.gateway.namespace }}
-      sectionName: https-short
+      sectionName: {{ $section }}-short
 {{- end }}
   hostnames:
     - {{ include "jellyfin.host" . }}
@@ -29,6 +31,7 @@ spec:
       backendRefs:
         - name: {{ $v.name }}
           port: {{ $v.port }}
+{{- if eq $section "https" }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -56,3 +59,4 @@ spec:
           requestRedirect:
             scheme: https
             statusCode: 301
+{{- end }}

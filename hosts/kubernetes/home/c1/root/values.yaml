@@ -92,6 +92,8 @@ apps:
     namespace: media
     local: true
     needsZone: true
+    zoneParameters:
+      gateway.https: "{gatewayHttps}"
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
   # Logs (spec step 3): two releases in namespace logging, as k8s_observability installed them.
