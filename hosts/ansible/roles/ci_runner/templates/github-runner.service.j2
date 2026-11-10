@@ -8,9 +8,9 @@ Wants=network-online.target
 User={{ ci_runner_user }}
 Group={{ ci_runner_user }}
 WorkingDirectory={{ ci_runner_home }}/runner
-# Through /bin/sh: SELinux (enforcing on AlmaLinux) stops systemd from running a file under
-# /var/lib directly (status 203/EXEC, measured 2026-11-10 on the runner VM). A shell started from
-# /bin may run it, and exec hands the runner the service's process.
+# Through /bin/sh, and exec hands the runner the service's process. Run directly, and then through
+# /bin/sh, the service exited 203/EXEC on the runner VM (2026-11-10), so the cause is still open:
+# the role's proof now prints the service's log and SELinux denials when it fails.
 ExecStart=/bin/sh -c 'exec {{ ci_runner_home }}/runner/run.sh'
 Restart=always
 RestartSec=15
