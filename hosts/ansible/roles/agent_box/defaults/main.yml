@@ -1,0 +1,69 @@
+---
+# Not private. The agent box (VM 258, docs/runbooks/set-up-the-agent-box.md): user `claude` runs
+# the sessions, user `keys` owns the lab keys, and the sessions use a key only through a root-owned
+# wrapper that sudo lets `claude` run as `keys` with fixed arguments. Agent picks, Library
+# plans/agent-workstation/PLAN.md sections 3 and 4.
+
+agent_box_user: claude
+agent_box_keys_user: keys
+agent_box_keys_dir: /etc/agent-keys
+agent_box_work_dir: /var/lib/agent-box
+agent_box_libexec_dir: /usr/local/libexec/agent-box
+agent_box_front_dir: /usr/local/bin
+agent_box_repo_url: https://github.com/jonhill90/central-hub.git
+
+# One entry per wrapper: files/<name>.sh is installed as <libexec>/<name>.sh, a front script
+# <front_dir>/<name> calls it through sudo, and sudoers allows exactly these first arguments.
+agent_box_wrappers:
+  - name: dev-vms
+    args: [plan, apply, destroy]
+
+# OpenTofu for the wrappers, the same version CI uses (.github/hosts-check/install-tools.sh),
+# checked against the release's SHA256SUMS.
+agent_box_tofu_version: 1.13.1
+agent_box_tofu_sha256: 8ccbc6f8ee21d2827715f3c6e08a9b3e0209b1e62057c05067ef117e047c1a80
+
+# Tailscale client from pkgs.tailscale.com (installed 2026-11-10 on VM 258, AlmaLinux 10).
+agent_box_tailscale_version: 1.104.5
+agent_box_rhel_major: 10
+
+# Hard floor for every session on the box, in /etc/claude-code/managed-settings.json. A deny rule
+# blocks a call before auto mode's classifier is asked and can't be overridden. Mapped from what
+# the Mac's guard blocks today (PLAN.md section 4).
+agent_box_deny:
+  # Branch deletes. A refspec delete (`git push origin :branch`) can't be matched by a prefix rule
+  # without blocking every push; the classifier and the repo rulesets cover it.
+  - "Bash(git push --delete:*)"
+  - "Bash(git push -d:*)"
+  - "Bash(git push origin --delete:*)"
+  - "Bash(git push origin -d:*)"
+  - "Bash(ssh root@:*)"
+  - "Bash(kubectl patch:*)"
+  - "Bash(kubectl --context c1 apply:*)"
+  - "Bash(kubectl --context c1 delete:*)"
+  - "Bash(kubectl --context c1 edit:*)"
+  - "Bash(az storage blob delete-batch:*)"
+  - "Bash(curl:* | bash)"
+  - "Bash(curl:* | sh)"
+  # Raw applies; applies go only through the wrappers.
+  - "Bash(tofu apply:*)"
+  - "Bash(tofu destroy:*)"
+  - "Bash(tofu -chdir=* apply:*)"
+  - "Bash(tofu -chdir=* destroy:*)"
+  - "Bash(gh pr merge:*)"
+  - "Bash(gh api:*)"
+  # Keys: sessions reach `keys` only through the front scripts, which call sudo themselves.
+  - "Bash(sudo:*)"
+  - "Read(/etc/agent-keys/**)"
+  # The settings themselves.
+  - "Edit(/etc/claude-code/**)"
+  - "Write(/etc/claude-code/**)"
+  - "Edit(~/.claude/settings.json)"
+  - "Write(~/.claude/settings.json)"
+
+# Private, through the inventory: the allow rules and auto mode's environment lines copied from
+# the Mac's settings (they name private paths). Empty lists are fine.
+agent_box_allow: []
+agent_box_auto_mode: {}
+# Any other top-level settings, merged over the rest (for example autoUpdatesChannel).
+agent_box_managed_settings_extra: {}
