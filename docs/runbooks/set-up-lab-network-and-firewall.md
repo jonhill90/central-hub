@@ -129,7 +129,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
    If it fails: set `opnsense_wan_connected = false` and apply at once, which takes WAN link-down; then fix the interface assignment at the console before trying again.
    Agent pick: the capture filter and the three moments to check; the build session watched the same packet types by hand.
 
-7b. Let the agent box (VM 258 on VNet dev) reach the Proxmox API and c1's API, and nothing else in the lab. Only when the box exists.
+   Then, once the agent box exists, let it (VM 258 on VNet dev) reach the Proxmox API and c1's API, and nothing else in the lab. Only when the box exists.
    why: the dev VLAN's own rules allow only the internet, ping and DNS, so the box's tools can't reach the APIs they run against. The owner said yes on 2026-11-10 at 05:16 UTC to one rule from the box's address only, to those two ports, once a reach test showed them blocked. Lane C measured that at 07:47 UTC: both timed out.
    Fill `opnsense_lab_agent_box` in the inventory: the box's address, VLAN 30, and the two targets. The Proxmox API is the host's **mgmt** address (agent pick): the dev VLAN's rule 0 blocks the home LAN, so the home-LAN address can't be reached from dev, and `pve.<zone>` and its lab certificate already point at mgmt.
 
