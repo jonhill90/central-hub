@@ -25,6 +25,10 @@ spec:
         - name: gatewayAddress
           value: "{{ k8s_gitops_source_gateway_address }}"
 {% endif %}
+{% if not (k8s_gitops_source_gateway_https | bool) %}
+        - name: gatewayHttps
+          value: "false"
+{% endif %}
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

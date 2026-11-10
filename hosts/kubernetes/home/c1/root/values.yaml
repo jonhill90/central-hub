@@ -6,6 +6,9 @@ zone: ""
 # The Gateway's address, also private and also set by Ansible (k8s_gitops_source_gateway_address);
 # only the gateway app uses it.
 gatewayAddress: ""
+# Whether the Gateway has its HTTPS listeners. Ansible sets it to false only for a cluster with no
+# certificate (k8s_gitops_source_gateway_https, from k8s_gateway_https); c1 keeps true.
+gatewayHttps: true
 
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
@@ -172,6 +175,7 @@ apps:
     needsZone: true
     zoneParameters:
       address: "{gatewayAddress}"
+      https: "{gatewayHttps}"
     wave: -1
     autoSync: true
     prune: false

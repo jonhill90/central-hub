@@ -28,7 +28,7 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
-{{- if .Values.https }}
+{{- if eq (toString .Values.https) "true" }}
     # TLS ends here (mode Terminate) with the certificate Secret next to the Gateway.
     - name: https
       protocol: HTTPS
@@ -54,7 +54,7 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
-{{- if .Values.https }}
+{{- if eq (toString .Values.https) "true" }}
     - name: https-short
       protocol: HTTPS
       port: 443
