@@ -8,7 +8,10 @@ Wants=network-online.target
 User={{ ci_runner_user }}
 Group={{ ci_runner_user }}
 WorkingDirectory={{ ci_runner_home }}/runner
-ExecStart={{ ci_runner_home }}/runner/run.sh
+# Through /bin/sh: SELinux (enforcing on AlmaLinux) stops systemd from running a file under
+# /var/lib directly (status 203/EXEC, measured 2026-11-10 on the runner VM). A shell started from
+# /bin may run it, and exec hands the runner the service's process.
+ExecStart=/bin/sh -c 'exec {{ ci_runner_home }}/runner/run.sh'
 Restart=always
 RestartSec=15
 KillMode=process
