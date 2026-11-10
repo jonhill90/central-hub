@@ -3,7 +3,8 @@
 # synced the apps, prove the restored folders are the apps' volumes, not copies beside them.
 #   1. each node's restore is still in place: the canary matches its record, every folder is there
 #   2. one app: its Deployment is Ready, a Ready pod mounts the claim, the claim's volume is the
-#      restored folder <restore path>/<namespace>/<claim>, and the folder belongs to the
+#      restored folder <restore path>/<namespace>/<claim>, the folder's own owner and mode equal
+#      its copy in the snapshot, it is not empty, and everything directly inside it belongs to the
 #      Deployment's runAsUser
 # Every kubectl call runs on the first control-plane node with its admin.conf, as the rebuild does.
 
@@ -95,27 +96,39 @@
           mounted from {{ k8s_backup_check_folder }}
         quiet: false
 
-- name: restore_check | The restored folder on the nodes
-  ansible.builtin.stat:
-    path: "{{ k8s_backup_check_folder }}"
-  register: k8s_backup_check_stat
+# The folder sits on one node, the one that holds the volume. Its own owner and mode are whatever
+# prod had, which the snapshot holds (restic restores owners): run 18 (2026-11-10) found most of
+# prod's folders 0:0 777 as local-path's setup makes them, Grafana's 472:472 777, and jellyfin's
+# config, data, log and metadata inside 1000:1000, the Deployment's runAsUser. So the folder is
+# compared with the snapshot (read-only, restic --no-lock) and what is inside with runAsUser.
+- name: restore_check | The restored folder on its node, and what is inside it
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_backup_bin_dir }}/c1-restore-volumes.sh"
+      - owner
+      - "{{ k8s_backup_restore_check_namespace }}/{{ k8s_backup_restore_check_claim }}"
+      - "{{ k8s_backup_check_uid }}"
+  environment:
+    CENTRAL_HUB_BACKUP_ENV: "{{ k8s_backup_node_env_file }}"
+    BACKUP_STATE: "{{ k8s_backup_state_dir }}"
+    RESTIC_CACHE_DIR: /var/cache/central-hub-backup
+    RESTORE_PATH: "{{ k8s_backup_restore_path }}"
+  register: k8s_backup_check_owner
+  changed_when: false
+  check_mode: false
 
-# The folder sits on one node, the one that holds the volume. It must belong to the app's user, as
-# it did on prod (restic restores owners).
-- name: restore_check | The folder belongs to the app's user
+- name: restore_check | The folder is as in the snapshot, and its contents belong to the app's user
   ansible.builtin.assert:
     that:
-      - holders | length > 0
-      - holders | map(attribute='uid') | map('string') | unique | list == [uid | string]
+      - passed | length == 1
     fail_msg: >-
-      {{ folder }}: on {{ holders | length }} node(s), owners
-      {{ holders | map(attribute='uid') | list }}; the Deployment runs as {{ uid }}.
-    success_msg: "PASS: {{ folder }} belongs to uid {{ uid }}, as the Deployment runs"
+      {{ k8s_backup_check_folder }} must be on exactly one node, owned and moded as in the snapshot,
+      with every entry inside owned by uid {{ k8s_backup_check_uid }}; nodes that passed:
+      {{ passed | length }}.
+    success_msg: "{{ passed | first }}"
     quiet: false
   vars:
-    uid: "{{ k8s_backup_check_uid }}"
-    folder: "{{ k8s_backup_check_folder }}"
-    holders: >-
-      {{ ansible_play_hosts | map('extract', hostvars, 'k8s_backup_check_stat')
-         | selectattr('stat.exists') | selectattr('stat.isdir') | map(attribute='stat') | list }}
+    passed: >-
+      {{ ansible_play_hosts | map('extract', hostvars, ['k8s_backup_check_owner', 'stdout'])
+         | select('match', '^PASS') | list }}
   run_once: true

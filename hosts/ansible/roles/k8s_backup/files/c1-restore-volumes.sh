@@ -5,6 +5,13 @@
 #
 #   c1-restore-volumes.sh restore   restore the snapshot, then prove every folder came back whole
 #   c1-restore-volumes.sh check     prove the restore is still in place (the rebuild's checks stage)
+#   c1-restore-volumes.sh owner <namespace>/<claim> <uid>
+#                                   prove one restored folder is as the app needs it (checks stage):
+#                                   the folder's own owner, group and mode equal its copy in the
+#                                   restored snapshot (local-path made most 0:0 777 on prod, but
+#                                   not all: Grafana's is 472:472), it is not empty, and every
+#                                   entry directly inside it belongs to <uid>, the Deployment's
+#                                   runAsUser. A node that doesn't hold the folder says SKIP.
 #
 # Every restic call has --no-lock, so nothing is written to the repository, and the node signs in
 # as a read-only identity, so nothing could be (agent pick 205).
@@ -42,7 +49,7 @@ set -euo pipefail
 . "$(dirname "$0")/c1-backup-lib.sh"
 
 cmd=${1:-}
-case $cmd in restore|check) ;; *) echo "usage: $0 restore|check" >&2; exit 2 ;; esac
+case $cmd in restore|check|owner) ;; *) echo "usage: $0 restore|check|owner <namespace>/<claim> <uid>" >&2; exit 2 ;; esac
 
 backup_lib_init
 path=${RESTORE_PATH:-/var/lib/c1-data/local-path}
@@ -62,6 +69,104 @@ disk_counts() {
       "$(find "$d" -type f -printf '%s\n' | awk '{s+=$1} END{print s+0}')"
   done
 }
+
+# What snapshot $1 holds under $path: each volume folder, where it goes, its files and bytes, and
+# the folder's own owner and mode, as "source<TAB>destination<TAB>files<TAB>bytes<TAB>uid:gid mode".
+# Exits non-zero, saying why, on a name it can't map or two folders for one claim.
+snapshot_map() {
+  r ls --json --recursive "$1" "$path" | python3 -c '
+import json, re, sys
+base = sys.argv[1].rstrip("/") + "/"
+dns = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$")
+folders = {}   # source folder (relative) -> [files, bytes]
+meta = {}      # source folder -> "uid:gid mode", the folder itself
+bad = []
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    n = json.loads(line)
+    p = n.get("path", "")
+    # restic 0.19 marks each line with message_type; older releases with struct_type.
+    if n.get("message_type", n.get("struct_type")) != "node" or not p.startswith(base):
+        continue
+    parts = p[len(base):].split("/")
+    if len(parts) == 1:
+        if n.get("type") != "dir":
+            continue   # the canary file
+        if parts[0].startswith("pvc-"):
+            folders.setdefault(parts[0], [0, 0])
+            meta[parts[0]] = "%d:%d %o" % (n.get("uid", -1), n.get("gid", -1), n.get("mode", 0) & 0o777)
+        continue
+    # pvc-<uid>_<namespace>_<claim>/... (prod) or <namespace>/<claim>/... (dev)
+    key = parts[0] if parts[0].startswith("pvc-") else "/".join(parts[:2])
+    if not parts[0].startswith("pvc-") and len(parts) == 2:
+        if n.get("type") == "dir":
+            folders.setdefault(key, [0, 0])
+            meta[key] = "%d:%d %o" % (n.get("uid", -1), n.get("gid", -1), n.get("mode", 0) & 0o777)
+        else:
+            bad.append(p[len(base):])
+        continue
+    f = folders.setdefault(key, [0, 0])
+    if n.get("type") == "file":
+        f[0] += 1
+        f[1] += n.get("size", 0)
+dest = {}
+for src in sorted(folders):
+    if src.startswith("pvc-"):
+        bits = src.split("_")
+        if len(bits) != 3 or not all(dns.match(b) for b in bits):
+            bad.append(src)
+            continue
+        d = bits[1] + "/" + bits[2]
+    else:
+        ns, claim = src.split("/")
+        if not (dns.match(ns) and dns.match(claim)):
+            bad.append(src)
+            continue
+        d = src
+    dest.setdefault(d, []).append(src)
+if bad:
+    sys.exit("UNKNOWN: folders that are not <namespace>/<claim> or pvc-<uid>_<namespace>_<claim>: %s" % ", ".join(bad))
+dup = {d: s for d, s in dest.items() if len(s) > 1}
+if dup:
+    sys.exit("DUPLICATE: more than one folder for the same claim: %s" % "; ".join("%s <- %s" % (d, ", ".join(s)) for d, s in sorted(dup.items())))
+for d in sorted(dest):
+    src = dest[d][0]
+    print("%s\t%s\t%d\t%d\t%s" % (src, d, folders[src][0], folders[src][1], meta.get(src, "?")))
+' "$path"
+}
+
+if [ "$cmd" = owner ]; then
+  rel=${2:?usage: $0 owner <namespace>/<claim> <uid>}
+  uid=${3:?usage: $0 owner <namespace>/<claim> <uid>}
+  case $uid in ''|*[!0-9]*) die "uid '$uid' is not a number" ;; esac
+  dir=$path/$rel
+  if [ ! -d "$dir" ]; then
+    echo "SKIP: $dir is not on $BACKUP_HOST"
+    exit 0
+  fi
+  [ -s "$record" ] || die "no restore recorded on $BACKUP_HOST ($record)"
+  id=$(awk -F'\t' '$1 == "snapshot" {print $2}' "$record")
+  work=$(mktemp -d "${TMPDIR:-/var/tmp}/c1-restore-volumes.XXXXXX")
+  trap 'rm -rf "$work"' EXIT
+  snapshot_map "$id" > "$work/map" 2> "$work/map.err" || die "snapshot $id can't be mapped: $(cat "$work/map.err")"
+  want=$(awk -F'\t' -v d="$rel" '$2 == d {print $5}' "$work/map")
+  [ -n "$want" ] || die "$rel is not in snapshot $id"
+  got="$(stat -c '%u:%g' "$dir") $(printf '%o' $((0$(stat -c '%a' "$dir") & 0777)))"
+  [ "$got" = "$want" ] || die "$dir is $got (owner:group mode), its copy in snapshot $id is $want"
+  n=0
+  bad=()
+  while IFS= read -r -d '' e; do
+    n=$((n + 1))
+    o=$(stat -c '%u' "$e")
+    [ "$o" = "$uid" ] || bad+=("${e#"$dir"/} (uid $o)")
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -print0)
+  [ "$n" -gt 0 ] || die "$dir is empty"
+  [ "${#bad[@]}" -eq 0 ] || die "in $dir, not owned by uid $uid: ${bad[*]}"
+  echo "PASS: $dir is $got (owner:group mode) as in snapshot $id, and all $n entries in it belong to uid $uid"
+  exit 0
+fi
 
 if [ "$cmd" = check ]; then
   [ -s "$record" ] || die "no restore recorded on $BACKUP_HOST ($record)"
@@ -119,71 +224,13 @@ if [ -n "$(ls -A "$path")" ]; then
   die "$path on $BACKUP_HOST is not empty and holds no recorded restore; nothing was changed"
 fi
 
-# 3. What the snapshot holds under $path: each volume folder, where it goes, its files and bytes,
-# as "source<TAB>destination<TAB>files<TAB>bytes".
+# 3. What the snapshot holds under $path, mapped (snapshot_map).
 work=$(mktemp -d "${TMPDIR:-/var/tmp}/c1-restore-volumes.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 chmod 0700 "$work"
-r ls --json --recursive "$id" "$path" | python3 -c '
-import json, re, sys
-base = sys.argv[1].rstrip("/") + "/"
-dns = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$")
-folders = {}   # source folder (relative) -> [files, bytes]
-bad = []
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    n = json.loads(line)
-    p = n.get("path", "")
-    # restic 0.19 marks each line with message_type; older releases with struct_type.
-    if n.get("message_type", n.get("struct_type")) != "node" or not p.startswith(base):
-        continue
-    parts = p[len(base):].split("/")
-    if len(parts) == 1:
-        if n.get("type") != "dir":
-            continue   # the canary file
-        if parts[0].startswith("pvc-"):
-            folders.setdefault(parts[0], [0, 0])
-        continue
-    # pvc-<uid>_<namespace>_<claim>/... (prod) or <namespace>/<claim>/... (dev)
-    key = parts[0] if parts[0].startswith("pvc-") else "/".join(parts[:2])
-    if not parts[0].startswith("pvc-") and len(parts) == 2:
-        if n.get("type") == "dir":
-            folders.setdefault(key, [0, 0])
-        else:
-            bad.append(p[len(base):])
-        continue
-    f = folders.setdefault(key, [0, 0])
-    if n.get("type") == "file":
-        f[0] += 1
-        f[1] += n.get("size", 0)
-dest = {}
-for src in sorted(folders):
-    if src.startswith("pvc-"):
-        bits = src.split("_")
-        if len(bits) != 3 or not all(dns.match(b) for b in bits):
-            bad.append(src)
-            continue
-        d = bits[1] + "/" + bits[2]
-    else:
-        ns, claim = src.split("/")
-        if not (dns.match(ns) and dns.match(claim)):
-            bad.append(src)
-            continue
-        d = src
-    dest.setdefault(d, []).append(src)
-if bad:
-    sys.exit("UNKNOWN: folders that are not <namespace>/<claim> or pvc-<uid>_<namespace>_<claim>: %s" % ", ".join(bad))
-dup = {d: s for d, s in dest.items() if len(s) > 1}
-if dup:
-    sys.exit("DUPLICATE: more than one folder for the same claim: %s" % "; ".join("%s <- %s" % (d, ", ".join(s)) for d, s in sorted(dup.items())))
-for d in sorted(dest):
-    src = dest[d][0]
-    print("%s\t%s\t%d\t%d" % (src, d, folders[src][0], folders[src][1]))
-' "$path" > "$work/map" 2> "$work/map.err" || die "snapshot $id can't be mapped: $(cat "$work/map.err"). Nothing was changed."
+snapshot_map "$id" > "$work/map" 2> "$work/map.err" || die "snapshot $id can't be mapped: $(cat "$work/map.err"). Nothing was changed."
 [ -s "$work/map" ] || die "snapshot $id holds no volume folder under $path"
-cut -f2- "$work/map" | sort > "$work/want"
+cut -f2-4 "$work/map" | sort > "$work/want"
 
 # 4. Restore, read back against the repository, into a staging folder beside $path on the same
 # disk, then rename each folder into place (a rename on one file system moves no data). SELinux

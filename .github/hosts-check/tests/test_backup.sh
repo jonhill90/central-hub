@@ -15,8 +15,9 @@
 #   5. One pack file in the repository damaged: the volume restore test must fail.
 #   6. Dev's restore (c1-restore-volumes.sh): prod's folders, named as local-path names them on c1
 #      (pvc-<uid>_<namespace>_<claim>), come back whole at <namespace>/<claim> from a repository it
-#      can't write to; a second run does nothing, check catches a changed restore, and it refuses a
-#      folder that already holds data, two folders for one claim and a name it can't map.
+#      can't write to; a second run does nothing, check catches a changed restore, owner checks one
+#      folder against the snapshot as the checks stage does, and it refuses a folder that already
+#      holds data, two folders for one claim and a name it can't map.
 #
 # Tools come from their GitHub releases, each checked against a SHA-256: the versions and sums the
 # role installs are read from its defaults/main.yml, so CI tests what goes on the nodes.
@@ -294,6 +295,45 @@ rm -rf "$prod_path/logging/storage-loki-0"
 cp "$work/prod-as-backed-up/.central-hub-backup-canary" "$prod_path/"
 if env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check > /dev/null 2>&1; then fail "check passed with a folder gone"; fi
 ok "check fails on a wrong canary and on a missing folder"
+
+# owner: the checks stage's test of one folder. The folder's own owner and mode must equal its copy
+# in the snapshot (prod's folders differ: most 0:0 777 as local-path makes them, Grafana's 472:472,
+# run 18, 2026-11-10); what is inside must belong to the app's user.
+jcfg=$prod_path/media/jellyfin-config
+own() { env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" owner "$@"; }
+me=$(id -u)
+out=$(own media/jellyfin-config "$me" 2>&1) || { echo "$out"; fail "owner failed on the folder as restored"; }
+grep -q "^PASS: .* as in snapshot .* all 3 entries in it belong to uid $me" <<< "$out" || { echo "$out"; fail "owner did not pass"; }
+mode=$(stat -c %a "$jcfg")
+chmod 0700 "$jcfg"
+if out=$(own media/jellyfin-config "$me" 2>&1); then fail "owner passed with the folder's mode changed"; fi
+grep -q " 700 (owner:group mode), its copy in snapshot .* is $me:$(id -g) $mode" <<< "$out" || { echo "$out"; fail "it failed for another reason"; }
+chmod "$mode" "$jcfg"
+if out=$(own media/jellyfin-config 4242 2>&1); then fail "owner passed with the entries owned by another user"; fi
+grep -q 'not owned by uid 4242: ' <<< "$out" || { echo "$out"; fail "it failed for another reason"; }
+if out=$(own media/jellyfin-media "$me" 2>&1); then fail "owner passed on an empty folder"; fi
+grep -q 'is empty' <<< "$out" || { echo "$out"; fail "it failed for another reason"; }
+mkdir "$prod_path/media/not-backed-up"
+if out=$(own media/not-backed-up "$me" 2>&1); then fail "owner passed on a folder that is not in the snapshot"; fi
+grep -q 'is not in snapshot' <<< "$out" || { echo "$out"; fail "it failed for another reason"; }
+rmdir "$prod_path/media/not-backed-up"
+out=$(own media/not-here "$me" 2>&1) || { echo "$out"; fail "owner failed on a node without the folder"; }
+grep -q '^SKIP: ' <<< "$out" || fail "a node without the folder did not SKIP"
+# Changing owners needs root: CI's runner has passwordless sudo.
+if [ "$me" = 0 ]; then asroot=(); elif sudo -n true 2>/dev/null; then asroot=(sudo -n); else asroot=(none); fi
+if [ "${asroot[0]:-}" != none ]; then
+  "${asroot[@]}" chown 4242 "$jcfg/system.xml"
+  if out=$(own media/jellyfin-config "$me" 2>&1); then fail "owner passed with one file of another user inside"; fi
+  grep -q "not owned by uid $me: system.xml (uid 4242)" <<< "$out" || { echo "$out"; fail "it failed for another reason"; }
+  "${asroot[@]}" chown "$me" "$jcfg/system.xml"
+  "${asroot[@]}" chown 4242 "$jcfg"
+  if out=$(own media/jellyfin-config "$me" 2>&1); then fail "owner passed with the folder's owner changed"; fi
+  grep -q "is 4242:$(id -g) $mode (owner:group mode)" <<< "$out" || { echo "$out"; fail "it failed for another reason"; }
+  "${asroot[@]}" chown "$me" "$jcfg"
+else
+  echo "   owner-change cases skipped: they need root or passwordless sudo"
+fi
+ok "owner passes on the folder as restored, fails on a changed mode or owner, entries of another user, an empty folder and a folder not in the snapshot, and skips a node without it"
 
 # Never over data it didn't restore: a non-empty folder with no record of this restore.
 if env "${dev_env[@]}" BACKUP_STATE="$work/dev-state-2" "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1; then
