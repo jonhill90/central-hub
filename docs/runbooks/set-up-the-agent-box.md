@@ -57,6 +57,7 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
    ```
 
    expect: the hostname change, the new users and folders, the sudoers file and the settings diff. Stop if `claude` loses a group the box needs.
+   On a fresh box, the steps that write into a folder the run would create (the OpenTofu download and unpack, and the Tailscale package after its repository) show as skipped, and the proofs are skipped in check mode. A check never writes to the box.
 
 2. Run it.
 

@@ -56,12 +56,18 @@
     owner: root
     group: root
     mode: "0644"
+  register: agent_box_tailscale_repo
   tags: [tailscale]
+
+# In check mode on a fresh box the repository isn't there yet, so the package and its service
+# can't be checked; they are skipped rather than failing.
 
 - name: Tailscale client, at the pinned version
   ansible.builtin.dnf:
     name: "tailscale-{{ agent_box_tailscale_version }}"
     state: present
+  when: not (ansible_check_mode and agent_box_tailscale_repo is changed)
+  register: agent_box_tailscale_pkg
   tags: [tailscale]
 
 - name: Tailscale daemon on at boot
@@ -69,6 +75,7 @@
     name: tailscaled
     enabled: true
     state: started
+  when: not (ansible_check_mode and (agent_box_tailscale_repo is changed or agent_box_tailscale_pkg is changed))
   tags: [tailscale]
 
 # --- Users ---------------------------------------------------------------------------------
@@ -134,7 +141,11 @@
     owner: root
     group: root
     mode: "0755"
+  register: agent_box_downloads_dir
   tags: [wrappers]
+
+# In check mode on a fresh box the folders above only report "would create", so the steps that
+# write into them are skipped there rather than failing. A check never writes to the box.
 
 - name: Download OpenTofu, checked against its SHA-256
   ansible.builtin.get_url:
@@ -144,6 +155,7 @@
     owner: root
     group: root
     mode: "0644"
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
   tags: [wrappers]
 
 - name: OpenTofu's folder
@@ -153,6 +165,7 @@
     owner: root
     group: root
     mode: "0755"
+  register: agent_box_tofu_dir
   tags: [wrappers]
 
 - name: Unpack OpenTofu
@@ -164,6 +177,7 @@
     creates: "{{ agent_box_libexec_dir }}/tofu-{{ agent_box_tofu_version }}/tofu"
     owner: root
     group: root
+  when: not (ansible_check_mode and (agent_box_downloads_dir is changed or agent_box_tofu_dir is changed))
   tags: [wrappers]
 
 - name: Put tofu on the path
@@ -251,49 +265,54 @@
   tags: [settings]
 
 # --- Proofs --------------------------------------------------------------------------------
-
-- name: Proof, the session user can't open the key folder
-  ansible.builtin.command:
-    argv: [runuser, -u, "{{ agent_box_user }}", --, test, -x, "{{ agent_box_keys_dir }}"]
-  register: agent_box_key_read
-  changed_when: false
-  failed_when: agent_box_key_read.rc == 0
+# The proofs read the box as it is, so they mean nothing in check mode, where nothing was written.
+- name: Proofs, after a real run
+  when: not ansible_check_mode
   tags: [verify]
+  block:
 
-- name: Proof, sudo lets the session user run the wrappers and nothing else
-  ansible.builtin.command:
-    argv: [sudo, -l, -U, "{{ agent_box_user }}"]
-  register: agent_box_sudo_list
-  changed_when: false
-  tags: [verify]
+    - name: Proof, the session user can't open the key folder
+      ansible.builtin.command:
+        argv: [runuser, -u, "{{ agent_box_user }}", --, test, -x, "{{ agent_box_keys_dir }}"]
+      register: agent_box_key_read
+      changed_when: false
+      failed_when: agent_box_key_read.rc == 0
+      tags: [verify]
 
-- name: Check the sudo list
-  ansible.builtin.assert:
-    that:
-      - agent_box_sudo_list.stdout is search('\(' ~ agent_box_keys_user ~ '\) NOPASSWD')
-      - agent_box_sudo_list.stdout is not search('\((root|ALL)(\s*:\s*ALL)?\)')
-    fail_msg: "{{ agent_box_user }} may run more than the wrappers as {{ agent_box_keys_user }}: {{ agent_box_sudo_list.stdout }}"
-    quiet: true
-  tags: [verify]
+    - name: Proof, sudo lets the session user run the wrappers and nothing else
+      ansible.builtin.command:
+        argv: [sudo, -l, -U, "{{ agent_box_user }}"]
+      register: agent_box_sudo_list
+      changed_when: false
+      tags: [verify]
 
-- name: Read /etc/hosts
-  ansible.builtin.slurp:
-    src: /etc/hosts
-  register: agent_box_etc_hosts
-  tags: [verify]
+    - name: Check the sudo list
+      ansible.builtin.assert:
+        that:
+          - agent_box_sudo_list.stdout is search('\(' ~ agent_box_keys_user ~ '\) NOPASSWD')
+          - agent_box_sudo_list.stdout is not search('\((root|ALL)(\s*:\s*ALL)?\)')
+        fail_msg: "{{ agent_box_user }} may run more than the wrappers as {{ agent_box_keys_user }}: {{ agent_box_sudo_list.stdout }}"
+        quiet: true
+      tags: [verify]
 
-- name: Check /etc/hosts names the box once per address (127.0.0.1 and ::1), with no repeated lines
-  vars:
-    agent_box_hosts_lines: >-
-      {{ (agent_box_etc_hosts.content | b64decode).splitlines()
-         | map('regex_replace', '#.*$', '') | map('trim') | select | list }}
-    agent_box_hosts_own: "{{ agent_box_hosts_lines | select('search', '(^|[ \t.])' ~ agent_box_hostname ~ '([ \t.]|$)') | list }}"
-    agent_box_hosts_addrs: "{{ agent_box_hosts_own | map('split') | map('first') | list }}"
-  ansible.builtin.assert:
-    that:
-      - agent_box_hosts_lines | length == agent_box_hosts_lines | unique | length
-      - agent_box_hosts_addrs | length == agent_box_hosts_addrs | unique | length
-      - agent_box_hosts_own | length >= 1
-    fail_msg: "/etc/hosts repeats a line or an address for {{ agent_box_hostname }}: {{ agent_box_hosts_own }}"
-    quiet: true
-  tags: [verify]
+    - name: Read /etc/hosts
+      ansible.builtin.slurp:
+        src: /etc/hosts
+      register: agent_box_etc_hosts
+      tags: [verify]
+
+    - name: Check /etc/hosts names the box once per address (127.0.0.1 and ::1), with no repeated lines
+      vars:
+        agent_box_hosts_lines: >-
+          {{ (agent_box_etc_hosts.content | b64decode).splitlines()
+             | map('regex_replace', '#.*$', '') | map('trim') | select | list }}
+        agent_box_hosts_own: "{{ agent_box_hosts_lines | select('search', '(^|[ \t.])' ~ agent_box_hostname ~ '([ \t.]|$)') | list }}"
+        agent_box_hosts_addrs: "{{ agent_box_hosts_own | map('split') | map('first') | list }}"
+      ansible.builtin.assert:
+        that:
+          - agent_box_hosts_lines | length == agent_box_hosts_lines | unique | length
+          - agent_box_hosts_addrs | length == agent_box_hosts_addrs | unique | length
+          - agent_box_hosts_own | length >= 1
+        fail_msg: "/etc/hosts repeats a line or an address for {{ agent_box_hostname }}: {{ agent_box_hosts_own }}"
+        quiet: true
+      tags: [verify]
