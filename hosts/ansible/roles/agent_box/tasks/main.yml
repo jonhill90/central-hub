@@ -25,14 +25,21 @@
     name: "{{ agent_box_hostname }}"
   tags: [hostname]
 
-# The clone's cloud-init would set the template's name back at the next boot.
-- name: Keep the hostname across reboots (cloud-init)
+# Proxmox makes the cloud-init instance-id from a hash of the user-data and network-data it
+# generates, and the user-data holds the VM's name. So a rename (or a change to the user, SSH
+# keys or addresses) looks like a new instance, and cloud-init runs its first-boot steps again:
+# new SSH host keys, among others. manual_cache_clean makes cloud-init trust the instance it
+# already has. Per-boot steps (growing the partition after a disk resize) still run.
+# Proxmox's user-data sets manage_etc_hosts: true, which outranks this file, so /etc/hosts is
+# left to cloud-init and checked under the verify tag instead.
+- name: Keep the hostname, and the first boot's keys, across renames and reboots (cloud-init)
   ansible.builtin.copy:
     dest: /etc/cloud/cloud.cfg.d/99-keep-hostname.cfg
     content: |
-      # Managed by the agent_box role (central-hub hosts/ansible): keep the STD-0001 hostname.
+      # Managed by the agent_box role (central-hub hosts/ansible): keep the STD-0001 hostname,
+      # and never treat a Proxmox rename as a new instance.
       preserve_hostname: true
-      manage_etc_hosts: false
+      manual_cache_clean: true
     owner: root
     group: root
     mode: "0644"
@@ -117,6 +124,77 @@
   loop_control:
     label: "{{ item.path | basename }}"
   tags: [users]
+
+# --- Private CAs ---------------------------------------------------------------------------
+# The Proxmox API's certificate comes from the lab CA, which the box does not trust, so tofu
+# would refuse it. Trust that CA rather than turn certificate checks off.
+# Only public certificates go to the box. The owner's CA folder also holds private keys, so each
+# entry must be one named file, checked on the controller before anything is copied.
+- name: Check each CA entry is one named file, not a folder or a pattern
+  ansible.builtin.assert:
+    that:
+      - item is match('^/')
+      - item is not search('[*?\\[\\]{}]')
+    fail_msg: "agent_box_ca_files takes absolute file paths only: {{ item }}"
+    quiet: true
+  loop: "{{ agent_box_ca_files }}"
+  tags: [ca]
+
+- name: Look at each CA file on the controller
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop: "{{ agent_box_ca_files }}"
+  register: agent_box_ca_stat
+  delegate_to: localhost
+  become: false
+  tags: [ca]
+
+- name: Check each CA file is a regular file
+  ansible.builtin.assert:
+    that: item.stat.exists and item.stat.isreg
+    fail_msg: "{{ item.item }} is not a regular file (missing, a folder or a link)."
+    quiet: true
+  loop: "{{ agent_box_ca_stat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  tags: [ca]
+
+- name: Check each CA file holds no private key
+  ansible.builtin.command:
+    argv: [grep, -c, PRIVATE KEY, "{{ item }}"]
+  loop: "{{ agent_box_ca_files }}"
+  register: agent_box_ca_keys
+  failed_when: agent_box_ca_keys.rc != 1
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  tags: [ca]
+
+- name: Check each CA file parses as a certificate
+  ansible.builtin.command:
+    argv: [openssl, x509, -noout, -in, "{{ item }}"]
+  loop: "{{ agent_box_ca_files }}"
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  tags: [ca]
+
+- name: Add each private CA to the trust store
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/pki/ca-trust/source/anchors/agent-box-{{ item | basename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ agent_box_ca_files }}"
+  notify: Rebuild the trust store
+  tags: [ca]
+
+# Now, not at the end of the play, so the verify tag's TLS proof sees the new store.
+- name: Rebuild the trust store now if a CA changed
+  ansible.builtin.meta: flush_handlers
+  tags: [ca]
 
 # --- Wrappers ------------------------------------------------------------------------------
 
@@ -267,4 +345,35 @@
       - agent_box_sudo_list.stdout is not search('\((root|ALL)(\s*:\s*ALL)?\)')
     fail_msg: "{{ agent_box_user }} may run more than the wrappers as {{ agent_box_keys_user }}: {{ agent_box_sudo_list.stdout }}"
     quiet: true
+  tags: [verify]
+
+- name: Read /etc/hosts
+  ansible.builtin.slurp:
+    src: /etc/hosts
+  register: agent_box_etc_hosts
+  tags: [verify]
+
+- name: Check /etc/hosts names the box once per address (127.0.0.1 and ::1), with no repeated lines
+  vars:
+    agent_box_hosts_lines: >-
+      {{ (agent_box_etc_hosts.content | b64decode).splitlines()
+         | map('regex_replace', '#.*$', '') | map('trim') | select | list }}
+    agent_box_hosts_own: "{{ agent_box_hosts_lines | select('search', '(^|[ \t.])' ~ agent_box_hostname ~ '([ \t.]|$)') | list }}"
+    agent_box_hosts_addrs: "{{ agent_box_hosts_own | map('split') | map('first') | list }}"
+  ansible.builtin.assert:
+    that:
+      - agent_box_hosts_lines | length == agent_box_hosts_lines | unique | length
+      - agent_box_hosts_addrs | length == agent_box_hosts_addrs | unique | length
+      - agent_box_hosts_own | length >= 1
+    fail_msg: "/etc/hosts repeats a line or an address for {{ agent_box_hostname }}: {{ agent_box_hosts_own }}"
+    quiet: true
+  tags: [verify]
+
+- name: Proof, the Proxmox API's certificate is trusted, with normal certificate checks
+  ansible.builtin.uri:
+    url: "{{ agent_box_tls_check_url }}"
+    validate_certs: true
+    status_code: [200, 401]
+  when: agent_box_tls_check_url | length > 0
+  changed_when: false
   tags: [verify]
