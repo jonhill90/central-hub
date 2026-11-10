@@ -41,6 +41,10 @@ k8s_gitops_cluster_labels:
 # gateway app (spec step 9). The inventory template sets it to k8s_gateway_address. Left unset, only
 # the gateway app fails to render.
 # k8s_gitops_source_gateway_address: <address>
+# Whether the Gateway gets its HTTPS listeners, passed to the root chart as `gatewayHttps` only when
+# false. It follows k8s_gateway_https: a cluster with no certificate (a dev rebuild, which has no
+# c1 CA key, D-0028) serves HTTP only, so the gateway app is not Degraded on a missing Secret.
+k8s_gitops_source_gateway_https: "{{ k8s_gateway_https | default(true) }}"
 
 # The Argo CD web UI through the shared Gateway (tag ui), a follow-on to BUILD-PATH S12: the owner
 # said (2026-10-27 03:52 UTC, relayed) the UI waits until DNS is up, with no port-forward. On, it
