@@ -3,5 +3,7 @@ collections/
 # A filled-in inventory never goes in the repository; only the *.example.yml templates are tracked
 inventories/*/*.yml
 !inventories/*/*.example.yml
+# Copies of a filled-in inventory kept beside it (hosts.yml.bak-<reason>) are private too
+inventories/*/*.yml.bak*
 # Values files, if one is ever kept next to an inventory (k8s_identity_values_file)
 inventories/*/*.env
