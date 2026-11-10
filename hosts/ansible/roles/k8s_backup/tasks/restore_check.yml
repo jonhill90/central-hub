@@ -1,0 +1,121 @@
+---
+# Reader mode, tag restore_check (the rebuild's checks stage on dev, TASK-0240): after Argo CD
+# synced the apps, prove the restored folders are the apps' volumes, not copies beside them.
+#   1. each node's restore is still in place: the canary matches its record, every folder is there
+#   2. one app: its Deployment is Ready, a Ready pod mounts the claim, the claim's volume is the
+#      restored folder <restore path>/<namespace>/<claim>, and the folder belongs to the
+#      Deployment's runAsUser
+# Every kubectl call runs on the first control-plane node with its admin.conf, as the rebuild does.
+
+- name: restore_check | Each node's restore is still in place
+  ansible.builtin.command:
+    argv: ["{{ k8s_backup_bin_dir }}/c1-restore-volumes.sh", check]
+  environment:
+    CENTRAL_HUB_BACKUP_ENV: "{{ k8s_backup_node_env_file }}"
+    BACKUP_STATE: "{{ k8s_backup_state_dir }}"
+    RESTORE_PATH: "{{ k8s_backup_restore_path }}"
+  register: k8s_backup_restore_check
+  changed_when: false
+  # A node without the data disk restored nothing, so it has no record to check.
+  failed_when: >-
+    k8s_backup_restore_check.rc != 0 and
+    'no restore recorded' not in k8s_backup_restore_check.stderr
+  check_mode: false
+
+- name: restore_check | What is in place
+  ansible.builtin.debug:
+    msg: "{{ k8s_backup_restore_check.stdout_lines }}"
+
+- name: restore_check | The app, its claim and its volume
+  delegate_to: "{{ groups['k8s_control_plane'] | first }}"
+  run_once: true
+  check_mode: false
+  vars:
+    k8s_backup_kc: kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_backup_restore_check_namespace }}
+  block:
+    - name: restore_check | The Deployment is rolled out and Ready
+      ansible.builtin.command: >-
+        {{ k8s_backup_kc }} rollout status deployment/{{ k8s_backup_restore_check_deployment }} --timeout=300s
+      changed_when: false
+
+    - name: restore_check | The Deployment's pod spec
+      ansible.builtin.command: >-
+        {{ k8s_backup_kc }} get deployment {{ k8s_backup_restore_check_deployment }} -o json
+      register: k8s_backup_check_deploy
+      changed_when: false
+
+    - name: restore_check | Its pods
+      ansible.builtin.command: >-
+        {{ k8s_backup_kc }} get pods -o json
+      register: k8s_backup_check_pods
+      changed_when: false
+
+    - name: restore_check | The claim's volume
+      ansible.builtin.command: >-
+        {{ k8s_backup_kc }} get pvc {{ k8s_backup_restore_check_claim }} -o jsonpath={.spec.volumeName}
+      register: k8s_backup_check_pv_name
+      changed_when: false
+
+    - name: restore_check | That volume's folder on its node
+      ansible.builtin.command: >-
+        kubectl --kubeconfig /etc/kubernetes/admin.conf get pv {{ k8s_backup_check_pv_name.stdout }}
+        -o jsonpath={.spec.hostPath.path}{.spec.local.path}
+      register: k8s_backup_check_pv_path
+      changed_when: false
+
+    - name: restore_check | The facts the node check needs
+      ansible.builtin.set_fact:
+        k8s_backup_check_uid: "{{ (k8s_backup_check_deploy.stdout | from_json).spec.template.spec.securityContext.runAsUser | default('') }}"
+        k8s_backup_check_folder: "{{ k8s_backup_restore_path }}/{{ k8s_backup_restore_check_namespace }}/{{ k8s_backup_restore_check_claim }}"
+        # Ready pods that mount the claim. run_once: these facts go to every node in the play.
+        k8s_backup_check_ready_pods: >-
+          {%- set out = [] -%}
+          {%- for p in (k8s_backup_check_pods.stdout | from_json)['items'] -%}
+          {%- set ready = p.status.conditions | default([]) | selectattr('type', 'equalto', 'Ready')
+                | selectattr('status', 'equalto', 'True') | list | length > 0 -%}
+          {%- set claims = p.spec.volumes | default([]) | selectattr('persistentVolumeClaim', 'defined')
+                | map(attribute='persistentVolumeClaim.claimName') | list -%}
+          {%- if ready and k8s_backup_restore_check_claim in claims -%}{%- set _ = out.append(p.metadata.name) -%}{%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+
+    - name: restore_check | A Ready pod mounts the claim, and its volume is the restored folder
+      ansible.builtin.assert:
+        that:
+          - k8s_backup_check_ready_pods | length > 0
+          - k8s_backup_check_pv_path.stdout == k8s_backup_check_folder
+          - k8s_backup_check_uid | string | length > 0
+        fail_msg: >-
+          {{ k8s_backup_restore_check_namespace }}/{{ k8s_backup_restore_check_deployment }}: Ready
+          pods mounting {{ k8s_backup_restore_check_claim }}: {{ k8s_backup_check_ready_pods }};
+          its volume's folder is {{ k8s_backup_check_pv_path.stdout }}, the restore put it at
+          {{ k8s_backup_check_folder }}; runAsUser '{{ k8s_backup_check_uid }}'.
+        success_msg: >-
+          PASS: {{ k8s_backup_check_ready_pods | first }} is Ready with {{ k8s_backup_restore_check_claim }}
+          mounted from {{ k8s_backup_check_folder }}
+        quiet: false
+
+- name: restore_check | The restored folder on the nodes
+  ansible.builtin.stat:
+    path: "{{ k8s_backup_check_folder }}"
+  register: k8s_backup_check_stat
+
+# The folder sits on one node, the one that holds the volume. It must belong to the app's user, as
+# it did on prod (restic restores owners).
+- name: restore_check | The folder belongs to the app's user
+  ansible.builtin.assert:
+    that:
+      - holders | length > 0
+      - holders | map(attribute='uid') | map('string') | unique | list == [uid | string]
+    fail_msg: >-
+      {{ folder }}: on {{ holders | length }} node(s), owners
+      {{ holders | map(attribute='uid') | list }}; the Deployment runs as {{ uid }}.
+    success_msg: "PASS: {{ folder }} belongs to uid {{ uid }}, as the Deployment runs"
+    quiet: false
+  vars:
+    uid: "{{ k8s_backup_check_uid }}"
+    folder: "{{ k8s_backup_check_folder }}"
+    holders: >-
+      {{ ansible_play_hosts | map('extract', hostvars, 'k8s_backup_check_stat')
+         | selectattr('stat.exists') | selectattr('stat.isdir') | map(attribute='stat') | list }}
+  run_once: true

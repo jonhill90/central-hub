@@ -2,7 +2,18 @@
 # Off-box backups of c1 (TASK-0194, TASK-0094). Runs on every node (playbooks/k8s-backup.yml): the
 # control plane backs up etcd, every node backs up the volume folders it holds. Tags: install
 # (tools and scripts), timers (env file and systemd timers), drill (back up now, then run the
-# restore tests).
+# restore tests). In reader mode (k8s_backup_reader, dev) also restore (bring prod's newest volume
+# snapshot back into this env) and restore_check (prove it, after the apps synced).
+
+# A reader must never write to the repository, so it never runs the backup timers.
+- name: install | Reader mode and backups are not both on
+  ansible.builtin.assert:
+    that: not (k8s_backup_enabled and k8s_backup_reader)
+    fail_msg: >-
+      k8s_backup_enabled and k8s_backup_reader are both true. A reader (dev) restores only and must
+      never back up into prod's repository. Nothing was changed.
+    quiet: true
+  tags: [install, timers, drill, restore, restore_check]
 
 - name: install | Settings are complete when backups are on
   ansible.builtin.assert:
@@ -12,8 +23,8 @@
       k8s_backup_enabled is true but k8s_backup_env_file is empty. Make the env file on the
       controller first (docs/runbooks/back-up-c1-off-box.md, step 1).
     quiet: true
-  when: k8s_backup_enabled
-  tags: [install, timers, drill]
+  when: k8s_backup_enabled or k8s_backup_reader
+  tags: [install, timers, drill, restore]
 
 - name: install | The env file on the controller
   ansible.builtin.stat:
@@ -22,8 +33,8 @@
   delegate_to: localhost
   become: false
   run_once: true
-  when: k8s_backup_enabled
-  tags: [install, timers, drill]
+  when: k8s_backup_enabled or k8s_backup_reader
+  tags: [install, timers, drill, restore]
 
 # The file holds the repository password, so only its owner may read it.
 - name: install | Stop if the env file is missing or readable by others
@@ -36,8 +47,8 @@
       {{ k8s_backup_env_file }} must exist on the controller, not be empty, and be mode 0600 or
       0400. Nothing was changed.
     quiet: true
-  when: k8s_backup_enabled
-  tags: [install, timers, drill]
+  when: k8s_backup_enabled or k8s_backup_reader
+  tags: [install, timers, drill, restore]
 
 - name: install | bzip2 for the restic release file, openssl for the Azure certificate
   ansible.builtin.dnf:
@@ -136,6 +147,7 @@
     - c1-restore-test-etcd.sh
     - c1-restore-test-volumes.sh
     - c1-backup-azure-cert.py
+    - c1-restore-volumes.sh
   tags: [install]
 
 # restic uses an account key or SAS when one is set, before any other sign-in, so neither may come
@@ -149,7 +161,7 @@
       nodes sign in with their own certificate. Nothing was changed.
     quiet: true
   no_log: true
-  when: k8s_backup_enabled and k8s_backup_azure_identity
+  when: (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_azure_identity
   tags: [timers]
 
 - name: timers | Azure sign-in for the nodes
@@ -157,7 +169,7 @@
     file: azure_identity.yml
     apply:
       tags: [timers]
-  when: k8s_backup_enabled and k8s_backup_azure_identity
+  when: (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_azure_identity
   tags: [timers]
 
 # The controller's env file, plus the Azure sign-in lines when the identity is on.
@@ -169,14 +181,14 @@
     group: root
     mode: "0600"
   no_log: true
-  when: k8s_backup_enabled
+  when: k8s_backup_enabled or k8s_backup_reader
   tags: [timers]
 
 - name: timers | No env file on the node when backups are off
   ansible.builtin.file:
     path: "{{ k8s_backup_node_env_file }}"
     state: absent
-  when: not k8s_backup_enabled
+  when: not (k8s_backup_enabled or k8s_backup_reader)
   tags: [timers]
 
 # The repository is made here, once, from one node, before any timer or drill can start a backup.
@@ -231,3 +243,22 @@
       tags: [drill]
   when: k8s_backup_enabled and k8s_backup_drill
   tags: [drill]
+
+# Reader mode only (dev, playbooks/k8s-restore.yml). restore runs before Argo CD exists in the env,
+# so the provisioner later finds each volume's folder already there (agent pick 205).
+- name: restore | Bring prod's newest volume snapshot back into this env
+  ansible.builtin.include_tasks:
+    file: restore.yml
+    apply:
+      tags: [restore]
+  when: k8s_backup_reader
+  tags: [restore]
+
+# Only when asked for (tag restore_check), from the rebuild's checks stage, after the apps synced.
+- name: restore_check | Prove the restored folders are the apps' volumes
+  ansible.builtin.include_tasks:
+    file: restore_check.yml
+    apply:
+      tags: [restore_check]
+  when: k8s_backup_reader
+  tags: [restore_check, never]

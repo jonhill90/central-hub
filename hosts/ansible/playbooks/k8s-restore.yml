@@ -1,0 +1,30 @@
+---
+# Dev only (TASK-0240, agent pick 205): restore a read-only copy of prod's newest volume snapshot into
+# this env's data disk, before Argo CD makes the claims, so each app finds its data (the owner's card,
+# 2026-11-10 02:50 UTC). Role k8s_backup in reader mode: the nodes sign in as the read-only app, no
+# timer runs, restic runs with --no-lock. Run by hosts/rebuild-k8s.sh's restore stage, and with
+# --tags restore_check by its checks stage. Runbook: docs/runbooks/rebuild-k8s-layer-with-one-command.md,
+# "Restore on dev".
+#   ansible-playbook -i <dev inventory> playbooks/k8s-restore.yml
+#   ansible-playbook -i <dev inventory> playbooks/k8s-restore.yml --tags restore_check
+- name: Restore prod's volumes into dev, read-only
+  hosts: k8s_workers
+  become: true
+  vars:
+    k8s_backup_reader: true
+    # Only the workers sign in, so the orphan-certificate check counts the workers.
+    k8s_backup_azure_cert_group: k8s_workers
+  pre_tasks:
+    - name: Never on prod, never with the backup timers on
+      ansible.builtin.assert:
+        that:
+          - not (k8s_backup_enabled | default(false) | bool)
+          - (k8s_gitops_cluster_labels | default({})).get('env', '') == 'dev'
+        fail_msg: >-
+          A restore runs on dev only, as a reader: the inventory must set k8s_gitops_cluster_labels.env
+          to dev (the rebuild runbook's dev inventory does) and leave k8s_backup_enabled off. Nothing
+          was changed.
+        quiet: true
+      tags: [always]
+  roles:
+    - role: k8s_backup

@@ -202,3 +202,32 @@ run "sas_signer_on_rollback" {
     error_message = "With keep_sas_signer the runner gets the role on the account."
   }
 }
+
+# Dev's restore identity (TASK-0240) reads the backup container and nothing else: a data role that
+# can't write or delete, scoped to the container, on its own app that the runner owns.
+run "reader_app_reads_the_container_only" {
+  assert {
+    condition     = azurerm_role_assignment.reader.role_definition_name == "Storage Blob Data Reader"
+    error_message = "Dev's reader app must hold Storage Blob Data Reader, never a role that writes."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.reader.scope == azurerm_storage_container.backup.id
+    error_message = "The reader's role must be scoped to the backup container only."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.reader.principal_id == azuread_service_principal.reader.object_id && azurerm_role_assignment.reader.principal_type == "ServicePrincipal"
+    error_message = "The reader's role must go to the reader app's service principal."
+  }
+
+  assert {
+    condition     = contains(azuread_application.reader.owners, "11111111-1111-1111-1111-111111111111") && length(azuread_application.reader.owners) == 1 && azuread_application.reader.sign_in_audience == "AzureADMyOrg"
+    error_message = "The reader app must be single-tenant, with the identity running tofu as its one owner."
+  }
+
+  assert {
+    condition     = azuread_application.reader.display_name != azuread_application.backup.display_name
+    error_message = "The reader must be its own app, not the backup app."
+  }
+}

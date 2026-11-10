@@ -48,3 +48,7 @@ kubeconfig*
 
 # Hosts check tools built by .github/hosts-check/install-tools.sh
 .github/hosts-check/.tools/
+
+# Python bytecode (the hosts checks import their own helpers)
+__pycache__/
+*.pyc
