@@ -64,7 +64,7 @@ Today there is one wrapper, `dev-vms plan|apply|destroy`: OpenTofu on `hosts/ter
    ansible-playbook -i inventories/home/ playbooks/agent-box.yml
    ```
 
-   expect: `failed=0`. The hostname is the STD-0001 name and stays so after a reboot (cloud-init keeps it). The last tasks are the proofs: user `claude` can't open `/etc/agent-keys`, and `sudo -l -U claude` lists only the wrappers, as `keys`.
+   expect: `failed=0`. The hostname is the STD-0001 name and stays so after a reboot (cloud-init keeps it), and cloud-init no longer runs its first boot again when the VM is renamed (`manual_cache_clean: true`). The last tasks are the proofs: user `claude` can't open `/etc/agent-keys`, `sudo -l -U claude` lists only the wrappers, as `keys`, and `/etc/hosts` names the box once per address with no repeated line.
    A backup of the old settings file stays beside it (`managed-settings.json.<date>~`).
 
 3. Restart Remote Control so new sessions read the new hostname and settings.
