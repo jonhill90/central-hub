@@ -8,7 +8,7 @@ outcome: Argo CD's Application `kube-prometheus-stack` is Synced and Healthy, Gr
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone]
 files: [hosts/kubernetes/home/c1/root/values.yaml, hosts/kubernetes/home/c1/apps/kube-prometheus-stack/, hosts/ansible/playbooks/k8s-observability.yml]
-last-tested: 2026-11-10, steps 1 to 4 on c1: auto-sync took over at 03:31 UTC (#140), Synced and Healthy, Grafana rolled once to a new pod and still shows "Lab sign-in"; k8s-observability.yml changed=1 (the old Helm records). The admin-password sign-in in step 3 was not checked
+last-tested: 2026-11-10, steps 1 to 4 on c1, auto-sync took over at 03:31 UTC (#140), Synced and Healthy, Grafana rolled once to a new pod and still shows "Lab sign-in"; k8s-observability.yml changed=1 (the old Helm records). The admin-password sign-in in step 3 was not checked
 superseded-by:
 ---
 
