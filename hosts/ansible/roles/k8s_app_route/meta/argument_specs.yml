@@ -20,7 +20,10 @@ argument_specs:
         description: "The HTTPS listener's certificate Secret; only its name and issuer annotation are read."
       k8s_app_route_https_redirect: {type: bool, default: true, description: "Answer plain HTTP for the name with 301 to https://."}
       k8s_app_route_short_names: {type: bool, default: true, description: "Also answer on <name>.<zone> (STD-0001 rule 5)."}
-      k8s_lab_dns_points_here: {type: bool, default: true, description: "False when the lab wildcard DNS points at another cluster (dev rebuilds); the check that a name resolves to this Gateway is skipped."}
+      k8s_lab_dns_points_here:
+        type: bool
+        default: true
+        description: "False when the lab wildcard DNS points at another cluster (dev rebuilds); the check that a name resolves to this Gateway is skipped."
       k8s_app_route_proof_client:
         type: str
         description: "Inventory host that proves the route by name, through the lab's DNS. Default: the first host of group k8s_workers."

@@ -24,7 +24,10 @@ argument_specs:
       k8s_gateway_smoke_name: {type: str, default: hello, description: First label of the smoke test's hostname.}
       k8s_gateway_smoke_namespace: {type: str, default: gateway-smoke, description: "Namespace of the smoke test app, deleted afterwards."}
       k8s_gateway_smoke_image: {type: str, default: "registry.k8s.io/e2e-test-images/agnhost:2.53", description: Echo app image.}
-      k8s_lab_dns_points_here: {type: bool, default: true, description: "False when the lab wildcard DNS points at another cluster (dev rebuilds); the check that a name resolves to this Gateway is skipped."}
+      k8s_lab_dns_points_here:
+        type: bool
+        default: true
+        description: "False when the lab wildcard DNS points at another cluster (dev rebuilds); the check that a name resolves to this Gateway is skipped."
       k8s_gateway_smoke_client:
         type: str
         description: "Inventory host that calls the Gateway from outside the cluster. Default: the first host of group proxmox."
