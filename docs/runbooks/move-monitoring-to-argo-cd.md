@@ -8,7 +8,7 @@ outcome: Argo CD's Application `kube-prometheus-stack` is Synced and Healthy, Gr
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone]
 files: [hosts/kubernetes/home/c1/root/values.yaml, hosts/kubernetes/home/c1/apps/kube-prometheus-stack/, hosts/ansible/playbooks/k8s-observability.yml]
-last-tested: not yet run on c1. On 2026-11-08 the git values and the role's values were each rendered with chart 92.3.1, with sign-in off and on; the output was the same except Grafana's random admin password, which Argo CD is told to leave alone
+last-tested: 2026-11-10, steps 1 to 4 on c1, auto-sync took over at 03:31 UTC (#140), Synced and Healthy, Grafana rolled once to a new pod and still shows "Lab sign-in"; k8s-observability.yml changed=1 (the old Helm records). The admin-password sign-in in step 3 was not checked
 superseded-by:
 ---
 
@@ -44,7 +44,7 @@ The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `kube-prom
    expect: tracking labels only. The CRDs may show the chart's newer annotations. The Grafana Secret shows no difference, because it is ignored. Anything else: fix the values by PR.
 
 3. Sync once, by hand.
-   expect: Synced and Healthy. Grafana at `https://grafana.apps.c1.prod.<zone>/` signs in with the same admin password as before (Secret `monitoring/kube-prometheus-stack-grafana`). Prometheus's claim is the same one, and old graphs still show.
+   expect: Synced and Healthy. Grafana rolls once to a new pod, because the sync rewrites its Deployment (2026-11-10). Grafana at `https://grafana.apps.c1.prod.<zone>/` signs in with the same admin password as before (Secret `monitoring/kube-prometheus-stack-grafana`). Prometheus's claim is the same one, and old graphs still show.
 
 4. By PR, set `autoSync: true` in `root/values.yaml`. In the private inventory, set `k8s_observability_metrics_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics,proof`.
    why: Ansible stops installing the chart and deletes Helm's old release records. Grafana's route moves with the Gateway ([gateway runbook](move-gateway-to-argo-cd.md)).

@@ -1,6 +1,6 @@
 ---
 title: Move c1's volume provisioner and default StorageClass from Ansible to Argo CD
-status: draft
+status: tested
 kind: automated
 trigger: on request (step 2 of spec 2026-11-c1-apps-under-argo-cd)
 runner: an agent lane, through the owner's Mac (D-0022)
@@ -8,7 +8,7 @@ outcome: Argo CD's Application `local-path` is Synced and Healthy, a new claim s
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone]
 files: [hosts/kubernetes/home/c1/apps/local-path/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_storage/, hosts/ansible/playbooks/k8s-storage.yml]
-last-tested: not yet run on c1. CI's parity check renders the role's manifest and this chart and finds them the same, object for object
+last-tested: 2026-11-10, on c1, auto-sync took over at 03:31 UTC (#140), Synced and Healthy, all claims Bound; k8s-storage.yml changed=0 with the claim proof passed
 superseded-by:
 ---
 

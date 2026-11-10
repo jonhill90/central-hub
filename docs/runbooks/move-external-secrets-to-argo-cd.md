@@ -1,6 +1,6 @@
 ---
 title: Move c1's External Secrets and its store from Ansible to Argo CD
-status: draft
+status: tested
 kind: automated
 trigger: on request (step 5 of spec 2026-11-c1-apps-under-argo-cd)
 runner: an agent lane, through the owner's Mac (D-0022)
@@ -8,7 +8,7 @@ outcome: Argo CD's Applications `external-secrets` and `secret-store` are Synced
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1)
 private-values: [k8s_gateway_zone]
 files: [hosts/kubernetes/home/c1/apps/external-secrets/values.yaml, hosts/kubernetes/home/c1/apps/secret-store/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_secrets/, hosts/ansible/playbooks/k8s-secrets.yml]
-last-tested: not yet run on c1. CI's parity check finds the chart values and the store manifest the same as the role's
+last-tested: 2026-11-10, on c1, secret-store taken over by auto-sync at 03:31 UTC (#140), Synced and Healthy, ClusterSecretStore c1 Ready; k8s-secrets.yml changed=1 (the old Helm records), all proofs ok
 superseded-by:
 ---
 
