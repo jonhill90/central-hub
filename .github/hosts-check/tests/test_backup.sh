@@ -13,6 +13,10 @@
 #      the runbook's "Restore Keycloak's database" steps load it into a new database whose password
 #      changed since the dump: every row comes back, and the new password still signs in.
 #   5. One pack file in the repository damaged: the volume restore test must fail.
+#   6. Dev's restore (c1-restore-volumes.sh): prod's folders, named as local-path names them on c1
+#      (pvc-<uid>_<namespace>_<claim>), come back whole at <namespace>/<claim> from a repository it
+#      can't write to; a second run does nothing, check catches a changed restore, and it refuses a
+#      folder that already holds data, two folders for one claim and a name it can't map.
 #
 # Tools come from their GitHub releases, each checked against a SHA-256: the versions and sums the
 # role installs are read from its defaults/main.yml, so CI tests what goes on the nodes.
@@ -27,6 +31,8 @@ pg_containers=()
 cleanup() {
   [ -n "${etcd_pid:-}" ] && kill "$etcd_pid" 2>/dev/null
   [ ${#pg_containers[@]} -gt 0 ] && docker rm -f "${pg_containers[@]}" >/dev/null 2>&1
+  # Section 6 makes a repository read-only; a failure there must not leave it undeletable.
+  chmod -R u+w "$work" 2>/dev/null
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -234,5 +240,102 @@ fi
 grep -qi 'pack .* contains .* errors\|ciphertext verification failed\|Fatal: repository contains errors' <<< "$out" \
   || { echo "$out"; fail "it failed for another reason"; }
 ok "c1-restore-test-volumes.sh fails on a damaged pack file"
+
+echo "== 6. dev's restore of prod's newest volume snapshot (c1-restore-volumes.sh, TASK-0240)"
+# A repository of its own: section 5 damaged the first one.
+export RESTIC_REPOSITORY=$work/repo-restore
+prod_path=$work/c1-data/local-path
+# Prod's folders as c1 names them (local-path's default), and one already in <namespace>/<claim>.
+loki=pvc-7f3e2a10-1b2c-4d5e-8f90-a1b2c3d4e5f6_logging_storage-loki-0
+jf=pvc-0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0_media_jellyfin-config
+jm=pvc-11111111-2222-3333-4444-555555555555_media_jellyfin-media
+mkdir -p "$prod_path/$jf/data" "$prod_path/$loki/chunks" "$prod_path/$jm" "$prod_path/monitoring/grafana"
+echo "<ServerConfiguration/>" > "$prod_path/$jf/system.xml"
+head -c 300000 /dev/urandom > "$prod_path/$jf/data/library.db"
+for i in $(seq 1 40); do echo "chunk $i" > "$prod_path/$loki/chunks/$i"; done
+ln -s system.xml "$prod_path/$jf/link.xml"
+echo "{}" > "$prod_path/monitoring/grafana/grafana.db"
+BACKUP_HOST=ci-prod BACKUP_STATE=$work/prod-state BACKUP_VOLUME_PATHS=$prod_path \
+  "$bin/c1-backup-volumes.sh" > "$work/prod-backup.log" 2>&1 || { cat "$work/prod-backup.log"; fail "prod's volume backup failed"; }
+# What dev must hold: the same folders, each at <namespace>/<claim>.
+want_tree=$work/prod-as-backed-up
+mkdir -p "$want_tree/media" "$want_tree/logging"
+cp -a "$prod_path/$jf" "$want_tree/media/jellyfin-config"
+cp -a "$prod_path/$jm" "$want_tree/media/jellyfin-media"
+cp -a "$prod_path/$loki" "$want_tree/logging/storage-loki-0"
+cp -a "$prod_path/monitoring" "$want_tree/monitoring"
+cp -a "$prod_path/.central-hub-backup-canary" "$want_tree/"
+# Dev starts with an empty data disk.
+rm -rf "$prod_path" && mkdir -p "$prod_path"
+# Read-only: with the repository unwritable, any lock or other write would fail the restore.
+repo_before=$(cd "$RESTIC_REPOSITORY" && find . -type f | sort | xargs sha256sum | sha256sum)
+chmod -R a-w "$RESTIC_REPOSITORY"
+dev_env=(BACKUP_HOST=ci-dev "BACKUP_STATE=$work/dev-state" RESTORE_SOURCE_HOST=ci-prod "RESTORE_PATH=$prod_path" RESTORE_REQUIRE_MOUNT=)
+out=$(env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" restore 2>&1) || { echo "$out"; fail "the dev restore failed"; }
+echo "$out"
+grep -q '^PASS: restored snapshot .* 4 folders, 43 files' <<< "$out" || fail "the restore did not report 4 folders and 43 files"
+grep -qP '^folder\tmedia/jellyfin-config\t2\t' <<< "$out" || fail "the restore did not log jellyfin-config's count"
+grep -qx "mapped $jf -> media/jellyfin-config" <<< "$out" || fail "the restore did not log jellyfin-config's mapping"
+diff -r "$want_tree" "$prod_path" || fail "the restored folders differ from prod's as backed up"
+[ ! -e "$work/c1-data/.c1-restore-stage" ] || fail "the staging folder was left behind"
+repo_after=$(cd "$RESTIC_REPOSITORY" && find . -type f | sort | xargs sha256sum | sha256sum)
+[ "$repo_before" = "$repo_after" ] || fail "the restore changed the repository"
+ok "c1-restore-volumes.sh restored every folder at <namespace>/<claim> from an unwritable repository, counts and canary match, the repository is unchanged"
+
+out=$(env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" restore 2>&1) || { echo "$out"; fail "a second restore run failed"; }
+grep -q '^ALREADY: ' <<< "$out" || fail "a second run did not say ALREADY"
+out=$(env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check 2>&1) || { echo "$out"; fail "check failed after the restore"; }
+grep -q 'PASS: restore of snapshot .* still in place, 4 folders, canary matches' <<< "$out" || { echo "$out"; fail "check did not pass"; }
+ok "a second run does nothing, and check passes"
+
+echo "changed" > "$prod_path/.central-hub-backup-canary"
+if env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check > /dev/null 2>&1; then fail "check passed with a wrong canary"; fi
+rm -rf "$prod_path/logging/storage-loki-0"
+cp "$work/prod-as-backed-up/.central-hub-backup-canary" "$prod_path/"
+if env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check > /dev/null 2>&1; then fail "check passed with a folder gone"; fi
+ok "check fails on a wrong canary and on a missing folder"
+
+# Never over data it didn't restore: a non-empty folder with no record of this restore.
+if env "${dev_env[@]}" BACKUP_STATE="$work/dev-state-2" "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1; then
+  fail "the restore wrote into a folder that already holds data"
+fi
+grep -q 'is not empty' "$work/r.log" || { cat "$work/r.log"; fail "it failed for another reason"; }
+ok "the restore refuses a folder that already holds data"
+
+# Snapshots it can't map stop it before anything is written: two folders for one claim (a claim
+# deleted and made again, its old folder kept), and a folder that is neither naming.
+chmod -R u+w "$RESTIC_REPOSITORY"
+bad_path=$work/bad-data/local-path
+for case in dup unknown; do
+  rm -rf "$bad_path" && mkdir -p "$bad_path"
+  if [ "$case" = dup ]; then
+    mkdir -p "$bad_path/pvc-aaaa_media_jellyfin-config" "$bad_path/pvc-bbbb_media_jellyfin-config"
+    want=DUPLICATE
+  else
+    mkdir -p "$bad_path/pvc-cccc_media"
+    want=UNKNOWN
+  fi
+  find "$bad_path" -mindepth 1 -maxdepth 1 -type d -exec sh -c 'echo x > "$1/f"' _ {} \;
+  BACKUP_HOST=ci-$case BACKUP_STATE=$work/$case-state BACKUP_VOLUME_PATHS=$bad_path \
+    "$bin/c1-backup-volumes.sh" > /dev/null 2>&1 || fail "the $case backup failed"
+  rm -rf "$bad_path" && mkdir -p "$bad_path"
+  if env BACKUP_HOST=ci-dev BACKUP_STATE="$work/dev-state-$case" RESTORE_SOURCE_HOST=ci-$case RESTORE_PATH="$bad_path" RESTORE_REQUIRE_MOUNT= \
+    "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1; then
+    fail "the restore took a snapshot it can't map ($case)"
+  fi
+  grep -q "$want" "$work/r.log" || { cat "$work/r.log"; fail "it failed for another reason ($case)"; }
+  [ -z "$(ls -A "$bad_path")" ] || fail "the refused restore left files behind ($case)"
+done
+ok "the restore refuses two folders for one claim and a name it can't map, and writes nothing"
+
+if env BACKUP_HOST=ci-dev BACKUP_STATE="$work/dev-state-4" RESTORE_SOURCE_HOST=no-such-host RESTORE_PATH="$work/none" RESTORE_REQUIRE_MOUNT= \
+  "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1; then
+  fail "the restore passed with no snapshot of that host"
+fi
+grep -q "no volume snapshot of host no-such-host" "$work/r.log" || { cat "$work/r.log"; fail "it failed for another reason"; }
+out=$(env BACKUP_HOST=ci-dev BACKUP_STATE="$work/dev-state-5" RESTORE_SOURCE_HOST=ci-prod RESTORE_PATH="$work/nodisk/local-path" \
+  "$bin/c1-restore-volumes.sh" restore 2>&1) || { echo "$out"; fail "a node without the data disk failed"; }
+grep -q '^SKIP: ' <<< "$out" || fail "a node without the data disk did not SKIP"
+ok "the restore fails with no snapshot of the host, and skips a node without its data disk"
 
 echo "backup: $pass checks passed"

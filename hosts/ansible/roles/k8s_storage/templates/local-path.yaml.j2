@@ -4,6 +4,7 @@
 # measured 2026-10-29), changed only here: the namespace, both images pinned by digest, each
 # volume's folder under the data disk's mount, and the StorageClass's name, default flag, reclaim
 # policy and allowed nodes.
+{# On a cluster that sets k8s_storage_stable_folders, also the folder names (pathPattern). #}
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -154,6 +155,11 @@ metadata:
 provisioner: rancher.io/local-path
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: {{ k8s_storage_reclaim_policy }}
+{% if k8s_storage_stable_folders | bool %}
+# Each volume's folder is <namespace>/<claim>, the same on every rebuild (TASK-0240).
+parameters:
+  pathPattern: "{{ k8s_storage_path_pattern }}"
+{% endif %}
 # Only nodes whose data disk is mounted (role k8s_storage, tag disk, sets the label), so no volume
 # lands on a node's OS disk.
 allowedTopologies:

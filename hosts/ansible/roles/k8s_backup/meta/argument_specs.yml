@@ -63,3 +63,22 @@ argument_specs:
         type: bool
         default: false
         description: With tag drill, back up now and run the restore tests, and fail unless they pass.
+      k8s_backup_reader:
+        type: bool
+        default: false
+        description: >-
+          Reader mode for dev: tools, sign-in and env file, no timers, no repository made, restic
+          with --no-lock. Never together with k8s_backup_enabled.
+      k8s_backup_azure_cert_group:
+        type: str
+        default: k8s_nodes
+        description: Inventory group whose nodes all hold a certificate on the app (orphan removal).
+      k8s_backup_restore_source_host:
+        type: str
+        default: ""
+        description: Short host name of the prod node whose newest volume snapshot a reader restores. Private.
+      k8s_backup_restore_path: {type: str, default: /var/lib/c1-data/local-path, description: The folder a reader restores.}
+      k8s_backup_restore_snapshot: {type: str, default: latest, description: A snapshot ID instead of the newest one.}
+      k8s_backup_restore_check_namespace: {type: str, default: media, description: Namespace of the app-level restore check.}
+      k8s_backup_restore_check_deployment: {type: str, default: jellyfin, description: Deployment of the app-level restore check.}
+      k8s_backup_restore_check_claim: {type: str, default: jellyfin-config, description: Claim of the app-level restore check.}

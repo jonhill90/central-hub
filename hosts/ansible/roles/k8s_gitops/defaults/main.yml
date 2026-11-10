@@ -45,6 +45,11 @@ k8s_gitops_cluster_labels:
 # false. It follows k8s_gateway_https: a cluster with no certificate (a dev rebuild, which has no
 # c1 CA key, D-0028) serves HTTP only, so the gateway app is not Degraded on a missing Secret.
 k8s_gitops_source_gateway_https: "{{ k8s_gateway_https | default(true) }}"
+# Whether local-path names each volume's folder <namespace>/<claim>, passed to the root chart as
+# `localPathStableFolders` only when true. Dev turns it on, so its restore of prod's backup puts each
+# folder where the claim will look (TASK-0240, agent pick 205). c1 keeps false: its StorageClass's
+# parameters can't change in place.
+k8s_gitops_source_local_path_stable_folders: false
 
 # The Argo CD web UI through the shared Gateway (tag ui), a follow-on to BUILD-PATH S12: the owner
 # said (2026-10-27 03:52 UTC, relayed) the UI waits until DNS is up, with no port-forward. On, it

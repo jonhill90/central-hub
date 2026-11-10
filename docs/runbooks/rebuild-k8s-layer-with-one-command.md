@@ -4,10 +4,10 @@ status: draft
 kind: automated
 trigger: on request; to rehearse a rebuild on dev; after a lost cluster on prod
 runner: an agent lane, through the owner's Mac
-outcome: the env's node VMs, the cluster, Argo CD with its root app and every app Synced and Healthy, certificates, sign-in and the Argo CD UI, all from this repository, with one log line per stage
+outcome: the env's node VMs, the cluster, on dev a read-only copy of prod's newest volume backup in place, Argo CD with its root app and every app Synced and Healthy, certificates, sign-in and the Argo CD UI, all from this repository, with one log line per stage
 needs: the controller from set-up-lab-controller.md; the lab network and Proxmox host as they are; the iac@pve!apply token file; an allow rule for hosts/rebuild-k8s.sh on the Mac
-private-values: [rebuild-env-dir, terraform-tfvars, terraform-state, ansible-inventory]
-files: [hosts/rebuild-k8s.sh, hosts/terraform/home/k8s/, hosts/ansible/playbooks/, hosts/kubernetes/home/c1/]
+private-values: [rebuild-env-dir, terraform-tfvars, terraform-state, ansible-inventory, c1-backup-restic-password, c1-backup-azure-storage-account, prod-volume-node-name]
+files: [hosts/rebuild-k8s.sh, hosts/rebuild.env.example, hosts/terraform/home/k8s/, hosts/ansible/playbooks/, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/files/c1-restore-volumes.sh, hosts/terraform/azure/backup/, hosts/kubernetes/home/c1/]
 last-tested:
 superseded-by:
 ---
@@ -21,9 +21,11 @@ This covers the Kubernetes layer only. The Proxmox host, OPNsense, the tailnet c
 ```mermaid
 flowchart LR
   td["teardown<br/>(--teardown)"] --> vms["vms<br/>tofu apply"] --> cl["cluster<br/>k8s.yml"] --> st["storage<br/>data disks"]
-  st --> go["gitops<br/>Argo CD + root app"] --> ap["apps<br/>wait for Synced + Healthy"] --> gw["gateway<br/>k8s-gateway.yml"]
-  gw --> ce["certs"] --> id["identity"] --> ui["ui<br/>Argo CD UI + SSO"] --> re["restore<br/>(hook)"] --> ck["checks"]
+  st --> re["restore<br/>prod's newest volumes,<br/>read-only (hook)"] --> go["gitops<br/>Argo CD + root app"] --> ap["apps<br/>wait for Synced + Healthy"]
+  ap --> gw["gateway<br/>k8s-gateway.yml"] --> ce["certs"] --> id["identity"] --> ui["ui<br/>Argo CD UI + SSO"] --> ck["checks<br/>+ restore proof"]
 ```
+
+On dev the stages are `vms cluster storage restore gitops apps gateway checks`: certs, identity and ui are left out (D-0028).
 
 ## Stages
 
@@ -33,6 +35,7 @@ flowchart LR
 | `vms` | `PRE_VMS_HOOK`, then `tofu apply` in the same folder | the hook re-adds the Proxmox `/vms` ACLs, which Proxmox removes on every destroy |
 | `cluster` | `playbooks/k8s.yml` | |
 | `storage` | `playbooks/k8s-storage.yml --tags disk` | the data disks only; Argo CD installs the provisioner |
+| `restore` | `RESTORE_HOOK` | before `gitops`, so each restored folder is there when Argo CD makes its claim; required on dev ([Restore on dev](#restore-on-dev)); skipped on prod when unset |
 | `gitops` | `playbooks/k8s-gitops.yml --tags install,source` | the inventory sets `k8s_gitops_source_enabled: true` |
 | `apps` | waits until every Argo CD app is Synced and Healthy (`APPS_TIMEOUT`, default 1200 s) | see "Apps and auto-sync" |
 | `gateway` | `playbooks/k8s-gateway.yml` | after `apps`: with `k8s_gateway_by_argocd: true`, Argo CD makes the Gateway and the playbook checks it |
@@ -40,12 +43,11 @@ flowchart LR
 | `identity` | `playbooks/k8s-identity.yml` | throwaway users on dev |
 | `ui` | `playbooks/k8s-gitops.yml --tags ui,sso` | |
 | `backup` | `playbooks/k8s-backup.yml` | not in the default list; prod only, the script refuses it on dev |
-| `restore` | `RESTORE_HOOK` | skipped when the hook is unset |
-| `checks` | nodes Ready, pods Running, apps Synced and Healthy, a second `k8s.yml` with `changed=0`, `tofu plan` with no changes | |
+| `checks` | nodes Ready, pods Running, apps Synced and Healthy, a second `k8s.yml` with `changed=0`, `tofu plan` with no changes, then `RESTORE_CHECK_HOOK` when `RESTORE_HOOK` is set | |
 
 ## Before you start
 
-- The env folder exists on the controller, outside the repository, mode `0700`, and holds `rebuild.env` (mode `0600`). The script's header lists every variable. For dev: `ENV_NAME=dev`, `VM_ID_MIN=250`, `VM_ID_MAX=257`, and a tfvars with `node_vnet = "dev"`. VM 258 and CT 259 are the jumpboxes, which stay (the owner, 2026-11-09 23:04 UTC), so the dev range stops at 257.
+- The env folder exists on the controller, outside the repository, mode `0700`, and holds `rebuild.env` (mode `0600`). The script's header lists every variable; [hosts/rebuild.env.example](../../hosts/rebuild.env.example) is a dev one with made-up paths. For dev: `ENV_NAME=dev`, `VM_ID_MIN=250`, `VM_ID_MAX=257`, and a tfvars with `node_vnet = "dev"`. VM 258 and CT 259 are the jumpboxes, which stay (the owner, 2026-11-09 23:04 UTC), so the dev range stops at 257.
 - No kubeconfig is needed on the controller, and none is copied there. Every `kubectl` call in the `apps` and `checks` stages runs on the env's first control-plane node through Ansible, with that node's `/etc/kubernetes/admin.conf`. Its output comes back through the `ansible.posix.json` callback, so `hosts/ansible/collections/` holds the collections from `requirements.yml` (`ansible-galaxy collection install -r requirements.yml -p ./collections`). A `KUBECONFIG` in `rebuild.env` is ignored.
 - Every node `vm_id` in the tfvars sits in the env's range. The script stops before any stage if one does not.
 - The env's inventory sets the values the root app needs. For dev:
@@ -76,6 +78,63 @@ flowchart LR
    why: the dev runs measure each stage, and two clean runs in a row are the proof.
    expect: every stage `rc=0`.
 
+## Restore on dev
+
+A dev rebuild proves the code with prod's data in it: the `restore` stage puts a read-only copy of prod's newest volume snapshot on dev's data disk (TASK-0240; the owner's card, 2026-11-10 02:50 UTC, and the owner's words of 2026-11-10 03:08 UTC that c1 holds no real data). Every part is agent pick 205 in [hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md).
+
+```mermaid
+flowchart LR
+  prod["prod worker<br/>nightly volume snapshot"] -->|"restic, write app c1-backup"| repo[("restic repository<br/>Azure Blob")]
+  repo -->|"restic --no-lock,<br/>read-only app c1-backup-reader"| dev["dev worker<br/>local-path/&lt;namespace&gt;/&lt;claim&gt;"]
+  dev --> argo["gitops: Argo CD makes the claims;<br/>local-path's mkdir -p keeps each folder"]
+```
+
+What comes back: only `/var/lib/c1-data/local-path`, every app volume. Not etcd: dev's cluster is built from code, which is what is being proven, and prod's snapshot carries prod's certificates and node names. Not Keycloak's database: the identity stage doesn't run on dev (D-0028).
+
+Why it works without fighting Argo CD: on dev, local-path names each volume's folder `<namespace>/<claim>` (its `pathPattern`, from upstream's README at v0.0.37), so a folder has the same name on every dev rebuild. The restore puts the folders in place before Argo CD exists; when Argo CD makes a claim, the provisioner's setup script runs `mkdir -m 0777 -p`, which keeps the folder and its files. Nothing is scaled down.
+
+c1 needs no change for this. It keeps upstream's folder names, `pvc-<uid>_<namespace>_<claim>`, and the restore maps each one to `<namespace>/<claim>` itself: namespaces, claim names and `pvc-<uid>` are DNS names with no `_`, so each name splits into exactly those three parts. A folder already named `<namespace>/<claim>` passes through. Any other name, or two folders for the same claim (a deleted claim's folder kept by reclaim policy `Retain`), stops the restore before it writes anything. The switch that turns `pathPattern` on is per cluster and off by default: `k8s_gitops_source_local_path_stable_folders` (root value `localPathStableFolders`, chart value `storageClass.stableFolders`). c1 leaves it off, because a StorageClass's parameters can't change in place; a rebuilt c1 may turn it on.
+
+Read-only, twice over: dev's worker signs in as its own app registration, `c1-backup-reader`, which holds Storage Blob Data Reader on the backup container only, and every restic call runs with `--no-lock`, which restic needs to read a repository it can't write. Known limit: restic has no read-only keys, so dev's worker holds the repository password, as prod's nodes do. It is on the access register, and it is rotated with every other secret once the secrets store exists.
+
+### Once, before the first dev restore
+
+These run through the Mac lane, in this order. Nothing here needs the owner except where it says so.
+
+1. Apply `hosts/terraform/azure/backup` ([Back up c1 off the box](back-up-c1-off-box.md), step A1). The plan adds 3 resources, the reader app, its service principal and its role, and changes nothing else. Note the outputs `reader_client_id` and `reader_app_object_id`.
+
+   why: the reader identity is code, like the backup app.
+   expect: `Plan: 3 to add, 0 to change, 0 to destroy.`
+
+2. Check that prod has a volume snapshot of its worker: [Back up c1 off the box](back-up-c1-off-box.md), step 4. If the newest is older than you want on dev, run one backup first (step 3 there).
+
+   why: dev restores the newest volume snapshot of `k8s_backup_restore_source_host`, as it is.
+   expect: a snapshot tagged `volumes` for the prod worker.
+
+3. In dev's private inventory, under `k8s_nodes` `vars`, set:
+
+   ```yaml
+   k8s_backup_env_file: ~/.config/central-hub/c1-backup.env   # the same RESTIC_REPOSITORY and RESTIC_PASSWORD as prod
+   k8s_backup_azure_identity: true
+   k8s_backup_azure_account: <storage_account_name>
+   k8s_backup_azure_client_id: <reader_client_id>
+   k8s_backup_azure_tenant_id: <tenant_id>
+   k8s_backup_azure_app_object_id: <reader_app_object_id>
+   k8s_backup_restore_source_host: <prod worker's short host name, as restic snapshots lists it>
+   k8s_gitops_source_local_path_stable_folders: true
+   ```
+
+   Leave `k8s_backup_enabled` unset or `false`: `playbooks/k8s-restore.yml` refuses an inventory that turns the backup timers on, or whose `k8s_gitops_cluster_labels.env` is not `dev`.
+   why: the reader app's IDs, never the backup app's, so dev can't write; the playbook also never makes the repository and runs no timer. The last line gives dev's local-path the `<namespace>/<claim>` folder names, so its claims find the restored folders.
+
+4. In dev's `rebuild.env`, set `STAGES`, `RESTORE_HOOK` and `RESTORE_CHECK_HOOK` as in [hosts/rebuild.env.example](../../hosts/rebuild.env.example).
+
+### What the stage does and how it is proven
+
+- `restore` runs `playbooks/k8s-restore.yml` on dev's workers: the backup tools, the node's own key and certificate (uploaded to the reader app the first time, as for prod's nodes), the env file, then `c1-restore-volumes.sh restore`. It maps each folder in the newest volume snapshot of `k8s_backup_restore_source_host` to `<namespace>/<claim>` (and stops on a name it can't map or two folders for one claim), restores the snapshot with `--verify` into a staging folder on the same disk, renames each folder into place (logged as `mapped <from> -> <to>`), then compares each `<namespace>/<claim>` folder's file count and bytes on disk with `restic ls` of the same snapshot, and the canary file with the snapshot's copy. Any mismatch fails the run. A node without its data disk mounted says `SKIP`; at least one node must restore. It never writes over a folder it didn't restore: a non-empty folder with no record stops it, and a second run on the same snapshot says `ALREADY` and does nothing.
+- `checks` runs `RESTORE_CHECK_HOOK`, the same playbook with `--tags restore_check`, after the apps synced: each node's restore is still in place, `media/jellyfin` is rolled out with a Ready pod that mounts `jellyfin-config`, that claim's volume is the restored folder `local-path/media/jellyfin-config`, and the folder belongs to the Deployment's `runAsUser`.
+- The run's `.log` gets the snapshot ID, the canary and one `folder <namespace>/<claim> <files> <bytes>` line per folder, so the run's worklog can quote them.
+
 ## Apps and auto-sync
 
 On a fresh cluster, Argo CD installs an app only if its `autoSync` is on in `hosts/kubernetes/home/c1/root/values.yaml`. The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). It is on for 8 of 12; `jellyfin`, `kube-prometheus-stack`, `local-path` and `secret-store` follow once their diffs on c1 are reconciled. Until then, the `apps` stage times out on a fresh cluster. `prune` stays off except for `monitoring-extras` and `alerts`. To leave the stage out, set `STAGES` in `rebuild.env`.
@@ -85,6 +144,10 @@ On a fresh cluster, Argo CD installs an app only if its `autoSync` is on in `hos
 - The script prints the stage, its `rc` and the last 20 lines of the `.raw` file. Fix the cause, then run again from that stage with `--only <stage>,<next>,...`.
 - `vm_id ... is outside` or `a dev run needs node_vnet`: the tfvars is for the wrong env. Nothing has run.
 - On dev, `--teardown` puts the env back to empty. On prod, stop and tell the owner before any teardown.
+- `restore` fails with `can't be mapped`, `UNKNOWN` or `DUPLICATE`: prod's snapshot holds a folder that is not a volume, or two folders for one claim (a deleted claim's folder, kept by `Retain`). The message names them. Nothing was written. Remove the stray folder on prod, run one volume backup, and run again.
+- `restore` fails with `is not empty and holds no recorded restore`: dev's data disk holds data this restore didn't put there. Run again with `--teardown`.
+- `restore` fails with `AuthorizationFailure` or `AADSTS700027`: the reader app's role or its certificate isn't in effect yet; see [Back up c1 off the box](back-up-c1-off-box.md), "If it fails".
+- `checks` fails on the restore proof: its message names the claim, the folder the volume uses and the folder the restore made. A volume at a `pvc-...` folder means dev's StorageClass has no `pathPattern`: set `k8s_gitops_source_local_path_stable_folders: true` in dev's inventory, run `--teardown`, and rebuild (the parameter can't change in place).
 
 ## Afterwards
 

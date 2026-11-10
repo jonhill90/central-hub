@@ -33,6 +33,15 @@ k8s_storage_kubectl: kubectl
 k8s_storage_class: local-path
 k8s_storage_class_default: true
 k8s_storage_reclaim_policy: Retain
+# true: each volume's folder under the path is <namespace>/<claim> (k8s_storage_path_pattern), not
+# upstream's pvc-<uid>_<namespace>_<claim>, so it keeps its name across rebuilds and dev can restore
+# prod's backup before the claims exist (TASK-0240, agent pick 205). Off by default, so a running
+# cluster's StorageClass, whose parameters can't change in place, stays as it is. The same switch
+# as the local-path chart's storageClass.stableFolders.
+k8s_storage_stable_folders: false
+# The provisioner's own example (README at v0.0.37, "pathPattern"); v0.0.37 refuses a pattern that
+# doesn't start with <namespace>/<claim>/.
+k8s_storage_path_pattern: !unsafe "{{ .PVC.Namespace }}/{{ .PVC.Name }}/"
 
 # Argo CD manages the provisioner and the StorageClass from hosts/kubernetes/home/c1/apps/local-path/
 # (spec 2026-11-c1-apps-under-argo-cd, step 2). True once its Application is Synced; the role then

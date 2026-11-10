@@ -36,3 +36,15 @@ argument_specs:
         default: Retain
         choices: [Retain, Delete]
         description: What happens to a volume's folder when its claim is deleted.
+      k8s_storage_stable_folders:
+        type: bool
+        default: false
+        description: >-
+          Name each volume's folder <namespace>/<claim> (k8s_storage_path_pattern), stable across
+          rebuilds, so a restore can put it in place before the claim exists. Off on a running cluster.
+      k8s_storage_path_pattern:
+        type: str
+        default: !unsafe "{{ .PVC.Namespace }}/{{ .PVC.Name }}/"
+        description: >-
+          The StorageClass's pathPattern: each volume's folder is <namespace>/<claim> under the path,
+          stable across rebuilds, so a restore can put it in place before the claim exists.

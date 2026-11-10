@@ -151,6 +151,7 @@
     # rebuilt node, or expired. Only when this run covers every node and each found its own, so a
     # run limited to one node never removes another node's certificate. A roll in progress at that
     # moment loses its new certificate; the node keeps the old one and rolls again the next day.
+    # "Every node" is every node of k8s_backup_azure_cert_group (k8s_nodes; k8s_workers for a reader).
     - name: timers | The app's certificates now
       ansible.builtin.command:
         argv:
@@ -193,7 +194,7 @@
       vars:
         k8s_backup_azure_held: "{{ ansible_play_hosts_all | map('extract', hostvars, 'k8s_backup_azure_mykey') | list }}"
       when:
-        - ansible_play_hosts_all | sort == groups['k8s_nodes'] | default(ansible_play_hosts_all) | sort
+        - ansible_play_hosts_all | sort == groups[k8s_backup_azure_cert_group] | default(ansible_play_hosts_all) | sort
         - ansible_play_hosts | length == ansible_play_hosts_all | length
         - k8s_backup_azure_held | select | list | length == ansible_play_hosts_all | length
       delegate_to: localhost

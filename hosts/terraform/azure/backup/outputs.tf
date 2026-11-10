@@ -27,3 +27,13 @@ output "tenant_id" {
   description = "k8s_backup_azure_tenant_id: the Entra ID tenant."
   value       = data.azuread_client_config.current.tenant_id
 }
+
+output "reader_client_id" {
+  description = "k8s_backup_azure_client_id in dev's inventory: the read-only app's client ID. Not a secret."
+  value       = azuread_application.reader.client_id
+}
+
+output "reader_app_object_id" {
+  description = "k8s_backup_azure_app_object_id in dev's inventory: the read-only app's object ID."
+  value       = azuread_application.reader.object_id
+}

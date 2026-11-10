@@ -14,6 +14,10 @@ argument_specs:
         type: bool
         default: false
         description: "Point the engine at central-hub. Keep false until the Activation gate passes."
+      k8s_gitops_source_local_path_stable_folders:
+        type: bool
+        default: false
+        description: "Pass localPathStableFolders true to the root chart: volume folders named <namespace>/<claim> (dev, TASK-0240)."
       k8s_gitops_source_url: {type: str, default: "https://github.com/jonhill90/central-hub", description: Repository read over anonymous HTTPS.}
       k8s_gitops_source_branch: {type: str, default: main, description: Branch the cluster follows (D-0002).}
       k8s_gitops_source_path: {type: str, default: hosts/kubernetes/home/c1, description: Folder the cluster reads.}

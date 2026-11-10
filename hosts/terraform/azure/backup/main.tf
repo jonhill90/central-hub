@@ -97,3 +97,30 @@ resource "azurerm_role_assignment" "sas_signer" {
   principal_id         = data.azurerm_client_config.current.object_id
   principal_type       = "ServicePrincipal"
 }
+
+# Dev's read-only identity (TASK-0240, agent pick 205): a second app registration, `c1-backup-reader`,
+# for the dev cluster's worker, which restores a read-only copy of prod's newest volume snapshot
+# into dev at each rebuild (the owner's card, 2026-11-10 02:50 UTC). It holds Storage Blob Data
+# Reader on the backup container only, so dev can list and read blobs and can't write or delete
+# any; restic runs with --no-lock, which needs no write. Like the backup app it has no secret: the
+# dev node makes its own key and certificate, and the playbook uploads the public half (the same
+# code as the backup app, roles/k8s_backup with k8s_backup_reader). Owned by the identity running
+# tofu, for the same upload. restic has no read-only keys, so dev's node still holds the repository
+# password (access register row; rotated with everything else once the secrets store exists).
+resource "azuread_application" "reader" {
+  display_name     = var.reader_app_display_name
+  sign_in_audience = "AzureADMyOrg"
+  owners           = [data.azuread_client_config.current.object_id]
+}
+
+resource "azuread_service_principal" "reader" {
+  client_id = azuread_application.reader.client_id
+  owners    = [data.azuread_client_config.current.object_id]
+}
+
+resource "azurerm_role_assignment" "reader" {
+  scope                = azurerm_storage_container.backup.id
+  role_definition_name = "Storage Blob Data Reader"
+  principal_id         = azuread_service_principal.reader.object_id
+  principal_type       = "ServicePrincipal"
+}

@@ -69,3 +69,9 @@ variable "keep_sas_signer" {
   type        = bool
   default     = false
 }
+
+variable "reader_app_display_name" {
+  description = "Display name of the read-only app registration that dev's worker signs in as to restore prod's newest volume snapshot (Storage Blob Data Reader on the container)."
+  type        = string
+  default     = "c1-backup-reader"
+}
