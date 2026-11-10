@@ -245,7 +245,7 @@
   tags: [drill]
 
 # Reader mode only (dev, playbooks/k8s-restore.yml). restore runs before Argo CD exists in the env,
-# so the provisioner later finds each volume's folder already there (agent pick 202).
+# so the provisioner later finds each volume's folder already there (agent pick 205).
 - name: restore | Bring prod's newest volume snapshot back into this env
   ansible.builtin.include_tasks:
     file: restore.yml

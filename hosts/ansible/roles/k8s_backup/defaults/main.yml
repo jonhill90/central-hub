@@ -76,7 +76,7 @@ k8s_backup_keep_monthly: 6
 # at least one backup.
 k8s_backup_drill: false
 
-# Reader mode, for dev (TASK-0240, agent pick 202; playbooks/k8s-restore.yml). true: the node gets
+# Reader mode, for dev (TASK-0240, agent pick 205; playbooks/k8s-restore.yml). true: the node gets
 # the tools, its Azure sign-in and the env file, as above, but no timer runs, the repository is never
 # made, and restic runs with --no-lock, so nothing is written to the repository. With Azure, the
 # sign-in is the read-only app (tofu outputs reader_client_id and reader_app_object_id of

@@ -33,7 +33,7 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 # gateway runs after apps: with k8s_gateway_by_argocd true, Argo CD makes the Gateway, and the
 # playbook's "programmed" wait and smoke test then check it. restore runs after storage made the data
 # disk and before gitops: once Argo CD reads the repo it syncs every app, and local-path then finds
-# each volume's folder already there (TASK-0240, agent pick 202).
+# each volume's folder already there (TASK-0240, agent pick 205).
 default_stages="vms cluster storage restore gitops apps gateway certs identity ui checks"
 
 die() { echo "rebuild: $*" >&2; exit 1; }

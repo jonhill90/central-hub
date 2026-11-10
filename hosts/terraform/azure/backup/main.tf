@@ -98,7 +98,7 @@ resource "azurerm_role_assignment" "sas_signer" {
   principal_type       = "ServicePrincipal"
 }
 
-# Dev's read-only identity (TASK-0240, agent pick 202): a second app registration, `c1-backup-reader`,
+# Dev's read-only identity (TASK-0240, agent pick 205): a second app registration, `c1-backup-reader`,
 # for the dev cluster's worker, which restores a read-only copy of prod's newest volume snapshot
 # into dev at each rebuild (the owner's card, 2026-11-10 02:50 UTC). It holds Storage Blob Data
 # Reader on the backup container only, so dev can list and read blobs and can't write or delete

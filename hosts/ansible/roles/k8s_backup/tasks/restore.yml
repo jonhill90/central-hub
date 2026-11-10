@@ -1,5 +1,5 @@
 ---
-# Reader mode (dev, TASK-0240, agent pick 202): restore prod's newest volume snapshot into this env's
+# Reader mode (dev, TASK-0240, agent pick 205): restore prod's newest volume snapshot into this env's
 # data disk, before Argo CD makes the claims. The work is c1-restore-volumes.sh on each node, which
 # stops at the first mismatch; it prints the snapshot ID and each folder's file count and bytes, and
 # those lines are shown here so the rebuild's log keeps them. Runbook:

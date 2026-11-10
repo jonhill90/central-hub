@@ -16,7 +16,7 @@ storageClass:
   # Each volume's folder under `path` is <namespace>/<claim>, not upstream's
   # pvc-<uid>_<namespace>_<claim>: the same on every rebuild and on dev and prod, so dev can restore
   # prod's backup before Argo CD makes the claims, and the provisioner's setup (mkdir -p) keeps the
-  # restored folder (TASK-0240, agent pick 202). Upstream's own example (README at v0.0.37,
+  # restored folder (TASK-0240, agent pick 205). Upstream's own example (README at v0.0.37,
   # "pathPattern"); v0.0.37 refuses a pattern that doesn't start with <namespace>/<claim>/. Values
   # aren't templated, so Helm passes it through as written. A StorageClass's parameters can't change
   # in place, so a running cluster deletes its StorageClass once for this (rebuild runbook,

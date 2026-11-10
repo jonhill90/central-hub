@@ -7,7 +7,7 @@
 #   c1-restore-volumes.sh check     prove the restore is still in place (the rebuild's checks stage)
 #
 # Every restic call has --no-lock, so nothing is written to the repository, and the node signs in
-# as a read-only identity, so nothing could be (agent pick 202).
+# as a read-only identity, so nothing could be (agent pick 205).
 #
 # Each volume is the folder <RESTORE_PATH>/<namespace>/<claim>: local-path's pathPattern on c1 and
 # dev (apps/local-path). A snapshot taken before that change holds pvc-<uid>_<namespace>_<claim>
