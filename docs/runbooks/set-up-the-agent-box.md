@@ -115,6 +115,32 @@ There are two wrappers. `ci-runner plan|apply|configure|destroy` builds the note
 
 7. Guard test: the owner sends each blocked line from their phone, as for the rehearsal (PLAN step 12). Each must be refused.
 
+## The agents' GitHub App
+
+The box holds the private key of the GitHub App "Central Hub Agents". Wrappers use it to mint one-hour installation tokens, so the agents act on GitHub under the App's own name instead of the owner's account. Today the only user is `ci-runner configure`. It mints a runner registration token for agent-notebook ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md), tested 2026-11-10). Cloud sessions don't use the App.
+
+The owner sets it up once, in GitHub's web UI:
+
+1. Register the App on the owner's account. Turn off the webhook and OAuth, and allow installs only on that account.
+   why: nothing listens for events, and the App acts only as itself, never on the owner's behalf.
+2. Give it repository permissions only:
+   - Contents: read and write.
+   - Pull requests: read and write.
+   - Checks: read.
+   - Actions: read.
+   - Metadata: read.
+   - Administration: write. GitHub requires it to create runner registration tokens, and the wrapper narrows each token to one repository and that one permission.
+
+   Leave out Workflows, so a push that changes `.github/workflows/` is refused (rule 5). Leave out Secrets, Environments and Deployments too.
+   why: least privilege. A permission added later must be accepted again on the installation.
+3. Install it on the owner's account with "Only select repositories": central-hub, inpara, agent-notebook and obsidian-graph-3d. Add the App to no ruleset bypass list.
+   why: `main` stays protected, so the App merges and accepts nothing (rules 1 and 2).
+4. Generate a private key, then put it on the box from the Mac with `agent-box-keys.sh put-github-app` ([allow-a-command-for-agents.md](allow-a-command-for-agents.md)). It lands as `/etc/agent-keys/github-app.pem`, owned by `keys`, mode 0600, and is never read, printed or copied anywhere else.
+5. Put the App's ID in the private inventory, as `github_app_id` in `agent_box_ci_runner` ([hosts.example.yml](../../hosts/ansible/inventories/home/hosts.example.yml)), then run step 2 of the CI runner runbook.
+   expect: `ci-runner configure` registers the runner. If the App is not installed on the repository, the wrapper says so by name ("If it fails" in the CI runner runbook).
+
+Exit: uninstall the App and delete it in GitHub's settings, then delete `/etc/agent-keys/github-app.pem`.
+
 ## If it fails
 
 - `visudo` rejects the sudoers file: the task fails and the old file stays; nothing else in sudo changes.
