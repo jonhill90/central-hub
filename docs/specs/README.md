@@ -76,3 +76,4 @@ The agent that writes the code does not edit the acceptance criteria in the same
 | [Give the home lab its own certificate authority that survives rebuilds](2026-11-lab-pki.md) | proposed | 2026-11-08 |
 | [Let c1's backups sign in to Azure with c1's own service-account tokens, so nothing has to renew a token](2026-11-c1-backups-without-a-renewed-token.md) | proposed | 2026-11-09 |
 | [Pass the Activation gate, so a cluster may read central-hub](2026-10-activation-gate.md) | proposed | 2026-10-28 |
+| [Rebuild c1 on its permanent choices and restore its apps from backup](2026-11-c1-rebuild.md) | proposed | 2026-11-11 |
