@@ -24,5 +24,5 @@ Should a repository keep its documentation and its knowledge in one store or two
 
 ## Limits
 
-- No published source sets the folders of a knowledge store inside a code repository. The `docs/knowledge/` layout comes from the owner's own method, the organization standard, and is not tested by outside research.
+- No published source sets the folders of a knowledge store inside a code repository. The choice of one kind folder, `docs/explanations/`, over a second layout under `docs/` rests on finding 1 and the owner's picks, not on a test.
 - The findability test ran on this project's own content, at its current size.

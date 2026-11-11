@@ -23,8 +23,10 @@ These rules fit the current stage, while Jon does every step himself so he under
 
 Before saving anything, ask D-0026's store test: is it about this repository's system, saying why it is so, what it is, or how to run or change it?
 
-- **Yes:** it is documentation. It goes in `docs/` here, in the kind folder D-0012 gives (runbook, decision, spec, standard), by pull request. A runbook people follow belongs here even when an agent wrote it while learning.
-- **No:** it is what agents learned (research, measurements, notes, thinking). It goes in the agent notebook, `jonhill90/agent-notebook`, which may link to the doc here but never copies its steps.
+- **Yes:** it is documentation. It goes in `docs/` here, in the kind folder D-0012 gives (runbook, decision, spec, standard, evidence, or `explanations/` for how a part works and what building it taught us), by pull request. A runbook people follow belongs here even when an agent wrote it while learning.
+- **No, or still working material** (research, measurements, notes, thinking): it goes in the agent notebook, `jonhill90/agent-notebook`, which is private.
+
+This repository holds the public, polished version. A notebook finding about this system gets its page here once it is measured or sourced, by a pull request Jon sees. A page here carries its own sources and never links into the notebook; the notebook may link here and never copies the steps (D-0026).
 
 When you do work on this system, its doc here is part of the work: a change that alters how to run or rebuild something updates the runbook in the same PR.
 
