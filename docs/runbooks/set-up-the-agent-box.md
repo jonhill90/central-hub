@@ -174,7 +174,7 @@ rebuild teardown    only the teardown
 - The role installs Ansible 2.21.5 in its own virtual environment under the wrapper folder, and the collections pinned in `hosts/ansible/requirements.yml`. Run the role's `wrappers` tag to install them.
 - What the wrapper does not make, and stops without if it is missing:
   - the dev inventory, a private folder at `/etc/agent-keys/rebuild-dev/inventory`, which has to be put there through the keys wrapper; its node SSH key path and the node public key in `dev-vms.tfvars` must be a pair;
-  - a guard that checks every inventory host's `ansible_host` against the node addresses in `dev-vms.tfvars` before any stage runs, so the wrapper refuses an inventory that names a prod node;
+  - a guard that runs before any stage: the node addresses in `dev-vms.tfvars` must sit in the dev VLAN (VLAN 30 in `vlans.yml`), and every inventory host must be one of them, reached by plain ssh to `ansible_host`, with no proxy, extra ssh arguments or other connection type;
   - for the `restore` stage, access to Azure for prod's newest backup, which the box doesn't have yet;
   - the Proxmox `/vms` ACLs after a teardown, which need a root step on the host (`agent-access.sh`) that the agents can't run themselves.
 

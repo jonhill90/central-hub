@@ -36,27 +36,45 @@ done
 [[ -d $inventory ]] || { echo "rebuild: the dev inventory $inventory is missing (docs/runbooks/set-up-the-agent-box.md, 'Rebuild dev from the box')" >&2; exit 1; }
 [[ -x $libexec/ansible-venv/bin/ansible-playbook ]] || { echo "rebuild: Ansible is not installed; run the agent_box role" >&2; exit 1; }
 
-# Every inventory host must be a dev node: its ansible_host has to be one of the addresses in the
-# dev tfvars. Without this, once SSH from the box to prod nodes is open, only key refusal would
-# keep kubeadm off prod. Nothing is printed except the count and a refused address.
-mapfile -t dev_addrs < <(grep -oE '^[^#]*address[[:space:]]*=[[:space:]]*"[0-9.]+"' "$keys/dev-vms.tfvars" | grep -oE '"[0-9.]+"' | tr -d '"')
-[[ ${#dev_addrs[@]} -gt 0 ]] || { echo "rebuild: no node addresses found in dev-vms.tfvars" >&2; exit 1; }
-mapfile -t inv_hosts < <(ansible-inventory -i "$inventory/" --list | python3 -I -c '
-import json, sys
-d = json.load(sys.stdin)
-for h, v in d.get("_meta", {}).get("hostvars", {}).items():
-    print(v.get("ansible_host", h))')
-[[ ${#inv_hosts[@]} -gt 0 ]] || { echo "rebuild: the dev inventory lists no hosts" >&2; exit 1; }
-for h in "${inv_hosts[@]}"; do
-  printf '%s\n' "${dev_addrs[@]}" | grep -qxF -- "$h" \
-    || { echo "rebuild: inventory host $h is not a node address in dev-vms.tfvars; refusing" >&2; exit 1; }
-done
-echo "rebuild: ${#inv_hosts[@]} inventory hosts, all dev node addresses"
-
 # Only reviewed code on main runs with the keys, never a checkout a session can edit.
 git -C "$repo" fetch --quiet origin main
 git -C "$repo" checkout --quiet --detach origin/main
 echo "rebuild: central-hub $(git -C "$repo" rev-parse --short HEAD)"
+
+# Dev only, checked on the code just checked out: every node address in dev-vms.tfvars must sit in
+# the dev VLAN (VLAN 30, from vlans.yml), and every inventory host must be one of those addresses,
+# reached by plain ssh to ansible_host. Hosts that set another connection, a proxy or extra ssh
+# arguments are refused. Nothing is printed except the count or the refused host.
+ansible-inventory -i "$inventory/" --list | python3 -I -c "$(cat <<'PY'
+import ipaddress, json, re, sys
+tfvars, vlans = sys.argv[1], sys.argv[2]
+def die(m):
+    print("rebuild: " + m, file=sys.stderr); sys.exit(1)
+import yaml
+dev = [v["cidr"] for v in yaml.safe_load(open(vlans))["lab_vlans"] if v["id"] == 30]
+if len(dev) != 1: die("vlans.yml has no single VLAN 30")
+net = ipaddress.ip_network(dev[0])
+addrs = set()
+for line in open(tfvars):
+    line = re.sub(r"(//|#).*", "", line)
+    for a in re.findall(r'\baddress\s*=\s*"([^"]+)"', line):
+        try: ip = ipaddress.ip_address(a)
+        except ValueError: die("bad node address in dev-vms.tfvars")
+        if ip not in net: die("a node address in dev-vms.tfvars is outside the dev VLAN; refusing")
+        addrs.add(a)
+if not addrs: die("no node addresses found in dev-vms.tfvars")
+inv = json.load(sys.stdin)
+hv = inv.get("_meta", {}).get("hostvars", {})
+if not hv: die("the dev inventory lists no hosts")
+bad = ("ansible_ssh_host", "ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args",
+       "ansible_ssh_executable", "ansible_ssh_pipelining_proxy")
+for h, v in hv.items():
+    if v.get("ansible_host") not in addrs: die("inventory host %s is not a dev node address; refusing" % h)
+    if v.get("ansible_connection", "ssh") != "ssh": die("inventory host %s uses a connection other than ssh; refusing" % h)
+    if any(k in v for k in bad): die("inventory host %s sets ssh host, proxy or extra arguments; refusing" % h)
+print("rebuild: %d inventory hosts, all dev node addresses" % len(hv))
+PY
+)" "$keys/dev-vms.tfvars" "$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml" || exit 1
 
 mkdir -p "$envdir" "$work/state"
 chmod 700 "$envdir"
