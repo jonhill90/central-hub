@@ -19,6 +19,9 @@ agent_box_wrappers:
     args: [plan, apply, destroy]
   - name: ci-runner
     args: [plan, apply, configure, destroy]
+  # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself.
+  - name: pr-merge
+    args: ["check *", "merge *"]
 
 # OpenTofu for the wrappers, the same version CI uses (.github/hosts-check/install-tools.sh),
 # checked against the release's SHA256SUMS.
