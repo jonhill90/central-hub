@@ -151,7 +151,7 @@ pr-merge merge jonhill90/<repo> <pr number> <40-character head>
 ```
 
 - It works only on the project's four repositories, and only with the full 40-character head the reviewer named. GitHub refuses the merge if the head moved since the check.
-- Green is [D-0031](../decisions/0031-let-agents-merge-green-prs.md) rule 1: the pull request is open and not a draft, GitHub reports a clean merge, and every check on the head has passed, none pending, and the wrapper read all of them. A check counts as passed only if it succeeded or its workflow skipped it.
+- Green is [D-0031](../decisions/0031-let-agents-merge-green-prs.md) rule 1: the pull request is open and not a draft, GitHub's merge state is `clean` or `has_hooks` (so `unstable`, `blocked`, `behind` and `dirty` all stop it), and every check on the head has passed, none pending, and the wrapper read all of them. A check counts as passed only if it succeeded or its workflow skipped it.
 - It refuses, with exit code 3, any pull request that touches `docs/decisions/`, `docs/standards/`, `docs/specs/`, `CLAUDE.md` or `AGENTS.md`. Those need the owner's named approval (D-0031 rules 3 and 4), which the wrapper can't check, so the owner's lane merges them.
 - It squash-merges only. It never deletes a branch and never enables auto-merge.
 - The App needs the repository permissions Contents (write), Pull requests (write) and Checks (read). Commit statuses (read) are used when the installation has accepted them; without it the wrapper says so and checks only the check runs, which is what GitHub Actions reports. If the other three are missing, it stops.

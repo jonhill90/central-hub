@@ -69,7 +69,12 @@ mint() {
     python3 -I -c 'import json,sys; print(json.load(sys.stdin)["token"])'
 }
 have_status=1
-tok=$(mint '{"contents":"write","pull_requests":"write","checks":"read","statuses":"read"}' 2>/dev/null) || {
+errf=$(mktemp "$work/state/pr-merge-err.XXXXXX")
+trap 'rm -f "$errf"' EXIT
+tok=$(mint '{"contents":"write","pull_requests":"write","checks":"read","statuses":"read"}' 2>"$errf") || {
+  # Only a 422 from GitHub means a permission was not accepted; any other failure (network, 5xx,
+  # a bad key) stops here instead of quietly dropping the status check.
+  grep -q 'returned 422' "$errf" || { cat "$errf" >&2; echo "pr-merge: no installation token" >&2; exit 1; }
   have_status=0
   tok=$(mint '{"contents":"write","pull_requests":"write","checks":"read"}') ||
     { echo "pr-merge: no installation token (has the installation accepted contents and pull requests write, and checks read?)" >&2; exit 1; }
@@ -81,7 +86,7 @@ base=https://api.github.com/repos/$full
 # The JSON goes to python through files in a private folder, not as arguments, so a large pull
 # request can't hit the argument size limit.
 tmp=$(mktemp -d "$work/state/pr-merge.XXXXXX")
-trap 'rm -rf "$tmp"' EXIT
+trap 'rm -rf "$tmp" "$errf"' EXIT
 gh "$base/pulls/$pr" > "$tmp/pr.json"
 gh "$base/pulls/$pr/files?per_page=100" > "$tmp/files.json"
 gh "$base/commits/$head/check-runs?per_page=100" > "$tmp/checks.json"
@@ -96,8 +101,8 @@ why = []
 if pr.get("state") != "open": why.append("PR is not open")
 if pr.get("draft"): why.append("PR is a draft")
 if pr["head"]["sha"] != head: why.append("head is %s, not the one named" % pr["head"]["sha"][:7])
-if pr.get("mergeable") is not True or pr.get("mergeable_state") == "dirty":
-    why.append("GitHub reports no clean merge (mergeable=%s, state=%s)" % (pr.get("mergeable"), pr.get("mergeable_state")))
+if pr.get("mergeable") is not True or pr.get("mergeable_state") not in ("clean", "has_hooks"):
+    why.append("GitHub does not report a clean merge (mergeable=%s, state=%s)" % (pr.get("mergeable"), pr.get("mergeable_state")))
 if len(files) >= 100: why.append("100 or more changed files; not checked")
 guarded = [f["filename"] for f in files
            if f["filename"].startswith(("docs/decisions/", "docs/standards/", "docs/specs/")) or f["filename"] in ("CLAUDE.md", "AGENTS.md")]
