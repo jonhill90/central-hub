@@ -59,26 +59,39 @@ jwt="$jwt.$(printf '%s' "$jwt" | openssl dgst -sha256 -sign "$keys/github-app.pe
 inst=$(BEARER=$jwt api "https://api.github.com/repos/$full/installation" |
   python3 -I -c 'import json,sys; print(json.load(sys.stdin)["id"])') ||
   { echo "pr-merge: no App installation on $full" >&2; exit 1; }
-# Cut down to this one repository and the four permissions a merge needs.
-perms='{"contents":"write","pull_requests":"write","checks":"read","statuses":"read"}'
-tok=$(BEARER=$jwt api -X POST \
-  -d "{\"repositories\":[\"$name\"],\"permissions\":$perms}" \
-  "https://api.github.com/app/installations/$inst/access_tokens" |
-  python3 -I -c 'import json,sys; print(json.load(sys.stdin)["token"])') ||
-  { echo "pr-merge: no installation token (has the installation accepted contents and pull requests write?)" >&2; exit 1; }
+# Cut down to this one repository and the permissions a merge needs. Commit statuses are asked
+# for first and dropped if the installation has not accepted them: GitHub Actions reports check
+# runs, and only older tools report statuses.
+mint() {
+  BEARER=$jwt api -X POST \
+    -d "{\"repositories\":[\"$name\"],\"permissions\":$1}" \
+    "https://api.github.com/app/installations/$inst/access_tokens" |
+    python3 -I -c 'import json,sys; print(json.load(sys.stdin)["token"])'
+}
+have_status=1
+tok=$(mint '{"contents":"write","pull_requests":"write","checks":"read","statuses":"read"}' 2>/dev/null) || {
+  have_status=0
+  tok=$(mint '{"contents":"write","pull_requests":"write","checks":"read"}') ||
+    { echo "pr-merge: no installation token (has the installation accepted contents and pull requests write, and checks read?)" >&2; exit 1; }
+  echo "pr-merge: the installation has not accepted Commit statuses (read); legacy statuses are not checked" >&2
+}
 gh() { BEARER=$tok api "$@"; }
 base=https://api.github.com/repos/$full
 
-pr_json=$(gh "$base/pulls/$pr")
-files_json=$(gh "$base/pulls/$pr/files?per_page=100")
-checks_json=$(gh "$base/commits/$head/check-runs?per_page=100")
-status_json=$(gh "$base/commits/$head/status")
+# The JSON goes to python through files in a private folder, not as arguments, so a large pull
+# request can't hit the argument size limit.
+tmp=$(mktemp -d "$work/state/pr-merge.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+gh "$base/pulls/$pr" > "$tmp/pr.json"
+gh "$base/pulls/$pr/files?per_page=100" > "$tmp/files.json"
+gh "$base/commits/$head/check-runs?per_page=100" > "$tmp/checks.json"
+if [[ $have_status == 1 ]]; then gh "$base/commits/$head/status" > "$tmp/status.json"; else echo '{}' > "$tmp/status.json"; fi
 
 # The verdict is decided in one place so check and merge can't disagree.
-verdict=$(python3 -I - "$head" "$pr_json" "$files_json" "$checks_json" "$status_json" <<'PY'
+verdict=$(python3 -I - "$head" "$tmp" <<'PY'
 import json, sys
-head = sys.argv[1]
-pr, files, checks, status = (json.loads(a) for a in sys.argv[2:6])
+head, tmp = sys.argv[1], sys.argv[2]
+pr, files, checks, status = (json.load(open("%s/%s.json" % (tmp, n))) for n in ("pr", "files", "checks", "status"))
 why = []
 if pr.get("state") != "open": why.append("PR is not open")
 if pr.get("draft"): why.append("PR is a draft")
