@@ -6,7 +6,7 @@
 # check: reads the pull request and prints whether it is green; changes nothing.
 # merge: does the same checks, then squash-merges pinned to HEAD_SHA. GitHub refuses the merge if
 # the head moved after the check.
-# Refuses (exit 3) any pull request that touches decision records, standards, CLAUDE.md or
+# Refuses (exit 3) any pull request that touches decision records, standards, specs, CLAUDE.md or
 # AGENTS.md: those need the owner's named approval (D-0031 rules 3 and 4), so the owner's lane merges them.
 # It does not delete the branch (the repositories delete merged branches themselves) and never
 # enables auto-merge.
@@ -36,10 +36,13 @@ app_id=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["git
 
 b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 
-# One GitHub API call. On an error it prints the status and GitHub's message (never a token) and fails.
+# One GitHub API call, with the bearer token in BEARER. The token goes to curl as a config line on
+# stdin, never as an argument, because any local user can read arguments from /proc/<pid>/cmdline.
+# On an error it prints the status and GitHub's message (never a token) and fails.
 api() {
   local out code
-  out=$(curl -sS -w '\n%{http_code}' -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$@") || return 1
+  out=$(printf 'header = "Authorization: Bearer %s"\n' "$BEARER" |
+    curl -sS -K - -w '\n%{http_code}' -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$@") || return 1
   code=${out##*$'\n'}
   out=${out%$'\n'*}
   if [[ $code != 2* ]]; then
@@ -53,17 +56,17 @@ api() {
 now=$(date +%s)
 jwt="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url).$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((now - 60)) $((now + 540)) "$app_id" | b64url)"
 jwt="$jwt.$(printf '%s' "$jwt" | openssl dgst -sha256 -sign "$keys/github-app.pem" | b64url)"
-inst=$(api -H "Authorization: Bearer $jwt" "https://api.github.com/repos/$full/installation" |
+inst=$(BEARER=$jwt api "https://api.github.com/repos/$full/installation" |
   python3 -I -c 'import json,sys; print(json.load(sys.stdin)["id"])') ||
   { echo "pr-merge: no App installation on $full" >&2; exit 1; }
 # Cut down to this one repository and the four permissions a merge needs.
 perms='{"contents":"write","pull_requests":"write","checks":"read","statuses":"read"}'
-tok=$(api -X POST -H "Authorization: Bearer $jwt" \
+tok=$(BEARER=$jwt api -X POST \
   -d "{\"repositories\":[\"$name\"],\"permissions\":$perms}" \
   "https://api.github.com/app/installations/$inst/access_tokens" |
   python3 -I -c 'import json,sys; print(json.load(sys.stdin)["token"])') ||
   { echo "pr-merge: no installation token (has the installation accepted contents and pull requests write?)" >&2; exit 1; }
-gh() { api -H "Authorization: Bearer $tok" "$@"; }
+gh() { BEARER=$tok api "$@"; }
 base=https://api.github.com/repos/$full
 
 pr_json=$(gh "$base/pulls/$pr")
@@ -84,15 +87,16 @@ if pr.get("mergeable") is not True or pr.get("mergeable_state") == "dirty":
     why.append("GitHub reports no clean merge (mergeable=%s, state=%s)" % (pr.get("mergeable"), pr.get("mergeable_state")))
 if len(files) >= 100: why.append("100 or more changed files; not checked")
 guarded = [f["filename"] for f in files
-           if f["filename"].startswith(("docs/decisions/", "docs/standards/")) or f["filename"] in ("CLAUDE.md", "AGENTS.md")]
+           if f["filename"].startswith(("docs/decisions/", "docs/standards/", "docs/specs/")) or f["filename"] in ("CLAUDE.md", "AGENTS.md")]
 if guarded:
     print("OWNER: touches " + ", ".join(guarded[:3]) + "; needs the owner's named approval (D-0031 rules 3, 4)")
     sys.exit(0)
 runs = checks.get("check_runs", [])
+if checks.get("total_count", len(runs)) != len(runs): why.append("read %d of %d check runs; not checked" % (len(runs), checks["total_count"]))
 if not runs and not status.get("statuses"): why.append("no checks reported on this head")
 for r in runs:
     if r["status"] != "completed": why.append("check %s is %s" % (r["name"], r["status"]))
-    elif r["conclusion"] not in ("success", "skipped", "neutral"): why.append("check %s: %s" % (r["name"], r["conclusion"]))
+    elif r["conclusion"] not in ("success", "skipped"): why.append("check %s: %s" % (r["name"], r["conclusion"]))
 if status.get("statuses") and status.get("state") != "success": why.append("commit status is %s" % status.get("state"))
 print("NOT GREEN: " + "; ".join(why) if why else "GREEN")
 PY

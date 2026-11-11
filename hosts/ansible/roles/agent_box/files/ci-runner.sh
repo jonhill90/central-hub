@@ -85,28 +85,31 @@ registration_token() {
   now=$(date +%s)
   jwt="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url).$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((now - 60)) $((now + 540)) "$app_id" | b64url)"
   jwt="$jwt.$(printf '%s' "$jwt" | openssl dgst -sha256 -sign "$keys/github-app.pem" | b64url)"
-  inst=$(api -H "Authorization: Bearer $jwt" "https://api.github.com/repos/$owner/$name/installation" | field id) ||
+  inst=$(BEARER=$jwt api "https://api.github.com/repos/$owner/$name/installation" | field id) ||
     {
       # GET /app works with any valid JWT, so it tells a wrong ID or key from a missing install.
-      if api -H "Authorization: Bearer $jwt" "https://api.github.com/app" >/dev/null; then
+      if BEARER=$jwt api "https://api.github.com/app" >/dev/null; then
         echo "ci-runner: the App's ID and key work, but the App is not installed on $owner/$name" >&2
       else
         echo "ci-runner: GitHub refused the App's ID or key" >&2
       fi
       return 1
     }
-  tok=$(api -X POST -H "Authorization: Bearer $jwt" \
+  tok=$(BEARER=$jwt api -X POST \
     -d "{\"repositories\":[\"$name\"],\"permissions\":{\"administration\":\"write\"}}" \
     "https://api.github.com/app/installations/$inst/access_tokens" | field token) ||
     { echo "ci-runner: no installation token (has the installation accepted Administration: write?)" >&2; return 1; }
-  api -X POST -H "Authorization: Bearer $tok" "https://api.github.com/repos/$owner/$name/actions/runners/registration-token" |
+  BEARER=$tok api -X POST "https://api.github.com/repos/$owner/$name/actions/runners/registration-token" |
     field token
 }
 
-# One GitHub API call. On an error it prints the status and GitHub's message (never a token) and fails.
+# One GitHub API call, with the bearer token in BEARER. The token goes to curl as a config line on
+# stdin, never as an argument, because any local user can read arguments from /proc/<pid>/cmdline.
+# On an error it prints the status and GitHub's message (never a token) and fails.
 api() {
   local out code
-  out=$(curl -sS -w '\n%{http_code}' -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$@") || return 1
+  out=$(printf 'header = "Authorization: Bearer %s"\n' "$BEARER" |
+    curl -sS -K - -w '\n%{http_code}' -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$@") || return 1
   code=${out##*$'\n'}
   out=${out%$'\n'*}
   if [[ $code != 2* ]]; then
