@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Import realm lab into a real Keycloak and check what lab apps will get from it (STD-0005 level 3).
+# Import realm home into a real Keycloak and check what lab apps will get from it (STD-0005 level 3).
 # Runs Keycloak in one container with the settings the operator gives it on c1 (hostname, plain
 # HTTP behind a proxy, X-Forwarded headers), imports the rendered realm, then checks with Keycloak's
 # own admin tool: every client and redirect, each user's password, the groups and roles claims in
@@ -56,9 +56,9 @@ python3 -I "$here/check_realm.py" "$work/lab.json"
 # The replace path the role takes when the realm changes: the role's own delete script, inside the
 # container as on c1, then the same file imported again (the operator imports with kc.sh import;
 # the admin API takes the same JSON).
-out=$(docker exec -i "$name" bash -s lab < "$root/hosts/ansible/roles/k8s_identity/files/delete-realm.sh")
+out=$(docker exec -i "$name" bash -s home < "$root/hosts/ansible/roles/k8s_identity/files/delete-realm.sh")
 [ "$out" = deleted ] || { echo "FAIL: delete-realm.sh printed '$out', not 'deleted'" >&2; exit 1; }
-out=$(docker exec -i "$name" bash -s lab < "$root/hosts/ansible/roles/k8s_identity/files/delete-realm.sh")
+out=$(docker exec -i "$name" bash -s home < "$root/hosts/ansible/roles/k8s_identity/files/delete-realm.sh")
 [ -z "$out" ] || { echo "FAIL: delete-realm.sh on a missing realm printed '$out'" >&2; exit 1; }
 docker cp "$work/lab.json" "$name:/tmp/lab.json"
 kc create realms -f /tmp/lab.json

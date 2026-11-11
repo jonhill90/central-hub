@@ -4,7 +4,7 @@ status: draft
 kind: automated
 trigger: on request; at a lab rebuild, after c1 has its HTTPS Gateway and volumes
 runner: an agent lane, through the owner's Mac (D-0022)
-outcome: External Secrets and store c1, metrics and logs with Grafana, Keycloak with realm lab, and Jellyfin all run on c1 and answer at their names, ready for Argo CD to take over
+outcome: External Secrets and store c1, metrics and logs with Grafana, Keycloak with realm home, and Jellyfin all run on c1 and answer at their names, ready for Argo CD to take over
 needs: c1 from build-c1-with-ansible.md, with volumes; the HTTPS Gateway from issue-c1-app-certificate.md
 private-values: [k8s_observability_zone, k8s_identity_zone, k8s_identity_owner_username, k8s_identity_owner_email, k8s_jellyfin_zone]
 files: [hosts/ansible/playbooks/k8s-secrets.yml, hosts/ansible/playbooks/k8s-observability.yml, hosts/ansible/playbooks/k8s-identity.yml, hosts/ansible/playbooks/k8s-jellyfin.yml]
@@ -20,7 +20,7 @@ This is how c1's add-ons and apps get installed today. The target state is that 
 
 ```mermaid
 flowchart LR
-  s["1 secrets<br/>ESO + store c1"] --> o["2 metrics + logs<br/>Grafana"] --> i["3 Keycloak<br/>realm lab"] --> g["4 Grafana SSO"] --> j["5 Jellyfin"]
+  s["1 secrets<br/>ESO + store c1"] --> o["2 metrics + logs<br/>Grafana"] --> i["3 Keycloak<br/>realm home"] --> g["4 Grafana SSO"] --> j["5 Jellyfin"]
 ```
 
 ## Before you start
@@ -53,15 +53,15 @@ Run from `hosts/ansible/`, each first with `--check --diff`.
    why: metrics-server for `kubectl top`, kube-prometheus-stack and Grafana in `monitoring`, Loki and Alloy in `logging` ([hosts/ansible/README.md, Metrics and logs on c1](../../hosts/ansible/README.md#metrics-and-logs-on-c1)); every part is an agent pick.
    expect: the proof shows `kubectl top`, Prometheus's targets and Loki log lines from `kube-system`; `https://grafana.apps.c1.prod.<zone>/` answers.
 
-3. Sign-in: the Keycloak operator, its database, Keycloak and realm `lab`, then its route.
+3. Sign-in: the Keycloak operator, its database, Keycloak and realm `home`, then its route.
 
    ```sh
    ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags operator,secrets,database
    ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags keycloak,route
    ```
 
-   why: one sign-in for lab apps over OIDC ([D-0025](../decisions/0025-use-keycloak-behind-oidc-for-sign-in-to-lab-apps-on-c1.md)). PR #69 changes this role: realm `lab` becomes all code, with every password and client secret in the git-ignored `inventories/home/identity.env`, and runbook `set-up-lab-sign-in.md` replaces this step once it merges.
-   expect: the realm's OIDC discovery document answers at `https://sso.apps.c1.prod.<zone>/realms/lab/.well-known/openid-configuration`.
+   why: one sign-in for lab apps over OIDC ([D-0025](../decisions/0025-use-keycloak-behind-oidc-for-sign-in-to-lab-apps-on-c1.md)). PR #69 changes this role: realm `home` becomes all code, with every password and client secret in the git-ignored `inventories/home/identity.env`, and runbook `set-up-lab-sign-in.md` replaces this step once it merges.
+   expect: the realm's OIDC discovery document answers at `https://sso.apps.c1.prod.<zone>/realms/home/.well-known/openid-configuration`.
 
 4. Grafana signs in through Keycloak. Set `k8s_observability_grafana_sso: true` in the inventory, then:
 
@@ -69,8 +69,8 @@ Run from `hosts/ansible/`, each first with `--check --diff`.
    ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics,proof
    ```
 
-   why: Grafana gets a "Lab sign-in" button; users with the realm role `admin` become Grafana Admins ([hosts/ansible/README.md, Sign-in on c1](../../hosts/ansible/README.md#sign-in-on-c1)).
-   expect: the owner signs in to Grafana with "Lab sign-in" and sets a new password when Keycloak asks.
+   why: Grafana gets a "Home sign-in" button; users with the realm role `admin` become Grafana Admins ([hosts/ansible/README.md, Sign-in on c1](../../hosts/ansible/README.md#sign-in-on-c1)).
+   expect: the owner signs in to Grafana with "Home sign-in" and sets a new password when Keycloak asks.
 
 5. Jellyfin.
 

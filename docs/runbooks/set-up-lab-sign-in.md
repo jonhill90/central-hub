@@ -4,7 +4,7 @@ status: tested
 kind: automated
 trigger: on request; again after any change to role k8s_identity or the values file
 runner: the owner, or an agent lane with cluster-admin on c1
-outcome: realm lab in Keycloak matches the code; Grafana, Argo CD and Jellyfin each have their client and their client secret in their own namespace; every user signs in with the password in the values file
+outcome: realm home in Keycloak matches the code; Grafana, Argo CD and Jellyfin each have their client and their client secret in their own namespace; every user signs in with the password in the values file
 needs: the filled-in inventory, SSH to the c1 control plane, HTTPS on Gateway apps (playbooks/k8s-gateway.yml, k8s-certs.yml)
 private-values: [k8s_identity_zone, k8s_identity_owner_username, k8s_identity_owner_email, PASSWORD_USER_NAME, GRAFANA_CLIENT_SECRET, ARGOCD_CLIENT_SECRET, JELLYFIN_CLIENT_SECRET]
 files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/ansible/roles/k8s_identity/, ~/.config/central-hub/identity.env]
@@ -14,17 +14,17 @@ superseded-by:
 
 # Set up sign-in for lab apps on c1
 
-Realm `lab` in Keycloak is code: its groups, users and the OIDC clients of every lab app are in `hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2`, and every password and client secret is a line in `~/.config/central-hub/identity.env` on the machine that runs Ansible, outside the repository. This runbook applies them to c1. Run it from `hosts/ansible` in the lab clone.
+Realm `home` in Keycloak is code: its groups, users and the OIDC clients of every lab app are in `hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2`, and every password and client secret is a line in `~/.config/central-hub/identity.env` on the machine that runs Ansible, outside the repository. This runbook applies them to c1. Run it from `hosts/ansible` in the lab clone.
 
 ```mermaid
 flowchart LR
-  env["~/.config/central-hub/identity.env<br/>(on the controller, outside the repo)"] --> s1["identity/realm-lab-secrets"]
+  env["~/.config/central-hub/identity.env<br/>(on the controller, outside the repo)"] --> s1["identity/realm-home-secrets"]
   env --> g["monitoring/grafana-sso"]
   env --> a["argocd/argocd-sso"]
   env --> j["media/jellyfin-sso"]
-  code["realm.yaml.j2<br/>(groups, users, clients)"] --> imp["KeycloakRealmImport realm-lab"]
+  code["realm.yaml.j2<br/>(groups, users, clients)"] --> imp["KeycloakRealmImport realm-home"]
   s1 --> imp
-  imp --> kc["Keycloak realm lab"]
+  imp --> kc["Keycloak realm home"]
   kc --> Grafana & ArgoCD["Argo CD"] & Jellyfin
 ```
 
@@ -35,7 +35,7 @@ flowchart LR
 | `argocd-cli` | public, PKCE S256 | `http://localhost:8085/auth/callback` | none (public) |
 | `jellyfin` | confidential | `https://jellyfin.apps.c1.prod.<zone>/sso/OID/redirect/keycloak` and `/sso/OID/r/keycloak` | `media/jellyfin-sso`, key `client-secret` |
 
-Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `groups` (`lab-admins`, `lab-viewers`) and `roles` (`admin`, `viewer`).
+Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/home`. Claims: `groups` (`home-admins`, `home-viewers`) and `roles` (`admin`, `viewer`).
 
 ## Before you start
 
@@ -51,15 +51,15 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
    ※ `hosts/AGENT-PICKS.md` pick 154.
    expect: `identity.env` exists, mode 0600, with `GRAFANA_CLIENT_SECRET`, `ARGOCD_CLIENT_SECRET`, `JELLYFIN_CLIENT_SECRET` and one `PASSWORD_<USER NAME>` per user.
 2. Apply: `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,keycloak`
-   why: the Secrets are made from the values file, then the realm import. When the import differs from the one on c1, the role deletes realm `lab` in Keycloak (`files/delete-realm.sh`, inside the Keycloak pod) and imports it again, because a KeycloakRealmImport never updates a realm that exists. Open sessions end; nothing else is lost, since every part of the realm is code.
+   why: the Secrets are made from the values file, then the realm import. When the import differs from the one on c1, the role deletes realm `home` in Keycloak (`files/delete-realm.sh`, inside the Keycloak pod) and imports it again, because a KeycloakRealmImport never updates a realm that exists. Open sessions end; nothing else is lost, since every part of the realm is code.
    ※ `hosts/AGENT-PICKS.md` picks 153 and 157.
-   expect: `kubectl -n identity get keycloakrealmimport realm-lab` shows condition `Done` True; Grafana's pod restarts if its secret changed.
+   expect: `kubectl -n identity get keycloakrealmimport realm-home` shows condition `Done` True; Grafana's pod restarts if its secret changed.
 3. Run it again: same command as step 2.
    why: proves the run is idempotent.
    expect: `changed=0`.
-4. Sign in: open `https://grafana.<zone>/` (or `https://grafana.apps.c1.prod.<zone>/` without short names), choose "Lab sign-in", and sign in with your user name and the `PASSWORD_<USER NAME>` line from `identity.env`.
+4. Sign in: open `https://grafana.<zone>/` (or `https://grafana.apps.c1.prod.<zone>/` without short names), choose "Home sign-in", and sign in with your user name and the `PASSWORD_<USER NAME>` line from `identity.env`.
    why: proves the user, the password and Grafana's client end to end.
-   expect: Grafana opens with the Admin role for a member of `lab-admins`.
+   expect: Grafana opens with the Admin role for a member of `home-admins`.
 5. Argo CD and Jellyfin: once their own config points at the issuer and the secrets above (the c1 GitOps work owns `argocd-cm` and the Jellyfin plugin), sign in to each the same way.
    why: this role makes their clients and secrets; it doesn't configure the apps.
    expect: Argo CD shows your groups under "User info"; Jellyfin signs you in through the plugin's "Sign in with keycloak" button.
@@ -74,7 +74,7 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 
 ## If it fails
 
-- The realm import never reaches `Done`: `kubectl -n identity logs job/realm-lab` shows Keycloak's import error. Fix the template; CI's `identity` job reproduces most import errors without a cluster (`.github/hosts-check/run.sh identity`).
+- The realm import never reaches `Done`: `kubectl -n identity logs job/realm-home` shows Keycloak's import error. Fix the template; CI's `identity` job reproduces most import errors without a cluster (`.github/hosts-check/run.sh identity`).
 - The delete step fails to sign in: the operator's first admin account (Secret `identity/sso-initial-admin`) was removed or changed in Keycloak. Set `k8s_identity_realm_replace: false` to stop the delete, and tell the owner.
 - The operator step stops at "Upstream files, checked against their pinned sha256": upstream rebuilt or changed a file at the pinned tag. Don't just copy the new hash. Download the file at the tag, diff it against the pinned content (from the earlier download in `/root/central-hub/identity/operator/` on the control plane, which the next run overwrites, or the live objects on c1), and move the pin in `vars/main.yml` by pull request only when the diff is harmless, such as build annotations. Write what changed in the comment above the pins and in the pull request.
 - To undo: check out the previous commit of the role and run step 2; the realm is imported again from that code.

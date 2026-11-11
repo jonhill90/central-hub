@@ -142,7 +142,7 @@ all:
         k8s_observability_grafana_sso: false   # true after playbooks/k8s-identity.yml
         # Sign-in for lab apps (playbooks/k8s-identity.yml): https://sso.apps.c1.prod.<zone>/.
         k8s_identity_zone: "{{ k8s_gateway_zone }}"
-        k8s_identity_owner_username: ""      # the owner's account in realm lab
+        k8s_identity_owner_username: ""      # the owner's account in realm home
         k8s_identity_owner_email: ""         # optional
         # Jellyfin (playbooks/k8s-jellyfin.yml, BUILD-PATH S17): https://jellyfin.apps.c1.prod.<zone>/.
         k8s_jellyfin_zone: "{{ k8s_gateway_zone }}"

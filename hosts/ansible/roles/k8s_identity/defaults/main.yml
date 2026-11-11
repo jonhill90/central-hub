@@ -16,27 +16,27 @@ k8s_identity_name: sso
 # Private, no default; the inventory template sets it to k8s_gateway_zone.
 # k8s_identity_zone: <zone>
 
-# The realm lab apps sign in to.
-k8s_identity_realm: lab
+# The realm home apps sign in to.
+k8s_identity_realm: home
 
-# The owner's account in that realm, in group lab-admins. The user name is private, no default.
+# The owner's account in that realm, in group home-admins. The user name is private, no default.
 # Its password is in the values file below (key PASSWORD_<USER NAME>). The email is optional;
-# without one, Grafana uses <user name>@lab.invalid (k8s_observability).
+# without one, Grafana uses <user name>@home.invalid (k8s_observability).
 # k8s_identity_owner_username: <name>
 k8s_identity_owner_email: ""
 
-# More people in realm lab, beside the owner. Each item: username, optional email, and groups
-# (lab-admins or lab-viewers). Every user's password is a line in the values file below.
+# More people in realm home, beside the owner. Each item: username, optional email, and groups
+# (home-admins or home-viewers). Every user's password is a line in the values file below.
 k8s_identity_extra_users: []
 
 # The values file on the controller (the machine that runs Ansible), outside the repository next to
-# c1's encryption key (~/.config/central-hub/): every password and client secret in realm lab, one
+# c1's encryption key (~/.config/central-hub/): every password and client secret in realm home, one
 # KEY=value per line.
 # The role adds a random value for any key that is missing and never changes one that is there, so
 # the owner reads a password there and changes one by editing the file and running the role again.
 k8s_identity_values_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/central-hub/identity.env"
 
-# When the realm's code or a value in the file changes, delete realm lab and import it again
+# When the realm's code or a value in the file changes, delete realm home and import it again
 # (KeycloakRealmImport never updates a realm that exists). Sessions end; nothing else is lost,
 # because every part of the realm comes from this role. false: only create the realm once.
 k8s_identity_realm_replace: true
