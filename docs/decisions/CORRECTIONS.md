@@ -6,6 +6,14 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
+### Accepted with PR #171
+
+PR #171: approved 2026-11-11T03:18:16Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN24R63uS9wHRg7gQH9GknEB), head 1c4bc05; merged as 1860af0.
+
+- 2026-11-11 · D-0026 title, Context, options, Decision Outcome, Rules, Consequences, Confirmation and revisit-when; evidence 0026 limits line · polished explanations and lessons about this system go in one kind folder, `docs/explanations/`, instead of `docs/knowledge/`; working knowledge stays in the agent notebook; a page here is published once its finding is proven, by a pull request the owner sees, and never links into the notebook · the owner's message of 2026-11-10 at 21:52 UTC and his decision-card answers of 2026-11-11 at 02:18, 02:29 and 02:38 UTC
+- 2026-11-11 · D-0012 tree, rules 6 and 12; AGENTS.md "Docs or notebook?" · the same change: `explanations/` is a kind folder, and nothing here links into the notebook · the same messages
+- 2026-11-11 · D-0026 accepted-evidence · the facts of the approval above replace those of 2026-11-05 · this PR
+
 ### Accepted with PR #89 (D-0028 accepted, D-0030 parked)
 
 PR #89: approved 2026-11-08T23:15:11Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJy1cMgtyxSZNPLcvtSJaYU), head c962f15; merged as 99a2679. It also parks D-0030, as the owner's message of 2026-11-08T22:58:40Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN3pm9VMkokaWXswED1D5mcj, head 7b0a662) said. An earlier message of 2026-11-08T22:43:28Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNJL7ijWm7aGctQ7jZcLe7qK) had said both records are approved without naming a PR or head. The owner said every record gets re-checked at the rebuild.
