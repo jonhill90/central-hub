@@ -27,6 +27,8 @@ argument_specs:
           args: {type: list, elements: str, required: true, description: The only first arguments sudo allows.}
       agent_box_tofu_version: {type: str, description: OpenTofu version for the wrappers.}
       agent_box_tofu_sha256: {type: str, description: SHA-256 of the linux_amd64 zip of that version.}
+      agent_box_ansible_core_version: {type: str, description: ansible-core version in the rebuild wrapper's virtual environment.}
+      agent_box_httpx_version: {type: str, description: httpx version in that environment (the OPNsense modules need it).}
       agent_box_tailscale_version: {type: str, description: Tailscale client version.}
       agent_box_rhel_major: {type: int, description: "RHEL-family major version, for the Tailscale repository path."}
       agent_box_deny: {type: list, elements: str, description: permissions.deny in the managed settings.}

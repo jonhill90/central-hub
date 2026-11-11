@@ -275,6 +275,35 @@
     recurse: true
   tags: [wrappers]
 
+# --- Ansible for the rebuild wrapper -----------------------------------------------------------
+
+- name: Python's pip, for the Ansible virtual environment
+  ansible.builtin.package:
+    name: [python3-pip]
+    state: present
+  tags: [wrappers]
+
+- name: Ansible, in its own virtual environment so the system Python stays as it is
+  ansible.builtin.pip:
+    name:
+      - "ansible-core=={{ agent_box_ansible_core_version }}"
+      - "httpx=={{ agent_box_httpx_version }}"
+    virtualenv: "{{ agent_box_libexec_dir }}/ansible-venv"
+    virtualenv_command: python3 -m venv
+  when: not ansible_check_mode
+  tags: [wrappers]
+
+- name: The Ansible collections the playbooks pin, from the keys user's checkout
+  ansible.builtin.command:
+    cmd: >-
+      {{ agent_box_libexec_dir }}/ansible-venv/bin/ansible-galaxy collection install
+      -r {{ agent_box_work_dir }}/central-hub/hosts/ansible/requirements.yml
+      -p {{ agent_box_libexec_dir }}/collections
+  register: agent_box_collections
+  changed_when: "'was installed successfully' in agent_box_collections.stdout"
+  when: not ansible_check_mode
+  tags: [wrappers]
+
 - name: Wrappers, root-owned
   ansible.builtin.copy:
     src: "{{ item.name }}.sh"

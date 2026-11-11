@@ -22,11 +22,20 @@ agent_box_wrappers:
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself.
   - name: pr-merge
     args: ["check *", "merge *"]
+  # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
+  - name: rebuild
+    args: [up, rebuild, teardown]
 
 # OpenTofu for the wrappers, the same version CI uses (.github/hosts-check/install-tools.sh),
 # checked against the release's SHA256SUMS.
 agent_box_tofu_version: 1.13.1
 agent_box_tofu_sha256: 8ccbc6f8ee21d2827715f3c6e08a9b3e0209b1e62057c05067ef117e047c1a80
+
+# Ansible for the rebuild wrapper, in its own virtual environment so the box's system Python stays
+# as it is. The version is the one hosts/ansible/requirements.txt pins; the collections come from
+# hosts/ansible/requirements.yml of the keys user's checkout.
+agent_box_ansible_core_version: 2.21.5
+agent_box_httpx_version: 0.28.1
 
 # Tailscale client from pkgs.tailscale.com (installed 2026-11-10 on VM 258, AlmaLinux 10).
 agent_box_tailscale_version: 1.104.5

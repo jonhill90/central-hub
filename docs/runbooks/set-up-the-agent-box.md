@@ -41,7 +41,7 @@ flowchart LR
 
 CT 259, the jumpbox rehearsal's container, is not the agent box. This runbook doesn't touch it. It stays up by the owner's call (2026-11-09 23:04 UTC) until the platform's architecture is settled, and it lives in the rehearsal kit's state ([Grow the agent jumpbox](grow-the-agent-jumpbox.md)).
 
-There are three wrappers. `pr-merge check|merge OWNER/REPO PR HEAD` checks or squash-merges one pull request as the GitHub App, under D-0031 ([how it decides](#merge-pull-requests-from-the-box)). `ci-runner plan|apply|configure|destroy` builds the notebook's CI runner VM and registers it ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md)). The other is `dev-vms plan|apply|destroy`: OpenTofu on `hosts/terraform/home/k8s` for the dev rebuild VMs (250-257), with the agents' own token `agent@pve!dev` (`hosts/terraform/home/bootstrap/agent-access.sh`). It runs only the code on `main`: it moves the `keys` user's own checkout to `origin/main` first, so a session can't change what runs with the token.
+There are four wrappers. `rebuild up|rebuild|teardown` runs the dev one-command rebuild ([below](#rebuild-dev-from-the-box)). `pr-merge check|merge OWNER/REPO PR HEAD` checks or squash-merges one pull request as the GitHub App, under D-0031 ([how it decides](#merge-pull-requests-from-the-box)). `ci-runner plan|apply|configure|destroy` builds the notebook's CI runner VM and registers it ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md)). The other is `dev-vms plan|apply|destroy`: OpenTofu on `hosts/terraform/home/k8s` for the dev rebuild VMs (250-257), with the agents' own token `agent@pve!dev` (`hosts/terraform/home/bootstrap/agent-access.sh`). It runs only the code on `main`: it moves the `keys` user's own checkout to `origin/main` first, so a session can't change what runs with the token.
 
 ## Before you start
 
@@ -158,6 +158,27 @@ pr-merge merge jonhill90/<repo> <pr number> <40-character head>
 - It does not look for secrets or private names in the diff (rule 4 of `CLAUDE.md`); the reviewer does that before the head is named.
 
 expect: `pr-merge check` prints `GREEN` or `NOT GREEN: <reasons>` and changes nothing.
+
+## Rebuild dev from the box
+
+`rebuild` runs `hosts/rebuild-k8s.sh` for the dev Kubernetes layer (VMs 250 to 257) from the box. It is for the proof that the Mac lane isn't needed; the Mac lane keeps running the rebuild until that proof passes.
+
+```text
+rebuild up          all stages
+rebuild rebuild     tear the dev VMs down first, then all stages
+rebuild teardown    only the teardown
+```
+
+- It runs only the code on `main`. There is no way to name another branch, because the keys never run code a session can edit.
+- It writes its own `rebuild.env`: dev, VM range 250 to 257, the box's `proxmox-dev.env` and `dev-vms.tfvars`, and the same state file as `dev-vms`. `rebuild-k8s.sh` still refuses a tfvars with a VM ID outside that range or a `node_vnet` other than `dev`.
+- The role installs Ansible 2.21.5 in its own virtual environment under the wrapper folder, and the collections pinned in `hosts/ansible/requirements.yml`. Run the role's `wrappers` tag to install them.
+- What the wrapper does not make, and stops without if it is missing:
+  - the dev inventory, a private folder at `/etc/agent-keys/rebuild-dev/inventory`, which has to be put there through the keys wrapper; its node SSH key path and the node public key in `dev-vms.tfvars` must be a pair;
+  - a guard that runs before any stage: the node addresses in `dev-vms.tfvars` must sit in the dev VLAN (VLAN 30 in `vlans.yml`), and every inventory host must be one of them, reached by plain ssh to `ansible_host`, with no proxy, extra ssh arguments or other connection type;
+  - for the `restore` stage, access to Azure for prod's newest backup, which the box doesn't have yet;
+  - the Proxmox `/vms` ACLs after a teardown, which need a root step on the host (`agent-access.sh`) that the agents can't run themselves.
+
+expect: with those in place, `rebuild up` prints `rebuild: central-hub <commit>` and then the stage lines of `rebuild-k8s.sh`, and stops at the first stage that fails.
 
 ## If it fails
 
