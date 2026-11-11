@@ -145,7 +145,7 @@ Exit: uninstall the App and delete it in GitHub's settings, then delete `/etc/ag
 
 `pr-merge` is the box's version of the Mac lane's merge step, built to be tested on test pull requests first. The Mac lane keeps merging until that test passes.
 
-```
+```text
 pr-merge check jonhill90/<repo> <pr number> <40-character head>
 pr-merge merge jonhill90/<repo> <pr number> <40-character head>
 ```
