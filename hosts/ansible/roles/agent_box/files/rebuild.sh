@@ -36,6 +36,23 @@ done
 [[ -d $inventory ]] || { echo "rebuild: the dev inventory $inventory is missing (docs/runbooks/set-up-the-agent-box.md, 'Rebuild dev from the box')" >&2; exit 1; }
 [[ -x $libexec/ansible-venv/bin/ansible-playbook ]] || { echo "rebuild: Ansible is not installed; run the agent_box role" >&2; exit 1; }
 
+# Every inventory host must be a dev node: its ansible_host has to be one of the addresses in the
+# dev tfvars. Without this, once SSH from the box to prod nodes is open, only key refusal would
+# keep kubeadm off prod. Nothing is printed except the count and a refused address.
+mapfile -t dev_addrs < <(grep -oE '^[^#]*address[[:space:]]*=[[:space:]]*"[0-9.]+"' "$keys/dev-vms.tfvars" | grep -oE '"[0-9.]+"' | tr -d '"')
+[[ ${#dev_addrs[@]} -gt 0 ]] || { echo "rebuild: no node addresses found in dev-vms.tfvars" >&2; exit 1; }
+mapfile -t inv_hosts < <(ansible-inventory -i "$inventory/" --list | python3 -I -c '
+import json, sys
+d = json.load(sys.stdin)
+for h, v in d.get("_meta", {}).get("hostvars", {}).items():
+    print(v.get("ansible_host", h))')
+[[ ${#inv_hosts[@]} -gt 0 ]] || { echo "rebuild: the dev inventory lists no hosts" >&2; exit 1; }
+for h in "${inv_hosts[@]}"; do
+  printf '%s\n' "${dev_addrs[@]}" | grep -qxF -- "$h" \
+    || { echo "rebuild: inventory host $h is not a node address in dev-vms.tfvars; refusing" >&2; exit 1; }
+done
+echo "rebuild: ${#inv_hosts[@]} inventory hosts, all dev node addresses"
+
 # Only reviewed code on main runs with the keys, never a checkout a session can edit.
 git -C "$repo" fetch --quiet origin main
 git -C "$repo" checkout --quiet --detach origin/main
