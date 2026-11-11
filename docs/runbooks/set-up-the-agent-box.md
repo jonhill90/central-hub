@@ -41,7 +41,7 @@ flowchart LR
 
 CT 259, the jumpbox rehearsal's container, is not the agent box. This runbook doesn't touch it. It stays up by the owner's call (2026-11-09 23:04 UTC) until the platform's architecture is settled, and it lives in the rehearsal kit's state ([Grow the agent jumpbox](grow-the-agent-jumpbox.md)).
 
-There are two wrappers. `ci-runner plan|apply|configure|destroy` builds the notebook's CI runner VM and registers it ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md)). The other is `dev-vms plan|apply|destroy`: OpenTofu on `hosts/terraform/home/k8s` for the dev rebuild VMs (250-257), with the agents' own token `agent@pve!dev` (`hosts/terraform/home/bootstrap/agent-access.sh`). It runs only the code on `main`: it moves the `keys` user's own checkout to `origin/main` first, so a session can't change what runs with the token.
+There are three wrappers. `pr-merge check|merge OWNER/REPO PR HEAD` checks or squash-merges one pull request as the GitHub App, under D-0031 ([how it decides](#merge-pull-requests-from-the-box)). `ci-runner plan|apply|configure|destroy` builds the notebook's CI runner VM and registers it ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md)). The other is `dev-vms plan|apply|destroy`: OpenTofu on `hosts/terraform/home/k8s` for the dev rebuild VMs (250-257), with the agents' own token `agent@pve!dev` (`hosts/terraform/home/bootstrap/agent-access.sh`). It runs only the code on `main`: it moves the `keys` user's own checkout to `origin/main` first, so a session can't change what runs with the token.
 
 ## Before you start
 
@@ -117,7 +117,7 @@ There are two wrappers. `ci-runner plan|apply|configure|destroy` builds the note
 
 ## The agents' GitHub App
 
-The box holds the private key of the GitHub App "Central Hub Agents". Wrappers use it to mint one-hour installation tokens, so the agents act on GitHub under the App's own name instead of the owner's account. Today the only user is `ci-runner configure`. It mints a runner registration token for agent-notebook ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md), tested 2026-11-10). Cloud sessions don't use the App.
+The box holds the private key of the GitHub App "Central Hub Agents". Wrappers use it to mint one-hour installation tokens, so the agents act on GitHub under the App's own name instead of the owner's account. Two wrappers use it. `pr-merge` mints a token for one repository to read a pull request and merge it. `ci-runner configure` mints a runner registration token for agent-notebook ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md), tested 2026-11-10). Cloud sessions don't use the App.
 
 The owner sets it up once, in GitHub's web UI:
 
@@ -140,6 +140,24 @@ The owner sets it up once, in GitHub's web UI:
    expect: `ci-runner configure` registers the runner. If the App is not installed on the repository, the wrapper says so by name ("If it fails" in the CI runner runbook).
 
 Exit: uninstall the App and delete it in GitHub's settings, then delete `/etc/agent-keys/github-app.pem`.
+
+## Merge pull requests from the box
+
+`pr-merge` is the box's version of the Mac lane's merge step, built to be tested on test pull requests first. The Mac lane keeps merging until that test passes.
+
+```text
+pr-merge check jonhill90/<repo> <pr number> <40-character head>
+pr-merge merge jonhill90/<repo> <pr number> <40-character head>
+```
+
+- It works only on the project's four repositories, and only with the full 40-character head the reviewer named. GitHub refuses the merge if the head moved since the check.
+- Green is [D-0031](../decisions/0031-let-agents-merge-green-prs.md) rule 1: the pull request is open and not a draft, GitHub reports a clean merge, and every check on the head has passed, none pending, and the wrapper read all of them. A check counts as passed only if it succeeded or its workflow skipped it.
+- It refuses, with exit code 3, any pull request that touches `docs/decisions/`, `docs/standards/`, `docs/specs/`, `CLAUDE.md` or `AGENTS.md`. Those need the owner's named approval (D-0031 rules 3 and 4), which the wrapper can't check, so the owner's lane merges them.
+- It squash-merges only. It never deletes a branch and never enables auto-merge.
+- The App needs the repository permissions Contents (write), Pull requests (write), Checks (read) and Commit statuses (read). If the installation has not accepted them, the wrapper says so and stops.
+- It does not look for secrets or private names in the diff (rule 4 of `CLAUDE.md`); the reviewer does that before the head is named.
+
+expect: `pr-merge check` prints `GREEN` or `NOT GREEN: <reasons>` and changes nothing.
 
 ## If it fails
 
