@@ -65,8 +65,8 @@ pub=$(cat "$nodekey.pub")
 # The agents' token clones only template 9001, the copy of template 9000 on VNet dev
 # (hosts/terraform/home/bootstrap/agent-access.sh); the Mac's tfvars name 9000, for its root token.
 awk -v pub="$pub" '/^[[:space:]]*node_ssh_public_key[[:space:]]*=/ { print "node_ssh_public_key = \"" pub "\""; next }
-  /^[[:space:]]*template_vm_id[[:space:]]*=/ { print "template_vm_id = 9001"; next } { print }' "$keys/dev-vms.tfvars" > "$envdir/dev-vms.tfvars"
-grep -q '^template_vm_id = 9001$' "$envdir/dev-vms.tfvars" || { echo "rebuild: dev-vms.tfvars has no template_vm_id line to set" >&2; exit 1; }
+  /^[[:space:]]*template_vm_id[[:space:]]*=/ { next } { print }' "$keys/dev-vms.tfvars" > "$envdir/dev-vms.tfvars"
+echo 'template_vm_id = 9001' >> "$envdir/dev-vms.tfvars"
 grep -q '^node_ssh_public_key = "ssh-ed25519 ' "$envdir/dev-vms.tfvars" || { echo "rebuild: dev-vms.tfvars has no node_ssh_public_key line to set" >&2; exit 1; }
 rm -rf "$inventory"
 install -d -m 700 "$inventory"
