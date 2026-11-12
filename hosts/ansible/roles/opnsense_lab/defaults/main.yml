@@ -40,8 +40,8 @@ opnsense_lab_host_overrides: []
 # tailnet device, 100.100.100.100 proves split DNS end to end.
 opnsense_lab_dns_proof_server: ""
 
-# Check the GUI certificate. Set opnsense_lab_ssl_ca_file to the CA file while it is self-signed.
-opnsense_lab_ssl_verify: true
+# The API's certificate is always checked against opnsense_lab_ssl_ca_file, the lab root (pick 30);
+# playbooks/tasks/opnsense-tls.yml decides it, with its one-time bootstrap switch.
 
 # The names of the agent box's rules (tasks/agent_box.yml), used to remove them when
 # opnsense_lab_agent_box is unset. Keep in step with the inventory's targets.

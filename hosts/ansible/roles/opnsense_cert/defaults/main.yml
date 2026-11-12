@@ -18,6 +18,6 @@ opnsense_cert_gui_port: 443
 # these. A fresh OPNsense names its own "Web GUI TLS certificate"; after the first run it carries
 # the first of opnsense_cert_names.
 opnsense_cert_target_descrs: ["Web GUI TLS certificate", "{{ opnsense_cert_names | first }}"]
-# Check the web GUI's certificate on the API calls. Until the first run swaps it, the GUI still
-# has its self-signed one; set opnsense_lab_ssl_ca_file for that, as playbooks/opnsense.yml does.
-opnsense_cert_validate: "{{ opnsense_lab_ssl_verify | default(true) }}"
+# Check the web GUI's certificate on the API calls, against the lab root (pick 30). Off only for a
+# rebuilt firewall's first run, through playbooks/tasks/opnsense-tls.yml's bootstrap switch.
+opnsense_cert_validate: "{{ opnsense_tls_verify | default(true) }}"

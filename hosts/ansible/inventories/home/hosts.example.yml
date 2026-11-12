@@ -53,7 +53,9 @@ all:
         opnsense_fw:
           ansible_connection: local   # the modules call the OPNsense API from the controller
           ansible_python_interpreter: ""   # a controller Python that has httpx (requirements.txt)
-          opnsense_api_host: ""   # address or name the API is reached on
+          opnsense_api_host: ""   # the firewall's name, opnsense.<zone>; never an address (pick 30)
+          opnsense_lab_ssl_ca_file: ""   # the lab root's PEM file on the controller; the API's certificate must chain to it
+          # opnsense_lab_tls_bootstrap: true   # a rebuilt firewall's first run only (set-opnsense-gui-certificate.md)
           opnsense_api_key: ""   # secret
           opnsense_api_secret: ""   # secret
           opnsense_home_lan_cidr: ""   # the home router's LAN range
