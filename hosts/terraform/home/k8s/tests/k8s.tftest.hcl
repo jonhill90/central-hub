@@ -56,17 +56,17 @@ run "everything_in_pool_k8s" {
   }
 }
 
-# The agents' dev rebuild may add guests only to pool dev, so the pool is a variable; c1 keeps k8s.
-run "pool_is_set_by_variable" {
+# The agents' dev rebuild may not add guests to a pool, so the pool is a variable; c1 keeps k8s.
+run "pool_can_be_left_out" {
   command = plan
 
   variables {
-    pool_id = "dev"
+    pool_id = null
   }
 
   assert {
-    condition     = proxmox_virtual_environment_vm.template[0].pool_id == "dev" && alltrue([for k, n in proxmox_virtual_environment_vm.node : n.pool_id == "dev"])
-    error_message = "pool_id must set the pool of the template and every node."
+    condition     = proxmox_virtual_environment_vm.template[0].pool_id == null && alltrue([for k, n in proxmox_virtual_environment_vm.node : n.pool_id == null])
+    error_message = "A null pool_id must leave the template and every node out of any pool."
   }
 }
 

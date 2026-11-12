@@ -18,7 +18,7 @@ variable "node_vnet" {
 }
 
 variable "pool_id" {
-  description = "The Proxmox resource pool the template and nodes go in (one pool per workload, named by job). c1 keeps k8s; the agents' dev rebuild uses dev, the one pool their Proxmox user may add guests to."
+  description = "The Proxmox resource pool the template and nodes go in (one pool per workload, named by job). c1 keeps k8s. The agents' dev rebuild sets null: no pool, because the agents' Proxmox user may create a guest on its /vms/<id> ACL but may not add one to a pool."
   type        = string
   default     = "k8s"
 }
