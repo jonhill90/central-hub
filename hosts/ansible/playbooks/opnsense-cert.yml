@@ -9,6 +9,10 @@
 - name: OPNsense web GUI certificate from the lab CA
   hosts: opnsense
   gather_facts: false
+  pre_tasks:
+    - name: The API's TLS check (pick 30)
+      ansible.builtin.import_tasks: tasks/opnsense-tls.yml
+      tags: [always]
   roles:
     - role: opnsense_cert
       tags: [cert]

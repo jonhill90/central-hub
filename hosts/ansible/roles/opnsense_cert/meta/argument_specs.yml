@@ -19,4 +19,6 @@ argument_specs:
         type: list
         elements: str
         description: Descriptions of the firewall certificate to replace; the first in use that matches wins.
-      opnsense_cert_validate: {type: bool, description: "Check the GUI's certificate on API calls. Default: opnsense_lab_ssl_verify."}
+      opnsense_cert_validate:
+        type: bool
+        description: "Check the GUI's certificate on API calls. Default: opnsense_tls_verify, from playbooks/tasks/opnsense-tls.yml (pick 30)."

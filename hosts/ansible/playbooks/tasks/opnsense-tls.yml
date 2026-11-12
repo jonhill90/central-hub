@@ -1,0 +1,73 @@
+---
+# The OPNsense API's TLS check (pick 30, owner's answer 2026-11-12 22:23 UTC: "turn the check on";
+# Ansible reaches OPNsense by name and trusts the lab root). Imported first by the playbooks that
+# call the API. It sets opnsense_tls_verify, which they pass to every API call.
+#
+# A rebuilt firewall serves its own self-signed certificate until playbooks/opnsense-cert.yml puts
+# the lab CA's on it, and the lab CA lives on c1, which needs the network first. So for that window
+# only, opnsense_lab_tls_bootstrap: true in the inventory turns the check off, loudly. The run
+# refuses the switch once the GUI's certificate checks out, so it can't stay on.
+
+- name: tls | No way to turn the check off from the inventory, and the API is reached by name
+  ansible.builtin.assert:
+    that:
+      - opnsense_lab_ssl_verify is not defined
+      - opnsense_cert_validate is not defined or opnsense_cert_validate is not false
+      - opnsense_api_host is not match('^[0-9.]+$')
+      - "':' not in opnsense_api_host"
+      - opnsense_lab_ssl_ca_file | default('', true) | length > 0
+    fail_msg: >-
+      The OPNsense API's certificate is always checked (pick 30). In the inventory: take out
+      opnsense_lab_ssl_verify (and any opnsense_cert_validate: false), set opnsense_api_host to the
+      firewall's name (opnsense.<zone>), and opnsense_lab_ssl_ca_file to the lab root's PEM file on
+      the controller. docs/runbooks/set-opnsense-gui-certificate.md, "Before you start".
+    quiet: true
+
+# Python's own TLS check, the same on macOS and Linux: the certificate must chain to the lab root
+# and carry the name.
+- name: tls | Does the web GUI serve a certificate the lab root signed, for this name?
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -I
+      - -c
+      - |
+        import socket, ssl, sys
+        host, port, ca = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+        ctx = ssl.create_default_context(cafile=ca)
+        try:
+            with socket.create_connection((host, port), timeout=10) as s, ctx.wrap_socket(s, server_hostname=host):
+                print("verified")
+        except ssl.SSLCertVerificationError as e:
+            print("not verified:", e.verify_message)
+            sys.exit(3)
+      - "{{ opnsense_api_host }}"
+      - "{{ opnsense_cert_gui_port | default(443) | string }}"
+      - "{{ opnsense_lab_ssl_ca_file | expanduser }}"
+  register: opnsense_tls_probe
+  changed_when: false
+  failed_when: opnsense_tls_probe.rc not in [0, 3]
+  check_mode: false
+
+- name: tls | The bootstrap switch only while the certificate doesn't check out
+  ansible.builtin.assert:
+    that: (opnsense_tls_probe.rc == 0) != (opnsense_lab_tls_bootstrap | default(false) | bool)
+    fail_msg: >-
+      {{ 'The GUI certificate checks out against the lab root for ' ~ opnsense_api_host ~
+         ': take opnsense_lab_tls_bootstrap out of the inventory.'
+         if opnsense_tls_probe.rc == 0 else
+         'The GUI certificate does not check out against the lab root for ' ~ opnsense_api_host ~
+         ' (' ~ opnsense_tls_probe.stdout ~ '). On a rebuilt firewall, set opnsense_lab_tls_bootstrap: true' ~
+         ' once and run playbooks/opnsense-cert.yml (docs/runbooks/set-opnsense-gui-certificate.md).' }}
+    quiet: true
+
+- name: tls | Check the certificate on every API call, except during the bootstrap
+  ansible.builtin.set_fact:
+    opnsense_tls_verify: "{{ opnsense_tls_probe.rc == 0 }}"
+
+- name: tls | Say so while it is off
+  ansible.builtin.debug:
+    msg: >-
+      BOOTSTRAP: the OPNsense API's certificate is NOT checked on this run. Run
+      playbooks/opnsense-cert.yml, then take opnsense_lab_tls_bootstrap out of the inventory.
+  when: not opnsense_tls_verify

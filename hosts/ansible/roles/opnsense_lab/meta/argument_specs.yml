@@ -118,10 +118,6 @@ argument_specs:
         type: str
         default: vtnet0
         description: The trunk port inside OPNsense (net0 on vmbr1).
-      opnsense_lab_ssl_verify:
-        type: bool
-        default: true
-        description: Check the GUI certificate.
       opnsense_lab_ssl_ca_file:
         type: str
-        description: CA file for the GUI certificate while it is self-signed. Optional.
+        description: The lab root's PEM file on the controller; the API's certificate must chain to it (pick 30).
