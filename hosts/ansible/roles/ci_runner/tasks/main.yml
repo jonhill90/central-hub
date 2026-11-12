@@ -165,7 +165,7 @@
   ansible.builtin.file:
     path: "{{ ci_runner_home }}/runner/{{ item }}"
     state: absent
-  loop: [.runner, .credentials, .credentials_rsaparams]
+  loop: "{{ ci_runner_registration_files }}"
   when:
     - ci_runner_registered.stat.exists
     - not ci_runner_update_off
@@ -189,6 +189,21 @@
   ansible.builtin.stat:
     path: "{{ ci_runner_home }}/runner/.runner"
   register: ci_runner_registered
+  tags: [runner]
+
+# config.sh refuses with "already configured" when any trace of an earlier registration is left in
+# the runner's folder, not only .runner (a run that stopped half way, or the runner's own
+# *_migrated markers). With no .runner and a fresh token, clear every one before registering;
+# config.sh --replace takes over the same name on GitHub.
+- name: Clear what an earlier registration left behind
+  ansible.builtin.file:
+    path: "{{ ci_runner_home }}/runner/{{ item }}"
+    state: absent
+  loop: "{{ ci_runner_registration_files }}"
+  when:
+    - not ci_runner_registered.stat.exists
+    - ci_runner_registration_token | length > 0
+    - not ansible_check_mode
   tags: [runner]
 
 - name: A registration token is needed the first time
