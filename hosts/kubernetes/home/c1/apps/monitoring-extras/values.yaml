@@ -6,6 +6,12 @@
 argocd:
   namespace: argocd   # where Argo CD runs (role k8s_gitops)
 
+certManager:
+  namespace: cert-manager   # where cert-manager runs (app cert-manager)
+  # A renewal is overdue this many seconds after cert-manager's planned renewal time. Let's
+  # Encrypt certificates renew 30 days before expiry, so 2 days late still leaves 28.
+  renewalOverdueSeconds: 172800
+
 # The data disk every volume lives on (role k8s_storage, k8s_storage_mount).
 dataMount: /var/lib/c1-data
 dataFreeWarnRatio: 0.15

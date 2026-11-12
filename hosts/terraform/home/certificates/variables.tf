@@ -40,7 +40,11 @@ variable "token_renew_days" {
 }
 
 variable "request_ip_in" {
-  description = "Optional Cloudflare client IP condition: the CIDRs the token may be used from (the cluster's public egress address). Empty (the default) means no condition. Private if set; a changing home address would break renewals, so it is off."
+  description = "Cloudflare client IP condition: the CIDRs the token may be used from, the home's public address as /32 (the address the cluster leaves through). Private, so it has no default and goes in home.tfvars. If the address changes, renewals stop and the C1CertificateRenewalOverdue alert fires (hosts/AGENT-PICKS.md pick 78)."
   type        = list(string)
-  default     = []
+
+  validation {
+    condition     = length(var.request_ip_in) > 0 && alltrue([for c in var.request_ip_in : can(cidrhost(c, 0))])
+    error_message = "request_ip_in needs at least one CIDR, for example the home's public address as a /32."
+  }
 }
