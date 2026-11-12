@@ -157,6 +157,7 @@ all:
         k8s_backup_azure_client_id: ""
         k8s_backup_azure_tenant_id: ""
         k8s_backup_azure_app_object_id: ""
-        # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
-        # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
-        # k8s_control_plane_kubernetes_version.
+        # Never set the Kubernetes versions here (k8s_node_kubernetes_minor,
+        # k8s_node_kubernetes_version, k8s_control_plane_kubernetes_version): the role defaults
+        # are the versions the cluster runs, bumped by PR, and playbooks/k8s-upgrade.yml stops on
+        # an override (hosts/AGENT-PICKS.md pick 33).

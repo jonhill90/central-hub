@@ -107,7 +107,16 @@ The agents' run logs and worklogs are kept in the agent notebook; this section i
 
 ## Afterwards
 
-Set `last-tested`. After any later `playbooks/k8s-upgrade.yml`, set the new versions in the inventory, as `hosts.example.yml` says, so a re-run of `k8s.yml` never downgrades the cluster.
+Set `last-tested`.
+
+To upgrade Kubernetes later, the code moves first, so a rebuild from the repo always builds the version that runs (pick 33 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)):
+
+1. Open a pull request that bumps `k8s_node_kubernetes_minor` and `k8s_node_kubernetes_version` in `roles/k8s_node/defaults/main.yml` and `k8s_control_plane_kubernetes_version` in `roles/k8s_control_plane/defaults/main.yml`, and the same defaults in each role's `meta/argument_specs.yml`, one minor version at most, to a release at least two weeks old (STD-0003). Check Cilium's compatibility page for the new minor first ([by-hand runbook step 17](build-kubeadm-cluster.md#17-upgrade-the-cluster-from-1365-to-1371-ca4)).
+2. After it merges, run `playbooks/k8s-upgrade.yml` from `main`, with no `-e` versions.
+   expect: the control plane, then each worker, at the new version. A node already there is skipped, so a stopped run can be run again.
+3. Between the merge and step 2, `k8s.yml` stops at step 6 on each node ("the code says"), so it can't upgrade the kubelet ahead of kubeadm.
+
+`k8s-upgrade.yml` also stops if the inventory or `-e` sets any of the three versions, if the two roles disagree, or if the bump is more than one minor version or down. Remove any version line an older inventory carries.
 
 ## Related
 
