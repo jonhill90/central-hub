@@ -26,6 +26,7 @@
         return_content: true
         timeout: 5
       delegate_to: "{{ k8s_gateway_smoke_client }}"
+      become: false
       register: k8s_gateway_smoke_get
       until: k8s_gateway_smoke_get.status == 200 and k8s_gateway_smoke_get.content.startswith(k8s_gateway_smoke_name ~ '-')
       retries: 12
@@ -38,6 +39,7 @@
         status_code: 404
         timeout: 5
       delegate_to: "{{ k8s_gateway_smoke_client }}"
+      become: false
 
     - name: smoke | The test name resolves to the Gateway address in the lab (wildcard override)
       ansible.builtin.command: getent hosts {{ k8s_gateway_smoke_host }}

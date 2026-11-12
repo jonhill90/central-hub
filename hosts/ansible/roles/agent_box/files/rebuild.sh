@@ -23,7 +23,9 @@ work=/var/lib/agent-box
 libexec=/usr/local/libexec/agent-box
 repo=$work/central-hub
 envdir=$work/rebuild-dev
-inventory=$keys/rebuild-dev/inventory
+inv_src=$keys/rebuild-dev/inventory
+inventory=$envdir/inventory
+nodekey=$keys/rebuild-node-key
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/rebuild-dev TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
@@ -33,7 +35,7 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 for f in "$keys/proxmox-dev.env" "$keys/dev-vms.tfvars"; do
   [[ -f $f ]] || { echo "rebuild: $f is missing" >&2; exit 1; }
 done
-[[ -d $inventory ]] || { echo "rebuild: the dev inventory $inventory is missing (docs/runbooks/set-up-the-agent-box.md, 'Rebuild dev from the box')" >&2; exit 1; }
+[[ -d $inv_src ]] || { echo "rebuild: the dev inventory $inv_src is missing (docs/runbooks/set-up-the-agent-box.md, 'Rebuild dev from the box')" >&2; exit 1; }
 [[ -x $libexec/ansible-venv/bin/ansible-playbook ]] || { echo "rebuild: Ansible is not installed; run the agent_box role" >&2; exit 1; }
 
 # Only reviewed code on main runs with the keys, never a checkout a session can edit.
@@ -41,13 +43,68 @@ git -C "$repo" fetch --quiet origin main
 git -C "$repo" checkout --quiet --detach origin/main
 echo "rebuild: central-hub $(git -C "$repo" rev-parse --short HEAD)"
 
+# The inventory that comes from the Mac reaches the nodes through a jump over root SSH to the
+# Proxmox host. The box never holds root on the hypervisor, and its own network reaches the dev VLAN,
+# so the box builds its own copy: the proxmox group and every ssh login, key and proxy setting are
+# dropped, the box's own node key and plain ssh are set, and the gateway smoke test runs from the
+# box itself (k8s_gateway_smoke_client). The Mac's private values (backup account, node name,
+# gitops source) stay as they are. The guard below then checks the copy.
+mkdir -p "$envdir" "$work/state"
+chmod 700 "$envdir"
+if [[ ! -f $nodekey ]]; then
+  ssh-keygen -q -t ed25519 -N '' -C rebuild-dev-node -f "$nodekey"
+fi
+pub=$(cat "$nodekey.pub")
+# A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
+awk -v pub="$pub" '/^[[:space:]]*node_ssh_public_key[[:space:]]*=/ { print "node_ssh_public_key = \"" pub "\""; next } { print }' "$keys/dev-vms.tfvars" > "$envdir/dev-vms.tfvars"
+grep -q '^node_ssh_public_key = "ssh-ed25519 ' "$envdir/dev-vms.tfvars" || { echo "rebuild: dev-vms.tfvars has no node_ssh_public_key line to set" >&2; exit 1; }
+rm -rf "$inventory"
+install -d -m 700 "$inventory"
+python3 -I -c "$(cat <<'PY'
+import sys, yaml
+src, dst, key, known = sys.argv[1:5]
+d = yaml.safe_load(open(src))
+DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
+        "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
+        "ansible_private_key_file", "ansible_host_key_checking"}
+def walk(n):
+    if isinstance(n, dict):
+        for k in list(n):
+            if k in DROP: del n[k]
+            elif k == "proxmox" and isinstance(n[k], dict) and ("hosts" in n[k] or "children" in n[k] or "vars" in n[k]): del n[k]
+            else: walk(n[k])
+    elif isinstance(n, list):
+        for i in n: walk(i)
+walk(d)
+def find(n, name):
+    if isinstance(n, dict):
+        if name in n and isinstance(n[name], dict): return n[name]
+        for v in n.values():
+            r = find(v, name)
+            if r is not None: return r
+    return None
+g = find(d, "k8s_nodes")
+if g is None:
+    print("rebuild: the dev inventory has no k8s_nodes group", file=sys.stderr); sys.exit(1)
+v = g.setdefault("vars", {})
+v["ansible_ssh_private_key_file"] = key
+v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
+v["k8s_gateway_smoke_client"] = "localhost"
+v["k8s_certs_smoke_client"] = "localhost"
+v["k8s_certs_smoke_root_file"] = known.rsplit("/", 1)[0] + "/lab-root-ca.crt"
+yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
+PY
+)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts"
+[[ -f $inventory/hosts.yml ]] || { echo "rebuild: could not build the box's dev inventory from $inv_src/hosts.yml" >&2; exit 1; }
+chmod 600 "$inventory/hosts.yml"
+
 # Dev only, checked on the code just checked out: every node address in dev-vms.tfvars must sit in
 # the dev VLAN (VLAN 30, from vlans.yml), and every inventory host must be one of those addresses,
 # reached by plain ssh to ansible_host. Hosts that set another connection, a proxy or extra ssh
 # arguments are refused. Nothing is printed except the count or the refused host.
 ansible-inventory -i "$inventory/" --list | python3 -I -c "$(cat <<'PY'
 import ipaddress, json, re, sys
-tfvars, vlans = sys.argv[1], sys.argv[2]
+tfvars, vlans, nodekey, known = sys.argv[1:5]
 def die(m):
     print("rebuild: " + m, file=sys.stderr); sys.exit(1)
 import yaml
@@ -66,24 +123,25 @@ if not addrs: die("no node addresses found in dev-vms.tfvars")
 inv = json.load(sys.stdin)
 hv = inv.get("_meta", {}).get("hostvars", {})
 if not hv: die("the dev inventory lists no hosts")
-bad = ("ansible_ssh_host", "ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args",
+bad = ("ansible_ssh_host", "ansible_ssh_extra_args", "ansible_ssh_args",
        "ansible_ssh_executable", "ansible_ssh_pipelining_proxy")
+want_args = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 for h, v in hv.items():
     if v.get("ansible_host") not in addrs: die("inventory host %s is not a dev node address; refusing" % h)
     if v.get("ansible_connection", "ssh") != "ssh": die("inventory host %s uses a connection other than ssh; refusing" % h)
     if any(k in v for k in bad): die("inventory host %s sets ssh host, proxy or extra arguments; refusing" % h)
+    if v.get("ansible_ssh_common_args") != want_args or v.get("ansible_ssh_private_key_file") != nodekey or "ansible_private_key_file" in v:
+        die("inventory host %s has ssh arguments or a key other than the box's own; refusing" % h)
 print("rebuild: %d inventory hosts, all dev node addresses" % len(hv))
 PY
-)" "$keys/dev-vms.tfvars" "$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml" || exit 1
+)" "$keys/dev-vms.tfvars" "$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml" "$nodekey" "$envdir/known_hosts" || exit 1
 
-mkdir -p "$envdir" "$work/state"
-chmod 700 "$envdir"
 # The same state file as dev-vms, so the two wrappers agree about which VMs exist.
 cat > "$envdir/rebuild.env" <<ENV
 ENV_NAME=dev
 VM_ID_MIN=250
 VM_ID_MAX=257
-TFVARS=$keys/dev-vms.tfvars
+TFVARS=$envdir/dev-vms.tfvars
 TFSTATE=$work/state/dev-vms.tfstate
 TOFU_ENV=$keys/proxmox-dev.env
 INVENTORY=$inventory/
