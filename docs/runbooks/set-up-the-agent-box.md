@@ -170,11 +170,13 @@ rebuild teardown    only the teardown
 ```
 
 - It runs only the code on `main`. There is no way to name another branch, because the keys never run code a session can edit.
-- It writes its own `rebuild.env`: dev, VM range 250 to 257, the box's `proxmox-dev.env` and `dev-vms.tfvars`, and the same state file as `dev-vms`. `rebuild-k8s.sh` still refuses a tfvars with a VM ID outside that range or a `node_vnet` other than `dev`.
+- It writes its own `rebuild.env`: dev, VM range 250 to 257, the box's `proxmox-dev.env`, and the same state file as `dev-vms`. `rebuild-k8s.sh` still refuses a tfvars with a VM ID outside that range or a `node_vnet` other than `dev`.
+- The nodes get a login key that belongs to the box. On the first run the wrapper makes it (`rebuild-node-key` in the keys folder) and runs with a copy of `dev-vms.tfvars` whose `node_ssh_public_key` is that key's public half.
+- The inventory is built from the private one on the Mac, which a keys command put at `/etc/agent-keys/rebuild-dev/inventory/hosts.yml`. The Mac's inventory reaches the nodes through a jump over root SSH to the Proxmox host. The box never holds root on the hypervisor, and it sits on the dev network, so each run builds a copy: the `proxmox` group and every login, key and proxy setting are dropped, the box's own key and plain ssh are set, and the gateway smoke test runs from the box (`k8s_gateway_smoke_client: localhost`). The private values stay as they were.
 - The role installs Ansible 2.21.5 in its own virtual environment under the wrapper folder, and the collections pinned in `hosts/ansible/requirements.yml`. Run the role's `wrappers` tag to install them.
 - What the wrapper does not make, and stops without if it is missing:
-  - the dev inventory, a private folder at `/etc/agent-keys/rebuild-dev/inventory`, which has to be put there through the keys wrapper; its node SSH key path and the node public key in `dev-vms.tfvars` must be a pair;
-  - a guard that runs before any stage: the node addresses in `dev-vms.tfvars` must sit in the dev VLAN (VLAN 30 in `vlans.yml`), and every inventory host must be one of them, reached by plain ssh to `ansible_host`, with no proxy, extra ssh arguments or other connection type;
+  - the private dev inventory at `/etc/agent-keys/rebuild-dev/inventory/hosts.yml`, which has to be put there through the keys wrapper;
+  - a guard that runs before any stage: the node addresses in `dev-vms.tfvars` must sit in the dev VLAN (VLAN 30 in `vlans.yml`), and every inventory host must be one of them, reached by plain ssh to `ansible_host` with the box's own ssh arguments only, no proxy, jump or other connection type;
   - for the `restore` stage, access to Azure for prod's newest backup, which the box doesn't have yet;
   - the Proxmox `/vms` ACLs after a teardown, which need a root step on the host (`agent-access.sh`) that the agents can't run themselves.
 
