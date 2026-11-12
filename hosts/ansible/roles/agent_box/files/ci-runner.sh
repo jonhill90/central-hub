@@ -166,16 +166,16 @@ PY
 }
 
 # Open a central-hub PR that moves the runner pin to the newest release at least two weeks old.
-# The pin is read from origin/main, the release list and tarball come from GitHub, and the PR is
-# made through the API as the App (Contents and Pull requests, write), so no git credentials are
-# stored and nothing runs from a branch.
+# The pin is read from main through the API at one commit, and the change is made on that text; the
+# release list and tarball come from GitHub, and the PR is made through the API as the App
+# (Contents and Pull requests, write), so no git credentials are stored and nothing runs from a branch.
 bump() {
   local defaults=hosts/ansible/roles/ci_runner/defaults/main.yml tok
   tok=$(app_token jonhill90 central-hub '{"contents":"write","pull_requests":"write"}') || return 1
-  BEARER=$tok python3 -I - "$repo/$defaults" "$defaults" "$work/state" <<'PY'
-import base64, datetime, hashlib, json, os, re, sys, urllib.request
+  BEARER=$tok python3 -I - "$defaults" <<'PY'
+import base64, datetime, hashlib, json, os, re, sys, urllib.error, urllib.request
 
-local_file, path, scratch = sys.argv[1:4]
+path = sys.argv[1]
 api = "https://api.github.com"
 target = "jonhill90/central-hub"
 
@@ -190,11 +190,25 @@ def call(method, url, body=None, raw=False):
     return data if raw else json.loads(data or b"null")
 
 
+def ref_exists(ref):
+    try:
+        call("GET", f"{api}/repos/{target}/git/ref/{ref}")
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        raise
+
+
 def vtuple(v):
     return tuple(int(x) for x in v.split("."))
 
 
-text = open(local_file).read()
+# The file as it is on main at one commit, read through the API; the PR's change is made on that
+# text and pinned to that commit, so a change that lands on main meanwhile is never undone.
+main_sha = call("GET", f"{api}/repos/{target}/git/ref/heads/main")["object"]["sha"]
+on_main = call("GET", f"{api}/repos/{target}/contents/{path}?ref={main_sha}")
+text = base64.b64decode(on_main["content"]).decode()
 pinned = re.search(r"^ci_runner_version: (\S+)$", text, re.M).group(1)
 
 # Releases two weeks old or more (STD-0003), newest version first.
@@ -216,9 +230,13 @@ if vtuple(version) <= vtuple(pinned):
     sys.exit(0)
 
 branch = "chore/bump-ci-runner-" + version.replace(".", "-")
-for pr in call("GET", f"{api}/repos/{target}/pulls?state=open&per_page=100"):
-    if pr["head"]["ref"] == branch:
+for pr in call("GET", f"{api}/repos/{target}/pulls?state=all&head=jonhill90:{branch}&per_page=100"):
+    if pr["state"] == "open":
         print(f"ci-runner bump: PR #{pr['number']} already moves the pin to {version}")
+        sys.exit(0)
+    if not pr.get("merged_at"):
+        # A person closed it: they don't want this version. Say so every week, open nothing.
+        print(f"ci-runner bump: PR #{pr['number']} for {version} was closed without merging; skipping {version}")
         sys.exit(0)
 
 # The SHA-256 must match twice: the release notes' line for the linux-x64 tarball, and a download.
@@ -252,9 +270,12 @@ for pattern, repl in [
     if n != 1:
         sys.exit(f"ci-runner bump: {path} no longer has exactly one line matching {pattern!r}; nothing opened")
 
-main_sha = call("GET", f"{api}/repos/{target}/git/ref/heads/main")["object"]["sha"]
-on_main = call("GET", f"{api}/repos/{target}/contents/{path}?ref={main_sha}")
-call("POST", f"{api}/repos/{target}/git/refs", {"ref": "refs/heads/" + branch, "sha": main_sha})
+# The branch is this job's own. One left by an earlier run that stopped before its PR (no PR above)
+# is moved to main_sha and used again, so a failed run never blocks the next one.
+if ref_exists("heads/" + branch):
+    call("PATCH", f"{api}/repos/{target}/git/refs/heads/{branch}", {"sha": main_sha, "force": True})
+else:
+    call("POST", f"{api}/repos/{target}/git/refs", {"ref": "refs/heads/" + branch, "sha": main_sha})
 call("PUT", f"{api}/repos/{target}/contents/{path}", {
     "message": f"chore: bump the CI runner to {version}",
     "content": base64.b64encode(new.encode()).decode(),

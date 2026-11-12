@@ -75,7 +75,7 @@ The runner's self-update is off (`config.sh --disableupdate`), so the version th
 The box's `ci-runner-weekly.timer` (Mondays 14:00 UTC, `agent_box_ci_runner_weekly`) runs `ci-runner weekly` as the keys user:
 
 1. `configure` installs the pin on `main`. A pin newer than the installed runner stops the service, unpacks the new release over the old one, and starts it again; the registration stays.
-2. `bump` looks for the newest [actions/runner release](https://github.com/actions/runner/releases) at least two weeks old (STD-0003). If it is newer than the pin, it checks the tarball's SHA-256 in the release notes against a download, then opens a central-hub pull request as the App on branch `chore/bump-ci-runner-X-Y-Z`. It opens nothing if the pin is current or that pull request is open already.
+2. `bump` looks for the newest [actions/runner release](https://github.com/actions/runner/releases) at least two weeks old (STD-0003). If it is newer than the pin, it checks the tarball's SHA-256 in the release notes against a download, then opens a central-hub pull request as the App on branch `chore/bump-ci-runner-X-Y-Z`. It opens nothing if the pin is current, if that pull request is open already, or if one for that version was closed without merging (a person turned that version down). A branch left by a run that stopped before its pull request is reset to `main` and used again.
 
 Merge the bump pull request within about two weeks; the next weekly run installs it. To install it sooner, run `ci-runner configure` after the merge. A session can also run `ci-runner bump` by hand.
 
