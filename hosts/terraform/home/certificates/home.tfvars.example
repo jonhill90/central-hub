@@ -2,3 +2,6 @@
 # Copy to home.tfvars and pass -var-file=home.tfvars.
 zone_name  = "example.com"
 token_file = "~/.config/central-hub/cloudflare-dns01-token.txt" # same as k8s_certs_cloudflare_token_file
+# The home's public address, the only place the token works from (pick 78). A documentation
+# address here; the real one is private.
+request_ip_in = ["203.0.113.10/32"]
