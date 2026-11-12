@@ -85,6 +85,7 @@ Check the last run: `systemctl status ci-runner-weekly.service`, or `journalctl 
 
 - `ci-runner configure` says "the App's ID and key work, but the App is not installed on" the repository: add that repository to the App's installation (the App's settings, Install App, Configure, Repository access). "GitHub refused the App's ID or key" means `github_app_id` or `/etc/agent-keys/github-app.pem` is wrong.
 - `ci-runner configure` warns "no registration token" and the role stops with "isn't registered yet": the App lacks Administration (write), or its installation hasn't accepted the new permission.
+- The role stops at "Why the registration failed": config.sh refused, and the message carries its last lines with the token masked. The old registration is already gone, so the runner stays offline until a `ci-runner configure` registers it; each run mints a fresh token, so run it again once the cause is fixed. Its full log is in `_diag/` under the runner's folder on the VM.
 - The play stops on a changed host key after a rebuild: check the new key on the VM's console, then remove its line from `/var/lib/agent-box/.ssh/known_hosts`.
 - `ci-runner apply` stops with 403 "Permission check failed (/sdn/zones/lab/prod, SDN.Use)": the settings still clone template 9000. Set `template_vm_id: 9001` and run `ansible-agent-box.sh apply` again (step 2).
 - `ci-runner plan` can't create VM 300 after a destroy: Proxmox dropped the `/vms/300` ACL (as for 250-257), so run step 1 again.
