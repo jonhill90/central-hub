@@ -3,16 +3,22 @@
 # (docs/runbooks/set-up-the-ci-runner.md). It runs as user `keys` through sudo, so the session that
 # asks for it never sees the Proxmox token, the runner's SSH key or the GitHub App key. Installed
 # by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/ci-runner.sh plan|apply|configure|destroy
+#   sudo -n -u keys /usr/local/libexec/agent-box/ci-runner.sh plan|apply|configure|destroy|bump
+#   (weekly is for the timer, which runs it as `keys` without sudo)
 # plan, apply, destroy: OpenTofu on hosts/terraform/home/ci-runner with the agents' Proxmox token.
 # configure: the ci_runner playbook over SSH, with a one-hour registration token minted from the
 # GitHub App, narrowed to the one repository and the one permission it needs.
+# bump: if actions/runner has a release newer than the pin on main and at least two weeks old
+# (STD-0003), checks its SHA-256 against a download and opens a central-hub PR that moves the pin,
+# as the App. Changes nothing when the pin is current or that PR is open already.
+# weekly: configure, then bump. The agent box's timer runs it (role agent_box); the runner's
+# self-update is off, so this is how a merged pin reaches the runner.
 set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | destroy) action=$1 ;;
-  *) echo "usage: ci-runner plan|apply|configure|destroy" >&2; exit 2 ;;
+  plan | apply | configure | destroy | bump | weekly) action=$1 ;;
+  *) echo "usage: ci-runner plan|apply|configure|destroy|bump|weekly" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -24,7 +30,9 @@ state=$work/state/ci-runner.tfstate
 plan=$work/state/ci-runner.tfplan
 vars=$work/state/ci-runner.tfvars.json
 sshkey=$keys/ci-runner-ssh
-export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin TF_DATA_DIR=$work/tofu-data/ci-runner TF_IN_AUTOMATION=1
+# Ansible comes from the box's own virtual environment (role agent_box), as in the rebuild wrapper.
+export HOME=$work PATH=/usr/local/libexec/agent-box/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
+export TF_DATA_DIR=$work/tofu-data/ci-runner TF_IN_AUTOMATION=1 ANSIBLE_HOME=$work/ansible-home
 
 [[ -f $settings ]] || { echo "ci-runner: $settings is missing; set agent_box_ci_runner in the inventory and run the agent_box role" >&2; exit 1; }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
@@ -74,14 +82,11 @@ PY
 
 b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 
-# A registration token for the one repository, from the GitHub App "Central Hub Agents". The App
-# needs the repository permission Administration (write), which GitHub requires for this call; the
-# installation token asked for here is cut down to that one repository and that one permission.
-registration_token() {
-  local app_id owner name now jwt inst tok
+# An installation token from the GitHub App "Central Hub Agents", cut down to one repository and
+# the permissions asked for (a JSON object), so it can do only the one job it is minted for.
+app_token() {
+  local owner=$1 name=$2 perms=$3 app_id now jwt inst
   app_id=$(setting github_app_id)
-  owner=$(setting repo_owner)
-  name=$(setting repo_name)
   now=$(date +%s)
   jwt="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url).$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((now - 60)) $((now + 540)) "$app_id" | b64url)"
   jwt="$jwt.$(printf '%s' "$jwt" | openssl dgst -sha256 -sign "$keys/github-app.pem" | b64url)"
@@ -95,10 +100,19 @@ registration_token() {
       fi
       return 1
     }
-  tok=$(BEARER=$jwt api -X POST \
-    -d "{\"repositories\":[\"$name\"],\"permissions\":{\"administration\":\"write\"}}" \
-    "https://api.github.com/app/installations/$inst/access_tokens" | field token) ||
-    { echo "ci-runner: no installation token (has the installation accepted Administration: write?)" >&2; return 1; }
+  BEARER=$jwt api -X POST \
+    -d "{\"repositories\":[\"$name\"],\"permissions\":$perms}" \
+    "https://api.github.com/app/installations/$inst/access_tokens" | field token ||
+    { echo "ci-runner: no installation token for $owner/$name with $perms (has the installation accepted it?)" >&2; return 1; }
+}
+
+# A registration token for the one repository. The App needs the repository permission
+# Administration (write), which GitHub requires for this call.
+registration_token() {
+  local owner name tok
+  owner=$(setting repo_owner)
+  name=$(setting repo_name)
+  tok=$(app_token "$owner" "$name" '{"administration":"write"}') || return 1
   BEARER=$tok api -X POST "https://api.github.com/repos/$owner/$name/actions/runners/registration-token" |
     field token
 }
@@ -151,7 +165,133 @@ PY
     ansible-playbook -i "$inventory" --private-key "$sshkey" -e "@$extra" playbooks/ci-runner.yml
 }
 
+# Open a central-hub PR that moves the runner pin to the newest release at least two weeks old.
+# The pin is read from origin/main, the release list and tarball come from GitHub, and the PR is
+# made through the API as the App (Contents and Pull requests, write), so no git credentials are
+# stored and nothing runs from a branch.
+bump() {
+  local defaults=hosts/ansible/roles/ci_runner/defaults/main.yml tok
+  tok=$(app_token jonhill90 central-hub '{"contents":"write","pull_requests":"write"}') || return 1
+  BEARER=$tok python3 -I - "$repo/$defaults" "$defaults" "$work/state" <<'PY'
+import base64, datetime, hashlib, json, os, re, sys, urllib.request
+
+local_file, path, scratch = sys.argv[1:4]
+api = "https://api.github.com"
+target = "jonhill90/central-hub"
+
+
+def call(method, url, body=None, raw=False):
+    req = urllib.request.Request(url, method=method, data=None if body is None else json.dumps(body).encode())
+    req.add_header("Authorization", "Bearer " + os.environ["BEARER"])
+    req.add_header("Accept", "application/vnd.github+json")
+    req.add_header("X-GitHub-Api-Version", "2022-11-28")
+    with urllib.request.urlopen(req, timeout=60) as r:
+        data = r.read()
+    return data if raw else json.loads(data or b"null")
+
+
+def vtuple(v):
+    return tuple(int(x) for x in v.split("."))
+
+
+text = open(local_file).read()
+pinned = re.search(r"^ci_runner_version: (\S+)$", text, re.M).group(1)
+
+# Releases two weeks old or more (STD-0003), newest version first.
+cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=14)
+releases = []
+for r in call("GET", api + "/repos/actions/runner/releases?per_page=30"):
+    if r["draft"] or r["prerelease"] or not re.fullmatch(r"v\d+\.\d+\.\d+", r["tag_name"]):
+        continue
+    published = datetime.datetime.fromisoformat(r["published_at"].replace("Z", "+00:00"))
+    if published <= cutoff:
+        releases.append((vtuple(r["tag_name"][1:]), r, published))
+if not releases:
+    sys.exit("ci-runner bump: no release at least two weeks old was found")
+releases.sort(key=lambda x: x[0], reverse=True)
+_, rel, published = releases[0]
+version = rel["tag_name"][1:]
+if vtuple(version) <= vtuple(pinned):
+    print(f"ci-runner bump: the pin {pinned} is current (newest release two weeks old: {version})")
+    sys.exit(0)
+
+branch = "chore/bump-ci-runner-" + version.replace(".", "-")
+for pr in call("GET", f"{api}/repos/{target}/pulls?state=open&per_page=100"):
+    if pr["head"]["ref"] == branch:
+        print(f"ci-runner bump: PR #{pr['number']} already moves the pin to {version}")
+        sys.exit(0)
+
+# The SHA-256 must match twice: the release notes' line for the linux-x64 tarball, and a download.
+asset = f"actions-runner-linux-x64-{version}.tar.gz"
+body = rel.get("body") or ""
+m = (re.search(r"<!-- BEGIN SHA linux-x64 -->([0-9a-f]{64})<!-- END SHA linux-x64 -->", body)
+     or re.search(re.escape(asset) + r"\W+([0-9a-f]{64})", body))
+if not m:
+    sys.exit(f"ci-runner bump: the notes of {rel['tag_name']} give no SHA-256 for {asset}; pin it by hand")
+noted = m.group(1)
+url = next((a["browser_download_url"] for a in rel["assets"] if a["name"] == asset), None)
+if not url:
+    sys.exit(f"ci-runner bump: {rel['tag_name']} has no {asset}")
+digest = hashlib.sha256()
+with urllib.request.urlopen(url, timeout=600) as r:
+    for chunk in iter(lambda: r.read(1 << 20), b""):
+        digest.update(chunk)
+if digest.hexdigest() != noted:
+    sys.exit(f"ci-runner bump: the download of {asset} doesn't match its release notes; nothing opened")
+
+today = datetime.date.today().isoformat()
+new = text
+for pattern, repl in [
+    (r"v\d+\.\d+\.\d+, published \d{4}-\d{2}-\d{2}\.", f"v{version}, published {published.date().isoformat()}."),
+    (r"actions-runner-linux-x64-\d+\.\d+\.\d+\.tar\.gz", asset),
+    (r"download on \d{4}-\d{2}-\d{2}\.", f"download on {today}."),
+    (r"^ci_runner_version: \S+$", f"ci_runner_version: {version}"),
+    (r"^ci_runner_sha256: \S+$", f"ci_runner_sha256: {noted}"),
+]:
+    new, n = re.subn(pattern, repl, new, flags=re.M)
+    if n != 1:
+        sys.exit(f"ci-runner bump: {path} no longer has exactly one line matching {pattern!r}; nothing opened")
+
+main_sha = call("GET", f"{api}/repos/{target}/git/ref/heads/main")["object"]["sha"]
+on_main = call("GET", f"{api}/repos/{target}/contents/{path}?ref={main_sha}")
+call("POST", f"{api}/repos/{target}/git/refs", {"ref": "refs/heads/" + branch, "sha": main_sha})
+call("PUT", f"{api}/repos/{target}/contents/{path}", {
+    "message": f"chore: bump the CI runner to {version}",
+    "content": base64.b64encode(new.encode()).decode(),
+    "sha": on_main["sha"],
+    "branch": branch,
+})
+pr = call("POST", f"{api}/repos/{target}/pulls", {
+    "title": f"chore: bump the CI runner to {version}",
+    "head": branch,
+    "base": "main",
+    "body": "\n".join([
+        "## Summary", "",
+        f"- Moves the notebook's CI runner pin from {pinned} to {version}, the newest actions/runner release at least two weeks old (STD-0003), published {published.date().isoformat()}.",
+        f"- SHA-256 `{noted}`, from the release notes and matched against a download on {today}.",
+        "", "## Issue", "", "- Closes: none.",
+        "", "## Deploy impact", "",
+        "- What the GitOps tool will change when this merges (Foundation: none): none. The agent box's next weekly `ci-runner configure` installs the new runner.",
+        "", "## Validation Evidence", "", "- Opened by the agent box's weekly `ci-runner bump` (hosts/ansible/roles/agent_box/files/ci-runner.sh).",
+        "", "## Test plan", "", "- [ ] CI checks pass",
+        "", "## Notes", "",
+        "- The runner's self-update is off, and GitHub stops queuing jobs on a runner more than 30 days behind a new release, so merge this within about two weeks.",
+        "", "Author-Lane: runner-bump timer",
+    ]),
+})
+print(f"ci-runner bump: opened PR #{pr['number']} moving the pin from {pinned} to {version}")
+PY
+}
+
 case $action in
   plan | apply | destroy) tofu_run ;;
   configure) configure ;;
+  bump) bump ;;
+  weekly)
+    # Each half runs even if the other fails, and the run fails if either did.
+    rc=0
+    ( configure ) || rc=1
+    ( bump ) || rc=1
+    exit $rc
+    ;;
 esac

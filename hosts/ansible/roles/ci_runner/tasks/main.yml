@@ -2,7 +2,8 @@
 # The notebook's self-hosted CI runner (docs/runbooks/set-up-the-ci-runner.md). The runner and its
 # jobs run as an unprivileged user with no sudo; the VM holds no lab keys. Registration happens
 # once, with a one-hour token the agent box's ci-runner wrapper mints; after that the runner keeps
-# its own credential in its home.
+# its own credential in its home. The runner never updates itself: the pin in defaults is what runs
+# (owner's answer, 2026-11-12, hosts/AGENT-PICKS.md pick 208).
 
 - name: Check the hostname against STD-0001 (at most 15 characters, a-z and 0-9, starts with a letter)
   ansible.builtin.assert:
@@ -72,19 +73,119 @@
   when: not (ansible_check_mode and ci_runner_dirs is changed)
   tags: [runner]
 
-# Unpacked once. The runner updates itself later, so a newer pin applies only to a fresh VM.
-- name: Unpack the runner
+# The runner doesn't update itself (registered with --disableupdate below), so the pin is the
+# version that runs: a newer pin is unpacked over the old files, which keeps the registration
+# (.runner, .credentials) because the tarball holds no such files. A runner that is already newer
+# than the pin (it updated itself before self-update was turned off) is left as it is until the
+# pin catches up; the agent box's weekly `ci-runner bump` opens that PR.
+- name: Which runner version is installed?
+  ansible.builtin.command: "{{ ci_runner_home }}/runner/bin/Runner.Listener --version"
+  register: ci_runner_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [runner]
+
+- name: Note the installed and pinned versions
+  ansible.builtin.set_fact:
+    ci_runner_installed_version: "{{ ci_runner_installed.stdout | default('') | trim if ci_runner_installed.rc == 0 else '' }}"
+  tags: [runner]
+
+- name: Say so when the installed runner is newer than the pin
+  ansible.builtin.debug:
+    msg: >-
+      The runner is {{ ci_runner_installed_version }}, newer than the pin {{ ci_runner_version }};
+      it stays as it is. Merge the bump PR (`ci-runner bump` opens it) so the pin catches up.
+  when:
+    - ci_runner_installed_version | length > 0
+    - ci_runner_installed_version is version(ci_runner_version, '>')
+  tags: [runner]
+
+- name: Stop the runner before its files change
+  ansible.builtin.systemd_service:
+    name: github-runner
+    state: stopped
+  when:
+    - not ansible_check_mode
+    - ci_runner_installed_version | length > 0
+    - ci_runner_installed_version is version(ci_runner_version, '<')
+  notify: Restart the runner
+  tags: [runner]
+
+- name: Unpack the pinned runner (first install, or a newer pin)
   ansible.builtin.unarchive:
     src: "{{ ci_runner_home }}/downloads/actions-runner-linux-x64-{{ ci_runner_version }}.tar.gz"
     dest: "{{ ci_runner_home }}/runner"
     remote_src: true
-    creates: "{{ ci_runner_home }}/runner/config.sh"
     owner: "{{ ci_runner_user }}"
     group: "{{ ci_runner_user }}"
-  when: not (ansible_check_mode and ci_runner_dirs is changed)
+  when:
+    - not (ansible_check_mode and ci_runner_dirs is changed)
+    - ci_runner_installed_version | length == 0 or ci_runner_installed_version is version(ci_runner_version, '<')
+  notify: Restart the runner
   tags: [runner]
 
 - name: Is the runner registered already?
+  ansible.builtin.stat:
+    path: "{{ ci_runner_home }}/runner/.runner"
+  register: ci_runner_registered
+  tags: [runner]
+
+- name: Read the runner's registration
+  ansible.builtin.slurp:
+    src: "{{ ci_runner_home }}/runner/.runner"
+  register: ci_runner_settings
+  when: ci_runner_registered.stat.exists
+  tags: [runner]
+
+# Self-update is set at registration only (`config.sh --disableupdate`, which the runner keeps in
+# .runner), so a runner registered without it is registered again: its local registration files go,
+# and config.sh --replace takes over the same runner name on GitHub. That needs a fresh token, which
+# the ci-runner wrapper mints on every configure run.
+- name: Does the registration keep self-update off?
+  ansible.builtin.set_fact:
+    ci_runner_update_off: >-
+      {{ ci_runner_registered.stat.exists and
+         ((ci_runner_settings.content | b64decode | regex_replace('^\ufeff', '') | from_json).disableUpdate | default(false) | bool) }}
+  tags: [runner]
+
+- name: Stop the runner before its registration goes
+  ansible.builtin.systemd_service:
+    name: github-runner
+    state: stopped
+  when:
+    - ci_runner_registered.stat.exists
+    - not ci_runner_update_off
+    - ci_runner_registration_token | length > 0
+    - not ansible_check_mode
+  notify: Restart the runner
+  tags: [runner]
+
+- name: Drop a registration that lets the runner update itself
+  ansible.builtin.file:
+    path: "{{ ci_runner_home }}/runner/{{ item }}"
+    state: absent
+  loop: [.runner, .credentials, .credentials_rsaparams]
+  when:
+    - ci_runner_registered.stat.exists
+    - not ci_runner_update_off
+    - ci_runner_registration_token | length > 0
+    - not ansible_check_mode
+  tags: [runner]
+
+- name: Say so when self-update is still on and there is no token to register again
+  ansible.builtin.debug:
+    msg: >-
+      The runner was registered with self-update on, and there is no registration token to
+      register it again without. Run `ci-runner configure` on the agent box, which mints one.
+  when:
+    - ci_runner_registered.stat.exists
+    - not ci_runner_update_off
+    - ci_runner_registration_token | length == 0
+  tags: [runner]
+
+# Always run: a skipped task would still overwrite the registered variable.
+- name: Look again for a registration
   ansible.builtin.stat:
     path: "{{ ci_runner_home }}/runner/.runner"
   register: ci_runner_registered
@@ -114,6 +215,7 @@
       - --work
       - _work
       - --replace
+      - --disableupdate
     chdir: "{{ ci_runner_home }}/runner"
     creates: "{{ ci_runner_home }}/runner/.runner"
   become: true

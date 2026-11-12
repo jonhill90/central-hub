@@ -17,8 +17,10 @@ agent_box_repo_url: https://github.com/jonhill90/central-hub.git
 agent_box_wrappers:
   - name: dev-vms
     args: [plan, apply, destroy]
+  # bump opens a PR moving the runner pin; `weekly` (configure, then bump) is the timer's only, so
+  # sessions can't start it through sudo.
   - name: ci-runner
-    args: [plan, apply, configure, destroy]
+    args: [plan, apply, configure, destroy, bump]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself.
   - name: pr-merge
     args: ["check *", "merge *"]
@@ -88,6 +90,9 @@ agent_box_ca_files: []
 agent_box_tls_check_url: ""
 # Any other top-level settings, merged over the rest (for example autoUpdatesChannel).
 agent_box_managed_settings_extra: {}
+# When the weekly `ci-runner weekly` run starts (systemd OnCalendar): it reinstalls the merged pin on
+# the runner, then opens a PR for a newer release (pick 208). Only set up when agent_box_ci_runner is.
+agent_box_ci_runner_weekly: "Mon *-*-* 14:00:00 UTC"
 # The notebook's CI runner VM that the ci-runner wrapper builds (docs/runbooks/set-up-the-ci-runner.md).
 # Private, through the inventory: name, vm_id, address, cores, memory_mb, disk_gb, proxmox_node_name,
 # vnet, template_vm_id, github_app_id, repo_owner, repo_name. Empty leaves the wrapper unset up.
