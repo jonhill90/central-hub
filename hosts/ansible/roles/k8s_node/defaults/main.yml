@@ -1,8 +1,11 @@
 ---
-# Every input of this role is listed here (Red Hat CoP rule). Versions are the kubeadm runbook's
-# pins (central-hub docs/runbooks/build-kubeadm-cluster.md steps 5-6).
-k8s_node_kubernetes_minor: "1.36"
-k8s_node_kubernetes_version: "1.36.5"
+# Every input of this role is listed here (Red Hat CoP rule). The Kubernetes versions are the ones
+# the cluster runs: an upgrade bumps them here by PR, with k8s_control_plane_kubernetes_version,
+# and playbooks/k8s-upgrade.yml then moves the cluster to them; never set them in the inventory
+# (hosts/AGENT-PICKS.md pick 33). They started at the kubeadm runbook's pins
+# (docs/runbooks/build-kubeadm-cluster.md steps 5-6).
+k8s_node_kubernetes_minor: "1.37"
+k8s_node_kubernetes_version: "1.37.1"
 k8s_node_containerd_package: containerd.io-2.3.6-1.el10
 # The pod range (STD-0002, cluster 1). firewalld trusts it so pods reach the API and the host.
 k8s_node_pod_cidr: 10.240.0.0/16

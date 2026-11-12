@@ -4,7 +4,7 @@ argument_specs:
     short_description: kubeadm init with Secrets encrypted at rest, Cilium and its Gateway API controller on the first control-plane node (runbook steps 7-10)
     options:
       k8s_control_plane_endpoint: {type: str, required: true, description: "The API name, api.c1.prod.<zone>. Private zone."}
-      k8s_control_plane_kubernetes_version: {type: str, default: "1.36.5", description: Kubernetes version for kubeadm init.}
+      k8s_control_plane_kubernetes_version: {type: str, default: "1.37.1", description: Kubernetes version for kubeadm init.}
       k8s_control_plane_pod_cidr: {type: str, default: 10.240.0.0/16, description: Pod range.}
       k8s_control_plane_service_cidr: {type: str, default: 10.96.0.0/16, description: Service range.}
       k8s_control_plane_helm_version: {type: str, default: v4.3.1, description: Helm release.}
