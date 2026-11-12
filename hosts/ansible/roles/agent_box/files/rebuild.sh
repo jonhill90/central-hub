@@ -3,13 +3,24 @@
 # (hosts/rebuild-k8s.sh, docs/runbooks/rebuild-k8s-layer-with-one-command.md) from the agent box.
 # It runs as user `keys` through sudo, so the session that asks for it never sees the Proxmox
 # token, the node SSH key or the dev inventory. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|log
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
 # Dev only: the env file below fixes ENV_NAME=dev and the dev VM range 250-257, and rebuild-k8s.sh
 # refuses a tfvars whose VM IDs fall outside it or whose node_vnet isn't "dev". Only code on main
 # runs with the keys; there is no way to name another branch.
+# log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can
+# quote the realm and the nodes' output). It takes no argument and reads no other file.
 set -euo pipefail
 umask 077
+
+if [[ ${1:-} == log && $# -eq 1 ]]; then
+  newest=$(ls -1 /var/lib/agent-box/rebuild-dev/logs/rebuild-*.log 2>/dev/null | sort | tail -n 1)
+  [[ -n $newest ]] || { echo "rebuild: no run has been logged yet" >&2; exit 1; }
+  echo "run: ${newest##*/}"
+  cat -- "$newest"
+  sed -E 's/\x1b\[[0-9;]*m//g' -- "${newest%.log}.raw" 2>/dev/null | grep -E '(^|[^A-Za-z])(PASS|FAIL):' | cut -c1-200 | head -n 60 || true
+  exit 0
+fi
 
 case ${1:-} in
   up) extra=() ;;

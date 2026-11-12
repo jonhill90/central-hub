@@ -26,7 +26,7 @@ agent_box_wrappers:
     args: ["check *", "merge *"]
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
-    args: [up, rebuild, teardown]
+    args: [up, rebuild, teardown, log]
 
 # OpenTofu for the wrappers, the same version CI uses (.github/hosts-check/install-tools.sh),
 # checked against the release's SHA256SUMS.
