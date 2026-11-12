@@ -17,6 +17,12 @@ variable "node_vnet" {
   default     = "prod"
 }
 
+variable "pool_id" {
+  description = "The Proxmox resource pool the template and nodes go in (one pool per workload, named by job). c1 keeps k8s; the agents' dev rebuild uses dev, the one pool their Proxmox user may add guests to."
+  type        = string
+  default     = "k8s"
+}
+
 variable "create_template" {
   description = "true: this state downloads the pinned image and owns the template (c1). false: the nodes clone template_vm_id, which another state owns (a rehearsal cluster beside c1)."
   type        = bool

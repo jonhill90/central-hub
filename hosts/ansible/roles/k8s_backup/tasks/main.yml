@@ -15,6 +15,16 @@
     quiet: true
   tags: [install, timers, drill, restore, restore_check]
 
+- name: install | A fixed reader certificate is for a reader only
+  ansible.builtin.assert:
+    that: k8s_backup_reader or (k8s_backup_azure_fixed_cert_file | length == 0)
+    fail_msg: >-
+      k8s_backup_azure_fixed_cert_file is set but k8s_backup_reader is false. The fixed certificate
+      is for a read-only dev restore; a cluster that backs up makes its own node certificates.
+      Nothing was changed.
+    quiet: true
+  tags: [install, timers, drill, restore, restore_check]
+
 - name: install | Settings are complete when backups are on
   ansible.builtin.assert:
     that:

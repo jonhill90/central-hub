@@ -32,9 +32,15 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 
 # What the box must hold before this wrapper can run. Each is put there through the keys wrapper
 # or made by the agent_box role; the wrapper says which one is missing instead of failing later.
-for f in "$keys/proxmox-dev.env" "$keys/dev-vms.tfvars"; do
+for f in "$keys/proxmox-dev.env" "$keys/dev-vms.tfvars" "$keys/c1-backup.env" "$keys/azure-reader.env"; do
   [[ -f $f ]] || { echo "rebuild: $f is missing" >&2; exit 1; }
 done
+# The reader certificate must still be valid, or the restore stage fails after the VMs exist. A warning
+# at 30 days left, so the renewal is not a surprise.
+openssl x509 -checkend 0 -noout -in "$keys/azure-reader.env" > /dev/null \
+  || { echo "rebuild: the reader certificate in $keys/azure-reader.env has expired or is unreadable" >&2; exit 1; }
+openssl x509 -checkend 2592000 -noout -in "$keys/azure-reader.env" > /dev/null \
+  || echo "rebuild: warning: the reader certificate expires within 30 days; renew it" >&2
 [[ -d $inv_src ]] || { echo "rebuild: the dev inventory $inv_src is missing (docs/runbooks/set-up-the-agent-box.md, 'Rebuild dev from the box')" >&2; exit 1; }
 [[ -x $libexec/ansible-venv/bin/ansible-playbook ]] || { echo "rebuild: Ansible is not installed; run the agent_box role" >&2; exit 1; }
 
@@ -56,7 +62,11 @@ if [[ ! -f $nodekey ]]; then
 fi
 pub=$(cat "$nodekey.pub")
 # A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
-awk -v pub="$pub" '/^[[:space:]]*node_ssh_public_key[[:space:]]*=/ { print "node_ssh_public_key = \"" pub "\""; next } { print }' "$keys/dev-vms.tfvars" > "$envdir/dev-vms.tfvars"
+# The agents' token adds guests only to pool dev (the module's pool_id) and clones only template 9001, the copy of template 9000 on VNet dev
+# (hosts/terraform/home/bootstrap/agent-access.sh); the Mac's tfvars name 9000, for its root token.
+awk -v pub="$pub" '/^[[:space:]]*node_ssh_public_key[[:space:]]*=/ { print "node_ssh_public_key = \"" pub "\""; next }
+  /^[[:space:]]*template_vm_id[[:space:]]*=/ { next } { print }' "$keys/dev-vms.tfvars" > "$envdir/dev-vms.tfvars"
+printf '%s\n' 'template_vm_id = 9001' 'pool_id = "dev"' >> "$envdir/dev-vms.tfvars"
 grep -q '^node_ssh_public_key = "ssh-ed25519 ' "$envdir/dev-vms.tfvars" || { echo "rebuild: dev-vms.tfvars has no node_ssh_public_key line to set" >&2; exit 1; }
 rm -rf "$inventory"
 install -d -m 700 "$inventory"
