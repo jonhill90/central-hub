@@ -61,6 +61,13 @@ if [[ ! -f $nodekey ]]; then
   ssh-keygen -q -t ed25519 -N '' -C rebuild-dev-node -f "$nodekey"
 fi
 pub=$(cat "$nodekey.pub")
+# The dev cluster's Secrets-at-rest key is the box's own, made once here and kept for later runs
+# (the Mac's copy is a rehearsal key, not c1's). Never printed.
+encfile=$keys/rebuild-encryption.key
+if [[ ! -s $encfile ]]; then
+  (umask 077; head -c 32 /dev/urandom | base64 > "$encfile")
+fi
+chmod 600 "$encfile"
 # A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
 # The agents' token creates guests on their /vms/<id> ACL but may not add one to a pool (the module's pool_id is null) and clones only template 9001, the copy of template 9000 on VNet dev
 # (hosts/terraform/home/bootstrap/agent-access.sh); the Mac's tfvars name 9000, for its root token.
@@ -78,7 +85,7 @@ DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking",
         "k8s_gateway_smoke_client", "k8s_certs_smoke_client", "k8s_certs_smoke_root_file",
-        "k8s_backup_env_file", "k8s_backup_azure_fixed_cert_file"}
+        "k8s_backup_env_file", "k8s_backup_azure_fixed_cert_file", "k8s_control_plane_encryption_key_file"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -106,6 +113,7 @@ v["k8s_certs_smoke_client"] = "localhost"
 v["k8s_certs_smoke_root_file"] = known.rsplit("/", 1)[0] + "/lab-root-ca.crt"
 v["k8s_backup_env_file"] = keys + "/c1-backup.env"
 v["k8s_backup_azure_fixed_cert_file"] = keys + "/azure-reader.env"
+v["k8s_control_plane_encryption_key_file"] = keys + "/rebuild-encryption.key"
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
 )" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys"
