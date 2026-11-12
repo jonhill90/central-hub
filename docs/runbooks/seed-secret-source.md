@@ -2,13 +2,13 @@
 title: Seed namespace secret-source on c1 from the controller
 status: draft
 kind: manual
-trigger: when an app first needs a secret through store c1; at a lab rebuild, after step 1 of install-c1-add-ons-with-ansible.md, only if the file below has lines
+trigger: when an app first needs a secret through store c1; at a lab rebuild, once store c1 is Ready; after a line of the file below changes
 runner: the owner, or an agent lane through the owner's Mac (D-0022)
 outcome: every line of the controller's secret-source file is a Secret named after it in namespace secret-source, and store c1 can hand it to an ExternalSecret
 needs: ClusterSecretStore c1 Ready (install-c1-add-ons-with-ansible.md step 1, or move-external-secrets-to-argo-cd.md); SSH to c1's control plane as D-0022 says; kubectl on the controller
 private-values: [secret-source.env, c1-control-plane]
 files: [hosts/kubernetes/home/c1/apps/secret-store/templates/store.yaml, hosts/ansible/roles/k8s_secrets/templates/store.yaml.j2, hosts/ansible/roles/k8s_secrets/defaults/main.yml]
-last-tested: not yet run; nothing on c1 reads store c1 yet
+last-tested: not yet run
 superseded-by:
 ---
 
@@ -16,17 +16,17 @@ superseded-by:
 
 **Status:** draft. Written on 2026-11-08 from the store's manifest and the repository's search for its users. Not run.
 
-## What goes in `secret-source` today: nothing
+## What goes in `secret-source` today
 
-On 2026-11-08 no ExternalSecret in this repository names store `c1`. The only ExternalSecret on c1, Jellyfin's admin password ([setup-secret.yaml](../../hosts/kubernetes/home/c1/apps/jellyfin/templates/setup-secret.yaml)), comes from an ESO `Password` generator, not from the store. Sign-in reads its values from `inventories/home/identity.env` through Ansible (PR #69), and the lab CA keeps its own files (PR #65). So at a rebuild there is nothing to seed: skip this runbook while the file below is empty or missing.
+ntfy's three values (pick 171): `ntfy-owner-password`, `ntfy-alertmanager-token` and `ntfy-proxmox-token`, made by `playbooks/ntfy-access.yml` ([Get c1's alerts on a phone](get-c1-alerts-on-your-phone.md), step 0). ExternalSecrets `ntfy-auth` (app alerts) and `alertmanager-ntfy` (app monitoring-extras) read them. Jellyfin's admin password comes from an ESO `Password` generator instead, and sign-in and the lab CA keep their own files. So at a rebuild, run this runbook once the store is Ready.
 
-Check before you trust that sentence, because a later change can add a user of the store:
+Check before you trust that list, because a later change can add a user of the store:
 
 ```sh
-git grep -n 'secretStoreRef' -- hosts/
+git grep -n 'remoteRef' -- hosts/kubernetes/
 ```
 
-expect: no hit (true on 2026-11-08). Every hit is an ExternalSecret whose `remoteRef.key` names a Secret that must be in the file below.
+expect: every `key:` named there is a line in the file below.
 
 ## How the store reads it
 

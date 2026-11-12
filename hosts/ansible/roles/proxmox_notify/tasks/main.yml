@@ -19,12 +19,19 @@
       options:
         url: "{{ proxmox_notify_ntfy_url }}"
         method: post
-        header:
-          - "name=Title,value={{ proxmox_notify_ntfy_title | b64encode }}"
-          - "name=Priority,value={{ proxmox_notify_ntfy_priority | b64encode }}"
-          - "name=Tags,value={{ proxmox_notify_ntfy_tags | b64encode }}"
+        header: >-
+          {{ ["name=Title,value=" ~ (proxmox_notify_ntfy_title | b64encode),
+              "name=Priority,value=" ~ (proxmox_notify_ntfy_priority | b64encode),
+              "name=Tags,value=" ~ (proxmox_notify_ntfy_tags | b64encode)]
+             + (["name=Authorization,value=" ~ ("Bearer " ~ proxmox_notify_ntfy_token) | b64encode]
+                if proxmox_notify_ntfy_token | default("", true) | length > 0 else []) }}
         body: "{{ proxmox_notify_ntfy_body | b64encode }}"
-        comment: ntfy on c1 (central-hub hosts/ansible proxmox_notify)
+        # Headers are secret, so the role never compares them; the comment carries the first 8
+        # hex digits of the token's SHA-256, so a new or changed token updates the target.
+        comment: >-
+          ntfy on c1 (central-hub hosts/ansible proxmox_notify){{ (', token sha256 ' ~
+          (proxmox_notify_ntfy_token | hash('sha256'))[:8]) if proxmox_notify_ntfy_token | default("", true) | length > 0 else '' }}
+  no_log: true
   when: proxmox_notify_ntfy_url | default("", true) | length > 0
 
 - name: Pick the target name

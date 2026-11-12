@@ -43,7 +43,13 @@ k8s_observability_kps_values:
           webhook_configs:
             - url: http://ntfy.alerts.svc.cluster.local/c1-alerts?template=alertmanager
               send_resolved: true
+              # Send-only token (pick 171), from Secret alertmanager-ntfy (app monitoring-extras).
+              http_config:
+                authorization:
+                  type: Bearer
+                  credentials_file: /etc/alertmanager/secrets/alertmanager-ntfy/token
     alertmanagerSpec:
+      secrets: [alertmanager-ntfy]
       resources:
         requests: {cpu: 10m, memory: 32Mi}
         limits: {memory: 128Mi}
