@@ -60,8 +60,10 @@ c1Project:
 
 # One entry per component, in the order they moved (spec, "Order"). Each one:
 #   namespace    where the chart installs
-#   chart        repoURL, name and version of the upstream Helm chart (version per STD-0003);
-#                optional `oci`, an OCI copy of the same file that CI's parity check pulls instead
+#   chart        repoURL, name and version of the upstream Helm chart (version per STD-0003).
+#                An oci:// repoURL also takes `digest`, the chart manifest's sha256: Argo CD fetches
+#                that digest, never the tag, so a re-pushed tag changes nothing (pick 141); `version`
+#                stays for people, and CI checks the chart at that digest has that version
 #   local        true: a chart kept in this repository at appsPath/<name>/ instead of `chart`
 #   releaseName  the Helm release name today, so the objects keep their names (default: the key)
 #   needsZone    pass `zone` to the chart as a value
@@ -110,13 +112,12 @@ apps:
   loki:
     namespace: logging
     chart:
-      repoURL: https://grafana-community.github.io/helm-charts
+      # The project's own OCI copy of the file on grafana-community.github.io (the chart layers'
+      # SHA-256 matched, bfa76744...edbe0a, 2026-11-12).
+      repoURL: oci://ghcr.io/grafana-community/helm-charts/loki
       name: loki
       version: 18.15.1   # Loki 3.7.8, 2026-10-09; same as k8s_observability today
-      # The same chart file, published by the same project as OCI. Only CI's parity check reads it
-      # (the GitHub release download behind repoURL returned 504 for hours on 2026-11-08); the bytes
-      # matched (SHA-256 bfa76744...edbe0a) on 2026-11-08. Argo CD and Ansible still use repoURL.
-      oci: oci://ghcr.io/grafana-community/helm-charts/loki
+      digest: sha256:97ac03444f2f4689a84c575e06318acf4297bbf15443b0fbd5481ab6ec476b42
     autoSync: true
     prune: false
   alloy:
@@ -132,9 +133,12 @@ apps:
   kube-prometheus-stack:
     namespace: monitoring
     chart:
-      repoURL: https://prometheus-community.github.io/helm-charts
+      # The project's own OCI copy of the file on prometheus-community.github.io (the chart layers'
+      # SHA-256 matched, 5c976ae9...e6bd6a, 2026-11-12).
+      repoURL: oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
       name: kube-prometheus-stack
       version: 92.3.1   # Prometheus Operator v0.94.1, 2026-10-13; same as k8s_observability today
+      digest: sha256:bb8dae4452aefa2e1fcfd23af35c0b3f8aa070e339aa7efec32848efb6886a24
     valueFiles: [values.yaml, values-sso.yaml]
     zoneParameters:
       # Short aliases (STD-0001 rules 5 and 7), as k8s_observability_short_names.
@@ -154,9 +158,12 @@ apps:
   external-secrets:
     namespace: external-secrets
     chart:
-      repoURL: https://charts.external-secrets.io
+      # The project's own OCI copy of the file on charts.external-secrets.io (the chart layers'
+      # SHA-256 matched, 0a6d9e91...ee5e34, 2026-11-12).
+      repoURL: oci://ghcr.io/external-secrets/charts/external-secrets
       name: external-secrets
       version: 2.14.0   # 2026-10-23, the first to list Kubernetes 1.37; same as k8s_secrets today
+      digest: sha256:0e3d45f11522f2730ff55deef57bc43e0ff4aadc00bdab5557fa4d354b0c3ab7
     wave: -2
     syncOptions: [ServerSideApply=true]
     autoSync: true
@@ -172,9 +179,12 @@ apps:
   cert-manager:
     namespace: cert-manager
     chart:
-      repoURL: https://charts.jetstack.io
+      # The project's own OCI copy of the file on charts.jetstack.io (the chart layers' SHA-256
+      # matched the one k8s_certs checks, 9ec67938...373a17, 2026-11-12).
+      repoURL: oci://quay.io/jetstack/charts/cert-manager
       name: cert-manager
       version: v1.21.3   # security release, STD-0003 rule 2; same as k8s_certs today
+      digest: sha256:e482675aec32862d323a9218293ff7de81192337998615e4378c56498473f240
     wave: -2
     syncOptions: [ServerSideApply=true]
     autoSync: true

@@ -51,6 +51,8 @@ Since 2026-11-10, `autoSync` is on for this app in `root/values.yaml` (the owner
 
 ## Change it
 
+Argo CD fetches the chart from its OCI copy, `oci://quay.io/jetstack/charts/cert-manager`, by digest (pick 141 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)), so a re-pushed tag changes nothing. A new version changes `version` and `digest` together in `root/values.yaml`: `helm pull oci://quay.io/jetstack/charts/cert-manager --version <version>` prints the digest, and CI's parity check fails if the chart at that digest has another version.
+
 Raise the chart version by PR after reading the release notes. With `crds.keep: true`, removing cert-manager never removes the Certificates and Issuers.
 
 ## Rebuild from nothing

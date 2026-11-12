@@ -25,11 +25,12 @@ def pull(chart, dest):
     (CI keeps that folder with actions/cache), else from its repository, with retries and backoff,
     so a short outage upstream doesn't fail the check."""
     cache = os.environ.get("PARITY_CHART_CACHE")
-    folder = pathlib.Path(cache) / f"{chart['name']}-{chart['version']}" if cache else dest
-    # A chart with an `oci` copy (root values) is pulled from there: the same file, without the
-    # repository index and GitHub release download that an outage can take away.
-    if chart.get("oci"):
-        args = ["helm", "pull", chart["oci"], "--version", str(chart["version"])]
+    oci = chart["repoURL"].startswith("oci://")
+    key = f"{chart['name']}-{chart['version']}" + (f"-{chart['digest'][7:19]}" if oci else "")
+    folder = pathlib.Path(cache) / key if cache else dest
+    # An OCI chart is pulled at its digest, as Argo CD fetches it (pick 141).
+    if oci:
+        args = ["helm", "pull", f"{chart['repoURL']}@{chart['digest']}"]
     else:
         args = ["helm", "pull", chart["name"], "--repo", chart["repoURL"], "--version",
                 str(chart["version"])]
@@ -46,7 +47,13 @@ def pull(chart, dest):
                 print(f"helm pull {chart['name']} {chart['version']} failed, retrying in {wait}s",
                       file=sys.stderr)
                 time.sleep(wait)
-    return folder / chart["name"]
+    path = folder / chart["name"]
+    # The digest is what Argo CD uses; the version is what people and the roles read. They must agree.
+    got = str(yaml.safe_load((path / "Chart.yaml").read_text())["version"])
+    if got != str(chart["version"]):
+        raise SystemExit(f"{chart['name']}: the chart at {chart.get('digest', 'that version')} is"
+                         f" version {got}, not {chart['version']}")
+    return path
 
 
 def objects(text):
