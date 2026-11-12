@@ -15,6 +15,12 @@ argument_specs:
       ci_runner_home: {type: path, default: /var/lib/github-runner, description: "The runner user's home: the runner's files and its job workspaces."}
       ci_runner_repo_url: {type: str, description: The one repository the runner takes jobs from.}
       ci_runner_labels: {type: list, elements: str, description: Labels the workflows ask for in runs-on.}
+      ci_runner_registration_files:
+        type: list
+        elements: str
+        description: >-
+          The files in the runner's folder that hold a registration; all are removed before a
+          registration is redone.
       ci_runner_version: {type: str, description: Runner release to install.}
       ci_runner_sha256: {type: str, description: SHA-256 of that release's linux-x64 tarball.}
       ci_runner_packages: {type: list, elements: str, description: Packages the runner and its jobs need.}

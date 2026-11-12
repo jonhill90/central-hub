@@ -26,3 +26,12 @@ ci_runner_packages: [git, python3, tar, gzip, acl, libicu, krb5-libs, openssl-li
 # A one-hour registration token, needed only the first time (the agent box's ci-runner wrapper
 # mints one). Secret; never logged.
 ci_runner_registration_token: ""
+
+# Everything config.sh or the runner keeps in its folder about a registration. All of it goes before a
+# registration is redone, or config.sh stops with "already configured".
+ci_runner_registration_files:
+  - .runner
+  - .credentials
+  - .credentials_rsaparams
+  - .runner_migrated
+  - .credentials_migrated
