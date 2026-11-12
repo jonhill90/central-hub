@@ -171,7 +171,17 @@
     file: azure_identity.yml
     apply:
       tags: [timers]
-  when: (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_azure_identity
+  when: (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_azure_identity and (k8s_backup_azure_fixed_cert_file | length == 0)
+  tags: [timers]
+
+# A reader (dev) may sign in with one fixed read-only certificate instead of one made on each node:
+# the controller holds the file, so it needs no Azure write rights (the agent box has none).
+- name: timers | Azure sign-in for the nodes, with the fixed reader certificate
+  ansible.builtin.include_tasks:
+    file: azure_fixed_cert.yml
+    apply:
+      tags: [timers]
+  when: k8s_backup_reader and k8s_backup_azure_identity and (k8s_backup_azure_fixed_cert_file | length > 0)
   tags: [timers]
 
 # The controller's env file, plus the Azure sign-in lines when the identity is on.
