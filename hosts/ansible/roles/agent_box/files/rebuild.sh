@@ -62,11 +62,13 @@ rm -rf "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
 import sys, yaml
-src, dst, key, known = sys.argv[1:5]
+src, dst, key, known, keys = sys.argv[1:6]
 d = yaml.safe_load(open(src))
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
-        "ansible_private_key_file", "ansible_host_key_checking"}
+        "ansible_private_key_file", "ansible_host_key_checking",
+        "k8s_gateway_smoke_client", "k8s_certs_smoke_client", "k8s_certs_smoke_root_file",
+        "k8s_backup_env_file", "k8s_backup_azure_fixed_cert_file"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -92,9 +94,11 @@ v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnown
 v["k8s_gateway_smoke_client"] = "localhost"
 v["k8s_certs_smoke_client"] = "localhost"
 v["k8s_certs_smoke_root_file"] = known.rsplit("/", 1)[0] + "/lab-root-ca.crt"
+v["k8s_backup_env_file"] = keys + "/c1-backup.env"
+v["k8s_backup_azure_fixed_cert_file"] = keys + "/azure-reader.env"
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts"
+)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys"
 [[ -f $inventory/hosts.yml ]] || { echo "rebuild: could not build the box's dev inventory from $inv_src/hosts.yml" >&2; exit 1; }
 chmod 600 "$inventory/hosts.yml"
 

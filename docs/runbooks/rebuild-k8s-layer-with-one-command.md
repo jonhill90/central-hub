@@ -124,6 +124,8 @@ These run through the Mac lane, in this order. Nothing here needs the owner exce
    k8s_gitops_source_local_path_stable_folders: true
    ```
 
+   Optional, for a controller with no Azure sign-in (the agent box): also set `k8s_backup_azure_fixed_cert_file` to the path of one PEM file (key and certificate) that the reader app already knows. The nodes then copy that file instead of making their own, and nothing is uploaded to or removed from the app. The certificate's expiry is the one date to renew by hand.
+
    Leave `k8s_backup_enabled` unset or `false`: `playbooks/k8s-restore.yml` refuses an inventory that turns the backup timers on, or whose `k8s_gitops_cluster_labels.env` is not `dev`.
    why: the reader app's IDs, never the backup app's, so dev can't write; the playbook also never makes the repository and runs no timer. The last line gives dev's local-path the `<namespace>/<claim>` folder names, so its claims find the restored folders.
 
