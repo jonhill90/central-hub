@@ -7,7 +7,7 @@ runner: an agent session on the agent box, plus one run each of two pinned Mac w
 outcome: VM 300 runs the GitHub Actions runner for agent-notebook as an unprivileged user, holds no lab keys, can't reach the Proxmox API, and the notebook's workflows run on it instead of on GitHub-hosted minutes
 needs: the agent box with the ci-runner wrapper; agent_box_ci_runner in the private inventory; the GitHub App with the repository permission Administration (write)
 private-values: [agent_box_ci_runner]
-files: [hosts/terraform/home/ci-runner/, hosts/ansible/roles/ci_runner/, hosts/ansible/playbooks/ci-runner.yml, hosts/ansible/roles/agent_box/files/ci-runner.sh, hosts/terraform/home/bootstrap/agent-access.sh]
+files: [hosts/terraform/home/ci-runner/, hosts/ansible/roles/ci_runner/, hosts/ansible/playbooks/ci-runner.yml, hosts/ansible/roles/agent_box/files/ci-runner.sh, hosts/ansible/roles/agent_box/templates/ci-runner-weekly.service.j2, hosts/ansible/roles/agent_box/templates/ci-runner-weekly.timer.j2, hosts/terraform/home/bootstrap/agent-access.sh]
 last-tested: 2026-11-10, an agent session through the agent box, steps 3-6 (steps 1-2 by the owner's Mac lane); the first run needed #170, #172, #173 and #174, then `ci-runner configure` passed twice (the second changed nothing) and agent-notebook #265's three jobs ran on the runner and passed
 superseded-by:
 ---
@@ -32,7 +32,8 @@ flowchart LR
 |---|---|
 | VM | `hosts/terraform/home/ci-runner`: VM 300 in pool `ci`, cloned from template 9001 (the agents' copy of 9000, on VNet dev), on VNet dev |
 | Runner | role `ci_runner`: user `github-runner` (no sudo), `/var/lib/github-runner/runner`, unit `github-runner.service` |
-| Wrapper | `ci-runner plan\|apply\|configure\|destroy` on the agent box, from role `agent_box` |
+| Wrapper | `ci-runner plan\|apply\|configure\|destroy\|bump` on the agent box, from role `agent_box` |
+| Updates | runner self-update off; the box's `ci-runner-weekly.timer` runs `configure`, then `bump` ([Keep the runner current](#keep-the-runner-current)) |
 | Private values | `agent_box_ci_runner` in the inventory, written to `/var/lib/agent-box/ci-runner.json` (the keys user's, 0600) |
 | Keys | `/etc/agent-keys/ci-runner-ssh` (made by the wrapper on its first run), `proxmox-dev.env`, `github-app.pem` |
 
@@ -42,8 +43,9 @@ The dev VLAN reaches the internet and no other lab network (role `opnsense_lab`,
 
 - The agent box is set up and its pin includes this runbook's code ([Set up the agent box](set-up-the-agent-box.md)).
 - The private inventory has `agent_box_ci_runner` with the runner's STD-0001 name, ID 300, a free dev address below the DHCP pool, its size, the Proxmox node, the GitHub App's ID and the repository ([hosts.example.yml](../../hosts/ansible/inventories/home/hosts.example.yml)).
-- The box's allow rules (`agent_box_allow`) include `Bash(ci-runner plan)`, `Bash(ci-runner apply)` and `Bash(ci-runner configure)`.
+- The box's allow rules (`agent_box_allow`) include `Bash(ci-runner plan)`, `Bash(ci-runner apply)`, `Bash(ci-runner configure)` and `Bash(ci-runner bump)`.
 - The GitHub App "Central Hub Agents" has the repository permission Administration (write), accepted on its installation. GitHub requires it to create a registration token ([self-hosted runners API](https://docs.github.com/en/rest/actions/self-hosted-runners)). The wrapper asks for a token cut down to agent-notebook and that one permission.
+- For `ci-runner bump`, the App is installed on central-hub with Contents and Pull requests (write), the permissions `pr-merge` already uses there.
 
 ## Steps
 
@@ -52,7 +54,7 @@ The dev VLAN reaches the internet and no other lab network (role `opnsense_lab`,
    expect: `agent-access: done`, and `qm config 9001` shows `template: 1` and `bridge=dev`.
 
 2. Install the wrapper on the box, from the Mac: `ansible-agent-box.sh apply`.
-   expect: `failed=0`; `ci-runner` is in `/usr/local/bin`, its sudoers line is in `/etc/sudoers.d/agent-box`, and `/var/lib/agent-box/ci-runner.json` exists.
+   expect: `failed=0`; `ci-runner` is in `/usr/local/bin`, its sudoers line is in `/etc/sudoers.d/agent-box`, `/var/lib/agent-box/ci-runner.json` exists, and `systemctl list-timers ci-runner-weekly.timer` shows the next run.
 
 3. Plan the VM, from a session on the box: `ci-runner plan`.
    expect: the central-hub commit, then `1 to add`: one VM, ID 300, pool `ci`, bridge `dev`.
@@ -61,10 +63,23 @@ The dev VLAN reaches the internet and no other lab network (role `opnsense_lab`,
    expect: `Apply complete! Resources: 1 added`.
 
 5. Install and register the runner: `ci-runner configure`.
-   expect: `failed=0`. The last tasks prove the service is active and that `github-runner` has no sudo. On the repository's Settings, under Actions and Runners, the runner shows as Idle with label `notebook`.
+   expect: `failed=0`. The last tasks prove the service is active and that `github-runner` has no sudo. On the repository's Settings, under Actions and Runners, the runner shows as Idle with label `notebook`. The runner's `.runner` file has `"disableUpdate": true`; a runner registered before self-update was turned off is registered again once, with the new token.
 
 6. Move the notebook's jobs onto it: in agent-notebook, `runs-on: [self-hosted, notebook]` for `org-check`, `access-expiry` and `daily-note` (a pull request there).
    expect: that pull request's checks run on the runner and pass.
+
+## Keep the runner current
+
+The runner's self-update is off (`config.sh --disableupdate`), so the version that runs is the pin in `hosts/ansible/roles/ci_runner/defaults/main.yml`, and a change to it is a reviewed pull request (owner's answer 2026-11-12 22:25 UTC, pick 208 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)). GitHub stops queuing jobs on a runner with updates off once it is more than 30 days behind a new release ([controlling runner software updates](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/autoscaling-with-self-hosted-runners)), so the pin has to keep moving.
+
+The box's `ci-runner-weekly.timer` (Mondays 14:00 UTC, `agent_box_ci_runner_weekly`) runs `ci-runner weekly` as the keys user:
+
+1. `configure` installs the pin on `main`. A pin newer than the installed runner stops the service, unpacks the new release over the old one, and starts it again; the registration stays.
+2. `bump` looks for the newest [actions/runner release](https://github.com/actions/runner/releases) at least two weeks old (STD-0003). If it is newer than the pin, it checks the tarball's SHA-256 in the release notes against a download, then opens a central-hub pull request as the App on branch `chore/bump-ci-runner-X-Y-Z`. It opens nothing if the pin is current or that pull request is open already.
+
+Merge the bump pull request within about two weeks; the next weekly run installs it. To install it sooner, run `ci-runner configure` after the merge. A session can also run `ci-runner bump` by hand.
+
+Check the last run: `systemctl status ci-runner-weekly.service`, or `journalctl -u ci-runner-weekly.service`.
 
 ## If it fails
 
@@ -75,7 +90,10 @@ The dev VLAN reaches the internet and no other lab network (role `opnsense_lab`,
 - `ci-runner plan` can't create VM 300 after a destroy: Proxmox dropped the `/vms/300` ACL (as for 250-257), so run step 1 again.
 - The proof "the runner service is running" fails: the message carries the service's last log lines and any SELinux denials. Exit status 203 means systemd could not start the program at all.
 - A job fails for a missing tool: add the package to `ci_runner_packages`, then run `ci-runner configure` again.
+- The weekly run failed: `journalctl -u ci-runner-weekly.service` shows which half. `bump` says "give no SHA-256" when a release's notes changed shape: pin it by hand in a pull request, with the SHA checked against a download. It says "no longer has exactly one line matching" when the defaults file's pin lines were reworded: put them back in the shape `bump` rewrites.
+- Jobs stay queued and the runner shows as offline or outdated: the pin is more than 30 days behind a release. Merge the open bump pull request and run `ci-runner configure`.
+- The runner reports a newer version than the pin (installed by hand): the role leaves it as it is and says so. Move the pin up by pull request.
 
 ## Exit
 
-Remove the runner on the repository's runner page, run `ci-runner destroy`, put `runs-on: ubuntu-24.04` back in the notebook's workflows, delete `/etc/agent-keys/ci-runner-ssh`, and remove pool `ci`, template 9001 (`qm destroy 9001`, if no dev rebuild uses it) and the `/vms/300` lines from `agent-access.sh`.
+Remove the runner on the repository's runner page, run `ci-runner destroy`, empty `agent_box_ci_runner` and stop `ci-runner-weekly.timer` (`systemctl disable --now ci-runner-weekly.timer`), put `runs-on: ubuntu-24.04` back in the notebook's workflows, delete `/etc/agent-keys/ci-runner-ssh`, and remove pool `ci`, template 9001 (`qm destroy 9001`, if no dev rebuild uses it) and the `/vms/300` lines from `agent-access.sh`.

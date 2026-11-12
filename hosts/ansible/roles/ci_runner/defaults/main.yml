@@ -9,9 +9,12 @@ ci_runner_home: /var/lib/github-runner
 ci_runner_repo_url: https://github.com/jonhill90/agent-notebook
 ci_runner_labels: [notebook]
 
-# The newest release at least two weeks old when pinned (STD-0003): v2.338.2, 2026-10-26.
+# The newest release at least two weeks old when pinned (STD-0003): v2.338.2, published 2026-10-26.
 # SHA-256 of actions-runner-linux-x64-2.338.2.tar.gz, from the release notes and checked against a
-# download on 2026-11-10. The runner updates itself after this, as GitHub requires.
+# download on 2026-11-10. Self-update is off, so this is the version that runs. The agent box's
+# weekly `ci-runner bump` opens a PR for each newer release, and its `ci-runner configure` run
+# installs the merged pin. GitHub stops queuing jobs on a runner more than 30 days behind a new
+# release, so merge those PRs within about two weeks.
 ci_runner_version: 2.338.2
 ci_runner_sha256: baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
 

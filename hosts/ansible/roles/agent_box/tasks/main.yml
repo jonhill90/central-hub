@@ -338,6 +338,27 @@
   when: agent_box_ci_runner | length > 0
   tags: [wrappers]
 
+- name: Weekly CI runner service and timer (pick 208)
+  ansible.builtin.template:
+    src: "ci-runner-weekly.{{ item }}.j2"
+    dest: "/etc/systemd/system/ci-runner-weekly.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_ci_runner_units
+  when: agent_box_ci_runner | length > 0
+  tags: [wrappers]
+
+- name: Weekly CI runner timer on
+  ansible.builtin.systemd_service:
+    name: ci-runner-weekly.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_ci_runner_units is changed }}"
+  when: agent_box_ci_runner | length > 0 and not (ansible_check_mode and agent_box_ci_runner_units is changed)
+  tags: [wrappers]
+
 - name: One sudoers line per wrapper, checked by visudo before it is written
   ansible.builtin.template:
     src: sudoers.j2

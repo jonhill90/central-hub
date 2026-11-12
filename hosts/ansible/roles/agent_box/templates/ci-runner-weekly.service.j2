@@ -1,0 +1,13 @@
+# Managed by the agent_box role (central-hub hosts/ansible). Reinstalls the CI runner at the pin on
+# main, then opens a PR for a newer actions/runner release (pick 208). Runs as the keys user, the
+# same as the wrapper does through sudo.
+[Unit]
+Description=CI runner: install the pinned version, open a PR for a newer one
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ agent_box_keys_user }}
+Group={{ agent_box_keys_user }}
+ExecStart={{ agent_box_libexec_dir }}/ci-runner.sh weekly
