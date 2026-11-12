@@ -63,4 +63,7 @@ argument_specs:
       k8s_certs_smoke_client:
         type: str
         description: "Inventory host that calls the Gateway from outside the cluster. Default: the first host of group proxmox."
-      k8s_certs_smoke_root_file: {type: str, default: /root/central-hub-lab-root-ca.crt, description: "Where the smoke client keeps the lab root; a user other than root sets a folder it owns."}
+      k8s_certs_smoke_root_file:
+        type: str
+        default: /root/central-hub-lab-root-ca.crt
+        description: "Where the smoke client keeps the lab root; a user other than root sets a folder it owns."
