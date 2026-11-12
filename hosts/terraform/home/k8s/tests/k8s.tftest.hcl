@@ -56,6 +56,20 @@ run "everything_in_pool_k8s" {
   }
 }
 
+# The agents' dev rebuild may add guests only to pool dev, so the pool is a variable; c1 keeps k8s.
+run "pool_is_set_by_variable" {
+  command = plan
+
+  variables {
+    pool_id = "dev"
+  }
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.template[0].pool_id == "dev" && alltrue([for k, n in proxmox_virtual_environment_vm.node : n.pool_id == "dev"])
+    error_message = "pool_id must set the pool of the template and every node."
+  }
+}
+
 # Spec home-lab-and-c1, decision log 2026-10-26: a pinned image, not "latest" (STD-0003).
 run "image_pinned_with_checksum" {
   command = plan
