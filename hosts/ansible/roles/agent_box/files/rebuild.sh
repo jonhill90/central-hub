@@ -32,9 +32,15 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 
 # What the box must hold before this wrapper can run. Each is put there through the keys wrapper
 # or made by the agent_box role; the wrapper says which one is missing instead of failing later.
-for f in "$keys/proxmox-dev.env" "$keys/dev-vms.tfvars"; do
+for f in "$keys/proxmox-dev.env" "$keys/dev-vms.tfvars" "$keys/c1-backup.env" "$keys/azure-reader.env"; do
   [[ -f $f ]] || { echo "rebuild: $f is missing" >&2; exit 1; }
 done
+# The reader certificate must still be valid, or the restore stage fails after the VMs exist. A warning
+# at 30 days left, so the renewal is not a surprise.
+openssl x509 -checkend 0 -noout -in "$keys/azure-reader.env" > /dev/null \
+  || { echo "rebuild: the reader certificate in $keys/azure-reader.env has expired or is unreadable" >&2; exit 1; }
+openssl x509 -checkend 2592000 -noout -in "$keys/azure-reader.env" > /dev/null \
+  || echo "rebuild: warning: the reader certificate expires within 30 days; renew it" >&2
 [[ -d $inv_src ]] || { echo "rebuild: the dev inventory $inv_src is missing (docs/runbooks/set-up-the-agent-box.md, 'Rebuild dev from the box')" >&2; exit 1; }
 [[ -x $libexec/ansible-venv/bin/ansible-playbook ]] || { echo "rebuild: Ansible is not installed; run the agent_box role" >&2; exit 1; }
 

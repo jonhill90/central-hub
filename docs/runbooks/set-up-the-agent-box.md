@@ -177,7 +177,7 @@ rebuild teardown    only the teardown
 - What the wrapper does not make, and stops without if it is missing:
   - the private dev inventory at `/etc/agent-keys/rebuild-dev/inventory/hosts.yml`, which has to be put there through the keys wrapper;
   - a guard that runs before any stage: the node addresses in `dev-vms.tfvars` must sit in the dev VLAN (VLAN 30 in `vlans.yml`), and every inventory host must be one of them, reached by plain ssh to `ansible_host` with the box's own ssh arguments only, no proxy, jump or other connection type;
-  - for the `restore` stage, the reader certificate: one PEM (key and certificate) the read-only backup app knows, put at `/etc/agent-keys/azure-reader.env` through the keys wrapper (`put-azure-reader`; the file is a PEM despite its name). The box has no Azure sign-in; the nodes copy that file, nothing is uploaded to the app, and its expiry is the one date to renew by hand;
+  - for the `restore` stage, the reader certificate (the wrapper stops early if it or `c1-backup.env` is missing, or if the certificate has expired): one PEM (key and certificate) the read-only backup app knows, put at `/etc/agent-keys/azure-reader.env` through the keys wrapper (`put-azure-reader`; the file is a PEM despite its name). The box has no Azure sign-in; the nodes copy that file, nothing is uploaded to the app, and its expiry is the one date to renew by hand;
   - the Proxmox `/vms` ACLs after a teardown, which need a root step on the host (`agent-access.sh`) that the agents can't run themselves.
 
 expect: with those in place, `rebuild up` prints `rebuild: central-hub <commit>` and then the stage lines of `rebuild-k8s.sh`, and stops at the first stage that fails.
