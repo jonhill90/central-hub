@@ -363,6 +363,56 @@
   when: agent_box_ci_runner | length > 0 and not (ansible_check_mode and agent_box_ci_runner_units is changed)
   tags: [wrappers]
 
+- name: The tailnet cleanup's limits hold (pick 214)
+  ansible.builtin.assert:
+    that:
+      - agent_box_tailnet_cleanup.tags | default([]) | length > 0
+      - agent_box_tailnet_cleanup.tags | select('match', '^tag:[a-z0-9-]+$') | list | length == agent_box_tailnet_cleanup.tags | length
+      - agent_box_tailnet_cleanup.keep | default([]) | length > 0
+      - agent_box_tailnet_cleanup.days | default(7) | int >= 7
+      - agent_box_tailnet_cleanup.max_deletes | default(5) | int >= 1
+      - agent_box_tailnet_cleanup.max_deletes | default(5) | int <= 20
+    fail_msg: >-
+      agent_box_tailnet_cleanup needs tags (tag:<name>), a keep list naming at least one device,
+      days of 7 or more and max_deletes from 1 to 20.
+    quiet: true
+  when: agent_box_tailnet_cleanup | length > 0
+  tags: [wrappers]
+
+- name: The tailnet cleanup's settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/tailnet-cleanup.json"
+    content: >-
+      {{ {'tags': agent_box_tailnet_cleanup.tags, 'keep': agent_box_tailnet_cleanup.keep,
+          'days': agent_box_tailnet_cleanup.days | default(7) | int,
+          'max_deletes': agent_box_tailnet_cleanup.max_deletes | default(5) | int} | to_nice_json }}
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_tailnet_cleanup | length > 0
+  tags: [wrappers]
+
+- name: Daily tailnet cleanup service and timer (pick 214)
+  ansible.builtin.template:
+    src: "tailnet-cleanup.{{ item }}.j2"
+    dest: "/etc/systemd/system/tailnet-cleanup.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_tailnet_cleanup_units
+  when: agent_box_tailnet_cleanup | length > 0
+  tags: [wrappers]
+
+- name: Daily tailnet cleanup timer on
+  ansible.builtin.systemd_service:
+    name: tailnet-cleanup.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_tailnet_cleanup_units is changed }}"
+  when: agent_box_tailnet_cleanup | length > 0 and not (ansible_check_mode and agent_box_tailnet_cleanup_units is changed)
+  tags: [wrappers]
+
 - name: One sudoers line per wrapper, checked by visudo before it is written
   ansible.builtin.template:
     src: sudoers.j2
