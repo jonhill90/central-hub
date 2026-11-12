@@ -14,7 +14,7 @@ superseded-by:
 
 # Get c1's alerts on a phone or in a browser
 
-c1's alerts go from Prometheus to Alertmanager, and from there to **ntfy**, a small push service that runs on c1 (Argo CD app `alerts`). Every alert lands on one topic, `c1-alerts`, formatted by ntfy's built-in Alertmanager template. Whatever subscribes to that topic shows it. Watchdog, the alert that always fires to prove the pipeline works, is not sent.
+c1's alerts go from Prometheus to Alertmanager, and from there to **ntfy**, a small push service that runs on c1 (Argo CD app `alerts`). Every alert lands on one topic, `c1-alerts`, formatted by ntfy's built-in Alertmanager template. Whatever subscribes to that topic shows it. Watchdog, the alert that always fires to prove the pipeline works, is not sent to ntfy; it is c1's heartbeat to Healthchecks.io instead ([Know when c1 itself is down](know-when-c1-is-down.md)).
 
 ```mermaid
 flowchart LR
@@ -61,5 +61,6 @@ Argo CD makes ntfy and Alertmanager again; step 0 gives them their values. Phone
 
 ## Related
 
+- [Know when c1 itself is down, from a heartbeat outside the lab](know-when-c1-is-down.md)
 - [Check c1's health from its dashboard and alerts](check-c1-alerts-and-dashboard.md)
 - `hosts/AGENT-PICKS.md` pick 171

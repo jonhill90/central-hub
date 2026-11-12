@@ -18,7 +18,7 @@ superseded-by:
 
 ## What goes in `secret-source` today
 
-ntfy's three values (pick 171): `ntfy-owner-password`, `ntfy-alertmanager-token` and `ntfy-proxmox-token`, made by `playbooks/ntfy-access.yml` ([Get c1's alerts on a phone](get-c1-alerts-on-your-phone.md), step 0). ExternalSecrets `ntfy-auth` (app alerts) and `alertmanager-ntfy` (app monitoring-extras) read them. Jellyfin's admin password comes from an ESO `Password` generator instead, and sign-in and the lab CA keep their own files. So at a rebuild, run this runbook once the store is Ready.
+ntfy's three values (pick 171): `ntfy-owner-password`, `ntfy-alertmanager-token` and `ntfy-proxmox-token`, made by `playbooks/ntfy-access.yml` ([Get c1's alerts on a phone](get-c1-alerts-on-your-phone.md), step 0). ExternalSecrets `ntfy-auth` (app alerts) and `alertmanager-ntfy` (app monitoring-extras) read them. `healthchecks-ping-url`, c1's heartbeat check, which the owner copies in from Healthchecks.io ([Know when c1 itself is down](know-when-c1-is-down.md), step 3), is read by ExternalSecret `alertmanager-heartbeat` (app monitoring-extras). Jellyfin's admin password comes from an ESO `Password` generator instead, and sign-in and the lab CA keep their own files. So at a rebuild, run this runbook once the store is Ready.
 
 Check before you trust that list, because a later change can add a user of the store:
 
