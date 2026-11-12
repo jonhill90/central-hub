@@ -220,9 +220,26 @@
     creates: "{{ ci_runner_home }}/runner/.runner"
   become: true
   become_user: "{{ ci_runner_user }}"
+  register: ci_runner_config
+  # The token is in the arguments, so the result stays hidden; the next task shows config.sh's own
+  # output with the token masked, which is what tells a refused token from a network or file fault.
   no_log: true
+  failed_when: false
   when: not ansible_check_mode
   notify: Restart the runner
+  tags: [runner]
+
+- name: Why the registration failed (config.sh's last lines, the token masked)
+  ansible.builtin.fail:
+    msg: >-
+      config.sh exited {{ ci_runner_config.rc }}. The runner is not registered; run `ci-runner configure`
+      again once the cause is fixed (it mints a new token). Its last lines:
+      {{ (((ci_runner_config.stdout_lines | default([])) + (ci_runner_config.stderr_lines | default([])))
+         | map('replace', ci_runner_registration_token, '***') | select | list)[-40:] }}
+  when:
+    - not ansible_check_mode
+    - ci_runner_config.rc is defined
+    - ci_runner_config.rc != 0
   tags: [runner]
 
 - name: Runner service
