@@ -88,5 +88,5 @@ flowchart LR
 ## More Information
 
 - **Evidence:** no research batch of its own. It rests on the card of 2026-11-12 at 22:44 UTC in the project thread "Plan path to permanent infra decisions", the owner's tap at 23:25 UTC, the owner's message of 22:21 UTC that day about a misclicked card, and the platform's record of a tap, which states that the tap came from the member's own client and stands as the member's reply.
-- **Exit path:** put AGENTS.md rule 1's sentence back to "approval is a message Jon writes there, naming the PR number and its head SHA". Nothing else depends on this record.
+- **Exit path:** take the card tap out of AGENTS.md rule 1, so that only the owner's typed message naming the PR number and its head SHA counts again. Nothing else depends on this record.
 - Related records: D-0001, D-0030, D-0031.
