@@ -65,7 +65,8 @@ import sys, yaml
 src, dst, key, known = sys.argv[1:5]
 d = yaml.safe_load(open(src))
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
-        "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password"}
+        "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
+        "ansible_private_key_file", "ansible_host_key_checking"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -89,6 +90,8 @@ v = g.setdefault("vars", {})
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 v["k8s_gateway_smoke_client"] = "localhost"
+v["k8s_certs_smoke_client"] = "localhost"
+v["k8s_certs_smoke_root_file"] = known.rsplit("/", 1)[0] + "/lab-root-ca.crt"
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
 )" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts"
@@ -101,7 +104,7 @@ chmod 600 "$inventory/hosts.yml"
 # arguments are refused. Nothing is printed except the count or the refused host.
 ansible-inventory -i "$inventory/" --list | python3 -I -c "$(cat <<'PY'
 import ipaddress, json, re, sys
-tfvars, vlans = sys.argv[1], sys.argv[2]
+tfvars, vlans, nodekey, known = sys.argv[1:5]
 def die(m):
     print("rebuild: " + m, file=sys.stderr); sys.exit(1)
 import yaml
@@ -122,16 +125,16 @@ hv = inv.get("_meta", {}).get("hostvars", {})
 if not hv: die("the dev inventory lists no hosts")
 bad = ("ansible_ssh_host", "ansible_ssh_extra_args", "ansible_ssh_args",
        "ansible_ssh_executable", "ansible_ssh_pipelining_proxy")
-want_args = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="
+want_args = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 for h, v in hv.items():
     if v.get("ansible_host") not in addrs: die("inventory host %s is not a dev node address; refusing" % h)
     if v.get("ansible_connection", "ssh") != "ssh": die("inventory host %s uses a connection other than ssh; refusing" % h)
     if any(k in v for k in bad): die("inventory host %s sets ssh host, proxy or extra arguments; refusing" % h)
-    if not str(v.get("ansible_ssh_common_args", "")).startswith(want_args) or "Proxy" in v.get("ansible_ssh_common_args", "") or " -J" in v.get("ansible_ssh_common_args", ""):
-        die("inventory host %s has ssh arguments other than the box's own; refusing" % h)
+    if v.get("ansible_ssh_common_args") != want_args or v.get("ansible_ssh_private_key_file") != nodekey or "ansible_private_key_file" in v:
+        die("inventory host %s has ssh arguments or a key other than the box's own; refusing" % h)
 print("rebuild: %d inventory hosts, all dev node addresses" % len(hv))
 PY
-)" "$keys/dev-vms.tfvars" "$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml" || exit 1
+)" "$keys/dev-vms.tfvars" "$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml" "$nodekey" "$envdir/known_hosts" || exit 1
 
 # The same state file as dev-vms, so the two wrappers agree about which VMs exist.
 cat > "$envdir/rebuild.env" <<ENV

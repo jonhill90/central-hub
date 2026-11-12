@@ -80,3 +80,6 @@ k8s_certs_smoke_name: hello
 k8s_certs_smoke_namespace: certs-smoke
 k8s_certs_smoke_image: registry.k8s.io/e2e-test-images/agnhost:2.53
 k8s_certs_smoke_client: "{{ groups['proxmox'] | first }}"
+# Where the client keeps the lab root for the smoke test. Run as a user other than root (the agent box),
+# point it at a folder that user owns; the tasks delegated to the client then run without become.
+k8s_certs_smoke_root_file: /root/central-hub-lab-root-ca.crt
