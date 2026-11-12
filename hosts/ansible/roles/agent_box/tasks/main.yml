@@ -109,6 +109,8 @@
     - "{{ agent_box_work_dir }}"
     - "{{ agent_box_work_dir }}/state"
     - "{{ agent_box_work_dir }}/tofu-data"
+    # One checkout per wrapper, made by the wrapper on its first run.
+    - "{{ agent_box_work_dir }}/checkouts"
   tags: [users]
 
 # The role never writes a key. It only makes sure every file already in the key folder belongs to
@@ -259,7 +261,9 @@
     force: true
   tags: [wrappers]
 
-- name: The keys user's checkout of central-hub, which the wrappers move to origin/main on each run
+# The wrappers each clone their own checkout from this one's origin (checkouts/<wrapper>) and move
+# it to origin/main on each run; this one gives the Ansible collections' requirements file.
+- name: The keys user's checkout of central-hub
   ansible.builtin.git:
     repo: "{{ agent_box_repo_url }}"
     dest: "{{ agent_box_work_dir }}/central-hub"
