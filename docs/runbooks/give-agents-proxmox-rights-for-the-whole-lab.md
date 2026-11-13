@@ -52,7 +52,7 @@ The rights reach every guest, so a guest someone adds by hand later is in reach 
    pveum user permissions agentlab@pve --path /vms/200
    ```
 
-   expect: no privileges on `/vms/258`; only `VM.Audit` on `/vms/900`; `VM.Allocate` and the `VM.Config.*` privileges on `/vms/200`.
+   expect: no privileges on `/vms/258`; only `VM.Audit` and `Pool.Audit` on `/vms/900`; `VM.Allocate` and the `VM.Config.*` privileges on `/vms/200`.
 
 4. Make the token only once the box has a wrapper that reads it, so it never sits unused on the box. The secret goes from the host straight into the box's keys folder as `/etc/agent-keys/proxmox-lab.env` (mode 0600, owner `keys`), in the same two lines as the dev token, and is never printed:
 
