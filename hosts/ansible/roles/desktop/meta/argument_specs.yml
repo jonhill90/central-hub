@@ -1,0 +1,14 @@
+---
+argument_specs:
+  main:
+    short_description: An Xfce desktop with xrdp on an AlmaLinux 10 VM, for the owner to sign in to apps by hand
+    options:
+      # Private, from the agent box
+      desktop_password_file:
+        type: path
+        required: true
+        description: File on the controller that holds the desktop user's password. Made once with random characters, mode 0600, never printed.
+      # Defaults in defaults/main.yml
+      desktop_user: {type: str, default: owner, description: "The RDP login user, without sudo."}
+      desktop_packages: {type: list, elements: str, default: ["@Xfce", xrdp, xorgxrdp, firefox], description: "The desktop packages, from EPEL."}
+      desktop_rdp_port: {type: int, default: 3389, description: "The port xrdp listens on and firewalld opens."}
