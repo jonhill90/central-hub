@@ -37,7 +37,7 @@ On dev the stages are `vms cluster storage restore gitops secrets apps gateway c
 | `storage` | `playbooks/k8s-storage.yml --tags disk` | the data disks only; Argo CD installs the provisioner |
 | `restore` | `RESTORE_HOOK` | before `gitops`, so each restored folder is there when Argo CD makes its claim; required on dev ([Restore on dev](#restore-on-dev)); skipped on prod when unset |
 | `gitops` | `playbooks/k8s-gitops.yml --tags install,source` | the inventory sets `k8s_gitops_source_enabled: true` |
-| `apps` | waits until every Argo CD app is Synced and Healthy (`APPS_TIMEOUT`, default 1200 s) | see "Apps and auto-sync" |
+| `apps` | waits until every Argo CD app is Synced and Healthy (`APPS_TIMEOUT`, default 1200 s), then on dev only re-reads every ExternalSecret and waits for each to be Ready, then for ntfy and Alertmanager's pod to be Ready (`SECRETS_TIMEOUT`, default 300 s each; the failure names what is not Ready) | see "Apps and auto-sync" |
 | `gateway` | `playbooks/k8s-gateway.yml` | after `apps`: with `k8s_gateway_by_argocd: true`, Argo CD makes the Gateway and the playbook checks it |
 | `certs` | `playbooks/k8s-certs.yml` | staging issuer on dev |
 | `identity` | `playbooks/k8s-identity.yml` | throwaway users on dev |

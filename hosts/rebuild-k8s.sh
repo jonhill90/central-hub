@@ -129,6 +129,23 @@ wait_apps() {
   done
 }
 
+# Every ExternalSecret re-read now and Ready, then the pods that mount their Secrets Ready. ESO retries
+# a failed read with a growing backoff, so without the nudge a pod can wait minutes on a Secret whose
+# source was seeded a moment ago. Each wait stops at a condition or at its timeout, never on a sleep.
+wait_secrets() {
+  local timeout=${SECRETS_TIMEOUT:-300} notready
+  kc annotate --request-timeout=60s externalsecrets.external-secrets.io -A --all --overwrite "force-sync=$(date -u +%Y%m%dT%H%M%SZ)" >/dev/null
+  if ! kc wait externalsecrets.external-secrets.io -A --all --for=condition=Ready "--timeout=${timeout}s" >/dev/null; then
+    notready=$(kc get --request-timeout=60s externalsecrets.external-secrets.io -A --no-headers \
+      -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,READY:.status.conditions[0].status | awk '$3 != "True"')
+    echo "ExternalSecrets not Ready after ${timeout}s:"; echo "$notready"
+    return 1
+  fi
+  kc -n alerts rollout status deployment/ntfy "--timeout=${timeout}s" >/dev/null || { echo "ntfy not Ready after ${timeout}s"; return 1; }
+  kc -n monitoring wait pod/alertmanager-kube-prometheus-stack-alertmanager-0 --for=condition=Ready "--timeout=${timeout}s" >/dev/null \
+    || { echo "alertmanager-0 not Ready after ${timeout}s"; return 1; }
+}
+
 checks() {
   local notready pods
   notready=$(kc get nodes --no-headers | awk '$2 != "Ready"')
@@ -172,7 +189,8 @@ run_stage() {
       if [ -z "${SECRET_SOURCE_FILE:-}" ]; then echo "no SECRET_SOURCE_FILE set: secrets skipped"; return 0; fi
       [ -s "$SECRET_SOURCE_FILE" ] || { echo "SECRET_SOURCE_FILE is missing or empty"; return 1; }
       ap playbooks/k8s-secret-source.yml -e "secret_source_file=$SECRET_SOURCE_FILE" ;;
-    apps) wait_apps ;;
+    # The ExternalSecret wait is dev only: it annotates every ExternalSecret, which a prod run doesn't need.
+    apps) wait_apps && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
     certs) ap playbooks/k8s-certs.yml ;;
     identity) ap playbooks/k8s-identity.yml ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
