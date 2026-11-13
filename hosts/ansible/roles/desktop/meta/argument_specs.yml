@@ -3,12 +3,21 @@ argument_specs:
   main:
     short_description: An Xfce desktop with xrdp on an AlmaLinux 10 VM, for the owner to sign in to apps by hand
     options:
-      # Private, from the agent box
-      desktop_password_file:
-        type: path
+      # Private, from the inventory
+      desktop_rdp_source:
+        type: str
         required: true
-        description: File on the controller that holds the desktop user's password. Made once with random characters, mode 0600, never printed.
+        description: The one IPv4 address or CIDR the owner connects from. firewalld accepts the RDP port from it only. Private.
+      desktop_admin_user:
+        type: str
+        required: true
+        description: The user Ansible reaches the VM as. Its SSH keys are removed at the end of the run.
       # Defaults in defaults/main.yml
       desktop_user: {type: str, default: owner, description: "The RDP login user, without sudo."}
       desktop_packages: {type: list, elements: str, default: ["@Xfce", xrdp, xorgxrdp, firefox], description: "The desktop packages, from EPEL."}
-      desktop_rdp_port: {type: int, default: 3389, description: "The port xrdp listens on and firewalld opens."}
+      desktop_rdp_port: {type: int, default: 3389, description: "The port xrdp listens on and firewalld opens for the owner's address."}
+      desktop_password_marker:
+        type: path
+        default: /var/lib/desktop/password-set
+        description: Made when the owner has set the password at the console; xrdp starts only after it.
+      desktop_lock_admin: {type: bool, default: true, description: "Remove the admin user's SSH keys at the end of the run."}

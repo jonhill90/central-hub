@@ -19,9 +19,9 @@ variable "template_vm_id" {
 }
 
 variable "pool_id" {
-  description = "Proxmox resource pool, or null for none. Null by default: the agents' token may create a guest on its /vms/<id> rights but may not add one to a pool (no Pool.Allocate)."
+  description = "Proxmox resource pool the desktop goes in. The agents' token holds its rights on /pool/desktop, which a clone that names the pool needs and which a teardown doesn't remove (the same as pool dev, #231). null leaves it out of any pool."
   type        = string
-  default     = null
+  default     = "desktop"
 }
 
 variable "admin_user" {
@@ -31,7 +31,7 @@ variable "admin_user" {
 }
 
 variable "ssh_public_key" {
-  description = "Public half of the SSH key the agent box's keys user configures the desktop with."
+  description = "Public half of the SSH key the agent box's keys user configures the desktop with once. The role removes it from the VM at the end of that first run, so the agents keep no login on the desktop."
   type        = string
 }
 

@@ -2,7 +2,8 @@
 # log in to apps by hand). One AlmaLinux 10 VM on VNet dev, cloned from template 9001, running Xfce and
 # xrdp (the desktop role). It holds no lab keys and no agent credentials: what the owner types into it
 # never sits beside the agents' keys. The VM and its ID are agent picks, hosts/AGENT-PICKS.md.
-# The agents' token may create it on its /vms/<id> rights alone, with no pool (it has no Pool.Allocate).
+# The agents' token creates it by cloning into pool desktop (VM.Allocate on /pool/desktop), so its rights
+# survive a teardown, as pool dev's do for the dev rebuild.
 # Applied from the agent box by the desktop wrapper (docs/runbooks/set-up-the-desktop.md).
 # Exit: tofu destroy with this folder's state.
 

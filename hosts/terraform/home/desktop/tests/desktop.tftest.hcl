@@ -12,7 +12,7 @@ variables {
   desktop           = { name = "dalapdemo02", vm_id = 400, address = "10.1.30.91", cores = 2, memory_mb = 4096, disk_gb = 30 }
 }
 
-run "desktop_on_dev_with_no_pool" {
+run "desktop_on_dev_in_pool_desktop" {
   command = plan
 
   assert {
@@ -21,8 +21,8 @@ run "desktop_on_dev_with_no_pool" {
   }
 
   assert {
-    condition     = proxmox_virtual_environment_vm.desktop.pool_id == null
-    error_message = "The desktop is created with no pool: the agents' token has no Pool.Allocate."
+    condition     = proxmox_virtual_environment_vm.desktop.pool_id == "desktop"
+    error_message = "The desktop is cloned into pool desktop, where the agents' token holds its rights."
   }
 
   assert {

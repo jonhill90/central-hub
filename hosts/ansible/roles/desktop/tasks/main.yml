@@ -1,13 +1,16 @@
 ---
-# An Xfce desktop with xrdp on AlmaLinux 10 (agent pick, hosts/AGENT-PICKS.md). The VM holds no lab keys
-# and no agent credentials: what the owner types into it never sits beside them.
-- name: desktop | The password file is named
+# An Xfce desktop with xrdp on AlmaLinux 10 (agent pick, hosts/AGENT-PICKS.md, pick 219). The VM holds no
+# lab keys and no agent credentials. The owner sets the login password at the Proxmox console, so it
+# passes through no agent, no transcript and no keys folder. RDP is reachable only from one address.
+- name: desktop | The private values are set
   ansible.builtin.assert:
-    that: desktop_password_file | length > 0
-    fail_msg: set desktop_password_file to the controller's file for the desktop user's password
+    that:
+      - desktop_rdp_source | length > 0
+      - desktop_admin_user | length > 0
+    fail_msg: set desktop_rdp_source (the owner's one address) and desktop_admin_user in the inventory
     quiet: true
 
-- name: desktop | EPEL and CRB are on
+- name: desktop | EPEL is on
   ansible.builtin.dnf:
     name: epel-release
     state: present
@@ -22,14 +25,12 @@
     name: "{{ desktop_packages }}"
     state: present
 
-# The password is made once on the controller, never printed, and hashed on its way to the VM.
-- name: desktop | The login user, with the controller's password
+# No password yet: the account's password stays locked until the owner sets it at the console.
+- name: desktop | The login user, password locked
   ansible.builtin.user:
     name: "{{ desktop_user }}"
     shell: /bin/bash
-    password: "{{ lookup('ansible.builtin.password', desktop_password_file, chars=['ascii_letters', 'digits'], length=24) | password_hash('sha512') }}"
-    update_password: on_create
-  no_log: true
+    password_lock: true
 
 - name: desktop | The session xrdp starts is Xfce
   ansible.builtin.copy:
@@ -40,15 +41,56 @@
     group: "{{ desktop_user }}"
     mode: "0755"
 
-- name: desktop | xrdp is enabled and running
-  ansible.builtin.systemd_service:
-    name: xrdp
-    enabled: true
-    state: started
+- name: desktop | Folder for the password marker
+  ansible.builtin.file:
+    path: "{{ desktop_password_marker | dirname }}"
+    state: directory
+    mode: "0755"
 
-- name: desktop | firewalld opens the RDP port
+- name: desktop | The console asks the owner for the password once
+  ansible.builtin.template:
+    src: desktop-set-password.service.j2
+    dest: /etc/systemd/system/desktop-set-password.service
+    mode: "0644"
+
+- name: desktop | Folder for xrdp's drop-in
+  ansible.builtin.file:
+    path: /etc/systemd/system/xrdp.service.d
+    state: directory
+    mode: "0755"
+
+- name: desktop | xrdp waits for the marker
+  ansible.builtin.template:
+    src: xrdp-wait-for-password.conf.j2
+    dest: /etc/systemd/system/xrdp.service.d/10-wait-for-password.conf
+    mode: "0644"
+
+- name: desktop | The path unit starts xrdp when the marker appears
+  ansible.builtin.template:
+    src: desktop-xrdp.path.j2
+    dest: /etc/systemd/system/desktop-xrdp.path
+    mode: "0644"
+
+- name: desktop | The units are enabled
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    daemon_reload: true
+  loop:
+    - desktop-set-password.service
+    - desktop-xrdp.path
+    - xrdp.service
+
+- name: desktop | firewalld accepts RDP from the owner's address only
   ansible.posix.firewalld:
-    port: "{{ desktop_rdp_port }}/tcp"
+    rich_rule: 'rule family="ipv4" source address="{{ desktop_rdp_source }}" port port="{{ desktop_rdp_port }}" protocol="tcp" accept'
     permanent: true
     immediate: true
     state: enabled
+
+# Last: the agents keep no login. A later change is a rebuild from teardown.
+- name: desktop | The admin user's SSH keys are removed
+  ansible.builtin.file:
+    path: "/home/{{ desktop_admin_user }}/.ssh/authorized_keys"
+    state: absent
+  when: desktop_lock_admin | bool
