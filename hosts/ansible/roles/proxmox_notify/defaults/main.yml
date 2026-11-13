@@ -20,6 +20,11 @@
 # controller's secret-source file (playbooks/ntfy-access.yml makes it), for example:
 #   proxmox_notify_ntfy_token: "{{ lookup('ansible.builtin.ini', 'ntfy-proxmox-token', type='properties',
 #     file=lookup('ansible.builtin.env', 'HOME') ~ '/.config/central-hub/secret-source.env') }}"
+# The host's own resolver doesn't know the lab names, so give it the address of c1's Gateway too
+# (pick 215); the role keeps one marked /etc/hosts line for the URL's name, and removes it when
+# either value is empty:
+#   proxmox_notify_ntfy_address: "{{ k8s_gateway_address }}"
+proxmox_notify_ntfy_address: ""
 
 proxmox_notify_placeholder: central-hub-off
 proxmox_notify_target_prefix: central-hub

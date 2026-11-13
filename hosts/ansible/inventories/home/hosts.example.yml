@@ -27,6 +27,8 @@ all:
           proxmox_notify_ntfy_url: ""   # errors (failed backups) to ntfy on c1: https://ntfy.apps.c1.prod.<zone>/c1-alerts; private
           # Proxmox's send-only ntfy token (pick 171), read from the controller's secret-source file:
           # proxmox_notify_ntfy_token: "{{ lookup('ansible.builtin.ini', 'ntfy-proxmox-token', type='properties', file=lookup('ansible.builtin.env', 'HOME') ~ '/.config/central-hub/secret-source.env') }}"
+          # The host's resolver doesn't know lab names: one /etc/hosts line for the URL's name (pick 215).
+          # proxmox_notify_ntfy_address: "{{ k8s_gateway_address }}"
           # or proxmox_notify_endpoint: {type: <smtp|gotify|webhook|sendmail>, options: {...}}, not both
           # playbooks/controller-trust.yml (README "Proxmox CA on the controller")
           controller_trust_ca_file: ""   # path on the controller, e.g. ~/.config/central-hub/pve-root-ca.pem
