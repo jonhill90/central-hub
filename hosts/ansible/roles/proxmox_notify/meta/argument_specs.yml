@@ -37,6 +37,13 @@ argument_specs:
         description: >-
           Proxmox's send-only ntfy token (pick 171), sent as a bearer token. ntfy on c1 refuses
           anonymous posts, so set it with proxmox_notify_ntfy_url.
+      proxmox_notify_ntfy_address:
+        type: str
+        default: ""
+        description: >-
+          The IPv4 address of c1's Gateway (pick 215). With proxmox_notify_ntfy_url set, the role
+          keeps one marked /etc/hosts line from the URL's name to it, because the host's resolver
+          doesn't know lab names; empty removes that line.
       # Defaults in defaults/main.yml
       proxmox_notify_placeholder: {type: str, default: central-hub-off, description: Name of the switched-off sendmail placeholder target.}
       proxmox_notify_target_prefix: {type: str, default: central-hub, description: The real target is named <prefix>-<type>.}
