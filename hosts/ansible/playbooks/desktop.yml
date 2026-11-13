@@ -1,0 +1,9 @@
+---
+# The owner's desktop VM (hosts/terraform/home/desktop/, docs/runbooks/set-up-the-desktop.md): Xfce and
+# xrdp on AlmaLinux 10, so the owner can sign in by RDP or VNC client and log in to apps by hand.
+#   ansible-playbook -i inventories/home/ playbooks/desktop.yml -e desktop_password_file=/path/to/file
+- name: Desktop
+  hosts: desktop
+  become: true
+  roles:
+    - role: desktop

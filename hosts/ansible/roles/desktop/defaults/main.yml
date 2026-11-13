@@ -1,0 +1,17 @@
+---
+# Every input of this role is listed here. The role stops if the inventory leaves a required one unset.
+#
+# REQUIRED, private, from the agent box's keys user: the file that holds the desktop user's login
+# password, on the machine that runs the playbook. It is made once with random letters and digits, mode
+# 0600, and never printed; a later run reads it and changes nothing.
+# desktop_password_file: /etc/agent-keys/desktop-password
+
+# The user the owner signs in as over RDP. It has no sudo and holds no lab keys.
+desktop_user: owner
+# The Xfce session, packages from EPEL (the repository this role enables, with CRB).
+desktop_packages:
+  - "@Xfce"
+  - xrdp
+  - xorgxrdp
+  - firefox
+desktop_rdp_port: 3389
