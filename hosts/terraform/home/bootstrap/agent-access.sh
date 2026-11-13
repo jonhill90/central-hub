@@ -155,7 +155,7 @@ lab_check() {
     out=$(pveum user permissions agentlab@pve --path "$1" --output-format json)
   fi
   if printf '%s' "$out" | grep -Eq "$2"; then
-    echo "agent-lab-access: STOP, $1 still allows $2: $out" >&2
+    echo "agent-access: STOP, $1 still allows $2: $out" >&2
     exit 1
   fi
 }
