@@ -1,0 +1,4 @@
+# The agents' read-only account on c1 (pick 216). The token is made by Kubernetes into Secret
+# <name>-token; the controller turns it into a kubeconfig for the agent box
+# (docs/runbooks/give-agents-read-access-to-c1.md). Nothing here can write or read a Secret.
+name: agent-read
