@@ -49,11 +49,16 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 if [[ ${1:-} == diag && $# -eq 1 ]]; then
   [[ -f $inventory/hosts.yml ]] || { echo "rebuild: no dev inventory yet; run rebuild up first" >&2; exit 1; }
   diag_kc() {
+    # Its own known_hosts file: a diag must never write host keys into the file a running rebuild uses.
     ansible 'k8s_control_plane[0]' -i "$inventory/" -b -m ansible.builtin.command \
+      -e "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$work/state/diag_known_hosts'" \
       -a "kubectl --kubeconfig /etc/kubernetes/admin.conf $*" 2>&1 | sed -E '1{/ \| (CHANGED|SUCCESS|FAILED)/d}' | cut -c1-300
+    return 0   # one failing kubectl must not skip the sections after it
   }
+  mkdir -p "$work/state"
+  rm -f -- "$work/state/diag_known_hosts"   # the nodes' host keys change with every rebuild
   echo "== argocd applications"
-  diag_kc -n argocd get applications.argoproj.io -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,HEALTH_MESSAGE:.status.health.message,CONDITIONS:.status.conditions[*].message
+  diag_kc -n argocd get applications.argoproj.io -o 'custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,HEALTH_MESSAGE:.status.health.message,CONDITIONS:.status.conditions[*].message'
   for ns in alerts monitoring; do
     echo "== newest events, namespace $ns"
     diag_kc -n "$ns" get events --sort-by=.lastTimestamp | tail -n 25
