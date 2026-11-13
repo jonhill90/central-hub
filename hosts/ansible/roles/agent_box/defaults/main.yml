@@ -107,3 +107,24 @@ agent_box_tailnet_cleanup_daily: "*-*-* 15:30:00 UTC"
 # Private, through the inventory: name, vm_id, address, cores, memory_mb, disk_gb, proxmox_node_name,
 # vnet, template_vm_id, github_app_id, repo_owner, repo_name. Empty leaves the wrapper unset up.
 agent_box_ci_runner: {}
+# The controller's private files the prod_files tasks copy to <keys_dir>/prod (D-0035; paths from
+# docs/runbooks/rebuild-home-lab-from-scratch.md). from: clone (the controller's checkout of this
+# repo) or config (~/.config/central-hub). A missing file is skipped and named. Not listed on purpose:
+# the Proxmox apply token, the Cloudflare bootstrap token, the nodes' SSH keys and the lab CA.
+agent_box_prod_files:
+  - {from: clone, path: hosts/.env, dest: hosts.env}
+  - {from: clone, path: hosts/ansible/inventories/home/hosts.yml, dest: inventory-hosts.yml}
+  - {from: clone, path: hosts/ansible/inventories/home/identity.env, dest: identity.env}
+  - {from: clone, path: hosts/terraform/home/certificates/home.tfvars, dest: tfvars/certificates.tfvars}
+  - {from: clone, path: hosts/terraform/home/dns-token/home.tfvars, dest: tfvars/dns-token.tfvars}
+  - {from: clone, path: hosts/terraform/home/dns/home.tfvars, dest: tfvars/dns.tfvars}
+  - {from: clone, path: hosts/terraform/home/jumpbox/home.tfvars, dest: tfvars/jumpbox.tfvars}
+  - {from: clone, path: hosts/terraform/home/k8s/home.tfvars, dest: tfvars/k8s.tfvars}
+  - {from: clone, path: hosts/terraform/home/tailnet-policy/home.tfvars, dest: tfvars/tailnet-policy.tfvars}
+  - {from: clone, path: hosts/terraform/home/tailnet/home.tfvars, dest: tfvars/tailnet.tfvars}
+  - {from: clone, path: hosts/terraform/home/dns/home.records.tfvars.json, dest: tfvars/dns.records.tfvars.json}
+  - {from: clone, path: hosts/terraform/azure/backup/azure.tfvars, dest: tfvars/azure-backup.tfvars}
+  - {from: config, path: opnsense-api.txt, dest: opnsense-api.txt}
+  - {from: config, path: c1-secrets-encryption.key, dest: c1-secrets-encryption.key}
+  - {from: config, path: cloudflare-dns01-token.txt, dest: cloudflare-dns01-token.txt}
+  - {from: config, path: pve-root-ca.pem, dest: pve-root-ca.pem}
