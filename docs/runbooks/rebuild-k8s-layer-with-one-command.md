@@ -8,7 +8,7 @@ outcome: the env's node VMs, the cluster, on dev a read-only copy of prod's newe
 needs: the controller from set-up-lab-controller.md; the lab network and Proxmox host as they are; the iac@pve!apply token file; an allow rule for hosts/rebuild-k8s.sh on the Mac
 private-values: [rebuild-env-dir, terraform-tfvars, terraform-state, ansible-inventory, c1-backup-restic-password, c1-backup-azure-storage-account, prod-volume-node-name]
 files: [hosts/rebuild-k8s.sh, hosts/rebuild.env.example, hosts/terraform/home/k8s/, hosts/ansible/playbooks/, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/files/c1-restore-volumes.sh, hosts/terraform/azure/backup/, hosts/kubernetes/home/c1/]
-last-tested:
+last-tested: 2026-11-12, the agent box, dev, central-hub 7e3e182, all eight stages passed in 11 minutes (see Proven runs)
 superseded-by:
 ---
 
@@ -165,6 +165,12 @@ On a fresh cluster, Argo CD installs an app only if its `autoSync` is on in `hos
 - `checks` fails at `identity`: the message says which step. `has no dump`: prod's snapshot of that host holds no Keycloak dump (the node that runs `sso-postgres-0` is another host). `cut short` or a count that differs: the dump or the load lost rows; the backup's own restore test checks the same dump weekly. `keycloak` not Ready: the pods' states are printed (never their logs, which can quote the realm); a Keycloak version that can't open the dump fails here. The namespace is deleted either way.
 - `checks` fails with `its copy in snapshot` or `not owned by uid`: the restored folder or an entry in it has another owner or mode than the app needs or prod had. The message names each one.
 - `checks` fails on the restore proof: its message names the claim, the folder the volume uses and the folder the restore made. A volume at a `pvc-...` folder means dev's StorageClass has no `pathPattern`: set `k8s_gitops_source_local_path_stable_folders: true` in dev's inventory, run `--teardown`, and rebuild (the parameter can't change in place).
+
+## Proven runs
+
+- 2026-11-12, the agent box (`rebuild up`, one run), central-hub `7e3e182`, dev: all eight stages passed. `vms` 1s (the nodes already existed from an earlier run), `cluster` 181s, `storage` 7s, `restore` 43s, `gitops` 55s, `apps` 196s, `gateway` 20s, `checks` 172s; 11 minutes in all, exit 0. Earlier runs from the box failed at faults now fixed in the wrapper, the inventory copy or the roles: the clone of template 9000 (the agents' token may clone only 9001), the pool (it may not add a guest to one) and the Mac's path for the Secrets-at-rest key.
+- What the restore covered: `restore` brings back only the local-path app volumes (see "Restore on dev"). Keycloak's database was not loaded into a running Keycloak; `checks` loads prod's dump into a throwaway PostgreSQL and starts the pinned Keycloak on it, then deletes both. That check is on by default and `checks` returned 0. The box's `rebuild log` (added after the run) prints that run's `PASS` lines: every stage passed, and the pinned Keycloak 26.8.1 became Ready on prod's dump with 2 realms, 2 users and 17 clients.
+- One run is not two: `status` stays `draft` until a second clean run in a row.
 
 ## Afterwards
 
