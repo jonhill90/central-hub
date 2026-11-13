@@ -1,7 +1,7 @@
 ---
 # Copy the controller's private lab files onto the agent box, into {{ agent_box_keys_dir }}/prod
 # (owner {{ agent_box_keys_user }}, folders 0700, files 0600), so agents can rebuild the lab with no
-# Mac in the loop (D-0035). Only runs with `--tags prod_files`. A file the controller lacks is
+# Mac in the loop (D-0035). Only runs when `agent_box_copy_prod_files` is true. A file the controller lacks is
 # skipped and named; no content is ever printed (no_log). Left out on purpose: the Proxmox
 # apply token, the Cloudflare bootstrap token and the nodes' SSH keys.
 
