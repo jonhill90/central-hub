@@ -74,10 +74,10 @@ agent_box_deny:
   - "Bash(gh api:*)"
   # Keys: sessions reach `keys` only through the front scripts, which call sudo themselves.
   - "Bash(sudo:*)"
-  - "Read(/etc/agent-keys/**)"
+  - "Read(//etc/agent-keys/**)"
   # The settings themselves.
   # Only Edit rules match file writes (an Edit rule covers every file-editing tool, Write included).
-  - "Edit(/etc/claude-code/**)"
+  - "Edit(//etc/claude-code/**)"
   - "Edit(~/.claude/settings.json)"
 
 # Private, through the inventory: the allow rules and auto mode's environment lines copied from

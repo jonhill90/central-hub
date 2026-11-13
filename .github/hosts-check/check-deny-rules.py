@@ -1,7 +1,7 @@
 """Check the agent box's managed deny rules for forms Claude Code ignores (measured on the box,
 2026-11-13: a `*` mixed with a trailing `:*` is matched as a literal prefix, and Write(path)
 rules are not matched because Edit(path) covers every file-editing tool). Also fails if the
-raw tofu apply and destroy rules, with and without -chdir, are missing."""
+single-slash Read/Edit paths are relative to the settings source (use //). Also fails if the raw tofu apply and destroy rules, with and without -chdir, are missing."""
 import re
 import sys
 
@@ -12,6 +12,9 @@ bad = []
 for r in rules:
     if r.startswith("Write("):
         bad.append(f"{r}: Write(path) rules never match; use Edit(path)")
+    p = re.match(r"(Read|Edit)\((/[^/].*)\)$", r)
+    if p:
+        bad.append(f"{r}: a single leading slash anchors at the settings source; use // for an absolute path")
     m = re.match(r"Bash\((.*):\*\)$", r)
     if m and "*" in m.group(1):
         bad.append(f"{r}: * mixed with a trailing :* is matched literally; end with plain *")
