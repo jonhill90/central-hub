@@ -88,6 +88,15 @@
     append: false
   tags: [users]
 
+- name: Runner user for the redeploy workflow, no extra groups and no login key (only when agent_box_runner_user is set)
+  ansible.builtin.user:
+    name: "{{ agent_box_runner_user }}"
+    shell: /bin/bash
+    groups: ""
+    append: false
+  when: agent_box_runner_user | length > 0
+  tags: [users]
+
 - name: Keys user, a system user that can't log in
   ansible.builtin.user:
     name: "{{ agent_box_keys_user }}"

@@ -6,6 +6,9 @@
 
 agent_box_user: claude
 agent_box_keys_user: keys
+# The user the GitHub Actions runner runs as (docs/runbooks/set-up-the-lab-redeploy-workflow.md). It gets
+# sudo only for the wrappers marked `runner: true`, with their args as listed. Empty does nothing.
+agent_box_runner_user: ""
 agent_box_keys_dir: /etc/agent-keys
 agent_box_work_dir: /var/lib/agent-box
 agent_box_libexec_dir: /usr/local/libexec/agent-box
@@ -27,6 +30,7 @@ agent_box_wrappers:
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
     args: [up, rebuild, teardown, log, diag]
+    runner: true   # the dev redeploy workflow (.github/workflows/lab-redeploy-dev.yml)
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]
