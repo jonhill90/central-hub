@@ -48,6 +48,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Set up sign-in for lab apps on c1](set-up-lab-sign-in.md) | automated | tested |
 | [Give lab apps short names under the zone](set-up-short-app-names.md) | automated | tested |
 | [Let agents run a new command without a permission block](allow-a-command-for-agents.md) | manual | draft |
+| [Give agents Proxmox rights for the whole lab](give-agents-proxmox-rights-for-the-whole-lab.md) | manual | draft |
 
 ## Template
 
