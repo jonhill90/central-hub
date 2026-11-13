@@ -1,0 +1,14 @@
+---
+# The box's second NIC sits on the Proxmox host's own subnet (hosts/terraform/home/jumpbox, variable
+# lifeline), so the box keeps its route to the Proxmox API when OPNsense is gone. That subnet is the
+# home LAN, so nothing there may reach the box: the interface goes in firewalld's `drop` zone, which
+# accepts no inbound connection at all. The box still starts connections out over it; replies come
+# back through connection tracking. Only runs when agent_box_lifeline_interface is set.
+
+- name: lifeline | The interface is in the drop zone
+  ansible.posix.firewalld:
+    zone: drop
+    interface: "{{ agent_box_lifeline_interface }}"
+    permanent: true
+    immediate: true
+    state: enabled

@@ -101,6 +101,15 @@ agent_box_ca_files: []
 # An HTTPS URL the verify tag fetches with normal certificate checks, for example the Proxmox
 # API's version path. Private. Empty skips the check.
 agent_box_tls_check_url: ""
+# A daily copy of OPNsense's configuration on the box (pick 220). Private, through the inventory: host (OPNsense's
+# name or address, over HTTPS with the lab CA the box trusts) and keep (copies to keep, 3 to 60, default 14). The API key
+# is /etc/agent-keys/prod/opnsense-api.txt, which the prod files copy puts there. Empty does nothing.
+agent_box_opnsense_backup: {}
+# When the daily OPNsense backup starts (systemd OnCalendar).
+agent_box_opnsense_backup_daily: "*-*-* 14:30:00 UTC"
+# The box's second NIC on the Proxmox host's own subnet (pick 220, docs/runbooks/set-up-the-box-lifeline.md):
+# its interface name inside the VM (for example eth1). Private, through the inventory. Empty does nothing.
+agent_box_lifeline_interface: ""
 # Any other top-level settings, merged over the rest (for example autoUpdatesChannel).
 agent_box_managed_settings_extra: {}
 # When the weekly `ci-runner weekly` run starts (systemd OnCalendar): it reinstalls the merged pin on

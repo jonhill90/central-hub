@@ -16,6 +16,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Set up the agent box's users, keys, wrappers and guard rules](set-up-the-agent-box.md) | automated | draft |
 | [Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md) | automated | draft |
 | [Set up the owner's desktop VM](set-up-the-desktop.md) | manual | draft |
+| [Give the agent box a lifeline to Proxmox and keep OPNsense's configuration](set-up-the-box-lifeline.md) | manual | draft |
 | [Create the c1 node VMs on Proxmox from code](create-c1-node-vms.md) | automated | draft |
 | [Restore the home lab from its backups](restore-home-lab-from-backups.md) | manual | draft |
 | [Seed namespace secret-source on c1 from the controller](seed-secret-source.md) | manual | draft |
