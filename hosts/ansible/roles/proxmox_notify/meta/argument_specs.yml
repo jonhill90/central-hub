@@ -27,7 +27,7 @@ argument_specs:
         type: str
         required: false
         description: >-
-          An ntfy topic URL, for example https://ntfy.<zone>/c1-alerts. When set, the target is a
+          An ntfy topic URL, for example https://ntfy.apps.c1.prod.<zone>/c1-alerts. When set, the target is a
           webhook that posts each matched notification there. Not together with proxmox_notify_endpoint.
       # Optional, secret, through the inventory. Empty = no Authorization header.
       proxmox_notify_ntfy_token:

@@ -24,7 +24,7 @@ all:
           proxmox_firewall_enable: false   # true only after the first run's ruleset was read
           proxmox_firewall_extra_rules: []   # more host IN rules, private; each one needs the owner's words, e.g.
           #   - { action: ACCEPT, source: "<agent box address>/32", proto: tcp, dport: "8006", comment: "agent box to the Proxmox API (owner's words pending)" }
-          proxmox_notify_ntfy_url: ""   # errors (failed backups) to ntfy on c1: https://ntfy.<zone>/c1-alerts; private
+          proxmox_notify_ntfy_url: ""   # errors (failed backups) to ntfy on c1: https://ntfy.apps.c1.prod.<zone>/c1-alerts; private
           # Proxmox's send-only ntfy token (pick 171), read from the controller's secret-source file:
           # proxmox_notify_ntfy_token: "{{ lookup('ansible.builtin.ini', 'ntfy-proxmox-token', type='properties', file=lookup('ansible.builtin.env', 'HOME') ~ '/.config/central-hub/secret-source.env') }}"
           # or proxmox_notify_endpoint: {type: <smtp|gotify|webhook|sendmail>, options: {...}}, not both
