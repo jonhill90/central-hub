@@ -14,7 +14,11 @@ superseded-by:
 
 # Run the dev lab redeploy from GitHub Actions on the agent box
 
-**Status:** draft. Written 2026-11-13 from the code in this change; the workflow has not run yet. It is the dev slice of D-0035 (proposed): rules 3 and 4 only. The record is not accepted, so nothing here touches prod, and no production wrapper or environment exists.
+**Status:** draft. Written 2026-11-13 from the code in this change; the workflow has not run yet and its runner is not registered (see below). It is the dev slice of D-0035 (proposed): rules 3 and 4 only. The record is not accepted, so nothing here touches prod, and no production wrapper or environment exists.
+
+## Not registered until D-0030 is met
+
+The environment `dev-redeploy` and the runner are **not created or registered yet, and the steps below are not to be done yet.** The approval tap is the gate, and today every agent acts as the owner's GitHub account (`jonhill90`), so an approval on `pending_deployments` can't be shown to be the owner's own. A gate any agent can approve is not the owner's gate. D-0035 rule 8 already ties prod to D-0030 (agents with their own accounts), and this dev slice waits on the same condition for the same reason. Until then the code can merge, because with no runner registered the workflow has nothing to run on; it is code at rest.
 
 ## What the workflow does
 
@@ -26,11 +30,13 @@ superseded-by:
 | `log` | the newest run's stage lines | none |
 | `up`, `rebuild`, `teardown` | the box's `rebuild` wrapper, dev VMs 250-257 only | the owner, on environment `dev-redeploy` |
 
+The repository is public, so any workflow on any branch could ask for the runner by its label and get the runner user's sudo without ever naming `dev-redeploy`. The runner's job-started hook closes that: `runner-job-started.sh` (installed by the role, root-owned) fails every job unless the workflow is `lab-redeploy-dev.yml` on `main` and the event is `workflow_dispatch`, before any step runs.
+
 The runner's user can run only the `rebuild` wrapper, with those five arguments, through sudo as the keys user. It never sees a key. The wrapper itself refuses anything outside dev.
 
-## What only the owner can do
+## What only the owner can do (after D-0030)
 
-These are repository settings and a registration, so they are the owner's. Do them in this order. Step 1 comes first because a workflow that names an environment which does not exist makes GitHub create it with no protection.
+These are repository settings and a registration, so they are the owner's. Do them after the section above is met, in this order in this order. Step 1 comes first because a workflow that names an environment which does not exist makes GitHub create it with no protection.
 
 1. Create the environment `dev-redeploy`: repository Settings, Environments, New environment. Add the owner as required reviewer, tick "Prevent self-review" off (the owner is the only person), and under Deployment branches choose "Selected branches" with `main` only.
    why: the tap is the approval channel (D-0035 rule 3); a branch limit keeps a branch's copy of the workflow from using it.
@@ -41,9 +47,11 @@ These are repository settings and a registration, so they are the owner's. Do th
 
 3. Register the runner by hand on the box, as the runner user, never as the keys user: Settings, Actions, Runners, New self-hosted runner, Linux x64. Give it the label `central-hub-box` and run the registration commands GitHub shows. The registration token is single-use and short-lived; it is never written down here or in a file.
    why: registration is a human act (D-0035 rule 8); the runner's own software comes from GitHub's release and its pin is checked on the box.
-   expect: the runner shows Idle in Settings, Actions, Runners with the label `central-hub-box`.
+   Before starting the runner, put the hook in its `.env` and make that file root's, so a job (which runs as the runner user) can't change it: add the line `ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/libexec/agent-box/runner-job-started.sh`, then `chown root:root .env` and `chmod 0644 .env`.
+   why: the hook is the only thing between a workflow on any branch and the runner's sudo.
+   expect: the runner shows Idle in Settings, Actions, Runners with the label `central-hub-box`; a throwaway workflow on a branch that asks for the label fails at "Set up job" with `runner-job-started: refused`.
 
-4. Accept D-0035 and D-0030 when the owner is ready. This slice runs without them for dev, but the record is what makes prod work possible.
+4. Accept D-0035 when the owner is ready; it is what makes prod work possible.
 
 ## What an agent does on the box
 

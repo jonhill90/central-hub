@@ -442,6 +442,16 @@
   when: agent_box_tailnet_cleanup | length > 0 and not (ansible_check_mode and agent_box_tailnet_cleanup_units is changed)
   tags: [wrappers]
 
+- name: The runner's job-started hook, root's (refuses every job but the dev redeploy workflow on main)
+  ansible.builtin.copy:
+    src: runner-job-started.sh
+    dest: "{{ agent_box_libexec_dir }}/runner-job-started.sh"
+    owner: root
+    group: root
+    mode: "0755"
+  when: agent_box_runner_user | length > 0
+  tags: [wrappers]
+
 - name: One sudoers line per wrapper, checked by visudo before it is written
   ansible.builtin.template:
     src: sudoers.j2
