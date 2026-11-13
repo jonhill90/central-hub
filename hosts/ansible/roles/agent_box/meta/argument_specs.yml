@@ -49,6 +49,12 @@ argument_specs:
         description: >-
           Copy the controller's private lab files to the box in this run (the prod_files tasks).
           Off by default.
+      agent_box_prod_files_clone:
+        type: str
+        default: ""
+        description: >-
+          Absolute path on the controller of its private clone of this repo, where the git-ignored files
+          are. Private, through the inventory. Empty means the checkout the playbook runs from.
       agent_box_prod_files:
         type: list
         elements: dict

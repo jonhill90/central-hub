@@ -25,7 +25,7 @@ flowchart LR
   ap --> gw["gateway<br/>k8s-gateway.yml"] --> ce["certs"] --> id["identity"] --> ui["ui<br/>Argo CD UI + SSO"] --> ck["checks<br/>+ restore proof"]
 ```
 
-On dev the stages are `vms cluster storage restore gitops apps gateway checks`: certs, identity and ui are left out (D-0028).
+On dev the stages are `vms cluster storage restore gitops secrets apps gateway checks`: certs, identity and ui are left out (D-0028). `secrets` seeds namespace `secret-source` from `SECRET_SOURCE_FILE` (`playbooks/k8s-secret-source.yml`, [seed-secret-source.md](seed-secret-source.md)) after Argo CD makes it and before `apps` waits on the ExternalSecrets that read it; unset, the stage is skipped. The agent box makes its own dev file once, with random values, and never prints it.
 
 ## Stages
 
@@ -33,11 +33,11 @@ On dev the stages are `vms cluster storage restore gitops apps gateway checks`: 
 |---|---|---|
 | `teardown` | `tofu destroy` in `hosts/terraform/home/k8s` | only with `--teardown` |
 | `vms` | `PRE_VMS_HOOK`, then `tofu apply` in the same folder | the hook re-adds the Proxmox `/vms` ACLs, which Proxmox removes on every destroy |
-| `cluster` | `playbooks/k8s.yml` | |
+| `cluster` | waits until every node takes an ssh login (`SSH_TIMEOUT`, default 300 s), then `playbooks/k8s.yml` | `vms` returns when the guests exist, not when sshd answers |
 | `storage` | `playbooks/k8s-storage.yml --tags disk` | the data disks only; Argo CD installs the provisioner |
 | `restore` | `RESTORE_HOOK` | before `gitops`, so each restored folder is there when Argo CD makes its claim; required on dev ([Restore on dev](#restore-on-dev)); skipped on prod when unset |
 | `gitops` | `playbooks/k8s-gitops.yml --tags install,source` | the inventory sets `k8s_gitops_source_enabled: true` |
-| `apps` | waits until every Argo CD app is Synced and Healthy (`APPS_TIMEOUT`, default 1200 s) | see "Apps and auto-sync" |
+| `apps` | waits until every Argo CD app is Synced and Healthy (`APPS_TIMEOUT`, default 1200 s), then on dev only re-reads every ExternalSecret and waits for each to be Ready, then for ntfy and Alertmanager's pod to be Ready (`SECRETS_TIMEOUT`, default 300 s each; the failure names what is not Ready) | see "Apps and auto-sync" |
 | `gateway` | `playbooks/k8s-gateway.yml` | after `apps`: with `k8s_gateway_by_argocd: true`, Argo CD makes the Gateway and the playbook checks it |
 | `certs` | `playbooks/k8s-certs.yml` | staging issuer on dev |
 | `identity` | `playbooks/k8s-identity.yml` | throwaway users on dev |
