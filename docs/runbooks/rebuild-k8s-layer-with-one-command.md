@@ -8,13 +8,13 @@ outcome: the env's node VMs, the cluster, on dev a read-only copy of prod's newe
 needs: the controller from set-up-lab-controller.md; the lab network and Proxmox host as they are; the iac@pve!apply token file; an allow rule for hosts/rebuild-k8s.sh on the Mac
 private-values: [rebuild-env-dir, terraform-tfvars, terraform-state, ansible-inventory, c1-backup-restic-password, c1-backup-azure-storage-account, prod-volume-node-name]
 files: [hosts/rebuild-k8s.sh, hosts/rebuild.env.example, hosts/terraform/home/k8s/, hosts/ansible/playbooks/, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/files/c1-restore-volumes.sh, hosts/terraform/azure/backup/, hosts/kubernetes/home/c1/]
-last-tested: 2026-11-13, the agent box, dev, central-hub 8861d3d, `rebuild rebuild` from teardown, all ten stages (teardown and the nine after it) passed in 14.4 minutes, the second such run in a row (see Proven runs)
+last-tested: 2026-11-13, run by an agent session on the agent box (lane `agent box`), dev, central-hub 8861d3d, `rebuild rebuild` from teardown, all ten stages (teardown and the nine after it) passed in 14.4 minutes, the second such run in a row (see Proven runs); output: the box's `rebuild log` for runs 20261113T084245Z and 20261113T085920Z, which holds the stage and PASS lines; the raw logs stay on the box (private), so there is no public link
 superseded-by:
 ---
 
 # Rebuild one cluster's Kubernetes layer with one command
 
-**Status:** tested. `hosts/rebuild-k8s.sh` was written from the code on `main` on 2026-11-09. It was proven on dev from the agent box with two clean `rebuild rebuild` runs in a row on 2026-11-13 (see Proven runs). Prod has not been rebuilt with it.
+**Status:** tested. `hosts/rebuild-k8s.sh` was written from the code on `main` on 2026-11-09. It was proven on dev from the agent box with two clean `rebuild rebuild` runs in a row on 2026-11-13 (see Proven runs). Prod has not been rebuilt with it. D-0012 also expects an automated runbook to link a `tested` manual one: [Rebuild the home lab from scratch](rebuild-home-lab-from-scratch.md) is still `draft`, so that link is not yet to a `tested` runbook.
 
 This covers the Kubernetes layer only. The Proxmox host, OPNsense, the tailnet container, DNS and the backup target stay as they are (the owner's card, 2026-11-09 23:21 UTC). For those, and for the whole order from bare metal, see [Rebuild the home lab from bare metal](rebuild-home-lab-from-scratch.md).
 
