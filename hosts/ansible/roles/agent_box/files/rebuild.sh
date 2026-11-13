@@ -52,8 +52,7 @@ if [[ ${1:-} == diag && $# -eq 1 ]]; then
     # Its own known_hosts file: a diag must never write host keys into the file a running rebuild uses.
     ansible 'k8s_control_plane[0]' -i "$inventory/" -b -m ansible.builtin.command \
       -e "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$work/state/diag_known_hosts'" \
-      -a "kubectl --kubeconfig /etc/kubernetes/admin.conf $*" 2>&1 | sed -E '1{/ \| (CHANGED|SUCCESS|FAILED)/d}' | cut -c1-300
-    return 0   # one failing kubectl must not skip the sections after it
+      -a "kubectl --kubeconfig /etc/kubernetes/admin.conf $*" 2>&1 | sed -E '1{/ \| (CHANGED|SUCCESS|FAILED)/d}' | cut -c1-300 || true   # one failing kubectl must not skip the sections after it (set -e, pipefail)
   }
   mkdir -p "$work/state"
   rm -f -- "$work/state/diag_known_hosts"   # the nodes' host keys change with every rebuild
