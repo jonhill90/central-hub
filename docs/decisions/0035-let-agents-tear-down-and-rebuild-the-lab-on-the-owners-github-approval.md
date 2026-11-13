@@ -9,7 +9,7 @@ consulted: []
 waits-on: [D-0001, D-0030, D-0031, D-0034]
 supersedes: []
 superseded-by:
-revisit-when: an agent changes or removes the approval rule on a protected environment; a run touches VM 258, CT 259 or the VPS node; the Proxmox token's rights grow beyond the lab's guests and configuration; a run passes a precondition it should have failed; the agents get GitHub identities of their own and GitHub can require the owner's approval for every write (D-0030)
+revisit-when: any agent token gains Administration or Deployments write on this repository; an agent changes or removes the approval rule on a protected environment; a run touches VM 258, CT 259 or the VPS node; the Proxmox token's rights grow beyond the lab's guests and configuration; a run passes a precondition it should have failed; the agents get GitHub identities of their own and GitHub can require the owner's approval for every write (D-0030)
 ---
 
 # Let agents tear down and rebuild the home lab's guests and Proxmox configuration from reviewed main, each run approved by the owner on GitHub
@@ -48,7 +48,8 @@ Chosen option: **1**. The owner picked the scope and the channel. The rules belo
 4. **What a run uses.** The code of `main` at a commit whose PR merged green, one fixed layer per run (no free arguments), the box's own wrappers and keys. No workflow in this repository takes a `pull_request`, `pull_request_target`, `issue_comment` or `issues` trigger and runs on that runner (AGENTS.md rule 5).
 5. **Before a teardown.** The run first checks that the newest restic snapshot is under 24 hours old and its restore check passed, that a firewall configuration backup and a copy of the OpenTofu state exist off the box, and that the agent box's route to the Proxmox host does not depend on the guest being destroyed. If any check fails, nothing is destroyed.
 6. **Logged and capped.** Every run keeps its stage log on the box and its Actions run on GitHub. One run at a time. A cap on destroys per run, set in the workflow.
-7. **Changing the rules.** This record's rules, the environments' reviewers and the runner's settings change only with the owner's typed line (D-0034 rule 4); an agent never edits a protection rule.
+7. **Changing the rules.** This record's rules, the environments' reviewers and protection rules, the workflow files that set `environment:`, the box's wrappers that a run calls and the runner's settings change only with the owner's typed line (D-0034 rule 4). An agent never edits a protection rule, and no token an agent holds may be able to.
+8. **Who holds which GitHub right.** (a) The box's central-hub App gets no Administration and no Deployments write: only what `pr-merge` and the bump PRs need, and Actions write to start a run. (b) Runner registration moves to a separate App with Administration that is not installed on this repository, or the owner registers the runner by hand. (c) The environments' required reviewer is an identity no agent holds a token for: agents act as the owner's own GitHub account today (AGENTS.md rule 1), so any token for that account with Deployments write could approve as the owner. Until the agents have an account of their own (D-0030, Activation gate item 1), this record does not take effect: the first run waits for it.
 8. **Break-glass.** The owner reaches the Proxmox host's own console to put things back by hand. The way back is the runbook (rebuild-home-lab-from-scratch.md), kept current by every run.
 
 ### Consequences
@@ -56,7 +57,8 @@ Chosen option: **1**. The owner picked the scope and the channel. The rules belo
 - Good: the owner approves from his phone, GitHub proves it was him, and no private file needs his Mac.
 - Good: the teardown can't touch the box that runs it, because the token has no rights there.
 - Bad: the agent box holds a Proxmox token that can destroy every lab guest. Compensating controls: reviewed main only, the environment approval, the 24-hour backup precondition, the destroy cap, and the exclusion by rights.
-- Bad: **the GitHub App the box uses today holds repository Administration, which it needs to mint runner registration tokens. Administration may be enough to change an environment's required reviewer.** Not settled here. Before this record is accepted, a review checks whether it is, and if so the runner token and the run-starting rights move to separate identities (D-0030).
+- Bad: **the GitHub App the box uses today holds repository Administration, which it needs to mint runner registration tokens.** Administration lets it clear an environment's required reviewers and change branch policies, protection rules and rulesets; with Deployments write it could add itself as a custom protection rule and approve runs [source: the reviewer's check of 2026-11-13, not tested by the drafting agent]. Rule 8 splits those rights. Compensating control until then: no run is started on an environment.
+- Bad: **agents act as the owner's account**, so an approval by that account is not proof of the owner. Rule 8(c) makes D-0030 a condition. Not yet checked: whether the Claude GitHub App holds Deployments write; the owner checks it in the App's settings before acceptance.
 - Bad: a self-hosted runner on a public repository runs whatever a workflow on `main` says. Compensating control: rule 4, and a change to a workflow is a reviewed PR to `main` like any other.
 - Bad: GitHub is a dependency for approving a run. If GitHub is down, nothing runs; the owner's console is the way round it (rule 8).
 - Neutral: AGENTS.md rule 1 gains one sentence pointing here. Nothing in this record weakens the owner's typed line.
