@@ -78,6 +78,7 @@ check_ansible() {
     (cd hosts/ansible && ansible-playbook --syntax-check -i localhost, "${playbook#hosts/ansible/}")
   done
   (cd hosts/ansible && ansible-lint --project-dir . -c "$here/ansible-lint.yml" playbooks roles)
+  python3 "$here/check-deny-rules.py"
 }
 
 check_manifests() {

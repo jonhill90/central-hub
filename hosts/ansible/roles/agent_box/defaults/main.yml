@@ -67,18 +67,18 @@ agent_box_deny:
   # Raw applies; applies go only through the wrappers.
   - "Bash(tofu apply:*)"
   - "Bash(tofu destroy:*)"
-  - "Bash(tofu -chdir=* apply:*)"
-  - "Bash(tofu -chdir=* destroy:*)"
+  # A `*` in the middle needs the plain trailing `*`: mixed with `:*` it is matched as literal text.
+  - "Bash(tofu -chdir=* apply*)"
+  - "Bash(tofu -chdir=* destroy*)"
   - "Bash(gh pr merge:*)"
   - "Bash(gh api:*)"
   # Keys: sessions reach `keys` only through the front scripts, which call sudo themselves.
   - "Bash(sudo:*)"
   - "Read(/etc/agent-keys/**)"
   # The settings themselves.
+  # Only Edit rules match file writes (an Edit rule covers every file-editing tool, Write included).
   - "Edit(/etc/claude-code/**)"
-  - "Write(/etc/claude-code/**)"
   - "Edit(~/.claude/settings.json)"
-  - "Write(~/.claude/settings.json)"
 
 # Private, through the inventory: the allow rules and auto mode's environment lines copied from
 # the Mac's settings (they name private paths). Empty lists are fine.
