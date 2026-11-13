@@ -1,7 +1,7 @@
 ---
 id: D-0034
 title: Let the owner's tap on a decision card that names a PR and its head count as the owner's go, the same as a typed line
-status: proposed
+status: accepted
 date: 2026-11-12
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0001, D-0031]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-12T23:51:53Z
+  approved-commit: 97bbaa24a6f5fd4eaa8411fe6597599b4ccc4cd6
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNXhMWwtBcRk1gYKHRf37Azh
+  approval-names: "PR #200 and head 97bbaa2, in the message itself"
+  check: the drafting agent read the message in the project thread at 2026-11-12T23:51Z; it reads "accept #200 97bbaa2", and that head holds this record. A reviewing agent checks it before the merge
+  merged: PR #200 squash-merged at head 97bbaa24 as 80004501
 revisit-when: a tap is disowned after it was acted on; the platform stops recording who tapped a card, or lets a card be answered by anyone but the member it was put to; the agents get a GitHub identity of their own (D-0030) and GitHub can require the owner's approval itself; or a cluster other than c1 reads the repository
 ---
 
