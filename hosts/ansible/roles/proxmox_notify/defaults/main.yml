@@ -16,6 +16,10 @@
 # endpoint that posts the notification's title and text there, at high priority:
 #   proxmox_notify_ntfy_url: https://ntfy.<zone>/c1-alerts   # private: the zone
 # Set one of proxmox_notify_ntfy_url and proxmox_notify_endpoint, not both.
+# ntfy on c1 refuses anonymous posts (pick 171): give Proxmox its send-only token too, from the
+# controller's secret-source file (playbooks/ntfy-access.yml makes it), for example:
+#   proxmox_notify_ntfy_token: "{{ lookup('ansible.builtin.ini', 'ntfy-proxmox-token', type='properties',
+#     file=lookup('ansible.builtin.env', 'HOME') ~ '/.config/central-hub/secret-source.env') }}"
 
 proxmox_notify_placeholder: central-hub-off
 proxmox_notify_target_prefix: central-hub

@@ -1,0 +1,55 @@
+---
+# ntfy's three secrets for pick 171, made once on the controller into its 0600 secret-source file
+# (docs/runbooks/seed-secret-source.md), never printed: the owner's ntfy password and the send-only
+# tokens of Alertmanager and Proxmox. A value already in the file is kept, so a re-run changes
+# nothing; to rotate one, delete its line and run this again. Then seed secret-source and restart
+# ntfy (docs/runbooks/get-c1-alerts-on-your-phone.md, "Who may read and post").
+#   ansible-playbook playbooks/ntfy-access.yml
+- name: ntfy's secrets in the controller's secret-source file
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ntfy_access_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/central-hub/secret-source.env"
+    # name, and how long its random part is. An ntfy token is tk_ and 29 more (32 in all, ntfy
+    # v2.35.0 docs/config.md, access tokens).
+    ntfy_access_values:
+      - {name: ntfy-owner-password, prefix: "", length: 24}
+      - {name: ntfy-alertmanager-token, prefix: tk_, length: 29}
+      - {name: ntfy-proxmox-token, prefix: tk_, length: 29}
+  tasks:
+    - name: ntfy | Folder for the file, private
+      ansible.builtin.file:
+        path: "{{ ntfy_access_file | dirname }}"
+        state: directory
+        mode: "0700"
+
+    - name: ntfy | The file, private (made empty if missing)
+      ansible.builtin.file:
+        path: "{{ ntfy_access_file }}"
+        state: touch
+        mode: "0600"
+        modification_time: preserve
+        access_time: preserve
+
+    # Only the names are kept from the file; the values never leave it.
+    - name: ntfy | Names already in the file
+      ansible.builtin.command:
+        argv: [sed, -n, 's/^\([A-Za-z0-9_.-]*\)=.*/\1/p', "{{ ntfy_access_file }}"]
+      register: ntfy_access_names
+      changed_when: false
+      check_mode: false
+
+    - name: ntfy | Add each missing value, random lowercase letters and digits
+      ansible.builtin.lineinfile:
+        path: "{{ ntfy_access_file }}"
+        line: >-
+          {{ item.name }}={{ item.prefix }}{{ lookup('ansible.builtin.password', '/dev/null',
+          chars=['ascii_lowercase', 'digits'], length=item.length) }}
+        insertafter: EOF
+        mode: "0600"
+      loop: "{{ ntfy_access_values }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.name not in ntfy_access_names.stdout_lines
+      no_log: true

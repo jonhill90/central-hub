@@ -29,6 +29,14 @@ argument_specs:
         description: >-
           An ntfy topic URL, for example https://ntfy.<zone>/c1-alerts. When set, the target is a
           webhook that posts each matched notification there. Not together with proxmox_notify_endpoint.
+      # Optional, secret, through the inventory. Empty = no Authorization header.
+      proxmox_notify_ntfy_token:
+        type: str
+        required: false
+        no_log: true
+        description: >-
+          Proxmox's send-only ntfy token (pick 171), sent as a bearer token. ntfy on c1 refuses
+          anonymous posts, so set it with proxmox_notify_ntfy_url.
       # Defaults in defaults/main.yml
       proxmox_notify_placeholder: {type: str, default: central-hub-off, description: Name of the switched-off sendmail placeholder target.}
       proxmox_notify_target_prefix: {type: str, default: central-hub, description: The real target is named <prefix>-<type>.}

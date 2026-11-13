@@ -1,0 +1,33 @@
+{{- $v := .Values }}
+# ntfy's users, access list and tokens (pick 171), built by External Secrets from the three values
+# in namespace secret-source. ntfy reads them at start ("auth-users", "auth-access", "auth-tokens";
+# ntfy v2.35.0 docs/config.md, access control) and deletes any it no longer finds there.
+# Passwords are bcrypt hashes: the owner's password, and for the two senders their token, which
+# only ever posts. bcrypt salts each run, so the Secret changes at every refresh; ntfy reads it only
+# at start, and every hash checks the same password.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $v.name }}-auth
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $v.auth.store }}
+  target:
+    name: {{ $v.name }}-auth
+    creationPolicy: Owner
+    template:
+      data:
+        NTFY_AUTH_USERS: >-
+          {{ $v.auth.ownerUser }}:{{ "{{" }} .owner | bcrypt {{ "}}" }}:user,alertmanager:{{ "{{" }} .alertmanager | bcrypt {{ "}}" }}:user,proxmox:{{ "{{" }} .proxmox | bcrypt {{ "}}" }}:user
+        NTFY_AUTH_ACCESS: >-
+          {{ $v.auth.ownerUser }}:{{ $v.topic }}:ro,alertmanager:{{ $v.topic }}:wo,proxmox:{{ $v.topic }}:wo
+        NTFY_AUTH_TOKENS: >-
+          alertmanager:{{ "{{" }} .alertmanager {{ "}}" }}:alertmanager,proxmox:{{ "{{" }} .proxmox {{ "}}" }}:proxmox
+  data:
+{{- range $key, $source := $v.auth.sources }}
+    - secretKey: {{ $key }}
+      remoteRef: {key: {{ $source }}, property: value}
+{{- end }}
