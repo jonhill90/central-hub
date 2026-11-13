@@ -18,6 +18,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Set up the owner's desktop VM](set-up-the-desktop.md) | manual | draft |
 | [Run the dev lab redeploy from GitHub Actions on the agent box](set-up-the-lab-redeploy-workflow.md) | manual | draft |
 | [Give the agent box a lifeline to Proxmox and keep OPNsense's configuration](set-up-the-box-lifeline.md) | manual | draft |
+| [Test the agents' own GitHub account before the switch](test-the-agents-github-account.md) | manual | draft |
 | [Create the c1 node VMs on Proxmox from code](create-c1-node-vms.md) | automated | draft |
 | [Restore the home lab from its backups](restore-home-lab-from-backups.md) | manual | draft |
 | [Seed namespace secret-source on c1 from the controller](seed-secret-source.md) | manual | draft |
