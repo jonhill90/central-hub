@@ -514,6 +514,9 @@
 # --- Prod files from the controller ----------------------------------------------------------
 
 - name: Copy the controller's private lab files to the box (only when agent_box_copy_prod_files is true)
-  ansible.builtin.include_tasks: prod_files.yml
+  ansible.builtin.include_tasks:
+    file: prod_files.yml
+    apply:
+      tags: [prod_files]
   when: agent_box_copy_prod_files | bool
   tags: [prod_files]
