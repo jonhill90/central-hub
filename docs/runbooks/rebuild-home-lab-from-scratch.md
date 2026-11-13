@@ -55,17 +55,19 @@ If a private file is lost, the runbook that makes it makes it again: a new token
 | `~/.config/central-hub/opnsense-api.txt` | the OPNsense API key and secret for user `ansible` | [Set up the lab network and firewall](set-up-lab-network-and-firewall.md) step 6 | make a new key |
 | `~/.config/central-hub/c1-secrets-encryption.key` | the secretbox key for Secrets at rest on c1 | [Build c1 with Ansible](build-c1-with-ansible.md) step 1 | a new cluster gets a new key; old etcd backups can't be read |
 | `~/.config/central-hub/cloudflare-bootstrap-token.txt` | the hand-made Cloudflare token that can make tokens | [hosts/terraform/README.md, The bootstrap token](../../hosts/terraform/README.md#the-bootstrap-token) | make a new one in the dashboard |
-| `~/.config/central-hub/cloudflare-dns01-token.txt` | cert-manager's DNS-01 token (90 days) | `hosts/terraform/home/certificates` | the next apply makes it again |
+| `~/.config/central-hub/<DNS-01 token file>` | cert-manager's DNS-01 token (90 days), at the path `token_file` names in the certificates folder's `home.tfvars` (the example says `cloudflare-dns01-token.txt`; the owner's controller uses `cloudflare-dns.token`) | `hosts/terraform/home/certificates` | the next apply makes it again |
 | `~/.config/central-hub/lab-ca/` | lab root CA key and certificate, c1's intermediate, `lab-ca.env` with the passphrase | `create-lab-root-ca.md` (PR #65) | a new root CA; every device trusts it again |
 | `~/.config/central-hub/c1-backup.env` | `RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, the target's credentials | `back-up-c1-off-box.md` (PR #68) | a new repository; the old snapshots can't be read |
 | `~/.local/state/central-hub/*.tfstate` | OpenTofu state per run folder; the certificates folder's state holds the Cloudflare token in plain text | `tofu apply` | see [If it fails](#if-it-fails) |
 | `hosts/.env` (git-ignored) | `TAILSCALE_OAUTH_CLIENT_ID`, `TAILSCALE_OAUTH_CLIENT_SECRET` | `set-up-lab-dns.md` step 2 (PR #67) | make a new OAuth client |
 | `hosts/ansible/inventories/home/hosts.yml` (git-ignored) | the filled-in inventory: every name, address, MAC and file path | copied from `hosts.example.yml` and filled in | fill in again from the lab |
-| `hosts/ansible/inventories/home/identity.env` (git-ignored) | every Keycloak user password and client secret | the first `k8s-identity.yml` run (PR #69) | the next run makes new values |
+| `~/.config/central-hub/identity.env` | every Keycloak user password and client secret (`k8s_identity_values_file`) | the first `k8s-identity.yml` run ([Set up lab sign-in](set-up-lab-sign-in.md)) | the next run makes new values |
 | `hosts/terraform/home/*/home.tfvars` (git-ignored) | each run folder's private names, MACs and addresses | copied from `home.tfvars.example` | fill in again |
+| `hosts/terraform/home/dns/home.records.tfvars.json` (git-ignored) | every record of the public zone | `export-records.sh` ([Manage public DNS records](manage-public-dns-records.md)) | export again from the live zone |
+| `hosts/terraform/azure/backup/azure.tfvars` (git-ignored) | the Azure backup target's private names | copied from `azure.tfvars.example` | fill in again |
 | an SSH key pair for the c1 nodes | the key `hosts/terraform/home/k8s` puts on the nodes | `ssh-keygen` on the controller | make a new one before step 4 |
 
-Agent pick: this table is the first list of the private files in one place. Where a file has no fixed name in the code (the Proxmox token file), the name is left open.
+Agent pick: this table is the first list of the private files in one place. Where a file has no fixed name in the code (the Proxmox token file), the name is left open. The agent box's copy of these files (`agent_box_prod_files` in the `agent_box` role, [Set up the agent box](set-up-the-agent-box.md#copy-the-controllers-private-files-to-the-box)) takes `hosts/.env`, the filled-in inventory, `identity.env`, each `home/*` run folder's `home.tfvars` and the DNS records file, `opnsense-api.txt`, `c1-secrets-encryption.key`, the DNS-01 token, `pve-root-ca.pem` and the state files. It leaves out the Proxmox token file, the Cloudflare bootstrap token, the nodes' SSH key pair and the Azure backup's `azure.tfvars`; `lab-ca/` and `c1-backup.env` reach the box through the keys wrapper instead.
 
 ### Open PRs this runbook already counts on
 
