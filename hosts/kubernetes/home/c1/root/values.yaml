@@ -143,7 +143,7 @@ apps:
     zoneParameters:
       # Short aliases (STD-0001 rules 5 and 7), as k8s_observability_short_names.
       grafana.grafana\.ini.server.root_url: "https://grafana.{zone}/"
-      grafana.grafana\.ini.auth\.generic_oauth.auth_url: "https://sso.{zone}/realms/lab/protocol/openid-connect/auth"
+      grafana.grafana\.ini.auth\.generic_oauth.auth_url: "https://sso.{zone}/realms/home/protocol/openid-connect/auth"
     # The CRDs are too large for a client-side apply's annotation.
     syncOptions: [ServerSideApply=true, RespectIgnoreDifferences=true]
     # Grafana's chart makes a new random admin password at every render; keep the one on the cluster.

@@ -3,7 +3,7 @@
 Keycloak's own admin tool (kcadm.sh) in the container test_realm.sh started.
 
 - every client is there, with its redirect URIs and its public or confidential type;
-- every user signs in with the password from the import (kcadm logs in to realm lab as that user);
+- every user signs in with the password from the import (kcadm logs in to realm home as that user);
 - for every user and every client, Keycloak's example ID token carries the realm's issuer, a
   `groups` claim with the user's groups and a `roles` claim with each group's realm role.
 
@@ -27,7 +27,7 @@ def kcadm(*args, config="/tmp/kcadm.config"):
 
 
 def get(path, *query):
-    args = ["get", path, "-r", "lab"]
+    args = ["get", path, "-r", "home"]
     for q in query:
         args += ["-q", q]
     rc, out, err = kcadm(*args)
@@ -64,7 +64,7 @@ def main(src):
         name = user["username"]
         password = user["credentials"][0]["value"]
         rc, _, err = kcadm("config", "credentials", "--server", "http://localhost:8080",
-                           "--realm", "lab", "--user", name, "--password", password,
+                           "--realm", "home", "--user", name, "--password", password,
                            config=f"/tmp/user-{name}.config")
         check(rc == 0, f"user {name} signs in with the imported password {err.strip()}".rstrip())
         found = get("users", f"username={name}", "exact=true")
@@ -76,7 +76,7 @@ def main(src):
         for client_id, cid in clients.items():
             token = get(f"clients/{cid}/evaluate-scopes/generate-example-id-token",
                         f"userId={found[0]['id']}", "scope=openid")
-            check(token.get("iss") == f"{HOST}/realms/lab", f"{client_id} token for {name}: issuer {token.get('iss')}")
+            check(token.get("iss") == f"{HOST}/realms/home", f"{client_id} token for {name}: issuer {token.get('iss')}")
             check(sorted(token.get("groups", [])) == groups, f"{client_id} token for {name}: groups {token.get('groups')}")
             check(sorted(r for r in token.get("roles", []) if r in ("admin", "viewer")) == roles,
                   f"{client_id} token for {name}: roles {token.get('roles')}")

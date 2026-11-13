@@ -80,7 +80,7 @@ These were open on 2026-11-08. Until each one merges, the step that names it run
 | #66 (merged) | label fixes in D-0003, D-0020 and two roles | none (corrections only) |
 | #67 | lab DNS: `home/tailnet`, role `tailnet_connector`, `dns_proof`, runbook `set-up-lab-dns.md` | 3, 9 |
 | #68 | c1 backups off the box: role `k8s_backup`, runbooks `back-up-c1-off-box.md`, `test-etcd-restore.md` | 11 |
-| #69 | realm `lab` as code, `identity.env`, runbook `set-up-lab-sign-in.md` | 10 |
+| #69 | realm `lab` as code (now `home`), `identity.env`, runbook `set-up-lab-sign-in.md` | 10 |
 
 Runbooks that exist only in an open PR are named in `code` here, not linked, so this page's links work on `main`. Link them once their PR merges.
 
@@ -187,10 +187,10 @@ expect: each `dig` in that step answers with the right address.
 
 #### Step 12
 
-Install the add-ons and apps with Ansible: External Secrets, metrics and logs with Grafana, Keycloak with realm `lab`, Grafana's sign-in through it, and Jellyfin.
+Install the add-ons and apps with Ansible: External Secrets, metrics and logs with Grafana, Keycloak with realm `home`, Grafana's sign-in through it, and Jellyfin.
 why: this is how they are installed today, and Keycloak sits in the middle because Grafana's sign-in needs both; Argo CD takes the add-ons and apps over in step 15.
 runbook: [Install c1's add-ons and apps with Ansible](install-c1-add-ons-with-ansible.md), then [Seed namespace secret-source](seed-secret-source.md) only if its file has lines (nothing reads store `c1` today). Its Keycloak step becomes `set-up-lab-sign-in.md` (PR #69) once that merges; on `main` today the procedure is [hosts/ansible/README.md, Sign-in on c1](../../hosts/ansible/README.md#sign-in-on-c1).
-expect: Grafana's "Lab sign-in" button signs the owner in, and Jellyfin answers at its name.
+expect: Grafana's "Home sign-in" button signs the owner in, and Jellyfin answers at its name.
 
 #### Step 13
 

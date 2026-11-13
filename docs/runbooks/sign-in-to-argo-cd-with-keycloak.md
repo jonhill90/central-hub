@@ -2,9 +2,9 @@
 title: Turn on sign-in to Argo CD through the lab's Keycloak
 status: draft
 kind: automated
-trigger: on request, once realm lab has the argocd clients (Keycloak identity as code) and the Argo CD UI route is on
+trigger: on request, once realm home has the argocd clients (Keycloak identity as code) and the Argo CD UI route is on
 runner: an agent lane, through the owner's Mac (D-0022)
-outcome: Argo CD's sign-in page shows "Lab sign-in"; a lab-admins member gets admin, a lab-viewers member read-only, anyone else nothing; the built-in admin still works
+outcome: Argo CD's sign-in page shows "Home sign-in"; a home-admins member gets admin, a home-viewers member read-only, anyone else nothing; the built-in admin still works
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; Secret argocd/argocd-sso made by playbooks/k8s-identity.yml
 private-values: [k8s_gateway_zone, k8s_gitops_ui_zone]
 files: [hosts/ansible/roles/k8s_gitops/tasks/sso.yml, hosts/ansible/roles/k8s_gitops/templates/argocd-sso.yaml.j2, hosts/ansible/roles/k8s_gitops/defaults/main.yml]
@@ -18,15 +18,15 @@ Argo CD stays installed by Ansible (D-0023 rule 2), so its sign-in settings live
 
 | Realm group | Argo CD role |
 |---|---|
-| lab-admins | role:admin |
-| lab-viewers | role:readonly |
+| home-admins | role:admin |
+| home-viewers | role:readonly |
 | anyone else | nothing |
 
 ## Before you start
 
 - `k8s_gitops_ui_route` is true, and `https://argocd.apps.c1.prod.<zone>/` opens.
-- `kubectl -n argocd get secret argocd-sso` exists, labelled `app.kubernetes.io/part-of=argocd`. It comes from `playbooks/k8s-identity.yml` (realm lab as code).
-- `https://sso.apps.c1.prod.<zone>/realms/lab/.well-known/openid-configuration` answers from a pod in the cluster, over a certificate the pod trusts. Argo CD's server fetches it itself. With the Let's Encrypt staging certificate it can't, because staging isn't trusted: issue from production first (`k8s_certs_issuer: letsencrypt-prod`). With the lab CA (`k8s_certs_issuer: lab-ca`, D-0028), set `k8s_gitops_sso_root_ca_file` to the lab root's PEM file on the controller, and Argo CD trusts it for this sign-in only.
+- `kubectl -n argocd get secret argocd-sso` exists, labelled `app.kubernetes.io/part-of=argocd`. It comes from `playbooks/k8s-identity.yml` (realm home as code).
+- `https://sso.apps.c1.prod.<zone>/realms/home/.well-known/openid-configuration` answers from a pod in the cluster, over a certificate the pod trusts. Argo CD's server fetches it itself. With the Let's Encrypt staging certificate it can't, because staging isn't trusted: issue from production first (`k8s_certs_issuer: letsencrypt-prod`). With the lab CA (`k8s_certs_issuer: lab-ca`, D-0028), set `k8s_gitops_sso_root_ca_file` to the lab root's PEM file on the controller, and Argo CD trusts it for this sign-in only.
 
 Stop if any of these is not true.
 
@@ -39,7 +39,7 @@ Stop if any of these is not true.
    expect: one change (Apply). Argo CD reads both ConfigMaps live, so no pod restarts.
 
 3. Open Argo CD's sign-in page in a private window.
-   expect: a "Lab sign-in" button. Sign in as a lab-admins member: every Application shows, and Sync works. Sign in as a lab-viewers member: Applications show, and Sync is refused.
+   expect: a "Home sign-in" button. Sign in as a home-admins member: every Application shows, and Sync works. Sign in as a home-viewers member: Applications show, and Sync is refused.
 
 4. Run step 2 again.
    expect: `changed=0`.

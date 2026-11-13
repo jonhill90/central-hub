@@ -49,7 +49,7 @@ spec:
 {% endfor %}
   realm:
     realm: {{ k8s_identity_realm }}
-    displayName: Lab sign-in
+    displayName: Home sign-in
     enabled: true
     sslRequired: external
     registrationAllowed: false
@@ -70,9 +70,9 @@ spec:
 {% for user in k8s_identity_users %}
       # Keycloak's user profile asks for an email, first and last name before a first sign-in
       # ("Account is not fully set up"), so each user gets all three: the given email or
-      # <user name>@lab.invalid (RFC 2606), and the given names or the user name and "Lab".
+      # <user name>@home.invalid (RFC 2606), and the given names or the user name and "Lab".
       - username: {{ user.username }}
-        email: {{ user.email if user.email | default('') | length > 0 else user.username ~ '@lab.invalid' }}
+        email: {{ user.email if user.email | default('') | length > 0 else user.username ~ '@home.invalid' }}
         emailVerified: true
         firstName: {{ user.first_name | default(user.username) }}
         lastName: {{ user.last_name | default('Lab') }}

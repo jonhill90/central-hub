@@ -117,7 +117,7 @@ k8s_observability_kps_values:
 k8s_observability_grafana_sso_ini:
   auth.generic_oauth:
     enabled: true
-    name: Lab sign-in
+    name: Home sign-in
     allow_sign_up: true
     client_id: "{{ k8s_observability_sso_client_id }}"
     scopes: openid profile email
@@ -126,8 +126,8 @@ k8s_observability_grafana_sso_ini:
     api_url: "{{ k8s_observability_sso_api_url }}"
     use_pkce: true
     login_attribute_path: preferred_username
-    # An account with no email gets <user name>@lab.invalid (RFC 2606 reserves .invalid).
-    email_attribute_path: "email || join('', [preferred_username, '@lab.invalid'])"
+    # An account with no email gets <user name>@home.invalid (RFC 2606 reserves .invalid).
+    email_attribute_path: "email || join('', [preferred_username, '@home.invalid'])"
     role_attribute_path: "contains(roles[*], 'admin') && 'Admin' || 'Viewer'"
     role_attribute_strict: false
 

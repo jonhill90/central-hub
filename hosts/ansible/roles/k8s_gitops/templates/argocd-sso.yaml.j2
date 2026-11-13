@@ -1,5 +1,5 @@
 # {{ ansible_managed }}
-# Sign-in to Argo CD through the lab's Keycloak (realm lab), applied server-side with its own field
+# Sign-in to Argo CD through the lab's Keycloak (realm home), applied server-side with its own field
 # manager, so only these keys belong to this role and the engine's install never takes them back.
 # With k8s_gitops_sso off the data is empty, and the same apply removes the keys an earlier run set.
 # Argo CD reads both ConfigMaps live; no restart (Argo CD 3.5 docs, operator-manual/user-management,

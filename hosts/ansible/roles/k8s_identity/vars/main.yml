@@ -37,16 +37,16 @@ k8s_identity_theme_sha256: "{{ k8s_identity_theme_files | map(attribute='b64') |
 k8s_identity_db_secret: "{{ k8s_identity_name }}-db"
 k8s_identity_realm_secret: realm-{{ k8s_identity_realm }}-secrets
 
-# The groups in realm lab and the realm role each gives. Apps read both claims: `groups` (Argo CD,
+# The groups in realm home and the realm role each gives. Apps read both claims: `groups` (Argo CD,
 # the Jellyfin plugin) and `roles` (Grafana).
 k8s_identity_groups:
-  - {name: lab-admins, role: admin}
-  - {name: lab-viewers, role: viewer}
+  - {name: home-admins, role: admin}
+  - {name: home-viewers, role: viewer}
 
 # Every user, the owner first. The password key is PASSWORD_ and the user name in capitals, with
 # anything that is not a letter or digit as an underscore.
 k8s_identity_users: >-
-  {{ [{'username': k8s_identity_owner_username, 'email': k8s_identity_owner_email, 'groups': ['lab-admins']}]
+  {{ [{'username': k8s_identity_owner_username, 'email': k8s_identity_owner_email, 'groups': ['home-admins']}]
   + k8s_identity_extra_users }}
 k8s_identity_password_keys: >-
   {{ k8s_identity_users | map(attribute='username') | map('upper') | map('regex_replace', '[^A-Z0-9]', '_')

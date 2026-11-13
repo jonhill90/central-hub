@@ -2,27 +2,27 @@
 argument_specs:
   main:
     short_description: >-
-      Keycloak through its operator, with PostgreSQL and realm lab as code (groups, users, and the
+      Keycloak through its operator, with PostgreSQL and realm home as code (groups, users, and the
       clients of Grafana, Argo CD and Jellyfin), served through the shared Gateway (BUILD-PATH S15, TASK-0019)
     options:
       k8s_identity_version: {type: str, default: 26.8.1, description: "Keycloak and operator version (STD-0003); vars/main.yml pins the files for it."}
       k8s_identity_namespace: {type: str, default: identity, description: "Namespace for the operator, Keycloak and its database."}
       k8s_identity_name: {type: str, default: sso, description: "The Keycloak object's name and the first label of its hostname."}
       k8s_identity_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}
-      k8s_identity_realm: {type: str, default: lab, description: The realm lab apps sign in to.}
+      k8s_identity_realm: {type: str, default: lab, description: The realm home apps sign in to.}
       k8s_identity_owner_username: {type: str, required: true, description: "The owner's user name in the realm. Private."}
       k8s_identity_owner_email: {type: str, default: "", description: "The owner's email in the realm. Private, optional."}
       k8s_identity_extra_users:
         type: list
         elements: dict
         default: []
-        description: "More users in realm lab: username, groups (lab-admins, lab-viewers), optional email, first_name, last_name."
+        description: "More users in realm home: username, groups (home-admins, home-viewers), optional email, first_name, last_name."
       k8s_identity_values_file:
         type: str
         description: "KEY=value file on the controller, outside the repo, with every password and client secret. Default: ~/.config/central-hub/identity.env."
       k8s_identity_short_names: {type: bool, default: true, description: "Keycloak at sso.<zone>, and each client also accepts <app>.<zone> (STD-0001 rule 5)."}
       k8s_identity_theme_dir: {type: str, default: "", description: "Keycloak theme folder on the controller for the sign-in look. Private."}
-      k8s_identity_realm_replace: {type: bool, default: true, description: "Delete and import realm lab again when its code or a value changes."}
+      k8s_identity_realm_replace: {type: bool, default: true, description: "Delete and import realm home again when its code or a value changes."}
       k8s_identity_grafana_name: {type: str, default: grafana, description: "First label of Grafana's hostname (k8s_observability_grafana_name)."}
       k8s_identity_grafana_namespace: {type: str, default: monitoring, description: "Grafana's namespace (k8s_observability_metrics_namespace)."}
       k8s_identity_grafana_deployment:
