@@ -7,7 +7,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | Runbook | Kind | Status |
 |---|---|---|
 | [Rebuild the home lab from bare metal (top-level order)](rebuild-home-lab-from-scratch.md) | manual | draft |
-| [Rebuild one cluster's Kubernetes layer with one command](rebuild-k8s-layer-with-one-command.md) | automated | draft |
+| [Rebuild one cluster's Kubernetes layer with one command](rebuild-k8s-layer-with-one-command.md) | automated | tested |
 | [Set up the lab controller](set-up-lab-controller.md) | manual | draft |
 | [Set up the lab network, the OPNsense firewall and the tailnet connector container from code](set-up-lab-network-and-firewall.md) | automated | draft |
 | [Put the OPNsense image and the Debian 13 template on the Proxmox host](stage-lab-images-on-proxmox.md) | manual | draft |
@@ -16,6 +16,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Set up the agent box's users, keys, wrappers and guard rules](set-up-the-agent-box.md) | automated | draft |
 | [Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md) | automated | draft |
 | [Set up the owner's desktop VM](set-up-the-desktop.md) | manual | draft |
+| [Give the agent box a lifeline to Proxmox and keep OPNsense's configuration](set-up-the-box-lifeline.md) | manual | draft |
 | [Create the c1 node VMs on Proxmox from code](create-c1-node-vms.md) | automated | draft |
 | [Restore the home lab from its backups](restore-home-lab-from-backups.md) | manual | draft |
 | [Seed namespace secret-source on c1 from the controller](seed-secret-source.md) | manual | draft |

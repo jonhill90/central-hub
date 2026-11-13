@@ -43,6 +43,29 @@ argument_specs:
         description: "Absolute paths of public CA certificate files on the controller (no folders, no patterns, no keys), each trusted on the box; private."
       agent_box_tls_check_url: {type: str, default: "", description: "HTTPS URL the verify tag fetches with certificate checks on; private; empty skips it."}
       agent_box_managed_settings_extra: {type: dict, default: {}, description: "Other top-level managed settings, merged over the rest."}
+      agent_box_opnsense_backup:
+        type: dict
+        default: {}
+        description: >-
+          Private. host (OPNsense's name or address) and keep (copies kept, 3 to 60, default 14) for the daily
+          configuration backup on the box. Empty does nothing.
+      agent_box_opnsense_backup_daily: {type: str, default: "*-*-* 14:30:00 UTC", description: "systemd OnCalendar for the daily OPNsense backup."}
+      agent_box_lifeline_interface:
+        type: str
+        default: ""
+        description: >-
+          The box's lifeline NIC inside the VM (for example eth1), put in firewalld's drop zone, on
+          its NetworkManager connection too. Private. Empty does nothing.
+      agent_box_lifeline_allow:
+        type: list
+        elements: dict
+        default: []
+        description: >-
+          Private. What the box may reach over the lifeline NIC, the rest is rejected: entries of
+          address (IPv4) and ports (TCP ports), normally the Proxmox host and 8006.
+        options:
+          address: {type: str, required: true, description: "IPv4 address."}
+          ports: {type: list, elements: int, required: true, description: "TCP ports."}
       agent_box_copy_prod_files:
         type: bool
         default: false

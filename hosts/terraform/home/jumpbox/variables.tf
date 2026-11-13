@@ -45,3 +45,18 @@ variable "jumpbox" {
     error_message = "The agent jumpbox needs at least 4 GiB of RAM (its size in the rehearsal) and 40 GB of disk. Set the RAM from the measurement in docs/runbooks/grow-the-agent-jumpbox.md step 8."
   }
 }
+
+variable "lifeline" {
+  description = "The box's second NIC on the Proxmox host's own bridge (pick 220), or null for none. bridge is that bridge's name on the host, address the box's address on that subnet, prefix its length. Private values: set only in the git-ignored tfvars. No gateway is set, so it only reaches that subnet."
+  type = object({
+    bridge  = string
+    address = string
+    prefix  = number
+  })
+  default = null
+
+  validation {
+    condition     = var.lifeline == null ? true : (can(cidrhost("${var.lifeline.address}/${var.lifeline.prefix}", 0)) && var.lifeline.bridge != var.vnet)
+    error_message = "The lifeline needs a valid address and prefix, and a bridge other than the box's own VNet."
+  }
+}

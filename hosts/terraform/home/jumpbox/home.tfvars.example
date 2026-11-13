@@ -5,3 +5,5 @@ vlans_file        = "../../../ansible/inventories/home/group_vars/all/vlans.yml"
 template_vm_id    = 9000
 ssh_public_key    = "ssh-ed25519 AAAA... admin"
 jumpbox = { name = "daldtdemo01", vm_id = 258, address = "10.1.30.90", cores = 2, memory_mb = 8192, disk_gb = 40 }
+# Optional: the lifeline, a second NIC on the Proxmox host's own bridge (docs/runbooks/set-up-the-box-lifeline.md).
+# lifeline = { bridge = "vmbr0", address = "192.0.2.50", prefix = 24 }

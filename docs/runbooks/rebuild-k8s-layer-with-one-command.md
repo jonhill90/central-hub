@@ -1,6 +1,6 @@
 ---
 title: Rebuild one cluster's Kubernetes layer with one command
-status: draft
+status: tested
 kind: automated
 trigger: on request; to rehearse a rebuild on dev; after a lost cluster on prod
 runner: an agent lane, through the owner's Mac
@@ -8,13 +8,13 @@ outcome: the env's node VMs, the cluster, on dev a read-only copy of prod's newe
 needs: the controller from set-up-lab-controller.md; the lab network and Proxmox host as they are; the iac@pve!apply token file; an allow rule for hosts/rebuild-k8s.sh on the Mac
 private-values: [rebuild-env-dir, terraform-tfvars, terraform-state, ansible-inventory, c1-backup-restic-password, c1-backup-azure-storage-account, prod-volume-node-name]
 files: [hosts/rebuild-k8s.sh, hosts/rebuild.env.example, hosts/terraform/home/k8s/, hosts/ansible/playbooks/, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/files/c1-restore-volumes.sh, hosts/terraform/azure/backup/, hosts/kubernetes/home/c1/]
-last-tested: 2026-11-12, the agent box, dev, central-hub 7e3e182, all eight stages passed in 11 minutes (see Proven runs)
+last-tested: 2026-11-13, run by an agent session on the agent box (lane `agent box`), dev, central-hub 8861d3d, `rebuild rebuild` from teardown, all ten stages (teardown and the nine after it) passed in 14.4 minutes, the second such run in a row (see Proven runs); the output is the box's `rebuild log` for runs 20261113T084245Z and 20261113T085920Z, which holds the stage and PASS lines; the raw logs stay on the box (private), so there is no public link
 superseded-by:
 ---
 
 # Rebuild one cluster's Kubernetes layer with one command
 
-**Status:** draft. `hosts/rebuild-k8s.sh` was written from the code on `main` on 2026-11-09 and has not been run. It is proven first with R1 (kubeadm by this repository's Ansible) on dev, twice, before it is used on prod.
+**Status:** tested. `hosts/rebuild-k8s.sh` was written from the code on `main` on 2026-11-09. It was proven on dev from the agent box with two clean `rebuild rebuild` runs in a row on 2026-11-13 (see Proven runs). Prod has not been rebuilt with it. D-0012 also expects an automated runbook to link a `tested` manual one: [Rebuild the home lab from scratch](rebuild-home-lab-from-scratch.md) is still `draft`, so that link is not yet to a `tested` runbook.
 
 This covers the Kubernetes layer only. The Proxmox host, OPNsense, the tailnet container, DNS and the backup target stay as they are (the owner's card, 2026-11-09 23:21 UTC). For those, and for the whole order from bare metal, see [Rebuild the home lab from bare metal](rebuild-home-lab-from-scratch.md).
 
@@ -169,8 +169,10 @@ On a fresh cluster, Argo CD installs an app only if its `autoSync` is on in `hos
 ## Proven runs
 
 - 2026-11-12, the agent box (`rebuild up`, one run), central-hub `7e3e182`, dev: all eight stages passed. `vms` 1s (the nodes already existed from an earlier run), `cluster` 181s, `storage` 7s, `restore` 43s, `gitops` 55s, `apps` 196s, `gateway` 20s, `checks` 172s; 11 minutes in all, exit 0. Earlier runs from the box failed at faults now fixed in the wrapper, the inventory copy or the roles: the clone of template 9000 (the agents' token may clone only 9001), the pool (it may not add a guest to one) and the Mac's path for the Secrets-at-rest key.
+- 2026-11-13, the agent box (`rebuild rebuild`, one command, no step on the Mac after the teardown), central-hub `0c7136f`, dev, run `20261113T084245Z`: all ten stages (`teardown` and the nine after it) passed in 14.4 minutes (08:42:45 to 08:57:06 UTC), exit 0. `teardown` 18s, `vms` 38s, `cluster` 293s, `storage` 6s, `restore` 47s, `gitops` 54s, `secrets` 46s, `apps` 172s, `gateway` 20s, `checks` 167s. Earlier runs found four faults, one at a time, now fixed: `apps` stayed Degraded because `ntfy-auth` and `alertmanager-ntfy` read three Secrets from namespace `secret-source` and a rebuild never seeded it (the `secrets` stage, #227); `checks` failed because ESO retries a failed read with a growing backoff, so `apps` now re-reads every ExternalSecret and waits for it and for the pods that mount them (#230); the next teardown left the agents' token without rights on the new VMs, so dev VMs go into pool `dev` and the rights sit on the pool (#231); and `cluster` failed in 0s on "Connection refused" because `vms` returns before sshd answers, so `cluster` waits for ssh first (#232). A `rebuild up` on the freshly made VMs of the run before it (central-hub `59d39c3`, run `20261113T082844Z`) also passed every stage: `cluster` 283s, `apps` 170s, `checks` 188s.
+- 2026-11-13, the agent box (`rebuild rebuild`, one command, no step on the Mac after the teardown), central-hub `8861d3d`, dev, run `20261113T085920Z`: all ten stages (`teardown` and the nine after it) passed in 14.4 minutes (08:59:20 to 09:13:43 UTC), exit 0. `teardown` 20s, `vms` 37s, `cluster` 294s, `storage` 7s, `restore` 46s, `gitops` 56s, `secrets` 45s, `apps` 170s, `gateway` 20s, `checks` 168s. Nothing was changed or rerun between this run and the one before it except that main moved by docs and the `c1-read` wrapper (#221 and #226).
 - What the restore covered: `restore` brings back only the local-path app volumes (see "Restore on dev"). Keycloak's database was not loaded into a running Keycloak; `checks` loads prod's dump into a throwaway PostgreSQL and starts the pinned Keycloak on it, then deletes both. That check is on by default and `checks` returned 0. The box's `rebuild log` (added after the run) prints that run's `PASS` lines: every stage passed, and the pinned Keycloak 26.8.1 became Ready on prod's dump with 2 realms, 2 users and 17 clients.
-- One run is not two: `status` stays `draft` until a second clean run in a row.
+- Two clean runs in a row (`20261113T084245Z` and `20261113T085920Z`), so `status` is `tested`. Dev only: a prod rebuild also runs `certs`, `identity` and `ui`, which no run here has covered.
 
 ## Afterwards
 
