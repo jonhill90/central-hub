@@ -1,12 +1,16 @@
 ---
 # Every input of this role is listed here. The role stops if the inventory leaves a required one unset.
 #
-# REQUIRED, private, from the agent box's keys user: the file that holds the desktop user's login
-# password, on the machine that runs the playbook. It is made once with random letters and digits, mode
-# 0600, and never printed; a later run reads it and changes nothing.
-# desktop_password_file: /etc/agent-keys/desktop-password
+# REQUIRED, private, from the inventory: the one address the owner connects from (an IPv4 address or
+# CIDR). firewalld accepts 3389/tcp from it and from nowhere else; the port is not open to the VLAN.
+# desktop_rdp_source: "<address>/32"
+#
+# REQUIRED, from the inventory: the login user Ansible reached the VM as (the cloud-init admin user).
+# The role removes its SSH key at the end of the run, so no agent keeps a login on the desktop.
+# desktop_admin_user: admin
 
-# The user the owner signs in as over RDP. It has no sudo and holds no lab keys.
+# The user the owner signs in as over RDP. It has no sudo and holds no lab keys. Its password is set
+# by the owner at the Proxmox console on first boot and passes through no agent and no file.
 desktop_user: owner
 # The Xfce session, packages from EPEL (the repository this role enables, with CRB).
 desktop_packages:
@@ -15,3 +19,8 @@ desktop_packages:
   - xorgxrdp
   - firefox
 desktop_rdp_port: 3389
+# The file that marks the owner's password as set. xrdp does not start before it exists.
+desktop_password_marker: /var/lib/desktop/password-set
+# Remove the admin user's SSH keys at the end of the run. Later changes are then a rebuild from
+# teardown. Leave true; false is for debugging a VM that is going to be destroyed.
+desktop_lock_admin: true

@@ -19,7 +19,7 @@
 # RPCEnvironment.pm compile_acl_path). This holds for clones only: a create that sets tags is
 # checked on /vms/<id> before the VM is in its pool (pick 18), and the dev rebuild only clones 9001.
 # Exit path: `pveum user delete agent@pve; pveum role delete AgentDev; pveum role delete AgentClone;
-# pveum group delete agents; pveum pool delete dev; pveum pool delete ci; qm destroy 9001` (after the pools are empty).
+# pveum group delete agents; pveum pool delete dev; pveum pool delete ci; pveum pool delete desktop; qm destroy 9001` (after the pools are empty).
 set -eu
 
 NODE=$(hostname)
@@ -42,6 +42,7 @@ for id in 250 251 252 253 254 255 256 257; do
   qm status "$id" >/dev/null 2>&1 || continue
   pvesh get /pools/dev --output-format json | grep -q "\"vmid\":$id" || pvesh set /pools/dev --vms "$id" --allow-move 1
 done
+pveum pool list --output-format json | grep -q '"poolid":"desktop"' || pveum pool add desktop --comment "The owner's desktop VM, ID 400-499"
 pveum pool list --output-format json | grep -q '"poolid":"ci"' || pveum pool add ci --comment "The notebook's CI runner, VM 300"
 if qm status 300 >/dev/null 2>&1; then
   pvesh get /pools/ci --output-format json | grep -q '"vmid":300' || pvesh set /pools/ci --vms 300 --allow-move 1
@@ -70,6 +71,7 @@ acl() {
 }
 acl /pool/dev AgentDev 1                 # VMs 250-257, made again after every teardown
 acl /pool/ci AgentDev 1
+acl /pool/desktop AgentDev 1             # the owner's desktop (400-499), made again after every teardown
 acl /vms/300 AgentDev 0                  # the CI runner
 acl /vms/9001 AgentClone 0               # clone the agents' template; can't change or delete it
 acl /sdn/zones/lab/dev AgentDev 0        # attach guests to VNet dev only
