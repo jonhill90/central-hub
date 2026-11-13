@@ -59,6 +59,17 @@ resource "proxmox_virtual_environment_vm" "jumpbox" {
     model  = "virtio"
   }
 
+  # The lifeline (docs/runbooks/set-up-the-box-lifeline.md, pick 220): a second NIC on the Proxmox
+  # host's own bridge, so the box keeps a route to the Proxmox API when OPNsense is gone. It is the
+  # second device, so the guest sees it as the second interface. Off unless var.lifeline is set.
+  dynamic "network_device" {
+    for_each = var.lifeline == null ? [] : [var.lifeline]
+    content {
+      bridge = network_device.value.bridge
+      model  = "virtio"
+    }
+  }
+
   initialization {
     datastore_id = "local-lvm"
 
@@ -66,6 +77,17 @@ resource "proxmox_virtual_environment_vm" "jumpbox" {
       ipv4 {
         address = "${var.jumpbox.address}/24"
         gateway = cidrhost([for v in yamldecode(file(var.vlans_file)).lab_vlans : v.cidr if v.name == var.vnet][0], 1)
+      }
+    }
+
+    # The lifeline's address, with no gateway: only the host's own subnet is reached over it, never
+    # the internet, and the box's default route stays through the dev VLAN's gateway.
+    dynamic "ip_config" {
+      for_each = var.lifeline == null ? [] : [var.lifeline]
+      content {
+        ipv4 {
+          address = "${ip_config.value.address}/${ip_config.value.prefix}"
+        }
       }
     }
 

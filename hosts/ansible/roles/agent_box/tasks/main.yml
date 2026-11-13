@@ -559,3 +559,68 @@
       tags: [prod_files]
   when: agent_box_copy_prod_files | bool
   tags: [prod_files]
+
+# --- OPNsense configuration backup (pick 220) -----------------------------------------------------
+
+- name: The OPNsense backup's settings hold
+  ansible.builtin.assert:
+    that:
+      - agent_box_opnsense_backup.host | default('') | length > 0
+      - agent_box_opnsense_backup.keep | default(14) | int >= 3
+      - agent_box_opnsense_backup.keep | default(14) | int <= 60
+    fail_msg: agent_box_opnsense_backup needs host (OPNsense's name or address) and, optionally, keep from 3 to 60.
+    quiet: true
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: The OPNsense backup's script, root-owned
+  ansible.builtin.copy:
+    src: opnsense-backup.sh
+    dest: "{{ agent_box_libexec_dir }}/opnsense-backup.sh"
+    owner: root
+    group: root
+    mode: "0755"
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: The OPNsense backup's settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/opnsense-backup.json"
+    content: >-
+      {{ {'host': agent_box_opnsense_backup.host, 'keep': agent_box_opnsense_backup.keep | default(14) | int} | to_nice_json }}
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: Daily OPNsense backup service and timer
+  ansible.builtin.template:
+    src: "opnsense-backup.{{ item }}.j2"
+    dest: "/etc/systemd/system/opnsense-backup.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_opnsense_backup_units
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: Daily OPNsense backup timer on
+  ansible.builtin.systemd_service:
+    name: opnsense-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_opnsense_backup_units is changed }}"
+  when: agent_box_opnsense_backup | length > 0 and not (ansible_check_mode and agent_box_opnsense_backup_units is changed)
+  tags: [wrappers]
+
+# --- The lifeline NIC (pick 220) ---------------------------------------------------------------------
+
+- name: Put the lifeline NIC in firewalld's drop zone (only when agent_box_lifeline_interface is set)
+  ansible.builtin.include_tasks:
+    file: lifeline.yml
+    apply:
+      tags: [lifeline]
+  when: agent_box_lifeline_interface | length > 0
+  tags: [lifeline]
