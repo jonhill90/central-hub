@@ -37,8 +37,10 @@ set -a
 set +a
 
 tofu() { /usr/local/bin/tofu -chdir="$folder" "$@"; }
-# The VLAN file from this run's own checkout, over any path the tfvars give.
-vlans=(-var "vlans_file=$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml")
+# The VLAN file from this run's own checkout, over any path the tfvars give. Pool dev and template
+# 9001 as rebuild.sh sets them, since both wrappers share one state: the token clones only 9001, and
+# a pool other than dev would plan a pool move, which needs Pool.Allocate the token doesn't have.
+vlans=(-var "vlans_file=$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml" -var "pool_id=dev" -var "template_vm_id=9001")
 tofu init -input=false -backend-config="path=$state" >/dev/null
 
 case $action in
