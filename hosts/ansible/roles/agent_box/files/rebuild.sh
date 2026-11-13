@@ -40,6 +40,9 @@ nodekey=$keys/rebuild-node-key
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/rebuild-dev TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
+# Rebuilt dev VMs get new SSH host keys, and the inventory's accept-new setting refuses a changed key.
+# This file only holds keys learned from earlier dev runs, so each run starts without it.
+rm -f -- "$envdir/known_hosts"
 
 # What the box must hold before this wrapper can run. Each is put there through the keys wrapper
 # or made by the agent_box role; the wrapper says which one is missing instead of failing later.
