@@ -6,7 +6,7 @@ trigger: once, after the agent box VM (258) is grown (grow-the-agent-jumpbox.md)
 runner: an agent lane, through the owner's Mac
 outcome: VM 258 has its STD-0001 hostname; Claude Code sessions run as user claude and can't read the lab keys, which belong to user keys; each key is used only through a root-owned wrapper that sudo lets claude run with fixed arguments; Claude Code's managed settings hold the hard deny rules
 needs: SSH to the VM as its admin user (which has sudo); the filled-in Ansible inventory with group agent_box
-private-values: [agent_box_hostname, ansible_host, ansible_user, agent_box_allow, agent_box_auto_mode]
+private-values: [agent_box_hostname, ansible_host, ansible_user, agent_box_allow, agent_box_auto_mode, agent_box_tailnet_cleanup, tailnet-cleanup.env]
 files: [hosts/ansible/playbooks/agent-box.yml, hosts/ansible/roles/agent_box/]
 last-tested:
 superseded-by:
@@ -41,7 +41,7 @@ flowchart LR
 
 CT 259, the jumpbox rehearsal's container, is not the agent box. This runbook doesn't touch it. It stays up by the owner's call (2026-11-09 23:04 UTC) until the platform's architecture is settled, and it lives in the rehearsal kit's state ([Grow the agent jumpbox](grow-the-agent-jumpbox.md)).
 
-There are four wrappers. `rebuild up|rebuild|teardown` runs the dev one-command rebuild ([below](#rebuild-dev-from-the-box)), and `rebuild log` prints the newest run's stage lines and its `PASS` and `FAIL` lines, nothing else, so a session can read what a run proved without reading the raw log. `pr-merge check|merge OWNER/REPO PR HEAD` checks or squash-merges one pull request as the GitHub App, under D-0031 ([how it decides](#merge-pull-requests-from-the-box)). `ci-runner plan|apply|configure|destroy|bump` builds the notebook's CI runner VM, registers it, and opens a pull request when a newer runner release is due; a weekly timer, `ci-runner-weekly.timer`, runs `configure` then `bump` as the keys user ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md)). The other is `dev-vms plan|apply|destroy`: OpenTofu on `hosts/terraform/home/k8s` for the dev rebuild VMs (250-257), with the agents' own token `agent@pve!dev` (`hosts/terraform/home/bootstrap/agent-access.sh`). It runs only the code on `main`: it moves the `keys` user's own checkout to `origin/main` first, so a session can't change what runs with the token. Each wrapper has its own checkout, `/var/lib/agent-box/checkouts/<wrapper>` (cloned on its first run), and takes a lock for the whole run, so one run can't move the code under another, and a second run of the same wrapper stops at once with `another <wrapper> run is going`.
+There are five wrappers. `rebuild up|rebuild|teardown` runs the dev one-command rebuild ([below](#rebuild-dev-from-the-box)), and `rebuild log` prints the newest run's stage lines and its `PASS` and `FAIL` lines, nothing else, so a session can read what a run proved without reading the raw log. `pr-merge check|merge OWNER/REPO PR HEAD` checks or squash-merges one pull request as the GitHub App, under D-0031 ([how it decides](#merge-pull-requests-from-the-box)). `ci-runner plan|apply|configure|destroy|bump` builds the notebook's CI runner VM, registers it, and opens a pull request when a newer runner release is due; a weekly timer, `ci-runner-weekly.timer`, runs `configure` then `bump` as the keys user ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md)). `tailnet-cleanup plan` lists the old tailnet devices its daily timer would remove ([below](#remove-old-tailnet-devices)). The last is `dev-vms plan|apply|destroy`: OpenTofu on `hosts/terraform/home/k8s` for the dev rebuild VMs (250-257), with the agents' own token `agent@pve!dev` (`hosts/terraform/home/bootstrap/agent-access.sh`). It runs only the code on `main`: it moves the `keys` user's own checkout to `origin/main` first, so a session can't change what runs with the token. Each wrapper that runs the repository's code (`ci-runner`, `dev-vms`, `rebuild`) has its own checkout, `/var/lib/agent-box/checkouts/<wrapper>` (cloned on its first run), and takes a lock for the whole run, so one run can't move the code under another, and a second run of the same wrapper stops at once with `another <wrapper> run is going`.
 
 ## Before you start
 
@@ -184,6 +184,29 @@ rebuild log         the newest run's stage lines and PASS/FAIL lines
 
 expect: with those in place, `rebuild up` prints `rebuild: central-hub <commit>` and then the stage lines of `rebuild-k8s.sh`, and stops at the first stage that fails.
 
+## Remove old tailnet devices
+
+Every finished cloud session and every rebuilt machine leaves a tailnet device behind. Once a day the box removes the tagged ones that have been offline a long time (owner's answer 2026-11-12 06:43 to 06:45 UTC; pick 214 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)). The `tailnet-cleanup.timer` runs `tailnet-cleanup run` as the `keys` user; sessions may only ask for the list:
+
+```text
+tailnet-cleanup plan    what run would remove, and why each other tagged device stays; removes nothing
+```
+
+A device goes only when all of these hold: it carries one of the settings' tags; it is not connected; its last contact is older than the settings' days (7 or more); and its name is not on the keep list. A device without tags, a person's own, is never touched. A run that would remove more than `max_deletes` devices removes none and fails, so a wrong answer from the API can't empty the tailnet.
+
+1. In the Tailscale admin console, Settings, Trust credentials: add an OAuth credential with **Devices Core: Write** and nothing else.
+   why: its own key that can only see and remove devices, not change the policy or make auth keys.
+   expect: a client ID and a client secret, shown once.
+
+2. Put them in a file on the Mac, `~/.config/central-hub/tailnet-cleanup.env`, mode 600, as two lines: `TS_OAUTH_CLIENT_ID=` and `TS_OAUTH_CLIENT_SECRET=`, each followed by its value. Then put it on the box through the keys wrapper (`put-tailnet-cleanup`).
+   expect: `/etc/agent-keys/tailnet-cleanup.env`, owned by `keys`, mode 0600.
+
+3. In the private inventory, set `agent_box_tailnet_cleanup`: `tags` (for example `[tag:agent]`), `keep` (every device name that must never go, at least one), `days` (7) and `max_deletes` (5). Run the role's `wrappers` tag.
+   expect: the role writes `tailnet-cleanup.json` and starts `tailnet-cleanup.timer`; it stops if the keep list is empty, a tag isn't `tag:<name>`, days is under 7 or max_deletes isn't 1 to 20.
+
+4. Run `tailnet-cleanup plan` and read the list before the first timer run.
+   expect: `remove:` lines only for devices you expect to go, and a last line with the counts.
+
 ## If it fails
 
 - `visudo` rejects the sudoers file: the task fails and the old file stays; nothing else in sudo changes.
@@ -192,7 +215,8 @@ expect: with those in place, `rebuild up` prints `rebuild: central-hub <commit>`
 - After a dev teardown, `dev-vms plan` can't create VMs: Proxmox dropped the `/vms/<id>` ACLs when the VMs were destroyed (pick 18), so `agent-access.sh` must run again as root.
 - The TLS proof fails with `CERTIFICATE_VERIFY_FAILED`: the CA file is the wrong one, or `update-ca-trust` didn't run. Fix the file and run again with `--tags ca,verify`; never turn certificate checks off.
 - It fails with a hostname mismatch: the URL's name is not in the host's certificate. Use a name the certificate lists, or reissue the certificate with that name.
+- `tailnet-cleanup` stops with `HTTP 401` or `403`: the OAuth credential is wrong, revoked, or lacks Devices Core write. With `more than max_deletes`: read `plan`; remove the extra devices by hand in the admin console, or raise the limit in the inventory. `journalctl -u tailnet-cleanup.service` shows each run.
 
 ## Exit
 
-Remove `/etc/sudoers.d/agent-box`, the front scripts and `/usr/local/libexec/agent-box/`, then delete `/etc/agent-keys/` and revoke the token `agent@pve!dev`. The VM itself goes with [grow-the-agent-jumpbox.md](grow-the-agent-jumpbox.md)'s exit.
+Stop `tailnet-cleanup.timer` and revoke its OAuth credential in the Tailscale admin console. Remove `/etc/sudoers.d/agent-box`, the front scripts and `/usr/local/libexec/agent-box/`, then delete `/etc/agent-keys/` and revoke the token `agent@pve!dev`. The VM itself goes with [grow-the-agent-jumpbox.md](grow-the-agent-jumpbox.md)'s exit.

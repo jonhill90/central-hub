@@ -27,6 +27,9 @@ agent_box_wrappers:
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
     args: [up, rebuild, teardown, log]
+  # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
+  - name: tailnet-cleanup
+    args: [plan]
 
 # OpenTofu for the wrappers, the same version CI uses (.github/hosts-check/install-tools.sh),
 # checked against the release's SHA256SUMS.
@@ -93,6 +96,13 @@ agent_box_managed_settings_extra: {}
 # When the weekly `ci-runner weekly` run starts (systemd OnCalendar): it reinstalls the merged pin on
 # the runner, then opens a PR for a newer release (pick 208). Only set up when agent_box_ci_runner is.
 agent_box_ci_runner_weekly: "Mon *-*-* 14:00:00 UTC"
+# The daily tailnet cleanup (pick 214, docs/runbooks/set-up-the-agent-box.md, "Remove old tailnet
+# devices"). Private, through the inventory: tags (the tag:<name> list whose devices may go), keep
+# (device names never removed; at least one), days (offline at least this long, 7 or more) and
+# max_deletes (a run that would remove more removes none, 1 to 20). Empty leaves the timer unset up.
+agent_box_tailnet_cleanup: {}
+# When the daily `tailnet-cleanup run` starts (systemd OnCalendar).
+agent_box_tailnet_cleanup_daily: "*-*-* 15:30:00 UTC"
 # The notebook's CI runner VM that the ci-runner wrapper builds (docs/runbooks/set-up-the-ci-runner.md).
 # Private, through the inventory: name, vm_id, address, cores, memory_mb, disk_gb, proxmox_node_name,
 # vnet, template_vm_id, github_app_id, repo_owner, repo_name. Empty leaves the wrapper unset up.

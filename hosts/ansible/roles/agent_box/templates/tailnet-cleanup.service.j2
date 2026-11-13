@@ -1,0 +1,13 @@
+# Managed by the agent_box role (central-hub hosts/ansible). Removes tagged tailnet devices offline
+# for a long time, within the limits in {{ agent_box_work_dir }}/tailnet-cleanup.json (pick 214).
+# Runs as the keys user, the same as the wrapper does through sudo.
+[Unit]
+Description=Tailnet cleanup: remove tagged devices offline for a long time
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ agent_box_keys_user }}
+Group={{ agent_box_keys_user }}
+ExecStart={{ agent_box_libexec_dir }}/tailnet-cleanup.sh run
