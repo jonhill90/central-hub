@@ -13,7 +13,10 @@
       firewall: "{{ opnsense_api_host }}"
       api_key: "{{ opnsense_api_key }}"
       api_secret: "{{ opnsense_api_secret }}"
-      ssl_verify: "{{ opnsense_tls_verify }}"
+      # tasks/opnsense-tls.yml sets opnsense_tls_verify before any API call. The default (on) only
+      # covers the tasks before it: ansible-core 2.18 templates module_defaults on every task and
+      # stops on an undefined variable.
+      ssl_verify: "{{ opnsense_tls_verify | default(true) }}"
       ssl_ca_file: "{{ opnsense_lab_ssl_ca_file | expanduser }}"
   pre_tasks:
     - name: The API's TLS check (pick 30)
