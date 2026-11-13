@@ -169,7 +169,7 @@ On a fresh cluster, Argo CD installs an app only if its `autoSync` is on in `hos
 ## Proven runs
 
 - 2026-11-12, the agent box (`rebuild up`, one run), central-hub `7e3e182`, dev: all eight stages passed. `vms` 1s (the nodes already existed from an earlier run), `cluster` 181s, `storage` 7s, `restore` 43s, `gitops` 55s, `apps` 196s, `gateway` 20s, `checks` 172s; 11 minutes in all, exit 0. Earlier runs from the box failed at faults now fixed in the wrapper, the inventory copy or the roles: the clone of template 9000 (the agents' token may clone only 9001), the pool (it may not add a guest to one) and the Mac's path for the Secrets-at-rest key.
-- What the restore covered: `restore` brings back only the local-path app volumes (see "Restore on dev"). Keycloak's database was not loaded into a running Keycloak; `checks` loads prod's dump into a throwaway PostgreSQL and starts the pinned Keycloak on it, then deletes both. That check is on by default and `checks` returned 0, but the wrapper prints a stage's log only when it fails, so the run's own output does not show its `PASS` lines; they are in the box's log folder.
+- What the restore covered: `restore` brings back only the local-path app volumes (see "Restore on dev"). Keycloak's database was not loaded into a running Keycloak; `checks` loads prod's dump into a throwaway PostgreSQL and starts the pinned Keycloak on it, then deletes both. That check is on by default and `checks` returned 0. The box's `rebuild log` (added after the run) prints that run's `PASS` lines: every stage passed, and the pinned Keycloak 26.8.1 became Ready on prod's dump with 2 realms, 2 users and 17 clients.
 - One run is not two: `status` stays `draft` until a second clean run in a row.
 
 ## Afterwards
