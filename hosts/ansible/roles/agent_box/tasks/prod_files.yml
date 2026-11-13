@@ -7,7 +7,7 @@
 
 - name: Name the controller's folders
   ansible.builtin.set_fact:
-    agent_box_pf_clone: "{{ playbook_dir }}/../../.."
+    agent_box_pf_clone: "{{ agent_box_prod_files_clone if agent_box_prod_files_clone | length > 0 else playbook_dir ~ '/../../..' }}"
     agent_box_pf_config: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/central-hub"
     agent_box_pf_state: "{{ lookup('ansible.builtin.env', 'HOME') }}/.local/state/central-hub"
 
