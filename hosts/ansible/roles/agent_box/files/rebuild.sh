@@ -3,13 +3,17 @@
 # (hosts/rebuild-k8s.sh, docs/runbooks/rebuild-k8s-layer-with-one-command.md) from the agent box.
 # It runs as user `keys` through sudo, so the session that asks for it never sees the Proxmox
 # token, the node SSH key or the dev inventory. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|log|diag
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
 # Dev only: the env file below fixes ENV_NAME=dev and the dev VM range 250-257, and rebuild-k8s.sh
 # refuses a tfvars whose VM IDs fall outside it or whose node_vnet isn't "dev". Only code on main
 # runs with the keys; there is no way to name another branch.
 # log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can
 # quote the realm and the nodes' output). It takes no argument and reads no other file.
+# diag: read-only look at the dev cluster, for a failed apps stage: the Argo CD applications' sync and
+# health, the newest events in the alerts and monitoring namespaces, pods that are not running, and
+# the monitoring pods and volume claims. Fixed commands, no argument, no write, no Secret read; it
+# uses the inventory the last run made and does not touch the checkout or the run lock.
 set -euo pipefail
 umask 077
 
@@ -26,7 +30,8 @@ case ${1:-} in
   up) extra=() ;;
   rebuild) extra=(--teardown) ;;
   teardown) extra=(--only teardown) ;;
-  *) echo "usage: rebuild up|rebuild|teardown" >&2; exit 2 ;;
+  diag) extra=() ;;   # handled below, before anything is changed
+  *) echo "usage: rebuild up|rebuild|teardown|log|diag" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -40,9 +45,26 @@ nodekey=$keys/rebuild-node-key
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/rebuild-dev TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
-# Rebuilt dev VMs get new SSH host keys, and the inventory's accept-new setting refuses a changed key.
-# This file only holds keys learned from earlier dev runs, so each run starts without it.
-rm -f -- "$envdir/known_hosts"
+
+if [[ ${1:-} == diag && $# -eq 1 ]]; then
+  [[ -f $inventory/hosts.yml ]] || { echo "rebuild: no dev inventory yet; run rebuild up first" >&2; exit 1; }
+  diag_kc() {
+    ansible 'k8s_control_plane[0]' -i "$inventory/" -b -m ansible.builtin.command \
+      -a "kubectl --kubeconfig /etc/kubernetes/admin.conf $*" 2>&1 | sed -E '1{/ \| (CHANGED|SUCCESS|FAILED)/d}' | cut -c1-300
+  }
+  echo "== argocd applications"
+  diag_kc -n argocd get applications.argoproj.io -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,HEALTH_MESSAGE:.status.health.message,CONDITIONS:.status.conditions[*].message
+  for ns in alerts monitoring; do
+    echo "== newest events, namespace $ns"
+    diag_kc -n "$ns" get events --sort-by=.lastTimestamp | tail -n 25
+  done
+  echo "== pods not Running or Completed, all namespaces"
+  diag_kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
+  echo "== monitoring pods and volume claims"
+  diag_kc -n monitoring get pods -o wide
+  diag_kc -n monitoring get pvc
+  exit 0
+fi
 
 # What the box must hold before this wrapper can run. Each is put there through the keys wrapper
 # or made by the agent_box role; the wrapper says which one is missing instead of failing later.
@@ -67,6 +89,10 @@ flock -n 9 || { echo "rebuild: another rebuild run is going; try again when it e
 git -C "$repo" fetch --quiet origin main
 git -C "$repo" checkout --quiet --detach origin/main
 echo "rebuild: central-hub $(git -C "$repo" rev-parse --short HEAD)"
+# Rebuilt dev VMs get new SSH host keys, and the inventory's accept-new setting refuses a changed key.
+# This file only holds keys learned from earlier dev runs, so each run starts without it (after the lock,
+# so a refused second call can't delete it under a run that is going).
+rm -f -- "$envdir/known_hosts"
 
 # The inventory that comes from the Mac reaches the nodes through a jump over root SSH to the
 # Proxmox host. The box never holds root on the hypervisor, and its own network reaches the dev VLAN,
