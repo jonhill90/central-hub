@@ -50,7 +50,7 @@ Chosen option: **1**. The owner picked the scope and the channel. The rules belo
 6. **Logged and capped.** Every run keeps its stage log on the box and its Actions run on GitHub. One run at a time. A cap on destroys per run, set in the workflow.
 7. **Changing the rules.** This record's rules, the environments' reviewers and protection rules, the workflow files that set `environment:`, the box's wrappers that a run calls and the runner's settings change only with the owner's typed line (D-0034 rule 4). An agent never edits a protection rule, and no token an agent holds may be able to.
 8. **Who holds which GitHub right.** (a) The box's central-hub App gets no Administration and no Deployments write: only what `pr-merge` and the bump PRs need, and Actions write to start a run. (b) Runner registration moves to a separate App with Administration that is not installed on this repository, or the owner registers the runner by hand. (c) The environments' required reviewer is an identity no agent holds a token for: agents act as the owner's own GitHub account today (AGENTS.md rule 1), so any token for that account with Deployments write could approve as the owner. Until the agents have an account of their own (D-0030, Activation gate item 1), this record does not take effect: the first run waits for it.
-8. **Break-glass.** The owner reaches the Proxmox host's own console to put things back by hand. The way back is the runbook (rebuild-home-lab-from-scratch.md), kept current by every run.
+9. **Break-glass.** The owner reaches the Proxmox host's own console to put things back by hand. The way back is the runbook (rebuild-home-lab-from-scratch.md), kept current by every run.
 
 ### Consequences
 
@@ -60,7 +60,7 @@ Chosen option: **1**. The owner picked the scope and the channel. The rules belo
 - Bad: **the GitHub App the box uses today holds repository Administration, which it needs to mint runner registration tokens.** Administration lets it clear an environment's required reviewers and change branch policies, protection rules and rulesets; with Deployments write it could add itself as a custom protection rule and approve runs [source: the reviewer's check of 2026-11-13, not tested by the drafting agent]. Rule 8 splits those rights. Compensating control until then: no run is started on an environment.
 - Bad: **agents act as the owner's account**, so an approval by that account is not proof of the owner. Rule 8(c) makes D-0030 a condition. Not yet checked: whether the Claude GitHub App holds Deployments write; the owner checks it in the App's settings before acceptance.
 - Bad: a self-hosted runner on a public repository runs whatever a workflow on `main` says. Compensating control: rule 4, and a change to a workflow is a reviewed PR to `main` like any other.
-- Bad: GitHub is a dependency for approving a run. If GitHub is down, nothing runs; the owner's console is the way round it (rule 8).
+- Bad: GitHub is a dependency for approving a run. If GitHub is down, nothing runs; the owner's console is the way round it (rule 9).
 - Neutral: AGENTS.md rule 1 gains one sentence pointing here. Nothing in this record weakens the owner's typed line.
 
 ### Confirmation
