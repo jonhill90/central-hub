@@ -216,7 +216,10 @@ For the agent to tear down and rebuild layers beyond dev (D-0035), the box needs
    why: the files only exist on the controller, and the role already runs from there.
    expect: no file content is printed. The last task lists names only: `copied`, `missing` and `state_files`.
 
-2. Read the `missing` list. Anything on it is not on the controller under the path in `agent_box_prod_files` (role defaults, the same paths as the private-files table in [rebuild-home-lab-from-scratch.md](rebuild-home-lab-from-scratch.md)); make it there and run step 1 again.
+2. If the controller runs the role from a pinned copy of the repo, set `agent_box_prod_files_clone` in the private inventory to the absolute path of its private clone, the one that holds `hosts/.env`, the filled-in inventory and the `home.tfvars` files. Empty means the checkout the playbook runs from.
+   why: those files are git-ignored, so only the private clone has them.
+
+3. Read the `missing` list. Anything on it is not on the controller under the path in `agent_box_prod_files` (role defaults, the same paths as the private-files table in [rebuild-home-lab-from-scratch.md](rebuild-home-lab-from-scratch.md)); make it there and run step 1 again.
    expect: a second run copies it and lists nothing missing that you meant to have.
 
 The list leaves out on purpose the Proxmox apply token, the Cloudflare bootstrap token, the nodes' SSH keys and the lab CA (the CA is put through the keys wrapper). Copying the files only stores them. No prod teardown or rebuild runs from the box until D-0035 is accepted and D-0030 is met. The state files hold secrets (the certificates folder's state holds the Cloudflare token in plain text), so the box's `/etc/agent-keys` stays owner-only. The state files go to `prod/state/`; the box's copy is not a backup, so keep the off-box copy too.
