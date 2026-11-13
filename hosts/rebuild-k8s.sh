@@ -131,9 +131,9 @@ wait_apps() {
 
 # The vms stage returns when the guests exist, not when sshd answers: a fresh VM is still booting
 # (seen 2026-11-13, cluster failed in 0s on "Connection refused"). Waits until every host takes an ssh
-# login, stopping at the condition or at SSH_TIMEOUT (default 300 s).
+# login (every node, as k8s.yml targets), stopping at the condition or at SSH_TIMEOUT (default 300 s).
 wait_ssh() {
-  (cd "$repo/hosts/ansible" && ansible all -i "$INVENTORY" -m ansible.builtin.wait_for_connection \
+  (cd "$repo/hosts/ansible" && ansible k8s_nodes -i "$INVENTORY" -m ansible.builtin.wait_for_connection \
     -a "timeout=${SSH_TIMEOUT:-300}")
 }
 
