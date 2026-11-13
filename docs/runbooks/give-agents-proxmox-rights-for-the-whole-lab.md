@@ -7,14 +7,14 @@ runner: the owner, as root on the Proxmox host (an agent lane through the owner'
 outcome: user agentlab@pve and token agentlab@pve!lab may manage every guest on the host except VM 258 and CT 259, may only read CT 900, and may not change VNet dev
 needs: root SSH to the Proxmox host; a central-hub checkout on main
 private-values: [proxmox-host, proxmox-lab.env]
-files: [hosts/terraform/home/bootstrap/agent-lab-access.sh]
+files: [hosts/terraform/home/bootstrap/agent-access.sh]
 last-tested: not yet run
 superseded-by:
 ---
 
 # Give agents Proxmox rights for the whole lab
 
-The agents' first Proxmox user, `agent@pve`, reaches only the dev rebuild VMs ([agent-access.sh](../../hosts/terraform/home/bootstrap/agent-access.sh)). To rebuild the whole lab from the agent box, the owner picked "Everything on Proxmox" on 2026-11-13 at 05:08 UTC: every guest on the host, not the host install, and never VM 258 (the agent box) or CT 259. [agent-lab-access.sh](../../hosts/terraform/home/bootstrap/agent-lab-access.sh) makes a second user for that, `agentlab@pve`, and puts the limits in the token's own rights, so a bug in a wrapper can't cross them (pick 217 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)).
+The agents' first Proxmox user, `agent@pve`, reaches only the dev rebuild VMs (the first part of [agent-access.sh](../../hosts/terraform/home/bootstrap/agent-access.sh)). To rebuild the whole lab from the agent box, the owner picked "Everything on Proxmox" on 2026-11-13 at 05:08 UTC: every guest on the host, not the host install, and never VM 258 (the agent box) or CT 259. The second part of the same script makes a second user for that, `agentlab@pve`, and puts the limits in the token's own rights, so a bug in a wrapper can't cross them (pick 217 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)).
 
 How the rights are laid out, and the Proxmox source that each part rests on:
 
@@ -33,16 +33,16 @@ The rights reach every guest, so a guest someone adds by hand later is in reach 
 
    ```sh
    git -C central-hub fetch origin main && git -C central-hub checkout --detach origin/main
-   less central-hub/hosts/terraform/home/bootstrap/agent-lab-access.sh
+   less central-hub/hosts/terraform/home/bootstrap/agent-access.sh
    ```
 
 2. Run it as root on the host. Nothing is written on the host except users, roles and ACLs.
 
    ```sh
-   ssh root@<proxmox-host> 'sh -s' < central-hub/hosts/terraform/home/bootstrap/agent-lab-access.sh
+   ssh root@<proxmox-host> 'sh -s' < central-hub/hosts/terraform/home/bootstrap/agent-access.sh
    ```
 
-   expect: `agent-lab-access: done (node <node>)`. The script ends by asking Proxmox for the computed rights on `/vms/258`, `/vms/259`, `/vms/900` and VNet dev, and stops with `STOP` if any of them still allows more than it should.
+   expect: `agent-access: done (node <node>)`. The script ends by asking Proxmox for the computed rights on `/vms/258`, `/vms/259`, `/vms/900` and VNet dev, and stops with `STOP` if any of them still allows more than it should.
 
 3. Check the rights by hand once, as root on the host.
 
