@@ -41,7 +41,7 @@ With the second NIC on the host's subnet, the connected route to the Proxmox API
 1. Fill in `lifeline` in the git-ignored tfvars: the host's own bridge (`vmbr0` or as `pvesh get /nodes/<node>/network` shows), a free address on its subnet, the prefix. Never in the repository.
    expect: `tofu plan` (through the box's `dev-vms`-style wrapper for this folder, or from the Mac) shows an update in place of VM 258: one more `network_device` and `ip_config`, nothing destroyed. If it shows a replace, stop.
 
-2. Apply, then give the new interface its zone: set `agent_box_lifeline_interface`, `agent_box_lifeline_allow` and `agent_box_opnsense_backup` in the private inventory and run the box's role from the Mac.
+2. Apply, then give the new interface its zone straight away. Between the apply of step 1 and this step the new NIC is in the default zone with no outbound policy, so do this right after the apply, not later. Set `agent_box_lifeline_interface`, `agent_box_lifeline_allow` and `agent_box_opnsense_backup` in the private inventory and run the box's role from the Mac.
    expect: `failed=0`; `firewall-cmd --get-zone-of-interface=<nic>` prints `drop`; `nmcli -g connection.zone connection show <connection>` prints `drop` (so it survives a reconnect; after a reboot of the box the first command must still print `drop`); `systemctl list-timers opnsense-backup.timer` lists the timer; from the box, `curl -sk --max-time 5 https://<another home LAN address>:443/` fails at once (rejected), while the allowed address and port still connect.
 
 3. Add the box's lifeline address to the Proxmox host's firewall rule for 8006 (the owner's words).
