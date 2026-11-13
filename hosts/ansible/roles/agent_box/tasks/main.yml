@@ -261,6 +261,26 @@
     force: true
   tags: [wrappers]
 
+- name: Download kubectl, checked against its SHA-256
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/v{{ agent_box_kubectl_version }}/bin/linux/amd64/kubectl"
+    dest: "{{ agent_box_libexec_dir }}/downloads/kubectl-{{ agent_box_kubectl_version }}"
+    checksum: "sha256:{{ agent_box_kubectl_sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  tags: [wrappers]
+
+- name: Put kubectl on the path
+  ansible.builtin.file:
+    src: "{{ agent_box_libexec_dir }}/downloads/kubectl-{{ agent_box_kubectl_version }}"
+    dest: /usr/local/bin/kubectl
+    state: link
+    force: true
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  tags: [wrappers]
+
 # The wrappers each clone their own checkout from this one's origin (checkouts/<wrapper>) and move
 # it to origin/main on each run; this one gives the Ansible collections' requirements file.
 - name: The keys user's checkout of central-hub
