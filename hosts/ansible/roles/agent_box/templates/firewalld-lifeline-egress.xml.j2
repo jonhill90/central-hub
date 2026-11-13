@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Managed by Ansible (role agent_box, tasks/lifeline.yml). From the box itself out over the lifeline NIC:
+     only the listed destinations are accepted, the rest is rejected. -->
+<policy target="REJECT">
+  <short>Box lifeline egress</short>
+  <description>Only the Proxmox API (agent_box_lifeline_allow) is reachable over the lifeline NIC.</description>
+  <ingress-zone name="HOST"/>
+  <egress-zone name="drop"/>
+{% for dest in agent_box_lifeline_allow %}
+{% for port in dest.ports %}
+  <rule family="ipv4">
+    <destination address="{{ dest.address }}"/>
+    <port port="{{ port }}" protocol="tcp"/>
+    <accept/>
+  </rule>
+{% endfor %}
+{% endfor %}
+</policy>
