@@ -43,6 +43,6 @@ opnsense_lab_dns_proof_server: ""
 # The API's certificate is always checked against opnsense_lab_ssl_ca_file, the lab root (pick 30);
 # playbooks/tasks/opnsense-tls.yml decides it, with its one-time bootstrap switch.
 
-# The names of the agent box's rules (tasks/agent_box.yml), used to remove them when
-# opnsense_lab_agent_box is unset. Keep in step with the inventory's targets.
-opnsense_lab_agent_box_target_names: [Proxmox API, c1 API]
+# The names the agent box's rules may have (tasks/agent_box.yml). Each target takes one, and every
+# name that is not a current target has its rule removed. Keep in step with the inventory's targets.
+opnsense_lab_agent_box_target_names: [Proxmox API, c1 API, prod node 200 SSH, prod node 201 SSH]
