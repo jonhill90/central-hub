@@ -124,6 +124,7 @@ agent_box_prod_files:
   - {from: clone, path: hosts/terraform/home/tailnet/home.tfvars, dest: tfvars/tailnet.tfvars}
   - {from: clone, path: hosts/terraform/home/dns/home.records.tfvars.json, dest: tfvars/dns.records.tfvars.json}
   - {from: config, path: opnsense-api.txt, dest: opnsense-api.txt}
+  - {from: config, path: secret-source.env, dest: secret-source.env}
   - {from: config, path: c1-secrets-encryption.key, dest: c1-secrets-encryption.key}
   - {from: config, path: cloudflare-dns.token, dest: cloudflare-dns01-token.txt}
   - {from: config, path: pve-root-ca.pem, dest: pve-root-ca.pem}

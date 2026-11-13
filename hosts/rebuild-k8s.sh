@@ -34,7 +34,7 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 # playbook's "programmed" wait and smoke test then check it. restore runs after storage made the data
 # disk and before gitops: once Argo CD reads the repo it syncs every app, and local-path then finds
 # each volume's folder already there (TASK-0240, agent pick 205).
-default_stages="vms cluster storage restore gitops apps gateway certs identity ui checks"
+default_stages="vms cluster storage restore gitops secrets apps gateway certs identity ui checks"
 
 die() { echo "rebuild: $*" >&2; exit 1; }
 
@@ -166,6 +166,12 @@ run_stage() {
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
     gateway) ap playbooks/k8s-gateway.yml ;;
     gitops) ap playbooks/k8s-gitops.yml --tags install,source ;;
+    # Seeds namespace secret-source from SECRET_SOURCE_FILE (docs/runbooks/seed-secret-source.md) after
+    # Argo CD made it and before apps wait on the ExternalSecrets that read it. Unset: skipped.
+    secrets)
+      if [ -z "${SECRET_SOURCE_FILE:-}" ]; then echo "no SECRET_SOURCE_FILE set: secrets skipped"; return 0; fi
+      [ -s "$SECRET_SOURCE_FILE" ] || { echo "SECRET_SOURCE_FILE is missing or empty"; return 1; }
+      ap playbooks/k8s-secret-source.yml -e "secret_source_file=$SECRET_SOURCE_FILE" ;;
     apps) wait_apps ;;
     certs) ap playbooks/k8s-certs.yml ;;
     identity) ap playbooks/k8s-identity.yml ;;

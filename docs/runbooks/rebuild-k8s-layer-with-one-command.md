@@ -25,7 +25,7 @@ flowchart LR
   ap --> gw["gateway<br/>k8s-gateway.yml"] --> ce["certs"] --> id["identity"] --> ui["ui<br/>Argo CD UI + SSO"] --> ck["checks<br/>+ restore proof"]
 ```
 
-On dev the stages are `vms cluster storage restore gitops apps gateway checks`: certs, identity and ui are left out (D-0028).
+On dev the stages are `vms cluster storage restore gitops secrets apps gateway checks`: certs, identity and ui are left out (D-0028). `secrets` seeds namespace `secret-source` from `SECRET_SOURCE_FILE` (`playbooks/k8s-secret-source.yml`, [seed-secret-source.md](seed-secret-source.md)) after Argo CD makes it and before `apps` waits on the ExternalSecrets that read it; unset, the stage is skipped. The agent box makes its own dev file once, with random values, and never prints it.
 
 ## Stages
 

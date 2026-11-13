@@ -117,6 +117,18 @@ if [[ ! -s $encfile ]]; then
   (umask 077; head -c 32 /dev/urandom | base64 > "$encfile")
 fi
 chmod 600 "$encfile"
+# The values the dev cluster's ExternalSecrets read from namespace secret-source (ntfy's, runbook
+# seed-secret-source.md), the box's own and made once with random values (dev only). Never printed.
+ssfile=$keys/rebuild-secret-source.env
+if [[ ! -s $ssfile ]]; then
+  (umask 077
+   {
+     printf 'ntfy-owner-password=%s\n' "$(head -c 64 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 24)"
+     printf 'ntfy-alertmanager-token=tk_%s\n' "$(head -c 128 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 29)"
+     printf 'ntfy-proxmox-token=tk_%s\n' "$(head -c 128 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 29)"
+   } > "$ssfile")
+fi
+chmod 600 "$ssfile"
 # A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
 # The agents' token creates guests on their /vms/<id> ACL but may not add one to a pool (the module's pool_id is null) and clones only template 9001, the copy of template 9000 on VNet dev
 # (hosts/terraform/home/bootstrap/agent-access.sh); the Mac's tfvars name 9000, for its root token.
@@ -216,7 +228,8 @@ TFVARS=$envdir/dev-vms.tfvars
 TFSTATE=$work/state/dev-vms.tfstate
 TOFU_ENV=$keys/proxmox-dev.env
 INVENTORY=$inventory/
-STAGES="vms cluster storage restore gitops apps gateway checks"
+STAGES="vms cluster storage restore gitops secrets apps gateway checks"
+SECRET_SOURCE_FILE=$ssfile
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'
 ENV
