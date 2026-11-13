@@ -510,3 +510,12 @@
       when: agent_box_tls_check_url | length > 0
       changed_when: false
       tags: [verify]
+
+# --- Prod files from the controller ----------------------------------------------------------
+
+- name: Copy the controller's private lab files to the box (only with --tags prod_files)
+  ansible.builtin.include_tasks:
+    file: prod_files.yml
+    apply:
+      tags: [prod_files, never]
+  tags: [prod_files, never]

@@ -1,0 +1,70 @@
+---
+# Copy the controller's private lab files onto the agent box, into {{ agent_box_keys_dir }}/prod
+# (owner {{ agent_box_keys_user }}, folders 0700, files 0600), so agents can rebuild the lab with no
+# Mac in the loop (D-0035). Only runs with `--tags prod_files`. A file the controller lacks is
+# skipped and named; no content is ever printed (no_log). Left out on purpose: the Proxmox
+# apply token, the Cloudflare bootstrap token and the nodes' SSH keys.
+
+- name: Name the controller's folders
+  ansible.builtin.set_fact:
+    agent_box_pf_clone: "{{ playbook_dir }}/../../.."
+    agent_box_pf_config: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/central-hub"
+    agent_box_pf_state: "{{ lookup('ansible.builtin.env', 'HOME') }}/.local/state/central-hub"
+
+- name: Prod folders on the box, the keys user's
+  ansible.builtin.file:
+    path: "{{ agent_box_keys_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0700"
+  loop: [prod, prod/state, prod/tfvars]
+
+- name: Look for each file on the controller
+  ansible.builtin.stat:
+    path: "{{ agent_box_pf_clone if item.from == 'clone' else agent_box_pf_config }}/{{ item.path }}"
+  delegate_to: localhost
+  become: false
+  loop: "{{ agent_box_prod_files }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  register: agent_box_pf_stats
+
+- name: Copy the files that exist
+  ansible.builtin.copy:
+    src: "{{ item.stat.path }}"
+    dest: "{{ agent_box_keys_dir }}/prod/{{ item.item.dest }}"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  loop: "{{ agent_box_pf_stats.results | selectattr('stat.exists') | list }}"
+  loop_control:
+    label: "{{ item.item.dest }}"
+  no_log: true
+
+- name: Find the controller's OpenTofu state files
+  ansible.builtin.find:
+    paths: "{{ agent_box_pf_state }}"
+    patterns: "*.tfstate"
+  delegate_to: localhost
+  become: false
+  register: agent_box_pf_tfstates
+
+- name: Copy the state files
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ agent_box_keys_dir }}/prod/state/{{ item.path | basename }}"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  loop: "{{ agent_box_pf_tfstates.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  no_log: true
+
+- name: Say which files were copied and which were missing (names only)
+  ansible.builtin.debug:
+    msg:
+      copied: "{{ agent_box_pf_stats.results | selectattr('stat.exists') | map(attribute='item.dest') | list }}"
+      missing: "{{ agent_box_pf_stats.results | rejectattr('stat.exists') | map(attribute='item.dest') | list }}"
+      state_files: "{{ agent_box_pf_tfstates.files | map(attribute='path') | map('basename') | list }}"
