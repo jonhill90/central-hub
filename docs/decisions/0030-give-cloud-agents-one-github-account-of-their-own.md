@@ -1,7 +1,7 @@
 ---
 id: D-0030
 title: Give the cloud agents one GitHub account of their own, separate from the owner's, so GitHub can require the owner's approval
-status: parked
+status: proposed
 date: 2026-10-28
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -20,7 +20,7 @@ Activation gate item 1 asks for per-agent GitHub identities, with the owner's ap
 
 The Foundation proposal (v0.4.3 §6, AG1) planned one GitHub App per agent. Research batch RB-0093 (2026-10-28) measured that the agents' environment puts the owner's token on GitHub requests. RB-0094 (2026-10-28, later the same day) found that the agents act as the owner through two separate channels, the environment's GitHub proxy and the GitHub connector the agents call as tools, and it found two more routes this record had not listed (options 4 and 5 below).
 
-This record was first drafted after a decision-card answer on 2026-10-28 at 05:12 UTC that picked the recommended option, one agent account. The owner typed no words about the choice. On 2026-11-08 at 19:01 UTC the owner said that past card answers that took the recommended option are agent picks, not the owner's decisions, and are to be re-checked at the lab rebuild. On 2026-10-29 the owner asked what needs an agent identity during the infrastructure build, and the work was set aside. On 2026-11-08 at 22:58 UTC the owner parked this record, and asked right after for its gaps to be closed. This version is that rewrite: every choice in it is an agent pick, for the owner to take, change or reject.
+This record was first drafted after a decision-card answer on 2026-10-28 at 05:12 UTC that picked the recommended option, one agent account. The owner typed no words about the choice. On 2026-11-08 at 19:01 UTC the owner said that past card answers that took the recommended option are agent picks, not the owner's decisions, and are to be re-checked at the lab rebuild. On 2026-10-29 the owner asked what needs an agent identity during the infrastructure build, and the work was set aside. On 2026-11-08 at 22:58 UTC the owner parked this record, and asked right after for its gaps to be closed. This version is that rewrite: every choice in it is an agent pick, for the owner to take, change or reject. On 2026-11-13 at 15:29:41 UTC the owner resumed it: he tapped the recommended option 1 on a decision card ("Pick how agents get their own GitHub identity for D-0030", card cmsg_01X43rfNYp4H1dL1V2dkfkwNBWWkUchCD1BDF42SQSZ6jX). Under his word of 2026-11-08, a tap on the recommended option is weaker than typed words, so this record now says `proposed` with option 1, and becomes his decision only with his typed accept.
 
 Nothing needs this record while only c1 reads the repository (D-0027). It is needed before any other cluster reads it.
 
@@ -28,7 +28,7 @@ Nothing needs this record while only c1 reads the repository (D-0027). It is nee
 
 | # | Gap | Answered in |
 |---|---|---|
-| 1 | It recorded a card answer as the owner's decision. | Context (above); Decision Outcome says no option is chosen |
+| 1 | It recorded a card answer as the owner's decision. | Context (above); Decision Outcome records the 2026-11-13 tap as a tap, and the record waits for the owner's typed accept |
 | 2 | It was never tested: no agent has pushed a branch or opened a PR as another account. | Rule 2, the switch test, with pass conditions |
 | 3 | Its review rule (1 approval on every PR) would stop agents merging green PRs, which D-0031 allows. | Rule 4 and "How this fits D-0031" |
 | 4 | One account for every cloud agent is one identity per lane, not per agent, so it does not meet item 1 as written on its own. | Rule 1 and "What this route does not give" |
@@ -53,7 +53,7 @@ Nothing needs this record while only c1 reads the repository (D-0027). It is nee
 
 ## Decision Outcome
 
-**No option is chosen.** The owner parked this record on 2026-11-08 at 22:58 UTC. The drafting agent's pick, if the owner resumes it, is option 1, because it is the only route RB-0094 found documented end to end for the cloud sessions, with option 4 tested first if the owner has a paid Copilot plan. That is an agent pick, not the owner's choice.
+**Proposed: option 1, one machine account for the cloud agents.** The owner tapped the recommended option 1 on a decision card on 2026-11-13 at 15:29:41 UTC (Context). That is a tap, not his reviewed decision: the record stays `proposed` until he types an accept naming this record's PR and its head (CLAUDE.md rule 1). Even after the accept, the switch waits for rule 2's test. The drafting agent picked option 1 because it is the only route RB-0094 found documented end to end for the cloud sessions. Option 4 was not tried first: it needs a paid Copilot plan and runs from GitHub, not from these sessions.
 
 ```mermaid
 flowchart LR
@@ -77,7 +77,7 @@ flowchart LR
    - a PR the session opens shows the agent account as its author;
    - the owner, from their own login, can approve that PR, and the approval counts for the last push.
 
-   If any step fails, the switch does not happen, the owner's account is reconnected, and this record is revisited.
+   If any step fails, the switch does not happen, the owner's account is reconnected, and this record is revisited. The steps, and how one session gets the agent account, are in [Test the agents' own GitHub account before the switch](../runbooks/test-the-agents-github-account.md).
 3. **The owner keeps their own login for approvals and admin.** No agent holds the owner's credentials or signing key.
 4. **Review rule, scoped by path.** After the switch, a second ruleset `main-review` holds only the review rule: 0 required approvals, code-owner review on, approval of the last push on, and the repository admin role as its one bypass actor in `pull_request` mode, so the owner's own PRs merge without self-approval. CODEOWNERS names the owner only for the paths that need the owner's review, for example what a cluster reads (`hosts/kubernetes/`), `AGENTS.md` and `.github/`. `protect-main` keeps no bypass, and the required checks move into it, so nobody merges red.
 5. **Both channels switch together.** At the switch, the owner's account is disconnected from the agents' environment and from their GitHub connector, and the Foundation-era token of the owner's account is revoked. A session that can still reach GitHub as the owner fails item 1.
@@ -141,6 +141,7 @@ D-0031 lets agents squash-merge a PR once every check passes. The first draft's 
 ## More Information
 
 - **Evidence:** [../evidence/0030-give-cloud-agents-one-github-account-of-their-own.md](../evidence/0030-give-cloud-agents-one-github-account-of-their-own.md), from research batches RB-0093, RB-0094 and RB-0018, and the measurements of 2026-11-08.
+- **Runbook:** [Test the agents' own GitHub account before the switch](../runbooks/test-the-agents-github-account.md) (rule 2).
 - **Exit path:** remove the collaborator, revoke its tokens, delete the account, reconnect another identity on both channels, and delete `main-review`; `protect-main` names nobody and doesn't change.
 - Related: AGENTS.md "Activation gate" item 1; docs/specs/2026-10-activation-gate.md; D-0013; D-0027; D-0031.
 - **Number:** drafted as D-0026 on 2026-10-28; main gave D-0026 to another record (PR #55), so this one takes D-0030, the next number not used or held (D-0027 on main, D-0028 in PR #65, D-0029 held for the Cilium record).
