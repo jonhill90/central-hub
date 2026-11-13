@@ -36,7 +36,7 @@ The runner's user can run only the `rebuild` wrapper, with those five arguments,
 
 ## What only the owner can do (after D-0030)
 
-These are repository settings and a registration, so they are the owner's. Do them after the section above is met, in this order in this order. Step 1 comes first because a workflow that names an environment which does not exist makes GitHub create it with no protection.
+These are repository settings and a registration, so they are the owner's. Do them after the section above is met, in this order. Step 1 comes first because a workflow that names an environment which does not exist makes GitHub create it with no protection.
 
 1. Create the environment `dev-redeploy`: repository Settings, Environments, New environment. Add the owner as required reviewer, tick "Prevent self-review" off (the owner is the only person), and under Deployment branches choose "Selected branches" with `main` only.
    why: the tap is the approval channel (D-0035 rule 3); a branch limit keeps a branch's copy of the workflow from using it.
@@ -47,7 +47,7 @@ These are repository settings and a registration, so they are the owner's. Do th
 
 3. Register the runner by hand on the box, as the runner user, never as the keys user: Settings, Actions, Runners, New self-hosted runner, Linux x64. Give it the label `central-hub-box` and run the registration commands GitHub shows. The registration token is single-use and short-lived; it is never written down here or in a file.
    why: registration is a human act (D-0035 rule 8); the runner's own software comes from GitHub's release and its pin is checked on the box.
-   Before starting the runner, put the hook in its `.env` and make that file root's, so a job (which runs as the runner user) can't change it: add the line `ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/libexec/agent-box/runner-job-started.sh`, then `chown root:root .env` and `chmod 0644 .env`.
+   Before starting the runner, set the hook where a job can't change it. The runner's own folder belongs to the runner user, so a root-owned `.env` inside it could still be unlinked and replaced by a job. Instead, as root, add a systemd drop-in for the runner's service (`/etc/systemd/system/<runner service>.service.d/hook.conf`, root-owned, in a folder the runner user can't write) with `Environment=ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/libexec/agent-box/runner-job-started.sh`, then `systemctl daemon-reload` and restart the service. Untested: check the refusal in the expect line below before trusting it.
    why: the hook is the only thing between a workflow on any branch and the runner's sudo.
    expect: the runner shows Idle in Settings, Actions, Runners with the label `central-hub-box`; a throwaway workflow on a branch that asks for the label fails at "Set up job" with `runner-job-started: refused`.
 
