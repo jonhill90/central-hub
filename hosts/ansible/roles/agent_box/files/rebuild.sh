@@ -32,7 +32,7 @@ esac
 keys=/etc/agent-keys
 work=/var/lib/agent-box
 libexec=/usr/local/libexec/agent-box
-repo=$work/central-hub
+repo=$work/checkouts/rebuild   # this wrapper's own checkout of central-hub
 envdir=$work/rebuild-dev
 inv_src=$keys/rebuild-dev/inventory
 inventory=$envdir/inventory
@@ -56,6 +56,11 @@ openssl x509 -checkend 2592000 -noout -in "$keys/azure-reader.env" > /dev/null \
 [[ -x $libexec/ansible-venv/bin/ansible-playbook ]] || { echo "rebuild: Ansible is not installed; run the agent_box role" >&2; exit 1; }
 
 # Only reviewed code on main runs with the keys, never a checkout a session can edit.
+# One rebuild run at a time, in its own checkout: no other run, of this wrapper or another, can
+# move the code under it. The lock is held until the run and everything it starts end.
+exec 9>"$work/state/rebuild.lock"
+flock -n 9 || { echo "rebuild: another rebuild run is going; try again when it ends" >&2; exit 1; }
+[[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
 git -C "$repo" fetch --quiet origin main
 git -C "$repo" checkout --quiet --detach origin/main
 echo "rebuild: central-hub $(git -C "$repo" rev-parse --short HEAD)"

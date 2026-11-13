@@ -14,13 +14,18 @@ esac
 
 keys=/etc/agent-keys
 work=/var/lib/agent-box
-repo=$work/central-hub
+repo=$work/checkouts/dev-vms   # this wrapper's own checkout of central-hub
 folder=$repo/hosts/terraform/home/k8s
 state=$work/state/dev-vms.tfstate
 plan=$work/state/dev-vms.tfplan
 export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin TF_DATA_DIR=$work/tofu-data/dev-vms TF_IN_AUTOMATION=1
 
 # Only reviewed code on main runs with the token, never a checkout a session can edit.
+# One dev-vms run at a time, in its own checkout: no other run, of this wrapper or another, can
+# move the code under it. The lock is held until the run and everything it starts end.
+exec 9>"$work/state/dev-vms.lock"
+flock -n 9 || { echo "dev-vms: another dev-vms run is going; try again when it ends" >&2; exit 1; }
+[[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
 git -C "$repo" fetch --quiet origin main
 git -C "$repo" checkout --quiet --detach origin/main
 echo "dev-vms: central-hub $(git -C "$repo" rev-parse --short HEAD)"
@@ -32,17 +37,19 @@ set -a
 set +a
 
 tofu() { /usr/local/bin/tofu -chdir="$folder" "$@"; }
+# The VLAN file from this run's own checkout, over any path the tfvars give.
+vlans=(-var "vlans_file=$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml")
 tofu init -input=false -backend-config="path=$state" >/dev/null
 
 case $action in
-  plan) tofu plan -input=false -var-file="$keys/dev-vms.tfvars" -out="$plan" ;;
+  plan) tofu plan -input=false -var-file="$keys/dev-vms.tfvars" "${vlans[@]}" -out="$plan" ;;
   apply)
     [[ -f $plan ]] || { echo "dev-vms: no saved plan; run dev-vms plan first" >&2; exit 1; }
     tofu apply -input=false "$plan"
     rm -f "$plan"
     ;;
   destroy)
-    tofu plan -destroy -input=false -var-file="$keys/dev-vms.tfvars" -out="$plan"
+    tofu plan -destroy -input=false -var-file="$keys/dev-vms.tfvars" "${vlans[@]}" -out="$plan"
     tofu apply -input=false "$plan"
     rm -f "$plan"
     ;;

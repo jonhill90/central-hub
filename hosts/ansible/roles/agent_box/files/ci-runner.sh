@@ -23,7 +23,7 @@ esac
 
 keys=/etc/agent-keys
 work=/var/lib/agent-box
-repo=$work/central-hub
+repo=$work/checkouts/ci-runner   # this wrapper's own checkout of central-hub
 folder=$repo/hosts/terraform/home/ci-runner
 settings=$work/ci-runner.json   # private values the agent_box role writes from the inventory
 state=$work/state/ci-runner.tfstate
@@ -38,6 +38,11 @@ export TF_DATA_DIR=$work/tofu-data/ci-runner TF_IN_AUTOMATION=1 ANSIBLE_HOME=$wo
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
 
 # Only reviewed code on main runs with the keys, never a checkout a session can edit.
+# One ci-runner run at a time, in its own checkout: no other run, of this wrapper or another, can
+# move the code under it. The lock is held until the run and everything it starts end.
+exec 9>"$work/state/ci-runner.lock"
+flock -n 9 || { echo "ci-runner: another ci-runner run is going; try again when it ends" >&2; exit 1; }
+[[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
 git -C "$repo" fetch --quiet origin main
 git -C "$repo" checkout --quiet --detach origin/main
 echo "ci-runner: central-hub $(git -C "$repo" rev-parse --short HEAD)"
