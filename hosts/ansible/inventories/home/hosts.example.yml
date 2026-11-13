@@ -79,6 +79,9 @@ all:
             targets:
               - { name: Proxmox API, address: "", port: 8006 }   # the host's mgmt address
               - { name: c1 API, address: "", port: 6443 }   # c1's control-plane node
+              # SSH to prod's nodes for the box's prod rebuild; add only on the owner's typed go.
+              # - { name: prod node 200 SSH, address: "", port: 22 }   # VM 200's address
+              # - { name: prod node 201 SSH, address: "", port: 22 }   # VM 201's address
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
             - { hostname: pve, address: "", description: "Proxmox host GUI (its mgmt address)" }

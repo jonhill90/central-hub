@@ -45,4 +45,4 @@ opnsense_lab_dns_proof_server: ""
 
 # The names of the agent box's rules (tasks/agent_box.yml), used to remove them when
 # opnsense_lab_agent_box is unset. Keep in step with the inventory's targets.
-opnsense_lab_agent_box_target_names: [Proxmox API, c1 API]
+opnsense_lab_agent_box_target_names: [Proxmox API, c1 API, prod node 200 SSH, prod node 201 SSH]

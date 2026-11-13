@@ -1,9 +1,10 @@
 ---
-# The agent box (VM 258 on VNet dev) may open two connections into the lab, and nothing else:
-# the Proxmox API and c1's Kubernetes API. The owner's yes, 2026-11-10 05:16 UTC: one rule from
-# the box's address only, to those two ports, once a reach test showed them blocked (measured
-# 07:47 UTC: both timed out). The dev VLAN's own rules still block the rest of RFC 1918.
-# Sequence 1 and up, ahead of the management rules (5 and up) and the per-VLAN rules (10 and up).
+# The agent box (VM 258 on VNet dev) may open these connections into the lab, and nothing else:
+# the Proxmox API and c1's Kubernetes API (the owner's yes, 2026-11-10 05:16 UTC, once a reach test
+# showed them blocked: measured 07:47 UTC, both timed out), and SSH to prod's two node VMs, 200 and
+# 201, so the box can rebuild prod (the owner's answer of 2026-11-11; applied on a typed go). One
+# rule per target, from the box's address only. The dev VLAN's own rules still block the rest of
+# RFC 1918. Sequence 1 and up, ahead of the management rules (5 and up): at most four targets.
 - name: Agent box to its lab APIs
   oxlorg.opnsense.rule:
     description: "Allow agent box to {{ item.name }}"

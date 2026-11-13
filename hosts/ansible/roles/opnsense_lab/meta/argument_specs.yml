@@ -87,7 +87,7 @@ argument_specs:
       opnsense_lab_agent_box_target_names:
         type: list
         elements: str
-        default: [Proxmox API, c1 API]
+        default: [Proxmox API, c1 API, prod node 200 SSH, prod node 201 SSH]
         description: Rule names removed when opnsense_lab_agent_box is unset.
       opnsense_lab_host_overrides:
         type: list
