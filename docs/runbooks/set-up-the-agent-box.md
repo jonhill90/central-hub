@@ -168,6 +168,7 @@ rebuild up          all stages
 rebuild rebuild     tear the dev VMs down first, then all stages
 rebuild teardown    only the teardown
 rebuild log         the newest run's stage lines and PASS/FAIL lines
+rebuild diag        read-only look at the dev cluster after a failed apps stage: Argo CD app sync and health, the newest events in alerts and monitoring, pods not running, the monitoring pods and volume claims; runs while a rebuild is going
 ```
 
 - It runs only the code on `main`. There is no way to name another branch, because the keys never run code a session can edit.
