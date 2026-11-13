@@ -29,6 +29,10 @@ case $1 in
 esac
 
 for a in "$@"; do
+  # kubectl reads "_" in a flag name as "-" (--cache_dir is --cache-dir), which would slip past the
+  # names below, and none of its own flags has "_": refuse any long flag whose name has one.
+  n=${a%%=*}
+  [[ $n == --* && $n == *_* ]] && die "flag $a is not allowed (no flag name has \"_\")"
   case $a in
     # credentials, identity and server: the kubeconfig decides these
     --kubeconfig* | --context* | --cluster* | --user* | --token* | --as* | --server* | \

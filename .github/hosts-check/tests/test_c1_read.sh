@@ -52,4 +52,10 @@ refuse get pods --kuberc /tmp/x
 refuse get pods --cache-dir /tmp/x
 refuse get pods --log-file /tmp/x
 refuse get pods --profile cpu
+refuse get pods --cache_dir=/etc/agent-keys/x
+refuse get pods --client_key /etc/agent-keys/x
+refuse get pods --kube_config=/etc/agent-keys/x
+refuse get pods --insecure_skip_tls_verify
+pass get pods -l app_name=x
+pass get pods --selector=app_name=x
 exit $fail
