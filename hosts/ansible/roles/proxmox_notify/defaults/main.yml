@@ -14,7 +14,7 @@
 #
 # Or, shorter, for ntfy on c1 (pick 191): set only the topic URL, and the role builds a webhook
 # endpoint that posts the notification's title and text there, at high priority:
-#   proxmox_notify_ntfy_url: https://ntfy.<zone>/c1-alerts   # private: the zone
+#   proxmox_notify_ntfy_url: https://ntfy.apps.c1.prod.<zone>/c1-alerts   # private: the zone
 # Set one of proxmox_notify_ntfy_url and proxmox_notify_endpoint, not both.
 # ntfy on c1 refuses anonymous posts (pick 171): give Proxmox its send-only token too, from the
 # controller's secret-source file (playbooks/ntfy-access.yml makes it), for example:
