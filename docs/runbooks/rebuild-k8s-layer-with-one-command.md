@@ -8,7 +8,7 @@ outcome: the env's node VMs, the cluster, on dev a read-only copy of prod's newe
 needs: the controller from set-up-lab-controller.md; the lab network and Proxmox host as they are; the iac@pve!apply token file; an allow rule for hosts/rebuild-k8s.sh on the Mac
 private-values: [rebuild-env-dir, terraform-tfvars, terraform-state, ansible-inventory, c1-backup-restic-password, c1-backup-azure-storage-account, prod-volume-node-name]
 files: [hosts/rebuild-k8s.sh, hosts/rebuild.env.example, hosts/terraform/home/k8s/, hosts/ansible/playbooks/, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/files/c1-restore-volumes.sh, hosts/terraform/azure/backup/, hosts/kubernetes/home/c1/]
-last-tested: 2026-11-13, run by an agent session on the agent box (lane `agent box`), dev, central-hub 8861d3d, `rebuild rebuild` from teardown, all ten stages (teardown and the nine after it) passed in 14.4 minutes, the second such run in a row (see Proven runs); output: the box's `rebuild log` for runs 20261113T084245Z and 20261113T085920Z, which holds the stage and PASS lines; the raw logs stay on the box (private), so there is no public link
+last-tested: 2026-11-13, run by an agent session on the agent box (lane `agent box`), dev, central-hub 8861d3d, `rebuild rebuild` from teardown, all ten stages (teardown and the nine after it) passed in 14.4 minutes, the second such run in a row (see Proven runs); the output is the box's `rebuild log` for runs 20261113T084245Z and 20261113T085920Z, which holds the stage and PASS lines; the raw logs stay on the box (private), so there is no public link
 superseded-by:
 ---
 
