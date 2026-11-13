@@ -30,11 +30,21 @@ agent_box_wrappers:
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]
+  # Reads c1 with the read-only kubeconfig from app agent-read; read verbs only, and the wrapper
+  # refuses flags that pick other credentials or open a local file.
+  - name: c1-read
+    args: ["get *", "describe *", "logs *", "top *", events, "events *", "explain *", api-resources,
+           "api-resources *", api-versions, version, "version *", "auth can-i *"]
 
 # OpenTofu for the wrappers, the same version CI uses (.github/hosts-check/install-tools.sh),
 # checked against the release's SHA256SUMS.
 agent_box_tofu_version: 1.13.1
 agent_box_tofu_sha256: 8ccbc6f8ee21d2827715f3c6e08a9b3e0209b1e62057c05067ef117e047c1a80
+
+# kubectl for the c1-read wrapper, the version c1 runs (k8s_node_kubernetes_version, pick 33),
+# checked against the release's kubectl.sha256. Bump it with the cluster.
+agent_box_kubectl_version: 1.37.1
+agent_box_kubectl_sha256: 65691ff77eb6fa44c908b77a1082c9f092c3b9733b5cefabec0d1104890e21a8
 
 # Ansible for the rebuild wrapper, in its own virtual environment so the box's system Python stays
 # as it is. The version is the one hosts/ansible/requirements.txt pins; the collections come from

@@ -27,6 +27,8 @@ argument_specs:
           args: {type: list, elements: str, required: true, description: The only first arguments sudo allows.}
       agent_box_tofu_version: {type: str, description: OpenTofu version for the wrappers.}
       agent_box_tofu_sha256: {type: str, description: SHA-256 of the linux_amd64 zip of that version.}
+      agent_box_kubectl_version: {type: str, description: "kubectl version for the c1-read wrapper, the one c1 runs."}
+      agent_box_kubectl_sha256: {type: str, description: SHA-256 of that version's linux amd64 kubectl.}
       agent_box_ansible_core_version: {type: str, description: ansible-core version in the rebuild wrapper's virtual environment.}
       agent_box_httpx_version: {type: str, description: httpx version in that environment (the OPNsense modules need it).}
       agent_box_tailscale_version: {type: str, description: Tailscale client version.}
