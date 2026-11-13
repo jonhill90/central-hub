@@ -85,6 +85,8 @@ agent_box_deny:
   # Keys: sessions reach `keys` only through the front scripts, which call sudo themselves.
   - "Bash(sudo:*)"
   - "Read(//etc/agent-keys/**)"
+  # The OPNsense configuration backups hold password hashes and keys.
+  - "Read(//var/lib/agent-box/opnsense-backup/**)"
   # The settings themselves.
   # Only Edit rules match file writes (an Edit rule covers every file-editing tool, Write included).
   - "Edit(//etc/claude-code/**)"
@@ -110,6 +112,10 @@ agent_box_opnsense_backup_daily: "*-*-* 14:30:00 UTC"
 # The box's second NIC on the Proxmox host's own subnet (pick 220, docs/runbooks/set-up-the-box-lifeline.md):
 # its interface name inside the VM (for example eth1). Private, through the inventory. Empty does nothing.
 agent_box_lifeline_interface: ""
+# What the box may reach over that NIC, and nothing else (the rest is rejected): a list of
+# {address: IPv4, ports: [TCP ports]}, normally the Proxmox host's own address and 8006 (and 22 if needed).
+# Private, through the inventory. Empty with the interface set rejects everything over the lifeline.
+agent_box_lifeline_allow: []
 # Any other top-level settings, merged over the rest (for example autoUpdatesChannel).
 agent_box_managed_settings_extra: {}
 # When the weekly `ci-runner weekly` run starts (systemd OnCalendar): it reinstalls the merged pin on

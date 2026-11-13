@@ -54,8 +54,18 @@ argument_specs:
         type: str
         default: ""
         description: >-
-          The box's lifeline NIC inside the VM (for example eth1), put in firewalld's drop zone.
-          Private. Empty does nothing.
+          The box's lifeline NIC inside the VM (for example eth1), put in firewalld's drop zone, on
+          its NetworkManager connection too. Private. Empty does nothing.
+      agent_box_lifeline_allow:
+        type: list
+        elements: dict
+        default: []
+        description: >-
+          Private. What the box may reach over the lifeline NIC, the rest is rejected: entries of
+          address (IPv4) and ports (TCP ports), normally the Proxmox host and 8006.
+        options:
+          address: {type: str, required: true, description: "IPv4 address."}
+          ports: {type: list, elements: int, required: true, description: "TCP ports."}
       agent_box_copy_prod_files:
         type: bool
         default: false

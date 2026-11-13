@@ -25,7 +25,7 @@ The box reaches the Proxmox API through OPNsense (the box sits on VNet dev; the 
 | Piece | Where |
 |---|---|
 | Second NIC | `hosts/terraform/home/jumpbox`, variable `lifeline` (`bridge`, `address`, `prefix`), default null: a second `network_device` on the Proxmox host's own bridge and a second `ip_config` with an address and **no gateway**, so only the host's subnet is reached over it and the box's default route stays through the dev VLAN |
-| Inbound closed | role `agent_box`, variable `agent_box_lifeline_interface` (the NIC's name inside the VM): the interface goes in firewalld's `drop` zone, so nothing on the home LAN can start a connection to the box |
+| Closed both ways | role `agent_box`, variables `agent_box_lifeline_interface` (the NIC's name inside the VM) and `agent_box_lifeline_allow` (entries of `address` and `ports`, normally the Proxmox host and 8006). Inbound: the interface and its NetworkManager connection are in firewalld's `drop` zone, so nothing on the home LAN can start a connection to the box. Outbound: a firewalld policy from the box itself to that zone accepts only the listed addresses and ports and rejects the rest, so the connected route does not let a session reach other home LAN devices |
 | Configuration copy | role `agent_box`, variable `agent_box_opnsense_backup` (`host`, `keep`): `opnsense-backup.sh` runs daily as the keys user, fetches the configuration from OPNsense's API with the key in `/etc/agent-keys/prod/opnsense-api.txt` (sent to curl on stdin), keeps the newest copies in `/var/lib/agent-box/opnsense-backup` (folder 0700, files 0600) and refuses anything that is not an OPNsense configuration |
 
 With the second NIC on the host's subnet, the connected route to the Proxmox API is more specific than the default one, so the box reaches the API over the lifeline all the time, not only when OPNsense is down.
@@ -41,8 +41,8 @@ With the second NIC on the host's subnet, the connected route to the Proxmox API
 1. Fill in `lifeline` in the git-ignored tfvars: the host's own bridge (`vmbr0` or as `pvesh get /nodes/<node>/network` shows), a free address on its subnet, the prefix. Never in the repository.
    expect: `tofu plan` (through the box's `dev-vms`-style wrapper for this folder, or from the Mac) shows an update in place of VM 258: one more `network_device` and `ip_config`, nothing destroyed. If it shows a replace, stop.
 
-2. Apply, then give the new interface its zone: set `agent_box_lifeline_interface` and `agent_box_opnsense_backup` in the private inventory and run the box's role from the Mac.
-   expect: `failed=0`; `firewall-cmd --get-zone-of-interface=<nic>` prints `drop`; `systemctl list-timers opnsense-backup.timer` lists the timer.
+2. Apply, then give the new interface its zone: set `agent_box_lifeline_interface`, `agent_box_lifeline_allow` and `agent_box_opnsense_backup` in the private inventory and run the box's role from the Mac.
+   expect: `failed=0`; `firewall-cmd --get-zone-of-interface=<nic>` prints `drop`; `nmcli -g connection.zone connection show <connection>` prints `drop` (so it survives a reconnect; after a reboot of the box the first command must still print `drop`); `systemctl list-timers opnsense-backup.timer` lists the timer; from the box, `curl -sk --max-time 5 https://<another home LAN address>:443/` fails at once (rejected), while the allowed address and port still connect.
 
 3. Add the box's lifeline address to the Proxmox host's firewall rule for 8006 (the owner's words).
    expect: from the box, `curl -sk https://<host>:8006/` answers over the lifeline.
