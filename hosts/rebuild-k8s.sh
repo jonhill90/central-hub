@@ -134,9 +134,9 @@ wait_apps() {
 # source was seeded a moment ago. Each wait stops at a condition or at its timeout, never on a sleep.
 wait_secrets() {
   local timeout=${SECRETS_TIMEOUT:-300} notready
-  kc annotate externalsecrets.external-secrets.io -A --all --overwrite "force-sync=$(date -u +%Y%m%dT%H%M%SZ)" >/dev/null
+  kc annotate --request-timeout=60s externalsecrets.external-secrets.io -A --all --overwrite "force-sync=$(date -u +%Y%m%dT%H%M%SZ)" >/dev/null
   if ! kc wait externalsecrets.external-secrets.io -A --all --for=condition=Ready "--timeout=${timeout}s" >/dev/null; then
-    notready=$(kc get externalsecrets.external-secrets.io -A --no-headers \
+    notready=$(kc get --request-timeout=60s externalsecrets.external-secrets.io -A --no-headers \
       -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,READY:.status.conditions[0].status | awk '$3 != "True"')
     echo "ExternalSecrets not Ready after ${timeout}s:"; echo "$notready"
     return 1
@@ -189,7 +189,8 @@ run_stage() {
       if [ -z "${SECRET_SOURCE_FILE:-}" ]; then echo "no SECRET_SOURCE_FILE set: secrets skipped"; return 0; fi
       [ -s "$SECRET_SOURCE_FILE" ] || { echo "SECRET_SOURCE_FILE is missing or empty"; return 1; }
       ap playbooks/k8s-secret-source.yml -e "secret_source_file=$SECRET_SOURCE_FILE" ;;
-    apps) wait_apps && wait_secrets ;;
+    # The ExternalSecret wait is dev only: it annotates every ExternalSecret, which a prod run doesn't need.
+    apps) wait_apps && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
     certs) ap playbooks/k8s-certs.yml ;;
     identity) ap playbooks/k8s-identity.yml ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
