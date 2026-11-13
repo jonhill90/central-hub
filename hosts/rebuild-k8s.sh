@@ -129,6 +129,14 @@ wait_apps() {
   done
 }
 
+# The vms stage returns when the guests exist, not when sshd answers: a fresh VM is still booting
+# (seen 2026-11-13, cluster failed in 0s on "Connection refused"). Waits until every host takes an ssh
+# login (every node, as k8s.yml targets), stopping at the condition or at SSH_TIMEOUT (default 300 s).
+wait_ssh() {
+  (cd "$repo/hosts/ansible" && ansible k8s_nodes -i "$INVENTORY" -m ansible.builtin.wait_for_connection \
+    -a "timeout=${SSH_TIMEOUT:-300}")
+}
+
 # Every ExternalSecret re-read now and Ready, then the pods that mount their Secrets Ready. ESO retries
 # a failed read with a growing backoff, so without the nudge a pod can wait minutes on a Secret whose
 # source was seeded a moment ago. Each wait stops at a condition or at its timeout, never on a sleep.
@@ -178,7 +186,7 @@ run_stage() {
       [ -z "${PRE_VMS_HOOK:-}" ] || bash -c "$PRE_VMS_HOOK"
       tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE"
       tofu_k8s apply -auto-approve -input=false -var-file="$TFVARS" ;;
-    cluster) ap playbooks/k8s.yml ;;
+    cluster) wait_ssh && ap playbooks/k8s.yml ;;
     # The data disks only: Argo CD installs the provisioner and StorageClass (move-local-path-to-argo-cd.md).
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
     gateway) ap playbooks/k8s-gateway.yml ;;
