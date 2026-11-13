@@ -88,7 +88,15 @@
     immediate: true
     state: enabled
 
-# Last: the agents keep no login. A later change is a rebuild from teardown.
+# Started now, without waiting: the oneshot holds tty1 until the owner has typed the password, so a plain
+# start would block this run. Nothing reboots the VM, so without this the console keeps its getty.
+- name: desktop | The console prompt starts now
+  ansible.builtin.systemd_service:
+    name: desktop-set-password.service
+    state: started
+    no_block: true
+
+# Last: the agents keep no SSH login. A later change is a rebuild from teardown.
 - name: desktop | The admin user's SSH keys are removed
   ansible.builtin.file:
     path: "/home/{{ desktop_admin_user }}/.ssh/authorized_keys"

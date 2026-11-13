@@ -16,7 +16,7 @@ superseded-by:
 
 **Status:** draft. Written 2026-11-13 from the code in this change (tests offline only). Not run: the package names and the xrdp session below come from the EPEL 10 package lists and have not been installed on a VM yet.
 
-**Isolation, by default (pick 219).** The agents configure the VM once and then keep no login on it: the role removes the admin SSH key at the end of its first run, so later changes are a rebuild from teardown. Nobody but the owner sets the login password, at the Proxmox console, so it passes through no agent, transcript or keys folder. RDP is reachable from one address, not from VNet dev.
+**Isolation, by default (pick 219).** The agents configure the VM once and then keep no SSH login on it: the role removes the admin SSH key at the end of its first run, so later changes are a rebuild from teardown. This closes SSH only: the agents' token keeps AgentDev on `/pool/desktop` (VM.Config.Cloudinit, VM.PowerMgmt, VM.Config.Disk, VM.Clone), so a session could still add a cloud-init key and reboot the VM, or clone its disk. Taking those rights off after creation, or a narrower role for the pool, is the owner's decision (pick 219). Nobody but the owner sets the login password, at the Proxmox console, so it passes through no agent, transcript or keys folder. RDP is reachable from one address, not from VNet dev.
 
 The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in to apps by hand (2026-11-13 05:04 UTC). It is a separate VM so what the owner types never sits beside the agents' keys.
 
