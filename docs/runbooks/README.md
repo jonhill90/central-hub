@@ -45,6 +45,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Manage the public zone's DNS records with OpenTofu](manage-public-dns-records.md) | automated | tested |
 | [Use break-glass access](use-break-glass-access.md) | manual | draft |
 | [Give agents their own access to the owner's Azure tenant](give-agents-access-to-azure.md) | manual | draft |
+| [Give agents read-only access to c1](give-agents-read-access-to-c1.md) | manual | draft |
 | [Set up sign-in for lab apps on c1](set-up-lab-sign-in.md) | automated | tested |
 | [Give lab apps short names under the zone](set-up-short-app-names.md) | automated | tested |
 | [Let agents run a new command without a permission block](allow-a-command-for-agents.md) | manual | draft |

@@ -1,9 +1,23 @@
 ---
-# The agent box (VM 258 on VNet dev) may open two connections into the lab, and nothing else:
-# the Proxmox API and c1's Kubernetes API. The owner's yes, 2026-11-10 05:16 UTC: one rule from
-# the box's address only, to those two ports, once a reach test showed them blocked (measured
-# 07:47 UTC: both timed out). The dev VLAN's own rules still block the rest of RFC 1918.
-# Sequence 1 and up, ahead of the management rules (5 and up) and the per-VLAN rules (10 and up).
+# The agent box (VM 258 on VNet dev) may open these connections into the lab, and nothing else:
+# the Proxmox API and c1's Kubernetes API (the owner's yes, 2026-11-10 05:16 UTC, once a reach test
+# showed them blocked: measured 07:47 UTC, both timed out), and SSH to prod's two node VMs, 200 and
+# 201, so the box can rebuild prod (the owner's answer of 2026-11-11; applied on a typed go). One
+# rule per target, from the box's address only. The dev VLAN's own rules still block the rest of
+# RFC 1918. Sequence 1 and up, ahead of the management rules (5 and up): at most four targets.
+# A fifth target needs the management and VLAN rules moved up first.
+- name: Agent box targets fit sequences 1 to 4 and have known names
+  ansible.builtin.assert:
+    that:
+      - opnsense_lab_agent_box.targets | length <= 4
+      - opnsense_lab_agent_box.targets | map(attribute='name') | unique | length == opnsense_lab_agent_box.targets | length
+      - opnsense_lab_agent_box.targets | map(attribute='name') | difference(opnsense_lab_agent_box_target_names) | length == 0
+    fail_msg: >-
+      opnsense_lab_agent_box takes at most 4 targets, each with its own name from
+      opnsense_lab_agent_box_target_names ({{ opnsense_lab_agent_box_target_names | join(', ') }}).
+    quiet: true
+  when: opnsense_lab_agent_box is defined
+
 - name: Agent box to its lab APIs
   oxlorg.opnsense.rule:
     description: "Allow agent box to {{ item.name }}"
@@ -26,12 +40,14 @@
   when: opnsense_lab_agent_box is defined
   notify: Apply rule changes
 
-# Unset in the inventory = no agent box rules: remove any left from before.
-- name: No agent box, no agent box rules
+# Every known name that is not a current target loses its rule: all of them when the box is unset,
+# and a target taken out of the inventory (say the SSH ones) when it is set.
+- name: No rules for agent box targets that are gone
   oxlorg.opnsense.rule:
     description: "Allow agent box to {{ item }}"
     match_fields: [description]
     state: absent
-  loop: "{{ opnsense_lab_agent_box_target_names }}"
-  when: opnsense_lab_agent_box is not defined
+  loop: >-
+    {{ opnsense_lab_agent_box_target_names
+       | difference((opnsense_lab_agent_box | default({})).targets | default([]) | map(attribute='name') | list) }}
   notify: Apply rule changes

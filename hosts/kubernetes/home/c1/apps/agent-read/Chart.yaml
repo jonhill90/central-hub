@@ -1,0 +1,5 @@
+apiVersion: v2
+name: agent-read
+description: A read-only account on c1 for the agents, with no access to Secrets (TASK-0215, pick 216)
+type: application
+version: 0.1.0
