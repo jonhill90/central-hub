@@ -41,6 +41,7 @@ argument_specs:
         description: "Absolute paths of public CA certificate files on the controller (no folders, no patterns, no keys), each trusted on the box; private."
       agent_box_tls_check_url: {type: str, default: "", description: "HTTPS URL the verify tag fetches with certificate checks on; private; empty skips it."}
       agent_box_managed_settings_extra: {type: dict, default: {}, description: "Other top-level managed settings, merged over the rest."}
+      agent_box_copy_prod_files: {type: bool, default: false, description: "Copy the controller's private lab files to the box in this run (the prod_files tasks). Off by default."}
       agent_box_prod_files:
         type: list
         elements: dict

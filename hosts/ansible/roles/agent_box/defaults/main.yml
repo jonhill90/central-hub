@@ -128,3 +128,7 @@ agent_box_prod_files:
   - {from: config, path: c1-secrets-encryption.key, dest: c1-secrets-encryption.key}
   - {from: config, path: cloudflare-dns01-token.txt, dest: cloudflare-dns01-token.txt}
   - {from: config, path: pve-root-ca.pem, dest: pve-root-ca.pem}
+# Switch for the prod_files tasks, which copy the controller's private lab files to the box. Off: a
+# run that copies them is a decision (docs/runbooks/set-up-the-agent-box.md, "Copy the controller's
+# private files to the box"), so it is turned on for one run and off again.
+agent_box_copy_prod_files: false
