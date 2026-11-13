@@ -11,9 +11,13 @@
 #   - ACLs for the group and for token agent@pve!dev (privilege-separated)
 # The token is made separately so its secret goes straight to a file and is never printed:
 #   pveum user token add agent@pve dev --privsep 1 --expire <epoch> --output-format json
-# Limit, measured for iac@pve: a new VM is checked on /vms/<id> before it is in its pool, and
-# Proxmox drops /vms/<id> ACLs when that VM is destroyed. So the per-ID ACLs below must be
-# re-added after each destroy, by running this script again.
+# The dev VMs get their rights from pool dev, not from /vms/<id> ACLs, which Proxmox drops when a
+# VM is destroyed. A clone that names pool dev needs VM.Allocate on /pool/dev only, and Proxmox adds
+# the clone to the pool before the clone task ends, so the provider's next call (tags, CPU, disks)
+# already finds the VM in the pool (qemu-server API2/Qemu.pm clone_vm: the permission check and
+# add_vm_to_pool). The pool's roles reach /vms/<id> of each member (pve-access-control
+# RPCEnvironment.pm compile_acl_path). This holds for clones only: a create that sets tags is
+# checked on /vms/<id> before the VM is in its pool (pick 18), and the dev rebuild only clones 9001.
 # Exit path: `pveum user delete agent@pve; pveum role delete AgentDev; pveum role delete AgentClone;
 # pveum group delete agents; pveum pool delete dev; pveum pool delete ci; qm destroy 9001` (after the pools are empty).
 set -eu
@@ -64,8 +68,7 @@ acl() {
     pveum acl modify "$1" $who --roles "$2" --propagate "$3"
   done
 }
-acl /pool/dev AgentDev 1
-for id in 250 251 252 253 254 255 256 257; do acl "/vms/$id" AgentDev 0; done
+acl /pool/dev AgentDev 1                 # VMs 250-257, made again after every teardown
 acl /pool/ci AgentDev 1
 acl /vms/300 AgentDev 0                  # the CI runner
 acl /vms/9001 AgentClone 0               # clone the agents' template; can't change or delete it
