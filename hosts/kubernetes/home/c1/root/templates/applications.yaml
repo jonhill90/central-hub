@@ -37,9 +37,16 @@ spec:
       {{- end }}
   {{- else }}
   sources:
+    {{- if hasPrefix "oci://" $app.chart.repoURL }}
+    # An OCI chart, fetched by its manifest digest (pick 141); a Helm chart in OCI is read at path ".".
+    - repoURL: {{ $app.chart.repoURL }}
+      path: .
+      targetRevision: {{ required (printf "apps.%s.chart.digest is needed for an oci:// chart" $name) $app.chart.digest | quote }}
+    {{- else }}
     - repoURL: {{ $app.chart.repoURL }}
       chart: {{ $app.chart.name }}
       targetRevision: {{ $app.chart.version | quote }}
+    {{- end }}
       helm:
         releaseName: {{ $app.releaseName | default $name }}
         valueFiles:

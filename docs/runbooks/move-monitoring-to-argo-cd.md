@@ -52,6 +52,8 @@ The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `kube-prom
 
 ## Change it
 
+Argo CD fetches the chart from its OCI copy, `oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack`, by digest (pick 141 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)), so a re-pushed tag changes nothing. A new version changes `version` and `digest` together in `root/values.yaml`: `helm pull oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack --version <version>` prints the digest, and CI's parity check fails if the chart at that digest has another version.
+
 Edit the values or the version by PR. Before raising the chart past a Prometheus Operator minor, read the chart's upgrade notes: with server-side apply Argo CD updates the CRDs itself, which Helm never did.
 
 ## Rebuild from nothing
