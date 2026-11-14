@@ -9,7 +9,7 @@ consulted: []
 waits-on: []
 supersedes: []
 superseded-by:
-revisit-when: a research batch compares self-hosted coordination servers (Headscale, NetBird) on the features the lab uses; the lab needs a feature that Tailscale keeps in a paid plan; the free plan's terms change; or the agents get accounts of their own (D-0030) and need their own identities on the network
+revisit-when: a research batch compares self-hosted coordination servers (Headscale, NetBird) on the features the lab uses; the lab needs a feature that Tailscale keeps in a paid plan; the free plan's terms change; the agents get accounts of their own (D-0030) and need their own identities on the network; or the lab is built for real, when the owner is asked again, as his card of 2026-11-10 and the Tailscale entry in `docs/standards/foss-exceptions.yaml` say
 ---
 
 # Keep Tailscale as a swappable stopgap for reaching the lab from outside, with Headscale as the way off its closed coordination server
@@ -18,12 +18,12 @@ revisit-when: a research batch compares self-hosted coordination servers (Headsc
 
 The owner, his Mac and the agents reach the lab from outside through Tailscale: a tailnet connector container on the Proxmox host routes to the lab's networks, and the agent box joins as a tagged device (`hosts/terraform/home/tailnet/`, `tailnet-policy/`, `remote-access/`, roles `tailnet_connector` and `agent_box`). 30 files in `hosts/`, 11 runbooks, D-0036 and STD-0002 build on it. No decision record chose it.
 
-Tailscale's client is open source, but its coordination server is closed, and its paid plans hold features back. On 2026-11-10 the owner answered on a decision card that Tailscale is fine for now and must stay swappable. On 2026-11-14 he ruled that no piece of the lab may be open core. This record writes down the stopgap, what keeps it swappable, and the way off.
+Tailscale's client is open source, but its coordination server is closed, and its paid plans hold features back. On 2026-11-10 at 19:09 UTC the owner answered on a decision card that Tailscale is fine for now and must stay swappable (card cmsg_01X43rfNYp4H1dL1V2dkfkwN94SWGX6ssfCizqji4VUhLp), to be asked again before the lab is built for real; STD-0006 records the same choice as Tailscale's entry in `docs/standards/foss-exceptions.yaml`. Between 04:43:45 and 04:44:57 UTC on 2026-11-14 he ruled that no piece of the lab may be open core (cmsg_01X43rfNYp4H1dL1V2dkfkwNR46AufLXRC146Xo4CSXG6t, cmsg_01X43rfNYp4H1dL1V2dkfkwNQV7TsveqXKdLbddnuYc8v7, cmsg_01X43rfNYp4H1dL1V2dkfkwN5A1ezB3rCi7zkVswXeZkB4), as D-0040 records. This record writes down the stopgap, what keeps it swappable, and the way off.
 
 ## Decision Drivers
 
 - **FOSS with no paid feature in use** (REQ-0032; the owner, 2026-11-14).
-- **Swappable** (the owner, 2026-11-10; CLAUDE.md rule 6).
+- **Swappable** (the owner's card, 2026-11-10 19:09 UTC; CLAUDE.md rule 6).
 - **Reach the lab without opening ports to the internet.**
 - **Agents rebuild the lab from the box** (D-0035, D-0036), so the box's way in must survive a rebuild.
 
@@ -35,7 +35,7 @@ Tailscale's client is open source, but its coordination server is closed, and it
 
 ## Decision Outcome
 
-Proposed: **option 1, as a stopgap**, the owner's answer of 2026-11-10. Option 2 is the named way off, because it keeps the same clients and the same policy format. Option 3 changes clients and policy. Neither has been compared on fit by a research batch.
+Proposed: **option 1, as a stopgap**, the owner's answer of 2026-11-10. Option 2 is the named way off, because it keeps the same clients and Headscale's documentation says it implements the same policy ACLs as Tailscale, written in HuJSON. Option 3 changes clients, and NetBird's documentation describes groups and policies set in its own interface rather than a policy file. Both readings come from the projects' documentation, not from a test. Neither has been compared on fit by a research batch.
 
 Diagram: not applicable. One component is chosen, and its place in the network is drawn in STD-0002 and the remote-access runbooks.
 
@@ -72,7 +72,7 @@ Run Headscale (BSD-3-Clause) on a lab VM, point the same Tailscale clients at it
 
 ### Option 2: Headscale
 
-- Good: BSD-3-Clause; same clients.
+- Good: BSD-3-Clause; same clients; its documentation says it implements Tailscale's policy ACLs, adapted to self-hosting.
 - Bad: its paid side and its coverage of Tailscale's features were not checked; one more server to run and back up.
 
 ### Option 3: NetBird
