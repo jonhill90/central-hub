@@ -58,7 +58,7 @@ flowchart LR
   rv --> cn["council A, B, C each pass the head"]
   cn --> job["merge job on main, box runner:<br/>pr-merge checks head, checks, clean merge,<br/>then squash pinned to the head"]
   job --> main["main"]
-  main --> box["box-apply, limits included"]
+  main --> box["box limits: applied from the controller,<br/>as D-0036 rule 6 says"]
   main --> dev["dev apply"]
   dev --> prod["production or cloud apply,<br/>no tap"]
   prod -. "firewall or tailnet, a delete,<br/>a secret, money" .-> tap["one tap from the owner"]
@@ -77,7 +77,7 @@ flowchart LR
    - It runs only by `workflow_dispatch`, only from `main`, on the agent box's runner, whose job-started hook refuses any other workflow, branch or event. Its own token is read-only (Activation gate item 3).
    - Its inputs are the PR number, the full head, and the message ids of the reviewer's clearance and of the council's passes.
    - It hands the merge to the box's `pr-merge` wrapper, which merges as the project's GitHub App with the key kept inside the wrapper (D-0031). The wrapper checks itself, and refuses otherwise:
-     - the PR is open, not a draft, and targets `main` (the last added to `pr-merge` with rule 4's changes);
+     - the PR is open, not a draft, and targets `main` (the last is added to `pr-merge` by one of the limit changes rule 4 names);
      - its head is the one named;
      - GitHub reports a clean merge;
      - every check on that head has completed and passed or was skipped, and at least one ran;
@@ -89,10 +89,10 @@ flowchart LR
    - the proposal merges first, or the pass names the head that holds it (D-0001);
    - the acceptance PR changes only `status`, `date` and `accepted-evidence`, with `approved-by: agents`, `approval-ref` the orchestrator's message that records the pass, and `approval-names` naming the PR and head;
    - the reviewer compares the accepted text with the passed head, as D-0001 asks.
-4. **The box's limits.** A change to a limit (D-0036 rule 3) that merged with the agents' pass is applied by `box-apply` on the box, with no apply from the Mac.
-   - The changes that set this up are themselves limit changes, so they are the last ones applied from the Mac, together, with the owner's accept of this record as their go: `box-apply` applying limit changes; the runner hook and the wrapper list letting the runner start `pr-merge` for the merge job; and `pr-merge` no longer stopping on records, standards and `AGENTS.md`, which rule 3 moves to the agents' pass, and checking that the PR targets `main`. The box's runner is registered as D-0041 rule 2 says.
-   - `box-apply` still logs each limit file that changed, with the commit.
-   - The keys stay in the box's own key folders, as now.
+4. **The box's limits.** A change to a limit (D-0036 rule 3) is approved by the agents' pass, like any other reversible change: it is none of the steps rule 6 keeps for the owner.
+   - This record does not change how a limit change reaches the box. It is still applied from the controller, as D-0036 rule 6 says, and the `box-apply` installed on the box still stops on it. Changing that would itself be a limit change, and the owner's messages did not ask for it.
+   - The merge job (rule 2) and the acceptances of rule 3 rest on limit changes of this kind: the runner hook and the wrapper list letting the runner start `pr-merge`, and `pr-merge` no longer stopping on records, standards and `AGENTS.md` and checking that the PR targets `main`. Until they are applied, merges go as they do today. How they reach the box without the Mac is open, and is designed separately.
+
 5. **Production and cloud applies.** Dev is the dev guests, VMs 250 to 257, and the dev secrets store, VMs 550 to 599 (D-0038 rule 2; central-hub #276). The production secrets store, VM 500, is production. A production run (D-0035) or a production or cloud apply (D-0041) needs no tap, apart from rule 6:
    - a layer with a dev twin runs once the same commit passed that layer on dev (D-0035 rule 3(a));
    - a layer with no dev twin (the Proxmox host's own configuration, OPNsense, the tailnet, Azure, Cloudflare and Tailscale) runs once its saved plan's hash has the agents' pass;
@@ -119,13 +119,13 @@ flowchart LR
 - Bad: a production or cloud apply now runs without the owner seeing its plan first. A wrong apply can break the lab until it is rebuilt. The owner gave his reason at 07:44:46 UTC: the lab is greenfield and holds no personal data or anything of value. If that stops being true, this record is revisited. Compensating controls: dev first for every layer that has a twin; the saved plan and the council's pass for those that don't; rule 6 for firewall, tailnet, deletes, secrets and money; the restore checks of D-0035 rule 5 before any teardown.
 - Bad: rule 7's steps still need the owner in person.
 - Bad: the merge job depends on the agent box and its runner. If the box is down, merges wait, or fall back to the owner's own merge on GitHub.
-- Neutral: the Mac and its guard are no longer in any approval path, except the one apply in rule 4.
+- Bad: a box limit change, including the ones the merge job needs, is still applied from the controller (rule 4). Until a later change moves that apply off the Mac, the merge job can't run, and merges go as they do today.
+- Neutral: the Mac and its guard are no longer in any approval path, but the apply of box limit changes still runs there (rule 4).
 
 ### Confirmation
 
 - The first docs-only PR merged through the job shows the project's App as the merger, a merge commit signed by GitHub, and the run summary of rule 2.
 - A cloud session starts the job with its GitHub tools. If its safety check refuses that, the orchestrator's session starts it, and the refusal is written into the runbook.
-- The first box limit change merged under this record is applied by `box-apply` with no apply from the Mac.
 - The first production apply under this record logs the pass's message id instead of a card's.
 
 ## Pros and Cons of the Options
@@ -145,4 +145,4 @@ flowchart LR
 - **Evidence:** [0042](../evidence/0042-let-agents-approve-every-reversible-change-in-the-owners-place.md).
 - **Records it changes, in this PR:** D-0001 (statuses), D-0031 rules 3 and 4, D-0034 rule 4, D-0035 rule 3, D-0036 rule 6, and AGENTS.md rules 1 and 2. D-0041 rule 6 changes in the same PR, since D-0041 is still proposed.
 - **How to start the job:** [Merge a PR through the merge job](../runbooks/merge-a-pr-through-the-merge-job.md).
-- **How this record is accepted.** It loosens AGENTS.md's rules for now, which D-0034 rule 4 sends to a line the owner types naming the PR and its head. His messages of 2026-11-14 from 07:36 to 07:44 UTC are typed and ask for this, but name no PR or head. Whether they count is the council's and the orchestrator's call, recorded in `accepted-evidence`.
+- **How this record is accepted.** It loosens AGENTS.md's rules for now, which D-0034 rule 4 sends to a line the owner types naming the PR and its head. It is accepted on the owner's typed messages in the orchestrator thread at 07:42:30 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6), where he said go and not to ask him for another PR, and at 07:43:25 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH), where he said he had already named what needs his approval and agents should stop asking him to approve PRs. His message at 07:44:46 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm), relayed from the project chat, says the same for the lab. These messages name no PR and no head. That departs from D-0034 rule 4's form. The reviewer and the council judge whether they count, and their passes are this PR's gate.
