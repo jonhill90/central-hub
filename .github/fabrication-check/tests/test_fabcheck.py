@@ -138,6 +138,13 @@ class Checks(unittest.TestCase):
             self.assertEqual(one("docs/a.md:9", "file_line", root=d)[0], "wrong")
             self.assertEqual(one("docs/b.md:1", "file_line", root=d)[0], "wrong")
             self.assertEqual(one("elsewhere/c.md:1", "file_line", root=d)[0], "unverifiable")
+            # Another repository's path is never judged against this checkout, even when the top folder matches.
+            for t in ('latent-to/developer-docs docs/a.md lines 20-34',
+                      'see https://example.org/x/y/blob/main/docs/a.md:3',
+                      'the file at `owner/repo` docs/a.md:9'):
+                self.assertEqual(one(t, "file_line", root=d)[0], "unverifiable", t)
+            self.assertEqual(one("repo docs @ abcdef1 docs/a.md:9", "file_line", root=d)[0], "unverifiable")
+            self.assertEqual(one("docs/a.md:9", "file_line", root=d)[0], "wrong")
 
     def test_message(self):
         ok = f'The owner at 09:15:30 UTC ({MID}): "keep the blue widget for now"'

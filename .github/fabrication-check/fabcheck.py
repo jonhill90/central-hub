@@ -36,6 +36,7 @@ ON_MAIN = re.compile(rf"(?:\b([a-z][\w-]*)\s+)?\bmain(?: at)? ({SHA})\b")
 STATE = re.compile(r"#(\d{1,6})\b,?\s+(?:is\s+|was\s+)?\(?(merged|open|closed)\b(?! as)")
 FILE_LINE = re.compile(r"`?((?:\.{0,2}[\w-]+/){0,12}[\w-]+(?:\.[\w-]+)*?\.(?:md|py|ya?ml|sh|tf|json|txt|tsv|toml)`?)"
                        r"(?::(\d+)(?:-(\d+))?|\s+lines?\s+(\d+)(?:\s*(?:-|to)\s*(\d+))?)")
+FOREIGN_PREFIX = re.compile(r"(?:\b[\w.-]+/[\w.-]+`?[\s:]+|https?://\S*|@\s*[0-9a-f]{7,40}\s+)$")
 QUOTE = re.compile(r"[\"\u201c]([^\"\u201c\u201d\n]{12,200})[\"\u201d]")
 MSG = re.compile(r"\bcmsg_[A-Za-z0-9]{20,}\b")
 CLOCK = re.compile(r"\b(\d{2}):(\d{2})(?::(\d{2}))?\s*(?:UTC|Z)\b|T(\d{2}):(\d{2})(?::(\d{2}))?Z")
@@ -141,8 +142,10 @@ def extract(text, src, default_repo):
         for m in FILE_LINE.finditer(line):
             a = m.group(2) or m.group(4)
             b = m.group(3) or m.group(5) or a
+            # A path named after another repository (owner/repo, a URL or "@ sha") is that repository's file.
+            foreign = bool(FOREIGN_PREFIX.search(line[max(0, m.start() - 120):m.start()]))
             claims.append({**base, "kind": "file_line", "path": m.group(1).strip("`"),
-                           "from": int(a), "to": int(b), "quotes": quotes})
+                           "from": int(a), "to": int(b), "quotes": quotes, "foreign": foreign})
         ids = MSG.findall(line)
         if ids:
             clock = CLOCK.search(line)
@@ -207,6 +210,8 @@ def check(c, gh, root, messages, as_of):
             return "wrong", f"{c['sha']} is not a commit of {c['repo']}"
         return ("pass", "on main") if res else ("wrong", f"{c['sha']} is not on {c['repo']} main")
     if k == "file_line":
+        if c.get("foreign"):
+            return "unverifiable", "the path names another repository, not this checkout"
         p = root / c["path"]
         if not p.is_file():
             top = c["path"].split("/")[0]

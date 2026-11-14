@@ -2,7 +2,7 @@
 # adds is looked up in GitHub or the checkout, with no model (design: Library
 # plans/fabrication-check/DESIGN.md, passed Councils A, B and C on 2026-11-14).
 # The verifier always comes from main, fetched by ref, never from the PR head, so a PR can't
-# edit the check that judges it. Read-only token, no secrets, actions pinned to a full SHA.
+# edit the check that judges it (the change's own tests run in a separate job). Read-only token, no secrets, actions pinned to a full SHA.
 name: fabrication
 on:
   pull_request:            # never pull_request_target (CLAUDE.md rule 5)
@@ -12,6 +12,17 @@ permissions:
   contents: read
   pull-requests: read
 jobs:
+  # The change's own tests run in a job of their own: code from the PR can write to GITHUB_PATH or
+  # GITHUB_ENV, and that must never reach the job that judges the PR.
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test the verifier in this change
+        run: python3 -I .github/fabrication-check/tests/test_fabcheck.py
+        if: hashFiles('.github/fabrication-check/tests/test_fabcheck.py') != ''
   claims:
     runs-on: ubuntu-24.04
     steps:
@@ -19,9 +30,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Test the verifier in this change
-        run: python3 -I .github/fabrication-check/tests/test_fabcheck.py
-        if: hashFiles('.github/fabrication-check/tests/test_fabcheck.py') != ''
       - name: Take the verifier from main
         id: verifier
         run: |
