@@ -48,6 +48,10 @@ argument_specs:
       openbao_snapshot_dir: {type: path, description: Where hourly snapshots are kept on the VM.}
       openbao_snapshot_keep: {type: int, description: How many snapshots to keep on the VM.}
       openbao_snapshot_on_calendar: {type: str, description: systemd OnCalendar for snapshots.}
+      openbao_drill_port: {type: int, description: "The restore drill's throwaway API port, on 127.0.0.1 inside its own network namespace."}
+      openbao_drill_cluster_port: {type: int, description: "The throwaway's cluster port, on 127.0.0.1 inside the same namespace."}
+      openbao_drill_on_calendar: {type: str, description: systemd OnCalendar for the restore drill.}
+      openbao_drill_wait: {type: int, description: Seconds each drill step may take to answer.}
       openbao_admin_token_ttl: {type: str, description: The admin AppRole's token TTL.}
       openbao_admin_token_max_ttl: {type: str, description: The admin AppRole's token max TTL.}
       openbao_tls_cert_src: {type: str, description: "Lab CA certificate for the listener on the controller; empty makes a self-signed one."}
