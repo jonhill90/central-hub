@@ -201,6 +201,9 @@ run_stage() {
     apps) wait_apps && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
     certs) ap playbooks/k8s-certs.yml ;;
     identity) ap playbooks/k8s-identity.yml ;;
+    # Only the identity secrets and Keycloak with its realm, for a re-run on a cluster that already has the rest
+    # (tags secrets,keycloak; the always-tagged steps run too). Not in the default stage list.
+    identity-keycloak) ap playbooks/k8s-identity.yml --tags secrets,keycloak ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.

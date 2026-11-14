@@ -3,8 +3,10 @@
 # (hosts/rebuild-k8s.sh, docs/runbooks/rebuild-k8s-layer-with-one-command.md) from the agent box.
 # It runs as user `keys` through sudo, so the session that asks for it never sees the Proxmox
 # token, the node SSH key or the dev inventory. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|log|diag
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|identity|log|diag
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
+# identity: only the stage identity-keycloak (k8s-identity.yml --tags secrets,keycloak) on the existing dev
+# cluster. Same dev guard, lock, checkout and log as the other runs; `log` shows it.
 # Dev only: the env file below fixes ENV_NAME=dev and the dev VM range 250-257, and rebuild-k8s.sh
 # refuses a tfvars whose VM IDs fall outside it or whose node_vnet isn't "dev". Only code on main
 # runs with the keys; there is no way to name another branch.
@@ -30,8 +32,9 @@ case ${1:-} in
   up) extra=() ;;
   rebuild) extra=(--teardown) ;;
   teardown) extra=(--only teardown) ;;
+  identity) extra=(--only identity-keycloak) ;;
   diag) extra=() ;;   # handled below, before anything is changed
-  *) echo "usage: rebuild up|rebuild|teardown|log|diag" >&2; exit 2 ;;
+  *) echo "usage: rebuild up|rebuild|teardown|identity|log|diag" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys

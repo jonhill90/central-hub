@@ -41,6 +41,7 @@ On dev the stages are `vms cluster storage restore gitops secrets apps gateway c
 | `gateway` | `playbooks/k8s-gateway.yml` | after `apps`: with `k8s_gateway_by_argocd: true`, Argo CD makes the Gateway and the playbook checks it |
 | `certs` | `playbooks/k8s-certs.yml` | staging issuer on dev |
 | `identity` | `playbooks/k8s-identity.yml` | throwaway users on dev |
+| `identity-keycloak` | `playbooks/k8s-identity.yml --tags secrets,keycloak` | not in the default list; run with `--only identity-keycloak` (the agent box: `rebuild identity`) to redo the sign-in secrets and Keycloak on a cluster that already has the rest |
 | `ui` | `playbooks/k8s-gitops.yml --tags ui,sso` | |
 | `backup` | `playbooks/k8s-backup.yml` | not in the default list; prod only, the script refuses it on dev |
 | `checks` | nodes Ready, pods Running, apps Synced and Healthy, a second `k8s.yml` with `changed=0`, `tofu plan` with no changes, then `RESTORE_CHECK_HOOK` when `RESTORE_HOOK` is set | |
