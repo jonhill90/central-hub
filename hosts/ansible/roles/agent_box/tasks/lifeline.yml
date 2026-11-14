@@ -29,6 +29,27 @@
     fail_msg: "agent_box_lifeline_address must be the box's address and prefix on the host's subnet, for example 192.0.2.50/24"
     quiet: true
 
+# The egress block is loaded BEFORE anything brings the link up, so a failure here leaves the NIC down, never open.
+- name: lifeline | Folder for firewalld policies
+  ansible.builtin.file:
+    path: /etc/firewalld/policies
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: lifeline | The outbound policy lists only the allowed destinations
+  ansible.builtin.template:
+    src: firewalld-lifeline-egress.xml.j2
+    dest: /etc/firewalld/policies/lifeline-egress.xml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload firewalld
+
+- name: lifeline | Apply the policy now
+  ansible.builtin.meta: flush_handlers
+
 - name: lifeline | Whether NetworkManager manages the NIC
   ansible.builtin.command: nmcli -g GENERAL.NM-MANAGED device show {{ agent_box_lifeline_interface | quote }}
   register: agent_box_lifeline_managed
@@ -79,12 +100,22 @@
   register: agent_box_lifeline_nm_modified
   changed_when: true
 
+# A profile is stale if it is active on this NIC, or if it is a leftover "Wired connection 1" that is bound to
+# this NIC or to no NIC at all. A profile bound to another NIC (the primary's) is never touched.
 - name: lifeline | Other profiles for this NIC
   ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail;
-      nmcli -t -f NAME,DEVICE connection show
-      | awk -F: -v dev={{ agent_box_lifeline_interface | quote }} '$1 != "lifeline" && ($2 == dev || $1 == "Wired connection 1") {print $1}'
+    cmd: |
+      set -o pipefail
+      nic={{ agent_box_lifeline_interface | quote }}
+      nmcli -t -f NAME,DEVICE connection show | while IFS=: read -r name device; do
+        [ "$name" = lifeline ] && continue
+        bound=$(nmcli -g connection.interface-name connection show "$name")
+        if [ "$device" = "$nic" ]; then
+          echo "$name"
+        elif [ "$name" = "Wired connection 1" ] && [ -z "$device" ] && { [ -z "$bound" ] || [ "$bound" = "$nic" ]; }; then
+          echo "$name"
+        fi
+      done
     executable: /bin/bash
   register: agent_box_lifeline_stale
   changed_when: false
@@ -99,26 +130,6 @@
   ansible.builtin.command: nmcli connection delete {{ item | quote }}
   loop: "{{ agent_box_lifeline_stale.stdout_lines }}"
   changed_when: true
-
-- name: lifeline | Folder for firewalld policies
-  ansible.builtin.file:
-    path: /etc/firewalld/policies
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: lifeline | The outbound policy lists only the allowed destinations
-  ansible.builtin.template:
-    src: firewalld-lifeline-egress.xml.j2
-    dest: /etc/firewalld/policies/lifeline-egress.xml
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Reload firewalld
-
-- name: lifeline | Apply the policy now
-  ansible.builtin.meta: flush_handlers
 
 - name: lifeline | The interface is in the drop zone now
   ansible.posix.firewalld:
@@ -148,7 +159,7 @@
   changed_when: false
   check_mode: false
 
-- name: lifeline | No default route, the drop zone, and only the listed destinations
+- name: lifeline | No default route over the NIC, the drop zone, and a rejecting policy
   ansible.builtin.assert:
     that:
       - agent_box_lifeline_default_route.stdout | trim | length == 0
@@ -157,11 +168,17 @@
       - >-
         agent_box_lifeline_policy.stdout_lines | select('search', 'rule family=') | list | length
         == (agent_box_lifeline_allow | map(attribute='ports') | map('length') | sum)
-      - >-
-        agent_box_lifeline_policy.stdout is
-        search('destination address="' ~ item.0.address ~ '"[^\n]*port="' ~ item.1 ~ '" protocol="tcp" accept')
     fail_msg: >-
       the lifeline is not closed as picked: a default route over it, the wrong zone, or a policy that
       allows more or less than agent_box_lifeline_allow
+    quiet: true
+
+- name: lifeline | Each allowed destination is in the policy
+  ansible.builtin.assert:
+    that:
+      - >-
+        agent_box_lifeline_policy.stdout is
+        search('destination address="' ~ item.0.address ~ '"[^\n]*port="' ~ item.1 ~ '" protocol="tcp" accept')
+    fail_msg: "{{ item.0.address }}:{{ item.1 }} is not in the lifeline egress policy"
     quiet: true
   loop: "{{ agent_box_lifeline_allow | subelements('ports') }}"
