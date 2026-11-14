@@ -6,8 +6,14 @@
 #   outbound: a firewalld policy from the box itself (HOST) to that zone accepts only the addresses and
 #             TCP ports in agent_box_lifeline_allow and rejects everything else, so a connected route
 #             does not let a session reach other home LAN devices.
-# The zone is also set on the NetworkManager connection, because NetworkManager puts an interface back
-# into its own zone whenever it reconnects. Only runs when agent_box_lifeline_interface is set.
+# This role owns the NIC's one NetworkManager connection, `lifeline`: a static address, no gateway, never
+# a default route, no DNS, no IPv6, autoconnect, and the drop zone set on the connection itself (so a
+# reconnect or reboot keeps it). cloud-init's network config applies only at first boot, so a NIC added to
+# a running VM would otherwise come up on DHCP in the default zone (measured on the first apply,
+# 2026-11-14). `connection up` also brings the link up, and runs last: the order is policy, the lifeline
+# profile, deleting the stale profiles, managed yes, then up, so no leftover DHCP profile ever autoconnects
+# in the default zone. Other profiles on the NIC, such as "Wired connection 1", are deleted.
+# Only runs when agent_box_lifeline_interface is set.
 
 - name: lifeline | The allowed destinations are plain IPv4 addresses and TCP ports
   ansible.builtin.assert:
@@ -19,28 +25,20 @@
     quiet: true
   loop: "{{ agent_box_lifeline_allow }}"
 
-- name: lifeline | Which NetworkManager connection owns the interface
-  ansible.builtin.command: nmcli -g GENERAL.CONNECTION device show {{ agent_box_lifeline_interface | quote }}
-  register: agent_box_lifeline_connection
-  changed_when: false
-  check_mode: false
-
-- name: lifeline | The interface has a NetworkManager connection
+- name: lifeline | The lifeline address is an IPv4 address with a prefix
   ansible.builtin.assert:
-    that: agent_box_lifeline_connection.stdout | trim | length > 0
-    fail_msg: "{{ agent_box_lifeline_interface }} has no NetworkManager connection: is the NIC up?"
+    that: agent_box_lifeline_address is match('^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$')
+    fail_msg: "agent_box_lifeline_address must be the box's address and prefix on the host's subnet, for example 192.0.2.50/24"
     quiet: true
 
-- name: lifeline | The connection's zone now
-  ansible.builtin.command: nmcli -g connection.zone connection show {{ agent_box_lifeline_connection.stdout | trim | quote }}
-  register: agent_box_lifeline_nm_zone
-  changed_when: false
-  check_mode: false
-
-- name: lifeline | The connection is in the drop zone (kept across reconnects and reboots)
-  ansible.builtin.command: nmcli connection modify {{ agent_box_lifeline_connection.stdout | trim | quote }} connection.zone drop
-  when: agent_box_lifeline_nm_zone.stdout | trim != 'drop'
-  changed_when: true
+# The egress block is loaded BEFORE anything brings the link up, so a failure here leaves the NIC down, never open.
+- name: lifeline | Folder for firewalld policies
+  ansible.builtin.file:
+    path: /etc/firewalld/policies
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: lifeline | The outbound policy lists only the allowed destinations
   ansible.builtin.template:
@@ -54,6 +52,87 @@
 - name: lifeline | Apply the policy now
   ansible.builtin.meta: flush_handlers
 
+- name: lifeline | The connection's settings now, in a fixed order
+  ansible.builtin.command: >-
+    nmcli -g ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.never-default,ipv4.dns,ipv4.ignore-auto-dns,ipv6.method,
+    connection.autoconnect,connection.zone,connection.interface-name connection show lifeline
+  register: agent_box_lifeline_nm_now
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: lifeline | The connection is made once
+  ansible.builtin.command: >-
+    nmcli connection add type ethernet con-name lifeline ifname {{ agent_box_lifeline_interface | quote }}
+    ipv4.method manual ipv4.addresses {{ agent_box_lifeline_address | quote }}
+  when: agent_box_lifeline_nm_now.rc != 0
+  changed_when: true
+
+- name: lifeline | The connection is static, never the default route, without DNS or IPv6, in the drop zone
+  ansible.builtin.command: >-
+    nmcli connection modify lifeline
+    ipv4.method manual ipv4.addresses {{ agent_box_lifeline_address | quote }} ipv4.gateway ""
+    ipv4.never-default yes ipv4.dns "" ipv4.ignore-auto-dns yes ipv6.method disabled
+    connection.autoconnect yes connection.zone drop connection.interface-name {{ agent_box_lifeline_interface | quote }}
+  when: agent_box_lifeline_nm_now.rc != 0 or (agent_box_lifeline_nm_now.stdout_lines | default([]) != agent_box_lifeline_wanted)
+  vars:
+    # nmcli -g prints one value per line, in the order asked; an empty value is an empty line.
+    agent_box_lifeline_wanted:
+      - manual
+      - "{{ agent_box_lifeline_address }}"
+      - ""
+      - "yes"
+      - ""
+      - "yes"
+      - disabled
+      - "yes"
+      - drop
+      - "{{ agent_box_lifeline_interface }}"
+  register: agent_box_lifeline_nm_modified
+  changed_when: true
+
+# A profile is stale if it is active on this NIC, or if it is a leftover "Wired connection 1" that is bound to
+# this NIC or to no NIC at all. A profile bound to another NIC (the primary's) is never touched.
+- name: lifeline | Other profiles for this NIC
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      nic={{ agent_box_lifeline_interface | quote }}
+      nmcli -t -f NAME,DEVICE connection show | while IFS=: read -r name device; do
+        [ "$name" = lifeline ] && continue
+        bound=$(nmcli -g connection.interface-name connection show "$name")
+        if [ "$device" = "$nic" ]; then
+          echo "$name"
+        elif [ "$name" = "Wired connection 1" ] && [ -z "$device" ] && { [ -z "$bound" ] || [ "$bound" = "$nic" ]; }; then
+          echo "$name"
+        fi
+      done
+    executable: /bin/bash
+  register: agent_box_lifeline_stale
+  changed_when: false
+  check_mode: false
+
+- name: lifeline | The other profiles are deleted
+  ansible.builtin.command: nmcli connection delete {{ item | quote }}
+  loop: "{{ agent_box_lifeline_stale.stdout_lines }}"
+  changed_when: true
+
+- name: lifeline | Whether NetworkManager manages the NIC
+  ansible.builtin.command: nmcli -g GENERAL.NM-MANAGED device show {{ agent_box_lifeline_interface | quote }}
+  register: agent_box_lifeline_managed
+  changed_when: false
+  check_mode: false
+
+- name: lifeline | The NIC is managed by NetworkManager (a containment may have set it unmanaged)
+  ansible.builtin.command: nmcli device set {{ agent_box_lifeline_interface | quote }} managed yes
+  when: agent_box_lifeline_managed.stdout | trim != 'yes'
+  changed_when: true
+
+- name: lifeline | The connection is up on the NIC
+  ansible.builtin.command: nmcli connection up lifeline
+  when: agent_box_lifeline_nm_now.rc != 0 or agent_box_lifeline_nm_modified is changed or agent_box_lifeline_stale.stdout_lines | length > 0
+  changed_when: true
+
 - name: lifeline | The interface is in the drop zone now
   ansible.posix.firewalld:
     zone: drop
@@ -61,3 +140,47 @@
     permanent: true
     immediate: true
     state: enabled
+
+# The proof: what the owner's pick 220 promises, measured on the box after the run.
+- name: lifeline | The interface's zone as firewalld reports it
+  ansible.builtin.command: firewall-cmd --get-zone-of-interface={{ agent_box_lifeline_interface | quote }}
+  register: agent_box_lifeline_zone
+  changed_when: false
+  check_mode: false
+
+- name: lifeline | The egress policy as firewalld reports it
+  ansible.builtin.command: firewall-cmd --info-policy=lifeline-egress
+  register: agent_box_lifeline_policy
+  changed_when: false
+  check_mode: false
+
+- name: lifeline | Default routes on the NIC
+  ansible.builtin.shell:
+    cmd: awk -v dev={{ agent_box_lifeline_interface | quote }} '$1 == dev && $2 == "00000000"' /proc/net/route
+  register: agent_box_lifeline_default_route
+  changed_when: false
+  check_mode: false
+
+- name: lifeline | No default route over the NIC, the drop zone, and a rejecting policy
+  ansible.builtin.assert:
+    that:
+      - agent_box_lifeline_default_route.stdout | trim | length == 0
+      - agent_box_lifeline_zone.stdout | trim == 'drop'
+      - "'target: REJECT' in agent_box_lifeline_policy.stdout"
+      - >-
+        agent_box_lifeline_policy.stdout_lines | select('search', 'rule family=') | list | length
+        == (agent_box_lifeline_allow | map(attribute='ports') | map('length') | sum)
+    fail_msg: >-
+      the lifeline is not closed as picked: a default route over it, the wrong zone, or a policy that
+      allows more or less than agent_box_lifeline_allow
+    quiet: true
+
+- name: lifeline | Each allowed destination is in the policy
+  ansible.builtin.assert:
+    that:
+      - >-
+        agent_box_lifeline_policy.stdout is
+        search('destination address="' ~ item.0.address ~ '"[^\n]*port="' ~ item.1 ~ '" protocol="tcp" accept')
+    fail_msg: "{{ item.0.address }}:{{ item.1 }} is not in the lifeline egress policy"
+    quiet: true
+  loop: "{{ agent_box_lifeline_allow | subelements('ports') }}"

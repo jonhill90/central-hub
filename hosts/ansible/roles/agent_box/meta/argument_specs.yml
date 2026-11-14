@@ -76,6 +76,12 @@ argument_specs:
         description: >-
           The box's lifeline NIC inside the VM (for example eth1), put in firewalld's drop zone, on
           its NetworkManager connection too. Private. Empty does nothing.
+      agent_box_lifeline_address:
+        type: str
+        default: ""
+        description: >-
+          Private. The box's IPv4 address and prefix on the lifeline NIC (for example 192.0.2.50/24).
+          Required when the interface is set; the role owns the NIC's NetworkManager connection.
       agent_box_lifeline_allow:
         type: list
         elements: dict
