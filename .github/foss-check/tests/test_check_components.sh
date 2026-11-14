@@ -71,8 +71,6 @@ expect "a download address needs a row" 1 "url:get.helm.sh/helm-" \
   "$(make_repo "$(row Other pass '[image:quay.io/x]')" "" '    url: "https://get.helm.sh/helm-{{ v }}-linux-amd64.tar.gz"')"
 expect "a templated host is the lab's own" 0 "" \
   "$(make_repo "$(row Other pass '[image:quay.io/x]')" "" '    url: "https://{{ name }}.example/api"')"
-expect "a host given as a regular expression is not a source" 0 "" \
-  "$(make_repo "$(row Other pass '[image:quay.io/x]')" "" "      - issuer is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?/realms/[a-z]+$')")"
 
 expect "a Docker Hub short name needs a row" 1 "image:docker.io/library/nginx" \
   "$(make_repo "$(row Other pass '[image:quay.io/x]')" "" '    image: nginx:1.27')"

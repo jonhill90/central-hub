@@ -35,8 +35,7 @@ PLACEHOLDER = re.compile(
     r"|[^/]*\b(example\.(com|org|net)|invalid|local|test|svc|svc\.cluster\.local)(:\d+)?(/|$)"
     r"|example[^/]*(/|$))"
 )
-# A host that is a template or a regular expression (https://[A-Za-z0-9.-]+) names no outside source.
-TEMPLATE = re.compile(r"\{|\$|<|%7B|\\|\[")
+TEMPLATE = re.compile(r"\{|\$|<|%7B|\\")
 COMMENT = re.compile(r"^\s*(#|//|--\s)")
 
 
