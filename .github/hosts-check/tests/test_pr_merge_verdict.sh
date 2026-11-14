@@ -91,6 +91,13 @@ d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes:\n  - D-0034\n---\nbody\n"}); check("a block-list supersedes of D-0034 needs the tap", run(d), "OWNER: rule 11 PR")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: []\n---\nThis amends rule 2 of D-0042.\n"}); check("a record whose body amends D-0042 needs the tap", run(d), "OWNER: rule 11 PR")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: []\n---\nThis amends rule 2 of this record. Much later, after a very long stretch of unrelated text that goes on, D-0042 is mentioned.\n"}); check("amend far from D-0042 is not caught", run(d), "GREEN")
+# A rule 11 PR that has the tap is GREEN but carries the NOTE the Mac's checked merge refuses on.
+f11 = "hosts/ansible/roles/agent_box/files/pass-record.sh"
+d = fx([f11], roles=ROLES + ["owner-tap"]); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
+check("a tapped rule 11 PR prints the NOTE the Mac refuses on", r, "NOTE: rule 11 PR")
+check("a tapped rule 11 PR is still GREEN on its last line", r.strip().splitlines()[-1], "GREEN")
+d = fx(DOC); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
+check("a docs PR carries no rule 11 NOTE", "x" + r, "x" + "GREEN")
 # Fold-in (D-0042 rule 3).
 def rec(status, extra="", ident="D-0099"):
     return "---\nid: %s\nstatus: %s\ndate: 2026-11-14\nsupersedes: []\naccepted-evidence:\n  approved-by: agents\n  approved-at: 2026-11-14T10:00:00Z\n  approved-commit: %s\n%s---\nbody\n" % (ident, status, ME, extra)

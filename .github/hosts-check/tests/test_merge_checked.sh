@@ -25,7 +25,7 @@ cat > "$t/bin/gh" <<'F'
 echo "gh $*" >> "$FAKE_CALLS"
 F
 chmod +x "$t/bin/zsh" "$t/bin/gh"
-git init -q --bare "$t/origin.git"
+git init -q --bare -b main "$t/origin.git"
 git clone -q "$t/origin.git" "$t/co" 2>/dev/null
 mkdir -p "$t/co/hosts/wrappers/mac"; cp "$src" "$t/co/hosts/wrappers/mac/merge-checked.sh"
 git -C "$t/co" add -A && git -C "$t/co" -c user.name=t -c user.email=t@t commit -q -m x \
@@ -51,10 +51,21 @@ out=$(FAKE_VERDICT=$G run $R x7 $H); check "a PR number that is not digits is re
 out=$(FAKE_VERDICT=$G run $R 7); check "a missing argument is refused" "$out" "usage"
 echo '# edit' >> "$t/co/hosts/wrappers/mac/merge-checked.sh"
 out=$(FAKE_VERDICT=$G run $R 7 $H); check "a tracked change in the checkout is refused" "$out" "tracked changes"
-git -C "$t/co" checkout -q -- . 
+git -C "$t/co" checkout -q -- .
 git -C "$t/co" -c user.name=t -c user.email=t@t commit -q --allow-empty -m local
-out=$(FAKE_VERDICT=$G run $R 7 $H); check "a checkout that is not origin/main is refused" "$out" "not at origin/main"
+out=$(FAKE_VERDICT=$G run $R 7 $H); check "a checkout that diverged from origin/main is refused" "$out" "not at origin/main"
 git -C "$t/co" reset -q --hard origin/main
+# Two merges in a row: origin/main moves after the first, and the second run fast-forwards the checkout.
+git clone -q "$t/origin.git" "$t/other" 2>/dev/null; git -C "$t/other" -c user.name=t -c user.email=t@t commit -q --allow-empty -m next; git -C "$t/other" push -q origin HEAD:main 2>/dev/null
+out=$(FAKE_VERDICT=$G run $R 7 $H); check "a checkout behind origin/main is fast-forwarded and merges" "$out" "rc=0"
+check "the second merge reached gh" "$(cat "$t/calls")" "gh pr merge 7"
+[[ $(git -C "$t/co" rev-parse HEAD) == "$(git -C "$t/co" rev-parse origin/main)" ]] && echo "ok   the checkout is now at origin/main" || { echo "FAIL: not fast-forwarded"; fail=1; }
+# A pin wrapper detaches a checkout onto an older commit: the same fast-forward covers it.
+git -C "$t/co" checkout -q --detach "$(git -C "$t/co" rev-parse HEAD~1)"
+out=$(FAKE_VERDICT=$G run $R 7 $H); check "a checkout detached on an older commit is fast-forwarded and merges" "$out" "rc=0"
+# A rule 11 PR with a tap line gets GREEN from the box, but the NOTE makes the wrapper refuse it.
+out=$(FAKE_VERDICT="NOTE: rule 11 PR (x) is merged on an owner-tap line, never by the Mac's checked merge
+$G" run $R 7 $H); check "a rule 11 PR with a tap is refused" "$out" "waits for the sweep"; [[ ! -s $t/calls ]] && echo "ok   rule 11 made no gh call" || { echo "FAIL: gh was called for a rule 11 PR"; fail=1; }
 # Mutation: without the GREEN test a NOT GREEN verdict merges.
 sed 's|^\[\[ \$rc -eq 0 && .*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut.sh"
 out=$(W="$t/co/hosts/wrappers/mac/mut.sh" FAKE_VERDICT="pr-merge: x: NOT GREEN: a check failed" FAKE_RC=1 run $R 7 $H)
@@ -63,4 +74,9 @@ out=$(W="$t/co/hosts/wrappers/mac/mut.sh" FAKE_VERDICT="pr-merge: x: NOT GREEN: 
 sed 's|^halted && die "the halt flag is set on the box.*|true|; s|^halted && die "the halt flag was set.*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut2.sh"
 out=$(W="$t/co/hosts/wrappers/mac/mut2.sh" FAKE_VERDICT=$G FAKE_HALT=0 run $R 7 $H)
 [[ -s $t/calls ]] && echo "ok   mutation: without the halt check a halted box still merges" || { echo "FAIL: the halt mutation did nothing: $out"; fail=1; }
+# Mutation: without the rule 11 NOTE test a rule 11 PR with a tap merges.
+sed 's|^\[\[ \$verdict != \*"NOTE: rule 11 PR"\* \]\].*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut3.sh"
+out=$(W="$t/co/hosts/wrappers/mac/mut3.sh" FAKE_VERDICT="NOTE: rule 11 PR (x)
+$G" run $R 7 $H)
+[[ -s $t/calls ]] && echo "ok   mutation: without the NOTE test a rule 11 PR merges from the Mac" || { echo "FAIL: the NOTE mutation did nothing: $out"; fail=1; }
 exit $fail

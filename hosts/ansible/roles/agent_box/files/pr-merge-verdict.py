@@ -222,6 +222,9 @@ def main():
             for x in notes: print(x)
             print("OWNER: " + msg)
             return
+    if needs_tap and not tap_missing:
+        # The tap line is the orchestrator's word for a card tap the box cannot see; the Mac's checked merge refuses any rule 11 PR.
+        notes.append("NOTE: rule 11 PR (%s) is merged on an owner-tap line, never by the Mac's checked merge" % ", ".join(rule11[:3]))
     for x in notes: print(x)
     print("NOT GREEN: " + "; ".join(why) if why else "GREEN")
 

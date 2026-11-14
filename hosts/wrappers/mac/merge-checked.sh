@@ -18,12 +18,19 @@ esac
 [[ $pr =~ ^[0-9]{1,7}$ ]] || die "PR number must be digits: $pr"
 [[ $head =~ ^[0-9a-f]{40}$ ]] || die "head must be a full 40-character commit id"
 
-# This file must be the one on main: the checkout equals origin/main and no tracked file differs.
+# This file must be the one on main: its own checkout (one no pin wrapper touches) equals origin/main, and no tracked file differs.
+# A checkout that is behind origin/main (each merge moves it) is fast-forwarded once and the wrapper starts again from the new copy.
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(git -C "$here" rev-parse --show-toplevel) || die "not inside a git checkout" 3
 git -C "$root" fetch -q origin main || die "could not fetch origin main" 3
-[[ $(git -C "$root" rev-parse HEAD) == "$(git -C "$root" rev-parse origin/main)" ]] || die "the checkout is not at origin/main" 3
 [[ -z $(git -C "$root" status --porcelain --untracked-files=no) ]] || die "the checkout has tracked changes" 3
+if [[ $(git -C "$root" rev-parse HEAD) != "$(git -C "$root" rev-parse origin/main)" ]]; then
+  if [[ -z ${MERGE_CHECKED_REEXEC:-} ]] && git -C "$root" merge-base --is-ancestor HEAD origin/main; then
+    git -C "$root" merge -q --ff-only origin/main || die "could not fast-forward the checkout" 3
+    exec env MERGE_CHECKED_REEXEC=1 "$0" "$@"
+  fi
+  die "the checkout is not at origin/main" 3
+fi
 
 # The box's ssh function (box_ssh) comes from the Mac's own lib.
 lib=$HOME/.config/central-hub/lib/pinned.zsh
@@ -41,6 +48,8 @@ halted && die "the halt flag is set on the box; nothing merged" 1
 verdict=$(box pr-merge check "$repo" "$pr" "$head" 2>&1) && rc=0 || rc=$?
 echo "$verdict"
 last=${verdict##*$'\n'}
+# A rule 11 PR is never merged from the Mac, even with an owner-tap line: the ledger is the recorder's own word (design v6).
+[[ $verdict != *"NOTE: rule 11 PR"* ]] || die "a rule 11 PR waits for the sweep; nothing merged" 1
 [[ $rc -eq 0 && $last == *": GREEN" ]] || die "not GREEN (exit $rc); nothing merged. A PR that is refused waits for the sweep." 1
 
 # The sweep posts the ledger on the PR (D-0042 rule 9); here it is printed, with its pass times, for the merge report.
