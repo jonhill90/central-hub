@@ -18,7 +18,7 @@ revisit-when: an app needs more memory than its cap or the VPS has; an app needs
 
 At 08:23:08 UTC on 2026-11-14 the owner asked to host OpenClaw and Hermes on his VPS, as part of the lab's network, and said the lab also needs OmniRoute (cmsg_01X43rfNYp4H1dL1V2dkfkwNB4NvHXxTVXu6Mw171TiuAq).
 
-- **OpenClaw** (`openclaw/openclaw`) and **Hermes Agent** (`NousResearch/hermes-agent`) are self-hosted AI agents that run tools and talk to chat platforms. **OmniRoute** (`cheaper-inference/OmniRoute`) is a gateway that gives one OpenAI-style endpoint in front of many model providers.
+- **OpenClaw** (`openclaw/openclaw`) and **Hermes Agent** (`NousResearch/hermes-agent`) are self-hosted AI agents that run tools and talk to chat platforms. **OmniRoute** (`cheaper-inference/OmniRoute`, formerly `diegosouzapw/OmniRoute`) is a gateway that gives one OpenAI-style endpoint in front of many model providers.
 - The VPS is already a node on the lab's tailnet, tagged `tag:vps`. No grant has `tag:vps` as its source, so it starts no connection to the lab. It has 4 vCPU, 15 GiB of memory and 199 GB of disk, and runs nothing yet.
 - Today `tag:agent` and `tag:github-actions` may log in to it as root (the tailnet policy's `ssh` block). Agents that hold API keys must not sit on a host where every agent session is root.
 - The repository's PRD says the apps themselves "live in their own repos" (`docs/PRD.md`, Non-goals), but the agents cannot create a repository.
@@ -83,7 +83,7 @@ Diagram: not applicable. The apps add no route to the lab; the only network path
 - Bad: the box gets a path to the VPS it did not have, though only as `deploy` after S4.
 - Bad: app config sits in the platform repository, against the PRD's non-goal, until the agents can make repos.
 - Bad: light use only. A coding agent through OmniRoute (10 GiB or more) or Hermes with browser tools does not fit.
-- Neutral: the owner's public SSH port on the VPS (sshd listens on all addresses and its firewall is off) is a firewall step of his own, not changed here.
+- Neutral: the VPS's own firewall is a step of the owner's, not changed here.
 
 ### Confirmation
 
