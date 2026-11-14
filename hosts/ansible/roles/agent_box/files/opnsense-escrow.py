@@ -4,8 +4,8 @@ docs/runbooks/copy-opnsense-backup-off-box.md). Run as the keys user by opnsense
 
   ensure  Make the password file (0600) if it is missing. Then make sure the newest version of the
           password secret in Key Vault is this password: the box's custom role lets it set the secret
-          and read secrets' metadata, never a value, so each version carries the password's SHA-256 as
-          a tag, and the tag is what is compared. If it differs or there is no version, write the
+          and read secrets' metadata, never a value, so each version carries a salted PBKDF2 hash of the
+          password as a tag, and the tag is what is compared. If it differs or there is no version, write the
           password as a new version and check the tag again. Exit 0 only when the vault holds it.
 
 The value goes from the file to Key Vault's HTTPS API and nowhere else: it is never printed or logged.
@@ -16,6 +16,7 @@ AZURE_CLIENT_CERTIFICATE_PATH, RESTIC_PASSWORD_FILE, OFFBOX_VAULT_URL and OFFBOX
 
 import base64
 import hashlib
+import hmac
 import importlib.util
 import os
 import sys
@@ -28,6 +29,28 @@ _spec.loader.exec_module(az)
 
 API = "api-version=7.4"
 SCOPE = "https://vault.azure.net/.default"
+TAG = "pbkdf2"
+ROUNDS = 600000  # OWASP's 2023 figure for PBKDF2-HMAC-SHA256
+
+
+def tag_for(value, salt=None, rounds=ROUNDS):
+    """The tag a version carries: pbkdf2_sha256$rounds$salt$hash, salt and hash in base64. Anyone who can
+    read the vault's metadata can read tags, so the hash is salted and slow."""
+    salt = salt if salt is not None else os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", value.encode(), salt, rounds)
+    return f"pbkdf2_sha256${rounds}${base64.b64encode(salt).decode()}${base64.b64encode(dk).decode()}"
+
+
+def tag_matches(tag, value):
+    """True when the tag was made from this value. A tag of another form never matches."""
+    try:
+        kind, rounds, salt, _ = tag.split("$")
+        rounds = int(rounds)
+        if kind != "pbkdf2_sha256" or not 100000 <= rounds <= 10000000:
+            return False
+        return hmac.compare_digest(tag, tag_for(value, base64.b64decode(salt, validate=True), rounds))
+    except (ValueError, TypeError):
+        return False
 
 
 def password(path):
@@ -47,7 +70,7 @@ def password(path):
 
 
 def newest_tag(conf, bearer):
-    """The sha256 tag of the newest enabled version, or "" when there is none (readMetadata only)."""
+    """The pbkdf2 tag of the newest enabled version, or "" when there is none (readMetadata only)."""
     url = f"{conf['OFFBOX_VAULT_URL'].rstrip('/')}/secrets/{conf['OFFBOX_VAULT_SECRET']}/versions?{API}"
     versions = []
     while url:
@@ -62,7 +85,7 @@ def newest_tag(conf, bearer):
     if not live:
         return ""
     newest = max(live, key=lambda v: v.get("attributes", {}).get("created", 0))
-    return (newest.get("tags") or {}).get("sha256", "")
+    return (newest.get("tags") or {}).get(TAG, "")
 
 
 def cmd_ensure(conf):
@@ -71,20 +94,19 @@ def cmd_ensure(conf):
     if urllib.parse.urlparse(conf["OFFBOX_VAULT_URL"]).scheme not in ("https", "http"):
         az.die("OFFBOX_VAULT_URL must be a URL")
     value = password(conf["RESTIC_PASSWORD_FILE"])
-    digest = hashlib.sha256(value.encode()).hexdigest()
     cert = az.Cert(conf["AZURE_CLIENT_CERTIFICATE_PATH"])
     bearer, err = az.token(conf, cert, SCOPE)
     if not bearer:
         az.die(f"no Key Vault token with the box's certificate: {err}")
-    if newest_tag(conf, bearer) == digest:
+    if tag_matches(newest_tag(conf, bearer), value):
         az.log("ok: the vault holds the current password")
         return
     url = f"{conf['OFFBOX_VAULT_URL'].rstrip('/')}/secrets/{conf['OFFBOX_VAULT_SECRET']}?{API}"
     status, answer = az.http("PUT", url, headers={"Authorization": f"Bearer {bearer}"}, body={
-        "value": value, "contentType": "restic-password", "tags": {"sha256": digest}})
+        "value": value, "contentType": "restic-password", "tags": {TAG: tag_for(value)}})
     if status != 200:
         az.die(f"setting the secret answered {status}: {str(answer.get('error', answer))[:300]}")
-    if newest_tag(conf, bearer) != digest:
+    if not tag_matches(newest_tag(conf, bearer), value):
         az.die("the vault's newest version still is not the current password after setting it")
     az.log("wrote the current password to the vault")
 

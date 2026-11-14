@@ -2,7 +2,7 @@
 # The off-box OPNsense copy's password escrow (hosts/ansible/roles/agent_box/files/opnsense-escrow.py, pick 222),
 # against the stand-in for Entra ID and Key Vault (azure_stub.py), which refuses to return a value as the box's
 # set-only role does:
-#   1. ensure makes a 0600 password and writes it to the vault as a version tagged with its SHA-256.
+#   1. ensure makes a 0600 password and writes it to the vault as a version tagged with a salted PBKDF2 hash of it.
 #   2. A second ensure finds the tag current and writes nothing.
 #   3. A newer version holding another password (the tag differs) makes ensure write the current one again.
 #   4. A refused set fails ensure, and the password file stays as it was.
@@ -66,8 +66,15 @@ value=$(tr -d '\n' < "$pw")
 [ ${#value} -ge 32 ] || fail "password is too short"
 [ "$(state 'len(s["secrets"]["opnsense-offbox-restic-password"])')" = 1 ] || fail "no version written"
 [ "$(state 's["secrets"]["opnsense-offbox-restic-password"][0]["value"]')" = "$value" ] || fail "the vault holds another value"
-want=$(printf '%s' "$value" | sha256sum | cut -d' ' -f1)
-[ "$(state 's["secrets"]["opnsense-offbox-restic-password"][0]["tags"]["sha256"]')" = "$want" ] || fail "the version's sha256 tag is wrong"
+tag=$(state 's["secrets"]["opnsense-offbox-restic-password"][0]["tags"]["pbkdf2"]')
+VALUE=$value TAG=$tag python3 -I -c '
+import base64, hashlib, hmac, os, sys
+kind, rounds, salt, dk = os.environ["TAG"].split("$")
+salt = base64.b64decode(salt)
+ok = kind == "pbkdf2_sha256" and int(rounds) >= 600000 and len(salt) == 16 and hmac.compare_digest(
+    base64.b64decode(dk), hashlib.pbkdf2_hmac("sha256", os.environ["VALUE"].encode(), salt, int(rounds)))
+sys.exit(0 if ok else 1)' || fail "the version's pbkdf2 tag is wrong"
+[[ $tag != *"$value"* ]] || fail "the tag holds the value"
 [[ $out == *"made a new repository password"* && $out == *"wrote the current password"* ]] || fail "first ensure said: $out"
 [[ $out != *"$value"* ]] || fail "the value was printed"
 echo "ok   1. ensure makes a 0600 password and writes one tagged version"
@@ -84,7 +91,7 @@ python3 - "$work/state.json" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1]))
 v = s["secrets"]["opnsense-offbox-restic-password"]
-v.append({"value": "other", "tags": {"sha256": "0" * 64}, "created": max(x["created"] for x in v) + 1, "enabled": True})
+v.append({"value": "other", "tags": {"pbkdf2": "pbkdf2_sha256$600000$AAAAAAAAAAAAAAAAAAAAAA==$AAAA"}, "created": max(x["created"] for x in v) + 1, "enabled": True})
 json.dump(s, open(sys.argv[1], "w"))
 PY
 out=$(escrow 2>&1) || fail "ensure after a foreign version: $out"
