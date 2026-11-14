@@ -84,6 +84,18 @@ argument_specs:
               name: {type: str, required: true, description: "Rule name; one of opnsense_lab_agent_box_target_names."}
               address: {type: str, required: true, description: "Destination address, without a prefix."}
               port: {type: int, required: true, description: Destination TCP port.}
+      # Optional, private (addresses), through the inventory. Unset = no desktop RDP rule.
+      opnsense_lab_desktop_rdp:
+        type: dict
+        required: false
+        description: The one pass rule for RDP to the owner's desktop VM, on WAN (tasks/desktop.yml).
+        options:
+          source: {type: str, required: true, description: "The one home address the owner connects from, without a prefix (desktop_rdp_source)."}
+          destination: {type: str, required: true, description: "The desktop VM's address on VNet dev, without a prefix."}
+      opnsense_lab_desktop_rdp_rule_name:
+        type: str
+        default: "Allow owner desktop RDP (home address to desktop VM)"
+        description: "The rule's name; fixed so removal finds it."
       opnsense_lab_agent_box_target_names:
         type: list
         elements: str

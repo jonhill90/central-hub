@@ -145,6 +145,18 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
    expect: the diff adds two pass rules at sequence 3 and 4 and changes nothing else. From the box, `ssh -o BatchMode=yes <VM 200 address> true` reaches the node (it may refuse the key until the box's key is on the node); port 22 on any other lab address still times out.
    To remove one rule, delete its target from the inventory; to remove them all, delete `opnsense_lab_agent_box`. Then run the same two commands. expect: the diff removes only the rules whose targets are gone. The role takes at most four targets, each named from `opnsense_lab_agent_box_target_names`, and stops with an error otherwise.
 
+   Then, once the owner's desktop VM exists ([Set up the owner's desktop VM](set-up-the-desktop.md)), let the owner reach it over RDP from home, and nothing else. The owner picked "Home network only" on a card on 2026-11-14 at 02:20 UTC: one rule, no tailnet change. Fill `opnsense_lab_desktop_rdp` in the inventory with the one home address the owner connects from (the same as `desktop_rdp_source`) and the desktop VM's address, then run the role with its own tag. This is a firewall change, so apply only on the owner's typed go naming the pull request and head.
+   why: the desktop is on VNet dev, whose own rules allow only the internet, ping and DNS, and the home LAN reaches the lab only through WAN. One pass rule on WAN, from that address to the VM, TCP 3389, sequence 4 after the home LAN rules at 1 to 3, opens exactly that and nothing else.
+
+   ```sh
+   cd hosts/ansible
+   ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags desktop --check --diff
+   ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags desktop
+   ```
+
+   expect: the diff adds one pass rule on WAN, `Allow owner desktop RDP (home address to desktop VM)`, and changes nothing else. From the owner's device an RDP client reaches the VM's port 3389 once the owner has set the password at the console; from any other home address, and on any other port, the connection fails. Untested: not applied yet.
+   To remove it, delete `opnsense_lab_desktop_rdp` and run the same two commands; the diff removes only that rule.
+
 8. Turn on the host's safety net: notifications, backups, then the host firewall in two runs.
 
    ```sh

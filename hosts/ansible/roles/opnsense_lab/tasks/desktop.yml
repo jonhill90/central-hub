@@ -1,0 +1,33 @@
+---
+# RDP to the owner's desktop VM (docs/runbooks/set-up-the-desktop.md): one pass rule on WAN, from the
+# one home address the owner connects from to the desktop VM's address, TCP 3389, and nothing else
+# (the owner's pick, 2026-11-14 02:20 UTC: "Home network only", no tailnet change). Home clients share
+# WAN's subnet, so replies go straight back (reply-to off), as for the rules in wan.yml. Sequence 4,
+# after the home LAN rules at 1 to 3. Both addresses are private values in the inventory. Applied only
+# on the owner's typed go, because it is a firewall change. Unset removes the rule.
+- name: Owner's desktop RDP, home address to the desktop VM
+  oxlorg.opnsense.rule:
+    description: "{{ opnsense_lab_desktop_rdp_rule_name }}"
+    match_fields: [description]
+    sequence: "4"
+    action: pass
+    quick: true
+    interface: [wan]
+    direction: in
+    ip_protocol: inet
+    protocol: TCP
+    source_net: "{{ opnsense_lab_desktop_rdp.source }}/32"
+    destination_net: "{{ opnsense_lab_desktop_rdp.destination }}/32"
+    destination_port: "3389"
+    disable_replyto: true
+    log: false
+  when: opnsense_lab_desktop_rdp is defined
+  notify: Apply rule changes
+
+- name: No desktop RDP rule when the desktop is not configured
+  oxlorg.opnsense.rule:
+    description: "{{ opnsense_lab_desktop_rdp_rule_name }}"
+    match_fields: [description]
+    state: absent
+  when: opnsense_lab_desktop_rdp is not defined
+  notify: Apply rule changes

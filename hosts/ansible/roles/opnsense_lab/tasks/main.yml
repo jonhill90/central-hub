@@ -45,6 +45,10 @@
   ansible.builtin.import_tasks: agent_box.yml
   tags: [rules, agent_box]
 
+- name: Desktop RDP rule
+  ansible.builtin.import_tasks: desktop.yml
+  tags: [rules, desktop]
+
 - name: DNS override
   ansible.builtin.import_tasks: dns.yml
   tags: [dns]

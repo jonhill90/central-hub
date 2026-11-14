@@ -46,3 +46,7 @@ opnsense_lab_dns_proof_server: ""
 # The names the agent box's rules may have (tasks/agent_box.yml). Each target takes one, and every
 # name that is not a current target has its rule removed. Keep in step with the inventory's targets.
 opnsense_lab_agent_box_target_names: [Proxmox API, c1 API, prod node 200 SSH, prod node 201 SSH]
+
+# The name of the one rule that lets the owner's home address reach the desktop VM over RDP
+# (tasks/desktop.yml). Fixed so a rule whose settings are taken out of the inventory is removed.
+opnsense_lab_desktop_rdp_rule_name: Allow owner desktop RDP (home address to desktop VM)
