@@ -41,7 +41,7 @@ It loosens "Rules for now", because the box's role no longer waits for the owner
 ## Considered Options
 
 1. **The box applies its own role from reviewed main, through one root-owned wrapper with fixed arguments, and stops on any change to its limits.** Limit changes are applied from the Mac.
-2. **Every box apply waits for the owner's approval on GitHub** (D-0035's channel).
+2. **Every box apply waits for the owner's approval on GitHub** (the channel D-0035 rule 8 leaves for later).
 3. **Keep the Mac applying every change.**
 
 ## Decision Outcome
@@ -104,7 +104,7 @@ flowchart LR
 ### 2. Every apply waits for the owner on GitHub
 
 - Good: the strictest; GitHub proves it was the owner.
-- Bad: it can't start until D-0035 is in effect, which waits on D-0030 (D-0035 rule 8(c)). The owner chose to keep his own account for now (2026-11-14 02:05 UTC).
+- Bad: it can't start until the agents have a GitHub account of their own (D-0030), when D-0035 rule 8 may move approval to GitHub. The owner chose to keep his own account for now (2026-11-14 02:05 UTC).
 
 ### 3. Keep the Mac applying
 
