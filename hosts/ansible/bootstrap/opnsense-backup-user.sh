@@ -2,7 +2,10 @@
 # Give the agent box its own read-only OPNsense API key for the daily configuration copy (pick 220): user
 # "box-backup" with two privileges, made by opnsense-backup-user.php (its header says why those two).
 # Run on the controller, from hosts/ansible, with root SSH to the Proxmox host:
-#   bootstrap/opnsense-backup-user.sh <Proxmox host> [<OPNsense VM ID, default 100>]
+#   bootstrap/opnsense-backup-user.sh [-i <SSH key>] <Proxmox host> [<OPNsense VM ID, default 100>]
+# -i names the private key the host accepts for root (the one the controller's Proxmox wrappers use); ssh then
+# offers only that key (IdentitiesOnly), because the host refuses other keys and an agent's or the default key
+# is tried first otherwise. Without -i, ssh uses its own settings for the host.
 # The key and secret are made here, once, in ~/.config/central-hub/opnsense-backup-api.txt (0600, two lines:
 # the key, then the secret); a run again keeps them. OPNsense gets only "<key>|<sha512-crypt of the secret>".
 # Nothing secret is printed or put in an argument: the secret reaches openssl on stdin, and only base64 of the
@@ -11,7 +14,17 @@
 # Then the agent_box role's prod_files tasks copy the file to the box (set-up-the-box-lifeline.md).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-host=${1:?usage: $0 <Proxmox host> [<OPNsense VM ID>]}
+usage="usage: $0 [-i <SSH key>] <Proxmox host> [<OPNsense VM ID>]"
+ssh_opts=(-n -o BatchMode=yes)
+while getopts 'i:' opt; do
+  case $opt in
+    i) [[ -r $OPTARG ]] || { echo "opnsense-backup-user: cannot read SSH key $OPTARG" >&2; exit 2; }
+       ssh_opts+=(-i "$OPTARG" -o IdentitiesOnly=yes) ;;
+    *) echo "$usage" >&2; exit 2 ;;
+  esac
+done
+shift $((OPTIND - 1))
+host=${1:?$usage}
 vm=${2:-100}
 [[ $host =~ ^[A-Za-z0-9.:-]+$ && $vm =~ ^[0-9]+$ ]] || { echo "opnsense-backup-user: bad host or VM ID" >&2; exit 2; }
 keyfile=$HOME/.config/central-hub/opnsense-backup-api.txt
@@ -31,7 +44,8 @@ hash=$(sed -n 2p "$keyfile" | openssl passwd -6 -stdin)
 
 # One guest-agent command; fails unless the command's own exit code is 0. Prints what it wrote to stdout.
 gx() {
-  ssh -n -o BatchMode=yes "root@$host" "qm guest exec $vm --timeout 60 -- $1" |
+  # shellcheck disable=SC2029  # $vm and $1 are meant to expand here: they make the command the host runs
+  ssh "${ssh_opts[@]}" "root@$host" "qm guest exec $vm --timeout 60 -- $1" |
     python3 -I -c 'import json, sys
 d = json.load(sys.stdin)
 sys.stdout.write(d.get("out-data", "")); sys.stderr.write(d.get("err-data", ""))
