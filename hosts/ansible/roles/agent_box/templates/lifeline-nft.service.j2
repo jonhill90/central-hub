@@ -11,6 +11,9 @@ Wants=network-pre.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStart={{ agent_box_nft_bin }} -f /etc/nftables/lifeline.nft
+# A reload replaces the table in one transaction (the file starts with table, delete table, table), so there is
+# no moment without the filter. Stop deletes the table, which only happens when the unit is stopped on purpose.
+ExecReload={{ agent_box_nft_bin }} -f /etc/nftables/lifeline.nft
 ExecStop=-{{ agent_box_nft_bin }} delete table inet lifeline
 
 [Install]
