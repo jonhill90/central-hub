@@ -2,19 +2,27 @@
 # The agent box (VM 258 on VNet dev) may open these connections into the lab, and nothing else:
 # the Proxmox API and c1's Kubernetes API (the owner's yes, 2026-11-10 05:16 UTC, once a reach test
 # showed them blocked: measured 07:47 UTC, both timed out), and SSH to prod's two node VMs, 200 and
-# 201, so the box can rebuild prod (the owner's answer of 2026-11-11; applied on a typed go). One
-# rule per target, from the box's address only. The dev VLAN's own rules still block the rest of
-# RFC 1918. Sequence 1 and up, ahead of the management rules (5 and up): at most four targets.
-# A fifth target needs the management and VLAN rules moved up first.
-- name: Agent box targets fit sequences 1 to 4 and have known names
+# 201, so the box can rebuild prod (the owner's answer of 2026-11-11; applied on a typed go), and the
+# firewall's own API on 443, for the box's daily copy of its configuration (pick 220; the backup's
+# first run timed out on it, measured 2026-11-14 04:27 UTC). One rule per target, from the box's
+# address only. The dev VLAN's own rules still block the rest of RFC 1918. Sequences come from
+# opnsense_lab_agent_box_sequences, in target order: 1 to 4, then 8 and 9, ahead of the dev VLAN's
+# rules (10 and up) and clear of the management rules (5 to 7, one per other lab VLAN).
+- name: Agent box targets fit their sequences and have known names
   ansible.builtin.assert:
     that:
-      - opnsense_lab_agent_box.targets | length <= 4
+      - opnsense_lab_agent_box.targets | length <= opnsense_lab_agent_box_sequences | length
+      - opnsense_lab_agent_box_sequences | max < 10
+      - >-
+        opnsense_lab_agent_box_sequences[:opnsense_lab_agent_box.targets | length]
+        | intersect(range(5, 5 + (opnsense_lab_vlans | rejectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | list | length)) | list)
+        | length == 0
       - opnsense_lab_agent_box.targets | map(attribute='name') | unique | length == opnsense_lab_agent_box.targets | length
       - opnsense_lab_agent_box.targets | map(attribute='name') | difference(opnsense_lab_agent_box_target_names) | length == 0
     fail_msg: >-
-      opnsense_lab_agent_box takes at most 4 targets, each with its own name from
-      opnsense_lab_agent_box_target_names ({{ opnsense_lab_agent_box_target_names | join(', ') }}).
+      opnsense_lab_agent_box takes at most {{ opnsense_lab_agent_box_sequences | length }} targets, each with its own
+      name from opnsense_lab_agent_box_target_names ({{ opnsense_lab_agent_box_target_names | join(', ') }}), at
+      sequences below 10 that no management rule uses.
     quiet: true
   when: opnsense_lab_agent_box is defined
 
@@ -22,7 +30,7 @@
   oxlorg.opnsense.rule:
     description: "Allow agent box to {{ item.name }}"
     match_fields: [description]
-    sequence: "{{ 1 + opnsense_lab_agent_box_index }}"
+    sequence: "{{ opnsense_lab_agent_box_sequences[opnsense_lab_agent_box_index] }}"
     action: pass
     quick: true
     interface: ["{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_agent_box.vlan) | first).ifname }}"]

@@ -82,6 +82,8 @@ all:
               # SSH to prod's nodes for the box's prod rebuild; add only on the owner's typed go.
               # - { name: prod node 200 SSH, address: "", port: 22 }   # VM 200's address
               # - { name: prod node 201 SSH, address: "", port: 22 }   # VM 201's address
+              # The firewall's own API, for the box's daily OPNsense backup (pick 220); add only on the owner's go.
+              # - { name: OPNsense API, address: "", port: 443 }   # the address opnsense.<zone> resolves to (mgmt)
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
             - { hostname: pve, address: "", description: "Proxmox host GUI (its mgmt address)" }
