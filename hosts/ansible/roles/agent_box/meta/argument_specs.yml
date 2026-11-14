@@ -31,7 +31,13 @@ argument_specs:
         options:
           name: {type: str, required: true, description: Wrapper name.}
           args: {type: list, elements: str, required: true, description: The only first arguments sudo allows.}
-          session_args: {type: list, elements: str, required: false, description: "The first arguments the session user may run, when that is fewer than args (which the runner user gets). An empty list gives the session user no line. Default: args. D-0041 uses it so only the workflow can run an apply."}
+          session_args:
+            type: list
+            elements: str
+            required: false
+            description: >-
+              The first arguments the session user may run, when that is fewer than args (the runner user gets args).
+              An empty list gives the session user no line. Default: args. D-0041 uses it so only the workflow can run an apply.
           runner: {type: bool, required: false, default: false, description: "Also let the runner user run it (agent_box_runner_user)."}
       agent_box_tofu_version: {type: str, description: OpenTofu version for the wrappers.}
       agent_box_tofu_sha256: {type: str, description: SHA-256 of the linux_amd64 zip of that version.}
