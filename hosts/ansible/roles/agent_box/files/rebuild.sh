@@ -136,6 +136,22 @@ if ! grep -q '^healthchecks-ping-url=' "$ssfile"; then
   (umask 077; printf '%s\n' 'healthchecks-ping-url=https://hc-ping.invalid/dev-not-a-check' >> "$ssfile")
 fi
 chmod 600 "$ssfile"
+# The secrets store (proposed D-0038), dev only like this wrapper: once `secrets-store configure` has
+# made the AppRole rebuild's IDs, stage openbao writes the rebuilt cluster's service-account key to
+# the store (hosts/ansible/playbooks/k8s-openbao-auth.yml), so External Secrets can sign in there.
+# Before that, the stage is left out and nothing changes.
+stages="vms cluster storage restore gitops secrets apps gateway checks"
+openbao_env=""
+store_keys=$keys/dev
+if [[ -s $store_keys/openbao-rebuild-role-id && -s $store_keys/openbao-rebuild-secret-id && -s $store_keys/secrets-store-ca.crt && -s $work/secrets-store.json ]]; then
+  store_addr=$(python3 -I -c 'import ipaddress, json, sys; print(ipaddress.ip_address(json.load(open(sys.argv[1]))["address"]))' "$work/secrets-store.json") \
+    || { echo "rebuild: the secrets store's address in $work/secrets-store.json is not an IP address" >&2; exit 1; }
+  stages="vms cluster storage restore gitops secrets openbao apps gateway checks"
+  openbao_env="OPENBAO_ADDR=https://$store_addr
+OPENBAO_CACERT=$store_keys/secrets-store-ca.crt
+OPENBAO_ROLE_ID_FILE=$store_keys/openbao-rebuild-role-id
+OPENBAO_SECRET_ID_FILE=$store_keys/openbao-rebuild-secret-id"
+fi
 # A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
 # The agents' token clones into pool dev, whose ACL survives a teardown, and clones only template 9001, the copy of template 9000 on VNet dev
 # (hosts/terraform/home/bootstrap/agent-access.sh); the Mac's tfvars name 9000, for its root token.
@@ -235,8 +251,9 @@ TFVARS=$envdir/dev-vms.tfvars
 TFSTATE=$work/state/dev-vms.tfstate
 TOFU_ENV=$keys/proxmox-dev.env
 INVENTORY=$inventory/
-STAGES="vms cluster storage restore gitops secrets apps gateway checks"
+STAGES="$stages"
 SECRET_SOURCE_FILE=$ssfile
+$openbao_env
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'
 ENV
