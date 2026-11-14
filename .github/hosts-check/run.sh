@@ -82,6 +82,7 @@ check_ansible() {
   bash "$here/tests/test_box_apply_baseline.sh"
   bash "$here/tests/test_proxmox_sso.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
+  bash "$here/tests/test_sudoers_session_args.sh"
 }
 
 check_manifests() {

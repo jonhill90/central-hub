@@ -49,7 +49,7 @@ The run prints only the commit, the plan's hash, the counts of changes (`N to ad
 
 ## What this does not close
 
-The box cannot check the tap itself (D-0041 rule 6). The card ID is a required input and goes into both logs; a reviewing agent checks the tap before the apply starts. That gap closes when D-0030 lets the approval move to a protected GitHub environment. The wrapper's `apply` argument is also open to an agent session on the box, as every wrapper is; the same compensating controls apply.
+The box cannot check the tap itself (D-0041 rule 6). The card ID is a required input and goes into both logs; a reviewing agent checks the tap before the apply starts. That gap closes when D-0030 lets the approval move to a protected GitHub environment. The agent session's own sudo line for this wrapper has `plan` and `log` only (`session_args` in the wrapper list); `apply *` is the runner user's alone, so a session on the box cannot apply from its shell, and an apply always leaves a GitHub run behind it. The agents that start the job still choose the card ID they pass, which is why a reviewing agent checks the tap first.
 
 ## Where its files come from
 
