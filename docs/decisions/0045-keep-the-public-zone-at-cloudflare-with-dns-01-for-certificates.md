@@ -57,7 +57,7 @@ flowchart LR
 ### Rules
 
 1. **What it is.** Cloudflare's hosted DNS on its free plan; a closed service. The OpenTofu provider used is Apache-2.0, pinned to one version in each folder's `versions.tf`. Let's Encrypt is a free service run by a nonprofit on the open ACME standard.
-2. **No paid feature.** The lab uses no paid Cloudflare feature. DNS and account-owned API tokens are on every plan.
+2. **No paid feature.** The lab must not use a paid Cloudflare feature. DNS and account-owned API tokens are on every plan, so what this record keeps needs none.
 3. **Records in code.** Every record in the zone is in OpenTofu state; nothing is changed in the dashboard. Changes go through the pipeline (D-0041).
 4. **Least scope.** Each token may only read the one zone and edit its DNS, has an expiry, and is made and replaced by OpenTofu. cert-manager's token also works only from the home's public address (agent pick 78 in `hosts/AGENT-PICKS.md`).
 5. **Lab names stay inside.** Lab-only names live in the lab's own DNS (OPNsense, D-0040), not in the public zone, as the owner asked on 2026-10-25.
@@ -67,7 +67,7 @@ flowchart LR
 - Good: no change; certificates and records keep working.
 - Good: two built-in ways off, so a move touches one issuer and the record list, not the apps.
 - Bad: the zone and the challenge path depend on one closed company.
-- Neutral: the free plan caps records per zone, at 200 for a zone added on or after 2024-09-01 and 1,000 for an older one. The zone's age and its live record count were not measured.
+- Neutral: the free plan caps records per zone, at 200 for a zone added on or after 2024-09-01 and 1,000 for an older one. Council A measured the zone on 2026-11-14 at 09:39 UTC: it is on the free plan and was added on 2026-07-26, so its cap is 200. Its live record count was not measured.
 
 ### Confirmation
 
