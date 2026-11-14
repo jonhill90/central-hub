@@ -104,9 +104,15 @@
 			"deny":   ["${proxmox_host_address}:22", "${proxmox_host_address}:8006", "${proxmox_host_address}:443"],
 		},
 		{
-			// The VPS starts nothing toward the lab (D-0046 rule 3).
+			// The VPS starts nothing toward the lab: the Proxmox host and the first address of every lab VLAN
+			// (D-0046 rule 3).
 			"src":  "tag:vps",
-			"deny": ["${proxmox_host_address}:22", "${proxmox_host_address}:8006", "${proxmox_host_address}:443"],
+			"deny": [
+				"${proxmox_host_address}:22", "${proxmox_host_address}:8006", "${proxmox_host_address}:443",
+%{ for h in lab_test_hosts ~}
+				"${h}:22", "${h}:443",
+%{ endfor ~}
+			],
 		},
 %{ if length(external_tailnets) > 0 ~}
 		{

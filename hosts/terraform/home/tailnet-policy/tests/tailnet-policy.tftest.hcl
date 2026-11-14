@@ -22,6 +22,11 @@ run "policy_fills_in_the_host_and_every_lab_vlan" {
   }
 
   assert {
+    condition     = alltrue([for v in yamldecode(file(var.vlans_file)).lab_vlans : strcontains(tailscale_acl.policy.acl, "\"${cidrhost(v.cidr, 1)}:22\", \"${cidrhost(v.cidr, 1)}:443\",") if lookup(v, "tailnet", true)])
+    error_message = "The policy test must deny tag:vps the first address of every lab VLAN on the tailnet (D-0046 rule 3)."
+  }
+
+  assert {
     condition     = !strcontains(tailscale_acl.policy.acl, "$${")
     error_message = "No template placeholder may be left in the rendered policy."
   }

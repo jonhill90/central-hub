@@ -13,6 +13,8 @@ resource "tailscale_acl" "policy" {
     proxmox_host_address = var.proxmox_host_address
     lab_ranges           = [for v in yamldecode(file(var.vlans_file)).lab_vlans : v.cidr if lookup(v, "tailnet", true)]
     external_tailnets    = var.external_tailnets
+    # One address per lab VLAN on the tailnet, its first, for the test that the VPS reaches no lab address (D-0046 rule 3).
+    lab_test_hosts = [for v in yamldecode(file(var.vlans_file)).lab_vlans : cidrhost(v.cidr, 1) if lookup(v, "tailnet", true)]
   })
 
   overwrite_existing_content = false
