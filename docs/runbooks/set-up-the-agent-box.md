@@ -143,7 +143,7 @@ Exit: uninstall the App and delete it in GitHub's settings, then delete `/etc/ag
 
 ## Merge pull requests from the box
 
-The box merges by a sweep, not by a workflow: a cloud session cannot start a GitHub workflow here (403, measured 2026-11-14). The page [Merge a pull request with the box's sweep](merge-a-pr-with-the-box-sweep.md) is the how-to; this section is the setup.
+The box merges by a sweep, not by a workflow: a cloud session cannot start a GitHub workflow here (403, measured 2026-11-14). The page [Merge a pull request with the box's sweep](merge-a-pr-through-the-merge-job.md) is the how-to; this section is the setup.
 
 - `pass-record` (sudo for sessions: `add`, `show`, `halt`, `resume`) writes the ledger of passes in `/var/lib/agent-box/passes/<repo>/<head>.jsonl` and sets or clears the halt flag. `pr-merge check` (sudo for sessions) is read-only. `pr-merge merge` and `pr-merge sweep` have no sudo line; only the keys user runs them.
 - `agent_box_merge_sweep: true` in the inventory installs `pr-merge-sweep.service` and `.timer` (every `agent_box_merge_sweep_interval`, default 5 minutes), which run `pr-merge.sh sweep` as the keys user. Installing it is a change to the box's limits, so it waits for the owner's tap (D-0042 rule 6).
