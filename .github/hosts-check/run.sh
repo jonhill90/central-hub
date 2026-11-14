@@ -81,6 +81,7 @@ check_ansible() {
   python3 "$here/check-deny-rules.py"
   bash "$here/tests/test_box_apply_baseline.sh"
   bash "$here/tests/test_proxmox_sso.sh"
+  bash "$here/tests/test_tailnet_stack_args.sh"
 }
 
 check_manifests() {
