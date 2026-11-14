@@ -69,9 +69,9 @@ superseded-by:
    expect: `snapshot raft-<time>.snap, <n> bytes` with n above 0; the file is in `/etc/agent-keys/dev/openbao-snapshots/`, which keeps 24.
 
 8. Restore drill.
-   why: a backup counts only once it has been restored (D-0038 Confirmation 4 and 5).
-   Write a test key, take a snapshot, delete the key, then `secrets-store restore`.
-   expect: `restored raft-<time>.snap`, and the test key reads back. For the full drill, `destroy`, `plan`, `apply`, `configure`, then `restore`, with no person.
+   why: a backup counts only once it has been restored.
+   Write a test key, take a snapshot, delete the key, then `secrets-store restore`. This quick drill restores over the live dev store; it is not D-0038 Confirmation 4, which restores into a throwaway server.
+   expect: `restored raft-<time>.snap`, and the test key reads back. The full drill is D-0038 Confirmation 5: `destroy`, `plan`, `apply`, `configure`, then `restore`, with no person.
 
 ## Remove it
 

@@ -36,8 +36,9 @@ export TF_DATA_DIR=$work/tofu-data/secrets-store TF_IN_AUTOMATION=1 ANSIBLE_COLL
 [[ -f $settings ]] || { echo "secrets-store: $settings is missing; set agent_box_secrets_store in the inventory and run the agent_box role" >&2; exit 1; }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
 
-# Dev only. The store's IDs are 500-599 (STD-0001); dev is 550-599, as dev is 250-257 among 200-299.
-# A prod store gets its own wrapper and keys folder after dev passes (D-0035 rule 3).
+# Dev only. The store's IDs are 500-599 (agent pick 226, under STD-0001's next-free-hundred rule); dev
+# is 550-599, as dev is 250-257 among 200-299. A prod store gets its own wrapper and keys folder after
+# dev passes (D-0035 rule 3), and its recovery shares go only to the owner's Mac (D-0038 rule 5).
 vm_id=$(setting vm_id)
 [[ $vm_id =~ ^5[5-9][0-9]$ ]] || { echo "secrets-store: VM ID $vm_id is not a dev store ID (550-599); refused" >&2; exit 1; }
 
@@ -140,6 +141,8 @@ admin_token() {
 
 recovery() {
   local out=$env_keys/openbao-recovery.json token
+  # Shares on the box are for dev only (D-0038 rule 5); checked again here, not only at the top.
+  [[ $vm_id =~ ^5[5-9][0-9]$ ]] || { echo "secrets-store: recovery shares are made on the box for dev stores only; refused" >&2; exit 1; }
   [[ ! -s $out ]] || { echo "secrets-store: recovery shares exist already ($out); nothing done" >&2; exit 1; }
   token=$(admin_token)
   # 3 shares, any 2 make a root token for break-glass (D-0038 rule 5). Written only to the keys folder.
@@ -160,11 +163,12 @@ snapshot() {
   mkdir -p "$snapshots"
   out=$snapshots/raft-$(date -u +%Y%m%dT%H%M%SZ).snap
   token=$(admin_token)
+  local ok=1
   printf 'header = "X-Vault-Token: %s"\n' "$token" |
-    curl -sS --fail-with-body --cacert "$cacert" -K - "$(addr)/v1/sys/storage/raft/snapshot" -o "$out.part"
+    curl -sS --fail-with-body --cacert "$cacert" -K - "$(addr)/v1/sys/storage/raft/snapshot" -o "$out.part" || ok=0
   printf 'header = "X-Vault-Token: %s"\n' "$token" |
-    curl -sS --cacert "$cacert" -K - -X POST "$(addr)/v1/auth/token/revoke-self" >/dev/null
-  [[ -s $out.part ]] || { rm -f "$out.part"; echo "secrets-store: empty snapshot" >&2; exit 1; }
+    curl -sS --cacert "$cacert" -K - -X POST "$(addr)/v1/auth/token/revoke-self" >/dev/null || true
+  [[ $ok == 1 && -s $out.part ]] || { rm -f "$out.part"; echo "secrets-store: snapshot failed or empty" >&2; exit 1; }
   mv "$out.part" "$out"
   find "$snapshots" -maxdepth 1 -name 'raft-*.snap' -printf '%f\n' | sort -r | tail -n +"$((snapshot_keep + 1))" |
     while read -r f; do rm -f -- "${snapshots:?}/$f"; done
