@@ -18,7 +18,7 @@ revisit-when: the greenfield build-out ends; the Mac's guard still refuses a tap
 
 D-0041 rule 3 forbids raw runs: changes made from the owner's Mac, a session's shell or a console. It allows one way round, in D-0041 line 63: "Until a layer or stack has its pipeline job, a raw run of it needs the owner's typed words naming the exact command." Line 64 lists each such run in the layer's runbook until its job exists. D-0041's Consequences repeat it: raw runs go on, on the owner's typed words (line 112).
 
-For the greenfield build-out, the owner's message of 2026-11-14 07:47 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV, cited in D-0042 rule 6) set card taps, not typed command lines, as the way he approves. D-0042 rule 4 applied that message to the box's limits. It kept the owner's approval of a limit change, but made it a tap on a decision card in place of the typed line D-0036 rule 6 asked for (D-0042 lines 115 and 129). Rule 3 of D-0041 was not changed then, so every raw run still waits on typed words.
+The owner's message of 2026-11-14 07:47 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV, cited in D-0042 rule 6) ended typed go lines for the build-out. D-0042 rule 4 made a card tap the replacement for the box's limits (an agent pick): it kept the owner's approval of a limit change, as a tap on a decision card in place of the typed line D-0036 rule 6 asked for (D-0042 lines 115 and 129). Rule 3 of D-0041 was not changed then, so every raw run still waits on typed words.
 
 Two raw runs wait on this now:
 
@@ -27,7 +27,7 @@ Two raw runs wait on this now:
 
 ## Decision Drivers
 
-- **The owner's delegation for the greenfield build-out.** He approves by card tap, not by typed command lines (his message of 2026-11-14 07:47 UTC), and PR approval is delegated to the agents' pass (his messages of 07:42 to 07:44 UTC, D-0042).
+- **The owner's messages for the greenfield build-out.** His message of 2026-11-14 07:47 UTC ended typed go lines, and his messages of 07:42 to 07:44 UTC said PRs should no longer come to him for approval. The card tap and the agents' pass that replace them are agent picks (D-0042).
 - **The owner keeps his approval of every raw run.** This record changes how he says yes, not whether he is asked (D-0034, "What decides stays with the owner").
 - **Exactness.** A typed line is trusted because it names one command. A card can name the same command and the commit it runs from (D-0034 rules 1 and 5).
 - **The same step D-0042 already took for the box's limits** (D-0042 rule 4), so one form of approval covers both.
@@ -42,7 +42,7 @@ Two raw runs wait on this now:
 
 ## Decision Outcome
 
-Chosen option: **1**. It keeps one owner step per raw run, names the run exactly, and is the form D-0042 already uses for the box's limits. Option 2 leaves every raw run waiting on a typed line, which is not how the owner approves during the build-out. Option 3 removes an owner step, which this record does not do. Option 4 leaves the certificate copy without a route until its job exists.
+Chosen option: **1**. It keeps one owner step per raw run, names the run exactly, and is the form D-0042 already uses for the box's limits. Option 2 leaves every raw run waiting on a typed go line, which the owner ended for the build-out. Option 3 removes an owner step, which this record does not do. Option 4 leaves the certificate copy without a route until its job exists.
 
 ### Rules
 
