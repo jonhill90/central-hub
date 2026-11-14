@@ -182,6 +182,7 @@ check_backup() {
   bash "$here/tests/test_openbao_oidc_check.sh"
   bash "$here/tests/test_rebuild_dev_stages.sh"
   bash "$here/tests/test_rebuild_preflight.sh"
+  bash "$here/tests/test_rebuild_short_log.sh"
 }
 
 check_scripts() {
