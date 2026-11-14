@@ -34,6 +34,11 @@ k8s_certs_issuer: letsencrypt-staging
 k8s_certs_lab_ca: false
 k8s_certs_lab_ca_name: lab-ca
 
+# A throwaway CA made by cert-manager inside a dev cluster, so dev gets HTTPS with no prod secret (tasks/dev_ca.yml).
+# Off. Only hosts/rebuild-k8s.sh turns it on, with -e, for ENV_NAME dev.
+k8s_certs_dev_ca: false
+k8s_certs_dev_ca_name: dev-ca
+
 # cert-manager, by Helm, from the chart file on charts.jetstack.io checked against the SHA-256 the
 # Jetstack Helm index publishes for it. v1.21.3 (2026-10-23) is newer than two weeks: STD-0003
 # rule 2, it is a security release ("All users should upgrade"): Go 1.26.10 for CVE-2026-111943
