@@ -8,13 +8,13 @@ outcome: every day the box's OPNsense configuration copies go, encrypted, to the
 needs: the box's daily OPNsense copies (agent_box_opnsense_backup); hosts/terraform/azure/backup applied before (back-up-c1-off-box.md); the Azure CLI on the controller signed in as agent-azure (Owner on the subscription); the box leaves through the home's public address, the only one the storage account and the vault answer
 private-values: [c1-backup-azure-storage-account, opnsense-offbox-vault-name, opnsense-offbox-client-id, opnsense-offbox-app-object-id, azure-tenant-id]
 files: [hosts/terraform/azure/backup/, hosts/ansible/roles/agent_box/tasks/opnsense_offbox.yml, hosts/ansible/roles/agent_box/files/opnsense-offbox.sh, hosts/ansible/roles/agent_box/files/opnsense-escrow.py, hosts/ansible/roles/k8s_backup/files/c1-backup-azure-cert.py, .github/hosts-check/tests/test_opnsense_offbox.sh, .github/hosts-check/tests/test_opnsense_escrow.sh]
-last-tested: "2026-11-14, an agent, the Azure folder's offline tests (mocked provider), opnsense-offbox.sh against a local restic repository, and opnsense-escrow.py against a stand-in for Entra ID and Key Vault; step 1, the Azure apply, ran: tofu state lists all seven off-box resources (read from the controller 2026-11-14 at 05:21 UTC), but its plan and apply output and its time were not kept, so only the resulting state was checked; steps 2 onward (the box's role, first backup, first off-box copy, the timer) have not run"
+last-tested: "2026-11-14, from real runs reported by the Mac session, and offline tests: step 1, the Azure apply, ran, and its plan showed no changes once opnsense_vault_name was in the private azure tfvars (the variable is needed); the box ran the role, then its first OPNsense backup at 06:11:26 UTC kept config-20261114T061126Z.xml (112,112 bytes, valid XML) with the box-backup key, and the first off-box copy printed all four expect lines in order, read back identical and wrote the vault escrow; both timers are enabled, next at 14:30:12 UTC (backup) and 15:08:14 UTC (off-box copy). The Azure folder, opnsense-offbox.sh and opnsense-escrow.py also passed offline tests. Not yet run: a recovery from the vault, and a replay on a fresh machine"
 superseded-by:
 ---
 
 # Copy the OPNsense configuration backups off the agent box
 
-**Status:** draft. Written 2026-11-14 from the code in this change and tested offline only. Azure side applied 2026-11-14: the owner said yes to the Key Vault (a new billable resource) with a decision-card tap at 03:07 UTC, and the Azure folder's tofu state now lists all seven off-box resources (the `opnsense-backup` container, its app, the Key Vault and its custom role, and their assignments; the apply's own time was not recorded). The box's side has not run: the first OPNsense backup, the first off-box copy and the timer are pending, so `last-tested` records no run of the steps.
+**Status:** draft. Written 2026-11-14 from the code in this change and tested offline only. Azure side applied 2026-11-14: the owner said yes to the Key Vault (a new billable resource) with a decision-card tap at 03:07 UTC, and the Azure folder's tofu state now lists all seven off-box resources (the `opnsense-backup` container, its app, the Key Vault and its custom role, and their assignments; the apply's own time was not recorded). The box's side then ran on 2026-11-14 (see `last-tested`): the first backup, the first off-box copy and both timers. A recovery from the vault has not been tried.
 
 ## Why
 
@@ -48,7 +48,7 @@ Nothing here needs the owner's own Azure rights except the recovery read.
 
 ## Steps (the owner's yes to the vault was given 2026-11-14 at 03:07 UTC)
 
-1. (Agent, on the controller) Set `opnsense_vault_name` in `azure.tfvars` to a free name. Then apply the Azure folder as in [back-up-c1-off-box.md, step A1](back-up-c1-off-box.md#azure-blob-without-a-key):
+1. (Agent, on the controller) Set `opnsense_vault_name` in `azure.tfvars` to a free name (required: on 2026-11-14 the plan showed no changes only once it was set). Then apply the Azure folder as in [back-up-c1-off-box.md, step A1](back-up-c1-off-box.md#azure-blob-without-a-key):
 
    ```sh
    cd hosts/terraform/azure/backup
