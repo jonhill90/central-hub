@@ -236,14 +236,15 @@ restore_rebuilt() {
 }
 
 # The rebuilt store is to stay as it is, with no restore: remove the hold, so snapshots and the hourly off-box
-# send run again. The earlier cluster's snapshots stay in the keys folder; off the box, retention removes them
-# in time, and that prune is the delete the owner already taps for the send (pick 237).
+# send run again. The earlier cluster's snapshots are not restored: the keys folder keeps the newest 24 whatever
+# their cluster, so new snapshots push them out in about a day; off the box, retention removes them in time,
+# and that prune is the delete the owner already taps for the send (pick 237).
 clear_hold() {
   [[ -e $hold ]] || { echo "secrets-store: no rebuild hold; nothing done"; return 0; }
   [[ $(curl -s -o /dev/null -w '%{http_code}' --cacert "$cacert" "$(addr)/v1/sys/health" || true) == 200 ]] ||
     { echo "secrets-store: the store does not answer sys/health 200; the hold stays" >&2; exit 1; }
   rm -f -- "$hold"
-  echo "secrets-store: rebuild hold removed; the earlier cluster's snapshots were not restored and stay in the keys folder"
+  echo "secrets-store: rebuild hold removed; the earlier cluster's snapshots were not restored; on the box, the next 24 snapshots push them out"
 }
 
 case $action in

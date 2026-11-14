@@ -7,7 +7,7 @@ runner: an agent session on the agent box, through the `secrets-store` wrapper (
 outcome: one AlmaLinux 10 VM on VNet dev runs OpenBao 2.7.2, starts and unseals with no person, initialized by itself with audit, KV v2 and two AppRoles, takes an hourly Raft snapshot, and holds c1's External Secrets login and the rebuild's AppRole
 needs: the agent box; the agents' Proxmox token with rights on pool `dev`; template 9001; a free dev address; the private inventory values listed below
 private-values: [store-name, store-address, box-address, seal-key, admin-role-id, admin-secret-id, rebuild-role-id, rebuild-secret-id, store-ssh-key]
-files: [hosts/terraform/home/secrets-store/, hosts/ansible/roles/openbao/, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore-rebuilt.sh, .github/hosts-check/tests/test_secrets_store_restore_rebuilt.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/openbao.yml, hosts/ansible/playbooks/k8s-openbao-auth.yml]
+files: [hosts/terraform/home/secrets-store/, hosts/ansible/roles/openbao/, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/openbao.yml, hosts/ansible/playbooks/k8s-openbao-auth.yml]
 last-tested: not yet run
 superseded-by:
 ---
@@ -145,7 +145,7 @@ Pick 238. **The owner's tap first:** a `destroy` or `restore` of the secrets sto
    expect: seven `ok` step lines (1, 1b and 2 to 6), step 3 saying `plain` or `forced`, then `PASS: restore-rebuilt: raft-<time>.snap restored (<how>) onto the rebuilt store; its mark reads back; hold removed`. The first run's `plain` or `forced` answers the open question whether the same static seal key passes the plain restore.
 5. `secrets-store configure` again. expect `changed=0`.
 
-If the rebuilt store is to stay as it is, with no restore, `secrets-store clear-hold` removes the hold once `sys/health` answers 200, so snapshots and the hourly send run again. The earlier cluster's snapshots stay in the keys folder; off the box, the send's retention removes them in time, which is the prune the owner already taps for the send.
+If the rebuilt store is to stay as it is, with no restore, `secrets-store clear-hold` removes the hold once `sys/health` answers 200, so snapshots and the hourly send run again. The earlier cluster's snapshots are not restored. On the box they stay only until 24 newer snapshots push them out (`snapshot` keeps the newest 24 whatever their cluster, so about a day of hourly sends); off the box they stay until the send's retention removes them, which is the prune the owner already taps for the send. To keep a way back, restore before clearing the hold.
 
 The admin policy can call the forced restore (`sys/storage/raft/snapshot-force`) only for this. `secrets-store restore` stays plain and never forces.
 
