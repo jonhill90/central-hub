@@ -45,3 +45,4 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0047 | [0047-keep-proxmox-ve-as-the-lab-hypervisor-on-its-free-repositories.md](0047-keep-proxmox-ve-as-the-lab-hypervisor-on-its-free-repositories.md) |
 | D-0048 | [0048-build-the-lab-with-opentofu-and-ansible-core.md](0048-build-the-lab-with-opentofu-and-ansible-core.md) |
 | D-0049 | [0049-run-almalinux-on-lab-vms-and-debian-where-it-comes-with-the-platform.md](0049-run-almalinux-on-lab-vms-and-debian-where-it-comes-with-the-platform.md) |
+| D-0050 | [0050-install-kubernetes-on-c1-with-kubeadm-from-ansible.md](0050-install-kubernetes-on-c1-with-kubeadm-from-ansible.md) |
