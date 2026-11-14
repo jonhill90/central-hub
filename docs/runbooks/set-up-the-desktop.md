@@ -56,7 +56,11 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 5. The owner opens the VM's console in Proxmox (VM, Console). It asks for two different passwords, each typed twice: the login password for `owner`, then the RDP password. No one else sees them, and neither is on a command line or in a log.
    expect: the prompt returns to a login; `/var/lib/desktop/password-set` exists and the remote desktop starts. The RDP client asks for `owner` and the RDP password, then GDM's login screen asks for the login password. The RDP password is stored on the VM's disk (there is no TPM), so a copy of it is in the VM's backups; it opens only the RDP layer, which is why it must differ from the login password, and GDM still asks for the login password.
 
-6. The owner connects with an RDP client to the VM's address, port 3389, as user `owner`, over the tailnet (the owner's device on the tailnet, with the tailnet connector's route to the dev range on).
+6. Give the VM a name the owner's devices resolve, so the RDP client needs no address. In the private inventory, add `{ hostname: <desktop-name>, address: <the VM's address>, description: "Owner's desktop VM (RDP)" }` to `opnsense_lab_host_overrides` (`hosts.example.yml` shows the line), run the OPNsense playbook with tag `dns` (`ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags dns`), and add `<desktop-name>` to `split_dns_names` in the private `home/tailnet` tfvars and apply that folder (the default list holds no desktop name, because lab hostnames stay out of this public repository). Changing the tailnet is the owner's decision, so it waits for the owner's words naming the change.
+   why: the owner's devices ask the lab's DNS only for the names in `split_dns_names` (pick 161); a name outside it resolves publicly, where the VM's private address is not published.
+   expect: from a tailnet device, `<desktop-name>.<zone>` answers with the VM's address (`dig +short <desktop-name>.<zone> @100.100.100.100`).
+
+7. The owner connects with an RDP client to the VM's name (or its address), port 3389, as user `owner`, over the tailnet (the owner's device on the tailnet, with the tailnet connector's route to the dev range on).
    expect: the RDP login, then GDM's login screen, then a GNOME session. Untested until the first run.
 
 ## If it fails

@@ -87,6 +87,8 @@ all:
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
             - { hostname: pve, address: "", description: "Proxmox host GUI (its mgmt address)" }
+            # The owner's desktop VM (pick 219), so the RDP client uses a name, not an address; its dev address.
+            # - { hostname: <desktop-name>, address: "", description: "Owner's desktop VM (RDP)" }
             # Wildcard: every name under apps.c1.prod.<zone> answers with the c1 Gateway.
             - { hostname: "*", subdomain: apps.c1.prod, address: "{{ k8s_gateway_address }}", description: "Kubernetes c1 Gateway apps (*.apps.c1.prod)" }
             # Short aliases <app>.<zone> (STD-0001 rule 5), each on its own so the rest of the zone
