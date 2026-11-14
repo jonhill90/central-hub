@@ -79,5 +79,14 @@ expect "a Docker Hub short name matches its row" 0 "" \
 expect "an example host is a placeholder" 0 "" \
   "$(make_repo "$(row Other pass '[image:quay.io/x]')" "" '    url: https://example-kv.vault.azure.net/')"
 
+hub=$(row GitHub hosted '[url:api.github.com]' hosted; echo '    carries: [url:github.com/]')
+expect "a GitHub release download needs its own row" 1 "hosted by GitHub, but the software itself has no register row" \
+  "$(make_repo "$hub" "" '    url: "https://github.com/openbao/openbao/releases/download/v{{ v }}/bao.rpm"')"
+expect "a GitHub release download with its own row passes" 0 "" \
+  "$(make_repo "$hub
+$(row OpenBao pass '[url:github.com/openbao/]')" "" '    url: "https://github.com/openbao/openbao/releases/download/v{{ v }}/bao.rpm"')"
+expect "carries only goes on a hosted row" 1 "carries must be a list, and only on a hosted row" \
+  "$(make_repo "$(row Other pass '[image:quay.io/x]'; echo '    carries: [url:github.com/]')" "" "# nothing")"
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

@@ -65,7 +65,11 @@ def check(root: Path) -> tuple[list[str], list[str]]:
             errors.append(f"{where}: verdict hosted goes with kind hosted, and only with it")
         if verdict in ("hosted", "fail") and not text(row.get("exit-path")):
             errors.append(f"{where}: exit-path is missing (STD-0006 rule 3)")
-        if isinstance(row.get("sources"), list) and not row["sources"] and not text(row.get("not-detected")):
+        carries = row.get("carries", [])
+        if not isinstance(carries, list) or (carries and kind != "hosted"):
+            errors.append(f"{where}: carries must be a list, and only on a hosted row")
+            carries = []
+        if isinstance(row.get("sources"), list) and not row["sources"] and not carries and not text(row.get("not-detected")):
             errors.append(f"{where}: no sources, so not-detected must say how it is installed")
 
     excepted: dict[str, dict] = {}
@@ -101,13 +105,18 @@ def check(root: Path) -> tuple[list[str], list[str]]:
                 notes.append(f"kept: {name} ({text(exc.get('decided'))[:60]}...)")
 
     prefixes = [(p, name) for name, row in names.items() for p in (row.get("sources") or []) if isinstance(p, str)]
+    carried = [(p, name) for name, row in names.items() for p in (row.get("carries") or []) if isinstance(p, str)]
     used: set[str] = set()
     for ref in sorted(scan(root)):
         hits = {name for p, name in prefixes if ref.startswith(p)}
         if not hits:
-            errors.append(f"{ref}: no register row in {REGISTER} has a source this starts with")
-        used |= {p for p, _ in prefixes if ref.startswith(p)}
-    for p, name in prefixes:
+            hosts = sorted({name for p, name in carried if ref.startswith(p)})
+            if hosts:
+                errors.append(f"{ref}: hosted by {', '.join(hosts)}, but the software itself has no register row in {REGISTER}")
+            else:
+                errors.append(f"{ref}: no register row in {REGISTER} has a source this starts with")
+        used |= {p for p, _ in prefixes + carried if ref.startswith(p)}
+    for p, name in prefixes + carried:
         if p not in used:
             notes.append(f"unused: {name} source {p} matches nothing the scanner found")
     return errors, notes

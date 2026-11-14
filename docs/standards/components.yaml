@@ -14,7 +14,12 @@
 #   exit-path            required for hosted and fail: what we would move to, and how
 #   sources              prefixes of the references the scanner prints (scan.py); a reference matches
 #                        every row with a prefix it starts with
-#   not-detected         required when sources is empty: how it is installed, and why the scanner can't see it
+#   carries              hosted rows only: prefixes of what the service hosts for other components
+#                        (release downloads, registries). A reference these match still needs a row
+#                        of its own in sources, so a new download from github.com or a new docker.io
+#                        image fails until its software has a row.
+#   not-detected         required when sources and carries are both empty: how it is installed, and why
+#                        the scanner can't see it
 #   checked              the date the pages were opened
 components:
   # Networking first (STD-0006 "Order").
@@ -401,7 +406,8 @@ components:
     paid-edition-source: https://docs.github.com/en/get-started/learning-about-github/githubs-plans
     verdict: hosted
     exit-path: git moves anywhere; Forgejo (GPL-3.0) for code review and CI, with downloads mirrored to a local cache
-    sources: [url:github.com/, url:api.github.com, url:raw.githubusercontent.com/, action:actions/, image:ghcr.io/]
+    sources: [url:api.github.com, url:github.com/jonhill90/, url:github.com/actions/, action:actions/]
+    carries: [url:github.com/, url:raw.githubusercontent.com/, image:ghcr.io/]
     checked: 2026-11-14
   - name: Azure
     kind: hosted
@@ -434,7 +440,8 @@ components:
     paid-edition-source: https://docs.docker.com/docker-hub/usage/pulls/
     verdict: hosted
     exit-path: a local pull-through registry (Zot or Harbor, Apache-2.0); containerd from its own releases
-    sources: [image:docker.io/, url:download.docker.com/]
+    sources: []
+    carries: [image:docker.io/, url:download.docker.com/]
     checked: 2026-11-14
   - name: Other container registries
     kind: hosted
@@ -445,7 +452,8 @@ components:
     paid-edition-source: https://kubernetes.io/
     verdict: hosted
     exit-path: the same local pull-through registry as Docker Hub's
-    sources: [image:quay.io/, image:registry.k8s.io/]
+    sources: []
+    carries: [image:quay.io/, image:registry.k8s.io/]
     checked: 2026-11-14
   - name: Let's Encrypt
     kind: hosted
