@@ -53,6 +53,10 @@ The ping URL is kept as a secret: anyone who has it can ping the check and hide 
 - **Faster or slower:** change `repeat_interval` on the Watchdog route in both `apps/kube-prometheus-stack/values.yaml` and `k8s_observability` `vars/main.yml` (CI's parity check), and the check's period to match.
 - **Phone push too:** add an integration on the check (Healthchecks.io offers ntfy.sh, Pushover, Telegram and others); not ntfy on c1, which is down when this fires.
 
+## Dev clusters
+
+A dev rebuild from the agent box needs the same Secret, or its Alertmanager never starts. The box's `rebuild` wrapper adds a dev-only line to its own seed file, `healthchecks-ping-url=https://hc-ping.invalid/dev-not-a-check`, when the line is missing. Never give dev c1's real URL: dev's pings would keep the check "up" while c1 is down. A `.invalid` name never resolves (RFC 6761), so dev's heartbeat POST fails and reaches no one. Dev's Alertmanager then logs failed sends to the `heartbeat` receiver, and its `AlertmanagerFailedToSendAlerts` alert may fire on dev's own ntfy; both are expected on dev.
+
 ## Rebuild from nothing
 
 The check and the URL stay as they are. Argo CD makes Alertmanager and the ExternalSecret again, and seeding gives it the URL. During the rebuild the check goes down and mails the owner once; that is expected.
