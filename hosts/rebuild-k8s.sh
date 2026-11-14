@@ -350,6 +350,14 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
   printf '%s\n' "$guests"
   preflight_storage "$node" || true
   if [ "$free" -lt "$min" ] && grep -q "guest vmid=$CI_RUNNER_VMID type=qemu status=running" <<<"$guests"; then
+    # What happens on a short node is the owner's pick (PREFLIGHT_SHORT_NODE, set at the install of the box's
+    # checkout). With no valid value there is no default: it refuses BEFORE it stops VM 300.
+    case ${PREFLIGHT_SHORT_NODE:-} in
+      ephemeral-dev|keep-dev) ;;
+      *) echo "preflight: refused, free memory ${free} MiB is below ${min} MiB, VM $CI_RUNNER_VMID was not stopped because the short-node setting is not set (agent_box_short_node). Two values: ephemeral-dev (stops VM $CI_RUNNER_VMID, tears dev down at the end of the run, then starts VM $CI_RUNNER_VMID: dev lasts one run, notebook CI keeps running except during the run) or keep-dev (stops VM $CI_RUNNER_VMID, dev stays up: notebook CI and the access-expiry alert are paused while dev is up)"
+         return 1 ;;
+    esac
+    echo "preflight: short-node setting is ${PREFLIGHT_SHORT_NODE}"
     preflight_stop_runner "$node" || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB and VM $CI_RUNNER_VMID could not be stopped"; return 1; }
     sleep 5
     free=$(preflight_read_free "$node") || { echo "$free"; return 1; }
@@ -474,14 +482,32 @@ if [ "$ENV_NAME" = dev ]; then
   trap runner_restart EXIT
 fi
 
-# When this run stopped VM 300 (the preflight was short), dev can't stay up: the node has no memory for both. So the
-# run tears dev down at its end, pass or fail, and the exit trap then starts VM 300 under its memory rule. It keeps
-# the notebook's runner down for one run, not for as long as dev lives. The cost: a failed run leaves nothing for
-# `rebuild diag` to read, so the run's own log lines (the last lines of the failed stage) are the evidence.
-runner_run_teardown() {
+# A failed ephemeral-dev run: read the cluster before it is torn down (what `rebuild diag` shows: the Argo CD
+# applications, the pods not running, the newest events), into the short log, each line prefixed `diag:`. Never fatal.
+runner_capture_diag() {
+  echo "diag: the run failed, so the cluster is read before it is torn down" | tee -a "$log"
+  {
+    echo "== argocd applications (name, sync, health)"
+    kc -n argocd get applications.argoproj.io --no-headers -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
+    echo "== pods not Running or Completed, all namespaces"
+    kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
+    echo "== newest events, all namespaces"
+    kc get events -A --sort-by=.lastTimestamp --no-headers | tail -n 25
+  } 2>&1 | cut -c1-240 | head -n 80 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
+  return 0
+}
+
+# The owner's pick for a short node is ephemeral-dev: when this run stopped VM 300, dev can't stay up beside it, so
+# the run tears dev down at its end, pass or fail, and the exit trap then starts VM 300 under its memory rule. VM 300
+# is down for one run, not for as long as dev lives. A failed run reads the cluster first (runner_capture_diag), so
+# its state is in the log. Never on any env but dev, never with keep-dev, never for a marker from another run.
+runner_run_teardown() { # [failed]
   local trc t0
+  [ "$ENV_NAME" = dev ] || return 0
+  [ "${PREFLIGHT_SHORT_NODE:-}" = ephemeral-dev ] || return 0
   [ -f "$(runner_mark)" ] && [ "$(cat "$(runner_mark)")" = "$stamp" ] || return 0
-  echo "runner stop: this run stopped VM $CI_RUNNER_VMID, so dev is torn down now (dev can't stay up while memory is short)" | tee -a "$log"
+  echo "runner stop: this run stopped VM $CI_RUNNER_VMID and the short-node setting is ephemeral-dev, so dev is torn down now (dev can't stay up while memory is short)" | tee -a "$log"
+  [ "${1:-}" != failed ] || runner_capture_diag
   t0=$(date +%s)
   echo "$(date -u +%FT%TZ) teardown start" | tee -a "$log"
   echo "===== teardown" >> "$raw"
@@ -520,7 +546,7 @@ for s in $stages; do
   if [ "$rc" -ne 0 ]; then
     echo "rebuild: stage $s failed; last lines of $raw:" >&2
     tail -n 20 "$raw" >&2
-    runner_run_teardown || true
+    runner_run_teardown failed || true
     exit "$rc"
   fi
 done

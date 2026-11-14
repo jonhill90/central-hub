@@ -7,7 +7,7 @@ src=$(cd "$(dirname "$0")/../../.." && pwd)/hosts/rebuild-k8s.sh
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 fail=0
-sed -n '/^CI_RUNNER_VMID=/p;/^preflight_storage() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
+sed -n '/^CI_RUNNER_VMID=/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
 grep -q '^preflight_memory' "$t/fn.sh" && grep -q '^run_stage' "$t/fn.sh" || { echo "FAIL: functions not found"; exit 1; }
 mkdir "$t/bin"
 cat > "$t/bin/curl" <<'F'
@@ -40,7 +40,7 @@ printf 'export PROXMOX_VE_ENDPOINT=%s\nexport PROXMOX_VE_API_TOKEN=agent@pve!dev
 GIB=1073741824
 run() { # env total_gib used_gib error
   rm -rf "$t/state" "$t/envdir" "$t/calls" "$t/argv"; mkdir -p "$t/state" "$t/envdir"; : > "$t/calls"; : > "$t/argv"
-  PATH="$t/bin:$PATH" TFVARS="${TFVARS_FILE:-$t/vars.tfvars}" TFSTATE="${STATE:-$t/empty.tfstate}" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_GUESTS_ERROR=${FAKE_GUESTS_ERROR:-} FAKE_AFTER_AVAILABLE=${FAKE_AFTER_AVAILABLE:-} FAKE_NEVER_STOPS=${FAKE_NEVER_STOPS:-} FAKE_START_FAILS=${FAKE_START_FAILS:-} FAKE_STORAGE_ERROR=${FAKE_STORAGE_ERROR:-} stamp=run1 FAKE_DIR="$t/state" FAKE_CALLS="$t/calls" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" env_dir="$t/envdir" log="$t/rebuild.log" \
+  PATH="$t/bin:$PATH" TFVARS="${TFVARS_FILE:-$t/vars.tfvars}" TFSTATE="${STATE:-$t/empty.tfstate}" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_GUESTS_ERROR=${FAKE_GUESTS_ERROR:-} FAKE_AFTER_AVAILABLE=${FAKE_AFTER_AVAILABLE:-} FAKE_NEVER_STOPS=${FAKE_NEVER_STOPS:-} FAKE_START_FAILS=${FAKE_START_FAILS:-} FAKE_STORAGE_ERROR=${FAKE_STORAGE_ERROR:-} stamp=run1 PREFLIGHT_SHORT_NODE="${SHORT_NODE-ephemeral-dev}" FAKE_DIR="$t/state" FAKE_CALLS="$t/calls" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" env_dir="$t/envdir" log="$t/rebuild.log" \
     bash -c '. "$1"; set +e; run_stage preflight; echo "rc=$?"; echo "marker=$([ -f "$env_dir/ci-runner-stopped" ] && echo yes || echo no)"' _ "$t/fn.sh" 2>&1
 }
 check() { if [[ $2 == *"$3"* ]] && { [ -z "${4:-}" ] || [[ $2 != *"$4"* ]]; }; then echo "ok   $1"; else echo "FAIL $1: $2"; fail=1; fi; }
@@ -112,17 +112,39 @@ out=$(run dev 31 28); check "the storage list says how many and names the types"
 check "a storage line has name and type" "$out" "storage name=local-lvm type=lvmthin" ""
 check "a storage name is cleaned to safe characters" "$out" "storage name=hddbackup type=dir" "hdd;backup"
 out=$(FAKE_STORAGE_ERROR=yes run dev 31 28); check "an unreadable storage list is not fatal and says so" "$out" "storage list could not be read" "SECRETTOKEN"
-# The end-of-run teardown: only when this run's stamp is in the marker; a failure is returned.
-td() { # marker content (empty: no marker), teardown rc
-  rm -rf "$t/envdir" "$t/tdcalls"; mkdir -p "$t/envdir"; : > "$t/tdcalls"; [ -z "$1" ] || printf '%s\n' "$1" > "$t/envdir/ci-runner-stopped"
-  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 TDRC=${2:-0} bash -c '. "$1"; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; if runner_run_teardown; then echo "rc=0"; else echo "rc=$?"; fi' _ "$t/fn.sh" 2>&1; }
-out=$(td run1); check "this run's marker tears dev down" "$out" "this run stopped VM 300, so dev is torn down now" "rc=1"
+# The owner's short-node pick. Unset (or anything but the two values) refuses BEFORE any stop call, and names both values.
+out=$(SHORT_NODE="" run dev 31 28); check "no short-node setting refuses and names both values and costs" "$out" "short-node setting is not set" "rc=0"
+check "it names ephemeral-dev and keep-dev" "$out" "ephemeral-dev (stops VM 300, tears dev down at the end of the run" ""
+check "and keep-dev with its cost" "$out" "keep-dev (stops VM 300, dev stays up: notebook CI and the access-expiry alert are paused" ""
+if grep -q 'status/shutdown' "$t/calls"; then echo "FAIL: VM 300 was stopped with no setting"; fail=1; else echo "ok   no stop call with no setting"; fi
+check "VM 300 stays unmarked with no setting" "$out" "marker=no" "marker=yes"
+out=$(SHORT_NODE=whatever run dev 31 28); check "an unknown value is the same as unset" "$out" "short-node setting is not set" "runner stop"
+out=$(SHORT_NODE=keep-dev FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); check "keep-dev stops VM 300 and the run passes" "$out" "short-node setting is keep-dev" "refused"
+check "keep-dev says it stopped" "$out" "runner stop: VM 300 is stopped" ""
+out=$(SHORT_NODE=ephemeral-dev FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); check "ephemeral-dev stops VM 300 and the run passes" "$out" "short-node setting is ephemeral-dev" "refused"
+out=$(SHORT_NODE="" run dev 31 17); check "enough memory needs no setting" "$out" "rc=0" "refused"
+# The end-of-run teardown, only for ephemeral-dev on dev with this run's marker; a failed run reads the cluster first.
+td() { # marker content (empty: no marker), teardown rc, env, short-node value, "failed" or empty
+  rm -rf "$t/envdir" "$t/tdcalls" "$t/rebuild.log"; mkdir -p "$t/envdir"; : > "$t/tdcalls"; : > "$t/rebuild.log"; [ -z "$1" ] || printf '%s\n' "$1" > "$t/envdir/ci-runner-stopped"
+  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 TDRC=${2:-0} ENV_NAME=${3:-dev} PREFLIGHT_SHORT_NODE=${4-ephemeral-dev} bash -c '. "$1"; kc() { echo "kc $*" >> "'"$t"'/tdcalls"; echo "fake-app Synced Healthy"; }; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; if runner_run_teardown "$2"; then echo "rc=0"; else echo "rc=$?"; fi' _ "$t/fn.sh" "${5:-}" 2>&1; }
+out=$(td run1); check "this run's marker tears dev down" "$out" "this run stopped VM 300 and the short-node setting is ephemeral-dev, so dev is torn down now" "rc=1"
 check "the teardown stage ran" "$(cat "$t/tdcalls")" "teardown" ""
 check "and says rc=0" "$out" "teardown end rc=0" ""
+check "a pass reads no diag" "$(cat "$t/tdcalls")" "teardown" "kc "
 out=$(td run0); check "a marker from an earlier run is not this run's" "$out" "rc=0" "torn down"
 check "no teardown stage ran for it" "x$(cat "$t/tdcalls")" "x" "teardown"
 out=$(td ""); check "no marker means no teardown" "$out" "rc=0" "torn down"
 check "no teardown stage ran without a marker" "x$(cat "$t/tdcalls")" "x" "teardown"
 out=$(td run1 1); check "a failed teardown is returned" "$out" "rc=1" "rc=0"
-grep -q 'runner_run_teardown || { echo' "$src" && grep -c 'runner_run_teardown || true' "$src" | grep -q 1 && echo "ok   the run tears dev down at its end, on a pass and on a failure" || { echo "FAIL: the end-of-run teardown is not wired both ways"; fail=1; }
+out=$(td run1 0 prod); check "a prod env never tears down" "$out" "rc=0" "torn down"
+check "no teardown stage ran on prod" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td run1 0 dev keep-dev); check "keep-dev never tears dev down" "$out" "rc=0" "torn down"
+check "no teardown stage ran with keep-dev" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td run1 0 dev ""); check "no setting never tears dev down" "$out" "rc=0" "torn down"
+check "no teardown stage ran with no setting" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td run1 0 dev ephemeral-dev failed); check "a failed run reads the cluster first" "$out" "diag: the run failed, so the cluster is read before it is torn down" "rc=1"
+check "the diag lines are in the log with their prefix" "$(cat "$t/rebuild.log")" "diag: fake-app Synced Healthy" ""
+check "the diag is read before the teardown" "$(tr '\n' ' ' < "$t/tdcalls")" "kc -n argocd get applications" ""
+if [ "$(grep -n 'kc ' "$t/tdcalls" | head -1 | cut -d: -f1)" -lt "$(grep -n '^teardown$' "$t/tdcalls" | head -1 | cut -d: -f1)" ]; then echo "ok   the first diag call comes before the teardown stage"; else echo "FAIL: the diag did not come first"; fail=1; fi
+grep -q 'runner_run_teardown || { echo' "$src" && grep -q 'runner_run_teardown failed || true' "$src" && echo "ok   the run tears dev down at its end, on a pass and on a failure" || { echo "FAIL: the end-of-run teardown is not wired both ways"; fail=1; }
 exit $fail

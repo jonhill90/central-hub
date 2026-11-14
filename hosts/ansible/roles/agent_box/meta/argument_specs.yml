@@ -164,6 +164,15 @@ argument_specs:
           the runner VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
           vnet, template_vm_id) and the GitHub App and repository it registers with (github_app_id,
           repo_owner, repo_name). No key goes in it. Empty skips the file.
+      agent_box_short_node:
+        type: str
+        default: ""
+        choices: ["", ephemeral-dev, keep-dev]
+        description: >-
+          The owner's pick for a dev run on a node short of memory, written to <work_dir>/short-node (0600, the keys
+          user's) for the rebuild wrapper. ephemeral-dev stops the CI runner, tears dev down at the end of the run, then
+          starts the runner. keep-dev stops the runner and leaves dev up (the notebook's CI and its access-expiry alert are
+          paused while dev is up). Empty is no pick: a short node refuses before it stops anything.
       agent_box_desktop:
         type: dict
         default: {}

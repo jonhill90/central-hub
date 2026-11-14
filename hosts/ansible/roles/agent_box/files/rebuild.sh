@@ -159,6 +159,20 @@ OPENBAO_CACERT=$store_keys/secrets-store-ca.crt
 OPENBAO_ROLE_ID_FILE=$store_keys/openbao-rebuild-role-id
 OPENBAO_SECRET_ID_FILE=$store_keys/openbao-rebuild-secret-id"
 fi
+# What a dev run does on a node short of memory is the owner's pick, never a default (rebuild-k8s.sh,
+# docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev or keep-dev, from the one-line file the
+# agent_box role writes (agent_box_short_node). Anything else, or no file, leaves the setting out, and the dev
+# run then refuses on a short node before it stops anything.
+short_node=""
+if [[ -f $work/short-node ]]; then
+  short_node=$(tr -d '[:space:]' < "$work/short-node")
+  case $short_node in
+    ephemeral-dev|keep-dev) ;;
+    *) echo "rebuild: $work/short-node holds a value other than ephemeral-dev or keep-dev; ignoring it" >&2; short_node="" ;;
+  esac
+fi
+short_node_env=""
+[[ -z $short_node ]] || short_node_env="PREFLIGHT_SHORT_NODE=$short_node"
 # A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
 # The agents' token clones into pool dev, whose ACL survives a teardown, and clones only template 9001, the copy of template 9000 on VNet dev
 # (hosts/terraform/home/bootstrap/agent-access.sh); the Mac's tfvars name 9000, for its root token.
@@ -265,6 +279,7 @@ INVENTORY=$inventory/
 STAGES="$stages"
 SECRET_SOURCE_FILE=$ssfile
 $openbao_env
+$short_node_env
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'
 ENV
