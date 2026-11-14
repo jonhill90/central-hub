@@ -93,7 +93,7 @@ superseded-by:
     - it checks that the throwaway's own token is refused, then signs in with the store's snapshot AppRole and reads that login's policy back;
     - it stops the throwaway and deletes its storage.
 
-    Around it, `configure` reads the live store's Raft peers, leader and term through the admin AppRole, before and after.
+    Around it, `configure` reads the live store's Raft peers, leader and term through the admin AppRole, before and after. That check runs only when `configure` runs the drill. The weekly timer has no admin token, so on its own runs the live store is kept apart by `PrivateNetwork=yes` alone.
     expect: 10 `ok` step lines, `PASS: restore drill: raft-<time>.snap restored into a throwaway server; the snapshot login and its policy read back; copy deleted`, then `PASS: live store unchanged by the drill`. The step lines name steps and the snapshot's file name only.
 
 11. The owner's sign-in to the web page (agent pick 233).
@@ -123,6 +123,7 @@ Take a last snapshot with `secrets-store snapshot`, which copies it to the box's
 - The health check never turns 200: read `journalctl -u openbao`. A seal error means the key file is missing or not 32 bytes.
 - The first start failed half way: self-initialization does not run again on storage that holds data. Destroy the VM and start over; nothing is in it yet.
 - The restore drill fails: read `journalctl -u openbao-drill`. The step line names the step that failed, and the throwaway's own log is gone with its temporary file system. To run it again, use `systemctl start openbao-drill.service` on the VM. It never touches the live store's data.
+- Step 8 (`known login`) fails, but steps 5 to 7 passed: the snapshot AppRole's IDs on the VM may differ from the ones in the newest snapshot, for example when that snapshot is older than a rebuild of the VM, which makes the IDs again. The restored data then holds the old IDs, so the login is refused although the restore worked. That is a false fail: check that `openbao-snapshot.service` succeeds, and once a snapshot is taken with the current IDs, run the drill again.
 - The drill passed but `configure` says the live store's Raft state changed: stop the timer (`systemctl disable --now openbao-drill.timer`) and tell the owner. The throwaway should never be able to reach the live store.
 - Tell the owner before trying anything not written here.
 

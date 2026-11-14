@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: the orchestrator thread's message to the Plan thread of 2026-11-14T11:55:08Z recording the reviewer's clearance of head c86b084 (11:52 UTC) and the passes of Councils C (11:53:25Z), A (11:54:54Z) and B (11:54:57Z) for head c86b084, each saying acceptance under D-0042 rule 3 is fine; it reached the Plan thread as a thread relay, which carries no message id
   approval-names: "the pass names PR #335 and head c86b084a3dc922c792ab5643b1cf8fe835a4df01"
   check: approved-by is agents under D-0042 rule 3, because External Secrets and the Local Path Provisioner are already in use and pass STD-0006 in the register the owner approved with PR #277. The Plan thread read the orchestrator's pass record at 11:55Z; it names this PR and the head. approved-commit is the head that holds the record as proposed; the commit after it changes only status, date and accepted-evidence, which the reviewer checks (D-0001)
-  merged: not yet; a follow-up PR fills this in after the merge (D-0001)
+  merged: PR #335 squash-merged at head 325aae5 as 5a7a470, whose commit time is 2026-11-14T12:03:03Z (GitHub's merged_at for the PR is 12:03:04Z); the follow-up PR that adds this line changes only accepted-evidence (D-0001)
 revisit-when: a paid edition of External Secrets or the Local Path Provisioner appears with features the lab would need; a data-only VM disk or networked storage replaces local-path (spec 2026-11-c1-rebuild, P6); a second cluster needs shared storage; or either project changes licence or stops being maintained
 ---
 

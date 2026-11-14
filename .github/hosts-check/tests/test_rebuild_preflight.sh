@@ -15,7 +15,7 @@ cat > "$t/bin/curl" <<'F'
 echo "$*" > "$FAKE_ARGV"; cat > "$FAKE_STDIN"
 case "$*" in *cluster/resources*)
   [ -n "$FAKE_GUESTS_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
-  echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":258,"type":"qemu","status":"running","maxmem":8589934592,"mem":4294967296,"name":"agent-box"}]}'
+  echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":411,"type":"qemu","status":"running","maxmem":8589934592,"mem":4294967296,"name":"agent-box"}]}'
   exit 0 ;; esac
 [ -n "$FAKE_CURL_ERROR" ] && { [ "$FAKE_CURL_ERROR" = long ] && { printf "%0185d token=SECRETTOKEN\n" 0 >&2; exit 22; }; echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
 if [ -n "$FAKE_AVAILABLE" ]; then echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED,\"available\":$FAKE_AVAILABLE}}}"
@@ -54,8 +54,9 @@ out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 28); 
 out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 17); check "a partial state passes with enough memory" "$out" "branch checked" "refused"
 out=$(STATE="$t/missing.tfstate" run dev 31 28); check "no state file means a fresh build and is checked" "$out" "branch checked" ""
 out=$(STATE="$t/empty.tfstate" run dev 31 17); check "an empty state is checked and passes with enough memory" "$out" "branch checked" "refused"
-out=$(run dev 31 28); check "the guest list is shown, sorted by VM ID" "$out" "guest vmid=258 type=qemu status=running maxmem=8192 MiB mem=4096 MiB name=agent-box"
-check "a name is cleaned to safe characters" "$out" "name=cirunner01" ";"
+out=$(run dev 31 28); check "the guest list is shown, sorted by VM ID" "$out" "guest vmid=411 type=qemu status=running maxmem=8192 MiB mem=4096 MiB name=agent-box"
+check "the list says VM 258 and CT 259 are not visible" "$out" "VM 258 and CT 259 are NoAccess for it"
+check "a name is cleaned to safe characters" "$out" "name=cirunner01" "name=ci runner;01"
 check "the list says which API path and how many" "$out" "guest list from /cluster/resources?type=vm, 2 guests"
 check "the refusal still comes after the list" "$out" "refused" "rc=0"
 out=$(FAKE_GUESTS_ERROR=yes run dev 31 28); check "an unreadable guest list is not fatal and says so" "$out" "guest list could not be read" ""
