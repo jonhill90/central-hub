@@ -33,12 +33,23 @@ k8s_observability_kps_values:
         group_interval: 5m
         repeat_interval: 12h
         routes:
-          - receiver: "null"
+          # Watchdog always fires, so it is c1's heartbeat: about every 5 minutes it pings a check on
+          # Healthchecks.io, which mails the owner when the pings stop (pick 213).
+          - receiver: heartbeat
             matchers: ['alertname = "Watchdog"']
+            group_wait: 0s
+            group_interval: 1m
+            repeat_interval: 4m
           - receiver: "null"
             matchers: ['alertname = "InfoInhibitor"']
       receivers:
         - name: "null"
+        - name: heartbeat
+          webhook_configs:
+            # The check's ping URL, from Secret alertmanager-heartbeat (app monitoring-extras).
+            - url_file: /etc/alertmanager/secrets/alertmanager-heartbeat/url
+              send_resolved: false
+              max_alerts: 1
         - name: ntfy
           webhook_configs:
             - url: http://ntfy.alerts.svc.cluster.local/c1-alerts?template=alertmanager
@@ -49,7 +60,7 @@ k8s_observability_kps_values:
                   type: Bearer
                   credentials_file: /etc/alertmanager/secrets/alertmanager-ntfy/token
     alertmanagerSpec:
-      secrets: [alertmanager-ntfy]
+      secrets: [alertmanager-ntfy, alertmanager-heartbeat]
       resources:
         requests: {cpu: 10m, memory: 32Mi}
         limits: {memory: 128Mi}

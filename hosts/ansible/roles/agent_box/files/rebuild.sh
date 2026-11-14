@@ -128,6 +128,13 @@ if [[ ! -s $ssfile ]]; then
      printf 'ntfy-proxmox-token=tk_%s\n' "$(head -c 128 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 29)"
    } > "$ssfile")
 fi
+# Dev's heartbeat URL (pick 213): Alertmanager mounts Secret alertmanager-heartbeat, so dev needs the
+# line too, or its ExternalSecret never syncs and the apps stage waits forever. Never c1's real URL:
+# dev's pings would keep c1's check up while c1 is down. An .invalid host never resolves (RFC 6761),
+# so dev's heartbeat POST fails harmlessly. Added to a file made before this line existed, too.
+if ! grep -q '^healthchecks-ping-url=' "$ssfile"; then
+  (umask 077; printf '%s\n' 'healthchecks-ping-url=https://hc-ping.invalid/dev-not-a-check' >> "$ssfile")
+fi
 chmod 600 "$ssfile"
 # A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
 # The agents' token clones into pool dev, whose ACL survives a teardown, and clones only template 9001, the copy of template 9000 on VNet dev
