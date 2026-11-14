@@ -191,6 +191,19 @@ argument_specs:
           keys user's): the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
           vnet, template_vm_id), box_address, and optionally seal_key_id and admin_user. No key goes in it; the
           wrapper makes the keys in the keys folder. Empty skips the file.
+      agent_box_secrets_store_offbox:
+        type: dict
+        default:
+          repository: azure:opnsense-backup:/openbao-dev
+          keep_hourly: 48
+          keep_daily: 14
+          keep_monthly: 6
+          prune_after_hour: 3
+        description: >-
+          The dev store's hourly snapshot off the box (pick 237): repository (azure:<container>:/<path>, its own, not
+          the OPNsense one), keep_hourly, keep_daily, keep_monthly, and prune_after_hour (UTC; the first run from then
+          prunes, once a day). Set up only when agent_box_secrets_store and agent_box_opnsense_offbox are both set.
+      agent_box_secrets_store_offbox_on_calendar: {type: str, default: hourly, description: "systemd OnCalendar for the snapshot send."}
       agent_box_tailnet_cleanup:
         type: dict
         default: {}
