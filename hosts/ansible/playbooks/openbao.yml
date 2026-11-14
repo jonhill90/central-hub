@@ -1,0 +1,10 @@
+---
+# The lab's secrets store (VM hosts/terraform/home/secrets-store, proposed D-0038). Run by the agent
+# box's secrets-store wrapper, which writes the inventory and holds the seal key and the admin
+# AppRole's IDs; order and proofs: docs/runbooks/set-up-the-secrets-store.md.
+- name: Secrets store
+  hosts: openbao
+  become: true
+  gather_facts: false
+  roles:
+    - role: openbao
