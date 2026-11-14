@@ -19,12 +19,14 @@ else echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED}}}";
 F
 chmod +x "$t/bin/curl"
 printf 'proxmox_node_name = "node-a"\n' > "$t/vars.tfvars"
+printf '{"resources":[{"mode":"managed","type":"proxmox_virtual_environment_vm","instances":[{},{}]}]}' > "$t/with-vms.tfstate"
+printf '{"resources":[]}' > "$t/empty.tfstate"
 # The endpoint is built from parts, so the components scanner doesn't take it for a real source.
 scheme=https
 printf 'export PROXMOX_VE_ENDPOINT=%s\nexport PROXMOX_VE_API_TOKEN=agent@pve!dev=SECRETTOKEN\n' "$scheme://node.invalid:8006/" > "$t/tofu.env"
 GIB=1073741824
 run() { # env total_gib used_gib error
-  PATH="$t/bin:$PATH" TFVARS="$t/vars.tfvars" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" \
+  PATH="$t/bin:$PATH" TFVARS="$t/vars.tfvars" TFSTATE="${STATE:-$t/empty.tfstate}" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" \
     bash -c '. "$1"; set +e; run_stage preflight; echo "rc=$?"' _ "$t/fn.sh" 2>&1
 }
 check() { if [[ $2 == *"$3"* ]] && { [ -z "${4:-}" ] || [[ $2 != *"$4"* ]]; }; then echo "ok   $1"; else echo "FAIL $1: $2"; fail=1; fi; }
@@ -39,5 +41,9 @@ out=$(PREFLIGHT_MIN_FREE_MIB=20480 run dev 31 17); check "the minimum can be rai
 out=$(FAKE_AVAILABLE=$((20 * GIB)) run dev 31 30); check "memory.available wins when present" "$out" "20480 MiB (field: available)" "refused"
 out=$(FAKE_AVAILABLE=$((5 * GIB)) run dev 31 1); check "a low memory.available refuses even with a low used" "$out" "refused" "rc=0"
 out=$(run dev 31 17); check "total-used is the fallback and is named" "$out" "(field: total-used)" ""
+out=$(STATE="$t/with-vms.tfstate" run dev 31 28); check "existing VMs in the state skip the check, even with low memory" "$out" "branch skipped, 2 dev VMs" "refused"
+check "a skipped run says rc=0" "$out" "rc=0"
+out=$(STATE="$t/missing.tfstate" run dev 31 28); check "no state file means a fresh build and is checked" "$out" "branch checked" ""
+out=$(STATE="$t/empty.tfstate" run dev 31 17); check "an empty state is checked and passes with enough memory" "$out" "branch checked" "refused"
 grep -q 'stages="preflight \$stages"' "$src" && echo "ok   a dev run gets the preflight" || { echo "FAIL: the preflight is not added to a dev run"; fail=1; }
 exit $fail

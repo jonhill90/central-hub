@@ -184,12 +184,29 @@ checks() {
 # A hook from rebuild.env, with the repository and the inventory it needs.
 hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 
-# Dev only, before the VMs: the Proxmox node must have enough free memory for the dev VMs beside the guests
+# Dev only, before the VMs, for a fresh build or after a teardown (a re-run on existing VMs is skipped, and the
+# log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default 14336: 12 GiB plus a 2 GiB margin). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 preflight_memory() {
   local min=${PREFLIGHT_MIN_FREE_MIB:-14336} node body free secret
+  local existing
+  # A re-run on VMs the state already holds allocates no new VMs, and their memory is already taken, so the
+  # node's free memory says nothing about it (measured on the box, 2026-11-14: 3547 MiB free with dev up).
+  # Only a fresh build, or a run after a teardown, is checked. An unreadable state file counts as no VMs.
+  existing=$(python3 -c 'import json,sys
+try:
+    st = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    print(0); raise SystemExit
+print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
+          if r.get("mode") == "managed" and r.get("type") == "proxmox_virtual_environment_vm"))' "$TFSTATE" 2>/dev/null || echo 0)
+  if [ "${existing:-0}" -gt 0 ]; then
+    echo "preflight: branch skipped, ${existing} dev VMs already exist in the state, so a re-run allocates no new VMs"
+    return 0
+  fi
+  echo "preflight: branch checked, no dev VMs in the state (a fresh build or after a teardown)"
   node=$(sed -n 's/^[[:space:]]*proxmox_node_name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$TFVARS" | head -1)
   [ -n "$node" ] || { echo "preflight: proxmox_node_name not found in the tfvars"; return 1; }
   # shellcheck source=/dev/null
