@@ -7,9 +7,11 @@
 #   1. The newest bundle must be encrypted to the box's own age recipient (and the Mac's, when one is set).
 #   2. Both escrows must hold before anything is sent: the restic password, and the box's age identity as secret
 #      BUNDLE_VAULT_SECRET. The box can write them and never read them back; the owner reads them at break-glass.
-#   3. restic backs the bundle up under tag secrets-bundle, then forgets past the keep settings and prunes.
+#   3. restic backs the bundle up under tag secrets-bundle, then forgets past the keep settings and prunes. Each
+#      bundle has its own file name, so forget groups by host and tags, not by path: grouped by path, every
+#      snapshot would be the only one in its group and none would ever be forgotten.
 #   4. The bundle is read back from the repository: the same bytes, and it decrypts with the box's identity to a
-#      tar holding prod/ or dev/.
+#      tar holding prod/ or dev/. The clear tar is only ever piped to `tar -t`, never written to disk.
 # No value is printed: one line with the bundle's name and size, or the step that failed.
 set -euo pipefail
 umask 077
@@ -66,24 +68,25 @@ CENTRAL_HUB_BACKUP_ENV=$settings BACKUP_ESCROW_FILE=$identity BACKUP_ESCROW_SECR
 
 err=$(mktemp "$work/.bundle-offbox.XXXXXX")
 back=$(mktemp "$work/.bundle-offbox.XXXXXX")
-tarback=$(mktemp "$work/.bundle-offbox.XXXXXX")
-trap 'rm -f "$err" "$back" "$tarback"' EXIT
+trap 'rm -f "$err" "$back"' EXIT
+# The OPNsense copy prunes the same repository; wait for its lock rather than fail.
+lock=(--retry-lock 30m)
 
 # The repository is pick 222's. It must exist already (the OPNsense copy makes it); this job never makes one.
 rc=0
-"$restic" cat config >/dev/null 2>"$err" || rc=$?
+"$restic" "${lock[@]}" cat config >/dev/null 2>"$err" || rc=$?
 [[ $rc == 0 ]] || { cat "$err" >&2; die "restic could not open the repository (exit $rc); the OPNsense off-box copy makes it"; }
 
 # 3. Send, then keep KEEP_DAILY daily and KEEP_MONTHLY monthly; --prune deletes the rest from the account for good.
-"$restic" backup --quiet --host "$host" --tag secrets-bundle "$bundle"
-"$restic" forget --quiet --host "$host" --tag secrets-bundle \
+"$restic" "${lock[@]}" backup --quiet --host "$host" --tag secrets-bundle "$bundle"
+"$restic" "${lock[@]}" forget --quiet --host "$host" --tag secrets-bundle --group-by host,tags \
   --keep-daily "$BUNDLE_OFFBOX_KEEP_DAILY" --keep-monthly "$BUNDLE_OFFBOX_KEEP_MONTHLY" --prune
 
 # 4. A copy counts only once it reads back and opens.
-"$restic" dump --host "$host" --tag secrets-bundle latest "$bundle" > "$back"
+"$restic" "${lock[@]}" dump --host "$host" --tag secrets-bundle latest "$bundle" > "$back"
 cmp -s "$back" "$bundle" || die "the bundle read back from the repository differs from $newest"
-SOPS_AGE_KEY_FILE=$identity "$sops" decrypt --input-type json --output-type binary --output "$tarback" "$back" \
-  || die "the bundle read back from the repository does not decrypt with the box's identity"
-tar -tf "$tarback" | grep -qE '^(prod|dev)/' || die "the bundle read back holds no prod/ or dev/ folder"
+listing=$(SOPS_AGE_KEY_FILE=$identity "$sops" decrypt --input-type json --output-type binary "$back" | tar -tf -) \
+  || die "the bundle read back from the repository does not decrypt with the box's identity to a tar"
+grep -qE '^(prod|dev)/' <<<"$listing" || die "the bundle read back holds no prod/ or dev/ folder"
 
 say "sent $newest ($(stat -c %s "$bundle") bytes) off the box; it reads back the same and opens with the box's identity"

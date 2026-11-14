@@ -8,7 +8,9 @@
 #   4. A Mac recipient in the settings that the bundle lacks is refused; with it in the bundle, it sends.
 #   5. A corrupted read-back fails the run.
 #   6. With no repository it fails, and makes none (the OPNsense copy makes it).
-#   7. No password, identity or file content shows in the output.
+#   7. No password, identity or file content shows in the output, and the clear tar is never written to a file.
+#   8. Retention works although every bundle has its own file name: with older snapshots on five past days and
+#      keep-daily 2, keep-monthly 0, one send leaves two. Grouped by path, as restic does by default, none would go.
 # restic, SOPS and age come from their GitHub releases, checked against the SHA-256s the role installs.
 # Usage: .github/hosts-check/tests/test_secrets_bundle_offbox.sh   (needs curl, python3 with PyYAML, bunzip2)
 set -euo pipefail
@@ -34,7 +36,7 @@ tar -xzf "$t/age.tgz" -C "$t" age/age-keygen && mv "$t/age/age-keygen" "$t/bin/a
 # restic, with a switch that corrupts what `dump` gives back.
 cat > "$t/bin/restic" <<EOF
 #!/bin/bash
-if [[ \$1 == dump && -e $t/corrupt ]]; then "$t/bin/restic-real" "\$@"; printf x; else exec "$t/bin/restic-real" "\$@"; fi
+if [[ " \$* " == *" dump "* && -e $t/corrupt ]]; then "$t/bin/restic-real" "\$@"; printf x; else exec "$t/bin/restic-real" "\$@"; fi
 EOF
 chmod +x "$t/bin/"*
 
@@ -62,13 +64,13 @@ cat > "$t/keys/opnsense-offbox/settings.env" <<EOF
 RESTIC_REPOSITORY=$t/repo
 RESTIC_PASSWORD_FILE=$t/keys/opnsense-offbox/restic.txt
 EOF
-write_bundle_settings() {
+write_bundle_settings() { # mac recipient, keep daily, keep monthly
   cat > "$t/keys/secrets-bundle/settings.env" <<EOF
 BUNDLE_MAC_RECIPIENT=${1:-}
 BUNDLE_KEEP=14
 BUNDLE_VAULT_SECRET=secrets-bundle-age-identity
-BUNDLE_OFFBOX_KEEP_DAILY=14
-BUNDLE_OFFBOX_KEEP_MONTHLY=6
+BUNDLE_OFFBOX_KEEP_DAILY=${2:-14}
+BUNDLE_OFFBOX_KEEP_MONTHLY=${3:-6}
 EOF
 }
 write_bundle_settings
@@ -124,7 +126,10 @@ send
 [[ $rc -ne 0 && $out == *"Mac's recipient"* ]] && ok "4a. a Mac recipient the bundle lacks is refused" || bad "4a. rc=$rc $out"
 make_bundle bundle-20261118T153000Z.sops.json "$box,$mac"
 send
-[[ $rc -eq 0 && $(snapshots) == 2 ]] && ok "4b. with the Mac's recipient in the bundle, it sends" || bad "4b. rc=$rc $out"
+# Same day as case 1. While fewer days than keep-daily hold snapshots, restic 0.19 also keeps the oldest one
+# ("oldest daily snapshot"), so both stay.
+[[ $rc -eq 0 && $out == *"sent bundle-20261118T153000Z.sops.json"* && $(snapshots) == 2 ]] \
+  && ok "4b. with the Mac's recipient in the bundle, it sends" || bad "4b. rc=$rc $out"
 write_bundle_settings
 
 # 5
@@ -134,7 +139,23 @@ send
 [[ $rc -ne 0 && $out == *"differs from"* ]] && ok "5. a corrupted read-back fails the run" || bad "5. rc=$rc $out"
 rm -f "$t/corrupt"
 
+# 8
+r() { RESTIC_REPOSITORY=$t/repo RESTIC_PASSWORD_FILE=$t/keys/opnsense-offbox/restic.txt "$t/bin/restic-real" "$@"; }
+for d in 01 02 03 04 05; do
+  make_bundle "bundle-202610${d}T153000Z.sops.json" "$box"
+  r backup --quiet --host agent-box --tag secrets-bundle --time "2026-10-$d 15:30:00" \
+    "$t/keys/secrets-bundle/bundles/bundle-202610${d}T153000Z.sops.json" >/dev/null
+done
+before=$(snapshots)
+make_bundle bundle-20261120T153000Z.sops.json "$box"
+write_bundle_settings "" 2 0
+send
+[[ $rc -eq 0 && $before -ge 6 && $(snapshots) == 2 ]] && ok "8. retention: $before snapshots on 6 days, keep-daily 2, leaves 2" \
+  || bad "8. rc=$rc before=$before after=$(snapshots) $out"
+write_bundle_settings
+
 # 7
+grep -qE 'decrypt[^|]*--output ' "$t/send.sh" && bad "7. the read-back writes the clear tar to a file"
 secret=$(grep AGE-SECRET-KEY "$t/keys/secrets-bundle/age-identity.txt")
 if [[ $all == *"$secret"* || $all == *"$(cat "$t/keys/opnsense-offbox/restic.txt")"* || $all == *fake-prod-file-content* ]]; then
   bad "7. a value shows in the output"

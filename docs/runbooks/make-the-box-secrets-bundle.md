@@ -34,10 +34,10 @@ The lab's private files live in the agent box's keys folder, and on the owner's 
   1. picks the newest bundle, and refuses it unless its `sops.age` lists the box's recipient, and the Mac's when one is set;
   2. runs the escrow (`opnsense-escrow.py ensure`) for both the restic password and the box's age identity, the identity as secret `BUNDLE_VAULT_SECRET` (default `secrets-bundle-age-identity`). If the vault does not hold the current value of both, nothing is sent;
   3. requires the repository to exist already (the OPNsense copy makes it; this job never does);
-  4. runs `restic backup --host agent-box --tag secrets-bundle`, then `restic forget --tag secrets-bundle --keep-daily 14 --keep-monthly 6 --prune`;
-  5. reads the bundle back with `restic dump latest`, requires the same bytes, decrypts that copy with the box's identity, and requires `prod/` or `dev/` in the tar;
+  4. runs `restic backup --host agent-box --tag secrets-bundle`, then `restic forget --tag secrets-bundle --group-by host,tags --keep-daily 14 --keep-monthly 6 --prune`. Each bundle has its own file name, and restic groups by path unless told otherwise, so without `--group-by host,tags` nothing would ever be forgotten. Every restic call waits up to 30 minutes for a lock (`--retry-lock 30m`), because the OPNsense copy prunes the same repository; it waits the same way;
+  5. reads the bundle back with `restic dump latest`, requires the same bytes, decrypts that copy with the box's identity straight into `tar -t` (the clear tar is never written to a file), and requires `prod/` or `dev/` in it;
   6. prints one line with the bundle's name and size. No value is ever printed.
-- **Retention:** 14 daily and 6 monthly off-box bundles (`offbox_keep_daily`, `offbox_keep_monthly`). `--prune` deletes older ones from Azure for good; the account's 7-day soft delete is the only way back.
+- **Retention:** 14 daily and 6 monthly off-box bundles (`offbox_keep_daily`, `offbox_keep_monthly`). While fewer days than that hold bundles, restic also keeps the oldest one. `--prune` deletes older ones from Azure for good; the account's 7-day soft delete is the only way back. That daily delete is why the install is a delete under D-0042 rule 6, and the owner's card names it.
 - **The escrowed identity:** the box's custom vault role can set a secret and read its metadata, never a value, and cannot delete or purge (hosts/terraform/azure/backup/main.tf). Each version carries a salted hash of what was written, so the box can tell the vault holds the current identity without reading it.
 
 ## Before you start
@@ -90,7 +90,7 @@ Don't, unless it leaked. A new identity can't open older bundles, so the old ide
 | `the vault does not hold the current repository password and age identity; nothing sent` | The escrow failed. The line before it says why, as in the OPNsense runbook's table: no token, a 403, or a refused set. |
 | `restic could not open the repository (exit 10)` | The OPNsense off-box copy has not made the repository yet. Run it first. |
 | `restic could not open the repository (exit 12)` | The password on the box is not the repository's. See the OPNsense runbook. |
-| `unable to create lock` from restic | The OPNsense copy holds the repository's lock; its timer runs earlier in the day. Run step 3 again later. |
+| `unable to create lock` from restic | Another restic run held the repository's lock for over 30 minutes. Check that no OPNsense copy or earlier send is stuck (`systemctl status opnsense-offbox secrets-bundle-offbox`), then run step 3 again. |
 | `differs from` or `does not decrypt` after the read-back | The repository copy is damaged. Run `restic check` on the box; tell the owner. |
 
 Tell the owner before trying anything not written here.
