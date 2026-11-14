@@ -16,8 +16,10 @@
       {{ {'peers': (__config.json.data.config.servers | map('dict2items')
                     | map('selectattr', 'key', 'in', ['node_id', 'address', 'leader', 'voter'])
                     | map('items2dict') | list),
-          'leader': __autopilot.json.data.leader,
-          'term': __autopilot.json.data.servers[__autopilot.json.data.leader].last_term} }}
+          'leader': __ap.leader,
+          'term': __ap.servers[__ap.leader].last_term} }}
+    # OpenBao's API page shows the autopilot state with no `data` wrapper; take either shape.
+    __ap: "{{ __autopilot.json.data | default(__autopilot.json) }}"
   block:
     - name: Drill | An admin token
       ansible.builtin.uri:
@@ -43,6 +45,7 @@
         ca_path: "{{ openbao_cacert_dest }}"
         headers: "{{ openbao_drill_headers }}"
       register: openbao_drill_config_before
+      no_log: true
 
     - name: Drill | Raft leader and term before
       ansible.builtin.uri:
@@ -50,6 +53,21 @@
         ca_path: "{{ openbao_cacert_dest }}"
         headers: "{{ openbao_drill_headers }}"
       register: openbao_drill_autopilot_before
+      no_log: true
+
+    - name: Drill | The Raft replies hold the peers, the leader and its term
+      ansible.builtin.assert:
+        that:
+          - openbao_drill_config_before.json.data.config.servers | default([]) | length > 0
+          - __ap.leader | default('') | length > 0
+          - __ap.servers[__ap.leader].last_term is defined
+        fail_msg: >-
+          The live store's Raft replies lack a field the drill compares (config servers, autopilot leader or its
+          last_term); the API's shape differs from what tasks/drill.yml expects.
+        quiet: true
+      vars:
+        __autopilot: "{{ openbao_drill_autopilot_before }}"
+        __ap: "{{ __autopilot.json.data | default(__autopilot.json) }}"
 
     - name: Drill | Keep the view from before
       ansible.builtin.set_fact:
@@ -92,6 +110,7 @@
         ca_path: "{{ openbao_cacert_dest }}"
         headers: "{{ openbao_drill_headers }}"
       register: openbao_drill_config_after
+      no_log: true
 
     - name: Drill | Raft leader and term after
       ansible.builtin.uri:
@@ -99,6 +118,7 @@
         ca_path: "{{ openbao_cacert_dest }}"
         headers: "{{ openbao_drill_headers }}"
       register: openbao_drill_autopilot_after
+      no_log: true
 
     - name: Drill | The drill passed and the live store's peers, leader and term did not change
       ansible.builtin.assert:
