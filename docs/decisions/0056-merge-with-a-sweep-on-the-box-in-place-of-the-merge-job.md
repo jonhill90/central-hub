@@ -24,7 +24,7 @@ This record **amends D-0042 rules 2 and 11**. It changes how a merge is started 
 
 ## Decision Drivers
 
-- **The owner's words.** Agents don't ask him to approve PRs (07:42 to 07:44 UTC), and he wants the Mac removed from merging.
+- **The owner's delegation.** For the greenfield phase the owner has delegated PR approval to the reviewer and council passes (message of 2026-11-14, 07:42 to 07:44 UTC), keeping his own approval for the steps D-0042 rule 6 lists. The delegation is time-limited and is the owner's to change or withdraw. He also wants the Mac removed from merging.
 - **No dispatch route.** A cloud session cannot start a workflow here (evidence, finding 1), and starting it by Actions write would let any session start the tailnet workflow, which has no environment gate (evidence, finding 4).
 - **What a job can check, it checks.** The box can read GitHub's state itself: the head, a clean merge and every check.
 - **What it can't check, it logs.** The box can't read the chat, so a pass is the recorder's word with the relay id it gave, shown on the PR after each merge.
