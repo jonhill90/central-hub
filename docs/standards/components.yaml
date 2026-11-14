@@ -369,7 +369,7 @@ components:
     used-for: machine code under hosts/ansible (ansible-core, ansible.posix, community.general, oxlorg.opnsense)
     licence: GPL-3.0
     licence-source: https://raw.githubusercontent.com/ansible/ansible/devel/COPYING
-    paid-edition: Red Hat Ansible Automation Platform adds a web UI, API and RBAC around ansible-core; we use ansible-core only
+    paid-edition: Red Hat Ansible Automation Platform adds a web UI, API and RBAC around ansible-core, Red Hat Ansible Certified Content and generative AI assistants; the same page names community Ansible and the AWX controller (Apache-2.0) as the do-it-yourself option at no cost; we use ansible-core and community collections only
     paid-edition-source: https://www.redhat.com/en/technologies/management/ansible/ansible-vs-red-hat-ansible-automation-platform
     verdict: pass
     sources: [pypi:ansible-core, collection:ansible.posix, collection:community.general, collection:oxlorg.opnsense]
