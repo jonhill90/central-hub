@@ -88,6 +88,12 @@ k8s_identity_jellyfin_provider: keycloak
 # proxmox_sso reads it on the controller for the Proxmox host.
 k8s_identity_proxmox_hosts: []
 
+# The secrets store's web page (role openbao, the owner's sign-in, agent pick 233): the names the owner's
+# browser uses for it. Private, from the inventory. The client allows the store's OIDC callback on each.
+# Empty: realm lab has no openbao client and the values file needs no OPENBAO_CLIENT_SECRET, so adding the
+# client is a realm change only when a name is set. Role openbao reads that secret from the same file.
+k8s_identity_openbao_hosts: []
+
 # Keycloak's database: PostgreSQL 18.6 (2026-08-13; Keycloak 26.8 tests 18), one pod. c1 has no
 # StorageClass yet (storage is BUILD-PATH S17), so its data sits on a static local volume: a folder
 # on one worker, kept when the pod or the volume object is deleted (reclaim policy Retain).

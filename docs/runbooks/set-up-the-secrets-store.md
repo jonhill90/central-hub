@@ -60,7 +60,7 @@ superseded-by:
 
 5. Make the recovery keys.
    why: self-initialization makes none, and the docs warn to make them before they are needed.
-   The wrapper logs in as `admin` and calls `sys/rotate/recovery/init` with 3 shares and a threshold of 2. On a store that self-initialized with no recovery keys, that call returns the shares at once ([OpenBao's rotate init API](https://openbao.org/docs/api/system/rotate/init/)). The shares go to `/etc/agent-keys/dev/openbao-recovery.json` and are never printed. That is for dev only, where the store holds nothing of value: a prod store's shares go only to the owner's Mac, never to the box (D-0038 rule 5), and the wrapper refuses any store outside the dev IDs.
+   The wrapper logs in as `admin` and calls `sys/rotate/recovery/init` with 3 shares and a threshold of 2. On a store that self-initialized with no recovery keys, that call returns the shares at once ([OpenBao's rotate init API](https://openbao.org/docs/api/system/rotate/init/)). The shares go to `/etc/agent-keys/dev/openbao-recovery.json` and are never printed. That is for dev only, where the store holds nothing of value: a prod store makes none (D-0038 rule 5), and the wrapper refuses any store outside the dev IDs.
    expect: `recovery shares written to the keys folder (not printed)`.
 
 6. Register the dev cluster's key.
@@ -85,6 +85,23 @@ superseded-by:
    why: a backup counts only once it has been restored.
    Write a test key, take a snapshot, delete the key, then `secrets-store restore`. This quick drill restores over the live dev store; it is not D-0038 Confirmation 4, which restores into a throwaway server.
    expect: `restored raft-<time>.snap`, and the test key reads back. The full drill is D-0038 Confirmation 5: `destroy`, `plan`, `apply`, `configure`, then `restore`, with no person.
+
+11. The owner's sign-in to the web page (agent pick 233).
+    why: the owner enters keys, such as the VPS provider key at `kv/vps/provider-key`, in the store's web page with the lab account they already have, with no paste in chat, no command and no Mac step.
+    **Not runnable yet:** the `secrets-store` wrapper passes only fixed settings to the playbook, so `openbao_oidc` reaches the role only after a change to the wrapper, which is a box limit (D-0036 rule 3), and that change waits for the box's limits to be applied. The inputs, once it does: `openbao_oidc` with `discovery_url` (`https://<Keycloak's name>/realms/lab`), `values_file` (the identity role's values file, which holds `OPENBAO_CLIENT_SECRET`), `ui_names` (the store's names), and on dev `ca_pem_file` (the dev cluster's CA) and `pin_address` (the dev Gateway, because on dev the lab's names resolve to prod's). Set the same names in `k8s_identity_openbao_hosts` and run the identity role first, so realm `lab` has client `openbao` and the values file has its secret. Then `secrets-store configure`, tag `owner_signin`:
+    - login `auth/oidc` (type jwt) with Keycloak's realm as its discovery URL and client `openbao`;
+    - role `owner`: only members of group `lab-admins` (`bound_claims` on `groups`), `max_age` 300, a 15-minute token with policy `vps-intake` and nothing else;
+    - policy `vps-intake`: create, update and read `kv/data/vps/*`, list and read its metadata, list `kv/metadata/`. No delete, no `sys/`, no `auth/`.
+
+    On dev, `openbao_oidc_proof` (`admin_user`, `viewer_user`, `gateway_address`, `verify`) runs `files/oidc-check.py`, which makes the web page's calls and prints step names and HTTP codes only.
+    expect: `PASS: owner sign-in: admin with code gets vps-intake only, viewer refused`, after 13 `ok` steps: the password alone stops at the code form, the code gives a token with `vps-intake`, that token writes and reads `kv/vps/proof` and gets 403 on `kv/data/c1/check` and `sys/policies/acl/admin`, and a `lab-viewers` user gets through Keycloak but not the store.
+
+    **Limits:**
+    - The one-time code is checked by Keycloak only. OpenBao's own login MFA fails in the web page with OIDC ([openbao#3281](https://github.com/openbao/openbao/issues/3281)), and the `amr` claim is unreliable ([keycloak#54497](https://github.com/keycloak/keycloak/issues/54497)).
+    - The realm seeds each admin's password and code seed from the values file. Anyone holding that file can make the owner's password and code, so a sign-in proves the owner only as far as that file stays with them. Every sign-in is in the store's audit log with the user name.
+    - Safari's sign-in window fails on OpenBao 2.7.x for some users ([openbao#4308](https://github.com/openbao/openbao/issues/4308)). Use another browser.
+    - The web page itself is first used by the owner; the dev proof drives its calls, not a browser.
+    - Prod: the login is a new access right, so it is set only after the owner's tap (D-0042 rule 6).
 
 ## Remove it
 

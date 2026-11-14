@@ -1,0 +1,256 @@
+---
+# The owner's sign-in to the store's web page (agent pick 233; docs/runbooks/set-up-the-secrets-store.md,
+# "The owner's sign-in"). OIDC through Keycloak realm lab: login mount {{ openbao_oidc_mount }} (type jwt),
+# one role for members of group {{ openbao_oidc_group }}, whose token gets policy {{ openbao_oidc_policy }}
+# only. Keycloak asks every member of that group for a one-time code; the store can't check that itself
+# (OpenBao's own login MFA fails in the web page with OIDC, openbao/openbao#3281). Set from the box through
+# the admin AppRole, like tasks/clients.yml. Each write runs only when the store holds something else.
+
+- name: owner_signin | The settings are complete
+  ansible.builtin.assert:
+    that:
+      - openbao_oidc.discovery_url | default('') is match('^https://[^/]+/realms/[^/]+$')
+      - openbao_oidc.values_file | default('') | length > 0
+      - openbao_oidc.ui_names | default([]) | length > 0
+    fail_msg: "openbao_oidc needs discovery_url (https://<Keycloak's name>/realms/<realm>), values_file and ui_names."
+    quiet: true
+
+- name: owner_signin | The login's settings
+  ansible.builtin.set_fact:
+    openbao_oidc_kc_host: "{{ openbao_oidc.discovery_url | urlsplit('hostname') }}"
+    openbao_oidc_redirects: >-
+      {{ openbao_oidc.ui_names | map('regex_replace', '^(.*)$',
+      'https://\1/ui/vault/auth/' ~ openbao_oidc_mount ~ '/oidc/callback') | list }}
+    openbao_oidc_role_body:
+      role_type: oidc
+      user_claim: preferred_username
+      bound_audiences: ["{{ openbao_oidc_client_id }}"]
+      bound_claims: {groups: ["{{ openbao_oidc_group }}"]}
+      max_age: "{{ openbao_oidc_max_age | int }}"
+      token_policies: ["{{ openbao_oidc_policy }}"]
+      token_ttl: "{{ openbao_oidc_token_ttl | int }}"
+      token_max_ttl: "{{ openbao_oidc_token_max_ttl | int }}"
+
+# Dev only. On dev the lab's names resolve to prod's Gateway, so the store would find prod's Keycloak;
+# this pins Keycloak's name to the dev Gateway. The VM's cloud-init may rewrite /etc/hosts at boot, so
+# every configure run puts the line back.
+- name: owner_signin | Keycloak's name resolves to the given address on the VM
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '\s{{ openbao_oidc_kc_host | regex_escape }}$'
+    line: "{{ openbao_oidc.pin_address }} {{ openbao_oidc_kc_host }}"
+    mode: "0644"
+  when: openbao_oidc.pin_address | default('') | length > 0
+
+- name: owner_signin | The login, from the box through the admin AppRole
+  delegate_to: localhost
+  become: false
+  run_once: true
+  vars:
+    openbao_api: "https://{{ openbao_address }}:{{ openbao_port }}/v1"
+  block:
+    - name: owner_signin | Read the values file
+      ansible.builtin.set_fact:
+        openbao_oidc_values: >-
+          {{ dict(__lines | map('regex_replace', '=.*$', '') | zip(__lines | map('regex_replace', '^[^=]*=', ''))) }}
+      vars:
+        __lines: >-
+          {{ lookup('ansible.builtin.file', openbao_oidc.values_file).splitlines() | select('match', '^[A-Z][A-Z0-9_]*=') | list }}
+      no_log: true
+
+    - name: owner_signin | The values file holds the client's secret
+      ansible.builtin.assert:
+        that: openbao_oidc_values[openbao_oidc_secret_key] | default('') | length > 0
+        fail_msg: "{{ openbao_oidc.values_file }} has no {{ openbao_oidc_secret_key }}: run the identity role with this store's names first."
+        quiet: true
+
+    - name: owner_signin | The login's config, and a hash of it
+      ansible.builtin.set_fact:
+        openbao_oidc_config_body:
+          oidc_discovery_url: "{{ openbao_oidc.discovery_url }}"
+          oidc_discovery_ca_pem: >-
+            {{ lookup('ansible.builtin.file', openbao_oidc.ca_pem_file) if openbao_oidc.ca_pem_file | default('') | length > 0 else '' }}
+          oidc_client_id: "{{ openbao_oidc_client_id }}"
+          oidc_client_secret: "{{ openbao_oidc_values[openbao_oidc_secret_key] }}"
+          default_role: "{{ openbao_oidc_role }}"
+      no_log: true
+
+    - name: owner_signin | The hash of what was last written
+      ansible.builtin.set_fact:
+        openbao_oidc_config_sha256: "{{ openbao_oidc_config_body | to_json | hash('sha256') }}"
+        openbao_oidc_config_sha256_now: "{{ lookup('ansible.builtin.file', openbao_oidc_config_sha256_dest, errors='ignore') | default('', true) | trim }}"
+
+    - name: owner_signin | An admin token
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/approle/login"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        body_format: json
+        body:
+          role_id: "{{ lookup('ansible.builtin.file', openbao_admin_role_id_src) }}"
+          secret_id: "{{ lookup('ansible.builtin.file', openbao_admin_secret_id_src) }}"
+      register: openbao_oidc_admin_login
+      no_log: true
+
+    - name: owner_signin | Calls below use that token
+      ansible.builtin.set_fact:
+        openbao_oidc_headers:
+          X-Vault-Token: "{{ openbao_oidc_admin_login.json.auth.client_token }}"
+      no_log: true
+
+    - name: owner_signin | Read the login mounts
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/auth"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_oidc_headers }}"
+      register: openbao_oidc_auth_mounts
+      no_log: true
+
+    - name: owner_signin | The login mount {{ openbao_oidc_mount }}
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/auth/{{ openbao_oidc_mount }}"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_oidc_headers }}"
+        body_format: json
+        body: {type: jwt, description: "The owner's sign-in through Keycloak (OIDC)"}
+        status_code: [200, 204]
+      when: (openbao_oidc_mount ~ '/') not in (openbao_oidc_auth_mounts.json.data | default(openbao_oidc_auth_mounts.json))
+      changed_when: true
+      no_log: true
+
+    # The client secret can't be read back, so the config is written when its hash differs from the one
+    # kept on the box, or when the mount has no config yet.
+    - name: owner_signin | Read the login's config
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/{{ openbao_oidc_mount }}/config"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_oidc_headers }}"
+        status_code: [200, 404]
+      register: openbao_oidc_config_now
+      no_log: true
+
+    - name: owner_signin | The login's config (Keycloak's realm, the client, the default role)
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/{{ openbao_oidc_mount }}/config"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_oidc_headers }}"
+        body_format: json
+        body: "{{ openbao_oidc_config_body }}"
+        status_code: [200, 204]
+      when: >-
+        openbao_oidc_config_now.status == 404 or
+        openbao_oidc_config_now.json.data.oidc_discovery_url | default('') != openbao_oidc.discovery_url or
+        openbao_oidc_config_sha256_now != openbao_oidc_config_sha256
+      changed_when: true
+      no_log: true
+
+    # Written after the config, so it always matches what the store holds (a failed write stops before it).
+    - name: owner_signin | The hash of the config the store holds, on the box
+      ansible.builtin.copy:
+        dest: "{{ openbao_oidc_config_sha256_dest }}"
+        content: "{{ openbao_oidc_config_sha256 }}\n"
+        mode: "0600"
+
+    - name: owner_signin | Read policy {{ openbao_oidc_policy }}
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/policies/acl/{{ openbao_oidc_policy }}"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_oidc_headers }}"
+        status_code: [200, 404]
+      register: openbao_oidc_policy_now
+      no_log: true
+
+    - name: owner_signin | The policy that writes and reads only its kv folder, {{ openbao_oidc_policy }}
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/policies/acl/{{ openbao_oidc_policy }}"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_oidc_headers }}"
+        body_format: json
+        body:
+          policy: "{{ lookup('ansible.builtin.template', 'policy-vps-intake.hcl.j2') }}"
+        status_code: [200, 204]
+      when: >-
+        openbao_oidc_policy_now.status == 404 or
+        (openbao_oidc_policy_now.json.data.policy | default('') | trim) != (lookup('ansible.builtin.template', 'policy-vps-intake.hcl.j2') | trim)
+      changed_when: true
+      no_log: true
+
+    - name: owner_signin | Read role {{ openbao_oidc_role }}
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/{{ openbao_oidc_mount }}/role/{{ openbao_oidc_role }}"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_oidc_headers }}"
+        status_code: [200, 404]
+      register: openbao_oidc_role_now
+      no_log: true
+
+    - name: owner_signin | The role for members of the one group, with that policy only, {{ openbao_oidc_role }}
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/{{ openbao_oidc_mount }}/role/{{ openbao_oidc_role }}"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_oidc_headers }}"
+        body_format: json
+        body: "{{ openbao_oidc_role_body | combine({'allowed_redirect_uris': openbao_oidc_redirects}) }}"
+        status_code: [200, 204]
+      vars:
+        __want: "{{ openbao_oidc_role_body | combine({'allowed_redirect_uris': openbao_oidc_redirects}) }}"
+      when: >-
+        openbao_oidc_role_now.status == 404 or
+        (openbao_oidc_role_now.json.data | dict2items | selectattr('key', 'in', __want | list) | items2dict) != __want
+      changed_when: true
+      no_log: true
+
+    - name: owner_signin | The proof (dev only)
+      when: openbao_oidc_proof | length > 0
+      block:
+        # Password and seed travel on stdin, never in an argument; no_log keeps them out of Ansible's output.
+        - name: owner_signin | An admin and a viewer sign in, as the web page does
+          ansible.builtin.command:
+            cmd: python3 -I {{ role_path }}/files/oidc-check.py
+            stdin: >-
+              {{ {'api': openbao_api, 'cacert': openbao_cacert_dest, 'mount': openbao_oidc_mount,
+              'role': openbao_oidc_role, 'policy': openbao_oidc_policy, 'prefix': openbao_oidc_kv_prefix,
+              'redirect': openbao_oidc_redirects | first,
+              'kc_base': 'https://' ~ openbao_oidc_kc_host,
+              'address': openbao_oidc_proof.gateway_address, 'verify': openbao_oidc_proof.verify | default(true) | bool,
+              'digits': openbao_oidc_proof.digits | default(6), 'period': openbao_oidc_proof.period | default(30),
+              'admin': {'user': openbao_oidc_proof.admin_user,
+                        'password': openbao_oidc_values['PASSWORD_' ~ (openbao_oidc_proof.admin_user | upper | regex_replace('[^A-Z0-9]', '_'))],
+                        'seed': openbao_oidc_values['TOTP_' ~ (openbao_oidc_proof.admin_user | upper | regex_replace('[^A-Z0-9]', '_'))]},
+              'viewer': {'user': openbao_oidc_proof.viewer_user,
+                         'password': openbao_oidc_values['PASSWORD_' ~ (openbao_oidc_proof.viewer_user | upper | regex_replace('[^A-Z0-9]', '_'))]}}
+              | to_json }}
+          register: openbao_oidc_check
+          changed_when: false
+          failed_when: false
+          no_log: true
+
+        # The script prints step names and HTTP codes only, so its lines are shown.
+        - name: owner_signin | Steps
+          ansible.builtin.debug:
+            msg: "{{ openbao_oidc_check.stdout_lines }}"
+
+        - name: owner_signin | Every step passed
+          ansible.builtin.assert:
+            that: openbao_oidc_check.rc == 0
+            fail_msg: The owner sign-in proof failed; the step lines above name the step and the HTTP code.
+            quiet: true
+
+        - name: PASS line for the owner's sign-in
+          ansible.builtin.debug:
+            msg: "PASS: owner sign-in: admin with code gets {{ openbao_oidc_policy }} only, viewer refused"
+
+  always:
+    - name: owner_signin | The admin token is revoked
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/token/revoke-self"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_oidc_headers }}"
+        status_code: [200, 204]
+      when: openbao_oidc_headers is defined
+      no_log: true

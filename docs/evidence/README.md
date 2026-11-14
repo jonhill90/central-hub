@@ -43,4 +43,5 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0044 | [0044-let-the-agent-box-apply-limit-changes-main-approves-by-digest.md](0044-let-the-agent-box-apply-limit-changes-main-approves-by-digest.md) |
 | D-0045 | [0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md](0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md) |
 | D-0047 | [0047-keep-proxmox-ve-as-the-lab-hypervisor-on-its-free-repositories.md](0047-keep-proxmox-ve-as-the-lab-hypervisor-on-its-free-repositories.md) |
+| D-0048 | [0048-build-the-lab-with-opentofu-and-ansible-core.md](0048-build-the-lab-with-opentofu-and-ansible-core.md) |
 | D-0049 | [0049-run-almalinux-on-lab-vms-and-debian-where-it-comes-with-the-platform.md](0049-run-almalinux-on-lab-vms-and-debian-where-it-comes-with-the-platform.md) |
