@@ -184,6 +184,7 @@ check_backup() {
   bash "$here/tests/test_secrets_bundle_offbox.sh"
   bash "$here/tests/test_secrets_store_offbox.sh"
   bash "$here/tests/test_secrets_store_restore.sh"
+  bash "$here/tests/test_secrets_store_snapshots.sh"
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
   bash "$here/tests/test_identity_signin.sh"

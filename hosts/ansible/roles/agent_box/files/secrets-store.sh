@@ -14,7 +14,8 @@
 # Confirmations 4 and 7, pick 239). restore-rebuilt: after a destroy and rebuild, puts back the newest snapshot
 # of the store's previous cluster, forced only if OpenBao refuses it for the keys (Confirmation 5, pick 238).
 # Both refuse a snapshot older than the recovery shares. destroy leaves a hold that stops the hourly off-box send
-# until restore-rebuilt passes; clear-hold removes it when the rebuilt store is to stay as it is. Dev only: every
+# until restore-rebuilt passes; clear-hold sets the earlier store's snapshots aside in a kept folder that rotation
+# never reads, then removes it, when the rebuilt store is to stay as it is. Dev only: every
 # action refuses a store outside 550-599.
 set -euo pipefail
 umask 077
@@ -37,6 +38,9 @@ sshkey=$env_keys/secrets-store-ssh
 cacert=$env_keys/secrets-store-ca.crt
 snapshots=$env_keys/openbao-snapshots   # the store's Raft snapshots, readable only with the seal key
 snapshot_keep=24
+# An earlier store's snapshots that clear-hold set aside: rotation never reads this folder, so they stay until
+# the owner taps their removal (a delete under D-0042 rule 6).
+kept=$env_keys/openbao-snapshots-kept
 hold=$work/state/secrets-store.rebuilding   # from destroy until restore-rebuilt passes; the off-box send skips meanwhile
 # The owner's sign-in (agent pick 233), dev: the dev rebuild's identity stage writes Keycloak's issuer, its
 # Gateway's address and the dev CA's root here once the store's address is in the realm; its values file holds
@@ -217,8 +221,7 @@ snapshot() {
   [[ $ok == 1 && -s $out.part ]] || { rm -f "$out.part"; echo "secrets-store: snapshot failed or empty" >&2; exit 1; }
   mv "$out.part" "$out"
   echo "$cluster" > "$out.cluster"
-  find "$snapshots" -maxdepth 1 -name 'raft-*.snap' -printf '%f\n' | sort -r | tail -n +"$((snapshot_keep + 1))" |
-    while read -r f; do rm -f -- "${snapshots:?}/$f" "${snapshots:?}/$f.cluster"; done
+  "$(dirname "$0")/secrets-store-snapshots.sh" rotate "$snapshots" "$snapshot_keep"
   echo "secrets-store: snapshot $(basename "$out"), $(stat -c %s "$out") bytes"
 }
 
@@ -235,16 +238,20 @@ restore_rebuilt() {
   "$(dirname "$0")/secrets-store-restore.sh" rebuilt "$(addr)" "$cacert" "$env_keys" "$snapshots" "$hold" 120
 }
 
-# The rebuilt store is to stay as it is, with no restore: remove the hold, so snapshots and the hourly off-box
-# send run again. The earlier cluster's snapshots are not restored: the keys folder keeps the newest 24 whatever
-# their cluster, so new snapshots push them out in about a day; off the box, retention removes them in time,
-# and that prune is the delete the owner already taps for the send (pick 237).
+# The rebuilt store is to stay as it is, with no restore. The hold is what keeps rotation from removing the earlier
+# store's snapshots, so first every snapshot not of the current cluster moves into the kept folder, which rotation
+# never reads; then the hold goes, and snapshots and the hourly off-box send run again. Nothing is deleted.
 clear_hold() {
+  local cluster moved
   [[ -e $hold ]] || { echo "secrets-store: no rebuild hold; nothing done"; return 0; }
-  [[ $(curl -s -o /dev/null -w '%{http_code}' --cacert "$cacert" "$(addr)/v1/sys/health" || true) == 200 ]] ||
-    { echo "secrets-store: the store does not answer sys/health 200; the hold stays" >&2; exit 1; }
+  cluster=$(curl -s --cacert "$cacert" "$(addr)/v1/sys/health" |
+    python3 -I -c 'import json, sys; print(json.load(sys.stdin)["cluster_id"])') ||
+    { echo "secrets-store: the store gave no cluster ID in sys/health; the hold stays" >&2; exit 1; }
+  [[ -n $cluster ]] || { echo "secrets-store: empty cluster ID; the hold stays" >&2; exit 1; }
+  moved=$("$(dirname "$0")/secrets-store-snapshots.sh" keep "$snapshots" "$kept" "$cluster") ||
+    { echo "secrets-store: setting the earlier snapshots aside failed; the hold stays" >&2; exit 1; }
   rm -f -- "$hold"
-  echo "secrets-store: rebuild hold removed; the earlier cluster's snapshots were not restored; on the box, the next 24 snapshots push them out"
+  echo "secrets-store: rebuild hold removed; $moved earlier snapshot(s) set aside in $kept, not restored; removing them is the owner's tap"
 }
 
 case $action in
