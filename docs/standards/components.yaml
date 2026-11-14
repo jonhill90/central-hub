@@ -254,6 +254,16 @@ components:
     verdict: pass
     sources: [image:quay.io/keycloak/keycloak, url:raw.githubusercontent.com/keycloak/]
     checked: 2026-11-14
+  - name: OpenBao
+    kind: software
+    used-for: the lab's secrets store, installed from its release package
+    licence: MPL-2.0
+    licence-source: https://raw.githubusercontent.com/openbao/openbao/main/LICENSE
+    paid-edition: none found; the project states it is community-run under open governance with an OSI licence, and sells no edition
+    paid-edition-source: https://raw.githubusercontent.com/openbao/openbao/main/README.md
+    verdict: pass
+    sources: [url:github.com/openbao/]
+    checked: 2026-11-14
   - name: PostgreSQL
     kind: software
     used-for: Keycloak's database
