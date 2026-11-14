@@ -1,0 +1,33 @@
+---
+argument_specs:
+  main:
+    short_description: Sign-in to the Proxmox web UI through Keycloak (an OpenID Connect realm), with root@pam kept
+    options:
+      # Private, through the inventory.
+      proxmox_sso_issuer:
+        type: str
+        required: true
+        description: Keycloak's issuer for realm lab, https://sso.<zone>/realms/lab (k8s_identity_issuer). Private.
+      proxmox_sso_ui_names:
+        type: list
+        elements: str
+        description: The web UI's DNS names (by default proxmox_cert_names); the first is the proof's redirect. Private.
+      proxmox_sso_address:
+        type: str
+        default: ""
+        description: c1's Gateway address for an /etc/hosts line for the issuer's name. Empty adds none. Private.
+      # Defaults in defaults/main.yml
+      proxmox_sso_hosts_file: {type: path, default: /etc/hosts, description: "The hosts file that line goes in (a test sets another)."}
+      proxmox_sso_realm: {type: str, default: sso, description: "The realm's name in Proxmox."}
+      proxmox_sso_client_id: {type: str, default: proxmox, description: "The Keycloak client's ID."}
+      proxmox_sso_values_file: {type: path, description: "The controller's identity values file that holds the client secret."}
+      proxmox_sso_secret_key: {type: str, default: PROXMOX_CLIENT_SECRET, description: "The secret's key in that file."}
+      proxmox_sso_username_claim: {type: str, default: username, description: "The claim Proxmox user names come from; fixed once the realm exists."}
+      proxmox_sso_default: {type: bool, default: true, description: "Offer this realm first on the login page."}
+      proxmox_sso_groups:
+        type: list
+        elements: dict
+        description: Each Keycloak group and the Proxmox role its members get on /.
+        options:
+          group: {type: str, required: true, description: "The group's name in Keycloak (the groups claim)."}
+          role: {type: str, required: true, description: "A Proxmox role, given on / to group <group>-<realm>."}

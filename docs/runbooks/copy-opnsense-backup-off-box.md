@@ -3,18 +3,18 @@ title: Copy the OPNsense configuration backups off the agent box
 status: draft
 kind: manual
 trigger: once, after the box keeps daily OPNsense copies (set-up-the-box-lifeline.md); again if the box is rebuilt or the copy app's certificate expired
-runner: an agent lane on the controller, with the Azure CLI signed in as agent-azure, after the owner's yes to the Key Vault and his go to apply
+runner: an agent lane on the controller, with the Azure CLI signed in as agent-azure, the owner's yes to the Key Vault was given on 2026-11-14 at 03:07 UTC (a decision-card tap on #244)
 outcome: every day the box's OPNsense configuration copies go, encrypted, to their own container in the Azure backup account, under their own identity and a restic password made on the box, whose one off-box copy sits in a Key Vault the box can write but not read; the newest copy is read back
 needs: the box's daily OPNsense copies (agent_box_opnsense_backup); hosts/terraform/azure/backup applied before (back-up-c1-off-box.md); the Azure CLI on the controller signed in as agent-azure (Owner on the subscription); the box leaves through the home's public address, the only one the storage account and the vault answer
 private-values: [c1-backup-azure-storage-account, opnsense-offbox-vault-name, opnsense-offbox-client-id, opnsense-offbox-app-object-id, azure-tenant-id]
 files: [hosts/terraform/azure/backup/, hosts/ansible/roles/agent_box/tasks/opnsense_offbox.yml, hosts/ansible/roles/agent_box/files/opnsense-offbox.sh, hosts/ansible/roles/agent_box/files/opnsense-escrow.py, hosts/ansible/roles/k8s_backup/files/c1-backup-azure-cert.py, .github/hosts-check/tests/test_opnsense_offbox.sh, .github/hosts-check/tests/test_opnsense_escrow.sh]
-last-tested: 2026-11-14, an agent, the Azure folder's offline tests (mocked provider), opnsense-offbox.sh against a local restic repository, and opnsense-escrow.py against a stand-in for Entra ID and Key Vault; nothing applied
+last-tested: "2026-11-14, from real runs reported by the Mac session, and offline tests: step 1, the Azure apply, ran, and its plan showed no changes once opnsense_vault_name was in the private azure tfvars (the variable is needed); the box ran the role, then its first OPNsense backup at 06:11:26 UTC kept config-20261114T061126Z.xml (112,112 bytes, valid XML) with the box-backup key, and the first off-box copy printed all four expect lines in order, read back identical and wrote the vault escrow; both timers are enabled, next at 14:30:12 UTC (backup) and 15:08:14 UTC (off-box copy). The Azure folder, opnsense-offbox.sh and opnsense-escrow.py also passed offline tests. Not yet run: a recovery from the vault, and a replay on a fresh machine"
 superseded-by:
 ---
 
 # Copy the OPNsense configuration backups off the agent box
 
-**Status:** draft. Written 2026-11-14 from the code in this change and tested offline only. Nothing is applied. The Key Vault is a new billable resource, so it waits for the owner's yes.
+**Status:** draft. Written 2026-11-14 from the code in this change and tested offline only. Azure side applied 2026-11-14: the owner said yes to the Key Vault (a new billable resource) with a decision-card tap at 03:07 UTC, and the Azure folder's tofu state now lists all seven off-box resources (the `opnsense-backup` container, its app, the Key Vault and its custom role, and their assignments; the apply's own time was not recorded). The box's side then ran on 2026-11-14 (see `last-tested`): the first backup, the first off-box copy and both timers. A recovery from the vault has not been tried.
 
 ## Why
 
@@ -38,17 +38,17 @@ No secret passes through a transcript, the repository, the controller or OpenTof
 
 | What | Made by | Identity | The owner's part |
 |---|---|---|---|
-| Container, app registration, its service principal and container role | `tofu apply` of `hosts/terraform/azure/backup`, on the controller | agent-azure (Owner on the subscription, Graph `Application.ReadWrite.OwnedBy`) | his go to apply |
-| Key Vault, the custom escrow role and its assignment on the vault | the same apply | agent-azure; Owner holds the `Microsoft.Authorization/roleDefinitions/write` and `roleAssignments/write` it needs | **his yes to the vault, a new billable resource** (his words of 2026-11-09 03:33 UTC: nothing billable beyond the storage account without asking) |
+| Container, app registration, its service principal and container role | `tofu apply` of `hosts/terraform/azure/backup`, on the controller | agent-azure (Owner on the subscription, Graph `Application.ReadWrite.OwnedBy`) | the owner's go to apply (given 2026-11-14 at 03:07 UTC) |
+| Key Vault, the custom escrow role and its assignment on the vault | the same apply | agent-azure; Owner holds the `Microsoft.Authorization/roleDefinitions/write` and `roleAssignments/write` it needs | **the owner's yes to the vault, a new billable resource** (the owner's standing rule of 2026-11-09 03:33 UTC: nothing billable beyond the storage account without asking; the yes itself was a decision-card tap on 2026-11-14 at 03:07 UTC) |
 | The box's first certificate on the app | the box's role, `--tags opnsense_offbox`, from the controller | agent-azure, the app's owner, through `az` | none |
 | The password and its vault copy | the box itself, on its first daily run | the OPNsense app, signed in with the box's certificate | none |
-| Reading the password for a recovery | the owner, only then | his own account, after giving himself Key Vault Secrets User on the vault | his step at recovery time |
+| Reading the password for a recovery | the owner, only then | the owner's own account, after giving their own account Key Vault Secrets User on the vault | the owner's step at recovery time |
 
 Nothing here needs the owner's own Azure rights except the recovery read.
 
-## Steps (after the owner's yes to the vault and his go)
+## Steps (the owner's yes to the vault was given 2026-11-14 at 03:07 UTC)
 
-1. (Agent, on the controller) Set `opnsense_vault_name` in `azure.tfvars` to a free name. Then apply the Azure folder as in [back-up-c1-off-box.md, step A1](back-up-c1-off-box.md#azure-blob-without-a-key):
+1. (Agent, on the controller) Set `opnsense_vault_name` in `azure.tfvars` to a free name (required: on 2026-11-14 the plan showed no changes only once it was set). Then apply the Azure folder as in [back-up-c1-off-box.md, step A1](back-up-c1-off-box.md#azure-blob-without-a-key):
 
    ```sh
    cd hosts/terraform/azure/backup
@@ -113,10 +113,10 @@ Nothing here needs the owner's own Azure rights except the recovery read.
   ```
 
 - **The box is gone too:**
-  1. The owner gives his own account Key Vault Secrets User on the vault, and Storage Blob Data Reader on the `opnsense-backup` container.
-  2. From a machine at home, he reads the password from the vault into a 0600 file and runs `restic -r azure:opnsense-backup:/opnsense restore latest --tag opnsense` with `AZURE_ACCOUNT_NAME` set and `az login` as himself.
-  3. If restic can't open the repository with the newest version (exit 12), he tries the older versions, newest first, with `az keyvault secret list-versions` and `show --version`. A box that was taken over can only add versions, never delete one, so the right password is still there.
-  4. He takes both roles away afterwards.
+  1. The owner gives their own account Key Vault Secrets User on the vault, and Storage Blob Data Reader on the `opnsense-backup` container.
+  2. From a machine at home, the owner reads the password from the vault into a 0600 file and runs `restic -r azure:opnsense-backup:/opnsense restore latest --tag opnsense` with `AZURE_ACCOUNT_NAME` set and `az login` as the owner.
+  3. If restic can't open the repository with the newest version (exit 12), the owner tries the older versions, newest first, with `az keyvault secret list-versions` and `show --version`. A box that was taken over can only add versions, never delete one, so the right password is still there.
+  4. The owner takes both roles away afterwards.
 
   A rebuilt box made by the role cannot do this: it makes a new password and a new certificate.
 

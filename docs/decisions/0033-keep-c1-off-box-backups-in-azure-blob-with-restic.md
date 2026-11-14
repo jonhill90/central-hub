@@ -93,7 +93,7 @@ Leaving restic means restoring the newest snapshots with restic and backing them
 
 ## More Information
 
-- **Evidence:** no research batch of its own. This record rests on the owner's statements above, the agent picks, and these measurements:
+- **Evidence:** [`docs/evidence/0033-keep-c1-off-box-backups-in-azure-blob-with-restic.md`](../evidence/0033-keep-c1-off-box-backups-in-azure-blob-with-restic.md) summarises research batch RB-0026, the comparison of off-site targets behind the owner's choice of Azure, and the licence check RB-0208. The record also rests on the owner's statements above, the agent picks, and these measurements:
   - **CI.** On every PR the CI job `backup` runs the same scripts against etcd 3.7.0 and a local restic repository, including a missing-key and a damaged-pack case.
   - **First drill.** On 2026-11-09 the first drill on c1 against Azure found two faults, and both were fixed in code before the second drill:
     - Two nodes initialised the repository at the same moment, which left two keys (fixed with a once-only init and one node at a time).

@@ -34,6 +34,9 @@ all:
           controller_trust_ca_file: ""   # path on the controller, e.g. ~/.config/central-hub/pve-root-ca.pem
           # playbooks/proxmox-cert.yml (D-0028): the web UI certificate from the lab CA on c1
           proxmox_cert_names: []   # e.g. ["<host>.<zone>"]; private
+          # playbooks/proxmox-sso.yml (docs/runbooks/sign-in-to-proxmox-through-keycloak.md)
+          proxmox_sso_issuer: ""   # https://sso.<zone>/realms/lab, Keycloak's issuer; private
+          proxmox_sso_address: ""   # c1's Gateway address, for the issuer's /etc/hosts line, e.g. "{{ k8s_gateway_address }}"
           # playbooks/tailnet-connector.yml (docs/runbooks/set-up-lab-dns.md): CT 900 advertises
           # every lab VLAN plus these; the same list as home/tailnet's connector_extra_routes.
           tailnet_connector_extra_routes: [""]   # the host's home LAN address as a /32, as advertised today
@@ -160,6 +163,8 @@ all:
         k8s_identity_zone: "{{ k8s_gateway_zone }}"
         k8s_identity_owner_username: ""      # the owner's account in realm lab
         k8s_identity_owner_email: ""         # optional
+        # The Proxmox web UI's client (playbooks/proxmox-sso.yml): its names, the certificate's.
+        # k8s_identity_proxmox_hosts: "{{ hostvars['proxmox_host'].proxmox_cert_names }}"
         # Jellyfin (playbooks/k8s-jellyfin.yml, BUILD-PATH S17): https://jellyfin.apps.c1.prod.<zone>/.
         k8s_jellyfin_zone: "{{ k8s_gateway_zone }}"
         # Off-box backups (playbooks/k8s-backup.yml, TASK-0194, TASK-0094): restic to the repository in
