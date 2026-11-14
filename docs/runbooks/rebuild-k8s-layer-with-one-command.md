@@ -34,7 +34,7 @@ On dev the stages are `preflight vms cluster storage restore gitops secrets apps
 | Stage | Runs | Notes |
 |---|---|---|
 | `teardown` | `tofu destroy` in `hosts/terraform/home/k8s` | only with `--teardown` |
-| `preflight` | reads the Proxmox node's memory with the stage-`vms` token (`/nodes/<node>/status`) | dev only, added to every dev run after a `--teardown` and before `vms`: refuses below `PREFLIGHT_MIN_FREE_MIB` (default 14336 MiB, 12 GiB plus a 2 GiB margin) and refuses when the memory can't be read; prints sizes only, never the token |
+| `preflight` | reads the Proxmox node's memory with the stage-`vms` token (`/nodes/<node>/status`: `memory.available` when present, from PVE 9, else total minus used; the log names the field) | dev only, added to every dev run after a `--teardown` and before `vms`: refuses below `PREFLIGHT_MIN_FREE_MIB` (default 14336 MiB, 12 GiB plus a 2 GiB margin) and refuses when the memory can't be read; prints sizes only, never the token |
 | `vms` | `PRE_VMS_HOOK`, then `tofu apply` in the same folder | the hook re-adds the Proxmox `/vms` ACLs, which Proxmox removes on every destroy |
 | `cluster` | waits until every node takes an ssh login (`SSH_TIMEOUT`, default 300 s), then `playbooks/k8s.yml` | `vms` returns when the guests exist, not when sshd answers |
 | `storage` | `playbooks/k8s-storage.yml --tags disk` | the data disks only; Argo CD installs the provisioner |

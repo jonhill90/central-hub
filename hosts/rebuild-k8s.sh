@@ -201,9 +201,16 @@ preflight_memory() {
          secret=$(set -a; . "$TOFU_ENV"; printf '%s' "${PROXMOX_VE_API_TOKEN##*=}")
          body=$(printf '%s' "$body" | tr -d '\n' | cut -c1-200); [ -z "$secret" ] || body=${body//"$secret"/***}
          echo "preflight: the node's memory could not be read: $body"; return 1; }
-  free=$(printf '%s' "$body" | python3 -c 'import json,sys; m=json.load(sys.stdin)["data"]["memory"]; print((m["total"]-m["used"])//1048576)') \
+  # memory.available (the kernel's MemAvailable) exists from PVE 9; older versions have total - used.
+  free=$(printf '%s' "$body" | python3 -c 'import json,sys
+m = json.load(sys.stdin)["data"]["memory"]
+if m.get("available") is not None:
+    print(m["available"] // 1048576, "available")
+else:
+    print((m["total"] - m["used"]) // 1048576, "total-used")') \
     || { echo "preflight: the node's memory answer had no memory figures"; return 1; }
-  echo "preflight: node free memory ${free} MiB, minimum ${min} MiB"
+  field=${free#* }; free=${free% *}
+  echo "preflight: node free memory ${free} MiB (field: ${field}), minimum ${min} MiB"
   [ "$free" -ge "$min" ] || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB"; return 1; }
 }
 
