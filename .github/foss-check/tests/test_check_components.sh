@@ -78,6 +78,8 @@ expect "a Docker Hub short name matches its row" 0 "" \
   "$(make_repo "$(row nginx pass '[image:docker.io/library/nginx]')" "" '    image: "nginx:1.27"')"
 expect "an example host is a placeholder" 0 "" \
   "$(make_repo "$(row Other pass '[image:quay.io/x]')" "" '    url: https://example-kv.vault.azure.net/')"
+expect "a regular expression for an address is not a source" 0 "" \
+  "$(make_repo "$(row Other pass '[image:quay.io/x]')" "" "      - x is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?/realms/[A-Za-z0-9_-]+$')")"
 
 hub=$(row GitHub hosted '[url:api.github.com]' hosted; echo '    carries: [url:github.com/]')
 expect "a GitHub release download needs its own row" 1 "hosted by GitHub, but the software itself has no register row" \

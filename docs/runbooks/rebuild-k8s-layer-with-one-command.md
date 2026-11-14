@@ -27,6 +27,8 @@ flowchart LR
 
 On dev the stages are `vms cluster storage restore gitops secrets apps gateway checks`: certs, identity and ui are left out (D-0028). `secrets` seeds namespace `secret-source` from `SECRET_SOURCE_FILE` (`playbooks/k8s-secret-source.yml`, [seed-secret-source.md](seed-secret-source.md)) after Argo CD makes it and before `apps` waits on the ExternalSecrets that read it; unset, the stage is skipped. The agent box makes its own dev file once, with random values, and never prints it.
 
+`openbao` (proposed D-0038) runs after `secrets` and before `apps`. A rebuilt cluster signs its service-account tokens with a new key, so External Secrets can't sign in at the secrets store until the store knows that key. The stage reads the key (`/etc/kubernetes/pki/sa.pub`, the public half) and the token issuer on the first control-plane node, and writes them to the store's `auth/jwt-c1/config` through the AppRole `rebuild`, which can write that one path and nothing else (`playbooks/k8s-openbao-auth.yml`). It needs `OPENBAO_ADDR`, `OPENBAO_CACERT`, `OPENBAO_ROLE_ID_FILE` and `OPENBAO_SECRET_ID_FILE` in `rebuild.env`; with `OPENBAO_ADDR` unset it is skipped. The store side is [set-up-the-secrets-store.md](set-up-the-secrets-store.md). Not yet run on the lab.
+
 ## Stages
 
 | Stage | Runs | Notes |
@@ -41,6 +43,7 @@ On dev the stages are `vms cluster storage restore gitops secrets apps gateway c
 | `gateway` | `playbooks/k8s-gateway.yml` | after `apps`: with `k8s_gateway_by_argocd: true`, Argo CD makes the Gateway and the playbook checks it |
 | `certs` | `playbooks/k8s-certs.yml` | staging issuer on dev |
 | `identity` | `playbooks/k8s-identity.yml` | throwaway users on dev |
+| `identity-keycloak` | `playbooks/k8s-identity.yml --tags secrets,keycloak,signin` | not in the default list; run with `--only identity-keycloak` (the agent box: `rebuild identity`) to redo the sign-in secrets and Keycloak on a cluster that already has the rest, then prove the owner's sign-in: the password alone stops at the one-time-code form, the password with a code computed from the owner's seed redirects back to Grafana with a code (the log has step names and HTTP codes only) |
 | `ui` | `playbooks/k8s-gitops.yml --tags ui,sso` | |
 | `backup` | `playbooks/k8s-backup.yml` | not in the default list; prod only, the script refuses it on dev |
 | `checks` | nodes Ready, pods Running, apps Synced and Healthy, a second `k8s.yml` with `changed=0`, `tofu plan` with no changes, then `RESTORE_CHECK_HOOK` when `RESTORE_HOOK` is set | |

@@ -1,0 +1,4 @@
+# rebuild-jwt-c1: the rebuild's openbao stage, through AppRole rebuild from the agent box only. It
+# writes a rebuilt c1's service-account key and issuer to the login's config; it can't read a
+# secret, change a role or a policy, or touch any other login.
+path "auth/{{ openbao_jwt_mount }}/config" { capabilities = ["create", "update"] }

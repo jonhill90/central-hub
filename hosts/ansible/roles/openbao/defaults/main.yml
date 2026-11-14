@@ -1,0 +1,50 @@
+---
+# The openbao role: the lab's secrets store on its own VM (proposed D-0038). Pins and paths a place
+# may change; private values (hostname, addresses, key files) have no default and come from the
+# inventory the secrets-store wrapper writes (STD-0004 rule 1).
+
+# OpenBao 2.7.2, tagged 2026-10-26, the newest release at least two weeks old on 2026-11-14 (STD-0003).
+# SHA-256 of openbao_2.7.2_linux_amd64.rpm, from the release's checksums.txt (read 2026-11-14).
+openbao_version: 2.7.2
+openbao_rpm_sha256: 24cf378047cd759d0a8b4da645e694b2f6af320ef20ac5536ad91fa050d18d34
+
+# Clients and the web UI reach the store by name on 443 with no other port (the owner, 2026-11-14).
+openbao_port: 443
+openbao_cluster_port: 8201
+
+# The package's own folders (its postinst makes /opt/openbao/tls and /opt/openbao/data).
+openbao_config_dir: /etc/openbao
+openbao_data_dir: /opt/openbao/data
+openbao_tls_dir: /opt/openbao/tls
+openbao_audit_dir: /var/log/openbao
+
+# Hourly Raft snapshots kept on the VM; the off-box copy is a later change (D-0038 rule 8).
+openbao_snapshot_dir: /var/lib/openbao-snapshots
+openbao_snapshot_keep: 48
+openbao_snapshot_on_calendar: hourly
+
+# The admin AppRole's tokens: short, and only from the agent box (D-0038 rule 6).
+openbao_admin_token_ttl: 15m
+openbao_admin_token_max_ttl: 1h
+
+# Lab CA certificate and key for the listener, on the controller. Empty: the role makes a
+# self-signed certificate for the VM's name and address and fetches its public half back (dev, where
+# the lab CA is left out, D-0028).
+openbao_tls_cert_src: ""
+openbao_tls_key_src: ""
+
+# The store's first clients (tasks/clients.yml). c1's External Secrets Operator signs in at this
+# login mount with its own service account's token, made for this audience only.
+openbao_jwt_mount: jwt-c1
+openbao_eso_role:
+  role_type: jwt
+  user_claim: sub
+  bound_subject: system:serviceaccount:external-secrets:store-openbao
+  bound_audiences: [openbao]
+  token_policies: [eso-c1]
+  token_ttl: 3600
+  token_max_ttl: 3600
+
+# The AppRole rebuild's IDs on the box, next to the admin's. Made there once, never printed.
+openbao_rebuild_role_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-rebuild-role-id"
+openbao_rebuild_secret_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-rebuild-secret-id"

@@ -27,12 +27,15 @@ agent_box_wrappers:
   # The owner's desktop VM (docs/runbooks/set-up-the-desktop.md). Not applied until the owner says so.
   - name: desktop
     args: [plan, apply, configure, destroy]
+  # The lab's secrets store, OpenBao, on dev (docs/runbooks/set-up-the-secrets-store.md, proposed D-0038).
+  - name: secrets-store
+    args: [plan, apply, configure, recovery, status, snapshot, restore, destroy]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself.
   - name: pr-merge
     args: ["check *", "merge *"]
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
-    args: [up, rebuild, teardown, log, diag]
+    args: [up, rebuild, teardown, identity, log, diag]
     runner: true   # the dev redeploy workflow (.github/workflows/lab-redeploy-dev.yml)
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
@@ -174,6 +177,11 @@ agent_box_ci_runner: {}
 # proxmox_node_name, vnet, template_vm_id, rdp_source (the tailnet connector's address, where RDP arrives from) and optionally
 # admin_user (default admin). Empty leaves the wrapper unset up.
 agent_box_desktop: {}
+# The secrets store's dev VM that the secrets-store wrapper builds (docs/runbooks/set-up-the-secrets-store.md).
+# Private, through the inventory: name, vm_id (500-599), address, cores, memory_mb, disk_gb,
+# proxmox_node_name, vnet, template_vm_id, box_address (this box's address, the only one the admin
+# AppRole works from), and optionally seal_key_id (default 1) and admin_user. Empty leaves the wrapper unset up.
+agent_box_secrets_store: {}
 # The controller's private files the prod_files tasks copy to <keys_dir>/prod (D-0035; paths from
 # docs/runbooks/rebuild-home-lab-from-scratch.md). from: clone (the controller's checkout of this
 # repo) or config (~/.config/central-hub). A missing file is skipped and named. Not listed on purpose:
