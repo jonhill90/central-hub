@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: the orchestrator thread's message to the Plan thread of 2026-11-14T11:38:39Z recording the reviewer's clearance (11:21:46Z) and the passes of Councils A (11:22:13Z), B (11:22:14Z) and C (11:22:22Z) for head 7f5cef6, each saying acceptance under D-0042 rule 3 is fine; it reached the Plan thread as a thread relay, which carries no message id
   approval-names: "the pass names PR #331 and head 7f5cef67191e04d33660942f8688bb4b2ee4fdf7"
   check: approved-by is agents under D-0042 rule 3, because kubeadm is already in use and Kubernetes passes STD-0006 in the register the owner approved with PR #277. The Plan thread read the orchestrator's pass record at 11:38Z; it names this PR and the head. approved-commit is the head that holds the record as proposed; the commit after it changes only status, date and accepted-evidence, which the reviewer checks (D-0001)
-  merged: not yet; a follow-up PR fills this in after the merge (D-0001)
+  merged: PR #331 squash-merged at head 7300ec3 as fd789f6, whose commit time is 2026-11-14T11:44:03Z (GitHub's merged_at for the PR is 11:44:04Z); the squash subject says "propose D-0050" because the PR's title was not changed when acceptance folded in, and the record merged accepted; the follow-up PR that adds this line changes only accepted-evidence (D-0001)
 revisit-when: the owner moves c1 to an immutable OS such as Talos; the Talos rehearsal cluster passes the same confirmation as c1; kubeadm stops supporting the Kubernetes version c1 needs; the owner wants to try Kubespray; or a second cluster is built
 ---
 

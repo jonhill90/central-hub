@@ -71,11 +71,12 @@
         ca_path: "{{ openbao_cacert_dest }}"
         headers: "{{ openbao_admin_headers }}"
         status_code: [200, 404]
-      loop: [eso-c1, rebuild-jwt-c1]
+      loop: [eso-c1, rebuild-jwt-c1, admin]
       register: openbao_client_policies
       no_log: true
 
-    - name: Policies eso-c1 (read kv/data/c1/*) and rebuild-jwt-c1 (write the login's key only)
+    # admin: stores made before a change to its template get the new text here (the first start wrote the old).
+    - name: Policies eso-c1 (read kv/data/c1/*), rebuild-jwt-c1 (write the login's key only) and admin
       ansible.builtin.uri:
         url: "{{ openbao_api }}/sys/policies/acl/{{ item.item }}"
         method: POST

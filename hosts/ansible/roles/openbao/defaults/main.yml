@@ -23,6 +23,14 @@ openbao_snapshot_dir: /var/lib/openbao-snapshots
 openbao_snapshot_keep: 48
 openbao_snapshot_on_calendar: hourly
 
+# The weekly restore drill (D-0038 rule 8, Confirmation 4; files/openbao-drill.sh): the newest snapshot goes
+# into a throwaway server on loopback-only ports inside its own unit, then is deleted. wait is the seconds
+# each step may take to answer.
+openbao_drill_port: 8300
+openbao_drill_cluster_port: 8301
+openbao_drill_on_calendar: weekly
+openbao_drill_wait: 60
+
 # The admin AppRole's tokens: short, and only from the agent box (D-0038 rule 6).
 openbao_admin_token_ttl: 15m
 openbao_admin_token_max_ttl: 1h

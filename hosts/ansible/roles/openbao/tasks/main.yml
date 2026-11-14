@@ -309,6 +309,52 @@
     daemon_reload: true
   tags: [snapshot]
 
+# The weekly restore drill (D-0038 rule 8): its script, its throwaway server's configuration, and its units.
+- name: The mount points of the restore drill's temporary file systems
+  ansible.builtin.file:
+    path: /var/lib/openbao-drill
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [drill]
+
+- name: The restore drill's script
+  ansible.builtin.copy:
+    src: openbao-drill.sh
+    dest: /usr/local/libexec/openbao-drill.sh
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [drill]
+
+- name: The restore drill's throwaway server configuration (no secret in it)
+  ansible.builtin.template:
+    src: drill.hcl.j2
+    dest: "{{ openbao_config_dir }}/drill.hcl"
+    owner: openbao
+    group: openbao
+    mode: "0640"
+  tags: [drill]
+
+- name: The restore drill's units
+  ansible.builtin.template:
+    src: "openbao-drill.{{ item }}.j2"
+    dest: "/etc/systemd/system/openbao-drill.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  tags: [drill]
+
+- name: The restore drill's timer runs
+  ansible.builtin.systemd_service:
+    name: openbao-drill.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [drill]
+
 # The store's first clients: c1's External Secrets login and the rebuild's AppRole.
 - name: The store's clients
   ansible.builtin.include_tasks:
@@ -316,6 +362,15 @@
     apply:
       tags: [clients]
   tags: [clients]
+
+# The restore drill once now, with the live store's Raft state checked before and after (Confirmation 4).
+# After the clients, so the admin policy already reads the Raft state.
+- name: The restore drill
+  ansible.builtin.include_tasks:
+    file: drill.yml
+    apply:
+      tags: [drill]
+  tags: [drill]
 
 # The owner's sign-in to the web page through Keycloak (agent pick 233). Off while openbao_oidc is empty.
 - name: The owner's sign-in
