@@ -1,18 +1,20 @@
 ---
 # The box's second NIC sits on the Proxmox host's own subnet (hosts/terraform/home/jumpbox, variable
 # lifeline), so the box keeps its route to the Proxmox API when OPNsense is gone. That subnet is the
-# home LAN, so it is closed both ways (least privilege):
-#   inbound:  the interface is in firewalld's `drop` zone, which accepts no inbound connection;
-#   outbound: a firewalld policy from the box itself (HOST) to that zone accepts only the addresses and
-#             TCP ports in agent_box_lifeline_allow and rejects everything else, so a connected route
-#             does not let a session reach other home LAN devices.
+# home LAN, so it is closed both ways (least privilege) by one nftables table, `inet lifeline`, which
+# touches that NIC only (the box runs no firewalld, and turning it on would change the whole box's
+# inbound posture, tailscale0 included: the owner's pick, 2026-11-14):
+#   input:   drop everything on the NIC except replies to the box's own connections;
+#   output:  accept only the addresses and TCP ports in agent_box_lifeline_allow and replies, reject the rest;
+#   forward: drop anything to or from the NIC.
+# A root-owned unit, lifeline-nft.service, loads it before NetworkManager starts, so the NIC is never up
+# unfiltered, at the first apply or after a reboot.
 # This role owns the NIC's one NetworkManager connection, `lifeline`: a static address, no gateway, never
-# a default route, no DNS, no IPv6, autoconnect, and the drop zone set on the connection itself (so a
-# reconnect or reboot keeps it). cloud-init's network config applies only at first boot, so a NIC added to
-# a running VM would otherwise come up on DHCP in the default zone (measured on the first apply,
-# 2026-11-14). `connection up` also brings the link up, and runs last: the order is policy, the lifeline
-# profile, deleting the stale profiles, managed yes, then up, so no leftover DHCP profile ever autoconnects
-# in the default zone. Other profiles on the NIC, such as "Wired connection 1", are deleted.
+# a default route, no DNS, no IPv6, autoconnect. cloud-init's network config applies only at first boot,
+# so a NIC added to a running VM would otherwise come up on DHCP (measured on the first apply,
+# 2026-11-14). `connection up` also brings the link up, and runs last: the order is the filter, the
+# lifeline profile, deleting the stale profiles, managed yes, then up, so no leftover DHCP profile ever
+# autoconnects. Other profiles on the NIC, such as "Wired connection 1", are deleted.
 # Only runs when agent_box_lifeline_interface is set.
 
 - name: lifeline | The allowed destinations are plain IPv4 addresses and TCP ports
@@ -31,31 +33,73 @@
     fail_msg: "agent_box_lifeline_address must be the box's address and prefix on the host's subnet, for example 192.0.2.50/24"
     quiet: true
 
-# The egress block is loaded BEFORE anything brings the link up, so a failure here leaves the NIC down, never open.
-- name: lifeline | Folder for firewalld policies
+# The filter is loaded BEFORE anything brings the link up, so a failure here leaves the NIC down, never open.
+- name: lifeline | The installed packages
+  ansible.builtin.package_facts:
+    manager: rpm
+
+- name: lifeline | nftables is installed, at the pinned version, only if it was missing
+  ansible.builtin.dnf:
+    name: "nftables-{{ agent_box_nftables_version }}"
+    state: present
+  when: "'nftables' not in ansible_facts.packages"
+
+- name: lifeline | Folder for the filter
   ansible.builtin.file:
-    path: /etc/firewalld/policies
+    path: /etc/nftables
     state: directory
     owner: root
     group: root
     mode: "0755"
 
-- name: lifeline | The outbound policy lists only the allowed destinations
+- name: lifeline | The filter lists only the allowed destinations
   ansible.builtin.template:
-    src: firewalld-lifeline-egress.xml.j2
-    dest: /etc/firewalld/policies/lifeline-egress.xml
+    src: lifeline.nft.j2
+    dest: /etc/nftables/lifeline.nft
+    owner: root
+    group: root
+    mode: "0600"
+    validate: "{{ agent_box_nft_bin }} -c -f %s"
+  notify: Reload the lifeline filter
+
+- name: lifeline | The unit that loads the filter before the network
+  ansible.builtin.template:
+    src: lifeline-nft.service.j2
+    dest: /etc/systemd/system/lifeline-nft.service
     owner: root
     group: root
     mode: "0644"
-  notify: Reload firewalld
+  notify: Reload the lifeline filter
 
-- name: lifeline | Apply the policy now
+- name: lifeline | The unit is enabled
+  ansible.builtin.systemd_service:
+    name: lifeline-nft.service
+    enabled: true
+    daemon_reload: true
+
+- name: lifeline | Load the filter now
   ansible.builtin.meta: flush_handlers
+
+- name: lifeline | The filter is loaded
+  ansible.builtin.systemd_service:
+    name: lifeline-nft.service
+    state: started
+
+- name: lifeline | The firewalld policy a first attempt wrote is removed
+  ansible.builtin.file:
+    path: /etc/firewalld/policies/lifeline-egress.xml
+    state: absent
+
+- name: lifeline | Its folders are removed when they are empty
+  ansible.builtin.command: rmdir /etc/firewalld/policies /etc/firewalld
+  register: agent_box_lifeline_rmdir
+  changed_when: agent_box_lifeline_rmdir.rc == 0
+  failed_when: false
 
 - name: lifeline | The connection's settings now, in a fixed order
   ansible.builtin.command: >-
     nmcli -g ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.never-default,ipv4.dns,ipv4.ignore-auto-dns,ipv6.method,
-    connection.autoconnect,connection.zone,connection.interface-name connection show lifeline
+    connection.autoconnect,connection.interface-name connection show lifeline
   register: agent_box_lifeline_nm_now
   changed_when: false
   failed_when: false
@@ -68,12 +112,12 @@
   when: agent_box_lifeline_nm_now.rc != 0
   changed_when: true
 
-- name: lifeline | The connection is static, never the default route, without DNS or IPv6, in the drop zone
+- name: lifeline | The connection is static, never the default route, without DNS or IPv6
   ansible.builtin.command: >-
     nmcli connection modify lifeline
     ipv4.method manual ipv4.addresses {{ agent_box_lifeline_address | quote }} ipv4.gateway ""
     ipv4.never-default yes ipv4.dns "" ipv4.ignore-auto-dns yes ipv6.method disabled
-    connection.autoconnect yes connection.zone drop connection.interface-name {{ agent_box_lifeline_interface | quote }}
+    connection.autoconnect yes connection.interface-name {{ agent_box_lifeline_interface | quote }}
   when: agent_box_lifeline_nm_now.rc != 0 or (agent_box_lifeline_nm_now.stdout_lines | default([]) != agent_box_lifeline_wanted)
   vars:
     # nmcli -g prints one value per line, in the order asked; an empty value is an empty line.
@@ -86,7 +130,6 @@
       - "yes"
       - disabled
       - "yes"
-      - drop
       - "{{ agent_box_lifeline_interface }}"
   register: agent_box_lifeline_nm_modified
   changed_when: true
@@ -133,24 +176,10 @@
   when: agent_box_lifeline_nm_now.rc != 0 or agent_box_lifeline_nm_modified is changed or agent_box_lifeline_stale.stdout_lines | length > 0
   changed_when: true
 
-- name: lifeline | The interface is in the drop zone now
-  ansible.posix.firewalld:
-    zone: drop
-    interface: "{{ agent_box_lifeline_interface }}"
-    permanent: true
-    immediate: true
-    state: enabled
-
 # The proof: what the owner's pick 220 promises, measured on the box after the run.
-- name: lifeline | The interface's zone as firewalld reports it
-  ansible.builtin.command: firewall-cmd --get-zone-of-interface={{ agent_box_lifeline_interface | quote }}
-  register: agent_box_lifeline_zone
-  changed_when: false
-  check_mode: false
-
-- name: lifeline | The egress policy as firewalld reports it
-  ansible.builtin.command: firewall-cmd --info-policy=lifeline-egress
-  register: agent_box_lifeline_policy
+- name: lifeline | The filter as nftables reports it
+  ansible.builtin.command: "{{ agent_box_nft_bin }} list table inet lifeline"
+  register: agent_box_lifeline_table
   changed_when: false
   check_mode: false
 
@@ -161,26 +190,25 @@
   changed_when: false
   check_mode: false
 
-- name: lifeline | No default route over the NIC, the drop zone, and a rejecting policy
+- name: lifeline | No default route over the NIC, and the filter drops, rejects and forwards nothing else
   ansible.builtin.assert:
     that:
       - agent_box_lifeline_default_route.stdout | trim | length == 0
-      - agent_box_lifeline_zone.stdout | trim == 'drop'
-      - "'target: REJECT' in agent_box_lifeline_policy.stdout"
+      - agent_box_lifeline_table.stdout is search('iifname "' ~ agent_box_lifeline_interface ~ '" drop')
+      - agent_box_lifeline_table.stdout is search('oifname "' ~ agent_box_lifeline_interface ~ '" reject')
+      - agent_box_lifeline_table.stdout is search('oifname "' ~ agent_box_lifeline_interface ~ '" drop')
       - >-
-        agent_box_lifeline_policy.stdout_lines | select('search', 'rule family=') | list | length
+        agent_box_lifeline_table.stdout_lines | select('search', 'ip daddr') | list | length
         == (agent_box_lifeline_allow | map(attribute='ports') | map('length') | sum)
     fail_msg: >-
-      the lifeline is not closed as picked: a default route over it, the wrong zone, or a policy that
-      allows more or less than agent_box_lifeline_allow
+      the lifeline is not closed as picked: a default route over it, a missing drop or reject, or a filter
+      that allows more or less than agent_box_lifeline_allow
     quiet: true
 
-- name: lifeline | Each allowed destination is in the policy
+- name: lifeline | Each allowed destination is in the filter
   ansible.builtin.assert:
     that:
-      - >-
-        agent_box_lifeline_policy.stdout is
-        search('destination address="' ~ item.0.address ~ '"[^\n]*port="' ~ item.1 ~ '" protocol="tcp" accept')
-    fail_msg: "{{ item.0.address }}:{{ item.1 }} is not in the lifeline egress policy"
+      - agent_box_lifeline_table.stdout is search('ip daddr ' ~ item.0.address ~ ' tcp dport ' ~ item.1 ~ ' accept')
+    fail_msg: "{{ item.0.address }}:{{ item.1 }} is not in the lifeline filter"
     quiet: true
   loop: "{{ agent_box_lifeline_allow | subelements('ports') }}"

@@ -143,6 +143,11 @@ agent_box_lifeline_interface: ""
 # Private, through the inventory. Required when the interface is set. Pick one the home router's DHCP
 # pool does not hand out: a static address inside the pool can clash with a lease.
 agent_box_lifeline_address: ""
+# nftables for the lifeline NIC's packet filter. The role installs it only if the package is missing, at this
+# version (epoch:version-release, the newest in the AlmaLinux 10 BaseOS when it was read, 2026-11-14).
+agent_box_nftables_version: "1:1.1.5-6.el10_2"
+# The nft binary the filter's unit and the proof use.
+agent_box_nft_bin: /usr/sbin/nft
 # What the box may reach over that NIC, and nothing else (the rest is rejected): a list of
 # {address: IPv4, ports: [TCP ports]}, normally the Proxmox host's own address and 8006 (and 22 if needed).
 # Private, through the inventory. Empty with the interface set rejects everything over the lifeline.
