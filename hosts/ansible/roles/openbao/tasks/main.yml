@@ -308,3 +308,11 @@
     state: started
     daemon_reload: true
   tags: [snapshot]
+
+# The store's first clients: c1's External Secrets login and the rebuild's AppRole.
+- name: The store's clients
+  ansible.builtin.include_tasks:
+    file: clients.yml
+    apply:
+      tags: [clients]
+  tags: [clients]
