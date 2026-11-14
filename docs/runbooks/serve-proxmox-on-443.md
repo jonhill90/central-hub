@@ -3,12 +3,12 @@ title: Serve the Proxmox web UI on port 443
 status: draft
 kind: manual
 trigger: once, after the Proxmox host's certificate is set (proxmox-cert.yml); again after each certificate renewal, at least every 30 days
-runner: the host job (a workflow_dispatch pipeline job on the agent box's runner, with playbooks proxmox-proxy.yml and proxmox-cert.yml on its allow list); it is not built yet, and until it exists nothing applies this playbook
+runner: the host job, workflow `lab-proxmox-host` on the agent box's runner through wrapper `proxmox-host` (pick 240); it runs proxmox-proxy.yml and nothing else. Built, not installed, so until the install below nothing applies this playbook
 outcome: the Proxmox web UI answers on https://pve.<zone> with the lab certificate, on port 443 with no port in the address, served by Apache httpd; port 80 redirects to it; port 8006 stays as the fallback and the agent box's lifeline
-needs: the host's certificate from the lab CA (role proxmox_cert, playbook proxmox-cert.yml) with a DNS name for the host's web UI that resolves from where the owner browses; the host firewall rows for 443 and 80 (the same sources as 8006); the host job and its box limits (an SSH key on the box used only through a root-owned wrapper, tcp 22 on the lifeline), which need the owner's tap
-private-values: [proxmox-cert-names]
-files: [hosts/ansible/roles/proxmox_proxy/, hosts/ansible/playbooks/proxmox-proxy.yml, hosts/ansible/roles/proxmox_firewall/defaults/main.yml, .github/hosts-check/tests/test_proxy.sh]
-last-tested: "not yet run on the host with Apache httpd; the role was tested on 2026-11-14 against a stand-in Proxmox host in a container (Debian trixie, systemd, nginx serving as the old role left it, a stand-in pveproxy): the install with nginx still serving, the move, a failing proof, a stopped move, a killed run, an open console across a graceful reload, and a host with no nginx (.github/hosts-check/tests/test_proxy.sh)"
+needs: the host's certificate from the lab CA (role proxmox_cert, playbook proxmox-cert.yml) with a DNS name for the host's web UI that resolves from where the owner browses; the host firewall rows for 443 and 80 (the same sources as 8006); the host job installed (below), which needs the owner's tap; python3-apt on the host for the check run
+private-values: [proxmox-cert-names, agent-box-proxmox-host, agent-box-lifeline-address, agent-box-lifeline-allow]
+files: [hosts/ansible/roles/proxmox_proxy/, hosts/ansible/playbooks/proxmox-proxy.yml, hosts/ansible/playbooks/proxmox-host-key.yml, hosts/ansible/roles/agent_box/files/proxmox-host.sh, hosts/ansible/roles/agent_box/tasks/proxmox_host.yml, hosts/ansible/roles/agent_box/tasks/proxmox_host_inventory.yml, .github/workflows/lab-proxmox-host.yml, hosts/ansible/roles/proxmox_firewall/defaults/main.yml, .github/hosts-check/tests/test_proxy.sh, .github/hosts-check/tests/test_proxmox_host_job.sh]
+last-tested: "not yet run on the host with Apache httpd; the role was tested on 2026-11-14 against a stand-in Proxmox host in a container (Debian trixie, systemd, nginx serving as the old role left it, a stand-in pveproxy): the install with nginx still serving, the move, a failing proof, a stopped move, a killed run, an open console across a graceful reload, and a host with no nginx (.github/hosts-check/tests/test_proxy.sh); the host job was tested the same day against the same stand-in: the key line with from=, a check that changes nothing, a wrong hash refused, an apply that moves 443 (.github/hosts-check/tests/test_proxmox_host_job.sh)"
 superseded-by:
 ---
 
@@ -35,23 +35,50 @@ Port 8006 is not closed. It stays as the fallback if the proxy fails, and it is 
 
 ## What the owner decides
 
-- **The host job.** The playbook reaches the host over SSH as root, and the agent box has no SSH key for the host and reaches it on 8006 only. The host job needs a key on the box, a root-owned wrapper with a fixed playbook allow list, and tcp 22 on the lifeline; those are box limits, so they need the owner's tap. Root on the Proxmox host reaches every guest, VM 258 and CT 259 included. If the host firewall refuses 22 from the lifeline address, that is a separate firewall tap.
+- **The host job.** The playbook reaches the host over SSH as root, and the agent box has no SSH key for the host and reaches it on 8006 only. The host job gives the box a key, held by its own user `hostops`, used only by the root-owned wrapper `proxmox-host`, which runs this one playbook from `main`; tcp 22 opens on the lifeline for `hostops`'s sockets only; the host takes the key only from the box's lifeline address. Those are an access right and box limits, so they need the owner's tap (D-0042 rule 6). Root on the Proxmox host reaches every guest, VM 258 and CT 259 included. If the host firewall refuses 22 from the lifeline address, that is a separate firewall tap (D-0036 rule 8).
 - **The DNS name.** `proxmox_proxy_server_names` is the same list as `proxmox_cert_names`, set in the private inventory. The first name is where port 80 redirects.
+
+## Install the host job
+
+Three routes, in this order (Library plans/r1-host-job/DESIGN.md v3.1, section 6). Nothing here is applied by the pull request that adds it.
+
+1. **On the box, through `box-apply`** (once its approved-limit mode exists, D-0044; and the owner's tap): the wrapper `proxmox-host`, its sudo lines (sessions `check` and `log`; the runner also `apply`), the hook's line for `lab-proxmox-host.yml`, user `hostops` and its folders `/etc/agent-keys-host/` and `/var/lib/agent-box-host/`. With `agent_box_proxmox_host_job: true`, the role makes the key, `/etc/agent-keys-host/id_ed25519`, as `hostops`.
+   expect: `proxmox-host check` refuses with "no inventory or key", because step 2 has not run.
+2. **From the controller only** (the inventory and the lifeline are skipped by every self-apply, D-0036 rule 7): `ansible-playbook -i inventories/home/ playbooks/agent-box.yml --tags proxmox_host_inventory,lifeline`, with these private values in the controller's inventory, none of them in this repository:
+
+   | Value | Variable | Read by |
+   |---|---|---|
+   | The host's lifeline-side IPv4 and its public host key | `agent_box_proxmox_host: {address, hostkey}` | the job's inventory and its `known_hosts` |
+   | The same address, port 22, for `hostops` only | an entry `{address, ports: [22], uid: hostops}` in `agent_box_lifeline_allow` | the lifeline filter |
+   | The box's own lifeline address | `agent_box_lifeline_address` (already set) | the host's key line (`from=`) |
+   | The certificate's names | `proxmox_cert_names` on the Proxmox host (already set) | the proxy role, through the job's inventory |
+
+   expect: `/etc/agent-keys-host/inventory/hosts.yml` and `known_hosts` exist, mode 0600, owned by `hostops`; `nft list table inet lifeline` shows `tcp dport 22 meta skuid` with `hostops`'s UID; the key's public half is on the controller at `hosts/ansible/inventories/home/id_ed25519-proxmox-host.pub` (git-ignored).
+3. **The host's key line, from the controller**: `ansible-playbook -i inventories/home/ playbooks/proxmox-host-key.yml`, first with `--check --diff`. It puts `restrict,from="<box lifeline address>" ssh-ed25519 <key> central-hub-r1` into `/etc/pve/priv/authorized_keys`. This is a raw run under D-0041 rule 3, listed here until the box can reach the host by itself; its approval is the one rule 3 sets.
+   expect: from the box, `proxmox-host check` prints `proxmox-host: check <hash>: ...`.
+
+Steps 2 and 3 need the controller, whose guard takes typed words only, so today they wait (the design's section 11 blocker).
 
 ## Steps (through the host job)
 
-1. Check run: the host job with playbook `proxmox-proxy.yml`. It runs `--check --diff` first.
+The job runs only from `main`, started by hand: `lab-proxmox-host` with `action: check`, or a session on the box with `proxmox-host check`. A session can't start the workflow today (dispatch returns 403, Library plans/merge-off-mac/DESIGN.md line 33), so the apply waits on that decision. GitHub's log gets only the commit, the hash, counts and pass or fail; the full output stays in `/var/lib/agent-box-host/logs/`.
+
+The check run needs `python3-apt` on the host: Ansible's apt module installs it itself on a real run but not in a check, and fails the check without it. Whether the host has it is not measured; if the first check fails with "python3-apt must be installed to use check mode", that is the cause.
+
+1. Check run: `proxmox-host check`. It runs `--check --diff` and prints a hash of the commit, every diff's text and each task's changed and skipped flags.
    On a host without Apache httpd, the check run shows the files it would write and says it skips the configuration test, the move and the proof, because apt installs nothing in check mode.
    expect: the diff shows the site, the drop-in, the two scripts and `proofs.env`, and nothing under `/etc/nginx/`.
 
-2. The run: the same job, without the check.
+   The reviewer and Councils A, B and C pass that hash (D-0041 rule 6: the host has no dev twin).
+
+2. The run: `lab-proxmox-host` with `action: apply`, the pass's message ID and the hash. It checks again and refuses unless the hash is the same, so a new commit on `main` or a changed host stops it; then it runs the playbook, and fails the run if a task changed that the check showed neither changed nor skipped (D-0041 rule 4).
    expect: `failed=0`; the task "The move, with its proofs" is `changed`; `/var/lib/proxmox-proxy/cutover.result` starts with `done`; `ss -ltnp 'sport = :443'` names `apache2`; the last task, "The proof holds", passes.
    If the move rolls back, nginx serves again and the run fails with the unit's error. Read `journalctl -u proxmox-proxy-cutover`, fix the cause, remove `cutover.result`, and run again; a re-run does not move a host whose file says `rolled-back` or `started`.
 
 3. Open the address from the owner's device: `https://pve.<zone>`.
    expect: the login page with no certificate warning and no port in the address. Open a VM's console (noVNC) and a node shell: both must connect. This is the part no check in the role can prove, because a console needs a login ticket.
 
-4. After each certificate renewal (`proxmox-cert.yml`), run `proxmox-proxy.yml` again.
+4. After each certificate renewal (`proxmox-cert.yml`), run `proxmox-proxy.yml` again (steps 1 and 2). `proxmox-cert.yml` is not on the host job: it reaches c1 prod's first control-plane node as root, so it still runs from the controller.
    why: Apache httpd reads the certificate at a reload; the role reloads it gracefully when the certificate it serves is not the one on disk.
    expect: the role's reload task shows `changed` only after a renewal.
 
@@ -73,5 +100,7 @@ To install Apache httpd and leave nginx serving, set `proxmox_proxy_cutover: fal
 - `443 times out from the browser`: the host firewall rows for 443 and 80 are not in.
 
 ## Exit
+
+To take the host job's reach away: run `proxmox-host-key.yml` with `-e proxmox_host_key_state=absent` (this alone ends it), take the tcp 22 entry out of `agent_box_lifeline_allow`, and set `agent_box_proxmox_host_job: false` and remove `/etc/agent-keys-host/` (box-limit changes).
 
 To go back to nginx on a moved host: `systemctl disable --now apache2`, `systemctl mask apache2`, `systemctl enable --now nginx` (nginx stays installed until the clean-up after the move). To serve on 8006 only: `systemctl disable --now apache2`, take the 443 and 80 rows out of `proxmox_firewall_rules`, then run the firewall role. Another proxy (Caddy, Apache-2.0) replaces only the role's insides.
