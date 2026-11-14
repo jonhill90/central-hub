@@ -668,6 +668,16 @@
   when: agent_box_opnsense_offbox | length > 0
   tags: [wrappers, opnsense_offbox]
 
+# --- Encrypted bundle of the box's private files (pick 228) ------------------------------------------
+
+- name: Make the daily encrypted bundle (only when agent_box_secrets_bundle is set)
+  ansible.builtin.include_tasks:
+    file: secrets_bundle.yml
+    apply:
+      tags: [wrappers, secrets_bundle]
+  when: agent_box_secrets_bundle | length > 0
+  tags: [wrappers, secrets_bundle]
+
 # --- The lifeline NIC (pick 220) ---------------------------------------------------------------------
 
 - name: Filter and set up the lifeline NIC (only when agent_box_lifeline_interface is set)
