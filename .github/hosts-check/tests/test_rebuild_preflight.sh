@@ -115,7 +115,7 @@ out=$(FAKE_STORAGE_ERROR=yes run dev 31 28); check "an unreadable storage list i
 # The owner's short-node pick. Unset (or anything but the two values) refuses BEFORE any stop call, and names both values.
 out=$(SHORT_NODE="" run dev 31 28); check "no short-node setting refuses and names both values and costs" "$out" "short-node setting is not set" "rc=0"
 check "it names ephemeral-dev and keep-dev" "$out" "ephemeral-dev (stops VM 300, tears dev down at the end of the run" ""
-check "and keep-dev with its cost" "$out" "keep-dev (stops VM 300, dev stays up: the notebook's queued jobs are cancelled after 24 hours" ""
+check "and keep-dev with its cost" "$out" "keep-dev (stops VM 300, dev stays up: the notebook's queued jobs fail or are cancelled after 24 hours queued" ""
 if grep -q 'status/shutdown' "$t/calls"; then echo "FAIL: VM 300 was stopped with no setting"; fail=1; else echo "ok   no stop call with no setting"; fi
 check "VM 300 stays unmarked with no setting" "$out" "marker=no" "marker=yes"
 out=$(SHORT_NODE=whatever run dev 31 28); check "an unknown value is the same as unset" "$out" "short-node setting is not set" "runner stop"
