@@ -87,8 +87,13 @@ argument_specs:
       opnsense_lab_agent_box_target_names:
         type: list
         elements: str
-        default: [Proxmox API, c1 API, prod node 200 SSH, prod node 201 SSH]
+        default: [Proxmox API, c1 API, prod node 200 SSH, prod node 201 SSH, OPNsense API]
         description: The names the agent box's rules may have; a name that is not a current target loses its rule.
+      opnsense_lab_agent_box_sequences:
+        type: list
+        elements: int
+        default: [1, 2, 3, 4, 8, 9]
+        description: The agent box rules' sequence numbers, in target order; below 10 and clear of the management rules.
       opnsense_lab_host_overrides:
         type: list
         elements: dict
