@@ -16,7 +16,7 @@ revisit-when: the Mac's guard still refuses a tap once this record is accepted, 
 
 ## Context and Problem Statement
 
-D-0041 rule 3 forbids raw runs: changes made from the owner's Mac, a session's shell or a console. Until a layer or stack has its pipeline job, it allows one way round: a raw run of that layer "needs the owner's typed words naming the exact command", and the run is listed in the layer's runbook until its job exists (D-0041 lines 63 and 64). D-0041's Consequences repeat it: raw runs go on, on the owner's typed words (line 112).
+D-0041 rule 3 forbids raw runs: changes made from the owner's Mac, a session's shell or a console. It allows one way round, in D-0041 line 63: "Until a layer or stack has its pipeline job, a raw run of it needs the owner's typed words naming the exact command." Line 64 lists each such run in the layer's runbook until its job exists. D-0041's Consequences repeat it: raw runs go on, on the owner's typed words (line 112).
 
 On 2026-11-14 at 07:47:50 UTC the owner said he will not type go lines anymore (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV, cited in D-0042 rule 6). D-0042 rule 4 dealt with the same words for the box's limits. It kept the owner's approval of a limit change, but made it a tap on a decision card in place of the typed line D-0036 rule 6 asked for (D-0042 lines 115 and 129). Rule 3 of D-0041 was not changed then, so every raw run still waits on typed words.
 
