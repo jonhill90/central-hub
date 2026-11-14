@@ -18,7 +18,7 @@ revisit-when: a research batch compares FOSS routers and firewalls for the lab f
 
 The lab's router, firewall, VLAN gateway, DHCP server and lab DNS is an OPNsense virtual machine on the Proxmox host. It was set up by hand before the lab was in code ([home-lab-and-c1 spec](../specs/2026-10-home-lab-and-c1.md)) and was later brought into code: role `opnsense_lab` and the shared VLAN file in `hosts/ansible/`, and `hosts/terraform/home/firewall/`. No decision record chose it. Records D-0011, D-0017, D-0021, D-0028 and D-0036 and 22 runbooks build on it.
 
-On 2026-11-14 the owner ruled that no piece of the lab may be open core: nothing whose owner holds a feature back in a paid edition (REQ-0032 sharpened). OPNsense's company, Deciso, sells a Business Edition with features the community edition lacks, among them OpenID Connect sign-in. The same day the owner said OPNsense is not being replaced for now. This record writes down that choice, its limits and its way out.
+Between 04:43:45 and 04:44:57 UTC on 2026-11-14 the owner ruled that no piece of the lab may be open core: nothing whose owner holds a feature back in a paid edition (REQ-0032 sharpened; cmsg_01X43rfNYp4H1dL1V2dkfkwNR46AufLXRC146Xo4CSXG6t, cmsg_01X43rfNYp4H1dL1V2dkfkwNQV7TsveqXKdLbddnuYc8v7, and most plainly cmsg_01X43rfNYp4H1dL1V2dkfkwN5A1ezB3rCi7zkVswXeZkB4). OPNsense's company, Deciso, sells a Business Edition with features the community edition lacks, among them OpenID Connect sign-in. At 05:11:29 UTC the same day the owner said OPNsense is not being replaced for now (cmsg_01X43rfNYp4H1dL1V2dkfkwNUCNWkCsmp5t7rH58x9gsJH). This record writes down that choice, its limits and its way out.
 
 ## Decision Drivers
 
@@ -37,14 +37,14 @@ On 2026-11-14 the owner ruled that no piece of the lab may be open core: nothing
 
 ## Decision Outcome
 
-Proposed: **option 1, for now**, the owner's choice of 2026-11-14. Options 2 to 5 are listed from the licence check only; no research batch has compared them with OPNsense on the features the lab uses, so none is ready to replace it. That comparison is what reopens this record.
+Proposed: **option 1, for now**, the owner's choice of 2026-11-14 at 05:11:29 UTC. Options 2 to 5 are listed from the licence check only; no research batch has compared them with OPNsense on the features the lab uses, so none is ready to replace it. That comparison is what reopens this record.
 
 Diagram: not applicable. One component is chosen, and its place in the network is drawn in STD-0002 and the home-lab spec.
 
 ### Rules
 
 1. **Licence and edition.** OPNsense community edition, BSD-2-Clause. Its DNS resolver, Unbound, is BSD-3-Clause with no paid edition.
-2. **No Business Edition feature.** The lab uses none of the features the Business Edition adds, including its OpenID Connect sign-in, its web application firewall and its central management. Sign-in to OPNsense through the lab's identity provider takes a free route (D-0037).
+2. **No Business Edition feature.** The lab uses none of the features the Business Edition adds, including its OpenID Connect sign-in (named by Deciso) and, per a reseller's list, its web application firewall and its central management. Sign-in to OPNsense through the lab's identity provider takes a free route (D-0037).
 3. **Configuration in code.** VLANs, DHCP, firewall rules and DNS overrides are set from `hosts/ansible/` (role `opnsense_lab`, collection `oxlorg.opnsense`, GPL-3.0) and `hosts/terraform/home/firewall/`, never by hand in the web UI, so the inputs outlive the product.
 4. **One VLAN file.** The VLAN plan stays in the shared file both tools read (`ansible/inventories/home/group_vars/all/vlans.yml`), not in OPNsense, so a replacement reads the same file.
 

@@ -20,7 +20,7 @@ Is OPNsense free and open source with no feature held back in a paid edition, do
 2. **Paid edition.** Deciso's Business Edition has "additional commercial features" [2] (sourced). "The business edition includes OpenID Connect support for some parts of the system" [3] (sourced). A reseller lists Business Edition only central management, web application firewall, advanced web proxy, GeoIP database access, user portal and tested updates [4] (sourced; a reseller page, not Deciso's).
 3. **Unbound**, the resolver inside OPNsense: "All functionality is available in the open-source project, with no separate enterprise edition or gated features"; BSD-3-Clause [5] (sourced).
 4. **How it got here.** The home-lab spec says the lab was set up by hand before code [6] (sourced). No decision record chose OPNsense [6] (measured).
-5. **Reach.** 72 files in 30 folders of `hosts/`, 22 runbooks, records D-0011, D-0017, D-0021, D-0028 and D-0036, STD-0001 and four specs name it [6] (measured, 2026-11-14).
+5. **Reach.** 72 files in 41 folders of `hosts/`, 22 runbooks, records D-0011, D-0017, D-0021, D-0028 and D-0036, STD-0001 and four specs name it [6] (measured, 2026-11-14).
 6. **Alternatives.** OpenWrt is GPL-2.0-only [7] (measured). VyOS's vyos-1x is LGPL-2.1 [8] (measured); LTS images go to contributors free and to others by "binary image subscription", rolling images are free, and "you will always be able to build LTS releases yourself" [9] (sourced, a 2018 post). IPFire says "Our software and everything else is free" without naming a licence on that page [10] (sourced). pfSense CE is Apache-2.0 [11] (measured); its paid sibling pfSense Plus was not checked.
 
 ## How the decision used it
