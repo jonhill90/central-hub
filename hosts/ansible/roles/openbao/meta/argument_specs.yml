@@ -1,0 +1,54 @@
+---
+# Inputs of the openbao role.
+argument_specs:
+  main:
+    short_description: OpenBao on its own VM, unsealed by a static key, initialized by itself (proposed D-0038)
+    options:
+      # Required, private, through the inventory the secrets-store wrapper writes.
+      openbao_hostname:
+        type: str
+        required: true
+        description: The VM's OS hostname by STD-0001 (made-up example daldapdemo01). The same as the VM's name in hosts/terraform/home/secrets-store.
+      openbao_address:
+        type: str
+        required: true
+        description: The VM's address, for api_addr and the certificate. Private (STD-0004 rule 1).
+      openbao_box_address:
+        type: str
+        required: true
+        description: The agent box's address; the admin AppRole works only from it.
+      openbao_seal_key_id:
+        type: str
+        required: true
+        description: The static seal's key ID. Change it only with a new key (seal rotation).
+      openbao_seal_key_src:
+        type: path
+        required: true
+        description: The 32-byte seal key on the controller (the box's keys folder). Copied to the VM, readable only by OpenBao, never printed.
+      openbao_admin_role_id_src:
+        type: path
+        required: true
+        description: The admin AppRole's role ID on the controller. Used only by the first start.
+      openbao_admin_secret_id_src:
+        type: path
+        required: true
+        description: The admin AppRole's secret ID on the controller. Used only by the first start, then removed from the VM.
+      openbao_cacert_dest:
+        type: path
+        required: true
+        description: Where on the controller to put the listener's public certificate, for clients to trust.
+      openbao_version: {type: str, description: OpenBao release to install.}
+      openbao_rpm_sha256: {type: str, description: SHA-256 of that release's linux amd64 RPM.}
+      openbao_port: {type: int, description: The API and UI port.}
+      openbao_cluster_port: {type: int, description: Raft's cluster port.}
+      openbao_config_dir: {type: path, description: The package's config folder.}
+      openbao_data_dir: {type: path, description: Raft's data folder.}
+      openbao_tls_dir: {type: path, description: The listener's certificate folder.}
+      openbao_audit_dir: {type: path, description: The file audit device's folder.}
+      openbao_snapshot_dir: {type: path, description: Where hourly snapshots are kept on the VM.}
+      openbao_snapshot_keep: {type: int, description: How many snapshots to keep on the VM.}
+      openbao_snapshot_on_calendar: {type: str, description: systemd OnCalendar for snapshots.}
+      openbao_admin_token_ttl: {type: str, description: The admin AppRole's token TTL.}
+      openbao_admin_token_max_ttl: {type: str, description: The admin AppRole's token max TTL.}
+      openbao_tls_cert_src: {type: str, description: "Lab CA certificate for the listener on the controller; empty makes a self-signed one."}
+      openbao_tls_key_src: {type: str, description: "Its key on the controller; empty with the certificate."}

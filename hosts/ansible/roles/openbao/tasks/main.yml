@@ -1,0 +1,310 @@
+---
+# OpenBao on its own VM (proposed D-0038; docs/runbooks/set-up-the-secrets-store.md). The store
+# starts and unseals with no person (static seal, rule 4) and initializes itself on its first start
+# (rule 5). Secrets never pass through a command line or a log.
+
+- name: Check the hostname against STD-0001 (at most 15 characters, a-z and 0-9, starts with a letter)
+  ansible.builtin.assert:
+    that: openbao_hostname is match('^[a-z][a-z0-9]{10,14}$')
+    fail_msg: "{{ openbao_hostname }} is not a STD-0001 hostname."
+    quiet: true
+  tags: [hostname]
+
+- name: The VM's OS hostname
+  ansible.builtin.hostname:
+    name: "{{ openbao_hostname }}"
+  tags: [hostname]
+
+# Same reason as the ci_runner role: a Proxmox rename must not look like a new cloud-init instance.
+- name: Keep the hostname across renames and reboots (cloud-init)
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-keep-hostname.cfg
+    content: |
+      # Managed by the openbao role (central-hub hosts/ansible): keep the STD-0001 hostname,
+      # and never treat a Proxmox rename as a new instance.
+      preserve_hostname: true
+      manual_cache_clean: true
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [hostname]
+
+- name: The OpenBao RPM, checked against the release's SHA-256
+  ansible.builtin.get_url:
+    url: "https://github.com/openbao/openbao/releases/download/v{{ openbao_version }}/openbao_{{ openbao_version }}_linux_amd64.rpm"
+    dest: "/var/cache/openbao_{{ openbao_version }}_linux_amd64.rpm"
+    checksum: "sha256:{{ openbao_rpm_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [install]
+
+# The RPM carries no signature dnf can check against a key we hold; the SHA-256 above is the check.
+- name: OpenBao installed from that file
+  ansible.builtin.dnf:
+    name: "/var/cache/openbao_{{ openbao_version }}_linux_amd64.rpm"
+    disable_gpg_check: true
+    state: present
+  tags: [install]
+
+- name: Folders for the seal key, the first start's IDs, the audit log and snapshots
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "0700"
+  loop:
+    - {path: "{{ openbao_config_dir }}/seal", owner: openbao}
+    - {path: "{{ openbao_config_dir }}/init", owner: openbao}
+    - {path: "{{ openbao_audit_dir }}", owner: openbao}
+    - {path: "{{ openbao_snapshot_dir }}", owner: root}
+    - {path: /etc/openbao/snapshot, owner: root}
+  tags: [config]
+
+- name: The static seal's key, readable only by OpenBao (rule 4)
+  ansible.builtin.copy:
+    src: "{{ openbao_seal_key_src }}"
+    dest: "{{ openbao_config_dir }}/seal/{{ openbao_seal_key_id }}.key"
+    owner: openbao
+    group: openbao
+    mode: "0400"
+  no_log: true
+  notify: Restart openbao
+  tags: [config]
+
+# Lab CA certificate when given; otherwise a self-signed one for the name, the address and
+# 127.0.0.1 (the snapshot timer's address). The package's own self-signed certificate has no
+# subjectAltName, which clients refuse.
+- name: The listener's certificate from the lab CA
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ openbao_tls_dir }}/{{ item.dest }}"
+    owner: openbao
+    group: openbao
+    mode: "{{ item.mode }}"
+  loop:
+    - {src: "{{ openbao_tls_cert_src }}", dest: tls.crt, mode: "0644"}
+    - {src: "{{ openbao_tls_key_src }}", dest: tls.key, mode: "0400"}
+  no_log: true
+  when: openbao_tls_cert_src | length > 0
+  notify: Restart openbao
+  tags: [tls]
+
+- name: The certificate's subjectAltName, to see whether it is the role's own
+  ansible.builtin.command: openssl x509 -in {{ openbao_tls_dir }}/tls.crt -noout -ext subjectAltName
+  register: openbao_tls_san
+  changed_when: false
+  failed_when: false
+  when: openbao_tls_cert_src | length == 0
+  tags: [tls]
+
+- name: A self-signed certificate for the name, the address and 127.0.0.1 (no lab CA given)
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - req
+      - -x509
+      - -newkey
+      - ec
+      - -pkeyopt
+      - ec_paramgen_curve:P-256
+      - -nodes
+      - -days
+      - "825"
+      - -subj
+      - "/CN={{ openbao_hostname }}"
+      - -addext
+      - "subjectAltName=DNS:{{ openbao_hostname }},IP:{{ openbao_address }},IP:127.0.0.1"
+      - -keyout
+      - "{{ openbao_tls_dir }}/tls.key"
+      - -out
+      - "{{ openbao_tls_dir }}/tls.crt"
+  when: openbao_tls_cert_src | length == 0 and ('IP Address:' ~ openbao_address) not in (openbao_tls_san.stdout | default(''))
+  changed_when: true
+  notify: Restart openbao
+  tags: [tls]
+
+- name: The listener's files belong to OpenBao
+  ansible.builtin.file:
+    path: "{{ openbao_tls_dir }}/{{ item.name }}"
+    owner: openbao
+    group: openbao
+    mode: "{{ item.mode }}"
+  loop:
+    - {name: tls.crt, mode: "0644"}
+    - {name: tls.key, mode: "0400"}
+  tags: [tls]
+
+- name: The listener's public certificate, back to the controller for clients to trust
+  ansible.builtin.fetch:
+    src: "{{ openbao_tls_dir }}/tls.crt"
+    dest: "{{ openbao_cacert_dest }}"
+    flat: true
+  tags: [tls]
+
+- name: The unit's drop-in folder
+  ansible.builtin.file:
+    path: /etc/systemd/system/openbao.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [config]
+
+- name: The unit may bind port {{ openbao_port }}
+  ansible.builtin.template:
+    src: override.conf.j2
+    dest: /etc/systemd/system/openbao.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart openbao
+  tags: [config]
+
+# Already initialized means the first start ran: never write its block or its files again.
+- name: Is the store already initialized?
+  ansible.builtin.stat:
+    path: "{{ openbao_data_dir }}/raft/raft.db"
+  register: openbao_raft_db
+  tags: [config]
+
+- name: The first start's AppRole IDs (rule 6), only before the first start
+  when: not openbao_raft_db.stat.exists
+  no_log: true
+  tags: [config]
+  block:
+    - name: The admin AppRole's IDs, from the controller
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ openbao_config_dir }}/init/{{ item.dest }}"
+        owner: openbao
+        group: openbao
+        mode: "0400"
+      loop:
+        - {src: "{{ openbao_admin_role_id_src }}", dest: admin-role-id}
+        - {src: "{{ openbao_admin_secret_id_src }}", dest: admin-secret-id}
+
+    - name: The snapshot AppRole's IDs, made on the VM
+      ansible.builtin.shell: |
+        set -euo pipefail
+        umask 077
+        for f in role-id secret-id; do
+          # No trailing newline: the init file source and the CLI @file both read the whole file.
+          [ -s /etc/openbao/snapshot/$f ] || openssl rand -hex 24 | tr -d '\n' > /etc/openbao/snapshot/$f
+        done
+        install -o openbao -g openbao -m 0400 /etc/openbao/snapshot/role-id {{ openbao_config_dir }}/init/snapshot-role-id
+        install -o openbao -g openbao -m 0400 /etc/openbao/snapshot/secret-id {{ openbao_config_dir }}/init/snapshot-secret-id
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+- name: OpenBao's configuration
+  ansible.builtin.template:
+    src: openbao.hcl.j2
+    dest: "{{ openbao_config_dir }}/openbao.hcl"
+    owner: openbao
+    group: openbao
+    mode: "0640"
+  vars:
+    openbao_first_start: "{{ not openbao_raft_db.stat.exists }}"
+  notify: Restart openbao
+  tags: [config]
+
+- name: Open the API port in the VM's firewall
+  ansible.posix.firewalld:
+    port: "{{ openbao_port }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled
+  tags: [config]
+
+# Restart before the start, never after it: a restart in the middle of the first start would leave
+# storage written and the initialize requests half done, and they never run again.
+- name: Apply a changed configuration before starting
+  ansible.builtin.meta: flush_handlers
+
+- name: OpenBao runs now and at boot
+  ansible.builtin.systemd_service:
+    name: openbao
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [config]
+
+- name: OpenBao is up, initialized and unsealed
+  ansible.builtin.uri:
+    url: "https://127.0.0.1:{{ openbao_port }}/v1/sys/health"
+    ca_path: "{{ openbao_tls_dir }}/tls.crt"
+    status_code: 200
+    return_content: true
+  register: openbao_health
+  retries: 30
+  delay: 2
+  until: openbao_health.status == 200
+  tags: [config, check]
+
+- name: The snapshot script
+  ansible.builtin.copy:
+    src: openbao-snapshot.sh
+    dest: /usr/local/libexec/openbao-snapshot.sh
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [config, snapshot]
+
+# Health says initialized and unsealed, not that every initialize request ran. The snapshot
+# AppRole's secret ID is the last request, so one snapshot through it proves the first start
+# finished. Run on every apply, so a run that stopped here never deletes the files unproven.
+- name: The first start finished, proved by one snapshot through the snapshot AppRole
+  ansible.builtin.command:
+    argv:
+      - /usr/local/libexec/openbao-snapshot.sh
+      - "{{ openbao_port }}"
+      - "{{ openbao_snapshot_dir }}"
+      - "{{ openbao_snapshot_keep }}"
+  register: openbao_first_snapshot
+  retries: 15
+  delay: 2
+  until: openbao_first_snapshot.rc == 0
+  changed_when: false
+  tags: [config, check]
+
+# The first start is done: take its block and its ID files away, so neither the admin's secret ID
+# nor the init requests stay on the VM (rule 5).
+- name: After the first start, the configuration without its initialize block
+  ansible.builtin.template:
+    src: openbao.hcl.j2
+    dest: "{{ openbao_config_dir }}/openbao.hcl"
+    owner: openbao
+    group: openbao
+    mode: "0640"
+  vars:
+    openbao_first_start: false
+  notify: Restart openbao
+  tags: [config]
+
+- name: The first start's ID files are gone
+  ansible.builtin.file:
+    path: "{{ openbao_config_dir }}/init/{{ item }}"
+    state: absent
+  loop: [admin-role-id, admin-secret-id, snapshot-role-id, snapshot-secret-id]
+  tags: [config]
+
+- name: The snapshot timer's units
+  ansible.builtin.template:
+    src: "openbao-snapshot.{{ item }}.j2"
+    dest: "/etc/systemd/system/openbao-snapshot.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  tags: [snapshot]
+
+- name: The snapshot timer runs
+  ansible.builtin.systemd_service:
+    name: openbao-snapshot.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [snapshot]
