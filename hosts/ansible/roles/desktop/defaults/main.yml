@@ -13,14 +13,22 @@
 # The user the owner signs in as over RDP. It has no sudo and holds no lab keys. Its password is set
 # by the owner at the Proxmox console on first boot and passes through no agent and no file.
 desktop_user: owner
-# The Xfce session, packages from EPEL (the repository this role enables, with CRB).
+# The GNOME session and GNOME's own remote desktop, all from the AlmaLinux 10 base repositories (EPEL 10 has
+# no Xfce and no xrdp, measured 2026-11-14). gdm shows the login screen that RDP reaches.
 desktop_packages:
-  - "@Xfce"
-  - xrdp
-  - xorgxrdp
+  - gdm
+  - gnome-shell
+  - gnome-session-wayland-session
+  - gnome-control-center
+  - nautilus
+  - ptyxis
   - firefox
+  - gnome-remote-desktop
+  - openssl
+# Where the RDP certificate and key are made (the daemon's own folder, from its package).
+desktop_rdp_tls_dir: /var/lib/gnome-remote-desktop
 desktop_rdp_port: 3389
-# The file that marks the owner's password as set. xrdp does not start before it exists.
+# The file that marks the owner's password as set. the remote desktop does not start before it exists.
 desktop_password_marker: /var/lib/desktop/password-set
 # Remove the admin user's SSH keys at the end of the run. Later changes are then a rebuild from
 # teardown. Leave true; false is for debugging a VM that is going to be destroyed.

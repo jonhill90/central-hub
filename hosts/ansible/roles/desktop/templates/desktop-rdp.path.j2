@@ -1,0 +1,10 @@
+# Starts the GNOME remote desktop daemon when the owner has set the password (the marker exists).
+[Unit]
+Description=Start the remote desktop once the owner has set the password
+
+[Path]
+PathExists={{ desktop_password_marker }}
+Unit=gnome-remote-desktop.service
+
+[Install]
+WantedBy=multi-user.target
