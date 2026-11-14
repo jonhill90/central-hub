@@ -1,5 +1,10 @@
 #!/bin/sh
 # Bootstrap, run as root on the Proxmox host. Safe to run again.
+#   agent-access.sh               everything below; the agents get NO rights on pool desktop
+#   agent-access.sh desktop-on    also AgentDev on /pool/desktop, for one `desktop apply` or `destroy`
+#   agent-access.sh desktop-off   take that ACL away again (the owner's pick 219, 2026-11-14 02:18 UTC:
+#                                 "No rights after build"; a token can't remove its own ACL, so this
+#                                 step is the host's, never the agents')
 # It gives agents their own Proxmox user for the dev rebuild VMs only (the owner's yes of
 # 2026-11-10 05:16 UTC: "dev pool only", VMs 250-257, nothing on c1, the firewall, 258 or 259),
 # and the notebook's CI runner, VM 300 in pool ci (the owner's go of 2026-11-10 20:05 UTC to move the
@@ -22,6 +27,8 @@
 # pveum group delete agents; pveum pool delete dev; pveum pool delete ci; pveum pool delete desktop; qm destroy 9001` (after the pools are empty).
 set -eu
 
+mode=${1:-base}
+case $mode in base | desktop-on | desktop-off) ;; *) echo "usage: agent-access.sh [desktop-on|desktop-off]" >&2; exit 2 ;; esac
 NODE=$(hostname)
 PRIVS="Datastore.Audit,Datastore.AllocateSpace,Datastore.AllocateTemplate,Pool.Audit,SDN.Audit,SDN.Use,Sys.Audit,VM.Audit,VM.Allocate,VM.Clone,VM.Config.Cloudinit,VM.Config.CDROM,VM.Config.CPU,VM.Config.Disk,VM.Config.HWType,VM.Config.Memory,VM.Config.Network,VM.Config.Options,VM.PowerMgmt,VM.GuestAgent.Audit,Sys.AccessNetwork"
 CLONE_PRIVS="VM.Audit,VM.Clone"
@@ -71,7 +78,6 @@ acl() {
 }
 acl /pool/dev AgentDev 1                 # VMs 250-257, made again after every teardown
 acl /pool/ci AgentDev 1
-acl /pool/desktop AgentDev 1             # the owner's desktop (400-499), made again after every teardown
 acl /vms/300 AgentDev 0                  # the CI runner
 acl /vms/9001 AgentClone 0               # clone the agents' template; can't change or delete it
 acl /sdn/zones/lab/dev AgentDev 0        # attach guests to VNet dev only
@@ -81,4 +87,13 @@ acl "/nodes/$NODE" AgentDev 0            # read the node; download-url needs Sys
 # Template 9000 is on VNet prod, which the agents may not use, so they no longer need it.
 pveum acl delete /vms/9000 --groups agents --roles AgentClone 2>/dev/null || true
 pveum acl delete /vms/9000 --tokens 'agent@pve!dev' --roles AgentClone 2>/dev/null || true
-echo "agent-access: done (node $NODE)"
+# The owner's desktop (400-499): rights only between desktop-on and desktop-off, so the agents keep
+# none on a VM where the owner types passwords. Every other mode removes the ACL too, so a run that
+# forgot desktop-off still ends with none.
+if [ "$mode" = desktop-on ]; then
+  acl /pool/desktop AgentDev 1
+else
+  pveum acl delete /pool/desktop --groups agents --roles AgentDev 2>/dev/null || true
+  pveum acl delete /pool/desktop --tokens 'agent@pve!dev' --roles AgentDev 2>/dev/null || true
+fi
+echo "agent-access: done (node $NODE, $mode)"

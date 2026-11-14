@@ -3,11 +3,11 @@ title: Set up the owner's desktop VM
 status: draft
 kind: manual
 trigger: once, when the owner wants a desktop in the lab to sign in to apps by hand; again after the VM is rebuilt
-runner: an agent session on the agent box, once the desktop wrapper exists (not built yet)
+runner: an agent session on the agent box (the `desktop` wrapper), with the owner's two Mac steps `desktop-on` and `desktop-off` around each apply or destroy
 outcome: one AlmaLinux 10 VM on VNet dev runs Xfce and xrdp, the owner signs in with an RDP client, and the VM holds no lab keys and no agent credentials
-needs: the agent box; the agents' Proxmox token with rights on pool `desktop` (`proxmox-agent-access.sh run`, from the Mac); template 9001; a free dev address; the private inventory group `desktop`
+needs: the agent box; the agents' Proxmox token with rights on pool `desktop` only while the apply runs (`desktop-on`, then `desktop-off`, from the Mac); template 9001; a free dev address; the private inventory group `desktop`
 private-values: [desktop-name, desktop-address, desktop-rdp-source, desktop-ssh-key]
-files: [hosts/terraform/home/desktop/, hosts/ansible/roles/desktop/, hosts/ansible/playbooks/desktop.yml]
+files: [hosts/ansible/roles/agent_box/files/desktop.sh, hosts/terraform/home/bootstrap/agent-access.sh, hosts/terraform/home/desktop/, hosts/ansible/roles/desktop/, hosts/ansible/playbooks/desktop.yml]
 last-tested: not yet run
 superseded-by:
 ---
@@ -29,22 +29,30 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 
 ## What is not built yet
 
-- The wrapper that applies the VM from the box (`desktop plan|apply|destroy`, like `ci-runner`). Until then nobody applies this folder.
-- The rights for the agents' token: pool `desktop` and its ACL come from `proxmox-agent-access.sh run` on the Mac (changed here, not yet run).
+- Nothing has been applied: the `desktop` wrapper is built (`plan|apply|configure|destroy`, on the box once `agent_box_desktop` is set in the private inventory), and it has not run.
+- The Mac's `proxmox-agent-access.sh` must pass `desktop-on` and `desktop-off` through to `agent-access.sh` on the host. That script is the owner's, so the edit is too; until it is made, run `agent-access.sh desktop-on` and `desktop-off` as root on the host.
 - An OPNsense rule that lets the owner's device reach 3389 on VNet dev. It stays the owner's: a firewall change needs the owner's words.
 
-## Steps (when the wrapper exists)
+## Steps
 
-1. Plan the VM from a session on the box: `desktop plan`.
-   expect: `1 to add`: one VM, ID in 400-499, bridge `dev`, no pool.
+1. The owner gives the agents rights on the pool for this run, on the Mac: `proxmox-agent-access.sh desktop-on`.
+   why: the owner picked "No rights after build" (pick 219), so the agents hold none between runs.
+   expect: `agent-access: done (node <node>, desktop-on)`.
 
-2. Apply it: `desktop apply`. The desktop playbook runs after it.
-   expect: `failed=0`; the VM answers on SSH as the admin user.
+2. Plan the VM from a session on the box: `desktop plan`.
+   expect: `1 to add`: one VM, ID in 400-499, bridge `dev`, in pool `desktop`.
 
-3. The owner opens the VM's console in Proxmox (VM, Console). It asks "Set the password for owner."; the owner types a password twice. No one else sees it.
+3. Apply it: `desktop apply`, then set up the VM: `desktop configure`.
+   expect: `failed=0`; the VM answers on SSH as the admin user until the role removes its key at the end of the run.
+
+4. The owner takes the rights away again, on the Mac: `proxmox-agent-access.sh desktop-off`.
+   why: no agent keeps a way into the VM where the owner will type passwords.
+   expect: `agent-access: done (node <node>, desktop-off)`; `pveum acl list` shows no entry for `/pool/desktop`.
+
+5. The owner opens the VM's console in Proxmox (VM, Console). It asks "Set the password for owner."; the owner types a password twice. No one else sees it.
    expect: the prompt returns to a login; `/var/lib/desktop/password-set` exists and xrdp starts.
 
-4. The owner connects with an RDP client to the VM's address, port 3389, as user `owner`, from the address in `desktop_rdp_source`.
+6. The owner connects with an RDP client to the VM's address, port 3389, as user `owner`, from the address in `desktop_rdp_source`.
    expect: an Xfce session.
 
 ## If it fails
@@ -56,4 +64,4 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 
 ## Exit
 
-`desktop destroy` (tofu destroy with this folder's state). The VM holds nothing the rest of the lab needs.
+`desktop-on`, then `desktop destroy` (tofu destroy with this folder's state), then `desktop-off`. The VM holds nothing the rest of the lab needs.
