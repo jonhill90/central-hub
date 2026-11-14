@@ -32,3 +32,19 @@ openbao_admin_token_max_ttl: 1h
 # the lab CA is left out, D-0028).
 openbao_tls_cert_src: ""
 openbao_tls_key_src: ""
+
+# The store's first clients (tasks/clients.yml). c1's External Secrets Operator signs in at this
+# login mount with its own service account's token, made for this audience only.
+openbao_jwt_mount: jwt-c1
+openbao_eso_role:
+  role_type: jwt
+  user_claim: sub
+  bound_subject: system:serviceaccount:external-secrets:store-openbao
+  bound_audiences: [openbao]
+  token_policies: [eso-c1]
+  token_ttl: 3600
+  token_max_ttl: 3600
+
+# The AppRole rebuild's IDs on the box, next to the admin's. Made there once, never printed.
+openbao_rebuild_role_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-rebuild-role-id"
+openbao_rebuild_secret_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-rebuild-secret-id"
