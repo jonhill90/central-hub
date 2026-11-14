@@ -115,7 +115,7 @@ out=$(FAKE_STORAGE_ERROR=yes run dev 31 28); check "an unreadable storage list i
 # The end-of-run teardown: only when this run's stamp is in the marker; a failure is returned.
 td() { # marker content (empty: no marker), teardown rc
   rm -rf "$t/envdir" "$t/tdcalls"; mkdir -p "$t/envdir"; : > "$t/tdcalls"; [ -z "$1" ] || printf '%s\n' "$1" > "$t/envdir/ci-runner-stopped"
-  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 TDRC=${2:-0} bash -c '. "$1"; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; runner_run_teardown; echo "rc=$?"' _ "$t/fn.sh" 2>&1; }
+  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 TDRC=${2:-0} bash -c '. "$1"; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; if runner_run_teardown; then echo "rc=0"; else echo "rc=$?"; fi' _ "$t/fn.sh" 2>&1; }
 out=$(td run1); check "this run's marker tears dev down" "$out" "this run stopped VM 300, so dev is torn down now" "rc=1"
 check "the teardown stage ran" "$(cat "$t/tdcalls")" "teardown" ""
 check "and says rc=0" "$out" "teardown end rc=0" ""
