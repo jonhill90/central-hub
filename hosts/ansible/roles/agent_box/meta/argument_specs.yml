@@ -173,8 +173,9 @@ argument_specs:
         description: >-
           The owner's pick for a dev run on a node short of memory, written to <work_dir>/short-node (0600, the keys
           user's) for the rebuild wrapper. ephemeral-dev stops the CI runner, tears dev down at the end of the run, then
-          starts the runner. keep-dev stops the runner and leaves dev up (the notebook's CI and its access-expiry alert are
-          paused while dev is up). Empty is no pick: a short node refuses before it stops anything.
+          starts the runner. keep-dev stops the runner and leaves dev up (the notebook's queued jobs fail or are cancelled after
+          24 hours queued, so if dev stays up for more than a day its daily access-expiry check does not run, and
+          whether its alert e-mail goes out is not measured). Empty is no pick: a short node refuses before it stops anything.
       agent_box_desktop:
         type: dict
         default: {}

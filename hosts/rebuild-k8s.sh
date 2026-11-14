@@ -354,7 +354,7 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
     # checkout). With no valid value there is no default: it refuses BEFORE it stops VM 300.
     case ${PREFLIGHT_SHORT_NODE:-} in
       ephemeral-dev|keep-dev) ;;
-      *) echo "preflight: refused, free memory ${free} MiB is below ${min} MiB, VM $CI_RUNNER_VMID was not stopped because the short-node setting is not set (agent_box_short_node). Two values: ephemeral-dev (stops VM $CI_RUNNER_VMID, tears dev down at the end of the run, then starts VM $CI_RUNNER_VMID: dev lasts one run, notebook CI keeps running except during the run) or keep-dev (stops VM $CI_RUNNER_VMID, dev stays up: notebook CI and the access-expiry alert are paused while dev is up)"
+      *) echo "preflight: refused, free memory ${free} MiB is below ${min} MiB, VM $CI_RUNNER_VMID was not stopped because the short-node setting is not set (agent_box_short_node). Two values: ephemeral-dev (stops VM $CI_RUNNER_VMID, tears dev down at the end of the run, then starts VM $CI_RUNNER_VMID: dev lasts one run, notebook CI keeps running except during the run) or keep-dev (stops VM $CI_RUNNER_VMID, dev stays up: the notebook's queued jobs fail or are cancelled after 24 hours queued, so if dev stays up for more than a day the daily access-expiry check does not run and its alert e-mail may not go out)"
          return 1 ;;
     esac
     echo "preflight: short-node setting is ${PREFLIGHT_SHORT_NODE}"
