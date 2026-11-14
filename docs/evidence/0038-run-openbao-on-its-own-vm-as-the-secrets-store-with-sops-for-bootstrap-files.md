@@ -59,6 +59,7 @@ Is OpenBao free software with no paid edition, and how should the lab run it so 
 | ESO Vault provider | Stable (14), already the planned route (RB-0012) | OpenBao page alpha, tested on old versions (14) |
 | JWT auth | No network path to the API, no stored token (16) | Revoked token valid to expiry (16); new key each rebuild (18) |
 | SOPS with age | Works before OpenBao exists; two recipients (21) | Key names in clear (20); one more tool |
+| No SOPS | One tool fewer | No off-machine copy of the bootstrap files (22); the box's copy is plain text (23) |
 | SOPS with transit | One key system | Files unreadable while OpenBao is down, exactly when rebuilding it (19, inferred) |
 
 ## How the decision used it
