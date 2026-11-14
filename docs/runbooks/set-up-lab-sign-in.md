@@ -7,7 +7,7 @@ runner: the owner, or an agent lane with cluster-admin on c1
 outcome: realm lab in Keycloak matches the code; Grafana, Argo CD and Jellyfin each have their client and their client secret in their own namespace; every user signs in with the password in the values file
 needs: the filled-in inventory, SSH to the c1 control plane, HTTPS on Gateway apps (playbooks/k8s-gateway.yml, k8s-certs.yml)
 private-values: [k8s_identity_zone, k8s_identity_owner_username, k8s_identity_owner_email, k8s_identity_proxmox_hosts, PASSWORD_USER_NAME, GRAFANA_CLIENT_SECRET, ARGOCD_CLIENT_SECRET, JELLYFIN_CLIENT_SECRET, PROXMOX_CLIENT_SECRET, TOTP_USER_NAME]
-files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/ansible/roles/k8s_identity/, ~/.config/central-hub/identity.env]
+files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/ansible/roles/k8s_identity/, hosts/ansible/bootstrap/show-totp-qr.sh, ~/.config/central-hub/identity.env]
 last-tested: 2026-11-09, the owner on the Mac, step 4 at https://grafana.<zone>/ after an agent lane ran steps 1-3 on c1 (2026-11-08 at b20c975; again 2026-11-09 for the owner's renamed user and the sign-in theme); step 5 not yet done
 superseded-by:
 ---
@@ -58,7 +58,7 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 3. Run it again: same command as step 2.
    why: proves the run is idempotent.
    expect: `changed=0`.
-4. Sign in: open `https://grafana.<zone>/` (or `https://grafana.apps.c1.prod.<zone>/` without short names), choose "Lab sign-in", and sign in with your user name and the `PASSWORD_<USER NAME>` line from `identity.env`. A member of `lab-admins` is then asked for a code: add the `TOTP_<USER NAME>` line's value to an authenticator app first, as a TOTP entry typed in by its text (base32, 6 digits, 30 seconds, SHA-1).
+4. Sign in: open `https://grafana.<zone>/` (or `https://grafana.apps.c1.prod.<zone>/` without short names), choose "Lab sign-in", and sign in with your user name and the `PASSWORD_<USER NAME>` line from `identity.env`. A member of `lab-admins` is then asked for a code: first scan their seed into an authenticator app with `bootstrap/show-totp-qr.sh <user name>` on the controller, which shows it as a QR code on the controller's own screen for 120 seconds and then deletes the image.
    why: proves the user, the password and Grafana's client end to end.
    expect: Grafana opens with the Admin role for a member of `lab-admins`.
 5. Argo CD and Jellyfin: once their own config points at the issuer and the secrets above (the c1 GitOps work owns `argocd-cm` and the Jellyfin plugin), sign in to each the same way.

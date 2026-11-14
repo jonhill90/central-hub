@@ -32,7 +32,8 @@ k8s_identity_extra_users: []
 # A second factor for admins (D-0037): every member of this group gets a TOTP seed, a line TOTP_<USER NAME>
 # in the values file (base32, made like the passwords), imported as the user's OTP credential, so the
 # seed survives each delete and import of the realm. Keycloak then asks admins for the code at every
-# sign-in, Proxmox's included. The owner adds the seed to an authenticator app once, by its base32 text.
+# sign-in, Proxmox's included. The owner adds the seed to an authenticator app once, by scanning the QR code
+# bootstrap/show-totp-qr.sh shows on the controller's screen.
 k8s_identity_otp_group: lab-admins
 k8s_identity_otp_digits: 6
 k8s_identity_otp_period: 30

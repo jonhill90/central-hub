@@ -7,7 +7,7 @@ runner: the controller's Ansible (the owner's Mac, or an agent lane with the sam
 outcome: the Proxmox login page offers realm sso first; a member of Keycloak group lab-admins signs in with the lab password and gets Administrator on /, a member of lab-viewers gets PVEAuditor; root@pam with TOTP still signs in when c1 is down
 needs: realm lab on c1 (set-up-lab-sign-in.md); the host's certificate from the lab CA and the lab root in its trust store (playbooks/proxmox-cert.yml); the web UI on 443 (serve-proxmox-on-443.md); the host can reach c1's Gateway on 443
 private-values: [proxmox-cert-names, k8s_identity_zone, k8s_gateway_address, PROXMOX_CLIENT_SECRET]
-files: [hosts/ansible/roles/proxmox_sso/, hosts/ansible/playbooks/proxmox-sso.yml, hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/vars/main.yml, .github/hosts-check/tests/test_proxmox_sso.sh]
+files: [hosts/ansible/roles/proxmox_sso/, hosts/ansible/bootstrap/show-totp-qr.sh, hosts/ansible/playbooks/proxmox-sso.yml, hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/vars/main.yml, .github/hosts-check/tests/test_proxmox_sso.sh]
 last-tested: "not yet run on the host; 2026-11-14, an agent, the role against stand-in pveum and pvesh and a local discovery document (test_proxmox_sso.sh), and the realm rendered with the proxmox client"
 superseded-by:
 ---
@@ -68,7 +68,7 @@ All from `hosts/ansible` in the lab clone, at the merge commit of the PR that ad
 
    why: the role checks the host can fetch Keycloak's discovery document with normal certificate checks before it makes anything, then makes the groups, their ACLs and the realm, then asks Proxmox for a sign-in link (the first half of a sign-in, with no user) and checks it goes to Keycloak for client `proxmox` and back to the web UI.
    expect: `failed=0`, `Realm sso: made.`; a second run shows `changed=0`.
-4. Before the first sign-in, add your second factor to an authenticator app: a new TOTP entry, by its text, with the `TOTP_<USER NAME>` line's value from `identity.env` (base32, 6 digits, 30 seconds, SHA-1). Then open `https://<web UI name>/`, keep realm "sso" (the default), choose Login, and sign in at Keycloak with your lab user, the `PASSWORD_<USER NAME>` line, and the app's code.
+4. Before the first sign-in, add your second factor to an authenticator app by scanning. On the controller, from `hosts/ansible`: `bootstrap/show-totp-qr.sh <user name>`. It opens a QR code of your `TOTP_<USER NAME>` seed on the controller's own screen for 120 seconds, then deletes the image; scan it with the app, which adds an entry named "Lab". Nothing is typed, pasted, printed or logged. Then open `https://<web UI name>/`, keep realm "sso" (the default), choose Login, and sign in at Keycloak with your lab user, the `PASSWORD_<USER NAME>` line, and the app's code.
    why: proves the redirect, the secret, the claims and the group mapping end to end.
    expect: Keycloak asks for the code after the password; the UI opens as `<name>@sso`, Datacenter → Permissions → Users lists you in `lab-admins-sso`, and you can open the host's Summary and Shell.
 5. Prove the way in without c1: log out, choose "Linux PAM standard authentication", sign in as root@pam with TOTP.

@@ -1,6 +1,6 @@
 ---
 record: D-0037
-batch: RB-0208 (2026-11-14), with the project's FOSS audit of the same night for licences and paid tiers
+batch: RB-0211 (2026-11-14), with the FOSS check RB-0208 of the same night for licences and paid tiers
 researched: 2026-11-14
 method: Proxmox and OPNsense documentation and source files fetched and read; the candidate OPNsense routes' repositories cloned and their licence files and build files read; the role run against stand-ins
 checks: none independent yet; the reviewing agent checks the sources with the PR
