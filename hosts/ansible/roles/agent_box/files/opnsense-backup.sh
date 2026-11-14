@@ -11,11 +11,13 @@ umask 077
 
 work=/var/lib/agent-box
 settings=$work/opnsense-backup.json   # host and keep: written by the agent_box role
-apikey=/etc/agent-keys/prod/opnsense-api.txt   # key=/secret= lines (OPNsense's download) or two bare lines, key then secret
+# The box's own read-only key (user box-backup, hosts/ansible/bootstrap/opnsense-backup-user.sh), not the Ansible
+# user's: key=/secret= lines (OPNsense's download) or two bare lines, key then secret.
+apikey=/etc/agent-keys/prod/opnsense-backup-api.txt
 export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin
 
 [[ -f $settings ]] || { echo "opnsense-backup: $settings is missing; set agent_box_opnsense_backup in the inventory and run the agent_box role" >&2; exit 1; }
-[[ -f $apikey ]] || { echo "opnsense-backup: $apikey is missing; copy the controller's files (docs/runbooks/set-up-the-agent-box.md)" >&2; exit 1; }
+[[ -f $apikey ]] || { echo "opnsense-backup: $apikey is missing; make it with bootstrap/opnsense-backup-user.sh and copy the controller's files (docs/runbooks/set-up-the-box-lifeline.md)" >&2; exit 1; }
 
 host=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["host"])' "$settings")
 keep=$(python3 -I -c 'import json,sys; print(int(json.load(open(sys.argv[1]))["keep"]))' "$settings")

@@ -1,0 +1,227 @@
+---
+# Proxmox sign-in through Keycloak: the issuer's name in /etc/hosts, a reach check, the groups and their
+# ACLs, the OpenID realm, then a proof that Proxmox can start a sign-in. Reads run in check mode too;
+# changes don't. The client secret is read on the controller and goes only into pveum's arguments (no_log).
+
+- name: sso | Check the inputs
+  ansible.builtin.assert:
+    that:
+      - proxmox_sso_issuer is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?/realms/[A-Za-z0-9_-]+$')
+      - proxmox_sso_ui_names | length > 0
+      - proxmox_sso_realm is match('^[A-Za-z][A-Za-z0-9_-]{1,30}$')
+      - proxmox_sso_address | length == 0 or proxmox_sso_address is match('^([0-9]{1,3}[.]){3}[0-9]{1,3}$')
+    fail_msg: >-
+      Set proxmox_sso_issuer (https://sso.<zone>/realms/lab) and proxmox_sso_ui_names (or proxmox_cert_names) in
+      the inventory; proxmox_sso_address, if set, is c1's Gateway's IPv4 address.
+    quiet: true
+
+- name: sso | The controller's values file
+  ansible.builtin.stat:
+    path: "{{ proxmox_sso_values_file }}"
+  delegate_to: localhost
+  become: false
+  register: proxmox_sso_values_stat
+
+- name: sso | The values file is there
+  ansible.builtin.assert:
+    that: proxmox_sso_values_stat.stat.exists
+    fail_msg: >-
+      {{ proxmox_sso_values_file }} is missing. Run playbooks/k8s-identity.yml first: it makes the file and the
+      {{ proxmox_sso_secret_key }} line (docs/runbooks/sign-in-to-proxmox-through-keycloak.md).
+    quiet: true
+
+- name: sso | The client secret, from the values file
+  ansible.builtin.set_fact:
+    proxmox_sso_secret: >-
+      {{ lookup('ansible.builtin.file', proxmox_sso_values_file).splitlines()
+         | select('match', '^' ~ proxmox_sso_secret_key ~ '=') | map('regex_replace', '^[^=]*=', '') | first | default('') }}
+  no_log: true
+
+- name: sso | The values file holds the client secret
+  ansible.builtin.assert:
+    that: proxmox_sso_secret | length >= 32
+    fail_msg: >-
+      {{ proxmox_sso_values_file }} has no {{ proxmox_sso_secret_key }} line. Run playbooks/k8s-identity.yml
+      --tags secrets,keycloak first: it adds the line and the client to realm lab.
+    quiet: true
+
+# One line, found by its marker, so a changed address replaces it (the pattern of role proxmox_notify).
+- name: sso | Point the issuer's name at c1's Gateway in /etc/hosts
+  ansible.builtin.lineinfile:
+    path: "{{ proxmox_sso_hosts_file }}"
+    regexp: '# central-hub proxmox_sso$'
+    line: "{{ proxmox_sso_address }} {{ proxmox_sso_issuer | urlsplit('hostname') }}  # central-hub proxmox_sso"
+    state: "{{ 'present' if proxmox_sso_address | length > 0 else 'absent' }}"
+
+# The host must reach Keycloak and trust its certificate (the lab root, role proxmox_cert): the same call
+# Proxmox makes first when a sign-in starts. A failure here names the cause before the realm exists.
+- name: sso | Keycloak's discovery document, from the host
+  ansible.builtin.uri:
+    url: "{{ proxmox_sso_issuer }}/.well-known/openid-configuration"
+    return_content: true
+    timeout: 15
+  register: proxmox_sso_discovery
+  check_mode: false
+
+- name: sso | The discovery document names this issuer
+  ansible.builtin.assert:
+    that: proxmox_sso_discovery.json.issuer == proxmox_sso_issuer
+    fail_msg: "Keycloak says its issuer is {{ proxmox_sso_discovery.json.issuer }}, not {{ proxmox_sso_issuer }}."
+    quiet: true
+
+- name: sso | Groups and ACLs now
+  ansible.builtin.command:
+    argv: [pveum, "{{ item }}", list, --output-format, json]
+  loop: [group, acl]
+  register: proxmox_sso_lists
+  changed_when: false
+  check_mode: false
+
+- name: sso | Name what is there
+  ansible.builtin.set_fact:
+    proxmox_sso_group_names: "{{ proxmox_sso_lists.results[0].stdout | from_json | map(attribute='groupid') | list }}"
+    proxmox_sso_acls: "{{ proxmox_sso_lists.results[1].stdout | from_json }}"
+
+- name: sso | Each Proxmox group for a Keycloak group
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - group
+      - add
+      - "{{ item.group }}-{{ proxmox_sso_realm }}"
+      - --comment
+      - "Keycloak group {{ item.group }}, through realm {{ proxmox_sso_realm }} (central-hub proxmox_sso)"
+  loop: "{{ proxmox_sso_groups }}"
+  loop_control:
+    label: "{{ item.group }}-{{ proxmox_sso_realm }}"
+  when: (item.group ~ '-' ~ proxmox_sso_realm) not in proxmox_sso_group_names
+  changed_when: true
+
+- name: sso | Each group's role on /
+  ansible.builtin.command:
+    argv: [pveum, acl, modify, /, --groups, "{{ item.group }}-{{ proxmox_sso_realm }}", --roles, "{{ item.role }}"]
+  loop: "{{ proxmox_sso_groups }}"
+  loop_control:
+    label: "{{ item.group }}-{{ proxmox_sso_realm }} {{ item.role }}"
+  when: >-
+    proxmox_sso_acls | selectattr('path', 'equalto', '/') | selectattr('type', 'equalto', 'group')
+    | selectattr('ugid', 'equalto', item.group ~ '-' ~ proxmox_sso_realm)
+    | selectattr('roleid', 'equalto', item.role) | list | length == 0
+  changed_when: true
+
+# The comment carries the first 8 hex digits of the secret's SHA-256, so a changed secret updates the realm
+# without the role reading the secret back (the pattern of role proxmox_notify).
+- name: sso | The realm's settings
+  ansible.builtin.set_fact:
+    proxmox_sso_want:
+      issuer-url: "{{ proxmox_sso_issuer }}"
+      client-id: "{{ proxmox_sso_client_id }}"
+      autocreate: "1"
+      groups-claim: groups
+      groups-overwrite: "1"
+      default: "{{ '1' if proxmox_sso_default | bool else '0' }}"
+      comment: >-
+        Keycloak {{ proxmox_sso_issuer | urlsplit('path') | regex_replace('^/realms/', 'realm ') }}
+        (central-hub proxmox_sso), client secret sha256 {{ (proxmox_sso_secret | hash('sha256'))[:8] }}
+  no_log: true
+
+- name: sso | Realms now
+  ansible.builtin.command:
+    argv: [pveum, realm, list, --output-format, json]
+  register: proxmox_sso_realms
+  changed_when: false
+  check_mode: false
+
+- name: sso | The realm's settings now
+  ansible.builtin.command:
+    argv: [pvesh, get, "/access/domains/{{ proxmox_sso_realm }}", --output-format, json]
+  register: proxmox_sso_now
+  changed_when: false
+  check_mode: false
+  when: proxmox_sso_realm in (proxmox_sso_realms.stdout | from_json | map(attribute='realm') | list)
+
+- name: sso | What differs
+  ansible.builtin.set_fact:
+    proxmox_sso_exists: "{{ proxmox_sso_now.stdout is defined }}"
+    proxmox_sso_diff: >-
+      {%- set now = proxmox_sso_now.stdout | default('{}') | from_json -%}
+      {%- set ns = namespace(out=[]) -%}
+      {%- for k, v in proxmox_sso_want.items() -%}
+      {%- if (now[k] | default('0' if k in ['autocreate', 'groups-overwrite', 'default'] else '') | string) != (v | string) -%}
+      {%- set ns.out = ns.out + [k] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ ns.out }}
+
+# Proxmox fixes the username claim when the realm is made (it is how user names are built), so the
+# role stops instead of changing it: delete the realm and run again, and users sign in as new accounts.
+- name: sso | The username claim is as made
+  ansible.builtin.assert:
+    that: (proxmox_sso_now.stdout | from_json)['username-claim'] | default('') == proxmox_sso_username_claim
+    fail_msg: >-
+      Realm {{ proxmox_sso_realm }} builds user names from another claim. Changing it changes every user name:
+      delete the realm (pveum realm delete {{ proxmox_sso_realm }}) and run this role again.
+    quiet: true
+  when: proxmox_sso_exists | bool
+
+- name: sso | Make the realm
+  ansible.builtin.command:
+    argv: >-
+      {{ ['pveum', 'realm', 'add', proxmox_sso_realm, '--type', 'openid', '--username-claim', proxmox_sso_username_claim,
+          '--client-key', proxmox_sso_secret]
+         + (proxmox_sso_want | dict2items | map(attribute='key') | map('regex_replace', '^', '--')
+            | zip(proxmox_sso_want | dict2items | map(attribute='value')) | flatten) }}
+  when: not proxmox_sso_exists | bool
+  changed_when: true
+  no_log: true
+
+- name: sso | Change the realm
+  ansible.builtin.command:
+    argv: >-
+      {{ ['pveum', 'realm', 'modify', proxmox_sso_realm, '--client-key', proxmox_sso_secret]
+         + (proxmox_sso_want | dict2items | map(attribute='key') | map('regex_replace', '^', '--')
+            | zip(proxmox_sso_want | dict2items | map(attribute='value')) | flatten) }}
+  when: proxmox_sso_exists | bool and proxmox_sso_diff | length > 0
+  changed_when: true
+  no_log: true
+
+- name: sso | Say what changed in the realm
+  ansible.builtin.debug:
+    msg: "Realm {{ proxmox_sso_realm }}: {{ 'made' if not proxmox_sso_exists | bool else 'changed ' ~ proxmox_sso_diff | join(', ') }}."
+  when: not proxmox_sso_exists | bool or proxmox_sso_diff | length > 0
+
+# The proof: Proxmox reads Keycloak's discovery document itself and builds the sign-in link, the first
+# half of a sign-in, with no user and no session. The link must go to Keycloak's authorization endpoint
+# for this client and redirect back to the web UI.
+- name: sso | Proof, Proxmox starts a sign-in
+  when: not ansible_check_mode
+  block:
+    - name: sso | Proxmox's sign-in link
+      ansible.builtin.command:
+        argv:
+          - pvesh
+          - create
+          - /access/openid/auth-url
+          - --realm
+          - "{{ proxmox_sso_realm }}"
+          - --redirect-url
+          - "https://{{ proxmox_sso_ui_names | first }}"
+          - --output-format
+          - json
+      register: proxmox_sso_auth_url
+      changed_when: false
+
+    - name: sso | The link goes to Keycloak for this client
+      ansible.builtin.assert:
+        that:
+          - __url.startswith(proxmox_sso_discovery.json.authorization_endpoint ~ '?')
+          - ('client_id=' ~ proxmox_sso_client_id) in __url
+          - __redirect == 'https://' ~ proxmox_sso_ui_names | first
+        fail_msg: "Proxmox's sign-in link is not what Keycloak and the client expect: {{ __url | regex_replace('state=[^&]*', 'state=...') }}"
+        quiet: true
+      vars:
+        __url: "{{ proxmox_sso_auth_url.stdout | from_json }}"
+        # The query's redirect_uri, with the two escapes a plain origin can hold undone.
+        __redirect: >-
+          {{ (__url | regex_replace('^[^?]*[?](.*&)?redirect_uri=([^&]*).*$', '\2') if 'redirect_uri=' in __url else '')
+             | regex_replace('%3[Aa]', ':') | regex_replace('%2[Ff]', '/') }}

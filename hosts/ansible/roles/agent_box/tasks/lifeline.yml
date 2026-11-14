@@ -10,7 +10,8 @@
 # A root-owned unit, lifeline-nft.service, loads it before NetworkManager starts, so the NIC is never up
 # unfiltered, at the first apply or after a reboot.
 # This role owns the NIC's one NetworkManager connection, `lifeline`: a static address, no gateway, never
-# a default route, no DNS, no IPv6, autoconnect. cloud-init's network config applies only at first boot,
+# a default route, no DNS, no IPv6, autoconnect off
+# (lifeline-up.service, which requires the filter unit, brings it up). cloud-init's network config applies only at first boot,
 # so a NIC added to a running VM would otherwise come up on DHCP (measured on the first apply,
 # 2026-11-14). `connection up` also brings the link up, and runs last: the order is the filter, the
 # lifeline profile, deleting the stale profiles, managed yes, then up, so no leftover DHCP profile ever
@@ -71,11 +72,30 @@
     mode: "0644"
   notify: Reload the lifeline filter
 
-- name: lifeline | The unit is enabled
+- name: lifeline | The unit that brings the NIC up only behind the filter
+  ansible.builtin.template:
+    src: lifeline-up.service.j2
+    dest: /etc/systemd/system/lifeline-up.service
+    owner: root
+    group: root
+    mode: "0644"
+
+# The distro's nftables.service runs `flush ruleset` on stop and reload, which would take this table (and
+# tailscale's) with it. Nothing on the box uses it, so it is masked, not just left disabled.
+- name: lifeline | The distro nftables service is masked
   ansible.builtin.systemd_service:
-    name: lifeline-nft.service
+    name: nftables.service
+    masked: true
+    enabled: false
+  when: not ansible_check_mode
+
+- name: lifeline | The units are enabled
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
     enabled: true
     daemon_reload: true
+  loop: [lifeline-nft.service, lifeline-up.service]
+  when: not ansible_check_mode
 
 - name: lifeline | Load the filter now
   ansible.builtin.meta: flush_handlers
@@ -84,6 +104,7 @@
   ansible.builtin.systemd_service:
     name: lifeline-nft.service
     state: started
+  when: not ansible_check_mode
 
 - name: lifeline | The firewalld policy a first attempt wrote is removed
   ansible.builtin.file:
@@ -117,7 +138,7 @@
     nmcli connection modify lifeline
     ipv4.method manual ipv4.addresses {{ agent_box_lifeline_address | quote }} ipv4.gateway ""
     ipv4.never-default yes ipv4.dns "" ipv4.ignore-auto-dns yes ipv6.method disabled
-    connection.autoconnect yes connection.interface-name {{ agent_box_lifeline_interface | quote }}
+    connection.autoconnect no connection.interface-name {{ agent_box_lifeline_interface | quote }}
   when: agent_box_lifeline_nm_now.rc != 0 or (agent_box_lifeline_nm_now.stdout_lines | default([]) != agent_box_lifeline_wanted)
   vars:
     # nmcli -g prints one value per line, in the order asked; an empty value is an empty line.
@@ -129,7 +150,7 @@
       - ""
       - "yes"
       - disabled
-      - "yes"
+      - "no"
       - "{{ agent_box_lifeline_interface }}"
   register: agent_box_lifeline_nm_modified
   changed_when: true
@@ -176,12 +197,21 @@
   when: agent_box_lifeline_nm_now.rc != 0 or agent_box_lifeline_nm_modified is changed or agent_box_lifeline_stale.stdout_lines | length > 0
   changed_when: true
 
-# The proof: what the owner's pick 220 promises, measured on the box after the run.
+# From here the up unit owns the link: it needs the filter unit, so a stopped or failed filter takes the NIC down.
+- name: lifeline | The unit that holds the NIC up behind the filter is running
+  ansible.builtin.systemd_service:
+    name: lifeline-up.service
+    state: started
+  when: not ansible_check_mode
+
+# The proof: what the owner's pick 220 promises, measured on the box after the run. Skipped in a check run:
+# before the first apply the units and the table it reads do not exist yet, so these would fail.
 - name: lifeline | The filter as nftables reports it
   ansible.builtin.command: "{{ agent_box_nft_bin }} list table inet lifeline"
   register: agent_box_lifeline_table
   changed_when: false
   check_mode: false
+  when: not ansible_check_mode
 
 - name: lifeline | Default routes on the NIC
   ansible.builtin.shell:
@@ -189,6 +219,7 @@
   register: agent_box_lifeline_default_route
   changed_when: false
   check_mode: false
+  when: not ansible_check_mode
 
 - name: lifeline | No default route over the NIC, and the filter drops, rejects and forwards nothing else
   ansible.builtin.assert:
@@ -204,6 +235,7 @@
       the lifeline is not closed as picked: a default route over it, a missing drop or reject, or a filter
       that allows more or less than agent_box_lifeline_allow
     quiet: true
+  when: not ansible_check_mode
 
 - name: lifeline | Each allowed destination is in the filter
   ansible.builtin.assert:
@@ -212,3 +244,11 @@
     fail_msg: "{{ item.0.address }}:{{ item.1 }} is not in the lifeline filter"
     quiet: true
   loop: "{{ agent_box_lifeline_allow | subelements('ports') }}"
+  when: not ansible_check_mode
+
+- name: lifeline | Both units are active
+  ansible.builtin.command: systemctl is-active lifeline-nft.service lifeline-up.service  # noqa: command-instead-of-module
+  register: agent_box_lifeline_active
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode

@@ -1,6 +1,6 @@
 ---
 title: Move c1's External Secrets and its store from Ansible to Argo CD
-status: tested
+status: draft
 kind: automated
 trigger: on request (step 5 of spec 2026-11-c1-apps-under-argo-cd)
 runner: an agent lane, through the owner's Mac (D-0022)

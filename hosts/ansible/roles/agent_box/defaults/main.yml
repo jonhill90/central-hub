@@ -112,7 +112,8 @@ agent_box_ca_files: []
 agent_box_tls_check_url: ""
 # A daily copy of OPNsense's configuration on the box (pick 220). Private, through the inventory: host (OPNsense's
 # name or address, over HTTPS with the lab CA the box trusts) and keep (copies to keep, 3 to 60, default 14). The API key
-# is /etc/agent-keys/prod/opnsense-api.txt, which the prod files copy puts there. Empty does nothing.
+# is /etc/agent-keys/prod/opnsense-backup-api.txt, the box's own read-only key (user box-backup, made by
+# hosts/ansible/bootstrap/opnsense-backup-user.sh), which the prod files copy puts there. Empty does nothing.
 agent_box_opnsense_backup: {}
 # When the daily OPNsense backup starts (systemd OnCalendar).
 agent_box_opnsense_backup_daily: "*-*-* 14:30:00 UTC"
@@ -190,6 +191,7 @@ agent_box_prod_files:
   - {from: clone, path: hosts/terraform/home/tailnet/home.tfvars, dest: tfvars/tailnet.tfvars}
   - {from: clone, path: hosts/terraform/home/dns/home.records.tfvars.json, dest: tfvars/dns.records.tfvars.json}
   - {from: config, path: opnsense-api.txt, dest: opnsense-api.txt}
+  - {from: config, path: opnsense-backup-api.txt, dest: opnsense-backup-api.txt}
   - {from: config, path: secret-source.env, dest: secret-source.env}
   - {from: config, path: c1-secrets-encryption.key, dest: c1-secrets-encryption.key}
   - {from: config, path: cloudflare-dns.token, dest: cloudflare-dns01-token.txt}
