@@ -247,3 +247,6 @@ agent_box_self_apply_skip_tags: [ca, prod_files, opnsense_offbox, lifeline, veri
 agent_box_self_apply_commit: ""
 # Set by box-apply on its own runs (-e); the box-apply tasks then write nothing.
 agent_box_self_applying: false
+# Set by box-apply, with agent_box_self_applying, on an approved limit apply (-e; pick 231): the box-apply tasks
+# then write box-apply, its settings and its limits, never its inventory.
+agent_box_limit_apply: false

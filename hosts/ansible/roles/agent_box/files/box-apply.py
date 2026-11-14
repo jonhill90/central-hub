@@ -10,8 +10,16 @@ agent_box role when agent_box_self_apply is true; sessions start it through sudo
          state before the run: one that changed is put back, and self-applies stop until the next full apply from
          the controller.
 
+A limit change since the baseline still stops both, unless main holds an approval line for exactly that change
+(APPROVALS, pick 231): `<from> <to> <digest> <pass> <tap>`, where from is the baseline, to is a commit on main with
+no limit change after it, and digest is the sha256 of `git diff --no-renames --binary --full-index <from> <to> --
+<the limit files that changed>`. `apply` then applies `to` with the limit tasks on, lets the limit paths change
+that its check run named, and moves the baseline to `to`; the next run goes on to main. The box can't check the
+pass or the tap: they are message and card ids it only logs. Without a line, the stop prints the digest to approve.
+
 Its settings and its list of limits (/etc/box-apply/) and its inventory are written only by an apply from the
-controller, and are limits themselves (D-0036 rules 3(f) and 7). Every run is logged to /var/log/box-apply.log.
+controller or an approved limit apply (the inventory by the controller only), and are limits themselves (D-0036
+rules 3(f) and 7). Every run is logged to /var/log/box-apply.log.
 """
 
 import errno
@@ -33,6 +41,8 @@ LIMITS = "/etc/box-apply/limits.txt"
 STATE = "/var/lib/box-apply"
 LOG = "/var/log/box-apply.log"
 KEEP_RUNS = 50
+# On main, outside the role, so adding a line is not itself a limit change. Read from the commit being applied.
+APPROVALS = "hosts/ansible/agent-box-limit-approvals.txt"
 
 run = {"time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "mode": None}
 
@@ -145,6 +155,63 @@ def limit_keys(rules, repo, base, new, changed):
             elif k not in cur or not free_value_ok(k, cur[k]):
                 hits.append(f"{f}: {k} (a free key's value must be a plain literal)")
     return hits
+
+
+def hit_files(hits):
+    """The repository files behind a list of hits ("file" or "file: key ...")."""
+    return sorted({h.split(":", 1)[0] for h in hits})
+
+
+def limit_digest(repo, base, to, files):
+    """sha256 of the limit files' diff from base to to, the bytes the councils read and the approval line names."""
+    p = subprocess.run(["git", "-C", repo, "diff", "--no-renames", "--binary", "--full-index", base, to, "--", *files],
+                       capture_output=True)
+    if p.returncode != 0:
+        stop(f"git diff for the limit digest failed: {p.stderr.decode(errors='replace').strip()[:300]}")
+    return hashlib.sha256(p.stdout).hexdigest()
+
+
+HEX40 = re.compile(r"[0-9a-f]{40}")
+HEX64 = re.compile(r"[0-9a-f]{64}")
+REF = re.compile(r"[A-Za-z0-9_.:-]{6,200}")
+
+
+def approved_limit_change(rules, repo, base, new):
+    """The approval line on main for the limit change since the baseline, or None. A line counts when its from is
+    the baseline, its to is on main, no limit changed between to and main, its digest matches, and its pass and
+    tap are ids (the box can't check either; a tap of "none" never counts)."""
+    text = git(repo, "show", f"{new}:{APPROVALS}", check=False).stdout
+    for n, line in enumerate(text.splitlines(), 1):
+        words = line.split("#", 1)[0].split()
+        if not words:
+            continue
+        if len(words) != 5:
+            say(f"{APPROVALS} line {n} is not <from> <to> <digest> <pass> <tap>; left out")
+            continue
+        frm, to, digest, pass_ref, tap = words
+        if frm != base:
+            continue
+        if not (HEX40.fullmatch(to) and HEX64.fullmatch(digest) and REF.fullmatch(pass_ref) and REF.fullmatch(tap)) \
+                or tap.lower() == "none" or to == base:
+            say(f"{APPROVALS} line {n} is malformed; left out")
+            continue
+        if git(repo, "merge-base", "--is-ancestor", to, new, check=False).returncode != 0:
+            say(f"{APPROVALS} line {n}: {to[:8]} is not on main; left out")
+            continue
+        after = [f for f in git(repo, "diff", "--name-only", "--no-renames", "-z", to, new).stdout.split("\0") if f]
+        if limit_files(rules, after) + limit_keys(rules, repo, to, new, after):
+            say(f"{APPROVALS} line {n}: a limit changed again after {to[:8]}, which needs its own line; left out")
+            continue
+        changed = [f for f in git(repo, "diff", "--name-only", "--no-renames", "-z", base, to).stdout.split("\0") if f]
+        files = hit_files(limit_files(rules, changed) + limit_keys(rules, repo, base, to, changed))
+        if not files:
+            say(f"{APPROVALS} line {n}: no limit changed from {base[:8]} to {to[:8]}; left out")
+            continue
+        if limit_digest(repo, base, to, files) != digest:
+            say(f"{APPROVALS} line {n}: its digest is not the diff of {', '.join(files)}; left out")
+            continue
+        return {"line": n, "to": to, "digest": digest, "pass": pass_ref, "tap": tap, "files": files}
+    return None
 
 
 # --- The box's limit paths, before and after ----------------------------------------------------------------
@@ -267,8 +334,9 @@ def put_back(before, diff):
 
 # --- The role run -------------------------------------------------------------------------------------------
 
-def play(s, repo, check):
-    """Runs the agent_box playbook on the box itself, as root, with the JSON callback; returns the parsed output."""
+def play(s, repo, check, limits=False):
+    """Runs the agent_box playbook on the box itself, as root, with the JSON callback; returns the parsed output.
+    limits: an approved limit apply, which also runs the tasks that write box-apply itself (never its inventory)."""
     folder = os.path.join(repo, "hosts/ansible")
     env = {
         "PATH": f"{os.path.dirname(s['ansible_playbook'])}:/usr/local/bin:/usr/bin:/bin",
@@ -283,6 +351,8 @@ def play(s, repo, check):
     }
     argv = [s["ansible_playbook"], "-i", s["inventory"], "playbooks/agent-box.yml",
             "--skip-tags", ",".join(s["skip_tags"]), "-e", "agent_box_self_applying=true"]
+    if limits:
+        argv += ["-e", "agent_box_limit_apply=true"]
     if check:
         argv += ["--check", "--diff"]
     p = subprocess.run(argv, cwd=folder, env=env, capture_output=True, text=True)
@@ -342,9 +412,60 @@ def check_hits(rules, out):
     return sorted(set(hits))
 
 
+def predicted(rules, out):
+    """The limit paths, folders and users a check run would change: what an approved limit apply may change."""
+    paths = set()
+    for _, r in changed_results(out):
+        for p in touched_paths(r):
+            if any(fnmatch.fnmatchcase(p, g) for g in rules["box"]) or p in rules["dir"]:
+                paths.add(p)
+        if r.get("name") in rules["user"]:
+            paths.add(r["name"])
+    return paths
+
+
 def failures(out):
     stats = out.get("stats", {})
     return sum(v.get("failures", 0) + v.get("unreachable", 0) for v in stats.values())
+
+
+def limit_apply(s, rules, repo, base, ok, mode):
+    """An approved limit change: check run and apply of ok["to"] with the limit tasks on. The apply may change only
+    the limit paths its check run named; any other change is put back and self-applies stop."""
+    to = ok["to"]
+    run.update(new=to, approval={k: ok[k] for k in ("line", "digest", "pass", "tap")})
+    git(repo, "checkout", "--quiet", "--detach", "--force", to)
+    git(repo, "clean", "-ffdxq")
+    say(f"approved limit change, {APPROVALS} line {ok['line']}: {base[:8]} to {to[:8]}, digest {ok['digest'][:12]}, "
+        f"pass {ok['pass']}, tap {ok['tap']} (the box can't check the pass or the tap): {', '.join(ok['files'])}")
+    rc, out = play(s, repo, check=True, limits=True)
+    if failures(out) or rc not in (0, 2):
+        stop(f"the check run failed (exit {rc}); nothing applied. Its output is in {STATE}/runs/")
+    allowed = predicted(rules, out)
+    say("check run: limit paths it would change: " + ("; ".join(sorted(allowed)) if allowed else "none"))
+    if mode == "plan":
+        record("planned", f"approved limit change to {to[:8]}: {len(allowed)} limit path(s)")
+        return
+    before = snapshot(rules, os.path.join(STATE, "before"))
+    rc, out = play(s, repo, check=False, limits=True)
+    diff = compare(rules, before)
+    extra = [(k, p) for k, p in diff if p not in allowed]
+    if extra:
+        left = put_back(before, diff)
+        what = "; ".join(f"{k} {p}" for k, p in extra)
+        with open(os.path.join(STATE, "stopped"), "w") as f:
+            f.write(f"{run['time']} at {to[:8]}: not in the check run: {what}\n")
+        stop(f"the approved apply changed limit paths its check run did not name: {what}. Put back every limit "
+             "change of this run" + (f", except: {'; '.join(left)}" if left else "")
+             + ". Self-applies are stopped until the next full apply from the controller.", code=4)
+    if failures(out) or rc != 0:
+        stop(f"the approved apply failed (exit {rc}); the baseline stays {base[:8]}. Its output is in {STATE}/runs/")
+    with open(os.path.join(STATE, "baseline.new"), "w") as f:
+        f.write(to + "\n")
+    os.replace(os.path.join(STATE, "baseline.new"), os.path.join(STATE, "baseline"))
+    say(f"applied the approved limit change {to[:8]}: " + ("; ".join(f"{k} {p}" for k, p in diff) or "no limit path changed")
+        + ". Run box-apply again to go on to main.")
+    record("applied-limits", "; ".join(f"{k} {p}" for k, p in diff))
 
 
 # --- Main ---------------------------------------------------------------------------------------------------
@@ -390,8 +511,13 @@ def main():
     changed = [f for f in git(repo, "diff", "--name-only", "--no-renames", "-z", base, new).stdout.split("\0") if f]
     hits = limit_files(rules, changed) + limit_keys(rules, repo, base, new, changed)
     if hits:
-        stop("a limit changed since the baseline, so this waits for the owner's go and an apply from the "
-             "controller (D-0036 rule 6): " + "; ".join(hits), code=3)
+        ok = approved_limit_change(rules, repo, base, new)
+        if ok is None:
+            stop("a limit changed since the baseline and main holds no approval line for it, so this waits "
+                 f"(D-0036 rule 6): {'; '.join(hits)}. To approve exactly this change, a merged line in "
+                 f"{APPROVALS}: {base} {new} {limit_digest(repo, base, new, hit_files(hits))} <pass> <tap>", code=3)
+        limit_apply(s, rules, repo, base, ok, mode)
+        return
     say(f"{len(changed)} file(s) changed since the baseline, none of them a limit")
 
     rc, out = play(s, repo, check=True)
