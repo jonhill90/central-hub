@@ -143,13 +143,17 @@ agent_box_opnsense_offbox_cert_days: 90
 agent_box_opnsense_offbox_cert_renew_days: 30
 # The Azure CLI on the controller, signed in as agent-azure (the app's owner), for the first certificate upload.
 agent_box_az: az
-# One SOPS-encrypted bundle a day of the box's private files, to two age recipients: the box's own identity and the
-# owner's Mac (proposed D-0038 rule 10, pick 228, docs/runbooks/make-the-box-secrets-bundle.md). Through the
-# inventory: mac_recipient (the Mac's age public key, age1..., not a secret) and optionally keep (bundles to keep,
-# 1 to 60, default 14). Empty does nothing.
+# One SOPS-encrypted bundle a day of the box's private files, to the box's own identity and, when set, the owner's
+# Mac (proposed D-0038 rule 10, picks 228 and 236, docs/runbooks/make-the-box-secrets-bundle.md). Through the
+# inventory, all optional: mac_recipient (the Mac's age public key, age1..., not a secret), keep (bundles kept on
+# the box, 1 to 60, default 14), and for the off-box send, which runs only with agent_box_opnsense_offbox set:
+# vault_secret (default secrets-bundle-age-identity), offbox_keep_daily (default 14) and offbox_keep_monthly
+# (default 6). Empty does nothing.
 agent_box_secrets_bundle: {}
 # When the daily bundle is made (systemd OnCalendar).
 agent_box_secrets_bundle_daily: "*-*-* 15:30:00 UTC"
+# The off-box send (pick 236), after the bundle and its randomized delay.
+agent_box_secrets_bundle_offbox_daily: "*-*-* 16:15:00 UTC"
 # SOPS (MPL-2.0) and age (BSD-3-Clause) for that bundle, each checked against its SHA-256: SOPS from the release's
 # checksums file, age from the release tarball as downloaded on 2026-11-14. No age checksums file was found: the
 # release workflow at tag v1.3.2 (.github/workflows/build.yml) uploads only the age-* archives with a build
@@ -200,6 +204,10 @@ agent_box_ci_runner: {}
 # proxmox_node_name, vnet, template_vm_id, rdp_source (the tailnet connector's address, where RDP arrives from) and optionally
 # admin_user (default admin). Empty leaves the wrapper unset up.
 agent_box_desktop: {}
+# The owner's pick for a dev run on a node short of memory (docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev
+# (the run stops the CI runner, tears dev down at its end, then the runner starts) or keep-dev (the runner stops, dev stays up, the
+# notebook's CI and its access-expiry alert are paused while dev is up). Empty is no pick: a short node then refuses before it stops anything.
+agent_box_short_node: ""
 # The secrets store's dev VM that the secrets-store wrapper builds (docs/runbooks/set-up-the-secrets-store.md).
 # Private, through the inventory: name, vm_id (500-599), address, cores, memory_mb, disk_gb,
 # proxmox_node_name, vnet, template_vm_id, box_address (this box's address, the only one the admin

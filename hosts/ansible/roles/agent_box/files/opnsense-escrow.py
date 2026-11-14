@@ -7,6 +7,9 @@ docs/runbooks/copy-opnsense-backup-off-box.md). Run as the keys user by opnsense
           and read secrets' metadata, never a value, so each version carries a salted PBKDF2 hash of the
           password as a tag, and the tag is what is compared. If it differs or there is no version, write the
           password as a new version and check the tag again. Exit 0 only when the vault holds it.
+          With BACKUP_ESCROW_FILE and BACKUP_ESCROW_SECRET also set (the secrets bundle's off-box send, pick 236),
+          the same is then done for that file's content under that secret name: the box's age identity, which opens
+          every secrets bundle. The file must exist already; this script never makes it.
 
 The value goes from the file to Key Vault's HTTPS API and nowhere else: it is never printed or logged.
 Sign-in is the box's own certificate, through azure-cert.py (the c1 nodes' script, same folder).
@@ -19,6 +22,7 @@ import hashlib
 import hmac
 import importlib.util
 import os
+import re
 import sys
 import urllib.parse
 
@@ -69,9 +73,9 @@ def password(path):
     return value
 
 
-def newest_tag(conf, bearer):
+def newest_tag(conf, bearer, secret):
     """The pbkdf2 tag of the newest enabled version, or "" when there is none (readMetadata only)."""
-    url = f"{conf['OFFBOX_VAULT_URL'].rstrip('/')}/secrets/{conf['OFFBOX_VAULT_SECRET']}/versions?{API}"
+    url = f"{conf['OFFBOX_VAULT_URL'].rstrip('/')}/secrets/{secret}/versions?{API}"
     versions = []
     while url:
         status, answer = az.http("GET", url, headers={"Authorization": f"Bearer {bearer}"})
@@ -93,22 +97,46 @@ def cmd_ensure(conf):
             "OFFBOX_VAULT_URL", "OFFBOX_VAULT_SECRET")
     if urllib.parse.urlparse(conf["OFFBOX_VAULT_URL"]).scheme not in ("https", "http"):
         az.die("OFFBOX_VAULT_URL must be a URL")
+    extra = (conf.get("BACKUP_ESCROW_FILE", ""), conf.get("BACKUP_ESCROW_SECRET", ""))
+    if any(extra) and not all(extra):
+        az.die("BACKUP_ESCROW_FILE and BACKUP_ESCROW_SECRET go together")
+    if extra[1] and not re.fullmatch(r"[0-9A-Za-z-]{1,127}", extra[1]):
+        az.die("BACKUP_ESCROW_SECRET is not a Key Vault secret name")
     value = password(conf["RESTIC_PASSWORD_FILE"])
     cert = az.Cert(conf["AZURE_CLIENT_CERTIFICATE_PATH"])
     bearer, err = az.token(conf, cert, SCOPE)
     if not bearer:
         az.die(f"no Key Vault token with the box's certificate: {err}")
-    if tag_matches(newest_tag(conf, bearer), value):
-        az.log("ok: the vault holds the current password")
+    escrow(conf, bearer, conf["OFFBOX_VAULT_SECRET"], value, "restic-password", "password")
+    if extra[0]:
+        escrow(conf, bearer, extra[1], file_value(extra[0]), "age-identity", "age identity")
+
+
+def file_value(path):
+    """The content of a file this script does not make (the box's age identity)."""
+    try:
+        with open(path) as f:
+            value = f.read().rstrip("\r\n")
+    except OSError as e:
+        az.die(f"{path} can't be read: {e.strerror}")
+    if not value:
+        az.die(f"{path} is empty")
+    return value
+
+
+def escrow(conf, bearer, secret, value, content_type, what):
+    """Make sure the newest version of `secret` is `value`, by its tag; write a new version if not."""
+    if tag_matches(newest_tag(conf, bearer, secret), value):
+        az.log(f"ok: the vault holds the current {what}")
         return
-    url = f"{conf['OFFBOX_VAULT_URL'].rstrip('/')}/secrets/{conf['OFFBOX_VAULT_SECRET']}?{API}"
+    url = f"{conf['OFFBOX_VAULT_URL'].rstrip('/')}/secrets/{secret}?{API}"
     status, answer = az.http("PUT", url, headers={"Authorization": f"Bearer {bearer}"}, body={
-        "value": value, "contentType": "restic-password", "tags": {TAG: tag_for(value)}})
+        "value": value, "contentType": content_type, "tags": {TAG: tag_for(value)}})
     if status != 200:
         az.die(f"setting the secret answered {status}: {str(answer.get('error', answer))[:300]}")
-    if not tag_matches(newest_tag(conf, bearer), value):
-        az.die("the vault's newest version still is not the current password after setting it")
-    az.log("wrote the current password to the vault")
+    if not tag_matches(newest_tag(conf, bearer, secret), value):
+        az.die(f"the vault's newest version still is not the current {what} after setting it")
+    az.log(f"wrote the current {what} to the vault")
 
 
 def main():

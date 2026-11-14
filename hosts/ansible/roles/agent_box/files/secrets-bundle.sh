@@ -3,12 +3,12 @@
 # rule 10, pick 228, docs/runbooks/make-the-box-secrets-bundle.md). Runs as user `keys` from its daily timer; no
 # session runs it, so it has no sudo line.
 #   1. tar the keys folder's environment folders (prod and dev, whichever exist), never this job's own folder.
-#   2. SOPS encrypts the tar as a binary file to two age recipients, the box's own identity and the owner's Mac,
-#      so either machine alone can decrypt it and nobody else can.
+#   2. SOPS encrypts the tar as a binary file to the box's own age identity, and to the owner's Mac when its
+#      recipient is set (optional since pick 236), so either can decrypt it and nobody else can.
 #   3. The bundle must decrypt again with the box's identity to the same bytes, or it is deleted and the run fails.
 #   4. The newest KEEP bundles stay; older ones go.
-# The off-box send is a separate step (a later PR); until then the bundle protects nothing that the keys folder
-# beside it does not already hold, and exists so the format and the read-back are proved first.
+# secrets-bundle-offbox.sh sends it off the box (pick 236); the box's identity is escrowed in the backup Key Vault,
+# so the off-box copy opens without the box.
 set -euo pipefail
 umask 077
 
@@ -28,7 +28,8 @@ set -a
 # shellcheck source=/dev/null
 . "$settings"
 set +a
-[[ ${BUNDLE_MAC_RECIPIENT:-} =~ ^age1[0-9a-z]{58}$ ]] || die "BUNDLE_MAC_RECIPIENT is not an age recipient"
+# The Mac's recipient is optional (pick 236): the off-box copy opens with the box's identity, escrowed in the vault.
+[[ -z ${BUNDLE_MAC_RECIPIENT:-} || $BUNDLE_MAC_RECIPIENT =~ ^age1[0-9a-z]{58}$ ]] || die "BUNDLE_MAC_RECIPIENT is not an age recipient"
 [[ ${BUNDLE_KEEP:-} =~ ^[1-9][0-9]*$ ]] || die "BUNDLE_KEEP must be a whole number from 1"
 [[ -s $identity ]] || die "$identity is missing; the agent_box role makes it"
 
@@ -50,7 +51,7 @@ tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' -C "$keys" -cf 
 
 bundle=$out/bundle-$stamp.sops.json
 "$libexec/sops" encrypt --input-type binary --output-type json \
-  --age "$box_recipient,$BUNDLE_MAC_RECIPIENT" --output "$bundle.part" "$tarball" \
+  --age "$box_recipient${BUNDLE_MAC_RECIPIENT:+,$BUNDLE_MAC_RECIPIENT}" --output "$bundle.part" "$tarball" \
   || { rm -f "$bundle.part"; die "sops could not encrypt the bundle"; }
 
 # A bundle counts only once it reads back.

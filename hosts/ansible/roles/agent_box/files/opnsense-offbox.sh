@@ -62,19 +62,19 @@ trap 'rm -f "$err" "$back"' EXIT
 
 # Make the repository once. Exit 10 is restic's "repository does not exist"; anything else is a real failure.
 rc=0
-"$restic" cat config >/dev/null 2>"$err" || rc=$?
+"$restic" --retry-lock 30m cat config >/dev/null 2>"$err" || rc=$?
 case $rc in
   0) ;;
   10) "$restic" init >/dev/null; say "made the repository" ;;
   *) cat "$err" >&2; die "restic could not open the repository (exit $rc)" ;;
 esac
 
-"$restic" backup --quiet --host "$host" --tag opnsense "$src"
-"$restic" forget --quiet --host "$host" --tag opnsense \
+"$restic" --retry-lock 30m backup --quiet --host "$host" --tag opnsense "$src"
+"$restic" --retry-lock 30m forget --quiet --host "$host" --tag opnsense \
   --keep-daily "$OFFBOX_KEEP_DAILY" --keep-monthly "$OFFBOX_KEEP_MONTHLY" --prune
 
 # A copy counts only once it reads back.
-"$restic" dump --host "$host" --tag opnsense latest "$newest" > "$back"
+"$restic" --retry-lock 30m dump --host "$host" --tag opnsense latest "$newest" > "$back"
 head -c 4096 "$back" | grep -q '<opnsense>' || die "the newest copy read back from the repository is not an OPNsense configuration"
 cmp -s "$back" "$newest" || die "the newest copy read back from the repository differs from $newest"
 

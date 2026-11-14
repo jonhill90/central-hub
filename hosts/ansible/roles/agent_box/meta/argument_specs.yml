@@ -79,9 +79,11 @@ argument_specs:
         type: dict
         default: {}
         description: >-
-          mac_recipient (the Mac's age public key) and, optionally, keep (1 to 60, default 14) for the daily
-          SOPS-encrypted bundle of the box's private files (pick 228). Empty does nothing.
+          All optional, for the daily SOPS-encrypted bundle of the box's private files (picks 228 and 236):
+          mac_recipient (the Mac's age public key), keep (1 to 60, default 14), and for the off-box send
+          vault_secret, offbox_keep_daily (default 14) and offbox_keep_monthly (default 6). Empty does nothing.
       agent_box_secrets_bundle_daily: {type: str, default: "*-*-* 15:30:00 UTC", description: "systemd OnCalendar for the daily bundle."}
+      agent_box_secrets_bundle_offbox_daily: {type: str, default: "*-*-* 16:15:00 UTC", description: "systemd OnCalendar for the bundle's off-box send."}
       agent_box_sops_version: {type: str, description: "SOPS version for the bundle."}
       agent_box_sops_sha256: {type: str, description: "SHA-256 of that version's linux.amd64 binary."}
       agent_box_age_version: {type: str, description: "age version for the bundle."}
@@ -164,6 +166,15 @@ argument_specs:
           the runner VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
           vnet, template_vm_id) and the GitHub App and repository it registers with (github_app_id,
           repo_owner, repo_name). No key goes in it. Empty skips the file.
+      agent_box_short_node:
+        type: str
+        default: ""
+        choices: ["", ephemeral-dev, keep-dev]
+        description: >-
+          The owner's pick for a dev run on a node short of memory, written to <work_dir>/short-node (0600, the keys
+          user's) for the rebuild wrapper. ephemeral-dev stops the CI runner, tears dev down at the end of the run, then
+          starts the runner. keep-dev stops the runner and leaves dev up (the notebook's CI and its access-expiry alert are
+          paused while dev is up). Empty is no pick: a short node refuses before it stops anything.
       agent_box_desktop:
         type: dict
         default: {}
