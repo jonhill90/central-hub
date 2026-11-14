@@ -1,0 +1,31 @@
+# Managed by Ansible (role agent_box, tasks/lifeline.yml). The lifeline NIC's own packet filter: one table,
+# touching {{ agent_box_lifeline_interface }} only. Every other interface is left to whatever else filters it.
+#   in:      nothing may start a connection to the box over the NIC; only replies to the box's own are kept;
+#   out:     only the destinations in agent_box_lifeline_allow, and replies; the rest is rejected, so a
+#            connected route does not let a session reach other home LAN devices;
+#   forward: nothing crosses the NIC.
+# `table` then `delete table` makes the file a clean replace in one transaction when it is loaded again.
+table inet lifeline
+delete table inet lifeline
+table inet lifeline {
+  chain input {
+    type filter hook input priority -10; policy accept;
+    iifname "{{ agent_box_lifeline_interface }}" ct state established,related accept
+    iifname "{{ agent_box_lifeline_interface }}" drop
+  }
+  chain output {
+    type filter hook output priority -10; policy accept;
+    oifname "{{ agent_box_lifeline_interface }}" ct state established,related accept
+{% for dest in agent_box_lifeline_allow %}
+{% for port in dest.ports %}
+    oifname "{{ agent_box_lifeline_interface }}" ip daddr {{ dest.address }} tcp dport {{ port }} accept
+{% endfor %}
+{% endfor %}
+    oifname "{{ agent_box_lifeline_interface }}" reject
+  }
+  chain forward {
+    type filter hook forward priority -10; policy accept;
+    iifname "{{ agent_box_lifeline_interface }}" drop
+    oifname "{{ agent_box_lifeline_interface }}" drop
+  }
+}

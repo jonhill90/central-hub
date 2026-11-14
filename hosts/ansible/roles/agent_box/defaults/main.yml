@@ -138,6 +138,16 @@ agent_box_restic_sha256: f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a
 # The box's second NIC on the Proxmox host's own subnet (pick 220, docs/runbooks/set-up-the-box-lifeline.md):
 # its interface name inside the VM (for example eth1). Private, through the inventory. Empty does nothing.
 agent_box_lifeline_interface: ""
+# The box's address and prefix on that NIC, for example 192.0.2.50/24 (the host's subnet; no gateway is set). The role
+# makes the NIC's one NetworkManager connection from it, because cloud-init sets a NIC up at first boot only.
+# Private, through the inventory. Required when the interface is set. Pick one the home router's DHCP
+# pool does not hand out: a static address inside the pool can clash with a lease.
+agent_box_lifeline_address: ""
+# nftables for the lifeline NIC's packet filter. The role installs it only if the package is missing, at this
+# version (epoch:version-release, the newest in the AlmaLinux 10 BaseOS when it was read, 2026-11-14).
+agent_box_nftables_version: "1:1.1.5-6.el10_2"
+# The nft binary the filter's unit and the proof use.
+agent_box_nft_bin: /usr/sbin/nft
 # What the box may reach over that NIC, and nothing else (the rest is rejected): a list of
 # {address: IPv4, ports: [TCP ports]}, normally the Proxmox host's own address and 8006 (and 22 if needed).
 # Private, through the inventory. Empty with the interface set rejects everything over the lifeline.
@@ -193,3 +203,15 @@ agent_box_copy_prod_files: false
 # set it in the inventory. Empty means the checkout the playbook runs from, which has none of them when
 # the controller runs from a pinned copy.
 agent_box_prod_files_clone: ""
+
+# box-apply (D-0036; docs/runbooks/apply-the-agent-box-from-itself.md): when true, the role installs the
+# root-owned box-apply wrapper and its one sudo line, so a session can apply this role to the box itself from
+# reviewed main, stopping on any change to the box's limits. Turned on in the private inventory.
+agent_box_self_apply: false
+# Tags a self-apply skips: tasks that read the controller's files (ca, prod_files, and the off-box copy's
+# certificate upload), the lifeline's firewall (D-0036 rule 8) and the proofs. A limit itself (defaults key).
+agent_box_self_apply_skip_tags: [ca, prod_files, opnsense_offbox, lifeline, verify]
+# The commit a controller's pinned copy was made from, when that copy is not a git checkout (-e only).
+agent_box_self_apply_commit: ""
+# Set by box-apply on its own runs (-e); the box-apply tasks then write nothing.
+agent_box_self_applying: false

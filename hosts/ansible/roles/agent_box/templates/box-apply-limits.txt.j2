@@ -1,0 +1,47 @@
+# /etc/box-apply/limits.txt: the agent box's limits, which a self-apply never changes (D-0036 rule 3).
+# Managed by the agent_box role (central-hub hosts/ansible), written only by an apply from the controller;
+# box-apply reads this copy, never the one in its checkout. Rules: see box-apply.py, read_limits().
+
+# Repository files whose change since the baseline stops a self-apply (rule 4). Everything in the role is a
+# limit except its defaults (below) and its argument specs: its tasks install the users, the key folder, the
+# wrappers and their sudo rules, the managed settings and the units that run as the keys user.
+path hosts/ansible/roles/agent_box/*
+except hosts/ansible/roles/agent_box/defaults/main.yml
+except hosts/ansible/roles/agent_box/meta/argument_specs.yml
+path hosts/ansible/playbooks/agent-box.yml
+path hosts/ansible/ansible.cfg
+path hosts/ansible/requirements.yml
+# Installed as azure-cert.py and run by the opnsense-offbox unit as the keys user.
+path hosts/ansible/roles/k8s_backup/files/c1-backup-azure-cert.py
+
+# In the role's defaults, only these keys may change by a self-apply: pinned tools, each with its SHA-256 where
+# it has one. Not Ansible's own pins: a self-apply runs from that virtual environment and must not replace it.
+# A change to any other key (the users, folders, wrapper list, allow and deny lists, auto mode's settings,
+# timers) stops it.
+free-keys hosts/ansible/roles/agent_box/defaults/main.yml agent_box_tofu_version agent_box_tofu_sha256 agent_box_kubectl_version agent_box_kubectl_sha256 agent_box_tailscale_version
+
+# Files on the box compared before and after an apply, and put back if they changed (rule 5).
+box /etc/sudoers
+box /etc/sudoers.d/*
+box /etc/claude-code/*
+box /etc/pki/ca-trust/source/anchors/agent-box-*
+box {{ agent_box_libexec_dir }}/*.sh
+box {{ agent_box_libexec_dir }}/*.py
+{% for w in agent_box_wrappers %}
+box {{ agent_box_front_dir }}/{{ w.name }}
+{% endfor %}
+box {{ agent_box_front_dir }}/box-apply
+box /etc/systemd/system/*.service
+box /etc/systemd/system/*.timer
+box /etc/box-apply/*
+box {{ agent_box_work_dir }}/*.json
+box {{ agent_box_keys_dir }}/*/settings.env
+dir {{ agent_box_keys_dir }}
+dir {{ agent_box_work_dir }}
+dir /etc/box-apply
+dir /var/lib/box-apply
+user {{ agent_box_user }}
+user {{ agent_box_keys_user }}
+{% if agent_box_runner_user | length > 0 %}
+user {{ agent_box_runner_user }}
+{% endif %}
