@@ -22,7 +22,7 @@ The lab's private files live in two places: the owner's Mac and the agent box's 
 
 ## What is built (pick 228)
 
-- SOPS 3.13.3 (MPL-2.0) and age 1.3.2 (BSD-3-Clause) in `/usr/local/libexec/agent-box/`, each checked against its SHA-256. SOPS's comes from the release's checksums file. age publishes none, so its value is the tarball's hash as downloaded on 2026-11-14.
+- SOPS 3.13.3 (MPL-2.0) and age 1.3.2 (BSD-3-Clause) in `/usr/local/libexec/agent-box/`, each checked against its SHA-256. SOPS's comes from the release's checksums file. For age, no checksums file was found, so its value is the tarball's hash as downloaded on 2026-11-14. What was checked on 2026-11-14: age's release workflow at tag v1.3.2 ([build.yml](https://github.com/FiloSottile/age/blob/v1.3.2/.github/workflows/build.yml)) uploads only the `age-*` archives, with a [build provenance attestation](https://github.com/actions/attest-build-provenance); `SHA256SUMS`, `SHA256SUMS.txt` and `checksums.txt` under the release's downloads return 404; a search of age's issues and code found no checksums file; the release page's asset list could not be read from the session (403). A later change can check that attestation instead.
 - The box's age identity, `/etc/agent-keys/secrets-bundle/age-identity.txt`, made once by the keys user and never printed or replaced. A new identity could not read older bundles.
 - `secrets-bundle.timer`, daily at 15:30 UTC, runs `secrets-bundle.sh` as the keys user. It tars `prod` and `dev` from the keys folder, never its own folder. SOPS encrypts the tar as one binary file to the box's recipient and the Mac's. The new bundle must decrypt with the box's identity to the same bytes, or it is deleted and the run fails. The newest 14 bundles stay in `/etc/agent-keys/secrets-bundle/bundles/`.
 
@@ -38,7 +38,7 @@ The lab's private files live in two places: the owner's Mac and the agent box's 
    expect: `The box's age identity` changed on the first run only, and `The bundle's timer runs` ok.
 
 2. Make the first bundle now.
-   `sudo systemctl start secrets-bundle.service`, then `journalctl -u secrets-bundle.service -n 5`
+   The box's own user has no sudo for this, so the controller that ran step 1 starts it: `ansible <the box> -i <private inventory> -b -m ansible.builtin.systemd_service -a "name=secrets-bundle.service state=started"`, then reads the result with `ansible <the box> -i <private inventory> -b -m ansible.builtin.command -a "journalctl -u secrets-bundle.service -n 5"`.
    expect: `secrets-bundle: bundle-<time>.sops.json: prod dev, <n> bytes before encryption; reads back the same`.
 
 3. Check that the Mac can decrypt it.

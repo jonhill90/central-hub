@@ -50,7 +50,8 @@ tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' -C "$keys" -cf 
 
 bundle=$out/bundle-$stamp.sops.json
 "$libexec/sops" encrypt --input-type binary --output-type json \
-  --age "$box_recipient,$BUNDLE_MAC_RECIPIENT" --output "$bundle.part" "$tarball"
+  --age "$box_recipient,$BUNDLE_MAC_RECIPIENT" --output "$bundle.part" "$tarball" \
+  || { rm -f "$bundle.part"; die "sops could not encrypt the bundle"; }
 
 # A bundle counts only once it reads back.
 SOPS_AGE_KEY_FILE=$identity "$libexec/sops" decrypt --input-type json --output-type binary \
