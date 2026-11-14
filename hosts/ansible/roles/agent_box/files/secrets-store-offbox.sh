@@ -84,10 +84,24 @@ for v in SNAPSHOT_KEEP_HOURLY SNAPSHOT_KEEP_DAILY SNAPSHOT_KEEP_MONTHLY SNAPSHOT
   [[ ${!v} =~ ^[0-9]+$ ]] || die "$v must be a whole number"
 done
 (( SNAPSHOT_KEEP_HOURLY >= 1 && 10#$SNAPSHOT_PRUNE_AFTER_HOUR <= 23 )) || die "keep at least 1 hourly; the prune hour is 0-23"
-# The repository is this job's own: never pick 222's, nor a path inside it, nor one that holds it.
-own_repo=${SNAPSHOT_REPOSITORY%/} other=${RESTIC_REPOSITORY:-}
-other=${other%/}
-if [[ -n $other && ( $own_repo == "$other" || $own_repo == "$other"/* || $other == "$own_repo"/* ) ]]; then
+# The repository is this job's own: never pick 222's, nor a path inside it, nor one that holds it. Both are
+# compared the way restic reads them: for azure:<container>:<path>, restic cleans the path and drops its
+# leading slash (internal/backend/azure/config.go, ParseConfig), so azure:c:p, azure:c:/p and azure:c://p/ are
+# one repository, and azure:c: or azure:c:/ is the whole container.
+repo_key() {
+  python3 -I -c '
+import posixpath, sys
+s = sys.argv[1]
+if s.startswith("azure:"):
+    container, _, prefix = s[6:].partition(":")
+    prefix = posixpath.normpath(prefix).lstrip("/")
+    print("azure:" + container + ":/" + ("" if prefix == "." else prefix))
+else:
+    print(posixpath.normpath(s))' "$1"
+}
+own_repo=$(repo_key "$SNAPSHOT_REPOSITORY") other=''
+[[ -z ${RESTIC_REPOSITORY:-} ]] || other=$(repo_key "$RESTIC_REPOSITORY")
+if [[ -n $other && ( $own_repo == "$other" || $own_repo == "${other%/}"/* || $other == "${own_repo%/}"/* ) ]]; then
   die "SNAPSHOT_REPOSITORY must not be the OPNsense repository, nor inside it, nor hold it"
 fi
 export RESTIC_REPOSITORY=$SNAPSHOT_REPOSITORY

@@ -9,7 +9,8 @@
 #   4. The first run from the prune hour prunes, once a day; the next run that day does not.
 #   5. A failed escrow stops it before restic.
 #   6. A repository restic can't open for another reason than "does not exist" fails and is never made again.
-#   7. The OPNsense repository is never touched, and the job refuses to be pointed at it, inside it, or above it.
+#   7. The OPNsense repository is never touched, and the job refuses to be pointed at it, inside it, or above it,
+#      in any form restic reads as the same azure: path.
 #   8. Retention works although every snapshot has its own file name: six snapshots on six hours, keep-hourly 2,
 #      leaves two.
 #   9. A corrupted read-back fails the run.
@@ -154,6 +155,18 @@ own "$t/repo-opnsense/openbao-dev"; send
 r7b=$rc o7b=$out
 own "$t"; send
 r7c=$rc o7c=$out
+# 7c. azure: repositories compared the way restic reads them: no leading slash, doubled or trailing slashes,
+# or the whole container are still the OPNsense repository, inside it, or holding it. restic is never run.
+sed -i "s|^RESTIC_REPOSITORY=.*|RESTIC_REPOSITORY=azure:opnsense-backup:/opnsense|" "$t/keys/opnsense-offbox/settings.env"
+r7d=0 o7d=''
+for repo in azure:opnsense-backup:opnsense azure:opnsense-backup://opnsense/ azure:opnsense-backup:opnsense/openbao-dev \
+  azure:opnsense-backup:/ azure:opnsense-backup:; do
+  own "$repo"; send
+  [[ $rc -ne 0 && $out == *"must not be the OPNsense repository"* && ! -s $t/restic-args ]] || { r7d=1 o7d+="$repo: rc=$rc $out; "; }
+done
+own azure:other-container:opnsense; send
+[[ $out != *"must not be the OPNsense repository"* ]] || { r7d=1 o7d+="other container refused; "; }
+sed -i "s|^RESTIC_REPOSITORY=.*|RESTIC_REPOSITORY=$t/repo-opnsense|" "$t/keys/opnsense-offbox/settings.env"
 own
 
 # 7
@@ -163,6 +176,8 @@ else bad "7. rc=$r7 $o7"; fi
 if [[ $r7b -ne 0 && $o7b == *"nor inside it"* && $r7c -ne 0 && $o7c == *"nor hold it"* && ! -e $t/repo-opnsense/openbao-dev ]]; then
   ok "7b. a path inside the OPNsense repository, or one that holds it, is refused too"
 else bad "7b. rc=$r7b/$r7c $o7b / $o7c"; fi
+[[ $r7d == 0 ]] && ok "7c. azure: forms of the OPNsense repository (no leading slash, extra slashes, the whole container) are refused too" \
+  || bad "7c. $o7d"
 
 # 8
 for h in 10 11 12 13 14; do
