@@ -9,7 +9,7 @@ consulted: []
 waits-on: []
 supersedes: []
 superseded-by:
-revisit-when: the owner's phone needs instant iOS push, which self-hosted ntfy gives only through ntfy.sh; Healthchecks.io changes its free plan or the lab needs more than its free checks; a machine outside the home is available to run the heartbeat watcher; or ntfy or Healthchecks changes licence
+revisit-when: the owner's phone needs instant iOS push, which self-hosted ntfy gives only through ntfy.sh; Healthchecks.io changes its free plan or the lab needs more than its free checks; the watcher can run on the VPS; or ntfy or Healthchecks changes licence
 ---
 
 # Send c1's alerts to a self-hosted, locked-down ntfy, and its heartbeat to Healthchecks.io's free plan, with self-hosted Healthchecks as the way off
@@ -45,11 +45,17 @@ Alert channel:
 Heartbeat watcher:
 
 - A. **Healthchecks.io, free plan.**
-- B. **A self-hosted watcher (Gatus or Healthchecks) on a machine outside the home.**
+- B. **A self-hosted watcher (Gatus or Healthchecks) on the owner's rented VPS**, which sits outside the home and is not part of c1.
 
 ## Decision Outcome
 
-Proposed: **option 1 with A**, the owner's answers of 2026-11-12. Options 2 and 3 are the most common channels in the five public home labs RB-0181 read, but both are closed services. B needs a machine outside the home, which the lab does not have yet.
+Proposed: **option 1 with A**, the owner's answers of 2026-11-12. Options 2 and 3 are the most common channels in the five public home labs RB-0181 read, but both are closed services.
+
+B is weighed against A (REQ-0034) and not picked now:
+
+- **For B:** the VPS is already outside the home and is not a c1 worker (PRD goal 1), and agent rebuilds never touch it (D-0035 rule 2). A watcher there needs no hosted service.
+- **Against B, for now:** the VPS runs no lab services yet; its first apps and host steps are proposed in PR #314 (D-0046), which is not merged. A watcher there also needs its own way to reach the owner that does not run on c1: self-hosted Healthchecks sends no e-mail without a mail server, and the other route, a second ntfy, has the slow iOS delivery noted below. And it adds a server to keep up whose uptime the lab has not measured.
+- **So A stays,** because the owner picked it (pick 213), and B is the way off once the watcher can run on the VPS.
 
 ```mermaid
 flowchart LR
@@ -89,7 +95,7 @@ flowchart LR
 
 ### Exit path
 
-- **Heartbeat:** run Healthchecks (BSD-3-Clause) or Gatus on any machine outside the home and change the one secret.
+- **Heartbeat:** run Healthchecks (BSD-3-Clause) or Gatus (Apache-2.0) on the VPS, give it a way to send the alarm that does not run on c1, and change the one secret.
 - **Channel:** Alertmanager has native receivers for many channels and a generic webhook, so another channel is a receiver change.
 
 ## Pros and Cons of the Options
@@ -114,12 +120,12 @@ flowchart LR
 - Good: outside the home; the software is BSD-3-Clause and can be self-hosted later.
 - Bad: a hosted service with paid plans.
 
-### Option B: self-hosted watcher outside the home
+### Option B: self-hosted watcher on the VPS
 
-- Good: no hosted service.
-- Bad: needs a machine outside the home.
+- Good: no hosted service; the VPS is already outside the home and out of c1.
+- Bad: the VPS runs no lab services yet; the watcher needs its own mail server or a second ntfy to reach the owner; one more server to keep up.
 
 ## More Information
 
 - Evidence: [`docs/evidence/0053-send-alerts-to-self-hosted-ntfy-and-the-heartbeat-to-healthchecks-io.md`](../evidence/0053-send-alerts-to-self-hosted-ntfy-and-the-heartbeat-to-healthchecks-io.md).
-- Related: D-0024 (metrics and alerts on c1), D-0045 (a hosted service kept as proposed), STD-0006 and its register (`docs/standards/components.yaml`).
+- Related: D-0024 (metrics and alerts on c1), D-0035 (rebuilds never touch the VPS), the PRD's goal 1 (the VPS is not a c1 worker), D-0045 (a hosted service kept as proposed), STD-0006 and its register (`docs/standards/components.yaml`).
