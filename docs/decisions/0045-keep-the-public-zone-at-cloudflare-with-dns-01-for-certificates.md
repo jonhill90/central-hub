@@ -1,5 +1,5 @@
 ---
-id: D-0044
+id: D-0045
 title: Keep the public DNS zone at Cloudflare, in OpenTofu, and prove names to Let's Encrypt through it by DNS-01, with RFC 2136 or ACME-DNS as the way off
 status: proposed
 date: 2026-11-14
@@ -99,5 +99,5 @@ flowchart LR
 
 ## More Information
 
-- Evidence: [`docs/evidence/0044-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md`](../evidence/0044-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md).
+- Evidence: [`docs/evidence/0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md`](../evidence/0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md).
 - Related: D-0028 (the lab CA, with Let's Encrypt as its exit), D-0040 (the lab's own DNS), spec [2026-10-c1-way-in-for-web-traffic](../specs/2026-10-c1-way-in-for-web-traffic.md).

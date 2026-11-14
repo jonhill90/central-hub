@@ -1,14 +1,14 @@
 ---
-record: D-0044
+record: D-0045
 batch: RB-0208 (FOSS check of every central-hub piece)
 researched: 2026-11-14
 method: provider licence read from its repository; cert-manager's DNS-01 page and Let's Encrypt's about page opened; central-hub searched for every file naming the piece; on 2026-11-14 at about 09:35 UTC, the reach re-counted at main 3d90375, the token code read, ACME-DNS's licence read, and Cloudflare's DNS overview, DNS records page and account API tokens page opened for the free-plan reading
 checks: "None yet. RB-0208 had no independent check and no recall check; a reviewing agent checks every line here against the batch and the pages before the record is accepted"
 ---
 
-# Evidence for D-0044: the public zone at Cloudflare
+# Evidence for D-0045: the public zone at Cloudflare
 
-This file summarises the research behind D-0044. It adds nothing the research and the pages listed below did not find.
+This file summarises the research behind D-0045. It adds nothing the research and the pages listed below did not find.
 
 ## Question
 
