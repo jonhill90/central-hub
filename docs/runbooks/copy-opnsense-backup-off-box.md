@@ -115,7 +115,8 @@ Nothing here needs the owner's own Azure rights except the recovery read.
 - **The box is gone too:**
   1. The owner gives his own account Key Vault Secrets User on the vault, and Storage Blob Data Reader on the `opnsense-backup` container.
   2. From a machine at home, he reads the password from the vault into a 0600 file and runs `restic -r azure:opnsense-backup:/opnsense restore latest --tag opnsense` with `AZURE_ACCOUNT_NAME` set and `az login` as himself.
-  3. He takes both roles away afterwards.
+  3. If restic can't open the repository with the newest version (exit 12), he tries the older versions, newest first, with `az keyvault secret list-versions` and `show --version`. A box that was taken over can only add versions, never delete one, so the right password is still there.
+  4. He takes both roles away afterwards.
 
   A rebuilt box made by the role cannot do this: it makes a new password and a new certificate.
 
@@ -128,6 +129,7 @@ Then put the file back in OPNsense: System, Configuration, Backups, Restore, or 
 | `the vault does not hold the current repository password; nothing copied` | The escrow step failed. The line before it says why: no token (certificate), a 403 (the role assignment hasn't reached the data plane yet, or the box left through another address), or a refused set. Nothing is sent until it passes. |
 | `restic could not open the repository (exit 12)` | The password on the box is not the one the repository was made with. Restore the file from the vault's version whose tag matches, as in "The box is gone too". |
 | `403` or `This request is not authorized` from restic | The box left through an address the account doesn't allow, or the container role hasn't reached the data plane yet (it can take a few minutes after step 1). |
+| A 403 from both the vault and restic, on every run since a given day | The home's public address changed. Both the vault and the account allow only `allowed_ip_addresses`, so the copy fails closed. Put the new address in the tfvars file and run step 1 again with the owner's go. |
 | `the certificate renewal failed` | The copy still ran with the current certificate. If it expired, step 2's tag uploads a new one. |
 | `the newest copy read back ... differs` | The configuration changed between the fetch and the copy, or the repository is damaged. Run step 3 again; if it repeats, run `restic check` on the box. |
 
