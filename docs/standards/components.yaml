@@ -264,6 +264,26 @@ components:
     verdict: pass
     sources: [url:github.com/openbao/]
     checked: 2026-11-14
+  - name: SOPS
+    kind: software
+    used-for: encrypting the agent box's daily bundle of its private files to age recipients (proposed D-0038 rule 10)
+    licence: MPL-2.0
+    licence-source: https://raw.githubusercontent.com/getsops/sops/main/LICENSE
+    paid-edition: none found; a CNCF Sandbox project with no vendor edition named in its README
+    paid-edition-source: https://raw.githubusercontent.com/getsops/sops/main/README.rst
+    verdict: pass
+    sources: [url:github.com/getsops/]
+    checked: 2026-11-14
+  - name: age
+    kind: software
+    used-for: the keys SOPS encrypts the agent box's bundle to (proposed D-0038 rule 10)
+    licence: BSD-3-Clause
+    licence-source: https://raw.githubusercontent.com/FiloSottile/age/main/LICENSE
+    paid-edition: none found; a single open-source tool and file format with no edition or plan named in its README
+    paid-edition-source: https://raw.githubusercontent.com/FiloSottile/age/main/README.md
+    verdict: pass
+    sources: [url:github.com/FiloSottile/]
+    checked: 2026-11-14
   - name: PostgreSQL
     kind: software
     used-for: Keycloak's database

@@ -1,19 +1,27 @@
 ---
 id: STD-0006
 title: Use only free and open-source components, with no open core
-status: proposed
+status: active
 scope: every outside component the lab runs or its code pulls in (software, container images, charts, packages, providers, collections, GitHub Actions and downloads under `hosts/` and `.github/`), and every hosted service the lab depends on
 owner-system: 8 Platform
 why: the owner's rule of 2026-11-14 04:43 to 04:44 UTC in the project chat (FOSS, not merely open source; nothing where a paid edition holds a feature back), on top of REQ-0032 (components are FOSS and open standards, and the system must not lock hard to one vendor); the owner kept OPNsense for now at 05:11:29 UTC the same day
 follows: ["Free Software Foundation, What is Free Software?", "Open Source Initiative, The Open Source Definition", "SPDX License List"]
 check: "`.github/foss-check/check_components.py`, run by workflow `foss` on every PR; rules 1 to 3 are judged by the agent that fills a register row, and checked again by a reviewing agent"
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-14T06:30:41Z
+  approved-commit: 669c7fc1c7a35699066c621402e546ca6e3bed24
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNBs2MstPeufRMzK1m6UU6FK
+  approval-names: "PR #277 and head 669c7fc, accepting STD-0006 with Tailscale kept per the owner's 2026-11-10 card, in the message itself"
+  check: the Plan thread read the message in the orchestrator thread on 2026-11-14 at 06:31 UTC; it names PR #277 and head 669c7fc itself. A reviewing agent checks it again on this PR.
+  merged: PR #277 merged at 2026-11-14T06:31:19Z as 3f795d90d139425c6b1e3c72cb9f4c29c4b22923
 ---
 
 # STD-0006: Use only free and open-source components, with no open core
 
 The key words "MUST", "MUST NOT", "SHOULD" and "MAY" in this document are to be interpreted as described in BCP 14 (RFC 2119, RFC 8174) when, and only when, they appear in all capitals.
 
-An agent wrote this standard. It is `proposed`, and not in force until the owner accepts it.
+An agent wrote this standard, and the owner accepted it with PR #277.
 
 ## The test
 

@@ -218,6 +218,25 @@
       when: openbao_rebuild_try.status != 200
       no_log: true
 
+    # D-0038 Confirmation 6: a wrapper's AppRole is refused a path outside its policy. The rebuild's
+    # token may write its login's key and nothing else, so reading c1's secrets and the policies must
+    # both answer 403.
+    - name: The AppRole rebuild is refused outside its policy
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/{{ item }}"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers:
+          X-Vault-Token: "{{ (openbao_rebuild_try if openbao_rebuild_try.status == 200 else openbao_rebuild_login).json.auth.client_token }}"
+        status_code: [403]
+      loop:
+        - kv/data/c1/check
+        - sys/policies/acl/eso-c1
+      no_log: true
+
+    - name: PASS line for Confirmation 6
+      ansible.builtin.debug:
+        msg: "PASS: AppRole rebuild got 403 reading kv/data/c1/check and sys/policies/acl/eso-c1"
+
     - name: The proof's token is revoked
       ansible.builtin.uri:
         url: "{{ openbao_api }}/auth/token/revoke-self"

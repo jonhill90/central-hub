@@ -44,11 +44,11 @@ The body holds the rule itself, worded with BCP 14 key words (RFC 2119, RFC 8174
 | STD-0003 | [Version choice](0003-version-choice.md) | proposed | the version of every outside tool, package, chart or image that a runbook, code under `hosts/` or a cluster manifest installs or pins | 8 Platform |
 | STD-0004 | [Code under hosts/](0004-hosts-code.md) | active | how Terraform run folders and Ansible roles, playbooks and inventories under `hosts/` are written; where they sit is D-0011 | 8 Platform |
 | STD-0005 | [Tests for specs and hosts code](0005-tests.md) | active | how each acceptance criterion in a spec under `docs/specs/` names the test that proves it, and which lints and tests run on every PR that changes code under `hosts/` | 8 Platform |
-| STD-0006 | [Use only free and open-source components, with no open core](0006-free-and-open-source-components.md) | proposed | every outside component the lab runs or its code pulls in (software, container images, charts, packages, providers, collections, GitHub Actions and downloads under `hosts/` and `.github/`), and every hosted service the lab depends on | 8 Platform |
+| STD-0006 | [Use only free and open-source components, with no open core](0006-free-and-open-source-components.md) | active | every outside component the lab runs or its code pulls in (software, container images, charts, packages, providers, collections, GitHub Actions and downloads under `hosts/` and `.github/`), and every hosted service the lab depends on | 8 Platform |
 
 ## Files that go with a standard
 
 | File | Standard | What it holds |
 |---|---|---|
 | [`components.yaml`](components.yaml) | STD-0006 | The component register: one row per outside component, with its licence, paid edition, verdict and sources. |
-| [`foss-exceptions.yaml`](foss-exceptions.yaml) | STD-0006 | The named exceptions to STD-0006. Only the owner's typed go extends it. |
+| [`foss-exceptions.yaml`](foss-exceptions.yaml) | STD-0006 | The named exceptions to STD-0006. Only the owner's go, typed or a card tap that names the component, extends it (rule 5). |
