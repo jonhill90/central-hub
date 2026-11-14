@@ -12,10 +12,10 @@ superseded-by:
 accepted-evidence:
   approved-by: owner
   approved-at: 2026-11-14T07:43:25Z
-  approved-commit: bc276d10078a91801653e7bf96ad8dcb2eb05e97
+  approved-commit: 0e36de56578300f4a706747a7df4db3b42822a54
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6, cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH, cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm
   approval-names: "no PR, no head and no commit; the messages are typed but name none, which departs from D-0034 rule 4's form"
-  check: the drafting agent read the three messages at 2026-11-14T08:14Z (the first two in the orchestrator thread, the third in the project chat). They ask agents to stop asking the owner to approve PRs and say what still needs him, without naming this PR, a head or a commit. The owner never saw approved-commit, so it is not his approval; it is the head the reviewer and the council passed. His approval covers only what his words say, listed in "What the owner said, and what agents picked" (REQ-0029); every other rule is labelled an agent pick. The orchestrator chose these messages as this record's acceptance at 08:13Z, and the reviewer's and the council's passes of this PR's head are the gate
+  check: the drafting agent read the three messages at 2026-11-14T08:14Z (the first two in the orchestrator thread, the third in the project chat). They ask agents to stop asking the owner to approve PRs and say what still needs him, without naming this PR, a head or a commit. The owner never saw approved-commit, so it is not his approval; it is the commit holding these rules, which the reviewer and the council pass, and the commit after it changes only this field. His approval covers only what his words say, listed in "What the owner said, and what agents picked" (REQ-0029); every other rule is labelled an agent pick. The orchestrator chose these messages as this record's acceptance at 08:13Z, and the reviewer's and the council's passes of this PR's head are the gate
   merged: not yet; a follow-up PR fills this in after the merge (D-0001)
 revisit-when: the lab comes to hold personal data or anything of value; a change approved under this record has to be undone after it harmed the lab, a cloud account or the repository; the owner says a pass was wrong; the agents get a GitHub identity of their own (D-0030) and GitHub can require an approval itself; or a cluster other than c1 reads the repository
 ---
