@@ -74,5 +74,6 @@ flowchart LR
 
 ## More Information
 
+- **Evidence:** [../evidence/0025-use-keycloak-behind-oidc-for-sign-in-to-lab-apps-on-c1.md](../evidence/0025-use-keycloak-behind-oidc-for-sign-in-to-lab-apps-on-c1.md), batches RB-0087 and RB-0092, licences and paid editions re-checked 2026-11-14.
 - Research: RB-0087 (Research `01-notes/01r-research/0087-central-identity/`), RB-0092 rows L20-L29.
 - Agent picks 96 and 98-102 in `hosts/AGENT-PICKS.md`.

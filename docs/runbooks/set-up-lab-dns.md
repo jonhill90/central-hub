@@ -1,6 +1,6 @@
 ---
 title: Set up lab DNS and make the owner's Mac resolve lab names
-status: tested
+status: draft
 kind: automated
 trigger: on request; again after a lab rebuild, a new lab name, or a new tailnet device that should resolve lab names
 runner: an agent lane, through the owner's Mac

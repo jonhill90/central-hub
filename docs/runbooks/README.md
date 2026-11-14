@@ -42,7 +42,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Move monitoring on c1 (kube-prometheus-stack) from Ansible to Argo CD](move-monitoring-to-argo-cd.md) | automated | draft |
 | [Move c1's External Secrets and its store from Ansible to Argo CD](move-external-secrets-to-argo-cd.md) | automated | draft |
 | [Move cert-manager on c1 from Ansible to Argo CD](move-cert-manager-to-argo-cd.md) | automated | draft |
-| [Move c1's Gateway and app routes from Ansible to Argo CD](move-gateway-to-argo-cd.md) | automated | tested |
+| [Move c1's Gateway and app routes from Ansible to Argo CD](move-gateway-to-argo-cd.md) | automated | draft |
 | [Check c1's health from its dashboard and alerts](check-c1-alerts-and-dashboard.md) | manual | draft |
 | [Get c1's alerts on a phone or in a browser](get-c1-alerts-on-your-phone.md) | manual | draft |
 | [Know when c1 itself is down, from a heartbeat outside the lab](know-when-c1-is-down.md) | manual | draft |
@@ -50,12 +50,12 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Back up c1 off the box](back-up-c1-off-box.md) | automated | draft |
 | [Test the etcd restore](test-etcd-restore.md) | automated | draft |
 | [Set up lab DNS and make the owner's Mac resolve lab names](set-up-lab-dns.md) | automated | draft |
-| [Manage the public zone's DNS records with OpenTofu](manage-public-dns-records.md) | automated | tested |
+| [Manage the public zone's DNS records with OpenTofu](manage-public-dns-records.md) | automated | draft |
 | [Use break-glass access](use-break-glass-access.md) | manual | draft |
 | [Give agents their own access to the owner's Azure tenant](give-agents-access-to-azure.md) | manual | draft |
 | [Give agents read-only access to c1](give-agents-read-access-to-c1.md) | manual | draft |
-| [Set up sign-in for lab apps on c1](set-up-lab-sign-in.md) | automated | tested |
-| [Give lab apps short names under the zone](set-up-short-app-names.md) | automated | tested |
+| [Set up sign-in for lab apps on c1](set-up-lab-sign-in.md) | automated | draft |
+| [Give lab apps short names under the zone](set-up-short-app-names.md) | automated | draft |
 | [Let agents run a new command without a permission block](allow-a-command-for-agents.md) | manual | draft |
 | [Give agents Proxmox rights for the whole lab](give-agents-proxmox-rights-for-the-whole-lab.md) | manual | draft |
 

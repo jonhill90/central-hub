@@ -1,6 +1,6 @@
 ---
 title: Set up sign-in for lab apps on c1
-status: tested
+status: draft
 kind: automated
 trigger: on request; again after any change to role k8s_identity or the values file
 runner: the owner, or an agent lane with cluster-admin on c1

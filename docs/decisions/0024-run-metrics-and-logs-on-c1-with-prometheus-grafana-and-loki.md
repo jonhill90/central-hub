@@ -80,5 +80,6 @@ flowchart LR
 
 ## More Information
 
+- **Evidence:** [../evidence/0024-run-metrics-and-logs-on-c1-with-prometheus-grafana-and-loki.md](../evidence/0024-run-metrics-and-logs-on-c1-with-prometheus-grafana-and-loki.md), batches RB-0092 and RB-0045, licences and paid editions re-checked 2026-11-14.
 - Research: RB-0092 (Research `01-notes/01r-research/0092-c1-observability/`), and RB-0045 (Research `01-notes/01r-research/0045-k8s-tool-map/`) rows A25-A41.
 - Agent picks 89-96 in `hosts/AGENT-PICKS.md`.
