@@ -267,7 +267,7 @@
   retries: 15
   delay: 2
   until: openbao_first_snapshot.rc == 0
-  changed_when: true
+  changed_when: false
   tags: [config, check]
 
 # The first start is done: take its block and its ID files away, so neither the admin's secret ID
