@@ -21,7 +21,7 @@ accepted-evidence:
 
 The key words "MUST", "MUST NOT", "SHOULD" and "MAY" in this document are to be interpreted as described in BCP 14 (RFC 2119, RFC 8174) when, and only when, they appear in all capitals.
 
-An agent wrote this standard. It is `proposed`, and not in force until the owner accepts it.
+An agent wrote this standard, and the owner accepted it with PR #277.
 
 ## The test
 
