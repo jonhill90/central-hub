@@ -336,6 +336,13 @@ for s in $stages; do
     sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
   fi
+  # The preflight's branch and the sign-in proof's step lines (step name, HTTP code, ok or the reason; the script
+  # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.
+  if [ "$s" = preflight ] || [ "$s" = identity-keycloak ]; then
+    awk -v s="$s" '$0 == "===== " s {on=1; next} /^===== / {on=0} on' "$raw" \
+      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
+      | sed "s/^/  $s: /" >> "$log" || true
+  fi
   if [ "$rc" -ne 0 ]; then
     echo "rebuild: stage $s failed; last lines of $raw:" >&2
     tail -n 20 "$raw" >&2

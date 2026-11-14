@@ -197,3 +197,24 @@ spec:
         webOrigins: {{ k8s_identity_proxmox_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
 {{ mappers }}
 {% endif %}
+{% if k8s_identity_openbao_hosts | length > 0 %}
+      # The secrets store's web page, through its OIDC login (role openbao, the owner's sign-in; OpenBao docs,
+      # "OIDC provider configuration", Keycloak): confidential, code flow. The page calls back on
+      # /ui/vault/auth/<mount>/oidc/callback; only the store's role openbao decides who gets a token (its
+      # bound_claims on groups), so the client itself lets any realm user sign in, like the other clients.
+      - clientId: openbao
+        name: Secrets store
+        protocol: openid-connect
+        publicClient: false
+        clientAuthenticatorType: client-secret
+        secret: "${OPENBAO_CLIENT_SECRET}"
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
+        rootUrl: https://{{ k8s_identity_openbao_hosts | first }}
+        baseUrl: /ui/
+        redirectUris: {{ k8s_identity_openbao_hosts | map('regex_replace', '^(.*)$', 'https://\\1/ui/vault/auth/oidc/oidc/callback') | list | to_json }}
+        webOrigins: {{ k8s_identity_openbao_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
+{{ mappers }}
+{% endif %}

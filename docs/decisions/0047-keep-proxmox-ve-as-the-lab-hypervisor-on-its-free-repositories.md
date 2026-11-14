@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: the orchestrator thread's message to the Plan thread of 2026-11-14T10:50:58Z recording the reviewer's clearance and the passes of Councils A (10:50:35Z), B (10:50:32Z) and C (10:50:49Z) for head 319503a, each saying acceptance under D-0042 rule 3 is fine; it reached the Plan thread as a thread relay, which carries no message id
   approval-names: "the pass names PR #320 and head 319503ac074507e99a10f265f0c43892912a2415"
   check: approved-by is agents under D-0042 rule 3, because Proxmox VE is already in use and passes STD-0006 in the register the owner approved with PR #277. The Plan thread read the orchestrator's pass record at 10:51Z; it names this PR and the head. approved-commit is the head that holds the record as proposed; the commit after it changes only status, date and accepted-evidence, which the reviewer checks (D-0001)
-  merged: not yet; a follow-up PR fills this in after the merge (D-0001)
+  merged: PR #320 squash-merged at head 3c0f0b6 as d9139e7 at 2026-11-14T10:56:52Z; the follow-up PR that adds this line changes only accepted-evidence (D-0001)
 revisit-when: Proxmox moves a feature the lab uses behind a subscription; the no-subscription repositories stop or change terms; the owner rules that a paid channel of more-tested updates is a paywall under his rule of 2026-11-14; a research batch compares hypervisors for the lab feature by feature; or the lab moves to more than one host
 ---
 
@@ -24,7 +24,7 @@ revisit-when: Proxmox moves a feature the lab uses behind a subscription; the no
 
 ## Context and Problem Statement
 
-Every lab machine runs on one Proxmox VE host: OPNsense, c1's nodes, the CI runner, the agent box, the desktop and the remote-access container. Proxmox was installed by hand on the lab host ([set-up-proxmox-host.md](../runbooks/set-up-proxmox-host.md)). On 2026-10-20 at 00:39 UTC the owner said c1's control plane and workers would run locally in Proxmox, for now. On 2026-10-25 at 05:27 and 05:59 UTC he said yes to Terraform-style code creating the Proxmox VMs, with the `bpg/proxmox` provider (D-0011); the lab runs that code with OpenTofu.
+Every lab machine runs on one Proxmox VE host: OPNsense, c1's nodes, the CI runner, the agent box, the desktop and the remote-access container. Proxmox was installed by hand on the lab host ([set-up-proxmox-host.md](../runbooks/set-up-proxmox-host.md)). On 2026-10-20 at 00:39 UTC the owner said c1's control plane and workers would run locally in Proxmox, for now. On 2026-10-25 at 05:27 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNRFZJcS1CMSehtz9iE5YMRA) and 05:59 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN6BE3e6HrbNbRKnsPiqjb64) he said yes to Terraform-style code creating the Proxmox VMs, with the `bpg/proxmox` provider (D-0011); the lab runs that code with OpenTofu.
 
 At main 3d3bcf1, 169 files in 88 `hosts/` folders and 29 runbooks name Proxmox, and so do 16 records from D-0002 to D-0045. They build on it, but no decision record chose it.
 
@@ -66,10 +66,12 @@ The owner's words of 04:44:57 UTC reach further than features, so this is weighe
 - Good: no feature is behind the subscription, as the vendor states.
 - Bad: the free repositories are, in Proxmox's words, for testing and non-production use, and their updates are tested less than the paid ones.
 - Bad: the OpenTofu provider and Ansible roles are written for Proxmox's API, so a move rewrites them.
+- Bad: part of the host is set by hand, not by code, which is a known gap for the goal of agents tearing down and rebuilding the whole lab. The install, its apt repositories, the first upgrade and the SSH settings come from the set-up runbook, and the agent account and its token come from bootstrap scripts run by hand. The host's network, firewall, backups, certificates, web front, notifications and sign-in are Ansible roles.
 
 ### Confirmation
 
 - No `hosts/` file or runbook adds a subscription key or the enterprise repository.
+- Once a pipeline job for the host exists, it reads the host's apt sources once and shows the no-subscription repositories enabled and the enterprise ones disabled.
 
 ### Exit path
 
