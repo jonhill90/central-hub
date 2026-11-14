@@ -659,7 +659,7 @@
 
 # --- The lifeline NIC (pick 220) ---------------------------------------------------------------------
 
-- name: Put the lifeline NIC in firewalld's drop zone (only when agent_box_lifeline_interface is set)
+- name: Filter and set up the lifeline NIC (only when agent_box_lifeline_interface is set)
   ansible.builtin.include_tasks:
     file: lifeline.yml
     apply:

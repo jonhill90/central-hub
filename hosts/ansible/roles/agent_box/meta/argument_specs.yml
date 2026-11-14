@@ -74,8 +74,16 @@ argument_specs:
         type: str
         default: ""
         description: >-
-          The box's lifeline NIC inside the VM (for example eth1), put in firewalld's drop zone, on
-          its NetworkManager connection too. Private. Empty does nothing.
+          The box's lifeline NIC inside the VM (for example eth1), packet-filtered by the role's
+          nftables table (inbound dropped, outbound only agent_box_lifeline_allow). Private. Empty does nothing.
+      agent_box_nftables_version:
+        type: str
+        default: "1:1.1.5-6.el10_2"
+        description: The nftables package version (epoch:version-release) installed only if the package is missing.
+      agent_box_nft_bin:
+        type: path
+        default: /usr/sbin/nft
+        description: The nft binary the lifeline filter unit and the proof use.
       agent_box_lifeline_address:
         type: str
         default: ""
