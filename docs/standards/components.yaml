@@ -1,0 +1,441 @@
+# Component register (STD-0006). One row per outside component the lab's code pulls in or runs on.
+# The FOSS check (.github/foss-check/) fails a pull request when a source the code pulls in matches no
+# row, when a row is incomplete, or when a row fails the test and has no entry in foss-exceptions.yaml.
+#
+# Fields:
+#   name                 the component
+#   kind                 software (we run it) or hosted (a service someone else runs for us)
+#   used-for             what the lab uses it for
+#   licence              the licence of what we run, or "closed service"
+#   licence-source       the page or licence file opened for it
+#   paid-edition         what a paid edition or plan holds back, or "none found" and where looked
+#   paid-edition-source  the page opened for it
+#   verdict              pass, fail (STD-0006 rule 1 or 2 broken) or hosted (rule 3: judged by exit path)
+#   exit-path            required for hosted and fail: what we would move to, and how
+#   sources              prefixes of the references the scanner prints (scan.py); a reference matches
+#                        every row with a prefix it starts with
+#   not-detected         required when sources is empty: how it is installed, and why the scanner can't see it
+#   checked              the date the pages were opened
+components:
+  # Networking first (STD-0006 "Order").
+  - name: OPNsense
+    kind: software
+    used-for: the lab router, firewall and lab DNS
+    licence: BSD-2-Clause
+    licence-source: https://raw.githubusercontent.com/opnsense/core/master/LICENSE
+    paid-edition: Deciso's Business Edition has OpenID Connect sign-in and other features the community edition lacks
+    paid-edition-source: https://docs.opnsense.org/vendor/deciso/oidc.html
+    verdict: fail
+    exit-path: a FOSS router (OpenWrt, IPFire, or Debian with nftables and Unbound); its config backup is exported daily
+    sources: [collection:oxlorg.opnsense]
+    checked: 2026-11-14
+  - name: Unbound
+    kind: software
+    used-for: DNS resolver inside OPNsense
+    licence: BSD-3-Clause
+    licence-source: https://nlnetlabs.nl/unbound
+    paid-edition: none; "All functionality is available in the open-source project"
+    paid-edition-source: https://nlnetlabs.nl/unbound
+    verdict: pass
+    sources: []
+    not-detected: part of OPNsense, installed with it
+    checked: 2026-11-14
+  - name: Tailscale
+    kind: software
+    used-for: remote access into the lab and the agent box's way in
+    licence: BSD-3-Clause client; the coordination server is a closed service
+    licence-source: https://tailscale.com/opensource
+    paid-edition: paid plans hold back SCIM, more ACL groups, device posture and more
+    paid-edition-source: https://tailscale.com/pricing
+    verdict: fail
+    exit-path: Headscale (BSD-3-Clause) as the coordination server, or NetBird; the tailnet policy is code
+    sources: [url:pkgs.tailscale.com/, url:api.tailscale.com/, provider:tailscale/tailscale]
+    checked: 2026-11-14
+  - name: Cilium
+    kind: software
+    used-for: pod network, load-balancer addresses and Gateway API on c1
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/cilium/cilium/main/LICENSE
+    paid-edition: Isovalent's enterprise edition adds networking, security and observability features
+    paid-edition-source: https://prnewswire.com/news-releases/isovalent-extends-ciliums-enterprise-networking-and-security-features-at-kubecon-301977843.html
+    verdict: fail
+    exit-path: Flannel with kube-proxy, MetalLB and another Gateway API controller such as Envoy Gateway
+    sources: [url:helm.cilium.io]
+    checked: 2026-11-14
+  - name: nginx
+    kind: software
+    used-for: reverse proxy for the Proxmox web UI on 443
+    licence: BSD-2-Clause
+    licence-source: https://raw.githubusercontent.com/nginx/nginx/master/LICENSE
+    paid-edition: F5 keeps modules such as JWT authentication in the commercial build
+    paid-edition-source: https://nginx.org/en/docs/http/ngx_http_auth_jwt_module.html
+    verdict: fail
+    exit-path: Caddy (Apache-2.0) or Apache httpd as the proxy; role proxmox_nginx is the only user
+    sources: []
+    not-detected: a Debian package installed by role proxmox_nginx from Debian's own repository
+    checked: 2026-11-14
+
+  # Platform software.
+  - name: Proxmox VE
+    kind: software
+    used-for: the hypervisor on the lab host
+    licence: AGPL-3.0-or-later
+    licence-source: https://www.proxmox.com/en/products/proxmox-virtual-environment/pricing
+    paid-edition: none for features; "all other Proxmox VE features are available at every level", plans add support and the Enterprise Repository
+    paid-edition-source: https://www.proxmox.com/en/products/proxmox-virtual-environment/pricing
+    verdict: pass
+    sources: [provider:bpg/proxmox]
+    checked: 2026-11-14
+  - name: Debian
+    kind: software
+    used-for: the base of the Proxmox host
+    licence: DFSG-free; "the Debian system and all its components will be free"
+    licence-source: https://www.debian.org/social_contract.html
+    paid-edition: none
+    paid-edition-source: https://www.debian.org/social_contract.html
+    verdict: pass
+    sources: []
+    not-detected: installed with Proxmox VE from its ISO
+    checked: 2026-11-14
+  - name: AlmaLinux
+    kind: software
+    used-for: the OS of the Kubernetes nodes, the agent box and the desktop VM
+    licence: free software distribution, community owned
+    licence-source: https://almalinux.org/blog/what-almalinux-foundation-membership-means-for-you
+    paid-edition: none; "forever-free enterprise Linux distribution"
+    paid-edition-source: https://almalinux.org/blog/what-almalinux-foundation-membership-means-for-you
+    verdict: pass
+    sources: [url:repo.almalinux.org/]
+    checked: 2026-11-14
+  - name: Talos Linux
+    kind: software
+    used-for: the Talos rehearsal cluster only (hosts/terraform/home/k8s-talos)
+    licence: MPL-2.0
+    licence-source: https://raw.githubusercontent.com/siderolabs/talos/main/LICENSE
+    paid-edition: Talos Enterprise Linux adds FIPS 140-3 builds, Omni fleet management and CVE SLAs
+    paid-edition-source: https://www.siderolabs.com/pricing/
+    verdict: fail
+    exit-path: kubeadm on AlmaLinux, which c1 already runs
+    sources: [url:factory.talos.dev/]
+    checked: 2026-11-14
+  - name: Kubernetes
+    kind: software
+    used-for: kubeadm, kubelet, kubectl, metrics-server, Gateway API CRDs and test images
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/kubernetes/kubernetes/master/LICENSE
+    paid-edition: none found; a CNCF graduated project, vendors sell their own distributions
+    paid-edition-source: https://kubernetes.io/
+    verdict: pass
+    sources: [url:dl.k8s.io/, url:pkgs.k8s.io, image:registry.k8s.io/, url:kubernetes-sigs.github.io/metrics-server, url:github.com/kubernetes-sigs/gateway-api/]
+    checked: 2026-11-14
+  - name: containerd
+    kind: software
+    used-for: the container runtime on the Kubernetes nodes (package containerd.io)
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/containerd/containerd/main/LICENSE
+    paid-edition: none found; a CNCF graduated project
+    paid-edition-source: https://containerd.io/
+    verdict: pass
+    sources: [url:download.docker.com/]
+    checked: 2026-11-14
+  - name: etcd
+    kind: software
+    used-for: etcdctl for c1's etcd snapshots
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/etcd-io/etcd/main/LICENSE
+    paid-edition: none found; "etcd is a CNCF project"
+    paid-edition-source: https://etcd.io/
+    verdict: pass
+    sources: [url:github.com/etcd-io/etcd/]
+    checked: 2026-11-14
+  - name: Helm
+    kind: software
+    used-for: installing charts on c1
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/helm/helm/main/LICENSE
+    paid-edition: none found; "a graduated project in the CNCF"
+    paid-edition-source: https://helm.sh/
+    verdict: pass
+    sources: [url:get.helm.sh/]
+    checked: 2026-11-14
+  - name: Argo CD
+    kind: software
+    used-for: GitOps engine on c1 (D-0023)
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/argoproj/argo-cd/master/LICENSE
+    paid-edition: none found in the project; Akuity sells its own platform that "extends the open-source tools"
+    paid-edition-source: https://akuity.io/enterprise
+    verdict: pass
+    sources: [url:raw.githubusercontent.com/argoproj/argo-cd/]
+    checked: 2026-11-14
+  - name: Flux
+    kind: software
+    used-for: the GitOps engine option in role k8s_gitops
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/fluxcd/flux2/main/LICENSE
+    paid-edition: none found; "Flux is a CNCF Graduated project"
+    paid-edition-source: https://fluxcd.io/
+    verdict: pass
+    sources: [url:github.com/fluxcd/]
+    checked: 2026-11-14
+  - name: cert-manager
+    kind: software
+    used-for: certificates on c1
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/cert-manager/cert-manager/master/LICENSE
+    paid-edition: none found; CyberArk sells support only and names no extra features
+    paid-edition-source: https://www.cyberark.com/resources/solution-briefs/cyberark-enterprise-support-for-cert-manager
+    verdict: pass
+    sources: [image:quay.io/jetstack/charts/cert-manager, url:charts.jetstack.io/]
+    checked: 2026-11-14
+  - name: External Secrets
+    kind: software
+    used-for: secrets from the store into c1
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/external-secrets/external-secrets/main/LICENSE
+    paid-edition: none today; the company that planned an enterprise offering wound down in December 2025
+    paid-edition-source: https://www.opencoreventures.com/blog/introducing-external-secrets-enterprise-secrets-management
+    verdict: pass
+    sources: [image:ghcr.io/external-secrets/charts/external-secrets, url:charts.external-secrets.io]
+    checked: 2026-11-14
+  - name: local-path-provisioner
+    kind: software
+    used-for: node-local volumes on c1
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/rancher/local-path-provisioner/master/LICENSE
+    paid-edition: none found in the project's README
+    paid-edition-source: https://raw.githubusercontent.com/rancher/local-path-provisioner/master/README.md
+    verdict: pass
+    sources: [image:docker.io/rancher/local-path-provisioner]
+    checked: 2026-11-14
+  - name: Prometheus
+    kind: software
+    used-for: metrics on c1, through the kube-prometheus-stack chart
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/prometheus-community/helm-charts/main/LICENSE
+    paid-edition: none found on the project's page
+    paid-edition-source: https://prometheus.io/
+    verdict: pass
+    sources: [image:ghcr.io/prometheus-community/charts/kube-prometheus-stack, url:prometheus-community.github.io/helm-charts]
+    checked: 2026-11-14
+  - name: Grafana, Loki and Alloy
+    kind: software
+    used-for: dashboards (inside kube-prometheus-stack), logs and the log collector on c1
+    licence: AGPL-3.0 (Grafana, Loki); Apache-2.0 (Alloy)
+    licence-source: https://raw.githubusercontent.com/grafana/grafana/main/LICENSE
+    paid-edition: Grafana Enterprise holds back SAML, team sync, RBAC, enhanced LDAP, SCIM and reporting; Enterprise Logs adds access control
+    paid-edition-source: https://grafana.com/products/enterprise/grafana/
+    verdict: fail
+    exit-path: VictoriaMetrics and VictoriaLogs (D-0024 option 2) or Perses for dashboards, once their own paid editions are checked
+    sources: [url:grafana.github.io/helm-charts, url:grafana-community.github.io/helm-charts, image:ghcr.io/grafana-community/, image:ghcr.io/prometheus-community/charts/kube-prometheus-stack]
+    checked: 2026-11-14
+  - name: Keycloak
+    kind: software
+    used-for: sign-in for the lab (D-0025)
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/keycloak/keycloak/main/LICENSE.txt
+    paid-edition: none found; Red Hat's build names component changes, not extra features
+    paid-edition-source: https://access.redhat.com/articles/7027683
+    verdict: pass
+    sources: [image:quay.io/keycloak/keycloak, url:raw.githubusercontent.com/keycloak/]
+    checked: 2026-11-14
+  - name: PostgreSQL
+    kind: software
+    used-for: Keycloak's database
+    licence: PostgreSQL License
+    licence-source: https://www.postgresql.org/about/license
+    paid-edition: none; use "for any purpose, without fee"
+    paid-edition-source: https://www.postgresql.org/about/license
+    verdict: pass
+    sources: [image:docker.io/library/postgres]
+    checked: 2026-11-14
+  - name: Jellyfin
+    kind: software
+    used-for: media server on c1
+    licence: GPL-2.0
+    licence-source: https://raw.githubusercontent.com/jellyfin/jellyfin/master/LICENSE
+    paid-edition: none; "no premium licenses or features"
+    paid-edition-source: https://jellyfin.org/docs/general/about
+    verdict: pass
+    sources: [image:docker.io/jellyfin/jellyfin]
+    checked: 2026-11-14
+  - name: ntfy
+    kind: software
+    used-for: alert notifications from c1
+    licence: Apache-2.0 and GPL-2.0
+    licence-source: https://raw.githubusercontent.com/binwiederhier/ntfy/main/LICENSE
+    paid-edition: none for self-hosting; paid plans are for the ntfy.sh hosted service, which we don't use
+    paid-edition-source: https://docs.ntfy.sh/terms/
+    verdict: pass
+    sources: [image:docker.io/binwiederhier/ntfy]
+    checked: 2026-11-14
+  - name: BusyBox
+    kind: software
+    used-for: helper containers on c1
+    licence: GPL-2.0
+    licence-source: https://busybox.net/license.html
+    paid-edition: none found on the project's site
+    paid-edition-source: https://busybox.net/license.html
+    verdict: pass
+    sources: [image:docker.io/library/busybox]
+    checked: 2026-11-14
+  - name: curl
+    kind: software
+    used-for: helper containers on c1
+    licence: curl licence (MIT-style); container image MIT
+    licence-source: https://raw.githubusercontent.com/curl/curl/master/COPYING
+    paid-edition: none; wolfSSL sells support, customization and patch maintenance, not a separate edition
+    paid-edition-source: https://curl.se/support.html
+    verdict: pass
+    sources: [image:docker.io/curlimages/curl]
+    checked: 2026-11-14
+  - name: restic
+    kind: software
+    used-for: backups of c1 and of OPNsense's configuration
+    licence: BSD-2-Clause
+    licence-source: https://raw.githubusercontent.com/restic/restic/master/LICENSE
+    paid-edition: none found; the project page lists only the forum and IRC for support
+    paid-edition-source: https://restic.net/
+    verdict: pass
+    sources: [url:github.com/restic/]
+    checked: 2026-11-14
+  - name: OpenTofu
+    kind: software
+    used-for: machine code under hosts/terraform
+    licence: MPL-2.0
+    licence-source: https://raw.githubusercontent.com/opentofu/opentofu/main/LICENSE
+    paid-edition: none; a Linux Foundation project, "not at the whim of any one company"
+    paid-edition-source: https://opentofu.org/manifesto
+    verdict: pass
+    sources: [url:github.com/opentofu/]
+    checked: 2026-11-14
+  - name: OpenTofu providers
+    kind: software
+    used-for: Proxmox, local files and time in OpenTofu (bpg/proxmox, hashicorp/local, hashicorp/time)
+    licence: MPL-2.0
+    licence-source: https://raw.githubusercontent.com/bpg/terraform-provider-proxmox/main/LICENSE
+    paid-edition: none found; the bpg provider's README names sponsors only
+    paid-edition-source: https://raw.githubusercontent.com/bpg/terraform-provider-proxmox/main/README.md
+    verdict: pass
+    sources: [provider:bpg/proxmox, provider:hashicorp/local, provider:hashicorp/time]
+    checked: 2026-11-14
+  - name: Ansible
+    kind: software
+    used-for: machine code under hosts/ansible (ansible-core, ansible.posix, community.general, oxlorg.opnsense)
+    licence: GPL-3.0
+    licence-source: https://raw.githubusercontent.com/ansible-collections/community.general/main/COPYING
+    paid-edition: Red Hat Ansible Automation Platform adds a web UI, API and RBAC around ansible-core; we use ansible-core only
+    paid-edition-source: https://www.redhat.com/en/technologies/management/ansible/ansible-vs-red-hat-ansible-automation-platform
+    verdict: pass
+    sources: [pypi:ansible-core, collection:ansible.posix, collection:community.general, collection:oxlorg.opnsense]
+    checked: 2026-11-14
+  - name: HTTPX
+    kind: software
+    used-for: a Python HTTP client the Ansible controller installs
+    licence: BSD-3-Clause
+    licence-source: https://raw.githubusercontent.com/encode/httpx/master/LICENSE.md
+    paid-edition: none found on the project's page
+    paid-edition-source: https://www.python-httpx.org/
+    verdict: pass
+    sources: [pypi:httpx]
+    checked: 2026-11-14
+  - name: lychee
+    kind: software
+    used-for: the docs link check in CI
+    licence: Apache-2.0 or MIT
+    licence-source: https://raw.githubusercontent.com/lycheeverse/lychee/master/LICENSE-MIT
+    paid-edition: none found on the project's page
+    paid-edition-source: https://lychee.cli.rs/
+    verdict: pass
+    sources: [url:github.com/lycheeverse/]
+    checked: 2026-11-14
+  - name: Vale
+    kind: software
+    used-for: the docs word check in CI
+    licence: MIT
+    licence-source: https://raw.githubusercontent.com/vale-cli/vale/v3/LICENSE
+    paid-edition: none for the linter; "Vale itself stays free, open source, and MIT licensed", Vale CMS is a separate hosted editor we don't use
+    paid-edition-source: https://vale.sh/cms
+    verdict: pass
+    sources: [url:github.com/vale-cli/]
+    checked: 2026-11-14
+
+  # Hosted services (STD-0006 rule 3).
+  - name: GitHub
+    kind: hosted
+    used-for: code, pull requests, Actions, the CI runner, approvals, release downloads and ghcr.io images
+    licence: closed service; actions/checkout, actions/cache and the runner are MIT
+    licence-source: https://raw.githubusercontent.com/actions/runner/main/LICENSE
+    paid-edition: paid plans add features to the service
+    paid-edition-source: https://docs.github.com/en/get-started/learning-about-github/githubs-plans
+    verdict: hosted
+    exit-path: git moves anywhere; Forgejo (GPL-3.0) for code review and CI, with downloads mirrored to a local cache
+    sources: [url:github.com/, url:api.github.com, url:raw.githubusercontent.com/, action:actions/, image:ghcr.io/]
+    checked: 2026-11-14
+  - name: Azure
+    kind: hosted
+    used-for: off-site backups, a Key Vault and app registrations (D-0033)
+    licence: closed service; the azurerm and azuread providers are MPL-2.0
+    licence-source: https://raw.githubusercontent.com/hashicorp/terraform-provider-azurerm/main/LICENSE
+    paid-edition: a paid service
+    paid-edition-source: https://azure.microsoft.com/en-us/pricing/
+    verdict: hosted
+    exit-path: restic copy to S3, SFTP, rest-server or local disk (D-0033)
+    sources: [url:graph.microsoft.com, url:login.microsoftonline.com, url:storage.azure.com, url:vault.azure.net, provider:hashicorp/azurerm, provider:hashicorp/azuread]
+    checked: 2026-11-14
+  - name: Cloudflare
+    kind: hosted
+    used-for: public DNS for certificate challenges
+    licence: closed service; the provider is Apache-2.0
+    licence-source: https://raw.githubusercontent.com/cloudflare/terraform-provider-cloudflare/main/LICENSE
+    paid-edition: paid plans add features to the service
+    paid-edition-source: https://www.cloudflare.com/plans/
+    verdict: hosted
+    exit-path: cert-manager's RFC2136 or ACMEDNS solver against a DNS server we run
+    sources: [url:api.cloudflare.com, provider:cloudflare/cloudflare]
+    checked: 2026-11-14
+  - name: Docker Hub and Docker's package repository
+    kind: hosted
+    used-for: container images from docker.io, and the containerd.io package
+    licence: closed service
+    licence-source: https://docs.docker.com/docker-hub/usage/pulls/
+    paid-edition: unauthenticated pulls are limited; paid plans lift the limit
+    paid-edition-source: https://docs.docker.com/docker-hub/usage/pulls/
+    verdict: hosted
+    exit-path: a local pull-through registry (Zot or Harbor, Apache-2.0); containerd from its own releases
+    sources: [image:docker.io/, url:download.docker.com/]
+    checked: 2026-11-14
+  - name: Other container registries
+    kind: hosted
+    used-for: images and charts from quay.io and registry.k8s.io
+    licence: closed services (Quay is run by Red Hat; registry.k8s.io by the Kubernetes project)
+    licence-source: https://kubernetes.io/
+    paid-edition: none used
+    paid-edition-source: https://kubernetes.io/
+    verdict: hosted
+    exit-path: the same local pull-through registry as Docker Hub's
+    sources: [image:quay.io/, image:registry.k8s.io/]
+    checked: 2026-11-14
+  - name: Let's Encrypt
+    kind: hosted
+    used-for: public certificates through ACME
+    licence: free service run by the nonprofit ISRG; ACME is an open standard
+    licence-source: https://letsencrypt.org/about/
+    paid-edition: none; certificates "at zero cost"
+    paid-edition-source: https://letsencrypt.org/about/
+    verdict: hosted
+    exit-path: any other ACME certificate authority, by changing cert-manager's issuer
+    sources: [url:acme-v02.api.letsencrypt.org/, url:acme-staging-v02.api.letsencrypt.org/]
+    checked: 2026-11-14
+  - name: Healthchecks.io
+    kind: hosted
+    used-for: the outside heartbeat (agent pick 213)
+    licence: closed service; the software is BSD-3-Clause
+    licence-source: https://raw.githubusercontent.com/healthchecks/healthchecks/master/LICENSE
+    paid-edition: the free plan has 20 jobs; paid plans add jobs, SMS and calls
+    paid-edition-source: https://healthchecks.io/pricing/
+    verdict: hosted
+    exit-path: self-host Healthchecks (BSD-3-Clause) or another heartbeat; the swap is one secret line (agent pick 213)
+    sources: []
+    not-detected: its address is in a private values file, not in the repository
+    checked: 2026-11-14
