@@ -47,6 +47,9 @@ Is OpenBao free software with no paid edition, and how should the lab run it so 
 23. The agent box keeps keys in `/etc/agent-keys`, owned by user `keys`, used only by its wrappers [22] (sourced).
 24. c1's secret keys are named `<app>-<field>` so each maps to one vault entry [23] (sourced).
 
+25. **A store can run with no recovery shares.** With an auto-unseal seal, `recovery_shares` may be 0 (since v2.4.0); no recovery keys are made, they can be made later through the rotate endpoint, and "Recovery mode will not function until such keys are created" [24]. Self-initialization makes none [13] (sourced; added 2026-11-14 for the edit of rules 4 and 5, batch RB-0228).
+26. **Rotating a static key with no recovery key can fail.** OpenBao issue #3996 (closed) reports that after a static key rotation the server could not unseal once the old key was removed, because the key upgrade stopped at "no recovery key found". A maintainer called it "still a bug"; the workarounds in the thread are making recovery keys first, or `bao write -force sys/rotate/root` after the first restart [25]. No fix for it is listed in the changelog for 2.7.0 to 2.7.2 [26] (sourced for the issue; measured for the changelog, a text search of `CHANGELOG.md` on main, 2026-11-14).
+
 ## Evidence for and against (REQ-0034)
 
 | Choice | For | Against |
@@ -64,7 +67,7 @@ Is OpenBao free software with no paid edition, and how should the lab run it so 
 
 ## How the decision used it
 
-Findings 1 to 4 pass REQ-0032 and the owner's "FOSS not OSS". Finding 22 and the rebuild goal set option 1. Findings 7, 8 and 12 set seal A and rule 5. Finding 10 sets rule 4's two extra copies of the key. Finding 11 sets the seal's exit path. Finding 13 sets rule 8. Findings 14 to 18 set rule 6 and the Confirmation's ExternalSecret steps. Findings 19 to 21 set rule 10. Finding 24 sets rule 7.
+Findings 1 to 4 pass REQ-0032 and the owner's "FOSS not OSS". Finding 22 and the rebuild goal set option 1. Findings 7, 8 and 12 set seal A and rule 5. Finding 10 set rule 4's copies of the key; since 2026-11-14 the box holds the only one off the VM. Findings 12 and 25 set rule 5's prod with no recovery shares, and finding 26 its open question on rotation. Finding 11 sets the seal's exit path. Finding 13 sets rule 8. Findings 14 to 18 set rule 6 and the Confirmation's ExternalSecret steps. Findings 19 to 21 set rule 10. Finding 24 sets rule 7.
 
 ## Limits
 
@@ -100,3 +103,6 @@ Relied on (the decision depends on these):
 21. This repository, [rebuild-home-lab-from-scratch.md](../runbooks/rebuild-home-lab-from-scratch.md), "The private files on the controller".
 22. This repository, [set-up-the-agent-box.md](../runbooks/set-up-the-agent-box.md).
 23. This repository, [seed-secret-source.md](../runbooks/seed-secret-source.md), "How the store reads it".
+24. OpenBao, "/sys/init" API, `recovery_shares`. <https://openbao.org/docs/api/system/init/>, fetched 2026-11-14.
+25. OpenBao issue #3996, "Static unseal key rotation fails with declarative self-initialization when no recovery key exists". <https://github.com/openbao/openbao/issues/3996>, fetched 2026-11-14.
+26. OpenBao, `CHANGELOG.md` on main. <https://github.com/openbao/openbao/blob/main/CHANGELOG.md>, fetched 2026-11-14.
