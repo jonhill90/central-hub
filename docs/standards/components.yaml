@@ -75,9 +75,21 @@ components:
     paid-edition: F5 keeps modules such as JWT authentication in the commercial build
     paid-edition-source: https://nginx.org/en/docs/http/ngx_http_auth_jwt_module.html
     verdict: fail
-    exit-path: Caddy (Apache-2.0) or Apache httpd as the proxy; role proxmox_nginx is the only user
+    exit-path: Apache httpd (Apache-2.0) as the proxy, built by role proxmox_proxy; that role is the only user
     sources: []
-    not-detected: a Debian package installed by role proxmox_nginx from Debian's own repository
+    not-detected: a Debian package installed by role proxmox_nginx (now proxmox_proxy, which moves 443 and 80 to Apache httpd) from Debian's own repository; the row goes when the package is purged
+    checked: 2026-11-14
+  - name: Apache httpd
+    kind: software
+    used-for: reverse proxy for the Proxmox web UI on 443, in place of nginx
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/apache/httpd/trunk/LICENSE
+    paid-edition: none found; the project says the server "only comes from the Apache Software Foundation" and leaves paid modules and support to other companies (ASF Bugzilla needs a log-in to search, so a site search was used)
+    paid-edition-source: https://httpd.apache.org/ABOUT_APACHE
+    verdict: pass
+    exit-path: Caddy (Apache-2.0) as the proxy; role proxmox_proxy is the only user and no variable names the program
+    sources: []
+    not-detected: Debian packages (apache2, apache2-bin, apache2-data, apache2-utils) installed by role proxmox_proxy from Debian's own repository
     checked: 2026-11-14
 
   # Platform software.
