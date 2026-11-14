@@ -1,6 +1,6 @@
 ---
 record: D-0046
-batch: RB-0230 (2026-11-14), the drafting agent's reads and measurements for the VPS apps, between 08:23 and 09:30 UTC
+batch: RB-0230 (2026-11-14), the drafting agent's reads and measurements for the VPS apps, between 08:23 and 10:45 UTC
 researched: 2026-11-14
 method: each project's licence file and README read from its repository; official docs pages opened; GitHub issue and code searches; package listings and network state measured on the VPS over Tailscale SSH; Proxmox and OpenBao source read
 checks: "RB-0230 had no independent research check. Three council threads and the reviewer thread checked the design; a reviewing agent checks this file against it"
@@ -23,12 +23,13 @@ Can OmniRoute, OpenClaw and Hermes Agent run on the owner's VPS as FOSS with no 
 5. **Redis and Valkey.** Redis 8 is under RSALv2, SSPLv1 or AGPLv3 [8] (measured), and Redis Software holds back Active-Active, Flex and Redis Data Integration [9] (sourced). Valkey is BSD-3-Clause [10] (measured). OmniRoute's Redis vector store names "standard Redis / Valkey instances" [3] (measured).
 6. **Packages on the VPS.** AlmaLinux 10 appstream has `podman` 5.8.2, `valkey` 8.0.11, `catatonit` 0.2.1 and `nodejs24` 24.22.1; none is installed (measured, `dnf list`, 2026-11-14 08:38 and 09:18 UTC). OpenClaw needs Node `>=24.16.0 <25 || >=26.1.0` [11] (measured, `npm view`).
 7. **OpenClaw's Podman sandbox.** `sandbox.backend: "podman"` uses the native CLI; rootless Podman is supported with a nonzero sandbox user; the host needs `catatonit`; "Browser sandboxing is not supported by Podman"; a containerized gateway "creates sibling sandboxes through the host's local Podman engine" [12]. (sourced)
-8. **Tailnet policy.** No grant has `tag:vps` as source; `tag:agent` and `tag:github-actions` may log in to `tag:vps` as root; the box's tag has no destination and a test denies it `tag:vps:22` [13] (measured, `main` at acd2842). Nothing else in this repository names `tag:github-actions` (measured, `grep -rl`).
+8. **Tailnet policy.** No grant has `tag:vps` as source; `tag:agent` and `tag:github-actions` may log in to `tag:vps` as root; the box's tag has no destination and a test denies it `tag:vps:22` [13] (measured, `main` at acd2842). Nothing else in this repository names `tag:github-actions` (measured, `grep -rl`, in central-hub only; other repositories and the tailnet's device list were not checked).
 9. **Tailscale Serve.** Serve "requires you to enable HTTPS certificates in your tailnet" [14]; enabling them publishes machine names and the tailnet DNS name on a public ledger [15] (sourced). `CertDomains` is empty on the VPS and on an agent node (measured, 09:18 UTC), so they are off.
 10. **SSH tests.** The policy file's `sshTests` take `src`, `dst`, `accept`, `check` and `deny`, and the tailnet rejects a policy whose tests fail [16]. (sourced)
-11. **Repositories.** A request to let a GitHub App installation token create a repository in a personal account is open with no answer [17] (sourced). The agents' session tools may not create a repository (session rules; not tried).
+11. **Repositories.** GitHub's list of endpoints for installation access tokens includes `POST /user/repos` [22], under the "Repository creation" permission [23] (sourced). A request to let a GitHub App installation token create a repository in a personal account is open with no answer [17] (sourced). Whether the app installed here holds that permission was not read, and no repository was created to test it. The agents' session tools may not create a repository (session rules; not tried). So: no route found, not "can't".
 12. **OpenBao's web UI.** It is on with `ui = true`, served at `/ui/` on the listener's port, and lets a user create, read, update and delete secrets [18] (sourced). This repository's OpenBao role sets `ui = true` and listens on 443 [19] (measured). D-0038 gives machine logins only (AppRole and JWT) and says the dev store holds nothing of value [20] (sourced).
 13. **Anthropic's terms.** Anthropic "does not permit third-party developers ... to route requests through Free, Pro, or Max plan credentials" [21]. (sourced)
+14. **Tailscale SSH.** Tailscale SSH authenticates the connection "using Tailscale node keys" and lets the SSH client skip further proof [24] (sourced), so the login belongs to the node, not to a program on it.
 
 ## Not checked
 
@@ -59,3 +60,6 @@ Can OmniRoute, OpenClaw and Hermes Agent run on the owner's VPS as FOSS with no 
 19. [`hosts/ansible/roles/openbao/templates/openbao.hcl.j2`](../../hosts/ansible/roles/openbao/templates/openbao.hcl.j2)
 20. [D-0038](../decisions/0038-run-openbao-on-its-own-vm-as-the-secrets-store-with-sops-for-bootstrap-files.md), rules 3 to 6
 21. <https://code.claude.com/docs/en/legal-and-compliance>
+22. <https://docs.github.com/en/rest/authentication/endpoints-available-for-github-app-installation-access-tokens>
+23. <https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps>
+24. <https://tailscale.com/docs/features/tailscale-ssh>
