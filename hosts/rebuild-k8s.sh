@@ -20,6 +20,7 @@
 #                 read-only copy of prod's newest volume snapshot (hosts/rebuild.env.example)
 #   RESTORE_CHECK_HOOK  the command the `checks` stage runs to prove the restore; required with
 #                 RESTORE_HOOK
+#   PREFLIGHT_MIN_FREE_MIB  optional, dev only: the least free memory (MiB) the Proxmox node must have before the VMs are made (14336)
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
 #   OPENBAO_ADDR  optional: the secrets store, https://<name or address> with no path (proposed
 #                 D-0038). Set: stage `openbao` registers the cluster's new service-account key with
@@ -183,8 +184,42 @@ checks() {
 # A hook from rebuild.env, with the repository and the inventory it needs.
 hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 
+# Dev only, before the VMs: the Proxmox node must have enough free memory for the dev VMs beside the guests
+# already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
+# the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default 14336: 12 GiB plus a 2 GiB margin). If the
+# read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
+preflight_memory() {
+  local min=${PREFLIGHT_MIN_FREE_MIB:-14336} node body free secret
+  node=$(sed -n 's/^[[:space:]]*proxmox_node_name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$TFVARS" | head -1)
+  [ -n "$node" ] || { echo "preflight: proxmox_node_name not found in the tfvars"; return 1; }
+  # shellcheck source=/dev/null
+  body=$( (set -a; . "$TOFU_ENV"; set +a
+    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    # The header goes in on stdin (a curl config), so the token is never in curl's arguments, where ps shows it.
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/nodes/$node/status") 2>&1) \
+    || { # shellcheck source=/dev/null
+         secret=$(set -a; . "$TOFU_ENV"; printf '%s' "${PROXMOX_VE_API_TOKEN##*=}")
+         body=$(printf '%s' "$body" | tr -d '\n' | cut -c1-200); [ -z "$secret" ] || body=${body//"$secret"/***}
+         echo "preflight: the node's memory could not be read: $body"; return 1; }
+  # memory.available (the kernel's MemAvailable) exists from PVE 9; older versions have total - used.
+  free=$(printf '%s' "$body" | python3 -c 'import json,sys
+m = json.load(sys.stdin)["data"]["memory"]
+if m.get("available") is not None:
+    print(m["available"] // 1048576, "available")
+else:
+    print((m["total"] - m["used"]) // 1048576, "total-used")') \
+    || { echo "preflight: the node's memory answer had no memory figures"; return 1; }
+  field=${free#* }; free=${free% *}
+  echo "preflight: node free memory ${free} MiB (field: ${field}), minimum ${min} MiB"
+  [ "$free" -ge "$min" ] || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB"; return 1; }
+}
+
 run_stage() {
   case $1 in
+    preflight)
+      [ "$ENV_NAME" = dev ] || { echo "the memory preflight runs on dev only"; return 1; }
+      preflight_memory ;;
     teardown)
       tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE"
       tofu_k8s destroy -auto-approve -input=false -var-file="$TFVARS" ;;
@@ -222,6 +257,10 @@ run_stage() {
       [ "$ENV_NAME" = dev ] || { echo "the dev CA runs on dev only"; return 1; }
       grep -q 'devca' "$repo/hosts/ansible/roles/k8s_certs/tasks/main.yml" \
         || { echo "the k8s_certs role has no devca tag: the dev CA change is missing from this checkout"; return 1; }
+      # The dev inventory turns the Gateway's HTTPS off (k8s_gateway_https), so Argo CD's root Application passes
+      # gatewayHttps=false and the Gateway has no https listener. Turn it on first (measured on dev, 2026-11-14:
+      # spec listeners http and http-short only), then make the certificate the listener waits for.
+      ap playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_gateway_https=true
       ap playbooks/k8s-certs.yml --tags devca -e k8s_certs_dev_ca=true ;;
     # Dev only, after dev-ca: the whole identity role with a test admin, never the owner's account, then the
     # sign-in proof (password alone stops at the one-time-code form; password and code redirect with a code;
@@ -257,6 +296,8 @@ stages=${STAGES:-$default_stages}
 # A dev run ends with its own HTTPS and sign-in proof, on the stages the box's wrapper sets, with no change to
 # that wrapper: the box's own checkout of main supplies them.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="$stages dev-ca identity-keycloak"; fi
+# A dev run starts with the memory preflight, after a teardown has freed its VMs and before it makes new ones.
+if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="preflight $stages"; fi
 if $teardown && [ -z "$only" ]; then stages="teardown $stages"; fi
 
 echo "rebuild: env $ENV_NAME, stages: $stages, log $log"
