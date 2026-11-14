@@ -36,7 +36,7 @@ run "policy_leaves_out_a_vlan_marked_tailnet_false" {
   }
 }
 
-run "agent_box_gets_ssh_from_agents_and_no_path_out" {
+run "agent_box_gets_ssh_from_agents_and_only_the_vps_out" {
   command = plan
 
   assert {
@@ -45,8 +45,32 @@ run "agent_box_gets_ssh_from_agents_and_no_path_out" {
   }
 
   assert {
-    condition     = !strcontains(tailscale_acl.policy.acl, "\"src\": [\"tag:agent-box\"]")
-    error_message = "tag:agent-box must have no grant or SSH rule of its own (no path to the Mac or the lab)."
+    condition     = length(regexall("\"src\": \\[\"tag:agent-box\"\\]", tailscale_acl.policy.acl)) == 2
+    error_message = "tag:agent-box may have exactly one grant and one SSH rule, both to tag:vps (D-0046 rule 4)."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "{\"src\": [\"tag:agent-box\"], \"dst\": [\"tag:vps\"], \"ip\": [\"tcp:22\"]}")
+    error_message = "tag:agent-box's one grant must be the VPS on tcp:22."
+  }
+}
+
+run "vps_logins_are_narrowed_and_github_actions_is_gone" {
+  command = plan
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "{\"action\": \"accept\", \"src\": [\"tag:agent\"], \"dst\": [\"tag:vps\"], \"users\": [\"deploy\"]}")
+    error_message = "Agent sessions must sign in to the VPS as deploy only (D-0046 rule 4, S1)."
+  }
+
+  assert {
+    condition     = !strcontains(tailscale_acl.policy.acl, "\"src\": [\"tag:github-actions\"]")
+    error_message = "tag:github-actions must have no grant or SSH rule (D-0046 rule 4, S1)."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"sshTests\"") && strcontains(tailscale_acl.policy.acl, "\"deny\": [\"root\", \"omniroute\", \"openclaw\", \"hermes\"]")
+    error_message = "The policy must carry the SSH test that denies root and the app users to agent sessions."
   }
 }
 
