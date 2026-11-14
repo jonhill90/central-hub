@@ -58,7 +58,7 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 3. Run it again: same command as step 2.
    why: proves the run is idempotent.
    expect: `changed=0`.
-4. Sign in: open `https://grafana.<zone>/` (or `https://grafana.apps.c1.prod.<zone>/` without short names), choose "Lab sign-in", and sign in with your user name and the `PASSWORD_<USER NAME>` line from `identity.env`. A member of `lab-admins` is then asked for a code: first scan their seed into an authenticator app with `bootstrap/show-totp-qr.sh <user name>` on the controller, which shows it as a QR code on the controller's own screen for 120 seconds and then deletes the image.
+4. Sign in: open `https://grafana.<zone>/` (or `https://grafana.apps.c1.prod.<zone>/` without short names), choose "Lab sign-in", and sign in with your user name and the `PASSWORD_<USER NAME>` line from `identity.env`. A member of `lab-admins` is then asked for a code: first scan their seed into an authenticator app with `bootstrap/show-totp-qr.sh <user name>` on the controller, which shows it as a QR code on the controller's own screen for 120 seconds and then deletes the image; close the image window after scanning.
    why: proves the user, the password and Grafana's client end to end.
    expect: Grafana opens with the Admin role for a member of `lab-admins`.
 5. Argo CD and Jellyfin: once their own config points at the issuer and the secrets above (the c1 GitOps work owns `argocd-cm` and the Jellyfin plugin), sign in to each the same way.

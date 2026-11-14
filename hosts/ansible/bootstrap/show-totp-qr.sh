@@ -27,6 +27,6 @@ printf 'otpauth://totp/Lab:%s?secret=%s&issuer=Lab&algorithm=SHA1&digits=6&perio
 chmod 0600 "$img"
 opener=$(command -v open || command -v xdg-open) || { echo "show-totp-qr: no open or xdg-open to show the image" >&2; exit 1; }
 "$opener" "$img"
-echo "show-totp-qr: showing $user's code for ${seconds}s; scan it, then close the image window"
+echo "show-totp-qr: showing $user's code for ${seconds}s; scan it, then close the image window (Preview keeps showing it after the file is gone)"
 if [[ -t 0 ]]; then read -r -t "$seconds" _ || true; else sleep "$seconds"; fi
 echo "show-totp-qr: image deleted"

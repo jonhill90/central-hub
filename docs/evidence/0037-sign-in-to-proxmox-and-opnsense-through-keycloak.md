@@ -3,7 +3,7 @@ record: D-0037
 batch: RB-0211 (2026-11-14), with the FOSS check RB-0208 of the same night for licences and paid tiers
 researched: 2026-11-14
 method: Proxmox and OPNsense documentation and source files fetched and read; the candidate OPNsense routes' repositories cloned and their licence files and build files read; the role run against stand-ins
-checks: none independent yet; the reviewing agent checks the sources with the PR
+checks: the reviewing agent re-read the Proxmox sources and Keycloak's OTPCredentialModel.java and DefaultAuthenticationFlows.java at 26.4.0 and at 26.8.1, the lab's version, and found the cited lines the same (2026-11-14)
 ---
 
 # Evidence for D-0037: sign-in to the Proxmox host and OPNsense through Keycloak
