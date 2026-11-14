@@ -54,7 +54,7 @@ Proposed: **option 1 with A**, the owner's answers of 2026-11-12. Options 2 and 
 B is weighed against A (REQ-0034) and not picked now:
 
 - **For B:** the VPS is already outside the home and is not a c1 worker (PRD goal 1), and agent rebuilds never touch it (D-0035 rule 2). A watcher there needs no hosted service.
-- **Against B, for now:** the VPS runs no lab services yet; its first apps and host steps are proposed in PR #314 (D-0046), which is not merged. A watcher there also needs its own way to reach the owner that does not run on c1: self-hosted Healthchecks sends no e-mail without a mail server, and the other route, a second ntfy, has the slow iOS delivery noted below. And it adds a server to keep up whose uptime the lab has not measured.
+- **Against B, for now:** the VPS runs no lab services yet; its first apps and host steps are proposed in PR #314 (D-0046), which is not merged. A watcher there also needs its own way to reach the owner that does not run on c1: self-hosted Healthchecks sends no e-mail without a mail server or an outside mail relay, and an outside relay is itself a hosted service, and the other route, a second ntfy, has the slow iOS delivery noted below. And it adds a server to keep up whose uptime the lab has not measured.
 - **So A stays,** because the owner picked it (pick 213), and B is the way off once the watcher can run on the VPS.
 
 ```mermaid
@@ -123,7 +123,7 @@ flowchart LR
 ### Option B: self-hosted watcher on the VPS
 
 - Good: no hosted service; the VPS is already outside the home and out of c1.
-- Bad: the VPS runs no lab services yet; the watcher needs its own mail server or a second ntfy to reach the owner; one more server to keep up.
+- Bad: the VPS runs no lab services yet; the watcher needs a mail server, an outside mail relay (a hosted service) or a second ntfy to reach the owner; one more server to keep up.
 
 ## More Information
 

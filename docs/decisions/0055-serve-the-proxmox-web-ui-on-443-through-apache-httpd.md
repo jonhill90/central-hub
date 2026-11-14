@@ -64,7 +64,7 @@ Diagram: not applicable. One proxy in front of one server on the same host.
 - Good: the web UI by name on 443 from one Debian package, with no paid edition behind it.
 - Good: the console's WebSocket is tunnelled, and a graceful reload lets open requests finish, so a certificate renewal does not cut it.
 - Bad: one more service on the hypervisor to patch.
-- Bad: a proxy in front of `pveproxy` keeps serving the old certificate after a renewal until it reloads (Proxmox bug 7287, reported for nginx). The runbook's step 4 re-runs the role after each renewal, and the role reloads Apache httpd when the served certificate is not the one on disk.
+- Bad: a proxy in front of `pveproxy` keeps serving the old certificate after a renewal until it reloads (Proxmox bug 7287, reported for nginx). Under the runbook's step 4, an agent re-runs the role through the host job after each renewal, and the role reloads Apache httpd when the served certificate is not the one on disk.
 - Bad: until the move runs, nginx serves 443 and STD-0006 still counts it as a pending fail.
 
 ### Confirmation
