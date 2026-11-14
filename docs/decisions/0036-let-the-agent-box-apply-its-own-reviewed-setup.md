@@ -1,7 +1,7 @@
 ---
 id: D-0036
 title: Let the agent box apply its own setup from reviewed main, and stop for the owner on any change to its own limits
-status: proposed
+status: accepted
 date: 2026-11-14
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0001, D-0031, D-0034, D-0035]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-14T03:16:37Z
+  approved-commit: 19df981ef0059b692ea7e60dd4cc52fef45b55da
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNMn7yyeHLWYUTpuMmYUECg2
+  approval-names: "PR #247 and head 19df981, in the message itself"
+  check: the drafting agent read the message in the project thread at 2026-11-14T03:17Z; it reads "accept #247 19df981", and that head holds this record. A reviewing agent checks it before the merge
+  merged: PR #247 squash-merged at head 19df981e as a55448e7
 revisit-when: a self-apply changes a limit file and the check does not stop it; the owner narrows the limit set when accepting; the box's role gains a task that writes outside its own folders and system units; D-0035 takes effect and an approval on GitHub can replace the Mac for limit changes; or a cluster other than c1 reads the repository
 ---
 
