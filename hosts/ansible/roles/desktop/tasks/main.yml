@@ -106,6 +106,12 @@
     - desktop-rdp.path
     - gnome-remote-desktop.service
 
+- name: desktop | firewalld runs
+  ansible.builtin.systemd_service:
+    name: firewalld.service
+    enabled: true
+    state: started
+
 - name: desktop | firewalld accepts RDP from the connector's address only
   ansible.posix.firewalld:
     rich_rule: 'rule family="ipv4" source address="{{ desktop_rdp_source }}" port port="{{ desktop_rdp_port }}" protocol="tcp" accept'
