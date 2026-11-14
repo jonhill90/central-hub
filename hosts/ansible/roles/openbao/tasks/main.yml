@@ -363,6 +363,14 @@
       tags: [clients]
   tags: [clients]
 
+# The box's snapshot login, snapshot-box (agent pick 240), after the clients, whose admin token it uses.
+- name: The box's snapshot login
+  ansible.builtin.include_tasks:
+    file: snapshot_box.yml
+    apply:
+      tags: [clients]
+  tags: [clients]
+
 # The restore drill once now, with the live store's Raft state checked before and after (Confirmation 4).
 # After the clients, so the admin policy already reads the Raft state.
 - name: The restore drill

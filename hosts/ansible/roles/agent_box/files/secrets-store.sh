@@ -196,33 +196,11 @@ recovery() {
 
 # Copy one Raft snapshot off the store, through the admin AppRole. Fails loudly: never an empty file.
 snapshot() {
-  local out token stamp cluster
   # During a rebuild the store is empty: a snapshot now would write its mark into the fresh store, which
   # restore-rebuilt's empty-store guard would then refuse, and it would be a snapshot of nothing.
   [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt first" >&2; exit 1; }
-  mkdir -p "$snapshots"
-  stamp=$(date -u +%Y%m%dT%H%M%SZ)
-  out=$snapshots/raft-$stamp.snap
-  # The store's cluster ID, which a rebuild changes (restore-rebuilt picks by it), from sys/health: no secret.
-  cluster=$(curl -sS --cacert "$cacert" "$(addr)/v1/sys/health" |
-    python3 -I -c 'import json, sys; print(json.load(sys.stdin)["cluster_id"])') ||
-    { echo "secrets-store: sys/health gave no cluster ID" >&2; exit 1; }
-  token=$(admin_token)
-  local ok=1
-  # A mark inside the snapshot: kv/dev/snapshot-mark holds this snapshot's own time, which restore-rebuilt
-  # reads back to prove the data came back. Not a secret.
-  printf 'header = "X-Vault-Token: %s"\n' "$token" |
-    curl -sS --fail-with-body --cacert "$cacert" -K - -X POST --data "{\"data\": {\"taken\": \"$stamp\"}}" \
-      "$(addr)/v1/kv/data/dev/snapshot-mark" >/dev/null || ok=0
-  [[ $ok == 1 ]] && printf 'header = "X-Vault-Token: %s"\n' "$token" |
-    curl -sS --fail-with-body --cacert "$cacert" -K - "$(addr)/v1/sys/storage/raft/snapshot" -o "$out.part" || ok=0
-  printf 'header = "X-Vault-Token: %s"\n' "$token" |
-    curl -sS --cacert "$cacert" -K - -X POST "$(addr)/v1/auth/token/revoke-self" >/dev/null || true
-  [[ $ok == 1 && -s $out.part ]] || { rm -f "$out.part"; echo "secrets-store: snapshot failed or empty" >&2; exit 1; }
-  mv "$out.part" "$out"
-  echo "$cluster" > "$out.cluster"
-  "$(dirname "$0")/secrets-store-snapshots.sh" rotate "$snapshots" "$snapshot_keep"
-  echo "secrets-store: snapshot $(basename "$out"), $(stat -c %s "$out") bytes"
+  # Through AppRole snapshot-box, not the admin (D-0038 rules 8 and 12, agent pick 240).
+  "$(dirname "$0")/secrets-store-snapshots.sh" take "$(addr)" "$cacert" "$env_keys" "$snapshots" "$snapshot_keep" dev
 }
 
 # Put the newest snapshot of this store's own cluster back, never forced, and prove it by the mark, under the

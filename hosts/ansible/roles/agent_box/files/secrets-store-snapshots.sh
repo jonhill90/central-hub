@@ -1,6 +1,12 @@
 #!/bin/bash
 # /usr/local/libexec/agent-box/secrets-store-snapshots.sh: the secrets-store wrapper's two file steps on its
-# snapshot folder, run only by the wrapper under its lock (pick 239). It never reads a snapshot's contents.
+# snapshot folder, run only by the wrapper under its lock (picks 239, 240). It never reads a snapshot's contents.
+#   take ADDR CACERT KEYS DIR KEEP ENV
+#                            sign in as AppRole snapshot-box (its IDs in KEYS; agent pick 240), write
+#                            kv/ENV/snapshot-mark with this snapshot's own time (not a secret), save a Raft
+#                            snapshot as DIR/raft-<time>.snap with the store's cluster ID beside it, revoke the
+#                            token, then rotate DIR to KEEP. Fails loudly: never an empty file. The token goes to
+#                            curl on stdin, never as an argument, and is never printed.
 #   rotate DIR KEEP          keep the newest KEEP raft-*.snap directly in DIR, with their .cluster files; older
 #                            ones go. Only DIR itself is read (-maxdepth 1), so no other folder is ever touched.
 #   keep DIR KEPT CLUSTER    move every raft-*.snap in DIR whose .cluster file does not name CLUSTER (or that has
@@ -10,12 +16,44 @@
 set -euo pipefail
 umask 077
 
+rotate() { # DIR KEEP
+  find "$1" -maxdepth 1 -type f -name 'raft-*.snap' -printf '%f\n' | sort -r | tail -n +"$(($2 + 1))" |
+    while read -r f; do rm -f -- "${1:?}/$f" "${1:?}/$f.cluster"; done
+}
+
 case ${1:-} in
+  take)
+    [[ $# -eq 7 && $6 =~ ^[1-9][0-9]*$ && $7 =~ ^(dev|prod)$ ]] || { echo "usage: secrets-store-snapshots.sh take ADDR CACERT KEYS DIR KEEP ENV" >&2; exit 2; }
+    addr=$2/v1 cacert=$3 keys=$4 dir=$5 keep=$6 env=$7
+    mkdir -p "$dir"
+    stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    out=$dir/raft-$stamp.snap
+    # The store's cluster ID, which a rebuild changes (restore-rebuilt picks by it), from sys/health: no secret.
+    cluster=$(curl -sS --cacert "$cacert" "$addr/sys/health" |
+      python3 -I -c 'import json, sys; print(json.load(sys.stdin)["cluster_id"])') ||
+      { echo "secrets-store: sys/health gave no cluster ID" >&2; exit 1; }
+    token=$(python3 -I -c 'import json,sys; print(json.dumps({"role_id": open(sys.argv[1]).read().strip(), "secret_id": open(sys.argv[2]).read().strip()}))' \
+      "$keys/openbao-snapshot-box-role-id" "$keys/openbao-snapshot-box-secret-id" |
+      curl -sS --fail-with-body --cacert "$cacert" -X POST --data @- "$addr/auth/approle/login" |
+      python3 -I -c 'import json,sys; print(json.load(sys.stdin)["auth"]["client_token"])') && [[ -n $token ]] ||
+      { echo "secrets-store: AppRole snapshot-box did not sign in" >&2; exit 1; }
+    ok=1
+    # A mark inside the snapshot: kv/<env>/snapshot-mark holds this snapshot's own time, which both restores
+    # read back to prove the data came back. Not a secret.
+    curl -sS --fail-with-body --cacert "$cacert" -H @- -X POST --data "{\"data\": {\"taken\": \"$stamp\"}}" \
+      "$addr/kv/data/$env/snapshot-mark" -o /dev/null <<<"X-Vault-Token: $token" || ok=0
+    [[ $ok == 1 ]] && { curl -sS --fail-with-body --cacert "$cacert" -H @- "$addr/sys/storage/raft/snapshot" \
+      -o "$out.part" <<<"X-Vault-Token: $token" || ok=0; }
+    curl -sS --cacert "$cacert" -H @- -X POST "$addr/auth/token/revoke-self" -o /dev/null <<<"X-Vault-Token: $token" || true
+    [[ $ok == 1 && -s $out.part ]] || { rm -f "$out.part"; echo "secrets-store: snapshot failed or empty" >&2; exit 1; }
+    mv "$out.part" "$out"
+    echo "$cluster" > "$out.cluster"
+    rotate "$dir" "$keep"
+    echo "secrets-store: snapshot $(basename "$out"), $(stat -c %s "$out") bytes"
+    ;;
   rotate)
     [[ $# -eq 3 && $3 =~ ^[1-9][0-9]*$ ]] || { echo "usage: secrets-store-snapshots.sh rotate DIR KEEP" >&2; exit 2; }
-    dir=$2 keep=$3
-    find "$dir" -maxdepth 1 -type f -name 'raft-*.snap' -printf '%f\n' | sort -r | tail -n +"$((keep + 1))" |
-      while read -r f; do rm -f -- "${dir:?}/$f" "${dir:?}/$f.cluster"; done
+    rotate "$2" "$3"
     ;;
   keep)
     [[ $# -eq 4 && -n $4 ]] || { echo "usage: secrets-store-snapshots.sh keep DIR KEPT CLUSTER" >&2; exit 2; }
@@ -35,5 +73,5 @@ case ${1:-} in
     done < <(find "$dir" -maxdepth 1 -type f -name 'raft-*.snap' -printf '%f\n' | sort)
     echo "$moved"
     ;;
-  *) echo "usage: secrets-store-snapshots.sh rotate DIR KEEP | keep DIR KEPT CLUSTER" >&2; exit 2 ;;
+  *) echo "usage: secrets-store-snapshots.sh take ADDR CACERT KEYS DIR KEEP ENV | rotate DIR KEEP | keep DIR KEPT CLUSTER" >&2; exit 2 ;;
 esac
