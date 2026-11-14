@@ -5,9 +5,9 @@ kind: manual
 trigger: each time a PR's head has CI green, the reviewer's clearance and the council's three passes (D-0042)
 runner: an agent session with the repository's GitHub tools, or the orchestrator's session if a session's safety check refuses the start
 outcome: the PR is squash-merged at the head that was passed, and the run summary names the PR, the head, the merge commit and the two message ids
-needs: D-0042 accepted and `.github/workflows/merge.yml` on `main`
+needs: D-0042 accepted, `.github/workflows/merge.yml` on `main`, the agent box's runner registered, and the box's role applied from the Mac once with D-0042 rule 4's changes
 private-values: []
-files: [.github/workflows/merge.yml, .github/merge/verdict.py, .github/hosts-check/tests/test_merge_verdict.sh]
+files: [.github/workflows/merge.yml, hosts/ansible/roles/agent_box/files/runner-job-started.sh, hosts/ansible/roles/agent_box/files/pr-merge.sh, hosts/ansible/roles/agent_box/defaults/main.yml]
 last-tested: not yet run
 superseded-by:
 ---
@@ -16,7 +16,7 @@ superseded-by:
 
 **Status:** draft. Written 2026-11-14 with the job; the job has not run yet, because a `workflow_dispatch` workflow runs only once it is on `main`.
 
-The job squash-merges one PR that the reviewer and the council passed, after checking the rest itself (D-0042 rule 2). It runs on GitHub's own runner with that run's `GITHUB_TOKEN`, so no lab key and no box is involved.
+The job squash-merges one PR that the reviewer and the council passed (D-0042 rule 2). It runs on the agent box's runner and hands the merge to the box's `pr-merge` wrapper, which checks the head, a clean merge and every check itself, then merges as the project's GitHub App. The workflow's own token is read-only.
 
 ## Before you start
 
@@ -41,12 +41,12 @@ From a cloud session, use the GitHub tools' "run workflow" call (`actions_run_tr
 
 ## Read the result
 
-- **Success:** the run summary lists the PR, the head, the merge commit and the two message ids. Tell the orchestrator the merge commit; it lists the merge in its next report to the owner (D-0042 rule 9).
-- **`NOT GREEN: ...`:** the job printed every reason. Fix the PR or wait for CI, get the new head passed, and start again.
-- **409 from the merge step:** the head moved after the check. The new head needs its own pass.
+- **Success:** the run summary lists the PR, the head, the wrapper's verdict with the merge commit, and the two message ids. Tell the orchestrator the merge commit; it lists the merge in its next report to the owner (D-0042 rule 9).
+- **`NOT GREEN: ...`:** the wrapper printed every reason. Fix the PR or wait for CI, get the new head passed, and start again. If the head moved after the check, GitHub refuses the merge; the new head needs its own pass.
+- **`OWNER: touches ...`:** the box still has the `pr-merge` from before D-0042 rule 4's Mac apply. Tell the orchestrator.
 - **Input refused (exit 2):** an input had the wrong shape. Nothing was read or merged.
 
 ## If it fails
 
 - **The session's safety check refuses the start:** don't retry it there. Ask the orchestrator's session to start it, and add the refusal to this page.
-- **GitHub refuses the merge (403 or 405):** read the run log. If `main`'s ruleset blocks merges made with the `GITHUB_TOKEN`, merges fall back to the box's `pr-merge` wrapper ([Set up the agent box](set-up-the-agent-box.md)), and this page records why.
+- **The job waits for a runner, or the hook refuses it:** the box's runner is offline or not registered, or the job was started from another branch or event. Start it on `main` by `workflow_dispatch` only; see [Set up the agent box](set-up-the-agent-box.md) for the runner.

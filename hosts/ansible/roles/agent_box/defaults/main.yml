@@ -33,6 +33,7 @@ agent_box_wrappers:
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself.
   - name: pr-merge
     args: ["check *", "merge *"]
+    runner: true   # the merge job (.github/workflows/merge.yml, D-0042 rule 2)
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
     args: [up, rebuild, teardown, identity, log, diag]

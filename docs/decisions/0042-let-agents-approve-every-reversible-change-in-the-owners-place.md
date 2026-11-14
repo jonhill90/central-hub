@@ -56,7 +56,7 @@ Chosen option: **1**, because the owner asked to stop approving the lab himself,
 flowchart LR
   pr["PR, CI green"] --> rv["reviewer thread clears the head"]
   rv --> cn["council A, B, C each pass the head"]
-  cn --> job["merge job on main:<br/>head, checks, clean merge,<br/>then squash pinned to the head"]
+  cn --> job["merge job on main, box runner:<br/>pr-merge checks head, checks, clean merge,<br/>then squash pinned to the head"]
   job --> main["main"]
   main --> box["box-apply, limits included"]
   main --> dev["dev apply"]
@@ -64,7 +64,7 @@ flowchart LR
   prod -. "firewall or tailnet, a delete,<br/>a secret, money" .-> tap["one tap from the owner"]
 ```
 
-*In words:* a PR whose CI is green goes to the reviewer thread and then to the three council threads. When all four pass the same head, an agent starts the merge job, which checks the head, the checks and the merge itself before it squash-merges. What lands on `main` is then applied as the other records set out, with no tap, except for the steps in rule 6: firewall and tailnet applies, deletes, secrets and money.
+*In words:* a PR whose CI is green goes to the reviewer thread and then to the three council threads. When all four pass the same head, an agent starts the merge job on the agent box's runner. The box's `pr-merge` wrapper checks the head, the checks and the merge itself before it squash-merges. What lands on `main` is then applied as the other records set out, with no tap, except for the steps in rule 6: firewall and tailnet applies, deletes, secrets and money.
 
 ### Rules
 
@@ -74,23 +74,23 @@ flowchart LR
 
    It takes the place of the owner's go, typed or tapped, wherever these rules asked for it: AGENTS.md rules 1 and 2, D-0001's statuses, D-0031 rules 3 and 4, D-0034, D-0035 rule 3(b) and (c), D-0036 rule 6 and D-0041 rule 6. Rule 6 below is the exception.
 2. **The merge job.** `.github/workflows/merge.yml` merges a PR that has the agents' pass.
-   - It runs only by `workflow_dispatch`, only from `main`, on GitHub's own runner, with that run's `GITHUB_TOKEN` and only the rights a merge needs: contents and pull requests write, checks and statuses read. It holds no lab key.
+   - It runs only by `workflow_dispatch`, only from `main`, on the agent box's runner, whose job-started hook refuses any other workflow, branch or event. Its own token is read-only (Activation gate item 3).
    - Its inputs are the PR number, the full head, and the message ids of the reviewer's clearance and of the council's passes.
-   - It checks itself, and refuses otherwise:
-     - the PR is open, not a draft, and targets `main`;
+   - It hands the merge to the box's `pr-merge` wrapper, which merges as the project's GitHub App with the key kept inside the wrapper (D-0031). The wrapper checks itself, and refuses otherwise:
+     - the PR is open and not a draft;
      - its head is the one named;
      - GitHub reports a clean merge;
      - every check on that head has completed and passed or was skipped, and at least one ran;
      - fewer than 100 files changed.
-   - It squash-merges pinned to that head, and prints the PR, the head, the merge commit and the two message ids in its run summary.
+   - It squash-merges pinned to that head, and the run summary shows the PR, the head, the wrapper's verdict and merge commit, and the two message ids.
    - It can't read the project's chat, so it can't check the two message ids. The agent that starts it checks them first, and the ids stay in the log.
-   - The box's `pr-merge` wrapper stays for the same checks; it is no longer the only way.
+   - No session's safety check stands in this path, because a runner job is not a session.
 3. **Records and standards.** An agent may set a record to `accepted`, `rejected` or `parked`, or a standard to `active`, with the agents' pass, the same way the owner did:
    - the proposal merges first, or the pass names the head that holds it (D-0001);
    - the acceptance PR changes only `status`, `date` and `accepted-evidence`, with `approved-by: agents`, `approval-ref` the orchestrator's message that records the pass, and `approval-names` naming the PR and head;
    - the reviewer compares the accepted text with the passed head, as D-0001 asks.
 4. **The box's limits.** A change to a limit (D-0036 rule 3) that merged with the agents' pass is applied by `box-apply` on the box, with no apply from the Mac.
-   - The change to `box-apply` that allows this is itself a limit change. It is the last one applied from the Mac, and the owner's accept of this record is its go.
+   - The changes that set this up are themselves limit changes, so they are the last ones applied from the Mac, together, with the owner's accept of this record as their go: `box-apply` applying limit changes; the runner hook and the wrapper list letting the runner start `pr-merge` for the merge job; and `pr-merge` no longer stopping on records, standards and `AGENTS.md`, which rule 3 moves to the agents' pass. The box's runner is registered as D-0041 rule 2 says.
    - `box-apply` still logs each limit file that changed, with the commit.
    - The keys stay in the box's own key folders, as now.
 5. **Production and cloud applies.** Dev is the dev guests, VMs 250 to 257, and the dev secrets store, VMs 550 to 599 (D-0038 rule 2; central-hub #276). The production secrets store, VM 500, is production. A production run (D-0035) or a production or cloud apply (D-0041) needs no tap, apart from rule 6:
@@ -106,24 +106,24 @@ flowchart LR
 8. **The owner's no.** A message from the owner that says no, stop or revert about a change wins at once. Agents stop starting jobs for it, and open a revert PR or run the layer's way back. A revert goes through the same pass and job.
 9. **Logs.** The merge job's summary is public on GitHub for at most 90 days, so it holds only the PR, the heads and the message ids. The orchestrator lists every merge and apply made under this record in its next report to the owner.
 10. **Unchanged.** Never enable auto-merge. No workflow on `pull_request_target`, `issue_comment` or `issues` that runs an agent or touches secrets. No secrets or private names in this repository. AGENTS.md rules 3 to 6 stand.
-11. **Changing this record.** A change that narrows this record, or adds a check to the merge job, needs the agents' pass, like any other change. A change that removes a step from rule 6, or drops or loosens a check in `merge.yml` or `.github/merge/verdict.py`, is itself a rule 6 step and needs the owner's tap. Every change to either is listed in the orchestrator's report.
+11. **Changing this record.** A change that narrows this record, or adds a check to the merge job, needs the agents' pass, like any other change. A change that removes a step from rule 6, or drops or loosens a check in `merge.yml`, the runner hook or `pr-merge`, is itself a rule 6 step and needs the owner's tap. Every change to either is listed in the orchestrator's report.
 
 ### Consequences
 
 - Good: the owner stops typing and tapping for merges, acceptances, box changes and production and cloud applies. He keeps one tap for firewall and tailnet applies, deletes, secrets and money.
 - Good: each approval names a reviewer's and a council's message, and the merge job's own checks don't rest on the caller.
-- Good: merges made by the job show as GitHub's Actions bot in the PR's history, apart from the owner's own merges.
+- Good: merges made by the job show as the project's GitHub App in the PR's history, and each has a run on GitHub that names its pass.
 - Bad: agents approve agents' work, and all four checkers are the same kind of model, so they can share a blind spot. Compensating controls: four separate threads, each told to look for what is missing; the four-check rule before any "supported" or "not supported" claim; the public run log; the owner's no at any time (rule 8); every merge can be reverted and every lab layer rebuilt from code.
 - Bad: the merge job can't check the reviewer's and the council's messages. An agent could start it with made-up ids. Compensating controls: the ids are in the public log and the orchestrator's report, so a made-up one shows; the job checks everything GitHub can tell it. This is the same gap D-0035 and D-0041 accept for card taps.
 - Bad: the merge job's checks live in this repository, so a PR can change them (Activation gate item 2 is still open). Compensating controls: a change that drops or loosens a check, or removes a step from rule 6, needs the owner's tap (rule 11); the job runs `main`'s copy, never a PR's; every change to it is in the orchestrator's report.
 - Bad: a production or cloud apply now runs without the owner seeing its plan first. A wrong apply can break the lab until it is rebuilt. The owner gave his reason at 07:44:46 UTC: the lab is greenfield and holds no personal data or anything of value. If that stops being true, this record is revisited. Compensating controls: dev first for every layer that has a twin; the saved plan and the council's pass for those that don't; rule 6 for firewall, tailnet, deletes, secrets and money; the restore checks of D-0035 rule 5 before any teardown.
 - Bad: rule 7's steps still need the owner in person.
-- Neutral: merges made with the run's `GITHUB_TOKEN` start no workflow on the push to `main`. No workflow here runs on a push today (evidence, finding 4).
+- Bad: the merge job depends on the agent box and its runner. If the box is down, merges wait, or fall back to the owner's own merge on GitHub.
 - Neutral: the Mac and its guard are no longer in any approval path, except the one apply in rule 4.
 
 ### Confirmation
 
-- The first docs-only PR merged through the job shows GitHub's Actions bot as the merger, a merge commit signed by GitHub, and the run summary of rule 2.
+- The first docs-only PR merged through the job shows the project's App as the merger, a merge commit signed by GitHub, and the run summary of rule 2.
 - A cloud session starts the job with its GitHub tools. If its safety check refuses that, the orchestrator's session starts it, and the refusal is written into the runbook.
 - The first box limit change merged under this record is applied by `box-apply` with no apply from the Mac.
 - The first production apply under this record logs the pass's message id instead of a card's.

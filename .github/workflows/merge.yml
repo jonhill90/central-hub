@@ -1,9 +1,11 @@
 # The merge job (D-0042 rule 2). An agent starts it with workflow_dispatch on main, after the
-# reviewer cleared the PR's head and the council passed it. The job checks the rest itself: the
-# head is the one named, GitHub reports a clean merge, and every check on that head passed. Then it
-# squash-merges pinned to that head. It runs on GitHub's own runner with this run's GITHUB_TOKEN,
-# holds no lab key, and never enables auto-merge. No pull_request_target, issue_comment or issues
-# trigger (AGENTS.md rule 5). Inputs reach the shell only through env, never inside the script text.
+# reviewer cleared the PR's head and the council passed it. It runs on the agent box's runner and
+# hands the merge to the box's `pr-merge` wrapper, which checks the head, a clean merge and every
+# check on that head itself, then squash-merges pinned to that head as the project's GitHub App.
+# The App's key stays inside the wrapper; this workflow's own token is read-only (Activation gate
+# item 3). The box's job-started hook refuses any other workflow, branch or event. Never enables
+# auto-merge. No pull_request_target, issue_comment or issues trigger (AGENTS.md rule 5). Inputs reach
+# the shell only through env, never inside the script text.
 # How to start it: docs/runbooks/merge-a-pr-through-the-merge-job.md
 name: merge
 on:
@@ -25,26 +27,20 @@ on:
         description: "message id that records the council's three passes of this head (cmsg_...)"
         required: true
         type: string
-permissions: {}
+permissions:
+  contents: read
 concurrency:
   group: merge
   cancel-in-progress: false
 jobs:
   merge:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, central-hub-box]
     timeout-minutes: 10
-    permissions:
-      contents: write
-      pull-requests: write
-      checks: read
-      statuses: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Check the inputs
+      - name: Check the inputs, then merge through the box's wrapper
         env:
+          REPO: ${{ github.repository }}
           PR: ${{ inputs.pr }}
           HEAD_SHA: ${{ inputs.head_sha }}
           REVIEW_REF: ${{ inputs.review_ref }}
@@ -54,40 +50,13 @@ jobs:
           [[ $HEAD_SHA =~ ^[0-9a-f]{40}$ ]] || { echo "head_sha must be the full 40-character head"; exit 2; }
           [[ $REVIEW_REF =~ ^cmsg_[A-Za-z0-9]{10,64}$ ]] || { echo "review_ref must be a message id"; exit 2; }
           [[ $COUNCIL_REF =~ ^cmsg_[A-Za-z0-9]{10,64}$ ]] || { echo "council_ref must be a message id"; exit 2; }
-      - name: Check the pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR: ${{ inputs.pr }}
-          HEAD_SHA: ${{ inputs.head_sha }}
-        run: |
-          work=$(mktemp -d)
-          # GitHub works out mergeable in the background, so a fresh read can say null; read again.
-          for try in 1 2 3 4 5; do
-            gh api "repos/$REPO/pulls/$PR" > "$work/pr.json"
-            python3 -I -c 'import json,sys; sys.exit(json.load(open(sys.argv[1])).get("mergeable") is None)' "$work/pr.json" && break
-            sleep $((try * 5))
-          done
-          gh api "repos/$REPO/pulls/$PR/files?per_page=100" > "$work/files.json"
-          gh api "repos/$REPO/commits/$HEAD_SHA/check-runs?per_page=100" > "$work/checks.json"
-          gh api "repos/$REPO/commits/$HEAD_SHA/status" > "$work/status.json"
-          python3 -I .github/merge/verdict.py "$HEAD_SHA" "$work"
-      - name: Squash-merge pinned to the head
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR: ${{ inputs.pr }}
-          HEAD_SHA: ${{ inputs.head_sha }}
-          REVIEW_REF: ${{ inputs.review_ref }}
-          COUNCIL_REF: ${{ inputs.council_ref }}
-        run: |
-          # GitHub refuses (409) if the head moved after the check.
-          merged=$(gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f merge_method=squash -f sha="$HEAD_SHA" --jq .sha)
-          # The public summary: no secret and no private name (AGENTS.md rule 4).
+          # The wrapper prints its verdict and, on a merge, the merge commit. No secret, no private name.
+          out=$(/usr/local/bin/pr-merge merge "$REPO" "$PR" "$HEAD_SHA")
+          echo "$out"
           {
-            echo "### Merged PR #$PR"
+            echo "### PR #$PR"
             echo "- head: \`$HEAD_SHA\`"
-            echo "- merge commit: \`$merged\`"
+            echo "- wrapper: $out"
             echo "- reviewer's clearance: \`$REVIEW_REF\`"
             echo "- council's passes: \`$COUNCIL_REF\`"
           } | tee -a "$GITHUB_STEP_SUMMARY"
