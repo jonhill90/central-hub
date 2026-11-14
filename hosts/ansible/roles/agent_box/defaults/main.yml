@@ -47,6 +47,12 @@ agent_box_wrappers:
     args: [plan, "apply *", log]
     session_args: [plan, log]   # a session cannot apply; only the workflow's runner can (D-0041 rules 2 and 3)
     runner: true
+  # The tailnet policy file's pipeline job (D-0041, D-0046 rule 4): the same shape as tailnet-stack, for
+  # hosts/terraform/home/tailnet-policy, which until now only the owner's Mac applied.
+  - name: tailnet-policy
+    args: [plan, "apply *", log]
+    session_args: [plan, log]   # a session cannot apply; only the workflow's runner can
+    runner: true
   # The VPS apps host (D-0046): bootstrap once as root, then apply and secrets as user deploy through the VPS's
   # own vps-apply. Only the workflow lab-vps-host.yml runs the changing actions; a session may read only.
   - name: vps-host

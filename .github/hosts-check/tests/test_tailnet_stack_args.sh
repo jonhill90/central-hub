@@ -3,10 +3,11 @@
 #   1. no argument, an unknown action, extra arguments after plan or log.
 #   2. apply without the card ID and plan hash, with a card ID that is not cmsg_..., with a hash that is not
 #      12 lowercase hex digits, with a hash of another length, or with extra arguments.
-# Usage: .github/hosts-check/tests/test_tailnet_stack_args.sh   (needs bash)
+# Usage: .github/hosts-check/tests/test_tailnet_stack_args.sh [tailnet-stack|tailnet-policy]   (needs bash)
+# tailnet-policy.sh has the same shape, so the same checks run on it.
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
-w=$root/hosts/ansible/roles/agent_box/files/tailnet-stack.sh
+w=$root/hosts/ansible/roles/agent_box/files/${1:-tailnet-stack}.sh
 fail=0
 refuse() { # description, arguments...
   local what=$1; shift
