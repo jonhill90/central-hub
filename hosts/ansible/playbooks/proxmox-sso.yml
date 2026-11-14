@@ -1,0 +1,13 @@
+---
+# Sign-in to the Proxmox web UI through Keycloak on c1 (docs/runbooks/sign-in-to-proxmox-through-keycloak.md).
+# Run after playbooks/k8s-identity.yml has added the proxmox client to realm lab and its secret to the
+# controller's identity values file, and after playbooks/proxmox-cert.yml (the host trusts the lab root).
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-sso.yml --check --diff
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-sso.yml
+- name: Proxmox sign-in through Keycloak
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  roles:
+    - role: proxmox_sso
+      tags: [sso]
