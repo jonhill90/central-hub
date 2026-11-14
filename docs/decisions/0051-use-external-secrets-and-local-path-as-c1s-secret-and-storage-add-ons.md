@@ -52,7 +52,7 @@ Diagram: not applicable. Two independent add-ons with no order between them.
 
 ### Rules
 
-1. **Licences.** External Secrets, Apache-2.0. Local Path Provisioner, Apache-2.0. Both from their upstream projects' own charts or images.
+1. **Licences.** External Secrets, Apache-2.0. Local Path Provisioner, Apache-2.0. Both from their upstream projects' own charts or images. The Local Path Provisioner's helper is BusyBox (`docker.io/library/busybox`), which has its own register row.
 2. **No paid offering.** No commercial External Secrets offering and no SUSE Application Collection build is used.
 3. **Pinned versions** (STD-0003). The local-path images are pinned by digest.
 
