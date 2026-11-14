@@ -3,3 +3,17 @@
 # seeded by hand; none are in git.
 storeName: c1
 sourceNamespace: secret-source
+# The secrets store (proposed D-0038), dev only for now. Set by the root chart from its private
+# values (rootParameters); empty, as on c1, renders no `openbao` store and nothing below.
+openbao:
+  # https://<store>, no path.
+  address: ""
+  # The store's certificate, base64 PEM (dev: the store's own self-signed certificate).
+  caBundle: ""
+  # The store's login for this cluster, and its role (the openbao role's tasks/clients.yml).
+  authPath: jwt-c1
+  role: eso
+  audience: openbao
+  # One non-secret test value the store side writes, read by one ExternalSecret to prove the store
+  # syncs (D-0038 Confirmation 2). Every other ExternalSecret keeps naming store `c1` until then.
+  checkKey: c1/check
