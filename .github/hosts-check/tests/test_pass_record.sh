@@ -31,16 +31,22 @@ H2=$(printf 'b%.0s' $(seq 40)); out=$(bash "$t/pass-record.sh" show jonhill90/ce
 out=$(LANE=builder pr add reviewer jonhill90/central-hub 8 "$H2" $R $T builder); check "a builder record for a builder-written PR exits 2" "$out" "rc=2"
 out=$(LANE=unreadable pr add reviewer jonhill90/central-hub 8 "$H2" $R $T builder); check "a builder record when the lane cannot be read exits 2" "$out" "rc=2"
 out=$(LANE=plan pr add reviewer jonhill90/central-hub 8 "$H2" $R $T builder); check "a builder record for another lane's PR is written" "$out" "rc=0"
+out=$(LANE="Builder lane" pr add reviewer jonhill90/central-hub 8 "$H2" $R $T builder); check "a label that starts with builder in any case is the builder" "$out" "rc=2"
 out=$(LANE=builder pr add reviewer jonhill90/central-hub 9 "$H2" $R $T orchestrator); check "the orchestrator may record for any PR" "$out" "rc=0"
-out=$(pr halt notamsg); check "halt needs a relay ref" "$out" "rc=2"
-out=$(pr halt $R); check "halt sets the flag" "$out" "rc=0"; [[ -f "$t/work/passes/HALT" ]] && echo "ok   the flag file exists" || { echo "FAIL: no flag"; fail=1; }
-out=$(pr resume $R); check "resume clears the flag" "$out" "rc=0"; [[ ! -e "$t/work/passes/HALT" ]] && echo "ok   the flag file is gone" || { echo "FAIL: flag stays"; fail=1; }
+out=$(pr halt notamsg orchestrator); check "halt needs a relay ref" "$out" "rc=2"
+out=$(pr halt $R); check "halt needs a recorder" "$out" "rc=2"
+out=$(pr halt $R builder); check "any lane may halt" "$out" "rc=0"; [[ -f "$t/work/passes/HALT" ]] && echo "ok   the flag file exists" || { echo "FAIL: no flag"; fail=1; }
+out=$(pr resume $R builder); check "resume by the builder exits 2" "$out" "rc=2"; [[ -f "$t/work/passes/HALT" ]] && echo "ok   the flag stays after a refused resume" || { echo "FAIL: flag gone"; fail=1; }
+out=$(pr resume $R orchestrator); check "resume by the orchestrator clears the flag" "$out" "rc=0"; [[ ! -e "$t/work/passes/HALT" ]] && echo "ok   the flag file is gone" || { echo "FAIL: flag stays"; fail=1; }
 [[ $(wc -l < "$t/work/passes/halt.log") == 2 ]] && echo "ok   halt.log has both lines" || { echo "FAIL: halt.log"; fail=1; }
 sed 's|^    \[\[ \$role != owner-tap.*|    true|' "$t/pass-record.sh" > "$t/mut2.sh"
 H4=$(printf 'd%.0s' $(seq 40)); out=$(LANE=plan bash "$t/mut2.sh" add owner-tap jonhill90/central-hub 8 "$H4" $R $T builder 2>&1; echo "rc=$?")
 [[ $out == *"rc=0"* ]] && echo "ok   mutation: without the owner-tap rule a builder records a tap" || { echo "FAIL: the owner-tap mutation did nothing: $out"; fail=1; }
+# Mutation: without the resume rule a builder lifts the halt.
+sed 's|^    \[\[ \$1 == halt .*|    true|' "$t/pass-record.sh" > "$t/mut3.sh"; bash "$t/mut3.sh" halt $R orchestrator > /dev/null 2>&1
+out=$(bash "$t/mut3.sh" resume $R builder 2>&1; echo "rc=$?"); [[ $out == *"rc=0"* ]] && echo "ok   mutation: without the resume rule a builder lifts the halt" || { echo "FAIL: resume mutation did nothing: $out"; fail=1; }
 # Mutation: without the lane rule, the builder-written PR is recorded, so the check above must fail.
-sed 's|\[\[ \$lane != builder \]\] \|\| die|true \|\| die|' "$t/pass-record.sh" > "$t/mut.sh"
+sed 's|\[\[ \${lane,,} != builder\* \]\] \|\| die|true \|\| die|' "$t/pass-record.sh" > "$t/mut.sh"
 H3=$(printf 'c%.0s' $(seq 40)); out=$(LANE=builder bash "$t/mut.sh" add reviewer jonhill90/central-hub 8 "$H3" $R $T builder 2>&1; echo "rc=$?")
 [[ $out == *"rc=0"* ]] && echo "ok   mutation: without the lane rule the builder's own PR is recorded" || { echo "FAIL: the mutation did not change anything: $out"; fail=1; }
 exit $fail

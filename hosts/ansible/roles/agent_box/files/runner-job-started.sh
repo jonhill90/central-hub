@@ -5,7 +5,7 @@
 # redeploy workflow and the tailnet pipeline job), as they are on main, started by hand, and byte for byte the
 # file whose sha256 is listed below. It fetches the file at the run's commit (GITHUB_WORKFLOW_SHA) from the public
 # repository and refuses if it cannot (fail closed). A merged edit to a listed workflow therefore does nothing on
-# the box until a tapped install updates this list. merge.yml is deliberately not listed, so the hook refuses it (it is retired; PR 1b removes the file with the rule 2 amendment).
+# the box until a tapped install updates this list. The merge job is gone: the box's sweep merges (D-0056).
 # A non-zero exit fails the job before any step runs. Installed by the agent_box role, root-owned. Names no private value.
 set -euo pipefail
 
@@ -18,9 +18,7 @@ allowed=(
 )
 # Workflow files that still exist and name the box's label but must not run here. The hook refuses them because they are
 # not listed above; the CI check requires each to exist and to stay unlisted, so deleting one means editing this list.
-retired=(
-  ".github/workflows/merge.yml"
-)
+retired=()
 repo=jonhill90/central-hub
 # GitHub's raw file host for this public repository's own workflow files (not a downloaded component).
 host=raw.githubusercontent.com

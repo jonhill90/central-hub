@@ -23,6 +23,7 @@ RULE11 = [re.compile(p) for p in (
     r"^docs/decisions/0042-.*\.md$", r"^docs/decisions/0034-.*\.md$",
     r"^hosts/ansible/roles/agent_box/files/(runner-job-started\.sh|pr-merge\.sh|pr-merge-verdict\.py|pass-record\.sh)$",
     r"^hosts/ansible/roles/agent_box/templates/pr-merge-sweep\.(service|timer)\.j2$",
+    r"^hosts/ansible/roles/agent_box/defaults/main\.yml$",   # holds the sudo arguments (D-0056 rule 4)
 )]
 MAX_RECORDS = 20
 DROP_TOP = re.compile(r"^[+-](status|date|accepted-evidence):")

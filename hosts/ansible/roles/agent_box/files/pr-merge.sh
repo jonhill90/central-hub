@@ -191,7 +191,7 @@ case $action in
     setup_repo "$full"
     lane=$(gh "$base/pulls/$pr" | python3 -I -c '
 import json, re, sys
-m = re.search(r"^Author-Lane:\s*([a-z0-9-]+)\s*$", json.load(sys.stdin).get("body") or "", re.M)
+m = re.search(r"^Author-Lane:[ \t]*([A-Za-z0-9][A-Za-z0-9 _-]{0,60}?)[ \t]*$", json.load(sys.stdin).get("body") or "", re.M)
 print(m.group(1) if m else "")') || exit 1
     [[ -n $lane ]] || { echo "pr-merge: no Author-Lane line" >&2; exit 1; }
     echo "$lane"

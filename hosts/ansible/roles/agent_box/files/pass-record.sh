@@ -3,7 +3,8 @@
 # Runs as user `keys` through sudo. Installed by the agent_box role; root owns it.
 #   pass-record add ROLE OWNER/REPO PR HEAD RELAY_REF RELAY_TIME RECORDER   append one pass for this exact head
 #   pass-record show OWNER/REPO HEAD                                         print that head's ledger
-#   pass-record halt RELAY_REF | resume RELAY_REF                           set or clear the stop flag the sweep reads first
+#   pass-record halt RELAY_REF RECORDER | resume RELAY_REF RECORDER        set or clear the stop flag the sweep reads first
+#                                                                            (resume: recorder orchestrator only)
 # The ledger is a file per repository and head, so a new head starts empty and no pass carries over. One identity
 # records all four checkers, so a line proves the recorder's word and the relay id it gave, not four separate
 # judgements; the sweep's PR comment lists every line. Everything is checked here and a bad argument writes nothing.
@@ -41,7 +42,7 @@ case ${1:-} in
     if [[ $recorder == builder ]]; then
       # The builder never records a pass for a PR the builder wrote. The PR body is data, so this is a speed bump.
       lane=$("$libexec/pr-merge.sh" lane "$full" "$pr") || die "the PR's author lane could not be read; a builder record is refused"
-      [[ $lane != builder ]] || die "the builder does not record a pass for a PR the builder wrote"
+      [[ ${lane,,} != builder* ]] || die "the builder does not record a pass for a PR the builder wrote"
     fi
     dir=$passes/${full#*/}
     install -d -m 0700 "$passes" "$dir"
@@ -62,12 +63,16 @@ print(json.dumps({"role": role, "repo": full, "pr": int(pr), "head": head, "rela
     [[ -f $f ]] && cat "$f" || echo "pass-record: no ledger for ${3:0:7}"
     ;;
   halt | resume)
-    [[ $# == 2 ]] || die "usage: pass-record $1 RELAY_REF"
+    [[ $# == 3 ]] || die "usage: pass-record $1 RELAY_REF RECORDER"
     ref_ok "$2" || die "RELAY_REF must be a cmsg_ message id"
+    case $3 in orchestrator | builder) ;; *) die "RECORDER must be orchestrator or builder" ;; esac
+    # Only the orchestrator lifts a halt, so a halt it relays from the owner is not undone by another lane's call.
+    # Any session can name itself the orchestrator; this is a name, not proof.
+    [[ $1 == halt || $3 == orchestrator ]] || die "resume is recorded by the orchestrator only"
     install -d -m 0700 "$passes"
-    if [[ $1 == halt ]]; then printf '%s %s\n' "$(now)" "$2" > "$passes/HALT"; else rm -f "$passes/HALT"; fi
-    printf '%s %s %s\n' "$(now)" "$1" "$2" >> "$passes/halt.log"
-    journal "$1 ref=$2"
+    if [[ $1 == halt ]]; then printf '%s %s %s\n' "$(now)" "$2" "$3" > "$passes/HALT"; else rm -f "$passes/HALT"; fi
+    printf '%s %s %s %s\n' "$(now)" "$1" "$2" "$3" >> "$passes/halt.log"
+    journal "$1 ref=$2 recorder=$3"
     echo "pass-record: sweep $1 recorded"
     ;;
   *) die "usage: pass-record add|show|halt|resume ..." ;;

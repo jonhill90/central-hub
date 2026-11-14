@@ -14,7 +14,7 @@ superseded-by:
 
 # Merge a pull request with the box's sweep
 
-**Status:** draft. Written 2026-11-14 with the sweep. Until the owner's tapped install puts it on the box, merges go as they do today. D-0042 rule 2 still names `merge.yml`. The file stays on `main` for now, inert: the runner hook does not list it, so a run of it is refused. Its removal and the rule 2 amendment are PR 1b, which needs the owner's tap.
+**Status:** draft. Written 2026-11-14 with the sweep ([D-0056](../decisions/0056-merge-with-a-sweep-on-the-box-in-place-of-the-merge-job.md), proposed). Until the owner's tapped install puts it on the box, merges go as they do today. This page keeps its old file name because D-0042 links to it.
 
 A cloud session cannot start a GitHub workflow here (the GitHub integration answers 403, measured 2026-11-14), so the merge does not run by dispatch. A timer on the agent box runs `pr-merge.sh sweep` as the keys user every few minutes. It merges a PR only when that PR's exact head holds four recorded passes: the reviewer's clearance and the passes of councils A, B and C. It is not GitHub's auto-merge, and it never passes `--admin`.
 
@@ -32,7 +32,7 @@ pass-record add <role> jonhill90/<repo> <pr number> <40-character head> <relay m
 ```
 
 - `<role>` is one of `reviewer`, `council-a`, `council-b`, `council-c`, `owner-tap`. `<relay message id>` is a `cmsg_` id and `<relay time>` an ISO time like `2026-11-14T13:00:00Z`. A wrong argument exits 2 and writes nothing.
-- The builder lane records only when the orchestrator's session cannot reach the box, and never for a PR the builder wrote (the wrapper reads the PR body's `Author-Lane:` line and refuses a builder record when it says `builder` or cannot be read).
+- The builder lane records only when the orchestrator's session cannot reach the box, and never for a PR the builder wrote (the wrapper reads the PR body's `Author-Lane:` line, any label such as `OpenBao thread`, and refuses a builder record when it starts with `builder` in any case or cannot be read).
 - One identity records all four roles, so a ledger line is the recorder's word and the relay id it gave, not four separate judgements. The sweep posts every line on the PR when it merges, for the owner to check.
 - `pass-record show jonhill90/<repo> <head>` prints a head's ledger.
 
@@ -48,18 +48,18 @@ pr-merge check jonhill90/<repo> <pr number> <40-character head>
 
 - `GREEN`: the sweep will merge it at its next turn.
 - `NOT GREEN: ...`: every reason is printed (a missing role, a failed check, a moved head, a ledger that does not parse). Fix it or wait; a new head needs its own four passes.
-- `OWNER: rule 11 PR ... needs an owner-tap line`: the PR changes a file that guards the merge itself (D-0042 rules 6 and 11, D-0034, the runner hook, `pr-merge.sh`, `pr-merge-verdict.py`, `pass-record.sh`, the sweep's unit files), or a record that supersedes or amends D-0042 or D-0034. The owner's decision card names the step and the commit; the orchestrator records the tap as role `owner-tap` with the card's message id, and the sweep merges it. Only the orchestrator may record that role (the wrapper refuses any other recorder), and the line is its word for a card tap the box cannot see. The owner never clicks merge.
+- `OWNER: rule 11 PR ... needs an owner-tap line`: the PR changes a file that guards the merge itself (D-0042 rules 6 and 11, D-0034, the runner hook, `pr-merge.sh`, `pr-merge-verdict.py`, `pass-record.sh`, the sweep's unit files, the role's `defaults/main.yml`), or a record that supersedes or amends D-0042 or D-0034. The owner's decision card names the step and the commit; the orchestrator records the tap as role `owner-tap` with the card's message id, and the sweep merges it. Only the orchestrator may record that role (the wrapper refuses any other recorder), and the line is its word for a card tap the box cannot see. The owner never clicks merge.
 - A changed record or standard whose content at the head cannot be read is never green (only a PR that removes the file may skip it), and a failed read of it stops the whole evaluation, so a 5xx or rate limit skips the PR until the next turn.
 - A status change to `accepted`, `rejected`, `parked` or `active` is checked too (D-0042 rule 3): `approved-by: agents` for an acceptance, an `approved-commit` with four passes of its own, and the PR's net change equal to the approved commit's apart from the status, date and `accepted-evidence` lines and the index row. If it does not fit, reshape the PR (acceptance as its own PR on top of the passed proposal head) and record passes again.
 
 ## Stop the sweep (D-0042 rule 8)
 
 ```text
-pass-record halt <relay message id>
-pass-record resume <relay message id>
+pass-record halt <relay message id> <orchestrator|builder>
+pass-record resume <relay message id> orchestrator
 ```
 
-While the flag exists, the sweep merges nothing, including a merge it was about to make. Any session can run both, so the flag stops a mistake, not a determined agent; the owner's own stop is `systemctl stop pr-merge-sweep.timer` on the box from the controller.
+While the flag exists, the sweep merges nothing, including a merge it was about to make. The wrapper accepts `resume` only with the recorder `orchestrator`, so a halt the orchestrator relays from the owner isn't lifted by another lane's call. Any session can name itself the orchestrator, so the flag stops a mistake, not a determined agent; the owner's own stop is `systemctl stop pr-merge-sweep.timer` on the box from the controller.
 
 ## What the green checks do not prove
 
