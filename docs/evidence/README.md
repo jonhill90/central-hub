@@ -39,4 +39,5 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0040 | [0040-keep-opnsense-community-edition-as-the-lab-router-and-firewall-for-now.md](0040-keep-opnsense-community-edition-as-the-lab-router-and-firewall-for-now.md) |
 | D-0041 | [0041-run-every-lab-and-cloud-change-through-one-logged-pipeline.md](0041-run-every-lab-and-cloud-change-through-one-logged-pipeline.md) |
 | D-0042 | [0042-let-agents-approve-every-reversible-change-in-the-owners-place.md](0042-let-agents-approve-every-reversible-change-in-the-owners-place.md) |
+| D-0043 | [0043-keep-tailscale-as-a-swappable-stopgap-for-reaching-the-lab.md](0043-keep-tailscale-as-a-swappable-stopgap-for-reaching-the-lab.md) |
 | D-0046 | [0046-run-omniroute-openclaw-and-hermes-agent-on-the-vps-in-rootless-podman-with-no-lab-reach.md](0046-run-omniroute-openclaw-and-hermes-agent-on-the-vps-in-rootless-podman-with-no-lab-reach.md) |
