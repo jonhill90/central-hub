@@ -705,6 +705,16 @@
   when: agent_box_secrets_bundle | length > 0
   tags: [wrappers, secrets_bundle]
 
+# --- The dev secrets store's hourly snapshot off the box (pick 237) -------------------------------------
+
+- name: Send the dev secrets store's snapshots off the box (only when the store's wrapper and the off-box copy are set)
+  ansible.builtin.include_tasks:
+    file: secrets_store_offbox.yml
+    apply:
+      tags: [wrappers, secrets_store_offbox]
+  when: agent_box_secrets_store | length > 0 and agent_box_opnsense_offbox | length > 0
+  tags: [wrappers, secrets_store_offbox]
+
 # --- The lifeline NIC (pick 220) ---------------------------------------------------------------------
 
 - name: Filter and set up the lifeline NIC (only when agent_box_lifeline_interface is set)
