@@ -1,6 +1,6 @@
 # A desktop in the lab for the owner (his words, 2026-11-13 05:04 UTC: to be able to VNC or RDP in and
-# log in to apps by hand). One AlmaLinux 10 VM on VNet dev, cloned from template 9001, running Xfce and
-# xrdp (the desktop role). It holds no lab keys and no agent credentials: what the owner types into it
+# log in to apps by hand). One AlmaLinux 10 VM on VNet dev, cloned from template 9001, running GNOME and
+# its own remote desktop (the desktop role). It holds no lab keys and no agent credentials: what the owner types into it
 # never sits beside the agents' keys. The VM and its ID are agent picks, hosts/AGENT-PICKS.md.
 # The agents' token creates it by cloning into pool desktop (VM.Allocate on /pool/desktop), so its rights
 # survive a teardown, as pool dev's do for the dev rebuild.
