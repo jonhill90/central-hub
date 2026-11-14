@@ -1,0 +1,8 @@
+# The agent_box role writes the real values to /var/lib/agent-box/desktop.json from the private
+# inventory. Made-up values shaped by STD-0001.
+proxmox_node_name = "examplehv01"
+vnet              = "dev"
+vlans_file        = "/var/lib/agent-box/checkouts/desktop/hosts/ansible/inventories/home/group_vars/all/vlans.yml"
+template_vm_id    = 9001
+ssh_public_key    = "ssh-ed25519 AAAA... keys@agentbox"
+desktop = { name = "dalapdemo02", vm_id = 400, address = "10.1.30.91", cores = 2, memory_mb = 4096, disk_gb = 30 }

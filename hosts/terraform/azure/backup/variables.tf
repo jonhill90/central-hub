@@ -75,3 +75,47 @@ variable "reader_app_display_name" {
   type        = string
   default     = "c1-backup-reader"
 }
+
+variable "opnsense_container_name" {
+  description = "Blob container that holds the restic repository of OPNsense's configuration copies from the agent box (RESTIC_REPOSITORY azure:<container>:/opnsense). Its own container, so its role is separate from c1's."
+  type        = string
+  default     = "opnsense-backup"
+
+  validation {
+    condition     = var.opnsense_container_name != var.container_name
+    error_message = "opnsense_container_name must differ from container_name: each backup has its own container."
+  }
+}
+
+variable "opnsense_app_display_name" {
+  description = "Display name of the app registration the agent box signs in as to copy OPNsense's configuration off the box (Storage Blob Data Contributor on the OPNsense container only)."
+  type        = string
+  default     = "opnsense-backup"
+}
+
+variable "opnsense_vault_name" {
+  description = "Key Vault that holds the OPNsense copies' restic password: 3 to 24 letters, digits and hyphens, starting with a letter, unique in all of Azure and part of a public DNS name (<name>.vault.azure.net). Private. No default."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$", var.opnsense_vault_name)) && !strcontains(var.opnsense_vault_name, "--")
+    error_message = "opnsense_vault_name must be 3 to 24 letters, digits and single hyphens, starting with a letter and not ending with a hyphen."
+  }
+}
+
+variable "opnsense_vault_retention_days" {
+  description = "Days a deleted vault or secret can still be brought back (7 to 90). Purge protection is on, so nobody can shorten it."
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.opnsense_vault_retention_days >= 7 && var.opnsense_vault_retention_days <= 90 && floor(var.opnsense_vault_retention_days) == var.opnsense_vault_retention_days
+    error_message = "opnsense_vault_retention_days must be a whole number from 7 to 90."
+  }
+}
+
+variable "opnsense_escrow_role_name" {
+  description = "Name of the custom role that lets the OPNsense app set the password secret and read secrets' metadata, never their values."
+  type        = string
+  default     = "opnsense-backup password escrow"
+}

@@ -34,7 +34,7 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 # playbook's "programmed" wait and smoke test then check it. restore runs after storage made the data
 # disk and before gitops: once Argo CD reads the repo it syncs every app, and local-path then finds
 # each volume's folder already there (TASK-0240, agent pick 205).
-default_stages="vms cluster storage restore gitops apps gateway certs identity ui checks"
+default_stages="vms cluster storage restore gitops secrets apps gateway certs identity ui checks"
 
 die() { echo "rebuild: $*" >&2; exit 1; }
 
@@ -129,6 +129,31 @@ wait_apps() {
   done
 }
 
+# The vms stage returns when the guests exist, not when sshd answers: a fresh VM is still booting
+# (seen 2026-11-13, cluster failed in 0s on "Connection refused"). Waits until every host takes an ssh
+# login (every node, as k8s.yml targets), stopping at the condition or at SSH_TIMEOUT (default 300 s).
+wait_ssh() {
+  (cd "$repo/hosts/ansible" && ansible k8s_nodes -i "$INVENTORY" -m ansible.builtin.wait_for_connection \
+    -a "timeout=${SSH_TIMEOUT:-300}")
+}
+
+# Every ExternalSecret re-read now and Ready, then the pods that mount their Secrets Ready. ESO retries
+# a failed read with a growing backoff, so without the nudge a pod can wait minutes on a Secret whose
+# source was seeded a moment ago. Each wait stops at a condition or at its timeout, never on a sleep.
+wait_secrets() {
+  local timeout=${SECRETS_TIMEOUT:-300} notready
+  kc annotate --request-timeout=60s externalsecrets.external-secrets.io -A --all --overwrite "force-sync=$(date -u +%Y%m%dT%H%M%SZ)" >/dev/null
+  if ! kc wait externalsecrets.external-secrets.io -A --all --for=condition=Ready "--timeout=${timeout}s" >/dev/null; then
+    notready=$(kc get --request-timeout=60s externalsecrets.external-secrets.io -A --no-headers \
+      -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,READY:.status.conditions[0].status | awk '$3 != "True"')
+    echo "ExternalSecrets not Ready after ${timeout}s:"; echo "$notready"
+    return 1
+  fi
+  kc -n alerts rollout status deployment/ntfy "--timeout=${timeout}s" >/dev/null || { echo "ntfy not Ready after ${timeout}s"; return 1; }
+  kc -n monitoring wait pod/alertmanager-kube-prometheus-stack-alertmanager-0 --for=condition=Ready "--timeout=${timeout}s" >/dev/null \
+    || { echo "alertmanager-0 not Ready after ${timeout}s"; return 1; }
+}
+
 checks() {
   local notready pods
   notready=$(kc get nodes --no-headers | awk '$2 != "Ready"')
@@ -161,12 +186,19 @@ run_stage() {
       [ -z "${PRE_VMS_HOOK:-}" ] || bash -c "$PRE_VMS_HOOK"
       tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE"
       tofu_k8s apply -auto-approve -input=false -var-file="$TFVARS" ;;
-    cluster) ap playbooks/k8s.yml ;;
+    cluster) wait_ssh && ap playbooks/k8s.yml ;;
     # The data disks only: Argo CD installs the provisioner and StorageClass (move-local-path-to-argo-cd.md).
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
     gateway) ap playbooks/k8s-gateway.yml ;;
     gitops) ap playbooks/k8s-gitops.yml --tags install,source ;;
-    apps) wait_apps ;;
+    # Seeds namespace secret-source from SECRET_SOURCE_FILE (docs/runbooks/seed-secret-source.md) after
+    # Argo CD made it and before apps wait on the ExternalSecrets that read it. Unset: skipped.
+    secrets)
+      if [ -z "${SECRET_SOURCE_FILE:-}" ]; then echo "no SECRET_SOURCE_FILE set: secrets skipped"; return 0; fi
+      [ -s "$SECRET_SOURCE_FILE" ] || { echo "SECRET_SOURCE_FILE is missing or empty"; return 1; }
+      ap playbooks/k8s-secret-source.yml -e "secret_source_file=$SECRET_SOURCE_FILE" ;;
+    # The ExternalSecret wait is dev only: it annotates every ExternalSecret, which a prod run doesn't need.
+    apps) wait_apps && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
     certs) ap playbooks/k8s-certs.yml ;;
     identity) ap playbooks/k8s-identity.yml ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;

@@ -3,13 +3,17 @@
 # (hosts/rebuild-k8s.sh, docs/runbooks/rebuild-k8s-layer-with-one-command.md) from the agent box.
 # It runs as user `keys` through sudo, so the session that asks for it never sees the Proxmox
 # token, the node SSH key or the dev inventory. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|log|diag
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
 # Dev only: the env file below fixes ENV_NAME=dev and the dev VM range 250-257, and rebuild-k8s.sh
 # refuses a tfvars whose VM IDs fall outside it or whose node_vnet isn't "dev". Only code on main
 # runs with the keys; there is no way to name another branch.
 # log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can
 # quote the realm and the nodes' output). It takes no argument and reads no other file.
+# diag: read-only look at the dev cluster, for a failed apps stage: the Argo CD applications' sync and
+# health, the newest events in the alerts and monitoring namespaces, pods that are not running, and
+# the monitoring pods and volume claims. Fixed commands, no argument, no write, no Secret read; it
+# uses the inventory the last run made and does not touch the checkout or the run lock.
 set -euo pipefail
 umask 077
 
@@ -26,7 +30,8 @@ case ${1:-} in
   up) extra=() ;;
   rebuild) extra=(--teardown) ;;
   teardown) extra=(--only teardown) ;;
-  *) echo "usage: rebuild up|rebuild|teardown" >&2; exit 2 ;;
+  diag) extra=() ;;   # handled below, before anything is changed
+  *) echo "usage: rebuild up|rebuild|teardown|log|diag" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -40,9 +45,30 @@ nodekey=$keys/rebuild-node-key
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/rebuild-dev TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
-# Rebuilt dev VMs get new SSH host keys, and the inventory's accept-new setting refuses a changed key.
-# This file only holds keys learned from earlier dev runs, so each run starts without it.
-rm -f -- "$envdir/known_hosts"
+
+if [[ ${1:-} == diag && $# -eq 1 ]]; then
+  [[ -f $inventory/hosts.yml ]] || { echo "rebuild: no dev inventory yet; run rebuild up first" >&2; exit 1; }
+  diag_kc() {
+    # Its own known_hosts file: a diag must never write host keys into the file a running rebuild uses.
+    ansible 'k8s_control_plane[0]' -i "$inventory/" -b -m ansible.builtin.command \
+      -e "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$work/state/diag_known_hosts'" \
+      -a "kubectl --kubeconfig /etc/kubernetes/admin.conf $*" 2>&1 | sed -E '1{/ \| (CHANGED|SUCCESS|FAILED)/d}' | cut -c1-300 || true   # one failing kubectl must not skip the sections after it (set -e, pipefail)
+  }
+  mkdir -p "$work/state"
+  rm -f -- "$work/state/diag_known_hosts"   # the nodes' host keys change with every rebuild
+  echo "== argocd applications"
+  diag_kc -n argocd get applications.argoproj.io -o 'custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,HEALTH_MESSAGE:.status.health.message,CONDITIONS:.status.conditions[*].message'
+  for ns in alerts monitoring; do
+    echo "== newest events, namespace $ns"
+    diag_kc -n "$ns" get events --sort-by=.lastTimestamp | tail -n 25
+  done
+  echo "== pods not Running or Completed, all namespaces"
+  diag_kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
+  echo "== monitoring pods and volume claims"
+  diag_kc -n monitoring get pods -o wide
+  diag_kc -n monitoring get pvc
+  exit 0
+fi
 
 # What the box must hold before this wrapper can run. Each is put there through the keys wrapper
 # or made by the agent_box role; the wrapper says which one is missing instead of failing later.
@@ -67,6 +93,10 @@ flock -n 9 || { echo "rebuild: another rebuild run is going; try again when it e
 git -C "$repo" fetch --quiet origin main
 git -C "$repo" checkout --quiet --detach origin/main
 echo "rebuild: central-hub $(git -C "$repo" rev-parse --short HEAD)"
+# Rebuilt dev VMs get new SSH host keys, and the inventory's accept-new setting refuses a changed key.
+# This file only holds keys learned from earlier dev runs, so each run starts without it (after the lock,
+# so a refused second call can't delete it under a run that is going).
+rm -f -- "$envdir/known_hosts"
 
 # The inventory that comes from the Mac reaches the nodes through a jump over root SSH to the
 # Proxmox host. The box never holds root on the hypervisor, and its own network reaches the dev VLAN,
@@ -87,12 +117,31 @@ if [[ ! -s $encfile ]]; then
   (umask 077; head -c 32 /dev/urandom | base64 > "$encfile")
 fi
 chmod 600 "$encfile"
+# The values the dev cluster's ExternalSecrets read from namespace secret-source (ntfy's, runbook
+# seed-secret-source.md), the box's own and made once with random values (dev only). Never printed.
+ssfile=$keys/rebuild-secret-source.env
+if [[ ! -s $ssfile ]]; then
+  (umask 077
+   {
+     printf 'ntfy-owner-password=%s\n' "$(head -c 64 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 24)"
+     printf 'ntfy-alertmanager-token=tk_%s\n' "$(head -c 128 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 29)"
+     printf 'ntfy-proxmox-token=tk_%s\n' "$(head -c 128 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 29)"
+   } > "$ssfile")
+fi
+# Dev's heartbeat URL (pick 213): Alertmanager mounts Secret alertmanager-heartbeat, so dev needs the
+# line too, or its ExternalSecret never syncs and the apps stage waits forever. Never c1's real URL:
+# dev's pings would keep c1's check up while c1 is down. An .invalid host never resolves (RFC 6761),
+# so dev's heartbeat POST fails harmlessly. Added to a file made before this line existed, too.
+if ! grep -q '^healthchecks-ping-url=' "$ssfile"; then
+  (umask 077; printf '%s\n' 'healthchecks-ping-url=https://hc-ping.invalid/dev-not-a-check' >> "$ssfile")
+fi
+chmod 600 "$ssfile"
 # A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
-# The agents' token creates guests on their /vms/<id> ACL but may not add one to a pool (the module's pool_id is null) and clones only template 9001, the copy of template 9000 on VNet dev
+# The agents' token clones into pool dev, whose ACL survives a teardown, and clones only template 9001, the copy of template 9000 on VNet dev
 # (hosts/terraform/home/bootstrap/agent-access.sh); the Mac's tfvars name 9000, for its root token.
 awk -v pub="$pub" '/^[[:space:]]*node_ssh_public_key[[:space:]]*=/ { print "node_ssh_public_key = \"" pub "\""; next }
   /^[[:space:]]*(template_vm_id|pool_id)[[:space:]]*=/ { next } { print }' "$keys/dev-vms.tfvars" > "$envdir/dev-vms.tfvars"
-printf '%s\n' 'template_vm_id = 9001' 'pool_id = null' >> "$envdir/dev-vms.tfvars"
+printf '%s\n' 'template_vm_id = 9001' 'pool_id = "dev"' >> "$envdir/dev-vms.tfvars"
 grep -q '^node_ssh_public_key = "ssh-ed25519 ' "$envdir/dev-vms.tfvars" || { echo "rebuild: dev-vms.tfvars has no node_ssh_public_key line to set" >&2; exit 1; }
 rm -rf "$inventory"
 install -d -m 700 "$inventory"
@@ -186,7 +235,8 @@ TFVARS=$envdir/dev-vms.tfvars
 TFSTATE=$work/state/dev-vms.tfstate
 TOFU_ENV=$keys/proxmox-dev.env
 INVENTORY=$inventory/
-STAGES="vms cluster storage restore gitops apps gateway checks"
+STAGES="vms cluster storage restore gitops secrets apps gateway checks"
+SECRET_SOURCE_FILE=$ssfile
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'
 ENV

@@ -7,7 +7,7 @@
 
 - name: Install what the wrappers need
   ansible.builtin.package:
-    name: [git, sudo, unzip, openssl, openssh-clients, python3, ansible-core]
+    name: [git, sudo, unzip, bzip2, openssl, openssh-clients, python3, ansible-core]
     state: present
   tags: [users, wrappers]
 
@@ -86,6 +86,15 @@
     shell: /bin/bash
     groups: ""
     append: false
+  tags: [users]
+
+- name: Runner user for the redeploy workflow, no extra groups and no login key (only when agent_box_runner_user is set)
+  ansible.builtin.user:
+    name: "{{ agent_box_runner_user }}"
+    shell: /bin/bash
+    groups: ""
+    append: false
+  when: agent_box_runner_user | length > 0
   tags: [users]
 
 - name: Keys user, a system user that can't log in
@@ -261,6 +270,26 @@
     force: true
   tags: [wrappers]
 
+- name: Download kubectl, checked against its SHA-256
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/v{{ agent_box_kubectl_version }}/bin/linux/amd64/kubectl"
+    dest: "{{ agent_box_libexec_dir }}/downloads/kubectl-{{ agent_box_kubectl_version }}"
+    checksum: "sha256:{{ agent_box_kubectl_sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  tags: [wrappers]
+
+- name: Put kubectl on the path
+  ansible.builtin.file:
+    src: "{{ agent_box_libexec_dir }}/downloads/kubectl-{{ agent_box_kubectl_version }}"
+    dest: /usr/local/bin/kubectl
+    state: link
+    force: true
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  tags: [wrappers]
+
 # The wrappers each clone their own checkout from this one's origin (checkouts/<wrapper>) and move
 # it to origin/main on each run; this one gives the Ansible collections' requirements file.
 - name: The keys user's checkout of central-hub
@@ -342,6 +371,16 @@
   when: agent_box_ci_runner | length > 0
   tags: [wrappers]
 
+- name: The desktop wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/desktop.json"
+    content: "{{ agent_box_desktop | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_desktop | length > 0
+  tags: [wrappers]
+
 - name: Weekly CI runner service and timer (pick 208)
   ansible.builtin.template:
     src: "ci-runner-weekly.{{ item }}.j2"
@@ -411,6 +450,16 @@
     state: started
     daemon_reload: "{{ agent_box_tailnet_cleanup_units is changed }}"
   when: agent_box_tailnet_cleanup | length > 0 and not (ansible_check_mode and agent_box_tailnet_cleanup_units is changed)
+  tags: [wrappers]
+
+- name: The runner's job-started hook, root's (refuses every job but the dev redeploy workflow on main)
+  ansible.builtin.copy:
+    src: runner-job-started.sh
+    dest: "{{ agent_box_libexec_dir }}/runner-job-started.sh"
+    owner: root
+    group: root
+    mode: "0755"
+  when: agent_box_runner_user | length > 0
   tags: [wrappers]
 
 - name: One sudoers line per wrapper, checked by visudo before it is written
@@ -510,3 +559,88 @@
       when: agent_box_tls_check_url | length > 0
       changed_when: false
       tags: [verify]
+
+# --- Prod files from the controller ----------------------------------------------------------
+
+- name: Copy the controller's private lab files to the box (only when agent_box_copy_prod_files is true)
+  ansible.builtin.include_tasks:
+    file: prod_files.yml
+    apply:
+      tags: [prod_files]
+  when: agent_box_copy_prod_files | bool
+  tags: [prod_files]
+
+# --- OPNsense configuration backup (pick 220) -----------------------------------------------------
+
+- name: The OPNsense backup's settings hold
+  ansible.builtin.assert:
+    that:
+      - agent_box_opnsense_backup.host | default('') | length > 0
+      - agent_box_opnsense_backup.keep | default(14) | int >= 3
+      - agent_box_opnsense_backup.keep | default(14) | int <= 60
+    fail_msg: agent_box_opnsense_backup needs host (OPNsense's name or address) and, optionally, keep from 3 to 60.
+    quiet: true
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: The OPNsense backup's script, root-owned
+  ansible.builtin.copy:
+    src: opnsense-backup.sh
+    dest: "{{ agent_box_libexec_dir }}/opnsense-backup.sh"
+    owner: root
+    group: root
+    mode: "0755"
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: The OPNsense backup's settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/opnsense-backup.json"
+    content: >-
+      {{ {'host': agent_box_opnsense_backup.host, 'keep': agent_box_opnsense_backup.keep | default(14) | int} | to_nice_json }}
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: Daily OPNsense backup service and timer
+  ansible.builtin.template:
+    src: "opnsense-backup.{{ item }}.j2"
+    dest: "/etc/systemd/system/opnsense-backup.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_opnsense_backup_units
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: Daily OPNsense backup timer on
+  ansible.builtin.systemd_service:
+    name: opnsense-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_opnsense_backup_units is changed }}"
+  when: agent_box_opnsense_backup | length > 0 and not (ansible_check_mode and agent_box_opnsense_backup_units is changed)
+  tags: [wrappers]
+
+# --- Off-box copy of those configurations (pick 222) ----------------------------------------------------
+
+- name: Copy the OPNsense backups off the box (only when agent_box_opnsense_offbox is set)
+  ansible.builtin.include_tasks:
+    file: opnsense_offbox.yml
+    apply:
+      tags: [wrappers, opnsense_offbox]
+  when: agent_box_opnsense_offbox | length > 0
+  tags: [wrappers, opnsense_offbox]
+
+# --- The lifeline NIC (pick 220) ---------------------------------------------------------------------
+
+- name: Put the lifeline NIC in firewalld's drop zone (only when agent_box_lifeline_interface is set)
+  ansible.builtin.include_tasks:
+    file: lifeline.yml
+    apply:
+      tags: [lifeline]
+  when: agent_box_lifeline_interface | length > 0
+  tags: [lifeline]

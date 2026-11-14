@@ -124,3 +124,84 @@ resource "azurerm_role_assignment" "reader" {
   principal_id         = azuread_service_principal.reader.object_id
   principal_type       = "ServicePrincipal"
 }
+
+# OPNsense's configuration, copied off the agent box (agent pick 222; runbook
+# docs/runbooks/copy-opnsense-backup-off-box.md). The owner's card of 2026-11-14 02:23 UTC: the same
+# storage account, but its own container and its own credential, so c1's backup identity can't touch
+# these copies and this one can't touch c1's. The box signs in as its own app registration with a
+# certificate made on the box (the same script as the nodes, pick 189): no secret here or in state.
+# Its role is on this container only; c1's two apps hold roles on the c1 container only.
+resource "azurerm_storage_container" "opnsense" {
+  name                  = var.opnsense_container_name
+  storage_account_id    = azurerm_storage_account.backup.id
+  container_access_type = "private"
+}
+
+resource "azuread_application" "opnsense" {
+  display_name     = var.opnsense_app_display_name
+  sign_in_audience = "AzureADMyOrg"
+  owners           = [data.azuread_client_config.current.object_id]
+}
+
+resource "azuread_service_principal" "opnsense" {
+  client_id = azuread_application.opnsense.client_id
+  owners    = [data.azuread_client_config.current.object_id]
+}
+
+resource "azurerm_role_assignment" "opnsense" {
+  scope                = azurerm_storage_container.opnsense.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azuread_service_principal.opnsense.object_id
+  principal_type       = "ServicePrincipal"
+}
+
+# The OPNsense copies' restic password, kept off the box (pick 222). The box makes the password itself
+# and writes it straight into this vault, signed in as the OPNsense app, so it never passes a
+# transcript, the repository or tofu state: tofu makes the vault and the role, never the secret.
+# The app may only set the secret and read its metadata (a custom role), so a box that is taken over
+# can't read the password back or delete an earlier version. c1's apps hold nothing here. The owner
+# reads it only for a recovery, by giving his own account Key Vault Secrets User then.
+resource "azurerm_key_vault" "opnsense" {
+  name                          = var.opnsense_vault_name
+  location                      = azurerm_resource_group.backup.location
+  resource_group_name           = azurerm_resource_group.backup.name
+  tenant_id                     = data.azurerm_client_config.current.tenant_id
+  sku_name                      = "standard"
+  rbac_authorization_enabled    = true
+  purge_protection_enabled      = true
+  soft_delete_retention_days    = var.opnsense_vault_retention_days
+  public_network_access_enabled = true
+
+  network_acls {
+    default_action = "Deny"
+    bypass         = "None"
+    ip_rules       = var.allowed_ip_addresses
+  }
+
+  tags = var.tags
+}
+
+resource "azurerm_role_definition" "opnsense_escrow" {
+  name        = var.opnsense_escrow_role_name
+  scope       = azurerm_resource_group.backup.id
+  description = "Set a secret and read secrets' metadata, never their values (central-hub pick 222)."
+
+  permissions {
+    actions = []
+    data_actions = [
+      "Microsoft.KeyVault/vaults/secrets/setSecret/action",
+      "Microsoft.KeyVault/vaults/secrets/readMetadata/action",
+    ]
+  }
+
+  # Azure takes a custom role's assignable scopes down to a resource group only; the assignment below
+  # is on the vault itself.
+  assignable_scopes = [azurerm_resource_group.backup.id]
+}
+
+resource "azurerm_role_assignment" "opnsense_escrow" {
+  scope              = azurerm_key_vault.opnsense.id
+  role_definition_id = azurerm_role_definition.opnsense_escrow.role_definition_resource_id
+  principal_id       = azuread_service_principal.opnsense.object_id
+  principal_type     = "ServicePrincipal"
+}

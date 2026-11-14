@@ -78,6 +78,7 @@ check_ansible() {
     (cd hosts/ansible && ansible-playbook --syntax-check -i localhost, "${playbook#hosts/ansible/}")
   done
   (cd hosts/ansible && ansible-lint --project-dir . -c "$here/ansible-lint.yml" playbooks roles)
+  python3 "$here/check-deny-rules.py"
 }
 
 check_manifests() {
@@ -160,15 +161,19 @@ check_identity() {
 }
 
 check_backup() {
-  # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository.
+  # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository, and
+  # the agent box's off-box OPNsense copy against a local restic repository.
   bash "$here/tests/test_backup.sh"
   bash "$here/tests/test_backup_azure_cert.sh"
+  bash "$here/tests/test_opnsense_offbox.sh"
+  bash "$here/tests/test_opnsense_escrow.sh"
 }
 
 check_scripts() {
   # Warnings and errors fail; style notes do not (an agent pick, STD-0005).
   git ls-files -z -- '*.sh' | xargs -0 shellcheck --severity=warning
   echo "scripts: ShellCheck passed on $(git ls-files -- '*.sh' | wc -l) scripts"
+  bash "$here/tests/test_c1_read.sh"
   actionlint -shellcheck="$(command -v shellcheck)"
   echo "scripts: actionlint passed on $(git ls-files -- '.github/workflows/*.yml' | wc -l) workflows"
 }

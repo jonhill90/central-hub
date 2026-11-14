@@ -13,6 +13,12 @@ argument_specs:
           VM under this name too, so the VM's name in OpenTofu must match it.
       agent_box_user: {type: str, default: claude, description: The user that runs Claude Code sessions.}
       agent_box_keys_user: {type: str, default: keys, description: The user that owns the lab keys.}
+      agent_box_runner_user:
+        type: str
+        default: ""
+        description: >-
+          The user the GitHub Actions runner runs as; sudo only for wrappers marked runner: true.
+          Empty does nothing.
       agent_box_keys_dir: {type: path, default: /etc/agent-keys, description: "Key folder, owned by the keys user, mode 0700; every file in it 0600."}
       agent_box_work_dir: {type: path, default: /var/lib/agent-box, description: "The keys user's home: the central-hub checkout, tofu state and data."}
       agent_box_libexec_dir: {type: path, default: /usr/local/libexec/agent-box, description: Where the root-owned wrappers go.}
@@ -25,8 +31,11 @@ argument_specs:
         options:
           name: {type: str, required: true, description: Wrapper name.}
           args: {type: list, elements: str, required: true, description: The only first arguments sudo allows.}
+          runner: {type: bool, required: false, default: false, description: "Also let the runner user run it (agent_box_runner_user)."}
       agent_box_tofu_version: {type: str, description: OpenTofu version for the wrappers.}
       agent_box_tofu_sha256: {type: str, description: SHA-256 of the linux_amd64 zip of that version.}
+      agent_box_kubectl_version: {type: str, description: "kubectl version for the c1-read wrapper, the one c1 runs."}
+      agent_box_kubectl_sha256: {type: str, description: SHA-256 of that version's linux amd64 kubectl.}
       agent_box_ansible_core_version: {type: str, description: ansible-core version in the rebuild wrapper's virtual environment.}
       agent_box_httpx_version: {type: str, description: httpx version in that environment (the OPNsense modules need it).}
       agent_box_tailscale_version: {type: str, description: Tailscale client version.}
@@ -41,6 +50,59 @@ argument_specs:
         description: "Absolute paths of public CA certificate files on the controller (no folders, no patterns, no keys), each trusted on the box; private."
       agent_box_tls_check_url: {type: str, default: "", description: "HTTPS URL the verify tag fetches with certificate checks on; private; empty skips it."}
       agent_box_managed_settings_extra: {type: dict, default: {}, description: "Other top-level managed settings, merged over the rest."}
+      agent_box_opnsense_backup:
+        type: dict
+        default: {}
+        description: >-
+          Private. host (OPNsense's name or address) and keep (copies kept, 3 to 60, default 14) for the daily
+          configuration backup on the box. Empty does nothing.
+      agent_box_opnsense_backup_daily: {type: str, default: "*-*-* 14:30:00 UTC", description: "systemd OnCalendar for the daily OPNsense backup."}
+      agent_box_opnsense_offbox:
+        type: dict
+        default: {}
+        description: >-
+          Private. account, client_id, tenant_id, app_object_id and vault_url (tofu outputs of hosts/terraform/azure/backup)
+          and, optionally, repository, vault_secret, keep_daily (default 30) and keep_monthly (default 12) for the daily
+          off-box copy of the OPNsense backups (pick 222). Needs agent_box_opnsense_backup. Empty does nothing.
+      agent_box_opnsense_offbox_daily: {type: str, default: "*-*-* 15:00:00 UTC", description: "systemd OnCalendar for the daily off-box copy."}
+      agent_box_opnsense_offbox_cert_days: {type: int, default: 90, description: "Days the box's certificate for the copy app is valid."}
+      agent_box_opnsense_offbox_cert_renew_days: {type: int, default: 30, description: "Days left when the daily run rolls that certificate."}
+      agent_box_az: {type: str, default: az, description: "The Azure CLI on the controller, signed in as agent-azure, for the first certificate upload."}
+      agent_box_restic_version: {type: str, description: "restic version for the off-box copy."}
+      agent_box_restic_sha256: {type: str, description: "SHA-256 of that version's linux_amd64 .bz2."}
+      agent_box_lifeline_interface:
+        type: str
+        default: ""
+        description: >-
+          The box's lifeline NIC inside the VM (for example eth1), put in firewalld's drop zone, on
+          its NetworkManager connection too. Private. Empty does nothing.
+      agent_box_lifeline_allow:
+        type: list
+        elements: dict
+        default: []
+        description: >-
+          Private. What the box may reach over the lifeline NIC, the rest is rejected: entries of
+          address (IPv4) and ports (TCP ports), normally the Proxmox host and 8006.
+        options:
+          address: {type: str, required: true, description: "IPv4 address."}
+          ports: {type: list, elements: int, required: true, description: "TCP ports."}
+      agent_box_copy_prod_files:
+        type: bool
+        default: false
+        description: >-
+          Copy the controller's private lab files to the box in this run (the prod_files tasks).
+          Off by default.
+      agent_box_prod_files_clone:
+        type: str
+        default: ""
+        description: >-
+          Absolute path on the controller of its private clone of this repo, where the git-ignored files
+          are. Private, through the inventory. Empty means the checkout the playbook runs from.
+      agent_box_prod_files:
+        type: list
+        elements: dict
+        default: []
+        description: "The controller files the prod_files tasks copy to the box: from (clone or config), path, dest. Names only are ever printed."
       agent_box_ci_runner:
         type: dict
         default: {}
@@ -49,6 +111,14 @@ argument_specs:
           the runner VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
           vnet, template_vm_id) and the GitHub App and repository it registers with (github_app_id,
           repo_owner, repo_name). No key goes in it. Empty skips the file.
+      agent_box_desktop:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the desktop wrapper, written to <work_dir>/desktop.json (0600, the keys user's):
+          the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name, vnet,
+          template_vm_id), rdp_source (the tailnet connector's address, where RDP arrives from) and optionally admin_user. No key and no
+          password goes in it. Empty skips the file.
       agent_box_tailnet_cleanup:
         type: dict
         default: {}

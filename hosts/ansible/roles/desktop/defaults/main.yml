@@ -1,0 +1,35 @@
+---
+# Every input of this role is listed here. The role stops if the inventory leaves a required one unset.
+#
+# REQUIRED, private, from the inventory: the one address RDP arrives from, which is the tailnet
+# connector's own address on the mgmt VLAN, because the connector rewrites the source (an IPv4 address
+# or CIDR). firewalld accepts 3389/tcp from it and from nowhere else; the port is not open to the VLAN.
+# desktop_rdp_source: "<address>/32"
+#
+# REQUIRED, from the inventory: the login user Ansible reached the VM as (the cloud-init admin user).
+# The role removes its SSH key at the end of the run, so no agent keeps a login on the desktop.
+# desktop_admin_user: admin
+
+# The user the owner signs in as over RDP. It has no sudo and holds no lab keys. Its password is set
+# by the owner at the Proxmox console on first boot and passes through no agent and no file.
+desktop_user: owner
+# The GNOME session and GNOME's own remote desktop, all from the AlmaLinux 10 base repositories (EPEL 10 has
+# no Xfce and no xrdp, measured 2026-11-14). gdm shows the login screen that RDP reaches.
+desktop_packages:
+  - gdm
+  - gnome-shell
+  - gnome-session-wayland-session
+  - gnome-control-center
+  - nautilus
+  - ptyxis
+  - firefox
+  - gnome-remote-desktop
+  - openssl
+# Where the RDP certificate and key are made (the daemon's own folder, from its package).
+desktop_rdp_tls_dir: /var/lib/gnome-remote-desktop
+desktop_rdp_port: 3389
+# The file that marks the owner's password as set. the remote desktop does not start before it exists.
+desktop_password_marker: /var/lib/desktop/password-set
+# Remove the admin user's SSH keys at the end of the run. Later changes are then a rebuild from
+# teardown. Leave true; false is for debugging a VM that is going to be destroyed.
+desktop_lock_admin: true

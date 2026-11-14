@@ -5,9 +5,9 @@ kind: manual
 trigger: once per cluster build, after Argo CD has synced app agent-read; again to rotate the token
 runner: the owner, or an agent lane through the owner's Mac (D-0022), with the owner's go because it reads a token from prod c1
 outcome: the agent box holds a kubeconfig that can read everything on c1 except Secrets, and can change nothing
-needs: app agent-read Synced on c1; SSH to c1's control plane as D-0022 says; the agent box's keys wrapper (put-c1-readonly)
+needs: app agent-read Synced on c1; SSH to c1's control plane as D-0022 says; the agent box's keys wrapper (put-c1-readonly); the agent box role's c1-read wrapper
 private-values: [c1-control-plane, k8s_control_plane_endpoint, c1-readonly.kubeconfig]
-files: [hosts/kubernetes/home/c1/apps/agent-read/, hosts/kubernetes/home/c1/root/values.yaml]
+files: [hosts/kubernetes/home/c1/apps/agent-read/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/agent_box/files/c1-read.sh]
 last-tested: not yet run
 superseded-by:
 ---
@@ -60,9 +60,19 @@ Agents look at c1 from the agent box; they change it only through the repository
 4. Put it on the box: `agent-box-keys.sh put-c1-readonly` (through the Mac lane's wrapper).
    expect: `/etc/agent-keys/c1-readonly.kubeconfig`, owned by `keys`, mode 0600.
 
+5. Prove it from a session on the box. Sessions can't open the kubeconfig; they read c1 through the `c1-read` wrapper, which runs kubectl as `keys` with that file and passes read verbs only (`get`, `describe`, `logs`, `top`, `events`, `explain`, `api-resources`, `api-versions`, `version`, `auth can-i`). It refuses any flag that picks other credentials or another server (`--kubeconfig`, `--context`, `--token`, `--as`, `--server`, `-s` and the like) or makes kubectl open a local file (`-f`, `-k`, `--template`, `*-file=` outputs, `--kuberc`), since as `keys` that file could be a key. If the session's permission rules don't allow it yet, add `Bash(c1-read:*)` to `agent_box_allow` in the private inventory and run the role's `wrappers` and `settings` tags.
+
+   ```sh
+   c1-read get nodes
+   c1-read auth can-i create pods
+   c1-read get pods -A --kubeconfig /etc/agent-keys/c1-readonly.kubeconfig
+   ```
+
+   expect: the nodes list; `no`; then `c1-read: flag --kubeconfig ... is not allowed` and nothing else.
+
 ## Rotate
 
-Delete Secret `agent-read-token` (`ssh <c1-control-plane> sudo kubectl -n agent-read delete secret agent-read-token`). The old token stops working at once; Argo CD makes the Secret again and Kubernetes fills in a new token. Run steps 2 to 4 again.
+Delete Secret `agent-read-token` (`ssh <c1-control-plane> sudo kubectl -n agent-read delete secret agent-read-token`). The old token stops working at once; Argo CD makes the Secret again and Kubernetes fills in a new token. Run steps 2 to 5 again.
 
 ## If it fails
 
