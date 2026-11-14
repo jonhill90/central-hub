@@ -29,4 +29,7 @@ k8s_app_route_proof_client: "{{ groups['k8s_workers'] | first }}"
 # for c1. False in the dev inventory: a dev rebuild uses c1's names while the wildcard still points
 # at prod's Gateway, so a name check there would test prod. The checks that call the Gateway by its
 # address with a Host header stay on either way.
+# false skips the proof below: a dev cluster's names resolve to prod's Gateway, so the dev rebuild passes false and
+# proves the sign-in against its own Gateway address instead (roles/k8s_identity/tasks/signin.yml).
+k8s_app_route_proof: true
 k8s_lab_dns_points_here: true
