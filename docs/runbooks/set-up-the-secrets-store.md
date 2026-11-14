@@ -144,7 +144,7 @@ Each hour, while the box is up, `secrets-store-offbox.sh`:
 1. Skips with `secrets-store-offbox: skipped: no store` and succeeds when the wrapper's OpenTofu state holds no store VM. Dev is often torn down. When the VM is in the state but `sys/health` does not answer 200, the run fails (rule 9).
 2. Runs `secrets-store snapshot`, which signs in with the admin AppRole and copies a snapshot into `/etc/agent-keys/dev/openbao-snapshots/` (keeps 24).
 3. Requires the escrow of pick 222's restic password, as the OPNsense copy does. With no current copy in the vault, nothing is sent.
-4. Uses its own repository, `azure:opnsense-backup:/openbao-dev` (`agent_box_secrets_store_offbox.repository`). It makes it on the first run, only when restic says it does not exist (exit 10); any other error fails the run.
+4. Uses its own repository, `azure:opnsense-backup:/openbao-dev` (`agent_box_secrets_store_offbox.repository`). It refuses the OPNsense repository, a path inside it, or one that holds it, compared the way restic reads an `azure:` path: `azure:c:p`, `azure:c:/p` and `azure:c://p/` are one repository, and `azure:c:/` is the whole container. It makes its repository on the first run, only when restic says it does not exist (exit 10); any other error fails the run.
 5. Backs the snapshot up under tag `openbao-dev`, then forgets past 48 hourly, 14 daily and 6 monthly, grouped by host and tags. The first run from 03:00 UTC each day also prunes, which deletes older snapshots from Azure for good.
 6. Reads the snapshot back and requires the same bytes. It does not open it: only a store with the seal key can, and the weekly drill proves that on the VM.
 
