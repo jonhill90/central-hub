@@ -231,7 +231,7 @@ expect: a root@pam login asks for the TOTP code; `pveum acl list` shows `admins`
 
 Lockout facts so they don't surprise you: 8 wrong TOTP codes disable TOTP until a recovery key or `pveum user tfa unlock root@pam` from the shell [S1-30]. SSH by key ([step 5](#5-ssh-for-you-keys-not-passwords)) is the second way in.
 
-Later, when the IdP exists (sketch, values from the IdP): `pveum realm add <idp> --type openid --issuer-url <url> --client-id <id> --client-key <secret> --username-claim username --autocreate 1 --groups-claim groups` [source: <https://pve.proxmox.com/wiki/User_Management>, "OpenID Connect"; groups flags inferred from "Groups mapping"]. Secrets go in through the secrets layer, never in a repo.
+Daily login through Keycloak is now code: [Sign in to the Proxmox web UI through Keycloak](sign-in-to-proxmox-through-keycloak.md) (role `proxmox_sso`). Proxmox adds `-<realm>` to every group name in the claim, so Keycloak's `lab-admins` lands in `lab-admins-sso`, which the role gives the same Administrator role on `/` as `admins` [source: <https://pve.proxmox.com/wiki/User_Management>, "Groups mapping"]. `admins` stays for accounts made by hand. The client secret stays in the controller's `identity.env`, never in a repo.
 
 #### 5. SSH for you: keys, not passwords
 

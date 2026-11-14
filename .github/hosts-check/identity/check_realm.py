@@ -2,17 +2,28 @@
 """Check a realm imported into the test Keycloak against the JSON it was imported from, through
 Keycloak's own admin tool (kcadm.sh) in the container test_realm.sh started.
 
+- users can't change their user name (Proxmox builds its user names from it, role proxmox_sso);
 - every client is there, with its redirect URIs and its public or confidential type;
-- every user signs in with the password from the import (kcadm logs in to realm lab as that user);
+- every user signs in with the password from the import, through the token endpoint's password grant;
+  a user with an OTP credential (an admin) is refused without a code and signs in with the TOTP code
+  from the imported seed;
 - for every user and every client, Keycloak's example ID token carries the realm's issuer, a
   `groups` claim with the user's groups and a `roles` claim with each group's realm role.
 
 Usage: check_realm.py <lab.json>   (environment: name = the container's name)
 """
+import base64
+import hashlib
+import hmac
 import json
 import os
+import struct
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 HOST = "https://sso.example.com"
 CONTAINER = os.environ["name"]
@@ -36,6 +47,30 @@ def get(path, *query):
     return json.loads(out)
 
 
+def totp(seed, period=30, digits=6):
+    """RFC 6238 with SHA-1, the realm's OTP policy."""
+    key = base64.b32decode(seed + "=" * (-len(seed) % 8))
+    mac = hmac.new(key, struct.pack(">Q", int(time.time()) // period), hashlib.sha1).digest()
+    off = mac[-1] & 15
+    return str((struct.unpack(">I", mac[off:off + 4])[0] & 0x7FFFFFFF) % 10 ** digits).zfill(digits)
+
+
+def sign_in(name, password, code=None):
+    """The password grant on realm lab's token endpoint, as admin-cli; True when a token comes back."""
+    ip = subprocess.run(["docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+                         CONTAINER], capture_output=True, text=True, check=True).stdout.strip()
+    form = {"grant_type": "password", "client_id": "admin-cli", "username": name, "password": password}
+    if code:
+        form["totp"] = code
+    req = urllib.request.Request(f"http://{ip}:8080/realms/lab/protocol/openid-connect/token",
+                                 data=urllib.parse.urlencode(form).encode())
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return "access_token" in json.load(r)
+    except urllib.error.HTTPError:
+        return False
+
+
 def check(ok, message):
     print(("ok   " if ok else "FAIL ") + message)
     if not ok:
@@ -46,6 +81,11 @@ def main(src):
     with open(src, encoding="utf-8") as f:
         realm = json.load(f)
     role_of = {g["name"]: g["realmRoles"] for g in realm["groups"]}
+
+    rc, out, err = kcadm("get", "realms/lab")
+    if rc != 0:
+        raise SystemExit(f"kcadm get realms/lab failed: {err.strip()}")
+    check(json.loads(out).get("editUsernameAllowed") is False, "users can't change their user name")
 
     clients = {}
     for want in realm["clients"]:
@@ -62,11 +102,16 @@ def main(src):
 
     for user in realm["users"]:
         name = user["username"]
-        password = user["credentials"][0]["value"]
-        rc, _, err = kcadm("config", "credentials", "--server", "http://localhost:8080",
-                           "--realm", "lab", "--user", name, "--password", password,
-                           config=f"/tmp/user-{name}.config")
-        check(rc == 0, f"user {name} signs in with the imported password {err.strip()}".rstrip())
+        password = next(c["value"] for c in user["credentials"] if c["type"] == "password")
+        otp = [c for c in user["credentials"] if c["type"] == "otp"]
+        if otp:
+            seed = json.loads(otp[0]["secretData"])["value"]
+            check(not sign_in(name, password), f"user {name} is refused with the password alone")
+            # One retry, in case the code turned over between making and sending it.
+            check(sign_in(name, password, totp(seed)) or sign_in(name, password, totp(seed)),
+                  f"user {name} signs in with the imported password and a TOTP code")
+        else:
+            check(sign_in(name, password), f"user {name} signs in with the imported password")
         found = get("users", f"username={name}", "exact=true")
         if not found:
             check(False, f"user {name} exists")

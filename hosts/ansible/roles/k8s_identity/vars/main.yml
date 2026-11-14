@@ -53,5 +53,11 @@ k8s_identity_password_keys: >-
   | map('regex_replace', '^', 'PASSWORD_') | list }}
 
 # Client secrets, one per confidential client, and every key the values file must hold.
-k8s_identity_client_secret_keys: [GRAFANA_CLIENT_SECRET, ARGOCD_CLIENT_SECRET, JELLYFIN_CLIENT_SECRET]
-k8s_identity_value_keys: "{{ k8s_identity_client_secret_keys + k8s_identity_password_keys }}"
+# PROXMOX_CLIENT_SECRET is in realm lab's Secret on c1 like the others (Keycloak must hold it), and role
+# proxmox_sso reads it from the values file on the controller for the Proxmox host; no app namespace gets a copy.
+k8s_identity_client_secret_keys: [GRAFANA_CLIENT_SECRET, ARGOCD_CLIENT_SECRET, JELLYFIN_CLIENT_SECRET, PROXMOX_CLIENT_SECRET]
+# Each member of k8s_identity_otp_group has a TOTP seed: TOTP_ and the user name as for passwords.
+k8s_identity_totp_keys: >-
+  {{ k8s_identity_users | selectattr('groups', 'contains', k8s_identity_otp_group) | map(attribute='username')
+  | map('upper') | map('regex_replace', '[^A-Z0-9]', '_') | map('regex_replace', '^', 'TOTP_') | list }}
+k8s_identity_value_keys: "{{ k8s_identity_client_secret_keys + k8s_identity_password_keys + k8s_identity_totp_keys }}"

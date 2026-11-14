@@ -29,6 +29,14 @@ k8s_identity_owner_email: ""
 # (lab-admins or lab-viewers). Every user's password is a line in the values file below.
 k8s_identity_extra_users: []
 
+# A second factor for admins (D-0037): every member of this group gets a TOTP seed, a line TOTP_<USER NAME>
+# in the values file (base32, made like the passwords), imported as the user's OTP credential, so the
+# seed survives each delete and import of the realm. Keycloak then asks admins for the code at every
+# sign-in, Proxmox's included. The owner adds the seed to an authenticator app once, by its base32 text.
+k8s_identity_otp_group: lab-admins
+k8s_identity_otp_digits: 6
+k8s_identity_otp_period: 30
+
 # The values file on the controller (the machine that runs Ansible), outside the repository next to
 # c1's encryption key (~/.config/central-hub/): every password and client secret in realm lab, one
 # KEY=value per line.
@@ -71,6 +79,13 @@ k8s_identity_argocd_namespace: argocd
 k8s_identity_jellyfin_name: jellyfin
 k8s_identity_jellyfin_namespace: media
 k8s_identity_jellyfin_provider: keycloak
+
+# Proxmox VE's web UI (role proxmox_sso): its DNS names, the same as proxmox_cert_names. Private, from the
+# inventory. The client allows https://<name> for each, because the UI sends its own origin as the redirect
+# (pve-manager www/manager6/window/LoginWindow.js). Empty: realm lab has no proxmox client. Its secret,
+# PROXMOX_CLIENT_SECRET in the values file, is in realm lab's Secret on c1 like every client secret, and role
+# proxmox_sso reads it on the controller for the Proxmox host.
+k8s_identity_proxmox_hosts: []
 
 # Keycloak's database: PostgreSQL 18.6 (2026-08-13; Keycloak 26.8 tests 18), one pod. c1 has no
 # StorageClass yet (storage is BUILD-PATH S17), so its data sits on a static local volume: a folder
