@@ -83,6 +83,11 @@ check_ansible() {
   bash "$here/tests/test_proxmox_sso.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
+  python3 "$here/check-hook-allowlist.py" .
+  bash "$here/tests/test_runner_hook.sh"
+  bash "$here/tests/test_pr_merge_verdict.sh"
+  bash "$here/tests/test_pass_record.sh"
+  bash "$here/tests/test_pr_merge_sweep.sh"
 }
 
 check_manifests() {

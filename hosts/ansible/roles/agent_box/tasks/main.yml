@@ -496,7 +496,37 @@
   when: agent_box_tailnet_cleanup | length > 0 and not (ansible_check_mode and agent_box_tailnet_cleanup_units is changed)
   tags: [wrappers]
 
-- name: The runner's job-started hook, root's (refuses every job but the dev redeploy workflow on main)
+- name: The merge sweep's verdict script, root's (D-0042 rule 2)
+  ansible.builtin.copy:
+    src: pr-merge-verdict.py
+    dest: "{{ agent_box_libexec_dir }}/pr-merge-verdict.py"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+- name: Merge sweep service and timer (D-0042 rule 2)
+  ansible.builtin.template:
+    src: "pr-merge-sweep.{{ item }}.j2"
+    dest: "/etc/systemd/system/pr-merge-sweep.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_merge_sweep_units
+  when: agent_box_merge_sweep | bool
+  tags: [wrappers]
+
+- name: Merge sweep timer on
+  ansible.builtin.systemd_service:
+    name: pr-merge-sweep.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_merge_sweep_units is changed }}"
+  when: agent_box_merge_sweep | bool and not (ansible_check_mode and agent_box_merge_sweep_units is changed)
+  tags: [wrappers]
+
+- name: The runner's job-started hook, root's (refuses every job but the listed workflows on main, whose file hash it checks)
   ansible.builtin.copy:
     src: runner-job-started.sh
     dest: "{{ agent_box_libexec_dir }}/runner-job-started.sh"

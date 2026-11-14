@@ -1,0 +1,12 @@
+# Managed by the agent_box role (central-hub hosts/ansible). The owner can stop the sweep from the controller with
+# `systemctl stop pr-merge-sweep.timer`; any lane can pause it with `pass-record halt` (D-0042 rule 8).
+[Unit]
+Description=Merge sweep timer
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ agent_box_merge_sweep_interval }}
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
