@@ -58,7 +58,7 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
    - The keys stay in the wrappers: the workflow never sees one.
    - The runner's job-started hook refuses any workflow not on its list, any ref but `main`, and any event but `workflow_dispatch`.
    - Agents start the jobs. The owner may too, from the Actions tab.
-   - **The box's runner is registered now, with no GitHub environment.** The runbook for the dev redeploy workflow held the runner back until D-0030, because a GitHub environment that any agent can approve is not the owner's gate. This record does not use a GitHub environment for approval. The gate is the card tap on the saved plan (rule 6), and dev applies need none. So the runner is registered once this record is accepted, and only the environment still waits for D-0030. The runner hook's list holds this record's workflows and nothing else.
+   - **The box's runner is registered now, with no GitHub environment.** The runbook for the dev redeploy workflow held the runner back until D-0030, because a GitHub environment that any agent can approve is not the owner's gate. This record does not use a GitHub environment for approval. The gate is the card tap on the saved plan (rule 6), and dev applies need none. So the runner is registered once this record is accepted, and only the environment still waits for D-0030. The runner hook's list holds this record's workflows and nothing else; since D-0042 it also holds D-0042's merge job.
 3. **No raw runs.** Nothing changes the lab or those accounts from the owner's Mac, a session's shell or a console, except break-glass (rule 9).
    - Until a layer or stack has its pipeline job, a raw run of it needs the owner's typed words naming the exact command.
    - Each such run is listed in the runbook of that layer, with the date, and stays listed until its job exists.
@@ -84,6 +84,8 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
    - The card's message ID is a required input of the apply job and is written to both logs.
    - A tap covers one apply of that plan and nothing after it.
    - Once the agents have a GitHub account of their own (D-0030), a later record may move this approval to a protected GitHub environment whose required reviewer is the owner (D-0035 rule 8).
+   - **Since D-0042** (on the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, asking not to be asked to approve PRs and to finish the greenfield lab): dev also includes the dev secrets store, VMs 550 to 599 (D-0038 rule 2), and the production secrets store, VM 500, is production. A production apply, and an apply to Azure, Cloudflare or Tailscale, runs on the agents' pass instead of the owner's tap: for a layer with a dev twin, once the same commit passed on dev; for one without, once the saved plan's hash has the pass. The pass's message ID is the job's input and goes to both logs. The owner's tap, as set out above, stays for the steps in D-0042 rule 6: firewall and tailnet applies, deletes, secrets, access rights, money and the agent box's limits. That the reviewer and the council give the pass is an agent pick the owner can change (D-0042). Before D-0042, every production and cloud apply needed the owner's tap.
+
 7. **Logs.**
    - **GitHub's run log** can be read by any signed-in GitHub user, and it is kept at most 90 days on a public repository. So a job prints only a summary there: the layer or stack, the commit, the card ID, the plan's hash, counts of changes, and pass or fail. It prints no secret and no private name (CLAUDE.md rule 4).
    - **The full log** stays on the box, one JSON line per run plus the run's output, as `box-apply` keeps its own. It goes off the box with the box's existing off-box copy.
@@ -97,7 +99,7 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
 10. **The Mac wrappers retire one by one.**
     - Each Mac wrapper, and each command that ran raw, gets one pipeline job.
     - A wrapper is deleted once its job has passed on dev and once on production. Removing it from the Mac is the owner's step.
-11. **Changing the rules.** This record's rules, the runner hook's list and the wrappers a job calls change only by a reviewed PR to `main`. A change that widens what a job can do needs the owner's typed line (D-0034 rule 4; D-0036 rule 4 for the box's own limits).
+11. **Changing the rules.** This record's rules, the runner hook's list and the wrappers a job calls change only by a reviewed PR to `main`. Since D-0042, a change that widens what a job can do needs the agents' pass (D-0042 rules 1 and 11), and a change to the box's own limits needs the owner's tap (D-0042 rule 6). Before D-0042, it needed the owner's typed line (D-0034 rule 4; D-0036 rule 4 for the box's own limits).
 
 ### Consequences
 

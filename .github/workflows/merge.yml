@@ -1,0 +1,62 @@
+# The merge job (D-0042 rule 2). An agent starts it with workflow_dispatch on main, after the
+# reviewer cleared the PR's head and the council passed it. It runs on the agent box's runner and
+# hands the merge to the box's `pr-merge` wrapper, which checks the head, a clean merge and every
+# check on that head itself, then squash-merges pinned to that head as the project's GitHub App.
+# The App's key stays inside the wrapper; this workflow's own token is read-only (Activation gate
+# item 3). The box's job-started hook refuses any other workflow, branch or event. Never enables
+# auto-merge. No pull_request_target, issue_comment or issues trigger (AGENTS.md rule 5). Inputs reach
+# the shell only through env, never inside the script text.
+# How to start it: docs/runbooks/merge-a-pr-through-the-merge-job.md
+name: merge
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "pull request number"
+        required: true
+        type: string
+      head_sha:
+        description: "the full 40-character head the reviewer and the council passed"
+        required: true
+        type: string
+      review_ref:
+        description: "message id of the reviewer's clearance of this head (cmsg_...)"
+        required: true
+        type: string
+      council_ref:
+        description: "message id that records the council's three passes of this head (cmsg_...)"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: merge
+  cancel-in-progress: false
+jobs:
+  merge:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, central-hub-box]
+    timeout-minutes: 10
+    steps:
+      - name: Check the inputs, then merge through the box's wrapper
+        env:
+          REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          REVIEW_REF: ${{ inputs.review_ref }}
+          COUNCIL_REF: ${{ inputs.council_ref }}
+        run: |
+          [[ $PR =~ ^[0-9]{1,6}$ ]] || { echo "pr must be a number"; exit 2; }
+          [[ $HEAD_SHA =~ ^[0-9a-f]{40}$ ]] || { echo "head_sha must be the full 40-character head"; exit 2; }
+          [[ $REVIEW_REF =~ ^cmsg_[A-Za-z0-9]{10,64}$ ]] || { echo "review_ref must be a message id"; exit 2; }
+          [[ $COUNCIL_REF =~ ^cmsg_[A-Za-z0-9]{10,64}$ ]] || { echo "council_ref must be a message id"; exit 2; }
+          # The wrapper prints its verdict and, on a merge, the merge commit. No secret, no private name.
+          out=$(/usr/local/bin/pr-merge merge "$REPO" "$PR" "$HEAD_SHA")
+          echo "$out"
+          {
+            echo "### PR #$PR"
+            echo "- head: \`$HEAD_SHA\`"
+            echo "- wrapper: $out"
+            echo "- reviewer's clearance: \`$REVIEW_REF\`"
+            echo "- council's passes: \`$COUNCIL_REF\`"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
