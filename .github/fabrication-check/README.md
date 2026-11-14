@@ -9,7 +9,7 @@
 | `#N is open`, `#N merged`, `#N closed` | the PR's state at the run's as-of time; a claim of `open` on a PR that has since merged or closed is `stale` |
 | `<repo> main <sha>` | the SHA is on that repository's main |
 | `path:line`, `path lines a-b`, with any "quoted words" on the line | the file and lines exist in the checkout; the quoted words are within three lines of the range |
-| `cmsg_…` with a time, "Jon" or "the owner", and quoted words | only when a message dump is given (`--messages`), as the hourly checkpoint does: the id exists, the time matches to the minute, the quote is in the body, and a body that starts with `[AGENT ·` or says it is not Jon's own words is never counted as Jon's |
+| `cmsg_…` with a time, the owner's name or "the owner", and quoted words | only when a message dump is given (`--messages`), as the hourly checkpoint does: the id exists, the time matches to the minute, the quote is in the body, and a body that starts with `[AGENT ·` or says it is not Jon's own words is never counted as Jon's |
 | a "not supported", "not documented", "not available" or "only in the paid …" sentence | its paragraph names the four rule-21 checks, or says which were not done |
 | `[measured]` | counted only; a re-run is not built yet |
 | `PR #N: approved <time> (<cmsg>), head <sha>; merged as <sha>` in `docs/decisions/CORRECTIONS.md` (`--corrections`) | the merge commit, the head and the approval coming before the merge all match GitHub |

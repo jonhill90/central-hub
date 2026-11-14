@@ -34,7 +34,7 @@ HEAD_A = re.compile(rf"#(\d{{1,6}})\b[^#\n]{{0,60}}?\bhead ({SHA})\b")
 HEAD_B = re.compile(rf"#(\d{{1,6}})\s*\(({SHA})\)")
 ON_MAIN = re.compile(rf"(?:\b([a-z][\w-]*)\s+)?\bmain(?: at)? ({SHA})\b")
 STATE = re.compile(r"#(\d{1,6})\b,?\s+(?:is\s+|was\s+)?\(?(merged|open|closed)\b(?! as)")
-FILE_LINE = re.compile(r"`?((?:\.?[\w.-]+/)*[\w.-]+\.(?:md|py|ya?ml|sh|tf|json|txt|tsv|toml)`?)"
+FILE_LINE = re.compile(r"`?((?:\.{0,2}[\w-]+/){0,12}[\w-]+(?:\.[\w-]+)*?\.(?:md|py|ya?ml|sh|tf|json|txt|tsv|toml)`?)"
                        r"(?::(\d+)(?:-(\d+))?|\s+lines?\s+(\d+)(?:\s*(?:-|to)\s*(\d+))?)")
 QUOTE = re.compile(r"[\"\u201c]([^\"\u201c\u201d\n]{12,200})[\"\u201d]")
 MSG = re.compile(r"\bcmsg_[A-Za-z0-9]{20,}\b")
