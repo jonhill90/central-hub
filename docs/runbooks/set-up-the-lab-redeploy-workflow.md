@@ -14,11 +14,11 @@ superseded-by:
 
 # Run the dev lab redeploy from GitHub Actions on the agent box
 
-**Status:** draft. Written 2026-11-13 from the code in this change; the workflow has not run yet and its runner is not registered (see below). It is the dev slice of D-0035 (proposed): rules 3 and 4 only. The record is not accepted, so nothing here touches prod, and no production wrapper or environment exists.
+**Status:** draft. Written 2026-11-13 from the code in this change; the workflow has not run yet and its runner is not registered (see below). It is a GitHub button for dev runs, which D-0035 (proposed) keeps for later: in its current text, production runs are approved by the owner's card tap in the project chat after dev passes (rule 3), and a GitHub environment is the later step once the agents have their own account (rule 8). Nothing here touches prod, and no production wrapper or environment exists.
 
 ## Not registered until D-0030 is met
 
-The environment `dev-redeploy` and the runner are **not created or registered yet, and the steps below are not to be done yet.** The approval tap is the gate, and today every agent acts as the owner's GitHub account (`jonhill90`), so an approval on `pending_deployments` can't be shown to be the owner's own. A gate any agent can approve is not the owner's gate. D-0035 rule 8 already ties prod to D-0030 (agents with their own accounts), and this dev slice waits on the same condition for the same reason. Until then the code can merge, because with no runner registered the workflow has nothing to run on; it is code at rest.
+The environment `dev-redeploy` and the runner are **not created or registered yet, and the steps below are not to be done yet.** The approval tap is the gate, and today every agent acts as the owner's GitHub account (`jonhill90`), so an approval on `pending_deployments` can't be shown to be the owner's own. A gate any agent can approve is not the owner's gate. D-0035 rule 8 ties any GitHub environment approval to D-0030 (agents with their own accounts), and this dev workflow waits on the same condition for the same reason. Dev runs from the box's `rebuild` wrapper need no approval meanwhile. Until then the code can merge, because with no runner registered the workflow has nothing to run on; it is code at rest.
 
 ## What the workflow does
 
@@ -39,7 +39,7 @@ The runner's user can run only the `rebuild` wrapper, with those five arguments,
 These are repository settings and a registration, so they are the owner's. Do them after the section above is met, in this order. Step 1 comes first because a workflow that names an environment which does not exist makes GitHub create it with no protection.
 
 1. Create the environment `dev-redeploy`: repository Settings, Environments, New environment. Add the owner as required reviewer, tick "Prevent self-review" off (the owner is the only person), and under Deployment branches choose "Selected branches" with `main` only.
-   why: the tap is the approval channel (D-0035 rule 3); a branch limit keeps a branch's copy of the workflow from using it.
+   why: the tap is the approval channel for this workflow (D-0035 rule 8, once D-0030 is met); a branch limit keeps a branch's copy of the workflow from using it.
    expect: the environment lists one required reviewer and one allowed branch.
 
 2. Settings, Actions, General: leave "Fork pull request workflows" at their strictest, and keep the default workflow token read-only.
@@ -51,7 +51,7 @@ These are repository settings and a registration, so they are the owner's. Do th
    why: the hook is the only thing between a workflow on any branch and the runner's sudo.
    expect: the runner shows Idle in Settings, Actions, Runners with the label `central-hub-box`; a throwaway workflow on a branch that asks for the label fails at "Set up job" with `runner-job-started: refused`.
 
-4. Accept D-0035 when the owner is ready; it is what makes prod work possible.
+4. Production runs don't go through this workflow until a later record moves them to GitHub (D-0035 rule 8); until then they are approved by the owner's card tap (D-0035 rule 3).
 
 ## What an agent does on the box
 
@@ -66,5 +66,5 @@ These are repository settings and a registration, so they are the owner's. Do th
 
 ## Not built yet
 
-- The prod environments (`prod-redeploy`, `lab-teardown`) and the per-layer actions behind them. They need prod wrappers on the box and D-0035 accepted, with its preconditions (rule 5: a fresh restic snapshot with a passing restore check, the firewall configuration saved off the box, and the box's own route not depending on what is destroyed).
+- The prod environments (`prod-redeploy`, `lab-teardown`) and the per-layer actions behind them, which wait for D-0035 rule 8. Production runs by card tap need prod wrappers on the box and D-0035 accepted, with its preconditions (rule 5: a fresh restic snapshot with a passing restore check, the firewall configuration saved off the box, and the box's own route not depending on what is destroyed).
 - Capping and logging beyond the wrapper's own run log (rule 6).
