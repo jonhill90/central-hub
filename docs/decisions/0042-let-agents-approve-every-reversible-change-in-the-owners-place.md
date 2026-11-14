@@ -9,7 +9,7 @@ consulted: []
 waits-on: [D-0041]
 supersedes: []
 superseded-by:
-revisit-when: a change approved under this record has to be undone after it harmed the lab, a cloud account or the repository; the owner says a pass was wrong; the agents get a GitHub identity of their own (D-0030) and GitHub can require an approval itself; or a cluster other than c1 reads the repository
+revisit-when: the lab comes to hold personal data or anything of value; a change approved under this record has to be undone after it harmed the lab, a cloud account or the repository; the owner says a pass was wrong; the agents get a GitHub identity of their own (D-0030) and GitHub can require an approval itself; or a cluster other than c1 reads the repository
 ---
 
 # Let the reviewer and the council approve every reversible change in the owner's place
@@ -29,7 +29,8 @@ On 2026-11-14 the owner asked, more than once, to stop typing and tapping approv
 - at 06:31:02 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNmDuqYAAd97e7MWLy7w5j9) he asked when agents would approve these themselves;
 - at 07:36:24 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN1HaQyfWs523TENpj3y4GrB) he asked why he was still pasting approval prompts;
 - at 07:36:52 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNVWniFNwFdxHd6saXpoKLKg) he said the greenfield lab should not need him to type or click anything;
-- at 07:42:15 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNPCDvrtDZGccQzAi27X4YGH) he asked that this be the last thing he types.
+- at 07:42:15 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNPCDvrtDZGccQzAi27X4YGH) he asked that this be the last thing he types;
+- at 07:44:46 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm) he said not to ask him to approve another PR, that he meant the lab for now rather than every PR, and that the lab is greenfield and holds no personal data or anything of value.
 
 Since that morning, every plan, record and done-claim already passes a reviewer thread and a council of three threads before it reaches him. This record makes that pass the approval.
 
@@ -49,7 +50,7 @@ Since that morning, every plan, record and done-claim already passes a reviewer 
 
 ## Decision Outcome
 
-Chosen option: **1**, because the owner asked to stop approving the lab himself, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets, as the owner set out at 07:44:46 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm) with the orchestrator's reading of it, and for spending money, from the project's standing rules. Where in each step the tap falls, and rule 7, are agent picks.
+Chosen option: **1**, because the owner asked to stop approving the lab himself, and option 2 would leave him a tap for every acceptance and every production apply. The owner's messages don't name what keeps a tap. Rule 6 keeps one for firewall and tailnet changes, deletes and secrets, which the project's standing rules already reserve to him and which the orchestrator thread named at 07:46 UTC, and for spending money, which the standing rules also reserve. That list, where in each step the tap falls, and rule 7, are agent picks.
 
 ```mermaid
 flowchart LR
@@ -92,7 +93,7 @@ flowchart LR
    - The change to `box-apply` that allows this is itself a limit change. It is the last one applied from the Mac, and the owner's accept of this record is its go.
    - `box-apply` still logs each limit file that changed, with the commit.
    - The keys stay in the box's own key folders, as now.
-5. **Production and cloud applies.** Dev is the dev guests, VMs 250 to 257, and the dev secrets store, VMs 550 to 599 (central-hub #276). A production run (D-0035) or a production or cloud apply (D-0041) needs no tap, apart from rule 6:
+5. **Production and cloud applies.** Dev is the dev guests, VMs 250 to 257, and the dev secrets store, VMs 550 to 599 (D-0038 rule 2; central-hub #276). The production secrets store, VM 500, is production. A production run (D-0035) or a production or cloud apply (D-0041) needs no tap, apart from rule 6:
    - a layer with a dev twin runs once the same commit passed that layer on dev (D-0035 rule 3(a));
    - a layer with no dev twin (the Proxmox host's own configuration, OPNsense, the tailnet, Azure, Cloudflare and Tailscale) runs once its saved plan's hash has the agents' pass;
    - the log names the pass's message id where it named the card.
@@ -105,7 +106,7 @@ flowchart LR
 8. **The owner's no.** A message from the owner that says no, stop or revert about a change wins at once. Agents stop starting jobs for it, and open a revert PR or run the layer's way back. A revert goes through the same pass and job.
 9. **Logs.** The merge job's summary is public on GitHub for at most 90 days, so it holds only the PR, the heads and the message ids. The orchestrator lists every merge and apply made under this record in its next report to the owner.
 10. **Unchanged.** Never enable auto-merge. No workflow on `pull_request_target`, `issue_comment` or `issues` that runs an agent or touches secrets. No secrets or private names in this repository. AGENTS.md rules 3 to 6 stand.
-11. **Changing this record.** A change to this record or to the merge job needs the agents' pass, like any other change, and is listed in the orchestrator's report.
+11. **Changing this record.** A change that narrows this record, or adds a check to the merge job, needs the agents' pass, like any other change. A change that removes a step from rule 6, or drops or loosens a check in `merge.yml` or `.github/merge/verdict.py`, is itself a rule 6 step and needs the owner's tap. Every change to either is listed in the orchestrator's report.
 
 ### Consequences
 
@@ -114,8 +115,8 @@ flowchart LR
 - Good: merges made by the job show as GitHub's Actions bot in the PR's history, apart from the owner's own merges.
 - Bad: agents approve agents' work, and all four checkers are the same kind of model, so they can share a blind spot. Compensating controls: four separate threads, each told to look for what is missing; the four-check rule before any "supported" or "not supported" claim; the public run log; the owner's no at any time (rule 8); every merge can be reverted and every lab layer rebuilt from code.
 - Bad: the merge job can't check the reviewer's and the council's messages. An agent could start it with made-up ids. Compensating controls: the ids are in the public log and the orchestrator's report, so a made-up one shows; the job checks everything GitHub can tell it. This is the same gap D-0035 and D-0041 accept for card taps.
-- Bad: agents can change this record and the merge job with their own pass (rule 11), so they can widen their own power. Compensating controls: the full pass, the orchestrator's report naming every such change, and the owner's no. The owner may narrow this when accepting, for example by keeping his typed line for changes to this record.
-- Bad: a production or cloud apply now runs without the owner seeing its plan first. A wrong apply can break the lab until it is rebuilt. The owner judged that acceptable on 2026-11-14 at 07:44:46 UTC, because the lab is new and holds no personal data. Compensating controls: dev first for every layer that has a twin; the saved plan and the council's pass for those that don't; rule 6 for firewall, tailnet, deletes, secrets and money; the restore checks of D-0035 rule 5 before any teardown.
+- Bad: the merge job's checks live in this repository, so a PR can change them (Activation gate item 2 is still open). Compensating controls: a change that drops or loosens a check, or removes a step from rule 6, needs the owner's tap (rule 11); the job runs `main`'s copy, never a PR's; every change to it is in the orchestrator's report.
+- Bad: a production or cloud apply now runs without the owner seeing its plan first. A wrong apply can break the lab until it is rebuilt. The owner gave his reason at 07:44:46 UTC: the lab is greenfield and holds no personal data or anything of value. If that stops being true, this record is revisited. Compensating controls: dev first for every layer that has a twin; the saved plan and the council's pass for those that don't; rule 6 for firewall, tailnet, deletes, secrets and money; the restore checks of D-0035 rule 5 before any teardown.
 - Bad: rule 7's steps still need the owner in person.
 - Neutral: merges made with the run's `GITHUB_TOKEN` start no workflow on the push to `main`. No workflow here runs on a push today (evidence, finding 4).
 - Neutral: the Mac and its guard are no longer in any approval path, except the one apply in rule 4.

@@ -65,7 +65,7 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
    - A lab layer passes on dev before production (D-0035 rule 3(a)).
    - The cloud accounts have no dev twin, so their gate is the saved plan.
 6. **How an apply is approved.**
-   - A dev apply needs no tap. Dev means only the dev guests, VMs 250 to 257 (D-0035 rule 3), and the dev secrets store, VMs 550 to 599 (central-hub #276).
+   - A dev apply needs no tap. Dev means only the dev guests, VMs 250 to 257 (D-0035 rule 3), and the dev secrets store, VMs 550 to 599 (D-0038 rule 2; central-hub #276). The production secrets store, VM 500, is production.
    - A layer with no dev twin counts as production: the Proxmox host's own configuration, OPNsense, the tailnet, and the Azure, Cloudflare and Tailscale accounts.
    - A production apply, and every apply to Azure, Cloudflare or Tailscale, runs once it has the agents' pass (D-0042 rule 1): for a layer with a dev twin, once the same commit passed on dev; for one without, once the saved plan's hash has the pass. The pass's message ID is a required input of the apply job and is written to both logs.
    - D-0042 rule 6 keeps the owner's tap on a decision card for firewall and tailnet applies, deletes, secrets and money. That card's question names the repository, the commit, the layer or stack, and the first 12 hex digits of the saved plan's SHA-256; a reviewing agent checks the tap before the job starts (D-0035 rule 3(c)), and the card's message ID is written to both logs. A tap covers one apply of that plan and nothing after it.
