@@ -10,7 +10,9 @@
 # a default route, no DNS, no IPv6, autoconnect, and the drop zone set on the connection itself (so a
 # reconnect or reboot keeps it). cloud-init's network config applies only at first boot, so a NIC added to
 # a running VM would otherwise come up on DHCP in the default zone (measured on the first apply,
-# 2026-11-14). `connection up` also brings the link up. Other profiles on the NIC, such as "Wired connection 1", are deleted.
+# 2026-11-14). `connection up` also brings the link up, and runs last: the order is policy, the lifeline
+# profile, deleting the stale profiles, managed yes, then up, so no leftover DHCP profile ever autoconnects
+# in the default zone. Other profiles on the NIC, such as "Wired connection 1", are deleted.
 # Only runs when agent_box_lifeline_interface is set.
 
 - name: lifeline | The allowed destinations are plain IPv4 addresses and TCP ports
@@ -49,17 +51,6 @@
 
 - name: lifeline | Apply the policy now
   ansible.builtin.meta: flush_handlers
-
-- name: lifeline | Whether NetworkManager manages the NIC
-  ansible.builtin.command: nmcli -g GENERAL.NM-MANAGED device show {{ agent_box_lifeline_interface | quote }}
-  register: agent_box_lifeline_managed
-  changed_when: false
-  check_mode: false
-
-- name: lifeline | The NIC is managed by NetworkManager (a containment may have set it unmanaged)
-  ansible.builtin.command: nmcli device set {{ agent_box_lifeline_interface | quote }} managed yes
-  when: agent_box_lifeline_managed.stdout | trim != 'yes'
-  changed_when: true
 
 - name: lifeline | The connection's settings now, in a fixed order
   ansible.builtin.command: >-
@@ -121,14 +112,25 @@
   changed_when: false
   check_mode: false
 
-- name: lifeline | The connection is up on the NIC
-  ansible.builtin.command: nmcli connection up lifeline
-  when: agent_box_lifeline_nm_now.rc != 0 or agent_box_lifeline_nm_modified is changed or agent_box_lifeline_stale.stdout_lines | length > 0
-  changed_when: true
-
 - name: lifeline | The other profiles are deleted
   ansible.builtin.command: nmcli connection delete {{ item | quote }}
   loop: "{{ agent_box_lifeline_stale.stdout_lines }}"
+  changed_when: true
+
+- name: lifeline | Whether NetworkManager manages the NIC
+  ansible.builtin.command: nmcli -g GENERAL.NM-MANAGED device show {{ agent_box_lifeline_interface | quote }}
+  register: agent_box_lifeline_managed
+  changed_when: false
+  check_mode: false
+
+- name: lifeline | The NIC is managed by NetworkManager (a containment may have set it unmanaged)
+  ansible.builtin.command: nmcli device set {{ agent_box_lifeline_interface | quote }} managed yes
+  when: agent_box_lifeline_managed.stdout | trim != 'yes'
+  changed_when: true
+
+- name: lifeline | The connection is up on the NIC
+  ansible.builtin.command: nmcli connection up lifeline
+  when: agent_box_lifeline_nm_now.rc != 0 or agent_box_lifeline_nm_modified is changed or agent_box_lifeline_stale.stdout_lines | length > 0
   changed_when: true
 
 - name: lifeline | The interface is in the drop zone now
