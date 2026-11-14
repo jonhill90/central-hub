@@ -121,10 +121,10 @@ Pick 238. **The owner's tap first:** a `destroy` or `restore` of the secrets sto
 
 1. `secrets-store snapshot`. It writes `kv/dev/snapshot-mark` with its time, then saves the snapshot and its `.cluster` file.
 2. `secrets-store destroy`. Before it removes the VM, it writes the hold `/var/lib/agent-box/state/secrets-store.rebuilding`.
-3. `secrets-store plan`, `apply` and `configure`. The rebuilt store initializes itself, with a new cluster ID. While the hold exists and the VM is back, the hourly off-box send prints `skipped: store rebuild in progress` and takes no snapshot.
+3. `secrets-store plan`, `apply` and `configure`. The rebuilt store initializes itself, with a new cluster ID. While the hold exists, `secrets-store snapshot` refuses, and, once the VM is back, the hourly off-box send prints `skipped: store rebuild in progress` and takes no snapshot.
 4. `secrets-store restore-rebuilt`. It runs `secrets-store-restore-rebuilt.sh` under the wrapper's lock:
    1. picks the newest snapshot whose `.cluster` names another cluster than the store's current one; one of the rebuilt store, or one with no `.cluster` file, is never picked;
-   2. refuses unless `kv/` holds nothing but `c1/check`, the fixed word `configure` writes;
+   2. refuses unless `kv/` holds nothing but `c1/check`, the fixed word `configure` writes; a listing that answers anything but 200 or 404 refuses too;
    3. tries the plain restore. Only if OpenBao refuses it with "possibly the snapshot is using a different set of unseal keys" does it use the forced one. That text is a Vault user's report, not OpenBao's own (source: [Raft: how to restore from 3-node HA cluster to 1-node DR instance](https://discuss.hashicorp.com/t/raft-how-to-restore-from-3-node-ha-cluster-to-1-node-dr-instance/20572)). If OpenBao words it otherwise, the run stops as `other refusal`, and the text in the script is changed once measured;
    4. waits for `sys/health` 200 and for its own token from before the restore to be refused;
    5. signs in again and reads `kv/dev/snapshot-mark`, which must hold the picked snapshot's time;

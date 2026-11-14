@@ -6,7 +6,8 @@
 #   2. OpenBao takes the plain restore: no forced call.
 #   3. Any other refusal stops the run: no forced call, the hold stays.
 #   4. Only snapshots of the current cluster, or with no .cluster file: refused before any restore.
-#   5. The store holds a key besides c1/check: refused before any restore.
+#   5. The store holds a key besides c1/check: refused before any restore; a listing that answers 403 or 500
+#      refuses too, never counts as empty.
 #   6. The token from before the restore still works: step 5 fails.
 #   7. The mark does not match the snapshot's time: step 6 fails.
 #   8. No token or AppRole ID shows in the output.
@@ -54,9 +55,13 @@ case $path in
       else body='{"auth": {"client_token": "tok-before-secret"}}'; fi
     else code=400; fi ;;
   kv/metadata/*)
+    [[ $MODE == list403 ]] && { code=403; body='{"errors": ["permission denied"]}'; }
+    [[ $MODE == list500 ]] && { code=500; body='{"errors": ["internal error"]}'; }
     p=${path#kv/metadata/}
     keys=$(grep -E "^${p}[^/]+/?$" "$T/kv" 2>/dev/null | sed "s|^$p||" | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
-    if [[ $keys == '[]' ]]; then code=404; body='{"errors": []}'; else body="{\"data\": {\"keys\": $keys}}"; fi ;;
+    if [[ $code == 200 ]]; then
+      if [[ $keys == '[]' ]]; then code=404; body='{"errors": []}'; else body="{\"data\": {\"keys\": $keys}}"; fi
+    fi ;;
   sys/storage/raft/snapshot)
     case $MODE in
       plain) echo restored > "$T/phase"; echo "${data#@}" > "$T/restored"; code=204 ;;
@@ -125,6 +130,14 @@ run keys
 snapset; printf 'c1/\nc1/check\ndev/\ndev/other\n' > "$t/kv"; run keys
 [[ $rc -ne 0 ]] && grep -q '2 empty store FAIL: the store holds kv/dev/other' "$t/out" && ! restored \
   && ok "5. a store holding a key besides c1/check: refused before any restore" || bad "5. rc=$rc $(cat "$t/out")"
+printf 'c1/\nc1/check\n' > "$t/kv"
+
+# 5b
+snapset; printf 'c1/\nc1/check\ndev/\ndev/other\n' > "$t/kv"; run list403
+r403=$rc o403=$(cat "$t/out"); n403=$(grep -c 'raft/snapshot' "$t/calls" || true)
+run list500
+[[ $r403 -ne 0 && $o403 == *"2 empty store FAIL: listing kv/ answered HTTP 403"* && $n403 == 0 && $rc -ne 0 ]] && grep -q 'answered HTTP 500' "$t/out" && ! restored \
+  && ok "5b. a key listing that answers 403 or 500 refuses, never counts as empty" || bad "5b. rc=$r403/$rc $o403 / $(cat "$t/out")"
 printf 'c1/\nc1/check\n' > "$t/kv"
 
 # 6

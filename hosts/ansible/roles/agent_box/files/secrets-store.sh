@@ -182,6 +182,9 @@ recovery() {
 # Copy one Raft snapshot off the store, through the admin AppRole. Fails loudly: never an empty file.
 snapshot() {
   local out token stamp cluster
+  # During a rebuild the store is empty: a snapshot now would write its mark into the fresh store, which
+  # restore-rebuilt's empty-store guard would then refuse, and it would be a snapshot of nothing.
+  [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt first" >&2; exit 1; }
   mkdir -p "$snapshots"
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   out=$snapshots/raft-$stamp.snap

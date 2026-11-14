@@ -5,7 +5,8 @@
 # Guards, each refusing with no change:
 #   1 snapshot          the newest raft-*.snap whose .cluster file names a cluster other than the store's current
 #                       one; a snapshot of the rebuilt store, or one with no .cluster file, is never picked
-#   2 empty store       kv/ holds nothing but c1/check, the fixed word configure writes
+#   2 empty store       kv/ holds nothing but c1/check, the fixed word configure writes; a listing that answers
+#                       anything but 200 or 404 refuses
 #   3 restore           plain first; forced only when OpenBao refuses it with the unseal-keys text below, any other
 #                       refusal stops the run
 #   4 unsealed          sys/health 200 again
@@ -75,10 +76,16 @@ found=() queue=("")
 while (( ${#queue[@]} )); do
   p=${queue[0]}
   queue=("${queue[@]:1}")
+  # Only 200 (keys) and 404 (nothing there) count as an answer; any other code is a refusal, never "empty".
+  out=$(call LIST "kv/metadata/$p" "$token" -w '\n%{http_code}') || true
+  rc=${out##*$'\n'}
+  [[ $rc == 404 ]] && continue
+  [[ $rc == 200 ]] || die "2 empty store" "listing kv/$p answered HTTP ${rc:-nothing}; nothing restored"
+  listed=$(field data keys <<<"${out%$'\n'*}") || die "2 empty store" "listing kv/$p gave no key list; nothing restored"
   while read -r k; do
     [[ -n $k ]] || continue
     if [[ $k == */ ]]; then queue+=("$p$k"); else found+=("$p$k"); fi
-  done < <(call LIST "kv/metadata/$p" "$token" | field data keys 2>/dev/null || true)
+  done <<<"$listed"
 done
 for k in "${found[@]}"; do
   [[ $k == c1/check ]] || die "2 empty store" "the store holds kv/$k, so it is not a fresh rebuild; nothing restored"
