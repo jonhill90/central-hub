@@ -18,7 +18,7 @@ revisit-when: c1 moves to an immutable OS such as Talos; AlmaLinux or Debian cha
 
 The lab runs two Linux distributions.
 
-- **AlmaLinux 10** runs on every Linux virtual machine made from code: c1's nodes, the agent box, the CI runner, the desktop and the secrets store. They all come from one AlmaLinux 10 GenericCloud image, pinned by URL and checksum in `hosts/terraform/home/k8s/variables.tf`. The firewall VM runs OPNsense, which is not Linux (D-0040).
+- **AlmaLinux 10** runs on every Linux virtual machine made from code: c1's nodes, the agent box, the CI runner, the desktop and the secrets store. They all come from one AlmaLinux 10 GenericCloud image, pinned by URL and checksum in `hosts/terraform/home/k8s/variables.tf`. The firewall VM runs OPNsense, which is not Linux (D-0040). The Talos Linux node VMs of the Talos rehearsal (`hosts/terraform/home/k8s-talos/`) are outside this record: they try Talos beside c1 and are not clones of the AlmaLinux template.
 - **Debian** runs under Proxmox itself (D-0047), and in the remote-access container, which is made from Proxmox's Debian 13 template (`hosts/terraform/home/remote-access/`).
 
 The owner's words this rests on:
@@ -76,7 +76,7 @@ The owner's words of 04:44:57 UTC reach further than STD-0006's register row, so
 
 ### Confirmation
 
-- Every Linux VM in `hosts/terraform/home/` clones a template made from the pinned AlmaLinux image.
+- Every VM in the `k8s`, `ci-runner`, `desktop`, `jumpbox` and `secrets-store` folders of `hosts/terraform/home/` clones a template made from the pinned AlmaLinux image.
 - No role adds a TuxCare, Cybertrust or Fujitsu repository.
 
 ### Exit path

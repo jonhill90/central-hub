@@ -26,6 +26,7 @@ Are AlmaLinux and Debian free with nothing held back behind a paywall, and which
 5. **Machines.** At main d9139e7 [3] (measured):
    - c1's nodes, the agent box, the CI runner, the desktop and the secrets store are AlmaLinux 10 VMs from one pinned GenericCloud image;
    - the firewall VM is OPNsense;
+   - the Talos rehearsal's node VMs (`k8s-talos`) run Talos Linux and are not clones of the AlmaLinux template;
    - the remote-access container uses Proxmox's Debian 13 template.
 6. **Reach.** At main d9139e7, AlmaLinux is named in 26 files in `hosts/`, 7 runbooks and 2 records, and Debian in 10 files, 6 runbooks and 1 record [3] (measured, 2026-11-14).
 
