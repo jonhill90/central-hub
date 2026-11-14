@@ -2,7 +2,7 @@
 record: D-0039
 batch: RB-0212 (2026-11-14), with the FOSS check RB-0208 of the same night for licences and paid tiers
 researched: 2026-11-14
-method: each candidate's licence file fetched from its own repository; vendor and project pages opened for paid editions and support; lldap's repository cloned and its Keycloak and OPNsense guides, FAQ and bootstrap script read; Keycloak's and Kanidm's documentation read
+method: each candidate's licence file fetched from its own repository; vendor and project pages opened for paid editions and support; lldap's repository cloned and its Keycloak and OPNsense guides, FAQ and bootstrap script read; Keycloak's and Kanidm's documentation read; OPNsense core's TOTP and LDAP authenticator sources read
 checks: none independent yet; the reviewing agent checks the sources with the PR
 ---
 
@@ -39,17 +39,22 @@ Which free and open-source LDAP directory should hold the lab's users and groups
    - FreeIPA: GPL-3.0 [15].
    - Red Hat sells Red Hat Directory Server [16]; its feature list against 389 DS was not compared.
    - Keycloak names "Red Hat Directory Server" among its LDAP vendors [2].
+7. **OPNsense's free core pairs LDAP with TOTP.**
+   - Its authenticator `LDAPTOTP` (type `ldap-totp`, "LDAP + Timebased One Time Password") extends the LDAP authenticator with the TOTP check [17].
+   - The check reads `otp_seed` from the user's local entry in OPNsense's configuration. It looks that entry up by name, and returns false when there is no entry or no seed, before LDAP is asked [18] [19].
+   - By default the code comes first in the password field, and is 6 digits on a 30-second window (RFC 6238); an option puts it after the password [18].
 
 ## How the decision used it
 
 - **The pick.** Findings 1, 2 and 3 are why lldap with `READ_ONLY` federation is picked: it is FOSS with no paid edition, gives `memberOf` to OPNsense, and keeps users and groups as code through its bootstrap script.
 - **Kanidm.** Finding 4 is why it is turned down: a second identity server, and LDAP binds on a separate POSIX password.
 - **OpenLDAP, 389 DS and FreeIPA.** Findings 5 and 6 are why they are turned down: heavier to run for what the lab needs.
+- **Rule 3.** Finding 7 is why OPNsense uses `ldap-totp`, and why each sign-in user is made in advance with a seed instead of at first sign-in.
 - **Rule 5.** It holds the switch because nothing here shows how a seeded OTP credential (D-0037 rule 6) attaches to a federated user.
 
 ## Limits
 
-- Nothing was run: no lldap, no federation, no OPNsense LDAP test.
+- Nothing was run: no lldap, no federation, no OPNsense LDAP test. Finding 7 is read from OPNsense's source on its `master` branch, not tested on the lab's version.
 - Maintainers and release cadence were not measured beyond the newest commit of lldap.
 - The commercial builds of OpenLDAP and 389 DS were not compared feature by feature.
 - How lldap's data is backed up and restored on c1 is not designed yet.
@@ -72,3 +77,6 @@ Which free and open-source LDAP directory should hold the lab's users and groups
 14. 389 Directory Server: <https://www.port389.org/>
 15. FreeIPA licence: <https://github.com/freeipa/freeipa/blob/master/COPYING>
 16. Red Hat Directory Server: <https://www.redhat.com/en/technologies/cloud-computing/directory-server>
+17. OPNsense core, `LDAPTOTP.php`: <https://github.com/opnsense/core/blob/master/src/opnsense/mvc/app/library/OPNsense/Auth/LDAPTOTP.php>
+18. OPNsense core, `TOTP.php`: <https://github.com/opnsense/core/blob/master/src/opnsense/mvc/app/library/OPNsense/Auth/TOTP.php>
+19. OPNsense core, `Base.php` (`getUser`): <https://github.com/opnsense/core/blob/master/src/opnsense/mvc/app/library/OPNsense/Auth/Base.php>
