@@ -18,6 +18,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md) | automated | draft |
 | [Set up the owner's desktop VM](set-up-the-desktop.md) | manual | draft |
 | [Serve the Proxmox web UI on port 443](serve-proxmox-on-443.md) | manual | draft |
+| [Sign in to the Proxmox web UI through Keycloak](sign-in-to-proxmox-through-keycloak.md) | automated | draft |
 | [Run the dev lab redeploy from GitHub Actions on the agent box](set-up-the-lab-redeploy-workflow.md) | manual | draft |
 | [Give the agent box a lifeline to Proxmox and keep OPNsense's configuration](set-up-the-box-lifeline.md) | manual | draft |
 | [Copy the OPNsense configuration backups off the agent box](copy-opnsense-backup-off-box.md) | manual | draft |

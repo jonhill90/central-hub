@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Turn a rendered KeycloakRealmImport into the realm JSON Keycloak imports, the way the operator
 does: every ${KEY} placeholder is replaced by the value of spec.placeholders.KEY. Here the values
-are made up (test-<KEY>), so the test knows each password and secret without any real one.
+are made up (test-<KEY>, and its base32 for a TOTP_ seed), so the test knows each password and secret
+without any real one.
 
 Fails when a ${KEY} in the realm has no placeholder, or a placeholder is never used: either would
 mean a password or secret that Keycloak never gets, or one the role makes for nothing.
 
 Usage: realm_to_json.py <rendered realm.yaml> <out.json>
 """
+import base64
 import json
 import re
 import sys
@@ -34,7 +36,11 @@ def main(src: str, dest: str) -> int:
         print("\n".join(f"FAIL: {e}" for e in errors), file=sys.stderr)
         return 1
     for key in declared:
-        text = text.replace("${" + key + "}", f"test-{key}")
+        # A TOTP seed is base32, as the role makes it; the value is still known from the key.
+        value = f"test-{key}"
+        if key.startswith("TOTP_"):
+            value = base64.b32encode(value.encode()).decode().rstrip("=")
+        text = text.replace("${" + key + "}", value)
     with open(dest, "w", encoding="utf-8") as f:
         f.write(text)
     print(f"realm {spec['realm']['realm']}: {len(client_ids)} clients, "

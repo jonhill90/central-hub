@@ -8,7 +8,7 @@ outcome: one AlmaLinux 10 VM on VNet dev runs GNOME with its own remote desktop,
 needs: the agent box; the agents' Proxmox token with rights on pool `desktop` only while the apply runs (`DESKTOP_ACCESS` in `agent-access.sh`, on then off); template 9001; a free dev address; the private inventory group `desktop`
 private-values: [desktop-name, desktop-address, desktop-rdp-source, desktop-ssh-key]
 files: [hosts/ansible/roles/agent_box/files/desktop.sh, hosts/terraform/home/bootstrap/agent-access.sh, hosts/terraform/home/desktop/, hosts/ansible/roles/desktop/, hosts/ansible/playbooks/desktop.yml]
-last-tested: "2026-11-14, VM 400, desktop configure (three runs): packages, certificate, console script, units and the 3389 rule passed; the run stopped at the admin key removal; the console prompts, the RDP handshake and GDM login over RDP are not yet seen"
+last-tested: "2026-11-14, VM 400, desktop configure (three runs): packages, certificate, console script, units and the 3389 rule passed; the run stopped at the admin key removal; the console prompts, the RDP handshake and GDM login over RDP are not yet seen; step 6, the name: dig at 100.100.100.100 returned the desktop's address (reported by the Mac session, 2026-11-14)"
 superseded-by:
 ---
 

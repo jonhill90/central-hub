@@ -8,7 +8,7 @@ outcome: VM 258 has a second NIC on the Proxmox host's own subnet, so the box ke
 needs: the filled-in private tfvars for hosts/terraform/home/jumpbox; the owner's typed go (this changes the box's network); the Proxmox host firewall allowing the box's new address to 8006
 private-values: [lifeline-bridge, lifeline-address, opnsense-host, lifeline-interface]
 files: [hosts/terraform/home/jumpbox/, hosts/ansible/roles/agent_box/tasks/lifeline.yml, hosts/ansible/roles/agent_box/files/opnsense-backup.sh, hosts/ansible/bootstrap/opnsense-backup-user.sh, hosts/ansible/bootstrap/opnsense-backup-user.php]
-last-tested: not yet run
+last-tested: "2026-11-14, on VM 258, as reported by the Mac session: the role applied at 9d51957 (ok=116 changed=14 failed=0), then a reboot at 06:05:14 UTC brought both lifeline units back active (lifeline-up.service exists from #268 on, so the filter-gated setup was the one tested), eth1 came up only with the lifeline nftables table, and the Proxmox API answered 200 over eth1; step 4's box-backup key ended the 403, and step 5's first backup at 06:11:26 UTC kept config-20261114T061126Z.xml (112,112 bytes, valid XML). Not yet run: the case where the filter unit fails (the primary link and the tailnet must stay up), and a replay on a fresh machine"
 superseded-by:
 ---
 
@@ -51,10 +51,10 @@ With the second NIC on the host's subnet, the connected route to the Proxmox API
 4. Give the box its own read-only OPNsense key (pick 225), on the controller, from `hosts/ansible`:
 
    ```sh
-   bootstrap/opnsense-backup-user.sh <Proxmox host>
+   bootstrap/opnsense-backup-user.sh -i <the Proxmox host's root SSH key> <Proxmox host>
    ```
 
-   then copy the controller's files to the box: the agent_box role with `agent_box_copy_prod_files` true ([set-up-the-agent-box.md](set-up-the-agent-box.md), "Copy the controller's private files to the box").
+   `-i` names the private key the host accepts for root, the one the controller's Proxmox wrappers use; the script then offers only that key. Leave it out only when the controller's own SSH settings already pick that key for the host. Then copy the controller's files to the box: the agent_box role with `agent_box_copy_prod_files` true ([set-up-the-agent-box.md](set-up-the-agent-box.md), "Copy the controller's private files to the box").
    why: the backup call, `api/core/backup/download/this`, needs OPNsense's "Diagnostics: Configuration History" privilege, the only one that covers `api/core/backup/*` (OPNsense core, `models/OPNsense/Core/ACL/ACL.xml`). That privilege also allows reverting to an older configuration and deleting one, so user `box-backup` also gets "System: Deny config write", which makes both calls refuse it (`BackupController.php`, `throwReadOnly()`). The configuration holds every secret on the firewall, so this key is the box's own and is revoked alone; the Ansible user's key, which can change firewall rules, is not sent by a daily timer. The script makes the key and secret once in `~/.config/central-hub/opnsense-backup-api.txt` (0600) and sends OPNsense only the key and the secret's hash, as in [set-up-lab-network-and-firewall.md](set-up-lab-network-and-firewall.md) step 6. Nothing prints the secret.
    expect: the script ends with `box-backup saved, privileges: page-diagnostics-configurationhistory,user-config-readonly, api keys: 1`, then `done`; the role's run lists `opnsense-backup-api.txt` among the copied files, not as missing.
 
@@ -65,6 +65,7 @@ With the second NIC on the host's subnet, the connected route to the Proxmox API
 
 - `curl: (22) ... 403`: the key's user lacks the backup privilege, for example `ansible`'s key before step 4 (measured 2026-11-14). Do step 4.
 - `opnsense-backup: what came back is not an OPNsense configuration`: the host answered with a login page or an error. The older copies are kept.
+- Step 4 stops at its first SSH call to the Proxmox host, before anything is made on the firewall: ssh offered a key the host refuses, such as the controller's default key (the first run from the Mac, 2026-11-14, failed this way and worked with only the wrappers' Proxmox key). Run step 4 again with `-i` naming the key the host accepts.
 - `opnsense-backup-user: openssl passwd -6 failed`: the controller's `openssl` is too old; put OpenSSL 1.1.1 or later first on `PATH`.
 - `curl: (60)` certificate error: the box does not trust the lab CA that signs OPNsense's certificate (`agent_box_ca_files`).
 - The plan shows a replace of VM 258: stop; a changed NIC order or a template change can do that. Nothing here should destroy the box.
