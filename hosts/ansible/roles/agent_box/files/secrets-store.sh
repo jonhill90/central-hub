@@ -3,16 +3,18 @@
 # on dev (docs/runbooks/set-up-the-secrets-store.md, proposed D-0038). It runs as user `keys` through
 # sudo, so the session that asks for it never sees the Proxmox token, the seal key, the AppRole IDs,
 # the recovery shares or the VM's SSH key. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh plan|apply|configure|recovery|status|destroy
+#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh plan|apply|configure|recovery|status|snapshot|restore|destroy
 # plan, apply, destroy: OpenTofu on hosts/terraform/home/secrets-store with the agents' Proxmox token.
 # configure: the openbao playbook over SSH. recovery: makes the recovery shares once (self-
 # initialization makes none) into the keys folder. status: sys/health, which holds no secret.
+# snapshot: copies a Raft snapshot off the store into the keys folder. restore: puts the newest of
+# those back (D-0038 Confirmation 4 and 5). Dev only: every action refuses a store outside 550-599.
 set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | recovery | status | destroy) action=$1 ;;
-  *) echo "usage: secrets-store plan|apply|configure|recovery|status|destroy" >&2; exit 2 ;;
+  plan | apply | configure | recovery | status | snapshot | restore | destroy) action=$1 ;;
+  *) echo "usage: secrets-store plan|apply|configure|recovery|status|snapshot|restore|destroy" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -26,11 +28,18 @@ plan=$work/state/secrets-store.tfplan
 vars=$work/state/secrets-store.tfvars.json
 sshkey=$env_keys/secrets-store-ssh
 cacert=$env_keys/secrets-store-ca.crt
+snapshots=$env_keys/openbao-snapshots   # the store's Raft snapshots, readable only with the seal key
+snapshot_keep=24
 export HOME=$work PATH=/usr/local/libexec/agent-box/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/secrets-store TF_IN_AUTOMATION=1 ANSIBLE_COLLECTIONS_PATH=/usr/local/libexec/agent-box/collections ANSIBLE_HOME=$work/ansible-home
 
 [[ -f $settings ]] || { echo "secrets-store: $settings is missing; set agent_box_secrets_store in the inventory and run the agent_box role" >&2; exit 1; }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
+
+# Dev only. The store's IDs are 500-599 (STD-0001); dev is 550-599, as dev is 250-257 among 200-299.
+# A prod store gets its own wrapper and keys folder after dev passes (D-0035 rule 3).
+vm_id=$(setting vm_id)
+[[ $vm_id =~ ^5[5-9][0-9]$ ]] || { echo "secrets-store: VM ID $vm_id is not a dev store ID (550-599); refused" >&2; exit 1; }
 
 # Only reviewed code on main runs with the keys, never a checkout a session can edit. One run at a time.
 exec 9>"$work/state/secrets-store.lock"
@@ -145,9 +154,41 @@ recovery() {
   echo "secrets-store: recovery shares written to the keys folder (not printed)"
 }
 
+# Copy one Raft snapshot off the store, through the admin AppRole. Fails loudly: never an empty file.
+snapshot() {
+  local out token
+  mkdir -p "$snapshots"
+  out=$snapshots/raft-$(date -u +%Y%m%dT%H%M%SZ).snap
+  token=$(admin_token)
+  printf 'header = "X-Vault-Token: %s"\n' "$token" |
+    curl -sS --fail-with-body --cacert "$cacert" -K - "$(addr)/v1/sys/storage/raft/snapshot" -o "$out.part"
+  printf 'header = "X-Vault-Token: %s"\n' "$token" |
+    curl -sS --cacert "$cacert" -K - -X POST "$(addr)/v1/auth/token/revoke-self" >/dev/null
+  [[ -s $out.part ]] || { rm -f "$out.part"; echo "secrets-store: empty snapshot" >&2; exit 1; }
+  mv "$out.part" "$out"
+  find "$snapshots" -maxdepth 1 -name 'raft-*.snap' -printf '%f\n' | sort -r | tail -n +"$((snapshot_keep + 1))" |
+    while read -r f; do rm -f -- "${snapshots:?}/$f"; done
+  echo "secrets-store: snapshot $(basename "$out"), $(stat -c %s "$out") bytes"
+}
+
+# Put the newest snapshot back. The store must be up and unsealed with the same seal key; OpenBao
+# checks the snapshot against it and refuses one it can't read. Never the forced restore.
+restore() {
+  local snap token
+  snap=$(find "$snapshots" -maxdepth 1 -name 'raft-*.snap' -printf '%f\n' 2>/dev/null | sort -r | head -n 1)
+  [[ -n $snap ]] || { echo "secrets-store: no snapshot in the keys folder; run secrets-store snapshot first" >&2; exit 1; }
+  token=$(admin_token)
+  printf 'header = "X-Vault-Token: %s"\n' "$token" |
+    curl -sS --fail-with-body --cacert "$cacert" -K - -X POST --data-binary "@$snapshots/$snap" \
+      "$(addr)/v1/sys/storage/raft/snapshot"
+  echo "secrets-store: restored $snap"
+}
+
 case $action in
   configure) configure ;;
   status) status ;;
   recovery) recovery ;;
+  snapshot) snapshot ;;
+  restore) restore ;;
   *) tofu_run ;;
 esac
