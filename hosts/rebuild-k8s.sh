@@ -223,8 +223,106 @@ for r in rows:
     || { echo "preflight: guest list had an unexpected shape"; return 1; }
 }
 
+# One call to the Proxmox API with the same token (header on stdin, never in curl's arguments). The path starts
+# after /api2/json. Used for the node's memory read and the CI runner's stop and start.
+px_api() { # method path [form data]
+  local method=$1 path=$2 data=${3:-}
+  # shellcheck source=/dev/null
+  (set -a; . "$TOFU_ENV"; set +a
+    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - -X "$method" ${data:+--data "$data"} "${PROXMOX_VE_ENDPOINT%/}/api2/json/$path") 2>&1
+}
+
+# The node's free memory in MiB and the field it came from ("MiB field"), or a failure that says why.
+preflight_read_free() { # node
+  local body
+  body=$(px_api GET "nodes/$1/status") \
+    || { body=$(preflight_clean "$body")
+         echo "preflight: the node's memory could not be read: $body"; return 1; }
+  # memory.available (the kernel's MemAvailable) exists from PVE 9; older versions have total - used.
+  printf '%s' "$body" | python3 -c 'import json,sys
+m = json.load(sys.stdin)["data"]["memory"]
+if m.get("available") is not None:
+    print(m["available"] // 1048576, "available")
+else:
+    print((m["total"] - m["used"]) // 1048576, "total-used")' \
+    || { echo "preflight: the node's memory answer had no memory figures"; return 1; }
+}
+
+# Dev only, and only when the preflight is short: stop VM 300 (the CI runner, a guest the token holds VM.PowerMgmt
+# on, pool ci) so its memory counts, and start it again when the run ends, pass or fail (runner_restart, an EXIT
+# trap). It touches no other guest. The marker file is written before the stop request, so a run that dies
+# without its trap still leaves the next run a reason to start the runner.
+CI_RUNNER_VMID=300
+runner_mark() { printf '%s' "$env_dir/ci-runner-stopped"; }
+preflight_stop_runner() { # node
+  local node=$1 i st out
+  echo "runner stop: short on memory and VM $CI_RUNNER_VMID is running, asking it to shut down (VM.PowerMgmt, nothing else is touched)"
+  # The marker holds this run's stamp, so the end of the run knows it was this run that stopped VM 300.
+  printf '%s\n' "$stamp" > "$(runner_mark)"
+  out=$(px_api POST "nodes/$node/qemu/$CI_RUNNER_VMID/status/shutdown" "timeout=60") \
+    || { echo "runner stop: the shutdown request failed: $(preflight_clean "$out")"; rm -f "$(runner_mark)"; return 1; }
+  for i in $(seq 1 24); do
+    st=$(px_api GET "nodes/$node/qemu/$CI_RUNNER_VMID/status/current" | python3 -c 'import json,sys
+print(json.load(sys.stdin)["data"].get("status", ""))' 2>/dev/null) || st=""
+    [ "$st" != stopped ] || { echo "runner stop: VM $CI_RUNNER_VMID is stopped after $(( (i - 1) * 5 )) s"; return 0; }
+    sleep 5
+  done
+  echo "runner stop: VM $CI_RUNNER_VMID did not stop within 120 s"; return 1
+}
+
+# The EXIT trap: start the CI runner again if this run (or an earlier one that died) stopped it. Never fatal. The
+# runner is the notebook's CI runner (docs/runbooks/set-up-the-ci-runner.md), so it starts only when the node has
+# its memory (VM 300's maxmem) plus 2048 MiB free again, so the start can't push the node back into the shortage that
+# stopped it. If not, it stays stopped, the marker stays, and the log says so: notebook checks queue meanwhile.
+# A dev cluster that stays up leaves too little free memory, so the runner starts on the next run's start only after a
+# teardown has freed the dev VMs.
+runner_restart() {
+  local node out cur maxmem free needs margin=2048
+  [ -f "$(runner_mark)" ] || return 0
+  node=$(sed -n 's/^[[:space:]]*proxmox_node_name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$TFVARS" | head -1)
+  cur=$(px_api GET "nodes/$node/qemu/$CI_RUNNER_VMID/status/current") \
+    && maxmem=$(printf '%s' "$cur" | python3 -c 'import json,sys
+print(json.load(sys.stdin)["data"]["maxmem"] // 1048576)' 2>/dev/null) || maxmem=""
+  free=$(preflight_read_free "$node" 2>/dev/null) && free=${free% *} || free=""
+  if [ -z "$maxmem" ] || [ -z "$free" ]; then
+    echo "runner left stopped: could not read the memory figures (VM $CI_RUNNER_VMID stays stopped, notebook checks queue)" | tee -a "$log"
+    return 0
+  fi
+  needs=$(( maxmem + margin ))
+  if [ "$free" -lt "$needs" ]; then
+    echo "runner left stopped: not enough memory (free $free MiB, needs $needs MiB), notebook checks queue until it is started" | tee -a "$log"
+    return 0
+  fi
+  if out=$(px_api POST "nodes/$node/qemu/$CI_RUNNER_VMID/status/start"); then
+    echo "runner restart: VM $CI_RUNNER_VMID started again (free $free MiB, needs $needs MiB)" | tee -a "$log"
+    rm -f "$(runner_mark)"
+  else
+    # The marker stays, so the next dev run tries the start again.
+    echo "runner restart: VM $CI_RUNNER_VMID start failed, marker kept: $(preflight_clean "$out")" | tee -a "$log"
+  fi
+  return 0
+}
+
+# The node's storages the token can see (name and type only), one line each, so the log shows whether the host
+# uses ZFS (whose ARC the node's memory.available may not count). Read-only and never fatal.
+preflight_storage() { # node
+  local out
+  out=$(px_api GET "nodes/$1/storage") \
+    || { echo "preflight: storage list could not be read: $(preflight_clean "$out")"; return 1; }
+  printf '%s' "$out" | python3 -c 'import json,sys
+rows = sorted(json.load(sys.stdin)["data"], key=lambda r: str(r.get("storage", "")))
+print("preflight: storage list from /nodes/<node>/storage, %d storages visible to the token" % len(rows))
+for r in rows:
+    print("preflight: storage name=%s type=%s" % (
+        "".join(c for c in str(r.get("storage", "")) if c.isalnum() or c in "-_."),
+        "".join(c for c in str(r.get("type", "")) if c.isalnum() or c in "-_.")))' \
+    || { echo "preflight: storage list had an unexpected shape"; return 1; }
+}
+
 preflight_memory() {
-  local min=${PREFLIGHT_MIN_FREE_MIB:-14336} node body free
+  local min=${PREFLIGHT_MIN_FREE_MIB:-14336} node free field guests
   local existing declared
   # A re-run on VMs the state already holds allocates no new VMs, and their memory is already taken, so the
   # node's free memory says nothing about it (measured on the box, 2026-11-14: 3547 MiB free with dev up).
@@ -245,25 +343,27 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
   echo "preflight: branch checked, the state holds ${existing:-0} of ${declared:-0} declared dev VMs (a fresh build, a partial state or after a teardown)"
   node=$(sed -n 's/^[[:space:]]*proxmox_node_name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$TFVARS" | head -1)
   [ -n "$node" ] || { echo "preflight: proxmox_node_name not found in the tfvars"; return 1; }
-  # shellcheck source=/dev/null
-  body=$( (set -a; . "$TOFU_ENV"; set +a
-    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
-    # The header goes in on stdin (a curl config), so the token is never in curl's arguments, where ps shows it.
-    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
-      curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/nodes/$node/status") 2>&1) \
-    || { body=$(preflight_clean "$body")
-         echo "preflight: the node's memory could not be read: $body"; return 1; }
-  # memory.available (the kernel's MemAvailable) exists from PVE 9; older versions have total - used.
-  free=$(printf '%s' "$body" | python3 -c 'import json,sys
-m = json.load(sys.stdin)["data"]["memory"]
-if m.get("available") is not None:
-    print(m["available"] // 1048576, "available")
-else:
-    print((m["total"] - m["used"]) // 1048576, "total-used")') \
-    || { echo "preflight: the node's memory answer had no memory figures"; return 1; }
+  free=$(preflight_read_free "$node") || { echo "$free"; return 1; }
   field=${free#* }; free=${free% *}
   echo "preflight: node free memory ${free} MiB (field: ${field}), minimum ${min} MiB"
-  preflight_guests || true
+  guests=$(preflight_guests) || true
+  printf '%s\n' "$guests"
+  preflight_storage "$node" || true
+  if [ "$free" -lt "$min" ] && grep -q "guest vmid=$CI_RUNNER_VMID type=qemu status=running" <<<"$guests"; then
+    # What happens on a short node is the owner's pick (PREFLIGHT_SHORT_NODE, set at the install of the box's
+    # checkout). With no valid value there is no default: it refuses BEFORE it stops VM 300.
+    case ${PREFLIGHT_SHORT_NODE:-} in
+      ephemeral-dev|keep-dev) ;;
+      *) echo "preflight: refused, free memory ${free} MiB is below ${min} MiB, VM $CI_RUNNER_VMID was not stopped because the short-node setting is not set (agent_box_short_node). Two values: ephemeral-dev (stops VM $CI_RUNNER_VMID, tears dev down at the end of the run, then starts VM $CI_RUNNER_VMID: dev lasts one run, notebook CI keeps running except during the run) or keep-dev (stops VM $CI_RUNNER_VMID, dev stays up: notebook CI and the access-expiry alert are paused while dev is up)"
+         return 1 ;;
+    esac
+    echo "preflight: short-node setting is ${PREFLIGHT_SHORT_NODE}"
+    preflight_stop_runner "$node" || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB and VM $CI_RUNNER_VMID could not be stopped"; return 1; }
+    sleep 5
+    free=$(preflight_read_free "$node") || { echo "$free"; return 1; }
+    field=${free#* }; free=${free% *}
+    echo "preflight: node free memory ${free} MiB (field: ${field}) after VM $CI_RUNNER_VMID stopped, minimum ${min} MiB"
+  fi
   [ "$free" -ge "$min" ] || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB"; return 1; }
 }
 
@@ -375,6 +475,50 @@ if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="$stages dev-ca identity
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="preflight $stages"; fi
 if $teardown && [ -z "$only" ]; then stages="teardown $stages"; fi
 
+# Dev only: the preflight may stop the CI runner (VM 300) to fit the dev VMs. Start it again when the run ends, pass
+# or fail, and first start it if an earlier run died with it stopped (the marker file is still there).
+if [ "$ENV_NAME" = dev ]; then
+  runner_restart
+  trap runner_restart EXIT
+fi
+
+# A failed ephemeral-dev run: read the cluster before it is torn down (what `rebuild diag` shows: the Argo CD
+# applications, the pods not running, the newest events), into the short log, each line prefixed `diag:`. Never fatal.
+runner_capture_diag() {
+  echo "diag: the run failed, so the cluster is read before it is torn down" | tee -a "$log"
+  {
+    echo "== argocd applications (name, sync, health)"
+    kc -n argocd get applications.argoproj.io --no-headers -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
+    echo "== pods not Running or Completed, all namespaces"
+    kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
+    echo "== newest events, all namespaces"
+    kc get events -A --sort-by=.lastTimestamp --no-headers | tail -n 25
+  } 2>&1 | cut -c1-240 | head -n 80 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
+  return 0
+}
+
+# The owner's pick for a short node is ephemeral-dev: when this run stopped VM 300, dev can't stay up beside it, so
+# the run tears dev down at its end, pass or fail, and the exit trap then starts VM 300 under its memory rule. VM 300
+# is down for one run, not for as long as dev lives. A failed run reads the cluster first (runner_capture_diag), so
+# its state is in the log. Never on any env but dev, never with keep-dev, never for a marker from another run.
+runner_run_teardown() { # [failed]
+  local trc t0
+  [ "$ENV_NAME" = dev ] || return 0
+  [ "${PREFLIGHT_SHORT_NODE:-}" = ephemeral-dev ] || return 0
+  [ -f "$(runner_mark)" ] && [ "$(cat "$(runner_mark)")" = "$stamp" ] || return 0
+  echo "runner stop: this run stopped VM $CI_RUNNER_VMID and the short-node setting is ephemeral-dev, so dev is torn down now (dev can't stay up while memory is short)" | tee -a "$log"
+  [ "${1:-}" != failed ] || runner_capture_diag
+  t0=$(date +%s)
+  echo "$(date -u +%FT%TZ) teardown start" | tee -a "$log"
+  echo "===== teardown" >> "$raw"
+  set +e
+  (set -e; run_stage teardown) >> "$raw" 2>&1
+  trc=$?
+  set -e
+  echo "$(date -u +%FT%TZ) teardown end rc=$trc $(( $(date +%s) - t0 ))s" | tee -a "$log"
+  return "$trc"
+}
+
 echo "rebuild: env $ENV_NAME, stages: $stages, log $log"
 for s in $stages; do
   t0=$(date +%s)
@@ -396,13 +540,15 @@ for s in $stages; do
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.
   if [ "$s" = preflight ] || [ "$s" = identity-keycloak ]; then
     awk -v s="$s" '$0 == "===== " s {on=1; next} /^===== / {on=0} on' "$raw" \
-      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|guest note[^"]*|guest vmid=[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
+      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|storage (list|name)[^"]*|guest note[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
       | sed "s/^/  $s: /" >> "$log" || true
   fi
   if [ "$rc" -ne 0 ]; then
     echo "rebuild: stage $s failed; last lines of $raw:" >&2
     tail -n 20 "$raw" >&2
+    runner_run_teardown failed || true
     exit "$rc"
   fi
 done
+runner_run_teardown || { echo "rebuild: the end-of-run teardown failed" >&2; exit 1; }
 echo "rebuild: all stages passed" | tee -a "$log"

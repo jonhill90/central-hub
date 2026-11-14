@@ -200,6 +200,10 @@ agent_box_ci_runner: {}
 # proxmox_node_name, vnet, template_vm_id, rdp_source (the tailnet connector's address, where RDP arrives from) and optionally
 # admin_user (default admin). Empty leaves the wrapper unset up.
 agent_box_desktop: {}
+# The owner's pick for a dev run on a node short of memory (docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev
+# (the run stops the CI runner, tears dev down at its end, then the runner starts) or keep-dev (the runner stops, dev stays up, the
+# notebook's CI and its access-expiry alert are paused while dev is up). Empty is no pick: a short node then refuses before it stops anything.
+agent_box_short_node: ""
 # The secrets store's dev VM that the secrets-store wrapper builds (docs/runbooks/set-up-the-secrets-store.md).
 # Private, through the inventory: name, vm_id (500-599), address, cores, memory_mb, disk_gb,
 # proxmox_node_name, vnet, template_vm_id, box_address (this box's address, the only one the admin

@@ -388,6 +388,23 @@
   when: agent_box_ci_runner | length > 0
   tags: [wrappers]
 
+- name: The rebuild wrapper's short-node pick, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/short-node"
+    content: "{{ agent_box_short_node }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_short_node | length > 0
+  tags: [wrappers]
+
+- name: No short-node pick in the inventory, so no file
+  ansible.builtin.file:
+    path: "{{ agent_box_work_dir }}/short-node"
+    state: absent
+  when: agent_box_short_node | length == 0
+  tags: [wrappers]
+
 - name: The desktop wrapper's private settings, from the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/desktop.json"
