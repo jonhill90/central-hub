@@ -140,6 +140,25 @@ if ! grep -q '^healthchecks-ping-url=' "$ssfile"; then
   (umask 077; printf '%s\n' 'healthchecks-ping-url=https://hc-ping.invalid/dev-not-a-check' >> "$ssfile")
 fi
 chmod 600 "$ssfile"
+# The secrets store (proposed D-0038), dev only like this wrapper: once `secrets-store configure` has
+# made the AppRole rebuild's IDs, stage openbao writes the rebuilt cluster's service-account key to
+# the store (hosts/ansible/playbooks/k8s-openbao-auth.yml), so External Secrets can sign in there.
+# The same values reach Argo CD's root Application (k8s_gitops_source_openbao_*), so the secret-store app
+# adds store `openbao` and its one test ExternalSecret. Before that, both are left out and nothing changes.
+stages="vms cluster storage restore gitops secrets apps gateway checks"
+openbao_env=""
+store_url=""
+store_keys=$keys/dev
+if [[ -s $store_keys/openbao-rebuild-role-id && -s $store_keys/openbao-rebuild-secret-id && -s $store_keys/secrets-store-ca.crt && -s $work/secrets-store.json ]]; then
+  store_addr=$(python3 -I -c 'import ipaddress, json, sys; print(ipaddress.ip_address(json.load(open(sys.argv[1]))["address"]))' "$work/secrets-store.json") \
+    || { echo "rebuild: the secrets store's address in $work/secrets-store.json is not an IP address" >&2; exit 1; }
+  store_url=https://$store_addr
+  stages="vms cluster storage restore gitops secrets openbao apps gateway checks"
+  openbao_env="OPENBAO_ADDR=$store_url
+OPENBAO_CACERT=$store_keys/secrets-store-ca.crt
+OPENBAO_ROLE_ID_FILE=$store_keys/openbao-rebuild-role-id
+OPENBAO_SECRET_ID_FILE=$store_keys/openbao-rebuild-secret-id"
+fi
 # A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
 # The agents' token clones into pool dev, whose ACL survives a teardown, and clones only template 9001, the copy of template 9000 on VNet dev
 # (hosts/terraform/home/bootstrap/agent-access.sh); the Mac's tfvars name 9000, for its root token.
@@ -151,13 +170,14 @@ rm -rf "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
 import sys, yaml
-src, dst, key, known, keys = sys.argv[1:6]
+src, dst, key, known, keys, store_url, store_ca = sys.argv[1:8]
 d = yaml.safe_load(open(src))
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking",
         "k8s_gateway_smoke_client", "k8s_certs_smoke_client", "k8s_certs_smoke_root_file",
-        "k8s_backup_env_file", "k8s_backup_azure_fixed_cert_file", "k8s_control_plane_encryption_key_file"}
+        "k8s_backup_env_file", "k8s_backup_azure_fixed_cert_file", "k8s_control_plane_encryption_key_file",
+        "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -186,9 +206,12 @@ v["k8s_certs_smoke_root_file"] = known.rsplit("/", 1)[0] + "/lab-root-ca.crt"
 v["k8s_backup_env_file"] = keys + "/c1-backup.env"
 v["k8s_backup_azure_fixed_cert_file"] = keys + "/azure-reader.env"
 v["k8s_control_plane_encryption_key_file"] = keys + "/rebuild-encryption.key"
+if store_url:
+    v["k8s_gitops_source_openbao_address"] = store_url
+    v["k8s_gitops_source_openbao_ca_file"] = store_ca
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys"
+)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt"
 [[ -f $inventory/hosts.yml ]] || { echo "rebuild: could not build the box's dev inventory from $inv_src/hosts.yml" >&2; exit 1; }
 chmod 600 "$inventory/hosts.yml"
 
@@ -239,8 +262,9 @@ TFVARS=$envdir/dev-vms.tfvars
 TFSTATE=$work/state/dev-vms.tfstate
 TOFU_ENV=$keys/proxmox-dev.env
 INVENTORY=$inventory/
-STAGES="vms cluster storage restore gitops secrets apps gateway checks"
+STAGES="$stages"
 SECRET_SOURCE_FILE=$ssfile
+$openbao_env
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'
 ENV
