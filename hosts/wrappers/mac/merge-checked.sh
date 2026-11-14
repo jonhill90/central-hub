@@ -37,22 +37,35 @@ lib=$HOME/.config/central-hub/lib/pinned.zsh
 [[ -f $lib ]] || die "the Mac's lib is missing" 3
 box() { zsh -c '. "$1"; shift; box_ssh "$@"' _ "$lib" "$@"; }
 
-verdict=$(box pr-merge check "$repo" "$pr" "$head" 2>&1) && rc=0 || rc=$?
-echo "$verdict"
-last=${verdict##*$'\n'}
-# The stop (D-0042 rule 8): the box's own `pr-merge check`, run as the keys user, prints the halt state. This wrapper cannot read the
-# flag's folder (0700 keys), and a failed `test -e` exits 1 just as a clear flag does, so it never reads the exit code: it merges only on exactly
-# "HALT: clear" and refuses on "HALT: set", on a missing line and on anything else.
-[[ $verdict != *"HALT: set"* ]] || die "the halt flag is set on the box; nothing merged" 1
-[[ $'\n'$verdict$'\n' == *$'\nHALT: clear\n'* ]] || die "the box did not say HALT: clear (an older pr-merge, or the read failed); nothing merged" 1
-# A rule 11 PR is never merged from the Mac, even with an owner-tap line: the ledger is the recorder's own word (design v6).
-[[ $verdict != *"NOTE: rule 11 PR"* ]] || die "a rule 11 PR waits for the sweep; nothing merged" 1
-# Only this verdict (or a later one) prints the marker line on every run and the ledger line on a GREEN; an older pr-merge prints GREEN with no ledger and no rule 11
-# check, so a missing line means the box has not been updated and the PR waits.
-[[ $verdict == *"NOTE: verdict v2"* && $verdict == *"LEDGER: reviewer council-a council-b council-c"* ]] || die "the box's verdict does not print the ledger line yet (an older pr-merge); nothing merged. The PR waits." 1
-[[ $rc -eq 0 && $last == *": GREEN" ]] || die "not GREEN (exit $rc); nothing merged. A PR that is refused waits for the sweep." 1
+# A whole line of the verdict, never a substring: a NOTE line that carries file names must not satisfy a marker.
+has_line() { [[ $'\n'$2$'\n' == *$'\n'$1$'\n'* ]]; }
+
+# Ask the box for the verdict and refuse unless every condition holds. Run twice: once to decide, once just before the merge.
+verdict_green() {
+  local verdict rc=0 last
+  verdict=$(box pr-merge check "$repo" "$pr" "$head" 2>&1) || rc=$?
+  echo "$verdict"
+  last=${verdict##*$'\n'}
+  # The stop (D-0042 rule 8): the box's own pr-merge check, run as the keys user, prints the halt state. This wrapper cannot read the
+  # flag's folder (0700 keys), and a failed test -e exits 1 just as a clear flag does, so it never reads the exit code: it merges only on
+  # exactly "HALT: clear" and refuses on "HALT: set", on a missing line and on anything else.
+  ! has_line "HALT: set" "$verdict" || die "the halt flag is set on the box; nothing merged" 1
+  has_line "HALT: clear" "$verdict" || die "the box did not say HALT: clear (an older pr-merge, or the read failed); nothing merged" 1
+  # A rule 11 PR is never merged from the Mac, even with an owner-tap line: the ledger is the recorder's own word (design v6).
+  [[ $verdict != *"NOTE: rule 11 PR"* ]] || die "a rule 11 PR waits for the sweep; nothing merged" 1
+  # Only this verdict (or a later one) prints the marker line on every run and the ledger line on a GREEN; an older pr-merge prints GREEN
+  # with no ledger and no rule 11 check, so a missing line means the box has not been updated and the PR waits.
+  { has_line "NOTE: verdict v2" "$verdict" && has_line "LEDGER: reviewer council-a council-b council-c" "$verdict"; } ||
+    die "the box's verdict does not print the ledger line yet (an older pr-merge); nothing merged. The PR waits." 1
+  [[ $rc -eq 0 && $last == *": GREEN" ]] || die "not GREEN (exit $rc); nothing merged. A PR that is refused waits for the sweep." 1
+}
+
+verdict_green
 
 # The sweep posts the ledger on the PR (D-0042 rule 9); here it is printed, with its pass times, for the merge report.
 box pass-record show "$repo" "$head" || die "could not read the head's ledger; nothing merged" 1
+
+# Read the verdict and the halt state again just before the merge (design v7 section 3: two reads).
+verdict_green > /dev/null
 
 gh pr merge "$pr" --repo "$repo" --squash --match-head-commit "$head"

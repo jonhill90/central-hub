@@ -79,24 +79,53 @@ out=$(FAKE_VERDICT=$G run $R 7 $H); check "a checkout detached on an older commi
 # A rule 11 PR with a tap line gets GREEN from the box, but the NOTE makes the wrapper refuse it.
 out=$(FAKE_VERDICT="NOTE: rule 11 PR (x) is merged on an owner-tap line, never by the Mac's checked merge
 $G" run $R 7 $H); check "a rule 11 PR with a tap is refused" "$out" "waits for the sweep"; [[ ! -s $t/calls ]] && echo "ok   rule 11 made no gh call" || { echo "FAIL: gh was called for a rule 11 PR"; fail=1; }
+# Whole lines only: a NOTE line that carries the marker text does not satisfy it.
+out=$(FAKE_VERDICT="HALT: clear
+NOTE: this PR edits files NOTE: verdict v2 and LEDGER: reviewer council-a council-b council-c
+pr-merge: jonhill90/central-hub#7 aaaaaaa: GREEN" run $R 7 $H); check "a marker inside another line does not count" "$out" "does not print the ledger line"
+out=$(FAKE_VERDICT="NOTE: x HALT: clear
+NOTE: verdict v2
+LEDGER: reviewer council-a council-b council-c
+pr-merge: jonhill90/central-hub#7 aaaaaaa: GREEN" run $R 7 $H); check "HALT: clear inside another line does not count" "$out" "did not say HALT: clear"
+# Two reads: the second one, just before the merge, sees a halt that was set in between.
+cat > "$t/bin/zsh" <<'F'
+#!/bin/bash
+case "$*" in
+  *"pass-record show"*) echo '{"role":"reviewer","relay_time":"2026-11-14T19:42:00Z"}'; exit 0 ;;
+  *) n=$(cat "$FAKE_COUNT" 2>/dev/null || echo 0); echo $((n+1)) > "$FAKE_COUNT"
+     if [[ $n -ge 1 ]]; then echo "$FAKE_SECOND"; else echo "$FAKE_VERDICT"; fi; exit 0 ;;
+esac
+F
+rm -f "$t/count"
+out=$(FAKE_COUNT="$t/count" FAKE_VERDICT=$G FAKE_SECOND=$H_SET run $R 7 $H); check "a halt set between the two reads stops the merge" "$out" "halt flag is set"; [[ ! -s $t/calls ]] && echo "ok   the second read made no gh call" || { echo "FAIL: gh was called after the second read said halted"; fail=1; }
+rm -f "$t/count"
+out=$(FAKE_COUNT="$t/count" FAKE_VERDICT=$G FAKE_SECOND=$G run $R 7 $H); check "two clean reads merge" "$out" "rc=0"
+cat > "$t/bin/zsh" <<'F'
+#!/bin/bash
+case "$*" in
+  *"grep -cF"*) echo "${FAKE_MARKER-1}"; exit 0 ;;
+  *"pass-record show"*) [[ -n ${FAKE_SHOW_FAIL:-} ]] && exit 1; echo '{"role":"reviewer","relay_time":"2026-11-14T19:42:00Z"}'; exit 0 ;;
+  *) echo "$FAKE_VERDICT"; exit "${FAKE_RC:-0}" ;;
+esac
+F
 # Mutation: without the GREEN test a NOT GREEN verdict merges.
-sed 's|^\[\[ \$rc -eq 0 && .*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut.sh"
+sed 's|^  \[\[ \$rc -eq 0 && .*|  true|' "$src" > "$t/co/hosts/wrappers/mac/mut.sh"
 out=$(W="$t/co/hosts/wrappers/mac/mut.sh" FAKE_VERDICT="HALT: clear
 NOTE: verdict v2
 LEDGER: reviewer council-a council-b council-c
 pr-merge: x: NOT GREEN: a check failed" FAKE_RC=1 run $R 7 $H)
 [[ -s $t/calls ]] && echo "ok   mutation: without the GREEN test a refused PR merges" || { echo "FAIL: the mutation did nothing: $out"; fail=1; }
 # Mutation: without the HALT tests a halted box still merges.
-sed 's|^\[\[ \$verdict != \*"HALT: set"\* \]\].*|true|; s|^\[\[ \$.\\n.\$verdict.*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut2.sh"
+sed 's|^  ! has_line "HALT: set".*|  true|; s|^  has_line "HALT: clear".*|  true|' "$src" > "$t/co/hosts/wrappers/mac/mut2.sh"
 out=$(W="$t/co/hosts/wrappers/mac/mut2.sh" FAKE_VERDICT=$H_SET run $R 7 $H)
 [[ -s $t/calls ]] && echo "ok   mutation: without the HALT tests a halted box still merges" || { echo "FAIL: the halt mutation did nothing: $out"; fail=1; }
 # Mutation: without the rule 11 NOTE test a rule 11 PR with a tap merges.
-sed 's|^\[\[ \$verdict != \*"NOTE: rule 11 PR"\* \]\].*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut3.sh"
+sed 's|^  \[\[ \$verdict != \*"NOTE: rule 11 PR"\* \]\].*|  true|' "$src" > "$t/co/hosts/wrappers/mac/mut3.sh"
 out=$(W="$t/co/hosts/wrappers/mac/mut3.sh" FAKE_VERDICT="NOTE: rule 11 PR (x)
 $G" run $R 7 $H)
 [[ -s $t/calls ]] && echo "ok   mutation: without the NOTE test a rule 11 PR merges from the Mac" || { echo "FAIL: the NOTE mutation did nothing: $out"; fail=1; }
 # Mutation: without the marker test an older box's GREEN merges.
-sed 's|^\[\[ \$verdict == \*"NOTE: verdict v2"\*.*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut4.sh"
+sed 's|^  { has_line "NOTE: verdict v2".*|  true \|\||' "$src" > "$t/co/hosts/wrappers/mac/mut4.sh"
 out=$(W="$t/co/hosts/wrappers/mac/mut4.sh" FAKE_VERDICT="HALT: clear
 $OLD" run $R 7 $H)
 [[ -s $t/calls ]] && echo "ok   mutation: without the marker test an older box merges" || { echo "FAIL: the marker mutation did nothing: $out"; fail=1; }
