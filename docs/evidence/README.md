@@ -42,3 +42,4 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0043 | [0043-keep-tailscale-as-a-swappable-stopgap-for-reaching-the-lab.md](0043-keep-tailscale-as-a-swappable-stopgap-for-reaching-the-lab.md) |
 | D-0044 | [0044-let-the-agent-box-apply-limit-changes-main-approves-by-digest.md](0044-let-the-agent-box-apply-limit-changes-main-approves-by-digest.md) |
 | D-0045 | [0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md](0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md) |
+| D-0047 | [0047-keep-proxmox-ve-as-the-lab-hypervisor-on-its-free-repositories.md](0047-keep-proxmox-ve-as-the-lab-hypervisor-on-its-free-repositories.md) |
