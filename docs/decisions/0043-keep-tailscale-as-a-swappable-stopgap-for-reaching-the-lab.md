@@ -9,7 +9,7 @@ consulted: []
 waits-on: []
 supersedes: []
 superseded-by:
-revisit-when: the Headscale test on a dev VM passes and the cut-over of the home tailnet goes to the owner; a research batch tests Headscale on the features the lab uses; the lab needs a feature that Tailscale keeps in a paid plan; the free plan's terms change; the agents get accounts of their own (D-0030) and need their own identities on the network; or the lab is built for real, when the owner is asked again, as his card of 2026-11-10 and the Tailscale entry in `docs/standards/foss-exceptions.yaml` say
+revisit-when: a research batch and a dev-VM test show Headscale runs the features the lab uses; the lab needs a feature that Tailscale keeps in a paid plan; the free plan's terms change; the agents get accounts of their own (D-0030) and need their own identities on the network; or the lab is built for real, when the owner is asked again, as his card of 2026-11-10 and the Tailscale entry in `docs/standards/foss-exceptions.yaml` say
 ---
 
 # Keep Tailscale as a swappable stopgap for reaching the lab from outside, with Headscale as the way off its closed coordination server
@@ -20,14 +20,14 @@ The owner, his Mac and the agents reach the lab from outside through Tailscale: 
 
 Tailscale's client is open source, but its coordination server is closed, and its paid plans hold features back (evidence finding 3). Between 04:43:45 and 04:44:57 UTC on 2026-11-14 the owner ruled that nothing in the lab may come from an owner who holds a feature back behind a paid tier (cmsg_01X43rfNYp4H1dL1V2dkfkwNR46AufLXRC146Xo4CSXG6t, cmsg_01X43rfNYp4H1dL1V2dkfkwNQV7TsveqXKdLbddnuYc8v7, and most plainly cmsg_01X43rfNYp4H1dL1V2dkfkwN5A1ezB3rCi7zkVswXeZkB4), as D-0040 records, and STD-0006 test 2 now says the same. **Tailscale fails that ruling and that test.**
 
-The only owner answer for keeping it is older than the ruling. On 2026-11-10 a decision card (cmsg_01X43rfNYp4H1dL1V2dkfkwN94SWGX6ssfCizqji4VUhLp, the question) asked whether Tailscale was acceptable for now under his rule of FOSS and no lock-in, and offered three answers: keep it for now and keep it swappable, plan the move off it now, or drop the rule. He tapped the first at 19:09 UTC. `docs/standards/foss-exceptions.yaml` line 16 records that answer: state `kept`, "as long as it stays swappable and nothing new depends on it in a way that can't be swapped", "asked again before the lab is built for real". That file was added with STD-0006 by #277 at 06:31 UTC on 2026-11-14 and accepted by #281, both after the ruling, but both were written and approved by agents; the owner has said nothing about Tailscale since the ruling.
+The owner kept it after that ruling. On 2026-11-10 a decision card (cmsg_01X43rfNYp4H1dL1V2dkfkwN94SWGX6ssfCizqji4VUhLp, the question) asked whether Tailscale was acceptable for now under his rule of FOSS and no lock-in, and offered three answers: keep it for now and keep it swappable, plan the move off it now, or drop the rule. He tapped the first at 19:09 UTC. At 06:30:41 UTC on 2026-11-14, after the ruling, he accepted STD-0006 with Tailscale kept as that card said (cmsg_01X43rfNYp4H1dL1V2dkfkwNBs2MstPeufRMzK1m6UU6FK, STD-0006's approval reference). `docs/standards/foss-exceptions.yaml` line 16 records the keep: state `kept`, "as long as it stays swappable and nothing new depends on it in a way that can't be swapped", "asked again before the lab is built for real". So Tailscale fails the test, and the owner's latest words keep it anyway, as a swappable stopgap.
 
-Planning the move off Tailscale, and testing it on a dev VM, changes nothing on the live tailnet and can be undone, so the agents decide it under D-0042. The cut-over of the home tailnet is a tailnet change, which stays behind the owner's words (D-0036 rule 8). This record writes down the stopgap, what keeps it swappable, the planned move, and where the owner decides.
+This record writes down the stopgap, what keeps it swappable, and the way off, which the agents keep ready so that the question at the build-for-real stage can be answered with a tested exit.
 
 ## Decision Drivers
 
 - **FOSS with no paid feature in use** (REQ-0032; the owner, 2026-11-14).
-- **Swappable** (the owner's card, 2026-11-10 19:09 UTC; CLAUDE.md rule 6).
+- **Swappable** (the owner's card, 2026-11-10 19:09 UTC, kept on 2026-11-14 06:30:41 UTC; CLAUDE.md rule 6).
 - **Reach the lab without opening ports to the internet.**
 - **Agents rebuild the lab from the box** (D-0035, D-0036), so the box's way in must survive a rebuild.
 
@@ -39,20 +39,20 @@ Planning the move off Tailscale, and testing it on a dev VM, changes nothing on 
 
 ## Decision Outcome
 
-Proposed: **option 1, as a stopgap, while the move to option 2 is planned now**. Option 2 is the named way off: it keeps the same clients, Headscale's documentation says it implements the same policy ACLs as Tailscale, written in HuJSON, and no paid edition of it was found (evidence finding 6). Option 3 is not a way off: NetBird holds features back from its self-hosted community edition (evidence finding 7), so it fails STD-0006 test 2 as Tailscale does. These readings come from documentation and searches, not from a test.
+Proposed: **option 1, as a stopgap, with option 2 kept ready as the exit**, as the owner's latest words say. Option 2 is the named way off: it keeps the same clients, Headscale's documentation says it implements the same policy ACLs as Tailscale, written in HuJSON, and no paid edition of it was found (evidence finding 6). Option 3 is not a way off: NetBird holds features back from its self-hosted community edition (evidence finding 7), so it fails STD-0006 test 2 as Tailscale does. These readings come from documentation and searches, not from a test.
 
-### Keep it now, or plan the move off it now
+### Keeping the exit ready
 
-The 2026-11-10 card offered both. They weigh as follows.
+The 2026-11-10 card also offered "plan the move off it now", and the owner picked keeping it for now, and kept that pick after the ruling. So the move is not planned now. The exit is kept ready instead.
 
-| | Keep it now (option 1) | Plan the move off it now (option 2) |
+| | Keep Tailscale, exit ready (this record) | Move off it now (not picked) |
 |---|---|---|
-| The 2026-11-14 ruling | Broken until the move | Kept once the move is done |
+| The 2026-11-14 ruling | Fails it, kept by the owner's later words | Kept once the move is done |
 | How the owner, his Mac and the agents reach the lab | No change | Changes once, on the path everyone uses to reach the lab |
-| Work it needs first | None | A research batch that runs Headscale on a dev VM and replays the policy file; a VM and its backup |
-| Risk | The lab depends on one company's closed server | A move that hasn't been tested could cut off the way in; rule 5's lifeline and break-glass cover that |
+| Work | A Headscale design and a dev-VM test, after the work of finishing the lab | The same, then a cut-over during the lab build |
+| Risk | The lab depends on one company's closed server | A cut-over that goes wrong could cut off the way in; rule 5's lifeline and break-glass cover that |
 
-The agents' pick, under D-0042, is to **plan the move now and keep Tailscale until a Headscale test on a dev VM passes**. The 2026-11-14 ruling points that way, and the planning and the test change nothing on the live tailnet. The move is planned as rule 21 research, then a design the three councils pass, then the dev-VM test. Only the cut-over of the home tailnet goes to the owner, as one decision card naming the commit to apply.
+Keeping the exit ready is work the agents do under D-0042, because a design and a dev-VM test change nothing on the live tailnet: rule 21 research, then a design the three councils pass, then the test. It comes after finishing the lab. When the lab is built for real, the owner is asked again, as `foss-exceptions.yaml` says. A cut-over of the home tailnet is a tailnet change and stays his (D-0036 rule 8), as one decision card naming the commit.
 
 Diagram: not applicable. One component is chosen, and its place in the network is drawn in STD-0002 and the remote-access runbooks.
 
@@ -69,7 +69,7 @@ Diagram: not applicable. One component is chosen, and its place in the network i
 - Good: no change to how anyone reaches the lab today.
 - Good: the policy is code, so a move to Headscale replays it.
 - Bad: the coordination server is closed and run by one company; the lab depends on it until the move.
-- Bad: until the move, the lab keeps a piece that fails the 2026-11-14 ruling and STD-0006 test 2.
+- Bad: the lab keeps a piece that fails STD-0006 test 2, by the owner's choice, until he is asked again.
 - Bad: the stopgap has no end date.
 
 ### Confirmation
