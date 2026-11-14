@@ -51,4 +51,4 @@ The body holds the rule itself, worded with BCP 14 key words (RFC 2119, RFC 8174
 | File | Standard | What it holds |
 |---|---|---|
 | [`components.yaml`](components.yaml) | STD-0006 | The component register: one row per outside component, with its licence, paid edition, verdict and sources. |
-| [`foss-exceptions.yaml`](foss-exceptions.yaml) | STD-0006 | The named exceptions to STD-0006. Only the owner's typed go extends it. |
+| [`foss-exceptions.yaml`](foss-exceptions.yaml) | STD-0006 | The named exceptions to STD-0006. Only the owner's go, typed or a card tap that names the component, extends it (rule 5). |
