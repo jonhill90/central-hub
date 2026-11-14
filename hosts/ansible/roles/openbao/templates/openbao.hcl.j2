@@ -1,0 +1,119 @@
+# {{ ansible_managed | comment('plain') | trim }}
+# OpenBao on its own VM (proposed D-0038). Starts and unseals with no person: the static seal's key
+# is a file only OpenBao can read (rule 4).
+
+ui            = true
+disable_mlock = true
+api_addr      = "https://{{ openbao_address }}:{{ openbao_port }}"
+cluster_addr  = "https://{{ openbao_address }}:{{ openbao_cluster_port }}"
+
+listener "tcp" {
+  address         = "0.0.0.0:{{ openbao_port }}"
+  cluster_address = "0.0.0.0:{{ openbao_cluster_port }}"
+  tls_cert_file   = "{{ openbao_tls_dir }}/tls.crt"
+  tls_key_file    = "{{ openbao_tls_dir }}/tls.key"
+}
+
+storage "raft" {
+  path    = "{{ openbao_data_dir }}"
+  node_id = "{{ openbao_hostname }}"
+}
+
+seal "static" {
+  current_key_id = "{{ openbao_seal_key_id }}"
+  current_key    = "file://{{ openbao_config_dir }}/seal/{{ openbao_seal_key_id }}.key"
+}
+{% if openbao_first_start | default(false) %}
+
+# First start only (rule 5): OpenBao initializes itself, then revokes the root token it used. The
+# role removes this block, and the two ID files it reads, once the store reports initialized.
+initialize "audit" {
+  request "file" {
+    operation = "update"
+    path      = "sys/audit/file"
+    data = {
+      type    = "file"
+      options = { file_path = "{{ openbao_audit_dir }}/audit.log" }
+    }
+  }
+}
+
+initialize "mounts" {
+  request "kv" {
+    operation = "update"
+    path      = "sys/mounts/kv"
+    data      = { type = "kv", options = { version = "2" } }
+  }
+  request "approle" {
+    operation = "update"
+    path      = "sys/auth/approle"
+    data      = { type = "approle" }
+  }
+}
+
+initialize "policies" {
+  request "admin" {
+    operation = "update"
+    path      = "sys/policies/acl/admin"
+    data      = { policy = {{ lookup('ansible.builtin.template', 'policy-admin.hcl.j2') | to_json }} }
+  }
+  request "snapshot" {
+    operation = "update"
+    path      = "sys/policies/acl/snapshot"
+    data      = { policy = {{ lookup('ansible.builtin.template', 'policy-snapshot.hcl.j2') | to_json }} }
+  }
+}
+
+initialize "roles" {
+  request "admin" {
+    operation = "update"
+    path      = "auth/approle/role/admin"
+    data = {
+      token_policies        = ["admin"]
+      token_ttl             = "{{ openbao_admin_token_ttl }}"
+      token_max_ttl         = "{{ openbao_admin_token_max_ttl }}"
+      secret_id_bound_cidrs = ["{{ openbao_box_address }}/32"]
+      token_bound_cidrs     = ["{{ openbao_box_address }}/32"]
+    }
+  }
+  request "admin_role_id" {
+    operation = "update"
+    path      = "auth/approle/role/admin/role-id"
+    data = {
+      role_id = { eval_type = "string", eval_source = "file", path = "{{ openbao_config_dir }}/init/admin-role-id" }
+    }
+  }
+  request "admin_secret_id" {
+    operation = "update"
+    path      = "auth/approle/role/admin/custom-secret-id"
+    data = {
+      secret_id = { eval_type = "string", eval_source = "file", path = "{{ openbao_config_dir }}/init/admin-secret-id" }
+    }
+  }
+  request "snapshot" {
+    operation = "update"
+    path      = "auth/approle/role/snapshot"
+    data = {
+      token_policies        = ["snapshot"]
+      token_ttl             = "5m"
+      token_max_ttl         = "10m"
+      secret_id_bound_cidrs = ["127.0.0.1/32"]
+      token_bound_cidrs     = ["127.0.0.1/32"]
+    }
+  }
+  request "snapshot_role_id" {
+    operation = "update"
+    path      = "auth/approle/role/snapshot/role-id"
+    data = {
+      role_id = { eval_type = "string", eval_source = "file", path = "{{ openbao_config_dir }}/init/snapshot-role-id" }
+    }
+  }
+  request "snapshot_secret_id" {
+    operation = "update"
+    path      = "auth/approle/role/snapshot/custom-secret-id"
+    data = {
+      secret_id = { eval_type = "string", eval_source = "file", path = "{{ openbao_config_dir }}/init/snapshot-secret-id" }
+    }
+  }
+}
+{% endif %}

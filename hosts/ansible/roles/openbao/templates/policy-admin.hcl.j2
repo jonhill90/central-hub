@@ -1,0 +1,13 @@
+# admin: the agent box's secrets-store wrapper only (D-0038 rule 6). It manages the store's
+# contents, mounts, logins and policies, takes snapshots and makes recovery keys. It can't unseal,
+# seal or generate a root token: those need the seal key or recovery shares.
+path "kv/*"                       { capabilities = ["create", "read", "update", "delete", "list"] }
+path "sys/policies/acl/*"         { capabilities = ["create", "read", "update", "delete", "list"] }
+path "sys/auth"                   { capabilities = ["read"] }
+path "sys/auth/*"                 { capabilities = ["create", "read", "update", "delete", "sudo"] }
+path "auth/*"                     { capabilities = ["create", "read", "update", "delete", "list"] }
+path "sys/mounts"                 { capabilities = ["read"] }
+path "sys/mounts/*"               { capabilities = ["create", "read", "update", "delete"] }
+path "sys/storage/raft/snapshot"  { capabilities = ["read"] }
+path "sys/rotate/recovery/*"      { capabilities = ["create", "read", "update", "delete", "sudo"] }
+path "sys/audit"                  { capabilities = ["read", "sudo"] }
