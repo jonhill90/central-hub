@@ -3,19 +3,22 @@
 # on dev (docs/runbooks/set-up-the-secrets-store.md, proposed D-0038). It runs as user `keys` through
 # sudo, so the session that asks for it never sees the Proxmox token, the seal key, the AppRole IDs,
 # the recovery shares or the VM's SSH key. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh plan|apply|configure|recovery|status|snapshot|restore|destroy
+#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt|destroy
 # plan, apply, destroy: OpenTofu on hosts/terraform/home/secrets-store with the agents' Proxmox token.
 # configure: the openbao playbook over SSH, with the owner's sign-in once the dev rebuild has handed over
 # Keycloak's issuer (pick 233). recovery: makes the recovery shares once (self-
 # initialization makes none) into the keys folder. status: sys/health, which holds no secret.
-# snapshot: copies a Raft snapshot off the store into the keys folder. restore: puts the newest of
-# those back (D-0038 Confirmation 4 and 5). Dev only: every action refuses a store outside 550-599.
+# snapshot: copies a Raft snapshot off the store into the keys folder, with the store's cluster ID beside it.
+# restore: puts the newest of those back, never forced (D-0038 Confirmation 4). restore-rebuilt: after a
+# destroy and rebuild, puts back the newest snapshot of the store's previous cluster, forced only if OpenBao
+# refuses it for the keys (Confirmation 5, pick 238). destroy leaves a hold that stops the hourly off-box send
+# until restore-rebuilt passes. Dev only: every action refuses a store outside 550-599.
 set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | recovery | status | snapshot | restore | destroy) action=$1 ;;
-  *) echo "usage: secrets-store plan|apply|configure|recovery|status|snapshot|restore|destroy" >&2; exit 2 ;;
+  plan | apply | configure | recovery | status | snapshot | restore | restore-rebuilt | destroy) action=$1 ;;
+  *) echo "usage: secrets-store plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt|destroy" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -31,6 +34,7 @@ sshkey=$env_keys/secrets-store-ssh
 cacert=$env_keys/secrets-store-ca.crt
 snapshots=$env_keys/openbao-snapshots   # the store's Raft snapshots, readable only with the seal key
 snapshot_keep=24
+hold=$work/state/secrets-store.rebuilding   # from destroy until restore-rebuilt passes; the off-box send skips meanwhile
 # The owner's sign-in (agent pick 233), dev: the dev rebuild's identity stage writes Keycloak's issuer, its
 # Gateway's address and the dev CA's root here once the store's address is in the realm; its values file holds
 # the client secret and the dev users' passwords and seeds. Absent: configure sets no sign-in.
@@ -94,6 +98,7 @@ PY
       rm -f "$plan"
       ;;
     destroy)
+      date -u +%FT%TZ > "$hold"
       tofu plan -destroy -input=false -var-file="$vars" -out="$plan"
       tofu apply -input=false "$plan"
       rm -f "$plan"
@@ -176,19 +181,33 @@ recovery() {
 
 # Copy one Raft snapshot off the store, through the admin AppRole. Fails loudly: never an empty file.
 snapshot() {
-  local out token
+  local out token stamp cluster
+  # During a rebuild the store is empty: a snapshot now would write its mark into the fresh store, which
+  # restore-rebuilt's empty-store guard would then refuse, and it would be a snapshot of nothing.
+  [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt first" >&2; exit 1; }
   mkdir -p "$snapshots"
-  out=$snapshots/raft-$(date -u +%Y%m%dT%H%M%SZ).snap
+  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+  out=$snapshots/raft-$stamp.snap
+  # The store's cluster ID, which a rebuild changes (restore-rebuilt picks by it), from sys/health: no secret.
+  cluster=$(curl -sS --cacert "$cacert" "$(addr)/v1/sys/health" |
+    python3 -I -c 'import json, sys; print(json.load(sys.stdin)["cluster_id"])') ||
+    { echo "secrets-store: sys/health gave no cluster ID" >&2; exit 1; }
   token=$(admin_token)
   local ok=1
+  # A mark inside the snapshot: kv/dev/snapshot-mark holds this snapshot's own time, which restore-rebuilt
+  # reads back to prove the data came back. Not a secret.
   printf 'header = "X-Vault-Token: %s"\n' "$token" |
+    curl -sS --fail-with-body --cacert "$cacert" -K - -X POST --data "{\"data\": {\"taken\": \"$stamp\"}}" \
+      "$(addr)/v1/kv/data/dev/snapshot-mark" >/dev/null || ok=0
+  [[ $ok == 1 ]] && printf 'header = "X-Vault-Token: %s"\n' "$token" |
     curl -sS --fail-with-body --cacert "$cacert" -K - "$(addr)/v1/sys/storage/raft/snapshot" -o "$out.part" || ok=0
   printf 'header = "X-Vault-Token: %s"\n' "$token" |
     curl -sS --cacert "$cacert" -K - -X POST "$(addr)/v1/auth/token/revoke-self" >/dev/null || true
   [[ $ok == 1 && -s $out.part ]] || { rm -f "$out.part"; echo "secrets-store: snapshot failed or empty" >&2; exit 1; }
   mv "$out.part" "$out"
+  echo "$cluster" > "$out.cluster"
   find "$snapshots" -maxdepth 1 -name 'raft-*.snap' -printf '%f\n' | sort -r | tail -n +"$((snapshot_keep + 1))" |
-    while read -r f; do rm -f -- "${snapshots:?}/$f"; done
+    while read -r f; do rm -f -- "${snapshots:?}/$f" "${snapshots:?}/$f.cluster"; done
   echo "secrets-store: snapshot $(basename "$out"), $(stat -c %s "$out") bytes"
 }
 
@@ -205,11 +224,18 @@ restore() {
   echo "secrets-store: restored $snap"
 }
 
+# After destroy, apply and configure: the newest snapshot of the store's previous cluster, under the guards in
+# secrets-store-restore-rebuilt.sh. It removes the hold once its proof passes.
+restore_rebuilt() {
+  "$(dirname "$0")/secrets-store-restore-rebuilt.sh" "$(addr)" "$cacert" "$env_keys" "$snapshots" "$hold" 120
+}
+
 case $action in
   configure) configure ;;
   status) status ;;
   recovery) recovery ;;
   snapshot) snapshot ;;
   restore) restore ;;
+  restore-rebuilt) restore_rebuilt ;;
   *) tofu_run ;;
 esac

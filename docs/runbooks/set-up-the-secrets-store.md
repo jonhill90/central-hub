@@ -7,7 +7,7 @@ runner: an agent session on the agent box, through the `secrets-store` wrapper (
 outcome: one AlmaLinux 10 VM on VNet dev runs OpenBao 2.7.2, starts and unseals with no person, initialized by itself with audit, KV v2 and two AppRoles, takes an hourly Raft snapshot, and holds c1's External Secrets login and the rebuild's AppRole
 needs: the agent box; the agents' Proxmox token with rights on pool `dev`; template 9001; a free dev address; the private inventory values listed below
 private-values: [store-name, store-address, box-address, seal-key, admin-role-id, admin-secret-id, rebuild-role-id, rebuild-secret-id, store-ssh-key]
-files: [hosts/terraform/home/secrets-store/, hosts/ansible/roles/openbao/, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/openbao.yml, hosts/ansible/playbooks/k8s-openbao-auth.yml]
+files: [hosts/terraform/home/secrets-store/, hosts/ansible/roles/openbao/, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore-rebuilt.sh, .github/hosts-check/tests/test_secrets_store_restore_rebuilt.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/openbao.yml, hosts/ansible/playbooks/k8s-openbao-auth.yml]
 last-tested: not yet run
 superseded-by:
 ---
@@ -33,7 +33,7 @@ superseded-by:
 
 ## Before you start
 
-- The agent box needs the `secrets-store` wrapper (`plan`, `apply`, `configure`, `recovery`, `status`, `snapshot`, `restore`, `destroy`, run as user `keys`), which the agent_box role installs (#276). A new wrapper changes the box's limits, so the box's self-apply stops on it and a controller apply puts it there (D-0036). Until it is on the box, nothing in this runbook runs.
+- The agent box needs the `secrets-store` wrapper (`plan`, `apply`, `configure`, `recovery`, `status`, `snapshot`, `restore`, `restore-rebuilt`, `destroy`, run as user `keys`), which the agent_box role installs (#276). A new wrapper changes the box's limits, so the box's self-apply stops on it and a controller apply puts it there (D-0036). Until it is on the box, nothing in this runbook runs.
 - The wrapper makes, once, in `/etc/agent-keys/dev/` (user `keys`, 0600): the 32-byte seal key (`openssl rand -out <file> 32`), the admin AppRole's role ID and secret ID (`openssl rand -hex 24` each, with no trailing newline, because the first start reads each file whole), and the VM's SSH key. None is ever printed.
 - The private inventory group `secrets_store` holds the VM's name, VM ID, address, cores, memory and disk, and the box's own address.
 
@@ -80,12 +80,12 @@ superseded-by:
 
 9. Snapshot off the VM.
    `secrets-store snapshot`
-   expect: `snapshot raft-<time>.snap, <n> bytes` with n above 0; the file is in `/etc/agent-keys/dev/openbao-snapshots/`, which keeps 24.
+   expect: `snapshot raft-<time>.snap, <n> bytes` with n above 0; the file is in `/etc/agent-keys/dev/openbao-snapshots/`, which keeps 24. Beside it, `raft-<time>.snap.cluster` holds the store's cluster ID from `sys/health` (not a secret). Before each snapshot the wrapper writes the snapshot's own time into `kv/dev/snapshot-mark`, so a restore can prove which snapshot came back.
 
 10. Restore drill.
    why: a backup counts only once it has been restored.
    Write a test key, take a snapshot, delete the key, then `secrets-store restore`. This quick drill restores over the live dev store; it is not D-0038 Confirmation 4, which restores into a throwaway server.
-   expect: `restored raft-<time>.snap`, and the test key reads back. The full drill is D-0038 Confirmation 5: `destroy`, `plan`, `apply`, `configure`, then `restore`, with no person.
+   expect: `restored raft-<time>.snap`, and the test key reads back. The full drill is D-0038 Confirmation 5, in [Rebuild and restore](#rebuild-and-restore-d-0038-confirmation-5).
 
     The weekly drill, D-0038 Confirmation 4, needs nothing typed. `configure` installs `openbao-drill.timer` on the VM and runs the drill once (tag `drill`). Unit `openbao-drill.service` runs `/usr/local/libexec/openbao-drill.sh`:
     - it has only a loopback device, so the throwaway can't reach the live store;
@@ -115,6 +115,26 @@ superseded-by:
     - The web page itself is first used by the owner; the dev proof drives its calls, not a browser.
     - Prod: the login is a new access right, so it is set only after the owner's tap (D-0042 rule 6).
 
+## Rebuild and restore (D-0038 Confirmation 5)
+
+Pick 238. **The owner's tap first:** a `destroy` or `restore` of the secrets store is a delete under D-0042 rule 6, on dev too, so this sequence runs only after the owner taps the card that names it and its commit. No other person takes any step.
+
+1. `secrets-store snapshot`. It writes `kv/dev/snapshot-mark` with its time, then saves the snapshot and its `.cluster` file.
+2. `secrets-store destroy`. Before it removes the VM, it writes the hold `/var/lib/agent-box/state/secrets-store.rebuilding`.
+3. `secrets-store plan`, `apply` and `configure`. The rebuilt store initializes itself, with a new cluster ID. While the hold exists, `secrets-store snapshot` refuses, and, once the VM is back, the hourly off-box send prints `skipped: store rebuild in progress` and takes no snapshot.
+4. `secrets-store restore-rebuilt`. It runs `secrets-store-restore-rebuilt.sh` under the wrapper's lock:
+   1. picks the newest snapshot whose `.cluster` names another cluster than the store's current one; one of the rebuilt store, or one with no `.cluster` file, is never picked;
+   2. refuses unless `kv/` holds nothing but `c1/check`, the fixed word `configure` writes; a listing that answers anything but 200 or 404 refuses too;
+   3. tries the plain restore. Only if OpenBao refuses it with "possibly the snapshot is using a different set of unseal keys" does it use the forced one. That text is a Vault user's report, not OpenBao's own (source: [Raft: how to restore from 3-node HA cluster to 1-node DR instance](https://discuss.hashicorp.com/t/raft-how-to-restore-from-3-node-ha-cluster-to-1-node-dr-instance/20572)). If OpenBao words it otherwise, the run stops as `other refusal`, and the text in the script is changed once measured;
+   4. waits for `sys/health` 200 and for its own token from before the restore to be refused;
+   5. signs in again and reads `kv/dev/snapshot-mark`, which must hold the picked snapshot's time;
+   6. removes the hold.
+
+   expect: six `ok` step lines, the third saying `plain` or `forced`, then `PASS: restore-rebuilt: raft-<time>.snap restored (<how>) onto the rebuilt store; its mark reads back; hold removed`. The first run's `plain` or `forced` answers the open question whether the same static seal key passes the plain restore.
+5. `secrets-store configure` again. expect `changed=0`.
+
+The admin policy can call the forced restore (`sys/storage/raft/snapshot-force`) only for this. `secrets-store restore` stays plain and never forces.
+
 ## Off-box copy of the snapshots
 
 Pick 237, proposed D-0038 rule 8. **Not installed yet:** it is a box limit, and a delete (the daily prune) under D-0042 rule 6, so it waits for the owner's tap. It also waits on the blocker in [the bundle's runbook](make-the-box-secrets-bundle.md#before-you-start): no agent or pipeline identity may hold role-assignment rights on the backup vault or container.
@@ -137,12 +157,12 @@ If the box is down, nothing goes off-site; the VM keeps its own 48 hourly snapsh
 1. Grant their own account Key Vault Secrets User on the backup vault and Storage Blob Data Reader on the container.
 2. Read the restic password and the box's age identity, and restore the newest secrets bundle as [its runbook](make-the-box-secrets-bundle.md#recover-the-bundle-when-the-box-is-lost-break-glass) says; the bundle holds the seal key.
 3. `restic -r azure:opnsense-backup:/openbao-dev restore --tag openbao-dev latest --target <folder>`.
-4. Rebuild the store from code with that seal key in the keys folder, put the snapshot in `/etc/agent-keys/dev/openbao-snapshots/`, and run `secrets-store restore`.
+4. Rebuild the store from code with that seal key in the keys folder, put the snapshot and its `.cluster` file (both are in the restic snapshot) in `/etc/agent-keys/dev/openbao-snapshots/`, and run `secrets-store restore-rebuilt`.
 5. Take both roles away.
 
 ## Remove it
 
-Take a last snapshot with `secrets-store snapshot`, which copies it to the box's keys folder, then `secrets-store destroy`. The seal key in the box's keys folder is what reads that snapshot again: after `apply` and `configure`, `secrets-store restore` puts the newest one back.
+Take a last snapshot with `secrets-store snapshot`, which copies it to the box's keys folder, then `secrets-store destroy` (the owner's tap: a delete under D-0042 rule 6). The seal key in the box's keys folder is what reads that snapshot again: after `apply` and `configure`, `secrets-store restore-rebuilt` puts it back, as in [Rebuild and restore](#rebuild-and-restore-d-0038-confirmation-5). While no store VM exists, the hourly off-box send skips.
 
 ## If it fails
 
@@ -153,7 +173,11 @@ Take a last snapshot with `secrets-store snapshot`, which copies it to the box's
 - The drill passed but `configure` says the live store's Raft state changed: stop the timer (`systemctl disable --now openbao-drill.timer`) and tell the owner. The throwaway should never be able to reach the live store.
 - `secrets-store-offbox: the store's VM is in the wrapper's state, but sys/health answered ...`: the store is sealed, broken or gone without `destroy`. Check `secrets-store status`. If the VM was removed outside the wrapper, its state still lists it; fix that before anything else.
 - `secrets-store-offbox: restic could not open the repository (exit 12) ...`: the password is not the repository's; the job never makes a new one over it. See the OPNsense runbook's password versions.
-- `secrets-store: another secrets-store run is going`: the hourly pull met a session's run of the wrapper; the next hour's run sends.
+- `secrets-store: another secrets-store run is going`: the hourly pull met a session's run of the wrapper (its lock is taken with `flock -n`), so that hour's off-box send fails red; the next hour's run sends. During Rebuild and restore this can happen in steps 1 to 3, before the VM is back with the hold in place.
+- `restore-rebuilt: 1 snapshot FAIL`: no snapshot of an earlier cluster is in the folder. Nothing was changed. After a recovery from off-box, check that the `.cluster` file came back with the snapshot.
+- `restore-rebuilt: 2 empty store FAIL`: the store holds data besides `c1/check`, so it is not a fresh rebuild, and a forced restore would throw that data away. Nothing was changed; tell the owner.
+- `restore-rebuilt: 3 restore FAIL: other refusal`: OpenBao refused the plain restore for another reason, or with other words than the pinned text. Nothing was forced. Read the store's log and tell the owner before changing the text.
+- `secrets-store-offbox: the store's rebuild hold is over 24 hours old`: a rebuild was left before `restore-rebuilt` passed. Finish it, or, if the empty store is to stay, remove the hold.
 - Tell the owner before trying anything not written here.
 
 ## Related

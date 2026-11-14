@@ -4,7 +4,9 @@
 # timer; no session runs it, so it has no sudo line.
 # It reuses the OPNsense off-box copy's settings, Azure sign-in, container, restic password and Key Vault (pick 222),
 # in a repository of its own, so it needs no Azure right of its own.
-#   1. No store: when the wrapper's OpenTofu state holds no store VM, one "skipped: no store" line, exit 0. A store
+#   1. No store: when the wrapper's OpenTofu state holds no store VM, one "skipped: no store" line, exit 0. With a
+#      store VM and the wrapper's rebuild hold (destroy leaves it, restore-rebuilt removes it): "skipped: store
+#      rebuild in progress", exit 0, and a hold older than 24 hours fails the run. A store
 #      VM that is there but whose sys/health is not 200 fails the run (rule 9: fail loudly).
 #   2. secrets-store snapshot copies a snapshot into the keys folder, through the admin AppRole, as it does by hand.
 #   3. The restic password's escrow must hold before anything is sent, as for the OPNsense copy.
@@ -25,6 +27,7 @@ settings=/etc/agent-keys/opnsense-offbox/settings.env   # pick 222's settings; n
 own=$work/secrets-store-offbox.env                       # this job's settings; no secret in it
 store_settings=$work/secrets-store.json                  # the wrapper's settings: the store's address
 state=$work/state/secrets-store.tfstate                  # the wrapper's OpenTofu state
+hold=$work/state/secrets-store.rebuilding               # the wrapper's destroy writes it; restore-rebuilt removes it
 cacert=/etc/agent-keys/dev/secrets-store-ca.crt
 snapshots=/etc/agent-keys/dev/openbao-snapshots
 pruned=$work/state/secrets-store-offbox.pruned           # the UTC day of the last prune
@@ -54,6 +57,13 @@ print(sum(len(r.get("instances", [])) for r in s.get("resources", [])
           if r.get("type") == "proxmox_virtual_environment_vm" and r.get("mode") == "managed"))' "$state") \
   || die "the wrapper's state at $state could not be read"
 if [[ $vms == 0 ]]; then say "skipped: no store"; exit 0; fi
+# A rebuild in progress (pick 238): the VM is back but restore-rebuilt has not passed yet, so no snapshot of the
+# empty store is taken, sent or kept. A hold older than a day is a rebuild left half done, which fails red.
+if [[ -e $hold ]]; then
+  (( $(date +%s) - $(stat -c %Y "$hold") < 86400 )) || die "the store's rebuild hold is over 24 hours old; finish restore-rebuilt or remove $hold"
+  say "skipped: store rebuild in progress"
+  exit 0
+fi
 address=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["address"])' "$store_settings")
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --cacert "$cacert" "https://$address/v1/sys/health" || true)
 [[ $code =~ ^[1-9] ]] || code=nothing   # curl prints 000 when nothing answered
@@ -109,7 +119,10 @@ case $rc in
 esac
 
 # 5. Send, forget past the keep settings, and prune once a day.
-"$restic" "${lock[@]}" backup --quiet --host "$host" --tag "$tag" "$snap"
+# The snapshot and, when there is one, its cluster ID, which restore-rebuilt needs after a recovery.
+files=("$snap")
+[[ -s $snap.cluster ]] && files+=("$snap.cluster")
+"$restic" "${lock[@]}" backup --quiet --host "$host" --tag "$tag" "${files[@]}"
 prune=()
 if [[ $(cat "$pruned" 2>/dev/null || true) != "${now%-*}" ]] && (( 10#${now##*-} >= 10#$SNAPSHOT_PRUNE_AFTER_HOUR )); then
   prune=(--prune)
