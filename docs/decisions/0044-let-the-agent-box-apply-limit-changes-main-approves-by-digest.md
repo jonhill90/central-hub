@@ -19,6 +19,7 @@ revisit-when: the box can check the owner's tap itself (for example a GitHub env
 D-0036 lets the agent box apply its own role from reviewed main, and keeps the box's limits (rule 3: the sudo rules, the guard settings, the wrappers, the users, the units that run with the keys, and `box-apply` itself) behind the owner. Rule 6 sends every limit change to an apply from the controller, the owner's Mac. D-0042 rule 4 kept that, made the owner's approval a tap (rule 6), and left open how limit changes "reach the box without the Mac".
 
 **This record reverses an answer of the owner's and weakens a step he kept.**
+
 - It reverses his answer of 2026-11-14 02:26 UTC on D-0036's card: an agent can't loosen its own limits. Under this record an agent can, with a made-up tap id that the box can't tell from a real one (rule 3).
 - It makes D-0042 rule 6's tap for the box's limits something the box only logs, not enforces. A change that weakens a rule 6 step is itself a rule 6 step (D-0042 rule 11).
 
