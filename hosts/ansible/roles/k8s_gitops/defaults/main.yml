@@ -50,6 +50,12 @@ k8s_gitops_source_gateway_https: "{{ k8s_gateway_https | default(true) }}"
 # folder where the claim will look (TASK-0240, agent pick 205). c1 keeps false: its StorageClass's
 # parameters can't change in place.
 k8s_gitops_source_local_path_stable_folders: false
+# The secrets store (proposed D-0038), dev only for now. Private, no default: its https:// address,
+# and its certificate as a file on the controller. Set, they reach the root chart as
+# `openbaoAddress` and `openbaoCaBundle` (base64), and the secret-store app adds store `openbao` and
+# one test ExternalSecret. Unset, as on c1, nothing changes.
+# k8s_gitops_source_openbao_address: https://<store>
+# k8s_gitops_source_openbao_ca_file: <path>
 
 # The Argo CD web UI through the shared Gateway (tag ui), a follow-on to BUILD-PATH S12: the owner
 # said (2026-10-27 03:52 UTC, relayed) the UI waits until DNS is up, with no port-forward. On, it

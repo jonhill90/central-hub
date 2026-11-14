@@ -44,6 +44,8 @@ openbao_eso_role:
   token_policies: [eso-c1]
   token_ttl: 3600
   token_max_ttl: 3600
+# A fixed, non-secret test value under c1's path, for the cluster's openbao-check ExternalSecret.
+openbao_check_key: c1/check
 
 # The AppRole rebuild's IDs on the box, next to the admin's. Made there once, never printed.
 openbao_rebuild_role_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-rebuild-role-id"
