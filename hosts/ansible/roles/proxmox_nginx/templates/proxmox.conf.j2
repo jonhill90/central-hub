@@ -1,0 +1,38 @@
+# Managed by Ansible (role proxmox_nginx). The Proxmox web UI on 443, proxied to pveproxy on 8006.
+# The shape follows https://pve.proxmox.com/wiki/Web_Interface_Via_Nginx_Proxy.
+
+# Port 80 only redirects, to the first name (never to the Host header the client sent).
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    return 301 https://{{ proxmox_nginx_server_names | first }}$request_uri;
+}
+
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    server_name {{ proxmox_nginx_server_names | join(' ') }};
+
+    ssl_certificate {{ proxmox_nginx_cert }};
+    ssl_certificate_key {{ proxmox_nginx_key }};
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    proxy_redirect off;
+
+    location / {
+        proxy_http_version 1.1;
+        # noVNC and xterm.js consoles are WebSockets.
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass {{ proxmox_nginx_upstream }};
+        # pveproxy's certificate is for the host's names, not for 127.0.0.1, and this hop never leaves the host.
+        proxy_ssl_verify off;
+        proxy_buffering off;
+        client_max_body_size 0;
+        proxy_connect_timeout 3600s;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        send_timeout 3600s;
+    }
+}

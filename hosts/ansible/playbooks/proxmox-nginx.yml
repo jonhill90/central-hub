@@ -1,0 +1,14 @@
+---
+# The Proxmox web UI on the standard ports: nginx on 443 (and a redirect on 80) in front of pveproxy on 8006
+# (the owner's rule, 2026-11-14: no non-standard ports for any lab web page; docs/runbooks/serve-proxmox-on-443.md).
+# Run after playbooks/proxmox-cert.yml: nginx serves the certificate that role sets. Re-run it after each
+# renewal (at least every 30 days) so nginx reloads it.
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-nginx.yml --check --diff
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-nginx.yml
+- name: Proxmox web UI on 443 through nginx
+  hosts: proxmox
+  become: false
+  gather_facts: true
+  roles:
+    - role: proxmox_nginx
+      tags: [nginx]

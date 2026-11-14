@@ -1,0 +1,18 @@
+---
+argument_specs:
+  main:
+    short_description: nginx on the Proxmox host serving the web UI on 443 (and a redirect on 80), proxying to pveproxy on 8006
+    options:
+      # Private, through the inventory (by default the certificate role's names).
+      proxmox_nginx_server_names:
+        type: list
+        elements: str
+        description: The DNS names the proxy answers to, the same as proxmox_cert_names. The first is the redirect target. Private.
+      # Defaults in defaults/main.yml
+      proxmox_nginx_version: {type: str, default: "1.26.3-3+deb13u10", description: "The nginx and nginx-common version from Debian trixie."}
+      proxmox_nginx_cert: {type: path, default: /etc/pve/local/pveproxy-ssl.pem, description: "The certificate the web UI serves."}
+      proxmox_nginx_key: {type: path, default: /etc/pve/local/pveproxy-ssl.key, description: "Its key."}
+      proxmox_nginx_upstream: {type: str, default: "https://127.0.0.1:8006", description: "Where pveproxy listens."}
+      proxmox_nginx_proof_front_ok: {type: list, elements: int, default: [200], description: "Statuses the proof accepts for the front page."}
+      proxmox_nginx_proof_api_ok: {type: list, elements: int, default: [401], description: "Statuses the proof accepts for an unauthenticated API call."}
+      proxmox_nginx_ca_bundle: {type: path, default: /etc/ssl/certs/ca-certificates.crt, description: "The CA bundle the proof verifies the chain with."}

@@ -16,6 +16,8 @@ proxmox_firewall_mgmt_cidr: "{{ (lab_vlans | selectattr('name', 'equalto', proxm
 proxmox_firewall_rules:
   - { action: ACCEPT, source: +management, proto: tcp, dport: "22", comment: "SSH from the home LAN and VNet mgmt" }
   - { action: ACCEPT, source: +management, proto: tcp, dport: "8006", comment: "GUI and API from the home LAN and VNet mgmt" }
+  - { action: ACCEPT, source: +management, proto: tcp, dport: "443", comment: "GUI and API through nginx, from the same sources as 8006" }
+  - { action: ACCEPT, source: +management, proto: tcp, dport: "80", comment: "Redirect to 443, from the same sources as 8006" }
   - { action: ACCEPT, proto: icmp, comment: "IPv4 ICMP: ping, unreachable, time exceeded" }
   - { action: ACCEPT, proto: icmpv6, comment: "IPv6 ICMP; neighbour discovery is on through ndp" }
 # Private, through the inventory: more host IN rules in the same shape, written after the ones
