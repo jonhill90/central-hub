@@ -55,3 +55,4 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0050 | [Install Kubernetes on c1 with upstream kubeadm, driven by the lab's own Ansible roles](0050-install-kubernetes-on-c1-with-kubeadm-from-ansible.md) | accepted | — | 2026-11-14 |
 | D-0051 | [Use External Secrets for c1's secrets and the Local Path Provisioner for its storage, both Apache-2.0 with no paid edition in use](0051-use-external-secrets-and-local-path-as-c1s-secret-and-storage-add-ons.md) | accepted | — | 2026-11-14 |
 | D-0052 | [Run Jellyfin as c1's media server, the first app built for people to use](0052-run-jellyfin-as-c1s-media-server.md) | accepted | — | 2026-11-14 |
+| D-0055 | [Serve the Proxmox web UI on 443 through Debian's Apache httpd in place of nginx, with port 8006 kept as the fallback](0055-serve-the-proxmox-web-ui-on-443-through-apache-httpd.md) | proposed | — | 2026-11-14 |
