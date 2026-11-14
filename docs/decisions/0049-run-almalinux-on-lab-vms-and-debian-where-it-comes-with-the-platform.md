@@ -66,6 +66,7 @@ The owner's words of 04:44:57 UTC reach further than STD-0006's register row, so
   - The lab does not use FIPS mode, and rule 3 below keeps every sponsor repository off its machines.
   - The register already counts AlmaLinux as a pass.
 - **What would change it.** If the owner rules that a sponsor's paid FIPS offer counts as a paywall under his words of 2026-11-14, this record is revisited (`revisit-when`).
+- **Why it stays proposed.** It stays proposed until the owner rules on the FIPS reading, because the register row he approved did not weigh it.
 - **Debian** has no paid side: its social contract says "We promise that the Debian system and all its components will be free".
 
 ### Rules
@@ -79,7 +80,7 @@ The owner's words of 04:44:57 UTC reach further than STD-0006's register row, so
 - Good: no change; both are free, and neither has a paid edition of its own.
 - Bad: AlmaLinux's FIPS-validated packages and longer fixes are sold by its sponsors, so a need for either would mean paying or moving.
 - Bad: two distributions, two package managers and two sets of security feeds to follow.
-- Bad: CT 259 runs Debian 13 but is not in code here, so this repository can't rebuild it or check its image. It is a gap until the rehearsal kit's container is brought into `hosts/` or removed.
+- Bad: CT 259 runs Debian 13 but is not in code here, so this repository can't rebuild it or check its image. It is a gap until the rehearsal kit's container is brought into `hosts/`.
 
 ### Confirmation
 
