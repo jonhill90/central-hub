@@ -4,8 +4,11 @@
 # (D-0041 rule 3), after the agent_box role has made the key and fetched its public half (tag proxmox_host_inventory).
 # The line takes the key only from the box's lifeline address, and `restrict` turns off forwarding, a terminal and
 # ~/.ssh/rc. On Proxmox VE, root's authorized_keys is a link to /etc/pve/priv/authorized_keys, the cluster's copy.
-# That copy is on pmxcfs, where Ansible's file modules fail ("Operation not permitted" on the chmod of their temporary
-# file; forum.proxmox.com thread 88310), so a fixed shell script writes it in place, as a plain cp does. A --check run
+# That copy is on pmxcfs, where Ansible's file modules fail with "Operation not permitted": on the chmod of the
+# destination in forum.proxmox.com thread 88310 (where a plain cp worked), and on a temporary file in /etc/pve in
+# forum.ansible.com thread 26792. So a fixed shell script writes it in place, as cp does. Before the write it copies
+# the file to /root/authorized_keys.pre-central-hub-r1 (off pmxcfs); if the write fails or the file then differs from
+# what was meant, it writes that copy back and fails, because the file also holds the controller's key. A --check run
 # makes the asserts and skips the write.
 #   ansible-playbook -i inventories/home/ playbooks/proxmox-host-key.yml --check
 #   ansible-playbook -i inventories/home/ playbooks/proxmox-host-key.yml
@@ -59,8 +62,16 @@
           [ "$rc" -le 1 ] || exit "$rc"
           [ -z "$line" ] || printf '%s\n' "$line" >> "$tmp"
           if cmp -s "$tmp" "$f"; then echo unchanged; exit 0; fi
-          cat "$tmp" > "$f"
-          echo changed
+          bak=/root/authorized_keys.pre-central-hub-r1
+          (umask 077; cp -p "$f" "$bak")
+          if cat "$tmp" > "$f" && cmp -s "$tmp" "$f"; then echo changed; exit 0; fi
+          echo "the write to $f failed or did not read back; writing the copy back" >&2
+          if cat "$bak" > "$f" && cmp -s "$bak" "$f"; then
+            echo "$f is as it was before this run" >&2
+          else
+            echo "$f could not be put back: the copy is $bak" >&2
+          fi
+          exit 1
         executable: /bin/bash
       vars:
         proxmox_host_key_line: >-

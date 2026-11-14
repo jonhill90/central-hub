@@ -35,6 +35,15 @@
     fail_msg: "agent_box_lifeline_address must be the box's address and prefix on the host's subnet, for example 192.0.2.50/24"
     quiet: true
 
+# nft refuses to load `meta skuid "<user>"` for a user that doesn't exist, so a run with only --tags lifeline on a
+# fresh box stops here, with the cause, instead of at the load. The users tag (or a full run) makes the user.
+- name: lifeline | Each uid in the allowed destinations is a user on the box
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ item }}"
+  loop: "{{ agent_box_lifeline_allow | selectattr('uid', 'defined') | map(attribute='uid') | unique | list }}"
+  when: not ansible_check_mode   # a check run before the install has no user yet; the same full run would make it
+
 # The filter is loaded BEFORE anything brings the link up, so a failure here leaves the NIC down, never open.
 - name: lifeline | The installed packages
   ansible.builtin.package_facts:

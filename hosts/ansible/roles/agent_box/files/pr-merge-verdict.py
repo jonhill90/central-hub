@@ -146,6 +146,10 @@ def main():
     if not err and missing: why.append("ledger lacks " + ", ".join(missing))
 
     central = full == "jonhill90/central-hub"
+    # The Proxmox host job runs this playbook and role as root on the host on the agents' pass (pick 241).
+    hostjob = [n for n in names if central and (n == "hosts/ansible/playbooks/proxmox-proxy.yml" or n.startswith("hosts/ansible/roles/proxmox_proxy/"))]
+    if hostjob:
+        notes.append("NOTE: this PR edits what the Proxmox host job runs as root on the host (%s); check that no firewall, delete or secret step is in it" % ", ".join(hostjob[:5]))
     # Rule 11 files and the supersede/amend text catch.
     rule11 = [n for n in names if central and any(p.match(n) for p in RULE11)] if central else []
     rec_files = [n for n in names if central and re.match(r"^docs/(decisions|standards)/[^/]+\.md$", n) and not n.endswith("README.md")]

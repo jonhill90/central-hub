@@ -5,6 +5,7 @@
 #   1. playbooks/proxmox-host-key.yml puts the job's key line in, narrowed by from= to this runner's address, and the
 #      job's key logs in; with from= another address, the same key is refused. It writes the file in place (same inode:
 #      no rename and no chmod, which pmxcfs refuses), keeps the other lines, and with state absent takes the line out.
+#      A write that fails part-way (a full tmpfs) is put back from the copy off pmxcfs, and the run fails.
 #   2. The wrapper's check prints a hash and changes nothing on the host (nginx still holds 443), and gives the
 #      same hash twice.
 #   3. apply with a hash that is not the check's refuses, and nginx still holds 443.
@@ -87,6 +88,16 @@ docker exec "$name" cat /etc/pve/priv/authorized_keys | cmp -s - "$t/admin.pub" 
 admin_inv "$gw"; keyplay > "$t/1d.log" 2>&1 || bad "1 the key playbook failed putting the line back"
 keyplay > "$t/1e.log" 2>&1 && grep -q 'changed=0' "$t/1e.log" && ok "1 a second run changes nothing" || bad "1 second run: $(grep -h 'changed=' "$t/1e.log")"
 [ "$(ino)" = "$ino0" ] && ok "1 the file was written in place (same inode)" || bad "1 the file was replaced, not written in place"
+# A write that fails part-way is put back. Here the folder is a full 4 KiB tmpfs: the file is just under 4 KiB with no
+# job line, so adding the line runs out of space after the file was cut short.
+{ cat "$t/admin.pub"; printf '# %s\n' "$(head -c 3900 /dev/zero | tr '\0' x)"; } > "$t/padded"
+docker exec "$name" sh -c 'cp /etc/pve/priv/authorized_keys /root/ak.keep && mount -t tmpfs -o size=4k tmpfs /etc/pve/priv'
+docker exec -i "$name" sh -c 'cat > /etc/pve/priv/authorized_keys' < "$t/padded"
+keyplay > "$t/1f.log" 2>&1 && bad "1 the key playbook passed although its write failed"
+grep -q 'is as it was before this run' "$t/1f.log" && docker exec "$name" cat /etc/pve/priv/authorized_keys | cmp -s - "$t/padded" \
+  && ok "1 a write that fails part-way is put back, and the run fails" || bad "1 failed write: $(grep -h -o 'msg.\{0,200\}' "$t/1f.log" | head -3)"
+docker exec "$name" cat /root/authorized_keys.pre-central-hub-r1 | cmp -s - "$t/padded" && ok "1 the copy off pmxcfs holds the file as it was" || bad "1 no copy off pmxcfs"
+docker exec "$name" sh -c 'umount /etc/pve/priv && cmp -s /root/ak.keep /etc/pve/priv/authorized_keys' || { echo "FAIL: the stand-in's key file did not come back"; exit 1; }
 
 # The wrapper, pointed at a test folder, at this commit as main, with the job's inventory.
 mkdir -p "$t/dir/inventory" "$t/work"
