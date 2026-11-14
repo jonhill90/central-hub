@@ -49,7 +49,7 @@ Since that morning, every plan, record and done-claim already passes a reviewer 
 The owner's words, above, decide only this much:
 
 - agents don't ask him to approve or go a PR;
-- the things his earlier standing rules gave him still need him; at 07:43:25 UTC he pointed to those rules without listing them. Which things they are is the agents' reading: firewall and tailnet changes (D-0036 rule 8 keeps them behind his words), and deletes and secrets [agent pick: the agents' reading of his earlier rules, with no record of their own];
+- the things his earlier standing rules gave him still need him; at 07:43:25 UTC he pointed to those rules without listing them. Which things they are is the agents' reading: firewall and tailnet changes (D-0036 rule 8 keeps them behind his words), deletes, partly from his standing rules that deleting a remote branch is his step and that one named c1 node is never deleted (both kept in the project's memory, not in a record), and [agent pick] for every other delete; and secrets [agent pick: the agents' reading of his earlier rules, with no record of their own];
 - the lab is greenfield, so agents finish it;
 - this is for the lab, for now, not for every PR (07:44:46 UTC).
 
@@ -73,7 +73,7 @@ His words are a change of mind (REQ-0030). They reverse REQ-0009 (the owner make
 
 ## Decision Outcome
 
-Chosen option: **1**, because the owner asked to stop approving the lab himself, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules he pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8, deletes and secrets as agent picks. The rest of rule 6 (money, the box's limits, access rights), where in each step the tap falls, and rule 7, are agent picks.
+Chosen option: **1**, because the owner asked to stop approving the lab himself, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules he pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8; deletes, partly from his standing rules that deleting a remote branch is his step and that one named c1 node is never deleted (both kept in the project's memory, not in a record), and [agent pick] for every other delete; secrets as an agent pick. The rest of rule 6 (money, the box's limits, access rights), where in each step the tap falls, and rule 7, are agent picks.
 
 ```mermaid
 flowchart LR
@@ -120,7 +120,7 @@ flowchart LR
    - a layer with a dev twin runs once the same commit passed that layer on dev (D-0035 rule 3(a));
    - a layer with no dev twin (the Proxmox host's own configuration, OPNsense, the tailnet, Azure, Cloudflare and Tailscale) runs once its saved plan's hash has the agents' pass;
    - the log names the pass's message id where it named the card.
-6. **Still one tap.** These still need the owner's tap on a card that names the step and the commit (D-0034), at the step itself. A merge of their code needs no tap; the apply or the act does. The first three are the agents' reading of the earlier standing rules the owner pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8; deletes and secrets [agent pick]. The rest are agent picks:
+6. **Still one tap.** These still need the owner's tap on a card that names the step and the commit (D-0034), at the step itself. A merge of their code needs no tap; the apply or the act does. The first three are the agents' reading of the earlier standing rules the owner pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8; deletes, partly from his standing rules that deleting a remote branch is his step and that one named c1 node is never deleted (both kept in the project's memory, not in a record), and [agent pick] for every other delete; secrets [agent pick]. The rest are agent picks:
    - **firewall and tailnet:** an apply to the firewall layers (the Proxmox host's firewall, OPNsense's rules) or to the tailnet, which includes opening a lab service to the internet;
    - **deletes:** deleting data or a backup, tearing down a whole environment's guests outside dev, and a `destroy` or `restore` of the secrets store, on dev too, since it holds the lab's secrets (other dev teardowns and rebuilds need no tap, as now);
    - **secrets:** exposing a secret, copying secrets onto the agent box, or rotating the owner's own credentials;
