@@ -3,7 +3,7 @@
 
 Run on a control-plane node by tasks/signin.yml, which sends one JSON object on stdin:
 base (https://<keycloak host>), realm, client, redirect (one of the client's redirect URIs), user,
-password, seed (base32 TOTP seed), address (the Gateway's IP, so the proof reaches THIS cluster's
+password, seed (base32 TOTP seed), digits and period (the realm's OTP policy), address (the Gateway's IP, so the proof reaches THIS cluster's
 Gateway whatever the lab DNS says), verify (false only for the staging certificate).
 
 Steps, each printed as "<number> <name>: HTTP <code> <ok or FAIL: reason>" and nothing else:
@@ -95,7 +95,7 @@ def main():
                 "redirect, the password alone signed in" if code in (301, 302, 303) else "no one-time-code form"):
         return 1
     for offset in (0, 1):  # the second try is the next 30-second window, if the first sat on a boundary
-        code, headers, body = call(form, {"otp": totp(cfg["seed"], offset), "credentialId": ""})
+        code, headers, body = call(form, {"otp": totp(cfg["seed"], offset, int(cfg.get("digits", 6)), int(cfg.get("period", 30))), "credentialId": ""})
         loc = headers.get("Location", "") if headers else ""
         ok = code == 302 and loc.startswith(cfg["redirect"]) and "code=" in loc
         if ok:
