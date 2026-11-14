@@ -1,5 +1,5 @@
 ---
-id: D-0037
+id: D-0038
 title: Run OpenBao on its own VM in each environment as the lab's secrets store, unsealed by a static key with no person, and keep the private bootstrap files encrypted with SOPS and age
 status: proposed
 date: 2026-11-14
@@ -68,7 +68,7 @@ Option 2 can't hold c1's own rebuild secrets and must be restored before anythin
 ### Rules
 
 1. **Version and source.** OpenBao 2.7.2, the newest release at least two weeks old (STD-0003), installed from the release RPM after checking it against the release's `checksums.txt`. Licence MPL-2.0. External Secrets stays on its chart as now.
-2. **Where.** One AlmaLinux VM per environment, made by OpenTofu from reviewed main: `daldapbao01` on VNet dev in pool `dev`, and `paldapbao01` on prod. VM IDs from a new hundred, 500 to 599, under STD-0001's "next free hundred" rule: 550 for dev and 500 for prod. The names and IDs are agent picks.
+2. **Where.** One AlmaLinux VM per environment, made by OpenTofu from reviewed main: `daldapbao01` on VNet dev in pool `dev`, and `paldapbao01` on prod. VM IDs from a new hundred, 500 to 599, for the job "secrets store": STD-0001's Proxmox VM IDs section gives a new job the next free hundred below 9000, and 300 (the CI runner) and 400 (the desktop) are taken. 550 for dev and 500 for prod. When this record is accepted, the range goes into STD-0001's table in the same PR. The names and IDs are agent picks.
 3. **Storage and address.** Integrated storage (Raft), one node. The listener serves TLS on 443 with a certificate from the lab CA (D-0028), so clients and the web UI reach it by name with no other port (the owner, 2026-11-14).
 4. **Unseal.** Seal `static`, its 32-byte key in a file readable only by the service. The key has exactly two other copies: the agent box's keys folder (`/etc/agent-keys/<env>/`, user `keys`, D-0036) and the owner's password manager plus his offline copy. No copy goes in git, a log or a chat.
 5. **First start.** OpenBao initializes itself from its `initialize` stanza: audit to a file, the KV v2 mount, the auth methods and the policies in rule 6. The root token it uses is revoked by OpenBao. The playbook's last step makes recovery keys through `sys/rotate/recovery`, three shares with a threshold of two, and hands them to the owner once for his password manager and offline copy.
@@ -152,6 +152,6 @@ On dev, from the agent box, with the logs named in the card for prod:
 
 ## More Information
 
-- **Evidence:** [docs/evidence/0037-run-openbao-on-its-own-vm-as-the-secrets-store-with-sops-for-bootstrap-files.md](../evidence/0037-run-openbao-on-its-own-vm-as-the-secrets-store-with-sops-for-bootstrap-files.md).
+- **Evidence:** [docs/evidence/0038-run-openbao-on-its-own-vm-as-the-secrets-store-with-sops-for-bootstrap-files.md](../evidence/0038-run-openbao-on-its-own-vm-as-the-secrets-store-with-sops-for-bootstrap-files.md).
 - **Licence check:** OpenBao, its plugins and SOPS are MPL-2.0, age is BSD-3-Clause and ESO is Apache-2.0; none has a paid edition (evidence findings 1 to 4).
 - Related records: D-0013, D-0023, D-0028, D-0033, D-0035, D-0036.
