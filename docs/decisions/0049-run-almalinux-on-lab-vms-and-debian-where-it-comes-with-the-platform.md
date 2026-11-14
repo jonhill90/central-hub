@@ -9,7 +9,7 @@ consulted: []
 waits-on: []
 supersedes: []
 superseded-by:
-revisit-when: c1 moves to an immutable OS such as Talos; AlmaLinux or Debian changes its licence, governance or free availability; the owner rules on whether a sponsor's paid FIPS-validated packages make AlmaLinux fail his rule of 2026-11-14; a research batch compares Linux distributions for the lab's machines; or one distribution everywhere is wanted
+revisit-when: c1 moves to an immutable OS such as Talos; AlmaLinux or Debian changes its licence, governance or free availability; the owner rules that a sponsor's paid FIPS offer makes AlmaLinux fail his rule of 2026-11-14; the lab needs FIPS-validated cryptography; a research batch compares Linux distributions for the lab's machines; or one distribution everywhere is wanted
 ---
 
 # Run AlmaLinux 10 on the lab's Linux virtual machines, and Debian only where it comes with the platform (the Proxmox host and its container template)
@@ -19,7 +19,7 @@ revisit-when: c1 moves to an immutable OS such as Talos; AlmaLinux or Debian cha
 The lab runs two Linux distributions.
 
 - **AlmaLinux 10** runs on every Linux virtual machine made from code except the Talos rehearsal's: c1's nodes, the agent box, the CI runner, the desktop and the secrets store. They all come from one AlmaLinux 10 GenericCloud image, pinned by URL and checksum in `hosts/terraform/home/k8s/variables.tf`. The firewall VM runs OPNsense, which is not Linux (D-0040). The Talos Linux node VMs of the Talos rehearsal (`hosts/terraform/home/k8s-talos/`) are outside this record: they try Talos beside c1 and are not clones of the AlmaLinux template.
-- **Debian** runs under Proxmox itself (D-0047), and in the remote-access container, which is made from Proxmox's Debian 13 template (`hosts/terraform/home/remote-access/`).
+- **Debian** runs under Proxmox itself (D-0047), in the remote-access container, which is made from Proxmox's Debian 13 template (`hosts/terraform/home/remote-access/`), and in CT 259, the jumpbox rehearsal's container. CT 259 is an unprivileged Debian 13 container made by the jumpbox rehearsal kit, whose code is not in this repository; agents never touch it (D-0035 rule 2, `hosts/terraform/home/bootstrap/agent-access.sh`).
 
 The owner's words this rests on:
 
@@ -58,8 +58,14 @@ The owner's words of 04:44:57 UTC reach further than STD-0006's register row, so
   - Cybertrust Japan: support;
   - Fujitsu: fixes for specific minor releases for up to 10 years.
 - **The FIPS packages.** TuxCare's documentation says its Extended Security Updates include "the full suite of five FIPS-validated modules" and that the product "unlocks commercial use of the FIPS-validated packages". TuxCare is AlmaLinux's founding sponsor.
-- **The reading.** Support and longer fixes are support and tested builds, which STD-0006 allows; the register counts AlmaLinux as a pass and says that reading is the owner's to overturn. FIPS-validated packages whose commercial use needs a paid licence are closer to a held-back feature, even though they are sold by a sponsor rather than by the Foundation, and the lab does not use them.
-- **So this record stays `proposed`.** Whether a founding sponsor's paid FIPS packages count as a paywall is the owner's call, and `revisit-when` names it.
+- **AlmaLinux's own FIPS page.** The Foundation's page says the validation was sponsored and paid for by TuxCare, that anyone running AlmaLinux OS 9.2 can use the validated modules at no cost for non-commercial use, from TuxCare's community repository, and that commercial use and ongoing FIPS-compliant patching come through TuxCare's paid support.
+- **The reading under STD-0006 rule 2: a pass.**
+  - The owner of AlmaLinux is the AlmaLinux OS Foundation, and it sells no edition. TuxCare is a sponsor, not the owner or lead company.
+  - FIPS validation is a certificate on a build of named packages, which is a tested build, and rule 2 allows selling tested builds.
+  - Support and longer fixes are support and tested builds too.
+  - The lab does not use FIPS mode, and rule 3 below keeps every sponsor repository off its machines.
+  - The register already counts AlmaLinux as a pass.
+- **What would change it.** If the owner rules that a sponsor's paid FIPS offer counts as a paywall under his words of 2026-11-14, this record is revisited (`revisit-when`).
 - **Debian** has no paid side: its social contract says "We promise that the Debian system and all its components will be free".
 
 ### Rules
@@ -73,11 +79,13 @@ The owner's words of 04:44:57 UTC reach further than STD-0006's register row, so
 - Good: no change; both are free, and neither has a paid edition of its own.
 - Bad: AlmaLinux's FIPS-validated packages and longer fixes are sold by its sponsors, so a need for either would mean paying or moving.
 - Bad: two distributions, two package managers and two sets of security feeds to follow.
+- Bad: CT 259 runs Debian 13 but is not in code here, so this repository can't rebuild it or check its image. It is a gap until the rehearsal kit's container is brought into `hosts/` or removed.
 
 ### Confirmation
 
 - Every VM in the `k8s`, `ci-runner`, `desktop`, `jumpbox` and `secrets-store` folders of `hosts/terraform/home/` clones a template made from the pinned AlmaLinux image.
 - No role adds a TuxCare, Cybertrust or Fujitsu repository.
+- CT 259 is outside this check, because it is not in code here (see Consequences).
 
 ### Exit path
 
