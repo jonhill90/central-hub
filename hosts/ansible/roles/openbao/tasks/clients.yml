@@ -176,8 +176,9 @@
       changed_when: true
       no_log: true
 
-    # A secret ID can't be read back, so the box's IDs are tried: a login that works means the
-    # store already holds the box's secret ID.
+    # A secret ID can't be read back: the API's "Read AppRole secret ID" returns its properties and
+    # accessor, never the ID (https://openbao.org/docs/api/auth/approle/). So the box's IDs are tried:
+    # a login that works means the store already holds the box's secret ID.
     - name: Try the box's rebuild IDs
       ansible.builtin.uri:
         url: "{{ openbao_api }}/auth/approle/login"
