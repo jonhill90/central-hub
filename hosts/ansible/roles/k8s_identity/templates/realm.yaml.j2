@@ -55,6 +55,14 @@ spec:
     registrationAllowed: false
     resetPasswordAllowed: false
     bruteForceProtected: true
+    # Users can't change their user name: Proxmox builds its user names from it (proxmox_sso_username_claim),
+    # and the Proxmox wiki warns that an editable claim lets one user take another's account.
+    editUsernameAllowed: false
+    # The second factor's settings, the ones authenticator apps assume; each admin's seed matches them.
+    otpPolicyType: totp
+    otpPolicyAlgorithm: HmacSHA1
+    otpPolicyDigits: {{ k8s_identity_otp_digits }}
+    otpPolicyPeriod: {{ k8s_identity_otp_period }}
 {% if k8s_identity_theme | length > 0 %}
     loginTheme: {{ k8s_identity_theme }}
 {% endif %}
@@ -80,6 +88,15 @@ spec:
         groups: [{% for g in user.groups %}/{{ g }}{{ ', ' if not loop.last }}{% endfor %}]
         credentials:
           - {type: password, value: "${{ '{' }}{{ k8s_identity_password_keys[loop.index0] }}{{ '}' }}", temporary: false}
+{% if k8s_identity_otp_group in user.groups %}
+          # An admin's second factor: a TOTP seed from the values file (base32), so it survives the realm's
+          # delete and import. Keycloak's built-in browser and direct grant flows ask for the code from any
+          # user who has one ("Condition - user configured"), so every admin is asked.
+          - type: otp
+            userLabel: lab authenticator
+            secretData: '{"value":"${{ '{' }}TOTP_{{ user.username | upper | regex_replace('[^A-Z0-9]', '_') }}{{ '}' }}"}'
+            credentialData: '{"subType":"totp","digits":{{ k8s_identity_otp_digits }},"counter":0,"period":{{ k8s_identity_otp_period }},"algorithm":"HmacSHA1","secretEncoding":"BASE32"}'
+{% endif %}
 {% endfor %}
     clients:
       # Grafana (k8s_observability): a confidential client with the authorization code flow
@@ -160,3 +177,23 @@ spec:
 {% endfor %}
         webOrigins: {{ k8s_identity_jellyfin_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
 {{ mappers }}
+{% if k8s_identity_proxmox_hosts | length > 0 %}
+      # Proxmox VE's web UI, through its own OpenID Connect realm (role proxmox_sso; Proxmox wiki, "User
+      # Management", OpenID Connect): confidential, code flow. The UI sends its own origin, with no path, as
+      # the redirect (pve-manager LoginWindow.js, 'redirect-url': location.origin), so that is what is allowed.
+      - clientId: proxmox
+        name: Proxmox VE
+        protocol: openid-connect
+        publicClient: false
+        clientAuthenticatorType: client-secret
+        secret: "${PROXMOX_CLIENT_SECRET}"
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
+        rootUrl: https://{{ k8s_identity_proxmox_hosts | first }}
+        baseUrl: /
+        redirectUris: {{ k8s_identity_proxmox_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
+        webOrigins: {{ k8s_identity_proxmox_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
+{{ mappers }}
+{% endif %}

@@ -1,0 +1,38 @@
+---
+# Sign-in to the Proxmox web UI through Keycloak on c1 (D-0025 rule 1: OIDC only; extended to Proxmox by the
+# record proposed with this role). Proxmox's own OpenID Connect realm type, set with pveum
+# (https://pve.proxmox.com/wiki/User_Management, "OpenID Connect"). root@pam with TOTP stays the way in when
+# c1 or Keycloak is down: pick "Linux PAM standard authentication" on the login page, or SSH by key.
+#
+# Private, no default, from the inventory: Keycloak's issuer for realm lab, the same as k8s_identity_issuer:
+# proxmox_sso_issuer: https://sso.<zone>/realms/lab
+#
+# The web UI's names, the same as proxmox_nginx_server_names: the first is the redirect the proof asks for.
+# The Keycloak client allows https://<name> for each (k8s_identity_proxmox_hosts), because the UI sends its own
+# origin as the redirect (pve-manager www/manager6/window/LoginWindow.js, 'redirect-url': location.origin).
+proxmox_sso_ui_names: "{{ proxmox_cert_names | default([]) }}"
+
+# The realm's name in Proxmox. Users become <user>@<realm>; groups from the claim get "-<realm>" added
+# (wiki, "Groups mapping"), so lab-admins arrives as lab-admins-sso.
+proxmox_sso_realm: sso
+# The Keycloak client (role k8s_identity, realm.yaml.j2) and where its secret is: the controller's identity
+# values file, which k8s_identity fills (key PROXMOX_CLIENT_SECRET). The secret is never in the repository.
+proxmox_sso_client_id: proxmox
+proxmox_sso_values_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/central-hub/identity.env"
+proxmox_sso_secret_key: PROXMOX_CLIENT_SECRET
+# preferred_username, which realm lab doesn't let users edit (editUsernameAllowed false); the wiki warns
+# that a claim users can change lets one user become another.
+proxmox_sso_username_claim: username
+# The login page offers this realm first. root@pam stays one choice away.
+proxmox_sso_default: true
+# Each Keycloak group and the Proxmox role its members get on /. The role makes the Proxmox group
+# <group>-<realm> and its ACL; groups-overwrite sets a user's groups from the claim at every sign-in, so
+# leaving a group in Keycloak takes the role away at the next sign-in.
+proxmox_sso_groups:
+  - {group: lab-admins, role: Administrator}
+  - {group: lab-viewers, role: PVEAuditor}
+
+# The host's resolver doesn't know lab names (pick 215): when set, one /etc/hosts line points the
+# issuer's name at this address (c1's Gateway, k8s_gateway_address). Empty: no line.
+proxmox_sso_address: ""
+proxmox_sso_hosts_file: /etc/hosts
