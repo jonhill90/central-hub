@@ -72,7 +72,7 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
   - Which agent filled a role is visible in git and PR history, not in the record.
 - **Statuses:**
   - A record starts as `proposed`.
-  - The owner moves it to `accepted`, `rejected` or `parked`, or, since D-0042, an agent does with the reviewer's and the council's pass (D-0042 rule 3).
+  - The owner moves it to `accepted`, `rejected` or `parked`, or, since D-0042, an agent does with the reviewer's and the council's pass (D-0042 rule 3; the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, asking not to be asked to approve PRs; who approves in his place is an agent pick).
   - An accepted record can later become `superseded` or `deprecated`.
   - Agents write only `proposed`, except under D-0042 rule 3.
 - **What the owner approves:** the whole record at the PR head commit he approves. After that, only the acceptance changes may follow: `status`, `date` and `accepted-evidence`. A reviewing agent compares the merged record with the approved commit; any other difference needs the owner's approval again.

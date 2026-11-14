@@ -1,6 +1,6 @@
 ---
 id: D-0042
-title: Let the reviewer and the council approve every reversible change in the owner's place
+title: Let the reviewer and the council approve in the owner's place, except the steps he keeps
 status: accepted
 date: 2026-11-14
 decision-makers: [owner]
@@ -14,13 +14,13 @@ accepted-evidence:
   approved-at: 2026-11-14T07:43:25Z
   approved-commit: bc276d10078a91801653e7bf96ad8dcb2eb05e97
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6, cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH, cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm
-  approval-names: "no PR and no head; the messages are typed but name neither, which departs from D-0034 rule 4's form"
-  check: the drafting agent read the three messages at 2026-11-14T08:14Z (the first two in the orchestrator thread, the third in the project chat); they ask agents to stop asking the owner to approve PRs and name what still needs him, without naming this PR or a head. The orchestrator chose them as this record's acceptance at 08:13Z. The reviewer and the council judge whether they count; their passes of this PR's head are the gate. Head bc276d1 holds this record's rules; the acceptance commit after it changes only status and accepted-evidence
+  approval-names: "no PR, no head and no commit; the messages are typed but name none, which departs from D-0034 rule 4's form"
+  check: the drafting agent read the three messages at 2026-11-14T08:14Z (the first two in the orchestrator thread, the third in the project chat). They ask agents to stop asking the owner to approve PRs and say what still needs him, without naming this PR, a head or a commit. The owner never saw approved-commit, so it is not his approval; it is the head the reviewer and the council passed. His approval covers only what his words say, listed in "What the owner said, and what agents picked" (REQ-0029); every other rule is labelled an agent pick. The orchestrator chose these messages as this record's acceptance at 08:13Z, and the reviewer's and the council's passes of this PR's head are the gate
   merged: not yet; a follow-up PR fills this in after the merge (D-0001)
 revisit-when: the lab comes to hold personal data or anything of value; a change approved under this record has to be undone after it harmed the lab, a cloud account or the repository; the owner says a pass was wrong; the agents get a GitHub identity of their own (D-0030) and GitHub can require an approval itself; or a cluster other than c1 reads the repository
 ---
 
-# Let the reviewer and the council approve every reversible change in the owner's place
+# Let the reviewer and the council approve in the owner's place, except the steps he keeps
 
 ## Context and Problem Statement
 
@@ -38,9 +38,23 @@ On 2026-11-14 the owner asked, more than once, to stop typing and tapping approv
 - at 07:36:24 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN1HaQyfWs523TENpj3y4GrB) he asked why he was still pasting approval prompts;
 - at 07:36:52 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNVWniFNwFdxHd6saXpoKLKg) he said the greenfield lab should not need him to type or click anything;
 - at 07:42:15 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNPCDvrtDZGccQzAi27X4YGH) he asked that this be the last thing he types;
+- at 07:42:30 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6), in the orchestrator thread, he said go and not to ask him for another PR;
+- at 07:43:25 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH), in the same thread, he said agents should not ask him to do anything more, that he had already said which things need his approval, and that they should stop asking him to approve PRs;
 - at 07:44:46 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm) he said not to ask him to approve another PR, that he meant the lab for now rather than every PR, and that the lab is greenfield and holds no personal data or anything of value.
 
 Since that morning, every plan, record and done-claim already passes a reviewer thread and a council of three threads before it reaches him. This record makes that pass the approval.
+
+### What the owner said, and what agents picked
+
+The owner's words, above, decide only this much:
+
+- agents don't ask him to approve or go a PR;
+- the things he named before still need him: firewall and tailnet changes, deletes and secrets;
+- the lab is greenfield, so agents finish it.
+
+Everything else in this record is an agent pick, labelled `[agent pick]` in its rule, which the owner can change at any time (REQ-0035). That includes the reviewer and the council approving in his place: that role is one the agents gave themselves, because his words say not to ask him but not who approves instead.
+
+His words are a change of mind (REQ-0030). They reverse REQ-0009 (the owner makes every decision) and REQ-0012 (only the owner accepts a record; agents must not mark one accepted) in the requirements register, and the project's standing instruction 1 (never mark anything accepted), for the changes this record covers. The register is kept outside this repository, and its rows change by the register's own process.
 
 ## Decision Drivers
 
@@ -52,13 +66,13 @@ Since that morning, every plan, record and done-claim already passes a reviewer 
 
 ## Considered Options
 
-1. **The agents' pass approves every reversible change**: merges, acceptances, box limit changes and production and cloud applies. The few steps that can't be undone keep one tap.
+1. **The agents' pass approves merges, acceptances and production and cloud applies.** The steps the owner named, and the box's own limits, keep one tap.
 2. **The agents' pass approves merges only**, records "as proposed" included. Acceptances, box limits and production and cloud applies keep the owner's tap.
 3. **Keep the owner's typed lines and taps**, as today.
 
 ## Decision Outcome
 
-Chosen option: **1**, because the owner asked to stop approving the lab himself, and option 2 would leave him a tap for every acceptance and every production apply. The owner's messages don't name what keeps a tap. Rule 6 keeps one for firewall and tailnet changes, deletes and secrets, which the project's standing rules already reserve to him and which the orchestrator thread named at 07:46 UTC, and for spending money, which the standing rules also reserve. That list, where in each step the tap falls, and rule 7, are agent picks.
+Chosen option: **1**, because the owner asked to stop approving the lab himself, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets, which he named (07:43:25 UTC). The rest of rule 6 (money, the box's limits, access rights), where in each step the tap falls, and rule 7, are agent picks.
 
 ```mermaid
 flowchart LR
@@ -76,12 +90,12 @@ flowchart LR
 
 ### Rules
 
-1. **The agents' pass.** The agents' pass for a head is:
+1. **The agents' pass.** [agent pick] The agents' pass for a head is:
    - the reviewer thread's clearance of that head, and
    - a pass from each of the three council threads for the same head, recorded by the orchestrator thread in one message.
 
-   It takes the place of the owner's go, typed or tapped, wherever these rules asked for it: AGENTS.md rules 1 and 2, D-0001's statuses, D-0031 rules 3 and 4, D-0034, D-0035 rule 3(b) and (c), D-0036 rule 6 and D-0041 rule 6. Rule 6 below is the exception.
-2. **The merge job.** `.github/workflows/merge.yml` merges a PR that has the agents' pass.
+   It takes the place of the owner's go, typed or tapped, wherever these rules asked for it: AGENTS.md rules 1 and 2, D-0001's statuses, D-0031 rules 3 and 4, D-0034, D-0035 rule 3(b) and (c), and D-0041 rule 6. Rule 6 below is the exception. That a pass is needed at all follows from the owner's words; that the reviewer and the council give it is the agents' own pick.
+2. **The merge job.** [agent pick] `.github/workflows/merge.yml` merges a PR that has the agents' pass. Until the box limits it needs are applied (rule 4), merges go as they do today.
    - It runs only by `workflow_dispatch`, only from `main`, on the agent box's runner, whose job-started hook refuses any other workflow, branch or event. Its own token is read-only (Activation gate item 3).
    - Its inputs are the PR number, the full head, and the message ids of the reviewer's clearance and of the council's passes.
    - It hands the merge to the box's `pr-merge` wrapper, which merges as the project's GitHub App with the key kept inside the wrapper (D-0031). The wrapper checks itself, and refuses otherwise:
@@ -93,32 +107,34 @@ flowchart LR
    - It squash-merges pinned to that head, and the run summary shows the PR, the head, the wrapper's verdict and merge commit, and the two message ids.
    - It can't read the project's chat, so it can't check the two message ids. The agent that starts it checks them first, and the ids stay in the log.
    - No session's safety check stands in this path, because a runner job is not a session.
-3. **Records and standards.** An agent may set a record to `accepted`, `rejected` or `parked`, or a standard to `active`, with the agents' pass, the same way the owner did:
+3. **Records and standards.** [agent pick for the route; the owner's words for not asking him] An agent may set a record to `accepted`, `rejected` or `parked`, or a standard to `active`, with the agents' pass, the same way the owner did:
    - the proposal merges first, or the pass names the head that holds it (D-0001);
    - the acceptance PR changes only `status`, `date` and `accepted-evidence`, with `approved-by: agents`, `approval-ref` the orchestrator's message that records the pass, and `approval-names` naming the PR and head;
    - the reviewer compares the accepted text with the passed head, as D-0001 asks.
-4. **The box's limits.** A change to a limit (D-0036 rule 3) is approved by the agents' pass, like any other reversible change: it is none of the steps rule 6 keeps for the owner.
-   - This record does not change how a limit change reaches the box. It is still applied from the controller, as D-0036 rule 6 says, and the `box-apply` installed on the box still stops on it. Changing that would itself be a limit change, and the owner's messages did not ask for it.
+4. **The box's limits.** [agent pick] A change to a limit (D-0036 rule 3) keeps the owner's approval, now as a tap (rule 6), because his card of 2026-11-14 02:24 UTC, which he answered at 02:26 UTC, kept limit changes for him (D-0036), and his words of 07:42 to 07:44 UTC did not take that back.
+   - It is still applied from the controller, as D-0036 rule 6 says, and the `box-apply` installed on the box still stops on it.
    - The merge job (rule 2) and the acceptances of rule 3 rest on limit changes of this kind: the runner hook and the wrapper list letting the runner start `pr-merge`, and `pr-merge` no longer stopping on records, standards and `AGENTS.md` and checking that the PR targets `main`. Until they are applied, merges go as they do today. How they reach the box without the Mac is open, and is designed separately.
 
-5. **Production and cloud applies.** Dev is the dev guests, VMs 250 to 257, and the dev secrets store, VMs 550 to 599 (D-0038 rule 2; central-hub #276). The production secrets store, VM 500, is production. A production run (D-0035) or a production or cloud apply (D-0041) needs no tap, apart from rule 6:
+5. **Production and cloud applies.** [the owner's words: finish the greenfield lab (07:44:46 UTC); the pass as approver is an agent pick] Dev is the dev guests, VMs 250 to 257, and the dev secrets store, VMs 550 to 599 (D-0038 rule 2; central-hub #276). The production secrets store, VM 500, is production. A production run (D-0035) or a production or cloud apply (D-0041) needs no tap, apart from rule 6:
    - a layer with a dev twin runs once the same commit passed that layer on dev (D-0035 rule 3(a));
    - a layer with no dev twin (the Proxmox host's own configuration, OPNsense, the tailnet, Azure, Cloudflare and Tailscale) runs once its saved plan's hash has the agents' pass;
    - the log names the pass's message id where it named the card.
-6. **Still one tap.** These still need the owner's tap on a card that names the step and the commit (D-0034), at the step itself. A merge of their code needs no tap; the apply or the act does:
+6. **Still one tap.** These still need the owner's tap on a card that names the step and the commit (D-0034), at the step itself. A merge of their code needs no tap; the apply or the act does. The first three are the owner's own list (07:43:25 UTC); the rest are agent picks:
    - **firewall and tailnet:** an apply to the firewall layers (the Proxmox host's firewall, OPNsense's rules) or to the tailnet, which includes opening a lab service to the internet;
    - **deletes:** deleting data or a backup, tearing down a whole environment's guests outside dev, and a `destroy` or `restore` of the secrets store, on dev too, since it holds the lab's secrets (other dev teardowns and rebuilds need no tap, as now);
    - **secrets:** exposing a secret, copying secrets onto the agent box, or rotating the owner's own credentials;
-   - **money:** anything that starts a charge, as the project's rules already say.
-7. **What stays with the owner by choice.** Scanning his own sign-in code into his authenticator, the settings of his own claude.ai and GitHub accounts, and the Proxmox console when everything else is down (D-0035 rule 9).
+   - **access rights:** [agent pick] a new credential for agents, or wider rights for an existing one, such as the agents' Proxmox token;
+   - **money:** [agent pick, from the owner's rule of 2026-11-09 against unexpected Azure charges] anything that starts a charge;
+   - **the box's limits:** [agent pick, rule 4] a change to a limit of the agent box (D-0036 rule 3). The tap replaces the typed line D-0036 rule 6 asked for, because the owner said at 07:47:50 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV) that he will not type go lines anymore.
+7. **What stays with the owner by choice.** [agent pick] Scanning his own sign-in code into his authenticator, the settings of his own claude.ai and GitHub accounts, and the Proxmox console when everything else is down (D-0035 rule 9).
 8. **The owner's no.** A message from the owner that says no, stop or revert about a change wins at once. Agents stop starting jobs for it, and open a revert PR or run the layer's way back. A revert goes through the same pass and job.
 9. **Logs.** The merge job's summary is public on GitHub for at most 90 days, so it holds only the PR, the heads and the message ids. The orchestrator lists every merge and apply made under this record in its next report to the owner.
 10. **Unchanged.** Never enable auto-merge. No workflow on `pull_request_target`, `issue_comment` or `issues` that runs an agent or touches secrets. No secrets or private names in this repository. AGENTS.md rules 3 to 6 stand.
-11. **Changing this record.** A change that narrows this record, or adds a check to the merge job, needs the agents' pass, like any other change. A change that removes a step from rule 6, or drops or loosens a check in `merge.yml`, the runner hook or `pr-merge`, is itself a rule 6 step and needs the owner's tap. Every change to either is listed in the orchestrator's report.
+11. **Changing this record.** [agent pick] A change that narrows this record, or adds a check to the merge job, needs the agents' pass, like any other change. A change that removes a step from rule 6, or drops or loosens a check in `merge.yml`, the runner hook or `pr-merge`, is itself a rule 6 step and needs the owner's tap. Every change to either is listed in the orchestrator's report.
 
 ### Consequences
 
-- Good: the owner stops typing and tapping for merges, acceptances, box changes and production and cloud applies. He keeps one tap for firewall and tailnet applies, deletes, secrets and money.
+- Good: the owner stops typing and tapping for merges, acceptances and production and cloud applies. He keeps one tap for firewall and tailnet applies, deletes, secrets, access rights, money and the box's limits.
 - Good: each approval names a reviewer's and a council's message, and the merge job's own checks don't rest on the caller.
 - Good: merges made by the job show as the project's GitHub App in the PR's history, and each has a run on GitHub that names its pass.
 - Bad: agents approve agents' work, and all four checkers are the same kind of model, so they can share a blind spot. Compensating controls: four separate threads, each told to look for what is missing; the four-check rule before any "supported" or "not supported" claim; the public run log; the owner's no at any time (rule 8); every merge can be reverted and every lab layer rebuilt from code.
@@ -127,8 +143,8 @@ flowchart LR
 - Bad: a production or cloud apply now runs without the owner seeing its plan first. A wrong apply can break the lab until it is rebuilt. The owner gave his reason at 07:44:46 UTC: the lab is greenfield and holds no personal data or anything of value. If that stops being true, this record is revisited. Compensating controls: dev first for every layer that has a twin; the saved plan and the council's pass for those that don't; rule 6 for firewall, tailnet, deletes, secrets and money; the restore checks of D-0035 rule 5 before any teardown.
 - Bad: rule 7's steps still need the owner in person.
 - Bad: the merge job depends on the agent box and its runner. If the box is down, merges wait, or fall back to the owner's own merge on GitHub.
-- Bad: a box limit change, including the ones the merge job needs, is still applied from the controller (rule 4). Until a later change moves that apply off the Mac, the merge job can't run, and merges go as they do today.
-- Neutral: the Mac and its guard are no longer in any approval path, but the apply of box limit changes still runs there (rule 4).
+- Bad: a box limit change, including the ones the merge job needs, keeps the owner's tap and is still applied from the controller (rule 4). Until a later change moves that apply off the Mac, the merge job can't run, and merges go as they do today.
+- Bad: most of this record is agent picks the owner did not see. Compensating controls: each is labelled, the owner can change any of them, and his no wins at once (rule 8).
 
 ### Confirmation
 
@@ -153,4 +169,4 @@ flowchart LR
 - **Evidence:** [0042](../evidence/0042-let-agents-approve-every-reversible-change-in-the-owners-place.md).
 - **Records it changes, in this PR:** D-0001 (statuses), D-0031 rules 3 and 4, D-0034 rule 4, D-0035 rule 3, D-0036 rule 6, and AGENTS.md rules 1 and 2. D-0041 rule 6 changes in the same PR, since D-0041 is still proposed.
 - **How to start the job:** [Merge a PR through the merge job](../runbooks/merge-a-pr-through-the-merge-job.md).
-- **How this record is accepted.** It loosens AGENTS.md's rules for now, which D-0034 rule 4 sends to a line the owner types naming the PR and its head. It is accepted on the owner's typed messages in the orchestrator thread at 07:42:30 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6), where he said go and not to ask him for another PR, and at 07:43:25 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH), where he said he had already named what needs his approval and agents should stop asking him to approve PRs. His message at 07:44:46 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm), relayed from the project chat, says the same for the lab. These messages name no PR and no head. That departs from D-0034 rule 4's form. The reviewer and the council judge whether they count, and their passes are this PR's gate.
+- **How this record is accepted.** It loosens AGENTS.md's rules for now, which D-0034 rule 4 sends to a line the owner types naming the PR and its head. It is accepted, for the scope his words cover, on the owner's typed messages in the orchestrator thread at 07:42:30 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6), where he said go and not to ask him for another PR, and at 07:43:25 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH), where he said he had already named what needs his approval and agents should stop asking him to approve PRs. His message at 07:44:46 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm), relayed from the project chat, says the same for the lab. These messages name no PR and no head. That departs from D-0034 rule 4's form. The reviewer and the council judge whether they count, and their passes are this PR's gate.

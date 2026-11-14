@@ -60,8 +60,8 @@ flowchart LR
 
 1. **Green.** A PR is green when every check GitHub runs on its head has passed, none is pending, and GitHub reports no merge conflict. A skipped check counts as passed only when its workflow skips it on purpose (for example a path filter).
 2. **How.** The agent squash-merges, because `main` keeps a linear history, and deletes the branch (D-0002). It never pushes to `main` and never enables auto-merge.
-3. **Accepting.** A PR that sets a decision record to `accepted`, `rejected` or `parked`, or that sets a standard to `active`, merges only with the reviewer's and the council's pass for its head (D-0042 rules 1 and 3), which since D-0042 takes the place of the owner's message. A PR that adds or changes a record that stays `proposed` may be merged by an agent.
-4. **Rule changes.** A PR that loosens AGENTS.md "Rules for now" merges only with the reviewer's and the council's pass for its head (D-0042 rules 1 and 11). Before D-0042 it needed the owner's message naming the PR and its head.
+3. **Accepting.** A PR that sets a decision record to `accepted`, `rejected` or `parked`, or that sets a standard to `active`, merges only with the reviewer's and the council's pass for its head (D-0042 rules 1 and 3), which since D-0042 takes the place of the owner's message (the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, asking not to be asked to approve PRs; who approves in his place is an agent pick). A PR that adds or changes a record that stays `proposed` may be merged by an agent.
+4. **Rule changes.** A PR that loosens AGENTS.md "Rules for now" merges only with the reviewer's and the council's pass for its head (D-0042 rules 1 and 11; the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, asking not to be asked to approve PRs; who approves in his place is an agent pick). Before D-0042 it needed the owner's message naming the PR and its head.
 5. **Nothing else changes.** Rules 3 to 6 of AGENTS.md stay as they are. Before a merge the agent checks the PR for secrets and private names (rule 4) the same way as before.
 
 ### Consequences
