@@ -5,6 +5,8 @@
 # only. Keycloak asks every member of that group for a one-time code; the store can't check that itself
 # (OpenBao's own login MFA fails in the web page with OIDC, openbao/openbao#3281). Set from the box through
 # the admin AppRole, like tasks/clients.yml. Each write runs only when the store holds something else.
+# The role is bound to the group and to the owner's user name (openbao_oidc.owner_user), so a second
+# lab-admins member is refused as well.
 
 - name: owner_signin | The settings are complete
   ansible.builtin.assert:
@@ -12,7 +14,8 @@
       - openbao_oidc.discovery_url | default('') is match('^https://[^/]+/realms/[^/]+$')
       - openbao_oidc.values_file | default('') | length > 0
       - openbao_oidc.ui_names | default([]) | length > 0
-    fail_msg: "openbao_oidc needs discovery_url (https://<Keycloak's name>/realms/<realm>), values_file and ui_names."
+      - openbao_oidc.owner_user | default('') | length > 0
+    fail_msg: "openbao_oidc needs discovery_url (https://<Keycloak's name>/realms/<realm>), values_file, ui_names and owner_user."
     quiet: true
 
 - name: owner_signin | The login's settings
@@ -25,7 +28,8 @@
       role_type: oidc
       user_claim: preferred_username
       bound_audiences: ["{{ openbao_oidc_client_id }}"]
-      bound_claims: {groups: ["{{ openbao_oidc_group }}"]}
+      # Both must match: the group, and the owner's own user name, so another lab-admins member is refused too.
+      bound_claims: {groups: ["{{ openbao_oidc_group }}"], preferred_username: ["{{ openbao_oidc.owner_user }}"]}
       max_age: "{{ openbao_oidc_max_age | int }}"
       token_policies: ["{{ openbao_oidc_policy }}"]
       token_ttl: "{{ openbao_oidc_token_ttl | int }}"
@@ -208,7 +212,7 @@
       when: openbao_oidc_proof | length > 0
       block:
         # Password and seed travel on stdin, never in an argument; no_log keeps them out of Ansible's output.
-        - name: owner_signin | An admin and a viewer sign in, as the web page does
+        - name: owner_signin | The owner, a viewer and another admin sign in, as the web page does
           ansible.builtin.command:
             cmd: python3 -I {{ role_path }}/files/oidc-check.py
             stdin: >-
@@ -222,7 +226,10 @@
                         'password': openbao_oidc_values['PASSWORD_' ~ (openbao_oidc_proof.admin_user | upper | regex_replace('[^A-Z0-9]', '_'))],
                         'seed': openbao_oidc_values['TOTP_' ~ (openbao_oidc_proof.admin_user | upper | regex_replace('[^A-Z0-9]', '_'))]},
               'viewer': {'user': openbao_oidc_proof.viewer_user,
-                         'password': openbao_oidc_values['PASSWORD_' ~ (openbao_oidc_proof.viewer_user | upper | regex_replace('[^A-Z0-9]', '_'))]}}
+                         'password': openbao_oidc_values['PASSWORD_' ~ (openbao_oidc_proof.viewer_user | upper | regex_replace('[^A-Z0-9]', '_'))]},
+              'other': {'user': openbao_oidc_proof.other_admin_user,
+                        'password': openbao_oidc_values['PASSWORD_' ~ (openbao_oidc_proof.other_admin_user | upper | regex_replace('[^A-Z0-9]', '_'))],
+                        'seed': openbao_oidc_values['TOTP_' ~ (openbao_oidc_proof.other_admin_user | upper | regex_replace('[^A-Z0-9]', '_'))]}}
               | to_json }}
           register: openbao_oidc_check
           changed_when: false
@@ -242,7 +249,7 @@
 
         - name: PASS line for the owner's sign-in
           ansible.builtin.debug:
-            msg: "PASS: owner sign-in: admin with code gets {{ openbao_oidc_policy }} only, viewer refused"
+            msg: "PASS: owner sign-in: the owner with the code gets {{ openbao_oidc_policy }} only; a viewer and another admin are refused"
 
   always:
     - name: owner_signin | The admin token is revoked

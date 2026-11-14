@@ -287,11 +287,22 @@ run_stage() {
     # named here, identity.env in this dev env folder, so no prod file is read whichever machine runs this. The route's name proof is off: on dev the names resolve to prod's
     # Gateway, so the proof goes to this cluster's Gateway address itself. The sign-in theme is left out (Keycloak's own look): the
     # theme folder is the owner's private branding checkout, which the box doesn't hold. `signin` is also tagged never.
+    # With a secrets store (OPENBAO_ADDR), the realm also gets client openbao for the store's address, and the
+    # role writes openbao-oidc.json in this env folder (Keycloak's issuer, this Gateway's address, the dev CA's
+    # root), which `secrets-store configure` reads for the owner's sign-in and its proof (agent pick 233). A
+    # lab-viewers user, dev-viewer, and a second lab-admins user, dev-admin2, are the ones the store must refuse.
     identity-keycloak)
       [ "$ENV_NAME" = dev ] || { echo "the dev identity stage runs on dev only"; return 1; }
+      local store_host="" store_hosts="[]" handoff=""
+      if [ -n "${OPENBAO_ADDR:-}" ]; then
+        store_host=${OPENBAO_ADDR#https://}; store_host=${store_host%%[:/]*}
+        store_hosts="[\"$store_host\"]"; handoff=$env_dir/openbao-oidc.json
+      fi
       ap playbooks/k8s-identity.yml --tags all,signin \
         -e k8s_identity_owner_username=dev-admin -e k8s_identity_owner_email= \
-        -e '{"k8s_identity_extra_users": []}' -e k8s_app_route_proof=false -e k8s_identity_theme_dir= \
+        -e '{"k8s_identity_extra_users": [{"username": "dev-viewer", "groups": ["lab-viewers"]}, {"username": "dev-admin2", "groups": ["lab-admins"]}]}' \
+        -e "{\"k8s_identity_openbao_hosts\": $store_hosts}" -e "k8s_identity_oidc_handoff_file=$handoff" \
+        -e k8s_app_route_proof=false -e k8s_identity_theme_dir= \
         -e "k8s_identity_values_file=$env_dir/identity.env" ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
     backup)

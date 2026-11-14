@@ -60,6 +60,7 @@ openbao_rebuild_secret_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openb
 #                       on prod, the dev cluster's own CA on dev); empty uses the VM's system roots
 #   values_file         on the controller: the identity role's KEY=value file that holds the client secret
 #   ui_names            the names the owner's browser uses for the store, one redirect URI each
+#   owner_user          the owner's user name in the realm: the role is bound to it as well as to the group
 #   pin_address         optional, dev: Keycloak's name resolves to this address on the VM, because on dev the
 #                       lab's names resolve to prod's Gateway
 openbao_oidc: {}
@@ -78,8 +79,8 @@ openbao_oidc_kv_prefix: vps
 # A hash of the login's settings, kept next to the box's other store files, so a run writes the
 # config (whose client secret can't be read back) only when a setting changed.
 openbao_oidc_config_sha256_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-oidc-config.sha256"
-# Dev only: the proof signs in as an admin and a viewer of the dev realm and checks what each gets
-# (tasks/owner_signin.yml). Keys: admin_user, viewer_user (their PASSWORD_ and TOTP_ lines are in
-# values_file), gateway_address (the dev cluster's Gateway, where Keycloak answers), verify (false for the
-# dev CA). Empty: no proof.
+# Dev only: the proof signs in as the owner (openbao_oidc.owner_user), a viewer and a second admin of the
+# dev realm and checks what each gets (tasks/owner_signin.yml). Keys: admin_user (the owner), viewer_user,
+# other_admin_user (their PASSWORD_ and TOTP_ lines are in values_file), gateway_address (the dev cluster's
+# Gateway, where Keycloak answers), verify (false for the dev CA). Empty: no proof.
 openbao_oidc_proof: {}
