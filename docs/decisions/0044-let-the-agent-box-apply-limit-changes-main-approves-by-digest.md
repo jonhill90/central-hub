@@ -18,6 +18,12 @@ revisit-when: the box can check the owner's tap itself (for example a GitHub env
 
 D-0036 lets the agent box apply its own role from reviewed main, and keeps the box's limits (rule 3: the sudo rules, the guard settings, the wrappers, the users, the units that run with the keys, and `box-apply` itself) behind the owner. Rule 6 sends every limit change to an apply from the controller, the owner's Mac. D-0042 rule 4 kept that, made the owner's approval a tap (rule 6), and left open how limit changes "reach the box without the Mac".
 
+**This record reverses an answer of the owner's and weakens a step he kept.**
+- It reverses his answer of 2026-11-14 02:26 UTC on D-0036's card: an agent can't loosen its own limits. Under this record an agent can, with a made-up tap id that the box can't tell from a real one (rule 3).
+- It makes D-0042 rule 6's tap for the box's limits something the box only logs, not enforces. A change that weakens a rule 6 step is itself a rule 6 step (D-0042 rule 11).
+
+So it is accepted only by the owner's own tap on a card naming this record's PR and head, as a change of his mind (REQ-0030), and never by the agents' pass. Until then it stays proposed, and the approvals file stays empty.
+
 On 2026-11-14 at 07:47:50 UTC the owner said he will not type go lines anymore, and the Mac's guard accepts only typed words. So no limit change has reached the box since its baseline, 9d519572. Main has 19 limit changes since then, from #276, #284, #288, #289 and #302, and the installed `box-apply` stops on all of them (evidence, finding 1). The owner's end goal is that an agent rebuilds the whole lab from the box or a cloud session with no Mac step (project memory, 2026-11-13).
 
 ## Decision Drivers
@@ -113,5 +119,6 @@ flowchart LR
 
 - **Evidence:** [0044](../evidence/0044-let-the-agent-box-apply-limit-changes-main-approves-by-digest.md).
 - **The code:** central-hub #308. Runbook: [Apply the agent box's setup from the box itself](../runbooks/apply-the-agent-box-from-itself.md), section "Apply an approved limit change".
+- **How this record is accepted:** only by the owner's tap on a card naming this PR and its head (REQ-0030, D-0042 rule 11), never by the agents' pass (Context).
 - **Exit path:** empty the approvals file. `box-apply` then stops on every limit change, as before this record. To remove the code too, an apply from the controller of an older `box-apply`.
 - Related records: D-0001, D-0030, D-0036, D-0042.
