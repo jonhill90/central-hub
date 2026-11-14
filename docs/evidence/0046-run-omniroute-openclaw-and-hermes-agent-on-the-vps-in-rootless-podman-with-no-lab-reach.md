@@ -1,14 +1,14 @@
 ---
-record: D-0044
-batch: RB-0228 (2026-11-14), the drafting agent's reads and measurements for the VPS apps, between 08:23 and 09:30 UTC
+record: D-0046
+batch: RB-0230 (2026-11-14), the drafting agent's reads and measurements for the VPS apps, between 08:23 and 09:30 UTC
 researched: 2026-11-14
 method: each project's licence file and README read from its repository; official docs pages opened; GitHub issue and code searches; package listings and network state measured on the VPS over Tailscale SSH; Proxmox and OpenBao source read
-checks: "RB-0228 had no independent research check. Three council threads and the reviewer thread checked the design; a reviewing agent checks this file against it"
+checks: "RB-0230 had no independent research check. Three council threads and the reviewer thread checked the design; a reviewing agent checks this file against it"
 ---
 
-# Evidence for D-0044: OmniRoute, OpenClaw and Hermes Agent on the VPS
+# Evidence for D-0046: OmniRoute, OpenClaw and Hermes Agent on the VPS
 
-This file summarises the research behind D-0044. It adds nothing the research did not find.
+This file summarises the research behind D-0046. It adds nothing the research did not find.
 
 ## Question
 

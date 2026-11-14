@@ -1,5 +1,5 @@
 ---
-id: D-0044
+id: D-0046
 title: Run OmniRoute, OpenClaw and Hermes Agent on the VPS in rootless Podman with no lab reach, narrow the VPS's SSH logins before any key lands, and keep their config in hosts/ until the agents can make repos
 status: proposed
 date: 2026-11-14
@@ -124,5 +124,5 @@ Diagram: not applicable. The apps add no route to the lab; the only network path
 
 ## More Information
 
-- Evidence: [`docs/evidence/0044-run-omniroute-openclaw-and-hermes-agent-on-the-vps-in-rootless-podman-with-no-lab-reach.md`](../evidence/0044-run-omniroute-openclaw-and-hermes-agent-on-the-vps-in-rootless-podman-with-no-lab-reach.md).
+- Evidence: [`docs/evidence/0046-run-omniroute-openclaw-and-hermes-agent-on-the-vps-in-rootless-podman-with-no-lab-reach.md`](../evidence/0046-run-omniroute-openclaw-and-hermes-agent-on-the-vps-in-rootless-podman-with-no-lab-reach.md).
 - Related: D-0035 (rule 2, the VPS node is never torn down), D-0036 (the box's limits), D-0038 (the secrets store), D-0041 (the pipeline), D-0042 (rule 6, the owner's taps).
