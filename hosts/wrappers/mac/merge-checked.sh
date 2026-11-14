@@ -30,9 +30,21 @@ lib=$HOME/.config/central-hub/lib/pinned.zsh
 [[ -f $lib ]] || die "the Mac's lib is missing" 3
 box() { zsh -c '. "$1"; shift; box_ssh "$@"' _ "$lib" "$@"; }
 
+# The box's stop (D-0042 rule 8) is a flag file; pr-merge only reads it for its own merge, so this wrapper reads it too.
+halted() {
+  local rc=0
+  box test -e /var/lib/agent-box/passes/HALT || rc=$?
+  case $rc in 0) return 0 ;; 1) return 1 ;; *) die "could not read the box's halt flag (exit $rc); nothing merged" 1 ;; esac
+}
+halted && die "the halt flag is set on the box; nothing merged" 1
+
 verdict=$(box pr-merge check "$repo" "$pr" "$head" 2>&1) && rc=0 || rc=$?
 echo "$verdict"
 last=${verdict##*$'\n'}
 [[ $rc -eq 0 && $last == *": GREEN" ]] || die "not GREEN (exit $rc); nothing merged. A PR that is refused waits for the sweep." 1
+
+# The sweep posts the ledger on the PR (D-0042 rule 9); here it is printed, with its pass times, for the merge report.
+box pass-record show "$repo" "$head" || die "could not read the head's ledger; nothing merged" 1
+halted && die "the halt flag was set while this ran; nothing merged" 1
 
 gh pr merge "$pr" --repo "$repo" --squash --match-head-commit "$head"
