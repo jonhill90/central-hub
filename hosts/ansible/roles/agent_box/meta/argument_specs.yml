@@ -61,9 +61,9 @@ argument_specs:
         type: dict
         default: {}
         description: >-
-          Private. account, client_id, tenant_id and app_object_id (tofu outputs of hosts/terraform/azure/backup) and,
-          optionally, repository, keep_daily (default 30) and keep_monthly (default 12) for the daily off-box copy of
-          the OPNsense backups (pick 222). Needs agent_box_opnsense_backup. Empty does nothing.
+          Private. account, client_id, tenant_id, app_object_id and vault_url (tofu outputs of hosts/terraform/azure/backup)
+          and, optionally, repository, vault_secret, keep_daily (default 30) and keep_monthly (default 12) for the daily
+          off-box copy of the OPNsense backups (pick 222). Needs agent_box_opnsense_backup. Empty does nothing.
       agent_box_opnsense_offbox_daily: {type: str, default: "*-*-* 15:00:00 UTC", description: "systemd OnCalendar for the daily off-box copy."}
       agent_box_opnsense_offbox_cert_days: {type: int, default: 90, description: "Days the box's certificate for the copy app is valid."}
       agent_box_opnsense_offbox_cert_renew_days: {type: int, default: 30, description: "Days left when the daily run rolls that certificate."}

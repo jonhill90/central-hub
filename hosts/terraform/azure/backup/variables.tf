@@ -92,3 +92,30 @@ variable "opnsense_app_display_name" {
   type        = string
   default     = "opnsense-backup"
 }
+
+variable "opnsense_vault_name" {
+  description = "Key Vault that holds the OPNsense copies' restic password: 3 to 24 letters, digits and hyphens, starting with a letter, unique in all of Azure and part of a public DNS name (<name>.vault.azure.net). Private. No default."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$", var.opnsense_vault_name)) && !strcontains(var.opnsense_vault_name, "--")
+    error_message = "opnsense_vault_name must be 3 to 24 letters, digits and single hyphens, starting with a letter and not ending with a hyphen."
+  }
+}
+
+variable "opnsense_vault_retention_days" {
+  description = "Days a deleted vault or secret can still be brought back (7 to 90). Purge protection is on, so nobody can shorten it."
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.opnsense_vault_retention_days >= 7 && var.opnsense_vault_retention_days <= 90 && floor(var.opnsense_vault_retention_days) == var.opnsense_vault_retention_days
+    error_message = "opnsense_vault_retention_days must be a whole number from 7 to 90."
+  }
+}
+
+variable "opnsense_escrow_role_name" {
+  description = "Name of the custom role that lets the OPNsense app set the password secret and read secrets' metadata, never their values."
+  type        = string
+  default     = "opnsense-backup password escrow"
+}

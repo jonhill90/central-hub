@@ -154,3 +154,54 @@ resource "azurerm_role_assignment" "opnsense" {
   principal_id         = azuread_service_principal.opnsense.object_id
   principal_type       = "ServicePrincipal"
 }
+
+# The OPNsense copies' restic password, kept off the box (pick 222). The box makes the password itself
+# and writes it straight into this vault, signed in as the OPNsense app, so it never passes a
+# transcript, the repository or tofu state: tofu makes the vault and the role, never the secret.
+# The app may only set the secret and read its metadata (a custom role), so a box that is taken over
+# can't read the password back or delete an earlier version. c1's apps hold nothing here. The owner
+# reads it only for a recovery, by giving his own account Key Vault Secrets User then.
+resource "azurerm_key_vault" "opnsense" {
+  name                          = var.opnsense_vault_name
+  location                      = azurerm_resource_group.backup.location
+  resource_group_name           = azurerm_resource_group.backup.name
+  tenant_id                     = data.azurerm_client_config.current.tenant_id
+  sku_name                      = "standard"
+  rbac_authorization_enabled    = true
+  purge_protection_enabled      = true
+  soft_delete_retention_days    = var.opnsense_vault_retention_days
+  public_network_access_enabled = true
+
+  network_acls {
+    default_action = "Deny"
+    bypass         = "None"
+    ip_rules       = var.allowed_ip_addresses
+  }
+
+  tags = var.tags
+}
+
+resource "azurerm_role_definition" "opnsense_escrow" {
+  name        = var.opnsense_escrow_role_name
+  scope       = azurerm_resource_group.backup.id
+  description = "Set a secret and read secrets' metadata, never their values (central-hub pick 222)."
+
+  permissions {
+    actions = []
+    data_actions = [
+      "Microsoft.KeyVault/vaults/secrets/setSecret/action",
+      "Microsoft.KeyVault/vaults/secrets/readMetadata/action",
+    ]
+  }
+
+  # Azure takes a custom role's assignable scopes down to a resource group only; the assignment below
+  # is on the vault itself.
+  assignable_scopes = [azurerm_resource_group.backup.id]
+}
+
+resource "azurerm_role_assignment" "opnsense_escrow" {
+  scope              = azurerm_key_vault.opnsense.id
+  role_definition_id = azurerm_role_definition.opnsense_escrow.role_definition_resource_id
+  principal_id       = azuread_service_principal.opnsense.object_id
+  principal_type     = "ServicePrincipal"
+}

@@ -8,8 +8,8 @@
 #   keys user, in <keys_dir>/opnsense-offbox. The key never leaves the box. Only the public certificate comes back,
 #   and the controller adds it to the app with the Azure CLI, signed in as agent-azure, the app's owner. After that
 #   the box's daily run rolls it itself (Graph addKey), so no Azure secret is stored anywhere.
-# - The restic password is made once on the controller, in ~/.config/central-hub, and reaches the box only through
-#   the prod files copy (no_log). The controller keeps its copy, so the backups can be read without the box.
+# - The restic password is made on the box by opnsense-escrow.py, as the keys user, and its one off-box copy goes
+#   straight from the box into a Key Vault secret the box may set but never read back. No controller holds it.
 
 - name: The off-box copy's settings hold
   ansible.builtin.assert:
@@ -20,15 +20,18 @@
       - agent_box_opnsense_offbox.tenant_id | default('') is match(agent_box_guid)
       - agent_box_opnsense_offbox.app_object_id | default('') is match(agent_box_guid)
       - agent_box_opnsense_offbox.repository | default('azure:opnsense-backup:/opnsense') is match('^azure:[a-z0-9-]{3,63}:/[A-Za-z0-9/_-]+$')
+      - agent_box_opnsense_offbox.vault_url | default('') is match('^https://[a-zA-Z0-9-]{3,24}\.vault\.azure\.net/?$')
+      - agent_box_opnsense_offbox.vault_secret | default('opnsense-offbox-restic-password') is match('^[A-Za-z0-9-]{1,127}$')
       - agent_box_opnsense_offbox.keep_daily | default(30) | int >= 1
       - agent_box_opnsense_offbox.keep_daily | default(30) | int <= 365
       - agent_box_opnsense_offbox.keep_monthly | default(12) | int >= 0
       - agent_box_opnsense_offbox.keep_monthly | default(12) | int <= 120
       - agent_box_opnsense_offbox_cert_renew_days | int < agent_box_opnsense_offbox_cert_days | int
     fail_msg: >-
-      agent_box_opnsense_offbox needs agent_box_opnsense_backup, and account, client_id, tenant_id and app_object_id
-      from the tofu outputs of hosts/terraform/azure/backup (storage_account_name, opnsense_client_id, tenant_id,
-      opnsense_app_object_id); repository, if set, as azure:<container>:/<path>; keep_daily 1 to 365; keep_monthly
+      agent_box_opnsense_offbox needs agent_box_opnsense_backup, and account, client_id, tenant_id, app_object_id and
+      vault_url from the tofu outputs of hosts/terraform/azure/backup (storage_account_name, opnsense_client_id,
+      tenant_id, opnsense_app_object_id, opnsense_vault_url); repository, if set, as azure:<container>:/<path>;
+      vault_secret, if set, letters, digits and hyphens; keep_daily 1 to 365; keep_monthly
       0 to 120; and fewer renewal days than certificate days.
     quiet: true
   vars:
@@ -73,12 +76,13 @@
     mode: "0755"
   loop:
     - {src: opnsense-offbox.sh, dest: opnsense-offbox.sh}
+    - {src: opnsense-escrow.py, dest: opnsense-escrow.py}
     # The same script the c1 nodes run (pick 189), so one copy of the certificate code is tested and kept.
     - {src: "{{ role_path }}/../k8s_backup/files/c1-backup-azure-cert.py", dest: azure-cert.py}
   loop_control:
     label: "{{ item.dest }}"
 
-# --- Settings and the password file ------------------------------------------------------------------
+# --- Settings ------------------------------------------------------------------
 
 - name: The off-box copy's key folder, the keys user's
   ansible.builtin.file:
@@ -97,21 +101,6 @@
     group: "{{ agent_box_keys_user }}"
     mode: "0600"
   when: not (ansible_check_mode and agent_box_offbox_dir is changed)
-
-- name: Look for the repository password on the box
-  ansible.builtin.stat:
-    path: "{{ agent_box_keys_dir }}/prod/opnsense-offbox-restic.txt"
-  register: agent_box_offbox_password
-
-- name: The repository password is on the box
-  ansible.builtin.assert:
-    that: agent_box_offbox_password.stat.exists and agent_box_offbox_password.stat.size > 0
-    fail_msg: >-
-      {{ agent_box_keys_dir }}/prod/opnsense-offbox-restic.txt is missing: make ~/.config/central-hub/opnsense-offbox-restic.txt
-      on the controller and run this role once with agent_box_copy_prod_files true
-      (docs/runbooks/copy-opnsense-backup-off-box.md, steps 2 and 3).
-    quiet: true
-  when: not ansible_check_mode
 
 # --- The box's own certificate, and its first upload -------------------------------------------------
 

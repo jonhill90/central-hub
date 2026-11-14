@@ -52,3 +52,8 @@ output "opnsense_app_object_id" {
   description = "app_object_id in agent_box_opnsense_offbox: the OPNsense copy app's object ID, which Graph addKey and removeKey take."
   value       = azuread_application.opnsense.object_id
 }
+
+output "opnsense_vault_url" {
+  description = "vault_url in agent_box_opnsense_offbox: the Key Vault the box writes the OPNsense copies' restic password into."
+  value       = azurerm_key_vault.opnsense.vault_uri
+}

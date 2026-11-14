@@ -6,6 +6,7 @@ mock_provider "azurerm" {
   mock_data "azurerm_client_config" {
     defaults = {
       object_id = "11111111-1111-1111-1111-111111111111"
+      tenant_id = "22222222-2222-2222-2222-222222222222"
     }
   }
   mock_resource "azurerm_storage_account" {
@@ -44,6 +45,7 @@ variables {
   location             = "eastus2"
   storage_account_name = "examplec1backup"
   allowed_ip_addresses = ["203.0.113.10"]
+  opnsense_vault_name  = "example-opnsense-kv"
 }
 
 # No raw keys (owner, 2026-11-08 23:42 UTC): the account refuses shared key and anonymous reads.
@@ -294,4 +296,58 @@ run "refuses_one_container_for_both" {
   }
 
   expect_failures = [var.opnsense_container_name]
+}
+
+# The OPNsense copies' restic password vault (pick 222): RBAC only, purge protection, the home address
+# only, and the OPNsense app may set the secret and read metadata, never read a value or delete.
+override_resource {
+  target = azurerm_key_vault.opnsense
+  values = {
+    id        = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-c1-backup/providers/Microsoft.KeyVault/vaults/example-opnsense-kv"
+    vault_uri = "https://example-opnsense-kv.vault.azure.net/"
+  }
+}
+
+override_resource {
+  target = azurerm_resource_group.backup
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-c1-backup"
+  }
+}
+
+run "password_vault_is_set_only_for_the_box" {
+  assert {
+    condition     = azurerm_key_vault.opnsense.rbac_authorization_enabled && azurerm_key_vault.opnsense.purge_protection_enabled && azurerm_key_vault.opnsense.soft_delete_retention_days == 90
+    error_message = "The vault needs RBAC, purge protection and 90 days of soft delete by default."
+  }
+
+  assert {
+    condition     = azurerm_key_vault.opnsense.network_acls[0].default_action == "Deny" && azurerm_key_vault.opnsense.network_acls[0].bypass == "None" && azurerm_key_vault.opnsense.network_acls[0].ip_rules == toset(["203.0.113.10"])
+    error_message = "The vault must answer only the listed addresses, with no bypass."
+  }
+
+  assert {
+    condition     = toset(azurerm_role_definition.opnsense_escrow.permissions[0].data_actions) == toset(["Microsoft.KeyVault/vaults/secrets/setSecret/action", "Microsoft.KeyVault/vaults/secrets/readMetadata/action"]) && length(azurerm_role_definition.opnsense_escrow.permissions[0].actions) == 0
+    error_message = "The escrow role may only set a secret and read secrets' metadata: no getSecret, no delete, no control-plane action."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.opnsense_escrow.scope == azurerm_key_vault.opnsense.id && azurerm_role_assignment.opnsense_escrow.principal_id == "66666666-6666-6666-6666-666666666666"
+    error_message = "The escrow role goes to the OPNsense app only, on the vault only."
+  }
+
+  assert {
+    condition     = output.opnsense_vault_url == "https://example-opnsense-kv.vault.azure.net/"
+    error_message = "opnsense_vault_url must be the vault's URI."
+  }
+}
+
+run "refuses_a_bad_vault_name" {
+  command = plan
+
+  variables {
+    opnsense_vault_name = "1-bad--name-"
+  }
+
+  expect_failures = [var.opnsense_vault_name]
 }
