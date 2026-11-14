@@ -316,3 +316,12 @@
     apply:
       tags: [clients]
   tags: [clients]
+
+# The owner's sign-in to the web page through Keycloak (agent pick 233). Off while openbao_oidc is empty.
+- name: The owner's sign-in
+  ansible.builtin.include_tasks:
+    file: owner_signin.yml
+    apply:
+      tags: [owner_signin]
+  when: openbao_oidc | length > 0
+  tags: [owner_signin]
