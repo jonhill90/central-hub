@@ -68,7 +68,12 @@ superseded-by:
    The rebuild's `openbao` stage does it, on every rebuild ([rebuild-k8s-layer-with-one-command.md](rebuild-k8s-layer-with-one-command.md)), once `rebuild.env` sets `OPENBAO_ADDR`, `OPENBAO_CACERT` and the AppRole `rebuild`'s two ID files.
    expect: `openbao: PASS: the cluster's signing key and issuer ... are in auth/jwt-c1/config` in the run's log.
 
-7. Restart test.
+7. Prove External Secrets reads from the store (D-0038 Confirmation 2).
+   why: one non-secret value through the whole path (the cluster's token, the store's login, policy `eso-c1`) before any real secret moves.
+   With `k8s_gitops_source_openbao_address` and `k8s_gitops_source_openbao_ca_file` set in the dev inventory, the root Application passes them to the secret-store app, which adds ClusterSecretStore `openbao`, service account `store-openbao` and ExternalSecret `openbao-check` in namespace `external-secrets`. `configure` wrote the value it reads, `kv/c1/check`. Every other ExternalSecret keeps naming store `c1`. On c1, where they are unset, the app renders as before.
+   expect: the dev rebuild's `apps` stage passes, since it waits for every ExternalSecret to be Ready, this one too.
+
+8. Restart test.
    `sudo systemctl restart openbao` on the VM, through the wrapper's `configure`.
    expect: health shows `"sealed":false` again with no person.
 

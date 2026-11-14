@@ -2,6 +2,7 @@
 # The store's first clients (proposed D-0038 rule 6; docs/runbooks/set-up-the-secrets-store.md):
 # - auth/jwt-c1: c1's External Secrets Operator signs in with its service account's token. Role `eso`
 #   takes only that one account's token, for audience `openbao`, and reads only kv/data/c1/*.
+# - kv/c1/check: one fixed, non-secret word that the cluster's openbao-check ExternalSecret reads.
 # - AppRole `rebuild`: the rebuild's `openbao` stage writes a rebuilt cluster's new signing key to
 #   auth/jwt-c1/config and can do nothing else (playbooks/k8s-openbao-auth.yml).
 # Run from the agent box through the admin AppRole, whose tokens work only from the box. Each write
@@ -225,6 +226,30 @@
         headers:
           X-Vault-Token: "{{ (openbao_rebuild_try if openbao_rebuild_try.status == 200 else openbao_rebuild_login).json.auth.client_token }}"
         status_code: [200, 204]
+      no_log: true
+
+    - name: Read the test value the cluster's openbao-check ExternalSecret reads
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/kv/data/{{ openbao_check_key }}"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        status_code: [200, 404]
+      register: openbao_check_now
+      no_log: true
+
+    # Not a secret: a fixed word, so External Secrets' first read from the store proves the path
+    # works (D-0038 Confirmation 2) without any real secret in it.
+    - name: The test value at kv/{{ openbao_check_key }}
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/kv/data/{{ openbao_check_key }}"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        body_format: json
+        body: {data: {value: openbao-check}}
+        status_code: [200, 204]
+      when: openbao_check_now.status == 404 or openbao_check_now.json.data.data.value | default('') != 'openbao-check'
+      changed_when: true
       no_log: true
 
   always:
