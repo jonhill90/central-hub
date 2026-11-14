@@ -14,6 +14,11 @@ gatewayHttps: true
 # (k8s_gitops_source_local_path_stable_folders): dev, which restores prod's backup before its apps
 # (TASK-0240). c1 keeps false.
 localPathStableFolders: false
+# The secrets store (proposed D-0038), dev only for now: its https:// address and its certificate,
+# base64 PEM, both private, set by Ansible (k8s_gitops_source_openbao_address and _ca_file). Empty,
+# as on c1: the secret-store app renders exactly as before, with no `openbao` store.
+openbaoAddress: ""
+openbaoCaBundle: ""
 
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
@@ -171,6 +176,9 @@ apps:
   secret-store:
     namespace: external-secrets
     local: true
+    rootParameters:
+      openbao.address: openbaoAddress
+      openbao.caBundle: openbaoCaBundle
     wave: -1
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false

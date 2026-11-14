@@ -1,0 +1,52 @@
+---
+# A throwaway CA for a dev cluster (cert-manager makes it in the cluster) and the Gateway's wildcard
+# certificate from it: HTTPS with no prod secret, for the dev rebuild's sign-in proof. Runs only when asked
+# for twice, the tag devca (tagged never too) and k8s_certs_dev_ca true, which only hosts/rebuild-k8s.sh passes
+# and only when ENV_NAME is dev. It refuses to run beside Let's Encrypt issuing or the lab CA, which own the same
+# Secret.
+- name: dev_ca | Not beside the other issuers
+  ansible.builtin.assert:
+    that:
+      - k8s_certs_dev_ca | bool
+      - not (k8s_certs_issue | bool)
+      - not (k8s_certs_lab_ca | bool)
+    fail_msg: >-
+      The dev CA needs k8s_certs_dev_ca true and k8s_certs_issue and k8s_certs_lab_ca false: all three would write
+      the same Secret.
+    quiet: true
+
+- name: dev_ca | Manifest
+  ansible.builtin.template:
+    src: dev-ca.yaml.j2
+    dest: /root/central-hub/dev-ca.yaml
+    mode: "0600"
+
+- name: dev_ca | Differs from the cluster?
+  ansible.builtin.command: kubectl diff -f /root/central-hub/dev-ca.yaml
+  register: k8s_certs_dev_ca_diff
+  changed_when: false
+  failed_when: >-
+    k8s_certs_dev_ca_diff.rc > 1 and not ('no matches for kind' in k8s_certs_dev_ca_diff.stderr
+    or 'ensure CRDs are installed' in k8s_certs_dev_ca_diff.stderr or 'not found' in k8s_certs_dev_ca_diff.stderr)
+  check_mode: false
+
+- name: dev_ca | Apply
+  ansible.builtin.command: kubectl apply -f /root/central-hub/dev-ca.yaml
+  when: k8s_certs_dev_ca_diff.rc != 0
+  changed_when: true
+
+- name: dev_ca | The issuer is ready and the Gateway's certificate comes from it
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    kubectl wait --for=condition=Ready --timeout=120s clusterissuer/{{ k8s_certs_dev_ca_name }} >/dev/null &&
+    kubectl -n {{ k8s_certs_gateway_namespace }} get certificate {{ k8s_certs_certificate_name }}
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}{"\n"}' &&
+    kubectl -n {{ k8s_certs_gateway_namespace }} get secret {{ k8s_certs_secret_name }}
+    -o jsonpath='{.metadata.annotations.cert-manager\.io/issuer-name}'
+  args: {executable: /bin/bash}
+  register: k8s_certs_dev_ca_ready
+  until: k8s_certs_dev_ca_ready.rc == 0 and k8s_certs_dev_ca_ready.stdout_lines == ['True', k8s_certs_dev_ca_name]
+  retries: 24
+  delay: 5
+  changed_when: false
+  when: not ansible_check_mode

@@ -81,6 +81,8 @@ check_ansible() {
   python3 "$here/check-deny-rules.py"
   bash "$here/tests/test_box_apply_baseline.sh"
   bash "$here/tests/test_proxmox_sso.sh"
+  bash "$here/tests/test_tailnet_stack_args.sh"
+  bash "$here/tests/test_sudoers_session_args.sh"
 }
 
 check_manifests() {
@@ -126,6 +128,11 @@ check_manifests() {
     helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com --set address=192.0.2.10 \
       > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
   done
+  # The secret-store app with the secrets store's address set (dev, proposed D-0038), so its
+  # `openbao` store and test ExternalSecret are schema-checked too.
+  helm template secret-store hosts/kubernetes/home/c1/apps/secret-store --namespace external-secrets \
+    --set openbao.address=https://192.0.2.20 --set openbao.caBundle=QUJD \
+    > "$work/rendered/app-c1-secret-store-openbao.yaml"
   # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
   if command -v promtool >/dev/null; then
     mkdir -p "$work/rules"
@@ -172,6 +179,7 @@ check_backup() {
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
   bash "$here/tests/test_identity_signin.sh"
+  bash "$here/tests/test_rebuild_dev_stages.sh"
 }
 
 check_scripts() {

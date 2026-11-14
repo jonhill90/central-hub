@@ -216,10 +216,25 @@ run_stage() {
     apps) wait_apps && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
     certs) ap playbooks/k8s-certs.yml ;;
     identity) ap playbooks/k8s-identity.yml ;;
-    # Only the identity secrets and Keycloak with its realm, then the sign-in proof (the owner's password and
-    # code through the browser flow; step names and HTTP codes only), for a re-run on a cluster that already
-    # has the rest (tags secrets,keycloak,signin; the always-tagged steps run too). Not in the default stage list.
-    identity-keycloak) ap playbooks/k8s-identity.yml --tags secrets,keycloak,signin ;;
+    # Dev only, and added to a dev run after `checks` (below): a throwaway in-cluster CA and the Gateway's
+    # certificate from it, so dev has HTTPS with no prod secret (no Cloudflare token, no lab CA key).
+    dev-ca)
+      [ "$ENV_NAME" = dev ] || { echo "the dev CA runs on dev only"; return 1; }
+      grep -q 'devca' "$repo/hosts/ansible/roles/k8s_certs/tasks/main.yml" \
+        || { echo "the k8s_certs role has no devca tag: the dev CA change is missing from this checkout"; return 1; }
+      ap playbooks/k8s-certs.yml --tags devca -e k8s_certs_dev_ca=true ;;
+    # Dev only, after dev-ca: the whole identity role with a test admin, never the owner's account, then the
+    # sign-in proof (password alone stops at the one-time-code form; password and code redirect with a code;
+    # step names and HTTP codes only). Every secret is a random value the role makes in the values file
+    # named here, identity.env in this dev env folder, so no prod file is read whichever machine runs this. The route's name proof is off: on dev the names resolve to prod's
+    # Gateway, so the proof goes to this cluster's Gateway address itself. The sign-in theme is left out (Keycloak's own look): the
+    # theme folder is the owner's private branding checkout, which the box doesn't hold. `signin` is also tagged never.
+    identity-keycloak)
+      [ "$ENV_NAME" = dev ] || { echo "the dev identity stage runs on dev only"; return 1; }
+      ap playbooks/k8s-identity.yml --tags all,signin \
+        -e k8s_identity_owner_username=dev-admin -e k8s_identity_owner_email= \
+        -e '{"k8s_identity_extra_users": []}' -e k8s_app_route_proof=false -e k8s_identity_theme_dir= \
+        -e "k8s_identity_values_file=$env_dir/identity.env" ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.
@@ -239,6 +254,9 @@ run_stage() {
 
 stages=${STAGES:-$default_stages}
 [ -z "$only" ] || stages=${only//,/ }
+# A dev run ends with its own HTTPS and sign-in proof, on the stages the box's wrapper sets, with no change to
+# that wrapper: the box's own checkout of main supplies them.
+if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="$stages dev-ca identity-keycloak"; fi
 if $teardown && [ -z "$only" ]; then stages="teardown $stages"; fi
 
 echo "rebuild: env $ENV_NAME, stages: $stages, log $log"

@@ -40,7 +40,7 @@
       'digits': k8s_identity_otp_digits, 'period': k8s_identity_otp_period,
       'seed': k8s_identity_values['TOTP_' ~ (k8s_identity_owner_username | upper | regex_replace('[^A-Z0-9]', '_'))],
       'address': k8s_identity_signin_facts.stdout_lines[0],
-      'verify': k8s_identity_signin_facts.stdout_lines[1] != 'letsencrypt-staging'} | to_json }}
+      'verify': k8s_identity_signin_facts.stdout_lines[1] not in ['letsencrypt-staging', 'dev-ca']} | to_json }}
   register: k8s_identity_signin
   changed_when: false
   failed_when: false
