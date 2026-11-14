@@ -4,7 +4,10 @@
 # (D-0041 rule 3), after the agent_box role has made the key and fetched its public half (tag proxmox_host_inventory).
 # The line takes the key only from the box's lifeline address, and `restrict` turns off forwarding, a terminal and
 # ~/.ssh/rc. On Proxmox VE, root's authorized_keys is a link to /etc/pve/priv/authorized_keys, the cluster's copy.
-#   ansible-playbook -i inventories/home/ playbooks/proxmox-host-key.yml --check --diff
+# That copy is on pmxcfs, where Ansible's file modules fail ("Operation not permitted" on the chmod of their temporary
+# file; forum.proxmox.com thread 88310), so a fixed shell script writes it in place, as a plain cp does. A --check run
+# makes the asserts and skips the write.
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-host-key.yml --check
 #   ansible-playbook -i inventories/home/ playbooks/proxmox-host-key.yml
 # Take the reach away: run it with -e proxmox_host_key_state=absent.
 - name: The agent box's Proxmox host job key
@@ -28,13 +31,41 @@
           proxmox_host_inventory first, so {{ proxmox_host_key_file }} holds the key's public half
         quiet: true
 
+    - name: Root's authorized keys are the link to the cluster's copy
+      ansible.builtin.stat:
+        path: /root/.ssh/authorized_keys
+      register: proxmox_host_key_link
+
+    - name: The line goes where sshd reads it
+      ansible.builtin.assert:
+        that:
+          - proxmox_host_key_link.stat.islnk | default(false)
+          - proxmox_host_key_link.stat.lnk_source | default('') == proxmox_host_key_path
+        fail_msg: /root/.ssh/authorized_keys is not a link to {{ proxmox_host_key_path }}, so this playbook stops
+        quiet: true
+
+    # Every line but the job's is kept as it is; the job's line is added (present) or left out (absent). The file is
+    # rewritten in place only when that changes it.
     - name: Root's authorized keys hold the job's key, narrowed to the box's lifeline address
-      ansible.builtin.lineinfile:
-        path: "{{ proxmox_host_key_path }}"
-        regexp: ' central-hub-r1$'
-        line: >-
-          {{ omit if proxmox_host_key_state == 'absent' else
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          f={{ proxmox_host_key_path | quote }}
+          line={{ proxmox_host_key_line | quote }}
+          tmp=$(mktemp)
+          trap 'rm -f "$tmp"' EXIT
+          rc=0
+          grep -v -- ' central-hub-r1$' "$f" > "$tmp" || rc=$?
+          [ "$rc" -le 1 ] || exit "$rc"
+          [ -z "$line" ] || printf '%s\n' "$line" >> "$tmp"
+          if cmp -s "$tmp" "$f"; then echo unchanged; exit 0; fi
+          cat "$tmp" > "$f"
+          echo changed
+        executable: /bin/bash
+      vars:
+        proxmox_host_key_line: >-
+          {{ '' if proxmox_host_key_state == 'absent' else
              'restrict,from="' ~ proxmox_host_key_from ~ '" '
              ~ ((lookup('ansible.builtin.file', proxmox_host_key_file) | split(' '))[0:2] | join(' ')) ~ ' central-hub-r1' }}
-        state: "{{ proxmox_host_key_state }}"
-        create: false
+      register: proxmox_host_key_write
+      changed_when: proxmox_host_key_write.stdout == 'changed'

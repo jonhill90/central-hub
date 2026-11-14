@@ -3,7 +3,7 @@ title: Serve the Proxmox web UI on port 443
 status: draft
 kind: manual
 trigger: once, after the Proxmox host's certificate is set (proxmox-cert.yml); again after each certificate renewal, at least every 30 days
-runner: the host job, workflow `lab-proxmox-host` on the agent box's runner through wrapper `proxmox-host` (pick 240); it runs proxmox-proxy.yml and nothing else. Built, not installed, so until the install below nothing applies this playbook
+runner: the host job, workflow `lab-proxmox-host` on the agent box's runner through wrapper `proxmox-host` (pick 241); it runs proxmox-proxy.yml and nothing else. Built, not installed, so until the install below nothing applies this playbook
 outcome: the Proxmox web UI answers on https://pve.<zone> with the lab certificate, on port 443 with no port in the address, served by Apache httpd; port 80 redirects to it; port 8006 stays as the fallback and the agent box's lifeline
 needs: the host's certificate from the lab CA (role proxmox_cert, playbook proxmox-cert.yml) with a DNS name for the host's web UI that resolves from where the owner browses; the host firewall rows for 443 and 80 (the same sources as 8006); the host job installed (below), which needs the owner's tap; python3-apt on the host for the check run
 private-values: [proxmox-cert-names, agent-box-proxmox-host, agent-box-lifeline-address, agent-box-lifeline-allow]
@@ -54,7 +54,7 @@ Three routes, in this order (Library plans/r1-host-job/DESIGN.md v3.1, section 6
    | The certificate's names | `proxmox_cert_names` on the Proxmox host (already set) | the proxy role, through the job's inventory |
 
    expect: `/etc/agent-keys-host/inventory/hosts.yml` and `known_hosts` exist, mode 0600, owned by `hostops`; `nft list table inet lifeline` shows `tcp dport 22 meta skuid` with `hostops`'s UID; the key's public half is on the controller at `hosts/ansible/inventories/home/id_ed25519-proxmox-host.pub` (git-ignored).
-3. **The host's key line, from the controller**: `ansible-playbook -i inventories/home/ playbooks/proxmox-host-key.yml`, first with `--check --diff`. It puts `restrict,from="<box lifeline address>" ssh-ed25519 <key> central-hub-r1` into `/etc/pve/priv/authorized_keys`. This is a raw run under D-0041 rule 3, listed here until the box can reach the host by itself; its approval is the one rule 3 sets.
+3. **The host's key line, from the controller**: `ansible-playbook -i inventories/home/ playbooks/proxmox-host-key.yml`, first with `--check`, which makes the asserts and skips the write. It puts `restrict,from="<box lifeline address>" ssh-ed25519 <key> central-hub-r1` into `/etc/pve/priv/authorized_keys`, after it checks that root's `authorized_keys` is a link to that file. The file is on pmxcfs, where Ansible's file modules fail on the chmod of their temporary file ([forum thread](https://forum.proxmox.com/threads/ansible-operation-not-permitted-copying-ssl-keys-directly.88310/)), so the playbook rewrites it in place with a fixed shell script, keeping every other line. The stand-in test proves the write is in place (same inode); a write on the real pmxcfs is not measured. This is a raw run under D-0041 rule 3, listed here until the box can reach the host by itself; its approval is the one rule 3 sets.
    expect: from the box, `proxmox-host check` prints `proxmox-host: check <hash>: ...`.
 
 Steps 2 and 3 need the controller, whose guard takes typed words only, so today they wait (the design's section 11 blocker).

@@ -3,7 +3,8 @@
 # host of test_proxy.sh (proxy/): systemd, sshd, nginx on 443 and 80, a stand-in pveproxy. Root's authorized_keys is a
 # link to /etc/pve/priv/authorized_keys, as on Proxmox VE. Test values only.
 #   1. playbooks/proxmox-host-key.yml puts the job's key line in, narrowed by from= to this runner's address, and the
-#      job's key logs in; with from= another address, the same key is refused.
+#      job's key logs in; with from= another address, the same key is refused. It writes the file in place (same inode:
+#      no rename and no chmod, which pmxcfs refuses), keeps the other lines, and with state absent takes the line out.
 #   2. The wrapper's check prints a hash and changes nothing on the host (nginx still holds 443), and gives the
 #      same hash twice.
 #   3. apply with a hash that is not the check's refuses, and nginx still holds 443.
@@ -65,10 +66,12 @@ all:
           agent_box_lifeline_address: $1/24
 INV
 }
-keyplay() { (cd "$root/hosts/ansible" && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i "$t/admin.yml" playbooks/proxmox-host-key.yml -e "proxmox_host_key_file=$t/jobkey.pub"); }
+keyplay() { (cd "$root/hosts/ansible" && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i "$t/admin.yml" playbooks/proxmox-host-key.yml -e "proxmox_host_key_file=$t/jobkey.pub" "$@"); }
 jobssh() { ssh -n -i "$t/jobkey" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$t/known_hosts" "root@$ip" true 2>/dev/null; }
 
 # 1
+ino() { docker exec "$name" stat -c %i /etc/pve/priv/authorized_keys; }
+ino0=$(ino)
 admin_inv "$gw"
 keyplay > "$t/1.log" 2>&1 || { bad "1 the key playbook failed"; tail -20 "$t/1.log"; }
 docker exec "$name" grep -q "^restrict,from=\"$gw\" ssh-ed25519 .* central-hub-r1\$" /etc/pve/priv/authorized_keys \
@@ -78,7 +81,12 @@ admin_inv 192.0.2.99
 keyplay > "$t/1b.log" 2>&1 || bad "1 the key playbook failed for another address"
 jobssh && bad "1 the job's key logged in from an address not in from=" || ok "1 from another address the key is refused"
 [ "$(docker exec "$name" grep -c central-hub-r1 /etc/pve/priv/authorized_keys)" = 1 ] && ok "1 one line, replaced in place" || bad "1 more than one job line"
-admin_inv "$gw"; keyplay > /dev/null 2>&1
+keyplay -e proxmox_host_key_state=absent > "$t/1c.log" 2>&1 || bad "1 the key playbook failed with state absent"
+docker exec "$name" grep -q central-hub-r1 /etc/pve/priv/authorized_keys && bad "1 state absent left the job's line" || ok "1 state absent takes the line out"
+docker exec "$name" cat /etc/pve/priv/authorized_keys | cmp -s - "$t/admin.pub" && ok "1 the other lines are kept as they were" || bad "1 the other lines changed"
+admin_inv "$gw"; keyplay > "$t/1d.log" 2>&1 || bad "1 the key playbook failed putting the line back"
+keyplay > "$t/1e.log" 2>&1 && grep -q 'changed=0' "$t/1e.log" && ok "1 a second run changes nothing" || bad "1 second run: $(grep -h 'changed=' "$t/1e.log")"
+[ "$(ino)" = "$ino0" ] && ok "1 the file was written in place (same inode)" || bad "1 the file was replaced, not written in place"
 
 # The wrapper, pointed at a test folder, at this commit as main, with the job's inventory.
 mkdir -p "$t/dir/inventory" "$t/work"
