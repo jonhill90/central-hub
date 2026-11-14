@@ -6,13 +6,14 @@ api (https://<store address>:<port>/v1), cacert (the store's public certificate)
 prefix (the folder under kv/ the policy allows), redirect (one of the role's allowed redirect URIs),
 kc_base (https://<Keycloak's name>), address (the dev Gateway's address, where Keycloak answers), verify
 (false for the dev CA), digits and period (the realm's OTP policy), admin {user, password, seed} and
-viewer {user, password}.
+viewer {user, password} and other {user, password, seed}
+(a second lab-admins member who is not the owner).
 
 It drives the same calls the store's web page makes: auth_url, Keycloak's login form, then the store's
 callback with the code. Each step prints "<number> <name>: HTTP <code> <ok or FAIL: reason>" and nothing
 else. No password, seed, code, token or page text is ever printed.
 
-  1 admin auth_url        the store hands out a Keycloak URL for the role
+  1 admin auth_url        the store hands out a Keycloak URL for the role (admin = the owner)
   2 admin login page      Keycloak shows its login form
   3 admin password only   Keycloak asks for the one-time code; a redirect would mean the password alone signs in
   4 admin password + code Keycloak redirects to the store's callback with a code
@@ -21,7 +22,15 @@ else. No password, seed, code, token or page text is ever printed.
   7 admin reads           and reads it back
   8 admin refused c1      the token is refused kv/data/c1/check (403)
   9 admin refused policy  and sys/policies/acl/admin (403)
- 10 viewer refused        a member of another group gets through Keycloak but the store refuses the login
+ 10 viewer auth_url       the same for a member of another group
+ 11 viewer login page
+ 12 viewer password       Keycloak redirects to the store (viewers have no code)
+ 13 viewer refused        the store refuses the login
+ 14 other auth_url        the same for a second lab-admins member who is not the owner
+ 15 other login page
+ 16 other password only   Keycloak asks for the code
+ 17 other password + code Keycloak redirects to the store
+ 18 other refused         the store refuses the login: the role binds the owner's user name
 """
 import base64
 import hashlib
@@ -131,22 +140,22 @@ def main():
     def to_store(location):
         return location.startswith(cfg["redirect"]) and "code=" in location and "state=" in location
 
-    try:
-        # The admin: password, then the code, then a token with the role's policy and nothing more.
-        got = to_keycloak(1, "admin")
+    def with_code(n, who, u):
+        """Steps n..n+3 for a lab-admins member: auth_url, login page, password alone must ask for the code,
+        password + code must redirect to the store. Returns the redirect location, or None."""
+        got = to_keycloak(n, who)
         if not got:
-            return 1
+            return None
         kc, form = got
-        admin = cfg["admin"]
-        code, headers, body = call(kc, form, {"username": admin["user"], "password": admin["password"],
+        code, headers, body = call(kc, form, {"username": u["user"], "password": u["password"],
                                               "credentialId": ""}, form=True)
         form = action(body)
-        if not line(3, "admin password only", code, code == 200 and form is not None and 'name="otp"' in body,
+        if not line(n + 2, who + " password only", code, code == 200 and form is not None and 'name="otp"' in body,
                     "redirect, the password alone signed in" if code in (301, 302, 303) else "no one-time-code form"):
-            return 1
+            return None
         location = ""
         for offset in (0, 1):  # the next 30-second window, if the first code sat on a boundary
-            code, headers, body = call(kc, form, {"otp": totp(admin["seed"], offset, int(cfg.get("digits", 6)),
+            code, headers, body = call(kc, form, {"otp": totp(u["seed"], offset, int(cfg.get("digits", 6)),
                                                               int(cfg.get("period", 30))), "credentialId": ""}, form=True)
             location = headers.get("Location", "") if headers else ""
             if code == 302 and to_store(location):
@@ -154,8 +163,15 @@ def main():
             form = action(body) or form
             if code != 200:
                 break
-        if not line(4, "admin password + code", code, code == 302 and to_store(location),
+        if not line(n + 3, who + " password + code", code, code == 302 and to_store(location),
                     "no redirect to the store with a code"):
+            return None
+        return location
+
+    try:
+        # The owner: password, then the code, then a token with the role's policy and nothing more.
+        location = with_code(1, "admin", cfg["admin"])
+        if not location:
             return 1
         code, _, body = callback(location)
         auth = as_json(body).get("auth") or {}
@@ -194,7 +210,20 @@ def main():
         token = (as_json(body).get("auth") or {}).get("client_token", "")
         if token:
             bao("auth/token/revoke-self", {}, token, method="POST")
-        return 0 if line(13, "viewer refused", code, code in (400, 403) and not token, "the store signed the viewer in") else 1
+        if not line(13, "viewer refused", code, code in (400, 403) and not token, "the store signed the viewer in"):
+            return 1
+
+        # Another lab-admins member with a good code: Keycloak lets them through, the store refuses (the role binds
+        # the owner's user name as well as the group).
+        location = with_code(14, "other", cfg["other"])
+        if not location:
+            return 1
+        code, _, body = callback(location)
+        token = (as_json(body).get("auth") or {}).get("client_token", "")
+        if token:
+            bao("auth/token/revoke-self", {}, token, method="POST")
+        return 0 if line(18, "other refused", code, code in (400, 403) and not token,
+                         "the store signed another admin in") else 1
     except Exception as e:  # network or TLS: the class name only
         line(0, "connection", "none", False, type(e).__name__)
         return 1

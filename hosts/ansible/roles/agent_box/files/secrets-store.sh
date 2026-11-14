@@ -5,7 +5,8 @@
 # the recovery shares or the VM's SSH key. Installed by the agent_box role; root owns it.
 #   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh plan|apply|configure|recovery|status|snapshot|restore|destroy
 # plan, apply, destroy: OpenTofu on hosts/terraform/home/secrets-store with the agents' Proxmox token.
-# configure: the openbao playbook over SSH. recovery: makes the recovery shares once (self-
+# configure: the openbao playbook over SSH, with the owner's sign-in once the dev rebuild has handed over
+# Keycloak's issuer (pick 233). recovery: makes the recovery shares once (self-
 # initialization makes none) into the keys folder. status: sys/health, which holds no secret.
 # snapshot: copies a Raft snapshot off the store into the keys folder. restore: puts the newest of
 # those back (D-0038 Confirmation 4 and 5). Dev only: every action refuses a store outside 550-599.
@@ -30,6 +31,11 @@ sshkey=$env_keys/secrets-store-ssh
 cacert=$env_keys/secrets-store-ca.crt
 snapshots=$env_keys/openbao-snapshots   # the store's Raft snapshots, readable only with the seal key
 snapshot_keep=24
+# The owner's sign-in (agent pick 233), dev: the dev rebuild's identity stage writes Keycloak's issuer, its
+# Gateway's address and the dev CA's root here once the store's address is in the realm; its values file holds
+# the client secret and the dev users' passwords and seeds. Absent: configure sets no sign-in.
+oidc_handoff=$work/rebuild-dev/openbao-oidc.json
+identity_values=$work/rebuild-dev/identity.env
 export HOME=$work PATH=/usr/local/libexec/agent-box/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/secrets-store TF_IN_AUTOMATION=1 ANSIBLE_COLLECTIONS_PATH=/usr/local/libexec/agent-box/collections ANSIBLE_HOME=$work/ansible-home
 
@@ -101,13 +107,14 @@ configure() {
   inventory=$(mktemp --suffix=.json "$work/state/secrets-store-inventory.XXXXXX")
   # shellcheck disable=SC2064
   trap "rm -f '$extra' '$inventory'" EXIT
-  python3 -I - "$settings" "$inventory" "$extra" "$env_keys" "$cacert" <<'PY'
-import json, sys
+  python3 -I - "$settings" "$inventory" "$extra" "$env_keys" "$cacert" "$oidc_handoff" "$identity_values" "$work/state" <<'PY'
+import json, os, sys
 s = json.load(open(sys.argv[1]))
 k = sys.argv[4]
+handoff, values, state = sys.argv[6], sys.argv[7], sys.argv[8]
 json.dump({"openbao": {"hosts": {"openbao_vm": {
     "ansible_host": s["address"], "ansible_user": s.get("admin_user", "admin")}}}}, open(sys.argv[2], "w"))
-json.dump({
+extra = {
     "openbao_hostname": s["name"],
     "openbao_address": s["address"],
     "openbao_box_address": s["box_address"],
@@ -116,7 +123,17 @@ json.dump({
     "openbao_admin_role_id_src": k + "/openbao-admin-role-id",
     "openbao_admin_secret_id_src": k + "/openbao-admin-secret-id",
     "openbao_cacert_dest": sys.argv[5],
-}, open(sys.argv[3], "w"))
+}
+if os.path.isfile(handoff) and os.path.isfile(values):
+    o = json.load(open(handoff))
+    ca = state + "/openbao-oidc-ca.pem"   # the dev CA's public root, not a secret
+    with open(ca, "w") as f:
+        f.write(o["ca_pem"])
+    extra["openbao_oidc"] = {"discovery_url": o["discovery_url"], "values_file": values, "ui_names": [s["address"]],
+                             "ca_pem_file": ca, "pin_address": o["gateway_address"], "owner_user": "dev-admin"}
+    extra["openbao_oidc_proof"] = {"admin_user": "dev-admin", "viewer_user": "dev-viewer", "other_admin_user": "dev-admin2",
+                                   "gateway_address": o["gateway_address"], "verify": False}
+json.dump(extra, open(sys.argv[3], "w"))
 PY
   mkdir -p "$work/.ssh"
   cd "$repo/hosts/ansible"
