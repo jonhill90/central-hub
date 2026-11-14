@@ -62,6 +62,8 @@ flowchart LR
 
 ### Apply a merged change (on the box)
 
+Run `box-apply` as the session user, without `sudo`: the front script calls `sudo -n` itself, and sudo allows only that one root line. `sudo box-apply` doesn't find it, because `/usr/local/bin` is not on root's `secure_path`.
+
 1. Plan:
 
    ```sh
