@@ -74,8 +74,12 @@ for v in SNAPSHOT_KEEP_HOURLY SNAPSHOT_KEEP_DAILY SNAPSHOT_KEEP_MONTHLY SNAPSHOT
   [[ ${!v} =~ ^[0-9]+$ ]] || die "$v must be a whole number"
 done
 (( SNAPSHOT_KEEP_HOURLY >= 1 && 10#$SNAPSHOT_PRUNE_AFTER_HOUR <= 23 )) || die "keep at least 1 hourly; the prune hour is 0-23"
-# The repository is this job's own, never pick 222's.
-[[ $SNAPSHOT_REPOSITORY != "${RESTIC_REPOSITORY:-}" ]] || die "SNAPSHOT_REPOSITORY must not be the OPNsense repository"
+# The repository is this job's own: never pick 222's, nor a path inside it, nor one that holds it.
+own_repo=${SNAPSHOT_REPOSITORY%/} other=${RESTIC_REPOSITORY:-}
+other=${other%/}
+if [[ -n $other && ( $own_repo == "$other" || $own_repo == "$other"/* || $other == "$own_repo"/* ) ]]; then
+  die "SNAPSHOT_REPOSITORY must not be the OPNsense repository, nor inside it, nor hold it"
+fi
 export RESTIC_REPOSITORY=$SNAPSHOT_REPOSITORY
 
 # 2. A snapshot, through the wrapper, which signs in with the admin AppRole and fails on an empty file.

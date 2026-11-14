@@ -8,7 +8,7 @@
 #   4. The first run from the prune hour prunes, once a day; the next run that day does not.
 #   5. A failed escrow stops it before restic.
 #   6. A repository restic can't open for another reason than "does not exist" fails and is never made again.
-#   7. The OPNsense repository is never touched, and the job refuses to be pointed at it.
+#   7. The OPNsense repository is never touched, and the job refuses to be pointed at it, inside it, or above it.
 #   8. Retention works although every snapshot has its own file name: six snapshots on six hours, keep-hourly 2,
 #      leaves two.
 #   9. A corrupted read-back fails the run.
@@ -146,12 +146,19 @@ if [[ $rc -ne 0 && $out == *"could not open the repository"* && $out == *"not ma
 else bad "6. rc=$rc $out $(cat "$t/restic-args")"; fi
 own "$t/repo-opnsense"; send
 r7=$rc o7=$out
+own "$t/repo-opnsense/openbao-dev"; send
+r7b=$rc o7b=$out
+own "$t"; send
+r7c=$rc o7c=$out
 own
 
 # 7
 if [[ $r7 -ne 0 && $o7 == *"must not be the OPNsense repository"* && $(count "$t/repo-opnsense" opnsense) == 1 && $(count "$t/repo-opnsense" openbao-dev) == 0 ]]; then
   ok "7. the OPNsense repository keeps its one copy, and the job refuses to be pointed at it"
 else bad "7. rc=$r7 $o7"; fi
+if [[ $r7b -ne 0 && $o7b == *"nor inside it"* && $r7c -ne 0 && $o7c == *"nor hold it"* && ! -e $t/repo-opnsense/openbao-dev ]]; then
+  ok "7b. a path inside the OPNsense repository, or one that holds it, is refused too"
+else bad "7b. rc=$r7b/$r7c $o7b / $o7c"; fi
 
 # 8
 for h in 10 11 12 13 14; do
