@@ -55,10 +55,21 @@
 # The client only. Joining (tailscale up --advertise-tags=tag:agent-box --ssh) needs a login
 # link an admin opens once, so it is a runbook step, not a task.
 
+# Written from the repository, not downloaded: pkgs.tailscale.com sends no Last-Modified, so get_url in check
+# mode reported a change on every run, and the package and service checks below were always skipped. The text is
+# what https://pkgs.tailscale.com/stable/rhel/<major>/tailscale.repo served on 2026-11-14.
 - name: Tailscale's package repository (RHEL family)
-  ansible.builtin.get_url:
-    url: "https://pkgs.tailscale.com/stable/rhel/{{ agent_box_rhel_major }}/tailscale.repo"
+  ansible.builtin.copy:
     dest: /etc/yum.repos.d/tailscale.repo
+    content: |
+      [tailscale-stable]
+      name=Tailscale stable
+      baseurl=https://pkgs.tailscale.com/stable/rhel/{{ agent_box_rhel_major }}/$basearch
+      enabled=1
+      type=rpm
+      repo_gpgcheck=1
+      gpgcheck=1
+      gpgkey=https://pkgs.tailscale.com/stable/rhel/{{ agent_box_rhel_major }}/repo.gpg
     owner: root
     group: root
     mode: "0644"
