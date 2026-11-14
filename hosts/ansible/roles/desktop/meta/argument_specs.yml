@@ -19,7 +19,18 @@ argument_specs:
       desktop_packages:
         type: list
         elements: str
-        default: [gdm, gnome-shell, gnome-session-wayland-session, gnome-control-center, nautilus, ptyxis, firefox, gnome-remote-desktop, openssl, firewalld, python3-firewall]
+        default:
+          - gdm
+          - gnome-shell
+          - gnome-session-wayland-session
+          - gnome-control-center
+          - nautilus
+          - ptyxis
+          - firefox
+          - gnome-remote-desktop
+          - openssl
+          - firewalld
+          - python3-firewall
         description: The desktop packages, all from the AlmaLinux 10 base repositories.
       desktop_rdp_tls_dir: {type: path, default: /var/lib/gnome-remote-desktop, description: "Where the RDP certificate and key are made."}
       desktop_rdp_port: {type: int, default: 3389, description: "The port the remote desktop listens on and firewalld opens for the connector's address."}
