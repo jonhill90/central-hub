@@ -12,7 +12,8 @@ cat > "$t/raw" <<'R'
 ===== preflight
 preflight: branch skipped, all 8 declared dev VMs already exist in the state, so a re-run allocates no new VMs
 preflight: guest list from /cluster/resources?type=vm, 1 guests visible to the token
-preflight: guest vmid=258 type=qemu status=running maxmem=8192 MiB mem=4096 MiB name=agent-box
+preflight: guest note: only guests the token can see are listed; VM 258 and CT 259 are NoAccess for it, so the memory these lines add up to undercounts
+preflight: guest vmid=411 type=qemu status=running maxmem=8192 MiB mem=4096 MiB name=agent-box
 runner stop: short on memory and VM 300 is running, asking it to shut down (VM.PowerMgmt, nothing else is touched)
 runner stop: VM 300 is stopped after 5 s
 ===== apps
@@ -40,7 +41,8 @@ check "a later stage is not taken" "$out" "HTTP 302" "500"
 check "nothing else from the stage is copied" "$out" "HTTP 302" "hunter2"
 out=$(run preflight)
 check "the preflight's branch line is kept" "$out" "preflight: branch skipped, all 8 declared"
-check "the guest list lines are kept" "$out" "preflight: guest vmid=258 type=qemu status=running maxmem=8192 MiB"
+check "the guest list lines are kept" "$out" "preflight: guest vmid=411 type=qemu status=running maxmem=8192 MiB"
+check "the visibility note is kept" "$out" "VM 258 and CT 259 are NoAccess"
 check "the runner stop lines are kept" "$out" "preflight: runner stop: VM 300 is stopped after 5 s"
 check "the preflight takes no sign-in lines" "$out" "branch skipped" "HTTP"
 exit $fail

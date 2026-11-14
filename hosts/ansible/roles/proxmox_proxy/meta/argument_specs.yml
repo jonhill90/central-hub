@@ -1,0 +1,20 @@
+---
+argument_specs:
+  main:
+    short_description: A reverse proxy (Apache httpd) on the Proxmox host serving the web UI on 443 (and a redirect on 80), proxying to pveproxy on 8006
+    options:
+      # Private, through the inventory (by default the certificate role's names).
+      proxmox_proxy_server_names:
+        type: list
+        elements: str
+        description: The DNS names the proxy answers to, the same as proxmox_cert_names. The first is the redirect target. Private.
+      # Defaults in defaults/main.yml
+      proxmox_proxy_apache_version: {type: str, default: "2.4.71-1~deb13u1", description: "The version of the four apache2 packages (trixie-security)."}
+      proxmox_proxy_cert: {type: path, default: /etc/pve/local/pveproxy-ssl.pem, description: "The certificate the web UI serves."}
+      proxmox_proxy_key: {type: path, default: /etc/pve/local/pveproxy-ssl.key, description: "Its key."}
+      proxmox_proxy_upstream: {type: str, default: "https://127.0.0.1:8006", description: "Where pveproxy listens."}
+      proxmox_proxy_proof_front_ok: {type: list, elements: int, default: [200], description: "Statuses the proof accepts for the front page."}
+      proxmox_proxy_proof_api_ok: {type: list, elements: int, default: [401], description: "Statuses the proof accepts for an API call with no ticket."}
+      proxmox_proxy_ca_bundle: {type: path, default: /etc/ssl/certs/ca-certificates.crt, description: "The CA bundle the proof verifies the chain with."}
+      proxmox_proxy_requires_unit: {type: str, default: pve-cluster.service, description: "The unit the proxy needs and starts after."}
+      proxmox_proxy_cutover: {type: bool, default: true, description: "Whether this run may move 443 and 80 from nginx to the proxy, once."}

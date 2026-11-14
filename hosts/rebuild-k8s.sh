@@ -215,6 +215,7 @@ preflight_guests() {
   printf '%s' "$out" | python3 -c 'import json,sys
 rows = sorted(json.load(sys.stdin)["data"], key=lambda r: r.get("vmid", 0))
 print("preflight: guest list from /cluster/resources?type=vm, %d guests visible to the token" % len(rows))
+print("preflight: guest note: only guests the token can see are listed; VM 258 and CT 259 are NoAccess for it (agent-access.sh, NO_ACCESS), so the memory these lines add up to undercounts")
 for r in rows:
     print("preflight: guest vmid=%s type=%s status=%s maxmem=%s MiB mem=%s MiB name=%s" % (
         r.get("vmid"), r.get("type"), r.get("status"), r.get("maxmem", 0) // 1048576, r.get("mem", 0) // 1048576,
@@ -476,7 +477,7 @@ for s in $stages; do
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.
   if [ "$s" = preflight ] || [ "$s" = identity-keycloak ]; then
     awk -v s="$s" '$0 == "===== " s {on=1; next} /^===== / {on=0} on' "$raw" \
-      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
+      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|guest note[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
       | sed "s/^/  $s: /" >> "$log" || true
   fi
   if [ "$rc" -ne 0 ]; then

@@ -54,3 +54,4 @@ Each decision is one record in this folder. Records are written one at a time, i
 | D-0049 | [Run AlmaLinux 10 on the lab's Linux virtual machines, and Debian only where it comes with the platform (the Proxmox host and its container template)](0049-run-almalinux-on-lab-vms-and-debian-where-it-comes-with-the-platform.md) | proposed | — | 2026-11-14 |
 | D-0050 | [Install Kubernetes on c1 with upstream kubeadm, driven by the lab's own Ansible roles](0050-install-kubernetes-on-c1-with-kubeadm-from-ansible.md) | accepted | — | 2026-11-14 |
 | D-0051 | [Use External Secrets for c1's secrets and the Local Path Provisioner for its storage, both Apache-2.0 with no paid edition in use](0051-use-external-secrets-and-local-path-as-c1s-secret-and-storage-add-ons.md) | accepted | — | 2026-11-14 |
+| D-0052 | [Run Jellyfin as c1's media server, the first app built for people to use](0052-run-jellyfin-as-c1s-media-server.md) | accepted | — | 2026-11-14 |

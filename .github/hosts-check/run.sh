@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Run the hosts checks (STD-0005). CI runs the same commands.
-# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|all]   (default: all)
+# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|proxy|all]   (default: all)
 # Needs: python3 with requirements.txt installed; tofu, tflint, kubeconform and helm on PATH, or
 # TOOLS=<dir> holding them (install-tools.sh builds them); for ansible and manifests, the
 # collections in hosts/ansible/requirements.yml (this script installs them when missing); for
-# identity, docker.
+# identity and proxy, docker (proxy: one that can run a privileged systemd container).
 # TOFU_PLUGIN_DIR=<dir> makes tofu init read providers from that folder instead of the registry,
 # for machines that can't download them; the copies then skip the lock file's hash check.
 set -euo pipefail
@@ -186,6 +186,12 @@ check_backup() {
   bash "$here/tests/test_rebuild_short_log.sh"
 }
 
+check_proxy() {
+  # Role proxmox_proxy against a stand-in Proxmox host in a container: the install beside nginx, the move from
+  # nginx, its rollbacks, a run killed part-way, an open console across a graceful reload, a host with no nginx.
+  bash "$here/tests/test_proxy.sh"
+}
+
 check_scripts() {
   # Warnings and errors fail; style notes do not (an agent pick, STD-0005).
   git ls-files -z -- '*.sh' | xargs -0 shellcheck --severity=warning
@@ -203,6 +209,7 @@ case "${1:-all}" in
   identity) check_identity ;;
   scripts) check_scripts ;;
   backup) check_backup ;;
-  all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts; check_backup ;;
-  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|all]" >&2; exit 2 ;;
+  proxy) check_proxy ;;
+  all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts; check_backup; check_proxy ;;
+  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|proxy|all]" >&2; exit 2 ;;
 esac
