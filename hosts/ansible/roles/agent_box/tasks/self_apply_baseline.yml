@@ -6,25 +6,41 @@
 # narrow apply never hides a limit change it didn't make, and it is written last, so a run that fails part way
 # leaves the old one. It also ends a stop after a put-back (rule 5). A controller that runs from a
 # pinned copy that is not a git checkout names its commit with -e agent_box_self_apply_commit=<40 hex>.
-- name: The controller's commit and whether its checkout is clean
+- name: The controller's commit, and any change in its checkout that this role reads
   ansible.builtin.set_fact:
     agent_box_box_apply_commit: >-
       {{ agent_box_self_apply_commit if agent_box_self_apply_commit | length > 0 else
          lookup('ansible.builtin.pipe', 'git -C ' ~ (playbook_dir | quote) ~ ' rev-parse HEAD 2>/dev/null || true') }}
-    agent_box_box_apply_clean: >-
-      {{ agent_box_self_apply_commit | length > 0 or
-         lookup('ansible.builtin.pipe', 'git -C ' ~ (playbook_dir | quote) ~ ' status --porcelain 2>/dev/null || echo not-a-checkout') | length == 0 }}
+    agent_box_box_apply_dirty: >-
+      {{ '' if agent_box_self_apply_commit | length > 0 else
+         lookup('ansible.builtin.pipe', 'cd ' ~ (playbook_dir | quote) ~ ' && { git status --porcelain --untracked-files=no'
+                ~ ' && git status --porcelain --untracked-files=all -- ' ~ (agent_box_box_apply_own_paths | map('quote') | join(' '))
+                ~ '; } 2>/dev/null || echo not-a-git-checkout') | trim }}
+  vars:
+    # Paths relative to the playbook folder. Untracked files elsewhere (the private inventory, a tofu plan or lock
+    # file in another folder) don't change what this role does, so only these must hold none.
+    agent_box_box_apply_own_paths: [../roles/agent_box, ../playbooks/agent-box.yml, ../ansible.cfg, ../requirements.yml,
+                                    ../roles/k8s_backup/files/c1-backup-azure-cert.py]
+  when: not agent_box_self_applying | bool
+
+- name: Whether the controller's checkout is clean
+  ansible.builtin.set_fact:
+    agent_box_box_apply_clean: "{{ agent_box_box_apply_dirty | length == 0 }}"
   when: not agent_box_self_applying | bool
 
 - name: Say why no baseline is written
   ansible.builtin.debug:
     msg: >-
-      box-apply's baseline is left as it was: it is written only by a full run (no --tags, --skip-tags or --start-at-task) from a
-      clean git checkout, or with -e agent_box_self_apply_commit=<the commit this copy was made from>.
+      box-apply's baseline is left as it was: it is written only by a full run (no --tags, --skip-tags or
+      --start-at-task) from a clean git checkout, or with -e agent_box_self_apply_commit=<the commit this copy was
+      made from>. This run: from the first task {{ agent_box_box_apply_from_start | default(false) | bool }},
+      tags {{ ansible_run_tags | join(',') }}, skip tags {{ ansible_skip_tags | join(',') or 'none' }},
+      commit {{ agent_box_box_apply_commit or 'none' }}, not clean because of
+      [{{ agent_box_box_apply_dirty | replace('\n', '; ') }}].
   when:
     - not agent_box_self_applying | bool
     - not (agent_box_box_apply_from_start | default(false) | bool
-           and ansible_run_tags == ['all'] and ansible_skip_tags | length == 0
+           and ansible_run_tags | list == ['all'] and ansible_skip_tags | length == 0
            and agent_box_box_apply_clean | bool and agent_box_box_apply_commit is match('^[0-9a-f]{40}$'))
 
 - name: box-apply's baseline, after a full apply from a clean checkout
@@ -38,7 +54,7 @@
     - not agent_box_self_applying | bool
     - not ansible_check_mode
     - agent_box_box_apply_from_start | default(false) | bool
-    - ansible_run_tags == ['all']
+    - ansible_run_tags | list == ['all']
     - ansible_skip_tags | length == 0
     - agent_box_box_apply_clean | bool
     - agent_box_box_apply_commit is match('^[0-9a-f]{40}$')
@@ -51,7 +67,7 @@
     - not agent_box_self_applying | bool
     - not ansible_check_mode
     - agent_box_box_apply_from_start | default(false) | bool
-    - ansible_run_tags == ['all']
+    - ansible_run_tags | list == ['all']
     - ansible_skip_tags | length == 0
     - agent_box_box_apply_clean | bool
     - agent_box_box_apply_commit is match('^[0-9a-f]{40}$')

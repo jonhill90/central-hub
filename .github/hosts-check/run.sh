@@ -79,6 +79,7 @@ check_ansible() {
   done
   (cd hosts/ansible && ansible-lint --project-dir . -c "$here/ansible-lint.yml" playbooks roles)
   python3 "$here/check-deny-rules.py"
+  bash "$here/tests/test_box_apply_baseline.sh"
 }
 
 check_manifests() {
