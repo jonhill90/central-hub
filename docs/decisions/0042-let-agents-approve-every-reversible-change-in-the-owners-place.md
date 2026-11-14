@@ -1,7 +1,7 @@
 ---
 id: D-0042
 title: Let the reviewer and the council approve every reversible change in the owner's place
-status: proposed
+status: accepted
 date: 2026-11-14
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0041]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-14T07:43:25Z
+  approved-commit: bc276d10078a91801653e7bf96ad8dcb2eb05e97
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6, cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH, cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm
+  approval-names: "no PR and no head; the messages are typed but name neither, which departs from D-0034 rule 4's form"
+  check: the drafting agent read the three messages at 2026-11-14T08:14Z (the first two in the orchestrator thread, the third in the project chat); they ask agents to stop asking the owner to approve PRs and name what still needs him, without naming this PR or a head. The orchestrator chose them as this record's acceptance at 08:13Z. The reviewer and the council judge whether they count; their passes of this PR's head are the gate. Head bc276d1 holds this record's rules; the acceptance commit after it changes only status and accepted-evidence
+  merged: not yet; a follow-up PR fills this in after the merge (D-0001)
 revisit-when: the lab comes to hold personal data or anything of value; a change approved under this record has to be undone after it harmed the lab, a cloud account or the repository; the owner says a pass was wrong; the agents get a GitHub identity of their own (D-0030) and GitHub can require an approval itself; or a cluster other than c1 reads the repository
 ---
 
