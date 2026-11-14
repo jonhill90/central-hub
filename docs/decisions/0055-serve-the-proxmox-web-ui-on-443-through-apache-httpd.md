@@ -45,7 +45,7 @@ Proposed: **option 1**, as pick 234 and PR #336 built it.
 - nginx (option 2) fails STD-0006 rule 2.
 - Caddy (option 3) is Apache-2.0, but by default it closes open WebSocket connections when its configuration reloads, which would cut an open console at each certificate renewal.
 - HAProxy and Angie (option 4) each have a paid edition (HAProxy Enterprise, Angie PRO), which STD-0006 would have to weigh first.
-- Proxmox does not support changing `pveproxy`'s port (pick 224), so option 5 is out.
+- `pveproxy` offers no setting for its port: its manual page gives TCP port 8006, and the settings it reads from `/etc/default/pveproxy` name none. So option 5 is out.
 
 This record stays `proposed`. The agents accept a record under D-0042 rule 3 only for a piece already in use (an agent pick of 2026-11-14 09:31 UTC), and Apache httpd does not serve the host until the move runs. Once the move has run and the runbook's step 3 shows the console working, a later PR can accept it.
 
@@ -100,7 +100,7 @@ The role holds a listener, a certificate path and one upstream, and no variable 
 ### Option 5: `pveproxy` on 443
 
 - Good: nothing extra on the host.
-- Bad: Proxmox does not support changing its port.
+- Bad: `pveproxy` offers no setting for its port.
 
 ## More Information
 
