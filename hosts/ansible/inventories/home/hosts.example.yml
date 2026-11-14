@@ -52,6 +52,9 @@ all:
           #   { name: dalapdemo01, vm_id: 300, address: "", cores: 1, memory_mb: 2048, disk_gb: 20,
           #     proxmox_node_name: "", vnet: dev, template_vm_id: 9001,
           #     github_app_id: "", repo_owner: jonhill90, repo_name: agent-notebook }
+          agent_box_secrets_store: {}   # the secrets store's dev VM the secrets-store wrapper builds; private; shape:
+          #   { name: daldapdemo01, vm_id: 550, address: "", cores: 2, memory_mb: 2048, disk_gb: 20,
+          #     proxmox_node_name: "", vnet: dev, template_vm_id: 9001, box_address: "" }
     opnsense:
       hosts:
         opnsense_fw:
