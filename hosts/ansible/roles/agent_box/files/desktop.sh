@@ -28,7 +28,7 @@ vars=$work/state/desktop.tfvars.json
 sshkey=$keys/desktop-ssh
 # Ansible comes from the box's own virtual environment (role agent_box), as in the rebuild wrapper.
 export HOME=$work PATH=/usr/local/libexec/agent-box/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
-export TF_DATA_DIR=$work/tofu-data/desktop TF_IN_AUTOMATION=1 ANSIBLE_HOME=$work/ansible-home
+export TF_DATA_DIR=$work/tofu-data/desktop TF_IN_AUTOMATION=1 ANSIBLE_COLLECTIONS_PATH=/usr/local/libexec/agent-box/collections ANSIBLE_HOME=$work/ansible-home
 
 [[ -f $settings ]] || { echo "desktop: $settings is missing; set agent_box_desktop in the inventory and run the agent_box role" >&2; exit 1; }
 
