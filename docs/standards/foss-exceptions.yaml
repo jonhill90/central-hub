@@ -1,4 +1,4 @@
-# Named exceptions to STD-0006. Only the owner's typed go extends this list (STD-0006 rule 5).
+# Named exceptions to STD-0006. Only the owner's go, typed or a card tap, extends this list (STD-0006 rule 5).
 # A pull request that adds or changes an entry is owner-only: it merges after the owner's go,
 # named in the entry.
 #
@@ -12,8 +12,8 @@ exceptions:
     state: kept
     decided: the owner kept OPNsense for now, 2026-11-14 05:11:29 UTC, project chat message cmsg_01X43rfNYp4H1dL1V2dkfkwNUCNWkCsmp5t7rH58x9gsJH; its sign-in goes through a free route (D-0037)
   - component: Tailscale
-    state: pending
-    listed: 2026-11-14, from the FOSS check of every central-hub piece; earlier kept as "fine for now, keep it swappable" (owner's card tap, 2026-11-10 19:09 UTC, card cmsg_01X43rfNYp4H1dL1V2dkfkwN94SWGX6ssfCizqji4VUhLp)
+    state: kept
+    decided: the owner chose to keep Tailscale for now, as long as it stays swappable and nothing new depends on it in a way that can't be swapped, by a card tap on 2026-11-10 19:09 UTC, card cmsg_01X43rfNYp4H1dL1V2dkfkwN94SWGX6ssfCizqji4VUhLp; asked again before the lab is built for real
   - component: Cilium
     state: pending
     listed: 2026-11-14, from the FOSS check of every central-hub piece
