@@ -5,7 +5,7 @@ status: proposed
 scope: every outside component the lab runs or its code pulls in (software, container images, charts, packages, providers, collections, GitHub Actions and downloads under `hosts/` and `.github/`), and every hosted service the lab depends on
 owner-system: 8 Platform
 why: the owner's rule of 2026-11-14 04:43 to 04:44 UTC in the project chat (FOSS, not merely open source; nothing where a paid edition holds a feature back), on top of REQ-0032 (components are FOSS and open standards, and the system must not lock hard to one vendor); the owner kept OPNsense for now at 05:11:29 UTC the same day
-follows: [Free Software Foundation "What is Free Software?", Open Source Initiative "The Open Source Definition", SPDX License List]
+follows: ["Free Software Foundation, What is Free Software?", "Open Source Initiative, The Open Source Definition", "SPDX License List"]
 check: "`.github/foss-check/check_components.py`, run by workflow `foss` on every PR; rules 1 to 3 are judged by the agent that fills a register row, and checked again by a reviewing agent"
 ---
 
