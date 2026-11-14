@@ -16,7 +16,7 @@ revisit-when: the agents get a GitHub account of their own (D-0030), so the appr
 
 ## Context and Problem Statement
 
-On 2026-11-14 the owner asked when he would stop typing go lines, and then said that everything should go through a workflow or pipeline anyway, for the logging and the tests. That night several changes ran as raw commands on the owner's Mac, on his typed lines: a Proxmox firewall playbook, the Proxmox nginx playbook, an OPNsense DNS run, an OpenTofu apply of the tailnet stack, and the OPNsense backup-user script. One Mac wrapper was pinned too old to pass a needed variable. None of these runs left a log that anyone but the Mac could read.
+At 06:31:02 UTC on 2026-11-14 the owner asked when he would stop typing go lines and be able to approve instead (cmsg_01X43rfNYp4H1dL1V2dkfkwNNmDuqYAAd97e7MWLy7w5j9). At 06:36:44 UTC he said that everything should go through a workflow or pipeline anyway, for the logging and the tests (cmsg_01X43rfNYp4H1dL1V2dkfkwNT6RrSBdDUEXGjL6tdtauzz). That night several changes ran as raw commands on the owner's Mac, on his typed lines: a Proxmox firewall playbook, the Proxmox nginx playbook, an OPNsense DNS run, an OpenTofu apply of the tailnet stack, and the OPNsense backup-user script. One Mac wrapper was pinned too old to pass a needed variable. None of these runs left a log that anyone but the Mac could read.
 
 D-0035 already lets agents tear down and rebuild the lab's guests from the agent box, each production run approved by the owner's card tap after dev. D-0036 lets the box apply its own setup. Neither covers the cloud accounts (Azure, Cloudflare, Tailscale), and neither says that the Mac and raw commands stop. This record makes one pipeline the only way a change reaches the lab or those accounts.
 
@@ -50,6 +50,7 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
    - The keys stay in the wrappers: the workflow never sees one.
    - The runner's job-started hook refuses any workflow not on its list, any ref but `main`, and any event but `workflow_dispatch`.
    - Agents start the jobs. The owner may too, from the Actions tab.
+   - **The box's runner is registered now, with no GitHub environment.** The runbook for the dev redeploy workflow held the runner back until D-0030, because a GitHub environment that any agent can approve is not the owner's gate. This record does not use a GitHub environment for approval. The gate is the card tap on the saved plan (rule 6), and dev applies need none. So the runner is registered once this record is accepted, and only the environment still waits for D-0030. The runner hook's list holds this record's workflows and nothing else.
 3. **No raw runs.** Nothing changes the lab or those accounts from the owner's Mac, a session's shell or a console, except break-glass (rule 9).
    - Until a layer or stack has its pipeline job, a raw run of it needs the owner's typed words naming the exact command.
    - Each such run is listed in the runbook of that layer, with the date, and stays listed until its job exists.
@@ -98,6 +99,7 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
 - Bad: the agent box now holds the Azure, Cloudflare and Tailscale keys as well as the Proxmox token. Compensating controls: the keys stay in wrappers, the hook lets only listed workflows run, PR code never runs on the box, and every apply to those accounts needs a tap.
 - Bad: GitHub Actions is a closed hosted service. Its run logs are public and kept at most 90 days, so the full record lives on the box. The exit is Forgejo with Forgejo Actions (GPL-3.0); its workflows are similar to GitHub's but not compatible, so the workflow files need rewriting.
 - Neutral: until each layer has its job, raw runs go on, on the owner's typed words, listed in the runbooks (rule 3).
+- Neutral: the dev redeploy runbook's section "Not registered until D-0030 is met" changes with the PR that registers the runner: the runner is registered, and only the GitHub environment waits for D-0030.
 
 ### Confirmation
 
