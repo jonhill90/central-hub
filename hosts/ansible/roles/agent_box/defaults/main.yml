@@ -47,6 +47,12 @@ agent_box_wrappers:
     args: [plan, "apply *", log]
     session_args: [plan, log]   # a session cannot apply; only the workflow's runner can (D-0041 rules 2 and 3)
     runner: true
+  # The VPS apps host (D-0046): bootstrap once as root, then apply and secrets as user deploy through the VPS's
+  # own vps-apply. Only the workflow lab-vps-host.yml runs the changing actions; a session may read only.
+  - name: vps-host
+    args: [bootstrap, apply, secrets, "secrets rotate", status, log]
+    session_args: [status, log]
+    runner: true
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]
@@ -229,6 +235,9 @@ agent_box_secrets_store_offbox:
   keep_monthly: 6
   prune_after_hour: 3
 agent_box_secrets_store_offbox_on_calendar: hourly
+# Private settings for the vps-host wrapper (D-0046), written to <work_dir>/vps-host.json: name (the VPS's name on
+# the tailnet). Empty does nothing.
+agent_box_vps_host: {}
 # The controller's private files the prod_files tasks copy to <keys_dir>/prod (D-0035; paths from
 # docs/runbooks/rebuild-home-lab-from-scratch.md). from: clone (the controller's checkout of this
 # repo) or config (~/.config/central-hub). A missing file is skipped and named. Not listed on purpose:

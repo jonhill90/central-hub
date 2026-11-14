@@ -1,0 +1,11 @@
+---
+# The VPS apps host (D-0046). Two ways in, both through the pipeline:
+#   - once, from the agent box's vps-host wrapper as root over the tailnet (S3, before the narrowing);
+#   - after that, `vps-apply host <commit>` on the VPS, which runs this playbook locally from reviewed main.
+# Order and proofs: docs/runbooks/set-up-the-vps-app-host.md.
+- name: VPS apps host
+  hosts: vps_app_host
+  become: true
+  gather_facts: false
+  roles:
+    - role: vps_app_host

@@ -438,6 +438,16 @@
   when: agent_box_secrets_store | length > 0
   tags: [wrappers]
 
+- name: The vps-host wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/vps-host.json"
+    content: "{{ agent_box_vps_host | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_vps_host | length > 0
+  tags: [wrappers]
+
 - name: Weekly CI runner service and timer (pick 208)
   ansible.builtin.template:
     src: "ci-runner-weekly.{{ item }}.j2"
