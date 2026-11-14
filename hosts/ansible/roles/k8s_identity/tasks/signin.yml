@@ -1,0 +1,63 @@
+---
+# Sign-in proof: the owner's account signs in to client grafana through the browser flow, over HTTPS to
+# THIS cluster's Gateway (its address is read from the Gateway, so a dev cluster is not tested through
+# prod's name resolution). The password alone must stop at the one-time-code form, and the password with
+# a code computed from the account's seed must redirect back with a code. Prints step names and HTTP
+# codes only. Changes nothing in the realm; the realm has no client for password grants (D-0037).
+- name: signin | Gateway address and the certificate's issuer
+  ansible.builtin.shell: >-
+    kubectl -n gateway get gateway apps -o jsonpath='{.status.addresses[0].value}' &&
+    echo &&
+    kubectl -n gateway get secret apps-tls -o jsonpath='{.metadata.annotations.cert-manager\.io/issuer-name}'
+  register: k8s_identity_signin_facts
+  changed_when: false
+  failed_when: k8s_identity_signin_facts.rc != 0 or k8s_identity_signin_facts.stdout_lines | length != 2
+  check_mode: false
+
+- name: signin | A temporary copy of the check on the node
+  ansible.builtin.tempfile: {state: file, suffix: .signin-check.py}
+  register: k8s_identity_signin_script
+  changed_when: false
+  check_mode: false
+
+- name: signin | Put the check there
+  ansible.builtin.copy:
+    src: signin-check.py
+    dest: "{{ k8s_identity_signin_script.path }}"
+    mode: "0700"
+  changed_when: false
+  check_mode: false
+
+# The password and seed travel on stdin, never in an argument; no_log keeps them out of Ansible's output.
+- name: signin | The owner signs in with the password, then the code
+  ansible.builtin.command:
+    cmd: python3 -I {{ k8s_identity_signin_script.path }}
+    stdin: >-
+      {{ {'base': 'https://' ~ k8s_identity_host, 'realm': k8s_identity_realm, 'client': 'grafana',
+      'redirect': 'https://' ~ k8s_identity_grafana_hosts | first ~ '/login/generic_oauth',
+      'user': k8s_identity_owner_username,
+      'password': k8s_identity_values['PASSWORD_' ~ (k8s_identity_owner_username | upper | regex_replace('[^A-Z0-9]', '_'))],
+      'seed': k8s_identity_values['TOTP_' ~ (k8s_identity_owner_username | upper | regex_replace('[^A-Z0-9]', '_'))],
+      'address': k8s_identity_signin_facts.stdout_lines[0],
+      'verify': k8s_identity_signin_facts.stdout_lines[1] != 'letsencrypt-staging'} | to_json }}
+  register: k8s_identity_signin
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: signin | Remove the temporary copy
+  ansible.builtin.file: {path: "{{ k8s_identity_signin_script.path }}", state: absent}
+  changed_when: false
+  check_mode: false
+
+# The script prints step names and HTTP codes only, so its lines are shown.
+- name: signin | Steps
+  ansible.builtin.debug:
+    msg: "{{ k8s_identity_signin.stdout_lines }}"
+
+- name: signin | Every step passed
+  ansible.builtin.assert:
+    that: k8s_identity_signin.rc == 0
+    fail_msg: The sign-in proof failed; the step lines above name the step and the HTTP code.
+    quiet: true

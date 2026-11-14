@@ -40,3 +40,8 @@
     k8s_app_route_zone: "{{ k8s_identity_zone }}"
     k8s_app_route_short_names: "{{ k8s_identity_short_names }}"
   tags: [route]
+
+# After the route: the proof goes through the Gateway, so it needs the route.
+- name: Sign-in proof (browser flow, the owner's password and code)
+  ansible.builtin.import_tasks: signin.yml
+  tags: [signin]

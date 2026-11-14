@@ -5,7 +5,8 @@
 # token, the node SSH key or the dev inventory. Installed by the agent_box role; root owns it.
 #   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|identity|log|diag
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
-# identity: only the stage identity-keycloak (k8s-identity.yml --tags secrets,keycloak) on the existing dev
+# identity: only the stage identity-keycloak (k8s-identity.yml --tags secrets,keycloak,signin: Keycloak and its
+# realm, then the owner's sign-in proof, step names and HTTP codes only) on the existing dev
 # cluster. Same dev guard, lock, checkout and log as the other runs; `log` shows it.
 # Dev only: the env file below fixes ENV_NAME=dev and the dev VM range 250-257, and rebuild-k8s.sh
 # refuses a tfvars whose VM IDs fall outside it or whose node_vnet isn't "dev". Only code on main
