@@ -20,12 +20,14 @@ superseded-by:
 
 The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in to apps by hand (2026-11-13 05:04 UTC). It is a separate VM so what the owner types never sits beside the agents' keys.
 
+**Where RDP comes from.** The owner picked "Your tailnet devices, anywhere" on a card on 2026-11-14 at 02:35:11 UTC, which replaced his earlier "Home network only" pick of 02:20 UTC (that one would have needed a home-router route to the dev range and the Tailscale client off on the Mac). So RDP works from any of his tailnet devices, at home or away, with no router or OPNsense change: the Mac reaches the dev range through the tailnet connector (CT 900), which advertises the lab ranges and rewrites the source of subnet traffic to its own address on the mgmt VLAN (SNAT stays on, the vendor default; see [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md)). So the VM sees RDP arrive from the connector, not from the Mac, and `desktop_rdp_source` is the connector's address, set in the private inventory only. OPNsense already passes the mgmt VLAN to every lab VLAN, so this path needs no new firewall rule. Two limits: any device the tailnet policy lets reach the dev range can open 3389 (narrowing it to the owner's device is a tailnet policy change, not made), and the agents' cloud sessions receive no dev route, so they cannot reach the desktop over the tailnet (measured from a cloud session, 2026-11-14).
+
 | Piece | Where |
 |---|---|
 | VM | `hosts/terraform/home/desktop`: one VM with an ID from 400-499 (STD-0001), on VNet dev, cloned from template 9001 into pool `desktop` (so the agents' rights survive a teardown, as pool `dev`'s do) |
 | Software | role `desktop`: EPEL and CRB, the Xfce group, `xrdp`, `xorgxrdp`, Firefox, a login user without sudo and with its password locked, `.xsession` running `startxfce4`, firewalld accepting 3389/tcp from one address only, and the admin SSH key removed at the end |
 | Playbook | `playbooks/desktop.yml`, hosts group `desktop` |
-| Private values | the VM's name and address in `desktop.json` (the same shape as `home.tfvars.example`), the group in the inventory, `desktop_rdp_source` (the one address the owner connects from) |
+| Private values | the VM's name and address in `desktop.json` (the same shape as `home.tfvars.example`), the group in the inventory, `desktop_rdp_source` (the address RDP arrives from: the tailnet connector's own address on the mgmt VLAN, see below) |
 
 ## What is not built yet
 
@@ -52,14 +54,14 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 5. The owner opens the VM's console in Proxmox (VM, Console). It asks "Set the password for owner."; the owner types a password twice. No one else sees it.
    expect: the prompt returns to a login; `/var/lib/desktop/password-set` exists and xrdp starts.
 
-6. The owner connects with an RDP client to the VM's address, port 3389, as user `owner`, from the address in `desktop_rdp_source`.
+6. The owner connects with an RDP client to the VM's address, port 3389, as user `owner`, over the tailnet (the owner's device on the tailnet, with the tailnet connector's route to the dev range on).
    expect: an Xfce session.
 
 ## If it fails
 
 - `dnf` cannot find the `Xfce` group or `xrdp`: EPEL 10 or CRB is not enabled, or the package set changed. The task `desktop | EPEL and CRB are on` and the next one name the step.
 - The console shows a login prompt and never asks for the password: `desktop-set-password.service` did not run (the marker exists already, or getty took tty1). Check `systemctl status desktop-set-password` from the console as root, which is locked; rebuild the VM from teardown instead.
-- The RDP client is refused: the owner has not set the password yet (xrdp waits for the marker), or the connecting address is not `desktop_rdp_source`.
+- The RDP client is refused: the owner has not set the password yet (xrdp waits for the marker), or the address the VM sees is not `desktop_rdp_source` (the connector's address, not the owner's device).
 - The RDP client connects and drops to a blank screen: `~owner/.xsession` or SELinux. Check `journalctl -u xrdp-sesman` on the VM.
 
 ## Exit
