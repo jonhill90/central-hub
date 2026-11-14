@@ -44,7 +44,7 @@ Diagram: not applicable. One component is chosen, and its place in the network i
 ### Rules
 
 1. **Licence and edition.** OPNsense community edition, BSD-2-Clause. Its DNS resolver, Unbound, is BSD-3-Clause with no paid edition.
-2. **No Business Edition feature.** The lab uses none of the features the Business Edition adds, including its OpenID Connect sign-in (named by Deciso) and, per a reseller's list, its web application firewall and its central management. Sign-in to OPNsense through the lab's identity provider takes a free route (D-0037).
+2. **No Business Edition feature.** The lab uses none of the features the Business Edition adds, including its OpenID Connect sign-in, its web application firewall and its central management, all three filed under Business Edition in OPNsense's own documentation. Sign-in to OPNsense through the lab's identity provider takes a free route (D-0037).
 3. **Configuration in code.** VLANs, DHCP, firewall rules and DNS overrides are set from `hosts/ansible/` (role `opnsense_lab`, collection `oxlorg.opnsense`, GPL-3.0) and `hosts/terraform/home/firewall/`, never by hand in the web UI, so the inputs outlive the product.
 4. **One VLAN file.** The VLAN plan stays in the shared file both tools read (`ansible/inventories/home/group_vars/all/vlans.yml`), not in OPNsense, so a replacement reads the same file.
 
@@ -69,7 +69,7 @@ The lab's network inputs (the VLAN file, the firewall rules in role `opnsense_la
 ### Option 1: OPNsense community edition
 
 - Good: already built, coded and documented.
-- Bad: open core; sign-in by OpenID Connect is Business Edition only.
+- Bad: open core; Deciso's OpenID Connect sign-in is in the Business Edition only, and the one third-party plugin found for the community edition carries no licence.
 
 ### Option 2: OpenWrt
 
