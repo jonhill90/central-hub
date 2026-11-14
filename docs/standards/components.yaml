@@ -123,7 +123,7 @@ components:
     used-for: the Talos rehearsal cluster only (hosts/terraform/home/k8s-talos)
     licence: MPL-2.0
     licence-source: https://raw.githubusercontent.com/siderolabs/talos/main/LICENSE
-    paid-edition: none for the OS; Talos Enterprise Linux sells "compliance, support, and Omni fleet management on the same open-source OS" (FIPS 140-3 builds, CVE SLAs); Omni is a separate product we don't use
+    paid-edition: none for the OS; Talos Enterprise Linux sells "compliance, support, and Omni fleet management on the same open-source OS" (FIPS 140-3 builds, CVE SLAs). The free edition gets no FIPS 140-3 certified build; this pass counts certification as a tested build of the same code, not a held-back feature, which is the owner's call to overturn. Omni is a separate BUSL product we don't use
     paid-edition-source: https://www.siderolabs.com/pricing/
     verdict: pass
     sources: [url:factory.talos.dev/]
