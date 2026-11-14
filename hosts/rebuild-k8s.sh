@@ -191,7 +191,7 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 preflight_memory() {
   local min=${PREFLIGHT_MIN_FREE_MIB:-14336} node body free secret
-  local existing
+  local existing declared
   # A re-run on VMs the state already holds allocates no new VMs, and their memory is already taken, so the
   # node's free memory says nothing about it (measured on the box, 2026-11-14: 3547 MiB free with dev up).
   # Only a fresh build, or a run after a teardown, is checked. An unreadable state file counts as no VMs.
@@ -202,11 +202,13 @@ except (OSError, ValueError):
     print(0); raise SystemExit
 print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
           if r.get("mode") == "managed" and r.get("type") == "proxmox_virtual_environment_vm"))' "$TFSTATE" 2>/dev/null || echo 0)
-  if [ "${existing:-0}" -gt 0 ]; then
-    echo "preflight: branch skipped, ${existing} dev VMs already exist in the state, so a re-run allocates no new VMs"
+  # Skipped only when the state holds every VM the tfvars declare; a partial state still has VMs to make.
+  declared=$(grep -Eo '(^|[^_[:alnum:]])vm_id[[:space:]]*=[[:space:]]*[0-9]+' "$TFVARS" | grep -Eo '[0-9]+$' | sort -u | wc -l)
+  if [ "${declared:-0}" -gt 0 ] && [ "${existing:-0}" -ge "$declared" ]; then
+    echo "preflight: branch skipped, all ${declared} declared dev VMs already exist in the state, so a re-run allocates no new VMs"
     return 0
   fi
-  echo "preflight: branch checked, no dev VMs in the state (a fresh build or after a teardown)"
+  echo "preflight: branch checked, the state holds ${existing:-0} of ${declared:-0} declared dev VMs (a fresh build, a partial state or after a teardown)"
   node=$(sed -n 's/^[[:space:]]*proxmox_node_name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$TFVARS" | head -1)
   [ -n "$node" ] || { echo "preflight: proxmox_node_name not found in the tfvars"; return 1; }
   # shellcheck source=/dev/null
