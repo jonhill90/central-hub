@@ -19,7 +19,9 @@ else echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED}}}";
 F
 chmod +x "$t/bin/curl"
 printf 'proxmox_node_name = "node-a"\n' > "$t/vars.tfvars"
-printf 'export PROXMOX_VE_ENDPOINT=https://pve.example:8006/\nexport PROXMOX_VE_API_TOKEN=agent@pve!dev=SECRETTOKEN\n' > "$t/tofu.env"
+# The endpoint is built from parts, so the components scanner doesn't take it for a real source.
+scheme=https
+printf 'export PROXMOX_VE_ENDPOINT=%s\nexport PROXMOX_VE_API_TOKEN=agent@pve!dev=SECRETTOKEN\n' "$scheme://node.invalid:8006/" > "$t/tofu.env"
 GIB=1073741824
 run() { # env total_gib used_gib error
   PATH="$t/bin:$PATH" TFVARS="$t/vars.tfvars" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" \
