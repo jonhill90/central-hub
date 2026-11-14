@@ -415,6 +415,16 @@
   when: agent_box_desktop | length > 0
   tags: [wrappers]
 
+- name: The secrets-store wrapper's guarded restore onto a rebuilt store, root-owned (pick 238)
+  ansible.builtin.copy:
+    src: secrets-store-restore-rebuilt.sh
+    dest: "{{ agent_box_libexec_dir }}/secrets-store-restore-rebuilt.sh"
+    owner: root
+    group: root
+    mode: "0755"
+  when: agent_box_secrets_store | length > 0
+  tags: [wrappers]
+
 - name: The secrets-store wrapper's private settings, from the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/secrets-store.json"
