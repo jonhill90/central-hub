@@ -50,6 +50,7 @@ Rows are kept in this order: networking first, then platform software, then host
 `.github/foss-check/check_components.py` fails when:
 
 - a source matches no row;
+- a source matches only what a hosted service carries for others (a GitHub release download, a Docker Hub image) and has no row for the software itself;
 - a row is incomplete;
 - a failing row has no exception;
 - an exception names no row, or names a row that passes.
