@@ -57,7 +57,7 @@ superseded-by:
 
 5. Make the recovery keys.
    why: self-initialization makes none, and the docs warn to make them before they are needed.
-   The wrapper logs in as `admin` and calls `sys/rotate/recovery/init` with 3 shares and a threshold of 2. On a store that self-initialized with no recovery keys, that call returns the shares at once ([OpenBao's rotate init API](https://openbao.org/docs/api/system/rotate/init/)). The shares go to `/etc/agent-keys/dev/openbao-recovery.json` and are never printed.
+   The wrapper logs in as `admin` and calls `sys/rotate/recovery/init` with 3 shares and a threshold of 2. On a store that self-initialized with no recovery keys, that call returns the shares at once ([OpenBao's rotate init API](https://openbao.org/docs/api/system/rotate/init/)). The shares go to `/etc/agent-keys/dev/openbao-recovery.json` and are never printed. That is for dev only, where the store holds nothing of value: a prod store's shares go only to the owner's Mac, never to the box (D-0038 rule 5), and the wrapper refuses any store outside the dev IDs.
    expect: `recovery shares written to the keys folder (not printed)`.
 
 6. Restart test.
