@@ -75,6 +75,17 @@ argument_specs:
       agent_box_opnsense_offbox_cert_days: {type: int, default: 90, description: "Days the box's certificate for the copy app is valid."}
       agent_box_opnsense_offbox_cert_renew_days: {type: int, default: 30, description: "Days left when the daily run rolls that certificate."}
       agent_box_az: {type: str, default: az, description: "The Azure CLI on the controller, signed in as agent-azure, for the first certificate upload."}
+      agent_box_secrets_bundle:
+        type: dict
+        default: {}
+        description: >-
+          mac_recipient (the Mac's age public key) and, optionally, keep (1 to 60, default 14) for the daily
+          SOPS-encrypted bundle of the box's private files (pick 228). Empty does nothing.
+      agent_box_secrets_bundle_daily: {type: str, default: "*-*-* 15:30:00 UTC", description: "systemd OnCalendar for the daily bundle."}
+      agent_box_sops_version: {type: str, description: "SOPS version for the bundle."}
+      agent_box_sops_sha256: {type: str, description: "SHA-256 of that version's linux.amd64 binary."}
+      agent_box_age_version: {type: str, description: "age version for the bundle."}
+      agent_box_age_sha256: {type: str, description: "SHA-256 of that version's linux-amd64 tarball."}
       agent_box_restic_version: {type: str, description: "restic version for the off-box copy."}
       agent_box_restic_sha256: {type: str, description: "SHA-256 of that version's linux_amd64 .bz2."}
       agent_box_lifeline_interface:
@@ -161,6 +172,14 @@ argument_specs:
           the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name, vnet,
           template_vm_id), rdp_source (the tailnet connector's address, where RDP arrives from) and optionally admin_user. No key and no
           password goes in it. Empty skips the file.
+      agent_box_secrets_store:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the secrets-store wrapper, written to <work_dir>/secrets-store.json (0600, the
+          keys user's): the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
+          vnet, template_vm_id), box_address, and optionally seal_key_id and admin_user. No key goes in it; the
+          wrapper makes the keys in the keys folder. Empty skips the file.
       agent_box_tailnet_cleanup:
         type: dict
         default: {}

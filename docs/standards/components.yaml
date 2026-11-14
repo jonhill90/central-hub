@@ -107,8 +107,8 @@ components:
     used-for: the OS of the Kubernetes nodes, the agent box and the desktop VM, and the packages roles install from its own repositories (GNOME and GNOME Remote Desktop on the desktop VM among them)
     licence: free software distribution, community owned
     licence-source: https://almalinux.org/blog/what-almalinux-foundation-membership-means-for-you
-    paid-edition: none; "forever-free enterprise Linux distribution"
-    paid-edition-source: https://almalinux.org/blog/what-almalinux-foundation-membership-means-for-you
+    paid-edition: none for the OS, which the almalinux.org home page calls a "forever-free enterprise Linux distribution". Its sponsors sell around it - TuxCare support, certification help and FIPS 140-3 validated modules, Cybertrust support in Japan, and Fujitsu fixes for specific minor releases for up to 10 years. This pass counts those as support and tested builds, not held-back features, which is the owner's call to overturn
+    paid-edition-source: https://almalinux.org/support
     verdict: pass
     sources: [url:repo.almalinux.org/]
     checked: 2026-11-14
@@ -263,6 +263,26 @@ components:
     paid-edition-source: https://raw.githubusercontent.com/openbao/openbao/main/README.md
     verdict: pass
     sources: [url:github.com/openbao/]
+    checked: 2026-11-14
+  - name: SOPS
+    kind: software
+    used-for: encrypting the agent box's daily bundle of its private files to age recipients (proposed D-0038 rule 10)
+    licence: MPL-2.0
+    licence-source: https://raw.githubusercontent.com/getsops/sops/main/LICENSE
+    paid-edition: none found; a CNCF Sandbox project with no vendor edition named in its README
+    paid-edition-source: https://raw.githubusercontent.com/getsops/sops/main/README.rst
+    verdict: pass
+    sources: [url:github.com/getsops/]
+    checked: 2026-11-14
+  - name: age
+    kind: software
+    used-for: the keys SOPS encrypts the agent box's bundle to (proposed D-0038 rule 10)
+    licence: BSD-3-Clause
+    licence-source: https://raw.githubusercontent.com/FiloSottile/age/main/LICENSE
+    paid-edition: none found; a single open-source tool and file format with no edition or plan named in its README
+    paid-edition-source: https://raw.githubusercontent.com/FiloSottile/age/main/README.md
+    verdict: pass
+    sources: [url:github.com/FiloSottile/]
     checked: 2026-11-14
   - name: PostgreSQL
     kind: software

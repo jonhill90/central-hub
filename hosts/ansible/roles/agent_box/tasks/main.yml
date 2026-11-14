@@ -398,6 +398,16 @@
   when: agent_box_desktop | length > 0
   tags: [wrappers]
 
+- name: The secrets-store wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/secrets-store.json"
+    content: "{{ agent_box_secrets_store | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_secrets_store | length > 0
+  tags: [wrappers]
+
 - name: Weekly CI runner service and timer (pick 208)
   ansible.builtin.template:
     src: "ci-runner-weekly.{{ item }}.j2"
@@ -667,6 +677,16 @@
       tags: [wrappers, opnsense_offbox]
   when: agent_box_opnsense_offbox | length > 0
   tags: [wrappers, opnsense_offbox]
+
+# --- Encrypted bundle of the box's private files (pick 228) ------------------------------------------
+
+- name: Make the daily encrypted bundle (only when agent_box_secrets_bundle is set)
+  ansible.builtin.include_tasks:
+    file: secrets_bundle.yml
+    apply:
+      tags: [wrappers, secrets_bundle]
+  when: agent_box_secrets_bundle | length > 0
+  tags: [wrappers, secrets_bundle]
 
 # --- The lifeline NIC (pick 220) ---------------------------------------------------------------------
 

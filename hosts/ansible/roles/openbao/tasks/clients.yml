@@ -1,0 +1,259 @@
+---
+# The store's first clients (proposed D-0038 rule 6; docs/runbooks/set-up-the-secrets-store.md):
+# - auth/jwt-c1: c1's External Secrets Operator signs in with its service account's token. Role `eso`
+#   takes only that one account's token, for audience `openbao`, and reads only kv/data/c1/*.
+# - AppRole `rebuild`: the rebuild's `openbao` stage writes a rebuilt cluster's new signing key to
+#   auth/jwt-c1/config and can do nothing else (playbooks/k8s-openbao-auth.yml).
+# Run from the agent box through the admin AppRole, whose tokens work only from the box. Each write
+# runs only when the store holds something else, so a second run changes nothing. No secret is
+# printed: every task that holds one has no_log.
+
+- name: The store's clients, set from the box through the admin AppRole
+  delegate_to: localhost
+  become: false
+  run_once: true
+  tags: [clients]
+  vars:
+    openbao_api: "https://{{ openbao_address }}:{{ openbao_port }}/v1"
+  block:
+    - name: The rebuild AppRole's IDs, made once in the box's keys folder (never printed)
+      ansible.builtin.shell: set -o pipefail && umask 077 && openssl rand -hex 24 | tr -d '\n' > {{ item }}
+      args:
+        executable: /bin/bash
+        creates: "{{ item }}"
+      loop:
+        - "{{ openbao_rebuild_role_id_dest }}"
+        - "{{ openbao_rebuild_secret_id_dest }}"
+
+    - name: An admin token
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/approle/login"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        body_format: json
+        body:
+          role_id: "{{ lookup('ansible.builtin.file', openbao_admin_role_id_src) }}"
+          secret_id: "{{ lookup('ansible.builtin.file', openbao_admin_secret_id_src) }}"
+      register: openbao_admin_login
+      no_log: true
+
+    - name: Calls below use that token
+      ansible.builtin.set_fact:
+        openbao_admin_headers:
+          X-Vault-Token: "{{ openbao_admin_login.json.auth.client_token }}"
+      no_log: true
+
+    - name: Read the login mounts
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/auth"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+      register: openbao_auth_mounts
+      no_log: true
+
+    - name: The login mount for c1's service-account tokens, {{ openbao_jwt_mount }}
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/auth/{{ openbao_jwt_mount }}"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        body_format: json
+        body: {type: jwt, description: "c1's service-account tokens (External Secrets)"}
+        status_code: [200, 204]
+      when: (openbao_jwt_mount ~ '/') not in (openbao_auth_mounts.json.data | default(openbao_auth_mounts.json))
+      changed_when: true
+      no_log: true
+
+    - name: Read the clients' policies
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/policies/acl/{{ item }}"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        status_code: [200, 404]
+      loop: [eso-c1, rebuild-jwt-c1]
+      register: openbao_client_policies
+      no_log: true
+
+    - name: Policies eso-c1 (read kv/data/c1/*) and rebuild-jwt-c1 (write the login's key only)
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/policies/acl/{{ item.item }}"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        body_format: json
+        body:
+          policy: "{{ lookup('ansible.builtin.template', 'policy-' ~ item.item ~ '.hcl.j2') }}"
+        status_code: [200, 204]
+      loop: "{{ openbao_client_policies.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: >-
+        item.status == 404 or
+        (item.json.data.policy | default('') | trim) != (lookup('ansible.builtin.template', 'policy-' ~ item.item ~ '.hcl.j2') | trim)
+      changed_when: true
+      no_log: true
+
+    - name: Read the login's role eso
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/{{ openbao_jwt_mount }}/role/eso"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        status_code: [200, 404]
+      register: openbao_eso_role_now
+      no_log: true
+
+    - name: Role eso, only External Secrets' own service account, reads with eso-c1
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/{{ openbao_jwt_mount }}/role/eso"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        body_format: json
+        body: "{{ openbao_eso_role }}"
+        status_code: [200, 204]
+      when: >-
+        openbao_eso_role_now.status == 404 or
+        (openbao_eso_role_now.json.data | dict2items | selectattr('key', 'in', openbao_eso_role | list) | items2dict) != openbao_eso_role
+      changed_when: true
+      no_log: true
+
+    - name: Read the AppRole rebuild
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/approle/role/rebuild"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        status_code: [200, 404]
+      register: openbao_rebuild_role_now
+      no_log: true
+
+    # OpenBao may hand a /32 back as the bare address, so both sides drop it before comparing.
+    - name: AppRole rebuild, from the box only, with policy rebuild-jwt-c1
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/approle/role/rebuild"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        body_format: json
+        body:
+          token_policies: [rebuild-jwt-c1]
+          token_ttl: 300
+          token_max_ttl: 600
+          secret_id_bound_cidrs: ["{{ openbao_box_address }}/32"]
+          token_bound_cidrs: ["{{ openbao_box_address }}/32"]
+        status_code: [200, 204]
+      vars:
+        openbao_rebuild_now: "{{ openbao_rebuild_role_now.json.data | default({}) }}"
+      when: >-
+        openbao_rebuild_role_now.status == 404 or
+        openbao_rebuild_now.token_policies != ['rebuild-jwt-c1'] or
+        openbao_rebuild_now.token_ttl != 300 or
+        openbao_rebuild_now.token_max_ttl != 600 or
+        (openbao_rebuild_now.secret_id_bound_cidrs | default([], true) | map('regex_replace', '/32$', '') | list) != [openbao_box_address] or
+        (openbao_rebuild_now.token_bound_cidrs | default([], true) | map('regex_replace', '/32$', '') | list) != [openbao_box_address]
+      changed_when: true
+      no_log: true
+
+    - name: Read the AppRole rebuild's role ID
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/approle/role/rebuild/role-id"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+      register: openbao_rebuild_role_id_now
+      no_log: true
+
+    - name: The AppRole rebuild's role ID is the box's
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/approle/role/rebuild/role-id"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        body_format: json
+        body:
+          role_id: "{{ lookup('ansible.builtin.file', openbao_rebuild_role_id_dest) }}"
+        status_code: [200, 204]
+      when: openbao_rebuild_role_id_now.json.data.role_id != lookup('ansible.builtin.file', openbao_rebuild_role_id_dest)
+      changed_when: true
+      no_log: true
+
+    # A secret ID can't be read back: the API's "Read AppRole secret ID" returns its properties and
+    # accessor, never the ID (https://openbao.org/docs/api/auth/approle/). So the box's IDs are tried:
+    # a login that works means the store already holds the box's secret ID.
+    - name: Try the box's rebuild IDs
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/approle/login"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        body_format: json
+        body:
+          role_id: "{{ lookup('ansible.builtin.file', openbao_rebuild_role_id_dest) }}"
+          secret_id: "{{ lookup('ansible.builtin.file', openbao_rebuild_secret_id_dest) }}"
+        status_code: [200, 400, 403]
+      register: openbao_rebuild_try
+      no_log: true
+
+    - name: The box's rebuild secret ID, given to the store
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/approle/role/rebuild/custom-secret-id"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        body_format: json
+        body:
+          secret_id: "{{ lookup('ansible.builtin.file', openbao_rebuild_secret_id_dest) }}"
+        status_code: [200, 204]
+      when: openbao_rebuild_try.status != 200
+      changed_when: true
+      no_log: true
+
+    - name: The box's rebuild IDs sign in after that
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/approle/login"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        body_format: json
+        body:
+          role_id: "{{ lookup('ansible.builtin.file', openbao_rebuild_role_id_dest) }}"
+          secret_id: "{{ lookup('ansible.builtin.file', openbao_rebuild_secret_id_dest) }}"
+      register: openbao_rebuild_login
+      when: openbao_rebuild_try.status != 200
+      no_log: true
+
+    # D-0038 Confirmation 6: a wrapper's AppRole is refused a path outside its policy. The rebuild's
+    # token may write its login's key and nothing else, so reading c1's secrets and the policies must
+    # both answer 403.
+    - name: The AppRole rebuild is refused outside its policy
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/{{ item }}"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers:
+          X-Vault-Token: "{{ (openbao_rebuild_try if openbao_rebuild_try.status == 200 else openbao_rebuild_login).json.auth.client_token }}"
+        status_code: [403]
+      loop:
+        - kv/data/c1/check
+        - sys/policies/acl/eso-c1
+      no_log: true
+
+    - name: PASS line for Confirmation 6
+      ansible.builtin.debug:
+        msg: "PASS: AppRole rebuild got 403 reading kv/data/c1/check and sys/policies/acl/eso-c1"
+
+    - name: The proof's token is revoked
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/token/revoke-self"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers:
+          X-Vault-Token: "{{ (openbao_rebuild_try if openbao_rebuild_try.status == 200 else openbao_rebuild_login).json.auth.client_token }}"
+        status_code: [200, 204]
+      no_log: true
+
+  always:
+    - name: The admin token is revoked
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/token/revoke-self"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_admin_headers }}"
+        status_code: [200, 204]
+      when: openbao_admin_headers is defined
+      no_log: true
