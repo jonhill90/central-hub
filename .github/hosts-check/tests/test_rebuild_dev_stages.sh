@@ -35,6 +35,11 @@ for stage in dev-ca identity-keycloak; do
   out=$(run dev "$stage" "$t/ok")
   check "$stage runs on dev" "$out" "AP playbooks/" "rc=1"
 done
+# dev-ca turns the Gateway's HTTPS on in the root Application before it makes the certificate.
+out=$(run dev dev-ca "$t/ok")
+check "dev-ca turns the Gateway's HTTPS on first" "$out" "k8s_gitops_source_gateway_https=true" ""
+first=${out%%playbooks/k8s-certs*}
+check "the HTTPS switch comes before the certificate" "$first" "k8s_gitops_source_gateway_https=true" ""
 out=$(run dev dev-ca "$t/bad")
 check "dev-ca names the missing devca tag" "$out" "has no devca tag" "AP "
 check "dev-ca fails without the tag" "$out" "rc=1" ""
