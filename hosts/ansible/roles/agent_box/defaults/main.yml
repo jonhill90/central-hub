@@ -38,6 +38,12 @@ agent_box_wrappers:
   - name: rebuild
     args: [up, rebuild, teardown, identity, log, diag]
     runner: true   # the dev redeploy workflow (.github/workflows/lab-redeploy-dev.yml)
+  # The tailnet stack's pipeline job (D-0041): plan, then apply the saved plan the owner's card named. The
+  # workflow lab-tailnet.yml calls it on the runner; the card ID and the plan hash are required arguments.
+  - name: tailnet-stack
+    args: [plan, "apply *", log]
+    session_args: [plan, log]   # a session cannot apply; only the workflow's runner can (D-0041 rules 2 and 3)
+    runner: true
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]

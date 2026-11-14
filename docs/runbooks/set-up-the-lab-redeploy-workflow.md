@@ -30,7 +30,7 @@ The environment `dev-redeploy` and the runner are **not created or registered ye
 | `log` | the newest run's stage lines | none |
 | `up`, `rebuild`, `teardown` | the box's `rebuild` wrapper, dev VMs 250-257 only | the owner, on environment `dev-redeploy` |
 
-The repository is public, so any workflow on any branch could ask for the runner by its label and get the runner user's sudo without ever naming `dev-redeploy`. The runner's job-started hook closes that: `runner-job-started.sh` (installed by the role, root-owned) fails every job unless the workflow is `lab-redeploy-dev.yml` or the merge job `merge.yml` (D-0042 rule 2) on `main` and the event is `workflow_dispatch`, before any step runs.
+The repository is public, so any workflow on any branch could ask for the runner by its label and get the runner user's sudo without ever naming `dev-redeploy`. The runner's job-started hook closes that: `runner-job-started.sh` (installed by the role, root-owned) fails every job unless the workflow is one on its list (`lab-redeploy-dev.yml`, the tailnet job `lab-tailnet.yml`, or the merge job `merge.yml`, D-0042 rule 2) on `main` and the event is `workflow_dispatch`, before any step runs.
 
 The runner's user can run only the `rebuild` wrapper, with those five arguments, through sudo as the keys user. It never sees a key. The wrapper itself refuses anything outside dev.
 

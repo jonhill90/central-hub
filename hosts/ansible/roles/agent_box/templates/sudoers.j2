@@ -3,7 +3,11 @@
 # hosts/ansible); checked with visudo before it is written.
 Defaults:{{ agent_box_user }} env_reset
 {% for w in agent_box_wrappers %}
-{{ agent_box_user }} ALL=({{ agent_box_keys_user }}) NOPASSWD: {{ w.args | map('regex_replace', '^', agent_box_libexec_dir ~ '/' ~ w.name ~ '.sh ') | join(', ') }}
+{# session_args: what the session user may run when that is less than the runner's args (an empty list: nothing). #}
+{% set __args = w.session_args if w.session_args is defined else w.args %}
+{% if __args | length > 0 %}
+{{ agent_box_user }} ALL=({{ agent_box_keys_user }}) NOPASSWD: {{ __args | map('regex_replace', '^', agent_box_libexec_dir ~ '/' ~ w.name ~ '.sh ') | join(', ') }}
+{% endif %}
 {% endfor %}
 {% if agent_box_self_apply | bool %}
 # box-apply (D-0036): the box applies its own role from reviewed main, as root, with plan or apply only.

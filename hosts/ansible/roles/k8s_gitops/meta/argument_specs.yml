@@ -18,6 +18,14 @@ argument_specs:
         type: bool
         default: false
         description: "Pass localPathStableFolders true to the root chart: volume folders named <namespace>/<claim> (dev, TASK-0240)."
+      k8s_gitops_source_openbao_address:
+        type: str
+        description: >-
+          The secrets store's https:// address, no path (proposed D-0038). Private; set only for dev for now.
+          Needs k8s_gitops_source_openbao_ca_file.
+      k8s_gitops_source_openbao_ca_file:
+        type: path
+        description: "The secrets store's certificate on the controller, passed base64 to the root chart."
       k8s_gitops_source_url: {type: str, default: "https://github.com/jonhill90/central-hub", description: Repository read over anonymous HTTPS.}
       k8s_gitops_source_branch: {type: str, default: main, description: Branch the cluster follows (D-0002).}
       k8s_gitops_source_path: {type: str, default: hosts/kubernetes/home/c1, description: Folder the cluster reads.}
