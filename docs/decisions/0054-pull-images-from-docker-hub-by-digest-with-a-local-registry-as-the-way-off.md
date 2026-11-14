@@ -16,7 +16,9 @@ revisit-when: a rebuild hits Docker Hub's pull limit; Docker changes its free pu
 
 ## Context and Problem Statement
 
-Six of c1's images come from Docker Hub: Jellyfin, ntfy, PostgreSQL, BusyBox, curl and the Local Path Provisioner (the apps' `values.yaml` files and the role defaults under `hosts/`). All but PostgreSQL are pinned by digest. PostgreSQL (`docker.io/library/postgres:18.6`, roles `k8s_identity` and `k8s_backup`) is pinned by tag only, as are two images from other registries: Keycloak from quay.io in the backup's restore check, and the `agnhost` test image from registry.k8s.io in roles `k8s_certs` and `k8s_gateway`. c1's nodes install containerd from Docker's package repository (role `k8s_node`, `download.docker.com`). At main 3400f06, 12 files in `hosts/` and one runbook (`build-kubeadm-cluster.md`) name Docker Hub or Docker's package repository. No decision record chose either; each image source followed where its project publishes.
+Of the images named in `hosts/`, six come from Docker Hub: Jellyfin, ntfy, PostgreSQL, BusyBox, curl and the Local Path Provisioner (the apps' `values.yaml` files and the role defaults under `hosts/`). All but PostgreSQL are pinned by digest. PostgreSQL (`docker.io/library/postgres:18.6`, roles `k8s_identity` and `k8s_backup`) is pinned by tag only, as are two images from other registries: Keycloak from quay.io in the backup's restore check, and the `agnhost` test image from registry.k8s.io in roles `k8s_certs` and `k8s_gateway`. c1's nodes install containerd from Docker's package repository (role `k8s_node`, `download.docker.com`). At main 3400f06, 12 files in `hosts/` and one runbook (`build-kubeadm-cluster.md`) name Docker Hub or Docker's package repository. No decision record chose either; each image source followed where its project publishes.
+
+c1's Helm charts (metrics-server, Loki, Alloy, kube-prometheus-stack, External Secrets and cert-manager, in the root app's `values.yaml`) and kubeadm choose more images. They are pinned by chart or Kubernetes version, not by digest, and the Alloy chart's current values default its image to `docker.io`. This record has not counted them.
 
 Docker Hub and Docker's package repository are hosted services run by one company, and Docker Hub limits pulls by clients that are not signed in. STD-0006 rule 3 lets a hosted service pass only with a stated exit path, and the register lists both as `hosted` with one. D-0035 lets agents tear down and rebuild the lab, and a rebuild pulls every image again.
 
@@ -42,7 +44,7 @@ Diagram: not applicable. Each node pulls straight from the registry; option 2 wo
 ### Rules
 
 1. **What it is.** Docker Hub and Docker's package repository are hosted services; the lab uses no paid Docker plan. containerd is Apache-2.0.
-2. **Digests.** Every image is pinned by digest, so the registry it comes from can change without changing what runs. The images pinned by tag only today (PostgreSQL, the restore check's Keycloak, `agnhost`) get their digests in a later change; until then they are a known gap.
+2. **Digests.** Every image named in `hosts/` is pinned by digest, so the registry it comes from can change without changing what runs. The images pinned by tag only today (PostgreSQL, the restore check's Keycloak, `agnhost`) get their digests in a later change; until then they are a known gap. The images that Helm charts and kubeadm choose are not yet counted, and how to pin them is left to the change that counts them.
 3. **No account.** The lab pulls without a Docker account and keeps no Docker credential.
 
 ### Consequences
@@ -51,10 +53,11 @@ Diagram: not applicable. Each node pulls straight from the registry; option 2 wo
 - Bad: pulls without signing in are limited to 100 per 6 hours per IPv4 address or IPv6 /64; a full rebuild from one home address shares that limit.
 - Bad: two hosted services from one company sit in the rebuild path.
 - Bad: three images pinned by tag only need their digests added.
+- Bad: the images that charts and kubeadm choose are pinned by chart or version only, and count against the same pull limit where they come from Docker Hub.
 
 ### Confirmation
 
-- Every image in `hosts/` names a digest. Today this fails for the three images in rule 2.
+- Every image named in `hosts/` names a digest. Today this fails for the three images in rule 2. Images chosen by Helm charts and kubeadm are not covered yet.
 
 ### Exit path
 
