@@ -1,6 +1,6 @@
 ---
 record: D-0037
-batch: RB-0208 (2026-11-14), with RB-0012 (2026-10-14) behind it
+batch: RB-0209 (2026-11-14), with RB-0012 (2026-10-14) behind it
 researched: 2026-11-14
 method: OpenBao v2.7.2, SOPS v3.13.3, the SOPS docs site and External Secrets v2.14.0 cloned at those tags and their licence files and docs read; release dates read from the tags; nothing run yet
 checks: none independent yet; the reviewing agent checks the record against this file before any merge, and the dev build in the record's Confirmation measures findings 7 to 14
