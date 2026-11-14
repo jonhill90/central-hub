@@ -32,6 +32,9 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0026 | [0026-tell-documentation-from-knowledge.md](0026-tell-documentation-from-knowledge.md) |
 | D-0028 | [0028-run-a-lab-ca-with-the-root-off-cluster-and-one-intermediate-per-cluster.md](0028-run-a-lab-ca-with-the-root-off-cluster-and-one-intermediate-per-cluster.md) |
 | D-0030 | [0030-give-cloud-agents-one-github-account-of-their-own.md](0030-give-cloud-agents-one-github-account-of-their-own.md) |
+| D-0033 | [0033-keep-c1-off-box-backups-in-azure-blob-with-restic.md](0033-keep-c1-off-box-backups-in-azure-blob-with-restic.md) |
 | D-0037 | [0037-sign-in-to-proxmox-and-opnsense-through-keycloak.md](0037-sign-in-to-proxmox-and-opnsense-through-keycloak.md) |
+| D-0038 | [0038-run-openbao-on-its-own-vm-as-the-secrets-store-with-sops-for-bootstrap-files.md](0038-run-openbao-on-its-own-vm-as-the-secrets-store-with-sops-for-bootstrap-files.md) |
 | D-0039 | [0039-keep-lab-users-in-lldap-read-by-keycloak-and-opnsense.md](0039-keep-lab-users-in-lldap-read-by-keycloak-and-opnsense.md) |
 | D-0040 | [0040-keep-opnsense-community-edition-as-the-lab-router-and-firewall-for-now.md](0040-keep-opnsense-community-edition-as-the-lab-router-and-firewall-for-now.md) |
+| D-0041 | [0041-run-every-lab-and-cloud-change-through-one-logged-pipeline.md](0041-run-every-lab-and-cloud-change-through-one-logged-pipeline.md) |
