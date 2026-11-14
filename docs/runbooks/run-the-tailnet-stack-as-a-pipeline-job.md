@@ -16,6 +16,8 @@ superseded-by:
 
 **Status:** draft, held. Written 2026-11-14 from the code in this change. Nothing here has run, and it does not run until D-0041 is accepted and the box's wrapper list and runner hook (both limits) are applied by the owner's typed go.
 
+The apply is the owner's tap on a decision card that names the pull request, its head and the plan's hash, run by this `lab-tailnet` job: no Mac step and no typed line. (Putting the wrapper on the box is a separate change to the box's limits.)
+
 This is the first job of D-0041. Until now the tailnet stack ran as a raw OpenTofu apply on the owner's Mac. After it passes once on its plan with a tap, that raw run is retired.
 
 ## What the job does
