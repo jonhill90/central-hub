@@ -1,6 +1,6 @@
 ---
 id: D-0041
-title: Run every change to the lab and to its cloud accounts through one logged, tested pipeline on the agent box, with no raw runs, and the owner approving a saved plan by card tap
+title: Run every change to the lab and to its cloud accounts through one logged, tested pipeline on the agent box, with no raw runs, each apply approved on its saved plan
 status: proposed
 date: 2026-11-14
 decision-makers: [owner]
@@ -9,10 +9,10 @@ consulted: []
 waits-on: []
 supersedes: []
 superseded-by:
-revisit-when: the agents get a GitHub account of their own (D-0030), so the approval can move to a protected GitHub environment; a run applies something its saved plan did not show; a production or cloud apply starts without a card that names its plan; a key leaves the box's wrappers; GitHub Actions stops being usable for the lab, and the exit to Forgejo is taken; a raw run happens outside break-glass
+revisit-when: the agents get a GitHub account of their own (D-0030), so the approval can move to a protected GitHub environment; a run applies something its saved plan did not show; a production or cloud apply starts without the pass or card that names its plan; a key leaves the box's wrappers; GitHub Actions stops being usable for the lab, and the exit to Forgejo is taken; a raw run happens outside break-glass
 ---
 
-# Run every change to the lab and to its cloud accounts through one logged, tested pipeline on the agent box, with no raw runs, and the owner approving a saved plan by card tap
+# Run every change to the lab and to its cloud accounts through one logged, tested pipeline on the agent box, with no raw runs, each apply approved on its saved plan
 
 ## Context and Problem Statement
 
@@ -20,7 +20,7 @@ At 06:31:02 UTC on 2026-11-14 the owner asked when he would stop typing go lines
 
 D-0035 already lets agents tear down and rebuild the lab's guests from the agent box, each production run approved by the owner's card tap after dev. D-0036 lets the box apply its own setup. Neither covers the cloud accounts (Azure, Cloudflare, Tailscale), and neither says that the Mac and raw commands stop. This record makes one pipeline the only way a change reaches the lab or those accounts.
 
-It changes how the owner approves: a card tap that names a saved plan replaces typed command lines, including for the firewall and tailnet changes that until now needed his words. So under D-0034 rule 4 it needs the owner's typed line.
+It changes how a change is approved: an approval that names a saved plan replaces typed command lines. Since D-0042, that approval is the reviewer's and the council's pass, and the owner taps a card only for firewall and tailnet applies, deletes, secrets and money (D-0042 rule 6).
 
 ## Decision Drivers
 
@@ -65,19 +65,12 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
    - A lab layer passes on dev before production (D-0035 rule 3(a)).
    - The cloud accounts have no dev twin, so their gate is the saved plan.
 6. **How an apply is approved.**
-   - A dev apply needs no tap. Dev means only the dev guests (VMs 250 to 257, D-0035 rule 3).
-   - A layer with no dev twin counts as production, so every change to it needs a tap: the Proxmox host's own configuration, OPNsense, the tailnet, and the Azure, Cloudflare and Tailscale accounts.
-   - A production apply, and every apply to Azure, Cloudflare or Tailscale, waits for the owner's tap on a decision card in the project's chat. The card's question names:
-     - the repository;
-     - the commit;
-     - the layer or stack;
-     - the first 12 hex digits of the saved plan's SHA-256.
-   - A reviewing agent checks the tap and the member before the apply job starts (D-0035 rule 3(c)).
-   - The card's message ID is a required input of the apply job and is written to both logs.
-   - A tap covers one apply of that plan and nothing after it.
-   - Once the agents have a GitHub account of their own (D-0030), a later record may move this approval to a protected GitHub environment whose required reviewer is the owner (D-0035 rule 8).
+   - A dev apply needs no tap. Dev means only the dev guests, VMs 250 to 257 (D-0035 rule 3), and the dev secrets store, VMs 550 to 599 (central-hub #276).
+   - A layer with no dev twin counts as production: the Proxmox host's own configuration, OPNsense, the tailnet, and the Azure, Cloudflare and Tailscale accounts.
+   - A production apply, and every apply to Azure, Cloudflare or Tailscale, runs once it has the agents' pass (D-0042 rule 1): for a layer with a dev twin, once the same commit passed on dev; for one without, once the saved plan's hash has the pass. The pass's message ID is a required input of the apply job and is written to both logs.
+   - D-0042 rule 6 keeps the owner's tap on a decision card for firewall and tailnet applies, deletes, secrets and money. That card's question names the repository, the commit, the layer or stack, and the first 12 hex digits of the saved plan's SHA-256; a reviewing agent checks the tap before the job starts (D-0035 rule 3(c)), and the card's message ID is written to both logs. A tap covers one apply of that plan and nothing after it.
 7. **Logs.**
-   - **GitHub's run log** can be read by any signed-in GitHub user, and it is kept at most 90 days on a public repository. So a job prints only a summary there: the layer or stack, the commit, the card ID, the plan's hash, counts of changes, and pass or fail. It prints no secret and no private name (CLAUDE.md rule 4).
+   - **GitHub's run log** can be read by any signed-in GitHub user, and it is kept at most 90 days on a public repository. So a job prints only a summary there: the layer or stack, the commit, the pass's or card's message ID, the plan's hash, counts of changes, and pass or fail. It prints no secret and no private name (CLAUDE.md rule 4).
    - **The full log** stays on the box, one JSON line per run plus the run's output, as `box-apply` keeps its own. It goes off the box with the box's existing off-box copy.
 8. **Where it runs.**
    - Jobs that hold a lab or cloud key run only on the agent box.
@@ -89,23 +82,23 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
 10. **The Mac wrappers retire one by one.**
     - Each Mac wrapper, and each command that ran raw, gets one pipeline job.
     - A wrapper is deleted once its job has passed on dev and once on production. Removing it from the Mac is the owner's step.
-11. **Changing the rules.** This record's rules, the runner hook's list and the wrappers a job calls change only by a reviewed PR to `main`. A change that widens what a job can do needs the owner's typed line (D-0034 rule 4; D-0036 rule 4 for the box's own limits).
+11. **Changing the rules.** This record's rules, the runner hook's list and the wrappers a job calls change only by a reviewed PR to `main`. A change that widens what a job can do needs the agents' pass, like any other (D-0042 rules 1 and 11).
 
 ### Consequences
 
-- Good: every change has a log, a tested commit and a saved plan behind it, and the owner approves the plan in the chat he already uses.
+- Good: every change has a log, a tested commit and a saved plan behind it, approved in the project's chat.
 - Good: no key is on the Mac or in a workflow. The Mac drops out as wrappers retire.
-- Good: the tailnet, firewall and cloud changes, which need the owner's words today, get the same plan-and-tap gate as the rest.
-- Bad: **the box still can't check the tap itself.** It is the same gap D-0035 accepts, with the same compensating controls: a reviewing agent's check, the card ID in the log, and a plan hash the tap must match. It closes when D-0030 lands (rule 6).
-- Bad: the agent box now holds the Azure, Cloudflare and Tailscale keys as well as the Proxmox token. Compensating controls: the keys stay in wrappers, the hook lets only listed workflows run, PR code never runs on the box, and every apply to those accounts needs a tap.
+- Good: the tailnet and firewall changes, which needed the owner's words, get a tap on a saved plan instead (D-0042 rule 6).
+- Bad: **the box can't check the pass or the tap itself.** It is the same gap D-0035 accepts, with the same compensating controls: a reviewing agent's check, the message ID in the log, and a plan hash the approval must match. It closes when D-0030 lands (rule 6).
+- Bad: the agent box now holds the Azure, Cloudflare and Tailscale keys as well as the Proxmox token. Compensating controls: the keys stay in wrappers, the hook lets only listed workflows run, PR code never runs on the box, and every apply to those accounts needs the agents' pass on its saved plan, and a tap for D-0042 rule 6's steps.
 - Bad: GitHub Actions is a closed hosted service. Its run logs are public and kept at most 90 days, so the full record lives on the box. The exit is Forgejo with Forgejo Actions (GPL-3.0); its workflows are similar to GitHub's but not compatible, so the workflow files need rewriting.
 - Neutral: until each layer has its job, raw runs go on, on the owner's typed words, listed in the runbooks (rule 3).
 - Neutral: the dev redeploy runbook's section "Not registered until D-0030 is met" changes with the PR that registers the runner: the runner is registered, and only the GitHub environment waits for D-0030.
 
 ### Confirmation
 
-- Each production or cloud apply has a card, and the card names the plan's hash. A reviewing agent checks the hash in the box log against the card before the run counts as done.
-- The first job built is the one for the tailnet stack, which ran raw on 2026-11-14. It is run once on its plan with a tap, and its summary in GitHub shows no private name.
+- Each production or cloud apply has a pass, or a card for D-0042 rule 6's steps, that names the plan's hash. A reviewing agent checks the hash in the box log against it before the run counts as done.
+- The first job built is the one for the tailnet stack, which ran raw on 2026-11-14. The tailnet is a rule 6 step of D-0042, so it is run once on its plan with a tap, and its summary in GitHub shows no private name.
 - A list in the runbooks shows every Mac wrapper and raw command, and the job that replaced each.
 
 ## Pros and Cons of the Options
