@@ -72,6 +72,15 @@ superseded-by:
    `sudo systemctl restart openbao` on the VM, through the wrapper's `configure`.
    expect: health shows `"sealed":false` again with no person.
 
+7. Snapshot off the VM.
+   `secrets-store snapshot`
+   expect: `snapshot raft-<time>.snap, <n> bytes` with n above 0; the file is in `/etc/agent-keys/dev/openbao-snapshots/`, which keeps 24.
+
+8. Restore drill.
+   why: a backup counts only once it has been restored.
+   Write a test key, take a snapshot, delete the key, then `secrets-store restore`. This quick drill restores over the live dev store; it is not D-0038 Confirmation 4, which restores into a throwaway server.
+   expect: `restored raft-<time>.snap`, and the test key reads back. The full drill is D-0038 Confirmation 5: `destroy`, `plan`, `apply`, `configure`, then `restore`, with no person.
+
 ## Remove it
 
 Take a last snapshot with `secrets-store snapshot`, which copies it to the box's keys folder, then `secrets-store destroy`. The seal key in the box's keys folder is what reads that snapshot again: after `apply` and `configure`, `secrets-store restore` puts the newest one back.
