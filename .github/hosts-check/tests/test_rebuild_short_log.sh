@@ -11,6 +11,8 @@ sed -n '/^  if \[ "\$s" = preflight \] || \[ "\$s" = identity-keycloak \]; then/
 cat > "$t/raw" <<'R'
 ===== preflight
 preflight: branch skipped, all 8 declared dev VMs already exist in the state, so a re-run allocates no new VMs
+preflight: guest list from /cluster/resources?type=vm, 1 guests visible to the token
+preflight: guest vmid=258 type=qemu status=running maxmem=8192 MiB mem=4096 MiB name=agent-box
 ===== apps
 "msg": ["1 login page: HTTP 999 ok"]
 ===== identity-keycloak
@@ -36,5 +38,6 @@ check "a later stage is not taken" "$out" "HTTP 302" "500"
 check "nothing else from the stage is copied" "$out" "HTTP 302" "hunter2"
 out=$(run preflight)
 check "the preflight's branch line is kept" "$out" "preflight: branch skipped, all 8 declared"
+check "the guest list lines are kept" "$out" "preflight: guest vmid=258 type=qemu status=running maxmem=8192 MiB"
 check "the preflight takes no sign-in lines" "$out" "branch skipped" "HTTP"
 exit $fail

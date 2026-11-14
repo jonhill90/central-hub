@@ -1,0 +1,33 @@
+# Managed by Ansible (role proxmox_proxy). The Proxmox web UI on 443, proxied to pveproxy on 8006, by
+# Apache httpd. Port 80 only redirects, to the first name (never to the Host header the client sent).
+# The server's own name, so apachectl does not guess it from the host's address (AH00558).
+ServerName {{ proxmox_proxy_server_names | first }}
+
+<VirtualHost *:80>
+    ServerName {{ proxmox_proxy_server_names | first }}
+    Redirect permanent / https://{{ proxmox_proxy_server_names | first }}/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName {{ proxmox_proxy_server_names | first }}
+{% for name in proxmox_proxy_server_names[1:] %}
+    ServerAlias {{ name }}
+{% endfor %}
+
+    SSLEngine on
+    SSLCertificateFile {{ proxmox_proxy_cert }}
+    SSLCertificateKeyFile {{ proxmox_proxy_key }}
+    SSLProtocol -all +TLSv1.2 +TLSv1.3
+
+    # pveproxy's certificate is for the host's names, not for 127.0.0.1, and this hop never leaves the host.
+    SSLProxyEngine on
+    SSLProxyVerify none
+    SSLProxyCheckPeerName off
+    SSLProxyCheckPeerExpire off
+
+    # noVNC and xterm.js consoles are WebSockets: upgrade=websocket tunnels them (httpd 2.4.47 and later).
+    # flushpackets=on sends each reply as it comes, with no buffering; timeout matches a long console.
+    ProxyPass / {{ proxmox_proxy_upstream }}/ upgrade=websocket flushpackets=on timeout=3600
+    ProxyPassReverse / {{ proxmox_proxy_upstream }}/
+    LimitRequestBody 0
+</VirtualHost>

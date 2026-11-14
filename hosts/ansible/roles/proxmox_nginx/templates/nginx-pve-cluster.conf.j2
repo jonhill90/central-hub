@@ -1,5 +1,0 @@
-# Managed by Ansible (role proxmox_nginx). The certificate and key live in /etc/pve, which pve-cluster
-# mounts; nginx must not start before it, and does not run without it.
-[Unit]
-Requires=pve-cluster.service
-After=pve-cluster.service

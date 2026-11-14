@@ -1,0 +1,251 @@
+---
+- name: proxy | The private input is set
+  ansible.builtin.assert:
+    that:
+      - proxmox_proxy_server_names | length > 0
+      - proxmox_proxy_server_names | select('match', '^[a-z0-9.-]+$') | list | length == proxmox_proxy_server_names | length
+    fail_msg: set proxmox_proxy_server_names (the same names as proxmox_cert_names) in the inventory
+    quiet: true
+
+- name: proxy | Where the move from nginx stands
+  ansible.builtin.slurp:
+    src: /var/lib/proxmox-proxy/cutover.result
+  register: proxmox_proxy_result_file
+  failed_when: false
+  check_mode: false
+
+- name: proxy | Note whether Apache httpd already serves 443 and 80
+  ansible.builtin.set_fact:
+    proxmox_proxy_state: >-
+      {{ (proxmox_proxy_result_file.content | default('') | b64decode).split(' ') | first | trim }}
+
+- name: proxy | Note whether the proxy serves now
+  ansible.builtin.set_fact:
+    proxmox_proxy_serving: "{{ proxmox_proxy_state == 'done' }}"
+
+# Debian's postinst enables apache2 and starts it on port 80, which nginx holds until the move. So before apt
+# runs, apache2 is masked (the link systemctl mask makes) and a policy-rc.d denies every service start
+# (exit 101, see invoke-rc.d(8)); after apt, the policy-rc.d goes and apache2 is disabled, because a mask
+# does not remove the enable links the postinst makes. It stays masked and disabled until the move.
+- name: proxy | Install Apache httpd without starting it
+  when: not proxmox_proxy_serving | bool
+  block:
+    - name: proxy | apache2 is masked
+      ansible.builtin.file:
+        src: /dev/null
+        dest: /etc/systemd/system/apache2.service
+        state: link
+        force: true
+
+    - name: proxy | Service starts are denied while apt runs
+      ansible.builtin.copy:
+        dest: /usr/sbin/policy-rc.d
+        content: "#!/bin/sh\n# Written by role proxmox_proxy while it installs apache2; removed right after.\nexit 101\n"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: proxy | Apache httpd at the pinned Debian version
+      ansible.builtin.apt:
+        name:
+          - "apache2={{ proxmox_proxy_apache_version }}"
+          - "apache2-bin={{ proxmox_proxy_apache_version }}"
+          - "apache2-data={{ proxmox_proxy_apache_version }}"
+          - "apache2-utils={{ proxmox_proxy_apache_version }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+  always:
+    - name: proxy | Service starts are allowed again
+      ansible.builtin.file:
+        path: /usr/sbin/policy-rc.d
+        state: absent
+
+# After the move, a new pinned version installs the ordinary way, and a graceful reload loads it.
+- name: proxy | Apache httpd at the pinned Debian version, after the move
+  ansible.builtin.apt:
+    name:
+      - "apache2={{ proxmox_proxy_apache_version }}"
+      - "apache2-bin={{ proxmox_proxy_apache_version }}"
+      - "apache2-data={{ proxmox_proxy_apache_version }}"
+      - "apache2-utils={{ proxmox_proxy_apache_version }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: proxmox_proxy_serving | bool
+  notify: Reload the proxy
+
+- name: proxy | apache2 is not enabled before the move
+  ansible.builtin.command: systemctl disable apache2.service  # noqa: command-instead-of-module (the module sees a masked unit as off and leaves the links)
+  register: proxmox_proxy_disable
+  changed_when: "'Removed' in proxmox_proxy_disable.stderr"
+  when: not proxmox_proxy_serving | bool and not ansible_check_mode
+
+# A check run on a host without Apache httpd can't test the configuration or reach it: apt installs nothing in
+# check mode. It still shows the files it would write, then skips the rest.
+- name: proxy | Whether Apache httpd is installed
+  ansible.builtin.stat:
+    path: /usr/sbin/apache2
+  register: proxmox_proxy_bin
+  check_mode: false
+
+- name: proxy | Note a check run before Apache httpd is installed
+  ansible.builtin.set_fact:
+    proxmox_proxy_dry: "{{ ansible_check_mode and not proxmox_proxy_bin.stat.exists }}"
+
+- name: proxy | Say what a check run before the install leaves out
+  ansible.builtin.debug:
+    msg: >-
+      Apache httpd is not installed yet, so this check run shows the files it would write and skips the
+      configuration test, the move and the proof; the run without --check does them.
+  when: proxmox_proxy_dry | bool
+
+- name: proxy | The modules the site needs
+  ansible.builtin.command: a2enmod {{ item }}
+  args:
+    creates: /etc/apache2/mods-enabled/{{ item }}.load
+  loop: [ssl, proxy, proxy_http]
+  notify: Reload the proxy
+  when: not proxmox_proxy_dry | bool
+
+# The package's own default site also listens on 80 and would clash with the redirect.
+- name: proxy | The packaged default site is off
+  ansible.builtin.file:
+    path: /etc/apache2/sites-enabled/000-default.conf
+    state: absent
+  notify: Reload the proxy
+
+- name: proxy | The site for the web UI
+  ansible.builtin.template:
+    src: proxmox.conf.j2
+    dest: /etc/apache2/sites-available/proxmox.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload the proxy
+
+- name: proxy | The site is enabled
+  ansible.builtin.file:
+    src: ../sites-available/proxmox.conf
+    dest: /etc/apache2/sites-enabled/proxmox.conf
+    state: link
+    force: "{{ ansible_check_mode }}"
+  notify: Reload the proxy
+
+- name: proxy | Folder for the unit drop-in
+  ansible.builtin.file:
+    path: /etc/systemd/system/apache2.service.d
+    state: directory
+    mode: "0755"
+
+- name: proxy | Apache httpd starts after pve-cluster and needs it
+  ansible.builtin.template:
+    src: apache-requires.conf.j2
+    dest: /etc/systemd/system/apache2.service.d/10-pve-cluster.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: proxy | Folder for the proof settings
+  ansible.builtin.file:
+    path: /etc/proxmox-proxy
+    state: directory
+    mode: "0755"
+
+- name: proxy | The proof settings
+  ansible.builtin.template:
+    src: proofs.env.j2
+    dest: /etc/proxmox-proxy/proofs.env
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: proxy | The proof and the move scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /usr/local/libexec/{{ item }}
+    owner: root
+    group: root
+    mode: "0755"
+  loop: [proxy-proofs.sh, proxy-cutover.sh]
+
+- name: proxy | systemd reads the drop-in now
+  ansible.builtin.meta: flush_handlers
+
+- name: proxy | The configuration is valid
+  ansible.builtin.command: apache2ctl configtest
+  changed_when: false
+  check_mode: false
+  when: not proxmox_proxy_dry | bool
+
+# The move runs once, as its own systemd unit (proxy-cutover.sh says how it rolls back). A host where an
+# earlier move rolled back, or stopped part-way, is not moved again by a re-run: a person reads why first.
+- name: proxy | Move 443 and 80 from nginx to Apache httpd
+  when:
+    - proxmox_proxy_cutover | bool
+    - not proxmox_proxy_serving | bool
+    - not ansible_check_mode
+  block:
+    - name: proxy | An earlier move did not stop part-way
+      ansible.builtin.assert:
+        that: proxmox_proxy_state == ''
+        fail_msg: >-
+          /var/lib/proxmox-proxy/cutover.result says '{{ proxmox_proxy_state }}': an earlier move did not finish.
+          Read the unit's journal (journalctl -u proxmox-proxy-cutover), fix the cause, then remove the file to try again.
+        quiet: true
+
+    - name: proxy | The move, with its proofs
+      ansible.builtin.command: >-
+        systemd-run --unit=proxmox-proxy-cutover --property=Type=oneshot --wait --collect --quiet
+        /usr/local/libexec/proxy-cutover.sh
+      changed_when: true
+
+    - name: proxy | Note that the proxy serves now
+      ansible.builtin.set_fact:
+        proxmox_proxy_serving: true
+
+- name: proxy | Say that nginx still serves
+  ansible.builtin.debug:
+    msg: Apache httpd is installed, configured, masked and disabled; nginx still serves 443 and 80 (proxmox_proxy_cutover is false).
+  when: not proxmox_proxy_serving | bool and not ansible_check_mode
+
+- name: proxy | Load any change now
+  ansible.builtin.meta: flush_handlers
+
+- name: proxy | Reload for a renewed certificate, and the proof
+  when: proxmox_proxy_serving | bool
+  block:
+    # pvenode cert set (role proxmox_cert) renews the certificate every 30 days or so; the proxy only reads it
+    # at a reload, so reload (gracefully) when the certificate it serves is not the one on disk.
+    - name: proxy | The certificate on disk
+      ansible.builtin.command: openssl x509 -in {{ proxmox_proxy_cert | quote }} -noout -fingerprint -sha256
+      register: proxmox_proxy_disk
+      changed_when: false
+      check_mode: false
+
+    - name: proxy | The certificate the proxy serves
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          openssl s_client -connect 127.0.0.1:443 -servername {{ proxmox_proxy_server_names | first | quote }}
+          </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256
+        executable: /bin/bash
+      register: proxmox_proxy_served
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: proxy | The proxy reloads to pick up a renewed certificate
+      ansible.builtin.command: apachectl -k graceful
+      changed_when: true
+      when: proxmox_proxy_served.stdout | trim != proxmox_proxy_disk.stdout | trim
+
+    - name: proxy | The proof holds
+      ansible.builtin.command: /usr/local/libexec/proxy-proofs.sh
+      register: proxmox_proxy_proof
+      changed_when: false
+      check_mode: false
+      until: proxmox_proxy_proof.rc == 0
+      retries: 3
+      delay: 2

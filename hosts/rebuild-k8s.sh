@@ -189,8 +189,41 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default 14336: 12 GiB plus a 2 GiB margin). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
+# curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
+# use it, so neither can print the token.
+preflight_clean() {
+  local secret text
+  # shellcheck source=/dev/null
+  secret=$(set -a; . "$TOFU_ENV"; printf '%s' "${PROXMOX_VE_API_TOKEN##*=}")
+  # Redact first and cut after, so a secret that crosses the cut can't leave a partial prefix.
+  text=$(printf '%s' "$1" | tr -d '\n')
+  [ -z "$secret" ] || text=${text//"$secret"/***}
+  printf '%s' "${text:0:200}"
+}
+
+# The guests the token can see (VM ID, type, status, maxmem and mem in MiB, name), one line each, so a refusal
+# shows what is using the node. Read-only and never fatal: a read that fails prints one line saying so. The
+# token only lists guests it holds audit rights on.
+preflight_guests() {
+  local out
+  # shellcheck source=/dev/null
+  out=$( (set -a; . "$TOFU_ENV"; set +a
+    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/cluster/resources?type=vm") 2>&1) \
+    || { echo "preflight: guest list could not be read: $(preflight_clean "$out")"; return 1; }
+  printf '%s' "$out" | python3 -c 'import json,sys
+rows = sorted(json.load(sys.stdin)["data"], key=lambda r: r.get("vmid", 0))
+print("preflight: guest list from /cluster/resources?type=vm, %d guests visible to the token" % len(rows))
+for r in rows:
+    print("preflight: guest vmid=%s type=%s status=%s maxmem=%s MiB mem=%s MiB name=%s" % (
+        r.get("vmid"), r.get("type"), r.get("status"), r.get("maxmem", 0) // 1048576, r.get("mem", 0) // 1048576,
+        "".join(c for c in str(r.get("name", "")) if c.isalnum() or c in "-_.")))' \
+    || { echo "preflight: guest list had an unexpected shape"; return 1; }
+}
+
 preflight_memory() {
-  local min=${PREFLIGHT_MIN_FREE_MIB:-14336} node body free secret
+  local min=${PREFLIGHT_MIN_FREE_MIB:-14336} node body free
   local existing declared
   # A re-run on VMs the state already holds allocates no new VMs, and their memory is already taken, so the
   # node's free memory says nothing about it (measured on the box, 2026-11-14: 3547 MiB free with dev up).
@@ -217,9 +250,7 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
     # The header goes in on stdin (a curl config), so the token is never in curl's arguments, where ps shows it.
     printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
       curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/nodes/$node/status") 2>&1) \
-    || { # shellcheck source=/dev/null
-         secret=$(set -a; . "$TOFU_ENV"; printf '%s' "${PROXMOX_VE_API_TOKEN##*=}")
-         body=$(printf '%s' "$body" | tr -d '\n' | cut -c1-200); [ -z "$secret" ] || body=${body//"$secret"/***}
+    || { body=$(preflight_clean "$body")
          echo "preflight: the node's memory could not be read: $body"; return 1; }
   # memory.available (the kernel's MemAvailable) exists from PVE 9; older versions have total - used.
   free=$(printf '%s' "$body" | python3 -c 'import json,sys
@@ -231,6 +262,7 @@ else:
     || { echo "preflight: the node's memory answer had no memory figures"; return 1; }
   field=${free#* }; free=${free% *}
   echo "preflight: node free memory ${free} MiB (field: ${field}), minimum ${min} MiB"
+  preflight_guests || true
   [ "$free" -ge "$min" ] || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB"; return 1; }
 }
 
@@ -363,7 +395,7 @@ for s in $stages; do
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.
   if [ "$s" = preflight ] || [ "$s" = identity-keycloak ]; then
     awk -v s="$s" '$0 == "===== " s {on=1; next} /^===== / {on=0} on' "$raw" \
-      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
+      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|guest vmid=[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
       | sed "s/^/  $s: /" >> "$log" || true
   fi
   if [ "$rc" -ne 0 ]; then

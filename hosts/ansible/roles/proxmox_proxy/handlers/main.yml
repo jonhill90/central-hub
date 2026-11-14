@@ -1,0 +1,12 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+# Graceful: each child finishes its current request first, so an open console survives a reload.
+- name: Reload the proxy
+  ansible.builtin.command: apachectl -k graceful
+  changed_when: true
+  when:
+    - not proxmox_proxy_dry | default(false) | bool
+    - proxmox_proxy_serving | default(false) | bool
