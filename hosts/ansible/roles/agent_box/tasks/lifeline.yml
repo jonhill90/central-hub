@@ -87,6 +87,7 @@
     name: nftables.service
     masked: true
     enabled: false
+  when: not ansible_check_mode
 
 - name: lifeline | The units are enabled
   ansible.builtin.systemd_service:
@@ -94,6 +95,7 @@
     enabled: true
     daemon_reload: true
   loop: [lifeline-nft.service, lifeline-up.service]
+  when: not ansible_check_mode
 
 - name: lifeline | Load the filter now
   ansible.builtin.meta: flush_handlers
@@ -102,6 +104,7 @@
   ansible.builtin.systemd_service:
     name: lifeline-nft.service
     state: started
+  when: not ansible_check_mode
 
 - name: lifeline | The firewalld policy a first attempt wrote is removed
   ansible.builtin.file:
@@ -199,13 +202,16 @@
   ansible.builtin.systemd_service:
     name: lifeline-up.service
     state: started
+  when: not ansible_check_mode
 
-# The proof: what the owner's pick 220 promises, measured on the box after the run.
+# The proof: what the owner's pick 220 promises, measured on the box after the run. Skipped in a check run:
+# before the first apply the units and the table it reads do not exist yet, so these would fail.
 - name: lifeline | The filter as nftables reports it
   ansible.builtin.command: "{{ agent_box_nft_bin }} list table inet lifeline"
   register: agent_box_lifeline_table
   changed_when: false
   check_mode: false
+  when: not ansible_check_mode
 
 - name: lifeline | Default routes on the NIC
   ansible.builtin.shell:
@@ -213,6 +219,7 @@
   register: agent_box_lifeline_default_route
   changed_when: false
   check_mode: false
+  when: not ansible_check_mode
 
 - name: lifeline | No default route over the NIC, and the filter drops, rejects and forwards nothing else
   ansible.builtin.assert:
@@ -228,6 +235,7 @@
       the lifeline is not closed as picked: a default route over it, a missing drop or reject, or a filter
       that allows more or less than agent_box_lifeline_allow
     quiet: true
+  when: not ansible_check_mode
 
 - name: lifeline | Each allowed destination is in the filter
   ansible.builtin.assert:
@@ -236,9 +244,11 @@
     fail_msg: "{{ item.0.address }}:{{ item.1 }} is not in the lifeline filter"
     quiet: true
   loop: "{{ agent_box_lifeline_allow | subelements('ports') }}"
+  when: not ansible_check_mode
 
 - name: lifeline | Both units are active
   ansible.builtin.command: systemctl is-active lifeline-nft.service lifeline-up.service  # noqa: command-instead-of-module
   register: agent_box_lifeline_active
   changed_when: false
   check_mode: false
+  when: not ansible_check_mode
