@@ -65,7 +65,8 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
    - A lab layer passes on dev before production (D-0035 rule 3(a)).
    - The cloud accounts have no dev twin, so their gate is the saved plan.
 6. **How an apply is approved.**
-   - A dev apply needs no tap.
+   - A dev apply needs no tap. Dev means only the dev guests (VMs 250 to 257, D-0035 rule 3).
+   - A layer with no dev twin counts as production, so every change to it needs a tap: the Proxmox host's own configuration, OPNsense, the tailnet, and the Azure, Cloudflare and Tailscale accounts.
    - A production apply, and every apply to Azure, Cloudflare or Tailscale, waits for the owner's tap on a decision card in the project's chat. The card's question names:
      - the repository;
      - the commit;
