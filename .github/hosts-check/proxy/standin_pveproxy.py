@@ -61,6 +61,7 @@ def handle(conn):
 
 def main():
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.load_cert_chain("/etc/pve/local/pveproxy-ssl.pem", "/etc/pve/local/pveproxy-ssl.key")
     os.makedirs("/run/standin", exist_ok=True)
     srv = socket.create_server(("127.0.0.1", 8006), reuse_port=True)
