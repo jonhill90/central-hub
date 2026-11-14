@@ -1,0 +1,7 @@
+# {{ ansible_managed | comment('plain') | trim }}
+# The package's unit allows only CAP_SYSLOG; the listener binds {{ openbao_port }} (the owner's rule of
+# 2026-11-14: lab pages by name on 443), which needs CAP_NET_BIND_SERVICE.
+[Service]
+CapabilityBoundingSet=CAP_SYSLOG CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ReadWritePaths={{ openbao_audit_dir }}

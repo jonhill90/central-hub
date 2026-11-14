@@ -1,0 +1,10 @@
+# {{ ansible_managed | comment('plain') | trim }}
+[Unit]
+Description=OpenBao Raft snapshot timer (D-0038 rule 8)
+
+[Timer]
+OnCalendar={{ openbao_snapshot_on_calendar }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -169,7 +169,9 @@ check_backup() {
   bash "$here/tests/test_backup_azure_cert.sh"
   bash "$here/tests/test_opnsense_offbox.sh"
   bash "$here/tests/test_opnsense_escrow.sh"
+  bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
+  bash "$here/tests/test_identity_signin.sh"
 }
 
 check_scripts() {
