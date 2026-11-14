@@ -222,6 +222,9 @@ restore_rebuilt() {
 clear_hold() {
   local cluster moved
   [[ -e $hold ]] || { echo "secrets-store: no rebuild hold; nothing done"; return 0; }
+  # Only a store that answers 200 (initialized, unsealed, active): a sealed store's 503 body also holds an ID.
+  [[ $(curl -s -o /dev/null -w '%{http_code}' --cacert "$cacert" "$(addr)/v1/sys/health" || true) == 200 ]] ||
+    { echo "secrets-store: the store does not answer sys/health 200; the hold stays" >&2; exit 1; }
   cluster=$(curl -s --cacert "$cacert" "$(addr)/v1/sys/health" |
     python3 -I -c 'import json, sys; print(json.load(sys.stdin)["cluster_id"])') ||
     { echo "secrets-store: the store gave no cluster ID in sys/health; the hold stays" >&2; exit 1; }
