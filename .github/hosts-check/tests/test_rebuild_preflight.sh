@@ -7,14 +7,14 @@ src=$(cd "$(dirname "$0")/../../.." && pwd)/hosts/rebuild-k8s.sh
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 fail=0
-sed -n '/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
+sed -n '/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
 grep -q '^preflight_memory' "$t/fn.sh" && grep -q '^run_stage' "$t/fn.sh" || { echo "FAIL: functions not found"; exit 1; }
 mkdir "$t/bin"
 cat > "$t/bin/curl" <<'F'
 #!/bin/sh
 echo "$*" > "$FAKE_ARGV"; cat > "$FAKE_STDIN"
 case "$*" in *cluster/resources*)
-  [ -n "$FAKE_GUESTS_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403" >&2; exit 22; }
+  [ -n "$FAKE_GUESTS_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
   echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":258,"type":"qemu","status":"running","maxmem":8589934592,"mem":4294967296,"name":"agent-box"}]}'
   exit 0 ;; esac
 [ -n "$FAKE_CURL_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
@@ -58,6 +58,7 @@ check "the list says which API path and how many" "$out" "guest list from /clust
 check "the refusal still comes after the list" "$out" "refused" "rc=0"
 out=$(FAKE_GUESTS_ERROR=yes run dev 31 28); check "an unreadable guest list is not fatal and says so" "$out" "guest list could not be read" ""
 check "the memory refusal still stands" "$out" "refused"
+check "the guest read error does not print the token" "$out" "guest list could not be read" "SECRETTOKEN"
 out=$(run dev 31 17); check "a pass lists guests too and passes" "$out" "guest vmid=300" "refused"
 check "the token is never in the guest request's arguments" "$(cat "$t/argv")" "cluster/resources" "SECRETTOKEN"
 grep -q 'stages="preflight \$stages"' "$src" && echo "ok   a dev run gets the preflight" || { echo "FAIL: the preflight is not added to a dev run"; fail=1; }
