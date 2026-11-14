@@ -96,4 +96,14 @@ else
   pveum acl delete /pool/desktop --groups agents --roles AgentDev 2>/dev/null || true
   pveum acl delete /pool/desktop --tokens 'agent@pve!dev' --roles AgentDev 2>/dev/null || true
 fi
+# The second identity (agent-lab-access.sh, pick 217) holds AgentLab on /vms, propagated, which would
+# reach the desktop VM whatever DESKTOP_ACCESS says. NoAccess on the pool beats it for every member of
+# the pool and survives a destroy. Applied once agentlab@pve exists, so run this script again after
+# that user is made; the pool path's precedence over /vms is unverified until the user exists.
+if pveum user list --output-format json | grep -q '"userid":"agentlab@pve"'; then
+  pveum acl modify /pool/desktop --groups agents-lab --roles NoAccess --propagate 1
+  if pveum user token list agentlab@pve --output-format json | grep -q '"tokenid":"lab"'; then
+    pveum acl modify /pool/desktop --tokens 'agentlab@pve!lab' --roles NoAccess --propagate 1
+  fi
+fi
 echo "agent-access: done (node $NODE, desktop access $DESKTOP_ACCESS)"

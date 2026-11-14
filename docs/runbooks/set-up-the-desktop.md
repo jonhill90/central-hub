@@ -16,7 +16,7 @@ superseded-by:
 
 **Status:** draft. Written 2026-11-13 from the code in this change (tests offline only). Not run: the package names and the xrdp session below come from the EPEL 10 package lists and have not been installed on a VM yet.
 
-**Isolation, by default (pick 219).** The agents configure the VM once and then keep no SSH login on it: the role removes the admin SSH key at the end of its first run, so later changes are a rebuild from teardown. This closes SSH only: the agents' token keeps AgentDev on `/pool/desktop` (VM.Config.Cloudinit, VM.PowerMgmt, VM.Config.Disk, VM.Clone), so a session could still add a cloud-init key and reboot the VM, or clone its disk. Taking those rights off after creation, or a narrower role for the pool, is the owner's decision (pick 219). Nobody but the owner sets the login password, at the Proxmox console, so it passes through no agent, transcript or keys folder. RDP is reachable from one address, not from VNet dev.
+**Isolation, by default (pick 219).** The agents configure the VM once and then keep no way in. The role removes the admin SSH key at the end of its first run, so later changes are a rebuild from teardown. The agents' Proxmox token holds AgentDev on `/pool/desktop` only while `DESKTOP_ACCESS` is on in `agent-access.sh` (the steps below), so after the build no agent can add a cloud-init key, reboot the VM or clone its disk. The second identity, `agentlab@pve`, is kept out by NoAccess on the same pool, whatever the switch says. firewalld accepts 3389 only from the owner's one address. The owner sets the password at the Proxmox console, so it passes through no agent.
 
 The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in to apps by hand (2026-11-13 05:04 UTC). It is a separate VM so what the owner types never sits beside the agents' keys.
 
@@ -47,7 +47,7 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 
 4. Take the rights away again: a PR that sets `DESKTOP_ACCESS=off` merges, then `proxmox-agent-access.sh run`.
    why: no agent keeps a way into the VM where the owner will type passwords.
-   expect: `agent-access: done (node <node>, desktop access off)`; `pveum acl list` shows no entry for `/pool/desktop`.
+   expect: `agent-access: done (node <node>, desktop access off)`; `pveum acl list` shows no AgentDev entry for `/pool/desktop`. If `agentlab@pve` exists, `pveum user token permissions agentlab@pve lab --path /vms/<the desktop's VM ID>` shows no `VM.` privilege. Run the off step after every `desktop apply` too, because a destroy and rebuild leaves the pool and its ACL, but the check is cheap.
 
 5. The owner opens the VM's console in Proxmox (VM, Console). It asks "Set the password for owner."; the owner types a password twice. No one else sees it.
    expect: the prompt returns to a login; `/var/lib/desktop/password-set` exists and xrdp starts.
