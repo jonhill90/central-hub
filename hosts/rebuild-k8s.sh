@@ -270,17 +270,36 @@ print(json.load(sys.stdin)["data"].get("status", ""))' 2>/dev/null) || st=""
   echo "runner stop: VM $CI_RUNNER_VMID did not stop within 120 s"; return 1
 }
 
-# The EXIT trap: start the CI runner again if this run (or an earlier one that died) stopped it. Never fatal.
+# The EXIT trap: start the CI runner again if this run (or an earlier one that died) stopped it. Never fatal. The
+# runner is the notebook's CI runner (docs/runbooks/set-up-the-ci-runner.md), so it starts only when the node has
+# its memory (VM 300's maxmem) plus 2048 MiB free again, so the start can't push the node back into the shortage that
+# stopped it. If not, it stays stopped, the marker stays, and the log says so: notebook checks queue meanwhile.
+# A dev cluster that stays up leaves too little free memory, so the runner starts on the next run's start only after a
+# teardown has freed the dev VMs.
 runner_restart() {
-  local node out
+  local node out cur maxmem free needs margin=2048
   [ -f "$(runner_mark)" ] || return 0
   node=$(sed -n 's/^[[:space:]]*proxmox_node_name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$TFVARS" | head -1)
-  if out=$(px_api POST "nodes/$node/qemu/$CI_RUNNER_VMID/status/start"); then
-    echo "runner restart: VM $CI_RUNNER_VMID started again" | tee -a "$log"
-  else
-    echo "runner restart: VM $CI_RUNNER_VMID start request: $(preflight_clean "$out")" | tee -a "$log"
+  cur=$(px_api GET "nodes/$node/qemu/$CI_RUNNER_VMID/status/current") \
+    && maxmem=$(printf '%s' "$cur" | python3 -c 'import json,sys
+print(json.load(sys.stdin)["data"]["maxmem"] // 1048576)' 2>/dev/null) || maxmem=""
+  free=$(preflight_read_free "$node" 2>/dev/null) && free=${free% *} || free=""
+  if [ -z "$maxmem" ] || [ -z "$free" ]; then
+    echo "runner left stopped: could not read the memory figures (VM $CI_RUNNER_VMID stays stopped, notebook checks queue)" | tee -a "$log"
+    return 0
   fi
-  rm -f "$(runner_mark)"
+  needs=$(( maxmem + margin ))
+  if [ "$free" -lt "$needs" ]; then
+    echo "runner left stopped: not enough memory (free $free MiB, needs $needs MiB), notebook checks queue until it is started" | tee -a "$log"
+    return 0
+  fi
+  if out=$(px_api POST "nodes/$node/qemu/$CI_RUNNER_VMID/status/start"); then
+    echo "runner restart: VM $CI_RUNNER_VMID started again (free $free MiB, needs $needs MiB)" | tee -a "$log"
+    rm -f "$(runner_mark)"
+  else
+    # The marker stays, so the next dev run tries the start again.
+    echo "runner restart: VM $CI_RUNNER_VMID start failed, marker kept: $(preflight_clean "$out")" | tee -a "$log"
+  fi
   return 0
 }
 
@@ -457,7 +476,7 @@ for s in $stages; do
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.
   if [ "$s" = preflight ] || [ "$s" = identity-keycloak ]; then
     awk -v s="$s" '$0 == "===== " s {on=1; next} /^===== / {on=0} on' "$raw" \
-      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|guest vmid=[^"]*|runner (stop|restart)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
+      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
       | sed "s/^/  $s: /" >> "$log" || true
   fi
   if [ "$rc" -ne 0 ]; then
