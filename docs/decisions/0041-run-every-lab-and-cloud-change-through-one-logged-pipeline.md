@@ -112,12 +112,12 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
 
 ### 2. A self-hosted Forgejo or Woodpecker
 
-- Good: FOSS with no paid edition (Forgejo GPL-3.0, held by a non-profit; Woodpecker Apache-2.0), and its logs stay private.
+- Good: FOSS, and no paid edition was found by the four checks in the evidence (Forgejo GPL-3.0, held by a non-profit; Woodpecker Apache-2.0). Its logs stay private.
 - Bad: one more service to host and back up. Hosted on c1, it couldn't rebuild c1. Woodpecker still needs a forge to sign in with. Kept as the exit path.
 
 ### 3. Semaphore UI, AWX or Atlantis
 
-- Bad: Semaphore UI's free edition lacks TOTP, LDAP and OIDC sign-in, OpenBao secrets storage and log export, which its Pro edition has, so it fails STD-0006 rule 2.
+- Bad: Semaphore UI's open-source build holds back its Pro features: its code has only empty stand-ins for secrets storage in Vault or OpenBao, file-based log export, workflows, project runners and high availability. So it fails STD-0006 rule 2. TOTP, LDAP and OIDC sign-in are not among them: its pricing table lists them as paid, but its MIT code and its docs have all three in the free build.
 - Bad: AWX covers Ansible only and runs on Kubernetes, so on c1 it couldn't rebuild c1.
 - Bad: Atlantis plans and applies from pull-request comments with the cloud keys, which breaks CLAUDE.md rule 5.
 
