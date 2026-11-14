@@ -1,0 +1,131 @@
+---
+# The restore drill, run once by every configure (D-0038 Confirmation 4; the weekly timer runs it too). The
+# drill itself runs on the VM in its own unit (files/openbao-drill.sh). Around it, from the box through the
+# admin AppRole, the live store's Raft peers, leader and term are read before and after, and must not change:
+# the throwaway must never have joined, dialled or unsettled the live store. No secret is printed.
+
+- name: The live store's Raft state, before and after the drill
+  delegate_to: localhost
+  become: false
+  run_once: true
+  tags: [drill]
+  vars:
+    openbao_api: "https://{{ openbao_address }}:{{ openbao_port }}/v1"
+    # Peers (node ID, address, leader, voter), the leader and its term, in one comparable value.
+    openbao_raft_view: >-
+      {{ {'peers': (__config.json.data.config.servers | map('dict2items')
+                    | map('selectattr', 'key', 'in', ['node_id', 'address', 'leader', 'voter'])
+                    | map('items2dict') | list),
+          'leader': __autopilot.json.data.leader,
+          'term': __autopilot.json.data.servers[__autopilot.json.data.leader].last_term} }}
+  block:
+    - name: Drill | An admin token
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/approle/login"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        body_format: json
+        body:
+          role_id: "{{ lookup('ansible.builtin.file', openbao_admin_role_id_src) }}"
+          secret_id: "{{ lookup('ansible.builtin.file', openbao_admin_secret_id_src) }}"
+      register: openbao_drill_login
+      no_log: true
+
+    - name: Drill | Calls below use that token
+      ansible.builtin.set_fact:
+        openbao_drill_headers:
+          X-Vault-Token: "{{ openbao_drill_login.json.auth.client_token }}"
+      no_log: true
+
+    - name: Drill | Raft peers before
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/storage/raft/configuration"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_drill_headers }}"
+      register: openbao_drill_config_before
+
+    - name: Drill | Raft leader and term before
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/storage/raft/autopilot/state"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_drill_headers }}"
+      register: openbao_drill_autopilot_before
+
+    - name: Drill | Keep the view from before
+      ansible.builtin.set_fact:
+        openbao_drill_before: "{{ openbao_raft_view }}"
+      vars:
+        __config: "{{ openbao_drill_config_before }}"
+        __autopilot: "{{ openbao_drill_autopilot_before }}"
+
+    - name: Drill | The drill on the VM, in its own unit (stops on the first failed step)
+      ansible.builtin.systemd_service:
+        name: openbao-drill.service
+        state: started
+      delegate_to: "{{ inventory_hostname }}"
+      become: true
+      changed_when: true
+      # A failed drill is reported below with its step lines, then fails the run.
+      failed_when: false
+
+    - name: Drill | Its step lines (names, results and the snapshot's file name only)
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        journalctl -o cat --no-pager
+        _SYSTEMD_INVOCATION_ID="$(systemctl show -p InvocationID --value openbao-drill.service)"
+        | grep -E '^(openbao-drill|PASS):'
+      args:
+        executable: /bin/bash
+      delegate_to: "{{ inventory_hostname }}"
+      become: true
+      register: openbao_drill_lines
+      changed_when: false
+      failed_when: false
+
+    - name: Drill | Steps
+      ansible.builtin.debug:
+        msg: "{{ openbao_drill_lines.stdout_lines }}"
+
+    - name: Drill | Raft peers after
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/storage/raft/configuration"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_drill_headers }}"
+      register: openbao_drill_config_after
+
+    - name: Drill | Raft leader and term after
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/sys/storage/raft/autopilot/state"
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_drill_headers }}"
+      register: openbao_drill_autopilot_after
+
+    - name: Drill | The drill passed and the live store's peers, leader and term did not change
+      ansible.builtin.assert:
+        that:
+          - openbao_drill_lines.stdout_lines | select('match', '^PASS: restore drill') | list | length == 1
+          - openbao_raft_view == openbao_drill_before
+        fail_msg: >-
+          The restore drill failed (the step lines above name the step) or the live store's Raft state changed:
+          before {{ openbao_drill_before }}, after {{ openbao_raft_view }}.
+        quiet: true
+      vars:
+        __config: "{{ openbao_drill_config_after }}"
+        __autopilot: "{{ openbao_drill_autopilot_after }}"
+
+    - name: PASS line for the live store during the drill
+      ansible.builtin.debug:
+        msg: >-
+          PASS: live store unchanged by the drill: peers, leader {{ openbao_drill_before.leader }}
+          and term {{ openbao_drill_before.term }} the same before and after
+
+  always:
+    - name: Drill | The admin token is revoked
+      ansible.builtin.uri:
+        url: "{{ openbao_api }}/auth/token/revoke-self"
+        method: POST
+        ca_path: "{{ openbao_cacert_dest }}"
+        headers: "{{ openbao_drill_headers }}"
+        status_code: [200, 204]
+      when: openbao_drill_headers is defined
+      no_log: true
