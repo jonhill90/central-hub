@@ -161,9 +161,12 @@ check_identity() {
 }
 
 check_backup() {
-  # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository.
+  # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository, and
+  # the agent box's off-box OPNsense copy against a local restic repository.
   bash "$here/tests/test_backup.sh"
   bash "$here/tests/test_backup_azure_cert.sh"
+  bash "$here/tests/test_opnsense_offbox.sh"
+  bash "$here/tests/test_opnsense_escrow.sh"
 }
 
 check_scripts() {

@@ -6,6 +6,7 @@ mock_provider "azurerm" {
   mock_data "azurerm_client_config" {
     defaults = {
       object_id = "11111111-1111-1111-1111-111111111111"
+      tenant_id = "22222222-2222-2222-2222-222222222222"
     }
   }
   mock_resource "azurerm_storage_account" {
@@ -44,6 +45,7 @@ variables {
   location             = "eastus2"
   storage_account_name = "examplec1backup"
   allowed_ip_addresses = ["203.0.113.10"]
+  opnsense_vault_name  = "example-opnsense-kv"
 }
 
 # No raw keys (owner, 2026-11-08 23:42 UTC): the account refuses shared key and anonymous reads.
@@ -230,4 +232,122 @@ run "reader_app_reads_the_container_only" {
     condition     = azuread_application.reader.display_name != azuread_application.backup.display_name
     error_message = "The reader must be its own app, not the backup app."
   }
+}
+
+# OPNsense's copies from the agent box (agent pick 222): their own container and their own app,
+# whose role is on that container only, while c1's two apps keep roles on the c1 container only.
+# The mocks give every container and service principal the same ID, so these two get their own.
+override_resource {
+  target = azurerm_storage_container.opnsense
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-c1-backup/providers/Microsoft.Storage/storageAccounts/examplec1backup/blobServices/default/containers/opnsense-backup"
+  }
+}
+
+override_resource {
+  target = azuread_service_principal.opnsense
+  values = {
+    object_id = "66666666-6666-6666-6666-666666666666"
+  }
+}
+
+run "opnsense_copies_are_separate" {
+  assert {
+    condition     = azurerm_storage_container.opnsense.name == "opnsense-backup" && azurerm_storage_container.opnsense.container_access_type == "private"
+    error_message = "OPNsense's copies need their own private container."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.opnsense.scope == azurerm_storage_container.opnsense.id && azurerm_role_assignment.opnsense.role_definition_name == "Storage Blob Data Contributor"
+    error_message = "The OPNsense app's role must be Storage Blob Data Contributor on the OPNsense container only."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.opnsense.principal_id == "66666666-6666-6666-6666-666666666666" && azurerm_role_assignment.opnsense.principal_type == "ServicePrincipal"
+    error_message = "The OPNsense container's role must go to the OPNsense app's own service principal."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.backup.scope != azurerm_storage_container.opnsense.id && azurerm_role_assignment.reader.scope != azurerm_storage_container.opnsense.id
+    error_message = "c1's backup and reader apps must hold no role on the OPNsense container."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.opnsense.principal_id != azurerm_role_assignment.backup.principal_id && azurerm_role_assignment.opnsense.principal_id != azurerm_role_assignment.reader.principal_id
+    error_message = "The OPNsense copies need their own identity, not c1's."
+  }
+
+  assert {
+    condition     = azuread_application.opnsense.display_name != azuread_application.backup.display_name && contains(azuread_application.opnsense.owners, "11111111-1111-1111-1111-111111111111") && length(azuread_application.opnsense.owners) == 1 && azuread_application.opnsense.sign_in_audience == "AzureADMyOrg"
+    error_message = "The OPNsense app must be its own single-tenant app, with the identity running tofu as its one owner."
+  }
+
+  assert {
+    condition     = output.opnsense_restic_repository == "azure:opnsense-backup:/opnsense"
+    error_message = "opnsense_restic_repository must be azure:<OPNsense container>:/opnsense."
+  }
+}
+
+run "refuses_one_container_for_both" {
+  command = plan
+
+  variables {
+    opnsense_container_name = "c1-backup"
+  }
+
+  expect_failures = [var.opnsense_container_name]
+}
+
+# The OPNsense copies' restic password vault (pick 222): RBAC only, purge protection, the home address
+# only, and the OPNsense app may set the secret and read metadata, never read a value or delete.
+override_resource {
+  target = azurerm_key_vault.opnsense
+  values = {
+    id        = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-c1-backup/providers/Microsoft.KeyVault/vaults/example-opnsense-kv"
+    vault_uri = "https://example-opnsense-kv.vault.azure.net/"
+  }
+}
+
+override_resource {
+  target = azurerm_resource_group.backup
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-c1-backup"
+  }
+}
+
+run "password_vault_is_set_only_for_the_box" {
+  assert {
+    condition     = azurerm_key_vault.opnsense.rbac_authorization_enabled && azurerm_key_vault.opnsense.purge_protection_enabled && azurerm_key_vault.opnsense.soft_delete_retention_days == 90
+    error_message = "The vault needs RBAC, purge protection and 90 days of soft delete by default."
+  }
+
+  assert {
+    condition     = azurerm_key_vault.opnsense.network_acls[0].default_action == "Deny" && azurerm_key_vault.opnsense.network_acls[0].bypass == "None" && azurerm_key_vault.opnsense.network_acls[0].ip_rules == toset(["203.0.113.10"])
+    error_message = "The vault must answer only the listed addresses, with no bypass."
+  }
+
+  assert {
+    condition     = toset(azurerm_role_definition.opnsense_escrow.permissions[0].data_actions) == toset(["Microsoft.KeyVault/vaults/secrets/setSecret/action", "Microsoft.KeyVault/vaults/secrets/readMetadata/action"]) && length(azurerm_role_definition.opnsense_escrow.permissions[0].actions) == 0
+    error_message = "The escrow role may only set a secret and read secrets' metadata: no getSecret, no delete, no control-plane action."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.opnsense_escrow.scope == azurerm_key_vault.opnsense.id && azurerm_role_assignment.opnsense_escrow.principal_id == "66666666-6666-6666-6666-666666666666"
+    error_message = "The escrow role goes to the OPNsense app only, on the vault only."
+  }
+
+  assert {
+    condition     = output.opnsense_vault_url == "https://example-opnsense-kv.vault.azure.net/"
+    error_message = "opnsense_vault_url must be the vault's URI."
+  }
+}
+
+run "refuses_a_bad_vault_name" {
+  command = plan
+
+  variables {
+    opnsense_vault_name = "1-bad--name-"
+  }
+
+  expect_failures = [var.opnsense_vault_name]
 }

@@ -4,7 +4,7 @@ status: draft
 kind: manual
 trigger: once, when the owner wants a desktop in the lab to sign in to apps by hand; again after the VM is rebuilt
 runner: an agent session on the agent box (the `desktop` wrapper), with two reviewed PRs and two runs of `proxmox-agent-access.sh run` around each apply or destroy
-outcome: one AlmaLinux 10 VM on VNet dev runs Xfce and xrdp, the owner signs in with an RDP client, and the VM holds no lab keys and no agent credentials
+outcome: one AlmaLinux 10 VM on VNet dev runs GNOME with its own remote desktop, the owner signs in with an RDP client, and the VM holds no lab keys and no agent credentials
 needs: the agent box; the agents' Proxmox token with rights on pool `desktop` only while the apply runs (`DESKTOP_ACCESS` in `agent-access.sh`, on then off); template 9001; a free dev address; the private inventory group `desktop`
 private-values: [desktop-name, desktop-address, desktop-rdp-source, desktop-ssh-key]
 files: [hosts/ansible/roles/agent_box/files/desktop.sh, hosts/terraform/home/bootstrap/agent-access.sh, hosts/terraform/home/desktop/, hosts/ansible/roles/desktop/, hosts/ansible/playbooks/desktop.yml]
@@ -14,9 +14,11 @@ superseded-by:
 
 # Set up the owner's desktop VM
 
-**Status:** draft. Written 2026-11-13 from the code in this change (tests offline only). Not run: the package names and the xrdp session below come from the EPEL 10 package lists and have not been installed on a VM yet.
+**Status:** draft. Written 2026-11-13 from the code in this change (tests offline only). Not run to the end. First run 2026-11-14: Xfce and xrdp could not be installed, because EPEL 10 has no Xfce group, no xrdp and no xorgxrdp (measured from its repository metadata), and the AlmaLinux 10 base repositories have no xrdp. The role now uses GNOME and `gnome-remote-desktop`, whose package ships a system (headless) service, all from the base repositories. That the system service shows the GDM login over RDP on this VM is untested until the first run below.
 
-**Isolation, by default (pick 219).** The agents configure the VM once and then keep no way in. The role removes the admin SSH key at the end of its first run, so later changes are a rebuild from teardown. The agents' Proxmox token holds AgentDev on `/pool/desktop` only while `DESKTOP_ACCESS` is on in `agent-access.sh` (the steps below), so after the build no agent can add a cloud-init key, reboot the VM or clone its disk. The second identity, `agentlab@pve`, is kept out by NoAccess on the VM itself, whatever the switch says. firewalld accepts 3389 only from the tailnet connector's address, where the owner's RDP arrives from (see "Where RDP comes from"). The owner sets the password at the Proxmox console, so it passes through no agent.
+**Last tested, 2026-11-14 (VM 400, `desktop configure`):** three runs. Run 1 stopped at a missing Ansible collection path in the wrapper; run 2 at the Xfce group; run 3, after the GNOME role, passed the packages, the RDP certificate and key, `grdctl --system rdp set-tls-cert` and `set-tls-key`, the console script and units, firewalld and the 3389 rule, then reported the admin SSH key refused (`Permission denied (publickey)`) at its last task, the key removal, and a rerun was refused the same way. The end state is as intended (no agent SSH login), but the removal itself was not observed, and why the key was refused is not known. Not yet seen: the console prompts, the RDP handshake and GDM's login over RDP. Those are the owner's first try, at the console and then from his device.
+
+**Isolation, by default (pick 219).** The agents configure the VM once and then keep no way in. The role removes the admin SSH key at the end of its first run, so later changes are a rebuild from teardown. The agents' Proxmox token holds AgentDev on `/pool/desktop` only while `DESKTOP_ACCESS` is on in `agent-access.sh` (the steps below), so after the build no agent can add a cloud-init key, reboot the VM or clone its disk. The second identity, `agentlab@pve`, is kept out by NoAccess on the VM itself, whatever the switch says. firewalld accepts 3389 only from the tailnet connector's address, where the owner's RDP arrives from (see "Where RDP comes from"). The owner sets the login and RDP passwords at the Proxmox console, so they pass through no agent.
 
 The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in to apps by hand (2026-11-13 05:04 UTC). It is a separate VM so what the owner types never sits beside the agents' keys.
 
@@ -25,7 +27,7 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 | Piece | Where |
 |---|---|
 | VM | `hosts/terraform/home/desktop`: one VM with an ID from 400-499 (STD-0001), on VNet dev, cloned from template 9001 into pool `desktop` (so the agents' rights survive a teardown, as pool `dev`'s do) |
-| Software | role `desktop`: EPEL and CRB, the Xfce group, `xrdp`, `xorgxrdp`, Firefox, a login user without sudo and with its password locked, `.xsession` running `startxfce4`, firewalld accepting 3389/tcp from the connector's address only, and the admin SSH key removed at the end |
+| Software | role `desktop`: GNOME (gdm, gnome-shell, Nautilus, Ptyxis), `gnome-remote-desktop` in its system (headless remote login) mode with a certificate made on the VM, Firefox, all from the AlmaLinux 10 base repositories, a login user without sudo and with its password locked, firewalld (installed by the role) accepting 3389/tcp from the connector's address only, and the admin SSH key removed at the end |
 | Playbook | `playbooks/desktop.yml`, hosts group `desktop` |
 | Private values | the VM's name and address in `desktop.json` (the same shape as `home.tfvars.example`), the group in the inventory, `desktop_rdp_source` (the address RDP arrives from: the tailnet connector's own address on the mgmt VLAN, see below) |
 
@@ -51,18 +53,18 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
    why: no agent keeps a way into the VM where the owner will type passwords.
    expect: `agent-access: done (node <node>, desktop access off)`; `pveum acl list` shows no AgentDev entry for `/pool/desktop`. If `agentlab@pve` exists, the script sets NoAccess for it and its token on the desktop VM (found from the pool's members, no ID in the repo), checks with `pveum` that the token holds no privilege there, and stops if it does. That ACL drops when the VM is destroyed, so run the script again after every `desktop apply`, not only at the end.
 
-5. The owner opens the VM's console in Proxmox (VM, Console). It asks "Set the password for owner."; the owner types a password twice. No one else sees it.
-   expect: the prompt returns to a login; `/var/lib/desktop/password-set` exists and xrdp starts.
+5. The owner opens the VM's console in Proxmox (VM, Console). It asks for two different passwords, each typed twice: the login password for `owner`, then the RDP password. No one else sees them, and neither is on a command line or in a log.
+   expect: the prompt returns to a login; `/var/lib/desktop/password-set` exists and the remote desktop starts. The RDP client asks for `owner` and the RDP password, then GDM's login screen asks for the login password. The RDP password is stored on the VM's disk (there is no TPM), so a copy of it is in the VM's backups; it opens only the RDP layer, which is why it must differ from the login password, and GDM still asks for the login password.
 
 6. The owner connects with an RDP client to the VM's address, port 3389, as user `owner`, over the tailnet (the owner's device on the tailnet, with the tailnet connector's route to the dev range on).
-   expect: an Xfce session.
+   expect: the RDP login, then GDM's login screen, then a GNOME session. Untested until the first run.
 
 ## If it fails
 
-- `dnf` cannot find the `Xfce` group or `xrdp`: EPEL 10 or CRB is not enabled, or the package set changed. The task `desktop | EPEL and CRB are on` and the next one name the step.
+- `dnf` cannot find a package: the AlmaLinux 10 package set changed. The task `desktop | The desktop packages` names the step.
 - The console shows a login prompt and never asks for the password: `desktop-set-password.service` did not run (the marker exists already, or getty took tty1). Check `systemctl status desktop-set-password` from the console as root, which is locked; rebuild the VM from teardown instead.
-- The RDP client is refused: the owner has not set the password yet (xrdp waits for the marker), or the address the VM sees is not `desktop_rdp_source` (the connector's address, not the owner's device).
-- The RDP client connects and drops to a blank screen: `~owner/.xsession` or SELinux. Check `journalctl -u xrdp-sesman` on the VM.
+- The RDP client is refused: the owner has not set the password yet (the remote desktop waits for the marker), or the address the VM sees is not `desktop_rdp_source` (the connector's address, not the owner's device).
+- The RDP client connects and drops, or shows no login screen: the system remote desktop daemon or GDM. Check `journalctl -u gnome-remote-desktop -u gdm` on the VM (from the Proxmox console, as the owner).
 
 ## Exit
 

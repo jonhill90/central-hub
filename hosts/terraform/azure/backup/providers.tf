@@ -5,11 +5,18 @@
 #
 # storage_use_azuread: the account allows no shared key, so any storage data call must use Entra
 # ID. resource_providers_to_register: from azurerm 5.0 the provider registers nothing by itself,
-# and a new subscription has Microsoft.Storage unregistered (measured 2026-11-09).
+# and a new subscription has Microsoft.Storage unregistered (measured 2026-11-09). Microsoft.KeyVault
+# for the OPNsense copies' password vault (pick 222). key_vault: purge protection is on, so a destroy
+# leaves the vault soft-deleted and never tries to purge it; a vault of the same name is recovered.
 provider "azurerm" {
-  features {}
+  features {
+    key_vault {
+      purge_soft_delete_on_destroy    = false
+      recover_soft_deleted_key_vaults = true
+    }
+  }
 
   storage_use_azuread             = true
   resource_provider_registrations = "none"
-  resource_providers_to_register  = ["Microsoft.Storage"]
+  resource_providers_to_register  = ["Microsoft.Storage", "Microsoft.KeyVault"]
 }

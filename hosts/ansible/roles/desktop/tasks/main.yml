@@ -1,24 +1,16 @@
 ---
-# An Xfce desktop with xrdp on AlmaLinux 10 (agent pick, hosts/AGENT-PICKS.md, pick 219). The VM holds no
-# lab keys and no agent credentials. The owner sets the login password at the Proxmox console, so it
-# passes through no agent, no transcript and no keys folder. RDP is reachable only from one address.
+# A GNOME desktop with GNOME's own remote desktop (RDP) on an AlmaLinux 10 VM (agent pick, hosts/AGENT-PICKS.md,
+# pick 219). Every package is from the AlmaLinux 10 base repositories: EPEL 10 has no Xfce and no xrdp
+# (measured 2026-11-14), so nothing from EPEL is used. The VM holds no lab keys and no agent credentials.
+# The owner sets the login and RDP password at the Proxmox console, so it passes through no agent, no
+# transcript and no keys folder. RDP is reachable only from one address.
 - name: desktop | The private values are set
   ansible.builtin.assert:
     that:
       - desktop_rdp_source | length > 0
       - desktop_admin_user | length > 0
-    fail_msg: set desktop_rdp_source (the owner's one address) and desktop_admin_user in the inventory
+    fail_msg: set desktop_rdp_source (the tailnet connector's address) and desktop_admin_user in the inventory
     quiet: true
-
-- name: desktop | EPEL is on
-  ansible.builtin.dnf:
-    name: epel-release
-    state: present
-
-- name: desktop | CRB is enabled
-  community.general.dnf_config_manager:
-    name: crb
-    state: enabled
 
 - name: desktop | The desktop packages
   ansible.builtin.dnf:
@@ -32,14 +24,41 @@
     shell: /bin/bash
     password_lock: true
 
-- name: desktop | The session xrdp starts is Xfce
-  ansible.builtin.copy:
-    dest: "/home/{{ desktop_user }}/.xsession"
-    content: |
-      exec startxfce4
-    owner: "{{ desktop_user }}"
-    group: "{{ desktop_user }}"
-    mode: "0755"
+- name: desktop | The VM boots to the login screen
+  ansible.builtin.systemd_service:
+    name: gdm.service
+    enabled: true
+
+- name: desktop | The default target is graphical
+  ansible.builtin.command: systemctl set-default graphical.target
+  register: desktop_default_target
+  changed_when: "'Created symlink' in desktop_default_target.stderr or 'Created symlink' in desktop_default_target.stdout"
+
+# The RDP certificate is made on the VM and its key never leaves it. The daemon's own account reads it.
+- name: desktop | The RDP certificate and key are made once
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -newkey rsa:3072 -nodes -days 3650 -subj "/CN={{ ansible_facts['hostname'] }}"
+      -keyout {{ desktop_rdp_tls_dir }}/rdp-tls.key -out {{ desktop_rdp_tls_dir }}/rdp-tls.crt
+    creates: "{{ desktop_rdp_tls_dir }}/rdp-tls.key"
+
+- name: desktop | The RDP key is the daemon's
+  ansible.builtin.file:
+    path: "{{ desktop_rdp_tls_dir }}/{{ item.name }}"
+    owner: gnome-remote-desktop
+    group: gnome-remote-desktop
+    mode: "{{ item.mode }}"
+  loop:
+    - {name: rdp-tls.key, mode: "0600"}
+    - {name: rdp-tls.crt, mode: "0644"}
+
+- name: desktop | The system RDP daemon uses that certificate
+  ansible.builtin.command:
+    cmd: "grdctl --system rdp {{ item }}"
+  loop:
+    - "set-tls-cert {{ desktop_rdp_tls_dir }}/rdp-tls.crt"
+    - "set-tls-key {{ desktop_rdp_tls_dir }}/rdp-tls.key"
+  changed_when: true
 
 - name: desktop | Folder for the password marker
   ansible.builtin.file:
@@ -47,28 +66,34 @@
     state: directory
     mode: "0755"
 
+- name: desktop | The console script that sets the password
+  ansible.builtin.template:
+    src: desktop-set-password.sh.j2
+    dest: /usr/local/sbin/desktop-set-password.sh
+    mode: "0700"
+
 - name: desktop | The console asks the owner for the password once
   ansible.builtin.template:
     src: desktop-set-password.service.j2
     dest: /etc/systemd/system/desktop-set-password.service
     mode: "0644"
 
-- name: desktop | Folder for xrdp's drop-in
+- name: desktop | Folder for the remote desktop's drop-in
   ansible.builtin.file:
-    path: /etc/systemd/system/xrdp.service.d
+    path: /etc/systemd/system/gnome-remote-desktop.service.d
     state: directory
     mode: "0755"
 
-- name: desktop | xrdp waits for the marker
+- name: desktop | The remote desktop waits for the marker
   ansible.builtin.template:
-    src: xrdp-wait-for-password.conf.j2
-    dest: /etc/systemd/system/xrdp.service.d/10-wait-for-password.conf
+    src: rdp-wait-for-password.conf.j2
+    dest: /etc/systemd/system/gnome-remote-desktop.service.d/10-wait-for-password.conf
     mode: "0644"
 
-- name: desktop | The path unit starts xrdp when the marker appears
+- name: desktop | The path unit starts the remote desktop when the marker appears
   ansible.builtin.template:
-    src: desktop-xrdp.path.j2
-    dest: /etc/systemd/system/desktop-xrdp.path
+    src: desktop-rdp.path.j2
+    dest: /etc/systemd/system/desktop-rdp.path
     mode: "0644"
 
 - name: desktop | The units are enabled
@@ -78,10 +103,16 @@
     daemon_reload: true
   loop:
     - desktop-set-password.service
-    - desktop-xrdp.path
-    - xrdp.service
+    - desktop-rdp.path
+    - gnome-remote-desktop.service
 
-- name: desktop | firewalld accepts RDP from the owner's address only
+- name: desktop | firewalld runs
+  ansible.builtin.systemd_service:
+    name: firewalld.service
+    enabled: true
+    state: started
+
+- name: desktop | firewalld accepts RDP from the connector's address only
   ansible.posix.firewalld:
     rich_rule: 'rule family="ipv4" source address="{{ desktop_rdp_source }}" port port="{{ desktop_rdp_port }}" protocol="tcp" accept'
     permanent: true

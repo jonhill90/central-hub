@@ -58,6 +58,6 @@ variable "desktop" {
 
   validation {
     condition     = var.desktop.memory_mb >= 4096 && var.desktop.disk_gb >= 30
-    error_message = "The desktop needs at least 4 GiB of RAM and 30 GB of disk (Xfce, a browser and xrdp)."
+    error_message = "The desktop needs at least 4 GiB of RAM and 30 GB of disk (GNOME, a browser and the remote desktop)."
   }
 }
