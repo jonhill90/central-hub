@@ -250,7 +250,12 @@ run_stage() {
     # The data disks only: Argo CD installs the provisioner and StorageClass (move-local-path-to-argo-cd.md).
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
     gateway) ap playbooks/k8s-gateway.yml ;;
-    gitops) ap playbooks/k8s-gitops.yml --tags install,source ;;
+    # A dev run keeps the Gateway's HTTPS on in the root Application on every run: the dev inventory leaves it
+    # off, and flipping it off here and on again in `dev-ca` left the gateway and jellyfin apps OutOfSync for
+    # 18 minutes on a re-run (measured on dev, run 8, 2026-11-14), so `apps` never finished.
+    gitops)
+      if [ "$ENV_NAME" = dev ]; then ap playbooks/k8s-gitops.yml --tags install,source -e k8s_gitops_source_gateway_https=true
+      else ap playbooks/k8s-gitops.yml --tags install,source; fi ;;
     # Seeds namespace secret-source from SECRET_SOURCE_FILE (docs/runbooks/seed-secret-source.md) after
     # Argo CD made it and before apps wait on the ExternalSecrets that read it. Unset: skipped.
     secrets)

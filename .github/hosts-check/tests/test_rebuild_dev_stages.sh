@@ -54,6 +54,9 @@ check "identity-keycloak with no store writes no handoff" "$out" "k8s_identity_o
 out=$(OPENBAO_ADDR=https://192.0.2.10 env_dir=/env run dev identity-keycloak "$t/ok")
 check "identity-keycloak with a store names it for the openbao client" "$out" '{"k8s_identity_openbao_hosts": ["192.0.2.10"]}' ""
 check "identity-keycloak with a store writes the handoff in the env folder" "$out" "k8s_identity_oidc_handoff_file=/env/openbao-oidc.json" ""
+# The gitops stage keeps the Gateway's HTTPS on in dev and leaves prod's command as it was.
+out=$(run dev gitops "$t/ok"); check "dev gitops keeps the Gateway's HTTPS on" "$out" "k8s_gitops_source_gateway_https=true" ""
+out=$(run prod gitops "$t/ok"); check "prod gitops is unchanged" "$out" "AP playbooks/k8s-gitops.yml --tags install,source" "gateway_https"
 # The default list stays a default: dev appends the two stages only when no --only is given.
 if grep -q 'ENV_NAME" = dev \] && \[ -z "\$only" \]; then stages="\$stages dev-ca identity-keycloak"' "$script"; then
   echo "ok   a dev run without --only appends dev-ca and identity-keycloak"
