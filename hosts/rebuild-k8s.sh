@@ -21,6 +21,11 @@
 #   RESTORE_CHECK_HOOK  the command the `checks` stage runs to prove the restore; required with
 #                 RESTORE_HOOK
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
+#   OPENBAO_ADDR  optional: the secrets store, https://<name or address> with no path (proposed
+#                 D-0038). Set: stage `openbao` registers the cluster's new service-account key with
+#                 it. Unset: that stage is skipped.
+#   OPENBAO_CACERT, OPENBAO_ROLE_ID_FILE, OPENBAO_SECRET_ID_FILE  with OPENBAO_ADDR: the store's
+#                 certificate and the AppRole rebuild's two ID files on the controller
 #
 # No kubeconfig leaves the cluster: every kubectl call runs on the first control-plane node through
 # Ansible, with that node's /etc/kubernetes/admin.conf (kc below). A KUBECONFIG in rebuild.env is
@@ -33,8 +38,9 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 # gateway runs after apps: with k8s_gateway_by_argocd true, Argo CD makes the Gateway, and the
 # playbook's "programmed" wait and smoke test then check it. restore runs after storage made the data
 # disk and before gitops: once Argo CD reads the repo it syncs every app, and local-path then finds
-# each volume's folder already there (TASK-0240, agent pick 205).
-default_stages="vms cluster storage restore gitops secrets apps gateway certs identity ui checks"
+# each volume's folder already there (TASK-0240, agent pick 205). openbao runs before apps, whose
+# ExternalSecrets wait needs External Secrets to sign in at the store with the new cluster's key.
+default_stages="vms cluster storage restore gitops secrets openbao apps gateway certs identity ui checks"
 
 die() { echo "rebuild: $*" >&2; exit 1; }
 
@@ -197,6 +203,15 @@ run_stage() {
       if [ -z "${SECRET_SOURCE_FILE:-}" ]; then echo "no SECRET_SOURCE_FILE set: secrets skipped"; return 0; fi
       [ -s "$SECRET_SOURCE_FILE" ] || { echo "SECRET_SOURCE_FILE is missing or empty"; return 1; }
       ap playbooks/k8s-secret-source.yml -e "secret_source_file=$SECRET_SOURCE_FILE" ;;
+    # Registers the cluster's service-account key with the secrets store (playbooks/k8s-openbao-auth.yml,
+    # docs/runbooks/set-up-the-secrets-store.md) before apps wait on ExternalSecrets. Unset: skipped.
+    openbao)
+      if [ -z "${OPENBAO_ADDR:-}" ]; then echo "no OPENBAO_ADDR set: openbao skipped"; return 0; fi
+      for v in OPENBAO_CACERT OPENBAO_ROLE_ID_FILE OPENBAO_SECRET_ID_FILE; do
+        [ -s "${!v:-}" ] || { echo "$v is not set, or its file is missing or empty"; return 1; }
+      done
+      ap playbooks/k8s-openbao-auth.yml -e "openbao_url=$OPENBAO_ADDR" -e "openbao_cacert=$OPENBAO_CACERT" \
+        -e "openbao_rebuild_role_id_file=$OPENBAO_ROLE_ID_FILE" -e "openbao_rebuild_secret_id_file=$OPENBAO_SECRET_ID_FILE" ;;
     # The ExternalSecret wait is dev only: it annotates every ExternalSecret, which a prod run doesn't need.
     apps) wait_apps && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
     certs) ap playbooks/k8s-certs.yml ;;
@@ -235,7 +250,7 @@ for s in $stages; do
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
   # short log too, so the run's worklog can quote it.
-  if [ "$s" = restore ] || [ "$s" = checks ]; then
+  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ]; then
     sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
   fi

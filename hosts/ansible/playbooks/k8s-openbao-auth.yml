@@ -1,0 +1,81 @@
+---
+# Register the cluster's service-account signing key with the secrets store (proposed D-0038), the
+# rebuild's `openbao` stage (hosts/rebuild-k8s.sh). A rebuilt cluster signs its tokens with a new
+# key, so External Secrets' sign-in at the store's jwt-c1 login fails until this runs. The store side
+# (the login, its role, the AppRole rebuild) is the openbao role's: docs/runbooks/set-up-the-secrets-store.md.
+# Inputs, from rebuild.env through -e: openbao_url (https://<store>), openbao_cacert (the store's
+# certificate on the controller), openbao_rebuild_role_id_file and openbao_rebuild_secret_id_file
+# (the AppRole rebuild's IDs on the controller). The secret ID is never printed.
+- name: Register the cluster's signing key with the secrets store
+  hosts: k8s_control_plane[0]
+  become: true
+  gather_facts: false
+  vars:
+    openbao_jwt_mount: jwt-c1
+  tasks:
+    - name: The inputs are set
+      ansible.builtin.assert:
+        that:
+          - openbao_url is defined and openbao_url is match('^https://[^/]+$')
+          - openbao_cacert is defined and openbao_cacert | length > 0
+          - openbao_rebuild_role_id_file is defined and openbao_rebuild_role_id_file | length > 0
+          - openbao_rebuild_secret_id_file is defined and openbao_rebuild_secret_id_file | length > 0
+        fail_msg: "Set openbao_url (https://<store>, no path), openbao_cacert and the AppRole rebuild's two ID files."
+        quiet: true
+
+    # kubeadm signs service-account tokens with sa.key; sa.pub is its public half, not a secret.
+    - name: The cluster's service-account public key
+      ansible.builtin.slurp:
+        src: /etc/kubernetes/pki/sa.pub
+      register: openbao_sa_pub
+
+    - name: The cluster's token issuer
+      ansible.builtin.command: kubectl --kubeconfig /etc/kubernetes/admin.conf get --raw /.well-known/openid-configuration
+      register: openbao_oidc
+      changed_when: false
+
+    - name: Write the key through the AppRole rebuild, from the controller
+      delegate_to: localhost
+      become: false
+      block:
+        - name: A token for the AppRole rebuild
+          ansible.builtin.uri:
+            url: "{{ openbao_url }}/v1/auth/approle/login"
+            method: POST
+            ca_path: "{{ openbao_cacert }}"
+            body_format: json
+            body:
+              role_id: "{{ lookup('ansible.builtin.file', openbao_rebuild_role_id_file) }}"
+              secret_id: "{{ lookup('ansible.builtin.file', openbao_rebuild_secret_id_file) }}"
+          register: openbao_rebuild_login
+          no_log: true
+
+        - name: The key and issuer in the login config of {{ openbao_jwt_mount }}
+          ansible.builtin.uri:
+            url: "{{ openbao_url }}/v1/auth/{{ openbao_jwt_mount }}/config"
+            method: POST
+            ca_path: "{{ openbao_cacert }}"
+            headers:
+              X-Vault-Token: "{{ openbao_rebuild_login.json.auth.client_token }}"
+            body_format: json
+            body:
+              jwt_validation_pubkeys: ["{{ openbao_sa_pub.content | b64decode | trim }}"]
+              bound_issuer: "{{ (openbao_oidc.stdout | from_json).issuer }}"
+            status_code: [200, 204]
+          changed_when: true
+          no_log: true
+
+        - name: PASS line for the run's log
+          ansible.builtin.debug:
+            msg: "PASS: the cluster's signing key and issuer {{ (openbao_oidc.stdout | from_json).issuer }} are in auth/{{ openbao_jwt_mount }}/config"
+      always:
+        - name: The token is revoked
+          ansible.builtin.uri:
+            url: "{{ openbao_url }}/v1/auth/token/revoke-self"
+            method: POST
+            ca_path: "{{ openbao_cacert }}"
+            headers:
+              X-Vault-Token: "{{ openbao_rebuild_login.json.auth.client_token }}"
+            status_code: [200, 204]
+          when: openbao_rebuild_login.json.auth.client_token is defined
+          no_log: true
