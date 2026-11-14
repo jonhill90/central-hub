@@ -24,13 +24,13 @@ superseded-by:
   - The static seal, its key at `/etc/openbao/seal/<id>.key`, readable only by user `openbao`.
   - A listener on 443 with TLS. On dev the role makes a self-signed certificate for the name, the address and 127.0.0.1, and copies its public half back to the box.
   - Raft storage in `/opt/openbao/data`.
-  - On the first start only, an `initialize` block: the file audit device, KV v2 at `kv/`, AppRole, policies `admin` and `snapshot`, and their two roles. The role then rewrites the configuration without it and deletes the ID files it read.
+  - On the first start only, an `initialize` block: the file audit device, KV v2 at `kv/`, AppRole, policies `admin` and `snapshot`, and their two roles. The role restarts OpenBao only before that start, never during it. Once the store is healthy it takes one snapshot through the `snapshot` AppRole, whose secret ID is the block's last request, to prove the block finished. Only then does it rewrite the configuration without the block and delete the ID files it read.
   - Timer `openbao-snapshot.timer`: an hourly Raft snapshot in `/var/lib/openbao-snapshots`, keeping 48.
 
 ## Before you start
 
 - The agent box needs a `secrets-store` wrapper, the same shape as `desktop`: `plan`, `apply`, `configure`, `destroy`, run as user `keys`. Adding a wrapper changes the box's limits, so it waits for the owner's typed go (D-0036). It is a separate PR. Until it exists, nothing in this runbook runs.
-- The wrapper makes, once, in `/etc/agent-keys/dev/` (user `keys`, 0600): the 32-byte seal key (`openssl rand -out <file> 32`), the admin AppRole's role ID and secret ID (`openssl rand -hex 24` each), and the VM's SSH key. None is ever printed.
+- The wrapper makes, once, in `/etc/agent-keys/dev/` (user `keys`, 0600): the 32-byte seal key (`openssl rand -out <file> 32`), the admin AppRole's role ID and secret ID (`openssl rand -hex 24` each, with no trailing newline, because the first start reads each file whole), and the VM's SSH key. None is ever printed.
 - The private inventory group `secrets_store` holds the VM's name, VM ID, address, cores, memory and disk, and the box's own address.
 
 ## Steps

@@ -190,7 +190,8 @@
         set -euo pipefail
         umask 077
         for f in role-id secret-id; do
-          [ -s /etc/openbao/snapshot/$f ] || openssl rand -hex 24 > /etc/openbao/snapshot/$f
+          # No trailing newline: the init file source and the CLI @file both read the whole file.
+          [ -s /etc/openbao/snapshot/$f ] || openssl rand -hex 24 | tr -d '\n' > /etc/openbao/snapshot/$f
         done
         install -o openbao -g openbao -m 0400 /etc/openbao/snapshot/role-id {{ openbao_config_dir }}/init/snapshot-role-id
         install -o openbao -g openbao -m 0400 /etc/openbao/snapshot/secret-id {{ openbao_config_dir }}/init/snapshot-secret-id
@@ -218,6 +219,11 @@
     state: enabled
   tags: [config]
 
+# Restart before the start, never after it: a restart in the middle of the first start would leave
+# storage written and the initialize requests half done, and they never run again.
+- name: Apply a changed configuration before starting
+  ansible.builtin.meta: flush_handlers
+
 - name: OpenBao runs now and at boot
   ansible.builtin.systemd_service:
     name: openbao
@@ -225,9 +231,6 @@
     state: started
     daemon_reload: true
   tags: [config]
-
-- name: Apply a changed configuration before checking
-  ansible.builtin.meta: flush_handlers
 
 - name: OpenBao is up, initialized and unsealed
   ansible.builtin.uri:
@@ -239,6 +242,32 @@
   retries: 30
   delay: 2
   until: openbao_health.status == 200
+  tags: [config, check]
+
+- name: The snapshot script
+  ansible.builtin.copy:
+    src: openbao-snapshot.sh
+    dest: /usr/local/libexec/openbao-snapshot.sh
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [config, snapshot]
+
+# Health says initialized and unsealed, not that every initialize request ran. The snapshot
+# AppRole's secret ID is the last request, so one snapshot through it proves the first start
+# finished. Run on every apply, so a run that stopped here never deletes the files unproven.
+- name: The first start finished, proved by one snapshot through the snapshot AppRole
+  ansible.builtin.command:
+    argv:
+      - /usr/local/libexec/openbao-snapshot.sh
+      - "{{ openbao_port }}"
+      - "{{ openbao_snapshot_dir }}"
+      - "{{ openbao_snapshot_keep }}"
+  register: openbao_first_snapshot
+  retries: 15
+  delay: 2
+  until: openbao_first_snapshot.rc == 0
+  changed_when: true
   tags: [config, check]
 
 # The first start is done: take its block and its ID files away, so neither the admin's secret ID
@@ -261,15 +290,6 @@
     state: absent
   loop: [admin-role-id, admin-secret-id, snapshot-role-id, snapshot-secret-id]
   tags: [config]
-
-- name: The snapshot script
-  ansible.builtin.copy:
-    src: openbao-snapshot.sh
-    dest: /usr/local/libexec/openbao-snapshot.sh
-    owner: root
-    group: root
-    mode: "0755"
-  tags: [snapshot]
 
 - name: The snapshot timer's units
   ansible.builtin.template:
