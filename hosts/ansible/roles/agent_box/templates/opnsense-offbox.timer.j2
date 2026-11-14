@@ -1,0 +1,11 @@
+# Managed by the agent_box role (central-hub hosts/ansible). A missed run (box off) runs at the next boot.
+[Unit]
+Description=Daily off-box copy of the OPNsense configuration backups
+
+[Timer]
+OnCalendar={{ agent_box_opnsense_offbox_daily }}
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

@@ -77,7 +77,7 @@ A1. (Agent, on the Mac) Make the storage and the app:
 
    why: everything about the account and the app is code, so a rebuild makes it the same way. All of it is management-plane work, which the network rule doesn't block, and the state holds no secret: no account key is read, and the app's certificates are not in tofu.
    ※ [hosts/terraform/README.md](../../hosts/terraform/README.md); azurerm `azurerm_storage_account` 5.11.0, "shared_access_key_enabled" and "network_rules"; azuread 3.10.0, `azuread_application`
-   expect: outputs `storage_account_name`, `restic_repository` (`azure:c1-backup:/c1`), `storage_account_id`, `client_id`, `app_object_id`, `tenant_id`, and `reader_client_id` and `reader_app_object_id` for dev's read-only app ([below](#dev-reads-a-copy)). The plan for a folder applied before 2026-11-09's change also destroys `azurerm_role_assignment.sas_signer`. That ends the old SAS on the nodes at once, so run step A3 straight after.
+   expect: outputs `storage_account_name`, `restic_repository` (`azure:c1-backup:/c1`), `storage_account_id`, `client_id`, `app_object_id`, `tenant_id`, and `reader_client_id` and `reader_app_object_id` for dev's read-only app ([below](#dev-reads-a-copy)), and the three `opnsense_` outputs for the agent box's OPNsense copies, in their own container ([Copy the OPNsense configuration backups off the agent box](copy-opnsense-backup-off-box.md)). The plan for a folder applied before 2026-11-09's change also destroys `azurerm_role_assignment.sas_signer`. That ends the old SAS on the nodes at once, so run step A3 straight after.
 
 A2. Nothing to do by hand, but two grants make step A1 work:
 

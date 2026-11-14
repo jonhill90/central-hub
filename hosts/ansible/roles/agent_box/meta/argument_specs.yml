@@ -57,6 +57,19 @@ argument_specs:
           Private. host (OPNsense's name or address) and keep (copies kept, 3 to 60, default 14) for the daily
           configuration backup on the box. Empty does nothing.
       agent_box_opnsense_backup_daily: {type: str, default: "*-*-* 14:30:00 UTC", description: "systemd OnCalendar for the daily OPNsense backup."}
+      agent_box_opnsense_offbox:
+        type: dict
+        default: {}
+        description: >-
+          Private. account, client_id, tenant_id, app_object_id and vault_url (tofu outputs of hosts/terraform/azure/backup)
+          and, optionally, repository, vault_secret, keep_daily (default 30) and keep_monthly (default 12) for the daily
+          off-box copy of the OPNsense backups (pick 222). Needs agent_box_opnsense_backup. Empty does nothing.
+      agent_box_opnsense_offbox_daily: {type: str, default: "*-*-* 15:00:00 UTC", description: "systemd OnCalendar for the daily off-box copy."}
+      agent_box_opnsense_offbox_cert_days: {type: int, default: 90, description: "Days the box's certificate for the copy app is valid."}
+      agent_box_opnsense_offbox_cert_renew_days: {type: int, default: 30, description: "Days left when the daily run rolls that certificate."}
+      agent_box_az: {type: str, default: az, description: "The Azure CLI on the controller, signed in as agent-azure, for the first certificate upload."}
+      agent_box_restic_version: {type: str, description: "restic version for the off-box copy."}
+      agent_box_restic_sha256: {type: str, description: "SHA-256 of that version's linux_amd64 .bz2."}
       agent_box_lifeline_interface:
         type: str
         default: ""
