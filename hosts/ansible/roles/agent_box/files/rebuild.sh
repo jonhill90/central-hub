@@ -5,8 +5,8 @@
 # token, the node SSH key or the dev inventory. Installed by the agent_box role; root owns it.
 #   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|identity|log|diag
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
-# identity: only the stage identity-keycloak (k8s-identity.yml --tags secrets,keycloak,signin: Keycloak and its
-# realm, then the owner's sign-in proof, step names and HTTP codes only) on the existing dev
+# identity: only the stage identity-keycloak (k8s-identity.yml --tags all,signin: the whole identity role, then the
+# dev admin's sign-in proof, step names and HTTP codes only) on the existing dev
 # cluster. Same dev guard, lock, checkout and log as the other runs; `log` shows it.
 # Dev only: the env file below fixes ENV_NAME=dev and the dev VM range 250-257, and rebuild-k8s.sh
 # refuses a tfvars whose VM IDs fall outside it or whose node_vnet isn't "dev". Only code on main
@@ -186,6 +186,12 @@ v["k8s_certs_smoke_root_file"] = known.rsplit("/", 1)[0] + "/lab-root-ca.crt"
 v["k8s_backup_env_file"] = keys + "/c1-backup.env"
 v["k8s_backup_azure_fixed_cert_file"] = keys + "/azure-reader.env"
 v["k8s_control_plane_encryption_key_file"] = keys + "/rebuild-encryption.key"
+# Dev's sign-in realm has one admin, a test account, never the owner's name from the Mac's inventory; its
+# password and TOTP seed are random values the role makes in the box's own identity.env (HOME is the box's
+# work folder, not the controller's), so dev identity reads no prod file.
+v["k8s_identity_owner_username"] = "dev-admin"
+v["k8s_identity_owner_email"] = ""
+v["k8s_identity_extra_users"] = []
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
 )" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys"

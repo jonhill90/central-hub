@@ -201,10 +201,11 @@ run_stage() {
     apps) wait_apps && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
     certs) ap playbooks/k8s-certs.yml ;;
     identity) ap playbooks/k8s-identity.yml ;;
-    # Only the identity secrets and Keycloak with its realm, then the sign-in proof (the owner's password and
-    # code through the browser flow; step names and HTTP codes only), for a re-run on a cluster that already
-    # has the rest (tags secrets,keycloak,signin; the always-tagged steps run too). Not in the default stage list.
-    identity-keycloak) ap playbooks/k8s-identity.yml --tags secrets,keycloak,signin ;;
+    # The whole identity role (operator, secrets, database, Keycloak and its realm, route), then the sign-in
+    # proof (the owner's password and code through the browser flow; step names and HTTP codes only). The
+    # operator and database come first on a rebuilt dev cluster, which leaves this stage out of its list.
+    # Tags all,signin: `signin` is also tagged never, so no other run executes it. Not in the default stage list.
+    identity-keycloak) ap playbooks/k8s-identity.yml --tags all,signin ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.
