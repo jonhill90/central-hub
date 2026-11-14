@@ -8,7 +8,7 @@ outcome: VM 258 has a second NIC on the Proxmox host's own subnet, so the box ke
 needs: the filled-in private tfvars for hosts/terraform/home/jumpbox; the owner's typed go (this changes the box's network); the Proxmox host firewall allowing the box's new address to 8006
 private-values: [lifeline-bridge, lifeline-address, opnsense-host, lifeline-interface]
 files: [hosts/terraform/home/jumpbox/, hosts/ansible/roles/agent_box/tasks/lifeline.yml, hosts/ansible/roles/agent_box/files/opnsense-backup.sh, hosts/ansible/bootstrap/opnsense-backup-user.sh, hosts/ansible/bootstrap/opnsense-backup-user.php]
-last-tested: not yet run
+last-tested: "2026-11-14, on VM 258, as reported by the Mac session: the role applied at 9d51957 (ok=116 changed=14 failed=0), then a reboot at 06:05:14 UTC brought both lifeline units back active (lifeline-up.service exists from #268 on, so the filter-gated setup was the one tested), eth1 came up only with the lifeline nftables table, and the Proxmox API answered 200 over eth1; step 4's box-backup key ended the 403, and step 5's first backup at 06:11:26 UTC kept config-20261114T061126Z.xml (112,112 bytes, valid XML). Not yet run: the case where the filter unit fails (the primary link and the tailnet must stay up), and a replay on a fresh machine"
 superseded-by:
 ---
 
