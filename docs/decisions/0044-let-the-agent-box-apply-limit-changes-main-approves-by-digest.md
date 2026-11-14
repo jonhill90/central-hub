@@ -29,7 +29,7 @@ On 2026-11-14 at 07:47:50 UTC the owner said he will not type go lines anymore, 
 
 ## Decision Drivers
 
-- **The owner's words.** He won't type go lines (07:47:50 UTC). Agents don't ask him to approve PRs, and his own list of what still needs him is firewall and tailnet, deletes and secrets (07:42 to 07:44 UTC, D-0042).
+- **The owner's words.** He won't type go lines (07:47:50 UTC), and agents don't ask him to approve PRs (07:42 to 07:44 UTC). At 07:43:25 UTC he pointed to his earlier rules without listing them; D-0042 reads them as firewall and tailnet (D-0036 rule 8), deletes and secrets (agent picks).
 - **The owner's earlier answer that an agent can't loosen its own limits** (his tap of 2026-11-14 02:26 UTC on D-0036's card). D-0042 rule 6 keeps his tap for limit changes.
 - **What the box can check, it checks.** It can check commits and bytes. It can't read chat messages or decision cards.
 - **Deterministic** (the owner's ranking of 2026-11-11).
