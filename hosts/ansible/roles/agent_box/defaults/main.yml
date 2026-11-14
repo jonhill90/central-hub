@@ -29,7 +29,7 @@ agent_box_wrappers:
     args: [plan, apply, configure, destroy]
   # The lab's secrets store, OpenBao, on dev (docs/runbooks/set-up-the-secrets-store.md, proposed D-0038).
   - name: secrets-store
-    args: [plan, apply, configure, recovery, status, snapshot, restore, destroy]
+    args: [plan, apply, configure, recovery, status, snapshot, restore, restore-rebuilt, destroy]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself. Sessions get the
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge
