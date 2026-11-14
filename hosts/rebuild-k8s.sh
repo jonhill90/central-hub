@@ -195,9 +195,10 @@ preflight_clean() {
   local secret text
   # shellcheck source=/dev/null
   secret=$(set -a; . "$TOFU_ENV"; printf '%s' "${PROXMOX_VE_API_TOKEN##*=}")
-  text=$(printf '%s' "$1" | tr -d '\n' | cut -c1-200)
+  # Redact first and cut after, so a secret that crosses the cut can't leave a partial prefix.
+  text=$(printf '%s' "$1" | tr -d '\n')
   [ -z "$secret" ] || text=${text//"$secret"/***}
-  printf '%s' "$text"
+  printf '%s' "${text:0:200}"
 }
 
 # The guests the token can see (VM ID, type, status, maxmem and mem in MiB, name), one line each, so a refusal

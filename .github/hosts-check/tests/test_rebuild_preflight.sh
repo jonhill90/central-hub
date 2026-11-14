@@ -17,7 +17,7 @@ case "$*" in *cluster/resources*)
   [ -n "$FAKE_GUESTS_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
   echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":258,"type":"qemu","status":"running","maxmem":8589934592,"mem":4294967296,"name":"agent-box"}]}'
   exit 0 ;; esac
-[ -n "$FAKE_CURL_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
+[ -n "$FAKE_CURL_ERROR" ] && { [ "$FAKE_CURL_ERROR" = long ] && { printf "%0185d token=SECRETTOKEN\n" 0 >&2; exit 22; }; echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
 if [ -n "$FAKE_AVAILABLE" ]; then echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED,\"available\":$FAKE_AVAILABLE}}}"
 else echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED}}}"; fi
 F
@@ -41,6 +41,8 @@ out=$(run dev 31 16); check "15 GiB free passes" "$out" "rc=0" "refused"
 if grep -q SECRETTOKEN "$t/argv"; then echo "FAIL: the token is in curl's arguments"; fail=1; else echo "ok   the token is not in curl's arguments"; fi
 if grep -q 'header = "Authorization: PVEAPIToken=agent@pve!dev=SECRETTOKEN"' "$t/stdin"; then echo "ok   the token goes in on stdin"; else echo "FAIL: the header is not on stdin"; fail=1; fi
 out=$(run dev 31 17 yes); check "an unreadable node is refused" "$out" "could not be read" "rc=0"; check "the token is not printed" "$out" "rc=1" "SECRETTOKEN"
+out=$(run dev 31 17 long); check "a token straddling character 200 leaves no prefix" "$out" "could not be read" "SECRET"
+check "no partial prefix of the token either" "$out" "rc=1" "SECR"
 out=$(run prod 31 1); check "prod refuses the dev preflight" "$out" "dev only" "rc=0"
 out=$(PREFLIGHT_MIN_FREE_MIB=20480 run dev 31 17); check "the minimum can be raised" "$out" "refused" "rc=0"
 out=$(FAKE_AVAILABLE=$((20 * GIB)) run dev 31 30); check "memory.available wins when present" "$out" "20480 MiB (field: available)" "refused"
