@@ -372,13 +372,23 @@ components:
 
   - name: Kubernetes JSON schemas
     kind: software
-    used-for: the schemas kubeconform checks manifests against in CI (yannh/kubernetes-json-schema, datreeio/CRDs-catalog)
-    licence: Apache-2.0 (kubernetes-json-schema); MIT (CRDs-catalog)
+    used-for: the Kubernetes schemas kubeconform checks manifests against in CI (yannh/kubernetes-json-schema)
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/LICENSE
+    paid-edition: none found; a catalogue of schema files
+    paid-edition-source: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/README.md
+    verdict: pass
+    sources: [url:raw.githubusercontent.com/yannh/kubernetes-json-schema/]
+    checked: 2026-11-14
+  - name: CRD JSON schemas
+    kind: software
+    used-for: the custom-resource schemas kubeconform checks manifests against in CI (datreeio/CRDs-catalog)
+    licence: MIT
     licence-source: https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/LICENSE
-    paid-edition: none found; both are catalogues of schema files
+    paid-edition: none found; a catalogue of schema files
     paid-edition-source: https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/README.md
     verdict: pass
-    sources: [url:raw.githubusercontent.com/yannh/kubernetes-json-schema/, url:raw.githubusercontent.com/datreeio/CRDs-catalog/]
+    sources: [url:raw.githubusercontent.com/datreeio/CRDs-catalog/]
     checked: 2026-11-14
 
   # Hosted services (STD-0006 rule 3).
