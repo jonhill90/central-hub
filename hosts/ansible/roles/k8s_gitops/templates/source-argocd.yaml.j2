@@ -29,6 +29,12 @@ spec:
         - name: gatewayHttps
           value: "false"
 {% endif %}
+{% if k8s_gitops_source_openbao_address | default('') | length > 0 %}
+        - name: openbaoAddress
+          value: "{{ k8s_gitops_source_openbao_address }}"
+        - name: openbaoCaBundle
+          value: "{{ lookup('ansible.builtin.file', k8s_gitops_source_openbao_ca_file) | b64encode }}"
+{% endif %}
 {% if k8s_gitops_source_local_path_stable_folders | bool %}
         - name: localPathStableFolders
           value: "true"
