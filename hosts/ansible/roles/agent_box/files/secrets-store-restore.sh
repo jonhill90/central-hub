@@ -1,5 +1,5 @@
 #!/bin/bash
-# /usr/local/libexec/agent-box/secrets-store-restore.sh MODE ADDR CACERT KEYS SNAPSHOTS HOLD WAIT: run only by the
+# /usr/local/libexec/agent-box/secrets-store-restore.sh MODE ADDR CACERT KEYS SNAPSHOTS HOLD WAIT [NAMED]: run only by the
 # `secrets-store` wrapper, under its lock. No token or ID is printed or passed as an argument; the step lines name
 # the step and the snapshot's file name only.
 #
@@ -16,7 +16,9 @@
 # MODE rebuilt (`secrets-store restore-rebuilt`, Confirmation 5, pick 238): after the dev store's VM was destroyed
 # and rebuilt from code, the newest snapshot of the store's previous cluster.
 #   1 snapshot          the newest raft-*.snap whose .cluster file names a cluster other than the current one; a
-#                       snapshot of the rebuilt store, or one with no .cluster file, is never picked
+#                       snapshot of the rebuilt store, or one with no .cluster file, is never picked. With NAMED
+#                       (an exact file name, e.g. one moved back from the kept folder), that file only: refused
+#                       if it is missing, has no .cluster file, or is of the current cluster
 #   1b shares           see below
 #   2 empty store       kv/ holds nothing but c1/check, the fixed word configure writes; a listing that answers
 #                       anything but 200 or 404 refuses
@@ -34,7 +36,7 @@
 # be strictly later. With no .made file, the shares file's own time is used, with a warning.
 set -euo pipefail
 umask 077
-mode=$1 addr=$2/v1 cacert=$3 keys=$4 snaps=$5 hold=$6 wait=$7
+mode=$1 addr=$2/v1 cacert=$3 keys=$4 snaps=$5 hold=$6 wait=$7 named=${8:-}
 case $mode in
   same) name=restore ;;
   rebuilt) name=restore-rebuilt ;;
@@ -88,9 +90,18 @@ mark() { call GET kv/data/dev/snapshot-mark "$1" | field data data taken; }
 [[ $(health) == 200 ]] || die "0 store up" "sys/health is not 200; run apply and configure first"
 current=$(curl -s --cacert "$cacert" "$addr/sys/health" | field cluster_id) || die "0 store up" "no cluster ID in sys/health"
 
-# 1. The snapshot: of the current cluster (same) or of another one (rebuilt).
+# 1. The snapshot: of the current cluster (same) or of another one (rebuilt), or the one named.
 snap=''
-while read -r f; do
+if [[ -n $named ]]; then
+  [[ $mode == rebuilt ]] || die "1 snapshot" "only restore-rebuilt takes a snapshot name"
+  [[ $named =~ ^raft-[0-9]{8}T[0-9]{6}Z\.snap$ ]] || die "1 snapshot" "$named is not a snapshot name"
+  [[ -s $snaps/$named ]] || die "1 snapshot" "$named is not in $snaps; nothing restored"
+  c=$(cat "$snaps/$named.cluster" 2>/dev/null || true)
+  [[ -n $c ]] || die "1 snapshot" "$named has no .cluster file; nothing restored"
+  [[ $c != "$current" ]] || die "1 snapshot" "$named is of the current store's cluster; nothing restored"
+  snap=$named
+fi
+[[ -n $snap ]] || while read -r f; do
   c=$(cat "$snaps/$f.cluster" 2>/dev/null || true)
   [[ -n $c ]] || continue
   if [[ $mode == same && $c == "$current" ]] || [[ $mode == rebuilt && $c != "$current" ]]; then snap=$f; break; fi
@@ -101,7 +112,7 @@ if [[ -z $snap || ! -s $snaps/$snap ]]; then
 fi
 stamp=${snap#raft-}
 stamp=${stamp%.snap}
-step "1 snapshot" "$snap"
+step "1 snapshot" "$snap${named:+ (named)}"
 
 # 1b. Never a snapshot older than the recovery shares.
 if [[ -e $keys/openbao-recovery.json ]]; then

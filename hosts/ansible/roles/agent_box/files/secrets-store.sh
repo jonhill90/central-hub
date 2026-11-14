@@ -3,7 +3,7 @@
 # on dev (docs/runbooks/set-up-the-secrets-store.md, proposed D-0038). It runs as user `keys` through
 # sudo, so the session that asks for it never sees the Proxmox token, the seal key, the AppRole IDs,
 # the recovery shares or the VM's SSH key. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt|clear-hold|destroy
+#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|destroy
 # plan, apply, destroy: OpenTofu on hosts/terraform/home/secrets-store with the agents' Proxmox token.
 # configure: the openbao playbook over SSH, with the owner's sign-in once the dev rebuild has handed over
 # Keycloak's issuer (pick 233). recovery: makes the recovery shares once (self-
@@ -20,9 +20,18 @@
 set -euo pipefail
 umask 077
 
+usage() { echo "usage: secrets-store plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|destroy" >&2; exit 2; }
+named=''
 case ${1:-} in
-  plan | apply | configure | recovery | status | snapshot | restore | restore-rebuilt | clear-hold | destroy) action=$1 ;;
-  *) echo "usage: secrets-store plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt|clear-hold|destroy" >&2; exit 2 ;;
+  plan | apply | configure | recovery | status | snapshot | restore | clear-hold | destroy) action=$1; [[ $# -eq 1 ]] || usage ;;
+  # restore-rebuilt may name one snapshot file exactly, e.g. one moved back from the kept folder (pick 239).
+  restore-rebuilt)
+    action=$1
+    [[ $# -le 2 ]] || usage
+    named=${2:-}
+    [[ -z $named || $named =~ ^raft-[0-9]{8}T[0-9]{6}Z\.snap$ ]] || { echo "secrets-store: a snapshot is named raft-<YYYYMMDDTHHMMSSZ>.snap" >&2; exit 2; }
+    ;;
+  *) usage ;;
 esac
 
 keys=/etc/agent-keys
@@ -213,7 +222,7 @@ restore() {
 # After destroy, apply and configure: the newest snapshot of the store's previous cluster, under the guards in
 # secrets-store-restore.sh (mode rebuilt). It removes the hold once its proof passes.
 restore_rebuilt() {
-  "$(dirname "$0")/secrets-store-restore.sh" rebuilt "$(addr)" "$cacert" "$env_keys" "$snapshots" "$hold" 120
+  "$(dirname "$0")/secrets-store-restore.sh" rebuilt "$(addr)" "$cacert" "$env_keys" "$snapshots" "$hold" 120 "$named"
 }
 
 # The rebuilt store is to stay as it is, with no restore. The hold is what keeps rotation from removing the earlier
