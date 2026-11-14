@@ -2,7 +2,7 @@
 # /usr/local/libexec/agent-box/runner-job-started.sh: the Actions runner's job-started hook
 # (ACTIONS_RUNNER_HOOK_JOB_STARTED in the runner's .env). The repository is public, so any workflow on any
 # branch can ask for this runner by label; this hook refuses every job except the listed workflows
-# (the dev redeploy workflow and the tailnet pipeline job) as they are on main, started by hand. A non-zero exit fails the job before any step runs.
+# (the dev redeploy workflow, the tailnet pipeline job and the merge job, D-0042 rule 2) as they are on main, started by hand. A non-zero exit fails the job before any step runs.
 # Installed by the agent_box role, root-owned. Names no private value.
 set -euo pipefail
 
@@ -10,6 +10,7 @@ set -euo pipefail
 allowed=(
   "jonhill90/central-hub/.github/workflows/lab-redeploy-dev.yml@refs/heads/main"
   "jonhill90/central-hub/.github/workflows/lab-tailnet.yml@refs/heads/main"
+  "jonhill90/central-hub/.github/workflows/merge.yml@refs/heads/main"
 )
 ok=false
 for want_ref in "${allowed[@]}"; do

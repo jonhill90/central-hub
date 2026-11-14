@@ -72,11 +72,11 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
   - Which agent filled a role is visible in git and PR history, not in the record.
 - **Statuses:**
   - A record starts as `proposed`.
-  - The owner moves it to `accepted`, `rejected` or `parked`.
+  - The owner moves it to `accepted`, `rejected` or `parked`, or, since D-0042, an agent does with the reviewer's and the council's pass (D-0042 rule 3; the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, asking not to be asked to approve PRs; who approves in his place is an agent pick).
   - An accepted record can later become `superseded` or `deprecated`.
-  - Agents write only `proposed`.
-- **What the owner approves:** the whole record at the PR head commit he approves. After that, only the acceptance changes may follow: `status`, `date` and `accepted-evidence`. A reviewing agent compares the merged record with the approved commit; any other difference needs the owner's approval again.
-- **Immutability:** once a record is accepted, its body changes only through a correction or a decision change under D-0006, which the owner approves the same way. Either way, the record is edited so it reads as the current decision, and `CORRECTIONS.md` gets one line. When a later record changes part of an earlier one, the same PR updates the earlier record's text so it reads as the current rule, and the later record keeps the reasons. A record replaced in whole becomes `superseded`. Lifecycle fields (`status`, `superseded-by`) change only when the owner approves.
+  - Agents write only `proposed`, except under D-0042 rule 3.
+- **What the owner approves:** the whole record at the PR head commit he approves. After that, only the acceptance changes may follow: `status`, `date` and `accepted-evidence`. A reviewing agent compares the merged record with the approved commit; any other difference needs the owner's approval again. Since D-0042 (on the owner's messages of 2026-11-14, 07:42 to 07:44 UTC; who approves in his place is an agent pick), the reviewer's and the council's pass approves the head in the same way, with `approved-by: agents`, except for the steps D-0042 rule 6 keeps for the owner.
+- **Immutability:** once a record is accepted, its body changes only through a correction or a decision change under D-0006, which the owner approves the same way (since D-0042, the agents' pass, D-0042 rule 3). Either way, the record is edited so it reads as the current decision, and `CORRECTIONS.md` gets one line. When a later record changes part of an earlier one, the same PR updates the earlier record's text so it reads as the current rule, and the later record keeps the reasons. A record replaced in whole becomes `superseded`. Lifecycle fields (`status`, `superseded-by`) change only when the owner approves, or, since D-0042, with the reviewer's and the council's pass (D-0042 rule 3).
 - **Diagrams:** a record includes a Mermaid diagram if the decision defines any of these:
   - two or more components and how they relate;
   - a sequence of three or more steps;
