@@ -199,6 +199,9 @@ print(m.group(1) if m else "")') || exit 1
     ;;
   check | merge)
     if [[ $action == merge ]] && halted; then echo "pr-merge: the halt flag is set; nothing merged" >&2; exit 1; fi
+    # Printed on every run, as the keys user (the flag's folder is 0700 keys): a caller that cannot read the folder must not
+    # guess "not halted" from a failed test, so it requires exactly "HALT: clear" (the Mac's checked merge does).
+    if halted; then echo "HALT: set"; else echo "HALT: clear"; fi
     setup_repo "$full"
     evaluate "$pr" "$head" || { echo "pr-merge: a GitHub read failed; nothing decided" >&2; exit 1; }
     [[ $out == *$'\n'* ]] && echo "${out%$'\n'*}"

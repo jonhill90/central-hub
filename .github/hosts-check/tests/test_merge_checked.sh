@@ -15,7 +15,6 @@ cat > "$t/bin/zsh" <<'F'
 # The fake box: `test -e .../HALT` answers FAKE_HALT (0 halted, 1 not, other = ssh failure); `pass-record show` prints a ledger
 # line; `pr-merge check` prints FAKE_VERDICT and exits FAKE_RC.
 case "$*" in
-  *"test -e"*) exit "${FAKE_HALT:-1}" ;;
   *"pass-record show"*) [[ -n ${FAKE_SHOW_FAIL:-} ]] && exit 1; echo '{"role":"reviewer","relay_time":"2026-11-14T19:42:00Z"}'; exit 0 ;;
   *) echo "$FAKE_VERDICT"; exit "${FAKE_RC:-0}" ;;
 esac
@@ -33,7 +32,11 @@ git -C "$t/co" add -A && git -C "$t/co" -c user.name=t -c user.email=t@t commit 
 git -C "$t/co" fetch -q origin main
 w="$t/co/hosts/wrappers/mac/merge-checked.sh"
 run() { : > "$t/calls"; PATH="$t/bin:$PATH" HOME="$t/home" FAKE_CALLS="$t/calls" bash "${W:-$w}" "$@" 2>&1; echo "rc=$?"; }
-G="pr-merge: jonhill90/central-hub#7 aaaaaaa: GREEN"
+G="HALT: clear
+NOTE: verdict v2
+LEDGER: reviewer council-a council-b council-c
+pr-merge: jonhill90/central-hub#7 aaaaaaa: GREEN"
+OLD="pr-merge: jonhill90/central-hub#7 aaaaaaa: GREEN"   # an older pr-merge: no marker, no ledger line
 R=jonhill90/central-hub
 out=$(FAKE_VERDICT=$G run $R 7 $H); check "GREEN merges" "$out" "rc=0"
 check "the merge is squash, pinned to the head" "$(cat "$t/calls")" "gh pr merge 7 --repo $R --squash --match-head-commit $H"
@@ -41,8 +44,18 @@ nocheck "no --admin" "$(cat "$t/calls")" "--admin"; nocheck "no --auto" "$(cat "
 out=$(FAKE_VERDICT="pr-merge: x: NOT GREEN: a check failed" FAKE_RC=1 run $R 7 $H); check "NOT GREEN is refused" "$out" "rc=1"; [[ ! -s $t/calls ]] && echo "ok   NOT GREEN made no gh call" || { echo "FAIL: gh was called"; fail=1; }
 out=$(FAKE_VERDICT="pr-merge: x: OWNER: rule 11" FAKE_RC=3 run $R 7 $H); check "an OWNER verdict is refused" "$out" "rc=1"; [[ ! -s $t/calls ]] && echo "ok   OWNER made no gh call" || { echo "FAIL: gh was called"; fail=1; }
 out=$(FAKE_VERDICT=$G FAKE_RC=1 run $R 7 $H); check "a failed box call is refused even with GREEN text" "$out" "rc=1"
-out=$(FAKE_VERDICT=$G FAKE_HALT=0 run $R 7 $H); check "a set halt flag refuses even a GREEN PR" "$out" "halt flag is set"; [[ ! -s $t/calls ]] && echo "ok   halted made no gh call" || { echo "FAIL: gh was called while halted"; fail=1; }
-out=$(FAKE_VERDICT=$G FAKE_HALT=255 run $R 7 $H); check "an unreadable halt flag refuses" "$out" "could not read the box's halt flag"
+H_SET="HALT: set
+NOTE: verdict v2
+LEDGER: reviewer council-a council-b council-c
+pr-merge: jonhill90/central-hub#7 aaaaaaa: GREEN"
+out=$(FAKE_VERDICT=$H_SET run $R 7 $H); check "a set halt flag refuses even a GREEN PR" "$out" "halt flag is set"; [[ ! -s $t/calls ]] && echo "ok   halted made no gh call" || { echo "FAIL: gh was called while halted"; fail=1; }
+out=$(FAKE_VERDICT="NOTE: verdict v2
+LEDGER: reviewer council-a council-b council-c
+pr-merge: jonhill90/central-hub#7 aaaaaaa: GREEN" run $R 7 $H); check "a missing HALT line refuses" "$out" "did not say HALT: clear"; [[ ! -s $t/calls ]] && echo "ok   a missing HALT line made no gh call" || { echo "FAIL: gh was called"; fail=1; }
+out=$(FAKE_VERDICT="HALT: unknown
+NOTE: verdict v2
+LEDGER: reviewer council-a council-b council-c
+pr-merge: jonhill90/central-hub#7 aaaaaaa: GREEN" run $R 7 $H); check "an unreadable halt state refuses" "$out" "did not say HALT: clear"
 out=$(FAKE_VERDICT=$G run $R 7 $H); check "the ledger with its pass times is printed" "$out" "2026-11-14T19:42:00Z"
 out=$(FAKE_VERDICT=$G FAKE_SHOW_FAIL=1 run $R 7 $H); check "an unreadable ledger refuses" "$out" "could not read the head's ledger"
 out=$(FAKE_VERDICT=$G run jonhill90/other 7 $H); check "a repository outside the four is refused" "$out" "not in the list"
@@ -68,15 +81,23 @@ out=$(FAKE_VERDICT="NOTE: rule 11 PR (x) is merged on an owner-tap line, never b
 $G" run $R 7 $H); check "a rule 11 PR with a tap is refused" "$out" "waits for the sweep"; [[ ! -s $t/calls ]] && echo "ok   rule 11 made no gh call" || { echo "FAIL: gh was called for a rule 11 PR"; fail=1; }
 # Mutation: without the GREEN test a NOT GREEN verdict merges.
 sed 's|^\[\[ \$rc -eq 0 && .*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut.sh"
-out=$(W="$t/co/hosts/wrappers/mac/mut.sh" FAKE_VERDICT="pr-merge: x: NOT GREEN: a check failed" FAKE_RC=1 run $R 7 $H)
+out=$(W="$t/co/hosts/wrappers/mac/mut.sh" FAKE_VERDICT="HALT: clear
+NOTE: verdict v2
+LEDGER: reviewer council-a council-b council-c
+pr-merge: x: NOT GREEN: a check failed" FAKE_RC=1 run $R 7 $H)
 [[ -s $t/calls ]] && echo "ok   mutation: without the GREEN test a refused PR merges" || { echo "FAIL: the mutation did nothing: $out"; fail=1; }
-# Mutation: without the halt check a GREEN PR merges while the flag is set.
-sed 's|^halted && die "the halt flag is set on the box.*|true|; s|^halted && die "the halt flag was set.*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut2.sh"
-out=$(W="$t/co/hosts/wrappers/mac/mut2.sh" FAKE_VERDICT=$G FAKE_HALT=0 run $R 7 $H)
-[[ -s $t/calls ]] && echo "ok   mutation: without the halt check a halted box still merges" || { echo "FAIL: the halt mutation did nothing: $out"; fail=1; }
+# Mutation: without the HALT tests a halted box still merges.
+sed 's|^\[\[ \$verdict != \*"HALT: set"\* \]\].*|true|; s|^\[\[ \$.\\n.\$verdict.*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut2.sh"
+out=$(W="$t/co/hosts/wrappers/mac/mut2.sh" FAKE_VERDICT=$H_SET run $R 7 $H)
+[[ -s $t/calls ]] && echo "ok   mutation: without the HALT tests a halted box still merges" || { echo "FAIL: the halt mutation did nothing: $out"; fail=1; }
 # Mutation: without the rule 11 NOTE test a rule 11 PR with a tap merges.
 sed 's|^\[\[ \$verdict != \*"NOTE: rule 11 PR"\* \]\].*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut3.sh"
 out=$(W="$t/co/hosts/wrappers/mac/mut3.sh" FAKE_VERDICT="NOTE: rule 11 PR (x)
 $G" run $R 7 $H)
 [[ -s $t/calls ]] && echo "ok   mutation: without the NOTE test a rule 11 PR merges from the Mac" || { echo "FAIL: the NOTE mutation did nothing: $out"; fail=1; }
+# Mutation: without the marker test an older box's GREEN merges.
+sed 's|^\[\[ \$verdict == \*"NOTE: verdict v2"\*.*|true|' "$src" > "$t/co/hosts/wrappers/mac/mut4.sh"
+out=$(W="$t/co/hosts/wrappers/mac/mut4.sh" FAKE_VERDICT="HALT: clear
+$OLD" run $R 7 $H)
+[[ -s $t/calls ]] && echo "ok   mutation: without the marker test an older box merges" || { echo "FAIL: the marker mutation did nothing: $out"; fail=1; }
 exit $fail

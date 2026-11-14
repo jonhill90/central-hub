@@ -118,6 +118,7 @@ def net_change(cmp_json, record_path, record_id):
 def main():
     full, pr_s, head, d = sys.argv[1:5]
     pr_no = int(pr_s)
+    print("NOTE: verdict v2")   # a fixed marker on every run: the ledger and the rule 11 files are checked (older pr-merge: neither)
     why, notes = [], []
     pr, files, checks, status = (load(d, n + ".json") for n in ("pr", "files", "checks", "status"))
     if pr.get("state") != "open": why.append("PR is not open")
@@ -226,6 +227,9 @@ def main():
         # The tap line is the orchestrator's word for a card tap the box cannot see; the Mac's checked merge refuses any rule 11 PR.
         notes.append("NOTE: rule 11 PR (%s) is merged on an owner-tap line, never by the Mac's checked merge" % ", ".join(rule11[:3]))
     for x in notes: print(x)
+    if not why:
+        # Printed on every GREEN so a caller can tell this verdict (ledger and rule 11 checked) from an older pr-merge's.
+        print("LEDGER: " + " ".join(r for r in ROLES if r in roles))
     print("NOT GREEN: " + "; ".join(why) if why else "GREEN")
 
 
