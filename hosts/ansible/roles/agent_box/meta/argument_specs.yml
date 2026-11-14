@@ -154,6 +154,14 @@ argument_specs:
           the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name, vnet,
           template_vm_id), rdp_source (the tailnet connector's address, where RDP arrives from) and optionally admin_user. No key and no
           password goes in it. Empty skips the file.
+      agent_box_secrets_store:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the secrets-store wrapper, written to <work_dir>/secrets-store.json (0600, the
+          keys user's): the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
+          vnet, template_vm_id), box_address, and optionally seal_key_id and admin_user. No key goes in it; the
+          wrapper makes the keys in the keys folder. Empty skips the file.
       agent_box_tailnet_cleanup:
         type: dict
         default: {}

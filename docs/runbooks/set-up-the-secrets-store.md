@@ -3,7 +3,7 @@ title: Set up the lab's secrets store (OpenBao) on dev
 status: draft
 kind: automated
 trigger: once per env, after D-0038's picks; again after the store's VM is rebuilt
-runner: an agent session on the agent box, through the `secrets-store` wrapper (not on the box yet; see Before you start)
+runner: an agent session on the agent box, through the `secrets-store` wrapper (in the agent_box role since #276; on the box once that role is applied, see Before you start)
 outcome: one AlmaLinux 10 VM on VNet dev runs OpenBao 2.7.2, starts and unseals with no person, initialized by itself with audit, KV v2 and two AppRoles, takes an hourly Raft snapshot, and holds c1's External Secrets login and the rebuild's AppRole
 needs: the agent box; the agents' Proxmox token with rights on pool `dev`; template 9001; a free dev address; the private inventory values listed below
 private-values: [store-name, store-address, box-address, seal-key, admin-role-id, admin-secret-id, rebuild-role-id, rebuild-secret-id, store-ssh-key]
@@ -32,7 +32,7 @@ superseded-by:
 
 ## Before you start
 
-- The agent box needs a `secrets-store` wrapper, the same shape as `desktop`: `plan`, `apply`, `configure`, `destroy`, run as user `keys`. Adding a wrapper changes the box's limits, so it waits for the owner's typed go (D-0036). It is a separate PR. Until it exists, nothing in this runbook runs.
+- The agent box needs the `secrets-store` wrapper (`plan`, `apply`, `configure`, `recovery`, `status`, `snapshot`, `restore`, `destroy`, run as user `keys`), which the agent_box role installs (#276). A new wrapper changes the box's limits, so the box's self-apply stops on it and a controller apply puts it there (D-0036). Until it is on the box, nothing in this runbook runs.
 - The wrapper makes, once, in `/etc/agent-keys/dev/` (user `keys`, 0600): the 32-byte seal key (`openssl rand -out <file> 32`), the admin AppRole's role ID and secret ID (`openssl rand -hex 24` each, with no trailing newline, because the first start reads each file whole), and the VM's SSH key. None is ever printed.
 - The private inventory group `secrets_store` holds the VM's name, VM ID, address, cores, memory and disk, and the box's own address.
 
@@ -76,6 +76,15 @@ superseded-by:
 8. Restart test.
    `sudo systemctl restart openbao` on the VM, through the wrapper's `configure`.
    expect: health shows `"sealed":false` again with no person.
+
+9. Snapshot off the VM.
+   `secrets-store snapshot`
+   expect: `snapshot raft-<time>.snap, <n> bytes` with n above 0; the file is in `/etc/agent-keys/dev/openbao-snapshots/`, which keeps 24.
+
+10. Restore drill.
+   why: a backup counts only once it has been restored.
+   Write a test key, take a snapshot, delete the key, then `secrets-store restore`. This quick drill restores over the live dev store; it is not D-0038 Confirmation 4, which restores into a throwaway server.
+   expect: `restored raft-<time>.snap`, and the test key reads back. The full drill is D-0038 Confirmation 5: `destroy`, `plan`, `apply`, `configure`, then `restore`, with no person.
 
 ## Remove it
 
