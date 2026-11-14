@@ -220,6 +220,8 @@ run_stage() {
     # certificate from it, so dev has HTTPS with no prod secret (no Cloudflare token, no lab CA key).
     dev-ca)
       [ "$ENV_NAME" = dev ] || { echo "the dev CA runs on dev only"; return 1; }
+      grep -q 'devca' "$repo/hosts/ansible/roles/k8s_certs/tasks/main.yml" \
+        || { echo "the k8s_certs role has no devca tag: the dev CA change is missing from this checkout"; return 1; }
       ap playbooks/k8s-certs.yml --tags devca -e k8s_certs_dev_ca=true ;;
     # Dev only, after dev-ca: the whole identity role with a test admin, never the owner's account, then the
     # sign-in proof (password alone stops at the one-time-code form; password and code redirect with a code;
