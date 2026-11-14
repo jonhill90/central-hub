@@ -126,7 +126,7 @@ echo "$c4" > "$t/state/baseline"
 
 # 4
 sed -i 's/^# The users./# The users of the box./' "$t/src/$r/defaults/main.yml"
-c5=$(commit c5)
+commit c5 >/dev/null
 out=$(ba plan) || bad "4: plan failed: $out"
 [[ $out == *"none of them a limit"* ]] && ok "4. a comment-only change in the defaults is not a limit change" || bad "4: $out"
 
