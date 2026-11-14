@@ -1,5 +1,5 @@
 # Approved changes to the agent box's limits (D-0036 rule 3), which box-apply applies with no apply from the
-# controller (pick 231; docs/runbooks/apply-the-agent-box-from-itself.md). One line per change:
+# controller (pick 232; docs/runbooks/apply-the-agent-box-from-itself.md). One line per change:
 #
 #   <from> <to> <digest> <pass> <tap>
 #

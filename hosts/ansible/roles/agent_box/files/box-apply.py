@@ -11,7 +11,7 @@ agent_box role when agent_box_self_apply is true; sessions start it through sudo
          the controller.
 
 A limit change since the baseline still stops both, unless main holds an approval line for exactly that change
-(APPROVALS, pick 231): `<from> <to> <digest> <pass> <tap>`, where from is the baseline, to is a commit on main with
+(APPROVALS, pick 232): `<from> <to> <digest> <pass> <tap>`, where from is the baseline, to is a commit on main with
 no limit change after it, and digest is the sha256 of `git diff --no-renames --binary --full-index <from> <to> --
 <the limit files that changed>`. `apply` then applies `to` with the limit tasks on, lets the limit paths change
 that its check run named, and moves the baseline to `to`; the next run goes on to main. The box can't check the

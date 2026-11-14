@@ -33,6 +33,7 @@ agent_box_wrappers:
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself.
   - name: pr-merge
     args: ["check *", "merge *"]
+    runner: true   # the merge job (.github/workflows/merge.yml, D-0042 rule 2)
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
     args: [up, rebuild, teardown, identity, log, diag]
@@ -247,6 +248,6 @@ agent_box_self_apply_skip_tags: [ca, prod_files, opnsense_offbox, lifeline, veri
 agent_box_self_apply_commit: ""
 # Set by box-apply on its own runs (-e); the box-apply tasks then write nothing.
 agent_box_self_applying: false
-# Set by box-apply, with agent_box_self_applying, on an approved limit apply (-e; pick 231): the box-apply tasks
+# Set by box-apply, with agent_box_self_applying, on an approved limit apply (-e; pick 232): the box-apply tasks
 # then write box-apply, its settings and its limits, never its inventory.
 agent_box_limit_apply: false

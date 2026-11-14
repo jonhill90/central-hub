@@ -1,7 +1,7 @@
 ---
 # box-apply (D-0036; docs/runbooks/apply-the-agent-box-from-itself.md): the box applies this role to itself from
 # reviewed main and stops on any change to its limits. Everything here is a limit, so it is installed and changed
-# only by an apply from the controller, or by an approved limit apply (pick 231). A self-apply passes
+# only by an apply from the controller, or by an approved limit apply (pick 232). A self-apply passes
 # agent_box_self_applying=true, and these tasks then write nothing. An approved limit apply also passes
 # agent_box_limit_apply=true, and these tasks then write box-apply, its front script, settings and limits; its
 # inventory stays as the controller left it (D-0036 rule 7), and box-apply writes its own baseline.
