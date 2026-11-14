@@ -74,7 +74,7 @@ Workloads are in Argo CD (D-0023) and data is backed up off the box (D-0033). A 
 ### Option 2: Kubespray
 
 - Good: a maintained Ansible installer, Apache-2.0; the owner named it as worth trying.
-- Bad: not compared on fit; it would hide steps the exam asks for.
+- Bad: not compared on fit, and not tried.
 
 ### Option 3: Talos
 
