@@ -1,6 +1,6 @@
 ---
 title: Give lab apps short names under the zone
-status: tested
+status: draft
 kind: automated
 trigger: on request; again after a lab rebuild, or when an app gets a short name
 runner: an agent lane, through the owner's Mac
