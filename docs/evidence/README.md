@@ -34,3 +34,4 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0030 | [0030-give-cloud-agents-one-github-account-of-their-own.md](0030-give-cloud-agents-one-github-account-of-their-own.md) |
 | D-0037 | [0037-sign-in-to-proxmox-and-opnsense-through-keycloak.md](0037-sign-in-to-proxmox-and-opnsense-through-keycloak.md) |
 | D-0039 | [0039-keep-lab-users-in-lldap-read-by-keycloak-and-opnsense.md](0039-keep-lab-users-in-lldap-read-by-keycloak-and-opnsense.md) |
+| D-0041 | [0041-run-every-lab-and-cloud-change-through-one-logged-pipeline.md](0041-run-every-lab-and-cloud-change-through-one-logged-pipeline.md) |
