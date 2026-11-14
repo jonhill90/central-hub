@@ -41,3 +41,4 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0042 | [0042-let-agents-approve-every-reversible-change-in-the-owners-place.md](0042-let-agents-approve-every-reversible-change-in-the-owners-place.md) |
 | D-0043 | [0043-keep-tailscale-as-a-swappable-stopgap-for-reaching-the-lab.md](0043-keep-tailscale-as-a-swappable-stopgap-for-reaching-the-lab.md) |
 | D-0045 | [0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md](0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md) |
+| D-0048 | [0048-build-the-lab-with-opentofu-and-ansible-core.md](0048-build-the-lab-with-opentofu-and-ansible-core.md) |
