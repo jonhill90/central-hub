@@ -28,7 +28,7 @@
 set -eu
 
 # on or off. Off is the default; a PR sets it to on for one desktop apply or destroy and back to off after.
-DESKTOP_ACCESS=off
+DESKTOP_ACCESS=on
 case $DESKTOP_ACCESS in on | off) ;; *) echo "agent-access: DESKTOP_ACCESS must be on or off" >&2; exit 2 ;; esac
 NODE=$(hostname)
 PRIVS="Datastore.Audit,Datastore.AllocateSpace,Datastore.AllocateTemplate,Pool.Audit,SDN.Audit,SDN.Use,Sys.Audit,VM.Audit,VM.Allocate,VM.Clone,VM.Config.Cloudinit,VM.Config.CDROM,VM.Config.CPU,VM.Config.Disk,VM.Config.HWType,VM.Config.Memory,VM.Config.Network,VM.Config.Options,VM.PowerMgmt,VM.GuestAgent.Audit,Sys.AccessNetwork"
