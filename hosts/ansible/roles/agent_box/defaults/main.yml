@@ -141,7 +141,7 @@ agent_box_tailnet_cleanup_daily: "*-*-* 15:30:00 UTC"
 agent_box_ci_runner: {}
 # The owner's desktop VM that the desktop wrapper builds (docs/runbooks/set-up-the-desktop.md).
 # Private, through the inventory: name, vm_id (400-499), address, cores, memory_mb, disk_gb,
-# proxmox_node_name, vnet, template_vm_id, rdp_source (the owner's one address) and optionally
+# proxmox_node_name, vnet, template_vm_id, rdp_source (the tailnet connector's address, where RDP arrives from) and optionally
 # admin_user (default admin). Empty leaves the wrapper unset up.
 agent_box_desktop: {}
 # The controller's private files the prod_files tasks copy to <keys_dir>/prod (D-0035; paths from

@@ -7,7 +7,9 @@ argument_specs:
       desktop_rdp_source:
         type: str
         required: true
-        description: The one IPv4 address or CIDR the owner connects from. firewalld accepts the RDP port from it only. Private.
+        description: >-
+          The one IPv4 address or CIDR RDP arrives from, which is the tailnet connector's own address
+          (it rewrites the source). firewalld accepts the RDP port from it only. Private.
       desktop_admin_user:
         type: str
         required: true

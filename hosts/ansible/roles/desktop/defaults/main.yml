@@ -1,8 +1,9 @@
 ---
 # Every input of this role is listed here. The role stops if the inventory leaves a required one unset.
 #
-# REQUIRED, private, from the inventory: the one address the owner connects from (an IPv4 address or
-# CIDR). firewalld accepts 3389/tcp from it and from nowhere else; the port is not open to the VLAN.
+# REQUIRED, private, from the inventory: the one address RDP arrives from, which is the tailnet
+# connector's own address on the mgmt VLAN, because the connector rewrites the source (an IPv4 address
+# or CIDR). firewalld accepts 3389/tcp from it and from nowhere else; the port is not open to the VLAN.
 # desktop_rdp_source: "<address>/32"
 #
 # REQUIRED, from the inventory: the login user Ansible reached the VM as (the cloud-init admin user).
