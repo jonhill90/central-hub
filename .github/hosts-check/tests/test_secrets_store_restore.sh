@@ -18,6 +18,9 @@
 # Recovery shares (both modes, pick 239):
 #  13. A snapshot older than the shares, or from the same second, is refused before any restore, in both modes.
 #  14. With no .made file, the shares file's time is used, with a warning.
+#  15. A named snapshot (store 1, moved back from the kept folder after stores 2 and 3): that file is restored, not
+#      the newer store 2 one, and the PASS line names it; a named file that is missing, of the current cluster,
+#      or has no .cluster file is refused before any restore; mode same takes no name.
 #   8. No token or AppRole ID shows in the output.
 # Usage: .github/hosts-check/tests/test_secrets_store_restore.sh   (needs python3)
 set -euo pipefail
@@ -106,10 +109,10 @@ snapset() { # the standard set: two of the old cluster, two newer of the rebuilt
     echo "snap ${s%%:*}" > "$t/snaps/raft-${s%%:*}.snap"; echo "${s##*:}" > "$t/snaps/raft-${s%%:*}.snap.cluster"
   done
 }
-run() { # stub mode [helper mode]
+run() { # stub mode [helper mode] [named]
   rm -f "$t/phase" "$t/restored" "$t/calls" "$t/mark-written"
   date -u +%FT%TZ > "$t/hold"
-  MODE=$1 T=$t PATH="$t/bin:$PATH" bash "$helper" "${2:-rebuilt}" https://store.invalid "$t/ca.crt" "$t/keys" "$t/snaps" "$t/hold" 3 > "$t/out" 2>&1 && rc=0 || rc=$?
+  MODE=$1 T=$t PATH="$t/bin:$PATH" bash "$helper" "${2:-rebuilt}" https://store.invalid "$t/ca.crt" "$t/keys" "$t/snaps" "$t/hold" 3 ${3:+"$3"} > "$t/out" 2>&1 && rc=0 || rc=$?
   all+=$(cat "$t/out")
 }
 forced() { grep -q 'snapshot-force' "$t/calls"; }
@@ -202,6 +205,25 @@ run keys rebuilt
 [[ $rc -ne 0 ]] && grep -q 'WARNING: openbao-recovery.made is missing' "$t/out" && grep -q '1b shares FAIL' "$t/out" && ! restored \
   && ok "14. no .made: the shares file's time is used, with a warning" || bad "14. rc=$rc $(cat "$t/out")"
 rm -f "$t/keys/openbao-recovery.json"
+
+# 15
+rm -f "$t/snaps/"*
+for s in 20261110T080000Z:cluster-1 20261112T080000Z:cluster-2 20261112T090000Z:cluster-2 20261114T100000Z:cluster-new; do
+  echo "snap ${s%%:*}" > "$t/snaps/raft-${s%%:*}.snap"; echo "${s##*:}" > "$t/snaps/raft-${s%%:*}.snap.cluster"
+done
+run keys rebuilt; r15a=$rc a15=$(cat "$t/restored" 2>/dev/null)
+run keys rebuilt raft-20261110T080000Z.snap
+if [[ $r15a -eq 0 && $a15 == "$t/snaps/raft-20261112T090000Z.snap" && $rc -eq 0 && $(cat "$t/restored") == "$t/snaps/raft-20261110T080000Z.snap" ]] &&
+   grep -q '1 snapshot ok: raft-20261110T080000Z.snap (named)' "$t/out" && grep -q '^PASS: restore-rebuilt: raft-20261110T080000Z.snap restored' "$t/out"; then
+  ok "15. stores 1, 2, 3: unnamed picks store 2's newest; naming store 1's file restores that file"
+else bad "15. rc=$r15a/$rc a=$a15 $(cat "$t/out")"; fi
+r=0
+run keys rebuilt raft-20261101T000000Z.snap; [[ $rc -ne 0 ]] && grep -q 'is not in' "$t/out" && ! restored || r=1
+run keys rebuilt raft-20261114T100000Z.snap; [[ $rc -ne 0 ]] && grep -q 'current store' "$t/out" && ! restored || r=1
+rm "$t/snaps/raft-20261110T080000Z.snap.cluster"
+run keys rebuilt raft-20261110T080000Z.snap; [[ $rc -ne 0 ]] && grep -q 'no .cluster file' "$t/out" && ! restored || r=1
+run plain same raft-20261114T100000Z.snap; [[ $rc -ne 0 ]] && grep -q 'only restore-rebuilt takes' "$t/out" && ! restored || r=1
+[[ $r == 0 ]] && ok "15b. a named file missing, of the current cluster or with no .cluster is refused; mode same takes no name" || bad "15b. $(cat "$t/out")"
 
 # 8
 if [[ $all == *tok-* || $all == *role-id-fake* || $all == *secret-id-fake* ]]; then bad "8. a token or ID shows in the output"
