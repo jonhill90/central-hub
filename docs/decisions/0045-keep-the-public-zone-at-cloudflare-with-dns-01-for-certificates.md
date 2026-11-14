@@ -21,7 +21,7 @@ The owner's public zone has been hosted at Cloudflare since before the lab; the 
 The lab now uses the public zone in two ways:
 
 - OpenTofu holds every record (`hosts/terraform/home/dns/`, with a zone-scoped token from `dns-token/`).
-- cert-manager proves c1's names to Let's Encrypt by DNS-01 with a second zone-scoped token (`hosts/terraform/home/certificates/`, role `k8s_certs`). On 2026-10-26 at 23:05 UTC the owner asked that the lab use cert-manager with Let's Encrypt (cmsg_01X43rfNYp4H1dL1V2dkfkwNHxEx2s28nVHvJ1yyL3y9ps), and the c1 way-in spec records that as his yes. D-0028 keeps Let's Encrypt as the issuer for Proxmox and OPNsense and as c1's way out.
+- cert-manager proves c1's names to Let's Encrypt by DNS-01 with a second zone-scoped token (`hosts/terraform/home/certificates/`, role `k8s_certs`). On 2026-10-26 at 23:05 UTC the owner asked whether the lab could use cert-manager with Let's Encrypt (cmsg_01X43rfNYp4H1dL1V2dkfkwNHxEx2s28nVHvJ1yyL3y9ps), and the c1 way-in spec records that as his yes. D-0028 keeps Let's Encrypt as the issuer for Proxmox and OPNsense and as c1's way out.
 
 At main 3d90375, 42 files in 19 `hosts/` folders and 7 runbooks name Cloudflare. D-0041 and D-0042 name the Cloudflare account as one the pipeline changes, and D-0038 names its token as a secret to store, but no decision record chose Cloudflare.
 
