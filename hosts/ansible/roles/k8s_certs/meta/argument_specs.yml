@@ -4,6 +4,12 @@ argument_specs:
     short_description: cert-manager, Let's Encrypt issuers and one wildcard certificate for the shared Gateway (BUILD-PATH S12)
     options:
       # Private, through the inventory
+      k8s_certs_dev_ca:
+        type: bool
+        default: false
+        description: >-
+          A throwaway in-cluster CA and the Gateway's certificate from it, for a dev rebuild only (tasks/dev_ca.yml). Tag devca too.
+      k8s_certs_dev_ca_name: {type: str, default: dev-ca, description: The throwaway CA's ClusterIssuer and Secret name.}
       k8s_certs_zone: {type: str, required: true, description: "The public DNS zone, at Cloudflare. Private."}
       k8s_certs_acme_email: {type: str, description: "ACME account contact address. Private; needed when k8s_certs_issue is true."}
       k8s_certs_cloudflare_token_file:
