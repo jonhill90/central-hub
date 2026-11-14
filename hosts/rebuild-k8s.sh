@@ -250,7 +250,19 @@ run_stage() {
     # The data disks only: Argo CD installs the provisioner and StorageClass (move-local-path-to-argo-cd.md).
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
     gateway) ap playbooks/k8s-gateway.yml ;;
-    gitops) ap playbooks/k8s-gitops.yml --tags install,source ;;
+    # A dev re-run keeps the Gateway's HTTPS on in the root Application: the dev inventory leaves it off, and
+    # flipping it off here and on again in `dev-ca` left the gateway and jellyfin apps OutOfSync for 18 minutes on
+    # a re-run (measured on dev, run 8, 2026-11-14), so `apps` never finished. It does so only when the
+    # certificate's Secret already exists; on a fresh build there is none yet, the Gateway would wait on it and
+    # `apps` with it, so HTTPS stays off until `dev-ca` makes the Secret and turns it on.
+    gitops)
+      if [ "$ENV_NAME" = dev ] && kc -n gateway get secret apps-tls -o name >/dev/null 2>&1; then
+        echo "gitops: the certificate's Secret exists (a re-run): the Gateway's HTTPS stays on"
+        ap playbooks/k8s-gitops.yml --tags install,source -e k8s_gitops_source_gateway_https=true
+      else
+        [ "$ENV_NAME" != dev ] || echo "gitops: no certificate Secret yet (a fresh build): the Gateway's HTTPS stays off until dev-ca"
+        ap playbooks/k8s-gitops.yml --tags install,source
+      fi ;;
     # Seeds namespace secret-source from SECRET_SOURCE_FILE (docs/runbooks/seed-secret-source.md) after
     # Argo CD made it and before apps wait on the ExternalSecrets that read it. Unset: skipped.
     secrets)
