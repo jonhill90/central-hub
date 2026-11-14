@@ -14,7 +14,7 @@ superseded-by:
 
 # Merge a pull request with the box's sweep
 
-**Status:** draft. Written 2026-11-14 with the sweep. Until the owner's tapped install puts it on the box, merges go as they do today. The wording of D-0042 rule 2 still names `merge.yml`, which is gone; the amendment that fixes the text is its own PR.
+**Status:** draft. Written 2026-11-14 with the sweep. Until the owner's tapped install puts it on the box, merges go as they do today. D-0042 rule 2 still names `merge.yml`. The file stays on `main` for now, inert: the runner hook does not list it, so a run of it is refused. Its removal and the rule 2 amendment are PR 1b, which needs the owner's tap.
 
 A cloud session cannot start a GitHub workflow here (the GitHub integration answers 403, measured 2026-11-14), so the merge does not run by dispatch. A timer on the agent box runs `pr-merge.sh sweep` as the keys user every few minutes. It merges a PR only when that PR's exact head holds four recorded passes: the reviewer's clearance and the passes of councils A, B and C. It is not GitHub's auto-merge, and it never passes `--admin`.
 
@@ -48,7 +48,8 @@ pr-merge check jonhill90/<repo> <pr number> <40-character head>
 
 - `GREEN`: the sweep will merge it at its next turn.
 - `NOT GREEN: ...`: every reason is printed (a missing role, a failed check, a moved head, a ledger that does not parse). Fix it or wait; a new head needs its own four passes.
-- `OWNER: rule 11 PR ... needs an owner-tap line`: the PR changes a file that guards the merge itself (D-0042 rules 6 and 11, D-0034, the runner hook, `pr-merge.sh`, `pr-merge-verdict.py`, `pass-record.sh`, the sweep's unit files), or a record that supersedes or amends D-0042 or D-0034. The owner's decision card names the step and the commit; record the tap as role `owner-tap` with the card's message id, and the sweep merges it. The owner never clicks merge.
+- `OWNER: rule 11 PR ... needs an owner-tap line`: the PR changes a file that guards the merge itself (D-0042 rules 6 and 11, D-0034, the runner hook, `pr-merge.sh`, `pr-merge-verdict.py`, `pass-record.sh`, the sweep's unit files), or a record that supersedes or amends D-0042 or D-0034. The owner's decision card names the step and the commit; the orchestrator records the tap as role `owner-tap` with the card's message id, and the sweep merges it. Only the orchestrator may record that role (the wrapper refuses any other recorder), and the line is its word for a card tap the box cannot see. The owner never clicks merge.
+- A changed record or standard whose content at the head cannot be read is never green (only a PR that removes the file may skip it), and a failed read of it stops the whole evaluation, so a 5xx or rate limit skips the PR until the next turn.
 - A status change to `accepted`, `rejected`, `parked` or `active` is checked too (D-0042 rule 3): `approved-by: agents` for an acceptance, an `approved-commit` with four passes of its own, and the PR's net change equal to the approved commit's apart from the status, date and `accepted-evidence` lines and the index row. If it does not fit, reshape the PR (acceptance as its own PR on top of the passed proposal head) and record passes again.
 
 ## Stop the sweep (D-0042 rule 8)

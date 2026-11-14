@@ -18,12 +18,12 @@ def ledger(path, roles, head=H, pr=PR, full=FULL):
         for r in roles:
             f.write(json.dumps({"role": r, "repo": full, "pr": pr, "head": head, "relay_ref": "cmsg_ABCDEFGHIJ", "relay_time": "2026-11-14T13:00:00Z", "recorder": "orchestrator", "box_time": "2026-11-14T13:00:01Z"}) + "\n")
 
-def fx(files, roles=ROLES, pr_over=None, checks=None, base_status=None, head_text=None, base_text=None, cmp_head=None, approved=None, approved_roles=ROLES, raw_ledger=None):
+def fx(files, removed=(), roles=ROLES, pr_over=None, checks=None, base_status=None, head_text=None, base_text=None, cmp_head=None, approved=None, approved_roles=ROLES, raw_ledger=None):
     d = tempfile.mkdtemp(dir=tmp)
     pr = {"state": "open", "draft": False, "base": {"ref": "main", "sha": "c" * 40}, "head": {"sha": H}, "mergeable": True, "mergeable_state": "clean"}
     pr.update(pr_over or {})
     json.dump(pr, open(d + "/pr.json", "w"))
-    json.dump([{"filename": f} for f in files], open(d + "/files.json", "w"))
+    json.dump([{"filename": f, "status": "removed" if f in removed else "modified"} for f in files], open(d + "/files.json", "w"))
     json.dump(checks or {"total_count": 1, "check_runs": [{"name": "docs", "status": "completed", "conclusion": "success"}]}, open(d + "/checks.json", "w"))
     json.dump({}, open(d + "/status.json", "w"))
     if raw_ledger is not None:
@@ -83,8 +83,8 @@ d = fx(DOC, checks={"total_count": 0, "check_runs": []});  check("no check run i
 d = fx([".github/workflows/docs.yml"]);                    check("an edit under .github/ is green with a NOTE", subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout, "NOTE: this PR edits 1 files under .github/")
 # Rule 11: the guarded files need the owner-tap line, the others do not.
 for f in ["docs/decisions/0042-let-the-reviewer.md", "docs/decisions/0034-x.md", "hosts/ansible/roles/agent_box/files/runner-job-started.sh", "hosts/ansible/roles/agent_box/files/pr-merge.sh", "hosts/ansible/roles/agent_box/files/pass-record.sh", "hosts/ansible/roles/agent_box/files/pr-merge-verdict.py", "hosts/ansible/roles/agent_box/templates/pr-merge-sweep.timer.j2"]:
-    d = fx([f], head_text={}); check("rule 11 file %s needs the owner tap" % f.split("/")[-1], run(d), "OWNER: rule 11 PR")
-    d = fx([f], roles=ROLES + ["owner-tap"]);   check("rule 11 file %s with the tap is GREEN" % f.split("/")[-1], run(d), "GREEN")
+    d = fx([f], head_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\n"}); check("rule 11 file %s needs the owner tap" % f.split("/")[-1], run(d), "OWNER: rule 11 PR")
+    d = fx([f], roles=ROLES + ["owner-tap"], head_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\n"});   check("rule 11 file %s with the tap is GREEN" % f.split("/")[-1], run(d), "GREEN")
 d = fx(["hosts/ansible/roles/agent_box/files/pr-merge.sh"]); check("the mutation: dropping the rule 11 list lets it through", run(d), "OWNER", mutate('RULE11 = [re.compile(p) for p in (', 'RULE11 = [re.compile(p) for p in ("^$",)] or ('), d)
 d = fx(["docs/decisions/0099-x.md", "CLAUDE.md", "AGENTS.md", "docs/standards/STD-0001.md"], roles=ROLES, head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: []\n---\nbody\n", "docs/standards/STD-0001.md": "---\nid: STD-0001\nstatus: draft\n---\n"}); check("records, standards, CLAUDE.md and AGENTS.md need no tap", run(d), "GREEN")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: [D-0042]\n---\nbody\n"}); check("a record that supersedes D-0042 needs the tap", run(d), "OWNER: rule 11 PR")
@@ -129,6 +129,11 @@ d = fx([REC], head_text={REC: rec("accepted")}, base_text={REC: base}, cmp_head=
 check("a missing compare refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: the compare")
 d = fx([REC] + ["docs/decisions/%04d-y.md" % i for i in range(25)], head_text={})
 check("more than 20 record files are not checked", run(d), "NOT GREEN: more than 20 record")
+# A changed record with no readable head content never passes (a failed contents read); a removed record may skip.
+d = fx([REC], head_text={}, base_text={REC: base})
+check("a changed record whose head content is missing is refused", run(d), "NOT GREEN: docs/decisions/0099-x.md: its content at the head could not be read", mutate('if fstatus.get(n) != "removed" and content("head", n) is None:', 'if False:'), d)
+d = fx([REC], removed=[REC], head_text={}, base_text={REC: base})
+check("a removed record needs no head content", run(d), "GREEN")
 d = tempfile.mkdtemp(dir=tmp)
 check("a missing input is a refusal, not a pass", run(d), "NOT GREEN: could not decide")
 shutil.rmtree(tmp)

@@ -19,6 +19,7 @@ root = sys.argv[1] if len(sys.argv) > 1 else "."
 hook = os.path.join(root, "hosts/ansible/roles/agent_box/files/runner-job-started.sh")
 problems = []
 listed = dict((m.group(2), m.group(1)) for m in re.finditer(r'^\s+"([0-9a-f]{64}) (\.github/workflows/[^"\s]+)"', open(hook).read(), re.M))
+retired = re.findall(r'^\s+"(\.github/workflows/[^"\s]+)"\s*$', re.sub(r'(?s)^.*?retired=\(', '', open(hook).read(), count=1).split(")", 1)[0], re.M)
 if not listed:
     problems.append("the hook lists no workflow (is the allowlist format changed?)")
 box = []
@@ -30,13 +31,19 @@ for p in sorted(glob.glob(os.path.join(root, ".github/workflows/*.y*ml"))):
         if re.search(r"^\s*-?\s*uses:", text, re.M):
             problems.append("%s runs on the box and has a uses: step; an action is not pinned by the file's hash" % rel)
 for rel in box:
-    if rel not in listed:
+    if rel in retired:
+        if rel in listed:
+            problems.append("%s is both listed and retired" % rel)
+    elif rel not in listed:
         problems.append("%s runs on the box but is not in the hook's list" % rel)
     elif hashlib.sha256(open(os.path.join(root, rel), "rb").read()).hexdigest() != listed[rel]:
         problems.append("%s changed: the hook's list holds a different sha256" % rel)
 for rel in listed:
     if rel not in box:
         problems.append("%s is in the hook's list but is not a workflow that runs on the box" % rel)
+for rel in retired:
+    if not os.path.exists(os.path.join(root, rel)):
+        problems.append("%s is in the hook's retired list but the file is gone: remove it from the list too" % rel)
 for x in problems:
     print("hook allowlist: " + x)
 sys.exit(1 if problems else 0)

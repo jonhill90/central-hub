@@ -35,6 +35,9 @@ case ${1:-} in
     ref_ok "$ref" || die "RELAY_REF must be a cmsg_ message id"
     [[ $rtime =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || die "RELAY_TIME must be an ISO time like 2026-11-14T13:00:00Z"
     case $recorder in orchestrator | builder) ;; *) die "RECORDER must be orchestrator or builder" ;; esac
+    # An owner-tap line is the orchestrator's word for a card tap the box cannot see; any session can call add, so
+    # no other recorder may write one.
+    [[ $role != owner-tap || $recorder == orchestrator ]] || die "owner-tap is recorded by the orchestrator only"
     if [[ $recorder == builder ]]; then
       # The builder never records a pass for a PR the builder wrote. The PR body is data, so this is a speed bump.
       lane=$("$libexec/pr-merge.sh" lane "$full" "$pr") || die "the PR's author lane could not be read; a builder record is refused"

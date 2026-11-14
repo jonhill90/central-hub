@@ -21,6 +21,7 @@ out=$(pr add reviewer jonhill90/central-hub 7 "$H" notamsg $T orchestrator); che
 out=$(pr add reviewer jonhill90/central-hub 7 "$H" $R yesterday orchestrator); check "a relay time that is not ISO exits 2" "$out" "rc=2"
 out=$(pr add reviewer jonhill90/central-hub 7 "$H" $R $T owner); check "a recorder other than orchestrator or builder exits 2" "$out" "rc=2"; none "none of the bad calls wrote anything"
 out=$(pr add reviewer jonhill90/central-hub 7 "$H" $R $T); check "a missing argument exits 2" "$out" "rc=2"
+out=$(LANE=plan pr add owner-tap jonhill90/central-hub 7 "$H" $R $T builder); check "owner-tap from the builder exits 2" "$out" "rc=2"; none "owner-tap from the builder writes nothing"
 for role in reviewer council-a council-b council-c owner-tap; do out=$(pr add $role jonhill90/central-hub 7 "$H" $R $T orchestrator); check "$role is recorded" "$out" "rc=0"; done
 f="$t/work/passes/central-hub/$H.jsonl"
 [[ $(wc -l < "$f") == 5 ]] && echo "ok   five lines in the file for this head" || { echo "FAIL: line count"; fail=1; }
@@ -35,6 +36,9 @@ out=$(pr halt notamsg); check "halt needs a relay ref" "$out" "rc=2"
 out=$(pr halt $R); check "halt sets the flag" "$out" "rc=0"; [[ -f "$t/work/passes/HALT" ]] && echo "ok   the flag file exists" || { echo "FAIL: no flag"; fail=1; }
 out=$(pr resume $R); check "resume clears the flag" "$out" "rc=0"; [[ ! -e "$t/work/passes/HALT" ]] && echo "ok   the flag file is gone" || { echo "FAIL: flag stays"; fail=1; }
 [[ $(wc -l < "$t/work/passes/halt.log") == 2 ]] && echo "ok   halt.log has both lines" || { echo "FAIL: halt.log"; fail=1; }
+sed 's|^    \[\[ \$role != owner-tap.*|    true|' "$t/pass-record.sh" > "$t/mut2.sh"
+H4=$(printf 'd%.0s' $(seq 40)); out=$(LANE=plan bash "$t/mut2.sh" add owner-tap jonhill90/central-hub 8 "$H4" $R $T builder 2>&1; echo "rc=$?")
+[[ $out == *"rc=0"* ]] && echo "ok   mutation: without the owner-tap rule a builder records a tap" || { echo "FAIL: the owner-tap mutation did nothing: $out"; fail=1; }
 # Mutation: without the lane rule, the builder-written PR is recorded, so the check above must fail.
 sed 's|\[\[ \$lane != builder \]\] \|\| die|true \|\| die|' "$t/pass-record.sh" > "$t/mut.sh"
 H3=$(printf 'c%.0s' $(seq 40)); out=$(LANE=builder bash "$t/mut.sh" add reviewer jonhill90/central-hub 8 "$H3" $R $T builder 2>&1; echo "rc=$?")

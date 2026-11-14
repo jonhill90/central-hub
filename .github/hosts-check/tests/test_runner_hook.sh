@@ -28,7 +28,7 @@ out=$(run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatch); check "a list
 out=$(run "$R/lab-redeploy-dev.yml@refs/heads/main" workflow_dispatch); check "the other listed workflow runs" "$out" "rc=0"
 out=$(FAKE_TAMPER=1 run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatch); check "a file whose hash is not listed is refused" "$out" "is not the file whose hash is listed"
 out=$(FAKE_FETCH_FAIL=1 run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatch); check "a fetch that fails is refused (fail closed)" "$out" "could not fetch"
-out=$(run "$R/merge.yml@refs/heads/main" workflow_dispatch); check "merge.yml is no longer listed" "$out" "is not a listed workflow"
+out=$(run "$R/merge.yml@refs/heads/main" workflow_dispatch); check "merge.yml is retired: the hook refuses it" "$out" "is retired and does not run here"
 out=$(run "$R/other.yml@refs/heads/main" workflow_dispatch); check "an unlisted workflow is refused" "$out" "is not a listed workflow"
 out=$(run "$R/lab-tailnet.yml@refs/heads/feature" workflow_dispatch); check "a branch other than main is refused" "$out" "not a workflow of"
 out=$(run "$R/lab-tailnet.yml@refs/heads/main" pull_request); check "an event other than workflow_dispatch is refused" "$out" "only runs the listed workflows"
@@ -38,9 +38,11 @@ out=$(SHA_OVERRIDE=abc run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatc
 sed 's|^\[\[ \$got == "\$want" \]\] .*|true|' "$hook" > "$t/mut.sh"
 out=$(HOOK="$t/mut.sh" FAKE_TAMPER=1 run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatch); check "mutation: without the compare a tampered file runs" "$out" "rc=0"
 # The CI check against a scratch tree.
-mk() { rm -rf "$t/tree"; mkdir -p "$t/tree/.github/workflows" "$t/tree/hosts/ansible/roles/agent_box/files"; cp "$hook" "$t/tree/hosts/ansible/roles/agent_box/files/"; cp "$root"/.github/workflows/lab-tailnet.yml "$root"/.github/workflows/lab-redeploy-dev.yml "$t/tree/.github/workflows/"; }
+mk() { rm -rf "$t/tree"; mkdir -p "$t/tree/.github/workflows" "$t/tree/hosts/ansible/roles/agent_box/files"; cp "$hook" "$t/tree/hosts/ansible/roles/agent_box/files/"; cp "$root"/.github/workflows/lab-tailnet.yml "$root"/.github/workflows/lab-redeploy-dev.yml "$root"/.github/workflows/merge.yml "$t/tree/.github/workflows/"; }
 ck() { python3 -I "$root/.github/hosts-check/check-hook-allowlist.py" "$t/tree" 2>&1; echo "rc=$?"; }
 mk; out=$(ck); check "the check passes on the repository's own state" "$out" "rc=0"
+mk; sed -i '/^retired=(/,/^)/{/merge.yml/d}' "$t/tree/hosts/ansible/roles/agent_box/files/runner-job-started.sh"; out=$(ck); check "a box workflow in neither list fails" "$out" "merge.yml runs on the box but is not in the hook's list"
+mk; rm "$t/tree/.github/workflows/merge.yml"; out=$(ck); check "a retired entry whose file is gone fails" "$out" "retired list but the file is gone"
 mk; echo "# edit" >> "$t/tree/.github/workflows/lab-tailnet.yml"; out=$(ck); check "an edited box workflow without the new hash fails" "$out" "changed: the hook's list holds a different sha256"
 mk; printf 'jobs:\n  x:\n    runs-on: [self-hosted, central-hub-box]\n    steps: []\n' > "$t/tree/.github/workflows/new.yml"; out=$(ck); check "a new box workflow not in the list fails" "$out" "new.yml runs on the box but is not in the hook's list"
 mk; rm "$t/tree/.github/workflows/lab-redeploy-dev.yml"; out=$(ck); check "a listed workflow that is gone fails" "$out" "is in the hook's list but is not a workflow that runs on the box"

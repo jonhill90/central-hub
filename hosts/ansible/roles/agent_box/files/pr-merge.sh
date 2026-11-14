@@ -144,8 +144,12 @@ for f in json.load(open(sys.argv[1])):
         q=$(python3 -I -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$path")
         for side in base head; do
           ref=$mb; [[ $side == head ]] && ref=$head
-          if gh "$base/contents/$path?ref=$ref" > "$tmp/c.json" 2>/dev/null; then
-            python3 -I -c 'import base64,json,sys; sys.stdout.write(base64.b64decode(json.load(open(sys.argv[1]))["content"]).decode())' "$tmp/c.json" > "$d/content/$side/$q"
+          # Only a 404 means the file is absent at that commit (new at the base, removed at the head); any other failure
+          # (a 5xx, a rate limit) fails the evaluation, and the verdict refuses a changed record whose head content is missing.
+          if gh "$base/contents/$path?ref=$ref" > "$tmp/c.json" 2>"$errf"; then
+            python3 -I -c 'import base64,json,sys; sys.stdout.write(base64.b64decode(json.load(open(sys.argv[1]))["content"]).decode())' "$tmp/c.json" > "$d/content/$side/$q" || return 1
+          else
+            grep -q 'returned 404' "$errf" || { cat "$errf" >&2; return 1; }
           fi
         done
         ac=$(sed -n 's/^  approved-commit: \([0-9a-f]\{40\}\)$/\1/p' "$d/content/head/$q" | head -1)

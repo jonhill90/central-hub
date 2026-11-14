@@ -162,6 +162,12 @@ def main():
         except OSError:
             return None
 
+    fstatus = {f["filename"]: f.get("status", "") for f in files}
+    # A changed record or standard with no head content is a refusal unless GitHub says the PR removes it.
+    for n in rec_files:
+        if fstatus.get(n) != "removed" and content("head", n) is None:
+            why.append("%s: its content at the head could not be read" % n)
+    rec_files = [n for n in rec_files if fstatus.get(n) != "removed"]
     for n in rec_files:
         if not n.startswith("docs/decisions/"): continue
         text = content("head", n)

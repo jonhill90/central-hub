@@ -5,7 +5,7 @@
 # redeploy workflow and the tailnet pipeline job), as they are on main, started by hand, and byte for byte the
 # file whose sha256 is listed below. It fetches the file at the run's commit (GITHUB_WORKFLOW_SHA) from the public
 # repository and refuses if it cannot (fail closed). A merged edit to a listed workflow therefore does nothing on
-# the box until a tapped install updates this list. The merge job is not here: the box's sweep merges (D-0042 rule 2).
+# the box until a tapped install updates this list. merge.yml is deliberately not listed, so the hook refuses it (it is retired; PR 1b removes the file with the rule 2 amendment).
 # A non-zero exit fails the job before any step runs. Installed by the agent_box role, root-owned. Names no private value.
 set -euo pipefail
 
@@ -15,6 +15,11 @@ set -euo pipefail
 allowed=(
   "45ba4675fa9d39e5953690e5861f4f74fd513eb504771b66f80d704c1bc79907 .github/workflows/lab-redeploy-dev.yml"
   "b61c975faa57620a94e4e2f4a178f30f33094543349c223b1f7c8bf29dfd378d .github/workflows/lab-tailnet.yml"
+)
+# Workflow files that still exist and name the box's label but must not run here. The hook refuses them because they are
+# not listed above; the CI check requires each to exist and to stay unlisted, so deleting one means editing this list.
+retired=(
+  ".github/workflows/merge.yml"
 )
 repo=jonhill90/central-hub
 # GitHub's raw file host for this public repository's own workflow files (not a downloaded component).
@@ -28,6 +33,9 @@ ref=${GITHUB_WORKFLOW_REF:-}
 path=${ref#"$repo/"}; path=${path%@refs/heads/main}
 sha=${GITHUB_WORKFLOW_SHA:-}
 [[ $sha =~ ^[0-9a-f]{40}$ ]] || refuse "the run's commit is missing or malformed"
+for entry in "${retired[@]}"; do
+  [[ $entry == "$path" ]] && refuse "$path is retired and does not run here"
+done
 want=
 for entry in "${allowed[@]}"; do
   [[ ${entry#* } == "$path" ]] && want=${entry%% *}
