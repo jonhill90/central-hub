@@ -14,7 +14,7 @@ accepted-evidence:
   approval-ref: the orchestrator thread's message to the audit thread of 2026-11-14 at about 10:58:30Z recording the reviewer's clearance and the passes of Councils C (10:56:26Z), A (10:56:31Z) and B (10:56:32Z) for head e955f94, each saying setting it active under D-0042 rule 3 is fine; it reached the audit thread as a thread relay, which carries no message id
   approval-names: "the pass names PR #318 and head e955f9413ab135245a2e125c8cb72ee9bb1ad927"
   check: approved-by is agents under D-0042 rule 3. The audit thread read the orchestrator's pass record at 10:58Z; it names PR #318 and the head. approved-commit is the head that holds the standard as proposed, merged as 8450530; this commit changes only status and accepted-evidence (the standard schema has no date field), plus the README index row the generator writes, which the reviewer checks (D-0001)
-  merged: PR #318 merged the proposal as 8450530892283b04a2c24063eee766b6f1289243; this acceptance is not merged yet, and a follow-up PR fills it in after the merge (D-0001)
+  merged: PR #318 merged the proposal as 8450530892283b04a2c24063eee766b6f1289243; PR #328 squash-merged this acceptance at head 3f411bdb24986e29d0c73b47c4558c3b89b04bf7 as 3fad13f13e54ecd8381ab3a828a582c2456e8624 at 2026-11-14T11:08:50Z; the follow-up PR that adds this line changes only accepted-evidence (D-0001)
 ---
 
 # STD-0003: Version choice
