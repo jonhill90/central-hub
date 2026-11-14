@@ -185,7 +185,7 @@ checks() {
 hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 
 # Dev only, before the VMs: the Proxmox node must have enough free memory for the dev VMs beside the guests
-# already running (the owner's capacity check, 2026-11-14). It reads the node's memory with the same token
+# already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default 14336: 12 GiB plus a 2 GiB margin). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 preflight_memory() {
@@ -195,8 +195,9 @@ preflight_memory() {
   # shellcheck source=/dev/null
   body=$( (set -a; . "$TOFU_ENV"; set +a
     insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
-    curl -sS --fail --max-time 30 "${insecure[@]}" -H "Authorization: PVEAPIToken=$PROXMOX_VE_API_TOKEN" \
-      "${PROXMOX_VE_ENDPOINT%/}/api2/json/nodes/$node/status") 2>&1) \
+    # The header goes in on stdin (a curl config), so the token is never in curl's arguments, where ps shows it.
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/nodes/$node/status") 2>&1) \
     || { # shellcheck source=/dev/null
          secret=$(set -a; . "$TOFU_ENV"; printf '%s' "${PROXMOX_VE_API_TOKEN##*=}")
          body=$(printf '%s' "$body" | tr -d '\n' | cut -c1-200); [ -z "$secret" ] || body=${body//"$secret"/***}
