@@ -10,12 +10,12 @@ waits-on: [D-0041]
 supersedes: []
 superseded-by:
 accepted-evidence:
-  approved-by: owner
-  approved-at: 2026-11-14T07:43:25Z
+  approved-by: agents
+  approved-at: 2026-11-14T07:44:46Z
   approved-commit: 0e36de56578300f4a706747a7df4db3b42822a54
-  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6, cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH, cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm
-  approval-names: "no PR, no head and no commit; the messages are typed but name none, which departs from D-0034 rule 4's form"
-  check: the drafting agent read the three messages at 2026-11-14T08:14Z (the first two in the orchestrator thread, the third in the project chat). They ask agents to stop asking the owner to approve PRs and say what still needs him, without naming this PR, a head or a commit. The owner never saw approved-commit, so it is not his approval; it is the commit holding these rules, which the reviewer and the council pass, and the commit after it changes only this field. His approval covers only what his words say, listed in "What the owner said, and what agents picked" (REQ-0029); every other rule is labelled an agent pick. The orchestrator chose these messages as this record's acceptance at 08:13Z, and the reviewer's and the council's passes of this PR's head are the gate
+  approval-ref: the orchestrator thread's message recording the reviewer's clearance and the three council passes of this PR's head; it is written after this head exists, so the follow-up PR that fills in merged adds its id (D-0001)
+  approval-names: "the pass names this PR and its head. Its basis is the owner's typed messages of 2026-11-14 at 07:42:30 (cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6), 07:43:25 (cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH) and 07:44:46 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm), which name no PR, head or commit, a departure from D-0034 rule 4's form"
+  check: approved-by is agents, the orchestrator's call, because the owner's messages ask agents to stop asking him and the agents' pass is what approves this head; approved-at is the time of his last message on it. The drafting agent read the three messages at 2026-11-14T08:14Z (the first two in the orchestrator thread, the third in the project chat). They ask agents to stop asking the owner to approve PRs and say what still needs him, without naming this PR, a head or a commit. The owner never saw approved-commit, so it is not his approval; it is the commit holding these rules, which the reviewer and the council pass, and the commit after it changes only this field. His approval covers only what his words say, listed in "What the owner said, and what agents picked" (REQ-0029); every other rule is labelled an agent pick. The orchestrator chose these messages as this record's acceptance at 08:13Z, and the reviewer's and the council's passes of this PR's head are the gate
   merged: not yet; a follow-up PR fills this in after the merge (D-0001)
 revisit-when: the lab comes to hold personal data or anything of value; a change approved under this record has to be undone after it harmed the lab, a cloud account or the repository; the owner says a pass was wrong; the agents get a GitHub identity of their own (D-0030) and GitHub can require an approval itself; or a cluster other than c1 reads the repository
 ---
@@ -50,11 +50,12 @@ The owner's words, above, decide only this much:
 
 - agents don't ask him to approve or go a PR;
 - the things he named before still need him: firewall and tailnet changes, deletes and secrets;
-- the lab is greenfield, so agents finish it.
+- the lab is greenfield, so agents finish it;
+- this is for the lab, for now, not for every PR (07:44:46 UTC).
 
 Everything else in this record is an agent pick, labelled `[agent pick]` in its rule, which the owner can change at any time (REQ-0035). That includes the reviewer and the council approving in his place: that role is one the agents gave themselves, because his words say not to ask him but not who approves instead.
 
-His words are a change of mind (REQ-0030). They reverse REQ-0009 (the owner makes every decision) and REQ-0012 (only the owner accepts a record; agents must not mark one accepted) in the requirements register, and the project's standing instruction 1 (never mark anything accepted), for the changes this record covers. The register is kept outside this repository, and its rows change by the register's own process.
+His words are a change of mind (REQ-0030). They reverse REQ-0009 (the owner makes every decision) and REQ-0012 (only the owner accepts a record; agents must not mark one accepted) in the requirements register, the project's standing instruction 1 (never mark anything accepted), and the second of the three Central Hub outcomes the owner ranked by card on 2026-11-11 at 04:03 UTC (he picks each permanent piece), for the changes this record covers. The register and that outcome's text are kept outside this repository; both need updating, by their own process.
 
 ## Decision Drivers
 
