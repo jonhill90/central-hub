@@ -30,6 +30,7 @@ superseded-by:
   - The store's first clients, set from the box through the admin AppRole on every `configure` (`tasks/clients.yml`). Each is written only when the store holds something else, so a second run changes nothing:
     - Login `auth/jwt-c1` (type jwt) for c1's External Secrets Operator. Its role `eso` takes only a token whose subject is `system:serviceaccount:external-secrets:store-openbao` and whose audience is `openbao`, and gives policy `eso-c1`, which reads `kv/data/c1/*` and nothing else. The login holds no key until a rebuild's `openbao` stage writes one.
     - AppRole `rebuild`, from the box's address only, with policy `rebuild-jwt-c1`: it can write `auth/jwt-c1/config` and nothing else. Its two IDs are made once in `/etc/agent-keys/dev/` (`openbao-rebuild-role-id`, `openbao-rebuild-secret-id`, no trailing newline) and never printed. The run proves them with one sign-in and revokes that token and its own admin token.
+    - AppRole `snapshot-box` (agent pick 240, `tasks/snapshot_box.yml`), from the box's address only, 5-minute tokens (10 at most), with policy `snapshot-box` plus the `default` policy: `read` on `sys/storage/raft/snapshot` and `create` and `update` on `kv/data/dev/snapshot-mark`, nothing else. The wrapper's `snapshot`, and so the hourly off-box send, signs in with it instead of the admin (D-0038 rules 8 and 12). Its two IDs are made once in `/etc/agent-keys/dev/` (`openbao-snapshot-box-role-id`, `openbao-snapshot-box-secret-id`) and never printed. `configure` proves it without writing anything: the token's policies are exactly `default` and `snapshot-box`, and `sys/capabilities-self` gives exactly `[read]` on the snapshot path and `[create, update]` on the mark, so neither a restore nor a read of the mark is allowed; the forced restore, `kv/data/c1/check`, `kv/metadata/`, the admin policy and its own role hold nothing but `deny`. It is a new credential for agents, so on the install card it is named as an access right as well as a box limit (D-0042 rule 6), one tap.
 
 ## Before you start
 
@@ -58,6 +59,8 @@ superseded-by:
    ```
 
    expect: `"initialized":true,"sealed":false`.
+
+   The first measurement after `configure` (pick 240): `configure` prints `PASS: AppRole snapshot-box holds default and snapshot-box only; capabilities-self: ...`, and then the first `secrets-store snapshot` must print `snapshot raft-<time>.snap`. That run is what shows `create` and `update` on the `data/` path alone let `snapshot-box` write the mark, which the sources state but nothing here had run.
 
 5. Restore with no recovery shares (D-0038 Confirmation 7, pick 239).
    why: prod runs with no recovery shares (D-0038 rule 5), so dev proves first that a store with none takes a snapshot and restores it.
@@ -92,7 +95,7 @@ superseded-by:
 10. Snapshot off the VM.
    `secrets-store snapshot`
    expect: `snapshot raft-<time>.snap, <n> bytes` with n above 0; the file is in `/etc/agent-keys/dev/openbao-snapshots/`, which keeps 24. Beside it, `raft-<time>.snap.cluster` holds the store's cluster ID from `sys/health` (not a secret).
-   Every snapshot writes one key into the store first: `kv/dev/snapshot-mark`, which holds the snapshot's own time and no secret, so a restore can prove which snapshot came back. It is the only key the wrapper writes on each run.
+   It signs in as AppRole `snapshot-box`, not the admin. Every snapshot writes one key into the store first: `kv/dev/snapshot-mark`, which holds the snapshot's own time and no secret, so a restore can prove which snapshot came back. It is the only key the wrapper writes on each run. KV keeps 10 versions of it and deletes older ones, since the mount sets no `max_versions` ([OpenBao KV v2 API](https://openbao.org/docs/api/secret/kv/kv-v2/)).
 
 11. Restore drill.
    why: a backup counts only once it has been restored.
@@ -158,7 +161,7 @@ Pick 237, proposed D-0038 rule 8. **Not installed yet:** it is a box limit, and 
 Each hour, while the box is up, `secrets-store-offbox.sh`:
 
 1. Skips with `secrets-store-offbox: skipped: no store` and succeeds when the wrapper's OpenTofu state holds no store VM. Dev is often torn down. When the VM is in the state but `sys/health` does not answer 200, the run fails (rule 9).
-2. Runs `secrets-store snapshot`, which signs in with the admin AppRole and copies a snapshot into `/etc/agent-keys/dev/openbao-snapshots/` (keeps 24).
+2. Runs `secrets-store snapshot`, which signs in with AppRole `snapshot-box` and copies a snapshot into `/etc/agent-keys/dev/openbao-snapshots/` (keeps 24).
 3. Requires the escrow of pick 222's restic password, as the OPNsense copy does. With no current copy in the vault, nothing is sent.
 4. Uses its own repository, `azure:opnsense-backup:/openbao-dev` (`agent_box_secrets_store_offbox.repository`). It refuses the OPNsense repository, a path inside it, or one that holds it, compared the way restic reads an `azure:` path: `azure:c:p`, `azure:c:/p` and `azure:c://p/` are one repository, and `azure:c:/` is the whole container. It makes its repository on the first run, only when restic says it does not exist (exit 10); any other error fails the run.
 5. Backs the snapshot up under tag `openbao-dev`, then forgets past 48 hourly, 14 daily and 6 monthly, grouped by host and tags. The first run from 03:00 UTC each day also prunes, which deletes older snapshots from Azure for good.
@@ -202,6 +205,8 @@ Take a last snapshot with `secrets-store snapshot`, which copies it to the box's
 - `WARNING: openbao-recovery.made is missing`: the shares came before their time was recorded, so the shares file's own time is used. The run goes on with that time.
 - `recovery`: `the shares are made, but the snapshot after them failed`: until a snapshot succeeds, nothing can be restored. Fix what the snapshot line says and run `secrets-store snapshot`.
 - After any restore, the token that took the snapshot exists again in the store: it was alive when the snapshot was taken, and its revoke is not in the snapshot. It stops at its TTL, an hour at most (D-0038 rule 6). Its revoke fails with "token not found" ([openbao #522](https://github.com/openbao/openbao/issues/522)), so leave it to expire.
+- `secrets-store: AppRole snapshot-box did not sign in`: its IDs are missing from the keys folder, or the store does not hold them yet. Run `configure`, which makes and sets them, then `snapshot` again.
+- `configure` fails at `The rights are exactly the two paths'`: the store's `snapshot-box` login holds more or less than its two paths. The message lists every path's rights (no secrets). Nothing uses the login until it passes; tell the owner.
 - Tell the owner before trying anything not written here.
 
 ## Related
