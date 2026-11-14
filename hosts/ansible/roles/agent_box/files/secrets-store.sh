@@ -42,12 +42,13 @@ echo "secrets-store: central-hub $(git -C "$repo" rev-parse --short HEAD)"
 
 # The store's keys, made here the first time and never printed: the VM's SSH key, the 32-byte static
 # seal key (D-0038 rule 4) and the admin AppRole's IDs (rule 6). A file that exists is never replaced:
-# a new seal key would make every snapshot unreadable.
+# a new seal key would make every snapshot unreadable. The IDs carry no trailing newline, because
+# the store's first start reads each file whole.
 mkdir -p "$env_keys"
 [[ -f $sshkey ]] || ssh-keygen -q -t ed25519 -N "" -C "keys@agent-box secrets-store" -f "$sshkey"
 [[ -f $env_keys/openbao-seal.key ]] || openssl rand -out "$env_keys/openbao-seal.key" 32
-[[ -f $env_keys/openbao-admin-role-id ]] || openssl rand -hex 24 > "$env_keys/openbao-admin-role-id"
-[[ -f $env_keys/openbao-admin-secret-id ]] || openssl rand -hex 24 > "$env_keys/openbao-admin-secret-id"
+[[ -f $env_keys/openbao-admin-role-id ]] || openssl rand -hex 24 | tr -d '\n' > "$env_keys/openbao-admin-role-id"
+[[ -f $env_keys/openbao-admin-secret-id ]] || openssl rand -hex 24 | tr -d '\n' > "$env_keys/openbao-admin-secret-id"
 
 tofu_run() {
   python3 -I - "$settings" "$sshkey.pub" "$repo" "$vars" <<'PY'
