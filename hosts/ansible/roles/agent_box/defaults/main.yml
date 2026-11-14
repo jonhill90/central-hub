@@ -193,3 +193,15 @@ agent_box_copy_prod_files: false
 # set it in the inventory. Empty means the checkout the playbook runs from, which has none of them when
 # the controller runs from a pinned copy.
 agent_box_prod_files_clone: ""
+
+# box-apply (D-0036; docs/runbooks/apply-the-agent-box-from-itself.md): when true, the role installs the
+# root-owned box-apply wrapper and its one sudo line, so a session can apply this role to the box itself from
+# reviewed main, stopping on any change to the box's limits. Turned on in the private inventory.
+agent_box_self_apply: false
+# Tags a self-apply skips: tasks that read the controller's files (ca, prod_files, and the off-box copy's
+# certificate upload), the lifeline's firewall (D-0036 rule 8) and the proofs. A limit itself (defaults key).
+agent_box_self_apply_skip_tags: [ca, prod_files, opnsense_offbox, lifeline, verify]
+# The commit a controller's pinned copy was made from, when that copy is not a git checkout (-e only).
+agent_box_self_apply_commit: ""
+# Set by box-apply on its own runs (-e); the box-apply tasks then write nothing.
+agent_box_self_applying: false

@@ -1,0 +1,135 @@
+---
+# box-apply (D-0036; docs/runbooks/apply-the-agent-box-from-itself.md): the box applies this role to itself from
+# reviewed main and stops on any change to its limits. Everything here is a limit, so it is installed and changed
+# only by an apply from the controller. A self-apply passes agent_box_self_applying=true, and these tasks then
+# write nothing: box-apply's settings, limits, inventory and baseline stay as the controller left them.
+
+- name: box-apply's folders, root's only
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop: [/etc/box-apply, /var/lib/box-apply]
+  register: agent_box_box_apply_dirs
+  when: not agent_box_self_applying | bool
+
+- name: box-apply itself, root-owned
+  ansible.builtin.copy:
+    src: box-apply.py
+    dest: "{{ agent_box_libexec_dir }}/box-apply.py"
+    owner: root
+    group: root
+    mode: "0755"
+  when: not agent_box_self_applying | bool
+
+- name: The front script that sessions run (box-apply plan|apply)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_front_dir }}/box-apply"
+    content: |
+      #!/bin/sh
+      # {{ agent_box_front_dir }}/box-apply: what a session runs. It hands the call to box-apply as root;
+      # sudoers allows only plan and apply (D-0036). Managed by the agent_box role (central-hub hosts/ansible).
+      cd / || exit 1
+      exec sudo -n {{ agent_box_libexec_dir }}/box-apply.py "$@"
+    owner: root
+    group: root
+    mode: "0755"
+  when: not agent_box_self_applying | bool
+
+# Skipped in a self-apply: tasks that read files on the controller (ca, prod_files, the off-box copy's
+# certificate upload), the lifeline's firewall (D-0036 rule 8), and the proofs, which a check run can't make.
+- name: box-apply's settings
+  ansible.builtin.copy:
+    dest: /etc/box-apply/settings.json
+    content: >-
+      {{ {'repo_url': agent_box_repo_url,
+          'ansible_playbook': agent_box_libexec_dir ~ '/ansible-venv/bin/ansible-playbook',
+          'collections': agent_box_libexec_dir ~ '/collections',
+          'inventory': '/etc/box-apply/inventory.yml',
+          'skip_tags': agent_box_self_apply_skip_tags} | to_nice_json }}
+    owner: root
+    group: root
+    mode: "0600"
+  when: not agent_box_self_applying | bool and not (ansible_check_mode and agent_box_box_apply_dirs is changed)
+
+- name: box-apply's list of limits
+  ansible.builtin.template:
+    src: box-apply-limits.txt.j2
+    dest: /etc/box-apply/limits.txt
+    owner: root
+    group: root
+    mode: "0600"
+  when: not agent_box_self_applying | bool and not (ansible_check_mode and agent_box_box_apply_dirs is changed)
+
+# The box's own variables from the controller's inventory (role defaults are not host variables, so they stay
+# with the role and a merged change to a free default still applies). Private values never come from anywhere
+# else in a self-apply (D-0036 rule 7).
+- name: box-apply's inventory, the box's host variables as the controller has them
+  ansible.builtin.copy:
+    dest: /etc/box-apply/inventory.yml
+    content: |
+      # Written by the agent_box role on an apply from the controller (D-0036 rule 7); root's only.
+      {{ {'all': {'children': {'agent_box': {'hosts': {inventory_hostname: agent_box_box_apply_vars}}}}} | to_nice_yaml(indent=2) }}
+    owner: root
+    group: root
+    mode: "0600"
+  vars:
+    agent_box_box_apply_vars: >-
+      {{ hostvars[inventory_hostname] | dict2items | selectattr('key', 'match', '^agent_box_')
+         | rejectattr('key', 'in', ['agent_box_self_applying', 'agent_box_self_apply_commit']) | items2dict
+         | combine({'ansible_connection': 'local', 'ansible_python_interpreter': '/usr/bin/python3'}) }}
+  no_log: true
+  when: not agent_box_self_applying | bool and not (ansible_check_mode and agent_box_box_apply_dirs is changed)
+
+# The baseline is the commit a full apply from the controller was made from: every limit at that commit is then
+# on the box. Only a full run writes it (no --tags, no --skip-tags) from a clean checkout, so a narrow apply never
+# hides a limit change it didn't make. It also ends a stop after a put-back (rule 5). A controller that runs from a
+# pinned copy that is not a git checkout names its commit with -e agent_box_self_apply_commit=<40 hex>.
+- name: The controller's commit and whether its checkout is clean
+  ansible.builtin.set_fact:
+    agent_box_box_apply_commit: >-
+      {{ agent_box_self_apply_commit if agent_box_self_apply_commit | length > 0 else
+         lookup('ansible.builtin.pipe', 'git -C ' ~ (playbook_dir | quote) ~ ' rev-parse HEAD 2>/dev/null || true') }}
+    agent_box_box_apply_clean: >-
+      {{ agent_box_self_apply_commit | length > 0 or
+         lookup('ansible.builtin.pipe', 'git -C ' ~ (playbook_dir | quote) ~ ' status --porcelain 2>/dev/null || echo not-a-checkout') | length == 0 }}
+  when: not agent_box_self_applying | bool
+
+- name: Say why no baseline is written
+  ansible.builtin.debug:
+    msg: >-
+      box-apply's baseline is left as it was: it is written only by a full run (no --tags or --skip-tags) from a
+      clean git checkout, or with -e agent_box_self_apply_commit=<the commit this copy was made from>.
+  when:
+    - not agent_box_self_applying | bool
+    - not (ansible_run_tags == ['all'] and ansible_skip_tags | length == 0
+           and agent_box_box_apply_clean | bool and agent_box_box_apply_commit is match('^[0-9a-f]{40}$'))
+
+- name: box-apply's baseline, after a full apply from a clean checkout
+  ansible.builtin.copy:
+    dest: /var/lib/box-apply/baseline
+    content: "{{ agent_box_box_apply_commit }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - not agent_box_self_applying | bool
+    - not ansible_check_mode
+    - ansible_run_tags == ['all']
+    - ansible_skip_tags | length == 0
+    - agent_box_box_apply_clean | bool
+    - agent_box_box_apply_commit is match('^[0-9a-f]{40}$')
+
+- name: A full apply from the controller ends a stop after a put-back
+  ansible.builtin.file:
+    path: /var/lib/box-apply/stopped
+    state: absent
+  when:
+    - not agent_box_self_applying | bool
+    - not ansible_check_mode
+    - ansible_run_tags == ['all']
+    - ansible_skip_tags | length == 0
+    - agent_box_box_apply_clean | bool
+    - agent_box_box_apply_commit is match('^[0-9a-f]{40}$')

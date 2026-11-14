@@ -225,6 +225,10 @@ For the agent to tear down and rebuild layers beyond dev (D-0035), the box needs
 
 The list leaves out on purpose the Proxmox apply token, the Cloudflare bootstrap token, the nodes' SSH keys, the lab CA (the CA is put through the keys wrapper) and the Azure backup run folder's `azure.tfvars` (`hosts/terraform/azure/backup`, which isn't on Proxmox). Copying the files only stores them. No prod teardown or rebuild runs from the box until D-0035 is accepted and D-0030 is met. The state files hold secrets (the certificates folder's state holds the Cloudflare token in plain text), so the box's `/etc/agent-keys` stays owner-only. The state files go to `prod/state/`; the box's copy is not a backup, so keep the off-box copy too.
 
+## Apply the box's own setup from the box
+
+D-0036 lets the box run this role on itself from reviewed main, through `box-apply plan` and `box-apply apply`, and stop for the owner on any change to its limits. It is off until `agent_box_self_apply` is set and the role runs in full from the controller. The steps are in [apply-the-agent-box-from-itself.md](apply-the-agent-box-from-itself.md).
+
 ## If it fails
 
 - `visudo` rejects the sudoers file: the task fails and the old file stays; nothing else in sudo changes.
