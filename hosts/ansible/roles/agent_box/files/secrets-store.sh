@@ -3,22 +3,25 @@
 # on dev (docs/runbooks/set-up-the-secrets-store.md, proposed D-0038). It runs as user `keys` through
 # sudo, so the session that asks for it never sees the Proxmox token, the seal key, the AppRole IDs,
 # the recovery shares or the VM's SSH key. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt|destroy
+#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt|clear-hold|destroy
 # plan, apply, destroy: OpenTofu on hosts/terraform/home/secrets-store with the agents' Proxmox token.
 # configure: the openbao playbook over SSH, with the owner's sign-in once the dev rebuild has handed over
 # Keycloak's issuer (pick 233). recovery: makes the recovery shares once (self-
-# initialization makes none) into the keys folder. status: sys/health, which holds no secret.
-# snapshot: copies a Raft snapshot off the store into the keys folder, with the store's cluster ID beside it.
-# restore: puts the newest of those back, never forced (D-0038 Confirmation 4). restore-rebuilt: after a
-# destroy and rebuild, puts back the newest snapshot of the store's previous cluster, forced only if OpenBao
-# refuses it for the keys (Confirmation 5, pick 238). destroy leaves a hold that stops the hourly off-box send
-# until restore-rebuilt passes. Dev only: every action refuses a store outside 550-599.
+# initialization makes none) into the keys folder, records their time and takes a snapshot that holds them.
+# status: sys/health, which holds no secret. snapshot: writes kv/dev/snapshot-mark (one key, its own time, no
+# secret), then copies a Raft snapshot off the store into the keys folder, with the store's cluster ID beside it.
+# restore: puts the newest snapshot of the same cluster back, never forced, and proves it by the mark (D-0038
+# Confirmations 4 and 7, pick 239). restore-rebuilt: after a destroy and rebuild, puts back the newest snapshot
+# of the store's previous cluster, forced only if OpenBao refuses it for the keys (Confirmation 5, pick 238).
+# Both refuse a snapshot older than the recovery shares. destroy leaves a hold that stops the hourly off-box send
+# until restore-rebuilt passes; clear-hold removes it when the rebuilt store is to stay as it is. Dev only: every
+# action refuses a store outside 550-599.
 set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | recovery | status | snapshot | restore | restore-rebuilt | destroy) action=$1 ;;
-  *) echo "usage: secrets-store plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt|destroy" >&2; exit 2 ;;
+  plan | apply | configure | recovery | status | snapshot | restore | restore-rebuilt | clear-hold | destroy) action=$1 ;;
+  *) echo "usage: secrets-store plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt|clear-hold|destroy" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -162,10 +165,14 @@ admin_token() {
 }
 
 recovery() {
-  local out=$env_keys/openbao-recovery.json token
+  local out=$env_keys/openbao-recovery.json made=$env_keys/openbao-recovery.made token stamp
   # Shares on the box are for dev only (D-0038 rule 5); checked again here, not only at the top.
   [[ $vm_id =~ ^5[5-9][0-9]$ ]] || { echo "secrets-store: recovery shares are made on the box for dev stores only; refused" >&2; exit 1; }
   [[ ! -s $out ]] || { echo "secrets-store: recovery shares exist already ($out); nothing done" >&2; exit 1; }
+  # The follow-up snapshot below refuses during a rebuild, so refuse before any share is made (pick 239).
+  [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt first; no shares made" >&2; exit 1; }
+  # The shares' time, taken before they are asked for: a snapshot must be strictly later to be restored.
+  stamp=$(date -u +%Y%m%dT%H%M%SZ)
   token=$(admin_token)
   # 3 shares, any 2 make a root token for break-glass (D-0038 rule 5). Written only to the keys folder.
   printf 'header = "X-Vault-Token: %s"\n' "$token" |
@@ -174,9 +181,13 @@ recovery() {
   python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("keys") or d.get("data",{}).get("keys"), "no shares in the reply"' "$out.part" ||
     { echo "secrets-store: the reply held no recovery shares; kept at $out.part for checking" >&2; exit 1; }
   mv "$out.part" "$out"
+  echo "$stamp" > "$made"
   printf 'header = "X-Vault-Token: %s"\n' "$token" |
     curl -sS --cacert "$cacert" -K - -X POST "$(addr)/v1/auth/token/revoke-self" >/dev/null
   echo "secrets-store: recovery shares written to the keys folder (not printed)"
+  # Every snapshot from before now is refused by restore, so take one that holds the shares, in a later second.
+  sleep 1
+  ( snapshot ) || { echo "secrets-store: the shares are made, but the snapshot after them failed; until one succeeds, no snapshot can be restored; run secrets-store snapshot" >&2; exit 1; }
 }
 
 # Copy one Raft snapshot off the store, through the admin AppRole. Fails loudly: never an empty file.
@@ -211,23 +222,28 @@ snapshot() {
   echo "secrets-store: snapshot $(basename "$out"), $(stat -c %s "$out") bytes"
 }
 
-# Put the newest snapshot back. The store must be up and unsealed with the same seal key; OpenBao
-# checks the snapshot against it and refuses one it can't read. Never the forced restore.
+# Put the newest snapshot of this store's own cluster back, never forced, and prove it by the mark, under the
+# guards in secrets-store-restore.sh (mode same).
 restore() {
-  local snap token
-  snap=$(find "$snapshots" -maxdepth 1 -name 'raft-*.snap' -printf '%f\n' 2>/dev/null | sort -r | head -n 1)
-  [[ -n $snap ]] || { echo "secrets-store: no snapshot in the keys folder; run secrets-store snapshot first" >&2; exit 1; }
-  token=$(admin_token)
-  printf 'header = "X-Vault-Token: %s"\n' "$token" |
-    curl -sS --fail-with-body --cacert "$cacert" -K - -X POST --data-binary "@$snapshots/$snap" \
-      "$(addr)/v1/sys/storage/raft/snapshot"
-  echo "secrets-store: restored $snap"
+  [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); use restore-rebuilt" >&2; exit 1; }
+  "$(dirname "$0")/secrets-store-restore.sh" same "$(addr)" "$cacert" "$env_keys" "$snapshots" "$hold" 120
 }
 
 # After destroy, apply and configure: the newest snapshot of the store's previous cluster, under the guards in
-# secrets-store-restore-rebuilt.sh. It removes the hold once its proof passes.
+# secrets-store-restore.sh (mode rebuilt). It removes the hold once its proof passes.
 restore_rebuilt() {
-  "$(dirname "$0")/secrets-store-restore-rebuilt.sh" "$(addr)" "$cacert" "$env_keys" "$snapshots" "$hold" 120
+  "$(dirname "$0")/secrets-store-restore.sh" rebuilt "$(addr)" "$cacert" "$env_keys" "$snapshots" "$hold" 120
+}
+
+# The rebuilt store is to stay as it is, with no restore: remove the hold, so snapshots and the hourly off-box
+# send run again. The earlier cluster's snapshots stay in the keys folder; off the box, retention removes them
+# in time, and that prune is the delete the owner already taps for the send (pick 237).
+clear_hold() {
+  [[ -e $hold ]] || { echo "secrets-store: no rebuild hold; nothing done"; return 0; }
+  [[ $(curl -s -o /dev/null -w '%{http_code}' --cacert "$cacert" "$(addr)/v1/sys/health" || true) == 200 ]] ||
+    { echo "secrets-store: the store does not answer sys/health 200; the hold stays" >&2; exit 1; }
+  rm -f -- "$hold"
+  echo "secrets-store: rebuild hold removed; the earlier cluster's snapshots were not restored and stay in the keys folder"
 }
 
 case $action in
@@ -237,5 +253,6 @@ case $action in
   snapshot) snapshot ;;
   restore) restore ;;
   restore-rebuilt) restore_rebuilt ;;
+  clear-hold) clear_hold ;;
   *) tofu_run ;;
 esac
