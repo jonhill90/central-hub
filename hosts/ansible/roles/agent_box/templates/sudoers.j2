@@ -5,6 +5,10 @@ Defaults:{{ agent_box_user }} env_reset
 {% for w in agent_box_wrappers %}
 {{ agent_box_user }} ALL=({{ agent_box_keys_user }}) NOPASSWD: {{ w.args | map('regex_replace', '^', agent_box_libexec_dir ~ '/' ~ w.name ~ '.sh ') | join(', ') }}
 {% endfor %}
+{% if agent_box_self_apply | bool %}
+# box-apply (D-0036): the box applies its own role from reviewed main, as root, with plan or apply only.
+{{ agent_box_user }} ALL=(root) NOPASSWD: {{ agent_box_libexec_dir }}/box-apply.py plan, {{ agent_box_libexec_dir }}/box-apply.py apply
+{% endif %}
 {% if agent_box_runner_user | length > 0 %}
 # The GitHub Actions runner user: only the wrappers marked runner: true, the same fixed arguments.
 Defaults:{{ agent_box_runner_user }} env_reset

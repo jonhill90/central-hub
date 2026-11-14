@@ -5,6 +5,12 @@
 # keys from sessions; the deny rules in the managed settings are the floor for everything else.
 # Order and proofs: docs/runbooks/set-up-the-agent-box.md.
 
+# box-apply writes its baseline only if this ran, so a run that started part way (--start-at-task) writes none.
+- name: Note that this run starts at the role's first task
+  ansible.builtin.set_fact:
+    agent_box_box_apply_from_start: true
+  tags: [always]
+
 - name: Install what the wrappers need
   ansible.builtin.package:
     name: [git, sudo, unzip, bzip2, openssl, openssh-clients, python3, ansible-core]
@@ -472,6 +478,14 @@
     validate: /usr/sbin/visudo -cf %s
   tags: [wrappers]
 
+- name: box-apply, so the box applies this role to itself from reviewed main (only when agent_box_self_apply is true)
+  ansible.builtin.include_tasks:
+    file: self_apply.yml
+    apply:
+      tags: [wrappers, box_apply]
+  when: agent_box_self_apply | bool
+  tags: [wrappers, box_apply]
+
 # --- Claude Code managed settings ----------------------------------------------------------
 
 - name: Managed settings folder, root's
@@ -520,11 +534,19 @@
       changed_when: false
       tags: [verify]
 
+    # The one root line allowed is box-apply's, with plan and apply only (D-0036 rule 2).
     - name: Check the sudo list
+      vars:
+        agent_box_box_apply_line: >-
+          (root) NOPASSWD: {{ agent_box_libexec_dir }}/box-apply.py plan, {{ agent_box_libexec_dir }}/box-apply.py apply
+        agent_box_sudo_list_rest: >-
+          {{ agent_box_sudo_list.stdout_lines | map('trim')
+             | reject('equalto', agent_box_box_apply_line if agent_box_self_apply | bool else '')
+             | join(' | ') }}
       ansible.builtin.assert:
         that:
           - agent_box_sudo_list.stdout is search('\(' ~ agent_box_keys_user ~ '\) NOPASSWD')
-          - agent_box_sudo_list.stdout is not search('\((root|ALL)(\s*:\s*ALL)?\)')
+          - agent_box_sudo_list_rest is not search('\((root|ALL)(\s*:\s*ALL)?\)')
         fail_msg: "{{ agent_box_user }} may run more than the wrappers as {{ agent_box_keys_user }}: {{ agent_box_sudo_list.stdout }}"
         quiet: true
       tags: [verify]
@@ -644,3 +666,13 @@
       tags: [lifeline]
   when: agent_box_lifeline_interface | length > 0
   tags: [lifeline]
+
+# --- box-apply's baseline, last, so only a run that got this far writes it -----------------------------
+
+- name: box-apply's baseline (only when agent_box_self_apply is true)
+  ansible.builtin.include_tasks:
+    file: self_apply_baseline.yml
+    apply:
+      tags: [wrappers, box_apply]
+  when: agent_box_self_apply | bool
+  tags: [wrappers, box_apply]

@@ -174,6 +174,7 @@ check_scripts() {
   git ls-files -z -- '*.sh' | xargs -0 shellcheck --severity=warning
   echo "scripts: ShellCheck passed on $(git ls-files -- '*.sh' | wc -l) scripts"
   bash "$here/tests/test_c1_read.sh"
+  bash "$here/tests/test_box_apply.sh"
   actionlint -shellcheck="$(command -v shellcheck)"
   echo "scripts: actionlint passed on $(git ls-files -- '.github/workflows/*.yml' | wc -l) workflows"
 }

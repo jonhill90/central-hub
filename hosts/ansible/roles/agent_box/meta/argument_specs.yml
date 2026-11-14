@@ -104,6 +104,27 @@ argument_specs:
         description: >-
           Absolute path on the controller of its private clone of this repo, where the git-ignored files
           are. Private, through the inventory. Empty means the checkout the playbook runs from.
+      agent_box_self_apply:
+        type: bool
+        default: false
+        description: >-
+          Install box-apply and its one sudo line (D-0036), so a session can apply this role to the box itself
+          from reviewed main, stopping on any change to the box's limits. Private, through the inventory.
+      agent_box_self_apply_skip_tags:
+        type: list
+        elements: str
+        default: [ca, prod_files, opnsense_offbox, lifeline, verify]
+        description: The tags a self-apply skips.
+      agent_box_self_apply_commit:
+        type: str
+        default: ""
+        description: >-
+          The commit the controller's copy was made from, when it is not a git checkout, so a full run can write
+          box-apply's baseline. Pass it with -e.
+      agent_box_self_applying:
+        type: bool
+        default: false
+        description: Set by box-apply on its own runs; the box-apply tasks then write nothing.
       agent_box_prod_files:
         type: list
         elements: dict

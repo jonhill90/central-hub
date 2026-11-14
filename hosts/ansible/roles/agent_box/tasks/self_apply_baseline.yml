@@ -1,0 +1,57 @@
+---
+# box-apply's baseline (D-0036; docs/runbooks/apply-the-agent-box-from-itself.md), the role's last tasks.
+
+# The baseline is the commit a full apply from the controller was made from: every limit at that commit is then
+# on the box. Only a full run writes it (no --tags, no --skip-tags, no --start-at-task) from a clean checkout, so a
+# narrow apply never hides a limit change it didn't make, and it is written last, so a run that fails part way
+# leaves the old one. It also ends a stop after a put-back (rule 5). A controller that runs from a
+# pinned copy that is not a git checkout names its commit with -e agent_box_self_apply_commit=<40 hex>.
+- name: The controller's commit and whether its checkout is clean
+  ansible.builtin.set_fact:
+    agent_box_box_apply_commit: >-
+      {{ agent_box_self_apply_commit if agent_box_self_apply_commit | length > 0 else
+         lookup('ansible.builtin.pipe', 'git -C ' ~ (playbook_dir | quote) ~ ' rev-parse HEAD 2>/dev/null || true') }}
+    agent_box_box_apply_clean: >-
+      {{ agent_box_self_apply_commit | length > 0 or
+         lookup('ansible.builtin.pipe', 'git -C ' ~ (playbook_dir | quote) ~ ' status --porcelain 2>/dev/null || echo not-a-checkout') | length == 0 }}
+  when: not agent_box_self_applying | bool
+
+- name: Say why no baseline is written
+  ansible.builtin.debug:
+    msg: >-
+      box-apply's baseline is left as it was: it is written only by a full run (no --tags, --skip-tags or --start-at-task) from a
+      clean git checkout, or with -e agent_box_self_apply_commit=<the commit this copy was made from>.
+  when:
+    - not agent_box_self_applying | bool
+    - not (agent_box_box_apply_from_start | default(false) | bool
+           and ansible_run_tags == ['all'] and ansible_skip_tags | length == 0
+           and agent_box_box_apply_clean | bool and agent_box_box_apply_commit is match('^[0-9a-f]{40}$'))
+
+- name: box-apply's baseline, after a full apply from a clean checkout
+  ansible.builtin.copy:
+    dest: /var/lib/box-apply/baseline
+    content: "{{ agent_box_box_apply_commit }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - not agent_box_self_applying | bool
+    - not ansible_check_mode
+    - agent_box_box_apply_from_start | default(false) | bool
+    - ansible_run_tags == ['all']
+    - ansible_skip_tags | length == 0
+    - agent_box_box_apply_clean | bool
+    - agent_box_box_apply_commit is match('^[0-9a-f]{40}$')
+
+- name: A full apply from the controller ends a stop after a put-back
+  ansible.builtin.file:
+    path: /var/lib/box-apply/stopped
+    state: absent
+  when:
+    - not agent_box_self_applying | bool
+    - not ansible_check_mode
+    - agent_box_box_apply_from_start | default(false) | bool
+    - ansible_run_tags == ['all']
+    - ansible_skip_tags | length == 0
+    - agent_box_box_apply_clean | bool
+    - agent_box_box_apply_commit is match('^[0-9a-f]{40}$')
