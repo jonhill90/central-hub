@@ -52,6 +52,10 @@ pr-merge check jonhill90/<repo> <pr number> <40-character head>
 - A changed record or standard whose content at the head cannot be read is never green (only a PR that removes the file may skip it), and a failed read of it stops the whole evaluation, so a 5xx or rate limit skips the PR until the next turn.
 - A status change to `accepted`, `rejected`, `parked` or `active` is checked too (D-0042 rule 3): `approved-by: agents` for an acceptance, an `approved-commit` with four passes of its own, and the PR's net change equal to the approved commit's apart from the status, date and `accepted-evidence` lines and the index row. If it does not fit, reshape the PR (acceptance as its own PR on top of the passed proposal head) and record passes again.
 
+## Merge from the Mac, while the sweep is not installed
+
+`hosts/wrappers/mac/merge-checked.sh OWNER/REPO PR HEAD` is the only merge the Mac may run on an allow line. It asks the box for the verdict (`pr-merge check` over ssh, so one verdict and one ledger), merges only when that says `GREEN`, and then runs `gh pr merge --squash --match-head-commit HEAD`. It refuses a repository outside the four `pass-record` accepts, a checkout that is not at `origin/main` or has tracked changes, and any PR whose verdict is `OWNER` (a rule 11 file) or not green. A refused PR waits for the sweep; the raw `gh pr merge` is never the fallback. The wrapper is no stronger than the sweep, because the ledger is the recorder's own word. It is a rule 11 file, so loosening it needs the owner's tap. The allow line that lets the Mac run it is not part of this change.
+
 ## Stop the sweep (D-0042 rule 8)
 
 ```text
