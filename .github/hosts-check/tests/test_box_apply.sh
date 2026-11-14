@@ -10,6 +10,10 @@
 #   6. An apply that changes limit files on the box is put back, never through a link planted at the temporary
 #      name, and self-applies stop until the controller ends the stop.
 #   7. A failed apply leaves the baseline where it was.
+#   8. A limit change with no approval line, a line whose tap is "none", a wrong digest, or a limit change after
+#      the line's commit stops and prints the digest to approve; a matching line applies that commit with the
+#      limit tasks on and moves the baseline to it, and the next run goes on to main; an approved apply that
+#      changes a limit path its check run did not name is put back and stops self-applies.
 # Usage: .github/hosts-check/tests/test_box_apply.sh   (needs git and python3)
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
@@ -180,6 +184,62 @@ commit c6 >/dev/null
 set +e; out=$(ba apply); rc=$?; set -e
 # The check run also exits 2 here: box-apply accepts 2 from a check run with no failures.
 [[ $rc == 1 && $out == *"the apply failed"* && $(base) == "$c4" ]] && ok "7. a failed apply leaves the baseline where it was" || bad "7: exit $rc: $out"
+
+# 8
+echo 0 > "$t/rc"; echo "$quiet" > "$t/apply.json"; echo "$quiet" > "$t/check.json"
+ba apply >/dev/null || bad "8: the plain apply before failed"
+appr=hosts/ansible/agent-box-limit-approvals.txt
+b8=$(base)
+printf -- '- name: z\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
+l8=$(commit c8)
+want=$(git -C "$t/src" diff --no-renames --binary --full-index "$b8" "$l8" -- "$r/tasks/main.yml" | sha256sum | cut -d' ' -f1)
+n=$(calls)
+set +e; out=$(ba plan); rc=$?; set -e
+[[ $rc == 3 && $out == *"no approval line"* && $out == *"$b8 $l8 $want <pass> <tap>"* && $(calls) == "$n" ]] \
+  && ok "8a. a limit change with no approval line stops and prints the digest to approve" || bad "8a: exit $rc: $out"
+echo "$b8 $l8 $want cmsg_pass01 none" > "$t/src/$appr"
+commit c8b >/dev/null
+set +e; out=$(ba apply); rc=$?; set -e
+[[ $rc == 3 && $out == *"line 1 is malformed"* && $(base) == "$b8" ]] && ok "8b. a line whose tap is none never counts" || bad "8b: exit $rc: $out"
+echo "$b8 $l8 $(printf "%064d" 0) cmsg_pass01 card_tap01" > "$t/src/$appr"
+commit c8c >/dev/null
+set +e; out=$(ba apply); rc=$?; set -e
+[[ $rc == 3 && $out == *"its digest is not the diff"* && $(base) == "$b8" ]] && ok "8c. a wrong digest stops" || bad "8c: exit $rc: $out"
+echo "$b8 $l8 $want cmsg_pass01 card_tap01" > "$t/src/$appr"
+a8=$(commit c8d)
+echo '{"plays":[{"tasks":[{"task":{"name":"One sudoers line per wrapper"},"hosts":{"box1":{"changed":true,"diff":[{"before_header":"'"$t"'/box/sudoers.d/agent-box"}]}}}]}],"stats":{"box1":{"failures":0,"unreachable":0}}}' > "$t/check.json"
+printf '#!/bin/bash\necho "claude ALL=(keys) NOPASSWD: /x plan, /x apply" > "%s/box/sudoers.d/agent-box"\n' "$t" > "$t/apply-hook"
+chmod +x "$t/apply-hook"
+: > "$t/calls"
+out=$(ba apply) || bad "8d: the approved apply failed: $out"
+[[ $out == *"applied the approved limit change ${l8:0:8}"* && $(base) == "$l8" && ! -f $t/state/stopped ]] \
+  && grep -q "/x apply" "$t/box/sudoers.d/agent-box" \
+  && ok "8d. a matching line applies its commit, keeps the named limit change, and moves the baseline to it" || bad "8d: $out"
+[[ $(grep -c -- "-e agent_box_limit_apply=true" "$t/calls") == 2 ]] && tail -n 1 "$t/box-apply.log" | grep -q '"result": "applied-limits"' \
+  && tail -n 1 "$t/box-apply.log" | grep -q '"tap": "card_tap01"' \
+  && ok "8e. both runs set agent_box_limit_apply, and the log names the line's pass and tap" || bad "8e: $(cat "$t/calls"); $(tail -n 1 "$t/box-apply.log")"
+rm "$t/apply-hook"; echo "$quiet" > "$t/check.json"
+out=$(ba apply) || bad "8f: the next apply failed: $out"
+[[ $out == *"applied ${a8:0:8}"* && $(base) == "$a8" ]] && ok "8f. the next run goes on to main as a plain apply" || bad "8f: $out"
+b9=$(base)
+printf -- '- name: w\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
+l9=$(commit c9)
+w9=$(git -C "$t/src" diff --no-renames --binary --full-index "$b9" "$l9" -- "$r/tasks/main.yml" | sha256sum | cut -d' ' -f1)
+echo "$b9 $l9 $w9 cmsg_pass02 card_tap02" >> "$t/src/$appr"
+printf -- '- name: v\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
+commit c9b >/dev/null
+set +e; out=$(ba plan); rc=$?; set -e
+[[ $rc == 3 && $out == *"a limit changed again after ${l9:0:8}"* ]] && ok "8g. a limit change after the line's commit needs its own line" || bad "8g: exit $rc: $out"
+git -C "$t/src" checkout -q "$l9" -- "$r/tasks/main.yml"
+commit c9c >/dev/null
+echo '{"plays":[{"tasks":[{"task":{"name":"One sudoers line per wrapper"},"hosts":{"box1":{"changed":true,"diff":[{"before_header":"'"$t"'/box/sudoers.d/agent-box"}]}}}]}],"stats":{"box1":{"failures":0,"unreachable":0}}}' > "$t/check.json"
+printf '#!/bin/bash\necho "claude ALL=(ALL) ALL" > "%s/box/sudoers.d/extra"\n' "$t" > "$t/apply-hook"
+chmod +x "$t/apply-hook"
+before=$(sha256sum < "$t/box/sudoers.d/agent-box")
+set +e; out=$(ba apply); rc=$?; set -e
+[[ $rc == 4 && $out == *"did not name"* && ! -e $t/box/sudoers.d/extra && $(base) == "$b9" && -f $t/state/stopped ]] \
+  && ok "8h. an approved apply that changes a limit path its check run did not name is put back and stops" || bad "8h: exit $rc: $out"
+rm -f "$t/apply-hook" "$t/state/stopped"
 
 [[ $fail == 0 ]] || exit 1
 echo "box-apply: all checks passed"

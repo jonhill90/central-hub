@@ -151,6 +151,12 @@ argument_specs:
         type: bool
         default: false
         description: Set by box-apply on its own runs; the box-apply tasks then write nothing.
+      agent_box_limit_apply:
+        type: bool
+        default: false
+        description: >-
+          Set by box-apply, with agent_box_self_applying, on an approved limit apply (pick 232); the box-apply tasks
+          then write box-apply, its settings and its limits, never its inventory.
       agent_box_prod_files:
         type: list
         elements: dict
