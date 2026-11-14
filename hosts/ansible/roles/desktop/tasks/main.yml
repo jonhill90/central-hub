@@ -133,3 +133,15 @@
     path: "/home/{{ desktop_admin_user }}/.ssh/authorized_keys"
     state: absent
   when: desktop_lock_admin | bool
+
+# After the key is gone, the public zone's ssh and cockpit services are closed too: nothing needs them, and the
+# default zone would otherwise accept them from any address that reaches the VM. Last on purpose: this run's own
+# SSH connection is already open and survives, and a later change is a rebuild from teardown.
+- name: desktop | ssh and cockpit are removed from the public zone
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: disabled
+  loop: [ssh, cockpit]
+  when: desktop_lock_admin | bool

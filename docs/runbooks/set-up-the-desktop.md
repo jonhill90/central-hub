@@ -27,13 +27,13 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 | Piece | Where |
 |---|---|
 | VM | `hosts/terraform/home/desktop`: one VM with an ID from 400-499 (STD-0001), on VNet dev, cloned from template 9001 into pool `desktop` (so the agents' rights survive a teardown, as pool `dev`'s do) |
-| Software | role `desktop`: GNOME (gdm, gnome-shell, Nautilus, Ptyxis), `gnome-remote-desktop` in its system (headless remote login) mode with a certificate made on the VM, Firefox, all from the AlmaLinux 10 base repositories, a login user without sudo and with its password locked, firewalld (installed by the role) accepting 3389/tcp from the connector's address only, and the admin SSH key removed at the end |
+| Software | role `desktop`: GNOME (gdm, gnome-shell, Nautilus, Ptyxis), `gnome-remote-desktop` in its system (headless remote login) mode with a certificate made on the VM, Firefox, all from the AlmaLinux 10 base repositories, a login user without sudo and with its password locked, firewalld (installed by the role) accepting 3389/tcp from the connector's address only, and the admin SSH key removed at the end, then ssh and cockpit removed from firewalld's public zone |
 | Playbook | `playbooks/desktop.yml`, hosts group `desktop` |
 | Private values | the VM's name and address in `desktop.json` (the same shape as `home.tfvars.example`), the group in the inventory, `desktop_rdp_source` (the address RDP arrives from: the tailnet connector's own address on the mgmt VLAN, see below) |
 
 ## What is not built yet
 
-- Nothing has been applied: the `desktop` wrapper is built (`plan|apply|configure|destroy`, on the box once `agent_box_desktop` is set in the private inventory), and it has not run.
+- The VM is built and configured (2026-11-14, see "Last tested"); the console passwords, the RDP handshake and GDM's login over RDP are not yet seen. The `desktop` wrapper (`plan|apply|configure|destroy`) is on the box once `agent_box_desktop` is set in the private inventory.
 - Nothing changes on the Mac: the switch is the value `DESKTOP_ACCESS` in `agent-access.sh`, which the already-allowed `proxmox-agent-access.sh run` carries to the host.
 - No OPNsense rule is needed for RDP: the mgmt VLAN already passes to every lab VLAN, and the connector's address is what the VM sees. Narrowing which tailnet devices can reach 3389 is a tailnet policy change, not made.
 
