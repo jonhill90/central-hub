@@ -114,6 +114,7 @@
 
 - name: desktop | firewalld accepts RDP from the connector's address only
   ansible.posix.firewalld:
+    zone: public
     rich_rule: 'rule family="ipv4" source address="{{ desktop_rdp_source }}" port port="{{ desktop_rdp_port }}" protocol="tcp" accept'
     permanent: true
     immediate: true
@@ -139,6 +140,7 @@
 # SSH connection is already open and survives, and a later change is a rebuild from teardown.
 - name: desktop | ssh and cockpit are removed from the public zone
   ansible.posix.firewalld:
+    zone: public
     service: "{{ item }}"
     permanent: true
     immediate: true
