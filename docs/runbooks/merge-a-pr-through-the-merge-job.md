@@ -14,7 +14,7 @@ superseded-by:
 
 # Merge a pull request with the box's sweep
 
-**Status:** draft. Written 2026-11-14 with the sweep ([D-0056](../decisions/0056-merge-with-a-sweep-on-the-box-in-place-of-the-merge-job.md), proposed). Until the owner's tapped install puts it on the box, merges go as they do today. This page keeps its old file name because D-0042 links to it.
+**Status:** draft. Written 2026-11-14 with the sweep ([D-0056](../decisions/0056-merge-with-a-sweep-on-the-box-in-place-of-the-merge-job.md), proposed). Until the owner's tapped install puts it on the box, merges go as they do today. D-0042 rule 2 and AGENTS.md rule 2 still name `merge.yml`; the file stays on `main`, inert (the runner hook lists it as retired and refuses it). Its removal and the rule changes are a follow-up PR that needs the owner's tap. This page keeps its old file name because D-0042 links to it.
 
 A cloud session cannot start a GitHub workflow here (the GitHub integration answers 403, measured 2026-11-14), so the merge does not run by dispatch. A timer on the agent box runs `pr-merge.sh sweep` as the keys user every few minutes. It merges a PR only when that PR's exact head holds four recorded passes: the reviewer's clearance and the passes of councils A, B and C. It is not GitHub's auto-merge, and it never passes `--admin`.
 
