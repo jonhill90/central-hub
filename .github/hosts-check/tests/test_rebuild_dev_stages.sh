@@ -38,6 +38,9 @@ done
 out=$(run dev dev-ca "$t/bad")
 check "dev-ca names the missing devca tag" "$out" "has no devca tag" "AP "
 check "dev-ca fails without the tag" "$out" "rc=1" ""
+# The dev identity stage never needs the owner's private theme folder: it passes an empty theme dir.
+out=$(run dev identity-keycloak "$t/ok")
+check "identity-keycloak runs with an empty theme dir" "$out" "k8s_identity_theme_dir= " ""
 # The default list stays a default: dev appends the two stages only when no --only is given.
 if grep -q 'ENV_NAME" = dev \] && \[ -z "\$only" \]; then stages="\$stages dev-ca identity-keycloak"' "$script"; then
   echo "ok   a dev run without --only appends dev-ca and identity-keycloak"
