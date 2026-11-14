@@ -124,3 +124,33 @@ resource "azurerm_role_assignment" "reader" {
   principal_id         = azuread_service_principal.reader.object_id
   principal_type       = "ServicePrincipal"
 }
+
+# OPNsense's configuration, copied off the agent box (agent pick 222; runbook
+# docs/runbooks/copy-opnsense-backup-off-box.md). The owner's card of 2026-11-14 02:23 UTC: the same
+# storage account, but its own container and its own credential, so c1's backup identity can't touch
+# these copies and this one can't touch c1's. The box signs in as its own app registration with a
+# certificate made on the box (the same script as the nodes, pick 189): no secret here or in state.
+# Its role is on this container only; c1's two apps hold roles on the c1 container only.
+resource "azurerm_storage_container" "opnsense" {
+  name                  = var.opnsense_container_name
+  storage_account_id    = azurerm_storage_account.backup.id
+  container_access_type = "private"
+}
+
+resource "azuread_application" "opnsense" {
+  display_name     = var.opnsense_app_display_name
+  sign_in_audience = "AzureADMyOrg"
+  owners           = [data.azuread_client_config.current.object_id]
+}
+
+resource "azuread_service_principal" "opnsense" {
+  client_id = azuread_application.opnsense.client_id
+  owners    = [data.azuread_client_config.current.object_id]
+}
+
+resource "azurerm_role_assignment" "opnsense" {
+  scope                = azurerm_storage_container.opnsense.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azuread_service_principal.opnsense.object_id
+  principal_type       = "ServicePrincipal"
+}

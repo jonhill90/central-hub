@@ -1,0 +1,265 @@
+---
+# The off-box copy of OPNsense's configuration (pick 222, docs/runbooks/copy-opnsense-backup-off-box.md). restic sends
+# the box's daily copies to their own container in the Azure backup account (hosts/terraform/azure/backup), signed in
+# as their own app registration, which holds a data role on that container only.
+#
+# No secret passes through a transcript or the repository:
+# - The box makes its own key and certificate (azure-cert.py init, the nodes' script from role k8s_backup), as the
+#   keys user, in <keys_dir>/opnsense-offbox. The key never leaves the box. Only the public certificate comes back,
+#   and the controller adds it to the app with the Azure CLI, signed in as agent-azure, the app's owner. After that
+#   the box's daily run rolls it itself (Graph addKey), so no Azure secret is stored anywhere.
+# - The restic password is made once on the controller, in ~/.config/central-hub, and reaches the box only through
+#   the prod files copy (no_log). The controller keeps its copy, so the backups can be read without the box.
+
+- name: The off-box copy's settings hold
+  ansible.builtin.assert:
+    that:
+      - agent_box_opnsense_backup | length > 0
+      - agent_box_opnsense_offbox.account | default('') is match('^[a-z0-9]{3,24}$')
+      - agent_box_opnsense_offbox.client_id | default('') is match(agent_box_guid)
+      - agent_box_opnsense_offbox.tenant_id | default('') is match(agent_box_guid)
+      - agent_box_opnsense_offbox.app_object_id | default('') is match(agent_box_guid)
+      - agent_box_opnsense_offbox.repository | default('azure:opnsense-backup:/opnsense') is match('^azure:[a-z0-9-]{3,63}:/[A-Za-z0-9/_-]+$')
+      - agent_box_opnsense_offbox.keep_daily | default(30) | int >= 1
+      - agent_box_opnsense_offbox.keep_daily | default(30) | int <= 365
+      - agent_box_opnsense_offbox.keep_monthly | default(12) | int >= 0
+      - agent_box_opnsense_offbox.keep_monthly | default(12) | int <= 120
+      - agent_box_opnsense_offbox_cert_renew_days | int < agent_box_opnsense_offbox_cert_days | int
+    fail_msg: >-
+      agent_box_opnsense_offbox needs agent_box_opnsense_backup, and account, client_id, tenant_id and app_object_id
+      from the tofu outputs of hosts/terraform/azure/backup (storage_account_name, opnsense_client_id, tenant_id,
+      opnsense_app_object_id); repository, if set, as azure:<container>:/<path>; keep_daily 1 to 365; keep_monthly
+      0 to 120; and fewer renewal days than certificate days.
+    quiet: true
+  vars:
+    agent_box_guid: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+# --- restic and the scripts ------------------------------------------------------------------------
+
+- name: Download restic, checked against its SHA-256
+  ansible.builtin.get_url:
+    url: "https://github.com/restic/restic/releases/download/v{{ agent_box_restic_version }}/restic_{{ agent_box_restic_version }}_linux_amd64.bz2"
+    dest: "{{ agent_box_libexec_dir }}/downloads/restic_{{ agent_box_restic_version }}.bz2"
+    checksum: "sha256:{{ agent_box_restic_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: not (ansible_check_mode and agent_box_downloads_dir | default({}) is changed)
+
+- name: Unpack restic {{ agent_box_restic_version }}
+  ansible.builtin.shell:
+    cmd: >-
+      bunzip2 -c {{ agent_box_libexec_dir }}/downloads/restic_{{ agent_box_restic_version }}.bz2
+      > {{ agent_box_libexec_dir }}/restic-{{ agent_box_restic_version }}.new &&
+      chmod 0755 {{ agent_box_libexec_dir }}/restic-{{ agent_box_restic_version }}.new &&
+      mv {{ agent_box_libexec_dir }}/restic-{{ agent_box_restic_version }}.new {{ agent_box_libexec_dir }}/restic-{{ agent_box_restic_version }}
+    creates: "{{ agent_box_libexec_dir }}/restic-{{ agent_box_restic_version }}"
+  when: not ansible_check_mode
+
+- name: restic points at that version
+  ansible.builtin.file:
+    src: restic-{{ agent_box_restic_version }}
+    dest: "{{ agent_box_libexec_dir }}/restic"
+    state: link
+    force: true
+  when: not ansible_check_mode
+
+- name: The off-box copy's script and the certificate script, root-owned
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ agent_box_libexec_dir }}/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - {src: opnsense-offbox.sh, dest: opnsense-offbox.sh}
+    # The same script the c1 nodes run (pick 189), so one copy of the certificate code is tested and kept.
+    - {src: "{{ role_path }}/../k8s_backup/files/c1-backup-azure-cert.py", dest: azure-cert.py}
+  loop_control:
+    label: "{{ item.dest }}"
+
+# --- Settings and the password file ------------------------------------------------------------------
+
+- name: The off-box copy's key folder, the keys user's
+  ansible.builtin.file:
+    path: "{{ agent_box_keys_dir }}/opnsense-offbox"
+    state: directory
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0700"
+  register: agent_box_offbox_dir
+
+- name: The off-box copy's settings (no secret in them)
+  ansible.builtin.template:
+    src: opnsense-offbox-settings.env.j2
+    dest: "{{ agent_box_keys_dir }}/opnsense-offbox/settings.env"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: not (ansible_check_mode and agent_box_offbox_dir is changed)
+
+- name: Look for the repository password on the box
+  ansible.builtin.stat:
+    path: "{{ agent_box_keys_dir }}/prod/opnsense-offbox-restic.txt"
+  register: agent_box_offbox_password
+
+- name: The repository password is on the box
+  ansible.builtin.assert:
+    that: agent_box_offbox_password.stat.exists and agent_box_offbox_password.stat.size > 0
+    fail_msg: >-
+      {{ agent_box_keys_dir }}/prod/opnsense-offbox-restic.txt is missing: make ~/.config/central-hub/opnsense-offbox-restic.txt
+      on the controller and run this role once with agent_box_copy_prod_files true
+      (docs/runbooks/copy-opnsense-backup-off-box.md, steps 2 and 3).
+    quiet: true
+  when: not ansible_check_mode
+
+# --- The box's own certificate, and its first upload -------------------------------------------------
+
+- name: The box's certificate and its upload
+  when: not ansible_check_mode
+  vars:
+    agent_box_offbox_run: ["runuser", "-u", "{{ agent_box_keys_user }}", "--", "env",
+                           "CENTRAL_HUB_BACKUP_ENV={{ agent_box_keys_dir }}/opnsense-offbox/settings.env",
+                           "{{ agent_box_libexec_dir }}/azure-cert.py"]
+    agent_box_offbox_cert_file: "{{ agent_box_keys_dir }}/opnsense-offbox/azure.pem"
+  block:
+    - name: The box's key and certificate, made on the box once, as the keys user
+      ansible.builtin.command:
+        argv: "{{ agent_box_offbox_run + ['init'] }}"
+      register: agent_box_offbox_cert
+      changed_when: (agent_box_offbox_cert.stdout | from_json).made
+
+    - name: Entra ID accepts the box's certificate
+      ansible.builtin.command:
+        argv: "{{ agent_box_offbox_run + ['check'] }}"
+      register: agent_box_offbox_check
+      changed_when: false
+      failed_when: agent_box_offbox_check.rc not in [0, 3]
+
+    # Exit 3: Entra ID does not know this certificate. Only the public certificate leaves the box.
+    - name: Upload the box's public certificate to the copy app
+      when: agent_box_offbox_check.rc == 3
+      delegate_to: localhost
+      become: false
+      block:
+        - name: A file for the public certificate on the controller
+          ansible.builtin.tempfile:
+            suffix: .pem
+          register: agent_box_offbox_upload
+
+        - name: Write the public certificate
+          ansible.builtin.copy:
+            content: "{{ (agent_box_offbox_cert.stdout | from_json).certificate }}"
+            dest: "{{ agent_box_offbox_upload.path }}"
+            mode: "0600"
+
+        - name: Add it to the app's certificates
+          ansible.builtin.command:
+            argv:
+              - "{{ agent_box_az }}"
+              - ad
+              - app
+              - credential
+              - reset
+              - --id
+              - "{{ agent_box_opnsense_offbox.client_id }}"
+              - --cert
+              - "@{{ agent_box_offbox_upload.path }}"
+              - --append
+              - --only-show-errors
+              - --output
+              - none
+          register: agent_box_offbox_reset
+          until: agent_box_offbox_reset.rc == 0
+          retries: 5
+          delay: 20
+          changed_when: true
+      always:
+        - name: Remove the file
+          ansible.builtin.file:
+            path: "{{ agent_box_offbox_upload.path }}"
+            state: absent
+          delegate_to: localhost
+          become: false
+          when: agent_box_offbox_upload.path is defined
+
+    # A new certificate takes a short while to work everywhere in Entra ID (pick 193's lesson on c1).
+    - name: Wait until Entra ID accepts the uploaded certificate
+      ansible.builtin.command:
+        argv: "{{ agent_box_offbox_run + ['check'] }}"
+      register: agent_box_offbox_wait
+      until: agent_box_offbox_wait.rc == 0
+      retries: 40
+      delay: 15
+      changed_when: false
+      when: agent_box_offbox_check.rc == 3
+
+    # The key ID lets the box remove its old certificate after it rolls it.
+    - name: Find the box's certificate on the app
+      ansible.builtin.command:
+        argv: ["{{ agent_box_az }}", ad, app, credential, list, --id, "{{ agent_box_opnsense_offbox.client_id }}",
+               --cert, --only-show-errors, --output, json]
+      register: agent_box_offbox_creds
+      vars:
+        agent_box_offbox_thumb: "{{ agent_box_offbox_cert.stdout | from_json }}"
+      until: >-
+        agent_box_offbox_creds.rc == 0 and
+        (agent_box_offbox_creds.stdout | from_json | selectattr('customKeyIdentifier', 'in',
+          [agent_box_offbox_thumb.thumbprint, agent_box_offbox_thumb.thumbprint | lower,
+           agent_box_offbox_thumb.thumbprint_b64, agent_box_offbox_thumb.thumbprint | b64encode]) | list | length) == 1
+      retries: 20
+      delay: 15
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: The box's key ID
+      ansible.builtin.set_fact:
+        agent_box_offbox_mykey: >-
+          {{ (agent_box_offbox_creds.stdout | from_json | selectattr('customKeyIdentifier', 'in',
+             [agent_box_offbox_thumb.thumbprint, agent_box_offbox_thumb.thumbprint | lower,
+              agent_box_offbox_thumb.thumbprint_b64, agent_box_offbox_thumb.thumbprint | b64encode]) | first).keyId }}
+      vars:
+        agent_box_offbox_thumb: "{{ agent_box_offbox_cert.stdout | from_json }}"
+
+    - name: Record the key ID of the box's certificate
+      ansible.builtin.copy:
+        content: "{{ agent_box_offbox_mykey }}\n"
+        dest: "{{ agent_box_offbox_cert_file }}.keyid"
+        owner: "{{ agent_box_keys_user }}"
+        group: "{{ agent_box_keys_user }}"
+        mode: "0600"
+
+    # The box is the app's only holder, so every other certificate on the app is one left by a roll whose
+    # removeKey failed, or by an earlier box. Only after the box's own certificate was found above.
+    - name: Remove the app's certificates the box does not hold
+      ansible.builtin.command:
+        argv: ["{{ agent_box_az }}", ad, app, credential, delete, --id, "{{ agent_box_opnsense_offbox.client_id }}",
+               --key-id, "{{ item.keyId }}", --cert, --only-show-errors]
+      loop: "{{ agent_box_offbox_creds.stdout | from_json | rejectattr('keyId', 'equalto', agent_box_offbox_mykey) | list }}"
+      loop_control:
+        label: "{{ item.keyId }} (ends {{ item.endDateTime }})"
+      when: agent_box_offbox_mykey | length > 0
+      delegate_to: localhost
+      become: false
+      changed_when: true
+
+# --- The daily timer -------------------------------------------------------------------------------
+
+- name: Daily off-box copy service and timer
+  ansible.builtin.template:
+    src: "opnsense-offbox.{{ item }}.j2"
+    dest: "/etc/systemd/system/opnsense-offbox.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_offbox_units
+
+- name: Daily off-box copy timer on
+  ansible.builtin.systemd_service:
+    name: opnsense-offbox.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_offbox_units is changed }}"
+  when: not (ansible_check_mode and agent_box_offbox_units is changed)

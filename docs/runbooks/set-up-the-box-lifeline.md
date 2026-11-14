@@ -34,7 +34,7 @@ With the second NIC on the host's subnet, the connected route to the Proxmox API
 
 - **It does not reach the tailnet or the internet without OPNsense.** There is no gateway on the lifeline. With OPNsense gone the box can still reach the Proxmox API (to rebuild it) but has no internet until OPNsense is back. A gateway through the home router would give it internet, and would also make the box reachable from and exposed to the home LAN's router path: the owner decides.
 - **The Proxmox host's own firewall.** It lets only the box reach port 8006, by the box's address on VNet dev. The box's source address over the lifeline is the new one, so that rule must add it (`proxmox_firewall`, the owner's words for a firewall change).
-- **The copy is on the box.** `opnsense-backup` keeps its copies on VM 258, where a destroyed OPNsense cannot touch them, but the box is not off-box storage. An off-box copy (the Azure backup account, the Proxmox host, or elsewhere) needs a place and a credential the owner picks. Restoring is OPNsense's own: System, Configuration, Backups, Restore, or the API's `core/backup` calls.
+- **The copy is on the box.** `opnsense-backup` keeps its copies on VM 258, where a destroyed OPNsense cannot touch them, but the box is not off-box storage. The owner picked the Azure backup account for the off-box copy, with its own container, credential and password: [Copy the OPNsense configuration backups off the agent box](copy-opnsense-backup-off-box.md). Restoring is OPNsense's own: System, Configuration, Backups, Restore, or the API's `core/backup` calls.
 
 ## Steps (after the owner's go)
 

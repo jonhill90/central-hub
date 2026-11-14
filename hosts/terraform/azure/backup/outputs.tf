@@ -37,3 +37,18 @@ output "reader_app_object_id" {
   description = "k8s_backup_azure_app_object_id in dev's inventory: the read-only app's object ID."
   value       = azuread_application.reader.object_id
 }
+
+output "opnsense_restic_repository" {
+  description = "repository in agent_box_opnsense_offbox: the restic repository of OPNsense's configuration copies."
+  value       = "azure:${azurerm_storage_container.opnsense.name}:/opnsense"
+}
+
+output "opnsense_client_id" {
+  description = "client_id in agent_box_opnsense_offbox: the OPNsense copy app's client ID, which the box signs in with. Not a secret."
+  value       = azuread_application.opnsense.client_id
+}
+
+output "opnsense_app_object_id" {
+  description = "app_object_id in agent_box_opnsense_offbox: the OPNsense copy app's object ID, which Graph addKey and removeKey take."
+  value       = azuread_application.opnsense.object_id
+}

@@ -75,3 +75,20 @@ variable "reader_app_display_name" {
   type        = string
   default     = "c1-backup-reader"
 }
+
+variable "opnsense_container_name" {
+  description = "Blob container that holds the restic repository of OPNsense's configuration copies from the agent box (RESTIC_REPOSITORY azure:<container>:/opnsense). Its own container, so its role is separate from c1's."
+  type        = string
+  default     = "opnsense-backup"
+
+  validation {
+    condition     = var.opnsense_container_name != var.container_name
+    error_message = "opnsense_container_name must differ from container_name: each backup has its own container."
+  }
+}
+
+variable "opnsense_app_display_name" {
+  description = "Display name of the app registration the agent box signs in as to copy OPNsense's configuration off the box (Storage Blob Data Contributor on the OPNsense container only)."
+  type        = string
+  default     = "opnsense-backup"
+}

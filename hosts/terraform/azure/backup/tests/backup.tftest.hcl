@@ -231,3 +231,67 @@ run "reader_app_reads_the_container_only" {
     error_message = "The reader must be its own app, not the backup app."
   }
 }
+
+# OPNsense's copies from the agent box (agent pick 222): their own container and their own app,
+# whose role is on that container only, while c1's two apps keep roles on the c1 container only.
+# The mocks give every container and service principal the same ID, so these two get their own.
+override_resource {
+  target = azurerm_storage_container.opnsense
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-c1-backup/providers/Microsoft.Storage/storageAccounts/examplec1backup/blobServices/default/containers/opnsense-backup"
+  }
+}
+
+override_resource {
+  target = azuread_service_principal.opnsense
+  values = {
+    object_id = "66666666-6666-6666-6666-666666666666"
+  }
+}
+
+run "opnsense_copies_are_separate" {
+  assert {
+    condition     = azurerm_storage_container.opnsense.name == "opnsense-backup" && azurerm_storage_container.opnsense.container_access_type == "private"
+    error_message = "OPNsense's copies need their own private container."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.opnsense.scope == azurerm_storage_container.opnsense.id && azurerm_role_assignment.opnsense.role_definition_name == "Storage Blob Data Contributor"
+    error_message = "The OPNsense app's role must be Storage Blob Data Contributor on the OPNsense container only."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.opnsense.principal_id == "66666666-6666-6666-6666-666666666666" && azurerm_role_assignment.opnsense.principal_type == "ServicePrincipal"
+    error_message = "The OPNsense container's role must go to the OPNsense app's own service principal."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.backup.scope != azurerm_storage_container.opnsense.id && azurerm_role_assignment.reader.scope != azurerm_storage_container.opnsense.id
+    error_message = "c1's backup and reader apps must hold no role on the OPNsense container."
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.opnsense.principal_id != azurerm_role_assignment.backup.principal_id && azurerm_role_assignment.opnsense.principal_id != azurerm_role_assignment.reader.principal_id
+    error_message = "The OPNsense copies need their own identity, not c1's."
+  }
+
+  assert {
+    condition     = azuread_application.opnsense.display_name != azuread_application.backup.display_name && contains(azuread_application.opnsense.owners, "11111111-1111-1111-1111-111111111111") && length(azuread_application.opnsense.owners) == 1 && azuread_application.opnsense.sign_in_audience == "AzureADMyOrg"
+    error_message = "The OPNsense app must be its own single-tenant app, with the identity running tofu as its one owner."
+  }
+
+  assert {
+    condition     = output.opnsense_restic_repository == "azure:opnsense-backup:/opnsense"
+    error_message = "opnsense_restic_repository must be azure:<OPNsense container>:/opnsense."
+  }
+}
+
+run "refuses_one_container_for_both" {
+  command = plan
+
+  variables {
+    opnsense_container_name = "c1-backup"
+  }
+
+  expect_failures = [var.opnsense_container_name]
+}

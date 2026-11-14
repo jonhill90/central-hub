@@ -113,6 +113,24 @@ agent_box_tls_check_url: ""
 agent_box_opnsense_backup: {}
 # When the daily OPNsense backup starts (systemd OnCalendar).
 agent_box_opnsense_backup_daily: "*-*-* 14:30:00 UTC"
+# The off-box copy of those configurations (pick 222, docs/runbooks/copy-opnsense-backup-off-box.md): restic sends them
+# daily to their own container in the Azure backup account (hosts/terraform/azure/backup), signed in as their own app
+# with a certificate made on the box. Private, through the inventory, from that folder's tofu outputs: account
+# (storage_account_name), client_id (opnsense_client_id), tenant_id, app_object_id (opnsense_app_object_id), and
+# optionally repository (opnsense_restic_repository, default below), keep_daily (default 30) and keep_monthly
+# (default 12). The repository password is <keys_dir>/prod/opnsense-offbox-restic.txt, which the prod files copy
+# puts there. Needs agent_box_opnsense_backup. Empty does nothing.
+agent_box_opnsense_offbox: {}
+# When the daily off-box copy starts (systemd OnCalendar), after the backup's 14:30 and its random delay.
+agent_box_opnsense_offbox_daily: "*-*-* 15:00:00 UTC"
+# The box's certificate for that app: days it is valid, and days left when the daily run rolls it.
+agent_box_opnsense_offbox_cert_days: 90
+agent_box_opnsense_offbox_cert_renew_days: 30
+# The Azure CLI on the controller, signed in as agent-azure (the app's owner), for the first certificate upload.
+agent_box_az: az
+# restic for the off-box copy, the same release role k8s_backup puts on the nodes, checked against its SHA-256.
+agent_box_restic_version: 0.19.1
+agent_box_restic_sha256: f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
 # The box's second NIC on the Proxmox host's own subnet (pick 220, docs/runbooks/set-up-the-box-lifeline.md):
 # its interface name inside the VM (for example eth1). Private, through the inventory. Empty does nothing.
 agent_box_lifeline_interface: ""
@@ -153,6 +171,8 @@ agent_box_prod_files:
   - {from: clone, path: hosts/terraform/home/tailnet/home.tfvars, dest: tfvars/tailnet.tfvars}
   - {from: clone, path: hosts/terraform/home/dns/home.records.tfvars.json, dest: tfvars/dns.records.tfvars.json}
   - {from: config, path: opnsense-api.txt, dest: opnsense-api.txt}
+  # The off-box OPNsense copy's restic password (pick 222); made once on the controller, never printed.
+  - {from: config, path: opnsense-offbox-restic.txt, dest: opnsense-offbox-restic.txt}
   - {from: config, path: secret-source.env, dest: secret-source.env}
   - {from: config, path: c1-secrets-encryption.key, dest: c1-secrets-encryption.key}
   - {from: config, path: cloudflare-dns.token, dest: cloudflare-dns01-token.txt}

@@ -1,0 +1,12 @@
+# Managed by the agent_box role (central-hub hosts/ansible). Copies the OPNsense configuration backups in
+# {{ agent_box_work_dir }}/opnsense-backup off the box, to their own Azure container (pick 222). Runs as the keys user.
+[Unit]
+Description=OPNsense configuration backups, copied off the box
+Wants=network-online.target
+After=network-online.target opnsense-backup.service
+
+[Service]
+Type=oneshot
+User={{ agent_box_keys_user }}
+Group={{ agent_box_keys_user }}
+ExecStart={{ agent_box_libexec_dir }}/opnsense-offbox.sh
