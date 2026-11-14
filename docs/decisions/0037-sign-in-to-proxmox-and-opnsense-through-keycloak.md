@@ -47,6 +47,12 @@ Proposed option: **1**. The owner asked for both machines on Keycloak with local
 
 6. **A second factor for admins, in place before the Proxmox realm.** Every member of `lab-admins` has a TOTP seed in the controller's `identity.env` (`TOTP_<USER NAME>`, base32), imported into realm lab as the user's OTP credential, so it survives each delete and import of the realm. Keycloak's built-in browser and direct grant flows ask any user who has an OTP credential for the code, so every admin is asked at every sign-in, Proxmox's included. The Proxmox realm (rule 1) is applied only after the realm import that adds the seeds, in the same change; the owner adds his seed to an authenticator app before his first sign-in by scanning a QR code that `hosts/ansible/bootstrap/show-totp-qr.sh` shows on the controller's own screen for a short time and then deletes, so the seed is never typed, pasted, printed or logged.
 
+7. **Exit.** Each part can be removed or replaced on its own, and no data is lost, because Proxmox keeps nothing from a sign-in except the user entry and the group membership the claim sets.
+   - Proxmox: `pveum realm delete sso` and the two groups' ACL entries undo rule 1; root@pam and SSH (rule 2) are untouched. Leaving `k8s_identity_proxmox_hosts` empty drops client `proxmox` at the next realm import.
+   - Keycloak: the realm uses only standard OpenID Connect (discovery, the code flow, a `preferred_username` claim and a `groups` claim). Any OpenID Connect provider that issues those two claims replaces it by a new `proxmox_sso_issuer` and client secret; users are made again at their first sign-in.
+   - The second factor: each seed is a base32 RFC 6238 TOTP seed in `identity.env`, so it moves to any provider or authenticator that imports one.
+   - OPNsense: LDAP is an open standard, so any LDAP directory can take the directory's place (its own record).
+
 ### Not decided here
 
 - Which directory, where it runs, and whether Keycloak writes to it: the directory's own record.
@@ -61,6 +67,7 @@ Proposed option: **1**. The owner asked for both machines on Keycloak with local
 - Bad: a user who has signed in can remove their own OTP credential in Keycloak's account console until the next import puts it back.
 - Bad: a realm import (any change to realm lab's code or values) ends open sign-ins, Proxmox's included.
 - Bad: the Proxmox host must reach c1's Gateway on 443 and resolve the issuer's name (one `/etc/hosts` line).
+- Bad: **`pveum` gets the client secret on its command line** while it runs, so a local process on the Proxmox host can read it from `/proc` for those seconds. It stays that way for now, because Proxmox keeps the same secret in plain text in `/etc/pve/domains.cfg` anyway (`client-key` is a realm property, not under `priv/`), which group www-data, the web proxy's group, can read, and the host has no unprivileged users. Ansible doesn't log it (`no_log`). Revisit when the host gets other local users or Proxmox moves the key under `priv/`.
 - Neutral: 8006 stays for root@pam. A Keycloak sign-in works only on the 443 names, because Keycloak allows only those redirects.
 
 ### Confirmation

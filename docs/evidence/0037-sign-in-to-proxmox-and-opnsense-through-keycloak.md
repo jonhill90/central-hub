@@ -49,6 +49,7 @@ How do the Proxmox host and OPNsense sign their administrators in through Keyclo
     - A new secret changed only the realm, and the secret never showed in the output.
     - A changed username claim stopped the run, and a wrong redirect failed the proof.
     - [measured, 2026-11-14]
+17. **Proxmox keeps an OpenID Connect realm's client secret in `domains.cfg`.** `client-key` is a property of the OpenID realm type [2], and realms live in `/etc/pve/domains.cfg` [15]. All files in `/etc/pve` belong to root with group www-data, which "can read most files"; only files below `/etc/pve/priv/` are root's alone [15]. So the secret is readable by root and group www-data at rest, whatever way it is set.
 
 ## How the decision used it
 
@@ -81,3 +82,4 @@ How do the Proxmox host and OPNsense sign their administrators in through Keyclo
 12. oauth2-proxy licence: <https://raw.githubusercontent.com/oauth2-proxy/oauth2-proxy/master/LICENSE>
 13. Keycloak 26.4.0, `server-spi/src/main/java/org/keycloak/models/credential/OTPCredentialModel.java`: <https://github.com/keycloak/keycloak/blob/26.4.0/server-spi/src/main/java/org/keycloak/models/credential/OTPCredentialModel.java>
 14. Keycloak 26.4.0, `server-spi-private/src/main/java/org/keycloak/models/utils/DefaultAuthenticationFlows.java`: <https://github.com/keycloak/keycloak/blob/26.4.0/server-spi-private/src/main/java/org/keycloak/models/utils/DefaultAuthenticationFlows.java>
+15. Proxmox VE wiki, "Proxmox Cluster File System (pmxcfs)", file access rights and files: <https://pve.proxmox.com/wiki/Proxmox_Cluster_File_System_(pmxcfs)>
