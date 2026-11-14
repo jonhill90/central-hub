@@ -97,13 +97,22 @@ else
   pveum acl delete /pool/desktop --tokens 'agent@pve!dev' --roles AgentDev 2>/dev/null || true
 fi
 # The second identity (agent-lab-access.sh, pick 217) holds AgentLab on /vms, propagated, which would
-# reach the desktop VM whatever DESKTOP_ACCESS says. NoAccess on the pool beats it for every member of
-# the pool and survives a destroy. Applied once agentlab@pve exists, so run this script again after
-# that user is made; the pool path's precedence over /vms is unverified until the user exists.
+# reach the desktop VM whatever DESKTOP_ACCESS says. NoAccess on /vms/<id> is the most specific path, so it
+# beats that grant. The IDs are private, so they are read here at run time from pool desktop's members, and
+# the ACL drops with the VM, so run this script again after every desktop apply. Applied once agentlab@pve
+# exists, then checked as Proxmox computes it: the token must hold no privilege on the desktop.
 if pveum user list --output-format json | grep -q '"userid":"agentlab@pve"'; then
-  pveum acl modify /pool/desktop --groups agents-lab --roles NoAccess --propagate 1
-  if pveum user token list agentlab@pve --output-format json | grep -q '"tokenid":"lab"'; then
-    pveum acl modify /pool/desktop --tokens 'agentlab@pve!lab' --roles NoAccess --propagate 1
-  fi
+  lab_token=no
+  pveum user token list agentlab@pve --output-format json | grep -q '"tokenid":"lab"' && lab_token=yes
+  for id in $(pvesh get /pools/desktop --output-format json | grep -o '"vmid":[0-9]*' | cut -d: -f2); do
+    pveum acl modify "/vms/$id" --groups agents-lab --roles NoAccess --propagate 0
+    if [ "$lab_token" = yes ]; then
+      pveum acl modify "/vms/$id" --tokens 'agentlab@pve!lab' --roles NoAccess --propagate 0
+      if pveum user token permissions agentlab@pve lab --path "/vms/$id" --output-format json | grep -Eq '"(VM|SDN|Datastore|Sys)\.'; then
+        echo "agent-access: STOP, the lab token still has privileges on the desktop VM" >&2
+        exit 1
+      fi
+    fi
+  done
 fi
 echo "agent-access: done (node $NODE, desktop access $DESKTOP_ACCESS)"
