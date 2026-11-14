@@ -13,10 +13,10 @@ accepted-evidence:
   approved-by: agents
   approved-at: 2026-11-14T07:44:46Z
   approved-commit: b9f606f4d2ab2ebce23e25fb00a94e67239b21d5
-  approval-ref: the orchestrator thread's message recording the reviewer's clearance and the three council passes of this PR's head; it is written after this head exists, so the follow-up PR that fills in merged adds its id (D-0001)
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNEhhF4KJMkWvM645W6Aa4Cd, the orchestrator thread's message of 2026-11-14T09:18:37Z recording the reviewer's clearance and the passes of Councils A (09:17:54Z), B (09:18:31Z) and C (09:17:25Z) for head 7e39f13
   approval-names: "the pass names this PR and its head. Its basis is the owner's typed messages of 2026-11-14 at 07:42:30 (cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6), 07:43:25 (cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH) and 07:44:46 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm), which name no PR, head or commit, a departure from D-0034 rule 4's form"
   check: approved-by is agents, the orchestrator's call, because the owner's messages ask agents to stop asking him and the agents' pass is what approves this head; approved-at is the time of his last message on it. The drafting agent read the three messages at 2026-11-14T08:14Z (the first two in the orchestrator thread, the third in the project chat). They ask agents to stop asking the owner to approve PRs and say what still needs him, without naming this PR, a head or a commit. The owner never saw approved-commit, so it is not his approval; it is the commit holding these rules, which the reviewer and the council pass, and the commit after it changes only this field. His approval covers only what his words say, listed in "What the owner said, and what agents picked" (REQ-0029); every other rule is labelled an agent pick. The orchestrator chose these messages as this record's acceptance at 08:13Z, and the reviewer's and the council's passes of this PR's head are the gate
-  merged: not yet; a follow-up PR fills this in after the merge (D-0001)
+  merged: PR #293 squash-merged at head 7e39f13d as 3d90375 at 2026-11-14T09:21:15Z; the follow-up PR that adds this line and the pass's message id changes only accepted-evidence (D-0001)
 revisit-when: the lab comes to hold personal data or anything of value; a change approved under this record has to be undone after it harmed the lab, a cloud account or the repository; the owner says a pass was wrong; the agents get a GitHub identity of their own (D-0030) and GitHub can require an approval itself; or a cluster other than c1 reads the repository
 ---
 
@@ -49,7 +49,7 @@ Since that morning, every plan, record and done-claim already passes a reviewer 
 The owner's words, above, decide only this much:
 
 - agents don't ask him to approve or go a PR;
-- the things his earlier standing rules gave him still need him; at 07:43:25 UTC he pointed to those rules without listing them. Which things they are is the agents' reading: firewall and tailnet changes (D-0036 rule 8 keeps them behind his words), and deletes and secrets [agent pick: the agents' reading of his earlier rules, with no record of their own];
+- the things his earlier standing rules gave him still need him; at 07:43:25 UTC he pointed to those rules without listing them. Which things they are is the agents' reading: firewall and tailnet changes (D-0036 rule 8 keeps them behind his words), deletes, partly from his standing rules that deleting a remote branch is his step and that one named c1 node is never deleted (both kept in the project's memory, not in a record), and [agent pick] for every other delete; and secrets [agent pick: the agents' reading of his earlier rules, with no record of their own];
 - the lab is greenfield, so agents finish it;
 - this is for the lab, for now, not for every PR (07:44:46 UTC).
 
@@ -73,7 +73,7 @@ His words are a change of mind (REQ-0030). They reverse REQ-0009 (the owner make
 
 ## Decision Outcome
 
-Chosen option: **1**, because the owner asked to stop approving the lab himself, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules he pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8, deletes and secrets as agent picks. The rest of rule 6 (money, the box's limits, access rights), where in each step the tap falls, and rule 7, are agent picks.
+Chosen option: **1**, because the owner asked to stop approving the lab himself, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules he pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8; deletes, partly from his standing rules that deleting a remote branch is his step and that one named c1 node is never deleted (both kept in the project's memory, not in a record), and [agent pick] for every other delete; secrets as an agent pick. The rest of rule 6 (money, the box's limits, access rights), where in each step the tap falls, and rule 7, are agent picks.
 
 ```mermaid
 flowchart LR
@@ -120,7 +120,7 @@ flowchart LR
    - a layer with a dev twin runs once the same commit passed that layer on dev (D-0035 rule 3(a));
    - a layer with no dev twin (the Proxmox host's own configuration, OPNsense, the tailnet, Azure, Cloudflare and Tailscale) runs once its saved plan's hash has the agents' pass;
    - the log names the pass's message id where it named the card.
-6. **Still one tap.** These still need the owner's tap on a card that names the step and the commit (D-0034), at the step itself. A merge of their code needs no tap; the apply or the act does. The first three are the agents' reading of the earlier standing rules the owner pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8; deletes and secrets [agent pick]. The rest are agent picks:
+6. **Still one tap.** These still need the owner's tap on a card that names the step and the commit (D-0034), at the step itself. A merge of their code needs no tap; the apply or the act does. The first three are the agents' reading of the earlier standing rules the owner pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8; deletes, partly from his standing rules that deleting a remote branch is his step and that one named c1 node is never deleted (both kept in the project's memory, not in a record), and [agent pick] for every other delete; secrets [agent pick]. The rest are agent picks:
    - **firewall and tailnet:** an apply to the firewall layers (the Proxmox host's firewall, OPNsense's rules) or to the tailnet, which includes opening a lab service to the internet;
    - **deletes:** deleting data or a backup, tearing down a whole environment's guests outside dev, and a `destroy` or `restore` of the secrets store, on dev too, since it holds the lab's secrets (other dev teardowns and rebuilds need no tap, as now);
    - **secrets:** exposing a secret, copying secrets onto the agent box, or rotating the owner's own credentials;
