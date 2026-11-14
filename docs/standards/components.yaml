@@ -230,8 +230,8 @@ components:
     used-for: node-local volumes on c1
     licence: Apache-2.0
     licence-source: https://raw.githubusercontent.com/rancher/local-path-provisioner/master/LICENSE
-    paid-edition: none found in the project's README
-    paid-edition-source: https://raw.githubusercontent.com/rancher/local-path-provisioner/master/README.md
+    paid-edition: SUSE Application Collection lists a Local Path Provisioner chart under its Prime subscription; SUSE's product page (https://www.suse.com/products/rancher/application-collection) calls the Collection aligned with upstream, rebuilt on SUSE's images and supported, and names no feature beyond the project, so it is a supported rebuild of the same code (a tested build, which STD-0006 rule 2 allows); c1 pulls the upstream image
+    paid-edition-source: https://apps.rancher.io/applications/local-path-provisioner/components
     verdict: pass
     sources: [image:docker.io/rancher/local-path-provisioner]
     checked: 2026-11-14
