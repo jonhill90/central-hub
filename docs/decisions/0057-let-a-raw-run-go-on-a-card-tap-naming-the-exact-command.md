@@ -76,7 +76,7 @@ Chosen option: **1**. It keeps one owner step per raw run, names the run exactly
 ### 3. The agents' pass alone
 
 - Good: no owner step at all.
-- Bad: it removes an owner step, which under D-0042 rule 11 is itself the owner's call, and it goes beyond what the owner asked.
+- Bad: a raw run skips the pipeline's logs and tests (D-0041), so it keeps an owner step; the owner did not ask to drop it [pick].
 
 ### 4. Pipeline jobs first
 
