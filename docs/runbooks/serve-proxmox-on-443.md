@@ -38,6 +38,7 @@ Port 8006 is not closed. It stays as the fallback if nginx fails, and it is the 
    expect: the role's own checks pass, and `pve-firewall compile` lists `-p tcp -m tcp --dport 443` and `--dport 80` in `PVEFW-HOST-IN`.
 
 2. Install and start nginx: `ansible-playbook -i inventories/home/ playbooks/proxmox-nginx.yml --check --diff`, read it, then run it without the flags.
+   On a host without nginx, the check run shows the files it would write and says it skips the configuration test, the service and the proof, because apt installs nothing in check mode; the run without the flags does them.
    expect: `failed=0`; the last tasks pass: the front page returns `200` and an API call without a ticket returns `401`, both over 443 with the lab chain verified against the host's own CA bundle; a WebSocket upgrade request for a console path returns `401` from `pveproxy` (a `400` or `502` means the upgrade headers were not passed on); port 80 returns `301` to `https://<first name>/`.
 
 3. Open the address from the owner's device: `https://pve.<zone>`.
