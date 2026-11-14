@@ -26,7 +26,7 @@ Where do c1's images and its containerd package come from, how are they pinned, 
 6. **Licences of the way off.** Zot [3], Harbor [4] and containerd [5] are Apache-2.0 (sourced).
 7. **The register.** `docs/standards/components.yaml` lists "Docker Hub and Docker's package repository" as `hosted`, with a local pull-through registry (Zot or Harbor) and containerd from its own releases as the exit path [1] (measured).
 8. **The pin standard.** STD-0003 is `active` and leaves open how a version is pinned (an exact version, a digest or a lock file) [1] (measured).
-9. **Images chosen by charts and kubeadm.** The root app's `values.yaml` installs six charts (metrics-server, Loki, Alloy, kube-prometheus-stack, External Secrets and cert-manager), each pinned by chart version; their images are not named in `hosts/` and were not counted [1] (measured). The Alloy chart's values default its image registry to `docker.io` [6] (sourced, the chart's main branch, not the pinned version).
+9. **Images chosen by charts, kubeadm, operators and manifests.** The root app's `values.yaml` installs six charts (metrics-server, Loki, Alloy, kube-prometheus-stack, External Secrets and cert-manager), each pinned by chart version; their images are not named in `hosts/` and were not counted. Role `k8s_identity` applies the Keycloak operator's manifests from `keycloak/keycloak-k8s-resources` at 26.8.1, and role `k8s_gitops` applies Argo CD's `install.yaml` at v3.5.5; the images these choose were not counted either [1] (measured). The Alloy chart's values default its image registry to `docker.io` [6] (sourced, the chart's main branch, not the pinned version).
 
 ## How the decision used it
 
@@ -39,7 +39,7 @@ Findings 1 to 4 are the context and rule 2's known gap. Finding 5 is the pull-li
 - Docker's paid plans and the terms of its package repository were not read.
 - Zot and Harbor were not tried; neither was compared on cost or effort.
 - How many pulls a full rebuild of c1 makes was not measured.
-- The images that c1's Helm charts and kubeadm choose were not counted, so neither their registries nor their pin form is listed here.
+- The images that c1's Helm charts, kubeadm, and operators or install manifests choose were not counted, so neither their registries nor their pin form is listed here.
 
 ## References
 

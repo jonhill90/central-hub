@@ -26,7 +26,7 @@ How do c1's alerts and heartbeat reach the owner, what do comparable home labs u
 8. **What c1 runs.** ntfy denies everyone by default (`NTFY_AUTH_DEFAULT_ACCESS: deny-all`). The Watchdog goes to a heartbeat receiver whose URL is the one secret `healthchecks-ping-url`, delivered by the ExternalSecret `alertmanager-heartbeat` in `monitoring-extras/` and read as a file, so it sits in no config [6] (measured).
 9. **Reach.** At main 07408f9, ntfy is named in 22 files in `hosts/` and 8 runbooks, and Healthchecks in 7 files in `hosts/` and 3 runbooks; no record names either [6] (measured, 2026-11-14).
 10. **The VPS.** The PRD's goal 1 says the rented VPS is not a c1 worker for now. D-0035 keeps "the VPS node" out of agent teardowns and rebuilds (its drivers and rule 2). PR #314, which proposes the VPS's first apps and host steps as D-0046, is open and not merged [6] (measured at main 3400f06, 2026-11-14).
-11. **A self-hosted watcher's alarm.** Self-hosted Healthchecks needs `EMAIL_HOST`, a mail server; "If this environment variable is not set, Healthchecks will not be able to send any email" [13] (sourced). Gatus is Apache-2.0 and can alert by e-mail through a mail server, by ntfy and by many other providers [14] (sourced).
+11. **A self-hosted watcher's alarm.** Self-hosted Healthchecks needs `EMAIL_HOST`, the SMTP server it sends through, which may be its own or an outside relay; "If this environment variable is not set, Healthchecks will not be able to send any email" [13] (sourced). Gatus is Apache-2.0 and can alert by e-mail through a mail server, by ntfy and by many other providers [14] (sourced).
 
 ## How the decision used it
 
