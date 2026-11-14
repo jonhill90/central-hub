@@ -63,8 +63,22 @@ put() {
   gx "/bin/sh -c 'openssl base64 -d -A -in $dest.b64 -out $dest && chmod 0600 $dest && rm -f $dest.b64'"
 }
 
+# The key line and the PHP file must not stay on the firewall whichever way this run ends, so a failed PHP step, a
+# dropped connection or Ctrl-C all remove them (and any half-written .b64 pieces) before the script exits. The
+# removal is best effort: if the firewall cannot be reached, it says so and names the files to remove by hand.
+cleanup() {
+  local rc=$?
+  trap - EXIT INT TERM
+  if ! gx "rm -f /root/box-backup-user.php /root/box-backup-apikey.line /root/box-backup-user.php.b64 /root/box-backup-apikey.line.b64" >/dev/null 2>&1; then
+    echo "opnsense-backup-user: could not remove /root/box-backup-apikey.line and /root/box-backup-user.php (and their .b64 pieces) from the firewall; remove them by hand" >&2
+    [[ $rc -eq 0 ]] && rc=1
+  fi
+  exit "$rc"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
 printf '%s|%s\n' "$key" "$hash" | put /root/box-backup-apikey.line
 put /root/box-backup-user.php < "$here/opnsense-backup-user.php"
 gx "php /root/box-backup-user.php"
-gx "rm -f /root/box-backup-user.php /root/box-backup-apikey.line"
 echo "opnsense-backup-user: done; now copy $keyfile to the box (agent_box role, tags prod_files)"
