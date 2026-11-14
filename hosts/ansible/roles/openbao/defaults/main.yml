@@ -50,3 +50,36 @@ openbao_check_key: c1/check
 # The AppRole rebuild's IDs on the box, next to the admin's. Made there once, never printed.
 openbao_rebuild_role_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-rebuild-role-id"
 openbao_rebuild_secret_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-rebuild-secret-id"
+
+# The owner's sign-in to the store's web page (agent pick 233; docs/runbooks/set-up-the-secrets-store.md,
+# "The owner's sign-in"): OIDC through Keycloak realm lab, for members of one group, with one narrow policy.
+# Empty: no OIDC login is made. Keys, all private (STD-0004 rule 1), from the inventory the secrets-store
+# wrapper writes:
+#   discovery_url       https://<Keycloak's name>/realms/lab (the realm's issuer)
+#   ca_pem_file         optional, on the controller: the CA that signed Keycloak's certificate (the lab root
+#                       on prod, the dev cluster's own CA on dev); empty uses the VM's system roots
+#   values_file         on the controller: the identity role's KEY=value file that holds the client secret
+#   ui_names            the names the owner's browser uses for the store, one redirect URI each
+#   pin_address         optional, dev: Keycloak's name resolves to this address on the VM, because on dev the
+#                       lab's names resolve to prod's Gateway
+openbao_oidc: {}
+openbao_oidc_mount: oidc
+openbao_oidc_client_id: openbao
+openbao_oidc_secret_key: OPENBAO_CLIENT_SECRET
+openbao_oidc_role: owner
+openbao_oidc_group: lab-admins
+# Keycloak asks for the password and code again when the last sign-in is older than this (seconds).
+openbao_oidc_max_age: 300
+openbao_oidc_token_ttl: 900
+openbao_oidc_token_max_ttl: 3600
+# The one policy the owner's login gets: write and read under kv/<prefix>/, nothing else.
+openbao_oidc_policy: vps-intake
+openbao_oidc_kv_prefix: vps
+# A hash of the login's settings, kept next to the box's other store files, so a run writes the
+# config (whose client secret can't be read back) only when a setting changed.
+openbao_oidc_config_sha256_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-oidc-config.sha256"
+# Dev only: the proof signs in as an admin and a viewer of the dev realm and checks what each gets
+# (tasks/owner_signin.yml). Keys: admin_user, viewer_user (their PASSWORD_ and TOTP_ lines are in
+# values_file), gateway_address (the dev cluster's Gateway, where Keycloak answers), verify (false for the
+# dev CA). Empty: no proof.
+openbao_oidc_proof: {}

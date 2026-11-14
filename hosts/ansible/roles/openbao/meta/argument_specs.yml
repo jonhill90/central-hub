@@ -57,3 +57,25 @@ argument_specs:
       openbao_rebuild_role_id_dest: {type: path, description: "The AppRole rebuild's role ID on the controller (the box's keys folder); made there once."}
       openbao_rebuild_secret_id_dest: {type: path, description: "The AppRole rebuild's secret ID on the controller; made there once, never printed."}
       openbao_check_key: {type: str, description: "Where under kv/ the fixed, non-secret test value for the cluster's openbao-check ExternalSecret lives."}
+      openbao_oidc:
+        type: dict
+        description: >-
+          The owner's sign-in through Keycloak (pick 233). Empty: no OIDC login. Keys discovery_url, values_file and
+          ui_names are required when set; ca_pem_file and pin_address are optional. Private.
+      openbao_oidc_mount: {type: str, description: "The OIDC login's mount (type jwt)."}
+      openbao_oidc_client_id: {type: str, description: "The realm's client for the store."}
+      openbao_oidc_secret_key: {type: str, description: "The line in values_file that holds the client's secret."}
+      openbao_oidc_role: {type: str, description: "The login's one role, for the owner."}
+      openbao_oidc_group: {type: str, description: "The realm group whose members may sign in (bound_claims on groups)."}
+      openbao_oidc_max_age: {type: int, description: "Seconds since the last Keycloak sign-in before Keycloak asks again."}
+      openbao_oidc_token_ttl: {type: int, description: "The owner's token TTL, seconds."}
+      openbao_oidc_token_max_ttl: {type: int, description: "The owner's token max TTL, seconds."}
+      openbao_oidc_policy: {type: str, description: "The one policy the owner's login gets."}
+      openbao_oidc_kv_prefix: {type: str, description: "The folder under kv/ that policy may write and read."}
+      openbao_oidc_config_sha256_dest:
+        type: path
+        description: "A hash of the login's settings on the controller, so the config is written only when one changed."
+      openbao_oidc_proof:
+        type: dict
+        description: >-
+          Dev only: the sign-in proof's admin_user, viewer_user, gateway_address and verify. Empty: no proof.
