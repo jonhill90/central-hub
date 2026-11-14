@@ -55,6 +55,12 @@ Port 8006 is not closed. It stays as the fallback if the proxy fails, and it is 
    why: Apache httpd reads the certificate at a reload; the role reloads it gracefully when the certificate it serves is not the one on disk.
    expect: the role's reload task shows `changed` only after a renewal.
 
+5. One week after step 2, if Apache httpd has served without a rollback: purge nginx.
+   who: the agents, by a clean-up pull request with the agents' pass (D-0042), applied through the host job like step 2, under the same approvals as step 2.
+   what: the clean-up PR adds a task to role `proxmox_proxy` that purges `nginx` and `nginx-common` once `cutover.result` says `done`, removes nginx's row from `docs/standards/components.yaml`, and removes its `pending` entry from `docs/standards/foss-exceptions.yaml` (STD-0006 rule 5).
+   expect: `dpkg -l nginx` shows it gone or `rc`; the proofs still pass; the FOSS check lists no nginx.
+   why: until this step, nginx stays installed and disabled as the way back (see Exit), and STD-0006 still counts it as a pending fail.
+
 To install Apache httpd and leave nginx serving, set `proxmox_proxy_cutover: false`.
 
 ## If it fails
