@@ -9,7 +9,7 @@ consulted: []
 waits-on: [D-0001, D-0031, D-0034, D-0035]
 supersedes: []
 superseded-by:
-revisit-when: a self-apply changes a limit file and the check does not stop it; a reviewed change to a wrapper script widens what a session can do; the box's role gains a task that writes outside its own folders and system units; D-0035 takes effect and an approval on GitHub can replace the Mac for limit changes; or a cluster other than c1 reads the repository
+revisit-when: a self-apply changes a limit file and the check does not stop it; the owner narrows the limit set when accepting; the box's role gains a task that writes outside its own folders and system units; D-0035 takes effect and an approval on GitHub can replace the Mac for limit changes; or a cluster other than c1 reads the repository
 ---
 
 # Let the agent box apply its own setup from reviewed main, and stop for the owner on any change to its own limits
@@ -62,9 +62,12 @@ flowchart LR
 3. **The box's limits.** These never change by a self-apply:
    (a) the sudo rules: the sudoers file the role writes, and the wrapper list with its arguments that it is made from;
    (b) the guard settings: Claude Code's managed settings on the box, with their allow and deny lists and auto mode's settings;
-   (c) the users the box runs as (the session user, the keys user, the runner user) and their groups, and the key folder's owner and mode;
-   (d) `box-apply` itself and its list of limit files.
-4. **The stop, before.** `box-apply` compares the commit it last applied with the new one. If any file that makes a limit in rule 3 changed (the role's sudoers, managed-settings and front-script templates, the wrapper list, the allow and deny lists, auto mode's settings, the user tasks, `box-apply` and its list), it stops and applies nothing. It also runs the role in check mode, and stops if a limit file would change.
+   (c) the wrappers: every script that sudo lets a session or the runner start (the wrapper scripts and the front scripts that call them), whatever user it runs as, and the role tasks that install them. A wrapper runs with the keys user's keys or more, so a change to its code can widen what a session can do as surely as a sudo rule can;
+   (d) the users the box runs as (the session user, the keys user, the runner user) and their groups, and the key folder's owner and mode;
+   (e) `box-apply` itself and its list of limit files.
+
+   The owner may narrow this set when accepting, for example by letting wrapper changes that add no argument apply by themselves.
+4. **The stop, before.** `box-apply` compares the commit it last applied with the new one. If any file that makes a limit in rule 3 changed (the role's sudoers, managed-settings and front-script templates, the wrapper list, every wrapper script under the role's `files/` and the tasks that install them, the allow and deny lists, auto mode's settings, the user tasks, `box-apply` and its list), it stops and applies nothing. It also runs the role in check mode, and stops if a limit file would change.
 5. **The check, after.** `box-apply` records the limit files' contents before an apply and compares them after. If one changed, it puts the old file back, logs it and refuses further self-applies until an apply from the Mac.
 6. **Limit changes.** A change to a limit is applied from the Mac, by an agent lane, after the owner's go naming the PR and its head (AGENTS.md rule 1, D-0034). When D-0035 is in effect, an approval on its GitHub environment may replace the Mac for this by a later record.
 7. **Values stay where they are.** Private values the role needs (the box's name, the allow lists, auto mode's settings) stay in the private inventory, which reaches the box only through the prod files copy from the Mac. A self-apply never edits them.
@@ -73,9 +76,9 @@ flowchart LR
 ### Consequences
 
 - Good: a reviewed, merged change to the box applies without the Mac, so the Mac lane has no box job left.
-- Good: the files that set what a session may do still change only with the owner's go.
+- Good: the files that set what a session may do, the wrappers' code among them, still change only with the owner's go.
 - Bad: **root on the box runs whatever reviewed main says.** The check before and after catches a plain change to a limit, by mistake or not. It does not stop merged code written to get around it, for example a task that kills the wrapper before its check after. Compensating control: review and the green merge, which already decide what the Mac applies today.
-- Bad: **a wrapper script is not a limit.** A reviewed change to a wrapper's code can widen what a session can do as the keys user, and it applies by itself. Compensating control: review; the wrapper's allowed first arguments are in the sudo rules, so a new verb still stops. The owner may add the wrapper scripts to rule 3 when accepting.
+- Bad: **most box changes are wrapper changes, so most still stop for the owner.** Rule 3(c) puts every wrapper in the limit set, which keeps the Mac in the loop for them. What applies by itself is the rest of the role: timers and services, settings files with no keys, tools and their pinned versions. Compensating control: the owner may narrow rule 3(c) when accepting.
 - Bad: this replaces the owner's tap of 2026-11-11 04:20:39 UTC ("behind my go") for the box's role. Compensating control: rules 3 to 6 keep that go for the limits.
 - Neutral: the `box-apply` wrapper and its tests are built in a later PR, and run from the Mac once to install, because the wrapper is itself a limit.
 
