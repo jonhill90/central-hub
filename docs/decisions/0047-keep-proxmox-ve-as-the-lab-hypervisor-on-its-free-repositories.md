@@ -1,7 +1,7 @@
 ---
 id: D-0047
 title: Keep Proxmox VE as the lab's hypervisor, on its free no-subscription repositories, with Incus as the named alternative
-status: proposed
+status: accepted
 date: 2026-11-14
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: []
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: agents
+  approved-at: 2026-11-14T10:50:58Z
+  approved-commit: 319503ac074507e99a10f265f0c43892912a2415
+  approval-ref: the orchestrator thread's message to the Plan thread of 2026-11-14T10:50:58Z recording the reviewer's clearance and the passes of Councils A (10:50:35Z), B (10:50:32Z) and C (10:50:49Z) for head 319503a, each saying acceptance under D-0042 rule 3 is fine; it reached the Plan thread as a thread relay, which carries no message id
+  approval-names: "the pass names PR #320 and head 319503ac074507e99a10f265f0c43892912a2415"
+  check: approved-by is agents under D-0042 rule 3, because Proxmox VE is already in use and passes STD-0006 in the register the owner approved with PR #277. The Plan thread read the orchestrator's pass record at 10:51Z; it names this PR and the head. approved-commit is the head that holds the record as proposed; the commit after it changes only status, date and accepted-evidence, which the reviewer checks (D-0001)
+  merged: not yet; a follow-up PR fills this in after the merge (D-0001)
 revisit-when: Proxmox moves a feature the lab uses behind a subscription; the no-subscription repositories stop or change terms; the owner rules that a paid channel of more-tested updates is a paywall under his rule of 2026-11-14; a research batch compares hypervisors for the lab feature by feature; or the lab moves to more than one host
 ---
 
