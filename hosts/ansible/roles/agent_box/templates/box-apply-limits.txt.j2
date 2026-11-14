@@ -24,6 +24,7 @@ free-keys hosts/ansible/roles/agent_box/defaults/main.yml agent_box_tofu_version
 box /etc/sudoers
 box /etc/sudoers.d/*
 box /etc/claude-code/*
+box /etc/pki/ca-trust/source/anchors/agent-box-*
 box {{ agent_box_libexec_dir }}/*.sh
 box {{ agent_box_libexec_dir }}/*.py
 {% for w in agent_box_wrappers %}

@@ -14,13 +14,16 @@ Its settings and its list of limits (/etc/box-apply/) and its inventory are writ
 controller, and are limits themselves (D-0036 rules 3(f) and 7). Every run is logged to /var/log/box-apply.log.
 """
 
+import errno
 import fcntl
 import fnmatch
 import glob
 import hashlib
 import json
 import os
+import re
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -109,16 +112,38 @@ def top_level_blocks(text):
     return {k: "\n".join(v) for k, v in blocks.items()}
 
 
+# A free key's new value must be a plain literal, never Jinja or a reference to another variable: a SHA-256 is 64
+# lowercase hex digits, anything else free is a version made of digits and dots.
+FREE_VALUE = {"sha256": re.compile(r"[0-9a-f]{64}"), "version": re.compile(r"[0-9][0-9.]*")}
+
+
+def free_value_ok(key, block):
+    """True if a free key's block is one line, `key: value`, and value (quotes taken off) is a plain literal."""
+    lines = block.splitlines()
+    if len(lines) != 1 or not lines[0].startswith(key + ":"):
+        return False
+    value = lines[0].split(":", 1)[1].split(" #", 1)[0].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1]
+    kind = "sha256" if key.endswith("_sha256") else "version"
+    return FREE_VALUE[kind].fullmatch(value) is not None
+
+
 def limit_keys(rules, repo, base, new, changed):
-    """For each free-keys file that changed: the top-level keys that changed and are not free."""
+    """For each free-keys file that changed: the top-level keys that changed and are not free, and the free keys
+    whose new value is not a plain literal."""
     hits = []
     for f, free in rules["free-keys"].items():
         if f not in changed:
             continue
         old, cur = (top_level_blocks(git(repo, "show", f"{rev}:{f}", check=False).stdout) for rev in (base, new))
         for k in sorted(set(old) | set(cur)):
-            if k not in free and old.get(k) != cur.get(k):
+            if old.get(k) == cur.get(k):
+                continue
+            if k not in free:
                 hits.append(f"{f}: {k}")
+            elif k not in cur or not free_value_ok(k, cur[k]):
+                hits.append(f"{f}: {k} (a free key's value must be a plain literal)")
     return hits
 
 
@@ -146,13 +171,25 @@ def snapshot(rules, where):
     os.makedirs(where, mode=0o700)
     files = {}
     for i, p in enumerate(box_files(rules)):
-        st = os.lstat(p)
         copy = os.path.join(where, str(i))
-        if os.path.islink(p):
+        try:
+            # O_NOFOLLOW: a file that turns into a link after the glob is read as the link, never through it.
+            fd = os.open(p, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except OSError as e:
+            if e.errno not in (errno.ELOOP, errno.EMLINK):
+                raise
+            st = os.lstat(p)
             files[p] = {"link": os.readlink(p), "uid": st.st_uid, "gid": st.st_gid}
             continue
-        shutil.copyfile(p, copy)
-        files[p] = {"copy": copy, "sha256": hashlib.sha256(open(p, "rb").read()).hexdigest(),
+        with os.fdopen(fd, "rb") as fh:
+            st = os.fstat(fh.fileno())
+            if not stat.S_ISREG(st.st_mode):
+                files[p] = {"other": stat.S_IFMT(st.st_mode), "uid": st.st_uid, "gid": st.st_gid}
+                continue
+            data = fh.read()
+        with open(copy, "xb") as out:
+            out.write(data)
+        files[p] = {"copy": copy, "sha256": hashlib.sha256(data).hexdigest(),
                     "uid": st.st_uid, "gid": st.st_gid, "mode": st.st_mode & 0o7777}
     dirs = {}
     for d in rules["dir"]:
@@ -188,17 +225,31 @@ def put_back(before, diff):
         b = before["files"].get(p) if kind != "folder" else None
         try:
             if kind == "added":
-                os.remove(p)
+                if os.path.lexists(p):
+                    os.remove(p)
             elif kind in ("changed", "removed") and "link" in b:
                 if os.path.lexists(p):
                     os.remove(p)
                 os.symlink(b["link"], p)
                 os.lchown(p, b["uid"], b["gid"])
-            elif kind in ("changed", "removed"):
+            elif kind in ("changed", "removed") and "copy" in b:
+                # Some of these folders are the keys user's, who could plant a link at the temporary name: take
+                # away whatever is there, then make it new (O_EXCL), never through a link (O_NOFOLLOW), and set
+                # its owner and mode on the open file before it takes the limit file's place.
                 tmp = p + ".box-apply"
-                shutil.copyfile(b["copy"], tmp)
-                os.chown(tmp, b["uid"], b["gid"])
-                os.chmod(tmp, b["mode"])
+                if os.path.lexists(tmp):
+                    os.remove(tmp)
+                with open(b["copy"], "rb") as fh:
+                    data = fh.read()
+                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                try:
+                    view = memoryview(data)
+                    while view:
+                        view = view[os.write(fd, view):]
+                    os.fchown(fd, b["uid"], b["gid"])
+                    os.fchmod(fd, b["mode"])
+                finally:
+                    os.close(fd)
                 os.replace(tmp, p)
             elif kind == "folder" and before["dirs"][p]:
                 uid, gid, mode = before["dirs"][p]

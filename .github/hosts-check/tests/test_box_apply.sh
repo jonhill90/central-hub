@@ -4,10 +4,11 @@
 #   1. No baseline, a baseline that is not on main, and a wrong argument each refuse.
 #   2. A change to free defaults keys and to other files plans and applies, and moves the baseline.
 #   3. A change to a limit file, or to a defaults key that is not free, stops before any run.
-#   4. A comment-only change in the defaults is not a limit change.
+#   4. A comment-only change in the defaults is not a limit change, and a free key whose value is not a plain
+#      literal stops.
 #   5. A check run that would change a limit path on the box stops before the apply.
-#   6. An apply that changes limit files on the box is put back, and self-applies stop until the controller
-#      ends the stop.
+#   6. An apply that changes limit files on the box is put back, never through a link planted at the temporary
+#      name, and self-applies stop until the controller ends the stop.
 #   7. A failed apply leaves the baseline where it was.
 # Usage: .github/hosts-check/tests/test_box_apply.sh   (needs git and python3)
 set -euo pipefail
@@ -128,7 +129,17 @@ echo "$c4" > "$t/state/baseline"
 sed -i 's/^# The users./# The users of the box./' "$t/src/$r/defaults/main.yml"
 commit c5 >/dev/null
 out=$(ba plan) || bad "4: plan failed: $out"
-[[ $out == *"none of them a limit"* ]] && ok "4. a comment-only change in the defaults is not a limit change" || bad "4: $out"
+[[ $out == *"none of them a limit"* ]] && ok "4a. a comment-only change in the defaults is not a limit change" || bad "4a: $out"
+n=$(calls)
+sed -i "s/^agent_box_tofu_version: .*/agent_box_tofu_version: \"{{ lookup('pipe', 'id') }}\"/" "$t/src/$r/defaults/main.yml"
+commit c5b >/dev/null
+set +e; out=$(ba plan); rc=$?; set -e
+[[ $rc == 3 && $out == *"agent_box_tofu_version (a free key's value must be a plain literal)"* && $(calls) == "$n" ]] \
+  && ok "4b. a free key whose new value is Jinja stops before any run" || bad "4b: exit $rc: $out"
+sed -i 's/^agent_box_tofu_version: .*/agent_box_tofu_version: "1.13.3"/' "$t/src/$r/defaults/main.yml"
+commit c5c >/dev/null
+out=$(ba plan) || bad "4c: plan failed: $out"
+[[ $out == *"none of them a limit"* ]] && ok "4c. a quoted plain version is free" || bad "4c: $out"
 
 # 5
 n=$(calls)
@@ -144,12 +155,16 @@ cat > "$t/apply-hook" <<EOF
 echo 'claude ALL=(root) NOPASSWD: ALL' >> "$t/box/sudoers.d/agent-box"
 echo 'claude ALL=(ALL) ALL' > "$t/box/sudoers.d/extra"
 chmod 755 "$t/box/keys"
+ln -s "$t/victim" "$t/box/sudoers.d/agent-box.box-apply"
 EOF
+echo untouched > "$t/victim"
 chmod +x "$t/apply-hook"
 set +e; out=$(ba apply); rc=$?; set -e
 [[ $rc == 4 && $out == *"changed a limit on the box"* ]] && ok "6a. an apply that changes limit files fails" || bad "6a: exit $rc: $out"
 [[ $(sha256sum < "$t/box/sudoers.d/agent-box") == "$before" && ! -e $t/box/sudoers.d/extra && $(stat -c %a "$t/box/keys") == 700 ]] \
   && ok "6b. the changed file, the added file and the folder's mode are put back" || bad "6b: $(ls -l "$t/box/sudoers.d" "$t/box")"
+[[ $(cat "$t/victim") == untouched && ! -L $t/box/sudoers.d/agent-box.box-apply && $out != *"agent-box.box-apply ("* ]] \
+  && ok "6e. a link planted at the temporary name is taken away, never written through" || bad "6e: $(cat "$t/victim"): $out"
 [[ $(base) == "$c4" && -f $t/state/stopped ]] && ok "6c. the baseline stays, and self-applies are stopped" || bad "6c"
 rm "$t/apply-hook"
 set +e; out=$(ba plan); rc=$?; set -e

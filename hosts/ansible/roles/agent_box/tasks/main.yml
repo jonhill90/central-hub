@@ -5,6 +5,12 @@
 # keys from sessions; the deny rules in the managed settings are the floor for everything else.
 # Order and proofs: docs/runbooks/set-up-the-agent-box.md.
 
+# box-apply writes its baseline only if this ran, so a run that started part way (--start-at-task) writes none.
+- name: Note that this run starts at the role's first task
+  ansible.builtin.set_fact:
+    agent_box_box_apply_from_start: true
+  tags: [always]
+
 - name: Install what the wrappers need
   ansible.builtin.package:
     name: [git, sudo, unzip, bzip2, openssl, openssh-clients, python3, ansible-core]
@@ -660,3 +666,13 @@
       tags: [lifeline]
   when: agent_box_lifeline_interface | length > 0
   tags: [lifeline]
+
+# --- box-apply's baseline, last, so only a run that got this far writes it -----------------------------
+
+- name: box-apply's baseline (only when agent_box_self_apply is true)
+  ansible.builtin.include_tasks:
+    file: self_apply_baseline.yml
+    apply:
+      tags: [wrappers, box_apply]
+  when: agent_box_self_apply | bool
+  tags: [wrappers, box_apply]
