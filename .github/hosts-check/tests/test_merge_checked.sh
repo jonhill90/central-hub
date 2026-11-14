@@ -79,6 +79,11 @@ out=$(FAKE_VERDICT=$G run $R 7 $H); check "a checkout detached on an older commi
 # A rule 11 PR with a tap line gets GREEN from the box, but the NOTE makes the wrapper refuse it.
 out=$(FAKE_VERDICT="NOTE: rule 11 PR (x) is merged on an owner-tap line, never by the Mac's checked merge
 $G" run $R 7 $H); check "a rule 11 PR with a tap is refused" "$out" "waits for the sweep"; [[ ! -s $t/calls ]] && echo "ok   rule 11 made no gh call" || { echo "FAIL: gh was called for a rule 11 PR"; fail=1; }
+out=$(FAKE_VERDICT="HALT: clear
+$OLD" run $R 7 $H); check "HALT: clear with an older GREEN and no marker is refused" "$out" "does not print the ledger line"; [[ ! -s $t/calls ]] && echo "ok   HALT: clear with the old GREEN made no gh call" || { echo "FAIL: gh was called"; fail=1; }
+out=$(FAKE_VERDICT="HALT: clear
+NOTE: verdict v2
+$OLD" run $R 7 $H); check "a marker without the ledger line is refused" "$out" "does not print the ledger line"
 # Whole lines only: a NOTE line that carries the marker text does not satisfy it.
 out=$(FAKE_VERDICT="HALT: clear
 NOTE: this PR edits files NOTE: verdict v2 and LEDGER: reviewer council-a council-b council-c
