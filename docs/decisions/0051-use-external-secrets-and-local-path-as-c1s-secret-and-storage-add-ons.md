@@ -21,7 +21,7 @@ Two of c1's add-ons were chosen in the owner's answers and in specs, but not in 
 - **External Secrets (ESO)** turns entries in a secret store into Kubernetes Secrets (`hosts/kubernetes/home/c1/apps/external-secrets/` and `secret-store/`, role `k8s_secrets`). On 2026-10-15 at 01:58 UTC (project decisions inbox, row 81) the owner said yes to the secrets layer's shape: ESO as the layer in the middle, with apps reading plain Kubernetes Secrets, as D-0038 records. D-0038 (proposed) puts OpenBao behind it.
 - **The Local Path Provisioner** is c1's default StorageClass, on nodes labelled as having a data disk (`hosts/kubernetes/home/c1/apps/local-path/`, role `k8s_storage`, agent pick 110). On 2026-11-11 at 02:38 UTC the owner chose to keep it for the rebuild (spec [2026-11-c1-rebuild](../specs/2026-11-c1-rebuild.md), P6).
 
-At main c6ee84b, External Secrets is named in 29 files in `hosts/`, 8 runbooks and D-0038. The Local Path Provisioner is named in 27 files in `hosts/`, 7 runbooks and D-0011, D-0033 and D-0039. No record chose either.
+At main e376aeb, External Secrets is named in 29 files in `hosts/`, 8 runbooks and D-0038. The Local Path Provisioner is named in 24 files in `hosts/`, 7 runbooks and D-0033 and D-0039. No record chose either.
 
 cert-manager, the third add-on in the audit's list, is already in D-0028 and the c1 way-in spec, and is not covered here.
 
