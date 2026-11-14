@@ -8,6 +8,8 @@
 #   4. A refused set fails ensure, and the password file stays as it was.
 #   5. A certificate the stand-in does not know fails ensure before any write.
 #   6. The value never appears in what ensure prints.
+#   3b/3c. With BACKUP_ESCROW_FILE and _SECRET (pick 236), the box's age identity is escrowed the same way; a
+#      missing file fails and is never made.
 # Usage: .github/hosts-check/tests/test_opnsense_escrow.sh   (needs python3, openssl)
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
@@ -97,6 +99,23 @@ PY
 out=$(escrow 2>&1) || fail "ensure after a foreign version: $out"
 [ "$(state 'len(s["secrets"]["opnsense-offbox-restic-password"])')" = 3 ] || fail "a foreign newest version was not replaced"
 echo "ok   3. a newer version with another password is replaced by the current one"
+
+# 3b. The secrets bundle's send (pick 236) also escrows the box's age identity, a file it never makes.
+printf '# created: 2026-11-14\n# public key: age1fake\nAGE-SECRET-KEY-1FAKEVALUEFORTHETEST\n' > "$work/keys/age-identity.txt"
+ident() { BACKUP_ESCROW_FILE=$work/keys/age-identity.txt BACKUP_ESCROW_SECRET=secrets-bundle-age-identity escrow; }
+out=$(ident 2>&1) || fail "ensure with the identity: $out"
+[ "$(state 'len(s["secrets"]["secrets-bundle-age-identity"])')" = 1 ] || fail "no identity version written"
+[ "$(state 's["secrets"]["secrets-bundle-age-identity"][0]["value"]')" = "$(cat "$work/keys/age-identity.txt")" ] || fail "the vault holds another identity"
+[[ $out == *"wrote the current age identity"* && $out != *AGE-SECRET-KEY* ]] || fail "identity ensure said: $out"
+out=$(ident 2>&1) || fail "second ensure with the identity: $out"
+[ "$(state 'len(s["secrets"]["secrets-bundle-age-identity"])')" = 1 ] || fail "a current identity tag still wrote a version"
+echo "ok   3b. the age identity is escrowed once, under its own name, and never printed"
+if out=$(BACKUP_ESCROW_FILE=$work/keys/missing.txt BACKUP_ESCROW_SECRET=secrets-bundle-age-identity escrow 2>&1); then fail "a missing identity file passed"; fi
+[[ $out == *"can't be read"* ]] || fail "missing identity said: $out"
+[ -e "$work/keys/missing.txt" ] && fail "ensure made the identity file"
+if out=$(BACKUP_ESCROW_FILE=$work/keys/age-identity.txt escrow 2>&1); then fail "a file with no secret name passed"; fi
+[[ $out == *"go together"* ]] || fail "half a pair said: $out"
+echo "ok   3c. a missing identity file fails and is never made; half a pair fails"
 
 # 4
 python3 -c "import json,sys; s=json.load(open(sys.argv[1])); s['reject_setsecret']=True; s['secrets']={}; json.dump(s,open(sys.argv[1],'w'))" "$work/state.json"
