@@ -77,7 +77,7 @@ flowchart LR
    - It runs only by `workflow_dispatch`, only from `main`, on the agent box's runner, whose job-started hook refuses any other workflow, branch or event. Its own token is read-only (Activation gate item 3).
    - Its inputs are the PR number, the full head, and the message ids of the reviewer's clearance and of the council's passes.
    - It hands the merge to the box's `pr-merge` wrapper, which merges as the project's GitHub App with the key kept inside the wrapper (D-0031). The wrapper checks itself, and refuses otherwise:
-     - the PR is open and not a draft;
+     - the PR is open, not a draft, and targets `main` (the last added to `pr-merge` with rule 4's changes);
      - its head is the one named;
      - GitHub reports a clean merge;
      - every check on that head has completed and passed or was skipped, and at least one ran;
@@ -90,7 +90,7 @@ flowchart LR
    - the acceptance PR changes only `status`, `date` and `accepted-evidence`, with `approved-by: agents`, `approval-ref` the orchestrator's message that records the pass, and `approval-names` naming the PR and head;
    - the reviewer compares the accepted text with the passed head, as D-0001 asks.
 4. **The box's limits.** A change to a limit (D-0036 rule 3) that merged with the agents' pass is applied by `box-apply` on the box, with no apply from the Mac.
-   - The changes that set this up are themselves limit changes, so they are the last ones applied from the Mac, together, with the owner's accept of this record as their go: `box-apply` applying limit changes; the runner hook and the wrapper list letting the runner start `pr-merge` for the merge job; and `pr-merge` no longer stopping on records, standards and `AGENTS.md`, which rule 3 moves to the agents' pass. The box's runner is registered as D-0041 rule 2 says.
+   - The changes that set this up are themselves limit changes, so they are the last ones applied from the Mac, together, with the owner's accept of this record as their go: `box-apply` applying limit changes; the runner hook and the wrapper list letting the runner start `pr-merge` for the merge job; and `pr-merge` no longer stopping on records, standards and `AGENTS.md`, which rule 3 moves to the agents' pass, and checking that the PR targets `main`. The box's runner is registered as D-0041 rule 2 says.
    - `box-apply` still logs each limit file that changed, with the commit.
    - The keys stay in the box's own key folders, as now.
 5. **Production and cloud applies.** Dev is the dev guests, VMs 250 to 257, and the dev secrets store, VMs 550 to 599 (D-0038 rule 2; central-hub #276). The production secrets store, VM 500, is production. A production run (D-0035) or a production or cloud apply (D-0041) needs no tap, apart from rule 6:
