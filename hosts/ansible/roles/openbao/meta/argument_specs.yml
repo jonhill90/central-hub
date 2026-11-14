@@ -60,8 +60,8 @@ argument_specs:
       openbao_oidc:
         type: dict
         description: >-
-          The owner's sign-in through Keycloak (pick 233). Empty: no OIDC login. Keys discovery_url, values_file and
-          ui_names are required when set; ca_pem_file and pin_address are optional. Private.
+          The owner's sign-in through Keycloak (pick 233). Empty: no OIDC login. Keys discovery_url, values_file,
+          ui_names and owner_user are required when set; ca_pem_file and pin_address are optional. Private.
       openbao_oidc_mount: {type: str, description: "The OIDC login's mount (type jwt)."}
       openbao_oidc_client_id: {type: str, description: "The realm's client for the store."}
       openbao_oidc_secret_key: {type: str, description: "The line in values_file that holds the client's secret."}
@@ -78,4 +78,4 @@ argument_specs:
       openbao_oidc_proof:
         type: dict
         description: >-
-          Dev only: the sign-in proof's admin_user, viewer_user, gateway_address and verify. Empty: no proof.
+          Dev only: the sign-in proof's admin_user, viewer_user, other_admin_user, gateway_address and verify. Empty: no proof.

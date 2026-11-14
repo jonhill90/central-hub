@@ -368,7 +368,7 @@ components:
     kind: software
     used-for: machine code under hosts/ansible (ansible-core, ansible.posix, community.general, oxlorg.opnsense)
     licence: GPL-3.0
-    licence-source: https://raw.githubusercontent.com/ansible-collections/community.general/main/COPYING
+    licence-source: https://raw.githubusercontent.com/ansible/ansible/devel/COPYING
     paid-edition: Red Hat Ansible Automation Platform adds a web UI, API and RBAC around ansible-core; we use ansible-core only
     paid-edition-source: https://www.redhat.com/en/technologies/management/ansible/ansible-vs-red-hat-ansible-automation-platform
     verdict: pass

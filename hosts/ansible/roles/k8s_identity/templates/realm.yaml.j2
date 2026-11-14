@@ -198,10 +198,10 @@ spec:
 {{ mappers }}
 {% endif %}
 {% if k8s_identity_openbao_hosts | length > 0 %}
-      # The secrets store's web page, through its OIDC login (role openbao, the owner's sign-in; OpenBao docs,
-      # "OIDC provider configuration", Keycloak): confidential, code flow. The page calls back on
-      # /ui/vault/auth/<mount>/oidc/callback; only the store's role openbao decides who gets a token (its
-      # bound_claims on groups), so the client itself lets any realm user sign in, like the other clients.
+      # The secrets store's web page, through its OIDC login (Ansible role openbao, tasks/owner_signin.yml;
+      # OpenBao docs, "OIDC provider configuration", Keycloak): confidential, code flow. The page calls back on
+      # /ui/vault/auth/<mount>/oidc/callback. The store's login role `owner` decides who gets a token (bound to
+      # group lab-admins and to the owner's user name), so this client lets any realm user sign in, like the others.
       - clientId: openbao
         name: Secrets store
         protocol: openid-connect
