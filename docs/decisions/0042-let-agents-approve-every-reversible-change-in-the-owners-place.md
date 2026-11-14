@@ -55,7 +55,7 @@ The owner's words, above, decide only this much:
 
 Everything else in this record is an agent pick, labelled `[agent pick]` in its rule, which the owner can change at any time (REQ-0035). That includes the reviewer and the council approving in his place: that role is one the agents gave themselves, because his words say not to ask him but not who approves instead.
 
-His words are a change of mind (REQ-0030). They reverse REQ-0009 (the owner makes every decision) and REQ-0012 (only the owner accepts a record; agents must not mark one accepted) in the requirements register, the project's standing instruction 1 (never mark anything accepted), and the second of the three Central Hub outcomes the owner ranked by card on 2026-11-11 at 04:03 UTC (he picks each permanent piece), for the changes this record covers. The register and that outcome's text are kept outside this repository; both need updating, by their own process.
+His words are a change of mind (REQ-0030). They reverse REQ-0009 (the owner makes every decision) and REQ-0012 (only the owner accepts a record; agents must not mark one accepted) in the requirements register, the project's standing instruction 1 (never mark anything accepted), and the second of the three Central Hub outcomes in the project's topic (he picks each permanent piece), whose work his card of 2026-11-11 at 04:03 UTC put ahead of other work, for the changes this record covers. The register and that outcome's text are kept outside this repository; both need updating, by their own process.
 
 ## Decision Drivers
 
