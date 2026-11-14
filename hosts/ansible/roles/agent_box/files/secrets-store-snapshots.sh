@@ -20,7 +20,7 @@ case ${1:-} in
   keep)
     [[ $# -eq 4 && -n $4 ]] || { echo "usage: secrets-store-snapshots.sh keep DIR KEPT CLUSTER" >&2; exit 2; }
     dir=$2 kept=$3 cluster=$4
-    mkdir -p -m 0700 "$kept"
+    mkdir -p "$kept" && chmod 0700 "$kept"
     moved=0
     while read -r f; do
       c=$(cat "$dir/$f.cluster" 2>/dev/null || true)
