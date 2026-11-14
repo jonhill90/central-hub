@@ -23,7 +23,7 @@ How do c1's alerts and heartbeat reach the owner, what do comparable home labs u
 5. **How ntfy arrived.** ntfy reached c1 in PR #72 on 2026-11-08 ("add c1's alerts, dashboard, ntfy delivery and Argo CD sign-in through Keycloak"). Picks 171 and 213 record the owner's answers of 2026-11-12 at 22:20 and 22:21 UTC [6] (measured).
 6. **Other home labs.** Of five public home labs read at fixed commits [7] to [11], Pushover and Discord are the most common receivers (two each) and ntfy one; four of the five send the Watchdog heartbeat to something outside the cluster (measured; five labs, not a survey).
 7. **Alertmanager** has native receivers for many channels, including Discord and Pushover, and a generic webhook; ntfy is not native [12] (sourced).
-8. **What c1 runs.** ntfy denies everyone by default (`NTFY_AUTH_DEFAULT_ACCESS: deny-all`). The Watchdog goes to a heartbeat receiver whose URL is the one secret `healthchecks-ping-url` [6] (measured).
+8. **What c1 runs.** ntfy denies everyone by default (`NTFY_AUTH_DEFAULT_ACCESS: deny-all`). The Watchdog goes to a heartbeat receiver whose URL is the one secret `healthchecks-ping-url`, delivered by the ExternalSecret `alertmanager-heartbeat` in `monitoring-extras/` and read as a file, so it sits in no config [6] (measured).
 9. **Reach.** At main 07408f9, ntfy is named in 22 files in `hosts/` and 8 runbooks, and Healthchecks in 7 files in `hosts/` and 3 runbooks; no record names either [6] (measured, 2026-11-14).
 
 ## How the decision used it

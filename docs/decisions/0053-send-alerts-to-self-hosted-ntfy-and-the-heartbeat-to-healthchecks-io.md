@@ -16,7 +16,7 @@ revisit-when: the owner's phone needs instant iOS push, which self-hosted ntfy g
 
 ## Context and Problem Statement
 
-c1's Alertmanager sends alerts to an ntfy server running on c1 (`hosts/kubernetes/home/c1/apps/alerts/`). Prometheus's always-firing Watchdog alert goes about every 5 minutes to a check on Healthchecks.io (`hosts/kubernetes/home/c1/apps/kube-prometheus-stack/values.yaml`), which e-mails the owner when the pings stop. No decision record chose either.
+c1's Alertmanager sends alerts to an ntfy server running on c1 (`hosts/kubernetes/home/c1/apps/alerts/`). Prometheus's always-firing Watchdog alert goes about every 5 minutes to a check on Healthchecks.io (route in `hosts/kubernetes/home/c1/apps/kube-prometheus-stack/values.yaml`), which e-mails the owner when the pings stop. The ntfy token and the heartbeat URL reach Alertmanager as ExternalSecrets in `monitoring-extras/`. No decision record chose either.
 
 ntfy reached c1 in PR #72 on 2026-11-08 as an agent pick, with no comparison behind it. The owner's words this rests on:
 
