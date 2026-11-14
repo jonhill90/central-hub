@@ -55,6 +55,8 @@ def url_ref(raw: str) -> str | None:
     if not rest or PLACEHOLDER.match(rest):
         return None
     host = rest.split("/", 1)[0]
+    if not re.fullmatch(r"[A-Za-z0-9.-]+(:\d+)?", host):
+        return None  # not a host name, such as a regular expression that checks an address
     if "." not in host or re.fullmatch(r"[\d.:]+", host):
         return None  # a bare name or an IP address is the lab's own, not an outside source
     return "url:" + rest
