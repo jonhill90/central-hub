@@ -1,0 +1,11 @@
+# {{ ansible_managed | comment('plain') | trim }}
+[Unit]
+Description=OpenBao weekly restore drill timer (D-0038 rule 8)
+
+[Timer]
+OnCalendar={{ openbao_drill_on_calendar }}
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

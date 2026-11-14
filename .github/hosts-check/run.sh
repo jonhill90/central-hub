@@ -180,6 +180,7 @@ check_backup() {
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
   bash "$here/tests/test_identity_signin.sh"
   bash "$here/tests/test_openbao_oidc_check.sh"
+  bash "$here/tests/test_openbao_drill.sh"
   bash "$here/tests/test_rebuild_dev_stages.sh"
   bash "$here/tests/test_rebuild_preflight.sh"
   bash "$here/tests/test_rebuild_short_log.sh"

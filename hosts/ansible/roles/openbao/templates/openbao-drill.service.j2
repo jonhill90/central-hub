@@ -1,0 +1,14 @@
+# {{ ansible_managed | comment('plain') | trim }}
+[Unit]
+Description=OpenBao restore drill into a throwaway server (D-0038 rule 8)
+After=openbao.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/openbao-drill.sh {{ openbao_drill_port }} {{ openbao_snapshot_dir }} {{ openbao_drill_wait }}
+# Only a loopback device: the throwaway can't dial the live store's cluster port or anything else.
+PrivateNetwork=yes
+PrivateTmp=yes
+# The throwaway's storage, and the audit log the restored data turns on, live in memory and go with the unit.
+TemporaryFileSystem=/var/lib/openbao-drill:mode=0755 /var/log/openbao:mode=0700
+TimeoutStartSec={{ openbao_drill_wait * 4 + 60 }}
