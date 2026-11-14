@@ -66,7 +66,7 @@ superseded-by:
 
 ## Remove it
 
-Take a last snapshot (`systemctl start openbao-snapshot.service`), copy it off the VM, then `secrets-store destroy`. The seal key in the box's keys folder is what reads that snapshot again.
+Take a last snapshot with `secrets-store snapshot`, which copies it to the box's keys folder, then `secrets-store destroy`. The seal key in the box's keys folder is what reads that snapshot again: after `apply` and `configure`, `secrets-store restore` puts the newest one back.
 
 ## If it fails
 
