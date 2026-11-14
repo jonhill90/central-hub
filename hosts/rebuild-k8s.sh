@@ -259,7 +259,8 @@ runner_mark() { printf '%s' "$env_dir/ci-runner-stopped"; }
 preflight_stop_runner() { # node
   local node=$1 i st out
   echo "runner stop: short on memory and VM $CI_RUNNER_VMID is running, asking it to shut down (VM.PowerMgmt, nothing else is touched)"
-  : > "$(runner_mark)"
+  # The marker holds this run's stamp, so the end of the run knows it was this run that stopped VM 300.
+  printf '%s\n' "$stamp" > "$(runner_mark)"
   out=$(px_api POST "nodes/$node/qemu/$CI_RUNNER_VMID/status/shutdown" "timeout=60") \
     || { echo "runner stop: the shutdown request failed: $(preflight_clean "$out")"; rm -f "$(runner_mark)"; return 1; }
   for i in $(seq 1 24); do
@@ -304,6 +305,22 @@ print(json.load(sys.stdin)["data"]["maxmem"] // 1048576)' 2>/dev/null) || maxmem
   return 0
 }
 
+# The node's storages the token can see (name and type only), one line each, so the log shows whether the host
+# uses ZFS (whose ARC the node's memory.available may not count). Read-only and never fatal.
+preflight_storage() { # node
+  local out
+  out=$(px_api GET "nodes/$1/storage") \
+    || { echo "preflight: storage list could not be read: $(preflight_clean "$out")"; return 1; }
+  printf '%s' "$out" | python3 -c 'import json,sys
+rows = sorted(json.load(sys.stdin)["data"], key=lambda r: str(r.get("storage", "")))
+print("preflight: storage list from /nodes/<node>/storage, %d storages visible to the token" % len(rows))
+for r in rows:
+    print("preflight: storage name=%s type=%s" % (
+        "".join(c for c in str(r.get("storage", "")) if c.isalnum() or c in "-_."),
+        "".join(c for c in str(r.get("type", "")) if c.isalnum() or c in "-_.")))' \
+    || { echo "preflight: storage list had an unexpected shape"; return 1; }
+}
+
 preflight_memory() {
   local min=${PREFLIGHT_MIN_FREE_MIB:-14336} node free field guests
   local existing declared
@@ -331,6 +348,7 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
   echo "preflight: node free memory ${free} MiB (field: ${field}), minimum ${min} MiB"
   guests=$(preflight_guests) || true
   printf '%s\n' "$guests"
+  preflight_storage "$node" || true
   if [ "$free" -lt "$min" ] && grep -q "guest vmid=$CI_RUNNER_VMID type=qemu status=running" <<<"$guests"; then
     preflight_stop_runner "$node" || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB and VM $CI_RUNNER_VMID could not be stopped"; return 1; }
     sleep 5
@@ -456,6 +474,25 @@ if [ "$ENV_NAME" = dev ]; then
   trap runner_restart EXIT
 fi
 
+# When this run stopped VM 300 (the preflight was short), dev can't stay up: the node has no memory for both. So the
+# run tears dev down at its end, pass or fail, and the exit trap then starts VM 300 under its memory rule. It keeps
+# the notebook's runner down for one run, not for as long as dev lives. The cost: a failed run leaves nothing for
+# `rebuild diag` to read, so the run's own log lines (the last lines of the failed stage) are the evidence.
+runner_run_teardown() {
+  local trc t0
+  [ -f "$(runner_mark)" ] && [ "$(cat "$(runner_mark)")" = "$stamp" ] || return 0
+  echo "runner stop: this run stopped VM $CI_RUNNER_VMID, so dev is torn down now (dev can't stay up while memory is short)" | tee -a "$log"
+  t0=$(date +%s)
+  echo "$(date -u +%FT%TZ) teardown start" | tee -a "$log"
+  echo "===== teardown" >> "$raw"
+  set +e
+  (set -e; run_stage teardown) >> "$raw" 2>&1
+  trc=$?
+  set -e
+  echo "$(date -u +%FT%TZ) teardown end rc=$trc $(( $(date +%s) - t0 ))s" | tee -a "$log"
+  return "$trc"
+}
+
 echo "rebuild: env $ENV_NAME, stages: $stages, log $log"
 for s in $stages; do
   t0=$(date +%s)
@@ -477,13 +514,15 @@ for s in $stages; do
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.
   if [ "$s" = preflight ] || [ "$s" = identity-keycloak ]; then
     awk -v s="$s" '$0 == "===== " s {on=1; next} /^===== / {on=0} on' "$raw" \
-      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|guest note[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
+      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|storage (list|name)[^"]*|guest note[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
       | sed "s/^/  $s: /" >> "$log" || true
   fi
   if [ "$rc" -ne 0 ]; then
     echo "rebuild: stage $s failed; last lines of $raw:" >&2
     tail -n 20 "$raw" >&2
+    runner_run_teardown || true
     exit "$rc"
   fi
 done
+runner_run_teardown || { echo "rebuild: the end-of-run teardown failed" >&2; exit 1; }
 echo "rebuild: all stages passed" | tee -a "$log"

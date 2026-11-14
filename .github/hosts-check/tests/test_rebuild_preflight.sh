@@ -7,13 +7,15 @@ src=$(cd "$(dirname "$0")/../../.." && pwd)/hosts/rebuild-k8s.sh
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 fail=0
-sed -n '/^CI_RUNNER_VMID=/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
+sed -n '/^CI_RUNNER_VMID=/p;/^preflight_storage() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
 grep -q '^preflight_memory' "$t/fn.sh" && grep -q '^run_stage' "$t/fn.sh" || { echo "FAIL: functions not found"; exit 1; }
 mkdir "$t/bin"
 cat > "$t/bin/curl" <<'F'
 #!/bin/sh
 echo "$*" >> "$FAKE_ARGV"; cat > "$FAKE_STDIN"
 for a in "$@"; do last=$a; done; echo "$last" | sed 's|.*/api2/json/||' >> "$FAKE_CALLS"
+case "$*" in *nodes/*/storage) [ -n "$FAKE_STORAGE_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
+  echo '{"data":[{"storage":"local-lvm","type":"lvmthin"},{"storage":"hdd;backup","type":"dir"}]}'; exit 0 ;; esac
 case "$*" in *"-X POST"*status/shutdown*) : > "$FAKE_DIR/stopped"; echo '{"data":"UPID:x"}'; exit 0 ;;
 *"-X POST"*status/start*) [ -n "$FAKE_START_FAILS" ] && { echo "curl: (22) The requested URL returned error: 500" >&2; exit 22; }; rm -f "$FAKE_DIR/stopped"; touch "$FAKE_DIR/started"; echo '{"data":"UPID:y"}'; exit 0 ;;
 *qemu/300/status/current*) if [ -f "$FAKE_DIR/stopped" ] && [ -z "$FAKE_NEVER_STOPS" ]; then echo '{"data":{"status":"stopped","maxmem":2147483648}}'; else echo '{"data":{"status":"running","maxmem":2147483648}}'; fi; exit 0 ;; esac
@@ -38,7 +40,7 @@ printf 'export PROXMOX_VE_ENDPOINT=%s\nexport PROXMOX_VE_API_TOKEN=agent@pve!dev
 GIB=1073741824
 run() { # env total_gib used_gib error
   rm -rf "$t/state" "$t/envdir" "$t/calls" "$t/argv"; mkdir -p "$t/state" "$t/envdir"; : > "$t/calls"; : > "$t/argv"
-  PATH="$t/bin:$PATH" TFVARS="${TFVARS_FILE:-$t/vars.tfvars}" TFSTATE="${STATE:-$t/empty.tfstate}" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_GUESTS_ERROR=${FAKE_GUESTS_ERROR:-} FAKE_AFTER_AVAILABLE=${FAKE_AFTER_AVAILABLE:-} FAKE_NEVER_STOPS=${FAKE_NEVER_STOPS:-} FAKE_START_FAILS=${FAKE_START_FAILS:-} FAKE_DIR="$t/state" FAKE_CALLS="$t/calls" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" env_dir="$t/envdir" log="$t/rebuild.log" \
+  PATH="$t/bin:$PATH" TFVARS="${TFVARS_FILE:-$t/vars.tfvars}" TFSTATE="${STATE:-$t/empty.tfstate}" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_GUESTS_ERROR=${FAKE_GUESTS_ERROR:-} FAKE_AFTER_AVAILABLE=${FAKE_AFTER_AVAILABLE:-} FAKE_NEVER_STOPS=${FAKE_NEVER_STOPS:-} FAKE_START_FAILS=${FAKE_START_FAILS:-} FAKE_STORAGE_ERROR=${FAKE_STORAGE_ERROR:-} stamp=run1 FAKE_DIR="$t/state" FAKE_CALLS="$t/calls" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" env_dir="$t/envdir" log="$t/rebuild.log" \
     bash -c '. "$1"; set +e; run_stage preflight; echo "rc=$?"; echo "marker=$([ -f "$env_dir/ci-runner-stopped" ] && echo yes || echo no)"' _ "$t/fn.sh" 2>&1
 }
 check() { if [[ $2 == *"$3"* ]] && { [ -z "${4:-}" ] || [[ $2 != *"$4"* ]]; }; then echo "ok   $1"; else echo "FAIL $1: $2"; fail=1; fi; }
@@ -105,4 +107,22 @@ out=$(FAKE_START_FAILS=yes rs 8 mark); check "a failed start keeps the marker so
 out=$(rs 8); check "no marker means nothing is read or started" "$out" "rc=0" "runner"
 grep -q 'status/start' "$t/calls" && { echo "FAIL: started with no marker"; fail=1; } || echo "ok   nothing is started without the marker"
 grep -q '^  runner_restart$' "$src" && grep -q 'trap runner_restart EXIT' "$src" && echo "ok   a dev run starts the runner again on exit" || { echo "FAIL: no restart trap"; fail=1; }
+# The storage list: names and types only, cleaned, and a failed read is not fatal.
+out=$(run dev 31 28); check "the storage list says how many and names the types" "$out" "storage list from /nodes/<node>/storage, 2 storages" ""
+check "a storage line has name and type" "$out" "storage name=local-lvm type=lvmthin" ""
+check "a storage name is cleaned to safe characters" "$out" "storage name=hddbackup type=dir" "hdd;backup"
+out=$(FAKE_STORAGE_ERROR=yes run dev 31 28); check "an unreadable storage list is not fatal and says so" "$out" "storage list could not be read" "SECRETTOKEN"
+# The end-of-run teardown: only when this run's stamp is in the marker; a failure is returned.
+td() { # marker content (empty: no marker), teardown rc
+  rm -rf "$t/envdir" "$t/tdcalls"; mkdir -p "$t/envdir"; : > "$t/tdcalls"; [ -z "$1" ] || printf '%s\n' "$1" > "$t/envdir/ci-runner-stopped"
+  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 TDRC=${2:-0} bash -c '. "$1"; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; runner_run_teardown; echo "rc=$?"' _ "$t/fn.sh" 2>&1; }
+out=$(td run1); check "this run's marker tears dev down" "$out" "this run stopped VM 300, so dev is torn down now" "rc=1"
+check "the teardown stage ran" "$(cat "$t/tdcalls")" "teardown" ""
+check "and says rc=0" "$out" "teardown end rc=0" ""
+out=$(td run0); check "a marker from an earlier run is not this run's" "$out" "rc=0" "torn down"
+check "no teardown stage ran for it" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td ""); check "no marker means no teardown" "$out" "rc=0" "torn down"
+check "no teardown stage ran without a marker" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td run1 1); check "a failed teardown is returned" "$out" "rc=1" "rc=0"
+grep -q 'runner_run_teardown || { echo' "$src" && grep -c 'runner_run_teardown || true' "$src" | grep -q 1 && echo "ok   the run tears dev down at its end, on a pass and on a failure" || { echo "FAIL: the end-of-run teardown is not wired both ways"; fail=1; }
 exit $fail
