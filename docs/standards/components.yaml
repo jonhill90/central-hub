@@ -99,7 +99,7 @@ components:
     checked: 2026-11-14
   - name: AlmaLinux
     kind: software
-    used-for: the OS of the Kubernetes nodes, the agent box and the desktop VM
+    used-for: the OS of the Kubernetes nodes, the agent box and the desktop VM, and the packages roles install from its own repositories (GNOME and GNOME Remote Desktop on the desktop VM among them)
     licence: free software distribution, community owned
     licence-source: https://almalinux.org/blog/what-almalinux-foundation-membership-means-for-you
     paid-edition: none; "forever-free enterprise Linux distribution"
@@ -107,15 +107,25 @@ components:
     verdict: pass
     sources: [url:repo.almalinux.org/]
     checked: 2026-11-14
+  - name: Firefox
+    kind: software
+    used-for: the browser on the desktop VM, an AlmaLinux package
+    licence: MPL-2.0 and other open source licences
+    licence-source: https://www.mozilla.org/en/legal/eula/firefox.html
+    paid-edition: none; Firefox may download content decryption modules from third parties "which may not be open source", to play some video
+    paid-edition-source: https://www.mozilla.org/en/legal/eula/firefox.html
+    verdict: pass
+    sources: []
+    not-detected: an AlmaLinux package installed by role desktop
+    checked: 2026-11-14
   - name: Talos Linux
     kind: software
     used-for: the Talos rehearsal cluster only (hosts/terraform/home/k8s-talos)
     licence: MPL-2.0
     licence-source: https://raw.githubusercontent.com/siderolabs/talos/main/LICENSE
-    paid-edition: Talos Enterprise Linux adds FIPS 140-3 builds, Omni fleet management and CVE SLAs
+    paid-edition: none for the OS; Talos Enterprise Linux sells "compliance, support, and Omni fleet management on the same open-source OS" (FIPS 140-3 builds, CVE SLAs); Omni is a separate product we don't use
     paid-edition-source: https://www.siderolabs.com/pricing/
-    verdict: fail
-    exit-path: kubeadm on AlmaLinux, which c1 already runs
+    verdict: pass
     sources: [url:factory.talos.dev/]
     checked: 2026-11-14
   - name: Kubernetes
@@ -358,6 +368,17 @@ components:
     paid-edition-source: https://vale.sh/cms
     verdict: pass
     sources: [url:github.com/vale-cli/]
+    checked: 2026-11-14
+
+  - name: Kubernetes JSON schemas
+    kind: software
+    used-for: the schemas kubeconform checks manifests against in CI (yannh/kubernetes-json-schema, datreeio/CRDs-catalog)
+    licence: Apache-2.0 (kubernetes-json-schema); MIT (CRDs-catalog)
+    licence-source: https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/LICENSE
+    paid-edition: none found; both are catalogues of schema files
+    paid-edition-source: https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/README.md
+    verdict: pass
+    sources: [url:raw.githubusercontent.com/yannh/kubernetes-json-schema/, url:raw.githubusercontent.com/datreeio/CRDs-catalog/]
     checked: 2026-11-14
 
   # Hosted services (STD-0006 rule 3).

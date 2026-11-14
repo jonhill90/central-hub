@@ -9,26 +9,31 @@ Reads the files git tracks under hosts/ and .github/ and prints one reference pe
   collection:<namespace>.<name>  an Ansible collection
   pypi:<name>                    a Python package the lab installs
   action:<owner>/<repo>          a GitHub Action a workflow uses
-Comment lines are skipped. Placeholders (example.com, .invalid, 127.0.0.1, localhost) are skipped.
+Every tracked text file is read except Markdown prose. Comment lines are skipped. Placeholders
+(example.com, .invalid, 127.0.0.1, localhost) and the lab's own templated names are skipped.
 """
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-SKIP_DIRS = ("hosts/ansible/collections/", "node_modules/", "/tests/", ".github/foss-check/")
+SKIP_DIRS = ("hosts/ansible/collections/", "node_modules/", ".github/foss-check/")
 # Lock files of the CI checks' own Node tools: STD-0006 "Not covered yet".
 SKIP_FILES = ("package-lock.json",)
-CODE_EXT = (".yml", ".yaml", ".j2", ".sh", ".tf", ".py", ".example", ".json", ".cfg", ".service", ".hcl")
+# Prose is not code: README and runbook text names pages to read, not sources to pull.
+PROSE_EXT = (".md",)
 REGISTRIES = r"(?:docker\.io|quay\.io|ghcr\.io|registry\.k8s\.io|gcr\.io|mcr\.microsoft\.com|public\.ecr\.aws)"
 IMAGE = re.compile(rf"\b{REGISTRIES}/[a-z0-9][a-z0-9._/-]*[a-z0-9]")
 URL = re.compile(r"https?://[^\s\"'`)>\]]+")
 PROVIDER = re.compile(r'^\s*source\s*=\s*"([a-z0-9-]+/[a-z0-9-]+)"')
+# An image named with no registry is a Docker Hub short name: nginx:1.27 is docker.io/library/nginx.
+IMAGE_KEY = re.compile(r"^\s*-?\s*[\"']?image[\"']?\s*[:=]\s*[\"']?([a-z0-9][a-z0-9._/-]*)(?=[:@\"'\s]|$)")
 USES = re.compile(r"^\s*-?\s*uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)")
 PIP = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:==|>=|~=|\[)")
 PLACEHOLDER = re.compile(
     r"^(127\.|localhost|0\.0\.0\.0|json-schema\.org/"
-    r"|[^/]*\b(example\.(com|org|net)|invalid|local|test|svc|svc\.cluster\.local)(:\d+)?(/|$))"
+    r"|[^/]*\b(example\.(com|org|net)|invalid|local|test|svc|svc\.cluster\.local)(:\d+)?(/|$)"
+    r"|example[^/]*(/|$))"
 )
 TEMPLATE = re.compile(r"\{|\$|<|%7B|\\")
 COMMENT = re.compile(r"^\s*(#|//|--\s)")
@@ -72,7 +77,7 @@ def scan(root: Path) -> set[str]:
                 if m:
                     refs.add("pypi:" + m.group(1).lower().replace("_", "-"))
             continue
-        if not name.endswith(CODE_EXT) and name not in ("Dockerfile",):
+        if name.endswith(PROSE_EXT):
             continue
         try:
             text = path.read_text()
@@ -84,6 +89,12 @@ def scan(root: Path) -> set[str]:
             code = re.split(r"\s#\s", line, maxsplit=1)[0] if not name.endswith(".py") else line
             for m in IMAGE.finditer(code):
                 refs.add("image:" + m.group(0))
+            m = IMAGE_KEY.match(code)
+            if m and not IMAGE.match(m.group(1)):
+                first = m.group(1).split("/", 1)[0]
+                if "." not in first and ":" not in first and first != "localhost":
+                    path = m.group(1) if "/" in m.group(1) else "library/" + m.group(1)
+                    refs.add("image:docker.io/" + path)
             for m in URL.finditer(code):
                 if IMAGE.match(m.group(0).split("://", 1)[1]):
                     continue

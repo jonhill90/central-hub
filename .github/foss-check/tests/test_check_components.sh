@@ -72,5 +72,12 @@ expect "a download address needs a row" 1 "url:get.helm.sh/helm-" \
 expect "a templated host is the lab's own" 0 "" \
   "$(make_repo "$(row Other pass '[image:quay.io/x]')" "" '    url: "https://{{ name }}.example/api"')"
 
+expect "a Docker Hub short name needs a row" 1 "image:docker.io/library/nginx" \
+  "$(make_repo "$(row Other pass '[image:quay.io/x]')" "" '    image: nginx:1.27')"
+expect "a Docker Hub short name matches its row" 0 "" \
+  "$(make_repo "$(row nginx pass '[image:docker.io/library/nginx]')" "" '    image: "nginx:1.27"')"
+expect "an example host is a placeholder" 0 "" \
+  "$(make_repo "$(row Other pass '[image:quay.io/x]')" "" '    url: https://example-kv.vault.azure.net/')"
+
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]

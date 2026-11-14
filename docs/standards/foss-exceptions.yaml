@@ -13,7 +13,7 @@ exceptions:
     decided: the owner kept OPNsense for now, 2026-11-14 05:11:29 UTC, project chat message cmsg_01X43rfNYp4H1dL1V2dkfkwNUCNWkCsmp5t7rH58x9gsJH; its sign-in goes through a free route (D-0037)
   - component: Tailscale
     state: pending
-    listed: 2026-11-14, from the FOSS check of every central-hub piece; earlier kept as "fine for now, keep it swappable" (owner's card, 2026-11-10 19:09 UTC)
+    listed: 2026-11-14, from the FOSS check of every central-hub piece; earlier kept as "fine for now, keep it swappable" (owner's card tap, 2026-11-10 19:09 UTC, card cmsg_01X43rfNYp4H1dL1V2dkfkwN94SWGX6ssfCizqji4VUhLp)
   - component: Cilium
     state: pending
     listed: 2026-11-14, from the FOSS check of every central-hub piece
@@ -23,6 +23,3 @@ exceptions:
   - component: nginx
     state: pending
     listed: 2026-11-14, from the FOSS check of every central-hub piece
-  - component: Talos Linux
-    state: pending
-    listed: 2026-11-14, found while seeding the register; rehearsal cluster only

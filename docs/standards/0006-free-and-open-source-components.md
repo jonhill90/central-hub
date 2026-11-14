@@ -38,9 +38,9 @@ Rows are kept in this order: networking first, then platform software, then host
 
 ## The check
 
-`.github/foss-check/scan.py` lists every outside source that the files git tracks under `hosts/` and `.github/` pull in:
+`.github/foss-check/scan.py` reads every text file git tracks under `hosts/` and `.github/`, tests included, except Markdown prose. It lists every outside source they pull in:
 
-- container images and OCI charts, by registry and path;
+- container images and OCI charts, by registry and path, with a Docker Hub short name such as `nginx:1.27` read as `docker.io/library/nginx`;
 - downloads, package repositories and APIs, by address;
 - OpenTofu providers;
 - Ansible collections;
@@ -61,7 +61,8 @@ Example that passes: the register row `Keycloak` matches `image:quay.io/keycloak
 ## Not covered yet
 
 - Packages installed from a distribution's own repositories (AlmaLinux, Debian) are not seen by the scanner. Their rows are kept by hand, as `nginx` is.
-- The CI checks' own Python and Node libraries, in `.github/*/requirements*.txt` and `package-lock.json`.
+- The CI checks' own Python and Node libraries, in `.github/*/requirements*.txt` and `package-lock.json`, and the CI tools `install-tools.sh` builds from Go modules (OpenTofu, tflint, kubeconform, promtool).
+- How an image is pinned, by tag or by digest. That is STD-0003's subject, not this one's.
 - Runbooks under `docs/runbooks/` that install software by hand.
 - Whether the check is a required status check on `main` is the owner's setting.
 
