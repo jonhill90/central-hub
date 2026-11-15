@@ -1,14 +1,22 @@
 ---
 id: D-0038
 title: Run OpenBao on its own VM in each environment as the lab's secrets store, unsealed by a static key with no person, and keep the private bootstrap files encrypted with SOPS and age
-status: proposed
-date: 2026-11-14
+status: accepted
+date: 2026-11-15
 decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0013, D-0023, D-0033, D-0035, D-0036]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-15T04:51:50Z
+  approved-commit: b78f6c18e2b6cac4592c39fdaabff82abdc67f69
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNPp39HCn1ncNojBhxoDx9cE
+  approval-names: "neither a PR nor a head; the owner picked option 0, Accept the picks, on the card that asks to accept D-0038's picks (OpenBao on its own VM, the static seal, SOPS S1, the prod seal key on the box); its option text adds no copy on his Mac and no prod recovery shares. The record matches main at the approved commit, the last commit to change it before the tap. It replaces his yes of 2026-10-15 01:58 UTC to root keys in his password manager plus an offline copy"
+  check: the Plan thread read the card (posted 2026-11-15T04:46:58Z) and the owner's choice event (cmsg_01X43rfNYp4H1dL1V2dkfkwNQKoGjY2FC2uXBaLLqXyH6C, 04:51:50Z, option 0) in the project thread at about 04:53Z, and they match; an independent check by the reviewer is still to do
+  merged: not yet
 revisit-when: the dev build measures a seal, restore or External Secrets login that does not work as written here; the store needs to stay up while its VM is down (high availability); a hardware or virtual TPM route is ready to replace the static key; External Secrets moves its OpenBao support out of alpha or drops it; OpenBao or SOPS changes licence or adds a paid edition; a cluster other than c1 reads secrets from it; or the agents get accounts of their own (D-0030); or the owner picks a home for the prod store's recovery shares
 ---
 

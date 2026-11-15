@@ -1,14 +1,22 @@
 ---
 id: D-0044
 title: Let the agent box apply a change to its own limits that main approves by its exact digest, with the owner's tap logged but not checked
-status: proposed
-date: 2026-11-14
+status: accepted
+date: 2026-11-15
 decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0036, D-0042]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-15T04:52:43Z
+  approved-commit: 657b9e66932fa2f4c8f0a6bfbeeffe195cb1bf80
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNEyqtrnpFokYtogLz2QfGp6
+  approval-names: "neither a PR nor a head; the owner picked option 0, Accept D-0044, on the card that asks to accept D-0044 so the box applies limit changes that main approves by digest; its option text says agents could loosen their own limits with a tap id the box logs but can't check. The record matches main at the approved commit, the only commit to change it"
+  check: the Plan thread read the card (posted 2026-11-15T04:48:22Z) and the owner's choice event (cmsg_01X43rfNYp4H1dL1V2dkfkwNNrcEb6ZgM58dZXtbgvqvFt, 04:52:43Z, option 0) in the project thread at about 04:54Z, and they match; an independent check by the reviewer is still to do
+  merged: not yet
 revisit-when: the box can check the owner's tap itself (for example a GitHub environment approval once the agents have their own account, D-0030); a line in the approvals file names a pass or a tap that does not exist; an approved apply changes a limit path its check run did not name; the approvals file becomes a limit; or a cluster other than c1 reads the repository
 ---
 
