@@ -91,6 +91,7 @@ check_ansible() {
   bash "$here/tests/test_merge_checked.sh"
   bash "$here/tests/test_lifeline_nmcli_read.sh"
   bash "$here/tests/test_lifeline_cleanup.sh"
+  bash "$here/tests/test_box_apply_inventory_vars.sh"
 }
 
 check_manifests() {
