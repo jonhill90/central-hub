@@ -64,6 +64,7 @@ kubeadm MUST be given `--service-cidr` and the CNI its pod range from this table
 | 20 | `10.1.20.0/24` | QA and stage | `10.1.20.224/27` |
 | 30 | `10.1.30.0/24` | dev | `10.1.30.224/27` |
 | 50 | `10.1.50.0/24` | management | none |
+| 60 | `10.1.60.0/24` | tenant lab | none |
 
 The copy in code of this table is `hosts/ansible/inventories/home/group_vars/all/vlans.yml` (list `lab_vlans`), which Terraform and Ansible both read. This table is the rule. The docs check (`.github/docs-check/check_vlans.py`) fails when the file differs from it in a VLAN ID, use or prefix, so a VLAN change edits both in one PR.
 

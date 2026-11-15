@@ -17,13 +17,22 @@ run "policy_fills_in_the_host_and_every_lab_vlan" {
   }
 
   assert {
-    condition     = alltrue([for v in yamldecode(file(var.vlans_file)).lab_vlans : strcontains(tailscale_acl.policy.acl, "\"${v.cidr}\": [\"tag:connector\"]")])
+    condition     = alltrue([for v in yamldecode(file(var.vlans_file)).lab_vlans : strcontains(tailscale_acl.policy.acl, "\"${v.cidr}\": [\"tag:connector\"]") if lookup(v, "tailnet", true)])
     error_message = "Every VLAN in the shared VLAN file must be an auto-approved connector route."
   }
 
   assert {
     condition     = !strcontains(tailscale_acl.policy.acl, "$${")
     error_message = "No template placeholder may be left in the rendered policy."
+  }
+}
+
+run "policy_leaves_out_a_vlan_marked_tailnet_false" {
+  command = plan
+
+  assert {
+    condition     = alltrue([for v in yamldecode(file(var.vlans_file)).lab_vlans : !strcontains(tailscale_acl.policy.acl, "\"${v.cidr}\"") if !lookup(v, "tailnet", true)])
+    error_message = "A VLAN marked tailnet: false in the VLAN file must not appear in the tailnet policy's lab ranges."
   }
 }
 

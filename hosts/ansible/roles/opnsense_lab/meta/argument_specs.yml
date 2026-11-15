@@ -50,10 +50,19 @@ argument_specs:
             type: str
             required: true
             description: The VLAN's /24 range.
+          tailnet:
+            type: bool
+            required: false
+            default: true
+            description: >-
+              False keeps the VLAN off the tailnet; this role then blocks its traffic to 100.64.0.0/10
+              and needs an explicit mgmt_pass in its settings.
       opnsense_lab_vlan_settings:
         type: dict
         required: true
-        description: This firewall's settings per VLAN name (ifname, dhcp, bootstrap).
+        description: >-
+          This firewall's settings per VLAN name (ifname, dhcp, bootstrap, and optional mgmt_pass,
+          default true; false stops the management VLAN's pass rule into that VLAN).
       opnsense_lab_mgmt_tag:
         type: int
         required: true
@@ -84,10 +93,11 @@ argument_specs:
               name: {type: str, required: true, description: "Rule name; one of opnsense_lab_agent_box_target_names."}
               address: {type: str, required: true, description: "Destination address, without a prefix."}
               port: {type: int, required: true, description: Destination TCP port.}
+              prefix: {type: int, required: false, default: 32, description: "Destination prefix length; 32 is one address, 24 a whole VLAN range."}
       opnsense_lab_agent_box_target_names:
         type: list
         elements: str
-        default: [Proxmox API, c1 API, prod node 200 SSH, prod node 201 SSH, OPNsense API]
+        default: [Proxmox API, c1 API, prod node 200 SSH, prod node 201 SSH, OPNsense API, tenant lab SSH]
         description: The names the agent box's rules may have; a name that is not a current target loses its rule.
       opnsense_lab_agent_box_sequences:
         type: list

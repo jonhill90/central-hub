@@ -71,8 +71,51 @@
     source_net: "{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | first).ifname }}"
     destination_net: "{{ item.cidr }}"
     log: false
-  loop: "{{ opnsense_lab_vlans | rejectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | list }}"
+  loop: "{{ opnsense_lab_mgmt_pass_vlans }}"
   loop_control:
     label: "mgmt to VLAN {{ item.tag }}"
     index_var: opnsense_lab_mgmt_rule_index
+  notify: Apply rule changes
+
+# A VLAN with mgmt_pass: false (a tenant VLAN) gets no such rule, and loses one it had.
+- name: No management VLAN pass into VLANs marked mgmt_pass false
+  oxlorg.opnsense.rule:
+    description: "Allow management VLAN {{ opnsense_lab_mgmt_tag }} to {{ item.label }} VLAN {{ item.tag }}"
+    match_fields: [description]
+    state: absent
+  loop: "{{ opnsense_lab_mgmt_no_pass_vlans }}"
+  loop_control:
+    label: "mgmt to VLAN {{ item.tag }}"
+  notify: Apply rule changes
+
+# A VLAN kept off the tailnet (tailnet: false in the VLAN file) may not open connections to the
+# tailnet's range 100.64.0.0/10, which "not RFC 1918" would otherwise let through. Sequence 5 below
+# the VLAN's internet rule (rule kind 3), so it is checked first.
+- name: Block VLANs kept off the tailnet from the tailnet range
+  oxlorg.opnsense.rule:
+    description: "Block {{ item.label }} VLAN {{ item.tag }} to tailnet range"
+    match_fields: [description]
+    sequence: "{{ 10 + (opnsense_lab_vlans.index(item) * 4 + 3) * 10 - 5 }}"
+    action: block
+    quick: true
+    interface: ["{{ item.ifname }}"]
+    direction: in
+    ip_protocol: inet
+    protocol: any
+    source_net: "{{ item.ifname }}"
+    destination_net: 100.64.0.0/10
+    log: false
+  loop: "{{ opnsense_lab_tailnet_off_vlans }}"
+  loop_control:
+    label: "VLAN {{ item.tag }}"
+  notify: Apply rule changes
+
+- name: No tailnet block rule for VLANs on the tailnet
+  oxlorg.opnsense.rule:
+    description: "Block {{ item.label }} VLAN {{ item.tag }} to tailnet range"
+    match_fields: [description]
+    state: absent
+  loop: "{{ opnsense_lab_vlans | selectattr('tailnet') | list }}"
+  loop_control:
+    label: "VLAN {{ item.tag }}"
   notify: Apply rule changes

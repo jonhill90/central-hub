@@ -20,7 +20,7 @@ run "routes_cover_every_lab_vlan" {
   command = plan
 
   assert {
-    condition     = alltrue([for v in yamldecode(file(var.vlans_file)).lab_vlans : contains(tailscale_device_subnet_routes.connector.routes, v.cidr)])
+    condition     = alltrue([for v in yamldecode(file(var.vlans_file)).lab_vlans : contains(tailscale_device_subnet_routes.connector.routes, v.cidr) if lookup(v, "tailnet", true)])
     error_message = "Every VLAN in the shared VLAN file must be a turned-on route of the connector."
   }
 
@@ -32,6 +32,15 @@ run "routes_cover_every_lab_vlan" {
   assert {
     condition     = tailscale_device_subnet_routes.connector.device_id == "nexample"
     error_message = "The routes must be set on the connector found by hostname."
+  }
+}
+
+run "routes_leave_out_a_vlan_marked_tailnet_false" {
+  command = plan
+
+  assert {
+    condition     = alltrue([for v in yamldecode(file(var.vlans_file)).lab_vlans : !contains(tailscale_device_subnet_routes.connector.routes, v.cidr) if !lookup(v, "tailnet", true)])
+    error_message = "A VLAN marked tailnet: false in the VLAN file must not be turned on as a connector route."
   }
 }
 

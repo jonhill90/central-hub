@@ -25,6 +25,9 @@
     fail_msg: lab_vlans (group_vars/all/vlans.yml) is empty, or a VLAN in it has no entry in opnsense_lab_vlan_settings.
     quiet: true
 
+- name: Tenant VLAN checks
+  ansible.builtin.import_tasks: tenant_checks.yml
+
 - name: VLANs
   ansible.builtin.import_tasks: vlans.yml
   tags: [vlans]
