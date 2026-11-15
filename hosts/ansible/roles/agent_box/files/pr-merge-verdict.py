@@ -23,10 +23,24 @@ RULE11 = [re.compile(p) for p in (
     r"^docs/decisions/0042-.*\.md$", r"^docs/decisions/0034-.*\.md$",
     r"^hosts/ansible/roles/agent_box/files/(runner-job-started\.sh|pr-merge\.sh|pr-merge-verdict\.py|pass-record\.sh)$",
     r"^hosts/ansible/roles/agent_box/templates/pr-merge-sweep\.(service|timer)\.j2$",
-    r"^hosts/ansible/roles/agent_box/defaults/main\.yml$",   # holds the sudo arguments (D-0056 rule 4)
     r"^hosts/wrappers/mac/merge-checked\.sh$",   # the Mac's checked merge: loosening it needs the owner's tap
 )]
 MAX_RECORDS = 20
+# The role's defaults hold the sudo wrapper list and the permission deny list, which are box limits (D-0056 rule 4), next to many
+# settings that are not. The file needs the owner's tap only when one of those two blocks changes (or cannot be compared).
+DEFAULTS = "hosts/ansible/roles/agent_box/defaults/main.yml"
+LIMIT_KEYS = ("agent_box_wrappers", "agent_box_deny")
+
+
+def limit_block(text, key):
+    """The lines of a top-level key, up to the next top-level key; None when the key is absent."""
+    out, inside = [], False
+    for line in text.split("\n"):
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*:", line):
+            inside = line.startswith(key + ":")
+        if inside:
+            out.append(line)
+    return "\n".join(out) if out else None
 DROP_TOP = re.compile(r"^[+-](status|date|accepted-evidence):")
 DROP_NESTED = re.compile(r"^[+-]  (approved-by|approved-at|approved-commit|approval-ref|approval-names|check|merged):")
 
@@ -166,6 +180,10 @@ def main():
             return None
 
     fstatus = {f["filename"]: f.get("status", "") for f in files}
+    if central and DEFAULTS in names:
+        dh, db = content("head", DEFAULTS), content("base", DEFAULTS)
+        if dh is None or db is None or any(limit_block(dh, k) is None or limit_block(dh, k) != limit_block(db, k) for k in LIMIT_KEYS):
+            rule11.append(DEFAULTS)
     # A changed record or standard with no head content is a refusal unless GitHub says the PR removes it.
     for n in rec_files:
         if fstatus.get(n) != "removed" and content("head", n) is None:

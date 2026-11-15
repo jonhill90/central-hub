@@ -91,6 +91,16 @@ d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes:\n  - D-0034\n---\nbody\n"}); check("a block-list supersedes of D-0034 needs the tap", run(d), "OWNER: rule 11 PR")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: []\n---\nThis amends rule 2 of D-0042.\n"}); check("a record whose body amends D-0042 needs the tap", run(d), "OWNER: rule 11 PR")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: []\n---\nThis amends rule 2 of this record. Much later, after a very long stretch of unrelated text that goes on, D-0042 is mentioned.\n"}); check("amend far from D-0042 is not caught", run(d), "GREEN")
+# The role's defaults: only the wrapper list and the deny list are box limits (D-0056 rule 4); other keys do not need the tap.
+DEF = "hosts/ansible/roles/agent_box/defaults/main.yml"
+def defaults(tofu="1.13.1", wrap="  - name: dev-vms\n    args: [plan]", deny="  - Bash(rm *)"):
+    return "agent_box_user: claude\n\nagent_box_wrappers:\n%s\n\nagent_box_tofu_version: %s\n\nagent_box_deny:\n%s\n\nagent_box_allow: []\n" % (wrap, tofu, deny)
+d = fx([DEF], head_text={DEF: defaults(tofu="1.13.2")}, base_text={DEF: defaults()});  check("a defaults change outside the two limit lists is GREEN with no tap", run(d), "GREEN")
+d = fx([DEF], head_text={DEF: defaults(wrap="  - name: dev-vms\n    args: [plan, apply]")}, base_text={DEF: defaults()}); check("a change in the wrapper list needs the owner tap", run(d), "OWNER: rule 11 PR", mutate('rule11.append(DEFAULTS)', 'pass'), d)
+d = fx([DEF], head_text={DEF: defaults(deny="  - Bash(ls *)")}, base_text={DEF: defaults()}); check("a change in the deny list needs the owner tap", run(d), "OWNER: rule 11 PR")
+d = fx([DEF], head_text={DEF: defaults(tofu="1.13.2")}); check("a defaults file with no base content needs the owner tap", run(d), "OWNER: rule 11 PR")
+d = fx([DEF], base_text={DEF: defaults()}); check("a defaults file with no head content needs the owner tap", run(d), "OWNER: rule 11 PR")
+d = fx([DEF], head_text={DEF: "agent_box_user: claude\n"}, base_text={DEF: defaults()}); check("a defaults file that lost a limit list needs the owner tap", run(d), "OWNER: rule 11 PR")
 # A rule 11 PR that has the tap is GREEN but carries the NOTE the Mac's checked merge refuses on.
 f11 = "hosts/ansible/roles/agent_box/files/pass-record.sh"
 d = fx([f11], roles=ROLES + ["owner-tap"]); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout

@@ -134,7 +134,7 @@ evaluate() { # pr head
 import json, re, sys
 for f in json.load(open(sys.argv[1])):
     n = f["filename"]
-    if re.match(r"^docs/(decisions|standards)/[^/]+\.md$", n) and not n.endswith("README.md"): print(n)
+    if (re.match(r"^docs/(decisions|standards)/[^/]+\.md$", n) and not n.endswith("README.md")) or n == "hosts/ansible/roles/agent_box/defaults/main.yml": print(n)
 ' "$d/files.json" | head -20)
     if [[ -n $recs ]]; then
       fetch_compare "$d/compare-head.json" "$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["base"]["sha"])' "$d/pr.json")...$head" || return 1

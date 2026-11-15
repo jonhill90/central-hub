@@ -42,7 +42,8 @@ case ${1:-} in
     if [[ $recorder == builder ]]; then
       # The builder never records a pass for a PR the builder wrote. The PR body is data, so this is a speed bump.
       lane=$("$libexec/pr-merge.sh" lane "$full" "$pr") || die "the PR's author lane could not be read; a builder record is refused"
-      [[ ${lane,,} != builder* ]] || die "the builder does not record a pass for a PR the builder wrote"
+      # "builder" as a word anywhere in the label, in any case, so "agent box builder" and "Builder lane" both count as the builder.
+      [[ ! ${lane,,} =~ (^|[^a-z0-9])builder([^a-z0-9]|$) ]] || die "the builder does not record a pass for a PR the builder wrote"
     fi
     dir=$passes/${full#*/}
     install -d -m 0700 "$passes" "$dir"
@@ -65,7 +66,8 @@ print(json.dumps({"role": role, "repo": full, "pr": int(pr), "head": head, "rela
   halt | resume)
     [[ $# == 3 ]] || die "usage: pass-record $1 RELAY_REF RECORDER"
     ref_ok "$2" || die "RELAY_REF must be a cmsg_ message id"
-    case $3 in orchestrator | builder) ;; *) die "RECORDER must be orchestrator or builder" ;; esac
+    # Any lane that reviews may stop the sweep (a council or the reviewer must be able to stop a merge); only the orchestrator lifts it.
+    case $3 in orchestrator | builder | reviewer | council-a | council-b | council-c) ;; *) die "RECORDER must be orchestrator, builder, reviewer or council-a, council-b or council-c" ;; esac
     # Only the orchestrator lifts a halt, so a halt it relays from the owner is not undone by another lane's call.
     # Any session can name itself the orchestrator; this is a name, not proof.
     [[ $1 == halt || $3 == orchestrator ]] || die "resume is recorded by the orchestrator only"
