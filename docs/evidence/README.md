@@ -51,3 +51,4 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0053 | [0053-send-alerts-to-self-hosted-ntfy-and-the-heartbeat-to-healthchecks-io.md](0053-send-alerts-to-self-hosted-ntfy-and-the-heartbeat-to-healthchecks-io.md) |
 | D-0054 | [0054-pull-images-from-docker-hub-by-digest-with-a-local-registry-as-the-way-off.md](0054-pull-images-from-docker-hub-by-digest-with-a-local-registry-as-the-way-off.md) |
 | D-0055 | [0055-serve-the-proxmox-web-ui-on-443-through-apache-httpd.md](0055-serve-the-proxmox-web-ui-on-443-through-apache-httpd.md) |
+| D-0057 | [0057-let-a-raw-run-go-on-a-card-tap-naming-the-exact-command.md](0057-let-a-raw-run-go-on-a-card-tap-naming-the-exact-command.md) |
