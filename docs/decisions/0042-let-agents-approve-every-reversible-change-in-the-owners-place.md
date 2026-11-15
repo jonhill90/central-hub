@@ -79,7 +79,7 @@ Chosen option: **1**, because the owner asked to stop approving the lab himself,
 flowchart LR
   pr["PR, CI green"] --> rv["reviewer thread clears the head"]
   rv --> cn["council A, B, C each pass the head"]
-  cn --> job["merge job on main, box runner:<br/>pr-merge checks head, checks, clean merge,<br/>then squash pinned to the head"]
+  cn --> job["merge sweep on the agent box:<br/>four passes on the head's ledger, checks, clean merge,<br/>then squash pinned to the head"]
   job --> main["main"]
   main --> box["box limits: applied from the controller,<br/>as D-0036 rule 6 says"]
   main --> dev["dev apply"]
@@ -87,7 +87,7 @@ flowchart LR
   prod -. "firewall or tailnet, a delete,<br/>a secret, money" .-> tap["one tap from the owner"]
 ```
 
-*In words:* a PR whose CI is green goes to the reviewer thread and then to the three council threads. When all four pass the same head, an agent starts the merge job on the agent box's runner. The box's `pr-merge` wrapper checks the head, the checks and the merge itself before it squash-merges. What lands on `main` is then applied as the other records set out, with no tap, except for the steps in rule 6: firewall and tailnet applies, deletes, secrets and money.
+*In words:* a PR whose CI is green goes to the reviewer thread and then to the three council threads. When all four pass the same head, the orchestrator records the four passes on the agent box's ledger. The box's sweep checks the head, the checks and the merge itself before it squash-merges. What lands on `main` is then applied as the other records set out, with no tap, except for the steps in rule 6: firewall and tailnet applies, deletes, secrets and money.
 
 ### Rules
 
@@ -97,24 +97,23 @@ flowchart LR
 
    It takes the place of the owner's go, typed or tapped, wherever these rules asked for it: AGENTS.md rules 1 and 2, D-0001's statuses, D-0031 rules 3 and 4, D-0034, D-0035 rule 3(b) and (c), and D-0041 rule 6. Rule 6 below is the exception. That a pass is needed at all follows from the owner's words; that the reviewer and the council give it is the agents' own pick.
 2. **The merge job.** [agent pick] The merge sweep on the agent box merges a PR whose exact head holds the reviewer's pass and the passes of the three councils on its ledger of recorded passes (D-0056). The workflow `merge.yml` that this rule first named was removed (D-0056).
-   - It runs only by `workflow_dispatch`, only from `main`, on the agent box's runner, whose job-started hook refuses any other workflow, branch or event. Its own token is read-only (Activation gate item 3).
-   - Its inputs are the PR number, the full head, and the message ids of the reviewer's clearance and of the council's passes.
-   - It hands the merge to the box's `pr-merge` wrapper, which merges as the project's GitHub App with the key kept inside the wrapper (D-0031). The wrapper checks itself, and refuses otherwise:
-     - the PR is open, not a draft, and targets `main` (the last is added to `pr-merge` by one of the limit changes rule 4 names);
-     - its head is the one named;
+   - A timer on the agent box runs `pr-merge sweep` as the keys user. For each open PR it reads the ledger of recorded passes for the head, and considers only a head with the reviewer's pass and the passes of councils A, B and C (D-0056 rules 1 and 3).
+   - It merges as the project's GitHub App with the key kept inside the wrapper (D-0031), and refuses otherwise:
+     - the PR is open, not a draft, and targets `main`;
+     - its head is the one the ledger names;
      - GitHub reports a clean merge;
      - every check on that head has completed and passed or was skipped, and at least one ran;
      - fewer than 100 files changed.
-   - It squash-merges pinned to that head, and the run summary shows the PR, the head, the wrapper's verdict and merge commit, and the two message ids.
-   - It can't read the project's chat, so it can't check the two message ids. The agent that starts it checks them first, and the ids stay in the log.
-   - No session's safety check stands in this path, because a runner job is not a session.
+   - It squash-merges pinned to that head, never enables auto-merge and never passes `--admin`, and comments on the PR with the head and the ledger's lines.
+   - It can't read the project's chat, so it can't check the relay ids in the ledger. A pass is the recorder's word, with the id it gave (D-0056 rules 1 and 2).
+   - No session's safety check stands in this path, because the sweep is a timer, not a session.
 3. **Records and standards.** [agent pick for the route; the owner's words for not asking him] An agent may set a record to `accepted`, `rejected` or `parked`, or a standard to `active`, with the agents' pass, the same way the owner did:
    - the proposal merges first, or the pass names the head that holds it (D-0001);
    - the acceptance PR changes only `status`, `date` and `accepted-evidence`, with `approved-by: agents`, `approval-ref` the orchestrator's message that records the pass, and `approval-names` naming the PR and head;
    - the reviewer compares the accepted text with the passed head, as D-0001 asks.
 4. **The box's limits.** [agent pick] A change to a limit (D-0036 rule 3) keeps the owner's approval, now as a tap (rule 6), because his card of 2026-11-14 02:24 UTC, which he answered at 02:26 UTC, kept limit changes for him (D-0036), and his words of 07:42 to 07:44 UTC did not take that back.
    - It is applied from the controller or, since D-0044, by the box itself from a line in main's approvals file naming its exact baseline, commit and digest with the pass and tap ids, which the box only logs and cannot check (D-0044 rule 3; D-0036 rule 6); without such a line, the `box-apply` installed on the box stops on it.
-   - The merge job (rule 2) and the acceptances of rule 3 rest on limit changes of this kind: the runner hook and the wrapper list letting the runner start `pr-merge`, and `pr-merge` no longer stopping on records, standards and `AGENTS.md` and checking that the PR targets `main`. Until they are applied, merges go as they do today. D-0044 is how they reach the box without the Mac, after one apply from the controller (D-0044 rule 5).
+   - The merge sweep (rule 2) and the acceptances of rule 3 rest on limit changes of this kind: `pr-merge`, the verdict script, `pass-record` and the sweep's units, installed from the controller (D-0056 rule 9). D-0044 is how they reach the box without the Mac, after one apply from the controller (D-0044 rule 5).
 
 5. **Production and cloud applies.** [the owner's words: finish the greenfield lab (07:44:46 UTC); the pass as approver is an agent pick] Dev is the dev guests, VMs 250 to 257, and the dev secrets store, VMs 550 to 599 (D-0038 rule 2; central-hub #276). The production secrets store, VM 500, is production. A production run (D-0035) or a production or cloud apply (D-0041) needs no tap, apart from rule 6:
    - a layer with a dev twin runs once the same commit passed that layer on dev (D-0035 rule 3(a));
@@ -129,22 +128,22 @@ flowchart LR
    - **the box's limits:** [agent pick, rule 4] a change to a limit of the agent box (D-0036 rule 3). The tap replaces the typed line D-0036 rule 6 asked for, because the owner said at 07:47:50 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV) that he will not type go lines anymore.
 7. **What stays with the owner by choice.** [agent pick] Scanning his own sign-in code into his authenticator, the settings of his own claude.ai and GitHub accounts, and the Proxmox console when everything else is down (D-0035 rule 9).
 8. **The owner's no.** A message from the owner that says no, stop or revert about a change wins at once. Agents stop starting jobs for it, and open a revert PR or run the layer's way back. A revert goes through the same pass and job.
-9. **Logs.** The merge job's summary is public on GitHub for at most 90 days, so it holds only the PR, the heads and the message ids. The orchestrator lists every merge and apply made under this record in its next report to the owner.
+9. **Logs.** The sweep's comment on a merged PR is public on GitHub, so it holds only the PR, the head and the ledger's lines (roles, relay ids and times). The orchestrator lists every merge and apply made under this record in its next report to the owner.
 10. **Unchanged.** Never enable auto-merge. No workflow on `pull_request_target`, `issue_comment` or `issues` that runs an agent or touches secrets. No secrets or private names in this repository. AGENTS.md rules 3 to 6 stand.
-11. **Changing this record.** [agent pick] A change that narrows this record, or adds a check to the merge job, needs the agents' pass, like any other change. A change that removes a step from rule 6, or drops or loosens a check in the runner hook, `pr-merge` or the sweep's verdict script, is itself a rule 6 step and needs the owner's tap. Every change to either is listed in the orchestrator's report.
+11. **Changing this record.** [agent pick] A change that narrows this record, or adds a check to the merge sweep, needs the agents' pass, like any other change. A change that removes a step from rule 6, or drops or loosens a check in the runner hook, `pr-merge` or the sweep's verdict script, is itself a rule 6 step and needs the owner's tap. Every change to either is listed in the orchestrator's report.
 
 ### Consequences
 
 - Good: the owner stops typing and tapping for merges, acceptances and production and cloud applies. He keeps one tap for firewall and tailnet applies, deletes, secrets, access rights, money and the box's limits.
-- Good: each approval names a reviewer's and a council's message, and the merge job's own checks don't rest on the caller.
-- Good: merges made by the job show as the project's GitHub App in the PR's history, and each has a run on GitHub that names its pass.
+- Good: each approval names a reviewer's and a council's message, and the sweep's own checks don't rest on the caller.
+- Good: merges made by the sweep show as the project's GitHub App in the PR's history, and each has a comment that names its passes.
 - Bad: agents approve agents' work, and all four checkers are the same kind of model, so they can share a blind spot. Compensating controls: four separate threads, each told to look for what is missing; the four-check rule before any "supported" or "not supported" claim; the public run log; the owner's no at any time (rule 8); every merge can be reverted and every lab layer rebuilt from code.
-- Bad: the merge job can't check the reviewer's and the council's messages. An agent could start it with made-up ids. Compensating controls: the ids are in the public log and the orchestrator's report, so a made-up one shows; the job checks everything GitHub can tell it. This is the same gap D-0035 and D-0041 accept for card taps.
-- Bad: the merge job's checks live in this repository, so a PR can change them (Activation gate item 2 is still open). Compensating controls: a change that drops or loosens a check, or removes a step from rule 6, needs the owner's tap (rule 11); the job runs `main`'s copy, never a PR's; every change to it is in the orchestrator's report.
+- Bad: the sweep can't check the reviewer's and the council's messages. A session that can run `pass-record` could record a pass with a made-up id. Compensating controls: the ids are in the PR's comment and the orchestrator's report, so a made-up one shows; the sweep checks everything GitHub can tell it. This is the same gap D-0035 and D-0041 accept for card taps.
+- Bad: the sweep's checks live in this repository, so a PR can change them (Activation gate item 2 is still open). Compensating controls: a change that drops or loosens a check, or removes a step from rule 6, needs the owner's tap (rule 11); the box runs the copy a tapped install put there, never a PR's; every change to it is in the orchestrator's report.
 - Bad: a production or cloud apply now runs without the owner seeing its plan first. A wrong apply can break the lab until it is rebuilt. The owner gave his reason at 07:44:46 UTC: the lab is greenfield and holds no personal data or anything of value. If that stops being true, this record is revisited. Compensating controls: dev first for every layer that has a twin; the saved plan and the council's pass for those that don't; rule 6 for firewall, tailnet, deletes, secrets and money; the restore checks of D-0035 rule 5 before any teardown.
 - Bad: rule 7's steps still need the owner in person.
-- Bad: the merge job depends on the agent box and its runner. If the box is down, merges wait, or fall back to the owner's own merge on GitHub.
-- Bad: a box limit change, including the ones the merge job needs, keeps the owner's tap and is still applied from the controller (rule 4). Until a later change moves that apply off the Mac, the merge job can't run, and merges go as they do today.
+- Bad: the sweep depends on the agent box. If the box is down, merges wait, or fall back to the Mac's checked merge or the owner's own merge on GitHub.
+- Bad: a box limit change, including the sweep's files, keeps the owner's tap and is applied from the controller, or by the box itself from a line in main's approvals file (rule 4, D-0044).
 - Bad: most of this record is agent picks the owner did not see. Compensating controls: each is labelled, the owner can change any of them, and his no wins at once (rule 8).
 
 ### Confirmation
@@ -169,5 +168,5 @@ flowchart LR
 
 - **Evidence:** [0042](../evidence/0042-let-agents-approve-every-reversible-change-in-the-owners-place.md).
 - **Records it changes, in this PR:** D-0001 (statuses), D-0031 rules 3 and 4, D-0034 rule 4, D-0035 rule 3, D-0036 rule 6, and AGENTS.md rules 1 and 2. D-0041 rules 2, 6 and 11 too, each saying what it was before.
-- **How to start the job:** [Merge a PR through the merge job](../runbooks/merge-a-pr-through-the-merge-job.md).
+- **How a PR is merged:** [Merge a PR through the merge sweep](../runbooks/merge-a-pr-through-the-merge-job.md).
 - **How this record is accepted.** It loosens AGENTS.md's rules for now, which D-0034 rule 4 sends to a line the owner types naming the PR and its head. It is accepted, for the scope his words cover, on the owner's typed messages in the orchestrator thread at 07:42:30 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6), where he said go and not to ask him for another PR, and at 07:43:25 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH), where he said he had already named what needs his approval and agents should stop asking him to approve PRs. His message at 07:44:46 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm), relayed from the project chat, says the same for the lab. These messages name no PR and no head. That departs from D-0034 rule 4's form. The reviewer and the council judge whether they count, and their passes are this PR's gate.

@@ -14,7 +14,7 @@ superseded-by:
 
 # Merge a pull request with the box's sweep
 
-**Status:** in use. Written 2026-11-14 with the sweep ([D-0056](../decisions/0056-merge-with-a-sweep-on-the-box-in-place-of-the-merge-job.md), accepted). The sweep, `pr-merge check`, the verdict script and `pass-record` are on the box, installed from the controller. The workflow `merge.yml` that D-0042 rule 2 first named was removed, and D-0042 rule 2 and AGENTS.md rule 2 name the sweep. This page keeps its old file name because D-0042 links to it.
+**Status:** in use. Written 2026-11-14 with the sweep ([D-0056](../decisions/0056-merge-with-a-sweep-on-the-box-in-place-of-the-merge-job.md)). The sweep, `pr-merge check`, the verdict script and `pass-record` reached the box by two controller runs of the agent box playbook on 2026-11-15: the first at 05:40 to 05:44 UTC (owner card row 19a), the second at 08:21 to 08:23 UTC at main e0a9b3e (row 19d), which also put #367's owner path on the box (run times as the orchestrator reported them). The workflow `merge.yml` that D-0042 rule 2 first named was removed, and D-0042 rule 2 and AGENTS.md rule 2 name the sweep. This page keeps its old file name because D-0042 links to it.
 
 A cloud session cannot start a GitHub workflow here (the GitHub integration answers 403, measured 2026-11-14), so the merge does not run by dispatch. A timer on the agent box runs `pr-merge.sh sweep` as the keys user every few minutes. It merges a PR only when that PR's exact head holds four recorded passes: the reviewer's clearance and the passes of councils A, B and C. It is not GitHub's auto-merge, and it never passes `--admin`.
 
