@@ -180,7 +180,7 @@ check("a fold-in whose approved commit cannot be read refuses", run(d), "NOT GRE
 d = fx([REC], head_text={REC: rec("accepted").replace("approved-by: agents", "approved-by: someone")}, base_text={REC: base}, cmp_head=cmp_(), approved=cmp_(status_line=False))
 check("approved-by other than agents or owner refuses an acceptance", run(d), "NOT GREEN: docs/decisions/0099-x.md: status accepted needs approved-by: agents or owner", mutate('nev.get("approved-by") != "agents"', 'False'), d)
 # The owner's own card tap (approved-by: owner): an owner-tap line whose relay ref is the approval-ref, and only the acceptance fields change.
-TAP = "cmsg_OWNERTAP0001"
+TAP = "cmsg_DECIDEEVENT01"
 def own(ref=TAP): return rec("accepted", extra="  approval-ref: %s\n" % ref).replace("approved-by: agents", "approved-by: owner")
 OWN_PATCH = "@@ -1,9 +1,10 @@\n+status: accepted\n-status: proposed\n+  approved-by: owner\n+  approval-ref: %s\n" % TAP
 def ocmp(extra=()): return {"files": [{"filename": REC, "patch": OWN_PATCH, "changes": 4}] + [{"filename": n, "patch": p, "changes": 1} for n, p in extra]}
@@ -189,7 +189,7 @@ d = fx([REC], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={R
 check("an owner-approved acceptance with a matching owner-tap line is GREEN with no approved-commit passes", run(d), "GREEN")
 d = fx([REC], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own()}, base_text={REC: base}, cmp_head=ocmp())
 check("an owner-approved acceptance prints the NOTE that names the tap ref", subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout, "NOTE: verdict v2\nNOTE: " + REC + " is accepted on the owner's card tap " + TAP)
-d = fx([REC], roles=ROLES + ["owner-tap"], refs={"owner-tap": "cmsg_OTHER00000001"}, head_text={REC: own()}, base_text={REC: base}, cmp_head=ocmp())
+d = fx([REC], roles=ROLES + ["owner-tap"], refs={"owner-tap": "cmsg_CARDMESSAGE01"}, head_text={REC: own()}, base_text={REC: base}, cmp_head=ocmp())
 check("an owner-tap line with another relay ref refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-by owner needs an owner-tap line", mutate(*GUARD), d)
 d = fx([REC], roles=ROLES, head_text={REC: own()}, base_text={REC: base}, cmp_head=ocmp())
 check("an owner-approved acceptance with no owner-tap line refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-by owner needs an owner-tap line")
@@ -199,6 +199,9 @@ d = fx([REC], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={R
 check("an extra changed line in the owner-approved record refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-by owner allows only the acceptance fields", mutate('if e2 or h:', 'if False:'), d)
 d = fx([REC, "hosts/x.sh"], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own()}, base_text={REC: base}, cmp_head=ocmp(extra=[("hosts/x.sh", "@@\n+rm -rf\n")]))
 check("an extra changed file beside an owner-approved record refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-by owner allows only the acceptance fields")
+REC2 = "docs/decisions/0098-y.md"
+d = fx([REC, REC2], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own(), REC2: own().replace("D-0099", "D-0098")}, base_text={REC: base, REC2: base.replace("D-0099", "D-0098")}, cmp_head={"files": [{"filename": REC, "patch": OWN_PATCH, "changes": 4}, {"filename": REC2, "patch": OWN_PATCH, "changes": 4}]})
+check("a PR that accepts two owner-approved records is refused (one record per PR)", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-by owner allows only the acceptance fields")
 d = fx([REC], roles=ROLES[:3] + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own()}, base_text={REC: base}, cmp_head=ocmp())
 check("an owner-approved acceptance still needs the four passes on the PR head", run(d), "NOT GREEN: ledger lacks council-c")
 d = fx([REC], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own()}, base_text={REC: base}, cmp_head=None)
