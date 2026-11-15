@@ -91,16 +91,30 @@ d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes:\n  - D-0034\n---\nbody\n"}); check("a block-list supersedes of D-0034 needs the tap", run(d), "OWNER: rule 11 PR")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: []\n---\nThis amends rule 2 of D-0042.\n"}); check("a record whose body amends D-0042 needs the tap", run(d), "OWNER: rule 11 PR")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: []\n---\nThis amends rule 2 of this record. Much later, after a very long stretch of unrelated text that goes on, D-0042 is mentioned.\n"}); check("amend far from D-0042 is not caught", run(d), "GREEN")
-# The role's defaults: only the wrapper list and the deny list are box limits (D-0056 rule 4); other keys do not need the tap.
+# The role's defaults: the owner's tap is needed unless every changed key is one of the five free pinned tools (D-0056 rule 4).
 DEF = "hosts/ansible/roles/agent_box/defaults/main.yml"
-def defaults(tofu="1.13.1", wrap="  - name: dev-vms\n    args: [plan]", deny="  - Bash(rm *)"):
-    return "agent_box_user: claude\n\nagent_box_wrappers:\n%s\n\nagent_box_tofu_version: %s\n\nagent_box_deny:\n%s\n\nagent_box_allow: []\n" % (wrap, tofu, deny)
-d = fx([DEF], head_text={DEF: defaults(tofu="1.13.2")}, base_text={DEF: defaults()});  check("a defaults change outside the two limit lists is GREEN with no tap", run(d), "GREEN")
-d = fx([DEF], head_text={DEF: defaults(wrap="  - name: dev-vms\n    args: [plan, apply]")}, base_text={DEF: defaults()}); check("a change in the wrapper list needs the owner tap", run(d), "OWNER: rule 11 PR", mutate('rule11.append(DEFAULTS)', 'pass'), d)
-d = fx([DEF], head_text={DEF: defaults(deny="  - Bash(ls *)")}, base_text={DEF: defaults()}); check("a change in the deny list needs the owner tap", run(d), "OWNER: rule 11 PR")
-d = fx([DEF], head_text={DEF: defaults(tofu="1.13.2")}); check("a defaults file with no base content needs the owner tap", run(d), "OWNER: rule 11 PR")
-d = fx([DEF], base_text={DEF: defaults()}); check("a defaults file with no head content needs the owner tap", run(d), "OWNER: rule 11 PR")
-d = fx([DEF], head_text={DEF: "agent_box_user: claude\n"}, base_text={DEF: defaults()}); check("a defaults file that lost a limit list needs the owner tap", run(d), "OWNER: rule 11 PR")
+BASE = {"agent_box_user": "claude", "agent_box_keys_user": "keys", "agent_box_wrappers": "  - name: dev-vms\n    args: [plan]",
+        "agent_box_tofu_version": "1.13.1", "agent_box_tofu_sha256": "aa", "agent_box_kubectl_version": "1.37.1",
+        "agent_box_kubectl_sha256": "bb", "agent_box_tailscale_version": "1.104.5", "agent_box_deny": "  - Bash(rm *)",
+        "agent_box_allow": "[]", "agent_box_managed_settings_extra": "{}", "agent_box_merge_sweep": "false"}
+def defaults(**over):
+    d = dict(BASE); d.update(over)
+    return "# header comment\n" + "".join("%s: %s\n\n" % (k, ("\n" + v) if v.startswith("  ") else v) for k, v in d.items() if v is not None)
+def dtest(name, head, base=None, want="OWNER: rule 11 PR", mut=False):
+    d = fx([DEF], head_text={DEF: head} if head is not None else None, base_text={DEF: defaults() if base is None else base} if base != "none" else None)
+    check(name, run(d), want, mutate('if k not in FREE_KEYS', 'if False') if mut else None, d if mut else None)
+for k, v in (("agent_box_tofu_version", "1.13.2"), ("agent_box_tofu_sha256", "cc"), ("agent_box_kubectl_version", "1.37.2"), ("agent_box_kubectl_sha256", "dd"), ("agent_box_tailscale_version", "1.104.6")):
+    dtest("a change to the free key %s is GREEN with no tap" % k, defaults(**{k: v}), want="GREEN")
+dtest("all five free keys together are GREEN with no tap", defaults(agent_box_tofu_version="9", agent_box_tofu_sha256="9", agent_box_kubectl_version="9", agent_box_kubectl_sha256="9", agent_box_tailscale_version="9"), want="GREEN")
+for k, v in (("agent_box_allow", "[Bash(ls *)]"), ("agent_box_managed_settings_extra", "{x: 1}"), ("agent_box_keys_user", "other"), ("agent_box_merge_sweep", "true"),
+             ("agent_box_wrappers", "  - name: dev-vms\n    args: [plan, apply]"), ("agent_box_deny", "  - Bash(ls *)"), ("agent_box_user", "someone")):
+    dtest("a change to %s needs the owner tap" % k, defaults(**{k: v}), mut=(k == "agent_box_allow"))
+dtest("a new key needs the owner tap", defaults(agent_box_new_thing="1"))
+dtest("a removed key needs the owner tap", defaults(agent_box_deny=None))
+dtest("a changed header comment before the first key needs the owner tap", defaults().replace("# header comment", "# another comment"))
+dtest("a repeated key is unreadable and needs the owner tap", defaults() + "agent_box_user: again\n")
+dtest("a defaults file with no base content needs the owner tap", defaults(), base="none")
+dtest("a defaults file with no head content needs the owner tap", None)
 # A rule 11 PR that has the tap is GREEN but carries the NOTE the Mac's checked merge refuses on.
 f11 = "hosts/ansible/roles/agent_box/files/pass-record.sh"
 d = fx([f11], roles=ROLES + ["owner-tap"]); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout

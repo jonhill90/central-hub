@@ -26,21 +26,35 @@ RULE11 = [re.compile(p) for p in (
     r"^hosts/wrappers/mac/merge-checked\.sh$",   # the Mac's checked merge: loosening it needs the owner's tap
 )]
 MAX_RECORDS = 20
-# The role's defaults hold the sudo wrapper list and the permission deny list, which are box limits (D-0056 rule 4), next to many
-# settings that are not. The file needs the owner's tap only when one of those two blocks changes (or cannot be compared).
+# The role's defaults hold box limits (the sudo wrapper list, the permission allow and deny lists, auto mode, the users, timers) next to
+# five pinned tools that a self-apply may change (the free-keys line of box-apply-limits.txt.j2). The file needs the owner's tap
+# unless every key that changed is one of those five (D-0056 rule 4). Anything unreadable, new or removed needs the tap.
 DEFAULTS = "hosts/ansible/roles/agent_box/defaults/main.yml"
-LIMIT_KEYS = ("agent_box_wrappers", "agent_box_deny")
+FREE_KEYS = {"agent_box_tofu_version", "agent_box_tofu_sha256", "agent_box_kubectl_version", "agent_box_kubectl_sha256",
+             "agent_box_tailscale_version"}
 
 
-def limit_block(text, key):
-    """The lines of a top-level key, up to the next top-level key; None when the key is absent."""
-    out, inside = [], False
+def top_blocks(text):
+    """{top-level key: its lines up to the next top-level key}; "" is the text before the first key. None when a key repeats."""
+    blocks, cur = {"": []}, ""
     for line in text.split("\n"):
-        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*:", line):
-            inside = line.startswith(key + ":")
-        if inside:
-            out.append(line)
-    return "\n".join(out) if out else None
+        m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*):", line)
+        if m:
+            cur = m.group(1)
+            if cur in blocks:
+                return None
+            blocks[cur] = []
+        blocks[cur].append(line)
+    return {k: "\n".join(v) for k, v in blocks.items()}
+
+
+def defaults_needs_tap(head, base):
+    if head is None or base is None:
+        return True
+    h, b = top_blocks(head), top_blocks(base)
+    if h is None or b is None:
+        return True
+    return any(h.get(k) != b.get(k) for k in set(h) | set(b) if k not in FREE_KEYS)
 DROP_TOP = re.compile(r"^[+-](status|date|accepted-evidence):")
 DROP_NESTED = re.compile(r"^[+-]  (approved-by|approved-at|approved-commit|approval-ref|approval-names|check|merged):")
 
@@ -182,7 +196,7 @@ def main():
     fstatus = {f["filename"]: f.get("status", "") for f in files}
     if central and DEFAULTS in names:
         dh, db = content("head", DEFAULTS), content("base", DEFAULTS)
-        if dh is None or db is None or any(limit_block(dh, k) is None or limit_block(dh, k) != limit_block(db, k) for k in LIMIT_KEYS):
+        if defaults_needs_tap(dh, db):
             rule11.append(DEFAULTS)
     # A changed record or standard with no head content is a refusal unless GitHub says the PR removes it.
     for n in rec_files:
