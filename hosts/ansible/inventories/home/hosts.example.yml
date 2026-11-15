@@ -113,7 +113,7 @@ all:
             mgmt: { ifname: lan, dhcp: false, bootstrap: true }
             # Kept off the tailnet (tailnet: false in the VLAN file), so mgmt_pass must be explicit:
             # false means no management VLAN pass into it. An agent adds it before the apply, which needs the owner's card tap.
-            tenant-lab: { ifname: opt4, dhcp: true, bootstrap: false, mgmt_pass: false }
+            tenant: { ifname: opt4, dhcp: true, bootstrap: false, mgmt_pass: false }
     # Kubernetes cluster c1 (BUILD-PATH S06-S08). Hostnames follow STD-0001; the real ones and
     # their addresses go only in the filled-in copy. Reached through the Proxmox host, which has an
     # address on VNet mgmt (OPNsense routes mgmt to prod).

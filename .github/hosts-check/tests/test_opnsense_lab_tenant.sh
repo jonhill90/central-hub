@@ -2,8 +2,8 @@
 # The opnsense_lab role's tenant VLAN keys, offline (no firewall, no API):
 #   1. With no VLAN using the new keys, the lists the rules are built from are today's: the management
 #      VLAN passes into the three other VLANs (sequences 5 to 7) and no VLAN is kept off the tailnet.
-#   2. With the real VLAN file (tenant-lab, tailnet: false) and its settings (mgmt_pass: false), the
-#      management passes are still those three, only tenant-lab is kept off the tailnet, and its
+#   2. With the real VLAN file (tenant, tailnet: false) and its settings (mgmt_pass: false), the
+#      management passes are still those three, only tenant is kept off the tailnet, and its
 #      tailnet block rule (sequence 195) sits before its internet rule (200).
 #   3. A VLAN with tailnet: false and no mgmt_pass in its settings fails the role's check, and the
 #      check is tagged always, so a run limited with --tags rules still runs it.
@@ -38,7 +38,7 @@ opnsense_lab_vlan_settings:
   qa: { ifname: opt2, dhcp: false, bootstrap: false }
   dev: { ifname: opt3, dhcp: true, bootstrap: false }
   mgmt: { ifname: lan, dhcp: false, bootstrap: true }
-  tenant-lab: { ifname: opt4, dhcp: true, bootstrap: false, mgmt_pass: false }
+  tenant: { ifname: opt4, dhcp: true, bootstrap: false, mgmt_pass: false }
 opnsense_lab_mgmt_tag: 50
 YML
 cat > "$w/settings-no-mgmt-pass.yml" <<'YML'
@@ -47,7 +47,7 @@ opnsense_lab_vlan_settings:
   qa: { ifname: opt2, dhcp: false, bootstrap: false }
   dev: { ifname: opt3, dhcp: true, bootstrap: false }
   mgmt: { ifname: lan, dhcp: false, bootstrap: true }
-  tenant-lab: { ifname: opt4, dhcp: true, bootstrap: false }
+  tenant: { ifname: opt4, dhcp: true, bootstrap: false }
 opnsense_lab_mgmt_tag: 50
 YML
 
@@ -93,7 +93,7 @@ done
 printf "[defaults]\n" > "$w/ansible.cfg"
 run() { (cd "$w" && ANSIBLE_CONFIG="$w/ansible.cfg" ansible-playbook -i localhost, -c local "$1" >"$w/out.txt" 2>&1); }
 run baseline.yml && ok "no VLAN uses the new keys: management passes 5 to 7 and no tailnet block, as today" || { bad "baseline lists changed"; cat "$w/out.txt"; }
-run tenant.yml && ok "tenant-lab: management passes unchanged, tailnet block at 195 before the internet rule at 200" || { bad "tenant-lab lists or sequences wrong"; cat "$w/out.txt"; }
+run tenant.yml && ok "tenant: management passes unchanged, tailnet block at 195 before the internet rule at 200" || { bad "tenant lists or sequences wrong"; cat "$w/out.txt"; }
 run checks-good.yml && ok "tailnet: false with mgmt_pass set passes the role's check" || { bad "check rejected a complete entry"; cat "$w/out.txt"; }
 if run checks-bad.yml; then bad "tailnet: false without mgmt_pass was accepted"
 elif grep -q "must set mgmt_pass" "$w/out.txt"; then ok "tailnet: false without mgmt_pass fails the role's check"
@@ -102,7 +102,7 @@ else bad "the bad entry failed for another reason"; cat "$w/out.txt"; fi
 cat > "$w/connector.yml" <<YML
 - hosts: localhost
   gather_facts: false
-  vars_files: ["$vlan_file", "$root/hosts/ansible/roles/tailnet_connector/defaults/main.yml"]
+  vars_files: ["$vlan_file", "$root/hosts/ansible/roles/tailnet_connector/vars/main.yml"]
   vars:
     tailnet_connector_extra_routes: ["192.0.2.10/32"]
   tasks:
