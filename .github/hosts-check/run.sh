@@ -83,6 +83,14 @@ check_ansible() {
   bash "$here/tests/test_proxmox_sso.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
+  python3 "$here/check-hook-allowlist.py" .
+  bash "$here/tests/test_runner_hook.sh"
+  bash "$here/tests/test_pr_merge_verdict.sh"
+  bash "$here/tests/test_pass_record.sh"
+  bash "$here/tests/test_pr_merge_sweep.sh"
+  bash "$here/tests/test_merge_checked.sh"
+  bash "$here/tests/test_lifeline_nmcli_read.sh"
+  bash "$here/tests/test_lifeline_cleanup.sh"
 }
 
 check_manifests() {
@@ -178,6 +186,8 @@ check_backup() {
   bash "$here/tests/test_opnsense_escrow.sh"
   bash "$here/tests/test_secrets_bundle_offbox.sh"
   bash "$here/tests/test_secrets_store_offbox.sh"
+  bash "$here/tests/test_secrets_store_restore.sh"
+  bash "$here/tests/test_secrets_store_snapshots.sh"
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
   bash "$here/tests/test_identity_signin.sh"

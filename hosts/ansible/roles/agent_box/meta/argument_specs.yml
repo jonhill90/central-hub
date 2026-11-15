@@ -213,4 +213,11 @@ argument_specs:
           (0600, the keys user's): tags (tag:<name> list whose devices may be removed), keep (device names never
           removed, at least one), days (offline at least this long, 7 or more) and max_deletes (1 to 20). The
           OAuth client is not in it; it is /etc/agent-keys/tailnet-cleanup.env. Empty skips the file and the timer.
+      agent_box_merge_sweep:
+        type: bool
+        default: false
+        description: >-
+          Install the merge sweep (D-0042 rule 2): a timer that runs pr-merge.sh sweep as the keys user. It merges only a head
+          with four recorded passes (pass-record) and checks the halt flag first. Private, through the inventory; installing it is a box-limit change.
+      agent_box_merge_sweep_interval: {type: str, default: 5min, description: "systemd OnUnitActiveSec between sweeps."}
       agent_box_tailnet_cleanup_daily: {type: str, default: "*-*-* 15:30:00 UTC", description: "systemd OnCalendar for the daily tailnet cleanup run."}

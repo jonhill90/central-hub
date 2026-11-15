@@ -12,6 +12,8 @@ path "auth/*"                     { capabilities = ["create", "read", "update", 
 path "sys/mounts"                 { capabilities = ["read"] }
 path "sys/mounts/*"               { capabilities = ["create", "read", "update", "delete"] }
 path "sys/storage/raft/snapshot"  { capabilities = ["read", "update"] }
+# Forced restore: only the box's restore-rebuilt calls it, onto a rebuilt dev store under its guards (pick 238).
+path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }
 path "sys/storage/raft/configuration"   { capabilities = ["read"] }
 path "sys/storage/raft/autopilot/state" { capabilities = ["read"] }
 path "sys/rotate/recovery/*"      { capabilities = ["create", "read", "update", "delete", "sudo"] }

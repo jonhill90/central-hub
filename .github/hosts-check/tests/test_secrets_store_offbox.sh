@@ -4,15 +4,18 @@
 # the escrow script:
 #   1. No store VM in the wrapper's state (no state file, or no VM in it): "skipped: no store", exit 0, nothing made.
 #   2. A store VM whose sys/health is not 200 (sealed, or no answer) fails, before any snapshot or send.
-#   3. A normal hourly run makes its own repository, sends, reads back, and forgets without pruning.
+#   3. A normal hourly run makes its own repository, sends the snapshot and its .cluster file, reads back, and
+#      forgets without pruning.
 #   4. The first run from the prune hour prunes, once a day; the next run that day does not.
 #   5. A failed escrow stops it before restic.
 #   6. A repository restic can't open for another reason than "does not exist" fails and is never made again.
-#   7. The OPNsense repository is never touched, and the job refuses to be pointed at it.
+#   7. The OPNsense repository is never touched, and the job refuses to be pointed at it, inside it, or above it,
+#      in any form restic reads as the same azure: path.
 #   8. Retention works although every snapshot has its own file name: six snapshots on six hours, keep-hourly 2,
 #      leaves two.
 #   9. A corrupted read-back fails the run.
 #  10. No password shows in the output.
+#  11. While the wrapper's rebuild hold exists, the run skips with no snapshot; a hold over 24 hours old fails it.
 # restic comes from its GitHub release, checked against the SHA-256 the role installs.
 # Usage: .github/hosts-check/tests/test_secrets_store_offbox.sh   (needs curl, python3 with PyYAML, bunzip2)
 set -euo pipefail
@@ -44,9 +47,10 @@ cat > "$t/wrapper" <<EOF
 #!/bin/bash
 [ "\$1" = snapshot ] || exit 9
 echo called >> $t/wrapper-calls
-n=\$(( \$(ls $t/keys/dev/openbao-snapshots | wc -l) + 1 ))
+n=\$(( \$(ls $t/keys/dev/openbao-snapshots/*.snap 2>/dev/null | wc -l) + 1 ))
 f=$t/keys/dev/openbao-snapshots/raft-20261114T\$(printf %02d \$n)0000Z.snap
 head -c 4096 /dev/urandom > "\$f"
+echo cluster-one > "\$f.cluster"
 echo "secrets-store: snapshot \$(basename "\$f"), 4096 bytes"
 EOF
 echo 0 > "$t/escrow-rc"
@@ -119,6 +123,7 @@ echo 200 > "$t/health"
 # 3
 send
 if [[ $rc -eq 0 && $out == *"made the repository"* && $out == *"sent raft-"* && $(count "$t/repo-store" openbao-dev) == 1 ]] &&
+   grep -q ' backup .*\.snap\.cluster' "$t/restic-args" &&
    grep -q ' forget ' "$t/restic-args" && ! grep -q -- '--prune' "$t/restic-args" && [[ ! -e $t/work/state/secrets-store-offbox.pruned ]]; then
   ok "3. an hourly run makes its own repository, sends, reads back, and forgets without pruning"
 else bad "3. rc=$rc $out $(cat "$t/restic-args")"; fi
@@ -146,12 +151,33 @@ if [[ $rc -ne 0 && $out == *"could not open the repository"* && $out == *"not ma
 else bad "6. rc=$rc $out $(cat "$t/restic-args")"; fi
 own "$t/repo-opnsense"; send
 r7=$rc o7=$out
+own "$t/repo-opnsense/openbao-dev"; send
+r7b=$rc o7b=$out
+own "$t"; send
+r7c=$rc o7c=$out
+# 7c. azure: repositories compared the way restic reads them: no leading slash, doubled or trailing slashes,
+# or the whole container are still the OPNsense repository, inside it, or holding it. restic is never run.
+sed -i "s|^RESTIC_REPOSITORY=.*|RESTIC_REPOSITORY=azure:opnsense-backup:/opnsense|" "$t/keys/opnsense-offbox/settings.env"
+r7d=0 o7d=''
+for repo in azure:opnsense-backup:opnsense azure:opnsense-backup://opnsense/ azure:opnsense-backup:opnsense/openbao-dev \
+  azure:opnsense-backup:/ azure:opnsense-backup:; do
+  own "$repo"; send
+  [[ $rc -ne 0 && $out == *"must not be the OPNsense repository"* && ! -s $t/restic-args ]] || { r7d=1 o7d+="$repo: rc=$rc $out; "; }
+done
+own azure:other-container:opnsense; send
+[[ $out != *"must not be the OPNsense repository"* ]] || { r7d=1 o7d+="other container refused; "; }
+sed -i "s|^RESTIC_REPOSITORY=.*|RESTIC_REPOSITORY=$t/repo-opnsense|" "$t/keys/opnsense-offbox/settings.env"
 own
 
 # 7
 if [[ $r7 -ne 0 && $o7 == *"must not be the OPNsense repository"* && $(count "$t/repo-opnsense" opnsense) == 1 && $(count "$t/repo-opnsense" openbao-dev) == 0 ]]; then
   ok "7. the OPNsense repository keeps its one copy, and the job refuses to be pointed at it"
 else bad "7. rc=$r7 $o7"; fi
+if [[ $r7b -ne 0 && $o7b == *"nor inside it"* && $r7c -ne 0 && $o7c == *"nor hold it"* && ! -e $t/repo-opnsense/openbao-dev ]]; then
+  ok "7b. a path inside the OPNsense repository, or one that holds it, is refused too"
+else bad "7b. rc=$r7b/$r7c $o7b / $o7c"; fi
+[[ $r7d == 0 ]] && ok "7c. azure: forms of the OPNsense repository (no leading slash, extra slashes, the whole container) are refused too" \
+  || bad "7c. $o7d"
 
 # 8
 for h in 10 11 12 13 14; do
@@ -171,6 +197,17 @@ own
 touch "$t/corrupt"; send
 [[ $rc -ne 0 && $out == *"differs from"* ]] && ok "9. a corrupted read-back fails the run" || bad "9. rc=$rc $out"
 rm -f "$t/corrupt"
+
+# 11
+vm_state
+date -u +%FT%TZ > "$t/work/state/secrets-store.rebuilding"
+: > "$t/wrapper-calls"; send
+r11=$rc o11=$out
+touch -d '25 hours ago' "$t/work/state/secrets-store.rebuilding"; send
+if [[ $r11 -eq 0 && $o11 == *"skipped: store rebuild in progress"* && $rc -ne 0 && $out == *"over 24 hours old"* ]] && ! called; then
+  ok "11. a rebuild hold skips the run (exit 0) with no snapshot; a hold over 24 hours old fails it"
+else bad "11. rc=$r11/$rc $o11 / $out"; fi
+rm -f "$t/work/state/secrets-store.rebuilding"
 
 # 10
 if [[ $all == *"$(cat "$t/keys/opnsense-offbox/restic.txt")"* ]]; then bad "10. the password shows in the output"

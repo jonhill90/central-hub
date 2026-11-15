@@ -1,0 +1,14 @@
+# Managed by the agent_box role (central-hub hosts/ansible). The merge sweep (D-0042 rule 2): merges a pull request
+# whose exact head holds four recorded passes and whose checks are green. Runs as the keys user, the same user the
+# wrapper runs as; sessions have no sudo line for it. It reads the halt flag first and does nothing while it is set.
+[Unit]
+Description=Merge sweep: squash-merge pull requests whose head holds four recorded passes
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ agent_box_keys_user }}
+Group={{ agent_box_keys_user }}
+ExecStart={{ agent_box_libexec_dir }}/pr-merge.sh sweep
+TimeoutStartSec=10min

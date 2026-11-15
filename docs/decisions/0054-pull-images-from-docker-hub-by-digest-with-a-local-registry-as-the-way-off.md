@@ -39,6 +39,8 @@ Proposed: **option 1 for now**, because it is what runs and c1's image count is 
 
 This record stays `proposed`: it rests on two hosted services that pass STD-0006 only by their exit path, like D-0045's public zone, which makes it a weighed choice for the owner.
 
+The owner's call (2026-11-15): at 04:52:30 UTC, on card `cmsg_01X43rfNYp4H1dL1V2dkfkwNM4pWAbpGS3Uq4LNd5sdJFP`, the owner chose to keep images from Docker Hub by digest, with a local Zot or Harbor cache as the way off, and the same for D-0053. The status still follows the pick-records rule: `accepted` once the pick is in use and passes STD-0006.
+
 Diagram: not applicable. Each node pulls straight from the registry; option 2 would add one cache in between.
 
 ### Rules
