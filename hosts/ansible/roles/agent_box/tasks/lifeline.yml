@@ -118,9 +118,16 @@
   failed_when: false
 
 - name: lifeline | The connection's settings now, in a fixed order
-  ansible.builtin.command: >-
-    nmcli -g ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.never-default,ipv4.dns,ipv4.ignore-auto-dns,ipv6.method,
-    connection.autoconnect,connection.interface-name connection show lifeline
+  # argv, one list item per argument: a folded `>-` line put a space after a comma and split the field list into two
+  # arguments, so nmcli failed on every run and the three tasks below reported changed on every apply.
+  ansible.builtin.command:
+    argv:
+      - nmcli
+      - -g
+      - ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.never-default,ipv4.dns,ipv4.ignore-auto-dns,ipv6.method,connection.autoconnect,connection.interface-name
+      - connection
+      - show
+      - lifeline
   register: agent_box_lifeline_nm_now
   changed_when: false
   failed_when: false

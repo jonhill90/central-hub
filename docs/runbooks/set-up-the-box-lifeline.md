@@ -68,6 +68,7 @@ With the second NIC on the host's subnet, the connected route to the Proxmox API
 - Step 4 stops at its first SSH call to the Proxmox host, before anything is made on the firewall: ssh offered a key the host refuses, such as the controller's default key (the first run from the Mac, 2026-11-14, failed this way and worked with only the wrappers' Proxmox key). Run step 4 again with `-i` naming the key the host accepts.
 - `opnsense-backup-user: openssl passwd -6 failed`: the controller's `openssl` is too old; put OpenSSL 1.1.1 or later first on `PATH`.
 - `curl: (60)` certificate error: the box does not trust the lab CA that signs OPNsense's certificate (`agent_box_ca_files`).
+- A second apply reports "made once", "static, never the default route" and "up on the NIC" as changed: before the fix in this PR, the role's read of the connection (`nmcli -g <fields> connection show lifeline`) was split into two arguments by a folded YAML line, so nmcli failed on every run and the role treated the connection as missing. After the fix those three tasks are skipped on a second apply (not yet measured on the box). While the older role is installed, check for duplicates: `nmcli -t -f NAME connection show | grep -c '^lifeline$'` should print 1, and a higher number means each apply added another profile named `lifeline` (inferred from the task code, not measured).
 - The plan shows a replace of VM 258: stop; a changed NIC order or a template change can do that. Nothing here should destroy the box.
 
 ## Exit

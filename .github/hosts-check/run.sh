@@ -89,6 +89,7 @@ check_ansible() {
   bash "$here/tests/test_pass_record.sh"
   bash "$here/tests/test_pr_merge_sweep.sh"
   bash "$here/tests/test_merge_checked.sh"
+  bash "$here/tests/test_lifeline_nmcli_read.sh"
 }
 
 check_manifests() {
