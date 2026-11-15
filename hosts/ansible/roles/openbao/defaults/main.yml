@@ -61,13 +61,13 @@ openbao_rebuild_secret_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openb
 
 # The AppRole snapshot-box (agent pick 240): the box's hourly snapshot pull signs in with it, not the admin. Its
 # IDs sit on the box next to the admin's, made there once, never printed. The mark it writes is
-# The AppRole snapshot-box (agent pick 240) is made only when this is true. It is a new access right, so it stays
-# false until the owner's install tap; the secrets-store wrapper sets it from its settings' snapshot_box.
-openbao_snapshot_box: false
 # kv/<openbao_mark_env>/snapshot-mark: dev today; a prod store sets prod.
 openbao_snapshot_box_role_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-snapshot-box-role-id"
 openbao_snapshot_box_secret_id_dest: "{{ openbao_admin_role_id_src | dirname }}/openbao-snapshot-box-secret-id"
 openbao_mark_env: dev
+# The AppRole snapshot-box (agent pick 240) is made only when this is true. It is a new access right, so it stays
+# false until the owner's install tap; the secrets-store wrapper sets it from its settings' snapshot_box.
+openbao_snapshot_box: false
 
 # The owner's sign-in to the store's web page (agent pick 233; docs/runbooks/set-up-the-secrets-store.md,
 # "The owner's sign-in"): OIDC through Keycloak realm lab, for members of one group, with one narrow policy.
