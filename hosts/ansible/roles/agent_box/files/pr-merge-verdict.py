@@ -26,6 +26,59 @@ RULE11 = [re.compile(p) for p in (
     r"^hosts/wrappers/mac/merge-checked\.sh$",   # the Mac's checked merge: loosening it needs the owner's tap
 )]
 MAX_RECORDS = 20
+# The role's defaults hold box limits (the sudo wrapper list, the permission allow and deny lists, auto mode, the users, timers) next to
+# five pinned tools that a self-apply may change (the free-keys line of box-apply-limits.txt.j2). The file needs the owner's tap
+# unless the only difference is the exact one-line entry of one of those five (D-0056 rule 4). Any other difference anywhere in
+# the file (a quoted or space-colon key, a duplicate, a comment, a new or removed key) or unreadable content needs the tap.
+DEFAULTS = "hosts/ansible/roles/agent_box/defaults/main.yml"
+FREE_KEYS = {"agent_box_tofu_version", "agent_box_tofu_sha256", "agent_box_kubectl_version", "agent_box_kubectl_sha256",
+             "agent_box_tailscale_version"}
+
+
+# top_level_blocks, FREE_VALUE and free_value_ok below are copies of the ones in box-apply.py, so the merge rule and the
+# self-apply rule read the file the same way (test_pr_merge_verdict.sh fails if the copies differ).
+def top_level_blocks(text):
+    """A YAML file's top-level keys, each with the text of its block, comment and blank lines left out. Text, not
+    parsed YAML, so it needs no YAML library, and any change inside a block counts."""
+    blocks, key = {}, "(before the first key)"
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#") or line.strip() == "---":
+            continue
+        if not line[0].isspace() and ":" in line and not line.startswith("-"):
+            key = line.split(":", 1)[0].strip()
+        blocks.setdefault(key, []).append(line.rstrip())
+    return {k: "\n".join(v) for k, v in blocks.items()}
+
+
+# A free key's new value must be a plain literal, never Jinja or a reference to another variable: a SHA-256 is 64
+# lowercase hex digits, anything else free is a version made of digits and dots.
+FREE_VALUE = {"sha256": re.compile(r"[0-9a-f]{64}"), "version": re.compile(r"[0-9][0-9.]*")}
+
+
+def free_value_ok(key, block):
+    """True if a free key's block is one line, `key: value`, and value (quotes taken off) is a plain literal."""
+    lines = block.splitlines()
+    if len(lines) != 1 or not lines[0].startswith(key + ":"):
+        return False
+    value = lines[0].split(":", 1)[1].split(" #", 1)[0].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1]
+    kind = "sha256" if key.endswith("_sha256") else "version"
+    return FREE_VALUE[kind].fullmatch(value) is not None
+
+
+def defaults_needs_tap(head, base):
+    """True unless the only blocks that differ are free keys whose new block is one plain-literal line. Block text, so a
+    line planted inside another key's list or flow list changes that block (and a repeated key makes a two-line block)."""
+    if head is None or base is None:
+        return True
+    old, cur = top_level_blocks(base), top_level_blocks(head)
+    for k in set(old) | set(cur):
+        if old.get(k) == cur.get(k):
+            continue
+        if k not in FREE_KEYS or k not in cur or not free_value_ok(k, cur[k]):
+            return True
+    return False
 DROP_TOP = re.compile(r"^[+-](status|date|accepted-evidence):")
 DROP_NESTED = re.compile(r"^[+-]  (approved-by|approved-at|approved-commit|approval-ref|approval-names|check|merged):")
 
@@ -169,6 +222,10 @@ def main():
             return None
 
     fstatus = {f["filename"]: f.get("status", "") for f in files}
+    if central and DEFAULTS in names:
+        dh, db = content("head", DEFAULTS), content("base", DEFAULTS)
+        if defaults_needs_tap(dh, db):
+            rule11.append(DEFAULTS)
     # A changed record or standard with no head content is a refusal unless GitHub says the PR removes it.
     for n in rec_files:
         if fstatus.get(n) != "removed" and content("head", n) is None:
@@ -196,8 +253,37 @@ def main():
         st = ntop.get("status", "")
         if st not in want or (old is not None and otop.get("status") == st):
             continue
+        if st in ("accepted", "active") and nev.get("approved-by") == "owner":
+            # The owner's own card tap: the PR's ledger holds an owner-tap line whose relay ref is the record's approval-ref, and
+            # the PR changes nothing but the acceptance fields (no approved-commit and no passes on one are needed).
+            ref = nev.get("approval-ref", "")
+            if not ref or not any(l.get("role") == "owner-tap" and l.get("relay_ref") == ref for l in lines):
+                why.append("%s: approved-by owner needs an owner-tap line whose relay ref is its approval-ref" % n); continue
+            try:
+                hcmp = load(d, "compare-head.json")
+            except (OSError, ValueError):
+                why.append("%s: the compare for head could not be read" % n); continue
+            h, e2 = net_change(hcmp, n, ntop.get("id", ""))
+            ac = nev.get("approved-commit", "")
+            if re.match(r"^[0-9a-f]{40}$", ac):
+                # The owner tapped a card that named this content commit: the PR's net change must equal that commit's, apart from
+                # the acceptance fields and the index row (the agents' path's compare). No passes on it are needed.
+                try:
+                    acmp = load(os.path.join(d, "approved"), ac + ".compare.json")
+                except (OSError, ValueError):
+                    why.append("%s: the compare for approved-commit %s could not be read" % (n, ac[:7])); continue
+                a, e1 = net_change(acmp, n, ntop.get("id", ""))
+                if e1 or e2:
+                    why.append("%s: %s" % (n, e1 or e2)); continue
+                odiff = sorted(f for f in set(a) | set(h) if a.get(f, collections.Counter()) != h.get(f, collections.Counter()))
+                if odiff:
+                    why.append("%s: the PR's net change differs from the owner-approved commit %s in %s" % (n, ac[:7], ", ".join(odiff[:3]))); continue
+            elif e2 or h:
+                why.append("%s: approved-by owner allows only the acceptance fields to change (%s)" % (n, e2 or ", ".join(sorted(h)[:3]))); continue
+            notes.append("NOTE: %s is accepted on the owner's card tap %s" % (n, ref))
+            continue
         if st in ("accepted", "active") and nev.get("approved-by") != "agents":
-            why.append("%s: status %s needs approved-by: agents" % (n, st)); continue
+            why.append("%s: status %s needs approved-by: agents or owner" % (n, st)); continue
         ac = nev.get("approved-commit", "")
         if not re.match(r"^[0-9a-f]{40}$", ac):
             why.append("%s: status %s needs a full approved-commit" % (n, st)); continue

@@ -93,6 +93,9 @@ check_ansible() {
   bash "$here/tests/test_pass_record.sh"
   bash "$here/tests/test_pr_merge_sweep.sh"
   bash "$here/tests/test_merge_checked.sh"
+  bash "$here/tests/test_lifeline_nmcli_read.sh"
+  bash "$here/tests/test_lifeline_cleanup.sh"
+  bash "$here/tests/test_box_apply_inventory_vars.sh"
 }
 
 check_manifests() {
@@ -188,7 +191,8 @@ check_backup() {
   bash "$here/tests/test_opnsense_escrow.sh"
   bash "$here/tests/test_secrets_bundle_offbox.sh"
   bash "$here/tests/test_secrets_store_offbox.sh"
-  bash "$here/tests/test_secrets_store_restore_rebuilt.sh"
+  bash "$here/tests/test_secrets_store_restore.sh"
+  bash "$here/tests/test_secrets_store_snapshots.sh"
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
   bash "$here/tests/test_identity_signin.sh"

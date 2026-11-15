@@ -56,6 +56,7 @@ The owner's words of 04:44:57 UTC reach further than STD-0006's register row, so
 - **What the lab uses.** Only `ansible-core` from PyPI and three collections from Galaxy (`oxlorg.opnsense`, `community.general`, `ansible.posix`), all GPL-3.0. It uses no certified content and no AI assistant.
 - **The reading.** OpenTofu is a clear pass: a Linux Foundation project with no paid edition. For Ansible, most of the platform is support and integrated builds of open upstreams, which STD-0006 allows. Certified content and the AI assistants, though, are sold only with the subscription as far as the page shows. The register's Ansible row does not mention them.
 - **So this record stays `proposed`.** Whether paid-only content and assistants around a free core count as a paywall is the owner's call, and `revisit-when` names it.
+- **The owner's call (2026-11-15).** At 04:51:59 UTC, on card `cmsg_01X43rfNYp4H1dL1V2dkfkwN1TjGnbUJUBa4TLNk8AL3gv`, the owner chose to keep this record and D-0049 as written, with the lab using only the free parts. The status still follows the pick-records rule: `accepted` once the pick is in use and passes STD-0006.
 
 ### Rules
 

@@ -1,0 +1,70 @@
+---
+# Duplicate NetworkManager profiles named `lifeline`. Before #369, the read below it in lifeline.yml failed on every
+# run, so "made once" added one profile per apply and the box held six (measured 2026-11-15). This deletes the extras
+# by UUID and keeps the one that is active on the lifeline NIC.
+#   - Only profiles named exactly `lifeline` are looked at, and only inactive ones are ever deleted.
+#   - Nothing to delete (zero or one profile) is no change and no failure, so a fresh box and a second apply are no-ops.
+#   - If there is something to delete and the profiles active are not exactly one, on the lifeline NIC, it fails before
+#     any delete.
+#   - A check run deletes nothing and shows the deletion as a change, with the UUIDs in its output.
+# Included from lifeline.yml, which runs only when agent_box_lifeline_interface is set.
+
+- name: lifeline cleanup | The profiles, as UUID:NAME:DEVICE:ACTIVE
+  ansible.builtin.command:
+    argv: [nmcli, -t, -f, "UUID,NAME,DEVICE,ACTIVE", connection, show]
+  register: agent_box_lifeline_profiles
+  changed_when: false
+  check_mode: false
+
+- name: lifeline cleanup | The profiles named lifeline, and which of them are active
+  ansible.builtin.set_fact:
+    agent_box_lifeline_rows: >-
+      {%- set ns = namespace(rows=[]) -%}
+      {%- for line in agent_box_lifeline_profiles.stdout_lines -%}
+      {%- set p = line.split(':') -%}
+      {%- if p | length == 4 and p[1] == 'lifeline' -%}
+      {%- set ns.rows = ns.rows + [{'uuid': p[0], 'device': p[2], 'active': p[3] == 'yes'}] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ ns.rows }}
+
+- name: lifeline cleanup | Exactly one is active, on the lifeline NIC, when there is anything to delete
+  ansible.builtin.assert:
+    that:
+      - agent_box_lifeline_rows | length < 2
+        or (agent_box_lifeline_rows | selectattr('active') | list | length == 1
+            and agent_box_lifeline_rows | selectattr('active') | selectattr('device', 'equalto', agent_box_lifeline_interface)
+            | list | length == 1)
+      - >-
+        agent_box_lifeline_rows | map(attribute='uuid')
+        | select('match', '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$') | list | length
+        == agent_box_lifeline_rows | length
+    fail_msg: >-
+      {{ agent_box_lifeline_rows | length }} profiles are named lifeline and the active ones are not exactly one on
+      {{ agent_box_lifeline_interface }}: nothing was deleted. Read them with
+      `nmcli -t -f UUID,NAME,DEVICE,ACTIVE connection show` and fix by hand.
+    quiet: true
+
+- name: lifeline cleanup | The extra profiles, all inactive, by UUID
+  ansible.builtin.set_fact:
+    agent_box_lifeline_extra: >-
+      {{ [] if agent_box_lifeline_rows | length < 2 else
+         agent_box_lifeline_rows | rejectattr('active') | map(attribute='uuid') | list }}
+
+- name: lifeline cleanup | What a check run would delete
+  ansible.builtin.debug:
+    msg: "would delete the inactive lifeline profiles {{ agent_box_lifeline_extra | join(' ') }}"
+  when: ansible_check_mode and agent_box_lifeline_extra | length > 0
+
+# A check run skips the delete below, so this shows it as a change in the check diff.
+- name: lifeline cleanup | A check run reports the deletion as a change
+  ansible.builtin.command: "true"  # noqa: command-instead-of-shell
+  check_mode: false
+  changed_when: agent_box_lifeline_extra | length > 0
+  when: ansible_check_mode
+
+- name: lifeline cleanup | The extra profiles are deleted
+  ansible.builtin.command:
+    argv: [nmcli, connection, delete, uuid, "{{ item }}"]
+  loop: "{{ agent_box_lifeline_extra }}"
+  changed_when: true
