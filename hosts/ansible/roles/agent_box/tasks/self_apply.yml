@@ -67,20 +67,9 @@
 
 # The box's own variables from the controller's inventory (role defaults are not host variables, so they stay
 # with the role and a merged change to a free default still applies). Private values never come from anywhere
-# else in a self-apply (D-0036 rule 7).
+# else in a self-apply (D-0036 rule 7). Only the role's own variables are written: hostvars also holds what this
+# play registered or set (a result such as agent_box_ca_stat), and those do not belong in the box's inventory
+# (self_apply_inventory_vars.yml picks the names).
 - name: box-apply's inventory, the box's host variables as the controller has them
-  ansible.builtin.copy:
-    dest: /etc/box-apply/inventory.yml
-    content: |
-      # Written by the agent_box role on an apply from the controller (D-0036 rule 7); root's only.
-      {{ {'all': {'children': {'agent_box': {'hosts': {inventory_hostname: agent_box_box_apply_vars}}}}} | to_nice_yaml(indent=2) }}
-    owner: root
-    group: root
-    mode: "0600"
-  vars:
-    agent_box_box_apply_vars: >-
-      {{ hostvars[inventory_hostname] | dict2items | selectattr('key', 'match', '^agent_box_')
-         | rejectattr('key', 'in', ['agent_box_self_applying', 'agent_box_self_apply_commit']) | items2dict
-         | combine({'ansible_connection': 'local', 'ansible_python_interpreter': '/usr/bin/python3'}) }}
-  no_log: true
+  ansible.builtin.include_tasks: self_apply_inventory_vars.yml
   when: not agent_box_self_applying | bool and not (ansible_check_mode and agent_box_box_apply_dirs is changed)
