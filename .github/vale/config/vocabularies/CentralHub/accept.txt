@@ -18,3 +18,7 @@ VNet
 API token
 (?i)break-glass account
 (?i)agent notebook
+(?i)pass ledger
+(?i)sweep
+(?i)merge sweep
+(?i)halt flag
