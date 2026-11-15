@@ -1,0 +1,14 @@
+# Approved changes to the agent box's limits (D-0036 rule 3), which box-apply applies with no apply from the
+# controller (pick 232; docs/runbooks/apply-the-agent-box-from-itself.md). One line per change:
+#
+#   <from> <to> <digest> <pass> <tap>
+#
+#   from    the baseline the box is on (40 hex), as `box-apply plan` prints it
+#   to      the commit on main that holds the change (40 hex); no limit may change after it
+#   digest  sha256 of `git diff --no-renames --binary --full-index <from> <to> -- <the limit files that changed>`,
+#           which `box-apply plan` prints when it stops
+#   pass    the id of the message that records the agents' pass of this digest (D-0042 rule 1)
+#   tap     the id of the owner's tap for this change (D-0042 rule 6); "none" never counts
+#
+# The box checks from, to and the digest. It can't check the pass or the tap: it only logs them. Lines stay as a
+# record; a line whose from is no longer the baseline is never used again.

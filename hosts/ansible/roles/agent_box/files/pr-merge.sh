@@ -134,7 +134,7 @@ evaluate() { # pr head
 import json, re, sys
 for f in json.load(open(sys.argv[1])):
     n = f["filename"]
-    if re.match(r"^docs/(decisions|standards)/[^/]+\.md$", n) and not n.endswith("README.md"): print(n)
+    if (re.match(r"^docs/(decisions|standards)/[^/]+\.md$", n) and not n.endswith("README.md")) or n == "hosts/ansible/roles/agent_box/defaults/main.yml": print(n)
 ' "$d/files.json" | head -20)
     if [[ -n $recs ]]; then
       fetch_compare "$d/compare-head.json" "$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["base"]["sha"])' "$d/pr.json")...$head" || return 1
@@ -191,7 +191,7 @@ case $action in
     setup_repo "$full"
     lane=$(gh "$base/pulls/$pr" | python3 -I -c '
 import json, re, sys
-m = re.search(r"^Author-Lane:\s*([a-z0-9-]+)\s*$", json.load(sys.stdin).get("body") or "", re.M)
+m = re.search(r"^Author-Lane:[ \t]*([A-Za-z0-9][A-Za-z0-9 _-]{0,60}?)[ \t]*$", json.load(sys.stdin).get("body") or "", re.M)
 print(m.group(1) if m else "")') || exit 1
     [[ -n $lane ]] || { echo "pr-merge: no Author-Lane line" >&2; exit 1; }
     echo "$lane"
@@ -199,6 +199,9 @@ print(m.group(1) if m else "")') || exit 1
     ;;
   check | merge)
     if [[ $action == merge ]] && halted; then echo "pr-merge: the halt flag is set; nothing merged" >&2; exit 1; fi
+    # Printed on every run, as the keys user (the flag's folder is 0700 keys): a caller that cannot read the folder must not
+    # guess "not halted" from a failed test, so it requires exactly "HALT: clear" (the Mac's checked merge does).
+    if halted; then echo "HALT: set"; else echo "HALT: clear"; fi
     setup_repo "$full"
     evaluate "$pr" "$head" || { echo "pr-merge: a GitHub read failed; nothing decided" >&2; exit 1; }
     [[ $out == *$'\n'* ]] && echo "${out%$'\n'*}"

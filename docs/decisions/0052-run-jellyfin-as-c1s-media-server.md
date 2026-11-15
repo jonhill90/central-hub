@@ -69,7 +69,7 @@ Diagram: not applicable. One app; its route and storage follow D-0021 and D-0051
 
 ### Exit path
 
-Media files are plain files on a volume. Another media server reads the same folder; only Jellyfin's own settings and watch history would be lost. On 2026-11-08 at 07:09 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNXbpPH5uUgtW9qv3YC9EXe3), just after asking for the apps, the owner asked that every piece be replaceable, so he can go back through it all.
+Media files are plain files on a volume. Another media server reads the same folder; only Jellyfin's own settings and watch history would be lost. On 2026-11-08 at 07:09 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNXbpPH5uUgtW9qv3YC9EXe3), just after asking for the apps, the owner said that he and the agents will go back through all of it so that he understands it, and asked that every piece be replaceable.
 
 ## Pros and Cons of the Options
 
