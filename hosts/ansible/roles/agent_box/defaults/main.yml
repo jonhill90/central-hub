@@ -270,6 +270,9 @@ agent_box_self_apply_skip_tags: [ca, prod_files, opnsense_offbox, lifeline, veri
 agent_box_self_apply_commit: ""
 # Set by box-apply on its own runs (-e); the box-apply tasks then write nothing.
 agent_box_self_applying: false
+# Set by box-apply, with agent_box_self_applying, on an approved limit apply (-e; pick 232): the box-apply tasks
+# then write box-apply, its settings and its limits, never its inventory.
+agent_box_limit_apply: false
 
 # The merge sweep (D-0042 rule 2): a systemd timer that runs `pr-merge.sh sweep` as the keys user. Off until the inventory
 # turns it on, because installing it is a change to the box's limits (D-0042 rule 6).

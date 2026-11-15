@@ -1,8 +1,10 @@
 ---
 # box-apply (D-0036; docs/runbooks/apply-the-agent-box-from-itself.md): the box applies this role to itself from
 # reviewed main and stops on any change to its limits. Everything here is a limit, so it is installed and changed
-# only by an apply from the controller. A self-apply passes agent_box_self_applying=true, and these tasks then
-# write nothing: box-apply's settings, limits, inventory and baseline stay as the controller left them.
+# only by an apply from the controller, or by an approved limit apply (pick 232). A self-apply passes
+# agent_box_self_applying=true, and these tasks then write nothing. An approved limit apply also passes
+# agent_box_limit_apply=true, and these tasks then write box-apply, its front script, settings and limits; its
+# inventory stays as the controller left it (D-0036 rule 7), and box-apply writes its own baseline.
 
 - name: box-apply's folders, root's only
   ansible.builtin.file:
@@ -13,7 +15,7 @@
     mode: "0700"
   loop: [/etc/box-apply, /var/lib/box-apply]
   register: agent_box_box_apply_dirs
-  when: not agent_box_self_applying | bool
+  when: not agent_box_self_applying | bool or agent_box_limit_apply | bool
 
 - name: box-apply itself, root-owned
   ansible.builtin.copy:
@@ -22,7 +24,7 @@
     owner: root
     group: root
     mode: "0755"
-  when: not agent_box_self_applying | bool
+  when: not agent_box_self_applying | bool or agent_box_limit_apply | bool
 
 - name: The front script that sessions run (box-apply plan|apply)
   ansible.builtin.copy:
@@ -36,7 +38,7 @@
     owner: root
     group: root
     mode: "0755"
-  when: not agent_box_self_applying | bool
+  when: not agent_box_self_applying | bool or agent_box_limit_apply | bool
 
 # Skipped in a self-apply: tasks that read files on the controller (ca, prod_files, the off-box copy's
 # certificate upload), the lifeline's firewall (D-0036 rule 8), and the proofs, which a check run can't make.
@@ -52,7 +54,7 @@
     owner: root
     group: root
     mode: "0600"
-  when: not agent_box_self_applying | bool and not (ansible_check_mode and agent_box_box_apply_dirs is changed)
+  when: (not agent_box_self_applying | bool or agent_box_limit_apply | bool) and not (ansible_check_mode and agent_box_box_apply_dirs is changed)
 
 - name: box-apply's list of limits
   ansible.builtin.template:
@@ -61,7 +63,7 @@
     owner: root
     group: root
     mode: "0600"
-  when: not agent_box_self_applying | bool and not (ansible_check_mode and agent_box_box_apply_dirs is changed)
+  when: (not agent_box_self_applying | bool or agent_box_limit_apply | bool) and not (ansible_check_mode and agent_box_box_apply_dirs is changed)
 
 # The box's own variables from the controller's inventory (role defaults are not host variables, so they stay
 # with the role and a merged change to a free default still applies). Private values never come from anywhere
