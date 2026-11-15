@@ -249,8 +249,23 @@ def main():
         st = ntop.get("status", "")
         if st not in want or (old is not None and otop.get("status") == st):
             continue
+        if st in ("accepted", "active") and nev.get("approved-by") == "owner":
+            # The owner's own card tap: the PR's ledger holds an owner-tap line whose relay ref is the record's approval-ref, and
+            # the PR changes nothing but the acceptance fields (no approved-commit and no passes on one are needed).
+            ref = nev.get("approval-ref", "")
+            if not ref or not any(l.get("role") == "owner-tap" and l.get("relay_ref") == ref for l in lines):
+                why.append("%s: approved-by owner needs an owner-tap line whose relay ref is its approval-ref" % n); continue
+            try:
+                hcmp = load(d, "compare-head.json")
+            except (OSError, ValueError):
+                why.append("%s: the compare for head could not be read" % n); continue
+            h, e2 = net_change(hcmp, n, ntop.get("id", ""))
+            if e2 or h:
+                why.append("%s: approved-by owner allows only the acceptance fields to change (%s)" % (n, e2 or ", ".join(sorted(h)[:3]))); continue
+            notes.append("NOTE: %s is accepted on the owner's card tap %s" % (n, ref))
+            continue
         if st in ("accepted", "active") and nev.get("approved-by") != "agents":
-            why.append("%s: status %s needs approved-by: agents" % (n, st)); continue
+            why.append("%s: status %s needs approved-by: agents or owner" % (n, st)); continue
         ac = nev.get("approved-commit", "")
         if not re.match(r"^[0-9a-f]{40}$", ac):
             why.append("%s: status %s needs a full approved-commit" % (n, st)); continue
