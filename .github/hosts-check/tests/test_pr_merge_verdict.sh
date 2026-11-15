@@ -81,6 +81,13 @@ d = fx(DOC, pr_over={"mergeable_state": "dirty"});         check("a conflict is 
 d = fx(DOC, checks={"total_count": 1, "check_runs": [{"name": "hosts", "status": "completed", "conclusion": "failure"}]}); check("a failed check is not green", run(d), "NOT GREEN: check hosts: failure")
 d = fx(DOC, checks={"total_count": 0, "check_runs": []});  check("no check run is not green", run(d), "NOT GREEN: no checks reported")
 d = fx([".github/workflows/docs.yml"]);                    check("an edit under .github/ is green with a NOTE", subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout.replace("NOTE: verdict v2\n", "", 1), "NOTE: this PR edits 1 files under .github/")
+import ast
+def fsrc(path, names):
+    t = ast.parse(open(path).read())
+    return {n.name: ast.get_source_segment(open(path).read(), n) for n in t.body if isinstance(n, ast.FunctionDef) and n.name in names}
+ROLE = os.path.dirname(SRC)
+a1, a2 = fsrc(SRC, ("top_level_blocks", "free_value_ok")), fsrc(ROLE + "/box-apply.py", ("top_level_blocks", "free_value_ok"))
+check("the verdict's block readers are the same text as box-apply.py's", "x" + ("ok" if a1 == a2 and len(a1) == 2 else "bad"), "xok")
 # Rule 11: the guarded files need the owner-tap line, the others do not.
 for f in ["docs/decisions/0042-let-the-reviewer.md", "docs/decisions/0034-x.md", "hosts/ansible/roles/agent_box/files/runner-job-started.sh", "hosts/ansible/roles/agent_box/files/pr-merge.sh", "hosts/ansible/roles/agent_box/files/pass-record.sh", "hosts/ansible/roles/agent_box/files/pr-merge-verdict.py", "hosts/ansible/roles/agent_box/templates/pr-merge-sweep.timer.j2", "hosts/ansible/roles/agent_box/defaults/main.yml", "hosts/wrappers/mac/merge-checked.sh"]:
     d = fx([f], head_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\n"}); check("rule 11 file %s needs the owner tap" % f.split("/")[-1], run(d), "OWNER: rule 11 PR")
@@ -100,22 +107,31 @@ BASE = {"agent_box_user": "claude", "agent_box_keys_user": "keys", "agent_box_wr
 def defaults(**over):
     d = dict(BASE); d.update(over)
     return "# header comment\n" + "".join("%s: %s\n\n" % (k, ("\n" + v) if v.startswith("  ") else v) for k, v in d.items() if v is not None)
-def dtest(name, head, base=None, want="OWNER: rule 11 PR", mut=False):
+def dtest(name, head, base=None, want="OWNER: rule 11 PR", mut=False, mutsrc=('if k not in FREE_KEYS or k not in cur or not free_value_ok(k, cur[k]):', 'if False:')):
     d = fx([DEF], head_text={DEF: head} if head is not None else None, base_text={DEF: defaults() if base is None else base} if base != "none" else None)
-    check(name, run(d), want, mutate('return without_free_lines(head) != without_free_lines(base)', 'return False') if mut else None, d if mut else None)
-for k, v in (("agent_box_tofu_version", "1.13.2"), ("agent_box_tofu_sha256", "cc"), ("agent_box_kubectl_version", "1.37.2"), ("agent_box_kubectl_sha256", "dd"), ("agent_box_tailscale_version", "1.104.6")):
+    check(name, run(d), want, mutate(*mutsrc) if mut else None, d if mut else None)
+for k, v in (("agent_box_tofu_version", "1.13.2"), ("agent_box_tofu_sha256", "c" * 64), ("agent_box_kubectl_version", "1.37.2"), ("agent_box_kubectl_sha256", "d" * 64), ("agent_box_tailscale_version", "1.104.6")):
     dtest("a change to the free key %s is GREEN with no tap" % k, defaults(**{k: v}), want="GREEN")
-dtest("all five free keys together are GREEN with no tap", defaults(agent_box_tofu_version="9", agent_box_tofu_sha256="9", agent_box_kubectl_version="9", agent_box_kubectl_sha256="9", agent_box_tailscale_version="9"), want="GREEN")
+dtest("all five free keys together are GREEN with no tap", defaults(agent_box_tofu_version="9", agent_box_tofu_sha256="e" * 64, agent_box_kubectl_version="9", agent_box_kubectl_sha256="f" * 64, agent_box_tailscale_version="9"), want="GREEN")
 for k, v in (("agent_box_allow", "[Bash(ls *)]"), ("agent_box_managed_settings_extra", "{x: 1}"), ("agent_box_keys_user", "other"), ("agent_box_merge_sweep", "true"),
              ("agent_box_wrappers", "  - name: dev-vms\n    args: [plan, apply]"), ("agent_box_deny", "  - Bash(ls *)"), ("agent_box_user", "someone")):
     dtest("a change to %s needs the owner tap" % k, defaults(**{k: v}), mut=(k == "agent_box_allow"))
 dtest("a new key needs the owner tap", defaults(agent_box_new_thing="1"))
 dtest("a removed key needs the owner tap", defaults(agent_box_deny=None))
-dtest("a changed header comment before the first key needs the owner tap", defaults().replace("# header comment", "# another comment"))
+dtest("a changed comment does not change the YAML, so it is GREEN", defaults().replace("# header comment", "# another comment"), want="GREEN")
 dtest("a quoted duplicate of a limit key needs the owner tap", defaults() + '"agent_box_keys_user": other\n')
 dtest("a space-colon duplicate of a limit key needs the owner tap", defaults() + "agent_box_keys_user : other\n")
 dtest("a quoted value that runs over later keys needs the owner tap", defaults().replace("agent_box_tofu_version: 1.13.1", 'agent_box_tofu_version: "1.13.1').replace("agent_box_deny:", 'agent_box_deny: x"\nagent_box_deny:'))
-dtest("a free key with a trailing comment needs the owner tap", defaults().replace("agent_box_tofu_version: 1.13.1", "agent_box_tofu_version: 1.13.1 # note"))
+dtest("a free key with a trailing comment is GREEN", defaults().replace("agent_box_tofu_version: 1.13.1", "agent_box_tofu_version: 1.13.2 # note"), want="GREEN")
+FLOW = "agent_box_wrappers", "  - name: c1-read\n    args: [\"get *\", describe,\n           \"api-resources *\"]"
+flow_base = defaults(**{FLOW[0]: FLOW[1]})
+dtest("a free-key line planted inside a multi-line flow list needs the owner tap", flow_base.replace('describe,\n', 'describe,\nagent_box_tofu_version: 9\n'), base=flow_base, mut=True, mutsrc=('if k not in FREE_KEYS or k not in cur or not free_value_ok(k, cur[k]):', 'if False:'))
+DENY = "agent_box_deny", "  - Bash(rm *)\n  - Bash(dd *)"
+deny_base = defaults(**{DENY[0]: DENY[1]})
+dtest("a free-key line moved into the deny list needs the owner tap", deny_base.replace("  - Bash(rm *)\n", "agent_box_tofu_version: 1.13.1\n  - Bash(rm *)\n"), base=deny_base, mut=True, mutsrc=('if k not in FREE_KEYS or k not in cur or not free_value_ok(k, cur[k]):', 'if False:'))
+dtest("a free-key line removed needs the owner tap", defaults(agent_box_tofu_version=None))
+dtest("a free-key line added twice needs the owner tap", defaults() + "agent_box_tofu_version: 1.13.1\n")
+dtest("a free key set to a Jinja reference needs the owner tap", defaults(agent_box_tofu_version="'{{ x }}'"))
 dtest("a repeated key is unreadable and needs the owner tap", defaults() + "agent_box_user: again\n")
 dtest("a defaults file with no base content needs the owner tap", defaults(), base="none")
 dtest("a defaults file with no head content needs the owner tap", None)

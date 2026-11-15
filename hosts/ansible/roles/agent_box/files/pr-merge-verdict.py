@@ -35,19 +35,50 @@ FREE_KEYS = {"agent_box_tofu_version", "agent_box_tofu_sha256", "agent_box_kubec
              "agent_box_tailscale_version"}
 
 
-# The value is a plain token (a version or a hex digest), so a quoted string cannot run on to later lines.
-FREE_LINE = re.compile(r"^(%s): [0-9A-Za-z._-]+$" % "|".join(sorted(FREE_KEYS)))
+# top_level_blocks, FREE_VALUE and free_value_ok below are copies of the ones in box-apply.py, so the merge rule and the
+# self-apply rule read the file the same way (test_pr_merge_verdict.sh fails if the copies differ).
+def top_level_blocks(text):
+    """A YAML file's top-level keys, each with the text of its block, comment and blank lines left out. Text, not
+    parsed YAML, so it needs no YAML library, and any change inside a block counts."""
+    blocks, key = {}, "(before the first key)"
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#") or line.strip() == "---":
+            continue
+        if not line[0].isspace() and ":" in line and not line.startswith("-"):
+            key = line.split(":", 1)[0].strip()
+        blocks.setdefault(key, []).append(line.rstrip())
+    return {k: "\n".join(v) for k, v in blocks.items()}
 
 
-def without_free_lines(text):
-    """The file with the exact one-line entries of the five free keys removed; every other byte stays."""
-    return "\n".join(l for l in text.split("\n") if not FREE_LINE.match(l))
+# A free key's new value must be a plain literal, never Jinja or a reference to another variable: a SHA-256 is 64
+# lowercase hex digits, anything else free is a version made of digits and dots.
+FREE_VALUE = {"sha256": re.compile(r"[0-9a-f]{64}"), "version": re.compile(r"[0-9][0-9.]*")}
+
+
+def free_value_ok(key, block):
+    """True if a free key's block is one line, `key: value`, and value (quotes taken off) is a plain literal."""
+    lines = block.splitlines()
+    if len(lines) != 1 or not lines[0].startswith(key + ":"):
+        return False
+    value = lines[0].split(":", 1)[1].split(" #", 1)[0].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1]
+    kind = "sha256" if key.endswith("_sha256") else "version"
+    return FREE_VALUE[kind].fullmatch(value) is not None
 
 
 def defaults_needs_tap(head, base):
+    """True unless the only blocks that differ are free keys whose new block is one plain-literal line. Block text, so a
+    line planted inside another key's list or flow list changes that block (and a repeated key makes a two-line block)."""
     if head is None or base is None:
         return True
-    return without_free_lines(head) != without_free_lines(base)
+    old, cur = top_level_blocks(base), top_level_blocks(head)
+    for k in set(old) | set(cur):
+        if old.get(k) == cur.get(k):
+            continue
+        if k not in FREE_KEYS or k not in cur or not free_value_ok(k, cur[k]):
+            return True
+    return False
 DROP_TOP = re.compile(r"^[+-](status|date|accepted-evidence):")
 DROP_NESTED = re.compile(r"^[+-]  (approved-by|approved-at|approved-commit|approval-ref|approval-names|check|merged):")
 
