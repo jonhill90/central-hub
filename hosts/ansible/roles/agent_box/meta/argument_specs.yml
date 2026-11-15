@@ -196,8 +196,10 @@ argument_specs:
         description: >-
           Private settings for the secrets-store wrapper, written to <work_dir>/secrets-store.json (0600, the
           keys user's): the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
-          vnet, template_vm_id), box_address, and optionally seal_key_id and admin_user. No key goes in it; the
-          wrapper makes the keys in the keys folder. Empty skips the file.
+          vnet, template_vm_id), box_address, and optionally seal_key_id, admin_user and snapshot_box. snapshot_box: true
+          (agent pick 240) makes configure create the AppRole snapshot-box and snapshot sign in with it; it is set only
+          by the owner's install tap, an access right and a box limit. No key goes in it; the wrapper makes the keys in
+          the keys folder. Empty skips the file.
       agent_box_secrets_store_offbox:
         type: dict
         default:
