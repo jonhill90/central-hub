@@ -4,6 +4,7 @@
 #   2. A wrapper without session_args: both users get args, as before.
 #   3. An empty session_args: the session user gets no line for that wrapper.
 #   4. The real wrapper list: tailnet-stack's session line has no apply, the runner's has it.
+#   5-6. pr-merge: sessions get `check *` only; pass-record: add, show, halt, resume; the runner gets neither.
 # Usage: .github/hosts-check/tests/test_sudoers_session_args.sh   (needs python3 with jinja2 and pyyaml)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -31,6 +32,12 @@ d = yaml.safe_load(open(role + "defaults/main.yml"))["agent_box_wrappers"]
 ts = [w for w in d if w["name"] == "tailnet-stack"][0]
 e = render([ts])
 print("4", len(lines(e, "sess")) == 1 and "apply" not in lines(e, "sess")[0], "apply *" in lines(e, "run")[0])
+pm = [w for w in d if w["name"] == "pr-merge"][0]
+pr = [w for w in d if w["name"] == "pass-record"][0]
+g = render([pm, pr])
+sl = lines(g, "sess")
+print("5", "pr-merge.sh check *" in sl[0] and "merge *" not in sl[0] and "sweep" not in sl[0], all(x in sl[1] for x in ("add *", "show *", "halt *", "resume *")))
+print("6", lines(g, "run") == [], not any(w.get("runner") for w in (pm, pr)))
 PY
 )
 check() { # number, text
@@ -40,4 +47,6 @@ check 1 "1. session_args for the session, full args for the runner"
 check 2 "2. no session_args: both get args"
 check 3 "3. empty session_args: the session gets no line"
 check 4 "4. tailnet-stack: no apply in the session's line, apply in the runner's"
+check 5 "5. sessions: pr-merge check only (no merge, no sweep); pass-record add, show, halt, resume"
+check 6 "6. the runner user gets no pr-merge or pass-record line (the merge job is gone)"
 exit "$fail"

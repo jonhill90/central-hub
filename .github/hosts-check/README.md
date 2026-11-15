@@ -4,11 +4,12 @@ Lints and offline tests for the code under `hosts/` (STD-0005). Workflow `hosts`
 
 | Path | What it is |
 |---|---|
-| `run.sh` | The one command: `run.sh terraform`, `run.sh ansible`, `run.sh manifests`, `run.sh identity`, `run.sh scripts`, `run.sh backup`, or no argument for all six. |
+| `run.sh` | The one command: `run.sh terraform`, `run.sh ansible`, `run.sh manifests`, `run.sh identity`, `run.sh scripts`, `run.sh backup`, `run.sh proxy`, or no argument for all seven. |
 | `install-tools.sh` | Builds tofu, tflint, kubeconform and helm from source at pinned versions. |
 | `requirements.in`, `requirements.txt` | ansible-core, ansible-lint, ShellCheck and actionlint, pinned with hashes. |
 | `check_hosts.py` | The STD-0004 rules a script can see: run folder files, no `locals`, no tracked real variable files or inventories, `meta/argument_specs.yml` in every role and no `meta/main.yml`. |
 | `tests/test_backup.sh` | The c1 backup and restore-test scripts (role `k8s_backup`) end to end: etcd 3.7.0 with test keys, a local restic repository, a volume folder; plus a missing key and a damaged pack file, which must fail. |
+| `tests/test_proxy.sh`, `proxy/` | Role `proxmox_proxy` against a stand-in Proxmox host in a container (`proxy/Dockerfile`, a stand-in `pveproxy` in `standin_pveproxy.py`, nginx as the old role left it in `nginx-today.conf`). |
 | `tests/test_check_hosts.sh` | Test cases: each breaks a copy of `hosts/` one way and expects `check_hosts.py` to fail. |
 | `tflint.hcl` | tflint settings: every bundled Terraform rule. |
 | `ansible-lint.yml` | ansible-lint settings: the production profile, with two style rules off and the reason. |
@@ -29,6 +30,7 @@ The tests themselves sit next to the code: `hosts/terraform/<place>/<workload>/t
 | `identity` | renders realm `lab` with an extra user, imports it into Keycloak in a container, checks clients, passwords and the `groups` and `roles` claims and the sign-in theme, then runs the role's `files/delete-realm.sh` and imports it again (STD-0005 level 3) |
 | `scripts` | ShellCheck (warnings and errors) on every tracked `*.sh`; actionlint on every workflow |
 | `backup` | `tests/test_backup.sh`: downloads restic and etcd from their releases, each checked against a SHA-256 (the role's own versions), and runs the role's scripts |
+| `proxy` | `tests/test_proxy.sh`: builds the stand-in Proxmox host in `proxy/` (Debian trixie pinned by digest, systemd as PID 1, nginx serving as role `proxmox_nginx` left it, a stand-in `pveproxy`) and runs role `proxmox_proxy` against a fresh container per case: the install beside nginx, the move, a failing proof, a stopped move, a killed run, an open WebSocket across a graceful reload, a host with no nginx. Needs a Docker that can run a privileged container |
 
 ## Run it locally
 

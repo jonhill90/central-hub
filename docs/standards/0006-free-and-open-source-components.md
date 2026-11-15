@@ -37,7 +37,7 @@ A component passes when all three hold:
 2. A row's verdict MUST be `pass`, `hosted` or `fail`. A field that says "not checked" or "unknown" makes the row incomplete.
 3. A pull request that adds an outside source MUST add or extend its row in the same pull request.
 4. A component that fails the test MUST NOT be added. One already in use that fails MUST have an entry in the named exception list, [`foss-exceptions.yaml`](foss-exceptions.yaml).
-5. Only the owner's go extends or changes the exception list: a message they write, or their tap on a card that names the component (D-0034). The entry names that go. An entry is either `kept` (the owner chose to keep it for now) or `pending` (it fails and waits for the owner's call).
+5. Only the owner's go extends or changes the exception list: a message they write, or their tap on a card that names the component (D-0034). The entry names that go. An entry is either `kept` (the owner chose to keep it for now) or `pending` (it fails and waits for the owner's call). One case needs no owner's go: when the lab no longer runs or pulls in a component, the pull request that removes its register row also removes its entry, with the agents' pass (D-0042 rule 3), and names the proof that the component is gone. The check fails an entry that has no register row, so the row and the entry always leave together.
 6. A record or spec that chooses a component MUST give its licence and paid-edition check, with sources, in its evidence (REQ-0032).
 
 ## Order

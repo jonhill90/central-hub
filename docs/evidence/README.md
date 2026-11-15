@@ -42,3 +42,12 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0043 | [0043-keep-tailscale-as-a-swappable-stopgap-for-reaching-the-lab.md](0043-keep-tailscale-as-a-swappable-stopgap-for-reaching-the-lab.md) |
 | D-0044 | [0044-let-the-agent-box-apply-limit-changes-main-approves-by-digest.md](0044-let-the-agent-box-apply-limit-changes-main-approves-by-digest.md) |
 | D-0045 | [0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md](0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md) |
+| D-0047 | [0047-keep-proxmox-ve-as-the-lab-hypervisor-on-its-free-repositories.md](0047-keep-proxmox-ve-as-the-lab-hypervisor-on-its-free-repositories.md) |
+| D-0048 | [0048-build-the-lab-with-opentofu-and-ansible-core.md](0048-build-the-lab-with-opentofu-and-ansible-core.md) |
+| D-0049 | [0049-run-almalinux-on-lab-vms-and-debian-where-it-comes-with-the-platform.md](0049-run-almalinux-on-lab-vms-and-debian-where-it-comes-with-the-platform.md) |
+| D-0050 | [0050-install-kubernetes-on-c1-with-kubeadm-from-ansible.md](0050-install-kubernetes-on-c1-with-kubeadm-from-ansible.md) |
+| D-0051 | [0051-use-external-secrets-and-local-path-as-c1s-secret-and-storage-add-ons.md](0051-use-external-secrets-and-local-path-as-c1s-secret-and-storage-add-ons.md) |
+| D-0052 | [0052-run-jellyfin-as-c1s-media-server.md](0052-run-jellyfin-as-c1s-media-server.md) |
+| D-0053 | [0053-send-alerts-to-self-hosted-ntfy-and-the-heartbeat-to-healthchecks-io.md](0053-send-alerts-to-self-hosted-ntfy-and-the-heartbeat-to-healthchecks-io.md) |
+| D-0054 | [0054-pull-images-from-docker-hub-by-digest-with-a-local-registry-as-the-way-off.md](0054-pull-images-from-docker-hub-by-digest-with-a-local-registry-as-the-way-off.md) |
+| D-0055 | [0055-serve-the-proxmox-web-ui-on-443-through-apache-httpd.md](0055-serve-the-proxmox-web-ui-on-443-through-apache-httpd.md) |

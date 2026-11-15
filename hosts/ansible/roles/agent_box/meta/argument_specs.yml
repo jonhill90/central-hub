@@ -79,9 +79,11 @@ argument_specs:
         type: dict
         default: {}
         description: >-
-          mac_recipient (the Mac's age public key) and, optionally, keep (1 to 60, default 14) for the daily
-          SOPS-encrypted bundle of the box's private files (pick 228). Empty does nothing.
+          All optional, for the daily SOPS-encrypted bundle of the box's private files (picks 228 and 236):
+          mac_recipient (the Mac's age public key), keep (1 to 60, default 14), and for the off-box send
+          vault_secret, offbox_keep_daily (default 14) and offbox_keep_monthly (default 6). Empty does nothing.
       agent_box_secrets_bundle_daily: {type: str, default: "*-*-* 15:30:00 UTC", description: "systemd OnCalendar for the daily bundle."}
+      agent_box_secrets_bundle_offbox_daily: {type: str, default: "*-*-* 16:15:00 UTC", description: "systemd OnCalendar for the bundle's off-box send."}
       agent_box_sops_version: {type: str, description: "SOPS version for the bundle."}
       agent_box_sops_sha256: {type: str, description: "SHA-256 of that version's linux.amd64 binary."}
       agent_box_age_version: {type: str, description: "age version for the bundle."}
@@ -170,6 +172,16 @@ argument_specs:
           the runner VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
           vnet, template_vm_id) and the GitHub App and repository it registers with (github_app_id,
           repo_owner, repo_name). No key goes in it. Empty skips the file.
+      agent_box_short_node:
+        type: str
+        default: ""
+        choices: ["", ephemeral-dev, keep-dev]
+        description: >-
+          The owner's pick for a dev run on a node short of memory, written to <work_dir>/short-node (0600, the keys
+          user's) for the rebuild wrapper. ephemeral-dev stops the CI runner, tears dev down at the end of the run, then
+          starts the runner. keep-dev stops the runner and leaves dev up (the notebook's queued jobs fail or are cancelled after
+          24 hours queued, so if dev stays up for more than a day its daily access-expiry check does not run, and
+          whether its alert e-mail goes out is not measured). Empty is no pick: a short node refuses before it stops anything.
       agent_box_desktop:
         type: dict
         default: {}
@@ -186,6 +198,19 @@ argument_specs:
           keys user's): the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
           vnet, template_vm_id), box_address, and optionally seal_key_id and admin_user. No key goes in it; the
           wrapper makes the keys in the keys folder. Empty skips the file.
+      agent_box_secrets_store_offbox:
+        type: dict
+        default:
+          repository: azure:opnsense-backup:/openbao-dev
+          keep_hourly: 48
+          keep_daily: 14
+          keep_monthly: 6
+          prune_after_hour: 3
+        description: >-
+          The dev store's hourly snapshot off the box (pick 237): repository (azure:<container>:/<path>, its own, not
+          the OPNsense one), keep_hourly, keep_daily, keep_monthly, and prune_after_hour (UTC; the first run from then
+          prunes, once a day). Set up only when agent_box_secrets_store and agent_box_opnsense_offbox are both set.
+      agent_box_secrets_store_offbox_on_calendar: {type: str, default: hourly, description: "systemd OnCalendar for the snapshot send."}
       agent_box_tailnet_cleanup:
         type: dict
         default: {}
@@ -194,4 +219,11 @@ argument_specs:
           (0600, the keys user's): tags (tag:<name> list whose devices may be removed), keep (device names never
           removed, at least one), days (offline at least this long, 7 or more) and max_deletes (1 to 20). The
           OAuth client is not in it; it is /etc/agent-keys/tailnet-cleanup.env. Empty skips the file and the timer.
+      agent_box_merge_sweep:
+        type: bool
+        default: false
+        description: >-
+          Install the merge sweep (D-0042 rule 2): a timer that runs pr-merge.sh sweep as the keys user. It merges only a head
+          with four recorded passes (pass-record) and checks the halt flag first. Private, through the inventory; installing it is a box-limit change.
+      agent_box_merge_sweep_interval: {type: str, default: 5min, description: "systemd OnUnitActiveSec between sweeps."}
       agent_box_tailnet_cleanup_daily: {type: str, default: "*-*-* 15:30:00 UTC", description: "systemd OnCalendar for the daily tailnet cleanup run."}

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Run the hosts checks (STD-0005). CI runs the same commands.
-# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|all]   (default: all)
+# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|proxy|all]   (default: all)
 # Needs: python3 with requirements.txt installed; tofu, tflint, kubeconform and helm on PATH, or
 # TOOLS=<dir> holding them (install-tools.sh builds them); for ansible and manifests, the
 # collections in hosts/ansible/requirements.yml (this script installs them when missing); for
-# identity, docker.
+# identity and proxy, docker (proxy: one that can run a privileged systemd container).
 # TOFU_PLUGIN_DIR=<dir> makes tofu init read providers from that folder instead of the registry,
 # for machines that can't download them; the copies then skip the lock file's hash check.
 set -euo pipefail
@@ -83,6 +83,12 @@ check_ansible() {
   bash "$here/tests/test_proxmox_sso.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
+  python3 "$here/check-hook-allowlist.py" .
+  bash "$here/tests/test_runner_hook.sh"
+  bash "$here/tests/test_pr_merge_verdict.sh"
+  bash "$here/tests/test_pass_record.sh"
+  bash "$here/tests/test_pr_merge_sweep.sh"
+  bash "$here/tests/test_merge_checked.sh"
 }
 
 check_manifests() {
@@ -157,14 +163,14 @@ check_manifests() {
 
 check_identity() {
   # Realm lab imported into a real Keycloak in a container (identity/test_realm.sh), rendered with
-  # an extra user so the users loop is tested with more than the owner, a Proxmox client (role proxmox_sso), and with the test sign-in
+  # an extra user so the users loop is tested with more than the owner, a Proxmox client (role proxmox_sso), a secrets store client (role openbao), and with the test sign-in
   # theme identity/theme/lab mounted the way the role mounts k8s_identity_theme_dir.
   collections
   mkdir -p "$work/identity"
   (cd hosts/ansible && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i localhost, \
     "$here/manifests/render.yml" -e role=k8s_identity -e template=realm.yaml.j2 \
     -e dest="$work/identity/realm.yaml" \
-    -e '{"k8s_identity_owner_email":"owner@example.com","k8s_identity_extra_users":[{"username":"viewer.one","groups":["lab-viewers"]}],"k8s_identity_proxmox_hosts":["pve.example.com"]}' \
+    -e '{"k8s_identity_owner_email":"owner@example.com","k8s_identity_extra_users":[{"username":"viewer.one","groups":["lab-viewers"]}],"k8s_identity_proxmox_hosts":["pve.example.com"],"k8s_identity_openbao_hosts":["bao.example.com"]}' \
     -e k8s_identity_theme_dir="$here/identity/theme/lab" >/dev/null)
   bash "$here/identity/test_realm.sh" "$work/identity/realm.yaml" "$here/identity/theme/lab"
 }
@@ -176,11 +182,23 @@ check_backup() {
   bash "$here/tests/test_backup_azure_cert.sh"
   bash "$here/tests/test_opnsense_offbox.sh"
   bash "$here/tests/test_opnsense_escrow.sh"
+  bash "$here/tests/test_secrets_bundle_offbox.sh"
+  bash "$here/tests/test_secrets_store_offbox.sh"
+  bash "$here/tests/test_secrets_store_restore_rebuilt.sh"
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
   bash "$here/tests/test_identity_signin.sh"
+  bash "$here/tests/test_openbao_oidc_check.sh"
+  bash "$here/tests/test_openbao_drill.sh"
   bash "$here/tests/test_rebuild_dev_stages.sh"
   bash "$here/tests/test_rebuild_preflight.sh"
+  bash "$here/tests/test_rebuild_short_log.sh"
+}
+
+check_proxy() {
+  # Role proxmox_proxy against a stand-in Proxmox host in a container: the install beside nginx, the move from
+  # nginx, its rollbacks, a run killed part-way, an open console across a graceful reload, a host with no nginx.
+  bash "$here/tests/test_proxy.sh"
 }
 
 check_scripts() {
@@ -200,6 +218,7 @@ case "${1:-all}" in
   identity) check_identity ;;
   scripts) check_scripts ;;
   backup) check_backup ;;
-  all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts; check_backup ;;
-  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|all]" >&2; exit 2 ;;
+  proxy) check_proxy ;;
+  all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts; check_backup; check_proxy ;;
+  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|proxy|all]" >&2; exit 2 ;;
 esac

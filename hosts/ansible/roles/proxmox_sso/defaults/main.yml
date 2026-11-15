@@ -7,7 +7,7 @@
 # Private, no default, from the inventory: Keycloak's issuer for realm lab, the same as k8s_identity_issuer:
 # proxmox_sso_issuer: https://sso.<zone>/realms/lab
 #
-# The web UI's names, the same as proxmox_nginx_server_names: the first is the redirect the proof asks for.
+# The web UI's names, the same as proxmox_proxy_server_names: the first is the redirect the proof asks for.
 # The Keycloak client allows https://<name> for each (k8s_identity_proxmox_hosts), because the UI sends its own
 # origin as the redirect (pve-manager www/manager6/window/LoginWindow.js, 'redirect-url': location.origin).
 proxmox_sso_ui_names: "{{ proxmox_cert_names | default([]) }}"
