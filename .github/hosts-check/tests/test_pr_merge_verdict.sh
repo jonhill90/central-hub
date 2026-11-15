@@ -80,9 +80,9 @@ d = fx(DOC, pr_over={"head": {"sha": "e" * 40}});          check("a moved head i
 d = fx(DOC, pr_over={"mergeable_state": "dirty"});         check("a conflict is not green", run(d), "NOT GREEN: GitHub does not report a clean merge")
 d = fx(DOC, checks={"total_count": 1, "check_runs": [{"name": "hosts", "status": "completed", "conclusion": "failure"}]}); check("a failed check is not green", run(d), "NOT GREEN: check hosts: failure")
 d = fx(DOC, checks={"total_count": 0, "check_runs": []});  check("no check run is not green", run(d), "NOT GREEN: no checks reported")
-d = fx([".github/workflows/docs.yml"]);                    check("an edit under .github/ is green with a NOTE", subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout, "NOTE: this PR edits 1 files under .github/")
+d = fx([".github/workflows/docs.yml"]);                    check("an edit under .github/ is green with a NOTE", subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout.replace("NOTE: verdict v2\n", "", 1), "NOTE: this PR edits 1 files under .github/")
 # Rule 11: the guarded files need the owner-tap line, the others do not.
-for f in ["docs/decisions/0042-let-the-reviewer.md", "docs/decisions/0034-x.md", "hosts/ansible/roles/agent_box/files/runner-job-started.sh", "hosts/ansible/roles/agent_box/files/pr-merge.sh", "hosts/ansible/roles/agent_box/files/pass-record.sh", "hosts/ansible/roles/agent_box/files/pr-merge-verdict.py", "hosts/ansible/roles/agent_box/templates/pr-merge-sweep.timer.j2"]:
+for f in ["docs/decisions/0042-let-the-reviewer.md", "docs/decisions/0034-x.md", "hosts/ansible/roles/agent_box/files/runner-job-started.sh", "hosts/ansible/roles/agent_box/files/pr-merge.sh", "hosts/ansible/roles/agent_box/files/pass-record.sh", "hosts/ansible/roles/agent_box/files/pr-merge-verdict.py", "hosts/ansible/roles/agent_box/templates/pr-merge-sweep.timer.j2", "hosts/wrappers/mac/merge-checked.sh"]:
     d = fx([f], head_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\n"}); check("rule 11 file %s needs the owner tap" % f.split("/")[-1], run(d), "OWNER: rule 11 PR")
     d = fx([f], roles=ROLES + ["owner-tap"], head_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\n"});   check("rule 11 file %s with the tap is GREEN" % f.split("/")[-1], run(d), "GREEN")
 d = fx(["hosts/ansible/roles/agent_box/files/pr-merge.sh"]); check("the mutation: dropping the rule 11 list lets it through", run(d), "OWNER", mutate('RULE11 = [re.compile(p) for p in (', 'RULE11 = [re.compile(p) for p in ("^$",)] or ('), d)
@@ -91,6 +91,18 @@ d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes:\n  - D-0034\n---\nbody\n"}); check("a block-list supersedes of D-0034 needs the tap", run(d), "OWNER: rule 11 PR")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: []\n---\nThis amends rule 2 of D-0042.\n"}); check("a record whose body amends D-0042 needs the tap", run(d), "OWNER: rule 11 PR")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: []\n---\nThis amends rule 2 of this record. Much later, after a very long stretch of unrelated text that goes on, D-0042 is mentioned.\n"}); check("amend far from D-0042 is not caught", run(d), "GREEN")
+# A rule 11 PR that has the tap is GREEN but carries the NOTE the Mac's checked merge refuses on.
+f11 = "hosts/ansible/roles/agent_box/files/pass-record.sh"
+d = fx([f11], roles=ROLES + ["owner-tap"]); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
+check("a tapped rule 11 PR prints the NOTE the Mac refuses on", r.replace("NOTE: verdict v2\n", "", 1), "NOTE: rule 11 PR")
+check("a tapped rule 11 PR is still GREEN on its last line", r.strip().splitlines()[-1], "GREEN")
+d = fx(DOC); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
+check("a docs PR carries no rule 11 NOTE", "x" + ("bad" if "NOTE: rule 11 PR" in r else "ok"), "xok")
+check("every run prints the verdict v2 marker", r, "NOTE: verdict v2")
+check("a GREEN prints the four roles it found", r.replace("NOTE: verdict v2\n", "", 1), "LEDGER: reviewer council-a council-b council-c")
+d = fx(DOC, roles=ROLES[:3]); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
+check("a NOT GREEN prints no LEDGER line", "x" + ("bad" if "LEDGER:" in r else "ok"), "xok")
+check("a NOT GREEN still prints the verdict v2 marker", r, "NOTE: verdict v2")
 # Fold-in (D-0042 rule 3).
 def rec(status, extra="", ident="D-0099"):
     return "---\nid: %s\nstatus: %s\ndate: 2026-11-14\nsupersedes: []\naccepted-evidence:\n  approved-by: agents\n  approved-at: 2026-11-14T10:00:00Z\n  approved-commit: %s\n%s---\nbody\n" % (ident, status, ME, extra)
