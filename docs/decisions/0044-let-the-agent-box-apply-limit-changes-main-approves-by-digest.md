@@ -1,14 +1,22 @@
 ---
 id: D-0044
 title: Let the agent box apply a change to its own limits that main approves by its exact digest, with the owner's tap logged but not checked
-status: proposed
-date: 2026-11-14
+status: accepted
+date: 2026-11-15
 decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0036, D-0042]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-15T05:40:46Z
+  approved-commit: c005fe86e842f43c522f1764e7524bc10f4c821d
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN11qb8ExeLTBTsq8hJeMyhR
+  approval-names: "PR #368 at head c005fe8 (c005fe86e842f43c522f1764e7524bc10f4c821d), the content commit; the owner picked option 0, Confirm D-0044, on the card asking to confirm D-0044 as accepted with PR #368 at that head, whose option text says one commit then adds only D-0044's status, date and acceptance fields, naming this tap. It confirms his earlier pick of Accept D-0044 at 2026-11-15T04:52:43Z (choice event cmsg_01X43rfNYp4H1dL1V2dkfkwNNrcEb6ZgM58dZXtbgvqvFt), on a card that named neither a PR nor a head. It reverses his answer of 2026-11-14 02:26 UTC on D-0036's card"
+  check: "the Plan thread read the owner's choice event (this approval-ref, 05:40:46Z, option 0) and the card it answers (cmsg_01X43rfNYp4H1dL1V2dkfkwN7NoQA2G9YDoopbDZWPsTDi, posted 2026-11-15T05:32:47Z) in the project thread at about 05:41Z, and they match; the merged head differs from c005fe8 only in this record's status, date and accepted-evidence and its row in the decisions index (git diff c005fe8..head measured)"
+  merged: not yet
 revisit-when: the box can check the owner's tap itself (for example a GitHub environment approval once the agents have their own account, D-0030); a line in the approvals file names a pass or a tap that does not exist; an approved apply changes a limit path its check run did not name; the approvals file becomes a limit; or a cluster other than c1 reads the repository
 ---
 
@@ -25,11 +33,11 @@ D-0036 lets the agent box apply its own role from reviewed main, and keeps the b
 
 So it is accepted only by the owner's own tap on a card naming this record's PR and head, as a change of his mind (REQ-0030), and never by the agents' pass. Until then it stays proposed, and the approvals file stays empty.
 
-On 2026-11-14 at 07:47:50 UTC the owner said he will not type go lines anymore, and the Mac's guard accepts only typed words. So no limit change has reached the box since its baseline, 9d519572. Main has 19 limit changes since then, from #276, #284, #288, #289 and #302, and the installed `box-apply` stops on all of them (evidence, finding 1). The owner's end goal is that an agent rebuilds the whole lab from the box or a cloud session with no Mac step (project memory, 2026-11-13).
+The owner's message of 2026-11-14 07:47:50 UTC said he would no longer type go lines (that this is for the greenfield build-out is the agents' reading of his message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and the Mac session's auto-mode check lets a raw run go only on typed words (D-0057 rule 5). So no limit change has reached the box since its baseline, 9d519572. Main has 19 limit changes since then, from #276, #284, #288, #289 and #302, and the installed `box-apply` stops on all of them (evidence, finding 1). The owner's end goal is that an agent rebuilds the whole lab from the box or a cloud session with no Mac step (project memory, 2026-11-13).
 
 ## Decision Drivers
 
-- **The owner's words.** He won't type go lines (07:47:50 UTC), and agents don't ask him to approve PRs (07:42 to 07:44 UTC). At 07:43:25 UTC he pointed to his earlier rules without listing them; D-0042 reads them as firewall and tailnet (D-0036 rule 8), deletes and secrets (agent picks).
+- **The owner's messages.** His message of 07:47:50 UTC said he would no longer type go lines (that this is for the greenfield build-out is the agents' reading of his message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and his messages of 07:42 to 07:44 UTC said PRs should no longer come to him for approval. At 07:43:25 UTC he pointed to his earlier rules without listing them; D-0042 reads them as firewall and tailnet (D-0036 rule 8), deletes and secrets (agent picks).
 - **The owner's earlier answer that an agent can't loosen its own limits** (his tap of 2026-11-14 02:26 UTC on D-0036's card). D-0042 rule 6 keeps his tap for limit changes.
 - **What the box can check, it checks.** It can check commits and bytes. It can't read chat messages or decision cards.
 - **Deterministic** (the owner's ranking of 2026-11-11).
@@ -114,7 +122,7 @@ flowchart LR
 ### 5. Keep the Mac
 
 - Good: nothing new to trust.
-- Bad: no limit change reaches the box while the owner won't type go lines, and the lab can't be rebuilt from the box.
+- Bad: no limit change reaches the box until a typed line comes, and the lab can't be rebuilt from the box.
 
 ## More Information
 
