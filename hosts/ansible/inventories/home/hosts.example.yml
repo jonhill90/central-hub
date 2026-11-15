@@ -90,7 +90,7 @@ all:
               # - { name: prod node 201 SSH, address: "", port: 22 }   # VM 201's address
               # The firewall's own API, for the box's daily OPNsense backup (pick 220); add only on the owner's go.
               # - { name: OPNsense API, address: "", port: 443 }   # the address opnsense.<zone> resolves to (mgmt)
-              # SSH into the tenant lab VLAN (the sixth and last slot); add only on the owner's card tap naming the step and its commit.
+              # SSH into the tenant lab VLAN (the sixth and last slot); an agent adds it before the apply, which needs the owner's card tap.
               # - { name: tenant lab SSH, address: "", prefix: 24, port: 22 }   # the VLAN's network address, e.g. 10.1.60.0
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
@@ -112,7 +112,7 @@ all:
             dev: { ifname: opt3, dhcp: true, bootstrap: false }
             mgmt: { ifname: lan, dhcp: false, bootstrap: true }
             # Kept off the tailnet (tailnet: false in the VLAN file), so mgmt_pass must be explicit:
-            # false means no management VLAN pass into it. Added only on the owner's card tap naming the step and its commit.
+            # false means no management VLAN pass into it. An agent adds it before the apply, which needs the owner's card tap.
             tenant-lab: { ifname: opt4, dhcp: true, bootstrap: false, mgmt_pass: false }
     # Kubernetes cluster c1 (BUILD-PATH S06-S08). Hostnames follow STD-0001; the real ones and
     # their addresses go only in the filled-in copy. Reached through the Proxmox host, which has an

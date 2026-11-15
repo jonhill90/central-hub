@@ -12,6 +12,13 @@
 #
 # REQUIRED, from the shared VLAN file (inventories/<place>/group_vars/all/vlans.yml): lab_vlans.
 
+# The lab VLANs' ranges the connector advertises: every VLAN except one marked tailnet: false in the
+# VLAN file. The key is optional, and a test on a missing key fails the whole run, so the VLANs
+# without it and those with it true are listed apart.
+tailnet_connector_lab_cidrs: >-
+  {{ lab_vlans | rejectattr('tailnet', 'defined') | map(attribute='cidr') | list
+     + lab_vlans | selectattr('tailnet', 'defined') | selectattr('tailnet') | map(attribute='cidr') | list }}
+
 # The connector container's ID (hosts/terraform/home/remote-access).
 tailnet_connector_vmid: 900
 

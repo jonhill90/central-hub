@@ -5,7 +5,10 @@
 #   2. With the real VLAN file (tenant-lab, tailnet: false) and its settings (mgmt_pass: false), the
 #      management passes are still those three, only tenant-lab is kept off the tailnet, and its
 #      tailnet block rule (sequence 195) sits before its internet rule (200).
-#   3. A VLAN with tailnet: false and no mgmt_pass in its settings fails the role's check.
+#   3. A VLAN with tailnet: false and no mgmt_pass in its settings fails the role's check, and the
+#      check is tagged always, so a run limited with --tags rules still runs it.
+#   4. The tailnet connector's advertised routes, from the real VLAN file, leave out VLAN 60 and keep
+#      the VLANs that have no tailnet key (a test on the missing key once broke every run).
 # Usage: .github/hosts-check/tests/test_opnsense_lab_tenant.sh   (needs ansible-core)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -95,4 +98,27 @@ run checks-good.yml && ok "tailnet: false with mgmt_pass set passes the role's c
 if run checks-bad.yml; then bad "tailnet: false without mgmt_pass was accepted"
 elif grep -q "must set mgmt_pass" "$w/out.txt"; then ok "tailnet: false without mgmt_pass fails the role's check"
 else bad "the bad entry failed for another reason"; cat "$w/out.txt"; fi
+
+cat > "$w/connector.yml" <<YML
+- hosts: localhost
+  gather_facts: false
+  vars_files: ["$vlan_file", "$root/hosts/ansible/roles/tailnet_connector/defaults/main.yml"]
+  vars:
+    tailnet_connector_extra_routes: ["192.0.2.10/32"]
+  tasks:
+    - ansible.builtin.assert:
+        that:
+          - ((tailnet_connector_extra_routes + tailnet_connector_lab_cidrs) | unique | sort) == ['10.1.10.0/24', '10.1.20.0/24', '10.1.30.0/24', '10.1.50.0/24', '192.0.2.10/32']
+YML
+run connector.yml && ok "connector routes: VLANs without a tailnet key kept, VLAN 60 left out" || { bad "connector routes wrong"; cat "$w/out.txt"; }
+
+# Skipped by --tags rules unless tagged always: the import in main.yml must carry the tag.
+if python3 - "$role/tasks/main.yml" <<'PY'
+import sys
+from ruamel.yaml import YAML
+tasks = YAML(typ="safe", pure=True).load(open(sys.argv[1]))
+hit = [t for t in tasks if t.get("ansible.builtin.import_tasks") == "tenant_checks.yml"]
+sys.exit(0 if len(hit) == 1 and "always" in hit[0].get("tags", []) else 1)
+PY
+then ok "tenant_checks.yml is imported with tags: [always]"; else bad "tenant_checks.yml is not tagged always"; fi
 exit "$fail"
