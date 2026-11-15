@@ -59,13 +59,13 @@ Diagram: not applicable. The apps add no route to the lab; the only network path
    - **S5**: `vps-apply` makes the generated secrets on the VPS (Valkey's password, OmniRoute's API key and bridge secret), each in a mode 600 file of its app user, after S4 and never before. Any made earlier is rotated.
    - **S6**: a new OpenBao AppRole for the VPS job whose policy reads only `kv/data/vps/*`.
    - **S7**: the job reads the provider key from OpenBao, and `vps-apply` writes it to OmniRoute's env file.
-5. **Holds.** S1 and S3 wait until S2 is installed on the box, so `tag:agent` never loses root on the VPS before `vps-host` exists. A box limit merged on `main` is installed by the box itself, with no controller run on the owner's Mac: after the owner's tap for that change (D-0042 rule 6), a line in `hosts/ansible/agent-box-limit-approvals.txt` names its exact digest, and `box-apply` applies it (D-0044, agent pick 232). S2 is installed that way.
+5. **Holds.** S1 and S3 wait until S2 is installed on the box, so `tag:agent` never loses root on the VPS before `vps-host` exists. After the owner's tap for a box limit (D-0042 rule 6), the box installs the change itself when a line in `hosts/ansible/agent-box-limit-approvals.txt` names its exact digest (D-0044 rules 1 and 2, agent pick 232). That route never writes the box's inventory (D-0044 rule 4, D-0036 rule 7), and `vps-host` needs the VPS's name, which stays in the private inventory (rule 11). So S2 installs by an approvals line only if it needs no new inventory value, and otherwise by one controller apply (D-0036 rule 6).
 6. **The owner's own steps, named in their smallest form.** None is hidden in a tap.
    - **J1** (money and secrets): create one model-provider API key, with billing and a monthly spend cap set in the provider's console. OmniRoute fronts all three apps, so one key serves them.
    - **J2** (secrets): type that key himself into OpenBao's web UI on 443, path `kv/vps/provider-key`. No chat paste, no Mac step, no typed line.
    - **J3**: one tap on a card that names S1, S2, S4 and S6 and their commits (D-0042 rule 6: firewall and tailnet, the box's limits, access rights). If a card may name only one plan, two cards back to back.
    - **J4**: no chat bot tokens at first. A bot token is a later step of its own, only if the owner wants a chat channel.
-7. **The key intake is gated.** The apps hold no provider key until two things exist: D-0038's production store (the dev store holds nothing of value by design), and a sign-in to its web UI for the owner, which D-0038 does not give. Until then the VPS stops at S5: host built, generated secrets only, no external key.
+7. **The key intake is gated.** The apps hold no provider key until two things exist: D-0038's production store (the dev store holds nothing of value by design), and the owner's sign-in to its web UI. The sign-in is agent pick 233: an OIDC login against Keycloak realm `lab`, role `owner`, policy `vps-intake` on `kv/data/vps/*`. Its code is on `main`, but the production store does not exist, so neither does pick 233 on it. Until then the VPS stops at S5: host built, generated secrets only, no external key.
 8. **Never the owner's Claude subscription.** Only API keys; no subscription logins in OmniRoute and no CLIProxyAPI sidecar. OmniRoute uses official provider APIs only.
 9. **OpenClaw's tools go live only after the sandbox proof.** On the rehearsal VM first, then the VPS: a tool call runs in a sandbox container of the `openclaw` user; from inside it, the user's env file and 127.0.0.1's OmniRoute and Valkey ports can't be reached; root's Podman holds no container. If any check fails, OpenClaw runs with tools off.
 10. **The pipeline's scope.** D-0041's pipeline also covers the VPS host's setup, through `vps-host` and `vps-apply`. Never its teardown: D-0035 rule 2 keeps the VPS node out of every teardown, unchanged.
@@ -78,8 +78,8 @@ Diagram: not applicable. The apps add no route to the lab; the only network path
 - Good: the apps run with no route into the lab, and none of them listens on the internet.
 - Good: once S4 is applied, no agent session can read the apps' keys, and the tailnet itself refuses a policy that brings root back.
 - Good: every app and the store have an exit (below), and all are FOSS.
-- Bad: the apps hold no provider key until the production secrets store and the owner's sign-in to it exist (rule 7).
-- Bad: S1 and S3 wait on the box-limit install gap (rule 5).
+- Bad: the apps hold no provider key until the production secrets store exists with pick 233's owner sign-in on it (rule 7).
+- Bad: S1 and S3 wait for S2's install, which takes one controller apply if `vps-host` needs a value not yet in the box's inventory (rule 5).
 - Bad: the box gets a path to the VPS it did not have, though only as `deploy` after S4.
 - Bad: Tailscale SSH signs in with the box's node key, so any session on the box can use the box's VPS login, not only the `vps-host` wrapper, and the wrapper's session limits do not bind it. Limits: between S1 and S4 that login includes `root`, while the VPS holds no secret (S5 comes after S4); after S4 it is `deploy`, whose sudo runs `vps-apply`'s four actions only, and the app users' secret files are not readable by `deploy`.
 - Bad: app config sits in the platform repository, against the PRD's non-goal, until the agents can make repos.
@@ -126,4 +126,4 @@ Diagram: not applicable. The apps add no route to the lab; the only network path
 ## More Information
 
 - Evidence: [`docs/evidence/0046-run-omniroute-openclaw-and-hermes-agent-on-the-vps-in-rootless-podman-with-no-lab-reach.md`](../evidence/0046-run-omniroute-openclaw-and-hermes-agent-on-the-vps-in-rootless-podman-with-no-lab-reach.md).
-- Related: D-0035 (rule 2, the VPS node is never torn down), D-0036 (the box's limits), D-0038 (the secrets store), D-0041 (the pipeline), D-0042 (rule 6, the owner's taps).
+- Related: D-0035 (rule 2, the VPS node is never torn down), D-0036 (the box's limits; rule 7, the box's inventory is written only by a controller apply), D-0038 (the secrets store), D-0041 (the pipeline), D-0042 (rule 6, the owner's taps), D-0044 (the box installs a limit change main approves by its digest; rule 4, never a new inventory value).
