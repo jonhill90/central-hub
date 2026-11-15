@@ -37,7 +37,7 @@ On 2026-11-14 the owner asked, in these messages, that approvals for the lab's g
 - at 06:31:02 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNmDuqYAAd97e7MWLy7w5j9) he asked when the agents would take these approvals over;
 - at 07:36:24 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN1HaQyfWs523TENpj3y4GrB) he raised the approval prompts still being sent to him;
 - at 07:36:52 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNVWniFNwFdxHd6saXpoKLKg) he said the greenfield lab should not need typed or clicked approvals from him;
-- at 07:42:15 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNPCDvrtDZGccQzAi27X4YGH) he asked that his typed approvals end there;
+- at 07:42:15 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNPCDvrtDZGccQzAi27X4YGH) he asked whether this was the last thing he would have to type, and that agents work out every other step he would need to type so that he would not have to;
 - at 07:42:30 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6), in the orchestrator thread, he gave his go and said no further PRs should come to him for approval;
 - at 07:43:25 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNQZSPJDASxzgXUwb36fceaH), in the same thread, he said agents should ask him for nothing beyond the steps he had already said need his approval;
 - at 07:44:46 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNLj5JuE8JmYT3juteQ3eMJm) he said this covers the lab for now, during its greenfield phase, not every PR, and that the lab holds no personal data or anything of value.
@@ -126,7 +126,7 @@ flowchart LR
    - **secrets:** exposing a secret, copying secrets onto the agent box, or rotating the owner's own credentials;
    - **access rights:** [agent pick] a new credential for agents, or wider rights for an existing one, such as the agents' Proxmox token;
    - **money:** [agent pick, from the owner's rule of 2026-11-09 against unexpected Azure charges] anything that starts a charge;
-   - **the box's limits:** [agent pick, rule 4] a change to a limit of the agent box (D-0036 rule 3). The tap replaces the typed line D-0036 rule 6 asked for, because the owner's message of 07:47:50 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV) ended typed go lines for the build-out (the build-out scope: the owner's message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN); the tap as their replacement is this agent pick.
+   - **the box's limits:** [agent pick, rule 4] a change to a limit of the agent box (D-0036 rule 3). The tap replaces the typed line D-0036 rule 6 asked for, because the owner's message of 07:47:50 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV) said he would no longer type go lines (that this is for the greenfield build-out is the agents' reading of his message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change); the tap as their replacement is this agent pick.
 7. **What stays with the owner by choice.** [agent pick] Scanning his own sign-in code into his authenticator, the settings of his own claude.ai and GitHub accounts, and the Proxmox console when everything else is down (D-0035 rule 9).
 8. **The owner's no.** A message from the owner that says no, stop or revert about a change wins at once. Agents stop starting jobs for it, and open a revert PR or run the layer's way back. A revert goes through the same pass and job.
 9. **Logs.** The merge job's summary is public on GitHub for at most 90 days, so it holds only the PR, the heads and the message ids. The orchestrator lists every merge and apply made under this record in its next report to the owner.
