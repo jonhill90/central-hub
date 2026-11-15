@@ -11,11 +11,11 @@ supersedes: []
 superseded-by:
 accepted-evidence:
   approved-by: agents
-  approved-at: 2026-11-15T23:10:13Z
+  approved-at: 2026-11-15T23:14:39Z
   approved-commit: 1608b1606638ca57eb0b750d9624a5d514384268
-  approval-ref: the reviewer's clearance of head 1608b16 (2026-11-15T23:08:48Z, cmsg_01X43rfNYp4H1dL1V2dkfkwN1mndUMcNtpqSYj6AH13tmV) and the passes of Councils A (23:09:46Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNJut3c8oqYxfKj8aeGgVMDH), B (23:09:51Z, cmsg_01X43rfNYp4H1dL1V2dkfkwN3UPir3asBSKRVryokCA459) and C (23:10:13Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNVPwE1uENXbhEmAXVyFhT3E), each naming this PR and that head
+  approval-ref: the orchestrator thread's message to the Plan thread of 2026-11-15T23:14:39Z recording the reviewer's clearance (23:08:48Z, cmsg_01X43rfNYp4H1dL1V2dkfkwN1mndUMcNtpqSYj6AH13tmV) and the passes of Councils A (23:09:46Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNJut3c8oqYxfKj8aeGgVMDH), B (23:09:51Z, cmsg_01X43rfNYp4H1dL1V2dkfkwN3UPir3asBSKRVryokCA459) and C (23:10:13Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNVPwE1uENXbhEmAXVyFhT3E) for head 1608b16, and that it wrote their ledger lines; it reached the Plan thread as a thread relay, which carries no message id
   approval-names: "the pass names PR #373 and head 1608b1606638ca57eb0b750d9624a5d514384268"
-  check: approved-by is agents under D-0042 rules 1 and 3, because this record removes no step from D-0042 rule 6, so D-0042 rule 11 does not send it to the owner (this record's "How this record is accepted" line). approved-commit is the head that holds the record as proposed together with the D-0041 edits its rule 6 asks for; the commit after it changes only status, date and accepted-evidence, which the reviewer checks (D-0001)
+  check: approved-by is agents under D-0042 rules 1 and 3, because this record removes no step from D-0042 rule 6, so D-0042 rule 11 does not send it to the owner (this record's "How this record is accepted" line). The Plan thread read the orchestrator's pass record at 23:14Z; it names this PR and the head. approved-commit is the head that holds the record as proposed together with the D-0041 edits its rule 6 asks for; the commit after it changes only status, date and accepted-evidence, which the reviewer checks (D-0001)
   merged: not yet; a follow-up PR fills this in after the merge (D-0001)
 revisit-when: the greenfield build-out ends (the scope of the owner's message of 2026-11-14 19:26 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN)); the Mac session's auto-mode check still refuses a tap once this record is accepted, so no raw run from the Mac can go on one; a raw run goes on a tap that did not name its exact command or commit; a tap is disowned after a raw run went on it; the agents get a GitHub account of their own (D-0030); or a cluster other than c1 reads the repository
 ---
