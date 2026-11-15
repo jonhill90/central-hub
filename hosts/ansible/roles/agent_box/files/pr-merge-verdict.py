@@ -35,7 +35,8 @@ FREE_KEYS = {"agent_box_tofu_version", "agent_box_tofu_sha256", "agent_box_kubec
              "agent_box_tailscale_version"}
 
 
-FREE_LINE = re.compile(r"^(%s): \S.*$" % "|".join(sorted(FREE_KEYS)))
+# The value is a plain token (a version or a hex digest), so a quoted string cannot run on to later lines.
+FREE_LINE = re.compile(r"^(%s): [0-9A-Za-z._-]+$" % "|".join(sorted(FREE_KEYS)))
 
 
 def without_free_lines(text):
