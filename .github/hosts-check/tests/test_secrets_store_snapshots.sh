@@ -12,6 +12,9 @@
 #   7. The admin's IDs are never used: with only those, it fails and saves nothing.
 #   8. A refused mark write or an empty snapshot fails, and no snapshot file is left.
 #   9. The token never shows in curl's arguments or the output.
+#  10. With LOGIN admin (before the install tap), it signs in with the admin's IDs and never reads snapshot-box's.
+#  11. Role openbao makes the snapshot-box login only when openbao_snapshot_box is true, and it defaults to false,
+#      so no configure creates that access right before the install tap (Council C on #363).
 # Usage: .github/hosts-check/tests/test_secrets_store_snapshots.sh
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -65,6 +68,8 @@ r=0
 bash "$helper" rotate "$s" 0 2>/dev/null && r=1
 bash "$helper" keep "$s" "$k" "" 2>/dev/null && r=1
 bash "$helper" delete "$s" 2>/dev/null && r=1
+bash "$helper" take https://store.invalid ca keys dir 2 dev root 2>/dev/null && r=1
+bash "$helper" take https://store.invalid ca keys dir 2 dev 2>/dev/null && r=1
 [[ $r == 0 ]] && ok "5. bad arguments are refused" || bad "5. a bad call was taken"
 
 # take: a stand-in curl
@@ -98,11 +103,12 @@ case $path in
   sys/health) body='{"cluster_id": "cluster-new"}' ;;
   auth/approle/login)
     if [[ $body_in == '{"role_id": "sb-role-fake", "secret_id": "sb-secret-fake"}' ]]; then body='{"auth": {"client_token": "tok-sb-secret"}}'
+    elif [[ ${STUB_ADMIN:-} == 1 && $body_in == '{"role_id": "admin-role-fake", "secret_id": "admin-secret-fake"}' ]]; then body='{"auth": {"client_token": "tok-admin"}}'
     else code=400; body='{"errors": ["invalid role or secret ID"]}'; fi ;;
   kv/data/dev/snapshot-mark)
-    if [[ $tok == tok-sb-secret && $method == POST && $TAKE != markfail ]]; then echo "$data" > "$T/mark"; else code=403; fi ;;
+    if [[ ($tok == tok-sb-secret || $tok == tok-admin) && $method == POST && $TAKE != markfail ]]; then echo "$data" > "$T/mark"; else code=403; fi ;;
   sys/storage/raft/snapshot)
-    if [[ $tok == tok-sb-secret && $method == GET ]]; then [[ $TAKE == empty ]] && body='' || body='RAFTDATA'; else code=403; fi ;;
+    if [[ ($tok == tok-sb-secret || $tok == tok-admin) && $method == GET ]]; then [[ $TAKE == empty ]] && body='' || body='RAFTDATA'; else code=403; fi ;;
   auth/token/revoke-self) echo revoked >> "$T/revoked"; code=204 ;;
   *) code=404 ;;
 esac
@@ -111,9 +117,9 @@ $fail && [[ $code -ge 400 ]] && exit 22
 exit 0
 SH
 chmod +x "$t/bin/curl"
-take() { # stub mode
+take() { # stub mode [login]
   rm -f "$t/calls" "$t/mark" "$t/revoked"
-  TAKE=$1 T=$t PATH="$t/bin:$PATH" bash "$helper" take https://store.invalid "$t/ca.crt" "$t/keys" "$t/tk" 2 dev > "$t/out" 2>&1 && rc=0 || rc=$?
+  TAKE=$1 T=$t PATH="$t/bin:$PATH" bash "$helper" take https://store.invalid "$t/ca.crt" "$t/keys" "$t/tk" 2 dev "${2:-snapshot-box}" > "$t/out" 2>&1 && rc=0 || rc=$?
   tout+=$(cat "$t/out")
 }
 tout=""
@@ -148,4 +154,19 @@ else bad "8. rc=$r8a/$rc $o8a / $(cat "$t/out")"; fi
 # 9
 if grep -q 'tok-sb-secret\|sb-secret-fake' "$t/argv" || [[ $tout == *tok-sb* || $tout == *sb-secret-fake* ]]; then bad "9. the token or secret ID shows in arguments or output"
 else ok "9. no token or secret ID in curl's arguments or the output"; fi
+# 10
+sleep 1; mv "$t/keys/openbao-snapshot-box-role-id" "$t/sb-role"; mv "$t/keys/openbao-snapshot-box-secret-id" "$t/sb-secret"
+export STUB_ADMIN=1; take ok admin; unset STUB_ADMIN
+if [[ $rc -eq 0 && -s $t/mark && -s $t/revoked ]] && grep -q '^GET sys/storage/raft/snapshot' "$t/calls" && grep -q '^secrets-store: snapshot raft-' "$t/out"; then
+  ok "10. with LOGIN admin, take signs in with the admin's IDs and needs no snapshot-box IDs"
+else bad "10. rc=$rc $(cat "$t/out")"; fi
+mv "$t/sb-role" "$t/keys/openbao-snapshot-box-role-id"; mv "$t/sb-secret" "$t/keys/openbao-snapshot-box-secret-id"
+
+# 11 (no YAML library needed: the include is one task of fixed shape, and the default is one line)
+r=$root/hosts/ansible/roles/openbao
+gate=$(awk '/^- name:/{blk=""} {blk=blk $0 "\n"} /^  tags:/{ if (blk ~ /file: snapshot_box\.yml/) print blk }' "$r/tasks/main.yml")
+if grep -qx 'openbao_snapshot_box: false' "$r/defaults/main.yml" && [[ $gate == *"  when: openbao_snapshot_box | bool"* ]] &&
+   [[ $(grep -c 'file: snapshot_box.yml' "$r/tasks/main.yml") == 1 ]]; then
+  ok "11. role openbao makes snapshot-box only when openbao_snapshot_box is true, false by default"
+else bad "11. snapshot_box.yml is not gated by openbao_snapshot_box (default false)"; fi
 exit "$fail"

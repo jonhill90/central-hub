@@ -60,6 +60,7 @@ argument_specs:
       openbao_eso_role: {type: dict, description: "That login's role eso, as OpenBao reads it back (TTLs in seconds), so a run compares before it writes."}
       openbao_rebuild_role_id_dest: {type: path, description: "The AppRole rebuild's role ID on the controller (the box's keys folder); made there once."}
       openbao_rebuild_secret_id_dest: {type: path, description: "The AppRole rebuild's secret ID on the controller; made there once, never printed."}
+      openbao_snapshot_box: {type: bool, default: false, description: "Make the AppRole snapshot-box (pick 240); an access right: only after the install tap."}
       openbao_snapshot_box_role_id_dest: {type: path, description: "The AppRole snapshot-box's role ID on the controller (the keys folder); made once."}
       openbao_snapshot_box_secret_id_dest: {type: path, description: "The AppRole snapshot-box's secret ID on the controller; made there once, never printed."}
       openbao_mark_env: {type: str, choices: [dev, prod], description: "The environment in the snapshot mark's path, kv/<env>/snapshot-mark (agent pick 240)."}

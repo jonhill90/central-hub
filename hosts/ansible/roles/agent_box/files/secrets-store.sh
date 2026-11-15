@@ -144,6 +144,8 @@ extra = {
     "openbao_admin_role_id_src": k + "/openbao-admin-role-id",
     "openbao_admin_secret_id_src": k + "/openbao-admin-secret-id",
     "openbao_cacert_dest": sys.argv[5],
+    # configure makes the AppRole snapshot-box only once the install tap sets snapshot_box (agent pick 240).
+    "openbao_snapshot_box": s.get("snapshot_box") is True,
 }
 if os.path.isfile(handoff) and os.path.isfile(values):
     o = json.load(open(handoff))
@@ -163,6 +165,11 @@ PY
 }
 
 addr() { echo "https://$(setting address)"; }
+
+# snapshot-box when the settings say snapshot_box: true (the install tap), else admin. Anything but true is false.
+snapshot_login() {
+  python3 -I -c 'import json,sys; print("snapshot-box" if json.load(open(sys.argv[1])).get("snapshot_box") is True else "admin")' "$settings"
+}
 
 status() {
   curl -sS --fail-with-body --cacert "$cacert" "$(addr)/v1/sys/health"
@@ -203,13 +210,15 @@ recovery() {
   ( snapshot ) || { echo "secrets-store: the shares are made, but the snapshot after them failed; until one succeeds, no snapshot can be restored; run secrets-store snapshot" >&2; exit 1; }
 }
 
-# Copy one Raft snapshot off the store, through the admin AppRole. Fails loudly: never an empty file.
+# Copy one Raft snapshot off the store, through AppRole snapshot-box once the install tap has turned it on, else the
+# admin AppRole (agent pick 240). Fails loudly: never an empty file.
 snapshot() {
   # During a rebuild the store is empty: a snapshot now would write its mark into the fresh store, which
   # restore-rebuilt's empty-store guard would then refuse, and it would be a snapshot of nothing.
   [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt first" >&2; exit 1; }
-  # Through AppRole snapshot-box, not the admin (D-0038 rules 8 and 12, agent pick 240).
-  "$(dirname "$0")/secrets-store-snapshots.sh" take "$(addr)" "$cacert" "$env_keys" "$snapshots" "$snapshot_keep" dev
+  # Through AppRole snapshot-box, not the admin, once the settings' snapshot_box is true (D-0038 rules 8 and 12,
+  # agent pick 240). It is false until the owner's install tap, which also makes configure create that login.
+  "$(dirname "$0")/secrets-store-snapshots.sh" take "$(addr)" "$cacert" "$env_keys" "$snapshots" "$snapshot_keep" dev "$(snapshot_login)"
 }
 
 # Put the newest snapshot of this store's own cluster back, never forced, and prove it by the mark, under the

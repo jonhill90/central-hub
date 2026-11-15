@@ -364,11 +364,13 @@
   tags: [clients]
 
 # The box's snapshot login, snapshot-box (agent pick 240), after the clients, whose admin token it uses.
+# Only once the owner's install tap turns it on (agent pick 240): the login is a new access right (D-0042 rule 6).
 - name: The box's snapshot login
   ansible.builtin.include_tasks:
     file: snapshot_box.yml
     apply:
       tags: [clients]
+  when: openbao_snapshot_box | bool
   tags: [clients]
 
 # The restore drill once now, with the live store's Raft state checked before and after (Confirmation 4).
