@@ -50,7 +50,7 @@ Chosen option: **1**. It keeps one owner step per raw run, names the run exactly
 2. **One tap, one run.** The tap covers that command at that commit only. If either changes, a new card goes out (D-0034 rule 5). A disowned tap is void (D-0034 rule 6).
 3. **Listed as now.** Each raw run is still listed in its layer's runbook with its date, now also with the card's message id, and stays listed until the layer's job exists (D-0041 rule 3).
 4. **D-0042 rule 6 is unchanged.** A raw run that is also a rule 6 step (a firewall or tailnet apply, a delete, a secret, an access right, money or a box limit) already needs the owner's tap; this record adds nothing to it. A raw run that is none of those still gets its own tap under rule 1, so no owner step is removed.
-5. **The Mac's guard is not changed by this record.** The guard on the controller accepts only typed words (D-0044 Context). Until the guard itself takes a tap, which is the owner's own script and a separate change, a raw run from the Mac still goes only on typed words. This record changes the rule, so that a guard change is all that is left.
+5. **The Mac's guard is not changed by this record.** The guard on the controller accepts only typed words (D-0044 Context). The refusal on the Mac comes from that session's auto-mode check, not a script (Mac read, 2026-11-15); until it accepts a tap, a raw run from the Mac still goes only on typed words. This record changes the rule, so that a guard change is all that is left.
 6. **What this changes, on acceptance.** D-0041 rule 3's second line and its Consequences line 112 are edited to read as the current rule, with a "since D-0057" note, as D-0036 rule 6 was for D-0042.
 
 ### Consequences
