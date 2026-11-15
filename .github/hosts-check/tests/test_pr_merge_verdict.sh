@@ -88,6 +88,15 @@ def fsrc(path, names):
 ROLE = os.path.dirname(SRC)
 a1, a2 = fsrc(SRC, ("top_level_blocks", "free_value_ok")), fsrc(ROLE + "/box-apply.py", ("top_level_blocks", "free_value_ok"))
 check("the verdict's block readers are the same text as box-apply.py's", "x" + ("ok" if a1 == a2 and len(a1) == 2 else "bad"), "xok")
+def asrc(path, name):
+    s = open(path).read()
+    for n in ast.parse(s).body:
+        if isinstance(n, ast.Assign) and any(getattr(x, "id", "") == name for x in n.targets):
+            return ast.get_source_segment(s, n)
+check("FREE_VALUE is the same text as box-apply.py's", "x" + ("ok" if asrc(SRC, "FREE_VALUE") and asrc(SRC, "FREE_VALUE") == asrc(ROLE + "/box-apply.py", "FREE_VALUE") else "bad"), "xok")
+rule = [l.split() for l in open(ROLE + "/../templates/box-apply-limits.txt.j2") if l.startswith("free-keys ")]
+vkeys = set(ast.literal_eval(asrc(SRC, "FREE_KEYS").split("=", 1)[1].strip()))
+check("FREE_KEYS is the free-keys rule of box-apply-limits.txt.j2 for defaults/main.yml", "x" + ("ok" if len(rule) == 1 and rule[0][1] == "hosts/ansible/roles/agent_box/defaults/main.yml" and set(rule[0][2:]) == vkeys else "bad"), "xok")
 # Rule 11: the guarded files need the owner-tap line, the others do not.
 for f in ["docs/decisions/0042-let-the-reviewer.md", "docs/decisions/0034-x.md", "hosts/ansible/roles/agent_box/files/runner-job-started.sh", "hosts/ansible/roles/agent_box/files/pr-merge.sh", "hosts/ansible/roles/agent_box/files/pass-record.sh", "hosts/ansible/roles/agent_box/files/pr-merge-verdict.py", "hosts/ansible/roles/agent_box/templates/pr-merge-sweep.timer.j2", "hosts/ansible/roles/agent_box/defaults/main.yml", "hosts/wrappers/mac/merge-checked.sh"]:
     d = fx([f], head_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\n"}); check("rule 11 file %s needs the owner tap" % f.split("/")[-1], run(d), "OWNER: rule 11 PR")
