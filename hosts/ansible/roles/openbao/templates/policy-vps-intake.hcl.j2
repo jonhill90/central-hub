@@ -1,0 +1,7 @@
+# {{ openbao_oidc_policy }}: the owner's login through auth/{{ openbao_oidc_mount }} role {{ openbao_oidc_role }}
+# (agent pick 233). The owner enters keys under kv/{{ openbao_oidc_kv_prefix }}/ in the web page and reads them
+# back. No delete or destroy, no other path, nothing under sys/ or auth/.
+path "kv/data/{{ openbao_oidc_kv_prefix }}/*" { capabilities = ["create", "update", "read"] }
+path "kv/metadata/{{ openbao_oidc_kv_prefix }}/*" { capabilities = ["list", "read"] }
+# The web page lists the mount's top folders to show where to go.
+path "kv/metadata/" { capabilities = ["list"] }

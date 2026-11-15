@@ -1,0 +1,10 @@
+# Stand-in for pve-cluster, which mounts /etc/pve on a real host. Here it only stays active.
+[Unit]
+Description=Stand-in pve-cluster
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+[Install]
+WantedBy=multi-user.target
+Alias=pve-cluster.service

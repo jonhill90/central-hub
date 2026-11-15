@@ -1,0 +1,28 @@
+# {{ ansible_managed | comment('plain') | trim }}
+# The weekly restore drill's throwaway server (D-0038 rule 8; files/openbao-drill.sh). It runs only inside
+# openbao-drill.service, whose network namespace has a loopback device and nothing else, and whose
+# /var/lib/openbao-drill and /var/log/openbao are empty temporary file systems. No secret in this file.
+
+ui            = false
+disable_mlock = true
+api_addr      = "https://127.0.0.1:{{ openbao_drill_port }}"
+cluster_addr  = "https://127.0.0.1:{{ openbao_drill_cluster_port }}"
+
+listener "tcp" {
+  address         = "127.0.0.1:{{ openbao_drill_port }}"
+  cluster_address = "127.0.0.1:{{ openbao_drill_cluster_port }}"
+  tls_cert_file   = "{{ openbao_tls_dir }}/tls.crt"
+  tls_key_file    = "{{ openbao_tls_dir }}/tls.key"
+}
+
+# The store's own node ID: the store has one node, so the restored data names this one.
+storage "raft" {
+  path    = "/var/lib/openbao-drill/raft"
+  node_id = "{{ openbao_hostname }}"
+}
+
+# The store's own seal key, which is what opens the restored keyring.
+seal "static" {
+  current_key_id = "{{ openbao_seal_key_id }}"
+  current_key    = "file://{{ openbao_config_dir }}/seal/{{ openbao_seal_key_id }}.key"
+}

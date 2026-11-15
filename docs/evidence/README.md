@@ -40,4 +40,16 @@ An evidence file is frozen with its record and changes only by a correction unde
 | D-0041 | [0041-run-every-lab-and-cloud-change-through-one-logged-pipeline.md](0041-run-every-lab-and-cloud-change-through-one-logged-pipeline.md) |
 | D-0042 | [0042-let-agents-approve-every-reversible-change-in-the-owners-place.md](0042-let-agents-approve-every-reversible-change-in-the-owners-place.md) |
 | D-0043 | [0043-keep-tailscale-as-a-swappable-stopgap-for-reaching-the-lab.md](0043-keep-tailscale-as-a-swappable-stopgap-for-reaching-the-lab.md) |
+| D-0044 | [0044-let-the-agent-box-apply-limit-changes-main-approves-by-digest.md](0044-let-the-agent-box-apply-limit-changes-main-approves-by-digest.md) |
+| D-0045 | [0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md](0045-keep-the-public-zone-at-cloudflare-with-dns-01-for-certificates.md) |
 | D-0046 | [0046-run-omniroute-openclaw-and-hermes-agent-on-the-vps-in-rootless-podman-with-no-lab-reach.md](0046-run-omniroute-openclaw-and-hermes-agent-on-the-vps-in-rootless-podman-with-no-lab-reach.md) |
+| D-0047 | [0047-keep-proxmox-ve-as-the-lab-hypervisor-on-its-free-repositories.md](0047-keep-proxmox-ve-as-the-lab-hypervisor-on-its-free-repositories.md) |
+| D-0048 | [0048-build-the-lab-with-opentofu-and-ansible-core.md](0048-build-the-lab-with-opentofu-and-ansible-core.md) |
+| D-0049 | [0049-run-almalinux-on-lab-vms-and-debian-where-it-comes-with-the-platform.md](0049-run-almalinux-on-lab-vms-and-debian-where-it-comes-with-the-platform.md) |
+| D-0050 | [0050-install-kubernetes-on-c1-with-kubeadm-from-ansible.md](0050-install-kubernetes-on-c1-with-kubeadm-from-ansible.md) |
+| D-0051 | [0051-use-external-secrets-and-local-path-as-c1s-secret-and-storage-add-ons.md](0051-use-external-secrets-and-local-path-as-c1s-secret-and-storage-add-ons.md) |
+| D-0052 | [0052-run-jellyfin-as-c1s-media-server.md](0052-run-jellyfin-as-c1s-media-server.md) |
+| D-0053 | [0053-send-alerts-to-self-hosted-ntfy-and-the-heartbeat-to-healthchecks-io.md](0053-send-alerts-to-self-hosted-ntfy-and-the-heartbeat-to-healthchecks-io.md) |
+| D-0054 | [0054-pull-images-from-docker-hub-by-digest-with-a-local-registry-as-the-way-off.md](0054-pull-images-from-docker-hub-by-digest-with-a-local-registry-as-the-way-off.md) |
+| D-0055 | [0055-serve-the-proxmox-web-ui-on-443-through-apache-httpd.md](0055-serve-the-proxmox-web-ui-on-443-through-apache-httpd.md) |
+| D-0057 | [0057-let-a-raw-run-go-on-a-card-tap-naming-the-exact-command.md](0057-let-a-raw-run-go-on-a-card-tap-naming-the-exact-command.md) |

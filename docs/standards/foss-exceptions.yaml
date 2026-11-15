@@ -1,6 +1,7 @@
 # Named exceptions to STD-0006. Only the owner's go, typed or a card tap, extends this list (STD-0006 rule 5).
 # A pull request that adds or changes an entry is owner-only: it merges after the owner's go,
-# named in the entry.
+# named in the entry. The one case without the owner's go: the pull request that removes a component's
+# register row, because the lab no longer runs it, also removes its entry, with the agents' pass (STD-0006 rule 5).
 #
 #   component   the register row's name, exactly
 #   state       kept: the owner chose to keep it, for now

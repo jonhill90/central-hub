@@ -1,0 +1,35 @@
+---
+# A reverse proxy on the Proxmox host serves the web UI on the standard ports, 443 and (as a redirect) 80, and
+# proxies to pveproxy on 127.0.0.1:8006 (the owner's rule, 2026-11-14: no non-standard ports for any lab web
+# page). Port 8006 stays as it is: it is the fallback and the agent box's lifeline route. The program is Apache
+# httpd (STD-0006: nginx's owner sells an edition that holds features back). No variable names the program, so
+# a later swap changes only this role's insides.
+#
+# Private, no default, from the inventory: the DNS names the proxy answers to. They must be the names in
+# proxmox_cert_names (the certificate role's input), so the served certificate matches.
+# proxmox_proxy_server_names: [<name>, ...]
+proxmox_proxy_server_names: "{{ proxmox_cert_names | default([]) }}"
+
+# Apache httpd from Debian's own repositories, at this exact version: the trixie-security build, read
+# 2026-11-14. It is a security release, so it is taken as soon as it is out (STD-0003 rule 2): Debian's
+# security tracker lists the fixes it carries. The four packages must match, so all are pinned.
+proxmox_proxy_apache_version: "2.4.71-1~deb13u1"
+
+# The certificate and key the web UI serves: pvenode cert set writes them into the cluster file system
+# (role proxmox_cert). Apache's parent process reads them as root.
+proxmox_proxy_cert: /etc/pve/local/pveproxy-ssl.pem
+proxmox_proxy_key: /etc/pve/local/pveproxy-ssl.key
+# Where pveproxy listens (it answers on all addresses; the proxy reaches it on loopback).
+proxmox_proxy_upstream: https://127.0.0.1:8006
+# The HTTP statuses the proof accepts for the front page and for an unauthenticated API call.
+proxmox_proxy_proof_front_ok: [200]
+proxmox_proxy_proof_api_ok: [401]
+# The CA bundle the proof uses: Debian's, which holds the lab root after role proxmox_cert.
+proxmox_proxy_ca_bundle: /etc/ssl/certs/ca-certificates.crt
+# The systemd unit the proxy needs before it starts: the cluster file system that holds the certificate.
+proxmox_proxy_requires_unit: pve-cluster.service
+
+# Whether this run may move 443 and 80 from nginx to Apache httpd. The move runs once: a host whose
+# /var/lib/proxmox-proxy/cutover.result says done skips it. False installs and configures Apache httpd,
+# masked, and leaves nginx serving.
+proxmox_proxy_cutover: true

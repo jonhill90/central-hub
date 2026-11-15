@@ -1,0 +1,7 @@
+[Unit]
+Description=Stand-in pveproxy on 127.0.0.1:8006
+[Service]
+ExecStart=/usr/bin/python3 -I /opt/standin/standin_pveproxy.py
+Restart=always
+[Install]
+WantedBy=multi-user.target

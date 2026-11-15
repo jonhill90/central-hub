@@ -62,3 +62,24 @@
     that: k8s_identity_signin.rc == 0
     fail_msg: The sign-in proof failed; the step lines above name the step and the HTTP code.
     quiet: true
+
+# Dev, after the proof passed: what the secrets store's owner sign-in needs from this cluster (agent pick 233,
+# role openbao), for the next `secrets-store configure`. The CA root is public; no secret is written.
+- name: signin | The root of the CA that signed the Gateway's certificate
+  ansible.builtin.shell: kubectl -n gateway get secret apps-tls -o jsonpath='{.data.ca\.crt}'
+  register: k8s_identity_signin_ca
+  changed_when: false
+  failed_when: k8s_identity_signin_ca.rc != 0 or k8s_identity_signin_ca.stdout | length == 0
+  check_mode: false
+  when: k8s_identity_oidc_handoff_file | length > 0
+
+- name: signin | The issuer, the Gateway and its CA root, for the secrets store's sign-in
+  ansible.builtin.copy:
+    dest: "{{ k8s_identity_oidc_handoff_file }}"
+    content: >-
+      {{ {'discovery_url': k8s_identity_issuer, 'gateway_address': k8s_identity_signin_facts.stdout_lines[0],
+      'ca_pem': k8s_identity_signin_ca.stdout | b64decode} | to_nice_json }}
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  when: k8s_identity_oidc_handoff_file | length > 0

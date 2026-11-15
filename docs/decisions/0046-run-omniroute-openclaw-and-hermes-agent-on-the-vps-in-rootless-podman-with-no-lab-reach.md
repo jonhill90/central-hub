@@ -59,7 +59,7 @@ Diagram: not applicable. The apps add no route to the lab; the only network path
    - **S5**: `vps-apply` makes the generated secrets on the VPS (Valkey's password, OmniRoute's API key and bridge secret), each in a mode 600 file of its app user, after S4 and never before. Any made earlier is rotated.
    - **S6**: a new OpenBao AppRole for the VPS job whose policy reads only `kv/data/vps/*`.
    - **S7**: the job reads the provider key from OpenBao, and `vps-apply` writes it to OmniRoute's env file.
-5. **Holds.** S1 and S3 wait until S2 is installed on the box, so `tag:agent` never loses root on the VPS before `vps-host` exists. The box limits merged on `main` are not installed until a controller apply, which today still needs the owner's Mac; S2 joins that gap.
+5. **Holds.** S1 and S3 wait until S2 is installed on the box, so `tag:agent` never loses root on the VPS before `vps-host` exists. A box limit merged on `main` is installed by the box itself, with no controller run on the owner's Mac: after the owner's tap for that change (D-0042 rule 6), a line in `hosts/ansible/agent-box-limit-approvals.txt` names its exact digest, and `box-apply` applies it (D-0044, agent pick 232). S2 is installed that way.
 6. **The owner's own steps, named in their smallest form.** None is hidden in a tap.
    - **J1** (money and secrets): create one model-provider API key, with billing and a monthly spend cap set in the provider's console. OmniRoute fronts all three apps, so one key serves them.
    - **J2** (secrets): type that key himself into OpenBao's web UI on 443, path `kv/vps/provider-key`. No chat paste, no Mac step, no typed line.
