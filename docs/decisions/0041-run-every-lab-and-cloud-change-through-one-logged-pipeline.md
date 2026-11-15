@@ -60,7 +60,7 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
    - Agents start the jobs. The owner may too, from the Actions tab.
    - **The box's runner is registered now, with no GitHub environment.** The runbook for the dev redeploy workflow held the runner back until D-0030, because a GitHub environment that any agent can approve is not the owner's gate. This record does not use a GitHub environment for approval. The gate is the card tap on the saved plan (rule 6), and dev applies need none. So the runner is registered once this record is accepted, and only the environment still waits for D-0030. The runner hook's list holds this record's workflows and nothing else; since D-0042 it also holds D-0042's merge job.
 3. **No raw runs.** Nothing changes the lab or those accounts from the owner's Mac, a session's shell or a console, except break-glass (rule 9).
-   - Until a layer or stack has its pipeline job, a raw run of it needs the owner's typed words naming the exact command.
+   - Until a layer or stack has its pipeline job, a raw run of it needs the owner's typed words naming the exact command. Since D-0057, his tap on a decision card that names the exact command and the commit it runs from counts as well; a run from the Mac still goes only on typed words while that session's auto-mode check refuses a tap (D-0057 rules 1 and 5).
    - Each such run is listed in the runbook of that layer, with the date, and stays listed until its job exists.
 4. **Plan, then apply the saved plan.**
    - For OpenTofu: `tofu plan -out`, then an apply of that file only.
@@ -109,7 +109,7 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
 - Bad: **the box still can't check the tap itself.** It is the same gap D-0035 accepts, with the same compensating controls: a reviewing agent's check, the card ID in the log, and a plan hash the tap must match. It closes when D-0030 lands (rule 6).
 - Bad: the agent box now holds the Azure, Cloudflare and Tailscale keys as well as the Proxmox token. Compensating controls: the keys stay in wrappers, the hook lets only listed workflows run, PR code never runs on the box, and every apply to those accounts needs a tap.
 - Bad: GitHub Actions is a closed hosted service. Its run logs are public and kept at most 90 days, so the full record lives on the box. The exit is Forgejo with Forgejo Actions (GPL-3.0); its workflows are similar to GitHub's but not compatible, so the workflow files need rewriting.
-- Neutral: until each layer has its job, raw runs go on, on the owner's typed words, listed in the runbooks (rule 3).
+- Neutral: until each layer has its job, raw runs go on, on the owner's typed words or, since D-0057, his tap on a card naming the exact command, listed in the runbooks (rule 3).
 - Neutral: the dev redeploy runbook's section "Not registered until D-0030 is met" changes with the PR that registers the runner: the runner is registered, and only the GitHub environment waits for D-0030.
 
 ### Confirmation

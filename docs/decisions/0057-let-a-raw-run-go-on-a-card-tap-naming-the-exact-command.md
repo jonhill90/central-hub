@@ -9,7 +9,7 @@ consulted: []
 waits-on: [D-0041, D-0042]
 supersedes: []
 superseded-by:
-revisit-when: the greenfield build-out ends (the scope of the owner's message of 2026-11-14 19:26 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN)); the Mac's guard still refuses a tap once this record is accepted, so no raw run can go on one; a raw run goes on a tap that did not name its exact command or commit; a tap is disowned after a raw run went on it; the agents get a GitHub account of their own (D-0030); or a cluster other than c1 reads the repository
+revisit-when: the greenfield build-out ends (the scope of the owner's message of 2026-11-14 19:26 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN)); the Mac session's auto-mode check still refuses a tap once this record is accepted, so no raw run from the Mac can go on one; a raw run goes on a tap that did not name its exact command or commit; a tap is disowned after a raw run went on it; the agents get a GitHub account of their own (D-0030); or a cluster other than c1 reads the repository
 ---
 
 # Let a raw run of a layer that has no pipeline job yet go on the owner's tap on a card naming the exact command, in place of typed words
