@@ -96,7 +96,7 @@ flowchart LR
    - a pass from each of the three council threads for the same head, recorded by the orchestrator thread in one message.
 
    It takes the place of the owner's go, typed or tapped, wherever these rules asked for it: AGENTS.md rules 1 and 2, D-0001's statuses, D-0031 rules 3 and 4, D-0034, D-0035 rule 3(b) and (c), and D-0041 rule 6. Rule 6 below is the exception. That a pass is needed at all follows from the owner's words; that the reviewer and the council give it is the agents' own pick.
-2. **The merge job.** [agent pick] `.github/workflows/merge.yml` merges a PR that has the agents' pass. Until the box limits it needs are applied (rule 4), merges go as they do today.
+2. **The merge job.** [agent pick] The merge sweep on the agent box merges a PR whose exact head holds the reviewer's pass and the passes of the three councils on its ledger of recorded passes (D-0056). The workflow `merge.yml` that this rule first named was removed (D-0056).
    - It runs only by `workflow_dispatch`, only from `main`, on the agent box's runner, whose job-started hook refuses any other workflow, branch or event. Its own token is read-only (Activation gate item 3).
    - Its inputs are the PR number, the full head, and the message ids of the reviewer's clearance and of the council's passes.
    - It hands the merge to the box's `pr-merge` wrapper, which merges as the project's GitHub App with the key kept inside the wrapper (D-0031). The wrapper checks itself, and refuses otherwise:
@@ -131,7 +131,7 @@ flowchart LR
 8. **The owner's no.** A message from the owner that says no, stop or revert about a change wins at once. Agents stop starting jobs for it, and open a revert PR or run the layer's way back. A revert goes through the same pass and job.
 9. **Logs.** The merge job's summary is public on GitHub for at most 90 days, so it holds only the PR, the heads and the message ids. The orchestrator lists every merge and apply made under this record in its next report to the owner.
 10. **Unchanged.** Never enable auto-merge. No workflow on `pull_request_target`, `issue_comment` or `issues` that runs an agent or touches secrets. No secrets or private names in this repository. AGENTS.md rules 3 to 6 stand.
-11. **Changing this record.** [agent pick] A change that narrows this record, or adds a check to the merge job, needs the agents' pass, like any other change. A change that removes a step from rule 6, or drops or loosens a check in `merge.yml`, the runner hook or `pr-merge`, is itself a rule 6 step and needs the owner's tap. Every change to either is listed in the orchestrator's report.
+11. **Changing this record.** [agent pick] A change that narrows this record, or adds a check to the merge job, needs the agents' pass, like any other change. A change that removes a step from rule 6, or drops or loosens a check in the runner hook, `pr-merge` or the sweep's verdict script, is itself a rule 6 step and needs the owner's tap. Every change to either is listed in the orchestrator's report.
 
 ### Consequences
 

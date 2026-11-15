@@ -1,14 +1,22 @@
 ---
 id: D-0056
 title: Merge with a sweep on the agent box, on a ledger of recorded passes, in place of the merge job
-status: proposed
-date: 2026-11-14
+status: accepted
+date: 2026-11-15
 decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0031, D-0042]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-15T07:23:51Z
+  approved-commit: b8a178d84a8639f34d328e33a29615f6df3e50dd
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNA37WfEkCDLG3yMqsZxvfPX
+  approval-names: "the question naming the merge-rule change in PR #367 at head b8a178d (D-0056) with PR #308 at a86bffd; option Accept the change"
+  check: the orchestrator relayed the tap at 2026-11-15T07:32Z; not read by the drafting agent in the owner's chat archive
+  merged: PR #367 was squash-merged as 56c3553 at 2026-11-15T07:30Z; the accepting change follows in its own PR
 revisit-when: a cloud session can start a GitHub workflow (the integration gets Actions write and the tailnet workflow gets an environment gate); the agents get GitHub identities of their own (D-0030) and GitHub can require their approvals; the ledger holds a line for a pass that was never given; or the owner says a merge was wrong
 ---
 
@@ -49,7 +57,7 @@ Chosen option: **1**. It needs no workflow start and no new GitHub right, and th
 5. **Status changes.** A PR that sets a record to `accepted`, `rejected` or `parked`, or a standard to `active`, merges only if the record says `approved-by: agents` (for an acceptance), its approved commit holds four passes of its own, and the PR's net change equals the approved commit's apart from the status, date and evidence lines and the index row.
 6. **The stop.** `pass-record halt` sets a flag the sweep reads before everything and before each merge; while it exists the sweep merges nothing. The wrapper accepts `halt` from the recorders `orchestrator`, `builder`, `reviewer` and `council-a`, `council-b` and `council-c`, so a reviewer or a council can stop a merge. `pass-record resume` clears it. The wrapper accepts `resume` only from the recorder `orchestrator`, so a halt that the orchestrator relays from the owner is not undone by another lane's call, but any session can name itself the orchestrator. The owner's own stop is stopping the timer from the controller.
 7. **Workflows that run on the box.** The runner hook lists each such workflow file with its sha256, fetches the file at the run's commit and refuses a job whose file differs or can't be fetched. A merged edit to a listed workflow does nothing on the box until a tapped install updates the list. CI checks the list against the files.
-8. **What this changes in D-0042.** Rule 2: the merge job is the sweep, not `merge.yml`. This record is proposed and changes nothing in force: `merge.yml` stays on `main` (inert, listed as retired in the runner hook) and AGENTS.md rule 2 stays as it is. A follow-up PR, which needs the owner's tap, removes `merge.yml` and its retired entry, rewrites AGENTS.md rule 2 and sets this record to accepted. Rule 11: the files that need the owner's tap are the list in rule 4 above. Rules 1, 3 to 10 stand.
+8. **What this changes in D-0042.** Rule 2: the merge job is the sweep, not `merge.yml`. The follow-up PR removed `merge.yml` and its retired entry in the runner hook, rewrote AGENTS.md rule 2 and set this record to accepted. Rule 11: the files that need the owner's tap are the list in rule 4 above. Rules 1, 3 to 10 stand.
 9. **Installed by one tapped install.** The sweep, the wrappers and the hook reach the box only by a change to its limits, which keeps the owner's tap (D-0042 rule 6). One card names that install and this record's PR head.
 
 ### Consequences
