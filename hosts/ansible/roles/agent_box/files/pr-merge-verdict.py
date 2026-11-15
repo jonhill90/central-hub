@@ -28,33 +28,25 @@ RULE11 = [re.compile(p) for p in (
 MAX_RECORDS = 20
 # The role's defaults hold box limits (the sudo wrapper list, the permission allow and deny lists, auto mode, the users, timers) next to
 # five pinned tools that a self-apply may change (the free-keys line of box-apply-limits.txt.j2). The file needs the owner's tap
-# unless every key that changed is one of those five (D-0056 rule 4). Anything unreadable, new or removed needs the tap.
+# unless the only difference is the exact one-line entry of one of those five (D-0056 rule 4). Any other difference anywhere in
+# the file (a quoted or space-colon key, a duplicate, a comment, a new or removed key) or unreadable content needs the tap.
 DEFAULTS = "hosts/ansible/roles/agent_box/defaults/main.yml"
 FREE_KEYS = {"agent_box_tofu_version", "agent_box_tofu_sha256", "agent_box_kubectl_version", "agent_box_kubectl_sha256",
              "agent_box_tailscale_version"}
 
 
-def top_blocks(text):
-    """{top-level key: its lines up to the next top-level key}; "" is the text before the first key. None when a key repeats."""
-    blocks, cur = {"": []}, ""
-    for line in text.split("\n"):
-        m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*):", line)
-        if m:
-            cur = m.group(1)
-            if cur in blocks:
-                return None
-            blocks[cur] = []
-        blocks[cur].append(line)
-    return {k: "\n".join(v) for k, v in blocks.items()}
+FREE_LINE = re.compile(r"^(%s): \S.*$" % "|".join(sorted(FREE_KEYS)))
+
+
+def without_free_lines(text):
+    """The file with the exact one-line entries of the five free keys removed; every other byte stays."""
+    return "\n".join(l for l in text.split("\n") if not FREE_LINE.match(l))
 
 
 def defaults_needs_tap(head, base):
     if head is None or base is None:
         return True
-    h, b = top_blocks(head), top_blocks(base)
-    if h is None or b is None:
-        return True
-    return any(h.get(k) != b.get(k) for k in set(h) | set(b) if k not in FREE_KEYS)
+    return without_free_lines(head) != without_free_lines(base)
 DROP_TOP = re.compile(r"^[+-](status|date|accepted-evidence):")
 DROP_NESTED = re.compile(r"^[+-]  (approved-by|approved-at|approved-commit|approval-ref|approval-names|check|merged):")
 

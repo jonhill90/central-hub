@@ -102,7 +102,7 @@ def defaults(**over):
     return "# header comment\n" + "".join("%s: %s\n\n" % (k, ("\n" + v) if v.startswith("  ") else v) for k, v in d.items() if v is not None)
 def dtest(name, head, base=None, want="OWNER: rule 11 PR", mut=False):
     d = fx([DEF], head_text={DEF: head} if head is not None else None, base_text={DEF: defaults() if base is None else base} if base != "none" else None)
-    check(name, run(d), want, mutate('if k not in FREE_KEYS', 'if False') if mut else None, d if mut else None)
+    check(name, run(d), want, mutate('return without_free_lines(head) != without_free_lines(base)', 'return False') if mut else None, d if mut else None)
 for k, v in (("agent_box_tofu_version", "1.13.2"), ("agent_box_tofu_sha256", "cc"), ("agent_box_kubectl_version", "1.37.2"), ("agent_box_kubectl_sha256", "dd"), ("agent_box_tailscale_version", "1.104.6")):
     dtest("a change to the free key %s is GREEN with no tap" % k, defaults(**{k: v}), want="GREEN")
 dtest("all five free keys together are GREEN with no tap", defaults(agent_box_tofu_version="9", agent_box_tofu_sha256="9", agent_box_kubectl_version="9", agent_box_kubectl_sha256="9", agent_box_tailscale_version="9"), want="GREEN")
@@ -112,6 +112,8 @@ for k, v in (("agent_box_allow", "[Bash(ls *)]"), ("agent_box_managed_settings_e
 dtest("a new key needs the owner tap", defaults(agent_box_new_thing="1"))
 dtest("a removed key needs the owner tap", defaults(agent_box_deny=None))
 dtest("a changed header comment before the first key needs the owner tap", defaults().replace("# header comment", "# another comment"))
+dtest("a quoted duplicate of a limit key needs the owner tap", defaults() + '"agent_box_keys_user": other\n')
+dtest("a space-colon duplicate of a limit key needs the owner tap", defaults() + "agent_box_keys_user : other\n")
 dtest("a repeated key is unreadable and needs the owner tap", defaults() + "agent_box_user: again\n")
 dtest("a defaults file with no base content needs the owner tap", defaults(), base="none")
 dtest("a defaults file with no head content needs the owner tap", None)
