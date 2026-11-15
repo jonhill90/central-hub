@@ -260,7 +260,21 @@ def main():
             except (OSError, ValueError):
                 why.append("%s: the compare for head could not be read" % n); continue
             h, e2 = net_change(hcmp, n, ntop.get("id", ""))
-            if e2 or h:
+            ac = nev.get("approved-commit", "")
+            if re.match(r"^[0-9a-f]{40}$", ac):
+                # The owner tapped a card that named this content commit: the PR's net change must equal that commit's, apart from
+                # the acceptance fields and the index row (the agents' path's compare). No passes on it are needed.
+                try:
+                    acmp = load(os.path.join(d, "approved"), ac + ".compare.json")
+                except (OSError, ValueError):
+                    why.append("%s: the compare for approved-commit %s could not be read" % (n, ac[:7])); continue
+                a, e1 = net_change(acmp, n, ntop.get("id", ""))
+                if e1 or e2:
+                    why.append("%s: %s" % (n, e1 or e2)); continue
+                odiff = sorted(f for f in set(a) | set(h) if a.get(f, collections.Counter()) != h.get(f, collections.Counter()))
+                if odiff:
+                    why.append("%s: the PR's net change differs from the owner-approved commit %s in %s" % (n, ac[:7], ", ".join(odiff[:3]))); continue
+            elif e2 or h:
                 why.append("%s: approved-by owner allows only the acceptance fields to change (%s)" % (n, e2 or ", ".join(sorted(h)[:3]))); continue
             notes.append("NOTE: %s is accepted on the owner's card tap %s" % (n, ref))
             continue

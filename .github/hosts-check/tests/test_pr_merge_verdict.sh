@@ -181,7 +181,9 @@ d = fx([REC], head_text={REC: rec("accepted").replace("approved-by: agents", "ap
 check("approved-by other than agents or owner refuses an acceptance", run(d), "NOT GREEN: docs/decisions/0099-x.md: status accepted needs approved-by: agents or owner", mutate('nev.get("approved-by") != "agents"', 'False'), d)
 # The owner's own card tap (approved-by: owner): an owner-tap line whose relay ref is the approval-ref, and only the acceptance fields change.
 TAP = "cmsg_DECIDEEVENT01"
-def own(ref=TAP): return rec("accepted", extra="  approval-ref: %s\n" % ref).replace("approved-by: agents", "approved-by: owner")
+def own(ref=TAP, commit=False):
+    t = rec("accepted", extra="  approval-ref: %s\n" % ref).replace("approved-by: agents", "approved-by: owner")
+    return t if commit else t.replace("  approved-commit: %s\n" % ME, "")
 OWN_PATCH = "@@ -1,9 +1,10 @@\n+status: accepted\n-status: proposed\n+  approved-by: owner\n+  approval-ref: %s\n" % TAP
 def ocmp(extra=()): return {"files": [{"filename": REC, "patch": OWN_PATCH, "changes": 4}] + [{"filename": n, "patch": p, "changes": 1} for n, p in extra]}
 GUARD = ('if not ref or not any(l.get("role") == "owner-tap" and l.get("relay_ref") == ref for l in lines):', 'if False:')
@@ -199,6 +201,20 @@ d = fx([REC], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={R
 check("an extra changed line in the owner-approved record refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-by owner allows only the acceptance fields", mutate('if e2 or h:', 'if False:'), d)
 d = fx([REC, "hosts/x.sh"], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own()}, base_text={REC: base}, cmp_head=ocmp(extra=[("hosts/x.sh", "@@\n+rm -rf\n")]))
 check("an extra changed file beside an owner-approved record refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-by owner allows only the acceptance fields")
+# An owner-approved record that names the commit the owner tapped (approved-commit): the PR's net change must equal that commit's.
+OTHER = "docs/runbooks/x.md"
+def acmp_(files): return {"files": [{"filename": n, "patch": p, "changes": 1} for n, p in files]}
+SPREAD = [(REC, OWN_PATCH), (OTHER, "@@\n+a line the owner's card named\n")]
+CMP_MUT = ('if odiff:', 'if False:')
+def ownc(name, headcmp, want, ref=TAP, mut=False):
+    d = fx([REC, OTHER], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own(ref, commit=True)}, base_text={REC: base}, cmp_head=headcmp, approved=acmp_(SPREAD), approved_roles=None)
+    check(name, run(d), want, mutate(*CMP_MUT) if mut else None, d if mut else None)
+ownc("an owner-approved PR whose net change equals the approved commit's is GREEN", acmp_(SPREAD), "GREEN")
+ownc("an owner-approved PR with one extra line outside the front matter is refused", acmp_(SPREAD + [("docs/other.md", "@@\n+extra\n")]), "NOT GREEN: docs/decisions/0099-x.md: the PR's net change differs from the owner-approved commit", mut=True)
+ownc("an owner-approved PR that lacks a line of the approved commit is refused", acmp_([(REC, OWN_PATCH)]), "NOT GREEN: docs/decisions/0099-x.md: the PR's net change differs from the owner-approved commit")
+ownc("an owner-approved PR with a tap ref that does not match is refused", acmp_(SPREAD), "NOT GREEN: docs/decisions/0099-x.md: approved-by owner needs an owner-tap line", ref="cmsg_CARDMESSAGE01")
+d = fx([REC, OTHER], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own(commit=True)}, base_text={REC: base}, cmp_head=acmp_(SPREAD), approved=None)
+check("an owner-approved PR whose approved-commit compare cannot be read is refused", run(d), "NOT GREEN: docs/decisions/0099-x.md: the compare for approved-commit")
 REC2 = "docs/decisions/0098-y.md"
 d = fx([REC, REC2], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own(), REC2: own().replace("D-0099", "D-0098")}, base_text={REC: base, REC2: base.replace("D-0099", "D-0098")}, cmp_head={"files": [{"filename": REC, "patch": OWN_PATCH, "changes": 4}, {"filename": REC2, "patch": OWN_PATCH, "changes": 4}]})
 check("a PR that accepts two owner-approved records is refused (one record per PR)", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-by owner allows only the acceptance fields")
