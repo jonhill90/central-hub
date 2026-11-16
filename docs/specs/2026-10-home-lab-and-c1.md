@@ -10,7 +10,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNUTitXeZeY3yfPfFn3ia17p
   approval-names: "PR #44 and head 0bee55a, in the message itself"
   check: the drafting agent read the message in the Gaming PC thread at 2026-10-27T00:07Z; it names the PR and the head SHA. Merging was blocked by unsigned commits, so the branch was re-signed with the same tree as f190fb0afb88f73cc6e74cadb52b12105d632c0f and force-pushed on the owner's go of 2026-10-27T00:12:51Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN47cYg7DjBjdfnn1xkU88Qe). An independent check by a reviewing agent is still to do.
-  merged: PR #44, commit 3195033
+  merged: "PR #44, commit 3195033"
 done-evidence:
 supersedes: []
 superseded-by:
