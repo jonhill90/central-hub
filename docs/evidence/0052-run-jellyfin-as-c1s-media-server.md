@@ -22,7 +22,7 @@ Is Jellyfin free, with nothing held back behind a paywall, and how does c1 run i
    - the image is `docker.io/jellyfin/jellyfin:12.2`, pinned by digest, in role `k8s_jellyfin` and the app's `values.yaml`;
    - namespace `media`, with `/config` and `/media` on claims of the default StorageClass (picks 115 and 117);
    - the off-box backup copies the whole local-path folder, and its app-level restore check uses Jellyfin's configuration claim (role `k8s_backup`).
-4. **The owner's words.** The project decisions inbox records his message of 2026-11-08 07:06 UTC asking the agents to set up Jellyfin and the other apps and write the runbooks [4] (sourced).
+4. **The owner's words.** The project decisions inbox records their message of 2026-11-08 07:06 UTC asking the agents to set up Jellyfin and the other apps and write the runbooks [4] (sourced).
 5. **Reach.** At main 37eb02d, 33 files in `hosts/`, 12 runbooks and D-0037 name Jellyfin. Runbook and decision indexes are not counted [3] (measured, 2026-11-14).
 
 ## How the decision used it

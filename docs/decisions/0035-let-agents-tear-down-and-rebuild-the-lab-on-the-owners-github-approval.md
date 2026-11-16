@@ -24,17 +24,17 @@ revisit-when: a production run starts without a card tap that names it, or befor
 
 ## Context and Problem Statement
 
-AGENTS.md "Rules for now" keep the owner's own hands on every step while he learns the system. Merges by agents were loosened in D-0031, and a card tap as the owner's go in D-0034, but a teardown or rebuild of the lab still needs the owner's Mac and his typed go for each production step.
+AGENTS.md "Rules for now" keep the owner's own hands on every step while they learn the system. Merges by agents were loosened in D-0031, and a card tap as the owner's go in D-0034, but a teardown or rebuild of the lab still needs the owner's Mac and their typed go for each production step.
 
-On 2026-11-13 at 04:58 UTC the owner said the plan was for an agent to redeploy from a cloud session or the agent jump box, and at 05:04 UTC that the goal is for the agent to be able to tear down the home lab and rebuild it if needed. On decision cards he picked "Everything on Proxmox" (05:08 UTC) for what an agent may rebuild, and "Approve on GitHub, phone tap" (05:29 UTC) for how he approves it. A dev rebuild from the agent box passed all eight stages on 2026-11-12, and again on 2026-11-13, with no Mac step.
+On 2026-11-13 at 04:58 UTC the owner said the plan was for an agent to redeploy from a cloud session or the agent jump box, and at 05:04 UTC that the goal is for the agent to be able to tear down the home lab and rebuild it if needed. On decision cards they picked "Everything on Proxmox" (05:08 UTC) for what an agent may rebuild, and "Approve on GitHub, phone tap" (05:29 UTC) for how they approve it. A dev rebuild from the agent box passed all eight stages on 2026-11-12, and again on 2026-11-13, with no Mac step.
 
-The first draft of this record used a protected GitHub environment for each run. That needs the agents to have a GitHub account of their own, because today they act as the owner's account, which could approve as him (D-0030). On 2026-11-14 at 03:20 UTC the owner wrote: "remember we are going to use natural language for all of this. And we need to be able to have you harden yourself in dev to prove it works before prod. So they both should be open for you right now. But the goal is to make it where you like i said just do stuff as your own account. But we are a while from there". At 03:22 UTC he tapped "Yes, set it up" on the card "Open prod to agents on your word in chat, after dev proves it?", whose option read: "Agents rewrite D-0035 to chat approval, ready #216 and the prod token; you accept with one typed line, then each prod run needs your card tap." This version records that choice. The GitHub approval moves to "Later, with D-0030".
+The first draft of this record used a protected GitHub environment for each run. That needs the agents to have a GitHub account of their own, because today they act as the owner's account, which could approve as them (D-0030). On 2026-11-14 at 03:20 UTC the owner wrote: "remember we are going to use natural language for all of this. And we need to be able to have you harden yourself in dev to prove it works before prod. So they both should be open for you right now. But the goal is to make it where you like i said just do stuff as your own account. But we are a while from there". At 03:22 UTC they tapped "Yes, set it up" on the card "Open prod to agents on your word in chat, after dev proves it?", whose option read: "Agents rewrite D-0035 to chat approval, ready #216 and the prod token; you accept with one typed line, then each prod run needs your card tap." This version records that choice. The GitHub approval moves to "Later, with D-0030".
 
 This record loosens "Rules for now", so under D-0034 rule 4 it needs the owner's typed line, not a tap.
 
 ## Decision Drivers
 
-- **The owner's answers** above, and his words of 2026-11-14 03:20 UTC: natural language for all of it, dev first, both open now.
+- **The owner's answers** above, and their words of 2026-11-14 03:20 UTC: natural language for all of it, dev first, both open now.
 - **Dev proves a change before prod.** Every production run follows a pass of the same change on dev.
 - **Least privilege** (the owner's direction of 2026-11-10): an agent asks, a fixed process acts, and the key stays with the process.
 - **What cannot be remade stays off the table:** the agent box itself, its sibling container and the VPS node.
@@ -56,7 +56,7 @@ Chosen option: **2**. The owner picked the scope and, on 2026-11-14, chat approv
 2. **Never.** VM 258 (the agent box), CT 259 (its rehearsal sibling) and the VPS node. The Proxmox token has rights on every guest except 258 and 259, which are `NoAccess`, so a bug cannot reach them; the VPS node is not a guest on the host at all. Each run also refuses a plan whose destroy list names them.
 3. **How a production run is approved.**
    (a) **Dev first.** The same change, at the same commit or the PR's head, has passed the same layer on dev (VMs 250 to 257), from the agent box. The dev run's log is named in the card.
-   (b) **The owner's tap.** The owner taps "go" on a decision card in the project's chat whose question names the repository, the commit or PR with its head, and the layer, as D-0034 sets out for a card. A teardown of the whole lab has its own card, which says so in its question. A tap covers one run of that layer at that commit, and nothing after it. Since D-0042, the reviewer's and the council's pass takes the place of this tap (the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, ending his own approval of PRs for the greenfield build-out; who approves in his place is an agent pick), except for the steps in D-0042 rule 6 (a teardown of the whole production lab among them), and (c) checks the pass the same way.
+   (b) **The owner's tap.** The owner taps "go" on a decision card in the project's chat whose question names the repository, the commit or PR with its head, and the layer, as D-0034 sets out for a card. A teardown of the whole lab has its own card, which says so in its question. A tap covers one run of that layer at that commit, and nothing after it. Since D-0042, the reviewer's and the council's pass takes the place of this tap (the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, ending their own approval of PRs for the greenfield build-out; who approves in their place is an agent pick), except for the steps in D-0042 rule 6 (a teardown of the whole production lab among them), and (c) checks the pass the same way.
    (c) **Checked before the run.** A reviewing agent reads the tap in the chat, checks that the member who tapped is the owner and that the card names this commit and layer, and only then the run starts. The run's log on the box names the card's message ID.
    Dev runs need no tap: they are where agents harden the change (the owner's words of 2026-11-14 03:20 UTC).
 4. **What a run uses.** The code of `main` at a commit whose PR merged green, one fixed layer per run (no free arguments), the box's own wrappers and keys. No workflow in this repository takes a `pull_request`, `pull_request_target`, `issue_comment` or `issues` trigger and runs on the box's runner (AGENTS.md rule 5).
@@ -68,7 +68,7 @@ Chosen option: **2**. The owner picked the scope and, on 2026-11-14, chat approv
 
 ### Consequences
 
-- Good: the owner approves in the same chat he already uses, in words and taps, and every production change has passed on dev first.
+- Good: the owner approves in the same chat they already use, in words and taps, and every production change has passed on dev first.
 - Good: the teardown can't touch the box that runs it, because the token has no rights there.
 - Bad: **the box can't check the tap itself.** The tap lives in the chat, which the box can't read, so an agent's word that the owner tapped is what starts the run. Compensating controls: a reviewing agent checks the tap and the member before the run (rule 3(c)); the run's log names the card; a disowned tap is a revisit trigger; and rule 8 replaces this with a GitHub approval once the agents have their own account.
 - Bad: the agent box holds a Proxmox token that can destroy every lab guest. Compensating controls: reviewed main only, the dev pass first, the owner's tap, the 24-hour backup precondition, the destroy cap, and the exclusion by rights.
@@ -85,7 +85,7 @@ Chosen option: **2**. The owner picked the scope and, on 2026-11-14, chat approv
 ### 1. Approval on a protected GitHub environment
 
 - Good: GitHub proves it was the owner, and the box can check the approval itself.
-- Bad: today agents act as the owner's GitHub account, so any token for that account with Deployments write could approve as him. It needs the agents' own account first (D-0030), which the owner placed after the platform is laid down (2026-11-14 03:20 UTC). Kept as rule 8.
+- Bad: today agents act as the owner's GitHub account, so any token for that account with Deployments write could approve as them. It needs the agents' own account first (D-0030), which the owner placed after the platform is laid down (2026-11-14 03:20 UTC). Kept as rule 8.
 
 ### 3. Keep the Mac in the loop
 
@@ -94,7 +94,7 @@ Chosen option: **2**. The owner picked the scope and, on 2026-11-14, chat approv
 
 ## More Information
 
-- **Evidence:** the owner's messages of 04:58 and 05:04 UTC on 2026-11-13; his taps at 05:08 and 05:29 UTC on the cards "What can an agent tear down and rebuild without you on the Mac?" and "How do you approve an agent's teardown or rebuild?"; his message of 2026-11-14 03:20 UTC and his tap at 03:22 UTC on the card "Open prod to agents on your word in chat, after dev proves it?"; and dev rebuilds from the box that passed on 2026-11-12 and 2026-11-13. No research batch of its own.
+- **Evidence:** the owner's messages of 04:58 and 05:04 UTC on 2026-11-13; their taps at 05:08 and 05:29 UTC on the cards "What can an agent tear down and rebuild without you on the Mac?" and "How do you approve an agent's teardown or rebuild?"; their message of 2026-11-14 03:20 UTC and their tap at 03:22 UTC on the card "Open prod to agents on your word in chat, after dev proves it?"; and dev rebuilds from the box that passed on 2026-11-12 and 2026-11-13. No research batch of its own.
 - **What the first draft found about GitHub rights**, kept for rule 8: GitHub's table of App permissions puts the endpoints that set or delete an environment and its protection rules under Administration (write), and the endpoint that approves a pending deployment under Deployments (write) [source: https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps].
 - **Exit path:** delete the box's production token; the Mac path in the runbooks still works.
 - Related records: D-0001, D-0030, D-0031, D-0034, D-0036.
