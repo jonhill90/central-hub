@@ -99,7 +99,7 @@ Stop if you can't sign in as a Global Administrator: nothing below works without
 ## Afterwards
 
 - The secret from step 4 expires; note its end date (`az ad app credential list --id <appId>`) and reset it before then.
-- On 2026-11-09 at 03:33 UTC the owner also gave `agent-azure` **Owner** on the subscription, so agents can assign the roles their code needs (for example the backup app's data role in `hosts/terraform/azure/backup`). The owner's words: "make you owner for now ... you need to be able to flesh the things out. It does not have a cc" and "just dont charge anything strange. like all we need is this storage account" (2026-11-09 03:32-03:33 UTC). So agents make no other billable resource there without the owner's yes. To go back to Contributor only: `az role assignment delete --assignee <appId> --role Owner --scope <scope>`.
+- On 2026-11-09 at 03:33 UTC the owner also gave `agent-azure` **Owner** on the subscription, so agents can assign the roles their code needs (for example the backup app's data role in `hosts/terraform/azure/backup`). The owner's words: "make you owner for now ... you need to be able to flesh the things out. It does not have a cc" and "just dont charge anything strange. like all we need is this storage account" (2026-11-09 03:32-03:33 UTC). So agents make no other billable resource there without the owner's yes. To go back to Contributor plus the backup roles only, see [Narrow agent-azure's rights](#narrow-agent-azures-rights).
 - Each new kind of job (for example an Entra app registration for Keycloak) needs its own Microsoft Graph permission, added by the owner with admin consent, one at a time. Record each one here:
 
   | Graph application permission | Given | For | What it allows |
@@ -122,6 +122,34 @@ Stop if you can't sign in as a Global Administrator: nothing below works without
   | agents | Keycloak, through a client in the realm | `AZURE_CLIENT_SECRET` |
 
   Both need the issuer's discovery document and signing keys to be reachable by Entra, so this waits on that being built and tested. Azure Arc is the fallback for c1 if federation can't be used.
+
+## Narrow agent-azure's rights
+
+Owner lets agent-azure give any account any role, itself included, so it can read every backup and the vault. Narrowing replaces that with a right that can give roles only to the three backup apps, and adds two deny rules for the whole subscription. It is code in `hosts/terraform/azure/backup` (agent pick 247), off until `narrow_agent_access = true`, and the script `narrow-agent-access.sh` beside it runs every step. Agents run it in the Mac lane, where this root's state lives (its `backend.tf`); the owner runs nothing. It starts only on the owner's tap on a card that names the merge commit and the saved plan's sha256 (an access right, D-0042 rule 6).
+
+What changes:
+
+| Before | After |
+|---|---|
+| Owner and Contributor on the subscription | Contributor on the subscription, and Role Based Access Control Administrator on the backup resource group with a condition: only Storage Blob Data Contributor, Storage Blob Data Reader and the OPNsense escrow role, only for the backup, reader and OPNsense apps, for both adding and removing ([constrained delegation](https://learn.microsoft.com/azure/role-based-access-control/delegate-role-assignments-examples)) |
+| Contributor or Owner could turn the storage account's keys back on and read every blob with a key ([Learn](https://learn.microsoft.com/azure/storage/common/shared-key-authorization-prevent)) | Built-in policy "Storage accounts should prevent shared key access", effect Deny, on the subscription |
+| Contributor could switch the vault to access lists and grant itself a secret ([Learn](https://learn.microsoft.com/azure/key-vault/general/assign-access-policy)) | Built-in policy "Azure Key Vault should use RBAC permission model", effect Deny, on the subscription |
+
+What stays: agent-azure owns the three apps (Graph `Application.ReadWrite.OwnedBy`), so it can still add a credential to one of them and read both backup containers through it, but not a vault secret's value, because the escrow role can only set a secret and read its metadata.
+
+Steps, each a subcommand of `hosts/terraform/azure/backup/narrow-agent-access.sh`, which logs what it runs and stops on the first result it did not expect:
+
+0. In the Mac's `azure.tfvars`, set `narrow_agent_access = true` and `agent_object_id` (agent-azure's service principal object ID: `az ad sp show --id <appId> --query id -o tsv`), and remove any `keep_sas_signer` line. Then `precheck`: read only; stops if any storage account in the subscription allows shared key access or any key vault uses access lists, since the deny rules would block their updates.
+1. `plan`, before the card: saves the plan and prints its sha256 for the card. After the tap: `apply <sha256>` applies that saved file only if its sha256 matches; tofu refuses a stale plan.
+2. `deny-check`, Owner still held: validates, in the backup resource group, a new storage account with shared keys and a new vault on access lists; both must be refused by policy. Validate creates nothing. If either passes, the script stops before the backups.
+3. Run both backups with their own jobs: a c1 backup and an OPNsense copy, and a restore read through the reader app. If either fails, stop here; Owner is still held.
+4. `remove-owner <c1 run> <OPNsense run>`: removes agent-azure's Owner on the subscription, with `az role assignment delete --assignee <appId> --role Owner --scope /subscriptions/<id>`.
+5. `verify`: agent-azure giving itself a data role, giving the OPNsense app Key Vault Secrets User, deleting either deny rule and exempting the backup group from either must each be refused. Then one allowed grant that adds no reach (Storage Blob Data Reader for the backup app on its own container, where it already holds Contributor) must work and is removed at once, and `tofu plan` must show no changes.
+6. Run both backups again.
+
+If any of steps 5 or 6 fails: stop and ask the owner to give Owner back, which agents cannot do: `az role assignment create --assignee <appId> --role Owner --scope /subscriptions/<id>`.
+
+Once narrowed, agent-azure cannot remove its own Role Based Access Control Administrator assignment (that role is not in its condition), so turning `narrow_agent_access` back to false, and any change to the escrow role's definition or the deny rules, needs the owner's login.
 
 ## Related
 
