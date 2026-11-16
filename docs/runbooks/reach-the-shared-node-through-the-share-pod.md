@@ -16,7 +16,7 @@ superseded-by:
 
 A node in another tailnet is shared into this one. The agent box is the lab's most sensitive machine, because its keys folder holds the secrets store's keys (D-0038), so it never joins that path itself. One small pod on c1 does instead. It has its own tailnet identity, tag `tag:share-pod`, holds no lab secret and no Kubernetes credential, and forwards one TCP port to the shared node. The agent's own SSH key and the shared node's host key check stay end to end through it, because the pod forwards raw TCP.
 
-```
+```text
 agent box (tag:agent-box) --tcp 2222--> share pod (tag:share-pod) --tcp--> shared node (other tailnet)
 ```
 
