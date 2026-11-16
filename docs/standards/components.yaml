@@ -268,14 +268,14 @@ components:
     checked: 2026-11-14
   - name: OpenBao
     kind: software
-    used-for: the lab's secrets store, installed from its release package
+    used-for: the lab's secrets store, inside c1 from OpenBao's own Helm chart and image (D-0058); its chart, openbao-helm, is MPL-2.0 too (https://raw.githubusercontent.com/openbao/openbao-helm/main/LICENSE). The release package (url:github.com/openbao/) stays listed until the store VM's role is removed
     licence: MPL-2.0
     licence-source: https://raw.githubusercontent.com/openbao/openbao/main/LICENSE
     paid-edition: none found; the project states it is community-run under open governance with an OSI licence, and sells no edition
     paid-edition-source: https://raw.githubusercontent.com/openbao/openbao/main/README.md
     verdict: pass
-    sources: [url:github.com/openbao/]
-    checked: 2026-11-14
+    sources: [url:github.com/openbao/, url:openbao.github.io/openbao-helm, image:quay.io/openbao/]
+    checked: 2026-11-16
   - name: SOPS
     kind: software
     used-for: encrypting the agent box's daily bundle of its private files to age recipients (proposed D-0038 rule 10)
