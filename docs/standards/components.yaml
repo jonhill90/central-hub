@@ -438,6 +438,39 @@ components:
     sources: [url:raw.githubusercontent.com/datreeio/CRDs-catalog/]
     checked: 2026-11-14
 
+  - name: Podman
+    kind: software
+    used-for: rootless containers, one per app user, on the VPS apps host (D-0046)
+    licence: Apache-2.0
+    licence-source: https://podman.io/
+    paid-edition: none found; the project page calls it "free & open source" and names no paid edition
+    paid-edition-source: https://podman.io/
+    verdict: pass
+    sources: []
+    not-detected: installed from AlmaLinux 10 appstream by role vps_app_host; the scanner reads no package names
+    checked: 2026-11-14
+  - name: catatonit
+    kind: software
+    used-for: the init process Podman starts in each container on the VPS apps host (D-0046)
+    licence: GPL-2.0
+    licence-source: https://raw.githubusercontent.com/openSUSE/catatonit/main/COPYING
+    paid-edition: none found; a small init program from openSUSE with no product around it
+    paid-edition-source: https://raw.githubusercontent.com/openSUSE/catatonit/main/COPYING
+    verdict: pass
+    sources: []
+    not-detected: installed from AlmaLinux 10 appstream by role vps_app_host; the scanner reads no package names
+    checked: 2026-11-14
+  - name: Valkey
+    kind: software
+    used-for: OmniRoute's Redis-protocol store on the VPS apps host, on loopback only (D-0046); chosen over Redis, whose company holds features back in a paid edition
+    licence: BSD-3-Clause
+    licence-source: https://valkey.io/
+    paid-edition: none found; the project page says it is backed by the Linux Foundation and names only third-party hosted services and support, not a paid edition
+    paid-edition-source: https://valkey.io/
+    verdict: pass
+    sources: []
+    not-detected: installed from AlmaLinux 10 appstream by role vps_app_host; the scanner reads no package names
+    checked: 2026-11-14
   # Hosted services (STD-0006 rule 3).
   - name: GitHub
     kind: hosted

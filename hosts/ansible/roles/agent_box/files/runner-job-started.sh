@@ -2,7 +2,7 @@
 # /usr/local/libexec/agent-box/runner-job-started.sh: the Actions runner's job-started hook
 # (ACTIONS_RUNNER_HOOK_JOB_STARTED in the runner's .env). The repository is public, so any workflow on any
 # branch can ask for this runner by label; this hook refuses every job except the listed workflow files (the dev
-# redeploy workflow, the tailnet pipeline job, the Proxmox host job, and the tailnet policy job, D-0046), as they are on main, started by hand, and byte for byte the
+# redeploy workflow, the tailnet pipeline job, the Proxmox host job, and the tailnet policy and VPS host jobs, D-0046), as they are on main, started by hand, and byte for byte the
 # file whose sha256 is listed below. It fetches the file at the run's commit (GITHUB_WORKFLOW_SHA) from the public
 # repository and refuses if it cannot (fail closed). A merged edit to a listed workflow therefore does nothing on
 # the box until a tapped install updates this list.
@@ -17,6 +17,7 @@ allowed=(
   "b61c975faa57620a94e4e2f4a178f30f33094543349c223b1f7c8bf29dfd378d .github/workflows/lab-tailnet.yml"
   "db51ec3fc842f9520afce005d211a4c6246b85a5bc79b3f89a2f939d4d35d2e7 .github/workflows/lab-proxmox-host.yml"
   "196fecc5a766435ddd8a77a84c03d9bcf5666d49b5c7d74db5d64879dba6d3ab .github/workflows/lab-tailnet-policy.yml"
+  "a924ac479b9613d8a62f807b380cc7ba842298ed16181922f14d3fa234bb293d .github/workflows/lab-vps-host.yml"
 )
 # Workflow files that still exist and name the box's label but must not run here. The hook refuses them because they are
 # not listed above; the CI check requires each to exist and to stay unlisted, so deleting one means editing this list.
