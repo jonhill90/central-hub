@@ -138,7 +138,7 @@ Another tailnet can share its own devices into this one with Tailscale's declara
 
 | When (UTC) | What | How | Approval |
 |---|---|---|---|
-| 2026-11-16, about 04:06 | One external tailnet entry with `allowIncomingConnections` false, and its group, added to the live policy | In the admin console, by an agent; the feature preview switch was not touched by the agent | The owner's message cmsg_01X43rfNYp4H1dL1V2dkfkwNKcqZHoK8kv2XYZkvmC9D2L (2026-11-16 03:49:47 UTC) |
+| 2026-11-16, about 04:06 | One external tailnet entry with `allowIncomingConnections` false, and its group, added to the live policy | In the admin console, by an agent; the feature preview switch was not touched by the agent | The owner's message cmsg_01X43rfNYp4H1dL1V2dkfkwNKcqZHoK8kv2XYZkvmC9D2L (2026-11-16 03:49:47 UTC), and their message cmsg_01X43rfNYp4H1dL1V2dkfkwNSwwKzEFPyyZP2uwiunXJkc (04:40:52 UTC), in which they say they can now reach the shared device |
 
 Until `home.tfvars` holds the same entry, a plan from this folder would remove it. So no plan or apply runs here, from the Mac or a pipeline job, until the entry is in `home.tfvars`, and the first plan's gate is that the rendered `groups` and `externalTailnets` sections equal the live ones. Any difference in them stops the run. The one difference allowed is the share pod's tag: `"tag:share-pod"` added to `allowExternalReferencesTo` in each entry. The apply's card names that tag, and the new `tagOwners` entry, grant and tests, in plain words. The change goes through this folder's plan and apply, the Mac's first run below, never the console.
 
@@ -148,6 +148,6 @@ No agent edits the Mac's `home.tfvars`, so the first run is one session on the M
 2. `tofu-tailnet-policy.sh import`: it reads the live policy into the state and changes nothing in the tailnet. `home.tfvars` has no `external_tailnets` yet, which is valid.
 3. Copy the live policy's external tailnet entry and its group from the imported state into `external_tailnets` in `home.tfvars` (0600): the alias, the ID, the group name and its logins, exactly as they are live. Print none of them.
 4. `tofu-tailnet-policy.sh plan`, then the gate: parse the rendered and the live policy as data and compare `groups` and `externalTailnets`. If they differ in anything but the added `"tag:share-pod"` in `allowExternalReferencesTo`, stop.
-5. Stop there. The plan's other differences go to the owner to read, and an apply is its own typed line naming that saved plan.
+5. Stop there. The owner gets the plain names of the top-level sections that differ (such as `grants` or `ssh`), not a whole-file diff, which names the Proxmox host's address. An apply is its own typed line naming that saved plan.
 
 The provider compares the policy as formatted HuJSON text, comments and key order included [source: terraform-provider-tailscale v0.29.2, `tailscale/plan_modifiers.go`, `aclHuJSONModifier`]. While the live policy has never been applied from this folder, the plan can show the whole file as changed even where the two mean the same. So compare those two sections as data (comments and trailing commas removed), and read the rest of the plan's difference as the paragraph above says.
