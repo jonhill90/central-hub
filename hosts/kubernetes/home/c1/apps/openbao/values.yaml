@@ -39,9 +39,8 @@ server:
     - type: configMap
       name: openbao-policies
   # The seal key's folder on the node (local PersistentVolume openbao-seal, D-0058 rule 3), read-only.
-  # Its node affinity places the pod on that node. For a store's first start only, the folder also
-  # holds the admin AppRole's two IDs; the box's node play removes them once OpenBao has initialized
-  # and checks they are gone, so they then live only in the box's keys folder (D-0038 rule 6).
+  # Its node affinity places the pod on that node. It holds the key only: the admin AppRole's IDs
+  # never leave the box's keys folder (D-0038 rule 6; see initialize "bootstrap" below).
   volumes:
     - name: seal
       persistentVolumeClaim:
@@ -181,6 +180,13 @@ server:
               policy = { eval_type = "string", eval_source = "file", path = "/openbao/userconfig/openbao-policies/snapshot.hcl" }
             }
           }
+          request "bootstrap" {
+            operation = "update"
+            path      = "sys/policies/acl/bootstrap"
+            data = {
+              policy = { eval_type = "string", eval_source = "file", path = "/openbao/userconfig/openbao-policies/bootstrap.hcl" }
+            }
+          }
         }
 
         # OpenBao's Kubernetes login checks a pod's token with the cluster's TokenReview API, using
@@ -216,8 +222,8 @@ server:
         }
 
         # The agent box's admin login (D-0038 rule 6): only from the box's address, 15-minute tokens.
-        # Its two IDs are files the box's node play writes beside the seal key for this first start
-        # only, and removes once OpenBao has initialized.
+        # It is made with no IDs the box knows: OpenBao picks a random role ID and there is no secret
+        # ID yet, so nothing the admin needs is in the cluster or on a node.
         initialize "roles" {
           request "admin" {
             operation = "update"
@@ -230,18 +236,24 @@ server:
               token_bound_cidrs     = ["{{ .Values.centralHub.boxCidr }}"]
             }
           }
-          request "admin_role_id" {
+        }
+
+        # One-time hand-over of the admin login to the box. The box mints a short token for service
+        # account openbao-bootstrap (no pod runs as it) with its cluster-admin kubeconfig, signs in
+        # here, sets the admin's role ID and a secret ID from its keys folder, and deletes this role
+        # with the same token (policy bootstrap: nothing else). Until then anyone with cluster-admin
+        # could do the same, but they can already read the seal key and the data.
+        initialize "bootstrap" {
+          request "role" {
             operation = "update"
-            path      = "auth/approle/role/admin/role-id"
+            path      = "auth/kubernetes/role/bootstrap"
             data = {
-              role_id = { eval_type = "string", eval_source = "file", path = "/openbao/seal/admin-role-id" }
-            }
-          }
-          request "admin_secret_id" {
-            operation = "update"
-            path      = "auth/approle/role/admin/custom-secret-id"
-            data = {
-              secret_id = { eval_type = "string", eval_source = "file", path = "/openbao/seal/admin-secret-id" }
+              bound_service_account_names      = ["openbao-bootstrap"]
+              bound_service_account_namespaces = ["openbao"]
+              token_policies                   = ["bootstrap"]
+              token_ttl                        = "5m"
+              token_max_ttl                    = "5m"
+              token_num_uses                   = 4
             }
           }
         }

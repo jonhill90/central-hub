@@ -3,9 +3,8 @@
 # It manages the store's contents, mounts, logins and policies, takes and restores snapshots and
 # makes recovery keys. It reads the Raft peers, leader and term, which the restore drill compares
 # before and after. Because it can write any policy and any login, it can grant itself anything:
-# treat it as root. What limits it is where it runs: its IDs live in the box's keys folder (and, for
-# a store's first start only, beside the seal key on the node, until the box's node play removes
-# them), it logs in only from the box's address, and its tokens last 15 minutes, an hour at most.
+# treat it as root. What limits it is where it runs: its IDs live only in the box's keys folder, it
+# logs in only from the box's address, and its tokens last 15 minutes, an hour at most.
 path "kv/*"                       { capabilities = ["create", "read", "update", "delete", "list"] }
 path "sys/policies/acl/*"         { capabilities = ["create", "read", "update", "delete", "list"] }
 path "sys/auth"                   { capabilities = ["read"] }
