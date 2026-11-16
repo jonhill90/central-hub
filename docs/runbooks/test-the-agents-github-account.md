@@ -31,7 +31,7 @@ A self-hosted environment can carry its own git credentials ([Configure git](htt
 
 ## Steps
 
-1. **The owner makes the account and invites it.** Make a GitHub account for the agents with an email they can verify, turn on two-factor sign-in, and invite it as a collaborator on central-hub, inpara, agent-notebook and obsidian-graph-3d. Sign in as the account and accept the four invitations. Put its name in the private store as `agent-account-name`, and send it to the agents in the project's chat.
+1. **The owner makes the account and invites it.** Make a GitHub account for the agents with an email the owner can verify, turn on two-factor sign-in, and invite it as a collaborator on central-hub, inpara, agent-notebook and obsidian-graph-3d. Sign in as the account and accept the four invitations. Put its name in the private store as `agent-account-name`, and send it to the agents in the project's chat.
    why: GitHub allows one free machine account per person, made by that person, who answers for it (D-0030 rule 1). A collaborator on a personal repository has write access, which is what the agents need, and no more.
    expect: each repository's collaborators page lists the account with write access.
 

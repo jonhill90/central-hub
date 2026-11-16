@@ -28,7 +28,7 @@ AGENTS.md "Rules for now" keep the owner's own hands on every step while they le
 
 On 2026-11-13 at 04:58 UTC the owner said the plan was for an agent to redeploy from a cloud session or the agent jump box, and at 05:04 UTC that the goal is for the agent to be able to tear down the home lab and rebuild it if needed. On decision cards they picked "Everything on Proxmox" (05:08 UTC) for what an agent may rebuild, and "Approve on GitHub, phone tap" (05:29 UTC) for how they approve it. A dev rebuild from the agent box passed all eight stages on 2026-11-12, and again on 2026-11-13, with no Mac step.
 
-The first draft of this record used a protected GitHub environment for each run. That needs the agents to have a GitHub account of their own, because today they act as the owner's account, which could approve as them (D-0030). On 2026-11-14 at 03:20 UTC the owner wrote: "remember we are going to use natural language for all of this. And we need to be able to have you harden yourself in dev to prove it works before prod. So they both should be open for you right now. But the goal is to make it where you like i said just do stuff as your own account. But we are a while from there". At 03:22 UTC they tapped "Yes, set it up" on the card "Open prod to agents on your word in chat, after dev proves it?", whose option read: "Agents rewrite D-0035 to chat approval, ready #216 and the prod token; you accept with one typed line, then each prod run needs your card tap." This version records that choice. The GitHub approval moves to "Later, with D-0030".
+The first draft of this record used a protected GitHub environment for each run. That needs the agents to have a GitHub account of their own, because today they act as the owner's account, which could approve as the owner (D-0030). On 2026-11-14 at 03:20 UTC the owner wrote: "remember we are going to use natural language for all of this. And we need to be able to have you harden yourself in dev to prove it works before prod. So they both should be open for you right now. But the goal is to make it where you like i said just do stuff as your own account. But we are a while from there". At 03:22 UTC they tapped "Yes, set it up" on the card "Open prod to agents on your word in chat, after dev proves it?", whose option read: "Agents rewrite D-0035 to chat approval, ready #216 and the prod token; you accept with one typed line, then each prod run needs your card tap." This version records that choice. The GitHub approval moves to "Later, with D-0030".
 
 This record loosens "Rules for now", so under D-0034 rule 4 it needs the owner's typed line, not a tap.
 
@@ -85,7 +85,7 @@ Chosen option: **2**. The owner picked the scope and, on 2026-11-14, chat approv
 ### 1. Approval on a protected GitHub environment
 
 - Good: GitHub proves it was the owner, and the box can check the approval itself.
-- Bad: today agents act as the owner's GitHub account, so any token for that account with Deployments write could approve as them. It needs the agents' own account first (D-0030), which the owner placed after the platform is laid down (2026-11-14 03:20 UTC). Kept as rule 8.
+- Bad: today agents act as the owner's GitHub account, so any token for that account with Deployments write could approve as the owner. It needs the agents' own account first (D-0030), which the owner placed after the platform is laid down (2026-11-14 03:20 UTC). Kept as rule 8.
 
 ### 3. Keep the Mac in the loop
 

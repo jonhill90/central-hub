@@ -83,7 +83,7 @@ Chosen option: **1**.
 - **Short-lived branch names:** `<type>/<short-description>`, for example `fix/cert-renewal`.
   - Lowercase letters, digits and hyphens after the slash, one slash only. An issue number may lead the description, as in `fix/123-cert-renewal`.
   - Deleted on merge.
-  - The proposed types are below. `feat` and `fix` are Conventional Commits types; the others come from the commitlint conventional list. In Conventional Branch 1.1.0, `feat` and `fix` are standard aliases and the rest are documented custom types, which this record documents. Seven of the eight already head 1,714 of the owner's 2,379 PRs (72%) across their 7 readable repos; `revert` has not been used yet.
+  - The proposed types are below. `feat` and `fix` are Conventional Commits types; the others come from the commitlint conventional list. In Conventional Branch 1.1.0, `feat` and `fix` are standard aliases and the rest are documented custom types, which this record documents. Seven of the eight already head 1,714 of the owner's 2,379 PRs (72%) across the owner's 7 readable repos; `revert` has not been used yet.
 
   | Type | Use for | Covers the owner's words |
   |---|---|---|
