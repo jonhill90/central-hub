@@ -1,0 +1,6 @@
+apiVersion: v2
+name: share-pod
+description: A small pod on c1 with its own tailnet identity that forwards one port to a node another tailnet shares in, so no machine that holds lab secrets needs that path
+type: application
+version: 0.1.0
+appVersion: v1.104.4

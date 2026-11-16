@@ -45,6 +45,9 @@ k8s_gitops_cluster_labels:
 # false. It follows k8s_gateway_https: a cluster with no certificate (a dev rebuild, which has no
 # c1 CA key, D-0028) serves HTTP only, so the gateway app is not Degraded on a missing Secret.
 k8s_gitops_source_gateway_https: "{{ k8s_gateway_https | default(true) }}"
+# Private, no default: the shared node the share pod forwards to, as <address>:<port>, passed to the
+# root chart as `shareTarget` (apps/share-pod). Left unset, the share-pod app renders nothing.
+# k8s_gitops_source_share_target: <address>:<port>
 # Whether local-path names each volume's folder <namespace>/<claim>, passed to the root chart as
 # `localPathStableFolders` only when true. Dev turns it on, so its restore of prod's backup puts each
 # folder where the claim will look (TASK-0240, agent pick 205). c1 keeps false: its StorageClass's
