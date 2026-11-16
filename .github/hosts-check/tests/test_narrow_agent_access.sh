@@ -2,13 +2,16 @@
 # hosts/terraform/azure/backup/narrow-agent-access.sh (pick 247) against stand-ins for az and tofu,
 # which log every call and answer from the case's settings. Nothing reaches Azure.
 #   1. precheck passes on a clean subscription, and stops on an account with shared keys, a vault on
-#      access lists, a person's login, keep_sas_signer left in azure.tfvars, or no narrowing settings.
+#      access lists (read one by one, as the list carries no properties), a person's login, keep_sas_signer
+#      left in azure.tfvars, no narrowing settings, an agent_object_id that is not agent-azure's, or a
+#      credentials file without AZURE_TENANT_ID.
 #   2. plan saves the plan and prints its sha256; a plan that changes anything else stops.
 #   3. apply refuses a plan whose sha256 is not the card's and applies only the saved file.
-#   4. deny-check passes only when both templates are refused by policy, and stops as "unproven".
+#   4. deny-check passes only when both templates are refused by policy; it says "wait" within an hour
+#      of apply and "unproven" after that.
 #   5. remove-owner needs deny-check and both backup runs, then removes Owner only.
-#   6. verify passes on refusals plus one allowed grant and a clean plan; a refusal that does not
-#      happen is undone and stops.
+#   6. verify waits 10 minutes after remove-owner, then passes on refusals plus one allowed grant and a
+#      clean plan; a refusal that does not happen is undone and stops; a cleanup that fails stops too.
 # Usage: .github/hosts-check/tests/test_narrow_agent_access.sh   (needs python3)
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
@@ -38,12 +41,17 @@ case "$*" in
   "account show --query user.type -o tsv") get user_type servicePrincipal; echo ;;
   "account show --query user.name -o tsv") get user_name 33333333-3333-3333-3333-333333333333; echo ;;
   "account show --query id -o tsv") echo 00000000-0000-0000-0000-000000000000 ;;
+  "ad sp show --id 33333333-3333-3333-3333-333333333333 --query id -o tsv") get sp_id 99999999-9999-9999-9999-999999999999; echo ;;
   "storage account list"*) get open_keys 0; echo ;;
-  "keyvault list"*) get old_vaults 0; echo ;;
+  "keyvault list --query [].id -o tsv") echo /subscriptions/0/resourceGroups/rg-c1-backup/providers/Microsoft.KeyVault/vaults/kv ;;
+  "keyvault show --ids "*"--query properties.enableRbacAuthorization -o tsv") get vault_rbac true; echo ;;
   "policy assignment list"*) echo 1 ;;
   "deployment group validate"*)
     [ -f "$cfg/validate_passes" ] && exit 0
     echo "ERROR: (RequestDisallowedByPolicy) Resource was disallowed by policy." >&2; exit 1 ;;
+  "role assignment delete --ids"*)
+    [ -f "$cfg/grant_delete_fails" ] && { echo "ERROR: (InternalServerError) try again" >&2; exit 1; }
+    exit 0 ;;
   "role assignment delete"*) exit 0 ;;
   "role assignment list"*) get owner_left 0; echo ;;
   "role assignment create"*"Storage Blob Data Reader"*"blobServices"*)
@@ -115,7 +123,12 @@ not_called() { if grep -q -- "$1" "$calls"; then cat "$calls"; echo "FAIL: unexp
 # 1. precheck
 reset; ok precheck
 reset; echo 1 > "$cfg/open_keys"; stops "allow shared key access" precheck
-reset; echo 1 > "$cfg/old_vaults"; stops "use access lists" precheck
+reset; echo false > "$cfg/vault_rbac"; stops "use access lists" precheck
+reset; : > "$cfg/vault_rbac"; stops "use access lists" precheck
+reset; echo 12345678-0000-0000-0000-000000000000 > "$cfg/sp_id"; stops "not agent-azure's service principal" precheck
+reset; echo 12345678-0000-0000-0000-000000000000 > "$cfg/sp_id"; stops "not agent-azure's service principal" plan
+reset; grep -v AZURE_TENANT_ID "$work/azure.env" > "$work/azure.env.notenant"; cp "$work/azure.env" "$work/azure.env.full"
+cp "$work/azure.env.notenant" "$work/azure.env"; stops "AZURE_TENANT_ID is not set" precheck; cp "$work/azure.env.full" "$work/azure.env"
 reset; echo user > "$cfg/user_type"; stops "not signed in as agent-azure" precheck
 reset; echo 'keep_sas_signer = true' >> "$work/root/azure.tfvars"; stops "keep_sas_signer" precheck
 reset; : > "$work/root/azure.tfvars"; stops "narrow_agent_access" precheck
@@ -135,6 +148,8 @@ echo "ok 3 apply"
 
 # 4. deny-check
 reset; touch "$cfg/validate_passes"; stops "unproven" deny-check
+date +%s > "$work/state/narrow-agent-access/applied.at"; stops "wait until" deny-check
+echo 0 > "$work/state/narrow-agent-access/applied.at"; stops "unproven" deny-check
 [ ! -f "$work/state/narrow-agent-access/deny-check.ok" ] || { echo "FAIL: deny-check marked a pass" >&2; exit 1; }
 reset; ok deny-check; called "deployment group validate -g rg-c1-backup"
 echo "ok 4 deny-check"
@@ -148,15 +163,18 @@ reset; ok deny-check; echo 1 > "$cfg/owner_left"; stops "still assigned" remove-
 echo "ok 5 remove-owner"
 
 # 6. verify
+aged() { echo 0 > "$work/state/narrow-agent-access/owner-removed.ok"; }
 reset; stops "remove-owner has not run" verify
-reset; ok deny-check; ok remove-owner a b; : > "$calls"; ok verify
+reset; ok deny-check; ok remove-owner a b; stops "role changes take up to 10 minutes" verify
+reset; ok deny-check; ok remove-owner a b; aged; : > "$calls"; ok verify
 called "policy assignment delete --name deny-storage-shared-key"
 called "policy exemption create --name narrow-check-deny-vault-access-policies"
 called "role assignment delete --ids /subscriptions/0/providers/Microsoft.Authorization/roleAssignments/grant1"
 called "tofu plan -input=false -no-color -detailed-exitcode"
-reset; ok deny-check; ok remove-owner a b; touch "$cfg/self_grant_works"; : > "$calls"
+reset; ok deny-check; ok remove-owner a b; aged; touch "$cfg/self_grant_works"; : > "$calls"
 stops "could give itself a data role" verify
 called "role assignment delete --assignee 99999999-9999-9999-9999-999999999999 --role Storage Blob Data Reader"
-reset; ok deny-check; ok remove-owner a b; echo 2 > "$cfg/plan_rc"; stops "plan is not clean" verify
+reset; ok deny-check; ok remove-owner a b; aged; echo 2 > "$cfg/plan_rc"; stops "plan is not clean" verify
+reset; ok deny-check; ok remove-owner a b; aged; touch "$cfg/grant_delete_fails"; stops "could not be removed" verify
 echo "ok 6 verify"
 echo "narrow-agent-access: all cases pass"
