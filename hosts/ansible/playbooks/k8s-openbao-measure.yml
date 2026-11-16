@@ -1,0 +1,377 @@
+---
+# Dev only: the source address OpenBao sees for a request from this machine (the agent box) through c1's
+# Gateway, and whether c1 enforces the store's NetworkPolicy (ADDENDUM-1 v3 step 1; the plan is
+# MEASURE-1; docs/runbooks/set-up-the-secrets-store.md, "Measuring the box's path through the Gateway").
+# The rebuild's dev-only stage `openbao-measure` runs it after `dev-ca`, with the root value openbaoMeasure
+# on, so the openbao-measure app's routes exist and OpenBao audits X-Forwarded-For and X-Measure-Nonce.
+#   ansible-playbook -i <dev inventory>/ playbooks/k8s-openbao-measure.yml
+# It changes nothing in OpenBao: each probe is a login with a made-up role, which OpenBao refuses and
+# audits. It prints no secret: of the store's TLS Secret it reads only the public ca.crt field, and of the
+# audit log only each probe's path, remote address and X-Forwarded-For. Its last line is one PASS line.
+- name: The box's source address through the Gateway, and the store's NetworkPolicy
+  hosts: k8s_control_plane[0]
+  become: true
+  gather_facts: false
+  vars:
+    measure_kubeconfig: /etc/kubernetes/admin.conf
+    measure_kubectl: kubectl --kubeconfig {{ measure_kubeconfig }}
+    measure_ns: openbao
+    measure_check_ns: openbao-measure
+    measure_gateway: apps
+    measure_gateway_ns: gateway
+    measure_listeners: [http, https, http-short, https-short]
+    measure_reencrypt_host: "openbao-measure.{{ k8s_gitops_source_zone }}"
+    measure_pass_host: "openbao-pass.{{ k8s_gitops_source_zone }}"
+    measure_ca_configmap: openbao-measure-ca
+    # The same pinned OpenBao image as the store's snapshot job (apps/openbao-store/values.yaml).
+    measure_image: >-
+      {{ (lookup('ansible.builtin.file', playbook_dir ~ '/../../kubernetes/home/c1/apps/openbao-store/values.yaml')
+      | from_yaml).snapshot.image }}
+  tasks:
+    - name: measure | Dev only, with the zone and the Gateway's address
+      ansible.builtin.assert:
+        that:
+          - k8s_gitops_source_zone | default('') | length > 0
+          - k8s_gitops_source_gateway_address | default('') | length > 0
+          - k8s_gitops_source_openbao_in_cluster | default(false) | bool
+        fail_msg: needs the dev inventory's zone, Gateway address and the in-cluster store
+        quiet: true
+
+    - name: measure | A run id, and one nonce per probe
+      ansible.builtin.set_fact:
+        measure_run: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_lowercase', 'digits'], length=12) }}"
+
+    - name: measure | Nonces
+      ansible.builtin.set_fact:
+        measure_nonce: {a: "{{ measure_run }}-a", axff: "{{ measure_run }}-axff", b: "{{ measure_run }}-b"}
+
+    # 1. Gateway apps' listeners and the measurement's ListenerSet, read before anything else.
+    - name: measure | Gateway listeners
+      ansible.builtin.command: >-
+        {{ measure_kubectl }} -n {{ measure_gateway_ns }} get gateway {{ measure_gateway }} -o jsonpath='{.status.listeners}'
+      register: measure_gw
+      changed_when: false
+      check_mode: false
+
+    - name: measure | Every existing listener is Programmed
+      ansible.builtin.assert:
+        that: measure_not_programmed == []
+        fail_msg: "listeners of Gateway apps that are not Programmed: {{ measure_not_programmed | join(', ') }}"
+        quiet: true
+      vars:
+        measure_programmed: >-
+          {%- set ok = [] -%}
+          {%- for l in measure_gw.stdout | from_json -%}
+          {%- if l.conditions | selectattr('type', 'equalto', 'Programmed') | selectattr('status', 'equalto', 'True') | list | length > 0 -%}
+          {%- set _ = ok.append(l.name) -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ ok }}
+        measure_not_programmed: "{{ measure_listeners | reject('in', measure_programmed) | list }}"
+
+    - name: measure | The ListenerSet's conditions
+      ansible.builtin.command: >-
+        {{ measure_kubectl }} -n {{ measure_ns }} get listenerset openbao-measure
+        -o jsonpath='{range .status.conditions[*]}{.type}={.status}({.reason}) {end}'
+      register: measure_ls
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    # 2. The CA as a ConfigMap for the BackendTLSPolicy (Cilium reads only ConfigMaps there), owned by the
+    #    namespace the openbao-measure app makes, so it goes when that namespace is pruned.
+    - name: measure | The check namespace's uid
+      ansible.builtin.command: >-
+        {{ measure_kubectl }} get namespace {{ measure_check_ns }} -o jsonpath='{.metadata.uid}'
+      register: measure_ns_uid
+      changed_when: false
+      check_mode: false
+      failed_when: measure_ns_uid.rc != 0 or measure_ns_uid.stdout | length == 0
+
+    # Only the ca.crt field: the same Secret holds the server's tls.key, which is never read.
+    - name: measure | The store's public CA certificate
+      ansible.builtin.command: >-
+        {{ measure_kubectl }} -n {{ measure_ns }} get secret openbao-tls -o jsonpath='{.data.ca\.crt}'
+      register: measure_store_ca
+      changed_when: false
+      check_mode: false
+      no_log: true
+      failed_when: measure_store_ca.rc != 0 or measure_store_ca.stdout | length == 0
+
+    - name: measure | The CA ConfigMap, made or replaced on every run
+      ansible.builtin.command:
+        argv: [kubectl, --kubeconfig, "{{ measure_kubeconfig }}", apply, -f, "-"]
+        stdin: "{{ measure_cm | to_json }}"
+      vars:
+        measure_cm:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: "{{ measure_ca_configmap }}"
+            namespace: "{{ measure_ns }}"
+            ownerReferences:
+              - apiVersion: v1
+                kind: Namespace
+                name: "{{ measure_check_ns }}"
+                uid: "{{ measure_ns_uid.stdout }}"
+          data:
+            ca.crt: "{{ measure_store_ca.stdout | b64decode }}"
+      register: measure_cm_apply
+      changed_when: "'unchanged' not in measure_cm_apply.stdout"
+      no_log: true
+
+    # 3. The policy check (DESIGN item 7): the same Job in namespace openbao (allowed; it must answer) and in
+    #    the check namespace (not allowed). Enforced only if the first answered and the second timed out.
+    - name: measure | Policy check Jobs
+      ansible.builtin.command:
+        argv: [kubectl, --kubeconfig, "{{ measure_kubeconfig }}", apply, -f, "-"]
+        stdin: "{{ measure_job | to_json }}"
+      vars:
+        # Restricted Pod Security; no service-account token; gone 5 minutes after it ends (no delete here).
+        measure_job:
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: "openbao-measure-{{ item.role }}-{{ measure_run }}"
+            namespace: "{{ item.ns }}"
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 60
+            ttlSecondsAfterFinished: 300
+            template:
+              spec:
+                restartPolicy: Never
+                automountServiceAccountToken: false
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 100
+                  runAsGroup: 1000
+                  seccompProfile: {type: RuntimeDefault}
+                containers:
+                  - name: check
+                    image: "{{ measure_image }}"
+                    command: [bao, status, "-address=https://openbao.{{ measure_ns }}.svc:8200", -tls-skip-verify]
+                    env:
+                      - {name: HOME, value: /tmp}
+                      - {name: BAO_CLIENT_TIMEOUT, value: 10s}
+                      - {name: BAO_MAX_RETRIES, value: "0"}
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities: {drop: [ALL]}
+                    volumeMounts:
+                      - {name: tmp, mountPath: /tmp}
+                volumes:
+                  - {name: tmp, emptyDir: {}}
+      loop:
+        - {role: control, ns: "{{ measure_ns }}"}
+        - {role: test, ns: "{{ measure_check_ns }}"}
+      changed_when: true
+
+    - name: measure | Wait for both Jobs to finish
+      ansible.builtin.command: >-
+        {{ measure_kubectl }} -n {{ item.ns }} get job openbao-measure-{{ item.role }}-{{ measure_run }}
+        -o jsonpath='{.status.succeeded}{.status.failed}'
+      register: measure_jobs
+      until: measure_jobs.stdout | length > 0
+      retries: 18
+      delay: 5
+      loop:
+        - {role: control, ns: "{{ measure_ns }}"}
+        - {role: test, ns: "{{ measure_check_ns }}"}
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: measure | The Jobs' last lines
+      ansible.builtin.command: >-
+        {{ measure_kubectl }} -n {{ item.ns }} logs job/openbao-measure-{{ item.role }}-{{ measure_run }} --tail=3
+      register: measure_job_logs
+      loop:
+        - {role: control, ns: "{{ measure_ns }}"}
+        - {role: test, ns: "{{ measure_check_ns }}"}
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: measure | Policy reading
+      ansible.builtin.set_fact:
+        measure_policy: >-
+          {%- set control = measure_jobs.results[0].stdout | default('?') -%}
+          {%- set test = measure_jobs.results[1].stdout | default('?') -%}
+          {%- set test_log = measure_job_logs.results[1].stdout | default('') | lower -%}
+          {%- if control == '1' and test == '1' -%}
+          not enforced
+          {%- elif control == '1' and ('timeout' in test_log or 'deadline' in test_log) -%}
+          enforced
+          {%- else -%}
+          not measured (control={{ control }}, test={{ test }}: {{ test_log | regex_replace('\s+', ' ') | truncate(80) }})
+          {%- endif -%}
+
+    # 4. The probes, from this machine. Each is a login with a made-up role ID, refused and audited.
+    - name: measure | A folder for the two public CA files, on this machine
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: openbao-measure.
+      register: measure_tmp
+      delegate_to: localhost
+      become: false
+
+    - name: measure | Dev's Gateway CA and the store's CA, public certificates only
+      ansible.builtin.command: >-
+        {{ measure_kubectl }} -n {{ item.ns }} get secret {{ item.secret }} -o jsonpath='{.data.ca\.crt}'
+      register: measure_cas
+      loop:
+        - {name: gateway, ns: "{{ measure_gateway_ns }}", secret: apps-tls}
+        - {name: store, ns: "{{ measure_ns }}", secret: openbao-tls}
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: measure | Write them on this machine
+      ansible.builtin.copy:
+        dest: "{{ measure_tmp.path }}/{{ item.item.name }}.crt"
+        content: "{{ item.stdout | b64decode }}"
+        mode: "0600"
+      loop: "{{ measure_cas.results }}"
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: measure | Probes
+      ansible.builtin.command:
+        argv:
+          - curl
+          - -sS
+          - -o
+          - /dev/null
+          - -w
+          - "%{http_code}"
+          - --max-time
+          - "15"
+          - --resolve
+          - "{{ item.host }}:443:{{ k8s_gitops_source_gateway_address }}"
+          - --cacert
+          - "{{ measure_tmp.path }}/{{ item.ca }}.crt"
+          - -H
+          - "X-Measure-Nonce: {{ measure_nonce[item.key] }}"
+          - -H
+          - "{{ item.xff | default('X-Measure-Probe: ' ~ item.key) }}"
+          - -H
+          - "Content-Type: application/json"
+          - -X
+          - POST
+          - --data
+          - '{"role_id":"measure-{{ measure_nonce[item.key] }}","secret_id":"measure"}'
+          - "https://{{ item.host }}/v1/auth/approle/login"
+      loop:
+        - {key: a, host: "{{ measure_reencrypt_host }}", ca: gateway}
+        - {key: axff, host: "{{ measure_reencrypt_host }}", ca: gateway, xff: "X-Forwarded-For: 192.0.2.1"}
+        - {key: b, host: "{{ measure_pass_host }}", ca: store}
+      register: measure_probes
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    # On b, which certificate answered: the store's CA means the passthrough listener; dev's wildcard means
+    # https-short (*.<zone>, also on 443) took the name, and b is not measured.
+    - name: measure | The certificate b's name was answered with
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        openssl s_client -connect {{ k8s_gitops_source_gateway_address }}:443 -servername {{ measure_pass_host }} </dev/null 2>/dev/null
+        | openssl x509 -noout -issuer
+      args:
+        executable: /bin/bash
+      register: measure_b_cert
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: measure | Remove the CA files
+      ansible.builtin.file:
+        path: "{{ measure_tmp.path }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+
+    # 5. OpenBao's audit lines for the three nonces. Registered without being printed; only three fields of
+    #    each are kept below.
+    - name: measure | Audit lines for the probes
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ measure_kubeconfig }}"
+          - -n
+          - "{{ measure_ns }}"
+          - exec
+          - openbao-0
+          - -c
+          - openbao
+          - --
+          - grep
+          - -F
+          - -e
+          - "{{ measure_nonce.a }}"
+          - -e
+          - "{{ measure_nonce.axff }}"
+          - -e
+          - "{{ measure_nonce.b }}"
+          - /openbao/audit/audit.log
+      register: measure_audit_raw
+      changed_when: false
+      check_mode: false
+      no_log: true
+      failed_when: measure_audit_raw.rc > 1
+
+    - name: measure | Path, remote address and X-Forwarded-For of each probe's request
+      ansible.builtin.set_fact:
+        measure_audit: "{{ measure_audit | default({}) | combine({item.key: measure_found}) }}"
+      vars:
+        measure_lines: "{{ measure_audit_raw.stdout_lines | map('from_json') | selectattr('type', 'equalto', 'request') | list }}"
+        measure_match: >-
+          {{ measure_lines | selectattr('request.headers.x-measure-nonce', 'defined')
+          | selectattr('request.headers.x-measure-nonce', 'contains', measure_nonce[item.key]) | list }}
+        measure_found: >-
+          {{ {'path': measure_match[0].request.path, 'remote': measure_match[0].request.remote_address,
+              'xff': measure_match[0].request.headers['x-forwarded-for'] | default(['none']) | join(',')}
+             if measure_match | length > 0 else {} }}
+      loop: "{{ measure_nonce | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    # 6. Cilium's per-node ingress addresses, to name the remote address.
+    - name: measure | Cilium's ingress addresses
+      ansible.builtin.command: >-
+        {{ measure_kubectl }} get ciliumnodes -o jsonpath='{range .items[*]}{.spec.ingress.ipv4}{" "}{end}'
+      register: measure_ingress
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: measure | Every probe that got an HTTP answer has its audit line, and path a its X-Forwarded-For
+      ansible.builtin.assert:
+        that:
+          - (measure_probes.results | selectattr('stdout', 'match', '^[1-5][0-9][0-9]$') | map(attribute='item.key')
+            | reject('in', measure_audit | dict2items | selectattr('value', 'truthy') | map(attribute='key') | list) | list) == []
+          - measure_probes.results[0].stdout is not match('^[1-5][0-9][0-9]$') or measure_audit.a.xff | default('none') != 'none'
+        fail_msg: >-
+          a probe reached OpenBao but no audit line or X-Forwarded-For was found: was the store first started without
+          the measure value (its audited headers are set only at the first start)?
+        quiet: true
+
+    - name: measure | Result
+      ansible.builtin.debug:
+        msg: >-
+          PASS: openbao-measure:
+          gateway=ok listenerset={{ measure_ls.stdout | default('none') | trim | default('none', true) }};
+          policy={{ measure_policy }};
+          {% for k in ['a', 'axff', 'b'] %}{% set p = measure_probes.results[loop.index0] %}{% set code = p.stdout | default('000') -%}
+          {{ k }}={{ (p.stderr | default('no answer') | truncate(60)) if code == '000' else code }}
+          remote={{ measure_audit[k].remote | default('-') }} xff={{ measure_audit[k].xff | default('-') }}; {% endfor %}
+          b_cert={{ measure_b_cert.stdout | default('none') | regex_replace('^issuer=\s*', '') | truncate(60) }};
+          ingress={{ measure_ingress.stdout | default('') | trim | default('unread', true) }}

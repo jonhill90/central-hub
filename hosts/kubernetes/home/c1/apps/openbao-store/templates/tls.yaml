@@ -58,6 +58,10 @@ spec:
     - openbao-active.{{ .Release.Namespace }}.svc
     - "*.openbao-internal"
     - "*.openbao-internal.{{ .Release.Namespace }}.svc"
+    {{- if eq (toString .Values.measure) "true" }}
+    # The measurement's passthrough host (MEASURE-1, dev only): TLS on that route ends here.
+    - openbao-pass.{{ required "zone: set by the root Application (k8s_gitops_source_zone)" .Values.zone }}
+    {{- end }}
   ipAddresses:
     - 127.0.0.1
   issuerRef:

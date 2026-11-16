@@ -5,6 +5,11 @@
 # from its root value openbaoSealNode. Empty: no PersistentVolume is made, so the claim stays
 # Pending and OpenBao's pod waits; nothing starts without its key.
 sealNode: ""
+# The lab DNS zone, private, from the root Application. Used only with measure (below).
+zone: ""
+# The dev-only measurement (MEASURE-1, root value openbaoMeasure): true adds openbao-pass.<zone>, the
+# passthrough route's host, to the store's certificate, so the box can check it by name.
+measure: false
 # The seal key's folder on that node (D-0058 rule 3). The agent box's node play writes the key there
 # (owner uid 100, group 1000, mode 0400, as OpenBao's pod runs), and nothing else: the admin
 # AppRole's IDs stay in the box's keys folder (D-0038 rule 6). The folder is outside what c1's nightly backup copies (role k8s_backup copies only

@@ -64,6 +64,10 @@ k8s_gitops_source_openbao_in_cluster: false
 # `kubectl port-forward` connection also matches, so the box's hand-over refuses until it is set.
 # k8s_gitops_source_openbao_seal_node: <node name>
 # k8s_gitops_source_openbao_box_cidr: <address>/32
+# The dev-only measurement of the agent box's source address through the Gateway (MEASURE-1), read only
+# with the switch above on: true passes `openbaoMeasure`. Never set in an inventory: hosts/rebuild-k8s.sh
+# passes it with -e on dev, when the in-cluster store's seal key file is set.
+k8s_gitops_source_openbao_measure: false
 
 # The Argo CD web UI through the shared Gateway (tag ui), a follow-on to BUILD-PATH S12: the owner
 # said (2026-10-27 03:52 UTC, relayed) the UI waits until DNS is up, with no port-forward. On, it

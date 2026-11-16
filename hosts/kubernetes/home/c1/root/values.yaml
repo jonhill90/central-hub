@@ -26,6 +26,12 @@ openbaoSealNode: ""
 # 127.0.0.1/32, which a `kubectl port-forward` connection also matches, so it is not a lock; the
 # box's hand-over refuses while it is empty (apps/openbao/values.yaml, centralHub.boxCidr).
 openbaoBoxCidr: ""
+# The dev-only measurement of the agent box's source address through the Gateway (ADDENDUM-1 v3 step 1,
+# MEASURE-1). true makes the openbao-measure app's routes, turns on OpenBao's audit of two request
+# headers at its first start, adds the passthrough host to the store's certificate and lets namespace
+# openbao attach a ListenerSet to Gateway apps. Only hosts/rebuild-k8s.sh sets it, on dev with the
+# in-cluster store (k8s_gitops_source_openbao_measure); c1 keeps false and renders as before.
+openbaoMeasure: false
 
 # The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
 # (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
@@ -244,6 +250,9 @@ apps:
     zoneParameters:
       address: "{gatewayAddress}"
       https: "{gatewayHttps}"
+    # Lets namespace openbao attach the measurement's ListenerSet, only with openbaoMeasure.
+    switchParameters:
+      openbaoMeasure: openbaoMeasure
     wave: -1
     autoSync: true
     prune: false
@@ -272,6 +281,10 @@ apps:
     enabledBy: openbaoInCluster
     rootParameters:
       sealNode: openbaoSealNode
+    switchParameters:
+      measure: openbaoMeasure
+    # The passthrough host on the store's certificate, only with measure (templates/tls.yaml).
+    needsZone: true
     # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume.
     clusterResources:
       - {group: "", kind: PersistentVolume}
@@ -291,7 +304,23 @@ apps:
     enabledBy: openbaoInCluster
     rootParameters:
       centralHub.boxCidr: openbaoBoxCidr
+    switchParameters:
+      centralHub.measure: openbaoMeasure
     # After openbao-store (-1), which makes its certificate Secret.
     wave: 0
     autoSync: true
     prune: false
+  # The measurement of the agent box's source address through the Gateway (MEASURE-1), dev only.
+  # It renders its objects only while openbaoMeasure is true and nothing otherwise, and it prunes, so
+  # turning the value off removes them (openbao-store and openbao keep prune false).
+  openbao-measure:
+    namespace: openbao
+    local: true
+    needsZone: true
+    enabledBy: openbaoInCluster
+    switchParameters:
+      measure: openbaoMeasure
+    # After openbao (0): its routes point at OpenBao's Service.
+    wave: 1
+    autoSync: true
+    prune: true

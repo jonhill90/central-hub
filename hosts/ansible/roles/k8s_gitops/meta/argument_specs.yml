@@ -28,6 +28,12 @@ argument_specs:
       k8s_gitops_source_openbao_box_cidr:
         type: str
         description: "The agent box's address as a /32, the admin AppRole's only source, passed as openbaoBoxCidr. Private."
+      k8s_gitops_source_openbao_measure:
+        type: bool
+        default: false
+        description: >-
+          Dev only: pass openbaoMeasure true (MEASURE-1, the box's source address through the Gateway).
+          Set by hosts/rebuild-k8s.sh with -e, never in an inventory.
       k8s_gitops_source_share_target:
         type: str
         description: >-
