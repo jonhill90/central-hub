@@ -49,7 +49,7 @@ Since that morning, every plan, record and done-claim already passes a reviewer 
 The owner's words, above, decide only this much:
 
 - PRs no longer go to them for approval;
-- the things the owner's earlier standing rules gave them still need the owner; at 07:43:25 UTC the owner pointed to those rules without listing them. Which things they are is the agents' reading: firewall and tailnet changes (D-0036 rule 8 keeps them behind the owner's words), and deletes and secrets [agent pick: the agents' reading of the owner's earlier rules, with no record of their own];
+- the things the owner's earlier standing rules gave the owner still need the owner; at 07:43:25 UTC the owner pointed to those rules without listing them. Which things they are is the agents' reading: firewall and tailnet changes (D-0036 rule 8 keeps them behind the owner's words), and deletes and secrets [agent pick: the agents' reading of the owner's earlier rules, with no record of their own];
 - the lab is greenfield, so agents finish it;
 - this covers the lab, for now, during its greenfield build-out, not every PR (07:44:46 UTC).
 
