@@ -15,7 +15,7 @@ Run folders laid out as `<place>/<workload>/` (layout A from RB-0083; decided in
 | [home/dns/](home/dns/) | Every DNS record of the public zone at Cloudflare, from the git-ignored `home.records.tfvars.json`; `export-records.sh` writes that file from the live zone once, and `imports.tf` adopted the records on 2026-11-09, removed after (restore it from git history to adopt again) ([runbook](../../docs/runbooks/manage-public-dns-records.md)) | home/dns-token |
 
 | [home/tailnet/](home/tailnet/) | Tailnet settings, not Proxmox: CT 900's subnet routes for every lab VLAN turned on, and split DNS that sends the lab names to OPNsense Unbound on the mgmt gateway, so the owner's Mac resolves them ([runbook](../../docs/runbooks/set-up-lab-dns.md)). Logs in with a tailnet OAuth client from the git-ignored `hosts/.env` | `playbooks/tailnet-connector.yml`, which makes CT 900 advertise the same routes |
-| [home/tailnet-policy/](home/tailnet-policy/) | The tailnet policy file (tag owners, grants, SSH rules and tests), rendered from `policy.hujson.tftpl` with the Proxmox host's address filled in at apply time. Not applied yet: adopt the live policy first ([below](#hometailnet-policy-the-tailnet-policy-file)). Logs in with its own OAuth client, scope `policy_file` | home/tailnet's routes, which the policy auto-approves |
+| [home/tailnet-policy/](home/tailnet-policy/) | The tailnet policy file (tag owners, grants, SSH rules and tests), rendered from `policy.hujson.tftpl` with the Proxmox host's address and any external tailnets filled in at apply time. Not applied yet: adopt the live policy first ([below](#hometailnet-policy-the-tailnet-policy-file)). Logs in with its own OAuth client, scope `policy_file` | home/tailnet's routes, which the policy auto-approves |
 | [azure/backup/](azure/backup/) | Azure, not Proxmox: resource group, storage account and private container for c1's restic backups, and a second container with its own app registration for the agent box's OPNsense configuration copies ([runbook](../../docs/runbooks/copy-opnsense-backup-off-box.md)). No shared key, no anonymous access, data endpoint open only to the home's public address ([runbook](../../docs/runbooks/back-up-c1-off-box.md)). Signs in as the agents' service principal `agent-azure` | `agent-azure` ([runbook](../../docs/runbooks/give-agents-access-to-azure.md)) |
 
 [home/bootstrap/](home/bootstrap/) is not a run folder: `iac-access.sh` makes the limited Proxmox account and token that Terraform uses, once, on the host. `agent-access.sh` makes the agents' own account, `agent@pve`, limited to the dev rebuild VMs 250-257 (pool `dev`); run it again after any of those VMs is destroyed, because Proxmox drops a VM's ACL with the VM. The second part of the same script makes a second account, `agentlab@pve`, for rebuilding the whole lab from the agent box: every guest except VM 258 and CT 259, read only on CT 900 ([runbook](../../docs/runbooks/give-agents-proxmox-rights-for-the-whole-lab.md)).
@@ -123,3 +123,22 @@ tofu plan -var-file=home.tfvars
 ```
 
 The plan shows every line the file would change in the live policy. Apply only after the owner reads it: a grant the file drops cuts off whatever used it. The tailnet runs the policy's `tests` on save and refuses a policy that fails them. To undo, apply the previous version of `policy.hujson.tftpl` from git, or paste the old policy in the admin console.
+
+### External tailnets (declarative node sharing)
+
+Another tailnet can share its own devices into this one with Tailscale's declarative node sharing, which is in alpha and allows at most three external tailnets [source: https://tailscale.com/docs/features/declarative-node-sharing]. This tailnet is the receiving side: its policy lists the other tailnet by ID and names the one group of this tailnet that the other tailnet may grant access to. The other tailnet's admin writes the grant, from `group://<their alias for this tailnet>/<group>` to their devices.
+
+- **Values:** `external_tailnets` in `home.tfvars`, never in this repository: a local alias, the other tailnet's ID, the group's name and its members' logins. `home.tfvars.example` shows the shape with made-up values. Empty, the default, renders the policy byte for byte as it is without the setting.
+- **One way only:** the template writes `"allowIncomingConnections": false` itself, so no value lets an external tailnet reach a device here. A test checks it.
+- **Limits checked before a plan:** at most three entries, an ID of letters and digits, a bare group name with at least one member, and one group per entry.
+- **Before the first apply:** the feature preview must be on: the admin console's General page, Feature previews, Declarative Node Sharing, "Manage in policy" [source: the page above]. The tailnet's own ID, which the other tailnet's admin needs, is on the General page under Unique IDs [source: the page above].
+
+**Changes made outside this folder**, which the code must match before any run here replaces them:
+
+| When (UTC) | What | How | Approval |
+|---|---|---|---|
+| 2026-11-16, about 04:06 | One external tailnet entry with `allowIncomingConnections` false, and its group, added to the live policy | In the admin console, by an agent; the feature preview switch was not touched by the agent | The owner's message cmsg_01X43rfNYp4H1dL1V2dkfkwNKcqZHoK8kv2XYZkvmC9D2L (2026-11-16 03:49:47 UTC) |
+
+Until `home.tfvars` holds the same entry, a plan from this folder would remove it. So no plan or apply runs here, from the Mac or a pipeline job, until the entry is in `home.tfvars`, and the first plan's gate is that the rendered `groups` and `externalTailnets` sections equal the live ones. Any difference in them stops the run.
+
+The provider compares the policy as formatted HuJSON text, comments and key order included [source: terraform-provider-tailscale v0.29.2, `tailscale/plan_modifiers.go`, `aclHuJSONModifier`]. While the live policy has never been applied from this folder, the plan can show the whole file as changed even where the two mean the same. So compare those two sections as data (comments and trailing commas removed), and read the rest of the plan's difference as the paragraph above says.
