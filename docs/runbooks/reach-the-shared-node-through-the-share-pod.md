@@ -27,7 +27,7 @@ What limits it, each in one place:
 - **The cluster:** a restricted namespace, no ServiceAccount token, a read-only root filesystem, state in memory, and a NetworkPolicy with no ingress and egress only to DNS and public addresses, with the private and tailnet ranges excepted. So the pod reaches its peers through public paths or the relays, never through a lab address.
 - **The pod's own key:** an ephemeral, pre-approved auth key tagged `tag:share-pod` only. It is reusable, because the pod registers again each time it restarts, so a stolen key can join any number of devices with this tag until it expires (90 days) or is revoked. Each such device would reach only what the other tailnet grants the tag, and nothing here, since the tag has no grant of its own. The tailnet removes an ephemeral node 30 to 60 minutes after it goes away [source: https://tailscale.com/kb/1111/ephemeral-nodes].
 - **Who approves:** the apply of the policy is a tailnet change (D-0036 rule 8), and making and seeding the key is a secret and an access right for a new tagged device (D-0042 rule 6). Each goes to the owner as those rules say, on a card naming the step and the commit.
-- **The egress limit holds only if c1 enforces NetworkPolicy.** That has not been measured on c1 yet; step 7 checks it.
+- **The egress limit holds only if c1 enforces NetworkPolicy.** That has not been measured on c1 yet, and agents can't check it today; until it is proved, treat the egress limit as designed, not proven (step 7).
 
 ## Steps
 
