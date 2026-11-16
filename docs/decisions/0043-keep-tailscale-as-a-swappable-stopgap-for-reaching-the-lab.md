@@ -9,7 +9,7 @@ consulted: []
 waits-on: []
 supersedes: []
 superseded-by:
-revisit-when: a research batch and a dev-VM test show Headscale runs the features the lab uses; the lab needs a feature that Tailscale keeps in a paid plan; the free plan's terms change; the agents get accounts of their own (D-0030) and need their own identities on the network; or the lab is built for real, when the owner is asked again, as his card of 2026-11-10 and the Tailscale entry in `docs/standards/foss-exceptions.yaml` say
+revisit-when: a research batch and a dev-VM test show Headscale runs the features the lab uses; the lab needs a feature that Tailscale keeps in a paid plan; the free plan's terms change; the agents get accounts of their own (D-0030) and need their own identities on the network; or the lab is built for real, when the owner is asked again, as their card of 2026-11-10 and the Tailscale entry in `docs/standards/foss-exceptions.yaml` say
 ---
 
 # Keep Tailscale as a swappable stopgap for reaching the lab from outside, with Headscale as the way off its closed coordination server
