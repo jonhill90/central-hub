@@ -35,12 +35,12 @@ No secret is made by the role. `vps-apply secrets` makes Valkey's password and O
 
 ## Steps
 
-1. **The owner's tap and tailnet step S1.** One card names S1, S2, S4 and S6 with their commits (D-0046 rule 6, J3). After the tap, the tailnet policy job applies S1 (`.github/workflows/lab-tailnet-policy.yml`, plan then apply; [Change the tailnet policy file through the pipeline job](run-the-tailnet-policy-as-a-pipeline-job.md)).
+1. **The owner's taps and tailnet step S1.** Each of S2, S1, S4 and S6 gets a card of its own, naming that one step and its commit, one pick per card, in that order and each when its step is next (D-0046 rule 6 lets the cards come back to back). S2 (the box's wrapper and sudo rule) comes first, because S1 waits until S2 is installed (D-0046 rule 5). After S1's tap, the tailnet policy job applies S1 (`.github/workflows/lab-tailnet-policy.yml`, plan then apply; [Change the tailnet policy file through the pipeline job](run-the-tailnet-policy-as-a-pipeline-job.md)).
    expect: the tailnet lets the box sign in to the VPS as `root` and `deploy`, and lets agent sessions sign in as `deploy` only.
 2. **Bootstrap (S3), once.** Start `lab-vps-host` with action `bootstrap`.
    why: `deploy` and `vps-apply` don't exist yet, so the first apply signs in as root.
    expect: the job prints `vps-host: bootstrap ok`. The box's log holds the playbook's output.
-3. **Tailnet step S4.** The tailnet policy job applies S4, which drops `root` from the box's login and adds the `sshTests`.
+3. **Tailnet step S4.** After S4's own card, the tailnet policy job applies S4, which drops `root` from the box's login and adds the `sshTests`.
    expect: the tailnet accepts the new policy, so its tests passed. From then on, `bootstrap` is refused by the tailnet.
 4. **The host's secrets (S5).** Start `lab-vps-host` with action `secrets`.
    expect: it prints which secrets it made, never their values: `valkey password`, `VPS_OMNIROUTE_API_KEY` and `VPS_OMNIROUTE_WS_BRIDGE_SECRET`. Valkey starts.

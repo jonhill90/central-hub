@@ -117,8 +117,12 @@ case $action in
     hash=$(sha256sum "$plan" | cut -c1-12)
     n=$(counts)
     python3 -I -c 'import json, sys; json.dump({"commit": sys.argv[1], "hash12": sys.argv[2]}, open(sys.argv[3], "w"))' "$commit" "$hash" "$meta"
+    # The policy is one resource, so the counts say only "1 to change". Name the top-level sections that differ,
+    # compared as data, and only their names: the contents hold private values (the runbook's card step).
+    sections=$(tofu show -json "$plan" | python3 -I "$folder/policy_sections.py") || true
     record "$hash" "$n" ok
     echo "tailnet-policy: plan $hash: $n"
+    echo "tailnet-policy: policy sections that differ: ${sections:-unknown}"
     echo "tailnet-policy: the owner's card for an apply names this commit (${commit:0:12}) and this plan hash ($hash)"
     ;;
   apply)

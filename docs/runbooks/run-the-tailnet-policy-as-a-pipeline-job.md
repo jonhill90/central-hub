@@ -37,9 +37,10 @@ The rendered policy names the Proxmox host's address, so the run prints only the
 ## Steps
 
 1. Start `lab-tailnet-policy` with `action: plan`.
-   - expect: `tailnet-policy: plan <12 hex>: N to add, N to change, N to destroy`, then a line naming the commit and the hash. On the first run, the import comes first.
+   - expect: `tailnet-policy: plan <12 hex>: N to add, N to change, N to destroy`, then `tailnet-policy: policy sections that differ: <names>`, then a line naming the commit and the hash. On the first run, the import comes first.
+   - why the second line: the whole policy is one resource, so the counts only ever say `1 to change`, and only the keys user can read the plan itself. `policy_sections.py` (in the stack's folder) compares the live and the new policy as data, with comments and trailing commas removed, and prints only the names of the top-level sections that differ, such as `grants` or `externalTailnets`, never their contents. The provider compares the formatted text, so a first run can show the whole file as changed when the meaning is the same; the names line is what counts. `none` means only formatting differs.
    - If the plan fails because the Tailscale OAuth client may not write the policy file, the client needs that scope. A wider right for an agents' credential is the owner's tap (D-0042 rule 6, access rights).
-2. A reviewing agent posts a decision card that names the repository, the commit, `tailnet-policy` and the 12-digit hash.
+2. A reviewing agent posts a decision card that names the repository, the commit, `tailnet-policy` and the 12-digit hash, and says in plain words what each changed section is (for example: `grants`, who may reach what; `ssh`, who may sign in where as which user; `groups`, named sets of people; `externalTailnets`, other tailnets that share devices in). One plan per card.
 3. The owner taps it.
 4. A reviewing agent checks the tap, then starts `lab-tailnet-policy` with `action: apply`, `card_id` and `plan_hash`.
    - expect: `tailnet-policy: applied plan <hash> (...), card <ID>`. The tailnet refuses to save a policy whose `tests` or `sshTests` fail, so a passed apply means they passed.
