@@ -16,6 +16,8 @@ superseded-by:
 
 **Status:** draft, not run. Written on 2026-11-14 from the code in this change. It does not run until the box's wrapper list and runner hook (both limits) are applied.
 
+**Hold (2026-11-16):** until the PR that adds the owner's group and the `externalTailnets` entry to the template merges, run no tailnet-policy plan or apply. The live policy holds them, and a run from the repository template would delete them.
+
 Until now the policy file ran as a raw OpenTofu apply on the owner's Mac. This job does the same through the pipeline, so D-0046's tailnet steps S1 and S4 need no Mac. It has the same shape as [the tailnet stack's job](run-the-tailnet-stack-as-a-pipeline-job.md); only the differences are written here.
 
 ## What differs from the tailnet stack's job
