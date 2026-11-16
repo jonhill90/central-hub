@@ -73,8 +73,8 @@ The owner's words of 04:44:57 UTC reach further than STD-0006's register row, so
   - Support and longer fixes are support and tested builds too.
   - The lab does not use FIPS mode, and rule 3 below keeps every sponsor repository off its machines.
   - The register already counts AlmaLinux as a pass.
-- **What would change it.** If the owner rules that a sponsor's paid FIPS offer counts as a paywall under his words of 2026-11-14, this record is revisited (`revisit-when`).
-- **Why it stays proposed.** It stays proposed until the owner rules on the FIPS reading, because the register row he approved did not weigh it.
+- **What would change it.** If the owner rules that a sponsor's paid FIPS offer counts as a paywall under their words of 2026-11-14, this record is revisited (`revisit-when`).
+- **Why it stays proposed.** It stays proposed until the owner rules on the FIPS reading, because the register row they approved did not weigh it.
 - **The owner's call (2026-11-15).** At 04:51:59 UTC, on card `cmsg_01X43rfNYp4H1dL1V2dkfkwN1TjGnbUJUBa4TLNk8AL3gv`, the owner chose to keep this record and D-0048 as written, with the lab using only the free parts; the paid FIPS offer is not used. The status still follows the pick-records rule: `accepted` once the pick is in use and passes STD-0006.
 - **Debian** has no paid side: its social contract says "We promise that the Debian system and all its components will be free".
 

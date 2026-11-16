@@ -26,7 +26,7 @@ revisit-when: the greenfield build-out ends (the scope of the owner's message of
 
 D-0041 rule 3 forbids raw runs: changes made from the owner's Mac, a session's shell or a console. It allows one way round, in D-0041 line 63: "Until a layer or stack has its pipeline job, a raw run of it needs the owner's typed words naming the exact command." Line 64 lists each such run in the layer's runbook until its job exists. D-0041's Consequences repeat it: raw runs go on, on the owner's typed words (line 112).
 
-The owner's message of 2026-11-14 07:47 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV, cited in D-0042 rule 6) said he would no longer type go lines. That this holds for the greenfield build-out is the agents' reading of the owner's message of 2026-11-14 19:26 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN), which says the PR-approval change was meant to help the build-out. D-0042 rule 4 made a card tap the replacement for the box's limits (an agent pick): it kept the owner's approval of a limit change, as a tap on a decision card in place of the typed line D-0036 rule 6 asked for (D-0042 lines 115 and 129). Rule 3 of D-0041 was not changed then, so every raw run still waits on typed words.
+The owner's message of 2026-11-14 07:47 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV, cited in D-0042 rule 6) said they would no longer type go lines. That this holds for the greenfield build-out is the agents' reading of the owner's message of 2026-11-14 19:26 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN), which says the PR-approval change was meant to help the build-out. D-0042 rule 4 made a card tap the replacement for the box's limits (an agent pick): it kept the owner's approval of a limit change, as a tap on a decision card in place of the typed line D-0036 rule 6 asked for (D-0042 lines 115 and 129). Rule 3 of D-0041 was not changed then, so every raw run still waits on typed words.
 
 Two raw runs wait on this now:
 
@@ -35,8 +35,8 @@ Two raw runs wait on this now:
 
 ## Decision Drivers
 
-- **The owner's messages.** His message of 2026-11-14 07:47 UTC said he would no longer type go lines (that this is for the greenfield build-out is the agents' reading of his message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and his messages of 07:42 to 07:44 UTC said PRs should no longer come to him for approval. The card tap and the agents' pass that replace them are agent picks (D-0042).
-- **The owner keeps his approval of every raw run.** This record changes how he says yes, not whether he is asked (D-0034, "What decides stays with the owner").
+- **The owner's messages.** Their message of 2026-11-14 07:47 UTC said they would no longer type go lines (that this is for the greenfield build-out is the agents' reading of their message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and their messages of 07:42 to 07:44 UTC said PRs should no longer come to them for approval. The card tap and the agents' pass that replace them are agent picks (D-0042).
+- **The owner keeps their approval of every raw run.** This record changes how they say yes, not whether they are asked (D-0034, "What decides stays with the owner").
 - **Exactness.** A typed line is trusted because it names one command. A card can name the same command and the commit it runs from (D-0034 rules 1 and 5).
 - **The same step D-0042 already took for the box's limits** (D-0042 rule 4), so one form of approval covers both.
 - **Replaceable** (REQ-0011): undone by putting rule 3's typed words back.
@@ -63,7 +63,7 @@ Chosen option: **1**. It keeps one owner step per raw run, names the run exactly
 
 ### Consequences
 
-- Good: the owner approves raw runs the way he approves everything else he keeps, by a tap, with no typed line.
+- Good: the owner approves raw runs the way they approve everything else they keep, by a tap, with no typed line.
 - Good: no owner step is removed. Each raw run keeps its own approval, named exactly.
 - Bad: on its own this record moves nothing, because the Mac's guard still takes only typed words (rule 5). Compensating control: it is stated here, so the guard change is the one step left, and it is the owner's.
 - Bad: a tap is one click and a typed line is not, so a tap is easier to give without reading. Compensating control: the card names the exact command and commit, and the owner's no wins at once (D-0042 rule 8).

@@ -26,13 +26,13 @@ revisit-when: a cloud session can start a GitHub workflow (the integration gets 
 
 D-0042 rule 2 names a workflow, `merge.yml`, as the merge job. It is started by `workflow_dispatch` and has never run. Measured on 2026-11-14 at 12:56 UTC: a cloud session that asks GitHub's integration to start a workflow gets `403 Resource not accessible by integration` (evidence 0056, finding 1). So the owner's end goal, merges with no Mac step, cannot go through that job, and every squash-merge still runs through the orchestrator's Mac session.
 
-This record **amends D-0042 rules 2 and 11**. It changes how a merge is started and checked. It does not change who approves: the agents' pass of rule 1 stays, and every step rule 6 keeps for the owner stays with him.
+This record **amends D-0042 rules 2 and 11**. It changes how a merge is started and checked. It does not change who approves: the agents' pass of rule 1 stays, and every step rule 6 keeps for the owner stays with them.
 
 **Terms.** The *pass ledger* is a file the box keeps for each repository and head, one line per recorded pass. The *sweep* is a timer on the box that merges a pull request when its head's ledger is complete and its checks are green. The *halt flag* is a file that stops the sweep.
 
 ## Decision Drivers
 
-- **The owner's delegation.** For the greenfield phase the owner has delegated PR approval to the reviewer and council passes (message of 2026-11-14, 07:42 to 07:44 UTC), keeping his own approval for the steps D-0042 rule 6 lists. The delegation is time-limited and is the owner's to change or withdraw. The owner asked whether he should remove his Mac from the work so that agents work from the box (message of 2026-11-14, 07:42:15 UTC).
+- **The owner's delegation.** For the greenfield phase the owner has delegated PR approval to the reviewer and council passes (message of 2026-11-14, 07:42 to 07:44 UTC), keeping their own approval for the steps D-0042 rule 6 lists. The delegation is time-limited and is the owner's to change or withdraw. The owner asked whether they should remove their Mac from the work so that agents work from the box (message of 2026-11-14, 07:42:15 UTC).
 - **No dispatch route.** A cloud session cannot start a workflow here (evidence, finding 1), and starting it by Actions write would let any session start the tailnet workflow, which has no environment gate (evidence, finding 4).
 - **What a job can check, it checks.** The box can read GitHub's state itself: the head, a clean merge and every check.
 - **What it can't check, it logs.** The box can't read the chat, so a pass is the recorder's word with the relay id it gave, shown on the PR after each merge.
@@ -64,7 +64,7 @@ Chosen option: **1**. It needs no workflow start and no new GitHub right, and th
 
 - Good: merges need no Mac step and no session safety check.
 - Good: the sweep merges only what passed, and shows its basis on the PR.
-- Bad: **an agent can write a ledger line for a pass that was never given** (rule 2). Compensating controls: the PR's comment lists every line for the owner to check against the chat, the orchestrator lists every merge (D-0042 rule 9), the files that guard the merge itself need his tap, and his no wins (rule 8 of D-0042).
+- Bad: **an agent can write a ledger line for a pass that was never given** (rule 2). Compensating controls: the PR's comment lists every line for the owner to check against the chat, the orchestrator lists every merge (D-0042 rule 9), the files that guard the merge itself need their tap, and their no wins (rule 8 of D-0042).
 - Bad: any session can run `halt` under one of those recorder names, and the check on `resume` is only a name. The owner's stop is the timer.
 - Bad: green checks come from the PR's own copy of the workflows. The reviewer reads those edits, and the sweep's output says when a PR changes files under `.github/`.
 

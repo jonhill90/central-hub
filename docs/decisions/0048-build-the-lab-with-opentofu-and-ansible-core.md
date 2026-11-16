@@ -28,7 +28,7 @@ revisit-when: c1 moves to an immutable OS whose own API replaces Ansible on the 
 
 The owner's words this rests on:
 
-- 2026-10-17 at 23:07 UTC: yes to trying Ansible as the configuration tool for his first real build.
+- 2026-10-17 at 23:07 UTC: yes to trying Ansible as the configuration tool for their first real build.
 - 2026-10-25 at 05:27 UTC: yes to Terraform-style code for the Proxmox VMs and networks, and Ansible for the host and OPNsense (cmsg_01X43rfNYp4H1dL1V2dkfkwNRFZJcS1CMSehtz9iE5YMRA, D-0011).
 - 2026-10-25 at 17:47 UTC: yes to keeping the lab's OpenTofu state as local files for now.
 - 2026-10-27 at 02:49 UTC: everything must be deterministic, idempotent code, with no clicking and no one-off commands.
