@@ -25,7 +25,9 @@ What limits it, each in one place:
 - **This tailnet's policy** ([`policy.hujson.tftpl`](../../hosts/terraform/home/tailnet-policy/policy.hujson.tftpl), only when `external_tailnets` is set): `tag:agent-box` may reach `tag:share-pod` on tcp 2222 only. The pod has no grant, so it reaches nothing here. Policy tests deny the pod the Proxmox host, the VPS and the agent box, and deny the agent box the pod's port 22.
 - **The other tailnet's policy:** its admin grants `tag:share-pod` (named in `allowExternalReferencesTo`) the one node and port. A grant is ignored unless this side lists the tag there [source: https://tailscale.com/docs/features/declarative-node-sharing]. `allowIncomingConnections` stays false, so the other tailnet can't reach anything here.
 - **The cluster:** a restricted namespace, no ServiceAccount token, a read-only root filesystem, state in memory, and a NetworkPolicy with no ingress and egress only to DNS and public addresses, with the private and tailnet ranges excepted. So the pod reaches its peers through public paths or the relays, never through a lab address.
-- **The pod's own key:** an ephemeral, pre-approved auth key tagged `tag:share-pod` only. The tailnet removes an ephemeral node 30 to 60 minutes after it goes away [source: https://tailscale.com/kb/1111/ephemeral-nodes]. A stolen key can join one more device with this tag and no more; the other side's grant is what it would then reach.
+- **The pod's own key:** an ephemeral, pre-approved auth key tagged `tag:share-pod` only. It is reusable, because the pod registers again each time it restarts, so a stolen key can join any number of devices with this tag until it expires (90 days) or is revoked. Each such device would reach only what the other tailnet grants the tag, and nothing here, since the tag has no grant of its own. The tailnet removes an ephemeral node 30 to 60 minutes after it goes away [source: https://tailscale.com/kb/1111/ephemeral-nodes].
+- **Who approves:** the apply of the policy is a tailnet change (D-0036 rule 8). Making and seeding the key is a secret and an access right for a new tagged device (D-0042 rule 6). The owner covered both, and the policy change, in the message of 2026-11-16 04:54:26 UTC in this work's thread (cmsg_01X43rfNYp4H1dL1V2dkfkwNB33wsxYuc5AiJubmyZLrSX).
+- **The egress limit holds only if c1 enforces NetworkPolicy.** That has not been measured on c1 yet; step 7 checks it.
 
 ## Steps
 
@@ -54,7 +56,7 @@ What limits it, each in one place:
 
    expect: the shared node's own SSH banner and host key. If the other side has not granted the tag yet, the connection hangs and then fails; that is the other tailnet's grant, not this side.
 
-7. Prove the limits. From the agent box, `ssh -p 22 share-pod` and a connection to the shared node's address directly must both fail. From the pod, nothing here is reachable (`c1-read` can't run commands in the pod; the policy tests are the proof).
+7. Prove the limits. First check that c1 enforces NetworkPolicy: from a throwaway pod in namespace `share-pod` with the same policy, a connection to a private lab address must fail. Then, from the agent box: `ssh -p 22 share-pod` and a connection to the shared node's address directly must both fail. From the pod, nothing here is reachable (`c1-read` can't run commands in the pod; the policy tests are the proof).
 
 ## Rotate
 

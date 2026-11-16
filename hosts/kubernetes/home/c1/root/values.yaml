@@ -200,7 +200,7 @@ apps:
     prune: false
   # A small pod with its own tailnet identity (tag:share-pod) that forwards one port to a node another
   # tailnet shares in. It holds no lab secret and no Kubernetes credential
-  # (docs/runbooks/reach-the-shared-vps-through-the-share-pod.md).
+  # (docs/runbooks/reach-the-shared-node-through-the-share-pod.md).
   share-pod:
     namespace: share-pod
     local: true

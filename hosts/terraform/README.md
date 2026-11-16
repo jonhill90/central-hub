@@ -140,7 +140,7 @@ Another tailnet can share its own devices into this one with Tailscale's declara
 |---|---|---|---|
 | 2026-11-16, about 04:06 | One external tailnet entry with `allowIncomingConnections` false, and its group, added to the live policy | In the admin console, by an agent; the feature preview switch was not touched by the agent | The owner's message cmsg_01X43rfNYp4H1dL1V2dkfkwNKcqZHoK8kv2XYZkvmC9D2L (2026-11-16 03:49:47 UTC) |
 
-Until `home.tfvars` holds the same entry, a plan from this folder would remove it. So no plan or apply runs here, from the Mac or a pipeline job, until the entry is in `home.tfvars`, and the first plan's gate is that the rendered `groups` and `externalTailnets` sections equal the live ones. Any difference in them stops the run.
+Until `home.tfvars` holds the same entry, a plan from this folder would remove it. So no plan or apply runs here, from the Mac or a pipeline job, until the entry is in `home.tfvars`, and the first plan's gate is that the rendered `groups` and `externalTailnets` sections equal the live ones. Any difference in them stops the run. With the share pod, the live policy must first hold the share pod's lines too: the console change adds `"tag:share-pod"` to `allowExternalReferencesTo`, its `tagOwners` entry, its one grant and its tests, exactly as the template renders them, and the gate then compares equal. The one difference allowed before that change is the added tag in `allowExternalReferencesTo`, and the apply's card names it, with the grant and the tests.
 
 No agent edits the Mac's `home.tfvars`, so the first run is one session on the Mac, in this order, and the owner's typed line names each step and the commit on `main`:
 
