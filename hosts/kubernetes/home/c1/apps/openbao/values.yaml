@@ -12,6 +12,7 @@ global:
   tlsDisable: false
 
 # The injector's image is HashiCorp's (docker.io hashicorp/vault-k8s), and nothing here uses it.
+# No web UI: neither the chart's UI Service nor `ui` in the config below; the box uses the API.
 injector:
   enabled: false
 csi:
@@ -38,8 +39,9 @@ server:
     - type: configMap
       name: openbao-policies
   # The seal key's folder on the node (local PersistentVolume openbao-seal, D-0058 rule 3), read-only.
-  # Its node affinity places the pod on that node. On a store's first start the folder also holds
-  # the admin AppRole's two IDs, which the box's node play writes beside the key.
+  # Its node affinity places the pod on that node. For a store's first start only, the folder also
+  # holds the admin AppRole's two IDs; the box's node play removes them once OpenBao has initialized
+  # and checks they are gone, so they then live only in the box's keys folder (D-0038 rule 6).
   volumes:
     - name: seal
       persistentVolumeClaim:
@@ -103,7 +105,7 @@ server:
       setNodeId: true
       # Passed through Helm's tpl: only {{ .Values.centralHub.* }} below is filled in.
       config: |
-        ui            = true
+        ui            = false
         disable_mlock = true
 
         listener "tcp" {
@@ -214,7 +216,8 @@ server:
         }
 
         # The agent box's admin login (D-0038 rule 6): only from the box's address, 15-minute tokens.
-        # Its two IDs are files the box's node play writes beside the seal key.
+        # Its two IDs are files the box's node play writes beside the seal key for this first start
+        # only, and removes once OpenBao has initialized.
         initialize "roles" {
           request "admin" {
             operation = "update"

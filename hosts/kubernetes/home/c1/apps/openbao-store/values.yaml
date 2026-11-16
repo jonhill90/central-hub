@@ -6,8 +6,11 @@
 # Pending and OpenBao's pod waits; nothing starts without its key.
 sealNode: ""
 # The seal key's folder on that node (D-0058 rule 3). The agent box's node play writes the key there
-# (owner uid 100, group 1000, mode 0400, as OpenBao's pod runs), and on a store's first start the
-# admin AppRole's two IDs. c1's backup copies /var/lib/central-hub/ (role k8s_backup).
+# (owner uid 100, group 1000, mode 0400, as OpenBao's pod runs), and, for a store's first start only,
+# the admin AppRole's two IDs, which it removes once OpenBao has initialized (D-0038 rule 6). The
+# folder is outside what c1's nightly backup copies (role k8s_backup copies only
+# /var/lib/c1-data/local-path, where OpenBao's data volume is, and /var/lib/central-hub/identity-postgres),
+# so the backup never holds the key with the data (D-0038 rule 4).
 sealPath: /var/lib/central-hub/openbao-seal
 sealSize: 1Mi
 # Which kv/<env>/snapshot-mark the snapshot login may read (DESIGN section 6): dev today.
