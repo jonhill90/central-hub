@@ -1,0 +1,16 @@
+---
+# Inputs of the vps_app_host role. None is private.
+argument_specs:
+  main:
+    short_description: The VPS apps host (D-0046) with app users, rootless Podman, deploy and vps-apply, and Valkey on loopback
+    options:
+      vps_app_host_packages: {type: list, elements: str, description: AlmaLinux packages the host needs.}
+      vps_app_host_app_users: {type: list, elements: str, description: One Linux user per app; each runs its own rootless Podman.}
+      vps_app_host_deploy_user: {type: str, description: "The user the box signs in as after the narrowing; its sudo allows vps-apply only."}
+      vps_app_host_apply_path: {type: path, description: Where vps-apply is installed.}
+      vps_app_host_apply_dir: {type: path, description: "vps-apply's checkout of central-hub, its logs and its state."}
+      vps_app_host_repo_url: {type: str, description: The public repository vps-apply checks out; main only.}
+      vps_app_host_valkey_conf: {type: path, description: "The Valkey package's configuration file."}
+      vps_app_host_valkey_secret_conf: {type: path, description: The file vps-apply writes Valkey's password into; the role never writes it.}
+      vps_app_host_valkey_port: {type: int, description: "Valkey's port, on loopback."}
+      vps_app_host_public_ports_allowed: {type: list, elements: int, description: "Ports that may listen on an address that is not loopback or the tailnet's."}
