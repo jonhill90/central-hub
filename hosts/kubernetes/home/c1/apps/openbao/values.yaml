@@ -3,7 +3,7 @@
 # cluster first. The namespace, the seal key's volume, the TLS certificate and the policy files come
 # from the openbao-store app, one wave earlier. How to run it: docs/runbooks/set-up-the-secrets-store.md.
 #
-# Kept from the VM role (hosts/ansible/roles/openbao, proposed D-0038): Raft storage, the static seal
+# Kept from the earlier VM role (D-0038; removed with the VM code, in git history): Raft storage, the static seal
 # read from a file, self-init on the first start, the admin AppRole bound to the agent box's address.
 # New here: ESO and the snapshot job sign in with OpenBao's Kubernetes login (D-0058 rule 5).
 

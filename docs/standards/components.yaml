@@ -274,7 +274,7 @@ components:
     paid-edition: none found; the project states it is community-run under open governance with an OSI licence, and sells no edition
     paid-edition-source: https://raw.githubusercontent.com/openbao/openbao/main/README.md
     verdict: pass
-    sources: [url:github.com/openbao/, url:openbao.github.io/openbao-helm, image:quay.io/openbao/]
+    sources: [url:openbao.github.io/openbao-helm, image:quay.io/openbao/]
     checked: 2026-11-16
   - name: SOPS
     kind: software
