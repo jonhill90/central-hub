@@ -60,7 +60,8 @@ k8s_gitops_source_openbao_in_cluster: false
 # Private, no default, read only with the switch on: the node that holds the seal key's folder (its
 # kubernetes.io/hostname label), passed as `openbaoSealNode`; and the agent box's address as a /32,
 # the only source the admin AppRole signs in from, passed as `openbaoBoxCidr`. Unset, the seal
-# volume is not made (OpenBao waits) and the admin login works from inside the pod only.
+# volume is not made (OpenBao waits), and the admin binding falls back to 127.0.0.1/32, which a
+# `kubectl port-forward` connection also matches, so the box's hand-over refuses until it is set.
 # k8s_gitops_source_openbao_seal_node: <node name>
 # k8s_gitops_source_openbao_box_cidr: <address>/32
 

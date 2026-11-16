@@ -261,7 +261,10 @@ server:
 # Not the chart's: values only this repository's config above reads (through tpl).
 centralHub:
   # The agent box's address as a /32. The root chart passes it from its private root value
-  # openbaoBoxCidr; this default lets no one outside the pod sign in as admin.
+  # openbaoBoxCidr. This default is not a lock: a `kubectl port-forward` connection also arrives
+  # from 127.0.0.1 (the runtime dials localhost inside the pod's network namespace), so while it is
+  # unset anyone who may port-forward in namespace openbao and holds the admin IDs passes the
+  # binding. The box's hand-over (PR 3) refuses while it is unset.
   boxCidr: 127.0.0.1/32
   # The seal key's id and file name, <id>.key, in the node folder.
   sealKeyId: seal-1

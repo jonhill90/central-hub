@@ -22,8 +22,9 @@ openbaoInCluster: false
 # (k8s_gitops_source_openbao_seal_node). Empty: no seal volume is made, and OpenBao's pod waits.
 openbaoSealNode: ""
 # The agent box's address as a /32, private, set by Ansible (k8s_gitops_source_openbao_box_cidr):
-# the only source the admin AppRole signs in from (D-0038 rule 6). Empty: the chart's own default,
-# 127.0.0.1/32, so no one outside the pod can sign in as admin.
+# the only source the admin AppRole signs in from (D-0038 rule 6). Empty: the app's own default,
+# 127.0.0.1/32, which a `kubectl port-forward` connection also matches, so it is not a lock; the
+# box's hand-over refuses while it is empty (apps/openbao/values.yaml, centralHub.boxCidr).
 openbaoBoxCidr: ""
 
 # The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
@@ -262,8 +263,9 @@ apps:
     autoSync: true
     prune: true
   # The secrets store inside the cluster (D-0058), only where openbaoInCluster is true (dev first).
-  # openbao-store: the namespace, the seal key's local volume, the TLS certificates and the network
-  # limit; openbao: OpenBao's own chart (docs/runbooks/set-up-the-secrets-store.md).
+  # openbao-store: the namespace, the seal key's local volume, the TLS certificates, the policy files
+  # and the bootstrap account; openbao: OpenBao's own chart, with its network limit
+  # (docs/runbooks/set-up-the-secrets-store.md).
   openbao-store:
     namespace: openbao
     local: true
