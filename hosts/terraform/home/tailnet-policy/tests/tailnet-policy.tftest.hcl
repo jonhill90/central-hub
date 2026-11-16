@@ -77,3 +77,113 @@ run "rejects_an_address_with_a_prefix" {
 
   expect_failures = [var.proxmox_host_address]
 }
+
+# External tailnets (declarative node sharing). All values below are made up, in the shape
+# home.tfvars.example uses.
+
+run "no_external_tailnets_renders_no_groups_or_sharing" {
+  command = plan
+
+  assert {
+    condition     = !strcontains(tailscale_acl.policy.acl, "\"groups\"") && !strcontains(tailscale_acl.policy.acl, "\"externalTailnets\"")
+    error_message = "With no external tailnets, the policy must have no groups or externalTailnets section, as before this setting."
+  }
+}
+
+run "an_external_tailnet_gets_its_group_and_no_incoming_connections" {
+  command = plan
+
+  variables {
+    external_tailnets = {
+      example = {
+        external_id = "T123456CNTRL"
+        group       = "example-admins"
+        members     = ["owner@example.com"]
+      }
+    }
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"group:example-admins\": [\"owner@example.com\"]")
+    error_message = "The group must be defined with its members."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"example\": {") && strcontains(tailscale_acl.policy.acl, "\"externalID\":                \"T123456CNTRL\"")
+    error_message = "The external tailnet must be listed under its alias with its ID."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"allowIncomingConnections\":  false") && !strcontains(tailscale_acl.policy.acl, "\"allowIncomingConnections\":  true")
+    error_message = "allowIncomingConnections must be false: an external tailnet never reaches a device in this one."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"allowExternalReferencesTo\": [\"group:example-admins\"]")
+    error_message = "The external tailnet may reference only its own group."
+  }
+}
+
+run "rejects_a_fourth_external_tailnet" {
+  command = plan
+
+  variables {
+    external_tailnets = {
+      a = { external_id = "T1111CNTRL", group = "a-admins", members = ["owner@example.com"] }
+      b = { external_id = "T2222CNTRL", group = "b-admins", members = ["owner@example.com"] }
+      c = { external_id = "T3333CNTRL", group = "c-admins", members = ["owner@example.com"] }
+      d = { external_id = "T4444CNTRL", group = "d-admins", members = ["owner@example.com"] }
+    }
+  }
+
+  expect_failures = [var.external_tailnets]
+}
+
+run "rejects_an_external_id_that_is_not_letters_and_digits" {
+  command = plan
+
+  variables {
+    external_tailnets = {
+      example = { external_id = "T123\", \"allowIncomingConnections\": true, \"x", group = "example-admins", members = ["owner@example.com"] }
+    }
+  }
+
+  expect_failures = [var.external_tailnets]
+}
+
+run "rejects_a_group_with_its_prefix" {
+  command = plan
+
+  variables {
+    external_tailnets = {
+      example = { external_id = "T123456CNTRL", group = "group:example-admins", members = ["owner@example.com"] }
+    }
+  }
+
+  expect_failures = [var.external_tailnets]
+}
+
+run "rejects_a_group_with_no_members" {
+  command = plan
+
+  variables {
+    external_tailnets = {
+      example = { external_id = "T123456CNTRL", group = "example-admins", members = [] }
+    }
+  }
+
+  expect_failures = [var.external_tailnets]
+}
+
+run "rejects_two_entries_with_one_group" {
+  command = plan
+
+  variables {
+    external_tailnets = {
+      a = { external_id = "T1111CNTRL", group = "shared-admins", members = ["owner@example.com"] }
+      b = { external_id = "T2222CNTRL", group = "shared-admins", members = ["owner@example.com"] }
+    }
+  }
+
+  expect_failures = [var.external_tailnets]
+}
