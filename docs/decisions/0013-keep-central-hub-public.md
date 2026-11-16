@@ -18,7 +18,7 @@ revisit-when: a secret or private value is found in the repository's history; a 
 
 central-hub is a public repository, and no record says why. On 2026-10-25 at 03:07 UTC the owner said yes to keeping it public, in the project's premise review. Behind that answer: GitHub's free plan gives public repositories a full feature set, secret scanning runs on public repositories for free, and hostnames, addresses and private names already stay out of the repository (CLAUDE.md rule 4).
 
-On 2026-10-26 at 01:35 UTC the owner gave his reasons. He wants to show the work in public: his progress, what he learns, and how the home lab grows over time. He wants the repository, the apps and the infrastructure to be secure enough that being public does not matter. He asked that wherever the work departs from a best practice, the record point out the exception and explain how it is kept secure.
+On 2026-10-26 at 01:35 UTC the owner gave their reasons. They want to show the work in public: their progress, what they learn, and how the home lab grows over time. They want the repository, the apps and the infrastructure to be secure enough that being public does not matter. They asked that wherever the work departs from a best practice, the record point out the exception and explain how it is kept secure.
 
 This record decides whether central-hub stays public, and how it records the places where being public changes a choice.
 
@@ -36,7 +36,7 @@ This record decides whether central-hub stays public, and how it records the pla
 
 ## Decision Outcome
 
-Chosen option: **1**. The owner said yes to keeping central-hub public on 2026-10-25 at 03:07 UTC, and on 2026-10-26 at 01:35 UTC he said yes to writing it down as a decision record, with the reasons above.
+Chosen option: **1**. The owner said yes to keeping central-hub public on 2026-10-25 at 03:07 UTC, and on 2026-10-26 at 01:35 UTC they said yes to writing it down as a decision record, with the reasons above.
 
 Diagram: not applicable. The record sets one choice and two rules, with no components, sequence or dependency order.
 

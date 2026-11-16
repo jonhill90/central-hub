@@ -149,7 +149,7 @@ resource "azurerm_role_assignment" "opnsense" {
 # transcript, the repository or tofu state: tofu makes the vault and the role, never the secret.
 # The app may only set the secret and read its metadata (a custom role), so a box that is taken over
 # can't read the password back or delete an earlier version. c1's apps hold nothing here. The owner
-# reads it only for a recovery, by giving his own account Key Vault Secrets User then.
+# reads it only for a recovery, by giving their own account Key Vault Secrets User then.
 resource "azurerm_key_vault" "opnsense" {
   name                          = var.opnsense_vault_name
   location                      = azurerm_resource_group.backup.location
