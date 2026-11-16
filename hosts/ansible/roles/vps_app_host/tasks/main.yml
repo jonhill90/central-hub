@@ -130,12 +130,13 @@
   register: vps_app_host_listeners
   changed_when: false
 
+# Not public: loopback, and the tailnet's own ranges, 100.64.0.0/10 and fd7a:115c:a1e0::/48 (Tailscale's address ranges).
 - name: Check nothing new listens on a public address
   vars:
     vps_app_host_public: >-
       {{ vps_app_host_listeners.stdout_lines
          | map('split') | map(attribute=3)
-         | reject('match', '^(127\.|\[::1\]|100\.|\[fd7a:115c:a1e0:)')
+         | reject('match', '^(127\.|\[::1\]|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.|\[fd7a:115c:a1e0:)')
          | map('regex_replace', '^.*:', '') | map('int') | unique
          | difference(vps_app_host_public_ports_allowed) | list }}
   ansible.builtin.assert:

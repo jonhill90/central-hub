@@ -54,9 +54,10 @@ After a change to role `vps_app_host` merges, start `lab-vps-host` with action `
 - `vps-apply status` checks Valkey itself (step 5): no password is refused, the password gets `PONG`.
 - Every apply fails if a port other than 22 listens on a public address (the role's last task).
 - The sudo rule is checked with `visudo` before it is written, and lists `vps-apply` only.
+- **The VPS's host key is trusted on first use, on purpose for now.** `vps-host` connects with `StrictHostKeyChecking=accept-new` and its own known-hosts file, so the first run records the key and any later run against a changed key stops. The box reaches the VPS only over the tailnet, where Tailscale's node keys already prove which node answers at that address ([Tailscale SSH](https://tailscale.com/docs/features/tailscale-ssh)). Pinning the key in the box's private inventory is a later step, not built.
 
 ## Way back
 
 - To undo a role change, start `apply` after the revert merges. `vps-apply host` takes any commit on `main`.
 - To make new secrets, run `secrets-rotate`. Services that read them restart with them.
-- To remove the setup, the owner deletes the app users and packages; that is a delete, so it is his step (D-0042 rule 6). The VPS itself is never torn down (D-0035 rule 2).
+- To remove the setup, the owner deletes the app users and packages; that is a delete, so it is the owner's step (D-0042 rule 6). The VPS itself is never torn down (D-0035 rule 2).

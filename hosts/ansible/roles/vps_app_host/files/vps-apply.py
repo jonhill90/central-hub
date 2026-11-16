@@ -10,8 +10,9 @@ through sudo with these first arguments only (/etc/sudoers.d/vps-apply):
   vps-apply secrets rotate    make every host secret again
   vps-apply status            what is applied and which secrets exist, never a value
 
-`secrets` runs only when called through sudo by `deploy`: after the narrowing (S4) that is the only way
-in, so no secret is made while agent sessions can still sign in as root.
+`secrets` refuses unless SUDO_USER is `deploy`. That guards against running it by mistake; it is not a
+boundary, because a root session can set SUDO_USER itself. What keeps secrets from agent sessions is the
+step order: `secrets` runs at S5, only after S4 has removed root from every agent login (D-0046 rule 4).
 What it prints holds no secret: commits, file names, counts and pass or fail. Full logs stay in
 /var/lib/vps-apply/logs/, root only.
 """
