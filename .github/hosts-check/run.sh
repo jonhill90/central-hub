@@ -82,6 +82,8 @@ check_ansible() {
   bash "$here/tests/test_box_apply_baseline.sh"
   bash "$here/tests/test_proxmox_sso.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
+  bash "$here/tests/test_tailnet_stack_args.sh" tailnet-policy
+  bash "$here/tests/test_tailnet_policy_sections.sh"
   bash "$here/tests/test_proxmox_host_args.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.

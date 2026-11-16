@@ -7,6 +7,7 @@
 #   5-6. pr-merge: sessions get `check *` only; pass-record: add, show, halt, resume; the runner gets neither.
 #   7. proxmox-host runs as its own user (run_as hostops): the session's line has check and log, the runner's adds
 #      apply, and neither runs it as the keys user.
+#   8. tailnet-policy: sessions get plan and log only; the runner also apply (D-0046 rule 4).
 # Usage: .github/hosts-check/tests/test_sudoers_session_args.sh   (needs python3 with jinja2 and pyyaml)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -46,6 +47,9 @@ hs = [l for l in h if l.startswith("sess ALL=")]
 hr = [l for l in h if l.startswith("run ALL=")]
 print("7", hs == ["sess ALL=(hostops) NOPASSWD: /x/proxmox-host.sh check, /x/proxmox-host.sh log"],
       hr == ["run ALL=(hostops) NOPASSWD: /x/proxmox-host.sh check, /x/proxmox-host.sh apply *, /x/proxmox-host.sh log"])
+tp = render([w for w in d if w["name"] == "tailnet-policy"])
+print("8", lines(tp, "sess") == ["sess ALL=(keys) NOPASSWD: /x/tailnet-policy.sh plan, /x/tailnet-policy.sh log"],
+      lines(tp, "run") == ["run ALL=(keys) NOPASSWD: /x/tailnet-policy.sh plan, /x/tailnet-policy.sh apply *, /x/tailnet-policy.sh log"])
 PY
 )
 check() { # number, text
@@ -58,4 +62,5 @@ check 4 "4. tailnet-stack: no apply in the session's line, apply in the runner's
 check 5 "5. sessions: pr-merge check only (no merge, no sweep); pass-record add, show, halt, resume"
 check 6 "6. the runner user gets no pr-merge or pass-record line (the merge job is gone)"
 check 7 "7. proxmox-host: as hostops; the session checks and reads the log, only the runner applies"
+check 8 "8. tailnet-policy: the session gets plan and log only, the runner also apply"
 exit "$fail"
