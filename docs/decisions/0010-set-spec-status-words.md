@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNG5mGAoayYeUHQvQF3FC42W
   approval-names: "PR #15 and head b32bd59, in the message itself"
   check: the drafting agent read the message in the PRD and spec research thread at 2026-10-22T07:03Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: PR #15 merged at 2026-10-22T07:03Z as 06ac6b9, with this evidence commit on top of the approved commit
+  merged: "PR #15 merged at 2026-10-22T07:03Z as 06ac6b9, with this evidence commit on top of the approved commit"
 revisit-when: specs pile up in accepted with no one finishing them; a check script starts reading the status field; or a second repo adopts specs
 ---
 

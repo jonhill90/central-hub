@@ -10,7 +10,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNEmxY3b4AUUUFSD7gBPZ7hH
   approval-names: "PR #178 and head 555a7863092f78cbe2aff3610d38712256ca6be6, in the message itself"
   check: the drafting agent read the message in the project thread at 2026-11-11T05:03Z; it reads "accept PR jonhill90/central-hub#178 555a7863092f78cbe2aff3610d38712256ca6be6". A reviewing agent checked it before the merge.
-  merged: PR #178 merged at head 555a7863 as aad7cd355901d3e5d447c66530c060a3a836bcf3
+  merged: "PR #178 merged at head 555a7863 as aad7cd355901d3e5d447c66530c060a3a836bcf3"
 done-evidence:
 supersedes: []
 superseded-by:

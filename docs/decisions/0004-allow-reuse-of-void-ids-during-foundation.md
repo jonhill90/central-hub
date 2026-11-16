@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: 85ce152e6e105f4406473c5912be63d0e8f3f43b
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN5xYTaeoa5nfZNqfToJKrD7
   approval-names: "PR #7 and head 85ce152 by context; it answers the agent's message (06:17:02Z) that named both"
-  check: the drafting agent read the message in the Rules table thread at 2026-10-13T06:18Z, and the recorded wording matched it exactly. It answers the agent's message in the same thread (06:17:02Z), which named PR #7 and head 85ce152 and asked for "accept" naming both. The message itself names neither, so it relies on that context, as D-0003's acceptance did. An independent check by a reviewing agent is still to do.
-  merged: PR #7 merged at 2026-10-13T06:20Z as 1c78db7, with this evidence commit on top of the approved commit
+  check: "the drafting agent read the message in the Rules table thread at 2026-10-13T06:18Z, and the recorded wording matched it exactly. It answers the agent's message in the same thread (06:17:02Z), which named PR #7 and head 85ce152 and asked for \"accept\" naming both. The message itself names neither, so it relies on that context, as D-0003's acceptance did. An independent check by a reviewing agent is still to do."
+  merged: "PR #7 merged at 2026-10-13T06:20Z as 1c78db7, with this evidence commit on top of the approved commit"
 revisit-when: the Activation gate passes; an ID family is referenced from outside the owner's own repositories and project; or a reuse leaves a reference that a search missed
 ---
 

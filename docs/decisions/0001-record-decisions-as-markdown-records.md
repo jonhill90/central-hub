@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNC3VZmTAMC2buEXh8pCC9LJ
   approval-names: "neither the PR nor the head; it answers the question naming ADR 0001 and ADR 0002 (07:25Z)"
   check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and at 07:28:13Z the owner had said that he had approved the PRs; an independent check by a reviewing agent is still to do
-  merged: jonhill90 merged PR #1 at 2026-10-11T07:22Z; the merged record matches the approved commit exactly
+  merged: "jonhill90 merged PR #1 at 2026-10-11T07:22Z; the merged record matches the approved commit exactly"
 revisit-when: a knowledge system (TASK-0036) is chosen that should own decisions, or the flat folder becomes hard to use
 ---
 

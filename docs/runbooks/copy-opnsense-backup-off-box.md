@@ -3,7 +3,7 @@ title: Copy the OPNsense configuration backups off the agent box
 status: draft
 kind: manual
 trigger: once, after the box keeps daily OPNsense copies (set-up-the-box-lifeline.md); again if the box is rebuilt or the copy app's certificate expired
-runner: an agent lane on the controller, with the Azure CLI signed in as agent-azure, the owner's yes to the Key Vault was given on 2026-11-14 at 03:07 UTC (a decision-card tap on #244)
+runner: "an agent lane on the controller, with the Azure CLI signed in as agent-azure, the owner's yes to the Key Vault was given on 2026-11-14 at 03:07 UTC (a decision-card tap on #244)"
 outcome: every day the box's OPNsense configuration copies go, encrypted, to their own container in the Azure backup account, under their own identity and a restic password made on the box, whose one off-box copy sits in a Key Vault the box can write but not read; the newest copy is read back
 needs: the box's daily OPNsense copies (agent_box_opnsense_backup); hosts/terraform/azure/backup applied before (back-up-c1-off-box.md); the Azure CLI on the controller signed in as agent-azure (Owner on the subscription); the box leaves through the home's public address, the only one the storage account and the vault answer
 private-values: [c1-backup-azure-storage-account, opnsense-offbox-vault-name, opnsense-offbox-client-id, opnsense-offbox-app-object-id, azure-tenant-id]
