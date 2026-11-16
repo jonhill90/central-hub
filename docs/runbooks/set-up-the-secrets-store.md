@@ -3,7 +3,7 @@ title: Set up the lab's secrets store (OpenBao) on dev
 status: draft
 kind: automated
 trigger: once per env, after D-0038's picks; again after the store's VM is rebuilt
-runner: an agent session on the agent box, through the `secrets-store` wrapper (in the agent_box role since #276; on the box once that role is applied, see Before you start)
+runner: "an agent session on the agent box, through the `secrets-store` wrapper (in the agent_box role since #276; on the box once that role is applied, see Before you start)"
 outcome: one AlmaLinux 10 VM on VNet dev runs OpenBao 2.7.2, starts and unseals with no person, initialized by itself with audit, KV v2 and two AppRoles, takes an hourly Raft snapshot, and holds c1's External Secrets login and the rebuild's AppRole
 needs: the agent box; the agents' Proxmox token with rights on pool `dev`; template 9001; a free dev address; the private inventory values listed below
 private-values: [store-name, store-address, box-address, seal-key, admin-role-id, admin-secret-id, rebuild-role-id, rebuild-secret-id, store-ssh-key]

@@ -8,7 +8,7 @@ outcome: VM 300 runs the GitHub Actions runner for agent-notebook as an unprivil
 needs: the agent box with the ci-runner wrapper; agent_box_ci_runner in the private inventory; the GitHub App with the repository permission Administration (write)
 private-values: [agent_box_ci_runner]
 files: [hosts/terraform/home/ci-runner/, hosts/ansible/roles/ci_runner/, hosts/ansible/playbooks/ci-runner.yml, hosts/ansible/roles/agent_box/files/ci-runner.sh, hosts/ansible/roles/agent_box/templates/ci-runner-weekly.service.j2, hosts/ansible/roles/agent_box/templates/ci-runner-weekly.timer.j2, hosts/terraform/home/bootstrap/agent-access.sh]
-last-tested: 2026-11-10, an agent session through the agent box, steps 3-6 (steps 1-2 by the owner's Mac lane); the first run needed #170, #172, #173 and #174, then `ci-runner configure` passed twice (the second changed nothing) and agent-notebook #265's three jobs ran on the runner and passed
+last-tested: "2026-11-10, an agent session through the agent box, steps 3-6 (steps 1-2 by the owner's Mac lane); the first run needed #170, #172, #173 and #174, then `ci-runner configure` passed twice (the second changed nothing) and agent-notebook #265's three jobs ran on the runner and passed"
 superseded-by:
 ---
 
