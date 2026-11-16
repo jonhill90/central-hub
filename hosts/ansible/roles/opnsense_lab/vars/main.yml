@@ -8,9 +8,16 @@ opnsense_lab_vlans: >-
   {%- set x = opnsense_lab_vlan_settings[v.name] -%}
   {%- set _ = out.append({'tag': v.id, 'name': v.name, 'label': v.alias, 'cidr': v.cidr,
       'base': v.cidr.split('/')[0].rsplit('.', 1)[0],
-      'ifname': x.ifname, 'dhcp': x.dhcp, 'bootstrap': x.bootstrap}) -%}
+      'ifname': x.ifname, 'dhcp': x.dhcp, 'bootstrap': x.bootstrap,
+      'tailnet': v.tailnet | default(true), 'mgmt_pass': x.mgmt_pass | default(true)}) -%}
   {%- endfor -%}
   {{ out }}
+
+# The VLANs the management VLAN gets a pass rule into (tasks/rules.yml), and the VLANs kept off the
+# tailnet (a block rule to 100.64.0.0/10). The management rules are numbered 5 up from this list.
+opnsense_lab_mgmt_pass_vlans: "{{ opnsense_lab_vlans | rejectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | selectattr('mgmt_pass') | list }}"
+opnsense_lab_mgmt_no_pass_vlans: "{{ opnsense_lab_vlans | rejectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | rejectattr('mgmt_pass') | list }}"
+opnsense_lab_tailnet_off_vlans: "{{ opnsense_lab_vlans | rejectattr('tailnet') | list }}"
 
 # Derived values. The gateway of each lab /24 is .1 (IP plan); the mgmt one is the firewall's
 # GUI, DNS and API address.

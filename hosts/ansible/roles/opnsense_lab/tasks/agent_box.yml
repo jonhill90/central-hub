@@ -5,7 +5,8 @@
 # 201, so the box can rebuild prod (the owner's answer of 2026-11-11; applied on a typed go), and the
 # firewall's own API on 443, for the box's daily copy of its configuration (pick 220; the backup's
 # first run timed out on it, measured 2026-11-14 04:27 UTC). One rule per target, from the box's
-# address only. The dev VLAN's own rules still block the rest of RFC 1918. Sequences come from
+# address only. The tenant lab SSH target is a whole /24 (prefix 24), so the box can reach every
+# tenant VM on that VLAN; it takes the sixth and last slot, sequence 9. The dev VLAN's own rules still block the rest of RFC 1918. Sequences come from
 # opnsense_lab_agent_box_sequences, in target order: 1 to 4, then 8 and 9, ahead of the dev VLAN's
 # rules (10 and up) and clear of the management rules (5 to 7, one per other lab VLAN).
 - name: Agent box targets fit their sequences and have known names
@@ -15,7 +16,7 @@
       - opnsense_lab_agent_box_sequences | max < 10
       - >-
         opnsense_lab_agent_box_sequences[:opnsense_lab_agent_box.targets | length]
-        | intersect(range(5, 5 + (opnsense_lab_vlans | rejectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | list | length)) | list)
+        | intersect(range(5, 5 + (opnsense_lab_mgmt_pass_vlans | length)) | list)
         | length == 0
       - opnsense_lab_agent_box.targets | map(attribute='name') | unique | length == opnsense_lab_agent_box.targets | length
       - opnsense_lab_agent_box.targets | map(attribute='name') | difference(opnsense_lab_agent_box_target_names) | length == 0
@@ -38,7 +39,7 @@
     ip_protocol: inet
     protocol: TCP
     source_net: "{{ opnsense_lab_agent_box.source }}/32"
-    destination_net: "{{ item.address }}/32"
+    destination_net: "{{ item.address }}/{{ item.prefix | default(32) }}"
     destination_port: "{{ item.port | string }}"
     log: false
   loop: "{{ opnsense_lab_agent_box.targets }}"

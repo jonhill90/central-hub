@@ -5,8 +5,13 @@
 # terraform/home/network reads it with yamldecode(file(var.vlans_file)).
 # .github/docs-check/check_vlans.py fails when id, alias (STD-0002's "Use") or cidr differ from STD-0002.
 # Ranges only, no single host addresses (CLAUDE.md rule 4).
+# Optional key `tailnet` (default true): false keeps the VLAN off the tailnet. The tailnet connector
+# does not advertise it, home/tailnet does not turn its route on, and the tailnet policy's lab ranges
+# leave it out. The OPNsense role also blocks that VLAN's traffic to 100.64.0.0/10.
+# A VLAN's name is also its Proxmox SDN VNet id: letters and digits, at most 8 characters, so `tenant`.
 lab_vlans:
   - { id: 10, name: prod, alias: prod, cidr: 10.1.10.0/24 }
   - { id: 20, name: qa, alias: qa and stage, cidr: 10.1.20.0/24 }
   - { id: 30, name: dev, alias: dev, cidr: 10.1.30.0/24 }
   - { id: 50, name: mgmt, alias: management, cidr: 10.1.50.0/24 }
+  - { id: 60, name: tenant, alias: tenant lab, cidr: 10.1.60.0/24, tailnet: false }

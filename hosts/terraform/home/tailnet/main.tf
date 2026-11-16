@@ -15,7 +15,7 @@ resource "tailscale_device_subnet_routes" "connector" {
   device_id = data.tailscale_device.connector.node_id
   routes = sort(distinct(concat(
     var.connector_extra_routes,
-    [for v in yamldecode(file(var.vlans_file)).lab_vlans : v.cidr],
+    [for v in yamldecode(file(var.vlans_file)).lab_vlans : v.cidr if lookup(v, "tailnet", true)],
   )))
 }
 
