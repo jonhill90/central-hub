@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# roles/agent_box/files/secrets-store-restore-rebuilt.sh (pick 238, D-0038 Confirmation 5) against a stand-in for
-# curl that plays a rebuilt dev store (fake values only):
+# roles/agent_box/files/secrets-store-restore.sh against a stand-in for curl that plays the dev store (fake values
+# only). Mode rebuilt (pick 238, D-0038 Confirmation 5), on a rebuilt store:
 #   1. OpenBao refuses the plain restore with the unseal-keys text: the forced one runs, the newest snapshot of the
 #      previous cluster is picked (not a newer one of the rebuilt store), the mark reads back, the hold is removed.
 #   2. OpenBao takes the plain restore: no forced call.
@@ -10,8 +10,19 @@
 #      refuses too, never counts as empty.
 #   6. The token from before the restore still works: step 5 fails.
 #   7. The mark does not match the snapshot's time: step 6 fails.
+# Mode same (pick 239, Confirmations 4 and 7), on the same store:
+#   9. The newest snapshot of the store's own cluster goes back plain; the mark is moved off first and reads back.
+#  10. The mark never comes back: step 4 fails.
+#  11. OpenBao refuses: the run stops, never forced.
+#  12. Only snapshots of another cluster: refused before any restore.
+# Recovery shares (both modes, pick 239):
+#  13. A snapshot older than the shares, or from the same second, is refused before any restore, in both modes.
+#  14. With no .made file, the shares file's time is used, with a warning.
+#  15. A named snapshot (store 1, moved back from the kept folder after stores 2 and 3): that file is restored, not
+#      the newer store 2 one, and the PASS line names it; a named file that is missing, of the current cluster,
+#      or has no .cluster file is refused before any restore; mode same takes no name.
 #   8. No token or AppRole ID shows in the output.
-# Usage: .github/hosts-check/tests/test_secrets_store_restore_rebuilt.sh   (needs python3)
+# Usage: .github/hosts-check/tests/test_secrets_store_restore.sh   (needs python3)
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 t=$(mktemp -d)
@@ -64,7 +75,7 @@ case $path in
     fi ;;
   sys/storage/raft/snapshot)
     case $MODE in
-      plain) echo restored > "$T/phase"; echo "${data#@}" > "$T/restored"; code=204 ;;
+      plain|nomark) echo restored > "$T/phase"; echo "${data#@}" > "$T/restored"; code=204 ;;
       other) code=400; body='{"errors": ["something else went wrong"]}' ;;
       *) code=500; body='{"errors": ["could not verify hash file, possibly the snapshot is using a different set of unseal keys; use the snapshot-force API to bypass this check"]}' ;;
     esac ;;
@@ -73,9 +84,15 @@ case $path in
   auth/token/lookup-self)
     if [[ $tok == tok-before-secret && $phase == restored && $MODE != stale ]]; then code=403; fi ;;
   kv/data/dev/snapshot-mark)
-    s=$(basename "$(cat "$T/restored")"); s=${s#raft-}; s=${s%.snap}
-    [[ $MODE == nomark ]] && s=20990101T000000Z
-    body="{\"data\": {\"data\": {\"taken\": \"$s\"}}}" ;;
+    if [[ $method == POST ]]; then
+      if [[ $data == *'"taken"'* ]]; then echo "$data" > "$T/mark-written"; else code=400; fi
+    elif [[ $phase == restored ]]; then
+      s=$(basename "$(cat "$T/restored")"); s=${s#raft-}; s=${s%.snap}
+      [[ $MODE == nomark ]] && s=20990101T000000Z
+      body="{\"data\": {\"data\": {\"taken\": \"$s\"}}}"
+    else
+      body='{"data": {"data": {"taken": "before-restore-x"}}}'
+    fi ;;
   auth/token/revoke-self) code=204 ;;
   *) code=404 ;;
 esac
@@ -84,7 +101,7 @@ esac
 exit 0
 SH
 chmod +x "$t/bin/curl"
-helper=$root/hosts/ansible/roles/agent_box/files/secrets-store-restore-rebuilt.sh
+helper=$root/hosts/ansible/roles/agent_box/files/secrets-store-restore.sh
 
 snapset() { # the standard set: two of the old cluster, two newer of the rebuilt store
   rm -f "$t/snaps/"*
@@ -92,10 +109,10 @@ snapset() { # the standard set: two of the old cluster, two newer of the rebuilt
     echo "snap ${s%%:*}" > "$t/snaps/raft-${s%%:*}.snap"; echo "${s##*:}" > "$t/snaps/raft-${s%%:*}.snap.cluster"
   done
 }
-run() { # mode
-  rm -f "$t/phase" "$t/restored" "$t/calls"
+run() { # stub mode [helper mode] [named]
+  rm -f "$t/phase" "$t/restored" "$t/calls" "$t/mark-written"
   date -u +%FT%TZ > "$t/hold"
-  MODE=$1 T=$t PATH="$t/bin:$PATH" bash "$helper" https://store.invalid "$t/ca.crt" "$t/keys" "$t/snaps" "$t/hold" 3 > "$t/out" 2>&1 && rc=0 || rc=$?
+  MODE=$1 T=$t PATH="$t/bin:$PATH" bash "$helper" "${2:-rebuilt}" https://store.invalid "$t/ca.crt" "$t/keys" "$t/snaps" "$t/hold" 3 ${3:+"$3"} > "$t/out" 2>&1 && rc=0 || rc=$?
   all+=$(cat "$t/out")
 }
 forced() { grep -q 'snapshot-force' "$t/calls"; }
@@ -147,6 +164,66 @@ snapset; run stale
 # 7
 snapset; run nomark
 [[ $rc -ne 0 ]] && grep -q '6 mark reads back FAIL' "$t/out" && [[ -e $t/hold ]] && ok "7. a mark that does not match fails step 6, hold kept" || bad "7. rc=$rc $(cat "$t/out")"
+
+# 9
+snapset; run plain same
+if [[ $rc -eq 0 ]] && grep -q '^PASS: restore: raft-20261114T110000Z.snap restored (plain) onto the same store' "$t/out" &&
+   [[ $(cat "$t/restored") == "$t/snaps/raft-20261114T110000Z.snap" ]] && grep -q 'before-restore-' "$t/mark-written" &&
+   grep -q 'measured: old token: refused' "$t/out" && ! forced && [[ -e $t/hold ]]; then
+  ok "9. same store: its own cluster's newest snapshot, plain, the mark moved off first and read back"
+else bad "9. rc=$rc $(cat "$t/out")"; fi
+
+# 10
+snapset; run nomark same
+[[ $rc -ne 0 ]] && grep -q 'restore: 4 mark reads back FAIL' "$t/out" && ok "10. same store: a mark that never comes back fails step 4" || bad "10. rc=$rc $(cat "$t/out")"
+
+# 11
+snapset; run keys same
+[[ $rc -ne 0 ]] && grep -q 'restore: 3 restore FAIL' "$t/out" && ! forced && ok "11. same store: a refusal stops the run, never forced" || bad "11. rc=$rc $(cat "$t/out")"
+
+# 12
+rm -f "$t/snaps/"*
+echo a > "$t/snaps/raft-20261114T090000Z.snap"; echo cluster-old > "$t/snaps/raft-20261114T090000Z.snap.cluster"
+run plain same
+[[ $rc -ne 0 ]] && grep -q 'restore: 1 snapshot FAIL' "$t/out" && ! restored && ok "12. same store: only another cluster's snapshots, refused before any restore" || bad "12. rc=$rc $(cat "$t/out")"
+
+# 13
+snapset; printf 'shares' > "$t/keys/openbao-recovery.json"; echo 20261114T110000Z > "$t/keys/openbao-recovery.made"
+run plain same; r13a=$rc o13a=$(cat "$t/out"); n13a=$(grep -c 'raft/snapshot' "$t/calls" || true)
+echo 20261114T093000Z > "$t/keys/openbao-recovery.made"
+run keys rebuilt
+if [[ $r13a -ne 0 && $o13a == *"1b shares FAIL"* && $n13a == 0 && $rc -ne 0 ]] && grep -q 'restore-rebuilt: 1b shares FAIL' "$t/out" && ! restored; then
+  ok "13. a snapshot older than the shares, or of the same second, is refused before any restore, in both modes"
+else bad "13. rc=$r13a/$rc $o13a / $(cat "$t/out")"; fi
+echo 20261114T085900Z > "$t/keys/openbao-recovery.made"
+run keys rebuilt
+[[ $rc -eq 0 ]] && grep -q '1b shares ok: snapshot is later than the shares' "$t/out" && ok "13b. a snapshot later than the shares passes" || bad "13b. rc=$rc $(cat "$t/out")"
+
+# 14
+snapset; rm -f "$t/keys/openbao-recovery.made"; touch -d '2026-11-14 09:30:00 UTC' "$t/keys/openbao-recovery.json"
+run keys rebuilt
+[[ $rc -ne 0 ]] && grep -q 'WARNING: openbao-recovery.made is missing' "$t/out" && grep -q '1b shares FAIL' "$t/out" && ! restored \
+  && ok "14. no .made: the shares file's time is used, with a warning" || bad "14. rc=$rc $(cat "$t/out")"
+rm -f "$t/keys/openbao-recovery.json"
+
+# 15
+rm -f "$t/snaps/"*
+for s in 20261110T080000Z:cluster-1 20261112T080000Z:cluster-2 20261112T090000Z:cluster-2 20261114T100000Z:cluster-new; do
+  echo "snap ${s%%:*}" > "$t/snaps/raft-${s%%:*}.snap"; echo "${s##*:}" > "$t/snaps/raft-${s%%:*}.snap.cluster"
+done
+run keys rebuilt; r15a=$rc a15=$(cat "$t/restored" 2>/dev/null)
+run keys rebuilt raft-20261110T080000Z.snap
+if [[ $r15a -eq 0 && $a15 == "$t/snaps/raft-20261112T090000Z.snap" && $rc -eq 0 && $(cat "$t/restored") == "$t/snaps/raft-20261110T080000Z.snap" ]] &&
+   grep -q '1 snapshot ok: raft-20261110T080000Z.snap (named)' "$t/out" && grep -q '^PASS: restore-rebuilt: raft-20261110T080000Z.snap restored' "$t/out"; then
+  ok "15. stores 1, 2, 3: unnamed picks store 2's newest; naming store 1's file restores that file"
+else bad "15. rc=$r15a/$rc a=$a15 $(cat "$t/out")"; fi
+r=0
+run keys rebuilt raft-20261101T000000Z.snap; [[ $rc -ne 0 ]] && grep -q 'is not in' "$t/out" && ! restored || r=1
+run keys rebuilt raft-20261114T100000Z.snap; [[ $rc -ne 0 ]] && grep -q 'current store' "$t/out" && ! restored || r=1
+rm "$t/snaps/raft-20261110T080000Z.snap.cluster"
+run keys rebuilt raft-20261110T080000Z.snap; [[ $rc -ne 0 ]] && grep -q 'no .cluster file' "$t/out" && ! restored || r=1
+run plain same raft-20261114T100000Z.snap; [[ $rc -ne 0 ]] && grep -q 'only restore-rebuilt takes' "$t/out" && ! restored || r=1
+[[ $r == 0 ]] && ok "15b. a named file missing, of the current cluster or with no .cluster is refused; mode same takes no name" || bad "15b. $(cat "$t/out")"
 
 # 8
 if [[ $all == *tok-* || $all == *role-id-fake* || $all == *secret-id-fake* ]]; then bad "8. a token or ID shows in the output"

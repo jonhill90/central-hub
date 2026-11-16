@@ -29,7 +29,7 @@ agent_box_wrappers:
     args: [plan, apply, configure, destroy]
   # The lab's secrets store, OpenBao, on dev (docs/runbooks/set-up-the-secrets-store.md, proposed D-0038).
   - name: secrets-store
-    args: [plan, apply, configure, recovery, status, snapshot, restore, restore-rebuilt, destroy]
+    args: [plan, apply, configure, recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, destroy]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself. Sessions get the
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge
@@ -47,6 +47,15 @@ agent_box_wrappers:
     args: [plan, "apply *", log]
     session_args: [plan, log]   # a session cannot apply; only the workflow's runner can (D-0041 rules 2 and 3)
     runner: true
+  # The Proxmox host's proxy playbook as a pipeline job (D-0041; Library plans/r1-host-job/DESIGN.md v3.1):
+  # check, then apply the check whose hash has the agents' pass. It runs as agent_box_host_user, not the keys
+  # user, so no other wrapper can read the host key. Sessions may check and read the log; only the workflow's
+  # runner (lab-proxmox-host.yml) may apply.
+  - name: proxmox-host
+    args: [check, "apply *", log]
+    session_args: [check, log]
+    runner: true
+    run_as: hostops   # the same name as agent_box_host_user
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]
@@ -183,9 +192,24 @@ agent_box_nftables_version: "1:1.1.5-6.el10_2"
 # The nft binary the filter's unit and the proof use.
 agent_box_nft_bin: /usr/sbin/nft
 # What the box may reach over that NIC, and nothing else (the rest is rejected): a list of
-# {address: IPv4, ports: [TCP ports]}, normally the Proxmox host's own address and 8006 (and 22 if needed).
+# {address: IPv4, ports: [TCP ports]}, normally the Proxmox host's own address and 8006. An entry may add
+# uid: <user>, so only that user's sockets get out to it: the host job's tcp 22 is
+# {address: <host>, ports: [22], uid: hostops}.
 # Private, through the inventory. Empty with the interface set rejects everything over the lifeline.
 agent_box_lifeline_allow: []
+# The Proxmox host job (wrapper proxmox-host). Its own system user holds the only key that logs in to the
+# host as root, in its own folder, so the keys user's wrappers can't read it. The key is made only when
+# agent_box_proxmox_host_job is true: the owner's tap (access rights and box limits, D-0042 rule 6). The job's
+# inventory (agent_box_proxmox_host) is private and written only by a run from the controller, under the
+# `proxmox_host_inventory` tag, which self-applies skip (D-0036 rule 7).
+agent_box_host_user: hostops
+agent_box_host_dir: /etc/agent-keys-host
+agent_box_host_work_dir: /var/lib/agent-box-host
+agent_box_proxmox_host_job: false
+# Private, through the controller's inventory: {address: the host's lifeline-side IPv4 (the same as its
+# agent_box_lifeline_allow entry), hostkey: the host's "ssh-ed25519 AAAA..." public host key}. The certificate's
+# names come from proxmox_cert_names. Empty: the inventory is not written and the job refuses to run.
+agent_box_proxmox_host: {}
 # Any other top-level settings, merged over the rest (for example autoUpdatesChannel).
 agent_box_managed_settings_extra: {}
 # When the weekly `ci-runner weekly` run starts (systemd OnCalendar): it reinstalls the merged pin on
@@ -215,7 +239,9 @@ agent_box_short_node: ""
 # The secrets store's dev VM that the secrets-store wrapper builds (docs/runbooks/set-up-the-secrets-store.md).
 # Private, through the inventory: name, vm_id (500-599), address, cores, memory_mb, disk_gb,
 # proxmox_node_name, vnet, template_vm_id, box_address (this box's address, the only one the admin
-# AppRole works from), and optionally seal_key_id (default 1) and admin_user. Empty leaves the wrapper unset up.
+# AppRole works from), and optionally seal_key_id (default 1), admin_user and snapshot_box (default false; true only
+# by the owner's install tap of pick 240: configure then makes AppRole snapshot-box, and snapshot signs in with it).
+# Empty leaves the wrapper unset up.
 agent_box_secrets_store: {}
 # The dev store's hourly snapshot off the box (pick 237, docs/runbooks/set-up-the-secrets-store.md), set up when both
 # agent_box_secrets_store and agent_box_opnsense_offbox are set. Its own restic repository in pick 222's container,
@@ -265,11 +291,14 @@ agent_box_prod_files_clone: ""
 agent_box_self_apply: false
 # Tags a self-apply skips: tasks that read the controller's files (ca, prod_files, and the off-box copy's
 # certificate upload), the lifeline's firewall (D-0036 rule 8) and the proofs. A limit itself (defaults key).
-agent_box_self_apply_skip_tags: [ca, prod_files, opnsense_offbox, lifeline, verify]
+agent_box_self_apply_skip_tags: [ca, prod_files, opnsense_offbox, lifeline, verify, proxmox_host_inventory]
 # The commit a controller's pinned copy was made from, when that copy is not a git checkout (-e only).
 agent_box_self_apply_commit: ""
 # Set by box-apply on its own runs (-e); the box-apply tasks then write nothing.
 agent_box_self_applying: false
+# Set by box-apply, with agent_box_self_applying, on an approved limit apply (-e; pick 232): the box-apply tasks
+# then write box-apply, its settings and its limits, never its inventory.
+agent_box_limit_apply: false
 
 # The merge sweep (D-0042 rule 2): a systemd timer that runs `pr-merge.sh sweep` as the keys user. Off until the inventory
 # turns it on, because installing it is a change to the box's limits (D-0042 rule 6).

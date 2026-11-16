@@ -139,7 +139,15 @@
     - "{{ agent_box_work_dir }}/checkouts"
   tags: [users]
 
-# The role never writes a key. It only makes sure every file already in the key folder belongs to
+# Before the wrappers and their sudo rules, which name this user.
+- name: The Proxmox host job's user, folders and key (the key only when agent_box_proxmox_host_job is true)
+  ansible.builtin.include_tasks:
+    file: proxmox_host.yml
+    apply:
+      tags: [users, proxmox_host]
+  tags: [users, proxmox_host]
+
+# The role never writes a key into the key folder. It only makes sure every file already in it belongs to
 # the keys user and is readable by it alone.
 - name: Find the key files
   ansible.builtin.find:
@@ -415,13 +423,16 @@
   when: agent_box_desktop | length > 0
   tags: [wrappers]
 
-- name: The secrets-store wrapper's guarded restore onto a rebuilt store, root-owned (pick 238)
+- name: The secrets-store wrapper's helpers, root-owned (picks 238, 239)
   ansible.builtin.copy:
-    src: secrets-store-restore-rebuilt.sh
-    dest: "{{ agent_box_libexec_dir }}/secrets-store-restore-rebuilt.sh"
+    src: "{{ item }}"
+    dest: "{{ agent_box_libexec_dir }}/{{ item }}"
     owner: root
     group: root
     mode: "0755"
+  loop:
+    - secrets-store-restore.sh     # the guarded restores, same store and rebuilt
+    - secrets-store-snapshots.sh   # rotation, and setting an earlier store's snapshots aside
   when: agent_box_secrets_store | length > 0
   tags: [wrappers]
 
@@ -744,6 +755,18 @@
       tags: [wrappers, secrets_bundle]
   when: agent_box_secrets_bundle | length > 0
   tags: [wrappers, secrets_bundle]
+
+# --- The Proxmox host job (Library plans/r1-host-job/DESIGN.md v3.1) ------------------------------------------
+
+# From the controller only: self-applies skip this tag (agent_box_self_apply_skip_tags), because the inventory
+# holds private values (D-0036 rule 7).
+- name: The Proxmox host job's inventory and the key's public half (only when agent_box_proxmox_host is set)
+  ansible.builtin.include_tasks:
+    file: proxmox_host_inventory.yml
+    apply:
+      tags: [proxmox_host_inventory]
+  when: agent_box_proxmox_host | length > 0 and agent_box_proxmox_host_job | bool
+  tags: [proxmox_host_inventory]
 
 # --- The dev secrets store's hourly snapshot off the box (pick 237) -------------------------------------
 

@@ -24,7 +24,7 @@ case "$method $last" in
   "POST "*access_tokens) reply '{"token":"T"}' 201 ;;
   "GET https://api.github.com/repos/jonhill90/central-hub/pulls?state=open"*) reply "[{\"number\":7,\"head\":{\"sha\":\"$FAKE_HEAD\"}}]" ;;
   "GET "*"/pulls?state=open"*) reply '[]' ;;
-  "GET "*"/pulls/7") reply "{\"state\":\"open\",\"draft\":false,\"base\":{\"ref\":\"main\",\"sha\":\"c\"},\"head\":{\"sha\":\"$FAKE_HEAD\"},\"mergeable\":true,\"mergeable_state\":\"clean\",\"body\":\"Author-Lane: plan\"}" ;;
+  "GET "*"/pulls/7") reply "{\"state\":\"open\",\"draft\":false,\"base\":{\"ref\":\"main\",\"sha\":\"c\"},\"head\":{\"sha\":\"$FAKE_HEAD\"},\"mergeable\":true,\"mergeable_state\":\"clean\",\"body\":\"Author-Lane: OpenBao thread\"}" ;;
   "GET "*"/pulls/7/files"*) reply '[{"filename":"docs/runbooks/x.md"}]' ;;
   "GET "*"/check-runs"*) [[ -n ${FAKE_CHECKS_FAIL:-} ]] && reply '{"message":"boom"}' 500; reply '{"total_count":1,"check_runs":[{"name":"docs","status":"completed","conclusion":"success"}]}' ;;
   "GET "*"/status") reply '{}' ;;
@@ -64,7 +64,7 @@ no_ "auto-merge is never called" "grep -qi 'auto' $t/calls"
 ledger "${roles[@]}"; out=$(FAKE_CHECKS_FAIL=1 run "$t/pr-merge.sh" sweep); check "a failed GitHub read skips the PR" "$out" "skipped (a GitHub read failed)"
 export FAKE_CHECKS_FAIL=; ledger "${roles[@]}"
 out=$(run "$t/pr-merge.sh" check jonhill90/central-hub 7 "$H"); check "check prints the verdict and merges nothing" "$out" "GREEN"; no_ "check never calls merge" merged
-out=$(run "$t/pr-merge.sh" lane jonhill90/central-hub 7); check "lane prints the Author-Lane label" "$out" "plan"
+out=$(run "$t/pr-merge.sh" lane jonhill90/central-hub 7); check "lane reads a label with a space, like OpenBao thread" "$out" "OpenBao thread"
 out=$(run "$t/pr-merge.sh" merge jonhill90/elsewhere 7 "$H"); check "another repository exits 2" "$out" "rc=2"
 out=$(run "$t/pr-merge.sh" sweep extra); check "sweep takes no arguments" "$out" "rc=2"
 exit $fail

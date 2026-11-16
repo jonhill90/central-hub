@@ -82,13 +82,20 @@ check_ansible() {
   bash "$here/tests/test_box_apply_baseline.sh"
   bash "$here/tests/test_proxmox_sso.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
+  bash "$here/tests/test_proxmox_host_args.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
+  # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
+  python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml
+  bash "$here/tests/test_check_check_mode.sh"
   python3 "$here/check-hook-allowlist.py" .
   bash "$here/tests/test_runner_hook.sh"
   bash "$here/tests/test_pr_merge_verdict.sh"
   bash "$here/tests/test_pass_record.sh"
   bash "$here/tests/test_pr_merge_sweep.sh"
   bash "$here/tests/test_merge_checked.sh"
+  bash "$here/tests/test_lifeline_nmcli_read.sh"
+  bash "$here/tests/test_lifeline_cleanup.sh"
+  bash "$here/tests/test_box_apply_inventory_vars.sh"
   bash "$here/tests/test_opnsense_lab_tenant.sh"
 }
 
@@ -185,7 +192,8 @@ check_backup() {
   bash "$here/tests/test_opnsense_escrow.sh"
   bash "$here/tests/test_secrets_bundle_offbox.sh"
   bash "$here/tests/test_secrets_store_offbox.sh"
-  bash "$here/tests/test_secrets_store_restore_rebuilt.sh"
+  bash "$here/tests/test_secrets_store_restore.sh"
+  bash "$here/tests/test_secrets_store_snapshots.sh"
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
   bash "$here/tests/test_identity_signin.sh"
@@ -200,6 +208,11 @@ check_proxy() {
   # Role proxmox_proxy against a stand-in Proxmox host in a container: the install beside nginx, the move from
   # nginx, its rollbacks, a run killed part-way, an open console across a graceful reload, a host with no nginx.
   bash "$here/tests/test_proxy.sh"
+  # The Proxmox host job end to end on the same stand-in (key line, check, refusal, apply), and the lifeline's
+  # per-user entry loaded by nft.
+  collections
+  bash "$here/tests/test_proxmox_host_job.sh"
+  bash "$here/tests/test_lifeline_uid.sh"
 }
 
 check_scripts() {
