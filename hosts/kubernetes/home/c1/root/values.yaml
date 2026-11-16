@@ -275,7 +275,8 @@ apps:
     # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume.
     clusterResources:
       - {group: "", kind: PersistentVolume}
-    wave: -2
+    # After cert-manager (-2): its Issuers and Certificates need cert-manager's CRDs.
+    wave: -1
     autoSync: true
     prune: false
   openbao:
@@ -284,9 +285,13 @@ apps:
       repoURL: https://openbao.github.io/openbao-helm
       name: openbao
       version: 0.30.6   # 2026-10-27, OpenBao v2.7.2; the newest at least two weeks old (STD-0003 rule 1)
+      # The chart's SHA-256 from the repository's index.yaml (D-0058 rule 1). CI (parity.py) fails if this
+      # version is served with other bytes; Argo CD's own pull at sync is not checked against it.
+      sha256: 76e90c2315a4922b4b0c6c63fd8a00b9f4bdf0cffda160664f8ea5762d59911c
     enabledBy: openbaoInCluster
     rootParameters:
       centralHub.boxCidr: openbaoBoxCidr
-    wave: -1
+    # After openbao-store (-1), which makes its certificate Secret.
+    wave: 0
     autoSync: true
     prune: false
