@@ -158,6 +158,11 @@ run "an_external_tailnet_gets_its_group_and_no_incoming_connections" {
   }
 
   assert {
+    condition     = length(regexall("\"src\": \\[\"tag:agent-box\"\\]", tailscale_acl.policy.acl)) == 3
+    error_message = "With external tailnets, tag:agent-box has exactly its grant and SSH rule to tag:vps and its grant to the share pod (D-0046 rule 4)."
+  }
+
+  assert {
     condition     = !strcontains(tailscale_acl.policy.acl, "\"src\": [\"tag:share-pod\"]")
     error_message = "The share pod must have no grant of its own: it reaches nothing in this tailnet."
   }
