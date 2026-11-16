@@ -141,4 +141,12 @@ Another tailnet can share its own devices into this one with Tailscale's declara
 
 Until `home.tfvars` holds the same entry, a plan from this folder would remove it. So no plan or apply runs here, from the Mac or a pipeline job, until the entry is in `home.tfvars`, and the first plan's gate is that the rendered `groups` and `externalTailnets` sections equal the live ones. Any difference in them stops the run.
 
+No agent edits the Mac's `home.tfvars`, so the first run is one session on the Mac, in this order, and the owner's typed line names each step and the commit on `main`:
+
+1. `tofu-tailnet-policy.sh init`, at that commit.
+2. `tofu-tailnet-policy.sh import`: it reads the live policy into the state and changes nothing in the tailnet. `home.tfvars` has no `external_tailnets` yet, which is valid.
+3. Copy the live policy's external tailnet entry and its group from the imported state into `external_tailnets` in `home.tfvars` (0600): the alias, the ID, the group name and its logins, exactly as they are live. Print none of them.
+4. `tofu-tailnet-policy.sh plan`, then the gate: parse the rendered and the live policy as data and compare `groups` and `externalTailnets`. If they differ, stop.
+5. Stop there. The plan's other differences go to the owner to read, and an apply is its own typed line naming that saved plan.
+
 The provider compares the policy as formatted HuJSON text, comments and key order included [source: terraform-provider-tailscale v0.29.2, `tailscale/plan_modifiers.go`, `aclHuJSONModifier`]. While the live policy has never been applied from this folder, the plan can show the whole file as changed even where the two mean the same. So compare those two sections as data (comments and trailing commas removed), and read the rest of the plan's difference as the paragraph above says.
