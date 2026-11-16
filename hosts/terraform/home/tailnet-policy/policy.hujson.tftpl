@@ -2,6 +2,29 @@
 // Built from the 2026-10-23 draft for the connector design, which was not applied then.
 // Tags and the lab's ranges only; the Proxmox host's address is filled in at apply time.
 {
+%{ if length(external_tailnets) > 0 ~}
+	// Groups that the external tailnets below may name in their own grants. Members are private
+	// values (home.tfvars).
+	"groups": {
+%{ for alias, t in external_tailnets ~}
+		"group:${t.group}": ${jsonencode(t.members)},
+%{ endfor ~}
+	},
+
+	// Declarative node sharing (alpha): each listed tailnet may share its own devices with the
+	// group it names here. allowIncomingConnections is written false in this template, not taken
+	// from a value, so no listed tailnet can reach a device in this one.
+	"externalTailnets": {
+%{ for alias, t in external_tailnets ~}
+		"${alias}": {
+			"externalID":                ${jsonencode(t.external_id)},
+			"allowIncomingConnections":  false,
+			"allowExternalReferencesTo": ["group:${t.group}"],
+		},
+%{ endfor ~}
+	},
+
+%{ endif ~}
 	"tagOwners": {
 		"tag:github-actions": ["autogroup:admin"],
 		"tag:vps":            ["autogroup:admin", "tag:vps"],
