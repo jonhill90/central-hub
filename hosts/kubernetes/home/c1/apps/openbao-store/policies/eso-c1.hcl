@@ -1,3 +1,3 @@
-# eso-c1: c1's External Secrets Operator, through auth/{{ openbao_jwt_mount }} role eso (D-0038 rule 6).
+# eso-c1: External Secrets Operator, through the Kubernetes login's role eso (D-0058 rule 5).
 # Reads c1's secrets and nothing else: no list, no write, no other path.
 path "kv/data/c1/*" { capabilities = ["read"] }

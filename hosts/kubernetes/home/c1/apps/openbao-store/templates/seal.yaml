@@ -1,0 +1,47 @@
+{{- /*
+The seal key's folder on one node, as a local PersistentVolume (D-0058 rule 3): restricted Pod
+Security forbids hostPath, and a local volume's node affinity places OpenBao's pod on that node.
+The claim is OpenBao's; the chart mounts it read-only at /openbao/seal (apps/openbao/values.yaml).
+Retain: deleting the claim never touches the folder.
+*/ -}}
+{{- if .Values.sealNode }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: openbao-seal
+spec:
+  capacity:
+    storage: {{ .Values.sealSize }}
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: {{ .Release.Namespace }}
+    name: openbao-seal
+  local:
+    path: {{ .Values.sealPath }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - {{ .Values.sealNode | quote }}
+---
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openbao-seal
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    # The claim only points at the folder; still, never let Argo CD delete it.
+    argocd.argoproj.io/sync-options: Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: ""
+  volumeName: openbao-seal
+  resources:
+    requests:
+      storage: {{ .Values.sealSize }}

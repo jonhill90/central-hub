@@ -14,11 +14,18 @@ gatewayHttps: true
 # (k8s_gitops_source_local_path_stable_folders): dev, which restores prod's backup before its apps
 # (TASK-0240). c1 keeps false.
 localPathStableFolders: false
-# The secrets store (proposed D-0038), dev only for now: its https:// address and its certificate,
-# base64 PEM, both private, set by Ansible (k8s_gitops_source_openbao_address and _ca_file). Empty,
-# as on c1: the secret-store app renders exactly as before, with no `openbao` store.
-openbaoAddress: ""
-openbaoCaBundle: ""
+# The secrets store, OpenBao inside the cluster (D-0058), dev's cluster first. true makes the apps
+# `openbao-store` and `openbao` (their `enabledBy`) and the secret-store app's `openbao` store. Ansible
+# sets it from k8s_gitops_source_openbao_in_cluster; c1 keeps false and renders as before.
+openbaoInCluster: false
+# The node that holds the seal key's folder (the local PersistentVolume), private, set by Ansible
+# (k8s_gitops_source_openbao_seal_node). Empty: no seal volume is made, and OpenBao's pod waits.
+openbaoSealNode: ""
+# The agent box's address as a /32, private, set by Ansible (k8s_gitops_source_openbao_box_cidr):
+# the only source the admin AppRole signs in from (D-0038 rule 6). Empty: the app's own default,
+# 127.0.0.1/32, which a `kubectl port-forward` connection also matches, so it is not a lock; the
+# box's hand-over refuses while it is empty (apps/openbao/values.yaml, centralHub.boxCidr).
+openbaoBoxCidr: ""
 
 # The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
 # (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
@@ -83,6 +90,12 @@ c1Project:
 #   valueFiles   the values files in appsPath/<name>/, in order (default: values.yaml)
 #   syncOptions  Argo CD sync options, for example ServerSideApply=true for charts with large CRDs
 #   ignoreDifferences  fields Argo CD leaves alone, for example a password the chart makes at random
+#   rootParameters  value path -> name of a root value; passed as a Helm parameter when that root
+#                value is set (private values such as an address or a node name)
+#   enabledBy    name of a true/false root value: the app's Application is made only when it is true
+#                (dev first, D-0058); without it the app is made on every cluster
+#   clusterResources  cluster-scoped kinds only this app makes, added to the project's whitelist
+#                only where the app is made (with enabledBy, only where that value is true)
 #   wave         sync order when the root syncs, lowest first (default 0): -3 storage, -2 operators
 #                and their CRDs, -1 what they serve (the secret store), 0 apps
 #   autoSync     true: Argo CD syncs the app on its own, so a fresh cluster installs every app
@@ -180,9 +193,8 @@ apps:
   secret-store:
     namespace: external-secrets
     local: true
-    rootParameters:
-      openbao.address: openbaoAddress
-      openbao.caBundle: openbaoCaBundle
+    switchParameters:
+      openbao.inCluster: openbaoInCluster
     wave: -1
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
@@ -250,4 +262,36 @@ apps:
     needsZone: true
     autoSync: true
     prune: true
-
+  # The secrets store inside the cluster (D-0058), only where openbaoInCluster is true (dev first).
+  # openbao-store: the namespace, the seal key's local volume, the TLS certificates, the policy files
+  # and the bootstrap account; openbao: OpenBao's own chart, with its network limit
+  # (docs/runbooks/set-up-the-secrets-store.md).
+  openbao-store:
+    namespace: openbao
+    local: true
+    enabledBy: openbaoInCluster
+    rootParameters:
+      sealNode: openbaoSealNode
+    # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume.
+    clusterResources:
+      - {group: "", kind: PersistentVolume}
+    # After cert-manager (-2): its Issuers and Certificates need cert-manager's CRDs.
+    wave: -1
+    autoSync: true
+    prune: false
+  openbao:
+    namespace: openbao
+    chart:
+      repoURL: https://openbao.github.io/openbao-helm
+      name: openbao
+      version: 0.30.6   # 2026-10-27, OpenBao v2.7.2; the newest at least two weeks old (STD-0003 rule 1)
+      # The chart's SHA-256 from the repository's index.yaml (D-0058 rule 1). CI (parity.py) fails if this
+      # version is served with other bytes; Argo CD's own pull at sync is not checked against it.
+      sha256: 76e90c2315a4922b4b0c6c63fd8a00b9f4bdf0cffda160664f8ea5762d59911c
+    enabledBy: openbaoInCluster
+    rootParameters:
+      centralHub.boxCidr: openbaoBoxCidr
+    # After openbao-store (-1), which makes its certificate Secret.
+    wave: 0
+    autoSync: true
+    prune: false

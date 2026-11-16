@@ -84,19 +84,8 @@ resource "azurerm_role_assignment" "backup" {
   principal_type       = "ServicePrincipal"
 }
 
-# Way back to the SAS (agent pick 182, kept switched off). With keep_sas_signer = true the identity
-# running tofu, agent-azure, gets Storage Blob Data Contributor on the account again, so the user
-# delegation SAS it signed for the nodes works again until it expires. Only for a rollback while the
-# nodes still hold that SAS; the nodes' own certificate (pick 189) needs none of this.
+# The tenant ID for the OPNsense password vault.
 data "azurerm_client_config" "current" {}
-
-resource "azurerm_role_assignment" "sas_signer" {
-  count                = var.keep_sas_signer ? 1 : 0
-  scope                = azurerm_storage_account.backup.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = data.azurerm_client_config.current.object_id
-  principal_type       = "ServicePrincipal"
-}
 
 # Dev's read-only identity (TASK-0240, agent pick 205): a second app registration, `c1-backup-reader`,
 # for the dev cluster's worker, which restores a read-only copy of prod's newest volume snapshot
@@ -204,4 +193,75 @@ resource "azurerm_role_assignment" "opnsense_escrow" {
   role_definition_id = azurerm_role_definition.opnsense_escrow.role_definition_resource_id
   principal_id       = azuread_service_principal.opnsense.object_id
   principal_type     = "ServicePrincipal"
+}
+
+# Narrowing of the agents' own Azure rights (agent pick 247). Off by default: with
+# narrow_agent_access = false (the default) nothing here is planned. The apply that turns it on, and
+# the removal of agent-azure's Owner role afterwards, run only on the owner's tap (runbook
+# give-agents-access-to-azure.md, "Narrow agent-azure's rights").
+#
+# With it on, agent-azure (pinned by var.agent_object_id, so an operator's own login never becomes
+# the principal) gets Role Based Access Control Administrator on the backup resource group, limited by
+# a condition to the three backup roles and the three backup apps, for both adding and removing a
+# role assignment (https://learn.microsoft.com/azure/role-based-access-control/delegate-role-assignments-examples).
+# Two subscription-wide deny rules stop storage account keys and Key Vault access lists being turned
+# back on, which Contributor could otherwise do and then read the data
+# (https://learn.microsoft.com/azure/storage/common/shared-key-authorization-prevent,
+# https://learn.microsoft.com/azure/key-vault/general/assign-access-policy). Contributor cannot write
+# or delete policy assignments, so once Owner is gone the rules hold against agents.
+
+data "azurerm_subscription" "current" {}
+
+resource "azurerm_role_assignment" "agent_role_admin" {
+  count                = var.narrow_agent_access ? 1 : 0
+  scope                = azurerm_resource_group.backup.id
+  role_definition_name = "Role Based Access Control Administrator"
+  principal_id         = var.agent_object_id
+  principal_type       = "ServicePrincipal"
+  condition_version    = "2.0"
+  # Condition format 2.0: adding is checked on the request, removing on the existing assignment.
+  # Roles: Storage Blob Data Contributor, Storage Blob Data Reader (built-in IDs,
+  # https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#storage) and the
+  # escrow role's GUID. Principals: the three backup apps.
+  condition = templatefile("${path.module}/agent-role-admin-condition.tftpl", {
+    roles = join(", ", [
+      "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
+      "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",
+      azurerm_role_definition.opnsense_escrow.role_definition_id,
+    ])
+    principals = join(", ", [
+      azuread_service_principal.backup.object_id,
+      azuread_service_principal.reader.object_id,
+      azuread_service_principal.opnsense.object_id,
+    ])
+  })
+
+  lifecycle {
+    precondition {
+      condition     = var.agent_object_id != null
+      error_message = "narrow_agent_access needs agent_object_id, the object ID of agent-azure's service principal."
+    }
+  }
+}
+
+# Built-in "Storage accounts should prevent shared key access", effect Deny
+# (https://learn.microsoft.com/azure/governance/policy/samples/built-in-policies#storage).
+resource "azurerm_subscription_policy_assignment" "deny_shared_key" {
+  count                = var.narrow_agent_access ? 1 : 0
+  name                 = "deny-storage-shared-key"
+  display_name         = "Storage accounts must not allow shared key access"
+  subscription_id      = data.azurerm_subscription.current.id
+  policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/8c6a50c6-9ffd-4ae7-986f-5fa6111f9a54"
+  parameters           = jsonencode({ effect = { value = "Deny" } })
+}
+
+# Built-in "Azure Key Vault should use RBAC permission model", effect Deny
+# (https://learn.microsoft.com/azure/key-vault/policy-reference).
+resource "azurerm_subscription_policy_assignment" "deny_vault_access_policies" {
+  count                = var.narrow_agent_access ? 1 : 0
+  name                 = "deny-vault-access-policies"
+  display_name         = "Key vaults must use RBAC, not access policies"
+  subscription_id      = data.azurerm_subscription.current.id
+  policy_definition_id = "/providers/Microsoft.Authorization/policyDefinitions/12d4fa5e-1f9f-4c21-97a9-b99b3c6611b5"
+  parameters           = jsonencode({ effect = { value = "Deny" } })
 }

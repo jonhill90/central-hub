@@ -434,7 +434,7 @@ run_stage() {
     # theme folder is the owner's private branding checkout, which the box doesn't hold. `signin` is also tagged never.
     # With a secrets store (OPENBAO_ADDR), the realm also gets client openbao for the store's address, and the
     # role writes openbao-oidc.json in this env folder (Keycloak's issuer, this Gateway's address, the dev CA's
-    # root), which `secrets-store configure` reads for the owner's sign-in and its proof (agent pick 233). A
+    # root), for the store's owner sign-in and its proof (agent pick 233), which the in-cluster store gets later. A
     # lab-viewers user, dev-viewer, and a second lab-admins user, dev-admin2, are the ones the store must refuse.
     identity-keycloak)
       [ "$ENV_NAME" = dev ] || { echo "the dev identity stage runs on dev only"; return 1; }

@@ -103,7 +103,7 @@ flowchart LR
      - its head is the one the ledger names;
      - GitHub reports a clean merge;
      - every check on that head has completed and passed or was skipped, and at least one ran;
-     - fewer than 100 files changed.
+     - fewer than 3000 files changed (the most GitHub lists for a PR).
    - It squash-merges pinned to that head, never enables auto-merge and never passes `--admin`, and comments on the PR with the head and the ledger's lines.
    - It can't read the project's chat, so it can't check the relay ids in the ledger. A pass is the recorder's word, with the id it gave (D-0056 rules 1 and 2).
    - No session's safety check stands in this path, because the sweep is a timer, not a session.

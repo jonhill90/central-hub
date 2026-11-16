@@ -1,29 +1,30 @@
 #!/bin/bash
-# /usr/local/libexec/agent-box/secrets-store.sh: build and set up the lab's secrets store, OpenBao,
-# on dev (docs/runbooks/set-up-the-secrets-store.md, proposed D-0038). It runs as user `keys` through
-# sudo, so the session that asks for it never sees the Proxmox token, the seal key, the AppRole IDs,
-# the recovery shares or the VM's SSH key. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|destroy
-# plan, apply, destroy: OpenTofu on hosts/terraform/home/secrets-store with the agents' Proxmox token.
-# configure: the openbao playbook over SSH, with the owner's sign-in once the dev rebuild has handed over
-# Keycloak's issuer (pick 233). recovery: makes the recovery shares once (self-
+# /usr/local/libexec/agent-box/secrets-store.sh: the agent box's calls to the lab's secrets store, OpenBao,
+# on dev (docs/runbooks/set-up-the-secrets-store.md, D-0038 as D-0058 changes it). It runs as user `keys`
+# through sudo, so the session that asks for it never sees the AppRole IDs or the recovery shares. Installed
+# by the agent_box role; root owns it.
+#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold
+# The store VM's actions (plan, apply, destroy and configure) are gone: no store VM was ever built, and the
+# store runs inside c1 (D-0058). Until the box's in-cluster work (rework PR 3b) points these calls at c1's
+# store, they still read the store's address and CA file from the settings below, and nothing writes the CA
+# file or the rebuild hold. recovery: makes the recovery shares once (self-
 # initialization makes none) into the keys folder, records their time and takes a snapshot that holds them.
 # status: sys/health, which holds no secret. snapshot: writes kv/dev/snapshot-mark (one key, its own time, no
 # secret), then copies a Raft snapshot off the store into the keys folder, with the store's cluster ID beside it.
 # restore: puts the newest snapshot of the same cluster back, never forced, and proves it by the mark (D-0038
-# Confirmations 4 and 7, pick 239). restore-rebuilt: after a destroy and rebuild, puts back the newest snapshot
+# Confirmations 4 and 7, pick 239). restore-rebuilt: after a rebuild of the store, puts back the newest snapshot
 # of the store's previous cluster, forced only if OpenBao refuses it for the keys (Confirmation 5, pick 238).
-# Both refuse a snapshot older than the recovery shares. destroy leaves a hold that stops the hourly off-box send
+# Both refuse a snapshot older than the recovery shares. A rebuild leaves a hold that stops the hourly off-box send
 # until restore-rebuilt passes; clear-hold sets the earlier store's snapshots aside in a kept folder that rotation
 # never reads, then removes it, when the rebuilt store is to stay as it is. Dev only: every
 # action refuses a store outside 550-599.
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store plan|apply|configure|recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|destroy" >&2; exit 2; }
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold" >&2; exit 2; }
 named=''
 case ${1:-} in
-  plan | apply | configure | recovery | status | snapshot | restore | clear-hold | destroy) action=$1; [[ $# -eq 1 ]] || usage ;;
+  recovery | status | snapshot | restore | clear-hold) action=$1; [[ $# -eq 1 ]] || usage ;;
   # restore-rebuilt may name one snapshot file exactly, e.g. one moved back from the kept folder (pick 239).
   restore-rebuilt)
     action=$1
@@ -37,132 +38,36 @@ esac
 keys=/etc/agent-keys
 env_keys=$keys/dev   # dev only; prod follows D-0035 rule 3 with its own folder
 work=/var/lib/agent-box
-repo=$work/checkouts/secrets-store   # this wrapper's own checkout of central-hub
-folder=$repo/hosts/terraform/home/secrets-store
 settings=$work/secrets-store.json   # private values the agent_box role writes from the inventory
-state=$work/state/secrets-store.tfstate
-plan=$work/state/secrets-store.tfplan
-vars=$work/state/secrets-store.tfvars.json
-sshkey=$env_keys/secrets-store-ssh
 cacert=$env_keys/secrets-store-ca.crt
 snapshots=$env_keys/openbao-snapshots   # the store's Raft snapshots, readable only with the seal key
 snapshot_keep=24
 # An earlier store's snapshots that clear-hold set aside: rotation never reads this folder, so they stay until
 # the owner taps their removal (a delete under D-0042 rule 6).
 kept=$env_keys/openbao-snapshots-kept
-hold=$work/state/secrets-store.rebuilding   # from destroy until restore-rebuilt passes; the off-box send skips meanwhile
-# The owner's sign-in (agent pick 233), dev: the dev rebuild's identity stage writes Keycloak's issuer, its
-# Gateway's address and the dev CA's root here once the store's address is in the realm; its values file holds
-# the client secret and the dev users' passwords and seeds. Absent: configure sets no sign-in.
-oidc_handoff=$work/rebuild-dev/openbao-oidc.json
-identity_values=$work/rebuild-dev/identity.env
-export HOME=$work PATH=/usr/local/libexec/agent-box/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
-export TF_DATA_DIR=$work/tofu-data/secrets-store TF_IN_AUTOMATION=1 ANSIBLE_COLLECTIONS_PATH=/usr/local/libexec/agent-box/collections ANSIBLE_HOME=$work/ansible-home
+hold=$work/state/secrets-store.rebuilding   # from a rebuild until restore-rebuilt passes; the off-box send skips meanwhile
+export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin
 
 [[ -f $settings ]] || { echo "secrets-store: $settings is missing; set agent_box_secrets_store in the inventory and run the agent_box role" >&2; exit 1; }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
 
 # Dev only. The store's IDs are 500-599 (agent pick 226, under STD-0001's next-free-hundred rule); dev
 # is 550-599, as dev is 250-257 among 200-299. A prod store gets its own wrapper and keys folder after
-# dev passes (D-0035 rule 3), and its recovery shares go only to the owner's Mac (D-0038 rule 5).
+# dev passes (D-0035 rule 3), and its recovery shares go only to the owner's Mac (D-0038 rule 5). The
+# in-cluster rework (PR 3b) replaces this check with the dev c1 store's address (D-0058 rule 10).
 vm_id=$(setting vm_id)
 [[ $vm_id =~ ^5[5-9][0-9]$ ]] || { echo "secrets-store: VM ID $vm_id is not a dev store ID (550-599); refused" >&2; exit 1; }
 
-# Only reviewed code on main runs with the keys, never a checkout a session can edit. One run at a time.
+# Only the root-owned helpers beside this file run with the keys. One run at a time.
 exec 9>"$work/state/secrets-store.lock"
 flock -n 9 || { echo "secrets-store: another secrets-store run is going; try again when it ends" >&2; exit 1; }
-[[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
-git -C "$repo" fetch --quiet origin main
-git -C "$repo" checkout --quiet --detach origin/main
-echo "secrets-store: central-hub $(git -C "$repo" rev-parse --short HEAD)"
 
-# The store's keys, made here the first time and never printed: the VM's SSH key, the 32-byte static
-# seal key (D-0038 rule 4) and the admin AppRole's IDs (rule 6). A file that exists is never replaced:
-# a new seal key would make every snapshot unreadable. The IDs carry no trailing newline, because
-# the store's first start reads each file whole.
+# The admin AppRole's IDs (D-0038 rule 6), made here the first time and never printed. A file that exists
+# is never replaced. The IDs carry no trailing newline, because the store reads each file whole. The seal
+# key is not made here: the rebuild wrapper keeps it as a SOPS copy (D-0058 rule 3).
 mkdir -p "$env_keys"
-[[ -f $sshkey ]] || ssh-keygen -q -t ed25519 -N "" -C "keys@agent-box secrets-store" -f "$sshkey"
-[[ -f $env_keys/openbao-seal.key ]] || openssl rand -out "$env_keys/openbao-seal.key" 32
 [[ -f $env_keys/openbao-admin-role-id ]] || openssl rand -hex 24 | tr -d '\n' > "$env_keys/openbao-admin-role-id"
 [[ -f $env_keys/openbao-admin-secret-id ]] || openssl rand -hex 24 | tr -d '\n' > "$env_keys/openbao-admin-secret-id"
-
-tofu_run() {
-  python3 -I - "$settings" "$sshkey.pub" "$repo" "$vars" <<'PY'
-import json, sys
-s = json.load(open(sys.argv[1]))
-json.dump({
-    "proxmox_node_name": s["proxmox_node_name"],
-    "vnet": s["vnet"],
-    "vlans_file": sys.argv[3] + "/hosts/ansible/inventories/home/group_vars/all/vlans.yml",
-    "template_vm_id": s["template_vm_id"],
-    "ssh_public_key": open(sys.argv[2]).read().strip(),
-    "store": {k: s[k] for k in ("name", "vm_id", "address", "cores", "memory_mb", "disk_gb")},
-}, open(sys.argv[4], "w"))
-PY
-  # PROXMOX_VE_ENDPOINT and PROXMOX_VE_API_TOKEN (agent@pve!dev).
-  set -a
-  # shellcheck source=/dev/null
-  . "$keys/proxmox-dev.env"
-  set +a
-  tofu() { /usr/local/bin/tofu -chdir="$folder" "$@"; }
-  tofu init -input=false -backend-config="path=$state" >/dev/null
-  case $action in
-    plan) tofu plan -input=false -var-file="$vars" -out="$plan" ;;
-    apply)
-      [[ -f $plan ]] || { echo "secrets-store: no saved plan; run secrets-store plan first" >&2; exit 1; }
-      tofu apply -input=false "$plan"
-      rm -f "$plan"
-      ;;
-    destroy)
-      date -u +%FT%TZ > "$hold"
-      tofu plan -destroy -input=false -var-file="$vars" -out="$plan"
-      tofu apply -input=false "$plan"
-      rm -f "$plan"
-      ;;
-  esac
-}
-
-configure() {
-  local extra inventory
-  extra=$(mktemp --suffix=.json "$work/state/secrets-store-extra.XXXXXX")
-  inventory=$(mktemp --suffix=.json "$work/state/secrets-store-inventory.XXXXXX")
-  # shellcheck disable=SC2064
-  trap "rm -f '$extra' '$inventory'" EXIT
-  python3 -I - "$settings" "$inventory" "$extra" "$env_keys" "$cacert" "$oidc_handoff" "$identity_values" "$work/state" <<'PY'
-import json, os, sys
-s = json.load(open(sys.argv[1]))
-k = sys.argv[4]
-handoff, values, state = sys.argv[6], sys.argv[7], sys.argv[8]
-json.dump({"openbao": {"hosts": {"openbao_vm": {
-    "ansible_host": s["address"], "ansible_user": s.get("admin_user", "admin")}}}}, open(sys.argv[2], "w"))
-extra = {
-    "openbao_hostname": s["name"],
-    "openbao_address": s["address"],
-    "openbao_box_address": s["box_address"],
-    "openbao_seal_key_id": str(s.get("seal_key_id", "1")),
-    "openbao_seal_key_src": k + "/openbao-seal.key",
-    "openbao_admin_role_id_src": k + "/openbao-admin-role-id",
-    "openbao_admin_secret_id_src": k + "/openbao-admin-secret-id",
-    "openbao_cacert_dest": sys.argv[5],
-    # configure makes the AppRole snapshot-box only once the install tap sets snapshot_box (agent pick 240).
-    "openbao_snapshot_box": s.get("snapshot_box") is True,
-}
-if os.path.isfile(handoff) and os.path.isfile(values):
-    o = json.load(open(handoff))
-    ca = state + "/openbao-oidc-ca.pem"   # the dev CA's public root, not a secret
-    with open(ca, "w") as f:
-        f.write(o["ca_pem"])
-    extra["openbao_oidc"] = {"discovery_url": o["discovery_url"], "values_file": values, "ui_names": [s["address"]],
-                             "ca_pem_file": ca, "pin_address": o["gateway_address"], "owner_user": "dev-admin"}
-    extra["openbao_oidc_proof"] = {"admin_user": "dev-admin", "viewer_user": "dev-viewer", "other_admin_user": "dev-admin2",
-                                   "gateway_address": o["gateway_address"], "verify": False}
-json.dump(extra, open(sys.argv[3], "w"))
-PY
-  mkdir -p "$work/.ssh"
-  cd "$repo/hosts/ansible"
-  ANSIBLE_SSH_ARGS="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$work/.ssh/known_hosts" \
-    ansible-playbook -i "$inventory" --private-key "$sshkey" -e "@$extra" playbooks/openbao.yml
-}
 
 addr() { echo "https://$(setting address)"; }
 
@@ -217,7 +122,7 @@ snapshot() {
   # restore-rebuilt's empty-store guard would then refuse, and it would be a snapshot of nothing.
   [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt first" >&2; exit 1; }
   # Through AppRole snapshot-box, not the admin, once the settings' snapshot_box is true (D-0038 rules 8 and 12,
-  # agent pick 240). It is false until the owner's install tap, which also makes configure create that login.
+  # agent pick 240). It is false until the owner's install tap.
   "$(dirname "$0")/secrets-store-snapshots.sh" take "$(addr)" "$cacert" "$env_keys" "$snapshots" "$snapshot_keep" dev "$(snapshot_login)"
 }
 
@@ -228,7 +133,7 @@ restore() {
   "$(dirname "$0")/secrets-store-restore.sh" same "$(addr)" "$cacert" "$env_keys" "$snapshots" "$hold" 120
 }
 
-# After destroy, apply and configure: the newest snapshot of the store's previous cluster, under the guards in
+# After a rebuild of the store: the newest snapshot of the store's previous cluster, under the guards in
 # secrets-store-restore.sh (mode rebuilt). It removes the hold once its proof passes.
 restore_rebuilt() {
   "$(dirname "$0")/secrets-store-restore.sh" rebuilt "$(addr)" "$cacert" "$env_keys" "$snapshots" "$hold" 120 "$named"
@@ -254,12 +159,10 @@ clear_hold() {
 }
 
 case $action in
-  configure) configure ;;
   status) status ;;
   recovery) recovery ;;
   snapshot) snapshot ;;
   restore) restore ;;
   restore-rebuilt) restore_rebuilt ;;
   clear-hold) clear_hold ;;
-  *) tofu_run ;;
 esac

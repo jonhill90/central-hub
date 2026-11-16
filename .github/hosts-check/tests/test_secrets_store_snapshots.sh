@@ -13,8 +13,8 @@
 #   8. A refused mark write or an empty snapshot fails, and no snapshot file is left.
 #   9. The token never shows in curl's arguments or the output.
 #  10. With LOGIN admin (before the install tap), it signs in with the admin's IDs and never reads snapshot-box's.
-#  11. Role openbao makes the snapshot-box login only when openbao_snapshot_box is true, and it defaults to false,
-#      so no configure creates that access right before the install tap (Council C on #363).
+#  11. The wrapper's snapshot_login picks snapshot-box only for snapshot_box: true in its settings, and the admin
+#      for anything else, so no snapshot uses that access right before the install tap (Council C on #363).
 # Usage: .github/hosts-check/tests/test_secrets_store_snapshots.sh
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -162,28 +162,17 @@ if [[ $rc -eq 0 && -s $t/mark && -s $t/revoked ]] && grep -q '^GET sys/storage/r
 else bad "10. rc=$rc $(cat "$t/out")"; fi
 mv "$t/sb-role" "$t/keys/openbao-snapshot-box-role-id"; mv "$t/sb-secret" "$t/keys/openbao-snapshot-box-secret-id"
 
-# 11 (no YAML library needed: the include is one task of fixed shape, and the default is one line)
-r=$root/hosts/ansible/roles/openbao
-gate=$(awk '/^- name:/{blk=""} {blk=blk $0 "\n"} /^  tags:/{ if (blk ~ /file: snapshot_box\.yml/) print blk }' "$r/tasks/main.yml")
-if grep -qx 'openbao_snapshot_box: false' "$r/defaults/main.yml" && [[ $gate == *"  when: openbao_snapshot_box | bool"* ]] &&
-   [[ $(grep -c 'file: snapshot_box.yml' "$r/tasks/main.yml") == 1 ]]; then
-  ok "11. role openbao makes snapshot-box only when openbao_snapshot_box is true, false by default"
-else bad "11. snapshot_box.yml is not gated by openbao_snapshot_box (default false)"; fi
-# 12 (the wrapper's half of the gate: its own extra-vars block and snapshot_login, run as written)
+# 11 (the wrapper's snapshot_login, run as written)
 w=$root/hosts/ansible/roles/agent_box/files/secrets-store.sh
-awk '/^  python3 -I - "\$settings" "\$inventory" "\$extra" /{on=1; next} on && /^PY$/{exit} on' "$w" >"$t/extra.py"
 fn=$(sed -n '/^snapshot_login() {/,/^}/p' "$w")
-r12=""
+r11=""
 for v in none false '"true"' 1 true; do
-  if [[ $v == none ]]; then echo '{"name": "n", "address": "a", "box_address": "b"}' >"$t/s12.json"
-  else echo "{\"name\": \"n\", \"address\": \"a\", \"box_address\": \"b\", \"snapshot_box\": $v}" >"$t/s12.json"; fi
-  python3 -I "$t/extra.py" "$t/s12.json" "$t/inv12.json" "$t/x12.json" "$t/keys" "$t/ca" /nonexistent /nonexistent "$t" 2>>"$t/out12" || true
-  gate12=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("openbao_snapshot_box"))' "$t/x12.json" 2>/dev/null || echo error)
-  login12=$(settings=$t/s12.json bash -c "$fn"$'\n''snapshot_login' 2>/dev/null || echo error)
-  r12+="$v:$gate12:$login12 "
-  rm -f "$t/x12.json"
+  if [[ $v == none ]]; then echo '{"name": "n", "address": "a"}' >"$t/s11.json"
+  else echo "{\"name\": \"n\", \"address\": \"a\", \"snapshot_box\": $v}" >"$t/s11.json"; fi
+  login11=$(settings=$t/s11.json bash -c "$fn"$'\n''snapshot_login' 2>/dev/null || echo error)
+  r11+="$v:$login11 "
 done
-if [[ -s $t/extra.py && $fn == *snapshot_login* && $r12 == 'none:False:admin false:False:admin "true":False:admin 1:False:admin true:True:snapshot-box ' ]]; then
-  ok "12. the wrapper sets openbao_snapshot_box and picks snapshot-box only for snapshot_box: true (no key, false, \"true\", 1: false and admin)"
-else bad "12. wrapper gate: $r12"; fi
+if [[ $fn == *snapshot_login* && $r11 == 'none:admin false:admin "true":admin 1:admin true:snapshot-box ' ]]; then
+  ok "11. the wrapper picks snapshot-box only for snapshot_box: true (no key, false, \"true\", 1: admin)"
+else bad "11. wrapper gate: $r11"; fi
 exit "$fail"

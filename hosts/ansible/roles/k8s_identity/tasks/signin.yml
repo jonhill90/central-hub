@@ -63,8 +63,9 @@
     fail_msg: The sign-in proof failed; the step lines above name the step and the HTTP code.
     quiet: true
 
-# Dev, after the proof passed: what the secrets store's owner sign-in needs from this cluster (agent pick 233,
-# role openbao), for the next `secrets-store configure`. The CA root is public; no secret is written.
+# Dev, after the proof passed: what the secrets store's owner sign-in needs from this cluster (agent pick 233).
+# The VM role that read it is gone (D-0058); the in-cluster store's sign-in comes later. The CA root is public;
+# no secret is written.
 - name: signin | The root of the CA that signed the Gateway's certificate
   ansible.builtin.shell: kubectl -n gateway get secret apps-tls -o jsonpath='{.data.ca\.crt}'
   register: k8s_identity_signin_ca

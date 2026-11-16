@@ -1,0 +1,276 @@
+# OpenBao inside the cluster (D-0058), from its own Helm chart (openbao-helm 0.30.6, OpenBao v2.7.2;
+# the version is in the root values). Made only where the root value openbaoInCluster is true: dev's
+# cluster first. The namespace, the seal key's volume, the TLS certificate and the policy files come
+# from the openbao-store app, one wave earlier. How to run it: docs/runbooks/set-up-the-secrets-store.md.
+#
+# Kept from the earlier VM role (D-0038; removed with the VM code, in git history): Raft storage, the static seal
+# read from a file, self-init on the first start, the admin AppRole bound to the agent box's address.
+# New here: ESO and the snapshot job sign in with OpenBao's Kubernetes login (D-0058 rule 5).
+
+global:
+  # TLS on the listener: ESO checks it against the openbao namespace's own CA (openbao-store).
+  tlsDisable: false
+
+# The injector's image is HashiCorp's (docker.io hashicorp/vault-k8s), and nothing here uses it.
+# No web UI: neither the chart's UI Service nor `ui` in the config below; the box uses the API.
+injector:
+  enabled: false
+csi:
+  enabled: false
+ui:
+  enabled: false
+
+server:
+  # The chart's own image, pinned by digest as well as the tag (the chart's default tag is its
+  # appVersion, v2.7.2).
+  image:
+    tag: "2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f"
+  # requests 100m CPU / 256 MiB, limit 512 MiB (DESIGN; the chart's own example is 250m / 256 MiB).
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  # The CLI inside the pod checks the listener against the same CA (kubectl exec ... bao status).
+  extraEnvironmentVars:
+    BAO_CACERT: /openbao/userconfig/openbao-tls/ca.crt
+  # From the openbao-store app: the server certificate (tls.crt, tls.key, ca.crt) and the policy
+  # files the first start reads. Mounted read-only at /openbao/userconfig/<name>/.
+  extraVolumes:
+    - type: secret
+      name: openbao-tls
+    - type: configMap
+      name: openbao-policies
+  # The seal key's folder on the node (local PersistentVolume openbao-seal, D-0058 rule 3), read-only.
+  # Its node affinity places the pod on that node. It holds the key only: the admin AppRole's IDs
+  # never leave the box's keys folder (D-0038 rule 6; see initialize "bootstrap" below).
+  volumes:
+    - name: seal
+      persistentVolumeClaim:
+        claimName: openbao-seal
+        readOnly: true
+  volumeMounts:
+    - name: seal
+      mountPath: /openbao/seal
+      readOnly: true
+  # Restricted Pod Security (namespace openbao): the chart's own pod context (non-root, uid 100,
+  # gid 1000, RuntimeDefault seccomp) plus every capability dropped in the container.
+  statefulSet:
+    securityContext:
+      pod:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      container:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ALL]
+  # Designed so that only ESO and OpenBao's own namespace (the pod itself and the snapshot job)
+  # reach port 8200 (and 8201, Raft). That c1 enforces NetworkPolicy is not measured yet (D-0058
+  # rule 6), so until it is, this is the design, not a proven limit. The agent box's path through
+  # the Gateway is added once its source address is measured (ADDENDUM-1 v3).
+  networkPolicy:
+    enabled: true
+    ingress:
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: external-secrets
+        ports:
+          - {port: 8200, protocol: TCP}
+      - from:
+          - podSelector: {}
+        ports:
+          - {port: 8200, protocol: TCP}
+          - {port: 8201, protocol: TCP}
+  dataStorage:
+    enabled: true
+    size: 2Gi
+    storageClass: local-path
+  auditStorage:
+    enabled: true
+    size: 1Gi
+    storageClass: local-path
+  standalone:
+    enabled: false
+  # HA mode with one replica, for Raft: standalone stores in pebbledb, where Raft snapshots don't
+  # apply. One replica until the second node (DESIGN, section 2).
+  ha:
+    enabled: true
+    replicas: 1
+    # With one replica the chart's budget (maxUnavailable 0) would block every node drain.
+    disruptionBudget:
+      enabled: false
+    raft:
+      enabled: true
+      setNodeId: true
+      # Passed through Helm's tpl: only {{ .Values.centralHub.* }} below is filled in.
+      config: |
+        ui            = false
+        disable_mlock = true
+
+        listener "tcp" {
+          address         = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_cert_file   = "/openbao/userconfig/openbao-tls/tls.crt"
+          tls_key_file    = "/openbao/userconfig/openbao-tls/tls.key"
+        }
+
+        storage "raft" {
+          path = "/openbao/data"
+        }
+
+        service_registration "kubernetes" {}
+
+        # Unseals with no person: the key is a file on the node (D-0058 rule 3), and its SOPS copy is
+        # in the agent box's off-box bundle, never in git.
+        seal "static" {
+          current_key_id = "{{ .Values.centralHub.sealKeyId }}"
+          current_key    = "file:///openbao/seal/{{ .Values.centralHub.sealKeyId }}.key"
+        }
+
+        # Self-init: runs once, on the first start of an empty store, then revokes the root token it
+        # used (https://openbao.org/docs/configuration/self-init/). Later starts skip it.
+        initialize "audit" {
+          request "file" {
+            operation = "update"
+            path      = "sys/audit/file"
+            data = {
+              type    = "file"
+              options = { file_path = "/openbao/audit/audit.log" }
+            }
+          }
+        }
+
+        initialize "mounts" {
+          request "kv" {
+            operation = "update"
+            path      = "sys/mounts/kv"
+            data      = { type = "kv", options = { version = "2" } }
+          }
+          request "approle" {
+            operation = "update"
+            path      = "sys/auth/approle"
+            data      = { type = "approle" }
+          }
+          request "kubernetes" {
+            operation = "update"
+            path      = "sys/auth/kubernetes"
+            data      = { type = "kubernetes" }
+          }
+        }
+
+        initialize "policies" {
+          request "admin" {
+            operation = "update"
+            path      = "sys/policies/acl/admin"
+            data = {
+              policy = { eval_type = "string", eval_source = "file", path = "/openbao/userconfig/openbao-policies/admin.hcl" }
+            }
+          }
+          request "eso-c1" {
+            operation = "update"
+            path      = "sys/policies/acl/eso-c1"
+            data = {
+              policy = { eval_type = "string", eval_source = "file", path = "/openbao/userconfig/openbao-policies/eso-c1.hcl" }
+            }
+          }
+          request "snapshot" {
+            operation = "update"
+            path      = "sys/policies/acl/snapshot"
+            data = {
+              policy = { eval_type = "string", eval_source = "file", path = "/openbao/userconfig/openbao-policies/snapshot.hcl" }
+            }
+          }
+          request "bootstrap" {
+            operation = "update"
+            path      = "sys/policies/acl/bootstrap"
+            data = {
+              policy = { eval_type = "string", eval_source = "file", path = "/openbao/userconfig/openbao-policies/bootstrap.hcl" }
+            }
+          }
+        }
+
+        # OpenBao's Kubernetes login checks a pod's token with the cluster's TokenReview API, using
+        # its own service account (system:auth-delegator, the chart's authDelegator).
+        initialize "kubernetes" {
+          request "config" {
+            operation = "update"
+            path      = "auth/kubernetes/config"
+            data      = { kubernetes_host = "https://kubernetes.default.svc" }
+          }
+          request "eso" {
+            operation = "update"
+            path      = "auth/kubernetes/role/eso"
+            data = {
+              bound_service_account_names      = ["store-openbao"]
+              bound_service_account_namespaces = ["external-secrets"]
+              token_policies                   = ["eso-c1"]
+              token_ttl                        = "15m"
+              token_max_ttl                    = "1h"
+            }
+          }
+          request "snapshot" {
+            operation = "update"
+            path      = "auth/kubernetes/role/snapshot"
+            data = {
+              bound_service_account_names      = ["openbao-snapshot"]
+              bound_service_account_namespaces = ["openbao"]
+              token_policies                   = ["snapshot"]
+              token_ttl                        = "5m"
+              token_max_ttl                    = "10m"
+            }
+          }
+        }
+
+        # The agent box's admin login (D-0038 rule 6): only from the box's address, 15-minute tokens.
+        # It is made with no IDs the box knows: OpenBao picks a random role ID and there is no secret
+        # ID yet, so nothing the admin needs is in the cluster or on a node.
+        initialize "roles" {
+          request "admin" {
+            operation = "update"
+            path      = "auth/approle/role/admin"
+            data = {
+              token_policies        = ["admin"]
+              token_ttl             = "15m"
+              token_max_ttl         = "1h"
+              secret_id_bound_cidrs = ["{{ .Values.centralHub.boxCidr }}"]
+              token_bound_cidrs     = ["{{ .Values.centralHub.boxCidr }}"]
+            }
+          }
+        }
+
+        # One-time hand-over of the admin login to the box. The box mints a short token for service
+        # account openbao-bootstrap (no pod runs as it) with its cluster-admin kubeconfig, signs in
+        # here, sets the admin's role ID and a secret ID from its keys folder, and deletes this role
+        # with the same token (policy bootstrap: nothing else). Until then anyone with cluster-admin
+        # could do the same, but they can already read the seal key and the data.
+        initialize "bootstrap" {
+          request "role" {
+            operation = "update"
+            path      = "auth/kubernetes/role/bootstrap"
+            data = {
+              bound_service_account_names      = ["openbao-bootstrap"]
+              bound_service_account_namespaces = ["openbao"]
+              token_policies                   = ["bootstrap"]
+              token_ttl                        = "5m"
+              token_max_ttl                    = "5m"
+              token_num_uses                   = 4
+            }
+          }
+        }
+
+# Not the chart's: values only this repository's config above reads (through tpl).
+centralHub:
+  # The agent box's address as a /32. The root chart passes it from its private root value
+  # openbaoBoxCidr. This default is not a lock: a `kubectl port-forward` connection also arrives
+  # from 127.0.0.1 (the runtime dials localhost inside the pod's network namespace), so while it is
+  # unset anyone who may port-forward in namespace openbao and holds the admin IDs passes the
+  # binding. The box's hand-over (PR 3) refuses while it is unset.
+  boxCidr: 127.0.0.1/32
+  # The seal key's id and file name, <id>.key, in the node folder.
+  sealKeyId: seal-1
