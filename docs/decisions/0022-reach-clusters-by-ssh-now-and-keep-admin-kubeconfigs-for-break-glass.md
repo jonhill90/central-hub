@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNBXECP3JHRcrWjcJeRvhwop
   approval-names: "PR #47 and head 0622e3b, in the message itself"
   check: the Gaming PC thread read the message in the records thread on 2026-10-27; it names PR jonhill90/central-hub#47 and head 0622e3b itself. An independent check by a reviewing agent is still to do.
-  merged: PR #47 merged at 2026-10-27T02:56:35Z as b52d931
+  merged: "PR #47 merged at 2026-10-27T02:56:35Z as b52d931"
 revisit-when: the owner's own user exists; an identity provider is chosen for cluster sign-in (BUILD-PATH S15); a second person or an agent needs cluster access; or the API server is opened to the home LAN
 ---
 

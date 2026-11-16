@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNAAS9GzJtCURemXkv3rE2Nx
   approval-names: "PR jonhill90/central-hub#63 and head 86c37df, in the message itself"
   check: the drafting agent read the message in the project thread at 2026-11-08T07:39Z; it reads "accept PR jonhill90/central-hub#63 86c37df", and that head holds this record. An independent check by a reviewing agent is still to do
-  merged: PR #63 merged at 2026-11-08T07:39Z as 5060578
+  merged: "PR #63 merged at 2026-11-08T07:39Z as 5060578"
 revisit-when: c1 holds data that can't be rebuilt or that someone other than the owner relies on; a second cluster (the VPS or a cloud site) is about to read the repository; an agent gets its own GitHub identity (Activation gate item 1); or anything other than the owner merges to main
 ---
 

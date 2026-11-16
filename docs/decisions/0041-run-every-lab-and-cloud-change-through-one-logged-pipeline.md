@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: c0408384f4b92610e20f3c30e5ecb1fa82f6208c
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNKdGN88LtVUDSiPpCPmtatT
   approval-names: "PR #286 and head c040838, in the message itself"
-  check: the drafting agent read the message in the project chat at 2026-11-14T08:18Z; it accepts D-0041 as written at PR #286 head c040838 and asks for the merge when green, and that head holds this record. The owner's go in the orchestrator thread at 07:42:30Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6) came after the orchestrator posted the same line in that thread at 07:36:06Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN62H7anJnP4HBGZPiMEVcz8). A reviewing agent checks it before the merge
-  merged: PR #286 squash-merged at head c0408384 as 2fcfa73, with the status left at proposed; this PR sets it to accepted (D-0001)
+  check: "the drafting agent read the message in the project chat at 2026-11-14T08:18Z; it accepts D-0041 as written at PR #286 head c040838 and asks for the merge when green, and that head holds this record. The owner's go in the orchestrator thread at 07:42:30Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNHGFshMgp6jwdfeuyZWEdj6) came after the orchestrator posted the same line in that thread at 07:36:06Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN62H7anJnP4HBGZPiMEVcz8). A reviewing agent checks it before the merge"
+  merged: "PR #286 squash-merged at head c0408384 as 2fcfa73, with the status left at proposed; this PR sets it to accepted (D-0001)"
 revisit-when: the agents get a GitHub account of their own (D-0030), so the approval can move to a protected GitHub environment; a run applies something its saved plan did not show; a production or cloud apply starts without a card that names its plan; a key leaves the box's wrappers; GitHub Actions stops being usable for the lab, and the exit to Forgejo is taken; a raw run happens outside break-glass
 ---
 
