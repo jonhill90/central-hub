@@ -33,3 +33,7 @@ To add a word, propose one row in your own PR. The owner says yes or no. The che
 | pass ledger | preferred | The file the agent box keeps for one repository and one head, with one line for each recorded pass (the reviewer's clearance, each council's pass, the owner's tap). A new head starts an empty ledger, so no pass carries over. | D-0056 | |
 | sweep, merge sweep | preferred | The timer on the agent box that squash-merges a pull request when its head's pass ledger is complete and every check on the head is green. It is not GitHub's auto-merge. | D-0056 | |
 | halt flag | preferred | The file whose existence stops the merge sweep from merging anything until it is cleared. | D-0056 | |
+| grant | preferred | A rule in a tailnet's policy that lets a source (a user, a group or a tag) reach a destination on the ports it names. Access that no grant allows is denied. | Tailscale, "Grants" (tailscale.com/kb/1324/grants) | |
+| tag | preferred | A label for a tailnet device that is not a person's, such as a server or a pod, declared in the policy's `tagOwners`. Rules name the tag, not a person. | Tailscale, "Tags" (tailscale.com/kb/1068/tags) | |
+| pod | preferred | The smallest unit of computing that Kubernetes deploys and manages. | Kubernetes documentation, "Pods" (kubernetes.io/docs/concepts/workloads/pods/) | |
+| sshd | preferred | The OpenSSH server program, which accepts SSH connections on a machine. | OpenBSD manual page sshd(8) (man.openbsd.org/sshd.8) | |
