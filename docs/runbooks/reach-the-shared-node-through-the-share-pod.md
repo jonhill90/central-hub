@@ -51,10 +51,10 @@ What limits it, each in one place:
 6. From the agent box, open the connection through the pod. The pod's tailnet name is `share-pod`.
 
    ```sh
-   ssh -p 2222 <user>@share-pod
+   ssh -p 2222 -o ForwardAgent=no -o IdentitiesOnly=yes -i <dedicated key> <user>@share-pod
    ```
 
-   expect: the shared node's own SSH banner and host key. If the other side has not granted the tag yet, the connection hangs and then fails; that is the other tailnet's grant, not this side.
+   expect: the shared node's own SSH banner and host key. Use a key made for this node only, never forward the agent, and pin the node's host key in `known_hosts` the first time you check it with the other tailnet's admin. If the other side has not granted the tag yet, the connection hangs and then fails; that is the other tailnet's grant, not this side.
 
 7. Prove the limits. First check that c1 enforces NetworkPolicy: from a throwaway pod in namespace `share-pod` with the same policy, a connection to a private lab address must fail. Then, from the agent box: `ssh -p 22 share-pod` and a connection to the shared node's address directly must both fail. From the pod, nothing here is reachable (`c1-read` can't run commands in the pod; the policy tests are the proof).
 
