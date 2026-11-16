@@ -7,7 +7,7 @@ runner: "an agent session on the agent box, through the `secrets-store` wrapper 
 outcome: one AlmaLinux 10 VM on VNet dev runs OpenBao 2.7.2, starts and unseals with no person, initialized by itself with audit, KV v2 and two AppRoles, takes an hourly Raft snapshot, and holds c1's External Secrets login and the rebuild's AppRole
 needs: the agent box; the agents' Proxmox token with rights on pool `dev`; template 9001; a free dev address; the private inventory values listed below
 private-values: [store-name, store-address, box-address, seal-key, admin-role-id, admin-secret-id, rebuild-role-id, rebuild-secret-id, store-ssh-key]
-files: [hosts/terraform/home/secrets-store/, hosts/ansible/roles/openbao/, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/files/secrets-store-snapshots.sh, .github/hosts-check/tests/test_secrets_store_snapshots.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/openbao.yml, hosts/ansible/playbooks/k8s-openbao-auth.yml]
+files: [hosts/kubernetes/home/c1/apps/openbao/, hosts/kubernetes/home/c1/apps/openbao-store/, hosts/kubernetes/home/c1/apps/secret-store/, hosts/kubernetes/home/c1/root/, hosts/ansible/roles/k8s_gitops/, hosts/terraform/home/secrets-store/, hosts/ansible/roles/openbao/, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/files/secrets-store-snapshots.sh, .github/hosts-check/tests/test_secrets_store_snapshots.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/openbao.yml, hosts/ansible/playbooks/k8s-openbao-auth.yml]
 last-tested: not yet run
 superseded-by:
 ---
@@ -15,6 +15,31 @@ superseded-by:
 # Set up the lab's secrets store (OpenBao) on dev
 
 **Status:** draft, not run. Written on 2026-11-14 from the code in this PR and the OpenBao 2.7.2 docs and package files. Every "expect" below is what the docs say, not yet seen on the lab. The record is [D-0038](../decisions/README.md) (proposed).
+
+**Moving into the cluster ([D-0058](../decisions/README.md)).** OpenBao leaves its VM and runs inside the cluster from its own Helm chart, dev's cluster first. [Inside the cluster](#inside-the-cluster-d-0058-dev-first) below is that part; it is code only, not yet run. The VM sections after it stay until the VM's code is removed in its own pull request. Step 8 now needs the in-cluster store, since the secret-store app's `openbao` store points there.
+
+## Inside the cluster (D-0058), dev first
+
+Argo CD installs it when the root Application passes `openbaoInCluster` true, which Ansible sets from `k8s_gitops_source_openbao_in_cluster` (role `k8s_gitops`). c1 keeps false and renders exactly as before (the root chart's `enabledBy`). Three apps take part:
+
+| App | What it makes | Wave |
+|---|---|---|
+| `openbao-store` (chart in this repository) | Namespace `openbao` (restricted Pod Security); the seal key's local PersistentVolume and claim `openbao-seal`; a self-signed CA and server certificate `openbao-tls` from cert-manager; ConfigMap `openbao-policies` (`admin`, `eso-c1`, `snapshot`) | -2 |
+| `openbao` (openbao-helm 0.30.6, OpenBao v2.7.2) | StatefulSet `openbao`, one replica, HA mode with Raft on `local-path`; the static seal read from `/openbao/seal/<id>.key`; TLS on 8200; a NetworkPolicy that lets only namespace `external-secrets` and its own namespace reach it | -1 |
+| `secret-store` | With `openbao.inCluster` true: ClusterSecretStore `openbao` at `https://openbao.openbao.svc:8200`, checking TLS against `ca.crt` in Secret `openbao/openbao-tls`, signing in with OpenBao's Kubernetes login, role `eso`, as service account `store-openbao`; ExternalSecret `openbao-check` | -1 |
+
+Private values, set in the dev inventory and never in git (CLAUDE.md rule 4):
+
+- `k8s_gitops_source_openbao_seal_node`: the node that holds the seal key's folder, by its `kubernetes.io/hostname` label. It must be a node with the data disk (label `central-hub/data-disk`), because the data and audit claims use `local-path` and follow the pod. Unset, no PersistentVolume is made, the claim stays Pending and OpenBao does not start.
+- `k8s_gitops_source_openbao_box_cidr`: the agent box's address as a /32, the admin AppRole's only source. Unset, the chart's default `127.0.0.1/32` lets no one outside the pod sign in as admin.
+
+Before the first start, the node folder `/var/lib/central-hub/openbao-seal` must hold, owned by uid 100, group 1000, mode 0400 (OpenBao's pod user): the 32-byte seal key as `seal-1.key`, and the admin AppRole's two IDs as `admin-role-id` and `admin-secret-id` (no trailing newline). The box's node play that writes them comes in a later pull request; until then nothing here runs on the lab.
+
+What the first start does (self-init, <https://openbao.org/docs/configuration/self-init/>): the file audit device at `/openbao/audit/audit.log`; KV v2 at `kv/`; AppRole and Kubernetes logins; policies `admin`, `eso-c1` and `snapshot` from the ConfigMap; the Kubernetes login's config (`kubernetes_host` `https://kubernetes.default.svc`, checked with OpenBao's own service account, which the chart binds to `system:auth-delegator`) and its roles `eso` (service account `store-openbao` in `external-secrets`, policy `eso-c1`, 15-minute tokens) and `snapshot` (service account `openbao-snapshot` in `openbao`, policy `snapshot`, for the hourly job that comes later); the admin AppRole bound to the box's /32 with the IDs from the node folder. Then it revokes the root token it used. Later starts skip it.
+
+expect, once the node play exists: `kubectl -n openbao get pod openbao-0` Ready; `kubectl -n openbao exec openbao-0 -- bao status` shows `Sealed false`; ExternalSecret `external-secrets/openbao-check` Ready once `kv/c1/check` is written.
+
+Not in this part yet: the agent box's path to OpenBao through the Gateway (after the source address is measured, so the admin AppRole's /32 binding still holds), the hourly snapshot job, and the box's wrapper changes (the seal key and IDs on the node, SOPS copies, reseed).
 
 ## What it builds
 
@@ -85,7 +110,7 @@ superseded-by:
 
 8. Prove External Secrets reads from the store (D-0038 Confirmation 2).
    why: one non-secret value through the whole path (the cluster's token, the store's login, policy `eso-c1`) before any real secret moves.
-   With `k8s_gitops_source_openbao_address` and `k8s_gitops_source_openbao_ca_file` set in the dev inventory, the root Application passes them to the secret-store app, which adds ClusterSecretStore `openbao`, service account `store-openbao` and ExternalSecret `openbao-check` in namespace `external-secrets`. `configure` wrote the value it reads, `kv/c1/check`. Every other ExternalSecret keeps naming store `c1`. On c1, where they are unset, the app renders as before.
+   With `k8s_gitops_source_openbao_in_cluster` true in the dev inventory, the root Application turns on the secret-store app's `openbao` store, which adds ClusterSecretStore `openbao`, service account `store-openbao` and ExternalSecret `openbao-check` in namespace `external-secrets`, pointed at OpenBao inside the cluster ([Inside the cluster](#inside-the-cluster-d-0058-dev-first)), not at this VM. `configure` wrote the value it reads, `kv/c1/check`. Every other ExternalSecret keeps naming store `c1`. On c1, where it is false, the app renders as before.
    expect: the dev rebuild's `apps` stage passes, since it waits for every ExternalSecret to be Ready, this one too.
 
 9. Restart test.

@@ -1,0 +1,14 @@
+# What OpenBao's own chart (the openbao app) lacks, made one wave before it (D-0058; DESIGN
+# section 2). Made only where the root value openbaoInCluster is true: dev's cluster first.
+
+# The node that holds the seal key's folder, private (CLAUDE.md rule 4): the root chart passes it
+# from its root value openbaoSealNode. Empty: no PersistentVolume is made, so the claim stays
+# Pending and OpenBao's pod waits; nothing starts without its key.
+sealNode: ""
+# The seal key's folder on that node (D-0058 rule 3). The agent box's node play writes the key there
+# (owner uid 100, group 1000, mode 0400, as OpenBao's pod runs), and on a store's first start the
+# admin AppRole's two IDs. c1's backup copies /var/lib/central-hub/ (role k8s_backup).
+sealPath: /var/lib/central-hub/openbao-seal
+sealSize: 1Mi
+# Which kv/<env>/snapshot-mark the snapshot login may read (DESIGN section 6): dev today.
+markEnv: dev

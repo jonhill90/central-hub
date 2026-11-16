@@ -1,0 +1,15 @@
+# The policy files OpenBao's first start reads (self-init, apps/openbao/values.yaml), mounted
+# read-only at /openbao/userconfig/openbao-policies/. Later changes go through the agent box's
+# `secrets-store configure`, since self-init runs only once.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openbao-policies
+  namespace: {{ .Release.Namespace }}
+data:
+  admin.hcl: |
+{{ .Files.Get "policies/admin.hcl" | indent 4 }}
+  eso-c1.hcl: |
+{{ .Files.Get "policies/eso-c1.hcl" | indent 4 }}
+  snapshot.hcl: |
+{{ tpl (.Files.Get "policies/snapshot.hcl") . | indent 4 }}
