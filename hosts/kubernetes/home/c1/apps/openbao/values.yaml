@@ -21,6 +21,10 @@ ui:
   enabled: false
 
 server:
+  # The chart's own image, pinned by digest as well as the tag (the chart's default tag is its
+  # appVersion, v2.7.2).
+  image:
+    tag: "2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f"
   # requests 100m CPU / 256 MiB, limit 512 MiB (DESIGN; the chart's own example is 250m / 256 MiB).
   resources:
     requests:
@@ -65,8 +69,10 @@ server:
         allowPrivilegeEscalation: false
         capabilities:
           drop: [ALL]
-  # Only ESO and OpenBao's own namespace reach port 8200 (and 8201, Raft). The agent box's path
-  # through the Gateway is added once its source address is measured (ADDENDUM-1 v3).
+  # Designed so that only ESO and OpenBao's own namespace (the pod itself and the snapshot job)
+  # reach port 8200 (and 8201, Raft). That c1 enforces NetworkPolicy is not measured yet (D-0058
+  # rule 6), so until it is, this is the design, not a proven limit. The agent box's path through
+  # the Gateway is added once its source address is measured (ADDENDUM-1 v3).
   networkPolicy:
     enabled: true
     ingress:
