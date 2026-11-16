@@ -23,6 +23,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Run the dev lab redeploy from GitHub Actions on the agent box](set-up-the-lab-redeploy-workflow.md) | manual | draft |
 | [Merge a pull request with the box's sweep](merge-a-pr-through-the-merge-job.md) | manual | draft |
 | [Change the tailnet stack through the pipeline job](run-the-tailnet-stack-as-a-pipeline-job.md) | manual | draft |
+| [Change the tailnet policy file through the pipeline job](run-the-tailnet-policy-as-a-pipeline-job.md) | manual | draft |
 | [Give the agent box a lifeline to Proxmox and keep OPNsense's configuration](set-up-the-box-lifeline.md) | manual | draft |
 | [Copy the OPNsense configuration backups off the agent box](copy-opnsense-backup-off-box.md) | manual | draft |
 | [Make the agent box's encrypted bundle of its private files](make-the-box-secrets-bundle.md) | manual | draft |
