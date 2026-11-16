@@ -182,6 +182,13 @@ argument_specs:
           starts the runner. keep-dev stops the runner and leaves dev up (the notebook's queued jobs fail or are cancelled after
           24 hours queued, so if dev stays up for more than a day its daily access-expiry check does not run, and
           whether its alert e-mail goes out is not measured). Empty is no pick: a short node refuses before it stops anything.
+      agent_box_openbao_in_cluster:
+        type: bool
+        default: false
+        description: >-
+          true writes <work_dir>/openbao-in-cluster (0600, the keys user's), and the rebuild wrapper then turns the
+          secrets store on in the dev cluster (D-0058, dev first) and puts its seal key, made once in the dev keys
+          folder, on the first worker before Argo CD makes the store. false removes the file.
       agent_box_desktop:
         type: dict
         default: {}

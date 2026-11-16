@@ -159,6 +159,23 @@ OPENBAO_CACERT=$store_keys/secrets-store-ca.crt
 OPENBAO_ROLE_ID_FILE=$store_keys/openbao-rebuild-role-id
 OPENBAO_SECRET_ID_FILE=$store_keys/openbao-rebuild-secret-id"
 fi
+# The secrets store inside the dev cluster (D-0058, dev first), switched on by the one-line file the agent_box role
+# writes (agent_box_openbao_in_cluster). The root chart then makes the apps openbao-store and openbao, with the seal
+# key's volume on the first k8s_workers host, and stage openbao-seal puts the key there first. The key is the same
+# file `secrets-store` uses, made here once if it is missing and never replaced (a new key would make every
+# snapshot unreadable); the keys folder is in the box's SOPS bundle, so its copy is off the box. Dev's key needs no
+# tap (D-0058 rule 3). The VM store's wiring above and this are never on together.
+in_cluster=false
+seal_env=""
+if [[ -f $work/openbao-in-cluster && $(tr -d '[:space:]' < "$work/openbao-in-cluster") == true ]]; then
+  [[ -z $store_url ]] || { echo "rebuild: the store VM's wiring and the store inside the cluster are both set; refusing" >&2; exit 1; }
+  in_cluster=true
+  mkdir -p "$store_keys"
+  [[ -f $store_keys/openbao-seal.key ]] || openssl rand -out "$store_keys/openbao-seal.key" 32
+  [[ $(wc -c < "$store_keys/openbao-seal.key") -eq 32 ]] || { echo "rebuild: $store_keys/openbao-seal.key is not 32 bytes" >&2; exit 1; }
+  stages="vms cluster storage openbao-seal restore gitops secrets apps gateway checks"
+  seal_env="OPENBAO_SEAL_KEY_FILE=$store_keys/openbao-seal.key"
+fi
 # What a dev run does on a node short of memory is the owner's pick, never a default (rebuild-k8s.sh,
 # docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev or keep-dev, from the one-line file the
 # agent_box role writes (agent_box_short_node). Anything else, or no file, leaves the setting out, and the dev
@@ -184,14 +201,15 @@ rm -rf "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
 import sys, yaml
-src, dst, key, known, keys, store_url, store_ca = sys.argv[1:8]
+src, dst, key, known, keys, store_url, store_ca, in_cluster = sys.argv[1:9]
 d = yaml.safe_load(open(src))
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking",
         "k8s_gateway_smoke_client", "k8s_certs_smoke_client", "k8s_certs_smoke_root_file",
         "k8s_backup_env_file", "k8s_backup_azure_fixed_cert_file", "k8s_control_plane_encryption_key_file",
-        "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file"}
+        "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file",
+        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -223,9 +241,19 @@ v["k8s_control_plane_encryption_key_file"] = keys + "/rebuild-encryption.key"
 if store_url:
     v["k8s_gitops_source_openbao_address"] = store_url
     v["k8s_gitops_source_openbao_ca_file"] = store_ca
+if in_cluster == "true":
+    # The seal key's node: the first worker, which the openbao-seal stage writes the key to. Its inventory name is
+    # its Kubernetes node name (STD-0001 hostnames); the stage checks that against the node's address and refuses
+    # if they differ. openbaoBoxCidr stays unset here: the box's path to the store comes after its measurement.
+    w = find(d, "k8s_workers")
+    hosts = list((w or {}).get("hosts") or {})
+    if not hosts:
+        print("rebuild: the dev inventory has no k8s_workers host for the seal key", file=sys.stderr); sys.exit(1)
+    v["k8s_gitops_source_openbao_in_cluster"] = True
+    v["k8s_gitops_source_openbao_seal_node"] = hosts[0]
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt"
+)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster"
 [[ -f $inventory/hosts.yml ]] || { echo "rebuild: could not build the box's dev inventory from $inv_src/hosts.yml" >&2; exit 1; }
 chmod 600 "$inventory/hosts.yml"
 
@@ -279,6 +307,7 @@ INVENTORY=$inventory/
 STAGES="$stages"
 SECRET_SOURCE_FILE=$ssfile
 $openbao_env
+$seal_env
 $short_node_env
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'

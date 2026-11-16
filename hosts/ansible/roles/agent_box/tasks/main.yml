@@ -413,6 +413,23 @@
   when: agent_box_short_node | length == 0
   tags: [wrappers]
 
+- name: The rebuild wrapper's switch for the secrets store inside the dev cluster (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/openbao-in-cluster"
+    content: "true\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_openbao_in_cluster | bool
+  tags: [wrappers]
+
+- name: No secrets store inside the dev cluster, so no switch file
+  ansible.builtin.file:
+    path: "{{ agent_box_work_dir }}/openbao-in-cluster"
+    state: absent
+  when: not (agent_box_openbao_in_cluster | bool)
+  tags: [wrappers]
+
 - name: The desktop wrapper's private settings, from the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/desktop.json"

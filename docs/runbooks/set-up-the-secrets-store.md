@@ -37,15 +37,26 @@ The hourly snapshot (D-0058 rule 6): CronJob `openbao/openbao-snapshot` runs at 
 
 expect, once a mark exists: `kubectl -n openbao logs job/<newest openbao-snapshot job>` ends with `openbao-snapshot: saved raft-<time>.snap, kept <n>`.
 
-Before the first start, the node folder `/var/lib/central-hub/openbao-seal` must hold the 32-byte seal key as `seal-1.key`, owned by uid 100, group 1000, mode 0400 (OpenBao's pod user), and nothing else. The folder is outside what c1's nightly backup copies (role `k8s_backup` copies only `/var/lib/c1-data/local-path`, which holds OpenBao's data volume, and `/var/lib/central-hub/identity-postgres`), so c1's nightly backup never holds the key with the data. Proxmox's nightly backup of the node VMs does hold both, as it held the store VM's (D-0058, Consequences). The box's node play that writes the key comes in a later pull request; until then nothing here runs on the lab.
+Before the first start, the node folder `/var/lib/central-hub/openbao-seal` must hold the 32-byte seal key as `seal-1.key`, owned by uid 100, group 1000, mode 0400 (OpenBao's pod user), and nothing else. The folder is outside what c1's nightly backup copies (role `k8s_backup` copies only `/var/lib/c1-data/local-path`, which holds OpenBao's data volume, and `/var/lib/central-hub/identity-postgres`), so c1's nightly backup never holds the key with the data. Proxmox's nightly backup of the node VMs does hold both, as it held the store VM's (D-0058, Consequences). On dev the box puts it there (below).
+
+The seal key on dev, from the box (D-0058 rule 3; dev's key needs no tap):
+
+1. The box's install sets `agent_box_openbao_in_cluster: true` in the private inventory, so the `agent_box` role writes `/var/lib/agent-box/openbao-in-cluster`. It is a change to the box's limits, so its install is the owner's tap (D-0042 rule 6).
+2. `rebuild up` (or `rebuild rebuild`) then:
+   - makes the key once, if it is missing, as `/etc/agent-keys/dev/openbao-seal.key` (`openssl rand -out <file> 32`, user `keys`, 0600; the same file the VM wrapper made, never replaced). The keys folder is in the box's SOPS bundle ([make-the-box-secrets-bundle.md](make-the-box-secrets-bundle.md)), so the key's copy leaves the box encrypted, never into git;
+   - sets `k8s_gitops_source_openbao_in_cluster: true` and `k8s_gitops_source_openbao_seal_node` to the first `k8s_workers` host in its copy of the dev inventory (an inventory value from the Mac for these is dropped), and leaves `k8s_gitops_source_openbao_box_cidr` unset;
+   - runs stage `openbao-seal` after `storage` and before `gitops`: `playbooks/k8s-openbao-seal.yml` checks that the key is 32 bytes and that the node at that host's address has the same Kubernetes name, makes the folder (uid 100, group 1000, 0500) and copies the key in (0400). A different key already on the node fails the stage and is never replaced; neither key nor checksum is printed.
+   - It refuses if the store VM's wiring (the AppRole `rebuild` IDs) is also set.
+
+   expect: `rebuild log` shows `openbao-seal end rc=0`; a second run reports `changed=0` for the play.
 
 What the first start does (self-init, <https://openbao.org/docs/configuration/self-init/>): the file audit device at `/openbao/audit/audit.log`; KV v2 at `kv/`; AppRole and Kubernetes logins; policies `admin`, `eso-c1`, `snapshot` and `bootstrap` from the ConfigMap; the Kubernetes login's config (`kubernetes_host` `https://kubernetes.default.svc`, checked with OpenBao's own service account, which the chart binds to `system:auth-delegator`) and its roles `eso` (service account `store-openbao` in `external-secrets`, policy `eso-c1`, 15-minute tokens), `snapshot` (service account `openbao-snapshot` in `openbao`, policy `snapshot`, for the hourly job that comes later) and `bootstrap`; and the admin AppRole bound to the box's /32, with a random role ID and no secret ID. Then it revokes the root token it used. Later starts skip it.
 
 Handing the admin login to the box, once per new store (the box's node play, in a later pull request): it mints a 10-minute token for service account `openbao/openbao-bootstrap` with `kubectl create token`, signs in at the Kubernetes login's role `bootstrap` (5-minute tokens, 4 uses), writes the admin's role ID and a custom secret ID from its keys folder, deletes role `bootstrap` with the same token, and checks that the role is gone. The admin AppRole's IDs never leave the box's keys folder (D-0038 rule 6). Until that step, anyone with cluster-admin could set the admin's IDs the same way, but they can already read the seal key and the data.
 
-expect, once the node play exists: `kubectl -n openbao get pod openbao-0` Ready; `kubectl -n openbao exec openbao-0 -- bao status` shows `Sealed false`; ExternalSecret `external-secrets/openbao-check` Ready once `kv/c1/check` is written.
+expect, after the box's run: `kubectl -n openbao get pod openbao-0` Ready; `kubectl -n openbao exec openbao-0 -- bao status` shows `Sealed false`; ExternalSecret `external-secrets/openbao-check` Ready once `kv/c1/check` is written.
 
-Not in this part yet: the agent box's path to OpenBao through the Gateway (after the source address is measured, so the admin AppRole's /32 binding still holds), and the box's wrapper changes (the seal key on the node, the admin hand-over, SOPS copies, reseed).
+Not in this part yet: the agent box's path to OpenBao through the Gateway (after the source address is measured, so the admin AppRole's /32 binding still holds), then the rest of the box's wrapper changes, which need that path (the admin hand-over, SOPS copies, reseed, compare, and the hold during a rebuild).
 
 ## What it builds
 

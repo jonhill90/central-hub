@@ -27,6 +27,10 @@
 #                 it. Unset: that stage is skipped.
 #   OPENBAO_CACERT, OPENBAO_ROLE_ID_FILE, OPENBAO_SECRET_ID_FILE  with OPENBAO_ADDR: the store's
 #                 certificate and the AppRole rebuild's two ID files on the controller
+#   OPENBAO_SEAL_KEY_FILE  optional: the 32-byte static seal key of the secrets store inside the
+#                 cluster (D-0058 rule 3). Set: stage `openbao-seal` puts it on the node the inventory's
+#                 k8s_gitops_source_openbao_seal_node names, before Argo CD makes the store. Unset: that
+#                 stage is skipped. On prod it is a secrets step, the owner's tap at the act.
 #
 # No kubeconfig leaves the cluster: every kubectl call runs on the first control-plane node through
 # Ansible, with that node's /etc/kubernetes/admin.conf (kc below). A KUBECONFIG in rebuild.env is
@@ -41,7 +45,8 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 # disk and before gitops: once Argo CD reads the repo it syncs every app, and local-path then finds
 # each volume's folder already there (TASK-0240, agent pick 205). openbao runs before apps, whose
 # ExternalSecrets wait needs External Secrets to sign in at the store with the new cluster's key.
-default_stages="vms cluster storage restore gitops secrets openbao apps gateway certs identity ui checks"
+# openbao-seal runs before gitops: the store's pod in the cluster waits for its seal key from the start.
+default_stages="vms cluster storage openbao-seal restore gitops secrets openbao apps gateway certs identity ui checks"
 
 die() { echo "rebuild: $*" >&2; exit 1; }
 
@@ -402,6 +407,11 @@ run_stage() {
       if [ -z "${SECRET_SOURCE_FILE:-}" ]; then echo "no SECRET_SOURCE_FILE set: secrets skipped"; return 0; fi
       [ -s "$SECRET_SOURCE_FILE" ] || { echo "SECRET_SOURCE_FILE is missing or empty"; return 1; }
       ap playbooks/k8s-secret-source.yml -e "secret_source_file=$SECRET_SOURCE_FILE" ;;
+    # The secrets store inside the cluster (D-0058): its seal key on its node, before Argo CD makes the store.
+    openbao-seal)
+      if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-seal skipped"; return 0; fi
+      [ -s "$OPENBAO_SEAL_KEY_FILE" ] || { echo "OPENBAO_SEAL_KEY_FILE is missing or empty"; return 1; }
+      ap playbooks/k8s-openbao-seal.yml -e "openbao_seal_key_file=$OPENBAO_SEAL_KEY_FILE" ;;
     # Registers the cluster's service-account key with the secrets store (playbooks/k8s-openbao-auth.yml,
     # docs/runbooks/set-up-the-secrets-store.md) before apps wait on ExternalSecrets. Unset: skipped.
     openbao)

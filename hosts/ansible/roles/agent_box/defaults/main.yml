@@ -248,6 +248,10 @@ agent_box_desktop: {}
 # notebook's queued jobs fail or are cancelled after 24 hours queued, so if dev stays up for more than a day its daily access-expiry
 # check does not run, and whether its alert e-mail goes out is not measured). Empty is no pick: a short node then refuses before it stops anything.
 agent_box_short_node: ""
+# The secrets store inside the dev cluster (D-0058, dev first; docs/runbooks/set-up-the-secrets-store.md). true writes
+# <work_dir>/openbao-in-cluster, and the rebuild wrapper then turns the store on in the dev cluster and puts its seal
+# key on the first worker (stage openbao-seal). false (the default) removes the file: dev runs as before.
+agent_box_openbao_in_cluster: false
 # The secrets store's dev VM that the secrets-store wrapper builds (docs/runbooks/set-up-the-secrets-store.md).
 # Private, through the inventory: name, vm_id (500-599), address, cores, memory_mb, disk_gb,
 # proxmox_node_name, vnet, template_vm_id, box_address (this box's address, the only one the admin
