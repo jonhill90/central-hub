@@ -73,10 +73,12 @@ spec:
               command: ["/bin/sh", "-ec"]
               args:
                 - |
-                  jwt=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-                  BAO_TOKEN=$(bao write -field=token auth/kubernetes/login role=snapshot jwt="$jwt")
+                  # The token is read from its file (@), so it is never in the process's arguments.
+                  BAO_TOKEN=$(bao write -field=token auth/kubernetes/login role=snapshot jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token)
                   export BAO_TOKEN
-                  trap 'bao token revoke -self >/dev/null 2>&1 || true' EXIT
+                  name=""
+                  # On any exit: revoke the token, and remove a half-written file, which the prune never counts.
+                  trap 'bao token revoke -self >/dev/null 2>&1 || true; [ -z "$name" ] || rm -f -- "/snapshots/$name.part"' EXIT
                   if ! out=$(bao read -format=json "$MARK" 2>&1); then
                     case $out in
                       *"No value found"*) echo "openbao-snapshot: no mark at $MARK yet, skipped"; exit 0 ;;
