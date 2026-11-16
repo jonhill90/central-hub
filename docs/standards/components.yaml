@@ -54,7 +54,7 @@ components:
     paid-edition-source: https://tailscale.com/pricing
     verdict: fail
     exit-path: Headscale (BSD-3-Clause) as the coordination server, with the same clients; the tailnet policy is code (D-0043; NetBird is not an exit, because its commercial licence holds features back)
-    sources: [url:pkgs.tailscale.com/, url:api.tailscale.com/, provider:tailscale/tailscale]
+    sources: [url:pkgs.tailscale.com/, url:api.tailscale.com/, provider:tailscale/tailscale, image:docker.io/tailscale/tailscale]
     checked: 2026-11-14
   - name: Cilium
     kind: software
