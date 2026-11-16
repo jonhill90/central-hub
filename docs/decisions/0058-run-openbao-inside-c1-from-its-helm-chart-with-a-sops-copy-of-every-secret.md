@@ -57,7 +57,7 @@ OpenBao runs inside c1 from OpenBao's Helm chart, and SOPS holds a copy of every
 
 ### Consequences
 
-- Good: no store VM to build, patch or size. The VM's planned size (`hosts/terraform/home/secrets-store/home.tfvars.example` line 8) is never spent. OpenBao's pod is planned at a 256 MiB request and a 512 MiB limit on the c1 worker, an estimate until dev measures it. The store moves with c1 to the EliteDesks, where three replicas give high availability.
+- Good: no store VM to build, patch or size. The VM's planned size (`hosts/terraform/home/secrets-store/home.tfvars.example` line 8 at commit d5b8d16, before PR #402 removed the file) is never spent. OpenBao's pod is planned at a 256 MiB request and a 512 MiB limit on the c1 worker, an estimate until dev measures it. The store moves with c1 to the EliteDesks, where three replicas give high availability.
 - Good: apps don't change. ESO's interface stays (D-0038, Exit path).
 - Bad: each c1 rebuild restores the store before any app can read a secret, so a failed restore stops every app's secrets from refreshing. Secrets already synced stay.
 - Good: the store can be lost entirely and rebuilt with no snapshot, by reseeding it from SOPS.
