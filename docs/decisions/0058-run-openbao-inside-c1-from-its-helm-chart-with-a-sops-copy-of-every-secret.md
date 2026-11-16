@@ -1,7 +1,7 @@
 ---
 id: D-0058
 title: Run OpenBao inside c1 from its Helm chart in place of its own VM, with a SOPS copy of every secret and of the seal key so the store can be restored or reseeded
-status: proposed
+status: accepted
 date: 2026-11-16
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0038, D-0050, D-0051]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: agents
+  approved-at: 2026-11-16T05:07:51Z
+  approved-commit: 6c440458305311dec3162e40aa4718895c4e3759
+  approval-ref: the reviewer's clearance for acceptance (2026-11-16T05:07:51Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNPe5RgyyXQfPSkPjiRsByrJ) and the passes for acceptance of Councils A (05:07:17Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNRF8Z8DQndMeqCqdtgCV4LU), B (05:07:34Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNRriqAZJC2mWMqm4NWjRy8M) and C (05:07:36Z, cmsg_01X43rfNYp4H1dL1V2dkfkwN9aNucvGLEWQxmE1yMR2HbA), each for this record as merged at 6c44045 and each saying it is accepted by the agents' pass under D-0042 rule 3; approved-at is the last of the four
+  approval-names: "each pass names D-0058 and commit 6c440458305311dec3162e40aa4718895c4e3759, the squash merge of PR #381, whose tree (d4a1118) equals that of head d328a22ab161643f621241a0a49a61532ca51d0e, which the reviewer and the three councils had passed as proposed"
+  check: "approved-by is agents under D-0042 rules 1 and 3, because the place and the SOPS balance are the owner's words of 2026-11-16 03:42 and 03:48 UTC and the rest goes on the agents' pass (this record's \"How this record is accepted\" line); the merge verdict's amend pattern finds no hit in this record, so D-0042 rule 11 does not send it to the owner; the records it waits on (D-0038, D-0050 and D-0051) are accepted. The Plan thread read the four passes by id at 05:08Z. This PR changes only this record's status, date and accepted-evidence and its row in the decisions index, which the reviewer checks against 6c44045 (D-0001). Acceptance builds nothing: the owner's taps this record keeps (the prod seal key, each restore, the box age key's wider right) stay at their own steps"
+  merged: not yet; a follow-up PR fills this in after the merge (D-0001)
 revisit-when: the EliteDesks run c1 on bare metal (three Raft replicas, and each node's own TPM for the seal); a c1 rebuild cannot restore the store before its apps need it; the seal key's home changes; or a job that must run while c1 is down needs a secret that is not in a file on the box
 ---
 
