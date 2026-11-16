@@ -1,0 +1,65 @@
+{{- /*
+TLS on OpenBao's listener from the namespace's own CA, made by cert-manager: a self-signed Issuer
+signs the CA, the CA Issuer signs the server certificate. Secret openbao-tls carries tls.crt,
+tls.key and ca.crt; OpenBao reads the first two and ESO checks the listener against ca.crt (the
+secret-store app's caProvider). The Gateway's path for the agent box comes later (ADDENDUM-1 v3).
+*/ -}}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: openbao-selfsigned
+  namespace: {{ .Release.Namespace }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openbao-ca
+  namespace: {{ .Release.Namespace }}
+spec:
+  isCA: true
+  commonName: openbao-ca
+  secretName: openbao-ca
+  duration: 87600h    # 10 years: only this namespace's server certificate trusts it
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: openbao-selfsigned
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: openbao-ca
+  namespace: {{ .Release.Namespace }}
+spec:
+  ca:
+    secretName: openbao-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openbao-tls
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: openbao-tls
+  duration: 2160h       # 90 days, renewed 30 days before; OpenBao reads the new files on reload
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  dnsNames:
+    # The Service ESO calls, and the pods' own names on the chart's headless Service.
+    - openbao
+    - openbao.{{ .Release.Namespace }}
+    - openbao.{{ .Release.Namespace }}.svc
+    - openbao-active.{{ .Release.Namespace }}.svc
+    - "*.openbao-internal"
+    - "*.openbao-internal.{{ .Release.Namespace }}.svc"
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: openbao-ca
+    kind: Issuer

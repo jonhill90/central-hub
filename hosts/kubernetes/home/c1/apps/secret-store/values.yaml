@@ -3,17 +3,18 @@
 # seeded by hand; none are in git.
 storeName: c1
 sourceNamespace: secret-source
-# The secrets store (proposed D-0038), dev only for now. Set by the root chart from its private
-# values (rootParameters); empty, as on c1, renders no `openbao` store and nothing below.
+# The secrets store, OpenBao inside the cluster (D-0058), dev's cluster first. The root chart passes
+# true from its openbaoInCluster (switchParameters); false, as on c1, renders no `openbao` store.
 openbao:
-  # https://<store>, no path.
-  address: ""
-  # The store's certificate, base64 PEM (dev: the store's own self-signed certificate).
-  caBundle: ""
-  # The store's login for this cluster, and its role (the openbao role's tasks/clients.yml).
-  authPath: jwt-c1
+  inCluster: false
+  # OpenBao's Service in namespace openbao (the openbao app); TLS from that namespace's own CA,
+  # read from the server certificate's Secret (the openbao-store app).
+  address: https://openbao.openbao.svc:8200
+  caSecret: openbao-tls
+  caNamespace: openbao
+  # OpenBao's Kubernetes login and its role for External Secrets (D-0058 rule 5).
+  authPath: kubernetes
   role: eso
-  audience: openbao
   # One non-secret test value the store side writes, read by one ExternalSecret to prove the store
   # syncs (D-0038 Confirmation 2). Every other ExternalSecret keeps naming store `c1` until then.
   checkKey: c1/check

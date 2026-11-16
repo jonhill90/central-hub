@@ -1,0 +1,17 @@
+# What OpenBao's own chart (the openbao app) lacks, made one wave before it (D-0058; DESIGN
+# section 2). Made only where the root value openbaoInCluster is true: dev's cluster first.
+
+# The node that holds the seal key's folder, private (CLAUDE.md rule 4): the root chart passes it
+# from its root value openbaoSealNode. Empty: no PersistentVolume is made, so the claim stays
+# Pending and OpenBao's pod waits; nothing starts without its key.
+sealNode: ""
+# The seal key's folder on that node (D-0058 rule 3). The agent box's node play writes the key there
+# (owner uid 100, group 1000, mode 0400, as OpenBao's pod runs), and nothing else: the admin
+# AppRole's IDs stay in the box's keys folder (D-0038 rule 6). The folder is outside what c1's nightly backup copies (role k8s_backup copies only
+# /var/lib/c1-data/local-path, where OpenBao's data volume is, and /var/lib/central-hub/identity-postgres),
+# so c1's nightly backup never holds the key with the data (D-0038 rule 4). Proxmox's nightly backup
+# of the node VMs does hold both (D-0058, Consequences).
+sealPath: /var/lib/central-hub/openbao-seal
+sealSize: 1Mi
+# Which kv/<env>/snapshot-mark the snapshot login may read (DESIGN section 6): dev today.
+markEnv: dev

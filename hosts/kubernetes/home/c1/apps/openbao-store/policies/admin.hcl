@@ -1,0 +1,21 @@
+# admin: the agent box's secrets-store wrapper only (D-0038 rule 6), the same paths as the VM role's
+# policy-admin.hcl.j2 (hosts/ansible/roles/openbao/templates/), which goes away with the VM (D-0058).
+# It manages the store's contents, mounts, logins and policies, takes and restores snapshots and
+# makes recovery keys. It reads the Raft peers, leader and term, which the restore drill compares
+# before and after. Because it can write any policy and any login, it can grant itself anything:
+# treat it as root. What limits it is where it runs: its IDs live only in the box's keys folder, it
+# logs in only from the box's address, and its tokens last 15 minutes, an hour at most.
+path "kv/*"                       { capabilities = ["create", "read", "update", "delete", "list"] }
+path "sys/policies/acl/*"         { capabilities = ["create", "read", "update", "delete", "list"] }
+path "sys/auth"                   { capabilities = ["read"] }
+path "sys/auth/*"                 { capabilities = ["create", "read", "update", "delete", "sudo"] }
+path "auth/*"                     { capabilities = ["create", "read", "update", "delete", "list"] }
+path "sys/mounts"                 { capabilities = ["read"] }
+path "sys/mounts/*"               { capabilities = ["create", "read", "update", "delete"] }
+path "sys/storage/raft/snapshot"  { capabilities = ["read", "update"] }
+# Forced restore: only the box's restore-rebuilt calls it, onto a rebuilt dev store under its guards (pick 238).
+path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }
+path "sys/storage/raft/configuration"   { capabilities = ["read"] }
+path "sys/storage/raft/autopilot/state" { capabilities = ["read"] }
+path "sys/rotate/recovery/*"      { capabilities = ["create", "read", "update", "delete", "sudo"] }
+path "sys/audit"                  { capabilities = ["read", "sudo"] }
