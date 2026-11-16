@@ -1,14 +1,22 @@
 ---
 id: D-0056
 title: Merge with a sweep on the agent box, on a ledger of recorded passes, in place of the merge job
-status: proposed
-date: 2026-11-14
+status: accepted
+date: 2026-11-16
 decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0031, D-0042]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-16T03:24:45Z
+  approved-commit: 20fb00acf45e6f48302e28021cb03bff4899fca7
+  approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNYQdNsZFufy4SaM6a1D9P3u
+  approval-names: "PR #372 at head 20fb00a (20fb00acf45e6f48302e28021cb03bff4899fca7), the content commit; the owner picked option 0, Accept the cleanup, on the card asking to accept the merge-rule cleanup in #372 at that head (the merge workflow goes; D-0056 is accepted), whose option text says D-0056 is then accepted and whose reason names D-0042, D-0056 and the runner hook as the files that need the owner's tap"
+  check: "the builder read the owner's choice event (this approval-ref, 2026-11-16T03:24:45Z, option 0) and the card it answers (cmsg_01X43rfNYp4H1dL1V2dkfkwNVRGutKkRcm4nGmpJ9m9bur, posted 2026-11-16T03:07:09Z) by id in the project thread, and they match; the status commit differs from 20fb00a only in this record's status, date and accepted-evidence and its row in the decisions index (measured on 688d013 with git diff 20fb00a 688d013 over the files of the PR: this record's status, date and accepted-evidence, 10 added lines and 2 removed, and the index row; no other file of the PR differs; the head after this line's edit differs from 688d013 only in this line)"
+  merged: not yet
 revisit-when: a cloud session can start a GitHub workflow (the integration gets Actions write and the tailnet workflow gets an environment gate); the agents get GitHub identities of their own (D-0030) and GitHub can require their approvals; the ledger holds a line for a pass that was never given; or the owner says a merge was wrong
 ---
 
@@ -49,7 +57,7 @@ Chosen option: **1**. It needs no workflow start and no new GitHub right, and th
 5. **Status changes.** A PR that sets a record to `accepted`, `rejected` or `parked`, or a standard to `active`, merges only if the record says `approved-by: agents` (for an acceptance), its approved commit holds four passes of its own, and the PR's net change equals the approved commit's apart from the status, date and evidence lines and the index row.
 6. **The stop.** `pass-record halt` sets a flag the sweep reads before everything and before each merge; while it exists the sweep merges nothing. The wrapper accepts `halt` from the recorders `orchestrator`, `builder`, `reviewer` and `council-a`, `council-b` and `council-c`, so a reviewer or a council can stop a merge. `pass-record resume` clears it. The wrapper accepts `resume` only from the recorder `orchestrator`, so a halt that the orchestrator relays from the owner is not undone by another lane's call, but any session can name itself the orchestrator. The owner's own stop is stopping the timer from the controller.
 7. **Workflows that run on the box.** The runner hook lists each such workflow file with its sha256, fetches the file at the run's commit and refuses a job whose file differs or can't be fetched. A merged edit to a listed workflow does nothing on the box until a tapped install updates the list. CI checks the list against the files.
-8. **What this changes in D-0042.** Rule 2: the merge job is the sweep, not `merge.yml`. This record is proposed and changes nothing in force: `merge.yml` stays on `main` (inert, listed as retired in the runner hook) and AGENTS.md rule 2 stays as it is. A follow-up PR, which needs the owner's tap, removes `merge.yml` and its retired entry, rewrites AGENTS.md rule 2 and sets this record to accepted. Rule 11: the files that need the owner's tap are the list in rule 4 above. Rules 1, 3 to 10 stand.
+8. **What this changes in D-0042.** Rule 2: the merge job is the sweep, not `merge.yml`. The follow-up PR removes `merge.yml` and its retired entry in the runner hook and rewrites AGENTS.md rule 2; its owner-tapped status commit sets this record to accepted. Rule 11: the files that need the owner's tap are the list in rule 4 above. Rules 1, 3 to 10 stand.
 9. **Installed by one tapped install.** The sweep, the wrappers and the hook reach the box only by a change to its limits, which keeps the owner's tap (D-0042 rule 6). One card names that install and this record's PR head.
 
 ### Consequences
