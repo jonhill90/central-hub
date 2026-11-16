@@ -137,7 +137,7 @@ Another tailnet can share its own devices into this one with Tailscale's declara
 
 | When (UTC) | What | How | Approval |
 |---|---|---|---|
-| 2026-11-16, about 04:06 | One external tailnet entry with `allowIncomingConnections` false, and its group, added to the live policy | In the admin console, by an agent; the feature preview switch was not touched by the agent | The owner's message cmsg_01X43rfNYp4H1dL1V2dkfkwNKcqZHoK8kv2XYZkvmC9D2L (2026-11-16 03:49:47 UTC), confirmed by their message cmsg_01X43rfNYp4H1dL1V2dkfkwNSwwKzEFPyyZP2uwiunXJkc (04:40:52 UTC) that the share stays |
+| 2026-11-16, about 04:06 | One external tailnet entry with `allowIncomingConnections` false, and its group, added to the live policy | In the admin console, by an agent; the feature preview switch was not touched by the agent | The owner's message cmsg_01X43rfNYp4H1dL1V2dkfkwNKcqZHoK8kv2XYZkvmC9D2L (2026-11-16 03:49:47 UTC), and their message cmsg_01X43rfNYp4H1dL1V2dkfkwNSwwKzEFPyyZP2uwiunXJkc (04:40:52 UTC), in which they say they can now reach the shared device |
 
 Until `home.tfvars` holds the same entry, a plan from this folder would remove it. So no plan or apply runs here, from the Mac or a pipeline job, until the entry is in `home.tfvars`, and the first plan's gate is that the rendered `groups` and `externalTailnets` sections equal the live ones. Any difference in them stops the run.
 
