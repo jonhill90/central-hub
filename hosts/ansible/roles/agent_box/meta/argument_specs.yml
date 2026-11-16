@@ -190,12 +190,6 @@ argument_specs:
           the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name, vnet,
           template_vm_id), rdp_source (the tailnet connector's address, where RDP arrives from) and optionally admin_user. No key and no
           password goes in it. Empty skips the file.
-      agent_box_vps_host:
-        type: dict
-        default: {}
-        description: >-
-          Private settings for the vps-host wrapper (D-0046), written to <work_dir>/vps-host.json (0600, the keys
-          user's): name, the VPS's name on the tailnet. No key goes in it; the box signs in by Tailscale SSH.
       agent_box_secrets_store:
         type: dict
         default: {}

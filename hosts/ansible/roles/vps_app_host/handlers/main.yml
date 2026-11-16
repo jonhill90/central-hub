@@ -1,6 +1,0 @@
----
-- name: Restart Valkey if it runs
-  ansible.builtin.systemd_service:
-    name: valkey
-    state: restarted
-  when: vps_app_host_valkey_secret.stat.exists | default(false)

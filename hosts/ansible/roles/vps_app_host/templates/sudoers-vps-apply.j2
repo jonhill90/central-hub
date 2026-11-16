@@ -1,5 +1,0 @@
-# /etc/sudoers.d/vps-apply: user {{ vps_app_host_deploy_user }} may run vps-apply as root with these first
-# arguments only, and nothing else (D-0046 rule 4). Managed by the vps_app_host role (central-hub
-# hosts/ansible); checked with visudo before it is written. vps-apply checks every further argument itself.
-Defaults:{{ vps_app_host_deploy_user }} env_reset
-{{ vps_app_host_deploy_user }} ALL=(root) NOPASSWD: {{ vps_app_host_apply_path }} host *, {{ vps_app_host_apply_path }} secrets, {{ vps_app_host_apply_path }} secrets rotate, {{ vps_app_host_apply_path }} status
