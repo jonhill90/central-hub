@@ -24,7 +24,8 @@
       - item.address is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
       - item.ports | length > 0
       - item.ports | map('string') | select('match', '^[0-9]{1,5}$') | list | length == item.ports | length
-    fail_msg: "agent_box_lifeline_allow entries need an IPv4 address and a list of TCP ports"
+      - item.uid is not defined or item.uid is match('^[a-z_][a-z0-9_-]{0,31}$')
+    fail_msg: "agent_box_lifeline_allow entries need an IPv4 address and a list of TCP ports, and an optional uid that is a user name"
     quiet: true
   loop: "{{ agent_box_lifeline_allow }}"
 
@@ -33,6 +34,15 @@
     that: agent_box_lifeline_address is match('^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$')
     fail_msg: "agent_box_lifeline_address must be the box's address and prefix on the host's subnet, for example 192.0.2.50/24"
     quiet: true
+
+# nft refuses to load `meta skuid "<user>"` for a user that doesn't exist, so a run with only --tags lifeline on a
+# fresh box stops here, with the cause, instead of at the load. The users tag (or a full run) makes the user.
+- name: lifeline | Each uid in the allowed destinations is a user on the box
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ item }}"
+  loop: "{{ agent_box_lifeline_allow | selectattr('uid', 'defined') | map(attribute='uid') | unique | list }}"
+  when: not ansible_check_mode   # a check run before the install has no user yet; the same full run would make it
 
 # The filter is loaded BEFORE anything brings the link up, so a failure here leaves the NIC down, never open.
 - name: lifeline | The installed packages
@@ -251,7 +261,9 @@
 - name: lifeline | Each allowed destination is in the filter
   ansible.builtin.assert:
     that:
-      - agent_box_lifeline_table.stdout is search('ip daddr ' ~ item.0.address ~ ' tcp dport ' ~ item.1 ~ ' accept')
+      - >-
+        agent_box_lifeline_table.stdout is search('ip daddr ' ~ (item.0.address | regex_escape) ~ ' tcp dport ' ~ item.1
+        ~ ((' meta skuid \\S+') if item.0.uid is defined else '') ~ ' accept')
     fail_msg: "{{ item.0.address }}:{{ item.1 }} is not in the lifeline filter"
     quiet: true
   loop: "{{ agent_box_lifeline_allow | subelements('ports') }}"

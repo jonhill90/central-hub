@@ -114,6 +114,9 @@
     path: /etc/apache2/sites-enabled/000-default.conf
     state: absent
   notify: Reload the proxy
+  # Before the install the file isn't there yet, so a check run would show this as unchanged although the run
+  # removes it; skipped, it shows as a step the run may take (the host job compares the two, D-0041 rule 4).
+  when: not proxmox_proxy_dry | bool
 
 - name: proxy | The site for the web UI
   ansible.builtin.template:

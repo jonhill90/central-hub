@@ -1,0 +1,82 @@
+---
+# The agent box's Proxmox host job key: one line in root's authorized keys on the Proxmox host (Library
+# plans/r1-host-job/DESIGN.md v3.1, section 6). A run from the controller, listed in docs/runbooks/serve-proxmox-on-443.md
+# (D-0041 rule 3), after the agent_box role has made the key and fetched its public half (tag proxmox_host_inventory).
+# The line takes the key only from the box's lifeline address, and `restrict` turns off forwarding, a terminal and
+# ~/.ssh/rc. On Proxmox VE, root's authorized_keys is a link to /etc/pve/priv/authorized_keys, the cluster's copy.
+# That copy is on pmxcfs, where Ansible's file modules fail with "Operation not permitted": on the chmod of the
+# destination in forum.proxmox.com thread 88310 (where a plain cp worked), and on a temporary file in /etc/pve in
+# forum.ansible.com thread 26792. So a fixed shell script writes it in place, as cp does. Before the write it copies
+# the file to /root/authorized_keys.pre-central-hub-r1 (off pmxcfs); if the write fails or the file then differs from
+# what was meant, it writes that copy back and fails, because the file also holds the controller's key. A --check run
+# makes the asserts and skips the write.
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-host-key.yml --check
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-host-key.yml
+# Take the reach away: run it with -e proxmox_host_key_state=absent.
+- name: The agent box's Proxmox host job key
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  vars:
+    proxmox_host_key_file: "{{ playbook_dir }}/../inventories/home/id_ed25519-proxmox-host.pub"
+    proxmox_host_key_path: /etc/pve/priv/authorized_keys
+    proxmox_host_key_state: present
+    proxmox_host_key_box: "{{ groups['agent_box'][0] }}"
+    proxmox_host_key_from: "{{ (hostvars[proxmox_host_key_box]['agent_box_lifeline_address'] | default('')).split('/')[0] }}"
+  tasks:
+    - name: The box's lifeline address and the key's public half are there
+      ansible.builtin.assert:
+        that:
+          - proxmox_host_key_from is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+          - proxmox_host_key_state == 'absent' or lookup('ansible.builtin.file', proxmox_host_key_file) is match('^ssh-ed25519 [A-Za-z0-9+/=]+ central-hub-r1$')
+        fail_msg: >-
+          set agent_box_lifeline_address on the agent box, and run the agent_box role with the tag
+          proxmox_host_inventory first, so {{ proxmox_host_key_file }} holds the key's public half
+        quiet: true
+
+    - name: Root's authorized keys are the link to the cluster's copy
+      ansible.builtin.stat:
+        path: /root/.ssh/authorized_keys
+      register: proxmox_host_key_link
+
+    - name: The line goes where sshd reads it
+      ansible.builtin.assert:
+        that:
+          - proxmox_host_key_link.stat.islnk | default(false)
+          - proxmox_host_key_link.stat.lnk_source | default('') == proxmox_host_key_path
+        fail_msg: /root/.ssh/authorized_keys is not a link to {{ proxmox_host_key_path }}, so this playbook stops
+        quiet: true
+
+    # Every line but the job's is kept as it is; the job's line is added (present) or left out (absent). The file is
+    # rewritten in place only when that changes it.
+    - name: Root's authorized keys hold the job's key, narrowed to the box's lifeline address
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          f={{ proxmox_host_key_path | quote }}
+          line={{ proxmox_host_key_line | quote }}
+          tmp=$(mktemp)
+          trap 'rm -f "$tmp"' EXIT
+          rc=0
+          grep -v -- ' central-hub-r1$' "$f" > "$tmp" || rc=$?
+          [ "$rc" -le 1 ] || exit "$rc"
+          [ -z "$line" ] || printf '%s\n' "$line" >> "$tmp"
+          if cmp -s "$tmp" "$f"; then echo unchanged; exit 0; fi
+          bak=/root/authorized_keys.pre-central-hub-r1
+          (umask 077; cp -p "$f" "$bak")
+          if cat "$tmp" > "$f" && cmp -s "$tmp" "$f"; then echo changed; exit 0; fi
+          echo "the write to $f failed or did not read back; writing the copy back" >&2
+          if cat "$bak" > "$f" && cmp -s "$bak" "$f"; then
+            echo "$f is as it was before this run" >&2
+          else
+            echo "$f could not be put back: the copy is $bak" >&2
+          fi
+          exit 1
+        executable: /bin/bash
+      vars:
+        proxmox_host_key_line: >-
+          {{ '' if proxmox_host_key_state == 'absent' else
+             'restrict,from="' ~ proxmox_host_key_from ~ '" '
+             ~ ((lookup('ansible.builtin.file', proxmox_host_key_file) | split(' '))[0:2] | join(' ')) ~ ' central-hub-r1' }}
+      register: proxmox_host_key_write
+      changed_when: proxmox_host_key_write.stdout == 'changed'
