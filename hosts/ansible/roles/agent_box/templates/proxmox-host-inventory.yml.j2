@@ -1,0 +1,11 @@
+# {{ agent_box_host_dir }}/inventory/hosts.yml: the Proxmox host job's inventory (wrapper proxmox-host). Managed by
+# the agent_box role from the controller only (tag proxmox_host_inventory); private, the job's user's only.
+proxmox:
+  hosts:
+    proxmox_host:
+      ansible_host: {{ agent_box_proxmox_host.address | to_json }}
+      ansible_user: root
+      ansible_ssh_private_key_file: {{ (agent_box_host_dir ~ '/id_ed25519') | to_json }}
+      ansible_ssh_common_args: {{ ('-o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=' ~ agent_box_host_dir ~ '/known_hosts') | to_json }}
+      ansible_python_interpreter: /usr/bin/python3
+      proxmox_cert_names: {{ agent_box_host_cert_names | to_json }}

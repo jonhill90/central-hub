@@ -1,0 +1,55 @@
+---
+# The Proxmox host job's inventory and the key's public half: a run from the controller only (tag
+# proxmox_host_inventory, which self-applies skip). The inventory holds private values (D-0036 rule 7): the
+# host's lifeline-side address, its public host key and the certificate's names. The public half of the box's key
+# is fetched to the controller for the host's key line (playbooks/proxmox-host-key.yml).
+
+- name: proxmox_host_inventory | The certificate's names, from the Proxmox host's own inventory entry
+  ansible.builtin.set_fact:
+    agent_box_host_cert_names: >-
+      {{ (hostvars[groups['proxmox'][0]]['proxmox_cert_names'] | default([]))
+         if (groups['proxmox'] | default([]) | length) > 0 else [] }}
+
+- name: proxmox_host_inventory | The settings are complete
+  ansible.builtin.assert:
+    that:
+      - agent_box_proxmox_host.address | default('') is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+      - agent_box_proxmox_host.hostkey | default('') is match('^ssh-ed25519 [A-Za-z0-9+/=]+$')
+      - agent_box_host_cert_names | length > 0
+      - >-
+        agent_box_lifeline_allow | selectattr('address', 'equalto', agent_box_proxmox_host.address | default(''))
+        | selectattr('uid', 'defined') | selectattr('uid', 'equalto', agent_box_host_user)
+        | selectattr('ports', 'contains', 22) | list | length == 1
+    fail_msg: >-
+      agent_box_proxmox_host needs address and hostkey, the proxmox host needs proxmox_cert_names, and agent_box_lifeline_allow
+      needs one entry for that address with ports [22] and uid {{ agent_box_host_user }}
+    quiet: true
+
+- name: proxmox_host_inventory | The host's public key, pinned
+  ansible.builtin.copy:
+    dest: "{{ agent_box_host_dir }}/known_hosts"
+    content: "{{ agent_box_proxmox_host.address }} {{ agent_box_proxmox_host.hostkey }}\n"
+    owner: "{{ agent_box_host_user }}"
+    group: "{{ agent_box_host_user }}"
+    mode: "0600"
+
+- name: proxmox_host_inventory | The job's inventory
+  ansible.builtin.template:
+    src: proxmox-host-inventory.yml.j2
+    dest: "{{ agent_box_host_dir }}/inventory/hosts.yml"
+    owner: "{{ agent_box_host_user }}"
+    group: "{{ agent_box_host_user }}"
+    mode: "0600"
+
+- name: proxmox_host_inventory | Read the key's public half
+  ansible.builtin.slurp:
+    src: "{{ agent_box_host_dir }}/id_ed25519.pub"
+  register: agent_box_host_pubkey
+
+- name: proxmox_host_inventory | Save the public half on the controller, for the host's key line
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/../inventories/home/id_ed25519-proxmox-host.pub"   # git-ignored (id_ed25519*)
+    content: "{{ agent_box_host_pubkey.content | b64decode }}"
+    mode: "0644"
+  delegate_to: localhost
+  become: false

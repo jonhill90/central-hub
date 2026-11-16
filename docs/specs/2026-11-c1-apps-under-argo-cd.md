@@ -9,8 +9,8 @@ accepted-evidence:
   approved-commit: b470fd8c1ad14c0f75d5bacd5afd8088a188291a
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNKYAVtofLbtfdhkN9JkMKtd
   approval-names: "PR #62 and head b470fd8, in the message itself"
-  check: the drafting agent read the message in the project thread at 2026-11-08T07:16Z; it reads "accept PR #62 b470fd8". An independent check by a reviewing agent is still to do.
-  merged: PR #62 merged at 2026-11-08T07:30:48Z as b50aaf5
+  check: "the drafting agent read the message in the project thread at 2026-11-08T07:16Z; it reads \"accept PR #62 b470fd8\". An independent check by a reviewing agent is still to do."
+  merged: "PR #62 merged at 2026-11-08T07:30:48Z as b50aaf5"
 done-evidence:
 supersedes: []
 superseded-by:

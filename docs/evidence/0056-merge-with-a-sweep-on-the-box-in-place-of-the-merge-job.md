@@ -3,7 +3,7 @@ record: D-0056
 batch: RB-0232 (2026-11-14), the builder lane's reads and measurements for the merge-off-Mac design, 2026-11-14 12:46 to 13:10 UTC
 researched: 2026-11-14
 method: this repository's merge.yml, pr-merge.sh, the runner hook, the sudo list and D-0042 read at main; one workflow-start call to GitHub's integration; ssh calls to the box's wrappers from a cloud session; the repository's own tests
-checks: Councils A, B and C passed design v5 and the code (central-hub #354); the reviewer cleared it
+checks: "Councils A, B and C passed design v5 and the code (central-hub #354); the reviewer cleared it"
 ---
 
 # Evidence for D-0056: merge with a sweep on the box
