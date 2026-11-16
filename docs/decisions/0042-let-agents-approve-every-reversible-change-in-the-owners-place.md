@@ -1,6 +1,6 @@
 ---
 id: D-0042
-title: Let the reviewer and the council approve in the owner's place, except the steps they keep
+title: Let the reviewer and the council approve in the owner's place, except the steps the owner keeps
 status: accepted
 date: 2026-11-14
 decision-makers: [owner]
@@ -20,7 +20,7 @@ accepted-evidence:
 revisit-when: the greenfield build-out of the lab ends; the lab comes to hold personal data or anything of value; a change approved under this record has to be undone after it harmed the lab, a cloud account or the repository; the owner says a pass was wrong; the agents get a GitHub identity of their own (D-0030) and GitHub can require an approval itself; or a cluster other than c1 reads the repository
 ---
 
-# Let the reviewer and the council approve in the owner's place, except the steps they keep
+# Let the reviewer and the council approve in the owner's place, except the steps the owner keeps
 
 ## Context and Problem Statement
 
@@ -55,7 +55,7 @@ The owner's words, above, decide only this much:
 
 Everything else in this record is an agent pick, labelled `[agent pick]` in its rule, which the owner can change at any time (REQ-0035). That includes the reviewer and the council approving in the owner's place: that role is one the agents gave themselves, because the owner's messages end their own approval but do not name who approves instead.
 
-The owner's messages are a change of mind (REQ-0030). They reverse REQ-0009 (the owner makes every decision) and REQ-0012 (only the owner accepts a record; agents must not mark one accepted) in the requirements register, the project's standing instruction 1 (never mark anything accepted), and the second of the three Central Hub outcomes in the project's topic (they pick each permanent piece), whose work the owner's card of 2026-11-11 at 04:03 UTC put ahead of other work, for the changes this record covers. The register and that outcome's text are kept outside this repository; both need updating, by their own process.
+The owner's messages are a change of mind (REQ-0030). They reverse REQ-0009 (the owner makes every decision) and REQ-0012 (only the owner accepts a record; agents must not mark one accepted) in the requirements register, the project's standing instruction 1 (never mark anything accepted), and the second of the three Central Hub outcomes in the project's topic (the owner picks each permanent piece), whose work the owner's card of 2026-11-11 at 04:03 UTC put ahead of other work, for the changes this record covers. The register and that outcome's text are kept outside this repository; both need updating, by their own process.
 
 ## Decision Drivers
 
