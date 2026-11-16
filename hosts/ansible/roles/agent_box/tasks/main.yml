@@ -413,6 +413,16 @@
   when: agent_box_short_node | length == 0
   tags: [wrappers]
 
+# The rebuild wrapper keeps the store's seal key only as a SOPS copy, encrypted to the box's age identity, which the
+# secrets bundle's tasks make (D-0058 rules 3 and 9).
+- name: The secrets store inside the dev cluster needs the secrets bundle, for the box's age identity
+  ansible.builtin.assert:
+    that: agent_box_secrets_bundle | length > 0
+    fail_msg: agent_box_openbao_in_cluster needs agent_box_secrets_bundle set, so the seal key can be kept as a SOPS copy
+    quiet: true
+  when: agent_box_openbao_in_cluster | bool
+  tags: [wrappers]
+
 - name: The rebuild wrapper's switch for the secrets store inside the dev cluster (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/openbao-in-cluster"

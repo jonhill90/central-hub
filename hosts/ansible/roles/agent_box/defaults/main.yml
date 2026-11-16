@@ -250,7 +250,8 @@ agent_box_desktop: {}
 agent_box_short_node: ""
 # The secrets store inside the dev cluster (D-0058, dev first; docs/runbooks/set-up-the-secrets-store.md). true writes
 # <work_dir>/openbao-in-cluster, and the rebuild wrapper then turns the store on in the dev cluster and puts its seal
-# key on the first worker (stage openbao-seal). false (the default) removes the file: dev runs as before.
+# key on the first worker (stage openbao-seal). The wrapper keeps that key only as a SOPS copy, so true needs
+# agent_box_secrets_bundle set (the box's age identity). false (the default) removes the file: dev runs as before.
 agent_box_openbao_in_cluster: false
 # The secrets store's dev VM that the secrets-store wrapper builds (docs/runbooks/set-up-the-secrets-store.md).
 # Private, through the inventory: name, vm_id (500-599), address, cores, memory_mb, disk_gb,

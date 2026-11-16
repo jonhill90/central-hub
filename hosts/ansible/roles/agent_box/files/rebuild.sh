@@ -161,20 +161,48 @@ OPENBAO_SECRET_ID_FILE=$store_keys/openbao-rebuild-secret-id"
 fi
 # The secrets store inside the dev cluster (D-0058, dev first), switched on by the one-line file the agent_box role
 # writes (agent_box_openbao_in_cluster). The root chart then makes the apps openbao-store and openbao, with the seal
-# key's volume on the first k8s_workers host, and stage openbao-seal puts the key there first. The key is the same
-# file `secrets-store` uses, made here once if it is missing and never replaced (a new key would make every
-# snapshot unreadable); the keys folder is in the box's SOPS bundle, so its copy is off the box. Dev's key needs no
-# tap (D-0058 rule 3). The VM store's wiring above and this are never on together.
+# key's volume on the first k8s_workers host, and stage openbao-seal puts the key there first.
+# The box keeps the key only as its SOPS copy (D-0058 rules 3 and 9), encrypted to the box's own age identity, which
+# the agent_box role makes with the secrets bundle (agent_box_secrets_bundle); without that identity this refuses.
+# The copy is made here once, from the store VM's key file when one exists or else from 32 random bytes, and is never
+# replaced: a new key would make every snapshot unreadable. Each run decrypts it to a file in memory (/dev/shm) that
+# only this user can read and that is removed when the run ends. The keys folder is in the box's daily bundle, so the
+# copy leaves the box only once the bundle's off-box send is installed (agent_box_opnsense_offbox set); until then
+# the dev key is only on the box and the node. Dev's key needs no tap (D-0058 rule 3). The VM store's wiring above
+# and this are never on together.
 in_cluster=false
 seal_env=""
+seal_tmp=""
 if [[ -f $work/openbao-in-cluster && $(tr -d '[:space:]' < "$work/openbao-in-cluster") == true ]]; then
   [[ -z $store_url ]] || { echo "rebuild: the store VM's wiring and the store inside the cluster are both set; refusing" >&2; exit 1; }
   in_cluster=true
+  identity=$keys/secrets-bundle/age-identity.txt
+  [[ -s $identity ]] || { echo "rebuild: $identity is missing; set agent_box_secrets_bundle and run the agent_box role, so the seal key can be kept as a SOPS copy" >&2; exit 1; }
+  seal_sops=$store_keys/openbao-seal.key.sops.json
+  seal_tmp=$(mktemp -d /dev/shm/rebuild-seal.XXXXXX) || { echo "rebuild: no private folder in /dev/shm for the seal key" >&2; exit 1; }
+  trap 'rm -rf -- "$seal_tmp"' EXIT
+  trap 'exit 1' INT TERM HUP
   mkdir -p "$store_keys"
-  [[ -f $store_keys/openbao-seal.key ]] || openssl rand -out "$store_keys/openbao-seal.key" 32
-  [[ $(wc -c < "$store_keys/openbao-seal.key") -eq 32 ]] || { echo "rebuild: $store_keys/openbao-seal.key is not 32 bytes" >&2; exit 1; }
+  if [[ ! -e $seal_sops ]]; then
+    if [[ -f $store_keys/openbao-seal.key ]]; then cp -- "$store_keys/openbao-seal.key" "$seal_tmp/new.key"
+    else openssl rand -out "$seal_tmp/new.key" 32; fi
+    [[ $(wc -c < "$seal_tmp/new.key") -eq 32 ]] || { echo "rebuild: the seal key to keep is not 32 bytes" >&2; exit 1; }
+    recipient=$("$libexec/age-keygen" -y "$identity")
+    [[ $recipient =~ ^age1[0-9a-z]{58}$ ]] || { echo "rebuild: the box's identity gives no age recipient" >&2; exit 1; }
+    "$libexec/sops" encrypt --input-type binary --output-type json --age "$recipient" \
+      --output "$seal_sops.part" "$seal_tmp/new.key" || { rm -f -- "$seal_sops.part"; echo "rebuild: sops could not encrypt the seal key" >&2; exit 1; }
+    if ! SOPS_AGE_KEY_FILE=$identity "$libexec/sops" decrypt --input-type json --output-type binary \
+         --output "$seal_tmp/back.key" "$seal_sops.part" || ! cmp -s "$seal_tmp/back.key" "$seal_tmp/new.key"; then
+      rm -f -- "$seal_sops.part"; echo "rebuild: the seal key's SOPS copy does not read back to the same bytes" >&2; exit 1
+    fi
+    mv -- "$seal_sops.part" "$seal_sops"
+    rm -f -- "$seal_tmp/new.key" "$seal_tmp/back.key"
+  fi
+  SOPS_AGE_KEY_FILE=$identity "$libexec/sops" decrypt --input-type json --output-type binary \
+    --output "$seal_tmp/openbao-seal.key" "$seal_sops" || { echo "rebuild: $seal_sops does not decrypt with the box's identity" >&2; exit 1; }
+  [[ $(wc -c < "$seal_tmp/openbao-seal.key") -eq 32 ]] || { echo "rebuild: the seal key in $seal_sops is not 32 bytes" >&2; exit 1; }
   stages="vms cluster storage openbao-seal restore gitops secrets apps gateway checks"
-  seal_env="OPENBAO_SEAL_KEY_FILE=$store_keys/openbao-seal.key"
+  seal_env="OPENBAO_SEAL_KEY_FILE=$seal_tmp/openbao-seal.key"
 fi
 # What a dev run does on a node short of memory is the owner's pick, never a default (rebuild-k8s.sh,
 # docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev or keep-dev, from the one-line file the
@@ -314,4 +342,9 @@ RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTOR
 ENV
 chmod 600 "$envdir/rebuild.env"
 
-exec bash "$repo/hosts/rebuild-k8s.sh" "$envdir" "${extra[@]}"
+# With the seal key in memory, the run is a child, so the key's folder is removed when it ends; otherwise exec.
+if [[ -n $seal_tmp ]]; then
+  bash "$repo/hosts/rebuild-k8s.sh" "$envdir" "${extra[@]}"
+else
+  exec bash "$repo/hosts/rebuild-k8s.sh" "$envdir" "${extra[@]}"
+fi
