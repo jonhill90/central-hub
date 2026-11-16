@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNU91iAKVLo8uUHycWbJs6MY
   approval-names: "PR #14 and head a4f0582, in the message itself"
   check: the drafting agent read the message in the Standards system thread at 2026-10-22T02:52Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: PR #14 merged at 2026-10-22T02:53Z as c7ede15, with this evidence commit on top of the approved commit
+  merged: "PR #14 merged at 2026-10-22T02:53Z as c7ede15, with this evidence commit on top of the approved commit"
 revisit-when: "the same as D-0003, plus: the standards register moves out of this repo; or a second kind of standard needs its own family"
 ---
 

@@ -1,0 +1,8 @@
+---
+# Not a default: an inventory must not be able to override which VLANs stay off the tailnet.
+# The lab VLANs' ranges the connector advertises: every VLAN except one marked tailnet: false in the
+# VLAN file. The key is optional, and a test on a missing key fails the whole run, so the VLANs
+# without it and those with it true are listed apart.
+tailnet_connector_lab_cidrs: >-
+  {{ lab_vlans | rejectattr('tailnet', 'defined') | map(attribute='cidr') | list
+     + lab_vlans | selectattr('tailnet', 'defined') | selectattr('tailnet') | map(attribute='cidr') | list }}

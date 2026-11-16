@@ -10,7 +10,7 @@
 resource "tailscale_acl" "policy" {
   acl = templatefile("${path.module}/policy.hujson.tftpl", {
     proxmox_host_address = var.proxmox_host_address
-    lab_ranges           = [for v in yamldecode(file(var.vlans_file)).lab_vlans : v.cidr]
+    lab_ranges           = [for v in yamldecode(file(var.vlans_file)).lab_vlans : v.cidr if lookup(v, "tailnet", true)]
   })
 
   overwrite_existing_content = false

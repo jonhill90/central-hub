@@ -17,8 +17,8 @@
     # The mgmt /24's .1 (STD-0002: every lab /24's gateway is .1).
     tailnet_connector_gateway: >-
       {{ (lab_vlans | selectattr('name', 'equalto', tailnet_connector_mgmt_vlan) | first).cidr.split('/')[0].rsplit('.', 1)[0] }}.1
-    # The same list home/tailnet turns on: the extra routes plus every lab VLAN.
-    tailnet_connector_routes: "{{ (tailnet_connector_extra_routes + lab_vlans | map(attribute='cidr') | list) | unique | sort }}"
+    # The same list home/tailnet turns on: the extra routes plus every lab VLAN not marked tailnet: false.
+    tailnet_connector_routes: "{{ (tailnet_connector_extra_routes + tailnet_connector_lab_cidrs) | unique | sort }}"
 
 - name: IP forwarding is on in CT 900
   ansible.builtin.command: pct exec {{ tailnet_connector_vmid }} -- sysctl -n net.ipv4.ip_forward
