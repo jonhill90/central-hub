@@ -6,6 +6,12 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
+### Accepted with PR #395
+
+PR #395: approval facts are added by the next PR that edits this file (D-0006 step 6).
+
+- 2026-11-16 · D-0042 rule 2 and D-0056 rule 3, the sweep's file limit · the sweep refuses a PR of 3000 or more changed files, in place of 100 or more, because GitHub lists at most 3000 files for a PR and the sweep now reads every page; the built change (`pr-merge.sh`, `pr-merge-verdict.py`, the merge runbook) is in the same PR · the owner's acceptance of this PR's head, by tap
+
 ### Accepted with this PR
 
 This PR: the owner's tap on the card naming it and its head, which D-0042 rule 11 needs for this file, filled in after the merge (D-0006 step 6).
