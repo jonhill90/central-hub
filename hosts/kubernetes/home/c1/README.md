@@ -25,3 +25,4 @@ No private names go here (CLAUDE.md rule 4). The lab zone and the Gateway's addr
 | gateway | gateway | [move-gateway-to-argo-cd.md](../../../../docs/runbooks/move-gateway-to-argo-cd.md) | in git, not yet synced |
 | monitoring-extras (alerts, Argo CD scrape, dashboard) | monitoring | [check-c1-alerts-and-dashboard.md](../../../../docs/runbooks/check-c1-alerts-and-dashboard.md) | in git, new (nothing to take over) |
 | alerts (ntfy) | alerts | [get-c1-alerts-on-your-phone.md](../../../../docs/runbooks/get-c1-alerts-on-your-phone.md) | in git, new |
+| openbao-store, openbao (the secrets store, D-0058) | openbao | [set-up-the-secrets-store.md](../../../../docs/runbooks/set-up-the-secrets-store.md) | in git, new; made only where the root value `openbaoInCluster` is true (dev first), so c1 renders as before |

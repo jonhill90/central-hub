@@ -4,8 +4,11 @@ and its values files from this repository (Argo CD multiple sources, `ref: value
 `local: true`, the chart itself is in this repository at appsPath/<name>/.
 No resources finalizer: deleting a child Application leaves its objects on the cluster, which is the
 way back to Ansible for every component (spec, "Taking over a running component").
+An entry with `enabledBy` makes its Application only when that root value is true, so an app can
+run on dev's cluster first while c1, which leaves the value false, renders as before (D-0058).
 */ -}}
 {{- range $name, $app := .Values.apps }}
+{{- if or (not $app.enabledBy) (eq (toString (index $.Values $app.enabledBy)) "true") }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -81,4 +84,5 @@ spec:
       {{- with $app.syncOptions }}
       {{- toYaml . | nindent 6 }}
       {{- end }}
+{{- end }}
 {{- end }}
