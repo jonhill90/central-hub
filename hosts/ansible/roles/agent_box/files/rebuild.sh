@@ -162,8 +162,10 @@ fi
 # The secrets store inside the dev cluster (D-0058, dev first), switched on by the one-line file the agent_box role
 # writes (agent_box_openbao_in_cluster). The root chart then makes the apps openbao-store and openbao, with the seal
 # key's volume on the first k8s_workers host, and stage openbao-seal puts the key there first.
-# The box keeps the key only as its SOPS copy (D-0058 rules 3 and 9), encrypted to the box's own age identity, which
-# the agent_box role makes with the secrets bundle (agent_box_secrets_bundle); without that identity this refuses.
+# This wrapper keeps the key as its SOPS copy (D-0058 rules 3 and 9), encrypted to the box's own age identity,
+# which the agent_box role makes with the secrets bundle (agent_box_secrets_bundle); without that identity this refuses.
+# This run writes no plain copy to disk. A plain openbao-seal.key from the store VM's wrapper (secrets-store.sh), if
+# one exists, stays until it is removed, which is a delete and the owner's tap (D-0042 rule 6).
 # The copy is made here once, from the store VM's key file when one exists or else from 32 random bytes, and is never
 # replaced: a new key would make every snapshot unreadable. Each run decrypts it to a file in memory (/dev/shm) that
 # only this user can read and that is removed when the run ends. The keys folder is in the box's daily bundle, so the
@@ -179,6 +181,8 @@ if [[ -f $work/openbao-in-cluster && $(tr -d '[:space:]' < "$work/openbao-in-clu
   identity=$keys/secrets-bundle/age-identity.txt
   [[ -s $identity ]] || { echo "rebuild: $identity is missing; set agent_box_secrets_bundle and run the agent_box role, so the seal key can be kept as a SOPS copy" >&2; exit 1; }
   seal_sops=$store_keys/openbao-seal.key.sops.json
+  # A run killed outright (SIGKILL) leaves its folder; the run lock above means no other run's folder is live now.
+  find /dev/shm -maxdepth 1 -name 'rebuild-seal.*' -user "$(id -u)" -exec rm -rf -- {} +
   seal_tmp=$(mktemp -d /dev/shm/rebuild-seal.XXXXXX) || { echo "rebuild: no private folder in /dev/shm for the seal key" >&2; exit 1; }
   trap 'rm -rf -- "$seal_tmp"' EXIT
   trap 'exit 1' INT TERM HUP

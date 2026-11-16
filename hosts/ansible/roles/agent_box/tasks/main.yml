@@ -413,7 +413,7 @@
   when: agent_box_short_node | length == 0
   tags: [wrappers]
 
-# The rebuild wrapper keeps the store's seal key only as a SOPS copy, encrypted to the box's age identity, which the
+# The rebuild wrapper keeps the store's seal key as a SOPS copy, encrypted to the box's age identity, which the
 # secrets bundle's tasks make (D-0058 rules 3 and 9).
 - name: The secrets store inside the dev cluster needs the secrets bundle, for the box's age identity
   ansible.builtin.assert:
