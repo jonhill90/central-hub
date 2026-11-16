@@ -56,7 +56,7 @@ What limits it, each in one place:
 
    expect: the shared node's own SSH banner and host key. Use a key made for this node only, never forward the agent, and pin the node's host key in `known_hosts` the first time you check it with the other tailnet's admin. If the other side has not granted the tag yet, the connection hangs and then fails; that is the other tailnet's grant, not this side.
 
-7. Prove the limits. c1's pod network is Cilium, which enforces NetworkPolicy (`hosts/ansible/roles/k8s_control_plane/defaults/main.yml`); read that it does for this pod with `c1-read get ciliumendpoints -n share-pod -o yaml` (its policy status shows ingress and egress enforcement on). Then, from the agent box, `ssh -p 22 share-pod` and a connection to the shared node's address directly must both fail. Nothing here is reachable from the pod: the policy tests and the NetworkPolicy are the proof, since agents can't run commands in it.
+7. Prove the limits. Read the NetworkPolicy with `c1-read get networkpolicy -n share-pod -o yaml`: no ingress, egress to DNS and public addresses only. That it is enforced is not yet checkable by agents: c1's pod network is Cilium, which enforces NetworkPolicy (`hosts/ansible/roles/k8s_control_plane/defaults/main.yml`), but `c1-read` has no read on `cilium.io` kinds, and a live connection test needs a pod started with write access. Until a lane with that access runs it, or a follow-up adds the read to app `agent-read`, treat the egress limit as designed, not proven. From the agent box, `ssh -p 22 share-pod` and a connection to the shared node's address directly must both fail. Nothing here is reachable from the pod: the policy tests are the proof for the tailnet side.
 
 ## Rotate
 
