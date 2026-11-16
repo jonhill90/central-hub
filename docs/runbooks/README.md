@@ -63,6 +63,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Give lab apps short names under the zone](set-up-short-app-names.md) | automated | draft |
 | [Let agents run a new command without a permission block](allow-a-command-for-agents.md) | manual | draft |
 | [Give agents Proxmox rights for the whole lab](give-agents-proxmox-rights-for-the-whole-lab.md) | manual | draft |
+| [Reach the shared node through the share pod](reach-the-shared-node-through-the-share-pod.md) | manual | draft |
 
 ## Template
 

@@ -119,8 +119,32 @@ run "an_external_tailnet_gets_its_group_and_no_incoming_connections" {
   }
 
   assert {
-    condition     = strcontains(tailscale_acl.policy.acl, "\"allowExternalReferencesTo\": [\"group:example-admins\"]")
-    error_message = "The external tailnet may reference only its own group."
+    condition     = strcontains(tailscale_acl.policy.acl, "\"allowExternalReferencesTo\": [\"group:example-admins\", \"tag:share-pod\"]")
+    error_message = "The external tailnet may reference only its own group and the share pod's tag."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "{\"src\": [\"tag:agent-box\"], \"dst\": [\"tag:share-pod\"], \"ip\": [\"tcp:2222\"]}")
+    error_message = "The agent box must reach the share pod on tcp 2222 and nothing else."
+  }
+
+  assert {
+    condition     = !strcontains(tailscale_acl.policy.acl, "\"src\": [\"tag:share-pod\"]")
+    error_message = "The share pod must have no grant of its own: it reaches nothing in this tailnet."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"tag:share-pod\":      [\"autogroup:admin\"]")
+    error_message = "tag:share-pod must be owned by admins only."
+  }
+}
+
+run "no_external_tailnets_renders_no_share_pod" {
+  command = plan
+
+  assert {
+    condition     = !strcontains(tailscale_acl.policy.acl, "tag:share-pod")
+    error_message = "With no external tailnets, the policy must not mention the share pod."
   }
 }
 

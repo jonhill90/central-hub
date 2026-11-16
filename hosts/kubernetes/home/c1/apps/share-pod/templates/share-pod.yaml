@@ -1,0 +1,138 @@
+{{- /*
+The share pod. No ServiceAccount token is mounted, so the pod can't call the Kubernetes API; the
+root filesystem is read-only; the tailnet state is in memory, so nothing about the pod survives it.
+Without a target there is nothing to forward to, so nothing renders.
+*/ -}}
+{{- if .Values.target }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Release.Namespace }}
+automountServiceAccountToken: false
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .Values.name }}-authkey
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.authKey.store }}
+  target:
+    name: {{ .Values.name }}-authkey
+    creationPolicy: Owner
+  data:
+    - secretKey: TS_AUTHKEY
+      remoteRef: {key: {{ .Values.authKey.source }}, property: value}
+---
+# What the pod forwards: the pod's own port to the shared node's port, as raw TCP, so the agent's
+# SSH key and host-key check stay end to end between the agent and the shared node.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-serve
+  namespace: {{ .Release.Namespace }}
+data:
+  serve.json: |
+    {"TCP": {{ printf "{%q: {\"TCPForward\": %q}}" (toString .Values.listenPort) .Values.target }}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.name }}
+    spec:
+      serviceAccountName: {{ .Values.name }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.uid }}
+        runAsGroup: {{ .Values.uid }}
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: tailscale
+          image: {{ .Values.image }}
+          env:
+            - name: TS_USERSPACE
+              value: "true"
+            - name: TS_HOSTNAME
+              value: {{ .Values.name }}
+            - name: TS_EXTRA_ARGS
+              value: --advertise-tags=tag:share-pod
+            - name: TS_STATE_DIR
+              value: /state
+            - name: TS_SERVE_CONFIG
+              value: /serve/serve.json
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.name }}-authkey
+                  key: TS_AUTHKEY
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - {name: state, mountPath: /state}
+            - {name: serve, mountPath: /serve, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: state
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 16Mi}
+        - name: serve
+          configMap: {name: {{ .Values.name }}-serve}
+---
+# The pod takes nothing in from the cluster and sends out only DNS and public addresses: the lab's
+# private ranges are excepted, so a hijacked pod has no path to a lab address.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]
+{{- end }}

@@ -20,6 +20,10 @@ localPathStableFolders: false
 openbaoAddress: ""
 openbaoCaBundle: ""
 
+# The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
+# (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
+shareTarget: ""
+
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
 targetRevision: main
@@ -192,6 +196,16 @@ apps:
         name: agent-read-token
         namespace: agent-read
         jsonPointers: [/data]
+    autoSync: true
+    prune: false
+  # A small pod with its own tailnet identity (tag:share-pod) that forwards one port to a node another
+  # tailnet shares in. It holds no lab secret and no Kubernetes credential
+  # (docs/runbooks/reach-the-shared-vps-through-the-share-pod.md).
+  share-pod:
+    namespace: share-pod
+    local: true
+    rootParameters:
+      target: shareTarget
     autoSync: true
     prune: false
   # Certificates (spec step 6): cert-manager itself. The issuers and the Gateway's certificate stay

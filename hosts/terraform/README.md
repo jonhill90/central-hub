@@ -130,6 +130,7 @@ Another tailnet can share its own devices into this one with Tailscale's declara
 
 - **Values:** `external_tailnets` in `home.tfvars`, never in this repository: a local alias, the other tailnet's ID, the group's name and its members' logins. `home.tfvars.example` shows the shape with made-up values. Empty, the default, renders the policy byte for byte as it is without the setting.
 - **One way only:** the template writes `"allowIncomingConnections": false` itself, so no value lets an external tailnet reach a device here. A test checks it.
+- **The share pod:** with any entry set, the policy also owns `tag:share-pod`, lists it in `allowExternalReferencesTo` beside the group, lets `tag:agent-box` reach it on tcp 2222 only, and tests that the pod reaches nothing here ([the runbook](../../docs/runbooks/reach-the-shared-node-through-the-share-pod.md)).
 - **Limits checked before a plan:** at most three entries, an ID of letters and digits, a bare group name with at least one member, and one group per entry.
 - **Before the first apply:** the feature preview must be on: the admin console's General page, Feature previews, Declarative Node Sharing, "Manage in policy" [source: the page above]. The tailnet's own ID, which the other tailnet's admin needs, is on the General page under Unique IDs [source: the page above].
 
