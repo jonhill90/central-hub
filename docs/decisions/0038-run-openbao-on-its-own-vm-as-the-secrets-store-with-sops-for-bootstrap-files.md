@@ -28,7 +28,7 @@ The lab has no secrets store. Its secrets sit in files: the private files on the
 
 The owner's words that lead here:
 
-- 2026-10-15 01:58 UTC (project decisions inbox, row 81), yes to the secrets layer shape (research batch RB-0012, its question 1): no secret values and no ciphertext in the public repository; ESO as the layer in the middle, apps reading plain Kubernetes Secrets; root keys in his password manager plus an offline copy; OpenBao later.
+- 2026-10-15 01:58 UTC (project decisions inbox, row 81), yes to the secrets layer shape (research batch RB-0012, its question 1): no secret values and no ciphertext in the public repository; ESO as the layer in the middle, apps reading plain Kubernetes Secrets; root keys in their password manager plus an offline copy; OpenBao later.
 - 2026-10-22 04:47 UTC (inbox row 232), card: machine addresses are blanks filled at apply time from GitHub secrets or the secret store; no new repository and no SOPS for them.
 - 2026-10-27 03:45 UTC (inbox row 360): the long-term home for provider tokens is "sops or openbao".
 - 2026-11-09 03:54 UTC (inbox row 431): agents make every password now, and all of them are rotated once OpenBao or SOPS exists.
@@ -73,7 +73,7 @@ What SOPS does:
 
 Chosen: **option 2 with seal A and SOPS S1.** Each of the three is **the owner's pick**: option 1 with seal A and SOPS S1 on a card, then option 2 in place of option 1 on 2026-11-16 (D-0058). The rest are agent picks.
 
-Option 2 can't hold c1's own rebuild secrets and must be restored before anything on c1 can start, so those secrets stay in SOPS (rule 11) and each c1 rebuild restores the store first (rule 13; D-0058 keeps the reasons for the move). Option 3 adds a second store with no need for one yet. Seal B adds a paid cloud resource (D-0033 rule 5 puts any new billable Azure resource before the owner) and still needs a credential where the store runs to reach it. Seal C is the stronger route but runs through a plugin and the host's TPM state, so it is the exit path rather than the start. Seal D needs a person at every start, which the end goal rules out. S2 leaves no copy of the bootstrap files off the Mac and the box, and the box's copy in plain text. S3 needs a new repository, which the owner's card of 2026-10-22 declined, or ciphertext in the public repository, which his yes of 2026-10-15 ruled out. His card of 2026-10-22 also said no SOPS, for machine addresses in the repository; S1 keeps them out of every repository, and his words of 2026-11-14 05:13 UTC, "pretty sure SOPs as well", bring SOPS back for this job.
+Option 2 can't hold c1's own rebuild secrets and must be restored before anything on c1 can start, so those secrets stay in SOPS (rule 11) and each c1 rebuild restores the store first (rule 13; D-0058 keeps the reasons for the move). Option 3 adds a second store with no need for one yet. Seal B adds a paid cloud resource (D-0033 rule 5 puts any new billable Azure resource before the owner) and still needs a credential where the store runs to reach it. Seal C is the stronger route but runs through a plugin and the host's TPM state, so it is the exit path rather than the start. Seal D needs a person at every start, which the end goal rules out. S2 leaves no copy of the bootstrap files off the Mac and the box, and the box's copy in plain text. S3 needs a new repository, which the owner's card of 2026-10-22 declined, or ciphertext in the public repository, which their yes of 2026-10-15 ruled out. Their card of 2026-10-22 also said no SOPS, for machine addresses in the repository; S1 keeps them out of every repository, and their words of 2026-11-14 05:13 UTC, "pretty sure SOPs as well", bring SOPS back for this job.
 
 ### Rules
 
@@ -97,7 +97,7 @@ Option 2 can't hold c1's own rebuild secrets and must be restored before anythin
 
 ### Not decided here
 
-- **Where prod's recovery shares would live**, if the owner wants them. Until he picks, prod has none (rule 5).
+- **Where prod's recovery shares would live**, if the owner wants them. Until they pick, prod has none (rule 5).
 - **Rotating the seal key** with no recovery shares: OpenBao issue #3996 reports that rotating a static key fails at the next restart when no recovery key exists, with a workaround in the issue thread (evidence, finding 26). It is proved on dev before any prod rotation.
 - **Rotation** of every secret agents made or saw (TASK-0247). It follows once the store runs, as its own change.
 - **Moving c1's ExternalSecrets** from store `c1` to OpenBao. That is a later PR per app, after the dev measurements.
@@ -180,7 +180,7 @@ On dev, from the agent box, with the logs named in the card for prod. They wait 
 
 ### SOPS S3, encrypted files in a repository
 
-- Bad: a new repository was declined by the owner's card of 2026-10-22, and ciphertext in the public repository by his yes of 2026-10-15; key names stay in clear text.
+- Bad: a new repository was declined by the owner's card of 2026-10-22, and ciphertext in the public repository by their yes of 2026-10-15; key names stay in clear text.
 
 ## More Information
 
