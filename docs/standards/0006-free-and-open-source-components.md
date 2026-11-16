@@ -13,8 +13,8 @@ accepted-evidence:
   approved-commit: 669c7fc1c7a35699066c621402e546ca6e3bed24
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNBs2MstPeufRMzK1m6UU6FK
   approval-names: "PR #277 and head 669c7fc, accepting STD-0006 with Tailscale kept per the owner's 2026-11-10 card, in the message itself"
-  check: the Plan thread read the message in the orchestrator thread on 2026-11-14 at 06:31 UTC; it names PR #277 and head 669c7fc itself. A reviewing agent checks it again on this PR.
-  merged: PR #277 merged at 2026-11-14T06:31:19Z as 3f795d90d139425c6b1e3c72cb9f4c29c4b22923
+  check: "the Plan thread read the message in the orchestrator thread on 2026-11-14 at 06:31 UTC; it names PR #277 and head 669c7fc itself. A reviewing agent checks it again on this PR."
+  merged: "PR #277 merged at 2026-11-14T06:31:19Z as 3f795d90d139425c6b1e3c72cb9f4c29c4b22923"
 ---
 
 # STD-0006: Use only free and open-source components, with no open core
