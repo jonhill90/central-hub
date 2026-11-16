@@ -22,3 +22,7 @@ API token
 (?i)sweep
 (?i)merge sweep
 (?i)halt flag
+(?i)grant
+(?i)tag
+(?i)pod
+(?i)sshd
