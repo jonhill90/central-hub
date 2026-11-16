@@ -27,6 +27,7 @@ R=jonhill90/central-hub/.github/workflows
 out=$(run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatch); check "a listed workflow with its listed hash runs" "$out" "rc=0"
 out=$(run "$R/lab-redeploy-dev.yml@refs/heads/main" workflow_dispatch); check "the other listed workflow runs" "$out" "rc=0"
 out=$(run "$R/lab-tailnet-policy.yml@refs/heads/main" workflow_dispatch); check "the tailnet policy job (D-0046) runs" "$out" "rc=0"
+out=$(run "$R/lab-vps-host.yml@refs/heads/main" workflow_dispatch); check "the VPS host job (D-0046) runs" "$out" "rc=0"
 out=$(FAKE_TAMPER=1 run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatch); check "a file whose hash is not listed is refused" "$out" "is not the file whose hash is listed"
 out=$(FAKE_FETCH_FAIL=1 run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatch); check "a fetch that fails is refused (fail closed)" "$out" "could not fetch"
 sed 's|^retired=($|retired=(\n  ".github/workflows/old.yml"|' "$hook" > "$t/ret.sh"
@@ -40,7 +41,7 @@ out=$(SHA_OVERRIDE=abc run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatc
 sed 's|^\[\[ \$got == "\$want" \]\] .*|true|' "$hook" > "$t/mut.sh"
 out=$(HOOK="$t/mut.sh" FAKE_TAMPER=1 run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatch); check "mutation: without the compare a tampered file runs" "$out" "rc=0"
 # The CI check against a scratch tree.
-mk() { rm -rf "$t/tree"; mkdir -p "$t/tree/.github/workflows" "$t/tree/hosts/ansible/roles/agent_box/files"; cp "$hook" "$t/tree/hosts/ansible/roles/agent_box/files/"; cp "$root"/.github/workflows/lab-tailnet.yml "$root"/.github/workflows/lab-redeploy-dev.yml "$root"/.github/workflows/lab-proxmox-host.yml "$root"/.github/workflows/lab-tailnet-policy.yml "$t/tree/.github/workflows/"; }
+mk() { rm -rf "$t/tree"; mkdir -p "$t/tree/.github/workflows" "$t/tree/hosts/ansible/roles/agent_box/files"; cp "$hook" "$t/tree/hosts/ansible/roles/agent_box/files/"; cp "$root"/.github/workflows/lab-tailnet.yml "$root"/.github/workflows/lab-redeploy-dev.yml "$root"/.github/workflows/lab-proxmox-host.yml "$root"/.github/workflows/lab-tailnet-policy.yml "$root"/.github/workflows/lab-vps-host.yml "$t/tree/.github/workflows/"; }
 ck() { python3 -I "$root/.github/hosts-check/check-hook-allowlist.py" "$t/tree" 2>&1; echo "rc=$?"; }
 mk; out=$(ck); check "the check passes on the repository's own state" "$out" "rc=0"
 mk; sed -i 's|^retired=($|retired=(\n  ".github/workflows/gone.yml"|' "$t/tree/hosts/ansible/roles/agent_box/files/runner-job-started.sh"; out=$(ck); check "a retired entry whose file is gone fails" "$out" "retired list but the file is gone"
