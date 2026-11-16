@@ -10,7 +10,8 @@ sealNode: ""
 # the admin AppRole's two IDs, which it removes once OpenBao has initialized (D-0038 rule 6). The
 # folder is outside what c1's nightly backup copies (role k8s_backup copies only
 # /var/lib/c1-data/local-path, where OpenBao's data volume is, and /var/lib/central-hub/identity-postgres),
-# so the backup never holds the key with the data (D-0038 rule 4).
+# so c1's nightly backup never holds the key with the data (D-0038 rule 4). Proxmox's nightly backup
+# of the node VMs does hold both (D-0058, Consequences).
 sealPath: /var/lib/central-hub/openbao-seal
 sealSize: 1Mi
 # Which kv/<env>/snapshot-mark the snapshot login may read (DESIGN section 6): dev today.
