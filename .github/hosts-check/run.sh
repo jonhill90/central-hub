@@ -208,7 +208,7 @@ check_manifests() {
 
 check_identity() {
   # Realm lab imported into a real Keycloak in a container (identity/test_realm.sh), rendered with
-  # an extra user so the users loop is tested with more than the owner, a Proxmox client (role proxmox_sso), a secrets store client (role openbao), and with the test sign-in
+  # an extra user so the users loop is tested with more than the owner, a Proxmox client (role proxmox_sso), a secrets store client (k8s_identity_openbao_hosts), and with the test sign-in
   # theme identity/theme/lab mounted the way the role mounts k8s_identity_theme_dir.
   collections
   mkdir -p "$work/identity"
@@ -234,8 +234,6 @@ check_backup() {
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
   bash "$here/tests/test_identity_signin.sh"
-  bash "$here/tests/test_openbao_oidc_check.sh"
-  bash "$here/tests/test_openbao_drill.sh"
   bash "$here/tests/test_rebuild_dev_stages.sh"
   bash "$here/tests/test_rebuild_preflight.sh"
   bash "$here/tests/test_rebuild_short_log.sh"

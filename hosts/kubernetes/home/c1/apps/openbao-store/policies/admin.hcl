@@ -1,5 +1,5 @@
-# admin: the agent box's secrets-store wrapper only (D-0038 rule 6), the same paths as the VM role's
-# policy-admin.hcl.j2 (hosts/ansible/roles/openbao/templates/), which goes away with the VM (D-0058).
+# admin: the agent box's secrets-store wrapper only (D-0038 rule 6), the same paths as the earlier VM
+# role's policy-admin.hcl.j2, removed with the VM code (D-0058; git history).
 # It manages the store's contents, mounts, logins and policies, takes and restores snapshots and
 # makes recovery keys. It reads the Raft peers, leader and term, which the restore drill compares
 # before and after. Because it can write any policy and any login, it can grant itself anything:

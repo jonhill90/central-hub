@@ -2,7 +2,8 @@
 # Register the cluster's service-account signing key with the secrets store (proposed D-0038), the
 # rebuild's `openbao` stage (hosts/rebuild-k8s.sh). A rebuilt cluster signs its tokens with a new
 # key, so External Secrets' sign-in at the store's jwt-c1 login fails until this runs. The store side
-# (the login, its role, the AppRole rebuild) is the openbao role's: docs/runbooks/set-up-the-secrets-store.md.
+# (the login, its role, the AppRole rebuild) was the store VM's role, removed with the VM code (D-0058 rule 5
+# ends the jwt-c1 login; this play stays until the dev rebuild stops calling it).
 # Inputs, from rebuild.env through -e: openbao_url (https://<store>), openbao_cacert (the store's
 # certificate on the controller), openbao_rebuild_role_id_file and openbao_rebuild_secret_id_file
 # (the AppRole rebuild's IDs on the controller). The secret ID is never printed.

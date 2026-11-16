@@ -49,7 +49,7 @@ argument_specs:
         type: list
         elements: str
         default: []
-        description: "The secrets store's web page names, for client openbao (Ansible role openbao, the owner's sign-in). Empty: no client. Private."
+        description: "The secrets store's web page names, for client openbao (the owner's sign-in, agent pick 233). Empty: no client. Private."
       k8s_identity_oidc_handoff_file:
         type: str
         default: ""
