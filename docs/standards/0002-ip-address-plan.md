@@ -14,7 +14,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNV1uvM92X9ekDHTkxTf1hLf
   approval-names: "PR #17 and head 5196b18, in the message itself"
   check: the drafting agent read the message in the IP address plan thread at 2026-10-22T07:12Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: PR #17, commit e87667b
+  merged: "PR #17, commit e87667b"
 ---
 
 # STD-0002: IP address plan

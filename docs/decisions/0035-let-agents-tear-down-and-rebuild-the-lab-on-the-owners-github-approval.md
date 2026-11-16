@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: 0805b475c00e0bbae4883f590e76201d8c65ab04
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN9eqigkaMKon5tdUcjXyopf
   approval-names: "PR #256 and head 0805b47, in the message itself"
-  check: the drafting agent read the message in the project thread; it reads "accept and merge central-hub #256 at 0805b47", and that head holds this record. A reviewing agent checks it before the merge
-  merged: PR #256 squash-merged at head 0805b475 as e0eed2b7
+  check: "the drafting agent read the message in the project thread; it reads \"accept and merge central-hub #256 at 0805b47\", and that head holds this record. A reviewing agent checks it before the merge"
+  merged: "PR #256 squash-merged at head 0805b475 as e0eed2b7"
 revisit-when: a production run starts without a card tap that names it, or before the same change passed on dev; a run touches VM 258, CT 259 or the VPS node; the Proxmox token's rights grow beyond the lab's guests and configuration; a run passes a precondition it should have failed; a tap is disowned after a run it approved; the agents get a GitHub account of their own (D-0030) and GitHub can require the owner's approval for every run
 ---
 

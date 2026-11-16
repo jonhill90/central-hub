@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: 1c4bc0505bfb6b746ed5d4a111842a3160655099
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN24R63uS9wHRg7gQH9GknEB
   approval-names: "PR #171 and head 1c4bc0505bfb6b746ed5d4a111842a3160655099"
-  check: the drafting agent read the message in its project thread at 2026-11-11T03:18Z; it names PR #171 and that full head, which was still the PR head at the time. An independent check by a reviewing agent is still to do
-  merged: Lane C squash-merged PR #171 pinned to that head at 2026-11-11T03:18:54Z as 1860af0; the record was first accepted on 2026-11-05 with PR #55 (CORRECTIONS.md)
+  check: "the drafting agent read the message in its project thread at 2026-11-11T03:18Z; it names PR #171 and that full head, which was still the PR head at the time. An independent check by a reviewing agent is still to do"
+  merged: "Lane C squash-merged PR #171 pinned to that head at 2026-11-11T03:18:54Z as 1860af0; the record was first accepted on 2026-11-05 with PR #55 (CORRECTIONS.md)"
 revisit-when: the agent notebook is retired and its knowledge moves; a document fits neither store; docs/explanations/ needs material that cannot be public; the organization standard reaches a new major version; or the decision records are refactored as a set
 ---
 
