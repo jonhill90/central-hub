@@ -41,6 +41,8 @@ def pull(chart, dest):
     pinned = None if oci else chart.get("sha256")
     tgz = folder / f"{chart['name']}-{chart['version']}.tgz"
     if pinned and not tgz.exists():
+        # helm pull --destination needs the folder; a cache folder for a new chart does not exist yet.
+        folder.mkdir(parents=True, exist_ok=True)
         for attempt in range(5):
             try:
                 run([*args, "--destination", str(folder)])
