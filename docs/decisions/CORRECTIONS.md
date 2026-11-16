@@ -6,6 +6,12 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
+### Accepted with this PR
+
+This PR: the owner's tap on the card naming it and its head, which D-0042 rule 11 needs for this file, filled in after the merge (D-0006 step 6).
+
+- 2026-11-16 · D-0042 rule 6, deletes; runbook `set-up-the-secrets-store.md`, Rebuild and restore · a teardown of dev's c1, which wipes the dev secrets store inside it, is not a store `destroy` and needs no tap; a `restore` of the store keeps the tap on dev and prod, and a `destroy` of the production store, which a teardown of prod's c1 counts as, keeps it · the owner's choice of option 1, "Tap only for the restore", on the card of 2026-11-16T06:19:08Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNVwRDuneWWaTJsfAyQHM15G; choice cmsg_01X43rfNYp4H1dL1V2dkfkwNFqCQUJw1fryzKmmNNuNJRE, 06:20:52Z)
+
 ### Accepted with PR #171
 
 PR #171: approved 2026-11-11T03:18:16Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN24R63uS9wHRg7gQH9GknEB), head 1c4bc05; merged as 1860af0.
@@ -217,3 +223,5 @@ A folded decision number has no file and no row in the index until the next new 
 - 2026-11-16 · this file · the approval facts and merge commit of PRs #372 and #381 added to their lines (D-0006 step 6), and the two lines above · PR #386: approved 2026-11-16T05:26:00Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN1Ujj13LioTC7gt9dQg4Hud), head bd85cbd; merged as 5e4d05f
 - 2026-11-16 · D-0038 Context, Decision Outcome, Not decided here and the pros and cons of SOPS S3 · six agent-written mentions of the owner, on four lines, use they and their in place of he and his; quotes and `accepted-evidence` are unchanged (D-0006 step 7) · this PR
 - 2026-11-16 · this file · the approval facts and merge commit of PR #386 added to its three lines (D-0006 step 6) · this PR
+- 2026-11-16 · D-0042 rule 5 · the dev and production secrets stores are named as they run after D-0058: the dev store in namespace `openbao` of dev's c1 and the production store in prod's c1, in place of VMs 550 to 599 and VM 500 (D-0058 rule 2; D-0006) · this PR
+- 2026-11-16 · D-0042 front matter · `accepted-evidence.merged` is quoted, so YAML loads its whole line and not only the text before " #293"; this follows the three quoting batches (#375, #377, #378) · this PR

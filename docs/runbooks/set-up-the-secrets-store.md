@@ -132,7 +132,7 @@ superseded-by:
 
 ## Rebuild and restore (D-0038 Confirmation 5)
 
-Pick 238. **The owner's tap first:** a `destroy` or `restore` of the secrets store is a delete under D-0042 rule 6, on dev too, so this sequence runs only after the owner taps the card that names it and its commit. No other person takes any step.
+Pick 238. **The owner's tap first:** a `restore` of the secrets store is a delete under D-0042 rule 6, on dev too, so this sequence runs only after the owner taps the card that names it and its commit. On dev, the `destroy` step on its own needs no tap; on prod it is a delete too (D-0042 rule 6). No other person takes any step.
 
 1. `secrets-store snapshot`. It writes `kv/dev/snapshot-mark` with its time, then saves the snapshot and its `.cluster` file.
 2. `secrets-store destroy`. Before it removes the VM, it writes the hold `/var/lib/agent-box/state/secrets-store.rebuilding`.
