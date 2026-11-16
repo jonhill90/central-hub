@@ -64,7 +64,7 @@ Chosen option: **1**. It needs no workflow start and no new GitHub right, and th
 
 - Good: merges need no Mac step and no session safety check.
 - Good: the sweep merges only what passed, and shows its basis on the PR.
-- Bad: **an agent can write a ledger line for a pass that was never given** (rule 2). Compensating controls: the PR's comment lists every line for the owner to check against the chat, the orchestrator lists every merge (D-0042 rule 9), the files that guard the merge itself need their tap, and their no wins (rule 8 of D-0042).
+- Bad: **an agent can write a ledger line for a pass that was never given** (rule 2). Compensating controls: the PR's comment lists every line for the owner to check against the chat, the orchestrator lists every merge (D-0042 rule 9), the files that guard the merge itself need the owner's tap, and the owner's no wins (rule 8 of D-0042).
 - Bad: any session can run `halt` under one of those recorder names, and the check on `resume` is only a name. The owner's stop is the timer.
 - Bad: green checks come from the PR's own copy of the workflows. The reviewer reads those edits, and the sweep's output says when a PR changes files under `.github/`.
 

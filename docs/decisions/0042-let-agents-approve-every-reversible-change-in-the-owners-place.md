@@ -49,7 +49,7 @@ Since that morning, every plan, record and done-claim already passes a reviewer 
 The owner's words, above, decide only this much:
 
 - PRs no longer go to them for approval;
-- the things their earlier standing rules gave them still need them; at 07:43:25 UTC they pointed to those rules without listing them. Which things they are is the agents' reading: firewall and tailnet changes (D-0036 rule 8 keeps them behind the owner's words), and deletes and secrets [agent pick: the agents' reading of the owner's earlier rules, with no record of their own];
+- the things the owner's earlier standing rules gave them still need the owner; at 07:43:25 UTC the owner pointed to those rules without listing them. Which things they are is the agents' reading: firewall and tailnet changes (D-0036 rule 8 keeps them behind the owner's words), and deletes and secrets [agent pick: the agents' reading of the owner's earlier rules, with no record of their own];
 - the lab is greenfield, so agents finish it;
 - this covers the lab, for now, during its greenfield build-out, not every PR (07:44:46 UTC).
 
@@ -73,7 +73,7 @@ The owner's messages are a change of mind (REQ-0030). They reverse REQ-0009 (the
 
 ## Decision Outcome
 
-Chosen option: **1**, because the owner ended their own approval of the lab's build-out, and option 2 would leave them a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules they pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8, deletes and secrets as agent picks. The rest of rule 6 (money, the box's limits, access rights), where in each step the tap falls, and rule 7, are agent picks.
+Chosen option: **1**, because the owner ended their own approval of the lab's build-out, and option 2 would leave them a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules the owner pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8, deletes and secrets as agent picks. The rest of rule 6 (money, the box's limits, access rights), where in each step the tap falls, and rule 7, are agent picks.
 
 ```mermaid
 flowchart LR
@@ -125,7 +125,7 @@ flowchart LR
    - **secrets:** exposing a secret, copying secrets onto the agent box, or rotating the owner's own credentials;
    - **access rights:** [agent pick] a new credential for agents, or wider rights for an existing one, such as the agents' Proxmox token;
    - **money:** [agent pick, from the owner's rule of 2026-11-09 against unexpected Azure charges] anything that starts a charge;
-   - **the box's limits:** [agent pick, rule 4] a change to a limit of the agent box (D-0036 rule 3). The tap replaces the typed line D-0036 rule 6 asked for, because the owner's message of 07:47:50 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV) said they would no longer type go lines (that this is for the greenfield build-out is the agents' reading of their message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change); the tap as their replacement is this agent pick.
+   - **the box's limits:** [agent pick, rule 4] a change to a limit of the agent box (D-0036 rule 3). The tap replaces the typed line D-0036 rule 6 asked for, because the owner's message of 07:47:50 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV) said they would no longer type go lines (that this is for the greenfield build-out is the agents' reading of the owner's message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change); the tap as their replacement is this agent pick.
 7. **What stays with the owner by choice.** [agent pick] Scanning their own sign-in code into their authenticator, the settings of their own claude.ai and GitHub accounts, and the Proxmox console when everything else is down (D-0035 rule 9).
 8. **The owner's no.** A message from the owner that says no, stop or revert about a change wins at once. Agents stop starting jobs for it, and open a revert PR or run the layer's way back. A revert goes through the same pass and job.
 9. **Logs.** The sweep's comment on a merged PR is public on GitHub, so it holds only the PR, the head and the ledger's lines (roles, relay ids and times). The orchestrator lists every merge and apply made under this record in its next report to the owner.
