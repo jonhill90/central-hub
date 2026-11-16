@@ -40,7 +40,7 @@ out=$(SHA_OVERRIDE=abc run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatc
 sed 's|^\[\[ \$got == "\$want" \]\] .*|true|' "$hook" > "$t/mut.sh"
 out=$(HOOK="$t/mut.sh" FAKE_TAMPER=1 run "$R/lab-tailnet.yml@refs/heads/main" workflow_dispatch); check "mutation: without the compare a tampered file runs" "$out" "rc=0"
 # The CI check against a scratch tree.
-mk() { rm -rf "$t/tree"; mkdir -p "$t/tree/.github/workflows" "$t/tree/hosts/ansible/roles/agent_box/files"; cp "$hook" "$t/tree/hosts/ansible/roles/agent_box/files/"; cp "$root"/.github/workflows/lab-tailnet.yml "$root"/.github/workflows/lab-redeploy-dev.yml "$root"/.github/workflows/merge.yml "$root"/.github/workflows/lab-tailnet-policy.yml "$root"/.github/workflows/lab-vps-host.yml "$t/tree/.github/workflows/"; }
+mk() { rm -rf "$t/tree"; mkdir -p "$t/tree/.github/workflows" "$t/tree/hosts/ansible/roles/agent_box/files"; cp "$hook" "$t/tree/hosts/ansible/roles/agent_box/files/"; cp "$root"/.github/workflows/lab-tailnet.yml "$root"/.github/workflows/lab-redeploy-dev.yml "$root"/.github/workflows/lab-proxmox-host.yml "$root"/.github/workflows/merge.yml "$root"/.github/workflows/lab-tailnet-policy.yml "$root"/.github/workflows/lab-vps-host.yml "$t/tree/.github/workflows/"; }
 ck() { python3 -I "$root/.github/hosts-check/check-hook-allowlist.py" "$t/tree" 2>&1; echo "rc=$?"; }
 mk; out=$(ck); check "the check passes on the repository's own state" "$out" "rc=0"
 mk; sed -i '/^retired=(/,/^)/{/merge.yml/d}' "$t/tree/hosts/ansible/roles/agent_box/files/runner-job-started.sh"; out=$(ck); check "a box workflow in neither list fails" "$out" "merge.yml runs on the box but is not in the hook's list"

@@ -81,6 +81,9 @@ d = fx(DOC, pr_over={"mergeable_state": "dirty"});         check("a conflict is 
 d = fx(DOC, checks={"total_count": 1, "check_runs": [{"name": "hosts", "status": "completed", "conclusion": "failure"}]}); check("a failed check is not green", run(d), "NOT GREEN: check hosts: failure")
 d = fx(DOC, checks={"total_count": 0, "check_runs": []});  check("no check run is not green", run(d), "NOT GREEN: no checks reported")
 d = fx([".github/workflows/docs.yml"]);                    check("an edit under .github/ is green with a NOTE", subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout.replace("NOTE: verdict v2\n", "", 1), "NOTE: this PR edits 1 files under .github/")
+d = fx(["hosts/ansible/roles/proxmox_proxy/tasks/main.yml"]);  check("an edit to the host job's role is green with a NOTE", subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout.replace("NOTE: verdict v2\n", "", 1), "NOTE: this PR edits what the Proxmox host job runs")
+d = fx(["hosts/ansible/playbooks/proxmox-proxy.yml"]);           check("an edit to the host job's playbook is green with a NOTE", subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout.replace("NOTE: verdict v2\n", "", 1), "NOTE: this PR edits what the Proxmox host job runs")
+d = fx(["hosts/ansible/roles/proxmox_proxy/tasks/main.yml"]);  check("the host job's role still merges GREEN", run(d), "GREEN")
 import ast
 def fsrc(path, names):
     t = ast.parse(open(path).read())

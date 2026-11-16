@@ -40,8 +40,13 @@ dir {{ agent_box_keys_dir }}
 dir {{ agent_box_work_dir }}
 dir /etc/box-apply
 dir /var/lib/box-apply
+dir {{ agent_box_host_dir }}
+dir {{ agent_box_host_work_dir }}
+box {{ agent_box_host_dir }}/inventory/hosts.yml
+box {{ agent_box_host_dir }}/known_hosts
 user {{ agent_box_user }}
 user {{ agent_box_keys_user }}
+user {{ agent_box_host_user }}
 {% if agent_box_runner_user | length > 0 %}
 user {{ agent_box_runner_user }}
 {% endif %}
