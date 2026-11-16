@@ -35,7 +35,7 @@ Two raw runs wait on this now:
 
 ## Decision Drivers
 
-- **The owner's messages.** Their message of 2026-11-14 07:47 UTC said they would no longer type go lines (that this is for the greenfield build-out is the agents' reading of their message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and their messages of 07:42 to 07:44 UTC said PRs should no longer come to them for approval. The card tap and the agents' pass that replace them are agent picks (D-0042).
+- **The owner's messages.** Their message of 2026-11-14 07:47 UTC said they would no longer type go lines (that this is for the greenfield build-out is the agents' reading of the owner's message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and their messages of 07:42 to 07:44 UTC said PRs should no longer come to them for approval. The card tap and the agents' pass that replace them are agent picks (D-0042).
 - **The owner keeps their approval of every raw run.** This record changes how they say yes, not whether they are asked (D-0034, "What decides stays with the owner").
 - **Exactness.** A typed line is trusted because it names one command. A card can name the same command and the commit it runs from (D-0034 rules 1 and 5).
 - **The same step D-0042 already took for the box's limits** (D-0042 rule 4), so one form of approval covers both.
