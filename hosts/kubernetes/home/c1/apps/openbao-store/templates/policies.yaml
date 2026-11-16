@@ -1,6 +1,6 @@
 # The policy files OpenBao's first start reads (self-init, apps/openbao/values.yaml), mounted
-# read-only at /openbao/userconfig/openbao-policies/. Later changes go through the agent box's
-# `secrets-store configure`, since self-init runs only once.
+# read-only at /openbao/userconfig/openbao-policies/. Self-init runs only once, so a later change
+# goes through the agent box's admin login.
 apiVersion: v1
 kind: ConfigMap
 metadata:

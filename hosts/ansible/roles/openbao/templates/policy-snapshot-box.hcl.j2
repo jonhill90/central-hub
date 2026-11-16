@@ -1,4 +1,0 @@
-# snapshot-box: the agent box's hourly snapshot pull (D-0038 rule 8, agent pick 240). It takes a snapshot and
-# writes the one non-secret key that marks it; a restore needs update on the snapshot path, which it lacks.
-path "sys/storage/raft/snapshot" { capabilities = ["read"] }
-path "kv/data/{{ openbao_mark_env }}/snapshot-mark" { capabilities = ["create", "update"] }
