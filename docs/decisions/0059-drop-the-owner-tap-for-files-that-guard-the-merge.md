@@ -20,7 +20,7 @@ D-0042 rule 11 and D-0056 rule 4 make the merge sweep hold back any PR that chan
 
 In practice, the rule sent the owner cards for changes that only touched wording, and for a defaults key that stays off until a later card (#401, #407).
 
-At 03:44:14 UTC on 2026-11-17 an agent listed for the owner the steps agents had made up (cmsg_01X43rfNYp4H1dL1V2dkfkwNHKeS2oQYGdDzbxuBx6crRt); its item 4 names the RULE11 list of guarded files. The owner's message of 03:51:09 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNiA9TRkEc5idx6DPuFfDEv) answered that list: drop those steps, because the owner never asked for them. The owner's earlier standing rules keep one tap each for:
+On 2026-11-17 two agent lists named the steps agents had made up: one in a thread at 03:44:14 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNHKeS2oQYGdDzbxuBx6crRt), whose item 4 names the RULE11 list of guarded files, and a nine-step list in the project chat at 03:49:58 UTC, whose step 7 is the rule-file cards. The owner's message of 03:51:09 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNiA9TRkEc5idx6DPuFfDEv) said to drop those steps, because the owner never asked for them. The owner's earlier standing rules keep one tap each for:
 
 - firewall and tailnet applies;
 - deletes;
@@ -66,6 +66,6 @@ Chosen option: 1.
 
 This record replaces D-0042 rule 11 and D-0056 rule 4. It changes no other rule of D-0042 or D-0056.
 
-- **How this record is accepted.** It loosens AGENTS.md rule 2, which D-0034 rule 4 sends to a line the owner types naming the PR and its head. It rests on the owner's typed message of 2026-11-17 03:51:09 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNiA9TRkEc5idx6DPuFfDEv), the answer to the list whose item 4 names RULE11. That message names no PR and no head. That departs from D-0034 rule 4's form, as D-0042 did; the reviewer and the councils judge whether it counts, and the orchestrator decides whether it serves as the `owner-tap` line's ref for this PR.
+- **How this record is accepted.** Since D-0042, D-0034 rule 4 lets the reviewer's and the councils' pass approve a PR that loosens AGENTS.md's rules for now, so this record is accepted on the agents' pass. The one owner step is the `owner-tap` line that the installed verdict still asks for under D-0042 rule 11, in D-0034 rule 1's form: a card naming the repository, the PR and its head. The owner's message of 03:51:09 UTC names no PR and no head; the orchestrator decides whether it serves as that line's ref or a card goes up.
 - **Until it takes effect.** The verdict on the agent box changes only when a box-limit install carries this record's code. Until then the installed verdict still asks for an `owner-tap` line on rule 11 PRs, this one included, and AGENTS.md rule 2 says so.
 - **Merge order.** This PR changes limit paths (`pr-merge-verdict.py`, `pr-merge.sh`). It merges only after the pending install from 88fd159f to 260de98c has applied, because a limit change merged after an approvals line's `to` commit makes that line unusable (D-0044). Its own install then needs a new approvals line.
