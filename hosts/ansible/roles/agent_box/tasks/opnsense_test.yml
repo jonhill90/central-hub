@@ -29,6 +29,8 @@
     group: root
     mode: "0644"
   loop: [subuid, subgid]
+  loop_control:
+    label: "/etc/{{ item }}"
 
 - name: opnsense_test | The wrapper's helpers, root-owned
   ansible.builtin.copy:
@@ -38,6 +40,8 @@
     group: root
     mode: "0755"
   loop: [opnsense-test-seed.py, opnsense-test-prove.py]
+  loop_control:
+    label: "{{ agent_box_libexec_dir }}/{{ item }}"
 
 - name: opnsense_test | The wrapper's private settings, from the inventory (no keys)
   ansible.builtin.copy:
