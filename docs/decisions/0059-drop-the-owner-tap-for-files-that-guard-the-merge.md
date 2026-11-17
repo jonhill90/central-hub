@@ -57,6 +57,7 @@ Chosen option: 1.
 
 - Good: PRs to the merge files, D-0042 and D-0034 no longer wait on an owner card.
 - Bad: agents can loosen the merge check without the owner seeing a card at merge time. The owner sees it at the box-limit install, which names every limit file the install carries.
+- Bad: records and `AGENTS.md` take effect at merge, not at an install. After this record, a PR that amends D-0042 rule 6 or `AGENTS.md` rule 1, the list of steps that keep the owner's tap (firewall and tailnet, deletes, secrets, access rights, money, the box's limits), merges on the agents' four passes with no owner card. The owner's no still wins at once (D-0042 rule 8), and the owner card for this PR must say so in plain words.
 
 ### Confirmation
 
