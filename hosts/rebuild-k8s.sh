@@ -560,8 +560,8 @@ for s in $stages; do
   set -e
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
-  # short log too, so the run's worklog can quote it.
-  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ]; then
+  # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line.
+  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ]; then
     sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
   fi

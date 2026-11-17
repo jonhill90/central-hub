@@ -2,7 +2,8 @@
 # hosts/rebuild-k8s.sh's dev-only stages, dev-ca, openbao-measure and identity-keycloak: each refuses any
 # ENV_NAME other than dev before it runs Ansible, dev-ca stops with a clear message when the k8s_certs role
 # has no devca tag, the measurement and its root switch need OPENBAO_SEAL_KEY_FILE, and a dev run appends
-# the stages after the default ones. Runs run_stage from a copy with `ap` stubbed.
+# the stages after the default ones, and its PASS line reaches the short log whole. Runs run_stage from a
+# copy with `ap` stubbed.
 set -euo pipefail
 src=$(cd "$(dirname "$0")/../../.." && pwd)
 script=$src/hosts/rebuild-k8s.sh
@@ -92,4 +93,12 @@ same "a dev run without --only appends dev-ca and identity-keycloak" "$(appended
 same "with a key file the measurement goes after dev-ca" "$(appended dev "" /k)" "base dev-ca openbao-measure identity-keycloak"
 same "--only appends nothing" "$(appended dev gitops /k)" "base"
 same "prod appends nothing" "$(appended prod "" /k)" "base"
+
+# The measurement's PASS line goes into the short log whole: its b, b_cert and ingress fields come last.
+sed -n '/^  if \[ "\$s" = restore \] .*; then$/,/^  fi$/p' "$script" > "$t/short.sh"
+[ -s "$t/short.sh" ] || { echo "FAIL: the short-log block is missing or changed"; fail=1; }
+long="PASS: openbao-measure: gateway=ok $(printf 'x%.0s' $(seq 1 250)); b=400 remote=- xff=-; b_cert=CN; ingress=192.0.2.5"
+printf '===== openbao-measure\n    "msg": "%s"\n' "$long" > "$t/raw"
+s=openbao-measure raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
+same "the measurement's PASS line reaches the short log whole" "$(cat "$t/log")" "  openbao-measure: \"msg\": \"$long\""
 exit $fail

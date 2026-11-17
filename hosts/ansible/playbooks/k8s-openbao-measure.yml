@@ -23,6 +23,8 @@
     measure_reencrypt_host: "openbao-measure.{{ k8s_gitops_source_zone }}"
     measure_pass_host: "openbao-pass.{{ k8s_gitops_source_zone }}"
     measure_ca_configmap: openbao-measure-ca
+    # The Gateway's own answers when it can't reach OpenBao: reported as "refused at gateway", no audit line.
+    measure_gateway_codes: ['502', '503', '504']
     # The same pinned OpenBao image as the store's snapshot job (apps/openbao-store/values.yaml).
     measure_image: >-
       {{ (lookup('ansible.builtin.file', playbook_dir ~ '/../../kubernetes/home/c1/apps/openbao-store/values.yaml')
@@ -121,7 +123,8 @@
       no_log: true
 
     # 3. The policy check (DESIGN item 7): the same Job in namespace openbao (allowed; it must answer) and in
-    #    the check namespace (not allowed). Enforced only if the first answered and the second timed out.
+    #    the check namespace (not allowed). A Job answered only when it succeeded (bao status exits 0 only
+    #    on an unsealed store). Enforced only if the control succeeded and the test failed with a timeout.
     - name: measure | Policy check Jobs
       ansible.builtin.command:
         argv: [kubectl, --kubeconfig, "{{ measure_kubeconfig }}", apply, -f, "-"]
@@ -171,9 +174,10 @@
     - name: measure | Wait for both Jobs to finish
       ansible.builtin.command: >-
         {{ measure_kubectl }} -n {{ item.ns }} get job openbao-measure-{{ item.role }}-{{ measure_run }}
-        -o jsonpath='{.status.succeeded}{.status.failed}'
+        -o jsonpath='s={.status.succeeded} f={.status.failed}'
       register: measure_jobs
-      until: measure_jobs.stdout | length > 0
+      # "s=1 f=" succeeded, "s= f=1" failed, "s= f=" still running: a bare count can't tell the first two apart.
+      until: measure_jobs.stdout | default('s= f=') not in ['', 's= f=']
       retries: 18
       delay: 5
       loop:
@@ -200,9 +204,9 @@
           {%- set control = measure_jobs.results[0].stdout | default('?') -%}
           {%- set test = measure_jobs.results[1].stdout | default('?') -%}
           {%- set test_log = measure_job_logs.results[1].stdout | default('') | lower -%}
-          {%- if control == '1' and test == '1' -%}
+          {%- if control == 's=1 f=' and test == 's=1 f=' -%}
           not enforced
-          {%- elif control == '1' and ('timeout' in test_log or 'deadline' in test_log) -%}
+          {%- elif control == 's=1 f=' and test == 's= f=1' and ('timeout' in test_log or 'deadline' in test_log) -%}
           enforced
           {%- else -%}
           not measured (control={{ control }}, test={{ test }}: {{ test_log | regex_replace('\s+', ' ') | truncate(80) }})
@@ -353,12 +357,17 @@
       failed_when: false
       check_mode: false
 
-    - name: measure | Every probe that got an HTTP answer has its audit line, and path a its X-Forwarded-For
+    # 502, 503 and 504 are the Gateway's own answers when it can't reach OpenBao (for example under an enforced
+    # NetworkPolicy): "refused at gateway", with no audit line to find (MEASURE-1 v5, Council C 02:41Z).
+    - name: measure | Every probe that OpenBao answered has its audit line, and path a its X-Forwarded-For
       ansible.builtin.assert:
         that:
-          - (measure_probes.results | selectattr('stdout', 'match', '^[1-5][0-9][0-9]$') | map(attribute='item.key')
+          - (measure_probes.results | selectattr('stdout', 'match', '^[1-5][0-9][0-9]$')
+            | rejectattr('stdout', 'in', measure_gateway_codes) | map(attribute='item.key')
             | reject('in', measure_audit | dict2items | selectattr('value', 'truthy') | map(attribute='key') | list) | list) == []
-          - measure_probes.results[0].stdout is not match('^[1-5][0-9][0-9]$') or measure_audit.a.xff | default('none') != 'none'
+          - measure_probes.results[0].stdout is not match('^[1-5][0-9][0-9]$')
+            or measure_probes.results[0].stdout in measure_gateway_codes
+            or measure_audit.a.xff | default('none') != 'none'
         fail_msg: >-
           a probe reached OpenBao but no audit line or X-Forwarded-For was found: was the store first started without
           the measure value (its audited headers are set only at the first start)?
@@ -371,7 +380,8 @@
           gateway=ok listenerset={{ measure_ls.stdout | default('none') | trim | default('none', true) }};
           policy={{ measure_policy }};
           {% for k in ['a', 'axff', 'b'] %}{% set p = measure_probes.results[loop.index0] %}{% set code = p.stdout | default('000') -%}
-          {{ k }}={{ (p.stderr | default('no answer') | truncate(60)) if code == '000' else code }}
+          {{ k }}={{ (p.stderr | default('no answer') | truncate(60)) if code == '000'
+          else (code ~ ' refused at gateway') if code in measure_gateway_codes else code }}
           remote={{ measure_audit[k].remote | default('-') }} xff={{ measure_audit[k].xff | default('-') }}; {% endfor %}
           b_cert={{ measure_b_cert.stdout | default('none') | regex_replace('^issuer=\s*', '') | truncate(60) }};
           ingress={{ measure_ingress.stdout | default('') | trim | default('unread', true) }}
