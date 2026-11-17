@@ -94,6 +94,16 @@ k8s_identity_proxmox_hosts: []
 # client is a realm change only when a name is set. The store's sign-in reads that secret from the same file.
 k8s_identity_openbao_hosts: []
 
+# The OPNsense web GUI, through the community plugin os-openid-connect (D-0037 rule 5): the names the
+# browser uses for the GUI. Private, from the inventory. The client allows the plugin's callback for its
+# application code on each name, and its lifecycle-test logout return. Empty: realm lab has no opnsense client
+# and the values file needs no OPNSENSE_CLIENT_SECRET, so adding the client is a realm change only when a
+# name is set.
+k8s_identity_opnsense_hosts: []
+# The plugin's application code (its setting openidconnect_app_code; its Keycloak guide uses keycloak). Every
+# callback path ends in it.
+k8s_identity_opnsense_app_code: keycloak
+
 # Keycloak's database: PostgreSQL 18.6 (2026-08-13; Keycloak 26.8 tests 18), one pod. c1 has no
 # StorageClass yet (storage is BUILD-PATH S17), so its data sits on a static local volume: a folder
 # on one worker, kept when the pod or the volume object is deleted (reclaim policy Retain).

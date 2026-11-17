@@ -34,6 +34,17 @@ components:
     exit-path: a FOSS router (OpenWrt, IPFire, or Debian with nftables and Unbound); its config backup is exported daily
     sources: [collection:oxlorg.opnsense]
     checked: 2026-11-14
+  - name: os-openid-connect
+    kind: software
+    used-for: OPNsense web GUI sign-in through Keycloak (D-0037 rule 5)
+    licence: BSD-2-Clause
+    licence-source: https://raw.githubusercontent.com/jpawlowski/opnsense-openid-connect/v1.0.0-beta5/LICENSE
+    paid-edition: none found; the repository names no paid edition
+    paid-edition-source: https://github.com/jpawlowski/opnsense-openid-connect/tree/v1.0.0-beta5
+    verdict: pass
+    sources: []
+    not-detected: an OPNsense package installed by hand from the project's GitHub release, pinned by SHA-256 in docs/runbooks/sign-in-to-opnsense-through-keycloak.md; no code in hosts/ installs it yet
+    checked: 2026-11-17
   - name: Unbound
     kind: software
     used-for: DNS resolver inside OPNsense
