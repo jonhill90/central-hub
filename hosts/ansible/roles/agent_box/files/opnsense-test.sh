@@ -196,7 +196,7 @@ configure() {
   # Plan's condition 2: measure dev's reach to what the bootstrap fetches (the core tarball from GitHub,
   # packages from pkg.opnsense.org) before relying on it. On a failure, stop: opening egress is a firewall change.
   local u
-  for u in https://github.com/ https://pkg.opnsense.org/; do
+  for u in https://github.com/opnsense/core/ https://pkg.opnsense.org/; do
     vm fetch -q -T 20 -o /dev/null "$u" || { echo "opnsense-test: stopped, dev does not reach $u; no egress is opened (firewall change)"; return 1; }
     echo "opnsense-test: dev reaches $u"
   done
@@ -244,10 +244,14 @@ keycloak_up() {
   cp "$proof/realm.json" "$proof/kc-import/"
   openssl rand -hex 24 > "$proof/kc-admin.pass"
   podman rm -f "$KC_NAME" >/dev/null 2>&1 || true
-  KC_BOOTSTRAP_ADMIN_PASSWORD=$(cat "$proof/kc-admin.pass") podman run -d --name "$KC_NAME" --network host \
+  # Secrets reach the container by name from this command's environment, never in its arguments or the realm file.
+  KC_BOOTSTRAP_ADMIN_PASSWORD=$(cat "$proof/kc-admin.pass") KC_PROOF_CLIENT_SECRET=$(cat "$proof/client.secret") \
+  KC_PROOF_USER_PASS=$(cat "$proof/user.pass") KC_PROOF_STRANGER_PASS=$(cat "$proof/stranger.pass") \
+    podman run -d --name "$KC_NAME" --network host \
     --userns=keep-id:uid=1000,gid=1000 -v "$proof/kc:/opt/keycloak/conf/proof:ro,Z" \
     -v "$proof/kc-import:/opt/keycloak/data/import:ro,Z" \
     -e KC_BOOTSTRAP_ADMIN_USERNAME=proof-admin -e KC_BOOTSTRAP_ADMIN_PASSWORD \
+    -e KC_PROOF_CLIENT_SECRET -e KC_PROOF_USER_PASS -e KC_PROOF_STRANGER_PASS \
     -e JAVA_OPTS_KC_HEAP="-Xms256m -Xmx1024m" \
     "$KEYCLOAK_IMAGE" start-dev --import-realm --http-enabled=false --https-port=8443 \
     --https-certificate-file=/opt/keycloak/conf/proof/kc.pem --https-certificate-key-file=/opt/keycloak/conf/proof/kc.key \

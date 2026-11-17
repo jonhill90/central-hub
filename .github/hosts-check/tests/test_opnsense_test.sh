@@ -86,7 +86,10 @@ assert c["redirectUris"] == ["https://10.1.30.57/api/openidconnect/auth/callback
 assert c["attributes"]["post.logout.redirect.uris"] == "https://10.1.30.57/api/openidconnect/auth/logouttestcallback/keycloak"
 assert c["attributes"]["pkce.code.challenge.method"] == "S256"
 assert sorted(u["username"] for u in r["users"]) == ["proof-stranger", "proof-user"]
+assert c["secret"] == "${KC_PROOF_CLIENT_SECRET}"
+assert sorted(u["credentials"][0]["value"] for u in r["users"]) == ["${KC_PROOF_STRANGER_PASS}", "${KC_PROOF_USER_PASS}"]
 PY
+if grep -qe 'client-secret-example' -e 'user-pass-example' -e 'stranger-pass-example' "$work/realm.json"; then bad "the realm file holds a secret"; else ok "the realm file holds placeholders, not the secret or passwords"; fi
 
 # Refusals: an address outside dev, the gateway itself, a bad name, a key that is not one ed25519 key.
 refuse() { # label, settings JSON

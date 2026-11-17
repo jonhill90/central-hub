@@ -7,7 +7,7 @@
       the /conf/config.xml OPNsense 26.1 boots with, from the proof dir's ca.pem, root.hash,
       proofadmin.hash and client.secret.
   opnsense-test-seed.py realm  <settings.json> <proof dir> <out file>
-      the throwaway Keycloak realm, from the proof dir's client.secret, user.pass and stranger.pass.
+      the throwaway Keycloak realm, with ${...} placeholders where the client secret and passwords go.
 
 Every secret here is made for the one proof by the wrapper and removed by `opnsense-test destroy`.
 None comes from the repository or the inventory.
@@ -218,12 +218,15 @@ def config(settings, vlans, pubkey, proof, out):
 def realm(settings, proof, out):
     s = json.load(open(settings))
     origin = f"https://{s['address']}"
-    users = [("proof-user", read(proof, "user.pass")), ("proof-stranger", read(proof, "stranger.pass"))]
+    # The client secret and passwords stay out of this file: Keycloak fills each ${...} placeholder from its own
+    # environment at import (keycloak.org/server/importExport, "Using Environment Variables within the Realm
+    # Configuration Files"), and the wrapper hands them to the container by name, from the proof folder.
+    users = [("proof-user", "${KC_PROOF_USER_PASS}"), ("proof-stranger", "${KC_PROOF_STRANGER_PASS}")]
     json.dump({
         "realm": REALM, "enabled": True, "sslRequired": "all",
         "clients": [{
             "clientId": CLIENT, "enabled": True, "protocol": "openid-connect", "publicClient": False,
-            "clientAuthenticatorType": "client-secret", "secret": read(proof, "client.secret"),
+            "clientAuthenticatorType": "client-secret", "secret": "${KC_PROOF_CLIENT_SECRET}",
             "standardFlowEnabled": True, "implicitFlowEnabled": False, "directAccessGrantsEnabled": False,
             # The same exact URIs as the lab realm's OPNsense client (role k8s_identity).
             "serviceAccountsEnabled": False, "rootUrl": origin, "baseUrl": "/",

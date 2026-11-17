@@ -32,8 +32,18 @@ components:
     paid-edition-source: https://docs.opnsense.org/vendor/deciso/oidc.html
     verdict: fail
     exit-path: a FOSS router (OpenWrt, IPFire, or Debian with nftables and Unbound); its config backup is exported daily
-    sources: [collection:oxlorg.opnsense]
+    sources: [collection:oxlorg.opnsense, url:pkg.opnsense.org, url:github.com/opnsense/, url:raw.githubusercontent.com/opnsense/]
     checked: 2026-11-14
+  - name: os-openid-connect
+    kind: software
+    used-for: OPNsense web GUI sign-in through Keycloak (D-0037 rule 5)
+    licence: BSD-2-Clause
+    licence-source: https://raw.githubusercontent.com/jpawlowski/opnsense-openid-connect/v1.0.0-beta5/LICENSE
+    paid-edition: none found; the repository names no paid edition
+    paid-edition-source: https://github.com/jpawlowski/opnsense-openid-connect/tree/v1.0.0-beta5
+    verdict: pass
+    sources: [url:github.com/jpawlowski/opnsense-openid-connect/]
+    checked: 2026-11-17
   - name: Unbound
     kind: software
     used-for: DNS resolver inside OPNsense
@@ -114,6 +124,16 @@ components:
     sources: []
     not-detected: installed with Proxmox VE from its ISO
     checked: 2026-11-14
+  - name: FreeBSD
+    kind: software
+    used-for: the cloud image the throwaway OPNsense test VM boots before the OPNsense bootstrap (opnsense-test)
+    licence: BSD-2-Clause (the FreeBSD Copyright)
+    licence-source: https://www.freebsd.org/copyright/freebsd-license/
+    paid-edition: none; "FreeBSD is available free of charge and comes with the source code"
+    paid-edition-source: https://www.freebsd.org/about/
+    verdict: pass
+    sources: [url:ftp-archive.freebsd.org/]
+    checked: 2026-11-17
   - name: AlmaLinux
     kind: software
     used-for: the OS of the Kubernetes nodes, the agent box and the desktop VM, and the packages roles install from its own repositories (GNOME and GNOME Remote Desktop on the desktop VM among them)
