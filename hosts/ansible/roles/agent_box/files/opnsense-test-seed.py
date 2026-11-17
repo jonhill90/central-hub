@@ -26,6 +26,9 @@ import yaml
 REALM = "opnsense-proof"
 CLIENT = "opnsense"
 SERVER = "keycloak-proof"   # the OPNsense authentication server's name
+# The plugin's application code, the same as the lab realm's OPNsense client (role k8s_identity): it is the
+# last part of the callback and logout-test paths.
+APP_CODE = "keycloak"
 PROOF_ADMIN = "proofadmin"  # the new local admin the test user is bound to
 PROOF_ADMIN_UID = 2000
 
@@ -194,7 +197,7 @@ def config(settings, vlans, pubkey, proof, out):
     <type>openidconnect</type>
     <name>{SERVER}</name>
     <openidconnect_enabled>1</openidconnect_enabled>
-    <openidconnect_app_code>main</openidconnect_app_code>
+    <openidconnect_app_code>{APP_CODE}</openidconnect_app_code>
     <openidconnect_provider_profile>keycloak</openidconnect_provider_profile>
     <openidconnect_provider_url>{v['issuer']}</openidconnect_provider_url>
     <openidconnect_client_id>{CLIENT}</openidconnect_client_id>
@@ -222,8 +225,11 @@ def realm(settings, proof, out):
             "clientId": CLIENT, "enabled": True, "protocol": "openid-connect", "publicClient": False,
             "clientAuthenticatorType": "client-secret", "secret": read(proof, "client.secret"),
             "standardFlowEnabled": True, "implicitFlowEnabled": False, "directAccessGrantsEnabled": False,
-            "serviceAccountsEnabled": False, "redirectUris": [origin + "/*"], "webOrigins": [origin],
-            "attributes": {"pkce.code.challenge.method": "S256"},
+            # The same exact URIs as the lab realm's OPNsense client (role k8s_identity).
+            "serviceAccountsEnabled": False, "rootUrl": origin, "baseUrl": "/",
+            "redirectUris": [f"{origin}/api/openidconnect/auth/callback/{APP_CODE}"], "webOrigins": [origin],
+            "attributes": {"pkce.code.challenge.method": "S256",
+                           "post.logout.redirect.uris": f"{origin}/api/openidconnect/auth/logouttestcallback/{APP_CODE}"},
         }],
         "users": [{
             "username": u, "enabled": True, "emailVerified": True, "email": f"{u}@example.invalid",

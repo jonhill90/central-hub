@@ -260,6 +260,13 @@ keycloak_up() {
   done
   [[ -s $proof/discovery.json ]] || { echo "opnsense-test: Keycloak did not come up"; podman logs --tail 30 "$KC_NAME"; return 1; }
   ! grep -q dpop_signing_alg_values_supported "$proof/discovery.json" || { echo "opnsense-test: Keycloak still advertises DPoP"; return 1; }
+  # On the host network the filter covers only 8443, so the container may listen on nothing else (TCP or UDP).
+  local pids ports
+  pids=$(podman top "$KC_NAME" hpid | tail -n +2 | tr -s ' \n' '|' | sed 's/^|//; s/|$//')
+  [[ -n $pids ]] || { echo "opnsense-test: the Keycloak container's processes could not be read"; return 1; }
+  ports=$(ss -Hlntup | grep -E "pid=($pids)," | awk '{print $1 " " $5}' | sed 's/ .*:/ /' | sort -u)
+  echo "opnsense-test: Keycloak listens on: $(tr '\n' ' ' <<<"$ports")"
+  [[ $ports == "tcp 8443" ]] || { echo "opnsense-test: stopped, the Keycloak container listens on more than tcp 8443"; return 1; }
   echo "opnsense-test: Keycloak 26.8.1 is up at https://$kc_addr:8443 (realm opnsense-proof, DPoP off)"
 }
 keycloak_down() {

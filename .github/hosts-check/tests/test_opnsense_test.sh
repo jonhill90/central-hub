@@ -14,7 +14,7 @@ fails=0
 ok() { echo "ok - $1"; }
 bad() { echo "FAIL - $1"; fails=$((fails + 1)); }
 
-printf '%s\n' '{"name": "daldopdemo01", "address": "10.1.30.57", "keycloak_address": "10.1.50.9",
+printf '%s\n' '{"name": "daldopdemo01", "address": "10.1.30.57", "keycloak_address": "192.0.2.10",
   "cores": 1, "memory_mb": 3072, "disk_gb": 16, "proxmox_node_name": "examplehv01"}' > "$work/settings.json"
 echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyExampleKeyExampleKeyExampleKey keys@agentbox" > "$work/key.pub"
 mkdir -p "$work/proof"
@@ -58,7 +58,8 @@ checks = {
     "proof admin uid 2000 in admins": t("system/user[name='proofadmin']/uid") == "2000" and "2000" in [m.text for m in c.findall("system/group[name='admins']/member")],
     "proof CA in the trust store": c.find("ca/crt") is not None,
     "plugin server named keycloak-proof": t("authserver/type") == "openidconnect" and t("authserver/name") == "keycloak-proof",
-    "issuer is the box's Keycloak": t("authserver/openidconnect_provider_url") == "https://10.1.50.9:8443/realms/opnsense-proof",
+    "app code keycloak, as the lab client": t("authserver/openidconnect_app_code") == "keycloak",
+    "issuer is the box's Keycloak": t("authserver/openidconnect_provider_url") == "https://192.0.2.10:8443/realms/opnsense-proof",
     "PAR disabled": t("authserver/openidconnect_par_mode") == "disabled",
     "shared signals off": t("authserver/openidconnect_ssf_enabled") == "0",
     "logout notifications off": t("authserver/openidconnect_logout_notifications") == "off",
@@ -75,13 +76,15 @@ then :; else fails=$((fails + 1)); fi
 
 # The realm: one confidential client with PKCE S256 and only the VM's origin, two users.
 python3 -I "$seed" realm "$work/settings.json" "$work/proof" "$work/realm.json"
-python3 -I - "$work/realm.json" <<'PY' && ok "realm: confidential client, PKCE S256, redirect only to the VM" || bad "realm shape"
+python3 -I - "$work/realm.json" <<'PY' && ok "realm: confidential client, PKCE S256, the lab client's exact callback and logout URIs" || bad "realm shape"
 import json, sys
 r = json.load(open(sys.argv[1]))
 c = r["clients"][0]
 assert r["realm"] == "opnsense-proof" and len(r["clients"]) == 1
 assert c["clientId"] == "opnsense" and c["publicClient"] is False and c["directAccessGrantsEnabled"] is False
-assert c["redirectUris"] == ["https://10.1.30.57/*"] and c["attributes"]["pkce.code.challenge.method"] == "S256"
+assert c["redirectUris"] == ["https://10.1.30.57/api/openidconnect/auth/callback/keycloak"]
+assert c["attributes"]["post.logout.redirect.uris"] == "https://10.1.30.57/api/openidconnect/auth/logouttestcallback/keycloak"
+assert c["attributes"]["pkce.code.challenge.method"] == "S256"
 assert sorted(u["username"] for u in r["users"]) == ["proof-stranger", "proof-user"]
 PY
 
@@ -90,9 +93,9 @@ refuse() { # label, settings JSON
   echo "$2" > "$work/bad.json"
   if python3 -I "$seed" seed "$work/bad.json" "$vlans" "$work/key.pub" "$work/bad" >/dev/null 2>&1; then bad "accepted $1"; else ok "refuses $1"; fi
 }
-refuse "an address in prod" '{"name": "daldopdemo01", "address": "10.1.10.57", "keycloak_address": "10.1.50.9"}'
-refuse "dev's gateway address" '{"name": "daldopdemo01", "address": "10.1.30.1", "keycloak_address": "10.1.50.9"}'
-refuse "a name outside STD-0001" '{"name": "OPNsense", "address": "10.1.30.57", "keycloak_address": "10.1.50.9"}'
+refuse "an address in prod" '{"name": "daldopdemo01", "address": "10.1.10.57", "keycloak_address": "192.0.2.10"}'
+refuse "dev's gateway address" '{"name": "daldopdemo01", "address": "10.1.30.1", "keycloak_address": "192.0.2.10"}'
+refuse "a name outside STD-0001" '{"name": "OPNsense", "address": "10.1.30.57", "keycloak_address": "192.0.2.10"}'
 printf 'ssh-rsa AAAA x\nssh-ed25519 AAAA y\n' > "$work/two.pub"
 if python3 -I "$seed" seed "$work/settings.json" "$vlans" "$work/two.pub" "$work/bad" >/dev/null 2>&1; then bad "accepted two keys"; else ok "refuses a key file that is not one ed25519 key"; fi
 
