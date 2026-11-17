@@ -1,0 +1,91 @@
+{{- if eq (toString .Values.measure) "true" }}
+{{- $zone := required "zone: set by the root Application (k8s_gitops_source_zone)" .Values.zone }}
+# The policy check's test namespace (DESIGN item 7). Restricted Pod Security, like namespace openbao.
+# The stage's CA ConfigMap names it as its owner, so pruning it removes that copy too.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.checkNamespace }}
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+# Path a: TLS ends at the Gateway (dev's wildcard certificate) and starts again to OpenBao.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: openbao-measure
+  namespace: {{ .Release.Namespace }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+      sectionName: https-short
+  hostnames:
+    - {{ .Values.reencrypt.host }}.{{ $zone }}
+  rules:
+    - backendRefs:
+        - name: {{ .Values.service }}
+          port: {{ .Values.port }}
+---
+# The Gateway calls OpenBao over TLS and checks it against the store's CA, by the Service's name.
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: openbao-measure
+  namespace: {{ .Release.Namespace }}
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: {{ .Values.service }}
+  validation:
+    caCertificateRefs:
+      - group: ""
+        kind: ConfigMap
+        name: {{ .Values.reencrypt.caConfigMap }}
+    hostname: {{ .Values.service }}.{{ .Release.Namespace }}.svc
+---
+# Path b: one passthrough listener, attached to Gateway apps (its allowedListeners, measure only).
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: openbao-measure
+  namespace: {{ .Release.Namespace }}
+spec:
+  parentRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: {{ .Values.gateway.name }}
+    namespace: {{ .Values.gateway.namespace }}
+  listeners:
+    - name: openbao-pass
+      protocol: TLS
+      port: 443
+      hostname: {{ .Values.passthrough.host }}.{{ $zone }}
+      tls:
+        mode: Passthrough
+      allowedRoutes:
+        namespaces:
+          from: Same
+        kinds:
+          - kind: TLSRoute
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  name: openbao-measure
+  namespace: {{ .Release.Namespace }}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: openbao-measure
+      sectionName: openbao-pass
+  hostnames:
+    - {{ .Values.passthrough.host }}.{{ $zone }}
+  rules:
+    - backendRefs:
+        - name: {{ .Values.service }}
+          port: {{ .Values.port }}
+{{- end }}

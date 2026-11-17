@@ -156,6 +156,34 @@ check_manifests() {
   helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
     --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32 \
     > "$work/rendered/root-c1-openbao.yaml"
+  # The dev-only measurement of the box's path through the Gateway (MEASURE-1) turned on: the root's
+  # switches and the four charts it changes, so its routes, listener and policy are schema-checked too.
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32 --set openbaoMeasure=true \
+    > "$work/rendered/root-c1-openbao-measure.yaml"
+  helm template openbao-measure hosts/kubernetes/home/c1/apps/openbao-measure --namespace openbao \
+    --set zone=example.com --set measure=true > "$work/rendered/app-c1-openbao-measure-on.yaml"
+  helm template gateway hosts/kubernetes/home/c1/apps/gateway --namespace gateway \
+    --set zone=example.com --set address=192.0.2.10 --set openbaoMeasure=true > "$work/rendered/app-c1-gateway-measure.yaml"
+  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set zone=example.com --set sealNode=node-1 --set measure=true > "$work/rendered/app-c1-openbao-store-measure.yaml"
+  # With openbaoMeasure unset, the root renders exactly as with it false, with and without OpenBao in
+  # the cluster, and passes no measure switch to any app: prod's root is as before (MEASURE-1).
+  local set unset
+  for set in "" "--set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32"; do
+    # shellcheck disable=SC2086 # $set is a list of words on purpose
+    unset=$(helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 $set)
+    # shellcheck disable=SC2086
+    if [ "$unset" != "$(helm template root hosts/kubernetes/home/c1/root --set zone=example.com \
+      --set gatewayAddress=192.0.2.10 $set --set openbaoMeasure=false)" ]; then
+      echo "manifests: the root renders differently with openbaoMeasure unset and false (${set:-default})" >&2
+      return 1
+    fi
+    if grep -Eq -- '- name: "?(measure|centralHub\.measure|openbaoMeasure)"?$' <<<"$unset"; then
+      echo "manifests: the root passes a measure switch with openbaoMeasure unset (${set:-default})" >&2
+      return 1
+    fi
+  done
   # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
   if command -v promtool >/dev/null; then
     mkdir -p "$work/rules"

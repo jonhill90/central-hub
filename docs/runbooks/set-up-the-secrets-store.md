@@ -7,7 +7,7 @@ runner: "the dev rebuild on the agent box (`rebuild up`), and an agent session t
 outcome: OpenBao 2.7.2 runs in namespace openbao in dev's cluster, starts and unseals with no person from its seal key on one node, initializes itself with audit, KV v2, AppRole and Kubernetes logins, takes an hourly Raft snapshot, and serves External Secrets through its Kubernetes login
 needs: the agent box with the agent_box role applied; the dev cluster; the private inventory values listed below
 private-values: [seal-node, box-cidr, seal-key, admin-role-id, admin-secret-id]
-files: [hosts/kubernetes/home/c1/apps/openbao/, hosts/kubernetes/home/c1/apps/openbao-store/, hosts/kubernetes/home/c1/apps/secret-store/, hosts/kubernetes/home/c1/root/, hosts/ansible/roles/k8s_gitops/, hosts/ansible/roles/agent_box/files/secrets-store.sh, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/files/secrets-store-snapshots.sh, .github/hosts-check/tests/test_secrets_store_snapshots.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/k8s-openbao-auth.yml]
+files: [hosts/kubernetes/home/c1/apps/openbao/, hosts/kubernetes/home/c1/apps/openbao-store/, hosts/kubernetes/home/c1/apps/openbao-measure/, hosts/ansible/playbooks/k8s-openbao-measure.yml, hosts/kubernetes/home/c1/apps/secret-store/, hosts/kubernetes/home/c1/root/, hosts/ansible/roles/k8s_gitops/, hosts/ansible/roles/agent_box/files/secrets-store.sh, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/files/secrets-store-snapshots.sh, .github/hosts-check/tests/test_secrets_store_snapshots.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/k8s-openbao-auth.yml]
 last-tested: not yet run
 superseded-by:
 ---
@@ -58,7 +58,47 @@ Handing the admin login to the box, once per new store (the box's node play, in 
 
 expect, after the box's run: `kubectl -n openbao get pod openbao-0` Ready; `kubectl -n openbao exec openbao-0 -- bao status` shows `Sealed false`; ExternalSecret `external-secrets/openbao-check` Ready once `kv/c1/check` is written.
 
-Not in this part yet: the agent box's path to OpenBao through the Gateway (after the source address is measured, so the admin AppRole's /32 binding still holds), then the rest of the box's wrapper changes, which need that path (the admin hand-over, SOPS copies, reseed, compare, and the hold during a rebuild).
+### Measuring the box's path through the Gateway (dev only)
+
+The admin AppRole accepts only the box's /32. Through c1's Gateway, OpenBao may see the Gateway's own address instead of the box's, so the path the box will use is chosen only after this is measured on dev: which address OpenBao sees on two paths, whether the Gateway adds `X-Forwarded-For`, and whether c1 enforces the store's NetworkPolicy. Nothing signs in: every probe is a login with a made-up role ID, which OpenBao refuses and writes to its audit log.
+
+It turns on by itself on dev. When `ENV_NAME` is `dev` and `OPENBAO_SEAL_KEY_FILE` is set (the in-cluster store is on), `hosts/rebuild-k8s.sh` adds `-e k8s_gitops_source_openbao_measure=true` to every `k8s-gitops.yml` call (stage `gitops`, both branches, and stage `dev-ca`), so the root Application passes `openbaoMeasure` true, and it runs stage `openbao-measure` after `dev-ca`, which makes the https listener the probes go through. Prod never gets it: the `-e` needs `ENV_NAME=dev` too, the stage refuses any other env, and CI checks that the root renders the same with the value unset as with it false (`.github/hosts-check/run.sh manifests`, `test_rebuild_dev_stages.sh`).
+
+The agent box sets `OPENBAO_SEAL_KEY_FILE` only when its switch `agent_box_openbao_in_cluster` is on, which also sets `k8s_gitops_source_openbao_in_cluster` in the dev inventory (`rebuild.sh`). A run by hand with the key file set and that inventory value off stops at stage `openbao-measure`, whose first check needs the in-cluster store, before `identity-keycloak`: leave the key file unset or turn the store on.
+
+What the value turns on:
+
+| App | While `openbaoMeasure` is true |
+|---|---|
+| `gateway` | Gateway `apps` accepts listeners from namespace `openbao` only (`allowedListeners`, selector on the namespace's name) |
+| `openbao-store` | The store's certificate `openbao-tls` also names `openbao-pass.<zone>`, the passthrough host |
+| `openbao` | Self-init block `measure`: the audit log records the `X-Forwarded-For` and `X-Measure-Nonce` request headers in plain text. Self-init runs only on a store's first start, so this setting stays in that dev store until it is rebuilt. Neither header carries a secret |
+| `openbao-measure` (new, `prune: true`, made only with `openbaoInCluster`) | Namespace `openbao-measure` (restricted Pod Security), for the policy check's test Job. Path a, re-encrypt: HTTPRoute `openbao-measure` on listener `https-short`, host `openbao-measure.<zone>`, to Service `openbao` port 8200, and a BackendTLSPolicy that checks OpenBao's certificate against the store's CA by the name `openbao.openbao.svc`. Path b, passthrough: ListenerSet `openbao-measure` with one TLS Passthrough listener on 443, host `openbao-pass.<zone>`, and a TLSRoute to the same Service |
+
+The BackendTLSPolicy reads the CA from ConfigMap `openbao-measure-ca`, because Cilium 1.20.4 accepts only a ConfigMap there (a code read at tag v1.20.4: `operator/pkg/model/ingestion/gateway.go`, lines 643-649, "Cilium only supports ConfigMap currently"). cert-manager writes the CA only to a Secret, so the stage copies the public `ca.crt` into that ConfigMap in namespace `openbao` on every run, owned by Namespace `openbao-measure`, so that the ConfigMap goes when the namespace goes (a namespaced object may name a cluster-scoped owner: <https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/>).
+
+Stage `openbao-measure` (`playbooks/k8s-openbao-measure.yml`, on the first control-plane node, the probes from the box):
+
+1. Checks that all four of the Gateway's listeners are `Programmed`, reads the ListenerSet's conditions, and reads the namespace `openbao-measure`'s uid (it fails if the namespace is missing).
+2. Copies `ca.crt` alone from Secret `openbao/openbao-tls` into the ConfigMap; it reads only that field and prints nothing.
+3. The policy check: two Jobs run `bao status` against `https://openbao.openbao.svc:8200`, the control from namespace `openbao` (allowed) and the test from namespace `openbao-measure` (not allowed). A Job answered only when it succeeded (`bao status` exits 0 only on an unsealed store); the stage reads each Job's succeeded and failed counts separately. The control succeeds and the test fails with a timeout: `enforced`. Both succeed: `not enforced`. Anything else: `not measured`, with both readings and the test's last log line.
+4. Three probes from the box, each with its own random nonce header: path a, path a with a made-up `X-Forwarded-For: 192.0.2.1`, and path b. It reads the issuer of the certificate path b presents, so a TLS answer from the Gateway's wildcard certificate is not taken for OpenBao's.
+5. Finds the three nonces in OpenBao's audit log and records, for each probe, the address OpenBao saw and the `X-Forwarded-For` it received. It also reads Cilium's Gateway addresses (`ciliumnodes`, `spec.ingress.ipv4`). It fails if a probe that OpenBao answered left no audit line, or if path a carries no `X-Forwarded-For`. On path a (and a with the made-up header), a 502, 503 or 504 is the Gateway's own answer when it can't reach OpenBao (for example under an enforced NetworkPolicy): when the control Job found the store unsealed, the line shows `refused at gateway` for that probe and expects no audit line. A sealed OpenBao answers 503 itself, so with a failed control Job the code is shown plain and its audit line is still required. Path b is passthrough, so any HTTP code there is OpenBao's own and always needs its audit line.
+
+expect: `rebuild log` shows `openbao-measure end rc=0`, and the stage's last line is `PASS: openbao-measure: gateway=ok listenerset=... policy=<enforced, not enforced or not measured>; a=<HTTP code> remote=<address> xff=<header>; axff=...; b=...; b_cert=<issuer>; ingress=<addresses>`. A refused login answers 400. A probe with no answer shows curl's error in place of the code. `rebuild log` keeps the whole line, since it runs past 200 characters.
+
+While the value is on, OpenBao's API can be reached from the dev network through the dev Gateway, on both hosts, if c1 does not enforce the NetworkPolicy for Gateway traffic. OpenBao still checks every login: the admin AppRole's /32 binding is unchanged and no forwarded header is trusted, so a login through the Gateway is refused by address, and on dev the admin AppRole has no secret ID until the hand-over. The dev store holds nothing of value (D-0038 rule 5).
+
+Turning it off is a change to `hosts/rebuild-k8s.sh` (the pull request that writes the chosen path removes the `-e` and the stage), with no install. The `openbao-measure` app then renders nothing and Argo CD prunes its objects; the ConfigMap goes with its namespace; the store's certificate drops `openbao-pass.<zone>` and Gateway `apps` drops `allowedListeners`. On the next dev run, check those two fields are gone:
+
+```sh
+kubectl -n openbao get certificate openbao-tls -o jsonpath='{.spec.dnsNames}'
+kubectl -n gateway get gateway apps -o jsonpath='{.spec.allowedListeners}'
+```
+
+expect: no `openbao-pass` name, and an empty `allowedListeners`. The audited-headers setting stays in that dev store until it is rebuilt. Two more ways the objects go: a run limited with `--only` to a stage that renders the root, without `OPENBAO_SEAL_KEY_FILE`, renders the value off, so they are pruned until the next full run; and if `openbaoInCluster` goes off while the value is on, the `openbao-measure` Application leaves the root and its objects stay (the root has no resources finalizer), until a dev teardown removes them.
+
+Not in this part yet: the agent box's path to OpenBao through the Gateway (after the source address is measured above, so the admin AppRole's /32 binding still holds), then the rest of the box's wrapper changes, which need that path (the admin hand-over, SOPS copies, reseed, compare, and the hold during a rebuild).
 
 ## The box's calls to the store (kept for rework PR 3b)
 

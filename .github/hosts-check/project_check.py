@@ -7,8 +7,9 @@ chart with its values files and zone parameters, or the local chart) and fails w
 namespace is not a project destination, a cluster-scoped kind is not in clusterResourceWhitelist,
 or a chart repository is not in sourceRepos. The root is rendered with every `enabledBy` switch on,
 so dev-first apps are checked too, and each app's rootParameters get a made-up value (ROOT_VALUE),
-so a part that renders only when a private value is set is checked too. Needs helm on PATH; charts
-are pulled as parity.py pulls them (PARITY_CHART_CACHE).
+so a part that renders only when a private value is set is checked too, and each switchParameters
+path is set to "true", so a part that renders only while a switch is on is checked too. Needs helm
+on PATH; charts are pulled as parity.py pulls them (PARITY_CHART_CACHE).
 """
 import pathlib
 import sys
@@ -56,6 +57,8 @@ def render(top, name, app, values):
     private = []
     for path in app.get("rootParameters") or {}:
         private += ["--set", f"{path}={ROOT_VALUE}"]
+    for path in app.get("switchParameters") or {}:
+        private += ["--set", f"{path}=true"]
     if app.get("local"):
         return run(["helm", "template", release, str(top / "apps" / name), "-n", ns, "--set",
                     f"zone={ZONE}", "--set", f"address={GATEWAY}", *private, "--include-crds", *kube])
