@@ -9,6 +9,7 @@
 #   5. A corrupted read-back fails the run.
 #   6. With no repository it fails, and makes none (the OPNsense copy makes it).
 #   7. No password, identity or file content shows in the output, and the clear tar is never written to a file.
+#   9. The role installs the send only when agent_box_secrets_bundle.offbox is true as well (the owner's secrets card).
 #   8. Retention works although every bundle has its own file name: with older snapshots on five past days and
 #      keep-daily 2, keep-monthly 0, one send leaves two. Grouped by path, as restic does by default, none would go.
 # restic, SOPS and age come from their GitHub releases, checked against the SHA-256s the role installs.
@@ -153,6 +154,26 @@ send
 [[ $rc -eq 0 && $before -ge 6 && $(snapshots) == 2 ]] && ok "8. retention: $before snapshots on 6 days, keep-daily 2, leaves 2" \
   || bad "8. rc=$rc before=$before after=$(snapshots) $out"
 write_bundle_settings
+
+# 9: the role's three send tasks run only on agent_box_bundle_offbox_send, which needs offbox: true and the off-box copy
+if python3 - "$role/tasks/secrets_bundle.yml" <<'PY'
+import sys, yaml
+tasks = yaml.safe_load(open(sys.argv[1]))
+by = {t.get("name", ""): t for t in tasks}
+fact = by["Is the off-box send turned on (the off-box copy is set and the bundle's offbox is true)"]["ansible.builtin.set_fact"]["agent_box_bundle_offbox_send"]
+assert "agent_box_opnsense_offbox" in fact and "agent_box_secrets_bundle.offbox" in fact and "is true" in fact, fact
+names = ["The off-box send's script, root-owned", "The off-box send's units", "The off-box send's timer runs"]
+for n in names:
+    w = by[n]["when"]
+    w = w if isinstance(w, list) else [w]
+    assert "agent_box_bundle_offbox_send | bool" in w, (n, w)
+    assert not any("agent_box_opnsense_offbox" in x for x in w), (n, w)
+off = by["The off-box send's timer off, while the send is not turned on"]
+assert off["ansible.builtin.systemd_service"]["enabled"] is False and off["ansible.builtin.systemd_service"]["state"] == "stopped"
+assert "not (agent_box_bundle_offbox_send | bool)" in off["when"]
+PY
+then ok "9. the off-box send needs agent_box_secrets_bundle.offbox: true"
+else bad "9. the off-box send is not guarded by offbox: true"; fi
 
 # 7
 grep -qE 'decrypt[^|]*--output ' "$t/send.sh" && bad "7. the read-back writes the clear tar to a file"

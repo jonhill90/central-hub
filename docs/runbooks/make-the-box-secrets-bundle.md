@@ -30,7 +30,7 @@ The lab's private files live in the agent box's keys folder, and on the owner's 
 
 **The off-box send (pick 236).** It reuses everything the OPNsense off-box copy built: its settings file, its Azure sign-in, the `opnsense-backup` container, the restic repository and its password, and the Key Vault. No Azure resource, role or assignment is added, and nothing is applied to Azure.
 
-- `secrets-bundle-offbox.timer`, daily at 16:15 UTC (`agent_box_secrets_bundle_offbox_daily`), after the bundle's, runs `secrets-bundle-offbox.sh` as the keys user. It is installed only when `agent_box_opnsense_offbox` is set. In order, it:
+- `secrets-bundle-offbox.timer`, daily at 16:15 UTC (`agent_box_secrets_bundle_offbox_daily`), after the bundle's, runs `secrets-bundle-offbox.sh` as the keys user. It is installed only when `agent_box_opnsense_offbox` is set and `agent_box_secrets_bundle.offbox` is `true`. The key is false by default: the send puts the box's age identity into the vault, a secrets step, so the owner sets it to true only after the secrets card for the send. Without it the daily bundle still runs and nothing leaves the box. In order, the send:
   1. picks the newest bundle, and refuses it unless its `sops.age` lists the box's recipient, and the Mac's when one is set;
   2. runs the escrow (`opnsense-escrow.py ensure`) for both the restic password and the box's age identity, the identity as secret `BUNDLE_VAULT_SECRET` (default `secrets-bundle-age-identity`). If the vault does not hold the current value of both, nothing is sent;
   3. requires the repository to exist already (the OPNsense copy makes it; this job never does);
