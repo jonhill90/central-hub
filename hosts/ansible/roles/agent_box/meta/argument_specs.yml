@@ -39,7 +39,10 @@ argument_specs:
               The first arguments the session user may run, when that is fewer than args (the runner user gets args).
               An empty list gives the session user no line. Default: args. D-0041 uses it so only the workflow can run an apply.
           runner: {type: bool, required: false, default: false, description: "Also let the runner user run it (agent_box_runner_user)."}
-          run_as: {type: str, required: false, description: "The user the wrapper's sudo line runs it as, instead of the keys user (the proxmox-host job's own user)."}
+          run_as:
+            type: str
+            required: false
+            description: "The user the wrapper's sudo line runs it as, instead of the keys user (the proxmox-host job's own user)."
       agent_box_tofu_version: {type: str, description: OpenTofu version for the wrappers.}
       agent_box_tofu_sha256: {type: str, description: SHA-256 of the linux_amd64 zip of that version.}
       agent_box_kubectl_version: {type: str, description: "kubectl version for the c1-read wrapper, the one c1 runs."}
