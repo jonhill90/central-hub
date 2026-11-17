@@ -108,6 +108,39 @@ if python3 -I "$seed" seed "$work/settings.json" "$vlans" "$work/shell.pub" "$wo
 printf '%s\n' 'ssh-ed25519 AAAA $(id)' > "$work/shell.pub"
 if python3 -I "$seed" seed "$work/settings.json" "$vlans" "$work/shell.pub" "$work/bad" >/dev/null 2>&1; then bad "accepted a command substitution in the key comment"; else ok "refuses a command substitution in the key comment"; fi
 
+# status: dev's host list, the newest start task, and the report's verdict from made-up Proxmox answers.
+python3 -I "$seed" dev-hosts "$work/settings.json" "$vlans" > "$work/hosts"
+[ "$(wc -l < "$work/hosts")" = 254 ] && head -1 "$work/hosts" | grep -qx '10.1.30.1' && tail -1 "$work/hosts" | grep -qx '10.1.30.254' \
+  && ok "status pings dev's 254 host addresses" || bad "dev host list"
+[ -z "$(python3 -I "$seed" dev-hosts "$work/settings.json" "$work/missing.yml")" ] && ok "status skips the sweep without the VLAN file" || bad "sweep without the VLAN file"
+st=$work/status
+mkdir -p "$st"
+printf '%s\n' '{"data": [{"type": "qmstart", "starttime": 100, "status": "OK", "upid": "UPID:examplehv01:00001234:00005678:0000ABCD:qmstart:257:agent@pve!dev:"},
+  {"type": "qmstart", "starttime": 200, "status": "OK", "upid": "UPID:examplehv01:00001235:00005679:0000ABCE:qmstart:257:agent@pve!dev:"},
+  {"type": "qmcreate", "starttime": 300, "upid": "UPID:examplehv01:00001236:0000567A:0000ABCF:qmcreate:257:agent@pve!dev:"}]}' > "$st/tasks.json"
+[ "$(python3 -I "$seed" last-start "$st/tasks.json")" = 'UPID:examplehv01:00001235:00005679:0000ABCE:qmstart:257:agent@pve!dev:' ] \
+  && ok "status reads the newest start task" || bad "newest start task"
+printf '%s\n' '{"data": [{"type": "qmstart", "starttime": 1, "upid": "UPID:x/../../y:qmstart"}]}' > "$work/badtasks.json"
+[ -z "$(python3 -I "$seed" last-start "$work/badtasks.json")" ] && ok "status refuses a task id that is not a UPID" || bad "accepted a bad UPID"
+echo '{"data": {"vmid": 257, "status": "running", "qmpstatus": "running", "uptime": 900, "cpu": 0.01, "mem": 536870912, "maxmem": 3221225472, "netin": 0, "netout": 0}}' > "$st/current.json"
+echo '{"data": {"net0": "virtio=BC:24:11:00:00:01,bridge=dev", "ide2": "local:iso/opnsense-test-257-seed.iso,media=cdrom", "boot": "order=scsi0"}}' > "$st/config.json"
+echo '{"data": [{"t": "OK"}]}' > "$st/tasklog.json"
+arp() { printf 'IP address HW type Flags HW address Mask Device\n'; printf '%s\n' "$@"; }
+verdict() { python3 -I "$seed" status "$work/settings.json" "$st" | sed -n 's/^opnsense-test: status: \(the VM .*\)$/\1/p'; }
+arp '10.1.30.199 0x1 0x2 bc:24:11:00:00:01 * eth0' > "$st/arp"
+verdict | grep -q '^the VM holds the seed.s address 10.1.30.199$' && ok "status: the VM holds the seed's address" || bad "verdict, seed address"
+arp '10.1.30.60 0x1 0x2 bc:24:11:00:00:01 * eth0' '10.1.30.199 0x1 0x0 00:00:00:00:00:00 * eth0' > "$st/arp"
+verdict | grep -q 'on 10.1.30.60, not the seed.s 10.1.30.199: the seed script did not set its address' && ok "status: the VM took another address" || bad "verdict, other address"
+arp '10.1.30.60 0x1 0x2 bc:24:11:00:00:02 * eth0' > "$st/arp"
+verdict | grep -q 'has sent nothing on its NIC' && ok "status: the VM sent nothing" || bad "verdict, silent VM"
+sed -i 's/"netout": 0/"netout": 4096/' "$st/current.json"
+verdict | grep -q 'answers ARP for no dev address' && ok "status: the VM sends but has no address" || bad "verdict, no address"
+sed -i 's/"status": "running"/"status": "stopped"/' "$st/current.json"
+verdict | grep -q '^the VM is not running$' && ok "status: the VM is stopped" || bad "verdict, stopped"
+w=$files/opnsense-test.sh
+if sed -n '/^px_api()/,/^}/p;/^status()/,/^}/p' "$w" | grep -qE -- '-X|--request|--data|-d |POST|PUT|DELETE'; then bad "status makes a call other than GET"
+else ok "status makes GET calls only"; fi
+
 # Pins: the wrapper's Keycloak is the digest the identity check pins, and the plugin is Plan's beta5 file.
 w=$files/opnsense-test.sh
 kc=$(sed -n 's/^image=\(quay.io\/keycloak\/keycloak@sha256:[0-9a-f]*\)$/\1/p' "$here/../identity/test_realm.sh")

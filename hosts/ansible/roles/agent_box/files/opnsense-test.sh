@@ -10,7 +10,9 @@
 #   run the pinned opnsense-bootstrap, then pkg add the pinned os-openid-connect package.
 # prove: start the proof's Keycloak on this box, run proof items 2 to 7 and 9, stop Keycloak, remove its data.
 # destroy: tofu destroy (proof item 8), the Keycloak container if still there, and the proof folder.
-# log: the last run's log.
+# log: the last run's log, then a read-only status of VM 257: its state, uptime, traffic and config from
+#   Proxmox, its last start task's log, and which dev address its MAC answers on. It changes nothing on
+#   Proxmox or the VM and leaves the log alone.
 set -euo pipefail
 umask 077
 
@@ -55,9 +57,50 @@ PLUGIN_SHA256=4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406a41b117c
 KEYCLOAK_IMAGE=quay.io/keycloak/keycloak@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
 KC_NAME=opnsense-test-keycloak
 
-[[ $action == log ]] && { cat "$logfile" 2>/dev/null || echo "opnsense-test: no log yet"; exit 0; }
+if [[ $action == log ]]; then
+  cat "$logfile" 2>/dev/null || echo "opnsense-test: no log yet"
+  [[ -f $settings ]] || exit 0
+fi
 [[ -f $settings ]] || { echo "opnsense-test: $settings is missing; set agent_box_opnsense_test in the inventory and run the agent_box role" >&2; exit 1; }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
+
+# One Proxmox API call with the agents' token, as the dev rebuild makes them; the token goes to curl on stdin.
+px_api() { # path
+  # shellcheck source=/dev/null
+  ( set -a; . "$keys/proxmox-dev.env"; set +a
+    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" )
+}
+
+# The status `log` ends with: GET calls only, with the agents' token. The token has no VM.Console
+# (hosts/terraform/home/bootstrap/agent-access.sh), so the VM's serial output can't be read; its traffic
+# counters, its start task's log and the ARP table stand in.
+status() {
+  local node t upid h
+  node=$(setting proxmox_node_name)
+  t=$(mktemp -d)
+  echo "opnsense-test: status at $(date -u +%FT%TZ)"
+  if ! px_api "nodes/$node/qemu/$VMID/status/current" > "$t/current.json" 2>/dev/null; then
+    rm -rf "$t"; echo "opnsense-test: VM $VMID is not on the node, or the token cannot read it"; return 0
+  fi
+  px_api "nodes/$node/qemu/$VMID/config" > "$t/config.json"
+  px_api "nodes/$node/qemu/$VMID/rrddata?timeframe=hour&cf=AVERAGE" > "$t/rrd.json" || echo '{"data": []}' > "$t/rrd.json"
+  px_api "nodes/$node/tasks?vmid=$VMID&source=all&limit=20" > "$t/tasks.json" || echo '{"data": []}' > "$t/tasks.json"
+  upid=$("$py" -I "$seed_py" last-start "$t/tasks.json")
+  if [[ -n $upid ]]; then
+    px_api "nodes/$node/tasks/$upid/log?limit=40" > "$t/tasklog.json" || echo '{"data": []}' > "$t/tasklog.json"
+  fi
+  # One ping to each host address in dev, so the ARP table shows which address the VM's MAC answers on.
+  for h in $("$py" -I "$seed_py" dev-hosts "$settings" "$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml"); do
+    ping -c 1 -W 1 "$h" >/dev/null 2>&1 &
+  done
+  wait
+  cp /proc/net/arp "$t/arp"
+  "$py" -I "$seed_py" status "$settings" "$t" || true
+  rm -rf "$t"
+}
+[[ $action == log ]] && { status; exit 0; }
 
 exec 9>"$work/state/opnsense-test.lock"
 flock -n 9 || { echo "opnsense-test: another opnsense-test run is going; try again when it ends" >&2; exit 1; }
@@ -72,15 +115,6 @@ vlans=$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml
 [[ -f $sshkey ]] || ssh-keygen -q -t ed25519 -N "" -C "keys@agent-box opnsense-test" -f "$sshkey"
 addr=$(setting address)
 kc_addr=$(setting keycloak_address)
-
-# One Proxmox API call with the agents' token, as the dev rebuild makes them; the token goes to curl on stdin.
-px_api() { # path
-  # shellcheck source=/dev/null
-  ( set -a; . "$keys/proxmox-dev.env"; set +a
-    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
-    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
-      curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" )
-}
 
 # Dev and the test VM never run together: dev's state must hold no resource, dev's tfvars must not
 # declare VM 257, no dev rebuild may be running, and the node must have the VM's memory plus the margin.

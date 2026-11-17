@@ -8,6 +8,13 @@
       proofadmin.hash and client.secret.
   opnsense-test-seed.py realm  <settings.json> <proof dir> <out file>
       the throwaway Keycloak realm, with ${...} placeholders where the client secret and passwords go.
+  opnsense-test-seed.py dev-hosts <settings.json> <vlans.yml>
+      dev's host addresses, one per line, for `opnsense-test log` to ping once; nothing if the file is missing.
+  opnsense-test-seed.py last-start <tasks.json>
+      the UPID of the VM's newest start task in a Proxmox task list, or nothing.
+  opnsense-test-seed.py status <settings.json> <dir>
+      the status report, from the Proxmox answers in <dir> (current.json, config.json, rrd.json,
+      tasks.json, tasklog.json) and the box's ARP table (<dir>/arp).
 
 Every secret here is made for the one proof by the wrapper and removed by `opnsense-test destroy`.
 None comes from the repository or the inventory.
@@ -244,9 +251,81 @@ def realm(settings, proof, out):
     }, open(out, "w"), indent=1)
 
 
+def dev_hosts(settings, vlans):
+    if not os.path.exists(vlans):
+        return
+    _, net, _ = load(settings, vlans)
+    for h in net.hosts():
+        print(h)
+
+
+UPID = re.compile(r"UPID:[A-Za-z0-9.-]+:[0-9A-F]{8}:[0-9A-F]{8}:[0-9A-F]{8}:qmstart:[0-9]+:[A-Za-z0-9@.!_-]+:")
+
+
+def last_start(tasks):
+    starts = [t for t in json.load(open(tasks)).get("data") or [] if t.get("type") == "qmstart"]
+    starts.sort(key=lambda t: t.get("starttime", 0))
+    if starts and UPID.fullmatch(starts[-1].get("upid", "")):
+        print(starts[-1]["upid"])
+
+
+def status(settings, folder):
+    s = json.load(open(settings))
+    def data(name, default):
+        try:
+            return json.load(open(os.path.join(folder, name))).get("data") or default
+        except (OSError, ValueError):
+            return default
+    cur, cfg = data("current.json", {}), data("config.json", {})
+    up = int(cur.get("uptime") or 0)
+    running = cur.get("status") == "running"
+    print(f"VM {cur.get('vmid', '?')}: {cur.get('status', '?')} (qmp {cur.get('qmpstatus', '?')}), "
+          f"up {up // 3600}h {up % 3600 // 60}m {up % 60}s, cpu {100 * float(cur.get('cpu') or 0):.1f}%, "
+          f"memory {int(cur.get('mem') or 0) >> 20}/{int(cur.get('maxmem') or 0) >> 20} MiB")
+    print(f"traffic since start: in {int(cur.get('netin') or 0)} bytes, out {int(cur.get('netout') or 0)} bytes")
+    for k in ("net0", "ide2", "scsi0", "boot", "serial0", "agent"):
+        print(f"config {k}: {cfg.get(k, '(not set)')}")
+    rrd = [r for r in data("rrd.json", []) if r.get("netin") is not None or r.get("netout") is not None][-6:]
+    for r in rrd:
+        print(f"last hour, {r.get('time')}: in {float(r.get('netin') or 0):.0f} B/s, out {float(r.get('netout') or 0):.0f} B/s")
+    starts = sorted((t for t in data("tasks.json", []) if t.get("type") == "qmstart"), key=lambda t: t.get("starttime", 0))
+    if starts:
+        t = starts[-1]
+        print(f"last start task: started {t.get('starttime')}, status {t.get('status', 'running')}")
+        for line in data("tasklog.json", []):
+            print(f"  start log: {line.get('t', '')}")
+    else:
+        print("last start task: none in the node's task list")
+    m = re.search(r"=([0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5})", cfg.get("net0", ""))
+    mac = m.group(1).lower() if m else None
+    seen = []
+    try:
+        for line in open(os.path.join(folder, "arp")).read().splitlines()[1:]:
+            f = line.split()
+            if len(f) >= 4 and f[2] != "0x0" and mac and f[3].lower() == mac:
+                seen.append(f[0])
+    except OSError:
+        pass
+    print(f"MAC {mac or '(none in net0)'} answers on dev at: {', '.join(seen) or 'no address'}")
+    addr = s["address"]
+    if not running:
+        verdict = "the VM is not running"
+    elif addr in seen:
+        verdict = f"the VM holds the seed's address {addr}"
+    elif seen:
+        verdict = f"the VM is on {', '.join(seen)}, not the seed's {addr}: the seed script did not set its address"
+    elif int(cur.get("netout") or 0) == 0:
+        verdict = "the VM has sent nothing on its NIC: it has not reached the network, or the NIC is down"
+    else:
+        verdict = "the VM has sent on its NIC but answers ARP for no dev address"
+    print(f"opnsense-test: status: {verdict}")
+    print("opnsense-test: status: no serial output, because the agents' token has no VM.Console")
+
+
 if __name__ == "__main__":
     cmd, args = (sys.argv[1], sys.argv[2:]) if len(sys.argv) > 1 else ("", [])
-    fn = {"seed": (seed, 4), "config": (config, 5), "realm": (realm, 3)}.get(cmd)
+    fn = {"seed": (seed, 4), "config": (config, 5), "realm": (realm, 3), "dev-hosts": (dev_hosts, 2),
+          "last-start": (last_start, 1), "status": (status, 2)}.get(cmd)
     if fn is None or len(args) != fn[1]:
         sys.exit(__doc__)
     fn[0](*args)
