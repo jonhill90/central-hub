@@ -186,7 +186,6 @@ PY
 }
 
 tofu_run() {
-  if [[ $action == plan ]]; then image; seed_iso; write_vars; fi
   if [[ $action == destroy && ! -f $vars ]]; then
     [[ ! -s $state ]] || { echo "opnsense-test: the state holds resources but $vars is gone; run plan, then destroy" >&2; exit 1; }
     echo "opnsense-test: nothing to destroy"; return 0
@@ -201,12 +200,18 @@ tofu_run() {
   held=$(tofu state list 2>/dev/null || true)
   case $action in
     plan)
+      # A plan while the VM is in the state would make a new seed (a new hash) and replace the old seed file,
+      # a delete the token can't make. So plan runs only once destroy has taken the VM out of the state.
+      if grep -qx "$vm_res" <<<"$held"; then
+        echo "opnsense-test: refused, VM $VMID is in the state; run opnsense-test destroy first" >&2; exit 1
+      fi
       # A seed in the state without its VM is a leftover of an earlier run. Replacing it would need a delete
       # the token can't make, so it leaves the state; its file stays on local for the owner.
-      if grep -qx "$seed_res" <<<"$held" && ! grep -qx "$vm_res" <<<"$held"; then
+      if grep -qx "$seed_res" <<<"$held"; then
         tofu state rm "$seed_res" >/dev/null
         echo "opnsense-test: an earlier run's seed ISO left the state; its file stays on local"
       fi
+      image; seed_iso; write_vars
       tofu plan -input=false -var-file="$vars" -out="$plan"
       ;;
     apply)

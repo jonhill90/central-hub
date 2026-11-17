@@ -157,8 +157,10 @@ grep -q '/var/db/openid-connect/dpop' "$files/opnsense-test-prove.py" && ok "pro
 grep -q 'DPoP sender constraint</th>' "$files/opnsense-test-prove.py" && ok "prove reads the sign-in test's DPoP sender constraint row" || bad "no DPoP sender constraint check"
 grep -q 'VMID=257$' "$w" && ok "the wrapper's VM ID is 257" || bad "VM ID"
 # The token can't delete files on local: destroy targets only the VM, and the seed leaves the state.
-if grep -q 'plan -destroy' "$w" && ! grep 'plan -destroy' "$w" | grep -vq -- '-target="$vm_res"'; then ok "destroy targets only the VM"; else bad "destroy may delete files on local"; fi
-grep -q 'tofu state rm "$seed_res"' "$w" && ok "the seed ISO leaves the state instead of being deleted" || bad "seed not dropped from the state"
+code=$(grep -v '^[[:space:]]*#' "$w")   # code lines only, so a comment can't pass or fail these
+if grep -q 'plan -destroy' <<<"$code" && ! grep 'plan -destroy' <<<"$code" | grep -vq -- '-target="$vm_res"'; then ok "destroy targets only the VM"; else bad "destroy may delete files on local"; fi
+grep -q 'tofu state rm "$seed_res"' <<<"$code" && ok "the seed ISO leaves the state instead of being deleted" || bad "seed not dropped from the state"
+grep -q 'refused, VM $VMID is in the state' <<<"$code" && ok "plan refuses while the VM is in the state, so a new seed never replaces a file" || bad "plan may replace the seed file"
 
 [ "$fails" = 0 ] || { echo "$fails failed"; exit 1; }
 echo "opnsense-test: all checks passed"

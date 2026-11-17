@@ -114,6 +114,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 |---|---|
 | `refused, dev's state holds N resources` | Dev is up. Tear it down first (step 1). |
 | `refused, short on memory` | The node lacks the VM's memory plus the margin. Stop nothing else; report it. |
+| `refused, VM 257 is in the state` | An earlier proof's VM was not destroyed. A new plan would make a new seed and replace the old seed file, a delete the agents' token can't make. Run `opnsense-test destroy`, then plan again. |
 | `refused, a dev rebuild run is going` | A dev rebuild holds the run lock. Wait for it to end, then tear dev down (step 1). |
 | `the image does not match its pin` | The archive's file changed. Nothing is built. Check the archive's CHECKSUM.SHA256 before you move the pin. |
 | `no SSH to <address> after 10 minutes` | The first boot did not take the seed's address, or dev blocks the box's SSH. Run `opnsense-test log` and keep its status verdict line, then destroy and report both. |
