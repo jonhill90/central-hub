@@ -49,7 +49,7 @@ run() { # mode
   [[ -z $srv ]] || { kill "$srv" 2>/dev/null; wait "$srv" 2>/dev/null || true; }
   python3 -I "$t/server.py" "$port" "$1" "$seed" "$redir" & srv=$!
   sleep 0.5
-  printf '{"base":"http://localhost:%s","realm":"lab","client":"grafana","redirect":"%s","user":"u","password":"pw-secret-value","seed":"%s","address":"127.0.0.1","verify":true}' "$port" "$redir" "$seed" \
+  printf '{"base":"http://localhost:%s","realm":"home","client":"grafana","redirect":"%s","user":"u","password":"pw-secret-value","seed":"%s","address":"127.0.0.1","verify":true}' "$port" "$redir" "$seed" \
     | python3 -I "$check" > "$t/out" 2>&1 && rc=0 || rc=$?
 }
 run normal

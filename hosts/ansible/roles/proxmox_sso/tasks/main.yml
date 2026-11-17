@@ -11,7 +11,7 @@
       - proxmox_sso_realm is match('^[A-Za-z][A-Za-z0-9_-]{1,30}$')
       - proxmox_sso_address | length == 0 or proxmox_sso_address is match('^([0-9]{1,3}[.]){3}[0-9]{1,3}$')
     fail_msg: >-
-      Set proxmox_sso_issuer (https://sso.<zone>/realms/lab) and proxmox_sso_ui_names (or proxmox_cert_names) in
+      Set proxmox_sso_issuer (https://sso.<zone>/realms/home) and proxmox_sso_ui_names (or proxmox_cert_names) in
       the inventory; proxmox_sso_address, if set, is c1's Gateway's IPv4 address.
     quiet: true
 
@@ -42,7 +42,7 @@
     that: proxmox_sso_secret | length >= 32
     fail_msg: >-
       {{ proxmox_sso_values_file }} has no {{ proxmox_sso_secret_key }} line. Run playbooks/k8s-identity.yml
-      --tags secrets,keycloak first: it adds the line and the client to realm lab.
+      --tags secrets,keycloak first: it adds the line and the client to realm home.
     quiet: true
 
 # One line, found by its marker, so a changed address replaces it (the pattern of role proxmox_notify).

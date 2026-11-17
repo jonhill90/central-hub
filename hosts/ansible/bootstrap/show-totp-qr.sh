@@ -15,14 +15,14 @@ key=TOTP_$(printf '%s' "$user" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_'
 command -v qrencode >/dev/null || { echo "show-totp-qr: qrencode is missing (brew install qrencode)" >&2; exit 1; }
 [[ -r $values ]] || { echo "show-totp-qr: $values is missing; run playbooks/k8s-identity.yml first" >&2; exit 1; }
 seed=$(sed -n "s/^${key}=//p" "$values" | head -1)
-[[ $seed =~ ^[A-Z2-7]{16,}=*$ ]] || { echo "show-totp-qr: $values has no base32 $key line; is $user in lab-admins?" >&2; exit 1; }
+[[ $seed =~ ^[A-Z2-7]{16,}=*$ ]] || { echo "show-totp-qr: $values has no base32 $key line; is $user in home-admins?" >&2; exit 1; }
 
 umask 077
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
 img=$dir/totp.png
-# otpauth URI (Google Authenticator's key URI format); the label and issuer are "Lab", never a host name.
-printf 'otpauth://totp/Lab:%s?secret=%s&issuer=Lab&algorithm=SHA1&digits=6&period=30' "$user" "${seed%%=*}" |
+# otpauth URI (Google Authenticator's key URI format); the label and issuer are "Home", never a host name.
+printf 'otpauth://totp/Home:%s?secret=%s&issuer=Home&algorithm=SHA1&digits=6&period=30' "$user" "${seed%%=*}" |
   qrencode -t PNG -s 8 -o "$img"
 chmod 0600 "$img"
 opener=$(command -v open || command -v xdg-open) || { echo "show-totp-qr: no open or xdg-open to show the image" >&2; exit 1; }

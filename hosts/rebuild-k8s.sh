@@ -460,7 +460,7 @@ run_stage() {
     # With a secrets store (OPENBAO_ADDR), the realm also gets client openbao for the store's address, and the
     # role writes openbao-oidc.json in this env folder (Keycloak's issuer, this Gateway's address, the dev CA's
     # root), for the store's owner sign-in and its proof (agent pick 233), which the in-cluster store gets later. A
-    # lab-viewers user, dev-viewer, and a second lab-admins user, dev-admin2, are the ones the store must refuse.
+    # home-viewers user, dev-viewer, and a second home-admins user, dev-admin2, are the ones the store must refuse.
     identity-keycloak)
       [ "$ENV_NAME" = dev ] || { echo "the dev identity stage runs on dev only"; return 1; }
       local store_host="" store_hosts="[]" handoff=""
@@ -470,7 +470,7 @@ run_stage() {
       fi
       ap playbooks/k8s-identity.yml --tags all,signin \
         -e k8s_identity_owner_username=dev-admin -e k8s_identity_owner_email= \
-        -e '{"k8s_identity_extra_users": [{"username": "dev-viewer", "groups": ["lab-viewers"]}, {"username": "dev-admin2", "groups": ["lab-admins"]}]}' \
+        -e '{"k8s_identity_extra_users": [{"username": "dev-viewer", "groups": ["home-viewers"]}, {"username": "dev-admin2", "groups": ["home-admins"]}]}' \
         -e "{\"k8s_identity_openbao_hosts\": $store_hosts}" -e "k8s_identity_oidc_handoff_file=$handoff" \
         -e k8s_app_route_proof=false -e k8s_identity_theme_dir= \
         -e "k8s_identity_values_file=$env_dir/identity.env" ;;

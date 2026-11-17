@@ -23,13 +23,13 @@ fail=0
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost -addext subjectAltName=DNS:localhost \
   -keyout "$t/key.pem" -out "$t/cert.pem" 2>/dev/null
 port=$(python3 -I -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-issuer=https://localhost:$port/realms/lab
+issuer=https://localhost:$port/realms/home
 cat > "$t/server.py" <<'PY'
 import http.server, json, ssl, sys
 port, issuer, cert, key = int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path != "/realms/lab/.well-known/openid-configuration":
+        if self.path != "/realms/home/.well-known/openid-configuration":
             self.send_response(404); self.end_headers(); return
         body = json.dumps({"issuer": issuer, "authorization_endpoint": issuer + "/protocol/openid-connect/auth"}).encode()
         self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(body)
@@ -108,8 +108,8 @@ out=$(run --check)
 [[ ! -e $t/pve.json ]] && ! grep -q proxmox_sso "$t/hosts" && ok "1. a check run changes nothing" || bad "1: $out"
 out=$(run); echo "$out" > "$t/out-all"
 if grep -q 'failed=0' <<<"$out" \
-   && [[ $(q 'sorted(s["groups"])') == "['lab-admins-sso', 'lab-viewers-sso']" ]] \
-   && [[ $(q 'sorted((a["ugid"], a["roleid"], a["path"]) for a in s["acls"])') == "[('lab-admins-sso', 'Administrator', '/'), ('lab-viewers-sso', 'PVEAuditor', '/')]" ]] \
+   && [[ $(q 'sorted(s["groups"])') == "['home-admins-sso', 'home-viewers-sso']" ]] \
+   && [[ $(q 'sorted((a["ugid"], a["roleid"], a["path"]) for a in s["acls"])') == "[('home-admins-sso', 'Administrator', '/'), ('home-viewers-sso', 'PVEAuditor', '/')]" ]] \
    && [[ $(q 's["realms"]["sso"]["type"], s["realms"]["sso"]["issuer-url"], s["realms"]["sso"]["client-id"], s["realms"]["sso"]["username-claim"], s["realms"]["sso"]["autocreate"], s["realms"]["sso"]["groups-claim"], s["realms"]["sso"]["groups-overwrite"], s["realms"]["sso"]["default"]') \
         == "('openid', '$issuer', 'proxmox', 'username', 1, 'groups', 1, 1)" ]] \
    && [[ $(q 's["realms"]["sso"]["client-key"]') == "$secret1" ]] \

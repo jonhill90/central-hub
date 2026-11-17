@@ -22,7 +22,7 @@ flowchart LR
   ub --> gw["Gateway apps<br/>listeners http-short, https-short (*.&lt;zone&gt;)"]
   cert["Certificate apps<br/>*.apps.c1.prod.&lt;zone&gt; and *.&lt;zone&gt;"] --> gw
   gw --> apps["Grafana, Argo CD, Keycloak,<br/>Jellyfin, ntfy"]
-  apps -- "sign in" --> kc["https://sso.&lt;zone&gt;/realms/lab"]
+  apps -- "sign in" --> kc["https://sso.&lt;zone&gt;/realms/home"]
 ```
 
 Each short name is its own DNS entry, in Unbound and in the tailnet's split DNS, so every other name in the zone still resolves publicly. On the Gateway one pair of listeners takes `*.<zone>`, and each app's route adds its short name. The certificate gets a second wildcard, `*.<zone>`, so no app name reaches Certificate Transparency logs with a public issuer.
@@ -32,7 +32,7 @@ Every part has its own switch, all on by default: `k8s_gateway_short_names`, `k8
 ## What needs the owner's hands
 
 1. Say go for steps 2 and 3, which change the firewall's DNS and the tailnet.
-2. After step 7, sign in at `https://grafana.<zone>/` with "Lab sign-in".
+2. After step 7, sign in at `https://grafana.<zone>/` with "Home sign-in".
 
 ## Before you start
 
@@ -82,27 +82,27 @@ Every part has its own switch, all on by default: `k8s_gateway_short_names`, `k8
    ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags ui,sso
    ```
 
-   why: the Gateway gains listeners `http-short` and `https-short`, each route adds its short name, ntfy builds links with `ntfy.<zone>`, and Argo CD's `url` becomes `https://argocd.<zone>` with the issuer `https://sso.<zone>/realms/lab`.
+   why: the Gateway gains listeners `http-short` and `https-short`, each route adds its short name, ntfy builds links with `ntfy.<zone>`, and Argo CD's `url` becomes `https://argocd.<zone>` with the issuer `https://sso.<zone>/realms/home`.
    expect: `kubectl -n gateway get gateway apps -o jsonpath='{range .status.listeners[*]}{.name}={.conditions[?(@.type=="Programmed")].status} {end}'` shows all four listeners `True`. `https://argocd.<zone>/` opens on the Mac.
 
-6. Keycloak and realm lab:
+6. Keycloak and realm home:
 
    ```sh
    ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags keycloak,route
    ```
 
    why: Keycloak's hostname, and so its issuer, becomes `https://sso.<zone>`. Every client also accepts its app's short name, so the realm is imported again (see set-up-lab-sign-in.md, step 2).
-   expect: `https://sso.<zone>/realms/lab/.well-known/openid-configuration` shows `"issuer":"https://sso.<zone>/realms/lab"`. A second run reports `changed=0`.
+   expect: `https://sso.<zone>/realms/home/.well-known/openid-configuration` shows `"issuer":"https://sso.<zone>/realms/home"`. A second run reports `changed=0`.
 
 7. Grafana: sync `kube-prometheus-stack` in Argo CD (or run `playbooks/k8s-observability.yml` when Ansible runs it).
    why: Grafana's `root_url` becomes `https://grafana.<zone>/` and its sign-in goes to `https://sso.<zone>/`.
-   expect: `https://grafana.<zone>/` opens, "Lab sign-in" goes to `sso.<zone>` and comes back signed in.
+   expect: `https://grafana.<zone>/` opens, "Home sign-in" goes to `sso.<zone>` and comes back signed in.
 
 ## If it fails
 
 - **A short name doesn't resolve on the Mac:** `tailscale dns status | grep <zone>` must list it (step 3), and the Unbound override must exist (step 2).
 - **The browser warns about the certificate:** step 4 hasn't issued the new one yet, or the Mac doesn't trust the lab root (trust-lab-root-ca-on-mac.md).
-- **Sign-in fails with "Invalid parameter: redirect_uri":** realm lab was not imported again (step 6).
+- **Sign-in fails with "Invalid parameter: redirect_uri":** realm home was not imported again (step 6).
 - **The way back:** set the switches above to false in the inventory and `shortNames: false` in the three charts, then run steps 4 to 7 again; the long names never stopped working.
 
 ## Afterwards

@@ -38,7 +38,7 @@ def kcadm(*args, config="/tmp/kcadm.config"):
 
 
 def get(path, *query):
-    args = ["get", path, "-r", "lab"]
+    args = ["get", path, "-r", "home"]
     for q in query:
         args += ["-q", q]
     rc, out, err = kcadm(*args)
@@ -56,13 +56,13 @@ def totp(seed, period=30, digits=6):
 
 
 def sign_in(name, password, code=None):
-    """The password grant on realm lab's token endpoint, as admin-cli; True when a token comes back."""
+    """The password grant on realm home's token endpoint, as admin-cli; True when a token comes back."""
     ip = subprocess.run(["docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
                          CONTAINER], capture_output=True, text=True, check=True).stdout.strip()
     form = {"grant_type": "password", "client_id": "admin-cli", "username": name, "password": password}
     if code:
         form["totp"] = code
-    req = urllib.request.Request(f"http://{ip}:8080/realms/lab/protocol/openid-connect/token",
+    req = urllib.request.Request(f"http://{ip}:8080/realms/home/protocol/openid-connect/token",
                                  data=urllib.parse.urlencode(form).encode())
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
@@ -82,9 +82,9 @@ def main(src):
         realm = json.load(f)
     role_of = {g["name"]: g["realmRoles"] for g in realm["groups"]}
 
-    rc, out, err = kcadm("get", "realms/lab")
+    rc, out, err = kcadm("get", "realms/home")
     if rc != 0:
-        raise SystemExit(f"kcadm get realms/lab failed: {err.strip()}")
+        raise SystemExit(f"kcadm get realms/home failed: {err.strip()}")
     check(json.loads(out).get("editUsernameAllowed") is False, "users can't change their user name")
 
     clients = {}
@@ -121,7 +121,7 @@ def main(src):
         for client_id, cid in clients.items():
             token = get(f"clients/{cid}/evaluate-scopes/generate-example-id-token",
                         f"userId={found[0]['id']}", "scope=openid")
-            check(token.get("iss") == f"{HOST}/realms/lab", f"{client_id} token for {name}: issuer {token.get('iss')}")
+            check(token.get("iss") == f"{HOST}/realms/home", f"{client_id} token for {name}: issuer {token.get('iss')}")
             check(sorted(token.get("groups", [])) == groups, f"{client_id} token for {name}: groups {token.get('groups')}")
             check(sorted(r for r in token.get("roles", []) if r in ("admin", "viewer")) == roles,
                   f"{client_id} token for {name}: roles {token.get('roles')}")

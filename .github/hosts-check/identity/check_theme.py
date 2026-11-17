@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that realm lab's sign-in page uses the theme the realm names.
+"""Check that realm home's sign-in page uses the theme the realm names.
 
 Usage: check_theme.py <Keycloak URL> <theme name>
 Asks for the authorization page of client argocd (code flow, no PKCE required), then checks that
@@ -24,7 +24,7 @@ def main(base, theme):
     query = urllib.parse.urlencode({
         "client_id": "argocd", "response_type": "code", "scope": "openid",
         "redirect_uri": "https://argocd.example.com/auth/callback"})
-    status, page = fetch(f"{base}/realms/lab/protocol/openid-connect/auth?{query}")
+    status, page = fetch(f"{base}/realms/home/protocol/openid-connect/auth?{query}")
     print(f"sign-in page: {status}")
     links = re.findall(r'href="([^"]*/login/' + re.escape(theme) + r'/css/styles\.css)"', page)
     if status != 200 or not links:

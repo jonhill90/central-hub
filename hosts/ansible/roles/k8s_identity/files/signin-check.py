@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sign-in proof for realm lab: the browser flow of one client, driven over HTTPS, no token endpoint.
+"""Sign-in proof for realm home: the browser flow of one client, driven over HTTPS, no token endpoint.
 
 Run on a control-plane node by tasks/signin.yml, which sends one JSON object on stdin:
 base (https://<keycloak host>), realm, client, redirect (one of the client's redirect URIs), user,

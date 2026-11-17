@@ -49,7 +49,7 @@ spec:
 {% endfor %}
   realm:
     realm: {{ k8s_identity_realm }}
-    displayName: Lab sign-in
+    displayName: Home sign-in
     enabled: true
     sslRequired: external
     registrationAllowed: false
@@ -78,12 +78,12 @@ spec:
 {% for user in k8s_identity_users %}
       # Keycloak's user profile asks for an email, first and last name before a first sign-in
       # ("Account is not fully set up"), so each user gets all three: the given email or
-      # <user name>@lab.invalid (RFC 2606), and the given names or the user name and "Lab".
+      # <user name>@home.invalid (RFC 2606), and the given names or the user name and "Home".
       - username: {{ user.username }}
-        email: {{ user.email if user.email | default('') | length > 0 else user.username ~ '@lab.invalid' }}
+        email: {{ user.email if user.email | default('') | length > 0 else user.username ~ '@home.invalid' }}
         emailVerified: true
         firstName: {{ user.first_name | default(user.username) }}
-        lastName: {{ user.last_name | default('Lab') }}
+        lastName: {{ user.last_name | default('Home') }}
         enabled: true
         groups: [{% for g in user.groups %}/{{ g }}{{ ', ' if not loop.last }}{% endfor %}]
         credentials:
@@ -93,7 +93,7 @@ spec:
           # delete and import. Keycloak's built-in browser and direct grant flows ask for the code from any
           # user who has one ("Condition - user configured"), so every admin is asked.
           - type: otp
-            userLabel: lab authenticator
+            userLabel: home authenticator
             secretData: '{"value":"${{ '{' }}TOTP_{{ user.username | upper | regex_replace('[^A-Z0-9]', '_') }}{{ '}' }}"}'
             credentialData: '{"subType":"totp","digits":{{ k8s_identity_otp_digits }},"counter":0,"period":{{ k8s_identity_otp_period }},"algorithm":"HmacSHA1","secretEncoding":"BASE32"}'
 {% endif %}
@@ -201,7 +201,7 @@ spec:
       # The secrets store's web page, through its OIDC login (agent pick 233; OpenBao docs,
       # "OIDC provider configuration", Keycloak): confidential, code flow. The page calls back on
       # /ui/vault/auth/<mount>/oidc/callback. The store's login role `owner` decides who gets a token (bound to
-      # group lab-admins and to the owner's user name), so this client lets any realm user sign in, like the others.
+      # group home-admins and to the owner's user name), so this client lets any realm user sign in, like the others.
       - clientId: openbao
         name: Secrets store
         protocol: openid-connect

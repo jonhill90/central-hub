@@ -7,7 +7,7 @@ argument_specs:
       proxmox_sso_issuer:
         type: str
         required: true
-        description: Keycloak's issuer for realm lab, https://sso.<zone>/realms/lab (k8s_identity_issuer). Private.
+        description: Keycloak's issuer for realm home, https://sso.<zone>/realms/home (k8s_identity_issuer). Private.
       proxmox_sso_ui_names:
         type: list
         elements: str
