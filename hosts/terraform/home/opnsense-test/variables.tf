@@ -3,11 +3,6 @@ variable "proxmox_node_name" {
   type        = string
 }
 
-variable "vlans_file" {
-  description = "Path to the place's shared VLAN file (the same one home/network and Ansible read). No default."
-  type        = string
-}
-
 variable "vnet" {
   description = "VNet the test VM sits on. Only dev: the proof never touches prod or the lab firewall."
   type        = string
@@ -24,15 +19,19 @@ variable "pool_id" {
   default     = "dev"
 }
 
-variable "admin_user" {
-  description = "Login user cloud-init makes in the FreeBSD image; the wrapper reaches the VM as this user until the bootstrap."
+variable "seed_iso_path" {
+  description = "Path on the agent box of the NoCloud seed ISO the wrapper built (hostname, root's SSH key, the static dev address)."
   type        = string
-  default     = "freebsd"
 }
 
-variable "ssh_public_key" {
-  description = "Public half of the SSH key the agent box's keys user configures the test VM with."
+variable "seed_iso_sha256" {
+  description = "sha256 of the seed ISO, measured by the wrapper after it built it."
   type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{64}$", var.seed_iso_sha256))
+    error_message = "seed_iso_sha256 must be 64 lowercase hex digits."
+  }
 }
 
 variable "image_path" {
@@ -57,11 +56,10 @@ variable "image_sha256" {
 }
 
 variable "vm" {
-  description = "The test VM. Name (STD-0001) and address are private values set only in the box's settings."
+  description = "The test VM. Its name (STD-0001) is a private value set only in the box's settings; its address is in the seed ISO."
   type = object({
     name      = string
     vm_id     = number
-    address   = string
     cores     = number
     memory_mb = number
     disk_gb   = number

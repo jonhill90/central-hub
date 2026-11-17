@@ -242,6 +242,7 @@ check_backup() {
   bash "$here/tests/test_rebuild_dev_stages.sh"
   bash "$here/tests/test_rebuild_preflight.sh"
   bash "$here/tests/test_rebuild_short_log.sh"
+  bash "$here/tests/test_opnsense_test.sh"
 }
 
 check_proxy() {
@@ -266,6 +267,11 @@ check_scripts() {
   echo "scripts: actionlint passed on $(git ls-files -- '.github/workflows/*.yml' | wc -l) workflows"
 }
 
+check_plugin_pin() {
+  # The OPNsense proof's plugin package: its pinned SHA-256 and its build provenance (opnsense-plugin-pin.sh).
+  bash "$here/opnsense-plugin-pin.sh"
+}
+
 case "${1:-all}" in
   terraform) check_terraform ;;
   ansible) check_ansible ;;
@@ -274,6 +280,7 @@ case "${1:-all}" in
   scripts) check_scripts ;;
   backup) check_backup ;;
   proxy) check_proxy ;;
+  plugin-pin) check_plugin_pin ;;
   all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts; check_backup; check_proxy ;;
-  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|proxy|all]" >&2; exit 2 ;;
+  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|proxy|plugin-pin|all]" >&2; exit 2 ;;
 esac

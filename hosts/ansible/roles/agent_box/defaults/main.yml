@@ -69,6 +69,10 @@ agent_box_wrappers:
     args: [bootstrap, apply, secrets, "secrets rotate", status, log]
     session_args: [status, log]
     runner: true
+  # A throwaway OPNsense on dev, VM 257, for the sign-in proof (docs/runbooks/prove-opnsense-sign-in-on-dev.md).
+  # Built and destroyed only while dev is down; it runs a Keycloak container on this box during `prove`.
+  - name: opnsense-test
+    args: [plan, apply, configure, prove, destroy, log]
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]
@@ -275,6 +279,13 @@ agent_box_secrets_store_offbox_on_calendar: hourly
 # Private settings for the vps-host wrapper (D-0046), written to <work_dir>/vps-host.json: name (the VPS's name on
 # the tailnet). Empty does nothing.
 agent_box_vps_host: {}
+# Private settings for the opnsense-test wrapper, written to <work_dir>/opnsense-test.json: name (STD-0001), address
+# (the test VM's dev address), keycloak_address (this box's address the test VM reaches), cores, memory_mb (3072 or
+# more), disk_gb (16 or more) and proxmox_node_name. The VM ID is fixed at 257. Empty leaves the wrapper's tools,
+# filter and settings unset up.
+agent_box_opnsense_test: {}
+# The first subordinate UID and GID of the keys user, for the proof's rootless Keycloak container (65536 of each).
+agent_box_opnsense_test_subid_start: 300000
 # The controller's private files the prod_files tasks copy to <keys_dir>/prod (D-0035; paths from
 # docs/runbooks/rebuild-home-lab-from-scratch.md). from: clone (the controller's checkout of this
 # repo) or config (~/.config/central-hub). A missing file is skipped and named. Not listed on purpose:

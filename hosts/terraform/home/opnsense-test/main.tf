@@ -1,16 +1,15 @@
 # A throwaway OPNsense on VNet dev for the proof of sign-in through Keycloak (TEST-VM design v4, passed by
 # Councils A, B and C on 2026-11-17). Its first boot needs no console: it boots the FreeBSD 14.3 cloud
-# image with Proxmox cloud-init (the box's SSH key and a static dev address), and the opnsense-test
-# wrapper then seeds /conf/config.xml and runs the pinned opnsense-bootstrap over SSH. OPNsense 26.1 is
-# built on FreeBSD 14.3 and its boot importer keeps a config.xml that is already there.
+# image with a NoCloud seed ISO the wrapper builds (the box's SSH key for root and a static dev
+# address), and the wrapper then seeds /conf/config.xml and runs the pinned opnsense-bootstrap over
+# SSH. OPNsense 26.1 is built on FreeBSD 14.3 and its boot importer keeps a config.xml that is
+# already there.
+# Not Proxmox's own cloud-init drive: FreeBSD 14.3's nuageinit reads no network-config file from a
+# NoCloud drive, only a `network` key inside cloud-config user-data, and Proxmox writes its address
+# to network-config (freebsd-src releng/14.3 libexec/nuageinit/nuageinit, the nocloud branch).
 # One NIC on dev, no WAN, so it routes nothing. Built only while dev is down, destroyed at the end of
 # the proof. Applied from the agent box by the opnsense-test wrapper (docs/runbooks/prove-opnsense-sign-in-on-dev.md).
 # Exit: tofu destroy with this folder's state.
-
-locals {
-  dev_cidr = [for v in yamldecode(file(var.vlans_file)).lab_vlans : v.cidr if v.name == var.vnet][0]
-  gateway  = cidrhost(local.dev_cidr, 1)
-}
 
 # The FreeBSD image, checked and unpacked on the box by the wrapper, uploaded through the API.
 resource "proxmox_virtual_environment_file" "image" {
@@ -22,6 +21,20 @@ resource "proxmox_virtual_environment_file" "image" {
     path      = var.image_path
     file_name = var.image_file_name
     checksum  = var.image_sha256
+  }
+}
+
+# The NoCloud seed ISO the wrapper built for this VM: meta-data (hostname) and a user-data script that
+# runs as root at first boot. Uploaded through the API (Datastore.AllocateTemplate on local).
+resource "proxmox_virtual_environment_file" "seed" {
+  node_name    = var.proxmox_node_name
+  datastore_id = "local"
+  content_type = "iso"
+
+  source_file {
+    path      = var.seed_iso_path
+    file_name = "opnsense-test-${var.vm.vm_id}-seed.iso"
+    checksum  = var.seed_iso_sha256
   }
 }
 
@@ -66,28 +79,15 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     iothread     = true
   }
 
+  # The seed: label cidata, read once by nuageinit at first boot. Removed with the VM.
+  cdrom {
+    interface = "ide2"
+    file_id   = proxmox_virtual_environment_file.seed.id
+  }
+
   network_device {
     bridge = var.vnet
     model  = "virtio"
   }
 
-  initialization {
-    datastore_id = "local-lvm"
-
-    ip_config {
-      ipv4 {
-        address = "${var.vm.address}/24"
-        gateway = local.gateway
-      }
-    }
-
-    dns {
-      servers = [local.gateway]
-    }
-
-    user_account {
-      username = var.admin_user
-      keys     = [var.ssh_public_key]
-    }
-  }
 }

@@ -1,0 +1,91 @@
+---
+# The opnsense-test wrapper's needs (docs/runbooks/prove-opnsense-sign-in-on-dev.md), only when
+# agent_box_opnsense_test is set: xorriso builds the seed ISO, podman runs the proof's Keycloak as the keys user
+# (rootless, so it gets the keys user's subordinate IDs), and a packet filter keeps that Keycloak's port to the
+# test VM's address. The filter is loaded by its own unit, like the lifeline's: the distro nftables service is
+# masked (tasks/lifeline.yml).
+# The address goes into the packet filter, so it must be one plain IPv4 address; the wrapper's helper also checks
+# that it is a host address in dev (opnsense-test-seed.py).
+- name: opnsense_test | Check the settings' addresses are single IPv4 addresses
+  ansible.builtin.assert:
+    that:
+      - agent_box_opnsense_test.address is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+      - agent_box_opnsense_test.keycloak_address is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+      - agent_box_opnsense_test.name is match('^[a-z][a-z0-9]{10,14}$')
+    fail_msg: agent_box_opnsense_test needs name (STD-0001), address (the test VM's dev address) and keycloak_address (the box's address the VM reaches)
+
+- name: opnsense_test | Seed ISO and container tools
+  ansible.builtin.package:
+    name: [xorriso, podman, xz, nftables]
+    state: present
+
+- name: opnsense_test | The keys user's subordinate IDs, for rootless podman
+  ansible.builtin.lineinfile:
+    path: "/etc/{{ item }}"
+    regexp: "^{{ agent_box_keys_user }}:"
+    line: "{{ agent_box_keys_user }}:{{ agent_box_opnsense_test_subid_start }}:65536"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [subuid, subgid]
+
+- name: opnsense_test | The wrapper's helpers, root-owned
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ agent_box_libexec_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: [opnsense-test-seed.py, opnsense-test-prove.py]
+
+- name: opnsense_test | The wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/opnsense-test.json"
+    content: "{{ agent_box_opnsense_test | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+
+- name: opnsense_test | The filter's folder
+  ansible.builtin.file:
+    path: /etc/nftables
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: opnsense_test | The filter for the proof's Keycloak port
+  ansible.builtin.template:
+    src: opnsense-test.nft.j2
+    dest: /etc/nftables/opnsense-test.nft
+    owner: root
+    group: root
+    mode: "0600"
+    validate: "{{ agent_box_nft_bin }} -c -f %s"
+  notify: Reload the OPNsense proof filter
+
+- name: opnsense_test | The unit that loads the filter before the network
+  ansible.builtin.template:
+    src: opnsense-test-nft.service.j2
+    dest: /etc/systemd/system/opnsense-test-nft.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload the OPNsense proof filter
+
+- name: opnsense_test | The unit is enabled
+  ansible.builtin.systemd_service:
+    name: opnsense-test-nft.service
+    enabled: true
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: opnsense_test | Load the filter now
+  ansible.builtin.meta: flush_handlers
+
+- name: opnsense_test | The filter is loaded
+  ansible.builtin.systemd_service:
+    name: opnsense-test-nft.service
+    state: started
+  when: not ansible_check_mode
