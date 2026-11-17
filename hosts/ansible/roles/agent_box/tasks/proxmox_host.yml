@@ -25,11 +25,12 @@
     - "{{ agent_box_host_dir }}/inventory"
     - "{{ agent_box_host_work_dir }}"
 
-# Made on the box as the job's user; the private half never leaves it. A key already there is kept.
+# Made on the box as the job's user; the private half never leaves it. A key already there is kept. A check run
+# before the install has no such user yet, and become to a missing user fails even in check mode, so a check skips it.
 - name: proxmox_host | The host key, ed25519 (only when the job is switched on)
   ansible.builtin.command:
     cmd: ssh-keygen -q -t ed25519 -N '' -C central-hub-r1 -f {{ (agent_box_host_dir ~ '/id_ed25519') | quote }}
     creates: "{{ agent_box_host_dir }}/id_ed25519"
   become: true
   become_user: "{{ agent_box_host_user }}"
-  when: agent_box_proxmox_host_job | bool
+  when: agent_box_proxmox_host_job | bool and not ansible_check_mode
