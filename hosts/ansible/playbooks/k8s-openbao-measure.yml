@@ -23,7 +23,9 @@
     measure_reencrypt_host: "openbao-measure.{{ k8s_gitops_source_zone }}"
     measure_pass_host: "openbao-pass.{{ k8s_gitops_source_zone }}"
     measure_ca_configmap: openbao-measure-ca
-    # The Gateway's own answers when it can't reach OpenBao: reported as "refused at gateway", no audit line.
+    # The Gateway's own answers when it can't reach OpenBao. OpenBao answers 503 too when sealed, so these
+    # count as "refused at gateway" only on path a (TLS ends at the Gateway) and only while the control Job
+    # found the store unsealed (see measure_gw_refused).
     measure_gateway_codes: ['502', '503', '504']
     # The same pinned OpenBao image as the store's snapshot job (apps/openbao-store/values.yaml).
     measure_image: >-
@@ -357,16 +359,25 @@
       failed_when: false
       check_mode: false
 
-    # 502, 503 and 504 are the Gateway's own answers when it can't reach OpenBao (for example under an enforced
-    # NetworkPolicy): "refused at gateway", with no audit line to find (MEASURE-1 v5, Council C 02:41Z).
+    # A 502, 503 or 504 on path a or a+xff is the Gateway's own answer when it can't reach OpenBao (for example
+    # under an enforced NetworkPolicy): "refused at gateway", with no audit line to find (MEASURE-1 v5, Council C
+    # 02:41Z). Only while the control Job found the store unsealed: a sealed OpenBao answers 503 itself. Path b
+    # is passthrough, so any HTTP answer there is OpenBao's own (Council A 02:56Z).
+    - name: measure | Probes refused at the Gateway
+      ansible.builtin.set_fact:
+        measure_gw_refused: >-
+          {{ (measure_jobs.results[0].stdout | default('') == 's=1 f=')
+             | ternary(measure_probes.results[:2] | selectattr('stdout', 'in', measure_gateway_codes)
+                       | map(attribute='item.key') | list, []) }}
+
     - name: measure | Every probe that OpenBao answered has its audit line, and path a its X-Forwarded-For
       ansible.builtin.assert:
         that:
-          - (measure_probes.results | selectattr('stdout', 'match', '^[1-5][0-9][0-9]$')
-            | rejectattr('stdout', 'in', measure_gateway_codes) | map(attribute='item.key')
+          - (measure_probes.results | selectattr('stdout', 'match', '^[1-5][0-9][0-9]$') | map(attribute='item.key')
+            | reject('in', measure_gw_refused)
             | reject('in', measure_audit | dict2items | selectattr('value', 'truthy') | map(attribute='key') | list) | list) == []
           - measure_probes.results[0].stdout is not match('^[1-5][0-9][0-9]$')
-            or measure_probes.results[0].stdout in measure_gateway_codes
+            or 'a' in measure_gw_refused
             or measure_audit.a.xff | default('none') != 'none'
         fail_msg: >-
           a probe reached OpenBao but no audit line or X-Forwarded-For was found: was the store first started without
@@ -381,7 +392,7 @@
           policy={{ measure_policy }};
           {% for k in ['a', 'axff', 'b'] %}{% set p = measure_probes.results[loop.index0] %}{% set code = p.stdout | default('000') -%}
           {{ k }}={{ (p.stderr | default('no answer') | truncate(60)) if code == '000'
-          else (code ~ ' refused at gateway') if code in measure_gateway_codes else code }}
+          else (code ~ ' refused at gateway') if k in measure_gw_refused else code }}
           remote={{ measure_audit[k].remote | default('-') }} xff={{ measure_audit[k].xff | default('-') }}; {% endfor %}
           b_cert={{ measure_b_cert.stdout | default('none') | regex_replace('^issuer=\s*', '') | truncate(60) }};
           ingress={{ measure_ingress.stdout | default('') | trim | default('unread', true) }}
