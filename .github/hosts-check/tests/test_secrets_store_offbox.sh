@@ -2,8 +2,9 @@
 # The hourly off-box send of the dev secrets store's snapshot (hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh,
 # pick 237), against local restic repositories, the real restic, and stand-ins for curl, the secrets-store wrapper and
 # the escrow script:
-#   1. No store VM in the wrapper's state (no state file, or no VM in it): "skipped: no store", exit 0, nothing made.
-#   2. A store VM whose sys/health is not 200 (sealed, or no answer) fails, before any snapshot or send.
+#   1. No store: the in-cluster store off, or no dev VM in the rebuild's state (no state file, or no VM in it):
+#      "skipped: no store", exit 0, nothing made.
+#   2. Dev up with the store on, but a store whose sys/health is not 200 (sealed, or no answer) fails, before any snapshot or send.
 #   3. A normal hourly run makes its own repository, sends the snapshot and its .cluster file, reads back, and
 #      forgets without pruning.
 #   4. The first run from the prune hour prunes, once a day; the next run that day does not.
@@ -77,7 +78,7 @@ SNAPSHOT_PRUNE_AFTER_HOUR=3
 EOF
 }
 own
-vm_state() { echo '{"resources": [{"mode": "managed", "type": "proxmox_virtual_environment_vm", "name": "store", "instances": [{}]}]}' > "$t/work/state/secrets-store.tfstate"; }
+vm_state() { echo '{"resources": [{"mode": "managed", "type": "proxmox_virtual_environment_vm", "name": "node", "instances": [{}]}]}' > "$t/work/state/dev-vms.tfstate"; }
 sed -e "s|^work=.*|work=$t/work|" -e "s|^settings=.*|settings=$t/keys/opnsense-offbox/settings.env|" \
     -e "s|^cacert=.*|cacert=$t/ca.crt|" -e "s|^snapshots=.*|snapshots=$t/keys/dev/openbao-snapshots|" \
     -e "s|^wrapper=.*|wrapper=$t/wrapper|" -e "s|^restic=.*|restic=$t/bin/restic|" -e "s|^escrow=.*|escrow=$t/escrow|" \
@@ -103,12 +104,19 @@ echo 2026-11-14-01 > "$t/now"
 
 # 1
 echo 200 > "$t/health"
+echo true > "$t/work/openbao-in-cluster"
 send
 r1=$rc o1=$out
-echo '{"resources": []}' > "$t/work/state/secrets-store.tfstate"
+echo '{"resources": []}' > "$t/work/state/dev-vms.tfstate"
 send
-if [[ $r1 -eq 0 && $o1 == *"skipped: no store"* && $rc -eq 0 && $out == *"skipped: no store"* && ! -e $t/repo-store ]] && ! called; then
-  ok "1. no store VM in the state: skipped, exit 0, nothing made"
+r1b=$rc o1b=$out
+vm_state
+echo false > "$t/work/openbao-in-cluster"
+send
+rm -f "$t/work/state/dev-vms.tfstate"
+echo true > "$t/work/openbao-in-cluster"
+if [[ $r1 -eq 0 && $o1 == *"skipped: no store"* && $r1b -eq 0 && $o1b == *"skipped: no store"* && $rc -eq 0 && $out == *"skipped: no store"* && ! -e $t/repo-store ]] && ! called; then
+  ok "1. no store (no dev VM in the state, or the in-cluster store off): skipped, exit 0, nothing made"
 else bad "1. rc=$r1/$rc $o1 / $out"; fi
 
 # 2
@@ -116,7 +124,7 @@ vm_state
 echo 503 > "$t/health"; send; r2=$rc o2=$out
 echo 000 > "$t/health"; send
 if [[ $r2 -ne 0 && $o2 == *"answered 503"* && $rc -ne 0 && $out == *"answered nothing"* && ! -e $t/repo-store ]] && ! called; then
-  ok "2. a store VM that is sealed or does not answer fails, before any snapshot or send"
+  ok "2. a store that is sealed or does not answer fails, before any snapshot or send"
 else bad "2. rc=$r2/$rc $o2 / $out"; fi
 echo 200 > "$t/health"
 

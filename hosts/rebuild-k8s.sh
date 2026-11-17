@@ -34,6 +34,9 @@
 #                 stage is skipped. On prod it is a secrets step, the owner's tap at the act. On dev it also
 #                 turns on the measurement of the box's path through the Gateway (MEASURE-1): the root
 #                 Application gets openbaoMeasure, and stage `openbao-measure` runs after `dev-ca`.
+#   OPENBAO_ADMIN_ROLE_ID_FILE, OPENBAO_ADMIN_SECRET_ID_FILE  with OPENBAO_SEAL_KEY_FILE, dev only: the box's
+#                 admin AppRole IDs on the controller. Stage `openbao-handover` hands the store's admin login
+#                 over to them once (D-0038 rule 6), after `openbao-measure`.
 #
 # No kubeconfig leaves the cluster: every kubectl call runs on the first control-plane node through
 # Ansible, with that node's /etc/kubernetes/admin.conf (kc below). A KUBECONFIG in rebuild.env is
@@ -487,6 +490,21 @@ run_stage() {
       [ "$ENV_NAME" = dev ] || { echo "the measurement runs on dev only"; return 1; }
       if [ ${#measure[@]} -eq 0 ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-measure skipped"; return 0; fi
       ap playbooks/k8s-openbao-measure.yml ;;
+    # Dev only, with the in-cluster store: the one-time hand-over of the store's admin login to this machine's
+    # IDs (D-0038 rule 6). It runs on the first control-plane node; every secret goes to OpenBao's pod on stdin.
+    # Until the box's address is set (k8s_gitops_source_openbao_box_cidr) it hands nothing over and says so.
+    openbao-handover)
+      [ "$ENV_NAME" = dev ] || { echo "the hand-over runs on dev only"; return 1; }
+      if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-handover skipped"; return 0; fi
+      # Neither ID file named: the box's rebuild wrapper is an install older than this stage, so nothing is
+      # handed over yet. One named but missing or empty is a fault.
+      if [ -z "${OPENBAO_ADMIN_ROLE_ID_FILE:-}" ] && [ -z "${OPENBAO_ADMIN_SECRET_ID_FILE:-}" ]; then
+        echo "SKIP: openbao-handover: not handed over, no admin ID files named; role bootstrap stays open"; return 0
+      fi
+      [ -s "${OPENBAO_ADMIN_ROLE_ID_FILE:-}" ] && [ -s "${OPENBAO_ADMIN_SECRET_ID_FILE:-}" ] ||
+        { echo "openbao-handover needs both OPENBAO_ADMIN_ROLE_ID_FILE and OPENBAO_ADMIN_SECRET_ID_FILE, each a file that is not empty"; return 1; }
+      ap playbooks/k8s-openbao-handover.yml -e "openbao_admin_role_id_file=$OPENBAO_ADMIN_ROLE_ID_FILE" \
+        -e "openbao_admin_secret_id_file=$OPENBAO_ADMIN_SECRET_ID_FILE" ;;
     # Dev only, after dev-ca: the whole identity role with a test admin, never the owner's account, then the
     # sign-in proof (password alone stops at the one-time-code form; password and code redirect with a code;
     # step names and HTTP codes only). Every secret is a random value the role makes in the values file
@@ -531,9 +549,10 @@ stages=${STAGES:-$default_stages}
 [ -z "$only" ] || stages=${only//,/ }
 # A dev run ends with its own HTTPS and sign-in proof, on the stages the box's wrapper sets, with no change to
 # that wrapper: the box's own checkout of main supplies them.
-# With the in-cluster store, the measurement (MEASURE-1) runs after dev-ca, which first makes the https listener.
+# With the in-cluster store, the measurement (MEASURE-1) runs after dev-ca, which first makes the https listener,
+# and the admin hand-over after it.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then
-  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure identity-keycloak"
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak"
   else stages="$stages dev-ca identity-keycloak"; fi
 fi
 # A dev run starts with the memory preflight, after a teardown has freed its VMs and before it makes new ones.
@@ -617,9 +636,10 @@ for s in $stages; do
   if [ -n "$sampler" ]; then kill "$sampler" 2>/dev/null || true; wait "$sampler" 2>/dev/null || true; fi
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
-  # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line.
-  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ]; then
-    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)' \
+  # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line, and the
+  # hand-over's PASS or SKIP line (its stage's own SKIP line is printed bare, not quoted by Ansible).
+  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ]; then
+    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: openbao-handover:' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
   fi
   # The preflight's branch and the sign-in proof's step lines (step name, HTTP code, ok or the reason; the script
