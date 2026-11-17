@@ -6,6 +6,13 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 
 ## Decision changes
 
+### Accepted with this PR
+
+This PR: the agents' pass (D-0042 rule 1), with the owner's tap line if the merge sweep's installed verdict asks for one, filled in after the merge (D-0006 step 6).
+
+- 2026-11-17 · D-0042 Decision Outcome, its diagram, rule 4, rule 6 (the firewall bullet, and the bullet on the box's limits removed) and Consequences · a change to the agent box's limits needs the agents' pass of its exact digest and no tap from the owner; a change that also holds another rule 6 step keeps that step's tap, and a packet filter on the box is a firewall layer; a sudo rule, wrapper or user on the box is a limit, not an access right · the owner's message of 2026-11-17 06:21:09 UTC, "drop the box-install cards" (cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh), with their message of 06:21:43 UTC that the rules still apply (cmsg_01X43rfNYp4H1dL1V2dkfkwN6X5bWTsHaTJ5KvG5fBAwzx)
+- 2026-11-17 · D-0036 diagram and its text, rule 6 and Consequences; D-0044 title, Decision Drivers, option 1, diagram and its text, rules 1, 3 and 7, and Consequences; D-0057 rule 4; AGENTS.md rule 1 · the same change: the approvals line's `tap` field holds the id of that order, or the owner's tap on a card when the change keeps one; the runbooks that sent a box limit to the owner's tap say the same · the same messages
+
 ### Accepted with PR #395
 
 PR #395: approved 2026-11-16T19:05:08Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN2CzwBpCvJq9EDZjjCg1DTW), head 0d1392d; merged as 96d9169. The approval is the owner's choice of "Merge #395" on the card "Merge central-hub PR #395 at 0d1392d865b2e024d6e158e05ac23695349fabca?" (card 2026-11-16T15:32:08Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNEf5gwjRLCTHgLuQ993AR9U), which D-0042 rule 11 needs for this file, recorded as the owner-tap line for head 0d1392d in the merge sweep's comment on #395, after the reviewer's clearance (2026-11-16T06:57:53Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNL1hFELddscmxZ5P2h7rp1t) and the passes of Councils A (06:58:03Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNYAwXS5v3Vb49TMGNspbPah), B (07:00:37Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNPSV6jPErpdzsRWkpg2gwNy) and C (06:58:32Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNQpGzzPbGnMMaakR8nMr961) for that head (D-0042 rule 1).

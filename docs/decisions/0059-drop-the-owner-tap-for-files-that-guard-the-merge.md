@@ -31,7 +31,7 @@ Rule 11 is not one of those.
 ## Decision Drivers
 
 - The owner's taps are for the steps the owner named (D-0042 rule 6), not for steps agents added.
-- A change to a merge-guard script does nothing on the agent box until the box installs it, and that install is a box-limit change. Box-limit changes keep the owner's tap (D-0042 rules 4 and 6, D-0044). The guard keeps its owner check where the change takes effect.
+- A change to a merge-guard script does nothing on the agent box until the box installs it, and that install is a box-limit change. Since the owner's order of 2026-11-17 06:21:09 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh), a box-limit change needs the agents' pass of its exact digest and no owner card (D-0042 rule 4, D-0044). The guard keeps that check, pinned to the bytes, where the change takes effect.
 
 ## Considered Options
 
@@ -56,8 +56,8 @@ Chosen option: 1.
 ### Consequences
 
 - Good: PRs to the merge files, D-0042 and D-0034 no longer wait on an owner card.
-- Bad: agents can loosen the merge check without the owner seeing a card at merge time. The owner sees it at the box-limit install, which names every limit file the install carries.
-- Bad: records and `AGENTS.md` take effect at merge, not at an install. After this record, a PR that amends D-0042 rule 6 or `AGENTS.md` rule 1, the list of steps that keep the owner's tap (firewall and tailnet, deletes, secrets, access rights, money, the box's limits), merges on the agents' four passes with no owner card. The owner's no still wins at once (D-0042 rule 8), and the owner card for this PR must say so in plain words.
+- Bad: agents can loosen the merge check without the owner seeing a card at merge time or at the box-limit install. Compensating controls: the install's approvals line pins the digest of every limit file it carries, the agents pass that digest, the orchestrator lists each install in its report (D-0042 rule 9), and the owner's no wins at once (D-0042 rule 8).
+- Bad: records and `AGENTS.md` take effect at merge, not at an install. After this record, a PR that amends D-0042 rule 6 or `AGENTS.md` rule 1, the list of steps that keep the owner's tap (firewall and tailnet, deletes, secrets, access rights, money), merges on the agents' four passes with no owner card. The owner's no still wins at once (D-0042 rule 8), and the owner card for this PR must say so in plain words.
 
 ### Confirmation
 

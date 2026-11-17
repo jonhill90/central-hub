@@ -5,7 +5,7 @@ kind: manual
 trigger: each time a PR's head has CI green, the reviewer's clearance and the three council passes (D-0042)
 runner: the orchestrator session records the passes over ssh; the box's timer merges
 outcome: the PR is squash-merged at the head that was passed, and the PR carries a comment listing the recorded passes and the merge commit
-needs: the box's limit install of the merge machinery (D-0042 rule 6, the owner's tap), the box's runner and App key (set-up-the-agent-box.md)
+needs: the box's limit install of the merge machinery (D-0042 rule 4, the agents' pass of its digest, no owner card), the box's runner and App key (set-up-the-agent-box.md)
 private-values: []
 files: [hosts/ansible/roles/agent_box/files/pr-merge.sh, hosts/ansible/roles/agent_box/files/pr-merge-verdict.py, hosts/ansible/roles/agent_box/files/pass-record.sh, hosts/ansible/roles/agent_box/templates/pr-merge-sweep.service.j2, hosts/ansible/roles/agent_box/files/runner-job-started.sh]
 last-tested: not yet run

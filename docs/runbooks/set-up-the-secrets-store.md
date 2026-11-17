@@ -167,7 +167,7 @@ The admin policy can call the forced restore (`sys/storage/raft/snapshot-force`)
 
 ## Off-box copy of the snapshots
 
-Pick 237, proposed D-0038 rule 8. **Not installed yet:** it is a box limit, and a delete (the daily prune) under D-0042 rule 6, so it waits for the owner's tap. It also waits on the blocker in [the bundle's runbook](make-the-box-secrets-bundle.md#before-you-start): no agent or pipeline identity may hold role-assignment rights on the backup vault or container.
+Pick 237, proposed D-0038 rule 8. **Not installed yet:** it is a box limit, which needs no card (D-0042 rule 4), and it holds a delete (the daily prune) under D-0042 rule 6, so it waits for the owner's tap. It also waits on the blocker in [the bundle's runbook](make-the-box-secrets-bundle.md#before-you-start): no agent or pipeline identity may hold role-assignment rights on the backup vault or container.
 
 Each hour, while the box is up, `secrets-store-offbox.sh`:
 

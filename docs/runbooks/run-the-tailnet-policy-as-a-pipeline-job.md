@@ -5,7 +5,7 @@ kind: manual
 trigger: every change to the tailnet policy file, hosts/terraform/home/tailnet-policy (who may reach what, the SSH rules and the policy's tests)
 runner: an agent session starts the job; the owner taps a decision card for the apply
 outcome: the policy is planned on main, the owner taps a card that names the saved plan's hash, the same plan is applied, and both logs name the card
-needs: D-0041; the agent_box role applied with the tailnet-policy wrapper (a box limit, the owner's tap under D-0042 rule 6); the runner registered; the controller's files on the box, with the policy's tfvars, including `external_tailnets`
+needs: D-0041; the agent_box role applied with the tailnet-policy wrapper (a box limit, so the agents' pass of its digest and no owner card, D-0042 rule 4); the runner registered; the controller's files on the box, with the policy's tfvars, including `external_tailnets`
 private-values: [tailscale-oauth-client, tailnet-policy-tfvars, tailnet-policy-state]
 files: [.github/workflows/lab-tailnet-policy.yml, hosts/ansible/roles/agent_box/files/tailnet-policy.sh, hosts/ansible/roles/agent_box/files/runner-job-started.sh, hosts/terraform/home/tailnet-policy/]
 last-tested: not yet run

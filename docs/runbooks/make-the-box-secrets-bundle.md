@@ -3,7 +3,7 @@ title: Make the agent box's encrypted bundle of its private files, and send it o
 status: draft
 kind: manual
 trigger: once to set up; again if the box is rebuilt; the break-glass recovery only when the box is lost
-runner: an agent lane on the controller, running the agent_box role (a box-limit change, and the off-box send is a secrets step, so the owner's decision-card tap under D-0042 rule 6 comes first); the break-glass recovery is the owner's alone
+runner: an agent lane on the controller, running the agent_box role (a box-limit change, which needs no card, D-0042 rule 4; the off-box send is a secrets step, so the owner's decision-card tap under D-0042 rule 6 comes first); the break-glass recovery is the owner's alone
 outcome: every day the box writes one SOPS-encrypted bundle of /etc/agent-keys/prod and /dev, proved to read back, and sends the newest one into the OPNsense off-box restic repository, where it reads back the same and opens with the box's age identity; that identity's one off-box copy is in the backup Key Vault, which only the owner can read
 needs: the agent_box role applied once from the controller; the OPNsense off-box copy set up and its repository made (copy-opnsense-backup-off-box.md); no agent or pipeline identity holding role-assignment rights on the backup vault or container (see Before you start); optionally the Mac's age public recipient (age1...) in the private inventory as agent_box_secrets_bundle.mac_recipient
 private-values: [mac-age-recipient, c1-backup-azure-storage-account, opnsense-offbox-vault-name]
@@ -45,7 +45,7 @@ The lab's private files live in the agent box's keys folder, and on the owner's 
 - **Blocker, the install waits for it:** no agent or pipeline identity may hold role-assignment rights on the backup vault or the `opnsense-backup` container; that includes the D-0041 pipeline identity (D-0038 rule 10). Today agent-azure holds Owner on the subscription ([back up c1 off box](back-up-c1-off-box.md), step A2), and Owner can write role assignments, so it could grant itself read on both and open every bundle. Clearing that is an access-rights change, which takes the owner's tap (D-0042 rule 6). Until then the send is not installed: this change is not applied to the box.
 - The OPNsense off-box copy must already run, and its first run must have made the repository ([copy the OPNsense backups off the box](copy-opnsense-backup-off-box.md)).
 - **Optional, the Mac:** if the owner makes an age identity on the Mac, its public recipient (one line starting `age1`) goes in the private inventory as `agent_box_secrets_bundle.mac_recipient`. A recipient is a public key, not a secret. Making the Mac's identity is a change to the Mac's keys script, which is the owner's. With no Mac recipient, the Mac holds no copy: recovery is the Azure vault plus the backup container, and losing that Azure account and the box together loses the bundle.
-- This changes the box's limits (new script, units and settings), and the send puts a key (the age identity) into the vault, so the owner's decision-card tap naming the step and the commit comes first (D-0042 rule 6).
+- This changes the box's limits (new script, units and settings), which needs no card (D-0042 rule 4). The send puts a key (the age identity) into the vault, a secrets step, so the owner's decision-card tap naming the step and the commit comes first (D-0042 rule 6).
 
 ## Steps
 
