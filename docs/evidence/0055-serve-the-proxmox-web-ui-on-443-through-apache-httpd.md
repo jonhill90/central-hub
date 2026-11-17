@@ -16,7 +16,7 @@ Which program should serve the Proxmox web UI on 443, now that nginx fails STD-0
 
 ## Findings
 
-1. **The owner's words.** The project decisions inbox records his message of 2026-11-14 03:51 UTC asking never to reach anything over a non-standard port and asking why Proxmox was not on 443 [1] (sourced). Pick 224 records his yes, at 03:56:52 UTC, to a proxy on the host [2] (measured).
+1. **The owner's words.** The project decisions inbox records their message of 2026-11-14 03:51 UTC asking never to reach anything over a non-standard port and asking why Proxmox was not on 443 [1] (sourced). Pick 224 records their yes, at 03:56:52 UTC, to a proxy on the host [2] (measured).
 2. **nginx's paid side.** nginx's JWT authentication module page says the module "is available as part of our commercial subscription" [3] (sourced). The register lists nginx as `fail`, and `foss-exceptions.yaml` lists it as `pending` [2] (measured).
 3. **Apache httpd.** Its licence is Apache-2.0 [4], and its about page says the server "only comes from the Apache Software Foundation, but many vendors ship their own product 'based on the Apache {Project}'" [5] (sourced). The register lists it as `pass` [2] (measured).
 4. **What is built.** At main ebff240, role `proxmox_proxy` installs Debian's `apache2` packages at `2.4.71-1~deb13u1`, masked until the move; the move runs as the systemd unit `proxmox-proxy-cutover`, enables Apache httpd only after its proofs, and rolls back to nginx otherwise; no variable names the program; 8006 stays open [2] (measured).

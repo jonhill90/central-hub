@@ -17,6 +17,16 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   gatewayClassName: {{ .Values.className }}
+  {{- if eq (toString .Values.openbaoMeasure) "true" }}
+  # The measurement's passthrough listener (MEASURE-1, dev only) comes as a ListenerSet from namespace
+  # openbao; no other namespace may attach one.
+  allowedListeners:
+    namespaces:
+      from: Selector
+      selector:
+        matchLabels:
+          kubernetes.io/metadata.name: openbao
+  {{- end }}
   addresses:
     - type: IPAddress
       value: {{ required "address: set by the root Application (k8s_gitops_source_gateway_address)" .Values.address }}

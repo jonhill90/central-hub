@@ -1,0 +1,32 @@
+# The measurement of the agent box's source address through c1's Gateway (ADDENDUM-1 v3 step 1;
+# MEASURE-1; docs/runbooks/set-up-the-secrets-store.md). Made only where the root value
+# openbaoInCluster is true, and renders objects only while measure (root value openbaoMeasure) is
+# true. The app prunes, so turning measure off removes them. The rebuild's dev-only stage
+# openbao-measure sends the probes and reads OpenBao's audit log.
+
+# The root value openbaoMeasure.
+measure: false
+# The lab DNS zone, private, from the root Application.
+zone: ""
+# The shared Gateway the routes attach to (apps/gateway).
+gateway:
+  name: apps
+  namespace: gateway
+# Path a (re-encrypt, ADDENDUM-1 v3 option a): an HTTPRoute on the Gateway's https-short listener
+# (*.<zone>), host <host>.<zone>, to OpenBao's Service, which the Gateway calls over TLS checked
+# against the store's CA. Cilium 1.20.4 reads that CA only from a ConfigMap (code read at tag v1.20.4,
+# operator/pkg/model/ingestion/gateway.go:643-649), so the stage copies the public ca.crt into
+# ConfigMap caConfigMap, owned by the namespace below so it goes when the namespace goes.
+reencrypt:
+  host: openbao-measure
+  caConfigMap: openbao-measure-ca
+# Path b (passthrough, option b): a ListenerSet with one TLS Passthrough listener on 443, host
+# <host>.<zone>, and a TLSRoute to OpenBao's Service; TLS ends at OpenBao's own listener, whose
+# certificate carries this host (apps/openbao-store, measure).
+passthrough:
+  host: openbao-pass
+# OpenBao's Service and port (the chart's).
+service: openbao
+port: 8200
+# The namespace the policy check's test Job runs in: not one the store's NetworkPolicy allows.
+checkNamespace: openbao-measure

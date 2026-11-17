@@ -18,14 +18,22 @@ argument_specs:
         type: bool
         default: false
         description: "Pass localPathStableFolders true to the root chart: volume folders named <namespace>/<claim> (dev, TASK-0240)."
-      k8s_gitops_source_openbao_address:
+      k8s_gitops_source_openbao_in_cluster:
+        type: bool
+        default: false
+        description: "Run OpenBao inside the cluster from its Helm chart (D-0058): pass openbaoInCluster true to the root chart (dev first)."
+      k8s_gitops_source_openbao_seal_node:
         type: str
+        description: "Node that holds the seal key's folder, passed as openbaoSealNode. Private; read only with the switch on."
+      k8s_gitops_source_openbao_box_cidr:
+        type: str
+        description: "The agent box's address as a /32, the admin AppRole's only source, passed as openbaoBoxCidr. Private."
+      k8s_gitops_source_openbao_measure:
+        type: bool
+        default: false
         description: >-
-          The secrets store's https:// address, no path (proposed D-0038). Private; set only for dev for now.
-          Needs k8s_gitops_source_openbao_ca_file.
-      k8s_gitops_source_openbao_ca_file:
-        type: path
-        description: "The secrets store's certificate on the controller, passed base64 to the root chart."
+          Dev only: pass openbaoMeasure true (MEASURE-1, the box's source address through the Gateway).
+          Set by hosts/rebuild-k8s.sh with -e, never in an inventory.
       k8s_gitops_source_share_target:
         type: str
         description: >-

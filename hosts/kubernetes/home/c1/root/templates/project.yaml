@@ -2,16 +2,24 @@
 AppProject `c1` (Activation gate item 5): the child Applications may read only this repository and
 their own chart repositories, write only to this cluster in the namespaces the charts use, and make
 only the cluster-scoped kinds listed in values `c1Project.clusterResources`. Sources and namespaces
-are built from .Values.apps, so a new app widens the project in the same change.
+are built from .Values.apps, so a new app widens the project in the same change. An app with
+`enabledBy` widens it only where that root value is true, with its own `clusterResources` kinds too,
+so a cluster that leaves the value false renders as before (D-0058).
 The children name it through `.Values.project`.
 */ -}}
 {{- $repos := list .Values.repoURL }}
 {{- $namespaces := .Values.c1Project.extraNamespaces | default list }}
+{{- $kinds := .Values.c1Project.clusterResources }}
 {{- range $name, $app := .Values.apps }}
+{{- if or (not $app.enabledBy) (eq (toString (index $.Values $app.enabledBy)) "true") }}
 {{- if not $app.local }}
 {{- $repos = append $repos $app.chart.repoURL }}
 {{- end }}
 {{- $namespaces = append $namespaces $app.namespace }}
+{{- range $app.clusterResources }}
+{{- $kinds = append $kinds . }}
+{{- end }}
+{{- end }}
 {{- end }}
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -36,7 +44,7 @@ spec:
       namespace: {{ . }}
     {{- end }}
   clusterResourceWhitelist:
-    {{- toYaml .Values.c1Project.clusterResources | nindent 4 }}
+    {{- toYaml $kinds | nindent 4 }}
   {{- if .Values.c1Project.syncPaused }}
   # Pause switch on: a deny window that is always open, for every Application, manual syncs included.
   syncWindows:

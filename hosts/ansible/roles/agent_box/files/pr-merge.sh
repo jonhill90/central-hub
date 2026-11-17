@@ -118,13 +118,33 @@ json.dump(merged, open(out, "w"))
 PY
 }
 
+# The PR's changed files, every page: GitHub lists at most 3000 files for a PR, 100 to a page, so up to 30 pages. A page of fewer
+# than 100 ends the list. If page 30 is still full, the list is cut short and the verdict refuses the PR (3000 files or more).
+fetch_pr_files() { # pr out
+  local pr=$1 out=$2 p n
+  : > "$tmp/files.parts"
+  for p in $(seq 1 30); do
+    gh "$base/pulls/$pr/files?per_page=100&page=$p" > "$tmp/files.$p.json" || return 1
+    n=$(python3 -I -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$tmp/files.$p.json") || return 1
+    echo "$tmp/files.$p.json" >> "$tmp/files.parts"
+    [[ $n -lt 100 ]] && break
+  done
+  python3 -I - "$out" "$tmp/files.parts" <<'PY'
+import json, sys
+out, parts = sys.argv[1], open(sys.argv[2]).read().split()
+files = []
+for p in parts: files += json.load(open(p))
+json.dump(files, open(out, "w"))
+PY
+}
+
 # Fetches everything the verdict needs into $tmp/d, then runs pr-merge-verdict.py. Sets verdict (last line) and
 # out (all lines). Returns 1 if a fetch failed (nothing is decided on a failed read).
 evaluate() { # pr head
   local pr=$1 head=$2 d=$tmp/d
   rm -rf "$d"; mkdir -p "$d/content/base" "$d/content/head" "$d/approved"
   gh "$base/pulls/$pr" > "$d/pr.json" || return 1
-  gh "$base/pulls/$pr/files?per_page=100" > "$d/files.json" || return 1
+  fetch_pr_files "$pr" "$d/files.json" || return 1
   gh "$base/commits/$head/check-runs?per_page=100" > "$d/checks.json" || return 1
   if [[ $have_status == 1 ]]; then gh "$base/commits/$head/status" > "$d/status.json" || return 1; else echo '{}' > "$d/status.json"; fi
   [[ -f $passes/$name/$head.jsonl ]] && cp "$passes/$name/$head.jsonl" "$d/ledger.jsonl" || true

@@ -135,7 +135,7 @@ Then put the file back in OPNsense: System, Configuration, Backups, Restore, or 
 
 ## Limits
 
-- agent-azure holds Owner on the subscription, so it could give itself a data role on either container or on the vault. The separation is between the two backups' own identities, not against the subscription's owner.
+- agent-azure holds Owner on the subscription, so it could give itself a data role on either container or on the vault. The separation is between the two backups' own identities, not against the subscription's owner. Once narrowed ([Give agents their own access](give-agents-access-to-azure.md#narrow-agent-azures-rights), pick 247), agent-azure can give roles only to the three backup apps, and only the two blob data roles and the escrow role; a change to the escrow role's definition, or to the two deny rules, then needs the owner's login. Through the apps it owns it can still read both containers, but not a vault secret's value.
 - Storage Blob Data Contributor can delete blobs, which restic's prune needs. A box that is taken over could delete these copies; the account's soft delete keeps deleted blobs for 7 days.
 - A box that is taken over could write a wrong password as a new version. Earlier versions stay, because the box can't delete or purge them, and each one carries a salted hash of what was written.
 

@@ -2,157 +2,129 @@
 title: Set up the lab's secrets store (OpenBao) on dev
 status: draft
 kind: automated
-trigger: once per env, after D-0038's picks; again after the store's VM is rebuilt
-runner: "an agent session on the agent box, through the `secrets-store` wrapper (in the agent_box role since #276; on the box once that role is applied, see Before you start)"
-outcome: one AlmaLinux 10 VM on VNet dev runs OpenBao 2.7.2, starts and unseals with no person, initialized by itself with audit, KV v2 and two AppRoles, takes an hourly Raft snapshot, and holds c1's External Secrets login and the rebuild's AppRole
-needs: the agent box; the agents' Proxmox token with rights on pool `dev`; template 9001; a free dev address; the private inventory values listed below
-private-values: [store-name, store-address, box-address, seal-key, admin-role-id, admin-secret-id, rebuild-role-id, rebuild-secret-id, store-ssh-key]
-files: [hosts/terraform/home/secrets-store/, hosts/ansible/roles/openbao/, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/files/secrets-store-snapshots.sh, .github/hosts-check/tests/test_secrets_store_snapshots.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/openbao.yml, hosts/ansible/playbooks/k8s-openbao-auth.yml]
+trigger: once per env, after D-0058; again after a rebuild of the cluster
+runner: "the dev rebuild on the agent box (`rebuild up`), and an agent session through the `secrets-store` wrapper once rework PR 3b points it at the in-cluster store"
+outcome: OpenBao 2.7.2 runs in namespace openbao in dev's cluster, starts and unseals with no person from its seal key on one node, initializes itself with audit, KV v2, AppRole and Kubernetes logins, takes an hourly Raft snapshot, and serves External Secrets through its Kubernetes login
+needs: the agent box with the agent_box role applied; the dev cluster; the private inventory values listed below
+private-values: [seal-node, box-cidr, seal-key, admin-role-id, admin-secret-id]
+files: [hosts/kubernetes/home/c1/apps/openbao/, hosts/kubernetes/home/c1/apps/openbao-store/, hosts/kubernetes/home/c1/apps/openbao-measure/, hosts/ansible/playbooks/k8s-openbao-measure.yml, hosts/kubernetes/home/c1/apps/secret-store/, hosts/kubernetes/home/c1/root/, hosts/ansible/roles/k8s_gitops/, hosts/ansible/roles/agent_box/files/secrets-store.sh, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/files/secrets-store-snapshots.sh, .github/hosts-check/tests/test_secrets_store_snapshots.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/k8s-openbao-auth.yml]
 last-tested: not yet run
 superseded-by:
 ---
 
 # Set up the lab's secrets store (OpenBao) on dev
 
-**Status:** draft, not run. Written on 2026-11-14 from the code in this PR and the OpenBao 2.7.2 docs and package files. Every "expect" below is what the docs say, not yet seen on the lab. The record is [D-0038](../decisions/README.md) (proposed).
+**Status:** draft, not run. Written from the code and the OpenBao 2.7.2 docs; every "expect" below is what the docs say, not yet seen on the lab. The records are [D-0038](../decisions/README.md) and [D-0058](../decisions/README.md), which moves the store into the cluster.
 
-## What it builds
+**Inside the cluster ([D-0058](../decisions/README.md)).** OpenBao runs inside the cluster from its own Helm chart, dev's cluster first, not on a VM of its own. No store VM was ever built, and its code is gone. [Inside the cluster](#inside-the-cluster-d-0058-dev-first) below is code only, not yet run. The box's calls to the store that stay are listed after it; rework PR 3b points them at the in-cluster store.
 
-- A VM from `hosts/terraform/home/secrets-store`: VM ID 550 on dev, in pool `dev`, cloned from template 9001.
-- The `openbao` role on it:
-  - OpenBao from the release RPM, checked against its SHA-256.
-  - The static seal, its key at `/etc/openbao/seal/<id>.key`, readable only by user `openbao`.
-  - A listener on 443 with TLS. On dev the role makes a self-signed certificate for the name, the address and 127.0.0.1, and copies its public half back to the box.
-  - Raft storage in `/opt/openbao/data`.
-  - On the first start only, an `initialize` block: the file audit device, KV v2 at `kv/`, AppRole, policies `admin` and `snapshot`, and their two roles. The role restarts OpenBao only before that start, never during it. Once the store is healthy it takes one snapshot through the `snapshot` AppRole, whose secret ID is the block's last request, to prove the block finished. Only then does it rewrite the configuration without the block and delete the ID files it read.
-  - Timer `openbao-snapshot.timer`: an hourly Raft snapshot in `/var/lib/openbao-snapshots`, keeping 48.
-- On the box, when both this wrapper and the [OPNsense off-box copy](copy-opnsense-backup-off-box.md) are set up (pick 237): timer `secrets-store-offbox.timer` runs `secrets-store-offbox.sh` hourly as user `keys`. It is not installed until the owner's tap (see [Off-box copy](#off-box-copy-of-the-snapshots)).
-  - The store's first clients, set from the box through the admin AppRole on every `configure` (`tasks/clients.yml`). Each is written only when the store holds something else, so a second run changes nothing:
-    - Login `auth/jwt-c1` (type jwt) for c1's External Secrets Operator. Its role `eso` takes only a token whose subject is `system:serviceaccount:external-secrets:store-openbao` and whose audience is `openbao`, and gives policy `eso-c1`, which reads `kv/data/c1/*` and nothing else. The login holds no key until a rebuild's `openbao` stage writes one.
-    - AppRole `rebuild`, from the box's address only, with policy `rebuild-jwt-c1`: it can write `auth/jwt-c1/config` and nothing else. Its two IDs are made once in `/etc/agent-keys/dev/` (`openbao-rebuild-role-id`, `openbao-rebuild-secret-id`, no trailing newline) and never printed. The run proves them with one sign-in and revokes that token and its own admin token.
-    - AppRole `snapshot-box` (agent pick 240, `tasks/snapshot_box.yml`), made only once the wrapper's settings say `snapshot_box: true` (`agent_box_secrets_store` in the inventory), which only the owner's install tap sets. Until then `configure` skips it and `snapshot` signs in with the admin AppRole, as before. It is from the box's address only, 5-minute tokens (10 at most), with policy `snapshot-box` plus the `default` policy: `read` on `sys/storage/raft/snapshot` and `create` and `update` on `kv/data/dev/snapshot-mark`, nothing else. The wrapper's `snapshot`, and so the hourly off-box send, signs in with it instead of the admin (D-0038 rules 8 and 12). Its two IDs are made once in `/etc/agent-keys/dev/` (`openbao-snapshot-box-role-id`, `openbao-snapshot-box-secret-id`) and never printed. `configure` proves it without writing anything: the token's policies are exactly `default` and `snapshot-box`, and `sys/capabilities-self` gives exactly `[read]` on the snapshot path and `[create, update]` on the mark, so neither a restore nor a read of the mark is allowed; the forced restore, `kv/data/c1/check`, `kv/metadata/`, the admin policy and its own role hold nothing but `deny`. It is a new credential for agents, so on the install card it is named as an access right as well as a box limit (D-0042 rule 6), one tap. That tap sets `snapshot_box: true`, runs the `agent_box` role to install the wrapper, and then runs `configure`.
+## Inside the cluster (D-0058), dev first
 
-## Before you start
+Argo CD installs it when the root Application passes `openbaoInCluster` true, which Ansible sets from `k8s_gitops_source_openbao_in_cluster` (role `k8s_gitops`). c1 keeps false and renders exactly as before (the root chart's `enabledBy`). Three apps take part:
 
-- The agent box needs the `secrets-store` wrapper (`plan`, `apply`, `configure`, `recovery`, `status`, `snapshot`, `restore`, `restore-rebuilt [raft-<time>.snap]`, `clear-hold`, `destroy`, run as user `keys`), which the agent_box role installs (#276). A new wrapper changes the box's limits, so the box's self-apply stops on it and a controller apply puts it there (D-0036). Until it is on the box, nothing in this runbook runs.
-- The wrapper makes, once, in `/etc/agent-keys/dev/` (user `keys`, 0600): the 32-byte seal key (`openssl rand -out <file> 32`), the admin AppRole's role ID and secret ID (`openssl rand -hex 24` each, with no trailing newline, because the first start reads each file whole), and the VM's SSH key. None is ever printed.
-- The private inventory group `secrets_store` holds the VM's name, VM ID, address, cores, memory and disk, and the box's own address.
+| App | What it makes | Wave |
+|---|---|---|
+| `openbao-store` (chart in this repository) | Namespace `openbao` (restricted Pod Security); the seal key's local PersistentVolume and claim `openbao-seal`; a self-signed CA and server certificate `openbao-tls` from cert-manager; ConfigMap `openbao-policies` (`admin`, `eso-c1`, `snapshot`, `bootstrap`); service account `openbao-bootstrap`, which no pod runs as; the hourly snapshot CronJob `openbao-snapshot` and its claim `openbao-snapshots` | -1 |
+| `openbao` (openbao-helm 0.30.6, OpenBao v2.7.2; the chart file checked in CI against its pinned SHA-256 from the repository's index, though Argo CD's own pull at sync is not checked; the image pinned by digest) | StatefulSet `openbao`, one replica, HA mode with Raft on `local-path`; the static seal read from `/openbao/seal/<id>.key`; TLS on 8200; a NetworkPolicy that lets only namespace `external-secrets` and its own namespace reach it | 0 |
+| `secret-store` | With `openbao.inCluster` true: ClusterSecretStore `openbao` at `https://openbao.openbao.svc:8200`, checking TLS against `ca.crt` in Secret `openbao/openbao-tls`, signing in with OpenBao's Kubernetes login, role `eso`, as service account `store-openbao`; ExternalSecret `openbao-check` | -1 |
 
-## Steps
+Private values, set in the dev inventory and never in git (CLAUDE.md rule 4):
 
-1. Plan the VM.
-   `secrets-store plan`
-   expect: one VM to add, ID 550, pool `dev`, on VNet `dev`.
+- `k8s_gitops_source_openbao_seal_node`: the node that holds the seal key's folder, by its `kubernetes.io/hostname` label. It must be a node with the data disk (label `central-hub/data-disk`), because the data and audit claims use `local-path` and follow the pod. Unset, no PersistentVolume is made, the claim stays Pending and OpenBao does not start.
+- `k8s_gitops_source_openbao_box_cidr`: the agent box's address as a /32, the admin AppRole's only source. Unset, the app's default `127.0.0.1/32` applies. That is not a lock: a `kubectl port-forward` connection also arrives from 127.0.0.1, because the container runtime dials localhost inside the pod's network namespace, so anyone who may port-forward in namespace `openbao` and holds the admin IDs passes the binding. The box's hand-over refuses while it is unset.
 
-2. Make it.
-   `secrets-store apply`
-   expect: `Apply complete! Resources: 1 added`.
+The hourly snapshot (D-0058 rule 6): CronJob `openbao/openbao-snapshot` runs at minute 17 as service account `openbao-snapshot`, signs in at the Kubernetes login's role `snapshot`, and reads `kv/data/dev/snapshot-mark`. While that mark is missing, the store has only self-initialized, so the job prints `openbao-snapshot: no mark at ... yet, skipped` and exits 0. Any other read failure fails the job. Otherwise it saves `raft-<UTC time>.snap` on claim `openbao-snapshots` (2 GiB, `local-path`), keeps the newest 48, and revokes its token. The box's hourly off-site pull is separate (pick 237).
 
-3. Configure it.
-   `secrets-store configure`
-   expect: the play ends with `OpenBao is up, initialized and unsealed` ok, then the configuration rewritten without its first-start block, and a second run reports `changed=0`.
+expect, once a mark exists: `kubectl -n openbao logs job/<newest openbao-snapshot job>` ends with `openbao-snapshot: saved raft-<time>.snap, kept <n>`.
 
-4. Check it from the box.
+Before the first start, the node folder `/var/lib/central-hub/openbao-seal` must hold the 32-byte seal key as `seal-1.key`, owned by uid 100, group 1000, mode 0400 (OpenBao's pod user), and nothing else. The folder is outside what c1's nightly backup copies (role `k8s_backup` copies only `/var/lib/c1-data/local-path`, which holds OpenBao's data volume, and `/var/lib/central-hub/identity-postgres`), so c1's nightly backup never holds the key with the data. Proxmox's nightly backup of the node VMs does hold both, as it held the store VM's (D-0058, Consequences). On dev the box puts it there (below).
 
-   ```sh
-   curl -sS --cacert <the fetched certificate> https://<store address>/v1/sys/health
-   ```
+The seal key on dev, from the box (D-0058 rule 3; dev's key needs no tap):
 
-   expect: `"initialized":true,"sealed":false`.
+1. The box's install sets `agent_box_openbao_in_cluster: true` in the private inventory, so the `agent_box` role writes `/var/lib/agent-box/openbao-in-cluster`. The role refuses it unless `agent_box_secrets_bundle` is set too, because the rebuild wrapper keeps the seal key as a SOPS copy encrypted to the box's age identity, which the bundle's tasks make ([make-the-box-secrets-bundle.md](make-the-box-secrets-bundle.md)). It is a change to the box's limits, so its install is the owner's tap (D-0042 rule 6).
+2. `rebuild up` (or `rebuild rebuild`) then:
+   - keeps the key as its SOPS copy, `/etc/agent-keys/dev/openbao-seal.key.sops.json` (user `keys`, 0600), encrypted to the box's age identity (D-0058 rules 3 and 9). It makes that copy once, if it is missing, from the VM wrapper's `openbao-seal.key` when one exists or else from `openssl rand 32`, checks that it decrypts to the same bytes, and never replaces it. It refuses if the identity is missing. A plain `openbao-seal.key` from the VM wrapper (`secrets-store.sh`), if one exists, stays until it is removed, which is a delete and the owner's tap (D-0042 rule 6);
+   - decrypts the copy for each run into a folder in memory (`/dev/shm`, only user `keys` can read it) and checks that it is 32 bytes; the folder is removed when the run ends. This run writes no plain copy to the box's disk, and none goes into git;
+   - the keys folder is in the box's daily bundle, so the copy leaves the box only once the bundle's off-box send is installed (`agent_box_secrets_bundle` and `agent_box_opnsense_offbox` set; see [make-the-box-secrets-bundle.md](make-the-box-secrets-bundle.md)). Until then the dev key is only on the box and the node;
+   - sets `k8s_gitops_source_openbao_in_cluster: true` and `k8s_gitops_source_openbao_seal_node` to the first `k8s_workers` host in its copy of the dev inventory (an inventory value from the Mac for these is dropped), and leaves `k8s_gitops_source_openbao_box_cidr` unset;
+   - runs stage `openbao-seal` after `storage` and before `gitops`: `playbooks/k8s-openbao-seal.yml` checks that the key is 32 bytes, that the node at that host's address has the same Kubernetes name and that it carries the label `central-hub/data-disk=true`, makes the folder (uid 100, group 1000, 0500) and copies the key in (0400). A different key already on the node fails the stage and is never replaced; neither key nor checksum is printed.
+   - It refuses if the store VM's wiring (the AppRole `rebuild` IDs) is also set.
 
-   The first measurement after the install tap's `configure` (pick 240): `configure` prints `PASS: AppRole snapshot-box holds default and snapshot-box only; capabilities-self: ...`, and then the first `secrets-store snapshot` must print `snapshot raft-<time>.snap`. That run is what shows `create` and `update` on the `data/` path alone let `snapshot-box` write the mark, which the sources state but nothing here had run.
+   expect: `rebuild log` shows `openbao-seal end rc=0`; a second run reports `changed=0` for the play.
 
-5. Restore with no recovery shares (D-0038 Confirmation 7, pick 239).
-   why: prod runs with no recovery shares (D-0038 rule 5), so dev proves first that a store with none takes a snapshot and restores it.
-   **The owner's tap first:** `restore` of the secrets store is a delete under D-0042 rule 6, on dev too; it runs only after the owner taps the card that names it and its commit.
-   Only on a store with no recovery shares yet: once `/etc/agent-keys/dev/openbao-recovery.json` exists, Confirmation 7 needs a fresh store, made with `destroy`, `apply` and `configure`.
-   1. `secrets-store snapshot`
-   2. `secrets-store restore`. It runs `secrets-store-restore.sh same` under the wrapper's lock. It picks the newest snapshot of the store's own cluster, sets `kv/dev/snapshot-mark` to `before-restore-<time>`, restores the snapshot plainly, never forced, and waits until a fresh login reads the snapshot's own time back in the mark. It then prints whether the token from before the restore is refused now. That is a measurement, not a check.
-      expect: `1b shares ok: no recovery shares yet`, then `PASS: restore: raft-<time>.snap restored (plain) onto the same store; its mark reads back`, and a line `measured: old token: refused` or `still works`.
-   3. `secrets-store status`
-      expect: `"initialized":true,"sealed":false`.
+What the first start does (self-init, <https://openbao.org/docs/configuration/self-init/>): the file audit device at `/openbao/audit/audit.log`; KV v2 at `kv/`; AppRole and Kubernetes logins; policies `admin`, `eso-c1`, `snapshot` and `bootstrap` from the ConfigMap; the Kubernetes login's config (`kubernetes_host` `https://kubernetes.default.svc`, checked with OpenBao's own service account, which the chart binds to `system:auth-delegator`) and its roles `eso` (service account `store-openbao` in `external-secrets`, policy `eso-c1`, 15-minute tokens), `snapshot` (service account `openbao-snapshot` in `openbao`, policy `snapshot`, for the hourly job) and `bootstrap`; and the admin AppRole bound to the box's /32, with a random role ID and no secret ID. Then it revokes the root token it used. Later starts skip it.
 
-6. Make the recovery keys.
-   why: self-initialization makes none, and the docs warn to make them before they are needed.
-   The wrapper logs in as `admin` and calls `sys/rotate/recovery/init` with 3 shares and a threshold of 2. On a store that self-initialized with no recovery keys, that call returns the shares at once ([OpenBao's rotate init API](https://openbao.org/docs/api/system/rotate/init/)). The shares go to `/etc/agent-keys/dev/openbao-recovery.json` and are never printed. That is for dev only, where the store holds nothing of value: a prod store makes none (D-0038 rule 5), and the wrapper refuses any store outside the dev IDs.
-   It refuses while a rebuild hold exists. It records the shares' time in `openbao-recovery.made`, taken before it asks for them. After the shares it waits a second and takes a snapshot itself, because from then on `restore` and `restore-rebuilt` refuse any snapshot that is not strictly later than the shares. A restore brings back the recovery keys of the snapshot's time, so an older snapshot would leave the box's shares useless (source: [Performing restore from snapshot invalidates existing auto-unseal recovery keys](https://discuss.hashicorp.com/t/performing-restore-from-snapshot-invalidates-existing-auto-unseal-recovery-keys/55326), about Vault).
-   expect: `recovery shares written to the keys folder (not printed)`, then `snapshot raft-<time>.snap, <n> bytes`.
+Handing the admin login to the box, once per new store (the box's node play, in a later pull request): it mints a 10-minute token for service account `openbao/openbao-bootstrap` with `kubectl create token`, signs in at the Kubernetes login's role `bootstrap` (5-minute tokens, 4 uses), writes the admin's role ID and a custom secret ID from its keys folder, deletes role `bootstrap` with the same token, and checks that the role is gone. The admin AppRole's IDs never leave the box's keys folder (D-0038 rule 6). Until that step, anyone with cluster-admin could set the admin's IDs the same way, but they can already read the seal key and the data.
 
-7. Register the dev cluster's key.
-   why: External Secrets signs in with a token the cluster signed; the store checks it against the key the rebuild wrote.
-   The rebuild's `openbao` stage does it, on every rebuild ([rebuild-k8s-layer-with-one-command.md](rebuild-k8s-layer-with-one-command.md)), once `rebuild.env` sets `OPENBAO_ADDR`, `OPENBAO_CACERT` and the AppRole `rebuild`'s two ID files.
-   expect: `openbao: PASS: the cluster's signing key and issuer ... are in auth/jwt-c1/config` in the run's log.
+expect, after the box's run: `kubectl -n openbao get pod openbao-0` Ready; `kubectl -n openbao exec openbao-0 -- bao status` shows `Sealed false`; ExternalSecret `external-secrets/openbao-check` Ready once `kv/c1/check` is written.
 
-8. Prove External Secrets reads from the store (D-0038 Confirmation 2).
-   why: one non-secret value through the whole path (the cluster's token, the store's login, policy `eso-c1`) before any real secret moves.
-   With `k8s_gitops_source_openbao_address` and `k8s_gitops_source_openbao_ca_file` set in the dev inventory, the root Application passes them to the secret-store app, which adds ClusterSecretStore `openbao`, service account `store-openbao` and ExternalSecret `openbao-check` in namespace `external-secrets`. `configure` wrote the value it reads, `kv/c1/check`. Every other ExternalSecret keeps naming store `c1`. On c1, where they are unset, the app renders as before.
-   expect: the dev rebuild's `apps` stage passes, since it waits for every ExternalSecret to be Ready, this one too.
+### Measuring the box's path through the Gateway (dev only)
 
-9. Restart test.
-   `sudo systemctl restart openbao` on the VM, through the wrapper's `configure`.
-   expect: health shows `"sealed":false` again with no person.
+The admin AppRole accepts only the box's /32. Through c1's Gateway, OpenBao may see the Gateway's own address instead of the box's, so the path the box will use is chosen only after this is measured on dev: which address OpenBao sees on two paths, whether the Gateway adds `X-Forwarded-For`, and whether c1 enforces the store's NetworkPolicy. Nothing signs in: every probe is a login with a made-up role ID, which OpenBao refuses and writes to its audit log.
 
-10. Snapshot off the VM.
-   `secrets-store snapshot`
-   expect: `snapshot raft-<time>.snap, <n> bytes` with n above 0; the file is in `/etc/agent-keys/dev/openbao-snapshots/`, which keeps 24. Beside it, `raft-<time>.snap.cluster` holds the store's cluster ID from `sys/health` (not a secret).
-   It signs in as AppRole `snapshot-box`, not the admin, once the install tap has set `snapshot_box: true`; until then it signs in with the admin AppRole. Every snapshot writes one key into the store first: `kv/dev/snapshot-mark`, which holds the snapshot's own time and no secret, so a restore can prove which snapshot came back. It is the only key the wrapper writes on each run. KV keeps 10 versions of it and deletes older ones, since the mount sets no `max_versions` ([OpenBao KV v2 API](https://openbao.org/docs/api/secret/kv/kv-v2/)).
+It turns on by itself on dev. When `ENV_NAME` is `dev` and `OPENBAO_SEAL_KEY_FILE` is set (the in-cluster store is on), `hosts/rebuild-k8s.sh` adds `-e k8s_gitops_source_openbao_measure=true` to every `k8s-gitops.yml` call (stage `gitops`, both branches, and stage `dev-ca`), so the root Application passes `openbaoMeasure` true, and it runs stage `openbao-measure` after `dev-ca`, which makes the https listener the probes go through. Prod never gets it: the `-e` needs `ENV_NAME=dev` too, the stage refuses any other env, and CI checks that the root renders the same with the value unset as with it false (`.github/hosts-check/run.sh manifests`, `test_rebuild_dev_stages.sh`).
 
-11. Restore drill.
-   why: a backup counts only once it has been restored.
-   `secrets-store snapshot`, then `secrets-store restore` (the owner's tap first, as in step 5). This quick drill restores over the live dev store; it is not D-0038 Confirmation 4, which restores into a throwaway server.
-   expect: the same `PASS: restore:` line as step 5, with `1b shares ok: snapshot is later than the shares`. The full drill is D-0038 Confirmation 5, in [Rebuild and restore](#rebuild-and-restore-d-0038-confirmation-5).
+The agent box sets `OPENBAO_SEAL_KEY_FILE` only when its switch `agent_box_openbao_in_cluster` is on, which also sets `k8s_gitops_source_openbao_in_cluster` in the dev inventory (`rebuild.sh`). A run by hand with the key file set and that inventory value off stops at stage `openbao-measure`, whose first check needs the in-cluster store, before `identity-keycloak`: leave the key file unset or turn the store on.
 
-    The weekly drill, D-0038 Confirmation 4, needs nothing typed. `configure` installs `openbao-drill.timer` on the VM and runs the drill once (tag `drill`). Unit `openbao-drill.service` runs `/usr/local/libexec/openbao-drill.sh`:
-    - it has only a loopback device, so the throwaway can't reach the live store;
-    - its storage and the restored audit log sit in temporary file systems that go with the unit;
-    - it starts a throwaway server from `/etc/openbao/drill.hcl` on `127.0.0.1:8300`, initializes it with no recovery shares, and force-restores the newest snapshot into it;
-    - it checks that the throwaway's own token is refused, then signs in with the store's snapshot AppRole and reads that login's policy back;
-    - it stops the throwaway and deletes its storage.
+What the value turns on:
 
-    Around it, `configure` reads the live store's Raft peers, leader and term through the admin AppRole, before and after. That check runs only when `configure` runs the drill. The weekly timer has no admin token, so on its own runs the live store is kept apart by `PrivateNetwork=yes` alone.
-    expect: 10 `ok` step lines, `PASS: restore drill: raft-<time>.snap restored into a throwaway server; the snapshot login and its policy read back; copy deleted`, then `PASS: live store unchanged by the drill`. The step lines name steps and the snapshot's file name only.
+| App | While `openbaoMeasure` is true |
+|---|---|
+| `gateway` | Gateway `apps` accepts listeners from namespace `openbao` only (`allowedListeners`, selector on the namespace's name) |
+| `openbao-store` | The store's certificate `openbao-tls` also names `openbao-pass.<zone>`, the passthrough host |
+| `openbao` | Self-init block `measure`: the audit log records the `X-Forwarded-For` and `X-Measure-Nonce` request headers in plain text. Self-init runs only on a store's first start, so this setting stays in that dev store until it is rebuilt. Neither header carries a secret |
+| `openbao-measure` (new, `prune: true`, made only with `openbaoInCluster`) | Namespace `openbao-measure` (restricted Pod Security), for the policy check's test Job. Path a, re-encrypt: HTTPRoute `openbao-measure` on listener `https-short`, host `openbao-measure.<zone>`, to Service `openbao` port 8200, and a BackendTLSPolicy that checks OpenBao's certificate against the store's CA by the name `openbao.openbao.svc`. Path b, passthrough: ListenerSet `openbao-measure` with one TLS Passthrough listener on 443, host `openbao-pass.<zone>`, and a TLSRoute to the same Service |
 
-12. The owner's sign-in to the web page (agent pick 233).
-    why: the owner enters keys, such as the VPS provider key at `kv/vps/provider-key`, in the store's web page with the lab account they already have, with no paste in chat, no command and no Mac step.
-    On dev the inputs come from the dev rebuild, so nothing is typed: once the store exists, `rebuild up` (stage `identity-keycloak`) adds client `openbao` for the store's address, a `lab-viewers` user `dev-viewer` and a second `lab-admins` user `dev-admin2`, then writes `openbao-oidc.json` in its env folder (Keycloak's issuer, the dev Gateway's address, the dev CA's root). The next `secrets-store configure` reads that file and the rebuild's `identity.env`, and passes `openbao_oidc` (`discovery_url`, `values_file`, `ui_names`, `owner_user` set to `dev-admin`, `ca_pem_file`, `pin_address`, because on dev the lab's names resolve to prod's Gateway) and `openbao_oidc_proof`. **Not runnable yet:** the box's `rebuild` wrapper passes the store's address only since #302, and `secrets-store` reads the file only since agent pick 233. Both wrappers are box limits (D-0036 rule 3), so both wait for the box's limits to be applied. Then `secrets-store configure`, tag `owner_signin`:
-    - login `auth/oidc` (type jwt) with Keycloak's realm as its discovery URL and client `openbao`;
-    - role `owner`: only the owner, by two `bound_claims` that must both match: group `lab-admins` and `preferred_username` equal to `owner_user`. Anyone the inventory adds to `lab-admins` later is still refused. `max_age` 300, a 15-minute token with policy `vps-intake` and nothing else;
-    - policy `vps-intake`: create, update and read `kv/data/vps/*`, list and read its metadata, list `kv/metadata/`. No delete, no `sys/`, no `auth/`.
+The BackendTLSPolicy reads the CA from ConfigMap `openbao-measure-ca`, because Cilium 1.20.4 accepts only a ConfigMap there (a code read at tag v1.20.4: `operator/pkg/model/ingestion/gateway.go`, lines 643-649, "Cilium only supports ConfigMap currently"). cert-manager writes the CA only to a Secret, so the stage copies the public `ca.crt` into that ConfigMap in namespace `openbao` on every run, owned by Namespace `openbao-measure`, so that the ConfigMap goes when the namespace goes (a namespaced object may name a cluster-scoped owner: <https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/>).
 
-    On prod, `owner_user` is the owner's user name from the private inventory.
-    On dev, `openbao_oidc_proof` (`admin_user`, `viewer_user`, `other_admin_user`, `gateway_address`, `verify`) runs `files/oidc-check.py`, which makes the web page's calls and prints step names and HTTP codes only.
-    expect: `PASS: owner sign-in: the owner with the code gets vps-intake only; a viewer and another admin are refused`, after 18 `ok` steps: the password alone stops at the code form, the code gives a token with `vps-intake`, that token writes and reads `kv/vps/proof` and gets 403 on `kv/data/c1/check` and `sys/policies/acl/admin`, a `lab-viewers` user gets through Keycloak but not the store, and so does `dev-admin2`, a `lab-admins` member with a good code who is not the owner.
+Stage `openbao-measure` (`playbooks/k8s-openbao-measure.yml`, on the first control-plane node, the probes from the box):
 
-    **Limits:**
-    - The one-time code is checked by Keycloak only. OpenBao's own login MFA fails in the web page with OIDC ([openbao#3281](https://github.com/openbao/openbao/issues/3281)), and the `amr` claim is unreliable ([keycloak#54497](https://github.com/keycloak/keycloak/issues/54497)).
-    - The realm seeds each admin's password and code seed from the values file. Anyone holding that file can make the owner's password and code, so a sign-in proves the owner only as far as that file stays with them. Every sign-in is in the store's audit log with the user name.
-    - Safari's sign-in window fails on OpenBao 2.7.x for some users ([openbao#4308](https://github.com/openbao/openbao/issues/4308)). Use another browser.
-    - The web page itself is first used by the owner; the dev proof drives its calls, not a browser.
-    - Prod: the login is a new access right, so it is set only after the owner's tap (D-0042 rule 6).
+1. Checks that all four of the Gateway's listeners are `Programmed`, reads the ListenerSet's conditions, and reads the namespace `openbao-measure`'s uid (it fails if the namespace is missing).
+2. Copies `ca.crt` alone from Secret `openbao/openbao-tls` into the ConfigMap; it reads only that field and prints nothing.
+3. The policy check: two Jobs run `bao status` against `https://openbao.openbao.svc:8200`, the control from namespace `openbao` (allowed) and the test from namespace `openbao-measure` (not allowed). A Job answered only when it succeeded (`bao status` exits 0 only on an unsealed store); the stage reads each Job's succeeded and failed counts separately. The control succeeds and the test fails with a timeout: `enforced`. Both succeed: `not enforced`. Anything else: `not measured`, with both readings and the test's last log line.
+4. Three probes from the box, each with its own random nonce header: path a, path a with a made-up `X-Forwarded-For: 192.0.2.1`, and path b. It reads the issuer of the certificate path b presents, so a TLS answer from the Gateway's wildcard certificate is not taken for OpenBao's.
+5. Finds the three nonces in OpenBao's audit log and records, for each probe, the address OpenBao saw and the `X-Forwarded-For` it received. It also reads Cilium's Gateway addresses (`ciliumnodes`, `spec.ingress.ipv4`). It fails if a probe that OpenBao answered left no audit line, or if path a carries no `X-Forwarded-For`. On path a (and a with the made-up header), a 502, 503 or 504 is the Gateway's own answer when it can't reach OpenBao (for example under an enforced NetworkPolicy): when the control Job found the store unsealed, the line shows `refused at gateway` for that probe and expects no audit line. A sealed OpenBao answers 503 itself, so with a failed control Job the code is shown plain and its audit line is still required. Path b is passthrough, so any HTTP code there is OpenBao's own and always needs its audit line.
 
-## Rebuild and restore (D-0038 Confirmation 5)
+expect: `rebuild log` shows `openbao-measure end rc=0`, and the stage's last line is `PASS: openbao-measure: gateway=ok listenerset=... policy=<enforced, not enforced or not measured>; a=<HTTP code> remote=<address> xff=<header>; axff=...; b=...; b_cert=<issuer>; ingress=<addresses>`. A refused login answers 400. A probe with no answer shows curl's error in place of the code. `rebuild log` keeps the whole line, since it runs past 200 characters.
 
-Pick 238. **The owner's tap first:** a `destroy` or `restore` of the secrets store is a delete under D-0042 rule 6, on dev too, so this sequence runs only after the owner taps the card that names it and its commit. No other person takes any step.
+While the value is on, OpenBao's API can be reached from the dev network through the dev Gateway, on both hosts, if c1 does not enforce the NetworkPolicy for Gateway traffic. OpenBao still checks every login: the admin AppRole's /32 binding is unchanged and no forwarded header is trusted, so a login through the Gateway is refused by address, and on dev the admin AppRole has no secret ID until the hand-over. The dev store holds nothing of value (D-0038 rule 5).
 
-1. `secrets-store snapshot`. It writes `kv/dev/snapshot-mark` with its time, then saves the snapshot and its `.cluster` file.
-2. `secrets-store destroy`. Before it removes the VM, it writes the hold `/var/lib/agent-box/state/secrets-store.rebuilding`.
-3. `secrets-store plan`, `apply` and `configure`. The rebuilt store initializes itself, with a new cluster ID. While the hold exists, `secrets-store snapshot` refuses, and, once the VM is back, the hourly off-box send prints `skipped: store rebuild in progress` and takes no snapshot.
-4. `secrets-store restore-rebuilt`. It runs `secrets-store-restore.sh rebuilt` under the wrapper's lock:
-   1. picks the newest snapshot whose `.cluster` names another cluster than the store's current one; one of the rebuilt store, or one with no `.cluster` file, is never picked; once recovery shares exist, the snapshot must be later than them (step 6);
-   2. refuses unless `kv/` holds nothing but `c1/check`, the fixed word `configure` writes; a listing that answers anything but 200 or 404 refuses too;
-   3. tries the plain restore. Only if OpenBao refuses it with "possibly the snapshot is using a different set of unseal keys" does it use the forced one. That text is a Vault user's report, not OpenBao's own (source: [Raft: how to restore from 3-node HA cluster to 1-node DR instance](https://discuss.hashicorp.com/t/raft-how-to-restore-from-3-node-ha-cluster-to-1-node-dr-instance/20572)). If OpenBao words it otherwise, the run stops as `other refusal`, and the text in the script is changed once measured;
-   4. waits for `sys/health` 200 and for its own token from before the restore to be refused;
-   5. signs in again and reads `kv/dev/snapshot-mark`, which must hold the picked snapshot's time;
-   6. removes the hold.
+Turning it off is a change to `hosts/rebuild-k8s.sh` (the pull request that writes the chosen path removes the `-e` and the stage), with no install. The `openbao-measure` app then renders nothing and Argo CD prunes its objects; the ConfigMap goes with its namespace; the store's certificate drops `openbao-pass.<zone>` and Gateway `apps` drops `allowedListeners`. On the next dev run, check those two fields are gone:
 
-   expect: seven `ok` step lines (1, 1b and 2 to 6), step 3 saying `plain` or `forced`, then `PASS: restore-rebuilt: raft-<time>.snap restored (<how>) onto the rebuilt store; its mark reads back; hold removed`. The first run's `plain` or `forced` answers the open question whether the same static seal key passes the plain restore.
-5. `secrets-store configure` again. expect `changed=0`.
+```sh
+kubectl -n openbao get certificate openbao-tls -o jsonpath='{.spec.dnsNames}'
+kubectl -n gateway get gateway apps -o jsonpath='{.spec.allowedListeners}'
+```
 
-If the rebuilt store is to stay as it is, with no restore, run `secrets-store clear-hold`. It gives up the restore, so it runs only on the owner's tap, on the same card line as `destroy` and `restore-rebuilt` (item 21). It needs `sys/health` to answer 200. While the hold exists, no snapshot runs, so rotation cannot remove the earlier store's snapshots, and those box copies may be the only ones. So `clear-hold` first moves every snapshot not of the current cluster, with its `.cluster` file, into `/etc/agent-keys/dev/openbao-snapshots-kept/`, never overwriting a file there. Rotation never reads that folder. Then it removes the hold, so snapshots and the hourly send run again. Nothing is deleted.
+expect: no `openbao-pass` name, and an empty `allowedListeners`. The audited-headers setting stays in that dev store until it is rebuilt. Two more ways the objects go: a run limited with `--only` to a stage that renders the root, without `OPENBAO_SEAL_KEY_FILE`, renders the value off, so they are pruned until the next full run; and if `openbaoInCluster` goes off while the value is on, the `openbao-measure` Application leaves the root and its objects stay (the root has no resources finalizer), until a dev teardown removes them.
 
-The kept snapshots are not sent off the box. **Removing anything from the kept folder is a delete under D-0042 rule 6, so it needs the owner's tap**, and no wrapper does it. To restore a kept snapshot later, run `secrets-store destroy` first (the owner's tap), so its hold stops every snapshot and rotation cannot remove the file once it is back. Then run `plan`, `apply` and `configure`, move the snapshot and its `.cluster` file back into `openbao-snapshots/`, and run `secrets-store restore-rebuilt raft-<time>.snap` with that file's exact name. Without the name it would take the newest snapshot of any earlier store, which after more than one rebuild is not the kept one. With the name it restores that file only, refuses it if it is missing, has no `.cluster` file or is of the current store, and names it on the `PASS` line. Its empty-store guard refuses any store but a fresh rebuild.
+Not in this part yet: the agent box's path to OpenBao through the Gateway (after the source address is measured above, so the admin AppRole's /32 binding still holds), then the rest of the box's wrapper changes, which need that path (the admin hand-over, SOPS copies, reseed, compare, and the hold during a rebuild).
 
-The admin policy can call the forced restore (`sys/storage/raft/snapshot-force`) only for this. `secrets-store restore` stays plain and never forces.
+## The box's calls to the store (kept for rework PR 3b)
+
+The store VM's code is gone: its OpenTofu folder, the `openbao` Ansible role and play, and the wrapper's `plan`, `apply`, `destroy` and `configure` (D-0058: no store VM was ever built, so nothing in the lab changed). The agent box's `secrets-store` wrapper keeps its calls to the store's API, which the in-cluster store will use: `status`, `recovery`, `snapshot`, `restore`, `restore-rebuilt [raft-<time>.snap]` and `clear-hold`, run as user `keys`, plus the hourly off-box copy.
+
+**Not runnable on the in-cluster store yet.** These calls still read the store's address from `agent_box_secrets_store` and its CA from `/etc/agent-keys/dev/secrets-store-ca.crt`, which only the VM's `configure` wrote, and they refuse a store outside the dev VM IDs 550 to 599. Rework PR 3b points them at the dev c1 store, guards recovery shares by its address (D-0058 rule 10), and has `hosts/rebuild-k8s.sh` write the rebuild hold that `destroy` used to write. Until then every call stops at once with `secrets-store: ... secrets-store.json is missing`, because `agent_box_secrets_store` is not set on the box, and the off-box copy finds no OpenTofu state and skips. The box's sudo rule still lists the four removed words (`agent_box_wrappers` in the role's defaults, whose change needs the owner's tap under D-0056 rule 4); the wrapper answers each with its usage line and does nothing. The rules below are what those calls do; they stay true after PR 3b.
+
+The wrapper makes the admin AppRole's role ID and secret ID once in `/etc/agent-keys/dev/` (user `keys`, 0600, `openssl rand -hex 24` each, no trailing newline) and never prints them. It no longer makes a seal key: the rebuild wrapper keeps the dev seal key as a SOPS copy ([above](#inside-the-cluster-d-0058-dev-first)).
+
+- `status`: `sys/health`, which holds no secret.
+- `snapshot`: writes `kv/dev/snapshot-mark` (the snapshot's own time, no secret), then copies a Raft snapshot into `/etc/agent-keys/dev/openbao-snapshots/` (keeps 24), with `raft-<time>.snap.cluster` beside it holding the store's cluster ID. It signs in as AppRole `snapshot-box` once the settings say `snapshot_box: true`, which only the owner's install tap sets (agent pick 240, an access right and a box limit), and with the admin AppRole until then. It refuses while a rebuild hold exists.
+- `restore` (D-0038 Confirmations 4 and 7, pick 239). **The owner's tap first:** a restore of the secrets store is a delete under D-0042 rule 6, on dev too. It runs `secrets-store-restore.sh same`: the newest snapshot of the store's own cluster, the mark set to `before-restore-<time>`, a plain restore, never forced, and a fresh login that must read the snapshot's own time back in the mark.
+  expect: `PASS: restore: raft-<time>.snap restored (plain) onto the same store; its mark reads back`, and a line `measured: old token: refused` or `still works`.
+- `recovery`: on dev only (D-0038 rule 5), once, 3 shares with a threshold of 2 from `sys/rotate/recovery/init` ([OpenBao's rotate init API](https://openbao.org/docs/api/system/rotate/init/)) into `/etc/agent-keys/dev/openbao-recovery.json`, never printed. It records their time in `openbao-recovery.made`, then takes a snapshot a second later, because `restore` and `restore-rebuilt` refuse any snapshot not strictly later than the shares: a restore brings back the recovery keys of the snapshot's time (source: [Performing restore from snapshot invalidates existing auto-unseal recovery keys](https://discuss.hashicorp.com/t/performing-restore-from-snapshot-invalidates-existing-auto-unseal-recovery-keys/55326), about Vault). It refuses while a rebuild hold exists.
+- `restore-rebuilt` (D-0038 Confirmation 5, pick 238), after a rebuild of the store, on the owner's tap (a delete). A teardown of dev's c1, which wipes the dev store inside it, is not a store `destroy` and needs no tap; a `restore` keeps the tap on dev and prod, and a `destroy` of the production store, which a teardown of prod's c1 counts as, keeps it (D-0042 rule 6). It runs `secrets-store-restore.sh rebuilt` under the wrapper's lock:
+  1. picks the newest snapshot whose `.cluster` names another cluster than the store's current one, later than the recovery shares once they exist, or the one named exactly;
+  2. refuses unless `kv/` holds nothing but `c1/check`;
+  3. tries the plain restore, and the forced one only if OpenBao refuses it with "possibly the snapshot is using a different set of unseal keys" (a Vault user's report, not OpenBao's own text: [Raft: how to restore from 3-node HA cluster to 1-node DR instance](https://discuss.hashicorp.com/t/raft-how-to-restore-from-3-node-ha-cluster-to-1-node-dr-instance/20572)); any other refusal stops as `other refusal`;
+  4. waits for `sys/health` 200 and for its own earlier token to be refused;
+  5. reads `kv/dev/snapshot-mark`, which must hold the picked snapshot's time;
+  6. removes the hold.
+
+  expect: seven `ok` step lines, then `PASS: restore-rebuilt: raft-<time>.snap restored (<how>) onto the rebuilt store; its mark reads back; hold removed`.
+- `clear-hold`: when the rebuilt store is to stay as it is, with no restore (the owner's tap, on the same card line as `restore-rebuilt`). It needs `sys/health` 200, moves every snapshot not of the current cluster, with its `.cluster` file, into `/etc/agent-keys/dev/openbao-snapshots-kept/`, never overwriting a file there, then removes the hold. Rotation never reads the kept folder, and the kept snapshots are not sent off the box. **Removing anything from the kept folder is a delete under D-0042 rule 6, so it needs the owner's tap**, and no wrapper does it.
+
+The admin policy can call the forced restore (`sys/storage/raft/snapshot-force`) only for `restore-rebuilt`. `secrets-store restore` stays plain and never forces.
 
 ## Off-box copy of the snapshots
 
@@ -160,39 +132,30 @@ Pick 237, proposed D-0038 rule 8. **Not installed yet:** it is a box limit, and 
 
 Each hour, while the box is up, `secrets-store-offbox.sh`:
 
-1. Skips with `secrets-store-offbox: skipped: no store` and succeeds when the wrapper's OpenTofu state holds no store VM. Dev is often torn down. When the VM is in the state but `sys/health` does not answer 200, the run fails (rule 9).
-2. Runs `secrets-store snapshot`, which signs in with AppRole `snapshot-box` (the admin AppRole until the install tap sets `snapshot_box: true`) and copies a snapshot into `/etc/agent-keys/dev/openbao-snapshots/` (keeps 24).
+1. Skips with `secrets-store-offbox: skipped: no store` and succeeds when the wrapper's OpenTofu state holds no store VM. With the VM code gone, nothing writes that state, so it skips every hour until rework PR 3b points it at the in-cluster store. When a store is listed but `sys/health` does not answer 200, the run fails (rule 9).
+2. Runs `secrets-store snapshot` and copies the snapshot into `/etc/agent-keys/dev/openbao-snapshots/` (keeps 24).
 3. Requires the escrow of pick 222's restic password, as the OPNsense copy does. With no current copy in the vault, nothing is sent.
 4. Uses its own repository, `azure:opnsense-backup:/openbao-dev` (`agent_box_secrets_store_offbox.repository`). It refuses the OPNsense repository, a path inside it, or one that holds it, compared the way restic reads an `azure:` path: `azure:c:p`, `azure:c:/p` and `azure:c://p/` are one repository, and `azure:c:/` is the whole container. It makes its repository on the first run, only when restic says it does not exist (exit 10); any other error fails the run.
 5. Backs the snapshot up under tag `openbao-dev`, then forgets past 48 hourly, 14 daily and 6 monthly, grouped by host and tags. The first run from 03:00 UTC each day also prunes, which deletes older snapshots from Azure for good.
-6. Reads the snapshot back and requires the same bytes. It does not open it: only a store with the seal key can, and the weekly drill proves that on the VM.
+6. Reads the snapshot back and requires the same bytes. It does not open it: only a store with the seal key can.
 
 expect: `secrets-store-offbox: sent raft-<time>.snap (<n> bytes) off the box; it reads back the same`, and once a day `pruned the repository (once a day)`.
 
-If the box is down, nothing goes off-site; the VM keeps its own 48 hourly snapshots and Proxmox's nightly backup.
+If the box is down, nothing goes off-site; c1's hourly CronJob keeps its own 48 snapshots, and Proxmox's nightly backup holds the node VMs.
 
 **Box lost (break-glass, Activation gate item 7).** The owner alone, with their own Azure sign-in:
 
 1. Grant their own account Key Vault Secrets User on the backup vault and Storage Blob Data Reader on the container.
-2. Read the restic password and the box's age identity, and restore the newest secrets bundle as [its runbook](make-the-box-secrets-bundle.md#recover-the-bundle-when-the-box-is-lost-break-glass) says; the bundle holds the seal key.
+2. Read the restic password and the box's age identity, and restore the newest secrets bundle as [its runbook](make-the-box-secrets-bundle.md#recover-the-bundle-when-the-box-is-lost-break-glass) says; the bundle holds the seal key's SOPS copy.
 3. `restic -r azure:opnsense-backup:/openbao-dev restore --tag openbao-dev latest --target <folder>`.
-4. Rebuild the store from code with that seal key in the keys folder, put the snapshot and its `.cluster` file (both are in the restic snapshot) in `/etc/agent-keys/dev/openbao-snapshots/`, and run `secrets-store restore-rebuilt`.
+4. Rebuild the store from code with that seal key, put the snapshot and its `.cluster` file (both are in the restic snapshot) in `/etc/agent-keys/dev/openbao-snapshots/`, and run `secrets-store restore-rebuilt`.
 5. Take both roles away.
-
-## Remove it
-
-Take a last snapshot with `secrets-store snapshot`, which copies it to the box's keys folder, then `secrets-store destroy` (the owner's tap: a delete under D-0042 rule 6). The seal key in the box's keys folder is what reads that snapshot again: after `apply` and `configure`, `secrets-store restore-rebuilt` puts it back, as in [Rebuild and restore](#rebuild-and-restore-d-0038-confirmation-5). While no store VM exists, the hourly off-box send skips.
 
 ## If it fails
 
-- The health check never turns 200: read `journalctl -u openbao`. A seal error means the key file is missing or not 32 bytes.
-- The first start failed half way: self-initialization does not run again on storage that holds data. Destroy the VM and start over; nothing is in it yet.
-- The restore drill fails: read `journalctl -u openbao-drill`. The step line names the step that failed, and the throwaway's own log is gone with its temporary file system. To run it again, use `systemctl start openbao-drill.service` on the VM. It never touches the live store's data.
-- Step 8 (`known login`) fails, but steps 5 to 7 passed: the snapshot AppRole's IDs on the VM may differ from the ones in the newest snapshot, for example when that snapshot is older than a rebuild of the VM, which makes the IDs again. The restored data then holds the old IDs, so the login is refused although the restore worked. That is a false fail: check that `openbao-snapshot.service` succeeds, and once a snapshot is taken with the current IDs, run the drill again.
-- The drill passed but `configure` says the live store's Raft state changed: stop the timer (`systemctl disable --now openbao-drill.timer`) and tell the owner. The throwaway should never be able to reach the live store.
-- `secrets-store-offbox: the store's VM is in the wrapper's state, but sys/health answered ...`: the store is sealed, broken or gone without `destroy`. Check `secrets-store status`. If the VM was removed outside the wrapper, its state still lists it; fix that before anything else.
+- `secrets-store-offbox: the store's VM is in the wrapper's state, but sys/health answered ...`: the store is sealed, broken or gone. Check `secrets-store status`.
 - `secrets-store-offbox: restic could not open the repository (exit 12) ...`: the password is not the repository's; the job never makes a new one over it. See the OPNsense runbook's password versions.
-- `secrets-store: another secrets-store run is going`: the hourly pull met a session's run of the wrapper (its lock is taken with `flock -n`), so that hour's off-box send fails red; the next hour's run sends. During Rebuild and restore this can happen in steps 1 to 3, before the VM is back with the hold in place.
+- `secrets-store: another secrets-store run is going`: the hourly pull met a session's run of the wrapper (its lock is taken with `flock -n`), so that hour's off-box send fails red; the next hour's run sends.
 - `restore-rebuilt: 1 snapshot FAIL`: no snapshot of an earlier cluster is in the folder. Nothing was changed. After a recovery from off-box, check that the `.cluster` file came back with the snapshot.
 - `restore-rebuilt: 2 empty store FAIL`: the store holds data besides `c1/check`, so it is not a fresh rebuild, and a forced restore would throw that data away. Nothing was changed; tell the owner.
 - `restore-rebuilt: 3 restore FAIL: other refusal`: OpenBao refused the plain restore for another reason, or with other words than the pinned text. Nothing was forced. Read the store's log and tell the owner before changing the text.
@@ -205,8 +168,7 @@ Take a last snapshot with `secrets-store snapshot`, which copies it to the box's
 - `WARNING: openbao-recovery.made is missing`: the shares came before their time was recorded, so the shares file's own time is used. The run goes on with that time.
 - `recovery`: `the shares are made, but the snapshot after them failed`: until a snapshot succeeds, nothing can be restored. Fix what the snapshot line says and run `secrets-store snapshot`.
 - After any restore, the token that took the snapshot exists again in the store: it was alive when the snapshot was taken, and its revoke is not in the snapshot. It stops at its TTL, an hour at most (D-0038 rule 6). Its revoke fails with "token not found" ([openbao #522](https://github.com/openbao/openbao/issues/522)), so leave it to expire.
-- `secrets-store: AppRole snapshot-box did not sign in`: its IDs are missing from the keys folder, or the store does not hold them yet. With `snapshot_box: true` in the settings, run `configure`, which makes and sets them, then `snapshot` again. Never set `snapshot_box` by hand: it is the install tap's (an access right and a box limit).
-- `configure` fails at `The rights are exactly the two paths'`: the store's `snapshot-box` login holds more or less than its two paths. The message lists every path's rights (no secrets). Nothing uses the login until it passes; tell the owner.
+- `secrets-store: AppRole snapshot-box did not sign in`: its IDs are missing from the keys folder, or the store does not hold them yet. Never set `snapshot_box` by hand: it is the install tap's (an access right and a box limit).
 - Tell the owner before trying anything not written here.
 
 ## Related

@@ -182,6 +182,13 @@ argument_specs:
           starts the runner. keep-dev stops the runner and leaves dev up (the notebook's queued jobs fail or are cancelled after
           24 hours queued, so if dev stays up for more than a day its daily access-expiry check does not run, and
           whether its alert e-mail goes out is not measured). Empty is no pick: a short node refuses before it stops anything.
+      agent_box_openbao_in_cluster:
+        type: bool
+        default: false
+        description: >-
+          true writes <work_dir>/openbao-in-cluster (0600, the keys user's), and the rebuild wrapper then turns the
+          secrets store on in the dev cluster (D-0058, dev first) and puts its seal key, made once in the dev keys
+          folder, on the first worker before Argo CD makes the store. false removes the file.
       agent_box_desktop:
         type: dict
         default: {}
@@ -201,11 +208,12 @@ argument_specs:
         default: {}
         description: >-
           Private settings for the secrets-store wrapper, written to <work_dir>/secrets-store.json (0600, the
-          keys user's): the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
-          vnet, template_vm_id), box_address, and optionally seal_key_id, admin_user and snapshot_box. snapshot_box: true
-          (agent pick 240) makes configure create the AppRole snapshot-box and snapshot sign in with it; it is set only
-          by the owner's install tap, an access right and a box limit. No key goes in it; the wrapper makes the keys in
-          the keys folder. Empty skips the file.
+          keys user's). The wrapper reads vm_id (its dev check, 550-599), address and snapshot_box. The store VM's
+          other fields (name, cores, memory_mb, disk_gb, proxmox_node_name, vnet, template_vm_id, box_address,
+          seal_key_id, admin_user) are read by nothing since the VM code was removed (D-0058); rework PR 3b reshapes
+          this for the store inside the cluster. snapshot_box: true (agent pick 240) makes snapshot sign in as AppRole
+          snapshot-box; it is set only by the owner's install tap, an access right and a box limit. No key goes in
+          it; the wrapper makes the keys in the keys folder. Empty skips the file.
       agent_box_secrets_store_offbox:
         type: dict
         default:

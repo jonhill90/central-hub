@@ -19,7 +19,7 @@ Through what pipeline should every change to the home lab and to its Azure, Clou
 1. **What is in place.**
    - `lab-redeploy-dev.yml` is a `workflow_dispatch` workflow on `main`. It runs on a self-hosted runner labelled `central-hub-box` and calls the box's `rebuild` wrapper, so it never sees a key [1].
    - A root-owned job-started hook on the box fails every job unless the workflow is that one, on `main`, from `workflow_dispatch` [2].
-   - Its environment and runner are not registered until the agents have their own GitHub account (D-0030), because every agent acts as the owner's account and could approve as him [2].
+   - Its environment and runner are not registered until the agents have their own GitHub account (D-0030), because every agent acts as the owner's account and could approve as the owner [2].
 2. **The CI runner VM.** It runs GitHub's runner as an unprivileged user, holds no lab keys, and can't reach the Proxmox API [3].
 3. **The box's own logs.** `box-apply` writes one JSON line per run to its log file and keeps the last 50 runs' output [4].
 4. **The Mac wrappers.**

@@ -144,11 +144,46 @@ check_manifests() {
     helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com --set address=192.0.2.10 \
       > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
   done
-  # The secret-store app with the secrets store's address set (dev, proposed D-0038), so its
-  # `openbao` store and test ExternalSecret are schema-checked too.
+  # The secret-store app with OpenBao in the cluster turned on (dev first, D-0058), so its `openbao`
+  # store and test ExternalSecret are schema-checked too.
   helm template secret-store hosts/kubernetes/home/c1/apps/secret-store --namespace external-secrets \
-    --set openbao.address=https://192.0.2.20 --set openbao.caBundle=QUJD \
+    --set openbao.inCluster=true \
     > "$work/rendered/app-c1-secret-store-openbao.yaml"
+  # The openbao-store app with a seal node set, so the seal key's local PersistentVolume is
+  # schema-checked too, and the root chart with OpenBao turned on (its two apps and the project).
+  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set sealNode=node-1 > "$work/rendered/app-c1-openbao-store-seal.yaml"
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32 \
+    > "$work/rendered/root-c1-openbao.yaml"
+  # The dev-only measurement of the box's path through the Gateway (MEASURE-1) turned on: the root's
+  # switches and the four charts it changes, so its routes, listener and policy are schema-checked too.
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32 --set openbaoMeasure=true \
+    > "$work/rendered/root-c1-openbao-measure.yaml"
+  helm template openbao-measure hosts/kubernetes/home/c1/apps/openbao-measure --namespace openbao \
+    --set zone=example.com --set measure=true > "$work/rendered/app-c1-openbao-measure-on.yaml"
+  helm template gateway hosts/kubernetes/home/c1/apps/gateway --namespace gateway \
+    --set zone=example.com --set address=192.0.2.10 --set openbaoMeasure=true > "$work/rendered/app-c1-gateway-measure.yaml"
+  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set zone=example.com --set sealNode=node-1 --set measure=true > "$work/rendered/app-c1-openbao-store-measure.yaml"
+  # With openbaoMeasure unset, the root renders exactly as with it false, with and without OpenBao in
+  # the cluster, and passes no measure switch to any app: prod's root is as before (MEASURE-1).
+  local set unset
+  for set in "" "--set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32"; do
+    # shellcheck disable=SC2086 # $set is a list of words on purpose
+    unset=$(helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 $set)
+    # shellcheck disable=SC2086
+    if [ "$unset" != "$(helm template root hosts/kubernetes/home/c1/root --set zone=example.com \
+      --set gatewayAddress=192.0.2.10 $set --set openbaoMeasure=false)" ]; then
+      echo "manifests: the root renders differently with openbaoMeasure unset and false (${set:-default})" >&2
+      return 1
+    fi
+    if grep -Eq -- '- name: "?(measure|centralHub\.measure|openbaoMeasure)"?$' <<<"$unset"; then
+      echo "manifests: the root passes a measure switch with openbaoMeasure unset (${set:-default})" >&2
+      return 1
+    fi
+  done
   # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
   if command -v promtool >/dev/null; then
     mkdir -p "$work/rules"
@@ -173,7 +208,7 @@ check_manifests() {
 
 check_identity() {
   # Realm lab imported into a real Keycloak in a container (identity/test_realm.sh), rendered with
-  # an extra user so the users loop is tested with more than the owner, a Proxmox client (role proxmox_sso), a secrets store client (role openbao), and with the test sign-in
+  # an extra user so the users loop is tested with more than the owner, a Proxmox client (role proxmox_sso), a secrets store client (k8s_identity_openbao_hosts), and with the test sign-in
   # theme identity/theme/lab mounted the way the role mounts k8s_identity_theme_dir.
   collections
   mkdir -p "$work/identity"
@@ -199,8 +234,6 @@ check_backup() {
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
   bash "$here/tests/test_identity_signin.sh"
-  bash "$here/tests/test_openbao_oidc_check.sh"
-  bash "$here/tests/test_openbao_drill.sh"
   bash "$here/tests/test_rebuild_dev_stages.sh"
   bash "$here/tests/test_rebuild_preflight.sh"
   bash "$here/tests/test_rebuild_short_log.sh"
@@ -223,6 +256,7 @@ check_scripts() {
   echo "scripts: ShellCheck passed on $(git ls-files -- '*.sh' | wc -l) scripts"
   bash "$here/tests/test_c1_read.sh"
   bash "$here/tests/test_box_apply.sh"
+  bash "$here/tests/test_narrow_agent_access.sh"
   actionlint -shellcheck="$(command -v shellcheck)"
   echo "scripts: actionlint passed on $(git ls-files -- '.github/workflows/*.yml' | wc -l) workflows"
 }

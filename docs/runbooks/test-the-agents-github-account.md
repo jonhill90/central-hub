@@ -16,7 +16,7 @@ superseded-by:
 
 **Status:** draft, written 2026-11-13 from the documentation of Claude Code's cloud sessions and D-0030. Not run.
 
-## Can one session have the agent account while the owner's other sessions keep his?
+## Can one session have the agent account while the owner's other sessions keep theirs?
 
 **Not inside one Claude account.** A Claude account has one GitHub connection, made once ("You connect your GitHub account to Claude once", [Projects, Set up GitHub access](https://code.claude.com/docs/en/claude-projects.md)). In Anthropic-hosted sessions the GitHub proxy swaps in "your actual GitHub token" for git and for API requests ([Cloud environments, GitHub proxy](https://code.claude.com/docs/en/cloud-environments.md)). The documentation names no GitHub identity per session or per environment. A token set in the environment doesn't help either: the proxy replaced a made-up token with the owner's (D-0030 evidence, finding 2).
 
@@ -24,14 +24,14 @@ So there are two ways to run the test, and the owner picks one:
 
 | Route | What changes | Cost |
 |---|---|---|
-| A. A short window on the owner's own Claude account | For the length of the test, every cloud session of his acts as the agent account | No new account; minutes; other running threads lose admin rights on GitHub during the window, because the agent account is a collaborator, not an admin |
+| A. A short window on the owner's own Claude account | For the length of the test, every cloud session of theirs acts as the agent account | No new account; minutes; other running threads lose admin rights on GitHub during the window, because the agent account is a collaborator, not an admin |
 | B. A second Claude login, connected only to the agent account | Nothing on the owner's account; the test runs in that login's own session | A second Claude plan; a project belongs to one account, so the test session runs outside the owner's project |
 
 A self-hosted environment can carry its own git credentials ([Configure git](https://code.claude.com/docs/en/self-hosted-environments-deploy.md)), but the GitHub connector would still be the owner's, so check 2 below can't pass there. It isn't a route for this test.
 
 ## Steps
 
-1. **The owner makes the account and invites it.** Make a GitHub account for the agents with an email he can verify, turn on two-factor sign-in, and invite it as a collaborator on central-hub, inpara, agent-notebook and obsidian-graph-3d. Sign in as the account and accept the four invitations. Put its name in the private store as `agent-account-name`, and send it to the agents in the project's chat.
+1. **The owner makes the account and invites it.** Make a GitHub account for the agents with an email the owner can verify, turn on two-factor sign-in, and invite it as a collaborator on central-hub, inpara, agent-notebook and obsidian-graph-3d. Sign in as the account and accept the four invitations. Put its name in the private store as `agent-account-name`, and send it to the agents in the project's chat.
    why: GitHub allows one free machine account per person, made by that person, who answers for it (D-0030 rule 1). A collaborator on a personal repository has write access, which is what the agents need, and no more.
    expect: each repository's collaborators page lists the account with write access.
 
@@ -61,7 +61,7 @@ A self-hosted environment can carry its own git credentials ([Configure git](htt
    why: rule 4's review rule can only tell the agents from the owner if their PRs show the agent account as author.
    expect: the agent account's name.
 
-8. **Check 5, the owner's approval.** The owner approves that PR from his own GitHub login. The agent then runs `gh api repos/jonhill90/central-hub/pulls/<number>/reviews --jq '.[] | [.user.login, .state, .commit_id] | @tsv'` and compares the commit with the PR's head.
+8. **Check 5, the owner's approval.** The owner approves that PR from their own GitHub login. The agent then runs `gh api repos/jonhill90/central-hub/pulls/<number>/reviews --jq '.[] | [.user.login, .state, .commit_id] | @tsv'` and compares the commit with the PR's head.
    why: last-push approval only counts when the approver isn't the one who pushed. Before the switch they were the same account, so this could never pass.
    ※ the PR is from [step 7](#steps).
    expect: one line with the owner, `APPROVED`, and the PR's head commit.
@@ -71,9 +71,9 @@ A self-hosted environment can carry its own git credentials ([Configure git](htt
    expect: the evidence PR is open; the test PR is closed.
 
 10. **Pass or fail.**
-    - Any check failed: the owner reconnects his own account on both channels (Route A) and the switch doesn't happen. The record is revisited (D-0030 rule 2).
-    - All five passed, and the owner has already typed his accept of D-0030: the connection stays. The switch goes on: `main-review` and CODEOWNERS (rule 4), then revoking the old token (rule 5).
-    - All five passed, but D-0030 isn't accepted yet: under Route A, reconnect the owner's own account until he accepts.
+    - Any check failed: the owner reconnects their own account on both channels (Route A) and the switch doesn't happen. The record is revisited (D-0030 rule 2).
+    - All five passed, and the owner has already typed their accept of D-0030: the connection stays. The switch goes on: `main-review` and CODEOWNERS (rule 4), then revoking the old token (rule 5).
+    - All five passed, but D-0030 isn't accepted yet: under Route A, reconnect the owner's own account until they accept.
    why: the test proves the route; acceptance is still the owner's typed line.
 
 ## Not covered here

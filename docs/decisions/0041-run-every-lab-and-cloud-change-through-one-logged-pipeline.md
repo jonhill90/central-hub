@@ -24,18 +24,18 @@ revisit-when: the agents get a GitHub account of their own (D-0030), so the appr
 
 ## Context and Problem Statement
 
-At 06:31:02 UTC on 2026-11-14 the owner asked when the agents would take these approvals over (cmsg_01X43rfNYp4H1dL1V2dkfkwNNmDuqYAAd97e7MWLy7w5j9). At 06:36:44 UTC he said that everything should go through a workflow or pipeline anyway, for the logging and the tests (cmsg_01X43rfNYp4H1dL1V2dkfkwNT6RrSBdDUEXGjL6tdtauzz). That night several changes ran as raw commands on the owner's Mac, on his typed lines: a Proxmox firewall playbook, the Proxmox nginx playbook, an OPNsense DNS run, an OpenTofu apply of the tailnet stack, and the OPNsense backup-user script. One Mac wrapper was pinned too old to pass a needed variable. None of these runs left a log that anyone but the Mac could read.
+At 06:31:02 UTC on 2026-11-14 the owner asked when the agents would take these approvals over (cmsg_01X43rfNYp4H1dL1V2dkfkwNNmDuqYAAd97e7MWLy7w5j9). At 06:36:44 UTC they said that everything should go through a workflow or pipeline anyway, for the logging and the tests (cmsg_01X43rfNYp4H1dL1V2dkfkwNT6RrSBdDUEXGjL6tdtauzz). That night several changes ran as raw commands on the owner's Mac, on their typed lines: a Proxmox firewall playbook, the Proxmox nginx playbook, an OPNsense DNS run, an OpenTofu apply of the tailnet stack, and the OPNsense backup-user script. One Mac wrapper was pinned too old to pass a needed variable. None of these runs left a log that anyone but the Mac could read.
 
 D-0035 already lets agents tear down and rebuild the lab's guests from the agent box, each production run approved by the owner's card tap after dev. D-0036 lets the box apply its own setup. Neither covers the cloud accounts (Azure, Cloudflare, Tailscale), and neither says that the Mac and raw commands stop. This record makes one pipeline the only way a change reaches the lab or those accounts.
 
-It changes how the owner approves: a card tap that names a saved plan replaces typed command lines, including for the firewall and tailnet changes that until now needed his words. So under D-0034 rule 4 it needs the owner's typed line.
+It changes how the owner approves: a card tap that names a saved plan replaces typed command lines, including for the firewall and tailnet changes that until now needed their words. So under D-0034 rule 4 it needs the owner's typed line.
 
 ## Decision Drivers
 
 - **The owner's ask**: every change through a pipeline, for logging and tests.
 - **Least privilege**: an agent asks, a fixed process acts, and the key stays with the process (D-0035).
 - **PR code never meets a key**: CLAUDE.md rule 5 and D-0035 rule 4.
-- **The owner sees what he approves**: the plan, not a command.
+- **The owner sees what they approve**: the plan, not a command.
 - **FOSS and an exit path** (STD-0006, REQ-0011).
 - **The pipeline can't run on what it tears down.**
 
@@ -84,7 +84,7 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
    - The card's message ID is a required input of the apply job and is written to both logs.
    - A tap covers one apply of that plan and nothing after it.
    - Once the agents have a GitHub account of their own (D-0030), a later record may move this approval to a protected GitHub environment whose required reviewer is the owner (D-0035 rule 8).
-   - **Since D-0042** (on the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, ending his own approval of PRs for the greenfield build-out): dev also includes the dev secrets store, VMs 550 to 599 (D-0038 rule 2), and the production secrets store, VM 500, is production. A production apply, and an apply to Azure, Cloudflare or Tailscale, runs on the agents' pass instead of the owner's tap: for a layer with a dev twin, once the same commit passed on dev; for one without, once the saved plan's hash has the pass. The pass's message ID is the job's input and goes to both logs. The owner's tap, as set out above, stays for the steps in D-0042 rule 6: firewall and tailnet applies, deletes, secrets, access rights, money and the agent box's limits. That the reviewer and the council give the pass is an agent pick the owner can change (D-0042). Before D-0042, every production and cloud apply needed the owner's tap.
+   - **Since D-0042** (on the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, ending their own approval of PRs for the greenfield build-out): dev also includes the dev secrets store, VMs 550 to 599 (D-0038 rule 2), and the production secrets store, VM 500, is production. A production apply, and an apply to Azure, Cloudflare or Tailscale, runs on the agents' pass instead of the owner's tap: for a layer with a dev twin, once the same commit passed on dev; for one without, once the saved plan's hash has the pass. The pass's message ID is the job's input and goes to both logs. The owner's tap, as set out above, stays for the steps in D-0042 rule 6: firewall and tailnet applies, deletes, secrets, access rights, money and the agent box's limits. That the reviewer and the council give the pass is an agent pick the owner can change (D-0042). Before D-0042, every production and cloud apply needed the owner's tap.
 
 7. **Logs.**
    - **GitHub's run log** can be read by any signed-in GitHub user, and it is kept at most 90 days on a public repository. So a job prints only a summary there: the layer or stack, the commit, the card ID, the plan's hash, counts of changes, and pass or fail. It prints no secret and no private name (CLAUDE.md rule 4).
@@ -94,7 +94,7 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
    - PR code never runs there.
    - The CI runner VM holds no lab keys and can't reach the Proxmox API, so it takes PR tests only.
 9. **Break-glass.**
-   - The owner's Proxmox console and his own cloud consoles stay the way back when the pipeline or the box is down.
+   - The owner's Proxmox console and their own cloud consoles stay the way back when the pipeline or the box is down.
    - A break-glass change is written into the layer's runbook afterwards, and code catches up by PR before the next pipeline run of that layer.
 10. **The Mac wrappers retire one by one.**
     - Each Mac wrapper, and each command that ran raw, gets one pipeline job.
@@ -103,7 +103,7 @@ Chosen option: **1**. It builds on what is already in place: the dev redeploy wo
 
 ### Consequences
 
-- Good: every change has a log, a tested commit and a saved plan behind it, and the owner approves the plan in the chat he already uses.
+- Good: every change has a log, a tested commit and a saved plan behind it, and the owner approves the plan in the chat they already use.
 - Good: no key is on the Mac or in a workflow. The Mac drops out as wrappers retire.
 - Good: the tailnet, firewall and cloud changes, which need the owner's words today, get the same plan-and-tap gate as the rest.
 - Bad: **the box still can't check the tap itself.** It is the same gap D-0035 accepts, with the same compensating controls: a reviewing agent's check, the card ID in the log, and a plan hash the tap must match. It closes when D-0030 lands (rule 6).

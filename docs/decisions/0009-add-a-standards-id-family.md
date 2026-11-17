@@ -24,7 +24,7 @@ revisit-when: "the same as D-0003, plus: the standards register moves out of thi
 
 ## Context and Problem Statement
 
-On 2026-10-21 the owner asked whether the project needs a system for its standards. The rules he has said yes to are spread across many files, for example VM hostnames (option E), the repo layout rules and the backlog status words. On 2026-10-21 at 02:00 UTC he said yes to the proposed answer: one standards register, a subsystem of system 2 Organization.
+On 2026-10-21 the owner asked whether the project needs a system for its standards. The rules they have said yes to are spread across many files, for example VM hostnames (option E), the repo layout rules and the backlog status words. On 2026-10-21 at 02:00 UTC they said yes to the proposed answer: one standards register, a subsystem of system 2 Organization.
 
 Standards will be cited across files, repos and chats, for example by AGENTS.md, by check scripts and by decision records. D-0003 rule 1 says such items get a global ID. D-0003 rule 2 says a new family is added only with the owner's approval, by its own decision record.
 

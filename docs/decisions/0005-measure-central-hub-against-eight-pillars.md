@@ -24,7 +24,7 @@ revisit-when: a CNCF document defines its own pillar set; a pillar has no workin
 
 ## Context and Problem Statement
 
-On 2026-10-15 (Central Hub project, Kubernetes thread) the owner asked for the homelab to be a leading example of Kubernetes reliability, high availability, resiliency, cost optimisation and the other Microsoft Well-Architected pillars, in a CNCF-based version of Central Hub's own. He scoped it to the whole of Central Hub, not to one cluster or one cloud service.
+On 2026-10-15 (Central Hub project, Kubernetes thread) the owner asked for the homelab to be a leading example of Kubernetes reliability, high availability, resiliency, cost optimisation and the other Microsoft Well-Architected pillars, in a CNCF-based version of Central Hub's own. They scoped it to the whole of Central Hub, not to one cluster or one cloud service.
 
 There is no CNCF well-architected framework. Each cloud vendor publishes its own, and they overlap. Central Hub also has goals that no published framework treats as a pillar, above all that every component can be swapped. This record decides which pillars Central Hub is measured against, and where the line sits between adopting a standard and adding our own.
 

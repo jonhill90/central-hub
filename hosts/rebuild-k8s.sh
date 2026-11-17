@@ -27,6 +27,12 @@
 #                 it. Unset: that stage is skipped.
 #   OPENBAO_CACERT, OPENBAO_ROLE_ID_FILE, OPENBAO_SECRET_ID_FILE  with OPENBAO_ADDR: the store's
 #                 certificate and the AppRole rebuild's two ID files on the controller
+#   OPENBAO_SEAL_KEY_FILE  optional: the 32-byte static seal key of the secrets store inside the
+#                 cluster (D-0058 rule 3). Set: stage `openbao-seal` puts it on the node the inventory's
+#                 k8s_gitops_source_openbao_seal_node names, before Argo CD makes the store. Unset: that
+#                 stage is skipped. On prod it is a secrets step, the owner's tap at the act. On dev it also
+#                 turns on the measurement of the box's path through the Gateway (MEASURE-1): the root
+#                 Application gets openbaoMeasure, and stage `openbao-measure` runs after `dev-ca`.
 #
 # No kubeconfig leaves the cluster: every kubectl call runs on the first control-plane node through
 # Ansible, with that node's /etc/kubernetes/admin.conf (kc below). A KUBECONFIG in rebuild.env is
@@ -41,7 +47,8 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 # disk and before gitops: once Argo CD reads the repo it syncs every app, and local-path then finds
 # each volume's folder already there (TASK-0240, agent pick 205). openbao runs before apps, whose
 # ExternalSecrets wait needs External Secrets to sign in at the store with the new cluster's key.
-default_stages="vms cluster storage restore gitops secrets openbao apps gateway certs identity ui checks"
+# openbao-seal runs before gitops: the store's pod in the cluster waits for its seal key from the start.
+default_stages="vms cluster storage openbao-seal restore gitops secrets openbao apps gateway certs identity ui checks"
 
 die() { echo "rebuild: $*" >&2; exit 1; }
 
@@ -368,6 +375,11 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
 }
 
 run_stage() {
+  # The dev-only measurement of the agent box's source address through the Gateway (MEASURE-1): on dev with
+  # the in-cluster store (its seal key file set), every render of the root Application passes openbaoMeasure,
+  # so a later stage never drops it mid-run. Prod, which will set the key file too, never gets it.
+  local measure=()
+  if [ "$ENV_NAME" = dev ] && [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then measure=(-e k8s_gitops_source_openbao_measure=true); fi
   case $1 in
     preflight)
       [ "$ENV_NAME" = dev ] || { echo "the memory preflight runs on dev only"; return 1; }
@@ -391,10 +403,10 @@ run_stage() {
     gitops)
       if [ "$ENV_NAME" = dev ] && kc -n gateway get secret apps-tls -o name >/dev/null 2>&1; then
         echo "gitops: the certificate's Secret exists (a re-run): the Gateway's HTTPS stays on"
-        ap playbooks/k8s-gitops.yml --tags install,source -e k8s_gitops_source_gateway_https=true
+        ap playbooks/k8s-gitops.yml --tags install,source -e k8s_gitops_source_gateway_https=true "${measure[@]}"
       else
         [ "$ENV_NAME" != dev ] || echo "gitops: no certificate Secret yet (a fresh build): the Gateway's HTTPS stays off until dev-ca"
-        ap playbooks/k8s-gitops.yml --tags install,source
+        ap playbooks/k8s-gitops.yml --tags install,source "${measure[@]}"
       fi ;;
     # Seeds namespace secret-source from SECRET_SOURCE_FILE (docs/runbooks/seed-secret-source.md) after
     # Argo CD made it and before apps wait on the ExternalSecrets that read it. Unset: skipped.
@@ -402,6 +414,11 @@ run_stage() {
       if [ -z "${SECRET_SOURCE_FILE:-}" ]; then echo "no SECRET_SOURCE_FILE set: secrets skipped"; return 0; fi
       [ -s "$SECRET_SOURCE_FILE" ] || { echo "SECRET_SOURCE_FILE is missing or empty"; return 1; }
       ap playbooks/k8s-secret-source.yml -e "secret_source_file=$SECRET_SOURCE_FILE" ;;
+    # The secrets store inside the cluster (D-0058): its seal key on its node, before Argo CD makes the store.
+    openbao-seal)
+      if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-seal skipped"; return 0; fi
+      [ -s "$OPENBAO_SEAL_KEY_FILE" ] || { echo "OPENBAO_SEAL_KEY_FILE is missing or empty"; return 1; }
+      ap playbooks/k8s-openbao-seal.yml -e "openbao_seal_key_file=$OPENBAO_SEAL_KEY_FILE" ;;
     # Registers the cluster's service-account key with the secrets store (playbooks/k8s-openbao-auth.yml,
     # docs/runbooks/set-up-the-secrets-store.md) before apps wait on ExternalSecrets. Unset: skipped.
     openbao)
@@ -424,8 +441,16 @@ run_stage() {
       # The dev inventory turns the Gateway's HTTPS off (k8s_gateway_https), so Argo CD's root Application passes
       # gatewayHttps=false and the Gateway has no https listener. Turn it on first (measured on dev, 2026-11-14:
       # spec listeners http and http-short only), then make the certificate the listener waits for.
-      ap playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_gateway_https=true
+      ap playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_gateway_https=true "${measure[@]}"
       ap playbooks/k8s-certs.yml --tags devca -e k8s_certs_dev_ca=true ;;
+    # Dev only, after dev-ca (the https listener exists only from then on) and only with the in-cluster store:
+    # the source address OpenBao sees for a box request through the Gateway, and whether c1 enforces the
+    # store's NetworkPolicy (MEASURE-1, ADDENDUM-1 v3 step 1). It runs on this machine, so its requests
+    # come from it. One PASS line names what it read; it changes nothing in OpenBao and prints no secret.
+    openbao-measure)
+      [ "$ENV_NAME" = dev ] || { echo "the measurement runs on dev only"; return 1; }
+      if [ ${#measure[@]} -eq 0 ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-measure skipped"; return 0; fi
+      ap playbooks/k8s-openbao-measure.yml ;;
     # Dev only, after dev-ca: the whole identity role with a test admin, never the owner's account, then the
     # sign-in proof (password alone stops at the one-time-code form; password and code redirect with a code;
     # step names and HTTP codes only). Every secret is a random value the role makes in the values file
@@ -434,7 +459,7 @@ run_stage() {
     # theme folder is the owner's private branding checkout, which the box doesn't hold. `signin` is also tagged never.
     # With a secrets store (OPENBAO_ADDR), the realm also gets client openbao for the store's address, and the
     # role writes openbao-oidc.json in this env folder (Keycloak's issuer, this Gateway's address, the dev CA's
-    # root), which `secrets-store configure` reads for the owner's sign-in and its proof (agent pick 233). A
+    # root), for the store's owner sign-in and its proof (agent pick 233), which the in-cluster store gets later. A
     # lab-viewers user, dev-viewer, and a second lab-admins user, dev-admin2, are the ones the store must refuse.
     identity-keycloak)
       [ "$ENV_NAME" = dev ] || { echo "the dev identity stage runs on dev only"; return 1; }
@@ -470,7 +495,11 @@ stages=${STAGES:-$default_stages}
 [ -z "$only" ] || stages=${only//,/ }
 # A dev run ends with its own HTTPS and sign-in proof, on the stages the box's wrapper sets, with no change to
 # that wrapper: the box's own checkout of main supplies them.
-if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="$stages dev-ca identity-keycloak"; fi
+# With the in-cluster store, the measurement (MEASURE-1) runs after dev-ca, which first makes the https listener.
+if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure identity-keycloak"
+  else stages="$stages dev-ca identity-keycloak"; fi
+fi
 # A dev run starts with the memory preflight, after a teardown has freed its VMs and before it makes new ones.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="preflight $stages"; fi
 if $teardown && [ -z "$only" ]; then stages="teardown $stages"; fi
@@ -531,8 +560,8 @@ for s in $stages; do
   set -e
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
-  # short log too, so the run's worklog can quote it.
-  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ]; then
+  # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line.
+  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ]; then
     sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
   fi

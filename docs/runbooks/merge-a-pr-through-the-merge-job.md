@@ -20,7 +20,7 @@ A cloud session cannot start a GitHub workflow here (the GitHub integration answ
 
 ## Before you start
 
-1. CI is green on the PR's head. The sweep checks it again itself: open, not a draft, base `main`, a clean merge, every check on the head completed and passed or skipped, at least one ran, fewer than 100 files.
+1. CI is green on the PR's head. The sweep checks it again itself: open, not a draft, base `main`, a clean merge, every check on the head completed and passed or skipped, at least one ran, fewer than 3000 files (the most GitHub lists for a PR; a server not yet updated by the tapped apply still stops at 100).
 2. You have read, in the project's chat, the reviewer's clearance of that exact head and a pass from each of councils A, B and C for that exact head. A pass for an older head does not count: the ledger is a file per head.
 
 ## Record the passes
