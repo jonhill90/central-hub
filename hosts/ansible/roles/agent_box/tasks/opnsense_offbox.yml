@@ -243,6 +243,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/opnsense-offbox.{{ item }}"
   register: agent_box_offbox_units
 
 - name: Daily off-box copy timer on
