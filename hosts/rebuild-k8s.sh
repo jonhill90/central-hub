@@ -460,8 +460,13 @@ run_stage() {
     openbao-handover)
       [ "$ENV_NAME" = dev ] || { echo "the hand-over runs on dev only"; return 1; }
       if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-handover skipped"; return 0; fi
+      # Neither ID file named: the box's rebuild wrapper is an install older than this stage, so nothing is
+      # handed over yet. One named but missing or empty is a fault.
+      if [ -z "${OPENBAO_ADMIN_ROLE_ID_FILE:-}" ] && [ -z "${OPENBAO_ADMIN_SECRET_ID_FILE:-}" ]; then
+        echo "SKIP: openbao-handover: not handed over, no admin ID files named; role bootstrap stays open"; return 0
+      fi
       [ -s "${OPENBAO_ADMIN_ROLE_ID_FILE:-}" ] && [ -s "${OPENBAO_ADMIN_SECRET_ID_FILE:-}" ] ||
-        { echo "openbao-handover needs OPENBAO_ADMIN_ROLE_ID_FILE and OPENBAO_ADMIN_SECRET_ID_FILE"; return 1; }
+        { echo "openbao-handover needs both OPENBAO_ADMIN_ROLE_ID_FILE and OPENBAO_ADMIN_SECRET_ID_FILE, each a file that is not empty"; return 1; }
       ap playbooks/k8s-openbao-handover.yml -e "openbao_admin_role_id_file=$OPENBAO_ADMIN_ROLE_ID_FILE" \
         -e "openbao_admin_secret_id_file=$OPENBAO_ADMIN_SECRET_ID_FILE" ;;
     # Dev only, after dev-ca: the whole identity role with a test admin, never the owner's account, then the
@@ -574,9 +579,10 @@ for s in $stages; do
   set -e
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
-  # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line.
+  # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line, and the
+  # hand-over's PASS or SKIP line (its stage's own SKIP line is printed bare, not quoted by Ansible).
   if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ]; then
-    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)' \
+    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: openbao-handover:' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
   fi
   # The preflight's branch and the sign-in proof's step lines (step name, HTTP code, ok or the reason; the script

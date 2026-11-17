@@ -35,13 +35,13 @@
 
     # Until the box's path to the store is set (the Gateway PR fills k8s_gitops_source_openbao_box_cidr), there is
     # nothing to hand over to: the admin AppRole would accept any port-forward from the pod's namespace. A dev run
-    # then passes this stage with a skip line, so the rest of the run is not stopped.
+    # then ends this stage with a SKIP line (role bootstrap stays open), so the rest of the run is not stopped.
     - name: handover | Skipped while the box's address is unset
       when: k8s_gitops_source_openbao_box_cidr | default('') | length == 0
       block:
         - name: handover | Result (skipped)
           ansible.builtin.debug:
-            msg: "PASS: openbao-handover: skipped, no box address yet (k8s_gitops_source_openbao_box_cidr unset)"
+            msg: "SKIP: openbao-handover: not handed over, no box address yet; role bootstrap stays open"
         - name: handover | Stop here
           ansible.builtin.meta: end_play
 
@@ -110,10 +110,21 @@
               *) echo "HANDOVER: login as bootstrap failed: $(printf '%s' "$out" | tr -s '\n' ' ' | cut -c1-200)"; exit 1 ;;
             esac
           fi
+          # The capture holds stderr too, so take it as the token only when it is one bare token (never printed).
+          case $out in
+            '' | *[!A-Za-z0-9._-]*) echo "HANDOVER: login as bootstrap gave more than a token (not shown)"; exit 1 ;;
+          esac
           BAO_TOKEN=$out
           export BAO_TOKEN
           printf '{"role_id":"%s"}' "$rid" | bao write auth/approle/role/admin/role-id - >/dev/null
-          printf '{"secret_id":"%s"}' "$sid" | bao write auth/approle/role/admin/custom-secret-id - >/dev/null
+          # A run stopped after this write and before the delete leaves the same secret ID registered; a rerun
+          # takes "already registered" as done (the text is OpenBao's, to be seen on dev).
+          if ! out=$(printf '{"secret_id":"%s"}' "$sid" | bao write auth/approle/role/admin/custom-secret-id - 2>&1); then
+            case $out in
+              *"already registered"*) ;;
+              *) echo "HANDOVER: setting the secret ID failed: $(printf '%s' "$out" | tr -s '\n' ' ' | cut -c1-200)"; exit 1 ;;
+            esac
+          fi
           bao delete auth/kubernetes/role/bootstrap >/dev/null
           bao token revoke -self >/dev/null 2>&1 || true
           echo "HANDOVER: done"

@@ -9,8 +9,9 @@
 #      SOPS is written and OpenBao is not; a write in between (the version moved) is refused, not overwritten.
 #   6. compare passes when both hold the same; it names a changed key, a key only in OpenBao and a key only in SOPS,
 #      by path and name only, and exits 1.
-#   7. reseed refuses a store that holds anything but c1/check and writes nothing; into a fresh store it writes every
-#      path, and compare then passes.
+#   7. reseed refuses a store that holds anything but c1/check and the snapshot mark dev/snapshot-mark, and writes
+#      nothing; into a fresh store, the mark included (any snapshot writes it), it writes every path, and compare
+#      then passes.
 #   8. A path outside c1/, a bad key name and an empty value are refused before anything is written.
 # SOPS and age come from their GitHub releases, checked against the SHA-256s the role installs.
 # Usage: .github/hosts-check/tests/test_secrets_store_kv.sh   (needs curl, python3 with PyYAML)
@@ -203,13 +204,13 @@ else bad "6. $r6a/$r6b | $o6a | $o6b"; fi
 : > "$t/calls"
 kv reseed </dev/null
 r7a=$rc o7a=$out c7a=$(cat "$t/calls")
-echo '{"c1/check": {"version": 1, "data": {"word": "check"}}}' > "$t/store.json"
+echo '{"c1/check": {"version": 1, "data": {"word": "check"}}, "dev/snapshot-mark": {"version": 3, "data": {"taken": "20261117T040000Z"}}}' > "$t/store.json"
 kv reseed </dev/null
 r7b=$rc o7b=$out
 kv compare </dev/null
 if [[ $r7a -ne 0 && $o7a == *"so it is not fresh; nothing written"* && $c7a == *LIST* && $c7a != *"POST kv/data"* ]] &&
    [[ $r7b -eq 0 && $o7b == *"PASS: reseed: 2 paths written from SOPS into the fresh store"* && $rc -eq 0 && $out == *"PASS: compare: 3 keys equal"* ]]; then
-  ok "7. reseed refuses a store that is not fresh; into a fresh one it writes every path, and compare passes"
+  ok "7. reseed refuses a store that is not fresh; into a fresh one, snapshot mark included, it writes every path, and compare passes"
 else bad "7. $r7a/$r7b | $o7a | $o7b | $out"; fi
 
 # 8

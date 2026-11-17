@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # playbooks/k8s-openbao-handover.yml offline, against a stub kubectl whose `exec ... sh -s` runs the play's
 # in-pod script here with a stub `bao`:
-#   1. with no box CIDR it hands nothing over and passes with a skip line; a loopback or wider one, or the
+#   1. with no box CIDR it hands nothing over and ends with a SKIP line, never a PASS one; a loopback or wider one, or the
 #      in-cluster store off, fails it; neither makes any kubectl call;
 #   2. a first hand-over signs in as bootstrap, sets the admin's role ID and secret ID, deletes role bootstrap,
 #      in that order, and ends with `PASS: openbao-handover: done`;
@@ -44,11 +44,18 @@ case "\$*" in
     cat >> "$w/stdin"; echo >> "$w/stdin"
     case \${LOGIN:-ok} in
       ok) printf 'tok-secret-1' ;;
+      noisy) echo 'WARNING! a notice on stderr' >&2; printf 'tok-secret-1' ;;
       gone) echo 'Error writing data to auth/kubernetes/login: * invalid role name "bootstrap"' >&2; exit 2 ;;
       *) echo 'Error writing data to auth/kubernetes/login: permission denied' >&2; exit 2 ;;
     esac ;;
-  "write auth/approle/role/admin/role-id -"|"write auth/approle/role/admin/custom-secret-id -")
+  "write auth/approle/role/admin/role-id -")
     [ "\$BAO_TOKEN" = tok-secret-1 ] || exit 4; cat >> "$w/stdin"; echo >> "$w/stdin" ;;
+  "write auth/approle/role/admin/custom-secret-id -")
+    [ "\$BAO_TOKEN" = tok-secret-1 ] || exit 4; cat >> "$w/stdin"; echo >> "$w/stdin"
+    case \${SECRET:-ok} in
+      again) echo 'Error writing data to auth/approle/role/admin/custom-secret-id: SecretID is already registered' >&2; exit 2 ;;
+      bad) echo 'Error writing data to auth/approle/role/admin/custom-secret-id: permission denied' >&2; exit 2 ;;
+    esac ;;
   "delete auth/kubernetes/role/bootstrap") [ "\$BAO_TOKEN" = tok-secret-1 ] || exit 4 ;;
   "token revoke -self") ;;
   *) echo "unexpected bao \$*" >&2; exit 3 ;;
@@ -71,7 +78,7 @@ run() { # extra -e values...
 has() { grep -qF -- "$2" "$1"; }
 
 run
-if has "$w/out" "PASS: openbao-handover: skipped, no box address yet" && has "$w/out" "failed=0" && [ ! -s "$w/args" ]; then ok "with no box CIDR it hands nothing over and passes with a skip line"; else bad "no box CIDR was not a clean skip"; fi
+if has "$w/out" "SKIP: openbao-handover: not handed over, no box address yet; role bootstrap stays open" && ! has "$w/out" "PASS:" && has "$w/out" "failed=0" && [ ! -s "$w/args" ]; then ok "with no box CIDR it hands nothing over and ends with a SKIP line, no PASS"; else bad "no box CIDR was not a clean skip"; fi
 for cidr in 127.0.0.1/32 192.0.2.7/24 0.0.0.0/32; do
   run -e k8s_gitops_source_openbao_box_cidr=$cidr
   if has "$w/out" "failed=1" && [ ! -s "$w/args" ]; then ok "refused with box CIDR $cidr, before any kubectl call"; else bad "box CIDR $cidr was not refused first"; fi
@@ -90,8 +97,16 @@ for s in "$rid" "$sid" "$jwt" tok-secret-1; do
 done
 if [ $leak -eq 0 ]; then ok "no secret in any kubectl or bao argument, or in Ansible's output"; else bad "a secret leaked into arguments or output"; fi
 
+SECRET=again run -e k8s_gitops_source_openbao_box_cidr=192.0.2.7/32
+if has "$w/out" "PASS: openbao-handover: done" && grep -q "delete auth/kubernetes/role/bootstrap" "$w/calls"; then ok "a rerun after a stop before the delete takes the secret ID already registered and deletes bootstrap"; else bad "rerun with the secret ID registered failed"; fi
+SECRET=bad run -e k8s_gitops_source_openbao_box_cidr=192.0.2.7/32
+if has "$w/out" "failed=1" && has "$w/out" "HANDOVER: setting the secret ID failed" && ! grep -q "delete" "$w/calls"; then ok "another secret ID failure stops before the delete, with its HANDOVER line"; else bad "secret ID failure not reported"; fi
+
 LOGIN=gone run -e k8s_gitops_source_openbao_box_cidr=192.0.2.7/32
 if has "$w/out" "PASS: openbao-handover: already handed over" && ! grep -q "role-id\|custom-secret-id\|delete" "$w/calls"; then ok "a store already handed over passes and sets nothing"; else bad "already-handed-over case wrong"; fi
+
+LOGIN=noisy run -e k8s_gitops_source_openbao_box_cidr=192.0.2.7/32
+if has "$w/out" "failed=1" && has "$w/out" "HANDOVER: login as bootstrap gave more than a token" && ! grep -q "role-id" "$w/calls"; then ok "a login answer that is more than one bare token is never used as the token"; else bad "noisy login answer was used"; fi
 
 LOGIN=denied run -e k8s_gitops_source_openbao_box_cidr=192.0.2.7/32
 if has "$w/out" "failed=1" && has "$w/out" "HANDOVER: login as bootstrap failed" && ! has "$w/out" "PASS:"; then ok "another login failure fails with its HANDOVER line"; else bad "login failure not reported"; fi

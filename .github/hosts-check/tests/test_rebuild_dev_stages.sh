@@ -60,6 +60,9 @@ out=$(OPENBAO_SEAL_KEY_FILE=/k OPENBAO_ADMIN_SECRET_ID_FILE=$t/none run dev open
 check "openbao-handover refuses without the secret ID file" "$out" "rc=1" "AP "
 out=$(OPENBAO_SEAL_KEY_FILE=/k OPENBAO_ADMIN_ROLE_ID_FILE='' run dev openbao-handover "$t/ok")
 check "openbao-handover refuses without the role ID file" "$out" "rc=1" "AP "
+out=$(OPENBAO_SEAL_KEY_FILE=/k OPENBAO_ADMIN_ROLE_ID_FILE='' OPENBAO_ADMIN_SECRET_ID_FILE='' run dev openbao-handover "$t/ok")
+check "openbao-handover with neither ID file named (an older box wrapper) ends with a SKIP line" "$out" "SKIP: openbao-handover: not handed over, no admin ID files named" "AP "
+check "openbao-handover with neither ID file named succeeds" "$out" "rc=0" "PASS"
 out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gitops "$t/ok")
 check "dev gitops with a key file turns the measurement on" "$out" "k8s_gitops_source_openbao_measure=true" ""
 out=$(OPENBAO_SEAL_KEY_FILE=/k FAKE_SECRET=yes run dev gitops "$t/ok")
@@ -115,4 +118,13 @@ long="PASS: openbao-measure: gateway=ok $(printf 'x%.0s' $(seq 1 250)); b=400 re
 printf '===== openbao-measure\n    "msg": "%s"\n' "$long" > "$t/raw"
 s=openbao-measure raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
 same "the measurement's PASS line reaches the short log whole" "$(cat "$t/log")" "  openbao-measure: \"msg\": \"$long\""
+# The hand-over's skip is a SKIP line in the short log, never a PASS one: from its playbook, or from the stage itself.
+: > "$t/log"
+printf '===== openbao-handover\n    "msg": "SKIP: openbao-handover: not handed over, no box address yet; role bootstrap stays open"\n' > "$t/raw"
+s=openbao-handover raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
+same "the hand-over's SKIP line from its playbook reaches the short log" "$(cat "$t/log")" '  openbao-handover: "msg": "SKIP: openbao-handover: not handed over, no box address yet; role bootstrap stays open"'
+: > "$t/log"
+printf '===== openbao-handover\nSKIP: openbao-handover: not handed over, no admin ID files named; role bootstrap stays open\n' > "$t/raw"
+s=openbao-handover raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
+same "the stage's own SKIP line reaches the short log" "$(cat "$t/log")" '  openbao-handover: SKIP: openbao-handover: not handed over, no admin ID files named; role bootstrap stays open'
 exit $fail

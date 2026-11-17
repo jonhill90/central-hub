@@ -16,7 +16,8 @@
 # compare        every key of the SOPS file against OpenBao: equal SHA-256 of the value, or the key is named. Keys in
 #                OpenBao at a path the SOPS file holds, but not in the file, are named too. Exit 1 on any difference.
 # reseed         a fresh store, empty but for configure's old word c1/check (the restore helper's empty-store guard,
-#                check 2), gets every path of the SOPS file, each written only if it is still absent (cas 0).
+#                check 2) and kv/dev/snapshot-mark (a time, no secret, which any snapshot writes, so the hourly off-box
+#                send leaves one within the hour), gets every path of the SOPS file, each only if still absent (cas 0).
 set -euo pipefail
 umask 077
 action=$1 addr=$2/v1 cacert=$3 keys=$4 libexec=$5
@@ -129,7 +130,7 @@ for k in sorted(set(want) | set(have)):
     plain
     token=$(login) && [[ -n $token ]] || die "the admin AppRole did not sign in"
     # The empty-store guard, as secrets-store-restore.sh check 2: only 200 and 404 are answers; any key but
-    # c1/check means the store is not fresh, and nothing is written.
+    # c1/check and the snapshot mark dev/snapshot-mark means the store is not fresh, and nothing is written.
     found=() queue=("")
     while (( ${#queue[@]} )); do
       p=${queue[0]}
@@ -146,7 +147,7 @@ for k in sorted(set(want) | set(have)):
       done <<<"$listed"
     done
     for k in "${found[@]}"; do
-      [[ $k == c1/check ]] || die "the store holds kv/$k, so it is not fresh; nothing written"
+      [[ $k == c1/check || $k == dev/snapshot-mark ]] || die "the store holds kv/$k, so it is not fresh; nothing written"
     done
     python3 -I -c 'import json, sys; print("\n".join(k for k in json.load(open(sys.argv[1])) if k != "sops"))' "$tmp/plain.json" > "$tmp/paths"
     n=0
