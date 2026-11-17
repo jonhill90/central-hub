@@ -9,7 +9,9 @@
 # configure: over SSH as root, check the release, measure dev's reach to the mirrors, seed /conf/config.xml,
 #   run the pinned opnsense-bootstrap, then pkg add the pinned os-openid-connect package.
 # prove: start the proof's Keycloak on this box, run proof items 2 to 7 and 9, stop Keycloak, remove its data.
-# destroy: tofu destroy (proof item 8), the Keycloak container if still there, and the proof folder.
+# destroy: destroy VM 257 (proof item 8), the Keycloak container if still there, and the proof folder. The
+#   token cannot delete files on Proxmox's local storage, so the seed ISO leaves the state and stays on
+#   local, and the image stays in the state for the next proof; destroy lists both for the owner.
 # log: the last run's log, then a read-only status of VM 257: its state, uptime, traffic and config from
 #   Proxmox, its last start task's log, and which dev address its MAC answers on. It changes nothing on
 #   Proxmox or the VM and leaves the log alone.
@@ -31,6 +33,8 @@ state=$work/state/opnsense-test.tfstate
 plan=$work/state/opnsense-test.tfplan
 vars=$work/state/opnsense-test.tfvars.json
 files=$work/opnsense-test            # image, seed ISO, proof folder; removed by destroy, except the image
+seed_res=proxmox_virtual_environment_file.seed
+vm_res=proxmox_virtual_environment_vm.opnsense
 proof=$files/proof
 sshkey=$keys/opnsense-test-ssh
 logfile=$work/state/opnsense-test.log
@@ -182,7 +186,6 @@ PY
 }
 
 tofu_run() {
-  if [[ $action == plan ]]; then image; seed_iso; write_vars; fi
   if [[ $action == destroy && ! -f $vars ]]; then
     [[ ! -s $state ]] || { echo "opnsense-test: the state holds resources but $vars is gone; run plan, then destroy" >&2; exit 1; }
     echo "opnsense-test: nothing to destroy"; return 0
@@ -193,19 +196,53 @@ tofu_run() {
   set +a
   tofu() { /usr/local/bin/tofu -chdir="$folder" "$@"; }
   tofu init -input=false -backend-config="path=$state" >/dev/null
+  local held
+  held=$(tofu state list 2>/dev/null || true)
   case $action in
-    plan) tofu plan -input=false -var-file="$vars" -out="$plan" ;;
+    plan)
+      # A plan while the VM is in the state would make a new seed (a new hash) and replace the old seed file,
+      # a delete the token can't make. So plan runs only once destroy has taken the VM out of the state.
+      if grep -qx "$vm_res" <<<"$held"; then
+        echo "opnsense-test: refused, VM $VMID is in the state; run opnsense-test destroy first" >&2; exit 1
+      fi
+      # A seed in the state without its VM is a leftover of an earlier run. Replacing it would need a delete
+      # the token can't make, so it leaves the state; its file stays on local for the owner.
+      if grep -qx "$seed_res" <<<"$held"; then
+        tofu state rm "$seed_res" >/dev/null
+        echo "opnsense-test: an earlier run's seed ISO left the state; its file stays on local"
+      fi
+      image; seed_iso; write_vars
+      tofu plan -input=false -var-file="$vars" -out="$plan"
+      ;;
     apply)
       [[ -f $plan ]] || { echo "opnsense-test: no saved plan; run opnsense-test plan first" >&2; exit 1; }
       tofu apply -input=false "$plan"
       rm -f "$plan"
       ;;
     destroy)
-      tofu plan -destroy -input=false -var-file="$vars" -out="$plan"
-      tofu apply -input=false "$plan"
-      rm -f "$plan"
+      # Only the VM: the token has no Datastore.Allocate on local (hosts/terraform/home/bootstrap/agent-access.sh),
+      # so deleting the seed ISO or the image fails with 403 (measured 2026-11-17 23:17 UTC).
+      if grep -qx "$vm_res" <<<"$held"; then
+        tofu plan -destroy -input=false -var-file="$vars" -target="$vm_res" -out="$plan"
+        tofu apply -input=false "$plan"
+        rm -f "$plan"
+      fi
+      if grep -qx "$seed_res" <<<"$held"; then tofu state rm "$seed_res" >/dev/null; fi
       ;;
   esac
+}
+
+# What destroy leaves on the node's local storage, for the owner to remove: every seed ISO of this VM, and
+# the image, which the next proof reuses. A read of the storage's content list.
+leftovers() {
+  px_api "nodes/$(setting proxmox_node_name)/storage/local/content" | python3 -I -c 'import json, sys
+for v in json.load(sys.stdin)["data"]:
+    i = v.get("volid", "")
+    if i.startswith("local:iso/opnsense-test-%s-seed" % sys.argv[1]):
+        print("opnsense-test: left on local for the owner to remove: " + i)
+    elif i == "local:import/" + sys.argv[2]:
+        print("opnsense-test: kept on local for the next proof (the owner may remove it): " + i)' "$VMID" "${IMAGE_XZ%.xz}" \
+    || echo "opnsense-test: the node's local storage could not be listed"
 }
 
 vm() { ssh -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
@@ -333,7 +370,8 @@ case $action in
   destroy)
     podman rm -f "$KC_NAME" >/dev/null 2>&1 || true
     tofu_run
-    rm -rf "$proof" "$files/seed" "$files/seed.iso" "$files/known_hosts" "$files"/*.part "$vars"
+    rm -rf "$proof" "$files/seed" "$files/seed.iso" "$files/known_hosts" "$files"/*.part
     echo "opnsense-test: proof item 8: VM $VMID destroyed; proof folder removed"
+    leftovers
     ;;
 esac

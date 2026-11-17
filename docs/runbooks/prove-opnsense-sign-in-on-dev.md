@@ -89,7 +89,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    opnsense-test destroy
    ```
 
-   why: this is proof item 8. It removes VM 257, its disk and the uploaded seed ISO, the Keycloak container if it is still there, and the proof folder with its secrets. The unpacked image stays on the box for the next proof.
+   why: this is proof item 8. It removes VM 257 and its disk, the Keycloak container if it is still there, and the proof folder with its secrets. The agents' token cannot delete files on the node's `local` storage (its role's `PRIVS` list has no `Datastore.Allocate`, `hosts/terraform/home/bootstrap/agent-access.sh` line 34). So the seed ISO leaves the wrapper's state and stays on `local`, and the uploaded image stays in the state for the next proof. Each seed is named by its hash, so a new proof never needs to delete the old one. Destroy ends by listing what it left on `local`. The unpacked image also stays on the box.
 6. Bring dev back if it is needed (`rebuild.sh up`). The dev rebuild's preflight refuses while VM 257 exists.
 
 `opnsense-test log` prints the last run's output, then reads VM 257 without changing anything. It shows the VM's Proxmox state, uptime, traffic counters and network, seed and boot settings, and its last start task's log. It then pings each dev host address once and names the dev address the VM's MAC answers on, ending with one verdict line. It leaves the last run's log alone. It cannot show the VM's serial output, because the agents' token has no `VM.Console` (`hosts/terraform/home/bootstrap/agent-access.sh`).
@@ -114,6 +114,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 |---|---|
 | `refused, dev's state holds N resources` | Dev is up. Tear it down first (step 1). |
 | `refused, short on memory` | The node lacks the VM's memory plus the margin. Stop nothing else; report it. |
+| `refused, VM 257 is in the state` | An earlier proof's VM was not destroyed. A new plan would make a new seed and replace the old seed file, a delete the agents' token can't make. Run `opnsense-test destroy`, then plan again. |
 | `refused, a dev rebuild run is going` | A dev rebuild holds the run lock. Wait for it to end, then tear dev down (step 1). |
 | `the image does not match its pin` | The archive's file changed. Nothing is built. Check the archive's CHECKSUM.SHA256 before you move the pin. |
 | `no SSH to <address> after 10 minutes` | The first boot did not take the seed's address, or dev blocks the box's SSH. Run `opnsense-test log` and keep its status verdict line, then destroy and report both. |
@@ -132,4 +133,4 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 
 ## Exit
 
-`opnsense-test destroy`, then empty `agent_box_opnsense_test` and run the box's role. The role then leaves the filter file and its unit in place. Disable the unit with `systemctl disable --now opnsense-test-nft.service` to remove the table.
+`opnsense-test destroy`, then empty `agent_box_opnsense_test` and run the box's role. The files destroy lists as left on `local` (`opnsense-test-257-seed-*.iso` and the FreeBSD image under `import`) are for the owner to remove, because deleting them is a delete the agents' token cannot make. The role then leaves the filter file and its unit in place. Disable the unit with `systemctl disable --now opnsense-test-nft.service` to remove the table.
