@@ -14,7 +14,7 @@ fails=0
 ok() { echo "ok - $1"; }
 bad() { echo "FAIL - $1"; fails=$((fails + 1)); }
 
-printf '%s\n' '{"name": "daldopdemo01", "address": "10.1.30.57", "keycloak_address": "192.0.2.10",
+printf '%s\n' '{"name": "daldopdemo01", "address": "10.1.30.199", "keycloak_address": "192.0.2.10",
   "cores": 1, "memory_mb": 3072, "disk_gb": 16, "proxmox_node_name": "examplehv01"}' > "$work/settings.json"
 echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyExampleKeyExampleKeyExampleKey keys@agent-box opnsense-test" > "$work/key.pub"   # the wrapper's own comment holds a space
 mkdir -p "$work/proof"
@@ -30,7 +30,7 @@ python3 -I "$seed" seed "$work/settings.json" "$vlans" "$work/key.pub" "$work/se
 ud=$work/seed/user-data
 grep -q '^local-hostname: daldopdemo01$' "$work/seed/meta-data" && ok "meta-data names the VM" || bad "meta-data hostname"
 head -1 "$ud" | grep -q '^#!/bin/sh$' && [ -x "$ud" ] && ok "user-data is an executable script, which nuageinit runs as root" || bad "user-data is not a script"
-grep -q 'ifconfig_vtnet0="inet 10.1.30.57/24"' "$ud" && grep -q 'defaultrouter="10.1.30.1"' "$ud" \
+grep -q 'ifconfig_vtnet0="inet 10.1.30.199/24"' "$ud" && grep -q 'defaultrouter="10.1.30.1"' "$ud" \
   && ok "static dev address, gateway dev's .1" || bad "address or gateway in user-data"
 grep -q 'PasswordAuthentication no' "$ud" && ! grep -q 'PasswordAuthentication yes' "$ud" && grep -q 'PermitRootLogin prohibit-password' "$ud" \
   && ok "SSH by key only" || bad "SSH password logins not off"
@@ -49,7 +49,7 @@ def t(path):
 checks = {
     "no WAN": c.find("interfaces/wan") is None,
     "no DHCP or DNS server": c.find("dnsmasq") is None and c.find("unbound") is None,
-    "LAN static on vtnet0": (t("interfaces/lan/if"), t("interfaces/lan/ipaddr"), t("interfaces/lan/subnet")) == ("vtnet0", "10.1.30.57", "24"),
+    "LAN static on vtnet0": (t("interfaces/lan/if"), t("interfaces/lan/ipaddr"), t("interfaces/lan/subnet")) == ("vtnet0", "10.1.30.199", "24"),
     "gateway dev .1": t("OPNsense/Gateways/gateway_item/gateway") == "10.1.30.1" and t("interfaces/lan/gateway") == "DEV_GW",
     "DNS dev .1": t("system/dnsserver") == "10.1.30.1",
     "GUI https on LAN only": (t("system/webgui/protocol"), t("system/webgui/interfaces")) == ("https", "lan"),
@@ -82,8 +82,8 @@ r = json.load(open(sys.argv[1]))
 c = r["clients"][0]
 assert r["realm"] == "opnsense-proof" and len(r["clients"]) == 1
 assert c["clientId"] == "opnsense" and c["publicClient"] is False and c["directAccessGrantsEnabled"] is False
-assert c["redirectUris"] == ["https://10.1.30.57/api/openidconnect/auth/callback/keycloak"]
-assert c["attributes"]["post.logout.redirect.uris"] == "https://10.1.30.57/api/openidconnect/auth/logouttestcallback/keycloak"
+assert c["redirectUris"] == ["https://10.1.30.199/api/openidconnect/auth/callback/keycloak"]
+assert c["attributes"]["post.logout.redirect.uris"] == "https://10.1.30.199/api/openidconnect/auth/logouttestcallback/keycloak"
 assert c["attributes"]["pkce.code.challenge.method"] == "S256"
 assert sorted(u["username"] for u in r["users"]) == ["proof-stranger", "proof-user"]
 assert c["secret"] == "${KC_PROOF_CLIENT_SECRET}"
@@ -98,11 +98,15 @@ refuse() { # label, settings JSON
 }
 refuse "an address in prod" '{"name": "daldopdemo01", "address": "10.1.10.57", "keycloak_address": "192.0.2.10"}'
 refuse "dev's gateway address" '{"name": "daldopdemo01", "address": "10.1.30.1", "keycloak_address": "192.0.2.10"}'
-refuse "a name outside STD-0001" '{"name": "OPNsense", "address": "10.1.30.57", "keycloak_address": "192.0.2.10"}'
+refuse "a name outside STD-0001" '{"name": "OPNsense", "address": "10.1.30.199", "keycloak_address": "192.0.2.10"}'
 printf 'ssh-rsa AAAA x\nssh-ed25519 AAAA y\n' > "$work/two.pub"
 if python3 -I "$seed" seed "$work/settings.json" "$vlans" "$work/two.pub" "$work/bad" >/dev/null 2>&1; then bad "accepted two keys"; else ok "refuses a key file that is not one ed25519 key"; fi
 printf 'ssh-ed25519 AAAA x\nssh-ed25519 BBBB y\n' > "$work/two.pub"
 if python3 -I "$seed" seed "$work/settings.json" "$vlans" "$work/two.pub" "$work/bad" >/dev/null 2>&1; then bad "accepted two ed25519 keys"; else ok "refuses two ed25519 keys in one file"; fi
+printf '%s\n' 'ssh-ed25519 AAAA keys@agent-box opnsense-test"; touch /tmp/pwn; echo "' > "$work/shell.pub"
+if python3 -I "$seed" seed "$work/settings.json" "$vlans" "$work/shell.pub" "$work/bad" >/dev/null 2>&1; then bad "accepted shell characters in the key comment"; else ok "refuses shell characters in the key comment"; fi
+printf '%s\n' 'ssh-ed25519 AAAA $(id)' > "$work/shell.pub"
+if python3 -I "$seed" seed "$work/settings.json" "$vlans" "$work/shell.pub" "$work/bad" >/dev/null 2>&1; then bad "accepted a command substitution in the key comment"; else ok "refuses a command substitution in the key comment"; fi
 
 # Pins: the wrapper's Keycloak is the digest the identity check pins, and the plugin is Plan's beta5 file.
 w=$files/opnsense-test.sh
