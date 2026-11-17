@@ -60,6 +60,25 @@ run "agent_box_gets_ssh_from_agents_and_only_the_vps_out" {
   }
 }
 
+run "box_signs_in_to_the_vps_as_deploy_only" {
+  command = plan
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "{\"action\": \"accept\", \"src\": [\"tag:agent-box\"], \"dst\": [\"tag:vps\"], \"users\": [\"deploy\"]}")
+    error_message = "The agent box must sign in to the VPS as deploy only (D-0046 rule 4, S4)."
+  }
+
+  assert {
+    condition     = length(regexall("\"users\": \\[[^\\]]*\"root\"", tailscale_acl.policy.acl)) == 2
+    error_message = "Only the owner's admin rule and the owner's own devices may name root in an SSH rule (S4)."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "{\"src\": \"tag:agent-box\", \"dst\": [\"tag:vps\"], \"accept\": [\"deploy\"], \"deny\": [\"root\", \"omniroute\", \"openclaw\", \"hermes\"]}")
+    error_message = "The policy must carry the SSH test that denies root and the app users to the agent box."
+  }
+}
+
 run "vps_logins_are_narrowed_and_github_actions_is_gone" {
   command = plan
 

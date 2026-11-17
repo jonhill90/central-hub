@@ -84,8 +84,8 @@
 		// D-0046 rule 4, S1: agent sessions sign in to the VPS as deploy only, whose sudo allows vps-apply only.
 		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:vps"], "users": ["deploy"]},
 		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:agent-box"], "users": ["claude"]},
-		// S1: the box signs in as root once, for the first host apply (S3); S4 removes root here.
-		{"action": "accept", "src": ["tag:agent-box"], "dst": ["tag:vps"], "users": ["root", "deploy"]},
+		// S4: after the first host apply (S3), the box signs in as deploy only, whose sudo allows vps-apply only.
+		{"action": "accept", "src": ["tag:agent-box"], "dst": ["tag:vps"], "users": ["deploy"]},
 		{"action": "accept", "src": ["autogroup:admin"], "dst": ["tag:vps"], "users": ["root", "deploy", "autogroup:nonroot"]},
 		{"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"], "users": ["autogroup:nonroot", "root"]},
 	],
@@ -127,8 +127,9 @@
 %{ endif ~}
 	],
 
-	// The tailnet refuses a policy whose SSH tests fail, so root can't come back for agent sessions unnoticed.
+	// The tailnet refuses a policy whose SSH tests fail, so root can't come back for agent sessions or the box unnoticed.
 	"sshTests": [
 		{"src": "tag:agent", "dst": ["tag:vps"], "accept": ["deploy"], "deny": ["root", "omniroute", "openclaw", "hermes"]},
+		{"src": "tag:agent-box", "dst": ["tag:vps"], "accept": ["deploy"], "deny": ["root", "omniroute", "openclaw", "hermes"]},
 	],
 }
