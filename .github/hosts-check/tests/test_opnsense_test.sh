@@ -104,7 +104,9 @@ w=$files/opnsense-test.sh
 kc=$(sed -n 's/^image=\(quay.io\/keycloak\/keycloak@sha256:[0-9a-f]*\)$/\1/p' "$here/../identity/test_realm.sh")
 grep -qx "KEYCLOAK_IMAGE=$kc" "$w" && ok "Keycloak image is the identity check's 26.8.1 digest" || bad "Keycloak image pin differs"
 grep -qx 'PLUGIN_SHA256=4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406a41b117c' "$w" && ok "plugin pin is beta5's sha256" || bad "plugin pin"
-grep -q -- '--features-disabled=dpop' "$w" && ok "the proof's Keycloak runs with DPoP off" || bad "DPoP not off"
+if grep -q -- '--features-disabled' "$w"; then bad "the proof's Keycloak turns a feature off"; else ok "the proof's Keycloak keeps DPoP on, as the lab does"; fi
+grep -q '"ES256" not in json.load' "$w" && ok "prove stops unless discovery lists ES256 for DPoP" || bad "no DPoP discovery check"
+grep -q '/var/db/openid-connect/dpop' "$files/opnsense-test-prove.py" && ok "prove checks the plugin's DPoP key store" || bad "no DPoP key check"
 grep -q 'VMID=257$' "$w" && ok "the wrapper's VM ID is 257" || bad "VM ID"
 
 [ "$fails" = 0 ] || { echo "$fails failed"; exit 1; }

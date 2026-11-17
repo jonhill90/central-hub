@@ -251,7 +251,7 @@ keycloak_up() {
     -e JAVA_OPTS_KC_HEAP="-Xms256m -Xmx1024m" \
     "$KEYCLOAK_IMAGE" start-dev --import-realm --http-enabled=false --https-port=8443 \
     --https-certificate-file=/opt/keycloak/conf/proof/kc.pem --https-certificate-key-file=/opt/keycloak/conf/proof/kc.key \
-    --hostname="https://$kc_addr:8443" --features-disabled=dpop >/dev/null
+    --hostname="https://$kc_addr:8443" >/dev/null
   local _
   for _ in $(seq 1 60); do
     curl -sS --fail --max-time 5 --cacert "$proof/ca.pem" "https://$kc_addr:8443/realms/opnsense-proof/.well-known/openid-configuration" \
@@ -259,7 +259,9 @@ keycloak_up() {
     sleep 5
   done
   [[ -s $proof/discovery.json ]] || { echo "opnsense-test: Keycloak did not come up"; podman logs --tail 30 "$KC_NAME"; return 1; }
-  ! grep -q dpop_signing_alg_values_supported "$proof/discovery.json" || { echo "opnsense-test: Keycloak still advertises DPoP"; return 1; }
+  # DPoP stays at Keycloak's default, on, as in the lab's Keycloak: the plugin then uses it, and prove checks that it did.
+  "$py" -I -c 'import json, sys; sys.exit("ES256" not in json.load(open(sys.argv[1])).get("dpop_signing_alg_values_supported", []))' \
+    "$proof/discovery.json" || { echo "opnsense-test: stopped, Keycloak does not advertise DPoP with ES256"; return 1; }
   # On the host network the filter covers only 8443, so the container may listen on nothing else (TCP or UDP).
   local pids ports
   pids=$(podman top "$KC_NAME" hpid | tail -n +2 | tr -s ' \n' '|' | sed 's/^|//; s/|$//')
@@ -267,7 +269,7 @@ keycloak_up() {
   ports=$(ss -Hlntup | grep -E "pid=($pids)," | awk '{print $1 " " $5}' | sed 's/ .*:/ /' | sort -u)
   echo "opnsense-test: Keycloak listens on: $(tr '\n' ' ' <<<"$ports")"
   [[ $ports == "tcp 8443" ]] || { echo "opnsense-test: stopped, the Keycloak container listens on more than tcp 8443"; return 1; }
-  echo "opnsense-test: Keycloak 26.8.1 is up at https://$kc_addr:8443 (realm opnsense-proof, DPoP off)"
+  echo "opnsense-test: Keycloak 26.8.1 is up at https://$kc_addr:8443 (realm opnsense-proof, DPoP on)"
 }
 keycloak_down() {
   podman rm -f "$KC_NAME" >/dev/null 2>&1 || true

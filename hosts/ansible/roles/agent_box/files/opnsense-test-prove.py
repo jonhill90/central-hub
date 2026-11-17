@@ -109,6 +109,18 @@ if not signed_in(op):
     fail("the bound test user did not land on the dashboard")
 print("opnsense-test: proof item 2: Keycloak sign-in as proof-user, once bound to local admin uid 2000, lands on the dashboard")
 
+# Item 2 (part): Keycloak advertises DPoP (prove checked discovery), so the plugin's sign-in used it.
+# Its key store is /var/db/openid-connect/dpop, a 0700 folder of 0600 key-<binding>.json files
+# (os-openid-connect v1.0.0-beta5 DpopKeyStore.php, statePath and ensureDirectory).
+modes = vm("cd /var/db/openid-connect/dpop 2>/dev/null && stat -f '%Lp %N' . key-*.json 2>/dev/null || true").split("\n")
+modes = [line.split(" ", 1) for line in modes if line.strip()]
+if not modes or modes[0] != ["700", "."]:
+    fail("the plugin's DPoP key folder is missing or not mode 0700")
+keys = [name for mode, name in modes[1:] if mode == "600"]
+if not keys or len(keys) != len(modes) - 1:
+    fail("the bound sign-in left no DPoP key, or a key file is not mode 0600")
+print(f"opnsense-test: proof item 2: the sign-in used DPoP ({len(keys)} key file in the plugin's 0700 store, mode 0600)")
+
 # Item 3: an identity no one approved gets no session, only a pending request.
 op = keycloak_sign_in("proof-stranger", read("stranger.pass"))
 if signed_in(op):
