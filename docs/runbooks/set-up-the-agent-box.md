@@ -6,7 +6,7 @@ trigger: once, after the agent box VM (258) is grown (grow-the-agent-jumpbox.md)
 runner: an agent lane, through the owner's Mac
 outcome: VM 258 has its STD-0001 hostname; Claude Code sessions run as user claude and can't read the lab keys, which belong to user keys; each key is used only through a root-owned wrapper that sudo lets claude run with fixed arguments; Claude Code's managed settings hold the hard deny rules
 needs: SSH to the VM as its admin user (which has sudo); the filled-in Ansible inventory with group agent_box
-private-values: [agent_box_hostname, ansible_host, ansible_user, agent_box_allow, agent_box_auto_mode]
+private-values: [agent_box_hostname, ansible_host, ansible_user, agent_box_allow, agent_box_auto_mode, agent_box_tailnet_cleanup, tailnet-cleanup.env]
 files: [hosts/ansible/playbooks/agent-box.yml, hosts/ansible/roles/agent_box/]
 last-tested:
 superseded-by:
@@ -41,7 +41,7 @@ flowchart LR
 
 CT 259, the jumpbox rehearsal's container, is not the agent box. This runbook doesn't touch it. It stays up by the owner's call (2026-11-09 23:04 UTC) until the platform's architecture is settled, and it lives in the rehearsal kit's state ([Grow the agent jumpbox](grow-the-agent-jumpbox.md)).
 
-There are two wrappers. `ci-runner plan|apply|configure|destroy` builds the notebook's CI runner VM and registers it ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md)). The other is `dev-vms plan|apply|destroy`: OpenTofu on `hosts/terraform/home/k8s` for the dev rebuild VMs (250-257), with the agents' own token `agent@pve!dev` (`hosts/terraform/home/bootstrap/agent-access.sh`). It runs only the code on `main`: it moves the `keys` user's own checkout to `origin/main` first, so a session can't change what runs with the token.
+There are eleven wrappers. `rebuild up|rebuild|teardown|identity` runs the dev one-command rebuild ([below](#rebuild-dev-from-the-box); every dev run also ends with a dev CA stage and the identity stage, a sign-in proof for a dev test admin; `identity` runs that stage alone once the role has been applied with the subcommand), and `rebuild log` prints the newest run's stage lines and its `PASS` and `FAIL` lines, nothing else, so a session can read what a run proved without reading the raw log. `pr-merge check OWNER/REPO PR HEAD` reads one pull request as the GitHub App and prints its verdict; the keys user's timer runs `pr-merge sweep`, which squash-merges a PR whose head holds four recorded passes, under D-0031 and D-0042 ([how it decides](#merge-pull-requests-from-the-box)). `pass-record add|show|halt|resume` writes the ledger of passes and the sweep's stop flag. `ci-runner plan|apply|configure|destroy|bump` builds the notebook's CI runner VM, registers it, and opens a pull request when a newer runner release is due; a weekly timer, `ci-runner-weekly.timer`, runs `configure` then `bump` as the keys user ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md)). `desktop plan|apply|configure|destroy` builds and sets up the owner's desktop VM, with the agents' Proxmox rights on its pool only while `DESKTOP_ACCESS` is on in `agent-access.sh` ([Set up the owner's desktop VM](set-up-the-desktop.md)). `secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold` calls the lab's secrets store, OpenBao, on dev, and makes its admin AppRole IDs in `/etc/agent-keys/dev/` and never prints them; it does nothing until rework PR 3b points it at the store inside the cluster (D-0058), since no store VM was ever built and the VM's actions are gone; `snapshot` copies a Raft snapshot into that folder, `restore` puts the newest of the same store back and proves it, `restore-rebuilt` puts the previous store's newest snapshot, or one named exactly, onto a rebuilt one, and `clear-hold` ends a rebuild's hold when no restore is wanted ([Set up the lab's secrets store (OpenBao) on dev](set-up-the-secrets-store.md)). `tailnet-cleanup plan` lists the old tailnet devices its daily timer would remove ([below](#remove-old-tailnet-devices)). `c1-read get|describe|logs|top|events|explain|api-resources|api-versions|version|auth can-i ...` reads c1 with the read-only kubeconfig from app `agent-read`, which sessions can't open; it passes read verbs only and refuses flags that pick other credentials or open a local file ([give-agents-read-access-to-c1.md](give-agents-read-access-to-c1.md) step 5). `tailnet-stack plan|apply <card> <hash>|log` plans and applies the tailnet's connector routes and split DNS as the keys user, through the `lab-tailnet` pipeline job: `plan` saves the plan with its commit and hash, and `apply` runs only that saved plan, and only when the owner has tapped a decision card that names the pull request and its head and the first 12 hex digits of the plan's hash, so a session can plan and read the log but can't apply; there is no Mac step and no typed line ([Change the tailnet stack through the pipeline job](run-the-tailnet-stack-as-a-pipeline-job.md)). `proxmox-host check|apply <pass> <hash>|log` runs `playbooks/proxmox-proxy.yml`, and nothing else, on the Proxmox host as root, through the `lab-proxmox-host` pipeline job; it runs as its own user, `hostops`, not `keys`, so no other wrapper can read its key in `/etc/agent-keys-host/`; a session can check and read the log, only the runner can apply, and an apply runs only when a fresh check gives the hash the agents passed ([Serve the Proxmox web UI on port 443](serve-proxmox-on-443.md)). The last is `dev-vms plan|apply|destroy`: OpenTofu on `hosts/terraform/home/k8s` for the dev rebuild VMs (250-257), with the agents' own token `agent@pve!dev` (`hosts/terraform/home/bootstrap/agent-access.sh`). It runs only the code on `main`: it moves the `keys` user's own checkout to `origin/main` first, so a session can't change what runs with the token. Each wrapper that runs the repository's code (`ci-runner`, `dev-vms`, `rebuild`, `tailnet-stack`) has its own checkout, `/var/lib/agent-box/checkouts/<wrapper>` (cloned on its first run), and takes a lock for the whole run, so one run can't move the code under another, and a second run of the same wrapper stops at once with `another <wrapper> run is going`.
 
 ## Before you start
 
@@ -101,7 +101,7 @@ There are two wrappers. `ci-runner plan|apply|configure|destroy` builds the note
    sudo install -o keys -g keys -m 0600 <dev tfvars from the Mac> /etc/agent-keys/dev-vms.tfvars
    ```
 
-   In `dev-vms.tfvars`, `vlans_file` points into the keys user's checkout: `/var/lib/agent-box/central-hub/hosts/ansible/inventories/home/group_vars/all/vlans.yml`.
+   `dev-vms.tfvars` needs no `vlans_file`: the wrapper passes the one in its own checkout, over any path the file gives.
 
 6. Prove it as a session would, from a Remote Control session on the box.
 
@@ -117,7 +117,7 @@ There are two wrappers. `ci-runner plan|apply|configure|destroy` builds the note
 
 ## The agents' GitHub App
 
-The box holds the private key of the GitHub App "Central Hub Agents". Wrappers use it to mint one-hour installation tokens, so the agents act on GitHub under the App's own name instead of the owner's account. Today the only user is `ci-runner configure`. It mints a runner registration token for agent-notebook ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md), tested 2026-11-10). Cloud sessions don't use the App.
+The box holds the private key of the GitHub App "Central Hub Agents". Wrappers use it to mint one-hour installation tokens, so the agents act on GitHub under the App's own name instead of the owner's account. Two wrappers use it. `pr-merge` mints a token for one repository to read a pull request and merge it. `ci-runner configure` mints a runner registration token for agent-notebook, and `ci-runner bump` mints a central-hub token with Contents and Pull requests (write) to open the runner bump pull request ([Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md), tested 2026-11-10). Cloud sessions don't use the App.
 
 The owner sets it up once, in GitHub's web UI:
 
@@ -141,15 +141,101 @@ The owner sets it up once, in GitHub's web UI:
 
 Exit: uninstall the App and delete it in GitHub's settings, then delete `/etc/agent-keys/github-app.pem`.
 
+## Merge pull requests from the box
+
+The box merges by a sweep, not by a workflow: a cloud session cannot start a GitHub workflow here (403, measured 2026-11-14). The page [Merge a pull request with the box's sweep](merge-a-pr-through-the-merge-job.md) is the how-to; this section is the setup.
+
+- `pass-record` (sudo for sessions: `add`, `show`, `halt`, `resume`; `owner-tap` and `resume` only with the recorder `orchestrator`) writes the ledger of passes in `/var/lib/agent-box/passes/<repo>/<head>.jsonl` and sets or clears the halt flag. `pr-merge check` (sudo for sessions) is read-only. `pr-merge merge` and `pr-merge sweep` have no sudo line; only the keys user runs them.
+- `agent_box_merge_sweep: true` in the inventory installs `pr-merge-sweep.service` and `.timer` (every `agent_box_merge_sweep_interval`, default 5 minutes), which run `pr-merge.sh sweep` as the keys user. Installing it is a change to the box's limits, so it waits for the owner's tap (D-0042 rule 6).
+- Green is [D-0031](../decisions/0031-let-agents-merge-green-prs.md) rule 1: open, not a draft, base `main`, GitHub's merge state `clean` or `has_hooks`, and every check on the head passed, none pending, and all of them read. On top of that the head's ledger must hold the reviewer and the three council passes. A PR that changes a rule 11 file needs an `owner-tap` line as well.
+- It squash-merges only, pinned to the head. It never deletes a branch, never passes `--admin` and never enables auto-merge. It reads the halt flag before everything and before each merge.
+- The App needs Contents (write), Pull requests (write) and Checks (read). Commit statuses (read) are used when the installation has accepted them; without it the wrapper says so and checks only the check runs. If the other three are missing, it stops.
+- It does not look for secrets or private names in the diff (rule 4 of `CLAUDE.md`); the reviewer does that before the head is named.
+
+expect: `pr-merge check` prints `GREEN` or `NOT GREEN: <reasons>` and changes nothing; with the timer on, `systemctl list-timers pr-merge-sweep.timer` shows the next run.
+
+## Rebuild dev from the box
+
+`rebuild` runs `hosts/rebuild-k8s.sh` for the dev Kubernetes layer (VMs 250 to 257) from the box. It is for the proof that the Mac lane isn't needed; the Mac lane keeps running the rebuild until that proof passes.
+
+```text
+rebuild up          all stages
+rebuild rebuild     tear the dev VMs down first, then all stages
+rebuild teardown    only the teardown
+rebuild identity    only the stage identity-keycloak: the whole identity role for the dev test admin, then the sign-in proof (step names and HTTP codes only). Every `up` and `rebuild` on dev already ends with it, so this subcommand is for a re-run alone, once the role has been applied with it
+rebuild log         the newest run's stage lines and PASS/FAIL lines
+rebuild diag        read-only look at the dev cluster after a failed apps stage: Argo CD app sync and health, the newest events in alerts and monitoring, pods not running, the monitoring pods and volume claims; runs while a rebuild is going
+```
+
+- It runs only the code on `main`. There is no way to name another branch, because the keys never run code a session can edit.
+- It writes its own `rebuild.env`: dev, VM range 250 to 257, the box's `proxmox-dev.env`, and the same state file as `dev-vms`. `rebuild-k8s.sh` still refuses a tfvars with a VM ID outside that range or a `node_vnet` other than `dev`.
+- The dev cluster's Secrets-at-rest key also belongs to the box: the wrapper makes it once (`rebuild-encryption.key` in the keys folder, mode 0600, never printed) and points `k8s_control_plane_encryption_key_file` at it, replacing the Mac path in the private inventory.
+- The nodes get a login key that belongs to the box. On the first run the wrapper makes it (`rebuild-node-key` in the keys folder) and runs with a copy of `dev-vms.tfvars` whose `node_ssh_public_key` is that key's public half and whose `pool_id` is always `dev` and whose `template_vm_id` is always 9001, the template copy on the dev network that the agents' token may clone. `dev-vms` passes the same two values over its tfvars, because both wrappers share one state.
+- The VMs go in pool `dev`, because the token's rights on them come from its ACL on `/pool/dev`, which a teardown leaves in place. Proxmox drops a VM's own `/vms/<id>` ACLs when the VM is destroyed. A clone that names a pool needs `VM.Allocate` on `/vms/<newid>` or on `/pool/<pool>`, and Proxmox adds the clone to the pool before the clone task ends, so the provider's next call, which sets the tags, CPU and disks, finds the VM already in the pool ([qemu-server `API2/Qemu.pm`](https://git.proxmox.com/?p=qemu-server.git;a=blob;f=src/PVE/API2/Qemu.pm;hb=HEAD), `clone_vm`). A pool's roles reach `/vms/<id>` of each VM in it ([pve-access-control `RPCEnvironment.pm`](https://git.proxmox.com/?p=pve-access-control.git;a=blob;f=src/PVE/RPCEnvironment.pm;hb=HEAD), `compile_acl_path`). The provider passes the pool in the clone call and sets the tags after it (bpg/proxmox 0.116.0, `vmCreateClone`). Clone also needs `VM.Clone` on template 9001, `Datastore.AllocateSpace` on the target storage and `SDN.Use` on VNet `dev`; `agent-access.sh` gives each on its own path, none of which a teardown removes. VMs made before pool `dev` was used sit outside it: tear them down, or run `agent-access.sh` once, which moves them in, because the token can't move a VM into a pool (`Pool.Allocate`).
+- The inventory is built from the private one on the Mac, which a keys command put at `/etc/agent-keys/rebuild-dev/inventory/hosts.yml`. The Mac's inventory reaches the nodes through a jump over root SSH to the Proxmox host. The box never holds root on the hypervisor, and it sits on the dev network, so each run builds a copy: the `proxmox` group and every login, key and proxy setting are dropped, the box's own key and plain ssh are set, and the gateway and certificate smoke tests run from the box (`k8s_gateway_smoke_client` and `k8s_certs_smoke_client` are `localhost`, as the box user without become, with the lab root kept in the wrapper folder). The private values stay as they were, except the controller paths: the backup env file and the reader certificate point at the box's own files.
+- The role installs Ansible 2.21.5 in its own virtual environment under the wrapper folder, and the collections pinned in `hosts/ansible/requirements.yml`. Run the role's `wrappers` tag to install them.
+- What the wrapper does not make, and stops without if it is missing:
+  - the private dev inventory at `/etc/agent-keys/rebuild-dev/inventory/hosts.yml`, which has to be put there through the keys wrapper;
+  - a guard that runs before any stage: the node addresses in `dev-vms.tfvars` must sit in the dev VLAN (VLAN 30 in `vlans.yml`), and every inventory host must be one of them, reached by plain ssh to `ansible_host` with the box's own ssh arguments only, no proxy, jump or other connection type;
+  - for the `restore` stage, the reader certificate (the wrapper stops early if it or `c1-backup.env` is missing, or if the certificate has expired): one PEM (key and certificate) the read-only backup app knows, put at `/etc/agent-keys/azure-reader.env` through the keys wrapper (`put-azure-reader`; the file is a PEM despite its name). The box has no Azure sign-in; the nodes copy that file, nothing is uploaded to the app, and its expiry is the one date to renew by hand;
+  - the token's ACLs from `agent-access.sh` (pool `dev`, template 9001, VNet `dev`, storage, node), which a root step on the host gives once, and which a teardown doesn't remove.
+
+expect: with those in place, `rebuild up` prints `rebuild: central-hub <commit>` and then the stage lines of `rebuild-k8s.sh`, and stops at the first stage that fails.
+
+## Remove old tailnet devices
+
+Every finished cloud session and every rebuilt machine leaves a tailnet device behind. Once a day the box removes the tagged ones that have been offline a long time (owner's answer 2026-11-12 06:43 to 06:45 UTC; pick 214 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)). The `tailnet-cleanup.timer` runs `tailnet-cleanup run` as the `keys` user; sessions may only ask for the list:
+
+```text
+tailnet-cleanup plan    what run would remove, and why each other tagged device stays; removes nothing
+```
+
+A device goes only when all of these hold: it carries one of the settings' tags; it is not connected; its last contact is older than the settings' days (7 or more); and its name is not on the keep list. A device without tags, a person's own, is never touched. A run that would remove more than `max_deletes` devices removes none and fails, so a wrong answer from the API can't empty the tailnet.
+
+1. In the Tailscale admin console, Settings, Trust credentials: add an OAuth credential with **Devices Core: Write** and nothing else.
+   why: its own key that can only see and remove devices, not change the policy or make auth keys.
+   expect: a client ID and a client secret, shown once.
+
+2. Put them in a file on the Mac, `~/.config/central-hub/tailnet-cleanup.env`, mode 600, as two lines: `TS_OAUTH_CLIENT_ID=` and `TS_OAUTH_CLIENT_SECRET=`, each followed by its value. Then put it on the box through the keys wrapper (`put-tailnet-cleanup`).
+   expect: `/etc/agent-keys/tailnet-cleanup.env`, owned by `keys`, mode 0600.
+
+3. In the private inventory, set `agent_box_tailnet_cleanup`: `tags` (for example `[tag:agent]`), `keep` (every device name that must never go, at least one), `days` (7) and `max_deletes` (5). Run the role's `wrappers` tag.
+   expect: the role writes `tailnet-cleanup.json` and starts `tailnet-cleanup.timer`; it stops if the keep list is empty, a tag isn't `tag:<name>`, days is under 7 or max_deletes isn't 1 to 20.
+
+4. Run `tailnet-cleanup plan` and read the list before the first timer run.
+   expect: `remove:` lines only for devices you expect to go, and a last line with the counts.
+
+## Copy the controller's private files to the box
+
+For the agent to tear down and rebuild layers beyond dev (D-0035), the box needs the private files the lab was built from. The role's `prod_files` tasks copy them from the controller into `/etc/agent-keys/prod/` (owned by `keys`, folders 0700, files 0600). They never run by default: they run only when `agent_box_copy_prod_files` is true for that run (a role variable, default false), so a wrapper that can't pass tags can still do it by a one-line change to the default, reverted after the run.
+
+1. Run the role from the controller with `agent_box_copy_prod_files` true.
+   why: the files only exist on the controller, and the role already runs from there.
+   expect: no file content is printed. The last task lists names only: `copied`, `missing` and `state_files`.
+
+2. If the controller runs the role from a pinned copy of the repo, set `agent_box_prod_files_clone` in the private inventory to the absolute path of its private clone, the one that holds `hosts/.env`, the filled-in inventory and the `home.tfvars` files. Empty means the checkout the playbook runs from.
+   why: those files are git-ignored, so only the private clone has them.
+
+3. Read the `missing` list. Anything on it is not on the controller under the path in `agent_box_prod_files` (role defaults, the same paths as the private-files table in [rebuild-home-lab-from-scratch.md](rebuild-home-lab-from-scratch.md)); make it there and run step 1 again.
+   expect: a second run copies it and lists nothing missing that you meant to have.
+
+The list leaves out on purpose the Proxmox apply token, the Cloudflare bootstrap token, the nodes' SSH keys, the lab CA (the CA is put through the keys wrapper) and the Azure backup run folder's `azure.tfvars` (`hosts/terraform/azure/backup`, which isn't on Proxmox). Copying the files only stores them. No prod teardown or rebuild runs from the box until D-0035 is accepted and D-0030 is met. The state files hold secrets (the certificates folder's state holds the Cloudflare token in plain text), so the box's `/etc/agent-keys` stays owner-only. The state files go to `prod/state/`; the box's copy is not a backup, so keep the off-box copy too.
+
+## Apply the box's own setup from the box
+
+D-0036 lets the box run this role on itself from reviewed main, through `box-apply plan` and `box-apply apply`, and stop for the owner on any change to its limits. It is off until `agent_box_self_apply` is set and the role runs in full from the controller. The steps are in [apply-the-agent-box-from-itself.md](apply-the-agent-box-from-itself.md).
+
 ## If it fails
 
 - `visudo` rejects the sudoers file: the task fails and the old file stays; nothing else in sudo changes.
 - `dev-vms` stops with `Failed to determine current working directory: stat .: permission denied`: it was started from a folder the `keys` user can't read, such as the admin user's home, on a box set up before the front script began with `cd /`. Run the role's `wrappers` tag again, or start `dev-vms` from `/` or the `claude` user's home.
 - `dev-vms` says there is no saved plan: run `dev-vms plan` first; `apply` only applies the saved plan.
-- After a dev teardown, `dev-vms plan` can't create VMs: Proxmox dropped the `/vms/<id>` ACLs when the VMs were destroyed (pick 18), so `agent-access.sh` must run again as root.
+- `vms` fails with `403` and `Permission check failed` on `/pool/dev` or `/vms/<id>`: the token has no ACL on pool `dev`, because `agent-access.sh` ran before the token was made. Run `agent-access.sh` again as root. A teardown alone no longer causes this, because the rights sit on the pool.
+- `vms` plans a pool change and fails on `Pool.Allocate`: a dev VM sits outside pool `dev`. Tear it down, or run `agent-access.sh` as root, which moves it in.
 - The TLS proof fails with `CERTIFICATE_VERIFY_FAILED`: the CA file is the wrong one, or `update-ca-trust` didn't run. Fix the file and run again with `--tags ca,verify`; never turn certificate checks off.
 - It fails with a hostname mismatch: the URL's name is not in the host's certificate. Use a name the certificate lists, or reissue the certificate with that name.
+- `tailnet-cleanup` stops with `HTTP 401` or `403`: the OAuth credential is wrong, revoked, or lacks Devices Core write. With `more than max_deletes`: read `plan`; remove the extra devices by hand in the admin console, or raise the limit in the inventory. `journalctl -u tailnet-cleanup.service` shows each run.
 
 ## Exit
 
-Remove `/etc/sudoers.d/agent-box`, the front scripts and `/usr/local/libexec/agent-box/`, then delete `/etc/agent-keys/` and revoke the token `agent@pve!dev`. The VM itself goes with [grow-the-agent-jumpbox.md](grow-the-agent-jumpbox.md)'s exit.
+Stop `tailnet-cleanup.timer` and revoke its OAuth credential in the Tailscale admin console. Remove `/etc/sudoers.d/agent-box`, the front scripts and `/usr/local/libexec/agent-box/`, then delete `/etc/agent-keys/` and revoke the token `agent@pve!dev`. The VM itself goes with [grow-the-agent-jumpbox.md](grow-the-agent-jumpbox.md)'s exit.

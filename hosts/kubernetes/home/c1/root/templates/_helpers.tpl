@@ -6,6 +6,8 @@ Helm parameters for one child Application:
   Grafana's root_url). Escape dots inside a key with "\\.".
 - switchParameters: value path -> the name of a true/false root value; "true" is passed only when
   that root value is true, so a cluster that leaves it false renders exactly as before.
+- rootParameters: value path -> the name of a text root value; passed only when that root value is
+  not empty, so a cluster that leaves it empty renders exactly as before.
 Both are private (CLAUDE.md rule 4): they live only in the root Application, set by Ansible.
 */ -}}
 {{- define "c1.parameters" -}}
@@ -16,11 +18,21 @@ Both are private (CLAUDE.md rule 4): they live only in the root Application, set
 {{- $switches = append $switches $path }}
 {{- end }}
 {{- end }}
-{{- if or $app.needsZone $app.zoneParameters $switches }}
+{{- $fromRoot := dict }}
+{{- range $path, $key := $app.rootParameters }}
+{{- with index $.root.Values $key }}
+{{- $_ := set $fromRoot $path (toString .) }}
+{{- end }}
+{{- end }}
+{{- if or $app.needsZone $app.zoneParameters $switches $fromRoot }}
 parameters:
 {{- range $path := $switches }}
   - name: {{ $path | quote }}
     value: "true"
+{{- end }}
+{{- range $path, $value := $fromRoot }}
+  - name: {{ $path | quote }}
+    value: {{ $value | quote }}
 {{- end }}
 {{- end }}
 {{- if or $app.needsZone $app.zoneParameters }}

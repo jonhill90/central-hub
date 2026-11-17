@@ -1,0 +1,20 @@
+# Managed by Ansible (role agent_box). Loads the lifeline NIC's packet filter (/etc/nftables/lifeline.nft)
+# before NetworkManager can bring the NIC up, so the NIC is never up unfiltered.
+[Unit]
+Description=Packet filter for the lifeline NIC
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target NetworkManager.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart={{ agent_box_nft_bin }} -f /etc/nftables/lifeline.nft
+# A reload replaces the table in one transaction (the file starts with table, delete table, table), so there is
+# no moment without the filter. Stop deletes the table, which only happens when the unit is stopped on purpose.
+ExecReload={{ agent_box_nft_bin }} -f /etc/nftables/lifeline.nft
+ExecStop=-{{ agent_box_nft_bin }} delete table inet lifeline
+
+[Install]
+WantedBy=multi-user.target

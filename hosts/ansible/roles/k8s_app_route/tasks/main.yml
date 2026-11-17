@@ -78,7 +78,7 @@
 # verified against the node's trust store unless it is from letsencrypt-staging; plain HTTP answers
 # 301 to https:// (or 404 with the redirect off).
 - name: route | Proof
-  when: not ansible_check_mode
+  when: not ansible_check_mode and k8s_app_route_proof | bool
   block:
     - name: route | Gateway address and the certificate's issuer
       ansible.builtin.shell: >-

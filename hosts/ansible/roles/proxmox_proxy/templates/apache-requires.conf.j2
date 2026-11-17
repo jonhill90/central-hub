@@ -1,0 +1,5 @@
+# Managed by Ansible (role proxmox_proxy). The certificate and key live in /etc/pve, which pve-cluster
+# mounts; the proxy must not start before it, and does not run without it.
+[Unit]
+Requires={{ proxmox_proxy_requires_unit }}
+After={{ proxmox_proxy_requires_unit }}

@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNUAoAvcmynir2k9d41h2F3m
   approval-names: "PR #19 and head ffd8dca, in the message itself"
   check: the drafting agent read the message in the documentation path thread at 2026-10-23T02:18Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: PR #19 merged at 2026-10-23T02:19Z as 007ee02, with this evidence commit on top of the approved commit
+  merged: "PR #19 merged at 2026-10-23T02:19Z as 007ee02, with this evidence commit on top of the approved commit"
 revisit-when: a kind folder passes about 30 files; a second reader group (not the owner or agents) needs its own docs; a docs site is built; the secret store for private values is chosen; a document kind turns up that fits no folder here; why lines in runbook steps grow into paragraphs; ※ links break often enough to need a link check; or every manual runbook has an automated twin and the manual ones stop being run
 ---
 
@@ -26,7 +26,7 @@ revisit-when: a kind folder passes about 30 files; a second reader group (not th
 
 D-0008 names `docs/PRD.md`, `docs/specs/`, `docs/decisions/` and `docs/runbooks/`. D-0009 adds `docs/standards/`. D-0011 leaves the folders inside `docs/` to the documentation folder map work.
 
-On 2026-10-22 at 06:58 UTC the owner asked which folders central-hub needs for plans, specs, runbooks, architecture and any other kind of document that each likely scenario calls for. He also raised the runbook format as open. On 2026-10-19 at 02:43 UTC the owner had asked that a runbook explain why each step is done, briefly, and how the steps connect, so it reads like a story with reminders that link back; and that each job get a manual runbook first and an automated one later, because starting with the abstractions would hide what they are worth.
+On 2026-10-22 at 06:58 UTC the owner asked which folders central-hub needs for plans, specs, runbooks, architecture and any other kind of document that each likely scenario calls for. They also raised the runbook format as open. On 2026-10-19 at 02:43 UTC the owner had asked that a runbook explain why each step is done, briefly, and how the steps connect, so it reads like a story with reminders that link back; and that each job get a manual runbook first and an automated one later, because starting with the abstractions would hide what they are worth.
 
 This record sets which kinds of document central-hub keeps, where each one goes, and the minimum content of a runbook and a postmortem. It creates no folder.
 

@@ -1,0 +1,20 @@
+# cert-manager's controller metrics (certificate expiry, renewal time, ready status), for the
+# c1-certificates alerts in rules.yaml. The chart (v1.21.3) makes the Service, port http-metrics,
+# with prometheus.enabled true by default; its own ServiceMonitor is off (prometheus.servicemonitor),
+# so this one sits here, after kube-prometheus-stack has made the CRD.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cert-manager
+  namespace: {{ .Release.Namespace }}
+spec:
+  namespaceSelector:
+    matchNames: [{{ .Values.certManager.namespace }}]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cert-manager
+      app.kubernetes.io/component: controller
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      interval: 60s

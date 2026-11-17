@@ -2,3 +2,9 @@
 - name: Rebuild the trust store
   ansible.builtin.command: update-ca-trust extract
   changed_when: true
+
+- name: Reload the lifeline filter
+  # reload-or-restart: reloads a running unit (the table is replaced in one transaction, so the NIC is never
+  # unfiltered), and starts one that is not running yet. daemon-reload ran in the task that enables the unit.
+  ansible.builtin.command: systemctl reload-or-restart lifeline-nft.service  # noqa: command-instead-of-module
+  changed_when: true

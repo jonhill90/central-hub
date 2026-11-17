@@ -17,8 +17,8 @@ spec:
     requests:
       storage: {{ $v.cacheSize }}
 ---
-# Anyone who can reach the name can read and post (ntfy's default access): the Gateway is reachable
-# only from the lab network and the tailnet. Adding users is ntfy's auth-users setting (pick 171).
+# Nobody may read or post without a login or token (deny-all, pick 171); the users come from
+# Secret ntfy-auth (auth.yaml). The Gateway is reachable only from the lab network and the tailnet.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -50,6 +50,13 @@ spec:
             - {name: NTFY_BEHIND_PROXY, value: "true"}
             - {name: NTFY_CACHE_FILE, value: /var/cache/ntfy/cache.db}
             - {name: NTFY_CACHE_DURATION, value: {{ $v.cacheDuration | quote }}}
+            - {name: NTFY_AUTH_FILE, value: /var/cache/ntfy/user.db}
+            - {name: NTFY_AUTH_DEFAULT_ACCESS, value: deny-all}
+            - {name: NTFY_ENABLE_LOGIN, value: "true"}
+          # NTFY_AUTH_USERS, NTFY_AUTH_ACCESS and NTFY_AUTH_TOKENS, read at start: after the
+          # secret-source values change, restart the Deployment.
+          envFrom:
+            - secretRef: {name: {{ $v.name }}-auth}
           ports:
             - {name: http, containerPort: {{ $v.port }}}
           readinessProbe:

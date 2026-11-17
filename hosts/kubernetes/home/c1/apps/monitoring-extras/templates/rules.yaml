@@ -35,6 +35,31 @@ spec:
           labels: {severity: warning}
           annotations:
             summary: Alertmanager could not deliver alerts to ntfy; check the alerts app (runbook get-c1-alerts-on-your-phone.md)
+    # Certificates for app names (pick 78): the Cloudflare token may be limited to the home's
+    # public address, so a changed address shows up here as renewals that stop.
+    - name: c1-certificates
+      rules:
+        - alert: C1CertificateRenewalOverdue
+          expr: |
+            time() - max by (exported_namespace, name) (certmanager_certificate_renewal_timestamp_seconds)
+              > {{ .Values.certManager.renewalOverdueSeconds }}
+          for: 1h
+          labels: {severity: warning}
+          annotations:
+            summary: "Certificate {{ "{{" }} $labels.exported_namespace {{ "}}" }}/{{ "{{" }} $labels.name {{ "}}" }} should have renewed more than 2 days ago; check its CertificateRequest and the Cloudflare token's address limit"
+            runbook: docs/runbooks/issue-c1-app-certificate.md
+        - alert: C1CertificateNotReady
+          expr: max by (exported_namespace, name) (certmanager_certificate_ready_status{condition!="True"}) == 1
+          for: 1h
+          labels: {severity: warning}
+          annotations:
+            summary: "Certificate {{ "{{" }} $labels.exported_namespace {{ "}}" }}/{{ "{{" }} $labels.name {{ "}}" }} has not been Ready for an hour"
+        - alert: C1CertManagerNotScraped
+          expr: absent(up{namespace="{{ .Values.certManager.namespace }}", service="cert-manager"} == 1)
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Prometheus can't read cert-manager's metrics, so the two certificate alerts above can't fire
     - name: c1-storage
       rules:
         - alert: C1DataDiskFillingUp

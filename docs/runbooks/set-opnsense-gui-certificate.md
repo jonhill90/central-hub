@@ -6,8 +6,8 @@ trigger: once after the lab CA is restored on c1; then at least every 30 days, t
 runner: the owner or an agent lane
 outcome: the OPNsense web UI serves a certificate issued by ClusterIssuer `lab-ca`, and a Mac that trusts the lab root opens it with no warning
 needs: the lab controller with the filled-in inventory (CLI path), or a browser signed in to the OPNsense web UI as an administrator (web UI path); `kubectl` access to c1 for both
-private-values: [opnsense_api_key, opnsense_api_secret, opnsense_cert_names]
-files: [hosts/ansible/playbooks/opnsense-cert.yml, hosts/ansible/roles/opnsense_cert, hosts/ansible/roles/lab_host_cert]
+private-values: [opnsense_api_key, opnsense_api_secret, opnsense_cert_names, opnsense_lab_ssl_ca_file]
+files: [hosts/ansible/playbooks/opnsense-cert.yml, hosts/ansible/playbooks/tasks/opnsense-tls.yml, hosts/ansible/roles/opnsense_cert, hosts/ansible/roles/lab_host_cert]
 last-tested: 2026-11-09, an agent lane on the owner's Mac, Path A steps 1-4 (four runs, each changed=0 after the first swap)
 superseded-by:
 ---
@@ -28,7 +28,9 @@ flowchart LR
 - `kubectl get clusterissuer lab-ca` on c1 shows `READY True`. If not, do [Restore c1's intermediate CA](restore-c1-intermediate-ca.md) first.
 - The owner's Mac trusts the lab root ([Trust the lab root CA on a Mac](trust-lab-root-ca-on-mac.md)).
 - `opnsense.<zone>` resolves from where you are ([Set up lab DNS](set-up-lab-dns.md)).
-- Path A only: the inventory sets `opnsense_api_host`, `opnsense_api_key`, `opnsense_api_secret` and `opnsense_cert_names` (for example `["opnsense.<zone>"]`).
+- Path A only: the inventory sets `opnsense_api_host` to the firewall's name (`opnsense.<zone>`, never an address), `opnsense_lab_ssl_ca_file` to the lab root's PEM file on the controller, `opnsense_api_key`, `opnsense_api_secret` and `opnsense_cert_names` (for example `["opnsense.<zone>"]`), and no `opnsense_lab_ssl_verify`.
+- Path A checks the API's certificate against the lab root on every call (owner's answer 2026-11-12 22:23 UTC, pick 30 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)); both OPNsense playbooks stop before any API call if the inventory would turn that off or names the firewall by address.
+- **A rebuilt firewall** still serves its own self-signed certificate, which can't pass that check. For its first run only, set `opnsense_lab_tls_bootstrap: true` in the inventory: the run says `BOOTSTRAP` and doesn't check the certificate. Take the line out after step 2; the next run refuses it once the certificate checks out.
 
 ## Path A: command line
 

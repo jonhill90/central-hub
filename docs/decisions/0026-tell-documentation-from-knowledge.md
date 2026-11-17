@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: 1c4bc0505bfb6b746ed5d4a111842a3160655099
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN24R63uS9wHRg7gQH9GknEB
   approval-names: "PR #171 and head 1c4bc0505bfb6b746ed5d4a111842a3160655099"
-  check: the drafting agent read the message in its project thread at 2026-11-11T03:18Z; it names PR #171 and that full head, which was still the PR head at the time. An independent check by a reviewing agent is still to do
-  merged: Lane C squash-merged PR #171 pinned to that head at 2026-11-11T03:18:54Z as 1860af0; the record was first accepted on 2026-11-05 with PR #55 (CORRECTIONS.md)
+  check: "the drafting agent read the message in its project thread at 2026-11-11T03:18Z; it names PR #171 and that full head, which was still the PR head at the time. An independent check by a reviewing agent is still to do"
+  merged: "Lane C squash-merged PR #171 pinned to that head at 2026-11-11T03:18:54Z as 1860af0; the record was first accepted on 2026-11-05 with PR #55 (CORRECTIONS.md)"
 revisit-when: the agent notebook is retired and its knowledge moves; a document fits neither store; docs/explanations/ needs material that cannot be public; the organization standard reaches a new major version; or the decision records are refactored as a set
 ---
 
@@ -24,9 +24,9 @@ revisit-when: the agent notebook is retired and its knowledge moves; a document 
 
 ## Context and Problem Statement
 
-On 2026-11-03 the owner stated that a repository's `docs/` folder is not a knowledge store or a research store. It may contain those things, but they are different, so the organization standard has to tell them apart. Earlier, on 2026-10-31, the owner asked that central-hub store knowledge of its own, in a structure set for it. On 2026-10-26 he asked that central-hub show the work in public: his progress, what he learns, and how the home lab grows (D-0013).
+On 2026-11-03 the owner stated that a repository's `docs/` folder is not a knowledge store or a research store. It may contain those things, but they are different, so the organization standard has to tell them apart. Earlier, on 2026-10-31, the owner asked that central-hub store knowledge of its own, in a structure set for it. On 2026-10-26 they asked that central-hub show the work in public: their progress, what they learn, and how the home lab grows (D-0013).
 
-The agents keep their working knowledge in the agent notebook, `jonhill90/agent-notebook`: research, measurements, notes and thinking. The notebook is private. On 2026-11-08 the owner said central-hub must rebuild and be trusted from the repository alone, with its provenance in it, and without the noise of the notebook. On 2026-11-10 he said central-hub holds the public-facing, polished version of the knowledge.
+The agents keep their working knowledge in the agent notebook, `jonhill90/agent-notebook`: research, measurements, notes and thinking. The notebook is private. On 2026-11-08 the owner said central-hub must rebuild and be trusted from the repository alone, with its provenance in it, and without the noise of the notebook. On 2026-11-10 they said central-hub holds the public-facing, polished version of the knowledge.
 
 Central-hub's folder `docs/research/` also used the knowledge store's word for decision summaries.
 

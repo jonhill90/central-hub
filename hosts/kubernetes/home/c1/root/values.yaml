@@ -14,6 +14,28 @@ gatewayHttps: true
 # (k8s_gitops_source_local_path_stable_folders): dev, which restores prod's backup before its apps
 # (TASK-0240). c1 keeps false.
 localPathStableFolders: false
+# The secrets store, OpenBao inside the cluster (D-0058), dev's cluster first. true makes the apps
+# `openbao-store` and `openbao` (their `enabledBy`) and the secret-store app's `openbao` store. Ansible
+# sets it from k8s_gitops_source_openbao_in_cluster; c1 keeps false and renders as before.
+openbaoInCluster: false
+# The node that holds the seal key's folder (the local PersistentVolume), private, set by Ansible
+# (k8s_gitops_source_openbao_seal_node). Empty: no seal volume is made, and OpenBao's pod waits.
+openbaoSealNode: ""
+# The agent box's address as a /32, private, set by Ansible (k8s_gitops_source_openbao_box_cidr):
+# the only source the admin AppRole signs in from (D-0038 rule 6). Empty: the app's own default,
+# 127.0.0.1/32, which a `kubectl port-forward` connection also matches, so it is not a lock; the
+# box's hand-over refuses while it is empty (apps/openbao/values.yaml, centralHub.boxCidr).
+openbaoBoxCidr: ""
+# The dev-only measurement of the agent box's source address through the Gateway (ADDENDUM-1 v3 step 1,
+# MEASURE-1). true makes the openbao-measure app's routes, turns on OpenBao's audit of two request
+# headers at its first start, adds the passthrough host to the store's certificate and lets namespace
+# openbao attach a ListenerSet to Gateway apps. Only hosts/rebuild-k8s.sh sets it, on dev with the
+# in-cluster store (k8s_gitops_source_openbao_measure); c1 keeps false and renders as before.
+openbaoMeasure: false
+
+# The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
+# (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
+shareTarget: ""
 
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
@@ -60,8 +82,10 @@ c1Project:
 
 # One entry per component, in the order they moved (spec, "Order"). Each one:
 #   namespace    where the chart installs
-#   chart        repoURL, name and version of the upstream Helm chart (version per STD-0003);
-#                optional `oci`, an OCI copy of the same file that CI's parity check pulls instead
+#   chart        repoURL, name and version of the upstream Helm chart (version per STD-0003).
+#                An oci:// repoURL also takes `digest`, the chart manifest's sha256: Argo CD fetches
+#                that digest, never the tag, so a re-pushed tag changes nothing (pick 141); `version`
+#                stays for people, and CI checks the chart at that digest has that version
 #   local        true: a chart kept in this repository at appsPath/<name>/ instead of `chart`
 #   releaseName  the Helm release name today, so the objects keep their names (default: the key)
 #   needsZone    pass `zone` to the chart as a value
@@ -72,6 +96,12 @@ c1Project:
 #   valueFiles   the values files in appsPath/<name>/, in order (default: values.yaml)
 #   syncOptions  Argo CD sync options, for example ServerSideApply=true for charts with large CRDs
 #   ignoreDifferences  fields Argo CD leaves alone, for example a password the chart makes at random
+#   rootParameters  value path -> name of a root value; passed as a Helm parameter when that root
+#                value is set (private values such as an address or a node name)
+#   enabledBy    name of a true/false root value: the app's Application is made only when it is true
+#                (dev first, D-0058); without it the app is made on every cluster
+#   clusterResources  cluster-scoped kinds only this app makes, added to the project's whitelist
+#                only where the app is made (with enabledBy, only where that value is true)
 #   wave         sync order when the root syncs, lowest first (default 0): -3 storage, -2 operators
 #                and their CRDs, -1 what they serve (the secret store), 0 apps
 #   autoSync     true: Argo CD syncs the app on its own, so a fresh cluster installs every app
@@ -110,13 +140,12 @@ apps:
   loki:
     namespace: logging
     chart:
-      repoURL: https://grafana-community.github.io/helm-charts
+      # The project's own OCI copy of the file on grafana-community.github.io (the chart layers'
+      # SHA-256 matched, bfa76744...edbe0a, 2026-11-12).
+      repoURL: oci://ghcr.io/grafana-community/helm-charts/loki
       name: loki
       version: 18.15.1   # Loki 3.7.8, 2026-10-09; same as k8s_observability today
-      # The same chart file, published by the same project as OCI. Only CI's parity check reads it
-      # (the GitHub release download behind repoURL returned 504 for hours on 2026-11-08); the bytes
-      # matched (SHA-256 bfa76744...edbe0a) on 2026-11-08. Argo CD and Ansible still use repoURL.
-      oci: oci://ghcr.io/grafana-community/helm-charts/loki
+      digest: sha256:97ac03444f2f4689a84c575e06318acf4297bbf15443b0fbd5481ab6ec476b42
     autoSync: true
     prune: false
   alloy:
@@ -132,9 +161,12 @@ apps:
   kube-prometheus-stack:
     namespace: monitoring
     chart:
-      repoURL: https://prometheus-community.github.io/helm-charts
+      # The project's own OCI copy of the file on prometheus-community.github.io (the chart layers'
+      # SHA-256 matched, 5c976ae9...e6bd6a, 2026-11-12).
+      repoURL: oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
       name: kube-prometheus-stack
       version: 92.3.1   # Prometheus Operator v0.94.1, 2026-10-13; same as k8s_observability today
+      digest: sha256:bb8dae4452aefa2e1fcfd23af35c0b3f8aa070e339aa7efec32848efb6886a24
     valueFiles: [values.yaml, values-sso.yaml]
     zoneParameters:
       # Short aliases (STD-0001 rules 5 and 7), as k8s_observability_short_names.
@@ -154,9 +186,12 @@ apps:
   external-secrets:
     namespace: external-secrets
     chart:
-      repoURL: https://charts.external-secrets.io
+      # The project's own OCI copy of the file on charts.external-secrets.io (the chart layers'
+      # SHA-256 matched, 0a6d9e91...ee5e34, 2026-11-12).
+      repoURL: oci://ghcr.io/external-secrets/charts/external-secrets
       name: external-secrets
       version: 2.14.0   # 2026-10-23, the first to list Kubernetes 1.37; same as k8s_secrets today
+      digest: sha256:0e3d45f11522f2730ff55deef57bc43e0ff4aadc00bdab5557fa4d354b0c3ab7
     wave: -2
     syncOptions: [ServerSideApply=true]
     autoSync: true
@@ -164,17 +199,44 @@ apps:
   secret-store:
     namespace: external-secrets
     local: true
+    switchParameters:
+      openbao.inCluster: openbaoInCluster
     wave: -1
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
+    prune: false
+  # The agents' read-only account (TASK-0215, pick 216): view everything but Secrets. Its token
+  # Secret is filled in by Kubernetes, so Argo CD leaves the token's fields alone.
+  agent-read:
+    namespace: agent-read
+    local: true
+    ignoreDifferences:
+      - kind: Secret
+        name: agent-read-token
+        namespace: agent-read
+        jsonPointers: [/data]
+    autoSync: true
+    prune: false
+  # A small pod with its own tailnet identity (tag:share-pod) that forwards one port to a node another
+  # tailnet shares in. It holds no lab secret and no Kubernetes credential
+  # (docs/runbooks/reach-the-shared-node-through-the-share-pod.md).
+  share-pod:
+    namespace: share-pod
+    local: true
+    rootParameters:
+      target: shareTarget
+    autoSync: true
     prune: false
   # Certificates (spec step 6): cert-manager itself. The issuers and the Gateway's certificate stay
   # with Ansible (k8s_certs, tag issue) until the lab PKI work gives them a `certs` app here.
   cert-manager:
     namespace: cert-manager
     chart:
-      repoURL: https://charts.jetstack.io
+      # The project's own OCI copy of the file on charts.jetstack.io (the chart layers' SHA-256
+      # matched the one k8s_certs checks, 9ec67938...373a17, 2026-11-12).
+      repoURL: oci://quay.io/jetstack/charts/cert-manager
       name: cert-manager
       version: v1.21.3   # security release, STD-0003 rule 2; same as k8s_certs today
+      digest: sha256:e482675aec32862d323a9218293ff7de81192337998615e4378c56498473f240
     wave: -2
     syncOptions: [ServerSideApply=true]
     autoSync: true
@@ -188,6 +250,9 @@ apps:
     zoneParameters:
       address: "{gatewayAddress}"
       https: "{gatewayHttps}"
+    # Lets namespace openbao attach the measurement's ListenerSet, only with openbaoMeasure.
+    switchParameters:
+      openbaoMeasure: openbaoMeasure
     wave: -1
     autoSync: true
     prune: false
@@ -206,4 +271,56 @@ apps:
     needsZone: true
     autoSync: true
     prune: true
-
+  # The secrets store inside the cluster (D-0058), only where openbaoInCluster is true (dev first).
+  # openbao-store: the namespace, the seal key's local volume, the TLS certificates, the policy files
+  # and the bootstrap account; openbao: OpenBao's own chart, with its network limit
+  # (docs/runbooks/set-up-the-secrets-store.md).
+  openbao-store:
+    namespace: openbao
+    local: true
+    enabledBy: openbaoInCluster
+    rootParameters:
+      sealNode: openbaoSealNode
+    switchParameters:
+      measure: openbaoMeasure
+    # The passthrough host on the store's certificate, only with measure (templates/tls.yaml).
+    needsZone: true
+    # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume.
+    clusterResources:
+      - {group: "", kind: PersistentVolume}
+    # After cert-manager (-2): its Issuers and Certificates need cert-manager's CRDs.
+    wave: -1
+    autoSync: true
+    prune: false
+  openbao:
+    namespace: openbao
+    chart:
+      repoURL: https://openbao.github.io/openbao-helm
+      name: openbao
+      version: 0.30.6   # 2026-10-27, OpenBao v2.7.2; the newest at least two weeks old (STD-0003 rule 1)
+      # The chart's SHA-256 from the repository's index.yaml (D-0058 rule 1). CI (parity.py) fails if this
+      # version is served with other bytes; Argo CD's own pull at sync is not checked against it.
+      sha256: 76e90c2315a4922b4b0c6c63fd8a00b9f4bdf0cffda160664f8ea5762d59911c
+    enabledBy: openbaoInCluster
+    rootParameters:
+      centralHub.boxCidr: openbaoBoxCidr
+    switchParameters:
+      centralHub.measure: openbaoMeasure
+    # After openbao-store (-1), which makes its certificate Secret.
+    wave: 0
+    autoSync: true
+    prune: false
+  # The measurement of the agent box's source address through the Gateway (MEASURE-1), dev only.
+  # It renders its objects only while openbaoMeasure is true and nothing otherwise, and it prunes, so
+  # turning the value off removes them (openbao-store and openbao keep prune false).
+  openbao-measure:
+    namespace: openbao
+    local: true
+    needsZone: true
+    enabledBy: openbaoInCluster
+    switchParameters:
+      measure: openbaoMeasure
+    # After openbao (0): its routes point at OpenBao's Service.
+    wave: 1
+    autoSync: true
+    prune: true

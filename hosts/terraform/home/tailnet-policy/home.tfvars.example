@@ -1,3 +1,14 @@
 # Copy to home.tfvars (git-ignored, 0600) and fill in. Made-up values in STD-0001 shape.
 vlans_file           = "../../../ansible/inventories/home/group_vars/all/vlans.yml"
 proxmox_host_address = "192.0.2.10" # home/tailnet's connector_extra_routes address, without /32
+
+# Optional. Other tailnets that may share their own devices into this one (at most three). The
+# alias is local; the other tailnet's admin uses the group name in a grant from
+# group://<their alias for this tailnet>/<group>. Leave it out for none.
+# external_tailnets = {
+#   example = {
+#     external_id = "T123456CNTRL" # the other tailnet's ID, from its General page, Unique IDs
+#     group       = "example-admins"
+#     members     = ["owner@example.com"]
+#   }
+# }

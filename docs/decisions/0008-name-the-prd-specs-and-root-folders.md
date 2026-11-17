@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNLjKFZhnGXTRAmEntnMMFcR
   approval-names: "PR #13 and head 86484af, in the message itself"
   check: the drafting agent read the message in the PRD and spec research thread at 2026-10-19T04:04Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: PR #13 merged at 2026-10-19T04:04Z as 2f6ec56, with this evidence commit on top of the approved commit
+  merged: "PR #13 merged at 2026-10-19T04:04Z as 2f6ec56, with this evidence commit on top of the approved commit"
 revisit-when: a second repo adopts the same standard; a root folder's tool is replaced; Kubernetes stops being the runtime; or a reader cannot find the PRD
 ---
 
@@ -32,7 +32,7 @@ This record fixes those names. It does not create the folders.
 
 ## Decision Drivers
 
-- **Name for the job, not the vendor product.** The owner said yes to this rule (and to naming clusters by role) on 2026-10-19 during his review of the organize-repository skill.
+- **Name for the job, not the vendor product.** The owner said yes to this rule (and to naming clusters by role) on 2026-10-19 during their review of the organize-repository skill.
 - **Keep the root short.** The repository root holds only what a reader needs before going deeper (README, AGENTS, SECURITY). Every document kind sits under `docs/`.
 - **Fit accepted records.** D-0007 rule 3 already places specs in `docs/specs/`.
 - **Replaceable** (REQ-0011).

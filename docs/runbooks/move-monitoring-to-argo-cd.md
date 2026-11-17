@@ -1,6 +1,6 @@
 ---
 title: Move monitoring on c1 (kube-prometheus-stack) from Ansible to Argo CD
-status: tested
+status: draft
 kind: automated
 trigger: on request (step 4 of spec 2026-11-c1-apps-under-argo-cd)
 runner: an agent lane, through the owner's Mac (D-0022)
@@ -51,6 +51,8 @@ The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `kube-prom
    expect: the first run reports the Helm records deleted; a second run reports `changed=0`.
 
 ## Change it
+
+Argo CD fetches the chart from its OCI copy, `oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack`, by digest (pick 141 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)), so a re-pushed tag changes nothing. A new version changes `version` and `digest` together in `root/values.yaml`: `helm pull oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack --version <version>` prints the digest, and CI's parity check fails if the chart at that digest has another version.
 
 Edit the values or the version by PR. Before raising the chart past a Prometheus Operator minor, read the chart's upgrade notes: with server-side apply Argo CD updates the CRDs itself, which Helm never did.
 

@@ -1,6 +1,6 @@
 ---
 title: Manage the public zone's DNS records with OpenTofu
-status: tested
+status: draft
 kind: automated
 trigger: once, to adopt the zone; then on every record change (add, change or delete a name in the public zone)
 runner: an agent lane, through the owner's Mac

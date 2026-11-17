@@ -1,0 +1,11 @@
+---
+# The owner's desktop VM (hosts/terraform/home/desktop/, docs/runbooks/set-up-the-desktop.md): GNOME and
+# its remote desktop on AlmaLinux 10, so the owner can sign in by RDP or VNC client and log in to apps by hand.
+# desktop_rdp_source (the tailnet connector's address) and desktop_admin_user come from the private inventory.
+# The role removes the admin user's SSH key at its end, so later changes are a rebuild from teardown.
+#   ansible-playbook -i inventories/home/ playbooks/desktop.yml
+- name: Desktop
+  hosts: desktop
+  become: true
+  roles:
+    - role: desktop

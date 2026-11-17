@@ -1,0 +1,20 @@
+# The ping URL of c1's heartbeat check on Healthchecks.io (pick 213), from namespace secret-source
+# through store c1. kube-prometheus-stack mounts Secret alertmanager-heartbeat into Alertmanager
+# (alertmanagerSpec.secrets), and the heartbeat receiver reads it as url_file, so the URL never sits
+# in a config: anyone who has it can ping the check and hide an outage.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: alertmanager-heartbeat
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.heartbeat.store }}
+  target:
+    name: alertmanager-heartbeat
+    creationPolicy: Owner
+  data:
+    - secretKey: url
+      remoteRef: {key: {{ .Values.heartbeat.pingUrlSource }}, property: value}

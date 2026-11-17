@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNNw9afcLyseACmQBjVznpsQ
   approval-names: "PR #35 and head 07c3873"
   check: the drafting agent read the message in the project thread at 2026-10-24T01:50Z; it names PR jonhill90/central-hub#35 and head 07c3873 itself. An independent check by a reviewing agent is still to do.
-  merged: PR #35 merged at 2026-10-24T01:51Z as 80571c5, with this evidence commit on top of the approved commit
+  merged: "PR #35 merged at 2026-10-24T01:51Z as 80571c5, with this evidence commit on top of the approved commit"
 revisit-when: a check gives more false positives than real findings for a month; a docs site or docs build is added; per-agent identities or a verifier outside this repository exist (Activation gate items 1 and 2); the glossary outgrows one table; a docs tool cannot take a settings path; an editor or CI service that the owner uses needs the settings in the root; or D-0008's rule for the root changes
 ---
 
@@ -68,7 +68,7 @@ flowchart LR
   V -->|glossary terms| R[Report only]
 ```
 
-*In words:* every PR runs one workflow with a read-only token. Front matter, inside links and Markdown style on the files the PR changes must pass before the PR can merge. The word check reports glossary terms without blocking, and blocks only on quoting the owner or naming him by first name, which D-0016 already forbids. The word rules are generated from the glossary.
+*In words:* every PR runs one workflow with a read-only token. Front matter, inside links and Markdown style on the files the PR changes must pass before the PR can merge. The word check reports glossary terms without blocking, and blocks only on quoting the owner or naming them by first name, which D-0016 already forbids. The word rules are generated from the glossary.
 
 ### The checks
 
@@ -77,7 +77,7 @@ flowchart LR
 | 1 | Front matter | front matter that is not valid YAML 1.2, including a repeated key; a missing or wrongly typed field; a status word not allowed for that kind; an ID that does not match the file name; `supersedes` and `superseded-by` that do not match; `waits-on` naming a record that does not exist or forming a cycle; an evidence file with no record, or a record that does not link its evidence file; a file missing from its folder's README index; a decision index row whose status differs from the record | one JSON Schema 2020-12 file per kind of document (decision, evidence, standard, spec, runbook, postmortem), plus one Python script for the rules that cross files, with test cases | **gate** |
 | 2 | Links inside the repo | relative links and `#anchors` that do not resolve | lychee, offline | **gate** |
 | 3 | Markdown style | heading, list, code-fence and spacing faults | markdownlint-cli2 | **gate** on files the PR adds or changes, except edits to existing records and evidence files |
-| 4 | Words | a deprecated glossary word; a quote of the owner, or his first name under `docs/` (D-0016 rule 5) | Vale, with its term rules generated from `docs/glossary.md` | glossary words: **report only**. Owner quotes and the owner's first name: **gate** on every file the PR adds or changes, edited records and evidence files included, except the approval template in `docs/specs/README.md` |
+| 4 | Words | a deprecated glossary word; a quote of the owner, or their first name under `docs/` (D-0016 rule 5) | Vale, with its term rules generated from `docs/glossary.md` | glossary words: **report only**. Owner quotes and the owner's first name: **gate** on every file the PR adds or changes, edited records and evidence files included, except the approval template in `docs/specs/README.md` |
 | — | Links outside the repo | dead outside URLs | lychee, online | weekly report, never a gate |
 
 ### Rules

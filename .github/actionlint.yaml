@@ -1,0 +1,4 @@
+# Custom runner label actionlint should accept: the agent box's runner (lab-redeploy-dev.yml).
+self-hosted-runner:
+  labels:
+    - central-hub-box

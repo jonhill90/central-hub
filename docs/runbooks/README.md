@@ -7,15 +7,29 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | Runbook | Kind | Status |
 |---|---|---|
 | [Rebuild the home lab from bare metal (top-level order)](rebuild-home-lab-from-scratch.md) | manual | draft |
-| [Rebuild one cluster's Kubernetes layer with one command](rebuild-k8s-layer-with-one-command.md) | automated | draft |
+| [Rebuild one cluster's Kubernetes layer with one command](rebuild-k8s-layer-with-one-command.md) | automated | tested |
 | [Set up the lab controller](set-up-lab-controller.md) | manual | draft |
 | [Set up the lab network, the OPNsense firewall and the tailnet connector container from code](set-up-lab-network-and-firewall.md) | automated | draft |
 | [Put the OPNsense image and the Debian 13 template on the Proxmox host](stage-lab-images-on-proxmox.md) | manual | draft |
 | [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md) | manual | draft |
 | [Grow the jumpbox VM into the agent jumpbox](grow-the-agent-jumpbox.md) | automated | draft |
 | [Set up the agent box's users, keys, wrappers and guard rules](set-up-the-agent-box.md) | automated | draft |
+| [Apply the agent box's setup from the box itself](apply-the-agent-box-from-itself.md) | automated | draft |
 | [Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md) | automated | draft |
+| [Set up the owner's desktop VM](set-up-the-desktop.md) | manual | draft |
+| [Set up the lab's secrets store (OpenBao) on dev](set-up-the-secrets-store.md) | automated | draft |
+| [Serve the Proxmox web UI on port 443](serve-proxmox-on-443.md) | manual | draft |
+| [Sign in to the Proxmox web UI through Keycloak](sign-in-to-proxmox-through-keycloak.md) | automated | draft |
+| [Run the dev lab redeploy from GitHub Actions on the agent box](set-up-the-lab-redeploy-workflow.md) | manual | draft |
+| [Merge a pull request with the box's sweep](merge-a-pr-through-the-merge-job.md) | manual | draft |
+| [Change the tailnet stack through the pipeline job](run-the-tailnet-stack-as-a-pipeline-job.md) | manual | draft |
+| [Change the tailnet policy file through the pipeline job](run-the-tailnet-policy-as-a-pipeline-job.md) | manual | draft |
+| [Give the agent box a lifeline to Proxmox and keep OPNsense's configuration](set-up-the-box-lifeline.md) | manual | draft |
+| [Copy the OPNsense configuration backups off the agent box](copy-opnsense-backup-off-box.md) | manual | draft |
+| [Make the agent box's encrypted bundle of its private files](make-the-box-secrets-bundle.md) | manual | draft |
+| [Test the agents' own GitHub account before the switch](test-the-agents-github-account.md) | manual | draft |
 | [Create the c1 node VMs on Proxmox from code](create-c1-node-vms.md) | automated | draft |
+| [Set up the VPS apps host](set-up-the-vps-app-host.md) | automated | draft |
 | [Restore the home lab from its backups](restore-home-lab-from-backups.md) | manual | draft |
 | [Seed namespace secret-source on c1 from the controller](seed-secret-source.md) | manual | draft |
 | [Build cluster c1 with Ansible](build-c1-with-ansible.md) | automated | draft |
@@ -35,19 +49,23 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Move monitoring on c1 (kube-prometheus-stack) from Ansible to Argo CD](move-monitoring-to-argo-cd.md) | automated | draft |
 | [Move c1's External Secrets and its store from Ansible to Argo CD](move-external-secrets-to-argo-cd.md) | automated | draft |
 | [Move cert-manager on c1 from Ansible to Argo CD](move-cert-manager-to-argo-cd.md) | automated | draft |
-| [Move c1's Gateway and app routes from Ansible to Argo CD](move-gateway-to-argo-cd.md) | automated | tested |
+| [Move c1's Gateway and app routes from Ansible to Argo CD](move-gateway-to-argo-cd.md) | automated | draft |
 | [Check c1's health from its dashboard and alerts](check-c1-alerts-and-dashboard.md) | manual | draft |
 | [Get c1's alerts on a phone or in a browser](get-c1-alerts-on-your-phone.md) | manual | draft |
+| [Know when c1 itself is down, from a heartbeat outside the lab](know-when-c1-is-down.md) | manual | draft |
 | [Turn on sign-in to Argo CD through the lab's Keycloak](sign-in-to-argo-cd-with-keycloak.md) | automated | draft |
 | [Back up c1 off the box](back-up-c1-off-box.md) | automated | draft |
 | [Test the etcd restore](test-etcd-restore.md) | automated | draft |
 | [Set up lab DNS and make the owner's Mac resolve lab names](set-up-lab-dns.md) | automated | draft |
-| [Manage the public zone's DNS records with OpenTofu](manage-public-dns-records.md) | automated | tested |
+| [Manage the public zone's DNS records with OpenTofu](manage-public-dns-records.md) | automated | draft |
 | [Use break-glass access](use-break-glass-access.md) | manual | draft |
 | [Give agents their own access to the owner's Azure tenant](give-agents-access-to-azure.md) | manual | draft |
-| [Set up sign-in for lab apps on c1](set-up-lab-sign-in.md) | automated | tested |
-| [Give lab apps short names under the zone](set-up-short-app-names.md) | automated | tested |
+| [Give agents read-only access to c1](give-agents-read-access-to-c1.md) | manual | draft |
+| [Set up sign-in for lab apps on c1](set-up-lab-sign-in.md) | automated | draft |
+| [Give lab apps short names under the zone](set-up-short-app-names.md) | automated | draft |
 | [Let agents run a new command without a permission block](allow-a-command-for-agents.md) | manual | draft |
+| [Give agents Proxmox rights for the whole lab](give-agents-proxmox-rights-for-the-whole-lab.md) | manual | draft |
+| [Reach the shared node through the share pod](reach-the-shared-node-through-the-share-pod.md) | manual | draft |
 
 ## Template
 

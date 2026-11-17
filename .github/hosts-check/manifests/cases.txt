@@ -6,6 +6,8 @@ k8s_gateway gateway.yaml.j2 gateway-http.yaml {"k8s_gateway_https":false}
 k8s_gateway gateway.yaml.j2 gateway-https.yaml {"k8s_gateway_https":true}
 k8s_gateway smoke.yaml.j2 gateway-smoke.yaml {}
 k8s_gitops source-argocd.yaml.j2 gitops-source-argocd.yaml {"k8s_gitops_engine":"argocd"}
+k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-openbao.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_openbao_in_cluster":true,"k8s_gitops_source_openbao_seal_node":"node-1","k8s_gitops_source_openbao_box_cidr":"192.0.2.30/32"}
+k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-openbao-measure.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_openbao_in_cluster":true,"k8s_gitops_source_openbao_seal_node":"node-1","k8s_gitops_source_openbao_measure":true}
 k8s_gitops source-flux.yaml.j2 gitops-source-flux.yaml {"k8s_gitops_engine":"flux"}
 k8s_gitops argocd-ui-route.yaml.j2 gitops-ui-route.yaml {"k8s_gitops_engine":"argocd"}
 k8s_gitops argocd-ui-route.yaml.j2 gitops-ui-route-no-redirect.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_ui_https_redirect":false}
@@ -17,6 +19,7 @@ k8s_identity keycloak.yaml.j2 identity-keycloak.yaml {}
 k8s_identity keycloak.yaml.j2 identity-keycloak-theme.yaml {"k8s_identity_theme_dir":"/x/lab","k8s_identity_theme_files":[{"key":"f1-theme.properties","path":"login/theme.properties","b64":"cGFyZW50PWtleWNsb2FrLnYy"},{"key":"f2-styles.css","path":"login/resources/css/styles.css","b64":"LyogdGVzdCAqLw=="}]}
 k8s_identity theme.yaml.j2 identity-theme.yaml {"k8s_identity_theme_files":[{"key":"f1-theme.properties","path":"login/theme.properties","b64":"cGFyZW50PWtleWNsb2FrLnYy"},{"key":"f2-styles.css","path":"login/resources/css/styles.css","b64":"LyogdGVzdCAqLw=="}]}
 k8s_identity realm.yaml.j2 identity-realm.yaml {}
+k8s_identity realm.yaml.j2 identity-realm-proxmox.yaml {"k8s_identity_proxmox_hosts":["pve.example.com","pve.mgmt.example.com"]}
 k8s_identity realm.yaml.j2 identity-realm-more-users.yaml {"k8s_identity_owner_email":"owner@example.com","k8s_identity_values_sha256":"0000","k8s_identity_extra_users":[{"username":"viewer.one","groups":["home-viewers"]},{"username":"admin.two","email":"two@example.com","first_name":"Two","last_name":"Admin","groups":["home-admins","home-viewers"]}]}
 k8s_storage local-path.yaml.j2 storage-local-path.yaml {}
 k8s_storage proof.yaml.j2 storage-proof.yaml {}

@@ -78,6 +78,7 @@
         openssl s_client -connect {{ k8s_certs_gateway_address }}:443 -servername {{ k8s_certs_smoke_host }}
         </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256
       delegate_to: "{{ k8s_certs_smoke_client }}"
+      become: false
       register: k8s_certs_smoke_served
       until: >-
         k8s_certs_smoke_served.rc == 0 and k8s_certs_smoke_served.stdout | upper
@@ -98,9 +99,10 @@
     - name: smoke | Lab root on the client
       ansible.builtin.copy:
         content: "{{ k8s_certs_smoke_root.stdout | b64decode }}"
-        dest: /root/central-hub-lab-root-ca.crt
+        dest: "{{ k8s_certs_smoke_root_file }}"
         mode: "0644"
       delegate_to: "{{ k8s_certs_smoke_client }}"
+      become: false
       when: k8s_certs_issuer == k8s_certs_lab_ca_name
 
     # Staging certificates chain to a root no machine trusts (that is the point of staging), so
@@ -109,10 +111,11 @@
     - name: smoke | An HTTPS request through the Gateway reaches the test app
       ansible.builtin.command: >-  # noqa: command-instead-of-module (uri has no --resolve)
         curl -sS --max-time 5 {{ '-k' if k8s_certs_issuer == 'letsencrypt-staging' else '' }}
-        {{ '--cacert /root/central-hub-lab-root-ca.crt' if k8s_certs_issuer == k8s_certs_lab_ca_name else '' }}
+        {{ '--cacert ' ~ k8s_certs_smoke_root_file if k8s_certs_issuer == k8s_certs_lab_ca_name else '' }}
         --resolve {{ k8s_certs_smoke_host }}:443:{{ k8s_certs_gateway_address }}
         https://{{ k8s_certs_smoke_host }}/hostname
       delegate_to: "{{ k8s_certs_smoke_client }}"
+      become: false
       register: k8s_certs_smoke_get
       until: k8s_certs_smoke_get.rc == 0 and k8s_certs_smoke_get.stdout.startswith(k8s_certs_smoke_name ~ '-')
       retries: 12

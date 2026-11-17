@@ -40,3 +40,40 @@ run "too_small_is_refused" {
 
   expect_failures = [var.jumpbox]
 }
+
+run "no_lifeline_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(proxmox_virtual_environment_vm.jumpbox.network_device) == 1 && length(proxmox_virtual_environment_vm.jumpbox.initialization[0].ip_config) == 1
+    error_message = "Without var.lifeline the box has one NIC and one ip_config."
+  }
+}
+
+run "lifeline_adds_a_second_nic_with_no_gateway" {
+  command = plan
+
+  variables {
+    lifeline = { bridge = "vmbr0", address = "192.0.2.50", prefix = 24 }
+  }
+
+  assert {
+    condition     = length(proxmox_virtual_environment_vm.jumpbox.network_device) == 2 && proxmox_virtual_environment_vm.jumpbox.network_device[1].bridge == "vmbr0"
+    error_message = "The lifeline must be a second NIC on the named bridge."
+  }
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.jumpbox.initialization[0].ip_config[1].ipv4[0].address == "192.0.2.50/24" && proxmox_virtual_environment_vm.jumpbox.initialization[0].ip_config[1].ipv4[0].gateway == null
+    error_message = "The lifeline's address is set and it has no gateway."
+  }
+}
+
+run "lifeline_on_the_boxs_own_vnet_is_refused" {
+  command = plan
+
+  variables {
+    lifeline = { bridge = "dev", address = "192.0.2.50", prefix = 24 }
+  }
+
+  expect_failures = [var.lifeline]
+}

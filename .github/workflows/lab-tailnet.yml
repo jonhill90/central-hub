@@ -1,0 +1,45 @@
+# The tailnet stack's pipeline job (D-0041 rules 2, 4, 6 and 7). It runs only when started by hand
+# (workflow_dispatch), only from main, on the box's own runner; the box's `tailnet-stack` wrapper does the
+# work with keys this workflow never sees. No pull_request trigger of any kind.
+#   plan   saves a plan and prints its commit, hash and counts of changes (never a resource name).
+#   apply  applies that saved plan only, and needs the owner's card: its message ID and the plan hash it named.
+# GitHub's run log is public, so the wrapper prints only the commit, the hash, counts and pass or fail.
+name: lab-tailnet
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "plan saves a plan; apply applies the saved plan the owner's card named"
+        type: choice
+        default: plan
+        options: [plan, apply]
+      card_id:
+        description: "apply only: the message ID (cmsg_...) of the owner's decision card"
+        type: string
+        default: ""
+      plan_hash:
+        description: "apply only: the first 12 hex digits of the saved plan's SHA-256, as the card names it"
+        type: string
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: lab-tailnet
+  cancel-in-progress: false
+jobs:
+  tailnet:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, central-hub-box]
+    timeout-minutes: 15
+    steps:
+      - name: Plan or apply the tailnet stack
+        env:
+          ACTION: ${{ inputs.action }}
+          CARD_ID: ${{ inputs.card_id }}
+          PLAN_HASH: ${{ inputs.plan_hash }}
+        run: |
+          if [ "$ACTION" = plan ]; then
+            /usr/local/bin/tailnet-stack plan
+          else
+            /usr/local/bin/tailnet-stack apply "$CARD_ID" "$PLAN_HASH"
+          fi

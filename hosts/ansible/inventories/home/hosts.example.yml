@@ -24,12 +24,19 @@ all:
           proxmox_firewall_enable: false   # true only after the first run's ruleset was read
           proxmox_firewall_extra_rules: []   # more host IN rules, private; each one needs the owner's words, e.g.
           #   - { action: ACCEPT, source: "<agent box address>/32", proto: tcp, dport: "8006", comment: "agent box to the Proxmox API (owner's words pending)" }
-          proxmox_notify_ntfy_url: ""   # errors (failed backups) to ntfy on c1: https://ntfy.<zone>/c1-alerts; private
+          proxmox_notify_ntfy_url: ""   # errors (failed backups) to ntfy on c1: https://ntfy.apps.c1.prod.<zone>/c1-alerts; private
+          # Proxmox's send-only ntfy token (pick 171), read from the controller's secret-source file:
+          # proxmox_notify_ntfy_token: "{{ lookup('ansible.builtin.ini', 'ntfy-proxmox-token', type='properties', file=lookup('ansible.builtin.env', 'HOME') ~ '/.config/central-hub/secret-source.env') }}"
+          # The host's resolver doesn't know lab names: one /etc/hosts line for the URL's name (pick 215).
+          # proxmox_notify_ntfy_address: "{{ k8s_gateway_address }}"
           # or proxmox_notify_endpoint: {type: <smtp|gotify|webhook|sendmail>, options: {...}}, not both
           # playbooks/controller-trust.yml (README "Proxmox CA on the controller")
           controller_trust_ca_file: ""   # path on the controller, e.g. ~/.config/central-hub/pve-root-ca.pem
           # playbooks/proxmox-cert.yml (D-0028): the web UI certificate from the lab CA on c1
           proxmox_cert_names: []   # e.g. ["<host>.<zone>"]; private
+          # playbooks/proxmox-sso.yml (docs/runbooks/sign-in-to-proxmox-through-keycloak.md)
+          proxmox_sso_issuer: ""   # https://sso.<zone>/realms/home, Keycloak's issuer; private
+          proxmox_sso_address: ""   # c1's Gateway address, for the issuer's /etc/hosts line, e.g. "{{ k8s_gateway_address }}"
           # playbooks/tailnet-connector.yml (docs/runbooks/set-up-lab-dns.md): CT 900 advertises
           # every lab VLAN plus these; the same list as home/tailnet's connector_extra_routes.
           tailnet_connector_extra_routes: [""]   # the host's home LAN address as a /32, as advertised today
@@ -48,12 +55,20 @@ all:
           #   { name: dalapdemo01, vm_id: 300, address: "", cores: 1, memory_mb: 2048, disk_gb: 20,
           #     proxmox_node_name: "", vnet: dev, template_vm_id: 9001,
           #     github_app_id: "", repo_owner: jonhill90, repo_name: agent-notebook }
+          agent_box_proxmox_host_job: false   # true makes the Proxmox host job's key (owner's tap, Library plans/r1-host-job/DESIGN.md)
+          agent_box_proxmox_host: {}   # that job's host; private; shape: { address: "<host's lifeline-side IPv4>", hostkey: "ssh-ed25519 AAAA..." }
+          #   and in agent_box_lifeline_allow: { address: "<the same>", ports: [22], uid: hostops }
+          agent_box_secrets_store: {}   # the secrets-store wrapper's settings; private; until rework PR 3b, shape:
+          #   { name: daldapdemo01, vm_id: 550, address: "", cores: 2, memory_mb: 2048, disk_gb: 20,
+          #     proxmox_node_name: "", vnet: dev, template_vm_id: 9001, box_address: "" }
     opnsense:
       hosts:
         opnsense_fw:
           ansible_connection: local   # the modules call the OPNsense API from the controller
           ansible_python_interpreter: ""   # a controller Python that has httpx (requirements.txt)
-          opnsense_api_host: ""   # address or name the API is reached on
+          opnsense_api_host: ""   # the firewall's name, opnsense.<zone>; never an address (pick 30)
+          opnsense_lab_ssl_ca_file: ""   # the lab root's PEM file on the controller; the API's certificate must chain to it
+          # opnsense_lab_tls_bootstrap: true   # a rebuilt firewall's first run only (set-opnsense-gui-certificate.md)
           opnsense_api_key: ""   # secret
           opnsense_api_secret: ""   # secret
           opnsense_home_lan_cidr: ""   # the home router's LAN range
@@ -73,9 +88,18 @@ all:
             targets:
               - { name: Proxmox API, address: "", port: 8006 }   # the host's mgmt address
               - { name: c1 API, address: "", port: 6443 }   # c1's control-plane node
+              # SSH to prod's nodes for the box's prod rebuild; add only on the owner's typed go.
+              # - { name: prod node 200 SSH, address: "", port: 22 }   # VM 200's address
+              # - { name: prod node 201 SSH, address: "", port: 22 }   # VM 201's address
+              # The firewall's own API, for the box's daily OPNsense backup (pick 220); add only on the owner's go.
+              # - { name: OPNsense API, address: "", port: 443 }   # the address opnsense.<zone> resolves to (mgmt)
+              # SSH into the tenant lab VLAN (the sixth and last slot); an agent adds it before the apply, which needs the owner's card tap.
+              # - { name: tenant lab SSH, address: "", prefix: 24, port: 22 }   # the VLAN's network address, e.g. 10.1.60.0
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
             - { hostname: pve, address: "", description: "Proxmox host GUI (its mgmt address)" }
+            # The owner's desktop VM (pick 219), so the RDP client uses a name, not an address; its dev address.
+            # - { hostname: <desktop-name>, address: "", description: "Owner's desktop VM (RDP)" }
             # Wildcard: every name under apps.c1.prod.<zone> answers with the c1 Gateway.
             - { hostname: "*", subdomain: apps.c1.prod, address: "{{ k8s_gateway_address }}", description: "Kubernetes c1 Gateway apps (*.apps.c1.prod)" }
             # Short aliases <app>.<zone> (STD-0001 rule 5), each on its own so the rest of the zone
@@ -90,6 +114,9 @@ all:
             qa: { ifname: opt2, dhcp: false, bootstrap: false }
             dev: { ifname: opt3, dhcp: true, bootstrap: false }
             mgmt: { ifname: lan, dhcp: false, bootstrap: true }
+            # Kept off the tailnet (tailnet: false in the VLAN file), so mgmt_pass must be explicit:
+            # false means no management VLAN pass into it. An agent adds it before the apply, which needs the owner's card tap.
+            tenant: { ifname: opt4, dhcp: true, bootstrap: false, mgmt_pass: false }
     # Kubernetes cluster c1 (BUILD-PATH S06-S08). Hostnames follow STD-0001; the real ones and
     # their addresses go only in the filled-in copy. Reached through the Proxmox host, which has an
     # address on VNet mgmt (OPNsense routes mgmt to prod).
@@ -144,6 +171,8 @@ all:
         k8s_identity_zone: "{{ k8s_gateway_zone }}"
         k8s_identity_owner_username: ""      # the owner's account in realm home
         k8s_identity_owner_email: ""         # optional
+        # The Proxmox web UI's client (playbooks/proxmox-sso.yml): its names, the certificate's.
+        # k8s_identity_proxmox_hosts: "{{ hostvars['proxmox_host'].proxmox_cert_names }}"
         # Jellyfin (playbooks/k8s-jellyfin.yml, BUILD-PATH S17): https://jellyfin.apps.c1.prod.<zone>/.
         k8s_jellyfin_zone: "{{ k8s_gateway_zone }}"
         # Off-box backups (playbooks/k8s-backup.yml, TASK-0194, TASK-0094): restic to the repository in
@@ -157,6 +186,7 @@ all:
         k8s_backup_azure_client_id: ""
         k8s_backup_azure_tenant_id: ""
         k8s_backup_azure_app_object_id: ""
-        # After playbooks/k8s-upgrade.yml, set the versions the cluster now runs, so a re-run of
-        # k8s.yml never downgrades it: k8s_node_kubernetes_minor, k8s_node_kubernetes_version,
-        # k8s_control_plane_kubernetes_version.
+        # Never set the Kubernetes versions here (k8s_node_kubernetes_minor,
+        # k8s_node_kubernetes_version, k8s_control_plane_kubernetes_version): the role defaults
+        # are the versions the cluster runs, bumped by PR, and playbooks/k8s-upgrade.yml stops on
+        # an override (hosts/AGENT-PICKS.md pick 33).

@@ -54,6 +54,8 @@ Since 2026-11-10, `autoSync` is on for this app in `root/values.yaml` (the owner
 
 ## Change it
 
+Argo CD fetches the chart from its OCI copy, `oci://ghcr.io/grafana-community/helm-charts/loki`, by digest (pick 141 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)), so a re-pushed tag changes nothing. A new version changes `version` and `digest` together in `root/values.yaml`: `helm pull oci://ghcr.io/grafana-community/helm-charts/loki --version <version>` prints the digest, and CI's parity check fails if the chart at that digest has another version. Alloy stays on its HTTPS repository by version, because its project publishes no OCI copy.
+
 Edit the values files or the chart version in `root/values.yaml` by PR. Read the chart's upgrade notes first: a change to Loki's claim template needs the StatefulSet deleted (not the claim) before the sync, as the role did when it moved off emptyDir.
 
 ## Rebuild from nothing

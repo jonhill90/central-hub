@@ -56,6 +56,20 @@ run "everything_in_pool_k8s" {
   }
 }
 
+# The agents' dev rebuild may not add guests to a pool, so the pool is a variable; c1 keeps k8s.
+run "pool_can_be_left_out" {
+  command = plan
+
+  variables {
+    pool_id = null
+  }
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.template[0].pool_id == null && alltrue([for k, n in proxmox_virtual_environment_vm.node : n.pool_id == null])
+    error_message = "A null pool_id must leave the template and every node out of any pool."
+  }
+}
+
 # Spec home-lab-and-c1, decision log 2026-10-26: a pinned image, not "latest" (STD-0003).
 run "image_pinned_with_checksum" {
   command = plan

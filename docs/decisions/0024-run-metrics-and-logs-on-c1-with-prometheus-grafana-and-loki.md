@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNSAeoZt8GnPSD7gLxwfR2em
   approval-names: "PR #51 and head d1b07e3, in the message itself"
   check: the thread that drafted it read the message in its project thread; it names PR jonhill90/central-hub#51 and head d1b07e3 itself, and the head was still d1b07e3, mergeable and green at 2026-10-28T04:05Z. An independent check by a reviewing agent is still to do.
-  merged: PR #51 merged at 2026-10-28T04:05:29Z as 9922955, pinned to head d1b07e3, by the Remote Control session on the owner's Mac at the owner's request (2026-10-28T04:21:07Z)
+  merged: "PR #51 merged at 2026-10-28T04:05:29Z as 9922955, pinned to head d1b07e3, by the Remote Control session on the owner's Mac at the owner's request (2026-10-28T04:21:07Z)"
 revisit-when: c1 gets a StorageClass (BUILD-PATH S17), so Prometheus and Loki can keep data across pod moves; a notification target is picked, so Alertmanager can run; logs pass about 20 GB a day, Loki's limit for monolithic mode; or the owner prefers the VictoriaMetrics stack
 ---
 
@@ -24,7 +24,7 @@ revisit-when: c1 gets a StorageClass (BUILD-PATH S17), so Prometheus and Loki ca
 
 ## Context and Problem Statement
 
-BUILD-PATH S15 asks for metrics and logs on cluster c1 (TASK-0020). The decision queue marked the observability stack "thin" (Q24), and the choice walk (J10) listed kube-prometheus-stack plus Loki, VictoriaMetrics plus VictoriaLogs, or waiting for the first app. On 2026-10-27 the owner asked for the build to keep moving while he is away, and the lab is greenfield. Research batch RB-0092 (Research `01-notes/01r-research/0092-c1-observability/`) compared the two stacks for c1: licences, maintainers, versions allowed by STD-0003 and fit with c1 (kubeadm, no kube-proxy, no StorageClass, 2-vCPU nodes).
+BUILD-PATH S15 asks for metrics and logs on cluster c1 (TASK-0020). The decision queue marked the observability stack "thin" (Q24), and the choice walk (J10) listed kube-prometheus-stack plus Loki, VictoriaMetrics plus VictoriaLogs, or waiting for the first app. On 2026-10-27 the owner asked for the build to keep moving while they are away, and the lab is greenfield. Research batch RB-0092 (Research `01-notes/01r-research/0092-c1-observability/`) compared the two stacks for c1: licences, maintainers, versions allowed by STD-0003 and fit with c1 (kubeadm, no kube-proxy, no StorageClass, 2-vCPU nodes).
 
 This record is proposed: the stack was built as agent picks (hosts/AGENT-PICKS.md picks 89-96), and the owner has not said yes to it.
 
@@ -80,5 +80,6 @@ flowchart LR
 
 ## More Information
 
+- **Evidence:** [../evidence/0024-run-metrics-and-logs-on-c1-with-prometheus-grafana-and-loki.md](../evidence/0024-run-metrics-and-logs-on-c1-with-prometheus-grafana-and-loki.md), batches RB-0092 and RB-0045, licences and paid editions re-checked 2026-11-14.
 - Research: RB-0092 (Research `01-notes/01r-research/0092-c1-observability/`), and RB-0045 (Research `01-notes/01r-research/0045-k8s-tool-map/`) rows A25-A41.
 - Agent picks 89-96 in `hosts/AGENT-PICKS.md`.

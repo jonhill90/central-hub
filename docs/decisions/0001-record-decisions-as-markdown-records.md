@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNC3VZmTAMC2buEXh8pCC9LJ
   approval-names: "neither the PR nor the head; it answers the question naming ADR 0001 and ADR 0002 (07:25Z)"
   check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and at 07:28:13Z the owner had said that he had approved the PRs; an independent check by a reviewing agent is still to do
-  merged: jonhill90 merged PR #1 at 2026-10-11T07:22Z; the merged record matches the approved commit exactly
+  merged: "jonhill90 merged PR #1 at 2026-10-11T07:22Z; the merged record matches the approved commit exactly"
 revisit-when: a knowledge system (TASK-0036) is chosen that should own decisions, or the flat folder becomes hard to use
 ---
 
@@ -56,7 +56,7 @@ flowchart LR
   A --> I[Generated index<br/>README.md]
 ```
 
-*In words:* the owner picks one decision from the backlog. It's researched, then checked independently. The owner reviews it, and it goes back for more research or he approves it. Approval makes it the next numbered record, and the index is regenerated.
+*In words:* the owner picks one decision from the backlog. It's researched, then checked independently. The owner reviews it, and it goes back for more research or they approve it. Approval makes it the next numbered record, and the index is regenerated.
 
 Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under consideration that had been written up appeared in the index as records marked Proposed or Open. None kept them in a separate file. Some sent raw questions or discussion to issues, pull requests or Discussions. One kind of file is the simplest to validate, migrate and replace.
 
@@ -72,11 +72,11 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
   - Which agent filled a role is visible in git and PR history, not in the record.
 - **Statuses:**
   - A record starts as `proposed`.
-  - The owner moves it to `accepted`, `rejected` or `parked`.
+  - The owner moves it to `accepted`, `rejected` or `parked`, or, since D-0042, an agent does with the reviewer's and the council's pass (D-0042 rule 3; the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, ending their own approval of PRs for the greenfield build-out; who approves in their place is an agent pick).
   - An accepted record can later become `superseded` or `deprecated`.
-  - Agents write only `proposed`.
-- **What the owner approves:** the whole record at the PR head commit he approves. After that, only the acceptance changes may follow: `status`, `date` and `accepted-evidence`. A reviewing agent compares the merged record with the approved commit; any other difference needs the owner's approval again.
-- **Immutability:** once a record is accepted, its body changes only through a correction or a decision change under D-0006, which the owner approves the same way. Either way, the record is edited so it reads as the current decision, and `CORRECTIONS.md` gets one line. When a later record changes part of an earlier one, the same PR updates the earlier record's text so it reads as the current rule, and the later record keeps the reasons. A record replaced in whole becomes `superseded`. Lifecycle fields (`status`, `superseded-by`) change only when the owner approves.
+  - Agents write only `proposed`, except under D-0042 rule 3.
+- **What the owner approves:** the whole record at the PR head commit they approve. After that, only the acceptance changes may follow: `status`, `date` and `accepted-evidence`. A reviewing agent compares the merged record with the approved commit; any other difference needs the owner's approval again. Since D-0042 (on the owner's messages of 2026-11-14, 07:42 to 07:44 UTC; who approves in their place is an agent pick), the reviewer's and the council's pass approves the head in the same way, with `approved-by: agents`, except for the steps D-0042 rule 6 keeps for the owner.
+- **Immutability:** once a record is accepted, its body changes only through a correction or a decision change under D-0006, which the owner approves the same way (since D-0042, the agents' pass, D-0042 rule 3). Either way, the record is edited so it reads as the current decision, and `CORRECTIONS.md` gets one line. When a later record changes part of an earlier one, the same PR updates the earlier record's text so it reads as the current rule, and the later record keeps the reasons. A record replaced in whole becomes `superseded`. Lifecycle fields (`status`, `superseded-by`) change only when the owner approves, or, since D-0042, with the reviewer's and the council's pass (D-0042 rule 3).
 - **Diagrams:** a record includes a Mermaid diagram if the decision defines any of these:
   - two or more components and how they relate;
   - a sequence of three or more steps;
@@ -99,11 +99,11 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
 ### Who accepts, and how it's proven
 
 **Now (Foundation): convention.**
-- The owner approves in the project chat, where his messages are marked as written by a human.
+- The owner approves in the project chat, where their messages are marked as written by a human.
 - `accepted-evidence` holds these facts, inside the record itself (D-0016 rule 6), and never a quote of the message:
   - `approved-by`: `owner`;
   - `approved-at`: the UTC time of the approval message;
-  - `approved-commit`: the full SHA of the PR head he approved;
+  - `approved-commit`: the full SHA of the PR head they approved;
   - `approval-ref`: the message id in the owner's chat archive, the one exact key into it;
   - `approval-names`: what the message named, for example "PR #19 and head ffd8dca";
   - `check`: who confirmed that the message names that PR and head, and when. If the message can't be read, the check is recorded as incomplete;
@@ -116,7 +116,7 @@ Chosen option: **1**. In the RB-0001 sample of 16 repos, decisions under conside
 - each agent has its own GitHub App identity;
 - a ruleset requires one approval and code-owner review, with `require_last_push_approval` and stale approvals dismissed on every push, and no agent can bypass it;
 - CODEOWNERS gives `docs/decisions/` and the CODEOWNERS file itself to the owner, and to nobody else;
-- The owner doesn't push to a decision PR himself (he asks for the change), because with him as the only reviewer, a last push by him can't be approved.
+- The owner doesn't push to a decision PR themselves (they ask for the change), because with them as the only reviewer, a last push by them can't be approved.
 
 Until each of these is checked, acceptance stays by convention.
 

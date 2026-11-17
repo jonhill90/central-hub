@@ -1,0 +1,47 @@
+#!/bin/bash
+# /usr/local/libexec/agent-box/runner-job-started.sh: the Actions runner's job-started hook
+# (ACTIONS_RUNNER_HOOK_JOB_STARTED in the runner's .env). The repository is public, so any workflow on any
+# branch can ask for this runner by label; this hook refuses every job except the listed workflow files (the dev
+# redeploy workflow, the tailnet pipeline job, the Proxmox host job, and the tailnet policy and VPS host jobs, D-0046), as they are on main, started by hand, and byte for byte the
+# file whose sha256 is listed below. It fetches the file at the run's commit (GITHUB_WORKFLOW_SHA) from the public
+# repository and refuses if it cannot (fail closed). A merged edit to a listed workflow therefore does nothing on
+# the box until a tapped install updates this list.
+# A non-zero exit fails the job before any step runs. Installed by the agent_box role, root-owned. Names no private value.
+set -euo pipefail
+
+# One entry per workflow file whose jobs run here: "<sha256> <path in the repository>". A CI check
+# (.github/hosts-check/check-hook-allowlist.py) recomputes these, so a PR that edits a listed file without
+# updating this list fails; the list changes only by a reviewed PR (D-0041 rule 11) and acts after a tapped install.
+allowed=(
+  "45ba4675fa9d39e5953690e5861f4f74fd513eb504771b66f80d704c1bc79907 .github/workflows/lab-redeploy-dev.yml"
+  "b61c975faa57620a94e4e2f4a178f30f33094543349c223b1f7c8bf29dfd378d .github/workflows/lab-tailnet.yml"
+  "db51ec3fc842f9520afce005d211a4c6246b85a5bc79b3f89a2f939d4d35d2e7 .github/workflows/lab-proxmox-host.yml"
+  "196fecc5a766435ddd8a77a84c03d9bcf5666d49b5c7d74db5d64879dba6d3ab .github/workflows/lab-tailnet-policy.yml"
+  "a924ac479b9613d8a62f807b380cc7ba842298ed16181922f14d3fa234bb293d .github/workflows/lab-vps-host.yml"
+)
+# Workflow files that still exist and name the box's label but must not run here. The hook refuses them because they are
+# not listed above; the CI check requires each to exist and to stay unlisted, so deleting one means editing this list.
+retired=(
+)
+repo=jonhill90/central-hub
+# GitHub's raw file host for this public repository's own workflow files (not a downloaded component).
+host=raw.githubusercontent.com
+
+refuse() { echo "runner-job-started: refused: $*" >&2; exit 1; }
+
+[[ ${GITHUB_EVENT_NAME:-} == workflow_dispatch ]] || refuse "this runner only runs the listed workflows on main, started by hand (event '${GITHUB_EVENT_NAME:-}')"
+ref=${GITHUB_WORKFLOW_REF:-}
+[[ $ref == "$repo/"*"@refs/heads/main" ]] || refuse "not a workflow of $repo on main (got '$ref')"
+path=${ref#"$repo/"}; path=${path%@refs/heads/main}
+sha=${GITHUB_WORKFLOW_SHA:-}
+[[ $sha =~ ^[0-9a-f]{40}$ ]] || refuse "the run's commit is missing or malformed"
+for entry in "${retired[@]}"; do
+  [[ $entry == "$path" ]] && refuse "$path is retired and does not run here"
+done
+want=
+for entry in "${allowed[@]}"; do
+  [[ ${entry#* } == "$path" ]] && want=${entry%% *}
+done
+[[ -n $want ]] || refuse "$path is not a listed workflow"
+got=$(curl -fsS --max-time 20 "https://$host/$repo/$sha/$path" | sha256sum | cut -d' ' -f1) || refuse "could not fetch $path at ${sha:0:7}"
+[[ $got == "$want" ]] || refuse "$path at ${sha:0:7} is not the file whose hash is listed"

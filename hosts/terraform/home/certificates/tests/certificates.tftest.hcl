@@ -35,8 +35,9 @@ mock_provider "time" {
 mock_provider "local" {}
 
 variables {
-  zone_name  = "example.com"
-  token_file = "~/.config/central-hub/cloudflare-dns01-token.txt"
+  zone_name     = "example.com"
+  token_file    = "~/.config/central-hub/cloudflare-dns01-token.txt"
+  request_ip_in = ["203.0.113.10/32"] # a documentation address (RFC 5737)
 }
 
 # Spec c1-way-in-for-web-traffic, manual criterion 3: the DNS-01 token can change only the one
@@ -58,9 +59,20 @@ run "token_limited_to_one_zone" {
   }
 
   assert {
-    condition     = cloudflare_account_token.cert_manager.condition == null
-    error_message = "With request_ip_in empty, the token must have no IP condition."
+    condition     = tolist(cloudflare_account_token.cert_manager.condition.request_ip.in) == tolist(["203.0.113.10/32"])
+    error_message = "The token must be usable only from request_ip_in (pick 78)."
   }
+}
+
+# Pick 78: the token is always limited to an address, so an empty list stops the run.
+run "address_limit_required" {
+  command = plan
+
+  variables {
+    request_ip_in = []
+  }
+
+  expect_failures = [var.request_ip_in]
 }
 
 # The token file is private to the operator: 0600 in a 0700 folder.

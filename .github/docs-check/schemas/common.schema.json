@@ -15,7 +15,7 @@
       "additionalProperties": false,
       "required": ["approved-by", "approved-at", "approved-commit", "approval-ref", "approval-names", "check", "merged"],
       "properties": {
-        "approved-by": { "const": "owner" },
+        "approved-by": { "enum": ["owner", "agents"], "$comment": "agents: the reviewer's and the council's pass, D-0042 rule 3." },
         "approved-at": { "$ref": "#/$defs/utc" },
         "approved-commit": { "$ref": "#/$defs/sha" },
         "approval-ref": { "type": "string", "minLength": 1 },

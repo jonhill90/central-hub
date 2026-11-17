@@ -3,8 +3,8 @@ argument_specs:
   main:
     short_description: A Kubernetes node on AlmaLinux 10, runbook steps 1-6 for the home lab
     options:
-      k8s_node_kubernetes_minor: {type: str, default: "1.36", description: Package repo minor version.}
-      k8s_node_kubernetes_version: {type: str, default: "1.36.5", description: "kubeadm, kubelet and kubectl version."}
+      k8s_node_kubernetes_minor: {type: str, default: "1.37", description: Package repo minor version.}
+      k8s_node_kubernetes_version: {type: str, default: "1.37.1", description: "kubeadm, kubelet and kubectl version."}
       k8s_node_containerd_package: {type: str, default: containerd.io-2.3.6-1.el10, description: The containerd package (runbook step 5).}
       k8s_node_pod_cidr: {type: str, default: 10.240.0.0/16, description: Pod range (STD-0002 cluster 1).}
       k8s_node_firewall_zone: {type: str, default: lab, description: firewalld zone for the lab NIC.}

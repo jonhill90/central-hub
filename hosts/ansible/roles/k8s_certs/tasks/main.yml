@@ -40,6 +40,11 @@
   ansible.builtin.import_tasks: lab_ca.yml
   tags: [labca, issue]
 
+# A throwaway CA for a dev cluster; never runs unless asked for by tag and by switch (dev_ca.yml).
+- name: Dev CA and the Gateway's certificate from it
+  ansible.builtin.import_tasks: dev_ca.yml
+  tags: [devca, never]
+
 - name: Issuers and the certificate, or their removal while issuing is off
   ansible.builtin.import_tasks: issue.yml
   tags: [issue]

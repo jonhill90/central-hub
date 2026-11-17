@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN9nbb2Y5bBnkgfrLDFWMVnS
   approval-names: "PR #18 and head 7dbae2c, in the message itself"
   check: the drafting agent read the message in the repo layout thread at 2026-10-22T07:15Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: PR #18 merged at 2026-10-22T07:16Z as 36d6a90, with this evidence commit on top of the approved commit
+  merged: "PR #18 merged at 2026-10-22T07:16Z as 36d6a90, with this evidence commit on top of the approved commit"
 revisit-when: the hosts/ code standard is written
 ---
 
@@ -28,7 +28,7 @@ D-0008 names the root folder `hosts/` as "machines below Kubernetes". It doesn't
 
 On 2026-10-20 at 03:03 UTC the owner asked where the code for the Proxmox hypervisor should go in central-hub, along with VPS machines, cloud VMs, cloud container services and machines still to come. The rule it serves is PRD goal 6: everything is controllable from this repository, and one-time console steps at the start are fine.
 
-On 2026-10-25 at 02:53 UTC the owner said yes to the proposed home for configuration management code: it lives in this repository, under `hosts/`. At 05:27 UTC he said yes to the proposed split for the home lab: Terraform creates the Proxmox VMs and networks, and Ansible configures the Proxmox host and the settings of the OPNsense firewall. At 05:59 UTC he said yes to the proposed Terraform provider, `bpg/proxmox`, and at 06:04 UTC to the proposed Ansible collection for the firewall, `oxlorg.opnsense`. On 2026-10-26 at 00:18 UTC he said yes to the proposed layout inside `hosts/ansible/`, and at 07:35 UTC to one runnable Terraform folder per workload inside each place.
+On 2026-10-25 at 02:53 UTC the owner said yes to the proposed home for configuration management code: it lives in this repository, under `hosts/`. At 05:27 UTC they said yes to the proposed split for the home lab: Terraform creates the Proxmox VMs and networks, and Ansible configures the Proxmox host and the settings of the OPNsense firewall. At 05:59 UTC they said yes to the proposed Terraform provider, `bpg/proxmox`, and at 06:04 UTC to the proposed Ansible collection for the firewall, `oxlorg.opnsense`. On 2026-10-26 at 00:18 UTC they said yes to the proposed layout inside `hosts/ansible/`, and at 07:35 UTC to one runnable Terraform folder per workload inside each place.
 
 ## Decision Drivers
 
@@ -49,7 +49,7 @@ On 2026-10-25 at 02:53 UTC the owner said yes to the proposed home for configura
 
 ## Decision Outcome
 
-Chosen option: **1**. The owner said yes to keeping `hosts/` on 2026-10-20 at 03:25 UTC. On 2026-10-26 at 04:11 UTC, after research batch RB-0086 set out options 4 to 7, he said yes to keeping the tool first. He said yes to `terraform/` as a vendor-product subfolder name on 2026-10-19 at 03:51 UTC, in his review of the organize-repository skill changes (item 9). The owner accepted this record under D-0001 on 2026-10-22 at 07:15 UTC. On 2026-10-26 at 04:51 UTC he said yes to the proposed rule for Terraform modules (rule 3): none of our own yet, and shared code stays in this repository until another repository needs it.
+Chosen option: **1**. The owner said yes to keeping `hosts/` on 2026-10-20 at 03:25 UTC. On 2026-10-26 at 04:11 UTC, after research batch RB-0086 set out options 4 to 7, they said yes to keeping the tool first. They said yes to `terraform/` as a vendor-product subfolder name on 2026-10-19 at 03:51 UTC, in their review of the organize-repository skill changes (item 9). The owner accepted this record under D-0001 on 2026-10-22 at 07:15 UTC. On 2026-10-26 at 04:51 UTC they said yes to the proposed rule for Terraform modules (rule 3): none of our own yet, and shared code stays in this repository until another repository needs it.
 
 ```
 central-hub/
@@ -66,7 +66,7 @@ central-hub/
 
 ### Rules
 
-1. **What `hosts/` holds.** Code for every machine below Kubernetes goes in `hosts/`, whoever runs the machine, and so does what the clusters run (the owner, 2026-11-08 07:51 UTC: no root `kubernetes/` folder). Kubernetes follows the same order as the other tools: tool, then place, then cluster, as `hosts/kubernetes/<place>/<cluster>/` (the owner, 2026-11-08 23:44 UTC: "something like Kubernetes/home"). That covers machines the owner owns, VPS machines, VMs on his own hypervisor, and cloud VMs.
+1. **What `hosts/` holds.** Code for every machine below Kubernetes goes in `hosts/`, whoever runs the machine, and so does what the clusters run (the owner, 2026-11-08 07:51 UTC: no root `kubernetes/` folder). Kubernetes follows the same order as the other tools: tool, then place, then cluster, as `hosts/kubernetes/<place>/<cluster>/` (the owner, 2026-11-08 23:44 UTC: "something like Kubernetes/home"). That covers machines the owner owns, VPS machines, VMs on their own hypervisor, and cloud VMs.
 2. **One subfolder per vendor product.** Each vendor product that creates or configures machines gets one subfolder in its own native layout, named for the product, for example `hosts/terraform/` or `hosts/ansible/`. Replacing the product replaces only that subfolder.
 3. **No Terraform modules of our own until code is reused.** A runnable folder holds its own resources. Code that two or more runnable folders use goes in `hosts/terraform/modules/<name>/`, called by a local path. It moves to its own repository, called by a tagged version, only when another repository needs it. A module is written only when it bundles real logic, such as a whole VM, and never as a thin wrapper around one resource, as HashiCorp's module guidance advises.
 4. **Not machines, not `hosts/`.** A managed container service with no machines to manage, such as AWS ECS, doesn't go in `hosts/`. It gets its own capability folder when it is first used (D-0008 rule 5).

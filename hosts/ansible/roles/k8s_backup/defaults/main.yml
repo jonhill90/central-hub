@@ -31,6 +31,11 @@ k8s_backup_azure_client_id: ""
 k8s_backup_azure_tenant_id: ""
 k8s_backup_azure_app_object_id: ""
 k8s_backup_azure_cert_file: /etc/central-hub/azure/backup.pem
+# Reader mode only (dev): the path, on the controller, of one PEM file holding a key and certificate
+# that the read-only app already knows. The nodes then copy it instead of making their own, nothing
+# is uploaded to or removed from the app, and the controller needs no Azure sign-in. Empty: each
+# node makes its own, as above. The file's expiry is the one date to renew by hand.
+k8s_backup_azure_fixed_cert_file: ""
 # A certificate lasts 90 days and is rolled once 30 or fewer are left, so a node that is off for up
 # to 60 days still rolls it by itself; after longer, the timers tag uploads a new one.
 k8s_backup_azure_cert_days: 90

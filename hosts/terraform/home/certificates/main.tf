@@ -51,8 +51,8 @@ resource "cloudflare_account_token" "cert_manager" {
   # Fixed from the clock's start, so a re-apply gives the same value and changes nothing.
   expires_on = timeadd(time_rotating.token.rfc3339, "${var.token_lifetime_days * 24}h")
 
-  # Off by default: see var.request_ip_in.
-  condition = length(var.request_ip_in) > 0 ? { request_ip = { in = var.request_ip_in } } : null
+  # Only from the home's public address (var.request_ip_in, pick 78).
+  condition = { request_ip = { in = var.request_ip_in } }
 
   lifecycle {
     # A new clock means a new token (a new secret value), not the old token with a later expiry.

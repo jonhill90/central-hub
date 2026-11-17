@@ -1,0 +1,31 @@
+---
+# The inventory file box-apply reads on the box (/etc/box-apply/inventory.yml): the controller's host variables for
+# the role, root's only. hostvars[inventory_hostname] holds every variable the play has set, including the results of
+# registered tasks (agent_box_ca_stat, agent_box_key_files and others), so the names are taken from what the role
+# declares: its defaults and its argument_specs options. A name outside both (a registered result, a set_fact) is not
+# written. The file is mode 0600, owner and group root, and no_log keeps the values out of the run's output.
+- name: box-apply's inventory, the names the role declares
+  ansible.builtin.set_fact:
+    agent_box_box_apply_vars: >-
+      {{ hostvars[inventory_hostname] | dict2items
+         | selectattr('key', 'in', agent_box_declared_names)
+         | rejectattr('key', 'in', ['agent_box_self_applying', 'agent_box_self_apply_commit']) | items2dict
+         | combine({'ansible_connection': 'local', 'ansible_python_interpreter': '/usr/bin/python3'}) }}
+  vars:
+    agent_box_role_directory: "{{ agent_box_role_dir | default(role_path) }}"
+    agent_box_declared_names: >-
+      {{ ((lookup('ansible.builtin.file', agent_box_role_directory ~ '/defaults/main.yml') | from_yaml).keys() | list)
+         + ((lookup('ansible.builtin.file', agent_box_role_directory ~ '/meta/argument_specs.yml')
+             | from_yaml).argument_specs.main.options.keys() | list) }}
+  no_log: true
+
+- name: box-apply's inventory, the box's host variables as the controller has them
+  ansible.builtin.copy:
+    dest: /etc/box-apply/inventory.yml
+    content: |
+      # Written by the agent_box role on an apply from the controller (D-0036 rule 7); root's only.
+      {{ {'all': {'children': {'agent_box': {'hosts': {inventory_hostname: agent_box_box_apply_vars}}}}} | to_nice_yaml(indent=2) }}
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true

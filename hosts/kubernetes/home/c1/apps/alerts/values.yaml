@@ -17,6 +17,18 @@ cacheSize: 1Gi
 cacheDuration: 72h
 # The topic Alertmanager posts to.
 topic: c1-alerts
+# Who may use ntfy (pick 171, owner's answer 2026-11-12 22:20 UTC): nobody by default; the owner
+# reads the topic with a login, Alertmanager and Proxmox may only post to it, each with its own
+# token. The three values are made by code on the controller (playbooks/ntfy-access.yml) into its
+# 0600 secret-source file and seeded into namespace secret-source (docs/runbooks/seed-secret-source.md);
+# store c1 hands them to ExternalSecret ntfy-auth. The users file sits on the cache claim.
+auth:
+  store: c1
+  ownerUser: owner
+  sources:
+    owner: ntfy-owner-password
+    alertmanager: ntfy-alertmanager-token
+    proxmox: ntfy-proxmox-token
 resources:
   requests: {cpu: 10m, memory: 32Mi}
   limits: {memory: 128Mi}

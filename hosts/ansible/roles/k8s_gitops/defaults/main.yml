@@ -45,11 +45,29 @@ k8s_gitops_cluster_labels:
 # false. It follows k8s_gateway_https: a cluster with no certificate (a dev rebuild, which has no
 # c1 CA key, D-0028) serves HTTP only, so the gateway app is not Degraded on a missing Secret.
 k8s_gitops_source_gateway_https: "{{ k8s_gateway_https | default(true) }}"
+# Private, no default: the shared node the share pod forwards to, as <address>:<port>, passed to the
+# root chart as `shareTarget` (apps/share-pod). Left unset, the share-pod app renders nothing.
+# k8s_gitops_source_share_target: <address>:<port>
 # Whether local-path names each volume's folder <namespace>/<claim>, passed to the root chart as
 # `localPathStableFolders` only when true. Dev turns it on, so its restore of prod's backup puts each
 # folder where the claim will look (TASK-0240, agent pick 205). c1 keeps false: its StorageClass's
 # parameters can't change in place.
 k8s_gitops_source_local_path_stable_folders: false
+# The secrets store, OpenBao inside the cluster (D-0058), dev's cluster first. True passes
+# `openbaoInCluster` to the root chart, which then makes the apps openbao-store and openbao and the
+# secret-store app's store `openbao`. c1 keeps false: nothing changes.
+k8s_gitops_source_openbao_in_cluster: false
+# Private, no default, read only with the switch on: the node that holds the seal key's folder (its
+# kubernetes.io/hostname label), passed as `openbaoSealNode`; and the agent box's address as a /32,
+# the only source the admin AppRole signs in from, passed as `openbaoBoxCidr`. Unset, the seal
+# volume is not made (OpenBao waits), and the admin binding falls back to 127.0.0.1/32, which a
+# `kubectl port-forward` connection also matches, so the box's hand-over refuses until it is set.
+# k8s_gitops_source_openbao_seal_node: <node name>
+# k8s_gitops_source_openbao_box_cidr: <address>/32
+# The dev-only measurement of the agent box's source address through the Gateway (MEASURE-1), read only
+# with the switch above on: true passes `openbaoMeasure`. Never set in an inventory: hosts/rebuild-k8s.sh
+# passes it with -e on dev, when the in-cluster store's seal key file is set.
+k8s_gitops_source_openbao_measure: false
 
 # The Argo CD web UI through the shared Gateway (tag ui), a follow-on to BUILD-PATH S12: the owner
 # said (2026-10-27 03:52 UTC, relayed) the UI waits until DNS is up, with no port-forward. On, it

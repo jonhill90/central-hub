@@ -19,13 +19,38 @@
       options:
         url: "{{ proxmox_notify_ntfy_url }}"
         method: post
-        header:
-          - "name=Title,value={{ proxmox_notify_ntfy_title | b64encode }}"
-          - "name=Priority,value={{ proxmox_notify_ntfy_priority | b64encode }}"
-          - "name=Tags,value={{ proxmox_notify_ntfy_tags | b64encode }}"
+        header: >-
+          {{ ["name=Title,value=" ~ (proxmox_notify_ntfy_title | b64encode),
+              "name=Priority,value=" ~ (proxmox_notify_ntfy_priority | b64encode),
+              "name=Tags,value=" ~ (proxmox_notify_ntfy_tags | b64encode)]
+             + (["name=Authorization,value=" ~ ("Bearer " ~ proxmox_notify_ntfy_token) | b64encode]
+                if proxmox_notify_ntfy_token | default("", true) | length > 0 else []) }}
         body: "{{ proxmox_notify_ntfy_body | b64encode }}"
-        comment: ntfy on c1 (central-hub hosts/ansible proxmox_notify)
+        # Headers are secret, so the role never compares them; the comment carries the first 8
+        # hex digits of the token's SHA-256, so a new or changed token updates the target.
+        comment: >-
+          ntfy on c1 (central-hub hosts/ansible proxmox_notify){{ (', token sha256 ' ~
+          (proxmox_notify_ntfy_token | hash('sha256'))[:8]) if proxmox_notify_ntfy_token | default("", true) | length > 0 else '' }}
+  no_log: true
   when: proxmox_notify_ntfy_url | default("", true) | length > 0
+
+# The host's resolver doesn't know the lab names, and the lab DNS runs on a VM on this host, so the
+# webhook's one name goes in /etc/hosts instead (pick 215). The marker keeps it to one line.
+- name: Check the ntfy address
+  ansible.builtin.assert:
+    that: proxmox_notify_ntfy_address is match('^([0-9]{1,3}[.]){3}[0-9]{1,3}$')
+    fail_msg: proxmox_notify_ntfy_address must be an IPv4 address (c1's Gateway).
+    quiet: true
+  when: proxmox_notify_ntfy_address | default("", true) | length > 0
+
+- name: Point the ntfy name at c1's Gateway in /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '# central-hub proxmox_notify$'
+    line: "{{ proxmox_notify_ntfy_address }} {{ proxmox_notify_ntfy_url | urlsplit('hostname') }}  # central-hub proxmox_notify"
+    state: >-
+      {{ 'present' if (proxmox_notify_ntfy_url | default('', true) | length > 0
+                       and proxmox_notify_ntfy_address | default('', true) | length > 0) else 'absent' }}
 
 - name: Pick the target name
   ansible.builtin.set_fact:

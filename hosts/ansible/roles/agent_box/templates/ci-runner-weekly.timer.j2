@@ -1,0 +1,12 @@
+# Managed by the agent_box role (central-hub hosts/ansible). A missed run (box off) runs at the
+# next boot.
+[Unit]
+Description=Weekly CI runner pin check
+
+[Timer]
+OnCalendar={{ agent_box_ci_runner_weekly }}
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

@@ -6,7 +6,7 @@ trigger: on request; at a lab rebuild, after c1 and its Gateway exist; when the 
 runner: an agent lane, through the owner's Mac; step 1 is the owner in the Cloudflare dashboard
 outcome: Certificate gateway/apps for *.apps.c1.prod.<zone> is Ready from letsencrypt-prod, and Gateway apps serves HTTPS on 443 with it
 needs: c1 built with build-c1-with-ansible.md, with Secrets at rest; a Cloudflare account that holds the zone; OpenTofu and Ansible on the controller
-private-values: [k8s_certs_zone, k8s_certs_acme_email, k8s_certs_cloudflare_token_file, cloudflare-bootstrap-token]
+private-values: [k8s_certs_zone, k8s_certs_acme_email, k8s_certs_cloudflare_token_file, cloudflare-bootstrap-token, request_ip_in]
 files: [hosts/terraform/home/certificates/, hosts/ansible/playbooks/k8s-certs.yml, hosts/ansible/playbooks/k8s-gateway.yml, hosts/ansible/roles/k8s_certs/]
 last-tested:
 superseded-by:
@@ -28,6 +28,7 @@ flowchart LR
 
 - On the control plane, `kubectl -n gateway get gateway apps` shows the Gateway programmed ([Build c1 with Ansible](build-c1-with-ansible.md) step 3).
 - Secrets at rest are on: the `issue` tag stops otherwise.
+- `hosts/terraform/home/certificates/home.tfvars` has `request_ip_in`, the home's public address as a /32 (`home.tfvars.example`). The token works only from there.
 - The inventory has `k8s_certs_acme_email`, `k8s_certs_cloudflare_token_file` (for example `~/.config/central-hub/cloudflare-dns01-token.txt`), `k8s_certs_issue: false`, `k8s_certs_issuer: letsencrypt-staging` and `k8s_gateway_https: false`.
 
 ## Steps
@@ -87,6 +88,7 @@ Set every switch in the filled-in inventory, never with `-e`: a later run withou
 ## If it fails
 
 - The challenge never finishes: `kubectl describe challenge -A`. The usual causes are a token without access to the zone, or a resolver that can't see the TXT record.
+- The challenge fails with a Cloudflare authentication error, or the alert `C1CertificateRenewalOverdue` fires on the phone: the token works only from `request_ip_in`, the home's public address. If the address changed, put the new one in `home.tfvars` and run step 2 again.
 - To undo: set `k8s_certs_issue: false` and run the `issue` tag; it removes the token Secret, the issuers and the Certificate (the issued Secret stays). Set `k8s_gateway_https: false` and run `k8s-gateway.yml --tags gateway` to drop the HTTPS listener.
 
 ## Afterwards

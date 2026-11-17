@@ -1,6 +1,6 @@
 ---
 title: Move c1's External Secrets and its store from Ansible to Argo CD
-status: tested
+status: draft
 kind: automated
 trigger: on request (step 5 of spec 2026-11-c1-apps-under-argo-cd)
 runner: an agent lane, through the owner's Mac (D-0022)
@@ -50,6 +50,8 @@ Since 2026-11-10, `autoSync` is on for `external-secrets` (the owner's card, 02:
    expect: the first run deletes ESO's old Helm release records; a second run reports `changed=0`.
 
 ## Change it
+
+Argo CD fetches the chart from its OCI copy, `oci://ghcr.io/external-secrets/charts/external-secrets`, by digest (pick 141 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)), so a re-pushed tag changes nothing. A new version changes `version` and `digest` together in `root/values.yaml`: `helm pull oci://ghcr.io/external-secrets/charts/external-secrets --version <version>` prints the digest, and CI's parity check fails if the chart at that digest has another version.
 
 ESO supports only its newest minor: raise the chart one minor at a time, by PR, after reading its release notes. Swapping the backend (a vault later) means replacing only ClusterSecretStore `c1` in `apps/secret-store/`; every ExternalSecret keeps its store name.
 

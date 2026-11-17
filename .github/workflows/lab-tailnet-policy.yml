@@ -1,0 +1,47 @@
+# The tailnet policy file's pipeline job (D-0041 rules 2, 4, 6 and 7; D-0046 rule 4): who may reach what and
+# the SSH rules, OpenTofu on hosts/terraform/home/tailnet-policy. It runs only when started by hand
+# (workflow_dispatch), only from main, on the box's own runner; the box's `tailnet-policy` wrapper does the
+# work with keys this workflow never sees. No pull_request trigger of any kind. Every apply is a tailnet
+# change, so it needs the owner's card (D-0042 rule 6).
+#   plan   saves a plan and prints its commit, hash and counts of changes (never a resource name).
+#   apply  applies that saved plan only, and needs the owner's card: its message ID and the plan hash it named.
+# GitHub's run log is public, so the wrapper prints only the commit, the hash, counts and pass or fail.
+name: lab-tailnet-policy
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "plan saves a plan; apply applies the saved plan the owner's card named"
+        type: choice
+        default: plan
+        options: [plan, apply]
+      card_id:
+        description: "apply only: the message ID (cmsg_...) of the owner's decision card"
+        type: string
+        default: ""
+      plan_hash:
+        description: "apply only: the first 12 hex digits of the saved plan's SHA-256, as the card names it"
+        type: string
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: lab-tailnet-policy
+  cancel-in-progress: false
+jobs:
+  tailnet-policy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, central-hub-box]
+    timeout-minutes: 15
+    steps:
+      - name: Plan or apply the tailnet policy
+        env:
+          ACTION: ${{ inputs.action }}
+          CARD_ID: ${{ inputs.card_id }}
+          PLAN_HASH: ${{ inputs.plan_hash }}
+        run: |
+          if [ "$ACTION" = plan ]; then
+            /usr/local/bin/tailnet-policy plan
+          else
+            /usr/local/bin/tailnet-policy apply "$CARD_ID" "$PLAN_HASH"
+          fi

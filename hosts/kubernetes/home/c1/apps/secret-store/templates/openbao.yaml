@@ -1,0 +1,57 @@
+{{- /*
+The second store: OpenBao inside the cluster (D-0058), only where the root chart turns it on (dev
+first). External Secrets signs in at OpenBao's Kubernetes login with this service account's token;
+OpenBao's role `eso` takes only this account and reads only kv/data/c1/* (D-0058 rule 5). TLS is
+checked against the openbao namespace's own CA, which cert-manager writes into the server
+certificate's Secret as ca.crt (the openbao-store app).
+*/ -}}
+{{- if .Values.openbao.inCluster }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: store-openbao
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: openbao
+spec:
+  provider:
+    vault:
+      server: {{ .Values.openbao.address | quote }}
+      path: kv
+      version: v2
+      caProvider:
+        type: Secret
+        name: {{ .Values.openbao.caSecret }}
+        namespace: {{ .Values.openbao.caNamespace }}
+        key: ca.crt
+      auth:
+        kubernetes:
+          mountPath: {{ .Values.openbao.authPath }}
+          role: {{ .Values.openbao.role }}
+          serviceAccountRef:
+            name: store-openbao
+            namespace: {{ .Release.Namespace }}
+---
+# The proof that the store syncs (D-0038 Confirmation 2): one non-secret value. A dev rebuild's
+# `apps` stage waits for every ExternalSecret to be Ready, this one too.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: openbao-check
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: openbao-check
+  data:
+    - secretKey: value
+      remoteRef:
+        key: {{ .Values.openbao.checkKey }}
+        property: value
+{{- end }}

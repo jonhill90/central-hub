@@ -13,6 +13,12 @@ argument_specs:
           VM under this name too, so the VM's name in OpenTofu must match it.
       agent_box_user: {type: str, default: claude, description: The user that runs Claude Code sessions.}
       agent_box_keys_user: {type: str, default: keys, description: The user that owns the lab keys.}
+      agent_box_runner_user:
+        type: str
+        default: ""
+        description: >-
+          The user the GitHub Actions runner runs as; sudo only for wrappers marked runner: true.
+          Empty does nothing.
       agent_box_keys_dir: {type: path, default: /etc/agent-keys, description: "Key folder, owned by the keys user, mode 0700; every file in it 0600."}
       agent_box_work_dir: {type: path, default: /var/lib/agent-box, description: "The keys user's home: the central-hub checkout, tofu state and data."}
       agent_box_libexec_dir: {type: path, default: /usr/local/libexec/agent-box, description: Where the root-owned wrappers go.}
@@ -25,8 +31,20 @@ argument_specs:
         options:
           name: {type: str, required: true, description: Wrapper name.}
           args: {type: list, elements: str, required: true, description: The only first arguments sudo allows.}
+          session_args:
+            type: list
+            elements: str
+            required: false
+            description: >-
+              The first arguments the session user may run, when that is fewer than args (the runner user gets args).
+              An empty list gives the session user no line. Default: args. D-0041 uses it so only the workflow can run an apply.
+          runner: {type: bool, required: false, default: false, description: "Also let the runner user run it (agent_box_runner_user)."}
       agent_box_tofu_version: {type: str, description: OpenTofu version for the wrappers.}
       agent_box_tofu_sha256: {type: str, description: SHA-256 of the linux_amd64 zip of that version.}
+      agent_box_kubectl_version: {type: str, description: "kubectl version for the c1-read wrapper, the one c1 runs."}
+      agent_box_kubectl_sha256: {type: str, description: SHA-256 of that version's linux amd64 kubectl.}
+      agent_box_ansible_core_version: {type: str, description: ansible-core version in the rebuild wrapper's virtual environment.}
+      agent_box_httpx_version: {type: str, description: httpx version in that environment (the OPNsense modules need it).}
       agent_box_tailscale_version: {type: str, description: Tailscale client version.}
       agent_box_rhel_major: {type: int, description: "RHEL-family major version, for the Tailscale repository path."}
       agent_box_deny: {type: list, elements: str, description: permissions.deny in the managed settings.}
@@ -39,6 +57,113 @@ argument_specs:
         description: "Absolute paths of public CA certificate files on the controller (no folders, no patterns, no keys), each trusted on the box; private."
       agent_box_tls_check_url: {type: str, default: "", description: "HTTPS URL the verify tag fetches with certificate checks on; private; empty skips it."}
       agent_box_managed_settings_extra: {type: dict, default: {}, description: "Other top-level managed settings, merged over the rest."}
+      agent_box_opnsense_backup:
+        type: dict
+        default: {}
+        description: >-
+          Private. host (OPNsense's name or address) and keep (copies kept, 3 to 60, default 14) for the daily
+          configuration backup on the box. Empty does nothing.
+      agent_box_opnsense_backup_daily: {type: str, default: "*-*-* 14:30:00 UTC", description: "systemd OnCalendar for the daily OPNsense backup."}
+      agent_box_opnsense_offbox:
+        type: dict
+        default: {}
+        description: >-
+          Private. account, client_id, tenant_id, app_object_id and vault_url (tofu outputs of hosts/terraform/azure/backup)
+          and, optionally, repository, vault_secret, keep_daily (default 30) and keep_monthly (default 12) for the daily
+          off-box copy of the OPNsense backups (pick 222). Needs agent_box_opnsense_backup. Empty does nothing.
+      agent_box_opnsense_offbox_daily: {type: str, default: "*-*-* 15:00:00 UTC", description: "systemd OnCalendar for the daily off-box copy."}
+      agent_box_opnsense_offbox_cert_days: {type: int, default: 90, description: "Days the box's certificate for the copy app is valid."}
+      agent_box_opnsense_offbox_cert_renew_days: {type: int, default: 30, description: "Days left when the daily run rolls that certificate."}
+      agent_box_az: {type: str, default: az, description: "The Azure CLI on the controller, signed in as agent-azure, for the first certificate upload."}
+      agent_box_secrets_bundle:
+        type: dict
+        default: {}
+        description: >-
+          All optional, for the daily SOPS-encrypted bundle of the box's private files (picks 228 and 236):
+          mac_recipient (the Mac's age public key), keep (1 to 60, default 14), and for the off-box send
+          vault_secret, offbox_keep_daily (default 14) and offbox_keep_monthly (default 6). Empty does nothing.
+      agent_box_secrets_bundle_daily: {type: str, default: "*-*-* 15:30:00 UTC", description: "systemd OnCalendar for the daily bundle."}
+      agent_box_secrets_bundle_offbox_daily: {type: str, default: "*-*-* 16:15:00 UTC", description: "systemd OnCalendar for the bundle's off-box send."}
+      agent_box_sops_version: {type: str, description: "SOPS version for the bundle."}
+      agent_box_sops_sha256: {type: str, description: "SHA-256 of that version's linux.amd64 binary."}
+      agent_box_age_version: {type: str, description: "age version for the bundle."}
+      agent_box_age_sha256: {type: str, description: "SHA-256 of that version's linux-amd64 tarball."}
+      agent_box_restic_version: {type: str, description: "restic version for the off-box copy."}
+      agent_box_restic_sha256: {type: str, description: "SHA-256 of that version's linux_amd64 .bz2."}
+      agent_box_lifeline_interface:
+        type: str
+        default: ""
+        description: >-
+          The box's lifeline NIC inside the VM (for example eth1), packet-filtered by the role's
+          nftables table (inbound dropped, outbound only agent_box_lifeline_allow). Private. Empty does nothing.
+      agent_box_nftables_version:
+        type: str
+        default: "1:1.1.5-6.el10_2"
+        description: The nftables package version (epoch:version-release) installed only if the package is missing.
+      agent_box_nft_bin:
+        type: path
+        default: /usr/sbin/nft
+        description: The nft binary the lifeline filter unit and the proof use.
+      agent_box_lifeline_address:
+        type: str
+        default: ""
+        description: >-
+          Private. The box's IPv4 address and prefix on the lifeline NIC (for example 192.0.2.50/24).
+          Required when the interface is set; the role owns the NIC's NetworkManager connection.
+      agent_box_lifeline_allow:
+        type: list
+        elements: dict
+        default: []
+        description: >-
+          Private. What the box may reach over the lifeline NIC, the rest is rejected: entries of
+          address (IPv4) and ports (TCP ports), normally the Proxmox host and 8006.
+        options:
+          address: {type: str, required: true, description: "IPv4 address."}
+          ports: {type: list, elements: int, required: true, description: "TCP ports."}
+      agent_box_copy_prod_files:
+        type: bool
+        default: false
+        description: >-
+          Copy the controller's private lab files to the box in this run (the prod_files tasks).
+          Off by default.
+      agent_box_prod_files_clone:
+        type: str
+        default: ""
+        description: >-
+          Absolute path on the controller of its private clone of this repo, where the git-ignored files
+          are. Private, through the inventory. Empty means the checkout the playbook runs from.
+      agent_box_self_apply:
+        type: bool
+        default: false
+        description: >-
+          Install box-apply and its one sudo line (D-0036), so a session can apply this role to the box itself
+          from reviewed main, stopping on any change to the box's limits. Private, through the inventory.
+      agent_box_self_apply_skip_tags:
+        type: list
+        elements: str
+        default: [ca, prod_files, opnsense_offbox, lifeline, verify]
+        description: The tags a self-apply skips.
+      agent_box_self_apply_commit:
+        type: str
+        default: ""
+        description: >-
+          The commit the controller's copy was made from, when it is not a git checkout, so a full run can write
+          box-apply's baseline. Pass it with -e.
+      agent_box_self_applying:
+        type: bool
+        default: false
+        description: Set by box-apply on its own runs; the box-apply tasks then write nothing.
+      agent_box_limit_apply:
+        type: bool
+        default: false
+        description: >-
+          Set by box-apply, with agent_box_self_applying, on an approved limit apply (pick 232); the box-apply tasks
+          then write box-apply, its settings and its limits, never its inventory.
+      agent_box_prod_files:
+        type: list
+        elements: dict
+        default: []
+        description: "The controller files the prod_files tasks copy to the box: from (clone or config), path, dest. Names only are ever printed."
       agent_box_ci_runner:
         type: dict
         default: {}
@@ -47,3 +172,74 @@ argument_specs:
           the runner VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name,
           vnet, template_vm_id) and the GitHub App and repository it registers with (github_app_id,
           repo_owner, repo_name). No key goes in it. Empty skips the file.
+      agent_box_short_node:
+        type: str
+        default: ""
+        choices: ["", ephemeral-dev, keep-dev]
+        description: >-
+          The owner's pick for a dev run on a node short of memory, written to <work_dir>/short-node (0600, the keys
+          user's) for the rebuild wrapper. ephemeral-dev stops the CI runner, tears dev down at the end of the run, then
+          starts the runner. keep-dev stops the runner and leaves dev up (the notebook's queued jobs fail or are cancelled after
+          24 hours queued, so if dev stays up for more than a day its daily access-expiry check does not run, and
+          whether its alert e-mail goes out is not measured). Empty is no pick: a short node refuses before it stops anything.
+      agent_box_openbao_in_cluster:
+        type: bool
+        default: false
+        description: >-
+          true writes <work_dir>/openbao-in-cluster (0600, the keys user's), and the rebuild wrapper then turns the
+          secrets store on in the dev cluster (D-0058, dev first) and puts its seal key, made once in the dev keys
+          folder, on the first worker before Argo CD makes the store. false removes the file.
+      agent_box_desktop:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the desktop wrapper, written to <work_dir>/desktop.json (0600, the keys user's):
+          the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name, vnet,
+          template_vm_id), rdp_source (the tailnet connector's address, where RDP arrives from) and optionally admin_user. No key and no
+          password goes in it. Empty skips the file.
+      agent_box_vps_host:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the vps-host wrapper (D-0046), written to <work_dir>/vps-host.json (0600, the keys
+          user's): name, the VPS's name on the tailnet. No key goes in it; the box signs in by Tailscale SSH.
+      agent_box_secrets_store:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the secrets-store wrapper, written to <work_dir>/secrets-store.json (0600, the
+          keys user's). The wrapper reads vm_id (its dev check, 550-599), address and snapshot_box. The store VM's
+          other fields (name, cores, memory_mb, disk_gb, proxmox_node_name, vnet, template_vm_id, box_address,
+          seal_key_id, admin_user) are read by nothing since the VM code was removed (D-0058); rework PR 3b reshapes
+          this for the store inside the cluster. snapshot_box: true (agent pick 240) makes snapshot sign in as AppRole
+          snapshot-box; it is set only by the owner's install tap, an access right and a box limit. No key goes in
+          it; the wrapper makes the keys in the keys folder. Empty skips the file.
+      agent_box_secrets_store_offbox:
+        type: dict
+        default:
+          repository: azure:opnsense-backup:/openbao-dev
+          keep_hourly: 48
+          keep_daily: 14
+          keep_monthly: 6
+          prune_after_hour: 3
+        description: >-
+          The dev store's hourly snapshot off the box (pick 237): repository (azure:<container>:/<path>, its own, not
+          the OPNsense one), keep_hourly, keep_daily, keep_monthly, and prune_after_hour (UTC; the first run from then
+          prunes, once a day). Set up only when agent_box_secrets_store and agent_box_opnsense_offbox are both set.
+      agent_box_secrets_store_offbox_on_calendar: {type: str, default: hourly, description: "systemd OnCalendar for the snapshot send."}
+      agent_box_tailnet_cleanup:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the daily tailnet cleanup (pick 214), written to <work_dir>/tailnet-cleanup.json
+          (0600, the keys user's): tags (tag:<name> list whose devices may be removed), keep (device names never
+          removed, at least one), days (offline at least this long, 7 or more) and max_deletes (1 to 20). The
+          OAuth client is not in it; it is /etc/agent-keys/tailnet-cleanup.env. Empty skips the file and the timer.
+      agent_box_merge_sweep:
+        type: bool
+        default: false
+        description: >-
+          Install the merge sweep (D-0042 rule 2): a timer that runs pr-merge.sh sweep as the keys user. It merges only a head
+          with four recorded passes (pass-record) and checks the halt flag first. Private, through the inventory; installing it is a box-limit change.
+      agent_box_merge_sweep_interval: {type: str, default: 5min, description: "systemd OnUnitActiveSec between sweeps."}
+      agent_box_tailnet_cleanup_daily: {type: str, default: "*-*-* 15:30:00 UTC", description: "systemd OnCalendar for the daily tailnet cleanup run."}

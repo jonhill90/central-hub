@@ -5,9 +5,15 @@
 # keys from sessions; the deny rules in the managed settings are the floor for everything else.
 # Order and proofs: docs/runbooks/set-up-the-agent-box.md.
 
+# box-apply writes its baseline only if this ran, so a run that started part way (--start-at-task) writes none.
+- name: Note that this run starts at the role's first task
+  ansible.builtin.set_fact:
+    agent_box_box_apply_from_start: true
+  tags: [always]
+
 - name: Install what the wrappers need
   ansible.builtin.package:
-    name: [git, sudo, unzip, openssl, openssh-clients, python3, ansible-core]
+    name: [git, sudo, unzip, bzip2, openssl, openssh-clients, python3, ansible-core]
     state: present
   tags: [users, wrappers]
 
@@ -49,10 +55,21 @@
 # The client only. Joining (tailscale up --advertise-tags=tag:agent-box --ssh) needs a login
 # link an admin opens once, so it is a runbook step, not a task.
 
+# Written from the repository, not downloaded: pkgs.tailscale.com sends no Last-Modified, so get_url in check
+# mode reported a change on every run, and the package and service checks below were always skipped. The text is
+# what https://pkgs.tailscale.com/stable/rhel/<major>/tailscale.repo served on 2026-11-14.
 - name: Tailscale's package repository (RHEL family)
-  ansible.builtin.get_url:
-    url: "https://pkgs.tailscale.com/stable/rhel/{{ agent_box_rhel_major }}/tailscale.repo"
+  ansible.builtin.copy:
     dest: /etc/yum.repos.d/tailscale.repo
+    content: |
+      [tailscale-stable]
+      name=Tailscale stable
+      baseurl=https://pkgs.tailscale.com/stable/rhel/{{ agent_box_rhel_major }}/$basearch
+      enabled=1
+      type=rpm
+      repo_gpgcheck=1
+      gpgcheck=1
+      gpgkey=https://pkgs.tailscale.com/stable/rhel/{{ agent_box_rhel_major }}/repo.gpg
     owner: root
     group: root
     mode: "0644"
@@ -88,6 +105,15 @@
     append: false
   tags: [users]
 
+- name: Runner user for the redeploy workflow, no extra groups and no login key (only when agent_box_runner_user is set)
+  ansible.builtin.user:
+    name: "{{ agent_box_runner_user }}"
+    shell: /bin/bash
+    groups: ""
+    append: false
+  when: agent_box_runner_user | length > 0
+  tags: [users]
+
 - name: Keys user, a system user that can't log in
   ansible.builtin.user:
     name: "{{ agent_box_keys_user }}"
@@ -109,9 +135,19 @@
     - "{{ agent_box_work_dir }}"
     - "{{ agent_box_work_dir }}/state"
     - "{{ agent_box_work_dir }}/tofu-data"
+    # One checkout per wrapper, made by the wrapper on its first run.
+    - "{{ agent_box_work_dir }}/checkouts"
   tags: [users]
 
-# The role never writes a key. It only makes sure every file already in the key folder belongs to
+# Before the wrappers and their sudo rules, which name this user.
+- name: The Proxmox host job's user, folders and key (the key only when agent_box_proxmox_host_job is true)
+  ansible.builtin.include_tasks:
+    file: proxmox_host.yml
+    apply:
+      tags: [users, proxmox_host]
+  tags: [users, proxmox_host]
+
+# The role never writes a key into the key folder. It only makes sure every file already in it belongs to
 # the keys user and is readable by it alone.
 - name: Find the key files
   ansible.builtin.find:
@@ -259,7 +295,29 @@
     force: true
   tags: [wrappers]
 
-- name: The keys user's checkout of central-hub, which the wrappers move to origin/main on each run
+- name: Download kubectl, checked against its SHA-256
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/v{{ agent_box_kubectl_version }}/bin/linux/amd64/kubectl"
+    dest: "{{ agent_box_libexec_dir }}/downloads/kubectl-{{ agent_box_kubectl_version }}"
+    checksum: "sha256:{{ agent_box_kubectl_sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  tags: [wrappers]
+
+- name: Put kubectl on the path
+  ansible.builtin.file:
+    src: "{{ agent_box_libexec_dir }}/downloads/kubectl-{{ agent_box_kubectl_version }}"
+    dest: /usr/local/bin/kubectl
+    state: link
+    force: true
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  tags: [wrappers]
+
+# The wrappers each clone their own checkout from this one's origin (checkouts/<wrapper>) and move
+# it to origin/main on each run; this one gives the Ansible collections' requirements file.
+- name: The keys user's checkout of central-hub
   ansible.builtin.git:
     repo: "{{ agent_box_repo_url }}"
     dest: "{{ agent_box_work_dir }}/central-hub"
@@ -273,6 +331,35 @@
     owner: "{{ agent_box_keys_user }}"
     group: "{{ agent_box_keys_user }}"
     recurse: true
+  tags: [wrappers]
+
+# --- Ansible for the rebuild wrapper -----------------------------------------------------------
+
+- name: Python's pip, for the Ansible virtual environment
+  ansible.builtin.package:
+    name: [python3-pip]
+    state: present
+  tags: [wrappers]
+
+- name: Ansible, in its own virtual environment so the system Python stays as it is
+  ansible.builtin.pip:
+    name:
+      - "ansible-core=={{ agent_box_ansible_core_version }}"
+      - "httpx=={{ agent_box_httpx_version }}"
+    virtualenv: "{{ agent_box_libexec_dir }}/ansible-venv"
+    virtualenv_command: python3 -m venv
+  when: not ansible_check_mode
+  tags: [wrappers]
+
+- name: The Ansible collections the playbooks pin, from the keys user's checkout
+  ansible.builtin.command:
+    cmd: >-
+      {{ agent_box_libexec_dir }}/ansible-venv/bin/ansible-galaxy collection install
+      -r {{ agent_box_work_dir }}/central-hub/hosts/ansible/requirements.yml
+      -p {{ agent_box_libexec_dir }}/collections
+  register: agent_box_collections
+  changed_when: "'was installed successfully' in agent_box_collections.stdout"
+  when: not ansible_check_mode
   tags: [wrappers]
 
 - name: Wrappers, root-owned
@@ -309,6 +396,204 @@
   when: agent_box_ci_runner | length > 0
   tags: [wrappers]
 
+- name: The rebuild wrapper's short-node pick, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/short-node"
+    content: "{{ agent_box_short_node }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_short_node | length > 0
+  tags: [wrappers]
+
+- name: No short-node pick in the inventory, so no file
+  ansible.builtin.file:
+    path: "{{ agent_box_work_dir }}/short-node"
+    state: absent
+  when: agent_box_short_node | length == 0
+  tags: [wrappers]
+
+# The rebuild wrapper keeps the store's seal key as a SOPS copy, encrypted to the box's age identity, which the
+# secrets bundle's tasks make (D-0058 rules 3 and 9).
+- name: The secrets store inside the dev cluster needs the secrets bundle, for the box's age identity
+  ansible.builtin.assert:
+    that: agent_box_secrets_bundle | length > 0
+    fail_msg: agent_box_openbao_in_cluster needs agent_box_secrets_bundle set, so the seal key can be kept as a SOPS copy
+    quiet: true
+  when: agent_box_openbao_in_cluster | bool
+  tags: [wrappers]
+
+- name: The rebuild wrapper's switch for the secrets store inside the dev cluster (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/openbao-in-cluster"
+    content: "true\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_openbao_in_cluster | bool
+  tags: [wrappers]
+
+- name: No secrets store inside the dev cluster, so no switch file
+  ansible.builtin.file:
+    path: "{{ agent_box_work_dir }}/openbao-in-cluster"
+    state: absent
+  when: not (agent_box_openbao_in_cluster | bool)
+  tags: [wrappers]
+
+- name: The desktop wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/desktop.json"
+    content: "{{ agent_box_desktop | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_desktop | length > 0
+  tags: [wrappers]
+
+- name: The secrets-store wrapper's helpers, root-owned (picks 238, 239)
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ agent_box_libexec_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - secrets-store-restore.sh     # the guarded restores, same store and rebuilt
+    - secrets-store-snapshots.sh   # rotation, and setting an earlier store's snapshots aside
+  when: agent_box_secrets_store | length > 0
+  tags: [wrappers]
+
+- name: The secrets-store wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/secrets-store.json"
+    content: "{{ agent_box_secrets_store | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_secrets_store | length > 0
+  tags: [wrappers]
+
+- name: The vps-host wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/vps-host.json"
+    content: "{{ agent_box_vps_host | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_vps_host | length > 0
+  tags: [wrappers]
+
+- name: Weekly CI runner service and timer (pick 208)
+  ansible.builtin.template:
+    src: "ci-runner-weekly.{{ item }}.j2"
+    dest: "/etc/systemd/system/ci-runner-weekly.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_ci_runner_units
+  when: agent_box_ci_runner | length > 0
+  tags: [wrappers]
+
+- name: Weekly CI runner timer on
+  ansible.builtin.systemd_service:
+    name: ci-runner-weekly.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_ci_runner_units is changed }}"
+  when: agent_box_ci_runner | length > 0 and not (ansible_check_mode and agent_box_ci_runner_units is changed)
+  tags: [wrappers]
+
+- name: The tailnet cleanup's limits hold (pick 214)
+  ansible.builtin.assert:
+    that:
+      - agent_box_tailnet_cleanup.tags | default([]) | length > 0
+      - agent_box_tailnet_cleanup.tags | select('match', '^tag:[a-z0-9-]+$') | list | length == agent_box_tailnet_cleanup.tags | length
+      - agent_box_tailnet_cleanup.keep | default([]) | length > 0
+      - agent_box_tailnet_cleanup.days | default(7) | int >= 7
+      - agent_box_tailnet_cleanup.max_deletes | default(5) | int >= 1
+      - agent_box_tailnet_cleanup.max_deletes | default(5) | int <= 20
+    fail_msg: >-
+      agent_box_tailnet_cleanup needs tags (tag:<name>), a keep list naming at least one device,
+      days of 7 or more and max_deletes from 1 to 20.
+    quiet: true
+  when: agent_box_tailnet_cleanup | length > 0
+  tags: [wrappers]
+
+- name: The tailnet cleanup's settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/tailnet-cleanup.json"
+    content: >-
+      {{ {'tags': agent_box_tailnet_cleanup.tags, 'keep': agent_box_tailnet_cleanup.keep,
+          'days': agent_box_tailnet_cleanup.days | default(7) | int,
+          'max_deletes': agent_box_tailnet_cleanup.max_deletes | default(5) | int} | to_nice_json }}
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_tailnet_cleanup | length > 0
+  tags: [wrappers]
+
+- name: Daily tailnet cleanup service and timer (pick 214)
+  ansible.builtin.template:
+    src: "tailnet-cleanup.{{ item }}.j2"
+    dest: "/etc/systemd/system/tailnet-cleanup.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_tailnet_cleanup_units
+  when: agent_box_tailnet_cleanup | length > 0
+  tags: [wrappers]
+
+- name: Daily tailnet cleanup timer on
+  ansible.builtin.systemd_service:
+    name: tailnet-cleanup.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_tailnet_cleanup_units is changed }}"
+  when: agent_box_tailnet_cleanup | length > 0 and not (ansible_check_mode and agent_box_tailnet_cleanup_units is changed)
+  tags: [wrappers]
+
+- name: The merge sweep's verdict script, root's (D-0042 rule 2)
+  ansible.builtin.copy:
+    src: pr-merge-verdict.py
+    dest: "{{ agent_box_libexec_dir }}/pr-merge-verdict.py"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+- name: Merge sweep service and timer (D-0042 rule 2)
+  ansible.builtin.template:
+    src: "pr-merge-sweep.{{ item }}.j2"
+    dest: "/etc/systemd/system/pr-merge-sweep.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_merge_sweep_units
+  when: agent_box_merge_sweep | bool
+  tags: [wrappers]
+
+- name: Merge sweep timer on
+  ansible.builtin.systemd_service:
+    name: pr-merge-sweep.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_merge_sweep_units is changed }}"
+  when: agent_box_merge_sweep | bool and not (ansible_check_mode and agent_box_merge_sweep_units is changed)
+  tags: [wrappers]
+
+- name: The runner's job-started hook, root's (refuses every job but the listed workflows on main, whose file hash it checks)
+  ansible.builtin.copy:
+    src: runner-job-started.sh
+    dest: "{{ agent_box_libexec_dir }}/runner-job-started.sh"
+    owner: root
+    group: root
+    mode: "0755"
+  when: agent_box_runner_user | length > 0
+  tags: [wrappers]
+
 - name: One sudoers line per wrapper, checked by visudo before it is written
   ansible.builtin.template:
     src: sudoers.j2
@@ -318,6 +603,14 @@
     mode: "0440"
     validate: /usr/sbin/visudo -cf %s
   tags: [wrappers]
+
+- name: box-apply, so the box applies this role to itself from reviewed main (only when agent_box_self_apply is true)
+  ansible.builtin.include_tasks:
+    file: self_apply.yml
+    apply:
+      tags: [wrappers, box_apply]
+  when: agent_box_self_apply | bool
+  tags: [wrappers, box_apply]
 
 # --- Claude Code managed settings ----------------------------------------------------------
 
@@ -367,11 +660,19 @@
       changed_when: false
       tags: [verify]
 
+    # The one root line allowed is box-apply's, with plan and apply only (D-0036 rule 2).
     - name: Check the sudo list
+      vars:
+        agent_box_box_apply_line: >-
+          (root) NOPASSWD: {{ agent_box_libexec_dir }}/box-apply.py plan, {{ agent_box_libexec_dir }}/box-apply.py apply
+        agent_box_sudo_list_rest: >-
+          {{ agent_box_sudo_list.stdout_lines | map('trim')
+             | reject('equalto', agent_box_box_apply_line if agent_box_self_apply | bool else '')
+             | join(' | ') }}
       ansible.builtin.assert:
         that:
           - agent_box_sudo_list.stdout is search('\(' ~ agent_box_keys_user ~ '\) NOPASSWD')
-          - agent_box_sudo_list.stdout is not search('\((root|ALL)(\s*:\s*ALL)?\)')
+          - agent_box_sudo_list_rest is not search('\((root|ALL)(\s*:\s*ALL)?\)')
         fail_msg: "{{ agent_box_user }} may run more than the wrappers as {{ agent_box_keys_user }}: {{ agent_box_sudo_list.stdout }}"
         quiet: true
       tags: [verify]
@@ -406,3 +707,130 @@
       when: agent_box_tls_check_url | length > 0
       changed_when: false
       tags: [verify]
+
+# --- Prod files from the controller ----------------------------------------------------------
+
+- name: Copy the controller's private lab files to the box (only when agent_box_copy_prod_files is true)
+  ansible.builtin.include_tasks:
+    file: prod_files.yml
+    apply:
+      tags: [prod_files]
+  when: agent_box_copy_prod_files | bool
+  tags: [prod_files]
+
+# --- OPNsense configuration backup (pick 220) -----------------------------------------------------
+
+- name: The OPNsense backup's settings hold
+  ansible.builtin.assert:
+    that:
+      - agent_box_opnsense_backup.host | default('') | length > 0
+      - agent_box_opnsense_backup.keep | default(14) | int >= 3
+      - agent_box_opnsense_backup.keep | default(14) | int <= 60
+    fail_msg: agent_box_opnsense_backup needs host (OPNsense's name or address) and, optionally, keep from 3 to 60.
+    quiet: true
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: The OPNsense backup's script, root-owned
+  ansible.builtin.copy:
+    src: opnsense-backup.sh
+    dest: "{{ agent_box_libexec_dir }}/opnsense-backup.sh"
+    owner: root
+    group: root
+    mode: "0755"
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: The OPNsense backup's settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/opnsense-backup.json"
+    content: >-
+      {{ {'host': agent_box_opnsense_backup.host, 'keep': agent_box_opnsense_backup.keep | default(14) | int} | to_nice_json }}
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: Daily OPNsense backup service and timer
+  ansible.builtin.template:
+    src: "opnsense-backup.{{ item }}.j2"
+    dest: "/etc/systemd/system/opnsense-backup.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_opnsense_backup_units
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: Daily OPNsense backup timer on
+  ansible.builtin.systemd_service:
+    name: opnsense-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_opnsense_backup_units is changed }}"
+  when: agent_box_opnsense_backup | length > 0 and not (ansible_check_mode and agent_box_opnsense_backup_units is changed)
+  tags: [wrappers]
+
+# --- Off-box copy of those configurations (pick 222) ----------------------------------------------------
+
+- name: Copy the OPNsense backups off the box (only when agent_box_opnsense_offbox is set)
+  ansible.builtin.include_tasks:
+    file: opnsense_offbox.yml
+    apply:
+      tags: [wrappers, opnsense_offbox]
+  when: agent_box_opnsense_offbox | length > 0
+  tags: [wrappers, opnsense_offbox]
+
+# --- Encrypted bundle of the box's private files (pick 228) ------------------------------------------
+
+- name: Make the daily encrypted bundle (only when agent_box_secrets_bundle is set)
+  ansible.builtin.include_tasks:
+    file: secrets_bundle.yml
+    apply:
+      tags: [wrappers, secrets_bundle]
+  when: agent_box_secrets_bundle | length > 0
+  tags: [wrappers, secrets_bundle]
+
+# --- The Proxmox host job (Library plans/r1-host-job/DESIGN.md v3.1) ------------------------------------------
+
+# From the controller only: self-applies skip this tag (agent_box_self_apply_skip_tags), because the inventory
+# holds private values (D-0036 rule 7).
+- name: The Proxmox host job's inventory and the key's public half (only when agent_box_proxmox_host is set)
+  ansible.builtin.include_tasks:
+    file: proxmox_host_inventory.yml
+    apply:
+      tags: [proxmox_host_inventory]
+  when: agent_box_proxmox_host | length > 0 and agent_box_proxmox_host_job | bool
+  tags: [proxmox_host_inventory]
+
+# --- The dev secrets store's hourly snapshot off the box (pick 237) -------------------------------------
+
+- name: Send the dev secrets store's snapshots off the box (only when the store's wrapper and the off-box copy are set)
+  ansible.builtin.include_tasks:
+    file: secrets_store_offbox.yml
+    apply:
+      tags: [wrappers, secrets_store_offbox]
+  when: agent_box_secrets_store | length > 0 and agent_box_opnsense_offbox | length > 0
+  tags: [wrappers, secrets_store_offbox]
+
+# --- The lifeline NIC (pick 220) ---------------------------------------------------------------------
+
+- name: Filter and set up the lifeline NIC (only when agent_box_lifeline_interface is set)
+  ansible.builtin.include_tasks:
+    file: lifeline.yml
+    apply:
+      tags: [lifeline]
+  when: agent_box_lifeline_interface | length > 0
+  tags: [lifeline]
+
+# --- box-apply's baseline, last, so only a run that got this far writes it -----------------------------
+
+- name: box-apply's baseline (only when agent_box_self_apply is true)
+  ansible.builtin.include_tasks:
+    file: self_apply_baseline.yml
+    apply:
+      tags: [wrappers, box_apply]
+  when: agent_box_self_apply | bool
+  tags: [wrappers, box_apply]

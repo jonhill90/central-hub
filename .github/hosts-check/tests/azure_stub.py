@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""A stand-in for Entra ID's token endpoint and Microsoft Graph addKey/removeKey, for
-test_backup_azure_cert.sh. It checks what the real services check and that a test can see:
+"""A stand-in for Entra ID's token endpoint, Microsoft Graph addKey/removeKey and Key Vault's
+secret versions (set a secret, list versions with metadata only), for test_backup_azure_cert.sh and
+test_opnsense_escrow.sh. It checks what the real services check and that a test can see:
 every JWT's RS256 signature against a registered certificate (or, for addKey and removeKey, the
 proof's), its audience, issuer and lifetime, and that a token is a bearer the stub issued.
 
 State lives in a JSON file (argv[2]) so the test can register a certificate the way the
 playbook's first upload does, and read what the stub did:
-  {"keys": {keyId: base64 DER}, "tokens": [...], "calls": [...], "reject_addkey": false}
+  {"keys": {keyId: base64 DER}, "tokens": [...], "calls": [...], "reject_addkey": false,
+   "secrets": {name: [{"value", "tags", "created", "enabled"}]}, "reject_setsecret": false}
+Key Vault answers only metadata on GET, as the box's set-only role allows: a GET of a value is refused.
 Usage: azure_stub.py <port file> <state file> <tenant> <client id> <app object id>
 """
 
@@ -107,6 +110,51 @@ class Handler(BaseHTTPRequestHandler):
             return self.answer(404, {"error": "no such path", "error_description": path})
         except Exception as err:  # the test reads this
             return self.answer(400, {"error": "stub", "error_description": repr(err)})
+
+    def bearer_ok(self, state):
+        bearer = self.headers.get("Authorization", "")
+        return bearer.startswith("Bearer ") and bearer[7:] in state["tokens"]
+
+    def do_PUT(self):
+        raw = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
+        state = load()
+        path, _, query = self.path.partition("?")
+        state["calls"].append("PUT " + path)
+        save(state)
+        if not self.bearer_ok(state):
+            return self.answer(401, {"error": {"code": "Unauthorized"}})
+        if "api-version=" not in query or not path.startswith("/secrets/") or path.count("/") != 2:
+            return self.answer(404, {"error": {"code": "NotFound", "message": path}})
+        if state.get("reject_setsecret"):
+            return self.answer(403, {"error": {"code": "Forbidden", "message": "rejected by the test"}})
+        body = json.loads(raw)
+        name = path.split("/")[2]
+        versions = state.setdefault("secrets", {}).setdefault(name, [])
+        # Each new version is newer than every earlier one, as Key Vault's own clock makes it.
+        created = max([v["created"] for v in versions] + [int(time.time())]) + 1
+        versions.append({"value": body["value"], "tags": body.get("tags", {}), "created": created, "enabled": True})
+        save(state)
+        return self.answer(200, {"id": f"https://vault/secrets/{name}/{uuid.uuid4().hex}",
+                                 "attributes": {"enabled": True, "created": created}, "tags": body.get("tags", {})})
+
+    def do_GET(self):
+        state = load()
+        path, _, query = self.path.partition("?")
+        state["calls"].append("GET " + path)
+        save(state)
+        if not self.bearer_ok(state):
+            return self.answer(401, {"error": {"code": "Unauthorized"}})
+        parts = path.split("/")
+        if len(parts) == 4 and parts[1] == "secrets" and parts[3] == "versions" and "api-version=" in query:
+            versions = state.get("secrets", {}).get(parts[2])
+            if versions is None:
+                return self.answer(404, {"error": {"code": "SecretNotFound"}})
+            return self.answer(200, {"value": [
+                {"id": f"https://vault/secrets/{parts[2]}/{i}", "tags": v["tags"],
+                 "attributes": {"enabled": v["enabled"], "created": v["created"]}} for i, v in enumerate(versions)],
+                "nextLink": None})
+        # Reading a value needs getSecret, which the box's role does not have.
+        return self.answer(403, {"error": {"code": "Forbidden", "message": "getSecret is not allowed"}})
 
     def token(self, state, form):
         one = {k: v[0] for k, v in form.items()}

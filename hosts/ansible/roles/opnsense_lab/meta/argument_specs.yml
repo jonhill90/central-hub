@@ -50,10 +50,19 @@ argument_specs:
             type: str
             required: true
             description: The VLAN's /24 range.
+          tailnet:
+            type: bool
+            required: false
+            default: true
+            description: >-
+              False keeps the VLAN off the tailnet; this role then blocks its traffic to 100.64.0.0/10
+              and needs an explicit mgmt_pass in its settings.
       opnsense_lab_vlan_settings:
         type: dict
         required: true
-        description: This firewall's settings per VLAN name (ifname, dhcp, bootstrap).
+        description: >-
+          This firewall's settings per VLAN name (ifname, dhcp, bootstrap, and optional mgmt_pass,
+          default true; false stops the management VLAN's pass rule into that VLAN).
       opnsense_lab_mgmt_tag:
         type: int
         required: true
@@ -84,11 +93,17 @@ argument_specs:
               name: {type: str, required: true, description: "Rule name; one of opnsense_lab_agent_box_target_names."}
               address: {type: str, required: true, description: "Destination address, without a prefix."}
               port: {type: int, required: true, description: Destination TCP port.}
+              prefix: {type: int, required: false, default: 32, description: "Destination prefix length; 32 is one address, 24 a whole VLAN range."}
       opnsense_lab_agent_box_target_names:
         type: list
         elements: str
-        default: [Proxmox API, c1 API]
-        description: Rule names removed when opnsense_lab_agent_box is unset.
+        default: [Proxmox API, c1 API, prod node 200 SSH, prod node 201 SSH, OPNsense API, tenant lab SSH]
+        description: The names the agent box's rules may have; a name that is not a current target loses its rule.
+      opnsense_lab_agent_box_sequences:
+        type: list
+        elements: int
+        default: [1, 2, 3, 4, 8, 9]
+        description: The agent box rules' sequence numbers, in target order; below 10 and clear of the management rules.
       opnsense_lab_host_overrides:
         type: list
         elements: dict
@@ -118,10 +133,6 @@ argument_specs:
         type: str
         default: vtnet0
         description: The trunk port inside OPNsense (net0 on vmbr1).
-      opnsense_lab_ssl_verify:
-        type: bool
-        default: true
-        description: Check the GUI certificate.
       opnsense_lab_ssl_ca_file:
         type: str
-        description: CA file for the GUI certificate while it is self-signed. Optional.
+        description: The lab root's PEM file on the controller; the API's certificate must chain to it (pick 30).

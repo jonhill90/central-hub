@@ -1,0 +1,20 @@
+# Managed by Ansible (role agent_box). Brings the lifeline NIC's NetworkManager connection up, and only while the
+# packet filter unit is active: Requires= means a failed or stopped filter leaves the NIC down, and stopping the
+# filter takes the NIC down again. The connection has autoconnect off, so NetworkManager never brings the NIC up
+# by itself. The box's primary NIC and its tailnet link do not depend on this unit.
+[Unit]
+Description=Bring the lifeline NIC up behind its packet filter
+Requires=lifeline-nft.service
+After=lifeline-nft.service NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/nmcli -w 30 connection up lifeline
+ExecStop=-/usr/bin/nmcli connection down lifeline
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

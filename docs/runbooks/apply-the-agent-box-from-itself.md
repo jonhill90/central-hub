@@ -1,0 +1,141 @@
+---
+title: Apply the agent box's setup from the box itself
+status: draft
+kind: automated
+trigger: a reviewed change to the agent box's role is merged to main and touches none of the box's limits
+runner: a session on the agent box, through `box-apply plan` and `box-apply apply`; the install and every limit change are an agent lane on the controller, after the owner's go
+outcome: the box runs its own agent_box role from the commit main points to, without the controller, and stops for the owner on any change to its limits; a limit file changed during a run is put back
+needs: D-0036 accepted; the box set up from the controller (set-up-the-agent-box.md), with its Ansible virtual environment and collections; agent_box_self_apply true in the private inventory
+private-values: [agent-box-inventory]
+files: [hosts/ansible/roles/agent_box/files/box-apply.py, hosts/ansible/agent-box-limit-approvals.txt, hosts/ansible/roles/agent_box/tasks/self_apply.yml, hosts/ansible/roles/agent_box/tasks/self_apply_baseline.yml, hosts/ansible/roles/agent_box/templates/box-apply-limits.txt.j2, hosts/ansible/roles/agent_box/templates/sudoers.j2, .github/hosts-check/tests/test_box_apply.sh]
+last-tested: 2026-11-14, an agent, box-apply.py against a local git repository and a stand-in for ansible-playbook (test_box_apply.sh, approved limit changes included), and the role's templates rendered; not installed on the box
+superseded-by:
+---
+
+# Apply the agent box's setup from the box itself
+
+**Status:** draft. Written 2026-11-14 from the code in this change and tested offline only. Not installed on the box yet.
+
+## Why
+
+D-0036 (accepted on the owner's message of 2026-11-14 03:16 UTC) lets the box apply its own role from reviewed main, so a merged change no longer waits for the controller. The files that set what a session on the box may do stay behind the owner: a change to one of them stops, and is applied from the controller after the owner's go.
+
+## How it works (pick 223)
+
+```mermaid
+flowchart LR
+  S["session:<br/>box-apply plan / apply"] --> F["fetch main into<br/>root's own checkout"]
+  F --> L{"limit file changed<br/>since the baseline?"}
+  L -- yes --> X["stop, exit 3:<br/>the controller applies it"]
+  L -- no --> C{"check run would<br/>change a limit path?"}
+  C -- yes --> X
+  C -- no --> A["apply: run the role,<br/>then compare limit paths"]
+  A --> D{"changed?"}
+  D -- no --> B["baseline = this commit"]
+  D -- yes --> P["put back, exit 4,<br/>self-applies stop"]
+```
+
+*In words:* `box-apply` fetches main into a checkout only root can write. If any limit file changed since the baseline, it stops. Otherwise it runs the role in check mode and stops if the run would touch a limit path on the box. `apply` then runs the role for real, compares every limit path with its state before, puts back any that changed, and stops self-applies until the controller's next full apply.
+
+| Piece | Where |
+|---|---|
+| **The wrapper.** `box-apply.py`, root-owned in `/usr/local/libexec/agent-box/`, started as root through one sudo line that allows `plan` and `apply` only. The front script `/usr/local/bin/box-apply` calls it. Every run is one JSON line in `/var/log/box-apply.log`, and the role's output is kept in `/var/lib/box-apply/runs/` (the last 50) | `files/box-apply.py`, `tasks/self_apply.yml`, `templates/sudoers.j2` |
+| **The limits.** `/etc/box-apply/limits.txt`, written only by an apply from the controller. Every file of the role is a limit, except its argument specs and its defaults. In the defaults, only the pinned tools' versions and SHA-256s may change (tofu, kubectl, Tailscale), and only to plain literals. Ansible's own pins are limits, because a self-apply runs from that virtual environment. Also limits: the playbook, `ansible.cfg`, the collections' requirements, and the certificate script the off-box copy runs. On the box, `box-apply` compares the sudo rules, the managed settings, the private CAs it trusts, every script in the wrapper folder, the front scripts, the units in `/etc/systemd/system`, its own files, the wrappers' settings files, the key and work folders' owner and mode, and the three users | `templates/box-apply-limits.txt.j2` |
+| **The baseline.** The commit of the controller's last full apply, written by the role's last task, and only when the run had no `--tags`, `--skip-tags` or `--start-at-task` and came from a clean git checkout: no tracked file changed, and no untracked file in the role, the playbook, `ansible.cfg`, `requirements.yml` or the certificate script (or named its commit with `-e agent_box_self_apply_commit=<40 hex>`). A narrow apply never moves it, so it can't hide a limit change it didn't make. A good self-apply moves it to the commit it applied | `/var/lib/box-apply/baseline` |
+| **The inventory.** The role's `agent_box_*` host variables as the controller had them (only names the role declares in its defaults or argument specs; a result the play registered is not written), written by the controller's apply (D-0036 rule 7). Role defaults are not host variables, so a merged change to a free default still applies | `/etc/box-apply/inventory.yml` |
+| **What a self-apply skips.** The tags `ca`, `prod_files` and `opnsense_offbox` (they read files on the controller), `lifeline` (the box's firewall, D-0036 rule 8), `proxmox_host_inventory` (the Proxmox host job's private inventory, rule 7) and `verify` | `agent_box_self_apply_skip_tags` |
+| **Approved limit changes (pick 232).** One line per change on main, outside the role: `<from> <to> <digest> <pass> <tap>`. `box-apply` checks the baseline, that `to` is on main with no limit change after it, and the digest of the limit files' diff. It can't check the pass or the tap, which it only logs. With a matching line it applies `to` with `agent_box_limit_apply=true`, so the tasks that write `box-apply`, its settings and its limits run too (never its inventory), and lets change only the limit paths its check run named | `hosts/ansible/agent-box-limit-approvals.txt` |
+
+## Steps
+
+### Install it (once, from the controller, after the owner's go)
+
+1. In the private inventory, set `agent_box_self_apply: true` for the box.
+2. Run the role in full, with no `--tags`, from a clean checkout of main:
+
+   ```sh
+   ansible-playbook -i inventories/home/ playbooks/agent-box.yml
+   ```
+
+   why: a full run is the only one that writes the baseline. If the controller runs from a pinned copy that is not a git checkout, add `-e agent_box_self_apply_commit=<the commit it was made from>`.
+   expect: `failed=0`. On the box, `sudo -l` as the session user lists the one `(root)` line for `box-apply.py plan` and `apply`. The proofs check that line and accept no other root line.
+3. If sessions on the box need an allow rule to run it, add `Bash(box-apply plan)` and `Bash(box-apply apply)` to the private allow list. That list is itself a limit, so it is part of this same apply.
+
+### Apply a merged change (on the box)
+
+Run `box-apply` as the session user, without `sudo`: the front script calls `sudo -n` itself, and sudo allows only that one root line. `sudo box-apply` doesn't find it, because `/usr/local/bin` is not on root's `secure_path`.
+
+1. Plan:
+
+   ```sh
+   box-apply plan
+   ```
+
+   expect: `main <commit>, baseline <commit>`, `<n> file(s) changed since the baseline, none of them a limit`, then the tasks the check run would change. Nothing is applied.
+2. Apply:
+
+   ```sh
+   box-apply apply
+   ```
+
+   expect: `applied <commit>: <n> task(s) changed`. The baseline is now that commit.
+
+### Apply a limit change (from the controller)
+
+`box-apply` exits 3 and names the limit. The change is applied from the controller, by an agent lane, after the owner's go naming the PR and its head (D-0036 rule 6). Apply it in full, so the baseline moves past it. A narrow `--tags` apply doesn't move the baseline, so `box-apply` keeps stopping until a full one.
+
+### Apply an approved limit change (on the box, no controller)
+
+D-0044 (accepted) lets the box apply a change to its own limits when one line in the approvals file names it, so no run from the controller is needed (D-0036 rules 3(f) and 6 carry it). Write a line only after the owner's tap on a card that names the digest: the box would apply it.
+
+What this route never does: it does not change the box's inventory (D-0036 rule 7, so a setting that only the private inventory sets stays as it is), and it skips the firewall tasks, which the self-apply's skipped tags leave to a run from the controller (`agent_box_self_apply_skip_tags`).
+
+1. Plan, and copy what the stop prints:
+
+   ```sh
+   box-apply plan
+   ```
+
+   expect: exit 3, `main holds no approval line for it`, the limit files, and a line to approve: `<baseline> <main> <digest> <pass> <tap>`.
+2. The reviewer and the councils read that diff. Anyone can recompute the digest in a checkout of main:
+
+   ```sh
+   git diff --no-renames --binary --full-index <baseline> <main> -- <the limit files it named> | sha256sum
+   ```
+
+   why: the digest pins the exact bytes they passed, so a later change to those files needs its own line.
+3. Add the line to `hosts/ansible/agent-box-limit-approvals.txt` by a PR that merges like any other. Its five fields are `<from> <to> <digest> <pass> <tap>` (the baseline, the commit on main, and the digest, as `box-apply plan` printed them), `pass` is the id of the orchestrator's message that records the agents' pass of that digest, and `tap` the id of the owner's decide event (the choice, not the card) on a card that named the digest (D-0042 rule 6). A tap of `none` never counts. `to` must be a commit on main after which no limit changes.
+4. Plan, then apply:
+
+   ```sh
+   box-apply plan
+   box-apply apply
+   ```
+
+   expect: `approved limit change, ... line <n>`, the limit paths the check run would change, then `applied the approved limit change <to>`. The baseline is now `<to>`.
+5. Run `box-apply apply` once more. It goes on to main as a plain apply, since adding the line changed no limit.
+
+## If it fails
+
+| Message | Cause and fix |
+|---|---|
+| `no baseline` | The role has not run in full from the controller since `agent_box_self_apply` was set. Run it in full. If the full run printed "box-apply's baseline is left as it was", that line names what was missing: a run from the first task, all tags, no skip tags, a commit, or a clean checkout (the files that weren't clean are listed). |
+| `a limit changed since the baseline` (exit 3) | Expected for a change to the role's tasks, templates, files, playbook, or a defaults key that isn't a pinned tool. It needs the owner's go and a full apply from the controller. A pinned tool's new value must be a plain literal (a version of digits and dots, or 64 hex digits for a SHA-256); anything else, Jinja included, stops with `must be a plain literal`. |
+| `the check run would change a limit on the box` (exit 3) | The box's limit files differ from what the role makes, for example after a narrow apply or a hand edit. A full apply from the controller sets them right. |
+| `the apply changed a limit on the box ... Put back` (exit 4) | A task changed a limit file anyway. It was put back, and `/var/lib/box-apply/stopped` says what. A changed user can't be put back safely: the message names it, and it needs the controller. Read the run's output in `/var/lib/box-apply/runs/`, fix the change by a PR, and end the stop with a full apply from the controller. |
+| `self-applies are stopped` | As above: only a full apply from the controller ends it. |
+| `main holds no approval line for it` (exit 3) | A limit changed and no line approves it. Approve it (above) or apply it from the controller. Lines that don't count are named first: `malformed` (wrong field count or format, or a tap of `none`), `not on main`, `a limit changed again after`, `no limit changed`, or `its digest is not the diff of`. |
+| `the approved apply changed limit paths its check run did not name` (exit 4) | The apply changed a limit path that its check run didn't list, so every limit change of the run was put back, and self-applies stop. Check mode can miss what a task does, for example a command task: read `/var/lib/box-apply/runs/`, then end the stop with a full apply from the controller. |
+| `the check run failed` or `the apply failed` | The role failed on the box. Its JSON output is in `/var/lib/box-apply/runs/`. The baseline didn't move. |
+| `does not descend from the baseline` | main's history was rewritten. Run the role in full from the controller. |
+
+## Limits
+
+- Root on the box runs whatever reviewed main says. The checks before and after catch a plain change to a limit. They don't stop merged code written to get around them, for example a task that changes a limit file and then puts back its hash. Review and the green merge are the control (D-0036, Consequences).
+- Pinned tools and package sources change by a self-apply, and so change what a wrapper runs with the keys (D-0036, Consequences).
+- Users are compared, not put back.
+- An approved limit change rests on ids the box can't check: a made-up pass or tap id would be applied. The approvals file is not a limit, so any merged PR can add a line. Review, the green merge and the agents' pass are the control, as for the merge job (D-0042, Consequences).
+
+## Exit
+
+Set `agent_box_self_apply: false` and run the role in full from the controller. That removes the sudo line. Then delete `/usr/local/libexec/agent-box/box-apply.py`, `/usr/local/bin/box-apply`, `/etc/box-apply/` and `/var/lib/box-apply/` as root. Box changes then wait for the controller again.

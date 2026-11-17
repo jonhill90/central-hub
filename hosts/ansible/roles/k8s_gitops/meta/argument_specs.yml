@@ -18,6 +18,27 @@ argument_specs:
         type: bool
         default: false
         description: "Pass localPathStableFolders true to the root chart: volume folders named <namespace>/<claim> (dev, TASK-0240)."
+      k8s_gitops_source_openbao_in_cluster:
+        type: bool
+        default: false
+        description: "Run OpenBao inside the cluster from its Helm chart (D-0058): pass openbaoInCluster true to the root chart (dev first)."
+      k8s_gitops_source_openbao_seal_node:
+        type: str
+        description: "Node that holds the seal key's folder, passed as openbaoSealNode. Private; read only with the switch on."
+      k8s_gitops_source_openbao_box_cidr:
+        type: str
+        description: "The agent box's address as a /32, the admin AppRole's only source, passed as openbaoBoxCidr. Private."
+      k8s_gitops_source_openbao_measure:
+        type: bool
+        default: false
+        description: >-
+          Dev only: pass openbaoMeasure true (MEASURE-1, the box's source address through the Gateway).
+          Set by hosts/rebuild-k8s.sh with -e, never in an inventory.
+      k8s_gitops_source_share_target:
+        type: str
+        description: >-
+          The shared node the share pod forwards to, <address>:<port>. Private. Passed to the root chart
+          as shareTarget; empty, the share-pod app renders nothing.
       k8s_gitops_source_url: {type: str, default: "https://github.com/jonhill90/central-hub", description: Repository read over anonymous HTTPS.}
       k8s_gitops_source_branch: {type: str, default: main, description: Branch the cluster follows (D-0002).}
       k8s_gitops_source_path: {type: str, default: hosts/kubernetes/home/c1, description: Folder the cluster reads.}

@@ -1,0 +1,57 @@
+# Fabrication check: every SHA, PR number and state, file:line and rule-21 sentence that a PR
+# adds is looked up in GitHub or the checkout, with no model (design: Library
+# plans/fabrication-check/DESIGN.md, passed Councils A, B and C on 2026-11-14).
+# The verifier always comes from main, fetched by ref, never from the PR head, so a PR can't
+# edit the check that judges it (the change's own tests run in a separate job). Read-only token, no secrets, actions pinned to a full SHA.
+name: fabrication
+on:
+  pull_request:            # never pull_request_target (CLAUDE.md rule 5)
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  # The change's own tests run in a job of their own: code from the PR can write to GITHUB_PATH or
+  # GITHUB_ENV, and that must never reach the job that judges the PR.
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test the verifier in this change
+        run: python3 -I .github/fabrication-check/tests/test_fabcheck.py
+        if: hashFiles('.github/fabrication-check/tests/test_fabcheck.py') != ''
+  claims:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Take the verifier from main
+        id: verifier
+        run: |
+          git fetch --no-tags --quiet origin main
+          if git cat-file -e origin/main:.github/fabrication-check/fabcheck.py 2>/dev/null; then
+            git show origin/main:.github/fabrication-check/fabcheck.py > "$RUNNER_TEMP/fabcheck.py"
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "The verifier is not on main yet; nothing to run."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check the claims this PR adds
+        if: github.event_name == 'pull_request' && steps.verifier.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 -I "$RUNNER_TEMP/fabcheck.py" --root . --repo "$GITHUB_REPOSITORY" \
+            --pr "$PR_NUMBER" --diff "$BASE_SHA"
+      - name: Check the approval facts on main
+        if: github.event_name == 'push' && steps.verifier.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I "$RUNNER_TEMP/fabcheck.py" --root . --repo "$GITHUB_REPOSITORY" --corrections

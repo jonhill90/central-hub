@@ -28,6 +28,10 @@ argument_specs:
       k8s_backup_azure_tenant_id: {type: str, default: "", description: "The Entra ID tenant (tofu output tenant_id)."}
       k8s_backup_azure_app_object_id: {type: str, default: "", description: "The backup app's object ID (tofu output app_object_id)."}
       k8s_backup_azure_cert_file: {type: str, default: /etc/central-hub/azure/backup.pem, description: "The node's key and certificate, one 0600 PEM file."}
+      k8s_backup_azure_fixed_cert_file:
+        type: str
+        default: ""
+        description: "Reader only: controller path of a PEM (key and certificate) the read-only app knows; the nodes copy it. Empty: each node makes its own."
       k8s_backup_azure_cert_days: {type: int, default: 90, description: Days each certificate lasts.}
       k8s_backup_azure_cert_renew_days: {type: int, default: 30, description: Days left at which the node rolls its certificate.}
       k8s_backup_azure_cert_schedule: {type: str, default: "*-*-* 01:40:00", description: systemd OnCalendar for the daily renewal check.}

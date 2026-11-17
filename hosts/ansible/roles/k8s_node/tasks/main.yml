@@ -212,6 +212,24 @@
   ansible.builtin.systemd: {name: containerd, state: started, enabled: true}
 
 # Step 6. kubeadm, kubelet, kubectl
+# The versions are the ones the cluster runs (pick 33): an upgrade bumps them by PR, then
+# playbooks/k8s-upgrade.yml moves the cluster. A node at another version stops here, so this role
+# never upgrades kubelet ahead of kubeadm, or takes a node back down.
+- name: step6 | The packages installed
+  ansible.builtin.package_facts:
+    manager: rpm
+
+- name: step6 | An installed kubelet matches the code
+  ansible.builtin.assert:
+    that: >-
+      'kubelet' not in ansible_facts.packages or
+      ansible_facts.packages['kubelet'] | map(attribute='version') | list == [k8s_node_kubernetes_version]
+    fail_msg: >-
+      This node runs kubelet {{ ansible_facts.packages['kubelet'] | default([]) | map(attribute='version') | join(', ') }} and the code says
+      {{ k8s_node_kubernetes_version }}. Run playbooks/k8s-upgrade.yml to bring the cluster to the
+      code (docs/runbooks/build-c1-with-ansible.md, "Afterwards").
+    quiet: true
+
 - name: step6 | Kubernetes package repo (excluded from routine updates)
   ansible.builtin.yum_repository:
     name: kubernetes

@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNTRAgZJF48qYp51Qbbdd9ns
   approval-names: "PR #12 and head 5a07427, in the message itself"
   check: the drafting agent read the message in the PRD and spec research thread at 2026-10-19T02:53Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: PR #12 merged at 2026-10-19T02:53Z as 4f157f8, with this evidence commit on top of the approved commit
+  merged: "PR #12 merged at 2026-10-19T02:53Z as 4f157f8, with this evidence commit on top of the approved commit"
 revisit-when: a second person must agree on scope; code lands in this repo; a study measures whether a project-level PRD helps people or agents; or merged specs are being read as current truth
 ---
 
@@ -24,7 +24,7 @@ revisit-when: a second person must agree on scope; code lands in this repo; a st
 
 ## Context and Problem Statement
 
-The project brief, written by the coordinator agent on 2026-10-06, asks for a PRD and specifications, and for maintained, indexed documentation that shows detail step by step to people and agents (Research repo, `02-projects/central-hub/platform-startup/brief.md`, line 5). The owner also asked that a spec point to the code rather than repeat it, so code is never updated in two places (Central Hub project, 2026-10-17 21:30 UTC). He said he has to pick something for version 1, knowing it will be replaced (2026-10-17 20:36 UTC).
+The project brief, written by the coordinator agent on 2026-10-06, asks for a PRD and specifications, and for maintained, indexed documentation that shows detail step by step to people and agents (Research repo, `02-projects/central-hub/platform-startup/brief.md`, line 5). The owner also asked that a spec point to the code rather than repeat it, so code is never updated in two places (Central Hub project, 2026-10-17 21:30 UTC). They said they have to pick something for version 1, knowing it will be replaced (2026-10-17 20:36 UTC).
 
 Three drafts exist in the Research repo and none is accepted: a platform PRD, a documentation contract and a first-slice spec. This record decides which documents hold "what and why" and "what changes", and what happens to them after a merge.
 
@@ -64,7 +64,7 @@ flowchart TB
   S -. "points to, never copies" .-> C["Code and tests"]
 ```
 
-*In words:* there is one short PRD. A change big enough to need it gets one spec file, written on the change's branch. The owner accepts the spec with his PR-and-SHA message, and the merge records that acceptance. After merge the spec is history, and its status field says so. Anything that has to last becomes a decision record. Specs point to code and tests and never copy them.
+*In words:* there is one short PRD. A change big enough to need it gets one spec file, written on the change's branch. The owner accepts the spec with their PR-and-SHA message, and the merge records that acceptance. After merge the spec is history, and its status field says so. Anything that has to last becomes a decision record. Specs point to code and tests and never copy them.
 
 ### Rules
 
@@ -82,7 +82,7 @@ flowchart TB
    - Sketches of code that does not exist yet are allowed.
    - The agent that writes the code does not edit the acceptance criteria in the same step.
 5. **Acceptance and freezing.**
-   - The owner accepts a spec as he accepts a record: a message naming the PR number and head SHA.
+   - The owner accepts a spec as they accept a record: a message naming the PR number and head SHA.
    - The merge records the acceptance.
    - A spec carries a status field, and after merge its body is not edited.
    - Agents treat a merged spec as history, not as current truth.

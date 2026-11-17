@@ -1,0 +1,117 @@
+{{- /*
+The hourly Raft snapshot (D-0058 rule 6). It signs in with OpenBao's Kubernetes login, role
+snapshot (policy snapshot: read on sys/storage/raft/snapshot and on this env's snapshot mark), and
+nothing else. While the mark is missing, the store has only self-initialized, so it skips and exits
+0; any other failure fails the Job. It keeps the newest .Values.snapshot.keep files on its own
+claim. Its token is revoked before it ends.
+*/ -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-snapshot
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openbao-snapshots
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    # The snapshots are the store's restore source; never let Argo CD delete them.
+    argocd.argoproj.io/sync-options: Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.snapshot.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.snapshot.size }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: openbao-snapshot
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: {{ .Values.snapshot.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          serviceAccountName: openbao-snapshot
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: snapshot
+              image: {{ .Values.snapshot.image }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              env:
+                - name: BAO_ADDR
+                  value: {{ .Values.snapshot.address | quote }}
+                - name: BAO_CACERT
+                  value: /tls/ca.crt
+                - name: MARK
+                  value: kv/data/{{ .Values.markEnv }}/snapshot-mark
+                - name: KEEP
+                  value: {{ .Values.snapshot.keep | quote }}
+                - name: HOME
+                  value: /tmp
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  # The token is read from its file (@), so it is never in the process's arguments.
+                  BAO_TOKEN=$(bao write -field=token auth/kubernetes/login role=snapshot jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token)
+                  export BAO_TOKEN
+                  name=""
+                  # On any exit: revoke the token, and remove a half-written file, which the prune never counts.
+                  trap 'bao token revoke -self >/dev/null 2>&1 || true; [ -z "$name" ] || rm -f -- "/snapshots/$name.part"' EXIT
+                  if ! out=$(bao read -format=json "$MARK" 2>&1); then
+                    case $out in
+                      *"No value found"*) echo "openbao-snapshot: no mark at $MARK yet, skipped"; exit 0 ;;
+                      *) echo "openbao-snapshot: reading $MARK failed: $out" >&2; exit 1 ;;
+                    esac
+                  fi
+                  name=raft-$(date -u +%Y%m%dT%H%M%SZ).snap
+                  bao operator raft snapshot save "/snapshots/$name.part"
+                  mv "/snapshots/$name.part" "/snapshots/$name"
+                  ls -1t /snapshots/raft-*.snap | tail -n +$((KEEP + 1)) | while read -r old; do rm -f -- "$old"; done
+                  echo "openbao-snapshot: saved $name, kept $(ls -1 /snapshots/raft-*.snap | wc -l)"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                - name: snapshots
+                  mountPath: /snapshots
+                - name: tls
+                  mountPath: /tls
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: snapshots
+              persistentVolumeClaim:
+                claimName: openbao-snapshots
+            - name: tls
+              secret:
+                secretName: openbao-tls
+                items:
+                  - {key: ca.crt, path: ca.crt}
+            - name: tmp
+              emptyDir: {}

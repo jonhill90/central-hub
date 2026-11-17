@@ -1,0 +1,15 @@
+---
+# A VLAN kept off the tailnet (tailnet: false in the VLAN file) must say, in this firewall's own
+# settings, whether the management VLAN may pass into it. mgmt_pass defaults to true, and a silent
+# default would give a tenant VLAN the management pass the tailnet hold keeps out.
+- name: Every VLAN kept off the tailnet sets mgmt_pass explicitly
+  ansible.builtin.assert:
+    that:
+      - opnsense_lab_vlan_settings[item.name].mgmt_pass is defined
+    fail_msg: >-
+      VLAN {{ item.name }} has tailnet: false in the VLAN file, so opnsense_lab_vlan_settings.{{ item.name }}
+      must set mgmt_pass (true or false) explicitly.
+    quiet: true
+  loop: "{{ lab_vlans | rejectattr('tailnet', 'undefined') | rejectattr('tailnet') | list }}"
+  loop_control:
+    label: "VLAN {{ item.name }}"

@@ -1,0 +1,10 @@
+# The store's namespace, under restricted Pod Security. Deleting it would delete the store's data
+# and audit claims, so Argo CD never deletes it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-options: Delete=false
+  labels:
+    pod-security.kubernetes.io/enforce: restricted

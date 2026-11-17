@@ -1,0 +1,40 @@
+# Dev lab redeploy from the agent box (D-0035 rules 3 and 4, dev only). It runs only when the owner
+# starts it by hand (workflow_dispatch), only from main, on the box's own runner, and the box's
+# `rebuild` wrapper does the work with keys this workflow never sees. No pull_request trigger of any
+# kind. Read-only actions need no approval; the ones that change the dev lab wait on the protected
+# environment `dev-redeploy`, where the owner is the required reviewer.
+# Setup the owner must do first: docs/runbooks/set-up-the-lab-redeploy-workflow.md
+name: lab-redeploy-dev
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "diag and log only read; up, rebuild and teardown change the dev lab (VMs 250-257) and wait for approval"
+        type: choice
+        default: diag
+        options: [diag, log, up, rebuild, teardown]
+permissions:
+  contents: read
+concurrency:
+  group: lab-redeploy-dev
+  cancel-in-progress: false
+jobs:
+  read:
+    if: github.ref == 'refs/heads/main' && (inputs.action == 'diag' || inputs.action == 'log')
+    runs-on: [self-hosted, central-hub-box]
+    timeout-minutes: 10
+    steps:
+      - name: Read the dev lab
+        env:
+          ACTION: ${{ inputs.action }}
+        run: /usr/local/bin/rebuild "$ACTION"
+  change:
+    if: github.ref == 'refs/heads/main' && inputs.action != 'diag' && inputs.action != 'log'
+    runs-on: [self-hosted, central-hub-box]
+    environment: dev-redeploy
+    timeout-minutes: 45
+    steps:
+      - name: Change the dev lab
+        env:
+          ACTION: ${{ inputs.action }}
+        run: /usr/local/bin/rebuild "$ACTION"

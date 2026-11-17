@@ -1,0 +1,19 @@
+# Alertmanager's send-only ntfy token (pick 171), from namespace secret-source through store c1.
+# kube-prometheus-stack mounts Secret alertmanager-ntfy into Alertmanager (alertmanagerSpec.secrets)
+# and the ntfy webhook reads it as a bearer token (credentials_file), so it never sits in a config.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: alertmanager-ntfy
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.ntfy.store }}
+  target:
+    name: alertmanager-ntfy
+    creationPolicy: Owner
+  data:
+    - secretKey: token
+      remoteRef: {key: {{ .Values.ntfy.alertmanagerTokenSource }}, property: value}

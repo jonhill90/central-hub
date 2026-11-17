@@ -1,0 +1,41 @@
+---
+# Reader mode with one fixed certificate (dev, from the agent box). The controller holds a PEM file
+# (key and certificate) that the read-only backup app already knows. Each node gets a copy and signs
+# in with it; no node makes a key, and nothing is uploaded to or removed from the app, so the
+# controller needs no Azure sign-in. The one date to watch is the certificate's expiry.
+
+- name: timers | Azure settings are complete
+  ansible.builtin.assert:
+    that:
+      - k8s_backup_azure_account | length > 0
+      - k8s_backup_azure_client_id | length > 0
+      - k8s_backup_azure_tenant_id | length > 0
+    fail_msg: >-
+      A fixed reader certificate needs k8s_backup_azure_account, k8s_backup_azure_client_id and
+      k8s_backup_azure_tenant_id (the tofu outputs of hosts/terraform/azure/backup).
+    quiet: true
+
+- name: timers | The folder for the node's certificate
+  ansible.builtin.file:
+    path: "{{ k8s_backup_azure_cert_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: timers | The fixed reader certificate on the node
+  ansible.builtin.copy:
+    content: "{{ lookup('ansible.builtin.file', k8s_backup_azure_fixed_cert_file) }}"
+    dest: "{{ k8s_backup_azure_cert_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: timers | Keep the sign-in settings for the node env file
+  ansible.builtin.set_fact:
+    k8s_backup_azure_env_lines: |
+      AZURE_ACCOUNT_NAME={{ k8s_backup_azure_account }}
+      AZURE_CLIENT_ID={{ k8s_backup_azure_client_id }}
+      AZURE_TENANT_ID={{ k8s_backup_azure_tenant_id }}
+      AZURE_CLIENT_CERTIFICATE_PATH={{ k8s_backup_azure_cert_file }}

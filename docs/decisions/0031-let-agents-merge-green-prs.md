@@ -15,7 +15,7 @@ accepted-evidence:
   approved-commit: 28422d93fcf20b3597708ebd61295d5239bb980d
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN3pm9VMkokaWXswED1D5mcj
   approval-names: "PR jonhill90/central-hub#86 and head 28422d9, in the message itself; an earlier message of 2026-11-08T22:41:00Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN3RXBrfbsYqiRtQHFBtL6DE) named head 16d13e4"
-  check: the drafting agent read the message in the project thread at 2026-11-08T22:58Z; it reads "accept #86 28422d9 and #89 7b0a662, D-0030 park", and that head holds this record. An independent check by a reviewing agent is still to do
+  check: "the drafting agent read the message in the project thread at 2026-11-08T22:58Z; it reads \"accept #86 28422d9 and #89 7b0a662, D-0030 park\", and that head holds this record. An independent check by a reviewing agent is still to do"
   merged: squash-merged as 087cdda
 revisit-when: the lab is torn down and rebuilt and the records are rewritten in order; an agent merge breaks main or c1; the agents get a GitHub identity of their own (D-0030, Activation gate item 1); or a cluster other than c1 reads the repository
 ---
@@ -60,8 +60,8 @@ flowchart LR
 
 1. **Green.** A PR is green when every check GitHub runs on its head has passed, none is pending, and GitHub reports no merge conflict. A skipped check counts as passed only when its workflow skips it on purpose (for example a path filter).
 2. **How.** The agent squash-merges, because `main` keeps a linear history, and deletes the branch (D-0002). It never pushes to `main` and never enables auto-merge.
-3. **The owner still accepts.** A PR that sets a decision record to `accepted`, `rejected` or `parked`, or that sets a standard to `active`, merges only after the owner's message naming the PR and its head (AGENTS.md rule 1, D-0001). A PR that adds or changes a record that stays `proposed` may be merged by an agent.
-4. **Rule changes.** A PR that loosens AGENTS.md "Rules for now", this record's PR among them, merges only after the owner's message naming the PR and its head.
+3. **Accepting.** A PR that sets a decision record to `accepted`, `rejected` or `parked`, or that sets a standard to `active`, merges only with the reviewer's and the council's pass for its head (D-0042 rules 1 and 3), which since D-0042 takes the place of the owner's message (the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, ending their own approval of PRs for the greenfield build-out; who approves in their place is an agent pick). A PR that adds or changes a record that stays `proposed` may be merged by an agent.
+4. **Rule changes.** A PR that loosens AGENTS.md "Rules for now" merges only with the reviewer's and the council's pass for its head (D-0042 rules 1 and 11; the owner's messages of 2026-11-14, 07:42 to 07:44 UTC, ending their own approval of PRs for the greenfield build-out; who approves in their place is an agent pick). Before D-0042 it needed the owner's message naming the PR and its head.
 5. **Nothing else changes.** Rules 3 to 6 of AGENTS.md stay as they are. Before a merge the agent checks the PR for secrets and private names (rule 4) the same way as before.
 
 ### Consequences

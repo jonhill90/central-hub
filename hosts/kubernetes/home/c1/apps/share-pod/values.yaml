@@ -1,0 +1,24 @@
+# The share pod: tailscaled in userspace mode plus `tailscale serve` forwarding one TCP port to the
+# shared node. The pod holds no lab secret and no Kubernetes credential; its one secret is its own
+# tailnet key, tagged tag:share-pod and good for nothing else. Swapping it for another forwarder
+# changes only this chart.
+name: share-pod
+# The shared node, <address>:<port>. Private (CLAUDE.md rule 4): the root Application sets it from
+# Ansible (shareTarget). Empty: the chart renders nothing.
+target: ""
+# The port the pod listens on inside the tailnet. The tailnet policy lets only tag:agent-box reach it.
+listenPort: 2222
+# tailscale/tailscale v1.104.4 (2026-10-28), older than two weeks (STD-0003 rule 2); multi-arch index
+# digest from Docker Hub.
+image: docker.io/tailscale/tailscale:v1.104.4@sha256:ed6480b33c6eb67c9cbd203ed42b9fb57e361986725b6856def71b7a3d9e276c
+uid: 1000
+# The pod's tailnet key. A reusable, ephemeral, pre-approved auth key tagged tag:share-pod only,
+# seeded into namespace secret-source as share-pod-authkey (docs/runbooks/seed-secret-source.md) and
+# handed over by ExternalSecret from store c1. Ephemeral: the tailnet removes the pod 30 to 60
+# minutes after it goes away, so a restart leaves no stale device.
+authKey:
+  store: c1
+  source: share-pod-authkey
+resources:
+  requests: {cpu: 10m, memory: 32Mi}
+  limits: {memory: 128Mi}

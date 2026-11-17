@@ -26,7 +26,7 @@ resource "proxmox_virtual_environment_vm" "template" {
   node_name = var.proxmox_node_name
   vm_id     = var.template_vm_id
   name      = "almalinux10-template"
-  pool_id   = "k8s"
+  pool_id   = var.pool_id
   tags      = ["almalinux", "template"]
   template  = true
   started   = false
@@ -89,7 +89,7 @@ resource "proxmox_virtual_environment_vm" "node" {
   node_name = var.proxmox_node_name
   vm_id     = each.value.vm_id
   name      = each.key
-  pool_id   = "k8s"
+  pool_id   = var.pool_id
   tags      = ["almalinux", var.node_vnet, "selfhosted", each.value.role]
 
   on_boot = true

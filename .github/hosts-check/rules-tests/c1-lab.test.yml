@@ -80,3 +80,53 @@ tests:
           - exp_labels: {severity: warning}
             exp_annotations:
               summary: Prometheus can't read Argo CD's metrics, so the two alerts above can't fire
+
+  - name: a certificate 2 days past its renewal time fires after an hour; one not yet due doesn't
+    interval: 1m
+    input_series:
+      # Renewal times in seconds since the epoch; the test clock starts at 0.
+      - series: 'certmanager_certificate_renewal_timestamp_seconds{exported_namespace="gateway", name="apps", issuer_name="letsencrypt-prod"}'
+        values: '-180000x80'
+      - series: 'certmanager_certificate_renewal_timestamp_seconds{exported_namespace="gateway", name="fresh", issuer_name="letsencrypt-prod"}'
+        values: '2000000x80'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: C1CertificateRenewalOverdue
+        exp_alerts: []
+      - eval_time: 65m
+        alertname: C1CertificateRenewalOverdue
+        exp_alerts:
+          - exp_labels: {exported_namespace: gateway, name: apps, severity: warning}
+            exp_annotations:
+              summary: Certificate gateway/apps should have renewed more than 2 days ago; check its CertificateRequest and the Cloudflare token's address limit
+              runbook: docs/runbooks/issue-c1-app-certificate.md
+
+  - name: a certificate not Ready for an hour fires; a Ready one doesn't
+    interval: 1m
+    input_series:
+      - series: 'certmanager_certificate_ready_status{exported_namespace="gateway", name="apps", condition="False"}'
+        values: '1x80'
+      - series: 'certmanager_certificate_ready_status{exported_namespace="gateway", name="apps", condition="True"}'
+        values: '0x80'
+      - series: 'certmanager_certificate_ready_status{exported_namespace="gateway", name="ok", condition="True"}'
+        values: '1x80'
+      - series: 'certmanager_certificate_ready_status{exported_namespace="gateway", name="ok", condition="False"}'
+        values: '0x80'
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: C1CertificateNotReady
+        exp_alerts:
+          - exp_labels: {exported_namespace: gateway, name: apps, severity: warning}
+            exp_annotations:
+              summary: Certificate gateway/apps has not been Ready for an hour
+
+  - name: cert-manager not scraped fires when its target is missing
+    interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: C1CertManagerNotScraped
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Prometheus can't read cert-manager's metrics, so the two certificate alerts above can't fire

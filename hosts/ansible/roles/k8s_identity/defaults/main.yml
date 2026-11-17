@@ -16,7 +16,7 @@ k8s_identity_name: sso
 # Private, no default; the inventory template sets it to k8s_gateway_zone.
 # k8s_identity_zone: <zone>
 
-# The realm home apps sign in to.
+# The realm that lab apps sign in to.
 k8s_identity_realm: home
 
 # The owner's account in that realm, in group home-admins. The user name is private, no default.
@@ -28,6 +28,15 @@ k8s_identity_owner_email: ""
 # More people in realm home, beside the owner. Each item: username, optional email, and groups
 # (home-admins or home-viewers). Every user's password is a line in the values file below.
 k8s_identity_extra_users: []
+
+# A second factor for admins (D-0037): every member of this group gets a TOTP seed, a line TOTP_<USER NAME>
+# in the values file (base32, made like the passwords), imported as the user's OTP credential, so the
+# seed survives each delete and import of the realm. Keycloak then asks admins for the code at every
+# sign-in, Proxmox's included. The owner adds the seed to an authenticator app once, by scanning the QR code
+# bootstrap/show-totp-qr.sh shows on the controller's screen.
+k8s_identity_otp_group: home-admins
+k8s_identity_otp_digits: 6
+k8s_identity_otp_period: 30
 
 # The values file on the controller (the machine that runs Ansible), outside the repository next to
 # c1's encryption key (~/.config/central-hub/): every password and client secret in realm home, one
@@ -72,6 +81,19 @@ k8s_identity_jellyfin_name: jellyfin
 k8s_identity_jellyfin_namespace: media
 k8s_identity_jellyfin_provider: keycloak
 
+# Proxmox VE's web UI (role proxmox_sso): its DNS names, the same as proxmox_cert_names. Private, from the
+# inventory. The client allows https://<name> for each, because the UI sends its own origin as the redirect
+# (pve-manager www/manager6/window/LoginWindow.js). Empty: realm home has no proxmox client. Its secret,
+# PROXMOX_CLIENT_SECRET in the values file, is in realm home's Secret on c1 like every client secret, and role
+# proxmox_sso reads it on the controller for the Proxmox host.
+k8s_identity_proxmox_hosts: []
+
+# The secrets store's web page (the owner's sign-in, agent pick 233): the names the owner's
+# browser uses for it. Private, from the inventory. The client allows the store's OIDC callback on each.
+# Empty: realm home has no openbao client and the values file needs no OPENBAO_CLIENT_SECRET, so adding the
+# client is a realm change only when a name is set. The store's sign-in reads that secret from the same file.
+k8s_identity_openbao_hosts: []
+
 # Keycloak's database: PostgreSQL 18.6 (2026-08-13; Keycloak 26.8 tests 18), one pod. c1 has no
 # StorageClass yet (storage is BUILD-PATH S17), so its data sits on a static local volume: a folder
 # on one worker, kept when the pod or the volume object is deleted (reclaim policy Retain).
@@ -79,3 +101,8 @@ k8s_identity_postgres_image: docker.io/library/postgres:18.6
 k8s_identity_db_host: "{{ groups['k8s_workers'] | first }}"
 k8s_identity_db_path: /var/lib/central-hub/identity-postgres
 k8s_identity_db_size: 2Gi
+
+# Dev only, with tag signin: a file on the controller where the sign-in proof writes, after it passes, what
+# the secrets store's owner sign-in needs from this cluster (agent pick 233): the realm's issuer, the
+# Gateway's address and the CA root its certificate comes from. Empty: nothing is written.
+k8s_identity_oidc_handoff_file: ""

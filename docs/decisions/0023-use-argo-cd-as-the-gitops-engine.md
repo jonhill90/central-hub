@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNUgBcgq1CnfEaBLT5BNZCVN
   approval-names: "PR #48 and head b138450"
   check: the drafting agent read the message in the project thread at 2026-10-27T02:58Z; it names PR jonhill90/central-hub#48 and head b138450 itself. The owner first approved head 972a8ee at 2026-10-27T02:56:19Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNG7LsdmAda7mFVVzz26S7dz); b138450 merges main into it and regenerates the two indexes only. An independent check by a reviewing agent is still to do.
-  merged: PR #48 merged at 2026-10-27T02:58:42Z as e68202c
+  merged: "PR #48 merged at 2026-10-27T02:58:42Z as e68202c"
 revisit-when: an Argo CD release lists the cluster's Kubernetes minor as tested, or a release in use fails on it; the planned head-to-head GitOps test on a real workload; a second cluster needs one engine to manage several clusters; or the web UI's login can't be kept off the internet
 ---
 
@@ -26,7 +26,7 @@ revisit-when: an Argo CD release lists the cluster's Kubernetes minor as tested,
 
 central-hub is meant to become a GitOps repository: a cluster pulls its desired state from `main` (D-0002). Activation gate item 4 asks for "a pinned, no-writer GitOps engine install", and the engine was not chosen (AGENTS.md, CLAUDE.md).
 
-On 2026-10-13 the owner asked to compare Flux and Argo CD and said either way the system must let him switch. Research batch RB-0009 compared them; the owner answered "I don't know. You pick", so Flux became an agent working pick, not a decision.
+On 2026-10-13 the owner asked to compare Flux and Argo CD and said either way the system must let them switch. Research batch RB-0009 compared them; the owner answered "I don't know. You pick", so Flux became an agent working pick, not a decision.
 
 Cluster c1 now runs at home: Proxmox, kubeadm, Kubernetes 1.37.1, Cilium and Gateway API. Research batch RB-0089 updated the comparison for c1. On 2026-10-27 at 02:23 UTC the owner said yes to the proposed Argo CD with its web UI.
 

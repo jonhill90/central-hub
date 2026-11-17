@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Run the hosts checks (STD-0005). CI runs the same commands.
-# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|all]   (default: all)
+# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|proxy|all]   (default: all)
 # Needs: python3 with requirements.txt installed; tofu, tflint, kubeconform and helm on PATH, or
 # TOOLS=<dir> holding them (install-tools.sh builds them); for ansible and manifests, the
 # collections in hosts/ansible/requirements.yml (this script installs them when missing); for
-# identity, docker.
+# identity and proxy, docker (proxy: one that can run a privileged systemd container).
 # TOFU_PLUGIN_DIR=<dir> makes tofu init read providers from that folder instead of the registry,
 # for machines that can't download them; the copies then skip the lock file's hash check.
 set -euo pipefail
@@ -78,6 +78,27 @@ check_ansible() {
     (cd hosts/ansible && ansible-playbook --syntax-check -i localhost, "${playbook#hosts/ansible/}")
   done
   (cd hosts/ansible && ansible-lint --project-dir . -c "$here/ansible-lint.yml" playbooks roles)
+  python3 "$here/check-deny-rules.py"
+  bash "$here/tests/test_box_apply_baseline.sh"
+  bash "$here/tests/test_proxmox_sso.sh"
+  bash "$here/tests/test_tailnet_stack_args.sh"
+  bash "$here/tests/test_tailnet_stack_args.sh" tailnet-policy
+  bash "$here/tests/test_tailnet_policy_sections.sh"
+  bash "$here/tests/test_proxmox_host_args.sh"
+  bash "$here/tests/test_sudoers_session_args.sh"
+  # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
+  python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml
+  bash "$here/tests/test_check_check_mode.sh"
+  python3 "$here/check-hook-allowlist.py" .
+  bash "$here/tests/test_runner_hook.sh"
+  bash "$here/tests/test_pr_merge_verdict.sh"
+  bash "$here/tests/test_pass_record.sh"
+  bash "$here/tests/test_pr_merge_sweep.sh"
+  bash "$here/tests/test_merge_checked.sh"
+  bash "$here/tests/test_lifeline_nmcli_read.sh"
+  bash "$here/tests/test_lifeline_cleanup.sh"
+  bash "$here/tests/test_box_apply_inventory_vars.sh"
+  bash "$here/tests/test_opnsense_lab_tenant.sh"
 }
 
 check_manifests() {
@@ -123,6 +144,46 @@ check_manifests() {
     helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com --set address=192.0.2.10 \
       > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
   done
+  # The secret-store app with OpenBao in the cluster turned on (dev first, D-0058), so its `openbao`
+  # store and test ExternalSecret are schema-checked too.
+  helm template secret-store hosts/kubernetes/home/c1/apps/secret-store --namespace external-secrets \
+    --set openbao.inCluster=true \
+    > "$work/rendered/app-c1-secret-store-openbao.yaml"
+  # The openbao-store app with a seal node set, so the seal key's local PersistentVolume is
+  # schema-checked too, and the root chart with OpenBao turned on (its two apps and the project).
+  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set sealNode=node-1 > "$work/rendered/app-c1-openbao-store-seal.yaml"
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32 \
+    > "$work/rendered/root-c1-openbao.yaml"
+  # The dev-only measurement of the box's path through the Gateway (MEASURE-1) turned on: the root's
+  # switches and the four charts it changes, so its routes, listener and policy are schema-checked too.
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32 --set openbaoMeasure=true \
+    > "$work/rendered/root-c1-openbao-measure.yaml"
+  helm template openbao-measure hosts/kubernetes/home/c1/apps/openbao-measure --namespace openbao \
+    --set zone=example.com --set measure=true > "$work/rendered/app-c1-openbao-measure-on.yaml"
+  helm template gateway hosts/kubernetes/home/c1/apps/gateway --namespace gateway \
+    --set zone=example.com --set address=192.0.2.10 --set openbaoMeasure=true > "$work/rendered/app-c1-gateway-measure.yaml"
+  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set zone=example.com --set sealNode=node-1 --set measure=true > "$work/rendered/app-c1-openbao-store-measure.yaml"
+  # With openbaoMeasure unset, the root renders exactly as with it false, with and without OpenBao in
+  # the cluster, and passes no measure switch to any app: prod's root is as before (MEASURE-1).
+  local set unset
+  for set in "" "--set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32"; do
+    # shellcheck disable=SC2086 # $set is a list of words on purpose
+    unset=$(helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 $set)
+    # shellcheck disable=SC2086
+    if [ "$unset" != "$(helm template root hosts/kubernetes/home/c1/root --set zone=example.com \
+      --set gatewayAddress=192.0.2.10 $set --set openbaoMeasure=false)" ]; then
+      echo "manifests: the root renders differently with openbaoMeasure unset and false (${set:-default})" >&2
+      return 1
+    fi
+    if grep -Eq -- '- name: "?(measure|centralHub\.measure|openbaoMeasure)"?$' <<<"$unset"; then
+      echo "manifests: the root passes a measure switch with openbaoMeasure unset (${set:-default})" >&2
+      return 1
+    fi
+  done
   # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
   if command -v promtool >/dev/null; then
     mkdir -p "$work/rules"
@@ -147,28 +208,55 @@ check_manifests() {
 
 check_identity() {
   # Realm home imported into a real Keycloak in a container (identity/test_realm.sh), rendered with
-  # an extra user so the users loop is tested with more than the owner, and with the test sign-in
+  # an extra user so the users loop is tested with more than the owner, a Proxmox client (role proxmox_sso), a secrets store client (k8s_identity_openbao_hosts), and with the test sign-in
   # theme identity/theme/lab mounted the way the role mounts k8s_identity_theme_dir.
   collections
   mkdir -p "$work/identity"
   (cd hosts/ansible && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i localhost, \
     "$here/manifests/render.yml" -e role=k8s_identity -e template=realm.yaml.j2 \
     -e dest="$work/identity/realm.yaml" \
-    -e '{"k8s_identity_owner_email":"owner@example.com","k8s_identity_extra_users":[{"username":"viewer.one","groups":["home-viewers"]}]}' \
+    -e '{"k8s_identity_owner_email":"owner@example.com","k8s_identity_extra_users":[{"username":"viewer.one","groups":["home-viewers"]}],"k8s_identity_proxmox_hosts":["pve.example.com"],"k8s_identity_openbao_hosts":["bao.example.com"]}' \
     -e k8s_identity_theme_dir="$here/identity/theme/lab" >/dev/null)
   bash "$here/identity/test_realm.sh" "$work/identity/realm.yaml" "$here/identity/theme/lab"
 }
 
 check_backup() {
-  # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository.
+  # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository, and
+  # the agent box's off-box OPNsense copy against a local restic repository.
   bash "$here/tests/test_backup.sh"
   bash "$here/tests/test_backup_azure_cert.sh"
+  bash "$here/tests/test_opnsense_offbox.sh"
+  bash "$here/tests/test_opnsense_escrow.sh"
+  bash "$here/tests/test_secrets_bundle_offbox.sh"
+  bash "$here/tests/test_secrets_store_offbox.sh"
+  bash "$here/tests/test_secrets_store_restore.sh"
+  bash "$here/tests/test_secrets_store_snapshots.sh"
+  bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
+  bash "$here/tests/test_opnsense_backup_keyfile.sh"
+  bash "$here/tests/test_identity_signin.sh"
+  bash "$here/tests/test_rebuild_dev_stages.sh"
+  bash "$here/tests/test_rebuild_preflight.sh"
+  bash "$here/tests/test_rebuild_short_log.sh"
+}
+
+check_proxy() {
+  # Role proxmox_proxy against a stand-in Proxmox host in a container: the install beside nginx, the move from
+  # nginx, its rollbacks, a run killed part-way, an open console across a graceful reload, a host with no nginx.
+  bash "$here/tests/test_proxy.sh"
+  # The Proxmox host job end to end on the same stand-in (key line, check, refusal, apply), and the lifeline's
+  # per-user entry loaded by nft.
+  collections
+  bash "$here/tests/test_proxmox_host_job.sh"
+  bash "$here/tests/test_lifeline_uid.sh"
 }
 
 check_scripts() {
   # Warnings and errors fail; style notes do not (an agent pick, STD-0005).
   git ls-files -z -- '*.sh' | xargs -0 shellcheck --severity=warning
   echo "scripts: ShellCheck passed on $(git ls-files -- '*.sh' | wc -l) scripts"
+  bash "$here/tests/test_c1_read.sh"
+  bash "$here/tests/test_box_apply.sh"
+  bash "$here/tests/test_narrow_agent_access.sh"
   actionlint -shellcheck="$(command -v shellcheck)"
   echo "scripts: actionlint passed on $(git ls-files -- '.github/workflows/*.yml' | wc -l) workflows"
 }
@@ -180,6 +268,7 @@ case "${1:-all}" in
   identity) check_identity ;;
   scripts) check_scripts ;;
   backup) check_backup ;;
-  all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts; check_backup ;;
-  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|all]" >&2; exit 2 ;;
+  proxy) check_proxy ;;
+  all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts; check_backup; check_proxy ;;
+  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|proxy|all]" >&2; exit 2 ;;
 esac

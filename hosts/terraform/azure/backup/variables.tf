@@ -64,14 +64,64 @@ variable "app_display_name" {
   default     = "c1-backup"
 }
 
-variable "keep_sas_signer" {
-  description = "Rollback only: true gives the identity running tofu Storage Blob Data Contributor on the account again, so the nodes' old user delegation SAS works until it expires (runbook back-up-c1-off-box.md, If it fails)."
+variable "narrow_agent_access" {
+  description = "true narrows agent-azure to the backup roles (main.tf, pick 247). Turn on only on the owner's tap; once on and Owner is removed, only the owner can turn it off."
   type        = bool
   default     = false
+}
+
+variable "agent_object_id" {
+  description = "Object ID of agent-azure's service principal, the only principal the narrowing in main.tf names. Private. Needed only with narrow_agent_access."
+  type        = string
+  default     = null
 }
 
 variable "reader_app_display_name" {
   description = "Display name of the read-only app registration that dev's worker signs in as to restore prod's newest volume snapshot (Storage Blob Data Reader on the container)."
   type        = string
   default     = "c1-backup-reader"
+}
+
+variable "opnsense_container_name" {
+  description = "Blob container that holds the restic repository of OPNsense's configuration copies from the agent box (RESTIC_REPOSITORY azure:<container>:/opnsense). Its own container, so its role is separate from c1's."
+  type        = string
+  default     = "opnsense-backup"
+
+  validation {
+    condition     = var.opnsense_container_name != var.container_name
+    error_message = "opnsense_container_name must differ from container_name: each backup has its own container."
+  }
+}
+
+variable "opnsense_app_display_name" {
+  description = "Display name of the app registration the agent box signs in as to copy OPNsense's configuration off the box (Storage Blob Data Contributor on the OPNsense container only)."
+  type        = string
+  default     = "opnsense-backup"
+}
+
+variable "opnsense_vault_name" {
+  description = "Key Vault that holds the OPNsense copies' restic password: 3 to 24 letters, digits and hyphens, starting with a letter, unique in all of Azure and part of a public DNS name (<name>.vault.azure.net). Private. No default."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]{1,22}[a-zA-Z0-9]$", var.opnsense_vault_name)) && !strcontains(var.opnsense_vault_name, "--")
+    error_message = "opnsense_vault_name must be 3 to 24 letters, digits and single hyphens, starting with a letter and not ending with a hyphen."
+  }
+}
+
+variable "opnsense_vault_retention_days" {
+  description = "Days a deleted vault or secret can still be brought back (7 to 90). Purge protection is on, so nobody can shorten it."
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.opnsense_vault_retention_days >= 7 && var.opnsense_vault_retention_days <= 90 && floor(var.opnsense_vault_retention_days) == var.opnsense_vault_retention_days
+    error_message = "opnsense_vault_retention_days must be a whole number from 7 to 90."
+  }
+}
+
+variable "opnsense_escrow_role_name" {
+  description = "Name of the custom role that lets the OPNsense app set the password secret and read secrets' metadata, never their values."
+  type        = string
+  default     = "opnsense-backup password escrow"
 }

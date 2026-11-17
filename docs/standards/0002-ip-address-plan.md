@@ -14,7 +14,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNV1uvM92X9ekDHTkxTf1hLf
   approval-names: "PR #17 and head 5196b18, in the message itself"
   check: the drafting agent read the message in the IP address plan thread at 2026-10-22T07:12Z, and the recorded wording matched it exactly. It names the PR and the head SHA itself. An independent check by a reviewing agent is still to do.
-  merged: PR #17, commit e87667b
+  merged: "PR #17, commit e87667b"
 ---
 
 # STD-0002: IP address plan
@@ -64,6 +64,7 @@ kubeadm MUST be given `--service-cidr` and the CNI its pod range from this table
 | 20 | `10.1.20.0/24` | QA and stage | `10.1.20.224/27` |
 | 30 | `10.1.30.0/24` | dev | `10.1.30.224/27` |
 | 50 | `10.1.50.0/24` | management | none |
+| 60 | `10.1.60.0/24` | tenant lab | none |
 
 The copy in code of this table is `hosts/ansible/inventories/home/group_vars/all/vlans.yml` (list `lab_vlans`), which Terraform and Ansible both read. This table is the rule. The docs check (`.github/docs-check/check_vlans.py`) fails when the file differs from it in a VLAN ID, use or prefix, so a VLAN change edits both in one PR.
 

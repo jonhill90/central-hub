@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwNC3VZmTAMC2buEXh8pCC9LJ
   approval-names: "neither the PR nor the head; it answers the question naming ADR 0001 and ADR 0002 (07:25Z)"
   check: the drafting agent read the message in the project thread at 2026-10-11T07:31Z and it matches. It answers the question "Do you accept ADR 0001 and ADR 0002?" (same thread, 07:25Z), and at 07:28:13Z the owner had said that he had approved the PRs; an independent check by a reviewing agent is still to do
-  merged: jonhill90 merged PR #2 at 2026-10-11T07:25Z; the merged record matches the approved commit exactly
+  merged: "jonhill90 merged PR #2 at 2026-10-11T07:25Z; the merged record matches the approved commit exactly"
 revisit-when: a second person gets merge rights with different trust per environment; rendered per-environment diffs become worth an extra moving part; a contributor appears whose tool can't name branches by type; or a search of real repositories finds environment branches working well for pull-based config (no such search has been run)
 ---
 
@@ -83,7 +83,7 @@ Chosen option: **1**.
 - **Short-lived branch names:** `<type>/<short-description>`, for example `fix/cert-renewal`.
   - Lowercase letters, digits and hyphens after the slash, one slash only. An issue number may lead the description, as in `fix/123-cert-renewal`.
   - Deleted on merge.
-  - The proposed types are below. `feat` and `fix` are Conventional Commits types; the others come from the commitlint conventional list. In Conventional Branch 1.1.0, `feat` and `fix` are standard aliases and the rest are documented custom types, which this record documents. Seven of the eight already head 1,714 of the owner's 2,379 PRs (72%) across his 7 readable repos; `revert` has not been used yet.
+  - The proposed types are below. `feat` and `fix` are Conventional Commits types; the others come from the commitlint conventional list. In Conventional Branch 1.1.0, `feat` and `fix` are standard aliases and the rest are documented custom types, which this record documents. Seven of the eight already head 1,714 of the owner's 2,379 PRs (72%) across the owner's 7 readable repos; `revert` has not been used yet.
 
   | Type | Use for | Covers the owner's words |
   |---|---|---|
@@ -106,7 +106,7 @@ Chosen option: **1**.
   - Dependency bots title their PRs with a type: Dependabot's `commit-message.prefix: chore` sets the PR title prefix (fetched 2026-10-11). Renovate has an equivalent setting (memory, not fetched). A bot whose title can't be configured is exempt from the check by author.
   - A PR made with the host's revert button keeps its `Revert "…"` title and is accepted by the check as a revert. The title shape is from memory and is to be tested.
 - **What gets checked, and when:**
-  - Until the Activation gate, nothing is enforced. The owner checks the PR title when he merges, reading the input diff knowing that it doesn't show the rendered manifests.
+  - Until the Activation gate, nothing is enforced. The owner checks the PR title when they merge, reading the input diff knowing that it doesn't show the rendered manifests.
   - At the Activation gate, the trusted verifier (Foundation AG2) adds three things:
     - a required title check that runs when a PR is opened, edited or updated. It is a status check, not a commit-metadata rule, because the host applies metadata rules to every commit in a squashed PR (fetched 2026-10-11);
     - a rendered, manifest-level diff posted on each PR, comparing the base and the PR head with the renderer versions and resolved dependencies named. Production impact is marked by what renders differently for production, not by which folder changed, so a change to a shared base is caught. A render that fails or is incomplete fails the check. Secrets stay encrypted in the report;

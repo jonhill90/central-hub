@@ -9,14 +9,18 @@
 
 # A changed Keycloak (a new theme, hostname or resources) restarts its pod, and the old status can
 # still say Ready for a moment. So: wait until the operator has seen this generation, then until the
-# StatefulSet's rollout is done, then Ready. Without it the realm delete below can hit the pod while
-# it restarts (measured on c1 2026-11-09: "Connection refused" on localhost:8080).
+# StatefulSet exists (a first install makes it a moment after the operator saw the generation; measured
+# on a fresh dev cluster 2026-11-14: "statefulsets.apps sso not found"), then until its rollout is done,
+# then Ready. Without it the realm delete below can hit the pod while it restarts
+# (measured on c1 2026-11-09: "Connection refused" on localhost:8080).
 - name: keycloak | Keycloak ready, at this generation
   ansible.builtin.shell: >-
     set -o pipefail &&
     gen=$(kubectl -n {{ k8s_identity_namespace }} get keycloak/{{ k8s_identity_name }} -o jsonpath='{.metadata.generation}') &&
     kubectl -n {{ k8s_identity_namespace }} wait keycloak/{{ k8s_identity_name }} --timeout=600s
     "--for=jsonpath={.status.observedGeneration}=$gen" &&
+    for i in $(seq 60); do
+    kubectl -n {{ k8s_identity_namespace }} get statefulset/{{ k8s_identity_name }} >/dev/null 2>&1 && break; sleep 5; done &&
     kubectl -n {{ k8s_identity_namespace }} rollout status statefulset/{{ k8s_identity_name }} --timeout=600s &&
     kubectl -n {{ k8s_identity_namespace }} wait keycloak/{{ k8s_identity_name }} --for=condition=Ready --timeout=600s
   args: {executable: /bin/bash}

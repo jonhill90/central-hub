@@ -15,8 +15,8 @@ accepted-evidence:
   approved-commit: 426ba8fe09c25d09a53d4578499374b1029bf8c2
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN1Gnn97mj1fpLXFxgZq2sb9
   approval-names: "PR #4 by context; it answers the agent's request to review PR #4 and accept again (05:21Z), sent after commit 426ba8f"
-  check: the drafting agent read the message in the project thread at 2026-10-12T05:24Z, and the recorded wording matched its opening sentences. It answers "look at PR #4 and write accept again" (same thread, 05:21Z), sent after the diagram commit 426ba8f. An earlier one-word acceptance at 05:19:35Z predates the diagram, so it is not counted. An independent check by a reviewing agent is still to do.
-  merged: PR #4 merged at 2026-10-12T05:25Z as aa8ac8c, with this evidence commit on top of the approved commit
+  check: "the drafting agent read the message in the project thread at 2026-10-12T05:24Z, and the recorded wording matched its opening sentences. It answers \"look at PR #4 and write accept again\" (same thread, 05:21Z), sent after the diagram commit 426ba8f. An earlier one-word acceptance at 05:19:35Z predates the diagram, so it is not counted. An independent check by a reviewing agent is still to do."
+  merged: "PR #4 merged at 2026-10-12T05:25Z as aa8ac8c, with this evidence commit on top of the approved commit"
 revisit-when: a family needs numbers faster than one owner can hand them out; agents start citing local labels across repos often enough that they need global IDs; a tool or knowledge system is adopted that brings its own ID scheme; or the registry grows past about 10 families
 ---
 
