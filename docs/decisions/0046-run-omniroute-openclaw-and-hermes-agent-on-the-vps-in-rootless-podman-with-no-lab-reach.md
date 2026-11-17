@@ -16,7 +16,7 @@ revisit-when: an app needs more memory than its cap or the VPS has; an app needs
 
 ## Context and Problem Statement
 
-At 08:23:08 UTC on 2026-11-14 the owner asked to host OpenClaw and Hermes on his VPS, as part of the lab's network, and said the lab also needs OmniRoute (cmsg_01X43rfNYp4H1dL1V2dkfkwNB4NvHXxTVXu6Mw171TiuAq).
+At 08:23:08 UTC on 2026-11-14 the owner asked to host OpenClaw and Hermes on their VPS, as part of the lab's network, and said the lab also needs OmniRoute (cmsg_01X43rfNYp4H1dL1V2dkfkwNB4NvHXxTVXu6Mw171TiuAq).
 
 - **OpenClaw** (`openclaw/openclaw`) and **Hermes Agent** (`NousResearch/hermes-agent`) are self-hosted AI agents that run tools and talk to chat platforms. **OmniRoute** (`cheaper-inference/OmniRoute`, formerly `diegosouzapw/OmniRoute`) is a gateway that gives one OpenAI-style endpoint in front of many model providers.
 - The VPS is already a node on the lab's tailnet, tagged `tag:vps`. No grant has `tag:vps` as its source, so it starts no connection to the lab. It has 4 vCPU, 15 GiB of memory and 199 GB of disk, and runs nothing yet.
@@ -26,7 +26,7 @@ At 08:23:08 UTC on 2026-11-14 the owner asked to host OpenClaw and Hermes on his
 
 ## Decision Drivers
 
-- **The owner's ask**: the three apps on his VPS, on the lab's network.
+- **The owner's ask**: the three apps on their VPS, on the lab's network.
 - **No lab reach for internet-facing agents**: they read untrusted messages and run tools.
 - **No key on a host where agent sessions are root.**
 - **FOSS with no paid feature in use, and an exit path** (STD-0006, REQ-0032).
@@ -62,7 +62,7 @@ Diagram: not applicable. The apps add no route to the lab; the only network path
 5. **Holds.** S1 and S3 wait until S2 is installed on the box, so `tag:agent` never loses root on the VPS before `vps-host` exists. After the owner's tap for a box limit (D-0042 rule 6), the box installs the change itself when a line in `hosts/ansible/agent-box-limit-approvals.txt` names its exact digest (D-0044 rules 1 and 2, agent pick 232). That route never writes the box's inventory (D-0044 rule 4, D-0036 rule 7), and `vps-host` needs the VPS's name, which stays in the private inventory (rule 11). So S2 installs by an approvals line only if it needs no new inventory value, and otherwise by one controller apply (D-0036 rule 6).
 6. **The owner's own steps, named in their smallest form.** None is hidden in a tap.
    - **J1** (money and secrets): create one model-provider API key, with billing and a monthly spend cap set in the provider's console. OmniRoute fronts all three apps, so one key serves them.
-   - **J2** (secrets): type that key himself into OpenBao's web UI on 443, path `kv/vps/provider-key`. No chat paste, no Mac step, no typed line.
+   - **J2** (secrets): type that key themselves into OpenBao's web UI on 443, path `kv/vps/provider-key`. No chat paste, no Mac step, no typed line.
    - **J3**: one tap on a card that names S1, S2, S4 and S6 and their commits (D-0042 rule 6: firewall and tailnet, the box's limits, access rights). If a card may name only one plan, two cards back to back.
    - **J4**: no chat bot tokens at first. A bot token is a later step of its own, only if the owner wants a chat channel.
    - **J5** (secrets): one tap on a card that names S7 and its commit, after J2. It is not part of J3, because it copies a secret onto the agent box (D-0042 rule 6).

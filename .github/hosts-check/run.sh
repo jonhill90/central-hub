@@ -256,6 +256,7 @@ check_scripts() {
   echo "scripts: ShellCheck passed on $(git ls-files -- '*.sh' | wc -l) scripts"
   bash "$here/tests/test_c1_read.sh"
   bash "$here/tests/test_box_apply.sh"
+  bash "$here/tests/test_narrow_agent_access.sh"
   actionlint -shellcheck="$(command -v shellcheck)"
   echo "scripts: actionlint passed on $(git ls-files -- '.github/workflows/*.yml' | wc -l) workflows"
 }

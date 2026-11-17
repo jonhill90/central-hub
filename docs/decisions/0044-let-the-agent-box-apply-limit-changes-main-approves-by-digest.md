@@ -26,19 +26,19 @@ revisit-when: the box can check the owner's tap itself (for example a GitHub env
 
 D-0036 lets the agent box apply its own role from reviewed main, and keeps the box's limits (rule 3: the sudo rules, the guard settings, the wrappers, the users, the units that run with the keys, and `box-apply` itself) behind the owner. Rule 6 sends every limit change to an apply from the controller, the owner's Mac. D-0042 rule 4 kept that, made the owner's approval a tap (rule 6), and left open how limit changes "reach the box without the Mac".
 
-**This record reverses an answer of the owner's and weakens a step he kept.**
+**This record reverses an answer of the owner's and weakens a step they kept.**
 
-- It reverses his answer of 2026-11-14 02:26 UTC on D-0036's card: an agent can't loosen its own limits. Under this record an agent can, with a made-up tap id that the box can't tell from a real one (rule 3).
+- It reverses their answer of 2026-11-14 02:26 UTC on D-0036's card: an agent can't loosen its own limits. Under this record an agent can, with a made-up tap id that the box can't tell from a real one (rule 3).
 - It makes D-0042 rule 6's tap for the box's limits something the box only logs, not enforces. A change that weakens a rule 6 step is itself a rule 6 step (D-0042 rule 11).
 
-So it is accepted only by the owner's own tap on a card naming this record's PR and head, as a change of his mind (REQ-0030), and never by the agents' pass. Until then it stays proposed, and the approvals file stays empty.
+So it is accepted only by the owner's own tap on a card naming this record's PR and head, as a change of their mind (REQ-0030), and never by the agents' pass. Until then it stays proposed, and the approvals file stays empty.
 
-The owner's message of 2026-11-14 07:47:50 UTC said he would no longer type go lines (that this is for the greenfield build-out is the agents' reading of his message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and the Mac session's auto-mode check lets a raw run go only on typed words (D-0057 rule 5). So no limit change has reached the box since its baseline, 9d519572. Main has 19 limit changes since then, from #276, #284, #288, #289 and #302, and the installed `box-apply` stops on all of them (evidence, finding 1). The owner's end goal is that an agent rebuilds the whole lab from the box or a cloud session with no Mac step (project memory, 2026-11-13).
+The owner's message of 2026-11-14 07:47:50 UTC said they would no longer type go lines (that this is for the greenfield build-out is the agents' reading of the owner's message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and the Mac session's auto-mode check lets a raw run go only on typed words (D-0057 rule 5). So no limit change has reached the box since its baseline, 9d519572. Main has 19 limit changes since then, from #276, #284, #288, #289 and #302, and the installed `box-apply` stops on all of them (evidence, finding 1). The owner's end goal is that an agent rebuilds the whole lab from the box or a cloud session with no Mac step (project memory, 2026-11-13).
 
 ## Decision Drivers
 
-- **The owner's messages.** His message of 07:47:50 UTC said he would no longer type go lines (that this is for the greenfield build-out is the agents' reading of his message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and his messages of 07:42 to 07:44 UTC said PRs should no longer come to him for approval. At 07:43:25 UTC he pointed to his earlier rules without listing them; D-0042 reads them as firewall and tailnet (D-0036 rule 8), deletes and secrets (agent picks).
-- **The owner's earlier answer that an agent can't loosen its own limits** (his tap of 2026-11-14 02:26 UTC on D-0036's card). D-0042 rule 6 keeps his tap for limit changes.
+- **The owner's messages.** Their message of 07:47:50 UTC said they would no longer type go lines (that this is for the greenfield build-out is the agents' reading of the owner's message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and their messages of 07:42 to 07:44 UTC said PRs should no longer come to them for approval. At 07:43:25 UTC they pointed to their earlier rules without listing them; D-0042 reads them as firewall and tailnet (D-0036 rule 8), deletes and secrets (agent picks).
+- **The owner's earlier answer that an agent can't loosen its own limits** (their tap of 2026-11-14 02:26 UTC on D-0036's card). D-0042 rule 6 keeps their tap for limit changes.
 - **What the box can check, it checks.** It can check commits and bytes. It can't read chat messages or decision cards.
 - **Deterministic** (the owner's ranking of 2026-11-11).
 - **Replaceable** (REQ-0011): undone by emptying the approvals file, or by an older `box-apply`.
@@ -53,7 +53,7 @@ The owner's message of 2026-11-14 07:47:50 UTC said he would no longer type go l
 
 ## Decision Outcome
 
-Chosen option: **1**. It needs no new sudo argument, and the box checks everything it can: the baseline, the commit and the exact bytes. Option 5 leaves every limit change waiting on typed words the owner said he won't give.
+Chosen option: **1**. It needs no new sudo argument, and the box checks everything it can: the baseline, the commit and the exact bytes. Option 5 leaves every limit change waiting on typed words the owner said they won't give.
 
 ```mermaid
 flowchart LR

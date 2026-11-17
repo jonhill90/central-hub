@@ -16,7 +16,7 @@ revisit-when: the move from nginx has run on the host (then this record can be a
 
 ## Context and Problem Statement
 
-On 2026-11-14 at 03:51 UTC the owner asked never to reach anything over a non-standard port, and asked why Proxmox was not on 443 (cmsg_01X43rfNYp4H1dL1V2dkfkwN6Bf1nxMc9HHoCZ9eqA9CDr). A few minutes later he said yes to a proxy on the host, as agent pick 224 records. Proxmox's own server, `pveproxy`, listens on 8006, so a reverse proxy on the host answers on 443 and passes everything to it on `127.0.0.1:8006` (runbook [serve-proxmox-on-443.md](../runbooks/serve-proxmox-on-443.md)).
+On 2026-11-14 at 03:51 UTC the owner asked never to reach anything over a non-standard port, and asked why Proxmox was not on 443 (cmsg_01X43rfNYp4H1dL1V2dkfkwN6Bf1nxMc9HHoCZ9eqA9CDr). A few minutes later they said yes to a proxy on the host, as agent pick 224 records. Proxmox's own server, `pveproxy`, listens on 8006, so a reverse proxy on the host answers on 443 and passes everything to it on `127.0.0.1:8006` (runbook [serve-proxmox-on-443.md](../runbooks/serve-proxmox-on-443.md)).
 
 The first proxy was Debian's nginx. Between 04:43:45 and 04:44:57 UTC the same day the owner ruled that no piece of the lab may hold something back behind a paywall (cmsg_01X43rfNYp4H1dL1V2dkfkwNR46AufLXRC146Xo4CSXG6t, cmsg_01X43rfNYp4H1dL1V2dkfkwNQV7TsveqXKdLbddnuYc8v7, cmsg_01X43rfNYp4H1dL1V2dkfkwN5A1ezB3rCi7zkVswXeZkB4). nginx's company keeps modules such as JWT authentication in its commercial build, so nginx fails STD-0006 rule 2, and the register lists it as `fail` with a `pending` exception. PR #336 rebuilt the role as `proxmox_proxy` with Apache httpd (agent pick 234). No decision record chose either program.
 

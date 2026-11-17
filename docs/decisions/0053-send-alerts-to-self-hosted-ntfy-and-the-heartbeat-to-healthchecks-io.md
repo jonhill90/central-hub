@@ -21,7 +21,7 @@ c1's Alertmanager sends alerts to an ntfy server running on c1 (`hosts/kubernete
 ntfy reached c1 in PR #72 on 2026-11-08 as an agent pick, with no comparison behind it. The owner's words this rests on:
 
 - 2026-11-09 at 23:00 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNEqt6eUmcny6bD1AKPp86uJ): alerting needs proper research, because ntfy was probably picked from memory rather than researched. Research batch RB-0181 then compared how alerts can work and what comparable home labs use.
-- 2026-11-12 at 22:20 UTC (agent pick 171, which records his answer): keep ntfy with everyone denied by default, send-only tokens for Alertmanager and Proxmox, and a read login for him.
+- 2026-11-12 at 22:20 UTC (agent pick 171, which records their answer): keep ntfy with everyone denied by default, send-only tokens for Alertmanager and Proxmox, and a read login for them.
 - 2026-11-12 at 22:21 UTC (agent pick 213): an outside heartbeat on Healthchecks.io's free plan.
 
 At main 07408f9, ntfy is named in 22 files in `hosts/` and 8 runbooks, and Healthchecks in 7 files in `hosts/` and 3 runbooks. No record names either.

@@ -16,8 +16,8 @@ accepted-evidence:
   approval-ref: the orchestrator thread's message to the Plan thread of 2026-11-16T06:12:51Z recording the reviewer's clearance (06:11:14Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNJVnsFS1px4pXrQYEDpvTzT) and the passes of Councils A (06:09:04Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNJeqFBSqTpKTyeeQWCYMffJ), B (D-0049, 06:11:39Z, cmsg_01X43rfNYp4H1dL1V2dkfkwN6An4874HcSoSaGLqkmv6hz) and C (06:09:32Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNXB561ABmu2eMeFPN4kJywC) for this record as merged at 135f589, each saying acceptance by the agents' pass under D-0042 rule 3 is fine; it reached the Plan thread as a thread relay, which carries no message id
   approval-names: "each pass names D-0049 and commit 135f5895419d841b489ec9b159a940126c34acff, the squash merge of PR #366, the last change to this record's text"
   check: "approved-by is agents under D-0042 rules 1 and 3, because this record's own line says it becomes accepted once the pick is in use and passes STD-0006, after the owner kept it as written on card cmsg_01X43rfNYp4H1dL1V2dkfkwN1TjGnbUJUBa4TLNk8AL3gv (option 0, 2026-11-15T04:51:59Z); measured on main f27e322: in use (90 .tf files under hosts/terraform, 341 files under hosts/ansible, the AlmaLinux image pinned in hosts/terraform/home/k8s/variables.tf, Debian in hosts/terraform/home/remote-access), and OpenTofu, OpenTofu providers, Ansible, AlmaLinux and Debian are pass in docs/standards/components.yaml; waits-on is empty; the merge verdict's rule-11 pattern finds no hit, so D-0042 rule 11 does not send it to the owner. This PR changes only this record's status, date and accepted-evidence and its row in the decisions index, which the reviewer checks against 135f589 (D-0001)"
-  merged: not yet; a follow-up PR fills this in after the merge (D-0001)
-revisit-when: c1 moves to an immutable OS such as Talos; AlmaLinux or Debian changes its licence, governance or free availability; the owner rules that a sponsor's paid FIPS offer makes AlmaLinux fail his rule of 2026-11-14; the lab needs FIPS-validated cryptography; a research batch compares Linux distributions for the lab's machines; or one distribution everywhere is wanted
+  merged: "PR #394 squash-merged at head bea263e as 01d100c, whose commit time is 2026-11-16T06:28:29Z (GitHub's merged_at for the PR is 06:28:30Z); the follow-up PR that adds this line changes nothing else in this record (D-0001)"
+revisit-when: c1 moves to an immutable OS such as Talos; AlmaLinux or Debian changes its licence, governance or free availability; the owner rules that a sponsor's paid FIPS offer makes AlmaLinux fail their rule of 2026-11-14; the lab needs FIPS-validated cryptography; a research batch compares Linux distributions for the lab's machines; or one distribution everywhere is wanted
 ---
 
 # Run AlmaLinux 10 on the lab's Linux virtual machines, and Debian only where it comes with the platform (the Proxmox host and its container template)
@@ -73,8 +73,8 @@ The owner's words of 04:44:57 UTC reach further than STD-0006's register row, so
   - Support and longer fixes are support and tested builds too.
   - The lab does not use FIPS mode, and rule 3 below keeps every sponsor repository off its machines.
   - The register already counts AlmaLinux as a pass.
-- **What would change it.** If the owner rules that a sponsor's paid FIPS offer counts as a paywall under his words of 2026-11-14, this record is revisited (`revisit-when`).
-- **Why it stays proposed.** It stays proposed until the owner rules on the FIPS reading, because the register row he approved did not weigh it.
+- **What would change it.** If the owner rules that a sponsor's paid FIPS offer counts as a paywall under their words of 2026-11-14, this record is revisited (`revisit-when`).
+- **Why it stays proposed.** It stays proposed until the owner rules on the FIPS reading, because the register row they approved did not weigh it.
 - **The owner's call (2026-11-15).** At 04:51:59 UTC, on card `cmsg_01X43rfNYp4H1dL1V2dkfkwN1TjGnbUJUBa4TLNk8AL3gv`, the owner chose to keep this record and D-0048 as written, with the lab using only the free parts; the paid FIPS offer is not used. The status still follows the pick-records rule: `accepted` once the pick is in use and passes STD-0006.
 - **Debian** has no paid side: its social contract says "We promise that the Debian system and all its components will be free".
 

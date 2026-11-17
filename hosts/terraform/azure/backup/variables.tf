@@ -64,10 +64,16 @@ variable "app_display_name" {
   default     = "c1-backup"
 }
 
-variable "keep_sas_signer" {
-  description = "Rollback only: true gives the identity running tofu Storage Blob Data Contributor on the account again, so the nodes' old user delegation SAS works until it expires (runbook back-up-c1-off-box.md, If it fails)."
+variable "narrow_agent_access" {
+  description = "true narrows agent-azure to the backup roles (main.tf, pick 247). Turn on only on the owner's tap; once on and Owner is removed, only the owner can turn it off."
   type        = bool
   default     = false
+}
+
+variable "agent_object_id" {
+  description = "Object ID of agent-azure's service principal, the only principal the narrowing in main.tf names. Private. Needed only with narrow_agent_access."
+  type        = string
+  default     = null
 }
 
 variable "reader_app_display_name" {

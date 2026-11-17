@@ -493,7 +493,7 @@ components:
     paid-edition-source: https://azure.microsoft.com/en-us/pricing/
     verdict: hosted
     exit-path: restic copy to S3, SFTP, rest-server or local disk (D-0033)
-    sources: [url:graph.microsoft.com, url:login.microsoftonline.com, url:storage.azure.com, url:vault.azure.net, provider:hashicorp/azurerm, provider:hashicorp/azuread]
+    sources: [url:graph.microsoft.com, url:login.microsoftonline.com, url:schema.management.azure.com, url:storage.azure.com, url:vault.azure.net, provider:hashicorp/azurerm, provider:hashicorp/azuread]
     checked: 2026-11-14
   - name: Cloudflare
     kind: hosted

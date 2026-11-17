@@ -62,7 +62,7 @@ flowchart LR
   C --> G[git keeps the accepted text]
 ```
 
-*In words:* if the decision would change, or it's unclear, it is a decision change (below), not a correction. Otherwise open a correction PR that lists each change with its before and after text. A reviewing agent first says whether each change leaves the decision unchanged; if not, it is handled as a decision change. The owner then approves the PR the same way he accepts a record. If he declines, the PR closes, and a decision change follows only if he says the decision should change. Once approved, the record is edited in place so it reads as the current text, one line is added to the corrections log, and a reviewing agent compares the merged record with the approved commit. Git keeps the text as it was accepted.
+*In words:* if the decision would change, or it's unclear, it is a decision change (below), not a correction. Otherwise open a correction PR that lists each change with its before and after text. A reviewing agent first says whether each change leaves the decision unchanged; if not, it is handled as a decision change. The owner then approves the PR the same way they accept a record. If they decline, the PR closes, and a decision change follows only if they say the decision should change. Once approved, the record is edited in place so it reads as the current text, one line is added to the corrections log, and a reviewing agent compares the merged record with the approved commit. Git keeps the text as it was accepted.
 
 ### What counts as a correction
 

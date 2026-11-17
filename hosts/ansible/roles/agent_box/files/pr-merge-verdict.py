@@ -180,7 +180,7 @@ def main():
     if pr["head"]["sha"] != head: why.append("head is %s, not the one named" % pr["head"]["sha"][:7])
     if pr.get("mergeable") is not True or pr.get("mergeable_state") not in ("clean", "has_hooks"):
         why.append("GitHub does not report a clean merge (mergeable=%s, state=%s)" % (pr.get("mergeable"), pr.get("mergeable_state")))
-    if len(files) >= 100: why.append("100 or more changed files; not checked")
+    if len(files) >= 3000: why.append("3000 or more changed files; GitHub lists no more, so the rest are not checked")
     runs = checks.get("check_runs", [])
     if checks.get("total_count", len(runs)) != len(runs): why.append("read %d of %d check runs; not checked" % (len(runs), checks["total_count"]))
     if not runs and not status.get("statuses"): why.append("no checks reported on this head")

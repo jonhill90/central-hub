@@ -26,7 +26,7 @@ revisit-when: a kind folder passes about 30 files; a second reader group (not th
 
 D-0008 names `docs/PRD.md`, `docs/specs/`, `docs/decisions/` and `docs/runbooks/`. D-0009 adds `docs/standards/`. D-0011 leaves the folders inside `docs/` to the documentation folder map work.
 
-On 2026-10-22 at 06:58 UTC the owner asked which folders central-hub needs for plans, specs, runbooks, architecture and any other kind of document that each likely scenario calls for. He also raised the runbook format as open. On 2026-10-19 at 02:43 UTC the owner had asked that a runbook explain why each step is done, briefly, and how the steps connect, so it reads like a story with reminders that link back; and that each job get a manual runbook first and an automated one later, because starting with the abstractions would hide what they are worth.
+On 2026-10-22 at 06:58 UTC the owner asked which folders central-hub needs for plans, specs, runbooks, architecture and any other kind of document that each likely scenario calls for. They also raised the runbook format as open. On 2026-10-19 at 02:43 UTC the owner had asked that a runbook explain why each step is done, briefly, and how the steps connect, so it reads like a story with reminders that link back; and that each job get a manual runbook first and an automated one later, because starting with the abstractions would hide what they are worth.
 
 This record sets which kinds of document central-hub keeps, where each one goes, and the minimum content of a runbook and a postmortem. It creates no folder.
 

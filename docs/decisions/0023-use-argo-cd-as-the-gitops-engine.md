@@ -26,7 +26,7 @@ revisit-when: an Argo CD release lists the cluster's Kubernetes minor as tested,
 
 central-hub is meant to become a GitOps repository: a cluster pulls its desired state from `main` (D-0002). Activation gate item 4 asks for "a pinned, no-writer GitOps engine install", and the engine was not chosen (AGENTS.md, CLAUDE.md).
 
-On 2026-10-13 the owner asked to compare Flux and Argo CD and said either way the system must let him switch. Research batch RB-0009 compared them; the owner answered "I don't know. You pick", so Flux became an agent working pick, not a decision.
+On 2026-10-13 the owner asked to compare Flux and Argo CD and said either way the system must let them switch. Research batch RB-0009 compared them; the owner answered "I don't know. You pick", so Flux became an agent working pick, not a decision.
 
 Cluster c1 now runs at home: Proxmox, kubeadm, Kubernetes 1.37.1, Cilium and Gateway API. Research batch RB-0089 updated the comparison for c1. On 2026-10-27 at 02:23 UTC the owner said yes to the proposed Argo CD with its web UI.
 

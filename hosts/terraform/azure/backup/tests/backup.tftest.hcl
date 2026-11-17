@@ -186,25 +186,6 @@ run "backup_app_owned_by_the_runner" {
   }
 }
 
-# The way back to the SAS is off unless asked for, and then sits on the account for the runner only.
-run "no_sas_signer_by_default" {
-  assert {
-    condition     = length(azurerm_role_assignment.sas_signer) == 0
-    error_message = "The SAS signer's role must not exist unless keep_sas_signer is true."
-  }
-}
-
-run "sas_signer_on_rollback" {
-  variables {
-    keep_sas_signer = true
-  }
-
-  assert {
-    condition     = length(azurerm_role_assignment.sas_signer) == 1 && azurerm_role_assignment.sas_signer[0].scope == azurerm_storage_account.backup.id && azurerm_role_assignment.sas_signer[0].principal_id == "11111111-1111-1111-1111-111111111111"
-    error_message = "With keep_sas_signer the runner gets the role on the account."
-  }
-}
-
 # Dev's restore identity (TASK-0240) reads the backup container and nothing else: a data role that
 # can't write or delete, scoped to the container, on its own app that the runner owns.
 run "reader_app_reads_the_container_only" {
@@ -350,4 +331,76 @@ run "refuses_a_bad_vault_name" {
   }
 
   expect_failures = [var.opnsense_vault_name]
+}
+
+# Narrowing of agent-azure's own rights (pick 247): nothing unless narrow_agent_access is on.
+override_data {
+  target = data.azurerm_subscription.current
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000"
+  }
+}
+
+override_resource {
+  target = azuread_service_principal.reader
+  values = {
+    object_id = "77777777-7777-7777-7777-777777777777"
+  }
+}
+
+override_resource {
+  target = azurerm_role_definition.opnsense_escrow
+  values = {
+    role_definition_id          = "88888888-8888-8888-8888-888888888888"
+    role_definition_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/88888888-8888-8888-8888-888888888888"
+  }
+}
+
+run "agent_access_unchanged_by_default" {
+  assert {
+    condition     = length(azurerm_role_assignment.agent_role_admin) == 0 && length(azurerm_subscription_policy_assignment.deny_shared_key) == 0 && length(azurerm_subscription_policy_assignment.deny_vault_access_policies) == 0
+    error_message = "With narrow_agent_access off, nothing about agent-azure's rights may be planned."
+  }
+}
+
+run "agent_access_narrowed" {
+  variables {
+    narrow_agent_access = true
+    agent_object_id     = "99999999-9999-9999-9999-999999999999"
+  }
+
+  assert {
+    condition     = azurerm_role_assignment.agent_role_admin[0].role_definition_name == "Role Based Access Control Administrator" && azurerm_role_assignment.agent_role_admin[0].scope == azurerm_resource_group.backup.id && azurerm_role_assignment.agent_role_admin[0].principal_id == "99999999-9999-9999-9999-999999999999" && azurerm_role_assignment.agent_role_admin[0].principal_type == "ServicePrincipal" && azurerm_role_assignment.agent_role_admin[0].condition_version == "2.0"
+    error_message = "agent-azure gets RBAC Administrator on the backup resource group only, as the pinned principal, with a 2.0 condition."
+  }
+
+  assert {
+    condition     = length(regexall("GuidEquals \\{ba92f5b4-2d11-453d-a403-e96b0029c9fe, 2a2b9908-6ea1-4ae2-8e65-a410df84e7d1, 88888888-8888-8888-8888-888888888888\\}", azurerm_role_assignment.agent_role_admin[0].condition)) == 2 && length(regexall("GuidEquals \\{55555555-5555-5555-5555-555555555555, 77777777-7777-7777-7777-777777777777, 66666666-6666-6666-6666-666666666666\\}", azurerm_role_assignment.agent_role_admin[0].condition)) == 2 && length(regexall("GuidEquals \\{", azurerm_role_assignment.agent_role_admin[0].condition)) == 4
+    error_message = "The condition may name only the two blob data roles and the escrow role's GUID, and only the three backup apps, once each for adding and removing."
+  }
+
+  assert {
+    condition     = length(regexall("@Request\\[Microsoft.Authorization/roleAssignments:(RoleDefinitionId|PrincipalId)\\]", azurerm_role_assignment.agent_role_admin[0].condition)) == 2 && length(regexall("@Resource\\[Microsoft.Authorization/roleAssignments:(RoleDefinitionId|PrincipalId)\\]", azurerm_role_assignment.agent_role_admin[0].condition)) == 2 && length(regexall("ActionMatches\\{'Microsoft.Authorization/roleAssignments/(write|delete)'\\}", azurerm_role_assignment.agent_role_admin[0].condition)) == 2
+    error_message = "Both adding (@Request) and removing (@Resource) must be limited by role and by principal."
+  }
+
+  assert {
+    condition     = azurerm_subscription_policy_assignment.deny_shared_key[0].policy_definition_id == "/providers/Microsoft.Authorization/policyDefinitions/8c6a50c6-9ffd-4ae7-986f-5fa6111f9a54" && jsondecode(azurerm_subscription_policy_assignment.deny_shared_key[0].parameters).effect.value == "Deny" && azurerm_subscription_policy_assignment.deny_shared_key[0].subscription_id == "/subscriptions/00000000-0000-0000-0000-000000000000"
+    error_message = "The shared-key rule must be the built-in with effect Deny, on the whole subscription."
+  }
+
+  assert {
+    condition     = azurerm_subscription_policy_assignment.deny_vault_access_policies[0].policy_definition_id == "/providers/Microsoft.Authorization/policyDefinitions/12d4fa5e-1f9f-4c21-97a9-b99b3c6611b5" && jsondecode(azurerm_subscription_policy_assignment.deny_vault_access_policies[0].parameters).effect.value == "Deny" && azurerm_subscription_policy_assignment.deny_vault_access_policies[0].subscription_id == "/subscriptions/00000000-0000-0000-0000-000000000000"
+    error_message = "The vault-model rule must be the built-in with effect Deny, on the whole subscription."
+  }
+}
+
+run "agent_access_needs_the_pinned_principal" {
+  command = plan
+
+  variables {
+    narrow_agent_access = true
+  }
+
+  expect_failures = [azurerm_role_assignment.agent_role_admin]
 }

@@ -25,7 +25,7 @@ case "$method $last" in
   "GET https://api.github.com/repos/jonhill90/central-hub/pulls?state=open"*) reply "[{\"number\":7,\"head\":{\"sha\":\"$FAKE_HEAD\"}}]" ;;
   "GET "*"/pulls?state=open"*) reply '[]' ;;
   "GET "*"/pulls/7") reply "{\"state\":\"open\",\"draft\":false,\"base\":{\"ref\":\"main\",\"sha\":\"c\"},\"head\":{\"sha\":\"$FAKE_HEAD\"},\"mergeable\":true,\"mergeable_state\":\"clean\",\"body\":\"Author-Lane: OpenBao thread\"}" ;;
-  "GET "*"/pulls/7/files"*) reply '[{"filename":"docs/runbooks/x.md"}]' ;;
+  "GET "*"/pulls/7/files"*) if [[ -n ${FAKE_FILES_N:-} ]]; then pg=${last##*page=}; python3 -I -c 'import json,sys; n,p=int(sys.argv[1]),int(sys.argv[2]); print(json.dumps([{"filename":"docs/f%d.md"%i} for i in range((p-1)*100,min(n,p*100))]))' "$FAKE_FILES_N" "$pg"; echo 200; exit 0; fi; reply '[{"filename":"docs/runbooks/x.md"}]' ;;
   "GET "*"/check-runs"*) [[ -n ${FAKE_CHECKS_FAIL:-} ]] && reply '{"message":"boom"}' 500; reply '{"total_count":1,"check_runs":[{"name":"docs","status":"completed","conclusion":"success"}]}' ;;
   "GET "*"/status") reply '{}' ;;
   "PUT "*"/pulls/7/merge") reply '{"sha":"deadbeefdeadbeef"}' ;;
@@ -64,6 +64,13 @@ no_ "auto-merge is never called" "grep -qi 'auto' $t/calls"
 ledger "${roles[@]}"; out=$(FAKE_CHECKS_FAIL=1 run "$t/pr-merge.sh" sweep); check "a failed GitHub read skips the PR" "$out" "skipped (a GitHub read failed)"
 export FAKE_CHECKS_FAIL=; ledger "${roles[@]}"
 out=$(run "$t/pr-merge.sh" check jonhill90/central-hub 7 "$H"); check "check prints the verdict and merges nothing" "$out" "GREEN"; no_ "check never calls merge" merged
+# a PR of 242 files comes in three pages (100, 100, 42): the sweep reads every page and merges; a list of 3000 is refused
+ledger "${roles[@]}"; out=$(FAKE_FILES_N=242 run "$t/pr-merge.sh" sweep); check "242 files read over three pages: GREEN" "$out" "${H:0:7}: GREEN"; yes_ "242 files: the merge is called" merged
+yes_ "242 files: page 3 was read" "grep -q 'pulls/7/files?per_page=100&page=3' $t/calls"; no_ "242 files: page 4 was not read" "grep -q 'page=4' $t/calls"
+ledger "${roles[@]}"; out=$(FAKE_FILES_N=3000 run "$t/pr-merge.sh" sweep); check "3000 files: not checked, refused" "$out" "3000 or more changed files"; no_ "3000 files: nothing merged" merged
+# the mutation: one page only, the list is cut at 100 and a 242-file PR is judged on 100 of them
+sed 's|seq 1 30|seq 1 1|' "$t/pr-merge.sh" > "$t/mut.sh"; ledger "${roles[@]}"; out=$(FAKE_FILES_N=3000 run "$t/mut.sh" sweep)
+check "mutation: one page of 100 reads 100 files and the 3000-file PR passes the cap" "$out" "${H:0:7}: GREEN"
 out=$(run "$t/pr-merge.sh" lane jonhill90/central-hub 7); check "lane reads a label with a space, like OpenBao thread" "$out" "OpenBao thread"
 out=$(run "$t/pr-merge.sh" merge jonhill90/elsewhere 7 "$H"); check "another repository exits 2" "$out" "rc=2"
 out=$(run "$t/pr-merge.sh" sweep extra); check "sweep takes no arguments" "$out" "rc=2"

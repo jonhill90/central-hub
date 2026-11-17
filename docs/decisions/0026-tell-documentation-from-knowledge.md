@@ -24,9 +24,9 @@ revisit-when: the agent notebook is retired and its knowledge moves; a document 
 
 ## Context and Problem Statement
 
-On 2026-11-03 the owner stated that a repository's `docs/` folder is not a knowledge store or a research store. It may contain those things, but they are different, so the organization standard has to tell them apart. Earlier, on 2026-10-31, the owner asked that central-hub store knowledge of its own, in a structure set for it. On 2026-10-26 he asked that central-hub show the work in public: his progress, what he learns, and how the home lab grows (D-0013).
+On 2026-11-03 the owner stated that a repository's `docs/` folder is not a knowledge store or a research store. It may contain those things, but they are different, so the organization standard has to tell them apart. Earlier, on 2026-10-31, the owner asked that central-hub store knowledge of its own, in a structure set for it. On 2026-10-26 they asked that central-hub show the work in public: their progress, what they learn, and how the home lab grows (D-0013).
 
-The agents keep their working knowledge in the agent notebook, `jonhill90/agent-notebook`: research, measurements, notes and thinking. The notebook is private. On 2026-11-08 the owner said central-hub must rebuild and be trusted from the repository alone, with its provenance in it, and without the noise of the notebook. On 2026-11-10 he said central-hub holds the public-facing, polished version of the knowledge.
+The agents keep their working knowledge in the agent notebook, `jonhill90/agent-notebook`: research, measurements, notes and thinking. The notebook is private. On 2026-11-08 the owner said central-hub must rebuild and be trusted from the repository alone, with its provenance in it, and without the noise of the notebook. On 2026-11-10 they said central-hub holds the public-facing, polished version of the knowledge.
 
 Central-hub's folder `docs/research/` also used the knowledge store's word for decision summaries.
 

@@ -145,8 +145,8 @@ Until `home.tfvars` holds the same entry, a plan from this folder would remove i
 No agent edits the Mac's `home.tfvars`, so the first run is one session on the Mac, in this order, and the owner's typed line names each step and the commit on `main`:
 
 1. `tofu-tailnet-policy.sh init`, at that commit.
-2. `tofu-tailnet-policy.sh import`: it reads the live policy into the state and changes nothing in the tailnet. `home.tfvars` has no `external_tailnets` yet, which is valid.
-3. Copy the live policy's external tailnet entry and its group from the imported state into `external_tailnets` in `home.tfvars` (0600): the alias, the ID, the group name and its logins, exactly as they are live. Print none of them.
+2. `tofu-tailnet-policy.sh import`: it reads the live policy into the state and changes nothing in the tailnet. `home.tfvars` has no `external_tailnets` yet, which is valid. If a saved state already exists, the import stops with "Resource already managed by OpenTofu", as it did on the Mac on 2026-11-16 (the state was from 2026-11-10). Then skip the import and run `tofu-tailnet-policy.sh plan` instead: a plan reads the live policy fresh and writes no state, and its live side is in `tofu show -json` as each change's `before`. That plan removes the share, because `home.tfvars` has no entry yet, so rename the plan file aside before reading it, and never apply it.
+3. Copy the live policy's external tailnet entry and its group from the imported state, or from that plan's live side, into `external_tailnets` in `home.tfvars` (0600): the alias, the ID, the group name and its logins, exactly as they are live. Print none of them.
 4. `tofu-tailnet-policy.sh plan`, then the gate: parse the rendered and the live policy as data and compare `groups` and `externalTailnets`. If they differ in anything but the added `"tag:share-pod"` in `allowExternalReferencesTo`, stop.
 5. Stop there. The owner gets the plain names of the top-level sections that differ (such as `grants` or `ssh`), not a whole-file diff, which names the Proxmox host's address. An apply is its own typed line naming that saved plan.
 
