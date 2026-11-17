@@ -9,7 +9,7 @@
   opnsense-test-seed.py realm  <settings.json> <proof dir> <out file>
       the throwaway Keycloak realm, with ${...} placeholders where the client secret and passwords go.
   opnsense-test-seed.py dev-hosts <settings.json> <vlans.yml>
-      dev's host addresses, one per line, for `opnsense-test status` to ping once; nothing if the file is missing.
+      dev's host addresses, one per line, for `opnsense-test log` to ping once; nothing if the file is missing.
   opnsense-test-seed.py last-start <tasks.json>
       the UPID of the VM's newest start task in a Proxmox task list, or nothing.
   opnsense-test-seed.py status <settings.json> <dir>

@@ -92,9 +92,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    why: this is proof item 8. It removes VM 257, its disk and the uploaded seed ISO, the Keycloak container if it is still there, and the proof folder with its secrets. The unpacked image stays on the box for the next proof.
 6. Bring dev back if it is needed (`rebuild.sh up`). The dev rebuild's preflight refuses while VM 257 exists.
 
-`opnsense-test log` prints the last run's output.
-
-`opnsense-test status` reads VM 257 without changing anything. It shows the VM's Proxmox state, uptime, traffic counters and network, seed and boot settings, and its last start task's log. It then pings each dev host address once and names the dev address the VM's MAC answers on, ending with one verdict line. It leaves the last run's log alone. It cannot show the VM's serial output, because the agents' token has no `VM.Console` (`hosts/terraform/home/bootstrap/agent-access.sh`).
+`opnsense-test log` prints the last run's output, then reads VM 257 without changing anything. It shows the VM's Proxmox state, uptime, traffic counters and network, seed and boot settings, and its last start task's log. It then pings each dev host address once and names the dev address the VM's MAC answers on, ending with one verdict line. It leaves the last run's log alone. It cannot show the VM's serial output, because the agents' token has no `VM.Console` (`hosts/terraform/home/bootstrap/agent-access.sh`).
 
 ## Proof items
 
@@ -118,7 +116,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 | `refused, short on memory` | The node lacks the VM's memory plus the margin. Stop nothing else; report it. |
 | `refused, a dev rebuild run is going` | A dev rebuild holds the run lock. Wait for it to end, then tear dev down (step 1). |
 | `the image does not match its pin` | The archive's file changed. Nothing is built. Check the archive's CHECKSUM.SHA256 before you move the pin. |
-| `no SSH to <address> after 10 minutes` | The first boot did not take the seed's address, or dev blocks the box's SSH. Run `opnsense-test status` and keep its verdict line, then destroy and report both. |
+| `no SSH to <address> after 10 minutes` | The first boot did not take the seed's address, or dev blocks the box's SSH. Run `opnsense-test log` and keep its status verdict line, then destroy and report both. |
 | `stopped, dev does not reach ...` | Dev has no route to the mirrors. Don't open egress: that is a firewall change and needs the owner. Destroy. |
 | `Keycloak did not come up` | The proof's Keycloak gave no discovery answer after 60 tries, 5 to 10 minutes; the last 30 lines of its log follow. The container is removed. Destroy, then report it. |
 | `stopped, Keycloak does not advertise DPoP with ES256` | Discovery lacks ES256 under `dpop_signing_alg_values_supported`, so the plugin would not use DPoP and the proof would not match the lab. Destroy, then report it. |

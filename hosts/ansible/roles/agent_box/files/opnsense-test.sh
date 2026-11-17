@@ -3,22 +3,22 @@
 # through Keycloak with os-openid-connect before VM 100 gets it (docs/runbooks/prove-opnsense-sign-in-on-dev.md).
 # It runs as user `keys` through sudo, so the session that asks for it never sees the Proxmox token or the
 # proof's keys and passwords. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/opnsense-test.sh plan|apply|configure|prove|destroy|status|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/opnsense-test.sh plan|apply|configure|prove|destroy|log
 # plan, apply: download and check the FreeBSD 14.3 cloud image, build the seed ISO, then OpenTofu on
 #   hosts/terraform/home/opnsense-test with the agents' Proxmox token. Refused while dev has any VM.
 # configure: over SSH as root, check the release, measure dev's reach to the mirrors, seed /conf/config.xml,
 #   run the pinned opnsense-bootstrap, then pkg add the pinned os-openid-connect package.
 # prove: start the proof's Keycloak on this box, run proof items 2 to 7 and 9, stop Keycloak, remove its data.
 # destroy: tofu destroy (proof item 8), the Keycloak container if still there, and the proof folder.
-# status: read only. VM 257's state, uptime, traffic and config from Proxmox, its last start task's log, and
-#   which dev address its MAC answers on. It changes nothing on Proxmox or the VM and leaves the log alone.
-# log: the last run's log.
+# log: the last run's log, then a read-only status of VM 257: its state, uptime, traffic and config from
+#   Proxmox, its last start task's log, and which dev address its MAC answers on. It changes nothing on
+#   Proxmox or the VM and leaves the log alone.
 set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | prove | destroy | status | log) action=$1 ;;
-  *) echo "usage: opnsense-test plan|apply|configure|prove|destroy|status|log" >&2; exit 2 ;;
+  plan | apply | configure | prove | destroy | log) action=$1 ;;
+  *) echo "usage: opnsense-test plan|apply|configure|prove|destroy|log" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -57,7 +57,10 @@ PLUGIN_SHA256=4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406a41b117c
 KEYCLOAK_IMAGE=quay.io/keycloak/keycloak@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
 KC_NAME=opnsense-test-keycloak
 
-[[ $action == log ]] && { cat "$logfile" 2>/dev/null || echo "opnsense-test: no log yet"; exit 0; }
+if [[ $action == log ]]; then
+  cat "$logfile" 2>/dev/null || echo "opnsense-test: no log yet"
+  [[ -f $settings ]] || exit 0
+fi
 [[ -f $settings ]] || { echo "opnsense-test: $settings is missing; set agent_box_opnsense_test in the inventory and run the agent_box role" >&2; exit 1; }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
 
@@ -70,7 +73,7 @@ px_api() { # path
       curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" )
 }
 
-# status: GET calls only, with the agents' token. The token has no VM.Console
+# The status `log` ends with: GET calls only, with the agents' token. The token has no VM.Console
 # (hosts/terraform/home/bootstrap/agent-access.sh), so the VM's serial output can't be read; its traffic
 # counters, its start task's log and the ARP table stand in.
 status() {
@@ -97,7 +100,7 @@ status() {
   "$py" -I "$seed_py" status "$settings" "$t" || true
   rm -rf "$t"
 }
-[[ $action == status ]] && { status; exit 0; }
+[[ $action == log ]] && { status; exit 0; }
 
 exec 9>"$work/state/opnsense-test.lock"
 flock -n 9 || { echo "opnsense-test: another opnsense-test run is going; try again when it ends" >&2; exit 1; }
