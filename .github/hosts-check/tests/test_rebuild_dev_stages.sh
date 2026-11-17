@@ -58,7 +58,7 @@ out=$(OPENBAO_SEAL_KEY_FILE=/k run dev openbao-handover "$t/ok")
 check "openbao-handover passes both ID files to its playbook" "$out" "AP playbooks/k8s-openbao-handover.yml -e openbao_admin_role_id_file=$t/rid -e openbao_admin_secret_id_file=$t/sid" "rc=1"
 out=$(OPENBAO_SEAL_KEY_FILE=/k OPENBAO_ADMIN_SECRET_ID_FILE=$t/none run dev openbao-handover "$t/ok")
 check "openbao-handover refuses without the secret ID file" "$out" "rc=1" "AP "
-out=$(OPENBAO_SEAL_KEY_FILE=/k OPENBAO_ADMIN_ROLE_ID_FILE= run dev openbao-handover "$t/ok")
+out=$(OPENBAO_SEAL_KEY_FILE=/k OPENBAO_ADMIN_ROLE_ID_FILE='' run dev openbao-handover "$t/ok")
 check "openbao-handover refuses without the role ID file" "$out" "rc=1" "AP "
 out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gitops "$t/ok")
 check "dev gitops with a key file turns the measurement on" "$out" "k8s_gitops_source_openbao_measure=true" ""

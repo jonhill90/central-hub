@@ -15,7 +15,7 @@
 # SOPS and age come from their GitHub releases, checked against the SHA-256s the role installs.
 # Usage: .github/hosts-check/tests/test_secrets_store_kv.sh   (needs curl, python3 with PyYAML)
 set -uo pipefail
-cd "$(dirname "$0")/../../.."
+cd "$(dirname "$0")/../../.." || exit 1
 root=$PWD
 role=$root/hosts/ansible/roles/agent_box
 t=$(mktemp -d)
