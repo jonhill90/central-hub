@@ -115,7 +115,7 @@ resource "proxmox_virtual_environment_vm" "node" {
   }
 
   memory {
-    dedicated = each.value.memory_mb
+    dedicated = lookup(var.memory_mb_by_role, each.value.role, each.value.memory_mb)
     floating  = 0
   }
 

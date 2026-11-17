@@ -153,3 +153,50 @@ run "second_cluster_clones_existing_template" {
     error_message = "A node's tags must name its VNet."
   }
 }
+
+# The agents' dev rebuild sizes its nodes by role (hosts/rebuild-k8s.sh); with no memory_mb_by_role, every node keeps its
+# own memory_mb, so c1 does not change.
+run "memory_is_each_nodes_own_by_default" {
+  command = plan
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.node["palcpdemo01"].memory[0].dedicated == 4096 && proxmox_virtual_environment_vm.node["palwkdemo01"].memory[0].dedicated == 4096
+    error_message = "With no memory_mb_by_role, a node's memory must be its own memory_mb."
+  }
+}
+
+run "memory_by_role_replaces_memory_mb" {
+  command = plan
+
+  variables {
+    memory_mb_by_role = { "control-plane" = 3072, "worker" = 6144 }
+  }
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.node["palcpdemo01"].memory[0].dedicated == 3072 && proxmox_virtual_environment_vm.node["palwkdemo01"].memory[0].dedicated == 6144
+    error_message = "memory_mb_by_role must replace each node's memory_mb by its role."
+  }
+}
+
+run "memory_by_role_for_one_role_only" {
+  command = plan
+
+  variables {
+    memory_mb_by_role = { "worker" = 6144 }
+  }
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.node["palcpdemo01"].memory[0].dedicated == 4096 && proxmox_virtual_environment_vm.node["palwkdemo01"].memory[0].dedicated == 6144
+    error_message = "A role memory_mb_by_role leaves out keeps each node's own memory_mb."
+  }
+}
+
+run "memory_by_role_refuses_an_unknown_role_or_a_tiny_size" {
+  command = plan
+
+  variables {
+    memory_mb_by_role = { "etcd" = 4096, "worker" = 1024 }
+  }
+
+  expect_failures = [var.memory_mb_by_role]
+}
