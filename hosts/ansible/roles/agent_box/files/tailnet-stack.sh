@@ -88,7 +88,9 @@ print(json.dumps({"stack": "tailnet", "time": a[1], "action": a[2], "commit": a[
 
 tofu() { /usr/local/bin/tofu -chdir="$folder" "$@"; }
 if ! tofu init -input=false -backend-config="path=$state" >> "$raw" 2>&1; then
-  record none none "FAIL: init"; echo "tailnet-stack: FAIL: init (details in the box's log $raw)" >&2; exit 1
+  record none none "FAIL: init"; echo "tailnet-stack: FAIL: init (details in the box's log $raw)" >&2
+  # Init prints provider names, versions and download errors, no value or secret; the last lines say why it failed.
+  tail -n 12 "$raw" | sed 's/\x1b\[[0-9;]*m//g' >&2; exit 1
 fi
 
 counts() { # from the saved plan's JSON: only counts of actions
