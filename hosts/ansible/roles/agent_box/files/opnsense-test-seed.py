@@ -17,6 +17,7 @@ import ipaddress
 import json
 import os
 import re
+import shlex
 import sys
 import uuid
 from xml.sax.saxutils import escape
@@ -53,7 +54,9 @@ def read(folder, name):
 def seed(settings, vlans, pubkey, out):
     s, net, gw = load(settings, vlans)
     key = open(pubkey).read().strip()
-    if not re.fullmatch(r"ssh-ed25519 [A-Za-z0-9+/=]+( \S+)?", key):
+    # One line. The comment may hold words split by spaces, as the wrapper's own key's does
+    # ("keys@agent-box opnsense-test"), but no shell characters: the key goes into a root script.
+    if not re.fullmatch(r"ssh-ed25519 [A-Za-z0-9+/=]+( [A-Za-z0-9@._:+-]+)*", key):
         sys.exit("opnsense-test: the root key is not one ed25519 public key")
     os.makedirs(out, exist_ok=True)
     with open(os.path.join(out, "meta-data"), "w") as f:
@@ -70,7 +73,7 @@ sysrc defaultrouter="{gw}"
 sysrc firstboot_freebsd_update_enable=NO
 echo "nameserver {gw}" > /etc/resolv.conf
 install -d -m 700 /root/.ssh
-echo "{key}" > /root/.ssh/authorized_keys
+echo {shlex.quote(key)} > /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 sed -i '' -e '/^PasswordAuthentication/d' -e '/^UsePAM/d' -e '/^PermitRootLogin/d' /etc/ssh/sshd_config
 printf 'PasswordAuthentication no\\nKbdInteractiveAuthentication no\\nPermitRootLogin prohibit-password\\n' >> /etc/ssh/sshd_config
