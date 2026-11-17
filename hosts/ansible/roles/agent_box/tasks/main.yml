@@ -231,6 +231,8 @@
     group: root
     mode: "0644"
   loop: "{{ agent_box_ca_files }}"
+  loop_control:
+    label: "/etc/pki/ca-trust/source/anchors/agent-box-{{ item | basename }}"
   notify: Rebuild the trust store
   tags: [ca]
 
@@ -371,7 +373,7 @@
     mode: "0755"
   loop: "{{ agent_box_wrappers }}"
   loop_control:
-    label: "{{ item.name }}"
+    label: "{{ agent_box_libexec_dir }}/{{ item.name }}.sh"   # the destination, so a check run names a file that is not there yet
   tags: [wrappers]
 
 - name: Front scripts that sessions run
@@ -383,7 +385,7 @@
     mode: "0755"
   loop: "{{ agent_box_wrappers }}"
   loop_control:
-    label: "{{ item.name }}"
+    label: "{{ agent_box_front_dir }}/{{ item.name }}"   # the destination, as above
   tags: [wrappers]
 
 - name: The ci-runner wrapper's private settings, from the inventory (no keys)
@@ -461,6 +463,8 @@
     - secrets-store-restore.sh     # the guarded restores, same store and rebuilt
     - secrets-store-snapshots.sh   # rotation, and setting an earlier store's snapshots aside
     - secrets-store-kv.sh          # SOPS copies: put, compare, reseed (D-0058 rule 8)
+  loop_control:
+    label: "{{ agent_box_libexec_dir }}/{{ item }}"
   when: agent_box_secrets_store | length > 0
   tags: [wrappers]
 
@@ -544,6 +548,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/ci-runner-weekly.{{ item }}"
   register: agent_box_ci_runner_units
   when: agent_box_ci_runner | length > 0
   tags: [wrappers]
@@ -594,6 +600,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/tailnet-cleanup.{{ item }}"
   register: agent_box_tailnet_cleanup_units
   when: agent_box_tailnet_cleanup | length > 0
   tags: [wrappers]
@@ -624,6 +632,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/pr-merge-sweep.{{ item }}"
   register: agent_box_merge_sweep_units
   when: agent_box_merge_sweep | bool
   tags: [wrappers]
@@ -813,6 +823,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/opnsense-backup.{{ item }}"
   register: agent_box_opnsense_backup_units
   when: agent_box_opnsense_backup | length > 0
   tags: [wrappers]

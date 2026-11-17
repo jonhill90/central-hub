@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# hosts/rebuild-k8s.sh's memory preflight: it refuses below the minimum free memory, passes at or above it, refuses
+# hosts/rebuild-k8s.sh's memory preflight: it refuses below the minimum free memory (the declared dev nodes at the dev
+# sizes by role plus a 2048 MiB margin, or PREFLIGHT_MIN_FREE_MIB), passes at or above it, refuses
 # when the memory can't be read (a number nobody saw is not a pass), refuses on any env but dev, and never prints
 # the token. Runs the function and the stage from a copy, with a fake curl on PATH.
 set -euo pipefail
@@ -7,7 +8,7 @@ src=$(cd "$(dirname "$0")/../../.." && pwd)/hosts/rebuild-k8s.sh
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 fail=0
-sed -n '/^CI_RUNNER_VMID=/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
+sed -n '/^CI_RUNNER_VMID=/p;/^node_top_sampler() {/,/^}/p;/^DEV_MEMORY_MB_[A-Z_]*=/p;/^preflight_declared_mib() {/,/^}/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
 grep -q '^preflight_memory' "$t/fn.sh" && grep -q '^run_stage' "$t/fn.sh" || { echo "FAIL: functions not found"; exit 1; }
 mkdir "$t/bin"
 cat > "$t/bin/curl" <<'F'
@@ -30,8 +31,9 @@ else echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED}}}";
 F
 chmod +x "$t/bin/curl"
 printf '#!/bin/sh\nexit 0\n' > "$t/bin/sleep"; chmod +x "$t/bin/sleep"
-printf 'proxmox_node_name = "node-a"\nnodes = {\n a = { vm_id = 250 }\n b = { vm_id = 251 }\n}\ntemplate_vm_id = 9001\n' > "$t/vars.tfvars"
-printf 'proxmox_node_name = "node-a"\nnodes = {\n a = { vm_id = 250 }\n b = { vm_id = 251 }\n c = { vm_id = 252 }\n}\n' > "$t/three.tfvars"
+printf 'proxmox_node_name = "node-a"\nnodes = {\n a = { vm_id = 250, role = "control-plane", memory_mb = 4096 }\n b = { vm_id = 251, role = "worker", memory_mb = 8192 }\n}\ntemplate_vm_id = 9001\n' > "$t/vars.tfvars"
+printf 'proxmox_node_name = "node-a"\nnodes = {\n a = { vm_id = 250, role = "control-plane" }\n b = { vm_id = 251, role = "worker" }\n c = { vm_id = 252, role = "worker" }\n}\n' > "$t/three.tfvars"
+printf 'proxmox_node_name = "node-a"\nnodes = {\n a = { vm_id = 250, role = "control-plane" }\n b = { vm_id = 251 }\n}\n' > "$t/norole.tfvars"
 printf '{"resources":[{"mode":"managed","type":"proxmox_virtual_environment_vm","instances":[{},{}]}]}' > "$t/with-vms.tfstate"
 printf '{"resources":[]}' > "$t/empty.tfstate"
 # The endpoint is built from parts, so the components scanner doesn't take it for a real source.
@@ -44,7 +46,11 @@ run() { # env total_gib used_gib error
     bash -c '. "$1"; set +e; run_stage preflight; echo "rc=$?"; echo "marker=$([ -f "$env_dir/ci-runner-stopped" ] && echo yes || echo no)"' _ "$t/fn.sh" 2>&1
 }
 check() { if [[ $2 == *"$3"* ]] && { [ -z "${4:-}" ] || [[ $2 != *"$4"* ]]; }; then echo "ok   $1"; else echo "FAIL $1: $2"; fail=1; fi; }
-out=$(run dev 31 18); check "13 GiB free is refused" "$out" "refused" "rc=0"; check "it says the sizes" "$out" "13312 MiB"
+out=$(run dev 31 20); check "11 GiB free is refused" "$out" "refused" "rc=0"; check "it says the sizes" "$out" "11264 MiB"
+out=$(FAKE_AVAILABLE=$((13311 * 1048576)) SHORT_NODE="" run dev 31 1); check "one MiB under 13312 is refused" "$out" "refused" "rc=0"
+check "the minimum is the dev VMs plus the margin" "$out" "the declared dev VMs need 11264 MiB (control plane 4096, worker 7168); minimum 13312 MiB with the 2048 MiB margin"
+out=$(FAKE_AVAILABLE=$((13312 * 1048576)) run dev 31 1); check "13312 MiB free, the minimum itself, passes" "$out" "rc=0" "refused"
+out=$(FAKE_AVAILABLE=$((13412 * 1048576)) run dev 31 1); check "13412 MiB free, the 2026-11-17 reading with VM 300 stopped, passes" "$out" "rc=0" "refused"
 out=$(run dev 31 17); check "14 GiB free passes" "$out" "rc=0" "refused"
 out=$(run dev 31 16); check "15 GiB free passes" "$out" "rc=0" "refused"
 if grep -q SECRETTOKEN "$t/argv"; then echo "FAIL: the token is in curl's arguments"; fail=1; else echo "ok   the token is not in curl's arguments"; fi
@@ -60,7 +66,9 @@ out=$(run dev 31 17); check "total-used is the fallback and is named" "$out" "(f
 out=$(STATE="$t/with-vms.tfstate" run dev 31 28); check "a state holding every declared VM skips the check, even with low memory" "$out" "branch skipped, all 2 declared dev VMs" "refused"
 check "a skipped run says rc=0" "$out" "rc=0"
 out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 28); check "a partial state (2 of 3) is checked and refused on low memory" "$out" "holds 2 of 3 declared" "rc=0"
-out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 17); check "a partial state passes with enough memory" "$out" "branch checked" "refused"
+check "three declared nodes need three nodes' memory" "$out" "need 18432 MiB (control plane 4096, worker 7168); minimum 20480 MiB"
+out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 11); check "a partial state passes with enough memory" "$out" "branch checked" "refused"
+out=$(TFVARS_FILE="$t/norole.tfvars" run dev 31 1); check "a declared node with no role is refused, whatever the memory" "$out" "has no role control-plane or worker" "rc=0"
 out=$(STATE="$t/missing.tfstate" run dev 31 28); check "no state file means a fresh build and is checked" "$out" "branch checked" ""
 out=$(STATE="$t/empty.tfstate" run dev 31 17); check "an empty state is checked and passes with enough memory" "$out" "branch checked" "refused"
 out=$(run dev 31 28); check "the guest list is shown, sorted by VM ID" "$out" "guest vmid=411 type=qemu status=running maxmem=8192 MiB mem=4096 MiB name=agent-box"
@@ -74,6 +82,22 @@ check "the guest read error does not print the token" "$out" "guest list could n
 out=$(run dev 31 17); check "a pass lists guests too and passes" "$out" "guest vmid=300" "refused"
 check "the token is never in the guest request's arguments" "$(cat "$t/argv")" "cluster/resources" "SECRETTOKEN"
 grep -q 'stages="preflight \$stages"' "$src" && echo "ok   a dev run gets the preflight" || { echo "FAIL: the preflight is not added to a dev run"; fail=1; }
+# The node sampler: one line per node with CPU and memory, from kubectl top nodes, and only on dev's sign-in stage.
+out=$(log="$t/top.log" bash -c '. "$1"; kc() { printf "%s\n" "dalcpkube01 120m 6% 3027Mi 79%" "dalwkkube01 900m 45% 6900Mi 96%" "junk"; }; sleep() { exit 0; }; node_top_sampler identity-keycloak "$$"' _ "$t/fn.sh"; cat "$t/top.log")
+check "the sampler logs each node's CPU and memory" "$out" "identity-keycloak: node top " ""
+check "the worker's line has its memory and percent" "$out" "dalwkkube01 cpu 45% memory 6900Mi (96%)" ""
+check "a short line is dropped" "$out" "dalcpkube01" "junk"
+# A sampler whose run is gone stops by itself: the PID it watches is a process that has already exited.
+sh -c 'exit 0' & gone=$!; wait "$gone" || true
+out=$(log="$t/top2.log" timeout 10 bash -c '. "$1"; kc() { echo "n1 1m 1% 1Mi 1%"; }; sleep() { :; }; node_top_sampler gone "$2"; echo "sampler-ended"' _ "$t/fn.sh" "$gone" 2>&1 || true)
+check "a sampler whose run is gone ends by itself" "$out" "sampler-ended" ""
+grep -q '^  if \[ "\$ENV_NAME" = dev \] && \[ "\$s" = identity-keycloak \]; then$' "$src" && grep -q '^    node_top_sampler "\$s" "\$\$" & sampler=\$!$' "$src" \
+  && grep -q 'kill "\$sampler"' "$src" && echo "ok   the sampler runs on dev's sign-in stage only and is stopped after it" || { echo "FAIL: the sampler is not wired"; fail=1; }
+grep -q 'the declared dev VMs need\[^"\]\*' "$src" && echo "ok   the short log keeps the declared-memory line" || { echo "FAIL: the short log drops the declared-memory line"; fail=1; }
+# The dev sizes reach OpenTofu on dev only, and every tofu call that takes the tfvars takes the same set.
+grep -q '^if \[ "\$ENV_NAME" = dev \]; then$' "$src" && grep -q '^  tofu_vars+=(-var "memory_mb_by_role=' "$src" && echo "ok   a dev run passes the dev sizes" || { echo "FAIL: the dev sizes are not passed on dev"; fail=1; }
+if grep -n 'tofu_k8s .*-var-file="\$TFVARS"' "$src"; then echo "FAIL: a tofu call takes the tfvars without the dev sizes"; fail=1; else echo "ok   no tofu call takes the tfvars alone"; fi
+[ "$(grep -c 'tofu_k8s [a-z]* .*"\${tofu_vars\[@\]}"' "$src")" = 3 ] && echo "ok   plan, apply and destroy take the same set" || { echo "FAIL: not every tofu call takes the same set"; fail=1; }
 # Short, VM 300 running: stop it, re-read, and pass when it now fits. The marker stays until the trap starts it.
 out=$(FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); check "short then fits: VM 300 is stopped and the run passes" "$out" "runner stop: VM 300 is stopped" "refused"
 check "it re-reads the memory and says so" "$out" "16384 MiB (field: available) after VM 300 stopped" "refused"
@@ -83,7 +107,7 @@ grep -q 'qemu/300/status/shutdown' "$t/calls" && echo "ok   the shutdown call we
 if grep -E 'qemu/[0-9]+/status/(shutdown|stop|start|reset|reboot)' "$t/calls" | grep -v 'qemu/300/'; then echo "FAIL: a guest other than VM 300 was touched"; fail=1; else echo "ok   no guest but VM 300 was touched"; fi
 if grep -q SECRETTOKEN "$t/argv"; then echo "FAIL: the token is in curl's arguments"; fail=1; else echo "ok   the token is not in any call's arguments, the stop calls included"; fi
 # Still short after the stop: refuse, and the marker is there for the restart.
-out=$(FAKE_AFTER_AVAILABLE=$((13 * GIB)) run dev 31 28); check "still short after the stop is refused" "$out" "refused, free memory 13312 MiB" "rc=0"
+out=$(FAKE_AFTER_AVAILABLE=$((11 * GIB)) run dev 31 28); check "still short after the stop is refused" "$out" "refused, free memory 11264 MiB" "rc=0"
 check "the marker stays so the restart runs" "$out" "marker=yes" "marker=no"
 # VM 300 does not stop: refuse, marker stays.
 out=$(FAKE_NEVER_STOPS=yes FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); check "a runner that does not stop is refused" "$out" "did not stop within 120 s" "rc=0"

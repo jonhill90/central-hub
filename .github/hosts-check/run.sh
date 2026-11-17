@@ -80,6 +80,8 @@ check_ansible() {
   (cd hosts/ansible && ansible-lint --project-dir . -c "$here/ansible-lint.yml" playbooks roles)
   python3 "$here/check-deny-rules.py"
   bash "$here/tests/test_box_apply_baseline.sh"
+  python3 -I "$here/check-loop-labels.py" hosts/ansible/roles/agent_box/tasks
+  bash "$here/tests/test_loop_labels.sh"
   bash "$here/tests/test_proxmox_sso.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
   bash "$here/tests/test_tailnet_stack_args.sh" tailnet-policy

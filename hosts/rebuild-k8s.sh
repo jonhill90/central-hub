@@ -20,7 +20,8 @@
 #                 read-only copy of prod's newest volume snapshot (hosts/rebuild.env.example)
 #   RESTORE_CHECK_HOOK  the command the `checks` stage runs to prove the restore; required with
 #                 RESTORE_HOOK
-#   PREFLIGHT_MIN_FREE_MIB  optional, dev only: the least free memory (MiB) the Proxmox node must have before the VMs are made (14336)
+#   PREFLIGHT_MIN_FREE_MIB  optional, dev only: the least free memory (MiB) the Proxmox node must have before the VMs are made
+#                 (default: the dev VMs' memory below, summed over the nodes the tfvars declare, plus a 2048 MiB margin)
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
 #   OPENBAO_ADDR  optional: the secrets store, https://<name or address> with no path (proposed
 #                 D-0038). Set: stage `openbao` registers the cluster's new service-account key with
@@ -85,6 +86,20 @@ for id in $ids; do
 done
 if [ "$ENV_NAME" = dev ]; then
   grep -Eq 'node_vnet[[:space:]]*=[[:space:]]*"dev"' "$TFVARS" || die "a dev run needs node_vnet = \"dev\""
+fi
+
+# Dev only: the memory (MiB) each dev node gets by role, in place of its memory_mb in the tfvars (the k8s stack's
+# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so it is sized to fit them: the dev rebuild
+# was refused at 13397 MiB free against 12288 MiB of dev VMs plus the 2048 MiB margin (box log, 2026-11-14 12:03 UTC).
+# The control plane keeps 4096 (c1's uses 3027 MiB, 2026-11-17). The worker is 7168: at 6144 the run of
+# 2026-11-17 04:33 UTC passed every stage up to dev-ca, then the Keycloak realm import timed out with probes failing
+# across the worker; with VM 300 stopped the node had 13412 MiB free, and 4096 + 7168 + 2048 = 13312. c1 (prod) keeps
+# the sizes in its own tfvars.
+DEV_MEMORY_MB_CONTROL_PLANE=4096
+DEV_MEMORY_MB_WORKER=7168
+tofu_vars=(-var-file="$TFVARS")
+if [ "$ENV_NAME" = dev ]; then
+  tofu_vars+=(-var "memory_mb_by_role={\"control-plane\" = $DEV_MEMORY_MB_CONTROL_PLANE, \"worker\" = $DEV_MEMORY_MB_WORKER}")
 fi
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -183,7 +198,7 @@ checks() {
   [ "$(changed_total)" = 0 ] || { echo "second k8s.yml run changed $(changed_total) things"; return 1; }
   # And OpenTofu must see no drift (exit 0 = no changes, 2 = changes).
   tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE" >> "$raw" 2>&1
-  tofu_k8s plan -detailed-exitcode -input=false -var-file="$TFVARS" >> "$raw" 2>&1
+  tofu_k8s plan -detailed-exitcode -input=false "${tofu_vars[@]}" >> "$raw" 2>&1
   # The restored data is what the apps use (TASK-0240).
   if [ -n "${RESTORE_HOOK:-}" ]; then
     [ -n "${RESTORE_CHECK_HOOK:-}" ] || { echo "RESTORE_HOOK is set but RESTORE_CHECK_HOOK is not: nothing proves the restore"; return 1; }
@@ -197,7 +212,8 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # Dev only, before the VMs, for a fresh build or after a teardown (a re-run on existing VMs is skipped, and the
 # log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
-# the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default 14336: 12 GiB plus a 2 GiB margin). If the
+# the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default: the dev VMs' memory by role, summed over the nodes
+# the tfvars declare, plus a 2048 MiB margin; 4096 + 7168 + 2048 = 13312 for one control plane and one worker). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 # curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
 # use it, so neither can print the token.
@@ -242,6 +258,23 @@ px_api() { # method path [form data]
     insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
     printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
       curl -sS --fail --max-time 30 "${insecure[@]}" -K - -X "$method" ${data:+--data "$data"} "${PROXMOX_VE_ENDPOINT%/}/api2/json/$path") 2>&1
+}
+
+# The memory the declared dev nodes need, in MiB: each node block in the tfvars that has a vm_id is counted by its
+# role, at the dev size for that role. A node with no role, or another role, fails: a sum nobody can check is not a
+# minimum.
+preflight_declared_mib() {
+  python3 -c 'import re, sys
+sizes = {"control-plane": int(sys.argv[2]), "worker": int(sys.argv[3])}
+total = 0
+for block in re.findall(r"\{([^{}]*)\}", open(sys.argv[1]).read()):
+    if not re.search(r"(^|[^_\w])vm_id\s*=\s*\d+", block):
+        continue
+    role = re.search(r"(^|[^_\w])role\s*=\s*\"([^\"]*)\"", block)
+    if not role or role.group(2) not in sizes:
+        sys.exit("preflight: a declared node has no role control-plane or worker, so its memory is unknown")
+    total += sizes[role.group(2)]
+print(total)' "$TFVARS" "$DEV_MEMORY_MB_CONTROL_PLANE" "$DEV_MEMORY_MB_WORKER"
 }
 
 # The node's free memory in MiB and the field it came from ("MiB field"), or a failure that says why.
@@ -332,7 +365,7 @@ for r in rows:
 }
 
 preflight_memory() {
-  local min=${PREFLIGHT_MIN_FREE_MIB:-14336} node free field guests
+  local min node free field guests needs margin=2048
   local existing declared
   # A re-run on VMs the state already holds allocates no new VMs, and their memory is already taken, so the
   # node's free memory says nothing about it (measured on the box, 2026-11-14: 3547 MiB free with dev up).
@@ -351,6 +384,9 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
     return 0
   fi
   echo "preflight: branch checked, the state holds ${existing:-0} of ${declared:-0} declared dev VMs (a fresh build, a partial state or after a teardown)"
+  needs=$(preflight_declared_mib 2>&1) || { echo "$needs"; return 1; }
+  min=${PREFLIGHT_MIN_FREE_MIB:-$(( needs + margin ))}
+  echo "preflight: the declared dev VMs need ${needs} MiB (control plane ${DEV_MEMORY_MB_CONTROL_PLANE}, worker ${DEV_MEMORY_MB_WORKER}); minimum ${min} MiB$([ -n "${PREFLIGHT_MIN_FREE_MIB:-}" ] && echo ', set in rebuild.env' || echo " with the ${margin} MiB margin")"
   node=$(sed -n 's/^[[:space:]]*proxmox_node_name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$TFVARS" | head -1)
   [ -n "$node" ] || { echo "preflight: proxmox_node_name not found in the tfvars"; return 1; }
   free=$(preflight_read_free "$node") || { echo "$free"; return 1; }
@@ -389,11 +425,11 @@ run_stage() {
       preflight_memory ;;
     teardown)
       tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE"
-      tofu_k8s destroy -auto-approve -input=false -var-file="$TFVARS" ;;
+      tofu_k8s destroy -auto-approve -input=false "${tofu_vars[@]}" ;;
     vms)
       [ -z "${PRE_VMS_HOOK:-}" ] || bash -c "$PRE_VMS_HOOK"
       tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE"
-      tofu_k8s apply -auto-approve -input=false -var-file="$TFVARS" ;;
+      tofu_k8s apply -auto-approve -input=false "${tofu_vars[@]}" ;;
     cluster) wait_ssh && ap playbooks/k8s.yml ;;
     # The data disks only: Argo CD installs the provisioner and StorageClass (move-local-path-to-argo-cd.md).
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
@@ -535,6 +571,8 @@ fi
 runner_capture_diag() {
   echo "diag: the run failed, so the cluster is read before it is torn down" | tee -a "$log"
   {
+    echo "== node CPU and memory (kubectl top nodes)"
+    kc top nodes --no-headers
     echo "== argocd applications (name, sync, health)"
     kc -n argocd get applications.argoproj.io --no-headers -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
     echo "== pods not Running or Completed, all namespaces"
@@ -568,15 +606,34 @@ runner_run_teardown() { # [failed]
 }
 
 echo "rebuild: env $ENV_NAME, stages: $stages, log $log"
+# Dev only, while the sign-in stage runs: each node's CPU and memory from metrics-server (kubectl top nodes), every
+# 60 s, into the short log, so a slow or failed Keycloak stage shows whether the worker ran out of memory or CPU
+# (the 2026-11-17 04:33 UTC run timed out with no reading). Read-only, never fatal; stopped when the stage ends, and it
+# ends itself once the run's own shell is gone, so a run killed mid-stage leaves no loop behind.
+node_top_sampler() { # stage, the run's PID
+  local t
+  while kill -0 "$2" 2>/dev/null; do
+    t=$(date -u +%FT%TZ)
+    kc top nodes --no-headers 2>/dev/null \
+      | awk -v s="$1" -v t="$t" 'NF >= 5 {print "  " s ": node top " t " " $1 " cpu " $3 " memory " $4 " (" $5 ")"}' >> "$log" || true
+    sleep 60
+  done
+}
+
 for s in $stages; do
   t0=$(date +%s)
   echo "$(date -u +%FT%TZ) $s start" | tee -a "$log"
   echo "===== $s" >> "$raw"
+  sampler=""
+  if [ "$ENV_NAME" = dev ] && [ "$s" = identity-keycloak ]; then
+    node_top_sampler "$s" "$$" & sampler=$!
+  fi
   # A subshell outside any `if`, so `set -e` still stops the stage at its first failed command.
   set +e
   (set -e; run_stage "$s") >> "$raw" 2>&1
   rc=$?
   set -e
+  if [ -n "$sampler" ]; then kill "$sampler" 2>/dev/null || true; wait "$sampler" 2>/dev/null || true; fi
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
   # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line, and the
@@ -589,7 +646,7 @@ for s in $stages; do
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.
   if [ "$s" = preflight ] || [ "$s" = identity-keycloak ]; then
     awk -v s="$s" '$0 == "===== " s {on=1; next} /^===== / {on=0} on' "$raw" \
-      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|storage (list|name)[^"]*|guest note[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
+      | grep -oE 'branch (skipped|checked)[^"]*|the declared dev VMs need[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|storage (list|name)[^"]*|guest note[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
       | sed "s/^/  $s: /" >> "$log" || true
   fi
   if [ "$rc" -ne 0 ]; then

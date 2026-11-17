@@ -397,6 +397,11 @@ def touched_paths(r):
             for x in v:
                 walk(x)
     walk({k: r.get(k) for k in ("dest", "path", "diff")})
+    # A file that is not on the box yet has no dest, path or header in a check run's result, so a looped task names
+    # it by its loop label, which the role sets to the destination (an absolute path).
+    label = r.get("_ansible_item_label")
+    if isinstance(label, str) and label.startswith("/"):
+        found.add(label)
     return found
 
 
