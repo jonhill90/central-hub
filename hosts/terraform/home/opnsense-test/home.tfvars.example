@@ -1,0 +1,9 @@
+# The opnsense-test wrapper writes the real values from the box's private settings. Made-up values
+# shaped by STD-0001.
+proxmox_node_name = "examplehv01"
+vnet              = "dev"
+seed_iso_path     = "/var/lib/agent-box/opnsense-test/seed.iso"
+seed_iso_sha256   = "1111111111111111111111111111111111111111111111111111111111111111"
+image_path        = "/var/lib/agent-box/opnsense-test/FreeBSD-14.3-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2"
+image_sha256      = "0000000000000000000000000000000000000000000000000000000000000000"
+vm = { name = "daldopdemo01", vm_id = 257, cores = 1, memory_mb = 3072, disk_gb = 16 }

@@ -298,6 +298,7 @@ else:
 # trap). It touches no other guest. The marker file is written before the stop request, so a run that dies
 # without its trap still leaves the next run a reason to start the runner.
 CI_RUNNER_VMID=300
+OPNSENSE_TEST_VMID=257
 runner_mark() { printf '%s' "$env_dir/ci-runner-stopped"; }
 preflight_stop_runner() { # node
   local node=$1 i st out
@@ -394,6 +395,13 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
   echo "preflight: node free memory ${free} MiB (field: ${field}), minimum ${min} MiB"
   guests=$(preflight_guests) || true
   printf '%s\n' "$guests"
+  # VM 257 is the OPNsense test VM (hosts/terraform/home/opnsense-test), built only while dev is down: a dev
+  # build never starts beside it. An unreadable guest list can't show it, and the log says so.
+  if grep -q "guest vmid=$OPNSENSE_TEST_VMID " <<<"$guests"; then
+    echo "preflight: refused, VM $OPNSENSE_TEST_VMID (the OPNsense test VM) exists; run opnsense-test destroy first"
+    return 1
+  fi
+  grep -q "guest list from" <<<"$guests" || echo "preflight: the guest list was not read, so VM $OPNSENSE_TEST_VMID (the OPNsense test VM) could not be checked"
   preflight_storage "$node" || true
   if [ "$free" -lt "$min" ] && grep -q "guest vmid=$CI_RUNNER_VMID type=qemu status=running" <<<"$guests"; then
     # What happens on a short node is the owner's pick (PREFLIGHT_SHORT_NODE, set at the install of the box's

@@ -1,0 +1,18 @@
+# Managed by Ansible (role agent_box). Loads the filter for the OPNsense proof's Keycloak port
+# (/etc/nftables/opnsense-test.nft) before the network, so the port is never open unfiltered.
+[Unit]
+Description=Packet filter for the OPNsense proof's Keycloak port
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart={{ agent_box_nft_bin }} -f /etc/nftables/opnsense-test.nft
+ExecReload={{ agent_box_nft_bin }} -f /etc/nftables/opnsense-test.nft
+ExecStop=-{{ agent_box_nft_bin }} delete table inet opnsense_test
+
+[Install]
+WantedBy=multi-user.target

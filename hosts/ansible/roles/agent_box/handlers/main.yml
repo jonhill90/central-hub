@@ -8,3 +8,8 @@
   # unfiltered), and starts one that is not running yet. daemon-reload ran in the task that enables the unit.
   ansible.builtin.command: systemctl reload-or-restart lifeline-nft.service  # noqa: command-instead-of-module
   changed_when: true
+
+- name: Reload the OPNsense proof filter
+  ansible.builtin.command: systemctl reload-or-restart opnsense-test-nft.service  # noqa: command-instead-of-module
+  changed_when: true
+  when: not ansible_check_mode

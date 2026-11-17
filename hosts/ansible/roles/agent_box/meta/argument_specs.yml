@@ -202,6 +202,18 @@ argument_specs:
           the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name, vnet,
           template_vm_id), rdp_source (the tailnet connector's address, where RDP arrives from) and optionally admin_user. No key and no
           password goes in it. Empty skips the file.
+      agent_box_opnsense_test:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the opnsense-test wrapper, written to <work_dir>/opnsense-test.json (0600, the keys
+          user's): name, address (the test VM's dev address), keycloak_address (the box's address the VM reaches),
+          cores, memory_mb, disk_gb and proxmox_node_name. No key or password goes in it: the wrapper makes the
+          proof's own and removes them at destroy. Empty skips the wrapper's tools, filter and file.
+      agent_box_opnsense_test_subid_start:
+        type: int
+        default: 300000
+        description: The keys user's first subordinate UID and GID (65536 of each), for the proof's rootless Keycloak.
       agent_box_vps_host:
         type: dict
         default: {}

@@ -8,7 +8,7 @@ src=$(cd "$(dirname "$0")/../../.." && pwd)/hosts/rebuild-k8s.sh
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 fail=0
-sed -n '/^CI_RUNNER_VMID=/p;/^node_top_sampler() {/,/^}/p;/^DEV_MEMORY_MB_[A-Z_]*=/p;/^preflight_declared_mib() {/,/^}/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
+sed -n '/^CI_RUNNER_VMID=/p;/^OPNSENSE_TEST_VMID=/p;/^node_top_sampler() {/,/^}/p;/^DEV_MEMORY_MB_[A-Z_]*=/p;/^preflight_declared_mib() {/,/^}/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
 grep -q '^preflight_memory' "$t/fn.sh" && grep -q '^run_stage' "$t/fn.sh" || { echo "FAIL: functions not found"; exit 1; }
 mkdir "$t/bin"
 cat > "$t/bin/curl" <<'F'
@@ -22,6 +22,7 @@ case "$*" in *"-X POST"*status/shutdown*) : > "$FAKE_DIR/stopped"; echo '{"data"
 *qemu/300/status/current*) if [ -f "$FAKE_DIR/stopped" ] && [ -z "$FAKE_NEVER_STOPS" ]; then echo '{"data":{"status":"stopped","maxmem":2147483648}}'; else echo '{"data":{"status":"running","maxmem":2147483648}}'; fi; exit 0 ;; esac
 case "$*" in *cluster/resources*)
   [ -n "$FAKE_GUESTS_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
+  [ -n "$FAKE_GUEST_257" ] && { echo '{"data":[{"vmid":257,"type":"qemu","status":"running","maxmem":3221225472,"mem":1073741824,"name":"opnsense-test"}]}'; exit 0; }
   echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":411,"type":"qemu","status":"running","maxmem":8589934592,"mem":4294967296,"name":"agent-box"}]}'
   exit 0 ;; esac
 [ -n "$FAKE_CURL_ERROR" ] && { [ "$FAKE_CURL_ERROR" = long ] && { printf "%0185d token=SECRETTOKEN\n" 0 >&2; exit 22; }; echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
@@ -42,7 +43,7 @@ printf 'export PROXMOX_VE_ENDPOINT=%s\nexport PROXMOX_VE_API_TOKEN=agent@pve!dev
 GIB=1073741824
 run() { # env total_gib used_gib error
   rm -rf "$t/state" "$t/envdir" "$t/calls" "$t/argv"; mkdir -p "$t/state" "$t/envdir"; : > "$t/calls"; : > "$t/argv"
-  PATH="$t/bin:$PATH" TFVARS="${TFVARS_FILE:-$t/vars.tfvars}" TFSTATE="${STATE:-$t/empty.tfstate}" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_GUESTS_ERROR=${FAKE_GUESTS_ERROR:-} FAKE_AFTER_AVAILABLE=${FAKE_AFTER_AVAILABLE:-} FAKE_NEVER_STOPS=${FAKE_NEVER_STOPS:-} FAKE_START_FAILS=${FAKE_START_FAILS:-} FAKE_STORAGE_ERROR=${FAKE_STORAGE_ERROR:-} stamp=run1 PREFLIGHT_SHORT_NODE="${SHORT_NODE-ephemeral-dev}" FAKE_DIR="$t/state" FAKE_CALLS="$t/calls" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" env_dir="$t/envdir" log="$t/rebuild.log" \
+  PATH="$t/bin:$PATH" TFVARS="${TFVARS_FILE:-$t/vars.tfvars}" TFSTATE="${STATE:-$t/empty.tfstate}" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_GUESTS_ERROR=${FAKE_GUESTS_ERROR:-} FAKE_GUEST_257=${FAKE_GUEST_257:-} FAKE_AFTER_AVAILABLE=${FAKE_AFTER_AVAILABLE:-} FAKE_NEVER_STOPS=${FAKE_NEVER_STOPS:-} FAKE_START_FAILS=${FAKE_START_FAILS:-} FAKE_STORAGE_ERROR=${FAKE_STORAGE_ERROR:-} stamp=run1 PREFLIGHT_SHORT_NODE="${SHORT_NODE-ephemeral-dev}" FAKE_DIR="$t/state" FAKE_CALLS="$t/calls" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" env_dir="$t/envdir" log="$t/rebuild.log" \
     bash -c '. "$1"; set +e; run_stage preflight; echo "rc=$?"; echo "marker=$([ -f "$env_dir/ci-runner-stopped" ] && echo yes || echo no)"' _ "$t/fn.sh" 2>&1
 }
 check() { if [[ $2 == *"$3"* ]] && { [ -z "${4:-}" ] || [[ $2 != *"$4"* ]]; }; then echo "ok   $1"; else echo "FAIL $1: $2"; fail=1; fi; }
@@ -80,6 +81,8 @@ out=$(FAKE_GUESTS_ERROR=yes run dev 31 28); check "an unreadable guest list is n
 check "the memory refusal still stands" "$out" "refused"
 check "the guest read error does not print the token" "$out" "guest list could not be read" "SECRETTOKEN"
 out=$(run dev 31 17); check "a pass lists guests too and passes" "$out" "guest vmid=300" "refused"
+out=$(FAKE_GUEST_257=yes run dev 31 1); check "VM 257, the OPNsense test VM, refuses a dev build whatever the memory" "$out" "refused, VM 257 (the OPNsense test VM) exists" "rc=0"
+out=$(FAKE_GUESTS_ERROR=yes run dev 31 17); check "an unreadable guest list says VM 257 was not checked" "$out" "could not be checked" ""
 check "the token is never in the guest request's arguments" "$(cat "$t/argv")" "cluster/resources" "SECRETTOKEN"
 grep -q 'stages="preflight \$stages"' "$src" && echo "ok   a dev run gets the preflight" || { echo "FAIL: the preflight is not added to a dev run"; fail=1; }
 # The node sampler: one line per node with CPU and memory, from kubectl top nodes, and only on dev's sign-in stage.

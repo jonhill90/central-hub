@@ -540,6 +540,14 @@
   when: agent_box_vps_host | length > 0
   tags: [wrappers]
 
+- name: The opnsense-test wrapper's tools, settings and packet filter
+  ansible.builtin.include_tasks:
+    file: opnsense_test.yml
+    apply:
+      tags: [wrappers]
+  when: agent_box_opnsense_test | length > 0
+  tags: [wrappers]
+
 - name: Weekly CI runner service and timer (pick 208)
   ansible.builtin.template:
     src: "ci-runner-weekly.{{ item }}.j2"
