@@ -73,7 +73,7 @@ His messages are a change of mind (REQ-0030). They reverse REQ-0009 (the owner m
 
 ## Decision Outcome
 
-Chosen option: **1**, because the owner ended his own approval of the lab's build-out, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules he pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8, deletes and secrets as agent picks. The rest of rule 6 (money, the box's limits, access rights), where in each step the tap falls, and rule 7, are agent picks.
+Chosen option: **1**, because the owner ended his own approval of the lab's build-out, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules he pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8, deletes and secrets as agent picks. The rest of rule 6 (money, access rights), where in each step the tap falls, and rule 7, are agent picks. The box's limits need no tap since the owner's order of 2026-11-17 (rule 4).
 
 ```mermaid
 flowchart LR
@@ -81,7 +81,7 @@ flowchart LR
   rv --> cn["council A, B, C each pass the head"]
   cn --> job["merge sweep on the agent box:<br/>four passes on the head's ledger, checks, clean merge,<br/>then squash pinned to the head"]
   job --> main["main"]
-  main --> box["box limits: applied from the controller,<br/>as D-0036 rule 6 says"]
+  main --> box["box limits: the agents' pass of the digest,<br/>no tap (rule 4)"]
   main --> dev["dev apply"]
   dev --> prod["production or cloud apply,<br/>no tap"]
   prod -. "firewall or tailnet, a delete,<br/>a secret, money" .-> tap["one tap from the owner"]
@@ -111,8 +111,9 @@ flowchart LR
    - the proposal merges first, or the pass names the head that holds it (D-0001);
    - the acceptance PR changes only `status`, `date` and `accepted-evidence`, with `approved-by: agents`, `approval-ref` the orchestrator's message that records the pass, and `approval-names` naming the PR and head;
    - the reviewer compares the accepted text with the passed head, as D-0001 asks.
-4. **The box's limits.** [agent pick] A change to a limit (D-0036 rule 3) keeps the owner's approval, now as a tap (rule 6), because his card of 2026-11-14 02:24 UTC, which he answered at 02:26 UTC, kept limit changes for him (D-0036), and his messages of 07:42 to 07:44 UTC did not change that.
-   - It is applied from the controller or, since D-0044, by the box itself from a line in main's approvals file naming its exact baseline, commit and digest with the pass and tap ids, which the box only logs and cannot check (D-0044 rule 3; D-0036 rule 6); without such a line, the `box-apply` installed on the box stops on it.
+4. **The box's limits.** [the owner's words: "drop the box-install cards" (2026-11-17 06:21:09 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh), and the rules still apply (06:21:43 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwN6X5bWTsHaTJ5KvG5fBAwzx); where the line falls is an agent pick] A change to a limit (D-0036 rule 3) needs the agents' pass of its exact digest (rule 1) and no tap from the owner. This replaces the tap that his answer of 2026-11-14 02:26 UTC on D-0036's card kept for him.
+   - A change that also holds a step of rule 6 keeps that step's tap, at that step: a firewall apply, such as a change to a packet filter on the box (D-0036 rule 8; the lifeline's filter runs only from the controller), a new credential for agents or wider rights for one in another system, a secret, a delete, or money. A sudo rule, wrapper or user on the box is a limit, not an access right.
+   - It is applied from the controller or, since D-0044, by the box itself from a line in main's approvals file naming its exact baseline, commit and digest with the pass's id and the owner's approval id (his order above, or his tap where the change keeps one), which the box only logs and cannot check (D-0044 rule 3; D-0036 rule 6); without such a line, the `box-apply` installed on the box stops on it.
    - The merge sweep (rule 2) and the acceptances of rule 3 rest on limit changes of this kind: `pr-merge`, the verdict script, `pass-record` and the sweep's units, installed from the controller (D-0056 rule 9). D-0044 is how they reach the box without the Mac, after one apply from the controller (D-0044 rule 5).
 
 5. **Production and cloud applies.** [the owner's words: finish the greenfield lab (07:44:46 UTC); the pass as approver is an agent pick] Dev is the dev guests, VMs 250 to 257, with the dev secrets store, which runs in namespace `openbao` of dev's c1 (D-0058 rule 2). The production secrets store, in prod's c1, is production. A production run (D-0035) or a production or cloud apply (D-0041) needs no tap, apart from rule 6:
@@ -120,12 +121,11 @@ flowchart LR
    - a layer with no dev twin (the Proxmox host's own configuration, OPNsense, the tailnet, Azure, Cloudflare and Tailscale) runs once its saved plan's hash has the agents' pass;
    - the log names the pass's message id where it named the card.
 6. **Still one tap.** These still need the owner's tap on a card that names the step and the commit (D-0034), at the step itself. A merge of their code needs no tap; the apply or the act does. The first three are the agents' reading of the earlier standing rules the owner pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8; deletes and secrets [agent pick]. The rest are agent picks:
-   - **firewall and tailnet:** an apply to the firewall layers (the Proxmox host's firewall, OPNsense's rules) or to the tailnet, which includes opening a lab service to the internet;
+   - **firewall and tailnet:** an apply to the firewall layers (the Proxmox host's firewall, OPNsense's rules, a packet filter on the agent box) or to the tailnet, which includes opening a lab service to the internet;
    - **deletes:** deleting data or a backup, tearing down a whole environment's guests outside dev, a `restore` of the secrets store, on dev too, since it puts the lab's secrets back, and a `destroy` of the production secrets store, which a teardown of prod's c1 counts as. A teardown of dev's c1, which wipes the dev secrets store inside it, is not a store `destroy` and needs no tap, like other dev teardowns and rebuilds;
    - **secrets:** exposing a secret, copying secrets onto the agent box, or rotating the owner's own credentials;
    - **access rights:** [agent pick] a new credential for agents, or wider rights for an existing one, such as the agents' Proxmox token;
-   - **money:** [agent pick, from the owner's rule of 2026-11-09 against unexpected Azure charges] anything that starts a charge;
-   - **the box's limits:** [agent pick, rule 4] a change to a limit of the agent box (D-0036 rule 3). The tap replaces the typed line D-0036 rule 6 asked for, because the owner's message of 07:47:50 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNLn48f4BruWkqptU1TmBMV) said he would no longer type go lines (that this is for the greenfield build-out is the agents' reading of his message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change); the tap as their replacement is this agent pick.
+   - **money:** [agent pick, from the owner's rule of 2026-11-09 against unexpected Azure charges] anything that starts a charge.
 7. **What stays with the owner by choice.** [agent pick] Scanning his own sign-in code into his authenticator, the settings of his own claude.ai and GitHub accounts, and the Proxmox console when everything else is down (D-0035 rule 9).
 8. **The owner's no.** A message from the owner that says no, stop or revert about a change wins at once. Agents stop starting jobs for it, and open a revert PR or run the layer's way back. A revert goes through the same pass and job.
 9. **Logs.** The sweep's comment on a merged PR is public on GitHub, so it holds only the PR, the head and the ledger's lines (roles, relay ids and times). The orchestrator lists every merge and apply made under this record in its next report to the owner.
@@ -134,16 +134,16 @@ flowchart LR
 
 ### Consequences
 
-- Good: the owner no longer types or taps for merges, acceptances and production and cloud applies. He keeps one tap for firewall and tailnet applies, deletes, secrets, access rights, money and the box's limits.
+- Good: the owner no longer types or taps for merges, acceptances and production and cloud applies. He keeps one tap for firewall and tailnet applies, deletes, secrets, access rights and money.
 - Good: each approval names a reviewer's and a council's message, and the sweep's own checks don't rest on the caller.
 - Good: merges made by the sweep show as the project's GitHub App in the PR's history, and each has a comment that names its passes.
 - Bad: agents approve agents' work, and all four checkers are the same kind of model, so they can share a blind spot. Compensating controls: four separate threads, each told to look for what is missing; the four-check rule before any "supported" or "not supported" claim; the public run log; the owner's no at any time (rule 8); every merge can be reverted and every lab layer rebuilt from code.
 - Bad: the sweep can't check the reviewer's and the council's messages. A session that can run `pass-record` could record a pass with a made-up id. Compensating controls: the ids are in the PR's comment and the orchestrator's report, so a made-up one shows; the sweep checks everything GitHub can tell it. This is the same gap D-0035 and D-0041 accept for card taps.
-- Bad: the sweep's checks live in this repository, so a PR can change them (Activation gate item 2 is still open). Compensating controls: a change that drops or loosens a check, or removes a step from rule 6, needs the owner's tap (rule 11); the box runs the copy a tapped install put there, never a PR's; every change to it is in the orchestrator's report.
+- Bad: the sweep's checks live in this repository, so a PR can change them (Activation gate item 2 is still open). Compensating controls: a change that drops or loosens a check, or removes a step from rule 6, needs the owner's tap (rule 11); the box runs the copy an approved install put there, never a PR's; every change to it is in the orchestrator's report.
 - Bad: a production or cloud apply now runs without the owner seeing its plan first. A wrong apply can break the lab until it is rebuilt. The owner gave his reason at 07:44:46 UTC: the lab is greenfield and holds no personal data or anything of value. If that stops being true, this record is revisited. Compensating controls: dev first for every layer that has a twin; the saved plan and the council's pass for those that don't; rule 6 for firewall, tailnet, deletes, secrets and money; the restore checks of D-0035 rule 5 before any teardown.
 - Bad: rule 7's steps still need the owner in person.
 - Bad: the sweep depends on the agent box. If the box is down, merges wait, or fall back to the Mac's checked merge or the owner's own merge on GitHub.
-- Bad: a box limit change, including the sweep's files, keeps the owner's tap and is applied from the controller, or by the box itself from a line in main's approvals file (rule 4, D-0044).
+- Bad: a box limit change, including the sweep's files, reaches the box on the agents' pass with no card for the owner, from the controller or from a line in main's approvals file (rule 4, D-0044). Compensating controls: the digest pins the bytes that were passed, every line is in the repository's history and the box's log, the orchestrator lists each install in its report (rule 9), and the owner's no wins at once (rule 8).
 - Bad: most of this record is agent picks the owner did not see. Compensating controls: each is labelled, the owner can change any of them, and his no wins at once (rule 8).
 
 ### Confirmation

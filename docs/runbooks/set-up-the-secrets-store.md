@@ -54,7 +54,7 @@ Before the first start, the node folder `/var/lib/central-hub/openbao-seal` must
 
 The seal key on dev, from the box (D-0058 rule 3; dev's key needs no tap):
 
-1. The box's install sets `agent_box_openbao_in_cluster: true` in the private inventory, so the `agent_box` role writes `/var/lib/agent-box/openbao-in-cluster`. The role refuses it unless `agent_box_secrets_bundle` is set too, because the rebuild wrapper keeps the seal key as a SOPS copy encrypted to the box's age identity, which the bundle's tasks make ([make-the-box-secrets-bundle.md](make-the-box-secrets-bundle.md)). It is a change to the box's limits, so its install is the owner's tap (D-0042 rule 6).
+1. The box's install sets `agent_box_openbao_in_cluster: true` in the private inventory, so the `agent_box` role writes `/var/lib/agent-box/openbao-in-cluster`. The role refuses it unless `agent_box_secrets_bundle` is set too, because the rebuild wrapper keeps the seal key as a SOPS copy encrypted to the box's age identity, which the bundle's tasks make ([make-the-box-secrets-bundle.md](make-the-box-secrets-bundle.md)). Its change to the box's limits needs no card (D-0042 rule 4). It gives agents a new admin login in the dev store, an access right, so its install is the owner's tap (D-0042 rule 6).
 2. `rebuild up` (or `rebuild rebuild`) then:
    - keeps the key as its SOPS copy, `/etc/agent-keys/dev/openbao-seal.key.sops.json` (user `keys`, 0600), encrypted to the box's age identity (D-0058 rules 3 and 9). It makes that copy once, if it is missing, from the VM wrapper's `openbao-seal.key` when one exists or else from `openssl rand 32`, checks that it decrypts to the same bytes, and never replaces it. It refuses if the identity is missing. A plain `openbao-seal.key` from the VM wrapper (`secrets-store.sh`), if one exists, stays until it is removed, which is a delete and the owner's tap (D-0042 rule 6);
    - decrypts the copy for each run into a folder in memory (`/dev/shm`, only user `keys` can read it) and checks that it is 32 bytes; the folder is removed when the run ends. This run writes no plain copy to the box's disk, and none goes into git;
@@ -167,7 +167,7 @@ The admin policy can call the forced restore (`sys/storage/raft/snapshot-force`)
 
 ## Off-box copy of the snapshots
 
-Pick 237, proposed D-0038 rule 8. **Not installed yet:** it is a box limit, and a delete (the daily prune) under D-0042 rule 6, so it waits for the owner's tap. It also waits on the blocker in [the bundle's runbook](make-the-box-secrets-bundle.md#before-you-start): no agent or pipeline identity may hold role-assignment rights on the backup vault or container.
+Pick 237, proposed D-0038 rule 8. **Not installed yet:** it is a box limit, which needs no card (D-0042 rule 4), and it holds a delete (the daily prune) under D-0042 rule 6, so it waits for the owner's tap. It also waits on the blocker in [the bundle's runbook](make-the-box-secrets-bundle.md#before-you-start): no agent or pipeline identity may hold role-assignment rights on the backup vault or container.
 
 Each hour, while the box is up, `secrets-store-offbox.sh`:
 
