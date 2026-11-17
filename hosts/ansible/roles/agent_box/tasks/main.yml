@@ -460,6 +460,7 @@
   loop:
     - secrets-store-restore.sh     # the guarded restores, same store and rebuilt
     - secrets-store-snapshots.sh   # rotation, and setting an earlier store's snapshots aside
+    - secrets-store-kv.sh          # SOPS copies: put, compare, reseed (D-0058 rule 8)
   when: agent_box_secrets_store | length > 0
   tags: [wrappers]
 
@@ -471,6 +472,56 @@
     group: "{{ agent_box_keys_user }}"
     mode: "0600"
   when: agent_box_secrets_store | length > 0
+  tags: [wrappers]
+
+# The weekly compare of the store with its SOPS copy (D-0058 rule 8), only once sops_copies is true (the owner's
+# access-right tap, rule 9). Set back to false, the timer is stopped and disabled; the wrapper refuses compare then.
+- name: The SOPS copies need the secrets bundle, for the box's age identity and SOPS
+  ansible.builtin.assert:
+    that: agent_box_secrets_bundle | length > 0
+    fail_msg: agent_box_secrets_store.sops_copies needs agent_box_secrets_bundle set (the box's age identity and SOPS)
+    quiet: true
+  when: agent_box_secrets_store.sops_copies | default(false) is true
+  tags: [wrappers]
+
+- name: Weekly secrets-store compare service and timer (D-0058 rule 8)
+  ansible.builtin.template:
+    src: "secrets-store-compare.{{ item }}.j2"
+    dest: "/etc/systemd/system/secrets-store-compare.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  register: agent_box_store_compare_units
+  when: agent_box_secrets_store.sops_copies | default(false) is true
+  tags: [wrappers]
+
+- name: Weekly secrets-store compare timer on
+  ansible.builtin.systemd_service:
+    name: secrets-store-compare.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_store_compare_units is changed }}"
+  when: >-
+    agent_box_secrets_store.sops_copies | default(false) is true
+    and not (ansible_check_mode and agent_box_store_compare_units is changed)
+  tags: [wrappers]
+
+- name: Is there a secrets-store compare timer to turn off
+  ansible.builtin.stat:
+    path: /etc/systemd/system/secrets-store-compare.timer
+  register: agent_box_store_compare_timer
+  when: agent_box_secrets_store.sops_copies | default(false) is not true
+  tags: [wrappers]
+
+- name: Weekly secrets-store compare timer off, while sops_copies is not true
+  ansible.builtin.systemd_service:
+    name: secrets-store-compare.timer
+    enabled: false
+    state: stopped
+  when: >-
+    agent_box_secrets_store.sops_copies | default(false) is not true
+    and agent_box_store_compare_timer.stat.exists | default(false)
   tags: [wrappers]
 
 - name: The vps-host wrapper's private settings, from the inventory (no keys)

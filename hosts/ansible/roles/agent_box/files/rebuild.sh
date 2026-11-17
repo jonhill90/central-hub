@@ -29,7 +29,8 @@ if [[ ${1:-} == log && $# -eq 1 ]]; then
   exit 0
 fi
 
-case ${1:-} in
+action=${1:-}
+case $action in
   up) extra=() ;;
   rebuild) extra=(--teardown) ;;
   teardown) extra=(--only teardown) ;;
@@ -206,7 +207,35 @@ if [[ -f $work/openbao-in-cluster && $(tr -d '[:space:]' < "$work/openbao-in-clu
     --output "$seal_tmp/openbao-seal.key" "$seal_sops" || { echo "rebuild: $seal_sops does not decrypt with the box's identity" >&2; exit 1; }
   [[ $(wc -c < "$seal_tmp/openbao-seal.key") -eq 32 ]] || { echo "rebuild: the seal key in $seal_sops is not 32 bytes" >&2; exit 1; }
   stages="vms cluster storage openbao-seal restore gitops secrets apps gateway checks"
-  seal_env="OPENBAO_SEAL_KEY_FILE=$seal_tmp/openbao-seal.key"
+  # The admin AppRole's IDs, which stage openbao-handover hands the store's admin login over to (D-0038 rule 6).
+  # Made here when missing, by the same rule as secrets-store.sh (both run as this user): never replaced, no
+  # trailing newline, never printed.
+  [[ -f $store_keys/openbao-admin-role-id ]] || openssl rand -hex 24 | tr -d '\n' > "$store_keys/openbao-admin-role-id"
+  [[ -f $store_keys/openbao-admin-secret-id ]] || openssl rand -hex 24 | tr -d '\n' > "$store_keys/openbao-admin-secret-id"
+  seal_env="OPENBAO_SEAL_KEY_FILE=$seal_tmp/openbao-seal.key
+OPENBAO_ADMIN_ROLE_ID_FILE=$store_keys/openbao-admin-role-id
+OPENBAO_ADMIN_SECRET_ID_FILE=$store_keys/openbao-admin-secret-id"
+  # The rebuild hold (DESIGN section 6): a run that leaves a fresh, empty store (rebuild and teardown, or up while
+  # no dev VM is in the state, as after an ephemeral-dev run), while this box holds snapshots of an earlier store,
+  # writes the hold first. secrets-store's snapshot and restore, and the hourly off-box send, then wait until
+  # restore-rebuilt brings the newest snapshot back (the owner's tap, D-0058 rule 7) or clear-hold sets the earlier
+  # snapshots aside. With no snapshot on the box there is nothing to keep, so no hold.
+  dev_vms=$(python3 -I -c '
+import json, sys
+try:
+    s = json.load(open(sys.argv[1]))
+except FileNotFoundError:
+    print(0); sys.exit()
+print(sum(len(r.get("instances", [])) for r in s.get("resources", [])
+          if r.get("type") == "proxmox_virtual_environment_vm" and r.get("mode") == "managed"))' "$work/state/dev-vms.tfstate") ||
+    { echo "rebuild: the dev state at $work/state/dev-vms.tfstate could not be read" >&2; exit 1; }
+  fresh=false
+  [[ ${extra[*]} == *teardown* ]] && fresh=true
+  [[ $action == up && $dev_vms == 0 ]] && fresh=true
+  if [[ $fresh == true ]] && compgen -G "$store_keys/openbao-snapshots/raft-*.snap" >/dev/null; then
+    [[ -e $work/state/secrets-store.rebuilding ]] || date -u +%FT%TZ > "$work/state/secrets-store.rebuilding"
+    echo "rebuild: the secrets store's rebuild hold is set; after the run, restore-rebuilt (the owner's tap) or clear-hold"
+  fi
 fi
 # What a dev run does on a node short of memory is the owner's pick, never a default (rebuild-k8s.sh,
 # docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev or keep-dev, from the one-line file the

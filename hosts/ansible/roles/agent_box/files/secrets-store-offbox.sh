@@ -4,10 +4,12 @@
 # timer; no session runs it, so it has no sudo line.
 # It reuses the OPNsense off-box copy's settings, Azure sign-in, container, restic password and Key Vault (pick 222),
 # in a repository of its own, so it needs no Azure right of its own.
-#   1. No store: when the wrapper's OpenTofu state holds no store VM, one "skipped: no store" line, exit 0. With a
-#      store VM and the wrapper's rebuild hold (destroy leaves it, restore-rebuilt or clear-hold removes it): "skipped: store
-#      rebuild in progress", exit 0, and a hold older than 24 hours fails the run. A store
-#      VM that is there but whose sys/health is not 200 fails the run (rule 9: fail loudly).
+#   1. No store: the store runs inside the dev cluster (D-0058), so there is none unless the in-cluster store is on
+#      (agent_box_openbao_in_cluster) and the dev rebuild's OpenTofu state holds dev VMs; then one "skipped: no store"
+#      line, exit 0. With dev up and the rebuild hold (the rebuild wrapper writes it before a run that makes a fresh
+#      store, restore-rebuilt or clear-hold removes it): "skipped: store rebuild in progress", exit 0, and a hold older
+#      than 24 hours fails the run. A store that is there but whose sys/health is not 200 fails the run (rule 9: fail
+#      loudly).
 #   2. secrets-store snapshot copies a snapshot into the keys folder, through the admin AppRole, as it does by hand.
 #   3. The restic password's escrow must hold before anything is sent, as for the OPNsense copy.
 #   4. The repository is its own (SNAPSHOT_REPOSITORY). It is made only when restic says it does not exist (exit 10);
@@ -15,8 +17,8 @@
 #   5. restic backs the snapshot up under tag openbao-dev, then forgets past the keep settings, grouped by host and
 #      tags (each snapshot has its own file name). Only the first run on or after PRUNE_AFTER_HOUR UTC each day
 #      prunes, which is what deletes data from the account.
-#   6. The snapshot is read back: the same bytes. It opens only in a store with the seal key; the weekly drill on the
-#      VM (pick 235) proves that.
+#   6. The snapshot is read back: the same bytes. It opens only in a store with the seal key; restore-rebuilt
+#      on a fresh dev store proves that (D-0058 rule 7).
 # No value is printed: one line with the snapshot's name and size, or the step that failed.
 set -euo pipefail
 umask 077
@@ -26,8 +28,9 @@ libexec=/usr/local/libexec/agent-box
 settings=/etc/agent-keys/opnsense-offbox/settings.env   # pick 222's settings; no secret in it
 own=$work/secrets-store-offbox.env                       # this job's settings; no secret in it
 store_settings=$work/secrets-store.json                  # the wrapper's settings: the store's address
-state=$work/state/secrets-store.tfstate                  # the wrapper's OpenTofu state
-hold=$work/state/secrets-store.rebuilding               # the wrapper's destroy writes it; restore-rebuilt or clear-hold removes it
+state=$work/state/dev-vms.tfstate                        # the dev rebuild's OpenTofu state: the cluster the store is in
+in_cluster=$work/openbao-in-cluster                      # "true" while the store inside the dev cluster is on
+hold=$work/state/secrets-store.rebuilding               # the rebuild wrapper writes it; restore-rebuilt or clear-hold removes it
 cacert=/etc/agent-keys/dev/secrets-store-ca.crt
 snapshots=/etc/agent-keys/dev/openbao-snapshots
 pruned=$work/state/secrets-store-offbox.pruned           # the UTC day of the last prune
@@ -46,7 +49,8 @@ for f in "$settings" "$own" "$store_settings"; do
   [[ -f $f ]] || die "$f is missing; set agent_box_opnsense_offbox and agent_box_secrets_store and run the agent_box role"
 done
 
-# 1. Is there a store? The wrapper's state lists the VM it made; no state, or no VM in it, is no store.
+# 1. Is there a store? Only with the in-cluster store on and dev's VMs in the rebuild's state.
+if [[ ! -f $in_cluster || $(tr -d '[:space:]' < "$in_cluster") != true ]]; then say "skipped: no store"; exit 0; fi
 vms=$(python3 -I -c '
 import json, sys
 try:
@@ -55,9 +59,9 @@ except FileNotFoundError:
     print(0); sys.exit()
 print(sum(len(r.get("instances", [])) for r in s.get("resources", [])
           if r.get("type") == "proxmox_virtual_environment_vm" and r.get("mode") == "managed"))' "$state") \
-  || die "the wrapper's state at $state could not be read"
+  || die "the dev rebuild's state at $state could not be read"
 if [[ $vms == 0 ]]; then say "skipped: no store"; exit 0; fi
-# A rebuild in progress (pick 238): the VM is back but restore-rebuilt has not passed yet, so no snapshot of the
+# A rebuild in progress (pick 238): dev is back but restore-rebuilt has not passed yet, so no snapshot of the
 # empty store is taken, sent or kept. A hold older than a day is a rebuild left half done, which fails red.
 if [[ -e $hold ]]; then
   (( $(date +%s) - $(stat -c %Y "$hold") < 86400 )) || die "the store's rebuild hold is over 24 hours old; finish restore-rebuilt, or run secrets-store clear-hold"
@@ -67,7 +71,7 @@ fi
 address=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["address"])' "$store_settings")
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --cacert "$cacert" "https://$address/v1/sys/health" || true)
 [[ $code =~ ^[1-9] ]] || code=nothing   # curl prints 000 when nothing answered
-[[ $code == 200 ]] || die "the store's VM is in the wrapper's state, but sys/health answered $code (200 is unsealed and active); nothing sent"
+[[ $code == 200 ]] || die "dev is up with the store on, but sys/health answered $code (200 is unsealed and active); nothing sent"
 
 set -a
 # shellcheck source=/dev/null

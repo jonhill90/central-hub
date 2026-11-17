@@ -1,0 +1,137 @@
+---
+# Dev only: the one-time hand-over of the secrets store's admin login to the agent box (D-0038 rule 6, D-0058;
+# docs/runbooks/set-up-the-secrets-store.md, "Handing the admin login to the box"). The store inside c1 makes its
+# admin AppRole at its first start with no IDs the box knows (apps/openbao/values.yaml, self-init "roles"), and a
+# Kubernetes login role `bootstrap` whose policy can only set that AppRole's role ID and a secret ID, and delete
+# role `bootstrap` (apps/openbao-store/policies/bootstrap.hcl). This play mints a short token for service account
+# openbao-bootstrap, signs in with it from inside OpenBao's own pod, sets the admin's role ID and secret ID to the
+# box's own (from the box's keys folder), and deletes role `bootstrap`, so the hand-over can't be done again.
+# The rebuild's dev-only stage `openbao-handover` runs it with the in-cluster store on.
+#   ansible-playbook -i <dev inventory>/ playbooks/k8s-openbao-handover.yml \
+#     -e openbao_admin_role_id_file=<keys>/openbao-admin-role-id -e openbao_admin_secret_id_file=<keys>/openbao-admin-secret-id
+# Every secret (the token, the IDs) goes to the pod on stdin, never in an argument, and no task logs it. The calls
+# go from OpenBao's pod to its own Service, which the store's NetworkPolicy allows, so no Gateway path is needed.
+# The admin AppRole then signs in only from the box's address (k8s_gitops_source_openbao_box_cidr): while that is
+# unset the play hands nothing over and passes with a skip line; a loopback or wider address fails it. A store
+# already handed over passes with no change.
+- name: Hand the secrets store's admin login to the agent box
+  hosts: k8s_control_plane[0]
+  become: true
+  gather_facts: false
+  vars:
+    # The IDs and the token travel on the module's stdin: piped, the module never lands in a temp file on the
+    # node (hosts/ansible/ansible.cfg does not turn pipelining on).
+    ansible_pipelining: true
+    handover_kubectl: [kubectl, --kubeconfig, /etc/kubernetes/admin.conf, -n, openbao]
+    handover_pod: openbao-0
+    # The pod calls its own Service by the name its certificate carries; BAO_CACERT is already set in the pod.
+    handover_addr: https://openbao.openbao.svc:8200
+  tasks:
+    - name: handover | Dev only, with the store inside the cluster
+      ansible.builtin.assert:
+        that: k8s_gitops_source_openbao_in_cluster | default(false) | bool
+        fail_msg: needs the in-cluster store (k8s_gitops_source_openbao_in_cluster)
+        quiet: true
+
+    # Until the box's path to the store is set (the Gateway PR fills k8s_gitops_source_openbao_box_cidr), there is
+    # nothing to hand over to: the admin AppRole would accept any port-forward from the pod's namespace. A dev run
+    # then passes this stage with a skip line, so the rest of the run is not stopped.
+    - name: handover | Skipped while the box's address is unset
+      when: k8s_gitops_source_openbao_box_cidr | default('') | length == 0
+      block:
+        - name: handover | Result (skipped)
+          ansible.builtin.debug:
+            msg: "PASS: openbao-handover: skipped, no box address yet (k8s_gitops_source_openbao_box_cidr unset)"
+        - name: handover | Stop here
+          ansible.builtin.meta: end_play
+
+    - name: handover | The box's address is a /32 that is not loopback
+      ansible.builtin.assert:
+        that:
+          - k8s_gitops_source_openbao_box_cidr is match('^([0-9]{1,3}\\.){3}[0-9]{1,3}/32$')
+          - k8s_gitops_source_openbao_box_cidr is not match('^(127|0)\\.')
+        fail_msg: k8s_gitops_source_openbao_box_cidr must be the box's own address as a /32, not loopback
+        quiet: true
+
+    - name: handover | The box's admin IDs, read on this machine, 48 hex characters each
+      ansible.builtin.set_fact:
+        handover_role_id: "{{ lookup('ansible.builtin.file', openbao_admin_role_id_file) }}"
+        handover_secret_id: "{{ lookup('ansible.builtin.file', openbao_admin_secret_id_file) }}"
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: handover | The IDs look right
+      ansible.builtin.assert:
+        that:
+          - handover_role_id is match('^[0-9a-f]{48}$')
+          - handover_secret_id is match('^[0-9a-f]{48}$')
+        fail_msg: the admin ID files are not 48 lowercase hex characters each (secrets-store.sh and rebuild.sh make them)
+        quiet: true
+      no_log: true
+
+    - name: handover | OpenBao's pod is Ready
+      ansible.builtin.command:
+        argv: "{{ handover_kubectl + ['get', 'pod', handover_pod, '-o', 'jsonpath={.status.containerStatuses[0].ready}'] }}"
+      register: handover_ready
+      changed_when: false
+      failed_when: handover_ready.rc != 0 or handover_ready.stdout != 'true'
+
+    # TokenRequest's shortest life is 10 minutes; the role's own tokens last 5 and allow 4 uses.
+    - name: handover | A short token for service account openbao-bootstrap
+      ansible.builtin.command:
+        argv: "{{ handover_kubectl + ['create', 'token', 'openbao-bootstrap', '--duration=10m'] }}"
+      register: handover_jwt
+      changed_when: false
+      no_log: true
+
+    - name: handover | The token looks like a JWT
+      ansible.builtin.assert:
+        that: handover_jwt.stdout is match('^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$')
+        fail_msg: kubectl create token gave no JWT
+        quiet: true
+      no_log: true
+
+    # One exec, the script and its values on stdin. Each bao call gets its JSON body on its own stdin through
+    # printf, a shell builtin, so no value is in any process's arguments. Login answering that role bootstrap
+    # does not exist means the hand-over was done before.
+    - name: handover | Sign in as bootstrap, set the admin's IDs, delete role bootstrap
+      ansible.builtin.command:
+        argv: "{{ handover_kubectl + ['exec', '-i', handover_pod, '-c', 'openbao', '--', 'sh', '-s'] }}"
+        stdin: |
+          set -eu
+          export BAO_ADDR={{ handover_addr }}
+          jwt='{{ handover_jwt.stdout }}'
+          rid='{{ handover_role_id }}'
+          sid='{{ handover_secret_id }}'
+          if ! out=$(printf '{"role":"bootstrap","jwt":"%s"}' "$jwt" | bao write -field=token auth/kubernetes/login - 2>&1); then
+            case $out in
+              *"invalid role name"*) echo "HANDOVER: already handed over"; exit 0 ;;
+              *) echo "HANDOVER: login as bootstrap failed: $(printf '%s' "$out" | tr -s '\n' ' ' | cut -c1-200)"; exit 1 ;;
+            esac
+          fi
+          BAO_TOKEN=$out
+          export BAO_TOKEN
+          printf '{"role_id":"%s"}' "$rid" | bao write auth/approle/role/admin/role-id - >/dev/null
+          printf '{"secret_id":"%s"}' "$sid" | bao write auth/approle/role/admin/custom-secret-id - >/dev/null
+          bao delete auth/kubernetes/role/bootstrap >/dev/null
+          bao token revoke -self >/dev/null 2>&1 || true
+          echo "HANDOVER: done"
+      register: handover_run
+      changed_when: "'HANDOVER: done' in handover_run.stdout"
+      # Judged by the next task, which prints only the HANDOVER line: this one's output is never shown.
+      failed_when: false
+      no_log: true
+
+    - name: handover | It passed, or why not (its HANDOVER line only, which holds no secret)
+      ansible.builtin.fail:
+        msg: >-
+          {{ handover_run.stdout_lines | default([]) | select('match', '^HANDOVER:') | list | join(' ')
+          | default('no HANDOVER line', true) }} (exit {{ handover_run.rc }})
+      when: >-
+        handover_run.rc != 0 or not (handover_run.stdout is search('HANDOVER: (done|already handed over)'))
+
+    - name: handover | Result
+      ansible.builtin.debug:
+        msg: >-
+          PASS: openbao-handover: {{ ('HANDOVER: done' in handover_run.stdout) | ternary('done', 'already handed over') }}
