@@ -3,9 +3,9 @@ title: Sign in to the OPNsense web GUI through Keycloak
 status: draft
 kind: manual
 trigger: once, on a test OPNsense first and then on the lab firewall with the owner's tap (D-0037 rule 5); again for every new plugin version and every OPNsense upgrade, on the test OPNsense first
-runner: an agent lane from the agent box for the realm and the test OPNsense; the lab firewall step only after the owner's tap
+runner: an agent lane from the agent box for the test OPNsense and its throwaway Keycloak; the c1 realm and lab firewall step only after the owner's tap
 outcome: the OPNsense login page offers a Keycloak button; a Keycloak user bound to a local OPNsense account signs in with that account's rights; an unknown identity waits for an admin's approval; root signs in with its local password whatever Keycloak's state
-needs: realm lab on c1 (set-up-lab-sign-in.md); the GUI on a name in the lab CA's certificate (set-opnsense-gui-certificate.md); OPNsense reaches Keycloak's issuer on 443 for every sign-in
+needs: for the test, the OPNsense test stack (a test OPNsense and a throwaway Keycloak on the agent box; not built yet); for the lab firewall, realm lab on c1 (set-up-lab-sign-in.md) and the GUI on a name in the lab CA's certificate (set-opnsense-gui-certificate.md); OPNsense reaches its Keycloak issuer on 443 for every sign-in
 private-values: [k8s_identity_opnsense_hosts, OPNSENSE_CLIENT_SECRET, opnsense-root-password]
 files: [hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/defaults/main.yml, hosts/ansible/roles/k8s_identity/vars/main.yml]
 last-tested: "not yet run; 2026-11-17, an agent, the realm rendered with the opnsense client for CI's realm import"
@@ -34,16 +34,14 @@ flowchart LR
 |---|---|
 | Client `opnsense` in realm `lab`: confidential, code flow with PKCE S256, redirects only to `https://<name>/api/openidconnect/auth/callback/keycloak`, and the lifecycle test's logout return `https://<name>/api/openidconnect/auth/logouttestcallback/keycloak` | `k8s_identity`: `templates/realm.yaml.j2`, inputs `k8s_identity_opnsense_hosts` and `k8s_identity_opnsense_app_code` |
 | Its secret: `OPNSENSE_CLIENT_SECRET` in `~/.config/central-hub/identity.env` on the controller, made by k8s_identity like the other client secrets, only once a name is set | `k8s_identity/vars/main.yml` |
-| The plugin: `os-openid-connect-1.0.0.beta5.pkg`, tag `v1.0.0-beta5` (commit `e7f5f7b3ed0dc6d71463bd7cbc08d65cbc794e12`), SHA-256 `4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406a41b117c` | this runbook, step 2 |
-| The plugin's settings on OPNsense | step 3 |
+| The plugin: `os-openid-connect-1.0.0.beta5.pkg`, tag `v1.0.0-beta5` (commit `e7f5f7b3ed0dc6d71463bd7cbc08d65cbc794e12`), SHA-256 `4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406a41b117c` | this runbook, step 1 |
+| The plugin's settings on OPNsense | step 2 |
 
 ## Steps
 
-1. **Add the client to the realm.** Set `k8s_identity_opnsense_hosts` in the private inventory to the GUI's names, and run the k8s_identity role twice, as for Proxmox ([sign-in-to-proxmox-through-keycloak.md](sign-in-to-proxmox-through-keycloak.md) step 2).
-   why: the first run adds `OPNSENSE_CLIENT_SECRET` to `identity.env`, and the second imports the realm with the client. As with every realm import, open sign-ins end.
-   expect: `identity.env` has an `OPNSENSE_CLIENT_SECRET` line, and the realm import shows `Done`.
+Steps 1 to 4 run on the test OPNsense, which signs in at a throwaway Keycloak on the agent box. That Keycloak imports the same realm template with client `opnsense` for the test OPNsense's name and one test user, and is removed at the end. Realm lab on c1 is not touched until step 5.
 
-2. **Check the package.** Download the package and its checksum from the `v1.0.0-beta5` release on the agent box, then check both:
+1. **Check the package.** Download the package and its checksum from the `v1.0.0-beta5` release on the agent box, then check both:
 
    ```sh
    sha256sum os-openid-connect-1.0.0.beta5.pkg
@@ -56,38 +54,47 @@ flowchart LR
    why: the SHA-256 pins the bytes that were read, and the attestation ties them to the repository's own build ([the plugin's install guide](https://github.com/jpawlowski/opnsense-openid-connect/blob/v1.0.0-beta5/docs/setup/install.md)).
    expect: the SHA-256 in the table above, and a verified attestation. On any other value, stop.
 
-3. **Install and set it up on the test OPNsense.** How the agent box puts a local package on OPNsense (its API, SSH, or a local package repository) is decided by the test run and written here before this step is used on the lab firewall. Then, under System > Access > Servers, add an OpenID Connect server with these settings:
+2. **Install and set it up on the test OPNsense.** Copy the checked file from the agent box and install it with `pkg add` of that local file; OPNsense never downloads the plugin. How the box reaches the firewall for this is decided by the test run and written here before step 5. Then, under System > Access > Servers, add an OpenID Connect server with these settings:
    - provider profile Keycloak;
-   - issuer `https://<sso name>/realms/lab`, client `opnsense` and its secret;
+   - issuer: the throwaway Keycloak's realm; client `opnsense` and its secret;
    - application code `keycloak`;
    - admission policy **Administrator approval**;
    - create an account on first login **off**;
    - root **not** allowed;
    - PAR mode **Disabled**;
-   - DPoP, back-channel logout and shared signals **off**;
+   - logout notifications **Off** (the Keycloak profile's default is back-channel);
+   - shared signals **off**;
    - keep the Local Database as a login server.
 
-   why: these are D-0037 rule 5's settings. With PAR, DPoP and shared signals off, the plugin's every-minute root job only fetches Keycloak's discovery document and keys.
+   why: these are D-0037 rule 5's settings. With PAR and shared signals off, the plugin's every-minute root job only fetches Keycloak's discovery document and keys. DPoP has no setting: the plugin uses it because Keycloak offers it, and its code was read (D-0037 evidence finding 24).
    expect: the plugin's own test sign-in passes.
 
-4. **Prove it.**
+3. **Prove it on the test OPNsense.**
    - A Keycloak user bound to a local admin account signs in and lands on the dashboard with that account's rights.
    - An unknown Keycloak user is refused or waits in the approval queue.
-   - With client `opnsense` disabled in Keycloak, root signs in with its local password.
+   - With the throwaway Keycloak stopped, root signs in with its local password.
 
    expect: all three. Keep the run's log in the agent notebook's run records, with no secret in it.
 
-5. **The lab firewall.** Only after step 4 passes on the test OPNsense, and with the owner's tap on a card that names this runbook's commit, the plugin version and its SHA-256: steps 2 to 4 on the lab firewall.
+4. **Clean up.** Destroy the test OPNsense, and stop the throwaway Keycloak and remove its data.
+   expect: neither is left running.
+
+5. **The lab firewall.** Only after step 3 passes, and with the owner's tap on a card that names this runbook's commit, the plugin version and its SHA-256, and says it changes the firewall (D-0036 rule 8) and who can sign in to it (D-0042 rule 6):
+   1. **Add the client to realm lab on c1.** Set `k8s_identity_opnsense_hosts` in the private inventory to the GUI's names, and run the k8s_identity role twice, as for Proxmox ([sign-in-to-proxmox-through-keycloak.md](sign-in-to-proxmox-through-keycloak.md) step 2).
+      why: the first run adds `OPNSENSE_CLIENT_SECRET` to `identity.env`, and the second imports the realm with the client. As with every realm import, open sign-ins end.
+      expect: `identity.env` has an `OPNSENSE_CLIENT_SECRET` line, and the realm import shows `Done`.
+   2. Steps 1 and 2 on the lab firewall, with issuer `https://<sso name>/realms/lab`.
+   3. Step 3's checks on the lab firewall, except that root's check is made with client `opnsense` disabled in Keycloak, so c1 keeps running.
 
 ## Undo
 
 - Turn off the OPNsense server's "Offer on the login page" setting, or run `pkg delete os-openid-connect`. Local sign-in is unchanged either way, and the package's settings stay in `/conf/config.xml`.
-- Empty `k8s_identity_opnsense_hosts` and run step 1 again to drop the client.
+- Empty `k8s_identity_opnsense_hosts` and run step 5.1 again to drop the client.
 
 ## When it goes wrong
 
 | Symptom | Cause and fix |
 |---|---|
-| Keycloak says "Invalid parameter: redirect_uri" | The name in the browser isn't in `k8s_identity_opnsense_hosts`, or the plugin's application code isn't `keycloak`. Add the name and run step 1, or set the code. |
+| Keycloak says "Invalid parameter: redirect_uri" | The name in the browser isn't in `k8s_identity_opnsense_hosts`, or the plugin's application code isn't `keycloak`. Add the name and run step 5.1, or set the code. |
 | The Keycloak button is gone after an OPNsense upgrade | The plugin hooks into core files that an upgrade can change. Sign in as root, and check the plugin's nightly check in the system log (`openid-connect-watch`). Try each upgrade on the test OPNsense first. |
 | Sign-in through Keycloak fails while c1 is down | Expected: sign in as root with its local password. |

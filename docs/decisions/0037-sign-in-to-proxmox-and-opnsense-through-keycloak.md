@@ -47,10 +47,11 @@ Proposed option: **1**. The owner asked for both machines on Keycloak with local
 4. **FOSS only.** Every component used for these sign-ins is free and open source in the edition the lab runs, with no feature behind a paid tier. That rules out OPNsense's Business Edition OIDC.
 5. **OPNsense signs in through the community plugin os-openid-connect.** Its web GUI signs in through Keycloak's realm, client `opnsense`, code flow with PKCE S256 (role k8s_identity, `k8s_identity_opnsense_hosts`; [runbook](../runbooks/sign-in-to-opnsense-through-keycloak.md)).
    - **The plugin decides who gets in, not Keycloak.** Each Keycloak identity is bound by exact issuer and subject to a local OPNsense account, whose groups give its rights. Admission is `approval`: an unknown identity waits until an admin binds it. Accounts are never made at first sign-in, and root is never reachable through it.
-   - **What is left off:** pushed authorization requests (PAR mode `disabled`), DPoP, back-channel logout and shared signals. Those parts of the plugin were not read, and with them off the plugin's root job only fetches Keycloak's discovery document and keys.
+   - **What is left off:** pushed authorization requests (PAR mode `disabled`), back-channel logout (logout notifications off) and shared signals. Those parts of the plugin were not read, and with them off the plugin's root job only fetches Keycloak's discovery document and keys.
+   - **DPoP stays on.** The plugin uses DPoP whenever Keycloak offers it and has no setting to turn it off, so every sign-in binds its tokens to a key the firewall keeps. Its DPoP code was read with the rest (evidence finding 24).
    - **One pinned package, read before use.** The package is pinned by version and SHA-256 and checked against the release's build attestation. Its code is read before it goes on the firewall, and again for each new version. The plugin is installed by hand and is never updated by OPNsense's own updates.
-   - **Proven on a throwaway OPNsense first.** The lab firewall gets it only after a test OPNsense in dev has shown a Keycloak sign-in, a refused unknown identity, and root's password sign-in with the client off.
-   - **The firewall step is the owner's.** Installing it on the lab firewall changes who can sign in to the firewall, so it waits for the owner's tap (D-0042 rule 6).
+   - **Proven on a throwaway OPNsense first.** The lab firewall gets it only after a test OPNsense in dev has shown a Keycloak sign-in, a refused unknown identity, and root's password sign-in with Keycloak stopped. The test signs in at a throwaway Keycloak on the agent box, so realm lab on c1 is not touched until the lab firewall step.
+   - **The firewall step is the owner's.** Installing it on the lab firewall changes the firewall and who can sign in to it, so it waits for the owner's tap (D-0036 rule 8, D-0042 rule 6). Client `opnsense` is added to realm lab on c1 only in that step.
 
 6. **A second factor for admins, in place before the Proxmox realm.** Every member of `lab-admins` has a TOTP seed in the controller's `identity.env` (`TOTP_<USER NAME>`, base32), imported into realm lab as the user's OTP credential, so it survives each delete and import of the realm. Keycloak's built-in browser and direct grant flows ask any user who has an OTP credential for the code, so every admin is asked at every sign-in, Proxmox's included. The Proxmox realm (rule 1) is applied only after the realm import that adds the seeds, in the same change; the owner adds their seed to an authenticator app before their first sign-in by scanning a QR code that `hosts/ansible/bootstrap/show-totp-qr.sh` shows on the controller's own screen for a short time and then deletes, so the seed is never typed, pasted, printed or logged.
 
@@ -87,7 +88,7 @@ Proposed option: **1**. The owner asked for both machines on Keycloak with local
 - step 4 signs in through Keycloak with Administrator;
 - step 5 signs in as root@pam with TOTP.
 
-[Sign in to the OPNsense web GUI through Keycloak](../runbooks/sign-in-to-opnsense-through-keycloak.md): the test OPNsense proof, then the same three checks on the lab firewall.
+[Sign in to the OPNsense web GUI through Keycloak](../runbooks/sign-in-to-opnsense-through-keycloak.md): the test OPNsense proof against a throwaway Keycloak, then the client in realm lab and the three checks on the lab firewall.
 
 The role's own proof checks that Proxmox builds a sign-in link to Keycloak for client `proxmox`. CI checks the realm import with the client in a real Keycloak, and runs the role against stand-ins (`test_proxmox_sso.sh`).
 

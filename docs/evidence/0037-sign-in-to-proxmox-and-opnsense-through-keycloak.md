@@ -67,18 +67,24 @@ How do the Proxmox host and OPNsense sign their administrators in through Keyclo
     - [measured: a clone at the tag, 2026-11-17]
 22. **It runs a root job every minute.** `openid-connect-refresh` fetches the provider's discovery document and keys when the cache is near stale. It also probes pushed authorization requests when its PAR mode is `auto`, which is the default (`OpenIDConnect.php` 1220, 4401-4403), and polls shared signals only when they are on (`packaging/watch/openid-connect-refresh` lines 72-172). A nightly `openid-connect-watch` hashes the core files the plugin hooks into and fetches the login page over loopback (`openid-connect-watch` lines 112, 145). [measured: the same clone]
 23. **It plugs into core's own interfaces.** The connector implements core's `IAuthConnector` and the login button `SSOProviders\ISSOContainer`; it patches no core file (`OpenIDConnect.php` 53; `Auth/SSOProviders/OpenIDConnectContainer.php` 44). [measured: the same clone]
+24. **With Keycloak, every sign-in uses DPoP, and the plugin has no setting to turn it off.** The plugin uses DPoP whenever the provider's discovery lists ES256 for DPoP and the profile is not authentik (`RelyingParty.php` 1129-1132, `Auth/OpenIDConnect.php` 3721-3727, `ProviderMetadata.php` 396-398); its Keycloak guide says the same [20]. Keycloak 26.8.1 has DPoP on by default and lists its algorithms in discovery when it is on [21]. The DPoP code, read at the tag:
+    - The proof key is a P-256 key made at the first sign-in, kept in `/var/db/openid-connect/dpop` (folder 0700, files 0600, written to a temporary file and renamed, under a lock), rotated after 90 days, with at most five retired keys kept (`DpopKeyStore.php` 37-39, 83-97, 313-358).
+    - Each proof is ES256 with a fresh random `jti`, the method, the URL without its query, `iat`, the access token's hash when one is sent, and a checked nonce (`DpopProof.php` 80-123, 138-143). The authorization request carries the key's thumbprint as `dpop_jkt` (`RelyingParty.php` 237-239).
+    - A request retries once on a `use_dpop_nonce` challenge and then fails (`RelyingParty.php` 936-997). A Bearer token where DPoP was asked is refused (566-571).
+    - DPoP headers are treated as sensitive by the HTTP client (`HttpClient.php` 367-375).
+    - [measured: the same clone]
 
 ## How the decision used it
 
 - **Proxmox (rule 1).** Findings 1 and 2 are why the role makes `lab-admins-sso` and `lab-viewers-sso` itself and leaves group autocreate off. Finding 3 is why the role stops on a changed username claim and why realm lab sets `editUsernameAllowed: false`. Finding 4 is why the client allows exactly `https://<name>`.
 - **Second factor (rule 6).** Findings 14 and 15 are why each admin's seed is imported as a base32 OTP credential and no custom flow is needed.
 - **FOSS only (rule 4).** Findings 6 to 8 put Proxmox and Keycloak inside the owner's FOSS rule, and OPNsense's own OIDC outside it.
-- **OPNsense's route (rule 5).** Findings 18 to 23 lead to os-openid-connect: it is FOSS, on the community edition, and a sign-in at Keycloak, and its sign-in code and package hold up to a read. Findings 20 to 22 are why the package is pinned and checked, and why PAR mode is set to `disabled`. Findings 18 and 19 are why the record calls it a beta from one maintainer and proves it on a test OPNsense first. The other routes: Lachee's plugin is not open source (10). The RADIUS plugin trails the Keycloak version and would need a custom Keycloak image (11). LDAP needs a new directory (9, 12). The proxy is not a sign-in (13).
+- **OPNsense's route (rule 5).** Findings 18 to 23 lead to os-openid-connect: it is FOSS, on the community edition, and a sign-in at Keycloak, and its sign-in code and package hold up to a read. Findings 20 to 22 are why the package is pinned and checked, and why PAR mode is set to `disabled`. Finding 24 is why DPoP stays on: it can't be turned off in the plugin, and its code was read. Findings 18 and 19 are why the record calls it a beta from one maintainer and proves it on a test OPNsense first. The other routes: Lachee's plugin is not open source (10). The RADIUS plugin trails the Keycloak version and would need a custom Keycloak image (11). LDAP needs a new directory (9, 12). The proxy is not a sign-in (13).
 
 ## Limits
 
 - Nothing has run on the real host yet: no sign-in through Keycloak, no reach from the host to c1's Gateway on 443.
-- The os-openid-connect route has not run anywhere yet: the test OPNsense proof is its first run. The code read covers the sign-in path and the root jobs, not the plugin's DPoP, PAR, shared-signals and setup code, which the record leaves off.
+- The os-openid-connect route has not run anywhere yet: the test OPNsense proof is its first run. The code read covers the sign-in path and the root jobs, and its DPoP code (finding 24), not its PAR, back-channel logout, shared-signals and setup code, which the record leaves off.
 - The OPNsense LDAP and RADIUS routes are read from the documentation, not tried.
 - Findings 14 and 15 were read at Keycloak's tag 26.4.0; the lab runs 26.8.1, which CI's realm test (Keycloak 26.8.1) exercises for the direct grant flow only. The browser flow's code prompt is proven only by the first real sign-in.
 - WebAuthn and passkeys were not researched.
@@ -105,3 +111,5 @@ How do the Proxmox host and OPNsense sign their administrators in through Keyclo
 17. os-openid-connect, `docs/setup/install.md`: <https://github.com/jpawlowski/opnsense-openid-connect/blob/v1.0.0-beta5/docs/setup/install.md>
 18. OPNsense forum, "Beta testers and reviewers wanted: OpenID Connect for OPNsense Community Edition": <https://forum.opnsense.org/index.php?topic=52815.0>
 19. OPNsense docs, "Access / User Management": <https://docs.opnsense.org/manual/users.html>
+20. os-openid-connect, `docs/providers/keycloak.md`: <https://github.com/jpawlowski/opnsense-openid-connect/blob/v1.0.0-beta5/docs/providers/keycloak.md>
+21. Keycloak 26.8.1, `common/src/main/java/org/keycloak/common/Profile.java` (feature `DPOP`, `Type.DEFAULT`) and `services/src/main/java/org/keycloak/protocol/oidc/OIDCWellKnownProvider.java` (DPoP algorithms listed when the feature is on): <https://github.com/keycloak/keycloak/blob/26.8.1/common/src/main/java/org/keycloak/common/Profile.java>, <https://github.com/keycloak/keycloak/blob/26.8.1/services/src/main/java/org/keycloak/protocol/oidc/OIDCWellKnownProvider.java>
