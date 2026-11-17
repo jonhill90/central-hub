@@ -35,6 +35,11 @@ grep -q 'ifconfig_vtnet0="inet 10.1.30.199/24"' "$ud" && grep -q 'defaultrouter=
 grep -q 'PasswordAuthentication no' "$ud" && ! grep -q 'PasswordAuthentication yes' "$ud" && grep -q 'PermitRootLogin prohibit-password' "$ud" \
   && ok "SSH by key only" || bad "SSH password logins not off"
 grep -q 'firstboot_freebsd_update_enable=NO' "$ud" && ok "first-boot freebsd-update skipped" || bad "freebsd-update not skipped"
+# /etc/rc reads rc.conf once, so this boot's netif, routing and freebsd-update read the settings from rc.conf.d.
+grep -qF "'ifconfig_DEFAULT=\"\"' 'ifconfig_vtnet0=\"inet 10.1.30.199/24\"' > /etc/rc.conf.d/network" "$ud" \
+  && grep -qF "'defaultrouter=\"10.1.30.1\"' > /etc/rc.conf.d/routing" "$ud" \
+  && grep -qF "'firstboot_freebsd_update_enable=\"NO\"' > /etc/rc.conf.d/firstboot_freebsd_update" "$ud" \
+  && ok "first boot reads the address, gateway and update skip from rc.conf.d" || bad "rc.conf.d settings for the first boot"
 grep -qF "$(cat "$work/key.pub")" "$ud" && ok "root's key is the box key" || bad "root key missing"
 
 # config.xml: parses, and holds what design v4 and Plan's conditions ask for.

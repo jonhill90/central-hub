@@ -72,8 +72,16 @@ def seed(settings, vlans, pubkey, out):
     # the network starts (rc.d/nuageinit: BEFORE: NETWORKING). It makes no user with a known password,
     # turns password logins off, and skips the image's first-boot freebsd-update: the bootstrap
     # replaces the base system anyway.
+    # /etc/rc reads /etc/rc.conf once, so later scripts in this boot never see a sysrc change made
+    # here (releng/14.3 libexec/rc/rc lines 73-78, rc.subr load_rc_config). They do read
+    # /etc/rc.conf.d/<name> each time, as nuageinit's own network settings rely on: netif reads
+    # `network`, routing reads `routing`. The sysrc lines keep the same settings for later boots.
     script = f"""#!/bin/sh
 set -e
+install -d -m 755 /etc/rc.conf.d
+printf '%s\\n' 'ifconfig_DEFAULT=""' 'ifconfig_vtnet0="inet {s['address']}/{net.prefixlen}"' > /etc/rc.conf.d/network
+printf '%s\\n' 'defaultrouter="{gw}"' > /etc/rc.conf.d/routing
+printf '%s\\n' 'firstboot_freebsd_update_enable="NO"' > /etc/rc.conf.d/firstboot_freebsd_update
 sysrc -x ifconfig_DEFAULT || true
 sysrc ifconfig_vtnet0="inet {s['address']}/{net.prefixlen}"
 sysrc defaultrouter="{gw}"
