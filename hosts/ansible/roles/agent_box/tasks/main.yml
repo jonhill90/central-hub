@@ -231,6 +231,8 @@
     group: root
     mode: "0644"
   loop: "{{ agent_box_ca_files }}"
+  loop_control:
+    label: "/etc/pki/ca-trust/source/anchors/agent-box-{{ item | basename }}"
   notify: Rebuild the trust store
   tags: [ca]
 
@@ -460,6 +462,8 @@
   loop:
     - secrets-store-restore.sh     # the guarded restores, same store and rebuilt
     - secrets-store-snapshots.sh   # rotation, and setting an earlier store's snapshots aside
+  loop_control:
+    label: "{{ agent_box_libexec_dir }}/{{ item }}"
   when: agent_box_secrets_store | length > 0
   tags: [wrappers]
 
