@@ -589,10 +589,11 @@ runner_run_teardown() { # [failed]
 echo "rebuild: env $ENV_NAME, stages: $stages, log $log"
 # Dev only, while the sign-in stage runs: each node's CPU and memory from metrics-server (kubectl top nodes), every
 # 60 s, into the short log, so a slow or failed Keycloak stage shows whether the worker ran out of memory or CPU
-# (the 2026-11-17 04:33 UTC run timed out with no reading). Read-only, never fatal; stopped when the stage ends.
-node_top_sampler() { # stage
+# (the 2026-11-17 04:33 UTC run timed out with no reading). Read-only, never fatal; stopped when the stage ends, and it
+# ends itself once the run's own shell is gone, so a run killed mid-stage leaves no loop behind.
+node_top_sampler() { # stage, the run's PID
   local t
-  while :; do
+  while kill -0 "$2" 2>/dev/null; do
     t=$(date -u +%FT%TZ)
     kc top nodes --no-headers 2>/dev/null \
       | awk -v s="$1" -v t="$t" 'NF >= 5 {print "  " s ": node top " t " " $1 " cpu " $3 " memory " $4 " (" $5 ")"}' >> "$log" || true
@@ -606,7 +607,7 @@ for s in $stages; do
   echo "===== $s" >> "$raw"
   sampler=""
   if [ "$ENV_NAME" = dev ] && [ "$s" = identity-keycloak ]; then
-    node_top_sampler "$s" & sampler=$!
+    node_top_sampler "$s" "$$" & sampler=$!
   fi
   # A subshell outside any `if`, so `set -e` still stops the stage at its first failed command.
   set +e
