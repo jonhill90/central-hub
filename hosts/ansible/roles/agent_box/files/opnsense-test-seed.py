@@ -53,7 +53,8 @@ def read(folder, name):
 def seed(settings, vlans, pubkey, out):
     s, net, gw = load(settings, vlans)
     key = open(pubkey).read().strip()
-    if not re.fullmatch(r"ssh-ed25519 [A-Za-z0-9+/=]+( \S+)?", key):
+    # One line: the comment may hold spaces, as the wrapper's own key's does ("keys@agent-box opnsense-test").
+    if not re.fullmatch(r"ssh-ed25519 [A-Za-z0-9+/=]+( [^\n]*)?", key):
         sys.exit("opnsense-test: the root key is not one ed25519 public key")
     os.makedirs(out, exist_ok=True)
     with open(os.path.join(out, "meta-data"), "w") as f:

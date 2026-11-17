@@ -16,7 +16,7 @@ bad() { echo "FAIL - $1"; fails=$((fails + 1)); }
 
 printf '%s\n' '{"name": "daldopdemo01", "address": "10.1.30.57", "keycloak_address": "192.0.2.10",
   "cores": 1, "memory_mb": 3072, "disk_gb": 16, "proxmox_node_name": "examplehv01"}' > "$work/settings.json"
-echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyExampleKeyExampleKeyExampleKey keys@agentbox" > "$work/key.pub"
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyExampleKeyExampleKeyExampleKey keys@agent-box opnsense-test" > "$work/key.pub"   # the wrapper's own comment holds a space
 mkdir -p "$work/proof"
 printf '%s\n' '-----BEGIN CERTIFICATE-----' 'MIIBexample' '-----END CERTIFICATE-----' > "$work/proof/ca.pem"
 echo '$6$salt$roothash' > "$work/proof/root.hash"
@@ -101,6 +101,8 @@ refuse "dev's gateway address" '{"name": "daldopdemo01", "address": "10.1.30.1",
 refuse "a name outside STD-0001" '{"name": "OPNsense", "address": "10.1.30.57", "keycloak_address": "192.0.2.10"}'
 printf 'ssh-rsa AAAA x\nssh-ed25519 AAAA y\n' > "$work/two.pub"
 if python3 -I "$seed" seed "$work/settings.json" "$vlans" "$work/two.pub" "$work/bad" >/dev/null 2>&1; then bad "accepted two keys"; else ok "refuses a key file that is not one ed25519 key"; fi
+printf 'ssh-ed25519 AAAA x\nssh-ed25519 BBBB y\n' > "$work/two.pub"
+if python3 -I "$seed" seed "$work/settings.json" "$vlans" "$work/two.pub" "$work/bad" >/dev/null 2>&1; then bad "accepted two ed25519 keys"; else ok "refuses two ed25519 keys in one file"; fi
 
 # Pins: the wrapper's Keycloak is the digest the identity check pins, and the plugin is Plan's beta5 file.
 w=$files/opnsense-test.sh
