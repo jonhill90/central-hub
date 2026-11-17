@@ -85,7 +85,7 @@ d = fx(["hosts/ansible/roles/proxmox_proxy/tasks/main.yml"]);  check("an edit to
 d = fx(["hosts/ansible/playbooks/proxmox-proxy.yml"]);           check("an edit to the host job's playbook is green with a NOTE", subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout.replace("NOTE: verdict v2\n", "", 1), "NOTE: this PR edits what the Proxmox host job runs")
 d = fx(["hosts/ansible/roles/proxmox_proxy/tasks/main.yml"]);  check("the host job's role still merges GREEN", run(d), "GREEN")
 # No owner-tap line is needed for any file: the merge guard's own files, D-0042 and D-0034, a record that amends them and the
-# role's defaults merge on the four passes like any other PR (the owner's message of 2026-11-17 03:51:09 UTC dropped rule 11).
+# role's defaults merge on the four passes like any other PR (D-0059).
 for f in ["docs/decisions/0042-let-the-reviewer.md", "docs/decisions/0034-x.md", "hosts/ansible/roles/agent_box/files/pr-merge.sh", "hosts/ansible/roles/agent_box/files/pr-merge-verdict.py", "hosts/ansible/roles/agent_box/files/pass-record.sh", "hosts/ansible/roles/agent_box/defaults/main.yml"]:
     d = fx([f], head_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\n"}, base_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\nold\n"}); check("%s merges on the four passes with no owner tap" % f.split("/")[-1], run(d), "GREEN")
 d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: [D-0042]\n---\nThis amends rule 2 of D-0042.\n"}); check("a record that supersedes or amends D-0042 merges on the four passes", run(d), "GREEN")
