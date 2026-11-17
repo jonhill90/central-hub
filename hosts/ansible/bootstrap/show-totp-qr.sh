@@ -21,8 +21,8 @@ umask 077
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
 img=$dir/totp.png
-# otpauth URI (Google Authenticator's key URI format); the label and issuer are "Lab", never a host name.
-printf 'otpauth://totp/Lab:%s?secret=%s&issuer=Lab&algorithm=SHA1&digits=6&period=30' "$user" "${seed%%=*}" |
+# otpauth URI (Google Authenticator's key URI format); the label and issuer are "Home", never a host name.
+printf 'otpauth://totp/Home:%s?secret=%s&issuer=Home&algorithm=SHA1&digits=6&period=30' "$user" "${seed%%=*}" |
   qrencode -t PNG -s 8 -o "$img"
 chmod 0600 "$img"
 opener=$(command -v open || command -v xdg-open) || { echo "show-totp-qr: no open or xdg-open to show the image" >&2; exit 1; }
