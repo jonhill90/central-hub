@@ -90,7 +90,7 @@ D-0044 (accepted) lets the box apply a change to its own limits when one line in
 
 - the lifeline's packet filter, table `inet lifeline`: `hosts/ansible/roles/agent_box/templates/lifeline.nft.j2`, `templates/lifeline-nft.service.j2`, `templates/lifeline-up.service.j2`, `tasks/lifeline.yml` and `tasks/lifeline_cleanup.yml`, and the private inventory's `agent_box_lifeline_allow`, `agent_box_lifeline_interface` and `agent_box_lifeline_address`. Only an apply from the controller runs them, because `lifeline` is in `agent_box_self_apply_skip_tags`, so their card goes with that apply;
 - `agent_box_self_apply_skip_tags` in the role's defaults, when a change takes `lifeline` off it;
-- any task or template that loads another nftables table on the box, such as the OPNsense test stack's.
+- a change that would load another nftables table on the box, such as setting `agent_box_opnsense_test` in the private inventory, which turns on the OPNsense test stack's filter (`tasks/main.yml`, the include gated on that setting). Installing code whose filter stays off because its setting is empty loads nothing and needs no card.
 
 A change that copies secrets onto the box keeps the owner's secrets card (D-0042 rule 6): the controller's private lab files, `agent_box_prod_files` with the `prod_files` tasks, which run only from the controller when `agent_box_copy_prod_files` is turned on for one run (the `prod_files` tag is in `agent_box_self_apply_skip_tags` too), and a change to that list or that switch.
 
