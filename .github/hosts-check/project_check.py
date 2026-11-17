@@ -5,8 +5,11 @@ Usage: project_check.py <repo root> <work dir>. For every hosts/kubernetes/<plac
 chart that makes an AppProject, renders each app in values `apps` the way Argo CD does (an upstream
 chart with its values files and zone parameters, or the local chart) and fails when an object's
 namespace is not a project destination, a cluster-scoped kind is not in clusterResourceWhitelist,
-or a chart repository is not in sourceRepos. Needs helm on PATH; charts are pulled as parity.py
-pulls them (PARITY_CHART_CACHE).
+or a chart repository is not in sourceRepos. The root is rendered with every `enabledBy` switch on,
+so dev-first apps are checked too, and each app's rootParameters get a made-up value (ROOT_VALUE),
+so a part that renders only when a private value is set is checked too, and each switchParameters
+path is set to "true", so a part that renders only while a switch is on is checked too. Needs helm
+on PATH; charts are pulled as parity.py pulls them (PARITY_CHART_CACHE).
 """
 import pathlib
 import sys
@@ -16,6 +19,8 @@ import yaml
 from parity import ZONE, pull, run
 
 GATEWAY = "192.0.2.10"
+# Stand-in for a private root value (rootParameters), such as a node name or an address.
+ROOT_VALUE = "example-node"
 # Built-in cluster-scoped kinds; a CRD's own kinds are added from its spec.scope.
 CLUSTER = {
     ("", "Namespace"), ("", "Node"), ("", "PersistentVolume"),
@@ -49,10 +54,15 @@ def render(top, name, app, values):
     ns, release = app["namespace"], app.get("releaseName", name)
     kube = ["--kube-version", "1.37.1"]
     zone = ["--set", f"zone={ZONE}"] if app.get("needsZone") else []
+    private = []
+    for path in app.get("rootParameters") or {}:
+        private += ["--set", f"{path}={ROOT_VALUE}"]
+    for path in app.get("switchParameters") or {}:
+        private += ["--set", f"{path}=true"]
     if app.get("local"):
         return run(["helm", "template", release, str(top / "apps" / name), "-n", ns, "--set",
-                    f"zone={ZONE}", "--set", f"address={GATEWAY}", "--include-crds", *kube])
-    sets = list(zone)
+                    f"zone={ZONE}", "--set", f"address={GATEWAY}", *private, "--include-crds", *kube])
+    sets = list(zone) + private
     for path, text in (app.get("zoneParameters") or {}).items():
         sets += ["--set", f"{path}={text.replace('{zone}', ZONE).replace('{gatewayAddress}', GATEWAY)}"]
     vals = []
@@ -66,8 +76,11 @@ def render(top, name, app, values):
 
 def check(top):
     values = yaml.safe_load((top / "root/values.yaml").read_text())
+    switches = []
+    for key in sorted({a["enabledBy"] for a in values["apps"].values() if a.get("enabledBy")}):
+        switches += ["--set", f"{key}=true"]
     rendered = docs(run(["helm", "template", "root", str(top / "root"), "--set", f"zone={ZONE}",
-                         "--set", f"gatewayAddress={GATEWAY}"]))
+                         "--set", f"gatewayAddress={GATEWAY}", *switches]))
     projects = [d for d in rendered if d["kind"] == "AppProject"]
     if not projects:
         return [], 0
@@ -80,6 +93,11 @@ def check(top):
         source = values["repoURL"] if app.get("local") else app["chart"]["repoURL"]
         if source not in repos:
             bad.append(f"{top.name}/{name}: source {source} is not in sourceRepos")
+        # An app's own clusterResources are its alone: another app making that kind fails here.
+        own = {(k.get("group", ""), k["kind"]) for k in app.get("clusterResources") or []}
+        shared = {(k.get("group", ""), k["kind"])
+                  for k in values["c1Project"].get("clusterResources") or []}
+        allowed = kinds & (shared | own)
         objs = docs(render(top, name, app, values))
         cluster = set(CLUSTER)
         for d in objs:
@@ -90,8 +108,9 @@ def check(top):
             key, meta = (group(d), d["kind"]), d.get("metadata") or {}
             label = f"{top.name}/{name}: {d['kind']}/{meta.get('name')}"
             if key in cluster:
-                if key not in kinds:
-                    bad.append(f"{label} is cluster-scoped and not in clusterResourceWhitelist")
+                if key not in allowed:
+                    bad.append(f"{label} is cluster-scoped and not in clusterResourceWhitelist"
+                               " (shared, or this app's own clusterResources)")
             elif (meta.get("namespace") or app["namespace"]) not in places:
                 bad.append(f"{label} is in namespace {meta.get('namespace') or app['namespace']},"
                            " which is not a destination")

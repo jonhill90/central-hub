@@ -57,7 +57,7 @@ Can OmniRoute, OpenClaw and Hermes Agent run on the owner's VPS as FOSS with no 
 16. <https://tailscale.com/docs/reference/syntax/policy-file.md>
 17. <https://github.com/orgs/community/discussions/116331>
 18. <https://openbao.org/docs/configuration/ui/>
-19. [`hosts/ansible/roles/openbao/templates/openbao.hcl.j2`](../../hosts/ansible/roles/openbao/templates/openbao.hcl.j2)
+19. [`hosts/ansible/roles/openbao/templates/openbao.hcl.j2`](https://github.com/jonhill90/central-hub/blob/d5b8d16508903a8ee9a1f8e397a1331f7b853ec9/hosts/ansible/roles/openbao/templates/openbao.hcl.j2), at the last commit that holds it
 20. [D-0038](../decisions/0038-run-openbao-on-its-own-vm-as-the-secrets-store-with-sops-for-bootstrap-files.md), rules 3 to 6
 21. <https://code.claude.com/docs/en/legal-and-compliance>
 22. <https://docs.github.com/en/rest/authentication/endpoints-available-for-github-app-installation-access-tokens>

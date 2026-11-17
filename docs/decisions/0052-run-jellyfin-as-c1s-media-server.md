@@ -28,7 +28,7 @@ Jellyfin runs on c1 in namespace `media`, with its configuration and media on tw
 
 The owner's words this rests on:
 
-- 2026-11-08 at 07:06 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNp8M1Uu2RmiKR53RXNQVLR): he asked the agents to finish the lab, set up Jellyfin and the other apps, and write the runbooks from doing it.
+- 2026-11-08 at 07:06 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNNp8M1Uu2RmiKR53RXNQVLR): they asked the agents to finish the lab, set up Jellyfin and the other apps, and write the runbooks from doing it.
 
 At main 37eb02d, 33 files in `hosts/`, 12 runbooks and D-0037 name Jellyfin. No record chose it.
 
@@ -69,7 +69,7 @@ Diagram: not applicable. One app; its route and storage follow D-0021 and D-0051
 
 ### Exit path
 
-Media files are plain files on a volume. Another media server reads the same folder; only Jellyfin's own settings and watch history would be lost. On 2026-11-08 at 07:09 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNXbpPH5uUgtW9qv3YC9EXe3), just after asking for the apps, the owner said that he and the agents will go back through all of it so that he understands it, and asked that every piece be replaceable.
+Media files are plain files on a volume. Another media server reads the same folder; only Jellyfin's own settings and watch history would be lost. On 2026-11-08 at 07:09 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNXbpPH5uUgtW9qv3YC9EXe3), just after asking for the apps, the owner said that they and the agents will go back through all of it so that the owner understands it, and asked that every piece be replaceable.
 
 ## Pros and Cons of the Options
 

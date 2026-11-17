@@ -29,11 +29,21 @@ spec:
         - name: gatewayHttps
           value: "false"
 {% endif %}
-{% if k8s_gitops_source_openbao_address | default('') | length > 0 %}
-        - name: openbaoAddress
-          value: "{{ k8s_gitops_source_openbao_address }}"
-        - name: openbaoCaBundle
-          value: "{{ lookup('ansible.builtin.file', k8s_gitops_source_openbao_ca_file) | b64encode }}"
+{% if k8s_gitops_source_openbao_in_cluster | bool %}
+        - name: openbaoInCluster
+          value: "true"
+{% if k8s_gitops_source_openbao_seal_node | default('') | length > 0 %}
+        - name: openbaoSealNode
+          value: "{{ k8s_gitops_source_openbao_seal_node }}"
+{% endif %}
+{% if k8s_gitops_source_openbao_box_cidr | default('') | length > 0 %}
+        - name: openbaoBoxCidr
+          value: "{{ k8s_gitops_source_openbao_box_cidr }}"
+{% endif %}
+{% if k8s_gitops_source_openbao_measure | bool %}
+        - name: openbaoMeasure
+          value: "true"
+{% endif %}
 {% endif %}
 {% if k8s_gitops_source_share_target | default('') | length > 0 %}
         - name: shareTarget

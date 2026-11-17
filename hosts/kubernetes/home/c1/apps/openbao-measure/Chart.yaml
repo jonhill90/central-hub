@@ -1,0 +1,5 @@
+apiVersion: v2
+name: openbao-measure
+description: Dev-only routes for measuring the agent box's source address through c1's Gateway (MEASURE-1, ADDENDUM-1 v3 step 1)
+type: application
+version: 0.1.0

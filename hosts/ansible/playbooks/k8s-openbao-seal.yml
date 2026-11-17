@@ -1,0 +1,128 @@
+---
+# Puts OpenBao's static seal key in its folder on one c1 node (D-0058 rule 3,
+# docs/runbooks/set-up-the-secrets-store.md, "Inside the cluster"). The openbao-store app's local
+# PersistentVolume points at that folder, and its node affinity places OpenBao's pod on the node.
+# The key comes from a file on the machine that runs this playbook (the agent box's keys folder) and
+# is never printed. A key that is already on the node is never replaced: a new key would leave every
+# snapshot and the store itself unreadable, so a different key fails the run instead.
+# The rebuild's `openbao-seal` stage runs this after `cluster` and before `gitops`.
+# The node is the one the root chart's openbaoSealNode names: k8s_gitops_source_openbao_seal_node, an
+# inventory host whose name is its Kubernetes node name (checked below by its address).
+#   ansible-playbook -i inventories/home/ playbooks/k8s-openbao-seal.yml -e openbao_seal_key_file=/path/to/openbao-seal.key
+# On prod, writing the key is a secrets step: the owner's tap at the act (D-0042 rule 6), each time.
+- name: OpenBao's seal key on its node
+  hosts: k8s_nodes
+  become: true
+  gather_facts: false
+  vars:
+    # The same folder and key ID as apps/openbao-store (sealPath) and apps/openbao (centralHub.sealKeyId).
+    openbao_seal_dir: /var/lib/central-hub/openbao-seal
+    openbao_seal_key_id: seal-1
+    # OpenBao's pod runs as uid 100, gid 1000 (apps/openbao/values.yaml).
+    openbao_seal_uid: "100"
+    openbao_seal_gid: "1000"
+    openbao_seal_kubeconfig: /etc/kubernetes/admin.conf
+    # The kubectl lines (name|address|label) whose address is the one Ansible reaches this host on.
+    openbao_seal_found: >-
+      {{ (openbao_seal_nodes.stdout_lines | default([]))
+      | map('split', '|') | selectattr('1', 'equalto', ansible_host) | list }}
+  tasks:
+    - name: seal | The key file is named, on this machine, and is 32 bytes
+      ansible.builtin.assert:
+        that:
+          - openbao_seal_key_file is defined and openbao_seal_key_file | length > 0
+          - lookup('ansible.builtin.pipe', 'wc -c < ' ~ (openbao_seal_key_file | quote)) | int == 32
+        fail_msg: set openbao_seal_key_file to the 32-byte key file on the machine running this playbook
+        quiet: true
+
+    - name: seal | The node is named, and is one of k8s_nodes
+      ansible.builtin.assert:
+        that:
+          - k8s_gitops_source_openbao_seal_node | default('') | length > 0
+          - k8s_gitops_source_openbao_seal_node in groups['k8s_nodes']
+        fail_msg: set k8s_gitops_source_openbao_seal_node to the inventory name of one host in k8s_nodes
+        quiet: true
+      run_once: true
+
+    - name: seal | Only that node from here on
+      ansible.builtin.meta: end_host
+      when: inventory_hostname != k8s_gitops_source_openbao_seal_node
+
+    # The node's Kubernetes name and its data-disk label, found by the address Ansible reaches it on (as
+    # k8s_identity's database does), so no machine name is written in this repository. It must be the node
+    # the root chart's openbaoSealNode names, or the PersistentVolume would point at a node without the key,
+    # and it must carry central-hub/data-disk=true, the label the store's data claims need (D-0051).
+    - name: seal | The node's Kubernetes name and data-disk label
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ openbao_seal_kubeconfig }}"
+          - get
+          - nodes
+          - -o
+          - >-
+            jsonpath={range .items[*]}{.metadata.name}|{.status.addresses[?(@.type=="InternalIP")].address}|{.metadata.labels.central-hub/data-disk}{"\n"}{end}
+      register: openbao_seal_nodes
+      delegate_to: "{{ groups['k8s_control_plane'][0] }}"
+      changed_when: false
+      check_mode: false
+
+    - name: seal | Its inventory name is its Kubernetes node name
+      ansible.builtin.assert:
+        that:
+          - openbao_seal_found | length == 1
+          - openbao_seal_found[0][0] == inventory_hostname
+        fail_msg: >-
+          the node at this host's address has another Kubernetes name (or no single node has that address),
+          so the chart's volume would point elsewhere; the key is not written
+        quiet: true
+
+    - name: seal | It carries the data-disk label
+      ansible.builtin.assert:
+        that: openbao_seal_found[0][2] == 'true'
+        fail_msg: >-
+          the node has no central-hub/data-disk=true label, so the store's data claims could not bind there;
+          the key is not written
+        quiet: true
+
+    - name: seal | The folder, readable only by OpenBao's user
+      ansible.builtin.file:
+        path: "{{ openbao_seal_dir }}"
+        state: directory
+        owner: "{{ openbao_seal_uid }}"
+        group: "{{ openbao_seal_gid }}"
+        mode: "0500"
+
+    - name: seal | A key already on the node
+      ansible.builtin.stat:
+        path: "{{ openbao_seal_dir }}/{{ openbao_seal_key_id }}.key"
+        checksum_algorithm: sha256
+      register: openbao_seal_on_node
+
+    # Only the two checksums are compared, and neither is printed.
+    - name: seal | A key on the node is the same key
+      ansible.builtin.assert:
+        that: openbao_seal_on_node.stat.checksum == lookup('ansible.builtin.pipe', 'sha256sum ' ~ (openbao_seal_key_file | quote)).split(' ') | first
+        fail_msg: >-
+          a different key is already on the node; it is never replaced (every snapshot and the store need
+          it). Nothing was written
+        quiet: true
+      when: openbao_seal_on_node.stat.exists
+
+    - name: seal | The key, read-only for OpenBao's user
+      ansible.builtin.copy:
+        src: "{{ openbao_seal_key_file }}"
+        dest: "{{ openbao_seal_dir }}/{{ openbao_seal_key_id }}.key"
+        owner: "{{ openbao_seal_uid }}"
+        group: "{{ openbao_seal_gid }}"
+        mode: "0400"
+        force: false
+      no_log: true
+
+    - name: seal | Owner and mode of a key that was already there
+      ansible.builtin.file:
+        path: "{{ openbao_seal_dir }}/{{ openbao_seal_key_id }}.key"
+        owner: "{{ openbao_seal_uid }}"
+        group: "{{ openbao_seal_gid }}"
+        mode: "0400"

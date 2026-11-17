@@ -1,15 +1,23 @@
 ---
 id: D-0048
 title: Build the lab's machines with OpenTofu and configure them with ansible-core, using no paid automation platform
-status: proposed
-date: 2026-11-14
+status: accepted
+date: 2026-11-16
 decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: []
 supersedes: []
 superseded-by:
-revisit-when: c1 moves to an immutable OS whose own API replaces Ansible on the nodes; OpenTofu or ansible-core changes licence or governance; the lab needs certified content, a web UI, an API or a scheduler for runs that only a paid product offers; the owner rules on whether Red Hat's paid platform makes Ansible fail his rule of 2026-11-14; or a research batch compares the tools on fit
+accepted-evidence:
+  approved-by: agents
+  approved-at: 2026-11-16T06:12:51Z
+  approved-commit: 135f5895419d841b489ec9b159a940126c34acff
+  approval-ref: the orchestrator thread's message to the Plan thread of 2026-11-16T06:12:51Z recording the reviewer's clearance (06:11:14Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNJVnsFS1px4pXrQYEDpvTzT) and the passes of Councils A (06:09:04Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNJeqFBSqTpKTyeeQWCYMffJ), B (D-0048, 06:11:44Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNN9pFtKrpSq71CZkHhPAL1k) and C (06:09:32Z, cmsg_01X43rfNYp4H1dL1V2dkfkwNXB561ABmu2eMeFPN4kJywC) for this record as merged at 135f589, each saying acceptance by the agents' pass under D-0042 rule 3 is fine; it reached the Plan thread as a thread relay, which carries no message id
+  approval-names: "each pass names D-0048 and commit 135f5895419d841b489ec9b159a940126c34acff, the squash merge of PR #366, the last change to this record's text"
+  check: "approved-by is agents under D-0042 rules 1 and 3, because this record's own line says it becomes accepted once the pick is in use and passes STD-0006, after the owner kept it as written on card cmsg_01X43rfNYp4H1dL1V2dkfkwN1TjGnbUJUBa4TLNk8AL3gv (option 0, 2026-11-15T04:51:59Z); measured on main f27e322: in use (90 .tf files under hosts/terraform, 341 files under hosts/ansible, the AlmaLinux image pinned in hosts/terraform/home/k8s/variables.tf, Debian in hosts/terraform/home/remote-access), and OpenTofu, OpenTofu providers, Ansible, AlmaLinux and Debian are pass in docs/standards/components.yaml; waits-on is empty; the merge verdict's rule-11 pattern finds no hit, so D-0042 rule 11 does not send it to the owner. This PR changes only this record's status, date and accepted-evidence and its row in the decisions index, which the reviewer checks against 135f589 (D-0001)"
+  merged: "PR #392 squash-merged at head 9236db9 as c6e6f28, whose commit time is 2026-11-16T06:49:55Z (GitHub's merged_at for the PR is 06:49:56Z); the follow-up PR that adds this line changes nothing else in this record (D-0001)"
+revisit-when: c1 moves to an immutable OS whose own API replaces Ansible on the nodes; OpenTofu or ansible-core changes licence or governance; the lab needs certified content, a web UI, an API or a scheduler for runs that only a paid product offers; the owner rules on whether Red Hat's paid platform makes Ansible fail their rule of 2026-11-14; or a research batch compares the tools on fit
 ---
 
 # Build the lab's machines with OpenTofu and configure them with ansible-core, using no paid automation platform
@@ -20,7 +28,7 @@ revisit-when: c1 moves to an immutable OS whose own API replaces Ansible on the 
 
 The owner's words this rests on:
 
-- 2026-10-17 at 23:07 UTC: yes to trying Ansible as the configuration tool for his first real build.
+- 2026-10-17 at 23:07 UTC: yes to trying Ansible as the configuration tool for their first real build.
 - 2026-10-25 at 05:27 UTC: yes to Terraform-style code for the Proxmox VMs and networks, and Ansible for the host and OPNsense (cmsg_01X43rfNYp4H1dL1V2dkfkwNRFZJcS1CMSehtz9iE5YMRA, D-0011).
 - 2026-10-25 at 17:47 UTC: yes to keeping the lab's OpenTofu state as local files for now.
 - 2026-10-27 at 02:49 UTC: everything must be deterministic, idempotent code, with no clicking and no one-off commands.

@@ -14,6 +14,9 @@ tlsSecret: apps-tls
 # Short aliases <app>.<zone> (STD-0001 rule 5): listeners http-short and https-short for *.<zone>,
 # and each route below also answers on <key>.<zone>. Same as k8s_gateway_short_names.
 shortNames: true
+# The dev-only measurement (MEASURE-1, root value openbaoMeasure): true lets ListenerSets in namespace
+# openbao attach to this Gateway (spec.allowedListeners), for the measurement's passthrough listener.
+openbaoMeasure: false
 
 # One HTTPRoute (https) plus a redirect route (http) per entry: <key>.apps.c1.prod.<zone>, and
 # <key>.<zone> with shortNames on, to the Service. Same shape as role k8s_app_route.

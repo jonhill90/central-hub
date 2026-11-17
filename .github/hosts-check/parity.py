@@ -4,11 +4,13 @@
 Usage: parity.py <repo root> <work dir>. Reads .github/hosts-check/manifests/parity.txt; needs
 helm and ansible-playbook on PATH. Exits 1 on any difference, printing each one.
 """
+import hashlib
 import os
 import pathlib
 import shlex
 import subprocess
 import sys
+import tarfile
 import time
 
 import yaml
@@ -26,7 +28,11 @@ def pull(chart, dest):
     so a short outage upstream doesn't fail the check."""
     cache = os.environ.get("PARITY_CHART_CACHE")
     oci = chart["repoURL"].startswith("oci://")
+    # A pinned https chart gets its own cache folder, keyed by the pin, so a folder unpacked by an
+    # earlier run without the check is never used: this folder's chart comes only from the checked file.
     key = f"{chart['name']}-{chart['version']}" + (f"-{chart['digest'][7:19]}" if oci else "")
+    if not oci and chart.get("sha256"):
+        key += f"-{chart['sha256'][:12]}"
     folder = pathlib.Path(cache) / key if cache else dest
     # An OCI chart is pulled at its digest, as Argo CD fetches it (pick 141).
     if oci:
@@ -34,6 +40,30 @@ def pull(chart, dest):
     else:
         args = ["helm", "pull", chart["name"], "--repo", chart["repoURL"], "--version",
                 str(chart["version"])]
+    # An https chart with `sha256` in the root values (D-0058 rule 1) is kept as its .tgz too, so
+    # every run checks the file against the pinned SHA-256 before it is unpacked.
+    pinned = None if oci else chart.get("sha256")
+    tgz = folder / f"{chart['name']}-{chart['version']}.tgz"
+    if pinned and not tgz.exists():
+        # helm pull --destination needs the folder; a cache folder for a new chart does not exist yet.
+        folder.mkdir(parents=True, exist_ok=True)
+        for attempt in range(5):
+            try:
+                run([*args, "--destination", str(folder)])
+                break
+            except subprocess.CalledProcessError as err:
+                if attempt == 4:
+                    sys.stderr.write(err.stderr)
+                    raise
+                time.sleep(2 ** (attempt + 1))
+    if pinned:
+        got_sum = hashlib.sha256(tgz.read_bytes()).hexdigest()
+        if got_sum != pinned:
+            raise SystemExit(f"{chart['name']} {chart['version']}: the chart file's SHA-256 is"
+                             f" {got_sum}, not the pinned {pinned}")
+    if not (folder / chart["name"] / "Chart.yaml").exists() and pinned:
+        with tarfile.open(tgz) as archive:
+            archive.extractall(folder, filter="data")
     if not (folder / chart["name"] / "Chart.yaml").exists():
         for attempt in range(5):
             try:

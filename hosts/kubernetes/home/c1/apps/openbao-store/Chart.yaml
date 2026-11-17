@@ -1,0 +1,5 @@
+apiVersion: v2
+name: openbao-store
+description: What OpenBao's own chart lacks on c1 (D-0058) - the namespace, the seal key's volume, TLS and the policy files
+type: application
+version: 0.1.0

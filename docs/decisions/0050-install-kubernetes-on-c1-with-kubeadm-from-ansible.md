@@ -28,9 +28,9 @@ c1 is a kubeadm cluster on AlmaLinux VMs. The lab's own Ansible roles build and 
 
 The owner's words this rests on:
 
-- 2026-10-19 at 00:26 UTC: he needs to be able to do what the CKA exam covers, so there is a runbook for that, the lab will also use Ansible, and at some point it will probably use an immutable OS such as Talos. He also said it would be good to try the Kubespray way.
-- 2026-10-26 at 04:15 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN3q914dMTeQzubJRvjgprBy): no record is needed for installing kubeadm by hand, which he would do only to learn the process.
-- 2026-11-12 at 15:01 UTC: the role defaults hold the version the cluster runs, and an upgrade starts with a pull request that bumps them (agent pick 33 in `hosts/AGENT-PICKS.md`, which records his answer).
+- 2026-10-19 at 00:26 UTC: they need to be able to do what the CKA exam covers, so there is a runbook for that, the lab will also use Ansible, and at some point it will probably use an immutable OS such as Talos. They also said it would be good to try the Kubespray way.
+- 2026-10-26 at 04:15 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN3q914dMTeQzubJRvjgprBy): no record is needed for installing kubeadm by hand, which they would do only to learn the process.
+- 2026-11-12 at 15:01 UTC: the role defaults hold the version the cluster runs, and an upgrade starts with a pull request that bumps them (agent pick 33 in `hosts/AGENT-PICKS.md`, which records their answer).
 
 This record is about the installer the lab's code uses, which the audit of 2026-11-14 found in no record, with its licence and its way out.
 

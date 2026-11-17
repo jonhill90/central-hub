@@ -44,7 +44,7 @@ On 2026-11-08 at 07:08 UTC the owner asked for that step: a PKI that still works
 
 ## Decision Outcome
 
-Proposed option: **1**. The owner leaned to it on 2026-11-08 at 07:42 UTC, typing that he felt it was b but might be wrong (b was this shape on the card); the drafting agent closed the card as this option.
+Proposed option: **1**. The owner leaned to it on 2026-11-08 at 07:42 UTC, typing that they felt it was b but might be wrong (b was this shape on the card); the drafting agent closed the card as this option.
 
 ```mermaid
 flowchart TB
