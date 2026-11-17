@@ -99,7 +99,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 | Item | What `prove` measures |
 |---|---|
 | 1 | The package's SHA-256 matches its pin on the box (configure). CI's `plugin-pin` job verifies the attestation of the same file. |
-| 2 | `proof-user`'s first sign-in gets no session and is queued. Once it is approved onto `proofadmin`, its next sign-in lands on the dashboard, and the plugin's DPoP key store (`/var/db/openid-connect/dpop`, mode 0700) holds a key file with mode 0600, so the sign-in used DPoP. |
+| 2 | `proof-user`'s first sign-in gets no session and is queued. Once it is approved onto `proofadmin`, its next sign-in lands on the dashboard, and the plugin's DPoP key store (`/var/db/openid-connect/dpop`, mode 0700) holds a key file with mode 0600, and the plugin's own sign-in test, run as the bound admin, reports the DPoP sender constraint as `Used`, so the token was DPoP-bound. |
 | 3 | `proof-stranger` gets no session and waits as one pending request. |
 | 4 | With the plugin's server disabled, root signs in by password through the Local Database. |
 | 5 | Can the API install a local `.pkg`? No. The firmware API's install takes a package name, sanitized as `pkgname`, and installs it from the repository (opnsense/core stable/26.1 `FirmwareController.php` `installAction`; `actions_firmware.conf` `[install]`). |

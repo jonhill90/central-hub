@@ -107,6 +107,7 @@ grep -qx 'PLUGIN_SHA256=4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406
 if grep -q -- '--features-disabled' "$w"; then bad "the proof's Keycloak turns a feature off"; else ok "the proof's Keycloak keeps DPoP on, as the lab does"; fi
 grep -q '"ES256" not in json.load' "$w" && ok "prove stops unless discovery lists ES256 for DPoP" || bad "no DPoP discovery check"
 grep -q '/var/db/openid-connect/dpop' "$files/opnsense-test-prove.py" && ok "prove checks the plugin's DPoP key store" || bad "no DPoP key check"
+grep -q 'DPoP sender constraint</th>' "$files/opnsense-test-prove.py" && ok "prove reads the sign-in test's DPoP sender constraint row" || bad "no DPoP sender constraint check"
 grep -q 'VMID=257$' "$w" && ok "the wrapper's VM ID is 257" || bad "VM ID"
 
 [ "$fails" = 0 ] || { echo "$fails failed"; exit 1; }

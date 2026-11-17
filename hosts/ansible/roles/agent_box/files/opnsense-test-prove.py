@@ -8,6 +8,7 @@ The opnsense-test wrapper runs it from `prove`, with the proof's Keycloak up. Ea
 Browser steps are made with urllib: the GUI's own certificate (read over SSH) and the proof CA are
 the only trust anchors, and no certificate check is turned off.
 """
+import base64
 import html
 import http.cookiejar
 import json
@@ -120,6 +121,35 @@ keys = [name for mode, name in modes[1:] if mode == "600"]
 if not keys or len(keys) != len(modes) - 1:
     fail("the bound sign-in left no DPoP key, or a key file is not mode 0600")
 print(f"opnsense-test: proof item 2: the sign-in used DPoP ({len(keys)} key file in the plugin's 0700 store, mode 0600)")
+
+# Item 2 (part): the plugin's own sign-in test, run as the bound admin, reports the DPoP sender constraint.
+# "Used" there, with a completed token exchange, means the token came back as type DPoP: the plugin refuses a
+# Bearer token where it asked for DPoP (os-openid-connect v1.0.0-beta5 Api/TestController.php startAction,
+# Api/AuthController.php line 894, RelyingParty.php lines 305 and 566-570). The API call needs the session's
+# CSRF token, which an MVC page prints (opnsense/core stable/26.1 ApiControllerBase.php, layouts/default.volt).
+_, page = get(op, base + "/ui/core/firmware")
+m = re.search(r'setRequestHeader\("X-CSRFToken", "([^"]+)"', page)
+if not m:
+    fail("no CSRF token on the bound admin's firmware page")
+req = urllib.request.Request(base + "/api/openidconnect/test/start", data=urllib.parse.urlencode({"provider": SERVER}).encode(),
+                             headers={"X-CSRFToken": m.group(1)})
+try:
+    with op.open(req, timeout=60) as r:
+        answer = json.loads(r.read().decode())
+except (urllib.error.HTTPError, ValueError) as e:
+    fail(f"the plugin's sign-in test did not start: {e}")
+if answer.get("status") != "ok" or "authorization_url_b64" not in answer:
+    fail(f"the plugin's sign-in test did not start: {answer.get('message', answer)}")
+url, page = get(op, base64.b64decode(answer["authorization_url_b64"]).decode())
+m = re.search(r'<form[^>]*id="kc-form-login"[^>]*action="([^"]+)"', page)
+if m:  # Keycloak asks again when the test wants a fresh sign-in; otherwise its session answers at once
+    url, page = get(op, html.unescape(m.group(1)), {"username": "proof-user", "password": read("user.pass"), "credentialId": ""})
+row = re.search(r"<th>DPoP sender constraint</th><td><code>([^<]*)</code>", page)
+if not row:
+    fail(f"the sign-in test page at {url} has no DPoP sender constraint row")
+if row.group(1) != "Used":
+    fail(f"the plugin's sign-in test reports the DPoP sender constraint as {row.group(1)!r}")
+print("opnsense-test: proof item 2: the plugin's sign-in test reports the DPoP sender constraint as Used")
 
 # Item 3: an identity no one approved gets no session, only a pending request.
 op = keycloak_sign_in("proof-stranger", read("stranger.pass"))
