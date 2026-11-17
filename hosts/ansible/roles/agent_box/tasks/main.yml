@@ -492,6 +492,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/secrets-store-compare.{{ item }}"   # the destination, so a check run names a file not there yet
   register: agent_box_store_compare_units
   when: agent_box_secrets_store.sops_copies | default(false) is true
   tags: [wrappers]
