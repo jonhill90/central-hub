@@ -83,11 +83,15 @@ out=$(run dev 31 17); check "a pass lists guests too and passes" "$out" "guest v
 check "the token is never in the guest request's arguments" "$(cat "$t/argv")" "cluster/resources" "SECRETTOKEN"
 grep -q 'stages="preflight \$stages"' "$src" && echo "ok   a dev run gets the preflight" || { echo "FAIL: the preflight is not added to a dev run"; fail=1; }
 # The node sampler: one line per node with CPU and memory, from kubectl top nodes, and only on dev's sign-in stage.
-out=$(log="$t/top.log" bash -c '. "$1"; kc() { printf "%s\n" "dalcpkube01 120m 6% 3027Mi 79%" "dalwkkube01 900m 45% 6900Mi 96%" "junk"; }; sleep() { exit 0; }; node_top_sampler identity-keycloak' _ "$t/fn.sh"; cat "$t/top.log")
+out=$(log="$t/top.log" bash -c '. "$1"; kc() { printf "%s\n" "dalcpkube01 120m 6% 3027Mi 79%" "dalwkkube01 900m 45% 6900Mi 96%" "junk"; }; sleep() { exit 0; }; node_top_sampler identity-keycloak "$$"' _ "$t/fn.sh"; cat "$t/top.log")
 check "the sampler logs each node's CPU and memory" "$out" "identity-keycloak: node top " ""
 check "the worker's line has its memory and percent" "$out" "dalwkkube01 cpu 45% memory 6900Mi (96%)" ""
 check "a short line is dropped" "$out" "dalcpkube01" "junk"
-grep -q '^  if \[ "\$ENV_NAME" = dev \] && \[ "\$s" = identity-keycloak \]; then$' "$src" && grep -q '^    node_top_sampler "\$s" & sampler=\$!$' "$src" \
+# A sampler whose run is gone stops by itself: the PID it watches is a process that has already exited.
+sh -c 'exit 0' & gone=$!; wait "$gone" || true
+out=$(log="$t/top2.log" timeout 10 bash -c '. "$1"; kc() { echo "n1 1m 1% 1Mi 1%"; }; sleep() { :; }; node_top_sampler gone "$2"; echo "sampler-ended"' _ "$t/fn.sh" "$gone" 2>&1 || true)
+check "a sampler whose run is gone ends by itself" "$out" "sampler-ended" ""
+grep -q '^  if \[ "\$ENV_NAME" = dev \] && \[ "\$s" = identity-keycloak \]; then$' "$src" && grep -q '^    node_top_sampler "\$s" "\$\$" & sampler=\$!$' "$src" \
   && grep -q 'kill "\$sampler"' "$src" && echo "ok   the sampler runs on dev's sign-in stage only and is stopped after it" || { echo "FAIL: the sampler is not wired"; fail=1; }
 grep -q 'the declared dev VMs need\[^"\]\*' "$src" && echo "ok   the short log keeps the declared-memory line" || { echo "FAIL: the short log drops the declared-memory line"; fail=1; }
 # The dev sizes reach OpenTofu on dev only, and every tofu call that takes the tfvars takes the same set.
