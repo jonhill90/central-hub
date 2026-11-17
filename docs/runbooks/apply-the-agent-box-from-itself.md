@@ -104,7 +104,7 @@ What this route never does: it does not change the box's inventory (D-0036 rule 
    ```
 
    why: the digest pins the exact bytes they passed, so a later change to those files needs its own line.
-3. Add the line to `hosts/ansible/agent-box-limit-approvals.txt` by a PR that merges like any other. Its five fields are `<baseline> <main> <digest> <pass> <tap>`: the first three as `box-apply plan` printed them, `pass` the id of the orchestrator's message that records the agents' pass of that digest, and `tap` the id of the owner's decide event (the choice, not the card) on a card that named the digest (D-0042 rule 6). A tap of `none` never counts. `main` must be a commit on main after which no limit changes.
+3. Add the line to `hosts/ansible/agent-box-limit-approvals.txt` by a PR that merges like any other. Its five fields are `<from> <to> <digest> <pass> <tap>` (the baseline, the commit on main, and the digest, as `box-apply plan` printed them), `pass` is the id of the orchestrator's message that records the agents' pass of that digest, and `tap` the id of the owner's decide event (the choice, not the card) on a card that named the digest (D-0042 rule 6). A tap of `none` never counts. `to` must be a commit on main after which no limit changes.
 4. Plan, then apply:
 
    ```sh
