@@ -72,7 +72,7 @@ agent_box_wrappers:
   # A throwaway OPNsense on dev, VM 257, for the sign-in proof (docs/runbooks/prove-opnsense-sign-in-on-dev.md).
   # Built and destroyed only while dev is down; it runs a Keycloak container on this box during `prove`.
   - name: opnsense-test
-    args: [plan, apply, configure, prove, destroy, log]
+    args: [plan, apply, configure, prove, destroy, status, log]
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]

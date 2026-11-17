@@ -3,20 +3,22 @@
 # through Keycloak with os-openid-connect before VM 100 gets it (docs/runbooks/prove-opnsense-sign-in-on-dev.md).
 # It runs as user `keys` through sudo, so the session that asks for it never sees the Proxmox token or the
 # proof's keys and passwords. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/opnsense-test.sh plan|apply|configure|prove|destroy|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/opnsense-test.sh plan|apply|configure|prove|destroy|status|log
 # plan, apply: download and check the FreeBSD 14.3 cloud image, build the seed ISO, then OpenTofu on
 #   hosts/terraform/home/opnsense-test with the agents' Proxmox token. Refused while dev has any VM.
 # configure: over SSH as root, check the release, measure dev's reach to the mirrors, seed /conf/config.xml,
 #   run the pinned opnsense-bootstrap, then pkg add the pinned os-openid-connect package.
 # prove: start the proof's Keycloak on this box, run proof items 2 to 7 and 9, stop Keycloak, remove its data.
 # destroy: tofu destroy (proof item 8), the Keycloak container if still there, and the proof folder.
+# status: read only. VM 257's state, uptime, traffic and config from Proxmox, its last start task's log, and
+#   which dev address its MAC answers on. It changes nothing on Proxmox or the VM and leaves the log alone.
 # log: the last run's log.
 set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | prove | destroy | log) action=$1 ;;
-  *) echo "usage: opnsense-test plan|apply|configure|prove|destroy|log" >&2; exit 2 ;;
+  plan | apply | configure | prove | destroy | status | log) action=$1 ;;
+  *) echo "usage: opnsense-test plan|apply|configure|prove|destroy|status|log" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -59,6 +61,44 @@ KC_NAME=opnsense-test-keycloak
 [[ -f $settings ]] || { echo "opnsense-test: $settings is missing; set agent_box_opnsense_test in the inventory and run the agent_box role" >&2; exit 1; }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
 
+# One Proxmox API call with the agents' token, as the dev rebuild makes them; the token goes to curl on stdin.
+px_api() { # path
+  # shellcheck source=/dev/null
+  ( set -a; . "$keys/proxmox-dev.env"; set +a
+    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" )
+}
+
+# status: GET calls only, with the agents' token. The token has no VM.Console
+# (hosts/terraform/home/bootstrap/agent-access.sh), so the VM's serial output can't be read; its traffic
+# counters, its start task's log and the ARP table stand in.
+status() {
+  local node t upid h
+  node=$(setting proxmox_node_name)
+  t=$(mktemp -d)
+  echo "opnsense-test: status at $(date -u +%FT%TZ)"
+  if ! px_api "nodes/$node/qemu/$VMID/status/current" > "$t/current.json" 2>/dev/null; then
+    rm -rf "$t"; echo "opnsense-test: VM $VMID is not on the node, or the token cannot read it"; return 0
+  fi
+  px_api "nodes/$node/qemu/$VMID/config" > "$t/config.json"
+  px_api "nodes/$node/qemu/$VMID/rrddata?timeframe=hour&cf=AVERAGE" > "$t/rrd.json" || echo '{"data": []}' > "$t/rrd.json"
+  px_api "nodes/$node/tasks?vmid=$VMID&source=all&limit=20" > "$t/tasks.json" || echo '{"data": []}' > "$t/tasks.json"
+  upid=$("$py" -I "$seed_py" last-start "$t/tasks.json")
+  if [[ -n $upid ]]; then
+    px_api "nodes/$node/tasks/$upid/log?limit=40" > "$t/tasklog.json" || echo '{"data": []}' > "$t/tasklog.json"
+  fi
+  # One ping to each host address in dev, so the ARP table shows which address the VM's MAC answers on.
+  for h in $("$py" -I "$seed_py" dev-hosts "$settings" "$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml"); do
+    ping -c 1 -W 1 "$h" >/dev/null 2>&1 &
+  done
+  wait
+  cp /proc/net/arp "$t/arp"
+  "$py" -I "$seed_py" status "$settings" "$t" || true
+  rm -rf "$t"
+}
+[[ $action == status ]] && { status; exit 0; }
+
 exec 9>"$work/state/opnsense-test.lock"
 flock -n 9 || { echo "opnsense-test: another opnsense-test run is going; try again when it ends" >&2; exit 1; }
 exec > >(tee "$logfile") 2>&1
@@ -72,15 +112,6 @@ vlans=$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml
 [[ -f $sshkey ]] || ssh-keygen -q -t ed25519 -N "" -C "keys@agent-box opnsense-test" -f "$sshkey"
 addr=$(setting address)
 kc_addr=$(setting keycloak_address)
-
-# One Proxmox API call with the agents' token, as the dev rebuild makes them; the token goes to curl on stdin.
-px_api() { # path
-  # shellcheck source=/dev/null
-  ( set -a; . "$keys/proxmox-dev.env"; set +a
-    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
-    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
-      curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" )
-}
 
 # Dev and the test VM never run together: dev's state must hold no resource, dev's tfvars must not
 # declare VM 257, no dev rebuild may be running, and the node must have the VM's memory plus the margin.
