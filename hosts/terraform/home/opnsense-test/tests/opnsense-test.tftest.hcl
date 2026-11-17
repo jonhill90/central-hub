@@ -55,6 +55,11 @@ run "boots_from_the_image_with_the_seed_attached" {
     condition     = proxmox_virtual_environment_file.seed.content_type == "iso" && proxmox_virtual_environment_file.seed.source_file[0].checksum == var.seed_iso_sha256
     error_message = "The seed is uploaded through the API as an ISO, checked against the hash the wrapper measured."
   }
+
+  assert {
+    condition     = proxmox_virtual_environment_file.seed.source_file[0].file_name == "opnsense-test-257-seed-111111111111.iso"
+    error_message = "Each seed is a new file named by its hash, so a new seed never needs a delete the token can't make."
+  }
 }
 
 run "refuses_a_bad_seed_hash" {

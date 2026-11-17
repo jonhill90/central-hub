@@ -9,7 +9,8 @@
 # to network-config (freebsd-src releng/14.3 libexec/nuageinit/nuageinit, the nocloud branch).
 # One NIC on dev, no WAN, so it routes nothing. Built only while dev is down, destroyed at the end of
 # the proof. Applied from the agent box by the opnsense-test wrapper (docs/runbooks/prove-opnsense-sign-in-on-dev.md).
-# Exit: tofu destroy with this folder's state.
+# Exit: `opnsense-test destroy`, which destroys the VM and leaves the seed ISO and image files on local
+# for the owner (the agents' token cannot delete them).
 
 # The FreeBSD image, checked and unpacked on the box by the wrapper, uploaded through the API.
 resource "proxmox_virtual_environment_file" "image" {
@@ -25,7 +26,10 @@ resource "proxmox_virtual_environment_file" "image" {
 }
 
 # The NoCloud seed ISO the wrapper built for this VM: meta-data (hostname) and a user-data script that
-# runs as root at first boot. Uploaded through the API (Datastore.AllocateTemplate on local).
+# runs as root at first boot. Uploaded through the API (Datastore.AllocateTemplate on local). The agents'
+# token cannot delete files on local (no Datastore.Allocate), so each seed is named by its hash: a new
+# seed is a new file and never needs a delete, and `opnsense-test destroy` drops the old one from the
+# state, leaving the file for the owner to remove.
 resource "proxmox_virtual_environment_file" "seed" {
   node_name    = var.proxmox_node_name
   datastore_id = "local"
@@ -33,7 +37,7 @@ resource "proxmox_virtual_environment_file" "seed" {
 
   source_file {
     path      = var.seed_iso_path
-    file_name = "opnsense-test-${var.vm.vm_id}-seed.iso"
+    file_name = "opnsense-test-${var.vm.vm_id}-seed-${substr(var.seed_iso_sha256, 0, 12)}.iso"
     checksum  = var.seed_iso_sha256
   }
 }
@@ -79,7 +83,8 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
     iothread     = true
   }
 
-  # The seed: label cidata, read once by nuageinit at first boot. Removed with the VM.
+  # The seed: label cidata, read once by nuageinit at first boot. The drive goes with the VM; the ISO
+  # file stays on local (see the seed resource).
   cdrom {
     interface = "ide2"
     file_id   = proxmox_virtual_environment_file.seed.id
