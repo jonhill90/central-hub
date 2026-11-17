@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# hosts/rebuild-k8s.sh's dev-only stages, dev-ca, openbao-measure, openbao-handover and identity-keycloak: each refuses any
+# hosts/rebuild-k8s.sh's dev-only stages, dev-ca, openbao-handover and identity-keycloak: each refuses any
 # ENV_NAME other than dev before it runs Ansible, dev-ca stops with a clear message when the k8s_certs role
-# has no devca tag, the measurement, its root switch and the hand-over need OPENBAO_SEAL_KEY_FILE, the hand-over
-# also needs both admin ID files, and a dev run appends
-# the stages after the default ones, and its PASS line reaches the short log whole. Runs run_stage from a
+# has no devca tag, the hand-over needs OPENBAO_SEAL_KEY_FILE and both admin ID files, no stage turns the
+# measurement's root switch on any more, and a dev run appends the stages after the default ones. Runs run_stage from a
 # copy with `ap` stubbed.
 set -euo pipefail
 src=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -34,7 +33,7 @@ check() { # name, output, must-contain, must-not-contain
 }
 echo id > "$t/rid"; echo id > "$t/sid"
 export OPENBAO_ADMIN_ROLE_ID_FILE=$t/rid OPENBAO_ADMIN_SECRET_ID_FILE=$t/sid
-for stage in dev-ca openbao-measure openbao-handover identity-keycloak; do
+for stage in dev-ca openbao-handover identity-keycloak; do
   for envname in prod staging ""; do
     out=$(OPENBAO_SEAL_KEY_FILE=/k run "$envname" "$stage" "$t/ok")
     check "$stage refuses ENV_NAME='${envname}'" "$out" "rc=1" "AP "
@@ -43,14 +42,9 @@ for stage in dev-ca openbao-measure openbao-handover identity-keycloak; do
   out=$(OPENBAO_SEAL_KEY_FILE=/k run dev "$stage" "$t/ok")
   check "$stage runs on dev" "$out" "AP playbooks/" "rc=1"
 done
-# The measurement (MEASURE-1) runs only with the in-cluster store's key file, and only then does the root
-# Application get openbaoMeasure; without it, and on prod, every command is as it was.
-out=$(run dev openbao-measure "$t/ok")
-check "openbao-measure without a key file is skipped" "$out" "openbao-measure skipped" "AP "
-check "openbao-measure without a key file succeeds" "$out" "rc=0" ""
+# The measurement (MEASURE-1) is over: its stage is gone, and no run passes its root switch.
 out=$(OPENBAO_SEAL_KEY_FILE=/k run dev openbao-measure "$t/ok")
-check "openbao-measure with a key file runs its playbook" "$out" "AP playbooks/k8s-openbao-measure.yml" "rc=1"
-# The hand-over (D-0038 rule 6) likewise, and it also needs both admin ID files, whose paths go to its playbook.
+check "openbao-measure is no longer a stage" "$out" "rc=" "AP playbooks/k8s-openbao-measure.yml"
 out=$(run dev openbao-handover "$t/ok")
 check "openbao-handover without a key file is skipped" "$out" "openbao-handover skipped" "AP "
 check "openbao-handover without a key file succeeds" "$out" "rc=0" ""
@@ -63,16 +57,9 @@ check "openbao-handover refuses without the role ID file" "$out" "rc=1" "AP "
 out=$(OPENBAO_SEAL_KEY_FILE=/k OPENBAO_ADMIN_ROLE_ID_FILE='' OPENBAO_ADMIN_SECRET_ID_FILE='' run dev openbao-handover "$t/ok")
 check "openbao-handover with neither ID file named (an older box wrapper) ends with a SKIP line" "$out" "SKIP: openbao-handover: not handed over, no admin ID files named" "AP "
 check "openbao-handover with neither ID file named succeeds" "$out" "rc=0" "PASS"
-out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gitops "$t/ok")
-check "dev gitops with a key file turns the measurement on" "$out" "k8s_gitops_source_openbao_measure=true" ""
-out=$(OPENBAO_SEAL_KEY_FILE=/k FAKE_SECRET=yes run dev gitops "$t/ok")
-check "a dev gitops re-run with a key file keeps it on" "$out" "k8s_gitops_source_openbao_measure=true" ""
-out=$(OPENBAO_SEAL_KEY_FILE=/k run dev dev-ca "$t/ok")
-check "dev-ca with a key file keeps it on" "$out" "k8s_gitops_source_openbao_measure=true" ""
-out=$(run dev gitops "$t/ok"); check "dev gitops without a key file leaves it off" "$out" "AP " "openbao_measure"
-out=$(run dev dev-ca "$t/ok"); check "dev-ca without a key file leaves it off" "$out" "AP " "openbao_measure"
-out=$(OPENBAO_SEAL_KEY_FILE=/k FAKE_SECRET=yes run prod gitops "$t/ok")
-check "prod gitops with a key file never turns it on" "$out" "AP playbooks/k8s-gitops.yml" "openbao_measure"
+out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gitops "$t/ok"); check "dev gitops with a key file passes no measure switch" "$out" "AP " "openbao_measure"
+out=$(OPENBAO_SEAL_KEY_FILE=/k FAKE_SECRET=yes run dev gitops "$t/ok"); check "a dev gitops re-run with a key file passes none" "$out" "AP " "openbao_measure"
+out=$(OPENBAO_SEAL_KEY_FILE=/k run dev dev-ca "$t/ok"); check "dev-ca with a key file passes none" "$out" "AP " "openbao_measure"
 # dev-ca turns the Gateway's HTTPS on in the root Application before it makes the certificate.
 out=$(run dev dev-ca "$t/ok")
 check "dev-ca turns the Gateway's HTTPS on first" "$out" "k8s_gitops_source_gateway_https=true" ""
@@ -98,8 +85,8 @@ out=$(FAKE_SECRET=yes run dev gitops "$t/ok"); check "a dev re-run keeps the Gat
 out=$(run dev gitops "$t/ok"); check "a fresh dev build leaves it off" "$out" "AP playbooks/k8s-gitops.yml --tags install,source" "gateway_https"
 check "a fresh dev build says so" "$out" "a fresh build" ""
 out=$(FAKE_SECRET=yes run prod gitops "$t/ok"); check "prod gitops is unchanged" "$out" "AP playbooks/k8s-gitops.yml --tags install,source" "gateway_https"
-# The default list stays a default: dev appends the stages only when no --only is given, and the measurement
-# only with a key file, after dev-ca (which makes the https listener it goes through).
+# The default list stays a default: dev appends the stages only when no --only is given, and the hand-over
+# only with a key file, after dev-ca.
 sed -n '/^if \[ "\$ENV_NAME" = dev \] && \[ -z "\$only" \]; then$/,/^fi$/p' "$script" > "$t/append.sh"
 [ -s "$t/append.sh" ] || { echo "FAIL: the dev-only append block is missing or changed"; fail=1; }
 appended() { # env, only, key file: the stage list after the block, starting from "base"
@@ -107,19 +94,13 @@ appended() { # env, only, key file: the stage list after the block, starting fro
 }
 same() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: '$2'"; fail=1; fi; }
 same "a dev run without --only appends dev-ca and identity-keycloak" "$(appended dev "" "")" "base dev-ca identity-keycloak"
-same "with a key file the measurement goes after dev-ca, the hand-over after it" "$(appended dev "" /k)" "base dev-ca openbao-measure openbao-handover identity-keycloak"
+same "with a key file the hand-over goes after dev-ca" "$(appended dev "" /k)" "base dev-ca openbao-handover identity-keycloak"
 same "--only appends nothing" "$(appended dev gitops /k)" "base"
 same "prod appends nothing" "$(appended prod "" /k)" "base"
 
-# The measurement's PASS line goes into the short log whole: its b, b_cert and ingress fields come last.
 sed -n '/^  if \[ "\$s" = restore \] .*; then$/,/^  fi$/p' "$script" > "$t/short.sh"
 [ -s "$t/short.sh" ] || { echo "FAIL: the short-log block is missing or changed"; fail=1; }
-long="PASS: openbao-measure: gateway=ok $(printf 'x%.0s' $(seq 1 250)); b=400 remote=- xff=-; b_cert=CN; ingress=192.0.2.5"
-printf '===== openbao-measure\n    "msg": "%s"\n' "$long" > "$t/raw"
-s=openbao-measure raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
-same "the measurement's PASS line reaches the short log whole" "$(cat "$t/log")" "  openbao-measure: \"msg\": \"$long\""
 # The hand-over's skip is a SKIP line in the short log, never a PASS one: from its playbook, or from the stage itself.
-: > "$t/log"
 printf '===== openbao-handover\n    "msg": "SKIP: openbao-handover: not handed over, no box address yet; role bootstrap stays open"\n' > "$t/raw"
 s=openbao-handover raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
 same "the hand-over's SKIP line from its playbook reaches the short log" "$(cat "$t/log")" '  openbao-handover: "msg": "SKIP: openbao-handover: not handed over, no box address yet; role bootstrap stays open"'
