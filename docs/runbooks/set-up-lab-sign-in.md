@@ -14,7 +14,7 @@ superseded-by:
 
 # Set up sign-in for lab apps on c1
 
-Realm `lab` in Keycloak is code: its groups, users and the OIDC clients of every lab app are in `hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2`, and every password and client secret is a line in `~/.config/central-hub/identity.env` on the machine that runs Ansible, outside the repository. This runbook applies them to c1. Run it from `hosts/ansible` in the lab clone.
+Realm `home` in Keycloak is code: its groups, users and the OIDC clients of every lab app are in `hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2`, and every password and client secret is a line in `~/.config/central-hub/identity.env` on the machine that runs Ansible, outside the repository. This runbook applies them to c1. Run it from `hosts/ansible` in the lab clone.
 
 ```mermaid
 flowchart LR
