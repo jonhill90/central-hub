@@ -8,15 +8,27 @@ outcome: OpenBao 2.7.2 runs in namespace openbao in dev's cluster, starts and un
 needs: the agent box with the agent_box role applied; the dev cluster; the private inventory values listed below
 private-values: [seal-node, box-cidr, store-host, seal-key, admin-role-id, admin-secret-id, sops-copies]
 files: [hosts/kubernetes/home/c1/apps/openbao/, hosts/kubernetes/home/c1/apps/openbao-store/, hosts/kubernetes/home/c1/apps/openbao-measure/, hosts/ansible/playbooks/k8s-openbao-measure.yml, hosts/ansible/playbooks/k8s-openbao-handover.yml, .github/hosts-check/tests/test_openbao_handover.sh, hosts/kubernetes/home/c1/apps/secret-store/, hosts/kubernetes/home/c1/root/, hosts/ansible/roles/k8s_gitops/, hosts/ansible/roles/agent_box/files/secrets-store.sh, .github/hosts-check/tests/test_secrets_store_wrapper.sh, hosts/ansible/roles/agent_box/files/secrets-store-kv.sh, .github/hosts-check/tests/test_secrets_store_kv.sh, hosts/ansible/roles/agent_box/templates/secrets-store-compare.service.j2, hosts/ansible/roles/agent_box/templates/secrets-store-compare.timer.j2, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/files/secrets-store-snapshots.sh, .github/hosts-check/tests/test_secrets_store_snapshots.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/k8s-openbao-auth.yml]
-last-tested: not yet run
+last-tested: not yet run on dev. The dev rebuilds 20261117T043328Z and 20261117T053037Z (central-hub 69edf9b) on the agent box ran without the store, as neither stage list had openbao-seal or openbao-measure. The box's scripts and the hand-over are checked only by CI's stand-in tests (test_openbao_handover.sh and the five test_secrets_store_*.sh files)
 superseded-by:
 ---
 
 # Set up the lab's secrets store (OpenBao) on dev
 
-**Status:** draft, not run. Written from the code and the OpenBao 2.7.2 docs; every "expect" below is what the docs say, not yet seen on the lab. The records are [D-0038](../decisions/README.md) and [D-0058](../decisions/README.md), which moves the store into the cluster.
+**Status:** draft, not run on the lab. Written from the code and the OpenBao 2.7.2 docs; every "expect" below is what the docs say, not yet seen on the lab. [What has run](#what-has-run) lists what has been run so far, and where. The records are [D-0038](../decisions/README.md) and [D-0058](../decisions/README.md), which moves the store into the cluster.
 
 **Inside the cluster ([D-0058](../decisions/README.md)).** OpenBao runs inside the cluster from its own Helm chart, dev's cluster first, not on a VM of its own. No store VM was ever built, and its code is gone. [Inside the cluster](#inside-the-cluster-d-0058-dev-first) below is code only, not yet run. The box's calls to the store are listed after it. They are code only too, and they need the box's path to the store, which comes after the measurement below.
+
+## What has run
+
+| Part | On dev | Checked so far |
+|---|---|---|
+| The store in the cluster (stages `openbao-seal`, `openbao-measure`, `openbao-handover`) | No. Two dev rebuilds ran on 2026-11-17, `20261117T043328Z` (started 04:33 UTC) and `20261117T053037Z` (started 05:30 UTC, central-hub 69edf9b). Neither stage list had an `openbao-` stage, because the box set no `OPENBAO_SEAL_KEY_FILE`. The box's `rebuild.sh` sets one only when its in-cluster switch, the file `openbao-in-cluster` in its work folder, reads `true`. | CI renders `openbao-store`, `secret-store` and the root with the store on. `test_rebuild_dev_stages.sh` checks the stage order, and `test_openbao_handover.sh` checks the hand-over against a stand-in OpenBao. |
+| The hourly snapshot in the cluster (CronJob `openbao-snapshot`) | No | CI renders it with the `openbao-store` chart and checks it with `kubeconform -strict`. No test runs it. |
+| The box's snapshot folder (`secrets-store-snapshots.sh`: rotate and keep) | No | `test_secrets_store_snapshots.sh` |
+| The box's `secrets-store` calls (`status`, `put`, `compare`, `reseed`, `restore`, `restore-rebuilt`) | No. They need the box's path to the store and, for `put`, `compare` and `reseed`, `sops_copies` on. | `test_secrets_store_wrapper.sh`, `test_secrets_store_kv.sh` (real SOPS and age against a stand-in OpenBao) and `test_secrets_store_restore.sh` |
+| The off-box copy | No | `test_secrets_store_offbox.sh` |
+
+CI runs every test named here on each pull request (`.github/hosts-check/run.sh`). In [Rebuild the k8s layer with one command](rebuild-k8s-layer-with-one-command.md), the 05:30 run is in [Proven runs](rebuild-k8s-layer-with-one-command.md#proven-runs) and the 04:33 run in the worker row of [Dev node sizes](rebuild-k8s-layer-with-one-command.md#dev-node-sizes). Both runs' stage and PASS lines are in the box's `rebuild log`. The raw logs stay on the box (private), so there is no public link. When a part first runs on dev, change its row and `last-tested` to the date, the run and the commit.
 
 ## Inside the cluster (D-0058), dev first
 
