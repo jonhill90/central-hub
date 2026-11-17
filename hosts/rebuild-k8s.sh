@@ -88,10 +88,12 @@ fi
 # Dev only: the memory (MiB) each dev node gets by role, in place of its memory_mb in the tfvars (the k8s stack's
 # memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so it is sized to fit them: the dev rebuild
 # was refused at 13397 MiB free against 12288 MiB of dev VMs plus the 2048 MiB margin (box log, 2026-11-14 12:03 UTC).
-# The control plane keeps 4096 (c1's uses 3027 MiB, 2026-11-17); the worker goes from 8192 to 6144. c1 (prod) keeps
+# The control plane keeps 4096 (c1's uses 3027 MiB, 2026-11-17). The worker is 7168: at 6144 the run of
+# 2026-11-17 04:33 UTC passed every stage up to dev-ca, then the Keycloak realm import timed out with probes failing
+# across the worker; with VM 300 stopped the node had 13412 MiB free, and 4096 + 7168 + 2048 = 13312. c1 (prod) keeps
 # the sizes in its own tfvars.
 DEV_MEMORY_MB_CONTROL_PLANE=4096
-DEV_MEMORY_MB_WORKER=6144
+DEV_MEMORY_MB_WORKER=7168
 tofu_vars=(-var-file="$TFVARS")
 if [ "$ENV_NAME" = dev ]; then
   tofu_vars+=(-var "memory_mb_by_role={\"control-plane\" = $DEV_MEMORY_MB_CONTROL_PLANE, \"worker\" = $DEV_MEMORY_MB_WORKER}")
@@ -208,7 +210,7 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default: the dev VMs' memory by role, summed over the nodes
-# the tfvars declare, plus a 2048 MiB margin; 4096 + 6144 + 2048 = 12288 for one control plane and one worker). If the
+# the tfvars declare, plus a 2048 MiB margin; 4096 + 7168 + 2048 = 13312 for one control plane and one worker). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 # curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
 # use it, so neither can print the token.
@@ -550,6 +552,8 @@ fi
 runner_capture_diag() {
   echo "diag: the run failed, so the cluster is read before it is torn down" | tee -a "$log"
   {
+    echo "== node CPU and memory (kubectl top nodes)"
+    kc top nodes --no-headers
     echo "== argocd applications (name, sync, health)"
     kc -n argocd get applications.argoproj.io --no-headers -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
     echo "== pods not Running or Completed, all namespaces"
@@ -583,15 +587,33 @@ runner_run_teardown() { # [failed]
 }
 
 echo "rebuild: env $ENV_NAME, stages: $stages, log $log"
+# Dev only, while the sign-in stage runs: each node's CPU and memory from metrics-server (kubectl top nodes), every
+# 60 s, into the short log, so a slow or failed Keycloak stage shows whether the worker ran out of memory or CPU
+# (the 2026-11-17 04:33 UTC run timed out with no reading). Read-only, never fatal; stopped when the stage ends.
+node_top_sampler() { # stage
+  local t
+  while :; do
+    t=$(date -u +%FT%TZ)
+    kc top nodes --no-headers 2>/dev/null \
+      | awk -v s="$1" -v t="$t" 'NF >= 5 {print "  " s ": node top " t " " $1 " cpu " $3 " memory " $4 " (" $5 ")"}' >> "$log" || true
+    sleep 60
+  done
+}
+
 for s in $stages; do
   t0=$(date +%s)
   echo "$(date -u +%FT%TZ) $s start" | tee -a "$log"
   echo "===== $s" >> "$raw"
+  sampler=""
+  if [ "$ENV_NAME" = dev ] && [ "$s" = identity-keycloak ]; then
+    node_top_sampler "$s" & sampler=$!
+  fi
   # A subshell outside any `if`, so `set -e` still stops the stage at its first failed command.
   set +e
   (set -e; run_stage "$s") >> "$raw" 2>&1
   rc=$?
   set -e
+  if [ -n "$sampler" ]; then kill "$sampler" 2>/dev/null || true; wait "$sampler" 2>/dev/null || true; fi
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
   # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line.
@@ -603,7 +625,7 @@ for s in $stages; do
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.
   if [ "$s" = preflight ] || [ "$s" = identity-keycloak ]; then
     awk -v s="$s" '$0 == "===== " s {on=1; next} /^===== / {on=0} on' "$raw" \
-      | grep -oE 'branch (skipped|checked)[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|storage (list|name)[^"]*|guest note[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
+      | grep -oE 'branch (skipped|checked)[^"]*|the declared dev VMs need[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|storage (list|name)[^"]*|guest note[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
       | sed "s/^/  $s: /" >> "$log" || true
   fi
   if [ "$rc" -ne 0 ]; then
