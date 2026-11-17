@@ -86,7 +86,9 @@ Run `box-apply` as the session user, without `sudo`: the front script calls `sud
 
 ### Apply an approved limit change (on the box, no controller)
 
-Only once a record amending D-0036 rules 3(f), 6 and 7 is accepted. Until then, write no line in the approvals file: the box would apply it.
+D-0044 (accepted) lets the box apply a change to its own limits when one line in the approvals file names it, so no run from the controller is needed (D-0036 rules 3(f) and 6 carry it). Write a line only after the owner's tap on a card that names the digest: the box would apply it.
+
+What this route never does: it does not change the box's inventory (D-0036 rule 7, so a setting that only the private inventory sets stays as it is), and it skips the firewall tasks, which the self-apply's skipped tags leave to a run from the controller (`agent_box_self_apply_skip_tags`).
 
 1. Plan, and copy what the stop prints:
 
@@ -102,7 +104,7 @@ Only once a record amending D-0036 rules 3(f), 6 and 7 is accepted. Until then, 
    ```
 
    why: the digest pins the exact bytes they passed, so a later change to those files needs its own line.
-3. Add the line to `hosts/ansible/agent-box-limit-approvals.txt` with the pass's message id and the owner's tap id (D-0042 rule 6), by a PR that merges like any other.
+3. Add the line to `hosts/ansible/agent-box-limit-approvals.txt` by a PR that merges like any other. Its five fields are `<baseline> <main> <digest> <pass> <tap>`: the first three as `box-apply plan` printed them, `pass` the id of the orchestrator's message that records the agents' pass of that digest, and `tap` the id of the owner's decide event (the choice, not the card) on a card that named the digest (D-0042 rule 6). A tap of `none` never counts. `main` must be a commit on main after which no limit changes.
 4. Plan, then apply:
 
    ```sh
