@@ -28,7 +28,11 @@ def pull(chart, dest):
     so a short outage upstream doesn't fail the check."""
     cache = os.environ.get("PARITY_CHART_CACHE")
     oci = chart["repoURL"].startswith("oci://")
+    # A pinned https chart gets its own cache folder, keyed by the pin, so a folder unpacked by an
+    # earlier run without the check is never used: this folder's chart comes only from the checked file.
     key = f"{chart['name']}-{chart['version']}" + (f"-{chart['digest'][7:19]}" if oci else "")
+    if not oci and chart.get("sha256"):
+        key += f"-{chart['sha256'][:12]}"
     folder = pathlib.Path(cache) / key if cache else dest
     # An OCI chart is pulled at its digest, as Argo CD fetches it (pick 141).
     if oci:
