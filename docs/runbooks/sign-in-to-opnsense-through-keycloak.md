@@ -39,9 +39,9 @@ flowchart LR
 
 ## Steps
 
-Steps 1 to 4 run on the test OPNsense, which signs in at a throwaway Keycloak on the agent box. That Keycloak imports the same realm template with client `opnsense` for the test OPNsense's name and one test user, and is removed at the end. Realm lab on c1 is not touched until step 5.
+Steps 1 to 4 run on the test OPNsense, which signs in at a throwaway Keycloak on the agent box, with DPoP on as in the lab. That Keycloak holds a minimal throwaway realm, not realm lab's template. Its one client `opnsense` has the lab client's settings: confidential, code flow with PKCE S256, application code `keycloak`, and the same callback and logout return paths on the test OPNsense's name. It has two users: one bound to a local admin account and one left unknown. The realm and its secrets are removed at the end. Realm lab on c1 is not touched until step 5.
 
-1. **Check the package.** Download the package and its checksum from the `v1.0.0-beta5` release on the agent box, then check both:
+1. **Check the package.** Download the package and its checksum from the `v1.0.0-beta5` release, then check both where `gh` is installed (the agent box has none, so the attestation check runs in CI), before the file goes to OPNsense:
 
    ```sh
    sha256sum os-openid-connect-1.0.0.beta5.pkg
@@ -71,10 +71,11 @@ Steps 1 to 4 run on the test OPNsense, which signs in at a throwaway Keycloak on
 
 3. **Prove it on the test OPNsense.**
    - A Keycloak user bound to a local admin account signs in and lands on the dashboard with that account's rights.
+   - The sign-in used DPoP: Keycloak's discovery lists ES256 under `dpop_signing_alg_values_supported`, and the plugin's test sign-in reports its DPoP sender constraint.
    - An unknown Keycloak user is refused or waits in the approval queue.
    - With the throwaway Keycloak stopped, root signs in with its local password.
 
-   expect: all three. Keep the run's log in the agent notebook's run records, with no secret in it.
+   expect: all four. Keep the run's log in the agent notebook's run records, with no secret in it.
 
 4. **Clean up.** Destroy the test OPNsense, and stop the throwaway Keycloak and remove its data.
    expect: neither is left running.

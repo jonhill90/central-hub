@@ -88,7 +88,7 @@ Proposed option: **1**. The owner asked for both machines on Keycloak with local
 - step 4 signs in through Keycloak with Administrator;
 - step 5 signs in as root@pam with TOTP.
 
-[Sign in to the OPNsense web GUI through Keycloak](../runbooks/sign-in-to-opnsense-through-keycloak.md): the test OPNsense proof against a throwaway Keycloak, then the client in realm lab and the three checks on the lab firewall.
+[Sign in to the OPNsense web GUI through Keycloak](../runbooks/sign-in-to-opnsense-through-keycloak.md): the test OPNsense proof against a throwaway Keycloak, then the client in realm lab and the proof's checks on the lab firewall.
 
 The role's own proof checks that Proxmox builds a sign-in link to Keycloak for client `proxmox`. CI checks the realm import with the client in a real Keycloak, and runs the role against stand-ins (`test_proxmox_sso.sh`).
 
