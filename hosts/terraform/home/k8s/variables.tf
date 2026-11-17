@@ -71,3 +71,14 @@ variable "nodes" {
     data_disk_gb = optional(number, 0)
   }))
 }
+
+variable "memory_mb_by_role" {
+  description = "Optional memory in MiB per role (control-plane, worker) that replaces each node's memory_mb. Empty, the default: every node keeps its own memory_mb. The agents' dev rebuild sets it (hosts/rebuild-k8s.sh) so dev fits beside the always-on guests; c1 leaves it empty."
+  type        = map(number)
+  default     = {}
+
+  validation {
+    condition     = alltrue([for r, m in var.memory_mb_by_role : contains(["control-plane", "worker"], r) && m >= 2048])
+    error_message = "memory_mb_by_role takes only control-plane and worker, each at least 2048 MiB."
+  }
+}
