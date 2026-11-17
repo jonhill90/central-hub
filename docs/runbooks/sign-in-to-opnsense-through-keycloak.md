@@ -44,6 +44,7 @@ flowchart LR
    expect: `identity.env` has an `OPNSENSE_CLIENT_SECRET` line, and the realm import shows `Done`.
 
 2. **Check the package.** Download the package and its checksum from the `v1.0.0-beta5` release on the agent box, then check both:
+
    ```sh
    sha256sum os-openid-connect-1.0.0.beta5.pkg
    gh attestation verify os-openid-connect-1.0.0.beta5.pkg \
@@ -51,6 +52,7 @@ flowchart LR
      --signer-workflow jpawlowski/opnsense-openid-connect/.github/workflows/build.yml \
      --deny-self-hosted-runners
    ```
+
    why: the SHA-256 pins the bytes that were read, and the attestation ties them to the repository's own build ([the plugin's install guide](https://github.com/jpawlowski/opnsense-openid-connect/blob/v1.0.0-beta5/docs/setup/install.md)).
    expect: the SHA-256 in the table above, and a verified attestation. On any other value, stop.
 
