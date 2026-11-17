@@ -8,7 +8,9 @@
 #   digest  sha256 of `git diff --no-renames --binary --full-index <from> <to> -- <the limit files that changed>`,
 #           which `box-apply plan` prints when it stops
 #   pass    the id of the message that records the agents' pass of this digest (D-0042 rule 1)
-#   tap     the id of the owner's tap for this change (D-0042 rule 6); "none" never counts
+#   tap     the owner's approval (D-0042 rule 4): the id of their order that dropped the box-install cards,
+#           cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh, or, for a change that also holds another D-0042
+#           rule 6 step, the id of their tap on that step's card; "none" never counts
 #
 # The box checks from, to and the digest. It can't check the pass or the tap: it only logs them. Lines stay as a
 # record; a line whose from is no longer the baseline is never used again.
