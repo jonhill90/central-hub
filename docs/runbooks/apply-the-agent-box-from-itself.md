@@ -92,6 +92,8 @@ D-0044 (accepted) lets the box apply a change to its own limits when one line in
 - `agent_box_self_apply_skip_tags` in the role's defaults, when a change takes `lifeline` off it;
 - any task or template that loads another nftables table on the box, such as the OPNsense test stack's.
 
+A change that copies secrets onto the box keeps the owner's secrets card (D-0042 rule 6): the controller's private lab files, `agent_box_prod_files` with the `prod_files` tasks, which run only from the controller when `agent_box_copy_prod_files` is turned on for one run (the `prod_files` tag is in `agent_box_self_apply_skip_tags` too), and a change to that list or that switch.
+
 A new credential for agents, or wider rights for one in another system (Proxmox, GitHub, the tailnet, OpenBao), keeps its access-rights card even when a wrapper uses it; a sudo rule, wrapper or user on the box is a limit and needs none.
 
 What this route never does: it does not change the box's inventory (D-0036 rule 7, so a setting that only the private inventory sets stays as it is), and it skips the firewall tasks, which the self-apply's skipped tags leave to a run from the controller (`agent_box_self_apply_skip_tags`).
