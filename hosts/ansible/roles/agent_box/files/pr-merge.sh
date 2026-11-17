@@ -9,7 +9,7 @@
 #                                                  passes (pass-record), the same checks, then merge. Skips everything while
 #                                                  the halt flag is set. It is not GitHub's auto-merge.
 # The verdict is decided by pr-merge-verdict.py from files this script fetches: the checks, a clean merge, the ledger of passes,
-# the rule 11 files that also need an owner-tap line, and the fold-in checks for a status change. It never enables auto-merge,
+# and the fold-in checks for a status change. It never enables auto-merge,
 # never passes --admin and does not delete the branch (the repositories delete merged branches themselves).
 set -euo pipefail
 umask 077
