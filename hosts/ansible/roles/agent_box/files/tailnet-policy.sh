@@ -12,7 +12,7 @@
 # apply: applies that saved plan and nothing else, and only if the hash the owner's card named is the saved
 #   plan's, and main has not moved since the plan. The card's message ID is required and goes into both logs.
 #   The box cannot check the tap itself (D-0041 rule 6); a reviewing agent does, before the job starts.
-# log: the newest run's summary lines.
+# log: the newest run's summary lines, and, if that run failed, its scrubbed error lines.
 # What is printed (and so what GitHub's public run log holds): the stack, the commit, the plan's hash, the
 # counts of changes, the card ID, pass or fail, and on a failed init the last 12 lines of init's output with IP
 # addresses replaced. Never the policy's text (it names the Proxmox host's address), a value or a secret. The full output stays on the box in {work}/logs/tailnet-policy/.
@@ -24,9 +24,23 @@ work=/var/lib/agent-box
 logs=$work/logs/tailnet-policy
 summary=$logs/summary.jsonl
 
+# Output that may leave the box: ANSI colours removed, IPv4 and IPv6 addresses, e-mail addresses and tailnet names (.ts.net) replaced.
+scrub() { sed -E 's/\x1b\[[0-9;]*m//g; s/[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?/<ip>/g; s/\[?[0-9a-fA-F]*:[0-9a-fA-F:]*:[0-9a-fA-F]*\]?/<ip>/g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/<email>/g; s/[A-Za-z0-9.-]*\.ts\.net/<tailnet>/g'; }
+# Only the Error: summary lines, never the plan's own text (a diff of the policy holds private values).
+error_lines() { grep -E -A"${2:-0}" '^(.{0,4})Error: ' | head -n "${1:-4}" | cut -c1-200 | scrub; }
+
 if [[ ${1:-} == log && $# -eq 1 ]]; then
   [[ -s $summary ]] || { echo "tailnet-policy: no run has been logged yet" >&2; exit 1; }
   tail -n 5 -- "$summary"
+  # If the newest run failed, also show why: its Error: lines with the 3 lines after each (up to 12 lines), scrubbed, never the rest of its log. A failed init has none, so its last 12 lines.
+  if tail -n 1 -- "$summary" | grep -q '"result": "FAIL'; then
+    last=$(ls -1 -- "$logs"/run-*.txt 2>/dev/null | tail -n 1 || true)
+    if [[ -n $last ]]; then
+      echo "tailnet-policy: newest run's errors (scrubbed):"
+      found=$(error_lines 12 3 < "$last" || true)
+      if [[ -n $found ]]; then printf '%s\n' "$found"; else tail -n 12 -- "$last" | scrub; fi
+    fi
+  fi
   exit 0
 fi
 
@@ -93,7 +107,7 @@ if ! tofu init -input=false -backend-config="path=$state" >> "$raw" 2>&1; then
   record none none "FAIL: init"; echo "tailnet-policy: FAIL: init (details in the box's log $raw)" >&2
   # Init prints provider names, versions and download errors, no value or secret; the last lines say why it failed.
   # IPv4 and IPv6 addresses are replaced, since a DNS error can name the box's resolver.
-  tail -n 12 "$raw" | sed -E 's/\x1b\[[0-9;]*m//g; s/[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?/<ip>/g; s/\[?[0-9a-fA-F]*:[0-9a-fA-F:]*:[0-9a-fA-F]*\]?/<ip>/g' >&2; exit 1
+  tail -n 12 "$raw" | scrub >&2; exit 1
 fi
 
 counts() { # from the saved plan's JSON: only counts of actions
@@ -116,9 +130,7 @@ case $action in
     fi
     if ! tofu plan -input=false -no-color "${vars[@]}" -out="$plan" >> "$raw" 2>&1; then
       record none none "FAIL: plan"; echo "tailnet-policy: FAIL: plan (details in the box's log $raw)" >&2
-      # Only the Error: summary lines, never the plan's own text (a diff of the policy holds private values). IPv4 and IPv6
-      # addresses, e-mail addresses and tailnet names (.ts.net) are replaced, as the error can quote any of them.
-      grep -E '^(.{0,4})Error: ' "$raw" | head -n 4 | cut -c1-200 | sed -E 's/\x1b\[[0-9;]*m//g; s/[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?/<ip>/g; s/\[?[0-9a-fA-F]*:[0-9a-fA-F:]*:[0-9a-fA-F]*\]?/<ip>/g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/<email>/g; s/[A-Za-z0-9.-]*\.ts\.net/<tailnet>/g' >&2
+      error_lines 4 < "$raw" >&2 || true
       exit 1
     fi
     hash=$(sha256sum "$plan" | cut -c1-12)
