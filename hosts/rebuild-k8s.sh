@@ -792,7 +792,7 @@ for s in $stages; do
   if [ -n "$sampler" ]; then kill "$sampler" 2>/dev/null || true; wait "$sampler" 2>/dev/null || true; fi
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
-  # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line, and the
+  # short log too, so the run's worklog can quote it; so does the measurement's whole PASS or SKIP line, and the
   # hand-over's PASS or SKIP line (its stage's own SKIP line is printed bare, not quoted by Ansible), and the apps'
   # secrets stage's SKIP line, or its put-apps count, compare PASS and DIFF lines (names only, never a value).
   if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ] || [ "$s" = app-secrets ]; then

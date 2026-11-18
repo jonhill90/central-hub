@@ -139,6 +139,12 @@ long="PASS: openbao-measure: gateway=ok $(printf 'x%.0s' $(seq 1 250)); b=400 re
 printf '===== openbao-measure\n    "msg": "%s"\n' "$long" > "$t/raw"
 s=openbao-measure raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
 same "the measurement's PASS line reaches the short log whole" "$(cat "$t/log")" "  openbao-measure: \"msg\": \"$long\""
+# A measurement where no probe got an answer ends with a SKIP line, which reaches the short log whole too.
+: > "$t/log"
+skipm="SKIP: openbao-measure: not measured, no probe got an HTTP answer from the Gateway; gateway=ok listenerset=x [y]; policy=enforced; a=curl: (28) Connection timed out"
+printf '===== openbao-measure\n    "msg": "%s"\n' "$skipm" > "$t/raw"
+s=openbao-measure raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
+same "the measurement's SKIP line reaches the short log whole" "$(cat "$t/log")" "  openbao-measure: \"msg\": \"$skipm\""
 # The hand-over's skip is a SKIP line in the short log, never a PASS one: from its playbook, or from the stage itself.
 : > "$t/log"
 printf '===== openbao-handover\n    "msg": "SKIP: openbao-handover: not handed over, no box address yet; role bootstrap stays open"\n' > "$t/raw"

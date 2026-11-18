@@ -7,7 +7,8 @@
 #   ansible-playbook -i <dev inventory>/ playbooks/k8s-openbao-measure.yml
 # It changes nothing in OpenBao: each probe is a login with a made-up role, which OpenBao refuses and
 # audits. It prints no secret: of the store's TLS Secret it reads only the public ca.crt field, and of the
-# audit log only each probe's path, remote address and X-Forwarded-For. Its last line is one PASS line.
+# audit log only each probe's path, remote address and X-Forwarded-For. Its last line is one PASS line, or one SKIP
+# line when no probe got an HTTP answer, so nothing was measured.
 - name: The box's source address through the Gateway, and the store's NetworkPolicy
   hosts: k8s_control_plane[0]
   become: true
@@ -78,6 +79,17 @@
         {{ measure_kubectl }} -n {{ measure_ns }} get listenerset openbao-measure
         -o jsonpath='{range .status.conditions[*]}{.type}={.status}({.reason}) {end}'
       register: measure_ls
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    # Each of its listeners' own conditions: a ListenerSet that is not Accepted says only ListenersNotValid,
+    # and the listener's conditions say why (dev run 20261118T212236Z read only the first).
+    - name: measure | The ListenerSet's listeners
+      ansible.builtin.command: >-
+        {{ measure_kubectl }} -n {{ measure_ns }} get listenerset openbao-measure
+        -o jsonpath='{range .status.listeners[*]}{.name}:{range .conditions[*]}{.type}={.status}({.reason}),{end} {end}'
+      register: measure_ls_listeners
       changed_when: false
       failed_when: false
       check_mode: false
@@ -400,11 +412,15 @@
           the measure value (its audited headers are set only at the first start)?
         quiet: true
 
+    # A run where no probe got an HTTP answer measured nothing: the box did not reach the Gateway on either path
+    # (dev run 20261118T212236Z: three curl timeouts). It says so with a SKIP line in place of the PASS one, and still
+    # passes, because the stage records the box's path and does not judge it; the rest of the dev run goes on.
     - name: measure | Result
       ansible.builtin.debug:
         msg: >-
-          PASS: openbao-measure:
-          gateway=ok listenerset={{ measure_ls.stdout | default('none') | trim | default('none', true) }};
+          {{ measure_head }}
+          gateway=ok listenerset={{ measure_ls.stdout | default('none') | trim | default('none', true) }}
+          [{{ measure_ls_listeners.stdout | default('') | trim | default('no listener status', true) }}];
           policy={{ measure_policy }};
           {% for k in ['a', 'axff', 'b'] %}{% set p = measure_probes.results[loop.index0] %}{% set code = p.stdout | default('000') -%}
           {{ k }}={{ (p.stderr | default('no answer') | truncate(60)) if code == '000'
@@ -412,3 +428,8 @@
           remote={{ measure_audit[k].remote | default('-') }} xff={{ measure_audit[k].xff | default('-') }}; {% endfor %}
           b_cert={{ measure_b_cert.stdout | default('none') | regex_replace('^issuer=\s*', '') | truncate(60) }};
           ingress={{ measure_ingress.stdout | default('') | trim | default('unread', true) }}
+      vars:
+        measure_answered: "{{ measure_probes.results | selectattr('stdout', 'match', '^[1-5][0-9][0-9]$') | list }}"
+        measure_head: >-
+          {{ 'PASS: openbao-measure:' if measure_answered | length > 0
+             else 'SKIP: openbao-measure: not measured, no probe got an HTTP answer from the Gateway;' }}
