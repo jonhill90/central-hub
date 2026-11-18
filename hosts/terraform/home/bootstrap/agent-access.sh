@@ -135,13 +135,15 @@ fi
 #     role AgentLabAudit (VM.Audit), role AgentLabPools (Pool.Audit), user agentlab@pve in agents-lab
 #   - ACLs for the group and for token agentlab@pve!lab (privilege-separated):
 #     AgentLab on /vms, propagated, so every guest ID, one that exists today or one made later;
-#     NoAccess on /vms/258 (the agent box) and /vms/259; AgentLabAudit on /vms/900; AgentLabPools on
+#     NoAccess on /vms/258 (the agent box); AgentLabAudit on /vms/900; AgentLabPools on
 #     /pool, so OpenTofu can read which pool a guest is in. Without it, GET /pools lists no pool
 #     (PVE source: API2/Pool.pm), bpg reads pool_id as empty and plans a pool change, which needs
 #     Pool.Allocate, which the token doesn't get (it can't move a guest, 258 included, into a pool).
 # A deeper ACL replaces the roles a path inherits, and NoAccess is never trumped by a pool's roles
 # (PVE source: AccessControl.pm `roles`, RPCEnvironment.pm `compile_acl_path`). Proxmox drops a
-# VM's ACLs only when that VM is destroyed, and the token can't destroy 258, 259 or 900.
+# VM's ACLs only when that VM is destroyed, and the token can't destroy 258 or 900. CT 259, the jumpbox
+# rehearsal's container, was the other NoAccess guest until the owner chose to delete it (tap of
+# 2026-11-18 00:00:40 UTC); its delete drops its NoAccess line, so its ID is a guest ID like any other.
 # CT 900 (the tailnet connector) gets read only: its config has keyctl and /dev/net/tun, which only
 # root@pam may set (PVE source: LXC.pm `check_ct_modify_config_perm`), so no token can make it
 # again, and a token that could destroy it would cut remote access with no way back.
@@ -155,11 +157,11 @@ fi
 # pveum group delete agents-lab` (the ACLs go with them).
 
 BOX_VNET=dev                         # VM 258's VNet (STD-0001, hosts/terraform/home/jumpbox)
-NO_ACCESS="258 259"                  # the agent box and CT 259: never touched by agents
+NO_ACCESS="258"                      # the agent box: never touched by agents
 READ_ONLY="900"                      # the tailnet connector: only root@pam can make it again
 LAB_PRIVS="Datastore.Audit,Datastore.AllocateSpace,Datastore.AllocateTemplate,Pool.Audit,SDN.Audit,SDN.Use,SDN.Allocate,Sys.Audit,VM.Audit,VM.Allocate,VM.Clone,VM.Config.Cloudinit,VM.Config.CDROM,VM.Config.CPU,VM.Config.Disk,VM.Config.HWType,VM.Config.Memory,VM.Config.Network,VM.Config.Options,VM.PowerMgmt,VM.GuestAgent.Audit,Sys.AccessNetwork"
 
-pveum group list --output-format json | grep -q '"groupid":"agents-lab"' || pveum group add agents-lab --comment "Agents' lab rebuilds: every guest but 258 and 259"
+pveum group list --output-format json | grep -q '"groupid":"agents-lab"' || pveum group add agents-lab --comment "Agents' lab rebuilds: every guest but 258"
 for r in "AgentLab:$LAB_PRIVS" "AgentLabUse:SDN.Audit,SDN.Use" "AgentLabAudit:VM.Audit" "AgentLabPools:Pool.Audit"; do
   role=${r%%:*}; privs=${r#*:}
   if pveum role list --output-format json | grep -q "\"roleid\":\"$role\""; then

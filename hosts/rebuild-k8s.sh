@@ -9,7 +9,7 @@
 # rebuild.env (mode 0600), which sets:
 #   ENV_NAME      dev or prod
 #   VM_ID_MIN     lowest VM ID this env may touch (dev: 250)
-#   VM_ID_MAX     highest VM ID this env may touch (dev: 257; 258 and 259 are the jumpboxes)
+#   VM_ID_MAX     highest VM ID this env may touch (dev: 257; 258 is the agent box, 259 was the rehearsal container)
 #   TFVARS        the k8s run folder's tfvars for this env
 #   TFSTATE       its OpenTofu state file
 #   TOFU_ENV      a file that exports PROXMOX_VE_ENDPOINT, PROXMOX_VE_API_TOKEN (and _INSECURE)
@@ -243,7 +243,7 @@ preflight_guests() {
   printf '%s' "$out" | python3 -c 'import json,sys
 rows = sorted(json.load(sys.stdin)["data"], key=lambda r: r.get("vmid", 0))
 print("preflight: guest list from /cluster/resources?type=vm, %d guests visible to the token" % len(rows))
-print("preflight: guest note: only guests the token can see are listed; VM 258 and CT 259 are NoAccess for it (agent-access.sh, NO_ACCESS), so the memory these lines add up to undercounts")
+print("preflight: guest note: only guests the token can see are listed; VM 258 is NoAccess for it (agent-access.sh, NO_ACCESS), so the memory these lines add up to undercounts")
 for r in rows:
     print("preflight: guest vmid=%s type=%s status=%s maxmem=%s MiB mem=%s MiB name=%s pool=%s" % (
         r.get("vmid"), r.get("type"), r.get("status"), r.get("maxmem", 0) // 1048576, r.get("mem", 0) // 1048576,

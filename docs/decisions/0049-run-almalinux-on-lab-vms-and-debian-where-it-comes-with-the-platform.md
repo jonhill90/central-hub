@@ -27,7 +27,7 @@ revisit-when: c1 moves to an immutable OS such as Talos; AlmaLinux or Debian cha
 The lab runs two Linux distributions.
 
 - **AlmaLinux 10** runs on every Linux virtual machine made from code except the Talos rehearsal's: c1's nodes, the agent box, the CI runner, the desktop and the secrets store. They all come from one AlmaLinux 10 GenericCloud image, pinned by URL and checksum in `hosts/terraform/home/k8s/variables.tf`. The firewall VM runs OPNsense, which is not Linux (D-0040). The Talos Linux node VMs of the Talos rehearsal (`hosts/terraform/home/k8s-talos/`) are outside this record: they try Talos beside c1 and are not clones of the AlmaLinux template.
-- **Debian** runs under Proxmox itself (D-0047), in the remote-access container, which is made from Proxmox's Debian 13 template (`hosts/terraform/home/remote-access/`), and in CT 259, the jumpbox rehearsal's container. CT 259 is an unprivileged Debian 13 container made by the jumpbox rehearsal kit, whose code is not in this repository; agents never touch it (D-0035 rule 2, `hosts/terraform/home/bootstrap/agent-access.sh`).
+- **Debian** runs under Proxmox itself (D-0047), in the remote-access container, which is made from Proxmox's Debian 13 template (`hosts/terraform/home/remote-access/`), and in CT 259, the jumpbox rehearsal's container, until its delete (the owner's tap of 2026-11-18 00:00:40 UTC). CT 259 is an unprivileged Debian 13 container made by the jumpbox rehearsal kit, whose code is not in this repository; agents never touch it (D-0035 rule 2, `hosts/terraform/home/bootstrap/agent-access.sh`).
 
 The owner's words this rests on:
 
@@ -89,7 +89,7 @@ The owner's words of 04:44:57 UTC reach further than STD-0006's register row, so
 - Good: no change; both are free, and neither has a paid edition of its own.
 - Bad: AlmaLinux's FIPS-validated packages and longer fixes are sold by its sponsors, so a need for either would mean paying or moving.
 - Bad: two distributions, two package managers and two sets of security feeds to follow.
-- Bad: CT 259 runs Debian 13 but is not in code here, so this repository can't rebuild it or check its image. It is a gap until the rehearsal kit's container is brought into `hosts/`.
+- Bad: CT 259 runs Debian 13 but is not in code here, so this repository can't rebuild it or check its image. It is a gap until the container is deleted, as the owner chose on 2026-11-18.
 
 ### Confirmation
 
