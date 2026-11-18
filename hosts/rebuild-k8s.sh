@@ -287,6 +287,21 @@ print(total)' "$TFVARS" "$DEV_MEMORY_MB_CONTROL_PLANE" "$DEV_MEMORY_MB_WORKER"
 }
 
 # The node's free memory in MiB and the field it came from ("MiB field"), or a failure that says why.
+# The node's whole memory picture, one line, read-only and never fatal: total, used, available, KSM's shared
+# pages and swap, all from /nodes/<node>/status (Proxmox reports ksm.shared in bytes). The guest list can't show
+# the guests the token can't see, so this says what the node as a whole holds.
+preflight_node_detail() { # node
+  local body
+  body=$(px_api GET "nodes/$1/status") || { echo "preflight: node memory detail could not be read"; return 0; }
+  printf '%s' "$body" | python3 -c 'import json,sys
+d = json.load(sys.stdin)["data"]
+m, k, w = d.get("memory") or {}, d.get("ksm") or {}, d.get("swap") or {}
+mib = lambda v: "?" if v is None else str(int(v) // 1048576)
+print("preflight: node memory total %s used %s available %s MiB; ksm shared %s MiB; swap used %s of %s MiB" % (
+    mib(m.get("total")), mib(m.get("used")), mib(m.get("available")), mib(k.get("shared")), mib(w.get("used")), mib(w.get("total"))))' \
+    || echo "preflight: node memory detail had an unexpected shape"
+}
+
 preflight_read_free() { # node
   local body
   body=$(px_api GET "nodes/$1/status") \
@@ -426,6 +441,7 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
   free=$(preflight_read_free "$node") || { echo "$free"; return 1; }
   field=${free#* }; free=${free% *}
   echo "preflight: node free memory ${free} MiB (field: ${field}), minimum ${min} MiB"
+  preflight_node_detail "$node"
   guests=$(preflight_guests) || true
   printf '%s\n' "$guests"
   # VM 257 is the OPNsense test VM (hosts/terraform/home/opnsense-test), built only while dev is down: a dev
@@ -709,7 +725,7 @@ for s in $stages; do
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.
   if [ "$s" = preflight ] || [ "$s" = identity-keycloak ]; then
     awk -v s="$s" '$0 == "===== " s {on=1; next} /^===== / {on=0} on' "$raw" \
-      | grep -oE 'branch (skipped|checked)[^"]*|the declared dev VMs need[^"]*|node free memory[^"]*|refused[^"]*|guest[ -]list[^"]*|storage (list|name)[^"]*|guest note[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
+      | grep -oE 'branch (skipped|checked)[^"]*|the declared dev VMs need[^"]*|node free memory[^"]*|node memory total[^"]*|node memory detail[^"]*|refused[^"]*|guest[ -]list[^"]*|storage (list|name)[^"]*|guest note[^"]*|guest vmid=[^"]*|runner (stop|restart|left stopped)[^"]*|[0-9]+ [a-z][a-z +-]*: HTTP [0-9]{3} (ok|FAIL[^"]*)' \
       | sed "s/^/  $s: /" >> "$log" || true
   fi
   if [ "$rc" -ne 0 ]; then
