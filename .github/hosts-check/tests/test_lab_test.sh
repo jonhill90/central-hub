@@ -349,7 +349,7 @@ assert not re.search(pat, "opnsense_fw                 : ok=57   changed=1    un
 pb = open(sys.argv[2]).read()
 assert 'api_port: "{{ opnsense_cert_gui_port | default(443) }}"' in pb
 PY
-grep -q '"$files"/opnsense-api.\* "$files/opnsense-run.log"' "$w" \
+grep -q '"$files"/opnsense-api.\* "$files"/opnsense-ssh.\* "$files/opnsense-run.log"' "$w" \
   && ok "destroy removes opnsense's log" || bad "destroy keeps opnsense's log"
 
 # firstboot: the console driver against a fake serial console that answers as OPNsense's does (a login, a wrong
@@ -448,6 +448,75 @@ for want in 0 3; do
     bad "the API user command (wanted exit $want, got $got)"
   fi
 done
+
+# Step 6's SSH for root on VM 100: the box makes the key for the copy and sends only its public line; firstboot and the
+# opnsense step check SSH by that key; destroy removes it.
+python3 -I - "$w" <<'PY' && ok "firstboot makes the copy's SSH key on the box and sends VM 100 only its public line" || bad "firstboot's SSH key wiring"
+import re, sys
+t = open(sys.argv[1]).read()
+assert 'ssh-keygen -q -t ed25519 -N "" -C lab-test-vm100 -f "$files/opnsense-ssh.key"' in t
+assert '"opnsense-ssh-key.php": sys.argv[8], "root-ssh.pub": sys.argv[9]}' in t
+args = re.search(r'"reboot": True\}\)\)\' (.*?)> "\$files/console-plan\.json"', t, re.S).group(1)
+assert '"$repo/hosts/ansible/bootstrap/opnsense-ssh-key.php" "$files/opnsense-ssh.key.pub"' in args, args
+assert '"$files/opnsense-ssh.key"' not in args and "opnsense-ssh.key " not in args, args
+PY
+grep -q 'if sshd=$(vm100 /usr/local/sbin/sshd -T); then up=1; break; fi' "$w" \
+  && grep -q 'problems=$(sshd_settings_ok "$gw" vtnet1 <<<"$sshd")' "$w" \
+  && grep -q 'after opnsense.yml, VM 100 still answers SSH as root by the copy' "$w" \
+  && grep -q -- '-o IdentitiesOnly=yes -o BatchMode=yes' "$w" \
+  && grep -q '"$files"/opnsense-api\.\* "$files"/opnsense-ssh\.\*' "$w" \
+  && ok "firstboot and the opnsense step check SSH by the copy's key with sshd's own settings, and destroy removes the key" \
+  || bad "the SSH checks' wiring"
+# The SSH key command, as the console runs it: the public line goes whether the script works or fails, and its exit
+# code comes through.
+sshcmd=$(python3 -I -c 'import re, sys
+print(re.search(r"\"(php opnsense-ssh-key\.php root-ssh\.pub;[^\"]*)\"", open(sys.argv[1]).read()).group(1))' "$w")
+mkdir -p "$work/sshk/bin"
+for want in 0 4; do
+  rm -rf "$work/sshk/dir" && mkdir -p "$work/sshk/dir"
+  echo 'ssh-ed25519 AAAA x' > "$work/sshk/dir/root-ssh.pub"
+  printf '#!/bin/sh\n[ "$1 $2" = "opnsense-ssh-key.php root-ssh.pub" ] && [ -s root-ssh.pub ] || exit 9\nexit %s\n' "$want" > "$work/sshk/bin/php"
+  chmod +x "$work/sshk/bin/php"
+  got=0; ( cd "$work/sshk/dir" && PATH=$work/sshk/bin:$PATH sh -c "$sshcmd" ) >/dev/null 2>&1 || got=$?
+  if [[ $got == "$want" && ! -e $work/sshk/dir/root-ssh.pub ]]; then
+    ok "the SSH key command removes the public line, and exits $want when the script does"
+  else
+    bad "the SSH key command (wanted exit $want, got $got)"
+  fi
+done
+# sshd_settings_ok against `sshd -T` output in OpenSSH's own format (servconf.c, format_listen_addrs): IPv6 in brackets,
+# link-local with its scope.
+eval "$(sed -n '/^sshd_settings_ok() {/,/^}/p' "$w")"
+sshd_good='port 22
+permitrootlogin yes
+pubkeyauthentication yes
+passwordauthentication no
+kbdinteractiveauthentication no
+listenaddress 10.1.50.1:22
+listenaddress 127.0.0.1:22
+listenaddress [::1]:22
+listenaddress [fe80::1%lo0]:22
+listenaddress [fe80::5a9c:fcff:fe00:1%vtnet0_vlan50]:22'
+sshd_settings_ok 10.1.50.1 vtnet1 <<<"$sshd_good" >/dev/null \
+  && ok "the sshd check passes root by key on the mgmt gateway, loopback and LAN link-local only" \
+  || bad "the sshd check refused good settings"
+while IFS='|' read -r what from to; do
+  if out=$(sshd_settings_ok 10.1.50.1 vtnet1 <<<"${sshd_good/"$from"/"$to"}"); then
+    bad "the sshd check passed $what"
+  else
+    ok "the sshd check refuses $what ($out)"
+  fi
+done <<'CASES'
+a WAN listen address|listenaddress 127.0.0.1:22|listenaddress 192.0.2.10:22
+every address|listenaddress 127.0.0.1:22|listenaddress 0.0.0.0:22
+a WAN link-local address|%vtnet0_vlan50]|%vtnet1]
+an unscoped link-local address|%vtnet0_vlan50]|]
+no mgmt gateway|listenaddress 10.1.50.1:22|listenaddress 127.0.0.2:22
+password sign-in|passwordauthentication no|passwordauthentication yes
+keyboard-interactive sign-in|kbdinteractiveauthentication no|kbdinteractiveauthentication yes
+no root|permitrootlogin yes|permitrootlogin no
+no keys|pubkeyauthentication yes|pubkeyauthentication no
+CASES
 
 # wancheck's capture: the watch's frames and its sorting, offline; then, where this runs as root or with sudo, the whole
 # watch on a made-up bridge against a fake WAN that is a client only, a DHCPv4 server, an IPv6 router, or silent.
@@ -622,6 +691,41 @@ done
 echo plain > "$work/php/plain.hash"
 LT_CONFIG=$work/php/config.json php -d include_path="$work/php" "$fb" vtnet0 50 10.1.50.1/24 vtnet1 "$work/php/plain.hash" > /dev/null 2>&1 \
   && bad "the first-boot PHP took a root hash that is not SHA-512 crypt" || ok "the first-boot PHP refuses a root hash that is not SHA-512 crypt"
+
+# The SSH key PHP against the same stubs, run twice: SSH on, root by key, password sign-in and the installer fallback
+# off, LAN only, root's keys that one line; anything but one ed25519 line is refused and changes nothing.
+sshphp=$root/hosts/ansible/bootstrap/opnsense-ssh-key.php
+cat > "$work/php/ssh.json" <<'JSON'
+{"system": {"ssh": {"group": "admins", "passwordauth": "1", "noauto": "1", "interfaces": "wan"},
+ "user": [{"name": "x", "uid": "2000"}, {"name": "root", "uid": "0", "authorizedkeys": "b2xk"}]}}
+JSON
+ssh-keygen -q -t ed25519 -N "" -C lab-test-vm100 -f "$work/php/k"
+rm -f "$work/php/ssh.json.set"
+for _ in 1 2; do
+  LT_CONFIG=$work/php/ssh.json php -d include_path="$work/php" "$sshphp" "$work/php/k.pub" > "$work/php/out" 2>&1 || { cat "$work/php/out"; break; }
+done
+python3 -I - "$work/php/ssh.json" "$work/php/k.pub" <<'PY' && [[ $(cat "$work/php/ssh.json.set") == root ]] \
+  && ok "the SSH key PHP (run twice): SSH on for root by key only, LAN only, root's keys that one line" || bad "the SSH key PHP"
+import base64, json, sys
+c = json.load(open(sys.argv[1]))
+assert c["system"]["ssh"] == {"group": "admins", "enabled": "enabled", "permitrootlogin": "1", "interfaces": "lan"}, c["system"]["ssh"]
+u = {x["name"]: x for x in c["system"]["user"]}
+assert base64.b64decode(u["root"]["authorizedkeys"]).decode() == open(sys.argv[2]).read().strip()
+assert "authorizedkeys" not in u["x"]
+PY
+ssh-keygen -q -t rsa -b 2048 -N "" -f "$work/php/rsa"
+cat "$work/php/k.pub" "$work/php/k.pub" > "$work/php/two.pub"
+: > "$work/php/empty.pub"
+sed 's/ lab-test-vm100$/ x;reboot/' "$work/php/k.pub" > "$work/php/shell.pub"
+cp "$work/php/ssh.json" "$work/php/ssh.before"
+for f in rsa.pub two.pub empty.pub shell.pub missing.pub; do
+  if LT_CONFIG=$work/php/ssh.json php -d include_path="$work/php" "$sshphp" "$work/php/$f" > /dev/null 2>&1 \
+      || ! cmp -s "$work/php/ssh.json" "$work/php/ssh.before"; then
+    bad "the SSH key PHP took $f"
+  else
+    ok "the SSH key PHP refuses $f and changes nothing"
+  fi
+done
 
 # The role takes the binary out of a .deb (an ar archive holding data.tar.xz) with Python only.
 mkdir -p "$work/deb/usr/bin"

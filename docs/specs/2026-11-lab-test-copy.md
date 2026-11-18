@@ -57,6 +57,7 @@ The copy needs 7168 MiB plus the 2048 MiB margin the OPNsense test uses: 9216 Mi
 ## Out of scope
 
 - **The real lab:** VM 100, CT 900, the real SDN and the host's own settings. The copy proves the code; a prod run of this layer is a separate step with the owner's go (D-0042 rule 6, D-0035 rule 3(b)).
+- **SSH for agents on the real VM 100.** The copy's VM 100 gets it, so later steps can run commands there (installing a package from a file, for one). On the real firewall it is a new access right, which waits for the owner's go (D-0042 rule 6).
 - **The tailnet:** the nested connector container is built and its client installed, but it never joins the tailnet, because that is a tailnet change.
 - **The Kubernetes layer:** it is already proven on dev, and the copy has no memory for it.
 - **Installing Proxmox on the real host:** D-0035 rule 1 leaves it to a person at the machine. The answer file this change writes is what that person would use.
@@ -72,6 +73,7 @@ The copy needs 7168 MiB plus the 2048 MiB margin the OPNsense test uses: 9216 Mi
 - [ ] On the nested host: a second `tofu plan` in `network`, `firewall` and `remote-access` shows no changes, and `opnsense.yml --check` reports `changed=0`.
 - [ ] The WAN safety check's three moments on the nested WAN bridge pass: before link-up only a DHCP client runs, and the captures at link-up and over a reboot each count 0 server-type packets and more than 0 frames from the WAN.
 - [ ] `proxmox-safety.yml` ends with its dead-man timer cancelled.
+- [ ] The copy's VM 100 answers SSH as root by a key made on the box for that copy, and its `sshd -T` shows password sign-in off and listen addresses on LAN and loopback only, after first boot and again after `opnsense.yml`.
 - [ ] Two clean runs in a row from the agent box, build to destroy, with no hand step, each with its log in the agent notebook's run records.
 
 ### Manual (what the owner checks)
@@ -92,3 +94,4 @@ The copy needs 7168 MiB plus the 2048 MiB margin the OPNsense test uses: 9216 Mi
 - 2026-11-18: 7168 MiB, not 6144. The first size counted the nested OPNsense at 3072 MiB, the OPNsense test's minimum, but the copy runs the firewall run folder as it is, and that gives VM 100 4096 MiB. Agent pick.
 - 2026-11-18: the automated installer, not Debian 13 with the Proxmox packages added. The installer is what a person would use on the real host, so the answer file is proven too. Agent pick.
 - 2026-11-18: the nested firewall's WAN on a nested bridge with no ports (`firewall`'s `wan_bridge`, default `vmbr0`), not the nested vmbr0, which is VNet dev; the capture asks for a server itself, since nothing else on that bridge would. Agent pick.
+- 2026-11-18: SSH for root on the copy's VM 100 by a key the box makes for each copy and destroy removes, set by a PHP over the console like first boot, LAN only, password sign-in off. The prover and the package install need a shell on the firewall, and the API has none. Agent pick.
