@@ -13,9 +13,10 @@ root=$(cd "$here/../../.." && pwd)
 realm_yaml=$1
 theme=${2:-}
 
-# The same Keycloak release the operator runs (k8s_identity_version), pinned by digest: the 26.8.1
-# image published 2026-10-23, the newest build of it at least two weeks old (STD-0003 rule 1).
-image=quay.io/keycloak/keycloak@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+# The same Keycloak release the operator runs (k8s_identity_version), pinned by digest: the 26.8.2 image
+# the tag pointed at on 2026-11-12 13:34 UTC (the tag moved on 11-05, 11-09 and 11-12; quay.io tag history). 26.8.2 holds
+# many security fixes, so STD-0003 rule 2 lets it go in sooner than two weeks (TASK-0252).
+image=quay.io/keycloak/keycloak@sha256:c68e286cacd87b942ac1939a0a1481461109d6acd3a57dc496969a319a76bbf0
 name=central-hub-realm-test-$$
 host=https://sso.example.com
 work=$(mktemp -d)
