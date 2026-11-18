@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|gitops|handover|reset-failed-start|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|gitops|handover|reset-failed-start|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -14,6 +14,10 @@
 #           of that tap, and it goes into the log. The key is made once from 32 random bytes and kept only as a SOPS copy
 #           (/etc/agent-keys/prod/openbao-seal.key.sops.json, the box's age identity), never replaced: a new key would make
 #           every snapshot unreadable. Each run decrypts it into a private folder in memory, removed when the run ends.
+# seal-copy for a store whose seal key was put on its node by another run (the Mac's): reads that key off the seal node
+#           over ssh into the same private folder in memory, and keeps it as the same SOPS copy, read back before it is
+#           kept, never printed. Copying a secret onto the box is a secrets step, so <tap id> is the owner's tap. With a
+#           SOPS copy already kept, it only compares the two and fails if they differ; nothing is replaced.
 # gitops    playbooks/k8s-gitops.yml --tags source: the root Application's parameters only, with the in-cluster store on
 #           (k8s_gitops_source_openbao_in_cluster, _seal_node, _box_cidr), so Argo CD makes openbao-store, openbao and the
 #           secret-store app's store `openbao`. Argo CD's install is left alone.
@@ -48,12 +52,12 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|gitops|handover|reset-failed-start|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|gitops|handover|reset-failed-start|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
   key | check | gitops | handover | reset-failed-start | log) [[ $# -eq 1 ]] || usage ;;
-  seal)
+  seal | seal-copy)
     [[ $# -eq 2 ]] || usage
     tap=$2
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "openbao-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
@@ -232,7 +236,7 @@ PY
       else echo "openbao-prod: check $name: no answer: ${out:0:80}"; fi
     done
     ;;
-  seal)
+  seal | seal-copy)
     identity=$keys/secrets-bundle/age-identity.txt
     [[ -s $identity ]] || { echo "openbao-prod: $identity is missing; set agent_box_secrets_bundle and run the agent_box role" >&2; exit 1; }
     seal_sops=$store_keys/openbao-seal.key.sops.json
@@ -241,24 +245,52 @@ PY
     trap 'rm -rf -- "$seal_tmp"' EXIT
     trap 'exit 1' INT TERM HUP
     mkdir -p "$store_keys"
-    if [[ ! -e $seal_sops ]]; then
-      openssl rand -out "$seal_tmp/new.key" 32
+    # Keep $1 (32 bytes) as the SOPS copy, only if it reads back to the same bytes.
+    keep() {
+      local recipient
       recipient=$("$libexec/age-keygen" -y "$identity")
       [[ $recipient =~ ^age1[0-9a-z]{58}$ ]] || { echo "openbao-prod: the box's identity gives no age recipient" >&2; exit 1; }
-      "$libexec/sops" encrypt --input-type binary --output-type json --age "$recipient" --output "$seal_sops.part" "$seal_tmp/new.key" ||
+      "$libexec/sops" encrypt --input-type binary --output-type json --age "$recipient" --output "$seal_sops.part" "$1" ||
         { rm -f -- "$seal_sops.part"; echo "openbao-prod: sops could not encrypt the seal key" >&2; exit 1; }
       if ! SOPS_AGE_KEY_FILE=$identity "$libexec/sops" decrypt --input-type json --output-type binary \
-           --output "$seal_tmp/back.key" "$seal_sops.part" || ! cmp -s "$seal_tmp/back.key" "$seal_tmp/new.key"; then
+           --output "$seal_tmp/back.key" "$seal_sops.part" || ! cmp -s "$seal_tmp/back.key" "$1"; then
         rm -f -- "$seal_sops.part"; echo "openbao-prod: the seal key's SOPS copy does not read back to the same bytes" >&2; exit 1
       fi
       mv -- "$seal_sops.part" "$seal_sops"
-      rm -f -- "$seal_tmp/new.key" "$seal_tmp/back.key"
-      echo "openbao-prod: a new prod seal key, kept only as its SOPS copy in the keys folder"
+      rm -f -- "$seal_tmp/back.key"
+    }
+    if [[ $action == seal-copy ]]; then
+      # The seal node's address and login, from the box's inventory copy; the key file is the seal playbook's own.
+      read -r host user < <(ansible-inventory -i "$inventory/" --host "$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["seal_node"])' "$settings")" |
+        python3 -I -c 'import json,sys; v=json.load(sys.stdin); print(v["ansible_host"], v.get("ansible_user", "root"))')
+      [[ -n ${host:-} ]] || { echo "openbao-prod: the seal node has no address in the inventory" >&2; exit 1; }
+      cmd="cat /var/lib/central-hub/openbao-seal/seal-1.key"
+      [[ $user == root ]] || cmd="sudo -n $cmd"
+      ssh -n -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$envdir/known_hosts" \
+        -i "$nodekey" "$user@$host" "$cmd" > "$seal_tmp/node.key" || { echo "openbao-prod: could not read the seal key off the seal node" >&2; exit 1; }
+      [[ $(wc -c < "$seal_tmp/node.key") -eq 32 ]] || { echo "openbao-prod: the seal node's key is not 32 bytes; nothing kept" >&2; exit 1; }
+      if [[ -e $seal_sops ]]; then
+        SOPS_AGE_KEY_FILE=$identity "$libexec/sops" decrypt --input-type json --output-type binary \
+          --output "$seal_tmp/kept.key" "$seal_sops" || { echo "openbao-prod: $seal_sops does not decrypt with the box's identity" >&2; exit 1; }
+        cmp -s "$seal_tmp/kept.key" "$seal_tmp/node.key" || { echo "FAIL: seal-copy: the seal node's key differs from the box's SOPS copy; nothing replaced"; exit 1; }
+        echo "PASS: seal-copy: the box's SOPS copy and the seal node's key are the same"
+      else
+        keep "$seal_tmp/node.key"
+        echo "PASS: seal-copy: the seal node's key is kept as the box's SOPS copy, and reads back the same"
+      fi
+      rm -f -- "$seal_tmp/node.key" "$seal_tmp/kept.key"
+    else
+      if [[ ! -e $seal_sops ]]; then
+        openssl rand -out "$seal_tmp/new.key" 32
+        keep "$seal_tmp/new.key"
+        rm -f -- "$seal_tmp/new.key"
+        echo "openbao-prod: a new prod seal key, kept only as its SOPS copy in the keys folder"
+      fi
+      SOPS_AGE_KEY_FILE=$identity "$libexec/sops" decrypt --input-type json --output-type binary \
+        --output "$seal_tmp/openbao-seal.key" "$seal_sops" || { echo "openbao-prod: $seal_sops does not decrypt with the box's identity" >&2; exit 1; }
+      [[ $(wc -c < "$seal_tmp/openbao-seal.key") -eq 32 ]] || { echo "openbao-prod: the seal key in $seal_sops is not 32 bytes" >&2; exit 1; }
+      ap playbooks/k8s-openbao-seal.yml -e "openbao_seal_key_file=$seal_tmp/openbao-seal.key"
     fi
-    SOPS_AGE_KEY_FILE=$identity "$libexec/sops" decrypt --input-type json --output-type binary \
-      --output "$seal_tmp/openbao-seal.key" "$seal_sops" || { echo "openbao-prod: $seal_sops does not decrypt with the box's identity" >&2; exit 1; }
-    [[ $(wc -c < "$seal_tmp/openbao-seal.key") -eq 32 ]] || { echo "openbao-prod: the seal key in $seal_sops is not 32 bytes" >&2; exit 1; }
-    ap playbooks/k8s-openbao-seal.yml -e "openbao_seal_key_file=$seal_tmp/openbao-seal.key"
     ;;
   gitops)
     ap playbooks/k8s-gitops.yml --tags source

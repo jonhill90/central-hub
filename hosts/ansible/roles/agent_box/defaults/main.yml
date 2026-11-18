@@ -34,10 +34,10 @@ agent_box_wrappers:
   # The same wrapper for the store inside prod's c1 (D-0058): prod's keys folder, settings and inventory only.
   - name: secrets-store-prod
     args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", compare, reseed]
-  # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal passes the
-  # owner's tap id, which the wrapper checks; key prints only the public half.
+  # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal and
+  # seal-copy passes the owner's tap id, which the wrapper checks; key prints only the public half.
   - name: openbao-prod
-    args: [key, check, "seal *", gitops, handover, reset-failed-start, log]
+    args: [key, check, "seal *", "seal-copy *", gitops, handover, reset-failed-start, log]
   # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
   # the owner's tap id, which the wrapper checks; the run needs dev to have passed at the same commit first.
   - name: rebuild-prod
