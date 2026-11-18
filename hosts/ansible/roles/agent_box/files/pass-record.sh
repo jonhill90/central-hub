@@ -37,8 +37,8 @@ case ${1:-} in
     ref_ok "$ref" || die "RELAY_REF must be a cmsg_ message id"
     [[ $rtime =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || die "RELAY_TIME must be an ISO time like 2026-11-14T13:00:00Z"
     case $recorder in orchestrator | builder | reviewer) ;; *) die "RECORDER must be orchestrator, builder or reviewer" ;; esac
-    # The reviewer lane records its own pass, so a merge does not wait for the orchestrator (the owner's order of
-    # 2026-11-18). It records the role reviewer only: never a council line (earlier ledgers keep theirs) and never an owner-tap.
+    # The reviewer lane records its own pass, so a merge does not wait for the orchestrator (an agent pick, relayed by the
+    # orchestrator on 2026-11-18). It records the role reviewer only: never a council line (earlier ledgers keep theirs) and never an owner-tap.
     [[ $recorder != reviewer || $role == reviewer ]] || die "the reviewer records only the role reviewer"
     # An owner-tap line is the orchestrator's word for a card tap the box cannot see; any session can call add, so
     # no other recorder may write one.
