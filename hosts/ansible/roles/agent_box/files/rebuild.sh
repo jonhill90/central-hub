@@ -6,7 +6,8 @@
 #   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild [<commit>]|teardown|identity|log|diag
 #   rebuild.sh auto   (the rebuild-auto timer only, as the keys user; no sudo line)
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
-# auto: an `up` of main's newest commit, started only when all hold: no run is going (the lock), the newest full
+# auto: an `up` of main's newest commit, started only when all hold: no run is going (the lock), dev is down (no VM
+# in the dev state), the newest full
 # run did not already build that commit, a file under hosts/ changed since the newest full pass (or there is none on
 # main), and the memory preflight fits (rebuild-k8s.sh --fit) without stopping the owner's desktop VM, which a timer
 # run never stops (PREFLIGHT_KEEP_DESKTOP). Otherwise it says why in one line and exits 0.
@@ -99,8 +100,22 @@ checkout_main() { # repo [commit]
 # says `rebuild: all stages passed`. Reads the logs, the checkout and the node's memory (rebuild-k8s.sh --fit); writes
 # only the fit check's own settings file.
 auto_decide() {
-  local head f newest="" pass="" nc pc changed fitdir sn=""
+  local head f newest="" pass="" nc pc changed fitdir sn="" up
   head=$(git -C "$repo" rev-parse HEAD)
+  # Dev must be down: with dev VMs in the state the preflight skips its memory check (a re-run makes no new VMs), so
+  # --fit would say yes, and a timer run would build over a dev someone kept up. An unreadable state counts as up.
+  up=$(python3 -I -c '
+import json, sys
+try:
+    s = json.load(open(sys.argv[1]))
+except FileNotFoundError:
+    print(0); sys.exit()
+print(sum(len(r.get("instances", [])) for r in s.get("resources", [])
+          if r.get("type") == "proxmox_virtual_environment_vm" and r.get("mode") == "managed"))' "$work/state/dev-vms.tfstate" 2>/dev/null) || up=unreadable
+  if [[ $up != 0 ]]; then
+    echo "rebuild auto: dev is up ($up VMs in the dev state), so a timer run would not start from an empty dev; nothing started"
+    return 1
+  fi
   while read -r f; do
     grep -Eq '^[0-9TZ:-]+ vms start$' "$f" || continue
     [[ -n $newest ]] || newest=$f

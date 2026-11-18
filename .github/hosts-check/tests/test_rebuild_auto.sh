@@ -7,7 +7,8 @@
 #   4. Teardown-only and identity-only logs are not full runs; a full run that did not pass is not a pass.
 #   5. The fit check: it gets the dev settings with PREFLIGHT_KEEP_DESKTOP=true and the short-node setting; a fit that
 #      fails stops it, with the preflight's reason.
-#   6. The wrapper: `auto` takes no argument, exits 0 when the lock is held, has no sudo line, and its run keeps the
+#   6. Dev is up (VMs in the dev state, or the state can't be read): nothing starts, before the fit check.
+#   7. The wrapper: `auto` takes no argument, exits 0 when the lock is held, has no sudo line, and its run keeps the
 #      desktop running; the role installs the timer.
 # Usage: .github/hosts-check/tests/test_rebuild_auto.sh   (needs git)
 set -uo pipefail
@@ -97,6 +98,17 @@ if [[ $o5a == *"rc=0" && $s5a == *"ENV_NAME=dev"* && $s5a == *"PREFLIGHT_KEEP_DE
 else bad "5. $o5a [$s5a] | $o5b [$s5b] | $o5c"; fi
 
 # 6
+reset; printf '{"resources":[{"mode":"managed","type":"proxmox_virtual_environment_vm","instances":[{},{}]}]}' > "$work/state/dev-vms.tfstate"
+o7a=$(decide); s7a=$([ -e "$t/fit-seen" ] && echo fit || echo nofit)
+reset; echo 'not json' > "$work/state/dev-vms.tfstate"; o7b=$(decide)
+reset; printf '{"resources":[]}' > "$work/state/dev-vms.tfstate"; o7c=$(decide)
+rm -f "$work/state/dev-vms.tfstate"
+if [[ $o7a == *"dev is up (2 VMs in the dev state)"*"nothing started"*"rc=1" && $s7a == nofit &&
+      $o7b == *"dev is up (unreadable VMs in the dev state)"*"rc=1" && $o7c == *"rc=0" ]]; then
+  ok "6. dev up (VMs in the dev state, or a state that can't be read): nothing starts, no fit check; an empty state goes on"
+else bad "6. $o7a [$s7a] | $o7b | $o7c"; fi
+
+# 7
 bash "$src" auto extra > "$t/out" 2>&1; r6a=$?
 defaults=$root/hosts/ansible/roles/agent_box/defaults/main.yml
 if [[ $r6a -eq 2 ]] && grep -q 'usage: rebuild .*|auto' "$t/out" &&
@@ -106,7 +118,7 @@ if [[ $r6a -eq 2 ]] && grep -q 'usage: rebuild .*|auto' "$t/out" &&
    ! grep -A3 '^  - name: rebuild$' "$defaults" | grep -q 'auto' &&
    grep -q '^agent_box_rebuild_auto: true$' "$defaults" &&
    grep -q 'ExecStart={{ agent_box_libexec_dir }}/rebuild.sh auto$' "$root/hosts/ansible/roles/agent_box/templates/rebuild-auto.service.j2"; then
-  ok "6. auto takes no argument, exits 0 while a run holds the lock, has no sudo line, keeps the desktop; the role installs its timer"
-else bad "6. $r6a $(cat "$t/out")"; fi
+  ok "7. auto takes no argument, exits 0 while a run holds the lock, has no sudo line, keeps the desktop; the role installs its timer"
+else bad "7. $r6a $(cat "$t/out")"; fi
 
 exit $fail
