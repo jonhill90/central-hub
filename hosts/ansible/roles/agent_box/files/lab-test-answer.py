@@ -3,11 +3,16 @@
 
   lab-test-answer.py answer <settings.json> <vlans.yml> <root key .pub> <root.hash> <out answer.toml>
       The automated installer's answer (Proxmox VE wiki, Automated Installation, "Answer File Format"):
-      root by key, with a hashed password no one keeps; dev's static address, gateway and DNS; ext4 on the one disk.
+      root by key, with the hash of a random password kept only on the box; dev's static address, gateway and DNS;
+      ext4 on the one disk.
 
   lab-test-answer.py inventory <settings.json> <vlans.yml> <ssh key> <known_hosts> <out hosts.yml>
       The copy's Ansible inventory, in the shape of hosts/ansible/inventories/home/hosts.example.yml: group proxmox
       with one host, the copy, reached as root with the wrapper's key, and the copy's own network values.
+
+  lab-test-answer.py layers <settings.json> <vlans.yml> <OPNsense image> <container template> <out dir>
+      The copy's own values for the network, firewall and remote-access run folders, one <folder>.tfvars.json each:
+      the copy's node name, made-up MACs and names for its VM 100 and CT 900, and WAN link-down.
 
 Exits non-zero with a reason when the settings are not what the copy needs. Needs PyYAML for the shared VLAN file.
 """
@@ -59,7 +64,8 @@ def answer(settings, vlans, pubkey, roothash, out):
         f"fqdn = {toml_str(fqdn)}",
         f"mailto = {toml_str('root@' + fqdn)}",
         'timezone = "UTC"',
-        # Hash of a random password no one keeps: root signs in by key only.
+        # Hash of a random password kept only on the box. SSH is by key; the password is for the copy's own API, where
+        # only root@pam may make CT 900 (lab-test.sh, lab).
         f"root-password-hashed = {toml_str(h)}",
         f"root-ssh-keys = [{toml_str(key)}]",
         # Stop on an error instead of looping through the installer; the wrapper's check then times out.
@@ -114,8 +120,48 @@ def inventory(settings, vlans, key, known_hosts, out):
         yaml.safe_dump(doc, f, default_flow_style=False, sort_keys=False)
 
 
+# The copy's VM 100 and CT 900, locally administered MACs from their IDs. VM 100's two NICs stay inside the copy:
+# net0 on the copy's vmbr1, which has no ports, and net1 link-down. CT 900's eth0 is on the copy's vmbr0, so on dev.
+COPY_OPNSENSE_LAN_MAC = "02:00:00:00:01:00"
+COPY_OPNSENSE_WAN_MAC = "02:00:00:00:01:01"
+COPY_CONNECTOR_ETH0_MAC = "02:00:00:00:09:00"
+
+
+def layers(settings, vlans, image, template, outdir):
+    s, net, gw, addr = load(settings, vlans)
+    lab = yaml.safe_load(open(vlans))["lab_vlans"]
+    mgmt = ipaddress.ip_network([v for v in lab if v["name"] == "mgmt"][0]["cidr"])
+    # STD-0001: <env><os><role><what><nn>. The copy's VM 100 and CT 900 keep its env, what and nn, with OPNsense
+    # (op) or Debian (de) as the OS and network (nw) as the role.
+    n = s["name"]
+    env, what, nn = n[0], n[5:-2], n[-2:]
+    if env not in "dqspn" or not 3 <= len(what) <= 8 or not nn.isdigit():
+        sys.exit("lab-test: the name is not <env><os><role><what><nn> (STD-0001)")
+    for f in (image, template):
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", f):
+            sys.exit("lab-test: an image name is not a plain file name")
+    node = {"proxmox_node_name": n}
+    out = {
+        "network": {**node, "vlans_file": vlans},
+        "firewall": {**node, "firewall_vm_name": f"{env}opnw{what}{nn}",
+                     "opnsense_lan_mac": COPY_OPNSENSE_LAN_MAC, "opnsense_wan_mac": COPY_OPNSENSE_WAN_MAC,
+                     # WAN stays link-down until the WAN safety check passes, as on a fresh real host.
+                     "opnsense_wan_connected": False,
+                     "opnsense_image_file_id": f"local:import/{image}"},
+        "remote-access": {**node, "connector_hostname": f"{env}denw{what}{nn}",
+                          "connector_eth0_mac": COPY_CONNECTOR_ETH0_MAC,
+                          # mgmt's .2 is the copy's own address there (inventory); the connector takes .3.
+                          "connector_mgmt_address": f"{mgmt.network_address + 3}/{mgmt.prefixlen}",
+                          "connector_template_file_id": f"local:vztmpl/{template}"},
+    }
+    for folder, values in out.items():
+        with open(f"{outdir}/{folder}.tfvars.json", "w") as f:
+            json.dump(values, f, indent=2)
+            f.write("\n")
+
+
 if __name__ == "__main__":
-    fn = {"answer": answer, "inventory": inventory}
+    fn = {"answer": answer, "inventory": inventory, "layers": layers}
     if len(sys.argv) != 7 or sys.argv[1] not in fn:
         sys.exit(__doc__)
     fn[sys.argv[1]](*sys.argv[2:])

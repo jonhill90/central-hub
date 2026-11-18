@@ -96,9 +96,9 @@ agent_box_wrappers:
     args: [plan, apply, configure, prove, destroy, log]
   # The lab test copy, VM 256, a nested Proxmox VE on dev (docs/runbooks/build-the-lab-test-copy.md). Built and
   # destroyed only while dev is down and VM 257 is gone; check reads the copy over SSH and changes nothing; host
-  # runs the fresh-host steps inside the copy.
+  # runs the fresh-host steps inside the copy; lab builds its own SDN, VM 100 and CT 900 and puts it on mgmt.
   - name: lab-test
-    args: [plan, apply, check, host, destroy, log]
+    args: [plan, apply, check, host, lab, destroy, log]
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]
