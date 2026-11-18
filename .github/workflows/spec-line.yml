@@ -1,0 +1,47 @@
+# Spec-line check: a PR that changes a file under
+# hosts/ names its spec on a "Spec:" line or says why it has none on a "No spec:" line. The checker
+# comes from main, fetched by ref, never from the PR head, so a PR can't edit the check that judges
+# it (the change's own tests run in a separate job). The PR description reaches the checker as a
+# file, never inside a shell command. Read-only token, no secrets, actions pinned to a full SHA.
+name: spec-line
+on:
+  pull_request:            # never pull_request_target (CLAUDE.md rule 5)
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test the checker in this change
+        run: bash .github/spec-check/tests/test_spec_check.sh
+  line:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Take the checker from main
+        id: checker
+        run: |
+          git fetch --no-tags --quiet origin main
+          if git cat-file -e origin/main:.github/spec-check/check_spec_line.py 2>/dev/null; then
+            git show origin/main:.github/spec-check/check_spec_line.py > "$RUNNER_TEMP/check_spec_line.py"
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "The checker is not on main yet; nothing to run."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check the PR description
+        if: steps.checker.outputs.ready == 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          printf '%s\n' "$PR_BODY" > "$RUNNER_TEMP/body.txt"
+          git diff --name-only "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/files.txt"
+          python3 -I "$RUNNER_TEMP/check_spec_line.py" --root . --body "$RUNNER_TEMP/body.txt" --files "$RUNNER_TEMP/files.txt"
