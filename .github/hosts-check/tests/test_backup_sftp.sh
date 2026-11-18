@@ -15,6 +15,7 @@
 #      Root stays refused from both addresses after the reader run and after the next writer run, since each run
 #      writes one user's keys and the root refusal must cover both.
 #   6. The real k8s-backup.yml's first --check run on a node with no key gets through every play and changes nothing.
+#   7. With the Azure sign-in off, the role turns off a c1-backup-azure-cert.timer a past run left on.
 # Usage: .github/hosts-check/tests/test_backup_sftp.sh   (needs docker that can run a privileged systemd container,
 # ansible-playbook, ssh-keygen, curl, bunzip2). RESTIC_BIN=<path> uses that restic instead of downloading the pin.
 set -euo pipefail
@@ -221,5 +222,31 @@ grep -q "TASK \[proxmox_restic_sftp : Remember the host key\]" "$t/7.log" && ok 
   || bad "6 the host play did not read the host's key"
 docker exec "$F" test -e /etc/central-hub/backup-ssh/id_ed25519 && bad "6 the check run made a key on the node" \
   || ok "6 the check run left the node without a key"
+
+# 7
+# The Azure certificate timer goes off when the Azure sign-in does: a node that ran the Azure path keeps the unit files,
+# and the timer's daily renew would fail on every node once the env file has no AZURE_* lines. The role's own two tasks.
+docker exec -i "$F" bash -c 'cat > /etc/systemd/system/c1-backup-azure-cert.service; printf "[Timer]\nOnCalendar=daily\n[Install]\nWantedBy=timers.target\n" > /etc/systemd/system/c1-backup-azure-cert.timer; systemctl daemon-reload && systemctl enable -q --now c1-backup-azure-cert.timer' \
+  <<<$'[Service]\nType=oneshot\nExecStart=/bin/false'
+python3 -c '
+import sys, yaml
+tasks = yaml.safe_load(open(sys.argv[1]))
+names = ["timers | The Azure certificate timer, if a past run made it",
+         "timers | The Azure certificate timer off while the Azure sign-in is off"]
+picked = [x for x in tasks if x.get("name") in names]
+if len(picked) != 2: sys.exit("the role has no tasks named " + repr(names))
+yaml.safe_dump([{"hosts": "fresh:node", "gather_facts": False, "vars": {"k8s_backup_azure_identity": False},
+                 "tasks": picked}], open(sys.argv[2], "w"))
+' "$root/hosts/ansible/roles/k8s_backup/tasks/main.yml" "$t/azoff.yml" > "$t/8.log" 2>&1 || { bad "7 the role's Azure timer tasks are missing"; cat "$t/8.log"; }
+printf 'all:\n  hosts:\n    fresh: { ansible_host: %s, %s }\n    node: { ansible_host: %s, %s }\n' "$fresh_ip" "$common" "$node_ip" "$common" > "$t/inv7.yml"
+azoff() { (cd "$root/hosts/ansible" && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i "$t/inv7.yml" "$t/azoff.yml"); }
+if [ -s "$t/azoff.yml" ] && azoff > "$t/9.log" 2>&1; then
+  st=$(docker exec "$F" bash -c 'echo "$(systemctl is-enabled c1-backup-azure-cert.timer) $(systemctl is-active c1-backup-azure-cert.timer)"' || true)
+  [ "$st" = "disabled inactive" ] && ok "7 the Azure certificate timer is off once the sign-in is off" || bad "7 the timer is still: $st"
+else bad "7 the Azure timer tasks failed"; tail -20 "$t/9.log"; fi
+if [ -s "$t/azoff.yml" ] && azoff > "$t/10.log" 2>&1 && grep -Eq '^fresh .*changed=0 .*failed=0' "$t/10.log" \
+   && grep -Eq '^node .*changed=0 .*failed=0' "$t/10.log"; then
+  ok "7 a second run changes nothing, and a node that never had the timer passes"
+else bad "7 the second run changed something or failed"; grep -E '^(fresh|node) ' "$t/10.log" || tail -20 "$t/10.log"; fi
 
 [[ $fail -eq 0 ]] && echo "backup sftp: all checks passed" || { echo "backup sftp: a check failed"; exit 1; }
