@@ -366,6 +366,7 @@ check_backup() {
   bash "$here/tests/test_rebuild_preflight.sh"
   bash "$here/tests/test_agent_access_desktop.sh"
   bash "$here/tests/test_rebuild_short_log.sh"
+  bash "$here/tests/test_rebuild_l2_report.sh"
   bash "$here/tests/test_rebuild_box_inventory.sh"
   bash "$here/tests/test_rebuild_log_pick.sh"
   bash "$here/tests/test_rebuild_diag_vms.sh"

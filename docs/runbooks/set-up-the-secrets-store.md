@@ -305,7 +305,7 @@ The restore and SOPS helpers take the environment from the keys folder's name, s
    expect: `sys/health` with `"sealed":false`.
 9. The admin path ([The box's admin path](#the-boxs-admin-path)), in this order:
    1. `openbao-prod l2-policy`. It applies role `k8s_control_plane`'s pool and general L2 policy (`k8s.yml --tags lb`, first control plane only), which then leaves out Services labelled `central-hub/l2-policy`.
-      expect: the recap with `failed=0`, and every LoadBalancer address and its lease as before (`c1-read get svc -A`, `c1-read -n kube-system get leases`).
+      expect: the recap with `failed=0`. With tag `lb` the role also prints, as root on the node, each L2 policy's service selector and each LoadBalancer Service's address, policy and lease holder (`files/l2-report.py`), before the change and after it, and the run fails if any address has no holder a minute after the change. `c1-read` can't show this: c1's read-only account is refused leases and Cilium's policies (measured 2026-11-18 11:17 UTC). `c1-read get svc -A` still shows every LoadBalancer address as before.
    2. The firewall rule from the box to the admin address on tcp 443: a firewall apply, so the owner's go first (D-0036 rule 8). Not written yet.
    3. `admin_address` in `agent_box_openbao_prod`, by a run of the `agent_box` role from the controller.
    4. `openbao-prod gitops`, which passes it as `openbaoAdminAddress`.
