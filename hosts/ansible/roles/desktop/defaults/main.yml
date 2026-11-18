@@ -43,10 +43,14 @@ desktop_lock_admin: true
 # name, <app>.<desktop_trust_check_zone>, for the apps the gateway's own name check opens; the agent box's
 # wrapper passes the zone (private) from the prod inventory it already holds. No zone and no names runs only the
 # chain check.
+# desktop_trust_check_reach stays false until the lab firewall passes the desktop to the c1 Gateway on 443: the dev
+# VLAN's rules (role opnsense_lab) pass no traffic to prod, so each name would fail as "not reached" and stop the
+# run. The pull request that adds that pass sets it true (docs/runbooks/set-up-the-desktop.md).
 desktop_trust_chain_file: "{{ k8s_node_trust_chain_file | default('') if (k8s_node_trust_enabled | default(false) | bool) else '' }}"
 desktop_trust_bundle: /etc/pki/tls/certs/ca-bundle.crt
 desktop_trust_check_zone: ""
+desktop_trust_check_reach: false
 desktop_trust_check_apps: [grafana, argocd, sso, jellyfin, ntfy]
 desktop_trust_check_names: >-
   {{ desktop_trust_check_apps | map('regex_replace', '$', '.' ~ desktop_trust_check_zone) | list
-  if desktop_trust_check_zone | length > 0 else [] }}
+  if (desktop_trust_check_reach | bool) and desktop_trust_check_zone | length > 0 else [] }}
