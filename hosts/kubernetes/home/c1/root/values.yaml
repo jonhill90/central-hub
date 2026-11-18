@@ -46,6 +46,17 @@ openbaoStoreHost: ""
 # out Services labelled central-hub/l2-policy, or that policy announces it from every node too.
 openbaoAdminAddress: ""
 
+# Whether the cluster has ClusterIssuer lab-ca, the lab CA that signs Keycloak's certificate (role k8s_certs,
+# lab_ca.yml). true, as on c1: jellyfin gets the CA's public root from a Certificate on lab-ca
+# (apps/jellyfin, templates/lab-ca.yaml). Ansible sets it to false only for a cluster without it
+# (k8s_gitops_source_lab_ca_issuer): dev, which runs no `certs` stage and whose own CA, dev-ca, is made only
+# after its `checks` stage, so that Certificate would wait for ever and hold the `apps` stage.
+labCaIssuer: true
+# Whether the cluster runs the sign-in checks (app login-probe). true, as on c1. Ansible sets it to false only
+# for a cluster whose names are not its own (k8s_gitops_source_login_probe): dev, whose lab names resolve to
+# prod's Gateway, so its probe would call prod's names from dev (apps/login-probe/values.yaml, hostSuffix).
+loginProbe: true
+
 # The agent notebook's CI runner as a pod (app notebook-runner). Ansible sets it to true on prod only
 # (k8s_gitops_source_notebook_runner, from the prod wrappers), so a dev cluster never registers a second
 # runner under the same name. false renders nothing.
@@ -117,6 +128,8 @@ c1Project:
 #                private, so a URL that holds it can't sit in a values file)
 #   switchParameters  value path -> name of a true/false root value; the parameter "true" is passed
 #                only when that root value is true, so a cluster that leaves it false renders as before
+#   switchOffParameters  value path -> name of a true/false root value; the parameter "false" is passed
+#                only when that root value is false, so a cluster that leaves it true renders as before
 #   valueFiles   the values files in appsPath/<name>/, in order (default: values.yaml)
 #   syncOptions  Argo CD sync options, for example ServerSideApply=true for charts with large CRDs
 #   ignoreDifferences  fields Argo CD leaves alone, for example a password the chart makes at random
@@ -158,6 +171,10 @@ apps:
     needsZone: true
     zoneParameters:
       gateway.https: "{gatewayHttps}"
+    # No ClusterIssuer lab-ca (dev): read the lab root from its optional Secret instead, which is not there,
+    # so Jellyfin's SSO setup skips (apps/jellyfin, files/setup.sh).
+    switchOffParameters:
+      sso.labRoot.certificate: labCaIssuer
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
   # Logs (spec step 3): two releases in namespace logging, as k8s_observability installed them.
@@ -253,6 +270,7 @@ apps:
   login-probe:
     namespace: login-probe
     local: true
+    enabledBy: loginProbe
     needsZone: true
     autoSync: true
     prune: false

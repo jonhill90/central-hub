@@ -273,6 +273,29 @@ check_manifests() {
     echo "manifests: role k8s_control_plane's L2 policy no longer leaves out Services labelled central-hub/l2-policy" >&2
     return 1
   fi
+  # A cluster without ClusterIssuer lab-ca and with names that are not its own (dev: labCaIssuer and loginProbe
+  # false, from k8s_gitops_source_lab_ca_issuer and _login_probe): the root passes jellyfin
+  # sso.labRoot.certificate false and makes no login-probe, and jellyfin then makes no Certificate on lab-ca. c1,
+  # which leaves both true, renders neither change, and Ansible passes them only when false (cases.txt).
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set labCaIssuer=false --set loginProbe=false > "$work/rendered/root-c1-dev-no-lab-ca.yaml"
+  helm template jellyfin hosts/kubernetes/home/c1/apps/jellyfin --namespace media --set zone=example.com \
+    --set sso.labRoot.certificate=false > "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml"
+  if ! grep -q 'name: "sso.labRoot.certificate"' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
+    grep -q 'name: login-probe$' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
+    grep -q 'kind: Certificate' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    grep -q 'sso.labRoot.certificate' "$work/rendered/root-c1.yaml" ||
+    ! grep -q 'name: login-probe$' "$work/rendered/root-c1.yaml" ||
+    ! grep -q 'kind: Certificate' "$work/rendered/app-c1-jellyfin.yaml"; then
+    echo "manifests: with labCaIssuer and loginProbe false, jellyfin should get sso.labRoot.certificate false and no Certificate, and login-probe should not be made; with both true (c1), neither change" >&2
+    return 1
+  fi
+  if ! grep -q 'name: labCaIssuer' "$work/rendered/gitops-source-argocd-dev.yaml" ||
+    ! grep -q 'name: loginProbe' "$work/rendered/gitops-source-argocd-dev.yaml" ||
+    grep -qE 'labCaIssuer|loginProbe' "$work/rendered/gitops-source-argocd.yaml"; then
+    echo "manifests: k8s_gitops should pass labCaIssuer and loginProbe only when they are false" >&2
+    return 1
+  fi
   # The apps' secrets read from OpenBao (appSecretsStore openbao, D-0058 rule 8): the root with it on,
   # and the three charts whose ExternalSecrets it moves, so the c1/<name> keys are schema-checked. The
   # root refuses it without OpenBao in the cluster, and refuses any other value.

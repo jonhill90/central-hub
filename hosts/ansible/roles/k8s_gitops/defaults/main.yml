@@ -53,6 +53,13 @@ k8s_gitops_source_gateway_https: "{{ k8s_gateway_https | default(true) }}"
 # folder where the claim will look (TASK-0240, agent pick 205). c1 keeps false: its StorageClass's
 # parameters can't change in place.
 k8s_gitops_source_local_path_stable_folders: false
+# Whether the cluster has ClusterIssuer lab-ca, passed to the root chart as `labCaIssuer` only when false. Dev
+# has none (no `certs` stage; its own CA is dev-ca, made after `checks`), so hosts/rebuild-k8s.sh sets it false
+# on dev and jellyfin reads its lab root from the optional Secret instead. c1 keeps true.
+k8s_gitops_source_lab_ca_issuer: true
+# Whether the cluster runs the sign-in checks (app login-probe), passed to the root chart as `loginProbe` only
+# when false. Dev's lab names resolve to prod's Gateway, so hosts/rebuild-k8s.sh sets it false on dev. c1 keeps true.
+k8s_gitops_source_login_probe: true
 # Where the apps' ExternalSecrets read their values (D-0058 rules 5 and 8), passed to the root chart as
 # `appSecretsStore` when set. Empty, as now: store c1, namespace secret-source. `openbao`: key c1/<name>
 # through store openbao, which needs k8s_gitops_source_openbao_in_cluster. Set it only once each value

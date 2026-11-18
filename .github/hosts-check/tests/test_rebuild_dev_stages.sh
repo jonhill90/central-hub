@@ -99,6 +99,19 @@ out=$(FAKE_SECRET=yes run dev gitops "$t/ok"); check "a dev re-run keeps the Gat
 out=$(run dev gitops "$t/ok"); check "a fresh dev build leaves it off" "$out" "AP playbooks/k8s-gitops.yml --tags install,source" "gateway_https"
 check "a fresh dev build says so" "$out" "a fresh build" ""
 out=$(FAKE_SECRET=yes run prod gitops "$t/ok"); check "prod gitops is unchanged" "$out" "AP playbooks/k8s-gitops.yml --tags install,source" "gateway_https"
+# Dev has no ClusterIssuer lab-ca and no names of its own: every render of the root on dev turns both off, prod never.
+for args in "dev gitops" "dev-fake dev gitops" "dev dev-ca"; do
+  set -- $args
+  if [ "$1" = dev-fake ]; then out=$(FAKE_SECRET=yes run "$2" "$3" "$t/ok"); else out=$(run "$1" "$2" "$t/ok"); fi
+  check "$args: lab-ca issuer off" "$out" "-e k8s_gitops_source_lab_ca_issuer=false" ""
+  check "$args: login-probe off" "$out" "-e k8s_gitops_source_login_probe=false" ""
+done
+out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gitops "$t/ok")
+check "dev with a key file: both off and the measurement on" "$out" "k8s_gitops_source_login_probe=false" ""
+check "dev with a key file: the measurement still on" "$out" "k8s_gitops_source_openbao_measure=true" ""
+out=$(run dev openbao-measure "$t/ok"); check "dev without a key file still skips the measurement" "$out" "openbao-measure skipped" "AP "
+out=$(FAKE_SECRET=yes run prod gitops "$t/ok"); check "prod gitops leaves the lab-ca issuer on" "$out" "AP " "lab_ca_issuer"
+check "prod gitops leaves login-probe on" "$out" "AP " "login_probe"
 # The default list stays a default: dev appends the stages only when no --only is given, and the measurement
 # only with a key file, after dev-ca (which makes the https listener it goes through).
 sed -n '/^if \[ "\$ENV_NAME" = dev \] && \[ -z "\$only" \]; then$/,/^fi$/p' "$script" > "$t/append.sh"
