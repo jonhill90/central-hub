@@ -56,6 +56,11 @@ k8s_backup_az: az
 k8s_backup_bin_dir: /usr/local/libexec/central-hub-backup
 k8s_backup_node_env_file: /etc/central-hub/backup.env
 k8s_backup_state_dir: /var/lib/central-hub-backup
+# node_exporter's textfile folder on each node. Each backup and restore test that ends well writes its time there
+# (c1_backup_last_success_timestamp_seconds{kind=volumes|etcd|restore-test-volumes|restore-test-etcd}), and
+# kube-prometheus-stack's node-exporter reads it through its host root mount (/host/root + this path,
+# apps/kube-prometheus-stack/values.yaml), so C1BackupStale fires when the off-site backup stops. Empty: nothing written.
+k8s_backup_metrics_dir: /var/lib/node-exporter/textfile
 
 # restic, the newest release at least two weeks old on 2026-11-08 (v0.19.1, 2026-07-05, STD-0003
 # rule 1), from its GitHub release, checked against the release's SHA256SUMS.

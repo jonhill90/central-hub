@@ -46,6 +46,7 @@ argument_specs:
       k8s_backup_bin_dir: {type: str, default: /usr/local/libexec/central-hub-backup, description: Where the tools and scripts go on the nodes.}
       k8s_backup_node_env_file: {type: str, default: /etc/central-hub/backup.env, description: The env file's path on the nodes.}
       k8s_backup_state_dir: {type: str, default: /var/lib/central-hub-backup, description: Local state on the nodes (the canary record).}
+      k8s_backup_metrics_dir: {type: str, default: /var/lib/node-exporter/textfile, description: "node_exporter's textfile folder; empty: none."}
       k8s_backup_restic_version: {type: str, default: 0.19.1, description: "restic release (STD-0003)."}
       k8s_backup_restic_sha256:
         type: str

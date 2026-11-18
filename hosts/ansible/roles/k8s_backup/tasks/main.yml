@@ -82,6 +82,18 @@
   check_mode: false
   tags: [install]
 
+# node_exporter runs as nobody and reads the success times through its host root mount, so this one
+# folder is world-readable. It holds only the .prom files backup_mark_success writes (c1-backup-lib.sh).
+- name: install | node_exporter's textfile folder
+  ansible.builtin.file:
+    path: "{{ k8s_backup_metrics_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: k8s_backup_metrics_dir | length > 0
+  tags: [install, timers]
+
 - name: install | restic release file, checked against its SHA-256
   ansible.builtin.get_url:
     url: "https://github.com/restic/restic/releases/download/v{{ k8s_backup_restic_version }}/restic_{{ k8s_backup_restic_version }}_linux_amd64.bz2"

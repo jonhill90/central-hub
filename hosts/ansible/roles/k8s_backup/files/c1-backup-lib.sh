@@ -8,6 +8,7 @@
 #   BACKUP_BIN              folder with restic, etcdctl, etcdutl and etcd (default: the folder of this file)
 #   BACKUP_HOST             the name snapshots are filed under (default: the short host name)
 #   BACKUP_STATE            local state: the last canary values (default /var/lib/central-hub-backup)
+#   BACKUP_METRICS_DIR      node_exporter's textfile folder (optional): a run that ends well writes the time there
 
 backup_lib_init() {
   local env_file=${CENTRAL_HUB_BACKUP_ENV:-/etc/central-hub/backup.env}
@@ -33,6 +34,27 @@ backup_lib_init() {
 }
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+
+# After a run ends well: c1_backup_last_success_timestamp_seconds{kind="<kind>"} in
+# $BACKUP_METRICS_DIR/c1-backup-<kind>.prom, for node_exporter's textfile collector, so Prometheus
+# can tell when the last good run was (apps/monitoring-extras, C1BackupStale). Written to a temporary
+# file and renamed, so the collector never reads half a file. Not set: nothing. A failed write is
+# logged and does not fail the backup that already ended well.
+backup_mark_success() {
+  local kind=$1 dir=${BACKUP_METRICS_DIR:-} f tmp
+  [ -n "$dir" ] || return 0
+  f=$dir/c1-backup-$kind.prom
+  tmp=$f.$$
+  if { printf '# HELP c1_backup_last_success_timestamp_seconds When a c1 backup or restore test last ended well.\n'
+       printf '# TYPE c1_backup_last_success_timestamp_seconds gauge\n'
+       printf 'c1_backup_last_success_timestamp_seconds{kind="%s"} %s\n' "$kind" "$(date +%s)"
+     } > "$tmp" && chmod 0644 "$tmp" && mv "$tmp" "$f"; then
+    log "recorded the $kind run's time in $f"
+  else
+    rm -f "$tmp"
+    log "could not write $f; the $kind run itself ended well"
+  fi
+}
 die() { log "FAIL: $*" >&2; exit 1; }
 
 # Make the repository the first time; leave it alone after that.
