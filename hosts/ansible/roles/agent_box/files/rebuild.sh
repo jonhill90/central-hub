@@ -3,8 +3,10 @@
 # (hosts/rebuild-k8s.sh, docs/runbooks/rebuild-k8s-layer-with-one-command.md) from the agent box.
 # It runs as user `keys` through sudo, so the session that asks for it never sees the Proxmox
 # token, the node SSH key or the dev inventory. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|identity|log|diag
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild [<commit>]|teardown|identity|log|diag
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
+# up and rebuild build main's newest commit, or <commit> (7 to 40 hex digits) when given, which must be on main: the
+# commit a prod go names (rebuild-prod.sh rebuild <tap id> <commit>), so dev and prod build the same one.
 # identity: only the stage identity-keycloak (k8s-identity.yml --tags secrets,keycloak,signin: Keycloak and its
 # realm, then the owner's sign-in proof, step names and HTTP codes only) on the existing dev
 # cluster. Same dev guard, lock, checkout and log as the other runs; `log` shows it.
@@ -43,15 +45,41 @@ if [[ ${1:-} == log && $# -eq 1 ]]; then
   exit 0
 fi
 
+usage() { echo "usage: rebuild up|rebuild [<commit>]|teardown|identity|log|diag" >&2; exit 2; }
 action=${1:-}
+want=""
 case $action in
   up) extra=() ;;
   rebuild) extra=(--teardown) ;;
   teardown) extra=(--only teardown) ;;
   identity) extra=(--only identity-keycloak) ;;
   diag) extra=() ;;   # handled below, before anything is changed
-  *) echo "usage: rebuild up|rebuild|teardown|identity|log|diag" >&2; exit 2 ;;
+  *) usage ;;
 esac
+# Only up and rebuild take an argument, the commit to build; every other action takes none.
+if [[ $action == up || $action == rebuild ]]; then
+  [[ $# -le 2 ]] || usage
+  want=${2:-}
+  [[ -z $want || $want =~ ^[0-9a-f]{7,40}$ ]] || usage
+else
+  [[ $# -eq 1 ]] || usage
+fi
+
+# The code a run builds: main's newest, or the commit named, only if main holds it. Never a branch, never a commit
+# main does not hold (D-0035 rule 4).
+checkout_main() { # repo [commit]
+  local pinned
+  git -C "$1" fetch --quiet origin main || return 1
+  if [[ -n ${2:-} ]]; then
+    pinned=$(git -C "$1" rev-parse --quiet --verify "$2^{commit}") ||
+      { echo "rebuild: commit $2 is not in the box's checkout of main" >&2; return 1; }
+    git -C "$1" merge-base --is-ancestor "$pinned" origin/main ||
+      { echo "rebuild: commit $2 is not on main" >&2; return 1; }
+    git -C "$1" checkout --quiet --detach "$pinned"
+  else
+    git -C "$1" checkout --quiet --detach origin/main
+  fi
+}
 
 keys=/etc/agent-keys
 work=/var/lib/agent-box
@@ -168,8 +196,7 @@ openssl x509 -checkend 2592000 -noout -in "$keys/azure-reader.env" > /dev/null \
 exec 9>"$work/state/rebuild.lock"
 flock -n 9 || { echo "rebuild: another rebuild run is going; try again when it ends" >&2; exit 1; }
 [[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
-git -C "$repo" fetch --quiet origin main
-git -C "$repo" checkout --quiet --detach origin/main
+checkout_main "$repo" "$want" || exit 1
 echo "rebuild: central-hub $(git -C "$repo" rev-parse --short HEAD)"
 # Rebuilt dev VMs get new SSH host keys, and the inventory's accept-new setting refuses a changed key.
 # This file only holds keys learned from earlier dev runs, so each run starts without it (after the lock,
