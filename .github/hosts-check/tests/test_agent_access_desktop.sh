@@ -4,7 +4,8 @@
 #   1. A fresh host: VM 400 gets AgentDesktopPower (VM.Audit, VM.PowerMgmt) for the group and the token, and the check passes.
 #   2. A host with an old NoAccess on /vms/400: the run removes it, and the check passes.
 #   3. Mutation, the delete removed: the old NoAccess stays and the check stops the run.
-#   4. A power role that also allows VM.Config.CPU is refused.
+#   4. A power role that also allows VM.Config.CPU, VM.Replicate or Permissions.Modify is refused (an allowlist:
+#      VM.Audit, VM.PowerMgmt, Pool.Audit); Pool.Audit on top passes.
 #   5. DESKTOP_ACCESS on: the power line is removed, so the pool's AgentDev applies during the apply.
 # It tests the script's own text, not a real Proxmox host; the real proof is the run printing "agent-access: done".
 # Usage: .github/hosts-check/tests/test_agent_access_desktop.sh   (needs python3)
@@ -84,6 +85,14 @@ out=$(run off); ok "mutation: with the old NoAccess kept, the check stops the ru
 sed 's/^DESKTOP_POWER_PRIVS="VM.Audit,VM.PowerMgmt"$/DESKTOP_POWER_PRIVS="VM.Audit,VM.PowerMgmt,VM.Config.CPU"/' "$work/part.keep" > "$work/part.sh"
 STATE_FILE=$work/s4.json; export STATE_FILE
 out=$(run off); ok "a power role that also allows VM.Config.CPU is refused" "$out" "allows more than"
+for extra in VM.Replicate Permissions.Modify; do
+  sed "s/^DESKTOP_POWER_PRIVS=\"VM.Audit,VM.PowerMgmt\"\$/DESKTOP_POWER_PRIVS=\"VM.Audit,VM.PowerMgmt,$extra\"/" "$work/part.keep" > "$work/part.sh"
+  STATE_FILE=$work/s4-$extra.json; export STATE_FILE
+  out=$(run off); ok "a power role that also allows $extra is refused (allowlist)" "$out" "allows more than"
+done
+sed 's/^DESKTOP_POWER_PRIVS="VM.Audit,VM.PowerMgmt"$/DESKTOP_POWER_PRIVS="VM.Audit,VM.PowerMgmt,Pool.Audit"/' "$work/part.keep" > "$work/part.sh"
+STATE_FILE=$work/s4-pool.json; export STATE_FILE
+out=$(run off); ok "Pool.Audit on top is allowed" "$out" "rc=0"
 cp "$work/part.keep" "$work/part.sh"
 
 STATE_FILE=$work/s5.json; export STATE_FILE

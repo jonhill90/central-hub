@@ -117,8 +117,11 @@ else
     out=$(pveum user permissions agent@pve --path "/vms/$DESKTOP_POWER_VMID" --output-format json)
   fi
   printf '%s' "$out" | grep -q '"VM\.PowerMgmt"' || { echo "agent-access: STOP, /vms/$DESKTOP_POWER_VMID lacks VM.PowerMgmt for the dev token: $out" >&2; exit 1; }
-  if printf '%s' "$out" | grep -Eq '"(VM\.(Allocate|Clone|Config|Console|Snapshot|Backup|Migrate|Monitor|GuestAgent)|SDN|Datastore|Sys)'; then
-    echo "agent-access: STOP, /vms/$DESKTOP_POWER_VMID allows more than VM.Audit and VM.PowerMgmt for the dev token: $out" >&2
+  # An allowlist, not a denylist: every right Proxmox reports on that path must be one of these three, so a right
+  # this list never named (VM.Replicate, Permissions.Modify, a new one) stops the run too.
+  extra=$(printf '%s' "$out" | grep -oE '"[A-Z][A-Za-z]*\.[A-Za-z.]+"' | tr -d '"' | grep -vxE 'VM\.Audit|VM\.PowerMgmt|Pool\.Audit' || true)
+  if [ -n "$extra" ]; then
+    echo "agent-access: STOP, /vms/$DESKTOP_POWER_VMID allows more than VM.Audit and VM.PowerMgmt for the dev token: $(printf '%s' "$extra" | tr '\n' ' ')" >&2
     exit 1
   fi
 fi

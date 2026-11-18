@@ -321,7 +321,8 @@ print(json.load(sys.stdin)["data"].get("status", ""))' 2>/dev/null) || st=""
 # Dev only, and only when the preflight is short: stop the owner's desktop VM (DESKTOP_VMID, an unused guest must never
 # block this run; the owner's words of 2026-11-17 23:58 UTC) when it is running in pool desktop. The token holds VM.Audit
 # and VM.PowerMgmt on that one VM and nothing else (agent-access.sh, role AgentDesktopPower). It is a shutdown,
-# then a forced stop after 60 s, and nothing starts it again: the owner starts it when the desktop is wanted.
+# then a forced stop after 60 s, and nothing starts it again: the owner starts it when the desktop is wanted. It does not
+# check whether anyone is signed in (the token can't read the guest), so it stops a desktop in use too; the runbook says so.
 preflight_stop_desktops() { # node vmid...
   local node=$1 id i st out
   shift
