@@ -93,7 +93,6 @@ The check run needs `python3-apt` on the host: Ansible's apt module installs it 
 
 To install Apache httpd and leave nginx serving, set `proxmox_proxy_cutover: false`.
 
-
 ## The box's own apply
 
 The orchestrator's pick (relayed 2026-11-18, 22:36 UTC): the box applies a host job itself, the way its merge sweep merges on a recorded pass, so no workflow dispatch and no new token is needed. A session on the box runs `sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply-recorded [<job>] <check hash>`. The wrapper checks `main`'s head again and refuses, naming each thing missing and running nothing, unless all of these hold:
