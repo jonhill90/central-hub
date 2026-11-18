@@ -1,0 +1,21 @@
+{{- if .Values.keycloak.metrics }}
+# Keycloak's own metrics (role k8s_identity, k8s_identity_metrics): /metrics on the management port of the
+# Service the Keycloak operator makes, <name>-service, port `management` (9000). Plain HTTP inside the cluster.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: keycloak
+  namespace: {{ .Release.Namespace }}
+spec:
+  namespaceSelector:
+    matchNames: [{{ .Values.keycloak.namespace }}]
+  selector:
+    matchLabels:
+      app: keycloak
+      app.kubernetes.io/instance: {{ .Values.keycloak.name }}
+      app.kubernetes.io/managed-by: keycloak-operator
+  endpoints:
+    - port: management
+      path: /metrics
+      interval: 60s
+{{- end }}

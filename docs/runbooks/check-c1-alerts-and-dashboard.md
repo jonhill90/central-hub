@@ -31,15 +31,15 @@ Alertmanager sends every alert to ntfy on c1 ([Get c1's alerts on a phone](get-c
 
 4. Read the logs panels for errors around the time the trouble began.
 
-5. Read the **OpenBao** and **Jellyfin** rows.
-   expect: OpenBao reads Unsealed, its pod is ready, the last snapshot is under 3 hours old, and there are 0 audit write failures. Jellyfin's pod is ready with 0 restarts in 24 hours, and its requests panel shows mostly `200`. On a cluster without OpenBao inside it, the OpenBao panels show "No data".
+5. Read the **OpenBao**, **Jellyfin** and **Keycloak (sign-in)** rows.
+   expect: OpenBao reads Unsealed, its pod is ready, the last snapshot is under 3 hours old, and there are 0 audit write failures. Jellyfin's pod is ready with 0 restarts in 24 hours, and its requests panel shows mostly `200`. Keycloak's pod is ready, its metrics are read (1), and failed logins in 24 hours are few: each mistyped password or code counts one. On a cluster without OpenBao inside it, the OpenBao panels show "No data".
 
 6. Read the **Alert delivery** row.
    expect: "Alerts sent to ntfy, 24h" is above 0 whenever an alert fired or resolved in the last day, and "Failed sends to ntfy, 24h" is 0. Both count only the `ntfy` receiver, not the heartbeat, because Alertmanager runs with `receiver-name-in-metrics` (`apps/kube-prometheus-stack/values.yaml`). "No data" there means the flag is off.
 
 ## Read the panels without a browser
 
-CronJob `monitoring/panel-check` asks Prometheus for the OpenBao, Jellyfin and alert delivery panels' values every half hour, plus "Alerts firing", and prints one line per panel, then the names of the alerts firing. It holds no token and reads only Prometheus, inside the cluster. A panel with no data fails the run. An agent reads it from the agent box with the read-only account ([give-agents-read-access-to-c1.md](give-agents-read-access-to-c1.md)):
+CronJob `monitoring/panel-check` asks Prometheus for the OpenBao, Jellyfin, Keycloak and alert delivery panels' values every half hour, plus "Alerts firing", and prints one line per panel, then the names of the alerts firing. It holds no token and reads only Prometheus, inside the cluster. A panel with no data fails the run. An agent reads it from the agent box with the read-only account ([give-agents-read-access-to-c1.md](give-agents-read-access-to-c1.md)):
 
 1. `c1-read get jobs -n monitoring --sort-by=.metadata.creationTimestamp`
    expect: the newest `panel-check-<number>` job is listed with completions `1/1`.
@@ -60,6 +60,9 @@ CronJob `monitoring/panel-check` asks Prometheus for the OpenBao, Jellyfin and a
 | C1PodCrashLooping | A container restarted more than 5 times in 30 minutes | `kubectl -n <namespace> logs <pod> --previous` |
 | C1JellyfinNotScraped | Prometheus can't read Jellyfin's `/metrics` for 15 minutes | [Jellyfin runbook, Metrics](move-jellyfin-to-argo-cd.md#metrics) |
 | C1JellyfinErrors | Jellyfin answered more than 0.05 server errors (5xx) a second for 15 minutes | Jellyfin's log in the dashboard's logs panel |
+| C1KeycloakDown | Keycloak has no ready pod for 10 minutes, so no app sign-in works | [sign-in runbook](set-up-lab-sign-in.md): `kubectl -n identity get pods` and the Keycloak object's status |
+| C1KeycloakNotScraped | Prometheus can't read Keycloak's `/metrics` for 15 minutes, so the login alert can't fire | [sign-in runbook, Metrics and alerts](set-up-lab-sign-in.md#metrics-and-alerts): `k8s_identity_metrics` and `kubectl -n identity get endpoints sso-service` |
+| C1KeycloakLoginFailures | More than 20 failed logins in realm lab in 15 minutes | the Logins panel by result; Keycloak's log in Loki (`{namespace="identity"}`) |
 | C1OpenBaoNotReady | OpenBao has no ready pod for 10 minutes: sealed or down, so apps can't read secrets | [secrets store runbook](set-up-the-secrets-store.md#metrics-alerts-and-restarts) |
 | C1OpenBaoSealed | OpenBao answers but is sealed | the same runbook, "If it fails" |
 | C1OpenBaoNotScraped | Prometheus can't read OpenBao's metrics, so the seal and audit alerts can't fire | `kubectl -n openbao get endpoints openbao-active` and the NetworkPolicy |

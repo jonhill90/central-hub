@@ -7,6 +7,9 @@
 #      tailnet block rule (sequence 195) sits before its internet rule (200).
 #   3. A VLAN with tailnet: false and no mgmt_pass in its settings fails the role's check, and the
 #      check is tagged always, so a run limited with --tags rules still runs it.
+#   5. With the real VLAN file and no tenant entry in this firewall's settings (the tenant VLAN not applied yet),
+#      tenant is held: it is left out of the VLANs, its checks and every sequence, the other VLANs keep their
+#      sequences, the role's checks pass and say once that tenant is held.
 #   4. The tailnet connector's advertised routes, from the real VLAN file, leave out VLAN 60 and keep
 #      the VLANs that have no tailnet key (a test on the missing key once broke every run).
 # Usage: .github/hosts-check/tests/test_opnsense_lab_tenant.sh   (needs ansible-core)
@@ -79,12 +82,55 @@ cat > "$w/tenant.yml" <<YML
           - 10 + (opnsense_lab_vlans.index(opnsense_lab_tailnet_off_vlans[0]) * 4 + 2) * 10 < 195
           - 10 + (opnsense_lab_vlans.index(opnsense_lab_tailnet_off_vlans[0]) * 4 + 3) * 10 == 200
 YML
-for t in "good:settings-tenant.yml" "bad:settings-no-mgmt-pass.yml"; do
+cat > "$w/settings-held.yml" <<'YML'
+opnsense_lab_vlan_settings:
+  prod: { ifname: opt1, dhcp: true, bootstrap: false }
+  qa: { ifname: opt2, dhcp: false, bootstrap: false }
+  dev: { ifname: opt3, dhcp: true, bootstrap: false }
+  mgmt: { ifname: lan, dhcp: false, bootstrap: true }
+opnsense_lab_mgmt_tag: 50
+YML
+cat > "$w/held.yml" <<YML
+- hosts: localhost
+  gather_facts: false
+  vars_files: ["$vlan_file", "$w/settings-held.yml", "$role/vars/main.yml"]
+  vars:
+    opnsense_lab_agent_box_sequences: [1, 2, 3, 4, 8, 9]
+  tasks:
+    - ansible.builtin.assert:
+        that:
+          - opnsense_lab_held_vlans == ['tenant']
+          - (opnsense_lab_vlans | map(attribute='tag') | list) == [10, 20, 30, 50]
+          - (opnsense_lab_vlans | map(attribute='pos') | list) == [0, 1, 2, 3]
+          - opnsense_lab_mgmt_pass_vlans | map(attribute='tag') | list == [10, 20, 30]
+          - opnsense_lab_mgmt_no_pass_vlans | length == 0
+          - opnsense_lab_tailnet_off_vlans | length == 0
+          - (opnsense_lab_numbered_sequences | sort) == ([5, 6, 7] + range(10, 170, 10) | list)
+YML
+cat > "$w/positions.yml" <<YML
+- hosts: localhost
+  gather_facts: false
+  vars_files: ["$w/settings-held.yml", "$role/vars/main.yml"]
+  vars:
+    opnsense_lab_agent_box_sequences: [1, 2, 3, 4, 8, 9]
+    lab_vlans:
+      - { id: 10, name: prod, alias: prod, cidr: 10.1.10.0/24 }
+      - { id: 60, name: tenant, alias: tenant lab, cidr: 10.1.60.0/24, tailnet: false }
+      - { id: 20, name: qa, alias: qa and stage, cidr: 10.1.20.0/24 }
+      - { id: 30, name: dev, alias: dev, cidr: 10.1.30.0/24 }
+      - { id: 50, name: mgmt, alias: management, cidr: 10.1.50.0/24 }
+  tasks:
+    - ansible.builtin.assert:
+        that:
+          - (opnsense_lab_vlans | map(attribute='tag') | list) == [10, 20, 30, 50]
+          - (opnsense_lab_vlans | map(attribute='pos') | list) == [0, 2, 3, 4]
+YML
+for t in "good:settings-tenant.yml" "bad:settings-no-mgmt-pass.yml" "held:settings-held.yml"; do
   name=${t%%:*}; s=${t#*:}
   cat > "$w/checks-$name.yml" <<YML
 - hosts: localhost
   gather_facts: false
-  vars_files: ["$vlan_file", "$w/$s"]
+  vars_files: ["$vlan_file", "$w/$s", "$role/vars/main.yml"]
   tasks:
     - ansible.builtin.import_tasks: $role/tasks/tenant_checks.yml
 YML
@@ -98,6 +144,13 @@ run checks-good.yml && ok "tailnet: false with mgmt_pass set passes the role's c
 if run checks-bad.yml; then bad "tailnet: false without mgmt_pass was accepted"
 elif grep -q "must set mgmt_pass" "$w/out.txt"; then ok "tailnet: false without mgmt_pass fails the role's check"
 else bad "the bad entry failed for another reason"; cat "$w/out.txt"; fi
+run held.yml && ok "tenant with no settings: held, left out of every list and sequence; the others keep 10 to 160 and 5 to 7" || { bad "held tenant changed the lists or sequences"; cat "$w/out.txt"; }
+run positions.yml && ok "a held VLAN in the middle of the VLAN file moves no other VLAN's place" || { bad "a held VLAN moved another VLAN's place"; cat "$w/out.txt"; }
+if run checks-held.yml && grep -q "Held, not applied here (no entry in opnsense_lab_vlan_settings): tenant" "$w/out.txt"; then
+  ok "tenant with no settings passes the role's check and is named once as held"
+else bad "the held tenant failed the check or was not named"; cat "$w/out.txt"; fi
+if grep -q "Held, not applied" <(run checks-good.yml; cat "$w/out.txt"); then bad "a VLAN with settings was named as held"
+else ok "with tenant's settings present, nothing is named as held"; fi
 
 cat > "$w/connector.yml" <<YML
 - hosts: localhost

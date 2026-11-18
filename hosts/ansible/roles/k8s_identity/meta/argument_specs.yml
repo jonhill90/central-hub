@@ -9,6 +9,7 @@ argument_specs:
       k8s_identity_namespace: {type: str, default: identity, description: "Namespace for the operator, Keycloak and its database."}
       k8s_identity_name: {type: str, default: sso, description: "The Keycloak object's name and the first label of its hostname."}
       k8s_identity_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}
+      k8s_identity_metrics: {type: bool, default: true, description: "Serve /metrics, with user event counts, for Prometheus (monitoring-extras)."}
       k8s_identity_realm: {type: str, default: lab, description: The realm lab apps sign in to.}
       k8s_identity_owner_username: {type: str, required: true, description: "The owner's user name in the realm. Private."}
       k8s_identity_owner_email: {type: str, default: "", description: "The owner's email in the realm. Private, optional."}
