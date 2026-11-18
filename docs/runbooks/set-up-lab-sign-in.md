@@ -76,6 +76,12 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 - Rotate everything at a lab rebuild: delete `identity.env`, then step 2.
 - Change the sign-in look: set `k8s_identity_theme_dir` in the inventory to a Keycloak theme folder on the controller (for example the owner's branding repository, cloned next to the lab clone), then step 2. Only its `login/` files below 500 KB are used; they go into ConfigMap `identity/keycloak-theme`, the Keycloak pod restarts with them, and the realm is imported again with `loginTheme` set to the folder's name. The path is private because the theme's name can name the zone. Empty goes back to Keycloak's own look.
 
+## Metrics and alerts
+
+With `k8s_identity_metrics: true` (the default), the Keycloak object sets the server options `metrics-enabled` and `event-metrics-user-enabled`, so Keycloak serves `/metrics` on its management port (9000), with `keycloak_user_events_total` counting logins and their errors per realm (Keycloak 26.8.1 guides "Gaining insights with metrics" and "Monitoring user activities with event metrics"). Changing the setting restarts the Keycloak pod once; it does not touch the realm. App `monitoring-extras` reads it through ServiceMonitor `keycloak` (Service `sso-service`, port `management`), raises `C1KeycloakDown`, `C1KeycloakNotScraped` and `C1KeycloakLoginFailures`, and shows the dashboard's **Keycloak (sign-in)** row ([check-c1-alerts-and-dashboard.md](check-c1-alerts-and-dashboard.md)). Its `keycloak.metrics` value must match this setting, or `C1KeycloakNotScraped` fires.
+
+expect: within an hour of the run, the panel check prints `Keycloak metrics read: 1` and a `Logins, 24h` line (`c1-read logs -n monitoring job/<newest panel-check job>`).
+
 ## If it fails
 
 - The realm import never reaches `Done`: `kubectl -n identity logs job/realm-lab` shows Keycloak's import error. Fix the template; CI's `identity` job reproduces most import errors without a cluster (`.github/hosts-check/run.sh identity`).

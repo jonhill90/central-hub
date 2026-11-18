@@ -1,5 +1,5 @@
 # The panel check: every half hour, ask Prometheus for the values the dashboard's OpenBao,
-# Jellyfin and alert delivery panels show, and print one line per panel. An agent reads them with
+# Jellyfin, Keycloak and alert delivery panels show, and print one line per panel. An agent reads them with
 # the read-only account (`c1-read logs -n monitoring job/<newest panel-check job>`), so the numbers
 # are seen without a browser, a password or a port-forward. It reads Prometheus only, inside the cluster, and holds no
 # token. A query that answers no series prints "no data" and makes the run fail, so a broken scrape
@@ -28,6 +28,12 @@ data:
     {{- if .Values.jellyfin.metrics }}
     Jellyfin requests per second	sum(rate(http_requests_received_total{namespace="{{ .Values.jellyfin.namespace }}"}[5m]))
     Jellyfin server errors per second	sum(rate(http_requests_received_total{namespace="{{ .Values.jellyfin.namespace }}",code=~"5.."}[5m])) or vector(0)
+    {{- end }}
+    Keycloak pod ready	kube_statefulset_status_replicas_ready{namespace="{{ .Values.keycloak.namespace }}",statefulset="{{ .Values.keycloak.name }}"}
+    {{- if .Values.keycloak.metrics }}
+    Keycloak metrics read	max(up{namespace="{{ .Values.keycloak.namespace }}",service="{{ .Values.keycloak.name }}-service"})
+    Logins, 24h	sum(increase(keycloak_user_events_total{namespace="{{ .Values.keycloak.namespace }}",realm="{{ .Values.keycloak.realm }}",event="login",error=""}[24h])) or vector(0)
+    Failed logins, 24h	sum(increase(keycloak_user_events_total{namespace="{{ .Values.keycloak.namespace }}",realm="{{ .Values.keycloak.realm }}",event="login",error!=""}[24h])) or vector(0)
     {{- end }}
     Alerts sent to ntfy, 24h	sum(increase(alertmanager_notifications_total{receiver_name="ntfy"}[24h]))
     Failed sends to ntfy, 24h	sum(increase(alertmanager_notifications_failed_total{receiver_name="ntfy"}[24h]))
