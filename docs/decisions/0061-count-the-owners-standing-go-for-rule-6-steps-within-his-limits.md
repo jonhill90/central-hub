@@ -70,5 +70,5 @@ The reviewer checks that each PR or run log of a rule 6 step names the step and 
 
 ## More Information
 
-- **What changes elsewhere.** D-0042 rule 6 and AGENTS.md rule 1 say the same, in the same PR (D-0001: the later record keeps the reasons).
-- **How this record is accepted.** It is accepted in the PR that adds it, because that PR also writes the standing go into D-0042 rule 6 and AGENTS.md rule 1 as in force. The PR's first commits hold the record as proposed. Once the reviewer clears that head, a last commit changes only this record's status, date and accepted-evidence and its index row, naming the cleared commit (D-0001 rule 5). The reviewer's clearance of the head approves a record and a change to AGENTS.md (D-0042 rule 1). D-0059 rule 1 lets a record that amends D-0042 merge on that pass. The go it records is the owner's own words, quoted above.
+- **What changes elsewhere.** Once this record is accepted, D-0042 rule 6 and AGENTS.md rule 1 say the same, in the acceptance PR (D-0001: the later record keeps the reasons). Until then they are unchanged, because an accepted rule must not rest on a proposed record.
+- **How this record is accepted.** By the owner's own words naming D-0061 (the orchestrator's ruling of 2026-11-18 11:07 UTC). The PR that adds it holds it as proposed. A later PR changes its status, date and accepted-evidence and its index row, and adds the sentences to D-0042 rule 6 and AGENTS.md rule 1, citing his words. The go it records is the owner's own words, quoted above.
