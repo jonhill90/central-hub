@@ -35,7 +35,10 @@
       ansible.builtin.assert:
         that:
           - (k8s_gitops_cluster_labels | default({})).get('env', '') == 'prod'
-        fail_msg: This moves prod's Keycloak database only; dev builds it on local-path from the start. Nothing was changed.
+        fail_msg: >-
+          This moves prod's Keycloak database only; dev builds it on local-path from the start. The host must set
+          k8s_gitops_cluster_labels.env to prod itself (the k8s_gitops role's default is not loaded in this play), so
+          a host with no label is refused too. Nothing was changed.
         quiet: true
 
     - name: The claim's class now (empty is the static volume)

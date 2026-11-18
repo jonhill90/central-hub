@@ -7,7 +7,7 @@
 #      are deleted in that order, then the database manifest is applied (local-path claim, no PersistentVolume), then the
 #      dump is loaded and Keycloak is started again; the PASS line appears and the dumps are removed.
 #   3. A claim already on local-path: SKIP, nothing else runs.
-#   4. A cluster labelled env dev: refused before any kubectl call.
+#   4. A cluster labelled env dev, or with no env label at all: refused before any kubectl call.
 #   5. Rows after the load differ from the rows before: the run fails and the dump is kept.
 # Usage: .github/hosts-check/tests/test_identity_db_move.sh   (needs ansible-playbook)
 set -uo pipefail
@@ -41,7 +41,9 @@ exit 0
 SH
 chmod +x "$t/bin/kubectl"
 
-inventory() { # inventory <env>: one control-plane host labelled with the env
+inventory() { # inventory <env>: one control-plane host labelled with the env; "none" sets no label at all
+  local label="k8s_gitops_cluster_labels: {env: $1}"
+  [ "$1" = none ] && label="k8s_unrelated: true"
   cat > "$t/inventory.yml" <<EOF2
 all:
   children:
@@ -52,7 +54,7 @@ all:
           ansible_connection: local
           ansible_become: false
           ansible_python_interpreter: $(command -v python3)
-          k8s_gitops_cluster_labels: {env: $1}
+          $label
 EOF2
 }
 
@@ -102,6 +104,12 @@ inventory dev; run -e k8s_identity_move_delete=true
 if [ $rc -ne 0 ] && grep -q 'moves prod' <<< "$out" && [ ! -s "$t/calls" ]; then
   ok "env dev is refused before any kubectl call"
 else bad "env dev (rc $rc)"; fi
+
+# 4b
+inventory none; run -e k8s_identity_move_delete=true
+if [ $rc -ne 0 ] && grep -q 'moves prod' <<< "$out" && [ ! -s "$t/calls" ]; then
+  ok "a host with no env label is refused before any kubectl call"
+else bad "no env label (rc $rc)"; fi
 
 # 5
 inventory prod
