@@ -56,7 +56,11 @@ case $loc in
 esac
 
 echo "jellyfin"
-h=$(hdrs "$JELLYFIN/sso/OID/start/keycloak"); loc=$(sloc "$h")
+# The plugin builds the redirect it sends to Keycloak from the request's Host header (SSOController.GetRequestBase, plugin
+# 5.1.1: scheme from the provider's schemeOverride, host and port from the request). Called by its service name the redirect
+# would be one Keycloak refuses (HTTP 400 on the pushed authorization request), so send the app's own host, which the realm's
+# jellyfin client lists (k8s_identity_jellyfin_hosts), as a browser through the Gateway does.
+h=$(curl -sS -o /dev/null -m 20 -D - -H "Host: jellyfin.$SUFFIX.$ZONE" "$JELLYFIN/sso/OID/start/keycloak" 2>/dev/null | tr -d '\r'); loc=$(sloc "$h")
 case $loc in
   *"/realms/$REALM/protocol/openid-connect/auth"*"client_id=jellyfin"*) pass "jellyfin's SSO plugin starts a login at keycloak" ;;
   *) fail "jellyfin's SSO plugin did not start a login at keycloak (HTTP $(scode "$h"), goes to path: $(where "$loc"))" ;;
