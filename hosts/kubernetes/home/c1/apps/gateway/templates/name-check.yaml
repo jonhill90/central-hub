@@ -1,0 +1,95 @@
+# The name check: every half hour, open each app's short name (<app>.<zone>) and long name
+# (<app>.apps.c1.prod.<zone>) over HTTPS through this Gateway, verify the certificate against the
+# lab CA, and print one line per name. The pod connects to the Gateway's own Service, so it needs no
+# DNS and no route from outside: what it proves is the listeners, the routes, the certificate and the
+# apps behind them. A name that fails TLS, gets no answer or answers 5xx makes the run fail, so a
+# broken name shows as a failed Job. It mounts only ca.crt from tlsSecret, never the key, and holds
+# no token. A passing line names the app and "short" or "long", not the zone; a failing line adds
+# curl's own error, which can name the host.
+{{- $c := .Values.nameCheck }}
+{{- if and $c.enabled (eq (toString .Values.https) "true") }}
+{{- $zone := required "zone: set by the root Application (k8s_gitops_source_zone)" .Values.zone }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: name-check
+  namespace: {{ .Release.Namespace }}
+data:
+  check.sh: |
+    #!/bin/sh
+    # No heredocs: the root filesystem is read-only.
+    set -u
+    fail=0
+    echo "name check through Gateway $GATEWAY at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    for app in $APPS; do
+      for kind in short long; do
+        if [ "$kind" = short ]; then host="$app.$ZONE"; else host="$app.$APPS_DOMAIN.$ZONE"; fi
+        # %{ssl_verify_result} is 0 when the chain checks out against the lab CA.
+        out=$(curl -sS -o /dev/null --max-time 15 --cacert /ca/ca.crt \
+          --connect-to "::$GATEWAY:443" -w '%{http_code} %{ssl_verify_result}' "https://$host/" 2>&1)
+        rc=$?
+        code=${out%% *}
+        if [ "$rc" -eq 0 ] && [ "$code" -ge 200 ] && [ "$code" -lt 500 ]; then
+          echo "$app $kind: $code, certificate verified"
+        else
+          echo "$app $kind: failed (curl exit $rc): $(printf '%s' "$out" | tr '\n' ' ')"; fail=1
+        fi
+      done
+    done
+    [ "$fail" -eq 0 ] && echo "name check: every name answers with a verified certificate" || echo "name check: some names failed"
+    exit "$fail"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: name-check
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: {{ $c.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: name-check}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: check
+              image: {{ $c.image }}
+              command: [/bin/sh, /check/check.sh]
+              env:
+                # Cilium serves each Gateway through a Service named cilium-gateway-<gateway name>.
+                - {name: GATEWAY, value: {{ printf "cilium-gateway-%s.%s.svc.cluster.local" .Values.name .Release.Namespace | quote }}}
+                - {name: APPS, value: {{ join " " $c.apps | quote }}}
+                - {name: ZONE, value: {{ $zone | quote }}}
+                - {name: APPS_DOMAIN, value: {{ .Values.appsDomain | quote }}}
+              resources:
+                requests: {cpu: 10m, memory: 16Mi}
+                limits: {memory: 64Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: check, mountPath: /check, readOnly: true}
+                - {name: ca, mountPath: /ca, readOnly: true}
+          volumes:
+            - name: check
+              configMap: {name: name-check}
+            # Only the CA certificate from the Gateway's certificate Secret; the key is not mounted.
+            - name: ca
+              secret:
+                secretName: {{ .Values.tlsSecret }}
+                items: [{key: ca.crt, path: ca.crt}]
+{{- end }}

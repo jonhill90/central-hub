@@ -98,6 +98,17 @@ Every part has its own switch, all on by default: `k8s_gateway_short_names`, `k8
    why: Grafana's `root_url` becomes `https://grafana.<zone>/` and its sign-in goes to `https://sso.<zone>/`.
    expect: `https://grafana.<zone>/` opens, "Lab sign-in" goes to `sso.<zone>` and comes back signed in.
 
+## Prove it from the agent box
+
+CronJob `gateway/name-check` (app `gateway`, `templates/name-check.yaml`) runs at :15 and :45. It opens `https://<app>.<zone>/` and `https://<app>.apps.c1.prod.<zone>/` for each app in `nameCheck.apps`, through the Gateway's own Service `cilium-gateway-apps`, and checks the certificate against the lab CA (`ca.crt` of Secret `apps-tls`, the only key it mounts). It proves the listeners, the routes, the certificate and the apps from inside c1, because the agent box sits on dev and has no route to prod's port 443. DNS is checked separately: from the box, `getent ahostsv4 grafana.<zone>` must print the Gateway's address.
+
+1. `c1-read get jobs -n gateway --sort-by=.metadata.creationTimestamp`
+   expect: the newest `name-check-<number>` job has completions `1/1`.
+2. `c1-read logs -n gateway job/<that job>`
+   expect: two lines per app, such as `grafana short: 302, certificate verified` and `grafana long: 302, certificate verified`, ending `name check: every name answers with a verified certificate`. A failing line gives curl's exit code: 60 is a certificate the lab CA did not sign or that lacks the name, 7 or 28 is no answer from the Gateway, and `curl exit 0` with a 5xx code is the app.
+
+This does not show that a browser trusts the certificate. That needs the lab root in the browser's trust store: [trust-lab-root-ca-on-mac.md](trust-lab-root-ca-on-mac.md) on the owner's Mac.
+
 ## If it fails
 
 - **A short name doesn't resolve on the Mac:** `tailscale dns status | grep <zone>` must list it (step 3), and the Unbound override must exist (step 2).
