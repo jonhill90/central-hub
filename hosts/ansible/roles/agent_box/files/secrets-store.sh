@@ -113,11 +113,13 @@ env_store
 # Once the store has its admin address (D-0062), every call goes there instead, on both environments, still by the
 # store's name: through the Gateway OpenBao sees a Cilium address, so the admin login, bound to the box's /32, is
 # refused (docs/runbooks/set-up-the-secrets-store.md, "The box's admin path"). The address is the one the cluster was
-# given: on dev the settings' admin_address, which the dev rebuild passes on; on prod the one
-# k8s_gitops_source_openbao_admin_address in the inventory openbao-prod builds from its own settings.
-if [[ $env == dev ]]; then
-  admin=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("admin_address") or "")' "$settings")
-else
+# given: the one k8s_gitops_source_openbao_admin_address in the inventory the cluster was built from. On dev that is
+# the rebuild wrapper's copy of the dev inventory (its settings' admin_address, or dev's own pick from its pool); none
+# until a rebuild has written it. On prod it is the inventory openbao-prod builds from its own settings.
+admin_inv=$inventory
+[[ $env == prod ]] || admin_inv=$work/rebuild-dev/inventory/hosts.yml
+admin=''
+if [[ $env == prod || -f $admin_inv ]]; then
   admin=$("$libexec/ansible-venv/bin/python3" -I -c '
 import sys, yaml
 found = set()
@@ -130,8 +132,8 @@ def walk(n):
         for i in n: walk(i)
 walk(yaml.safe_load(open(sys.argv[1])))
 if len(found) > 1: sys.exit(1)
-print(found.pop() if found else "")' "$inventory") ||
-    { echo "secrets-store: the prod inventory gives two admin addresses (k8s_gitops_source_openbao_admin_address); refused" >&2; exit 1; }
+print(found.pop() if found else "")' "$admin_inv") ||
+    { echo "secrets-store: the $env inventory gives two admin addresses (k8s_gitops_source_openbao_admin_address); refused" >&2; exit 1; }
 fi
 [[ -z $admin || $admin =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
   { echo "secrets-store: the store's admin address is not one IPv4 address; refused" >&2; exit 1; }

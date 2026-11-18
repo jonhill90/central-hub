@@ -8,6 +8,10 @@
 #   4. The store's admin address (D-0062): admin_address in the settings, with the store on, sets
 #      k8s_gitops_source_openbao_admin_address; one in the source inventory is dropped; one that is not IPv4, is loopback
 #      or comes without box_cidr stops the build.
+#   5. With the store on, box_cidr set and no admin_address in the settings, dev picks its own from the dev inventory's
+#      k8s_control_plane_lb_cidr: the highest address below the pool's last that is not the Gateway's, never printed.
+#      No pool in the inventory: none. A settings value wins. A pool that is not IPv4 or is under 4 addresses stops
+#      the build. Without box_cidr: no address, and a line that names box_cidr.
 # Usage: .github/hosts-check/tests/test_rebuild_box_inventory.sh   (needs python3 with PyYAML)
 set -uo pipefail
 src=$(cd "$(dirname "$0")/../../.." && pwd)/hosts/ansible/roles/agent_box/files/rebuild.sh
@@ -98,5 +102,31 @@ build true '{"admin_address": "192.0.2.40"}'; r4+="$rc:$admin:$(grep -c 'with bo
 if [[ $r4 == "0:192.0.2.40 0:none 0:none 1:missing:1 1:missing:1 1:missing:1 1:missing:1 1:missing:1" ]]; then
   ok "4. admin_address with the store on: set, the source's dropped; a range, loopback, a name, IPv6 or no box_cidr stops the build"
 else bad "4. $r4"; fi
+
+# 5
+pool() { # pool gateway: the source inventory with dev's pool and Gateway address
+  python3 -I -c '
+import sys, yaml
+d = yaml.safe_load(open(sys.argv[1]))
+v = d["all"]["children"]["k8s_nodes"]["vars"]
+if sys.argv[2]: v["k8s_control_plane_lb_cidr"] = sys.argv[2]
+if sys.argv[3]: v["k8s_gitops_source_gateway_address"] = sys.argv[3]
+yaml.safe_dump(d, open(sys.argv[1], "w"))' "$t/src.yml" "$1" "$2"
+}
+cp "$t/src.yml" "$t/src.keep"
+r5=""
+pool 192.0.2.224/27 192.0.2.230; build true '{"box_cidr": "192.0.2.30/32"}'; r5+="$rc:$admin:$(grep -c "dev's own pick" "$t/err"):$(grep -c '192.0.2.254' "$t/err") "
+cp "$t/src.keep" "$t/src.yml"; pool 192.0.2.224/27 192.0.2.254; build true '{"box_cidr": "192.0.2.30/32"}'; r5+="$rc:$admin "
+build true '{"box_cidr": "192.0.2.30/32", "admin_address": "192.0.2.240"}'; r5+="$rc:$admin "
+build false '{"box_cidr": "192.0.2.30/32"}'; r5+="$rc:$admin "
+build true '{"address": "bao.invalid"}'; r5+="$rc:$admin:$(grep -c 'box_cidr is not in the secrets store' "$t/err") "
+cp "$t/src.keep" "$t/src.yml"; build true '{"box_cidr": "192.0.2.30/32"}'; r5+="$rc:$admin "
+for p in 192.0.2.224/31 2001:db8::/120 192.0.2.225/27; do
+  cp "$t/src.keep" "$t/src.yml"; pool "$p" ""; build true '{"box_cidr": "192.0.2.30/32"}'; r5+="$rc:$admin:$(grep -c 'k8s_control_plane_lb_cidr' "$t/err") "
+done
+cp "$t/src.keep" "$t/src.yml"
+if [[ $r5 == "0:192.0.2.254:1:0 0:192.0.2.253 0:192.0.2.240 0:none 0:none:1 0:none 1:missing:1 1:missing:1 1:missing:1 " ]]; then
+  ok "5. no admin_address: dev's own pick below the pool's last, never the Gateway's, never printed; none without a pool, the store or box_cidr (named); a settings value wins; a bad pool stops the build"
+else bad "5. $r5 $(cat "$t/err")"; fi
 
 exit $fail

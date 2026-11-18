@@ -375,6 +375,34 @@ def walk(n):
     elif isinstance(n, list):
         for i in n: walk(i)
 walk(d)
+def value(n, name):
+    if isinstance(n, dict):
+        if name in n and isinstance(n[name], str): return n[name]
+        for x in n.values():
+            r = value(x, name)
+            if r is not None: return r
+    return None
+# No admin_address in the settings: dev picks its own, so dev renders the admin path with no hand step (D-0062; the
+# owner's ask to rebuild from code with no hand steps). It is the highest address of dev's load-balancer pool below
+# the pool's last, other than dev's Gateway address, from the dev inventory's own values only (the role's default
+# pool is prod's). The address is private, so it is never printed. A settings value still wins.
+if in_cluster == "true" and box_cidr and not admin:
+    pool = value(d, "k8s_control_plane_lb_cidr")
+    gw = value(d, "k8s_gitops_source_gateway_address") or ""
+    if pool:
+        try: net = ipaddress.ip_network(pool, strict=True)
+        except ValueError: net = None
+        if net is None or net.version != 4 or net.num_addresses < 4:
+            print("rebuild: k8s_control_plane_lb_cidr in the dev inventory must be one IPv4 network of 4 addresses or more", file=sys.stderr); sys.exit(1)
+        for i in range(int(net.broadcast_address) - 1, int(net.network_address), -1):
+            if str(ipaddress.ip_address(i)) != gw:
+                admin = str(ipaddress.ip_address(i))
+                break
+        print("rebuild: admin_address: none in the settings, so dev's own pick from its load-balancer pool", file=sys.stderr)
+if in_cluster == "true" and not box_cidr:
+    # The admin address needs the box's /32, the one source its NetworkPolicy lets in, and box_cidr is set only from
+    # the controller (agent_box_secrets_store in the private inventory). Not a stop: dev is built without the path.
+    print("rebuild: no admin address: box_cidr is not in the secrets store's settings; set it from the controller (agent_box_secrets_store)", file=sys.stderr)
 def find(n, name):
     if isinstance(n, dict):
         if name in n and isinstance(n[name], dict): return n[name]
