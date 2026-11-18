@@ -13,6 +13,8 @@
 #   8. seal-copy: reads the seal node's key over ssh and keeps it as the SOPS copy, never printed; a second run only
 #      compares; a node key that differs fails and replaces nothing; a key that is not 32 bytes is refused; seal with a
 #      SOPS copy already kept makes no new key.
+#   9. reset-failed-start deletes only the pod and its claim, and only when the log shows the self-init failure, the pod
+#      is not Ready and the store is not initialized.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -180,5 +182,41 @@ if [[ $r8a -eq 0 && $o8a == *"PASS: seal-copy: the seal node's key is kept"* && 
       $after_seal == "$before" ]]; then
   ok "8. seal-copy keeps the node's key once and then only compares; a differing or short key keeps nothing; seal makes no new key"
 else bad "8. $r8a [$c8a] $o8a | $r8b $o8b | $r8c $o8c | $r8d $o8d | $r8e $c8e"; fi
+
+# 9: a stand-in `ansible` that answers kubectl as one JSON document, from the files READY, LOGS and STATUS in $t/kube.
+mkdir -p "$t/kube"
+cat > "$venv/ansible" <<EOF
+#!/usr/bin/env python3
+import json, os, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+d = "$t/kube/"
+def rd(n):
+    return open(d + n).read() if os.path.exists(d + n) else ""
+rc, out = 0, ""
+if " delete " in a: out = "deleted"
+elif " logs " in a: out = rd("LOGS")
+elif " exec " in a: out = rd("STATUS")
+elif "jsonpath" in a: out = rd("READY")
+else: out = "pod/openbao-0 0/1 Running\\npvc/data-openbao-0 Bound"
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": rc, "stdout": out, "stderr": ""}}}]}]}))
+EOF
+chmod +x "$venv/ansible"
+printf '#!/bin/bash\nexit 0\n' > "$t/bin/sleep"; chmod +x "$t/bin/sleep"
+settings '{"seal_node":"wk-a","store_host":"bao.invalid","box_cidr":"192.0.2.50/32"}'
+inventory "${prod_inv[@]}"
+kube() { printf '%s' "$1" > "$t/kube/READY"; printf '%s' "$2" > "$t/kube/LOGS"; printf '%s' "$3" > "$t/kube/STATUS"; : > "$t/kcalls"; }
+fl='[ERROR] self-initialization failed: refusing to unseal'
+kube false "$fl" '{"initialized": false}'; run reset-failed-start; g_rc=$rc g_out=$out; g_del=$(grep -c ' delete ' "$t/kcalls")
+g_names=$(grep ' delete ' "$t/kcalls" | sed 's/.*delete //; s/ --wait.*//' | tr '\n' ' ')
+kube true "$fl" '{"initialized": false}'; run reset-failed-start; r_rc=$rc; r_del=$(grep -c ' delete ' "$t/kcalls")
+kube false 'some other error' '{"initialized": false}'; run reset-failed-start; l_rc=$rc; l_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" '{"initialized": true}'; run reset-failed-start; i_rc=$rc; i_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" ''; run reset-failed-start; e_rc=$rc; e_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" 'not json at all'; run reset-failed-start; j_rc=$rc; j_del=$(grep -c ' delete ' "$t/kcalls")
+if [[ $g_rc -eq 0 && $g_del -eq 2 && $g_names == "pod/openbao-0 pvc/data-openbao-0 " && $g_out == *"before:"* && $g_out == *"after"* &&
+      $r_rc -ne 0 && $r_del -eq 0 && $l_rc -ne 0 && $l_del -eq 0 && $i_rc -ne 0 && $i_del -eq 0 && $e_rc -ne 0 && $e_del -eq 0 && $j_rc -ne 0 && $j_del -eq 0 ]]; then
+  ok "9. reset-failed-start: deletes the pod and its claim only on a confirmed failed start; Ready, no log line, initialized, an empty status and an unreadable status each refuse"
+else bad "9. good rc=$g_rc del=$g_del [$g_names] ready rc=$r_rc/$r_del log rc=$l_rc/$l_del init rc=$i_rc/$i_del empty rc=$e_rc/$e_del junk rc=$j_rc/$j_del"; fi
 
 exit "$fail"

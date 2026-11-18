@@ -1,0 +1,21 @@
+# Checks that need no password: Keycloak answers its sign-in page for each app's client and redirect
+# (a wrong client or redirect makes it refuse), Argo CD names its Keycloak provider and sends its
+# login to Keycloak, and Jellyfin's SSO plugin starts a login at Keycloak. The Job runs inside c1, so
+# it needs no route from the agent box to the Gateway. It reads and changes nothing in the cluster.
+# Every value here is public; the zone comes only from the root Application (CLAUDE.md rule 4).
+zone: ""
+name: login-probe
+realm: lab
+# Keycloak's own service name, reached over plain HTTP inside the cluster.
+keycloak: http://sso-service.identity.svc:8080
+argocd: http://argocd-server.argocd.svc:80
+jellyfin: http://jellyfin.media.svc:8096
+gateway:
+  hostSuffix: apps.c1.prod
+# client id, app host label, redirect path (the realm's clients, realm.yaml.j2).
+clients:
+  - {id: argocd, host: argocd, redirect: /auth/callback}
+  - {id: jellyfin, host: jellyfin, redirect: /sso/OID/redirect/keycloak}
+  - {id: grafana, host: grafana, redirect: /login/generic_oauth}
+# Same curl image as the Jellyfin setup Job (curl 8.22.0, 2026-09-02, STD-0003).
+image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777

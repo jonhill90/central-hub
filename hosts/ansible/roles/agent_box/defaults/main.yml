@@ -37,7 +37,7 @@ agent_box_wrappers:
   # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal and
   # seal-copy passes the owner's tap id, which the wrapper checks; key prints only the public half.
   - name: openbao-prod
-    args: [key, check, "seal *", "seal-copy *", gitops, handover, log]
+    args: [key, check, "seal *", "seal-copy *", gitops, handover, reset-failed-start, log]
   # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
   # the owner's tap id, which the wrapper checks; the run needs dev to have passed at the same commit first.
   - name: rebuild-prod
@@ -64,8 +64,8 @@ agent_box_wrappers:
   # user, so no other wrapper can read the host key. Sessions may check and read the log; only the workflow's
   # runner (lab-proxmox-host.yml) may apply.
   - name: proxmox-host
-    args: [check, "apply *", log]
-    session_args: [check, log]
+    args: [check, "check *", "apply *", log]
+    session_args: [check, "check *", log]
     runner: true
     run_as: hostops   # the same name as agent_box_host_user
   # The tailnet policy file's pipeline job (D-0041, D-0046 rule 4): the same shape as tailnet-stack, for
