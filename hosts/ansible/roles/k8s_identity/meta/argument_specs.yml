@@ -37,6 +37,7 @@ argument_specs:
         type: str
         default: keycloak
         description: "The provider name in Jellyfin's SSO plugin, the last part of its redirect paths."
+      k8s_identity_jellyfin_root_ca_file: {type: str, default: "", description: "Controller path of the lab CA's public root (PEM). Copied to Secret jellyfin-lab-root-ca in Jellyfin's namespace, and Jellyfin is restarted when it changes. Empty: no Secret, no Jellyfin sign-in."}
       k8s_identity_otp_group: {type: str, default: lab-admins, description: "Members get a TOTP seed and are asked for a code at every sign-in."}
       k8s_identity_otp_digits: {type: int, default: 6, description: "Digits in a TOTP code."}
       k8s_identity_otp_period: {type: int, default: 30, description: "Seconds a TOTP code lasts."}
