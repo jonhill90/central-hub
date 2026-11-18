@@ -66,7 +66,8 @@ agent_box_wrappers:
     args: ["add *", "show *", "halt *", "resume *"]
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
-    args: [up, rebuild, teardown, identity, log, diag]
+    # up and rebuild may name the commit to build (`*`); the wrapper takes only 7 to 40 hex digits on main.
+    args: [up, "up *", rebuild, "rebuild *", teardown, identity, log, diag]
     runner: true   # the dev redeploy workflow (.github/workflows/lab-redeploy-dev.yml)
   # The tailnet stack's pipeline job (D-0041): plan, then apply the saved plan the owner's card named. The
   # workflow lab-tailnet.yml calls it on the runner; the card ID and the plan hash are required arguments.
