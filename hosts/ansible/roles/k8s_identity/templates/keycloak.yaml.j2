@@ -26,6 +26,13 @@ spec:
     headers: xforwarded
   ingress:
     enabled: false
+{% if k8s_identity_metrics | bool %}
+  # Metrics on the management port, /metrics, with user event counts (k8s_identity_metrics). Server options
+  # go through additionalOptions (the operator's Keycloak CRD, 26.8.1).
+  additionalOptions:
+    - {name: metrics-enabled, value: "true"}
+    - {name: event-metrics-user-enabled, value: "true"}
+{% endif %}
   resources:
     requests: {cpu: 200m, memory: 768Mi}
     limits: {memory: 1536Mi}

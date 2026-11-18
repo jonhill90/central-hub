@@ -16,6 +16,13 @@ k8s_identity_name: sso
 # Private, no default; the inventory template sets it to k8s_gateway_zone.
 # k8s_identity_zone: <zone>
 
+# Keycloak's metrics for Prometheus: options metrics-enabled and event-metrics-user-enabled, so the management
+# port (9000) serves /metrics with keycloak_user_events_total (logins and their errors, per realm) beside the JVM
+# and database pool metrics (Keycloak 26.8.1 guides observability/configuration-metrics and event-metrics). The
+# ServiceMonitor, alerts and dashboard row are in apps/monitoring-extras (keycloak.metrics there must match).
+# Changing it restarts the Keycloak pod once; it touches no realm. false: no metrics.
+k8s_identity_metrics: true
+
 # The realm lab apps sign in to.
 k8s_identity_realm: lab
 
