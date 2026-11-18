@@ -514,6 +514,62 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
   [ "$free" -ge "$min" ] || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB"; return 1; }
 }
 
+# Dev only, the last stage of a full dev run, before the end-of-run teardown: what an agent read by hand after a run,
+# read inside it, so it is in the short log when ephemeral-dev tears dev down. One Job from the suspended panel-check
+# CronJob (the dashboard's panels, then the alerts firing), whether Prometheus scrapes namespaces openbao and media, and
+# the store's StatefulSet's age (a [5m] rate has no data in a store's first minutes). It changes nothing but that one
+# Job. A fresh store has no snapshot until its CronJob's first tick at minute 17, so its snapshot panel has no data;
+# the stage says so. It never fails the run: each `read:` line says what was read, or why it was not.
+PANELS_WAIT_STEPS=${PANELS_WAIT_STEPS:-34}
+PANELS_WAIT_S=${PANELS_WAIT_S:-10}
+panels_read() {
+  local job out state="" i q ts age
+  local prom=/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:9090/proxy/api/v1/query
+  job=panel-check-run-$(printf '%s' "$stamp" | tr 'A-Z' 'a-z')
+  if kc -n monitoring create job --from=cronjob/panel-check "$job" >/dev/null; then
+    for i in $(seq 1 "$PANELS_WAIT_STEPS"); do
+      out=$(kc -n monitoring get job "$job" -o 'jsonpath={.status.succeeded}/{.status.failed}' 2>/dev/null) || out=""
+      case $out in 1/*) state="ended, every panel has data"; break ;; */1) state="ended with panels that have no data (the Job failed)"; break ;; esac
+      [ "$i" -eq "$PANELS_WAIT_STEPS" ] || sleep "$PANELS_WAIT_S"
+    done
+    echo "read: panel check $job ${state:-had no result after $PANELS_WAIT_STEPS reads}"
+    { kc -n monitoring logs "job/$job" 2>&1 || true; } | cut -c1-300 | head -n 60 | sed 's/^/read: /'
+  else
+    echo "read: panel check not run: no Job could be made from CronJob monitoring/panel-check"
+  fi
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then
+    ts=$(kc -n openbao get cronjob openbao-snapshot -o 'jsonpath={.status.lastSuccessfulTime}' 2>/dev/null) || ts=""
+    [ -n "$ts" ] || echo "read: no snapshot of this store has run yet (CronJob openbao/openbao-snapshot ticks at minute 17), so the snapshot panel's no data is expected"
+  fi
+  for q in openbao media; do
+    out=$(kc get --raw "$prom?query=up%7Bnamespace%3D%22$q%22%7D" 2>/dev/null) || out=""
+    printf '%s' "$out" | python3 -I -c '
+import json, sys
+q = sys.argv[1]
+try:
+    res = json.load(sys.stdin)["data"]["result"]
+except Exception:
+    print("read: up{namespace=\"%s\"}: not read, Prometheus did not answer through the API server" % q); sys.exit(0)
+if not res:
+    print("read: up{namespace=\"%s\"}: no series, Prometheus scrapes nothing there" % q)
+for r in res[:10]:
+    m = r.get("metric", {})
+    print("read: up{namespace=\"%s\"}: job=%s pod=%s up=%s" % (q, m.get("job", "-"), m.get("pod", "-"), r.get("value", ["", "?"])[1]))
+' "$q" || true
+  done
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then
+    ts=$(kc -n openbao get statefulset openbao -o 'jsonpath={.metadata.creationTimestamp}' 2>/dev/null) || ts=""
+    if [ -n "$ts" ] && age=$(( $(date +%s) - $(date -d "$ts" +%s 2>/dev/null || echo x) )) 2>/dev/null; then
+      echo "read: StatefulSet openbao/openbao made $ts, ${age}s before this read"
+    else
+      echo "read: StatefulSet openbao/openbao: not read"
+    fi
+  else
+    echo "read: StatefulSet openbao/openbao: not read, the store is not in this cluster (no OPENBAO_SEAL_KEY_FILE)"
+  fi
+  return 0
+}
+
 run_stage() {
   # The dev-only measurement of the agent box's source address through the Gateway (MEASURE-1): on dev with
   # the in-cluster store (its seal key file set), every render of the root Application passes openbaoMeasure,
@@ -672,6 +728,9 @@ run_stage() {
       fi
       hook "$RESTORE_HOOK" ;;
     checks) checks ;;
+    panels)
+      [ "$ENV_NAME" = dev ] || { echo "the panels stage runs on dev only"; return 1; }
+      panels_read ;;
     *) echo "unknown stage: $1"; return 1 ;;
   esac
 }
@@ -681,10 +740,11 @@ stages=${STAGES:-$default_stages}
 # A dev run ends with its own HTTPS and sign-in proof, on the stages the box's wrapper sets, with no change to
 # that wrapper: the box's own checkout of main supplies them.
 # With the in-cluster store, the measurement (MEASURE-1) runs after dev-ca, which first makes the https listener,
-# and the admin hand-over after it; the apps' secrets go into SOPS and OpenBao last, after identity-keycloak.
+# and the admin hand-over after it; the apps' secrets go into SOPS and OpenBao after identity-keycloak. The
+# read-only `panels` stage is last on every full dev run, so its reads come before the end-of-run teardown.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then
-  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak app-secrets"
-  else stages="$stages dev-ca identity-keycloak"; fi
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak app-secrets panels"
+  else stages="$stages dev-ca identity-keycloak panels"; fi
 fi
 # A dev run starts with the memory preflight, after a teardown has freed its VMs and before it makes new ones.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="preflight $stages"; fi
@@ -798,6 +858,10 @@ for s in $stages; do
   if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ] || [ "$s" = app-secrets ]; then
     sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: (openbao-handover|app-secrets):|^(PASS: compare:|DIFF: |secrets-store: put-apps:)' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
+  fi
+  # The panels stage's read lines: the panel check's output, the two up reads and the store's age.
+  if [ "$s" = panels ]; then
+    awk '$0 == "===== panels" {on=1; next} /^===== / {on=0} on' "$raw" | grep -E '^read: ' | sed "s/^/  $s: /" >> "$log" || true
   fi
   # The gateway stage's L2 lines (D-0062): each LoadBalancer Service, its address, policy and lease holder.
   if [ "$s" = gateway ]; then
