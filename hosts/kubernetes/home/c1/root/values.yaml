@@ -264,6 +264,9 @@ apps:
   monitoring-extras:
     namespace: monitoring
     local: true
+    # The OpenBao alerts only where the store is in the cluster (D-0058).
+    switchParameters:
+      openbao.inCluster: openbaoInCluster
     wave: 1
     autoSync: true
     prune: true
