@@ -8,7 +8,7 @@ outcome: Argo CD's Application `jellyfin` is Synced and Healthy, the setup Job h
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1); External Secrets running on c1
 private-values: [k8s_gateway_zone]
 files: [hosts/kubernetes/home/c1/apps/jellyfin/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_jellyfin/, hosts/ansible/playbooks/k8s-jellyfin.yml]
-last-tested: 2026-11-10, steps 1 to 3, 5 and 6 on c1, auto-sync took over at 03:31 UTC (#140), Synced and Healthy, the setup Job ran and the pod did not restart; admin signed in with the password from Secret media/jellyfin-admin through the API (AuthenticateByName 200, IsAdministrator true); k8s-jellyfin.yml changed=0 twice. Step 4 (password to the env file) not yet run
+last-tested: 2026-11-10 (sign-in through Keycloak: written 2026-11-18, not run; see its section), steps 1 to 3, 5 and 6 on c1, auto-sync took over at 03:31 UTC (#140), Synced and Healthy, the setup Job ran and the pod did not restart; admin signed in with the password from Secret media/jellyfin-admin through the API (AuthenticateByName 200, IsAdministrator true); k8s-jellyfin.yml changed=0 twice. Step 4 (password to the env file) not yet run
 superseded-by:
 ---
 
@@ -72,6 +72,27 @@ The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `jellyfin`
 6. By PR, set `autoSync: true` for `jellyfin` in `hosts/kubernetes/home/c1/root/values.yaml`. In the private inventory, set `k8s_jellyfin_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-jellyfin.yml`.
    why: from now on git is the source of truth. The role skips every task, so it never fights Argo CD.
    expect: the play reports `changed=0`, and a second run reports `changed=0` too.
+
+## Sign in through Keycloak
+
+Jellyfin has no OpenID Connect of its own, so the chart adds it by plugin. Everything is in git; nothing is clicked.
+
+| Part | Where | What it does |
+|---|---|---|
+| Plugin | init container `sso-plugin` in `templates/jellyfin.yaml`, `files/install-sso-plugin.sh` | Before Jellyfin starts, downloads the SSO Authentication plugin 5.1.1 from K0lin's fork of `9p4/jellyfin-plugin-sso` (the original is archived and stops at Jellyfin 10.11; 5.1.1's `meta.json` has `targetAbi` 12.0.0.0), checks its sha256 and unpacks it into `/config/plugins`. |
+| Trust | the same init container, ConfigMap `jellyfin-lab-root-ca` | Keycloak's certificate comes from the lab CA. The container adds the lab root's public certificate to a copy of the public bundle and Jellyfin reads it through `SSL_CERT_FILE`. |
+| Provider | the setup Job's `sso` steps in `files/setup.sh` | After each sync: signs in as `admin`, waits until the plugin is loaded, writes provider `keycloak` (`POST /sso/OID/Add/keycloak`: issuer `https://sso.apps.c1.prod.<zone>/realms/lab`, client `jellyfin`, secret from `media/jellyfin-sso`, roles from the realm's `roles` claim; `admin` makes a Jellyfin admin) and reads it back. The call overwrites, so a second run changes nothing. |
+
+Its settings are the `sso:` block of `apps/jellyfin/values.yaml`. The client and the Secret `media/jellyfin-sso` come from `playbooks/k8s-identity.yml` ([set-up-lab-sign-in.md](set-up-lab-sign-in.md)); with no secret yet the Job skips this part and says so.
+
+Prove it without typing a password:
+
+1. `kubectl -n media logs job/jellyfin-setup` ends with `done: sso provider keycloak set`.
+2. `kubectl -n media logs deploy/jellyfin -c jellyfin` shows `Loaded plugin: SSO Authentication`.
+3. From a machine that can reach the app: `curl -s https://jellyfin.apps.c1.prod.<zone>/sso/OID/start/keycloak` answers a redirect whose `Location` starts with the issuer above.
+4. The owner's sign-in with the Keycloak button, once, is the end-to-end proof.
+
+If it fails: **"plugin ... is not loaded"** means Jellyfin refused it (read the Jellyfin log for `targetAbi`); **a TLS error in the Jellyfin log** means the lab root is missing from the bundle (`kubectl -n media logs deploy/jellyfin -c sso-plugin` shows the certificate count). The way back is `sso.enabled: false` by PR; the plugin folder stays on the claim and does nothing.
 
 ## Change it
 

@@ -41,6 +41,17 @@ spec:
             - {name: LIBRARY_NAME, value: {{ $s.library.name | quote }}}
             - {name: LIBRARY_TYPE, value: {{ $s.library.collectionType | quote }}}
             - {name: LIBRARY_PATH, value: {{ $s.library.path | quote }}}
+            {{- if .Values.sso.enabled }}
+            - {name: SSO_ENABLED, value: "true"}
+            - {name: SSO_PROVIDER, value: {{ .Values.sso.provider | quote }}}
+            - {name: SSO_ISSUER, value: "https://{{ .Values.sso.issuerHost }}.{{ .Values.gateway.hostSuffix }}.{{ required "zone: set by the root Application" .Values.zone }}/realms/{{ .Values.sso.realm }}"}
+            - {name: SSO_CLIENT_ID, value: {{ .Values.sso.clientId | quote }}}
+            - {name: SSO_SECRET_NAME, value: {{ .Values.sso.secretName | quote }}}
+            - {name: SSO_ROLES, value: {{ join " " .Values.sso.roles | quote }}}
+            - {name: SSO_ADMIN_ROLES, value: {{ join " " .Values.sso.adminRoles | quote }}}
+            - name: SSO_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ .Values.sso.secretName }}, key: client-secret, optional: true}}
+            {{- end }}
             - name: ADMIN_USER
               valueFrom: {secretKeyRef: {name: {{ .Values.name }}-admin, key: username}}
             - name: ADMIN_PASSWORD

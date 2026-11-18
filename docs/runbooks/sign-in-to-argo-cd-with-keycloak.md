@@ -8,7 +8,7 @@ outcome: Argo CD's sign-in page shows "Lab sign-in"; a lab-admins member gets ad
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; Secret argocd/argocd-sso made by playbooks/k8s-identity.yml
 private-values: [k8s_gateway_zone, k8s_gitops_ui_zone]
 files: [hosts/ansible/roles/k8s_gitops/tasks/sso.yml, hosts/ansible/roles/k8s_gitops/templates/argocd-sso.yaml.j2, hosts/ansible/roles/k8s_gitops/defaults/main.yml]
-last-tested: not yet run on c1. CI renders the manifest with sign-in on and off and checks both against the ConfigMap schema
+last-tested: 2026-11-18, an agent lane from the agent box, read only (c1-read, no password typed): on c1 `argocd-cm` holds `url` and `oidc.config` (issuer realm lab, clientID argocd, secret read from `argocd-sso`, the lab root as `rootCA`), `argocd-rbac-cm` holds the group table below, and `argocd-server` logs `sso: true`. The sign-in page, a lab-admins sign-in and step 4 not run. CI renders the manifest with sign-in on and off and checks both against the ConfigMap schema
 superseded-by:
 ---
 

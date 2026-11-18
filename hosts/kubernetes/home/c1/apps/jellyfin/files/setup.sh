@@ -14,11 +14,7 @@ until curl -fsS -o /dev/null "$BASE/health"; do
   sleep 5
 done
 
-if api "$BASE/System/Info/Public" | grep -q '"StartupWizardCompleted":true'; then
-  echo "wizard already completed: nothing to do"
-  exit 0
-fi
-
+wizard() {
 echo "1/4 server settings"
 printf '{"ServerName":"%s","UICulture":"%s","MetadataCountryCode":"%s","PreferredMetadataLanguage":"%s"}' \
   "$SERVER_NAME" "$UI_CULTURE" "$COUNTRY" "$LANGUAGE" |
@@ -48,3 +44,40 @@ echo "4/4 complete"
 api -X POST -o /dev/null "$BASE/Startup/Complete"
 api "$BASE/System/Info/Public" | grep -q '"StartupWizardCompleted":true'
 echo "done: wizard completed, admin user $ADMIN_USER, library $LIBRARY_NAME at $LIBRARY_PATH"
+}
+
+if api "$BASE/System/Info/Public" | grep -q '"StartupWizardCompleted":true'; then
+  echo "wizard already completed"
+else
+  wizard
+fi
+
+# Sign-in through Keycloak: write the SSO plugin's provider config (POST /sso/OID/Add/<provider>
+# adds or overwrites it, so every run leaves the same state). Skipped when SSO is off or the client
+# secret Secret does not exist yet. Neither the token nor the secret is printed.
+[ "${SSO_ENABLED:-false}" = "true" ] || { echo "sso: off, nothing to do"; exit 0; }
+[ -n "${SSO_CLIENT_SECRET:-}" ] || { echo "sso: Secret $SSO_SECRET_NAME has no client-secret yet: skipped (run playbooks/k8s-identity.yml)" >&2; exit 0; }
+
+auth='Authorization: MediaBrowser Client="setup", Device="job", DeviceId="jellyfin-setup", Version="1"'
+echo "sso 1/3 sign in as $ADMIN_USER"
+token=$(printf '{"Username":"%s","Pw":"%s"}' "$ADMIN_USER" "$ADMIN_PASSWORD" |
+  api -X POST -H "$auth" --data-binary @- "$BASE/Users/AuthenticateByName" |
+  sed -n 's/.*"AccessToken":"\([^"]*\)".*/\1/p')
+[ -n "$token" ] || { echo "sso: sign-in as $ADMIN_USER failed" >&2; exit 1; }
+authz="Authorization: MediaBrowser Client=\"setup\", Device=\"job\", DeviceId=\"jellyfin-setup\", Version=\"1\", Token=\"$token\""
+
+echo "sso 2/3 plugin loaded?"
+i=0
+until api -H "$authz" "$BASE/Plugins" | grep -q '"Name":"SSO Authentication"'; do
+  i=$((i + 1)); [ "$i" -lt 12 ] || { echo "sso: plugin SSO Authentication is not loaded (see the Jellyfin log: targetAbi, meta.json)" >&2; exit 1; }
+  sleep 5
+done
+
+echo "sso 3/3 provider $SSO_PROVIDER"
+roles=$(printf '"%s",' $SSO_ROLES | sed 's/,$//')
+admin_roles=$(printf '"%s",' $SSO_ADMIN_ROLES | sed 's/,$//')
+printf '{"oidEndpoint":"%s","oidClientId":"%s","oidSecret":"%s","enabled":true,"enableAuthorization":true,"enableAllFolders":true,"roleClaim":"roles","roles":[%s],"adminRoles":[%s],"preserveAdminPermissions":true,"defaultUsernameClaim":"preferred_username","schemeOverride":"https"}' \
+  "$SSO_ISSUER" "$SSO_CLIENT_ID" "$SSO_CLIENT_SECRET" "$roles" "$admin_roles" |
+  api -X POST -H "$authz" -o /dev/null --data-binary @- "$BASE/sso/OID/Add/$SSO_PROVIDER"
+api -H "$authz" "$BASE/sso/OID/Get" | grep -q "\"$SSO_PROVIDER\"" || { echo "sso: provider $SSO_PROVIDER not listed after the write" >&2; exit 1; }
+echo "done: sso provider $SSO_PROVIDER set, issuer $SSO_ISSUER"

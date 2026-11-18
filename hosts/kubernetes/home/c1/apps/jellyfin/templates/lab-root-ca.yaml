@@ -1,0 +1,11 @@
+{{- if .Values.sso.enabled }}
+# The lab CA's public root certificate (a certificate, not a key). Mounted only by the init container.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-lab-root-ca
+  namespace: {{ .Release.Namespace }}
+data:
+  lab-root-ca.pem: |
+{{ .Files.Get "files/lab-root-ca.pem" | indent 4 }}
+{{- end }}
