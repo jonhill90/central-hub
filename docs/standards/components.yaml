@@ -426,6 +426,28 @@ components:
     verdict: pass
     sources: [pypi:httpx]
     checked: 2026-11-14
+  - name: Playwright
+    kind: software
+    used-for: headless browser control for the agent box's web sign-in proofs (web-shot), with its Python dependencies greenlet, pyee and typing_extensions
+    licence: Apache-2.0 (Playwright for Python); greenlet MIT and PSF-2.0, pyee MIT, typing_extensions PSF-2.0
+    licence-source: https://raw.githubusercontent.com/microsoft/playwright-python/main/LICENSE
+    paid-edition: none found on the project's pages; Microsoft's paid Playwright Testing is a hosted test-run service we do not use, and the library has no gated features
+    paid-edition-source: https://playwright.dev/python/docs/browsers
+    verdict: pass
+    sources: [pypi:playwright, pypi:greenlet, pypi:pyee, pypi:typing-extensions, pypi:typing_extensions]
+    checked: 2026-11-18
+  - name: Chromium
+    kind: software
+    used-for: the browser Playwright drives on the agent box
+    licence: BSD-3-Clause (Chromium's own LICENSE file; the build also carries third-party code under its own licences)
+    licence-source: https://chromium.googlesource.com/chromium/src/+/refs/heads/main/LICENSE
+    paid-edition: none found; Playwright uses the open-source Chromium builds, not branded Chrome
+    paid-edition-source: https://playwright.dev/python/docs/browsers
+    verdict: pass
+    sources: []
+    carries: []
+    not-detected: "`playwright install chromium` (tasks/main.yml) downloads it from Playwright's own host at run time, so no address or package name in the code names it"
+    checked: 2026-11-18
   - name: lychee
     kind: software
     used-for: the docs link check in CI

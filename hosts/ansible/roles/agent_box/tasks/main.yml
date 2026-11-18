@@ -363,9 +363,19 @@
     state: present
   tags: [wrappers]
 
-- name: Playwright, in its own virtual environment
+- name: Playwright's hash-pinned requirements, root-owned
+  ansible.builtin.copy:
+    src: playwright-requirements.txt
+    dest: "{{ agent_box_libexec_dir }}/playwright-requirements.txt"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [wrappers]
+
+- name: Playwright, in its own virtual environment (every file checked against its hash)
   ansible.builtin.pip:
-    name: ["playwright==1.65.2"]
+    requirements: "{{ agent_box_libexec_dir }}/playwright-requirements.txt"
+    extra_args: --require-hashes
     virtualenv: "{{ agent_box_libexec_dir }}/playwright-venv"
     virtualenv_command: python3 -m venv
   when: not ansible_check_mode
@@ -395,7 +405,19 @@
     content: |
       #!/bin/sh
       # Made by the agent_box role. web-shot <url> <out.png> [--insecure]
-      PLAYWRIGHT_BROWSERS_PATH={{ agent_box_libexec_dir }}/playwright-browsers exec {{ agent_box_libexec_dir }}/playwright-venv/bin/python -I {{ agent_box_libexec_dir }}/web-shot.py "$@"
+      export PLAYWRIGHT_BROWSERS_PATH={{ agent_box_libexec_dir }}/playwright-browsers
+      exec {{ agent_box_libexec_dir }}/playwright-venv/bin/python -I {{ agent_box_libexec_dir }}/web-shot.py "$@"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+# lab-proof: a read-only check, run by sessions as themselves (no key), that each c1 app name resolves through the
+# lab DNS and that the Gateway's certificate verifies against the box's trust store (docs/runbooks/set-up-the-agent-box.md).
+- name: lab-proof on the path, root-owned
+  ansible.builtin.copy:
+    src: lab-proof.sh
+    dest: "{{ agent_box_front_dir }}/lab-proof"
     owner: root
     group: root
     mode: "0755"
