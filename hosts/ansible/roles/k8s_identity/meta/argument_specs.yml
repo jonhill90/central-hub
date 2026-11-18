@@ -69,6 +69,15 @@ argument_specs:
         elements: str
         default: []
         description: "The secrets store's web page names, for client openbao (the owner's sign-in, agent pick 233). Empty: no client. Private."
+      k8s_identity_opnsense_hosts:
+        type: list
+        elements: str
+        default: []
+        description: "The OPNsense web GUI names, for client opnsense (plugin os-openid-connect, D-0037 rule 5). Empty: no client. Private."
+      k8s_identity_opnsense_app_code:
+        type: str
+        default: keycloak
+        description: "The plugin's application code; the last part of its callback paths."
       k8s_identity_oidc_handoff_file:
         type: str
         default: ""

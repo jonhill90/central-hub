@@ -1,7 +1,7 @@
 ---
 record: D-0037
 batch: RB-0211 (2026-11-14), with the FOSS check RB-0208 of the same night for licences and paid tiers
-researched: 2026-11-14
+researched: 2026-11-14 to 2026-11-18
 method: Proxmox and OPNsense documentation and source files fetched and read; the candidate OPNsense routes' repositories cloned and their licence files and build files read; the role run against stand-ins
 checks: the reviewing agent re-read the Proxmox sources and Keycloak's OTPCredentialModel.java and DefaultAuthenticationFlows.java at 26.4.0 and at 26.8.1, the lab's version, and found the cited lines the same (2026-11-14)
 ---
@@ -50,18 +50,52 @@ How do the Proxmox host and OPNsense sign their administrators in through Keyclo
     - A changed username claim stopped the run, and a wrong redirect failed the proof.
     - [measured, 2026-11-14]
 17. **Proxmox keeps an OpenID Connect realm's client secret in `domains.cfg`.** `client-key` is a property of the OpenID realm type [2], and realms live in `/etc/pve/domains.cfg` [15]. All files in `/etc/pve` belong to root with group www-data, which "can read most files"; only files below `/etc/pve/priv/` are root's alone [15]. So the secret is readable by root and group www-data at rest, whatever way it is set.
+18. **A second community OIDC plugin, `os-openid-connect`, is BSD-2-Clause** [16].
+    - Its README at `v1.0.0-beta5` calls it "a pre-release package for OPNsense Community Edition 26.1 and 26.7", says "Every accepted external identity is durably bound by its exact issuer and subject to a local OPNsense account", and "Your normal local OPNsense login remains available as the recovery path" [16].
+    - It is installed by `pkg add` of a release package, with a published checksum and a GitHub build attestation; it "does not add a package repository or enable automatic updates" [17]. Removing it "leaves its settings in `/conf/config.xml`" [17].
+    - The repository names no paid edition [16].
+    - Its releases are five betas, `v1.0.0-beta1` to `v1.0.0-beta5`, all marked pre-release, from one maintainer [16].
+    - The forum thread announcing it, of 2026-08-26, asks for testers and security review; no OPNsense staff reply is in it [18].
+    - [measured: the repository's LICENSE, README and releases page, 2026-11-17]
+19. **OPNsense's plugin repository has no OIDC plugin.** Issue search in `opnsense/plugins` finds no OIDC plugin request or pull request, and the users page lists "OpenID connect (BE only)" next to LDAP and RADIUS [19]. [measured: GitHub issue search, 2026-11-17]
+20. **The `v1.0.0-beta5` package matches its tag's source.** Tag `v1.0.0-beta5` is commit `e7f5f7b3ed0dc6d71463bd7cbc08d65cbc794e12`. The package `os-openid-connect-1.0.0.beta5.pkg` has SHA-256 `4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406a41b117c`, the value on the release page, and its files under `usr/local/opnsense`, its two `sbin` scripts and its cron file are byte-identical to `src/opnsense` and `packaging/watch` at that commit. [measured: download, `sha256sum`, `diff -rq` and `cmp`, 2026-11-17]
+21. **Its sign-in code, read at that commit** (paths under `src/opnsense/mvc/app/`):
+    - ID tokens: only RS, PS, ES and EdDSA signatures, and only an algorithm the provider advertises (`library/OPNsense/OpenIDConnect/JwtVerifier.php` lines 36-41, 91-99); exact `iss`, `aud` holding the client id, `azp` when needed, `exp`, `iat`, `nbf` and `nonce` (lines 456-508).
+    - The flow: code with PKCE `S256`, `state` compared in constant time, and each login transaction used once (`RelyingParty.php` 207-235, 1099-1119; `TransactionRegistry.php` 64-110).
+    - The account: disabled and expired local accounts are refused, and root unless allowed (`library/OPNsense/Auth/OpenIDConnect.php` 2415-2443). The connector never checks a password (163-170).
+    - Outbound: https only, no redirects, TLS verified (`HttpClient.php` 243, 346-349, 359).
+    - [measured: a clone at the tag, 2026-11-17]
+22. **It runs a root job every minute.** `openid-connect-refresh` fetches the provider's discovery document and keys when the cache is near stale. It also probes pushed authorization requests when its PAR mode is `auto`, which is the default (`OpenIDConnect.php` 1220, 4401-4403), and polls shared signals only when they are on (`packaging/watch/openid-connect-refresh` lines 72-172). A nightly `openid-connect-watch` hashes the core files the plugin hooks into and fetches the login page over loopback (`openid-connect-watch` lines 112, 145). [measured: the same clone]
+23. **It plugs into core's own interfaces.** The connector implements core's `IAuthConnector` and the login button `SSOProviders\ISSOContainer`; it patches no core file (`OpenIDConnect.php` 53; `Auth/SSOProviders/OpenIDConnectContainer.php` 44). [measured: the same clone]
+24. **With Keycloak, every sign-in uses DPoP, and the plugin has no setting to turn it off.** The plugin uses DPoP whenever the provider's discovery lists ES256 for DPoP and the profile is not authentik (`RelyingParty.php` 1129-1132, `Auth/OpenIDConnect.php` 3721-3727, `ProviderMetadata.php` 396-398); its Keycloak guide says the same [20]. Keycloak 26.8.1 has DPoP on by default and lists its algorithms in discovery when it is on [21]. The DPoP code, read at the tag:
+    - The proof key is a P-256 key made at the first sign-in, kept in `/var/db/openid-connect/dpop` (folder 0700, files 0600, written to a temporary file and renamed, under a lock), rotated after 90 days, with at most five retired keys kept (`DpopKeyStore.php` 37-39, 83-97, 313-358).
+    - Each proof is ES256 with a fresh random `jti`, the method, the URL without its query, `iat`, the access token's hash when one is sent, and a checked nonce (`DpopProof.php` 80-123, 138-143). The authorization request carries the key's thumbprint as `dpop_jkt` (`RelyingParty.php` 237-239).
+    - A request retries once on a `use_dpop_nonce` challenge and then fails (`RelyingParty.php` 936-997). A Bearer token where DPoP was asked is refused (566-571).
+    - DPoP headers are treated as sensitive by the HTTP client (`HttpClient.php` 367-375).
+    - [measured: the same clone]
+25. **The proof passed on a test OPNsense.** On 2026-11-18, `opnsense-test` ran plan, apply, configure, prove and destroy from the agent box at central-hub d333499, 13:02 to 13:13 UTC. It used OPNsense 26.1.11 on dev, os-openid-connect 1.0.0.beta5 (the pinned SHA-256), and a throwaway Keycloak 26.8.1 with DPoP on. Every proof item held, and prove ended with rc 0 [22]:
+    - A Keycloak user, once an admin bound it to a local admin account, signed in and landed on the dashboard.
+    - The sign-in used DPoP: one key file, mode 0600, in the plugin's 0700 store. The plugin's own sign-in test reported the DPoP sender constraint as `Used`.
+    - An unknown Keycloak user got no session and waited as one pending request. Binding an identity to root (uid 0) was refused.
+    - With the plugin's server disabled, root signed in by password through the Local Database.
+    - The plugin's settings were in `/conf/config.xml`: admission `approval`, root not allowed, PAR disabled, shared signals and logout notifications off, no account made on first login.
+    - The VM used 522 of 3035 MiB.
+    - The firmware API installs only a package from the repository, by name, so a local package goes on by `pkg add` over SSH. This was read from core's code, not run.
+    - [measured: the run's output, 2026-11-18]
 
 ## How the decision used it
 
 - **Proxmox (rule 1).** Findings 1 and 2 are why the role makes `lab-admins-sso` and `lab-viewers-sso` itself and leaves group autocreate off. Finding 3 is why the role stops on a changed username claim and why realm lab sets `editUsernameAllowed: false`. Finding 4 is why the client allows exactly `https://<name>`.
 - **Second factor (rule 6).** Findings 14 and 15 are why each admin's seed is imported as a base32 OTP credential and no custom flow is needed.
 - **FOSS only (rule 4).** Findings 6 to 8 put Proxmox and Keycloak inside the owner's FOSS rule, and OPNsense's own OIDC outside it.
-- **OPNsense's route (rule 5).** Findings 9 to 13 lead to LDAP; the directory is compared in its own record's evidence. The plugin is not open source (10). The RADIUS plugin trails the Keycloak version and would need a custom Keycloak image (11). The proxy is not a sign-in (13).
+- **OPNsense's route (rule 5).** Findings 18 to 23 lead to os-openid-connect: it is FOSS, on the community edition, and a sign-in at Keycloak, and its sign-in code and package hold up to a read. Findings 20 to 22 are why the package is pinned and checked, and why PAR mode is set to `disabled`. Finding 24 is why DPoP stays on: it can't be turned off in the plugin, and its code was read. Finding 25 is the test OPNsense proof that rule 5 asks for before the lab firewall. Findings 18 and 19 are why the record calls it a beta from one maintainer and proves it on a test OPNsense first. The other routes: Lachee's plugin is not open source (10). The RADIUS plugin trails the Keycloak version and would need a custom Keycloak image (11). LDAP needs a new directory (9, 12). The proxy is not a sign-in (13).
 
 ## Limits
 
 - Nothing has run on the real host yet: no sign-in through Keycloak, no reach from the host to c1's Gateway on 443.
-- The OPNsense LDAP route is read from the documentation, not tried. lldap's `memberOf` support is not checked here.
+- The os-openid-connect route has run only on the test OPNsense, against a throwaway Keycloak (finding 25); not on the lab firewall or against realm lab on c1. The code read covers the sign-in path and the root jobs, and its DPoP code (finding 24), not its PAR, back-channel logout, shared-signals and setup code, which the record leaves off.
+- Root's password sign-in was proven with the plugin's server disabled and Keycloak still running (finding 25), not with Keycloak stopped, which D-0037 rule 5 asks for. That check has not run yet.
+- The OPNsense LDAP and RADIUS routes are read from the documentation, not tried.
 - Findings 14 and 15 were read at Keycloak's tag 26.4.0; the lab runs 26.8.1, which CI's realm test (Keycloak 26.8.1) exercises for the direct grant flow only. The browser flow's code prompt is proven only by the first real sign-in.
 - WebAuthn and passkeys were not researched.
 - The paid tiers come from the vendors' own pages as the FOSS audit read them; nothing was bought or tried.
@@ -83,3 +117,10 @@ How do the Proxmox host and OPNsense sign their administrators in through Keyclo
 13. Keycloak 26.4.0, `server-spi/src/main/java/org/keycloak/models/credential/OTPCredentialModel.java`: <https://github.com/keycloak/keycloak/blob/26.4.0/server-spi/src/main/java/org/keycloak/models/credential/OTPCredentialModel.java>
 14. Keycloak 26.4.0, `server-spi-private/src/main/java/org/keycloak/models/utils/DefaultAuthenticationFlows.java`: <https://github.com/keycloak/keycloak/blob/26.4.0/server-spi-private/src/main/java/org/keycloak/models/utils/DefaultAuthenticationFlows.java>
 15. Proxmox VE wiki, "Proxmox Cluster File System (pmxcfs)", file access rights and files: <https://pve.proxmox.com/wiki/Proxmox_Cluster_File_System_(pmxcfs)>
+16. os-openid-connect at `v1.0.0-beta5`, README and LICENSE: <https://github.com/jpawlowski/opnsense-openid-connect/tree/v1.0.0-beta5>; releases: <https://github.com/jpawlowski/opnsense-openid-connect/releases>
+17. os-openid-connect, `docs/setup/install.md`: <https://github.com/jpawlowski/opnsense-openid-connect/blob/v1.0.0-beta5/docs/setup/install.md>
+18. OPNsense forum, "Beta testers and reviewers wanted: OpenID Connect for OPNsense Community Edition": <https://forum.opnsense.org/index.php?topic=52815.0>
+19. OPNsense docs, "Access / User Management": <https://docs.opnsense.org/manual/users.html>
+20. os-openid-connect, `docs/providers/keycloak.md`: <https://github.com/jpawlowski/opnsense-openid-connect/blob/v1.0.0-beta5/docs/providers/keycloak.md>
+21. Keycloak 26.8.1, `common/src/main/java/org/keycloak/common/Profile.java` (feature `DPOP`, `Type.DEFAULT`) and `services/src/main/java/org/keycloak/protocol/oidc/OIDCWellKnownProvider.java` (DPoP algorithms listed when the feature is on): <https://github.com/keycloak/keycloak/blob/26.8.1/common/src/main/java/org/keycloak/common/Profile.java>, <https://github.com/keycloak/keycloak/blob/26.8.1/services/src/main/java/org/keycloak/protocol/oidc/OIDCWellKnownProvider.java>
+22. central-hub, `hosts/ansible/roles/agent_box/files/opnsense-test-prove.py` at d333499, the proof that printed each item; its runbook: [prove-opnsense-sign-in-on-dev.md](../runbooks/prove-opnsense-sign-in-on-dev.md)

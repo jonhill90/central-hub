@@ -197,6 +197,31 @@ spec:
         webOrigins: {{ k8s_identity_proxmox_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
 {{ mappers }}
 {% endif %}
+{% if k8s_identity_opnsense_hosts | length > 0 %}
+      # The OPNsense web GUI, through the community plugin os-openid-connect (D-0037 rule 5; its docs/setup/README.md,
+      # "Register the provider application"): confidential, code flow with PKCE S256, exact redirects. The plugin
+      # calls back on /api/openidconnect/auth/callback/<application code>, and its lifecycle test returns to
+      # /api/openidconnect/auth/logouttestcallback/<application code>. The plugin, not Keycloak, decides who gets
+      # in: every identity is bound to a local OPNsense account, and unknown ones wait for an admin's approval.
+      - clientId: opnsense
+        name: OPNsense
+        protocol: openid-connect
+        publicClient: false
+        clientAuthenticatorType: client-secret
+        secret: "${OPNSENSE_CLIENT_SECRET}"
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
+        rootUrl: https://{{ k8s_identity_opnsense_hosts | first }}
+        baseUrl: /
+        redirectUris: {{ k8s_identity_opnsense_hosts | map('regex_replace', '^(.*)$', 'https://\\1/api/openidconnect/auth/callback/' ~ k8s_identity_opnsense_app_code) | list | to_json }}
+        webOrigins: {{ k8s_identity_opnsense_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
+        attributes:
+          pkce.code.challenge.method: S256
+          post.logout.redirect.uris: "{{ k8s_identity_opnsense_hosts | map('regex_replace', '^(.*)$', 'https://\\1/api/openidconnect/auth/logouttestcallback/' ~ k8s_identity_opnsense_app_code) | join('##') }}"
+{{ mappers }}
+{% endif %}
 {% if k8s_identity_openbao_hosts | length > 0 %}
       # The secrets store's web page, through its OIDC login (agent pick 233; OpenBao docs,
       # "OIDC provider configuration", Keycloak): confidential, code flow. The page calls back on
