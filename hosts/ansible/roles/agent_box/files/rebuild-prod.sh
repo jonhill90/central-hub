@@ -4,17 +4,19 @@
 # "Rebuild prod from the box"). It runs hosts/rebuild-k8s.sh, the same one command as dev, as user `keys` through sudo,
 # so the session never sees the Proxmox token, the node key, the seal key, the backup certificates or the inventory.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check|rebuild <tap id>|log
-# check    read-only. Names every file the run needs that is missing; builds the box's copies of the prod inventory
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check|rebuild <tap id> <commit>|log
+# check    read-only, at main's newest commit. Names every file the run needs that is missing; builds the box's copies of the prod inventory
 #          and tfvars and refuses one that still points at the Mac; plans OpenTofu with the Mac's own tfvars on the
 #          box's state and needs "no changes" (the box's state is the live prod); lists what a teardown would destroy
 #          and refuses anything but node VMs 200-249, VM 258 or 259, or more VMs than the tfvars declare; reaches every
 #          prod node with the box's key; checks that neither the box's default route nor its route to the Proxmox
 #          API goes through a node VM (D-0035 rule 5); and needs the newest dev run to have passed every stage at this commit
 #          (D-0035 rule 3(a)). One PASS or FAIL line each; exit 0 only when every line passes.
-# rebuild  <tap id> is the owner's tap on a decision card that names rebuild-prod and this main commit (D-0035
-#          rule 3(b), D-0042 rule 6: a delete); it is written to the log. It runs check, then the checks before a
-#          teardown (D-0035 rule 5), each of which must pass or nothing is destroyed:
+# rebuild  <tap id> is the owner's go that names rebuild-prod and <commit> (D-0035 rule 3(b), D-0042 rule 6: a delete);
+#          it is written to the log. <commit> (7 to 40 hex digits) must be on main; the run builds that commit, not
+#          main's newest, so a merge after the dev run and the go neither moves the code under the go nor forces dev
+#          again. It runs check at that commit, then the checks before a teardown (D-0035 rule 5), each of which must
+#          pass or nothing is destroyed:
 #            1. a backup of every prod node now, and the restore tests on it (k8s-backup.yml --tags drill), so the
 #               newest snapshot is minutes old and its restore test passed, each test naming the snapshot it restored
 #               into a temporary folder (never over prod's data);
@@ -55,15 +57,17 @@ export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/rebuild-prod TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: rebuild-prod check|rebuild <tap id>|log" >&2; exit 2; }
+usage() { echo "usage: rebuild-prod check|rebuild <tap id> <commit>|log" >&2; exit 2; }
 action=${1:-}
 tap=''
+want=''
 case $action in
   check | log) [[ $# -eq 1 ]] || usage ;;
   rebuild)
-    [[ $# -eq 2 ]] || usage
-    tap=$2
+    [[ $# -eq 3 ]] || usage
+    tap=$2 want=$3
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "rebuild-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
+    [[ $want =~ ^[0-9a-f]{7,40}$ ]] || { echo "rebuild-prod: the commit is the one the owner's go names, 7 to 40 hex digits" >&2; exit 2; }
     ;;
   *) usage ;;
 esac
@@ -87,7 +91,16 @@ exec 9>"$work/state/rebuild.lock"
 flock -n 9 || { echo "rebuild-prod: another rebuild run (dev or prod) is going; try again when it ends" >&2; exit 1; }
 [[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
 git -C "$repo" fetch --quiet origin main
-git -C "$repo" checkout --quiet --detach origin/main
+if [[ -n $want ]]; then
+  # The commit the go names, and only if it is on main: never a branch, never a commit main does not hold.
+  pinned=$(git -C "$repo" rev-parse --quiet --verify "$want^{commit}" 2>/dev/null) ||
+    { echo "rebuild-prod: commit $want is not in the box's checkout of main" >&2; exit 1; }
+  git -C "$repo" merge-base --is-ancestor "$pinned" origin/main ||
+    { echo "rebuild-prod: commit $want is not on main" >&2; exit 1; }
+  git -C "$repo" checkout --quiet --detach "$pinned"
+else
+  git -C "$repo" checkout --quiet --detach origin/main
+fi
 commit=$(git -C "$repo" rev-parse HEAD)
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -396,7 +409,7 @@ fi
 # --- 5. Dev first (D-0035 rule 3(a)): the newest dev run passed every stage at this same commit.
 # The newest run that did more than a teardown, the way `rebuild log` reads it (rebuild.sh): a teardown run after a
 # good full run must not hide that run. Dev is torn down after a run: hosts/rebuild-k8s.sh runner_run_teardown tears it
-# down at the end of a run that stopped VM 300 under ephemeral-dev, and the runbook's hand `rebuild teardown` does the same.
+# down at the end of every full run under ephemeral-dev, pass or fail, and the runbook's hand `rebuild teardown` does the same.
 # A teardown-only log alone, or newest with no full run behind it, still fails below.
 dev_short=""
 while read -r f; do

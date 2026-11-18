@@ -19,6 +19,7 @@
 #   8. log prints the run's lines.
 #   9. The Mac's inventory with no labels gets the role's default (env prod); the sign-in CA is mapped.
 #  10. The sign-in theme folder keeps its own name under prod/identity-theme/; one with no login/theme.properties is refused.
+#  11. rebuild builds the commit the go names, which must be on main; check reads main's newest.
 #  12. The backup target: sftp to the Proxmox host is refused at check; with no Azure sign-in no certificate is carried.
 # Usage: .github/hosts-check/tests/test_rebuild_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
@@ -43,7 +44,10 @@ case "\$*" in
           printf '%s\n' '#!/bin/bash' 'echo "one-command \$*" >> $t/calls' 'cp "\$1/rebuild.env" $t/seen-rebuild.env' \
             'f=\$(sed -n "s/^OPENBAO_SEAL_KEY_FILE=//p" "\$1/rebuild.env"); [ -s "\$f" ] && echo "seal-in-memory \$(wc -c < "\$f")" >> $t/calls' \
             'exit \${ONE_RC:-0}' > "\$d/hosts/rebuild-k8s.sh" ;;
+  *"rev-parse --quiet --verify "*) a="\${*: -1}"; a="\${a%^\{commit\}}"; [[ $sha == "\$a"* ]] && echo $sha || exit 1 ;;
   *rev-parse*) echo $sha ;;
+  *"merge-base --is-ancestor"*) exit \${NOT_ON_MAIN:-0} ;;
+  *" checkout "*) echo "git \${*: -1}" >> $t/gitcalls ;;
 esac
 exit 0
 EOF
@@ -154,11 +158,12 @@ seal_copy() { python3 -c 'import base64, json, sys; print(json.dumps({"data": ba
 
 # 1
 r1=""
-for args in "" "apply" "rebuild" "rebuild notatap" "rebuild cmsg_short" "check extra"; do
+for args in "" "apply" "rebuild" "rebuild notatap" "rebuild cmsg_short" "check extra" "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
+            "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ main" "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123"; do
   # shellcheck disable=SC2086
   run $args; r1+="$rc:${calls:-none} "
 done
-if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "1. usage errors, nothing run"; else bad "1. $r1"; fi
+if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "1. usage errors (rebuild with no commit, or one that is not 7 to 40 hex digits, too), nothing run"; else bad "1. $r1"; fi
 
 # 2
 run check
@@ -224,7 +229,7 @@ else bad "5. [$r5] $out"; fi
 
 # 6
 tap=cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ
-run rebuild "$tap"
+run rebuild "$tap" "${sha:0:12}"
 order=$(grep -oE '^(playbook [^ ]+ [^ ]+ [^ ]+|ssh [^ ]+ .*(backup.pem|seal-1.key)$|job [a-z-]+|one-command .*|seal-in-memory [0-9]+)' "$t/calls" |
   sed -E 's/^playbook -i [^ ]+ /playbook /; s/^ssh [^ ]+ (sudo -n )?cat .*\/(backup.pem|seal-1.key)$/ssh \2/' | uniq | tr '\n' '|')
 want="playbook playbooks/k8s-backup.yml|ssh backup.pem|ssh seal-1.key|job opnsense-backup|job opnsense-offbox|job secrets-bundle|job secrets-bundle-offbox|one-command $t/work/rebuild-prod --teardown|seal-in-memory 32|"
@@ -241,9 +246,9 @@ if [[ $rc -eq 0 && $order == "$want" && $calls == *"playbooks/k8s-backup.yml --t
 else bad "6. $rc [$order] [$stages] $out"; fi
 
 # 7
-printf 'J%.0s' {1..32} > "$t/node.key"; run rebuild "$tap"; r7a=$rc o7a=$out c7a=$calls
-printf 'K%.0s' {1..32} > "$t/node.key"; DRILL_RC=2 run rebuild "$tap"; r7b=$rc o7b=$out c7b=$calls
-DRILL_NOSNAP=1 run rebuild "$tap"; r7c=$rc o7c=$out c7c=$calls
+printf 'J%.0s' {1..32} > "$t/node.key"; run rebuild "$tap" "$sha"; r7a=$rc o7a=$out c7a=$calls
+printf 'K%.0s' {1..32} > "$t/node.key"; DRILL_RC=2 run rebuild "$tap" "$sha"; r7b=$rc o7b=$out c7b=$calls
+DRILL_NOSNAP=1 run rebuild "$tap" "$sha"; r7c=$rc o7c=$out c7c=$calls
 if [[ $r7a -eq 1 && $o7a == *"differs from the seal node's key"* && $c7a != *one-command* && $c7a != *job* &&
       $r7b -eq 1 && $o7b == *"backup and restore test before the teardown failed"* && $c7b != *one-command* && $c7b != *"ssh "*backup.pem* &&
       $r7c -eq 1 && $o7c == *"named no tested volume snapshot"* && $c7c != *one-command* && $c7c != *"ssh "*backup.pem* ]]; then
@@ -284,16 +289,26 @@ if [[ $o10a == *"k8s_identity_theme_dir is $t/keys/prod/identity-theme/brand-the
       $r10c -eq 0 && $o10c != *FAIL* && $th == "$t/keys/prod/identity-theme/brand-theme" ]]; then
   ok "10. the theme folder keeps its name under prod/identity-theme/, and one with no login/theme.properties is refused"
 else bad "10. [$th] $o10a | $o10b | $r10c $o10c"; fi
+# 11. rebuild builds the commit the go names, never main's newest, and only a commit on main.
+inventory; rm -f "$t/gitcalls"; run check; g11a=$(cat "$t/gitcalls" 2>/dev/null)
+rm -f "$t/gitcalls"; run rebuild "$tap" "${sha:0:12}"; r11b=$rc g11b=$(cat "$t/gitcalls" 2>/dev/null)
+NOT_ON_MAIN=1 run rebuild "$tap" "$sha"; r11c=$rc o11c=$out c11c=$calls
+run rebuild "$tap" fedcba9; r11d=$rc o11d=$out c11d=$calls
+if [[ $g11a == "git origin/main" && $r11b -eq 0 && $g11b == "git $sha" &&
+      $r11c -eq 1 && $o11c == *"commit $sha is not on main"* && -z $c11c &&
+      $r11d -eq 1 && $o11d == *"commit fedcba9 is not in the box's checkout of main"* && -z $c11d ]]; then
+  ok "11. rebuild checks out the commit the go names (check, main's newest); a commit not on main, or unknown, runs nothing"
+else bad "11. [$g11a] $r11b [$g11b] | $r11c $o11c [$c11c] | $r11d $o11d [$c11d]"; fi
 # 12. The backup target: the Proxmox host over sftp is refused before anything is destroyed (the box can't let the rebuilt
 # nodes' keys in on the host); with no Azure sign-in there is no certificate to carry, and the rebuild goes on without one.
 inventory "        k8s_backup_sftp: true"
 sed -i '/k8s_backup_azure_identity/d' "$t/keys/prod/inventory-hosts.yml"
 dev_log "$sha" "rebuild: all stages passed"
 run check; r12a=$rc o12a=$out
-run rebuild "$tap"; r12b=$rc c12b=$calls
+run rebuild "$tap" "$sha"; r12b=$rc c12b=$calls
 inventory; sed -i '/k8s_backup_azure_identity/d' "$t/keys/prod/inventory-hosts.yml"
 rm -rf "$t/keys/prod/backup-certs"
-run rebuild "$tap"; r12c=$rc o12c=$out c12c=$calls
+run rebuild "$tap" "$sha"; r12c=$rc o12c=$out c12c=$calls
 if [[ $r12a -eq 1 && $o12a == *"k8s_backup_sftp is true (the Proxmox host as the backup target): the box can't let the rebuilt nodes' new keys in"* &&
       $r12b -eq 1 && $c12b != *playbook* && $c12b != *one-command* &&
       $r12c -eq 0 && $o12c == *"no Azure sign-in on the prod nodes (k8s_backup_azure_identity off), so no backup certificate to carry"* &&
