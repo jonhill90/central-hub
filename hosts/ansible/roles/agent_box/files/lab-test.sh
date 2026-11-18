@@ -92,7 +92,7 @@ if [[ $action == log ]]; then
   cat "$logfile" 2>/dev/null || echo "lab-test: no log yet"
   [[ -f $settings ]] || exit 0
 fi
-[[ -f $settings ]] || { echo "lab-test: $settings is missing; set agent_box_lab_test in the inventory and run the agent_box role" >&2; exit 1; }
+[[ -f $settings ]] || { echo "lab-test: $settings is missing; run the agent_box role (it writes the file from the role's default or the inventory's agent_box_lab_test)" >&2; exit 1; }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
 
 # One Proxmox API call with the agents' token, as the dev rebuild makes them; the token goes to curl on stdin.
@@ -104,9 +104,25 @@ px_api() { # path
       curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" )
 }
 
+# The node the copy runs on: the settings' proxmox_node_name when the inventory sets one, otherwise the node the agents'
+# token sees at GET /nodes, read at run time and never written to a file in the repository. More or fewer than one node
+# is a refusal, because the wrapper will not guess between nodes.
+node_name() {
+  local n
+  n=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("proxmox_node_name", ""))' "$settings") || return 1
+  if [[ -z $n ]]; then
+    n=$(px_api nodes | python3 -I -c 'import json,sys
+names = [x["node"] for x in json.load(sys.stdin)["data"]]
+sys.exit("lab-test: GET /nodes shows %d nodes, not one" % len(names)) if len(names) != 1 else print(names[0])') \
+      || { echo "lab-test: the node name could not be read from GET /nodes" >&2; return 1; }
+  fi
+  [[ $n =~ ^[A-Za-z0-9-]+$ ]] || { echo "lab-test: the node name is not a plain host name" >&2; return 1; }
+  printf '%s\n' "$n"
+}
+
 if [[ $action == log ]]; then
   echo "lab-test: status at $(date -u +%FT%TZ)"
-  px_api "nodes/$(setting proxmox_node_name)/qemu/$VMID/status/current" | python3 -I -c 'import json, sys
+  px_api "nodes/$(node_name)/qemu/$VMID/status/current" | python3 -I -c 'import json, sys
 d = json.load(sys.stdin)["data"]
 print("lab-test: VM %s is %s, uptime %ss, memory %s of %s MiB" % (sys.argv[1], d.get("status"), d.get("uptime", 0),
       d.get("mem", 0) // 1048576, d.get("maxmem", 0) // 1048576))' "$VMID" 2>/dev/null \
@@ -155,7 +171,7 @@ guards() {
       "$OPNSENSE_TEST_VMID" <<<"$guests"; then
     echo "lab-test: refused, VM $OPNSENSE_TEST_VMID (the OPNsense test) exists; run opnsense-test destroy first"; return 1
   fi
-  node=$(setting proxmox_node_name)
+  node=$(node_name) || { echo "lab-test: refused, the node name could not be read"; return 1; }
   need=$(( $(setting memory_mb) + 2048 ))
   free=$(px_api "nodes/$node/status" | python3 -I -c 'import json,sys
 m = json.load(sys.stdin)["data"]["memory"]
@@ -208,7 +224,7 @@ prepared() {
 }
 
 write_vars() {
-  python3 -I - "$settings" "$iso_out" "$vars" <<'PY'
+  python3 -I - "$settings" "$iso_out" "$vars" "$(node_name)" <<'PY'
 import hashlib, json, sys
 s = json.load(open(sys.argv[1]))
 h = hashlib.sha256()
@@ -216,7 +232,7 @@ with open(sys.argv[2], "rb") as f:
     for b in iter(lambda: f.read(1 << 20), b""):
         h.update(b)
 json.dump({
-    "proxmox_node_name": s["proxmox_node_name"], "vnet": "dev",
+    "proxmox_node_name": sys.argv[4], "vnet": "dev",
     "installer_iso_path": sys.argv[2], "installer_iso_sha256": h.hexdigest(),
     "vm": {"name": s["name"], "vm_id": 256, "cores": s["cores"], "memory_mb": s["memory_mb"], "disk_gb": s["disk_gb"]},
 }, open(sys.argv[3], "w"))
@@ -280,7 +296,7 @@ tofu_run() {
 
 # What destroy leaves on the node's local storage, for the owner to remove. A read of the storage's content list.
 leftovers() {
-  px_api "nodes/$(setting proxmox_node_name)/storage/local/content" | python3 -I -c 'import json, sys
+  px_api "nodes/$(node_name)/storage/local/content" | python3 -I -c 'import json, sys
 for v in json.load(sys.stdin)["data"]:
     i = v.get("volid", "")
     if i and i == sys.argv[2]:

@@ -179,18 +179,22 @@ out=$(SHORT_NODE=keep-dev FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); che
 check "keep-dev says it stopped" "$out" "runner stop: VM 300 is stopped" ""
 out=$(SHORT_NODE=ephemeral-dev FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); check "ephemeral-dev stops VM 300 and the run passes" "$out" "short-node setting is ephemeral-dev" "refused"
 out=$(SHORT_NODE="" run dev 31 17); check "enough memory needs no setting" "$out" "rc=0" "refused"
-# The end-of-run teardown, only for ephemeral-dev on dev with this run's marker; a failed run reads the cluster first.
-td() { # marker content (empty: no marker), teardown rc, env, short-node value, "failed" or empty
+# The end-of-run teardown, for ephemeral-dev on dev: every full run, and a run with --only only with this run's marker;
+# a failed run reads the cluster first.
+td() { # marker content (empty: no marker), teardown rc, env, short-node value, "failed" or empty, --only value
   rm -rf "$t/envdir" "$t/tdcalls" "$t/rebuild.log"; mkdir -p "$t/envdir"; : > "$t/tdcalls"; : > "$t/rebuild.log"; [ -z "$1" ] || printf '%s\n' "$1" > "$t/envdir/ci-runner-stopped"
-  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 TDRC=${2:-0} ENV_NAME=${3:-dev} PREFLIGHT_SHORT_NODE=${4-ephemeral-dev} bash -c '. "$1"; kc() { echo "kc $*" >> "'"$t"'/tdcalls"; echo "fake-app Synced Healthy"; }; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; if runner_run_teardown "$2"; then echo "rc=0"; else echo "rc=$?"; fi' _ "$t/fn.sh" "${5:-}" 2>&1; }
+  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 only="${6:-}" TDRC=${2:-0} ENV_NAME=${3:-dev} PREFLIGHT_SHORT_NODE=${4-ephemeral-dev} bash -c '. "$1"; kc() { echo "kc $*" >> "'"$t"'/tdcalls"; echo "fake-app Synced Healthy"; }; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; if runner_run_teardown "$2"; then echo "rc=0"; else echo "rc=$?"; fi' _ "$t/fn.sh" "${5:-}" 2>&1; }
 out=$(td run1); check "this run's marker tears dev down" "$out" "this run stopped VM 300 and the short-node setting is ephemeral-dev, so dev is torn down now" "rc=1"
 check "the teardown stage ran" "$(cat "$t/tdcalls")" "teardown" ""
 check "and says rc=0" "$out" "teardown end rc=0" ""
 check "a pass reads no diag" "$(cat "$t/tdcalls")" "teardown" "kc "
-out=$(td run0); check "a marker from an earlier run is not this run's" "$out" "rc=0" "torn down"
-check "no teardown stage ran for it" "x$(cat "$t/tdcalls")" "x" "teardown"
-out=$(td ""); check "no marker means no teardown" "$out" "rc=0" "torn down"
-check "no teardown stage ran without a marker" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td run0); check "a full run with a marker from an earlier run still tears dev down: dev lasts one run" "$out" "ephemeral-dev, so dev lasts one run and is torn down now" "this run stopped"
+check "the teardown stage ran for it" "$(cat "$t/tdcalls")" "teardown" ""
+out=$(td ""); check "a full run that stopped nothing tears dev down too" "$out" "dev lasts one run and is torn down now" "rc=1"
+check "the teardown stage ran without a marker" "$(cat "$t/tdcalls")" "teardown" ""
+out=$(td "" 0 dev ephemeral-dev "" identity-keycloak); check "a run with --only and no marker of its own leaves dev up" "$out" "rc=0" "torn down"
+check "no teardown stage ran for the --only run" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td run0 0 dev ephemeral-dev "" identity-keycloak); check "a run with --only and an earlier run's marker leaves dev up" "$out" "rc=0" "torn down"
 out=$(td run1 1); check "a failed teardown is returned" "$out" "rc=1" "rc=0"
 out=$(td run1 0 prod); check "a prod env never tears down" "$out" "rc=0" "torn down"
 check "no teardown stage ran on prod" "x$(cat "$t/tdcalls")" "x" "teardown"

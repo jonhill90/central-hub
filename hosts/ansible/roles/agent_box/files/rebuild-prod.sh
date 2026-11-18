@@ -4,17 +4,19 @@
 # "Rebuild prod from the box"). It runs hosts/rebuild-k8s.sh, the same one command as dev, as user `keys` through sudo,
 # so the session never sees the Proxmox token, the node key, the seal key, the backup certificates or the inventory.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check|rebuild <tap id>|log
-# check    read-only. Names every file the run needs that is missing; builds the box's copies of the prod inventory
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check|rebuild <tap id> <commit>|log
+# check    read-only, at main's newest commit. Names every file the run needs that is missing; builds the box's copies of the prod inventory
 #          and tfvars and refuses one that still points at the Mac; plans OpenTofu with the Mac's own tfvars on the
 #          box's state and needs "no changes" (the box's state is the live prod); lists what a teardown would destroy
 #          and refuses anything but node VMs 200-249, VM 258 or 259, or more VMs than the tfvars declare; reaches every
 #          prod node with the box's key; checks that neither the box's default route nor its route to the Proxmox
 #          API goes through a node VM (D-0035 rule 5); and needs the newest dev run to have passed every stage at this commit
 #          (D-0035 rule 3(a)). One PASS or FAIL line each; exit 0 only when every line passes.
-# rebuild  <tap id> is the owner's tap on a decision card that names rebuild-prod and this main commit (D-0035
-#          rule 3(b), D-0042 rule 6: a delete); it is written to the log. It runs check, then the checks before a
-#          teardown (D-0035 rule 5), each of which must pass or nothing is destroyed:
+# rebuild  <tap id> is the owner's go that names rebuild-prod and <commit> (D-0035 rule 3(b), D-0042 rule 6: a delete);
+#          it is written to the log. <commit> (7 to 40 hex digits) must be on main; the run builds that commit, not
+#          main's newest, so a merge after the dev run and the go neither moves the code under the go nor forces dev
+#          again. It runs check at that commit, then the checks before a teardown (D-0035 rule 5), each of which must
+#          pass or nothing is destroyed:
 #            1. a backup of every prod node now, and the restore tests on it (k8s-backup.yml --tags drill), so the
 #               newest snapshot is minutes old and its restore test passed, each test naming the snapshot it restored
 #               into a temporary folder (never over prod's data);
@@ -55,15 +57,17 @@ export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/rebuild-prod TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: rebuild-prod check|rebuild <tap id>|log" >&2; exit 2; }
+usage() { echo "usage: rebuild-prod check|rebuild <tap id> <commit>|log" >&2; exit 2; }
 action=${1:-}
 tap=''
+want=''
 case $action in
   check | log) [[ $# -eq 1 ]] || usage ;;
   rebuild)
-    [[ $# -eq 2 ]] || usage
-    tap=$2
+    [[ $# -eq 3 ]] || usage
+    tap=$2 want=$3
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "rebuild-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
+    [[ $want =~ ^[0-9a-f]{7,40}$ ]] || { echo "rebuild-prod: the commit is the one the owner's go names, 7 to 40 hex digits" >&2; exit 2; }
     ;;
   *) usage ;;
 esac
@@ -87,7 +91,16 @@ exec 9>"$work/state/rebuild.lock"
 flock -n 9 || { echo "rebuild-prod: another rebuild run (dev or prod) is going; try again when it ends" >&2; exit 1; }
 [[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
 git -C "$repo" fetch --quiet origin main
-git -C "$repo" checkout --quiet --detach origin/main
+if [[ -n $want ]]; then
+  # The commit the go names, and only if it is on main: never a branch, never a commit main does not hold.
+  pinned=$(git -C "$repo" rev-parse --quiet --verify "$want^{commit}" 2>/dev/null) ||
+    { echo "rebuild-prod: commit $want is not in the box's checkout of main" >&2; exit 1; }
+  git -C "$repo" merge-base --is-ancestor "$pinned" origin/main ||
+    { echo "rebuild-prod: commit $want is not on main" >&2; exit 1; }
+  git -C "$repo" checkout --quiet --detach "$pinned"
+else
+  git -C "$repo" checkout --quiet --detach origin/main
+fi
 commit=$(git -C "$repo" rev-parse HEAD)
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -196,12 +209,15 @@ MAP = {"k8s_control_plane_encryption_key_file": pkeys + "/c1-secrets-encryption.
        "k8s_identity_values_file": pkeys + "/identity.env",
        "k8s_certs_lab_ca_cert_file": pkeys + "/lab-ca/c1-intermediate-chain.crt",
        "k8s_certs_lab_ca_key_file": pkeys + "/lab-ca/c1-intermediate.key",
-       "k8s_identity_theme_dir": pkeys + "/identity-theme",
        "k8s_gitops_sso_root_ca_file": pkeys + "/lab-ca/root.crt"}
+# The sign-in theme folder keeps its own name under <pkeys>/identity-theme/, where the controller's prod-files run copies it
+# (tasks/prod_files.yml) and c1-ansible.sh looks: the folder's name is the theme's name in Keycloak (k8s_identity vars).
 def remap(n):
     if isinstance(n, dict):
         for k in list(n):
             if k in MAP and isinstance(n[k], str) and n[k]: n[k] = MAP[k]
+            elif k == "k8s_identity_theme_dir" and isinstance(n[k], str) and n[k].strip("/"):
+                n[k] = pkeys + "/identity-theme/" + n[k].rstrip("/").rsplit("/", 1)[-1]
             else: remap(n[k])
     elif isinstance(n, list):
         for i in n: remap(i)
@@ -275,6 +291,11 @@ for h in sorted(nodes):
               "k8s_gitops_sso_root_ca_file"):
         p = v.get(k)
         if isinstance(p, str) and p and not os.path.exists(p): bad.append("%s is %s, which is not on the box" % (k, p))
+    # The identity role needs <theme>/login/theme.properties (k8s_identity tasks/theme.yml) and would stop on it only after
+    # the teardown, in stage identity.
+    th = v.get("k8s_identity_theme_dir")
+    if isinstance(th, str) and th and os.path.isdir(th) and not os.path.isfile(os.path.join(th, "login", "theme.properties")):
+        bad.append("k8s_identity_theme_dir is %s, which has no login/theme.properties" % th)
 for b in sorted(set(bad)): print("FAIL: rebuild-prod: inventory: " + b)
 if bad: sys.exit(1)
 print("PASS: rebuild-prod: %d prod nodes, plain ssh with the box's key, every private file at the box's copy" % len(nodes))
@@ -375,7 +396,7 @@ fi
 # --- 5. Dev first (D-0035 rule 3(a)): the newest dev run passed every stage at this same commit.
 # The newest run that did more than a teardown, the way `rebuild log` reads it (rebuild.sh): a teardown run after a
 # good full run must not hide that run. Dev is torn down after a run: hosts/rebuild-k8s.sh runner_run_teardown tears it
-# down at the end of a run that stopped VM 300 under ephemeral-dev, and the runbook's hand `rebuild teardown` does the same.
+# down at the end of every full run under ephemeral-dev, pass or fail, and the runbook's hand `rebuild teardown` does the same.
 # A teardown-only log alone, or newest with no full run behind it, still fails below.
 dev_short=""
 while read -r f; do

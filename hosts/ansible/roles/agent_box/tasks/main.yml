@@ -716,7 +716,7 @@
     file: lab_test.yml
     apply:
       tags: [wrappers]
-  when: agent_box_lab_test | length > 0
+  when: agent_box_lab_test_enabled | bool
   tags: [wrappers]
 
 - name: Weekly CI runner service and timer (pick 208)
