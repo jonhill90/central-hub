@@ -52,7 +52,7 @@ The 2026-11-10 card also offered "plan the move off it now", and the owner picke
 | Work | A Headscale design and a dev-VM test, after the work of finishing the lab | The same, then a cut-over during the lab build |
 | Risk | The lab depends on one company's closed server | A cut-over that goes wrong could cut off the way in; rule 5's lifeline and break-glass cover that |
 
-Keeping the exit ready is work the agents do under D-0042, because a design and a dev-VM test change nothing on the live tailnet: rule 21 research, then a design the three councils pass, then the test. It comes after finishing the lab. When the lab is built for real, the owner is asked again, as `foss-exceptions.yaml` says. A cut-over of the home tailnet is a tailnet change and stays theirs (D-0036 rule 8), as one decision card naming the commit.
+Keeping the exit ready is work the agents do under D-0042, because a design and a dev-VM test change nothing on the live tailnet: rule 21 research, then a design the reviewer clears, then the test. It comes after finishing the lab. When the lab is built for real, the owner is asked again, as `foss-exceptions.yaml` says. A cut-over of the home tailnet is a tailnet change and stays theirs (D-0036 rule 8), as one decision card naming the commit.
 
 Diagram: not applicable. One component is chosen, and its place in the network is drawn in STD-0002 and the remote-access runbooks.
 
