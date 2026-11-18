@@ -3,8 +3,8 @@
 # and the trust check's default names (role desktop, defaults/main.yml):
 #   1. the zone is read from the prod inventory's k8s_gateway_zone, wherever it sits, and passed as
 #      desktop_trust_check_zone; no zone, two different zones or a templated value stops the run;
-#   2. with a zone and desktop_trust_check_reach on, the role's default names are <app>.<zone> for the gateway name
-#      check's apps; with reach off (the default) or no zone, none.
+#   2. with a zone and desktop_trust_check_reach on (the default), the role's default names are <app>.<zone> for the
+#      gateway name check's apps; with reach off or no zone, none.
 # The wrapper's Python is cut from desktop.sh itself, so the test runs the shipped text.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -56,10 +56,10 @@ cat >"$t/render.yml" <<YML
 YML
 names() { ANSIBLE_LOCALHOST_WARNING=False ansible-playbook -i localhost, -e ansible_python_interpreter=auto_silent "$t/render.yml" "$@" >/dev/null && cat "$t/names.json"; }
 want='["grafana.lab.example.com", "argocd.lab.example.com", "sso.lab.example.com", "jellyfin.lab.example.com", "ntfy.lab.example.com"]'
-got=$(names -e desktop_trust_check_zone=lab.example.com -e desktop_trust_check_reach=true)
-[[ $got == "$want" ]] && echo "ok   with a zone and reach on, the names are each app's short name" || { echo "FAIL: names with a zone: $got"; fails=$((fails + 1)); }
 got=$(names -e desktop_trust_check_zone=lab.example.com)
-[[ $got == "[]" ]] && echo "ok   with a zone and reach off (the default), no names" || { echo "FAIL: names with reach off: $got"; fails=$((fails + 1)); }
+[[ $got == "$want" ]] && echo "ok   with a zone and reach on (the default), the names are each app's short name" || { echo "FAIL: names with a zone: $got"; fails=$((fails + 1)); }
+got=$(names -e desktop_trust_check_zone=lab.example.com -e desktop_trust_check_reach=false)
+[[ $got == "[]" ]] && echo "ok   with a zone and reach off, no names" || { echo "FAIL: names with reach off: $got"; fails=$((fails + 1)); }
 got=$(names)
 [[ $got == "[]" ]] && echo "ok   without a zone, no names" || { echo "FAIL: names without a zone: $got"; fails=$((fails + 1)); }
 gw=$(python3 -I -c 'import sys,yaml; print(" ".join(yaml.safe_load(open(sys.argv[1]))["nameCheck"]["apps"]))' "$here/hosts/kubernetes/home/c1/apps/gateway/values.yaml")

@@ -52,10 +52,10 @@ argument_specs:
         description: The lab's DNS zone (private). With it, the check opens <app>.<zone> for each app in desktop_trust_check_apps.
       desktop_trust_check_reach:
         type: bool
-        default: false
+        default: true
         description: >-
-          Open the apps' names from the VM. False until the lab firewall passes the desktop to the c1 Gateway on 443,
-          because the dev VLAN's rules pass nothing to prod and every name would fail as not reached.
+          Open the apps' names from the VM. Needs the lab firewall's pass from the desktop to the c1 Gateway on 443
+          (role opnsense_lab, app access); without it every name fails as not reached, so set it false there.
       desktop_trust_check_apps:
         type: list
         elements: str
