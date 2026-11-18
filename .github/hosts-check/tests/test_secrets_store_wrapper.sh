@@ -16,7 +16,10 @@
 #      value in SECRETS_STORE_RESOLVE (dev's names resolve to prod's Gateway).
 #   9. put-apps refuses until sops_copies is true and on a missing file or a bad line, before any write; otherwise each
 #      <name>=<value> line of the environment's secret-source file goes to the helper as put c1/<name> value, the value
-#      on stdin byte for byte (an = inside it kept), comments and blank lines skipped; --prod reads prod's file only.
+#      on stdin byte for byte (an = inside it kept), comments and blank lines skipped; then each KEY=value line of the
+#      identity values file as put c1/identity KEY; --prod reads prod's files only, and also puts the DNS-01 token,
+#      trimmed, as put c1/cloudflare-api-token value. A missing identity or token file, a bad identity line or a blank
+#      token writes nothing.
 # Usage: .github/hosts-check/tests/test_secrets_store_wrapper.sh   (needs python3 with PyYAML, openssl, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -145,6 +148,8 @@ else bad "8. $r8"; fi
 
 # 9
 settings '{"address": "bao-dev.invalid"}'
+mkdir -p "$t/work/rebuild-dev"
+printf '%s\n' 'GRAFANA_CLIENT_SECRET=g=1' 'PASSWORD_OWNER=pw-owner' > "$t/work/rebuild-dev/identity.env"
 printf '%s\n' 'ntfy-owner-password=pw1' > "$t/keys/rebuild-secret-source.env"
 run put-apps; r9a=$rc o9a=$out c9a=$calls
 settings '{"address": "bao-dev.invalid", "sops_copies": true}'
@@ -152,16 +157,30 @@ rm -f "$t/keys/rebuild-secret-source.env"; run put-apps; r9b=$rc o9b=$out c9b=$c
 printf '%s\n' 'ntfy-owner-password=pw1' 'Bad_Name=x' > "$t/keys/rebuild-secret-source.env"; run put-apps; r9c=$rc o9c=$out c9c=$calls
 printf '%s\n' '# a comment' '' 'ntfy-owner-password=pw1' '  ' 'healthchecks-ping-url=https://hc.invalid/a?b=c' > "$t/keys/rebuild-secret-source.env"
 printf '%s' 'ntfy-proxmox-token=tk_last' >> "$t/keys/rebuild-secret-source.env"
+mv "$t/work/rebuild-dev/identity.env" "$t/ident.keep"; run put-apps; r9f=$rc o9f=$out c9f=$calls
+printf '%s\n' 'GRAFANA_CLIENT_SECRET=g' 'lower_key=x' > "$t/work/rebuild-dev/identity.env"; run put-apps; r9g=$rc o9g=$out c9g=$calls
+mv "$t/ident.keep" "$t/work/rebuild-dev/identity.env"
 rm -f "$t/kv-log"; run put-apps; r9d=$rc o9d=$out log9d=$(cat "$t/kv-log" 2>/dev/null)
 printf '%s\n' 'share-pod-authkey=prodkey' > "$t/keys/prod/secret-source.env"
+printf '%s\n' 'ARGOCD_CLIENT_SECRET=a1' > "$t/keys/prod/identity.env"
 echo '{"address": "bao-prod.invalid", "sops_copies": true}' > "$t/work/secrets-store-prod.json"
-rm -f "$t/kv-log"; run --prod put-apps; r9e=$rc log9e=$(cat "$t/kv-log" 2>/dev/null)
+rm -f "$t/keys/prod/cloudflare-dns01-token.txt"; run --prod put-apps; r9h=$rc o9h=$out c9h=$calls
+printf '  \n' > "$t/keys/prod/cloudflare-dns01-token.txt"; run --prod put-apps; r9i=$rc o9i=$out c9i=$calls
+printf '  cf-token-1\n\n' > "$t/keys/prod/cloudflare-dns01-token.txt"
+rm -f "$t/kv-log"; run --prod put-apps; r9e=$rc o9e=$out log9e=$(cat "$t/kv-log" 2>/dev/null)
 want9d="c1/ntfy-owner-password value [pw1]"$'\n'"c1/healthchecks-ping-url value [https://hc.invalid/a?b=c]"$'\n'"c1/ntfy-proxmox-token value [tk_last]"
+want9d+=$'\n'"c1/identity GRAFANA_CLIENT_SECRET [g=1]"$'\n'"c1/identity PASSWORD_OWNER [pw-owner]"
+want9e="c1/share-pod-authkey value [prodkey]"$'\n'"c1/identity ARGOCD_CLIENT_SECRET [a1]"$'\n'"c1/cloudflare-api-token value [cf-token-1]"
 if [[ $r9a -ne 0 && $o9a == *"wait for the owner's tap"* && -z $c9a && $r9b -ne 0 && $o9b == *"is missing or empty"* && -z $c9b &&
       $r9c -ne 0 && $o9c == *"not <name>=<value>"* && -z $c9c && $r9d -eq 0 && $log9d == "$want9d" &&
-      $o9d == *"put-apps: 3 values from rebuild-secret-source.env"* && $o9d != *pw1* && $o9d != *tk_last* &&
-      $r9e -eq 0 && $log9e == "c1/share-pod-authkey value [prodkey]" ]]; then
-  ok "9. put-apps: refused without sops_copies, a file or good lines; otherwise each line as put c1/<name> value, value on stdin"
-else bad "9. $r9a $o9a | $r9b $o9b | $r9c $o9c | $r9d [$log9d] $o9d | $r9e [$log9e]"; fi
+      $o9d == *"put-apps: 3 values from rebuild-secret-source.env at c1/<name> key value, 2 from identity.env at c1/identity"* &&
+      $o9d != *pw1* && $o9d != *tk_last* && $o9d != *pw-owner* && $o9d != *"DNS-01"* &&
+      $r9f -ne 0 && $o9f == *"identity.env is missing or empty"* && -z $c9f &&
+      $r9g -ne 0 && $o9g == *"not KEY=<value>"* && -z $c9g &&
+      $r9h -ne 0 && $o9h == *"cloudflare-dns01-token.txt is missing or empty"* && -z $c9h &&
+      $r9i -ne 0 && $o9i == *"holds no single token"* && -z $c9i &&
+      $r9e -eq 0 && $log9e == "$want9e" && $o9e == *"and the DNS-01 token at c1/cloudflare-api-token"* && $o9e != *cf-token-1* ]]; then
+  ok "9. put-apps: refused without sops_copies, a file or good lines; otherwise each line as put c1/<name> value, each identity line as put c1/identity KEY, and on prod the trimmed DNS-01 token, value on stdin"
+else bad "9. $r9a $o9a | $r9b $o9b | $r9c $o9c | $r9d [$log9d] $o9d | $r9f $o9f | $r9g $o9g | $r9h $o9h | $r9i $o9i | $r9e [$log9e] $o9e"; fi
 
 exit $fail

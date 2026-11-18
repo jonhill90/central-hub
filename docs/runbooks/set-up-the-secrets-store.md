@@ -28,6 +28,7 @@ superseded-by:
 | The box's snapshot folder (`secrets-store-snapshots.sh`: rotate and keep) | No | `test_secrets_store_snapshots.sh` |
 | The box's `secrets-store` calls (`status`, `put`, `compare`, `reseed`, `restore`, `restore-rebuilt`) | No. They need the box's path to the store and, for `put`, `compare` and `reseed`, `sops_copies` on. | `test_secrets_store_wrapper.sh`, `test_secrets_store_kv.sh` (real SOPS and age against a stand-in OpenBao) and `test_secrets_store_restore.sh` |
 | The off-box copy | No | `test_secrets_store_offbox.sh` |
+| The apps' secrets from OpenBao (`put-apps`; roles `k8s_identity` and `k8s_certs` with the store on) | No | `test_secrets_store_wrapper.sh` (check 9) for `put-apps`; `test_identity_external_secrets.sh` for `k8s_identity`'s ExternalSecrets against a stand-in kubectl. `k8s_certs`'s ExternalSecret is checked only by the syntax check and `ansible-lint` |
 
 CI runs every test named here on each pull request (`.github/hosts-check/run.sh`). In [Rebuild the k8s layer with one command](rebuild-k8s-layer-with-one-command.md), the 05:30 run is in [Proven runs](rebuild-k8s-layer-with-one-command.md#proven-runs) and the 04:33 run in the worker row of [Dev node sizes](rebuild-k8s-layer-with-one-command.md#dev-node-sizes). Both runs' stage and PASS lines are in the box's `rebuild log`. The raw logs stay on the box (private), so there is no public link. When a part first runs on dev, change its row and `last-tested` to the date, the run and the commit.
 
@@ -190,8 +191,13 @@ The wrapper makes the admin AppRole's role ID and secret ID once in `/etc/agent-
   expect: seven `ok` step lines, then `PASS: restore-rebuilt: raft-<time>.snap restored (<how>) onto the rebuilt store; its mark reads back; hold removed`.
 - `put c1/<path> <key>`, the value on stdin (D-0058 rule 8), byte for byte, so give it with `printf '%s'`, not `echo`, which adds a newline: SOPS first, then the store. `secrets-store-kv.sh` writes the one key into `/etc/agent-keys/dev/openbao-kv.sops.json` with `sops set --value-stdin` (SOPS 3.13.3; the file is never decrypted and re-encrypted whole), encrypted to the box's own age identity, so it is in the box's daily bundle and never in git. A Mac key on the bundle opens the bundle, not this file (D-0058 rule 9). It makes the file the first time. Then it reads `kv/data/<path>`, merges the one key, and writes it back with check-and-set on the version it read (the admin policy has no `patch`), so a write in between is refused, not overwritten. Only paths under `c1/` (the ones External Secrets reads). No value, token or ID is in any process's arguments or the output.
   expect: `secrets-store put: kv/<path> key <key> written to SOPS, then OpenBao`. A failure names which write failed; after "SOPS is written, but ...", run `put` again, then `compare`.
-- `put-apps`: every value the apps read through store `c1` today, from the file the rebuild seeds namespace `secret-source` from (dev: `/etc/agent-keys/rebuild-secret-source.env`, the box's own; prod: `/etc/agent-keys/prod/secret-source.env`, the controller's copy), each written as `put c1/<name> value`: SOPS first, then the store. It checks every line's name before the first write, skips blank and `#` lines, and prints only names. [The apps' secrets](#the-apps-secrets) says when to run it.
-  expect: one `put` line per value, then `secrets-store: put-apps: <n> values from <file> written to SOPS, then OpenBao, at c1/<name> key value`.
+- `put-apps`: every value c1's apps read at run time, each through `put`, so SOPS first, then the store:
+  - every line of the file the rebuild seeds namespace `secret-source` from (dev: `/etc/agent-keys/rebuild-secret-source.env`, the box's own; prod: `/etc/agent-keys/prod/secret-source.env`, the controller's copy), as `put c1/<name> value`;
+  - every `KEY=value` line of the identity values file role `k8s_identity` reads (dev: `/var/lib/agent-box/rebuild-dev/identity.env`, which the dev rebuild makes; prod: `/etc/agent-keys/prod/identity.env`, the controller's copy), as `put c1/identity <KEY>`;
+  - prod only: the Cloudflare DNS-01 token (`/etc/agent-keys/prod/cloudflare-dns01-token.txt`), with the whitespace around it removed as role `k8s_certs` removes it, as `put c1/cloudflare-api-token value`.
+
+  It reads every file and checks every line before the first write: lowercase names in the first file, uppercase keys with a value in the second, one token with no space in it in the third. It skips blank and `#` lines and prints only names. [The apps' secrets](#the-apps-secrets) says when to run it.
+  expect: one `put` line per value, then `secrets-store: put-apps: <n> values from <file> at c1/<name> key value, <m> from identity.env at c1/identity key <KEY>, and the DNS-01 token at c1/cloudflare-api-token key value, written to SOPS, then OpenBao` (dev has no token part).
 - `compare`: every key of the SOPS file against the store, by SHA-256 in memory; it prints only the path and name of a key that differs, is only in SOPS, or is only in the store, never a value or a hash. The weekly timer (`secrets-store-compare.timer`, Mondays at 05:00 by the box's clock by default, up to 30 minutes later, `agent_box_secrets_store_compare_on_calendar`) runs it once `sops_copies` is true.
   expect: `PASS: compare: <n> keys equal in SOPS and OpenBao`.
 - `reseed`: a fresh store, filled from SOPS, when no snapshot can bring it back. It refuses during a rebuild hold (run `restore-rebuilt`, or `clear-hold` first), and refuses unless `kv/` holds nothing but `c1/check` and the snapshot mark `dev/snapshot-mark` (a time, no secret; any snapshot writes it, so the hourly off-box send leaves one within the hour). It writes every path of the SOPS file, each only if still absent (check-and-set 0), then takes a snapshot. It replaces nothing, so it is not a delete.
@@ -251,13 +257,15 @@ Plan step 8a (D-0058 rules 5 and 8): every secret c1's apps read at run time mov
 | `healthchecks-ping-url` | `monitoring/alertmanager-heartbeat` | `apps/monitoring-extras/values.yaml`, `heartbeat.pingUrlSource` |
 | `share-pod-authkey` | `share-pod/share-pod-authkey`, only where `shareTarget` is set (none on prod: `c1-read get externalsecrets -A` lists no share-pod one, 2026-11-18) | `apps/share-pod/values.yaml`, `authKey.source` |
 
-**Made by Ansible from the controller's files today, into an app's namespace.** These move in a later part of step 8a, which gives each app an ExternalSecret in place of the role's copy:
+**Made by Ansible from the controller's files today, into an app's namespace, moving now too.** With the store on, the role that makes each one makes an ExternalSecret in its place, read through store `openbao`, and External Secrets takes over the Secret the role made, since it carries no owner (External Secrets v2.14.0 docs, <https://github.com/external-secrets/external-secrets/blob/v2.14.0/docs/guides/ownership-deletion-policy.md>, line 43):
 
-| Secret | Made by | From |
-|---|---|---|
-| `monitoring/grafana-sso`, `argocd/argocd-sso`, `media/jellyfin-sso` (each app's client secret) | `k8s_identity`, `tasks/secrets.yml`, "Each app's copy of its client secret" | `identity.env` |
-| `identity/realm-lab-secrets` (every client secret, user password and TOTP seed of realm `lab`) | `k8s_identity`, `tasks/secrets.yml`, "The realm's Secret" | `identity.env` |
-| `cert-manager/cloudflare-api-token` (DNS-01) | `k8s_certs`, `tasks/issue.yml`, "Token as a Secret in the cert-manager namespace" | `cloudflare-dns01-token.txt` |
+| Secret | Made by | From | With the store on, read from |
+|---|---|---|---|
+| `monitoring/grafana-sso`, `argocd/argocd-sso`, `media/jellyfin-sso` (each app's client secret) | `k8s_identity`, `tasks/secrets.yml`, "Each app's copy of its client secret" | `identity.env` | `c1/identity`, keys `GRAFANA_CLIENT_SECRET`, `ARGOCD_CLIENT_SECRET`, `JELLYFIN_CLIENT_SECRET` |
+| `identity/realm-lab-secrets` (every client secret, user password and TOTP seed of realm `lab`) | `k8s_identity`, `tasks/secrets.yml`, "The realm's Secret" | `identity.env` | `c1/identity`, one key per key the realm uses (`k8s_identity_value_keys`) |
+| `cert-manager/cloudflare-api-token` (DNS-01) | `k8s_certs`, `tasks/issue.yml`, "Token as a Secret in the cert-manager namespace" | `cloudflare-dns01-token.txt` | `c1/cloudflare-api-token`, key `value` |
+
+`media/jellyfin-lab-root-ca` is a public certificate, not a secret, so `k8s_identity` keeps making it.
 
 **Made inside the cluster, with no copy outside it.** A later part decides, one by one, whether each gets a SOPS copy: `media/jellyfin-admin` (an External Secrets `Password` generator, `CreatedOnce`), `identity/<name>-db` (made on the node by `k8s_identity`), Keycloak's first admin (`<name>-initial-admin`, made by its operator), Grafana's admin (`monitoring/kube-prometheus-stack-grafana`, made by its chart) and Argo CD's `argocd-initial-admin-secret`. `agent-read/agent-read-token` is a service-account token Kubernetes fills in, and the `openbao-tls` and `openbao-ca` certificates come from cert-manager; neither moves.
 
@@ -265,7 +273,7 @@ Plan step 8a (D-0058 rules 5 and 8): every secret c1's apps read at run time mov
 
 ### Moving them
 
-Off by default: the root value `appSecretsStore` is empty, so every ExternalSecret above reads store `c1` as before. Ansible sets it from `k8s_gitops_source_app_secrets_store` (role `k8s_gitops`). With `openbao`, the apps `alerts`, `monitoring-extras` and `share-pod` read key `c1/<name>`, property `value`, through store `openbao`. Policy `eso-c1` reads `kv/data/c1/*` and nothing else (`apps/openbao-store/policies/eso-c1.hcl`). The root chart and the role both refuse `openbao` while `openbaoInCluster` is off, and the root refuses any value other than empty, `c1` or `openbao`.
+Off by default: the root value `appSecretsStore` is empty, so every ExternalSecret above reads store `c1` as before. Ansible sets it from `k8s_gitops_source_app_secrets_store` (role `k8s_gitops`). With `openbao`, the apps `alerts`, `monitoring-extras` and `share-pod` read key `c1/<name>`, property `value`, through store `openbao`. Roles `k8s_identity` and `k8s_certs` follow the same inventory value (`k8s_identity_secrets_store` and `k8s_certs_token_store` default to it): with `openbao` they make the ExternalSecrets in the second table in place of their Secrets, and wait up to 2 minutes for each to be Ready. Policy `eso-c1` reads `kv/data/c1/*` and nothing else (`apps/openbao-store/policies/eso-c1.hcl`). The root chart and the role both refuse `openbao` while `openbaoInCluster` is off, and the root refuses any value other than empty, `c1` or `openbao`.
 
 Per environment, in this order:
 
@@ -276,7 +284,13 @@ Per environment, in this order:
    expect: `PASS: compare: <n> keys equal in SOPS and OpenBao`.
 4. Set `k8s_gitops_source_app_secrets_store: openbao` in that environment's inventory and apply the source (prod: `openbao-prod gitops`).
    expect: `c1-read get externalsecrets -A` shows `ntfy-auth`, `alertmanager-ntfy` and `alertmanager-heartbeat` on store `openbao`, each `SecretSynced` and Ready.
-5. Leave `secret-source` as it is until the next rebuild proves step 4 from code. Removing its Secrets is a delete (D-0042 rule 6).
+5. Run `k8s-identity.yml --tags secrets` and `k8s-certs.yml --tags issue` with that inventory, from the machine that runs them today (prod: the controller). Its values file and token file must still be there: the realm's import hash and the token check read them.
+   expect: each play's recap with `failed=0`, and `c1-read get externalsecrets -A` also shows `realm-lab-secrets`, `grafana-sso`, `argocd-sso`, `jellyfin-sso` and `cloudflare-api-token` on store `openbao`, each Ready.
+6. Leave `secret-source` as it is until the next rebuild proves steps 4 and 5 from code. Removing its Secrets is a delete (D-0042 rule 6).
+
+After the move, a changed value goes into the file first, then `put-apps`, then the role. External Secrets reads the store every hour, so the role's realm import, which starts when a value's hash changes, can read the old value if it runs first: let the ExternalSecret sync before the role runs. Grafana reads its client secret only at start, and with the store on no task restarts it, so restart it after a change to its secret.
+
+Going back to an empty value is a delete: the roles' ExternalSecrets must go, and with them the Secrets External Secrets owns (D-0042 rule 6), so no task does it. Until they are gone, `k8s_identity` stops at "No ExternalSecret of this role's is left while the store is off" and `k8s_certs` at "No token ExternalSecret is left while the store is off".
 
 On dev, every rebuild makes a fresh store. So the switch stays off there until the rebuild writes the dev values into OpenBao itself before `apps` (`put-apps` needs the hand-over, which waits on the box's path to the store).
 

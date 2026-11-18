@@ -16,7 +16,8 @@
 #   9. reset-failed-start <tap id> deletes only the pod and its claim, and only when the log shows the self-init failure, the pod
 #      is not Ready and the store is not initialized.
 #  10. ca writes ca.crt of Secret openbao/openbao-tls to <keys>/prod/secrets-store-ca.crt, asking kubectl for that one key
-#      after Ansible's shell-style split; two certificates, a non-certificate or a failed read write nothing.
+#      after Ansible's shell-style split; two certificates, a certificate with another PEM block, a non-certificate or a
+#      failed read write nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -246,6 +247,7 @@ done
 rm -f "$cafile"
 cp "$t/ca1.pem" "$t/kube/CA"; run ca; a_rc=$rc a_out=$out; a_words=$(cat "$t/kwords"); a_file=$(cat "$cafile" 2>/dev/null)
 cat "$t/ca1.pem" "$t/ca2.pem" > "$t/kube/CA"; run ca; b_rc=$rc b_out=$out; b_file=$(cat "$cafile" 2>/dev/null)
+cat "$t/ca1.pem" "$t/ca2.key" > "$t/kube/CA"; run ca; k_rc=$rc k_out=$out k_file=$(cat "$cafile" 2>/dev/null)
 echo 'not a certificate' > "$t/kube/CA"; run ca; c_rc=$rc c_out=$out; c_file=$(cat "$cafile" 2>/dev/null)
 rm -f "$t/kube/CA"; run ca; d_rc=$rc d_out=$out; d_file=$(cat "$cafile" 2>/dev/null)
 run ca extra; e_rc=$rc
@@ -253,9 +255,10 @@ want_words=$'-n\nopenbao\nget\nsecret\nopenbao-tls\n-o\njsonpath={.data.ca\\.crt
 if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: ca: the store's CA written to $cafile"* && $a_out == *"test-ca-1"* &&
       -n $a_file && $a_file == "$(cat "$t/ca1.pem")" && $a_words == *"$want_words" &&
       $b_rc -ne 0 && $b_out == *"is not one PEM certificate; nothing written"* && $b_file == "$a_file" &&
+      $k_rc -ne 0 && $k_out == *"is not one PEM certificate; nothing written"* && $k_file == "$a_file" &&
       $c_rc -ne 0 && $c_out == *"is not one PEM certificate; nothing written"* && $c_file == "$a_file" &&
       $d_rc -ne 0 && $d_out == *"nothing written"* && $d_file == "$a_file" && ! -e $cafile.part && $e_rc -eq 2 ]]; then
-  ok "10. ca: one certificate written from ca.crt, the key's dot kept through Ansible's split; two certificates, a non-certificate or a failed read write nothing"
-else bad "10. good rc=$a_rc [$a_words] $a_out | two rc=$b_rc $b_out | junk rc=$c_rc $c_out | fail rc=$d_rc $d_out | extra rc=$e_rc"; fi
+  ok "10. ca: one certificate written from ca.crt, the key's dot kept through Ansible's split; two certificates, a certificate with a key block, a non-certificate or a failed read write nothing"
+else bad "10. good rc=$a_rc [$a_words] $a_out | two rc=$b_rc $b_out | key rc=$k_rc $k_out | junk rc=$c_rc $c_out | fail rc=$d_rc $d_out | extra rc=$e_rc"; fi
 
 exit "$fail"

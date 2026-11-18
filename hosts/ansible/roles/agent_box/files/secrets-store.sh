@@ -241,24 +241,52 @@ put() {
 # appSecretsStore is openbao (D-0058 rule 8; plan step 8a). The source is the file the rebuild seeds secret-source from:
 # dev's is the box's own (rebuild.sh), prod's is the controller's copy (rebuild-prod.sh). Every name is checked before
 # the first write. Each value goes from the file to the helper's stdin, byte for byte; only names are printed.
+# put-apps (plan step 8a): every value c1's apps read at run time, each through put, so SOPS first, then OpenBao:
+#   - the secret-source file, one <name>=<value> line each, to c1/<name> key value (store c1's values today);
+#   - the identity values file the rebuild hands role k8s_identity, every KEY=value line to c1/identity key KEY (realm
+#     lab's client secrets, passwords and TOTP seeds, and each app's client secret, which k8s_identity reads from there);
+#   - prod only: the Cloudflare DNS-01 token file, trimmed as role k8s_certs trims it, to c1/cloudflare-api-token key value.
+# Every file is read and every line checked before the first write. Only names are printed, never a value.
 put_apps() {
   sops_copies
-  local src line name n=0
-  if [[ $env == dev ]]; then src=$keys/rebuild-secret-source.env; else src=$env_keys/secret-source.env; fi
-  [[ -s $src ]] || { echo "secrets-store: $src is missing or empty; nothing written" >&2; exit 1; }
+  local src ident token='' line name n=0 m=0 value
+  if [[ $env == dev ]]; then
+    src=$keys/rebuild-secret-source.env ident=$work/rebuild-dev/identity.env
+  else
+    src=$env_keys/secret-source.env ident=$env_keys/identity.env token=$env_keys/cloudflare-dns01-token.txt
+  fi
+  for f in "$src" "$ident" ${token:+"$token"}; do
+    [[ -s $f ]] || { echo "secrets-store: $f is missing or empty; nothing written" >&2; exit 1; }
+  done
   while IFS= read -r line || [[ -n $line ]]; do
     [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
     name=${line%%=*}
     [[ $line == *=* && $name =~ ^[a-z0-9][a-z0-9_-]*$ ]] ||
       { echo "secrets-store: a line of $src is not <name>=<value> with a lowercase name; nothing written" >&2; exit 1; }
   done < "$src"
+  # The same lines role k8s_identity reads (tasks/secrets.yml: ^[A-Z][A-Z0-9_]*=, the value after the first =).
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    [[ $line =~ ^[A-Z][A-Z0-9_]*= && -n ${line#*=} ]] ||
+      { echo "secrets-store: a line of $ident is not KEY=<value> with an uppercase key and a value; nothing written" >&2; exit 1; }
+  done < "$ident"
+  if [[ -n $token ]]; then
+    value=$(python3 -I -c 'import sys; print(open(sys.argv[1]).read().strip(), end="")' "$token")
+    [[ -n $value && $value != *[[:space:]]* ]] || { echo "secrets-store: $token holds no single token; nothing written" >&2; exit 1; }
+  fi
   while IFS= read -r line || [[ -n $line ]]; do
     [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
     name=${line%%=*}
     printf '%s' "${line#*=}" | kv put "c1/$name" value
     n=$((n + 1))
   done < "$src"
-  echo "secrets-store: put-apps: $n values from ${src##*/} written to SOPS, then OpenBao, at c1/<name> key value"
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    printf '%s' "${line#*=}" | kv put c1/identity "${line%%=*}"
+    m=$((m + 1))
+  done < "$ident"
+  if [[ -n $token ]]; then printf '%s' "$value" | kv put c1/cloudflare-api-token value; fi
+  echo "secrets-store: put-apps: $n values from ${src##*/} at c1/<name> key value, $m from ${ident##*/} at c1/identity key <KEY>$([[ -z $token ]] || echo ", and the DNS-01 token at c1/cloudflare-api-token key value"), written to SOPS, then OpenBao"
 }
 
 compare() {
