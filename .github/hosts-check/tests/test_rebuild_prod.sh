@@ -129,10 +129,13 @@ grep -q "^keys=$t/keys" "$t/run/rebuild-prod.sh" && grep -q "^work=$t/work" "$t/
 
 run() { : > "$t/calls"; bash "$t/run/rebuild-prod.sh" "$@" > "$t/out" 2>&1; rc=$?; out=$(cat "$t/out"); calls=$(cat "$t/calls"); }
 full_stages() { for st in vms cluster storage restore gitops secrets apps gateway checks; do printf '%s\n' "2026-11-18T03:00:00Z $st start" "2026-11-18T03:00:01Z $st end rc=0 1s"; done; }
-dev_log() { { printf '%s\n' "rebuild: central-hub $1"; full_stages; printf '%s\n' "$2"; } > "$t/work/rebuild-dev/logs/rebuild-20261118T030000Z.log"; }
-# The log of `rebuild.sh teardown`: same ending line, but only the teardown stage ran.
-dev_log_teardown() { printf '%s\n' "rebuild: central-hub $1" "2026-11-18T03:00:00Z teardown start" "2026-11-18T03:00:20Z teardown end rc=0 20s" \
-  "rebuild: all stages passed" > "$t/work/rebuild-dev/logs/rebuild-20261118T030000Z.log"; }
+ld=$t/work/rebuild-dev/logs
+# dev_log: the dev folder holds this one run (03:00). dev_log_teardown: a teardown-only run, alone or after another run
+# (the log of `rebuild.sh teardown`: the same ending line, but only the teardown stage ran).
+dev_log() { rm -f "$ld"/*; { printf '%s\n' "rebuild: central-hub $1"; full_stages; printf '%s\n' "$2"; } > "$ld/rebuild-20261118T030000Z.log"; }
+dev_log_teardown() { printf '%s\n' "rebuild: central-hub $1" "2026-11-18T0${2:-3}:00:00Z teardown start" "2026-11-18T0${2:-3}:00:20Z teardown end rc=0 20s" \
+  "rebuild: all stages passed" > "$ld/rebuild-20261118T0${2:-3}0000Z.log"; }
+dev_log_later() { { printf '%s\n' "rebuild: central-hub $1"; full_stages; printf '%s\n' "$3"; } > "$ld/rebuild-20261118T0${2}0000Z.log"; }
 destroy() { python3 -c 'import json, sys; print(json.dumps({"resource_changes": [
   {"type": "proxmox_virtual_environment_vm", "address": "a%d" % i, "change": {"actions": ["delete"], "before": {"vm_id": i}}}
   for i in map(int, sys.argv[1:])]}))' "$@" > "$t/destroy.json"; }
@@ -202,14 +205,18 @@ run check; [[ $rc -eq 1 && $out == *"k8s_certs_smoke_root_file still points at t
 dev_log 1111111111111111111111111111111111111111 "rebuild: all stages passed"
 run check; [[ $rc -eq 1 && $out == *"ran another commit"* ]] && r5+="d"
 dev_log "$sha" "rebuild: stage apps failed"; run check; [[ $rc -eq 1 && $out == *"did not pass every stage"* ]] && r5+="e"
-dev_log_teardown "$sha"; run check; [[ $rc -eq 1 && $out == *"is not a full run: no good end line for stage(s) vms cluster storage"* ]] && r5+="i"
+rm -f "$ld"/*; dev_log_teardown "$sha"; run check; [[ $rc -eq 1 && $out == *"no dev run other than a teardown is logged"* ]] && r5+="i"
+dev_log "$sha" "rebuild: all stages passed"; dev_log_teardown "$sha" 4; run check
+[[ $rc -eq 0 && $out == *"dev passed every stage at ${sha:0:12} (run rebuild-20261118T030000Z.log)"* ]] && r5+="j"
+dev_log "$sha" "rebuild: all stages passed"; dev_log_later "$sha" 4 "rebuild: stage apps failed"; dev_log_teardown "$sha" 5; run check
+[[ $rc -eq 1 && $out == *"the newest dev run (rebuild-20261118T040000Z.log) did not pass every stage"* ]] && r5+="k"
 dev_log "$sha" "rebuild: all stages passed"
 sed -i 's/vm_id = 201/vm_id = 301/' "$t/keys/prod/tfvars/k8s.tfvars"
 run check; [[ $rc -eq 1 && $out == *"outside 200-249: 301"* ]] && r5+="f"
 sed -i 's/vm_id = 301/vm_id = 201/' "$t/keys/prod/tfvars/k8s.tfvars"
 ROUTE_VIA=192.0.2.11 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"* ]] && r5+="g"
 DEFAULT_VIA=192.0.2.10 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"*"default via 192.0.2.10"* ]] && r5+="h"
-if [[ $r5 == abcdeifgh ]]; then ok "5. check refuses a plan with changes, VM 258, a Mac path, another dev commit, a failed dev run, a teardown-only dev run, VM 301, a route through a node"
+if [[ $r5 == abcdeijkfgh ]]; then ok "5. check passes a teardown after a full pass, and refuses a plan with changes, VM 258, a Mac path, another dev commit, a failed dev run, a teardown-only dev run alone, VM 301, a route through a node"
 else bad "5. [$r5] $out"; fi
 
 # 6

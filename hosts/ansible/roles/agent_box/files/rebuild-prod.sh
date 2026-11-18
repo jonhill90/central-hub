@@ -373,8 +373,18 @@ if [[ $inv_ok == true && -s $tofu_env && -s $node_list ]]; then
 fi
 
 # --- 5. Dev first (D-0035 rule 3(a)): the newest dev run passed every stage at this same commit.
-dev_short=$(ls -1 "$dev_logs"/rebuild-*.log 2>/dev/null | sort | tail -n 1 || true)
-if [[ -z $dev_short ]]; then fail "no dev run is logged on the box"
+# The newest run that did more than a teardown, the way `rebuild log` reads it (rebuild.sh): a teardown run after a
+# good full run must not hide that run. Dev is torn down after a run: hosts/rebuild-k8s.sh runner_run_teardown tears it
+# down at the end of a run that stopped VM 300 under ephemeral-dev, and the runbook's hand `rebuild teardown` does the same.
+# A teardown-only log alone, or newest with no full run behind it, still fails below.
+dev_short=""
+while read -r f; do
+  if grep -Eq '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" && ! grep -E '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" | grep -vq ' teardown start$'; then
+    continue
+  fi
+  dev_short=$f; break
+done < <(ls -1 "$dev_logs"/rebuild-*.log 2>/dev/null | sort -r)
+if [[ -z $dev_short ]]; then fail "no dev run other than a teardown is logged on the box; run dev in full first"
 elif ! grep -qx 'rebuild: all stages passed' "$dev_short"; then fail "the newest dev run (${dev_short##*/}) did not pass every stage"
 elif ! grep -qx "rebuild: central-hub $commit" "$dev_short"; then fail "the newest dev run (${dev_short##*/}) ran another commit than ${commit:0:12}; run dev again first"
 else
