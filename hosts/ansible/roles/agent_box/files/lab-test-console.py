@@ -144,8 +144,13 @@ def main():
         print("lab-test: VM 100 reboots to apply", flush=True)
     else:
         c.send("exit\r")
+    # Close our side and let the connection end by itself, so the last line reaches the console before it goes:
+    # socat forwards what it has, then ends on end of input. Stop it only if it hangs.
     c.p.stdin.close()
-    c.p.terminate()
+    try:
+        c.p.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        c.p.terminate()
 
 
 if __name__ == "__main__":
