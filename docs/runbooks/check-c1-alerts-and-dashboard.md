@@ -8,7 +8,7 @@ outcome: you know whether every node, Argo CD Application and app on c1 is healt
 needs: a browser on the lab network; Grafana's admin password (Secret monitoring/kube-prometheus-stack-grafana) or a lab sign-in once Grafana uses Keycloak
 private-values: [k8s_gateway_zone]
 files: [hosts/kubernetes/home/c1/apps/monitoring-extras/, hosts/kubernetes/home/c1/apps/openbao/values.yaml]
-last-tested: not yet run on c1
+last-tested: 2026-11-18 on prod's c1, the agent parts only. "Read the panels without a browser" was run from the agent box at 04:32 UTC, on central-hub ab8caa1. Run panel-check-29916270 printed a value for every panel, including the OpenBao, Jellyfin and alert delivery rows. Its "Alerts firing, by name" line named C1ArgoAppUnhealthy, KubeCPUOvercommit and KubeMemoryOvercommit. Grafana's sidecar wrote c1-lab.json at 03:46:50 UTC. Nobody has yet looked at the dashboard in a browser (steps 1 to 6)
 superseded-by:
 ---
 

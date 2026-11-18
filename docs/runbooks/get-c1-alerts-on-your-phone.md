@@ -8,7 +8,7 @@ outcome: a test message and every new c1 alert show up in the ntfy app or web pa
 needs: a phone or computer on the lab network or the tailnet; the ntfy app (Android, iOS) or a browser; ntfy's three values seeded into secret-source (step 0)
 private-values: [k8s_gateway_zone, secret-source.env]
 files: [hosts/kubernetes/home/c1/apps/alerts/, hosts/kubernetes/home/c1/apps/monitoring-extras/templates/alertmanager-ntfy.yaml, hosts/kubernetes/home/c1/apps/monitoring-extras/templates/panel-check.yaml, hosts/kubernetes/home/c1/apps/kube-prometheus-stack/values.yaml, hosts/ansible/roles/k8s_observability/vars/main.yml, hosts/ansible/playbooks/ntfy-access.yml, hosts/ansible/roles/proxmox_notify/]
-last-tested: not yet run on c1. CI renders the alerts chart and checks Alertmanager's values match the role's; the login and tokens (pick 171) are untested
+last-tested: 2026-11-18 on prod's c1, step 5 only. Read from the agent box at 04:32 UTC, on central-hub ab8caa1: Alertmanager restarted with receiver-name-in-metrics at about 04:15 UTC, then the 04:30 UTC panel check counted 3 alerts sent to ntfy and 0 failed. Steps 1 to 4, the owner's browser and phone, have not been run. CI renders the alerts chart and checks that Alertmanager's values match the role's
 superseded-by:
 ---
 
