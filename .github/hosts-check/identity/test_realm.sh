@@ -51,6 +51,9 @@ kc config credentials --server http://localhost:8080 --realm master --user test-
 
 # The checks, in Python on this side; the container only answers kcadm calls.
 export name
+# The checks run three times in this one Keycloak; Keycloak refuses a TOTP code it already took, so the runs share the last time step used.
+OTP_STEP_FILE=$work/otp-step
+export OTP_STEP_FILE
 python3 -I "$here/check_realm.py" "$work/lab.json"
 
 # The replace path the role takes when the realm changes: the role's own delete script, inside the

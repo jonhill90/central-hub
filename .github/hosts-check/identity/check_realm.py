@@ -71,6 +71,54 @@ def sign_in(name, password, code=None):
         return False
 
 
+def user_id(name):
+    found = get("users", f"username={name}", "exact=true")
+    return found[0]["id"] if found else None
+
+
+def clear_lockout(uid):
+    """Forget the user's failed sign-ins. The realm has brute-force protection on, with Keycloak's defaults: two
+    failures within a second lock the user out for a minute. The check's own refusal (the password alone) and a
+    refused code are such failures, and the lock then refused the retry too (identity job, 2026-11-18 14:01 UTC)."""
+    rc, _, err = kcadm("delete", f"attack-detection/brute-force/users/{uid}", "-r", "lab")
+    if rc != 0:
+        raise SystemExit(f"kcadm delete the failed sign-ins of {uid} failed: {err.strip()}")
+
+
+def last_step():
+    try:
+        with open(os.environ["OTP_STEP_FILE"], encoding="utf-8") as f:
+            return int(f.read().strip())
+    except (KeyError, OSError, ValueError):
+        return -1
+
+
+def remember_step(step):
+    if os.environ.get("OTP_STEP_FILE"):
+        with open(os.environ["OTP_STEP_FILE"], "w", encoding="utf-8") as f:
+            f.write(str(step))
+
+
+def sign_in_with_code(name, password, seed, period=30, attempts=3):
+    """Sign in with a TOTP code that Keycloak has not seen. Keycloak refuses a code it already accepted, and
+    test_realm.sh runs this file three times, so a code is sent only in a time step after the last one a run used
+    (the step is kept in the file OTP_STEP_FILE, which test_realm.sh sets), and never in the last two seconds of a
+    step, when the code can turn over before Keycloak reads it. Failed sign-ins are cleared before each try."""
+    uid = user_id(name)
+    for _ in range(attempts):
+        now = time.time()
+        if int(now) // period <= last_step() or now % period > period - 2:
+            time.sleep(period - now % period + 1)
+        step = int(time.time()) // period
+        if uid:
+            clear_lockout(uid)
+        ok = sign_in(name, password, totp(seed, period))
+        remember_step(step)
+        if ok:
+            return True
+    return False
+
+
 def check(ok, message):
     print(("ok   " if ok else "FAIL ") + message)
     if not ok:
@@ -107,15 +155,7 @@ def main(src):
         if otp:
             seed = json.loads(otp[0]["secretData"])["value"]
             check(not sign_in(name, password), f"user {name} is refused with the password alone")
-            # One retry, in the next 30-second step. Keycloak refuses a code that was already used, and
-            # test_realm.sh runs this check twice, so the second run can land in the same step as the
-            # first and send a used code (identity job, central-hub #457, 2026-11-18 02:35 UTC). The
-            # code can also turn over between making and sending it. Waiting for the next step covers both.
-            ok = sign_in(name, password, totp(seed))
-            if not ok:
-                time.sleep(30 - time.time() % 30 + 1)
-                ok = sign_in(name, password, totp(seed))
-            check(ok, f"user {name} signs in with the imported password and a TOTP code")
+            check(sign_in_with_code(name, password, seed), f"user {name} signs in with the imported password and a TOTP code")
         else:
             check(sign_in(name, password), f"user {name} signs in with the imported password")
         found = get("users", f"username={name}", "exact=true")
