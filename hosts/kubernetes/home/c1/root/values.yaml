@@ -178,11 +178,19 @@ apps:
     # The CRDs are too large for a client-side apply's annotation.
     syncOptions: [ServerSideApply=true, RespectIgnoreDifferences=true]
     # Grafana's chart makes a new random admin password at every render; keep the one on the cluster.
+    # The Deployment carries that password's checksum, so it changes at every render too, and with
+    # selfHeal each sync rolled Grafana out again (a new ReplicaSet every 5 to 10 minutes on c1,
+    # 2026-11-18 03:00 to 04:15 UTC). Keep the live checksum as well.
     ignoreDifferences:
       - kind: Secret
         name: kube-prometheus-stack-grafana
         namespace: monitoring
         jsonPointers: [/data]
+      - group: apps
+        kind: Deployment
+        name: kube-prometheus-stack-grafana
+        namespace: monitoring
+        jsonPointers: [/spec/template/metadata/annotations/checksum~1secret]
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was the sign-in, now in valueFiles
     prune: false
   # Secrets (spec step 5): External Secrets and the one store `c1` every ExternalSecret names.
