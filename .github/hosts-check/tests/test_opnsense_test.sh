@@ -150,7 +150,7 @@ else ok "status makes GET calls only"; fi
 # Pins: the wrapper's Keycloak is the digest the identity check pins, and the plugin is Plan's beta5 file.
 w=$files/opnsense-test.sh
 kc=$(sed -n 's/^image=\(quay.io\/keycloak\/keycloak@sha256:[0-9a-f]*\)$/\1/p' "$here/../identity/test_realm.sh")
-grep -qx "KEYCLOAK_IMAGE=$kc" "$w" && ok "Keycloak image is the identity check's 26.8.1 digest" || bad "Keycloak image pin differs"
+grep -qx "KEYCLOAK_IMAGE=$kc" "$w" && ok "Keycloak image is the identity check's 26.8.2 digest" || bad "Keycloak image pin differs"
 grep -qx 'PLUGIN_SHA256=4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406a41b117c' "$w" && ok "plugin pin is beta5's sha256" || bad "plugin pin"
 if grep -q -- '--features-disabled' "$w"; then bad "the proof's Keycloak turns a feature off"; else ok "the proof's Keycloak keeps DPoP on, as the lab does"; fi
 grep -q '"ES256" not in json.load' "$w" && ok "prove stops unless discovery lists ES256 for DPoP" || bad "no DPoP discovery check"

@@ -128,5 +128,5 @@ argument_specs:
         description: PostgreSQL image of the Keycloak database check (role k8s_identity's).
       k8s_backup_restore_check_keycloak_image:
         type: str
-        default: quay.io/keycloak/keycloak:26.8.1
+        default: quay.io/keycloak/keycloak:26.8.2
         description: Keycloak image of the Keycloak database check (the one k8s_identity's operator runs).
