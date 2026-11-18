@@ -14,10 +14,17 @@
       The copy's own values for the network, firewall and remote-access run folders, one <folder>.tfvars.json each:
       the copy's node name, made-up MACs and names for its VM 100 and CT 900, and WAN link-down.
 
+  lab-test-answer.py firewall-inventory <settings.json> <vlans.yml> <tunnel port> <python> <out opnsense.yml>
+      The inventory group opnsense for playbooks/opnsense.yml against the copy's VM 100, in the shape of
+      hosts.example.yml: the API reached as localhost through the wrapper's SSH tunnel, the TLS bootstrap switch on
+      (the copy's OPNsense keeps its self-signed certificate), every VLAN's settings as hosts.example.yml has them,
+      and made-up values where the real ones are private. The API key and secret are not in it.
+
 Exits non-zero with a reason when the settings are not what the copy needs. Needs PyYAML for the shared VLAN file.
 """
 import ipaddress
 import json
+import os
 import re
 import sys
 
@@ -160,8 +167,73 @@ def layers(settings, vlans, image, template, outdir):
             f.write("\n")
 
 
+# Each VLAN's settings on the copy's firewall: hosts.example.yml's opnsense_lab_vlan_settings, which the test keeps in
+# step. Unlike the real inventory, the copy also takes the VLANs whose real firewall step waits for the owner (tenant):
+# the copy's VLANs exist only inside the copy, whose vmbr1 has no ports.
+COPY_VLAN_SETTINGS = {
+    "prod": {"ifname": "opt1", "dhcp": True, "bootstrap": False},
+    "qa": {"ifname": "opt2", "dhcp": False, "bootstrap": False},
+    "dev": {"ifname": "opt3", "dhcp": True, "bootstrap": False},
+    "mgmt": {"ifname": "lan", "dhcp": False, "bootstrap": True},
+    "tenant": {"ifname": "opt4", "dhcp": True, "bootstrap": False, "mgmt_pass": False},
+}
+# Made up for the copy, where the real values are private: the home LAN is TEST-NET-1 (RFC 5737), which nothing in
+# the copy uses, and the zone is under .test (RFC 2606).
+COPY_HOME_LAN = "192.0.2.0/24"
+COPY_DNS_ZONE = "lab-test.test"
+
+
+def firewall_inventory(settings, vlans, port, python, out):
+    s, net, gw, addr = load(settings, vlans)
+    lab = yaml.safe_load(open(vlans))["lab_vlans"]
+    missing = [v["name"] for v in lab if v["name"] not in COPY_VLAN_SETTINGS]
+    if missing:
+        sys.exit(f"lab-test: no copy settings for VLAN {', '.join(missing)}; add them as in hosts.example.yml")
+    if not port.isdigit() or not 1024 <= int(port) <= 65535:
+        sys.exit("lab-test: the tunnel port is not an unprivileged port")
+    if not python.startswith("/"):
+        sys.exit("lab-test: the Python is not an absolute path")
+    ca = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(out))), "copy-ca.pem")
+    if not os.path.isfile(ca):
+        sys.exit(f"lab-test: {ca} is missing; run lab-test lab first")
+    nets = {v["name"]: ipaddress.ip_network(v["cidr"]) for v in lab}
+    mgmt = [v for v in lab if v["name"] == "mgmt"][0]
+    host = {
+        "ansible_connection": "local",
+        "ansible_python_interpreter": python,
+        # A name, as the TLS check asks (pick 30), that the box resolves to itself, where the tunnel listens.
+        "opnsense_api_host": "localhost",
+        # The port the tunnel listens on; the playbook gives it to the modules as api_port and to the TLS check.
+        "opnsense_cert_gui_port": int(port),
+        # The copy's OPNsense serves its own self-signed certificate; the copy has no lab CA. The TLS check still
+        # runs and must find the certificate unverified, or the run stops (playbooks/tasks/opnsense-tls.yml).
+        "opnsense_lab_tls_bootstrap": True,
+        # Any CA that did not sign it: the copy's own Proxmox CA, which lab-test lab fetched next to the inventory.
+        "opnsense_lab_ssl_ca_file": ca,
+        "opnsense_home_lan_cidr": COPY_HOME_LAN,
+        "opnsense_dns_zone": COPY_DNS_ZONE,
+        "opnsense_lab_mgmt_tag": mgmt["id"],
+        "opnsense_lab_dhcp_first": 100,
+        "opnsense_lab_dhcp_last": 199,
+        # Made-up addresses in the copy's own VLANs: pve is the copy's mgmt .2 (inventory), the rest are in prod.
+        "opnsense_lab_host_overrides": [
+            {"hostname": "api.c1.prod", "address": str(nets["prod"].network_address + 200),
+             "description": "Kubernetes c1 API (lab test copy, made up)"},
+            {"hostname": "pve", "address": str(nets["mgmt"].network_address + 2),
+             "description": "Proxmox host GUI (lab test copy)"},
+            {"hostname": "*", "subdomain": "apps.c1.prod", "address": str(nets["prod"].network_address + 225),
+             "description": "Kubernetes c1 Gateway apps (lab test copy, made up)"},
+        ],
+        "opnsense_lab_vlan_settings": {v["name"]: COPY_VLAN_SETTINGS[v["name"]] for v in lab},
+    }
+    doc = {"all": {"children": {"opnsense": {"hosts": {"opnsense_fw": host}}}}}
+    with open(out, "w") as f:
+        f.write("---\n# Written by lab-test opnsense for the lab test copy's VM 100; not the real firewall.\n")
+        yaml.safe_dump(doc, f, default_flow_style=False, sort_keys=False)
+
+
 if __name__ == "__main__":
-    fn = {"answer": answer, "inventory": inventory, "layers": layers}
+    fn = {"answer": answer, "inventory": inventory, "layers": layers, "firewall-inventory": firewall_inventory}
     if len(sys.argv) != 7 or sys.argv[1] not in fn:
         sys.exit(__doc__)
     fn[sys.argv[1]](*sys.argv[2:])

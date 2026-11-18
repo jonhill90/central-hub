@@ -11,6 +11,9 @@
   module_defaults:
     group/oxlorg.opnsense.all:
       firewall: "{{ opnsense_api_host }}"
+      # 443 unless the inventory says otherwise; the TLS check reads the same value. The lab test copy reaches its
+      # firewall through an SSH tunnel on an unprivileged port (lab-test opnsense).
+      api_port: "{{ opnsense_cert_gui_port | default(443) }}"
       api_key: "{{ opnsense_api_key }}"
       api_secret: "{{ opnsense_api_secret }}"
       # tasks/opnsense-tls.yml sets opnsense_tls_verify before any API call. The default (on) only

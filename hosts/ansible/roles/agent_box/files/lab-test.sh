@@ -3,7 +3,7 @@
 # its own SDN, OPNsense and connector container (docs/specs/2026-11-lab-test-copy.md,
 # docs/runbooks/build-the-lab-test-copy.md). It runs as user `keys` through sudo, so the session that asks for it
 # never sees the Proxmox token. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|destroy|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|opnsense|destroy|log
 # plan: the guards (dev down, no dev rebuild running, VM 257 gone, free memory and box disk), then download and
 #   check the Proxmox VE ISO, write the answer file, bake it into a copy of the ISO with the pinned
 #   proxmox-auto-install-assistant (--fetch-from iso), and save an OpenTofu plan for hosts/terraform/home/lab-test.
@@ -23,6 +23,9 @@
 #   as root on the copy, sign in, run hosts/ansible/bootstrap/opnsense-first-boot.php (mgmt VLAN, LAN, WAN, root's
 #   password, kept on the box) and then step 6's opnsense-ansible-user.php (the API user, its key and secret kept on
 #   the box), reboot VM 100, and wait for the mgmt gateway and the API user to answer. Safe to run again.
+# opnsense: inside the copy, set-up-lab-network-and-firewall.md step 7's playbooks/opnsense.yml against VM 100, from the
+#   box through an SSH tunnel to the copy (the copy's mgmt VLAN exists only inside it), with an inventory the wrapper
+#   writes; the DNS proof is left out (it asks the gateway directly). A second run must report changed=0.
 # destroy: destroy VM 256 only. The token cannot delete files on Proxmox's local storage, so the prepared ISO stays
 #   in the state and on local for the next build, which reuses it while the answer is unchanged; destroy lists it.
 # log: the last run's log, then VM 256's Proxmox state, read-only.
@@ -30,8 +33,8 @@ set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | check | host | lab | firstboot | destroy | log) action=$1 ;;
-  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|destroy|log" >&2; exit 2 ;;
+  plan | apply | check | host | lab | firstboot | opnsense | destroy | log) action=$1 ;;
+  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|opnsense|destroy|log" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -425,14 +428,19 @@ lab() {
 # (lab-test-console.py says why). Root on the copy reaches it as qm terminal does: socat on VM 100's serial0 socket
 # (qemu-server src/PVE/CLI/qm.pm, terminal; qemu-server depends on socat, debian/control). OPNsense's own root
 # password is new and kept on the box until destroy; the image's default, opnsense, is tried first.
+# The mgmt VLAN's tag, its gateway (VM 100's LAN address) and its prefix length, from the VLAN file.
+mgmt_values() {
+  "$py" -I -c 'import ipaddress, sys, yaml
+v = [x for x in yaml.safe_load(open(sys.argv[1]))["lab_vlans"] if x["name"] == "mgmt"][0]
+n = ipaddress.ip_network(v["cidr"])
+print(v["id"], n.network_address + 1, n.prefixlen)' "$vlans"
+}
+
 firstboot() {
   wait_ssh
   vm 'qm status 100' | grep -qx 'status: running' || { echo "lab-test: VM 100 is not running in the copy; run lab-test lab first"; return 1; }
   local tag gw prefix
-  read -r tag gw prefix < <("$py" -I -c 'import ipaddress, sys, yaml
-v = [x for x in yaml.safe_load(open(sys.argv[1]))["lab_vlans"] if x["name"] == "mgmt"][0]
-n = ipaddress.ip_network(v["cidr"])
-print(v["id"], n.network_address + 1, n.prefixlen)' "$vlans")
+  read -r tag gw prefix < <(mgmt_values)
   [[ -s $files/opnsense-root.pass ]] || openssl rand -base64 32 > "$files/opnsense-root.pass"
   openssl passwd -6 -stdin < "$files/opnsense-root.pass" > "$files/opnsense-root.hash"
   # Step 6's API user `ansible`: the key and secret stay on the box; OPNsense gets only "<key>|<hash of the secret>"
@@ -481,6 +489,51 @@ print(json.dumps({
   echo "lab-test: the API user ansible gets no answer on https://$gw/api after 5 minutes"; return 1
 }
 
+# set-up-lab-network-and-firewall.md step 7 against the copy's VM 100: playbooks/opnsense.yml as the controller runs it,
+# unchanged. The copy's mgmt VLAN exists only inside the copy (its vmbr1 has no ports), so the box reaches the API
+# through an SSH tunnel to the copy, which has mgmt .2 (lab); the copy's inventory names the API localhost on the
+# tunnel's port. The key and secret go to the playbook as extra vars from a file only this user reads, never on a
+# command line. The DNS proof (tag dns_proof) runs dig on the controller against the gateway, which the box can't reach,
+# so it is left out here.
+opnsense() {
+  wait_ssh
+  [[ -s $files/opnsense-api.key && -s $files/opnsense-api.secret ]] || { echo "lab-test: the API key is not on the box; run lab-test firstboot first"; return 1; }
+  [[ -f $files/inventory/hosts.yml && -s $files/copy-ca.pem ]] || { echo "lab-test: run lab-test lab first"; return 1; }
+  local tag gw prefix port tunnel n rc=0 _
+  read -r tag gw prefix < <(mgmt_values)
+  port=$("$py" -I -c 'import socket
+s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+  "$py" -I "$answer_py" firewall-inventory "$settings" "$vlans" "$port" "$py" "$files/inventory/opnsense.yml"
+  python3 -I -c 'import json, sys
+print(json.dumps({"opnsense_api_key": open(sys.argv[1]).read().strip(),
+                  "opnsense_api_secret": open(sys.argv[2]).read().strip()}))' \
+    "$files/opnsense-api.key" "$files/opnsense-api.secret" > "$files/opnsense-api.vars.json"
+  ssh -N -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
+    -o UserKnownHostsFile="$files/known_hosts" -L "127.0.0.1:$port:$gw:443" "root@$addr" &
+  tunnel=$!
+  # shellcheck disable=SC2064  # the tunnel's PID is known now
+  trap "kill $tunnel 2>/dev/null; rm -f '$files/opnsense-api.vars.json'" EXIT
+  for _ in $(seq 1 30); do
+    "$py" -I -c 'import socket, sys
+socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=2).close()' "$port" 2>/dev/null && break
+    kill -0 "$tunnel" 2>/dev/null || { echo "lab-test: the SSH tunnel to the copy ended"; return 1; }
+    sleep 1
+  done
+  for n in 1 2; do
+    echo "lab-test: opnsense.yml against the copy's VM 100, run $n"
+    # oxlorg.opnsense sends every API call through HTTPS_PROXY when it is set, which can't reach the tunnel.
+    ( cd "$repo/hosts/ansible"
+      unset HTTPS_PROXY https_proxy
+      ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home \
+        ansible-playbook -i "$files/inventory" -e @"$files/opnsense-api.vars.json" playbooks/opnsense.yml \
+        --skip-tags dns_proof ) 2>&1 | tee "$files/opnsense-run.log" || rc=$?
+    (( rc == 0 )) || { echo "lab-test: opnsense.yml failed on run $n (exit $rc)"; return 1; }
+  done
+  grep -Eq '^opnsense_fw +: ok=[0-9]+ +changed=0 +unreachable=0 +failed=0' "$files/opnsense-run.log" \
+    || { echo "lab-test: the second opnsense.yml run changed something; the role does not converge on the copy"; return 1; }
+  echo "lab-test: opnsense.yml applied to the copy's VM 100; a second run shows changed=0"
+}
+
 case $action in
   plan) guards; tofu_run ;;
   apply) guards; tofu_run ;;
@@ -488,12 +541,13 @@ case $action in
   host) host ;;
   lab) lab ;;
   firstboot) firstboot ;;
+  opnsense) opnsense ;;
   destroy)
     tofu_run
     # The copy's token, inventory and run folder states go with it; a new copy gets new ones. Root's password stays
     # with its hash, which the cached prepared ISO holds.
     rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory" "$files/state" "$files/copy-ca.pem" \
-      "$files"/opnsense-root.* "$files"/opnsense-api.*
+      "$files"/opnsense-root.* "$files"/opnsense-api.* "$files/opnsense-run.log"
     echo "lab-test: VM $VMID destroyed"
     leftovers
     ;;
