@@ -485,10 +485,14 @@ def limit_apply(s, rules, repo, base, ok, mode):
 # --- Main ---------------------------------------------------------------------------------------------------
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in ("plan", "apply"):
-        print("usage: box-apply plan|apply", file=sys.stderr)
+    # tick is the timer's run (box-apply.service, root only; sudoers allows sessions plan and apply): an apply that
+    # ends at once when main has not moved past the baseline, so the timer doesn't re-run the role every time.
+    if len(sys.argv) != 2 or sys.argv[1] not in ("plan", "apply", "tick"):
+        print("usage: box-apply plan|apply|tick", file=sys.stderr)
         sys.exit(2)
-    mode = run["mode"] = sys.argv[1]
+    tick = sys.argv[1] == "tick"
+    mode = run["mode"] = "apply" if tick else sys.argv[1]
+    run["tick"] = tick
     os.umask(0o077)
     os.makedirs(STATE, mode=0o700, exist_ok=True)
     lock = open(os.path.join(STATE, "lock"), "w")
@@ -521,6 +525,10 @@ def main():
     git(repo, "checkout", "--quiet", "--detach", "--force", new)
     git(repo, "clean", "-ffdxq")
     say(f"main {new[:8]}, baseline {base[:8]}")
+    if tick and new == base:
+        say("nothing new on main since the baseline")
+        record("nothing-new")
+        return
 
     changed = [f for f in git(repo, "diff", "--name-only", "--no-renames", "-z", base, new).stdout.split("\0") if f]
     hits = limit_files(rules, changed) + limit_keys(rules, repo, base, new, changed)

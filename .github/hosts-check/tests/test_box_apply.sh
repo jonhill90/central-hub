@@ -222,6 +222,11 @@ out=$(ba apply) || bad "8d: the approved apply failed: $out"
 rm "$t/apply-hook"; echo "$quiet" > "$t/check.json"
 out=$(ba apply) || bad "8f: the next apply failed: $out"
 [[ $out == *"applied ${a8:0:8}"* && $(base) == "$a8" ]] && ok "8f. the next run goes on to main as a plain apply" || bad "8f: $out"
+: > "$t/calls"
+out=$(ba tick) || bad "8f2: tick failed: $out"
+[[ $out == *"nothing new on main since the baseline"* && ! -s $t/calls && $(base) == "$a8" ]] \
+  && tail -n 1 "$t/box-apply.log" | grep -q '"result": "nothing-new"' \
+  && ok "8f2. the timer's tick with main at the baseline runs no play and logs nothing-new" || bad "8f2: $out; calls: $(cat "$t/calls")"
 b9=$(base)
 printf -- '- name: w\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
 l9=$(commit c9)
