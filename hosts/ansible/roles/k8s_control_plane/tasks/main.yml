@@ -179,6 +179,10 @@
     kubectl -n kube-system rollout status deploy/coredns --timeout=300s
   changed_when: false
 
+# The L2 policy announces every LoadBalancer Service except those labelled central-hub/l2-policy, which bring
+# their own policy: the store's admin path (apps/openbao-store, admin-path.yaml), announced only from the node its
+# pod is pinned to, because L2 announcements ignore externalTrafficPolicy Local (Cilium v1.20.4 docs,
+# network/l2-announcements.rst lines 84-85; the selector, lines 112-128; D-0062).
 - name: step9 | Load-balancer address pool and L2 announcement policy
   ansible.builtin.shell: |
     kubectl apply -f - <<'YAML'
@@ -195,13 +199,10 @@
     metadata:
       name: {{ k8s_control_plane_lb_pool_name }}
     spec:
-      # Every LoadBalancer Service except those labelled central-hub/l2-policy, which bring their own
-      # policy: the store's admin path (apps/openbao-store, admin-path.yaml), announced only from the
-      # node its pod is pinned to, because L2 announcements ignore externalTrafficPolicy Local (Cilium
-      # v1.20.4 docs, network/l2-announcements.rst lines 84-85; the selector, lines 112-128).
       serviceSelector:
         matchExpressions:
-          - {key: central-hub/l2-policy, operator: DoesNotExist}
+          - key: central-hub/l2-policy
+            operator: DoesNotExist
       interfaces:
         - {{ ansible_default_ipv4.interface }}
       loadBalancerIPs: true

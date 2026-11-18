@@ -268,7 +268,7 @@ check_manifests() {
     echo "manifests: openbao-store rendered an admin path without the box's /32" >&2
     return 1
   fi
-  if ! grep -q 'key: central-hub/l2-policy, operator: DoesNotExist' hosts/ansible/roles/k8s_control_plane/tasks/main.yml; then
+  if ! grep -A1 -- '- key: central-hub/l2-policy$' hosts/ansible/roles/k8s_control_plane/tasks/main.yml | grep -q 'operator: DoesNotExist$'; then
     echo "manifests: role k8s_control_plane's L2 policy no longer leaves out Services labelled central-hub/l2-policy" >&2
     return 1
   fi
