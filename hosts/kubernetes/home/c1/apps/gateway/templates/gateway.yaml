@@ -17,9 +17,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   gatewayClassName: {{ .Values.className }}
-  {{- if eq (toString .Values.openbaoMeasure) "true" }}
-  # The measurement's passthrough listener (MEASURE-1, dev only) comes as a ListenerSet from namespace
-  # openbao; no other namespace may attach one.
+  {{- if or (eq (toString .Values.openbaoMeasure) "true") .Values.openbaoBoxHost }}
+  # The store's passthrough listeners come as ListenerSets from namespace openbao: the measurement's
+  # (MEASURE-1, dev only) and the agent box's path (apps/openbao-store, box-path.yaml). No other
+  # namespace may attach one.
   allowedListeners:
     namespaces:
       from: Selector

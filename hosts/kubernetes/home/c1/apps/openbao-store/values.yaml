@@ -10,6 +10,16 @@ zone: ""
 # The dev-only measurement (MEASURE-1, root value openbaoMeasure): true adds openbao-pass.<zone>, the
 # passthrough route's host, to the store's certificate, so the box can check it by name.
 measure: false
+# The store's name as the agent box reaches it (root value openbaoStoreHost, from
+# k8s_gitops_source_openbao_store_host), private. Set: templates/box-path.yaml gives the box its
+# path through Gateway apps, a TLS passthrough listener for this name on 443 to OpenBao's Service,
+# and the store's certificate carries the name, so TLS ends at OpenBao and the box checks the store's
+# own CA. Empty: no path.
+boxHost: ""
+# The shared Gateway the box path attaches to (apps/gateway).
+gateway:
+  name: apps
+  namespace: gateway
 # The seal key's folder on that node (D-0058 rule 3). The agent box's node play writes the key there
 # (owner uid 100, group 1000, mode 0400, as OpenBao's pod runs), and nothing else: the admin
 # AppRole's IDs stay in the box's keys folder (D-0038 rule 6). The folder is outside what c1's nightly backup copies (role k8s_backup copies only

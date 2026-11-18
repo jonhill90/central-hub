@@ -28,6 +28,11 @@ argument_specs:
       k8s_gitops_source_openbao_box_cidr:
         type: str
         description: "The agent box's address as a /32, the admin AppRole's only source, passed as openbaoBoxCidr. Private."
+      k8s_gitops_source_openbao_store_host:
+        type: str
+        description: >-
+          The store's name as the agent box reaches it, private, read only with the in-cluster store on. Passed
+          as openbaoStoreHost: the box's TLS passthrough path through Gateway apps (apps/openbao-store, box-path.yaml).
       k8s_gitops_source_openbao_measure:
         type: bool
         default: false

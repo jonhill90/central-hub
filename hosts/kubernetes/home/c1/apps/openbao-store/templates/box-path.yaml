@@ -1,0 +1,78 @@
+{{- with .Values.boxHost }}
+{{- /*
+The agent box's lasting path to the store (D-0058 rule 4: reached by name on 443 like every c1 app),
+made when the root passes the store's name (openbaoStoreHost). TLS passthrough: Gateway apps routes
+by the name the client sends (SNI) and never ends TLS, so it sees no token and needs no certificate;
+TLS ends at OpenBao's own listener, whose certificate carries this name (tls.yaml), and the box
+checks the store's own CA, ca.crt of Secret openbao-tls, which `openbao-prod ca` copies to the box.
+It is the measurement's path b (apps/openbao-measure), made lasting. No header is trusted.
+Expected, not yet measured: OpenBao sees a Cilium ingress address on this path, not the box's
+(Cilium v1.20.4 docs, gettingstarted/terminology.rst lines 211-212: reserved:ingress is "the IPs
+used as the source address for connections from Ingress proxies"). The admin AppRole signs in only
+from the box's /32 (apps/openbao/values.yaml, centralHub.boxCidr), so its login needs another path
+(docs/runbooks/set-up-the-secrets-store.md, "The box's path to the store").
+*/ -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: openbao-box
+  namespace: {{ $.Release.Namespace }}
+spec:
+  parentRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: {{ $.Values.gateway.name }}
+    namespace: {{ $.Values.gateway.namespace }}
+  listeners:
+    - name: openbao-box
+      protocol: TLS
+      port: 443
+      hostname: {{ . }}
+      tls:
+        mode: Passthrough
+      allowedRoutes:
+        namespaces:
+          from: Same
+        kinds:
+          - kind: TLSRoute
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  name: openbao-box
+  namespace: {{ $.Release.Namespace }}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: openbao-box
+      sectionName: openbao-box
+  hostnames:
+    - {{ . }}
+  rules:
+    - backendRefs:
+        - name: openbao
+          port: 8200
+---
+# The Gateway's traffic to its backends carries Cilium's identity reserved:ingress, which the store's
+# namespace-based NetworkPolicy (apps/openbao/values.yaml, networkPolicy) does not select (Cilium
+# v1.20.4 docs, gettingstarted/terminology.rst lines 211-212, and
+# network/servicemesh/default-deny-ingress-policy.rst lines 72-76). This
+# lets that identity reach OpenBao's API port, 8200, and nothing else. Cilium adds it to the
+# NetworkPolicy's allow rules.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: openbao-box
+  namespace: {{ $.Release.Namespace }}
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/instance: openbao
+      app.kubernetes.io/name: openbao
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports:
+            - {port: "8200", protocol: TCP}
+{{- end }}
