@@ -7,7 +7,8 @@ Description=OmniRoute (model router), rootless, loopback only
 ConditionPathExists=%h/.config/vps-apps/secrets.env
 
 [Container]
-Image=docker.io/diegosouzapw/omniroute@sha256:2be638c210c7a559643e8f68bdcac2167e4eacfef370fdd9eabb825eebe56d32
+# Version 3.8.52, pushed 2026-10-20. 3.8.53 (2026-11-06) is under STD-0003's two weeks on 2026-11-18.
+Image=docker.io/diegosouzapw/omniroute@sha256:b08a12e876baa8a5ccadd1ebbe346fe7267dba3b1c9f4fd6bb02070fae41ab6c
 ContainerName=omniroute
 # D-0046 rule 1: 2.5 GiB. Quadlet turns this into podman's --memory, which a hand-run container got no cap from.
 Memory=2560m

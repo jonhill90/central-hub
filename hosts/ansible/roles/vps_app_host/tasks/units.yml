@@ -49,7 +49,7 @@
     vps_app_host_getent_uid: "{{ ansible_facts.getent_passwd[vps_app_host_app][1] }}"
   changed_when: false
 
-- name: Check Quadlet generated the service, with the memory cap in it
+- name: Check Quadlet generated the service, with its own memory cap in it
   ansible.builtin.command:
     argv:
       - runuser
@@ -64,4 +64,4 @@
       - "{{ vps_app_host_app }}.service"
   register: vps_app_host_unit_cat
   changed_when: false
-  failed_when: "'--memory' not in vps_app_host_unit_cat.stdout"
+  failed_when: vps_app_host_unit_cat.stdout is not search('--memory[ =][0-9]+[mg]( |$)', multiline=True)

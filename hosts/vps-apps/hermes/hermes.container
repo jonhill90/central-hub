@@ -6,7 +6,8 @@ Description=Hermes Agent, rootless, no published port
 ConditionPathExists=%h/.config/vps-apps/secrets.env
 
 [Container]
-Image=docker.io/nousresearch/hermes-agent@sha256:667a9dc77f303f6cd6e9ff62ce2c9580563597e09dde07fe5a224375988d6209
+# Version v0.22.7, pushed 2026-11-03. v0.23.0 (2026-11-05) is under STD-0003's two weeks on 2026-11-18.
+Image=docker.io/nousresearch/hermes-agent@sha256:e6d81ae52ebf6a43efa529701405509f20054ba818f179ddd748bed4f8af584c
 ContainerName=hermes
 # D-0046 rule 1: 4 GiB.
 Memory=4g
