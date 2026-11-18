@@ -26,8 +26,9 @@ spec:
           {{ $v.auth.ownerUser }}:{{ $v.topic }}:ro,alertmanager:{{ $v.topic }}:wo,proxmox:{{ $v.topic }}:wo
         NTFY_AUTH_TOKENS: >-
           alertmanager:{{ "{{" }} .alertmanager {{ "}}" }}:alertmanager,proxmox:{{ "{{" }} .proxmox {{ "}}" }}:proxmox
+  # Store openbao reads key c1/<name>: policy eso-c1 reads kv/data/c1/* only (apps/openbao-store/policies/eso-c1.hcl).
   data:
 {{- range $key, $source := $v.auth.sources }}
     - secretKey: {{ $key }}
-      remoteRef: {key: {{ $source }}, property: value}
+      remoteRef: {key: {{ if eq $v.auth.store "openbao" }}c1/{{ end }}{{ $source }}, property: value}
 {{- end }}

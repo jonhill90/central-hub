@@ -14,6 +14,9 @@
 #   8. Dev's calls go to dev's Gateway: with no gateway address in the dev inventory, two, or one that is not IPv4, every
 #      action refuses before any call; with one, curl gets --resolve <store>:443:<address> and the helpers get the same
 #      value in SECRETS_STORE_RESOLVE (dev's names resolve to prod's Gateway).
+#   9. put-apps refuses until sops_copies is true and on a missing file or a bad line, before any write; otherwise each
+#      <name>=<value> line of the environment's secret-source file goes to the helper as put c1/<name> value, the value
+#      on stdin byte for byte (an = inside it kept), comments and blank lines skipped; --prod reads prod's file only.
 # Usage: .github/hosts-check/tests/test_secrets_store_wrapper.sh   (needs python3 with PyYAML, openssl, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -35,6 +38,7 @@ cat > "$t/libexec/secrets-store-kv.sh" <<EOF
 echo "kv \$*" >> $t/calls
 echo "\${SECRETS_STORE_RESOLVE:-unset}" > $t/kv-resolve
 cat > $t/kv-stdin
+{ printf '%s [' "\${*: -2}"; cat $t/kv-stdin; printf ']\n'; } >> $t/kv-log
 echo "kv helper ran \$1"
 EOF
 cat > "$t/run/secrets-store-snapshots.sh" <<EOF
@@ -138,5 +142,26 @@ done
 inventory "${store_inv[@]}"
 if [[ $r8 == "1:none:named 1:none:named 1:none:named " ]]; then ok "8. no gateway address, a name, or two: refused before any call"
 else bad "8. $r8"; fi
+
+# 9
+settings '{"address": "bao-dev.invalid"}'
+printf '%s\n' 'ntfy-owner-password=pw1' > "$t/keys/rebuild-secret-source.env"
+run put-apps; r9a=$rc o9a=$out c9a=$calls
+settings '{"address": "bao-dev.invalid", "sops_copies": true}'
+rm -f "$t/keys/rebuild-secret-source.env"; run put-apps; r9b=$rc o9b=$out c9b=$calls
+printf '%s\n' 'ntfy-owner-password=pw1' 'Bad_Name=x' > "$t/keys/rebuild-secret-source.env"; run put-apps; r9c=$rc o9c=$out c9c=$calls
+printf '%s\n' '# a comment' '' 'ntfy-owner-password=pw1' '  ' 'healthchecks-ping-url=https://hc.invalid/a?b=c' > "$t/keys/rebuild-secret-source.env"
+printf '%s' 'ntfy-proxmox-token=tk_last' >> "$t/keys/rebuild-secret-source.env"
+rm -f "$t/kv-log"; run put-apps; r9d=$rc o9d=$out log9d=$(cat "$t/kv-log" 2>/dev/null)
+printf '%s\n' 'share-pod-authkey=prodkey' > "$t/keys/prod/secret-source.env"
+echo '{"address": "bao-prod.invalid", "sops_copies": true}' > "$t/work/secrets-store-prod.json"
+rm -f "$t/kv-log"; run --prod put-apps; r9e=$rc log9e=$(cat "$t/kv-log" 2>/dev/null)
+want9d="c1/ntfy-owner-password value [pw1]"$'\n'"c1/healthchecks-ping-url value [https://hc.invalid/a?b=c]"$'\n'"c1/ntfy-proxmox-token value [tk_last]"
+if [[ $r9a -ne 0 && $o9a == *"wait for the owner's tap"* && -z $c9a && $r9b -ne 0 && $o9b == *"is missing or empty"* && -z $c9b &&
+      $r9c -ne 0 && $o9c == *"not <name>=<value>"* && -z $c9c && $r9d -eq 0 && $log9d == "$want9d" &&
+      $o9d == *"put-apps: 3 values from rebuild-secret-source.env"* && $o9d != *pw1* && $o9d != *tk_last* &&
+      $r9e -eq 0 && $log9e == "c1/share-pod-authkey value [prodkey]" ]]; then
+  ok "9. put-apps: refused without sops_copies, a file or good lines; otherwise each line as put c1/<name> value, value on stdin"
+else bad "9. $r9a $o9a | $r9b $o9b | $r9c $o9c | $r9d [$log9d] $o9d | $r9e [$log9e]"; fi
 
 exit $fail
