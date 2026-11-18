@@ -1,0 +1,36 @@
+# The agent notebook's self-hosted CI runner as a pod (docs/runbooks/run-the-notebook-runner-on-c1.md).
+# It takes the same jobs as VM 300 (docs/runbooks/set-up-the-ci-runner.md): the label `notebook` on the
+# one repository below. Swapping it for another runner changes only this chart.
+name: notebook-runner
+repoURL: https://github.com/jonhill90/agent-notebook
+labels: notebook
+# The runner's name on GitHub. VM 300 keeps its own name, so both serve the label while VM 300 is the
+# fallback; GitHub gives each job to whichever is idle.
+runnerName: notebook-c1
+# actions/runner, the same pin as VM 300 (hosts/ansible/roles/ci_runner/defaults/main.yml, STD-0003):
+# v2.338.2 and the SHA-256 of actions-runner-linux-x64-2.338.2.tar.gz. Self-update is off, so a newer
+# release reaches the pod only through a PR that moves both pins.
+runnerVersion: 2.338.2
+runnerSha256: baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
+# What the notebook's jobs run: bash, git and python3 (99-meta/tools/org-check/check-all.sh), plus the
+# runner's own .NET needs (glibc, OpenSSL, zlib, Kerberos). python:3.12.15-bookworm is built on
+# buildpack-deps:bookworm, which has git, curl and those libraries but no ICU, so the pod runs .NET in
+# globalization-invariant mode (DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1). Its tag was last pushed on 2026-10-22,
+# more than two weeks ago; 3.12.16-bookworm was first pushed on 2026-11-06 (STD-0003 rule 1).
+# Multi-arch index digest from Docker Hub.
+image: docker.io/library/python:3.12.15-bookworm@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735
+uid: 1001
+# The runner's folder: the unpacked release, its registration (.runner, .credentials) and the jobs'
+# work folder, so a restarted pod needs no new registration token.
+storage: 10Gi
+# A one-hour registration token for the first start only, which the agent box mints from the GitHub
+# App and writes to the store (kv c1/notebook-runner, key registration-token). Once the pod is
+# registered the token is not read again, and an expired one does no harm.
+token:
+  store: openbao
+  key: c1/notebook-runner
+  property: registration-token
+# VM 300 had 2048 MiB for the OS and the jobs together; the notebook-cli job builds Go.
+resources:
+  requests: {cpu: 100m, memory: 512Mi}
+  limits: {memory: 2Gi}

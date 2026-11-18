@@ -184,6 +184,40 @@ To check it, before and after on dev:
 
 expect: no address lost, and the admin login's audit lines show the box's own address as `remote_address`.
 
+#### Giving dev its admin address
+
+From the controller, in the agent box's host variables in the private inventory. These are private values, so none is written here:
+
+```yaml
+agent_box_openbao_in_cluster: true      # dev runs the store; its first install is the owner's tap (above)
+agent_box_secrets_store:
+  address: <dev store name>             # the dev inventory's k8s_gitops_source_openbao_store_host
+  box_cidr: <box's dev address>/32      # the box's own address on VLAN 30
+  admin_address: <one free dev pool address>
+  # snapshot_box and sops_copies: keep as they are
+```
+
+Pick `admin_address` from dev's load-balancer pool, `k8s_control_plane_lb_cidr` in the dev inventory (VLAN 30's `.224/27`, STD-0002). Rule out all of these:
+
+- the pool's first and last address;
+- the dev inventory's `k8s_gitops_source_gateway_address`;
+- any address another LoadBalancer Service holds (`kubectl get svc -A` on dev, if it is up).
+
+Then:
+
+```sh
+cd hosts/ansible
+ansible-playbook -i inventories/home/ playbooks/agent-box.yml --check --diff
+ansible-playbook -i inventories/home/ playbooks/agent-box.yml
+```
+
+expect:
+
+- The check's diff for `/var/lib/agent-box/secrets-store.json` adds `admin_address`, plus `box_cidr` if it was not set yet, and nothing else changes there.
+- The run ends `failed=0`.
+
+A box that has not installed the admin path's code yet ignores `admin_address`, so the order of this step and that install doesn't matter. Then a dev rebuild (`rebuild up`) passes the value on as `k8s_gitops_source_openbao_admin_address` (`rebuild.sh`), and the checks above follow.
+
 ## The box's calls to the store
 
 The agent box's `secrets-store` wrapper calls the store inside the dev cluster, run as user `keys`: `status`, `recovery`, `snapshot`, `restore`, `restore-rebuilt [raft-<time>.snap]`, `clear-hold`, `put c1/<path> <key>` (the value on stdin), `put-apps`, `compare` and `reseed`, plus the hourly off-box copy and the weekly compare. The store VM's actions (`plan`, `apply`, `destroy`, `configure`) are gone from the wrapper and from its sudo line (D-0058: no store VM was ever built).
@@ -271,7 +305,7 @@ The restore and SOPS helpers take the environment from the keys folder's name, s
    expect: `sys/health` with `"sealed":false`.
 9. The admin path ([The box's admin path](#the-boxs-admin-path)), in this order:
    1. `openbao-prod l2-policy`. It applies role `k8s_control_plane`'s pool and general L2 policy (`k8s.yml --tags lb`, first control plane only), which then leaves out Services labelled `central-hub/l2-policy`.
-      expect: the recap with `failed=0`, and every LoadBalancer address and its lease as before (`c1-read get svc -A`, `c1-read -n kube-system get leases`).
+      expect: the recap with `failed=0`. With tag `lb` the role also prints, as root on the node, each L2 policy's service selector and each LoadBalancer Service's address, policy and lease holder (`files/l2-report.py`), before the change and after it, and the run fails if any address has no holder a minute after the change. `c1-read` can't show this: c1's read-only account is refused leases and Cilium's policies (measured 2026-11-18 11:17 UTC). `c1-read get svc -A` still shows every LoadBalancer address as before.
    2. The firewall rule from the box to the admin address on tcp 443: a firewall apply, so the owner's go first (D-0036 rule 8). Not written yet.
    3. `admin_address` in `agent_box_openbao_prod`, by a run of the `agent_box` role from the controller.
    4. `openbao-prod gitops`, which passes it as `openbaoAdminAddress`.

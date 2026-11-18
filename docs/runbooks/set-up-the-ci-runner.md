@@ -39,6 +39,8 @@ flowchart LR
 
 The dev VLAN reaches the internet and no other lab network (role `opnsense_lab`, rule kinds 0 and 3), and the host firewall lets only the agent box reach 8006, so the runner needs no firewall change.
 
+A pod on c1 is to take these jobs over, so a dev rebuild no longer stops the notebook's CI: [Run the notebook's CI runner as a pod on c1](run-the-notebook-runner-on-c1.md). VM 300 stays as the fallback until the pod has run three notebook pull requests green. The weekly `ci-runner bump` moves both pins in one pull request.
+
 ## Before you start
 
 - The agent box is set up and its pin includes this runbook's code ([Set up the agent box](set-up-the-agent-box.md)).

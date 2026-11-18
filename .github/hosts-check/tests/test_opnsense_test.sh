@@ -160,6 +160,9 @@ grep -q 'no Keycloak sign-in form after {url}\\n{why_no_redirect(page)}' "$files
   && ok "a login that doesn't reach Keycloak prints OPNsense's answer and its OIDC log lines" || bad "no reason when the login doesn't redirect"
 # Root's login shell on the VM is csh, which refuses `2>/dev/null`: diagnostic reads run under /bin/sh.
 grep -q 'vm("/bin/sh -c " + shlex.quote(cmd))' "$files/opnsense-test-prove.py" && ok "the VM's diagnostic reads run under /bin/sh, not root's csh" || bad "diagnostic reads run in csh"
+# No sh-only redirect may reach root's csh: every `2>` or `2>&1` command goes through on_vm (/bin/sh).
+if grep -n 'vm("' "$files/opnsense-test-prove.py" | grep -v 'on_vm("' | grep -q '2>'; then bad "a vm() command uses a sh-only redirect, which csh refuses"
+else ok "no vm() command passes a sh-only redirect to csh"; fi
 grep -q 'if last_status\["code"\] == 404:' "$files/opnsense-test-prove.py" && grep -q "get('%s')" "$files/opnsense-test-prove.py" \
   && ok "a 404 from the login prints what the authentication factory lists and returns" || bad "no factory read on a 404"
 grep -q 'VMID=257$' "$w" && ok "the wrapper's VM ID is 257" || bad "VM ID"

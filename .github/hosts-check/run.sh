@@ -89,6 +89,7 @@ check_ansible() {
   bash "$here/tests/test_tailnet_policy_log.sh"
   bash "$here/tests/test_tailnet_policy_sections.sh"
   bash "$here/tests/test_proxmox_host_args.sh"
+  bash "$here/tests/test_jellyfin_plugin_name.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
   python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml
@@ -365,10 +366,12 @@ check_backup() {
   bash "$here/tests/test_rebuild_preflight.sh"
   bash "$here/tests/test_agent_access_desktop.sh"
   bash "$here/tests/test_rebuild_short_log.sh"
+  bash "$here/tests/test_rebuild_l2_report.sh"
   bash "$here/tests/test_rebuild_box_inventory.sh"
   bash "$here/tests/test_rebuild_log_pick.sh"
   bash "$here/tests/test_rebuild_diag_vms.sh"
   bash "$here/tests/test_opnsense_test.sh"
+  bash "$here/tests/test_notebook_runner.sh"
 }
 
 check_proxy() {

@@ -376,6 +376,16 @@ components:
     verdict: pass
     sources: [image:docker.io/curlimages/curl]
     checked: 2026-11-14
+  - name: Python
+    kind: software
+    used-for: the notebook runner pod's job environment on c1 (the official python image, on a Debian base)
+    licence: Python Software Foundation License (PSF-2.0), GPL-compatible
+    licence-source: https://docs.python.org/3/license.html
+    paid-edition: none found; the page says all Python releases are Open Source and free to use
+    paid-edition-source: https://docs.python.org/3/license.html
+    verdict: pass
+    sources: [image:docker.io/library/python]
+    checked: 2026-11-18
   - name: restic
     kind: software
     used-for: backups of c1 and of OPNsense's configuration

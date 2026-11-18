@@ -26,3 +26,4 @@ No private names go here (CLAUDE.md rule 4). The lab zone and the Gateway's addr
 | monitoring-extras (alerts, Argo CD scrape, dashboard) | monitoring | [check-c1-alerts-and-dashboard.md](../../../../docs/runbooks/check-c1-alerts-and-dashboard.md) | in git, new (nothing to take over) |
 | alerts (ntfy) | alerts | [get-c1-alerts-on-your-phone.md](../../../../docs/runbooks/get-c1-alerts-on-your-phone.md) | in git, new |
 | openbao-store, openbao (the secrets store, D-0058) | openbao | [set-up-the-secrets-store.md](../../../../docs/runbooks/set-up-the-secrets-store.md) | in git, new; made only where the root value `openbaoInCluster` is true (dev first), so c1 renders as before |
+| notebook-runner (the notebook's CI runner) | notebook-runner | [run-the-notebook-runner-on-c1.md](../../../../docs/runbooks/run-the-notebook-runner-on-c1.md) | in git, new; made only where the root value `notebookRunner` is true (prod's wrappers), so dev never runs it |
