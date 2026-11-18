@@ -53,9 +53,9 @@ run() { # env total_gib used_gib error
 }
 check() { if [[ $2 == *"$3"* ]] && { [ -z "${4:-}" ] || [[ $2 != *"$4"* ]]; }; then echo "ok   $1"; else echo "FAIL $1: $2"; fail=1; fi; }
 out=$(run dev 31 20); check "11 GiB free is refused" "$out" "refused" "rc=0"; check "it says the sizes" "$out" "11264 MiB"
-out=$(FAKE_AVAILABLE=$((13311 * 1048576)) SHORT_NODE="" run dev 31 1); check "one MiB under 13312 is refused" "$out" "refused" "rc=0"
-check "the minimum is the dev VMs plus the margin" "$out" "the declared dev VMs need 11264 MiB (control plane 4096, worker 7168); minimum 13312 MiB with the 2048 MiB margin"
-out=$(FAKE_AVAILABLE=$((13312 * 1048576)) run dev 31 1); check "13312 MiB free, the minimum itself, passes" "$out" "rc=0" "refused"
+out=$(FAKE_AVAILABLE=$((12287 * 1048576)) SHORT_NODE="" run dev 31 1); check "one MiB under 12288 is refused" "$out" "refused" "rc=0"
+check "the minimum is the dev VMs plus the margin" "$out" "the declared dev VMs need 11264 MiB (control plane 4096, worker 7168); minimum 12288 MiB with the 1024 MiB margin"
+out=$(FAKE_AVAILABLE=$((12288 * 1048576)) run dev 31 1); check "12288 MiB free, the minimum itself, passes" "$out" "rc=0" "refused"
 out=$(FAKE_AVAILABLE=$((13412 * 1048576)) run dev 31 1); check "13412 MiB free, the 2026-11-17 reading with VM 300 stopped, passes" "$out" "rc=0" "refused"
 out=$(run dev 31 17); check "14 GiB free passes" "$out" "rc=0" "refused"
 out=$(run dev 31 16); check "15 GiB free passes" "$out" "rc=0" "refused"
@@ -72,7 +72,7 @@ out=$(run dev 31 17); check "total-used is the fallback and is named" "$out" "(f
 out=$(STATE="$t/with-vms.tfstate" run dev 31 28); check "a state holding every declared VM skips the check, even with low memory" "$out" "branch skipped, all 2 declared dev VMs" "refused"
 check "a skipped run says rc=0" "$out" "rc=0"
 out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 28); check "a partial state (2 of 3) is checked and refused on low memory" "$out" "holds 2 of 3 declared" "rc=0"
-check "three declared nodes need three nodes' memory" "$out" "need 18432 MiB (control plane 4096, worker 7168); minimum 20480 MiB"
+check "three declared nodes need three nodes' memory" "$out" "need 18432 MiB (control plane 4096, worker 7168); minimum 19456 MiB"
 out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 11); check "a partial state passes with enough memory" "$out" "branch checked" "refused"
 out=$(TFVARS_FILE="$t/norole.tfvars" run dev 31 1); check "a declared node with no role is refused, whatever the memory" "$out" "has no role control-plane or worker" "rc=0"
 out=$(STATE="$t/missing.tfstate" run dev 31 28); check "no state file means a fresh build and is checked" "$out" "branch checked" ""
