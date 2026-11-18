@@ -1,0 +1,12 @@
+# Managed by the agent_box role (central-hub hosts/ansible). Runs box-apply apply on its own (D-0036), so merged
+# work reaches the box with no session running it. Stop it with `systemctl stop box-apply.timer`.
+[Unit]
+Description=box-apply timer
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec={{ agent_box_self_apply_interval }}
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

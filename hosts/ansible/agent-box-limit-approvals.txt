@@ -4,7 +4,8 @@
 #   <from> <to> <digest> <pass> <tap>
 #
 #   from    the baseline the box is on (40 hex), as `box-apply plan` prints it
-#   to      the commit on main that holds the change (40 hex); no limit may change after it
+#   to      the commit on main that holds the change (40 hex); the box applies this commit, so a limit that
+#           changes after it waits for its own line, from it
 #   digest  sha256 of `git diff --no-renames --binary --full-index <from> <to> -- <the limit files that changed>`,
 #           which `box-apply plan` prints when it stops
 #   pass    the id of the message that records the agents' pass of this digest (D-0042 rule 1)
