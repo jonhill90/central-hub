@@ -448,6 +448,16 @@ components:
     carries: []
     not-detected: "`playwright install chromium` (tasks/main.yml) downloads it from Playwright's own host at run time, so no address or package name in the code names it"
     checked: 2026-11-18
+  - name: Blender
+    kind: software
+    used-for: headless 3D scenes, renders and glTF exports by agents on the agent box (`blender -b`)
+    licence: GPL-2.0-or-later (copyright.txt in the 5.3.0 Linux tarball; bundled libraries are GPL-3.0-compatible, listed in its license/license.md)
+    licence-source: https://projects.blender.org/blender/blender/src/branch/main/COPYING
+    paid-edition: none found; the Blender Foundation's FAQ says what you make with it is yours and the program is free, and Blender Studio's subscription sells training and assets, not program features
+    paid-edition-source: https://www.blender.org/support/faq/
+    verdict: pass
+    sources: [url:mirrors.ocf.berkeley.edu/blender/]
+    checked: 2026-11-18
   - name: lychee
     kind: software
     used-for: the docs link check in CI
