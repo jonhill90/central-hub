@@ -1,0 +1,12 @@
+# Managed by the agent_box role (central-hub hosts/ansible). Every {{ agent_box_rebuild_auto_interval }} while the box is
+# up; the run itself decides whether to build. Off with agent_box_rebuild_auto: false, or `systemctl stop rebuild-auto.timer`.
+[Unit]
+Description=Dev rebuild timer
+
+[Timer]
+OnBootSec=30min
+OnUnitActiveSec={{ agent_box_rebuild_auto_interval }}
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
