@@ -21,7 +21,8 @@
 #   playbooks/proxmox-host.yml --tags mgmt. Each folder's second plan must show no changes. Safe to run again.
 # firstboot: inside the copy, set-up-lab-network-and-firewall.md step 5 with no person: over VM 100's serial console,
 #   as root on the copy, sign in, run hosts/ansible/bootstrap/opnsense-first-boot.php (mgmt VLAN, LAN, WAN, root's
-#   password, kept on the box), reboot VM 100, and wait for the mgmt gateway to answer. Safe to run again.
+#   password, kept on the box) and then step 6's opnsense-ansible-user.php (the API user, its key and secret kept on
+#   the box), reboot VM 100, and wait for the mgmt gateway and the API user to answer. Safe to run again.
 # destroy: destroy VM 256 only. The token cannot delete files on Proxmox's local storage, so the prepared ISO stays
 #   in the state and on local for the next build, which reuses it while the answer is unchanged; destroy lists it.
 # log: the last run's log, then VM 256's Proxmox state, read-only.
@@ -434,26 +435,50 @@ n = ipaddress.ip_network(v["cidr"])
 print(v["id"], n.network_address + 1, n.prefixlen)' "$vlans")
   [[ -s $files/opnsense-root.pass ]] || openssl rand -base64 32 > "$files/opnsense-root.pass"
   openssl passwd -6 -stdin < "$files/opnsense-root.pass" > "$files/opnsense-root.hash"
+  # Step 6's API user `ansible`: the key and secret stay on the box; OPNsense gets only "<key>|<hash of the secret>"
+  # (hosts/ansible/bootstrap/opnsense-ansible-user.php). Over the console, so the copy needs no guest agent.
+  [[ -s $files/opnsense-api.key ]] || openssl rand -hex 40 > "$files/opnsense-api.key"
+  [[ -s $files/opnsense-api.secret ]] || openssl rand -hex 40 > "$files/opnsense-api.secret"
+  printf '%s|%s\n' "$(cat "$files/opnsense-api.key")" "$(openssl passwd -6 -stdin < "$files/opnsense-api.secret")" \
+    > "$files/opnsense-api.line"
   # net0 is the trunk (vtnet0) and net1 is WAN (vtnet1), in firewall/main.tf's order.
   python3 -I -c 'import json, sys
 print(json.dumps({
     "passwords": ["opnsense", open(sys.argv[1]).read().strip()], "dir": "/root/lab-test",
-    "files": {"opnsense-first-boot.php": sys.argv[2], "root.hash": sys.argv[3]},
-    "commands": ["php opnsense-first-boot.php vtnet0 %s %s vtnet1 root.hash" % (sys.argv[4], sys.argv[5])],
+    "files": {"opnsense-first-boot.php": sys.argv[2], "root.hash": sys.argv[3],
+              "opnsense-ansible-user.php": sys.argv[6], "ansible-apikey.line": sys.argv[7]},
+    "commands": [
+        "php opnsense-first-boot.php vtnet0 %s %s vtnet1 root.hash" % (sys.argv[4], sys.argv[5]),
+        # The script reads /root/ansible-apikey.line; the line goes however the script ends.
+        "cp ansible-apikey.line /root/ansible-apikey.line && chmod 600 /root/ansible-apikey.line"
+        " && php opnsense-ansible-user.php; r=$?; rm -f /root/ansible-apikey.line ansible-apikey.line root.hash; (exit $r)"],
     "reboot": True}))' "$files/opnsense-root.pass" "$repo/hosts/ansible/bootstrap/opnsense-first-boot.php" \
-    "$files/opnsense-root.hash" "$tag" "$gw/$prefix" > "$files/console-plan.json"
+    "$files/opnsense-root.hash" "$tag" "$gw/$prefix" "$repo/hosts/ansible/bootstrap/opnsense-ansible-user.php" \
+    "$files/opnsense-api.line" > "$files/console-plan.json"
   local rc=0
   python3 -I "$console_py" "$files/console-plan.json" ssh -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 \
     -o UserKnownHostsFile="$files/known_hosts" "root@$addr" "socat UNIX-CONNECT:/var/run/qemu-server/100.serial0 STDIO" || rc=$?
   rm -f "$files/console-plan.json"
   (( rc == 0 )) || return "$rc"
   # The copy has mgmt .2 from lab; the default LAN rules let it ping the gateway.
-  local _
+  local _ up=0
   for _ in $(seq 1 60); do
-    if vm "ping -c 1 -W 2 $gw >/dev/null"; then echo "lab-test: the mgmt gateway $gw answers from the copy"; return 0; fi
+    if vm "ping -c 1 -W 2 $gw >/dev/null"; then up=1; break; fi
     sleep 10
   done
-  echo "lab-test: the mgmt gateway $gw does not answer from the copy after 10 minutes"; return 1
+  (( up )) || { echo "lab-test: the mgmt gateway $gw does not answer from the copy after 10 minutes"; return 1; }
+  echo "lab-test: the mgmt gateway $gw answers from the copy"
+  # The API user answers on one of its own paths (api/interfaces/vlan_settings, privilege page-interfaces-vlan-edit).
+  # -k: OPNsense's own certificate is self-signed, and the mgmt VLAN exists only inside the copy (its vmbr1 has no
+  # ports). The key and secret go to curl on stdin, never on a command line.
+  for _ in $(seq 1 30); do
+    if printf 'user = "%s:%s"\n' "$(cat "$files/opnsense-api.key")" "$(cat "$files/opnsense-api.secret")" |
+        vm "curl -sk --fail --max-time 10 -K - -o /dev/null https://$gw/api/interfaces/vlan_settings/search_item"; then
+      echo "lab-test: the API user ansible answers on https://$gw/api"; return 0
+    fi
+    sleep 10
+  done
+  echo "lab-test: the API user ansible gets no answer on https://$gw/api after 5 minutes"; return 1
 }
 
 case $action in
@@ -468,7 +493,7 @@ case $action in
     # The copy's token, inventory and run folder states go with it; a new copy gets new ones. Root's password stays
     # with its hash, which the cached prepared ISO holds.
     rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory" "$files/state" "$files/copy-ca.pem" \
-      "$files"/opnsense-root.*
+      "$files"/opnsense-root.* "$files"/opnsense-api.*
     echo "lab-test: VM $VMID destroyed"
     leftovers
     ;;

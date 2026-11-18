@@ -6,6 +6,7 @@
 // the agent's file-write call in pieces under ~700 bytes (larger payloads hang OPNsense's agent),
 // then `qm guest exec 100 -- php /root/ansible-user.php`. Make the key and secret on the
 // controller, keep them in a 0600 file there, and send only "<key>|$(openssl passwd -6)".
+// The lab test copy runs it from a root shell over the serial console instead (lab-test firstboot).
 require_once('script/load_phalcon.php');
 use OPNsense\Core\Config;
 
