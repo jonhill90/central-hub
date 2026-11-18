@@ -173,6 +173,11 @@ PY
 grep -q 'openssl passwd -6 -stdin < "$files/root.pass" > "$files/root.hash"' "$w" && ok "root's hash is of the password the box keeps" || bad "root's hash and password"
 grep -q '"$files/inventory" "$files/state" "$files/copy-ca.pem"' "$w" && ok "destroy removes the copy's run folder states and its CA" || bad "destroy keeps lab's states"
 
+# iac-access.sh, which host runs in the copy: zone lab can be made on an empty host (Zones.pm checks /sdn/zones).
+iac=$root/hosts/terraform/home/bootstrap/iac-access.sh
+grep -Eq '^acl /sdn/zones 0 ' "$iac" && ! grep -Eq '^acl /sdn/zones 1 ' "$iac" && ! grep -Eq '^acl /sdn 1 ' "$iac" \
+  && ok "iac-access.sh lets the token make a zone, without rights in other zones" || bad "iac-access.sh: no /sdn/zones ACL"
+
 # The role takes the binary out of a .deb (an ar archive holding data.tar.xz) with Python only.
 mkdir -p "$work/deb/usr/bin"
 printf '#!/bin/sh\necho example\n' > "$work/deb/usr/bin/proxmox-auto-install-assistant"
