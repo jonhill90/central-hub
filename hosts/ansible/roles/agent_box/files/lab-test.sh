@@ -22,10 +22,12 @@
 # firstboot: inside the copy, set-up-lab-network-and-firewall.md step 5 with no person: over VM 100's serial console,
 #   as root on the copy, sign in, run hosts/ansible/bootstrap/opnsense-first-boot.php (mgmt VLAN, LAN, WAN, root's
 #   password, kept on the box) and then step 6's opnsense-ansible-user.php (the API user, its key and secret kept on
-#   the box), reboot VM 100, and wait for the mgmt gateway and the API user to answer. Safe to run again.
+#   the box), then opnsense-ssh-key.php (SSH for root by a key the box makes for this copy, LAN only), reboot VM 100,
+#   and wait for the mgmt gateway, the API user and SSH by that key to answer. Safe to run again.
 # opnsense: inside the copy, set-up-lab-network-and-firewall.md step 7's playbooks/opnsense.yml against VM 100, from the
 #   box through an SSH tunnel to the copy (the copy's mgmt VLAN exists only inside it), with an inventory the wrapper
-#   writes; the DNS proof is left out (it asks the gateway directly). A second run must report changed=0.
+#   writes; the DNS proof is left out (it asks the gateway directly). A second run must report changed=0, and SSH by
+#   firstboot's key must still answer, as firstboot left it.
 # wancheck: inside the copy, step 7's WAN safety check on VM 100, whose WAN is on the copy's portless vmbr9: WAN a DHCP
 #   client only (over the console), then a watch for server-type frames from the WAN at link-up and over a reboot.
 #   WAN goes down again on any failure.
@@ -293,6 +295,50 @@ for v in json.load(sys.stdin)["data"]:
 vm() { ssh -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
   -o UserKnownHostsFile="$files/known_hosts" "root@$addr" "$@"; }
 
+# A command on the copy's VM 100 as root, over SSH by the key firstboot made for this copy, through the copy: VM 100's
+# LAN is the copy's mgmt VLAN, which exists only inside the copy. Root's shell there is csh behind opnsense-shell, so
+# a command must not use sh redirects. The key, its public line and VM 100's host key stay in $files/opnsense-ssh.*,
+# and destroy removes them.
+vm100() {
+  local _ gw
+  read -r _ gw _ < <(mgmt_values)
+  ssh -i "$files/opnsense-ssh.key" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 \
+    -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$files/opnsense-ssh.known_hosts" \
+    -o ProxyCommand="ssh -i $sshkey -o BatchMode=yes -o ConnectTimeout=10 -o UserKnownHostsFile=$files/known_hosts root@$addr -W %h:%p" \
+    "root@$gw" "$@"
+}
+
+# Reads VM 100's `sshd -T` on stdin and names what is not as opnsense-ssh-key.php sets it: root by key, password and
+# keyboard-interactive sign-in off, and sshd listening on the mgmt gateway (LAN) and loopback only, never WAN.
+# OPNsense listens on every address of the chosen interfaces and lo0, link-local ones with their scope
+# (openssh.inc, openssh_configure_do; interfaces.inc, interfaces_addresses), so a link-local address is let through
+# unless its scope is the WAN device.
+sshd_settings_ok() { # mgmt gateway, WAN device
+  python3 -I -c 'import ipaddress, sys
+gw, wan, got, bad = sys.argv[1], sys.argv[2], {}, []
+for line in sys.stdin:
+    k, _, v = line.strip().partition(" ")
+    got.setdefault(k.lower(), []).append(v)
+for k, want in (("permitrootlogin", "yes"), ("pubkeyauthentication", "yes"), ("passwordauthentication", "no"),
+                ("kbdinteractiveauthentication", "no")):
+    if got.get(k) != [want]:
+        bad.append("%s is %s" % (k, " ".join(got.get(k, ["unset"]))))
+def allowed(a):
+    host = a.split(" ", 1)[0].rsplit(":", 1)[0].strip("[]")
+    host, _, scope = host.partition("%")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_loopback or (ip.is_link_local and scope not in ("", wan))
+listen = got.get("listenaddress", [])
+if gw + ":22" not in listen or any(a != gw + ":22" and not allowed(a) for a in listen):
+    bad.append("listenaddress is " + (" ".join(listen) or "unset"))
+if bad:
+    print("; ".join(bad))
+    sys.exit(1)' "$1" "$2"
+}
+
 # The install takes some minutes after apply; wait up to 30 for the installed system's SSH.
 wait_ssh() {
   local _
@@ -479,20 +525,29 @@ firstboot() {
   [[ -s $files/opnsense-api.secret ]] || openssl rand -hex 40 > "$files/opnsense-api.secret"
   printf '%s|%s\n' "$(cat "$files/opnsense-api.key")" "$(openssl passwd -6 -stdin < "$files/opnsense-api.secret")" \
     > "$files/opnsense-api.line"
+  # SSH for root on VM 100, LAN only, so later steps can run commands there: the key is made here for this copy and
+  # stays on the box; VM 100 gets only its public line (hosts/ansible/bootstrap/opnsense-ssh-key.php).
+  if [[ ! -s $files/opnsense-ssh.key || ! -s $files/opnsense-ssh.key.pub ]]; then
+    rm -f "$files/opnsense-ssh.key" "$files/opnsense-ssh.key.pub"
+    ssh-keygen -q -t ed25519 -N "" -C lab-test-vm100 -f "$files/opnsense-ssh.key"
+  fi
   # net0 is the trunk (vtnet0) and net1 is WAN (vtnet1), in firewall/main.tf's order.
   python3 -I -c 'import json, sys
 print(json.dumps({
     "passwords": ["opnsense", open(sys.argv[1]).read().strip()], "dir": "/root/lab-test",
     "files": {"opnsense-first-boot.php": sys.argv[2], "root.hash": sys.argv[3],
-              "opnsense-ansible-user.php": sys.argv[6], "ansible-apikey.line": sys.argv[7]},
+              "opnsense-ansible-user.php": sys.argv[6], "ansible-apikey.line": sys.argv[7],
+              "opnsense-ssh-key.php": sys.argv[8], "root-ssh.pub": sys.argv[9]},
     "commands": [
         "php opnsense-first-boot.php vtnet0 %s %s vtnet1 root.hash" % (sys.argv[4], sys.argv[5]),
         # The script reads /root/ansible-apikey.line; the line goes however the script ends.
         "cp ansible-apikey.line /root/ansible-apikey.line && chmod 600 /root/ansible-apikey.line"
-        " && php opnsense-ansible-user.php; r=$?; rm -f /root/ansible-apikey.line ansible-apikey.line root.hash; (exit $r)"],
+        " && php opnsense-ansible-user.php; r=$?; rm -f /root/ansible-apikey.line ansible-apikey.line root.hash; (exit $r)",
+        "php opnsense-ssh-key.php root-ssh.pub; r=$?; rm -f root-ssh.pub; (exit $r)"],
     "reboot": True}))' "$files/opnsense-root.pass" "$repo/hosts/ansible/bootstrap/opnsense-first-boot.php" \
     "$files/opnsense-root.hash" "$tag" "$gw/$prefix" "$repo/hosts/ansible/bootstrap/opnsense-ansible-user.php" \
-    "$files/opnsense-api.line" > "$files/console-plan.json"
+    "$files/opnsense-api.line" "$repo/hosts/ansible/bootstrap/opnsense-ssh-key.php" "$files/opnsense-ssh.key.pub" \
+    > "$files/console-plan.json"
   local rc=0
   python3 -I "$console_py" "$files/console-plan.json" ssh -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 \
     -o UserKnownHostsFile="$files/known_hosts" "root@$addr" "socat UNIX-CONNECT:/var/run/qemu-server/100.serial0 STDIO" || rc=$?
@@ -509,14 +564,28 @@ print(json.dumps({
   # The API user answers on one of its own paths (api/interfaces/vlan_settings, privilege page-interfaces-vlan-edit).
   # -k: OPNsense's own certificate is self-signed, and the mgmt VLAN exists only inside the copy (its vmbr1 has no
   # ports). The key and secret go to curl on stdin, never on a command line.
+  up=0
   for _ in $(seq 1 30); do
     if printf 'user = "%s:%s"\n' "$(cat "$files/opnsense-api.key")" "$(cat "$files/opnsense-api.secret")" |
         vm "curl -sk --fail --max-time 10 -K - -o /dev/null https://$gw/api/interfaces/vlan_settings/search_item"; then
-      echo "lab-test: the API user ansible answers on https://$gw/api"; return 0
+      up=1; break
     fi
     sleep 10
   done
-  echo "lab-test: the API user ansible gets no answer on https://$gw/api after 5 minutes"; return 1
+  (( up )) || { echo "lab-test: the API user ansible gets no answer on https://$gw/api after 5 minutes"; return 1; }
+  echo "lab-test: the API user ansible answers on https://$gw/api"
+  # SSH by the copy's key: sshd's own view of its settings, read over that SSH.
+  local sshd=""
+  up=0
+  for _ in $(seq 1 30); do
+    if sshd=$(vm100 /usr/local/sbin/sshd -T); then up=1; break; fi
+    sleep 10
+  done
+  (( up )) || { echo "lab-test: VM 100 does not answer SSH as root by the copy's key after 5 minutes"; return 1; }
+  local problems
+  problems=$(sshd_settings_ok "$gw" vtnet1 <<<"$sshd") \
+    || { echo "lab-test: VM 100's sshd is not as opnsense-ssh-key.php sets it: $problems"; return 1; }
+  echo "lab-test: VM 100 answers SSH as root by the copy's key, on $gw only, with password sign-in off"
 }
 
 # set-up-lab-network-and-firewall.md step 7 against the copy's VM 100: playbooks/opnsense.yml as the controller runs it,
@@ -528,6 +597,7 @@ print(json.dumps({
 opnsense() {
   wait_ssh
   [[ -s $files/opnsense-api.key && -s $files/opnsense-api.secret ]] || { echo "lab-test: the API key is not on the box; run lab-test firstboot first"; return 1; }
+  [[ -s $files/opnsense-ssh.key ]] || { echo "lab-test: VM 100's SSH key is not on the box; run lab-test firstboot first"; return 1; }
   [[ -f $files/inventory/hosts.yml && -s $files/copy-ca.pem ]] || { echo "lab-test: run lab-test lab first"; return 1; }
   local tag gw prefix port tunnel n rc=0 _
   read -r tag gw prefix < <(mgmt_values)
@@ -562,6 +632,13 @@ socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=2).close()' "$
   grep -Eq '^opnsense_fw +: ok=[0-9]+ +changed=0 +unreachable=0 +failed=0' "$files/opnsense-run.log" \
     || { echo "lab-test: the second opnsense.yml run changed something; the role does not converge on the copy"; return 1; }
   echo "lab-test: opnsense.yml applied to the copy's VM 100; a second run shows changed=0"
+  # The role's config must leave firstboot's SSH as it was: later steps run commands on VM 100 over it.
+  local sshd problems
+  sshd=$(vm100 /usr/local/sbin/sshd -T) \
+    || { echo "lab-test: after opnsense.yml, VM 100 does not answer SSH as root by the copy's key"; return 1; }
+  problems=$(sshd_settings_ok "$gw" vtnet1 <<<"$sshd") \
+    || { echo "lab-test: after opnsense.yml, VM 100's sshd is not as opnsense-ssh-key.php sets it: $problems"; return 1; }
+  echo "lab-test: after opnsense.yml, VM 100 still answers SSH as root by the copy's key, on $gw only"
 }
 
 # set-up-lab-network-and-firewall.md step 7's WAN safety check against the copy's VM 100, whose WAN is on the copy's
@@ -718,7 +795,7 @@ case $action in
     # The copy's token, inventory and run folder states go with it; a new copy gets new ones. Root's password stays
     # with its hash, which the cached prepared ISO holds.
     rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory" "$files/state" "$files/copy-ca.pem" \
-      "$files"/opnsense-root.* "$files"/opnsense-api.* "$files/opnsense-run.log" \
+      "$files"/opnsense-root.* "$files"/opnsense-api.* "$files"/opnsense-ssh.* "$files/opnsense-run.log" \
       "$files/connector-run.log" "$files/safety-run.log"
     echo "lab-test: VM $VMID destroyed"
     leftovers
