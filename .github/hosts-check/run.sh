@@ -365,6 +365,7 @@ check_identity() {
     -e dest="$work/identity/realm.yaml" \
     -e '{"k8s_identity_owner_email":"owner@example.com","k8s_identity_extra_users":[{"username":"viewer.one","groups":["lab-viewers"]}],"k8s_identity_proxmox_hosts":["pve.example.com"],"k8s_identity_openbao_hosts":["bao.example.com"],"k8s_identity_opnsense_hosts":["fw.example.com"]}' \
     -e k8s_identity_theme_dir="$here/identity/theme/lab" >/dev/null)
+  bash "$here/tests/test_user_json.sh"
   bash "$here/identity/test_realm.sh" "$work/identity/realm.yaml" "$here/identity/theme/lab"
 }
 

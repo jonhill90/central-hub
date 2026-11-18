@@ -158,3 +158,9 @@ k8s_identity_oidc_handoff_file: ""
 # clients of realm.yaml.j2. Use it to add a client without the realm replace, which ends every open
 # sign-in: for example [proxmox] once k8s_identity_proxmox_hosts is set.
 k8s_identity_ensure_clients: []
+
+# Users that tasks/users.yml adds to the live realm (tag users), by user name. They must be users of
+# realm.yaml.j2 (the owner or k8s_identity_extra_users). Use it to add a user, such as the sign-in test
+# user, without the realm replace, which ends every open sign-in. A user that is already there is not
+# changed.
+k8s_identity_ensure_users: []

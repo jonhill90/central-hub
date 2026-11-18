@@ -114,6 +114,37 @@ fi
 python3 -I "$here/check_realm.py" "$work/lab.json"
 echo "identity: a client deleted, added and updated through ensure-client.sh; users and other clients untouched; realm checked again"
 
+# The add-a-user path the role takes to put a user in the live realm without the replace (role
+# tasks/users.yml): files/user-json.py fills the user's password and seed from the environment and
+# files/ensure-user.sh creates the user inside the container. Delete the admin first, so the create path runs
+# with its groups, password and TOTP credential, then run it again for the "exists" path, and check that the
+# other users and the clients are untouched and that the new user signs in with the password and a TOTP code.
+ensure_user() { # <username> <json file>
+  docker exec -i "$name" bash -c "$(cat "$roledir/ensure-user.sh")" ensure-user lab "$1" < "$2"
+}
+adm=$(python3 -I -c 'import json, sys; print(next(u["username"] for u in json.load(open(sys.argv[1]))["users"] if any(c["type"] == "otp" for c in u["credentials"])))' "$work/lab.json")
+adm_key=$(printf '%s' "$adm" | tr 'a-z' 'A-Z' | tr -c 'A-Z0-9' '_')
+pw_value=test-PASSWORD_$adm_key
+seed_value=$(python3 -I -c 'import base64, sys; print(base64.b32encode(sys.argv[1].encode()).decode().rstrip("="))' "test-TOTP_$adm_key")
+env "PASSWORD_$adm_key=$pw_value" "TOTP_$adm_key=$seed_value" python3 -I "$roledir/user-json.py" "$realm_yaml" "$adm" > "$work/user.json"
+users_before=$(kc get users -r lab --fields username --format csv --noquotes | grep -v "^$adm$" | sort | tr '\n' ' ')
+clients_before=$(kc get clients -r lab --fields clientId --format csv --noquotes | sort | tr '\n' ' ')
+uid=$(kc get users -r lab -q "username=$adm" -q exact=true --fields id --format csv --noquotes)
+kc delete "users/$uid" -r lab
+out=$(ensure_user "$adm" "$work/user.json")
+[ "$out" = created ] || { echo "FAIL: ensure-user.sh printed '$out' for a missing user, not 'created'" >&2; exit 1; }
+out=$(ensure_user "$adm" "$work/user.json")
+[ "$out" = exists ] || { echo "FAIL: ensure-user.sh printed '$out' for an existing user, not 'exists'" >&2; exit 1; }
+users_after=$(kc get users -r lab --fields username --format csv --noquotes | grep -v "^$adm$" | sort | tr '\n' ' ')
+clients_after=$(kc get clients -r lab --fields clientId --format csv --noquotes | sort | tr '\n' ' ')
+[ "$users_before" = "$users_after" ] || { echo "FAIL: other users changed: '$users_before' became '$users_after'" >&2; exit 1; }
+[ "$clients_before" = "$clients_after" ] || { echo "FAIL: clients changed" >&2; exit 1; }
+if echo '{"username":"other"}' | ensure_user "$adm" /dev/stdin 2>/dev/null; then
+  echo "FAIL: ensure-user.sh took JSON for another user" >&2; exit 1
+fi
+python3 -I "$here/check_realm.py" "$work/lab.json"
+echo "identity: a user deleted and added through ensure-user.sh with its groups, password and TOTP seed; other users and clients untouched; realm checked again"
+
 # The sign-in page uses the theme: Argo CD's client (no PKCE needed) asks for the page, and the page
 # links the theme's stylesheet, which Keycloak serves.
 if [ -n "$theme" ]; then
