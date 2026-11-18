@@ -241,6 +241,7 @@ Every backup and restore test that ends well writes its time for Prometheus: `c1
 The panel check prints the hours since the last volume and etcd backups and the days since the last volume restore test ([check-c1-alerts-and-dashboard.md](check-c1-alerts-and-dashboard.md)).
 
 Order, so nothing fires for the wrong reason:
+
 1. Merge the change, then run step 2 with `--tags install,timers`. The role makes the folder and the units pass `BACKUP_METRICS_DIR`.
 2. After the next night's timers, or a drill (`--tags drill`), each node's folder holds its `.prom` files.
    expect: `cat /var/lib/node-exporter/textfile/c1-backup-volumes.prom` on a node shows the line with tonight's time.
