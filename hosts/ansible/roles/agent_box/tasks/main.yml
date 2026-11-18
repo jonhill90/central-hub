@@ -711,6 +711,14 @@
   when: agent_box_opnsense_test | length > 0
   tags: [wrappers]
 
+- name: The lab-test wrapper's assistant, helper and settings
+  ansible.builtin.include_tasks:
+    file: lab_test.yml
+    apply:
+      tags: [wrappers]
+  when: agent_box_lab_test | length > 0
+  tags: [wrappers]
+
 - name: Weekly CI runner service and timer (pick 208)
   ansible.builtin.template:
     src: "ci-runner-weekly.{{ item }}.j2"
