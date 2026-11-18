@@ -5,7 +5,8 @@
 # Installed by the agent_box role; root owns it.
 #   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|gitops|handover|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
-#           public half, which goes into root's authorized_keys on prod's nodes once, by a run that already reaches them.
+#           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
+#           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
 # check     read-only: for each prod node in the inventory, ssh as root with that key, BatchMode, 10 s: reached, the key
 #           refused, or no answer (a firewall), by node name. Nothing else runs.
 # seal      puts prod's seal key on the node openbaoSealNode names (playbooks/k8s-openbao-seal.yml), D-0058 rule 3. Putting
@@ -149,7 +150,7 @@ PY
 )" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$settings" || exit 1
 chmod 600 "$inventory/hosts.yml"
 
-# Every host: plain ssh to ansible_host with the box's key and nothing else; the env label says prod.
+# Every host: plain ssh to ansible_host with the box's key and nothing else; no host labelled another env than prod.
 ansible-inventory -i "$inventory/" --list | python3 -I -c "$(cat <<'PY'
 import json, sys
 nodekey, known = sys.argv[1:3]
