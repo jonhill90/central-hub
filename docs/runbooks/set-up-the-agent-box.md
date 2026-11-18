@@ -152,15 +152,15 @@ The role installs Blender 5.2.3 LTS (the newest release at least two weeks old o
 Sessions run it as themselves, always in background mode:
 
 ```sh
-blender -b --python scene.py -- <args for the script>
-blender -b file.blend -E CYCLES -f 1 -o /tmp/out/frame_####
+blender -b --factory-startup --python-exit-code 1 --python scene.py -- <args for the script>
+blender -b file.blend -E CYCLES -o /tmp/out/frame_#### -f 1
 ```
 
-why: `-b` runs with no window; the box has no display.
-expect: `Blender 5.2.3 LTS` from `blender -b --version`. Measured on the box on 2026-11-18 (2 vCPUs, no GPU), a 960x540 scene with three area lights and a subdivided mesh: Cycles on the CPU at 64 samples with denoising took 48 s and peaked at 860 MB of memory; EEVEE took 99 s on Mesa's software renderer (llvmpipe) and peaked at 2.5 GB; Workbench took about 1 s and peaked at 740 MB.
+why: `-b` runs with no window; the box has no display. `--factory-startup` skips any saved user startup file, so every run starts the same. `--python-exit-code 1` makes a script that raises end with exit code 1: without it Blender exits 0 even when the script failed (measured on the box on 2026-11-18, a script that raises returned 0 by default and 3 with `--python-exit-code 3`), so a failed render looks like a passed one. Arguments run in the order given, so `-f` or `-a` goes last.
+expect: `Blender 5.2.3 LTS` from `blender -b --version`. Measured with the installed copy on the box on 2026-11-18 (2 vCPUs, 7.3 GB, no GPU), a 960x540 scene with three area lights and a subdivided mesh, peak memory read from `VmHWM`: Cycles on the CPU at 64 samples with denoising took 32 s and peaked at 850 MB; EEVEE took 52 s on Mesa's software renderer (llvmpipe) and peaked at 2.0 GB; Workbench took about 2 s and peaked at 740 MB. An earlier run of the same scene from a user-space copy took 48 s, 99 s and 1 s.
 
 - Use Cycles with `cycles.device = "CPU"` for finished images. EEVEE works only through Mesa's software EGL, so it is slower than Cycles here.
-- Check `free -m` before a render, and above all before EEVEE, which peaked at 2.5 GB on a small scene; the box shares the host with the dev rebuild.
+- Check `free -m` before a render, and above all before EEVEE, which peaked at 2.0 to 2.5 GB on a small scene; the box shares the host with the dev rebuild.
 - The Vulkan warning at start is expected: Blender falls back to OpenGL through EGL.
 - docs.blender.org answers 403 to the box. The role keeps Blender Lab's MCP repository (projects.blender.org/lab/blender_mcp, pinned to commit dbbf836, 2026-09-29) under the libexec folder for the Python API reference and manual excerpts it bundles, about 4,500 RST files. Search them with `grep -rl <term> /usr/local/libexec/agent-box/blender-mcp/mcp/blmcp/data/`. Its MCP server is not installed, because sessions drive Blender directly with `blender -b --python`.
 

@@ -483,6 +483,16 @@
     repo: https://projects.blender.org/lab/blender_mcp.git
     dest: "{{ agent_box_libexec_dir }}/blender-mcp"
     version: dbbf836ad4b1025f14a2b3b504c43903f39e0b04
+    umask: "0022"
+  when: not ansible_check_mode
+  tags: [wrappers]
+
+- name: Blender Lab's MCP docs readable by the sessions (root's umask left the clone at 0700)
+  ansible.builtin.file:
+    path: "{{ agent_box_libexec_dir }}/blender-mcp"
+    state: directory
+    recurse: true
+    mode: "u=rwX,go=rX"
   when: not ansible_check_mode
   tags: [wrappers]
 
