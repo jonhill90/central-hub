@@ -55,7 +55,7 @@ variable "vm" {
   }
 
   validation {
-    condition     = var.vm.memory_mb >= 6144 && var.vm.disk_gb >= 32 && var.vm.cores >= 2
-    error_message = "The copy holds Proxmox VE (2 GiB, its documented minimum), an OPNsense guest (3 GiB, its documented minimum) and the connector container: at least 6144 MiB, 32 GB and 2 cores (docs/specs/2026-11-lab-test-copy.md)."
+    condition     = var.vm.memory_mb >= 7168 && var.vm.disk_gb >= 32 && var.vm.cores >= 2
+    error_message = "The copy holds Proxmox VE (2 GiB, its documented minimum), the firewall run folder's VM 100 (4096 MiB, hosts/terraform/home/firewall/main.tf) and the connector container (256 MiB): at least 7168 MiB, 32 GB and 2 cores (docs/specs/2026-11-lab-test-copy.md)."
   }
 }

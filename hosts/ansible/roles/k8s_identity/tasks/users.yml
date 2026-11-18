@@ -1,0 +1,71 @@
+---
+# Add a user to the live realm through Keycloak's admin tool, without the realm replace (tasks/keycloak.yml
+# deletes realm lab and imports it again, which ends every open sign-in). Only users named in
+# k8s_identity_ensure_users are touched; groups, clients and the other users stay, and a user that is already
+# there is left exactly as it is, its password and seed included.
+# Run with `--tags secrets,users`: the secrets tag loads the values file the passwords and seeds come from.
+# The user's definition is the one in realm.yaml.j2 (k8s_identity_extra_users), so there is one place to edit
+# it. Its ${KEY} placeholders are filled from the values file on the controller, through the environment of
+# files/user-json.py, never in an argument; the JSON then goes to files/ensure-user.sh on stdin, inside the
+# Keycloak pod.
+- name: users | A private folder on the controller
+  ansible.builtin.tempfile: {state: directory, suffix: .users}
+  register: k8s_identity_users_dir
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+
+- name: users | Realm manifest, rendered on the controller
+  ansible.builtin.template:
+    src: realm.yaml.j2
+    dest: "{{ k8s_identity_users_dir.path }}/realm.yaml"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+
+- name: users | The user's JSON, secrets filled in
+  ansible.builtin.command:
+    argv: [python3, -I, "{{ role_path }}/files/user-json.py", "{{ k8s_identity_users_dir.path }}/realm.yaml", "{{ __user }}"]
+  environment: "{{ k8s_identity_values }}"
+  register: k8s_identity_user_json
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+  loop: "{{ k8s_identity_ensure_users }}"
+  loop_control: {loop_var: __user}
+  no_log: true
+
+- name: users | Make sure each user is in realm {{ k8s_identity_realm }}
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - -n
+      - "{{ k8s_identity_namespace }}"
+      - exec
+      - -i
+      - "{{ k8s_identity_name }}-0"
+      - --
+      - bash
+      - -c
+      - "{{ lookup('ansible.builtin.file', 'ensure-user.sh') }}"
+      - ensure-user
+      - "{{ k8s_identity_realm }}"
+      - "{{ __result.__user }}"
+    stdin: "{{ __result.stdout }}"
+  register: k8s_identity_user_ensured
+  changed_when: "'created' in k8s_identity_user_ensured.stdout"
+  when: not ansible_check_mode
+  loop: "{{ k8s_identity_user_json.results }}"
+  loop_control: {loop_var: __result, label: "{{ __result.__user }}"}
+  no_log: true
+
+- name: users | Remove the controller's temporary folder
+  ansible.builtin.file: {path: "{{ k8s_identity_users_dir.path }}", state: absent}
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false

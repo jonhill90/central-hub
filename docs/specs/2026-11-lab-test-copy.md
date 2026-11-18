@@ -34,7 +34,7 @@ It serves the PRD's goal of a platform an agent can tear down and rebuild from t
 |---|---|---|
 | VM | 256, pool `dev`, one NIC on VNet `dev`, never starts with the host | In dev's range (`hosts/terraform/home/bootstrap/agent-access.sh`, pool dev 250-257); 250-251 are dev's nodes and 257 is the OPNsense test VM |
 | CPU | type `host`, 2 cores | `host` passes the hardware virtualisation flags through (Proxmox wiki, above); the OPNsense test VM already uses it (`hosts/terraform/home/opnsense-test/main.tf`) |
-| Memory | 6144 MiB, no ballooning | 2048 for Proxmox VE itself, the documented minimum "for the OS and Proxmox VE services" ([System Requirements](https://pve.proxmox.com/wiki/System_Requirements)); 3072 for the nested OPNsense, the minimum `hosts/terraform/home/opnsense-test/variables.tf` records as documented (its run of 2026-11-18 used 522 of 3035 MiB, proof item 7); 256 for the nested connector, as CT 900 has (`hosts/terraform/home/remote-access/main.tf`); 5376 in all, rounded up |
+| Memory | 7168 MiB, no ballooning | 2048 for Proxmox VE itself, the documented minimum "for the OS and Proxmox VE services" ([System Requirements](https://pve.proxmox.com/wiki/System_Requirements)); 4096 for the nested OPNsense, because the copy runs the firewall run folder unchanged and it gives VM 100 4096 MiB with no ballooning (`hosts/terraform/home/firewall/main.tf`); 256 for the nested connector, as CT 900 has (`hosts/terraform/home/remote-access/main.tf`); 6400 in all, rounded up to whole GiB |
 | Disk | 32 GB on `local-lvm`, thin | Room for the nested host, a 16 GB OPNsense disk as VM 257 has, and a container |
 | Install | the Proxmox VE 9 ISO prepared with `proxmox-auto-install-assistant prepare-iso --fetch-from iso`, its answer file holding a root password hash, the box's SSH key and a static dev address | The prepared ISO's boot menu picks "Automated Installation" after 10 seconds, so no console is needed ([Automated Installation](https://pve.proxmox.com/wiki/Automated_Installation)); the agents' token has no `VM.Console` |
 | Secrets | the nested root password, the nested `iac@pve` token and the nested OPNsense API key, made for the copy and removed with it | As the OPNsense test does; no prod secret is read |
@@ -52,7 +52,7 @@ The nested vmbr1 has no ports, as on the real host, so the nested firewall's LAN
 
 ## Memory
 
-The copy needs 6144 MiB plus the 2048 MiB margin the OPNsense test uses: 8192 MiB. A dev rebuild needs 11264 MiB ([Dev node sizes](../runbooks/rebuild-k8s-layer-with-one-command.md#dev-node-sizes)). With dev down, the node's free memory read 7568 MiB and 11414 MiB at two times on 2026-11-18. So the copy runs only while dev is down and VM 257 does not exist, and it would not have fitted at the lower reading, and its wrapper refuses otherwise, as the OPNsense test's does. The dev rebuild refuses while VM 256 exists.
+The copy needs 7168 MiB plus the 2048 MiB margin the OPNsense test uses: 9216 MiB. A dev rebuild needs 11008 MiB ([Dev node sizes](../runbooks/rebuild-k8s-layer-with-one-command.md#dev-node-sizes)). With dev down, the node's free memory read 7568 MiB and 11414 MiB at two times on 2026-11-18. So the copy runs only while dev is down and VM 257 does not exist; it would not have fitted at the lower reading, and it fits at the higher one with 2198 MiB to spare; and its wrapper refuses otherwise, as the OPNsense test's does. The dev rebuild refuses while VM 256 exists.
 
 ## Out of scope
 
@@ -66,7 +66,7 @@ The copy needs 6144 MiB plus the 2048 MiB margin the OPNsense test uses: 8192 Mi
 
 ### Automated
 
-- [ ] `tofu test` in `hosts/terraform/home/lab-test`: VM 256 in pool dev, CPU `host`, 6144 MiB, one NIC on VNet dev, never on boot.
+- [ ] `tofu test` in `hosts/terraform/home/lab-test`: VM 256 in pool dev, CPU `host`, 7168 MiB, one NIC on VNet dev, never on boot.
 - [ ] `bash .github/hosts-check/tests/test_rebuild_preflight.sh`: the dev preflight refuses while VM 256 exists.
 - [ ] From inside VM 256: `grep -cE 'vmx|svm' /proc/cpuinfo` prints more than 0, and `pveversion` names Proxmox VE 9.
 - [ ] On the nested host: a second `tofu plan` in `network`, `firewall` and `remote-access` shows no changes, and `opnsense.yml --check` reports `changed=0`.
@@ -89,4 +89,5 @@ The copy needs 6144 MiB plus the 2048 MiB margin the OPNsense test uses: 8192 Mi
 
 - 2026-11-18: one nested Proxmox VM, not a second set of lab objects on the real host. A second SDN zone or a second firewall on the real host would change the real host's network, and the agents' dev token cannot allocate SDN objects (`agent-access.sh`, role AgentDev has no `SDN.Allocate`). Agent pick.
 - 2026-11-18: VM 256, the free ID nearest 257 in dev's range. Agent pick.
+- 2026-11-18: 7168 MiB, not 6144. The first size counted the nested OPNsense at 3072 MiB, the OPNsense test's minimum, but the copy runs the firewall run folder as it is, and that gives VM 100 4096 MiB. Agent pick.
 - 2026-11-18: the automated installer, not Debian 13 with the Proxmox packages added. The installer is what a person would use on the real host, so the answer file is proven too. Agent pick.
