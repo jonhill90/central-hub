@@ -644,7 +644,8 @@ if [ "$ENV_NAME" = dev ]; then
 fi
 
 # A failed ephemeral-dev run: read the cluster before it is torn down (what `rebuild diag` shows: the Argo CD
-# applications, the pods not running, the newest events), into the short log, each line prefixed `diag:`. Never fatal.
+# applications and why each is not Synced and Healthy, the pods not running, the last log lines of each pod in Error,
+# the newest events), into the short log, each line prefixed `diag:`. Never fatal.
 runner_capture_diag() {
   echo "diag: the run failed, so the cluster is read before it is torn down" | tee -a "$log"
   {
@@ -656,7 +657,17 @@ runner_capture_diag() {
     kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
     echo "== newest events, all namespaces"
     kc get events -A --sort-by=.lastTimestamp --no-headers | tail -n 25
-  } 2>&1 | cut -c1-240 | head -n 80 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
+    # Why an application is not Synced and Healthy: its message, its conditions and each resource that is not, then the
+    # last 30 log lines of each pod in Error; both are scrubbed of secrets (hosts/diag-apps.py).
+    echo "== applications not Synced and Healthy: messages and resources"
+    kc -n argocd get applications.argoproj.io -o json | python3 -I "$repo/hosts/diag-apps.py" apps
+    echo "== last 30 log lines of each pod in Error (at most 6 pods)"
+    kc get pods -A --no-headers | awk '$4 ~ /^(Error|CrashLoopBackOff|OOMKilled|CreateContainerError|RunContainerError|Init:Error|Init:CrashLoopBackOff)$/ {print $1, $2}' | head -n 6 |
+      while read -r pns pod; do
+        echo "-- $pns/$pod"
+        kc -n "$pns" logs "$pod" --tail=30 --all-containers=true 2>&1 | python3 -I "$repo/hosts/diag-apps.py" scrub
+      done
+  } 2>&1 | cut -c1-300 | head -n 260 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
   return 0
 }
 

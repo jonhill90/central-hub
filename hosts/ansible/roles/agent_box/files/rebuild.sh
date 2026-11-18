@@ -15,7 +15,8 @@
 # quote the realm and the nodes' output). It takes no argument and reads no other file.
 # diag: read-only look at the dev cluster, for a failed apps stage: the Argo CD applications' sync and
 # health, the newest events in the alerts and monitoring namespaces, pods that are not running, and
-# the monitoring pods and volume claims. Fixed commands, no argument, no write, no Secret read; it
+# the monitoring pods and volume claims, and why each application is not Synced and Healthy with the last log lines of
+# each pod in Error (scrubbed). Fixed commands, no argument, no write, no Secret read; it
 # uses the inventory the last run made and does not touch the checkout or the run lock.
 set -euo pipefail
 umask 077
@@ -69,6 +70,26 @@ if [[ ${1:-} == diag && $# -eq 1 ]]; then
   done
   echo "== pods not Running or Completed, all namespaces"
   diag_kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
+  # Why: each application that is not Synced and Healthy with its messages and resources, and the last 30 log lines of each
+  # pod in Error (at most 6), both scrubbed of secrets by hosts/diag-apps.py in the box's checkout of main.
+  if [[ -f $repo/hosts/diag-apps.py ]]; then
+    diag_json() {
+      ansible 'k8s_control_plane[0]' -i "$inventory/" -b -m ansible.builtin.command \
+        -e "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$work/state/diag_known_hosts'" \
+        -a "kubectl --kubeconfig /etc/kubernetes/admin.conf $*" 2>&1 | sed -E '1{/ \| (CHANGED|SUCCESS|FAILED)/d}' || true
+    }
+    echo "== applications not Synced and Healthy: messages and resources"
+    diag_json -n argocd get applications.argoproj.io -o json | python3 -I "$repo/hosts/diag-apps.py" apps | cut -c1-300
+    echo "== last 30 log lines of each pod in Error (at most 6 pods)"
+    diag_json get pods -A --no-headers |
+      awk '$4 ~ /^(Error|CrashLoopBackOff|OOMKilled|CreateContainerError|RunContainerError|Init:Error|Init:CrashLoopBackOff)$/ {print $1, $2}' | head -n 6 |
+      while read -r pns pod; do
+        echo "-- $pns/$pod"
+        diag_json -n "$pns" logs "$pod" --tail=30 --all-containers=true | python3 -I "$repo/hosts/diag-apps.py" scrub
+      done
+  else
+    echo "(hosts/diag-apps.py is not in the box's checkout of main yet; run rebuild up once)"
+  fi
   echo "== monitoring pods and volume claims"
   diag_kc -n monitoring get pods -o wide
   diag_kc -n monitoring get pvc
