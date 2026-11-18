@@ -1,7 +1,7 @@
-# The panel check: every half hour, ask Prometheus for the values the dashboard's OpenBao and
-# Jellyfin panels show, and print one line per panel. An agent reads them with the read-only account
-# (`c1-read logs -n monitoring job/<newest panel-check job>`), so the numbers are seen without a
-# browser, a password or a port-forward. It reads Prometheus only, inside the cluster, and holds no
+# The panel check: every half hour, ask Prometheus for the values the dashboard's OpenBao,
+# Jellyfin and alert delivery panels show, and print one line per panel. An agent reads them with
+# the read-only account (`c1-read logs -n monitoring job/<newest panel-check job>`), so the numbers
+# are seen without a browser, a password or a port-forward. It reads Prometheus only, inside the cluster, and holds no
 # token. A query that answers no series prints "no data" and makes the run fail, so a broken scrape
 # shows as a failed Job. The OpenBao lines are there only where OpenBao is in the cluster.
 {{- $p := .Values.panelCheck }}
@@ -29,6 +29,8 @@ data:
     Jellyfin requests per second	sum(rate(http_requests_received_total{namespace="{{ .Values.jellyfin.namespace }}"}[5m]))
     Jellyfin server errors per second	sum(rate(http_requests_received_total{namespace="{{ .Values.jellyfin.namespace }}",code=~"5.."}[5m])) or vector(0)
     {{- end }}
+    Alerts sent to ntfy, 24h	sum(increase(alertmanager_notifications_total{receiver_name="ntfy"}[24h]))
+    Failed sends to ntfy, 24h	sum(increase(alertmanager_notifications_failed_total{receiver_name="ntfy"}[24h]))
     Alerts firing	count(ALERTS{alertstate="firing",alertname!="Watchdog"}) or vector(0)
   check.sh: |
     #!/bin/sh
@@ -45,6 +47,14 @@ data:
       vals=$(printf '%s' "$out" | grep -o '"value": *\[[^]]*\]' | sed 's/.*"\([^"]*\)" *\]$/\1/' | tr '\n' ' ')
       if [ -z "$vals" ]; then echo "$title: no data"; fail=1; else echo "$title: $vals"; fi
     done < /check/queries.tsv
+    # Which alerts are firing, by name and count, so the reader can tell them apart without a
+    # browser. It does not change the result: firing alerts are what the "Alerts firing" line counts.
+    if out=$(curl -fsS --max-time 20 --get --data-urlencode 'query=ALERTS{alertstate="firing",alertname!="Watchdog"}' "$PROMETHEUS/api/v1/query"); then
+      names=$(printf '%s' "$out" | grep -o '"alertname": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | sort | uniq -c | sed 's/^ *\([0-9]*\) \(.*\)/\2 x\1/' | tr '\n' ' ')
+      echo "Alerts firing, by name: ${names:-none}"
+    else
+      echo "Alerts firing, by name: query failed"
+    fi
     [ "$fail" -eq 0 ] && echo "panel check: every panel has data" || echo "panel check: some panels have no data"
     exit "$fail"
 ---
