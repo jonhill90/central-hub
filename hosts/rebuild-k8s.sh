@@ -9,7 +9,7 @@
 # rebuild.env (mode 0600), which sets:
 #   ENV_NAME      dev or prod
 #   VM_ID_MIN     lowest VM ID this env may touch (dev: 250)
-#   VM_ID_MAX     highest VM ID this env may touch (dev: 257; 258 and 259 are the jumpboxes)
+#   VM_ID_MAX     highest VM ID this env may touch (dev: 257; 258 is the agent box, 259 was the rehearsal container)
 #   TFVARS        the k8s run folder's tfvars for this env
 #   TFSTATE       its OpenTofu state file
 #   TOFU_ENV      a file that exports PROXMOX_VE_ENDPOINT, PROXMOX_VE_API_TOKEN (and _INSECURE)
@@ -89,16 +89,22 @@ if [ "$ENV_NAME" = dev ]; then
 fi
 
 # Dev only: the memory (MiB) each dev node gets by role, in place of its memory_mb in the tfvars (the k8s stack's
-# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so it is sized to fit them: the dev rebuild
-# was refused at 13397 MiB free against 12288 MiB of dev VMs plus the 2048 MiB margin (box log, 2026-11-14 12:03 UTC).
-# The control plane keeps 4096 (c1's uses 3027 MiB, 2026-11-17). The worker is 7168: at 6144 the run of
-# 2026-11-17 04:33 UTC passed every stage up to dev-ca, then the Keycloak realm import timed out with probes failing
-# across the worker; with VM 300 stopped the node had 13412 MiB free, and 4096 + 7168 + 2048 = 13312. c1 (prod) keeps
-# the sizes in its own tfvars.
-DEV_MEMORY_MB_CONTROL_PLANE=4096
-DEV_MEMORY_MB_WORKER=7168
-# The preflight's margin is 1024 MiB (was 2048): on 2026-11-18 01:35 UTC the node had 13209 MiB free with VM 300 and the
-# desktop stopped, 103 MiB under the old minimum of 13312, and the worker can't go below 7168 (see above). 4096 + 7168 + 1024 = 12288.
+# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so it is sized to fit them. On 2026-11-18 at
+# 02:37 UTC the node had 10467 MiB free with VM 300 and the desktop stopped (box rebuild log), down from 12887 MiB at
+# 01:49 UTC: the agent box (VM 258) has no balloon device, so its footprint on the host only grows. The old sizes
+# (4096 + 7168 + the 1024 MiB margin = 12288) no longer fit. The dev VMs now sum to 9216 MiB, at least 1 GiB under
+# that reading: control plane 3072 (the dev control plane peaked at 2813 MiB at 4096 during identity-keycloak,
+# run 20261117T053037Z) and worker 6144 (the worker peaked at 4255 MiB at 7168 in that run; at 6144 the run of
+# 2026-11-17 04:33 UTC timed out in the Keycloak realm import with probes failing; CPU reached 98% in the 7168 run, so the node-top
+# lines of the next run at 6144 show whether memory or CPU ran short). c1 (prod) keeps the sizes in its own tfvars.
+DEV_MEMORY_MB_CONTROL_PLANE=3072
+DEV_MEMORY_MB_WORKER=6144
+# The preflight's margin is 1024 MiB: 3072 + 6144 + 1024 = 10240.
+# Dev only: how long identity-keycloak waits for the realm import (seconds; the role's default is 600). At 6144 MiB the
+# worker's import timed out at 600 s on 2026-11-17 at 04:33 UTC; at 7168 MiB the whole stage took 176 s (run
+# 20261117T053037Z). 1200 gives the smaller worker twice the wait that ran out; if it still times out, the node-top
+# lines say whether memory or CPU ran short.
+DEV_REALM_IMPORT_TIMEOUT_S=1200
 tofu_vars=(-var-file="$TFVARS")
 if [ "$ENV_NAME" = dev ]; then
   tofu_vars+=(-var "memory_mb_by_role={\"control-plane\" = $DEV_MEMORY_MB_CONTROL_PLANE, \"worker\" = $DEV_MEMORY_MB_WORKER}")
@@ -215,7 +221,7 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default: the dev VMs' memory by role, summed over the nodes
-# the tfvars declare, plus a 1024 MiB margin; 4096 + 7168 + 1024 = 12288 for one control plane and one worker). If the
+# the tfvars declare, plus a 1024 MiB margin; 3072 + 6144 + 1024 = 10240 for one control plane and one worker). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 # curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
 # use it, so neither can print the token.
@@ -243,7 +249,7 @@ preflight_guests() {
   printf '%s' "$out" | python3 -c 'import json,sys
 rows = sorted(json.load(sys.stdin)["data"], key=lambda r: r.get("vmid", 0))
 print("preflight: guest list from /cluster/resources?type=vm, %d guests visible to the token" % len(rows))
-print("preflight: guest note: only guests the token can see are listed; VM 258 and CT 259 are NoAccess for it (agent-access.sh, NO_ACCESS), so the memory these lines add up to undercounts")
+print("preflight: guest note: only guests the token can see are listed; VM 258 is NoAccess for it (agent-access.sh, NO_ACCESS), so the memory these lines add up to undercounts")
 for r in rows:
     print("preflight: guest vmid=%s type=%s status=%s maxmem=%s MiB mem=%s MiB name=%s pool=%s" % (
         r.get("vmid"), r.get("type"), r.get("status"), r.get("maxmem", 0) // 1048576, r.get("mem", 0) // 1048576,
@@ -520,6 +526,11 @@ run_stage() {
     apps) wait_apps && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
     certs) ap playbooks/k8s-certs.yml ;;
     identity) ap playbooks/k8s-identity.yml ;;
+    # Prod rebuilt from the agent box only, after identity: prod's Keycloak database back from its dump in the
+    # snapshot the restore stage used, so accounts and their one-time-code devices come back as they were.
+    identity-db)
+      [ "$ENV_NAME" = prod ] || { echo "the Keycloak database is put back on prod only"; return 1; }
+      ap playbooks/k8s-identity-restore.yml ;;
     # Dev only, and added to a dev run after `checks` (below): a throwaway in-cluster CA and the Gateway's
     # certificate from it, so dev has HTTPS with no prod secret (no Cloudflare token, no lab CA key).
     dev-ca)
@@ -576,7 +587,8 @@ run_stage() {
         -e '{"k8s_identity_extra_users": [{"username": "dev-viewer", "groups": ["lab-viewers"]}, {"username": "dev-admin2", "groups": ["lab-admins"]}]}' \
         -e "{\"k8s_identity_openbao_hosts\": $store_hosts}" -e "k8s_identity_oidc_handoff_file=$handoff" \
         -e k8s_app_route_proof=false -e k8s_identity_theme_dir= \
-        -e "k8s_identity_values_file=$env_dir/identity.env" ;;
+        -e "k8s_identity_values_file=$env_dir/identity.env" \
+        -e "k8s_identity_realm_import_timeout=$DEV_REALM_IMPORT_TIMEOUT_S" ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.
@@ -655,6 +667,8 @@ runner_run_teardown() { # [failed]
 }
 
 echo "rebuild: env $ENV_NAME, stages: $stages, log $log"
+# The commit in the short log, so a later run can name the one it rests on (D-0035 rule 3(a): prod after dev).
+echo "rebuild: central-hub $(git -C "$repo" rev-parse HEAD 2>/dev/null || echo unknown)" | tee -a "$log"
 # Dev only, while the sign-in stage runs: each node's CPU and memory from metrics-server (kubectl top nodes), every
 # 60 s, into the short log, so a slow or failed Keycloak stage shows whether the worker ran out of memory or CPU
 # (the 2026-11-17 04:33 UTC run timed out with no reading). Read-only, never fatal; stopped when the stage ends, and it

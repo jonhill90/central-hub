@@ -1,0 +1,98 @@
+---
+# A rebuilt node that backs up as before (prod rebuilt from the agent box, k8s_backup_azure_seed_dir).
+# Before the teardown the box copied each node's key and certificate and its key ID on the app off the
+# node, into <seed dir>/<inventory name>.pem and .pem.keyid on the controller. A node with no
+# certificate gets that one back; a node that has its own (it rolled it since) keeps it. Entra ID must
+# accept it: nothing is uploaded, so a certificate the app no longer knows stops the run, and the
+# controller needs no Azure sign-in. The node's daily timer then rolls it as usual (Microsoft Graph
+# addKey, proved by the current key). Nothing is removed from the app either: the orphan clean-up
+# needs the Azure CLI, and a rebuilt node holds the same certificate as before, so it leaves none.
+
+- name: timers | Azure settings are complete
+  ansible.builtin.assert:
+    that:
+      - k8s_backup_azure_account | length > 0
+      - k8s_backup_azure_client_id | length > 0
+      - k8s_backup_azure_tenant_id | length > 0
+      - k8s_backup_azure_app_object_id | length > 0
+      - k8s_backup_azure_cert_renew_days | int < k8s_backup_azure_cert_days | int
+      - k8s_backup_azure_fixed_cert_file | length == 0
+    fail_msg: >-
+      A carried certificate needs k8s_backup_azure_account, k8s_backup_azure_client_id,
+      k8s_backup_azure_tenant_id and k8s_backup_azure_app_object_id (the tofu outputs of
+      hosts/terraform/azure/backup), fewer renewal days than certificate days, and no
+      k8s_backup_azure_fixed_cert_file (that is the dev reader's).
+    quiet: true
+
+- name: timers | This node's carried certificate and key ID on the controller
+  ansible.builtin.stat:
+    path: "{{ k8s_backup_azure_seed_dir }}/{{ inventory_hostname }}.{{ item }}"
+  loop: [pem, pem.keyid]
+  register: k8s_backup_azure_seed_stat
+  delegate_to: localhost
+  become: false
+
+- name: timers | Stop if either is missing or readable by others
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.size > 0
+      - item.stat.mode in ['0600', '0400']
+    fail_msg: >-
+      {{ k8s_backup_azure_seed_dir }}/{{ inventory_hostname }}.{{ item.item }} must exist on the controller,
+      not be empty, and be mode 0600 or 0400 (copied off the node before its teardown). Nothing was changed.
+    quiet: true
+  loop: "{{ k8s_backup_azure_seed_stat.results }}"
+  loop_control:
+    label: "{{ inventory_hostname }}.{{ item.item }}"
+
+- name: timers | The folder for the node's certificate
+  ansible.builtin.file:
+    path: "{{ k8s_backup_azure_cert_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# force: false keeps a certificate the node already has: after a rebuild that is the carried one, put
+# there by the restore stage, or a newer one the node's timer rolled to since.
+- name: timers | The node's earlier certificate, back on a node that has none
+  ansible.builtin.copy:
+    content: "{{ lookup('ansible.builtin.file', k8s_backup_azure_seed_dir ~ '/' ~ inventory_hostname ~ '.pem') }}\n"
+    dest: "{{ k8s_backup_azure_cert_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+  no_log: true
+
+- name: timers | Its key ID on the app, which the timer's roll removes
+  ansible.builtin.copy:
+    content: "{{ lookup('ansible.builtin.file', k8s_backup_azure_seed_dir ~ '/' ~ inventory_hostname ~ '.pem.keyid') }}\n"
+    dest: "{{ k8s_backup_azure_cert_file }}.keyid"
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+
+- name: timers | Keep the sign-in settings for the node env file
+  ansible.builtin.set_fact:
+    k8s_backup_azure_env_lines: |
+      AZURE_ACCOUNT_NAME={{ k8s_backup_azure_account }}
+      AZURE_CLIENT_ID={{ k8s_backup_azure_client_id }}
+      AZURE_TENANT_ID={{ k8s_backup_azure_tenant_id }}
+      AZURE_APP_OBJECT_ID={{ k8s_backup_azure_app_object_id }}
+      AZURE_CLIENT_CERTIFICATE_PATH={{ k8s_backup_azure_cert_file }}
+      BACKUP_CERT_DAYS={{ k8s_backup_azure_cert_days }}
+      BACKUP_CERT_RENEW_DAYS={{ k8s_backup_azure_cert_renew_days }}
+
+# Exit 3: Entra ID no longer knows the certificate. Nothing is uploaded: the run stops, and a run from a
+# controller with the Azure CLI (k8s_backup_azure_seed_dir empty) uploads a new one.
+- name: timers | Entra ID accepts the carried certificate
+  ansible.builtin.command:
+    argv: ["{{ k8s_backup_bin_dir }}/c1-backup-azure-cert.py", check]
+  environment: "{{ k8s_backup_azure_script_env }}"
+  register: k8s_backup_azure_check
+  changed_when: false
+  failed_when: k8s_backup_azure_check.rc != 0
+  when: not ansible_check_mode

@@ -19,7 +19,7 @@ out=$(pr add reviewer jonhill90/central-hub x7 "$H" $R $T orchestrator); check "
 out=$(pr add reviewer jonhill90/central-hub 7 abc $R $T orchestrator); check "a short head exits 2" "$out" "rc=2"
 out=$(pr add reviewer jonhill90/central-hub 7 "$H" notamsg $T orchestrator); check "a relay ref that is not a cmsg id exits 2" "$out" "rc=2"
 out=$(pr add reviewer jonhill90/central-hub 7 "$H" $R yesterday orchestrator); check "a relay time that is not ISO exits 2" "$out" "rc=2"
-out=$(pr add reviewer jonhill90/central-hub 7 "$H" $R $T owner); check "a recorder other than orchestrator or builder exits 2" "$out" "rc=2"; none "none of the bad calls wrote anything"
+out=$(pr add reviewer jonhill90/central-hub 7 "$H" $R $T stranger); check "a recorder other than orchestrator, builder or reviewer exits 2" "$out" "rc=2"; none "none of the bad calls wrote anything"
 out=$(pr add reviewer jonhill90/central-hub 7 "$H" $R $T); check "a missing argument exits 2" "$out" "rc=2"
 out=$(LANE=plan pr add owner-tap jonhill90/central-hub 7 "$H" $R $T builder); check "owner-tap from the builder exits 2" "$out" "rc=2"; none "owner-tap from the builder writes nothing"
 for role in reviewer council-a council-b council-c owner-tap; do out=$(pr add $role jonhill90/central-hub 7 "$H" $R $T orchestrator); check "$role is recorded" "$out" "rc=0"; done
@@ -27,6 +27,11 @@ f="$t/work/passes/central-hub/$H.jsonl"
 [[ $(wc -l < "$f") == 5 ]] && echo "ok   five lines in the file for this head" || { echo "FAIL: line count"; fail=1; }
 python3 -I -c 'import json,sys; [json.loads(l) for l in open(sys.argv[1])]; print("ok   every line is JSON")' "$f" || fail=1
 [[ $(stat -c %a "$f") == 600 && $(stat -c %a "$t/work/passes") == 700 ]] && echo "ok   the ledger is 0600 in a 0700 folder" || { echo "FAIL: modes"; fail=1; }
+H3=$(printf 'c%.0s' $(seq 40))
+out=$(pr add reviewer jonhill90/central-hub 8 "$H3" $R $T reviewer); check "the reviewer records its own pass" "$out" "rc=0"
+out=$(pr add council-a jonhill90/central-hub 8 "$H3" $R $T reviewer); check "the reviewer does not record a council line" "$out" "rc=2"
+out=$(pr add owner-tap jonhill90/central-hub 8 "$H3" $R $T reviewer); check "the reviewer does not record an owner-tap" "$out" "rc=2"
+[[ $(wc -l < "$t/work/passes/central-hub/$H3.jsonl") == 1 ]] && echo "ok   only the reviewer's own line was written for that head" || { echo "FAIL: reviewer lines"; fail=1; }
 H2=$(printf 'b%.0s' $(seq 40)); out=$(bash "$t/pass-record.sh" show jonhill90/central-hub "$H2" 2>&1); check "another head has an empty ledger (no carry-over)" "$out" "no ledger"
 out=$(LANE=builder pr add reviewer jonhill90/central-hub 8 "$H2" $R $T builder); check "a builder record for a builder-written PR exits 2" "$out" "rc=2"
 out=$(LANE=unreadable pr add reviewer jonhill90/central-hub 8 "$H2" $R $T builder); check "a builder record when the lane cannot be read exits 2" "$out" "rc=2"

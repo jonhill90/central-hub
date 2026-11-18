@@ -158,6 +158,9 @@ check_manifests() {
   helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
     --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32 \
     > "$work/rendered/root-c1-openbao.yaml"
+  # monitoring-extras with OpenBao in the cluster: its alerts and the panel check's OpenBao lines.
+  helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
+    --set openbao.inCluster=true > "$work/rendered/app-c1-monitoring-extras-openbao.yaml"
   # The dev-only measurement of the box's path through the Gateway (MEASURE-1) turned on: the root's
   # switches and the four charts it changes, so its routes, listener and policy are schema-checked too.
   helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
@@ -186,10 +189,13 @@ check_manifests() {
       return 1
     fi
   done
+  # Jellyfin's route sends every spelling of /metrics to the redirect.
+  bash "$here/tests/test_jellyfin_metrics_route.sh"
   # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
   if command -v promtool >/dev/null; then
     mkdir -p "$work/rules"
-    helm template x hosts/kubernetes/home/c1/apps/monitoring-extras -n monitoring \
+    # With the OpenBao alerts on, so they are checked and tested too.
+    helm template x hosts/kubernetes/home/c1/apps/monitoring-extras -n monitoring --set openbao.inCluster=true \
       -s templates/rules.yaml | python3 -c 'import sys, yaml; d = yaml.safe_load(sys.stdin); yaml.safe_dump({"groups": d["spec"]["groups"]}, sys.stdout)' \
       > "$work/rules/c1-lab.rules.yml"
     cp "$here/rules-tests/c1-lab.test.yml" "$work/rules/"
@@ -236,6 +242,7 @@ check_backup() {
   bash "$here/tests/test_secrets_store_kv.sh"
   bash "$here/tests/test_secrets_store_wrapper.sh"
   bash "$here/tests/test_openbao_prod.sh"
+  bash "$here/tests/test_rebuild_prod.sh"
   bash "$here/tests/test_openbao_handover.sh"
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"

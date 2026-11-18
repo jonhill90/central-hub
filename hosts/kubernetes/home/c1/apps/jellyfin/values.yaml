@@ -32,6 +32,15 @@ gateway:
   # on the http listeners and there is no redirect route.
   https: true
 
+# Prometheus metrics at /metrics (Jellyfin's EnableMetrics, https://jellyfin.org/docs/general/post-install/networking/advanced/monitoring).
+# The setup Job turns the setting on and restarts Jellyfin once; Prometheus reads it through the
+# PodMonitor in app monitoring-extras. The route answers /metrics from outside the cluster with a
+# redirect to /, because the docs say to keep the endpoint off the public internet. blockPath is the
+# route's RE2 pattern for it (templates/route.yaml says why it is a pattern).
+metrics:
+  enabled: true
+  blockPath: '(?i).*(/|%2f)(m|%6d)(e|%65)(t|%74)(r|%72)(i|%69)(c|%63)(s|%73)((/|%2f).*)?'
+
 # First-run setup (templates/setup-*.yaml). The admin password is made once by External Secrets'
 # Password generator and kept in the Secret <name>-admin (keys: username, password); nothing
 # prints it. The Job runs after every sync and changes nothing once the wizard is done.

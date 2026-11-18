@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|gitops|handover|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|gitops|handover|reset-failed-start|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -19,6 +19,11 @@
 #           secret-store app's store `openbao`. Argo CD's install is left alone.
 # handover  playbooks/k8s-openbao-handover.yml with prod's admin AppRole IDs (/etc/agent-keys/prod/openbao-admin-*, made
 #           once by the same rule as secrets-store.sh, never printed).
+# reset-failed-start  clears a first start that stopped in self-init (the pod's log says "self-initialization failed:
+#           refusing to unseal"), so the store starts clean. It refuses unless that line is in the pod's log (this run's or
+#           the last one's), the pod is not Ready and `bao status` does not say the store is initialized. It deletes only
+#           the pod openbao-0 and the claim data-openbao-0 in namespace openbao, and prints both before and after. It
+#           replaces a hand delete; a store that was ever initialized is never touched.
 # log       the newest run's lines: the action, the commit, the tap id, and the PASS, FAIL, SKIP and play-recap lines.
 # Settings (agent_box_openbao_prod, private, in <work>/openbao-prod.json): seal_node (a k8s_nodes host of the prod inventory,
 # its Kubernetes node name), store_host (the store's name as the box reaches it; secrets-store-prod checks its own address
@@ -43,11 +48,11 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|gitops|handover|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|gitops|handover|reset-failed-start|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | gitops | handover | log) [[ $# -eq 1 ]] || usage ;;
+  key | check | gitops | handover | reset-failed-start | log) [[ $# -eq 1 ]] || usage ;;
   seal)
     [[ $# -eq 2 ]] || usage
     tap=$2
@@ -57,7 +62,7 @@ case $action in
 esac
 
 if [[ $action == log ]]; then
-  newest=$(ls -1 "$logs"/run-*.log 2>/dev/null | sort | tail -n 1)
+  newest=$(ls -1 "$logs"/run-*.log 2>/dev/null | sort | tail -n 1 || true)
   [[ -n $newest ]] || { echo "openbao-prod: no run has been logged yet" >&2; exit 1; }
   echo "run: ${newest##*/}"
   sed -E 's/\x1b\[[0-9;]*m//g' -- "$newest" | grep -E '^(openbao-prod:|PLAY RECAP|.*(PASS|FAIL|SKIP):|[^ ]+ +: ok=)' | cut -c1-200 | head -n 60 || true
@@ -93,8 +98,8 @@ commit=$(git -C "$repo" rev-parse --short HEAD)
 rm -rf -- "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
-import ipaddress, json, sys, yaml
-src, dst, key, known, settings = sys.argv[1:6]
+import ipaddress, json, os, sys, yaml
+src, dst, key, known, settings, stable = sys.argv[1:7]
 s = json.load(open(settings))
 seal, store, cidr = s.get("seal_node") or "", s.get("store_host") or "", s.get("box_cidr") or ""
 def die(m):
@@ -145,9 +150,12 @@ v["k8s_gitops_source_openbao_in_cluster"] = True
 v["k8s_gitops_source_openbao_seal_node"] = seal
 v["k8s_gitops_source_openbao_store_host"] = store
 if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
+# Once rebuild-prod has built prod again, its local-path StorageClass names folders <namespace>/<claim>; a
+# StorageClass's parameters can't change in place, so every later render keeps that setting.
+if os.path.exists(stable): v["k8s_gitops_source_local_path_stable_folders"] = True
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$settings" || exit 1
+)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$settings" "$work/state/prod-stable-folders" || exit 1
 chmod 600 "$inventory/hosts.yml"
 
 # Every host: plain ssh to ansible_host with the box's key and nothing else; no host labelled another env than prod.
@@ -182,6 +190,27 @@ log=$logs/run-$stamp.log
 exec > >(tee -a "$log") 2>&1
 echo "openbao-prod: $action at central-hub $commit${tap:+, owner tap $tap}"
 ap() { (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory/" "$@"); }
+# kc <kubectl arguments>: kubectl on the first control-plane node with its admin kubeconfig, through Ansible. It prints the
+# command's output and returns its exit code (ansible.posix.json, pinned in hosts/ansible/requirements.yml, gives the run as
+# one JSON document), the same way hosts/rebuild-k8s.sh does.
+kc() {
+  local json rc=0
+  json=$(cd "$repo/hosts/ansible" && ANSIBLE_LOAD_CALLBACK_PLUGINS=1 ANSIBLE_STDOUT_CALLBACK=ansible.posix.json \
+    ansible 'k8s_control_plane[0]' -i "$inventory/" -b -m ansible.builtin.command \
+    -a "kubectl --kubeconfig /etc/kubernetes/admin.conf $*") || rc=$?
+  printf '%s' "$json" | python3 -I -c '
+import json, sys
+try:
+    res = list(json.load(sys.stdin)["plays"][0]["tasks"][0]["hosts"].values())[0]
+except Exception as e:
+    print("kc: no result from Ansible: %s" % e, file=sys.stderr); sys.exit(1)
+if res.get("stdout"): print(res["stdout"])
+err = res.get("stderr") or ("" if "rc" in res else res.get("msg", ""))
+if err: print(err, file=sys.stderr)
+sys.exit(res.get("rc", 1))
+' || rc=$?
+  return "$rc"
+}
 
 case $action in
   check)
@@ -240,6 +269,27 @@ PY
     [[ -f $store_keys/openbao-admin-secret-id ]] || openssl rand -hex 24 | tr -d '\n' > "$store_keys/openbao-admin-secret-id"
     ap playbooks/k8s-openbao-handover.yml -e "openbao_admin_role_id_file=$store_keys/openbao-admin-role-id" \
       -e "openbao_admin_secret_id_file=$store_keys/openbao-admin-secret-id"
+    ;;
+  reset-failed-start)
+    ns=openbao pod=openbao-0 claim=data-openbao-0
+    echo "openbao-prod: before:"
+    kc -n "$ns" get "pod/$pod" "pvc/$claim" --no-headers || { echo "openbao-prod: cannot read the pod and its claim; nothing deleted" >&2; exit 1; }
+    ready=$(kc -n "$ns" get "pod/$pod" -o 'jsonpath={.status.containerStatuses[0].ready}' 2>/dev/null) || ready=unknown
+    [[ $ready == false ]] || { echo "openbao-prod: refused: the pod's ready state is '$ready', not false" >&2; exit 1; }
+    logs=$( { kc -n "$ns" logs "$pod" 2>&1; kc -n "$ns" logs "$pod" --previous 2>&1; } || true)
+    grep -qF 'self-initialization failed: refusing to unseal' <<< "$logs" ||
+      { echo "openbao-prod: refused: the pod's log does not show the self-init failure" >&2; exit 1; }
+    # Only a status that parses as JSON and says initialized false lets the delete go on: an unreadable status, a pod that
+    # cannot be reached or a store that says true all refuse.
+    status=$(kc -n "$ns" exec "$pod" -- bao status -format=json 2>/dev/null) || true
+    python3 -I -c 'import json, sys; sys.exit(0 if json.loads(sys.stdin.read()).get("initialized") is False else 1)' <<< "$status" 2>/dev/null ||
+      { echo "openbao-prod: refused: bao status does not read as initialized false" >&2; exit 1; }
+    echo "openbao-prod: the failed start is confirmed (self-init line in the log, pod not Ready, store not initialized)"
+    kc -n "$ns" delete "pod/$pod" --wait=true --timeout=120s
+    kc -n "$ns" delete "pvc/$claim" --wait=true --timeout=120s
+    echo "openbao-prod: after (the pod and its claim are made again by the StatefulSet):"
+    sleep 20
+    kc -n "$ns" get "pod/$pod" "pvc/$claim" --no-headers || true
     ;;
 esac
 echo "openbao-prod: $action done"

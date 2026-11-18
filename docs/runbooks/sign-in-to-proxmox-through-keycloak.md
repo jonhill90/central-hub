@@ -50,15 +50,14 @@ All from `hosts/ansible` in the lab clone, at the merge commit of the PR that ad
    - for c1 (next to `k8s_identity_zone`): `k8s_identity_proxmox_hosts: "{{ hostvars['proxmox_host'].proxmox_cert_names }}"`;
    - for the Proxmox host: `proxmox_sso_issuer: https://sso.<zone>/realms/lab` and `proxmox_sso_address: "{{ k8s_gateway_address }}"`.
    why: the client's redirects are the web UI's names, the same names the certificate and nginx use; the issuer is Keycloak's own (`k8s_identity_issuer`).
-2. Add the client to realm lab:
+2. Add the client to realm lab, without the realm replace:
 
    ```sh
-   ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,keycloak --check --diff
-   ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,keycloak
+   ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,clients -e '{"k8s_identity_ensure_clients":["proxmox"]}'
    ```
 
-   why: the first run adds `PROXMOX_CLIENT_SECRET` to `identity.env` (even in check mode, as for every key); the second imports realm lab again with the client. Open sign-ins to Grafana, Argo CD and Jellyfin end ([set-up-lab-sign-in.md](set-up-lab-sign-in.md) step 2).
-   expect: `identity.env` has a `PROXMOX_CLIENT_SECRET` line and a `TOTP_<USER NAME>` line for each admin; `kubectl -n identity get keycloakrealmimport realm-lab` shows `Done`.
+   why: the full run (`--tags secrets,keycloak`) deletes realm lab and imports it again whenever its code changes, which ends every open sign-in to Grafana, Argo CD and Jellyfin. The `clients` tag adds only client `proxmox` through Keycloak's admin tool inside the Keycloak pod (`files/ensure-client.sh`), from the same definition in `realm.yaml.j2`; users, groups and the other clients are not touched. The `secrets` tag first makes `PROXMOX_CLIENT_SECRET` in `identity.env`, as for every key. CI's `identity` job deletes a client from a real Keycloak, adds it back, changes it, and checks that users and the other clients stay.
+   expect: `identity.env` has a `PROXMOX_CLIENT_SECRET` line and a `TOTP_<USER NAME>` line for each admin; the first run reports `changed` for `proxmox`, a later one reports `ok` (the client is updated in place). A later full run (`--tags secrets,keycloak`) still imports this client, so keep `k8s_identity_proxmox_hosts` set.
 3. Set the realm on the host:
 
    ```sh

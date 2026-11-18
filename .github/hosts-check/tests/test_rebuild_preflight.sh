@@ -52,11 +52,11 @@ run() { # env total_gib used_gib error
     bash -c '. "$1"; set +e; run_stage preflight; echo "rc=$?"; echo "marker=$([ -f "$env_dir/ci-runner-stopped" ] && echo yes || echo no)"' _ "$t/fn.sh" 2>&1
 }
 check() { if [[ $2 == *"$3"* ]] && { [ -z "${4:-}" ] || [[ $2 != *"$4"* ]]; }; then echo "ok   $1"; else echo "FAIL $1: $2"; fail=1; fi; }
-out=$(run dev 31 20); check "11 GiB free is refused" "$out" "refused" "rc=0"; check "it says the sizes" "$out" "11264 MiB"
-out=$(FAKE_AVAILABLE=$((12287 * 1048576)) SHORT_NODE="" run dev 31 1); check "one MiB under 12288 is refused" "$out" "refused" "rc=0"
-check "the minimum is the dev VMs plus the margin" "$out" "the declared dev VMs need 11264 MiB (control plane 4096, worker 7168); minimum 12288 MiB with the 1024 MiB margin"
-out=$(FAKE_AVAILABLE=$((12288 * 1048576)) run dev 31 1); check "12288 MiB free, the minimum itself, passes" "$out" "rc=0" "refused"
-out=$(FAKE_AVAILABLE=$((13412 * 1048576)) run dev 31 1); check "13412 MiB free, the 2026-11-17 reading with VM 300 stopped, passes" "$out" "rc=0" "refused"
+out=$(run dev 31 22); check "9 GiB free is refused" "$out" "refused" "rc=0"; check "it says the sizes" "$out" "9216 MiB"
+out=$(FAKE_AVAILABLE=$((10239 * 1048576)) SHORT_NODE="" run dev 31 1); check "one MiB under 10240 is refused" "$out" "refused" "rc=0"
+check "the minimum is the dev VMs plus the margin" "$out" "the declared dev VMs need 9216 MiB (control plane 3072, worker 6144); minimum 10240 MiB with the 1024 MiB margin"
+out=$(FAKE_AVAILABLE=$((10240 * 1048576)) run dev 31 1); check "10240 MiB free, the minimum itself, passes" "$out" "rc=0" "refused"
+out=$(FAKE_AVAILABLE=$((10467 * 1048576)) run dev 31 1); check "10467 MiB free, the 2026-11-18 02:37 UTC reading with VM 300 stopped, passes" "$out" "rc=0" "refused"
 out=$(run dev 31 17); check "14 GiB free passes" "$out" "rc=0" "refused"
 out=$(run dev 31 16); check "15 GiB free passes" "$out" "rc=0" "refused"
 if grep -q SECRETTOKEN "$t/argv"; then echo "FAIL: the token is in curl's arguments"; fail=1; else echo "ok   the token is not in curl's arguments"; fi
@@ -72,13 +72,13 @@ out=$(run dev 31 17); check "total-used is the fallback and is named" "$out" "(f
 out=$(STATE="$t/with-vms.tfstate" run dev 31 28); check "a state holding every declared VM skips the check, even with low memory" "$out" "branch skipped, all 2 declared dev VMs" "refused"
 check "a skipped run says rc=0" "$out" "rc=0"
 out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 28); check "a partial state (2 of 3) is checked and refused on low memory" "$out" "holds 2 of 3 declared" "rc=0"
-check "three declared nodes need three nodes' memory" "$out" "need 18432 MiB (control plane 4096, worker 7168); minimum 19456 MiB"
+check "three declared nodes need three nodes' memory" "$out" "need 15360 MiB (control plane 3072, worker 6144); minimum 16384 MiB"
 out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 11); check "a partial state passes with enough memory" "$out" "branch checked" "refused"
 out=$(TFVARS_FILE="$t/norole.tfvars" run dev 31 1); check "a declared node with no role is refused, whatever the memory" "$out" "has no role control-plane or worker" "rc=0"
 out=$(STATE="$t/missing.tfstate" run dev 31 28); check "no state file means a fresh build and is checked" "$out" "branch checked" ""
 out=$(STATE="$t/empty.tfstate" run dev 31 17); check "an empty state is checked and passes with enough memory" "$out" "branch checked" "refused"
 out=$(run dev 31 28); check "the guest list is shown, sorted by VM ID" "$out" "guest vmid=411 type=qemu status=running maxmem=8192 MiB mem=4096 MiB name=agent-box"
-check "the list says VM 258 and CT 259 are not visible" "$out" "VM 258 and CT 259 are NoAccess for it"
+check "the list says VM 258 is not visible" "$out" "VM 258 is NoAccess for it"
 check "a name is cleaned to safe characters" "$out" "name=cirunner01" "name=ci runner;01"
 check "the list says which API path and how many" "$out" "guest list from /cluster/resources?type=vm, 2 guests"
 check "the refusal still comes after the list" "$out" "refused" "rc=0"
@@ -126,7 +126,7 @@ if grep -q 'status/shutdown' "$t/calls"; then echo "FAIL: a shutdown call was ma
 out=$(FAKE_DESKTOP=yes FAKE_NEVER_STOPS=yes FAKE_AFTER_DESKTOP=$((16 * GIB)) run dev 31 28); check "a desktop that does not stop is refused" "$out" "desktop stop: VM 400 did not stop within 120 s" "rc=0"
 out=$(FAKE_DESKTOP=yes run dev 31 17); check "enough memory: the desktop is left running" "$out" "rc=0" "desktop stop"
 # Still short after the stop: refuse, and the marker is there for the restart.
-out=$(FAKE_AFTER_AVAILABLE=$((11 * GIB)) run dev 31 28); check "still short after the stop is refused" "$out" "refused, free memory 11264 MiB" "rc=0"
+out=$(FAKE_AFTER_AVAILABLE=$((9 * GIB)) run dev 31 28); check "still short after the stop is refused" "$out" "refused, free memory 9216 MiB" "rc=0"
 check "the marker stays so the restart runs" "$out" "marker=yes" "marker=no"
 # VM 300 does not stop: refuse, marker stays.
 out=$(FAKE_NEVER_STOPS=yes FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); check "a runner that does not stop is refused" "$out" "did not stop within 120 s" "rc=0"

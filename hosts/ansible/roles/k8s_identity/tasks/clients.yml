@@ -1,0 +1,70 @@
+---
+# Add or update clients in the live realm through Keycloak's admin tool, without the realm replace
+# (tasks/keycloak.yml deletes realm lab and imports it again, which ends every open sign-in). Only
+# clients named in k8s_identity_ensure_clients are touched; users, groups and the other clients stay.
+# Run with `--tags secrets,clients`: the secrets tag loads the values file the client secrets come from.
+# The client's definition is the one in realm.yaml.j2, so there is one place to edit it. Its ${KEY}
+# placeholders are filled from the values file on the controller, through the environment of
+# files/client-json.py (the controller has PyYAML, the node may not), never in an argument; the JSON
+# then goes to files/ensure-client.sh on stdin, inside the Keycloak pod.
+- name: clients | A private folder on the controller
+  ansible.builtin.tempfile: {state: directory, suffix: .clients}
+  register: k8s_identity_clients_dir
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+
+- name: clients | Realm manifest, rendered on the controller
+  ansible.builtin.template:
+    src: realm.yaml.j2
+    dest: "{{ k8s_identity_clients_dir.path }}/realm.yaml"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+
+- name: clients | The client's JSON, secrets filled in
+  ansible.builtin.command:
+    argv: [python3, -I, "{{ role_path }}/files/client-json.py", "{{ k8s_identity_clients_dir.path }}/realm.yaml", "{{ __client }}"]
+  environment: "{{ k8s_identity_values }}"
+  register: k8s_identity_client_json
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+  loop: "{{ k8s_identity_ensure_clients }}"
+  loop_control: {loop_var: __client}
+  no_log: true
+
+- name: clients | Make sure each client is in realm {{ k8s_identity_realm }}
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - -n
+      - "{{ k8s_identity_namespace }}"
+      - exec
+      - -i
+      - "{{ k8s_identity_name }}-0"
+      - --
+      - bash
+      - -c
+      - "{{ lookup('ansible.builtin.file', 'ensure-client.sh') }}"
+      - ensure-client
+      - "{{ k8s_identity_realm }}"
+      - "{{ __result.__client }}"
+    stdin: "{{ __result.stdout }}"
+  register: k8s_identity_client_ensured
+  changed_when: "'created' in k8s_identity_client_ensured.stdout"
+  when: not ansible_check_mode
+  loop: "{{ k8s_identity_client_json.results }}"
+  loop_control: {loop_var: __result, label: "{{ __result.__client }}"}
+  no_log: true
+
+- name: clients | Remove the controller's temporary folder
+  ansible.builtin.file: {path: "{{ k8s_identity_clients_dir.path }}", state: absent}
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false

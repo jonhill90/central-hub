@@ -219,6 +219,14 @@ apps:
         jsonPointers: [/data]
     autoSync: true
     prune: false
+  # Sign-in checks from inside c1, no password (runbook set-up-lab-sign-in.md, "Prove it"): a Job
+  # after each sync prints PASS or FAIL lines for the Keycloak clients, Argo CD and Jellyfin.
+  login-probe:
+    namespace: login-probe
+    local: true
+    needsZone: true
+    autoSync: true
+    prune: false
   # A small pod with its own tailnet identity (tag:share-pod) that forwards one port to a node another
   # tailnet shares in. It holds no lab secret and no Kubernetes credential
   # (docs/runbooks/reach-the-shared-node-through-the-share-pod.md).
@@ -264,6 +272,9 @@ apps:
   monitoring-extras:
     namespace: monitoring
     local: true
+    # The OpenBao alerts only where the store is in the cluster (D-0058).
+    switchParameters:
+      openbao.inCluster: openbaoInCluster
     wave: 1
     autoSync: true
     prune: true

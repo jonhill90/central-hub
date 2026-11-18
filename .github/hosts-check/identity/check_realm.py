@@ -107,9 +107,15 @@ def main(src):
         if otp:
             seed = json.loads(otp[0]["secretData"])["value"]
             check(not sign_in(name, password), f"user {name} is refused with the password alone")
-            # One retry, in case the code turned over between making and sending it.
-            check(sign_in(name, password, totp(seed)) or sign_in(name, password, totp(seed)),
-                  f"user {name} signs in with the imported password and a TOTP code")
+            # One retry, in the next 30-second step. Keycloak refuses a code that was already used, and
+            # test_realm.sh runs this check twice, so the second run can land in the same step as the
+            # first and send a used code (identity job, central-hub #457, 2026-11-18 02:35 UTC). The
+            # code can also turn over between making and sending it. Waiting for the next step covers both.
+            ok = sign_in(name, password, totp(seed))
+            if not ok:
+                time.sleep(30 - time.time() % 30 + 1)
+                ok = sign_in(name, password, totp(seed))
+            check(ok, f"user {name} signs in with the imported password and a TOTP code")
         else:
             check(sign_in(name, password), f"user {name} signs in with the imported password")
         found = get("users", f"username={name}", "exact=true")

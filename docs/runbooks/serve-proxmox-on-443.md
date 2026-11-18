@@ -35,7 +35,7 @@ Port 8006 is not closed. It stays as the fallback if the proxy fails, and it is 
 
 ## What the owner decides
 
-- **The host job.** The playbook reaches the host over SSH as root, and the agent box has no SSH key for the host and reaches it on 8006 only. The host job gives the box a key, held by its own user `hostops`, used only by the root-owned wrapper `proxmox-host`, which runs this one playbook from `main`; tcp 22 opens on the lifeline for `hostops`'s sockets only; the host takes the key only from the box's lifeline address. The key is an access right and the lifeline's tcp 22 is a change to the box's packet filter, so they need the owner's tap (D-0042 rule 6); the user and the wrapper are box limits, which need no tap (D-0042 rule 4). Root on the Proxmox host reaches every guest, VM 258 and CT 259 included. If the host firewall refuses 22 from the lifeline address, that is a separate firewall tap (D-0036 rule 8).
+- **The host job.** The playbook reaches the host over SSH as root, and the agent box has no SSH key for the host and reaches it on 8006 only. The host job gives the box a key, held by its own user `hostops`, used only by the root-owned wrapper `proxmox-host`, which runs this one playbook from `main`; tcp 22 opens on the lifeline for `hostops`'s sockets only; the host takes the key only from the box's lifeline address. The key is an access right and the lifeline's tcp 22 is a change to the box's packet filter, so they need the owner's tap (D-0042 rule 6); the user and the wrapper are box limits, which need no tap (D-0042 rule 4). Root on the Proxmox host reaches every guest, VM 258 included. If the host firewall refuses 22 from the lifeline address, that is a separate firewall tap (D-0036 rule 8).
 - **The DNS name.** `proxmox_proxy_server_names` is the same list as `proxmox_cert_names`, set in the private inventory. The first name is where port 80 redirects.
 
 ## Install the host job
@@ -91,6 +91,12 @@ The check run needs `python3-apt` on the host: Ansible's apt module installs it 
    why: until step 5.1, nginx stays installed and disabled as the way back (see Exit), and STD-0006 still counts it as a pending fail; the register row goes only once the host shows it gone.
 
 To install Apache httpd and leave nginx serving, set `proxmox_proxy_cutover: false`.
+
+## Change the agents' Proxmox rights through the host job
+
+The same wrapper runs a second job, `agent-access`, so a change to `hosts/terraform/home/bootstrap/agent-access.sh` reaches the host by a reviewed PR and no longer needs the Mac: `proxmox-host check agent-access` copies the script from the checked-out commit to the host and shows what would change (the run itself is skipped in a check), then `proxmox-host apply agent-access <pass message ID> <check hash>` copies it and runs it as root. The pass and the hash work as for the proxy job above, and the hash covers the script's exact text. It needs the host job installed first (steps 1 to 3 of "Install the host job"). The run itself changes the agents' access rights, so it needs the owner's tap on a card that names the step and the commit (D-0042 rule 6); the check does not. The script is safe to run again, prints no token secret, and its desktop switch (`DESKTOP_ACCESS`) is a committed value, so the owner's rule of no desktop rights after a build still holds.
+
+expect: `proxmox-host: check <hash>: ...` with the job named in the line before it (`job agent-access`).
 
 ## If it fails
 

@@ -130,3 +130,119 @@ tests:
           - exp_labels: {severity: warning}
             exp_annotations:
               summary: Prometheus can't read cert-manager's metrics, so the two certificate alerts above can't fire
+
+  # OpenBao inside the cluster (rendered with openbao.inCluster=true, run.sh). The seal gauge keeps a
+  # stale cluster="" series at 0 from before the unseal (measured on OpenBao 2.7.2, 2026-11-18), so
+  # the rule takes the max: one unsealed series means unsealed.
+  - name: OpenBao with no ready pod for 10 minutes fires; a ready one doesn't
+    interval: 1m
+    input_series:
+      - series: 'kube_statefulset_status_replicas_ready{namespace="openbao", statefulset="openbao"}'
+        values: '0x15'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: C1OpenBaoNotReady
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: C1OpenBaoNotReady
+        exp_alerts:
+          - exp_labels: {namespace: openbao, statefulset: openbao, severity: critical}
+            exp_annotations:
+              summary: OpenBao has no ready pod for 10 minutes, so it is sealed or down and apps can't read their secrets
+              runbook: docs/runbooks/set-up-the-secrets-store.md
+
+  - name: OpenBao sealed fires; the stale pre-unseal series next to an unsealed one doesn't
+    interval: 1m
+    input_series:
+      - series: 'vault_core_unsealed{namespace="openbao", cluster=""}'
+        values: '0x20'
+      - series: 'vault_core_unsealed{namespace="openbao", cluster="c"}'
+        values: '1x9 0x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: C1OpenBaoSealed
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: C1OpenBaoSealed
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: OpenBao answers but is sealed
+              runbook: docs/runbooks/set-up-the-secrets-store.md
+
+  - name: OpenBao not scraped fires when its target is missing
+    interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: C1OpenBaoNotScraped
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Prometheus can't read OpenBao's metrics, so the seal and audit alerts can't fire
+
+  - name: an audit log write failure fires at once
+    interval: 1m
+    input_series:
+      - series: 'vault_audit_log_request_failure{namespace="openbao", pod="openbao-0"}'
+        values: '0x5 1x10'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: C1OpenBaoAuditFailing
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: C1OpenBaoAuditFailing
+        exp_alerts:
+          - exp_labels: {namespace: openbao, pod: openbao-0, severity: critical}
+            exp_annotations:
+              summary: OpenBao failed to write its audit log; it refuses requests it can't audit
+
+  - name: no successful snapshot for over 3 hours fires; a recent one doesn't
+    interval: 1m
+    input_series:
+      # The last success at time 0 (seconds since the epoch, the test clock's start).
+      - series: 'kube_cronjob_status_last_successful_time{namespace="openbao", cronjob="openbao-snapshot"}'
+        values: '0x240'
+    alert_rule_test:
+      - eval_time: 170m
+        alertname: C1OpenBaoSnapshotStale
+        exp_alerts: []
+      - eval_time: 200m
+        alertname: C1OpenBaoSnapshotStale
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: OpenBao's hourly snapshot has not succeeded for more than 3 hours
+              runbook: docs/runbooks/set-up-the-secrets-store.md
+
+  - name: Jellyfin not scraped fires when its target is missing
+    interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: C1JellyfinNotScraped
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Prometheus can't read Jellyfin's /metrics; check that the setup Job turned EnableMetrics on
+              runbook: docs/runbooks/move-jellyfin-to-argo-cd.md
+
+  - name: Jellyfin server errors above 0.05 a second for 15 minutes fire; a few don't
+    interval: 1m
+    input_series:
+      # 6 errors a minute (0.1 a second), then a client error count that never counts.
+      - series: 'http_requests_received_total{namespace="media", code="500", method="GET", controller="Items", action="GetItems", endpoint=""}'
+        values: '0+6x40'
+      - series: 'http_requests_received_total{namespace="media", code="404", method="GET", controller="Items", action="GetItems", endpoint=""}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: C1JellyfinErrors
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: C1JellyfinErrors
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Jellyfin has answered with server errors (5xx) for 15 minutes
+              runbook: docs/runbooks/move-jellyfin-to-argo-cd.md

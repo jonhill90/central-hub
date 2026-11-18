@@ -94,7 +94,7 @@ These live only on the owner's Mac, in `~/.config/central-hub/` (mode 0700), not
 | `az-login-agent.sh` | none | sign `az` in as the agents' service principal | no |
 | `tofu-plan-check.sh` | `network\|firewall\|remote-access\|k8s` | read-only drift check: `tofu plan -lock=false`, summary line only | no |
 | `tofu-home-jumpbox.sh` | `init\|plan\|apply` | `hosts/terraform/home/jumpbox` (VM 258); apply runs only the saved plan | no |
-| `tofu-jumpbox.sh` | `init\|plan\|apply\|destroy` | the jumpbox rehearsal kit (VM 258 and CT 259) | no |
+| `tofu-jumpbox.sh` | `init\|plan\|apply\|destroy` | the jumpbox rehearsal kit, whose state holds CT 259; its `destroy` deletes CT 259 ([Grow the agent jumpbox](grow-the-agent-jumpbox.md#delete-the-rehearsals-container)) | no |
 | `tofu-tailnet-policy.sh` | `init\|import\|plan\|apply` | `hosts/terraform/home/tailnet-policy` | no |
 | `jumpbox-claude-install.sh` | `j1\|j2` | install Claude Code on one jumpbox test guest | no |
 | `ansible-agent-box.sh` | `check\|apply\|verify` | `playbooks/agent-box.yml` ([Set up the agent box](set-up-the-agent-box.md)) | yes |
