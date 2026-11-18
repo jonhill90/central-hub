@@ -125,6 +125,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 | `stopped, the Keycloak container listens on more than tcp 8443` | On the host network the filter covers only 8443, so another listening port would be open. Ports bound to loopback only are listed apart and allowed, because only the box reaches them. The proof runs Keycloak with `start` (the prod profile, dev-file database, local caches), because `start-dev` listens on 8080 whatever `--http-enabled` says (measured 2026-11-18). The container is removed. Destroy, then report it. |
 | `stopped, the VM does not reach Keycloak` | Dev can't reach the box's port 8443, or the trust store lacks the proof CA. Destroy, then report it. |
 | `proof failed: ...` | The named item did not hold. Keep the output, then destroy. |
+| `proof failed: no Keycloak sign-in form after ...` | OPNsense answered the login button without sending the browser to Keycloak. The lines after it give OPNsense's HTTP status and page text and the VM's `OIDC` log lines: a 404 means no authentication server of that name, a 400 means the address the proof used is not one of the WebGUI's accepted origins (os-openid-connect beta5, `loginAction`). Keep the output, then destroy. |
 
 ## Limits
 
