@@ -18,7 +18,7 @@
         | intersect(opnsense_lab_numbered_sequences) | length == 0
       - >-
         opnsense_lab_app_access_sequences[:opnsense_lab_app_access.sources | length] | max
-        < opnsense_lab_app_access_first_vlan_rule
+        < (opnsense_lab_app_access_first_vlan_rule | int)
     fail_msg: >-
       opnsense_lab_app_access needs the Gateway's IPv4 address, a VLAN tag in lab_vlans, and one to
       {{ opnsense_lab_app_access_sequences | length }} sources, each an IPv4 address with its own name from
