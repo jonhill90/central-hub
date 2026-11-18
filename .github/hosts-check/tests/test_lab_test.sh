@@ -751,4 +751,19 @@ python3 -I "$work/extract.py" "$work/example.deb" "$work/out" \
   && cmp -s "$work/out" "$work/deb/usr/bin/proxmox-auto-install-assistant" \
   && ok "the role's unpacking takes the assistant out of a .deb" || bad "the role's unpacking"
 
+# node_name: the settings' proxmox_node_name when set, else the one node GET /nodes shows, else a refusal.
+sed -n '/^node_name() {/,/^}/p' "$w" > "$work/node_name.sh"
+nn_run() { # settings-json nodes-json
+  printf '%s\n' "$1" > "$work/nn-settings.json"; nodes_json=$2
+  # shellcheck disable=SC2034,SC2329,SC1091
+  ( settings=$work/nn-settings.json; px_api() { printf '%s\n' "$nodes_json"; }; . "$work/node_name.sh"; node_name ) 2>&1
+}
+[ "$(nn_run '{"proxmox_node_name": "setnode1"}' '{"data": [{"node": "apinode1"}]}')" = setnode1 ] \
+  && ok "node_name keeps a node the settings name" || bad "node_name with a settings node"
+[ "$(nn_run '{"name": "x"}' '{"data": [{"node": "apinode1"}]}')" = apinode1 ] \
+  && ok "node_name reads the only node from GET /nodes when the settings name none" || bad "node_name from the API"
+out=$(nn_run '{"name": "x"}' '{"data": [{"node": "a1"}, {"node": "b1"}]}') && bad "node_name accepted two nodes" \
+  || { grep -q 'shows 2 nodes' <<<"$out" && ok "node_name refuses two nodes" || bad "node_name two-node message: $out"; }
+out=$(nn_run '{"name": "x"}' '{"data": [{"node": "bad node"}]}') && bad "node_name accepted a node with a space" || ok "node_name refuses a node name that is not plain"
+
 [ "$fails" -eq 0 ] && echo "lab-test: all checks passed" || { echo "lab-test: $fails failed"; exit 1; }

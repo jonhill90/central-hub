@@ -17,6 +17,8 @@
 #   7. rebuild with a seal key that differs from the node's, a failed backup test, or a drill whose restore tests
 #      name no snapshot (a node with nothing to test), destroys nothing.
 #   8. log prints the run's lines.
+#   9. The Mac's inventory with no labels gets the role's default (env prod); the sign-in CA is mapped.
+#  10. The sign-in theme folder keeps its own name under prod/identity-theme/; one with no login/theme.properties is refused.
 # Usage: .github/hosts-check/tests/test_rebuild_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -266,5 +268,20 @@ if [[ $o9a == *"k8s_gitops_sso_root_ca_file is $t/keys/prod/lab-ca/root.crt, whi
       $o9c == *"is labelled env dev, not prod"* ]]; then
   ok "9. no labels in the Mac's inventory: the box's copy gets the role's default (env prod); an env other than prod is still refused; the sign-in CA is mapped"
 else bad "9. [$box] $o9a | $o9b | $o9c"; fi
+
+# 10. The sign-in theme folder: the box's copy keeps the folder's own name under prod/identity-theme/, where the
+# controller's prod-files run puts it, and check refuses one with no login/theme.properties before any teardown.
+inventory "        k8s_identity_theme_dir: /Users/someone/src/brand-theme/"
+run check; o10a=$out
+mkdir -p "$t/keys/prod/identity-theme/brand-theme/login"
+run check; o10b=$out
+echo 'parent=keycloak' > "$t/keys/prod/identity-theme/brand-theme/login/theme.properties"
+run check; o10c=$out r10c=$rc
+th=$(python3 -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1]))["all"]["children"]["k8s_nodes"]["vars"]["k8s_identity_theme_dir"])' "$t/work/rebuild-prod/inventory/hosts.yml" 2>&1)
+if [[ $o10a == *"k8s_identity_theme_dir is $t/keys/prod/identity-theme/brand-theme, which is not on the box"* &&
+      $o10b == *"k8s_identity_theme_dir is $t/keys/prod/identity-theme/brand-theme, which has no login/theme.properties"* &&
+      $r10c -eq 0 && $o10c != *FAIL* && $th == "$t/keys/prod/identity-theme/brand-theme" ]]; then
+  ok "10. the theme folder keeps its name under prod/identity-theme/, and one with no login/theme.properties is refused"
+else bad "10. [$th] $o10a | $o10b | $r10c $o10c"; fi
 
 exit "$fail"
