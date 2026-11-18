@@ -195,35 +195,15 @@ wait_secrets() {
 }
 
 # Dev, at the end of the gateway stage and in a failed run's capture: every LoadBalancer Service, its address, the L2
-# announcement policy meant to announce it (its own, named by the label central-hub/l2-policy, or the general one), and
-# the node that holds its lease, cilium-l2announce-<namespace>-<name> in kube-system (Cilium v1.20.4 docs,
-# network/l2-announcements.rst lines 240-259). D-0062 narrowed the general policy to Services without that label, so a
-# Service with an address and no lease holder is one no policy announces: it fails. Read-only.
+# announcement policy meant to announce it and the node holding its lease, by the role's own report
+# (hosts/ansible/roles/k8s_control_plane/files/l2-report.py, which `openbao-prod l2-policy` runs on prod). D-0062
+# narrowed the general policy to Services without the label central-hub/l2-policy, so a Service with an address and no
+# lease holder is one no policy announces: it fails. Read-only.
 l2_report() {
   local d rc=0
   d=$(mktemp -d)
   if kc get svc -A -o json > "$d/svc" && kc -n kube-system get leases -o json > "$d/leases"; then
-    python3 -I -c 'import json, sys
-svcs = json.load(open(sys.argv[1]))["items"]
-leases = {l["metadata"]["name"]: (l.get("spec") or {}).get("holderIdentity") or ""
-          for l in json.load(open(sys.argv[2]))["items"]}
-n = bad = 0
-for s in sorted(svcs, key=lambda s: (s["metadata"]["namespace"], s["metadata"]["name"])):
-    if (s.get("spec") or {}).get("type") != "LoadBalancer":
-        continue
-    n += 1
-    ns, name = s["metadata"]["namespace"], s["metadata"]["name"]
-    policy = (s["metadata"].get("labels") or {}).get("central-hub/l2-policy") or "general"
-    ips = [i["ip"] for i in ((s.get("status") or {}).get("loadBalancer") or {}).get("ingress") or [] if i.get("ip")]
-    holder = leases.get("cilium-l2announce-%s-%s" % (ns, name), "")
-    print("l2: service %s/%s address %s policy %s lease %s" % (ns, name, ",".join(ips) or "none", policy, holder or "none"))
-    if ips and not holder:
-        bad += 1
-print("l2: %d LoadBalancer Services, %d with an address and no lease holder" % (n, bad))
-if n == 0 or bad:
-    print("l2: FAIL: %s" % ("no LoadBalancer Service" if n == 0 else "an address no node announces"))
-    sys.exit(1)
-print("l2: PASS: every LoadBalancer Service with an address has a lease holder")' "$d/svc" "$d/leases" || rc=$?
+    python3 -I "$repo/hosts/ansible/roles/k8s_control_plane/files/l2-report.py" "$d/svc" "$d/leases" || rc=$?
   else
     echo "l2: FAIL: the Services or the leases could not be read"; rc=1
   fi

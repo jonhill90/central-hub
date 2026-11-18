@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# hosts/rebuild-k8s.sh's l2_report (D-0062): one line per LoadBalancer Service with its address, its policy and the node
-# holding its lease; PASS only when every Service with an address has a lease holder; FAIL on one with none, on no
-# LoadBalancer Service at all, and on a failed read. The gateway stage runs it on dev only, and the gateway stage's
-# l2 lines, and nothing else, reach the short log. Runs the function from a copy with `kc` stubbed.
+# hosts/rebuild-k8s.sh's l2_report and the report it runs, role k8s_control_plane's files/l2-report.py (D-0062): one
+# line per LoadBalancer Service with its address, its policy and the node holding its lease; PASS only when every
+# Service with an address has a lease holder; FAIL on one with none, on no LoadBalancer Service at all, and on a
+# failed read. The gateway stage runs it on dev only, and the gateway stage's l2 lines, and nothing else, reach the
+# short log. With --kubectl (the role's lb tag, on the node) it reads with kubectl and lists the policies too. Runs
+# the function from a copy with `kc` stubbed, and the script with a stub kubectl.
 set -euo pipefail
 src=$(cd "$(dirname "$0")/../../.." && pwd)
 script=$src/hosts/rebuild-k8s.sh
@@ -25,7 +27,7 @@ lease() { printf '{"metadata": {"name": "%s"}, "spec": {"holderIdentity": "%s"}}
 # run <svc items> <lease items> [fail-read]: prints the output and the exit code on the last line.
 run() {
   printf '{"items": [%s]}' "$1" > "$t/svc.json"; printf '{"items": [%s]}' "$2" > "$t/leases.json"
-  FAILREAD=${3:-} T=$t bash -c '
+  FAILREAD=${3:-} T=$t repo=$src bash -c '
     kc() { [ -z "$FAILREAD" ] || return 1; case "$*" in *leases*) cat "$T/leases.json" ;; *) cat "$T/svc.json" ;; esac; }
     . "$1"; set +e; l2_report; echo "rc=$?"' _ "$t/fn.sh"
 }
@@ -60,6 +62,30 @@ check "no LoadBalancer Service at all: FAIL" "$out" "l2: FAIL: no LoadBalancer S
 out=$(run "$gw" "$lgw" yes)
 check "a failed read: FAIL, rc 1" "$out" "l2: FAIL: the Services or the leases could not be read"
 check "and rc 1" "$out" "rc=1"
+
+# --kubectl: the script reads the three lists itself and prints the policies first.
+mkdir -p "$t/bin"
+cat > "$t/bin/kubectl" <<'K'
+#!/usr/bin/env bash
+[ -z "${KFAIL:-}" ] || { echo "forbidden" >&2; exit 1; }
+case "$*" in
+  *leases*) cat "$T/leases.json" ;;
+  *ciliuml2announcementpolicies*) printf '{"items": [{"metadata": {"name": "pool"}, "spec": {"serviceSelector": {"matchExpressions": [{"key": "central-hub/l2-policy", "operator": "DoesNotExist"}]}}}]}' ;;
+  *) cat "$T/svc.json" ;;
+esac
+K
+chmod +x "$t/bin/kubectl"
+py=$src/hosts/ansible/roles/k8s_control_plane/files/l2-report.py
+printf '{"items": [%s]}' "$gw" > "$t/svc.json"; printf '{"items": [%s]}' "$lgw" > "$t/leases.json"
+out=$(T=$t PATH="$t/bin:$PATH" python3 -I "$py" --kubectl; echo "rc=$?")
+check "--kubectl: the policy line" "$out" 'l2: policy pool serviceSelector {"matchExpressions": [{"key": "central-hub/l2-policy", "operator": "DoesNotExist"}]}'
+check "--kubectl: the Service line and PASS" "$out" "lease node-a" "rc=1"
+check "--kubectl: rc 0" "$out" "rc=0"
+out=$(T=$t KFAIL=1 PATH="$t/bin:$PATH" python3 -I "$py" --kubectl; echo "rc=$?")
+check "--kubectl: a refused read fails" "$out" "l2: FAIL: the Services, leases or policies could not be read"
+check "--kubectl: rc 1" "$out" "rc=1"
+out=$(python3 -I "$py" 2>&1; echo "rc=$?")
+check "no arguments: usage, rc 2" "$out" "rc=2"
 
 # The gateway stage: dev runs the report after the playbook, other envs don't, and a failed report fails the stage.
 sed -n '/^run_stage() {/,/^}/p' "$script" > "$t/stage.sh"
