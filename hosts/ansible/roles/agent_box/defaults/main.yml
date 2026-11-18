@@ -49,7 +49,8 @@ agent_box_wrappers:
   - name: signin-check
     args: [run, log]
   # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
-  # the owner's tap id, which the wrapper checks; the run needs dev to have passed at the same commit first.
+  # the owner's tap id and the commit the go names, which the wrapper checks (7 to 40 hex digits, on main); the run
+  # needs dev to have passed at that same commit first.
   - name: rebuild-prod
     args: [check, "rebuild *", log]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself. Sessions get the
