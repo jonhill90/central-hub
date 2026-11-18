@@ -3,7 +3,7 @@
 # its own SDN, OPNsense and connector container (docs/specs/2026-11-lab-test-copy.md,
 # docs/runbooks/build-the-lab-test-copy.md). It runs as user `keys` through sudo, so the session that asks for it
 # never sees the Proxmox token. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|opnsense|wancheck|destroy|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|opnsense|wancheck|connector|safety|prove|destroy|log
 # plan: the guards (dev down, no dev rebuild running, VM 257 gone, free memory and box disk), then download and
 #   check the Proxmox VE ISO, write the answer file, bake it into a copy of the ISO with the pinned
 #   proxmox-auto-install-assistant (--fetch-from iso), and save an OpenTofu plan for hosts/terraform/home/lab-test.
@@ -29,6 +29,12 @@
 # wancheck: inside the copy, step 7's WAN safety check on VM 100, whose WAN is on the copy's portless vmbr9: WAN a DHCP
 #   client only (over the console), then a watch for server-type frames from the WAN at link-up and over a reboot.
 #   WAN goes down again on any failure.
+# connector: inside the copy, CT 900's tailnet client (set-up-tailnet-client-in-ct-900.md steps 1-3) and
+#   playbooks/tailnet-connector.yml, never joined to a tailnet; it stops if CT 900 is ever logged in.
+# safety: inside the copy, step 8's host firewall (proxmox-safety.yml --tags firewall), off, then on with its dead-man
+#   timer, then once more with no change; the timer must end cancelled.
+# prove: every step above in order, from plan to safety, then destroy whether they passed or not; each step is its own
+#   run of this wrapper under this run's lock and log. One clean prove is one of the spec's two clean runs.
 # destroy: destroy VM 256 only. The token cannot delete files on Proxmox's local storage, so the prepared ISO stays
 #   in the state and on local for the next build, which reuses it while the answer is unchanged; destroy lists it.
 # log: the last run's log, then VM 256's Proxmox state, read-only.
@@ -36,8 +42,8 @@ set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | check | host | lab | firstboot | opnsense | wancheck | destroy | log) action=$1 ;;
-  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|opnsense|wancheck|destroy|log" >&2; exit 2 ;;
+  plan | apply | check | host | lab | firstboot | opnsense | wancheck | connector | safety | prove | destroy | log) action=$1 ;;
+  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|opnsense|wancheck|connector|safety|prove|destroy|log" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -108,14 +114,23 @@ print("lab-test: VM %s is %s, uptime %ss, memory %s of %s MiB" % (sys.argv[1], d
   exit 0
 fi
 
-exec 9>"$work/state/lab-test.lock"
-flock -n 9 || { echo "lab-test: another lab-test run is going; try again when it ends" >&2; exit 1; }
-exec > >(tee "$logfile") 2>&1
+# A step of prove runs under prove's lock, log and checkout: its parent is the prove run that named itself. Any other
+# run takes the lock and its own log, and moves the checkout to main.
+child=0
+if [[ -n ${LAB_TEST_PROVE_PARENT:-} && $LAB_TEST_PROVE_PARENT == "$PPID" && $action != prove ]]; then child=1; fi
+unset LAB_TEST_PROVE_PARENT
+if (( ! child )); then
+  exec 9>"$work/state/lab-test.lock"
+  flock -n 9 || { echo "lab-test: another lab-test run is going; try again when it ends" >&2; exit 1; }
+  exec > >(tee "$logfile") 2>&1
+fi
 echo "lab-test: $action at $(date -u +%FT%TZ)"
 mkdir -p "$files"
-[[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
-git -C "$repo" fetch --quiet origin main
-git -C "$repo" checkout --quiet --detach origin/main
+if (( ! child )); then
+  [[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
+  git -C "$repo" fetch --quiet origin main
+  git -C "$repo" checkout --quiet --detach origin/main
+fi
 echo "lab-test: central-hub $(git -C "$repo" rev-parse --short HEAD)"
 vlans=$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml
 [[ -f $sshkey ]] || ssh-keygen -q -t ed25519 -N "" -C "keys@agent-box lab-test" -f "$sshkey"
@@ -436,6 +451,13 @@ lab() {
 # (lab-test-console.py says why). Root on the copy reaches it as qm terminal does: socat on VM 100's serial0 socket
 # (qemu-server src/PVE/CLI/qm.pm, terminal; qemu-server depends on socat, debian/control). OPNsense's own root
 # password is new and kept on the box until destroy; the image's default, opnsense, is tried first.
+# The whole lab range, the mgmt /24's /16 (STD-0002), as the copy's inventory has it.
+lab_supernet() {
+  "$py" -I -c 'import ipaddress, sys, yaml
+v = [x for x in yaml.safe_load(open(sys.argv[1]))["lab_vlans"] if x["name"] == "mgmt"][0]
+print(ipaddress.ip_network(v["cidr"]).supernet(new_prefix=16))' "$vlans"
+}
+
 # The mgmt VLAN's tag, its gateway (VM 100's LAN address) and its prefix length, from the VLAN file.
 mgmt_values() {
   "$py" -I -c 'import ipaddress, sys, yaml
@@ -582,6 +604,101 @@ json.dump(v, open(p, "w"), indent=2)' "$files/state/firewall.tfvars.json" "$1"
   echo "lab-test: the WAN check passed at link-up and over a reboot; WAN stays up on the copy's vmbr9"
 }
 
+# CT 900 in the copy, as set-up-tailnet-client-in-ct-900.md steps 1 to 3 and set-up-lab-dns.md's
+# playbooks/tailnet-connector.yml do it on a fresh real host, but never joined: steps 4 and 5 (the key and the join)
+# are a tailnet change, and the copy has no key. The client from the vendor's Debian repository, IP forwarding, the
+# route unit and the advertised routes, which the client keeps as preferences until a login it never gets. Stops if
+# CT 900 is ever logged in.
+connector_state() { # CT 900's tailnet client state, or "none" before it is installed
+  vm 'pct exec 900 -- tailscale status --json 2>/dev/null || true' |
+    python3 -I -c 'import json, sys
+try:
+    print(json.load(sys.stdin).get("BackendState") or "none")
+except ValueError:
+    print("none")'
+}
+
+connector() {
+  wait_ssh
+  vm 'pct status 900' | grep -qx 'status: running' || { echo "lab-test: CT 900 is not running in the copy; run lab-test lab first"; return 1; }
+  [[ -f $files/inventory/hosts.yml ]] || { echo "lab-test: run lab-test host first"; return 1; }
+  local state tag gw prefix n rc=0
+  state=$(connector_state)
+  [[ $state != Running && $state != Starting ]] || { echo "lab-test: CT 900 is logged in to a tailnet ($state); the copy must never join. Stopped"; return 1; }
+  read -r tag gw prefix < <(mgmt_values)
+  # The runbook's own lines, steps 1 to 3, in CT 900 through the copy's pct.
+  vm 'bash -s' <<'SH'
+set -eu
+pct exec 900 -- bash -c 'apt-get update && apt-get install -y curl ca-certificates'
+pct exec 900 -- bash -c 'mkdir -p --mode=0755 /usr/share/keyrings &&
+  curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg &&
+  curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list'
+pct exec 900 -- bash -c 'apt-get update && apt-get install -y tailscale'
+[ "$(pct exec 900 -- systemctl is-enabled tailscaled)" = enabled ]
+pct exec 900 -- bash -c 'printf "net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n" > /etc/sysctl.d/99-tailscale.conf && sysctl -p /etc/sysctl.d/99-tailscale.conf'
+SH
+  for n in 1 2; do
+    echo "lab-test: tailnet-connector.yml against the copy, run $n"
+    ( cd "$repo/hosts/ansible"
+      ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home \
+        ansible-playbook -i "$files/inventory" playbooks/tailnet-connector.yml ) 2>&1 | tee "$files/connector-run.log" || rc=$?
+    (( rc == 0 )) || { echo "lab-test: tailnet-connector.yml failed on run $n (exit $rc)"; return 1; }
+  done
+  grep -Eq '^proxmox_host +: ok=[0-9]+ +changed=0 +unreachable=0 +failed=0' "$files/connector-run.log" \
+    || { echo "lab-test: the second tailnet-connector.yml run changed something"; return 1; }
+  # The route unit is up, the lab range goes through the copy's firewall on eth1, and the gateway answers there.
+  vm "pct exec 900 -- systemctl is-active central-hub-lab-route.service &&
+    pct exec 900 -- ip route show $(lab_supernet) | grep -q 'via $gw dev eth1' &&
+    pct exec 900 -- ping -c 1 -W 2 -I eth1 $gw >/dev/null" \
+    || { echo "lab-test: CT 900's route to the lab or the mgmt gateway $gw does not work"; return 1; }
+  state=$(connector_state)
+  [[ $state == NeedsLogin ]] || { echo "lab-test: CT 900's tailnet client is $state, not NeedsLogin"; return 1; }
+  echo "lab-test: CT 900 has the tailnet client, forwarding, the lab route and its routes advertised, and never joined"
+}
+
+# set-up-lab-network-and-firewall.md step 8's host firewall against the copy: playbooks/proxmox-safety.yml --tags
+# firewall, first with the switch off (rules written, ruleset shown), then on, as the runbook runs it. The second run
+# arms the dead-man timer, proves every way in, and cancels the timer; a third run must change nothing. The copy's
+# "home LAN" in its management IPSet is dev, where the box is (inventory). Notifications and backups are left out:
+# their inputs are the owner's ntfy topic and a backup disk, which the copy does not have.
+safety() {
+  wait_ssh
+  [[ -f $files/inventory/hosts.yml ]] || { echo "lab-test: run lab-test host first"; return 1; }
+  local n rc=0 extra
+  for n in 1 2 3; do
+    extra=(); (( n == 1 )) || extra=(-e '{"proxmox_firewall_enable": true}')
+    echo "lab-test: proxmox-safety.yml --tags firewall against the copy, run $n"
+    ( cd "$repo/hosts/ansible"
+      ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home \
+        ansible-playbook -i "$files/inventory" playbooks/proxmox-safety.yml --tags firewall "${extra[@]}" ) 2>&1 \
+      | tee "$files/safety-run.log" || rc=$?
+    (( rc == 0 )) || { echo "lab-test: proxmox-safety.yml failed on run $n (exit $rc)"; return 1; }
+  done
+  grep -Eq '^proxmox_host +: ok=[0-9]+ +changed=0 +unreachable=0 +failed=0' "$files/safety-run.log" \
+    || { echo "lab-test: the third proxmox-safety.yml run changed something"; return 1; }
+  vm 'pve-firewall status' | grep -q 'enabled/running' || { echo "lab-test: the copy's firewall is not enabled and running"; return 1; }
+  ! vm 'systemctl is-active --quiet central-hub-fw-deadman.timer' \
+    || { echo "lab-test: the dead-man timer is still armed in the copy"; return 1; }
+  echo "lab-test: the copy's host firewall is on, every way in still works, and the dead-man timer is cancelled"
+}
+
+# The whole copy, build to destroy, with no hand step (docs/specs/2026-11-lab-test-copy.md, "Two clean runs"): each
+# step as its own run of this wrapper, so each keeps its own stop-on-error, under this run's lock, log and checkout.
+# Destroy runs whether the steps pass or not, so dev can come back; the log says where a run stopped.
+prove() {
+  local step failed="" rc
+  for step in plan apply check host lab firstboot opnsense wancheck connector safety; do
+    echo "lab-test: prove: $step"
+    rc=0; LAB_TEST_PROVE_PARENT=$$ "$0" "$step" || rc=$?
+    (( rc == 0 )) || { failed=$step; echo "lab-test: prove: $step failed (exit $rc)"; break; }
+  done
+  echo "lab-test: prove: destroy"
+  rc=0; LAB_TEST_PROVE_PARENT=$$ "$0" destroy || rc=$?
+  (( rc == 0 )) || { echo "lab-test: prove: destroy failed (exit $rc); VM $VMID may still exist"; return 1; }
+  [[ -z $failed ]] || { echo "lab-test: prove: stopped at $failed; the copy is destroyed"; return 1; }
+  echo "lab-test: prove: every step passed, build to destroy, with no hand step"
+}
+
 case $action in
   plan) guards; tofu_run ;;
   apply) guards; tofu_run ;;
@@ -591,12 +708,16 @@ case $action in
   firstboot) firstboot ;;
   opnsense) opnsense ;;
   wancheck) wancheck ;;
+  connector) connector ;;
+  safety) safety ;;
+  prove) prove ;;
   destroy)
     tofu_run
     # The copy's token, inventory and run folder states go with it; a new copy gets new ones. Root's password stays
     # with its hash, which the cached prepared ISO holds.
     rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory" "$files/state" "$files/copy-ca.pem" \
-      "$files"/opnsense-root.* "$files"/opnsense-api.* "$files/opnsense-run.log"
+      "$files"/opnsense-root.* "$files"/opnsense-api.* "$files/opnsense-run.log" \
+      "$files/connector-run.log" "$files/safety-run.log"
     echo "lab-test: VM $VMID destroyed"
     leftovers
     ;;

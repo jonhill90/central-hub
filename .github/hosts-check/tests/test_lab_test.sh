@@ -88,8 +88,8 @@ grep -q "grep -cE '(vmx|svm)' /proc/cpuinfo" "$w" && grep -q "test -c /dev/kvm" 
   && ok "check stops when the copy's guests would run without KVM" || bad "no nested check"
 grep -q '^  plan) guards; tofu_run ;;$' "$w" && grep -q '^  apply) guards; tofu_run ;;$' "$w" \
   && ok "plan and apply both pass the guards" || bad "a build step skips the guards"
-grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, firstboot, opnsense, wancheck, destroy, log\]' \
-  && ok "the wrapper list allows plan, apply, check, host, lab, firstboot, opnsense, wancheck, destroy and log" || bad "the wrapper's sudo arguments"
+grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, firstboot, opnsense, wancheck, connector, safety, prove, destroy, log\]' \
+  && ok "the wrapper list allows every step, safety, prove, destroy and log" || bad "the wrapper's sudo arguments"
 
 # host: the inventory the copy's playbook runs with, the real inventory's shape with the copy's own values.
 python3 -I "$helper" inventory "$work/settings.json" "$vlans" /keys/lab-test-ssh /work/known_hosts "$work/hosts.yml"
@@ -103,6 +103,107 @@ assert "UserKnownHostsFile=/work/known_hosts" in h["ansible_ssh_common_args"]
 assert h["proxmox_host_mgmt_address"] == "10.1.50.2" and h["proxmox_network_lab_supernet"] == "10.1.0.0/16"
 assert int(h["proxmox_vmbr1_mac"].split(":")[0], 16) & 2, "not locally administered"
 PY
+python3 -I - "$w" "$work/hosts.yml" "$root/hosts/ansible/roles/tailnet_connector/meta/argument_specs.yml" <<'PY' && ok "connector: the runbook's install lines, never joined, tailnet-connector.yml twice with changed=0, the route and gateway checked" || bad "connector's wiring"
+import sys, yaml
+t = open(sys.argv[1]).read()
+h = yaml.safe_load(open(sys.argv[2]))["all"]["children"]["proxmox"]["hosts"]["proxmox_host"]
+assert h["tailnet_connector_extra_routes"] == ["10.1.30.198/32"] and h["tailnet_connector_lab_supernet"] == "10.1.0.0/16"
+opts = yaml.safe_load(open(sys.argv[3]))["argument_specs"]["main"]["options"]
+assert {k for k, v in opts.items() if v.get("required")} - set(h) == {"lab_vlans"}
+f = t[t.index("\nconnector() {"):]
+f = f[:f.index("\n}\n")]
+# Never joined: no auth key, no tailscale up or login anywhere in the wrapper; stop before anything when logged in.
+assert "tailscale up" not in t and "auth-key" not in t and "tailscale login" not in t
+assert f.index('[[ $state != Running && $state != Starting ]]') < f.index("vm 'bash -s'")
+assert f.rindex("[[ $state == NeedsLogin ]]") > f.index("playbooks/tailnet-connector.yml")
+for line in ["https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg", "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list",
+             "apt-get install -y tailscale", "systemctl is-enabled tailscaled)\" = enabled", "/etc/sysctl.d/99-tailscale.conf"]:
+    assert line in f, line
+rb = open(sys.argv[1].replace("hosts/ansible/roles/agent_box/files/lab-test.sh", "docs/runbooks/set-up-tailnet-client-in-ct-900.md")).read()
+for line in ["https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg", "apt-get install -y tailscale",
+             'printf "net.ipv4.ip_forward = 1\\nnet.ipv6.conf.all.forwarding = 1\\n" > /etc/sysctl.d/99-tailscale.conf']:
+    assert line in rb and line in f, line
+assert "for n in 1 2; do" in f and "changed=0 +unreachable=0 +failed=0' \"$files/connector-run.log\"" in f
+assert "grep -q 'via $gw dev eth1'" in f and "ping -c 1 -W 2 -I eth1 $gw" in f
+PY
+# safety: the firewall tag off, then on twice, the third run changed=0, the timer cancelled; the copy's home LAN is dev.
+python3 -I - "$w" "$work/hosts.yml" "$role/../proxmox_firewall/meta/argument_specs.yml" <<'PY' && ok "safety: the firewall off, then on with the dead-man timer, then no change; dev as the copy's home LAN" || bad "safety's wiring"
+import sys, yaml
+t = open(sys.argv[1]).read()
+h = yaml.safe_load(open(sys.argv[2]))["all"]["children"]["proxmox"]["hosts"]["proxmox_host"]
+assert h["proxmox_firewall_home_lan_cidr"] == "10.1.30.0/24"
+opts = yaml.safe_load(open(sys.argv[3]))["argument_specs"]["main"]["options"]
+assert {k for k, v in opts.items() if v.get("required")} - set(h) <= {"lab_vlans"}
+f = t[t.index("\nsafety() {"):]
+f = f[:f.index("\n}\n")]
+assert "for n in 1 2 3; do" in f and "(( n == 1 )) || extra=(-e '{\"proxmox_firewall_enable\": true}')" in f
+assert "playbooks/proxmox-safety.yml --tags firewall" in f and "--tags notify" not in f and "--tags backup" not in f
+assert "changed=0 +unreachable=0 +failed=0' \"$files/safety-run.log\"" in f
+assert "pve-firewall status' | grep -q 'enabled/running'" in f and "systemctl is-active --quiet central-hub-fw-deadman.timer" in f
+PY
+# Every playbook the copy's inventory runs checks the arguments of every role it lists, tagged always, whatever the
+# --tags: each required input of each of those roles must be in the inventory (hosts.yml, plus the VLAN file the
+# wrapper copies into its group_vars), or the run fails at its first task.
+python3 -I - "$work/hosts.yml" "$root/hosts/ansible" "$vlans" "$w" <<'PY' && ok "the copy's inventory holds every required input of every role in proxmox-host.yml, tailnet-connector.yml and proxmox-safety.yml" || bad "a role's required input is missing from the copy's inventory"
+import os, sys, yaml
+h = yaml.safe_load(open(sys.argv[1]))["all"]["children"]["proxmox"]["hosts"]["proxmox_host"]
+assert 'cp "$vlans" "$files/inventory/group_vars/all/vlans.yml"' in open(sys.argv[4]).read()
+have = set(h) | set(yaml.safe_load(open(sys.argv[3])))
+base, missing, seen = sys.argv[2], [], []
+for pb in ("proxmox-host.yml", "tailnet-connector.yml", "proxmox-safety.yml"):
+    for play in yaml.safe_load(open(os.path.join(base, "playbooks", pb))):
+        for r in play.get("roles", []):
+            name = r["role"] if isinstance(r, dict) else r
+            seen.append(name)
+            spec = os.path.join(base, "roles", name, "meta", "argument_specs.yml")
+            if not os.path.isfile(spec):
+                continue
+            for ep in yaml.safe_load(open(spec))["argument_specs"].values():
+                need = {k for k, v in (ep.get("options") or {}).items() if v.get("required")}
+                missing += [f"{pb} {name} {k}" for k in sorted(need - have)]
+assert {"proxmox_network", "tailnet_connector", "proxmox_notify", "proxmox_backup", "proxmox_firewall"} <= set(seen), seen
+assert not missing, missing
+assert h["proxmox_backup_disk"].startswith("/dev/disk/by-id/lab-test-copy-")
+PY
+# prove: run against a stand-in wrapper that logs each step and fails where told; then the child check on its own.
+body=$(sed -n '/^prove() {$/,/^}$/p' "$w")
+cat > "$work/prove-step.sh" <<'SH'
+#!/bin/bash
+echo "$1 parent=${LAB_TEST_PROVE_PARENT:-}" >> "$PROVE_CALLS"
+[[ $1 != "${PROVE_FAIL_AT:-}" ]]
+SH
+chmod +x "$work/prove-step.sh"
+prove_run() { # fail-at
+  : > "$work/prove-calls"
+  PROVE_CALLS=$work/prove-calls PROVE_FAIL_AT=$1 VMID=256 bash -c "set -euo pipefail; $body"$'\n'"set -- ; prove" "$work/prove-step.sh" > "$work/prove-out" 2>&1
+}
+pid_ok() { awk '{print $2}' "$work/prove-calls" | grep -vx 'parent=[0-9]\+' | grep -q . && return 1; return 0; }
+if prove_run "" && [[ $(awk '{print $1}' "$work/prove-calls" | paste -sd' ') == "plan apply check host lab firstboot opnsense wancheck connector safety destroy" ]] \
+  && pid_ok && grep -q 'every step passed, build to destroy' "$work/prove-out"; then
+  ok "prove runs plan through safety in order, then destroy, each as a child that names its parent"
+else
+  bad "prove's order"; cat "$work/prove-calls" "$work/prove-out"
+fi
+if ! prove_run lab && [[ $(awk '{print $1}' "$work/prove-calls" | paste -sd' ') == "plan apply check host lab destroy" ]] \
+  && grep -q 'stopped at lab; the copy is destroyed' "$work/prove-out"; then
+  ok "prove stops at the first failed step, still destroys, and fails"
+else
+  bad "prove after a failed step"; cat "$work/prove-calls" "$work/prove-out"
+fi
+if ! prove_run destroy && grep -q 'destroy failed (exit 1); VM 256 may still exist' "$work/prove-out"; then
+  ok "prove fails loudly when destroy fails"
+else
+  bad "prove after a failed destroy"; cat "$work/prove-out"
+fi
+childblock=$(sed -n '/^child=0$/,/^unset LAB_TEST_PROVE_PARENT$/p' "$w")
+child_of() { # LAB_TEST_PROVE_PARENT value ("parent" for the run's own parent), action
+  bash -c 'if [[ $1 == parent ]]; then export LAB_TEST_PROVE_PARENT=$PPID; else export LAB_TEST_PROVE_PARENT=$1; fi; action=$2
+'"$childblock"'
+echo "$child ${LAB_TEST_PROVE_PARENT:-unset}"' _ "$1" "$2"
+}
+[[ $(child_of parent lab) == "1 unset" && $(child_of 1 lab) == "0 unset" && $(child_of parent prove) == "0 unset" && $(child_of "" lab) == "0 unset" ]] \
+  && ok "a run is prove's step only when its parent named itself, never for prove, and the name does not pass on" \
+  || bad "the prove child check"
 # host runs the fresh-host steps in the runbook's order: apt, iac-access.sh, the token, iac-access.sh again, vmbr1.
 python3 -I - "$w" <<'PY' && ok "host runs apt, iac-access.sh, the token, iac-access.sh again, then vmbr1" || bad "host's order"
 import sys
@@ -408,8 +509,12 @@ while time.time() < end:
     if mode == "router" and f[12:14] == b"\x86\xdd" and f[20] == 58:
         s.send(ra())
 PY
+  # The fake WAN is a host link, and with IPv6 on, Linux keeps sending router solicitations from its MAC with backoff
+  # and no end (MAX_RTR_SOLICITATIONS is -1), so one can land in the silent run's window and count as a frame.
+  # IPv6 off on ltwan0 leaves only the frames fakewan.py sends.
   "${sudo[@]}" ip link add vmbr97 type bridge && "${sudo[@]}" ip link set vmbr97 up \
     && "${sudo[@]}" ip link add ltwan0 type veth peer name ltwan0br && "${sudo[@]}" ip link set ltwan0br master vmbr97 \
+    && { [[ ! -e /proc/sys/net/ipv6/conf/ltwan0 ]] || "${sudo[@]}" sysctl -qw net.ipv6.conf.ltwan0.disable_ipv6=1; } \
     && "${sudo[@]}" ip link set ltwan0 address 02:00:00:00:01:01 && "${sudo[@]}" ip link set ltwan0br up && "${sudo[@]}" ip link set ltwan0 up
   for want in client:0 server:3 router:3 silent:4; do
     mode=${want%:*}; rc=0

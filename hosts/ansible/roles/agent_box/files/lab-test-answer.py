@@ -8,7 +8,8 @@
 
   lab-test-answer.py inventory <settings.json> <vlans.yml> <ssh key> <known_hosts> <out hosts.yml>
       The copy's Ansible inventory, in the shape of hosts/ansible/inventories/home/hosts.example.yml: group proxmox
-      with one host, the copy, reached as root with the wrapper's key, and the copy's own network values.
+      with one host, the copy, reached as root with the wrapper's key, and the copy's own network values, the tailnet
+      connector's among them.
 
   lab-test-answer.py layers <settings.json> <vlans.yml> <OPNsense image> <container template> <out dir>
       The copy's own values for the network, firewall and remote-access run folders, one <folder>.tfvars.json each:
@@ -120,6 +121,17 @@ def inventory(settings, vlans, key, known_hosts, out):
         "proxmox_vmbr1_mac": COPY_VMBR1_MAC,
         "proxmox_host_mgmt_address": str(mgmt.network_address + 2),
         "proxmox_network_lab_supernet": str(supernet),
+        # playbooks/tailnet-connector.yml: as on the real host, the extra route is the host's own address on its
+        # vmbr0 as a /32, here the copy's dev address.
+        "tailnet_connector_extra_routes": [f"{addr}/32"],
+        "tailnet_connector_lab_supernet": str(supernet),
+        # playbooks/proxmox-safety.yml --tags firewall: the copy's "home LAN" is dev, where the box reaches it from, so
+        # the management IPSet keeps the box's SSH and API path. No check targets: the copy has no k8s_nodes.
+        "proxmox_firewall_home_lan_cidr": str(net),
+        # proxmox-safety.yml checks every role's arguments, tagged always, even under --tags firewall, and
+        # proxmox_backup requires its disk. The copy has no backup disk and never runs that role, so this made-up id
+        # names no disk anywhere; it only lets the argument check pass.
+        "proxmox_backup_disk": "/dev/disk/by-id/lab-test-copy-has-no-backup-disk",
     }
     doc = {"all": {"children": {"proxmox": {"hosts": {"proxmox_host": host}}}}}
     with open(out, "w") as f:
