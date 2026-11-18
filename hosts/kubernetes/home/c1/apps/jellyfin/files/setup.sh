@@ -1,7 +1,8 @@
 #!/bin/sh
 # Jellyfin first-run setup (startup API, Jellyfin 12.2: StartupController and
 # LibraryStructureController, both open to anonymous calls only until the wizard completes).
-# Safe to run again: it stops as soon as the server says the wizard is done.
+# Safe to run again: the wizard runs only until the server says it is done; the sign-in step after it
+# writes the same state every time.
 # The password goes to curl on stdin, never on a command line or in the log. No heredocs:
 # the root filesystem is read-only.
 set -eu
@@ -56,6 +57,7 @@ fi
 # adds or overwrites it, so every run leaves the same state). Skipped when SSO is off or the client
 # secret Secret does not exist yet. Neither the token nor the secret is printed.
 [ "${SSO_ENABLED:-false}" = "true" ] || { echo "sso: off, nothing to do"; exit 0; }
+[ -s /lab-ca/lab-root-ca.pem ] || { echo "sso: Secret $SSO_CA_NAME is missing, so Jellyfin can't trust Keycloak: skipped (run playbooks/k8s-identity.yml)" >&2; exit 0; }
 [ -n "${SSO_CLIENT_SECRET:-}" ] || { echo "sso: Secret $SSO_SECRET_NAME has no client-secret yet: skipped (run playbooks/k8s-identity.yml)" >&2; exit 0; }
 
 auth='Authorization: MediaBrowser Client="setup", Device="job", DeviceId="jellyfin-setup", Version="1"'

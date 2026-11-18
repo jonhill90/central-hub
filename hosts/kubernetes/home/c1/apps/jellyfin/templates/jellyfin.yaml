@@ -123,7 +123,7 @@ spec:
         - name: tmp
           emptyDir: {sizeLimit: 16Mi}
         - name: lab-root-ca
-          configMap: {name: {{ $v.name }}-lab-root-ca}
+          secret: {secretName: {{ $v.name }}-lab-root-ca, optional: true}
         {{- end }}
 ---
 apiVersion: v1
