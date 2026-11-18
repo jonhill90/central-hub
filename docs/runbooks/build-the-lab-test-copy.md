@@ -146,10 +146,10 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    why: this is [Set up the lab network](set-up-lab-network-and-firewall.md) step 7's WAN safety check, with its three moments. The copy's WAN is on the portless `vmbr9`, so it reaches nothing outside the copy.
    1. Before link-up, over the console: `dhclient` runs for `vtnet1`, and no `radvd`, Kea or `dhcp6c` runs.
    2. Link-up, through the `firewall` run folder with `opnsense_wan_connected = true`, while `lab-test-wan-watch.py` watches `vmbr9` on the copy for 120 seconds.
-   3. A reboot of VM 100 (`qm reboot 100` in the copy) under a 240-second watch.
+   3. A reboot of VM 100 (`qm reboot 100` in the copy) under a 240-second watch of its WAN tap, `tap100i1`. Frames from the WAN count only once that tap is back as a new device, with a new interface index, which only VM 100's new QEMU process gives it. Frames from before the reboot prove nothing about the WAN after it, so they are not counted.
 
    The watch counts the packets the real check counts, from the WAN's MAC: UDP from port 67, UDP from port 547 and ICMPv6 type 134. Nothing on `vmbr9` would ask a server, so every 5 seconds the watch asks itself from a made-up MAC, with a DHCPv4 discover, a DHCPv6 solicit and a router solicitation. It reads frames on the bridge's ports, where they enter, before the bridge's netfilter hooks. It passes only when it saw frames from the WAN and none of server type. Any failure takes WAN link-down again. WAN stays up when all three pass; `lab-test lab`, run again, takes it down. Safe to run again.
-   expect: `pgrep` lists `dhclient: vtnet1`, then `wan-watch: 120s on vmbr9: N frames from the WAN, server-type: 0` with N above 0, `firewall applied in the copy`, the same line for 240s, then `the WAN check passed at link-up and over a reboot`.
+   expect: `pgrep` lists `dhclient: vtnet1`, then `wan-watch: 120s on vmbr9: N frames from the WAN, server-type: 0` with N above 0, `firewall applied in the copy`, `wan-watch: tap100i1 is back as a new device`, then `wan-watch: 240s on vmbr9: N frames from the WAN after tap100i1 came back (M before, not counted), server-type: 0` with N above 0, then `the WAN check passed at link-up and over a reboot`.
    ※ `lab-test.sh`, `wancheck`; `lab-test-wan-watch.py`; `firewall/variables.tf`, `wan_bridge`
 9. Set up CT 900's tailnet client, never joined:
 
@@ -229,7 +229,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 | `opnsense.yml failed on run N` | A task failed on the copy's firewall; Ansible's output is above the line. A finding about the role or about 26.1.6: report the failed task. |
 | `the second opnsense.yml run changed something` | The role does not converge on a fresh firewall. Report the second run's changed tasks. |
 | `before link-up, WAN is not a DHCP client only` | `dhclient` is not on `vtnet1`, or a DHCPv6 client, router or Kea runs; the console output is above. WAN stays down. Report it. |
-| `the WAN check failed at link-up` or `over the reboot` | The watch saw a server-type frame from the WAN (the line above names the kinds), or nothing from the WAN at all. WAN is down again. Report the watch line. |
+| `the WAN check failed at link-up` or `over the reboot` | The watch saw a server-type frame from the WAN (the line above names the kinds), or nothing from the WAN at all. Over the reboot it also fails when `tap100i1 never came back as a new device`, or when the tap came back and the WAN sent nothing after it. WAN is down again. Report the watch line. |
 | `CT 900 is logged in to a tailnet` | Someone joined the copy's CT 900. The copy must never join: destroy the copy and remove the device from the tailnet, which is the owner's step. |
 | `tailnet-connector.yml failed on run N` or `the second tailnet-connector.yml run changed something` | The role fails or does not converge on a fresh CT 900; Ansible's output is above. Report it. |
 | `CT 900's route to the lab or the mgmt gateway ... does not work` | The route unit did not start, or VM 100's LAN is not on mgmt. Run `lab-test check`, then report it. |

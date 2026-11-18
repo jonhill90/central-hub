@@ -588,8 +588,8 @@ p = sys.argv[1]; v = json.load(open(p)); v["opnsense_wan_connected"] = sys.argv[
 json.dump(v, open(p, "w"), indent=2)' "$files/state/firewall.tfvars.json" "$1"
     lab_folder firewall
   }
-  wan_watch() { # seconds; the watch's verdict is its exit code
-    vm "python3 -I - vmbr9 $wanmac $1" < "$wan_watch_py"
+  wan_watch() { # seconds [port]; the watch's verdict is its exit code
+    vm "python3 -I - vmbr9 $wanmac $*" < "$wan_watch_py"
   }
   echo "lab-test: WAN link-up with the watch on vmbr9"
   wan_watch 120 & watcher=$!
@@ -597,7 +597,9 @@ json.dump(v, open(p, "w"), indent=2)' "$files/state/firewall.tfvars.json" "$1"
   wan_link true
   wait "$watcher" || { echo "lab-test: the WAN check failed at link-up; WAN goes down"; wan_link false; return 1; }
   echo "lab-test: VM 100 reboots with the watch on vmbr9"
-  wan_watch 240 & watcher=$!
+  # Over the reboot only frames from VM 100's new WAN tap count: net1 is tap100i1 (no NIC firewall in
+  # firewall/main.tf), and a new QEMU process gives it a new interface index.
+  wan_watch 240 tap100i1 & watcher=$!
   sleep 5
   vm 'qm reboot 100'
   wait "$watcher" || { echo "lab-test: the WAN check failed over the reboot; WAN goes down"; wan_link false; return 1; }
