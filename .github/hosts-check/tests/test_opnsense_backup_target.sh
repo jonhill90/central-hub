@@ -61,12 +61,11 @@ refuse() { # description, extra vars JSON
   if check "$2"; then bad "$1 (the check passed)"; elif grep -q "opnsense_lab_backup_target needs" "$w/out"; then ok "$1"; else bad "$1 (failed some other way)"; cat "$w/out"; fi
 }
 sub() { python3 -I -c 'import json,sys; d=json.loads(sys.argv[1]); exec(sys.argv[2]); print(json.dumps(d))' "$good" "$1"; }
-B='d["opnsense_lab_backup_target"]'
-refuse "an unknown source name is refused" "$(sub "$B[\"sources\"][1][\"name\"]=\"laptop\"")"
-refuse "a repeated name is refused" "$(sub "$B[\"sources\"][1][\"name\"]=\"prod node 200\"")"
-refuse "a source with a prefix is refused" "$(sub "$B[\"sources\"][1][\"address\"]=\"192.0.2.0/24\"")"
-refuse "a host that is not an address is refused" "$(sub "$B[\"host\"]=\"pve.example.com\"")"
-refuse "a VLAN tag not in the file is refused" "$(sub "$B[\"vlan\"]=99")"
+refuse "an unknown source name is refused" "$(sub 'd["opnsense_lab_backup_target"]["sources"][1]["name"]="laptop"')"
+refuse "a repeated name is refused" "$(sub 'd["opnsense_lab_backup_target"]["sources"][1]["name"]="prod node 200"')"
+refuse "a source with a prefix is refused" "$(sub 'd["opnsense_lab_backup_target"]["sources"][1]["address"]="192.0.2.0/24"')"
+refuse "a host that is not an address is refused" "$(sub 'd["opnsense_lab_backup_target"]["host"]="pve.example.com"')"
+refuse "a VLAN tag not in the file is refused" "$(sub 'd["opnsense_lab_backup_target"]["vlan"]=99')"
 refuse "more sources than sequences are refused" "$(sub 'd["opnsense_lab_backup_target_sequences"]=[13]')"
 refuse "prod's own first rule's sequence is refused" "$(sub 'd["opnsense_lab_backup_target_sequences"]=[10, 14]')"
 refuse "a management pass sequence is refused" "$(sub 'd["opnsense_lab_backup_target_sequences"]=[5, 14]')"
