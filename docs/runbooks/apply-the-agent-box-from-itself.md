@@ -105,7 +105,7 @@ What this route never does: it does not change the box's inventory (D-0036 rule 
    ```
 
    expect: exit 3, `main holds no approval line for it`, the limit files, and a line to approve: `<baseline> <main> <digest> <pass> <tap>`.
-2. The reviewer and the councils read that diff. Anyone can recompute the digest in a checkout of main:
+2. The reviewer reads that diff. Anyone can recompute the digest in a checkout of main:
 
    ```sh
    git diff --no-renames --binary --full-index <baseline> <main> -- <the limit files it named> | sha256sum

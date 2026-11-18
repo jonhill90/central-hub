@@ -8,6 +8,8 @@
 #   4. put, compare and reseed refuse until the settings' sops_copies is true (D-0058 rule 9), without calling the helper.
 #   5. put hands the helper the path and key as arguments and the value on stdin only; a bad path or key is a usage error.
 #   6. reseed refuses during a rebuild hold; without one it runs the helper's reseed, then takes a snapshot.
+#   7. --prod reads only the prod settings, keys folder and inventory: dev's store address is refused, the prod store's
+#      is reached, and prod recovery refuses before any call (D-0038 rule 5: prod gets no recovery shares).
 # Usage: .github/hosts-check/tests/test_secrets_store_wrapper.sh   (needs python3 with PyYAML, openssl, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -17,7 +19,7 @@ fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 
-mkdir -p "$t/bin" "$t/libexec/ansible-venv/bin" "$t/keys/dev" "$t/keys/rebuild-dev/inventory" "$t/work/state" "$t/run"
+mkdir -p "$t/bin" "$t/libexec/ansible-venv/bin" "$t/keys/dev" "$t/keys/prod" "$t/work/openbao-prod/inventory" "$t/keys/rebuild-dev/inventory" "$t/work/state" "$t/run"
 ln -s "$(command -v python3)" "$t/libexec/ansible-venv/bin/python3"
 cat > "$t/bin/curl" <<EOF
 #!/bin/bash
@@ -103,5 +105,19 @@ if [[ $r6a -ne 0 && $o6a == *"a rebuild is in progress"* && -z $c6a && $rc -eq 0
       $calls == "kv reseed https://bao-dev.invalid $t/keys/dev/secrets-store-ca.crt $t/keys/dev $t/libexec"$'\n'"snapshots take" ]]; then
   ok "6. reseed refuses during a rebuild hold; otherwise the helper's reseed, then a snapshot"
 else bad "6. $r6a $o6a | $rc $out | $calls"; fi
+
+# 7
+echo '{"address": "bao-dev.invalid"}' > "$t/work/secrets-store-prod.json"
+printf '%s\n' "all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-prod.invalid" > "$t/work/openbao-prod/inventory/hosts.yml"
+echo ca > "$t/keys/prod/secrets-store-ca.crt"
+run --prod status; r7a=$rc o7a=$out c7a=$calls
+echo '{"address": "bao-prod.invalid"}' > "$t/work/secrets-store-prod.json"
+run --prod status; r7b=$rc c7b=$calls
+run --prod recovery; r7c=$rc o7c=$out c7c=$calls
+if [[ $r7a -ne 0 && $o7a == *"is not the prod c1 store"* && -z $c7a && $r7b -eq 0 && $c7b == *"https://bao-prod.invalid/v1/sys/health"* &&
+      $c7b != *bao-dev* && $r7c -ne 0 && $o7c == *"prod gets no recovery shares"* && -z $c7c &&
+      -s $t/keys/prod/openbao-admin-role-id ]]; then
+  ok "7. --prod: dev's address refused, the prod store reached, prod recovery refused"
+else bad "7. $r7a $o7a | $r7b $c7b | $r7c $o7c $c7c"; fi
 
 exit $fail

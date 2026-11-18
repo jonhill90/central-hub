@@ -12,8 +12,8 @@
 #   The box cannot check the tap itself (D-0041 rule 6); a reviewing agent does, before the job starts.
 # log: the newest run's summary lines.
 # What is printed (and so what GitHub's public run log holds): the stack, the commit, the plan's hash, the
-# counts of changes, the card ID, pass or fail. Never a resource address (split DNS names are private), a
-# value or a secret. The full output stays on the box in {work}/logs/tailnet-stack/.
+# counts of changes, the card ID, pass or fail, and on a failed init the last 12 lines of init's output with IP
+# addresses replaced. Never a resource address (split DNS names are private), a value or a secret. The full output stays on the box in {work}/logs/tailnet-stack/.
 set -euo pipefail
 umask 077
 
@@ -88,7 +88,10 @@ print(json.dumps({"stack": "tailnet", "time": a[1], "action": a[2], "commit": a[
 
 tofu() { /usr/local/bin/tofu -chdir="$folder" "$@"; }
 if ! tofu init -input=false -backend-config="path=$state" >> "$raw" 2>&1; then
-  record none none "FAIL: init"; echo "tailnet-stack: FAIL: init (details in the box's log $raw)" >&2; exit 1
+  record none none "FAIL: init"; echo "tailnet-stack: FAIL: init (details in the box's log $raw)" >&2
+  # Init prints provider names, versions and download errors, no value or secret; the last lines say why it failed.
+  # IPv4 and IPv6 addresses are replaced, since a DNS error can name the box's resolver.
+  tail -n 12 "$raw" | sed -E 's/\x1b\[[0-9;]*m//g; s/[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?/<ip>/g; s/\[?[0-9a-fA-F]*:[0-9a-fA-F:]*:[0-9a-fA-F]*\]?/<ip>/g' >&2; exit 1
 fi
 
 counts() { # from the saved plan's JSON: only counts of actions

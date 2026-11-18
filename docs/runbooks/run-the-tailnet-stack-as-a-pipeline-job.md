@@ -30,7 +30,7 @@ This is the first job of D-0041. Until now the tailnet stack ran as a raw OpenTo
 | `apply` | applies that saved plan only, if the hash named is the saved plan's and `main` has not moved | the owner's card tap naming the repository, the commit, `tailnet` and the first 12 hex digits of the plan's SHA-256 |
 | `log` (on the box) | the newest run's summary lines | none |
 
-The run prints only the commit, the plan's hash, the counts of changes (`N to add, N to change, N to destroy`), the card's message ID and pass or fail. Split DNS names are private, so no resource address is printed. The full output stays on the box in `/var/lib/agent-box/logs/tailnet-stack/`, with one JSON line per run in `summary.jsonl`.
+The run prints only the commit, the plan's hash, the counts of changes (`N to add, N to change, N to destroy`), the card's message ID and pass or fail; on a failed init it also prints the last 12 lines of init's output, with IP addresses replaced. Split DNS names are private, so no resource address is printed. The full output stays on the box in `/var/lib/agent-box/logs/tailnet-stack/`, with one JSON line per run in `summary.jsonl`.
 
 ## Steps
 

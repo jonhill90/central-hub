@@ -65,7 +65,7 @@ The seal key on dev, from the box (D-0058 rule 3; dev's key needs no tap):
 
    expect: `rebuild log` shows `openbao-seal end rc=0`; a second run reports `changed=0` for the play.
 
-What the first start does (self-init, <https://openbao.org/docs/configuration/self-init/>): the file audit device at `/openbao/audit/audit.log`; KV v2 at `kv/`; AppRole and Kubernetes logins; policies `admin`, `eso-c1`, `snapshot` and `bootstrap` from the ConfigMap; the Kubernetes login's config (`kubernetes_host` `https://kubernetes.default.svc`, checked with OpenBao's own service account, which the chart binds to `system:auth-delegator`) and its roles `eso` (service account `store-openbao` in `external-secrets`, policy `eso-c1`, 15-minute tokens), `snapshot` (service account `openbao-snapshot` in `openbao`, policy `snapshot`, for the hourly job) and `bootstrap`; and the admin AppRole bound to the box's /32, with a random role ID and no secret ID. Then it revokes the root token it used. Later starts skip it.
+The file audit device at `/openbao/audit/audit.log` is declared in the server config, not made by self-init, because OpenBao refuses audit devices made through the API by default and self-init then refuses to unseal (first prod start, 2026-11-18; <https://openbao.org/docs/configuration/audit/>). What the first start does (self-init, <https://openbao.org/docs/configuration/self-init/>): KV v2 at `kv/`; AppRole and Kubernetes logins; policies `admin`, `eso-c1`, `snapshot` and `bootstrap` from the ConfigMap; the Kubernetes login's config (`kubernetes_host` `https://kubernetes.default.svc`, checked with OpenBao's own service account, which the chart binds to `system:auth-delegator`) and its roles `eso` (service account `store-openbao` in `external-secrets`, policy `eso-c1`, 15-minute tokens), `snapshot` (service account `openbao-snapshot` in `openbao`, policy `snapshot`, for the hourly job) and `bootstrap`; and the admin AppRole bound to the box's /32, with a random role ID and no secret ID. Then it revokes the root token it used. Later starts skip it.
 
 ### Handing the admin login to the box
 
@@ -164,6 +164,37 @@ The wrapper makes the admin AppRole's role ID and secret ID once in `/etc/agent-
 - `clear-hold`: when the rebuilt store is to stay as it is, with no restore (the owner's tap, on the same card line as `restore-rebuilt`). It needs `sys/health` 200, moves every snapshot not of the current cluster, with its `.cluster` file, into `/etc/agent-keys/dev/openbao-snapshots-kept/`, never overwriting a file there, then removes the hold. Rotation never reads the kept folder, and the kept snapshots are not sent off the box. **Removing anything from the kept folder is a delete under D-0042 rule 6, so it needs the owner's tap**, and no wrapper does it.
 
 The admin policy can call the forced restore (`sys/storage/raft/snapshot-force`) only for `restore-rebuilt`. `secrets-store restore` stays plain and never forces.
+
+### On prod
+
+`secrets-store-prod` is the same wrapper for the store inside prod's c1: it runs `secrets-store.sh --prod`, with the same actions and guards. It never reads dev's files, and the dev wrapper never reads its own:
+
+| | dev (`secrets-store`) | prod (`secrets-store-prod`) |
+|---|---|---|
+| settings | `agent_box_secrets_store`, `/var/lib/agent-box/secrets-store.json` | `agent_box_secrets_store_prod`, `/var/lib/agent-box/secrets-store-prod.json` |
+| keys, CA file, snapshots | `/etc/agent-keys/dev/` | `/etc/agent-keys/prod/` |
+| the store name `address` must equal | `k8s_gitops_source_openbao_store_host` in `/etc/agent-keys/rebuild-dev/inventory/hosts.yml` | the same key in `/var/lib/agent-box/openbao-prod/inventory/hosts.yml`, which `openbao-prod` builds from its `store_host` |
+| snapshot mark | `kv/dev/snapshot-mark` | `kv/prod/snapshot-mark` |
+| rebuild hold | `/var/lib/agent-box/state/secrets-store.rebuilding` | `/var/lib/agent-box/state/secrets-store-prod.rebuilding` |
+| `recovery` | once, into the keys folder | refused: prod gets no recovery shares (D-0038 rule 5, D-0058 rule 10) |
+
+The restore and SOPS helpers take the environment from the keys folder's name, so they name the right mark. With the in-cluster store on, the root chart passes prod's cluster `env` label (`k8s_gitops_cluster_labels.env`) as `openbaoMarkEnv`, so prod's snapshot CronJob reads `kv/prod/snapshot-mark`. A `restore` or `restore-rebuilt` on prod is still the owner's tap (a delete, D-0042 rule 6), and so is putting prod's seal key on its node (a secrets step, D-0058 rule 3). The hourly off-box copy below is for the dev store only.
+
+`openbao-prod` turns the store on in prod's c1 from the box, with no Mac step after the first. It runs as user `keys` on the code of `main`, in its own checkout, one run at a time, and logs each run in `/var/lib/agent-box/openbao-prod/logs/`. Its settings are `agent_box_openbao_prod` in the private inventory, written to `/var/lib/agent-box/openbao-prod.json`: `seal_node` (the prod `k8s_nodes` host that holds the seal key, by its Kubernetes node name), `store_host` (the store's name as the box reaches it) and `box_cidr` (the box's address as a /32, empty until the box's path to the store is set). It reads the box's copy of the prod inventory (`/etc/agent-keys/prod/inventory-hosts.yml`, from the controller's prod-files run) and builds its own copy with the box's node key and plain ssh. It refuses a host that is labelled other than `env: prod`, a `seal_node` that is not a prod node, and a `box_cidr` wider than one address.
+
+1. `openbao-prod key`. It makes `/etc/agent-keys/prod-node-key` once and prints its public half.
+   expect: one `ssh-ed25519 ...` line. Putting it into the `authorized_keys` of the inventory's `ansible_user` on each prod node gives the agents a root login there, a new access right, so it waits for the owner's tap (D-0042 rule 6). After the tap, put it there once, from a run that already reaches the nodes.
+2. `openbao-prod check`.
+   expect: `check <node>: reached` for every node. `answered, the key refused` means step 1's key is not on that node yet. `no answer` means the box's firewall rules to the prod nodes are not applied ([set-up-lab-network-and-firewall.md](set-up-lab-network-and-firewall.md), "prod node 200 SSH"), which is a firewall change and the owner's tap.
+3. Check that `seal_node` has room: OpenBao asks for 256Mi of memory (limit 512Mi) and its snapshot job for 32Mi (`apps/openbao/values.yaml`, `apps/openbao-store/templates/snapshot.yaml`). Compare these with the node's allocatable memory less its pods' requests (`c1-read describe nodes`).
+4. `openbao-prod seal <tap id>`, after the owner's tap. Putting prod's seal key on its node is a secrets step (D-0058 rule 3, D-0042 rule 6). It makes prod's key once, kept only as `/etc/agent-keys/prod/openbao-seal.key.sops.json`, and runs `k8s-openbao-seal.yml`.
+   expect: the play's recap with `failed=0`. A node that already holds a different key fails the run rather than being overwritten.
+5. `openbao-prod gitops`. It runs `k8s-gitops.yml --tags source` with the in-cluster store on, so Argo CD makes `openbao-store`, `openbao` and the store `openbao`.
+   expect: the recap with `failed=0`, then the three apps Synced and Healthy (`c1-read get applications -n argocd`).
+6. `openbao-prod handover`, once `box_cidr` is set. It hands the admin login to the IDs in `/etc/agent-keys/prod/` (`k8s-openbao-handover.yml`).
+   expect: a `PASS` line, or `SKIP: ... no box address yet` while `box_cidr` is empty.
+7. `secrets-store-prod status`, once `agent_box_secrets_store_prod.address` and the CA file are set by the box's path to the store.
+   expect: `sys/health` with `"sealed":false`.
 
 ## Off-box copy of the snapshots
 
