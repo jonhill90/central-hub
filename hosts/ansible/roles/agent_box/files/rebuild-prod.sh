@@ -86,10 +86,11 @@ fi
 mkdir -p "$envdir" "$logs" "$work/state"
 chmod 700 "$envdir"
 
-# The oldest commit a go may name: main's merge of #573, the same floor as the dev wrapper's (rebuild.sh). The run uses
-# that commit's own hosts/rebuild-k8s.sh, and one below it lacks the refusal while VM 256 exists and (below #343) the
-# memory preflight. Raise it with rebuild.sh's whenever rebuild-k8s.sh gains a refusal every run must keep.
-PIN_FLOOR=f3e9c3ed09c431bf00cdacdad04fb3858e516317
+# The oldest commit a go may name: main's merge of #624, the same floor as the dev wrapper's (rebuild.sh). The run uses
+# that commit's own hosts/rebuild-k8s.sh, and one below it leaves dev up after a full run that had memory to spare
+# (below #624), lacks the refusal while VM 256 exists (below #573) and the memory preflight (below #343). Raise it with
+# rebuild.sh's whenever rebuild-k8s.sh gains a refusal or an end step every run must keep.
+PIN_FLOOR=8c2f4cacca14de78bf0f5502d054ce3e92e33a74
 
 # One rebuild at a time, dev's or prod's, in this wrapper's own checkout of main.
 exec 9>"$work/state/rebuild.lock"
@@ -103,7 +104,7 @@ if [[ -n $want ]]; then
   git -C "$repo" merge-base --is-ancestor "$pinned" origin/main ||
     { echo "rebuild-prod: commit $want is not on main" >&2; exit 1; }
   git -C "$repo" merge-base --is-ancestor "$PIN_FLOOR" "$pinned" ||
-    { echo "rebuild-prod: commit $want is older than the floor ${PIN_FLOOR:0:7}, whose rebuild-k8s.sh has the refusals a run must keep" >&2; exit 1; }
+    { echo "rebuild-prod: commit $want is older than the floor ${PIN_FLOOR:0:7}, whose rebuild-k8s.sh has the refusals and the teardown a run must keep" >&2; exit 1; }
   git -C "$repo" checkout --quiet --detach "$pinned"
 else
   git -C "$repo" checkout --quiet --detach origin/main
