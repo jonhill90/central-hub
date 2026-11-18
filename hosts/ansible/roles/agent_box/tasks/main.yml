@@ -429,6 +429,49 @@
     mode: "0755"
   tags: [wrappers]
 
+# Blender, headless, for agents' graphics work (`blender -b`). Pinned here with its SHA-256, like the Playwright pin, so
+# a bump is a change to the box's limits (D-0044). 5.2.3 LTS is the newest release at least two weeks old on 2026-11-18
+# (STD-0003); its SHA-256 matches download.blender.org's own .sha256. The tarball comes from an official mirror:
+# download.blender.org answers 403 to the box. The libraries are the ones `ldd` found missing on the box, plus Mesa's software EGL and
+# Vulkan, which EEVEE needs with no GPU (docs/runbooks/set-up-the-agent-box.md, "Render with Blender from the box").
+- name: Libraries Blender needs with no display or GPU
+  ansible.builtin.package:
+    name: [libSM, libICE, libXxf86vm, libX11-xcb, libxkbcommon, libwayland-client, mesa-libGL, mesa-libEGL,
+           mesa-dri-drivers, mesa-libgbm, mesa-vulkan-drivers, vulkan-loader, xz]
+    state: present
+  tags: [wrappers]
+
+- name: Download Blender, checked against its SHA-256
+  ansible.builtin.get_url:
+    url: https://mirrors.ocf.berkeley.edu/blender/release/Blender5.2/blender-5.2.3-linux-x64.tar.xz
+    dest: "{{ agent_box_libexec_dir }}/downloads/blender-5.2.3-linux-x64.tar.xz"
+    checksum: sha256:78486c018b4443efe5e75ab54c290ed8c15abafd249b862c2c9ce2530a918eec
+    owner: root
+    group: root
+    mode: "0644"
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  tags: [wrappers]
+
+- name: Unpack Blender, root-owned
+  ansible.builtin.unarchive:
+    src: "{{ agent_box_libexec_dir }}/downloads/blender-5.2.3-linux-x64.tar.xz"
+    dest: "{{ agent_box_libexec_dir }}"
+    remote_src: true
+    creates: "{{ agent_box_libexec_dir }}/blender-5.2.3-linux-x64/blender"
+    owner: root
+    group: root
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  tags: [wrappers]
+
+- name: Put blender on the path
+  ansible.builtin.file:
+    src: "{{ agent_box_libexec_dir }}/blender-5.2.3-linux-x64/blender"
+    dest: "{{ agent_box_front_dir }}/blender"
+    state: link
+    force: true
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  tags: [wrappers]
+
 - name: The Ansible collections the playbooks pin, from the keys user's checkout
   ansible.builtin.command:
     cmd: >-

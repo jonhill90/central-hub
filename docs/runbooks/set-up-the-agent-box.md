@@ -145,6 +145,24 @@ Exit: uninstall the App and delete it in GitHub's settings, then delete `/etc/ag
 
 The role installs headless Chromium through Playwright (pinned with hashes in `files/playwright-requirements.txt`, in its own virtual environment, browsers in a root-owned folder under the libexec folder) and the command `web-shot <url> <out.png> [--insecure]`. It loads the page as the session user, with no key, saves a full-page screenshot and prints the final address, the page title and the HTTP status. `--insecure` is for a dev cluster's throwaway CA only. It types nothing, so a sign-in that needs a form still goes through the proof scripts. Chromium's download comes from Playwright's own host at the first install, so the first run needs that outbound route. A bump of the pin is a change to the box's limits (D-0044).
 
+## Render with Blender from the box
+
+The role installs Blender 5.2.3 LTS (the newest release at least two weeks old on 2026-11-18, STD-0003) from the official Linux tarball, checked against the SHA-256 that download.blender.org publishes, into a root-owned folder under the libexec folder, links `blender` into `/usr/local/bin`, and installs the libraries it needs with no display or GPU: the X client libraries `ldd` found missing (`libSM`, `libICE`, `libXxf86vm`, `libX11-xcb`), and Mesa's software OpenGL, EGL and Vulkan. The tarball comes from an official mirror, because `download.blender.org` answers 403 to the box. A bump of the pin is a change to the box's limits (D-0044).
+
+Sessions run it as themselves, always in background mode:
+
+```sh
+blender -b --python scene.py -- <args for the script>
+blender -b file.blend -E CYCLES -f 1 -o /tmp/out/frame_####
+```
+
+why: `-b` runs with no window; the box has no display.
+expect: `Blender 5.2.3 LTS` from `blender -b --version`. Measured on the box on 2026-11-18 (2 vCPUs, no GPU), a 960x540 scene with three area lights and a subdivided mesh: Cycles on the CPU at 64 samples with denoising took 48 s and peaked at 860 MB of memory; EEVEE took 99 s on Mesa's software renderer (llvmpipe) and peaked at 2.5 GB; Workbench took about 1 s and peaked at 740 MB.
+
+- Use Cycles with `cycles.device = "CPU"` for finished images. EEVEE works only through Mesa's software EGL, so it is slower than Cycles here.
+- Check `free -m` before a render, and above all before EEVEE, which peaked at 2.5 GB on a small scene; the box shares the host with the dev rebuild.
+- The Vulkan warning at start is expected: Blender falls back to OpenGL through EGL.
+
 ## Prove the lab's names from the box
 
 `lab-proof` (a session runs it as itself, no key) reads c1's HTTPRoutes and the Gateway's address through `c1-read`, asks the box's resolver (the tailnet's, which hands lab names to Unbound) for each name with a short Python query, and opens a TLS connection to the Gateway with `openssl s_client`, checking the certificate against the box's trust store, where the lab root sits. It prints one line per route name and name number, with `dns=ok|FAIL` and the TLS verify result, then `PASS` or `FAIL`. It prints no host name, address or zone, so its output can go in a public record. It asks the question the `dns_proof` tag asks of the names c1 serves, but it is not that tag, and OPNsense's own name, which is not a c1 route, is not covered.
