@@ -39,7 +39,7 @@ Alertmanager sends every alert to ntfy on c1 ([Get c1's alerts on a phone](get-c
 
 ## Read the panels without a browser
 
-CronJob `monitoring/panel-check` (suspended on a dev rebuild, whose OpenBao and Keycloak panels have no data until the stages after `apps`, and Jellyfin's request rate printed none either, cause not measured; [rebuild runbook](rebuild-k8s-layer-with-one-command.md)) asks Prometheus for the OpenBao, Jellyfin, Keycloak and alert delivery panels' values every half hour, plus "Alerts firing", and prints one line per panel, then the names of the alerts firing. It holds no token and reads only Prometheus, inside the cluster. A panel with no data fails the run. An agent reads it from the agent box with the read-only account ([give-agents-read-access-to-c1.md](give-agents-read-access-to-c1.md)):
+CronJob `monitoring/panel-check` (suspended on a dev rebuild, whose panel-check printed no data for seven panels in the run that failed: Keycloak's has none before the `identity-keycloak` stage, and the five OpenBao ones and Jellyfin's request rate had none for a cause not measured; [rebuild runbook](rebuild-k8s-layer-with-one-command.md)) asks Prometheus for the OpenBao, Jellyfin, Keycloak and alert delivery panels' values every half hour, plus "Alerts firing", and prints one line per panel, then the names of the alerts firing. It holds no token and reads only Prometheus, inside the cluster. A panel with no data fails the run. An agent reads it from the agent box with the read-only account ([give-agents-read-access-to-c1.md](give-agents-read-access-to-c1.md)):
 
 1. `c1-read get jobs -n monitoring --sort-by=.metadata.creationTimestamp`
    expect: the newest `panel-check-<number>` job is listed with completions `1/1`.

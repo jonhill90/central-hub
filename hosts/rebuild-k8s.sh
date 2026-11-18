@@ -524,7 +524,8 @@ run_stage() {
   # `checks`), so jellyfin's Certificate on it would hold `apps`; and no login-probe, whose names are prod's
   # (k8s_gitops defaults, k8s_gitops_source_lab_ca_issuer and _login_probe); and no Jellyfin setup CronJob, because
   # `restore` puts prod's Jellyfin config, with prod's admin password, in place before the apps start (k8s_gitops_source_jellyfin_setup); and a suspended panel-check CronJob, whose
-  # OpenBao and Keycloak panels have no data until the stages after `apps` (Jellyfin's request rate printed none too, cause not measured) (k8s_gitops_source_panel_check_suspended).
+  # Keycloak panel has no data before the `identity-keycloak` stage; the OpenBao panels and Jellyfin's request rate
+  # also printed no data in the run that failed, cause not measured (k8s_gitops_source_panel_check_suspended).
   if [ "$ENV_NAME" = dev ]; then
     rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false -e k8s_gitops_source_jellyfin_setup=false -e k8s_gitops_source_panel_check_suspended=true)
   fi

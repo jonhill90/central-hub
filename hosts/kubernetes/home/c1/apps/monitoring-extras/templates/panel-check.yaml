@@ -76,10 +76,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   schedule: {{ $p.schedule | quote }}
-  # true on a dev run (root value panelCheckSuspended): its OpenBao and Keycloak panels have no data until the
-  # stages after `checks`' apps (dev-ca, openbao-handover, identity-keycloak) bring them up, so a tick before then
-  # would fail the Job and `checks`. A suspended CronJob makes no Job; an agent runs one by hand when dev is up.
-  # (Jellyfin's request rate also printed no data in that run; why is not measured, so it is not claimed to wait on a later stage.)
+  # true on a dev run (root value panelCheckSuspended): a tick inside the run failed the Job and `checks`, because
+  # seven panels printed no data. Keycloak's has none before the `identity-keycloak` stage, which runs after `apps`;
+  # the five OpenBao panels and Jellyfin's request rate had none for a cause not measured.
+  # A suspended CronJob makes no Job; an agent runs one by hand when dev is up.
   suspend: {{ $p.suspend | default false }}
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
