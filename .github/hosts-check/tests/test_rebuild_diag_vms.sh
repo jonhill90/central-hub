@@ -18,7 +18,7 @@ cat > "$t/bin/curl" <<'C'
 printf '%s\n' "$*" >> "$FAKE_ARGV"; cat >> "$FAKE_STDIN"
 [ -n "${FAKE_FAIL:-}" ] && exit 22
 case "${*: -1}" in
-  */cluster/resources?type=vm) echo '{"data":[{"vmid":250,"status":"running","mem":3060000000,"maxmem":3221225472,"cpu":0.91,"maxcpu":2},{"vmid":251,"status":"running","mem":5000000000,"maxmem":6442450944,"cpu":0.4,"maxcpu":4},{"vmid":258,"status":"running","mem":1,"maxmem":1,"cpu":0,"maxcpu":2},{"vmid":300,"status":"stopped","mem":0,"maxmem":2147483648,"cpu":0,"maxcpu":2}]}' ;;
+  */cluster/resources?type=vm) [ -n "${FAKE_VMS:-}" ] && { echo "$FAKE_VMS"; exit 0; }; echo '{"data":[{"vmid":250,"status":"running","mem":3060000000,"maxmem":3221225472,"cpu":0.91,"maxcpu":2},{"vmid":251,"status":"running","mem":5000000000,"maxmem":6442450944,"cpu":0.4,"maxcpu":4},{"vmid":258,"status":"running","mem":1,"maxmem":1,"cpu":0,"maxcpu":2},{"vmid":300,"status":"stopped","mem":0,"maxmem":2147483648,"cpu":0,"maxcpu":2}]}' ;;
   */nodes/examplehv01/status) echo '{"data":{"cpu":0.35,"memory":{"total":33582403584,"used":31000000000,"available":2582403584},"swap":{"used":1073741824,"total":8589934592}}}' ;;
   *) exit 22 ;;
 esac
@@ -32,7 +32,7 @@ echo "Mem:           2949        2801          60"
 A
 chmod +x "$t/bin/curl" "$t/bin/ansible"
 run() { : > "$t/argv"; : > "$t/stdin"; : > "$t/ansible"
-  PATH="$t/bin:$PATH" keys="$t/keys" inventory="$t/inv" work="$t" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" FAKE_ANSIBLE="$t/ansible" FAKE_FAIL=${FAKE_FAIL:-} \
+  PATH="$t/bin:$PATH" keys="$t/keys" inventory="$t/inv" work="$t" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" FAKE_ANSIBLE="$t/ansible" FAKE_FAIL=${FAKE_FAIL:-} FAKE_VMS=${FAKE_VMS:-} \
     bash -c 'set -euo pipefail; . "$1"; echo "rc=$?"' _ "$t/block.sh" 2>&1; }
 check() { if [[ $2 == *"$3"* ]] && { [ -z "${4:-}" ] || [[ $2 != *"$4"* ]]; }; then echo "ok   $1"; else echo "FAIL $1: $2"; fail=1; fi; }
 out=$(run)
@@ -52,5 +52,22 @@ out=$(FAKE_FAIL=1 run)
 check "a failed guest list prints one line and goes on" "$out" "(the guest list could not be read)" "SECRETTOKEN"
 check "a failed node read prints one line and goes on" "$out" "(the node status could not be read)" ""
 check "the node sections still run" "$out" "rc=0" ""
+# With no dev VM running, the sections that reach a node over ssh would only time out: one line replaces them and diag stops.
+out=$(FAKE_VMS='{"data":[{"vmid":258,"status":"running","mem":1,"maxmem":1,"cpu":0,"maxcpu":2},{"vmid":300,"status":"stopped","mem":0,"maxmem":2147483648,"cpu":0,"maxcpu":2}]}' run)
+check "no dev VM: one line says so" "$out" "dev nodes: none running (no running vmid 250-257)" "== each dev node"
+check "no dev VM: no node is reached" "$(cat "$t/ansible")" "" "k8s_control_plane"
+check "no dev VM: the node memory on Proxmox is still printed" "$out" "node memory total 32026" ""
+check "no dev VM: diag stops before the Argo CD section" "$out" "dev nodes: none running" "== argocd applications"
+out=$(FAKE_VMS='{"data":[{"vmid":250,"status":"stopped","mem":0,"maxmem":3221225472,"cpu":0,"maxcpu":2}]}' run)
+check "a dev VM that is stopped counts as not running" "$out" "dev nodes: none running" "== each dev node"
+out=$(run)
+check "with dev VMs running the node section still runs" "$(cat "$t/ansible")" "k8s_control_plane:k8s_workers" ""
+# Mutation: without the skip, the no-VM case reaches the nodes again, and this test must see it.
+sed 's/^  if \[\[ \$running == 0 \]\]; then$/  if false; then/' "$t/block.sh" > "$t/mutant.sh"
+if cmp -s "$t/block.sh" "$t/mutant.sh"; then echo "FAIL: the mutation did not change the block"; fail=1; else
+  cp "$t/block.sh" "$t/block.good"; cp "$t/mutant.sh" "$t/block.sh"
+  out=$(FAKE_VMS='{"data":[]}' run); cp "$t/block.good" "$t/block.sh"
+  if [[ $out == *"== each dev node"* ]]; then echo "ok   mutation: without the skip the nodes are reached"; else echo "FAIL mutation: the test did not notice: $out"; fail=1; fi
+fi
 [ "$fail" = 0 ] || exit 1
 echo "rebuild diag VM stats: all checks passed"
