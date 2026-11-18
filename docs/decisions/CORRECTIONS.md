@@ -11,7 +11,13 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 This PR: the agents' pass (D-0042 rule 1), with the owner's tap line if the merge sweep's installed verdict asks for one, filled in after the merge (D-0006 step 6).
 
 - 2026-11-18 · D-0042 title, Context, Decision Drivers, Decision Outcome, its diagram, rules 1 and 2, and Consequences; D-0044 diagram and its text, and rule 1's `digest`; D-0056 Context, rules 2, 3 and 5; D-0001 statuses, what the owner approves and immutability; AGENTS.md rule 1; the decisions index · the agents' pass for a head is the reviewer thread's clearance alone, in place of the reviewer's clearance and a pass from each of the three council threads, Councils A, B and C (four recorded passes on the sweep's ledger); the built change (`pr-merge.sh`, `pr-merge-verdict.py`, their tests, `box-apply.py`'s comment) and the runbooks that named the councils' passes (`merge-a-pr-through-the-merge-job.md`, `apply-the-agent-box-from-itself.md`, `serve-proxmox-on-443.md`, `set-up-the-agent-box.md`, `give-agents-access-to-azure.md`) are in the same PR · the owner's message of 2026-11-18 00:03:15 UTC dropping the council threads (cmsg_01X43rfNYp4H1dL1V2dkfkwN4Zahj7f5i1barqCMaC7fZF)
-- 2026-11-18 · this file · the approval facts and merge commit of PR #516 added to its section (D-0006 step 6) · this PR
+- 2026-11-18 · this file · the approval facts and merge commit of PR #519 added to its section (D-0006 step 6) · this PR
+
+### Accepted with PR #519
+
+PR #519: approved by the reviewer's clearance of head bb7164a (cmsg_01X43rfNYp4H1dL1V2dkfkwNU524dtepAwnRNKqQ3NqGeK); merged as d77f018 at 2026-11-18T11:22:57Z. It adds D-0061 as proposed; D-0061's acceptance waits on the owner's own words.
+
+- 2026-11-18 · this file · the approval facts and merge commit of PR #516 added to its section (D-0006 step 6) · the reviewer's clearance above
 
 ### Accepted with PR #516
 
