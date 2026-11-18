@@ -136,7 +136,7 @@ install -d -m 700 "$inventory"
 inv_ok=false
 if [[ -s $pkeys/inventory-hosts.yml && -s $settings ]] && python3 -I -c "$(cat <<'PY'
 import ipaddress, json, os, sys, yaml
-src, dst, key, known, pkeys, keys, certs, settings = sys.argv[1:9]
+src, dst, key, known, pkeys, keys, certs, settings, repo = sys.argv[1:10]
 def die(m):
     print("FAIL: rebuild-prod: " + m); sys.exit(1)
 s = json.load(open(settings))
@@ -196,7 +196,8 @@ MAP = {"k8s_control_plane_encryption_key_file": pkeys + "/c1-secrets-encryption.
        "k8s_identity_values_file": pkeys + "/identity.env",
        "k8s_certs_lab_ca_cert_file": pkeys + "/lab-ca/c1-intermediate-chain.crt",
        "k8s_certs_lab_ca_key_file": pkeys + "/lab-ca/c1-intermediate.key",
-       "k8s_identity_theme_dir": pkeys + "/identity-theme"}
+       "k8s_identity_theme_dir": pkeys + "/identity-theme",
+       "k8s_gitops_sso_root_ca_file": pkeys + "/lab-ca/root.crt"}
 def remap(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -205,6 +206,19 @@ def remap(n):
     elif isinstance(n, list):
         for i in n: remap(i)
 remap(d)
+# The plays that restore prod (k8s-restore.yml, k8s-identity-restore.yml) read k8s_gitops_cluster_labels.env in their
+# pre_tasks, where the k8s_gitops role's default (env prod) is not loaded. The Mac's inventory leaves the labels to that
+# default, so with no labels set anywhere the box's copy gets the role's own default labels, which say prod. Labels set
+# anywhere in the inventory are left as they are, and the check below still refuses one whose env is not prod.
+def has_key(n, name):
+    if isinstance(n, dict): return name in n or any(has_key(x, name) for x in n.values())
+    if isinstance(n, list): return any(has_key(x, name) for x in n)
+    return False
+if not has_key(d, "k8s_gitops_cluster_labels"):
+    role = yaml.safe_load(open(repo + "/hosts/ansible/roles/k8s_gitops/defaults/main.yml"))
+    labels = role.get("k8s_gitops_cluster_labels")
+    if not isinstance(labels, dict) or labels.get("env") != "prod": die("the k8s_gitops role's default labels do not say env prod")
+    v["k8s_gitops_cluster_labels"] = labels
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 v["k8s_gateway_smoke_client"] = "localhost"
@@ -225,7 +239,7 @@ v["k8s_backup_azure_seed_dir"] = certs
 v["k8s_backup_restore_check_identity"] = False
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$pkeys/inventory-hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$pkeys" "$keys" "$certs" "$settings"; then
+)" "$pkeys/inventory-hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$pkeys" "$keys" "$certs" "$settings" "$repo"; then
   chmod 600 "$inventory/hosts.yml"
   # Every k8s_nodes host as Ansible sees it: plain ssh with the box's key, labelled env prod, at an address, and no
   # value that still names a file on the Mac. The names of the mapped files must exist on the box.
@@ -257,7 +271,8 @@ for h in sorted(nodes):
     for k, val in v.items():
         if isinstance(val, str) and mac.search(val): bad.append("host %s: %s still points at the Mac" % (h, k))
     for k in ("k8s_control_plane_encryption_key_file", "k8s_backup_env_file", "k8s_certs_cloudflare_token_file",
-              "k8s_identity_values_file", "k8s_certs_lab_ca_cert_file", "k8s_certs_lab_ca_key_file", "k8s_identity_theme_dir"):
+              "k8s_identity_values_file", "k8s_certs_lab_ca_cert_file", "k8s_certs_lab_ca_key_file", "k8s_identity_theme_dir",
+              "k8s_gitops_sso_root_ca_file"):
         p = v.get(k)
         if isinstance(p, str) and p and not os.path.exists(p): bad.append("%s is %s, which is not on the box" % (k, p))
 for b in sorted(set(bad)): print("FAIL: rebuild-prod: inventory: " + b)

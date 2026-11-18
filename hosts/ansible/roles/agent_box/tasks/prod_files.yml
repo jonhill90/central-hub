@@ -18,7 +18,7 @@
     owner: "{{ agent_box_keys_user }}"
     group: "{{ agent_box_keys_user }}"
     mode: "0700"
-  loop: [prod, prod/state, prod/tfvars, prod/identity-theme]
+  loop: [prod, prod/state, prod/tfvars, prod/identity-theme, prod/lab-ca]
 
 - name: Look for each file on the controller
   ansible.builtin.stat:
