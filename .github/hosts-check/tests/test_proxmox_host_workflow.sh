@@ -36,7 +36,7 @@ printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/calls"\n' "$t" > "$t/bin/proxmox-
 sed -i "s|/usr/local/bin/proxmox-host|$t/bin/proxmox-host|g" "$t/run.sh"
 for job in $have; do
   : > "$t/calls"
-  JOB=$job ACTION=check PASS_ID= CHECK_HASH= bash "$t/run.sh"
+  JOB=$job ACTION=check PASS_ID='' CHECK_HASH='' bash "$t/run.sh"
   JOB=$job ACTION=apply PASS_ID=cmsg_0123456789abc CHECK_HASH=0123456789ab bash "$t/run.sh"
   got=$(tr '\n' '|' < "$t/calls")
   [ "$got" = "check $job|apply $job cmsg_0123456789abc 0123456789ab|" ] && ok "job $job: check and apply reach the wrapper with the job first" || bad "job $job: the wrapper got [$got]"
