@@ -1,0 +1,35 @@
+---
+# One pass rule from the agent box to the secrets store's admin address in prod's c1, on tcp 443 (D-0062 rule 4).
+# The admin address is a load-balancer address on prod's VLAN, and the dev VLAN's own rules block it like the rest of
+# RFC 1918 (tasks/rules.yml). From the box's address only, to the admin address only, on tcp 443 only. OpenBao's
+# admin login also accepts only the box's /32, and the cluster's NetworkPolicy lets only that /32 in on this path, so
+# the firewall rule is the outer of three locks. Applying it is a firewall change on the owner's go (D-0036 rule 8).
+- name: Store admin input is checked
+  ansible.builtin.import_tasks: store_admin_checks.yml
+
+- name: Agent box to the store's admin address on 443
+  oxlorg.opnsense.rule:
+    description: "Allow agent box to OpenBao admin HTTPS"
+    match_fields: [description]
+    sequence: "{{ opnsense_lab_store_admin_sequence }}"
+    action: pass
+    quick: true
+    interface: ["{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_store_admin.vlan) | first).ifname }}"]
+    direction: in
+    ip_protocol: inet
+    protocol: TCP
+    source_net: "{{ opnsense_lab_store_admin.source }}/32"
+    destination_net: "{{ opnsense_lab_store_admin.address }}/32"
+    destination_port: "443"
+    log: false
+  when: opnsense_lab_store_admin is defined
+  notify: Apply rule changes
+
+# With the input unset, the rule is removed, so taking the entry out of the inventory takes the rule away.
+- name: No store admin rule when its input is unset
+  oxlorg.opnsense.rule:
+    description: "Allow agent box to OpenBao admin HTTPS"
+    match_fields: [description]
+    state: absent
+  when: opnsense_lab_store_admin is not defined
+  notify: Apply rule changes
