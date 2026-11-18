@@ -131,7 +131,7 @@ fi
 # The inventory: the Mac's, with every ssh login, key and proxy setting and the proxmox group dropped; the box's
 # key and plain ssh set; the store's settings (openbao-prod.json) added; the private files pointed at the box's
 # copies; the rebuild's own settings set. Any value still pointing at the Mac stops the run, by key name.
-rm -rf -- "$inventory"
+rm -rf -- "$inventory" "$envdir/backup-mode"
 install -d -m 700 "$inventory"
 inv_ok=false
 if [[ -s $pkeys/inventory-hosts.yml && -s $settings ]] && python3 -I -c "$(cat <<'PY'
@@ -245,7 +245,7 @@ PY
   # value that still names a file on the Mac. The names of the mapped files must exist on the box.
   if ansible-inventory -i "$inventory/" --list | python3 -I -c "$(cat <<'PY'
 import json, os, re, sys
-nodekey, known = sys.argv[1:3]
+nodekey, known, backup_mode = sys.argv[1:4]
 inv = json.load(sys.stdin)
 hv = inv.get("_meta", {}).get("hostvars", {})
 def members(g, seen=None):
@@ -275,11 +275,24 @@ for h in sorted(nodes):
               "k8s_gitops_sso_root_ca_file"):
         p = v.get(k)
         if isinstance(p, str) and p and not os.path.exists(p): bad.append("%s is %s, which is not on the box" % (k, p))
+# The backup target (docs/runbooks/back-up-c1-off-box.md). Azure: each node's certificate is carried to its rebuilt node
+# (step 2 of rebuild). The Proxmox host over sftp: each rebuilt node makes a new key, which only the host play (group
+# proxmox) lets in, and the box's copy drops that group because the box holds no key on the host (the runbook's P3), so a
+# rebuild from the box would lose its backup and restore after the teardown. Refused here, before anything is destroyed.
+truthy = lambda x: x is True or str(x).lower() in ("true", "yes", "1")
+sftp = sorted(h for h in nodes if truthy(hv.get(h, {}).get("k8s_backup_sftp")))
+azure = sorted(h for h in nodes if truthy(hv.get(h, {}).get("k8s_backup_azure_identity")))
+if sftp:
+    bad.append("k8s_backup_sftp is true (the Proxmox host as the backup target): the box can't let the rebuilt nodes' new keys in on the host, "
+               "because its copy has no proxmox group and the box holds no key there (back-up-c1-off-box.md, P3); rebuild prod from the controller")
+elif azure and len(azure) != len(nodes):
+    bad.append("k8s_backup_azure_identity is true on some prod nodes only: %s" % " ".join(azure))
 for b in sorted(set(bad)): print("FAIL: rebuild-prod: inventory: " + b)
 if bad: sys.exit(1)
+open(backup_mode, "w").write("azure\n" if azure else "none\n")
 print("PASS: rebuild-prod: %d prod nodes, plain ssh with the box's key, every private file at the box's copy" % len(nodes))
 PY
-)" "$nodekey" "$envdir/known_hosts"; then inv_ok=true; else fails=$((fails + 1)); fi
+)" "$nodekey" "$envdir/known_hosts" "$envdir/backup-mode"; then inv_ok=true; else fails=$((fails + 1)); fi
 else
   fails=$((fails + 1))
 fi
@@ -420,7 +433,9 @@ if [[ -z $vol_pass || -z $etcd_pass ]]; then
 fi
 echo "PASS: rebuild-prod: every prod node backed up now, and its restore test passed: ${vol_pass#PASS: }; ${etcd_pass#PASS: }"
 
-# 2. Each node's backup certificate and key ID, kept in the keys folder; never printed.
+# 2. Each node's backup certificate and key ID, kept in the keys folder; never printed. Only with the Azure sign-in
+# (k8s_backup_azure_identity): with none, the nodes hold no certificate and there is nothing to carry.
+if [[ $(cat -- "$envdir/backup-mode" 2>/dev/null) == azure ]]; then
 install -d -m 700 "$certs"
 while read -r name host user; do
   sudo_=""; [[ $user == root ]] || sudo_="sudo -n "
@@ -435,6 +450,9 @@ while read -r name host user; do
   chmod 600 "$certs/$name.pem" "$certs/$name.pem.keyid"
 done < "$node_list"
 echo "PASS: rebuild-prod: each node's backup certificate kept for its rebuilt node"
+else
+  echo "PASS: rebuild-prod: no Azure sign-in on the prod nodes (k8s_backup_azure_identity off), so no backup certificate to carry"
+fi
 
 # 3. The seal key: its SOPS copy decrypts to the 32 bytes on the seal node, and stays in memory only for this run.
 identity=$keys/secrets-bundle/age-identity.txt
