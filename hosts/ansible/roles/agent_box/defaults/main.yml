@@ -242,6 +242,11 @@ agent_box_proxmox_host_job: false
 # agent_box_lifeline_allow entry), hostkey: the host's "ssh-ed25519 AAAA..." public host key}. The certificate's
 # names come from proxmox_cert_names. Empty: the inventory is not written and the job refuses to run.
 agent_box_proxmox_host: {}
+# Private, through the controller's inventory, for the host job's `sso` job (role proxmox_sso): {issuer: Keycloak's
+# https://sso.<zone>/realms/lab, address: c1's Gateway IPv4 for the host's /etc/hosts line, optional}. Set, a run from the
+# controller also writes {{ agent_box_host_dir }}/proxmox-sso.env, the one PROXMOX_CLIENT_SECRET line of the controller's
+# identity.env, owner agent_box_host_user, mode 0600. Empty: no such file, and the sso job refuses to run.
+agent_box_proxmox_host_sso: {}
 # Any other top-level settings, merged over the rest (for example autoUpdatesChannel).
 agent_box_managed_settings_extra: {}
 # When the weekly `ci-runner weekly` run starts (systemd OnCalendar): it reinstalls the merged pin on
