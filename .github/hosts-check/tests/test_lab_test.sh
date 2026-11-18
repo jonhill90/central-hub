@@ -88,8 +88,8 @@ grep -q "grep -cE '(vmx|svm)' /proc/cpuinfo" "$w" && grep -q "test -c /dev/kvm" 
   && ok "check stops when the copy's guests would run without KVM" || bad "no nested check"
 grep -q '^  plan) guards; tofu_run ;;$' "$w" && grep -q '^  apply) guards; tofu_run ;;$' "$w" \
   && ok "plan and apply both pass the guards" || bad "a build step skips the guards"
-grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, destroy, log\]' \
-  && ok "the wrapper list allows plan, apply, check, host, destroy and log" || bad "the wrapper's sudo arguments"
+grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, destroy, log\]' \
+  && ok "the wrapper list allows plan, apply, check, host, lab, destroy and log" || bad "the wrapper's sudo arguments"
 
 # host: the inventory the copy's playbook runs with, the real inventory's shape with the copy's own values.
 python3 -I "$helper" inventory "$work/settings.json" "$vlans" /keys/lab-test-ssh /work/known_hosts "$work/hosts.yml"
@@ -126,6 +126,52 @@ printf 'dir: local\n\tpath /var/lib/vz\n\tcontent iso,vztmpl,backup\n\nlvmthin: 
 prog=$(sed -n "s|^content=\$(awk '\(.*\)' /etc/pve/storage.cfg)$|\1|p" "$w")
 [[ -n $prog && $(awk "$prog" "$work/storage.cfg") == "iso,vztmpl,backup" ]] \
   && ok "the content line of storage local is read from storage.cfg, not local-lvm's" || bad "the storage.cfg read"
+
+# lab: the copy's own values for the three run folders, then the folders in the runbook's order, then mgmt.
+mkdir -p "$work/layers"
+python3 -I "$helper" layers "$work/settings.json" "$vlans" OPNsense-26.1.6-nano-amd64.img debian-13-standard_13.6-1_amd64.tar.zst "$work/layers"
+python3 -I - "$work/layers" "$vlans" <<'PY' && ok "lab's values: the copy's node, STD-0001 names, local MACs, WAN link-down, mgmt .3, the staged files" || bad "lab's values"
+import json, os, re, sys
+d = sys.argv[1]
+v = {f: json.load(open(os.path.join(d, f + ".tfvars.json"))) for f in ("network", "firewall", "remote-access")}
+assert all(x["proxmox_node_name"] == "ddehvdemo01" for x in v.values())
+assert v["network"]["vlans_file"] == sys.argv[2] and set(v["network"]) == {"proxmox_node_name", "vlans_file"}
+fw, ra = v["firewall"], v["remote-access"]
+assert fw["firewall_vm_name"] == "dopnwdemo01" and ra["connector_hostname"] == "ddenwdemo01"
+assert fw["opnsense_wan_connected"] is False
+assert fw["opnsense_image_file_id"] == "local:import/OPNsense-26.1.6-nano-amd64.img"
+assert ra["connector_template_file_id"] == "local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
+assert ra["connector_mgmt_address"] == "10.1.50.3/24"
+macs = [fw["opnsense_lan_mac"], fw["opnsense_wan_mac"], ra["connector_eth0_mac"], "02:00:00:00:02:56"]
+assert len(set(macs)) == 4 and all(re.fullmatch(r"02(:[0-9a-f]{2}){5}", m) for m in macs), macs
+PY
+# Each folder's required variables are ones the helper writes: no private value is left for the box to guess.
+python3 -I - "$root/hosts/terraform/home" "$work/layers" <<'PY' && ok "lab's values fill every required variable of network, firewall and remote-access" || bad "a run folder variable lab does not set"
+import json, os, re, sys
+for f in ("network", "firewall", "remote-access"):
+    src = open(os.path.join(sys.argv[1], f, "variables.tf")).read()
+    blocks = re.findall(r'variable "([a-z0-9_]+)" \{(.*?)\n\}', src, re.S)
+    assert blocks, f
+    required = {name for name, body in blocks if not re.search(r"^\s*default\s*=", body, re.M)}
+    have = set(json.load(open(os.path.join(sys.argv[2], f + ".tfvars.json"))))
+    assert required <= have, (f, required - have)
+PY
+python3 -I - "$w" <<'PY' && ok "lab runs network, firewall, remote-access, then mgmt; remote-access as root@pam, the others by the copy token" || bad "lab's order or sign-in"
+import sys
+t = open(sys.argv[1]).read()
+body = t[t.index("\nlab() {"):]
+body = body[:body.index("\n}\n")]
+assert body.index("for f in network firewall remote-access; do lab_folder") < body.index("playbooks/proxmox-host.yml --tags mgmt")
+f = t[t.index("\nlab_folder() {"):]
+f = f[:f.index("\n}\n")]
+assert "unset PROXMOX_VE_API_TOKEN PROXMOX_VE_USERNAME PROXMOX_VE_PASSWORD PROXMOX_VE_INSECURE" in f
+assert f.index("if [[ $1 == remote-access ]]") < f.index("PROXMOX_VE_USERNAME=root@pam") < f.index("else") \
+    < f.index('PROXMOX_VE_API_TOKEN=$(cat "$files/copy-token")')
+assert "PROXMOX_VE_ENDPOINT=https://$addr:8006/ SSL_CERT_FILE=$files/copy-ca.pem" in f
+assert "-detailed-exitcode" in f and "the second plan is not empty" in f
+PY
+grep -q 'openssl passwd -6 -stdin < "$files/root.pass" > "$files/root.hash"' "$w" && ok "root's hash is of the password the box keeps" || bad "root's hash and password"
+grep -q '"$files/inventory" "$files/state" "$files/copy-ca.pem"' "$w" && ok "destroy removes the copy's run folder states and its CA" || bad "destroy keeps lab's states"
 
 # The role takes the binary out of a .deb (an ar archive holding data.tar.xz) with Python only.
 mkdir -p "$work/deb/usr/bin"
