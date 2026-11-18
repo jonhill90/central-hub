@@ -10,6 +10,8 @@
 #   5. gitops runs k8s-gitops.yml --tags source only, on that copy.
 #   6. handover makes the admin IDs once, names their files to the play, and prints neither ID.
 #   7. log prints the run's own lines.
+#   8. reset-failed-start deletes only the pod and its claim, and only when the log shows the self-init failure, the pod
+#      is not Ready and the store is not initialized.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -131,5 +133,39 @@ else bad "6. $r6a $c6a"; fi
 run log
 if [[ $rc -eq 0 && $out == *"openbao-prod: handover at central-hub abc1234"* && $out == *"PLAY RECAP"* ]]; then ok "7. log prints the run's own lines"
 else bad "7. $rc $out"; fi
+
+# 8: a stand-in `ansible` that answers kubectl as one JSON document, from the files READY, LOGS and STATUS in $t/kube.
+mkdir -p "$t/kube"
+cat > "$venv/ansible" <<EOF
+#!/usr/bin/env python3
+import json, os, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+d = "$t/kube/"
+def rd(n):
+    return open(d + n).read() if os.path.exists(d + n) else ""
+rc, out = 0, ""
+if " delete " in a: out = "deleted"
+elif " logs " in a: out = rd("LOGS")
+elif " exec " in a: out = rd("STATUS")
+elif "jsonpath" in a: out = rd("READY")
+else: out = "pod/openbao-0 0/1 Running\\npvc/data-openbao-0 Bound"
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": rc, "stdout": out, "stderr": ""}}}]}]}))
+EOF
+chmod +x "$venv/ansible"
+printf '#!/bin/bash\nexit 0\n' > "$t/bin/sleep"; chmod +x "$t/bin/sleep"
+settings '{"seal_node":"wk-a","store_host":"bao.invalid","box_cidr":"192.0.2.50/32"}'
+inventory "${prod_inv[@]}"
+kube() { printf '%s' "$1" > "$t/kube/READY"; printf '%s' "$2" > "$t/kube/LOGS"; printf '%s' "$3" > "$t/kube/STATUS"; : > "$t/kcalls"; }
+fl='[ERROR] self-initialization failed: refusing to unseal'
+kube false "$fl" '{"initialized": false}'; run reset-failed-start; g_rc=$rc g_out=$out; g_del=$(grep -c ' delete ' "$t/kcalls")
+g_names=$(grep ' delete ' "$t/kcalls" | sed 's/.*delete //; s/ --wait.*//' | tr '\n' ' ')
+kube true "$fl" '{"initialized": false}'; run reset-failed-start; r_rc=$rc; r_del=$(grep -c ' delete ' "$t/kcalls")
+kube false 'some other error' '{"initialized": false}'; run reset-failed-start; l_rc=$rc; l_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" '{"initialized": true}'; run reset-failed-start; i_rc=$rc; i_del=$(grep -c ' delete ' "$t/kcalls")
+if [[ $g_rc -eq 0 && $g_del -eq 2 && $g_names == "pod/openbao-0 pvc/data-openbao-0 " && $g_out == *"before:"* && $g_out == *"after"* &&
+      $r_rc -ne 0 && $r_del -eq 0 && $l_rc -ne 0 && $l_del -eq 0 && $i_rc -ne 0 && $i_del -eq 0 ]]; then
+  ok "8. reset-failed-start: deletes the pod and its claim only on a confirmed failed start; Ready, no log line and initialized each refuse"
+else bad "8. good rc=$g_rc del=$g_del [$g_names] ready rc=$r_rc/$r_del log rc=$l_rc/$l_del init rc=$i_rc/$i_del"; fi
 
 exit "$fail"

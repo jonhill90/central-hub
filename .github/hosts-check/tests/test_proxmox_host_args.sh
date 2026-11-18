@@ -9,6 +9,8 @@
 #   6. apply after main moved refuses, because the commit is in the hash.
 #   7. apply with the check's hash runs the playbook and passes; the log line holds the pass ID.
 #   8. apply fails when a task changes that the check showed neither changed nor skipped (D-0041 rule 4).
+#  10. A job name picks the playbook: `check agent-access` runs proxmox-agent-access.yml, no name runs the proxy playbook,
+#      an unknown name is refused, and `apply agent-access <pass> <hash>` takes the same pass and hash as the proxy job.
 #   9. Nothing printed holds a diff's text or the host's address; log prints the summary lines.
 # Usage: .github/hosts-check/tests/test_proxmox_host_args.sh   (needs git and python3)
 set -uo pipefail
@@ -128,5 +130,19 @@ cat "$t"/[3-8]*.out > "$t/all.out"
 if grep -q -e '192.0.2.10' -e 'secret-name' -e 'old ' "$t/all.out"; then bad "9 a diff's text or the address was printed"; else ok "9 no diff text or address printed"; fi
 job log > "$t/9.out" 2>&1 && [ "$(grep -c '"job": "proxmox-host"' "$t/9.out")" -ge 1 ] && ok "9 log prints the summary lines" || bad "9 log: $(cat "$t/9.out")"
 grep -q -e '192.0.2.10' -e 'secret-name' "$t/work/logs/summary.jsonl" && bad "9 the summary holds private text" || ok "9 the summary holds no private text"
+
+# 10
+: > "$t/calls"
+job check agent-access > "$t/10a.out" 2>&1; rc10a=$?
+c10a=$(cat "$t/calls"); : > "$t/calls"
+job check > "$t/10b.out" 2>&1; c10b=$(cat "$t/calls"); : > "$t/calls"
+job check bogus > /dev/null 2>&1; rc10c=$?
+job apply bogus cmsg_0123456789ab 0123456789ab > /dev/null 2>&1; rc10d=$?
+h10=$(sed -n 's/^proxmox-host: check \([0-9a-f]\{12\}\): .*/\1/p' "$t/10a.out")
+job apply agent-access cmsg_0123456789ab "$h10" > "$t/10e.out" 2>&1; rc10e=$?
+if [ $rc10a = 0 ] && [[ $c10a == *playbooks/proxmox-agent-access.yml* && $c10b == *playbooks/proxmox-proxy.yml* && $c10b != *agent-access* ]] &&
+   [ "$rc10c" = 2 ] && [ "$rc10d" = 2 ] && [ $rc10e = 0 ] && grep -q "job agent-access" "$t/10a.out"; then
+  ok "10 a job name picks the playbook; none means the proxy; an unknown name is refused"
+else bad "10 rc=$rc10a/$rc10c/$rc10d/$rc10e [$c10a] [$c10b] $(cat "$t/10a.out")"; fi
 
 exit "$fail"
