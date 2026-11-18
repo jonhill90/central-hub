@@ -36,4 +36,5 @@ Created with the first real files in `hosts/` (D-0012 rule 2). Status: home lab,
 ## What reads what
 
 - Terraform and Ansible both read the VLAN data file for this place (one file, two readers). It is the copy in code of STD-0002's Home VLANs table, and the docs check fails when they differ.
-- Only the lab cluster c1 reads this repo, through Argo CD and read-only (D-0027). Everything else is applied by hand until the Activation gate passes (AGENTS.md).
+- Only the lab cluster c1 reads this repo, through Argo CD and read-only (D-0027). No other cluster reads it until the Activation gate passes (AGENTS.md).
+- The rest is applied from the agent box, not by hand: one wrapper per job runs the repository's code, among them the dev and prod rebuilds, the dev VMs, the CI runner, the tailnet stack, the store in prod's c1 and the Proxmox host's web proxy ([set-up-the-agent-box.md](runbooks/set-up-the-agent-box.md)). The diagram above shows the first build, run from the owner's machine. The one-time bootstrap script on the Proxmox host is still run by hand (table above).

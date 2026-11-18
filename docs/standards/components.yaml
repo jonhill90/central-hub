@@ -288,7 +288,7 @@ components:
     checked: 2026-11-14
   - name: OpenBao
     kind: software
-    used-for: the lab's secrets store, inside c1 from OpenBao's own Helm chart and image (D-0058); its chart, openbao-helm, is MPL-2.0 too (https://raw.githubusercontent.com/openbao/openbao-helm/main/LICENSE). The release package (url:github.com/openbao/) stays listed until the store VM's role is removed
+    used-for: the lab's secrets store, inside c1 from OpenBao's own Helm chart and image (D-0058); its chart, openbao-helm, is MPL-2.0 too (https://raw.githubusercontent.com/openbao/openbao-helm/main/LICENSE). The store VM's role, which installed the release package, is removed, so the package is no longer a source
     licence: MPL-2.0
     licence-source: https://raw.githubusercontent.com/openbao/openbao/main/LICENSE
     paid-edition: none found; the project states it is community-run under open governance with an OSI licence, and sells no edition

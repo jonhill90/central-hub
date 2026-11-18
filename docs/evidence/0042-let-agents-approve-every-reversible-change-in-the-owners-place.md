@@ -6,7 +6,7 @@ method: GitHub's documentation for the merge endpoint, rulesets and workflow_dis
 checks: none independent yet; the reviewer thread and the council check it with the PR
 ---
 
-# Evidence for D-0042: the reviewer and the council approve in the owner's place
+# Evidence for D-0042: the reviewer approves in the owner's place
 
 This file summarises what was read and measured for D-0042. Nothing in it was run against the lab, and the merge job has not run yet.
 
