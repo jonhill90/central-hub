@@ -1,14 +1,22 @@
 ---
 id: D-0059
 title: Drop the owner-tap line for files that guard the merge, so they merge on the agents' pass like any other PR
-status: proposed
-date: 2026-11-17
+status: accepted
+date: 2026-11-18
 decision-makers: [owner]
 proposed-by: drafting-agent
 consulted: []
 waits-on: [D-0042, D-0056]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: owner
+  approved-at: 2026-11-18T02:59:19Z
+  approved-commit: a8529ce123c75621645126e2434f962077138a97
+  approval-ref: the owner's tap on option 0, "Yes, accept D-0059", of the decision card cmsg_01X43rfNYp4H1dL1V2dkfkwNMxZw7Ym3W7MBsCswhvbQoF in the orchestrator thread (card posted 2026-11-18T02:58:44Z, tap 02:59:19Z by the owner's account)
+  approval-names: "the card's question names jonhill90/central-hub #414 at head a8529ce1, the PR that merged this record as 83c8dff; its option text says in plain words that after this record a PR that changes D-0042 rule 6 or AGENTS.md rule 1, the owner's own tap list, merges on the agents' passes with no card from the owner, and that the owner's no still wins at once, as this record's \"How this record is accepted\" line asks"
+  check: "D-0034 rule 1 form: repository, PR and head are named, and the rule 6 sentence is in the card. Since a8529ce1 the record changed twice, neither in its rules: #429 (826f290) rewrote one Decision Drivers line and two Consequences lines to follow the owner's order of 2026-11-17 06:21:09 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh) that box-limit installs need no owner card, and dropped 'the box's limits' from the tap list that order removed; #433 (4314454) rewrote the Merge order line to say how it merged (83c8dff, after line A, install line B #428). An earlier tap at 2026-11-18 02:35:50 UTC on card cmsg_01X43rfNYp4H1dL1V2dkfkwN7xqW7YbmeMQhLKcPMGVp8X named neither the PR nor its head, so it is not used here. This PR changes only this record's status, date and accepted-evidence and its row in the decisions index (D-0001)"
+  merged: "PR #414 squash-merged at head a8529ce1 as 83c8dff at 2026-11-17T07:07:27Z (GitHub merged_at); the record was proposed then and is accepted by this follow-up PR"
 revisit-when: an agent change to a merge-guard file merges something the owner says should not have merged; or the agents get GitHub identities of their own (D-0030) and GitHub can require their approvals
 ---
 
