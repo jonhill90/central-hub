@@ -127,6 +127,14 @@ k8s_identity_opnsense_hosts: []
 # callback path ends in it.
 k8s_identity_opnsense_app_code: keycloak
 
+# Where the database's data sits (TASK-0225). static: the hand-made local volume below, a folder on one worker
+# (what prod uses today). local-path: a claim on StorageClass k8s_identity_db_storage_class, on the data disk
+# (k8s_storage), so the db_host, db_path and the folder step do not apply. Changing it on a live cluster
+# needs the dump-and-restore in docs/runbooks/back-up-c1-off-box.md ("Move Keycloak's database onto the data
+# disk"); the StatefulSet's claim template cannot change in place.
+k8s_identity_db_storage: static
+k8s_identity_db_storage_class: local-path
+
 # Keycloak's database: PostgreSQL 18.6 (2026-08-13; Keycloak 26.8 tests 18), one pod. c1 has no
 # StorageClass yet (storage is BUILD-PATH S17), so its data sits on a static local volume: a folder
 # on one worker, kept when the pod or the volume object is deleted (reclaim policy Retain).

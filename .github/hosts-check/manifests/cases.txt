@@ -19,6 +19,7 @@ k8s_secrets store.yaml.j2 secrets-store.yaml {}
 k8s_app_route route.yaml.j2 app-route.yaml {"k8s_app_route_name":"grafana","k8s_app_route_namespace":"monitoring","k8s_app_route_service":"kube-prometheus-stack-grafana","k8s_app_route_port":80,"k8s_app_route_zone":"example.com"}
 k8s_identity namespace.yaml.j2 identity-namespace.yaml {}
 k8s_identity database.yaml.j2 identity-database.yaml {"k8s_identity_db_node":"node-1"}
+k8s_identity database.yaml.j2 identity-database-local-path.yaml {"k8s_identity_db_storage":"local-path"}
 k8s_identity keycloak.yaml.j2 identity-keycloak.yaml {}
 k8s_identity keycloak.yaml.j2 identity-keycloak-theme.yaml {"k8s_identity_theme_dir":"/x/lab","k8s_identity_theme_files":[{"key":"f1-theme.properties","path":"login/theme.properties","b64":"cGFyZW50PWtleWNsb2FrLnYy"},{"key":"f2-styles.css","path":"login/resources/css/styles.css","b64":"LyogdGVzdCAqLw=="}]}
 k8s_identity theme.yaml.j2 identity-theme.yaml {"k8s_identity_theme_files":[{"key":"f1-theme.properties","path":"login/theme.properties","b64":"cGFyZW50PWtleWNsb2FrLnYy"},{"key":"f2-styles.css","path":"login/resources/css/styles.css","b64":"LyogdGVzdCAqLw=="}]}
