@@ -16,7 +16,7 @@ superseded-by:
 
 **Status:** draft, not yet run. Written 2026-11-10 from the code in `hosts/terraform/home/jumpbox`.
 
-The VM was first built by the jumpbox rehearsal kit, whose state also holds the rehearsal's container (CT 259). This runbook moves only the VM's entry into this folder's own state, then grows the VM. The container stays in the rehearsal state, untouched.
+The VM was first built by the jumpbox rehearsal kit, whose state also holds the rehearsal's container (CT 259). This runbook moves only the VM's entry into this folder's own state, then grows the VM. The container stays in the rehearsal state until it is deleted ([Delete the rehearsal's container](#delete-the-rehearsals-container)).
 
 ```mermaid
 flowchart LR
@@ -131,6 +131,52 @@ flowchart LR
 
   expect: the same fingerprint as SSH shows. Then run the agent_box role (it sets `manual_cache_clean`), and redo [set-up-the-agent-box.md](set-up-the-agent-box.md) step 4 if `tailscale status` says it is logged out.
 - `growpart` says `NOCHANGE`: cloud-init already grew the partition at boot; go straight to `xfs_growfs /`.
+
+## Delete the rehearsal's container
+
+The owner chose to delete CT 259 (tap of 2026-11-18 00:00:40 UTC). It has had no job since VM 258 became the agent box. VM 258 and every other guest stay as they are. The agents' Proxmox tokens have no right on CT 259, so this runs on the owner's Mac, which holds the kit's state, the `iac@pve!apply` token and root SSH to the host. An agent lane runs it there on the owner's typed line.
+
+1. Check that it is the rehearsal's container, and that the kit's state holds nothing else.
+
+   ```sh
+   ssh root@<proxmox host> 'pct config 259' | grep '^tags:'
+   tofu-jumpbox.sh init
+   tofu -chdir=<rehearsal kit folder> state list
+   ```
+
+   expect: the tags include `jumpbox` and `rehearsal`, and `state list` prints exactly one line, `proxmox_virtual_environment_container.j2`.
+   If `state list` prints anything else, such as `proxmox_virtual_environment_vm.j1`, stop: the kit's destroy deletes everything in its state, and that VM may be VM 258.
+
+2. Sign the container out of the tailnet and out of Claude Code, so no device or login is left behind.
+
+   ```sh
+   ssh root@<proxmox host> "pct exec 259 -- sh -c 'systemctl disable --now claude-rc; su -s /bin/sh claude -c \"/home/claude/.local/bin/claude auth logout\"; if command -v tailscale >/dev/null; then tailscale logout; fi'"
+   ```
+
+   expect: the output of each command, and no error from `pct`. A command that is missing in the container is reported, not a stop; step 5 covers what it leaves.
+
+3. Delete it with the kit.
+   why: the kit's state then holds nothing, so no later apply of the kit can build CT 259 again. Proxmox drops the container's ACLs with it.
+
+   ```sh
+   tofu-jumpbox.sh destroy
+   ```
+
+   expect: `Destroy complete! Resources: 1 destroyed.`
+
+4. Check.
+
+   ```sh
+   ssh root@<proxmox host> 'pct status 259; qm status 258'
+   ```
+
+   expect: `pct` says the container does not exist, and `qm status 258` prints `status: running`.
+
+5. Clear what is left outside the host.
+   - Tailnet: a device that step 2 did not sign out goes offline. If it carries a tag that the agent box's daily cleanup removes, the cleanup removes it after its days offline ([set-up-the-agent-box.md](set-up-the-agent-box.md), "Remove old tailnet devices"), and `tailnet-cleanup plan` lists it first.
+   - DNS: if the private records file names the container, remove that record and apply the DNS stack.
+   - Claude Code: its Remote Control registration shows offline, and its line on the temporary-access register closes.
+   - The kit: its state is empty. The kit's folder and `tofu-jumpbox.sh` stay on the Mac until the owner removes them.
 
 ## Exit
 

@@ -12,7 +12,7 @@ cat > "$t/raw" <<'R'
 ===== preflight
 preflight: branch skipped, all 8 declared dev VMs already exist in the state, so a re-run allocates no new VMs
 preflight: guest list from /cluster/resources?type=vm, 1 guests visible to the token
-preflight: guest note: only guests the token can see are listed; VM 258 and CT 259 are NoAccess for it, so the memory these lines add up to undercounts
+preflight: guest note: only guests the token can see are listed; VM 258 is NoAccess for it, so the memory these lines add up to undercounts
 preflight: guest vmid=411 type=qemu status=running maxmem=8192 MiB mem=4096 MiB name=agent-box
 preflight: storage list from /nodes/<node>/storage, 1 storages visible to the token
 preflight: storage name=local-lvm type=lvmthin
@@ -44,7 +44,7 @@ check "nothing else from the stage is copied" "$out" "HTTP 302" "hunter2"
 out=$(run preflight)
 check "the preflight's branch line is kept" "$out" "preflight: branch skipped, all 8 declared"
 check "the guest list lines are kept" "$out" "preflight: guest vmid=411 type=qemu status=running maxmem=8192 MiB"
-check "the visibility note is kept" "$out" "VM 258 and CT 259 are NoAccess"
+check "the visibility note is kept" "$out" "VM 258 is NoAccess"
 check "the storage lines are kept" "$out" "preflight: storage name=local-lvm type=lvmthin"
 check "the runner stop lines are kept" "$out" "preflight: runner stop: VM 300 is stopped after 5 s"
 check "the preflight takes no sign-in lines" "$out" "branch skipped" "HTTP"
