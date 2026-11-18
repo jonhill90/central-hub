@@ -2,7 +2,7 @@
 """The answer file the lab-test wrapper bakes into the Proxmox VE installer ISO (docs/runbooks/build-the-lab-test-copy.md).
 
   lab-test-answer.py answer <settings.json> <vlans.yml> <root key .pub> <root.hash> <out answer.toml>
-      The automated installer's answer (https://pve.proxmox.com/wiki/Automated_Installation, "Answer File Format"):
+      The automated installer's answer (Proxmox VE wiki, Automated Installation, "Answer File Format"):
       root by key, with a hashed password no one keeps; dev's static address, gateway and DNS; ext4 on the one disk.
 
 Exits non-zero with a reason when the settings are not what the copy needs. Needs PyYAML for the shared VLAN file.

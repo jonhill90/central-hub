@@ -256,7 +256,7 @@ check() {
   if [[ ${flags:-0} == 0 ]] || ! vm 'test -c /dev/kvm'; then
     echo "lab-test: stopped, the copy's CPU shows no vmx or svm, or it has no /dev/kvm, so its own guests would run"
     echo "lab-test: without KVM. The host's kvm module needs nested on; turning it on stops every guest on the host,"
-    echo "lab-test: so it is the owner's call (https://pve.proxmox.com/wiki/Nested_Virtualization). Destroy, then report it."
+    echo "lab-test: so it is the owner's call (Proxmox VE wiki, Nested Virtualization). Destroy, then report it."
     return 1
   fi
   echo "lab-test: the copy's CPU shows vmx or svm on $flags threads and it has /dev/kvm; its own guests can use KVM"

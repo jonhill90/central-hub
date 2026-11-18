@@ -111,7 +111,7 @@ components:
     paid-edition: none for features; "all other Proxmox VE features are available at every level", plans add support and the Enterprise Repository
     paid-edition-source: https://www.proxmox.com/en/products/proxmox-virtual-environment/pricing
     verdict: pass
-    sources: [provider:bpg/proxmox]
+    sources: [provider:bpg/proxmox, url:enterprise.proxmox.com/iso, url:download.proxmox.com/debian/pve/]
     checked: 2026-11-14
   - name: Debian
     kind: software
