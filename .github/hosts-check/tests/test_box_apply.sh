@@ -230,7 +230,9 @@ echo "$b9 $l9 $w9 cmsg_pass02 card_tap02" >> "$t/src/$appr"
 printf -- '- name: v\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
 commit c9b >/dev/null
 set +e; out=$(ba plan); rc=$?; set -e
-[[ $rc == 3 && $out == *"a limit changed again after ${l9:0:8}"* ]] && ok "8g. a limit change after the line's commit needs its own line" || bad "8g: exit $rc: $out"
+[[ $rc == 0 && $out == *"a limit changed again after ${l9:0:8}; this applies ${l9:0:8} only"* \
+  && $out == *"approved limit change"*"to ${l9:0:8}"* && $(base) == "$b9" ]] \
+  && ok "8g. a limit change after the line's commit leaves the line good for its own commit only" || bad "8g: exit $rc: $out"
 git -C "$t/src" checkout -q "$l9" -- "$r/tasks/main.yml"
 commit c9c >/dev/null
 echo '{"plays":[{"tasks":[{"task":{"name":"One sudoers line per wrapper"},"hosts":{"box1":{"changed":true,"diff":[{"before_header":"'"$t"'/box/sudoers.d/agent-box"}]}}}]}],"stats":{"box1":{"failures":0,"unreachable":0}}}' > "$t/check.json"
