@@ -1,7 +1,8 @@
 ---
 # The Proxmox host job (wrapper proxmox-host; Library plans/r1-host-job/DESIGN.md v3.1). Its own user, its own
 # folders and the key that logs in to the Proxmox host as root. Everything here is a box limit (D-0036 rule 3 (c)
-# and (d)). The key is made only when agent_box_proxmox_host_job is true, the owner's tap (D-0042 rule 6).
+# and (d)). The key is made only when agent_box_proxmox_host_job is true (the default since the owner's go, D-0061;
+# an access right, D-0042 rule 6).
 
 - name: proxmox_host | The job's user, a system user that can't log in and has no other groups
   ansible.builtin.user:
