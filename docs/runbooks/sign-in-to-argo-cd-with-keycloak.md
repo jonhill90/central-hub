@@ -8,7 +8,7 @@ outcome: Argo CD's sign-in page shows "Lab sign-in"; a lab-admins member gets ad
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; Secret argocd/argocd-sso made by playbooks/k8s-identity.yml
 private-values: [k8s_gateway_zone, k8s_gitops_ui_zone]
 files: [hosts/ansible/roles/k8s_gitops/tasks/sso.yml, hosts/ansible/roles/k8s_gitops/templates/argocd-sso.yaml.j2, hosts/ansible/roles/k8s_gitops/defaults/main.yml]
-last-tested: 2026-11-18, an agent lane from the agent box, read only (c1-read, no password typed), on c1 `argocd-cm` holds `url` and `oidc.config` (issuer realm lab, clientID argocd, secret read from `argocd-sso`, the lab root as `rootCA`), `argocd-rbac-cm` holds the group table below, and `argocd-server` logs the setting sso as true. The sign-in page, a lab-admins sign-in and step 4 not run. CI renders the manifest with sign-in on and off and checks both against the ConfigMap schema
+last-tested: 2026-11-18, an agent lane from the agent box, read only (c1-read, no password typed), on c1 `argocd-cm` holds `url` and `oidc.config` (issuer realm lab, clientID argocd, secret read from `argocd-sso`, the lab root as `rootCA`), `argocd-rbac-cm` holds the group table below, and `argocd-server` logs the setting sso as true. The CronJob login-probe ran inside c1 at 2026-11-18 06:11 UTC with no password and read through c1-read, Keycloak showed its sign-in page for client argocd and its redirect (HTTP 200), Argo CD listed the provider Lab sign-in and its login redirected to Keycloak realm lab. A typed sign-in, a lab-admins sign-in and step 4 not run. CI renders the manifest with sign-in on and off and checks both against the ConfigMap schema
 superseded-by:
 ---
 
@@ -26,7 +26,7 @@ Argo CD stays installed by Ansible (D-0023 rule 2), so its sign-in settings live
 
 - `k8s_gitops_ui_route` is true, and `https://argocd.apps.c1.prod.<zone>/` opens.
 - `kubectl -n argocd get secret argocd-sso` exists, labelled `app.kubernetes.io/part-of=argocd`. It comes from `playbooks/k8s-identity.yml` (realm lab as code).
-- `https://sso.apps.c1.prod.<zone>/realms/lab/.well-known/openid-configuration` answers from a pod in the cluster, over a certificate the pod trusts. Argo CD's server fetches it itself. With the Let's Encrypt staging certificate it can't, because staging isn't trusted: issue from production first (`k8s_certs_issuer: letsencrypt-prod`). With the lab CA (`k8s_certs_issuer: lab-ca`, D-0028), set `k8s_gitops_sso_root_ca_file` to the lab root's PEM file on the controller, and Argo CD trusts it for this sign-in only.
+- `https://sso.<zone>/realms/lab/.well-known/openid-configuration` (with short names off, `https://sso.apps.c1.prod.<zone>/realms/lab/...`; Argo CD's `k8s_gitops_sso_issuer` follows `k8s_gitops_ui_short_names`) answers from a pod in the cluster, over a certificate the pod trusts. Argo CD's server fetches it itself. With the Let's Encrypt staging certificate it can't, because staging isn't trusted: issue from production first (`k8s_certs_issuer: letsencrypt-prod`). With the lab CA (`k8s_certs_issuer: lab-ca`, D-0028), set `k8s_gitops_sso_root_ca_file` to the lab root's PEM file on the controller, and Argo CD trusts it for this sign-in only.
 
 Stop if any of these is not true.
 

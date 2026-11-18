@@ -429,6 +429,73 @@
     mode: "0755"
   tags: [wrappers]
 
+# Blender, headless, for agents' graphics work (`blender -b`). Pinned here with its SHA-256, like the Playwright pin, so
+# a bump is a change to the box's limits (D-0044). 5.2.3 LTS is the newest release at least two weeks old on 2026-11-18
+# (STD-0003); its SHA-256 matches download.blender.org's own .sha256. The tarball comes from an official mirror:
+# download.blender.org answers 403 to the box. The libraries are the ones `ldd` found missing on the box, plus Mesa's software EGL and
+# Vulkan, which EEVEE needs with no GPU (docs/runbooks/set-up-the-agent-box.md, "Render with Blender from the box").
+- name: Libraries Blender needs with no display or GPU
+  ansible.builtin.package:
+    name: [libSM, libICE, libXxf86vm, libX11-xcb, libxkbcommon, libwayland-client, mesa-libGL, mesa-libEGL,
+           mesa-dri-drivers, mesa-libgbm, mesa-vulkan-drivers, vulkan-loader, xz]
+    state: present
+  tags: [wrappers]
+
+- name: Download Blender, checked against its SHA-256
+  ansible.builtin.get_url:
+    url: https://mirrors.ocf.berkeley.edu/blender/release/Blender5.2/blender-5.2.3-linux-x64.tar.xz
+    dest: "{{ agent_box_libexec_dir }}/downloads/blender-5.2.3-linux-x64.tar.xz"
+    checksum: sha256:78486c018b4443efe5e75ab54c290ed8c15abafd249b862c2c9ce2530a918eec
+    owner: root
+    group: root
+    mode: "0644"
+  register: agent_box_blender_tarball
+  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  tags: [wrappers]
+
+# A check run plans the download but does not make it, so the unpack and the link wait for a real run when the
+# tarball is not there yet (box-apply's check run failed on the missing file on 2026-11-18).
+- name: Unpack Blender, root-owned
+  ansible.builtin.unarchive:
+    src: "{{ agent_box_libexec_dir }}/downloads/blender-5.2.3-linux-x64.tar.xz"
+    dest: "{{ agent_box_libexec_dir }}"
+    remote_src: true
+    creates: "{{ agent_box_libexec_dir }}/blender-5.2.3-linux-x64/blender"
+    owner: root
+    group: root
+  when: not (ansible_check_mode and (agent_box_downloads_dir is changed or agent_box_blender_tarball is changed))
+  tags: [wrappers]
+
+- name: Put blender on the path
+  ansible.builtin.file:
+    src: "{{ agent_box_libexec_dir }}/blender-5.2.3-linux-x64/blender"
+    dest: "{{ agent_box_front_dir }}/blender"
+    state: link
+    force: true
+  when: not (ansible_check_mode and (agent_box_downloads_dir is changed or agent_box_blender_tarball is changed))
+  tags: [wrappers]
+
+# Blender Lab's MCP repository, for the Blender Python API reference and manual excerpts it bundles (about 4,500 RST
+# files) that agents search offline, because docs.blender.org answers 403 to the box. Pinned to a commit, root-owned; the
+# MCP server itself is not installed (docs/runbooks/set-up-the-agent-box.md, "Render with Blender from the box").
+- name: Blender Lab's MCP repository at a pinned commit, for its offline docs
+  ansible.builtin.git:
+    repo: https://projects.blender.org/lab/blender_mcp.git
+    dest: "{{ agent_box_libexec_dir }}/blender-mcp"
+    version: dbbf836ad4b1025f14a2b3b504c43903f39e0b04
+    umask: "0022"
+  when: not ansible_check_mode
+  tags: [wrappers]
+
+- name: Blender Lab's MCP docs readable by the sessions (root's umask left the clone at 0700)
+  ansible.builtin.file:
+    path: "{{ agent_box_libexec_dir }}/blender-mcp"
+    state: directory
+    recurse: true
+    mode: "u=rwX,go=rX"
+  when: not ansible_check_mode
+  tags: [wrappers]
+
 - name: The Ansible collections the playbooks pin, from the keys user's checkout
   ansible.builtin.command:
     cmd: >-
@@ -717,6 +784,55 @@
     state: started
     daemon_reload: "{{ agent_box_tailnet_cleanup_units is changed }}"
   when: agent_box_tailnet_cleanup | length > 0 and not (ansible_check_mode and agent_box_tailnet_cleanup_units is changed)
+  tags: [wrappers]
+
+# The box's page cache back to the host. The VM has a balloon with free page reporting (hosts/terraform/home/jumpbox),
+# but reporting returns only free pages, and the kernel keeps file cache as long as nothing else asks for memory:
+# on 2026-11-18 at 05:27 UTC, an hour after the balloon went on, the box held 5947 MiB of cache of 7935 MiB, and the
+# node had 9829 MiB free with VM 300 stopped, 411 MiB under the dev minimum. Dropping the clean cache every 5 minutes
+# turns it into free pages, which the balloon reports to the host (expected; the proof is the next dev preflight's
+# free line). Dirty pages are written first (sync); nothing the box needs is lost, files are only read again from
+# disk, so the first run of a tool after a drop is slower.
+- name: Page cache drop service and timer
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/box-drop-cache.{{ item.key }}"
+    content: "{{ item.value }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ {'service': agent_box_drop_cache_service, 'timer': agent_box_drop_cache_timer} | dict2items }}"
+  loop_control:
+    label: "/etc/systemd/system/box-drop-cache.{{ item.key }}"
+  vars:
+    agent_box_drop_cache_service: |
+      # Made by the agent_box role: the box's clean page cache back to the host (see tasks/main.yml).
+      [Unit]
+      Description=Drop the box's clean page cache so the balloon returns it to the host
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/sh -c 'sync && echo 1 > /proc/sys/vm/drop_caches'
+    agent_box_drop_cache_timer: |
+      # Made by the agent_box role.
+      [Unit]
+      Description=Drop the box's clean page cache every 5 minutes
+
+      [Timer]
+      OnBootSec=5min
+      OnUnitActiveSec=5min
+
+      [Install]
+      WantedBy=timers.target
+  register: agent_box_drop_cache_units
+  tags: [wrappers]
+
+- name: Page cache drop timer on
+  ansible.builtin.systemd_service:
+    name: box-drop-cache.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_drop_cache_units is changed }}"
+  when: not (ansible_check_mode and agent_box_drop_cache_units is changed)
   tags: [wrappers]
 
 - name: The merge sweep's verdict script, root's (D-0042 rule 2)

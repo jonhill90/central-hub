@@ -145,6 +145,8 @@ evaluate() { # pr head
   rm -rf "$d"; mkdir -p "$d/content/base" "$d/content/head" "$d/approved"
   gh "$base/pulls/$pr" > "$d/pr.json" || return 1
   fetch_pr_files "$pr" "$d/files.json" || return 1
+  # Only to explain a "blocked" (the verdict names unverified commits); it decides nothing, so a failed read just leaves it out.
+  gh "$base/pulls/$pr/commits?per_page=100" > "$d/commits.json" 2>/dev/null || rm -f "$d/commits.json"
   gh "$base/commits/$head/check-runs?per_page=100" > "$d/checks.json" || return 1
   if [[ $have_status == 1 ]]; then gh "$base/commits/$head/status" > "$d/status.json" || return 1; else echo '{}' > "$d/status.json"; fi
   [[ -f $passes/$name/$head.jsonl ]] && cp "$passes/$name/$head.jsonl" "$d/ledger.jsonl" || true
@@ -236,9 +238,19 @@ print(m.group(1) if m else "")') || exit 1
     for r in "${repos[@]}"; do
       setup_repo "$r" || { echo "pr-merge sweep: $r skipped (no token)"; continue; }
       gh "$base/pulls?state=open&per_page=100" > "$tmp/open.json" || { echo "pr-merge sweep: $r skipped (could not list PRs)"; continue; }
+      # Oldest first (GitHub lists the newest first, so a stream of new PRs would starve an older one that is green).
       while read -r n h; do
         [[ -f $passes/$name/$h.jsonl ]] || continue          # no ledger for this head: nothing to do, quietly
-        evaluate "$n" "$h" || { echo "pr-merge sweep: $r#$n skipped (a GitHub read failed)"; continue; }
+        # A merge makes GitHub work out every other open PR's mergeability again, and until it has, it reports mergeable=null
+        # (shown as None): ask again, a few seconds apart, so one run can merge every green PR, one at a time, each judged
+        # after the one before it.
+        tries=0 failed=0
+        while :; do
+          evaluate "$n" "$h" || { failed=1; break; }
+          [[ $verdict == *"mergeable=None"* && $tries -lt 3 ]] || break
+          tries=$((tries + 1)); sleep "${SWEEP_RECHECK_SECONDS:-10}"
+        done
+        [[ $failed == 0 ]] || { echo "pr-merge sweep: $r#$n skipped (a GitHub read failed)"; continue; }
         [[ $out == *$'\n'* ]] && echo "${out%$'\n'*}"
         echo "pr-merge sweep: $r#$n ${h:0:7}: $verdict"
         [[ $verdict == GREEN ]] || continue
@@ -246,7 +258,7 @@ print(m.group(1) if m else "")') || exit 1
         do_merge "$n" "$h" || echo "pr-merge sweep: $r#$n merge call failed"
       done < <(python3 -I -c '
 import json, sys
-for p in json.load(open(sys.argv[1])): print(p["number"], p["head"]["sha"])' "$tmp/open.json")
+for p in sorted(json.load(open(sys.argv[1])), key=lambda p: p["number"]): print(p["number"], p["head"]["sha"])' "$tmp/open.json")
     done
     ;;
 esac

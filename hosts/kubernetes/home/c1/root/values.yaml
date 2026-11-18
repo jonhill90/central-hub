@@ -35,10 +35,42 @@ openbaoMarkEnv: ""
 # openbao attach a ListenerSet to Gateway apps. Only hosts/rebuild-k8s.sh sets it, on dev with the
 # in-cluster store (k8s_gitops_source_openbao_measure); c1 keeps false and renders as before.
 openbaoMeasure: false
+# The store's name as the agent box reaches it, private, set by Ansible (k8s_gitops_source_openbao_store_host)
+# with the in-cluster store on. Set: the agent box's path to the store through Gateway apps, TLS
+# passthrough (apps/openbao-store, box-path.yaml; the gateway app lets namespace openbao attach it).
+openbaoStoreHost: ""
+# The store's admin address, private, set by Ansible (k8s_gitops_source_openbao_admin_address) with the
+# in-cluster store on: one address of the load-balancer pool, on which OpenBao sees the agent box's own
+# address, so the admin AppRole's /32 binding passes (apps/openbao-store, admin-path.yaml). It needs
+# openbaoSealNode and openbaoBoxCidr. Set it only after role k8s_control_plane's general L2 policy leaves
+# out Services labelled central-hub/l2-policy, or that policy announces it from every node too.
+openbaoAdminAddress: ""
+
+# Whether the cluster has ClusterIssuer lab-ca, the lab CA that signs Keycloak's certificate (role k8s_certs,
+# lab_ca.yml). true, as on c1: jellyfin gets the CA's public root from a Certificate on lab-ca
+# (apps/jellyfin, templates/lab-ca.yaml). Ansible sets it to false only for a cluster without it
+# (k8s_gitops_source_lab_ca_issuer): dev, which runs no `certs` stage and whose own CA, dev-ca, is made only
+# after its `checks` stage, so that Certificate would wait for ever and hold the `apps` stage.
+labCaIssuer: true
+# Whether the cluster runs the sign-in checks (app login-probe). true, as on c1. Ansible sets it to false only
+# for a cluster whose names are not its own (k8s_gitops_source_login_probe): dev, whose lab names resolve to
+# prod's Gateway, so its probe would call prod's names from dev (apps/login-probe/values.yaml, hostSuffix).
+loginProbe: true
+
+# The agent notebook's CI runner as a pod (app notebook-runner). Ansible sets it to true on prod only
+# (k8s_gitops_source_notebook_runner, from the prod wrappers), so a dev cluster never registers a second
+# runner under the same name. false renders nothing.
+notebookRunner: false
 
 # The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
 # (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
 shareTarget: ""
+# Where the apps' ExternalSecrets read their values (D-0058 rules 5 and 8; plan step 8a). Empty or `c1`,
+# as now: Secret <name> in namespace secret-source, through store `c1`. `openbao`: key `c1/<name>` in
+# OpenBao, through store `openbao`, so it needs openbaoInCluster. Ansible sets it from
+# k8s_gitops_source_app_secrets_store, and only once every value is in OpenBao and in its SOPS copy
+# (docs/runbooks/set-up-the-secrets-store.md, "The apps' secrets"). The apps alerts, monitoring-extras and share-pod.
+appSecretsStore: ""
 
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
@@ -96,6 +128,8 @@ c1Project:
 #                private, so a URL that holds it can't sit in a values file)
 #   switchParameters  value path -> name of a true/false root value; the parameter "true" is passed
 #                only when that root value is true, so a cluster that leaves it false renders as before
+#   switchOffParameters  value path -> name of a true/false root value; the parameter "false" is passed
+#                only when that root value is false, so a cluster that leaves it true renders as before
 #   valueFiles   the values files in appsPath/<name>/, in order (default: values.yaml)
 #   syncOptions  Argo CD sync options, for example ServerSideApply=true for charts with large CRDs
 #   ignoreDifferences  fields Argo CD leaves alone, for example a password the chart makes at random
@@ -137,6 +171,10 @@ apps:
     needsZone: true
     zoneParameters:
       gateway.https: "{gatewayHttps}"
+    # No ClusterIssuer lab-ca (dev): read the lab root from its optional Secret instead, which is not there,
+    # so Jellyfin's SSO setup skips (apps/jellyfin, files/setup.sh).
+    switchOffParameters:
+      sso.labRoot.certificate: labCaIssuer
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
   # Logs (spec step 3): two releases in namespace logging, as k8s_observability installed them.
@@ -227,11 +265,12 @@ apps:
         jsonPointers: [/data]
     autoSync: true
     prune: false
-  # Sign-in checks from inside c1, no password (runbook set-up-lab-sign-in.md, "Prove it"): a Job
-  # after each sync prints PASS or FAIL lines for the Keycloak clients, Argo CD and Jellyfin.
+  # Sign-in checks from inside c1, no password (runbook set-up-lab-sign-in.md, "Prove it"): a CronJob, every
+  # 10 minutes, whose newest Job log prints PASS or FAIL lines for the Keycloak clients, Argo CD and Jellyfin.
   login-probe:
     namespace: login-probe
     local: true
+    enabledBy: loginProbe
     needsZone: true
     autoSync: true
     prune: false
@@ -243,6 +282,16 @@ apps:
     local: true
     rootParameters:
       target: shareTarget
+      authKey.store: appSecretsStore
+    autoSync: true
+    prune: false
+  # The agent notebook's CI runner (label `notebook`), one locked-down pod in place of VM 300, which stays
+  # as the fallback until the pod has run the notebook's checks green on three PRs
+  # (docs/runbooks/run-the-notebook-runner-on-c1.md). Prod only.
+  notebook-runner:
+    namespace: notebook-runner
+    local: true
+    enabledBy: notebookRunner
     autoSync: true
     prune: false
   # Certificates (spec step 6): cert-manager itself. The issuers and the Gateway's certificate stay
@@ -269,9 +318,12 @@ apps:
     zoneParameters:
       address: "{gatewayAddress}"
       https: "{gatewayHttps}"
-    # Lets namespace openbao attach the measurement's ListenerSet, only with openbaoMeasure.
+    # Lets namespace openbao attach the measurement's ListenerSet, only with openbaoMeasure, and the
+    # agent box's path, only with openbaoStoreHost.
     switchParameters:
       openbaoMeasure: openbaoMeasure
+    rootParameters:
+      openbaoBoxHost: openbaoStoreHost
     wave: -1
     autoSync: true
     prune: false
@@ -283,6 +335,9 @@ apps:
     # The OpenBao alerts only where the store is in the cluster (D-0058).
     switchParameters:
       openbao.inCluster: openbaoInCluster
+    rootParameters:
+      ntfy.store: appSecretsStore
+      heartbeat.store: appSecretsStore
     wave: 1
     autoSync: true
     prune: true
@@ -291,6 +346,8 @@ apps:
     namespace: alerts
     local: true
     needsZone: true
+    rootParameters:
+      auth.store: appSecretsStore
     autoSync: true
     prune: true
   # The secrets store inside the cluster (D-0058), only where openbaoInCluster is true (dev first).
@@ -304,13 +361,18 @@ apps:
     rootParameters:
       sealNode: openbaoSealNode
       markEnv: openbaoMarkEnv
+      boxHost: openbaoStoreHost
+      adminAddress: openbaoAdminAddress
+      boxCidr: openbaoBoxCidr
     switchParameters:
       measure: openbaoMeasure
     # The passthrough host on the store's certificate, only with measure (templates/tls.yaml).
     needsZone: true
-    # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume.
+    # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume. The admin
+    # path's L2 announcement policy (admin-path.yaml), only with openbaoAdminAddress.
     clusterResources:
       - {group: "", kind: PersistentVolume}
+      - {group: cilium.io, kind: CiliumL2AnnouncementPolicy}
     # After cert-manager (-2): its Issuers and Certificates need cert-manager's CRDs.
     wave: -1
     autoSync: true

@@ -16,14 +16,18 @@
   no_log: "{{ item in ['opnsense_api_key', 'opnsense_api_secret'] }}"
 
 # "is defined" and the types are checked by meta/argument_specs.yml; it doesn't reject an empty
-# list, and every shared VLAN needs this firewall's settings, so these stay.
-- name: Check that the VLAN values are not empty and match
+# list, so this stays. A VLAN with no entry in opnsense_lab_vlan_settings is held (vars/main.yml,
+# opnsense_lab_held_vlans), but the management VLAN never is: every rule and the DNS need it.
+- name: Check that the VLAN values are not empty and the management VLAN has settings
   ansible.builtin.assert:
     that:
       - lab_vlans | length > 0
-      - lab_vlans | map(attribute='name') | difference(opnsense_lab_vlan_settings.keys() | list) | length == 0
-    fail_msg: lab_vlans (group_vars/all/vlans.yml) is empty, or a VLAN in it has no entry in opnsense_lab_vlan_settings.
+      - opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_mgmt_tag) | list | length == 1
+    fail_msg: >-
+      lab_vlans (group_vars/all/vlans.yml) is empty, or the management VLAN (tag {{ opnsense_lab_mgmt_tag }})
+      has no entry in opnsense_lab_vlan_settings.
     quiet: true
+  tags: [always]
 
 # Always runs, so a run limited with --tags rules still stops before it would pass the management
 # VLAN into a VLAN kept off the tailnet.
@@ -50,6 +54,14 @@
 - name: Agent box rules
   ansible.builtin.import_tasks: agent_box.yml
   tags: [rules, agent_box]
+
+- name: App access rules
+  ansible.builtin.import_tasks: app_access.yml
+  tags: [rules, app_access]
+
+- name: Backup target rules
+  ansible.builtin.import_tasks: backup_target.yml
+  tags: [rules, backup_target]
 
 - name: DNS override
   ansible.builtin.import_tasks: dns.yml

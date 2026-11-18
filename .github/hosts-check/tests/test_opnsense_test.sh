@@ -62,15 +62,16 @@ checks = {
     "root hash from the proof": t("system/user[name='root']/password") == "$6$salt$roothash",
     "proof admin uid 2000 in admins": t("system/user[name='proofadmin']/uid") == "2000" and "2000" in [m.text for m in c.findall("system/group[name='admins']/member")],
     "proof CA in the trust store": c.find("ca/crt") is not None,
-    "plugin server named keycloak-proof": t("authserver/type") == "openidconnect" and t("authserver/name") == "keycloak-proof",
-    "app code keycloak, as the lab client": t("authserver/openidconnect_app_code") == "keycloak",
-    "issuer is the box's Keycloak": t("authserver/openidconnect_provider_url") == "https://192.0.2.10:8443/realms/opnsense-proof",
-    "PAR disabled": t("authserver/openidconnect_par_mode") == "disabled",
-    "shared signals off": t("authserver/openidconnect_ssf_enabled") == "0",
-    "logout notifications off": t("authserver/openidconnect_logout_notifications") == "off",
-    "admission approval": t("authserver/openidconnect_bootstrap_mode") == "approval",
-    "root not allowed": t("authserver/openidconnect_allow_root") == "0",
-    "no account on first login": t("authserver/openidconnect_create_users") == "0",
+    "the plugin server is under system, where OPNsense reads it": c.find("authserver") is None and c.find("system/authserver") is not None,
+    "plugin server named keycloak-proof": t("system/authserver/type") == "openidconnect" and t("system/authserver/name") == "keycloak-proof",
+    "app code keycloak, as the lab client": t("system/authserver/openidconnect_app_code") == "keycloak",
+    "issuer is the box's Keycloak": t("system/authserver/openidconnect_provider_url") == "https://192.0.2.10:8443/realms/opnsense-proof",
+    "PAR disabled": t("system/authserver/openidconnect_par_mode") == "disabled",
+    "shared signals off": t("system/authserver/openidconnect_ssf_enabled") == "0",
+    "logout notifications off": t("system/authserver/openidconnect_logout_notifications") == "off",
+    "admission approval": t("system/authserver/openidconnect_bootstrap_mode") == "approval",
+    "root not allowed": t("system/authserver/openidconnect_allow_root") == "0",
+    "no account on first login": t("system/authserver/openidconnect_create_users") == "0",
 }
 bad = [k for k, v in checks.items() if not v]
 print("\n".join("ok - config.xml: " + k for k, v in checks.items() if v))
@@ -155,6 +156,28 @@ if grep -q -- '--features-disabled' "$w"; then bad "the proof's Keycloak turns a
 grep -q '"ES256" not in json.load' "$w" && ok "prove stops unless discovery lists ES256 for DPoP" || bad "no DPoP discovery check"
 grep -q '/var/db/openid-connect/dpop' "$files/opnsense-test-prove.py" && ok "prove checks the plugin's DPoP key store" || bad "no DPoP key check"
 grep -q 'DPoP sender constraint</th>' "$files/opnsense-test-prove.py" && ok "prove reads the sign-in test's DPoP sender constraint row" || bad "no DPoP sender constraint check"
+grep -q 'no Keycloak sign-in form after {url}\\n{why_no_redirect(page)}' "$files/opnsense-test-prove.py" \
+  && ok "a login that doesn't reach Keycloak prints OPNsense's answer and its OIDC log lines" || bad "no reason when the login doesn't redirect"
+# Root's login shell on the VM is csh, which refuses `2>/dev/null`: diagnostic reads run under /bin/sh.
+grep -q 'vm("/bin/sh -c " + shlex.quote(cmd))' "$files/opnsense-test-prove.py" && ok "the VM's diagnostic reads run under /bin/sh, not root's csh" || bad "diagnostic reads run in csh"
+# No sh-only redirect may reach root's csh: every `2>` or `2>&1` command goes through on_vm (/bin/sh).
+if grep -n 'vm("' "$files/opnsense-test-prove.py" | grep -v 'on_vm("' | grep -q '2>'; then bad "a vm() command uses a sh-only redirect, which csh refuses"
+else ok "no vm() command passes a sh-only redirect to csh"; fi
+# A top-level assignment must not rebind one of the prover's functions: run 9 (2026-11-18) bound `read` to a
+# string after the DPoP check, and item 3's read("stranger.pass") failed with "'str' object is not callable".
+python3 -I - "$files/opnsense-test-prove.py" <<'PY' && ok "no top-level name in prove rebinds one of its functions" || bad "prove rebinds one of its own functions"
+import ast, sys
+tree = ast.parse(open(sys.argv[1]).read())
+funcs = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+bound = {t.id for n in tree.body if isinstance(n, (ast.Assign, ast.AnnAssign, ast.AugAssign))
+         for t in (n.targets if isinstance(n, ast.Assign) else [n.target]) if isinstance(t, ast.Name)}
+clash = funcs & bound
+if clash:
+    print("rebinds:", ", ".join(sorted(clash)))
+sys.exit(1 if clash else 0)
+PY
+grep -q 'if last_status\["code"\] == 404:' "$files/opnsense-test-prove.py" && grep -q "get('%s')" "$files/opnsense-test-prove.py" \
+  && ok "a 404 from the login prints what the authentication factory lists and returns" || bad "no factory read on a 404"
 grep -q 'VMID=257$' "$w" && ok "the wrapper's VM ID is 257" || bad "VM ID"
 # The token can't delete files on local: destroy targets only the VM, and the seed leaves the state.
 code=$(grep -v '^[[:space:]]*#' "$w")   # code lines only, so a comment can't pass or fail these
@@ -169,6 +192,9 @@ grep -q 'if \[\[ $have == "$want" \]\]' <<<"$code" && ok "plan reuses an unchang
 # The proof's Keycloak: prod profile (start-dev opens 8080 whatever --http-enabled says), and only loopback is exempt.
 if grep -q 'start-dev' <<<"$code"; then bad "the proof's Keycloak runs start-dev"; else ok "the proof's Keycloak runs start, not start-dev"; fi
 grep -q 'start --db=dev-file --cache=local --import-realm --http-enabled=false' <<<"$code" && ok "start uses the dev-file database, local caches and no HTTP" || bad "start options"
+# OPNsense 26.1 writes the GUI certificate under lighttpd_webgui (core src/etc/inc/plugins.inc.d/webgui.inc), not /var/etc.
+grep -q "cat /usr/local/etc/lighttpd_webgui/cert.pem' > \"\$proof/gui.pem\"" <<<"$code" && ! grep -q '/var/etc/cert.pem' <<<"$code" \
+  && ok "prove reads the GUI certificate from where OPNsense 26.1 writes it" || bad "GUI certificate path"
 
 [ "$fails" = 0 ] || { echo "$fails failed"; exit 1; }
 echo "opnsense-test: all checks passed"

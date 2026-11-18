@@ -7,8 +7,8 @@ runner: the owner, or an agent lane with cluster-admin on c1
 outcome: realm lab in Keycloak matches the code; Grafana, Argo CD and Jellyfin each have their client and their client secret in their own namespace; every user signs in with the password in the values file
 needs: the filled-in inventory, SSH to the c1 control plane, HTTPS on Gateway apps (playbooks/k8s-gateway.yml, k8s-certs.yml)
 private-values: [k8s_identity_zone, k8s_identity_owner_username, k8s_identity_owner_email, k8s_identity_proxmox_hosts, PASSWORD_USER_NAME, GRAFANA_CLIENT_SECRET, ARGOCD_CLIENT_SECRET, JELLYFIN_CLIENT_SECRET, PROXMOX_CLIENT_SECRET, TOTP_USER_NAME]
-files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/ansible/roles/k8s_identity/, hosts/ansible/bootstrap/show-totp-qr.sh, ~/.config/central-hub/identity.env]
-last-tested: 2026-11-09, the owner on the Mac, step 4 at https://grafana.<zone>/ after an agent lane ran steps 1-3 on c1 (2026-11-08 at b20c975; again 2026-11-09 for the owner's renamed user and the sign-in theme); step 5 not yet done
+files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/kubernetes/home/c1/apps/login-probe/, hosts/ansible/roles/k8s_identity/, hosts/ansible/bootstrap/show-totp-qr.sh, ~/.config/central-hub/identity.env]
+last-tested: 2026-11-09, the owner on the Mac, step 4 at https://grafana.<zone>/ after an agent lane ran steps 1-3 on c1 (2026-11-08 at b20c975; again 2026-11-09 for the owner's renamed user and the sign-in theme); step 5 not yet done, step 6 ran on 2026-11-18 at 06:11 UTC from c1 with no password and 7 of 8 checks passed, only Jellyfin's SSO start failed (Provider does not exist); that was before #511 and #517, and no later probe result has been read by this lane
 superseded-by:
 ---
 
@@ -36,7 +36,7 @@ flowchart LR
 | `jellyfin` | confidential | `https://jellyfin.apps.c1.prod.<zone>/sso/OID/redirect/keycloak` and `/sso/OID/r/keycloak` | `media/jellyfin-sso`, key `client-secret` |
 | `proxmox` (only with `k8s_identity_proxmox_hosts`) | confidential | `https://<web UI name>` for each name | the controller's `identity.env`, read by role `proxmox_sso` ([runbook](sign-in-to-proxmox-through-keycloak.md)) |
 
-Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `groups` (`lab-admins`, `lab-viewers`) and `roles` (`admin`, `viewer`).
+Issuer for every app: `https://sso.<zone>/realms/lab` (short names on, `k8s_identity_short_names: true`, the default; with them off, `https://sso.apps.c1.prod.<zone>/realms/lab`). Claims: `groups` (`lab-admins`, `lab-viewers`) and `roles` (`admin`, `viewer`).
 
 ## Before you start
 
@@ -64,6 +64,9 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 5. Argo CD and Jellyfin: this role makes their clients and secrets; it doesn't configure the apps. Argo CD's side is role `k8s_gitops`, tag `sso` ([runbook](sign-in-to-argo-cd-with-keycloak.md)). Jellyfin's side is its Argo CD chart: [the SSO section of move-jellyfin-to-argo-cd.md](move-jellyfin-to-argo-cd.md#sign-in-through-keycloak) installs the plugin and writes the provider. Sign in to each the same way.
    expect: Argo CD shows your groups under "User info"; Jellyfin signs you in through the plugin's "Sign in with keycloak" button.
 
+6. Prove it without a password: CronJob `login-probe` in namespace `login-probe` (Argo CD app `login-probe`) runs every 10 minutes inside c1. Its checks ask Keycloak for its sign-in page for the argocd, jellyfin and grafana clients and each client's redirect, check that Argo CD lists the provider Lab sign-in and sends its login to Keycloak, and check that Jellyfin's SSO plugin starts a login at Keycloak. Read the newest Job's log with `c1-read logs -n login-probe job/<newest job>` (list them with `c1-read get jobs -n login-probe`).
+   expect: the log ends with `RESULT: PASS`. A failed check prints `FAIL:` with the HTTP code and the redirect path (no host name), the last line is `RESULT: FAIL (n checks)` and the Job fails, which marks the app Degraded until the next run passes.
+
 ## Change a password or add a user
 
 - Password: edit its line in `identity.env`, then step 2. The realm is imported again with the new value.
@@ -72,6 +75,12 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 - New app: add a client to `realm.yaml.j2`, a `*_CLIENT_SECRET` key to `k8s_identity_client_secret_keys`, and a copy to the app's namespace in `tasks/secrets.yml`; CI's `identity` job checks the import.
 - Rotate everything at a lab rebuild: delete `identity.env`, then step 2.
 - Change the sign-in look: set `k8s_identity_theme_dir` in the inventory to a Keycloak theme folder on the controller (for example the owner's branding repository, cloned next to the lab clone), then step 2. Only its `login/` files below 500 KB are used; they go into ConfigMap `identity/keycloak-theme`, the Keycloak pod restarts with them, and the realm is imported again with `loginTheme` set to the folder's name. The path is private because the theme's name can name the zone. Empty goes back to Keycloak's own look.
+
+## Metrics and alerts
+
+With `k8s_identity_metrics: true` (the default), the Keycloak object sets the server options `metrics-enabled` and `event-metrics-user-enabled`, so Keycloak serves `/metrics` on its management port (9000), with `keycloak_user_events_total` counting logins and their errors per realm (Keycloak 26.8.1 guides "Gaining insights with metrics" and "Monitoring user activities with event metrics"). Changing the setting restarts the Keycloak pod once; it does not touch the realm. App `monitoring-extras` reads it through ServiceMonitor `keycloak` (Service `sso-service`, port `management`), raises `C1KeycloakDown`, `C1KeycloakNotScraped` and `C1KeycloakLoginFailures`, and shows the dashboard's **Keycloak (sign-in)** row ([check-c1-alerts-and-dashboard.md](check-c1-alerts-and-dashboard.md)). Order: first a run of this role with `k8s_identity_metrics: true` reaches c1 (on prod, the agent box's `c1-ansible apply identity`), then a pull request sets `keycloak.metrics: true` in `apps/monitoring-extras/values.yaml`. In the other order `C1KeycloakNotScraped` fires until the role's run. `C1KeycloakDown` and the pod-ready panel need no metrics and are on from the start.
+
+expect: the role's run ends with Keycloak Ready, and Keycloak's start log (`kubectl -n identity logs sso-0`) shows no error for either option. After the values pull request, within an hour the panel check prints `Keycloak metrics read: 1` and a `Logins, 24h` line (`c1-read logs -n monitoring job/<newest panel-check job>`).
 
 ## If it fails
 

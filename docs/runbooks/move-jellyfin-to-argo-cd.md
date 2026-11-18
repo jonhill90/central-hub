@@ -8,7 +8,7 @@ outcome: Argo CD's Application `jellyfin` is Synced and Healthy, the setup Job h
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1); External Secrets running on c1
 private-values: [k8s_gateway_zone]
 files: [hosts/kubernetes/home/c1/apps/jellyfin/, hosts/kubernetes/home/c1/apps/monitoring-extras/templates/jellyfin-podmonitor.yaml, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_jellyfin/, hosts/ansible/playbooks/k8s-jellyfin.yml]
-last-tested: 2026-11-10 (sign-in through Keycloak, 2026-11-18 02:30 UTC, an agent lane from the agent box, logs read with c1-read after #451 synced, no password typed, the init container checked the plugin sha256 and installed 5.1.1, Jellyfin logged the line Loaded plugin SSO Authentication 5.1.1, Job completed and skipped the provider because Secret jellyfin-lab-root-ca does not exist yet; the provider write and a sign-in not run, see its section), steps 1 to 3, 5 and 6 on c1, auto-sync took over at 03:31 UTC (#140), Synced and Healthy, the setup Job ran and the pod did not restart; admin signed in with the password from Secret media/jellyfin-admin through the API (AuthenticateByName 200, IsAdministrator true); k8s-jellyfin.yml changed=0 twice. Step 4 (password to the env file) not yet run
+last-tested: 2026-11-10 (sign-in through Keycloak, 2026-11-18 02:30 UTC, an agent lane from the agent box, logs read with c1-read after #451 synced, no password typed, the init container checked the plugin sha256 and installed 5.1.1, Jellyfin logged the line Loaded plugin SSO Authentication 5.1.1, Job completed and skipped the provider because Secret jellyfin-lab-root-ca does not exist yet; the provider write and a sign-in not run, see its section; at 2026-11-18 06:11 UTC the login-probe CronJob read Keycloak's sign-in page for client jellyfin (HTTP 200) but Jellyfin's SSO start answered HTTP 400 with Provider does not exist in its log, and at 06:40 UTC the setup CronJob (#493) ran and again skipped the provider; after #511 the box read at 07:44 UTC that Certificate media/jellyfin-lab-ca was Ready and the setup CronJob failed at its plugin check while the Jellyfin log said Loaded plugin SSO Authentication 5.1.1, #517 changed that check, and the first run after it, and the probe after that, were not read by this lane: those reads were relayed by other lanes, not made by this one), steps 1 to 3, 5 and 6 on c1, auto-sync took over at 03:31 UTC (#140), Synced and Healthy, the setup Job ran and the pod did not restart; admin signed in with the password from Secret media/jellyfin-admin through the API (AuthenticateByName 200, IsAdministrator true); k8s-jellyfin.yml changed=0 twice. Step 4 (password to the env file) not yet run
 superseded-by:
 ---
 
@@ -20,7 +20,7 @@ Jellyfin is the media server on c1, at `https://jellyfin.apps.c1.prod.<zone>/`. 
 flowchart LR
   gen["Password generator<br/>(External Secrets)"] --> sec["Secret jellyfin-admin<br/>made once"]
   app["Application jellyfin<br/>(local chart)"] --> obj["Deployment, claims,<br/>Service, routes"]
-  app --> job["PostSync Job<br/>jellyfin-setup"]
+  app --> job["CronJob<br/>jellyfin-setup"]
   sec --> job
   job -- "startup API:<br/>settings, admin, library, complete" --> obj
 ```
@@ -59,7 +59,7 @@ The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `jellyfin`
 
 3. Sync once, by hand.
    why: Argo CD takes over the running objects, External Secrets makes the password, and the setup Job runs the wizard.
-   expect: Synced and Healthy. `kubectl -n media logs job/jellyfin-setup` ends with `done: wizard completed`. `curl -s https://jellyfin.apps.c1.prod.<zone>/System/Info/Public` shows `"StartupWizardCompleted":true`. The Jellyfin pod did not restart.
+   expect: Synced and Healthy. The first setup Job's log (`c1-read get jobs -n media`, then `c1-read logs -n media job/<newest jellyfin-setup job>`) ends with `done: wizard completed`. `curl -s https://jellyfin.apps.c1.prod.<zone>/System/Info/Public` shows `"StartupWizardCompleted":true`. The Jellyfin pod did not restart.
 
 4. Save the admin password to the gitignored env file on the Mac, without printing it. From the lab clone's root:
    `ssh <control plane> "kubectl -n media get secret jellyfin-admin -o jsonpath='{.data.password}'" | base64 -d | { printf 'JELLYFIN_ADMIN_USER=admin\nJELLYFIN_ADMIN_PASSWORD='; cat; echo; } >> .env.lab`
@@ -80,19 +80,19 @@ Jellyfin has no OpenID Connect of its own, so the chart adds it by plugin. Every
 | Part | Where | What it does |
 |---|---|---|
 | Plugin | init container `sso-plugin` in `templates/jellyfin.yaml`, `files/install-sso-plugin.sh` | Before Jellyfin starts, downloads the SSO Authentication plugin 5.1.1 from K0lin's fork of `9p4/jellyfin-plugin-sso` (the original is archived and stops at Jellyfin 10.11; 5.1.1's `meta.json` has `targetAbi` 12.0.0.0), checks its sha256 and unpacks it into `/config/plugins`. |
-| Trust | the same init container, Secret `media/jellyfin-lab-root-ca` | Keycloak's certificate comes from the lab CA. The lab root is not in git (its names may be private); `playbooks/k8s-identity.yml` copies it there from the controller's file `k8s_identity_jellyfin_root_ca_file`. The container adds it to a copy of the public bundle and Jellyfin reads that through `SSL_CERT_FILE`. With no Secret yet, Jellyfin starts as before and the Job skips the sign-in; a file with no certificate stops the container. The role restarts Jellyfin when it first makes or changes that Secret, because the bundle is built when the pod starts; then sync again (or delete the Job) so the Job writes the provider. |
-| Provider | the setup Job's `sso` steps in `files/setup.sh` | After each sync: signs in as `admin`, waits until the plugin is loaded, writes provider `keycloak` (`POST /sso/OID/Add/keycloak`: issuer `https://sso.apps.c1.prod.<zone>/realms/lab`, client `jellyfin`, secret from `media/jellyfin-sso`, roles from the realm's `roles` claim; `admin` makes a Jellyfin admin) and reads it back. The call overwrites, so a second run changes nothing. |
+| Trust | the same init container, Secret `media/jellyfin-lab-ca` | Keycloak's certificate comes from the lab CA. The lab root is not in git (its names may be private), so `templates/lab-ca.yaml` asks cert-manager for a small certificate from ClusterIssuer `lab-ca`, and cert-manager writes the issuing CA as `ca.crt` into that Secret. The pod mounts it as `lab-root-ca.pem`. The init container adds it to a copy of the public bundle and Jellyfin reads that through `SSL_CERT_FILE`. No Ansible run is involved. Set `sso.labRoot.certificate` to `false` to read Secret `jellyfin-lab-root-ca` from `playbooks/k8s-identity.yml` instead. With no Secret yet, Jellyfin starts as before and the setup CronJob skips the sign-in; a file with no certificate stops the container. The bundle is built when the pod starts, so if the pod started before the Secret existed, restart it once; the CronJob's next run, within 10 minutes, then writes the provider. |
+| Provider | the setup CronJob's `sso` steps in `files/setup.sh` | Every 10 minutes (a CronJob, because a hook would run only on a sync): signs in as `admin`, waits until the plugin is loaded, writes provider `keycloak` (`POST /sso/OID/Add/keycloak`: issuer `https://sso.<zone>/realms/lab` with `sso.shortNames: true`, or `https://sso.<gateway.hostSuffix>.<zone>/realms/lab` with `false`, always Keycloak's own issuer; client `jellyfin`, secret from `media/jellyfin-sso`, roles from the realm's `roles` claim; `admin` makes a Jellyfin admin) and reads it back. The call overwrites, so a second run changes nothing. |
 
-Its settings are the `sso:` block of `apps/jellyfin/values.yaml`. The client and the Secret `media/jellyfin-sso` come from `playbooks/k8s-identity.yml` ([set-up-lab-sign-in.md](set-up-lab-sign-in.md)); with no client secret, or no lab root Secret, yet the Job skips this part and says so.
+Its settings are the `sso:` block of `apps/jellyfin/values.yaml`. The client and the Secret `media/jellyfin-sso` come from `playbooks/k8s-identity.yml` ([set-up-lab-sign-in.md](set-up-lab-sign-in.md)); with no client secret, or no lab root Secret, yet the CronJob skips this part and says so.
 
 Prove it without typing a password:
 
-1. `kubectl -n media logs job/jellyfin-setup` ends with `done: sso provider keycloak set`.
+1. The newest setup Job's log (`c1-read get jobs -n media`, then `c1-read logs -n media job/<newest jellyfin-setup job>`) ends with `done: sso provider keycloak set`.
 2. `kubectl -n media logs deploy/jellyfin -c jellyfin` shows `Loaded plugin: SSO Authentication`.
 3. From a machine that can reach the app: `curl -s https://jellyfin.apps.c1.prod.<zone>/sso/OID/start/keycloak` answers a redirect whose `Location` starts with the issuer above.
 4. The owner's sign-in with the Keycloak button, once, is the end-to-end proof.
 
-If it fails: **"plugin ... is not loaded"** means Jellyfin refused it (read the Jellyfin log for `targetAbi`); **a TLS error in the Jellyfin log** means the lab root is missing from the bundle (`kubectl -n media logs deploy/jellyfin -c sso-plugin` shows the certificate count). The way back is `sso.enabled: false` by PR; the plugin folder stays on the claim and does nothing.
+If it fails: **"Error loading discovery document: Issuer name does not match authority"** in the Jellyfin log (the sign-in start answers HTTP 500) means the setup CronJob wrote an authority that differs from the issuer in Keycloak's discovery document: `sso.shortNames` in `values.yaml` must match the role's `k8s_identity_short_names` (true: `https://sso.<zone>/realms/lab`; false: `https://sso.<gateway.hostSuffix>.<zone>/realms/lab`), and the next CronJob run writes the corrected provider (measured on c1, 2026-11-18, log relayed by the orchestrator). **"plugin SSO-Auth is not in GET /Plugins"** means the plugin is not loaded or the reply spells its name differently (Jellyfin lists it as `SSO-Auth`, the name in its dll, while the startup log and meta.json say `SSO Authentication`; measured on c1 2026-11-18) (the CronJob log lists the names the reply held; read the Jellyfin log for `targetAbi`); **a TLS error in the Jellyfin log** means the lab root is missing from the bundle (`kubectl -n media logs deploy/jellyfin -c sso-plugin` shows the certificate count). The way back is `sso.enabled: false` by PR; the plugin folder stays on the claim and does nothing.
 
 ## Metrics
 
@@ -119,7 +119,7 @@ The metric names are prometheus-net's, the library Jellyfin 12.2 ships (8.2.1): 
 
 Prove it without typing a password:
 
-1. `kubectl -n media logs job/jellyfin-setup` shows `metrics: /metrics answers`.
+1. The newest setup Job's log (`c1-read get jobs -n media`, then `c1-read logs -n media job/<newest jellyfin-setup job>`) shows `metrics: /metrics answers`.
 2. The panel check prints `Jellyfin requests per second: <a number>` ([check-c1-alerts-and-dashboard.md](check-c1-alerts-and-dashboard.md#read-the-panels-without-a-browser)).
 
 If it fails: **`metrics: EnableMetrics not in the configuration`** means the API's answer no longer has that field: read the Jellyfin version's `ServerConfiguration`. **`C1JellyfinNotScraped`** with the Job's line present means the PodMonitor does not match the pod: compare its labels.
@@ -135,7 +135,7 @@ On a new cluster with the root Application made, Argo CD makes every object, Ext
 
 ## If it fails
 
-- **The setup Job fails:** read `kubectl -n media logs job/jellyfin-setup`. The Job is safe to run again: sync again, or delete the Job and sync. If the wizard was finished by hand, the Job sees that and does nothing.
+- **The setup Job fails:** read the newest Job's log (`c1-read get jobs -n media`, then `c1-read logs -n media job/<newest jellyfin-setup job>`). The CronJob runs again every 10 minutes and every step is safe to repeat; a failed run marks the app Degraded until one passes, once the CronJob has had a first success (Argo CD shows a CronJob that never succeeded as Healthy). If the wizard was finished by hand, the Job sees that and does nothing.
 - **The password is lost or must change:** delete the ExternalSecret and the Secret `jellyfin-admin`, then sync; a new password is made. Jellyfin still has the old one, so reset it in Jellyfin's Dashboard, Users, `admin`.
 - **The way back:** delete the `jellyfin` Application. It has no resources finalizer, so every object stays. Set `k8s_jellyfin_by_argocd: false` and run the Jellyfin playbook, and Ansible owns it again. The generated Secret also stays.
 - Tell the owner before trying anything not written here.

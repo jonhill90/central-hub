@@ -146,13 +146,19 @@ if cidr:
     try: n = ipaddress.ip_network(cidr, strict=False)
     except ValueError: die("box_cidr must be one address as a /32")
     if n.prefixlen != 32 or n.is_loopback: die("box_cidr must be one address as a /32")
+admin = s.get("admin_address") or ""
+if admin:
+    try: a = ipaddress.ip_address(admin)
+    except ValueError: a = None
+    if a is None or a.version != 4 or a.is_loopback: die("admin_address must be one IPv4 address, not loopback")
+    if not cidr: die("admin_address needs box_cidr: only the box's /32 may reach the admin address")
 d = yaml.safe_load(open(src))
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking", "k8s_gateway_smoke_client", "k8s_certs_smoke_client",
         "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file", "k8s_gitops_source_openbao_measure",
         "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
-        "k8s_gitops_source_openbao_store_host", "k8s_backup_azure_fixed_cert_file"}
+        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner", "k8s_backup_azure_fixed_cert_file"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -204,9 +210,12 @@ v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnown
 v["k8s_gateway_smoke_client"] = "localhost"
 v["k8s_certs_smoke_client"] = "localhost"
 v["k8s_gitops_source_openbao_in_cluster"] = True
+# The notebook CI runner pod is prod's only (docs/runbooks/run-the-notebook-runner-on-c1.md).
+v["k8s_gitops_source_notebook_runner"] = True
 v["k8s_gitops_source_openbao_seal_node"] = seal
 v["k8s_gitops_source_openbao_store_host"] = store
 if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
+if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
 # The rebuild's own: prod's own snapshot back (k8s-restore.yml, k8s-identity-restore.yml), onto stable folder names
 # so the new claims find the restored folders, the backup certificates carried over, and no throwaway identity copy.
 v["k8s_backup_restore_own_env"] = True

@@ -30,12 +30,12 @@
     label: "{{ item.description }}"
   notify: Apply rule changes
 
-# Four rules per lab VLAN, sequence 10, 20, 30 ... in the order of opnsense_lab_vlans.
+# Four rules per lab VLAN, sequence 10, 20, 30 ... by the VLAN's place in the VLAN file (pos), held VLANs left out.
 - name: Lab rules per VLAN
   oxlorg.opnsense.rule:
     description: "{{ item.1.text | replace('{}', item.0.label ~ ' VLAN ' ~ item.0.tag) }}"
     match_fields: [description]
-    sequence: "{{ 10 + (opnsense_lab_vlans.index(item.0) * 4 + item.1.n) * 10 }}"
+    sequence: "{{ 10 + (item.0.pos * 4 + item.1.n) * 10 }}"
     action: "{{ item.1.action }}"
     quick: true
     interface: ["{{ item.0.ifname }}"]
@@ -95,7 +95,7 @@
   oxlorg.opnsense.rule:
     description: "Block {{ item.label }} VLAN {{ item.tag }} to tailnet range"
     match_fields: [description]
-    sequence: "{{ 10 + (opnsense_lab_vlans.index(item) * 4 + 3) * 10 - 5 }}"
+    sequence: "{{ 10 + (item.pos * 4 + 3) * 10 - 5 }}"
     action: block
     quick: true
     interface: ["{{ item.ifname }}"]

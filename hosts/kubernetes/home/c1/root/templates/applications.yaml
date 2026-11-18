@@ -7,6 +7,13 @@ way back to Ansible for every component (spec, "Taking over a running component"
 An entry with `enabledBy` makes its Application only when that root value is true, so an app can
 run on dev's cluster first while c1, which leaves the value false, renders as before (D-0058).
 */ -}}
+{{- $secretsStore := toString (.Values.appSecretsStore | default "") }}
+{{- if not (has $secretsStore (list "" "c1" "openbao")) }}
+{{- fail "appSecretsStore must be empty, c1 or openbao" }}
+{{- end }}
+{{- if and (eq $secretsStore "openbao") (ne (toString .Values.openbaoInCluster) "true") }}
+{{- fail "appSecretsStore openbao needs openbaoInCluster true: store openbao exists only then" }}
+{{- end }}
 {{- range $name, $app := .Values.apps }}
 {{- if or (not $app.enabledBy) (eq (toString (index $.Values $app.enabledBy)) "true") }}
 ---

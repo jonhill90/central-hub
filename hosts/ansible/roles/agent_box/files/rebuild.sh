@@ -11,19 +11,32 @@
 # Dev only: the env file below fixes ENV_NAME=dev and the dev VM range 250-257, and rebuild-k8s.sh
 # refuses a tfvars whose VM IDs fall outside it or whose node_vnet isn't "dev". Only code on main
 # runs with the keys; there is no way to name another branch.
-# log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can
-# quote the realm and the nodes' output). It takes no argument and reads no other file.
-# diag: read-only look at the dev cluster, for a failed apps stage: the Argo CD applications' sync and
+# log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can quote the realm
+# and the nodes' output). A newer run that only tore dev down is named in one line and skipped, so it can't hide
+# a failed run's diag. It takes no argument and reads no other file.
+# diag: read-only look at the dev cluster, for a failed apps stage: each dev VM's memory and CPU on Proxmox, the
+# node's memory, each dev node's free memory, load and pressure, the Argo CD applications' sync and
 # health, the newest events in the alerts and monitoring namespaces, pods that are not running, and
 # the monitoring pods and volume claims, and why each application is not Synced and Healthy with the last log lines of
-# each pod in Error (scrubbed). Fixed commands, no argument, no write, no Secret read; it
+# each pod in Error (scrubbed). With no dev VM running it prints the Proxmox sections and one line "dev nodes: none running",
+# and skips the sections that reach a node over ssh. Fixed commands, no argument, no write, no Secret read; it
 # uses the inventory the last run made and does not touch the checkout or the run lock.
 set -euo pipefail
 umask 077
 
 if [[ ${1:-} == log && $# -eq 1 ]]; then
-  newest=$(ls -1 /var/lib/agent-box/rebuild-dev/logs/rebuild-*.log 2>/dev/null | sort | tail -n 1)
-  [[ -n $newest ]] || { echo "rebuild: no run has been logged yet" >&2; exit 1; }
+  # The newest run that did more than a teardown: a `rebuild teardown` after a failed run must not hide that run's
+  # stage and diag lines (2026-11-18 07:43 UTC). A newer teardown-only run gets one line of its own.
+  newest="" td=""
+  while read -r f; do
+    if grep -Eq '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" && ! grep -E '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" | grep -vq ' teardown start$'; then
+      [[ -n $td ]] || td=$f
+      continue
+    fi
+    newest=$f; break
+  done < <(ls -1 /var/lib/agent-box/rebuild-dev/logs/rebuild-*.log 2>/dev/null | sort -r)
+  [[ -n $td ]] && echo "newer teardown-only run: ${td##*/}: $(grep -E ' teardown end ' "$td" | tail -n 1)"
+  [[ -n $newest ]] || { echo "rebuild: no run other than a teardown has been logged yet" >&2; exit 1; }
   echo "run: ${newest##*/}"
   cat -- "$newest"
   sed -E 's/\x1b\[[0-9;]*m//g' -- "${newest%.log}.raw" 2>/dev/null | grep -E '(^|[^A-Za-z])(PASS|FAIL):' | cut -c1-200 | head -n 60 || true
@@ -62,6 +75,45 @@ if [[ ${1:-} == diag && $# -eq 1 ]]; then
   }
   mkdir -p "$work/state"
   rm -f -- "$work/state/diag_known_hosts"   # the nodes' host keys change with every rebuild
+  # Each dev VM's memory and CPU as Proxmox sees them, and the node's memory, with the dev token the run uses (GET
+  # only, the token on curl's stdin), then each node's own memory, load and pressure, so a starved node is measured,
+  # not guessed (the 3072 MiB control plane of 2026-11-18 06:11 UTC). A failed read prints one line and goes on.
+  px_get() { # path after /api2/json
+    # shellcheck source=/dev/null
+    ( set -a; . "$keys/proxmox-dev.env"; set +a
+      insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+      printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+        curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" ) 2>/dev/null
+  }
+  echo "== dev VMs on Proxmox (VM IDs 250-257: status, memory used of max, CPU)"
+  vms=$(px_get 'cluster/resources?type=vm' || true)
+  printf '%s' "$vms" | python3 -I -c 'import json,sys
+for r in sorted(json.load(sys.stdin)["data"], key=lambda r: r.get("vmid", 0)):
+    if 250 <= int(r.get("vmid", 0)) <= 257:
+        print("vmid=%s status=%s mem=%s of %s MiB cpu=%.0f%% of %s vCPU" % (r.get("vmid"), r.get("status"),
+              int(r.get("mem", 0)) // 1048576, int(r.get("maxmem", 0)) // 1048576, 100 * float(r.get("cpu", 0)), r.get("maxcpu")))' \
+    || echo "(the guest list could not be read)"
+  # How many dev VMs are running. With none, every section that reaches a node over ssh would only print a timeout, so
+  # they are skipped with one line. If the guest list could not be read, the count is "unknown" and the sections run.
+  running=$(printf '%s' "$vms" | python3 -I -c 'import json,sys
+print(sum(1 for r in json.load(sys.stdin)["data"] if 250 <= int(r.get("vmid", 0)) <= 257 and r.get("status") == "running"))' 2>/dev/null || echo unknown)
+  dnode=$(sed -n 's/^[[:space:]]*proxmox_node_name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$keys/dev-vms.tfvars" | head -1)
+  px_get "nodes/$dnode/status" | python3 -I -c 'import json,sys
+d = json.load(sys.stdin)["data"]
+m, w = d.get("memory") or {}, d.get("swap") or {}
+mib = lambda v: "?" if v is None else str(int(v) // 1048576)
+print("node memory total %s used %s available %s MiB; swap used %s of %s MiB; cpu %.0f%%" % (mib(m.get("total")), mib(m.get("used")),
+      mib(m.get("available")), mib(w.get("used")), mib(w.get("total")), 100 * float(d.get("cpu", 0))))' \
+    || echo "(the node status could not be read)"
+  if [[ $running == 0 ]]; then
+    echo "dev nodes: none running (no running vmid 250-257); the node, Argo CD and pod sections are skipped"
+  else
+    echo "== each dev node: free -m, load average, memory and CPU pressure"
+    ansible 'k8s_control_plane:k8s_workers' -i "$inventory/" -b -m ansible.builtin.shell \
+      -e "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$work/state/diag_known_hosts'" \
+      -a 'free -m; cat /proc/loadavg; for f in memory cpu; do echo "$f: $(head -1 /proc/pressure/$f)"; done' 2>&1 | grep -v '^\[WARNING\]' | cut -c1-300 || true
+  fi
+  [[ $running != 0 ]] || exit 0   # no dev node to reach; the line above said so
   echo "== argocd applications"
   diag_kc -n argocd get applications.argoproj.io -o 'custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,HEALTH_MESSAGE:.status.health.message,CONDITIONS:.status.conditions[*].message'
   for ns in alerts monitoring; do
@@ -191,7 +243,8 @@ fi
 # The copy is made here once, from the store VM's key file when one exists or else from 32 random bytes, and is never
 # replaced: a new key would make every snapshot unreadable. Each run decrypts it to a file in memory (/dev/shm) that
 # only this user can read and that is removed when the run ends. The keys folder is in the box's daily bundle, so the
-# copy leaves the box only once the bundle's off-box send is installed (agent_box_opnsense_offbox set); until then
+# copy leaves the box only once the bundle's off-box send is installed (agent_box_opnsense_offbox set and
+# agent_box_secrets_bundle.offbox true, tasks/secrets_bundle.yml); until then
 # the dev key is only on the box and the node. Dev's key needs no tap (D-0058 rule 3). The VM store's wiring above
 # and this are never on together.
 in_cluster=false
@@ -282,16 +335,37 @@ grep -q '^node_ssh_public_key = "ssh-ed25519 ' "$envdir/dev-vms.tfvars" || { ech
 rm -rf "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
-import sys, yaml
-src, dst, key, known, keys, store_url, store_ca, in_cluster = sys.argv[1:9]
+import ipaddress, json, os, sys, yaml
+src, dst, key, known, keys, store_url, store_ca, in_cluster, store_settings = sys.argv[1:10]
 d = yaml.safe_load(open(src))
+# The box's own address as a /32, for the hand-over (the box's path to the store): the settings' box_cidr, private,
+# empty until that path is set. Checked as openbao-prod.sh checks prod's.
+box_cidr = ""
+if in_cluster == "true" and os.path.isfile(store_settings):
+    box_cidr = json.load(open(store_settings)).get("box_cidr") or ""
+if box_cidr:
+    try: n = ipaddress.ip_network(box_cidr, strict=False)
+    except ValueError: n = None
+    if n is None or n.version != 4 or n.prefixlen != 32 or n.is_loopback:
+        print("rebuild: box_cidr in the secrets store's settings must be one IPv4 address as a /32, not loopback", file=sys.stderr); sys.exit(1)
+# The store's admin address (D-0062), private: one address of dev's load-balancer pool, on which OpenBao sees the box's
+# own address. It needs box_cidr, the one source its NetworkPolicy lets in.
+admin = ""
+if in_cluster == "true" and os.path.isfile(store_settings):
+    admin = json.load(open(store_settings)).get("admin_address") or ""
+if admin:
+    try: a = ipaddress.ip_address(admin)
+    except ValueError: a = None
+    if a is None or a.version != 4 or a.is_loopback or not box_cidr:
+        print("rebuild: admin_address in the secrets store's settings must be one IPv4 address, not loopback, with box_cidr set", file=sys.stderr); sys.exit(1)
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking",
         "k8s_gateway_smoke_client", "k8s_certs_smoke_client", "k8s_certs_smoke_root_file",
         "k8s_backup_env_file", "k8s_backup_azure_fixed_cert_file", "k8s_control_plane_encryption_key_file",
         "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file",
-        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr"}
+        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
+        "k8s_gitops_source_openbao_admin_address"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -326,16 +400,18 @@ if store_url:
 if in_cluster == "true":
     # The seal key's node: the first worker, which the openbao-seal stage writes the key to. Its inventory name is
     # its Kubernetes node name (STD-0001 hostnames); the stage checks that against the node's address and refuses
-    # if they differ. openbaoBoxCidr stays unset here: the box's path to the store comes after its measurement.
+    # if they differ. The box's /32 goes to the hand-over only once its settings have box_cidr (the box's path to the store).
     w = find(d, "k8s_workers")
     hosts = list((w or {}).get("hosts") or {})
     if not hosts:
         print("rebuild: the dev inventory has no k8s_workers host for the seal key", file=sys.stderr); sys.exit(1)
     v["k8s_gitops_source_openbao_in_cluster"] = True
     v["k8s_gitops_source_openbao_seal_node"] = hosts[0]
+    if box_cidr: v["k8s_gitops_source_openbao_box_cidr"] = box_cidr
+    if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster"
+)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster" "$work/secrets-store.json"
 [[ -f $inventory/hosts.yml ]] || { echo "rebuild: could not build the box's dev inventory from $inv_src/hosts.yml" >&2; exit 1; }
 chmod 600 "$inventory/hosts.yml"
 

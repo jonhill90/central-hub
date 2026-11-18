@@ -61,6 +61,20 @@
         quiet: true
       no_log: true
 
+    # Going back from openbao means deleting the ExternalSecret, and with it the Secret External Secrets
+    # owns: a delete (D-0042 rule 6), so no task does it. Until it is gone, a run with the store off stops
+    # here rather than write over External Secrets' Secret.
+    - name: issue | No token ExternalSecret is left while the store is off
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_certs_namespace }} get externalsecret {{ k8s_certs_token_secret_name }} --ignore-not-found -o name
+      register: k8s_certs_token_es_left
+      changed_when: false
+      check_mode: false
+      failed_when: >-
+        (k8s_certs_token_es_left.rc != 0 and 'have a resource type' not in k8s_certs_token_es_left.stderr)
+        or k8s_certs_token_es_left.stdout | trim | length > 0
+      when: k8s_certs_token_store != 'openbao'
+
     - name: issue | Token in the cluster now
       ansible.builtin.command: >-
         kubectl -n {{ k8s_certs_namespace }} get secret {{ k8s_certs_token_secret_name }}
@@ -82,9 +96,59 @@
       args:
         stdin: "{{ k8s_certs_token }}"
         stdin_add_newline: false
-      when: k8s_certs_token_now.stdout | default('') != (k8s_certs_token | b64encode)
+      when:
+        - k8s_certs_token_store != 'openbao'
+        - k8s_certs_token_now.stdout | default('') != (k8s_certs_token | b64encode)
       changed_when: true
       no_log: true
+
+    # With k8s_certs_token_store openbao (plan step 8a), the Secret comes from OpenBao instead: an
+    # ExternalSecret reads c1/cloudflare-api-token, which the agent box's `secrets-store put-apps`
+    # writes from the same token file, trimmed the same way (SOPS first, then OpenBao). External
+    # Secrets takes over the Secret made above, which carries no owner (External Secrets v2.14.0 docs,
+    # guides/ownership-deletion-policy.md, line 43). The ExternalSecret holds no value.
+    - name: issue | Token's ExternalSecret now
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_certs_namespace }} get externalsecret {{ k8s_certs_token_secret_name }} --ignore-not-found
+        -o jsonpath={.metadata.annotations}
+      register: k8s_certs_token_es_now
+      changed_when: false
+      check_mode: false
+      when: k8s_certs_token_store == 'openbao'
+
+    - name: issue | Token from OpenBao, as an ExternalSecret
+      ansible.builtin.command: kubectl apply --server-side --field-manager=central-hub -f -
+      args:
+        stdin: "{{ __manifest | to_json }}"
+      vars:
+        __manifest:
+          apiVersion: external-secrets.io/v1
+          kind: ExternalSecret
+          metadata:
+            name: "{{ k8s_certs_token_secret_name }}"
+            namespace: "{{ k8s_certs_namespace }}"
+            annotations: {central-hub/spec-sha256: "{{ __spec | to_json | hash('sha256') }}"}
+          spec: "{{ __spec }}"
+        __spec:
+          refreshInterval: 1h
+          secretStoreRef: {kind: ClusterSecretStore, name: openbao}
+          target: {name: "{{ k8s_certs_token_secret_name }}", creationPolicy: Owner}
+          data:
+            - secretKey: api-token
+              remoteRef: {key: c1/cloudflare-api-token, property: value}
+      # Applied only when its spec changed, so a re-run reports no change.
+      when: >-
+        k8s_certs_token_store == 'openbao' and not ansible_check_mode
+        and ((k8s_certs_token_es_now.stdout | default('', true) or '{}') | from_json).get('central-hub/spec-sha256')
+        != (__spec | to_json | hash('sha256'))
+      changed_when: true
+
+    - name: issue | Token from OpenBao is synced
+      ansible.builtin.command: >-
+        kubectl -n {{ k8s_certs_namespace }} wait externalsecret/{{ k8s_certs_token_secret_name }}
+        --for=condition=Ready --timeout=120s
+      changed_when: false
+      when: k8s_certs_token_store == 'openbao' and not ansible_check_mode
 
     - name: issue | The token is stored encrypted (read from etcd)
       ansible.builtin.shell: >-  # noqa: command-instead-of-shell (k8s_certs_etcdctl uses $(...))

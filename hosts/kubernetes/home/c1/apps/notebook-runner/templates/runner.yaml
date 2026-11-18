@@ -1,0 +1,147 @@
+{{- /*
+The agent notebook's CI runner as one pod. It runs the notebook's own checks on the notebook's PRs,
+so it is kept apart from the cluster: no ServiceAccount token, so it can't call the Kubernetes API;
+restricted pod security; and a NetworkPolicy that takes nothing in and sends out only DNS and public
+addresses, so a job has no path to a lab address. Its one secret is a one-hour registration token,
+read only at the first start.
+*/ -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Release.Namespace }}
+automountServiceAccountToken: false
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ .Values.name }}-token
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.token.store }}
+  target:
+    name: {{ .Values.name }}-token
+    creationPolicy: Owner
+  data:
+    - secretKey: value
+      remoteRef: {key: {{ .Values.token.key }}, property: {{ .Values.token.property }}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-start
+  namespace: {{ .Release.Namespace }}
+data:
+  start.sh: |
+{{ .Files.Get "files/start.sh" | indent 4 }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.name }}
+      annotations:
+        checksum/start: {{ .Files.Get "files/start.sh" | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Values.name }}
+      automountServiceAccountToken: false
+      # A running job finishes before the pod goes, up to 30 minutes.
+      terminationGracePeriodSeconds: 1800
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.uid }}
+        runAsGroup: {{ .Values.uid }}
+        fsGroup: {{ .Values.uid }}
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: runner
+          image: {{ .Values.image }}
+          command: [bash, /start/start.sh]
+          env:
+            - {name: REPO_URL, value: {{ .Values.repoURL | quote }}}
+            - {name: RUNNER_NAME, value: {{ .Values.runnerName | quote }}}
+            - {name: RUNNER_LABELS, value: {{ .Values.labels | quote }}}
+            - {name: RUNNER_VERSION, value: {{ .Values.runnerVersion | quote }}}
+            - {name: RUNNER_SHA256, value: {{ .Values.runnerSha256 | quote }}}
+            - {name: DOTNET_SYSTEM_GLOBALIZATION_INVARIANT, value: "1"}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - {name: runner, mountPath: /runner}
+            - {name: start, mountPath: /start, readOnly: true}
+            - {name: token, mountPath: /token, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: runner
+          persistentVolumeClaim: {claimName: {{ .Values.name }}}
+        - name: start
+          configMap: {name: {{ .Values.name }}-start}
+        - name: token
+          secret: {secretName: {{ .Values.name }}-token, optional: true}
+        - name: tmp
+          emptyDir: {sizeLimit: 2Gi}
+---
+# Nothing comes in. Out: DNS, and public addresses only; the lab's private ranges and the tailnet's
+# are excepted, so a job has no path to a lab address.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]

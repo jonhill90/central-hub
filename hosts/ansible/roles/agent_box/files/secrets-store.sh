@@ -28,12 +28,12 @@
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|compare|reseed" >&2; exit 2; }
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed" >&2; exit 2; }
 named='' kv_path='' kv_key=''
 env=dev
 if [[ ${1:-} == --prod ]]; then env=prod; shift; fi
 case ${1:-} in
-  recovery | status | snapshot | restore | clear-hold | compare | reseed) action=$1; [[ $# -eq 1 ]] || usage ;;
+  recovery | status | snapshot | restore | clear-hold | put-apps | compare | reseed) action=$1; [[ $# -eq 1 ]] || usage ;;
   # The value comes on stdin, never as an argument; the helper checks the path and key again.
   put)
     action=$1
@@ -79,28 +79,72 @@ setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[s
 # One store per run (D-0058 rule 10). The settings' address must be the one name this environment's inventory gives its
 # c1 store (k8s_gitops_source_openbao_store_host), so no call reaches another store: dev's settings, keys and inventory
 # never meet prod's.
-env_store() {
-  local address host
-  address=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("address") or "")' "$settings")
-  [[ -n $address ]] || { echo "secrets-store: the settings have no store address yet (agent_box_secrets_store.address, set with the box's path to the store); refused" >&2; exit 1; }
-  [[ -f $inventory ]] || { echo "secrets-store: the $env inventory $inventory is missing, so the $env store can't be checked; refused" >&2; exit 1; }
-  host=$("$libexec/ansible-venv/bin/python3" -I -c '
+# inventory_value KEY: the one value this environment's inventory gives KEY, anywhere in it; fails on none or two.
+inventory_value() {
+  "$libexec/ansible-venv/bin/python3" -I -c '
 import sys, yaml
-found = set()
+key, found = sys.argv[2], set()
 def walk(n):
     if isinstance(n, dict):
         for k, v in n.items():
-            if k == "k8s_gitops_source_openbao_store_host" and isinstance(v, str) and v: found.add(v)
+            if k == key and isinstance(v, str) and v: found.add(v)
             else: walk(v)
     elif isinstance(n, list):
         for i in n: walk(i)
 walk(yaml.safe_load(open(sys.argv[1])))
 if len(found) != 1: sys.exit(1)
-print(found.pop())' "$inventory") ||
+print(found.pop())' "$inventory" "$1"
+}
+env_store() {
+  local address host
+  address=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("address") or "")' "$settings")
+  [[ -n $address ]] || { echo "secrets-store: the settings have no store address yet (agent_box_secrets_store.address, set with the box's path to the store); refused" >&2; exit 1; }
+  [[ -f $inventory ]] || { echo "secrets-store: the $env inventory $inventory is missing, so the $env store can't be checked; refused" >&2; exit 1; }
+  host=$(inventory_value k8s_gitops_source_openbao_store_host) ||
     { echo "secrets-store: the $env inventory names no single $env store (k8s_gitops_source_openbao_store_host); refused" >&2; exit 1; }
   [[ $address == "$host" ]] || { echo "secrets-store: the settings' store address is not the $env c1 store the $env inventory names; refused" >&2; exit 1; }
 }
 env_store
+
+# Dev uses c1's names, and the lab's wildcard DNS sends them to prod's Gateway (docs/runbooks/
+# rebuild-k8s-layer-with-one-command.md, k8s_lab_dns_points_here). So on dev every call goes to dev's Gateway by its
+# address, the dev inventory's k8s_gitops_source_gateway_address, with the store's name kept for TLS and routing.
+# Exported for the helpers below, which call curl the same way. Prod's names resolve to prod's Gateway: none there.
+# Once the store has its admin address (D-0062), every call goes there instead, on both environments, still by the
+# store's name: through the Gateway OpenBao sees a Cilium address, so the admin login, bound to the box's /32, is
+# refused (docs/runbooks/set-up-the-secrets-store.md, "The box's admin path"). The address is the one the cluster was
+# given: on dev the settings' admin_address, which the dev rebuild passes on; on prod the one
+# k8s_gitops_source_openbao_admin_address in the inventory openbao-prod builds from its own settings.
+if [[ $env == dev ]]; then
+  admin=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("admin_address") or "")' "$settings")
+else
+  admin=$("$libexec/ansible-venv/bin/python3" -I -c '
+import sys, yaml
+found = set()
+def walk(n):
+    if isinstance(n, dict):
+        for k, v in n.items():
+            if k == "k8s_gitops_source_openbao_admin_address" and isinstance(v, str) and v: found.add(v)
+            else: walk(v)
+    elif isinstance(n, list):
+        for i in n: walk(i)
+walk(yaml.safe_load(open(sys.argv[1])))
+if len(found) > 1: sys.exit(1)
+print(found.pop() if found else "")' "$inventory") ||
+    { echo "secrets-store: the prod inventory gives two admin addresses (k8s_gitops_source_openbao_admin_address); refused" >&2; exit 1; }
+fi
+[[ -z $admin || $admin =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
+  { echo "secrets-store: the store's admin address is not one IPv4 address; refused" >&2; exit 1; }
+SECRETS_STORE_RESOLVE=''
+if [[ -n $admin ]]; then
+  SECRETS_STORE_RESOLVE="$(setting address):443:$admin"
+elif [[ $env == dev ]]; then
+  gateway=$(inventory_value k8s_gitops_source_gateway_address) && [[ $gateway =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
+    { echo "secrets-store: the dev inventory gives no single IPv4 k8s_gitops_source_gateway_address for dev's Gateway; refused" >&2; exit 1; }
+  SECRETS_STORE_RESOLVE="$(setting address):443:$gateway"
+fi
+export SECRETS_STORE_RESOLVE
+curl() { if [[ -n ${SECRETS_STORE_RESOLVE:-} ]]; then command curl --resolve "$SECRETS_STORE_RESOLVE" "$@"; else command curl "$@"; fi; }
 
 # Only the root-owned helpers beside this file run with the keys. One run at a time.
 exec 9>"$work/state/secrets-store$([[ $env == dev ]] || echo -prod).lock"
@@ -219,6 +263,59 @@ put() {
   kv put "$kv_path" "$kv_key"
 }
 
+# Every value this environment's apps read through store c1 (namespace secret-source, docs/runbooks/seed-secret-source.md)
+# into SOPS, then OpenBao, at c1/<name>, key `value`: the path and key the apps' ExternalSecrets read once the root's
+# appSecretsStore is openbao (D-0058 rule 8; plan step 8a). The source is the file the rebuild seeds secret-source from:
+# dev's is the box's own (rebuild.sh), prod's is the controller's copy (rebuild-prod.sh). Every name is checked before
+# the first write. Each value goes from the file to the helper's stdin, byte for byte; only names are printed.
+# put-apps (plan step 8a): every value c1's apps read at run time, each through put, so SOPS first, then OpenBao:
+#   - the secret-source file, one <name>=<value> line each, to c1/<name> key value (store c1's values today);
+#   - the identity values file the rebuild hands role k8s_identity, every KEY=value line to c1/identity key KEY (realm
+#     lab's client secrets, passwords and TOTP seeds, and each app's client secret, which k8s_identity reads from there);
+#   - prod only: the Cloudflare DNS-01 token file, trimmed as role k8s_certs trims it, to c1/cloudflare-api-token key value.
+# Every file is read and every line checked before the first write. Only names are printed, never a value.
+put_apps() {
+  sops_copies
+  local src ident token='' line name n=0 m=0 value
+  if [[ $env == dev ]]; then
+    src=$keys/rebuild-secret-source.env ident=$work/rebuild-dev/identity.env
+  else
+    src=$env_keys/secret-source.env ident=$env_keys/identity.env token=$env_keys/cloudflare-dns01-token.txt
+  fi
+  for f in "$src" "$ident" ${token:+"$token"}; do
+    [[ -s $f ]] || { echo "secrets-store: $f is missing or empty; nothing written" >&2; exit 1; }
+  done
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    name=${line%%=*}
+    [[ $line == *=* && $name =~ ^[a-z0-9][a-z0-9_-]*$ ]] ||
+      { echo "secrets-store: a line of $src is not <name>=<value> with a lowercase name; nothing written" >&2; exit 1; }
+  done < "$src"
+  # The same lines role k8s_identity reads (tasks/secrets.yml: ^[A-Z][A-Z0-9_]*=, the value after the first =).
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    [[ $line =~ ^[A-Z][A-Z0-9_]*= && -n ${line#*=} ]] ||
+      { echo "secrets-store: a line of $ident is not KEY=<value> with an uppercase key and a value; nothing written" >&2; exit 1; }
+  done < "$ident"
+  if [[ -n $token ]]; then
+    value=$(python3 -I -c 'import sys; print(open(sys.argv[1]).read().strip(), end="")' "$token")
+    [[ -n $value && $value != *[[:space:]]* ]] || { echo "secrets-store: $token holds no single token; nothing written" >&2; exit 1; }
+  fi
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    name=${line%%=*}
+    printf '%s' "${line#*=}" | kv put "c1/$name" value
+    n=$((n + 1))
+  done < "$src"
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    printf '%s' "${line#*=}" | kv put c1/identity "${line%%=*}"
+    m=$((m + 1))
+  done < "$ident"
+  if [[ -n $token ]]; then printf '%s' "$value" | kv put c1/cloudflare-api-token value; fi
+  echo "secrets-store: put-apps: $n values from ${src##*/} at c1/<name> key value, $m from ${ident##*/} at c1/identity key <KEY>$([[ -z $token ]] || echo ", and the DNS-01 token at c1/cloudflare-api-token key value"), written to SOPS, then OpenBao"
+}
+
 compare() {
   sops_copies
   kv compare </dev/null
@@ -241,6 +338,7 @@ case $action in
   restore-rebuilt) restore_rebuilt ;;
   clear-hold) clear_hold ;;
   put) put ;;
+  put-apps) put_apps ;;
   compare) compare ;;
   reseed) reseed ;;
 esac

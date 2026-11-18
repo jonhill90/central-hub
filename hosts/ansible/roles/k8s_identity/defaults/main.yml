@@ -16,6 +16,13 @@ k8s_identity_name: sso
 # Private, no default; the inventory template sets it to k8s_gateway_zone.
 # k8s_identity_zone: <zone>
 
+# Keycloak's metrics for Prometheus: options metrics-enabled and event-metrics-user-enabled, so the management
+# port (9000) serves /metrics with keycloak_user_events_total (logins and their errors, per realm) beside the JVM
+# and database pool metrics (Keycloak 26.8.1 guides observability/configuration-metrics and event-metrics). The
+# ServiceMonitor, alerts and dashboard row are in apps/monitoring-extras (keycloak.metrics there must match).
+# Changing it restarts the Keycloak pod once; it touches no realm. false: no metrics.
+k8s_identity_metrics: true
+
 # The realm lab apps sign in to.
 k8s_identity_realm: lab
 
@@ -44,6 +51,13 @@ k8s_identity_otp_period: 30
 # The role adds a random value for any key that is missing and never changes one that is there, so
 # the owner reads a password there and changes one by editing the file and running the role again.
 k8s_identity_values_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/central-hub/identity.env"
+
+# Where c1 reads realm lab's Secret and each app's copy of its client secret from (plan step 8a, D-0058 rule 8).
+# "" (the default): this role makes them from the values file, as before. openbao: it makes an ExternalSecret for
+# each instead, read through ClusterSecretStore openbao from c1/identity, one key per line of the values file,
+# which the agent box's `secrets-store put-apps` writes (SOPS first, then OpenBao). It follows the root's
+# appSecretsStore (k8s_gitops_source_app_secrets_store), so one inventory value moves every app secret.
+k8s_identity_secrets_store: "{{ k8s_gitops_source_app_secrets_store | default('') }}"
 
 # When the realm's code or a value in the file changes, delete realm lab and import it again
 # (KeycloakRealmImport never updates a realm that exists). Sessions end; nothing else is lost,

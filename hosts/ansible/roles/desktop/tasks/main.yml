@@ -128,6 +128,17 @@
     state: started
     no_block: true
 
+# The proof that the desktop trusts the lab's certificates (ask 275), while an agent can still look: the run fails
+# here, before the admin user's key is removed, if the system store does not verify the lab chain, or if any
+# name in desktop_trust_check_names gives a TLS error or no answer. Role k8s_node_trust's handler rebuilds the
+# trust store only at a flush, so the handlers run first. files/desktop-trust-check.sh prints one line per check.
+- name: desktop | Handlers run, so the trust store holds the lab root before the check
+  ansible.builtin.meta: flush_handlers
+
+- name: desktop | The desktop trusts the lab's certificates
+  ansible.builtin.include_tasks: trust_check.yml
+  when: desktop_trust_chain_file | length > 0
+
 # Last: the agents keep no SSH login. A later change is a rebuild from teardown.
 - name: desktop | The admin user's SSH keys are removed
   ansible.builtin.file:

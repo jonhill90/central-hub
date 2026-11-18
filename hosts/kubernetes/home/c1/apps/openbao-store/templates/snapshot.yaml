@@ -19,6 +19,13 @@ metadata:
   annotations:
     # The snapshots are the store's restore source; never let Argo CD delete them.
     argocd.argoproj.io/sync-options: Delete=false
+    # local-path binds a claim only when a pod first uses it (WaitForFirstConsumer), and the first pod
+    # here is the CronJob's, at minute 17. Argo CD counts a Pending claim as Progressing (v3.5.5,
+    # gitops-engine/pkg/health/health_pvc.go line 33), so a fresh build kept the whole Application
+    # Progressing until then, and a dev `apps` stage that did not cross minute 17 timed out (run
+    # 20261118T071239Z). The claim's health is left out of the Application's (docs/operator-manual/
+    # health.md line 294); a failed or missing snapshot still fires C1OpenBaoSnapshotStale.
+    argocd.argoproj.io/ignore-healthcheck: "true"
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: {{ .Values.snapshot.storageClass }}

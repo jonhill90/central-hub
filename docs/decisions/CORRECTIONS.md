@@ -11,6 +11,25 @@ It has four parts: decision changes, which the owner accepts by name; ID changes
 This PR: the agents' pass (D-0042 rule 1), with the owner's tap line if the merge sweep's installed verdict asks for one, filled in after the merge (D-0006 step 6).
 
 - 2026-11-18 · D-0042 title, Context, Decision Drivers, Decision Outcome, its diagram, rules 1 and 2, and Consequences; D-0044 diagram and its text, and rule 1's `digest`; D-0056 Context, rules 2, 3 and 5; D-0001 statuses, what the owner approves and immutability; AGENTS.md rule 1; the decisions index · the agents' pass for a head is the reviewer thread's clearance alone, in place of the reviewer's clearance and a pass from each of the three council threads, Councils A, B and C (four recorded passes on the sweep's ledger); the built change (`pr-merge.sh`, `pr-merge-verdict.py`, their tests, `box-apply.py`'s comment) and the runbooks that named the councils' passes (`merge-a-pr-through-the-merge-job.md`, `apply-the-agent-box-from-itself.md`, `serve-proxmox-on-443.md`, `set-up-the-agent-box.md`, `give-agents-access-to-azure.md`) are in the same PR · the owner's message of 2026-11-18 00:03:15 UTC dropping the council threads (cmsg_01X43rfNYp4H1dL1V2dkfkwN4Zahj7f5i1barqCMaC7fZF)
+- 2026-11-18 · this file · the approval facts and merge commit of PR #519 added to its section (D-0006 step 6) · this PR
+
+### Accepted with PR #519
+
+PR #519: approved by the reviewer's clearance of head bb7164a (cmsg_01X43rfNYp4H1dL1V2dkfkwNU524dtepAwnRNKqQ3NqGeK); merged as d77f018 at 2026-11-18T11:22:57Z. It adds D-0061 as proposed; D-0061's acceptance waits on the owner's own words.
+
+- 2026-11-18 · this file · the approval facts and merge commit of PR #516 added to its section (D-0006 step 6) · the reviewer's clearance above
+
+### Accepted with PR #516
+
+PR #516: approved by the reviewer's clearance of head e87c13f (cmsg_01X43rfNYp4H1dL1V2dkfkwNKYgG2RtGNEuDb5n8Ry2wtq); merged as ba3a733 at 2026-11-18T07:58:15Z.
+
+- 2026-11-18 · this file · the approval facts and merge commit of PR #512 added to its section (D-0006 step 6) · the reviewer's clearance above
+
+### Accepted with PR #512
+
+PR #512: approved 2026-11-18T07:39:58Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNCPFjLjGBC6Q958XkyTkvoF), head 882d697; merged as 03ceebf at 2026-11-18T07:42:10Z. The approval is the owner's typed line "Accept #512 at 882d697" in the project thread "Coordinate the project in my place", with the reviewer's clearance of that head at 07:32:32Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNRQHbQM8W2wUJtDsVCEkCxj).
+
+- 2026-11-18 · D-0034 rule 9 (new); D-0042 rule 6's title and first sentence; AGENTS.md rule 1 · the owner's go for a rule 6 step is his typed words naming the step and the commit, or his tap on an option the agents did not recommend; a tap on the recommended option is the agents' pick. The old text said a tap on a card was his go, and on 2026-11-18 two taps on recommended options (06:35 UTC, a firewall apply and an access right) were acted on as his go until the agents corrected that at 06:56 UTC · the owner's project instructions, rule 12, in force on 2026-11-18; the owner's acceptance above
 
 ### Accepted with PR #429
 

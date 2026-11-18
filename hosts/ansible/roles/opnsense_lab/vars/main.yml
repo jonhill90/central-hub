@@ -1,15 +1,24 @@
 ---
+# VLANs in the VLAN file with no entry in this firewall's settings: held, not applied here. A VLAN is added to the file
+# in its pull request, and its firewall step (its settings in the private inventory, then a run) waits for the owner's
+# tap (D-0036 rule 8), as the tenant VLAN does. The role leaves a held VLAN out of every check and task: it makes no
+# interface, DHCP pool or rule for it, and removes nothing for it. tasks/main.yml says which VLANs are held.
+opnsense_lab_held_vlans: "{{ lab_vlans | map(attribute='name') | reject('in', opnsense_lab_vlan_settings.keys() | list) | list }}"
+
 # The VLANs this role works on: the shared lab_vlans (group_vars/all/vlans.yml, the one VLAN
-# file) joined with this firewall's own settings per VLAN (opnsense_lab_vlan_settings).
-# base = the /24's first three numbers, for example 10.1.10.
+# file) joined with this firewall's own settings per VLAN (opnsense_lab_vlan_settings), held VLANs left out.
+# base = the /24's first three numbers, for example 10.1.10. pos = the VLAN's place in the VLAN file, which numbers
+# its rules (tasks/rules.yml), so a held VLAN never moves another VLAN's rules.
 opnsense_lab_vlans: >-
   {%- set out = [] -%}
   {%- for v in lab_vlans -%}
+  {%- if v.name in opnsense_lab_vlan_settings -%}
   {%- set x = opnsense_lab_vlan_settings[v.name] -%}
   {%- set _ = out.append({'tag': v.id, 'name': v.name, 'label': v.alias, 'cidr': v.cidr,
-      'base': v.cidr.split('/')[0].rsplit('.', 1)[0],
+      'base': v.cidr.split('/')[0].rsplit('.', 1)[0], 'pos': loop.index0,
       'ifname': x.ifname, 'dhcp': x.dhcp, 'bootstrap': x.bootstrap,
       'tailnet': v.tailnet | default(true), 'mgmt_pass': x.mgmt_pass | default(true)}) -%}
+  {%- endif -%}
   {%- endfor -%}
   {{ out }}
 
@@ -57,3 +66,22 @@ opnsense_lab_rule_kinds:
     port: ""
     icmp: []
     invert: true
+
+# Every sequence number the role gives a rule (tasks/rules.yml, tasks/agent_box.yml): the four rules per lab VLAN,
+# the tailnet block of each VLAN kept off the tailnet, the management passes and the agent box's targets. The app
+# access rules (tasks/app_access.yml) must use none of them, and must sit below their source VLAN's first rule.
+opnsense_lab_numbered_sequences: >-
+  {%- set out = [] -%}
+  {%- for v in opnsense_lab_vlans -%}
+  {%- set i = v.pos -%}
+  {%- for n in range(4) -%}{%- set _ = out.append(10 + (i * 4 + n) * 10) -%}{%- endfor -%}
+  {%- if not v.tailnet -%}{%- set _ = out.append(10 + (i * 4 + 3) * 10 - 5) -%}{%- endif -%}
+  {%- endfor -%}
+  {%- for k in range(opnsense_lab_mgmt_pass_vlans | length) -%}{%- set _ = out.append(5 + k) -%}{%- endfor -%}
+  {%- set _ = out.extend(opnsense_lab_agent_box_sequences[: (opnsense_lab_agent_box | default({})).targets | default([]) | length]) -%}
+  {{ out }}
+opnsense_lab_app_access_first_vlan_rule: >-
+  {{ 10 + (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_app_access.vlan) | first).pos * 40
+  if opnsense_lab_app_access is defined else 0 }}
+# An IPv4 address with no prefix (the app access inputs; ansible.utils is not installed).
+opnsense_lab_ipv4_pattern: '^(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])){3}$'

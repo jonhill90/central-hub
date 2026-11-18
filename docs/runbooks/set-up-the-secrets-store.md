@@ -6,8 +6,8 @@ trigger: once per env, after D-0058; again after a rebuild of the cluster
 runner: "the dev rebuild on the agent box (`rebuild up`), and an agent session through the `secrets-store` wrapper, once the box's path to the store is set"
 outcome: OpenBao 2.7.2 runs in namespace openbao in dev's cluster and in prod's, starts and unseals with no person from its seal key on one node, initializes itself with audit, KV v2, AppRole and Kubernetes logins, takes an hourly Raft snapshot, and serves External Secrets through its Kubernetes login
 needs: the agent box with the agent_box role applied; the dev cluster; the private inventory values listed below
-private-values: [seal-node, box-cidr, store-host, seal-key, admin-role-id, admin-secret-id, sops-copies]
-files: [hosts/kubernetes/home/c1/apps/openbao/, hosts/kubernetes/home/c1/apps/openbao-store/, hosts/kubernetes/home/c1/apps/openbao-measure/, hosts/ansible/playbooks/k8s-openbao-measure.yml, hosts/ansible/playbooks/k8s-openbao-handover.yml, .github/hosts-check/tests/test_openbao_handover.sh, hosts/kubernetes/home/c1/apps/secret-store/, hosts/kubernetes/home/c1/root/, hosts/ansible/roles/k8s_gitops/, hosts/ansible/roles/agent_box/files/secrets-store.sh, .github/hosts-check/tests/test_secrets_store_wrapper.sh, hosts/ansible/roles/agent_box/files/secrets-store-kv.sh, .github/hosts-check/tests/test_secrets_store_kv.sh, hosts/ansible/roles/agent_box/templates/secrets-store-compare.service.j2, hosts/ansible/roles/agent_box/templates/secrets-store-compare.timer.j2, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/files/secrets-store-snapshots.sh, .github/hosts-check/tests/test_secrets_store_snapshots.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/k8s-openbao-auth.yml]
+private-values: [seal-node, box-cidr, store-host, admin-address, seal-key, admin-role-id, admin-secret-id, sops-copies]
+files: [hosts/kubernetes/home/c1/apps/openbao/, hosts/kubernetes/home/c1/apps/openbao-store/, hosts/kubernetes/home/c1/apps/openbao-measure/, hosts/ansible/playbooks/k8s-openbao-measure.yml, hosts/ansible/playbooks/k8s-openbao-handover.yml, .github/hosts-check/tests/test_openbao_handover.sh, hosts/kubernetes/home/c1/apps/secret-store/, hosts/kubernetes/home/c1/root/, hosts/ansible/roles/k8s_gitops/, hosts/kubernetes/home/c1/apps/alerts/, hosts/kubernetes/home/c1/apps/monitoring-extras/, hosts/kubernetes/home/c1/apps/share-pod/, hosts/ansible/roles/agent_box/files/secrets-store.sh, .github/hosts-check/tests/test_secrets_store_wrapper.sh, .github/hosts-check/tests/test_rebuild_box_inventory.sh, hosts/ansible/roles/agent_box/files/secrets-store-kv.sh, .github/hosts-check/tests/test_secrets_store_kv.sh, hosts/ansible/roles/agent_box/templates/secrets-store-compare.service.j2, hosts/ansible/roles/agent_box/templates/secrets-store-compare.timer.j2, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/files/secrets-store-snapshots.sh, .github/hosts-check/tests/test_secrets_store_snapshots.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/k8s-openbao-auth.yml]
 last-tested: 2026-11-18 on prod's c1, the store only. Central-hub 6d59d49 started openbao-0 (1/1, unsealed at 02:15:58 UTC) and the ClusterSecretStore openbao was Ready at 02:20 UTC, checked from the agent box. Not yet run on dev. The dev rebuilds 20261117T043328Z and 20261117T053037Z (central-hub 69edf9b) on the agent box ran without the store, as neither stage list had openbao-seal or openbao-measure. The box's scripts and the hand-over are checked only by CI's stand-in tests (test_openbao_handover.sh and the five test_secrets_store_*.sh files)
 superseded-by:
 ---
@@ -28,6 +28,8 @@ superseded-by:
 | The box's snapshot folder (`secrets-store-snapshots.sh`: rotate and keep) | No | `test_secrets_store_snapshots.sh` |
 | The box's `secrets-store` calls (`status`, `put`, `compare`, `reseed`, `restore`, `restore-rebuilt`) | No. They need the box's path to the store and, for `put`, `compare` and `reseed`, `sops_copies` on. | `test_secrets_store_wrapper.sh`, `test_secrets_store_kv.sh` (real SOPS and age against a stand-in OpenBao) and `test_secrets_store_restore.sh` |
 | The off-box copy | No | `test_secrets_store_offbox.sh` |
+| The box's admin path (D-0062: Service, L2 policy and NetworkPolicy `openbao-admin`, the narrowed general L2 policy, calls on `admin_address`) | No | CI renders the three objects and the root with `kubeconform -strict` and checks that the general policy leaves the label out (`run.sh manifests`); `test_secrets_store_wrapper.sh` (check 10), `test_openbao_prod.sh` (checks 3, 4 and 5b), `test_rebuild_box_inventory.sh` (check 4), `test_rebuild_prod.sh` (check 4). Not run on a cluster: whether the general policy's change keeps every lease, and whether OpenBao sees the box's own address, are unmeasured |
+| The apps' secrets from OpenBao (`put-apps`; roles `k8s_identity` and `k8s_certs` with the store on) | No | `test_secrets_store_wrapper.sh` (check 9) for `put-apps`; `test_identity_external_secrets.sh` for `k8s_identity`'s ExternalSecrets against a stand-in kubectl. `k8s_certs`'s ExternalSecret is checked only by the syntax check and `ansible-lint` |
 
 CI runs every test named here on each pull request (`.github/hosts-check/run.sh`). In [Rebuild the k8s layer with one command](rebuild-k8s-layer-with-one-command.md), the 05:30 run is in [Proven runs](rebuild-k8s-layer-with-one-command.md#proven-runs) and the 04:33 run in the worker row of [Dev node sizes](rebuild-k8s-layer-with-one-command.md#dev-node-sizes). Both runs' stage and PASS lines are in the box's `rebuild log`. The raw logs stay on the box (private), so there is no public link. When a part first runs on dev, change its row and `last-tested` to the date, the run and the commit.
 
@@ -45,9 +47,12 @@ Private values, set in the dev inventory and never in git (CLAUDE.md rule 4):
 
 - `k8s_gitops_source_openbao_seal_node`: the node that holds the seal key's folder, by its `kubernetes.io/hostname` label. It must be a node with the data disk (label `central-hub/data-disk`), because the data and audit claims use `local-path` and follow the pod. Unset, no PersistentVolume is made, the claim stays Pending and OpenBao does not start.
 - `k8s_gitops_source_openbao_box_cidr`: the agent box's address as a /32, the admin AppRole's only source. Unset, the app's default `127.0.0.1/32` applies. That is not a lock: a `kubectl port-forward` connection also arrives from 127.0.0.1, because the container runtime dials localhost inside the pod's network namespace, so anyone who may port-forward in namespace `openbao` and holds the admin IDs passes the binding. While it is unset, the box's hand-over (stage `openbao-handover`) hands nothing over and passes with a skip line.
-- `k8s_gitops_source_openbao_store_host`: the dev store's name as the box reaches it, the same as `address` in the box's `agent_box_secrets_store`. The box's `secrets-store` wrapper reads it from the dev inventory and refuses every action unless the two are equal (D-0058 rule 10). No chart reads it.
+- `k8s_gitops_source_openbao_admin_address`: the store's admin address, one address of the cluster's load-balancer pool, not its first or last. With the in-cluster store on, the root Application passes it as `openbaoAdminAddress`, which makes the box's admin path ([below](#the-boxs-admin-path)). It needs `k8s_gitops_source_openbao_box_cidr`. The dev rebuild sets it from `admin_address` in the box's settings, and `openbao-prod` and `rebuild-prod` from theirs; an inventory's own value is dropped.
+- `k8s_gitops_source_openbao_store_host`: the dev store's name as the box reaches it, the same as `address` in the box's `agent_box_secrets_store`. The box's `secrets-store` wrapper reads it from the dev inventory and refuses every action unless the two are equal (D-0058 rule 10). With the in-cluster store on, the root Application also passes it as `openbaoStoreHost`, which makes the box's path to the store through Gateway `apps` ([below](#the-boxs-path-to-the-store)). Prod's `openbao-prod` and `rebuild-prod` set it from their own `store_host` (below).
 
 The hourly snapshot (D-0058 rule 6): CronJob `openbao/openbao-snapshot` runs at minute 17 as service account `openbao-snapshot`, signs in at the Kubernetes login's role `snapshot`, and reads `kv/data/dev/snapshot-mark`. While that mark is missing, the store has only self-initialized, so the job prints `openbao-snapshot: no mark at ... yet, skipped` and exits 0. Any other read failure fails the job. Otherwise it saves `raft-<UTC time>.snap` on claim `openbao-snapshots` (2 GiB, `local-path`), keeps the newest 48, and revokes its token. The box's hourly off-site pull is separate (pick 237).
+
+The claim `openbao-snapshots` carries `argocd.argoproj.io/ignore-healthcheck: "true"`. `local-path` binds a claim only when a pod first uses it, and the first pod is the CronJob's, at minute 17. Argo CD counts a Pending claim as Progressing (v3.5.5, <https://github.com/argoproj/argo-cd/blob/v3.5.5/gitops-engine/pkg/health/health_pvc.go>, line 33). So on a fresh build, `openbao-store` stayed Progressing until minute 17, and a dev `apps` stage that did not cross it timed out after 1200 s (dev run `20261118T071239Z`, 2026-11-18). The annotation leaves the claim's health out of the Application's (<https://github.com/argoproj/argo-cd/blob/v3.5.5/docs/operator-manual/health.md>, line 294). A snapshot that fails, or can't mount its claim, still fires `C1OpenBaoSnapshotStale`.
 
 expect, once a mark exists: `kubectl -n openbao logs job/<newest openbao-snapshot job>` ends with `openbao-snapshot: saved raft-<time>.snap, kept <n>`.
 
@@ -60,7 +65,7 @@ The seal key on dev, from the box (D-0058 rule 3; dev's key needs no tap):
    - keeps the key as its SOPS copy, `/etc/agent-keys/dev/openbao-seal.key.sops.json` (user `keys`, 0600), encrypted to the box's age identity (D-0058 rules 3 and 9). It makes that copy once, if it is missing, from the VM wrapper's `openbao-seal.key` when one exists or else from `openssl rand 32`, checks that it decrypts to the same bytes, and never replaces it. It refuses if the identity is missing. A plain `openbao-seal.key` from the VM wrapper (`secrets-store.sh`), if one exists, stays until it is removed, which is a delete and the owner's tap (D-0042 rule 6);
    - decrypts the copy for each run into a folder in memory (`/dev/shm`, only user `keys` can read it) and checks that it is 32 bytes; the folder is removed when the run ends. This run writes no plain copy to the box's disk, and none goes into git;
    - the keys folder is in the box's daily bundle, so the copy leaves the box only once the bundle's off-box send is installed (`agent_box_opnsense_offbox` set and `agent_box_secrets_bundle.offbox: true`, which is false by default; see [make-the-box-secrets-bundle.md](make-the-box-secrets-bundle.md)). Until then the dev key is only on the box and the node. The bundle is also encrypted to the owner's Mac key when `mac_recipient` is set. The seal key's SOPS copy inside it stays encrypted to the box's identity only, so the Mac cannot read it (D-0058 rules 3 and 9), but the admin ID files beside it are plain, so a Mac that opens the bundle can read those;
-   - sets `k8s_gitops_source_openbao_in_cluster: true` and `k8s_gitops_source_openbao_seal_node` to the first `k8s_workers` host in its copy of the dev inventory (an inventory value from the Mac for these is dropped), and leaves `k8s_gitops_source_openbao_box_cidr` unset;
+   - sets `k8s_gitops_source_openbao_in_cluster: true` and `k8s_gitops_source_openbao_seal_node` to the first `k8s_workers` host in its copy of the dev inventory (an inventory value from the Mac for these is dropped), and sets `k8s_gitops_source_openbao_box_cidr` only from `box_cidr` in the wrapper's settings (below), never from the Mac's inventory; with no `box_cidr` it stays unset. A `box_cidr` that is not one IPv4 address as a /32, or is loopback, stops the run (`test_rebuild_box_inventory.sh`);
    - runs stage `openbao-seal` after `storage` and before `gitops`: `playbooks/k8s-openbao-seal.yml` checks that the key is 32 bytes, that the node at that host's address has the same Kubernetes name and that it carries the label `central-hub/data-disk=true`, makes the folder (uid 100, group 1000, 0500) and copies the key in (0400). A different key already on the node fails the stage and is never replaced; neither key nor checksum is printed.
    - It refuses if the store VM's wiring (the AppRole `rebuild` IDs) is also set.
 
@@ -112,10 +117,12 @@ What the value turns on:
 
 The BackendTLSPolicy reads the CA from ConfigMap `openbao-measure-ca`, because Cilium 1.20.4 accepts only a ConfigMap there (a code read at tag v1.20.4: `operator/pkg/model/ingestion/gateway.go`, lines 643-649, "Cilium only supports ConfigMap currently"). cert-manager writes the CA only to a Secret, so the stage copies the public `ca.crt` into that ConfigMap in namespace `openbao` on every run, owned by Namespace `openbao-measure`, so that the ConfigMap goes when the namespace goes (a namespaced object may name a cluster-scoped owner: <https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/>).
 
+The four route objects carry `argocd.argoproj.io/ignore-healthcheck: "true"`, so their health does not count toward the `openbao-measure` Application's (Argo CD v3.5.5: <https://github.com/argoproj/argo-cd/blob/v3.5.5/docs/operator-manual/health.md>, line 294). On a fresh dev build the root renders them at stage `gitops`, but listener `https-short` comes only at `dev-ca` and the CA ConfigMap only at `openbao-measure`, both after `apps`. Until then the HTTPRoute and the BackendTLSPolicy are Degraded (Argo CD's own checks for both kinds read `Accepted` and `ResolvedRefs`), so the Application was Degraded and stage `apps` timed out after 1200 s (dev run `20261118T040207Z`, 2026-11-18). The value has to be on from `gitops`, because the `openbao` self-init block runs only at the store's first start. So the stage checks the route itself (step 2).
+
 Stage `openbao-measure` (`playbooks/k8s-openbao-measure.yml`, on the first control-plane node, the probes from the box):
 
 1. Checks that all four of the Gateway's listeners are `Programmed`, reads the ListenerSet's conditions, and reads the namespace `openbao-measure`'s uid (it fails if the namespace is missing).
-2. Copies `ca.crt` alone from Secret `openbao/openbao-tls` into the ConfigMap; it reads only that field and prints nothing.
+2. Copies `ca.crt` alone from Secret `openbao/openbao-tls` into the ConfigMap; it reads only that field and prints nothing. Then it waits up to 2 minutes for HTTPRoute `openbao-measure` to show `Accepted=True` and `ResolvedRefs=True` and no condition `False`, and fails if it doesn't.
 3. The policy check: two Jobs run `bao status` against `https://openbao.openbao.svc:8200`, the control from namespace `openbao` (allowed) and the test from namespace `openbao-measure` (not allowed). A Job answered only when it succeeded (`bao status` exits 0 only on an unsealed store); the stage reads each Job's succeeded and failed counts separately. The control succeeds and the test fails with a timeout: `enforced`. Both succeed: `not enforced`. Anything else: `not measured`, with both readings and the test's last log line.
 4. Three probes from the box, each with its own random nonce header: path a, path a with a made-up `X-Forwarded-For: 192.0.2.1`, and path b. It reads the issuer of the certificate path b presents, so a TLS answer from the Gateway's wildcard certificate is not taken for OpenBao's.
 5. Finds the three nonces in OpenBao's audit log and records, for each probe, the address OpenBao saw and the `X-Forwarded-For` it received. It also reads Cilium's Gateway addresses (`ciliumnodes`, `spec.ingress.ipv4`). It fails if a probe that OpenBao answered left no audit line, or if path a carries no `X-Forwarded-For`. On path a (and a with the made-up header), a 502, 503 or 504 is the Gateway's own answer when it can't reach OpenBao (for example under an enforced NetworkPolicy): when the control Job found the store unsealed, the line shows `refused at gateway` for that probe and expects no audit line. A sealed OpenBao answers 503 itself, so with a failed control Job the code is shown plain and its audit line is still required. Path b is passthrough, so any HTTP code there is OpenBao's own and always needs its audit line.
@@ -133,19 +140,97 @@ kubectl -n gateway get gateway apps -o jsonpath='{.spec.allowedListeners}'
 
 expect: no `openbao-pass` name, and an empty `allowedListeners`. The audited-headers setting stays in that dev store until it is rebuilt. Two more ways the objects go: a run limited with `--only` to a stage that renders the root, without `OPENBAO_SEAL_KEY_FILE`, renders the value off, so they are pruned until the next full run; and if `openbaoInCluster` goes off while the value is on, the `openbao-measure` Application leaves the root and its objects stay (the root has no resources finalizer), until a dev teardown removes them.
 
-Not in this part yet: the agent box's path to OpenBao through the Gateway, chosen after the source address is measured above, so the admin AppRole's /32 binding still holds. That change sets `k8s_gitops_source_openbao_box_cidr` for the hand-over, the store's name and the CA file for the wrapper (below).
+### The box's path to the store
+
+D-0058 rule 4 has the store "reached by name on 443 like every c1 app", and leaves to the agents whether TLS ends at c1's Gateway or at OpenBao's own listener. The path is the measurement's path b made lasting: TLS passthrough, so TLS ends at OpenBao. The Gateway routes by the name the client sends and never sees a token, so it needs no certificate for this name, and no forwarded header is trusted.
+
+When the root Application passes `openbaoStoreHost` (`k8s_gitops_source_openbao_store_host`, set only with the in-cluster store on), these are made, and with it unset none of them is (`.github/hosts-check/run.sh manifests` checks both):
+
+| App | What it makes |
+|---|---|
+| `openbao-store` (`templates/box-path.yaml`) | ListenerSet `openbao-box` on Gateway `apps`: one listener, protocol TLS, port 443, that host only, mode Passthrough, TLSRoutes from namespace `openbao` only. TLSRoute `openbao-box` from that listener to Service `openbao` port 8200. CiliumNetworkPolicy `openbao-box`, which lets Cilium's `ingress` identity reach OpenBao's pod on 8200 only |
+| `openbao-store` (`templates/tls.yaml`) | The host on the store's certificate `openbao-tls`, so the box checks the store by that name |
+| `gateway` | `allowedListeners`, as with the measurement: Gateway `apps` accepts listeners from namespace `openbao` only |
+
+The policy is needed because the Gateway's traffic to a backend carries Cilium's reserved identity `ingress`, not the address of a pod or namespace the store's NetworkPolicy names (Cilium v1.20.4 docs: the identity in `terminology.rst`, lines 211-212, as above; a policy for it in <https://github.com/cilium/cilium/blob/v1.20.4/Documentation/network/servicemesh/default-deny-ingress-policy.rst>, lines 72-76). Cilium adds its rule to the NetworkPolicy's allow rules.
+
+The CA the box checks the store against is `ca.crt` of Secret `openbao/openbao-tls`: the namespace's own CA (`templates/tls.yaml`), a public certificate. On prod, `openbao-prod ca` copies it to `/etc/agent-keys/prod/secrets-store-ca.crt` ([On prod](#on-prod), step 6). A rebuild of the store makes a new CA, so run it again after one. Nothing writes dev's CA file yet.
+
+**The admin login on this path is expected to be refused (not yet measured).** The admin AppRole signs in only from the box's /32 (`apps/openbao/values.yaml`, `secret_id_bound_cidrs` and `token_bound_cidrs`). Cilium's Gateway is an Envoy proxy that opens its own connection to the backend, and Cilium's docs give `reserved:ingress` to "the IPs used as the source address for connections from Ingress proxies" (v1.20.4, <https://github.com/cilium/cilium/blob/v1.20.4/Documentation/gettingstarted/terminology.rst>, lines 211-212). So OpenBao should see one of Cilium's ingress addresses (`ciliumnodes`, `spec.ingress.ipv4`), not the box's, and refuse the admin login by address. The dev measurement (above) that would show it has not printed its `PASS` line yet. The binding is not widened to the Gateway's addresses (agent pick 252), so the admin login has its own path ([The box's admin path](#the-boxs-admin-path)). What this path gives: `sys/health`, which needs no login, and the store's name on its certificate, checked against its CA.
+
+Already in place: `box_cidr` reaches the hand-over, and every dev call goes to dev's Gateway by address (below).
+
+### The box's admin path
+
+D-0062. When the root Application passes `openbaoAdminAddress` (`k8s_gitops_source_openbao_admin_address`), app `openbao-store` makes three objects (`templates/admin-path.yaml`), and with it unset none of them (`.github/hosts-check/run.sh manifests` checks both):
+
+| Object | What it does |
+|---|---|
+| Service `openbao/openbao-admin` | Type LoadBalancer on that address (annotation `lbipam.cilium.io/ips`), port 443 to OpenBao's 8200, `externalTrafficPolicy: Local`, so OpenBao sees the client's own address (Cilium v1.20.4, <https://github.com/cilium/cilium/blob/v1.20.4/Documentation/network/kubernetes/kubeproxy-free.rst>, lines 324-328). Label `central-hub/l2-policy: openbao-admin` |
+| `CiliumL2AnnouncementPolicy` `openbao-admin` | Announces that Service only, only from the seal node (`openbaoSealNode`), where OpenBao's pod is pinned by its seal volume (`templates/seal.yaml`). L2 announcements ignore `Local` and could otherwise announce from a node with no pod (<https://github.com/cilium/cilium/blob/v1.20.4/Documentation/network/l2-announcements.rst>, lines 84-85) |
+| NetworkPolicy `openbao-admin` | Lets the box's /32 (`openbaoBoxCidr`) reach OpenBao's 8200, and nothing else from outside the cluster |
+
+Role `k8s_control_plane`'s general L2 policy leaves out every Service labelled `central-hub/l2-policy`, so it never announces the admin address from another node (`tasks/main.yml`, tag `lb`). Apply that first on a running cluster (on prod, `openbao-prod l2-policy`), then set the address. TLS still ends at OpenBao, and the box sends the store's name, which its certificate carries, so it checks the same CA as on the Gateway path.
+
+Once the settings hold `admin_address`, every `secrets-store` call goes there by the store's name: curl's `--resolve <store name>:443:<admin address>`, on dev and on prod (dev's from its settings, prod's from the inventory `openbao-prod` builds). Without it, dev's calls go to dev's Gateway and prod's by name, as before. The hourly off-box copy's health call keeps the Gateway path, since it needs no login.
+
+If the seal node is down, nothing answers on the address: OpenBao's pod is down with it, and no other node announces the address. `openbao-store` does not prune, so after `openbaoAdminAddress` is unset, the three objects stay until they are deleted (`c1-read get svc,ciliuml2announcementpolicy,networkpolicy -A | grep openbao-admin`).
+
+To check it, before and after on dev:
+
+- `kubectl get svc -A --field-selector spec.type=LoadBalancer -o wide`: every address it had, plus `openbao-admin` on the admin address.
+- `kubectl -n kube-system get leases | grep cilium-l2announce`: one lease per LoadBalancer Service, the Gateway's (`cilium-l2announce-gateway-cilium-gateway-apps`) included; `cilium-l2announce-openbao-openbao-admin` held by the seal node.
+- From the box: `curl` to the Gateway's address still answers, and `secrets-store status` answers on the admin address.
+
+expect: no address lost, and the admin login's audit lines show the box's own address as `remote_address`.
+
+#### Giving dev its admin address
+
+From the controller, in the agent box's host variables in the private inventory. These are private values, so none is written here:
+
+```yaml
+agent_box_openbao_in_cluster: true      # dev runs the store; its first install is the owner's tap (above)
+agent_box_secrets_store:
+  address: <dev store name>             # the dev inventory's k8s_gitops_source_openbao_store_host
+  box_cidr: <box's dev address>/32      # the box's own address on VLAN 30
+  admin_address: <one free dev pool address>
+  # snapshot_box and sops_copies: keep as they are
+```
+
+Pick `admin_address` from dev's load-balancer pool, `k8s_control_plane_lb_cidr` in the dev inventory (VLAN 30's `.224/27`, STD-0002). Rule out all of these:
+
+- the pool's first and last address;
+- the dev inventory's `k8s_gitops_source_gateway_address`;
+- any address another LoadBalancer Service holds (`kubectl get svc -A` on dev, if it is up).
+
+Then:
+
+```sh
+cd hosts/ansible
+ansible-playbook -i inventories/home/ playbooks/agent-box.yml --check --diff
+ansible-playbook -i inventories/home/ playbooks/agent-box.yml
+```
+
+expect:
+
+- The check's diff for `/var/lib/agent-box/secrets-store.json` adds `admin_address`, plus `box_cidr` if it was not set yet, and nothing else changes there.
+- The run ends `failed=0`.
+
+A box that has not installed the admin path's code yet ignores `admin_address`, so the order of this step and that install doesn't matter. Then a dev rebuild (`rebuild up`) passes the value on as `k8s_gitops_source_openbao_admin_address` (`rebuild.sh`), and the checks above follow.
 
 ## The box's calls to the store
 
-The agent box's `secrets-store` wrapper calls the store inside the dev cluster, run as user `keys`: `status`, `recovery`, `snapshot`, `restore`, `restore-rebuilt [raft-<time>.snap]`, `clear-hold`, `put c1/<path> <key>` (the value on stdin), `compare` and `reseed`, plus the hourly off-box copy and the weekly compare. The store VM's actions (`plan`, `apply`, `destroy`, `configure`) are gone from the wrapper and from its sudo line (D-0058: no store VM was ever built).
+The agent box's `secrets-store` wrapper calls the store inside the dev cluster, run as user `keys`: `status`, `recovery`, `snapshot`, `restore`, `restore-rebuilt [raft-<time>.snap]`, `clear-hold`, `put c1/<path> <key>` (the value on stdin), `put-apps`, `compare` and `reseed`, plus the hourly off-box copy and the weekly compare. The store VM's actions (`plan`, `apply`, `destroy`, `configure`) are gone from the wrapper and from its sudo line (D-0058: no store VM was ever built).
 
 Settings, `agent_box_secrets_store` in the private inventory, written to `/var/lib/agent-box/secrets-store.json`:
 
 - `address`: the store's name as the box reaches it. **Dev only (D-0058 rule 10):** every action refuses unless it equals the one `k8s_gitops_source_openbao_store_host` in the dev inventory the rebuild wrapper reads (`/etc/agent-keys/rebuild-dev/inventory/hosts.yml`). `recovery` checks it again before it makes shares.
+- `box_cidr`: the box's own address as a /32. The dev rebuild passes it to the hand-over as `k8s_gitops_source_openbao_box_cidr` (above). Empty until the box's path to the store is set.
+- `admin_address`: the store's admin address, one address of dev's load-balancer pool, which needs `box_cidr`. The dev rebuild passes it on as `k8s_gitops_source_openbao_admin_address`, and every call goes there ([The box's admin path](#the-boxs-admin-path)). Empty: no admin path.
 - `snapshot_box`: see `snapshot` below.
 - `sops_copies`: false until the owner's access-right tap (D-0058 rule 9), then set by a run of the role from the controller. Until it is true, `put`, `compare` and `reseed` refuse, and the weekly compare timer is not installed (set back to false, the role stops it).
 
-Every call checks the store against `/etc/agent-keys/dev/secrets-store-ca.crt` and refuses while that file is missing. The box's path to the store writes it, so **none of these calls runs on the lab yet**: each stops with the missing value named (no address, no store name in the dev inventory, or no CA file).
+Without `admin_address`, every dev call goes to dev's Gateway by its address, the one `k8s_gitops_source_gateway_address` in the dev inventory, with curl's `--resolve <address>:443:<gateway address>`. Dev uses c1's names, and the lab's wildcard DNS sends them to prod's Gateway ([rebuild-k8s-layer-with-one-command.md](rebuild-k8s-layer-with-one-command.md), `k8s_lab_dns_points_here`). The wrapper refuses before any call when the dev inventory gives none, two, or a value that is not IPv4. The hourly off-box copy's health call does the same. Prod's calls go by name. Every call checks the store against `/etc/agent-keys/dev/secrets-store-ca.crt` and refuses while that file is missing. Nothing writes dev's CA file yet (prod's comes from `openbao-prod ca`), so **none of these calls runs on dev yet**: each stops with the missing value named (no address, no store name in the dev inventory, or no CA file).
 
 The rebuild hold (`/var/lib/agent-box/state/secrets-store.rebuilding`): `rebuild.sh`, with the in-cluster store on, writes it before a run that leaves a fresh, empty store (`rebuild` and `teardown`, and `up` while no dev VM is in the dev state, as after an ephemeral-dev run), and only when the box holds snapshots of an earlier store. The run then ends with the hold in place: the dev rebuild never calls `restore-rebuilt`, because each restore is the owner's tap (D-0058 rule 7). `restore-rebuilt` or `clear-hold` removes it.
 
@@ -153,10 +238,10 @@ The wrapper makes the admin AppRole's role ID and secret ID once in `/etc/agent-
 
 - `status`: `sys/health`, which holds no secret.
 - `snapshot`: writes `kv/dev/snapshot-mark` (the snapshot's own time, no secret), then copies a Raft snapshot into `/etc/agent-keys/dev/openbao-snapshots/` (keeps 24), with `raft-<time>.snap.cluster` beside it holding the store's cluster ID. It signs in as AppRole `snapshot-box` once the settings say `snapshot_box: true`, which only the owner's install tap sets (agent pick 240, an access right and a box limit), and with the admin AppRole until then. It refuses while a rebuild hold exists.
-- `restore` (D-0038 Confirmations 4 and 7, pick 239). **The owner's tap first:** a restore of the secrets store is a delete under D-0042 rule 6, on dev too. It runs `secrets-store-restore.sh same`: the newest snapshot of the store's own cluster, the mark set to `before-restore-<time>`, a plain restore, never forced, and a fresh login that must read the snapshot's own time back in the mark.
+- `restore` (D-0038 Confirmations 4 and 7, pick 239). **The owner's go first** (D-0034 rule 9): a restore of the secrets store is a delete under D-0042 rule 6, on dev too. It runs `secrets-store-restore.sh same`: the newest snapshot of the store's own cluster, the mark set to `before-restore-<time>`, a plain restore, never forced, and a fresh login that must read the snapshot's own time back in the mark.
   expect: `PASS: restore: raft-<time>.snap restored (plain) onto the same store; its mark reads back`, and a line `measured: old token: refused` or `still works`.
 - `recovery`: on dev only (D-0038 rule 5), once, 3 shares with a threshold of 2 from `sys/rotate/recovery/init` ([OpenBao's rotate init API](https://openbao.org/docs/api/system/rotate/init/)) into `/etc/agent-keys/dev/openbao-recovery.json`, never printed. It records their time in `openbao-recovery.made`, then takes a snapshot a second later, because `restore` and `restore-rebuilt` refuse any snapshot not strictly later than the shares: a restore brings back the recovery keys of the snapshot's time (source: [Performing restore from snapshot invalidates existing auto-unseal recovery keys](https://discuss.hashicorp.com/t/performing-restore-from-snapshot-invalidates-existing-auto-unseal-recovery-keys/55326), about Vault). It refuses while a rebuild hold exists.
-- `restore-rebuilt` (D-0038 Confirmation 5, pick 238), after a rebuild of the store, on the owner's tap (a delete). A teardown of dev's c1, which wipes the dev store inside it, is not a store `destroy` and needs no tap; a `restore` keeps the tap on dev and prod, and a `destroy` of the production store, which a teardown of prod's c1 counts as, keeps it (D-0042 rule 6). It runs `secrets-store-restore.sh rebuilt` under the wrapper's lock:
+- `restore-rebuilt` (D-0038 Confirmation 5, pick 238), after a rebuild of the store, on the owner's go (a delete). A teardown of dev's c1, which wipes the dev store inside it, is not a store `destroy` and needs no tap; a `restore` keeps the tap on dev and prod, and a `destroy` of the production store, which a teardown of prod's c1 counts as, keeps it (D-0042 rule 6). It runs `secrets-store-restore.sh rebuilt` under the wrapper's lock:
   1. picks the newest snapshot whose `.cluster` names another cluster than the store's current one, later than the recovery shares once they exist, or the one named exactly;
   2. refuses unless `kv/` holds nothing but `c1/check`;
   3. tries the plain restore, and the forced one only if OpenBao refuses it with "possibly the snapshot is using a different set of unseal keys" (a Vault user's report, not OpenBao's own text: [Raft: how to restore from 3-node HA cluster to 1-node DR instance](https://discuss.hashicorp.com/t/raft-how-to-restore-from-3-node-ha-cluster-to-1-node-dr-instance/20572)); any other refusal stops as `other refusal`;
@@ -167,11 +252,18 @@ The wrapper makes the admin AppRole's role ID and secret ID once in `/etc/agent-
   expect: seven `ok` step lines, then `PASS: restore-rebuilt: raft-<time>.snap restored (<how>) onto the rebuilt store; its mark reads back; hold removed`.
 - `put c1/<path> <key>`, the value on stdin (D-0058 rule 8), byte for byte, so give it with `printf '%s'`, not `echo`, which adds a newline: SOPS first, then the store. `secrets-store-kv.sh` writes the one key into `/etc/agent-keys/dev/openbao-kv.sops.json` with `sops set --value-stdin` (SOPS 3.13.3; the file is never decrypted and re-encrypted whole), encrypted to the box's own age identity, so it is in the box's daily bundle and never in git. A Mac key on the bundle opens the bundle, not this file (D-0058 rule 9). It makes the file the first time. Then it reads `kv/data/<path>`, merges the one key, and writes it back with check-and-set on the version it read (the admin policy has no `patch`), so a write in between is refused, not overwritten. Only paths under `c1/` (the ones External Secrets reads). No value, token or ID is in any process's arguments or the output.
   expect: `secrets-store put: kv/<path> key <key> written to SOPS, then OpenBao`. A failure names which write failed; after "SOPS is written, but ...", run `put` again, then `compare`.
+- `put-apps`: every value c1's apps read at run time, each through `put`, so SOPS first, then the store:
+  - every line of the file the rebuild seeds namespace `secret-source` from (dev: `/etc/agent-keys/rebuild-secret-source.env`, the box's own; prod: `/etc/agent-keys/prod/secret-source.env`, the controller's copy), as `put c1/<name> value`;
+  - every `KEY=value` line of the identity values file role `k8s_identity` reads (dev: `/var/lib/agent-box/rebuild-dev/identity.env`, which the dev rebuild makes; prod: `/etc/agent-keys/prod/identity.env`, the controller's copy), as `put c1/identity <KEY>`;
+  - prod only: the Cloudflare DNS-01 token (`/etc/agent-keys/prod/cloudflare-dns01-token.txt`), with the whitespace around it removed as role `k8s_certs` removes it, as `put c1/cloudflare-api-token value`.
+
+  It reads every file and checks every line before the first write: lowercase names in the first file, uppercase keys with a value in the second, one token with no space in it in the third. It skips blank and `#` lines and prints only names. [The apps' secrets](#the-apps-secrets) says when to run it.
+  expect: one `put` line per value, then `secrets-store: put-apps: <n> values from <file> at c1/<name> key value, <m> from identity.env at c1/identity key <KEY>, and the DNS-01 token at c1/cloudflare-api-token key value, written to SOPS, then OpenBao` (dev has no token part).
 - `compare`: every key of the SOPS file against the store, by SHA-256 in memory; it prints only the path and name of a key that differs, is only in SOPS, or is only in the store, never a value or a hash. The weekly timer (`secrets-store-compare.timer`, Mondays at 05:00 by the box's clock by default, up to 30 minutes later, `agent_box_secrets_store_compare_on_calendar`) runs it once `sops_copies` is true.
   expect: `PASS: compare: <n> keys equal in SOPS and OpenBao`.
 - `reseed`: a fresh store, filled from SOPS, when no snapshot can bring it back. It refuses during a rebuild hold (run `restore-rebuilt`, or `clear-hold` first), and refuses unless `kv/` holds nothing but `c1/check` and the snapshot mark `dev/snapshot-mark` (a time, no secret; any snapshot writes it, so the hourly off-box send leaves one within the hour). It writes every path of the SOPS file, each only if still absent (check-and-set 0), then takes a snapshot. It replaces nothing, so it is not a delete.
   expect: `PASS: reseed: <n> paths written from SOPS into the fresh store`, then the snapshot line.
-- `clear-hold`: when the rebuilt store is to stay as it is, with no restore (the owner's tap, on the same card line as `restore-rebuilt`). It needs `sys/health` 200, moves every snapshot not of the current cluster, with its `.cluster` file, into `/etc/agent-keys/dev/openbao-snapshots-kept/`, never overwriting a file there, then removes the hold. Rotation never reads the kept folder, and the kept snapshots are not sent off the box. **Removing anything from the kept folder is a delete under D-0042 rule 6, so it needs the owner's tap**, and no wrapper does it.
+- `clear-hold`: when the rebuilt store is to stay as it is, with no restore (the owner's go, given with the one for `restore-rebuilt`). It needs `sys/health` 200, moves every snapshot not of the current cluster, with its `.cluster` file, into `/etc/agent-keys/dev/openbao-snapshots-kept/`, never overwriting a file there, then removes the hold. Rotation never reads the kept folder, and the kept snapshots are not sent off the box. **Removing anything from the kept folder is a delete under D-0042 rule 6, so it needs the owner's tap**, and no wrapper does it.
 
 The admin policy can call the forced restore (`sys/storage/raft/snapshot-force`) only for `restore-rebuilt`. `secrets-store restore` stays plain and never forces.
 
@@ -190,25 +282,86 @@ The admin policy can call the forced restore (`sys/storage/raft/snapshot-force`)
 
 The restore and SOPS helpers take the environment from the keys folder's name, so they name the right mark. With the in-cluster store on, the root chart passes prod's cluster `env` label (`k8s_gitops_cluster_labels.env`) as `openbaoMarkEnv`, so prod's snapshot CronJob reads `kv/prod/snapshot-mark`. A `restore` or `restore-rebuilt` on prod is still the owner's tap (a delete, D-0042 rule 6), and so is putting prod's seal key on its node (a secrets step, D-0058 rule 3). The hourly off-box copy below is for the dev store only.
 
-`openbao-prod` turns the store on in prod's c1 from the box, with no Mac step after the first. It runs as user `keys` on the code of `main`, in its own checkout, one run at a time, and logs each run in `/var/lib/agent-box/openbao-prod/logs/`. Its settings are `agent_box_openbao_prod` in the private inventory, written to `/var/lib/agent-box/openbao-prod.json`: `seal_node` (the prod `k8s_nodes` host that holds the seal key, by its Kubernetes node name), `store_host` (the store's name as the box reaches it) and `box_cidr` (the box's address as a /32, empty until the box's path to the store is set). It reads the box's copy of the prod inventory (`/etc/agent-keys/prod/inventory-hosts.yml`, from the controller's prod-files run) and builds its own copy with the box's node key and plain ssh. It refuses a host that is labelled other than `env: prod`, a `seal_node` that is not a prod node, and a `box_cidr` wider than one address.
+`openbao-prod` turns the store on in prod's c1 from the box, with no Mac step after the first. It runs as user `keys` on the code of `main`, in its own checkout, one run at a time, and logs each run in `/var/lib/agent-box/openbao-prod/logs/`. Its settings are `agent_box_openbao_prod` in the private inventory, written to `/var/lib/agent-box/openbao-prod.json`: `seal_node` (the prod `k8s_nodes` host that holds the seal key, by its Kubernetes node name), `store_host` (the store's name as the box reaches it) `box_cidr` (the box's address as a /32, empty until the box's path to the store is set) and `admin_address` (the store's admin address, which needs `box_cidr`; empty: no admin path). It reads the box's copy of the prod inventory (`/etc/agent-keys/prod/inventory-hosts.yml`, from the controller's prod-files run) and builds its own copy with the box's node key and plain ssh. It refuses a host that is labelled other than `env: prod`, a `seal_node` that is not a prod node, a `box_cidr` wider than one address, and an `admin_address` that is not one IPv4 address or comes without `box_cidr`.
 
 1. `openbao-prod key`. It makes `/etc/agent-keys/prod-node-key` once and prints its public half.
    expect: one `ssh-ed25519 ...` line. Putting it into the `authorized_keys` of the inventory's `ansible_user` on each prod node gives the agents a root login there, a new access right, so it waits for the owner's tap (D-0042 rule 6). After the tap, put it there once, from a run that already reaches the nodes.
 2. `openbao-prod check`.
    expect: `check <node>: reached` for every node. `answered, the key refused` means step 1's key is not on that node yet. `no answer` means the box's firewall rules to the prod nodes are not applied ([set-up-lab-network-and-firewall.md](set-up-lab-network-and-firewall.md), "prod node 200 SSH"), which is a firewall change and the owner's tap.
 3. Check that `seal_node` has room: OpenBao asks for 256Mi of memory (limit 512Mi) and its snapshot job for 32Mi (`apps/openbao/values.yaml`, `apps/openbao-store/templates/snapshot.yaml`). Compare these with the node's allocatable memory less its pods' requests (`c1-read describe nodes`).
-4. `openbao-prod seal <tap id>`, after the owner's tap. Putting prod's seal key on its node is a secrets step (D-0058 rule 3, D-0042 rule 6). It makes prod's key once, kept only as `/etc/agent-keys/prod/openbao-seal.key.sops.json`, and runs `k8s-openbao-seal.yml`.
+4. `openbao-prod seal <tap id>`, after the owner's go (D-0034 rule 9; the tap id is the message ID of his line or of the card he answered). Putting prod's seal key on its node is a secrets step (D-0058 rule 3, D-0042 rule 6). It makes prod's key once, kept only as `/etc/agent-keys/prod/openbao-seal.key.sops.json`, and runs `k8s-openbao-seal.yml`.
    expect: the play's recap with `failed=0`. A node that already holds a different key fails the run rather than being overwritten.
    If an earlier run (the Mac's) already put the seal key on its node, run `openbao-prod seal-copy <tap id>` instead, before step 4 ever runs on the box. Copying the key onto the box is also a secrets step, so it takes the owner's tap too. It reads the node's key file (`/var/lib/central-hub/openbao-seal/seal-1.key`) over ssh into a private folder in memory, keeps it as the same SOPS copy, and reads that copy back before keeping it. It never prints the key. If a SOPS copy is already kept, it only compares the two.
    expect: `PASS: seal-copy: ...`. `FAIL: seal-copy: ... differs` means the box's copy and the node's key are not the same key, and nothing is replaced.
-5. `openbao-prod gitops`. It runs `k8s-gitops.yml --tags source` with the in-cluster store on, so Argo CD makes `openbao-store`, `openbao` and the store `openbao`.
+5. `openbao-prod gitops`. It runs `k8s-gitops.yml --tags source` with the in-cluster store on, so Argo CD makes `openbao-store`, `openbao` and the store `openbao`. It passes `store_host` as `openbaoStoreHost`, so it also makes the box's path to the store ([The box's path to the store](#the-boxs-path-to-the-store)).
    expect: the recap with `failed=0`, then the three apps Synced and Healthy (`c1-read get applications -n argocd`).
-6. `openbao-prod handover`, once `box_cidr` is set. It hands the admin login to the IDs in `/etc/agent-keys/prod/` (`k8s-openbao-handover.yml`).
+6. `openbao-prod ca`, after step 5, and again after any rebuild of the store. It reads `ca.crt` of Secret `openbao/openbao-tls` and writes it to `/etc/agent-keys/prod/secrets-store-ca.crt` only if it is one PEM certificate.
+   expect: `PASS: openbao-prod: ca: the store's CA written to /etc/agent-keys/prod/secrets-store-ca.crt (subject=CN = openbao-ca notAfter=...)`. A failed read or anything other than one certificate writes nothing.
+7. `openbao-prod handover`, once `box_cidr` is set. It hands the admin login to the IDs in `/etc/agent-keys/prod/` (`k8s-openbao-handover.yml`).
    expect: a `PASS` line, or `SKIP: ... no box address yet` while `box_cidr` is empty.
-   If prod's first start stops in self-init (the pod's log says `self-initialization failed: refusing to unseal`), run `openbao-prod reset-failed-start` after the fix reaches main. It refuses unless that line is in the pod's log, the pod is not Ready and `bao status` reads as initialized false; then it deletes only pod `openbao-0` and claim `data-openbao-0` in namespace `openbao`, prints both before and after, and the StatefulSet makes them again.
-   expect: `the failed start is confirmed`, then the pod and claim listed again. A store that was ever initialized is refused, never touched. The run deletes a pod and its claim, so it needs the owner's tap on a card that names the step and the commit (D-0042 rule 6).
-7. `secrets-store-prod status`, once `agent_box_secrets_store_prod.address` and the CA file are set by the box's path to the store.
+   If prod's first start stops in self-init (the pod's log says `self-initialization failed: refusing to unseal`), run `openbao-prod reset-failed-start <tap id>` after the fix reaches main, with the owner's tap on a card that names the step and the commit: the run deletes a claim (D-0042 rule 6), and the wrapper refuses without a tap id and logs it. It refuses unless that line is in the pod's log, the pod is not Ready and `bao status` reads as initialized false; then it deletes only pod `openbao-0` and claim `data-openbao-0` in namespace `openbao`, prints both before and after, and the StatefulSet makes them again.
+   expect: `the failed start is confirmed`, then the pod and claim listed again. A store that was ever initialized is refused, never touched.
+8. `secrets-store-prod status`, once `agent_box_secrets_store_prod.address` is set to `store_host` (a run of the `agent_box` role from the controller, which writes `/var/lib/agent-box/secrets-store-prod.json`) and step 6 has written the CA file.
    expect: `sys/health` with `"sealed":false`.
+9. The admin path ([The box's admin path](#the-boxs-admin-path)), in this order:
+   1. `openbao-prod l2-policy`. It applies role `k8s_control_plane`'s pool and general L2 policy (`k8s.yml --tags lb`, first control plane only), which then leaves out Services labelled `central-hub/l2-policy`.
+      expect: the recap with `failed=0`. With tag `lb` the role also prints, as root on the node, each L2 policy's service selector and each LoadBalancer Service's address, policy and lease holder (`files/l2-report.py`), before the change and after it, and the run fails if any address has no holder a minute after the change. `c1-read` can't show this: c1's read-only account is refused leases and Cilium's policies (measured 2026-11-18 11:17 UTC). `c1-read get svc -A` still shows every LoadBalancer address as before.
+   2. The firewall rule from the box to the admin address on tcp 443: a firewall apply, so the owner's go first (D-0036 rule 8). Not written yet.
+   3. `admin_address` in `agent_box_openbao_prod`, by a run of the `agent_box` role from the controller.
+   4. `openbao-prod gitops`, which passes it as `openbaoAdminAddress`.
+      expect: `c1-read -n openbao get svc openbao-admin` shows the address under EXTERNAL-IP.
+   5. `secrets-store-prod status` again: now on the admin address.
+
+## The apps' secrets
+
+Plan step 8a (D-0058 rules 5 and 8): every secret c1's apps read at run time moves into OpenBao, with a SOPS copy of each, and what a rebuild or repair needs while c1 is down stays a file on the box. This is the list, read from the code on 2026-11-18. Check it before you trust it, because a later change can add a reader: `git grep -n 'remoteRef\|secretKeyRef\|create secret' -- hosts/`.
+
+**Read through store `c1` today, moving now.** Each is a line `<name>=<value>` in the environment's secret-source file, seeded into namespace `secret-source` by the rebuild's `secrets` stage ([seed-secret-source.md](seed-secret-source.md)). On prod, that file is the controller's, copied to the box (`agent_box` defaults, `prod_files`); on dev it is the box's own, made with random values (`files/rebuild.sh`, `ssfile`).
+
+| Secret | Read by | Where the app names it |
+|---|---|---|
+| `ntfy-owner-password` | ExternalSecret `alerts/ntfy-auth` | `apps/alerts/values.yaml`, `auth.sources.owner` |
+| `ntfy-alertmanager-token` | `alerts/ntfy-auth` and `monitoring/alertmanager-ntfy` | `apps/alerts/values.yaml`, `auth.sources.alertmanager`; `apps/monitoring-extras/values.yaml`, `ntfy.alertmanagerTokenSource` |
+| `ntfy-proxmox-token` | `alerts/ntfy-auth` (the Proxmox host's own copy is role `proxmox_notify`'s, from the controller's file) | `apps/alerts/values.yaml`, `auth.sources.proxmox` |
+| `healthchecks-ping-url` | `monitoring/alertmanager-heartbeat` | `apps/monitoring-extras/values.yaml`, `heartbeat.pingUrlSource` |
+| `share-pod-authkey` | `share-pod/share-pod-authkey`, only where `shareTarget` is set (none on prod: `c1-read get externalsecrets -A` lists no share-pod one, 2026-11-18) | `apps/share-pod/values.yaml`, `authKey.source` |
+
+**Made by Ansible from the controller's files today, into an app's namespace, moving now too.** With the store on, the role that makes each one makes an ExternalSecret in its place, read through store `openbao`, and External Secrets takes over the Secret the role made, since it carries no owner (External Secrets v2.14.0 docs, <https://github.com/external-secrets/external-secrets/blob/v2.14.0/docs/guides/ownership-deletion-policy.md>, line 43):
+
+| Secret | Made by | From | With the store on, read from |
+|---|---|---|---|
+| `monitoring/grafana-sso`, `argocd/argocd-sso`, `media/jellyfin-sso` (each app's client secret) | `k8s_identity`, `tasks/secrets.yml`, "Each app's copy of its client secret" | `identity.env` | `c1/identity`, keys `GRAFANA_CLIENT_SECRET`, `ARGOCD_CLIENT_SECRET`, `JELLYFIN_CLIENT_SECRET` |
+| `identity/realm-lab-secrets` (every client secret, user password and TOTP seed of realm `lab`) | `k8s_identity`, `tasks/secrets.yml`, "The realm's Secret" | `identity.env` | `c1/identity`, one key per key the realm uses (`k8s_identity_value_keys`) |
+| `cert-manager/cloudflare-api-token` (DNS-01) | `k8s_certs`, `tasks/issue.yml`, "Token as a Secret in the cert-manager namespace" | `cloudflare-dns01-token.txt` | `c1/cloudflare-api-token`, key `value` |
+
+`media/jellyfin-lab-root-ca` is a public certificate, not a secret, so `k8s_identity` keeps making it.
+
+**Made inside the cluster, with no copy outside it.** A later part decides, one by one, whether each gets a SOPS copy: `media/jellyfin-admin` (an External Secrets `Password` generator, `CreatedOnce`), `identity/<name>-db` (made on the node by `k8s_identity`), Keycloak's first admin (`<name>-initial-admin`, made by its operator), Grafana's admin (`monitoring/kube-prometheus-stack-grafana`, made by its chart) and Argo CD's `argocd-initial-admin-secret`. `agent-read/agent-read-token` is a service-account token Kubernetes fills in, and the `openbao-tls` and `openbao-ca` certificates come from cert-manager; neither moves.
+
+**Stays outside OpenBao** (rule 5: the jobs that rebuild or repair c1 or the layers under it read files in the box's keys folder; rule 8: what is needed before OpenBao starts): the seal key, the etcd encryption key (`c1-secrets-encryption.key`), the backup's `c1-backup.env`, the store's own admin IDs, and the Proxmox, firewall, tailnet and DNS files the rebuild reads (`files/rebuild-prod.sh`, the `need` list and `MAP`). The secret-source file itself also stays: it is what `put-apps` reads, and dev's rebuild seeds from it.
+
+### Moving them
+
+Off by default: the root value `appSecretsStore` is empty, so every ExternalSecret above reads store `c1` as before. Ansible sets it from `k8s_gitops_source_app_secrets_store` (role `k8s_gitops`). With `openbao`, the apps `alerts`, `monitoring-extras` and `share-pod` read key `c1/<name>`, property `value`, through store `openbao`. Roles `k8s_identity` and `k8s_certs` follow the same inventory value (`k8s_identity_secrets_store` and `k8s_certs_token_store` default to it): with `openbao` they make the ExternalSecrets in the second table in place of their Secrets, and wait up to 2 minutes for each to be Ready. Policy `eso-c1` reads `kv/data/c1/*` and nothing else (`apps/openbao-store/policies/eso-c1.hcl`). The root chart and the role both refuse `openbao` while `openbaoInCluster` is off, and the root refuses any value other than empty, `c1` or `openbao`.
+
+Per environment, in this order:
+
+1. The box's path to the store, its hand-over and `sops_copies` are in place: `secrets-store-prod status` answers (prod), or `secrets-store status` (dev).
+2. `secrets-store-prod put-apps` (or `secrets-store put-apps`).
+   expect: the `put-apps` line above, with one value per line of the file.
+3. `secrets-store-prod compare`.
+   expect: `PASS: compare: <n> keys equal in SOPS and OpenBao`.
+4. Set `k8s_gitops_source_app_secrets_store: openbao` in that environment's inventory and apply the source (prod: `openbao-prod gitops`).
+   expect: `c1-read get externalsecrets -A` shows `ntfy-auth`, `alertmanager-ntfy` and `alertmanager-heartbeat` on store `openbao`, each `SecretSynced` and Ready.
+5. Run `k8s-identity.yml --tags secrets` and `k8s-certs.yml --tags issue` with that inventory, from the machine that runs them today (prod: the controller). Its values file and token file must still be there: the realm's import hash and the token check read them.
+   expect: each play's recap with `failed=0`, and `c1-read get externalsecrets -A` also shows `realm-lab-secrets`, `grafana-sso`, `argocd-sso`, `jellyfin-sso` and `cloudflare-api-token` on store `openbao`, each Ready.
+6. Leave `secret-source` as it is until the next rebuild proves steps 4 and 5 from code. Removing its Secrets is a delete (D-0042 rule 6).
+
+After the move, a changed value goes into the file first, then `put-apps`, then the role. External Secrets reads the store every hour, so the role's realm import, which starts when a value's hash changes, can read the old value if it runs first: let the ExternalSecret sync before the role runs. Grafana reads its client secret only at start, and with the store on no task restarts it, so restart it after a change to its secret.
+
+Going back to an empty value is a delete: the roles' ExternalSecrets must go, and with them the Secrets External Secrets owns (D-0042 rule 6), so no task does it. Until they are gone, `k8s_identity` stops at "No ExternalSecret of this role's is left while the store is off" and `k8s_certs` at "No token ExternalSecret is left while the store is off".
+
+On dev, every rebuild makes a fresh store. So the switch stays off there until the rebuild writes the dev values into OpenBao itself before `apps` (`put-apps` needs the hand-over, which waits on the box's path to the store).
 
 ## Off-box copy of the snapshots
 
@@ -239,8 +392,9 @@ If the box is down, nothing goes off-site; c1's hourly CronJob keeps its own 48 
 
 - `secrets-store-offbox: dev is up with the store on, but sys/health answered ...`: the store is sealed, broken or gone, or the box's path to it is not set yet. Check `secrets-store status`.
 - `secrets-store: the settings have no store address yet`, `the dev inventory names no single dev store`, or `secrets-store-ca.crt is missing`: the box's path to the store is not set yet. Nothing was called.
+- `secrets-store: the dev inventory gives no single IPv4 k8s_gitops_source_gateway_address`: the dev inventory lacks dev's Gateway address, or names two. Nothing was called.
 - `secrets-store: the settings' store address is not the dev c1 store the dev inventory names; refused`: the two private values disagree. Fix the inventory; never point the wrapper at another store.
-- `secrets-store: put keeps SOPS copies, which wait for the owner's tap`: `sops_copies` is not true. It is the owner's access-right tap (D-0058 rule 9); never set it by hand.
+- `secrets-store: put keeps SOPS copies, which wait for the owner's tap`: `sops_copies` is not true. It waits for the owner's go on an access right (D-0034 rule 9, D-0058 rule 9); never set it by hand.
 - `compare`: `FAIL: SOPS and OpenBao differ at the keys above (names only)`: a write reached one side only, or something changed the store outside `put`. Tell the owner before writing either side; a `put` of the right value fixes one key.
 - `reseed`: `the store holds kv/<path>, so it is not fresh; nothing written`: use `restore` or `put`, never reseed over data.
 - `openbao-handover`: `HANDOVER: login as bootstrap failed: ...`: the store refused role `bootstrap` for another reason than its absence. Nothing was set. Read the store's log; if the text for a deleted role differs from "invalid role name", the stage needs that text.

@@ -11,6 +11,8 @@
 #   8. apply fails when a task changes that the check showed neither changed nor skipped (D-0041 rule 4).
 #  10. A job name picks the playbook: `check agent-access` runs proxmox-agent-access.yml, no name runs the proxy playbook,
 #      an unknown name is refused, and `apply agent-access <pass> <hash>` takes the same pass and hash as the proxy job.
+#  11. `check sso` runs proxmox-sso.yml with the secret file's path as proxmox_sso_values_file, and refuses with no such file;
+#      the proxy and agent-access jobs are never given that variable.
 #   9. Nothing printed holds a diff's text or the host's address; log prints the summary lines.
 # Usage: .github/hosts-check/tests/test_proxmox_host_args.sh   (needs git and python3)
 set -uo pipefail
@@ -144,5 +146,20 @@ if [ $rc10a = 0 ] && [[ $c10a == *playbooks/proxmox-agent-access.yml* && $c10b =
    [ "$rc10c" = 2 ] && [ "$rc10d" = 2 ] && [ $rc10e = 0 ] && grep -q "job agent-access" "$t/10a.out"; then
   ok "10 a job name picks the playbook; none means the proxy; an unknown name is refused"
 else bad "10 rc=$rc10a/$rc10c/$rc10d/$rc10e [$c10a] [$c10b] $(cat "$t/10a.out")"; fi
+
+# 11
+: > "$t/calls"
+job check sso > "$t/11a.out" 2>&1; rc11a=$?
+c11a=$(cat "$t/calls"); : > "$t/calls"
+echo "PROXMOX_CLIENT_SECRET=stand-in-not-a-secret-0123456789abcdef" > "$t/dir/proxmox-sso.env"
+job check sso > "$t/11b.out" 2>&1; rc11b=$?
+c11b=$(cat "$t/calls"); : > "$t/calls"
+job check agent-access > /dev/null 2>&1; c11c=$(cat "$t/calls"); : > "$t/calls"
+job check > /dev/null 2>&1; c11d=$(cat "$t/calls")
+if [ "$rc11a" = 1 ] && [ -z "$c11a" ] && grep -q 'proxmox-sso.env is missing' "$t/11a.out" &&
+   [ "$rc11b" = 0 ] && [[ $c11b == *playbooks/proxmox-sso.yml* && $c11b == *"-e proxmox_sso_values_file=$t/dir/proxmox-sso.env"* ]] &&
+   [[ $c11c != *proxmox_sso_values_file* && $c11d != *proxmox_sso_values_file* ]] && ! grep -q 'stand-in-not-a-secret' "$t"/11?.out; then
+  ok "11 the sso job needs its secret file, runs proxmox-sso.yml with that path, and the other jobs get no such variable"
+else bad "11 rc=$rc11a/$rc11b [$c11a] [$c11b] [$c11c] [$c11d] $(cat "$t/11a.out")"; fi
 
 exit "$fail"

@@ -60,7 +60,8 @@ all:
           #   and in agent_box_lifeline_allow: { address: "<the same>", ports: [22], uid: hostops }
           agent_box_secrets_store: {}   # the secrets-store wrapper's settings; private; shape:
           #   { address: "<the dev store's name, as k8s_gitops_source_openbao_store_host in the dev inventory>",
-          #     snapshot_box: false, sops_copies: false }   # both true only by the owner's taps
+          #     snapshot_box: false, sops_copies: false,   # both true only by the owner's taps
+          #     box_cidr: "<the box's address>/32", admin_address: "<one address of dev's load-balancer pool>" }   # D-0062
     opnsense:
       hosts:
         opnsense_fw:
@@ -74,6 +75,9 @@ all:
           opnsense_home_lan_cidr: ""   # the home router's LAN range
           opnsense_dns_zone: ""   # DNS zone for the opnsense.<zone> override
           opnsense_cert_names: []   # playbooks/opnsense-cert.yml (D-0028): e.g. ["opnsense.<zone>"]; private
+          # The c1 nodes to the Proxmox host's ssh, for restic's sftp target (pick 262); a firewall change on the owner's go:
+          # opnsense_lab_backup_target: { vlan: 10, host: "<proxmox_host_mgmt_address>",
+          #   sources: [{ name: prod node 200, address: "" }, { name: prod node 201, address: "" }] }
           # The VLAN list itself is in group_vars/all/vlans.yml (the one shared VLAN file).
           # These are this firewall's own settings (Red Hat CoP rule, the owner, 2026-10-26 00:35 UTC).
           opnsense_lab_mgmt_tag: 50
@@ -95,6 +99,14 @@ all:
               # - { name: OPNsense API, address: "", port: 443 }   # the address opnsense.<zone> resolves to (mgmt)
               # SSH into the tenant lab VLAN (the sixth and last slot); an agent adds it before the apply, which needs the owner's card tap.
               # - { name: tenant lab SSH, address: "", prefix: 24, port: 22 }   # the VLAN's network address, e.g. 10.1.60.0
+          # Pass rules to the c1 Gateway on 443 (tasks/app_access.yml), so the desktop VM and the box open the apps'
+          # names; applied only on the owner's tap on a card naming the rule and the commit (D-0036 rule 8).
+          # opnsense_lab_app_access:
+          #   vlan: 30
+          #   gateway: ""   # the c1 Gateway's address (Gateway gateway/apps, status.addresses)
+          #   sources:
+          #     - { name: agent box, address: "" }    # VM 258's dev address
+          #     - { name: desktop VM, address: "" }   # VM 400's dev address
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
             - { hostname: pve, address: "", description: "Proxmox host GUI (its mgmt address)" }
@@ -186,6 +198,9 @@ all:
         k8s_backup_azure_client_id: ""
         k8s_backup_azure_tenant_id: ""
         k8s_backup_azure_app_object_id: ""
+        # Or the Proxmox host's backup HDD over sftp (pick 262; the owner, 2026-11-18): true here and the
+        # Azure line above false. The host's address comes from proxmox_host's proxmox_host_mgmt_address.
+        k8s_backup_sftp: false
         # Never set the Kubernetes versions here (k8s_node_kubernetes_minor,
         # k8s_node_kubernetes_version, k8s_control_plane_kubernetes_version): the role defaults
         # are the versions the cluster runs, bumped by PR, and playbooks/k8s-upgrade.yml stops on

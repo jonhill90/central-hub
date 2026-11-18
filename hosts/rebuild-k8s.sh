@@ -89,17 +89,17 @@ if [ "$ENV_NAME" = dev ]; then
 fi
 
 # Dev only: the memory (MiB) each dev node gets by role, in place of its memory_mb in the tfvars (the k8s stack's
-# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so it is sized to fit them. On 2026-11-18 at
-# 02:37 UTC the node had 10467 MiB free with VM 300 and the desktop stopped (box rebuild log), down from 12887 MiB at
-# 01:49 UTC: the agent box (VM 258) has no balloon device, so its footprint on the host only grows. The old sizes
-# (4096 + 7168 + the 1024 MiB margin = 12288) no longer fit. The dev VMs now sum to 9216 MiB, at least 1 GiB under
-# that reading: control plane 3072 (the dev control plane peaked at 2813 MiB at 4096 during identity-keycloak,
-# run 20261117T053037Z) and worker 6144 (the worker peaked at 4255 MiB at 7168 in that run; at 6144 the run of
-# 2026-11-17 04:33 UTC timed out in the Keycloak realm import with probes failing; CPU reached 98% in the 7168 run, so the node-top
-# lines of the next run at 6144 show whether memory or CPU ran short). c1 (prod) keeps the sizes in its own tfvars.
-DEV_MEMORY_MB_CONTROL_PLANE=3072
+# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so it is sized to fit them. Control plane
+# 4096: at 3072 the run of 2026-11-18 06:11 UTC (rebuild-20261118T061140Z) failed in apps, with the API server timing
+# out lease renewals and kube-controller-manager and cilium-operator in CrashLoopBackOff, so openbao's volume claims
+# stayed Pending. c1's control plane, which runs only the control-plane pods, used 2530 MiB that day, 1809 MiB of it
+# kube-apiserver (c1-read top, 06:46 UTC). Worker 6144 (the worker peaked at 4255 MiB at 7168 in run 20261117T053037Z;
+# the 06:11 run at 6144 showed no eviction and no OOM kill in its diag). The sum, 10240, plus the 1024 MiB margin is
+# 11264, under the 11914 MiB the preflight read at 06:11 UTC with the box's drop-cache timer on. c1 (prod) keeps the
+# sizes in its own tfvars.
+DEV_MEMORY_MB_CONTROL_PLANE=4096
 DEV_MEMORY_MB_WORKER=6144
-# The preflight's margin is 1024 MiB: 3072 + 6144 + 1024 = 10240.
+# The preflight's margin is 1024 MiB: 4096 + 6144 + 1024 = 11264.
 # Dev only: how long identity-keycloak waits for the realm import (seconds; the role's default is 600). At 6144 MiB the
 # worker's import timed out at 600 s on 2026-11-17 at 04:33 UTC; at 7168 MiB the whole stage took 176 s (run
 # 20261117T053037Z). 1200 gives the smaller worker twice the wait that ran out; if it still times out, the node-top
@@ -194,6 +194,23 @@ wait_secrets() {
     || { echo "alertmanager-0 not Ready after ${timeout}s"; return 1; }
 }
 
+# Dev, at the end of the gateway stage and in a failed run's capture: every LoadBalancer Service, its address, the L2
+# announcement policy meant to announce it and the node holding its lease, by the role's own report
+# (hosts/ansible/roles/k8s_control_plane/files/l2-report.py, which `openbao-prod l2-policy` runs on prod). D-0062
+# narrowed the general policy to Services without the label central-hub/l2-policy, so a Service with an address and no
+# lease holder is one no policy announces: it fails. Read-only.
+l2_report() {
+  local d rc=0
+  d=$(mktemp -d)
+  if kc get svc -A -o json > "$d/svc" && kc -n kube-system get leases -o json > "$d/leases"; then
+    python3 -I "$repo/hosts/ansible/roles/k8s_control_plane/files/l2-report.py" "$d/svc" "$d/leases" || rc=$?
+  else
+    echo "l2: FAIL: the Services or the leases could not be read"; rc=1
+  fi
+  rm -rf "$d"
+  return "$rc"
+}
+
 checks() {
   local notready pods
   notready=$(kc get nodes --no-headers | awk '$2 != "Ready"')
@@ -221,7 +238,7 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default: the dev VMs' memory by role, summed over the nodes
-# the tfvars declare, plus a 1024 MiB margin; 3072 + 6144 + 1024 = 10240 for one control plane and one worker). If the
+# the tfvars declare, plus a 1024 MiB margin; 4096 + 6144 + 1024 = 11264 for one control plane and one worker). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 # curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
 # use it, so neither can print the token.
@@ -488,8 +505,14 @@ run_stage() {
   # The dev-only measurement of the agent box's source address through the Gateway (MEASURE-1): on dev with
   # the in-cluster store (its seal key file set), every render of the root Application passes openbaoMeasure,
   # so a later stage never drops it mid-run. Prod, which will set the key file too, never gets it.
-  local measure=()
-  if [ "$ENV_NAME" = dev ] && [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then measure=(-e k8s_gitops_source_openbao_measure=true); fi
+  local rootvars=()
+  if [ "$ENV_NAME" = dev ] && [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then rootvars=(-e k8s_gitops_source_openbao_measure=true); fi
+  # Dev, on every render of the root Application too: no ClusterIssuer lab-ca (no `certs` stage; dev-ca comes after
+  # `checks`), so jellyfin's Certificate on it would hold `apps`; and no login-probe, whose names are prod's
+  # (k8s_gitops defaults, k8s_gitops_source_lab_ca_issuer and _login_probe).
+  if [ "$ENV_NAME" = dev ]; then
+    rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false)
+  fi
   case $1 in
     preflight)
       [ "$ENV_NAME" = dev ] || { echo "the memory preflight runs on dev only"; return 1; }
@@ -504,7 +527,9 @@ run_stage() {
     cluster) wait_ssh && ap playbooks/k8s.yml ;;
     # The data disks only: Argo CD installs the provisioner and StorageClass (move-local-path-to-argo-cd.md).
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
-    gateway) ap playbooks/k8s-gateway.yml ;;
+    # On dev, after the smoke test's call from this machine to the Gateway's address: every load-balancer address has
+    # a node announcing it (D-0062).
+    gateway) ap playbooks/k8s-gateway.yml; [ "$ENV_NAME" != dev ] || l2_report ;;
     # A dev re-run keeps the Gateway's HTTPS on in the root Application: the dev inventory leaves it off, and
     # flipping it off here and on again in `dev-ca` left the gateway and jellyfin apps OutOfSync for 18 minutes on
     # a re-run (measured on dev, run 8, 2026-11-14), so `apps` never finished. It does so only when the
@@ -513,10 +538,10 @@ run_stage() {
     gitops)
       if [ "$ENV_NAME" = dev ] && kc -n gateway get secret apps-tls -o name >/dev/null 2>&1; then
         echo "gitops: the certificate's Secret exists (a re-run): the Gateway's HTTPS stays on"
-        ap playbooks/k8s-gitops.yml --tags install,source -e k8s_gitops_source_gateway_https=true "${measure[@]}"
+        ap playbooks/k8s-gitops.yml --tags install,source -e k8s_gitops_source_gateway_https=true "${rootvars[@]}"
       else
         [ "$ENV_NAME" != dev ] || echo "gitops: no certificate Secret yet (a fresh build): the Gateway's HTTPS stays off until dev-ca"
-        ap playbooks/k8s-gitops.yml --tags install,source "${measure[@]}"
+        ap playbooks/k8s-gitops.yml --tags install,source "${rootvars[@]}"
       fi ;;
     # Seeds namespace secret-source from SECRET_SOURCE_FILE (docs/runbooks/seed-secret-source.md) after
     # Argo CD made it and before apps wait on the ExternalSecrets that read it. Unset: skipped.
@@ -556,7 +581,7 @@ run_stage() {
       # The dev inventory turns the Gateway's HTTPS off (k8s_gateway_https), so Argo CD's root Application passes
       # gatewayHttps=false and the Gateway has no https listener. Turn it on first (measured on dev, 2026-11-14:
       # spec listeners http and http-short only), then make the certificate the listener waits for.
-      ap playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_gateway_https=true "${measure[@]}"
+      ap playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_gateway_https=true "${rootvars[@]}"
       ap playbooks/k8s-certs.yml --tags devca -e k8s_certs_dev_ca=true ;;
     # Dev only, after dev-ca (the https listener exists only from then on) and only with the in-cluster store:
     # the source address OpenBao sees for a box request through the Gateway, and whether c1 enforces the
@@ -564,7 +589,7 @@ run_stage() {
     # come from it. One PASS line names what it read; it changes nothing in OpenBao and prints no secret.
     openbao-measure)
       [ "$ENV_NAME" = dev ] || { echo "the measurement runs on dev only"; return 1; }
-      if [ ${#measure[@]} -eq 0 ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-measure skipped"; return 0; fi
+      if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-measure skipped"; return 0; fi
       ap playbooks/k8s-openbao-measure.yml ;;
     # Dev only, with the in-cluster store: the one-time hand-over of the store's admin login to this machine's
     # IDs (D-0038 rule 6). It runs on the first control-plane node; every secret goes to OpenBao's pod on stdin.
@@ -653,6 +678,8 @@ runner_capture_diag() {
     kc top nodes --no-headers
     echo "== argocd applications (name, sync, health)"
     kc -n argocd get applications.argoproj.io --no-headers -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
+    echo "== load-balancer addresses and the nodes announcing them (D-0062)"
+    l2_report || true
     echo "== pods not Running or Completed, all namespaces"
     kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
     echo "== newest events, all namespaces"
@@ -731,6 +758,10 @@ for s in $stages; do
   if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ]; then
     sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: openbao-handover:' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
+  fi
+  # The gateway stage's L2 lines (D-0062): each LoadBalancer Service, its address, policy and lease holder.
+  if [ "$s" = gateway ]; then
+    awk '$0 == "===== gateway" {on=1; next} /^===== / {on=0} on' "$raw" | grep -E '^l2: ' | sed "s/^/  $s: /" >> "$log" || true
   fi
   # The preflight's branch and the sign-in proof's step lines (step name, HTTP code, ok or the reason; the script
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.

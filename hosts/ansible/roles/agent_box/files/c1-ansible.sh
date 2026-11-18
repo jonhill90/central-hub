@@ -36,6 +36,11 @@ declare -A needs_var=([identity]=k8s_identity_values_file)
 # imports it again when its code changes, which on prod ends every sign-in and drops enrolled one-time codes. With false
 # the realm is only made when missing; a client is added in place by the role's clients tag.
 declare -A fixed_vars=([identity]=k8s_identity_realm_replace=false)
+# Tags per name. identity runs every task plus the clients tag, which is off by default. The tag acts only on the clients in
+# k8s_identity_ensure_clients (empty by default), so the wrapper names one: proxmox, the client the realm gained after prod's
+# realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
+declare -A fixed_tags=([identity]="all,clients")
+declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}')
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
 action=${1:-} name='' clearance=''
@@ -71,6 +76,8 @@ if [[ -n ${needs_file[$name]:-} ]]; then
   extra=(-e "${needs_var[$name]}=${needs_file[$name]}")
 fi
 [[ -n ${fixed_vars[$name]:-} ]] && extra+=(-e "${fixed_vars[$name]}")
+[[ -n ${fixed_tags[$name]:-} ]] && extra+=(--tags "${fixed_tags[$name]}")
+[[ -n ${fixed_json[$name]:-} ]] && extra+=(-e "${fixed_json[$name]}")
 
 mkdir -p "$envdir" "$logs" "$work/state"
 chmod 700 "$envdir"
@@ -88,7 +95,7 @@ rm -rf -- "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
 import sys, yaml
-src, dst, key, known = sys.argv[1:5]
+src, dst, key, known, themes = sys.argv[1:6]
 def die(m):
     print("c1-ansible: " + m, file=sys.stderr); sys.exit(1)
 d = yaml.safe_load(open(src))
@@ -104,6 +111,16 @@ def walk(n):
     elif isinstance(n, list):
         for i in n: walk(i)
 walk(d)
+# The theme folder the inventory names is a path on the controller. On the box it is the copy the controller's prod-files run
+# puts under <keys>/prod/identity-theme/<the folder's own name>: the name stays, because it is the theme's name in Keycloak.
+def theme(n):
+    if isinstance(n, dict):
+        for k in list(n):
+            if k == "k8s_identity_theme_dir" and isinstance(n[k], str) and n[k].strip("/"): n[k] = themes + "/" + n[k].rstrip("/").rsplit("/", 1)[-1]
+            else: theme(n[k])
+    elif isinstance(n, list):
+        for i in n: theme(i)
+theme(d)
 def find(n, name):
     if isinstance(n, dict):
         if name in n and isinstance(n[name], dict): return n[name]
@@ -118,12 +135,12 @@ v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" || exit 1
+)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys/prod/identity-theme" || exit 1
 chmod 600 "$inventory/hosts.yml"
 
 # Every k8s node: plain ssh to ansible_host with the box's key and nothing else; no host labelled another env than prod.
 ansible-inventory -i "$inventory/" --list | python3 -I -c "$(cat <<'PY'
-import json, sys
+import json, os, sys
 nodekey, known = sys.argv[1:3]
 def die(m):
     print("c1-ansible: " + m, file=sys.stderr); sys.exit(1)
@@ -144,6 +161,9 @@ for h in nodes:
         die("inventory host %s has ssh arguments or a key other than the box's own; refusing" % h)
     env = (v.get("k8s_gitops_cluster_labels") or {}).get("env", "prod")
     if env != "prod": die("inventory host %s is labelled env %s, not prod; refusing" % (h, env))
+    t = v.get("k8s_identity_theme_dir")
+    if isinstance(t, str) and t and not os.path.isfile(os.path.join(t, "login", "theme.properties")):
+        die("k8s_identity_theme_dir is %s, which holds no login/theme.properties on the box; the controller's prod-files run copies the theme folder there (agent_box_prod_theme_src). Nothing was run, so prod's current theme stays" % t)
 print("c1-ansible: %d prod nodes, plain ssh with the box's key" % len(nodes))
 PY
 )" "$nodekey" "$envdir/known_hosts" || exit 1

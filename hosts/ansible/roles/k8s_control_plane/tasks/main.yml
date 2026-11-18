@@ -179,6 +179,26 @@
     kubectl -n kube-system rollout status deploy/coredns --timeout=300s
   changed_when: false
 
+# Only with --tags lb (openbao-prod l2-policy), never in a plain run: which node announces each load-balancer address
+# and what each L2 policy selects, read as root on this node before and after the policy below changes, because
+# c1's read-only account can't read leases or Cilium's policies (D-0062). Before: a reading only.
+- name: step9 | L2 announcements before the policy change
+  ansible.builtin.script: l2-report.py --kubectl
+  args: {executable: python3}
+  register: k8s_cp_l2_before
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [lb, never]
+
+- name: step9 | L2 announcements before, as read
+  ansible.builtin.debug: {var: k8s_cp_l2_before.stdout_lines}
+  tags: [lb, never]
+
+# The L2 policy announces every LoadBalancer Service except those labelled central-hub/l2-policy, which bring
+# their own policy: the store's admin path (apps/openbao-store, admin-path.yaml), announced only from the node its
+# pod is pinned to, because L2 announcements ignore externalTrafficPolicy Local (Cilium v1.20.4 docs,
+# network/l2-announcements.rst lines 84-85; the selector, lines 112-128; D-0062).
 - name: step9 | Load-balancer address pool and L2 announcement policy
   ansible.builtin.shell: |
     kubectl apply -f - <<'YAML'
@@ -195,12 +215,35 @@
     metadata:
       name: {{ k8s_control_plane_lb_pool_name }}
     spec:
+      serviceSelector:
+        matchExpressions:
+          - key: central-hub/l2-policy
+            operator: DoesNotExist
       interfaces:
         - {{ ansible_default_ipv4.interface }}
       loadBalancerIPs: true
     YAML
   register: k8s_cp_lb
   changed_when: "'created' in k8s_cp_lb.stdout or 'configured' in k8s_cp_lb.stdout"
+  # Alone on a running cluster: playbooks/k8s.yml --tags lb --limit 'k8s_control_plane[0]' (openbao-prod l2-policy).
+  tags: [lb]
+
+# After: every LoadBalancer Service with an address still has a node holding its lease, or the run fails. Cilium
+# elects a new holder after the lease duration, 15 s by default (l2-announcements.rst lines 278-281), so it waits up to a minute.
+- name: step9 | L2 announcements after the policy change, every address announced
+  ansible.builtin.script: l2-report.py --kubectl
+  args: {executable: python3}
+  register: k8s_cp_l2_after
+  until: k8s_cp_l2_after.rc == 0
+  retries: 12
+  delay: 5
+  changed_when: false
+  check_mode: false
+  tags: [lb, never]
+
+- name: step9 | L2 announcements after, as read
+  ansible.builtin.debug: {var: k8s_cp_l2_after.stdout_lines}
+  tags: [lb, never]
 
 # Step 10. With a worker in this cluster the control-plane taint stays (the runbook's single node
 # removed it). The smoke test runs after the worker joins (playbooks/k8s.yml).

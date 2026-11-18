@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|gitops|handover|reset-failed-start|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -18,21 +18,29 @@
 #           over ssh into the same private folder in memory, and keeps it as the same SOPS copy, read back before it is
 #           kept, never printed. Copying a secret onto the box is a secrets step, so <tap id> is the owner's tap. With a
 #           SOPS copy already kept, it only compares the two and fails if they differ; nothing is replaced.
+# l2-policy playbooks/k8s.yml --tags lb on the first control plane only: role k8s_control_plane's load-balancer pool and
+#           general L2 announcement policy, which leaves out Services labelled central-hub/l2-policy (D-0062). Run it once
+#           before the settings get admin_address, so that policy never announces the admin address from every node.
 # gitops    playbooks/k8s-gitops.yml --tags source: the root Application's parameters only, with the in-cluster store on
-#           (k8s_gitops_source_openbao_in_cluster, _seal_node, _box_cidr), so Argo CD makes openbao-store, openbao and the
-#           secret-store app's store `openbao`. Argo CD's install is left alone.
+#           (k8s_gitops_source_openbao_in_cluster, _seal_node, _box_cidr, _store_host, _admin_address), so Argo CD makes
+#           openbao-store, openbao and the secret-store app's store `openbao`. Argo CD's install is left alone.
+# ca        the CA the box checks prod's store against on its path through the Gateway (TLS passthrough, so TLS ends at
+#           OpenBao): ca.crt of Secret openbao/openbao-tls, a public certificate, written to <keys>/prod/secrets-store-ca.crt
+#           only if it is one PEM certificate. Run it after gitops, and again after a rebuild, which makes a new CA.
 # handover  playbooks/k8s-openbao-handover.yml with prod's admin AppRole IDs (/etc/agent-keys/prod/openbao-admin-*, made
 #           once by the same rule as secrets-store.sh, never printed).
 # reset-failed-start  clears a first start that stopped in self-init (the pod's log says "self-initialization failed:
 #           refusing to unseal"), so the store starts clean. It refuses unless that line is in the pod's log (this run's or
 #           the last one's), the pod is not Ready and `bao status` does not say the store is initialized. It deletes only
 #           the pod openbao-0 and the claim data-openbao-0 in namespace openbao, and prints both before and after. It
-#           replaces a hand delete; a store that was ever initialized is never touched.
+#           replaces a hand delete; a store that was ever initialized is never touched. <tap id> is the owner's tap on a
+#           card naming this step and the commit: it deletes a claim (D-0042 rule 6); it is checked and logged as for seal.
 # log       the newest run's lines: the action, the commit, the tap id, and the PASS, FAIL, SKIP and play-recap lines.
 # Settings (agent_box_openbao_prod, private, in <work>/openbao-prod.json): seal_node (a k8s_nodes host of the prod inventory,
 # its Kubernetes node name), store_host (the store's name as the box reaches it; secrets-store-prod checks its own address
-# against it) and box_cidr (the box's address as a /32; empty until the box's path to the store is set, and the hand-over
-# skips meanwhile). The prod inventory is the box's copy from the controller (<keys>/prod/inventory-hosts.yml,
+# against it), box_cidr (the box's address as a /32; empty until the box's path to the store is set, and the hand-over
+# skips meanwhile) and admin_address (the store's admin address, one address of prod's load-balancer pool, which needs
+# box_cidr; empty: no admin path, D-0062). The prod inventory is the box's copy from the controller (<keys>/prod/inventory-hosts.yml,
 # prod_files.yml); this wrapper builds its own copy with the box's node key and plain ssh, and refuses any host that sets
 # a proxy, another connection or another key. Only code on main runs with the keys.
 set -euo pipefail
@@ -52,12 +60,12 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|gitops|handover|reset-failed-start|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | gitops | handover | reset-failed-start | log) [[ $# -eq 1 ]] || usage ;;
-  seal | seal-copy)
+  key | check | l2-policy | gitops | ca | handover | log) [[ $# -eq 1 ]] || usage ;;
+  seal | seal-copy | reset-failed-start)
     [[ $# -eq 2 ]] || usage
     tap=$2
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "openbao-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
@@ -114,13 +122,19 @@ if cidr:
     try: n = ipaddress.ip_network(cidr, strict=False)
     except ValueError: die("box_cidr must be one address as a /32, not loopback")
     if n.prefixlen != 32 or n.is_loopback: die("box_cidr must be one address as a /32, not loopback")
+admin = s.get("admin_address") or ""
+if admin:
+    try: a = ipaddress.ip_address(admin)
+    except ValueError: a = None
+    if a is None or a.version != 4 or a.is_loopback: die("admin_address must be one IPv4 address, not loopback")
+    if not cidr: die("admin_address needs box_cidr: only the box's /32 may reach the admin address")
 d = yaml.safe_load(open(src))
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking",
         "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file", "k8s_gitops_source_openbao_measure",
         "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
-        "k8s_gitops_source_openbao_store_host"}
+        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -151,9 +165,12 @@ v = g.setdefault("vars", {})
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 v["k8s_gitops_source_openbao_in_cluster"] = True
+# The notebook CI runner pod is prod's only (docs/runbooks/run-the-notebook-runner-on-c1.md).
+v["k8s_gitops_source_notebook_runner"] = True
 v["k8s_gitops_source_openbao_seal_node"] = seal
 v["k8s_gitops_source_openbao_store_host"] = store
 if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
+if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
 # Once rebuild-prod has built prod again, its local-path StorageClass names folders <namespace>/<claim>; a
 # StorageClass's parameters can't change in place, so every later render keeps that setting.
 if os.path.exists(stable): v["k8s_gitops_source_local_path_stable_folders"] = True
@@ -292,8 +309,27 @@ PY
       ap playbooks/k8s-openbao-seal.yml -e "openbao_seal_key_file=$seal_tmp/openbao-seal.key"
     fi
     ;;
+  l2-policy)
+    ap playbooks/k8s.yml --tags lb --limit 'k8s_control_plane[0]'
+    ;;
   gitops)
     ap playbooks/k8s-gitops.yml --tags source
+    ;;
+  ca)
+    mkdir -p "$store_keys"
+    # kc's arguments reach Ansible's command module as one string, which it splits as a shell would (shlex), so the
+    # inner single quotes keep the backslash before the key's dot: kubectl then reads key ca.crt, not ca then crt.
+    pem=$(kc -n openbao get secret openbao-tls -o "'jsonpath={.data.ca\.crt}'" | base64 -d) ||
+      { echo "openbao-prod: could not read ca.crt of Secret openbao/openbao-tls; nothing written" >&2; exit 1; }
+    # Exactly one PEM block, and it a certificate: no second certificate and no other block, such as a key.
+    if [[ $(grep -c -- '-----BEGIN ' <<< "$pem") -ne 1 || $(grep -c -- '-----BEGIN CERTIFICATE-----' <<< "$pem") -ne 1 ]] ||
+      ! openssl x509 -noout <<< "$pem" 2>/dev/null; then
+      echo "openbao-prod: ca.crt of Secret openbao/openbao-tls is not one PEM certificate; nothing written" >&2
+      exit 1
+    fi
+    printf '%s\n' "$pem" > "$store_keys/secrets-store-ca.crt.part"
+    mv -- "$store_keys/secrets-store-ca.crt.part" "$store_keys/secrets-store-ca.crt"
+    echo "PASS: openbao-prod: ca: the store's CA written to $store_keys/secrets-store-ca.crt ($(openssl x509 -noout -subject -enddate <<< "$pem" | tr '\n' ' '))"
     ;;
   handover)
     mkdir -p "$store_keys"

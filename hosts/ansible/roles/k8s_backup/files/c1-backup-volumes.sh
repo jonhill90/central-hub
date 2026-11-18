@@ -90,4 +90,5 @@ log "backing up ${paths[*]} ${extra[*]}"
 mv "$BACKUP_STATE/canary-volumes.new" "$BACKUP_STATE/canary-volumes"
 restic_retention volumes
 [ "$dump_failed" = 0 ] || die "a database dump failed; the files were backed up, the dump was not"
+backup_mark_success volumes
 log "volume backup done"

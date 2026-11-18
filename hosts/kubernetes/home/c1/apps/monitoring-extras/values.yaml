@@ -22,6 +22,18 @@ jellyfin:
   # Requests a second answered with a 5xx, over 15 minutes, before C1JellyfinErrors fires.
   errorRatePerSecond: 0.05
 
+# Keycloak, the lab's sign-in (role k8s_identity, outside Argo CD). metrics: read its /metrics on the management
+# port. Set it true only after a run of role k8s_identity with k8s_identity_metrics true has reached the cluster
+# (the box's `c1-ansible apply identity`), in its own pull request; before that C1KeycloakNotScraped would fire.
+keycloak:
+  namespace: identity
+  name: sso        # the Keycloak object: StatefulSet sso, Service sso-service
+  realm: lab
+  metrics: false
+  # Failed logins in realm lab over 15 minutes before C1KeycloakLoginFailures fires (a mistyped password or
+  # code is one each).
+  loginFailures15m: 20
+
 certManager:
   namespace: cert-manager   # where cert-manager runs (app cert-manager)
   # A renewal is overdue this many seconds after cert-manager's planned renewal time. Let's
@@ -51,3 +63,16 @@ panelCheck:
   prometheus: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
   # Same image as the Jellyfin setup Job (curl 8.22.0, 2026-09-02, multi-arch index digest).
   image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+
+# The off-site backups (role k8s_backup, to Azure): each node's node-exporter reads the time of the last good run
+# (c1_backup_last_success_timestamp_seconds, by kind). metrics: the alerts and panel check lines below. Set it true
+# only once role k8s_backup with k8s_backup_metrics_dir has reached every node and a night's backups have run, in
+# its own pull request; before that C1BackupNotRecorded would fire.
+backup:
+  metrics: false
+  # The nightly volume and etcd backups: stale after 30 hours (one missed night, with room for the timers'
+  # 5-minute random delay and a slow upload).
+  staleSeconds: 108000
+  # The weekly restore tests: stale after 8 days.
+  restoreTestStaleSeconds: 691200
+

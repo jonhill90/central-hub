@@ -66,4 +66,5 @@ for dump in "$work$BACKUP_STATE"/db-dumps/*.sql; do
   log "   $(basename "$dump"): complete, $(wc -c < "$dump") bytes"
   d=$((d + 1))
 done
+backup_mark_success restore-test-volumes
 log "PASS: volume restore test, $n folders, $d database dumps, snapshot $snap_id of $snap_time"

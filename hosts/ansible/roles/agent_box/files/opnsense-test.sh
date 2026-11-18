@@ -383,7 +383,7 @@ prove() {
   vm "fetch -q -T 20 -o /dev/null https://$kc_addr:8443/realms/opnsense-proof/.well-known/openid-configuration" \
     || { echo "opnsense-test: stopped, the VM does not reach Keycloak on the box over verified https"; return 1; }
   echo "opnsense-test: the VM reaches Keycloak over https, trusting the proof CA from its config.xml"
-  vm 'cat /var/etc/cert.pem' > "$proof/gui.pem"
+  vm 'cat /usr/local/etc/lighttpd_webgui/cert.pem' > "$proof/gui.pem"
   "$py" -I "$libexec/opnsense-test-prove.py" "$addr" "$proof" "$sshkey" "$files/known_hosts"
 }
 

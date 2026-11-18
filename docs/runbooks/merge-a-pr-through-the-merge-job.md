@@ -21,6 +21,7 @@ A cloud session cannot start a GitHub workflow here (the GitHub integration answ
 ## Before you start
 
 1. CI is green on the PR's head. The sweep checks it again itself: open, not a draft, base `main`, a clean merge, every check on the head completed and passed or skipped, at least one ran, fewer than 3000 files (the most GitHub lists for a PR; a server not yet updated by the tapped apply still stops at 100).
+   If the sweep says GitHub does not report a clean merge (`state=blocked`) on a green PR, read the rest of its line: it names each commit of the PR that GitHub does not verify, because `main` requires signed commits and GitHub counts the PR's own commits (measured 2026-11-18: the blocked PRs each held an unverified commit; a PR far behind `main` with all commits verified was `clean`). Updating the branch does not fix that and replaces the head, so the recorded pass no longer matches. Re-make the head as verified commits and record a new pass. Before the box installs the change, the line says only `blocked`; list the commits with `GET /repos/OWNER/REPO/pulls/N/commits` and read each `commit.verification`.
 2. You have read, in the project's chat, the reviewer's clearance of that exact head. A pass for an older head does not count: the ledger is a file per head.
 
 ## Record the passes
@@ -36,6 +37,7 @@ pass-record add <role> jonhill90/<repo> <pr number> <40-character head> <relay m
 - The builder lane records only when the orchestrator's session cannot reach the box, and never for a PR the builder wrote (the wrapper reads the PR body's `Author-Lane:` line, any label such as `OpenBao thread`, and refuses a builder record when the label contains the word `builder` in any case, as in `agent box builder`, or cannot be read).
 - Only `reviewer` is needed for a merge; a `council-a`, `council-b` or `council-c` line still parses and is not needed (`pr-merge-verdict.py`). One identity records every role, so a ledger line is the recorder's word and the relay id it gave, not a separate judgement. The sweep posts every line on the PR when it merges, for the owner to check.
 - `pass-record show jonhill90/<repo> <head>` prints a head's ledger.
+- One sweep run goes through the open PRs oldest number first and merges every green one, one at a time, each judged after the one before it. A merge makes GitHub work out the other PRs' mergeability again and it answers `mergeable=None` until it has, so the sweep asks again up to 3 times, 10 seconds apart; a PR that still answers `None` waits for the next run. (Before this, the list ran newest first and one merge per run was typical, which starved older green PRs.)
 
 expect: `pass-record: <role> recorded for <repo>#<pr> <head7>`.
 

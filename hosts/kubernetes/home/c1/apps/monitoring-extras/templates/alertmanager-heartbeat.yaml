@@ -17,4 +17,5 @@ spec:
     creationPolicy: Owner
   data:
     - secretKey: url
-      remoteRef: {key: {{ .Values.heartbeat.pingUrlSource }}, property: value}
+      # Store openbao reads key c1/<name>: policy eso-c1 reads kv/data/c1/* only (apps/openbao-store/policies/eso-c1.hcl).
+      remoteRef: {key: {{ if eq .Values.heartbeat.store "openbao" }}c1/{{ end }}{{ .Values.heartbeat.pingUrlSource }}, property: value}
