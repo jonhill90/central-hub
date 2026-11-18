@@ -172,7 +172,7 @@ D-0062. When the root Application passes `openbaoAdminAddress` (`k8s_gitops_sour
 
 Role `k8s_control_plane`'s general L2 policy leaves out every Service labelled `central-hub/l2-policy`, so it never announces the admin address from another node (`tasks/main.yml`, tag `lb`). Apply that first on a running cluster (on prod, `openbao-prod l2-policy`), then set the address. TLS still ends at OpenBao, and the box sends the store's name, which its certificate carries, so it checks the same CA as on the Gateway path.
 
-Once the settings hold `admin_address`, every `secrets-store` call goes there by the store's name: curl's `--resolve <store name>:443:<admin address>`, on dev and on prod (dev's from its settings, prod's from the inventory `openbao-prod` builds). Without it, dev's calls go to dev's Gateway and prod's by name, as before. The hourly off-box copy's health call keeps the Gateway path, since it needs no login.
+Once the cluster was built with an admin address, every `secrets-store` call goes there by the store's name: curl's `--resolve <store name>:443:<admin address>`, on dev and on prod. The wrapper reads it from the inventory the cluster was built from: dev's from the rebuild wrapper's copy of the dev inventory (`/var/lib/agent-box/rebuild-dev/inventory/hosts.yml`), prod's from the inventory `openbao-prod` builds. Without one, dev's calls go to dev's Gateway and prod's by name, as before. The hourly off-box copy's health call keeps the Gateway path, since it needs no login.
 
 If the seal node is down, nothing answers on the address: OpenBao's pod is down with it, and no other node announces the address. `openbao-store` does not prune, so after `openbaoAdminAddress` is unset, the three objects stay until they are deleted (`c1-read get svc,ciliuml2announcementpolicy,networkpolicy -A | grep openbao-admin`).
 
@@ -186,6 +186,8 @@ expect: no address lost, and the admin login's audit lines show the box's own ad
 
 #### Giving dev its admin address
 
+Dev needs one hand step, `box_cidr`; the address itself is picked by the rebuild. With the store inside the dev cluster, `box_cidr` set and no `admin_address` in the settings, the rebuild wrapper takes the highest address of dev's load-balancer pool (`k8s_control_plane_lb_cidr` in the dev inventory) below the pool's last, other than dev's Gateway address (`k8s_gateway_address` and `k8s_gitops_source_gateway_address`, the second often a reference to the first), and passes it on. A Gateway value that is neither one IPv4 address nor a bare reference to one stops the run (`files/rebuild.sh`, `test_rebuild_box_inventory.sh` check 5). It never prints it, and it picks none when the dev inventory names no pool. Without `box_cidr`, the run says `rebuild: no admin address: box_cidr is not in the secrets store's settings` and builds dev without the path. An `admin_address` in the settings wins over the pick; set one only if the pick collides with another LoadBalancer Service on dev.
+
 From the controller, in the agent box's host variables in the private inventory. These are private values, so none is written here:
 
 ```yaml
@@ -193,11 +195,11 @@ agent_box_openbao_in_cluster: true      # dev runs the store; its first install 
 agent_box_secrets_store:
   address: <dev store name>             # the dev inventory's k8s_gitops_source_openbao_store_host
   box_cidr: <box's dev address>/32      # the box's own address on VLAN 30
-  admin_address: <one free dev pool address>
+  # admin_address: <one free dev pool address>   # optional; without it the rebuild picks one
   # snapshot_box and sops_copies: keep as they are
 ```
 
-Pick `admin_address` from dev's load-balancer pool, `k8s_control_plane_lb_cidr` in the dev inventory (VLAN 30's `.224/27`, STD-0002). Rule out all of these:
+If you set `admin_address` by hand, pick it from dev's load-balancer pool, `k8s_control_plane_lb_cidr` in the dev inventory (VLAN 30's `.224/27`, STD-0002). Rule out all of these:
 
 - the pool's first and last address;
 - the dev inventory's `k8s_gitops_source_gateway_address`;
@@ -213,10 +215,10 @@ ansible-playbook -i inventories/home/ playbooks/agent-box.yml
 
 expect:
 
-- The check's diff for `/var/lib/agent-box/secrets-store.json` adds `admin_address`, plus `box_cidr` if it was not set yet, and nothing else changes there.
+- The check's diff for `/var/lib/agent-box/secrets-store.json` adds `box_cidr` (and `admin_address`, if you set one), and nothing else changes there.
 - The run ends `failed=0`.
 
-A box that has not installed the admin path's code yet ignores `admin_address`, so the order of this step and that install doesn't matter. Then a dev rebuild (`rebuild up`) passes the value on as `k8s_gitops_source_openbao_admin_address` (`rebuild.sh`), and the checks above follow.
+A box that has not installed the admin path's code yet ignores `admin_address`, so the order of this step and that install doesn't matter. Then a dev rebuild (`rebuild up`) passes the address on as `k8s_gitops_source_openbao_admin_address` (`rebuild.sh`), and the checks above follow. The `gateway` stage's L2 report then lists `openbao/openbao-admin` with policy `openbao-admin` and the seal node as its lease holder.
 
 ## The box's calls to the store
 
@@ -226,7 +228,7 @@ Settings, `agent_box_secrets_store` in the private inventory, written to `/var/l
 
 - `address`: the store's name as the box reaches it. **Dev only (D-0058 rule 10):** every action refuses unless it equals the one `k8s_gitops_source_openbao_store_host` in the dev inventory the rebuild wrapper reads (`/etc/agent-keys/rebuild-dev/inventory/hosts.yml`). `recovery` checks it again before it makes shares.
 - `box_cidr`: the box's own address as a /32. The dev rebuild passes it to the hand-over as `k8s_gitops_source_openbao_box_cidr` (above). Empty until the box's path to the store is set.
-- `admin_address`: the store's admin address, one address of dev's load-balancer pool, which needs `box_cidr`. The dev rebuild passes it on as `k8s_gitops_source_openbao_admin_address`, and every call goes there ([The box's admin path](#the-boxs-admin-path)). Empty: no admin path.
+- `admin_address`: optional, the store's admin address, one address of dev's load-balancer pool, which needs `box_cidr`. The dev rebuild passes it on as `k8s_gitops_source_openbao_admin_address`, and every call goes there ([The box's admin path](#the-boxs-admin-path)). Empty, with `box_cidr` set: the rebuild picks one from dev's pool ([Giving dev its admin address](#giving-dev-its-admin-address)).
 - `snapshot_box`: see `snapshot` below.
 - `sops_copies`: false until the owner's access-right tap (D-0058 rule 9), then set by a run of the role from the controller. Until it is true, `put`, `compare` and `reseed` refuse, and the weekly compare timer is not installed (set back to false, the role stops it).
 
