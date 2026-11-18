@@ -509,8 +509,12 @@ while time.time() < end:
     if mode == "router" and f[12:14] == b"\x86\xdd" and f[20] == 58:
         s.send(ra())
 PY
+  # The fake WAN is a host link, and with IPv6 on, Linux keeps sending router solicitations from its MAC with backoff
+  # and no end (MAX_RTR_SOLICITATIONS is -1), so one can land in the silent run's window and count as a frame.
+  # IPv6 off on ltwan0 leaves only the frames fakewan.py sends.
   "${sudo[@]}" ip link add vmbr97 type bridge && "${sudo[@]}" ip link set vmbr97 up \
     && "${sudo[@]}" ip link add ltwan0 type veth peer name ltwan0br && "${sudo[@]}" ip link set ltwan0br master vmbr97 \
+    && { [[ ! -e /proc/sys/net/ipv6/conf/ltwan0 ]] || "${sudo[@]}" sysctl -qw net.ipv6.conf.ltwan0.disable_ipv6=1; } \
     && "${sudo[@]}" ip link set ltwan0 address 02:00:00:00:01:01 && "${sudo[@]}" ip link set ltwan0br up && "${sudo[@]}" ip link set ltwan0 up
   for want in client:0 server:3 router:3 silent:4; do
     mode=${want%:*}; rc=0
