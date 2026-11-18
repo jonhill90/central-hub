@@ -27,3 +27,8 @@ vps_app_host_valkey_port: 6379
 # Ports allowed to listen on an address that is not loopback or the tailnet's. 22 is the owner's sshd,
 # which this role does not change (D-0046, Consequences). Anything else fails the run.
 vps_app_host_public_ports_allowed: [22]
+
+# F144: close the public SSH door and turn the host firewall on. Off until the owner's card for it
+# (D-0042 rule 6). See tasks/harden.yml.
+vps_app_host_harden: false
+vps_app_host_tailnet_interface: tailscale0

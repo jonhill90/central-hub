@@ -47,6 +47,8 @@ No secret is made by the role. `vps-apply secrets` makes Valkey's password and O
 5. **Check.** Start `lab-vps-host` with action `status`.
    expect: the last good host apply is named; Valkey's password file is present; Valkey is `active`; and `valkey proof: pass`, which means a client with no password was refused and one with the password got `PONG`.
 
+**Close the public SSH door (off until the owner's card).** The role's `harden.yml` turns off sshd password login, sets root to key only, and turns on firewalld with the tailnet's interface trusted and port 22 open, only when `vps_app_host_harden` is `true` in the inventory. It refuses to start unless Tailscale SSH is on, the tailnet interface exists and root has an authorized key, and it checks `sshd -t` and the live firewall afterwards. Tailscale SSH does not go through sshd, so the agents' way in is untouched. Not run: it waits for the owner's card (D-0042 rule 6).
+
 After a change to role `vps_app_host` merges, start `lab-vps-host` with action `apply`. The VPS checks out `main`'s commit and applies the role to itself.
 
 ## Proofs
