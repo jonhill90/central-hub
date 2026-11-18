@@ -728,8 +728,8 @@ runner_capture_diag() {
 }
 
 # The owner's pick for a short node is ephemeral-dev: dev lasts one run. Every full run (no --only) tears dev down at its
-# end, pass or fail, whether or not it had to stop VM 300 (the orchestrator's pick of 2026-11-18 22:33 UTC: before it,
-# a run with memory to spare left dev up and an agent tore it down by hand, plan step 1c). When this run stopped VM 300,
+# end, pass or fail, whether or not it had to stop VM 300. Before 2026-11-18 a run with memory to spare left dev up, and
+# an agent tore it down by hand; this closes that hand step. When this run stopped VM 300,
 # the exit trap then starts it under its memory rule, so VM 300 is down for one run. A run with --only tears down only
 # when it stopped VM 300 itself (it has no preflight, so it never does). A failed run reads the cluster first
 # (runner_capture_diag), so its state is in the log. Never on any env but dev, never with keep-dev or no setting.
