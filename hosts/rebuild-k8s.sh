@@ -727,16 +727,23 @@ runner_capture_diag() {
   return 0
 }
 
-# The owner's pick for a short node is ephemeral-dev: when this run stopped VM 300, dev can't stay up beside it, so
-# the run tears dev down at its end, pass or fail, and the exit trap then starts VM 300 under its memory rule. VM 300
-# is down for one run, not for as long as dev lives. A failed run reads the cluster first (runner_capture_diag), so
-# its state is in the log. Never on any env but dev, never with keep-dev, never for a marker from another run.
+# The owner's pick for a short node is ephemeral-dev: dev lasts one run. Every full run (no --only) tears dev down at its
+# end, pass or fail, whether or not it had to stop VM 300 (the orchestrator's pick of 2026-11-18 22:33 UTC: before it,
+# a run with memory to spare left dev up and an agent tore it down by hand, plan step 1c). When this run stopped VM 300,
+# the exit trap then starts it under its memory rule, so VM 300 is down for one run. A run with --only tears down only
+# when it stopped VM 300 itself (it has no preflight, so it never does). A failed run reads the cluster first
+# (runner_capture_diag), so its state is in the log. Never on any env but dev, never with keep-dev or no setting.
 runner_run_teardown() { # [failed]
-  local trc t0
+  local trc t0 mine=false
   [ "$ENV_NAME" = dev ] || return 0
   [ "${PREFLIGHT_SHORT_NODE:-}" = ephemeral-dev ] || return 0
-  [ -f "$(runner_mark)" ] && [ "$(cat "$(runner_mark)")" = "$stamp" ] || return 0
-  echo "runner stop: this run stopped VM $CI_RUNNER_VMID and the short-node setting is ephemeral-dev, so dev is torn down now (dev can't stay up while memory is short)" | tee -a "$log"
+  [ -f "$(runner_mark)" ] && [ "$(cat "$(runner_mark)")" = "$stamp" ] && mine=true
+  [ -z "${only:-}" ] || $mine || return 0
+  if $mine; then
+    echo "runner stop: this run stopped VM $CI_RUNNER_VMID and the short-node setting is ephemeral-dev, so dev is torn down now (dev can't stay up while memory is short)" | tee -a "$log"
+  else
+    echo "runner stop: the short-node setting is ephemeral-dev, so dev lasts one run and is torn down now" | tee -a "$log"
+  fi
   [ "${1:-}" != failed ] || runner_capture_diag
   t0=$(date +%s)
   echo "$(date -u +%FT%TZ) teardown start" | tee -a "$log"
