@@ -22,7 +22,8 @@ k8s_observability_metrics_server_values:
 
 k8s_observability_kps_values:
   # Alertmanager sends every alert to ntfy on c1 (app alerts, hosts/kubernetes/home/c1/apps/alerts/)
-  # with ntfy's built-in Alertmanager format; Watchdog goes nowhere (pick 171).
+  # with ntfy's built-in Alertmanager format; Watchdog goes to receiver heartbeat, for Healthchecks.io
+  # (pick 213), not to ntfy (pick 171).
   alertmanager:
     enabled: true
     # Count notifications per receiver (alertmanager_notifications_total{receiver_name="ntfy"}), so

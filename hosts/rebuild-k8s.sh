@@ -522,9 +522,11 @@ run_stage() {
   if [ "$ENV_NAME" = dev ] && [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then rootvars=(-e k8s_gitops_source_openbao_measure=true); fi
   # Dev, on every render of the root Application too: no ClusterIssuer lab-ca (no `certs` stage; dev-ca comes after
   # `checks`), so jellyfin's Certificate on it would hold `apps`; and no login-probe, whose names are prod's
-  # (k8s_gitops defaults, k8s_gitops_source_lab_ca_issuer and _login_probe).
+  # (k8s_gitops defaults, k8s_gitops_source_lab_ca_issuer and _login_probe); and no Jellyfin setup CronJob, because
+  # `restore` puts prod's Jellyfin config, with prod's admin password, in place before the apps start (k8s_gitops_source_jellyfin_setup); and a suspended panel-check CronJob, whose
+  # OpenBao and Keycloak panels have no data until the stages after `apps` (Jellyfin's request rate printed none too, cause not measured) (k8s_gitops_source_panel_check_suspended).
   if [ "$ENV_NAME" = dev ]; then
-    rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false)
+    rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false -e k8s_gitops_source_jellyfin_setup=false -e k8s_gitops_source_panel_check_suspended=true)
   fi
   case $1 in
     preflight)
@@ -644,6 +646,18 @@ run_stage() {
         -e "k8s_identity_values_file=$env_dir/identity.env" \
         -e "k8s_identity_realm_import_timeout=$DEV_REALM_IMPORT_TIMEOUT_S" \
         -e "k8s_identity_realm_import_memory=$DEV_REALM_IMPORT_MEMORY" ;;
+    # Dev only, with the in-cluster store, after identity-keycloak (which writes identity.env in this env folder): SOPS's
+    # copy of every value the apps read, then OpenBao's, and a compare of the two (D-0058 rule 8, plan step 8a). The box's
+    # rebuild wrapper sets APP_SECRETS_HOOK only once its gate is open: the owner's sops_copies tap (D-0058 rule 9), the
+    # box's admin path (box_cidr), the store's CA file and no rebuild hold. Shut, it sets APP_SECRETS_SKIP to the reason,
+    # and the stage prints one SKIP line with it and writes nothing. The apps still read store c1 (appSecretsStore off).
+    app-secrets)
+      [ "$ENV_NAME" = dev ] || { echo "the apps' secrets stage runs on dev only"; return 1; }
+      if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "no OPENBAO_SEAL_KEY_FILE set: app-secrets skipped"; return 0; fi
+      if [ -z "${APP_SECRETS_HOOK:-}" ]; then
+        echo "SKIP: app-secrets: ${APP_SECRETS_SKIP:-not run, the rebuild wrapper on the box set no gate (an install older than this stage)}"; return 0
+      fi
+      hook "$APP_SECRETS_HOOK" ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.
@@ -666,9 +680,9 @@ stages=${STAGES:-$default_stages}
 # A dev run ends with its own HTTPS and sign-in proof, on the stages the box's wrapper sets, with no change to
 # that wrapper: the box's own checkout of main supplies them.
 # With the in-cluster store, the measurement (MEASURE-1) runs after dev-ca, which first makes the https listener,
-# and the admin hand-over after it.
+# and the admin hand-over after it; the apps' secrets go into SOPS and OpenBao last, after identity-keycloak.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then
-  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak"
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak app-secrets"
   else stages="$stages dev-ca identity-keycloak"; fi
 fi
 # A dev run starts with the memory preflight, after a teardown has freed its VMs and before it makes new ones.
@@ -768,9 +782,10 @@ for s in $stages; do
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
   # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line, and the
-  # hand-over's PASS or SKIP line (its stage's own SKIP line is printed bare, not quoted by Ansible).
-  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ]; then
-    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: openbao-handover:' \
+  # hand-over's PASS or SKIP line (its stage's own SKIP line is printed bare, not quoted by Ansible), and the apps'
+  # secrets stage's SKIP line, or its put-apps count, compare PASS and DIFF lines (names only, never a value).
+  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ] || [ "$s" = app-secrets ]; then
+    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: (openbao-handover|app-secrets):|^(PASS: compare:|DIFF: |secrets-store: put-apps:)' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
   fi
   # The gateway stage's L2 lines (D-0062): each LoadBalancer Service, its address, policy and lease holder.
