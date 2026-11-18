@@ -30,7 +30,8 @@ proxmox_restic_sftp_set_writer: false
 proxmox_restic_sftp_set_reader: false
 
 # Root may not sign in from these sources at all (sshd Match Address ... PermitRootLogin no): the nodes reach
-# port 22 only for backups. Empty: the play fills it from the node addresses above.
+# port 22 only for backups. The role adds every address named in either keys file, so a run that writes one
+# user's keys keeps the other user's addresses refused too.
 proxmox_restic_sftp_no_root_from: []
 
 # Files the role writes. The keys files live outside the chroot, owned by root.

@@ -95,6 +95,24 @@
     mode: "0644"
   when: proxmox_restic_sftp_set_reader
 
+# Root is refused from every address any key file names, the writer's and the reader's, whichever list this run
+# wrote, so a dev run never drops prod's addresses and a prod run never drops dev's.
+- name: The keys files as they are now
+  ansible.builtin.slurp:
+    src: "{{ proxmox_restic_sftp_keys_dir }}/{{ item }}"
+  loop: ["{{ proxmox_restic_sftp_writer }}", "{{ proxmox_restic_sftp_reader }}"]
+  register: proxmox_restic_sftp_keys_now
+  failed_when: false
+
+- name: Every address a key works from
+  ansible.builtin.set_fact:
+    proxmox_restic_sftp_no_root_all: >-
+      {{ (proxmox_restic_sftp_no_root_from
+          + (proxmox_restic_sftp_keys_now.results | selectattr('content', 'defined')
+             | map(attribute='content') | map('b64decode') | join(' ')
+             | regex_findall('from="([0-9.]+)"')))
+         | unique | sort }}
+
 # Checked on its own first, then with the whole config, before sshd reloads; a reload keeps open sessions.
 - name: The sshd settings for the two users
   ansible.builtin.template:

@@ -26,7 +26,7 @@ argument_specs:
         type: list
         elements: str
         default: []
-        description: "Sources root may not sign in from (sshd Match Address ... PermitRootLogin no)."
+        description: "Sources root may not sign in from (sshd Match Address ... PermitRootLogin no), added to every address in either keys file."
       proxmox_restic_sftp_sshd_conf: {type: str, default: /etc/ssh/sshd_config.d/40-central-hub-restic.conf, description: "The sshd drop-in the role writes."}
       proxmox_restic_sftp_keys_dir:
         type: str
