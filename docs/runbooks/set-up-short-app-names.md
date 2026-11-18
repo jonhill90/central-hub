@@ -3,7 +3,7 @@ title: Give lab apps short names under the zone
 status: draft
 kind: automated
 trigger: on request; again after a lab rebuild, or when an app gets a short name
-runner: an agent lane, through the owner's Mac
+runner: an agent lane, through the owner's Mac (the private inventory and the tailnet key are there; the last run, `last-tested` below, ran there); the checks under "Prove it from the agent box" run from the agent box
 outcome: Grafana, Argo CD, Keycloak, Jellyfin and ntfy open at https://<app>.<zone>/ on the owner's Mac and in the lab, with a trusted certificate, and sign-in goes through https://sso.<zone>/; every long name <app>.apps.c1.prod.<zone> keeps working
 needs: the lab DNS runbook done (set-up-lab-dns.md), the lab clone of central-hub with its private inventory and home.tfvars, hosts/.env with the tailnet OAuth client, cluster-admin on c1
 private-values: [opnsense_dns_zone, opnsense_lab_host_overrides, k8s_gateway_zone, k8s_gateway_address]
@@ -31,8 +31,21 @@ Every part has its own switch, all on by default: `k8s_gateway_short_names`, `k8
 
 ## What needs the owner's hands
 
-1. Say go for steps 2 and 3, which change the firewall's DNS and the tailnet.
-2. After step 7, sign in at `https://grafana.<zone>/` with "Lab sign-in".
+1. Say go for steps 2 and 3, which change the firewall's DNS and the tailnet (D-0036 rule 8).
+2. Say go for the firewall pass that lets the agent box and the desktop VM open the Gateway on tcp 443 (the app access pass, [set-up-lab-network-and-firewall.md](set-up-lab-network-and-firewall.md), the paragraph "For the apps' names from dev"). It is not a step of this runbook: steps 1 to 7 and the in-cluster check below do not need it. Without it, the box's and the desktop's own checks of the names cannot pass.
+3. After step 7, sign in at `https://grafana.<zone>/` with "Lab sign-in".
+
+## Where this stands on main
+
+Read from `main` at `8bca3cd` on 2026-11-18, not run again here:
+
+| Part | What main has | Still waits |
+|---|---|---|
+| Switches | all on by default: `k8s_gateway_short_names` (`roles/k8s_gateway/defaults/main.yml`), `k8s_observability_short_names` (`roles/k8s_observability/defaults/main.yml`) and `shortNames` in `apps/gateway/values.yaml` | nothing |
+| The in-cluster name check | CronJob `gateway/name-check`, schedule `15,45 * * * *`, apps `grafana argocd sso jellyfin ntfy` (`apps/gateway/values.yaml`, `nameCheck`) | to read its newest job, see "Prove it from the agent box" |
+| Unbound and tailnet split DNS (steps 2 and 3) | code and default names (`split_dns_names`, `hosts/terraform/home/tailnet/variables.tf`) | the owner's go; the private values are not in this repository |
+| The firewall pass for the box and the desktop VM on tcp 443 | merged: role `opnsense_lab`, `tasks/app_access.yml` | the owner's go, and a run from a machine that holds the private inventory; whether it has run is not shown by this repository |
+| The desktop's own check of the names | `desktop_trust_check_reach: false` (`roles/desktop/defaults/main.yml`), a switch a one-line pull request sets after the firewall pass | the firewall pass above; [set-up-the-desktop.md](set-up-the-desktop.md) |
 
 ## Before you start
 
@@ -100,7 +113,7 @@ Every part has its own switch, all on by default: `k8s_gateway_short_names`, `k8
 
 ## Prove it from the agent box
 
-CronJob `gateway/name-check` (app `gateway`, `templates/name-check.yaml`) runs at :15 and :45. It opens `https://<app>.<zone>/` and `https://<app>.apps.c1.prod.<zone>/` for each app in `nameCheck.apps`, through the Gateway's own Service `cilium-gateway-apps`, and checks the certificate against the lab CA (`ca.crt` of Secret `apps-tls`, the only key it mounts). It proves the listeners, the routes, the certificate and the apps from inside c1, because the agent box sits on dev and has no route to prod's port 443. DNS is checked separately: from the box, `getent ahostsv4 grafana.<zone>` must print the Gateway's address.
+CronJob `gateway/name-check` (app `gateway`, `templates/name-check.yaml`) runs at :15 and :45. It opens `https://<app>.<zone>/` and `https://<app>.apps.c1.prod.<zone>/` for each app in `nameCheck.apps`, through the Gateway's own Service `cilium-gateway-apps`, and checks the certificate against the lab CA (`ca.crt` of Secret `apps-tls`, the only key it mounts). It proves the listeners, the routes, the certificate and the apps from inside c1, because the dev VLAN's rules do not pass the agent box to prod's port 443 until the firewall pass (see "What needs the owner's hands", item 2) is applied; the box's `curl` to the Gateway timed out on 2026-11-18 at 22:51 UTC, and whether that pass was applied since is not read here. After that pass, the box's `curl -sS -o /dev/null -w '%{http_code}' --cacert <lab CA chain> https://grafana.<zone>/` prints a status. DNS is checked separately: from the box, `getent ahostsv4 grafana.<zone>` must print the Gateway's address.
 
 1. `c1-read get jobs -n gateway --sort-by=.metadata.creationTimestamp`
    expect: the newest `name-check-<number>` job has completions `1/1`.
@@ -123,4 +136,4 @@ Fill in `last-tested` with the date, who ran it and on what, and set `status: te
 ## Related
 
 - STD-0001, "Service names", rules 5 to 7.
-- set-up-lab-dns.md, set-up-lab-sign-in.md, issue-c1-app-certificate.md, move-gateway-to-argo-cd.md.
+- set-up-lab-network-and-firewall.md, set-up-the-desktop.md, set-up-lab-dns.md, set-up-lab-sign-in.md, issue-c1-app-certificate.md, move-gateway-to-argo-cd.md.
