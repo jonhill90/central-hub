@@ -141,6 +141,10 @@ The owner sets it up once, in GitHub's web UI:
 
 Exit: uninstall the App and delete it in GitHub's settings, then delete `/etc/agent-keys/github-app.pem`.
 
+## Prove a web sign-in from the box
+
+The role installs headless Chromium through Playwright (pinned in `tasks/main.yml`, in its own virtual environment, browsers in a root-owned folder under the libexec folder) and the command `web-shot <url> <out.png> [--insecure]`. It loads the page as the session user, with no key, saves a full-page screenshot and prints the final address, the page title and the HTTP status. `--insecure` is for a dev cluster's throwaway CA only. It types nothing, so a sign-in that needs a form still goes through the proof scripts. Chromium's download comes from Playwright's own host at the first install, so the first run needs that outbound route. A bump of the pin is a change to the box's limits (D-0044).
+
 ## Merge pull requests from the box
 
 The box merges by a sweep, not by a workflow: a cloud session cannot start a GitHub workflow here (403, measured 2026-11-14). The page [Merge a pull request with the box's sweep](merge-a-pr-through-the-merge-job.md) is the how-to; this section is the setup.

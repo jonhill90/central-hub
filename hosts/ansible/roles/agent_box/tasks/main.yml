@@ -353,6 +353,54 @@
   when: not ansible_check_mode
   tags: [wrappers]
 
+# Headless Chromium for the web proofs: agents sign in to a web page from the box and keep a screenshot
+# (`web-shot <url> <out.png>`). The version is pinned here, with the task, not in defaults, so a bump is a change
+# to the box's limits like the Ansible pin above. Playwright downloads its own Chromium into one root-owned folder.
+- name: Libraries headless Chromium needs
+  ansible.builtin.package:
+    name: [nss, nspr, atk, at-spi2-atk, cups-libs, libdrm, libxkbcommon, libXcomposite, libXdamage, libXfixes,
+           libXrandr, mesa-libgbm, pango, cairo, alsa-lib, liberation-fonts]
+    state: present
+  tags: [wrappers]
+
+- name: Playwright, in its own virtual environment
+  ansible.builtin.pip:
+    name: ["playwright==1.65.2"]
+    virtualenv: "{{ agent_box_libexec_dir }}/playwright-venv"
+    virtualenv_command: python3 -m venv
+  when: not ansible_check_mode
+  tags: [wrappers]
+
+- name: Chromium for Playwright, in a root-owned folder
+  ansible.builtin.command:
+    cmd: "{{ agent_box_libexec_dir }}/playwright-venv/bin/playwright install chromium"
+    creates: "{{ agent_box_libexec_dir }}/playwright-browsers"
+  environment:
+    PLAYWRIGHT_BROWSERS_PATH: "{{ agent_box_libexec_dir }}/playwright-browsers"
+  when: not ansible_check_mode
+  tags: [wrappers]
+
+- name: The web-shot script, root-owned
+  ansible.builtin.copy:
+    src: web-shot.py
+    dest: "{{ agent_box_libexec_dir }}/web-shot.py"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+- name: web-shot on the path
+  ansible.builtin.copy:
+    dest: "{{ agent_box_front_dir }}/web-shot"
+    content: |
+      #!/bin/sh
+      # Made by the agent_box role. web-shot <url> <out.png> [--insecure]
+      PLAYWRIGHT_BROWSERS_PATH={{ agent_box_libexec_dir }}/playwright-browsers exec {{ agent_box_libexec_dir }}/playwright-venv/bin/python -I {{ agent_box_libexec_dir }}/web-shot.py "$@"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
 - name: The Ansible collections the playbooks pin, from the keys user's checkout
   ansible.builtin.command:
     cmd: >-
