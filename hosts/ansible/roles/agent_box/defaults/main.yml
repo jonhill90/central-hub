@@ -327,7 +327,7 @@ agent_box_opnsense_test: {}
 # The first subordinate UID and GID of the keys user, for the proof's rootless Keycloak container (65536 of each).
 agent_box_opnsense_test_subid_start: 300000
 # Private settings for the lab-test wrapper, written to <work_dir>/lab-test.json: name (STD-0001), domain (the copy's
-# search domain), address (its dev address), cores (2 or more), memory_mb (6144 or more), disk_gb (32 or more) and
+# search domain), address (its dev address), cores (2 or more), memory_mb (7168 or more), disk_gb (32 or more) and
 # proxmox_node_name. The VM ID is fixed at 256 (docs/specs/2026-11-lab-test-copy.md). Empty leaves the wrapper's
 # tools and settings not set up.
 agent_box_lab_test: {}
