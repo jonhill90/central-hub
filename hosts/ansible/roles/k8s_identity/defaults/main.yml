@@ -5,9 +5,10 @@
 # Everything apps see is plain OIDC, so a swap changes this role and the three endpoint URLs in
 # k8s_observability, nothing in the apps. How it is installed is listed in hosts/AGENT-PICKS.md. Every input is listed here (Red Hat CoP rule).
 
-# Keycloak and its operator, the newest release at least two weeks old on 2026-10-27 (26.8.1, 13
+# Keycloak and its operator: 26.8.2 (5 November 2026), taken under STD-0003 rule 2 because it holds many security fixes
+# (release note: https://www.keycloak.org/2026/11/keycloak-2682-released), TASK-0252. Before it: 26.8.1, 13
 # October 2026, STD-0003 rule 1). The upstream manifests are pinned by sha256 in vars/main.yml.
-k8s_identity_version: 26.8.1
+k8s_identity_version: 26.8.2
 k8s_identity_namespace: identity
 
 # The Keycloak object's name, also the first label of its hostname: https://sso.apps.c1.prod.<zone>/.
