@@ -4,11 +4,12 @@
 #   1. Usage: no action, another action, rebuild with no tap id or a malformed one: usage errors, nothing run.
 #   2. check with nothing on the box names what is missing and changes nothing.
 #   3. check with everything in place passes every line: the box's state is the live prod, the teardown destroys
-#      only VMs 200 and 201, every node answers, and dev passed at this commit.
+#      only VMs 200 and 201, every node answers, the box routes around the nodes, and dev passed at this commit.
 #   4. The box's inventory copy: the box's key and plain ssh, the private files at the box's copies, the rebuild's
 #      own settings (prod's own restore, stable folders, the carried certificates), no proxmox group.
 #   5. check refuses, each alone: a plan with changes, a teardown that would destroy VM 258, a value still on the
-#      Mac, a dev run at another commit, a failed dev run, a node VM ID outside 200-249.
+#      Mac, a dev run at another commit, a failed dev run, a node VM ID outside 200-249, the box's route to the
+#      Proxmox API or its default route through a prod node.
 #   6. rebuild runs the checks before a teardown in order (backup and restore test, the certificates, the seal
 #      key, the firewall copy, the bundle), keeps each node's certificate, then the one command with prod's stages,
 #      the seal key in memory, and the tap id in the log.
@@ -52,6 +53,19 @@ case " \$* " in
 esac
 EOF
 # ssh: the last argument is the command; each answers as a node would.
+cat > "$t/bin/getent" <<'EOF'
+#!/bin/bash
+case $2 in pve.invalid) echo "192.0.2.1       STREAM pve.invalid" ;; *) [[ $2 =~ ^[0-9.]+$ ]] && echo "$2       STREAM $2" ;; esac
+exit 0
+EOF
+cat > "$t/bin/ip" <<'EOF'
+#!/bin/bash
+case "$*" in
+  "-4 route get "*) echo "$4 via ${ROUTE_VIA:-192.0.2.254} dev eth0 src 192.0.2.50 uid 0" ;;
+  "-4 route show default") echo "default via ${DEFAULT_VIA:-192.0.2.254} dev eth0 proto static" ;;
+  *) exit 1 ;;
+esac
+EOF
 cat > "$t/bin/ssh" <<EOF
 #!/bin/bash
 cmd="\${*: -1}"
@@ -158,7 +172,7 @@ inventory; destroy 200 201; dev_log "$sha" "rebuild: all stages passed"
 run check
 seen=$(python3 -c 'import json, sys, yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))' "$t/work/rebuild-prod/inventory/hosts.yml" 2>/dev/null)
 if [[ $rc -eq 0 && $out == *"every check passed; nothing was changed"* && $out == *"no changes with the Mac's tfvars"* &&
-      $out == *"destroys only VMs 200 201"* && $out == *"reaches all 2 prod nodes"* && $out == *"dev passed every stage at ${sha:0:12}"* &&
+      $out == *"destroys only VMs 200 201"* && $out == *"reaches all 2 prod nodes"* && $out == *"routes do not go through a prod node: Proxmox API next hop 192.0.2.254, default via 192.0.2.254"* && $out == *"dev passed every stage at ${sha:0:12}"* &&
       $out != *FAIL* && $calls != *playbook* && $calls != *one-command* && $calls != *job* ]]; then
   ok "3. check passes every line and changes nothing"
 else bad "3. $rc $out"; fi
@@ -185,7 +199,9 @@ dev_log "$sha" "rebuild: all stages passed"
 sed -i 's/vm_id = 201/vm_id = 301/' "$t/keys/prod/tfvars/k8s.tfvars"
 run check; [[ $rc -eq 1 && $out == *"outside 200-249: 301"* ]] && r5+="f"
 sed -i 's/vm_id = 301/vm_id = 201/' "$t/keys/prod/tfvars/k8s.tfvars"
-if [[ $r5 == abcdef ]]; then ok "5. check refuses a plan with changes, VM 258, a Mac path, another dev commit, a failed dev run, VM 301"
+ROUTE_VIA=192.0.2.11 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"* ]] && r5+="g"
+DEFAULT_VIA=192.0.2.10 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"*"default via 192.0.2.10"* ]] && r5+="h"
+if [[ $r5 == abcdefgh ]]; then ok "5. check refuses a plan with changes, VM 258, a Mac path, another dev commit, a failed dev run, VM 301, a route through a node"
 else bad "5. [$r5] $out"; fi
 
 # 6

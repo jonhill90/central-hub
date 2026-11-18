@@ -9,11 +9,12 @@
 #          and tfvars and refuses one that still points at the Mac; plans OpenTofu with the Mac's own tfvars on the
 #          box's state and needs "no changes" (the box's state is the live prod); lists what a teardown would destroy
 #          and refuses anything but node VMs 200-249, VM 258 or 259, or more VMs than the tfvars declare; reaches every
-#          prod node with the box's key; and needs the newest dev run to have passed every stage at this commit
+#          prod node with the box's key; checks that neither the box's default route nor its route to the Proxmox
+#          API goes through a node VM (D-0035 rule 5); and needs the newest dev run to have passed every stage at this commit
 #          (D-0035 rule 3(a)). One PASS or FAIL line each; exit 0 only when every line passes.
-# rebuild  <tap id> names the owner's go-ahead for the prod teardown (D-0035 rule 3(b), D-0042 rule 6): his card
-#          tap, or the id of his own message ordering it; it is written to the log. It runs check, then the checks
-#          before a teardown (D-0035 rule 5), each of which must pass or nothing is destroyed:
+# rebuild  <tap id> is the owner's tap on a decision card that names rebuild-prod and this main commit (D-0035
+#          rule 3(b), D-0042 rule 6: a delete); it is written to the log. It runs check, then the checks before a
+#          teardown (D-0035 rule 5), each of which must pass or nothing is destroyed:
 #            1. a backup of every prod node now, and the restore tests on it (k8s-backup.yml --tags drill), so the
 #               newest snapshot is minutes old and its restore test passed, each test naming the snapshot it restored
 #               into a temporary folder (never over prod's data);
@@ -324,6 +325,27 @@ for h in sorted(members("k8s_nodes")): print(h, hv[h]["ansible_host"], hv[h].get
     if ssh_node "$host" "$user" true </dev/null >/dev/null 2>&1; then reached=$((reached + 1)); else fail "no ssh login to node $name with the box's key"; fi
   done < "$node_list"
   [[ $total -gt 0 && $reached -eq $total ]] && pass "the box's key reaches all $total prod nodes"
+fi
+
+# --- 4b. The box's route (D-0035 rule 5): neither its default route nor its route to the Proxmox API may go
+# through a node the teardown destroys, or the run would cut itself off half way. Only the routing table is read.
+if [[ $inv_ok == true && -s $tofu_env && -s $node_list ]]; then
+  node_ips=" "
+  while read -r _ host _; do
+    [[ $host =~ ^[0-9.]+$ ]] && node_ips+="$host "
+    for a in $(getent ahostsv4 "$host" 2>/dev/null | awk '{print $1}' | sort -u); do node_ips+="$a "; done
+  done < "$node_list"
+  api_host=$(sed -n 's|^PROXMOX_VE_ENDPOINT=https\{0,1\}://\([^:/]*\).*|\1|p' "$tofu_env" | head -n 1)
+  api_ip=$(getent ahostsv4 "$api_host" 2>/dev/null | awk 'NR == 1 {print $1}' || true)
+  hop() { sed -n 's/.* via \([0-9.]*\).*/\1/p' <<< "$1" | head -n 1; }
+  api_route=$( [[ -n $api_ip ]] && ip -4 route get "$api_ip" 2>/dev/null | head -n 1 || true)
+  api_hop=$(hop "$api_route"); api_hop=${api_hop:-$api_ip}
+  def_hop=$(hop " $(ip -4 route show default 2>/dev/null | head -n 1)")
+  if [[ -z $api_ip || -z $api_route ]]; then fail "the box has no route to the Proxmox API's address ($api_host)"
+  elif [[ -z $def_hop ]]; then fail "the box has no default route"
+  elif [[ $node_ips == *" $api_ip "* || $node_ips == *" $api_hop "* || $node_ips == *" $def_hop "* ]]; then
+    fail "the box's route goes through a prod node the teardown destroys (Proxmox API next hop $api_hop, default via $def_hop)"
+  else pass "the box's routes do not go through a prod node: Proxmox API next hop $api_hop, default via $def_hop"; fi
 fi
 
 # --- 5. Dev first (D-0035 rule 3(a)): the newest dev run passed every stage at this same commit.

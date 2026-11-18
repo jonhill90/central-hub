@@ -169,7 +169,7 @@ The agent box's `rebuild-prod` wrapper (`hosts/ansible/roles/agent_box/files/reb
 
 ```sh
 sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check
-sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh rebuild <approval id>
+sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh rebuild <tap id>
 sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh log
 ```
 
@@ -179,9 +179,10 @@ sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh log
 2. The box's own copies: the tfvars with the box's node key, every node `vm_id` in 200-249; the inventory with the Mac's ssh settings and `proxmox` group dropped, plain ssh with the box's key, the private files pointed at the box's copies, and the rebuild's own settings (`k8s_backup_restore_own_env`, the first worker as the restore's source, `k8s_gitops_source_local_path_stable_folders`, `k8s_backup_azure_seed_dir`). A value that still points at the Mac fails the check by key name.
 3. `tofu plan` with the Mac's tfvars on the box's state gives no changes, so the box's state is the live prod; `tofu plan -destroy` deletes only node VMs in 200-249, never VM 258 or 259, and no more than the tfvars declare (D-0035 rules 2 and 6).
 4. Every prod node answers ssh with the box's key.
-5. The newest dev run on the box passed every stage at this same commit (D-0035 rule 3(a)). `rebuild-k8s.sh` writes `rebuild: central-hub <commit>` into each run's short log for this.
+5. Neither the box's default route nor its route to the Proxmox API goes through a node VM, so the teardown can't cut the box off half way (D-0035 rule 5). Only the routing table is read.
+6. The newest dev run on the box passed every stage at this same commit (D-0035 rule 3(a)). `rebuild-k8s.sh` writes `rebuild: central-hub <commit>` into each run's short log for this.
 
-`rebuild <approval id>` runs `check`, then the checks before a teardown (D-0035 rule 5). Each must pass or nothing is destroyed:
+`rebuild <tap id>` runs `check`, then the checks before a teardown (D-0035 rule 5). Each must pass or nothing is destroyed:
 
 1. A backup of every prod node now, then the restore tests (`k8s-backup.yml --tags drill`). The tests restore into a temporary folder on each node, never over its data, and each names the snapshot it restored: the first worker's volume test must restore at least one folder, and the control plane's etcd test must pass. Both `PASS` lines, with their snapshot IDs, go into the run's log. This is also the Azure restore test's proof.
 2. Each node's backup certificate and its key ID on the app, copied into the keys folder (mode 0600), so each rebuilt node signs in to the backup as before ([Back up c1 off the box](back-up-c1-off-box.md), "A rebuilt node keeps its certificate").
@@ -190,7 +191,7 @@ sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh log
 
 Then it runs `hosts/rebuild-k8s.sh --teardown` with `ENV_NAME=prod` and stages `vms cluster storage openbao-seal restore gitops secrets apps gateway certs identity identity-db ui backup checks`. `restore` puts prod's own newest volume snapshot (the one step 1 just made) back onto the empty data disk with `k8s-restore.yml`, with backups off; `identity-db` loads Keycloak's database from the same snapshot; `backup` turns the timers on again with the carried certificates. When the box holds snapshots of the secrets store, the run sets the store's rebuild hold, so the rebuilt store waits for `secrets-store-prod restore-rebuilt` or `clear-hold` before a new snapshot replaces them.
 
-The approval id names the owner's go-ahead for the prod teardown (D-0035 rule 3(b), D-0042 rule 6) and goes into the log. After a box rebuild the Mac's prod tfstate is stale and its inventory needs `k8s_gitops_source_local_path_stable_folders: true`: take both from the box's run before any prod run from the Mac.
+The tap id is the message ID of the owner's tap on a decision card whose question names `rebuild-prod`, the repository and this main commit (D-0035 rule 3(b): a teardown of prod is one of D-0042 rule 6's deletes). A reviewing agent checks the tap, the member and the commit before the run (rule 3(c)); the wrapper writes the id into the log. A message that orders a rebuild without naming the commit is not a tap. After a box rebuild the Mac's prod tfstate is stale and its inventory needs `k8s_gitops_source_local_path_stable_folders: true`: take both from the box's run before any prod run from the Mac.
 
 ## Dev node sizes
 
