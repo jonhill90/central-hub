@@ -26,7 +26,7 @@ case "$*" in *cluster/resources*)
   [ -n "$FAKE_GUESTS_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
   [ -n "$FAKE_GUEST_257" ] && { echo '{"data":[{"vmid":257,"type":"qemu","status":"running","maxmem":3221225472,"mem":1073741824,"name":"opnsense-test"}]}'; exit 0; }
   [ -n "$FAKE_OTHER_DESKTOP" ] && { echo '{"data":[{"vmid":401,"type":"qemu","status":"running","maxmem":4294967296,"mem":3221225472,"name":"otherdesk","pool":"desktop"}]}'; exit 0; }
-  [ -n "$FAKE_DESKTOP" ] && { echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":400,"type":"qemu","status":"running","maxmem":4294967296,"mem":3221225472,"name":"deskvm","pool":"desktop"}]}'; exit 0; }
+  [ -n "$FAKE_DESKTOP" ] && { echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":400,"type":"qemu","status":"running","maxmem":4294967296,"mem":3221225472,"name":"deskvm"}]}'; exit 0; }
   echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":411,"type":"qemu","status":"running","maxmem":8589934592,"mem":4294967296,"name":"agent-box"}]}'
   exit 0 ;; esac
 [ -n "$FAKE_CURL_ERROR" ] && { [ "$FAKE_CURL_ERROR" = long ] && { printf "%0185d token=SECRETTOKEN\n" 0 >&2; exit 22; }; echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }

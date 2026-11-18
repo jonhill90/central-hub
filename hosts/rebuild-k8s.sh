@@ -319,7 +319,7 @@ print(json.load(sys.stdin)["data"].get("status", ""))' 2>/dev/null) || st=""
 }
 
 # Dev only, and only when the preflight is short: stop the owner's desktop VM (DESKTOP_VMID, an unused guest must never
-# block this run; the owner's words of 2026-11-17 23:58 UTC) when it is running in pool desktop. The token holds VM.Audit
+# block this run; the owner's words of 2026-11-17 23:58 UTC) when it is running (matched by its ID; the token cannot see pools). The token holds VM.Audit
 # and VM.PowerMgmt on that one VM and nothing else (agent-access.sh, role AgentDesktopPower). It is a shutdown,
 # then a forced stop after 60 s, and nothing starts it again: the owner starts it when the desktop is wanted. It does not
 # check whether anyone is signed in (the token can't read the guest), so it stops a desktop in use too; the runbook says so.
@@ -327,7 +327,7 @@ preflight_stop_desktops() { # node vmid...
   local node=$1 id i st out
   shift
   for id in "$@"; do
-    echo "desktop stop: short on memory and VM $id (pool desktop) is running, asking it to shut down (VM.PowerMgmt, nothing else is touched)"
+    echo "desktop stop: short on memory and VM $id (the desktop) is running, asking it to shut down (VM.PowerMgmt, nothing else is touched)"
     out=$(px_api POST "nodes/$node/qemu/$id/status/shutdown" "timeout=60&forceStop=1") \
       || { echo "desktop stop: the shutdown request for VM $id failed: $(preflight_clean "$out")"; return 1; }
     st=""
@@ -429,7 +429,10 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
   grep -q "guest list from" <<<"$guests" || echo "preflight: the guest list was not read, so VM $OPNSENSE_TEST_VMID (the OPNsense test VM) could not be checked"
   preflight_storage "$node" || true
   if [ "$free" -lt "$min" ]; then
-    desktops=$(sed -n "s/^preflight: guest vmid=\($DESKTOP_VMID\) type=qemu status=running .* pool=desktop\$/\1/p" <<<"$guests")
+    # Matched by its ID alone: /cluster/resources leaves out the pool field when the token lacks Pool.Audit on
+    # /pool/desktop, which the dev token does (it holds rights on /vms/<DESKTOP_VMID> only), and that ID is the
+    # only one the token's VM.PowerMgmt covers.
+    desktops=$(sed -n "s/^preflight: guest vmid=\($DESKTOP_VMID\) type=qemu status=running .*/\1/p" <<<"$guests")
     if [ -n "$desktops" ]; then
       # shellcheck disable=SC2086
       preflight_stop_desktops "$node" $desktops || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB and a desktop VM could not be stopped"; return 1; }
