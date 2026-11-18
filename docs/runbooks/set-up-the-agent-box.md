@@ -147,7 +147,7 @@ The role installs headless Chromium through Playwright (pinned with hashes in `f
 
 ## Render with Blender from the box
 
-The role installs Blender 5.3.0 from the official Linux tarball, checked against its SHA-256, into a root-owned folder under the libexec folder, links `blender` into `/usr/local/bin`, and installs the libraries it needs with no display or GPU: the X client libraries `ldd` found missing (`libSM`, `libICE`, `libXxf86vm`, `libX11-xcb`), and Mesa's software OpenGL, EGL and Vulkan. The tarball comes from an official mirror, because `download.blender.org` answers 403 to the box. A bump of the pin is a change to the box's limits (D-0044).
+The role installs Blender 5.2.3 LTS (the newest release at least two weeks old on 2026-11-18, STD-0003) from the official Linux tarball, checked against the SHA-256 that download.blender.org publishes, into a root-owned folder under the libexec folder, links `blender` into `/usr/local/bin`, and installs the libraries it needs with no display or GPU: the X client libraries `ldd` found missing (`libSM`, `libICE`, `libXxf86vm`, `libX11-xcb`), and Mesa's software OpenGL, EGL and Vulkan. The tarball comes from an official mirror, because `download.blender.org` answers 403 to the box. A bump of the pin is a change to the box's limits (D-0044).
 
 Sessions run it as themselves, always in background mode:
 
@@ -157,10 +157,10 @@ blender -b file.blend -E CYCLES -f 1 -o /tmp/out/frame_####
 ```
 
 why: `-b` runs with no window; the box has no display.
-expect: `Blender 5.3.0` from `blender -b --version`. Measured on the box on 2026-11-18 (2 vCPUs, no GPU), a 960x540 scene with three area lights and a subdivided mesh: Cycles on the CPU at 64 samples with denoising took 53 s; EEVEE took 115 s on Mesa's software renderer (llvmpipe); Workbench took under 1 s. Each run peaked near 320 MB of memory.
+expect: `Blender 5.2.3 LTS` from `blender -b --version`. Measured on the box on 2026-11-18 (2 vCPUs, no GPU), a 960x540 scene with three area lights and a subdivided mesh: Cycles on the CPU at 64 samples with denoising took 48 s and peaked at 860 MB of memory; EEVEE took 99 s on Mesa's software renderer (llvmpipe) and peaked at 2.5 GB; Workbench took about 1 s and peaked at 740 MB.
 
 - Use Cycles with `cycles.device = "CPU"` for finished images. EEVEE works only through Mesa's software EGL, so it is slower than Cycles here.
-- Check `free -m` before a long or large render; the box shares the host with the dev rebuild.
+- Check `free -m` before a render, and above all before EEVEE, which peaked at 2.5 GB on a small scene; the box shares the host with the dev rebuild.
 - The Vulkan warning at start is expected: Blender falls back to OpenGL through EGL.
 
 ## Prove the lab's names from the box

@@ -430,8 +430,9 @@
   tags: [wrappers]
 
 # Blender, headless, for agents' graphics work (`blender -b`). Pinned here with its SHA-256, like the Playwright pin, so
-# a bump is a change to the box's limits (D-0044). The tarball comes from an official mirror: download.blender.org
-# answers 403 to the box. The libraries are the ones `ldd` found missing on the box, plus Mesa's software EGL and
+# a bump is a change to the box's limits (D-0044). 5.2.3 LTS is the newest release at least two weeks old on 2026-11-18
+# (STD-0003); its SHA-256 matches download.blender.org's own .sha256. The tarball comes from an official mirror:
+# download.blender.org answers 403 to the box. The libraries are the ones `ldd` found missing on the box, plus Mesa's software EGL and
 # Vulkan, which EEVEE needs with no GPU (docs/runbooks/set-up-the-agent-box.md, "Render with Blender from the box").
 - name: Libraries Blender needs with no display or GPU
   ansible.builtin.package:
@@ -442,9 +443,9 @@
 
 - name: Download Blender, checked against its SHA-256
   ansible.builtin.get_url:
-    url: https://mirrors.ocf.berkeley.edu/blender/release/Blender5.3/blender-5.3.0-linux-x64.tar.xz
-    dest: "{{ agent_box_libexec_dir }}/downloads/blender-5.3.0-linux-x64.tar.xz"
-    checksum: sha256:dacb8264197a3f7fda6001285a5a506fc97ee943881261c2c3bd63c882f22e05
+    url: https://mirrors.ocf.berkeley.edu/blender/release/Blender5.2/blender-5.2.3-linux-x64.tar.xz
+    dest: "{{ agent_box_libexec_dir }}/downloads/blender-5.2.3-linux-x64.tar.xz"
+    checksum: sha256:78486c018b4443efe5e75ab54c290ed8c15abafd249b862c2c9ce2530a918eec
     owner: root
     group: root
     mode: "0644"
@@ -453,10 +454,10 @@
 
 - name: Unpack Blender, root-owned
   ansible.builtin.unarchive:
-    src: "{{ agent_box_libexec_dir }}/downloads/blender-5.3.0-linux-x64.tar.xz"
+    src: "{{ agent_box_libexec_dir }}/downloads/blender-5.2.3-linux-x64.tar.xz"
     dest: "{{ agent_box_libexec_dir }}"
     remote_src: true
-    creates: "{{ agent_box_libexec_dir }}/blender-5.3.0-linux-x64/blender"
+    creates: "{{ agent_box_libexec_dir }}/blender-5.2.3-linux-x64/blender"
     owner: root
     group: root
   when: not (ansible_check_mode and agent_box_downloads_dir is changed)
@@ -464,7 +465,7 @@
 
 - name: Put blender on the path
   ansible.builtin.file:
-    src: "{{ agent_box_libexec_dir }}/blender-5.3.0-linux-x64/blender"
+    src: "{{ agent_box_libexec_dir }}/blender-5.2.3-linux-x64/blender"
     dest: "{{ agent_box_front_dir }}/blender"
     state: link
     force: true
