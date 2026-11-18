@@ -104,8 +104,14 @@ signin
 
 echo "sso 2/3 plugin loaded?"
 i=0
-until api -H "$authz" "$BASE/Plugins" | grep -q '"Name":"SSO Authentication"'; do
-  i=$((i + 1)); [ "$i" -lt 12 ] || { echo "sso: plugin SSO Authentication is not loaded (see the Jellyfin log: targetAbi, meta.json)" >&2; exit 1; }
+# The reply's key case and spacing are Jellyfin's to change (12.x may write "name" and add spaces), so match both.
+until api -H "$authz" "$BASE/Plugins" | grep -Eiq '"name" *: *"SSO Authentication"'; do
+  i=$((i + 1))
+  if [ "$i" -ge 12 ]; then
+    echo "sso: plugin SSO Authentication is not in GET /Plugins (see the Jellyfin log: targetAbi, meta.json); the reply listed these names:" >&2
+    api -H "$authz" "$BASE/Plugins" | grep -Eio '"name" *: *"[^"]*"' >&2 || echo "(no names; the reply was empty or not JSON)" >&2
+    exit 1
+  fi
   sleep 5
 done
 
