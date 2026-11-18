@@ -125,6 +125,9 @@ def inventory(settings, vlans, key, known_hosts, out):
         # vmbr0 as a /32, here the copy's dev address.
         "tailnet_connector_extra_routes": [f"{addr}/32"],
         "tailnet_connector_lab_supernet": str(supernet),
+        # playbooks/proxmox-safety.yml --tags firewall: the copy's "home LAN" is dev, where the box reaches it from, so
+        # the management IPSet keeps the box's SSH and API path. No check targets: the copy has no k8s_nodes.
+        "proxmox_firewall_home_lan_cidr": str(net),
     }
     doc = {"all": {"children": {"proxmox": {"hosts": {"proxmox_host": host}}}}}
     with open(out, "w") as f:
