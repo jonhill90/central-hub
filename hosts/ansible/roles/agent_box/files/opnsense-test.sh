@@ -133,6 +133,13 @@ guards() {
   fi
   exec 8>"$work/state/rebuild.lock"
   flock -n 8 || { echo "opnsense-test: refused, a dev rebuild run is going"; return 1; }
+  # VM 256, the lab test copy (hosts/terraform/home/lab-test), is built only while dev is down too; the two never
+  # run together, because the node does not have the memory for both (docs/specs/2026-11-lab-test-copy.md).
+  local guests
+  guests=$(px_api "cluster/resources?type=vm") || { echo "opnsense-test: refused, the guest list could not be read"; return 1; }
+  if python3 -I -c 'import json,sys; sys.exit(0 if any(g.get("vmid") == 256 for g in json.load(sys.stdin)["data"]) else 1)' <<<"$guests"; then
+    echo "opnsense-test: refused, VM 256 (the lab test copy) exists; run lab-test destroy first"; return 1
+  fi
   local node free need
   node=$(setting proxmox_node_name)
   need=$(( $(setting memory_mb) + 2048 ))

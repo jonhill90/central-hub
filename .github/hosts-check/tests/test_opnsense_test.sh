@@ -178,6 +178,8 @@ sys.exit(1 if clash else 0)
 PY
 grep -q 'if last_status\["code"\] == 404:' "$files/opnsense-test-prove.py" && grep -q "get('%s')" "$files/opnsense-test-prove.py" \
   && ok "a 404 from the login prints what the authentication factory lists and returns" || bad "no factory read on a 404"
+grep -q 'refused, VM 256 (the lab test copy) exists' "$w" && grep -q 'g.get("vmid") == 256' "$w" \
+  && ok "plan refuses while VM 256, the lab test copy, exists" || bad "no refusal while the lab test copy exists"
 grep -q 'VMID=257$' "$w" && ok "the wrapper's VM ID is 257" || bad "VM ID"
 # The token can't delete files on local: destroy targets only the VM, and the seed leaves the state.
 code=$(grep -v '^[[:space:]]*#' "$w")   # code lines only, so a comment can't pass or fail these

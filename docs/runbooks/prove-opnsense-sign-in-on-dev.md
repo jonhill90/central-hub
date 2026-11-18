@@ -31,7 +31,7 @@ flowchart LR
   v -- "OIDC, https" --> k
 ```
 
-- **The VM.** VM 257 in pool dev, one NIC on the dev VNet, no WAN, 1 core, 3072 MiB, 16 GB. It never starts with the host. The dev rebuild's preflight refuses to run while VM 257 exists, and this wrapper refuses to build it while dev's state holds anything.
+- **The VM.** VM 257 in pool dev, one NIC on the dev VNet, no WAN, 1 core, 3072 MiB, 16 GB. It never starts with the host. The dev rebuild's preflight refuses to run while VM 257 exists, and this wrapper refuses to build it while dev's state holds anything or VM 256, the lab test copy, exists (`hosts/terraform/home/lab-test/`).
   ※ `hosts/terraform/home/opnsense-test/`; `hosts/rebuild-k8s.sh`, the `OPNSENSE_TEST_VMID` check
 - **A first boot with no console.** The agents' Proxmox role has no `VM.Console`, so nothing can type at the VM. It boots the FreeBSD 14.3 cloud image with a NoCloud seed ISO the wrapper builds. Its user-data is a script that FreeBSD's nuageinit runs as root before the network starts. The script sets the static dev address, dev's gateway and DNS, and root's SSH key. It writes the address and gateway to `/etc/rc.conf.d`, because `/etc/rc` reads `/etc/rc.conf` only once per boot, so a change made there during boot is not seen until the next boot. It turns password logins off and skips the image's first-boot update.
   ※ freebsd-src releng/14.3, `libexec/nuageinit/nuageinit` (a non-cloud-config user-data is run) and `libexec/rc/rc.d/nuageinit` (`BEFORE: NETWORKING`, label `cidata`)
@@ -66,7 +66,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    opnsense-test apply
    ```
 
-   why: `plan` checks the guards (dev down, no dev rebuild running, VM 257 not in dev's tfvars, free memory), downloads the image and checks it against its pin, builds the seed ISO and saves a plan. `apply` applies only that saved plan.
+   why: `plan` checks the guards (dev down, no dev rebuild running, VM 257 not in dev's tfvars, VM 256, the lab test copy, not there, free memory), downloads the image and checks it against its pin, builds the seed ISO and saves a plan. `apply` applies only that saved plan.
    ※ `opnsense-test.sh`, `guards`, `image` and `seed_iso`
 3. Configure:
 
