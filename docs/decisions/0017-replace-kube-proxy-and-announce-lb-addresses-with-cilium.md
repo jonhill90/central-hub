@@ -64,7 +64,7 @@ flowchart LR
 
 1. **No kube-proxy.** `kubeadm init`, `kubeadm upgrade apply` and `kubeadm upgrade node` skip the `addon/kube-proxy` phase, and Cilium runs with `kubeProxyReplacement=true` and `k8sServiceHost` set to the cluster's API name (STD-0001).
 2. **One pool per cluster, from STD-0002.** The cluster's `CiliumLoadBalancerIPPool` is the node VLAN's `.224/27`. The router's DHCP pool never overlaps it.
-3. **L2 announcements on the node interface.** `l2announcements.enabled=true`, with the node's lab interface in `devices`, and one announcement policy for the pool. A Service that needs `externalTrafficPolicy: Local` and whose only pod is pinned to one node may bring its own policy, announced from that node only, and the pool's policy leaves it out (D-0062).
+3. **L2 announcements on the node interface.** `l2announcements.enabled=true`, with the node's lab interface in `devices`, and one announcement policy for the pool.
 4. **Addresses that names point at are pinned.** A Service or Gateway whose address a DNS name points at sets that address in its spec, so a rebuild keeps it (agent pick).
 
 ### Not decided here

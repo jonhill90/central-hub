@@ -62,7 +62,7 @@ Chosen option: 1. OpenBao's one pod can run only on the seal node: its seal key'
 
 ## More Information
 
-- **What changes elsewhere.** D-0017 rule 3 reads as the current rule, in the same PR (D-0001: the later record keeps the reasons).
+- **What changes elsewhere.** D-0017 rule 3 is updated to read as the current rule, with its `CORRECTIONS.md` line, in the PR that accepts this record (D-0001: the later record keeps the reasons; D-0042 rule 3).
 - **Where it is built:** `hosts/kubernetes/home/c1/apps/openbao-store/templates/admin-path.yaml`, `hosts/ansible/roles/k8s_control_plane/tasks/main.yml`, and the settings `admin_address` in `docs/runbooks/set-up-the-secrets-store.md`.
 - **Exit path:** unset `openbaoAdminAddress`, delete the three objects, and drop the general policy's selector. With BGP or another announcer that honours `Local`, the Service keeps working without its own policy.
 - Related records: D-0017, D-0036, D-0038, D-0058.
