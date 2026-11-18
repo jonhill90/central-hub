@@ -63,7 +63,7 @@ Proposed option: **1**. The owner asked for both machines on Keycloak with local
 
 ### Not decided here
 
-- How the agent box puts the package on OPNsense (its API, SSH, or a local package repository): decided from the dev proof, in the runbook.
+- How the agent box reaches the lab firewall to put the package on it. The dev proof found that the firmware API installs only by package name from the repository, so the package goes on by `pkg add` over SSH (evidence finding 25). The box's SSH route to the lab firewall goes in the runbook before its step 5.
 - The realm's new name (the spec's rename of `lab` to `home`). The rename re-runs `proxmox_sso` with the new issuer and group names.
 
 ### Consequences

@@ -8,7 +8,7 @@ outcome: a throwaway OPNsense 26.1 (VM 257, dev only) shows that sign-in through
 needs: the agent box with the opnsense-test wrapper (agent_box_opnsense_test in the private inventory, one install of the box's role); dev torn down; the node's free memory at least the VM's 3072 MiB plus the 2048 MiB margin; dev reaching github.com and pkg.opnsense.org, and the test VM reaching the box's Keycloak port
 private-values: [agent_box_opnsense_test]
 files: [hosts/terraform/home/opnsense-test/, hosts/ansible/roles/agent_box/files/opnsense-test.sh, hosts/ansible/roles/agent_box/files/opnsense-test-seed.py, hosts/ansible/roles/agent_box/files/opnsense-test-prove.py, hosts/ansible/roles/agent_box/tasks/opnsense_test.yml, hosts/ansible/roles/agent_box/templates/opnsense-test.nft.j2, hosts/ansible/roles/agent_box/templates/opnsense-test-nft.service.j2, .github/hosts-check/opnsense-plugin-pin.sh, .github/hosts-check/tests/test_opnsense_test.sh]
-last-tested: "not run; offline tests only (the stack's tofu test, test_opnsense_test.sh)"
+last-tested: "2026-11-18, an agent, plan, apply, configure, prove and destroy from the agent box at central-hub d333499: every proof item held, prove rc 0, VM 257 destroyed; the stack's tofu test and test_opnsense_test.sh offline"
 superseded-by:
 ---
 

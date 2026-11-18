@@ -8,7 +8,7 @@ outcome: the OPNsense login page offers a Keycloak button; a Keycloak user bound
 needs: for the test, the opnsense-test wrapper on the agent box (prove-opnsense-sign-in-on-dev.md), with dev torn down; for the lab firewall, realm lab on c1 (set-up-lab-sign-in.md) and the GUI on a name in the lab CA's certificate (set-opnsense-gui-certificate.md); OPNsense reaches its Keycloak issuer on 443 for every sign-in
 private-values: [k8s_identity_opnsense_hosts, OPNSENSE_CLIENT_SECRET, opnsense-root-password]
 files: [hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/defaults/main.yml, hosts/ansible/roles/k8s_identity/vars/main.yml]
-last-tested: "not yet run; 2026-11-17, an agent, the realm rendered with the opnsense client for CI's realm import"
+last-tested: "2026-11-17, an agent, the realm rendered with the opnsense client for CI's realm import; 2026-11-18, an agent, steps 1 to 4 on the test OPNsense with opnsense-test at central-hub d333499 (OPNsense 26.1.11, os-openid-connect 1.0.0.beta5, Keycloak 26.8.1 with DPoP on), every check passed; step 5 not run"
 superseded-by:
 ---
 
