@@ -7,7 +7,7 @@ runner: the owner or an agent lane
 outcome: the OPNsense web UI serves a certificate issued by ClusterIssuer `lab-ca`, and a Mac that trusts the lab root opens it with no warning
 needs: the lab controller with the filled-in inventory (CLI path), or a browser signed in to the OPNsense web UI as an administrator (web UI path); `kubectl` access to c1 for both
 private-values: [opnsense_api_key, opnsense_api_secret, opnsense_cert_names, opnsense_lab_ssl_ca_file]
-files: [hosts/ansible/playbooks/opnsense-cert.yml, hosts/ansible/playbooks/tasks/opnsense-tls.yml, hosts/ansible/roles/opnsense_cert, hosts/ansible/roles/lab_host_cert]
+files: [hosts/ansible/playbooks/opnsense-cert.yml, hosts/ansible/playbooks/tasks/opnsense-tls.yml, hosts/ansible/roles/opnsense_cert, hosts/ansible/roles/lab_host_cert, hosts/ansible/roles/agent_box/files/opnsense-cert-check.sh, .github/hosts-check/tests/test_opnsense_cert_check.sh]
 last-tested: 2026-11-09, an agent lane on the owner's Mac, Path A steps 1-4 (four runs, each changed=0 after the first swap)
 superseded-by:
 ---
@@ -129,6 +129,7 @@ B5. Check it in the browser.
 
 - Set `last-tested` here, with the date, the path (A or B) and who ran it.
 - cert-manager renews the certificate on c1 30 days before it ends; OPNsense does not fetch it. Run Path A at least every 30 days, or repeat B0, B3 and B4.
+- **The box checks the copy the firewall serves, every day.** Timer `opnsense-cert-check.timer` on the agent box runs `opnsense-cert-check check` (`hosts/ansible/roles/agent_box/files/opnsense-cert-check.sh`) as the keys user at 16:00 UTC. It makes one TLS connection to the firewall's name (the host setting of `agent_box_opnsense_backup`), checks the chain against the lab chain, and reads the end date. It exits 0 with `opnsense-cert-check: notAfter <date>, <N> days left, verified yes`, and exits 1 with a line starting `WARN` when fewer than 25 days are left, the chain does not verify, or no certificate can be read. The 25 is chosen because cert-manager renews c1's copy at 30 days left (`lab_host_cert_renew_before`, 720h of 2160h): under 25 days a renewed certificate is ready, so the warning means "copy it now", where a warning from 45 days would repeat daily for 15 days while Path A could only copy the same certificate. A failing run is a failed unit (`systemctl --failed`, `journalctl -t opnsense-cert-check`); `sudo -n -u keys /usr/local/libexec/agent-box/opnsense-cert-check.sh status` prints the last line and its time. When it says WARN for fewer than 25 days, run Path A. It holds no key and changes nothing on the firewall. **No push notification yet:** the box holds no ntfy credential, and making one is a secret, so today the warning is read, not pushed. Tested against a local TLS server in `.github/hosts-check/tests/test_opnsense_cert_check.sh`; not yet run on the box.
 
 ## Proven runs
 

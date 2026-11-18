@@ -57,6 +57,10 @@ agent_box_wrappers:
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge
     args: ["check *"]
+  # Reads the certificate the firewall's web UI serves and says how many days it has left (files/opnsense-cert-check.sh). It
+  # holds no key and writes nothing to the firewall; the daily timer (opnsense-cert-check.timer) runs `check` as the keys user.
+  - name: opnsense-cert-check
+    args: [check, status]
   # The pass ledger the merge sweep reads (D-0042 rule 2) and its stop switch (rule 8). The wrapper checks every argument.
   - name: pass-record
     args: ["add *", "show *", "halt *", "resume *"]
@@ -186,6 +190,8 @@ agent_box_tls_check_url: ""
 agent_box_opnsense_backup: {}
 # When the daily OPNsense backup starts (systemd OnCalendar).
 agent_box_opnsense_backup_daily: "*-*-* 14:30:00 UTC"
+# The daily check of the certificate the firewall serves (needs agent_box_opnsense_backup, whose host it reads).
+agent_box_opnsense_cert_check_daily: "*-*-* 16:00:00 UTC"
 # The off-box copy of those configurations (pick 222, docs/runbooks/copy-opnsense-backup-off-box.md): restic sends them
 # daily to their own container in the Azure backup account (hosts/terraform/azure/backup), signed in as their own app
 # with a certificate made on the box. Private, through the inventory, from that folder's tofu outputs: account

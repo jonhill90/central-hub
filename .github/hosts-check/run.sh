@@ -96,6 +96,7 @@ check_ansible() {
   bash "$here/tests/test_tailnet_policy_sections.sh"
   bash "$here/tests/test_proxmox_host_args.sh"
   bash "$here/tests/test_signin_check_wrapper.sh"
+  bash "$here/tests/test_opnsense_cert_check.sh"
   bash "$here/tests/test_jellyfin_plugin_name.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
@@ -412,6 +413,7 @@ check_backup() {
   bash "$here/tests/test_identity_signin.sh"
   bash "$here/tests/test_jellyfin_signin_check.sh"
   bash "$here/tests/test_rebuild_dev_stages.sh"
+  bash "$here/tests/test_rebuild_panels.sh"
   bash "$here/tests/test_rebuild_app_secrets.sh"
   bash "$here/tests/test_rebuild_preflight.sh"
   bash "$here/tests/test_agent_access_desktop.sh"
