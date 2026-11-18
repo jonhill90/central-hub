@@ -7,20 +7,29 @@
   kubectl logs ... | diag-apps.py scrub
       the lines on stdin with secrets and long token-like strings replaced.
 
-Both modes scrub what they print: a value after password, secret, token, key, authorization or bearer, and any run of 40 or
-more base64-like characters, become <redacted>. They read stdin only, write nothing and run no command.
+Both modes scrub what they print: a value after password, secret, token, key, authorization, credential or bearer (quoted or
+not, and as a --flag), the password in a URL's userinfo, OpenBao and Vault tokens, and any run of 40 or more base64-like
+characters, become <redacted>. They read stdin only, write nothing and run no command.
 """
 import json
 import re
 import sys
 
 BEARER = re.compile(r"(?i)\b(bearer|basic)\s+[^\s,;\"']+")
-WORDS = re.compile(r"(?i)((?:pass(?:word|wd)?|secret|token|api[_-]?key|private[_-]?key|authorization|credential)[A-Za-z0-9_-]*[\"']?\s*[=:]\s*)[^\s,;\"']+")
+WORDS = re.compile(r"(?i)((?:pass(?:word|wd)?|secret|token|api[_-]?key|private[_-]?key|authorization|credential)[A-Za-z0-9_-]*[\"']?\s*[=:]\s*[\"']?)[^\s,;\"']+")
+FLAGS = re.compile(r"(?i)(--(?:pass(?:word|wd)?|token|secret|api[_-]?key)[A-Za-z0-9_-]*(?:=|\s+)[\"']?)[^\s,;\"']+")
+USERINFO = re.compile(r"(://[^/\s:@]+:)[^@\s/]+@")
+VAULT = re.compile(r"\b(?:hv[sbr]|[sbr])\.[A-Za-z0-9_-]{20,}")
 LONG = re.compile(r"[A-Za-z0-9+/=_-]{40,}")
 
 
 def scrub(text):
-    return LONG.sub("<redacted>", WORDS.sub(r"\1<redacted>", BEARER.sub(r"\1 <redacted>", text)))
+    text = BEARER.sub(r"\1 <redacted>", text)
+    text = USERINFO.sub(r"\1<redacted>@", text)
+    text = FLAGS.sub(r"\1<redacted>", text)
+    text = WORDS.sub(r"\1<redacted>", text)
+    text = VAULT.sub("<redacted>", text)
+    return LONG.sub("<redacted>", text)
 
 
 def one(s, n=300):

@@ -16,6 +16,20 @@ if [[ $out == "every application is Synced and Healthy" ]]; then ok "apps: all h
 out=$(python3 -I hosts/diag-apps.py apps <<< 'not json'); if [[ $out == *"did not read as JSON"* ]]; then ok "apps: bad input is reported, not a crash"; else bad "apps bad input: $out"; fi
 out=$(printf 'GET /x Authorization: Bearer abcdef\nsecret: s3cr3t value\nplain line\n%s\n' "$(printf 'B%.0s' {1..60})" | python3 -I hosts/diag-apps.py scrub)
 if [[ $out != *abcdef* && $out != *s3cr3t* && $out != *BBBBBBBBBB* && $out == *"plain line"* ]]; then ok "scrub: secrets go, plain lines stay"; else bad "scrub: $out"; fi
+shapes=$(cat <<'S'
+{"password":"hunter2pass"}
+password: "hunter2pass"
+token: 'tok12345abc'
+{"client_secret": "Zx9qWv3LmN8pRt2YkB7cD4fG6hJ1sA5e"}
+"secret_id":"0f8fad5b-d9cb-469f-a165-70867728950e"
+login with s.AbCdEfGhIjKlMnOpQrStUvWx now
+postgres://keycloak:Sup3rS3cret@db.example:5432/kc
+run --password hunter2pass --verbose
+S
+)
+out=$(python3 -I hosts/diag-apps.py scrub <<< "$shapes")
+leak=""; for v in hunter2pass tok12345abc Zx9qWv3LmN8pRt2YkB7cD4fG6hJ1sA5e 0f8fad5b-d9cb AbCdEfGhIjKlMnOpQrStUvWx Sup3rS3cret; do [[ $out == *"$v"* ]] && leak+=" $v"; done
+if [[ -z $leak && $out == *"keycloak:<redacted>@db.example"* && $out == *"--verbose"* ]]; then ok "scrub: quoted JSON and YAML values, URL userinfo, OpenBao tokens and --flags go"; else bad "scrub shapes leaked:$leak :: $out"; fi
 python3 -I hosts/diag-apps.py nothing < /dev/null > /dev/null 2>&1; rc=$?
 if [[ $rc -eq 2 ]]; then ok "an unknown mode is refused"; else bad "unknown mode rc=$rc"; fi
 exit "$fail"
