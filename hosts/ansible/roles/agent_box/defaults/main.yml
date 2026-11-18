@@ -38,6 +38,10 @@ agent_box_wrappers:
   # seal-copy and reset-failed-start passes the owner's tap id, which the wrapper checks; key prints only the public half.
   - name: openbao-prod
     args: [key, check, "seal *", "seal-copy *", gitops, handover, "reset-failed-start *", log]
+  # Applies one named Ansible playbook to prod's c1 with the box's own prod node key (files/c1-ansible.sh). check is
+  # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The only name now is identity.
+  - name: c1-ansible
+    args: [list, "check *", "apply *", log]
   # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
   # the owner's tap id, which the wrapper checks; the run needs dev to have passed at the same commit first.
   - name: rebuild-prod
