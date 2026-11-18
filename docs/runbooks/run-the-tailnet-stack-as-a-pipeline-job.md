@@ -3,8 +3,8 @@ title: Change the tailnet stack through the pipeline job
 status: draft
 kind: manual
 trigger: every change to the tailnet stack, hosts/terraform/home/tailnet (the connector's subnet routes and split DNS), once D-0041 is accepted
-runner: an agent session starts the job; the owner taps a decision card for the apply
-outcome: the stack is planned on main, the owner taps a card that names the saved plan's hash, the same plan is applied, and both logs name the card
+runner: an agent session starts the job; the owner gives his go for the apply (D-0034 rule 9)
+outcome: the stack is planned on main, the owner's go names the saved plan's hash, the same plan is applied, and both logs name the card
 needs: D-0041 accepted; the agent_box role applied with the tailnet-stack wrapper (the owner's typed go, a limits change under D-0036); the runner registered; the controller's files on the box, with the tailnet state and its tfvars
 private-values: [tailscale-oauth-client, tailnet-tfvars, tailnet-state]
 files: [.github/workflows/lab-tailnet.yml, hosts/ansible/roles/agent_box/files/tailnet-stack.sh, hosts/ansible/roles/agent_box/files/runner-job-started.sh, hosts/terraform/home/tailnet/]
@@ -16,7 +16,7 @@ superseded-by:
 
 **Status:** draft, held. Written 2026-11-14 from the code in this change. Nothing here has run, and it does not run until D-0041 is accepted and the box's wrapper list and runner hook (both limits) are applied by the owner's typed go.
 
-The apply is the owner's tap on a decision card that names the pull request, its head and the plan's hash, run by this `lab-tailnet` job: no Mac step and no typed line. (Putting the wrapper on the box is a separate change to the box's limits.)
+The apply is the owner's go (his typed line, or his tap on a card option the card did not recommend (D-0034 rule 9)) naming the pull request, its head and the plan's hash, run by this `lab-tailnet` job: no Mac step. (Putting the wrapper on the box is a separate change to the box's limits.)
 
 This is the first job of D-0041. Until now the tailnet stack ran as a raw OpenTofu apply on the owner's Mac. After it passes once on its plan with a tap, that raw run is retired.
 
@@ -36,9 +36,9 @@ The run prints only the commit, the plan's hash, the counts of changes (`N to ad
 
 1. From the Actions tab, or an agent's `gh` run, start `lab-tailnet` with `action: plan`.
    - expect: `tailnet-stack: plan <12 hex>: N to add, N to change, N to destroy`, then a line naming the commit and the hash.
-2. A reviewing agent posts a decision card in the project chat that names the repository, the commit, `tailnet` and the 12-digit hash.
-3. The owner taps it. A tap covers one apply of that plan.
-4. A reviewing agent checks the tap and the member, then starts `lab-tailnet` with `action: apply`, `card_id` (the card's message ID) and `plan_hash`.
+2. A reviewing agent posts a decision card in the project chat that names the repository, the commit, `tailnet` and the 12-digit hash. The go option is never the recommended one (D-0034 rule 9).
+3. The owner gives his go: his typed line, or his tap on a card option the card did not recommend (D-0034 rule 9). One go covers one apply of that plan.
+4. A reviewing agent checks the go and the member, then starts `lab-tailnet` with `action: apply`, `card_id` (the message ID of his line or of the card he answered) and `plan_hash`.
    - expect: `tailnet-stack: applied plan <hash> (N to add, N to change, N to destroy), card <ID>`.
 5. Run `plan` again.
    - expect: `0 to add, 0 to change, 0 to destroy`. A plan that still shows changes means the apply did not do what its plan showed; stop and read the box's log.
