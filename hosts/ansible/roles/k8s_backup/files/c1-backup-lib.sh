@@ -57,13 +57,19 @@ backup_mark_success() {
 }
 die() { log "FAIL: $*" >&2; exit 1; }
 
-# Make the repository the first time; leave it alone after that.
+# Make the repository the first time; leave it alone after that. Only restic's exit code 10, "repository
+# does not exist" (restic 0.17 and later), makes one: any other failure to read it (the network, the
+# sign-in, a wrong password, 12) stops the run: `init` is refused on a repository that is there (c1,
+# 2026-11-18 07:25 UTC), and the backup could not use it anyway.
 restic_ensure_repo() {
-  if "$RESTIC" cat config >/dev/null 2>&1; then
-    return 0
-  fi
-  log "no repository at the target yet: making one"
-  "$RESTIC" init
+  local rc=0 err
+  err=$("$RESTIC" cat config 2>&1 >/dev/null) || rc=$?
+  case $rc in
+    0) return 0 ;;
+    10) log "no repository at the target yet: making one"
+        "$RESTIC" init ;;
+    *) die "could not read the repository (restic exit $rc), so it was left alone: $(tail -n 3 <<<"$err" | tr '\n' ' ')" ;;
+  esac
 }
 
 # forget + prune with the retention from the env file (agent pick: 7 daily, 4 weekly, 6 monthly).
