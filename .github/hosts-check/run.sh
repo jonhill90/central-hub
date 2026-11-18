@@ -105,6 +105,7 @@ check_ansible() {
   bash "$here/tests/test_opnsense_lab_tenant.sh"
   bash "$here/tests/test_desktop_configure_vars.sh"
   bash "$here/tests/test_opnsense_app_access.sh"
+  bash "$here/tests/test_opnsense_backup_target.sh"
 }
 
 check_manifests() {
@@ -193,6 +194,42 @@ check_manifests() {
       return 1
     fi
   done
+  # The agent box's path to the store through the Gateway (openbaoStoreHost; apps/openbao-store,
+  # box-path.yaml): the root with it set and the two charts it changes, so the ListenerSet, TLSRoute
+  # and CiliumNetworkPolicy are schema-checked. Unset, nothing of it renders and the root passes no
+  # store name to any app; set, the store's certificate names the host and the Gateway lets
+  # namespace openbao attach a listener.
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoStoreHost=bao.example.com \
+    > "$work/rendered/root-c1-openbao-box-path.yaml"
+  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set zone=example.com --set sealNode=node-1 --set boxHost=bao.example.com > "$work/rendered/app-c1-openbao-store-box-path.yaml"
+  helm template gateway hosts/kubernetes/home/c1/apps/gateway --namespace gateway \
+    --set zone=example.com --set address=192.0.2.10 --set openbaoBoxHost=bao.example.com > "$work/rendered/app-c1-gateway-box-path.yaml"
+  local box_kinds
+  box_kinds=$(grep -E '^kind: (ListenerSet|TLSRoute|CiliumNetworkPolicy)$' "$work/rendered/app-c1-openbao-store-box-path.yaml" | sort | tr '\n' ' ')
+  if [ "$box_kinds" != "kind: CiliumNetworkPolicy kind: ListenerSet kind: TLSRoute " ] ||
+    ! grep -q -- '- bao.example.com$' "$work/rendered/app-c1-openbao-store-box-path.yaml" ||
+    ! grep -q 'allowedListeners:' "$work/rendered/app-c1-gateway-box-path.yaml"; then
+    echo "manifests: with a box host, expected the ListenerSet, TLSRoute and CiliumNetworkPolicy, the host on the certificate and the Gateway's allowedListeners; got [$box_kinds]" >&2
+    return 1
+  fi
+  if grep -qE 'openbao-box|bao.example.com' "$work/rendered/app-c1-openbao-store.yaml" "$work/rendered/app-c1-openbao-store-seal.yaml" ||
+    grep -q 'allowedListeners:' "$work/rendered/app-c1-gateway.yaml" ||
+    grep -Eq -- '- name: "?(boxHost|openbaoBoxHost)"?$' "$work/rendered/root-c1-openbao.yaml"; then
+    echo "manifests: with no box host, the box path, its certificate name, allowedListeners or a box host parameter rendered" >&2
+    return 1
+  fi
+  # Ansible passes the store's name to the root only when it is set (cases.txt, store-host case).
+  if ! grep -q 'name: openbaoStoreHost' "$work/rendered/gitops-source-argocd-openbao-store-host.yaml" ||
+    grep -q 'openbaoStoreHost' "$work/rendered/gitops-source-argocd-openbao.yaml"; then
+    echo "manifests: k8s_gitops should pass openbaoStoreHost only when k8s_gitops_source_openbao_store_host is set" >&2
+    return 1
+  fi
+  if [ "$(grep -cE -- '- name: "?(boxHost|openbaoBoxHost)"?$' "$work/rendered/root-c1-openbao-box-path.yaml")" != 2 ]; then
+    echo "manifests: the root with openbaoStoreHost set should pass boxHost to openbao-store and openbaoBoxHost to gateway" >&2
+    return 1
+  fi
   # The apps' secrets read from OpenBao (appSecretsStore openbao, D-0058 rule 8): the root with it on,
   # and the three charts whose ExternalSecrets it moves, so the c1/<name> keys are schema-checked. The
   # root refuses it without OpenBao in the cluster, and refuses any other value.
@@ -287,6 +324,7 @@ check_backup() {
   bash "$here/tests/test_agent_access_desktop.sh"
   bash "$here/tests/test_rebuild_short_log.sh"
   bash "$here/tests/test_rebuild_box_inventory.sh"
+  bash "$here/tests/test_rebuild_log_pick.sh"
   bash "$here/tests/test_rebuild_diag_vms.sh"
   bash "$here/tests/test_opnsense_test.sh"
 }
@@ -295,6 +333,8 @@ check_proxy() {
   # Role proxmox_proxy against a stand-in Proxmox host in a container: the install beside nginx, the move from
   # nginx, its rollbacks, a run killed part-way, an open console across a graceful reload, a host with no nginx.
   bash "$here/tests/test_proxy.sh"
+  # The Proxmox host as c1's restic target on the same stand-in: a real sftp backup, restore and read-only reader.
+  bash "$here/tests/test_backup_sftp.sh"
   # The Proxmox host job end to end on the same stand-in (key line, check, refusal, apply), and the lifeline's
   # per-user entry loaded by nft.
   collections

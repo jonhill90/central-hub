@@ -15,6 +15,8 @@
 #      SOPS copy already kept makes no new key.
 #   9. reset-failed-start <tap id> deletes only the pod and its claim, and only when the log shows the self-init failure, the pod
 #      is not Ready and the store is not initialized.
+#  10. ca writes ca.crt of Secret openbao/openbao-tls to <keys>/prod/secrets-store-ca.crt, asking kubectl for that one key
+#      after Ansible's shell-style split; two certificates, a non-certificate or a failed read write nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -221,5 +223,39 @@ if [[ $g_rc -eq 0 && $g_del -eq 2 && $g_names == "pod/openbao-0 pvc/data-openbao
       $g_out == *"owner tap $tap"* && $n_rc -eq 2 && $n_del -eq 0 && $m_rc -eq 2 && $m_del -eq 0 ]]; then
   ok "9. reset-failed-start: deletes the pod and its claim only on a confirmed failed start; Ready, no log line, initialized, an empty status, an unreadable status, no tap id and a malformed one each refuse; the tap is logged"
 else bad "9. good rc=$g_rc del=$g_del [$g_names] ready rc=$r_rc/$r_del log rc=$l_rc/$l_del init rc=$i_rc/$i_del empty rc=$e_rc/$e_del junk rc=$j_rc/$j_del notap rc=$n_rc/$n_del badtap rc=$m_rc/$m_del"; fi
+
+# 10: a stand-in `ansible` that splits its -a string the way Ansible's command module does (shlex), records the words,
+# and answers kubectl with the file $t/kube/CA as base64, or fails when that file is missing.
+cat > "$venv/ansible" <<EOF
+#!/usr/bin/env python3
+import base64, json, os, shlex, sys
+words = shlex.split(sys.argv[sys.argv.index("-a") + 1])
+open("$t/kwords", "w").write("\\n".join(words))
+path = "$t/kube/CA"
+if not os.path.exists(path):
+    print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 1, "stdout": "", "stderr": "not found"}}}]}]})); sys.exit(2)
+out = base64.b64encode(open(path, "rb").read()).decode()
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0, "stdout": out, "stderr": ""}}}]}]}))
+EOF
+chmod +x "$venv/ansible"
+cafile=$t/keys/prod/secrets-store-ca.crt
+for n in 1 2; do
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout "$t/ca$n.key" -subj "/CN=test-ca-$n" -days 2 \
+    -out "$t/ca$n.pem" 2>/dev/null
+done
+rm -f "$cafile"
+cp "$t/ca1.pem" "$t/kube/CA"; run ca; a_rc=$rc a_out=$out; a_words=$(cat "$t/kwords"); a_file=$(cat "$cafile" 2>/dev/null)
+cat "$t/ca1.pem" "$t/ca2.pem" > "$t/kube/CA"; run ca; b_rc=$rc b_out=$out; b_file=$(cat "$cafile" 2>/dev/null)
+echo 'not a certificate' > "$t/kube/CA"; run ca; c_rc=$rc c_out=$out; c_file=$(cat "$cafile" 2>/dev/null)
+rm -f "$t/kube/CA"; run ca; d_rc=$rc d_out=$out; d_file=$(cat "$cafile" 2>/dev/null)
+run ca extra; e_rc=$rc
+want_words=$'-n\nopenbao\nget\nsecret\nopenbao-tls\n-o\njsonpath={.data.ca\\.crt}'
+if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: ca: the store's CA written to $cafile"* && $a_out == *"test-ca-1"* &&
+      -n $a_file && $a_file == "$(cat "$t/ca1.pem")" && $a_words == *"$want_words" &&
+      $b_rc -ne 0 && $b_out == *"is not one PEM certificate; nothing written"* && $b_file == "$a_file" &&
+      $c_rc -ne 0 && $c_out == *"is not one PEM certificate; nothing written"* && $c_file == "$a_file" &&
+      $d_rc -ne 0 && $d_out == *"nothing written"* && $d_file == "$a_file" && ! -e $cafile.part && $e_rc -eq 2 ]]; then
+  ok "10. ca: one certificate written from ca.crt, the key's dot kept through Ansible's split; two certificates, a non-certificate or a failed read write nothing"
+else bad "10. good rc=$a_rc [$a_words] $a_out | two rc=$b_rc $b_out | junk rc=$c_rc $c_out | fail rc=$d_rc $d_out | extra rc=$e_rc"; fi
 
 exit "$fail"

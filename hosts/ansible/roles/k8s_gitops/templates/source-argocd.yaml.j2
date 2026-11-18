@@ -42,6 +42,10 @@ spec:
         - name: openbaoBoxCidr
           value: "{{ k8s_gitops_source_openbao_box_cidr }}"
 {% endif %}
+{% if k8s_gitops_source_openbao_store_host | default('') | length > 0 %}
+        - name: openbaoStoreHost
+          value: "{{ k8s_gitops_source_openbao_store_host }}"
+{% endif %}
 {% if k8s_gitops_source_openbao_measure | bool %}
         - name: openbaoMeasure
           value: "true"

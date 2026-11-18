@@ -1,11 +1,13 @@
 #!/bin/bash
 # /usr/local/libexec/agent-box/proxmox-host.sh: the pipeline job for the Proxmox host's web UI proxy (D-0041; Library
-# plans/r1-host-job/DESIGN.md v3.1). It runs one of two named playbooks from main, and nothing else, on the Proxmox
+# plans/r1-host-job/DESIGN.md v3.1). It runs one of three named playbooks from main, and nothing else, on the Proxmox
 # host as root, with the key in /etc/agent-keys-host/. It runs as user `hostops` through sudo, so no session and no
 # other wrapper can read that key. Installed by the agent_box role; root owns it.
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check [<job>]
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply [<job>] <pass message ID> <check hash, 12 hex>
-# <job> names which one playbook runs: `proxy` (the default, playbooks/proxmox-proxy.yml) or `agent-access` (playbooks/
+# <job> names which one playbook runs: `proxy` (the default, playbooks/proxmox-proxy.yml), `sso` (playbooks/proxmox-sso.yml:
+#   the web UI's sign-in through Keycloak; its client secret is the one line in $dir/proxmox-sso.env, read on the box by this
+#   user only) or `agent-access` (playbooks/
 #   proxmox-agent-access.yml: it copies hosts/terraform/home/bootstrap/agent-access.sh from the same commit to the host and
 #   runs it as root, so the agents' Proxmox rights change by a reviewed PR and no longer need the Mac).
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh log
@@ -29,13 +31,13 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
 result=$work/state/check.json
 
-usage() { echo "usage: proxmox-host check [proxy|agent-access]|apply [proxy|agent-access] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2; exit 2; }
+usage() { echo "usage: proxmox-host check [proxy|agent-access|sso]|apply [proxy|agent-access|sso] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2; exit 2; }
 
 if [[ ${1:-} == log ]]; then
   [[ $# -eq 1 ]] || usage
@@ -57,6 +59,14 @@ esac
 
 [[ -f $inventory && -f $dir/id_ed25519 && -f $dir/known_hosts ]] \
   || { echo "proxmox-host: no inventory or key in $dir; the install from the controller has not run (docs/runbooks/serve-proxmox-on-443.md)" >&2; exit 1; }
+# The sso job reads the proxmox client's secret from one file of this user's own, made by the controller's run (tag
+# proxmox_host_inventory); the playbook is told its path, so it never looks in the controller's home or the keys user's folder.
+sso_args=()
+if [[ $job == sso ]]; then
+  [[ -s $dir/proxmox-sso.env ]] \
+    || { echo "proxmox-host: $dir/proxmox-sso.env is missing; the controller's proxmox_host_inventory run makes it (docs/runbooks/sign-in-to-proxmox-through-keycloak.md)" >&2; exit 1; }
+  sso_args=(-e "proxmox_sso_values_file=$dir/proxmox-sso.env")
+fi
 
 repo=$work/checkout   # this wrapper's own checkout of central-hub
 export HOME=$work PATH=$ansible_bin:/usr/local/bin:/usr/bin:/bin
@@ -84,7 +94,7 @@ print(json.dumps({"job": "proxmox-host", "time": a[1], "action": a[2], "commit":
 
 play() { # out-file, extra ansible-playbook arguments...
   local out=$1; shift
-  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" "$playbook" "$@") > "$out" 2>> "$logs/run-$stamp.err"
+  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" "$playbook" ${sso_args[@]+"${sso_args[@]}"} "$@") > "$out" 2>> "$logs/run-$stamp.err"
 }
 
 # summarize <json output> <result file>: writes the result file and prints "<hash> <changed> <skipped> <tasks>".
