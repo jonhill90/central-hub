@@ -181,7 +181,7 @@ sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh log
 3. `tofu plan` with the Mac's tfvars on the box's state gives no changes, so the box's state is the live prod; `tofu plan -destroy` deletes only node VMs in 200-249, never VM 258 or 259, and no more than the tfvars declare (D-0035 rules 2 and 6).
 4. Every prod node answers ssh with the box's key.
 5. Neither the box's default route nor its route to the Proxmox API goes through a node VM, so the teardown can't cut the box off half way (D-0035 rule 5). Only the routing table is read.
-6. The newest dev run on the box passed every stage at this same commit (D-0035 rule 3(a)). `rebuild-k8s.sh` writes `rebuild: central-hub <commit>` into each run's short log for this.
+6. The newest dev run on the box passed every stage at this same commit (D-0035 rule 3(a)). `rebuild-k8s.sh` writes `rebuild: central-hub <commit>` into each run's short log for this. The log must end `rebuild: all stages passed` and hold a good end line (`<stage> end rc=0`) for each of `vms cluster storage restore gitops secrets apps gateway checks`: a teardown-only run (`rebuild.sh teardown`) ends with the same line but ran only `teardown`, so `rebuild-prod.sh check` refuses it with `is not a full run`.
 
 `rebuild <tap id>` runs `check`, then the checks before a teardown (D-0035 rule 5). Each must pass or nothing is destroyed:
 
