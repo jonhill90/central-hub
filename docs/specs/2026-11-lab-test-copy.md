@@ -48,7 +48,7 @@ Inside the copy, the code runs against the nested host, not the real one. The st
 - the WAN safety check;
 - `playbooks/proxmox-safety.yml`.
 
-The nested vmbr1 has no ports, as on the real host, so the nested firewall's LAN DHCP stays inside the copy. Its WAN faces VNet dev, which is why the WAN safety check runs before its WAN comes up, as it does on the real host.
+The nested vmbr1 has no ports, as on the real host, so the nested firewall's LAN DHCP stays inside the copy. Its WAN sits on a nested bridge with no ports, `vmbr9`, not on the nested vmbr0: the nested vmbr0 is VNet dev itself, and the nested firewall's own dev VLAN holds dev's range, so a live WAN there would put that range on two interfaces next to dev's real gateway. The WAN safety check runs before its WAN comes up, as it does on the real host.
 
 ## Memory
 
@@ -70,7 +70,7 @@ The copy needs 6144 MiB plus the 2048 MiB margin the OPNsense test uses: 8192 Mi
 - [ ] `bash .github/hosts-check/tests/test_rebuild_preflight.sh`: the dev preflight refuses while VM 256 exists.
 - [ ] From inside VM 256: `grep -cE 'vmx|svm' /proc/cpuinfo` prints more than 0, and `pveversion` names Proxmox VE 9.
 - [ ] On the nested host: a second `tofu plan` in `network`, `firewall` and `remote-access` shows no changes, and `opnsense.yml --check` reports `changed=0`.
-- [ ] The WAN safety check's three captures on the nested vmbr0 each count 0 server-type packets.
+- [ ] The WAN safety check's three moments on the nested WAN bridge pass: before link-up only a DHCP client runs, and the captures at link-up and over a reboot each count 0 server-type packets and more than 0 frames from the WAN.
 - [ ] `proxmox-safety.yml` ends with its dead-man timer cancelled.
 - [ ] Two clean runs in a row from the agent box, build to destroy, with no hand step, each with its log in the agent notebook's run records.
 
@@ -90,3 +90,4 @@ The copy needs 6144 MiB plus the 2048 MiB margin the OPNsense test uses: 8192 Mi
 - 2026-11-18: one nested Proxmox VM, not a second set of lab objects on the real host. A second SDN zone or a second firewall on the real host would change the real host's network, and the agents' dev token cannot allocate SDN objects (`agent-access.sh`, role AgentDev has no `SDN.Allocate`). Agent pick.
 - 2026-11-18: VM 256, the free ID nearest 257 in dev's range. Agent pick.
 - 2026-11-18: the automated installer, not Debian 13 with the Proxmox packages added. The installer is what a person would use on the real host, so the answer file is proven too. Agent pick.
+- 2026-11-18: the nested firewall's WAN on a nested bridge with no ports (`firewall`'s `wan_bridge`, default `vmbr0`), not the nested vmbr0, which is VNet dev; the capture asks for a server itself, since nothing else on that bridge would. Agent pick.
