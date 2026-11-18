@@ -65,8 +65,13 @@ else
   [[ $# -eq 1 ]] || usage
 fi
 
-# The code a run builds: main's newest, or the commit named, only if main holds it. Never a branch, never a commit
-# main does not hold (D-0035 rule 4).
+# The oldest commit a pin may name: main's merge of #573. A pin runs that commit's own hosts/rebuild-k8s.sh, and one
+# below it would run without the refusal while VM 256 (the lab test copy) exists, or below #343 without the memory
+# preflight that stops VM 300 to fit dev. Raise it whenever rebuild-k8s.sh gains a refusal every dev run must keep.
+PIN_FLOOR=f3e9c3ed09c431bf00cdacdad04fb3858e516317
+
+# The code a run builds: main's newest, or the commit named, only if main holds it and it is not older than
+# PIN_FLOOR. Never a branch, never a commit main does not hold (D-0035 rule 4).
 checkout_main() { # repo [commit]
   local pinned
   git -C "$1" fetch --quiet origin main || return 1
@@ -75,6 +80,8 @@ checkout_main() { # repo [commit]
       { echo "rebuild: commit $2 is not in the box's checkout of main" >&2; return 1; }
     git -C "$1" merge-base --is-ancestor "$pinned" origin/main ||
       { echo "rebuild: commit $2 is not on main" >&2; return 1; }
+    git -C "$1" merge-base --is-ancestor "$PIN_FLOOR" "$pinned" ||
+      { echo "rebuild: commit $2 is older than the floor ${PIN_FLOOR:0:7}, whose rebuild-k8s.sh has the refusals a dev run must keep" >&2; return 1; }
     git -C "$1" checkout --quiet --detach "$pinned"
   else
     git -C "$1" checkout --quiet --detach origin/main

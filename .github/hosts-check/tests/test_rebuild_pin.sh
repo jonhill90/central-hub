@@ -4,7 +4,9 @@
 #      usage error before anything is read (diag with an argument used to fall through to a build).
 #   2. checkout_main, against a real git repository: no commit checks out main's newest; a commit on main, short or
 #      long, checks out that commit; a commit only on another branch, or one the checkout lacks, is refused.
-#   3. The box's sudo line lets a session pass the commit to up and rebuild.
+#   3. A commit on main older than the floor (PIN_FLOOR) is refused, the floor itself is taken, and rebuild.sh names
+#      the floor as one full commit ID.
+#   4. The box's sudo line lets a session pass the commit to up and rebuild.
 # Usage: .github/hosts-check/tests/test_rebuild_pin.sh   (needs git)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -32,13 +34,14 @@ grep -q 'merge-base --is-ancestor' "$t/fn.sh" || { echo "FAIL: checkout_main was
 g() { git -c user.name=t -c user.email=t@example.invalid -c init.defaultBranch=main "$@"; }
 g init -q --bare "$t/origin.git"
 g clone -q "$t/origin.git" "$t/work" 2>/dev/null
-(cd "$t/work" && g commit -q --allow-empty -m one && g push -q origin HEAD:main &&
+(cd "$t/work" && g commit -q --allow-empty -m old && g push -q origin HEAD:main &&
+ g commit -q --allow-empty -m one && g push -q origin HEAD:main &&
  g commit -q --allow-empty -m two && g push -q origin HEAD:main &&
  g checkout -q -b side && g commit -q --allow-empty -m side && g push -q origin side)
-one=$(git -C "$t/work" rev-parse main~1) two=$(git -C "$t/work" rev-parse main) side=$(git -C "$t/work" rev-parse side)
+old=$(git -C "$t/work" rev-parse main~2) one=$(git -C "$t/work" rev-parse main~1) two=$(git -C "$t/work" rev-parse main) side=$(git -C "$t/work" rev-parse side)
 g clone -q --no-checkout "$t/origin.git" "$t/box"
 git -C "$t/box" fetch -q origin side   # the side commit is in the checkout's objects, but not on main
-co() { bash -c '. "$1"; checkout_main "$2" "$3"' _ "$t/fn.sh" "$t/box" "${1:-}" > "$t/out" 2>&1; rc=$?; head=$(git -C "$t/box" rev-parse HEAD 2>/dev/null); out=$(cat "$t/out"); }
+co() { PIN_FLOOR=$one bash -c '. "$1"; checkout_main "$2" "$3"' _ "$t/fn.sh" "$t/box" "${1:-}" > "$t/out" 2>&1; rc=$?; head=$(git -C "$t/box" rev-parse HEAD 2>/dev/null); out=$(cat "$t/out"); }
 co; r2a="$rc $([[ $head == "$two" ]] && echo newest)"
 co "${one:0:7}"; r2b="$rc $([[ $head == "$one" ]] && echo pinned)"
 co "$one"; r2c="$rc $([[ $head == "$one" ]] && echo pinned)"
@@ -49,8 +52,16 @@ if [[ $r2a == "0 newest" && $r2b == "0 pinned" && $r2c == "0 pinned" && $r2d == 
 else bad "2. [$r2a] [$r2b] [$r2c] [$r2d] [$r2e]"; fi
 
 # 3
+co "$two"; co "$old"; r4a="$rc $([[ $head == "$two" ]] && echo unmoved) $([[ $out == *"commit $old is older than the floor ${one:0:7}"* ]] && echo said)"
+co "${one:0:7}"; r4b="$rc $([[ $head == "$one" ]] && echo pinned)"
+grep -qE '^PIN_FLOOR=[0-9a-f]{40}$' "$src"; r4c=$?
+if [[ $r4a == "1 unmoved said" && $r4b == "0 pinned" && $r4c -eq 0 ]]; then
+  ok "3. a commit on main older than the floor is refused, the floor itself is taken, and the floor is a full commit ID"
+else bad "3. [$r4a] [$r4b] $r4c"; fi
+
+# 4
 if grep -qF 'args: [up, "up *", rebuild, "rebuild *", teardown, identity, log, diag]' "$root/hosts/ansible/roles/agent_box/defaults/main.yml"; then
-  ok "3. the sudo line lets a session pass the commit to up and rebuild, and nothing to the other actions"
-else bad "3. the rebuild wrapper's sudo args do not pass a commit to up and rebuild"; fi
+  ok "4. the sudo line lets a session pass the commit to up and rebuild, and nothing to the other actions"
+else bad "4. the rebuild wrapper's sudo args do not pass a commit to up and rebuild"; fi
 
 exit $fail
