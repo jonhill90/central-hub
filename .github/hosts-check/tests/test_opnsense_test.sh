@@ -178,6 +178,8 @@ sys.exit(1 if clash else 0)
 PY
 grep -q 'if last_status\["code"\] == 404:' "$files/opnsense-test-prove.py" && grep -q "get('%s')" "$files/opnsense-test-prove.py" \
   && ok "a 404 from the login prints what the authentication factory lists and returns" || bad "no factory read on a 404"
+grep -q 'refused, VM 256 (the lab test copy) exists' "$w" && grep -q 'g.get("vmid") == 256' "$w" \
+  && ok "plan refuses while VM 256, the lab test copy, exists" || bad "no refusal while the lab test copy exists"
 # Item 10 (D-0037 rule 5): Keycloak stopped with the plugin's server on, then root's password. The wrapper hands
 # the prover the container's name; the prover stops it, shows the VM can't reach the issuer, then signs root in.
 grep -q '"$sshkey" "$files/known_hosts" "$KC_NAME"$' "$w" && ok "prove gets the Keycloak container's name" || bad "prove lacks the container's name"

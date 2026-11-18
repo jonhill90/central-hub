@@ -341,6 +341,7 @@ else:
 CI_RUNNER_VMID=300
 DESKTOP_VMID=400   # the one desktop VM the token may stop (agent-access.sh, DESKTOP_POWER_VMID)
 OPNSENSE_TEST_VMID=257
+LAB_TEST_VMID=256   # the lab test copy (hosts/terraform/home/lab-test), built only while dev is down
 runner_mark() { printf '%s' "$env_dir/ci-runner-stopped"; }
 preflight_stop_runner() { # node
   local node=$1 i st out
@@ -467,7 +468,13 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
     echo "preflight: refused, VM $OPNSENSE_TEST_VMID (the OPNsense test VM) exists; run opnsense-test destroy first"
     return 1
   fi
-  grep -q "guest list from" <<<"$guests" || echo "preflight: the guest list was not read, so VM $OPNSENSE_TEST_VMID (the OPNsense test VM) could not be checked"
+  # VM 256 is the lab test copy (hosts/terraform/home/lab-test, docs/specs/2026-11-lab-test-copy.md), built only while
+  # dev is down, for the same reason.
+  if grep -q "guest vmid=$LAB_TEST_VMID " <<<"$guests"; then
+    echo "preflight: refused, VM $LAB_TEST_VMID (the lab test copy) exists; run lab-test destroy first"
+    return 1
+  fi
+  grep -q "guest list from" <<<"$guests" || echo "preflight: the guest list was not read, so VM $OPNSENSE_TEST_VMID (the OPNsense test VM) and VM $LAB_TEST_VMID (the lab test copy) could not be checked"
   preflight_storage "$node" || true
   if [ "$free" -lt "$min" ]; then
     # Matched by its ID alone: /cluster/resources leaves out the pool field when the token lacks Pool.Audit on
