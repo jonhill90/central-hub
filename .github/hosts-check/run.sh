@@ -326,6 +326,8 @@ check_manifests() {
     echo "manifests: with store openbao, expected 6 remoteRef keys under c1/, found $keys" >&2
     return 1
   fi
+  # The keys those charts read, the names dev's secret-source file holds and the runbook's list agree.
+  bash "$here/tests/test_app_secrets_contract.sh"
   if helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
     --set appSecretsStore=openbao >/dev/null 2>&1; then
     echo "manifests: the root rendered appSecretsStore openbao without openbaoInCluster" >&2
