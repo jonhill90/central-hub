@@ -335,6 +335,7 @@ agent_box_lab_test: {}
 # the package's line in pve-no-subscription's trixie Packages index (read 2026-11-18). Its download is plain http,
 # so the pin is the only integrity check.
 agent_box_pve_assistant_version: 9.2.8
+agent_box_pve_assistant_base: http://download.proxmox.com/debian/pve/dists/trixie/pve-no-subscription/binary-amd64
 agent_box_pve_assistant_sha256: 94b562ac026bf9a989e0a5834538ad24e38606f8858367af0e665af0bcbdc2e2
 # The controller's private files the prod_files tasks copy to <keys_dir>/prod (D-0035; paths from
 # docs/runbooks/rebuild-home-lab-from-scratch.md). from: clone (the controller's checkout of this

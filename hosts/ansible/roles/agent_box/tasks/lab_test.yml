@@ -26,7 +26,7 @@
 
 - name: lab_test | Download proxmox-auto-install-assistant, checked against its SHA-256
   ansible.builtin.get_url:
-    url: "http://download.proxmox.com/debian/pve/dists/trixie/pve-no-subscription/binary-amd64/proxmox-auto-install-assistant_{{ agent_box_pve_assistant_version }}_amd64.deb"
+    url: "{{ agent_box_pve_assistant_base }}/proxmox-auto-install-assistant_{{ agent_box_pve_assistant_version }}_amd64.deb"
     dest: "{{ agent_box_libexec_dir }}/downloads/proxmox-auto-install-assistant_{{ agent_box_pve_assistant_version }}_amd64.deb"
     checksum: "sha256:{{ agent_box_pve_assistant_sha256 }}"
     owner: root
