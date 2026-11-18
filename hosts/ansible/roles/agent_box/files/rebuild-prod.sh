@@ -358,8 +358,9 @@ if [[ $inv_ok == true && -s $tofu_env && -s $node_list ]]; then
 fi
 
 # --- 5. Dev first (D-0035 rule 3(a)): the newest dev run passed every stage at this same commit.
-# The newest run that did more than a teardown, the way `rebuild log` reads it (rebuild.sh): a hand `rebuild teardown`
-# after a good full run, which dev needs before a prod rebuild (it can't stay up beside it), must not hide that run.
+# The newest run that did more than a teardown, the way `rebuild log` reads it (rebuild.sh): a teardown run after a
+# good full run must not hide that run. Dev is torn down after a run: hosts/rebuild-k8s.sh runner_run_teardown tears it
+# down at the end of a run that stopped VM 300 under ephemeral-dev, and the runbook's hand `rebuild teardown` does the same.
 # A teardown-only log alone, or newest with no full run behind it, still fails below.
 dev_short=""
 while read -r f; do
