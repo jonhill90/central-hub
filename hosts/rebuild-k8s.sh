@@ -194,6 +194,43 @@ wait_secrets() {
     || { echo "alertmanager-0 not Ready after ${timeout}s"; return 1; }
 }
 
+# Dev, at the end of the gateway stage and in a failed run's capture: every LoadBalancer Service, its address, the L2
+# announcement policy meant to announce it (its own, named by the label central-hub/l2-policy, or the general one), and
+# the node that holds its lease, cilium-l2announce-<namespace>-<name> in kube-system (Cilium v1.20.4 docs,
+# network/l2-announcements.rst lines 240-259). D-0062 narrowed the general policy to Services without that label, so a
+# Service with an address and no lease holder is one no policy announces: it fails. Read-only.
+l2_report() {
+  local d rc=0
+  d=$(mktemp -d)
+  if kc get svc -A -o json > "$d/svc" && kc -n kube-system get leases -o json > "$d/leases"; then
+    python3 -I -c 'import json, sys
+svcs = json.load(open(sys.argv[1]))["items"]
+leases = {l["metadata"]["name"]: (l.get("spec") or {}).get("holderIdentity") or ""
+          for l in json.load(open(sys.argv[2]))["items"]}
+n = bad = 0
+for s in sorted(svcs, key=lambda s: (s["metadata"]["namespace"], s["metadata"]["name"])):
+    if (s.get("spec") or {}).get("type") != "LoadBalancer":
+        continue
+    n += 1
+    ns, name = s["metadata"]["namespace"], s["metadata"]["name"]
+    policy = (s["metadata"].get("labels") or {}).get("central-hub/l2-policy") or "general"
+    ips = [i["ip"] for i in ((s.get("status") or {}).get("loadBalancer") or {}).get("ingress") or [] if i.get("ip")]
+    holder = leases.get("cilium-l2announce-%s-%s" % (ns, name), "")
+    print("l2: service %s/%s address %s policy %s lease %s" % (ns, name, ",".join(ips) or "none", policy, holder or "none"))
+    if ips and not holder:
+        bad += 1
+print("l2: %d LoadBalancer Services, %d with an address and no lease holder" % (n, bad))
+if n == 0 or bad:
+    print("l2: FAIL: %s" % ("no LoadBalancer Service" if n == 0 else "an address no node announces"))
+    sys.exit(1)
+print("l2: PASS: every LoadBalancer Service with an address has a lease holder")' "$d/svc" "$d/leases" || rc=$?
+  else
+    echo "l2: FAIL: the Services or the leases could not be read"; rc=1
+  fi
+  rm -rf "$d"
+  return "$rc"
+}
+
 checks() {
   local notready pods
   notready=$(kc get nodes --no-headers | awk '$2 != "Ready"')
@@ -504,7 +541,9 @@ run_stage() {
     cluster) wait_ssh && ap playbooks/k8s.yml ;;
     # The data disks only: Argo CD installs the provisioner and StorageClass (move-local-path-to-argo-cd.md).
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
-    gateway) ap playbooks/k8s-gateway.yml ;;
+    # On dev, after the smoke test's call from this machine to the Gateway's address: every load-balancer address has
+    # a node announcing it (D-0062).
+    gateway) ap playbooks/k8s-gateway.yml; [ "$ENV_NAME" != dev ] || l2_report ;;
     # A dev re-run keeps the Gateway's HTTPS on in the root Application: the dev inventory leaves it off, and
     # flipping it off here and on again in `dev-ca` left the gateway and jellyfin apps OutOfSync for 18 minutes on
     # a re-run (measured on dev, run 8, 2026-11-14), so `apps` never finished. It does so only when the
@@ -653,6 +692,8 @@ runner_capture_diag() {
     kc top nodes --no-headers
     echo "== argocd applications (name, sync, health)"
     kc -n argocd get applications.argoproj.io --no-headers -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
+    echo "== load-balancer addresses and the nodes announcing them (D-0062)"
+    l2_report || true
     echo "== pods not Running or Completed, all namespaces"
     kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
     echo "== newest events, all namespaces"
@@ -731,6 +772,10 @@ for s in $stages; do
   if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ]; then
     sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: openbao-handover:' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
+  fi
+  # The gateway stage's L2 lines (D-0062): each LoadBalancer Service, its address, policy and lease holder.
+  if [ "$s" = gateway ]; then
+    awk '$0 == "===== gateway" {on=1; next} /^===== / {on=0} on' "$raw" | grep -E '^l2: ' | sed "s/^/  $s: /" >> "$log" || true
   fi
   # The preflight's branch and the sign-in proof's step lines (step name, HTTP code, ok or the reason; the script
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.
