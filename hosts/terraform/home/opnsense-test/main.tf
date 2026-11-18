@@ -47,7 +47,11 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   vm_id     = var.vm.vm_id
   name      = var.vm.name
   pool_id   = var.pool_id
-  tags      = ["opnsense", var.vnet, "test"]
+  # No tags. Proxmox checks a create's tags for VM.Config.Options on /vms/257 itself, before the VM is
+  # in pool dev (pve-guest-common GuestHelpers.pm assert_tag_permissions: check_vm_perm with no pool),
+  # and the agents' token holds its rights on pool dev only (agent pick 196). Proxmox drops a VM's own
+  # ACLs when the VM is destroyed, and the apply after the first proof VM's destroy, 2026-11-18 02:29
+  # UTC, failed with 403 on /vms/257, VM.Config.Options.
 
   on_boot = false
   started = true
