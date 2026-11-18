@@ -68,8 +68,12 @@ setup:
 sso:
   enabled: true
   provider: keycloak
-  # Keycloak's name under the Gateway: <host>.<gateway.hostSuffix>.<zone>, realm lab.
+  # Keycloak's issuer, which the plugin compares with the issuer in Keycloak's discovery document and refuses when they
+  # differ ("Issuer name does not match authority"). Keycloak's hostname is <host>.<zone> with short names on (role
+  # k8s_identity: k8s_identity_short_names, default true; vars/main.yml k8s_identity_host) and
+  # <host>.<gateway.hostSuffix>.<zone> with them off, so this must match that setting.
   issuerHost: sso
+  shortNames: true
   realm: lab
   clientId: jellyfin
   secretName: jellyfin-sso
