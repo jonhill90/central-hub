@@ -33,6 +33,11 @@ argument_specs:
         description: >-
           The store's name as the agent box reaches it, private, read only with the in-cluster store on. Passed
           as openbaoStoreHost: the box's TLS passthrough path through Gateway apps (apps/openbao-store, box-path.yaml).
+      k8s_gitops_source_openbao_admin_address:
+        type: str
+        description: >-
+          The store's admin address, private, read only with the in-cluster store on: one address of the
+          load-balancer pool, passed as openbaoAdminAddress (apps/openbao-store, admin-path.yaml; D-0062).
       k8s_gitops_source_openbao_measure:
         type: bool
         default: false

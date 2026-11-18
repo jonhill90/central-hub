@@ -240,7 +240,9 @@ argument_specs:
           and reseed keep SOPS copies and turns on the weekly compare; it is set only by the owner's access-right tap
           (D-0058 rule 9). Anything but true is false. box_cidr: the box's own address as a /32, which the dev
           rebuild passes to stage openbao-handover (k8s_gitops_source_openbao_box_cidr); empty until the box's path
-          to the store is set. On dev every call goes to dev's Gateway by the dev inventory's
+          to the store is set. admin_address: the store's admin address, one address of dev's load-balancer pool,
+          which needs box_cidr; the dev rebuild passes it on (k8s_gitops_source_openbao_admin_address) and every
+          call goes there (D-0062). Without it, every dev call goes to dev's Gateway by the dev inventory's
           k8s_gitops_source_gateway_address. No key goes in it; the wrapper makes the keys in the keys folder.
           Empty skips the file.
       agent_box_secrets_store_prod:
@@ -257,8 +259,9 @@ argument_specs:
         description: >-
           Private settings for the openbao-prod wrapper, written to <work_dir>/openbao-prod.json (0600, the keys user's):
           seal_node (the prod k8s_nodes host for the seal key, its Kubernetes node name), store_host (the store's name as the
-          box reaches it) and box_cidr (the box's address as a /32; empty until the box's path to the store is set). No key
-          goes in it. Empty skips the file.
+          box reaches it), box_cidr (the box's address as a /32; empty until the box's path to the store is set) and
+          admin_address (the store's admin address, one address of prod's load-balancer pool, which needs box_cidr;
+          secrets-store-prod then calls it, D-0062). No key goes in it. Empty skips the file.
       agent_box_secrets_store_compare_on_calendar:
         type: str
         default: "Mon *-*-* 05:00:00"

@@ -337,13 +337,24 @@ if box_cidr:
     except ValueError: n = None
     if n is None or n.version != 4 or n.prefixlen != 32 or n.is_loopback:
         print("rebuild: box_cidr in the secrets store's settings must be one IPv4 address as a /32, not loopback", file=sys.stderr); sys.exit(1)
+# The store's admin address (D-0062), private: one address of dev's load-balancer pool, on which OpenBao sees the box's
+# own address. It needs box_cidr, the one source its NetworkPolicy lets in.
+admin = ""
+if in_cluster == "true" and os.path.isfile(store_settings):
+    admin = json.load(open(store_settings)).get("admin_address") or ""
+if admin:
+    try: a = ipaddress.ip_address(admin)
+    except ValueError: a = None
+    if a is None or a.version != 4 or a.is_loopback or not box_cidr:
+        print("rebuild: admin_address in the secrets store's settings must be one IPv4 address, not loopback, with box_cidr set", file=sys.stderr); sys.exit(1)
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking",
         "k8s_gateway_smoke_client", "k8s_certs_smoke_client", "k8s_certs_smoke_root_file",
         "k8s_backup_env_file", "k8s_backup_azure_fixed_cert_file", "k8s_control_plane_encryption_key_file",
         "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file",
-        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr"}
+        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
+        "k8s_gitops_source_openbao_admin_address"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -386,6 +397,7 @@ if in_cluster == "true":
     v["k8s_gitops_source_openbao_in_cluster"] = True
     v["k8s_gitops_source_openbao_seal_node"] = hosts[0]
     if box_cidr: v["k8s_gitops_source_openbao_box_cidr"] = box_cidr
+    if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
 )" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster" "$work/secrets-store.json"

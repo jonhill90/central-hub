@@ -20,6 +20,9 @@
 #      identity values file as put c1/identity KEY; --prod reads prod's files only, and also puts the DNS-01 token,
 #      trimmed, as put c1/cloudflare-api-token value. A missing identity or token file, a bad identity line or a blank
 #      token writes nothing.
+#  10. The store's admin address (D-0062): on dev the settings' admin_address, on prod the prod inventory's
+#      k8s_gitops_source_openbao_admin_address; set, every call goes there by the store's name (curl and the helpers),
+#      in place of dev's Gateway; one that is not IPv4, or two in the prod inventory, is refused before any call.
 # Usage: .github/hosts-check/tests/test_secrets_store_wrapper.sh   (needs python3 with PyYAML, openssl, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -182,5 +185,27 @@ if [[ $r9a -ne 0 && $o9a == *"wait for the owner's tap"* && -z $c9a && $r9b -ne 
       $r9e -eq 0 && $log9e == "$want9e" && $o9e == *"and the DNS-01 token at c1/cloudflare-api-token"* && $o9e != *cf-token-1* ]]; then
   ok "9. put-apps: refused without sops_copies, a file or good lines; otherwise each line as put c1/<name> value, each identity line as put c1/identity KEY, and on prod the trimmed DNS-01 token, value on stdin"
 else bad "9. $r9a $o9a | $r9b $o9b | $r9c $o9c | $r9d [$log9d] $o9d | $r9f $o9f | $r9g $o9g | $r9h $o9h | $r9i $o9i | $r9e [$log9e] $o9e"; fi
+
+# 10
+settings '{"address": "bao-dev.invalid", "sops_copies": true, "admin_address": "192.0.2.40"}'
+run status; r10a=$rc c10a=$calls
+run put c1/app/db password < <(printf v); r10b=$rc k10b=$(cat "$t/kv-resolve")
+settings '{"address": "bao-dev.invalid", "admin_address": "bao-admin.invalid"}'; run status; r10c=$rc o10c=$out c10c=$calls
+prod_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-prod.invalid")
+echo '{"address": "bao-prod.invalid"}' > "$t/work/secrets-store-prod.json"
+printf '%s\n' "${prod_inv[@]}" "        k8s_gitops_source_openbao_admin_address: 192.0.2.41" > "$t/work/openbao-prod/inventory/hosts.yml"
+run --prod status; r10d=$rc c10d=$calls
+printf '%s\n' "${prod_inv[@]}" "        k8s_gitops_source_openbao_admin_address: 192.0.2.41" "    k8s_workers:" "      vars:" \
+  "        k8s_gitops_source_openbao_admin_address: 192.0.2.42" > "$t/work/openbao-prod/inventory/hosts.yml"
+run --prod status; r10e=$rc o10e=$out c10e=$calls
+printf '%s\n' "${prod_inv[@]}" > "$t/work/openbao-prod/inventory/hosts.yml"
+settings '{"address": "bao-dev.invalid"}'
+if [[ $r10a -eq 0 && $c10a == *"--resolve bao-dev.invalid:443:192.0.2.40 "*"https://bao-dev.invalid/v1/sys/health"* && $c10a != *192.0.2.10* &&
+      $r10b -eq 0 && $k10b == bao-dev.invalid:443:192.0.2.40 &&
+      $r10c -ne 0 && $o10c == *"admin address is not one IPv4 address"* && -z $c10c &&
+      $r10d -eq 0 && $c10d == *"--resolve bao-prod.invalid:443:192.0.2.41 "*"https://bao-prod.invalid/v1/sys/health"* &&
+      $r10e -ne 0 && $o10e == *"gives two admin addresses"* && -z $c10e ]]; then
+  ok "10. the admin address: dev's from its settings, prod's from its inventory, every call there by name; not IPv4 or two: refused"
+else bad "10. $r10a [$c10a] | $r10b [$k10b] | $r10c $o10c | $r10d [$c10d] | $r10e $o10e"; fi
 
 exit $fail

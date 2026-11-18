@@ -3,11 +3,13 @@
 # ansible-inventory, ansible-playbook, ssh, sops and age-keygen:
 #   1. Usage: no action, another action, seal with no tap id or a malformed one: usage errors, nothing run.
 #   2. key makes the box's prod node key once and prints only its public half; a second run keeps the same key.
-#   3. Before any playbook: no settings, a seal_node that is not a prod node, a box_cidr wider than one address, or a
-#      host labelled env dev each refuse.
+#   3. Before any playbook: no settings, a seal_node that is not a prod node, a box_cidr wider than one address, an
+#      admin_address that is not one IPv4 address or comes without box_cidr, or a host labelled env dev each refuse.
 #   4. The box's inventory copy: the Mac's ssh arguments, key and proxmox group are gone; the box's key and plain ssh,
-#      the in-cluster store, its seal node, store name and box address are set.
-#   5. gitops runs k8s-gitops.yml --tags source only, on that copy.
+#      the in-cluster store, its seal node, store name, box address and admin address are set; with no admin_address,
+#      none is.
+#   5. gitops runs k8s-gitops.yml --tags source only, on that copy; l2-policy runs k8s.yml --tags lb on the first control
+#      plane only (D-0062).
 #   6. handover makes the admin IDs once, names their files to the play, and prints neither ID.
 #   7. log prints the run's own lines.
 #   8. seal-copy: reads the seal node's key over ssh and keeps it as the SOPS copy, never printed; a second run only
@@ -121,30 +123,41 @@ inventory "${prod_inv[@]}"
 rm -f "$t/work/openbao-prod.json"; run gitops; r3a=$rc o3a=$out c3a=$calls
 settings '{"seal_node": "nope", "store_host": "bao.invalid"}'; run gitops; r3b=$rc o3b=$out c3b=$calls
 settings '{"seal_node": "wk-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/24"}'; run gitops; r3c=$rc o3c=$out c3c=$calls
+settings '{"seal_node": "wk-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/32", "admin_address": "bao-admin.invalid"}'
+run gitops; r3e=$rc o3e=$out c3e=$calls
+settings '{"seal_node": "wk-a", "store_host": "bao.invalid", "admin_address": "192.0.2.60"}'; run gitops; r3f=$rc o3f=$out c3f=$calls
 inventory "${prod_inv[@]}" "      hosts:" "        wk-a: {k8s_gitops_cluster_labels: {env: dev}}"
 settings '{"seal_node": "wk-a", "store_host": "bao.invalid"}'; run gitops; r3d=$rc o3d=$out c3d=$calls
 if [[ $r3a -ne 0 && $o3a == *"openbao-prod.json is missing"* && $r3b -ne 0 && $o3b == *"seal_node is not a k8s_nodes host"* &&
       $r3c -ne 0 && $o3c == *"box_cidr must be one address"* && $r3d -ne 0 && $o3d == *"labelled env dev"* &&
-      -z $c3a$c3b$c3c$c3d ]]; then
-  ok "3. no settings, a seal node not in prod, a wide box_cidr or an env dev host: refused before any playbook"
-else bad "3. $r3a $o3a | $r3b $o3b | $r3c $o3c | $r3d $o3d"; fi
+      $r3e -ne 0 && $o3e == *"admin_address must be one IPv4 address"* && $r3f -ne 0 && $o3f == *"admin_address needs box_cidr"* &&
+      -z $c3a$c3b$c3c$c3d$c3e$c3f ]]; then
+  ok "3. no settings, a seal node not in prod, a wide box_cidr, a bad admin_address or one without box_cidr, or an env dev host: refused before any playbook"
+else bad "3. $r3a $o3a | $r3b $o3b | $r3c $o3c | $r3d $o3d | $r3e $o3e | $r3f $o3f"; fi
 
 # 4, 5
 inventory "${prod_inv[@]}"
 settings '{"seal_node": "wk-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/32"}'
 run gitops
+no_admin=$(grep -c k8s_gitops_source_openbao_admin_address "$t/seen-inventory.yml" 2>/dev/null)
+settings '{"seal_node": "wk-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/32", "admin_address": "192.0.2.60"}'
+run gitops
 seen=$(python3 -c 'import json, sys, yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))' "$t/seen-inventory.yml" 2>/dev/null)
 v=$(python3 -c 'import json, sys; d = json.loads(sys.argv[1]); v = d["all"]["children"]["k8s_nodes"]["vars"]
 print(v["ansible_ssh_private_key_file"], v["ansible_ssh_common_args"], v["k8s_gitops_source_openbao_in_cluster"],
       v["k8s_gitops_source_openbao_seal_node"], v["k8s_gitops_source_openbao_store_host"], v["k8s_gitops_source_openbao_box_cidr"],
-      "proxmox" in d["all"]["children"])' "$seen" 2>/dev/null)
-want="$t/keys/prod-node-key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$t/work/openbao-prod/known_hosts True wk-a bao.invalid 192.0.2.50/32 False"
-if [[ $rc -eq 0 && $v == "$want" && $seen != *ProxyJump* && $seen != */Users/* ]]; then
+      v["k8s_gitops_source_openbao_admin_address"], "proxmox" in d["all"]["children"])' "$seen" 2>/dev/null)
+want="$t/keys/prod-node-key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$t/work/openbao-prod/known_hosts True wk-a bao.invalid 192.0.2.50/32 192.0.2.60 False"
+if [[ $rc -eq 0 && $v == "$want" && $seen != *ProxyJump* && $seen != */Users/* && $no_admin == 0 ]]; then
   ok "4. the box's copy: the Mac's ssh settings and proxmox group gone; the box's key and the store's settings set"
 else bad "4. $rc [$v] $out"; fi
 if [[ $calls == "playbook -i $t/work/openbao-prod/inventory/ playbooks/k8s-gitops.yml --tags source" && $out == *"prod nodes, plain ssh"* ]]; then
   ok "5. gitops: k8s-gitops.yml --tags source only"
 else bad "5. [$calls]"; fi
+run l2-policy
+if [[ $rc -eq 0 && $calls == "playbook -i $t/work/openbao-prod/inventory/ playbooks/k8s.yml --tags lb --limit k8s_control_plane[0]" ]]; then
+  ok "5b. l2-policy: k8s.yml --tags lb on the first control plane only"
+else bad "5b. $rc [$calls]"; fi
 
 # 6
 run handover; r6a=$rc c6a=$calls o6a=$out

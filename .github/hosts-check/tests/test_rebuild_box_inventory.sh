@@ -5,6 +5,9 @@
 #      k8s_gitops_source_openbao_box_cidr to it; a box_cidr in the source inventory is dropped either way.
 #   2. With no box_cidr in the settings, no settings file, or the in-cluster store off, the copy sets none.
 #   3. A box_cidr that is not one IPv4 address as a /32 (a /24, loopback, a name, IPv6) stops the build.
+#   4. The store's admin address (D-0062): admin_address in the settings, with the store on, sets
+#      k8s_gitops_source_openbao_admin_address; one in the source inventory is dropped; one that is not IPv4, is loopback
+#      or comes without box_cidr stops the build.
 # Usage: .github/hosts-check/tests/test_rebuild_box_inventory.sh   (needs python3 with PyYAML)
 set -uo pipefail
 src=$(cd "$(dirname "$0")/../../.." && pwd)/hosts/ansible/roles/agent_box/files/rebuild.sh
@@ -23,6 +26,7 @@ all:
     k8s_nodes:
       vars:
         k8s_gitops_source_openbao_box_cidr: 198.51.100.9/32
+        k8s_gitops_source_openbao_admin_address: 198.51.100.40
       children:
         k8s_control_plane:
           hosts:
@@ -49,6 +53,16 @@ def walk(n):
         for i in n: walk(i)
 walk(d)
 print(",".join(found) or "none")' "$t/out.yml" 2>/dev/null || echo missing)
+  admin=$(python3 -I -c '
+import sys, yaml
+found = []
+def walk(n):
+    if isinstance(n, dict):
+        for k, v in n.items():
+            if k == "k8s_gitops_source_openbao_admin_address": found.append(v)
+            else: walk(v)
+walk(yaml.safe_load(open(sys.argv[1])))
+print(",".join(found) or "none")' "$t/out.yml" 2>/dev/null || echo missing)
 }
 
 # 1
@@ -71,5 +85,18 @@ for c in 192.0.2.0/24 127.0.0.1/32 bao.invalid 2001:db8::1/128; do
 done
 if [[ $r3 == "1:missing:1 1:missing:1 1:missing:1 1:missing:1 " ]]; then ok "3. a /24, loopback, a name or IPv6 stops the build, with the reason"
 else bad "3. $r3"; fi
+
+# 4
+r4=""
+build true '{"box_cidr": "192.0.2.30/32", "admin_address": "192.0.2.40"}'; r4+="$rc:$admin "
+build true '{"box_cidr": "192.0.2.30/32"}'; r4+="$rc:$admin "
+build false '{"box_cidr": "192.0.2.30/32", "admin_address": "192.0.2.40"}'; r4+="$rc:$admin "
+for a in 192.0.2.0/24 127.0.0.1 bao.invalid 2001:db8::1; do
+  build true "{\"box_cidr\": \"192.0.2.30/32\", \"admin_address\": \"$a\"}"; r4+="$rc:$admin:$(grep -c 'admin_address' "$t/err") "
+done
+build true '{"admin_address": "192.0.2.40"}'; r4+="$rc:$admin:$(grep -c 'with box_cidr set' "$t/err")"
+if [[ $r4 == "0:192.0.2.40 0:none 0:none 1:missing:1 1:missing:1 1:missing:1 1:missing:1 1:missing:1" ]]; then
+  ok "4. admin_address with the store on: set, the source's dropped; a range, loopback, a name, IPv6 or no box_cidr stops the build"
+else bad "4. $r4"; fi
 
 exit $fail

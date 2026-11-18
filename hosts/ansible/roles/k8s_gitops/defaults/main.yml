@@ -70,6 +70,11 @@ k8s_gitops_source_openbao_in_cluster: false
 # `kubectl port-forward` connection also matches, so the box's hand-over refuses until it is set.
 # k8s_gitops_source_openbao_seal_node: <node name>
 # k8s_gitops_source_openbao_box_cidr: <address>/32
+# Private, no default, read only with the switch on: the store's admin address, one address of the
+# load-balancer pool (not its first or last), passed as `openbaoAdminAddress`. The box's admin login goes
+# there, so OpenBao sees the box's own address (D-0062). Set it only after role k8s_control_plane's general
+# L2 policy leaves out Services labelled central-hub/l2-policy. Unset: no admin path.
+# k8s_gitops_source_openbao_admin_address: <address>
 # The dev-only measurement of the agent box's source address through the Gateway (MEASURE-1), read only
 # with the switch above on: true passes `openbaoMeasure`. Never set in an inventory: hosts/rebuild-k8s.sh
 # passes it with -e on dev, when the in-cluster store's seal key file is set.

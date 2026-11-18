@@ -195,12 +195,21 @@
     metadata:
       name: {{ k8s_control_plane_lb_pool_name }}
     spec:
+      # Every LoadBalancer Service except those labelled central-hub/l2-policy, which bring their own
+      # policy: the store's admin path (apps/openbao-store, admin-path.yaml), announced only from the
+      # node its pod is pinned to, because L2 announcements ignore externalTrafficPolicy Local (Cilium
+      # v1.20.4 docs, network/l2-announcements.rst lines 84-85; the selector, lines 112-128).
+      serviceSelector:
+        matchExpressions:
+          - {key: central-hub/l2-policy, operator: DoesNotExist}
       interfaces:
         - {{ ansible_default_ipv4.interface }}
       loadBalancerIPs: true
     YAML
   register: k8s_cp_lb
   changed_when: "'created' in k8s_cp_lb.stdout or 'configured' in k8s_cp_lb.stdout"
+  # Alone on a running cluster: playbooks/k8s.yml --tags lb --limit 'k8s_control_plane[0]' (openbao-prod l2-policy).
+  tags: [lb]
 
 # Step 10. With a worker in this cluster the control-plane taint stays (the runbook's single node
 # removed it). The smoke test runs after the worker joins (playbooks/k8s.yml).
