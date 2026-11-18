@@ -35,7 +35,8 @@ cat > "$t/bin/git" <<EOF
 #!/bin/bash
 case "\$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) d="\${@: -1}"; mkdir -p "\$d/.git" "\$d/hosts/ansible" "\$d/hosts/terraform/home/k8s"
+  clone*) d="\${@: -1}"; mkdir -p "\$d/.git" "\$d/hosts/ansible/roles/k8s_gitops/defaults" "\$d/hosts/terraform/home/k8s"
+          printf '%s\n' 'k8s_gitops_cluster_labels:' '  place: home' '  env: prod' '  purpose: apps' > "\$d/hosts/ansible/roles/k8s_gitops/defaults/main.yml"
           printf '%s\n' '#!/bin/bash' 'echo "one-command \$*" >> $t/calls' 'cp "\$1/rebuild.env" $t/seen-rebuild.env' \
             'f=\$(sed -n "s/^OPENBAO_SEAL_KEY_FILE=//p" "\$1/rebuild.env"); [ -s "\$f" ] && echo "seal-in-memory \$(wc -c < "\$f")" >> $t/calls' \
             'exit \${ONE_RC:-0}' > "\$d/hosts/rebuild-k8s.sh" ;;
@@ -127,7 +128,11 @@ grep -q "^keys=$t/keys" "$t/run/rebuild-prod.sh" && grep -q "^work=$t/work" "$t/
   grep -q ":$t/bin:" "$t/run/rebuild-prod.sh" || { echo "FAIL the test could not point the wrapper at its folders"; exit 1; }
 
 run() { : > "$t/calls"; bash "$t/run/rebuild-prod.sh" "$@" > "$t/out" 2>&1; rc=$?; out=$(cat "$t/out"); calls=$(cat "$t/calls"); }
-dev_log() { printf '%s\n' "rebuild: central-hub $1" "2026-11-18T03:00:00Z vms start" "$2" > "$t/work/rebuild-dev/logs/rebuild-20261118T030000Z.log"; }
+full_stages() { for st in vms cluster storage restore gitops secrets apps gateway checks; do printf '%s\n' "2026-11-18T03:00:00Z $st start" "2026-11-18T03:00:01Z $st end rc=0 1s"; done; }
+dev_log() { { printf '%s\n' "rebuild: central-hub $1"; full_stages; printf '%s\n' "$2"; } > "$t/work/rebuild-dev/logs/rebuild-20261118T030000Z.log"; }
+# The log of `rebuild.sh teardown`: same ending line, but only the teardown stage ran.
+dev_log_teardown() { printf '%s\n' "rebuild: central-hub $1" "2026-11-18T03:00:00Z teardown start" "2026-11-18T03:00:20Z teardown end rc=0 20s" \
+  "rebuild: all stages passed" > "$t/work/rebuild-dev/logs/rebuild-20261118T030000Z.log"; }
 destroy() { python3 -c 'import json, sys; print(json.dumps({"resource_changes": [
   {"type": "proxmox_virtual_environment_vm", "address": "a%d" % i, "change": {"actions": ["delete"], "before": {"vm_id": i}}}
   for i in map(int, sys.argv[1:])]}))' "$@" > "$t/destroy.json"; }
@@ -197,13 +202,14 @@ run check; [[ $rc -eq 1 && $out == *"k8s_certs_smoke_root_file still points at t
 dev_log 1111111111111111111111111111111111111111 "rebuild: all stages passed"
 run check; [[ $rc -eq 1 && $out == *"ran another commit"* ]] && r5+="d"
 dev_log "$sha" "rebuild: stage apps failed"; run check; [[ $rc -eq 1 && $out == *"did not pass every stage"* ]] && r5+="e"
+dev_log_teardown "$sha"; run check; [[ $rc -eq 1 && $out == *"is not a full run: no good end line for stage(s) vms cluster storage"* ]] && r5+="i"
 dev_log "$sha" "rebuild: all stages passed"
 sed -i 's/vm_id = 201/vm_id = 301/' "$t/keys/prod/tfvars/k8s.tfvars"
 run check; [[ $rc -eq 1 && $out == *"outside 200-249: 301"* ]] && r5+="f"
 sed -i 's/vm_id = 301/vm_id = 201/' "$t/keys/prod/tfvars/k8s.tfvars"
 ROUTE_VIA=192.0.2.11 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"* ]] && r5+="g"
 DEFAULT_VIA=192.0.2.10 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"*"default via 192.0.2.10"* ]] && r5+="h"
-if [[ $r5 == abcdefgh ]]; then ok "5. check refuses a plan with changes, VM 258, a Mac path, another dev commit, a failed dev run, VM 301, a route through a node"
+if [[ $r5 == abcdeifgh ]]; then ok "5. check refuses a plan with changes, VM 258, a Mac path, another dev commit, a failed dev run, a teardown-only dev run, VM 301, a route through a node"
 else bad "5. [$r5] $out"; fi
 
 # 6
@@ -238,5 +244,20 @@ else bad "7. $r7a $o7a | $r7b $o7b | $r7c $o7c"; fi
 run log
 if [[ $rc -eq 0 && $out == *"rebuild-prod: rebuild at central-hub ${sha:0:12}, owner tap $tap"* ]]; then ok "8. log prints the run's lines"
 else bad "8. $rc $out"; fi
+
+# 9. The Mac's inventory leaves the labels to the k8s_gitops role's default (env prod) and names its sign-in CA on the Mac.
+inventory "        k8s_gitops_sso_root_ca_file: /Users/someone/.config/central-hub/lab-ca/root.crt"
+sed -i '/k8s_gitops_cluster_labels/d' "$t/keys/prod/inventory-hosts.yml"
+run check; o9a=$out
+mkdir -p "$t/keys/prod/lab-ca"; echo x > "$t/keys/prod/lab-ca/root.crt"
+run check; o9b=$out
+box=$(python3 -c 'import sys, yaml; d = yaml.safe_load(open(sys.argv[1])); v = d["all"]["children"]["k8s_nodes"]["vars"]; l = v["k8s_gitops_cluster_labels"]; print(l["env"], l["place"], l["purpose"], v["k8s_gitops_sso_root_ca_file"])' "$t/work/rebuild-prod/inventory/hosts.yml" 2>&1)
+inventory "        k8s_gitops_cluster_labels: {env: dev}"
+run check; o9c=$out
+if [[ $o9a == *"k8s_gitops_sso_root_ca_file is $t/keys/prod/lab-ca/root.crt, which is not on the box"* && $o9a != *"labelled env"* && $o9a != *"still points at the Mac"* &&
+      $o9b == *"every private file at the box's copy"* && $o9b != *"labelled env"* && $box == "prod home apps $t/keys/prod/lab-ca/root.crt" &&
+      $o9c == *"is labelled env dev, not prod"* ]]; then
+  ok "9. no labels in the Mac's inventory: the box's copy gets the role's default (env prod); an env other than prod is still refused; the sign-in CA is mapped"
+else bad "9. [$box] $o9a | $o9b | $o9c"; fi
 
 exit "$fail"
