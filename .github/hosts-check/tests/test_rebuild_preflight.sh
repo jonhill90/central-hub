@@ -100,6 +100,14 @@ out=$(log="$t/top.log" bash -c '. "$1"; kc() { printf "%s\n" "dalcpkube01 120m 6
 check "the sampler logs each node's CPU and memory" "$out" "identity-keycloak: node top " ""
 check "the worker's line has its memory and percent" "$out" "dalwkkube01 cpu 45% memory 6900Mi (96%)" ""
 check "a short line is dropped" "$out" "dalcpkube01" "junk"
+check "a sample with node rows logs no \"no reading\" line" "$out" "dalwkkube01" "no reading"
+# A sample with no node row logs one line: how long the call took and the first line of its error, or that it had none.
+out=$(log="$t/top3.log" bash -c '. "$1"; kc() { echo "error: Metrics API not available" >&2; echo "second line" >&2; return 1; }; sleep() { exit 0; }; node_top_sampler identity-keycloak "$$"' _ "$t/fn.sh"; cat "$t/top3.log")
+check "a failed sample logs one no-reading line with its error's first line" "$out" "identity-keycloak: node top 20" "second line"
+check "the no-reading line says how long the call took and why" "$out" "s: error: Metrics API not available" ""
+[ "$(printf '%s\n' "$out" | grep -c 'no reading after [0-9]*s: ')" = 1 ] && echo "ok   one no-reading line per empty sample" || { echo "FAIL: not one no-reading line: [$out]"; fail=1; }
+out=$(log="$t/top4.log" bash -c '. "$1"; kc() { echo "junk"; }; sleep() { exit 0; }; node_top_sampler identity-keycloak "$$"' _ "$t/fn.sh"; cat "$t/top4.log")
+check "a sample with no node row and no error says so" "$out" "no reading after 0s: no node row and no error" "junk"
 # A sampler whose run is gone stops by itself: the PID it watches is a process that has already exited.
 sh -c 'exit 0' & gone=$!; wait "$gone" || true
 out=$(log="$t/top2.log" timeout 10 bash -c '. "$1"; kc() { echo "n1 1m 1% 1Mi 1%"; }; sleep() { :; }; node_top_sampler gone "$2"; echo "sampler-ended"' _ "$t/fn.sh" "$gone" 2>&1 || true)
