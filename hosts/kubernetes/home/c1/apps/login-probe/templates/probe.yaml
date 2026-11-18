@@ -8,7 +8,9 @@ metadata:
 ---
 # A CronJob, not an Argo CD hook: a PostSync hook runs only when a sync does, so it would not rerun
 # when its script changes, and a failing hook fails the sync and stalls it. A failed check here fails
-# one Job and leaves the app Synced. Read the newest Job's log; it ends with RESULT: PASS or FAIL.
+# one Job and leaves the app Synced; Argo CD's CronJob health check shows it Degraded while the newest run
+# is the failed one (lastSuccessfulTime older than lastScheduleTime), until a run passes. Read the newest Job's
+# log; it ends with RESULT: PASS or FAIL.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
