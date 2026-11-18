@@ -92,8 +92,13 @@ print(json.dumps(c))
 PY
 out=$(ensure "$client" "$work/client-changed.json")
 [ "$out" = updated ] || { echo "FAIL: ensure-client.sh printed '$out' for a changed client, not 'updated'" >&2; exit 1; }
-kc get clients -r lab -q "clientId=$client" --fields redirectUris | grep -q "changed.example.com" ||
-  { echo "FAIL: the changed redirect did not land" >&2; exit 1; }
+# Read the whole answer first: with pipefail, `grep -q` closing the pipe at its first match can make kcadm
+# die of SIGPIPE, and the pipeline then fails even though the redirect is there.
+redirects=$(kc get clients -r lab -q "clientId=$client" --fields redirectUris)
+case $redirects in
+  *changed.example.com*) ;;
+  *) echo "FAIL: the changed redirect did not land; kcadm answered: $redirects" >&2; exit 1 ;;
+esac
 out=$(ensure "$client" "$work/client.json")
 after=$(kc get users -r lab --fields username --format csv --noquotes | sort | tr '\n' ' ')
 others_after=$(kc get clients -r lab --fields clientId --format csv --noquotes | grep -v "^$client$" | sort | tr '\n' ' ')
