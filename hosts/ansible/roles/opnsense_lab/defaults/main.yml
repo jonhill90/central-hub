@@ -64,3 +64,18 @@ opnsense_lab_app_access_names: [agent box, desktop VM]
 # The rules' sequence numbers, in source order: ahead of the dev VLAN's own rules (90 and up with today's VLAN file)
 # and clear of every other rule the role numbers; the role checks both.
 opnsense_lab_app_access_sequences: [11, 12]
+
+# Pass rules from the c1 nodes to the Proxmox host's ssh on its VNet mgmt address (tasks/backup_target.yml), so restic
+# reaches its sftp target there (the owner, 2026-11-18 07:44 UTC: back up on the Proxmox host; agent pick 262).
+# Optional and private (addresses), from the inventory; unset = no such rules, and any left from an earlier run are
+# removed. Applying a change is a firewall change on the owner's go (D-0036 rule 8).
+# opnsense_lab_backup_target:
+#   vlan: 10                     # the sources' VLAN tag (prod)
+#   host: <address>              # the host's address on VNet mgmt (proxmox_host_mgmt_address)
+#   sources:
+#     - { name: prod node 200, address: <VM 200's address> }
+#     - { name: prod node 201, address: <VM 201's address> }
+# The names the rules may have; a name that is not a current source loses its rule.
+opnsense_lab_backup_target_names: [prod node 200, prod node 201]
+# The rules' sequence numbers, in source order, clear of every other rule the role numbers; the role checks it.
+opnsense_lab_backup_target_sequences: [13, 14]

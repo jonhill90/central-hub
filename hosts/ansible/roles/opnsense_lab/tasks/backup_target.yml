@@ -1,0 +1,41 @@
+---
+# Pass rules from the c1 nodes to the Proxmox host's ssh, so restic reaches its sftp target there (agent pick 262).
+# Without them prod's own rules pass only ping and DNS to the firewall and the internet (tasks/rules.yml), so the
+# host's VNet mgmt address is dropped. One rule per node, from that address only, to the host's address only, on
+# tcp 22 only. On the host, sshd lets those addresses in only as the backup users, never as root (role
+# proxmox_restic_sftp). Applying them is a firewall change on the owner's go (D-0036 rule 8).
+- name: Backup target inputs are checked
+  ansible.builtin.import_tasks: backup_target_checks.yml
+
+- name: The c1 nodes to the Proxmox host's ssh
+  oxlorg.opnsense.rule:
+    description: "Allow {{ item.name }} to Proxmox backup SSH"
+    match_fields: [description]
+    sequence: "{{ opnsense_lab_backup_target_sequences[opnsense_lab_backup_target_index] }}"
+    action: pass
+    quick: true
+    interface: ["{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_backup_target.vlan) | first).ifname }}"]
+    direction: in
+    ip_protocol: inet
+    protocol: TCP
+    source_net: "{{ item.address }}/32"
+    destination_net: "{{ opnsense_lab_backup_target.host }}/32"
+    destination_port: "22"
+    log: false
+  loop: "{{ opnsense_lab_backup_target.sources }}"
+  loop_control:
+    label: "{{ item.name }} to Proxmox backup SSH"
+    index_var: opnsense_lab_backup_target_index
+  when: opnsense_lab_backup_target is defined
+  notify: Apply rule changes
+
+# Every known name that is not a current source loses its rule: all of them when the input is unset.
+- name: No rules for backup sources that are gone
+  oxlorg.opnsense.rule:
+    description: "Allow {{ item }} to Proxmox backup SSH"
+    match_fields: [description]
+    state: absent
+  loop: >-
+    {{ opnsense_lab_backup_target_names
+       | difference((opnsense_lab_backup_target | default({})).sources | default([]) | map(attribute='name') | list) }}
+  notify: Apply rule changes

@@ -29,3 +29,6 @@ k8s_backup_azure_script_env:
   AZURE_CLIENT_CERTIFICATE_PATH: "{{ k8s_backup_azure_cert_file }}"
   BACKUP_CERT_DAYS: "{{ k8s_backup_azure_cert_days }}"
   BACKUP_CERT_RENEW_DAYS: "{{ k8s_backup_azure_cert_renew_days }}"
+# The Proxmox target's repository line (agent pick 262), after the controller's env file so it wins. No newline
+# here: the env file task adds it (a '\n' in a Jinja literal stays two characters under Ansible).
+k8s_backup_sftp_env_line: "{{ ('RESTIC_REPOSITORY=sftp:' ~ k8s_backup_sftp_alias ~ ':/' ~ k8s_backup_sftp_repo) if k8s_backup_sftp else '' }}"

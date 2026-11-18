@@ -38,6 +38,11 @@ data:
     Alerts sent to ntfy, 24h	sum(increase(alertmanager_notifications_total{receiver_name="ntfy"}[24h]))
     Failed sends to ntfy, 24h	sum(increase(alertmanager_notifications_failed_total{receiver_name="ntfy"}[24h]))
     Alerts firing	count(ALERTS{alertstate="firing",alertname!="Watchdog"}) or vector(0)
+    {{- if .Values.backup.metrics }}
+    Hours since the last volume backup	(time() - max(c1_backup_last_success_timestamp_seconds{kind="volumes"})) / 3600
+    Hours since the last etcd backup	(time() - max(c1_backup_last_success_timestamp_seconds{kind="etcd"})) / 3600
+    Days since the last volume restore test	(time() - max(c1_backup_last_success_timestamp_seconds{kind="restore-test-volumes"})) / 86400
+    {{- end }}
   check.sh: |
     #!/bin/sh
     # No heredocs: the root filesystem is read-only.

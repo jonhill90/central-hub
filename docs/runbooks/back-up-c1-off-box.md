@@ -6,15 +6,15 @@ trigger: nightly timers on the c1 nodes; the playbook on request
 runner: an agent lane, through the owner's Mac (D-0022)
 outcome: every night restic writes an encrypted snapshot of c1's etcd and of every volume folder to a repository off the Proxmox host, and every week a restore test proves the newest snapshots come back
 needs: the lab clone of central-hub with its private inventory; SSH to the c1 nodes as D-0022 says; a restic repository off the Proxmox host and its credentials; for Azure, the agents' service principal signed in to `az` on the Mac, with Graph `Application.ReadWrite.OwnedBy` (give-agents-access-to-azure.md)
-private-values: [c1-backup-restic-repository, c1-backup-restic-password, c1-backup-target-credentials, c1-backup-azure-storage-account, home-public-ip]
-files: [hosts/terraform/azure/backup/, hosts/ansible/playbooks/k8s-backup.yml, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/, .github/hosts-check/tests/test_backup.sh, .github/hosts-check/tests/test_backup_azure_cert.sh]
-last-tested: 2026-11-08, an agent, the scripts end to end in CI's test (etcd 3.7.0, local restic repository); 2026-11-09, an agent, terraform/azure/backup's offline tests (mocked provider); 2026-11-09, an agent lane through the owner's Mac, the full apply and the playbook's drill on c1 against Azure Blob with a user delegation SAS (backups OK, restic check clean, etcd restore test PASS, volume restore test PASS on 2 folders); 2026-11-09, an agent, the node certificate script and azure_identity.yml against a stand-in for Entra ID and Graph in CI (test_backup_azure_cert.sh); the sign-in by certificate on c1 is not tested yet; 2026-11-09, an agent, CI's test with Keycloak's PostgreSQL image (18.6), a real `pg_dumpall` through a stand-in for crictl, then steps 2 and 3 of "Restore Keycloak's database" into a new database whose password had changed (all rows back, the new password still signs in)
+private-values: [c1-backup-restic-repository, c1-backup-restic-password, c1-backup-target-credentials, c1-backup-azure-storage-account, home-public-ip, proxmox-host-mgmt-address, c1-node-addresses]
+files: [hosts/terraform/azure/backup/, hosts/ansible/playbooks/k8s-backup.yml, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/, hosts/ansible/roles/proxmox_restic_sftp/, hosts/ansible/roles/opnsense_lab/tasks/backup_target.yml, .github/hosts-check/tests/test_backup_sftp.sh, .github/hosts-check/tests/test_opnsense_backup_target.sh, .github/hosts-check/tests/test_backup.sh, .github/hosts-check/tests/test_backup_azure_cert.sh, .github/hosts-check/tests/test_backup_metrics.sh, hosts/kubernetes/home/c1/apps/monitoring-extras/]
+last-tested: 2026-11-08, an agent, the scripts end to end in CI's test (etcd 3.7.0, local restic repository); 2026-11-09, an agent, terraform/azure/backup's offline tests (mocked provider); 2026-11-09, an agent lane through the owner's Mac, the full apply and the playbook's drill on c1 against Azure Blob with a user delegation SAS (backups OK, restic check clean, etcd restore test PASS, volume restore test PASS on 2 folders); 2026-11-09, an agent, the node certificate script and azure_identity.yml against a stand-in for Entra ID and Graph in CI (test_backup_azure_cert.sh); the sign-in by certificate on c1 is not tested yet; 2026-11-09, an agent, CI's test with Keycloak's PostgreSQL image (18.6), a real `pg_dumpall` through a stand-in for crictl, then steps 2 and 3 of "Restore Keycloak's database" into a new database whose password had changed (all rows back, the new password still signs in); 2026-11-18, an agent, the Proxmox host target in CI's stand-in (test_backup_sftp.sh runs role proxmox_restic_sftp on a Debian trixie container with OpenSSH 10.0, a node container, restic init, backup, full restore, prune, the read-only reader, and every refusal); not run on the real host or c1 yet
 superseded-by:
 ---
 
 # Back up c1 off the box
 
-Until now the only copy of c1's data is the nightly Proxmox backup on one old HDD in the same PC (TASK-0139). This runbook adds a second copy somewhere else: restic snapshots of etcd and of every volume folder, sent off the Proxmox host each night, and a weekly test that restores them.
+Until now the only copy of c1's data is the nightly Proxmox backup on one old HDD in the same PC (TASK-0139). This runbook adds a second copy: restic snapshots of etcd and of every volume folder, sent off the Proxmox host each night, and a weekly test that restores them.
 
 ```mermaid
 flowchart LR
@@ -35,11 +35,12 @@ Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md),
 
 - c1 is up: `kubectl get nodes` shows both nodes `Ready`.
 - The worker's data disk is mounted: `findmnt /var/lib/c1-data` on the worker shows it ([Storage on c1](../../hosts/ansible/README.md#storage-on-c1)).
-- You have a place for the repository that is not the Proxmox host. restic can write to many kinds of target; this role works with any of them, because the target lives only in the env file:
+- You have a place for the repository. The owner's words of 2026-11-18 07:44 UTC put it on the Proxmox host for now ("just ... back on the proxmox for now"), on the backup HDD, through [The Proxmox host](#the-proxmox-host) below. That copy shares the PC with the data it protects, so a lost PC loses both: it is a second, file-level copy, not an off-site one. Azure Blob is parked, and its steps stay below, off. restic can write to many kinds of target; this role works with any of them, because the target lives only in the env file:
 
   | Target | `RESTIC_REPOSITORY` | Extra lines in the env file |
   |---|---|---|
-  | Azure Blob storage, the owner's pick (2026-10-16), made by [the Azure steps below](#azure-blob-without-a-key) | `azure:c1-backup:/c1` | none: the playbook adds `AZURE_ACCOUNT_NAME` and the nodes' own sign-in lines |
+  | The Proxmox host's backup HDD, the owner's words of 2026-11-18 (below) | none: the playbook adds `sftp:c1-backup-target:/c1` | none: each node makes its own ssh key |
+  | Azure Blob storage, the owner's pick (2026-10-16), parked on 2026-11-18, made by [the Azure steps below](#azure-blob-without-a-key) | `azure:c1-backup:/c1` | none: the playbook adds `AZURE_ACCOUNT_NAME` and the nodes' own sign-in lines |
   | Any S3-compatible store | `s3:https://<endpoint>/<bucket>/c1` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
   | A restic REST server on another machine | `rest:https://<user>:<password>@<host>:8000/c1` | none |
   | An SFTP account on another machine | `sftp:<user>@<host>:/srv/restic/c1` | none (an SSH key for root on each node) |
@@ -120,6 +121,51 @@ A4. Nothing runs by hand after that. Each certificate lasts 90 days. Every day a
    ```
 
    expect: `ok: Entra ID accepts certificate <thumbprint>, N days left`.
+
+## The Proxmox host
+
+The repository sits on the Proxmox host's backup HDD, at `/mnt/hdd-backup/restic/c1`, served by the host's own OpenSSH (agent pick 262). Nothing new is installed on the host. The nodes sign in as `c1backup`, which gets nothing but `internal-sftp` inside `/mnt/hdd-backup/restic`: no shell, no forwarding, no tty, key only, and each key only from its own node's address. Root can't sign in from those addresses at all. Dev reads as `c1restore`, whose `internal-sftp -R` refuses every write, the way the Azure reader app can't write.
+
+```mermaid
+flowchart LR
+  n["each c1 node<br/>own ssh key, made on the node<br/>alias c1-backup-target"] -->|"tcp 22, VLAN 10 to VNet mgmt<br/>OPNsense pass, host.fw IN"| h["Proxmox host sshd<br/>c1backup: chroot + internal-sftp"]
+  h --> r[("/mnt/hdd-backup/restic/c1<br/>restic repository, encrypted")]
+  d["dev worker<br/>own key"] -->|"c1restore: internal-sftp -R"| h
+```
+
+`playbooks/k8s-backup.yml` does all of it in one run when `k8s_backup_sftp` is true: play 1 makes each node's key (`/etc/central-hub/backup-ssh/id_ed25519`, 0600), play 2 runs role `proxmox_restic_sftp` on the host with those public keys, play 3 is the usual backup role, which writes the ssh alias (`/etc/ssh/ssh_config.d/40-central-hub-backup.conf`, the host's key pinned) and adds `RESTIC_REPOSITORY=sftp:c1-backup-target:/c1` last in the node env file, and play 4 makes the repository readable by the reader's group. The host role stops if nothing is mounted at `/mnt/hdd-backup`, so a missing disk never fills the host's root disk.
+
+why: rest-server would add append-only mode, but it needs a binary on the host from a release this lane could not download or check (2026-11-18), and sftp needs only what the host has. The cost: a node can delete snapshots, as the Azure Contributor role allows today.
+※ sshd_config(5), `ChrootDirectory`, `ForceCommand`, the keywords allowed in `Match`; sftp-server(8), `-R` and `-u`; restic's docs, "SFTP" (<https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#sftp>); restic 0.14.0 changelog, "Support for group-accessible repositories"; CI's `test_backup_sftp.sh` proves each point against a real sshd and restic.
+
+P1. Firewall. The nodes are on VLAN 10 and the host's address is on VNet mgmt, and today OPNsense passes VLAN 10 only ping and DNS to the firewall, and the internet (`opnsense_lab` `tasks/rules.yml`). Two rules open tcp 22 from the two nodes to the host, and nothing else. Both are firewall changes, so applying them waits on the owner's go: his typed words naming this step and the commit, or a tap on an option the agents did not recommend (D-0036 rule 8, D-0034 rule 9). In the private inventory:
+
+   ```yaml
+   # opnsense_fw (playbooks/opnsense.yml, tags rules):
+   opnsense_lab_backup_target:
+     vlan: 10
+     host: <proxmox_host_mgmt_address>
+     sources:
+       - { name: prod node 200, address: <VM 200's address> }
+       - { name: prod node 201, address: <VM 201's address> }
+   # proxmox_host (playbooks/proxmox-safety.yml), only if proxmox_firewall_enable is true:
+   proxmox_firewall_extra_rules:
+     - { action: ACCEPT, source: "<VM 200's address>,<VM 201's address>", proto: tcp, dport: "22", comment: "restic sftp from the c1 nodes" }
+   ```
+
+   ```sh
+   ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags backup_target --check --diff
+   ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags backup_target
+   ```
+
+   expect: two rules on the VLAN 10 interface, "Allow prod node 200 to Proxmox backup SSH" and the same for 201, at sequences 13 and 14, each from one node's /32 to the host's /32 on tcp 22. Then from each node, `timeout 5 bash -c '</dev/tcp/<host's mgmt address>/22' && echo open` prints `open`.
+
+P2. In step 1, the env file needs only `RESTIC_PASSWORD`; a `RESTIC_REPOSITORY` line there is overruled by the one the playbook adds. In step 2, set in the private inventory `k8s_backup_sftp: true` and `k8s_backup_azure_identity: false` (the role refuses both). The host's address comes from `proxmox_host_mgmt_address`, which the inventory already holds. Run step 2 over every node, never with `--limit`: the host's list of keys is the nodes the run reached, and play 2 stops a run that reached only some. The first `--check` run makes no node key, so it shows no change to the host's users or sshd; play 2 still reads the host's ssh key, so the nodes' alias tasks are checked (`.github/hosts-check/tests/test_backup_sftp.sh`, section 6). With the Azure sign-in off, step 2 also stops and disables `c1-backup-azure-cert.timer` on a node where an earlier run left it, and keeps its unit files (section 7).
+   expect: play 2 ends with `sshd applies the chroot and internal-sftp to the writer` ok; play 3's `The alias reaches the host and gets sftp only` ok on both nodes; then step 3's drill passes as before.
+
+P3. Dev can't restore from here yet. The plays in `playbooks/k8s-restore.yml` give dev's worker its own read-only login (`k8s_backup_sftp: true` in dev's inventory), but `opnsense_lab_backup_target` opens tcp 22 only from the two prod nodes on VLAN 10, so dev's worker has no route to the host. A dev restore from this target needs that input to take dev's worker too, in its own pull request. Until then dev restores from Azure as before. Until the agent box has its own key on the host, the host plays run only from the Mac, whose inventory has the `proxmox` group.
+
+The way back: `k8s_backup_sftp: false` and `k8s_backup_azure_identity: true`, then step 2. The host's users, keys and repository stay until removed by hand, which is a delete and waits on the owner's go.
 
 ## Steps
 
@@ -227,14 +273,58 @@ The copy of `/var/lib/central-hub/identity-postgres` in a snapshot is read file 
 
 why: a dump is consistent by itself, so it restores the database whatever was happening on disk at the time (agent pick 190). The weekly restore test checks that each dump came back whole.
 
+## Know when a backup stops
+
+Every backup and restore test that ends well writes its time for Prometheus: `c1_backup_last_success_timestamp_seconds{kind="volumes"}` (and `etcd`, `restore-test-volumes`, `restore-test-etcd`) in `c1-backup-<kind>.prom` in `k8s_backup_metrics_dir` (`/var/lib/node-exporter/textfile`, mode 0755). That is `backup_mark_success` in `c1-backup-lib.sh`. A run that fails writes nothing, so its time grows old. kube-prometheus-stack's node-exporter reads the folder with its textfile collector, through the chart's read-only host root mount at `/host/root`. App `monitoring-extras` then raises:
+
+| Alert | Means |
+|---|---|
+| C1BackupStale | No good volume or etcd backup from a node for 30 hours (one missed night); critical |
+| C1RestoreTestStale | A weekly restore test on a node hasn't passed for 8 days |
+| C1BackupNotRecorded | No node reports a good volume or etcd backup at all for 2 hours, so C1BackupStale can't fire |
+
+A node whose folder node-exporter can't read raises the chart's own NodeTextFileCollectorScrapeError.
+
+The panel check prints the hours since the last volume and etcd backups and the days since the last volume restore test ([check-c1-alerts-and-dashboard.md](check-c1-alerts-and-dashboard.md)).
+
+Order, so nothing fires for the wrong reason:
+
+1. Merge the change, then run step 2 with `--tags install,timers`. The role makes the folder and the units pass `BACKUP_METRICS_DIR`.
+   expect: `ls -ld /var/lib/node-exporter/textfile` on every node shows the folder, mode `drwxr-xr-x`.
+2. After the next night's timers, or a drill (`--tags drill`), each node's folder holds its `.prom` files.
+   expect: `cat /var/lib/node-exporter/textfile/c1-backup-volumes.prom` on a node shows the line with tonight's time.
+3. One pull request turns it on, in both places that must match (`.github/hosts-check/parity.py`):
+   - `prometheus-node-exporter.extraArgs` in `apps/kube-prometheus-stack/values.yaml` and in `k8s_observability_kps_values` (role k8s_observability's `vars/main.yml`): the chart's two `--collector.filesystem` defaults (this list replaces them) plus `--collector.textfile.directory=/host/root/var/lib/node-exporter/textfile`;
+   - `backup.metrics: true` in `apps/monitoring-extras/values.yaml`.
+
+   why: node-exporter reports `node_textfile_scrape_error 1` for a folder that isn't there yet, and the chart's NodeTextFileCollectorScrapeError fires on it at once, so the collector waits for step 1. Until step 3 the three alerts and the panel lines are off.
+
 ## If it fails
 
 - **The env file check stops the run:** the file is missing, empty, or readable by others. Fix it on the controller; nothing on the nodes was changed.
-- **A backup fails at night:** `journalctl -u c1-backup-etcd -u c1-backup-volumes --since yesterday` on the node. The timers retry the next night; `Persistent=true` runs a missed one at boot.
+- **A backup fails at night** (C1BackupStale, or C1RestoreTestStale for the weekly test): `journalctl -u c1-backup-etcd -u c1-backup-volumes -u c1-restore-test --since yesterday` on the node named in the alert. The timers retry the next night; `Persistent=true` runs a missed one at boot.
 - **`AuthorizationFailure` or 403 from Azure:** the home's public address changed (set the new one in `azure.tfvars` and apply step A1 again), or the app's role from step A1 is missing or not yet in effect (role assignments can take a few minutes).
+- **`AuthorizationPermissionMismatch` on writes while reads work:** network blocks show as `AuthorizationFailure` instead ([403 errors in Blob Storage](https://learn.microsoft.com/troubleshoot/azure/azure-storage/blobs/authentication/storage-troubleshoot-403-errors)). First rule out the simpler causes, read-only, on the Mac:
+
+   1. Confirm the token is the backup app's. Decode only the `appid` and `oid` claims of a storage token that the node gets with its certificate, and compare `appid` with `tofu output -raw client_id`. Dev's reader app (`reader_client_id`) holds Storage Blob Data Reader on the same container (`main.tf`, `azurerm_role_assignment.reader`). It fails exactly this way: reads work and writes fail. If `appid` is the reader's, the node's env file is wrong; fix that, not Azure.
+   2. Run a plain `tofu plan -var-file=azure.tfvars` (no `-replace`). If it shows `azurerm_role_assignment.backup` as 1 to add and 0 to destroy, the assignment is gone, and applying that plan is the fix. It is an access right, so it too waits on the owner's go: his typed words naming this command and the commit, or a tap on an option the agents did not recommend (D-0034 rule 9).
+   3. Run `az role assignment list --assignee <client_id> --scope <the container's resource ID> --include-inherited`. Expect one Storage Blob Data Contributor at the container scope, with no `condition`.
+
+   If all three hold and the OPNsense off-box copy still writes (it uses the same pattern in the same account: a container-scope role and a certificate sign-in), the fault is c1's one assignment. Replace that assignment and nothing else. The replace deletes and remakes an access right, so it waits on the owner's go: his typed words naming this command and the commit, or a tap on an option the agents did not recommend (D-0034 rule 9). It runs on the Mac, as in step A1, with `az` signed in as agent-azure and the same state file:
+
+   ```sh
+   cd hosts/terraform/azure/backup
+   tofu init -backend-config="path=$HOME/.local/state/central-hub/azure-backup.tfstate"
+   tofu plan -var-file=azure.tfvars -replace=azurerm_role_assignment.backup -out=replace-backup-role.tfplan
+   tofu apply replace-backup-role.tfplan
+   ```
+
+   expect: the plan says `Plan: 1 to add, 0 to change, 1 to destroy`, and both lines name `azurerm_role_assignment.backup` only. If it names any other resource, stop: the folder has drifted, and that is a separate change. After the apply, the same Contributor role sits on the same container for the same principal, under a new assignment ID. Run one backup by hand on the control-plane node (`systemctl start c1-backup-etcd`) and read `journalctl -u c1-backup-etcd` for a new snapshot. Between the destroy and the add, the nodes can't write, so don't run it while a backup timer is due.
 - **Step A1 stops with `403 Insufficient privileges` on `azuread_application.backup`:** `agent-azure` lacks the Graph permission `Application.ReadWrite.OwnedBy`, or its admin consent never took. A fresh Graph token for `agent-azure` then has no `roles` claim. The owner grants it (step A2). The way back to the nodes' old SAS (`keep_sas_signer`, agent pick 182) was removed on 2026-11-16 (pick 247): that SAS reached its hard expiry on 2026-11-16 at 05:04 UTC, so there is nothing left to roll back to.
 - **`AADSTS700027` or no token:** Entra ID doesn't know the node's certificate, usually because it expired while the node was off for more than 60 days. Run step 2 with `--tags timers`: it uploads the node's certificate again. Look at `journalctl -u c1-backup-azure-cert` for why the roll failed.
 - **`ciphertext verification failed`** on every restic command: the repository holds keys from two `restic init` runs. If it holds no backup you need, tell the owner, delete the `c1/` folder in the container, and run step 2 again to make it once.
+- **`could not read the repository (restic exit N), so it was left alone`** (or `restic could not read the repository` from step 2): restic makes a repository only on its exit 10, "repository does not exist" ([restic exit codes](https://restic.readthedocs.io/en/stable/075_scripting.html)). Any other code is a fault at the target, for example a 403 (above), a lock (11, below) or a wrong password (12). Fix that fault; never run `restic init` against a repository that is there.
+- **`Permission denied (publickey)`, `Connection timed out` or `Host key verification failed` for `c1-backup-target`:** from the node, `sudo ssh -v c1-backup-target` shows which. A timeout is the firewall (step P1). A refused key means the host's list lost this node; run step 2 over every node. A changed host key means the host was rebuilt, and the next step 2 pins the new one.
 - **The repository is locked** (a run was cut off): `restic unlock` with the env file loaded, as in step 4.
 - **The way back:** set `k8s_backup_enabled: false` and run step 2 again. The timers stop and the env file is removed from the nodes; the tools stay, and the repository and its snapshots are untouched.
 - Tell the owner before deleting snapshots or the repository.

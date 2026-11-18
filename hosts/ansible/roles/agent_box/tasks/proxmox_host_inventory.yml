@@ -41,6 +41,42 @@
     group: "{{ agent_box_host_user }}"
     mode: "0600"
 
+# The sso job's secret: one line of the controller's identity.env, in a file only the job's user reads. The
+# controller's other client secrets stay out of the host job's folder. Never printed (no_log).
+- name: proxmox_host_inventory | The sso settings are complete
+  ansible.builtin.assert:
+    that: agent_box_proxmox_host_sso.issuer | default('') is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?/realms/[A-Za-z0-9_-]+$')
+    fail_msg: agent_box_proxmox_host_sso needs issuer, https://sso.<zone>/realms/lab
+    quiet: true
+  when: agent_box_proxmox_host_sso | length > 0
+
+- name: proxmox_host_inventory | The proxmox client's secret line, from the controller's identity.env
+  ansible.builtin.set_fact:
+    agent_box_host_sso_line: >-
+      {{ lookup('ansible.builtin.file', lookup('ansible.builtin.env', 'HOME') ~ '/.config/central-hub/identity.env').splitlines()
+         | select('match', '^PROXMOX_CLIENT_SECRET=.{32,}$') | first | default('') }}
+  no_log: true
+  when: agent_box_proxmox_host_sso | length > 0
+
+- name: proxmox_host_inventory | The secret is there
+  ansible.builtin.assert:
+    that: agent_box_host_sso_line | length > 0
+    fail_msg: >-
+      The controller's identity.env has no PROXMOX_CLIENT_SECRET line of 32 characters or more. Run
+      playbooks/k8s-identity.yml --tags secrets first (docs/runbooks/sign-in-to-proxmox-through-keycloak.md step 2).
+    quiet: true
+  when: agent_box_proxmox_host_sso | length > 0
+
+- name: proxmox_host_inventory | The sso job's secret file
+  ansible.builtin.copy:
+    dest: "{{ agent_box_host_dir }}/proxmox-sso.env"
+    content: "{{ agent_box_host_sso_line }}\n"
+    owner: "{{ agent_box_host_user }}"
+    group: "{{ agent_box_host_user }}"
+    mode: "0600"
+  no_log: true
+  when: agent_box_proxmox_host_sso | length > 0
+
 - name: proxmox_host_inventory | Read the key's public half
   ansible.builtin.slurp:
     src: "{{ agent_box_host_dir }}/id_ed25519.pub"

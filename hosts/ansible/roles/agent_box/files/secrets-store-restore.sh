@@ -35,6 +35,9 @@
 # shares' time is openbao-recovery.made, which `recovery` writes before it asks for them; the snapshot's time must
 # be strictly later. With no .made file, the shares file's own time is used, with a warning.
 set -euo pipefail
+# On dev, secrets-store.sh sets SECRETS_STORE_RESOLVE (<store name>:443:<dev Gateway address>), because dev's names
+# resolve to prod's Gateway; every curl here goes there. Unset (prod): curl as it is.
+curl() { if [[ -n ${SECRETS_STORE_RESOLVE:-} ]]; then command curl --resolve "$SECRETS_STORE_RESOLVE" "$@"; else command curl "$@"; fi; }
 umask 077
 mode=$1 addr=$2/v1 cacert=$3 keys=$4 snaps=$5 hold=$6 wait=$7 named=${8:-}
 # The environment is the keys folder's own name, dev or prod (the wrapper passes <keys>/<env>): it names the mark.

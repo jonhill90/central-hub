@@ -171,3 +171,34 @@ spec:
             summary: "OpenBao's hourly snapshot has not succeeded for more than {{ div .Values.openbao.snapshotStaleSeconds 3600 }} hours"
             runbook: docs/runbooks/set-up-the-secrets-store.md
 {{- end }}
+{{- if .Values.backup.metrics }}
+    # The off-site backups (role k8s_backup). Each run that ends well writes its time for node-exporter
+    # (c1-backup-lib.sh backup_mark_success); a failed run writes nothing, so its time grows old.
+    - name: c1-backups
+      rules:
+        - alert: C1BackupStale
+          expr: |
+            time() - max by (instance, kind) (c1_backup_last_success_timestamp_seconds{kind=~"volumes|etcd"})
+              > {{ .Values.backup.staleSeconds }}
+          for: 30m
+          labels: {severity: critical}
+          annotations:
+            summary: "No good {{ "{{" }} $labels.kind {{ "}}" }} backup off the box from {{ "{{" }} $labels.instance {{ "}}" }} for more than {{ div .Values.backup.staleSeconds 3600 }} hours"
+            runbook: docs/runbooks/back-up-c1-off-box.md
+        - alert: C1RestoreTestStale
+          expr: |
+            time() - max by (instance, kind) (c1_backup_last_success_timestamp_seconds{kind=~"restore-test-.*"})
+              > {{ .Values.backup.restoreTestStaleSeconds }}
+          for: 1h
+          labels: {severity: warning}
+          annotations:
+            summary: "The weekly {{ "{{" }} $labels.kind {{ "}}" }} on {{ "{{" }} $labels.instance {{ "}}" }} has not passed for more than {{ div .Values.backup.restoreTestStaleSeconds 86400 }} days"
+            runbook: docs/runbooks/back-up-c1-off-box.md
+        - alert: C1BackupNotRecorded
+          expr: absent(c1_backup_last_success_timestamp_seconds{kind="volumes"}) or absent(c1_backup_last_success_timestamp_seconds{kind="etcd"})
+          for: 2h
+          labels: {severity: warning}
+          annotations:
+            summary: No node reports a good volume or etcd backup, so C1BackupStale can't fire; check k8s_backup_metrics_dir and node-exporter's textfile collector
+            runbook: docs/runbooks/back-up-c1-off-box.md
+{{- end }}

@@ -145,6 +145,25 @@ Exit: uninstall the App and delete it in GitHub's settings, then delete `/etc/ag
 
 The role installs headless Chromium through Playwright (pinned with hashes in `files/playwright-requirements.txt`, in its own virtual environment, browsers in a root-owned folder under the libexec folder) and the command `web-shot <url> <out.png> [--insecure]`. It loads the page as the session user, with no key, saves a full-page screenshot and prints the final address, the page title and the HTTP status. `--insecure` is for a dev cluster's throwaway CA only. It types nothing, so a sign-in that needs a form still goes through the proof scripts. Chromium's download comes from Playwright's own host at the first install, so the first run needs that outbound route. A bump of the pin is a change to the box's limits (D-0044).
 
+## Render with Blender from the box
+
+The role installs Blender 5.2.3 LTS (the newest release at least two weeks old on 2026-11-18, STD-0003) from the official Linux tarball, checked against the SHA-256 that download.blender.org publishes, into a root-owned folder under the libexec folder, links `blender` into `/usr/local/bin`, and installs the libraries it needs with no display or GPU: the X client libraries `ldd` found missing (`libSM`, `libICE`, `libXxf86vm`, `libX11-xcb`), and Mesa's software OpenGL, EGL and Vulkan. The tarball comes from an official mirror, because `download.blender.org` answers 403 to the box. A bump of the pin is a change to the box's limits (D-0044).
+
+Sessions run it as themselves, always in background mode:
+
+```sh
+blender -b --factory-startup --python-exit-code 1 --python scene.py -- <args for the script>
+blender -b file.blend -E CYCLES -o /tmp/out/frame_#### -f 1
+```
+
+why: `-b` runs with no window; the box has no display. `--factory-startup` skips any saved user startup file, so every run starts the same. `--python-exit-code 1` makes a script that raises end with exit code 1: without it Blender exits 0 even when the script failed (measured on the box on 2026-11-18, a script that raises returned 0 by default and 3 with `--python-exit-code 3`), so a failed render looks like a passed one. Arguments run in the order given, so `-f` or `-a` goes last.
+expect: `Blender 5.2.3 LTS` from `blender -b --version`. Measured with the installed copy on the box on 2026-11-18 (2 vCPUs, 7.3 GB, no GPU), a 960x540 scene with three area lights and a subdivided mesh, peak memory read from `VmHWM`: Cycles on the CPU at 64 samples with denoising took 32 s and peaked at 850 MB; EEVEE took 52 s on Mesa's software renderer (llvmpipe) and peaked at 2.0 GB; Workbench took about 2 s and peaked at 740 MB. An earlier run of the same scene from a user-space copy took 48 s, 99 s and 1 s.
+
+- Use Cycles with `cycles.device = "CPU"` for finished images. EEVEE works only through Mesa's software EGL, so it is slower than Cycles here.
+- Check `free -m` before a render, and above all before EEVEE, which peaked at 2.0 to 2.5 GB on a small scene; the box shares the host with the dev rebuild.
+- The Vulkan warning at start is expected: Blender falls back to OpenGL through EGL.
+- docs.blender.org answers 403 to the box. The role keeps Blender Lab's MCP repository (projects.blender.org/lab/blender_mcp, pinned to commit dbbf836, 2026-09-29) under the libexec folder for the Python API reference and manual excerpts it bundles, about 4,500 RST files. Search them with `grep -rl <term> /usr/local/libexec/agent-box/blender-mcp/mcp/blmcp/data/`. Its MCP server is not installed, because sessions drive Blender directly with `blender -b --python`.
+
 ## Prove the lab's names from the box
 
 `lab-proof` (a session runs it as itself, no key) reads c1's HTTPRoutes and the Gateway's address through `c1-read`, asks the box's resolver (the tailnet's, which hands lab names to Unbound) for each name with a short Python query, and opens a TLS connection to the Gateway with `openssl s_client`, checking the certificate against the box's trust store, where the lab root sits. It prints one line per route name and name number, with `dns=ok|FAIL` and the TLS verify result, then `PASS` or `FAIL`. It prints no host name, address or zone, so its output can go in a public record. It asks the question the `dns_proof` tag asks of the names c1 serves, but it is not that tag, and OPNsense's own name, which is not a c1 route, is not covered.
@@ -179,8 +198,8 @@ rebuild up          all stages
 rebuild rebuild     tear the dev VMs down first, then all stages
 rebuild teardown    only the teardown
 rebuild identity    only the stage identity-keycloak: the whole identity role for the dev test admin, then the sign-in proof (step names and HTTP codes only). Every `up` and `rebuild` on dev already ends with it, so this subcommand is for a re-run alone, once the role has been applied with it
-rebuild log         the newest run's stage lines and PASS/FAIL lines
-rebuild diag        read-only look at the dev cluster after a failed apps stage: Argo CD app sync and health, the newest events in alerts and monitoring, pods not running, the monitoring pods and volume claims, each application that is not Synced and Healthy with its messages, conditions and unhealthy resources, and the last 30 log lines of each pod in Error (at most 6; secrets scrubbed by `hosts/diag-apps.py` from the box's checkout of main); runs while a rebuild is going
+rebuild log         the newest run's stage lines and PASS/FAIL lines; a newer teardown-only run is named in one line and skipped
+rebuild diag        read-only look at the dev cluster after a failed apps stage: each dev VM's memory and CPU on Proxmox and the node's memory (GET with the dev token), each dev node's free -m, load average and pressure, Argo CD app sync and health, the newest events in alerts and monitoring, pods not running, the monitoring pods and volume claims, each application that is not Synced and Healthy with its messages, conditions and unhealthy resources, and the last 30 log lines of each pod in Error (at most 6; secrets scrubbed by `hosts/diag-apps.py` from the box's checkout of main); runs while a rebuild is going
 ```
 
 - It runs only the code on `main`. There is no way to name another branch, because the keys never run code a session can edit.
@@ -238,6 +257,8 @@ For the agent to tear down and rebuild layers beyond dev (D-0035), the box needs
 
 3. Read the `missing` list. Anything on it is not on the controller under the path in `agent_box_prod_files` (role defaults, the same paths as the private-files table in [rebuild-home-lab-from-scratch.md](rebuild-home-lab-from-scratch.md)); make it there and run step 1 again.
    expect: a second run copies it and lists nothing missing that you meant to have.
+
+The sign-in theme is a folder, not a file, so it has its own setting: `agent_box_prod_theme_src` in the private inventory is the folder's path on the controller (the same value as `k8s_identity_theme_dir`). Step 1 then copies it to `/etc/agent-keys/prod/identity-theme/<the folder's name>`, and `c1-ansible` points `k8s_identity_theme_dir` there, keeping the name (it is the theme's name in Keycloak). If the inventory names a theme folder with no `login/theme.properties` on the box, `c1-ansible` stops before any playbook and says so, so prod's current theme is never replaced by a missing one.
 
 The list leaves out on purpose the Proxmox apply token, the Cloudflare bootstrap token, the nodes' SSH keys, the lab CA (the CA is put through the keys wrapper) and the Azure backup run folder's `azure.tfvars` (`hosts/terraform/azure/backup`, which isn't on Proxmox). Copying the files only stores them. A prod teardown and rebuild runs from the box only through `rebuild-prod`, under D-0035: dev passed the same layer at the same commit (rule 3(a)), the owner tapped a card naming the commit and the layer (rule 3(b), D-0042 rule 6) and a reviewing agent checked the tap (rule 3(c)), and the checks before a teardown passed (rule 5) ([Rebuild prod from the box](rebuild-k8s-layer-with-one-command.md#rebuild-prod-from-the-box)). The state files hold secrets (the certificates folder's state holds the Cloudflare token in plain text), so the box's `/etc/agent-keys` stays owner-only. The state files go to `prod/state/`; the box's copy is not a backup, so keep the off-box copy too.
 

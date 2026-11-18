@@ -60,9 +60,9 @@
   when: k8s_backup_enabled or k8s_backup_reader
   tags: [install, timers, drill, restore]
 
-- name: install | bzip2 for the restic release file, openssl for the Azure certificate
+- name: install | bzip2 for the restic release file, openssl for the Azure certificate, ssh for the Proxmox target
   ansible.builtin.dnf:
-    name: [bzip2, openssl]
+    name: [bzip2, openssl, openssh-clients]
     state: present
   tags: [install]
 
@@ -81,6 +81,18 @@
   # Made in --check too, so the downloads into them can be checked (empty, root-only folders).
   check_mode: false
   tags: [install]
+
+# node_exporter runs as nobody and reads the success times through its host root mount, so this one
+# folder is world-readable. It holds only the .prom files backup_mark_success writes (c1-backup-lib.sh).
+- name: install | node_exporter's textfile folder
+  ansible.builtin.file:
+    path: "{{ k8s_backup_metrics_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: k8s_backup_metrics_dir | length > 0
+  tags: [install, timers]
 
 - name: install | restic release file, checked against its SHA-256
   ansible.builtin.get_url:
@@ -209,10 +221,21 @@
     ((k8s_backup_azure_fixed_cert_file | length > 0) or (k8s_backup_azure_seed_dir | length > 0))
   tags: [timers]
 
-# The controller's env file, plus the Azure sign-in lines when the identity is on.
+# The Proxmox host as the target: the node's ssh alias for it (agent pick 262). The key itself was made by
+# the playbook's first play (tasks/sftp_key.yml).
+- name: timers | The ssh alias for the Proxmox target
+  ansible.builtin.include_tasks:
+    file: sftp.yml
+    apply:
+      tags: [timers, drill, restore]
+  when: (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_sftp
+  tags: [timers, drill, restore]
+
+# The controller's env file, plus the Azure sign-in lines when the identity is on, or the Proxmox target's
+# repository line, which comes last so it wins.
 - name: timers | The env file on the node
   ansible.builtin.copy:
-    content: "{{ lookup('ansible.builtin.file', k8s_backup_env_file) }}\n{{ k8s_backup_azure_env_lines | default('') }}"
+    content: "{{ lookup('ansible.builtin.file', k8s_backup_env_file) }}\n{{ k8s_backup_azure_env_lines | default('') }}{{ k8s_backup_sftp_env_line }}\n"
     dest: "{{ k8s_backup_node_env_file }}"
     owner: root
     group: root
@@ -232,13 +255,17 @@
 # When every node made it on its first backup, two nodes ran `restic init` at the same second
 # (c1, 2026-11-09 04:11:25 UTC): each wrote its own key, and the repository failed with
 # "ciphertext verification failed". The scripts still make a missing repository (for CI's local
-# one), but on the cluster it already exists by then.
+# one), but on the cluster it already exists by then. Only restic's exit code 10 ("repository does not
+# exist") makes one; any other failure to read it (the network, the sign-in, exit 12 for a wrong password)
+# stops the play, since `init` is refused on a repository that is there (c1, 2026-11-18 07:25 UTC).
 - name: timers | Make the restic repository once, if it is not there
   ansible.builtin.shell: >-
     set -o pipefail &&
     set -a && . {{ k8s_backup_node_env_file }} && set +a &&
-    if {{ k8s_backup_bin_dir }}/restic cat config >/dev/null 2>&1; then echo exists;
-    else {{ k8s_backup_bin_dir }}/restic init >/dev/null && echo made; fi
+    { rc=0; err=$({{ k8s_backup_bin_dir }}/restic cat config 2>&1 >/dev/null) || rc=$?;
+    if [ "$rc" -eq 0 ]; then echo exists;
+    elif [ "$rc" -eq 10 ]; then {{ k8s_backup_bin_dir }}/restic init >/dev/null && echo made;
+    else echo "restic could not read the repository (exit $rc), so it was left alone: $err" >&2; exit 1; fi; }
   args:
     executable: /bin/bash
   environment:
@@ -269,6 +296,24 @@
     state: "{{ 'started' if k8s_backup_enabled else 'stopped' }}"
     daemon_reload: "{{ k8s_backup_units_written is changed }}"
   loop: "{{ k8s_backup_timers }}"
+  tags: [timers]
+
+# k8s_backup_timers names the Azure certificate timer only while the Azure sign-in is on, so turning the sign-in
+# off (the Proxmox target, agent pick 262) left the timer running: its daily renew found no AZURE_* lines in the
+# new env file and failed on every node. The unit files stay, so turning the sign-in back on needs no rebuild.
+- name: timers | The Azure certificate timer, if a past run made it
+  ansible.builtin.stat:
+    path: /etc/systemd/system/c1-backup-azure-cert.timer
+  register: k8s_backup_azure_timer_file
+  when: not k8s_backup_azure_identity
+  tags: [timers]
+
+- name: timers | The Azure certificate timer off while the Azure sign-in is off
+  ansible.builtin.systemd_service:
+    name: c1-backup-azure-cert.timer
+    enabled: false
+    state: stopped
+  when: not k8s_backup_azure_identity and k8s_backup_azure_timer_file.stat.exists
   tags: [timers]
 
 # apply: a tag on include_tasks is not passed to the tasks it includes, so without it

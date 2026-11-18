@@ -3,11 +3,13 @@
 # ansible-inventory, ansible-playbook, ssh, sops and age-keygen:
 #   1. Usage: no action, another action, seal with no tap id or a malformed one: usage errors, nothing run.
 #   2. key makes the box's prod node key once and prints only its public half; a second run keeps the same key.
-#   3. Before any playbook: no settings, a seal_node that is not a prod node, a box_cidr wider than one address, or a
-#      host labelled env dev each refuse.
+#   3. Before any playbook: no settings, a seal_node that is not a prod node, a box_cidr wider than one address, an
+#      admin_address that is not one IPv4 address or comes without box_cidr, or a host labelled env dev each refuse.
 #   4. The box's inventory copy: the Mac's ssh arguments, key and proxmox group are gone; the box's key and plain ssh,
-#      the in-cluster store, its seal node, store name and box address are set.
-#   5. gitops runs k8s-gitops.yml --tags source only, on that copy.
+#      the in-cluster store, its seal node, store name, box address and admin address are set; with no admin_address,
+#      none is.
+#   5. gitops runs k8s-gitops.yml --tags source only, on that copy; l2-policy runs k8s.yml --tags lb on the first control
+#      plane only (D-0062).
 #   6. handover makes the admin IDs once, names their files to the play, and prints neither ID.
 #   7. log prints the run's own lines.
 #   8. seal-copy: reads the seal node's key over ssh and keeps it as the SOPS copy, never printed; a second run only
@@ -15,6 +17,9 @@
 #      SOPS copy already kept makes no new key.
 #   9. reset-failed-start <tap id> deletes only the pod and its claim, and only when the log shows the self-init failure, the pod
 #      is not Ready and the store is not initialized.
+#  10. ca writes ca.crt of Secret openbao/openbao-tls to <keys>/prod/secrets-store-ca.crt, asking kubectl for that one key
+#      after Ansible's shell-style split; two certificates, a certificate with another PEM block, a non-certificate or a
+#      failed read write nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -118,30 +123,41 @@ inventory "${prod_inv[@]}"
 rm -f "$t/work/openbao-prod.json"; run gitops; r3a=$rc o3a=$out c3a=$calls
 settings '{"seal_node": "nope", "store_host": "bao.invalid"}'; run gitops; r3b=$rc o3b=$out c3b=$calls
 settings '{"seal_node": "wk-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/24"}'; run gitops; r3c=$rc o3c=$out c3c=$calls
+settings '{"seal_node": "wk-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/32", "admin_address": "bao-admin.invalid"}'
+run gitops; r3e=$rc o3e=$out c3e=$calls
+settings '{"seal_node": "wk-a", "store_host": "bao.invalid", "admin_address": "192.0.2.60"}'; run gitops; r3f=$rc o3f=$out c3f=$calls
 inventory "${prod_inv[@]}" "      hosts:" "        wk-a: {k8s_gitops_cluster_labels: {env: dev}}"
 settings '{"seal_node": "wk-a", "store_host": "bao.invalid"}'; run gitops; r3d=$rc o3d=$out c3d=$calls
 if [[ $r3a -ne 0 && $o3a == *"openbao-prod.json is missing"* && $r3b -ne 0 && $o3b == *"seal_node is not a k8s_nodes host"* &&
       $r3c -ne 0 && $o3c == *"box_cidr must be one address"* && $r3d -ne 0 && $o3d == *"labelled env dev"* &&
-      -z $c3a$c3b$c3c$c3d ]]; then
-  ok "3. no settings, a seal node not in prod, a wide box_cidr or an env dev host: refused before any playbook"
-else bad "3. $r3a $o3a | $r3b $o3b | $r3c $o3c | $r3d $o3d"; fi
+      $r3e -ne 0 && $o3e == *"admin_address must be one IPv4 address"* && $r3f -ne 0 && $o3f == *"admin_address needs box_cidr"* &&
+      -z $c3a$c3b$c3c$c3d$c3e$c3f ]]; then
+  ok "3. no settings, a seal node not in prod, a wide box_cidr, a bad admin_address or one without box_cidr, or an env dev host: refused before any playbook"
+else bad "3. $r3a $o3a | $r3b $o3b | $r3c $o3c | $r3d $o3d | $r3e $o3e | $r3f $o3f"; fi
 
 # 4, 5
 inventory "${prod_inv[@]}"
 settings '{"seal_node": "wk-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/32"}'
 run gitops
+no_admin=$(grep -c k8s_gitops_source_openbao_admin_address "$t/seen-inventory.yml" 2>/dev/null)
+settings '{"seal_node": "wk-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/32", "admin_address": "192.0.2.60"}'
+run gitops
 seen=$(python3 -c 'import json, sys, yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))' "$t/seen-inventory.yml" 2>/dev/null)
 v=$(python3 -c 'import json, sys; d = json.loads(sys.argv[1]); v = d["all"]["children"]["k8s_nodes"]["vars"]
 print(v["ansible_ssh_private_key_file"], v["ansible_ssh_common_args"], v["k8s_gitops_source_openbao_in_cluster"],
       v["k8s_gitops_source_openbao_seal_node"], v["k8s_gitops_source_openbao_store_host"], v["k8s_gitops_source_openbao_box_cidr"],
-      "proxmox" in d["all"]["children"])' "$seen" 2>/dev/null)
-want="$t/keys/prod-node-key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$t/work/openbao-prod/known_hosts True wk-a bao.invalid 192.0.2.50/32 False"
-if [[ $rc -eq 0 && $v == "$want" && $seen != *ProxyJump* && $seen != */Users/* ]]; then
+      v["k8s_gitops_source_openbao_admin_address"], "proxmox" in d["all"]["children"])' "$seen" 2>/dev/null)
+want="$t/keys/prod-node-key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$t/work/openbao-prod/known_hosts True wk-a bao.invalid 192.0.2.50/32 192.0.2.60 False"
+if [[ $rc -eq 0 && $v == "$want" && $seen != *ProxyJump* && $seen != */Users/* && $no_admin == 0 ]]; then
   ok "4. the box's copy: the Mac's ssh settings and proxmox group gone; the box's key and the store's settings set"
 else bad "4. $rc [$v] $out"; fi
 if [[ $calls == "playbook -i $t/work/openbao-prod/inventory/ playbooks/k8s-gitops.yml --tags source" && $out == *"prod nodes, plain ssh"* ]]; then
   ok "5. gitops: k8s-gitops.yml --tags source only"
 else bad "5. [$calls]"; fi
+run l2-policy
+if [[ $rc -eq 0 && $calls == "playbook -i $t/work/openbao-prod/inventory/ playbooks/k8s.yml --tags lb --limit k8s_control_plane[0]" ]]; then
+  ok "5b. l2-policy: k8s.yml --tags lb on the first control plane only"
+else bad "5b. $rc [$calls]"; fi
 
 # 6
 run handover; r6a=$rc c6a=$calls o6a=$out
@@ -221,5 +237,41 @@ if [[ $g_rc -eq 0 && $g_del -eq 2 && $g_names == "pod/openbao-0 pvc/data-openbao
       $g_out == *"owner tap $tap"* && $n_rc -eq 2 && $n_del -eq 0 && $m_rc -eq 2 && $m_del -eq 0 ]]; then
   ok "9. reset-failed-start: deletes the pod and its claim only on a confirmed failed start; Ready, no log line, initialized, an empty status, an unreadable status, no tap id and a malformed one each refuse; the tap is logged"
 else bad "9. good rc=$g_rc del=$g_del [$g_names] ready rc=$r_rc/$r_del log rc=$l_rc/$l_del init rc=$i_rc/$i_del empty rc=$e_rc/$e_del junk rc=$j_rc/$j_del notap rc=$n_rc/$n_del badtap rc=$m_rc/$m_del"; fi
+
+# 10: a stand-in `ansible` that splits its -a string the way Ansible's command module does (shlex), records the words,
+# and answers kubectl with the file $t/kube/CA as base64, or fails when that file is missing.
+cat > "$venv/ansible" <<EOF
+#!/usr/bin/env python3
+import base64, json, os, shlex, sys
+words = shlex.split(sys.argv[sys.argv.index("-a") + 1])
+open("$t/kwords", "w").write("\\n".join(words))
+path = "$t/kube/CA"
+if not os.path.exists(path):
+    print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 1, "stdout": "", "stderr": "not found"}}}]}]})); sys.exit(2)
+out = base64.b64encode(open(path, "rb").read()).decode()
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0, "stdout": out, "stderr": ""}}}]}]}))
+EOF
+chmod +x "$venv/ansible"
+cafile=$t/keys/prod/secrets-store-ca.crt
+for n in 1 2; do
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout "$t/ca$n.key" -subj "/CN=test-ca-$n" -days 2 \
+    -out "$t/ca$n.pem" 2>/dev/null
+done
+rm -f "$cafile"
+cp "$t/ca1.pem" "$t/kube/CA"; run ca; a_rc=$rc a_out=$out; a_words=$(cat "$t/kwords"); a_file=$(cat "$cafile" 2>/dev/null)
+cat "$t/ca1.pem" "$t/ca2.pem" > "$t/kube/CA"; run ca; b_rc=$rc b_out=$out; b_file=$(cat "$cafile" 2>/dev/null)
+cat "$t/ca1.pem" "$t/ca2.key" > "$t/kube/CA"; run ca; k_rc=$rc k_out=$out k_file=$(cat "$cafile" 2>/dev/null)
+echo 'not a certificate' > "$t/kube/CA"; run ca; c_rc=$rc c_out=$out; c_file=$(cat "$cafile" 2>/dev/null)
+rm -f "$t/kube/CA"; run ca; d_rc=$rc d_out=$out; d_file=$(cat "$cafile" 2>/dev/null)
+run ca extra; e_rc=$rc
+want_words=$'-n\nopenbao\nget\nsecret\nopenbao-tls\n-o\njsonpath={.data.ca\\.crt}'
+if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: ca: the store's CA written to $cafile"* && $a_out == *"test-ca-1"* &&
+      -n $a_file && $a_file == "$(cat "$t/ca1.pem")" && $a_words == *"$want_words" &&
+      $b_rc -ne 0 && $b_out == *"is not one PEM certificate; nothing written"* && $b_file == "$a_file" &&
+      $k_rc -ne 0 && $k_out == *"is not one PEM certificate; nothing written"* && $k_file == "$a_file" &&
+      $c_rc -ne 0 && $c_out == *"is not one PEM certificate; nothing written"* && $c_file == "$a_file" &&
+      $d_rc -ne 0 && $d_out == *"nothing written"* && $d_file == "$a_file" && ! -e $cafile.part && $e_rc -eq 2 ]]; then
+  ok "10. ca: one certificate written from ca.crt, the key's dot kept through Ansible's split; two certificates, a certificate with a key block, a non-certificate or a failed read write nothing"
+else bad "10. good rc=$a_rc [$a_words] $a_out | two rc=$b_rc $b_out | key rc=$k_rc $k_out | junk rc=$c_rc $c_out | fail rc=$d_rc $d_out | extra rc=$e_rc"; fi
 
 exit "$fail"

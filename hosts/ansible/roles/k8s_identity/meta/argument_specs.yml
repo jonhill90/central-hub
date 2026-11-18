@@ -21,6 +21,12 @@ argument_specs:
       k8s_identity_values_file:
         type: str
         description: "KEY=value file on the controller, outside the repo, with every password and client secret. Default: ~/.config/central-hub/identity.env."
+      k8s_identity_secrets_store:
+        type: str
+        choices: ["", c1, openbao]
+        description: >-
+          Where realm lab's Secret and the apps' client secrets come from. "" or c1: made by this role from the
+          values file. openbao: an ExternalSecret each, from c1/identity on store openbao. Default: k8s_gitops_source_app_secrets_store.
       k8s_identity_short_names: {type: bool, default: true, description: "Keycloak at sso.<zone>, and each client also accepts <app>.<zone> (STD-0001 rule 5)."}
       k8s_identity_theme_dir: {type: str, default: "", description: "Keycloak theme folder on the controller for the sign-in look. Private."}
       k8s_identity_realm_replace: {type: bool, default: true, description: "Delete and import realm lab again when its code or a value changes."}

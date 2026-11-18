@@ -448,6 +448,26 @@ components:
     carries: []
     not-detected: "`playwright install chromium` (tasks/main.yml) downloads it from Playwright's own host at run time, so no address or package name in the code names it"
     checked: 2026-11-18
+  - name: Blender
+    kind: software
+    used-for: headless 3D scenes, renders and glTF exports by agents on the agent box (`blender -b`)
+    licence: GPL-2.0-or-later (copyright.txt in the 5.2.3 Linux tarball; bundled libraries are GPL-3.0-compatible, listed in its license/license.md)
+    licence-source: https://projects.blender.org/blender/blender/src/branch/main/COPYING
+    paid-edition: none found; the Blender Foundation's FAQ says what you make with it is yours and the program is free, and Blender Studio's subscription sells training and assets, not program features
+    paid-edition-source: https://www.blender.org/support/faq/
+    verdict: pass
+    sources: [url:mirrors.ocf.berkeley.edu/blender/]
+    checked: 2026-11-18
+  - name: Blender Lab MCP
+    kind: software
+    used-for: the Blender Python API reference and manual excerpts its repository bundles, which agents on the agent box search offline; its MCP server is not installed
+    licence: GPL-3.0-or-later (its LICENSE file, commit "Include GPL3+ license", 2026-09-29)
+    licence-source: https://projects.blender.org/lab/blender_mcp/src/branch/main/LICENSE
+    paid-edition: none found; a Blender Lab project with no paid edition named in its readme
+    paid-edition-source: https://projects.blender.org/lab/blender_mcp
+    verdict: pass
+    sources: [url:projects.blender.org/lab/blender_mcp]
+    checked: 2026-11-18
   - name: lychee
     kind: software
     used-for: the docs link check in CI
@@ -523,6 +543,39 @@ components:
     sources: []
     not-detected: installed from AlmaLinux 10 appstream by role vps_app_host; the scanner reads no package names
     checked: 2026-11-14
+  - name: OmniRoute
+    kind: software
+    used-for: the model router on the VPS apps host, one Quadlet unit under user omniroute, loopback only (D-0046)
+    licence: MIT
+    licence-source: https://github.com/cheaper-inference/OmniRoute/blob/main/LICENSE
+    paid-edition: none found; the LICENSE file read 2026-11-18 is plain MIT and D-0046's evidence found no commercial or enterprise licence text in its code
+    paid-edition-source: https://github.com/cheaper-inference/OmniRoute
+    verdict: pass
+    sources:
+      - image:docker.io/diegosouzapw/omniroute
+    checked: 2026-11-18
+  - name: OpenClaw
+    kind: software
+    used-for: the OpenClaw gateway on the VPS apps host, one Quadlet unit under user openclaw, loopback only (D-0046)
+    licence: MIT
+    licence-source: https://github.com/openclaw/openclaw/blob/main/LICENSE
+    paid-edition: none found; the README says it "has no paid tier, hosted service, or token" (D-0046 evidence, finding 2)
+    paid-edition-source: https://github.com/openclaw/openclaw
+    verdict: pass
+    sources:
+      - image:ghcr.io/openclaw/openclaw
+    checked: 2026-11-18
+  - name: Hermes Agent
+    kind: software
+    used-for: the Hermes Agent on the VPS apps host, one Quadlet unit under user hermes, no published port (D-0046)
+    licence: MIT
+    licence-source: https://github.com/NousResearch/hermes-agent/blob/main/LICENSE
+    paid-edition: none used; Nous Portal is a paid subscription that bundles hosted tools, and the agent also runs with the user's own keys, so D-0046 uses no Portal (evidence, finding 2)
+    paid-edition-source: https://github.com/NousResearch/hermes-agent
+    verdict: pass
+    sources:
+      - image:docker.io/nousresearch/hermes-agent
+    checked: 2026-11-18
   # Hosted services (STD-0006 rule 3).
   - name: GitHub
     kind: hosted

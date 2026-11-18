@@ -13,6 +13,8 @@
 #      nothing; into a fresh store, the mark included (any snapshot writes it), it writes every path, and compare
 #      then passes.
 #   8. A path outside c1/, a bad key name and an empty value are refused before anything is written.
+#   9. With SECRETS_STORE_RESOLVE set (dev: the wrapper points every call at dev's Gateway), every curl call carries
+#      --resolve with that value; without it (every run above), none does.
 # SOPS and age come from their GitHub releases, checked against the SHA-256s the role installs.
 # Usage: .github/hosts-check/tests/test_secrets_store_kv.sh   (needs curl, python3 with PyYAML)
 set -uo pipefail
@@ -62,7 +64,7 @@ while i < len(args):
     if a == "-X": method = args[i + 1]; i += 2; continue
     if a == "-o": out = args[i + 1]; i += 2; continue
     if a == "-w": fmt = args[i + 1]; i += 2; continue
-    if a == "--cacert": i += 2; continue
+    if a in ("--cacert", "--resolve"): i += 2; continue
     if a == "-H" and args[i + 1] == "@-": hdr_stdin = True; i += 2; continue
     if a in ("--data", "--data-binary"):
         v = args[i + 1]
@@ -223,6 +225,16 @@ if [[ $r8a -ne 0 && $r8b -ne 0 && $r8c -ne 0 && $o8c == *"no value on stdin; not
    cmp -s "$t/sops.before" "$t/keys/dev/openbao-kv.sops.json"; then
   ok "8. a path outside c1/, a bad key and an empty value are refused before anything is written"
 else bad "8. $r8a/$r8b/$r8c $o8c"; fi
+
+# 9
+before=$(wc -l < "$t/args")
+grep -q -- '--resolve' "$t/args"; r9a=$?
+SECRETS_STORE_RESOLVE=store.invalid:443:192.0.2.10 kv compare </dev/null; r9b=$rc
+r9c=$(tail -n +"$((before + 1))" "$t/args" | grep '^curl ' | grep -vc -- '--resolve store.invalid:443:192.0.2.10 ')
+r9d=$(tail -n +"$((before + 1))" "$t/args" | grep -c '^curl ')
+if [[ $r9a -ne 0 && $r9b -eq 0 && $r9c -eq 0 && $r9d -gt 0 ]]; then
+  ok "9. with SECRETS_STORE_RESOLVE every curl call carries --resolve with it; without it none does"
+else bad "9. resolve before=$r9a rc=$r9b without=$r9c calls=$r9d"; fi
 
 # 4 (over every run above)
 leak=0

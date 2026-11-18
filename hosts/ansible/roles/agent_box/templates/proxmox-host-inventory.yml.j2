@@ -9,3 +9,8 @@ proxmox:
       ansible_ssh_common_args: {{ ('-o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=' ~ agent_box_host_dir ~ '/known_hosts') | to_json }}
       ansible_python_interpreter: /usr/bin/python3
       proxmox_cert_names: {{ agent_box_host_cert_names | to_json }}
+{% if agent_box_proxmox_host_sso | length > 0 %}
+      # Role proxmox_sso (job sso): Keycloak's issuer for realm lab and c1's Gateway address for the host's /etc/hosts line.
+      proxmox_sso_issuer: {{ agent_box_proxmox_host_sso.issuer | to_json }}
+      proxmox_sso_address: {{ agent_box_proxmox_host_sso.address | default('') | to_json }}
+{% endif %}
