@@ -231,13 +231,15 @@ agent_box_nft_bin: /usr/sbin/nft
 agent_box_lifeline_allow: []
 # The Proxmox host job (wrapper proxmox-host). Its own system user holds the only key that logs in to the
 # host as root, in its own folder, so the keys user's wrappers can't read it. The key is made only when
-# agent_box_proxmox_host_job is true: the owner's tap (access rights and box limits, D-0042 rule 6). The job's
-# inventory (agent_box_proxmox_host) is private and written only by a run from the controller, under the
-# `proxmox_host_inventory` tag, which self-applies skip (D-0036 rule 7).
+# agent_box_proxmox_host_job is true. That is an access right (D-0042 rule 6), and the owner's standing go of
+# 2026-11-18 07:40:44 UTC covers it (D-0061), so it is on by default. The key alone reaches nothing: the host takes
+# it only once playbooks/proxmox-host-key.yml, a run from the controller, adds its line. An inventory that sets
+# false still wins over this default. The job's inventory (agent_box_proxmox_host) is private and written only by a
+# run from the controller, under the `proxmox_host_inventory` tag, which self-applies skip (D-0036 rule 7).
 agent_box_host_user: hostops
 agent_box_host_dir: /etc/agent-keys-host
 agent_box_host_work_dir: /var/lib/agent-box-host
-agent_box_proxmox_host_job: false
+agent_box_proxmox_host_job: true
 # Private, through the controller's inventory: {address: the host's lifeline-side IPv4 (the same as its
 # agent_box_lifeline_allow entry), hostkey: the host's "ssh-ed25519 AAAA..." public host key}. The certificate's
 # names come from proxmox_cert_names. Empty: the inventory is not written and the job refuses to run.
