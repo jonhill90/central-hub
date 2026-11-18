@@ -7,8 +7,8 @@ runner: the controller's Ansible (the owner's Mac, or an agent lane with the sam
 outcome: the Proxmox login page offers realm sso first; a member of Keycloak group lab-admins signs in with the lab password and gets Administrator on /, a member of lab-viewers gets PVEAuditor; root@pam with TOTP still signs in when c1 is down
 needs: realm lab on c1 (set-up-lab-sign-in.md); the host's certificate from the lab CA and the lab root in its trust store (playbooks/proxmox-cert.yml); the web UI on 443 (serve-proxmox-on-443.md); the host can reach c1's Gateway on 443
 private-values: [proxmox-cert-names, k8s_identity_zone, k8s_gateway_address, PROXMOX_CLIENT_SECRET, TOTP_USER_NAME]
-files: [hosts/ansible/roles/proxmox_sso/, .github/hosts-check/tests/test_proxmox_signin_check.sh, hosts/ansible/bootstrap/show-totp-qr.sh, hosts/ansible/playbooks/proxmox-sso.yml, hosts/ansible/roles/agent_box/files/proxmox-host.sh, hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/vars/main.yml, .github/hosts-check/tests/test_proxmox_sso.sh]
-last-tested: "not yet run on the host; 2026-11-14, an agent, the role against stand-in pveum and pvesh and a local discovery document (test_proxmox_sso.sh), and the realm rendered with the proxmox client; 2026-11-18, an agent, the scripted sign-in check against a stand-in for Keycloak and the Proxmox API (test_proxmox_signin_check.sh), not against the host"
+files: [hosts/ansible/roles/proxmox_sso/, .github/hosts-check/tests/test_proxmox_signin_check.sh, hosts/ansible/bootstrap/show-totp-qr.sh, hosts/ansible/playbooks/proxmox-sso.yml, hosts/ansible/roles/agent_box/files/proxmox-host.sh, hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/vars/main.yml, .github/hosts-check/tests/test_proxmox_sso.sh, .github/hosts-check/tests/test_agent_access_rights.sh, hosts/terraform/home/bootstrap/agent-access.sh, hosts/ansible/roles/agent_box/templates/proxmox-host-inventory.yml.j2]
+last-tested: "not yet run on the host; 2026-11-14, an agent, the role against stand-in pveum and pvesh and a local discovery document (test_proxmox_sso.sh), and the realm rendered with the proxmox client; 2026-11-18, an agent, the scripted sign-in check against a stand-in for Keycloak and the Proxmox API (test_proxmox_signin_check.sh); 2026-11-18, an agent, the rights section read against Proxmox's source and the token scripts (test_agent_access_rights.sh), not against the host"
 superseded-by:
 ---
 
@@ -76,6 +76,27 @@ All from `hosts/ansible` in the lab clone, at the merge commit of the PR that ad
 5. Prove the way in without c1: log out, choose "Linux PAM standard authentication", sign in as root@pam with TOTP.
    why: the break-glass path must not depend on Keycloak (D-0025 rule 6; D-0037).
    expect: root@pam signs in as before.
+
+## Which Proxmox rights this needs, and who holds them
+
+Step 3 changes Proxmox's own access settings, so it needs the rights that do that. Each one is read from the Proxmox code that guards the call:
+
+| What the role does | Right Proxmox asks for | Source |
+|---|---|---|
+| `pveum realm add` and `realm modify` (realm `sso`) | `Realm.Allocate` on `/access/realm` | pve-access-control `src/PVE/API2/Domains.pm`, `create` and `update`: `check => ['perm', '/access/realm', ['Realm.Allocate']]` |
+| `pveum group add` (`lab-admins-sso`, `lab-viewers-sso`) | `Group.Allocate` on `/access/groups` | `src/PVE/API2/Group.pm`, `create_group`: `check => ['perm', '/access/groups', ['Group.Allocate']]` |
+| `pveum acl modify /` (Administrator and PVEAuditor for those groups) | `Permissions.Modify` on the path | `src/PVE/API2/ACL.pm`, `update_acl`: `check => ['perm-modify', '{path}']` |
+| The proof's `openid/auth-url`, and a person's `openid/login` | none: open to anyone | `src/PVE/API2/OpenId.pm`: `permissions => { user => 'world' }` for both |
+
+The wiki's privilege list describes the same four as "create/modify/remove authentication realms", "create/modify/remove groups" and "modify access permissions" ([User Management, Privileges](https://pve.proxmox.com/pve-docs/chapter-pveum.html)). These sources were read through a page fetch of the Proxmox git server on 2026-11-18; the quoted lines are as the fetch returned them.
+
+Who holds them today:
+
+- **The host job holds them, as root.** The job's inventory logs in as `root` with the box's key (`roles/agent_box/templates/proxmox-host-inventory.yml.j2`, `ansible_user: root`), and `proxmox-host.sh` runs `playbooks/proxmox-sso.yml` with that inventory (line 34, the `sso` entry of `jobs`). Root can do all of the above, so the job needs no API token and no right added. It does need the box's public key in root's `authorized_keys` on the host, which `playbooks/proxmox-host-key.yml` writes from the controller (D-0041 rule 3). That playbook has not been run on the host as far as this runbook knows, so the `sso` job cannot reach the host yet.
+- **The agents' tokens do not hold them, by design.** `agent-access.sh` gives the dev token `agent@pve!dev` the roles built from `PRIVS` (line 34), `CLONE_PRIVS` (line 35) and `DESKTOP_POWER_PRIVS` (line 39), and the lab token `agentlab@pve!lab` the four roles of line 165 (`AgentLab` from `LAB_PRIVS`, line 162, and three one-privilege roles); `iac-access.sh` gives the IaC token `iac@pve!apply` `IacOps` from its `PRIVS` (line 19). None of those lists names `Realm.Allocate`, `Group.Allocate`, `Permissions.Modify` or `User.Modify` (`.github/hosts-check/tests/test_agent_access_rights.sh` checks it on every run), and a token's effective rights are the intersection of the user's and the token's ([wiki, API Tokens](https://pve.proxmox.com/pve-docs/chapter-pveum.html)), so a token can't get them through its user either. [set-up-proxmox-host.md](set-up-proxmox-host.md) says the same of the IaC token. An agent therefore can't make the realm or the ACLs through an API token; it can only through the host job.
+- **The test account needs no Proxmox right.** `proxmox-signin-check.py` calls `openid/auth-url` and `openid/login` as anyone, and reads `access/permissions` with the ticket of the account it signed in as, which is that account's own rights (not read from Proxmox's code; the check's last step shows it). Realm `sso` has `autocreate` on, so the account is made on its first sign-in.
+
+The one gap is therefore not a missing right but a step that needs the owner's words: changing who may log in and what they may do on the Proxmox host (D-0042 rule 6, access rights). Until the owner gives them for the commit, nothing here is applied: no key line, no realm, no group, no ACL.
 
 ## If it fails
 
