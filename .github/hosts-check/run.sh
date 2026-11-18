@@ -237,6 +237,7 @@ check_backup() {
   bash "$here/tests/test_backup.sh"
   bash "$here/tests/test_backup_azure_cert.sh"
   bash "$here/tests/test_backup_metrics.sh"
+  bash "$here/tests/test_backup_repo_init.sh"
   bash "$here/tests/test_opnsense_offbox.sh"
   bash "$here/tests/test_opnsense_escrow.sh"
   bash "$here/tests/test_secrets_bundle_offbox.sh"

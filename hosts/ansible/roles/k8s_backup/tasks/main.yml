@@ -244,13 +244,17 @@
 # When every node made it on its first backup, two nodes ran `restic init` at the same second
 # (c1, 2026-11-09 04:11:25 UTC): each wrote its own key, and the repository failed with
 # "ciphertext verification failed". The scripts still make a missing repository (for CI's local
-# one), but on the cluster it already exists by then.
+# one), but on the cluster it already exists by then. Only restic's exit code 10 ("repository does not
+# exist") makes one; any other failure to read it (the network, the sign-in, exit 12 for a wrong password)
+# stops the play, since `init` is refused on a repository that is there (c1, 2026-11-18 07:25 UTC).
 - name: timers | Make the restic repository once, if it is not there
   ansible.builtin.shell: >-
     set -o pipefail &&
     set -a && . {{ k8s_backup_node_env_file }} && set +a &&
-    if {{ k8s_backup_bin_dir }}/restic cat config >/dev/null 2>&1; then echo exists;
-    else {{ k8s_backup_bin_dir }}/restic init >/dev/null && echo made; fi
+    { rc=0; err=$({{ k8s_backup_bin_dir }}/restic cat config 2>&1 >/dev/null) || rc=$?;
+    if [ "$rc" -eq 0 ]; then echo exists;
+    elif [ "$rc" -eq 10 ]; then {{ k8s_backup_bin_dir }}/restic init >/dev/null && echo made;
+    else echo "restic could not read the repository (exit $rc), so it was left alone: $err" >&2; exit 1; fi; }
   args:
     executable: /bin/bash
   environment:
