@@ -298,6 +298,24 @@
   loop: "{{ k8s_backup_timers }}"
   tags: [timers]
 
+# k8s_backup_timers names the Azure certificate timer only while the Azure sign-in is on, so turning the sign-in
+# off (the Proxmox target, agent pick 262) left the timer running: its daily renew found no AZURE_* lines in the
+# new env file and failed on every node. The unit files stay, so turning the sign-in back on needs no rebuild.
+- name: timers | The Azure certificate timer, if a past run made it
+  ansible.builtin.stat:
+    path: /etc/systemd/system/c1-backup-azure-cert.timer
+  register: k8s_backup_azure_timer_file
+  when: not k8s_backup_azure_identity
+  tags: [timers]
+
+- name: timers | The Azure certificate timer off while the Azure sign-in is off
+  ansible.builtin.systemd_service:
+    name: c1-backup-azure-cert.timer
+    enabled: false
+    state: stopped
+  when: not k8s_backup_azure_identity and k8s_backup_azure_timer_file.stat.exists
+  tags: [timers]
+
 # apply: a tag on include_tasks is not passed to the tasks it includes, so without it
 # `--tags drill` ran nothing (measured on c1, 2026-11-09).
 - name: drill | Back up now, then run the restore tests
