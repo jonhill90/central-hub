@@ -141,6 +141,30 @@ assert "playbooks/proxmox-safety.yml --tags firewall" in f and "--tags notify" n
 assert "changed=0 +unreachable=0 +failed=0' \"$files/safety-run.log\"" in f
 assert "pve-firewall status' | grep -q 'enabled/running'" in f and "systemctl is-active --quiet central-hub-fw-deadman.timer" in f
 PY
+# Every playbook the copy's inventory runs checks the arguments of every role it lists, tagged always, whatever the
+# --tags: each required input of each of those roles must be in the inventory (hosts.yml, plus the VLAN file the
+# wrapper copies into its group_vars), or the run fails at its first task.
+python3 -I - "$work/hosts.yml" "$root/hosts/ansible" "$vlans" "$w" <<'PY' && ok "the copy's inventory holds every required input of every role in proxmox-host.yml, tailnet-connector.yml and proxmox-safety.yml" || bad "a role's required input is missing from the copy's inventory"
+import os, sys, yaml
+h = yaml.safe_load(open(sys.argv[1]))["all"]["children"]["proxmox"]["hosts"]["proxmox_host"]
+assert 'cp "$vlans" "$files/inventory/group_vars/all/vlans.yml"' in open(sys.argv[4]).read()
+have = set(h) | set(yaml.safe_load(open(sys.argv[3])))
+base, missing, seen = sys.argv[2], [], []
+for pb in ("proxmox-host.yml", "tailnet-connector.yml", "proxmox-safety.yml"):
+    for play in yaml.safe_load(open(os.path.join(base, "playbooks", pb))):
+        for r in play.get("roles", []):
+            name = r["role"] if isinstance(r, dict) else r
+            seen.append(name)
+            spec = os.path.join(base, "roles", name, "meta", "argument_specs.yml")
+            if not os.path.isfile(spec):
+                continue
+            for ep in yaml.safe_load(open(spec))["argument_specs"].values():
+                need = {k for k, v in (ep.get("options") or {}).items() if v.get("required")}
+                missing += [f"{pb} {name} {k}" for k in sorted(need - have)]
+assert {"proxmox_network", "tailnet_connector", "proxmox_notify", "proxmox_backup", "proxmox_firewall"} <= set(seen), seen
+assert not missing, missing
+assert h["proxmox_backup_disk"].startswith("/dev/disk/by-id/lab-test-copy-")
+PY
 # prove: run against a stand-in wrapper that logs each step and fails where told; then the child check on its own.
 body=$(sed -n '/^prove() {$/,/^}$/p' "$w")
 cat > "$work/prove-step.sh" <<'SH'

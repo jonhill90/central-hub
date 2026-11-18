@@ -128,6 +128,10 @@ def inventory(settings, vlans, key, known_hosts, out):
         # playbooks/proxmox-safety.yml --tags firewall: the copy's "home LAN" is dev, where the box reaches it from, so
         # the management IPSet keeps the box's SSH and API path. No check targets: the copy has no k8s_nodes.
         "proxmox_firewall_home_lan_cidr": str(net),
+        # proxmox-safety.yml checks every role's arguments, tagged always, even under --tags firewall, and
+        # proxmox_backup requires its disk. The copy has no backup disk and never runs that role, so this made-up id
+        # names no disk anywhere; it only lets the argument check pass.
+        "proxmox_backup_disk": "/dev/disk/by-id/lab-test-copy-has-no-backup-disk",
     }
     doc = {"all": {"children": {"proxmox": {"hosts": {"proxmox_host": host}}}}}
     with open(out, "w") as f:
