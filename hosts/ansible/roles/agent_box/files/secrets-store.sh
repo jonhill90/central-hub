@@ -79,28 +79,45 @@ setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[s
 # One store per run (D-0058 rule 10). The settings' address must be the one name this environment's inventory gives its
 # c1 store (k8s_gitops_source_openbao_store_host), so no call reaches another store: dev's settings, keys and inventory
 # never meet prod's.
-env_store() {
-  local address host
-  address=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("address") or "")' "$settings")
-  [[ -n $address ]] || { echo "secrets-store: the settings have no store address yet (agent_box_secrets_store.address, set with the box's path to the store); refused" >&2; exit 1; }
-  [[ -f $inventory ]] || { echo "secrets-store: the $env inventory $inventory is missing, so the $env store can't be checked; refused" >&2; exit 1; }
-  host=$("$libexec/ansible-venv/bin/python3" -I -c '
+# inventory_value KEY: the one value this environment's inventory gives KEY, anywhere in it; fails on none or two.
+inventory_value() {
+  "$libexec/ansible-venv/bin/python3" -I -c '
 import sys, yaml
-found = set()
+key, found = sys.argv[2], set()
 def walk(n):
     if isinstance(n, dict):
         for k, v in n.items():
-            if k == "k8s_gitops_source_openbao_store_host" and isinstance(v, str) and v: found.add(v)
+            if k == key and isinstance(v, str) and v: found.add(v)
             else: walk(v)
     elif isinstance(n, list):
         for i in n: walk(i)
 walk(yaml.safe_load(open(sys.argv[1])))
 if len(found) != 1: sys.exit(1)
-print(found.pop())' "$inventory") ||
+print(found.pop())' "$inventory" "$1"
+}
+env_store() {
+  local address host
+  address=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("address") or "")' "$settings")
+  [[ -n $address ]] || { echo "secrets-store: the settings have no store address yet (agent_box_secrets_store.address, set with the box's path to the store); refused" >&2; exit 1; }
+  [[ -f $inventory ]] || { echo "secrets-store: the $env inventory $inventory is missing, so the $env store can't be checked; refused" >&2; exit 1; }
+  host=$(inventory_value k8s_gitops_source_openbao_store_host) ||
     { echo "secrets-store: the $env inventory names no single $env store (k8s_gitops_source_openbao_store_host); refused" >&2; exit 1; }
   [[ $address == "$host" ]] || { echo "secrets-store: the settings' store address is not the $env c1 store the $env inventory names; refused" >&2; exit 1; }
 }
 env_store
+
+# Dev uses c1's names, and the lab's wildcard DNS sends them to prod's Gateway (docs/runbooks/
+# rebuild-k8s-layer-with-one-command.md, k8s_lab_dns_points_here). So on dev every call goes to dev's Gateway by its
+# address, the dev inventory's k8s_gitops_source_gateway_address, with the store's name kept for TLS and routing.
+# Exported for the helpers below, which call curl the same way. Prod's names resolve to prod's Gateway: none there.
+SECRETS_STORE_RESOLVE=''
+if [[ $env == dev ]]; then
+  gateway=$(inventory_value k8s_gitops_source_gateway_address) && [[ $gateway =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
+    { echo "secrets-store: the dev inventory gives no single IPv4 k8s_gitops_source_gateway_address for dev's Gateway; refused" >&2; exit 1; }
+  SECRETS_STORE_RESOLVE="$(setting address):443:$gateway"
+fi
+export SECRETS_STORE_RESOLVE
+curl() { if [[ -n ${SECRETS_STORE_RESOLVE:-} ]]; then command curl --resolve "$SECRETS_STORE_RESOLVE" "$@"; else command curl "$@"; fi; }
 
 # Only the root-owned helpers beside this file run with the keys. One run at a time.
 exec 9>"$work/state/secrets-store$([[ $env == dev ]] || echo -prod).lock"

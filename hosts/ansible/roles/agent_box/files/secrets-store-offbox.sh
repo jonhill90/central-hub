@@ -28,6 +28,7 @@ libexec=/usr/local/libexec/agent-box
 settings=/etc/agent-keys/opnsense-offbox/settings.env   # pick 222's settings; no secret in it
 own=$work/secrets-store-offbox.env                       # this job's settings; no secret in it
 store_settings=$work/secrets-store.json                  # the wrapper's settings: the store's address
+inventory=/etc/agent-keys/rebuild-dev/inventory/hosts.yml   # the dev inventory: dev's Gateway address
 state=$work/state/dev-vms.tfstate                        # the dev rebuild's OpenTofu state: the cluster the store is in
 in_cluster=$work/openbao-in-cluster                      # "true" while the store inside the dev cluster is on
 hold=$work/state/secrets-store.rebuilding               # the rebuild wrapper writes it; restore-rebuilt or clear-hold removes it
@@ -69,7 +70,23 @@ if [[ -e $hold ]]; then
   exit 0
 fi
 address=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["address"])' "$store_settings")
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --cacert "$cacert" "https://$address/v1/sys/health" || true)
+# Dev's names resolve to prod's Gateway, so the call goes to dev's Gateway by the dev inventory's address, as
+# secrets-store.sh does (k8s_gitops_source_gateway_address, exactly one, IPv4).
+gateway=$("$libexec/ansible-venv/bin/python3" -I -c '
+import sys, yaml
+found = set()
+def walk(n):
+    if isinstance(n, dict):
+        for k, v in n.items():
+            if k == "k8s_gitops_source_gateway_address" and isinstance(v, str) and v: found.add(v)
+            else: walk(v)
+    elif isinstance(n, list):
+        for i in n: walk(i)
+walk(yaml.safe_load(open(sys.argv[1])))
+if len(found) != 1: sys.exit(1)
+print(found.pop())' "$inventory" 2>/dev/null) && [[ $gateway =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
+  die "the dev inventory $inventory gives no single IPv4 k8s_gitops_source_gateway_address; nothing sent"
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --resolve "$address:443:$gateway" --cacert "$cacert" "https://$address/v1/sys/health" || true)
 [[ $code =~ ^[1-9] ]] || code=nothing   # curl prints 000 when nothing answered
 [[ $code == 200 ]] || die "dev is up with the store on, but sys/health answered $code (200 is unsealed and active); nothing sent"
 
