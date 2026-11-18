@@ -227,8 +227,8 @@ apps:
         jsonPointers: [/data]
     autoSync: true
     prune: false
-  # Sign-in checks from inside c1, no password (runbook set-up-lab-sign-in.md, "Prove it"): a Job
-  # after each sync prints PASS or FAIL lines for the Keycloak clients, Argo CD and Jellyfin.
+  # Sign-in checks from inside c1, no password (runbook set-up-lab-sign-in.md, "Prove it"): a CronJob, every
+  # 10 minutes, whose newest Job log prints PASS or FAIL lines for the Keycloak clients, Argo CD and Jellyfin.
   login-probe:
     namespace: login-probe
     local: true

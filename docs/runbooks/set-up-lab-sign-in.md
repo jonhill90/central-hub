@@ -7,7 +7,7 @@ runner: the owner, or an agent lane with cluster-admin on c1
 outcome: realm lab in Keycloak matches the code; Grafana, Argo CD and Jellyfin each have their client and their client secret in their own namespace; every user signs in with the password in the values file
 needs: the filled-in inventory, SSH to the c1 control plane, HTTPS on Gateway apps (playbooks/k8s-gateway.yml, k8s-certs.yml)
 private-values: [k8s_identity_zone, k8s_identity_owner_username, k8s_identity_owner_email, k8s_identity_proxmox_hosts, PASSWORD_USER_NAME, GRAFANA_CLIENT_SECRET, ARGOCD_CLIENT_SECRET, JELLYFIN_CLIENT_SECRET, PROXMOX_CLIENT_SECRET, TOTP_USER_NAME]
-files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/ansible/roles/k8s_identity/, hosts/ansible/bootstrap/show-totp-qr.sh, ~/.config/central-hub/identity.env]
+files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/kubernetes/home/c1/apps/login-probe/, hosts/ansible/roles/k8s_identity/, hosts/ansible/bootstrap/show-totp-qr.sh, ~/.config/central-hub/identity.env]
 last-tested: 2026-11-09, the owner on the Mac, step 4 at https://grafana.<zone>/ after an agent lane ran steps 1-3 on c1 (2026-11-08 at b20c975; again 2026-11-09 for the owner's renamed user and the sign-in theme); step 5 not yet done
 superseded-by:
 ---
@@ -63,6 +63,9 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
    expect: Grafana opens with the Admin role for a member of `lab-admins`.
 5. Argo CD and Jellyfin: this role makes their clients and secrets; it doesn't configure the apps. Argo CD's side is role `k8s_gitops`, tag `sso` ([runbook](sign-in-to-argo-cd-with-keycloak.md)). Jellyfin's side is its Argo CD chart: [the SSO section of move-jellyfin-to-argo-cd.md](move-jellyfin-to-argo-cd.md#sign-in-through-keycloak) installs the plugin and writes the provider. Sign in to each the same way.
    expect: Argo CD shows your groups under "User info"; Jellyfin signs you in through the plugin's "Sign in with keycloak" button.
+
+6. Prove it without a password: CronJob `login-probe` in namespace `login-probe` (Argo CD app `login-probe`) runs every 10 minutes inside c1. Its checks ask Keycloak for its sign-in page for the argocd, jellyfin and grafana clients and each client's redirect, check that Argo CD lists the provider Lab sign-in and sends its login to Keycloak, and check that Jellyfin's SSO plugin starts a login at Keycloak. Read the newest Job's log with `c1-read logs -n login-probe job/<newest job>` (list them with `c1-read get jobs -n login-probe`).
+   expect: the log ends with `RESULT: PASS`. A failed check prints `FAIL:` with the HTTP code and the redirect path (no host name), the last line is `RESULT: FAIL (n checks)` and the Job fails, which marks the app Degraded until the next run passes.
 
 ## Change a password or add a user
 

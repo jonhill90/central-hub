@@ -5,6 +5,8 @@
 # Every value here is public; the zone comes only from the root Application (CLAUDE.md rule 4).
 zone: ""
 name: login-probe
+# Every 10 minutes; a run takes a few seconds.
+schedule: "*/10 * * * *"
 realm: lab
 # Keycloak's own service name, reached over plain HTTP inside the cluster.
 keycloak: http://sso-service.identity.svc:8080

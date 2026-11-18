@@ -1,6 +1,6 @@
 #!/bin/sh
-# Sign-in checks from inside c1, no password. The log prints no host name, URL or secret: only check names and codes. Prints one PASS or FAIL line per check and exits 1 if
-# any failed. Reads only; the Job has no Kubernetes credential. No heredocs: the root filesystem is
+# Sign-in checks from inside c1, no password. The log prints no host name, URL or secret: only check names and codes. Prints one PASS or FAIL line per check and a last RESULT
+# line, and exits 1 if any check failed. Reads only; the Job has no Kubernetes credential. No heredocs: the root filesystem is
 # read-only.
 set -u
 fails=0
@@ -58,5 +58,6 @@ case $loc in
   *) fail "jellyfin's SSO plugin did not start a login at keycloak (HTTP $(scode "$h"), goes to path: $(where "$loc"))" ;;
 esac
 
-echo "$fails failed"
+# The last line is the verdict. A failed check fails the Job, so the CronJob's Job list shows it.
+if [ "$fails" = 0 ]; then echo "RESULT: PASS"; else echo "RESULT: FAIL ($fails checks)"; fi
 [ "$fails" = 0 ]
