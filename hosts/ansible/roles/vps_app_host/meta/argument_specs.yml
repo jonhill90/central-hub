@@ -14,3 +14,5 @@ argument_specs:
       vps_app_host_valkey_secret_conf: {type: path, description: The file vps-apply writes Valkey's password into; the role never writes it.}
       vps_app_host_valkey_port: {type: int, description: "Valkey's port, on loopback."}
       vps_app_host_public_ports_allowed: {type: list, elements: int, description: "Ports that may listen on an address that is not loopback or the tailnet's."}
+      vps_app_host_harden: {type: bool, description: "Close the public SSH door and turn the host firewall on (tasks/harden.yml); off until the owner's card."}
+      vps_app_host_tailnet_interface: {type: str, description: "The tailnet's interface, put in firewalld's trusted zone when hardening."}

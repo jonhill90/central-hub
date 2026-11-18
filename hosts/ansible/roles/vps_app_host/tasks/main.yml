@@ -125,6 +125,10 @@
     state: started
   when: vps_app_host_valkey_secret.stat.exists
 
+- name: Close the public SSH door and turn the host firewall on, only after the owner's card
+  ansible.builtin.include_tasks: harden.yml
+  when: vps_app_host_harden | bool
+
 - name: Read the listening TCP sockets
   ansible.builtin.command: ss -Htln
   register: vps_app_host_listeners
