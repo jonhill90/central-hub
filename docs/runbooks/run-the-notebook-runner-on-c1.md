@@ -29,7 +29,26 @@ A dev rebuild needs more memory than the host has free while VM 300, the noteboo
 
 With VM 300 running, dev is 967 MiB short. Shrinking VM 300 to 1024 MiB frees about 900 MiB, which still leaves dev short. Dev's VMs keep their memory until the teardown, so no stage frees memory for an earlier restart either. The runner VM stopped at 07:12:55 UTC and started again at 07:43:44 UTC, after the run's own teardown.
 
-A pod on c1 uses c1's worker, which a dev rebuild does not touch. c1's worker used 5501 of about 7.7 GiB on 2026-11-18 at 07:25 UTC (`c1-read top nodes`), and the pod asks for 512 MiB and may use up to 2 GiB.
+A pod on c1 uses c1's worker, which a dev rebuild does not touch.
+
+## Does it fit on c1's worker
+
+The pod runs on c1's worker: the control plane carries the `node-role.kubernetes.io/control-plane:NoSchedule` taint. Measured on 2026-11-18 at 08:33 UTC with `c1-read top nodes` and `c1-read describe node` on the worker:
+
+| Reading | MiB |
+|---|---|
+| Worker allocatable memory (8023144Ki) | 7835 |
+| Requests of the pods on it (45%) | 3590 |
+| Limits of the pods on it (129%, overcommitted) | 10178 |
+| Working set now (`top nodes`, 71%) | 5586 |
+| The pod's request | 512 |
+| The pod's limit | 2048 |
+
+- **Scheduling:** requests become 3590 + 512 = 4102 of 7835 (52%), so the scheduler places it.
+- **Use:** at rest the working set has 7835 - 5586 = 2249 MiB of room. A job that reaches the pod's whole 2048 MiB limit leaves about 200 MiB. The kubelet starts evicting at 100 MiB available by default, so a job at its limit while the other pods peak can push the worker into eviction. The kubelet evicts first the pod whose use is furthest above its request, which would be this one. Its running job then fails and has to be re-run; GitHub does not move it to another runner by itself.
+- **The host's figure is not this figure.** Proxmox counted the worker VM at 8233 of 8192 MiB on 2026-11-18 at 01:45 UTC: that is the VM's memory as the host sees it, guest page cache included, not what the pods use.
+- c1 has no ResourceQuota or LimitRange in any namespace (`c1-read get resourcequota -A` and `get limitrange -A`: `No resources found`), and namespace `notebook-runner` does not exist yet.
+- How much memory a notebook job really takes is not measured yet; step 6 measures it. If the worker's working set passes 7300 MiB during those runs, lower the pod's limit to 1536 MiB, or move the jobs back to VM 300, before VM 300 is retired.
 
 ## What runs
 
@@ -51,28 +70,35 @@ The pod is kept apart from the cluster because it runs the code in each notebook
 
 ## Steps
 
-1. Install this runbook's box code: the box-limit line that holds `ci-runner.sh` (action `c1-token`), the sudoers line and the two prod wrappers ([Set up the agent box](set-up-the-agent-box.md)).
+1. Check the fit again, since it changes as apps are added: `c1-read top nodes` and `c1-read describe node <worker>`.
+   expect: the worker's requests plus 512 MiB stay under its allocatable, and its working set plus 2048 MiB stays under its allocatable. If not, stop here and say what would have to move.
+
+2. Install this runbook's box code: the box-limit line that holds `ci-runner.sh` (action `c1-token`), the sudoers line and the two prod wrappers ([Set up the agent box](set-up-the-agent-box.md)).
    expect: `sudo -n -l` on the box lists `ci-runner.sh c1-token`.
 
-2. Put a registration token in prod's store, from a session on the box: `ci-runner c1-token`.
+3. Put a registration token in prod's store, from a session on the box: `ci-runner c1-token`.
    expect: `ci-runner: a one-hour registration token is in prod's store at kv c1/notebook-runner (registration-token)`.
 
-3. Turn the app on: `openbao-prod gitops`. It renders the root Application with `notebookRunner` true.
+4. Turn the app on: `openbao-prod gitops`. It renders the root Application with `notebookRunner` true.
    expect: `failed=0`; `c1-read get applications -n argocd notebook-runner` shows `Synced` and `Healthy` within about ten minutes.
 
-4. Check the pod registered: `c1-read logs -n notebook-runner deploy/notebook-runner`.
+5. Check the pod registered: `c1-read logs -n notebook-runner deploy/notebook-runner`.
    expect: `Listening for Jobs`, and on the notebook's Settings, under Actions and Runners, runner `notebook-c1` is Idle with label `notebook`.
 
-   Run steps 2 to 4 within the hour the token lasts. If the pod starts after the token expired, config.sh is refused and the pod exits and restarts. Run step 2 again: the ExternalSecret reads the new token within an hour (`refreshInterval: 1h`), and the pod registers at its next restart.
+   Run steps 3 to 5 within the hour the token lasts. If the pod starts after the token expired, config.sh is refused and the pod exits and restarts. Run step 3 again: the ExternalSecret reads the new token within an hour (`refreshInterval: 1h`), and the pod registers at its next restart.
 
-5. Watch three notebook pull requests: each of their `org-check` jobs runs on `notebook-c1` and passes (the job log's first lines name the runner).
-   expect: three green runs on `notebook-c1`. Until then VM 300 stays as the fallback, and GitHub gives each job to whichever runner is idle.
+6. Watch three notebook pull requests: each of their `org-check` jobs runs on `notebook-c1` and passes (the job log's first lines name the runner).
+   expect: three green runs on `notebook-c1`. While each runs, read `c1-read top pod -n notebook-runner` and `c1-read top nodes` and write the pod's peak memory and the worker's peak working set into the pull request that retires VM 300. Until then VM 300 stays as the fallback, and GitHub gives each job to whichever runner is idle.
 
-6. Retire VM 300 in its own pull request, following [the exit](set-up-the-ci-runner.md#exit) of its runbook, once step 5 passed.
+7. Retire VM 300 in its own pull request, following [the exit](set-up-the-ci-runner.md#exit) of its runbook, once step 6 passed.
+
+## The fallback
+
+VM 300 keeps its registration and its label until step 7, so both runners take the notebook's jobs and GitHub gives each to whichever is idle. If the pod is down, evicted or turned off, new jobs go to VM 300 with no change anywhere; a job that was running on the pod fails and is re-run. A dev rebuild still stops VM 300 meanwhile, and the pod then takes every job. Retire VM 300 only after step 6, in its own pull request.
 
 ## If it fails
 
-- The pod's log says "not registered and no registration token in the store": step 2 did not run, or the ExternalSecret is not Ready (`c1-read get externalsecret -n notebook-runner`).
+- The pod's log says "not registered and no registration token in the store": step 3 did not run, or the ExternalSecret is not Ready (`c1-read get externalsecret -n notebook-runner`).
 - `sha256sum` reports FAILED: the download does not match the pin. Nothing is unpacked; check the pin against the release notes.
 - A job fails for a missing tool: the image lacks it. Pick an image that has it, pinned by digest, in a pull request.
 - Jobs stay queued and `notebook-c1` shows as offline: the pin is more than 30 days behind a release. Merge the open bump pull request.
