@@ -127,6 +127,11 @@ prog=$(sed -n "s|^content=\$(awk '\(.*\)' /etc/pve/storage.cfg)$|\1|p" "$w")
 [[ -n $prog && $(awk "$prog" "$work/storage.cfg") == "iso,vztmpl,backup" ]] \
   && ok "the content line of storage local is read from storage.cfg, not local-lvm's" || bad "the storage.cfg read"
 
+# iac-access.sh, which host runs in the copy: zone lab can be made on an empty host (Zones.pm checks /sdn/zones).
+iac=$root/hosts/terraform/home/bootstrap/iac-access.sh
+grep -Eq '^acl /sdn/zones 0 ' "$iac" && ! grep -Eq '^acl /sdn/zones 1 ' "$iac" && ! grep -Eq '^acl /sdn 1 ' "$iac" \
+  && ok "iac-access.sh lets the token make a zone, without rights in other zones" || bad "iac-access.sh: no /sdn/zones ACL"
+
 # lab: the copy's own values for the three run folders, then the folders in the runbook's order, then mgmt.
 mkdir -p "$work/layers"
 python3 -I "$helper" layers "$work/settings.json" "$vlans" OPNsense-26.1.6-nano-amd64.img debian-13-standard_13.6-1_amd64.tar.zst "$work/layers"
@@ -317,11 +322,6 @@ done
 echo plain > "$work/php/plain.hash"
 LT_CONFIG=$work/php/config.json php -d include_path="$work/php" "$fb" vtnet0 50 10.1.50.1/24 vtnet1 "$work/php/plain.hash" > /dev/null 2>&1 \
   && bad "the first-boot PHP took a root hash that is not SHA-512 crypt" || ok "the first-boot PHP refuses a root hash that is not SHA-512 crypt"
-
-# iac-access.sh, which host runs in the copy: zone lab can be made on an empty host (Zones.pm checks /sdn/zones).
-iac=$root/hosts/terraform/home/bootstrap/iac-access.sh
-grep -Eq '^acl /sdn/zones 0 ' "$iac" && ! grep -Eq '^acl /sdn/zones 1 ' "$iac" && ! grep -Eq '^acl /sdn 1 ' "$iac" \
-  && ok "iac-access.sh lets the token make a zone, without rights in other zones" || bad "iac-access.sh: no /sdn/zones ACL"
 
 # The role takes the binary out of a .deb (an ar archive holding data.tar.xz) with Python only.
 mkdir -p "$work/deb/usr/bin"
