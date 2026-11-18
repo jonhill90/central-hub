@@ -541,8 +541,8 @@ components:
     paid-edition: none found; the LICENSE file read 2026-11-18 is plain MIT and D-0046's evidence found no commercial or enterprise licence text in its code
     paid-edition-source: https://github.com/cheaper-inference/OmniRoute
     verdict: pass
-    sources: []
-    not-detected: pulled by digest as docker.io/diegosouzapw/omniroute in hosts/vps-apps/omniroute/omniroute.container; the scanner reads no Quadlet files
+    sources:
+      - image:docker.io/diegosouzapw/omniroute
     checked: 2026-11-18
   - name: OpenClaw
     kind: software
@@ -552,8 +552,8 @@ components:
     paid-edition: none found; the README says it "has no paid tier, hosted service, or token" (D-0046 evidence, finding 2)
     paid-edition-source: https://github.com/openclaw/openclaw
     verdict: pass
-    sources: []
-    not-detected: pulled by digest as ghcr.io/openclaw/openclaw in hosts/vps-apps/openclaw/openclaw.container; the scanner reads no Quadlet files
+    sources:
+      - image:ghcr.io/openclaw/openclaw
     checked: 2026-11-18
   - name: Hermes Agent
     kind: software
@@ -563,8 +563,8 @@ components:
     paid-edition: none used; Nous Portal is a paid subscription that bundles hosted tools, and the agent also runs with the user's own keys, so D-0046 uses no Portal (evidence, finding 2)
     paid-edition-source: https://github.com/NousResearch/hermes-agent
     verdict: pass
-    sources: []
-    not-detected: pulled by digest as docker.io/nousresearch/hermes-agent in hosts/vps-apps/hermes/hermes.container; the scanner reads no Quadlet files
+    sources:
+      - image:docker.io/nousresearch/hermes-agent
     checked: 2026-11-18
   # Hosted services (STD-0006 rule 3).
   - name: GitHub
