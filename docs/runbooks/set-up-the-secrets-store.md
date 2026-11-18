@@ -165,6 +165,21 @@ The wrapper makes the admin AppRole's role ID and secret ID once in `/etc/agent-
 
 The admin policy can call the forced restore (`sys/storage/raft/snapshot-force`) only for `restore-rebuilt`. `secrets-store restore` stays plain and never forces.
 
+### On prod
+
+`secrets-store-prod` is the same wrapper for the store inside prod's c1: it runs `secrets-store.sh --prod`, with the same actions and guards. It never reads dev's files, and the dev wrapper never reads its own:
+
+| | dev (`secrets-store`) | prod (`secrets-store-prod`) |
+|---|---|---|
+| settings | `agent_box_secrets_store`, `/var/lib/agent-box/secrets-store.json` | `agent_box_secrets_store_prod`, `/var/lib/agent-box/secrets-store-prod.json` |
+| keys, CA file, snapshots | `/etc/agent-keys/dev/` | `/etc/agent-keys/prod/` |
+| the store name `address` must equal | `k8s_gitops_source_openbao_store_host` in `/etc/agent-keys/rebuild-dev/inventory/hosts.yml` | the same key in `/etc/agent-keys/prod/inventory-hosts.yml`, the box's copy of the prod inventory |
+| snapshot mark | `kv/dev/snapshot-mark` | `kv/prod/snapshot-mark` |
+| rebuild hold | `/var/lib/agent-box/state/secrets-store.rebuilding` | `/var/lib/agent-box/state/secrets-store-prod.rebuilding` |
+| `recovery` | once, into the keys folder | refused: prod gets no recovery shares (D-0038 rule 5, D-0058 rule 10) |
+
+The restore and SOPS helpers take the environment from the keys folder's name, so they name the right mark. With the in-cluster store on, the root chart passes prod's cluster `env` label (`k8s_gitops_cluster_labels.env`) as `openbaoMarkEnv`, so prod's snapshot CronJob reads `kv/prod/snapshot-mark`. A `restore` or `restore-rebuilt` on prod is still the owner's tap (a delete, D-0042 rule 6), and so is putting prod's seal key on its node (a secrets step, D-0058 rule 3). The hourly off-box copy below is for the dev store only.
+
 ## Off-box copy of the snapshots
 
 Pick 237, proposed D-0038 rule 8. **Not installed yet:** it is a box limit, which needs no card (D-0042 rule 4), and it holds a delete (the daily prune) under D-0042 rule 6, so it waits for the owner's tap. It also waits on the blocker in [the bundle's runbook](make-the-box-secrets-bundle.md#before-you-start): no agent or pipeline identity may hold role-assignment rights on the backup vault or container.

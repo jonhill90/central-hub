@@ -465,7 +465,7 @@
     - secrets-store-kv.sh          # SOPS copies: put, compare, reseed (D-0058 rule 8)
   loop_control:
     label: "{{ agent_box_libexec_dir }}/{{ item }}"
-  when: agent_box_secrets_store | length > 0
+  when: agent_box_secrets_store | length > 0 or agent_box_secrets_store_prod | length > 0
   tags: [wrappers]
 
 - name: The secrets-store wrapper's private settings, from the inventory (no keys)
@@ -476,6 +476,16 @@
     group: "{{ agent_box_keys_user }}"
     mode: "0600"
   when: agent_box_secrets_store | length > 0
+  tags: [wrappers]
+
+- name: The secrets-store-prod wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/secrets-store-prod.json"
+    content: "{{ agent_box_secrets_store_prod | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_secrets_store_prod | length > 0
   tags: [wrappers]
 
 # The weekly compare of the store with its SOPS copy (D-0058 rule 8), only once sops_copies is true (the owner's

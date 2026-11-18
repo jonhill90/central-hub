@@ -233,6 +233,14 @@ argument_specs:
           and reseed keep SOPS copies and turns on the weekly compare; it is set only by the owner's access-right tap
           (D-0058 rule 9). Anything but true is false. No key goes in it; the wrapper makes the keys in the keys
           folder. Empty skips the file.
+      agent_box_secrets_store_prod:
+        type: dict
+        default: {}
+        description: >-
+          The same settings for the store inside prod's c1, written to <work_dir>/secrets-store-prod.json for the
+          secrets-store-prod wrapper. address must equal the prod inventory's k8s_gitops_source_openbao_store_host (the
+          box's copy in <keys_dir>/prod); snapshot_box and sops_copies as for the dev settings, each set only by its own
+          tap. It makes no recovery shares (D-0038 rule 5: prod gets none). Empty skips the file.
       agent_box_secrets_store_compare_on_calendar:
         type: str
         default: "Mon *-*-* 05:00:00"

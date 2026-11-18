@@ -31,6 +31,9 @@ agent_box_wrappers:
   # on put lets sudo pass the path and key; the value comes on stdin, and the wrapper checks both arguments itself.
   - name: secrets-store
     args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", compare, reseed]
+  # The same wrapper for the store inside prod's c1 (D-0058): prod's keys folder, settings and inventory only.
+  - name: secrets-store-prod
+    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", compare, reseed]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself. Sessions get the
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge
@@ -264,6 +267,11 @@ agent_box_openbao_in_cluster: false
 # by the owner's install tap of pick 240) and sops_copies (default false; true only by the owner's access-right tap,
 # D-0058 rule 9: put, compare and reseed keep SOPS copies, and the weekly compare runs). Empty leaves the wrapper unset up.
 agent_box_secrets_store: {}
+# The same settings for the store inside prod's c1, written to <work_dir>/secrets-store-prod.json for the secrets-store-prod
+# wrapper. address must equal the prod inventory's k8s_gitops_source_openbao_store_host (the box's copy,
+# <keys_dir>/prod/inventory-hosts.yml); snapshot_box and sops_copies as above, each set only by its own tap. It makes no
+# recovery shares (D-0038 rule 5: prod gets none). Empty leaves it unset up.
+agent_box_secrets_store_prod: {}
 # When the weekly compare of the store with its SOPS copy runs (systemd OnCalendar), once sops_copies is true.
 agent_box_secrets_store_compare_on_calendar: "Mon *-*-* 05:00:00"
 # The dev store's hourly snapshot off the box (pick 237, docs/runbooks/set-up-the-secrets-store.md), set up when both
