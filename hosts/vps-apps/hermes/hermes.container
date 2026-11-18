@@ -1,0 +1,25 @@
+# Hermes Agent (D-0046 rules 1, 3 and 11). Config only. Runs as Quadlet unit hermes.service of Linux user
+# `hermes`. Pinned by digest, never built on the VPS. Browser tools stay off (rule 1: 4 GiB assumes it).
+[Unit]
+Description=Hermes Agent, rootless, no published port
+# The owner's provider key (S7) lands here. Until it exists the unit is skipped.
+ConditionPathExists=%h/.config/vps-apps/secrets.env
+
+[Container]
+Image=docker.io/nousresearch/hermes-agent@sha256:667a9dc77f303f6cd6e9ff62ce2c9580563597e09dde07fe5a224375988d6209
+ContainerName=hermes
+# D-0046 rule 1: 4 GiB.
+Memory=4g
+PodmanArgs=--memory-swap=4g
+PidsLimit=1024
+# The image exposes no port, so nothing is published: nothing can listen on the VPS for this app (rule 3).
+Volume=%h/data:/opt/data:Z
+EnvironmentFile=%h/.config/vps-apps/secrets.env
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

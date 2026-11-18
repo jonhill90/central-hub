@@ -1,0 +1,33 @@
+# OpenClaw gateway (D-0046 rules 1 to 3, 9 and 11). Config only. Runs as Quadlet unit
+# openclaw.service of Linux user `openclaw`. Pinned by digest, never built on the VPS.
+# D-0046 rule 2 says the gateway runs as a plain Node process. This unit runs it in the image's own container
+# instead, so it gets a memory cap now; its tool sandboxes stay off (rule 9) until the sandbox proof.
+[Unit]
+Description=OpenClaw gateway, rootless, loopback only
+# The owner's provider key (S7) and OpenClaw's own config land here. Until they exist the unit is skipped.
+ConditionPathExists=%h/.config/vps-apps/secrets.env
+
+[Container]
+Image=ghcr.io/openclaw/openclaw@sha256:97781490d6cd01cec8d1f0ad300ff8bedfaae18ec5b8c30666aaebc470a6309f
+ContainerName=openclaw
+# D-0046 rule 1: 3 GiB.
+Memory=3g
+PodmanArgs=--memory-swap=3g
+PidsLimit=1024
+# Loopback on the host. 18789 is chosen here and passed to the gateway below, not read from the image.
+PublishPort=127.0.0.1:18789:18789
+# The image runs as its user `node` (uid 1000). keep-id maps that to this Linux user, so the data folder is writable.
+UserNS=keep-id:uid=1000,gid=1000
+Volume=%h/data:/home/node/.openclaw:Z
+EnvironmentFile=%h/.config/vps-apps/secrets.env
+# --bind lan means "all interfaces inside the container"; the host side is the loopback publish above.
+Exec=node openclaw.mjs gateway --port 18789 --bind lan
+NoNewPrivileges=true
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

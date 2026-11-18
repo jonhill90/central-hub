@@ -1,0 +1,67 @@
+---
+# One app's Quadlet unit (D-0046 rules 1 to 3). Run once per app user, with vps_app_host_app set to its name.
+# The unit file is copied from hosts/vps-apps/<app>/<app>.container. The unit is installed and generated, never
+# started here: each carries a ConditionPathExists on the host's secrets file, so it starts only after
+# `vps-apply secrets` (S5) and, for the provider key, S7. Start-up is that step's job.
+
+- name: Look up this app user
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ vps_app_host_app }}"
+
+- name: Folders for the unit file, the app's data and its secrets file
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ vps_app_host_app }}"
+    group: "{{ vps_app_host_app }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "/home/{{ vps_app_host_app }}/.config", mode: "0755" }
+    - { path: "/home/{{ vps_app_host_app }}/.config/containers", mode: "0755" }
+    - { path: "/home/{{ vps_app_host_app }}/.config/containers/systemd", mode: "0755" }
+    - { path: "/home/{{ vps_app_host_app }}/.config/vps-apps", mode: "0700" }
+    - { path: "/home/{{ vps_app_host_app }}/data", mode: "0700" }
+
+- name: The app's Quadlet unit file
+  ansible.builtin.copy:
+    src: "{{ vps_app_host_units_dir }}/{{ vps_app_host_app }}/{{ vps_app_host_app }}.container"
+    dest: "/home/{{ vps_app_host_app }}/.config/containers/systemd/{{ vps_app_host_app }}.container"
+    owner: "{{ vps_app_host_app }}"
+    group: "{{ vps_app_host_app }}"
+    mode: "0644"
+
+# The user's systemd runs because linger is on. Quadlet turns the file into <app>.service at this reload,
+# which is run every time: it is cheap and changes nothing when the file did not change.
+- name: Let the user's systemd read the unit
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - "{{ vps_app_host_app }}"
+      - --
+      - env
+      - XDG_RUNTIME_DIR=/run/user/{{ vps_app_host_getent_uid }}
+      - systemctl
+      - --user
+      - daemon-reload
+  vars:
+    vps_app_host_getent_uid: "{{ ansible_facts.getent_passwd[vps_app_host_app][1] }}"
+  changed_when: false
+
+- name: Check Quadlet generated the service, with the memory cap in it
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - "{{ vps_app_host_app }}"
+      - --
+      - env
+      - XDG_RUNTIME_DIR=/run/user/{{ ansible_facts.getent_passwd[vps_app_host_app][1] }}
+      - systemctl
+      - --user
+      - cat
+      - "{{ vps_app_host_app }}.service"
+  register: vps_app_host_unit_cat
+  changed_when: false
+  failed_when: "'--memory' not in vps_app_host_unit_cat.stdout"

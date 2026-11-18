@@ -533,6 +533,39 @@ components:
     sources: []
     not-detected: installed from AlmaLinux 10 appstream by role vps_app_host; the scanner reads no package names
     checked: 2026-11-14
+  - name: OmniRoute
+    kind: software
+    used-for: the model router on the VPS apps host, one Quadlet unit under user omniroute, loopback only (D-0046)
+    licence: MIT
+    licence-source: https://github.com/cheaper-inference/OmniRoute/blob/main/LICENSE
+    paid-edition: none found; the LICENSE file read 2026-11-18 is plain MIT and D-0046's evidence found no commercial or enterprise licence text in its code
+    paid-edition-source: https://github.com/cheaper-inference/OmniRoute
+    verdict: pass
+    sources: []
+    not-detected: pulled by digest as docker.io/diegosouzapw/omniroute in hosts/vps-apps/omniroute/omniroute.container; the scanner reads no Quadlet files
+    checked: 2026-11-18
+  - name: OpenClaw
+    kind: software
+    used-for: the OpenClaw gateway on the VPS apps host, one Quadlet unit under user openclaw, loopback only (D-0046)
+    licence: MIT
+    licence-source: https://github.com/openclaw/openclaw/blob/main/LICENSE
+    paid-edition: none found; the README says it "has no paid tier, hosted service, or token" (D-0046 evidence, finding 2)
+    paid-edition-source: https://github.com/openclaw/openclaw
+    verdict: pass
+    sources: []
+    not-detected: pulled by digest as ghcr.io/openclaw/openclaw in hosts/vps-apps/openclaw/openclaw.container; the scanner reads no Quadlet files
+    checked: 2026-11-18
+  - name: Hermes Agent
+    kind: software
+    used-for: the Hermes Agent on the VPS apps host, one Quadlet unit under user hermes, no published port (D-0046)
+    licence: MIT
+    licence-source: https://github.com/NousResearch/hermes-agent/blob/main/LICENSE
+    paid-edition: none used; Nous Portal is a paid subscription that bundles hosted tools, and the agent also runs with the user's own keys, so D-0046 uses no Portal (evidence, finding 2)
+    paid-edition-source: https://github.com/NousResearch/hermes-agent
+    verdict: pass
+    sources: []
+    not-detected: pulled by digest as docker.io/nousresearch/hermes-agent in hosts/vps-apps/hermes/hermes.container; the scanner reads no Quadlet files
+    checked: 2026-11-18
   # Hosted services (STD-0006 rule 3).
   - name: GitHub
     kind: hosted
