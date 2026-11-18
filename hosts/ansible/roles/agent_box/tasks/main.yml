@@ -390,13 +390,19 @@
   when: not ansible_check_mode
   tags: [wrappers]
 
+# A loop of one, so a check run names the file by its loop label before the file exists: box-apply allows an approved limit
+# apply to change only the limit paths its check run named, and a plain copy of a new file has no path in a check run's
+# result (the first apply of line I stopped on this, 2026-11-18 04:03Z).
 - name: The web-shot script, root-owned
   ansible.builtin.copy:
     src: web-shot.py
-    dest: "{{ agent_box_libexec_dir }}/web-shot.py"
+    dest: "{{ item }}"
     owner: root
     group: root
     mode: "0755"
+  loop: ["{{ agent_box_libexec_dir }}/web-shot.py"]
+  loop_control:
+    label: "{{ item }}"   # the destination, as for the wrappers
   tags: [wrappers]
 
 - name: web-shot on the path
