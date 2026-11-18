@@ -21,7 +21,9 @@
       {%- else -%}
       lab_test settings: the inventory sets agent_box_lab_test ({{ agent_box_lab_test.keys() | sort | join(', ') }}) over the role's default
       {%- endif %}
-      ; the Proxmox node name {{ 'comes from the inventory' if agent_box_lab_test_effective.proxmox_node_name is defined else 'is read from the API at run time' }}
+      ; the Proxmox node name
+      {{ 'comes from the inventory' if agent_box_lab_test_effective.proxmox_node_name is defined
+      else 'is read from the API at run time' }}
 
 - name: lab_test | Check the settings
   ansible.builtin.assert:
