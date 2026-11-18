@@ -6,6 +6,22 @@
 argocd:
   namespace: argocd   # where Argo CD runs (role k8s_gitops)
 
+# OpenBao inside the cluster (apps openbao-store and openbao, D-0058). The root passes inCluster
+# from its openbaoInCluster; false leaves out the OpenBao alerts, so a cluster with no store raises
+# none. Its metrics come from the openbao app's own ServiceMonitor (apps/openbao/values.yaml).
+openbao:
+  inCluster: false
+  namespace: openbao
+  # The hourly Raft snapshot (apps/openbao-store, CronJob openbao-snapshot): stale after 3 hours.
+  snapshotStaleSeconds: 10800
+
+jellyfin:
+  namespace: media   # where Jellyfin runs (app jellyfin)
+  # Read Jellyfin's own /metrics (app jellyfin's metrics.enabled must be true too).
+  metrics: true
+  # Requests a second answered with a 5xx, over 15 minutes, before C1JellyfinErrors fires.
+  errorRatePerSecond: 0.05
+
 certManager:
   namespace: cert-manager   # where cert-manager runs (app cert-manager)
   # A renewal is overdue this many seconds after cert-manager's planned renewal time. Let's
@@ -26,3 +42,12 @@ heartbeat:
 # The data disk every volume lives on (role k8s_storage, k8s_storage_mount).
 dataMount: /var/lib/c1-data
 dataFreeWarnRatio: 0.15
+
+# The panel check: a CronJob that asks Prometheus for the dashboard's OpenBao and Jellyfin values and
+# prints them, so an agent with the read-only account (c1-read logs) sees the same numbers as the
+# panels without a browser, a password or a port-forward. It reads Prometheus only, in the cluster.
+panelCheck:
+  schedule: "*/30 * * * *"
+  prometheus: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+  # Same image as the Jellyfin setup Job (curl 8.22.0, 2026-09-02, multi-arch index digest).
+  image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
