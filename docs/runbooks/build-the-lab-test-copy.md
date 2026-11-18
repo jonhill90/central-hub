@@ -7,7 +7,7 @@ runner: an agent session on the agent box, while dev is down and VM 257 is gone
 outcome: VM 256 runs Proxmox VE 9.2 installed with no console, answers SSH as root with the box's key on its dev address, shows vmx or svm and /dev/kvm, so its own guests can use KVM, and has the fresh-host steps done (apt, iac@pve and its token, vmbr1, the nano image and the Debian 13 template), then holds its own SDN, VM 100 (OPNsense, WAN link-down) and CT 900 from the run folders, each with a second plan that shows no changes, its own address on mgmt, and VM 100 set up over its serial console with LAN on mgmt; destroy removes it
 needs: the agent box with the lab-test wrapper (agent_box_lab_test in the private inventory, one install of the box's role); dev torn down and VM 257 destroyed; the node's free memory at least the copy's 7168 MiB plus the 2048 MiB margin; 5 GB free on the box; the host's kvm module with nested on
 private-values: [agent_box_lab_test]
-files: [hosts/terraform/home/lab-test/, hosts/terraform/home/bootstrap/iac-access.sh, hosts/terraform/home/network/, hosts/terraform/home/firewall/, hosts/terraform/home/remote-access/, hosts/ansible/playbooks/proxmox-host.yml, hosts/ansible/roles/agent_box/files/lab-test.sh, hosts/ansible/roles/agent_box/files/lab-test-answer.py, hosts/ansible/roles/agent_box/files/lab-test-console.py, hosts/ansible/bootstrap/opnsense-first-boot.php, hosts/ansible/bootstrap/opnsense-ansible-user.php, hosts/ansible/playbooks/opnsense.yml, hosts/ansible/roles/agent_box/files/lab-test-wan-watch.py, hosts/ansible/roles/agent_box/tasks/lab_test.yml, .github/hosts-check/tests/test_lab_test.sh]
+files: [hosts/terraform/home/lab-test/, hosts/terraform/home/bootstrap/iac-access.sh, hosts/terraform/home/network/, hosts/terraform/home/firewall/, hosts/terraform/home/remote-access/, hosts/ansible/playbooks/proxmox-host.yml, hosts/ansible/roles/agent_box/files/lab-test.sh, hosts/ansible/roles/agent_box/files/lab-test-answer.py, hosts/ansible/roles/agent_box/files/lab-test-console.py, hosts/ansible/bootstrap/opnsense-first-boot.php, hosts/ansible/bootstrap/opnsense-ansible-user.php, hosts/ansible/playbooks/opnsense.yml, hosts/ansible/roles/agent_box/files/lab-test-wan-watch.py, hosts/ansible/playbooks/tailnet-connector.yml, hosts/ansible/roles/agent_box/tasks/lab_test.yml, .github/hosts-check/tests/test_lab_test.sh]
 last-tested: "never on the box; the stack's tofu test and test_lab_test.sh offline"
 superseded-by:
 ---
@@ -151,14 +151,33 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    The watch counts the packets the real check counts, from the WAN's MAC: UDP from port 67, UDP from port 547 and ICMPv6 type 134. Nothing on `vmbr9` would ask a server, so every 5 seconds the watch asks itself from a made-up MAC, with a DHCPv4 discover, a DHCPv6 solicit and a router solicitation. It reads frames on the bridge's ports, where they enter, before the bridge's netfilter hooks. It passes only when it saw frames from the WAN and none of server type. Any failure takes WAN link-down again. WAN stays up when all three pass; `lab-test lab`, run again, takes it down. Safe to run again.
    expect: `pgrep` lists `dhclient: vtnet1`, then `wan-watch: 120s on vmbr9: N frames from the WAN, server-type: 0` with N above 0, `firewall applied in the copy`, the same line for 240s, then `the WAN check passed at link-up and over a reboot`.
    ※ `lab-test.sh`, `wancheck`; `lab-test-wan-watch.py`; `firewall/variables.tf`, `wan_bridge`
-9. Destroy when done:
+9. Set up CT 900's tailnet client, never joined:
+
+   ```sh
+   lab-test connector
+   ```
+
+   why: on a fresh real host, CT 900 gets its client from [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md) steps 1 to 3, which are the vendor's Debian repository, the client and IP forwarding. Then it gets its route and advertised routes from `playbooks/tailnet-connector.yml` ([Set up lab DNS](set-up-lab-dns.md)). The wrapper runs that runbook's own lines in the copy's CT 900 through the copy's `pct`, then runs the playbook twice against the copy, and the second run must report `changed=0`.
+
+   It never runs steps 4 and 5, the auth key and the join: those are a tailnet change, and the copy has no key. The advertised routes stay preferences in the client until a login that never comes (`tailscale set` and `tailscale debug prefs` only edit and read the local daemon's preferences, tailscale `cmd/tailscale/cli/set.go` and `debug.go`). The inventory's extra route is the copy's own dev address as a /32, as the real one is the host's home LAN address.
+
+   The wrapper stops before anything if CT 900 is ever logged in. Last, it checks:
+   - the route unit is active;
+   - the lab range goes through the mgmt gateway on `eth1`;
+   - the gateway answers a ping on `eth1`;
+   - the client still says `NeedsLogin`.
+
+   Safe to run again.
+   expect: `enabled`, both forwarding values `1`, two playbook runs, then `CT 900 has the tailnet client, forwarding, the lab route and its routes advertised, and never joined`.
+   ※ `lab-test.sh`, `connector`; `lab-test-answer.py`, `inventory`; `playbooks/tailnet-connector.yml`
+10. Destroy when done:
 
    ```sh
    lab-test destroy
    ```
 
-   why: it removes VM 256 and its disk, and on the box the copy's token, inventory, CA, run folder states, OPNsense root password, API key and the last `opnsense` log. The prepared ISO stays in the wrapper's state and on `local` for the next build, and on the box. Destroy ends by listing what it left on `local`.
-10. Bring dev back if it is needed (`rebuild.sh up`). The dev rebuild's preflight refuses while VM 256 exists.
+   why: it removes VM 256 and its disk, and on the box the copy's token, inventory, CA, run folder states, OPNsense root password, API key and the last `opnsense` and `connector` logs. The prepared ISO stays in the wrapper's state and on `local` for the next build, and on the box. Destroy ends by listing what it left on `local`.
+11. Bring dev back if it is needed (`rebuild.sh up`). The dev rebuild's preflight refuses while VM 256 exists.
 
 `lab-test log` prints the last run's output, then VM 256's state, uptime and memory from Proxmox. It changes nothing.
 
@@ -187,6 +206,9 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 | `the second opnsense.yml run changed something` | The role does not converge on a fresh firewall. Report the second run's changed tasks. |
 | `before link-up, WAN is not a DHCP client only` | `dhclient` is not on `vtnet1`, or a DHCPv6 client, router or Kea runs; the console output is above. WAN stays down. Report it. |
 | `the WAN check failed at link-up` or `over the reboot` | The watch saw a server-type frame from the WAN (the line above names the kinds), or nothing from the WAN at all. WAN is down again. Report the watch line. |
+| `CT 900 is logged in to a tailnet` | Someone joined the copy's CT 900. The copy must never join: destroy the copy and remove the device from the tailnet, which is the owner's step. |
+| `tailnet-connector.yml failed on run N` or `the second tailnet-connector.yml run changed something` | The role fails or does not converge on a fresh CT 900; Ansible's output is above. Report it. |
+| `CT 900's route to the lab or the mgmt gateway ... does not work` | The route unit did not start, or VM 100's LAN is not on mgmt. Run `lab-test check`, then report it. |
 | `the API user ansible gets no answer` | The gateway answers but the API refuses the key, or the web GUI is not up. Report it with the console output. |
 | `stopped, the copy's CPU shows no vmx or svm` | The host's kvm module has nested off. Turning it on stops every guest on the host, so it is the owner's call ([Nested Virtualization](https://pve.proxmox.com/wiki/Nested_Virtualization)). Destroy, then report it. |
 
@@ -199,7 +221,8 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 - The DNS proof is not run against the copy (step 7); the names are made, not asked for.
 - The WAN check on the copy runs on a portless bridge, so its WAN gets no lease and nothing real asks it for a server; only the watch's own requests do. It shows what VM 100 sends, not how the home LAN's devices would take it.
 - The watch was tested against a fake WAN on a made-up bridge (client only, DHCPv4 server, router, silent), not against OPNsense.
-- CT 900's eth0 sits on the copy's vmbr0, so its DHCP request reaches dev, and dev's DHCP gives it a lease under its made-up name. Nothing runs in it until the tailnet step.
+- CT 900's eth0 sits on the copy's vmbr0, so its DHCP request reaches dev, and dev's DHCP gives it a lease under its made-up name. From step 9 its tailnet client runs, never logged in. What a logged-out client sends to the vendor's servers (for example its own logs) is not measured; the client is the vendor's default build, as on the real CT 900.
+- The client comes from the vendor's repository unpinned, as the real runbook installs it, so two runs can get different versions.
 - The copy's data volume is about 18 GB, and VM 100's 16 GB disk and CT 900's 2 GB are thin, so together they fill it on paper. Proxmox allows that on LVM-thin.
 - Root's password for the copy stays on the box with its hash while `agent_box_lab_test` is set, because the cached prepared ISO holds that hash. The copy is reachable only on dev.
 - Unproven until the copy runs: the 26.1 console's prompts as `lab-test-console.py` expects them (October's run measured 26.7), the first-boot and API user PHP on a real 26.1.6 OPNsense (the API user PHP ran on 26.7 in October), `opnsense.yml` on 26.1.6 (October ran it on 26.7; `oxlorg.opnsense` 26.1.11 is tested on 26.1, `requirements.yml`), that the bpg provider trusts the copy's CA through `SSL_CERT_FILE` (bpg 0.116.0 sets no roots of its own, `proxmox/api/client.go`), that VM 100's create passes through its pre-added pool membership, and that every folder's second plan is empty on an empty host.
