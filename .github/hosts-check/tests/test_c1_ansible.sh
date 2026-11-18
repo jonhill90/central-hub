@@ -8,6 +8,8 @@
 #   4. apply runs the playbook without --check, never with realm replace, and logs the clearance id; a host labelled env dev
 #      refuses before any run.
 #   5. log prints the run's own lines.
+#   6. An inventory that names a theme folder (a controller path) is remapped to <keys>/prod/identity-theme/<its name>; with no
+#      login/theme.properties there the run stops before any playbook, and with it the run goes on.
 # Usage: .github/hosts-check/tests/test_c1_ansible.sh   (needs python3 with PyYAML, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -87,4 +89,13 @@ if [[ $rc -ne 0 && -z $calls && $out == *"not prod"* ]]; then ok "4b. a host lab
 inventory "${prod_inv[@]}"
 run check identity; run log
 if [[ $rc -eq 0 && $out == *"c1-ansible: check identity at central-hub abc1234"* && $out == *"PLAY RECAP"* ]]; then ok "5. log prints the run's own lines"; else bad "5. $rc $out"; fi
+
+inventory "all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_identity_theme_dir: /Users/someone/branding/hill90/" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}"
+run check identity; r6a="$rc:${calls:-none}:$out"
+mkdir -p "$t/keys/prod/identity-theme/hill90/login"; echo "parent=keycloak.v2" > "$t/keys/prod/identity-theme/hill90/login/theme.properties"
+run check identity; seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
+if [[ $r6a == 1:none:*"no login/theme.properties on the box"* && $r6a == *"$t/keys/prod/identity-theme/hill90"* ]] &&
+   [[ $rc -eq 0 && $seen == *"k8s_identity_theme_dir: $t/keys/prod/identity-theme/hill90"* && $seen != */Users/* ]]; then
+  ok "6. the theme folder is remapped to the box's copy; a missing copy stops the run first"
+else bad "6. [$r6a] $rc [$calls] $out"; fi
 exit "$fail"

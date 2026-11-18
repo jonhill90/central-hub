@@ -18,7 +18,7 @@
     owner: "{{ agent_box_keys_user }}"
     group: "{{ agent_box_keys_user }}"
     mode: "0700"
-  loop: [prod, prod/state, prod/tfvars]
+  loop: [prod, prod/state, prod/tfvars, prod/identity-theme]
 
 - name: Look for each file on the controller
   ansible.builtin.stat:
@@ -60,6 +60,28 @@
   loop: "{{ agent_box_pf_tfstates.files }}"
   loop_control:
     label: "{{ agent_box_keys_dir }}/prod/state/{{ item.path | basename }}"
+  no_log: true
+
+# The sign-in theme folder (c1-ansible reads it as k8s_identity_theme_dir, remapped to <keys>/prod/identity-theme/<its name>):
+# copied whole, so the branded files stay on prod when the box runs the identity playbook. Only when the inventory names it
+# (agent_box_prod_theme_src, a path on the controller); no content is printed.
+- name: The sign-in theme folder on the controller
+  ansible.builtin.stat:
+    path: "{{ agent_box_prod_theme_src }}/login/theme.properties"
+  delegate_to: localhost
+  become: false
+  register: agent_box_pf_theme
+  when: agent_box_prod_theme_src | length > 0
+
+- name: Copy the sign-in theme folder
+  ansible.builtin.copy:
+    src: "{{ agent_box_prod_theme_src | regex_replace('/+$', '') }}/"
+    dest: "{{ agent_box_keys_dir }}/prod/identity-theme/{{ agent_box_prod_theme_src | regex_replace('/+$', '') | basename }}"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+    directory_mode: "0700"
+  when: agent_box_prod_theme_src | length > 0 and agent_box_pf_theme.stat.exists | default(false)
   no_log: true
 
 - name: Say which files were copied and which were missing (names only)
