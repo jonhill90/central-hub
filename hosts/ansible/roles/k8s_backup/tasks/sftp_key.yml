@@ -1,0 +1,40 @@
+---
+# The node's own ssh key for the Proxmox target (agent pick 262). Run by the first play of k8s-backup.yml and
+# k8s-restore.yml, before the host play lets the key in. The key never leaves the node: only its public half
+# goes into a fact the host play reads.
+
+- name: sftp | Not together with the Azure sign-in
+  ansible.builtin.assert:
+    that: not k8s_backup_azure_identity
+    fail_msg: >-
+      k8s_backup_sftp and k8s_backup_azure_identity are both true. The node env file can name one
+      repository only. Nothing was changed.
+    quiet: true
+
+- name: sftp | The key's folder, root only
+  ansible.builtin.file:
+    path: "{{ k8s_backup_sftp_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: sftp | The node's key, made once on the node
+  ansible.builtin.command: >-
+    ssh-keygen -q -t ed25519 -N '' -C {{ (k8s_backup_sftp_user ~ '@' ~ inventory_hostname) | quote }}
+    -f {{ (k8s_backup_sftp_dir ~ '/id_ed25519') | quote }}
+  args:
+    creates: "{{ k8s_backup_sftp_dir }}/id_ed25519"
+
+- name: sftp | The key's public half
+  ansible.builtin.slurp:
+    src: "{{ k8s_backup_sftp_dir }}/id_ed25519.pub"
+  register: k8s_backup_sftp_pub_raw
+  # A first --check run has no key yet; the host play then gets no line for this node.
+  failed_when: false
+
+- name: sftp | Remember it for the host play
+  ansible.builtin.set_fact:
+    k8s_backup_sftp_pubkey: >-
+      {{ ((k8s_backup_sftp_pub_raw.content | default('') | b64decode).split()[:2] | join(' '))
+         if k8s_backup_sftp_pub_raw.content is defined else '' }}

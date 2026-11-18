@@ -1,0 +1,39 @@
+---
+# The Proxmox host as c1's restic target (the owner, 2026-11-18 07:44 UTC: back up on the Proxmox host for now;
+# agent pick 262). OpenSSH's own internal-sftp serves one folder on the backup HDD to two locked-down users, so
+# nothing new is installed on the host. Runbook: docs/runbooks/back-up-c1-off-box.md, "The Proxmox host".
+# Every input is listed here (Red Hat CoP rule). Not private: the node keys and addresses come from the play.
+
+# The HDD's mount and the folder on it. The folder is the users' chroot: sshd needs it and every folder above it
+# owned by root and writable by no one else (sshd_config(5), ChrootDirectory). The role stops if the HDD is not
+# mounted there, so a missing disk never fills the host's root disk.
+proxmox_restic_sftp_mount: /mnt/hdd-backup
+proxmox_restic_sftp_root: "{{ proxmox_restic_sftp_mount }}/restic"
+# The repository's folder inside the chroot; restic sees it as /<name> (RESTIC_REPOSITORY sftp:<alias>:/<name>).
+proxmox_restic_sftp_repo: c1
+
+# The writer: the c1 nodes back up as this user, read and write, only inside the repository folder.
+proxmox_restic_sftp_writer: c1backup
+# The reader: dev restores as this user. internal-sftp -R refuses every write, so restic runs with --no-lock.
+# It reads the repository through the writer's group: restic keeps a repository's files group-readable once its
+# config file is (restic 0.14.0 changelog, "Support for group-accessible repositories"), and the role sets that.
+proxmox_restic_sftp_reader: c1restore
+
+# Which list of keys this run writes. A prod run (k8s-backup.yml) writes the writer's keys; a dev run
+# (k8s-restore.yml) writes the reader's. Each user's list is its own file, so one never removes the other's.
+# Each item: { key: "ssh-ed25519 AAAA... comment", from: "<the node's address>" }. Every key gets `restrict`
+# (no forwarding, no pty, no agent, no X11) and from="<address>", so it works only from that node.
+proxmox_restic_sftp_writer_keys: []
+proxmox_restic_sftp_reader_keys: []
+# true: write the writer's list (empty list: no writer can sign in). false: leave the writer's file as it is.
+proxmox_restic_sftp_set_writer: false
+proxmox_restic_sftp_set_reader: false
+
+# Root may not sign in from these sources at all (sshd Match Address ... PermitRootLogin no): the nodes reach
+# port 22 only for backups. The role adds every address named in either keys file, so a run that writes one
+# user's keys keeps the other user's addresses refused too.
+proxmox_restic_sftp_no_root_from: []
+
+# Files the role writes. The keys files live outside the chroot, owned by root.
+proxmox_restic_sftp_sshd_conf: /etc/ssh/sshd_config.d/40-central-hub-restic.conf
+proxmox_restic_sftp_keys_dir: /etc/ssh/central-hub-restic

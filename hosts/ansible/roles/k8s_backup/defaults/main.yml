@@ -51,6 +51,23 @@ k8s_backup_azure_cert_renew_days: 30
 k8s_backup_azure_cert_schedule: "*-*-* 01:40:00"
 k8s_backup_az: az
 
+# The Proxmox host as the target (the owner, 2026-11-18 07:44 UTC: back up on the Proxmox host for now;
+# agent pick 262). true: each node makes its own ssh key (never leaving the node), the playbook's host play
+# lets that key in as the host's backup user (role proxmox_restic_sftp; the reader user in reader mode), and
+# the node env file gets RESTIC_REPOSITORY=sftp:<alias>:/<repo>, an ssh alias that a root-only ssh config
+# drop-in points at the host, with the host's key pinned. That line comes after the controller's env file, so
+# it wins over a RESTIC_REPOSITORY there; the env file then needs only RESTIC_PASSWORD. Never true together
+# with k8s_backup_azure_identity. The address is the host's on VNet mgmt (proxmox_host_mgmt_address), which
+# the playbook passes in; it is private.
+k8s_backup_sftp: false
+k8s_backup_sftp_address: ""
+k8s_backup_sftp_host_key: ""   # "ssh-ed25519 AAAA...", the host's own; the playbook reads it from the host
+k8s_backup_sftp_alias: c1-backup-target
+k8s_backup_sftp_repo: c1
+k8s_backup_sftp_user: "{{ 'c1restore' if k8s_backup_reader else 'c1backup' }}"
+k8s_backup_sftp_dir: /etc/central-hub/backup-ssh
+k8s_backup_sftp_ssh_conf: /etc/ssh/ssh_config.d/40-central-hub-backup.conf
+
 # Where the tools and scripts go on the nodes, apart from the PATH so nothing else picks up this
 # etcd binary.
 k8s_backup_bin_dir: /usr/local/libexec/central-hub-backup
