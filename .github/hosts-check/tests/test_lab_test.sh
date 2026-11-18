@@ -264,7 +264,9 @@ f = f[:f.index("\n}\n")]
 pre = f.index('pgrep -lf \\"dhclient.*vtnet1\\"", "! pgrep -lf \\"radvd|kea-dhcp|dhcp6c\\""')
 up = f.index("wan_link true")
 assert pre < f.index('"$console_py"') < up < f.index("vm 'qm reboot 100'")
-assert f.index("wan_watch 120 & watcher=$!") < up and 'vm "python3 -I - vmbr9 $wanmac $1" < "$wan_watch_py"' in f
+assert f.index("wan_watch 120 & watcher=$!") < up and 'vm "python3 -I - vmbr9 $wanmac $*" < "$wan_watch_py"' in f
+# Over the reboot, only frames from VM 100's new WAN tap count (net1 is tap100i1).
+assert f.index("wan_watch 240 tap100i1 & watcher=$!") < f.index("vm 'qm reboot 100'")
 assert f.count("wan_link false; return 1") == 2 and f.count('wait "$watcher" ||') == 2
 PY
 grep -q 'openssl passwd -6 -stdin < "$files/root.pass" > "$files/root.hash"' "$w" && ok "root's hash is of the password the box keeps" || bad "root's hash and password"
@@ -497,6 +499,26 @@ PY
     if [[ $rc == "${want#*:}" ]]; then ok "the live WAN watch exits $rc for a WAN that is $mode: $(head -1 "$work/watch.out")"
     else bad "the live WAN watch for a $mode WAN (exit $rc)"; cat "$work/watch.out"; fi
   done
+  # Over a reboot (a port named): frames count only once the port is a new device. Phase 1 runs the fake on the first
+  # veth; then the veth is deleted and made again under the same name, as a reboot gives VM 100 a new tap; phase 2
+  # runs the fake again, or not at all.
+  veth() { "${sudo[@]}" ip link add ltwan0 type veth peer name ltwan0br && "${sudo[@]}" ip link set ltwan0br master vmbr97 \
+    && "${sudo[@]}" ip link set ltwan0 address 02:00:00:00:01:01 && "${sudo[@]}" ip link set ltwan0br up && "${sudo[@]}" ip link set ltwan0 up; }
+  for want in before-only:4 before-and-after:0 never-cycled:5; do
+    mode=${want%:*}; rc=0
+    "${sudo[@]}" python3 -I "$wan_watch" vmbr97 02:00:00:00:01:01 14 ltwan0br > "$work/watch.out" 2>&1 & watch=$!
+    sleep 0.5
+    "${sudo[@]}" python3 -I "$work/fakewan.py" "$wan_watch" client 4 || true
+    if [[ $mode != never-cycled ]]; then
+      "${sudo[@]}" ip link del ltwan0 && veth
+      [[ $mode == before-only ]] || "${sudo[@]}" python3 -I "$work/fakewan.py" "$wan_watch" client 4 || true
+    fi
+    wait "$watch" || rc=$?
+    if [[ $rc == "${want#*:}" ]]; then ok "the live WAN watch over a reboot exits $rc for frames $mode: $(head -2 "$work/watch.out" | tail -1)"
+    else bad "the live WAN watch over a reboot, frames $mode (exit $rc)"; cat "$work/watch.out"; fi
+  done
+  python3 -I "$wan_watch" vmbr97 02:00:00:00:01:01 1 ltwan9 > "$work/watch.out" 2>&1 && bad "the watch took a port not on the bridge" \
+    || { grep -q 'is not on vmbr97 at the start' "$work/watch.out" && ok "the watch refuses a port that is not on the bridge at the start" || bad "the watch's missing-port message"; }
   "${sudo[@]}" ip link del ltwan0 || true; "${sudo[@]}" ip link del vmbr97 || true
 fi
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The WAN safety check's capture, inside the lab test copy (docs/runbooks/build-the-lab-test-copy.md, wancheck).
 
-  lab-test-wan-watch.py <bridge> <WAN MAC> <seconds>
+  lab-test-wan-watch.py <bridge> <WAN MAC> <seconds> [<port>]
 
 Run as root on the copy, it watches the bridge VM 100's WAN sits on for the packets set-up-lab-network-and-firewall.md
 step 7 counts: from the WAN's MAC, UDP from port 67 (a DHCPv4 server's offer or ack), UDP from port 547 (a DHCPv6
@@ -11,6 +11,12 @@ discover, a DHCPv6 solicit and a router solicitation. It exits 0 only when it sa
 is up and alive) and none of server type. It reads the frames where they enter the bridge, on its ports (VM 100's
 tap), before the bridge's own netfilter hooks could drop them, so a reboot's new tap is read too. Standard library
 only; Linux AF_PACKET.
+
+With <port> (VM 100's WAN tap, for the watch over a reboot), frames from the WAN count as a sign of life only once
+that port is a new device: the port must be on the bridge at the start, and it counts as back when the same name has
+a new interface index, which only a new QEMU process gives it. Frames sent before the reboot prove nothing about the
+WAN after it, so they are not counted. Server-type frames count at any time. It exits 5 when the port never came
+back as a new device in the time given, and 4 when it came back but sent nothing.
 """
 import os
 import re
@@ -99,22 +105,47 @@ def classify(frame, wan):
     return "other"
 
 
+def port_index(brif, port):
+    """The port's interface index while it is on the bridge, else None."""
+    try:
+        with open(os.path.join(brif, port, "..", "ifindex")) as f:   # brif/<port> links to the port's brport folder
+            return int(f.read())
+    except (OSError, ValueError):
+        return None
+
+
+def came_back(brif, port, start_index):
+    """True once the port is on the bridge with an index other than the one it had at the start."""
+    i = port_index(brif, port)
+    if i is None or i == start_index:
+        return False
+    print(f"wan-watch: {port} is back as a new device (index {start_index} -> {i})", flush=True)
+    return True
+
+
 def main():
-    if len(sys.argv) != 4 or not re.fullmatch(r"vmbr[0-9]+", sys.argv[1]) or not sys.argv[3].isdigit():
+    if len(sys.argv) not in (4, 5) or not re.fullmatch(r"vmbr[0-9]+", sys.argv[1]) or not sys.argv[3].isdigit() \
+            or (len(sys.argv) == 5 and not re.fullmatch(r"[a-z][a-z0-9]{1,14}", sys.argv[4])):
         sys.exit(__doc__)
     bridge, wan, seconds = sys.argv[1], mac_bytes(sys.argv[2]), int(sys.argv[3])
+    port = sys.argv[4] if len(sys.argv) == 5 else None
     brif = f"/sys/class/net/{bridge}/brif"
     if not os.path.isdir(brif):
         sys.exit(f"wan-watch: {bridge} is not a bridge here")
+    start_index = port_index(brif, port) if port else None
+    if port and start_index is None:
+        sys.exit(f"wan-watch: {port} is not on {bridge} at the start, so a reboot can't be told apart")
+    back = port is None
     # Not bound: frames are taken from the bridge's ports, read again each second as VM 100's tap comes and goes.
     s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
     s.settimeout(0.5)
-    seen, bad, end, next_probe, next_ports, ports = 0, {}, time.monotonic() + seconds, 0.0, 0.0, set()
+    seen, before, bad, end, next_probe, next_ports, ports = 0, 0, {}, time.monotonic() + seconds, 0.0, 0.0, set()
     frames = probes()
     while time.monotonic() < end:
         now = time.monotonic()
         if now >= next_ports:
             ports, next_ports = set(os.listdir(brif)), now + 1
+            back = back or came_back(brif, port, start_index)
         if now >= next_probe:
             for f in frames:
                 s.sendto(f, (bridge, 0))
@@ -128,13 +159,24 @@ def main():
         kind = classify(frame, wan)
         if kind is None:
             continue
-        seen += 1
+        if not back and where[0] == port:   # read the index again at once, so the new tap's first frame counts
+            back = came_back(brif, port, start_index)
+        # A frame from a port that is gone has no name (Python reads the name from the index at receive time), so a
+        # frame the old tap sent is never taken for one from the new tap.
+        if back:
+            seen += 1
+        else:
+            before += 1
         if kind != "other":
             bad[kind] = bad.get(kind, 0) + 1
-    print(f"wan-watch: {seconds}s on {bridge}: {seen} frames from the WAN, server-type: "
+    print(f"wan-watch: {seconds}s on {bridge}: {seen} frames from the WAN"
+          + (f" after {port} came back ({before} before, not counted)" if port else "") + ", server-type: "
           + (", ".join(f"{k} {v}" for k, v in sorted(bad.items())) or "0"), flush=True)
     if bad:
         sys.exit(3)
+    if not back:
+        print(f"wan-watch: {port} never came back as a new device, so the reboot was not seen", flush=True)
+        sys.exit(5)
     if not seen:
         print("wan-watch: nothing from the WAN's MAC; the WAN is not up, so this proves nothing", flush=True)
         sys.exit(4)
