@@ -5,8 +5,8 @@
 #   pr-merge check OWNER/REPO PR_NUMBER HEAD_SHA   read the PR and print its verdict; changes nothing.
 #   pr-merge merge OWNER/REPO PR_NUMBER HEAD_SHA   the same, then squash-merge pinned to HEAD_SHA (no sudo line gives it to a session).
 #   pr-merge lane  OWNER/REPO PR_NUMBER            print the PR body's Author-Lane label (pass-record uses it).
-#   pr-merge sweep                                 what the systemd timer runs: for each open PR whose head holds four recorded
-#                                                  passes (pass-record), the same checks, then merge. Skips everything while
+#   pr-merge sweep                                 what the systemd timer runs: for each open PR whose head holds the reviewer's
+#                                                  recorded pass (pass-record), the same checks, then merge. Skips everything while
 #                                                  the halt flag is set. It is not GitHub's auto-merge.
 # The verdict is decided by pr-merge-verdict.py from files this script fetches: the checks, a clean merge, the ledger of passes,
 # and the fold-in checks for a status change. It never enables auto-merge,
@@ -198,7 +198,7 @@ print("| role | relay | relay time | recorder |\n|---|---|---|---|")
 for line in open(path):
     o = json.loads(line)
     print("| %s | `%s` | %s | %s |" % (o["role"], o["relay_ref"], o["relay_time"], o["recorder"]))
-print("\nOne identity records all four, so a line is the recorder's word with the relay id it gave.")
+print("\nOne identity records each pass, so a line is the recorder's word with the relay id it gave.")
 PY
   python3 -I -c 'import json,sys; print(json.dumps({"body": open(sys.argv[1]).read()}))' "$tmp/comment.txt" > "$tmp/comment.json" 2>/dev/null &&
     gh -X POST -d @"$tmp/comment.json" "$base/issues/$pr/comments" > /dev/null || echo "pr-merge: the PR comment could not be posted (the merge stands)" >&2

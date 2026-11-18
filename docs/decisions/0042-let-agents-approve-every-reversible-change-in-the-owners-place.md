@@ -73,13 +73,12 @@ His messages are a change of mind (REQ-0030). They reverse REQ-0009 (the owner m
 
 ## Decision Outcome
 
-Chosen option: **1**, because the owner ended his own approval of the lab's build-out, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules he pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8, deletes and secrets as agent picks. The rest of rule 6 (money, access rights), where in each step the tap falls, and rule 7, are agent picks. The box's limits need no tap since the owner's order of 2026-11-17 (rule 4).
+Chosen option: **1**, because the owner ended his own approval of the lab's build-out, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules he pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8, deletes and secrets as agent picks. The rest of rule 6 (money, access rights), where in each step the tap falls, and rule 7, are agent picks. The box's limits need no tap since the owner's order of 2026-11-17 (rule 4). The three councils were dropped at his word of 2026-11-18 at 00:03 UTC: the reviewer's clearance of the head is the whole pass (rules 1 and 2).
 
 ```mermaid
 flowchart LR
   pr["PR, CI green"] --> rv["reviewer thread clears the head"]
-  rv --> cn["council A, B, C each pass the head"]
-  cn --> job["merge sweep on the agent box:<br/>four passes on the head's ledger, checks, clean merge,<br/>then squash pinned to the head"]
+  rv --> job["merge sweep on the agent box:<br/>the reviewer's pass on the head's ledger, checks, clean merge,<br/>then squash pinned to the head"]
   job --> main["main"]
   main --> box["box limits: the agents' pass of the digest,<br/>no tap (rule 4)"]
   main --> dev["dev apply"]
@@ -87,17 +86,18 @@ flowchart LR
   prod -. "firewall or tailnet, a delete,<br/>a secret, money" .-> tap["one tap from the owner"]
 ```
 
-*In words:* a PR whose CI is green goes to the reviewer thread and then to the three council threads. When all four pass the same head, the orchestrator records the four passes on the agent box's ledger. The box's sweep checks the head, the checks and the merge itself before it squash-merges. What lands on `main` is then applied as the other records set out, with no tap, except for the steps in rule 6: firewall and tailnet applies, deletes, secrets and money.
+*In words:* a PR whose CI is green goes to the reviewer thread. When it clears the head, the orchestrator records the pass on the agent box's ledger. The box's sweep checks the head, the checks and the merge itself before it squash-merges. What lands on `main` is then applied as the other records set out, with no tap, except for the steps in rule 6: firewall and tailnet applies, deletes, secrets and money.
 
 ### Rules
 
 1. **The agents' pass.** [agent pick] The agents' pass for a head is:
-   - the reviewer thread's clearance of that head, and
-   - a pass from each of the three council threads for the same head, recorded by the orchestrator thread in one message.
+   - the reviewer thread's clearance of that head, recorded by the orchestrator thread.
+
+   Until 2026-11-18 00:03 UTC it also needed a pass from each of the three council threads. The owner dropped them at that word, so the reviewer's clearance is the whole pass.
 
    It takes the place of the owner's go, typed or tapped, wherever these rules asked for it: AGENTS.md rules 1 and 2, D-0001's statuses, D-0031 rules 3 and 4, D-0034, D-0035 rule 3(b) and (c), and D-0041 rule 6. Rule 6 below is the exception. That a pass is needed at all follows from the owner's messages; that the reviewer and the council give it is the agents' own pick.
-2. **The merge job.** [agent pick] The merge sweep on the agent box merges a PR whose exact head holds the reviewer's pass and the passes of the three councils on its ledger of recorded passes (D-0056). The workflow `merge.yml` that this rule first named was removed (D-0056).
-   - A timer on the agent box runs `pr-merge sweep` as the keys user. For each open PR it reads the ledger of recorded passes for the head, and considers only a head with the reviewer's pass and the passes of councils A, B and C (D-0056 rules 1 and 3).
+2. **The merge job.** [agent pick] The merge sweep on the agent box merges a PR whose exact head holds the reviewer's pass on its ledger of recorded passes (D-0056). The workflow `merge.yml` that this rule first named was removed (D-0056).
+   - A timer on the agent box runs `pr-merge sweep` as the keys user. For each open PR it reads the ledger of recorded passes for the head, and considers only a head with the reviewer's pass (D-0056 rules 1 and 3).
    - It merges as the project's GitHub App with the key kept inside the wrapper (D-0031), and refuses otherwise:
      - the PR is open, not a draft, and targets `main`;
      - its head is the one the ledger names;

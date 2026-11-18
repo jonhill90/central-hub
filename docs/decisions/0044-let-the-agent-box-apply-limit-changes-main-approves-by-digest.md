@@ -58,20 +58,20 @@ Chosen option: **1**. It needs no new sudo argument, and the box checks everythi
 ```mermaid
 flowchart LR
   pr["limit change<br/>merged to main"] --> plan["box-apply plan:<br/>stops, prints the line to approve"]
-  plan --> pass["reviewer + councils pass the digest<br/>(D-0042 rule 4)"]
+  plan --> pass["reviewer passes the digest<br/>(D-0042 rule 4)"]
   pass --> line["PR adds the line to<br/>the approvals file"]
   line --> apply["box-apply apply:<br/>checks baseline, commit, digest;<br/>logs pass and tap"]
   apply --> done["applies that commit,<br/>baseline moves"]
 ```
 
-*In words:* a limit change merges. `box-apply plan` stops and prints the line that would approve it. The reviewer and the council pass that digest; the owner taps a card that names it only when the change also holds another D-0042 rule 6 step. A PR adds the line. `box-apply apply` checks the baseline, the commit and the digest, logs the pass and approval ids, applies the change, and moves the baseline.
+*In words:* a limit change merges. `box-apply plan` stops and prints the line that would approve it. The reviewer passes that digest; the owner taps a card that names it only when the change also holds another D-0042 rule 6 step. A PR adds the line. `box-apply apply` checks the baseline, the commit and the digest, logs the pass and approval ids, applies the change, and moves the baseline.
 
 ### Rules
 
 1. **The approvals file.** `hosts/ansible/agent-box-limit-approvals.txt` holds one line per approved limit change: `<from> <to> <digest> <pass> <tap>`.
    - `from` is the baseline.
    - `to` is a commit on main after which no limit changes.
-   - `digest` is the sha256 of `git diff --no-renames --binary --full-index <from> <to> -- <the limit files that changed>`, the bytes the reviewer and the council read.
+   - `digest` is the sha256 of `git diff --no-renames --binary --full-index <from> <to> -- <the limit files that changed>`, the bytes the reviewer reads.
    - `pass` is the id of the orchestrator's message that records the agents' pass of that digest (D-0042 rule 1).
    - `tap` is the owner's approval: the id of their order of 2026-11-17 06:21:09 UTC that dropped the box-install cards (cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh), or, when the change also holds another D-0042 rule 6 step (a firewall apply such as a packet filter on the box, an access right, a secret, a delete or money), the id of their tap on a card naming the digest (D-0042 rule 4). A tap of `none` never counts.
 
