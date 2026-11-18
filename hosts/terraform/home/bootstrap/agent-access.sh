@@ -127,11 +127,12 @@ fi
 
 BOX_VNET=dev                         # VM 258's VNet (STD-0001, hosts/terraform/home/jumpbox)
 NO_ACCESS="258 259"                  # the agent box and CT 259: never touched by agents
+DESKTOP_POWER_VMID=400                # the one desktop VM the lab account may see and turn off (the owner's word of 2026-11-17 23:58 UTC)
 READ_ONLY="900"                      # the tailnet connector: only root@pam can make it again
 LAB_PRIVS="Datastore.Audit,Datastore.AllocateSpace,Datastore.AllocateTemplate,Pool.Audit,SDN.Audit,SDN.Use,SDN.Allocate,Sys.Audit,VM.Audit,VM.Allocate,VM.Clone,VM.Config.Cloudinit,VM.Config.CDROM,VM.Config.CPU,VM.Config.Disk,VM.Config.HWType,VM.Config.Memory,VM.Config.Network,VM.Config.Options,VM.PowerMgmt,VM.GuestAgent.Audit,Sys.AccessNetwork"
 
 pveum group list --output-format json | grep -q '"groupid":"agents-lab"' || pveum group add agents-lab --comment "Agents' lab rebuilds: every guest but 258 and 259"
-for r in "AgentLab:$LAB_PRIVS" "AgentLabUse:SDN.Audit,SDN.Use" "AgentLabAudit:VM.Audit" "AgentLabPools:Pool.Audit"; do
+for r in "AgentLab:$LAB_PRIVS" "AgentLabUse:SDN.Audit,SDN.Use" "AgentLabAudit:VM.Audit" "AgentLabPools:Pool.Audit" "AgentLabDesktopPower:VM.Audit,VM.PowerMgmt"; do
   role=${r%%:*}; privs=${r#*:}
   if pveum role list --output-format json | grep -q "\"roleid\":\"$role\""; then
     pveum role modify "$role" --privs "$privs"
@@ -153,12 +154,18 @@ lab_acl() {
     pveum acl modify "$1" $who --roles "$2" --propagate "$3"
   done
 }
-# The owner's desktop (pool desktop, 400-499) is never the lab account's either: NoAccess on each of its VMs,
-# the most specific path, beats AgentLab on /vms. The IDs are private, so they are read here at run time from
-# pool desktop's members. The ACL drops with the VM, so run this script again after every desktop apply.
+# The owner's desktop (pool desktop, 400-499) is not the lab account's to change. Every VM in the pool gets NoAccess
+# on its own path, the most specific one, which beats AgentLab on /vms, except the one VM DESKTOP_POWER_VMID names: it
+# gets role AgentLabDesktopPower (VM.Audit and VM.PowerMgmt, nothing else), so the agents may see it and turn it off and an
+# unused desktop can't block a rebuild. They can't open its console, change its config, snapshot, clone, back up or
+# destroy it (the owner's words of 2026-11-17 23:58 UTC). Other desktop VMs, now or later, stay NoAccess. The pool's
+# members are read here at run time. The ACL drops with the VM, so run this script again after every desktop apply.
 DESKTOP_IDS=$(pvesh get /pools/desktop --output-format json 2>/dev/null | grep -o '"vmid":[0-9]*' | cut -d: -f2 || true)
 # The limits first, so there is no moment where /vms reaches them.
-for id in $NO_ACCESS $DESKTOP_IDS; do lab_acl "/vms/$id" NoAccess 0; done
+for id in $NO_ACCESS; do lab_acl "/vms/$id" NoAccess 0; done
+for id in $DESKTOP_IDS; do
+  if [ "$id" = "$DESKTOP_POWER_VMID" ]; then lab_acl "/vms/$id" AgentLabDesktopPower 0; else lab_acl "/vms/$id" NoAccess 0; fi
+done
 for id in $READ_ONLY; do lab_acl "/vms/$id" AgentLabAudit 0; done
 lab_acl "/sdn/zones/lab/$BOX_VNET" AgentLabUse 1
 lab_acl /vms AgentLab 1                      # every other guest, and templates 9000 and 9001
@@ -183,7 +190,11 @@ lab_check() {
     exit 1
   fi
 }
-for id in $NO_ACCESS $DESKTOP_IDS; do lab_check "/vms/$id" '"(VM|SDN|Datastore|Sys)\.'; done
+for id in $NO_ACCESS; do lab_check "/vms/$id" '"(VM|SDN|Datastore|Sys)\.'; done
+for id in $DESKTOP_IDS; do
+  if [ "$id" = "$DESKTOP_POWER_VMID" ]; then lab_check "/vms/$id" '"(VM\.(Allocate|Clone|Config|Console|Snapshot|Backup|Migrate|Monitor|GuestAgent)|SDN|Datastore|Sys)'
+  else lab_check "/vms/$id" '"(VM|SDN|Datastore|Sys)\.'; fi
+done
 for id in $READ_ONLY; do lab_check "/vms/$id" '"VM\.(Allocate|PowerMgmt|Config)'; done
 lab_check "/sdn/zones/lab/$BOX_VNET" '"SDN\.Allocate'
 echo "agent-access: done (node $NODE, desktop access $DESKTOP_ACCESS)"

@@ -8,7 +8,7 @@ src=$(cd "$(dirname "$0")/../../.." && pwd)/hosts/rebuild-k8s.sh
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 fail=0
-sed -n '/^CI_RUNNER_VMID=/p;/^OPNSENSE_TEST_VMID=/p;/^node_top_sampler() {/,/^}/p;/^DEV_MEMORY_MB_[A-Z_]*=/p;/^preflight_declared_mib() {/,/^}/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
+sed -n '/^CI_RUNNER_VMID=/p;/^DESKTOP_VMID=/p;/^OPNSENSE_TEST_VMID=/p;/^node_top_sampler() {/,/^}/p;/^DEV_MEMORY_MB_[A-Z_]*=/p;/^preflight_declared_mib() {/,/^}/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^preflight_stop_desktops() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
 grep -q '^preflight_memory' "$t/fn.sh" && grep -q '^run_stage' "$t/fn.sh" || { echo "FAIL: functions not found"; exit 1; }
 mkdir "$t/bin"
 cat > "$t/bin/curl" <<'F'
@@ -17,16 +17,21 @@ echo "$*" >> "$FAKE_ARGV"; cat > "$FAKE_STDIN"
 for a in "$@"; do last=$a; done; echo "$last" | sed 's|.*/api2/json/||' >> "$FAKE_CALLS"
 case "$*" in *nodes/*/storage) [ -n "$FAKE_STORAGE_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
   echo '{"data":[{"storage":"local-lvm","type":"lvmthin"},{"storage":"hdd;backup","type":"dir"}]}'; exit 0 ;; esac
+case "$*" in *"-X POST"*qemu/400/status/shutdown*) : > "$FAKE_DIR/dstopped"; echo '{"data":"UPID:d"}'; exit 0 ;;
+*qemu/400/status/current*) if [ -f "$FAKE_DIR/dstopped" ] && [ -z "$FAKE_NEVER_STOPS" ]; then echo '{"data":{"status":"stopped","maxmem":4294967296}}'; else echo '{"data":{"status":"running","maxmem":4294967296}}'; fi; exit 0 ;; esac
 case "$*" in *"-X POST"*status/shutdown*) : > "$FAKE_DIR/stopped"; echo '{"data":"UPID:x"}'; exit 0 ;;
 *"-X POST"*status/start*) [ -n "$FAKE_START_FAILS" ] && { echo "curl: (22) The requested URL returned error: 500" >&2; exit 22; }; rm -f "$FAKE_DIR/stopped"; touch "$FAKE_DIR/started"; echo '{"data":"UPID:y"}'; exit 0 ;;
 *qemu/300/status/current*) if [ -f "$FAKE_DIR/stopped" ] && [ -z "$FAKE_NEVER_STOPS" ]; then echo '{"data":{"status":"stopped","maxmem":2147483648}}'; else echo '{"data":{"status":"running","maxmem":2147483648}}'; fi; exit 0 ;; esac
 case "$*" in *cluster/resources*)
   [ -n "$FAKE_GUESTS_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
   [ -n "$FAKE_GUEST_257" ] && { echo '{"data":[{"vmid":257,"type":"qemu","status":"running","maxmem":3221225472,"mem":1073741824,"name":"opnsense-test"}]}'; exit 0; }
+  [ -n "$FAKE_OTHER_DESKTOP" ] && { echo '{"data":[{"vmid":401,"type":"qemu","status":"running","maxmem":4294967296,"mem":3221225472,"name":"otherdesk","pool":"desktop"}]}'; exit 0; }
+  [ -n "$FAKE_DESKTOP" ] && { echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":400,"type":"qemu","status":"running","maxmem":4294967296,"mem":3221225472,"name":"deskvm","pool":"desktop"}]}'; exit 0; }
   echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":411,"type":"qemu","status":"running","maxmem":8589934592,"mem":4294967296,"name":"agent-box"}]}'
   exit 0 ;; esac
 [ -n "$FAKE_CURL_ERROR" ] && { [ "$FAKE_CURL_ERROR" = long ] && { printf "%0185d token=SECRETTOKEN\n" 0 >&2; exit 22; }; echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
-if [ -f "$FAKE_DIR/stopped" ] && [ -n "$FAKE_AFTER_AVAILABLE" ]; then echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED,\"available\":$FAKE_AFTER_AVAILABLE}}}"
+if [ -f "$FAKE_DIR/dstopped" ] && [ ! -f "$FAKE_DIR/stopped" ] && [ -n "$FAKE_AFTER_DESKTOP" ]; then echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED,\"available\":$FAKE_AFTER_DESKTOP}}}"
+elif [ -f "$FAKE_DIR/stopped" ] && [ -n "$FAKE_AFTER_AVAILABLE" ]; then echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED,\"available\":$FAKE_AFTER_AVAILABLE}}}"
 elif [ -n "$FAKE_AVAILABLE" ]; then echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED,\"available\":$FAKE_AVAILABLE}}}"
 else echo "{\"data\":{\"memory\":{\"total\":$FAKE_TOTAL,\"used\":$FAKE_USED}}}"; fi
 F
@@ -109,6 +114,17 @@ check "the marker is there before the trap runs" "$out" "marker=yes" "marker=no"
 grep -q 'qemu/300/status/shutdown' "$t/calls" && echo "ok   the shutdown call went to VM 300" || { echo "FAIL: no shutdown call"; fail=1; }
 if grep -E 'qemu/[0-9]+/status/(shutdown|stop|start|reset|reboot)' "$t/calls" | grep -v 'qemu/300/'; then echo "FAIL: a guest other than VM 300 was touched"; fail=1; else echo "ok   no guest but VM 300 was touched"; fi
 if grep -q SECRETTOKEN "$t/argv"; then echo "FAIL: the token is in curl's arguments"; fail=1; else echo "ok   the token is not in any call's arguments, the stop calls included"; fi
+# A running desktop guest (pool desktop) is stopped first, alone, and nothing starts it again.
+out=$(FAKE_DESKTOP=yes FAKE_AFTER_DESKTOP=$((16 * GIB)) run dev 31 28); check "short with a desktop VM running: it is stopped and the run passes" "$out" "desktop stop: VM 400 is stopped" "refused"
+check "it re-reads the memory after the desktop stop" "$out" "16384 MiB (field: available) after the desktop VM stopped" "refused"
+check "the runner is left alone when the desktop was enough" "$out" "rc=0" "runner stop"
+check "it says the desktop stays stopped" "$out" "stays stopped until the owner starts it" ""
+grep -q 'qemu/400/status/shutdown' "$t/calls" && echo "ok   the shutdown call went to VM 400" || { echo "FAIL: no desktop shutdown call"; fail=1; }
+if grep -E 'qemu/[0-9]+/status/(start|reset|reboot|stop)' "$t/calls"; then echo "FAIL: a start, reset, reboot or stop call was made"; fail=1; else echo "ok   no desktop start, reset, reboot or stop call"; fi
+out=$(FAKE_OTHER_DESKTOP=yes run dev 31 28); check "another desktop VM in the pool is never stopped" "$out" "refused, free memory" "desktop stop"
+if grep -q 'status/shutdown' "$t/calls"; then echo "FAIL: a shutdown call was made for another desktop VM"; fail=1; else echo "ok   no shutdown call for another desktop VM"; fi
+out=$(FAKE_DESKTOP=yes FAKE_NEVER_STOPS=yes FAKE_AFTER_DESKTOP=$((16 * GIB)) run dev 31 28); check "a desktop that does not stop is refused" "$out" "desktop stop: VM 400 did not stop within 120 s" "rc=0"
+out=$(FAKE_DESKTOP=yes run dev 31 17); check "enough memory: the desktop is left running" "$out" "rc=0" "desktop stop"
 # Still short after the stop: refuse, and the marker is there for the restart.
 out=$(FAKE_AFTER_AVAILABLE=$((11 * GIB)) run dev 31 28); check "still short after the stop is refused" "$out" "refused, free memory 11264 MiB" "rc=0"
 check "the marker stays so the restart runs" "$out" "marker=yes" "marker=no"

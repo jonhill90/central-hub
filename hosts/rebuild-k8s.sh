@@ -243,9 +243,10 @@ rows = sorted(json.load(sys.stdin)["data"], key=lambda r: r.get("vmid", 0))
 print("preflight: guest list from /cluster/resources?type=vm, %d guests visible to the token" % len(rows))
 print("preflight: guest note: only guests the token can see are listed; VM 258 and CT 259 are NoAccess for it (agent-access.sh, NO_ACCESS), so the memory these lines add up to undercounts")
 for r in rows:
-    print("preflight: guest vmid=%s type=%s status=%s maxmem=%s MiB mem=%s MiB name=%s" % (
+    print("preflight: guest vmid=%s type=%s status=%s maxmem=%s MiB mem=%s MiB name=%s pool=%s" % (
         r.get("vmid"), r.get("type"), r.get("status"), r.get("maxmem", 0) // 1048576, r.get("mem", 0) // 1048576,
-        "".join(c for c in str(r.get("name", "")) if c.isalnum() or c in "-_.")))' \
+        "".join(c for c in str(r.get("name", "")) if c.isalnum() or c in "-_."),
+        "".join(c for c in str(r.get("pool", "")) if c.isalnum() or c in "-_.")))' \
     || { echo "preflight: guest list had an unexpected shape"; return 1; }
 }
 
@@ -298,6 +299,7 @@ else:
 # trap). It touches no other guest. The marker file is written before the stop request, so a run that dies
 # without its trap still leaves the next run a reason to start the runner.
 CI_RUNNER_VMID=300
+DESKTOP_VMID=400   # the one desktop VM the token may stop (agent-access.sh, DESKTOP_POWER_VMID)
 OPNSENSE_TEST_VMID=257
 runner_mark() { printf '%s' "$env_dir/ci-runner-stopped"; }
 preflight_stop_runner() { # node
@@ -314,6 +316,28 @@ print(json.load(sys.stdin)["data"].get("status", ""))' 2>/dev/null) || st=""
     sleep 5
   done
   echo "runner stop: VM $CI_RUNNER_VMID did not stop within 120 s"; return 1
+}
+
+# Dev only, and only when the preflight is short: stop the owner's desktop VM (DESKTOP_VMID, an unused guest must never
+# block this run; the owner's words of 2026-11-17 23:58 UTC) when it is running in pool desktop. The token holds VM.Audit
+# and VM.PowerMgmt on that one VM and nothing else (agent-access.sh, role AgentLabDesktopPower). It is a shutdown,
+# then a forced stop after 60 s, and nothing starts it again: the owner starts it when the desktop is wanted.
+preflight_stop_desktops() { # node vmid...
+  local node=$1 id i st out
+  shift
+  for id in "$@"; do
+    echo "desktop stop: short on memory and VM $id (pool desktop) is running, asking it to shut down (VM.PowerMgmt, nothing else is touched)"
+    out=$(px_api POST "nodes/$node/qemu/$id/status/shutdown" "timeout=60&forceStop=1") \
+      || { echo "desktop stop: the shutdown request for VM $id failed: $(preflight_clean "$out")"; return 1; }
+    st=""
+    for i in $(seq 1 24); do
+      st=$(px_api GET "nodes/$node/qemu/$id/status/current" | python3 -c 'import json,sys
+print(json.load(sys.stdin)["data"].get("status", ""))' 2>/dev/null) || st=""
+      [ "$st" != stopped ] || { echo "desktop stop: VM $id is stopped after $(( (i - 1) * 5 )) s; it stays stopped until the owner starts it"; break; }
+      sleep 5
+    done
+    [ "$st" = stopped ] || { echo "desktop stop: VM $id did not stop within 120 s"; return 1; }
+  done
 }
 
 # The EXIT trap: start the CI runner again if this run (or an earlier one that died) stopped it. Never fatal. The
@@ -366,7 +390,7 @@ for r in rows:
 }
 
 preflight_memory() {
-  local min node free field guests needs margin=2048
+  local min node free field guests desktops needs margin=2048
   local existing declared
   # A re-run on VMs the state already holds allocates no new VMs, and their memory is already taken, so the
   # node's free memory says nothing about it (measured on the box, 2026-11-14: 3547 MiB free with dev up).
@@ -403,6 +427,17 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
   fi
   grep -q "guest list from" <<<"$guests" || echo "preflight: the guest list was not read, so VM $OPNSENSE_TEST_VMID (the OPNsense test VM) could not be checked"
   preflight_storage "$node" || true
+  if [ "$free" -lt "$min" ]; then
+    desktops=$(sed -n "s/^preflight: guest vmid=\($DESKTOP_VMID\) type=qemu status=running .* pool=desktop\$/\1/p" <<<"$guests")
+    if [ -n "$desktops" ]; then
+      # shellcheck disable=SC2086
+      preflight_stop_desktops "$node" $desktops || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB and a desktop VM could not be stopped"; return 1; }
+      sleep 5
+      free=$(preflight_read_free "$node") || { echo "$free"; return 1; }
+      field=${free#* }; free=${free% *}
+      echo "preflight: node free memory ${free} MiB (field: ${field}) after the desktop VM stopped, minimum ${min} MiB"
+    fi
+  fi
   if [ "$free" -lt "$min" ] && grep -q "guest vmid=$CI_RUNNER_VMID type=qemu status=running" <<<"$guests"; then
     # What happens on a short node is the owner's pick (PREFLIGHT_SHORT_NODE, set at the install of the box's
     # checkout). With no valid value there is no default: it refuses BEFORE it stops VM 300.
