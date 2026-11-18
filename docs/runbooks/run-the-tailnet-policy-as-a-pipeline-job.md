@@ -32,7 +32,7 @@ Until now the policy file ran as a raw OpenTofu apply on the owner's Mac. This j
 | `vlans_file` | from the tfvars | always this checkout's `hosts/ansible/inventories/home/group_vars/all/vlans.yml`, since the tfvars names a path on the controller |
 | Box log | `/var/lib/agent-box/logs/tailnet-stack/` | `/var/lib/agent-box/logs/tailnet-policy/` |
 
-The rendered policy names the Proxmox host's address, so the run prints only the commit, the plan's hash, the counts of changes, the card's message ID and pass or fail.
+The rendered policy names the Proxmox host's address, so the run prints only the commit, the plan's hash, the counts of changes, the card's message ID and pass or fail; on a failed init it also prints the last 12 lines of init's output, with IP addresses replaced.
 
 ## Steps
 
