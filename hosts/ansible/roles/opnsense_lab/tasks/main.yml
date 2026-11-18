@@ -63,6 +63,10 @@
   ansible.builtin.import_tasks: backup_target.yml
   tags: [rules, backup_target]
 
+- name: Store admin rule
+  ansible.builtin.import_tasks: store_admin.yml
+  tags: [rules, store_admin]
+
 - name: DNS override
   ansible.builtin.import_tasks: dns.yml
   tags: [dns]
