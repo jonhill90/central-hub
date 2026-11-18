@@ -4,6 +4,7 @@
 # as they are (the owner's card, 2026-11-09 23:21 UTC). It stops at the first stage that fails.
 #
 # Usage: hosts/rebuild-k8s.sh <env-dir> [--teardown] [--only <stage>[,<stage>...]]
+#        hosts/rebuild-k8s.sh <env-dir> --fit   (dev only: would the memory preflight pass now? read-only, no log)
 #
 # <env-dir> is a private folder on the controller (mode 0700), outside the repository. It holds
 # rebuild.env (mode 0600), which sets:
@@ -56,13 +57,14 @@ default_stages="vms cluster storage openbao-seal restore gitops secrets openbao 
 
 die() { echo "rebuild: $*" >&2; exit 1; }
 
-[ $# -ge 1 ] || die "usage: $0 <env-dir> [--teardown] [--only <stage>[,<stage>...]]"
+[ $# -ge 1 ] || die "usage: $0 <env-dir> [--teardown] [--only <stage>[,<stage>...]] | --fit"
 env_dir=$1; shift
-teardown=false; only=""
+teardown=false; only=""; fit=false
 while [ $# -gt 0 ]; do
   case $1 in
     --teardown) teardown=true ;;
     --only) shift; only=${1:-} ;;
+    --fit) fit=true ;;
     *) die "unknown argument: $1" ;;
   esac
   shift
@@ -117,10 +119,11 @@ if [ "$ENV_NAME" = dev ]; then
 fi
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
-mkdir -p "$env_dir/logs"
+$fit || mkdir -p "$env_dir/logs"
 log="$env_dir/logs/rebuild-$stamp.log"
 raw="$env_dir/logs/rebuild-$stamp.raw"
-: > "$log"; : > "$raw"; chmod 600 "$log" "$raw"
+# --fit writes no run log: `rebuild log` and rebuild-prod's dev-first check read these logs, and a fit check is no run.
+if $fit; then log=/dev/null raw=/dev/null; else : > "$log"; : > "$raw"; chmod 600 "$log" "$raw"; fi
 
 tf="$repo/hosts/terraform/home/k8s"
 ap() { (cd "$repo/hosts/ansible" && ansible-playbook -i "$INVENTORY" "$@"); }
@@ -438,7 +441,7 @@ for r in rows:
 }
 
 preflight_memory() {
-  local min node free field guests desktops needs margin=1024
+  local min node free field guests desktops needs margin=1024 add
   local existing declared
   # A re-run on VMs the state already holds allocates no new VMs, and their memory is already taken, so the
   # node's free memory says nothing about it (measured on the box, 2026-11-14: 3547 MiB free with dev up).
@@ -487,7 +490,12 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
     # /pool/desktop, which the dev token does (it holds rights on /vms/<DESKTOP_VMID> only), and that ID is the
     # only one the token's VM.PowerMgmt covers.
     desktops=$(sed -n "s/^preflight: guest vmid=\($DESKTOP_VMID\) type=qemu status=running .*/\1/p" <<<"$guests")
-    if [ -n "$desktops" ]; then
+    if [ -n "$desktops" ] && ${PREFLIGHT_DRY:-false}; then
+      # A fit check stops nothing: it counts the desktop's maxmem as freed, which the stop frees at most.
+      add=$(sed -n "s/^preflight: guest vmid=$DESKTOP_VMID type=qemu status=running maxmem=\([0-9]*\) MiB .*/\1/p" <<<"$guests")
+      free=$(( free + ${add:-0} ))
+      echo "preflight: fit check: VM $DESKTOP_VMID (the desktop) is running; a run would stop it; its maxmem ${add:-0} MiB counted as freed, estimate ${free} MiB, minimum ${min} MiB"
+    elif [ -n "$desktops" ]; then
       # shellcheck disable=SC2086
       preflight_stop_desktops "$node" $desktops || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB and a desktop VM could not be stopped"; return 1; }
       sleep 5
@@ -505,6 +513,13 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
          return 1 ;;
     esac
     echo "preflight: short-node setting is ${PREFLIGHT_SHORT_NODE}"
+    if ${PREFLIGHT_DRY:-false}; then
+      add=$(sed -n "s/^preflight: guest vmid=$CI_RUNNER_VMID type=qemu status=running maxmem=\([0-9]*\) MiB .*/\1/p" <<<"$guests")
+      free=$(( free + ${add:-0} ))
+      echo "preflight: fit check: VM $CI_RUNNER_VMID is running; a run would stop it; its maxmem ${add:-0} MiB counted as freed, estimate ${free} MiB, minimum ${min} MiB"
+      [ "$free" -ge "$min" ] || { echo "preflight: refused, estimate ${free} MiB is below ${min} MiB"; return 1; }
+      return 0
+    fi
     preflight_stop_runner "$node" || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB and VM $CI_RUNNER_VMID could not be stopped"; return 1; }
     sleep 5
     free=$(preflight_read_free "$node") || { echo "$free"; return 1; }
@@ -734,6 +749,15 @@ run_stage() {
     *) echo "unknown stage: $1"; return 1 ;;
   esac
 }
+
+# --fit: the memory preflight alone, with PREFLIGHT_DRY: the same reads and refusals as a run's, but nothing is stopped
+# (a guest a run would stop counts as its maxmem freed) and no log is written. For the box's timer, which starts a dev
+# run only when this says it fits. Exit 0 fits, 3 does not or could not be read.
+if $fit; then
+  [ "$ENV_NAME" = dev ] || die "--fit is for dev only"
+  if PREFLIGHT_DRY=true preflight_memory; then echo "fit: yes"; exit 0; fi
+  echo "fit: no"; exit 3
+fi
 
 stages=${STAGES:-$default_stages}
 [ -z "$only" ] || stages=${only//,/ }
