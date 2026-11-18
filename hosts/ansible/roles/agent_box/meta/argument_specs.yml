@@ -222,6 +222,16 @@ argument_specs:
         type: int
         default: 300000
         description: The keys user's first subordinate UID and GID (65536 of each), for the proof's rootless Keycloak.
+      agent_box_lab_test:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the lab-test wrapper, written to <work_dir>/lab-test.json (0600, the keys user's):
+          name, domain, address (the copy's dev address), cores, memory_mb, disk_gb and proxmox_node_name. No key or
+          password goes in it. Empty skips the wrapper's assistant, helper and file.
+      agent_box_pve_assistant_version: {type: str, description: "proxmox-auto-install-assistant version for the lab-test wrapper."}
+      agent_box_pve_assistant_base: {type: str, description: "The package pool folder the assistant's .deb is downloaded from."}
+      agent_box_pve_assistant_sha256: {type: str, description: "SHA-256 of that version's .deb, from pve-no-subscription's Packages index."}
       agent_box_vps_host:
         type: dict
         default: {}
