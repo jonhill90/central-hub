@@ -1,4 +1,10 @@
 {{- if eq (toString .Values.measure) "true" }}
+# The four route objects carry argocd.argoproj.io/ignore-healthcheck (Argo CD v3.5.5,
+# docs/user-guide/annotations-and-labels.md): on a fresh dev build the root renders them at stage
+# gitops, but the https-short listener comes only at dev-ca and the CA ConfigMap only at stage
+# openbao-measure, both after apps. So the HTTPRoute and BackendTLSPolicy are Degraded until then,
+# and the apps stage timed out on that (dev run 20261118T040207Z). Stage openbao-measure waits for
+# the route itself (playbooks/k8s-openbao-measure.yml).
 {{- $zone := required "zone: set by the root Application (k8s_gitops_source_zone)" .Values.zone }}
 # The policy check's test namespace (DESIGN item 7). Restricted Pod Security, like namespace openbao.
 # The stage's CA ConfigMap names it as its owner, so pruning it removes that copy too.
@@ -16,6 +22,8 @@ kind: HTTPRoute
 metadata:
   name: openbao-measure
   namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/ignore-healthcheck: "true"
 spec:
   parentRefs:
     - name: {{ .Values.gateway.name }}
@@ -34,6 +42,8 @@ kind: BackendTLSPolicy
 metadata:
   name: openbao-measure
   namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/ignore-healthcheck: "true"
 spec:
   targetRefs:
     - group: ""
@@ -52,6 +62,8 @@ kind: ListenerSet
 metadata:
   name: openbao-measure
   namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/ignore-healthcheck: "true"
 spec:
   parentRef:
     group: gateway.networking.k8s.io
@@ -76,6 +88,8 @@ kind: TLSRoute
 metadata:
   name: openbao-measure
   namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/ignore-healthcheck: "true"
 spec:
   parentRefs:
     - group: gateway.networking.k8s.io
