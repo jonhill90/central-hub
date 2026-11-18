@@ -3,7 +3,7 @@
 # its own SDN, OPNsense and connector container (docs/specs/2026-11-lab-test-copy.md,
 # docs/runbooks/build-the-lab-test-copy.md). It runs as user `keys` through sudo, so the session that asks for it
 # never sees the Proxmox token. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|destroy|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|destroy|log
 # plan: the guards (dev down, no dev rebuild running, VM 257 gone, free memory and box disk), then download and
 #   check the Proxmox VE ISO, write the answer file, bake it into a copy of the ISO with the pinned
 #   proxmox-auto-install-assistant (--fetch-from iso), and save an OpenTofu plan for hosts/terraform/home/lab-test.
@@ -19,6 +19,9 @@
 # lab: inside the copy, docs/runbooks/set-up-lab-network-and-firewall.md steps 2 to 4: the network, firewall and
 #   remote-access run folders against the copy's own API, each with its own state on the box, then
 #   playbooks/proxmox-host.yml --tags mgmt. Each folder's second plan must show no changes. Safe to run again.
+# firstboot: inside the copy, set-up-lab-network-and-firewall.md step 5 with no person: over VM 100's serial console,
+#   as root on the copy, sign in, run hosts/ansible/bootstrap/opnsense-first-boot.php (mgmt VLAN, LAN, WAN, root's
+#   password, kept on the box), reboot VM 100, and wait for the mgmt gateway to answer. Safe to run again.
 # destroy: destroy VM 256 only. The token cannot delete files on Proxmox's local storage, so the prepared ISO stays
 #   in the state and on local for the next build, which reuses it while the answer is unchanged; destroy lists it.
 # log: the last run's log, then VM 256's Proxmox state, read-only.
@@ -26,8 +29,8 @@ set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | check | host | lab | destroy | log) action=$1 ;;
-  *) echo "usage: lab-test plan|apply|check|host|lab|destroy|log" >&2; exit 2 ;;
+  plan | apply | check | host | lab | firstboot | destroy | log) action=$1 ;;
+  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|destroy|log" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -48,6 +51,7 @@ export HOME=$work PATH=/usr/local/libexec/agent-box/ansible-venv/bin:/usr/local/
 export TF_DATA_DIR=$work/tofu-data/lab-test TF_IN_AUTOMATION=1
 py=/usr/local/libexec/agent-box/ansible-venv/bin/python3   # has PyYAML, for the shared VLAN file
 answer_py=$libexec/lab-test-answer.py
+console_py=$libexec/lab-test-console.py
 assistant=$libexec/proxmox-auto-install-assistant           # the role installs it from the pinned .deb
 
 VMID=256
@@ -416,17 +420,55 @@ lab() {
   vm 'ip -br addr show mgmt; qm list; pct list'
 }
 
+# The copy's VM 100 has no installer, no SSH and no config on first boot, so the serial console is the only way in
+# (lab-test-console.py says why). Root on the copy reaches it as qm terminal does: socat on VM 100's serial0 socket
+# (qemu-server src/PVE/CLI/qm.pm, terminal; qemu-server depends on socat, debian/control). OPNsense's own root
+# password is new and kept on the box until destroy; the image's default, opnsense, is tried first.
+firstboot() {
+  wait_ssh
+  vm 'qm status 100' | grep -qx 'status: running' || { echo "lab-test: VM 100 is not running in the copy; run lab-test lab first"; return 1; }
+  local tag gw prefix
+  read -r tag gw prefix < <("$py" -I -c 'import ipaddress, sys, yaml
+v = [x for x in yaml.safe_load(open(sys.argv[1]))["lab_vlans"] if x["name"] == "mgmt"][0]
+n = ipaddress.ip_network(v["cidr"])
+print(v["id"], n.network_address + 1, n.prefixlen)' "$vlans")
+  [[ -s $files/opnsense-root.pass ]] || openssl rand -base64 32 > "$files/opnsense-root.pass"
+  openssl passwd -6 -stdin < "$files/opnsense-root.pass" > "$files/opnsense-root.hash"
+  # net0 is the trunk (vtnet0) and net1 is WAN (vtnet1), in firewall/main.tf's order.
+  python3 -I -c 'import json, sys
+print(json.dumps({
+    "passwords": ["opnsense", open(sys.argv[1]).read().strip()], "dir": "/root/lab-test",
+    "files": {"opnsense-first-boot.php": sys.argv[2], "root.hash": sys.argv[3]},
+    "commands": ["php opnsense-first-boot.php vtnet0 %s %s vtnet1 root.hash" % (sys.argv[4], sys.argv[5])],
+    "reboot": True}))' "$files/opnsense-root.pass" "$repo/hosts/ansible/bootstrap/opnsense-first-boot.php" \
+    "$files/opnsense-root.hash" "$tag" "$gw/$prefix" > "$files/console-plan.json"
+  local rc=0
+  python3 -I "$console_py" "$files/console-plan.json" ssh -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 \
+    -o UserKnownHostsFile="$files/known_hosts" "root@$addr" "socat UNIX-CONNECT:/var/run/qemu-server/100.serial0 STDIO" || rc=$?
+  rm -f "$files/console-plan.json"
+  (( rc == 0 )) || return "$rc"
+  # The copy has mgmt .2 from lab; the default LAN rules let it ping the gateway.
+  local _
+  for _ in $(seq 1 60); do
+    if vm "ping -c 1 -W 2 $gw >/dev/null"; then echo "lab-test: the mgmt gateway $gw answers from the copy"; return 0; fi
+    sleep 10
+  done
+  echo "lab-test: the mgmt gateway $gw does not answer from the copy after 10 minutes"; return 1
+}
+
 case $action in
   plan) guards; tofu_run ;;
   apply) guards; tofu_run ;;
   check) check ;;
   host) host ;;
   lab) lab ;;
+  firstboot) firstboot ;;
   destroy)
     tofu_run
     # The copy's token, inventory and run folder states go with it; a new copy gets new ones. Root's password stays
     # with its hash, which the cached prepared ISO holds.
-    rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory" "$files/state" "$files/copy-ca.pem"
+    rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory" "$files/state" "$files/copy-ca.pem" \
+      "$files"/opnsense-root.*
     echo "lab-test: VM $VMID destroyed"
     leftovers
     ;;

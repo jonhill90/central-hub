@@ -85,7 +85,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
 5. At the OPNsense console (VM 100 in the Proxmox web UI), by hand: set the root password, make VLAN 50 on the trunk the LAN interface with the mgmt gateway address (`10.1.50.1/24`), and leave WAN unassigned until the next step works.
    why: the API can't be reached before the mgmt VLAN has an address, so the role leaves the mgmt VLAN and its LAN slot alone (`hosts/README.md` step 4).
    expect: from the host, `ping 10.1.50.1` answers.
-   note: the root password goes only in the owner's private store; this step has no code.
+   note: the root password goes only in the owner's private store; this step has no code that has run on the real firewall. `hosts/ansible/bootstrap/opnsense-first-boot.php` makes this step's settings from a root shell, and the lab test copy runs it over the serial console first ([Build the lab test copy](build-the-lab-test-copy.md) step 6).
 
 6. Make the OPNsense API user `ansible` and its key, with no GUI login.
    On the controller, make a key and a secret and keep both in `~/.config/central-hub/opnsense-api.txt` (mode 0600). Send the firewall only `"<key>|$(openssl passwd -6 <secret>)"`, as `/root/ansible-apikey.line`, together with `hosts/ansible/bootstrap/opnsense-ansible-user.php`, through the QEMU guest agent in pieces under about 700 bytes, then run `qm guest exec 100 -- php /root/ansible-user.php` on the host.

@@ -56,6 +56,11 @@ labCaIssuer: true
 # for a cluster whose names are not its own (k8s_gitops_source_login_probe): dev, whose lab names resolve to
 # prod's Gateway, so its probe would call prod's names from dev (apps/login-probe/values.yaml, hostSuffix).
 loginProbe: true
+# Whether Jellyfin's setup CronJob (and the admin Secret it signs in with) is made. true, as on c1. Ansible sets it
+# to false only for a cluster that restores prod's volumes before the apps start (k8s_gitops_source_jellyfin_setup):
+# dev. The restored Jellyfin config already holds prod's admin user and password, which the setup Job's own
+# Secret, made fresh in that cluster, can't match, so every run signed in with a 401 and failed `checks`.
+jellyfinSetup: true
 
 # The agent notebook's CI runner as a pod (app notebook-runner). Ansible sets it to true on prod only
 # (k8s_gitops_source_notebook_runner, from the prod wrappers), so a dev cluster never registers a second
@@ -173,8 +178,11 @@ apps:
       gateway.https: "{gatewayHttps}"
     # No ClusterIssuer lab-ca (dev): read the lab root from its optional Secret instead, which is not there,
     # so Jellyfin's SSO setup skips (apps/jellyfin, files/setup.sh).
+    # No setup CronJob on a cluster that restores prod's Jellyfin config (dev, jellyfinSetup false): the config
+    # already has prod's admin password, which the fresh admin Secret there can't match.
     switchOffParameters:
       sso.labRoot.certificate: labCaIssuer
+      setup.enabled: jellyfinSetup
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
   # Logs (spec step 3): two releases in namespace logging, as k8s_observability installed them.
