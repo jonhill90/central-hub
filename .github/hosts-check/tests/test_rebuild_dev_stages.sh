@@ -11,7 +11,7 @@ script=$src/hosts/rebuild-k8s.sh
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 fail=0
-sed -n '/^DEV_REALM_IMPORT_TIMEOUT_S=/p;/^run_stage() {/,/^}/p' "$script" > "$t/fn.sh"
+sed -n '/^DEV_REALM_IMPORT_TIMEOUT_S=/p;/^DEV_REALM_IMPORT_MEMORY=/p;/^run_stage() {/,/^}/p' "$script" > "$t/fn.sh"
 [ -s "$t/fn.sh" ] || { echo "FAIL: run_stage not found"; exit 1; }
 
 # run_stage <env> <stage> <repo>: prints the output, and the exit code on the last line.
@@ -90,6 +90,7 @@ check "identity-keycloak adds the second admin the store must refuse" "$out" '"u
 check "identity-keycloak with no store adds no openbao client" "$out" '{"k8s_identity_openbao_hosts": []}' ""
 check "identity-keycloak with no store writes no handoff" "$out" "k8s_identity_oidc_handoff_file= " ""
 check "identity-keycloak waits 1200 s for the realm import" "$out" "k8s_identity_realm_import_timeout=1200" ""
+check "identity-keycloak caps the realm import at 1Gi" "$out" "k8s_identity_realm_import_memory=1Gi" ""
 # With a store, the realm gets its address as the openbao client's name, and the handoff goes in the env folder.
 out=$(OPENBAO_ADDR=https://192.0.2.10 env_dir=/env run dev identity-keycloak "$t/ok")
 check "identity-keycloak with a store names it for the openbao client" "$out" '{"k8s_identity_openbao_hosts": ["192.0.2.10"]}' ""
