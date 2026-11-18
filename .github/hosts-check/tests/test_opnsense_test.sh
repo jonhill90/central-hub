@@ -155,6 +155,8 @@ if grep -q -- '--features-disabled' "$w"; then bad "the proof's Keycloak turns a
 grep -q '"ES256" not in json.load' "$w" && ok "prove stops unless discovery lists ES256 for DPoP" || bad "no DPoP discovery check"
 grep -q '/var/db/openid-connect/dpop' "$files/opnsense-test-prove.py" && ok "prove checks the plugin's DPoP key store" || bad "no DPoP key check"
 grep -q 'DPoP sender constraint</th>' "$files/opnsense-test-prove.py" && ok "prove reads the sign-in test's DPoP sender constraint row" || bad "no DPoP sender constraint check"
+grep -q 'no Keycloak sign-in form after {url}\\n{why_no_redirect(page)}' "$files/opnsense-test-prove.py" \
+  && ok "a login that doesn't reach Keycloak prints OPNsense's answer and its OIDC log lines" || bad "no reason when the login doesn't redirect"
 grep -q 'VMID=257$' "$w" && ok "the wrapper's VM ID is 257" || bad "VM ID"
 # The token can't delete files on local: destroy targets only the VM, and the seed leaves the state.
 code=$(grep -v '^[[:space:]]*#' "$w")   # code lines only, so a comment can't pass or fail these
