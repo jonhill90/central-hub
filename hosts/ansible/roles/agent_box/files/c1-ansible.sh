@@ -32,6 +32,10 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 declare -A playbook=([identity]=playbooks/k8s-identity.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file)
+# Fixed extra variables per name. identity never replaces realm lab on prod: the role's default deletes the realm and
+# imports it again when its code changes, which on prod ends every sign-in and drops enrolled one-time codes. With false
+# the realm is only made when missing; a client is added in place by the role's clients tag.
+declare -A fixed_vars=([identity]=k8s_identity_realm_replace=false)
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
 action=${1:-} name='' clearance=''
@@ -66,6 +70,7 @@ if [[ -n ${needs_file[$name]:-} ]]; then
   [[ -s ${needs_file[$name]} ]] || { echo "c1-ansible: ${needs_file[$name]} is missing; the controller's prod-files run puts it there" >&2; exit 1; }
   extra=(-e "${needs_var[$name]}=${needs_file[$name]}")
 fi
+[[ -n ${fixed_vars[$name]:-} ]] && extra+=(-e "${fixed_vars[$name]}")
 
 mkdir -p "$envdir" "$logs" "$work/state"
 chmod 700 "$envdir"
