@@ -3,7 +3,7 @@
 # its own SDN, OPNsense and connector container (docs/specs/2026-11-lab-test-copy.md,
 # docs/runbooks/build-the-lab-test-copy.md). It runs as user `keys` through sudo, so the session that asks for it
 # never sees the Proxmox token. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|destroy|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|destroy|log
 # plan: the guards (dev down, no dev rebuild running, VM 257 gone, free memory and box disk), then download and
 #   check the Proxmox VE ISO, write the answer file, bake it into a copy of the ISO with the pinned
 #   proxmox-auto-install-assistant (--fetch-from iso), and save an OpenTofu plan for hosts/terraform/home/lab-test.
@@ -16,6 +16,9 @@
 #   copy's own iac@pve!apply token (kept on the box, removed by destroy), then playbooks/proxmox-host.yml --tags vmbr1
 #   against the copy with an inventory the wrapper writes, then the OPNsense nano image and the Debian 13 template
 #   inside the copy, each checked against its pin. Safe to run again.
+# lab: inside the copy, docs/runbooks/set-up-lab-network-and-firewall.md steps 2 to 4: the network, firewall and
+#   remote-access run folders against the copy's own API, each with its own state on the box, then
+#   playbooks/proxmox-host.yml --tags mgmt. Each folder's second plan must show no changes. Safe to run again.
 # destroy: destroy VM 256 only. The token cannot delete files on Proxmox's local storage, so the prepared ISO stays
 #   in the state and on local for the next build, which reuses it while the answer is unchanged; destroy lists it.
 # log: the last run's log, then VM 256's Proxmox state, read-only.
@@ -23,8 +26,8 @@ set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | check | host | destroy | log) action=$1 ;;
-  *) echo "usage: lab-test plan|apply|check|host|destroy|log" >&2; exit 2 ;;
+  plan | apply | check | host | lab | destroy | log) action=$1 ;;
+  *) echo "usage: lab-test plan|apply|check|host|lab|destroy|log" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -148,12 +151,15 @@ source_iso() {
   echo "lab-test: $ISO_NAME checked against $ISO_SHA256"
 }
 
-# The answer, then the prepared ISO. Root's hash is of a random password no one keeps; the hash file stays, so the
-# same settings give the same answer. A prepared ISO is kept under the hash of what made it (the source ISO, the
+# The answer, then the prepared ISO. Root's hash is of a random password kept only on the box, for lab's sign-in as
+# root@pam to the copy's own API; the hash and the password stay, so the same settings give the same answer. A prepared ISO is kept under the hash of what made it (the source ISO, the
 # assistant and the answer), so an unchanged answer reuses the same file, and its upload is the same file on local,
 # which the token can't delete.
 prepared() {
-  [[ -f $files/root.hash ]] || openssl rand -base64 48 | openssl passwd -6 -stdin > "$files/root.hash"
+  if [[ ! -s $files/root.hash || ! -s $files/root.pass ]]; then
+    openssl rand -base64 32 > "$files/root.pass"
+    openssl passwd -6 -stdin < "$files/root.pass" > "$files/root.hash"
+  fi
   "$py" -I "$answer_py" answer "$settings" "$vlans" "$sshkey.pub" "$files/root.hash" "$files/answer.toml"
   "$assistant" validate-answer "$files/answer.toml"
   local key
@@ -359,15 +365,68 @@ SH
   echo "lab-test: the copy holds local:import/$NANO_IMG and local:vztmpl/$CT_TEMPLATE"
 }
 
+# One run folder against the copy's own API, with its own state and plan on the box. The endpoint is the copy's
+# address, which the helper checks is a host on dev, where the real host's API is not. The copy's API certificate is
+# signed by its own CA and names its address (pve-cluster src/PVE/Cluster/Setup.pm, gen_pve_ssl_cert), so the
+# provider trusts that CA and nothing else (Go reads SSL_CERT_FILE and SSL_CERT_DIR; bpg 0.116.0 sets no roots).
+lab_folder() { # folder
+  local dir=$repo/hosts/terraform/home/$1 out=$files/state/$1 rc=0
+  (
+    export TF_DATA_DIR=$work/tofu-data/lab-test-$1
+    t() { /usr/local/bin/tofu -chdir="$dir" "$@"; }
+    t init -input=false -backend-config="path=$out.tfstate" >/dev/null
+    export PROXMOX_VE_ENDPOINT=https://$addr:8006/ SSL_CERT_FILE=$files/copy-ca.pem SSL_CERT_DIR=$files/no-ca
+    unset PROXMOX_VE_API_TOKEN PROXMOX_VE_USERNAME PROXMOX_VE_PASSWORD PROXMOX_VE_INSECURE
+    if [[ $1 == remote-access ]]; then
+      # Only root@pam may set CT 900's keyctl and /dev/net/tun, and a token never counts as root@pam (pve-container
+      # src/PVE/LXC.pm, check_ct_modify_config_perm), so this folder signs in with root's password.
+      PROXMOX_VE_USERNAME=root@pam PROXMOX_VE_PASSWORD=$(head -n 1 "$files/root.pass")
+      export PROXMOX_VE_USERNAME PROXMOX_VE_PASSWORD
+    else
+      PROXMOX_VE_API_TOKEN=$(cat "$files/copy-token")
+      export PROXMOX_VE_API_TOKEN
+    fi
+    t plan -input=false -var-file="$out.tfvars.json" -out="$out.tfplan"
+    t apply -input=false "$out.tfplan"
+    rm -f "$out.tfplan"
+    t plan -input=false -detailed-exitcode -var-file="$out.tfvars.json" >/dev/null || rc=$?
+    [[ $rc == 0 ]] || { echo "lab-test: $1: the second plan is not empty (exit $rc); stopped"; exit 1; }
+    echo "lab-test: $1 applied in the copy; a second plan shows no changes"
+  )
+}
+
+# The copy's lab layer, as on a fresh real host after its vmbr1: the SDN, VM 100 (OPNsense, WAN link-down) and CT 900
+# from the run folders (set-up-lab-network-and-firewall.md steps 2 and 3), then the host's address on mgmt (step 4).
+lab() {
+  wait_ssh
+  [[ -s $files/copy-token && -f $files/inventory/hosts.yml ]] || { echo "lab-test: run lab-test host first"; return 1; }
+  [[ -s $files/root.pass ]] || { echo "lab-test: root's password is not on the box; destroy and build again"; return 1; }
+  mkdir -p "$files/state" "$files/no-ca"
+  # The copy's CA over SSH, whose host key the box pinned at its first contact with the copy.
+  vm 'cat /etc/pve/pve-root-ca.pem' > "$files/copy-ca.pem"
+  printf 'header = "Authorization: PVEAPIToken=%s"\n' "$(cat "$files/copy-token")" |
+    curl -sS --fail --max-time 30 --cacert "$files/copy-ca.pem" -K - "https://$addr:8006/api2/json/version" >/dev/null \
+    || { echo "lab-test: the copy's API does not answer with its own CA and the copy token"; return 1; }
+  "$py" -I "$answer_py" layers "$settings" "$vlans" "$NANO_IMG" "$CT_TEMPLATE" "$files/state"
+  local f
+  for f in network firewall remote-access; do lab_folder "$f"; done
+  ( cd "$repo/hosts/ansible"
+    ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home \
+      ansible-playbook -i "$files/inventory" playbooks/proxmox-host.yml --tags mgmt )
+  vm 'ip -br addr show mgmt; qm list; pct list'
+}
+
 case $action in
   plan) guards; tofu_run ;;
   apply) guards; tofu_run ;;
   check) check ;;
   host) host ;;
+  lab) lab ;;
   destroy)
     tofu_run
-    # The copy's token and inventory go with it; a new copy gets new ones.
-    rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory"
+    # The copy's token, inventory and run folder states go with it; a new copy gets new ones. Root's password stays
+    # with its hash, which the cached prepared ISO holds.
+    rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory" "$files/state" "$files/copy-ca.pem"
     echo "lab-test: VM $VMID destroyed"
     leftovers
     ;;
