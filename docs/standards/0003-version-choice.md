@@ -26,7 +26,9 @@ The key words "MUST", "MUST NOT", "SHOULD" and "MAY" in this document are to be 
 1. A version that a runbook, code under `hosts/` or a cluster manifest installs or pins MUST be the newest release that is at least two weeks old when it is pinned.
 2. A release that fixes a security flaw MAY be used sooner. The runbook, code or manifest SHOULD name the fix it takes and link the advisory or release note.
 
-Example that passes rule 1: the identity role pins Keycloak 26.8.1 (`k8s_identity_version` in `hosts/ansible/roles/k8s_identity/defaults/main.yml`). Keycloak 26.8.1 was released on 13 October 2026, and the pin reached `main` with PR #51 on 28 October 2026, fifteen days later; no newer Keycloak server release was out by 14 October. Keycloak 26.8.2, released on 5 November 2026, may replace it from 19 November 2026, two weeks after its release (source: <https://www.keycloak.org/blog>).
+Example that passed rule 1: the identity role pinned Keycloak 26.8.1 (`k8s_identity_version` in `hosts/ansible/roles/k8s_identity/defaults/main.yml`). Keycloak 26.8.1 was released on 13 October 2026, and the pin reached `main` with PR #51 on 28 October 2026, fifteen days later; no newer Keycloak server release was out by 14 October (source: <https://www.keycloak.org/blog>).
+
+Example that uses rule 2: Keycloak 26.8.2 was released on 5 November 2026, so rule 1 allowed it only from 19 November 2026. It holds security fixes, so PR #587 moved the pin to 26.8.2 on 18 November 2026, and `hosts/AGENT-PICKS.md` pick 97 names the fix and links its release note (source: <https://www.keycloak.org/2026/11/keycloak-2682-released>).
 
 ## Not covered here
 
