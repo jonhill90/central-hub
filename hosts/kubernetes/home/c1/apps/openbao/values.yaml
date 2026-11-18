@@ -133,19 +133,18 @@ server:
           current_key    = "file:///openbao/seal/{{ .Values.centralHub.sealKeyId }}.key"
         }
 
-        # Self-init: runs once, on the first start of an empty store, then revokes the root token it
-        # used (https://openbao.org/docs/configuration/self-init/). Later starts skip it.
-        initialize "audit" {
-          request "file" {
-            operation = "update"
-            path      = "sys/audit/file"
-            data = {
-              type    = "file"
-              options = { file_path = "/openbao/audit/audit.log" }
-            }
+        # The audit device is declared here, not made by self-init: OpenBao refuses audit devices
+        # made through the API unless unsafe_allow_api_audit_creation is set, and self-init then
+        # stops with "refusing to unseal" (measured on c1, 2026-11-18;
+        # https://openbao.org/docs/configuration/audit/).
+        audit "file" "file" {
+          options {
+            file_path = "/openbao/audit/audit.log"
           }
         }
 
+        # Self-init: runs once, on the first start of an empty store, then revokes the root token it
+        # used (https://openbao.org/docs/configuration/self-init/). Later starts skip it.
         initialize "mounts" {
           request "kv" {
             operation = "update"
