@@ -141,6 +141,30 @@ assert "playbooks/proxmox-safety.yml --tags firewall" in f and "--tags notify" n
 assert "changed=0 +unreachable=0 +failed=0' \"$files/safety-run.log\"" in f
 assert "pve-firewall status' | grep -q 'enabled/running'" in f and "systemctl is-active --quiet central-hub-fw-deadman.timer" in f
 PY
+# Every playbook the copy's inventory runs checks the arguments of every role it lists, tagged always, whatever the
+# --tags: each required input of each of those roles must be in the inventory (hosts.yml, plus the VLAN file the
+# wrapper copies into its group_vars), or the run fails at its first task.
+python3 -I - "$work/hosts.yml" "$root/hosts/ansible" "$vlans" "$w" <<'PY' && ok "the copy's inventory holds every required input of every role in proxmox-host.yml, tailnet-connector.yml and proxmox-safety.yml" || bad "a role's required input is missing from the copy's inventory"
+import os, sys, yaml
+h = yaml.safe_load(open(sys.argv[1]))["all"]["children"]["proxmox"]["hosts"]["proxmox_host"]
+assert 'cp "$vlans" "$files/inventory/group_vars/all/vlans.yml"' in open(sys.argv[4]).read()
+have = set(h) | set(yaml.safe_load(open(sys.argv[3])))
+base, missing, seen = sys.argv[2], [], []
+for pb in ("proxmox-host.yml", "tailnet-connector.yml", "proxmox-safety.yml"):
+    for play in yaml.safe_load(open(os.path.join(base, "playbooks", pb))):
+        for r in play.get("roles", []):
+            name = r["role"] if isinstance(r, dict) else r
+            seen.append(name)
+            spec = os.path.join(base, "roles", name, "meta", "argument_specs.yml")
+            if not os.path.isfile(spec):
+                continue
+            for ep in yaml.safe_load(open(spec))["argument_specs"].values():
+                need = {k for k, v in (ep.get("options") or {}).items() if v.get("required")}
+                missing += [f"{pb} {name} {k}" for k in sorted(need - have)]
+assert {"proxmox_network", "tailnet_connector", "proxmox_notify", "proxmox_backup", "proxmox_firewall"} <= set(seen), seen
+assert not missing, missing
+assert h["proxmox_backup_disk"].startswith("/dev/disk/by-id/lab-test-copy-")
+PY
 # prove: run against a stand-in wrapper that logs each step and fails where told; then the child check on its own.
 body=$(sed -n '/^prove() {$/,/^}$/p' "$w")
 cat > "$work/prove-step.sh" <<'SH'
@@ -487,8 +511,12 @@ while time.time() < end:
     if mode == "router" and f[12:14] == b"\x86\xdd" and f[20] == 58:
         s.send(ra())
 PY
+  # The fake WAN is a host link, and with IPv6 on, Linux keeps sending router solicitations from its MAC with backoff
+  # and no end (MAX_RTR_SOLICITATIONS is -1), so one can land in the silent run's window and count as a frame.
+  # IPv6 off on ltwan0 leaves only the frames fakewan.py sends.
   "${sudo[@]}" ip link add vmbr97 type bridge && "${sudo[@]}" ip link set vmbr97 up \
     && "${sudo[@]}" ip link add ltwan0 type veth peer name ltwan0br && "${sudo[@]}" ip link set ltwan0br master vmbr97 \
+    && { [[ ! -e /proc/sys/net/ipv6/conf/ltwan0 ]] || "${sudo[@]}" sysctl -qw net.ipv6.conf.ltwan0.disable_ipv6=1; } \
     && "${sudo[@]}" ip link set ltwan0 address 02:00:00:00:01:01 && "${sudo[@]}" ip link set ltwan0br up && "${sudo[@]}" ip link set ltwan0 up
   for want in client:0 server:3 router:3 silent:4; do
     mode=${want%:*}; rc=0

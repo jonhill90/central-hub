@@ -181,7 +181,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
     2. With `proxmox_firewall_enable` on. This run arms the 10-minute dead-man timer, proves that every way in still works (a new SSH connection, the API on 8006, CT 900 to the mgmt gateway), and cancels the timer.
     3. Once more, which must report `changed=0`.
 
-    The copy's management IPSet holds dev as its "home LAN", because that is where the box reaches it from. Notifications and backups are left out. Their inputs are the owner's ntfy topic and a backup disk, and the copy has neither. Safe to run again.
+    The copy's management IPSet holds dev as its "home LAN", because that is where the box reaches it from. Notifications and backups are left out. Their inputs are the owner's ntfy topic and a backup disk, and the copy has neither. The playbook still checks every role's arguments under `--tags firewall`, so the copy's inventory holds a made-up backup disk id, `/dev/disk/by-id/lab-test-copy-has-no-backup-disk`, that names no disk; the backup role never runs. Safe to run again.
     expect: `the copy's host firewall is on, every way in still works, and the dead-man timer is cancelled`.
     ※ `lab-test.sh`, `safety`; `lab-test-answer.py`, `inventory`; `playbooks/proxmox-safety.yml`
 
