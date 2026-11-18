@@ -36,3 +36,11 @@ desktop_password_marker: /var/lib/desktop/password-set
 # Remove the admin user's SSH keys at the end of the run. Later changes are then a rebuild from
 # teardown. Leave true; false is for debugging a VM that is going to be destroyed.
 desktop_lock_admin: true
+# The trust check before the admin key is removed (tasks "The desktop trusts the lab's certificates"). The chain is
+# the lab CA chain file role k8s_node_trust reads on the controller; empty (the lab root not put in the store)
+# skips the check. The bundle is AlmaLinux's extracted system store, which curl reads. Each name in
+# desktop_trust_check_names (private, such as grafana.<zone>) is opened over https with that store; empty runs
+# only the chain check.
+desktop_trust_chain_file: "{{ k8s_node_trust_chain_file | default('') if (k8s_node_trust_enabled | default(false) | bool) else '' }}"
+desktop_trust_bundle: /etc/pki/tls/certs/ca-bundle.crt
+desktop_trust_check_names: []

@@ -272,6 +272,7 @@ check_scripts() {
   bash "$here/tests/test_c1_read.sh"
   bash "$here/tests/test_box_apply.sh"
   bash "$here/tests/test_narrow_agent_access.sh"
+  bash "$here/tests/test_desktop_trust_check.sh"
   actionlint -shellcheck="$(command -v shellcheck)"
   echo "scripts: actionlint passed on $(git ls-files -- '.github/workflows/*.yml' | wc -l) workflows"
 }
