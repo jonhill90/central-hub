@@ -160,7 +160,11 @@ image() {
 seed_iso() {
   rm -rf "$files/seed" && mkdir -p "$files/seed"
   "$py" -I "$seed_py" seed "$settings" "$vlans" "$sshkey.pub" "$files/seed"
-  xorriso -as mkisofs -quiet -o "$files/seed.iso" -V cidata -J -r "$files/seed"
+  # The same seed gives the same ISO, byte for byte: fixed file dates and xorriso's SOURCE_DATE_EPOCH (measured on the
+  # box, 2026-11-18: two builds, one sha256). The same hash is the same file name, so every proof with unchanged
+  # settings reuses one seed file, which the token can't delete.
+  touch -d @0 "$files/seed" "$files/seed"/*
+  SOURCE_DATE_EPOCH=0 xorriso -as mkisofs -quiet -o "$files/seed.iso" -V cidata -J -r "$files/seed" 2>/dev/null
 }
 
 # The variables for tofu: the unpacked image's and the seed ISO's hashes go to tofu, which checks the uploads.
@@ -205,13 +209,21 @@ tofu_run() {
       if grep -qx "$vm_res" <<<"$held"; then
         echo "opnsense-test: refused, VM $VMID is in the state; run opnsense-test destroy first" >&2; exit 1
       fi
-      # A seed in the state without its VM is a leftover of an earlier run. Replacing it would need a delete
-      # the token can't make, so it leaves the state; its file stays on local for the owner.
-      if grep -qx "$seed_res" <<<"$held"; then
-        tofu state rm "$seed_res" >/dev/null
-        echo "opnsense-test: an earlier run's seed ISO left the state; its file stays on local"
-      fi
       image; seed_iso; write_vars
+      # A seed in the state is an earlier proof's. With the same hash it is the same file and is reused. With
+      # another hash, replacing it would need a delete the token can't make, so it leaves the state and its file
+      # stays on local; the new seed is a new file.
+      if grep -qx "$seed_res" <<<"$held"; then
+        local want have
+        want="opnsense-test-$VMID-seed-$(sha256sum "$files/seed.iso" | cut -c1-12).iso"
+        have=$(tofu state show -no-color "$seed_res" | sed -n 's/^ *id *= *"local:iso\/\(.*\)"$/\1/p')
+        if [[ $have == "$want" ]]; then
+          echo "opnsense-test: the seed is unchanged; the earlier proof's seed file is reused"
+        else
+          tofu state rm "$seed_res" >/dev/null
+          echo "opnsense-test: the seed changed; the earlier seed ISO left the state and its file stays on local"
+        fi
+      fi
       tofu plan -input=false -var-file="$vars" -out="$plan"
       ;;
     apply)
@@ -227,7 +239,10 @@ tofu_run() {
         tofu apply -input=false "$plan"
         rm -f "$plan"
       fi
-      if grep -qx "$seed_res" <<<"$held"; then tofu state rm "$seed_res" >/dev/null; fi
+      # The seed stays in the state, like the image, so the next proof reuses its file when the seed is unchanged.
+      if grep -qx "$seed_res" <<<"$held"; then
+        kept_seed=$(tofu state show -no-color "$seed_res" | sed -n 's/^ *id *= *"\(local:iso\/.*\)"$/\1/p')
+      fi
       ;;
   esac
 }
@@ -238,10 +253,12 @@ leftovers() {
   px_api "nodes/$(setting proxmox_node_name)/storage/local/content" | python3 -I -c 'import json, sys
 for v in json.load(sys.stdin)["data"]:
     i = v.get("volid", "")
-    if i.startswith("local:iso/opnsense-test-%s-seed" % sys.argv[1]):
+    if i and i == sys.argv[3]:
+        print("opnsense-test: kept on local for the next proof, which reuses it while the seed is unchanged: " + i)
+    elif i.startswith("local:iso/opnsense-test-%s-seed" % sys.argv[1]):
         print("opnsense-test: left on local for the owner to remove: " + i)
     elif i == "local:import/" + sys.argv[2]:
-        print("opnsense-test: kept on local for the next proof (the owner may remove it): " + i)' "$VMID" "${IMAGE_XZ%.xz}" \
+        print("opnsense-test: kept on local for the next proof (the owner may remove it): " + i)' "$VMID" "${IMAGE_XZ%.xz}" "${kept_seed:-}" \
     || echo "opnsense-test: the node's local storage could not be listed"
 }
 
@@ -324,7 +341,7 @@ keycloak_up() {
     -e KC_BOOTSTRAP_ADMIN_USERNAME=proof-admin -e KC_BOOTSTRAP_ADMIN_PASSWORD \
     -e KC_PROOF_CLIENT_SECRET -e KC_PROOF_USER_PASS -e KC_PROOF_STRANGER_PASS \
     -e JAVA_OPTS_KC_HEAP="-Xms256m -Xmx1024m" \
-    "$KEYCLOAK_IMAGE" start-dev --import-realm --http-enabled=false --https-port=8443 \
+    "$KEYCLOAK_IMAGE" start --db=dev-file --cache=local --import-realm --http-enabled=false --https-port=8443 \
     --https-certificate-file=/opt/keycloak/conf/proof/kc.pem --https-certificate-key-file=/opt/keycloak/conf/proof/kc.key \
     --hostname="https://$kc_addr:8443" >/dev/null
   local _
@@ -337,12 +354,19 @@ keycloak_up() {
   # DPoP stays at Keycloak's default, on, as in the lab's Keycloak: the plugin then uses it, and prove checks that it did.
   "$py" -I -c 'import json, sys; sys.exit("ES256" not in json.load(open(sys.argv[1])).get("dpop_signing_alg_values_supported", []))' \
     "$proof/discovery.json" || { echo "opnsense-test: stopped, Keycloak does not advertise DPoP with ES256"; return 1; }
-  # On the host network the filter covers only 8443, so the container may listen on nothing else (TCP or UDP).
-  local pids ports
+  # On the host network the filter covers only 8443, so the container may listen on nothing else (TCP or UDP)
+  # that another host could reach. A loopback-only socket is reachable from the box alone and is listed apart:
+  # Keycloak 26.8.1 opens one on a random port even with dev-file's AUTO_SERVER off (measured on the box,
+  # 2026-11-18). start-dev listens on 8080 whatever --http-enabled says (its log, 2026-11-18 03:11 UTC), so the
+  # proof runs start (prod profile) with the dev-file database and local caches.
+  local pids lines ports loop
   pids=$(podman top "$KC_NAME" hpid | tail -n +2 | tr -s ' \n' '|' | sed 's/^|//; s/|$//')
   [[ -n $pids ]] || { echo "opnsense-test: the Keycloak container's processes could not be read"; return 1; }
-  ports=$(ss -Hlntup | grep -E "pid=($pids)," | awk '{print $1 " " $5}' | sed 's/ .*:/ /' | sort -u)
+  lines=$(ss -Hlntup | grep -E "pid=($pids),")
+  loop=$(awk '$5 ~ /^(127\.|\[::1\]:|\[::ffff:127\.)/ {print $1 " " $5}' <<<"$lines" | sed 's/ .*:/ /' | sort -u)
+  ports=$(awk '$5 !~ /^(127\.|\[::1\]:|\[::ffff:127\.)/ {print $1 " " $5}' <<<"$lines" | sed 's/ .*:/ /' | sort -u)
   echo "opnsense-test: Keycloak listens on: $(tr '\n' ' ' <<<"$ports")"
+  [[ -z $loop ]] || echo "opnsense-test: and on loopback only: $(tr '\n' ' ' <<<"$loop")"
   [[ $ports == "tcp 8443" ]] || { echo "opnsense-test: stopped, the Keycloak container listens on more than tcp 8443"; return 1; }
   echo "opnsense-test: Keycloak 26.8.1 is up at https://$kc_addr:8443 (realm opnsense-proof, DPoP on)"
 }

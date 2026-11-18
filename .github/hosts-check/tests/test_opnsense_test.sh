@@ -161,6 +161,14 @@ code=$(grep -v '^[[:space:]]*#' "$w")   # code lines only, so a comment can't pa
 if grep -q 'plan -destroy' <<<"$code" && ! grep 'plan -destroy' <<<"$code" | grep -vq -- '-target="$vm_res"'; then ok "destroy targets only the VM"; else bad "destroy may delete files on local"; fi
 grep -q 'tofu state rm "$seed_res"' <<<"$code" && ok "the seed ISO leaves the state instead of being deleted" || bad "seed not dropped from the state"
 grep -q 'refused, VM $VMID is in the state' <<<"$code" && ok "plan refuses while the VM is in the state, so a new seed never replaces a file" || bad "plan may replace the seed file"
+# One seed file per seed: the ISO is built byte for byte the same, destroy keeps the seed in the state, and plan keeps
+# a seed whose file name matches the new build.
+grep -q 'SOURCE_DATE_EPOCH=0 xorriso' <<<"$code" && grep -q 'touch -d @0' <<<"$code" && ok "the seed ISO is built the same each time" || bad "the seed ISO is not reproducible"
+if sed -n '/^    destroy)$/,/^      ;;$/p' <<<"$code" | grep -q 'state rm'; then bad "destroy drops the seed from the state"; else ok "destroy keeps the seed in the state, for reuse"; fi
+grep -q 'if \[\[ $have == "$want" \]\]' <<<"$code" && ok "plan reuses an unchanged seed" || bad "plan never reuses the seed"
+# The proof's Keycloak: prod profile (start-dev opens 8080 whatever --http-enabled says), and only loopback is exempt.
+if grep -q 'start-dev' <<<"$code"; then bad "the proof's Keycloak runs start-dev"; else ok "the proof's Keycloak runs start, not start-dev"; fi
+grep -q 'start --db=dev-file --cache=local --import-realm --http-enabled=false' <<<"$code" && ok "start uses the dev-file database, local caches and no HTTP" || bad "start options"
 
 [ "$fails" = 0 ] || { echo "$fails failed"; exit 1; }
 echo "opnsense-test: all checks passed"
