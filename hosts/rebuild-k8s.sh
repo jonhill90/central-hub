@@ -89,17 +89,17 @@ if [ "$ENV_NAME" = dev ]; then
 fi
 
 # Dev only: the memory (MiB) each dev node gets by role, in place of its memory_mb in the tfvars (the k8s stack's
-# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so it is sized to fit them. Control plane
-# 4096: at 3072 the run of 2026-11-18 06:11 UTC (rebuild-20261118T061140Z) failed in apps, with the API server timing
-# out lease renewals and kube-controller-manager and cilium-operator in CrashLoopBackOff, so openbao's volume claims
-# stayed Pending. c1's control plane, which runs only the control-plane pods, used 2530 MiB that day, 1809 MiB of it
-# kube-apiserver (c1-read top, 06:46 UTC). Worker 6144 (the worker peaked at 4255 MiB at 7168 in run 20261117T053037Z;
-# the 06:11 run at 6144 showed no eviction and no OOM kill in its diag). The sum, 10240, plus the 1024 MiB margin is
-# 11264, under the 11914 MiB the preflight read at 06:11 UTC with the box's drop-cache timer on. c1 (prod) keeps the
-# sizes in its own tfvars.
-DEV_MEMORY_MB_CONTROL_PLANE=4096
-DEV_MEMORY_MB_WORKER=6144
-# The preflight's margin is 1024 MiB: 4096 + 6144 + 1024 = 11264.
+# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so its total stays at 10240, what the host
+# has had free beside them (the run of 2026-11-18 13:14 UTC read 11296 MiB available, with 1264 MiB of the host's
+# swap in use), and the split follows the measured use. Worker 6656: at 6144 the worker never passed identity-keycloak
+# (runs 20261117T043328Z and 20261118T131441Z: in the second it read 4007 MiB, 68%, at 13:41:25 UTC, then <unknown>
+# at every sample, and was unreachable over ssh at 5729 of 6144 MiB); c1's worker runs the same apps in about
+# 4700 MiB of pods at rest (c1-read top pods, 14:11 UTC), and Keycloak's realm import adds to that. Control plane
+# 3584: dev's read 2403 to 2839 MiB at 4096 in that run, and 3072 starved the API server (run 20261118T061140Z).
+# The sum, 10240, plus the 1024 MiB margin is 11264. c1 (prod) keeps the sizes in its own tfvars.
+DEV_MEMORY_MB_CONTROL_PLANE=3584
+DEV_MEMORY_MB_WORKER=6656
+# The preflight's margin is 1024 MiB: 3584 + 6656 + 1024 = 11264.
 # Dev only: how long identity-keycloak waits for the realm import (seconds; the role's default is 600). At 6144 MiB the
 # worker's import timed out at 600 s on 2026-11-17 at 04:33 UTC; at 7168 MiB the whole stage took 176 s (run
 # 20261117T053037Z). 1200 gives the smaller worker twice the wait that ran out; if it still times out, the node-top
@@ -238,7 +238,7 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default: the dev VMs' memory by role, summed over the nodes
-# the tfvars declare, plus a 1024 MiB margin; 4096 + 6144 + 1024 = 11264 for one control plane and one worker). If the
+# the tfvars declare, plus a 1024 MiB margin; 3584 + 6656 + 1024 = 11264 for one control plane and one worker). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 # curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
 # use it, so neither can print the token.
