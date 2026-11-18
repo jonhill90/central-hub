@@ -1,0 +1,14 @@
+---
+# Also run on its own by the last play of k8s-backup.yml, after the nodes made the repository and backed up.
+# restic keeps new files group-readable once the config file is (restic 0.14.0, #2351). A repository the writer
+# made before this ran gets the group bits here; the find prints only what it changed.
+- name: The repository's files, group-readable
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    find {{ (proxmox_restic_sftp_root ~ '/' ~ proxmox_restic_sftp_repo) | quote }} -mindepth 1
+    \( -type d \! -perm -g=rx -o -type f \! -perm -g=r \) -print -exec chmod g+rX {} + | wc -l
+  args:
+    executable: /bin/bash
+  register: proxmox_restic_sftp_group_read
+  changed_when: proxmox_restic_sftp_group_read.stdout | int > 0
+  when: not ansible_check_mode

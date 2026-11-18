@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# The opnsense_lab role's backup target rules (tasks/backup_target.yml), offline (no firewall, no API):
+#   1. With the real VLAN file and prod as the sources' VLAN, the check passes for the two prod nodes at sequences
+#      13 and 14: no other rule the role numbers uses them, nor the app access rules.
+#   2. The check fails for: an unknown source name, a repeated name, a source with a prefix, a host that is not an
+#      IPv4 address, a VLAN tag not in the file, more sources than sequences, a sequence another rule uses (10,
+#      prod's own first rule; 5, a management pass; 1, an agent box target; 11, an app access rule).
+#   3. The rule task opens tcp 22 only, to the host's /32, from each node's /32, on the sources' VLAN.
+# Usage: .github/hosts-check/tests/test_opnsense_backup_target.sh   (needs ansible-core)
+set -uo pipefail
+root=$(cd "$(dirname "$0")/../../.." && pwd)
+role=$root/hosts/ansible/roles/opnsense_lab
+vlan_file=$root/hosts/ansible/inventories/home/group_vars/all/vlans.yml
+w=$(mktemp -d); trap 'rm -rf "$w"' EXIT
+fail=0
+ok() { echo "ok   $1"; }
+bad() { echo "FAIL $1"; fail=1; }
+
+cat > "$w/settings.yml" <<'YML'
+opnsense_lab_vlan_settings:
+  prod: { ifname: opt1, dhcp: true, bootstrap: false }
+  qa: { ifname: opt2, dhcp: false, bootstrap: false }
+  dev: { ifname: opt3, dhcp: true, bootstrap: false }
+  mgmt: { ifname: lan, dhcp: false, bootstrap: true }
+  tenant: { ifname: opt4, dhcp: true, bootstrap: false, mgmt_pass: false }
+opnsense_lab_mgmt_tag: 50
+opnsense_lab_agent_box:
+  source: 192.0.2.10
+  vlan: 30
+  targets:
+    - { name: Proxmox API, address: 192.0.2.50, port: 8006 }
+    - { name: c1 API, address: 192.0.2.20, port: 6443 }
+YML
+good='{"opnsense_lab_app_access": {"vlan": 30, "gateway": "192.0.2.230", "sources": [{"name": "agent box", "address": "192.0.2.10"}]}, "opnsense_lab_backup_target": {"vlan": 10, "host": "192.0.2.50", "sources": [{"name": "prod node 200", "address": "192.0.2.20"}, {"name": "prod node 201", "address": "192.0.2.21"}]}}'
+
+cat > "$w/check.yml" <<YML
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files: ["$vlan_file", "$w/settings.yml", "$role/defaults/main.yml", "$role/vars/main.yml"]
+  tasks:
+    - ansible.builtin.import_tasks: "$role/tasks/backup_target_checks.yml"
+    - ansible.builtin.copy:
+        content: "{{ {'numbered': opnsense_lab_numbered_sequences} | to_json }}"
+        dest: "$w/seq.json"
+        mode: "0600"
+YML
+check() { ANSIBLE_LOCALHOST_WARNING=False ansible-playbook -i localhost, -e ansible_python_interpreter=auto_silent "$w/check.yml" -e "$1" >"$w/out" 2>&1; }
+
+if check "$good"; then
+  ok "the two prod nodes at sequences 13 and 14 pass the check"
+  python3 -I - "$w/seq.json" <<'PY' && ok "the role's numbered sequences hold neither 13 nor 14, and prod's own rules are 10 to 40" || bad "numbered sequences are not as expected"
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert 13 not in d["numbered"] and 14 not in d["numbered"], d
+assert {1, 2, 5, 6, 7, 10, 20, 30, 40}.issubset(d["numbered"]), d
+PY
+else bad "the good input fails the check"; cat "$w/out"; fi
+
+refuse() { # description, extra vars JSON
+  if check "$2"; then bad "$1 (the check passed)"; elif grep -q "opnsense_lab_backup_target needs" "$w/out"; then ok "$1"; else bad "$1 (failed some other way)"; cat "$w/out"; fi
+}
+sub() { python3 -I -c 'import json,sys; d=json.loads(sys.argv[1]); exec(sys.argv[2]); print(json.dumps(d))' "$good" "$1"; }
+B='d["opnsense_lab_backup_target"]'
+refuse "an unknown source name is refused" "$(sub "$B[\"sources\"][1][\"name\"]=\"laptop\"")"
+refuse "a repeated name is refused" "$(sub "$B[\"sources\"][1][\"name\"]=\"prod node 200\"")"
+refuse "a source with a prefix is refused" "$(sub "$B[\"sources\"][1][\"address\"]=\"192.0.2.0/24\"")"
+refuse "a host that is not an address is refused" "$(sub "$B[\"host\"]=\"pve.example.com\"")"
+refuse "a VLAN tag not in the file is refused" "$(sub "$B[\"vlan\"]=99")"
+refuse "more sources than sequences are refused" "$(sub 'd["opnsense_lab_backup_target_sequences"]=[13]')"
+refuse "prod's own first rule's sequence is refused" "$(sub 'd["opnsense_lab_backup_target_sequences"]=[10, 14]')"
+refuse "a management pass sequence is refused" "$(sub 'd["opnsense_lab_backup_target_sequences"]=[5, 14]')"
+refuse "an agent box sequence is refused" "$(sub 'd["opnsense_lab_backup_target_sequences"]=[1, 14]')"
+refuse "an app access sequence in use is refused" "$(sub 'd["opnsense_lab_backup_target_sequences"]=[11, 14]')"
+
+# The rule as written: tcp 22 only, /32 at both ends, the sources' VLAN, pass, quick.
+python3 -I - "$role/tasks/backup_target.yml" <<'PY' && ok "the rule opens tcp 22 only, from each node's /32 to the host's /32" || bad "the rule task is not as narrow as it should be"
+import sys, yaml
+tasks = yaml.safe_load(open(sys.argv[1]))
+r = next(t for t in tasks if t.get("name") == "The c1 nodes to the Proxmox host's ssh")["oxlorg.opnsense.rule"]
+assert r["action"] == "pass" and r["quick"] is True and r["direction"] == "in", r
+assert r["protocol"] == "TCP" and r["destination_port"] == "22", r
+assert r["source_net"] == "{{ item.address }}/32", r
+assert r["destination_net"] == "{{ opnsense_lab_backup_target.host }}/32", r
+assert "opnsense_lab_backup_target.vlan" in r["interface"][0], r
+gone = next(t for t in tasks if t.get("name") == "No rules for backup sources that are gone")["oxlorg.opnsense.rule"]
+assert gone["state"] == "absent" and gone["description"] == "Allow {{ item }} to Proxmox backup SSH", gone
+PY
+
+[[ $fail -eq 0 ]] && echo "opnsense backup target: all checks passed" || { echo "opnsense backup target: a check failed"; exit 1; }

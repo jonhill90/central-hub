@@ -1,0 +1,35 @@
+# {{ ansible_managed | default('Managed by Ansible') }}: central-hub role proxmox_restic_sftp (agent pick 262).
+# c1's restic backups reach this host over sftp as two users that get nothing but internal-sftp inside
+# {{ proxmox_restic_sftp_root }}. Every keyword below is one sshd_config(5) allows inside Match.
+{% if proxmox_restic_sftp_no_root_from | length > 0 %}
+
+# The nodes reach port 22 for backups only, never as root.
+Match Address {{ proxmox_restic_sftp_no_root_from | join(',') }}
+	PermitRootLogin no
+{% endif %}
+
+Match User {{ proxmox_restic_sftp_writer }},{{ proxmox_restic_sftp_reader }}
+	AuthorizedKeysFile {{ proxmox_restic_sftp_keys_dir }}/%u
+	AuthenticationMethods publickey
+	PasswordAuthentication no
+	KbdInteractiveAuthentication no
+	ChrootDirectory {{ proxmox_restic_sftp_root }}
+	AllowTcpForwarding no
+	AllowAgentForwarding no
+	AllowStreamLocalForwarding no
+	PermitListen none
+	PermitOpen none
+	PermitTunnel no
+	PermitTTY no
+	X11Forwarding no
+
+# Files it makes are group-readable (-u 0027), so the reader can read them.
+Match User {{ proxmox_restic_sftp_writer }}
+	ForceCommand internal-sftp -u 0027 -d /{{ proxmox_restic_sftp_repo }}
+
+# -R: read-only, every write is refused (sftp-server(8)).
+Match User {{ proxmox_restic_sftp_reader }}
+	ForceCommand internal-sftp -R -d /{{ proxmox_restic_sftp_repo }}
+
+# Ends the Match blocks above, so the lines that come after this file in sshd_config apply to everyone again.
+Match all

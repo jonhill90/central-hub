@@ -43,6 +43,22 @@ argument_specs:
       k8s_backup_azure_cert_renew_days: {type: int, default: 30, description: Days left at which the node rolls its certificate.}
       k8s_backup_azure_cert_schedule: {type: str, default: "*-*-* 01:40:00", description: systemd OnCalendar for the daily renewal check.}
       k8s_backup_az: {type: str, default: az, description: The Azure CLI on the controller.}
+      k8s_backup_sftp:
+        type: bool
+        default: false
+        description: >-
+          Back up to the Proxmox host over sftp (agent pick 262): each node makes its own ssh key, the host play lets
+          it in, and the node env file gets RESTIC_REPOSITORY=sftp:<alias>:/<repo>. Not with k8s_backup_azure_identity.
+      k8s_backup_sftp_address: {type: str, default: "", description: "The host's address on VNet mgmt; the playbook passes proxmox_host_mgmt_address. Private."}
+      k8s_backup_sftp_host_key: {type: str, default: "", description: "The host's ssh-ed25519 public key; the playbook reads it from the host."}
+      k8s_backup_sftp_alias: {type: str, default: c1-backup-target, description: "The ssh alias RESTIC_REPOSITORY names."}
+      k8s_backup_sftp_repo: {type: str, default: c1, description: "The repository's folder inside the host's chroot."}
+      k8s_backup_sftp_user: {type: str, default: "c1backup, or c1restore in reader mode", description: "The host user the node signs in as."}
+      k8s_backup_sftp_dir: {type: str, default: /etc/central-hub/backup-ssh, description: "Root-only folder of the node's key and the pinned host key."}
+      k8s_backup_sftp_ssh_conf:
+        type: str
+        default: /etc/ssh/ssh_config.d/40-central-hub-backup.conf
+        description: "The ssh config drop-in that defines the alias."
       k8s_backup_bin_dir: {type: str, default: /usr/local/libexec/central-hub-backup, description: Where the tools and scripts go on the nodes.}
       k8s_backup_node_env_file: {type: str, default: /etc/central-hub/backup.env, description: The env file's path on the nodes.}
       k8s_backup_state_dir: {type: str, default: /var/lib/central-hub-backup, description: Local state on the nodes (the canary record).}

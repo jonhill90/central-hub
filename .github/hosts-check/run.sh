@@ -104,6 +104,7 @@ check_ansible() {
   bash "$here/tests/test_opnsense_lab_tenant.sh"
   bash "$here/tests/test_desktop_configure_vars.sh"
   bash "$here/tests/test_opnsense_app_access.sh"
+  bash "$here/tests/test_opnsense_backup_target.sh"
 }
 
 check_manifests() {
@@ -264,6 +265,8 @@ check_proxy() {
   # Role proxmox_proxy against a stand-in Proxmox host in a container: the install beside nginx, the move from
   # nginx, its rollbacks, a run killed part-way, an open console across a graceful reload, a host with no nginx.
   bash "$here/tests/test_proxy.sh"
+  # The Proxmox host as c1's restic target on the same stand-in: a real sftp backup, restore and read-only reader.
+  bash "$here/tests/test_backup_sftp.sh"
   # The Proxmox host job end to end on the same stand-in (key line, check, refusal, apply), and the lifeline's
   # per-user entry loaded by nft.
   collections

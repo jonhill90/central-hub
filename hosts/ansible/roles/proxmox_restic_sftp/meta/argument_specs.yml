@@ -1,0 +1,34 @@
+---
+# Inputs of the proxmox_restic_sftp role (agent pick 262). The plays in k8s-backup.yml and k8s-restore.yml fill
+# the key lists from the nodes; nothing here is private.
+argument_specs:
+  main:
+    short_description: The Proxmox host serves c1's restic repository over sftp to a writer and a read-only reader
+    options:
+      proxmox_restic_sftp_mount: {type: str, default: /mnt/hdd-backup, description: "The backup HDD's mount point; the role stops if nothing is mounted there."}
+      proxmox_restic_sftp_root: {type: str, default: "<mount>/restic", description: "The users' chroot, owned by root."}
+      proxmox_restic_sftp_repo: {type: str, default: c1, description: "The repository's folder inside the chroot."}
+      proxmox_restic_sftp_writer: {type: str, default: c1backup, description: "The user the c1 nodes back up as."}
+      proxmox_restic_sftp_reader: {type: str, default: c1restore, description: "The read-only user dev restores as (internal-sftp -R)."}
+      proxmox_restic_sftp_writer_keys:
+        type: list
+        elements: dict
+        default: []
+        description: "The writer's keys, each {key, from}: one ssh public key line and the one node address it works from."
+      proxmox_restic_sftp_reader_keys:
+        type: list
+        elements: dict
+        default: []
+        description: "The reader's keys, in the same shape."
+      proxmox_restic_sftp_set_writer: {type: bool, default: false, description: "Write the writer's keys file from the list."}
+      proxmox_restic_sftp_set_reader: {type: bool, default: false, description: "Write the reader's keys file from the list."}
+      proxmox_restic_sftp_no_root_from:
+        type: list
+        elements: str
+        default: []
+        description: "Sources root may not sign in from (sshd Match Address ... PermitRootLogin no)."
+      proxmox_restic_sftp_sshd_conf: {type: str, default: /etc/ssh/sshd_config.d/40-central-hub-restic.conf, description: "The sshd drop-in the role writes."}
+      proxmox_restic_sftp_keys_dir:
+        type: str
+        default: /etc/ssh/central-hub-restic
+        description: "Root-owned folder of the users' keys files, outside the chroot."
