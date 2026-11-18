@@ -92,7 +92,7 @@ Prove it without typing a password:
 3. From a machine that can reach the app: `curl -s https://jellyfin.apps.c1.prod.<zone>/sso/OID/start/keycloak` answers a redirect whose `Location` starts with the issuer above.
 4. The owner's sign-in with the Keycloak button, once, is the end-to-end proof.
 
-If it fails: **"plugin SSO Authentication is not in GET /Plugins"** means the plugin is not loaded or the reply spells its name differently (the CronJob log lists the names the reply held; read the Jellyfin log for `targetAbi`); **a TLS error in the Jellyfin log** means the lab root is missing from the bundle (`kubectl -n media logs deploy/jellyfin -c sso-plugin` shows the certificate count). The way back is `sso.enabled: false` by PR; the plugin folder stays on the claim and does nothing.
+If it fails: **"plugin SSO-Auth is not in GET /Plugins"** means the plugin is not loaded or the reply spells its name differently (Jellyfin lists it as `SSO-Auth`, the name in its dll, while the startup log and meta.json say `SSO Authentication`; measured on c1 2026-11-18) (the CronJob log lists the names the reply held; read the Jellyfin log for `targetAbi`); **a TLS error in the Jellyfin log** means the lab root is missing from the bundle (`kubectl -n media logs deploy/jellyfin -c sso-plugin` shows the certificate count). The way back is `sso.enabled: false` by PR; the plugin folder stays on the claim and does nothing.
 
 ## Metrics
 
