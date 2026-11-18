@@ -422,6 +422,7 @@ check_backup() {
   bash "$here/tests/test_rebuild_box_inventory.sh"
   bash "$here/tests/test_rebuild_log_pick.sh"
   bash "$here/tests/test_rebuild_pin.sh"
+  bash "$here/tests/test_rebuild_auto.sh"
   bash "$here/tests/test_rebuild_diag_vms.sh"
   bash "$here/tests/test_opnsense_test.sh"
   bash "$here/tests/test_lab_test.sh"

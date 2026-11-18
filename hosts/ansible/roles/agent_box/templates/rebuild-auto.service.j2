@@ -1,0 +1,16 @@
+# Managed by the agent_box role (central-hub hosts/ansible). The dev rebuild's timer run: `rebuild.sh auto` builds main's
+# newest commit on dev only when no run is going, the newest full run did not already build it, a file under hosts/
+# changed since the newest full pass, and the memory preflight fits without stopping the owner's desktop VM. Otherwise
+# it says why in one line and exits 0. Runs as the keys user, the same user the wrapper runs as; sessions have no sudo
+# line for `auto`.
+[Unit]
+Description=Dev rebuild of main's head, when hosts/ changed and the memory fits
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ agent_box_keys_user }}
+Group={{ agent_box_keys_user }}
+ExecStart={{ agent_box_libexec_dir }}/rebuild.sh auto
+TimeoutStartSec=3h

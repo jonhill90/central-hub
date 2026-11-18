@@ -238,4 +238,13 @@ out=$(fitrun dev 28); check "--fit: does not fit, exit 3" "$out" "fit: no
 rc=3" ""
 out=$(fitrun prod 22); check "--fit: dev only" "$out" "--fit is for dev only" "fit: yes"
 
+# PREFLIGHT_KEEP_DESKTOP (the box's timer run): the desktop is never stopped, in a run or a fit check; VM 300 still may be.
+out=$(PREFLIGHT_KEEP_DESKTOP=true FAKE_DESKTOP=yes FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 24)
+check "keep-desktop: the desktop is left alone" "$out" "VM 400 (the desktop) is running and is left alone" "desktop stop"
+check "keep-desktop: VM 300 is still stopped and the run passes" "$out" "rc=0" "refused"
+if grep -q 'qemu/400/status/shutdown' "$t/argv"; then echo "FAIL keep-desktop: VM 400 got a shutdown"; fail=1; else echo "ok   keep-desktop: no shutdown sent to VM 400"; fi
+out=$(PREFLIGHT_KEEP_DESKTOP=true PREFLIGHT_DRY=true FAKE_DESKTOP=yes run dev 31 24)
+check "keep-desktop fit: 7168 plus VM 300's 2048 is refused, the desktop not counted" "$out" "refused, estimate 9216 MiB is below 11008 MiB" "maxmem 4096"
+check "keep-desktop fit: nothing stopped" "posts=$(posts)" "posts=0"
+
 exit $fail

@@ -424,6 +424,13 @@ agent_box_limit_apply: false
 agent_box_self_apply_timer: true
 agent_box_self_apply_interval: 10min
 
+# The dev rebuild's timer run (files/rebuild.sh auto, TASK-0291 row 2b): every interval it builds main's newest commit on
+# dev, but only when no rebuild run is going, the newest full run did not already build that commit, a file under hosts/
+# changed since the newest full pass, and the memory preflight fits without stopping the owner's desktop VM. Each run
+# that starts stops VM 300 for its length under ephemeral-dev, as a hand run does.
+agent_box_rebuild_auto: true
+agent_box_rebuild_auto_interval: 2h
+
 # The merge sweep (D-0042 rule 2): a systemd timer that runs `pr-merge.sh sweep` as the keys user. Off until the inventory
 # turns it on, because installing it is a change to the box's limits (D-0042 rule 6).
 agent_box_merge_sweep: false

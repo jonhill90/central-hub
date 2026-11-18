@@ -4,7 +4,13 @@
 # It runs as user `keys` through sudo, so the session that asks for it never sees the Proxmox
 # token, the node SSH key or the dev inventory. Installed by the agent_box role; root owns it.
 #   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild [<commit>]|teardown|identity|log|diag
+#   rebuild.sh auto   (the rebuild-auto timer only, as the keys user; no sudo line)
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
+# auto: an `up` of main's newest commit, started only when all hold: no run is going (the lock), dev is down (no VM
+# in the dev state), the newest full
+# run did not already build that commit, a file under hosts/ changed since the newest full pass (or there is none on
+# main), and the memory preflight fits (rebuild-k8s.sh --fit) without stopping the owner's desktop VM, which a timer
+# run never stops (PREFLIGHT_KEEP_DESKTOP). Otherwise it says why in one line and exits 0.
 # up and rebuild build main's newest commit, or <commit> (7 to 40 hex digits) when given, which must be on main: the
 # commit a prod go names (rebuild-prod.sh rebuild <tap id> <commit>), so dev and prod build the same one.
 # identity: only the stage identity-keycloak (k8s-identity.yml --tags secrets,keycloak,signin: Keycloak and its
@@ -45,7 +51,7 @@ if [[ ${1:-} == log && $# -eq 1 ]]; then
   exit 0
 fi
 
-usage() { echo "usage: rebuild up|rebuild [<commit>]|teardown|identity|log|diag" >&2; exit 2; }
+usage() { echo "usage: rebuild up|rebuild [<commit>]|teardown|identity|log|diag|auto" >&2; exit 2; }
 action=${1:-}
 want=""
 case $action in
@@ -54,6 +60,7 @@ case $action in
   teardown) extra=(--only teardown) ;;
   identity) extra=(--only identity-keycloak) ;;
   diag) extra=() ;;   # handled below, before anything is changed
+  auto) extra=() ;;   # an `up`, when auto_decide says so
   *) usage ;;
 esac
 # Only up and rebuild take an argument, the commit to build; every other action takes none.
@@ -88,6 +95,64 @@ checkout_main() { # repo [commit]
   else
     git -C "$1" checkout --quiet --detach origin/main
   fi
+}
+
+# auto: whether the timer's run starts. Prints one line and returns 1 when it does not. The newest full run is the newest
+# log with a `vms` stage (a teardown or identity run has none); a full pass also ends every stage, `checks` included, and
+# says `rebuild: all stages passed`. Reads the logs, the checkout and the node's memory (rebuild-k8s.sh --fit); writes
+# only the fit check's own settings file.
+auto_decide() {
+  local head f newest="" pass="" nc pc changed fitdir sn="" up
+  head=$(git -C "$repo" rev-parse HEAD)
+  # Dev must be down: with dev VMs in the state the preflight skips its memory check (a re-run makes no new VMs), so
+  # --fit would say yes, and a timer run would build over a dev someone kept up. An unreadable state counts as up.
+  up=$(python3 -I -c '
+import json, sys
+try:
+    s = json.load(open(sys.argv[1]))
+except FileNotFoundError:
+    print(0); sys.exit()
+print(sum(len(r.get("instances", [])) for r in s.get("resources", [])
+          if r.get("type") == "proxmox_virtual_environment_vm" and r.get("mode") == "managed"))' "$work/state/dev-vms.tfstate" 2>/dev/null) || up=unreadable
+  if [[ $up != 0 ]]; then
+    echo "rebuild auto: dev is up ($up VMs in the dev state), so a timer run would not start from an empty dev; nothing started"
+    return 1
+  fi
+  while read -r f; do
+    grep -Eq '^[0-9TZ:-]+ vms start$' "$f" || continue
+    [[ -n $newest ]] || newest=$f
+    if grep -qx 'rebuild: all stages passed' "$f" && grep -Eq '^[0-9TZ:-]+ checks end rc=0 ' "$f"; then pass=$f; break; fi
+  done < <(ls -1 "$envdir"/logs/rebuild-*.log 2>/dev/null | sort -r)
+  nc=$( [[ -z $newest ]] || sed -n 's/^rebuild: central-hub \([0-9a-f]\{40\}\)$/\1/p' "$newest" | head -n 1)
+  if [[ -n $nc && $nc == "$head" ]]; then
+    echo "rebuild auto: the newest full run, ${newest##*/}, already built main's head ${head:0:7} ($([[ $newest == "$pass" ]] && echo passed || echo 'did not pass')); nothing started"
+    return 1
+  fi
+  pc=$( [[ -z $pass ]] || sed -n 's/^rebuild: central-hub \([0-9a-f]\{40\}\)$/\1/p' "$pass" | head -n 1)
+  if [[ -n $pc ]] && git -C "$repo" merge-base --is-ancestor "$pc" "$head" 2>/dev/null; then
+    changed=$(git -C "$repo" diff --name-only "$pc" "$head" -- hosts/ | wc -l)
+    if [[ $changed -eq 0 ]]; then
+      echo "rebuild auto: nothing under hosts/ changed since the newest full pass at ${pc:0:7} (${pass##*/}); nothing started"
+      return 1
+    fi
+    echo "rebuild auto: $changed files under hosts/ changed since the newest full pass at ${pc:0:7}"
+  else
+    echo "rebuild auto: no full pass on main is logged, so main's head is built"
+  fi
+  if [[ -f $work/short-node ]]; then
+    sn=$(tr -d '[:space:]' < "$work/short-node")
+    case $sn in ephemeral-dev|keep-dev) ;; *) sn="" ;; esac
+  fi
+  fitdir=$work/state/rebuild-fit
+  install -d -m 700 "$fitdir"
+  printf '%s\n' ENV_NAME=dev VM_ID_MIN=250 VM_ID_MAX=257 "TFVARS=$keys/dev-vms.tfvars" "TFSTATE=$work/state/dev-vms.tfstate" \
+    "TOFU_ENV=$keys/proxmox-dev.env" "INVENTORY=$inventory/" PREFLIGHT_KEEP_DESKTOP=true ${sn:+"PREFLIGHT_SHORT_NODE=$sn"} > "$fitdir/rebuild.env"
+  chmod 600 "$fitdir/rebuild.env"
+  if ! bash "$repo/hosts/rebuild-k8s.sh" "$fitdir" --fit > "$fitdir/fit.out" 2>&1; then
+    echo "rebuild auto: the memory preflight does not fit now ($(grep -E 'refused|could not be read' "$fitdir/fit.out" | tail -n 1 | cut -c1-200)); nothing started"
+    return 1
+  fi
+  echo "rebuild auto: the memory preflight fits; building main's head ${head:0:7}"
 }
 
 keys=/etc/agent-keys
@@ -203,9 +268,13 @@ openssl x509 -checkend 2592000 -noout -in "$keys/azure-reader.env" > /dev/null \
 # One rebuild run at a time, in its own checkout: no other run, of this wrapper or another, can
 # move the code under it. The lock is held until the run and everything it starts end.
 exec 9>"$work/state/rebuild.lock"
-flock -n 9 || { echo "rebuild: another rebuild run is going; try again when it ends" >&2; exit 1; }
+if ! flock -n 9; then
+  [[ $action != auto ]] || { echo "rebuild auto: a rebuild run (dev or prod) is going; nothing started"; exit 0; }
+  echo "rebuild: another rebuild run is going; try again when it ends" >&2; exit 1
+fi
 [[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
 checkout_main "$repo" "$want" || exit 1
+if [[ $action == auto ]]; then auto_decide || exit 0; fi
 echo "rebuild: central-hub $(git -C "$repo" rev-parse --short HEAD)"
 # Rebuilt dev VMs get new SSH host keys, and the inventory's accept-new setting refuses a changed key.
 # This file only holds keys learned from earlier dev runs, so each run starts without it (after the lock,
@@ -366,7 +435,7 @@ print(sum(len(r.get("instances", [])) for r in s.get("resources", [])
     { echo "rebuild: the dev state at $work/state/dev-vms.tfstate could not be read" >&2; exit 1; }
   fresh=false
   [[ ${extra[*]} == *teardown* ]] && fresh=true
-  [[ $action == up && $dev_vms == 0 ]] && fresh=true
+  [[ ($action == up || $action == auto) && $dev_vms == 0 ]] && fresh=true
   if [[ $fresh == true ]] && compgen -G "$store_keys/openbao-snapshots/raft-*.snap" >/dev/null; then
     [[ -e $work/state/secrets-store.rebuilding ]] || date -u +%FT%TZ > "$work/state/secrets-store.rebuilding"
     echo "rebuild: the secrets store's rebuild hold is set; after the run, restore-rebuilt (the owner's tap) or clear-hold"
@@ -388,6 +457,9 @@ if [[ -f $work/short-node ]]; then
 fi
 short_node_env=""
 [[ -z $short_node ]] || short_node_env="PREFLIGHT_SHORT_NODE=$short_node"
+# A timer run (auto) never stops the owner's desktop VM: the preflight leaves it running and judges without it.
+keep_desktop_env=""
+[[ $action != auto ]] || keep_desktop_env="PREFLIGHT_KEEP_DESKTOP=true"
 # A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
 # The agents' token clones into pool dev, whose ACL survives a teardown, and clones only template 9001, the copy of template 9000 on VNet dev
 # (hosts/terraform/home/bootstrap/agent-access.sh); the Mac's tfvars name 9000, for its root token.
@@ -571,6 +643,7 @@ $openbao_env
 $seal_env
 $app_secrets_env
 $short_node_env
+$keep_desktop_env
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'
 ENV
