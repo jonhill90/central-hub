@@ -163,7 +163,7 @@ def hit_files(hits):
 
 
 def limit_digest(repo, base, to, files):
-    """sha256 of the limit files' diff from base to to, the bytes the councils read and the approval line names."""
+    """sha256 of the limit files' diff from base to to, the bytes the reviewer reads and the approval line names."""
     p = subprocess.run(["git", "-C", repo, "diff", "--no-renames", "--binary", "--full-index", base, to, "--", *files],
                        capture_output=True)
     if p.returncode != 0:
