@@ -104,11 +104,13 @@ signin
 
 echo "sso 2/3 plugin loaded?"
 i=0
-# The reply's key case and spacing are Jellyfin's to change (12.x may write "name" and add spaces), so match both.
-until api -H "$authz" "$BASE/Plugins" | grep -Eiq '"name" *: *"SSO Authentication"'; do
+# Jellyfin lists a plugin by the Name its code gives, not by meta.json's name: the SSO plugin's dll holds "SSO-Auth" and
+# not "SSO Authentication" (the meta.json name, which only the startup log shows), and c1's GET /Plugins listed "SSO-Auth".
+# Key case and spacing are Jellyfin's to change, so match both, and either name.
+until api -H "$authz" "$BASE/Plugins" | grep -Eiq '"name" *: *"(SSO-Auth|SSO Authentication)"'; do
   i=$((i + 1))
   if [ "$i" -ge 12 ]; then
-    echo "sso: plugin SSO Authentication is not in GET /Plugins (see the Jellyfin log: targetAbi, meta.json); the reply listed these names:" >&2
+    echo "sso: plugin SSO-Auth is not in GET /Plugins (see the Jellyfin log: targetAbi, meta.json); the reply listed these names:" >&2
     api -H "$authz" "$BASE/Plugins" | grep -Eio '"name" *: *"[^"]*"' >&2 || echo "(no names; the reply was empty or not JSON)" >&2
     exit 1
   fi
