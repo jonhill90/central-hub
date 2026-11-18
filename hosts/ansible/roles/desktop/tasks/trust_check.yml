@@ -1,0 +1,41 @@
+---
+# The desktop's trust check (included from main.yml before the admin key is removed). The lab chain goes to a
+# temporary file on the VM, files/desktop-trust-check.sh checks the system store against it and opens each name
+# in desktop_trust_check_names, and the run fails on any failed line. The temporary file is removed either way.
+- name: desktop | The trust check, with its temporary chain file
+  block:
+    - name: desktop | A temporary file for the lab chain
+      ansible.builtin.tempfile:
+        suffix: .pem
+      register: desktop_trust_tmp
+
+    - name: desktop | The lab chain (public certificates only) on the VM
+      ansible.builtin.copy:
+        content: "{{ lookup('ansible.builtin.file', desktop_trust_chain_file | expanduser) }}\n"
+        dest: "{{ desktop_trust_tmp.path }}"
+        mode: "0644"
+
+    - name: desktop | The trust check runs
+      ansible.builtin.script:
+        cmd: >-
+          desktop-trust-check.sh {{ desktop_trust_tmp.path | quote }} {{ desktop_trust_bundle | quote }}
+          {% for name in desktop_trust_check_names %}{{ name | quote }} {% endfor %}
+      register: desktop_trust_check
+      changed_when: false
+      failed_when: false
+
+    - name: desktop | What the trust check printed
+      ansible.builtin.debug:
+        msg: "{{ desktop_trust_check.stdout_lines }}"
+
+    - name: desktop | Every trust check passed
+      ansible.builtin.assert:
+        that: desktop_trust_check.rc == 0
+        fail_msg: "the desktop does not trust the lab's certificates; the lines above say which check failed"
+        quiet: true
+  always:
+    - name: desktop | The temporary chain file is removed
+      ansible.builtin.file:
+        path: "{{ desktop_trust_tmp.path }}"
+        state: absent
+      when: desktop_trust_tmp.path is defined

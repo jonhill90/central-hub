@@ -39,3 +39,15 @@ argument_specs:
         default: /var/lib/desktop/password-set
         description: Made when the owner has set the password at the console; the remote desktop starts only after it.
       desktop_lock_admin: {type: bool, default: true, description: "Remove the admin user's SSH keys at the end of the run."}
+      desktop_trust_chain_file:
+        type: str
+        description: >-
+          The lab CA chain file on the controller (intermediate first, root last). The run fails before the admin
+          key is removed unless the VM's system store verifies it. Default: role k8s_node_trust's chain file when
+          that role is on, else empty, which skips the check.
+      desktop_trust_bundle: {type: path, default: /etc/pki/tls/certs/ca-bundle.crt, description: "The extracted system trust store the check verifies against."}
+      desktop_trust_check_names:
+        type: list
+        elements: str
+        default: []
+        description: Names the check opens over https with the system store, such as grafana.<zone>. Private. Empty runs only the chain check.
