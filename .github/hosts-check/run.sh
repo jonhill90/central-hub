@@ -280,17 +280,23 @@ check_manifests() {
     return 1
   fi
   # A cluster without ClusterIssuer lab-ca and with names that are not its own (dev: labCaIssuer, loginProbe
-  # and jellyfinSetup false, from k8s_gitops_source_lab_ca_issuer, _login_probe and _jellyfin_setup): the root passes
+  # and jellyfinSetup false and panelCheckSuspended true, from k8s_gitops_source_lab_ca_issuer, _login_probe and _jellyfin_setup): the root passes
   # jellyfin sso.labRoot.certificate and setup.enabled false and makes no login-probe, and jellyfin then makes no Certificate on lab-ca and no setup CronJob or admin
   # Secret. c1, which leaves all three true, renders none of these changes, and Ansible passes them only when false (cases.txt).
   helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
-    --set labCaIssuer=false --set loginProbe=false --set jellyfinSetup=false > "$work/rendered/root-c1-dev-no-lab-ca.yaml"
+    --set labCaIssuer=false --set loginProbe=false --set jellyfinSetup=false --set panelCheckSuspended=true > "$work/rendered/root-c1-dev-no-lab-ca.yaml"
+  helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
+    --set panelCheck.suspend=true > "$work/rendered/app-c1-monitoring-extras-dev-suspended.yaml"
   helm template jellyfin hosts/kubernetes/home/c1/apps/jellyfin --namespace media --set zone=example.com \
     --set sso.labRoot.certificate=false --set setup.enabled=false > "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml"
   if ! grep -q 'name: "sso.labRoot.certificate"' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
     grep -q 'name: login-probe$' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
     grep -q 'kind: Certificate' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
     ! grep -q 'name: "setup.enabled"' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
+    ! grep -q 'name: "panelCheck.suspend"' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
+    grep -q 'panelCheck.suspend' "$work/rendered/root-c1.yaml" ||
+    ! grep -qE '^  suspend: true$' "$work/rendered/app-c1-monitoring-extras-dev-suspended.yaml" ||
+    ! grep -qE '^  suspend: false$' "$work/rendered/app-c1-monitoring-extras.yaml" ||
     grep -qE 'kind: CronJob|kind: ExternalSecret' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
     grep -q 'setup.enabled' "$work/rendered/root-c1.yaml" ||
     ! grep -q 'kind: CronJob' "$work/rendered/app-c1-jellyfin.yaml" ||
@@ -303,8 +309,9 @@ check_manifests() {
   if ! grep -q 'name: labCaIssuer' "$work/rendered/gitops-source-argocd-dev.yaml" ||
     ! grep -q 'name: loginProbe' "$work/rendered/gitops-source-argocd-dev.yaml" ||
     ! grep -q 'name: jellyfinSetup' "$work/rendered/gitops-source-argocd-dev.yaml" ||
-    grep -qE 'labCaIssuer|loginProbe|jellyfinSetup' "$work/rendered/gitops-source-argocd.yaml"; then
-    echo "manifests: k8s_gitops should pass labCaIssuer, loginProbe and jellyfinSetup only when they are false" >&2
+    ! grep -q 'name: panelCheckSuspended' "$work/rendered/gitops-source-argocd-dev.yaml" ||
+    grep -qE 'labCaIssuer|loginProbe|jellyfinSetup|panelCheckSuspended' "$work/rendered/gitops-source-argocd.yaml"; then
+    echo "manifests: k8s_gitops should pass labCaIssuer, loginProbe and jellyfinSetup only when they are false, and panelCheckSuspended only when true" >&2
     return 1
   fi
   # The apps' secrets read from OpenBao (appSecretsStore openbao, D-0058 rule 8): the root with it on,

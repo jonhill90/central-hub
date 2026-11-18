@@ -61,6 +61,10 @@ loginProbe: true
 # dev. The restored Jellyfin config already holds prod's admin user and password, which the setup Job's own
 # Secret, made fresh in that cluster, can't match, so every run signed in with a 401 and failed `checks`.
 jellyfinSetup: true
+# Whether monitoring-extras' panel-check CronJob is suspended. false, as on c1. Ansible sets it to true only for dev
+# (k8s_gitops_source_panel_check_suspended): there the OpenBao and Keycloak panels have no data until the stages after
+# `apps` (dev-ca, openbao-handover, identity-keycloak) run, so a tick inside the run failed the Job and `checks`.
+panelCheckSuspended: false
 
 # The agent notebook's CI runner as a pod (app notebook-runner). Ansible sets it to true on prod only
 # (k8s_gitops_source_notebook_runner, from the prod wrappers), so a dev cluster never registers a second
@@ -343,6 +347,7 @@ apps:
     # The OpenBao alerts only where the store is in the cluster (D-0058).
     switchParameters:
       openbao.inCluster: openbaoInCluster
+      panelCheck.suspend: panelCheckSuspended
     rootParameters:
       ntfy.store: appSecretsStore
       heartbeat.store: appSecretsStore
