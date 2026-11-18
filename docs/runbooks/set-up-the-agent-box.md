@@ -198,6 +198,10 @@ rebuild diag        read-only look at the dev cluster after a failed apps stage:
 
 expect: with those in place, `rebuild up` prints `rebuild: central-hub <commit>` and then the stage lines of `rebuild-k8s.sh`, and stops at the first stage that fails.
 
+## Give the box's page cache back to the host
+
+The box's VM has a balloon with free page reporting ([grow-the-agent-jumpbox.md](grow-the-agent-jumpbox.md), "Give the box a balloon"), but reporting returns only free pages, and the kernel keeps file cache while nothing else asks for memory. An hour after the balloon went on, on 2026-11-18 at 05:27 UTC, the box held 5947 MiB of cache of its 7935 MiB, and the node had 9829 MiB free with VM 300 stopped, 411 MiB under the dev rebuild's minimum. The role's root timer `box-drop-cache.timer` runs `sync` and then drops the clean page cache every 5 minutes (`vm.drop_caches=1`), and free page reporting hands the freed pages to the host. Measured once by hand: at 05:30 UTC an agent session dropped the cache of the files it can read (5307 to 5029 MiB, `free -m` on the box), and the node's free memory with VM 300 running went from 9083 MiB (dev preflight, 05:29:46 UTC) to 9423 MiB (05:30:42 UTC). Other guests move too, so the proof for the timer is the next dev preflight's `node free memory` line after the install. The cost: after each drop, the box reads files from disk again, so the first run of a tool or a sweep after a drop is slower.
+
 ## Remove old tailnet devices
 
 Every finished cloud session and every rebuilt machine leaves a tailnet device behind. Once a day the box removes the tagged ones that have been offline a long time (owner's answer 2026-11-12 06:43 to 06:45 UTC; pick 214 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)). The `tailnet-cleanup.timer` runs `tailnet-cleanup run` as the `keys` user; sessions may only ask for the list:
