@@ -66,11 +66,11 @@
 		{"src": ["tag:agent"], "dst": ["${proxmox_host_address}/32"], "ip": ["tcp:22"]},
 
 		// Agent cloud sessions: the agent box on SSH only (the owner's yes of 2026-11-09 at 08:14 UTC).
-		// tag:agent-box gets no destination of its own, so it has no path to the Mac or the lab.
 		{"src": ["tag:agent"], "dst": ["tag:agent-box"], "ip": ["tcp:22"]},
 
-		// GitHub Actions runners: the VPS on SSH only
-		{"src": ["tag:github-actions"], "dst": ["tag:vps"], "ip": ["tcp:22"]},
+		// The agent box: the VPS on SSH only, for the vps-host pipeline job (D-0046 rule 4, S1). With the share
+		// pod below (only when external tailnets are set), these are the box's only destinations, so it has no path to the Mac or the lab.
+		{"src": ["tag:agent-box"], "dst": ["tag:vps"], "ip": ["tcp:22"]},
 %{ if length(external_tailnets) > 0 ~}
 
 		// The agent box reaches the share pod on one port, which forwards to the shared node. The
@@ -81,9 +81,11 @@
 	],
 
 	"ssh": [
-		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:vps"], "users": ["root", "autogroup:nonroot"]},
+		// D-0046 rule 4, S1: agent sessions sign in to the VPS as deploy only, whose sudo allows vps-apply only.
+		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:vps"], "users": ["deploy"]},
 		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:agent-box"], "users": ["claude"]},
-		{"action": "accept", "src": ["tag:github-actions"], "dst": ["tag:vps"], "users": ["root", "deploy", "autogroup:nonroot"]},
+		// S1: the box signs in as root once, for the first host apply (S3); S4 removes root here.
+		{"action": "accept", "src": ["tag:agent-box"], "dst": ["tag:vps"], "users": ["root", "deploy"]},
 		{"action": "accept", "src": ["autogroup:admin"], "dst": ["tag:vps"], "users": ["root", "deploy", "autogroup:nonroot"]},
 		{"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"], "users": ["autogroup:nonroot", "root"]},
 	],
@@ -97,8 +99,20 @@
 			"deny":   ["${proxmox_host_address}:8006", "${proxmox_host_address}:443", "${proxmox_host_address}:3389"],
 		},
 		{
-			"src":  "tag:agent-box",
-			"deny": ["${proxmox_host_address}:22", "tag:vps:22"],
+			"src":    "tag:agent-box",
+			"accept": ["tag:vps:22"],
+			"deny":   ["${proxmox_host_address}:22", "${proxmox_host_address}:8006", "${proxmox_host_address}:443"],
+		},
+		{
+			// The VPS starts nothing toward the lab: the Proxmox host and the first address of every lab VLAN
+			// (D-0046 rule 3).
+			"src":  "tag:vps",
+			"deny": [
+				"${proxmox_host_address}:22", "${proxmox_host_address}:8006", "${proxmox_host_address}:443",
+%{ for h in lab_test_hosts ~}
+				"${h}:22", "${h}:443",
+%{ endfor ~}
+			],
 		},
 %{ if length(external_tailnets) > 0 ~}
 		{
@@ -111,5 +125,10 @@
 			"deny": ["${proxmox_host_address}:22", "${proxmox_host_address}:8006", "tag:vps:22", "tag:agent-box:22"],
 		},
 %{ endif ~}
+	],
+
+	// The tailnet refuses a policy whose SSH tests fail, so root can't come back for agent sessions unnoticed.
+	"sshTests": [
+		{"src": "tag:agent", "dst": ["tag:vps"], "accept": ["deploy"], "deny": ["root", "omniroute", "openclaw", "hermes"]},
 	],
 }
