@@ -37,6 +37,26 @@
     fail_msg: /root/.ssh/authorized_keys holds no public key; nobody could use port 22 once passwords are off.
     quiet: true
 
+# A pre-check like the ones above: firewalld's configured default zone must be public, since the ports below go
+# there. Where firewalld is not installed yet, the vendor default (public) applies and there is nothing to read.
+- name: Look for firewalld's offline tool
+  ansible.builtin.stat:
+    path: /usr/bin/firewall-offline-cmd
+  register: vps_app_host_fw_offline
+
+- name: Read firewalld's configured default zone
+  ansible.builtin.command: firewall-offline-cmd --get-default-zone
+  register: vps_app_host_fw_default_zone
+  changed_when: false
+  when: vps_app_host_fw_offline.stat.exists
+
+- name: Refuse to continue unless the default zone is public
+  ansible.builtin.assert:
+    that: vps_app_host_fw_default_zone.stdout | trim == 'public'
+    fail_msg: firewalld's default zone is not public; the ports below would go in the wrong zone.
+    quiet: true
+  when: vps_app_host_fw_offline.stat.exists
+
 # The drop-in is removed again if sshd does not accept it, so a later restart never reads a bad file.
 - name: Write the sshd drop-in and check sshd accepts it, or take it out again
   block:
@@ -93,19 +113,6 @@
     permanent: true
     state: enabled
 
-- name: Read firewalld's default zone
-  ansible.builtin.command: firewall-cmd --get-default-zone
-  register: vps_app_host_fw_default_zone
-  changed_when: false
-  failed_when: false
-
-# Before firewalld runs, the command fails; the zone is then the vendor default, public. Refuse any other.
-- name: Refuse to continue unless the default zone is public
-  ansible.builtin.assert:
-    that: vps_app_host_fw_default_zone.rc != 0 or vps_app_host_fw_default_zone.stdout | trim == 'public'
-    fail_msg: firewalld's default zone is not public; the ports below would go in the wrong zone.
-    quiet: true
-
 # Tailscale's own UDP port, so the tailnet keeps direct paths (the host would otherwise use relays).
 - name: Allow Tailscale's UDP port in the public zone
   ansible.posix.firewalld:
@@ -147,11 +154,11 @@
   register: vps_app_host_fw
   changed_when: false
 
-- name: Check the firewall holds the tailnet interface and port 22 only
+- name: Check the firewall holds the tailnet interface and the listed ports
   ansible.builtin.assert:
     that:
       - "vps_app_host_fw.stdout is search('(?s)trusted \\(active\\).*interfaces: ' ~ vps_app_host_tailnet_interface)"
-      - "vps_app_host_fw.stdout is search('(?s)public \\(.*ports: 22/tcp')"
+      - "vps_app_host_fw.stdout is search('(?s)public \\(.*ports:[^\\n]*22/tcp')"
     fail_msg: The firewall is not as the role set it; check firewall-cmd --list-all-zones by hand.
     quiet: true
 
