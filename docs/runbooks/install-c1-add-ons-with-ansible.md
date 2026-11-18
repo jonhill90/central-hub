@@ -61,7 +61,7 @@ Run from `hosts/ansible/`, each first with `--check --diff`.
    ```
 
    why: one sign-in for lab apps over OIDC ([D-0025](../decisions/0025-use-keycloak-behind-oidc-for-sign-in-to-lab-apps-on-c1.md)). PR #69 changes this role: realm `lab` becomes all code, with every password and client secret in the git-ignored `inventories/home/identity.env`, and runbook `set-up-lab-sign-in.md` replaces this step once it merges.
-   expect: the realm's OIDC discovery document answers at `https://sso.apps.c1.prod.<zone>/realms/lab/.well-known/openid-configuration`.
+   expect: the realm's OIDC discovery document answers at `https://sso.<zone>/realms/lab/.well-known/openid-configuration` (with short names off, at `https://sso.apps.c1.prod.<zone>/realms/lab/.well-known/openid-configuration`).
 
 4. Grafana signs in through Keycloak. Set `k8s_observability_grafana_sso: true` in the inventory, then:
 

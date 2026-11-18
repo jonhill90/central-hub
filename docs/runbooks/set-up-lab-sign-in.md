@@ -36,7 +36,7 @@ flowchart LR
 | `jellyfin` | confidential | `https://jellyfin.apps.c1.prod.<zone>/sso/OID/redirect/keycloak` and `/sso/OID/r/keycloak` | `media/jellyfin-sso`, key `client-secret` |
 | `proxmox` (only with `k8s_identity_proxmox_hosts`) | confidential | `https://<web UI name>` for each name | the controller's `identity.env`, read by role `proxmox_sso` ([runbook](sign-in-to-proxmox-through-keycloak.md)) |
 
-Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `groups` (`lab-admins`, `lab-viewers`) and `roles` (`admin`, `viewer`).
+Issuer for every app: `https://sso.<zone>/realms/lab` (short names on, `k8s_identity_short_names: true`, the default; with them off, `https://sso.apps.c1.prod.<zone>/realms/lab`). Claims: `groups` (`lab-admins`, `lab-viewers`) and `roles` (`admin`, `viewer`).
 
 ## Before you start
 
