@@ -22,7 +22,7 @@ On 2026-11-18 the orchestrator asked the owner to type several such lines. He an
 
 - 07:40:44 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNFcHLPyEs7Kus4RCG73RKe6): "any other lines. Like i accept everyint but you lifting my creds and buy [...] and like dont wipe my mac or install virus or leak my data".
 - 07:40:57 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNGkWQaRP1PcetVDtg9g7ZZZ): "dont run rm -rf ~".
-- 07:41:01 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN8YtLJBAkzt1i6tykNmWLTf): he meant the usual limits.
+- 07:41:01 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN8YtLJBAkzt1i6tykNmWLTf): "you know normal [...]". The agents read this as the usual limits.
 - 07:41:29 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN6a639VYLJZA5t7LB8SD6tZ): he asked why he had to type "Accept #512 at" a commit id.
 - 07:45:23 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN21gcct7pZfawWtAx2DAxFu): "stop making me type so much".
 
@@ -71,4 +71,4 @@ The reviewer checks that each PR or run log of a rule 6 step names the step and 
 ## More Information
 
 - **What changes elsewhere.** D-0042 rule 6 and AGENTS.md rule 1 say the same, in the same PR (D-0001: the later record keeps the reasons).
-- **How this record is accepted.** The reviewer's clearance of the head approves a record (D-0042 rule 1; AGENTS.md rule 1), and D-0059 rule 1 lets a PR that changes D-0042 rule 6 or AGENTS.md rule 1 merge on that pass. The go it records is the owner's own words, quoted above.
+- **How this record is accepted.** It is accepted in the PR that adds it, because that PR also writes the standing go into D-0042 rule 6 and AGENTS.md rule 1 as in force. The PR's first commits hold the record as proposed. Once the reviewer clears that head, a last commit changes only this record's status, date and accepted-evidence and its index row, naming the cleared commit (D-0001 rule 5). The reviewer's clearance of the head approves a record and a change to AGENTS.md (D-0042 rule 1). D-0059 rule 1 lets a record that amends D-0042 merge on that pass. The go it records is the owner's own words, quoted above.
