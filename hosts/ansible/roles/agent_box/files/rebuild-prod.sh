@@ -362,7 +362,16 @@ dev_short=$(ls -1 "$dev_logs"/rebuild-*.log 2>/dev/null | sort | tail -n 1 || tr
 if [[ -z $dev_short ]]; then fail "no dev run is logged on the box"
 elif ! grep -qx 'rebuild: all stages passed' "$dev_short"; then fail "the newest dev run (${dev_short##*/}) did not pass every stage"
 elif ! grep -qx "rebuild: central-hub $commit" "$dev_short"; then fail "the newest dev run (${dev_short##*/}) ran another commit than ${commit:0:12}; run dev again first"
-else pass "dev passed every stage at ${commit:0:12} (run ${dev_short##*/})"; dev_run=${dev_short##*/}; fi
+else
+  # A teardown-only run (rebuild.sh teardown) also ends "all stages passed", so that line alone is no pass.
+  # The run must hold a good end line for each stage every full dev run has (rebuild.sh's stage lists).
+  not_ended=""
+  for s in vms cluster storage restore gitops secrets apps gateway checks; do
+    grep -Eq "^[0-9TZ:-]+ $s end rc=0( |\$)" "$dev_short" || not_ended+="$s "
+  done
+  if [[ -n $not_ended ]]; then fail "the newest dev run (${dev_short##*/}) is not a full run: no good end line for stage(s) ${not_ended% }; run dev in full first"
+  else pass "dev passed every stage at ${commit:0:12} (run ${dev_short##*/})"; dev_run=${dev_short##*/}; fi
+fi
 
 if [[ $fails -gt 0 ]]; then echo "rebuild-prod: $action: $fails checks failed; nothing was changed"; exit 1; fi
 if [[ $action == check ]]; then echo "rebuild-prod: check: every check passed; nothing was changed"; exit 0; fi
