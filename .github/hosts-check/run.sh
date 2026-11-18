@@ -83,6 +83,7 @@ check_ansible() {
   python3 -I "$here/check-loop-labels.py" hosts/ansible/roles/agent_box/tasks
   bash "$here/tests/test_loop_labels.sh"
   bash "$here/tests/test_proxmox_sso.sh"
+  bash "$here/tests/test_proxmox_signin_check.sh"
   bash "$here/tests/test_identity_external_secrets.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
   bash "$here/tests/test_tailnet_stack_args.sh" tailnet-policy
