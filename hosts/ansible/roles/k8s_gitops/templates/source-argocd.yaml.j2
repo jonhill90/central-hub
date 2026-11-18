@@ -46,6 +46,10 @@ spec:
         - name: openbaoStoreHost
           value: "{{ k8s_gitops_source_openbao_store_host }}"
 {% endif %}
+{% if k8s_gitops_source_openbao_admin_address | default('') | length > 0 %}
+        - name: openbaoAdminAddress
+          value: "{{ k8s_gitops_source_openbao_admin_address }}"
+{% endif %}
 {% if k8s_gitops_source_openbao_measure | bool %}
         - name: openbaoMeasure
           value: "true"

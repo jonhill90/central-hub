@@ -230,6 +230,48 @@ check_manifests() {
     echo "manifests: the root with openbaoStoreHost set should pass boxHost to openbao-store and openbaoBoxHost to gateway" >&2
     return 1
   fi
+  # The store's admin address (openbaoAdminAddress; apps/openbao-store, admin-path.yaml; D-0062): the root
+  # with it set and the chart, so the Service, the L2 announcement policy and the NetworkPolicy are
+  # schema-checked. Set, the Service asks for that address with Local, the policy announces it from the
+  # seal node only, and the NetworkPolicy lets the box's /32 in; unset, none of it renders and the root
+  # passes no admin address. The chart refuses it without the box's /32. Role k8s_control_plane's general
+  # policy must leave out the label the Service carries, or it would announce the address from every node.
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32 \
+    --set openbaoAdminAddress=192.0.2.40 > "$work/rendered/root-c1-openbao-admin-path.yaml"
+  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set sealNode=node-1 --set boxCidr=192.0.2.30/32 --set adminAddress=192.0.2.40 \
+    > "$work/rendered/app-c1-openbao-store-admin-path.yaml"
+  local admin=$work/rendered/app-c1-openbao-store-admin-path.yaml admin_kinds
+  admin_kinds=$(grep -E '^kind: (Service|CiliumL2AnnouncementPolicy|NetworkPolicy)$' "$admin" | sort | tr '\n' ' ')
+  if [ "$admin_kinds" != "kind: CiliumL2AnnouncementPolicy kind: NetworkPolicy kind: Service " ] ||
+    ! grep -q 'lbipam.cilium.io/ips: "192.0.2.40"' "$admin" || ! grep -q 'externalTrafficPolicy: Local' "$admin" ||
+    ! grep -q 'kubernetes.io/hostname: "node-1"' "$admin" || ! grep -q 'cidr: 192.0.2.30/32' "$admin" ||
+    ! grep -q 'central-hub/l2-policy: openbao-admin' "$admin"; then
+    echo "manifests: with an admin address, expected the Service (its address, Local, the label), the policy on node-1 and the box's /32; got [$admin_kinds]" >&2
+    return 1
+  fi
+  if grep -q 'openbao-admin' "$work/rendered/app-c1-openbao-store-seal.yaml" "$work/rendered/app-c1-openbao-store-box-path.yaml" ||
+    grep -Eq -- '- name: "?(adminAddress|openbaoAdminAddress)"?$' "$work/rendered/root-c1-openbao.yaml" ||
+    grep -q 'openbaoAdminAddress' "$work/rendered/gitops-source-argocd-openbao.yaml"; then
+    echo "manifests: with no admin address, the admin path or an admin address parameter rendered" >&2
+    return 1
+  fi
+  if ! grep -Eq -- '- name: "?adminAddress"?$' "$work/rendered/root-c1-openbao-admin-path.yaml" ||
+    ! grep -q 'name: openbaoAdminAddress' "$work/rendered/gitops-source-argocd-openbao-admin.yaml" ||
+    ! grep -q 'kind: CiliumL2AnnouncementPolicy' "$work/rendered/root-c1-openbao-admin-path.yaml"; then
+    echo "manifests: the admin address should pass from Ansible to the root and to openbao-store, and the project allow its L2 policy" >&2
+    return 1
+  fi
+  if helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set sealNode=node-1 --set adminAddress=192.0.2.40 >/dev/null 2>&1; then
+    echo "manifests: openbao-store rendered an admin path without the box's /32" >&2
+    return 1
+  fi
+  if ! grep -A1 -- '- key: central-hub/l2-policy$' hosts/ansible/roles/k8s_control_plane/tasks/main.yml | grep -q 'operator: DoesNotExist$'; then
+    echo "manifests: role k8s_control_plane's L2 policy no longer leaves out Services labelled central-hub/l2-policy" >&2
+    return 1
+  fi
   # The apps' secrets read from OpenBao (appSecretsStore openbao, D-0058 rule 8): the root with it on,
   # and the three charts whose ExternalSecrets it moves, so the c1/<name> keys are schema-checked. The
   # root refuses it without OpenBao in the cluster, and refuses any other value.

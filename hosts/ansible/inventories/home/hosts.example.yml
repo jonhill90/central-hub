@@ -60,7 +60,8 @@ all:
           #   and in agent_box_lifeline_allow: { address: "<the same>", ports: [22], uid: hostops }
           agent_box_secrets_store: {}   # the secrets-store wrapper's settings; private; shape:
           #   { address: "<the dev store's name, as k8s_gitops_source_openbao_store_host in the dev inventory>",
-          #     snapshot_box: false, sops_copies: false }   # both true only by the owner's taps
+          #     snapshot_box: false, sops_copies: false,   # both true only by the owner's taps
+          #     box_cidr: "<the box's address>/32", admin_address: "<one address of dev's load-balancer pool>" }   # D-0062
     opnsense:
       hosts:
         opnsense_fw:

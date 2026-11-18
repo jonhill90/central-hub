@@ -110,8 +110,35 @@ env_store
 # rebuild-k8s-layer-with-one-command.md, k8s_lab_dns_points_here). So on dev every call goes to dev's Gateway by its
 # address, the dev inventory's k8s_gitops_source_gateway_address, with the store's name kept for TLS and routing.
 # Exported for the helpers below, which call curl the same way. Prod's names resolve to prod's Gateway: none there.
-SECRETS_STORE_RESOLVE=''
+# Once the store has its admin address (D-0062), every call goes there instead, on both environments, still by the
+# store's name: through the Gateway OpenBao sees a Cilium address, so the admin login, bound to the box's /32, is
+# refused (docs/runbooks/set-up-the-secrets-store.md, "The box's admin path"). The address is the one the cluster was
+# given: on dev the settings' admin_address, which the dev rebuild passes on; on prod the one
+# k8s_gitops_source_openbao_admin_address in the inventory openbao-prod builds from its own settings.
 if [[ $env == dev ]]; then
+  admin=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("admin_address") or "")' "$settings")
+else
+  admin=$("$libexec/ansible-venv/bin/python3" -I -c '
+import sys, yaml
+found = set()
+def walk(n):
+    if isinstance(n, dict):
+        for k, v in n.items():
+            if k == "k8s_gitops_source_openbao_admin_address" and isinstance(v, str) and v: found.add(v)
+            else: walk(v)
+    elif isinstance(n, list):
+        for i in n: walk(i)
+walk(yaml.safe_load(open(sys.argv[1])))
+if len(found) > 1: sys.exit(1)
+print(found.pop() if found else "")' "$inventory") ||
+    { echo "secrets-store: the prod inventory gives two admin addresses (k8s_gitops_source_openbao_admin_address); refused" >&2; exit 1; }
+fi
+[[ -z $admin || $admin =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
+  { echo "secrets-store: the store's admin address is not one IPv4 address; refused" >&2; exit 1; }
+SECRETS_STORE_RESOLVE=''
+if [[ -n $admin ]]; then
+  SECRETS_STORE_RESOLVE="$(setting address):443:$admin"
+elif [[ $env == dev ]]; then
   gateway=$(inventory_value k8s_gitops_source_gateway_address) && [[ $gateway =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
     { echo "secrets-store: the dev inventory gives no single IPv4 k8s_gitops_source_gateway_address for dev's Gateway; refused" >&2; exit 1; }
   SECRETS_STORE_RESOLVE="$(setting address):443:$gateway"

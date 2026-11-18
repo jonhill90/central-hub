@@ -39,6 +39,12 @@ openbaoMeasure: false
 # with the in-cluster store on. Set: the agent box's path to the store through Gateway apps, TLS
 # passthrough (apps/openbao-store, box-path.yaml; the gateway app lets namespace openbao attach it).
 openbaoStoreHost: ""
+# The store's admin address, private, set by Ansible (k8s_gitops_source_openbao_admin_address) with the
+# in-cluster store on: one address of the load-balancer pool, on which OpenBao sees the agent box's own
+# address, so the admin AppRole's /32 binding passes (apps/openbao-store, admin-path.yaml). It needs
+# openbaoSealNode and openbaoBoxCidr. Set it only after role k8s_control_plane's general L2 policy leaves
+# out Services labelled central-hub/l2-policy, or that policy announces it from every node too.
+openbaoAdminAddress: ""
 
 # The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
 # (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
@@ -324,13 +330,17 @@ apps:
       sealNode: openbaoSealNode
       markEnv: openbaoMarkEnv
       boxHost: openbaoStoreHost
+      adminAddress: openbaoAdminAddress
+      boxCidr: openbaoBoxCidr
     switchParameters:
       measure: openbaoMeasure
     # The passthrough host on the store's certificate, only with measure (templates/tls.yaml).
     needsZone: true
-    # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume.
+    # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume. The admin
+    # path's L2 announcement policy (admin-path.yaml), only with openbaoAdminAddress.
     clusterResources:
       - {group: "", kind: PersistentVolume}
+      - {group: cilium.io, kind: CiliumL2AnnouncementPolicy}
     # After cert-manager (-2): its Issuers and Certificates need cert-manager's CRDs.
     wave: -1
     autoSync: true

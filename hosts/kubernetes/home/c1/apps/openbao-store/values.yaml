@@ -16,6 +16,16 @@ measure: false
 # and the store's certificate carries the name, so TLS ends at OpenBao and the box checks the store's
 # own CA. Empty: no path.
 boxHost: ""
+# The store's admin address (root value openbaoAdminAddress, from k8s_gitops_source_openbao_admin_address),
+# private: one address of c1's load-balancer pool, not its first or last. Set: templates/admin-path.yaml
+# gives the box a path on which OpenBao sees the box's own address, so the admin AppRole's /32 binding
+# passes: a LoadBalancer Service on it, announced from the seal node only, and a NetworkPolicy for
+# boxCidr. It needs sealNode and boxCidr. Empty: no admin path. openbao-store does not prune, so
+# emptying it later leaves the three objects until they are deleted.
+adminAddress: ""
+# The agent box's address as a /32 (root value openbaoBoxCidr), private: the one source the admin path's
+# NetworkPolicy lets in. Used only with adminAddress.
+boxCidr: ""
 # The shared Gateway the box path attaches to (apps/gateway).
 gateway:
   name: apps

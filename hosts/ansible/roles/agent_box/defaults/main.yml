@@ -37,7 +37,7 @@ agent_box_wrappers:
   # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal,
   # seal-copy and reset-failed-start passes the owner's tap id, which the wrapper checks; key prints only the public half.
   - name: openbao-prod
-    args: [key, check, "seal *", "seal-copy *", gitops, ca, handover, "reset-failed-start *", log]
+    args: [key, check, "seal *", "seal-copy *", l2-policy, gitops, ca, handover, "reset-failed-start *", log]
   # Applies one named Ansible playbook to prod's c1 with the box's own prod node key (files/c1-ansible.sh). check is
   # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The only name now is identity.
   - name: c1-ansible
@@ -283,8 +283,9 @@ agent_box_openbao_in_cluster: false
 # inventory's k8s_gitops_source_openbao_store_host, D-0058 rule 10), and optionally snapshot_box (default false; true only
 # by the owner's install tap of pick 240) and sops_copies (default false; true only by the owner's access-right tap,
 # D-0058 rule 9: put, compare and reseed keep SOPS copies, and the weekly compare runs), and box_cidr (the box's own address
-# as a /32, which the dev rebuild passes to stage openbao-handover; empty until the box's path to the store is set).
-# Empty leaves the wrapper unset up.
+# as a /32, which the dev rebuild passes to stage openbao-handover; empty until the box's path to the store is set), and
+# admin_address (the store's admin address, one address of dev's load-balancer pool, which needs box_cidr; the dev rebuild
+# passes it on and every call goes there, D-0062). Empty leaves the wrapper unset up.
 agent_box_secrets_store: {}
 # The same settings for the store inside prod's c1, written to <work_dir>/secrets-store-prod.json for the secrets-store-prod
 # wrapper. address must equal the prod inventory's k8s_gitops_source_openbao_store_host (the box's copy,
@@ -294,7 +295,9 @@ agent_box_secrets_store: {}
 agent_box_secrets_store_prod: {}
 # The openbao-prod wrapper's settings, private, written to <work_dir>/openbao-prod.json: seal_node (the prod k8s_nodes host
 # that holds the seal key, by its Kubernetes node name), store_host (the store's name as the box reaches it) and box_cidr
-# (the box's address as a /32, empty until the box's path to the store is set). Empty leaves the file out.
+# (the box's address as a /32, empty until the box's path to the store is set), and admin_address (the store's admin
+# address, one address of prod's load-balancer pool, which needs box_cidr; secrets-store-prod then calls it, D-0062; set
+# it only once the firewall lets the box reach it, D-0036 rule 8). Empty leaves the file out.
 agent_box_openbao_prod: {}
 # When the weekly compare of the store with its SOPS copy runs (systemd OnCalendar), once sops_copies is true.
 agent_box_secrets_store_compare_on_calendar: "Mon *-*-* 05:00:00"
