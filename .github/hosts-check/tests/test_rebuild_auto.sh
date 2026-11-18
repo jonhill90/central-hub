@@ -20,8 +20,8 @@ fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 
-sed -n '/^auto_decide() {/,/^}/p' "$src" > "$t/fn.sh"
-grep -q 'rebuild-k8s.sh" "$fitdir" --fit' "$t/fn.sh" || { echo "FAIL: auto_decide was not found in rebuild.sh"; exit 1; }
+sed -n '/^fit_check() {/,/^}/p;/^auto_decide() {/,/^}/p' "$src" > "$t/fn.sh"
+grep -q 'rebuild-k8s.sh" "$fitdir" --fit' "$t/fn.sh" && grep -q '^auto_decide() {' "$t/fn.sh" || { echo "FAIL: fit_check and auto_decide were not found in rebuild.sh"; exit 1; }
 
 g() { git -c user.name=t -c user.email=t@example.invalid -c init.defaultBranch=main "$@"; }
 g init -q "$t/repo"
@@ -120,5 +120,22 @@ if [[ $r6a -eq 2 ]] && grep -q 'usage: rebuild .*|auto' "$t/out" &&
    grep -q 'ExecStart={{ agent_box_libexec_dir }}/rebuild.sh auto$' "$root/hosts/ansible/roles/agent_box/templates/rebuild-auto.service.j2"; then
   ok "7. auto takes no argument, exits 0 while a run holds the lock, has no sudo line, keeps the desktop; the role installs its timer"
 else bad "7. $r6a $(cat "$t/out")"; fi
+
+# 8: the fit action: the fit check's lines, then the 12 running guests with the most memory, read-only. A stand-in
+# curl returns a fixed guest list; the exit code is the fit check's.
+sed -n '/^if \[\[ \${1:-} == fit && \$# -eq 1 \]\]; then$/,/^fi$/p' "$src" > "$t/fitact.sh"
+grep -q 'exit $(( rc == 0' "$t/fitact.sh" || bad "8. the fit action was not found in rebuild.sh"
+sed -n '/^fit_check() {/,/^}/p' "$src" > "$t/fitfn.sh"
+mkdir -p "$t/keys8" "$t/bin8"
+echo 'PROXMOX_VE_API_TOKEN=x' > "$t/keys8/proxmox-dev.env"; echo 'x = 1' > "$t/keys8/dev-vms.tfvars"
+printf '%s\n' '#!/bin/bash' 'cat > /dev/null' 'echo "{\"data\": [{\"vmid\": 100, \"name\": \"small\", \"status\": \"running\", \"mem\": 1073741824, \"maxmem\": 2147483648}, {\"vmid\": 258, \"name\": \"big\", \"status\": \"running\", \"mem\": 8589934592, \"maxmem\": 8589934592}, {\"vmid\": 300, \"name\": \"off\", \"status\": \"stopped\", \"mem\": 0, \"maxmem\": 1}]}"' > "$t/bin8/curl"
+chmod +x "$t/bin8/curl"
+fitact() { FIT_SEEN=$t/fit-seen8 FIT_RC=$1 repo=$t/repo work=$t/work8 keys=$t/keys8 inventory="$t/env/inventory" PATH=$t/bin8:$PATH \
+  bash -c 'mkdir -p "$work"; . "$1"; f=$2; set -- fit; . "$f"' _ "$t/fitfn.sh" "$t/fitact.sh" 2>&1; echo "rc=$?"; }
+o8a=$(fitact 0); o8b=$(fitact 3)
+if [[ $o8a == *"preflight: refused, estimate 9216 MiB"* && $o8a == *"vmid=258 name=big status=running mem=8192 of 8192 MiB"* &&
+      $o8a != *"name=off"* && $o8a == *"rc=0" && $o8b == *"rc=3" && $o8b == *"vmid=258"* ]]; then
+  ok "8. fit prints the fit check's lines and the running guests by memory, biggest first, and exits with the fit check's code"
+else bad "8. [$o8a] [$o8b]"; fi
 
 exit $fail
