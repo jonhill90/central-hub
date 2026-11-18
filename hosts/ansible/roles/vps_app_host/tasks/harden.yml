@@ -36,7 +36,7 @@
     fail_msg: /root/.ssh/authorized_keys holds no public key; the owner would lose the port 22 way in.
     quiet: true
 
-- name: sshd, no password login and root by key only (a drop-in that sorts before the vendor's files)
+- name: Sshd, no password login and root by key only (a drop-in that sorts before the vendor's files)
   ansible.builtin.copy:
     dest: /etc/ssh/sshd_config.d/00-vps-hardening.conf
     owner: root
@@ -67,7 +67,7 @@
     state: reloaded
   when: vps_app_host_sshd_dropin is changed
 
-- name: firewalld
+- name: Install firewalld
   ansible.builtin.dnf:
     name: firewalld
     state: present
@@ -116,8 +116,8 @@
 - name: Check the firewall holds the tailnet interface and port 22 only
   ansible.builtin.assert:
     that:
-      - vps_app_host_fw.stdout is search('(?s)trusted \(active\).*interfaces: ' ~ vps_app_host_tailnet_interface)
-      - vps_app_host_fw.stdout is search('(?s)public \(.*ports: 22/tcp')
+      - "vps_app_host_fw.stdout is search('(?s)trusted \\(active\\).*interfaces: ' ~ vps_app_host_tailnet_interface)"
+      - "vps_app_host_fw.stdout is search('(?s)public \\(.*ports: 22/tcp')"
     fail_msg: The firewall is not as the role set it; check firewall-cmd --list-all-zones by hand.
     quiet: true
 
