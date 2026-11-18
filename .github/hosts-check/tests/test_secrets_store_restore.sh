@@ -30,9 +30,9 @@ trap 'rm -rf "$t"' EXIT
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 fail=0
-mkdir -p "$t/bin" "$t/keys" "$t/snaps"
-printf 'role-id-fake-value' > "$t/keys/openbao-admin-role-id"
-printf 'secret-id-fake-value' > "$t/keys/openbao-admin-secret-id"
+mkdir -p "$t/bin" "$t/keys/dev" "$t/snaps"
+printf 'role-id-fake-value' > "$t/keys/dev/openbao-admin-role-id"
+printf 'secret-id-fake-value' > "$t/keys/dev/openbao-admin-secret-id"
 : > "$t/ca.crt"
 
 cat > "$t/bin/curl" <<'SH'
@@ -112,7 +112,7 @@ snapset() { # the standard set: two of the old cluster, two newer of the rebuilt
 run() { # stub mode [helper mode] [named]
   rm -f "$t/phase" "$t/restored" "$t/calls" "$t/mark-written"
   date -u +%FT%TZ > "$t/hold"
-  MODE=$1 T=$t PATH="$t/bin:$PATH" bash "$helper" "${2:-rebuilt}" https://store.invalid "$t/ca.crt" "$t/keys" "$t/snaps" "$t/hold" 3 ${3:+"$3"} > "$t/out" 2>&1 && rc=0 || rc=$?
+  MODE=$1 T=$t PATH="$t/bin:$PATH" bash "$helper" "${2:-rebuilt}" https://store.invalid "$t/ca.crt" "$t/keys/dev" "$t/snaps" "$t/hold" 3 ${3:+"$3"} > "$t/out" 2>&1 && rc=0 || rc=$?
   all+=$(cat "$t/out")
 }
 forced() { grep -q 'snapshot-force' "$t/calls"; }
@@ -188,23 +188,23 @@ run plain same
 [[ $rc -ne 0 ]] && grep -q 'restore: 1 snapshot FAIL' "$t/out" && ! restored && ok "12. same store: only another cluster's snapshots, refused before any restore" || bad "12. rc=$rc $(cat "$t/out")"
 
 # 13
-snapset; printf 'shares' > "$t/keys/openbao-recovery.json"; echo 20261114T110000Z > "$t/keys/openbao-recovery.made"
+snapset; printf 'shares' > "$t/keys/dev/openbao-recovery.json"; echo 20261114T110000Z > "$t/keys/dev/openbao-recovery.made"
 run plain same; r13a=$rc o13a=$(cat "$t/out"); n13a=$(grep -c 'raft/snapshot' "$t/calls" || true)
-echo 20261114T093000Z > "$t/keys/openbao-recovery.made"
+echo 20261114T093000Z > "$t/keys/dev/openbao-recovery.made"
 run keys rebuilt
 if [[ $r13a -ne 0 && $o13a == *"1b shares FAIL"* && $n13a == 0 && $rc -ne 0 ]] && grep -q 'restore-rebuilt: 1b shares FAIL' "$t/out" && ! restored; then
   ok "13. a snapshot older than the shares, or of the same second, is refused before any restore, in both modes"
 else bad "13. rc=$r13a/$rc $o13a / $(cat "$t/out")"; fi
-echo 20261114T085900Z > "$t/keys/openbao-recovery.made"
+echo 20261114T085900Z > "$t/keys/dev/openbao-recovery.made"
 run keys rebuilt
 [[ $rc -eq 0 ]] && grep -q '1b shares ok: snapshot is later than the shares' "$t/out" && ok "13b. a snapshot later than the shares passes" || bad "13b. rc=$rc $(cat "$t/out")"
 
 # 14
-snapset; rm -f "$t/keys/openbao-recovery.made"; touch -d '2026-11-14 09:30:00 UTC' "$t/keys/openbao-recovery.json"
+snapset; rm -f "$t/keys/dev/openbao-recovery.made"; touch -d '2026-11-14 09:30:00 UTC' "$t/keys/dev/openbao-recovery.json"
 run keys rebuilt
 [[ $rc -ne 0 ]] && grep -q 'WARNING: openbao-recovery.made is missing' "$t/out" && grep -q '1b shares FAIL' "$t/out" && ! restored \
   && ok "14. no .made: the shares file's time is used, with a warning" || bad "14. rc=$rc $(cat "$t/out")"
-rm -f "$t/keys/openbao-recovery.json"
+rm -f "$t/keys/dev/openbao-recovery.json"
 
 # 15
 rm -f "$t/snaps/"*
@@ -228,4 +228,9 @@ run plain same raft-20261114T100000Z.snap; [[ $rc -ne 0 ]] && grep -q 'only rest
 # 8
 if [[ $all == *tok-* || $all == *role-id-fake* || $all == *secret-id-fake* ]]; then bad "8. a token or ID shows in the output"
 else ok "8. no token or ID in the output"; fi
+# 16. The keys folder names the environment, and so the mark: a folder that is not .../dev or .../prod is refused.
+mkdir -p "$t/keys/other"
+T=$t PATH="$t/bin:$PATH" bash "$helper" same https://store.invalid "$t/ca.crt" "$t/keys/other" "$t/snaps" "$t/hold" 3 > "$t/out" 2>&1 && rc=0 || rc=$?
+if [[ $rc -eq 2 && $(cat "$t/out") == *"must be .../dev or .../prod"* ]]; then ok "16. a keys folder not named dev or prod is refused"
+else bad "16. rc=$rc $(cat "$t/out")"; fi
 exit "$fail"
