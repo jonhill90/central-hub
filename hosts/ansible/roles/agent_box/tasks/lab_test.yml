@@ -97,6 +97,14 @@
     group: root
     mode: "0755"
 
+- name: lab_test | The WAN safety check's capture, run on the copy, root-owned
+  ansible.builtin.copy:
+    src: lab-test-wan-watch.py
+    dest: "{{ agent_box_libexec_dir }}/lab-test-wan-watch.py"
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: lab_test | The wrapper's private settings, from the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/lab-test.json"

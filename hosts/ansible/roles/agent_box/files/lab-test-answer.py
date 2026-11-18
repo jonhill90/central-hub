@@ -132,6 +132,9 @@ def inventory(settings, vlans, key, known_hosts, out):
 COPY_OPNSENSE_LAN_MAC = "02:00:00:00:01:00"
 COPY_OPNSENSE_WAN_MAC = "02:00:00:00:01:01"
 COPY_CONNECTOR_ETH0_MAC = "02:00:00:00:09:00"
+# VM 100's WAN bridge in the copy: no ports, so the WAN safety check reaches nothing outside the copy. The copy's vmbr0
+# is dev itself, and the copy's own dev VLAN holds dev's range inside (lab-test.sh, lab makes it).
+COPY_WAN_BRIDGE = "vmbr9"
 
 
 def layers(settings, vlans, image, template, outdir):
@@ -153,7 +156,7 @@ def layers(settings, vlans, image, template, outdir):
         "firewall": {**node, "firewall_vm_name": f"{env}opnw{what}{nn}",
                      "opnsense_lan_mac": COPY_OPNSENSE_LAN_MAC, "opnsense_wan_mac": COPY_OPNSENSE_WAN_MAC,
                      # WAN stays link-down until the WAN safety check passes, as on a fresh real host.
-                     "opnsense_wan_connected": False,
+                     "opnsense_wan_connected": False, "wan_bridge": COPY_WAN_BRIDGE,
                      "opnsense_image_file_id": f"local:import/{image}"},
         "remote-access": {**node, "connector_hostname": f"{env}denw{what}{nn}",
                           "connector_eth0_mac": COPY_CONNECTOR_ETH0_MAC,

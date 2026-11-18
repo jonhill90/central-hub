@@ -130,6 +130,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
    why: this is the check the build session ran on 2026-10-23 and 2026-10-24, at link-up, after a reboot, after the rules and after a firmware update, each time with 0 server-type packets (the owner's private build log; no values from it are copied here). The OPNsense nano image starts with LAN on the first NIC at 192.168.1.1/24 with its own DHCP server and WAN as a DHCP client (OPNsense manual, "Installation"), which is why net0, the trunk, must stay first.
    If it fails: set `opnsense_wan_connected = false` and apply at once, which takes WAN link-down; then fix the interface assignment at the console before trying again.
    Agent pick: the capture filter and the three moments to check; the build session watched the same packet types by hand.
+   note: the lab test copy runs the same three moments as code, with WAN on a bridge inside the copy (`wan_bridge`, default `vmbr0`) and `lab-test-wan-watch.py` in place of `tcpdump` ([Build the lab test copy](build-the-lab-test-copy.md) step 8).
 
    Then, once the agent box exists, let it (VM 258 on VNet dev) reach the Proxmox API and c1's API, and nothing else in the lab. Only when the box exists.
    why: the dev VLAN's own rules allow only the internet, ping and DNS, so the box's tools can't reach the APIs they run against. The owner said yes on 2026-11-10 at 05:16 UTC to one rule from the box's address only, to those two ports, once a reach test showed them blocked. Lane C measured that at 07:47 UTC: both timed out.
