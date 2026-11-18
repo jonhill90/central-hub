@@ -16,7 +16,7 @@ ok() { echo "ok - $1"; }
 bad() { echo "FAIL - $1"; fails=$((fails + 1)); }
 
 settings() { # address name domain
-  printf '{"name": "%s", "domain": "%s", "address": "%s", "cores": 2, "memory_mb": 6144, "disk_gb": 32, "proxmox_node_name": "examplehv01"}\n' \
+  printf '{"name": "%s", "domain": "%s", "address": "%s", "cores": 2, "memory_mb": 7168, "disk_gb": 32, "proxmox_node_name": "examplehv01"}\n' \
     "$2" "$3" "$1" > "$work/settings.json"
 }
 settings 10.1.30.198 ddehvdemo01 lab.example
@@ -126,6 +126,11 @@ printf 'dir: local\n\tpath /var/lib/vz\n\tcontent iso,vztmpl,backup\n\nlvmthin: 
 prog=$(sed -n "s|^content=\$(awk '\(.*\)' /etc/pve/storage.cfg)$|\1|p" "$w")
 [[ -n $prog && $(awk "$prog" "$work/storage.cfg") == "iso,vztmpl,backup" ]] \
   && ok "the content line of storage local is read from storage.cfg, not local-lvm's" || bad "the storage.cfg read"
+
+# iac-access.sh, which host runs in the copy: zone lab can be made on an empty host (Zones.pm checks /sdn/zones).
+iac=$root/hosts/terraform/home/bootstrap/iac-access.sh
+grep -Eq '^acl /sdn/zones 0 ' "$iac" && ! grep -Eq '^acl /sdn/zones 1 ' "$iac" && ! grep -Eq '^acl /sdn 1 ' "$iac" \
+  && ok "iac-access.sh lets the token make a zone, without rights in other zones" || bad "iac-access.sh: no /sdn/zones ACL"
 
 # lab: the copy's own values for the three run folders, then the folders in the runbook's order, then mgmt.
 mkdir -p "$work/layers"

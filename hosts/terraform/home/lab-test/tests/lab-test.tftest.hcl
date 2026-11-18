@@ -14,7 +14,7 @@ variables {
   vnet                 = "dev"
   installer_iso_path   = "/tmp/example-pve-auto.iso"
   installer_iso_sha256 = "2222222222222222222222222222222222222222222222222222222222222222"
-  vm                   = { name = "ddehvdemo01", vm_id = 256, cores = 2, memory_mb = 6144, disk_gb = 32 }
+  vm                   = { name = "ddehvdemo01", vm_id = 256, cores = 2, memory_mb = 7168, disk_gb = 32 }
 }
 
 run "one_nic_on_dev_in_pool_dev" {
@@ -50,8 +50,8 @@ run "nested_ready_and_sized" {
   }
 
   assert {
-    condition     = proxmox_virtual_environment_vm.host.memory[0].dedicated == 6144 && proxmox_virtual_environment_vm.host.memory[0].floating == 0
-    error_message = "The copy gets 6144 MiB, with no ballooning."
+    condition     = proxmox_virtual_environment_vm.host.memory[0].dedicated == 7168 && proxmox_virtual_environment_vm.host.memory[0].floating == 0
+    error_message = "The copy gets 7168 MiB, with no ballooning."
   }
 }
 
@@ -103,17 +103,17 @@ run "refuses_another_vm_id" {
   command = plan
 
   variables {
-    vm = { name = "ddehvdemo01", vm_id = 257, cores = 2, memory_mb = 6144, disk_gb = 32 }
+    vm = { name = "ddehvdemo01", vm_id = 257, cores = 2, memory_mb = 7168, disk_gb = 32 }
   }
 
   expect_failures = [var.vm]
 }
 
-run "refuses_less_than_6_gib" {
+run "refuses_less_than_7_gib" {
   command = plan
 
   variables {
-    vm = { name = "ddehvdemo01", vm_id = 256, cores = 2, memory_mb = 5120, disk_gb = 32 }
+    vm = { name = "ddehvdemo01", vm_id = 256, cores = 2, memory_mb = 6144, disk_gb = 32 }
   }
 
   expect_failures = [var.vm]
