@@ -191,7 +191,8 @@ fi
 # The copy is made here once, from the store VM's key file when one exists or else from 32 random bytes, and is never
 # replaced: a new key would make every snapshot unreadable. Each run decrypts it to a file in memory (/dev/shm) that
 # only this user can read and that is removed when the run ends. The keys folder is in the box's daily bundle, so the
-# copy leaves the box only once the bundle's off-box send is installed (agent_box_opnsense_offbox set); until then
+# copy leaves the box only once the bundle's off-box send is installed (agent_box_opnsense_offbox set and
+# agent_box_secrets_bundle.offbox true, tasks/secrets_bundle.yml); until then
 # the dev key is only on the box and the node. Dev's key needs no tap (D-0058 rule 3). The VM store's wiring above
 # and this are never on together.
 in_cluster=false
@@ -282,9 +283,19 @@ grep -q '^node_ssh_public_key = "ssh-ed25519 ' "$envdir/dev-vms.tfvars" || { ech
 rm -rf "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
-import sys, yaml
-src, dst, key, known, keys, store_url, store_ca, in_cluster = sys.argv[1:9]
+import ipaddress, json, os, sys, yaml
+src, dst, key, known, keys, store_url, store_ca, in_cluster, store_settings = sys.argv[1:10]
 d = yaml.safe_load(open(src))
+# The box's own address as a /32, for the hand-over (the box's path to the store): the settings' box_cidr, private,
+# empty until that path is set. Checked as openbao-prod.sh checks prod's.
+box_cidr = ""
+if in_cluster == "true" and os.path.isfile(store_settings):
+    box_cidr = json.load(open(store_settings)).get("box_cidr") or ""
+if box_cidr:
+    try: n = ipaddress.ip_network(box_cidr, strict=False)
+    except ValueError: n = None
+    if n is None or n.version != 4 or n.prefixlen != 32 or n.is_loopback:
+        print("rebuild: box_cidr in the secrets store's settings must be one IPv4 address as a /32, not loopback", file=sys.stderr); sys.exit(1)
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking",
@@ -326,16 +337,17 @@ if store_url:
 if in_cluster == "true":
     # The seal key's node: the first worker, which the openbao-seal stage writes the key to. Its inventory name is
     # its Kubernetes node name (STD-0001 hostnames); the stage checks that against the node's address and refuses
-    # if they differ. openbaoBoxCidr stays unset here: the box's path to the store comes after its measurement.
+    # if they differ. The box's /32 goes to the hand-over only once its settings have box_cidr (the box's path to the store).
     w = find(d, "k8s_workers")
     hosts = list((w or {}).get("hosts") or {})
     if not hosts:
         print("rebuild: the dev inventory has no k8s_workers host for the seal key", file=sys.stderr); sys.exit(1)
     v["k8s_gitops_source_openbao_in_cluster"] = True
     v["k8s_gitops_source_openbao_seal_node"] = hosts[0]
+    if box_cidr: v["k8s_gitops_source_openbao_box_cidr"] = box_cidr
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster"
+)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster" "$work/secrets-store.json"
 [[ -f $inventory/hosts.yml ]] || { echo "rebuild: could not build the box's dev inventory from $inv_src/hosts.yml" >&2; exit 1; }
 chmod 600 "$inventory/hosts.yml"
 

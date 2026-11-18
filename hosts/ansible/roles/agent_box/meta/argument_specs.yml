@@ -231,8 +231,11 @@ argument_specs:
           (D-0058 rule 10). snapshot_box: true (agent pick 240) makes snapshot sign in as AppRole snapshot-box; it is
           set only by the owner's install tap, an access right and a box limit. sops_copies: true lets put, compare
           and reseed keep SOPS copies and turns on the weekly compare; it is set only by the owner's access-right tap
-          (D-0058 rule 9). Anything but true is false. No key goes in it; the wrapper makes the keys in the keys
-          folder. Empty skips the file.
+          (D-0058 rule 9). Anything but true is false. box_cidr: the box's own address as a /32, which the dev
+          rebuild passes to stage openbao-handover (k8s_gitops_source_openbao_box_cidr); empty until the box's path
+          to the store is set. On dev every call goes to dev's Gateway by the dev inventory's
+          k8s_gitops_source_gateway_address. No key goes in it; the wrapper makes the keys in the keys folder.
+          Empty skips the file.
       agent_box_secrets_store_prod:
         type: dict
         default: {}
