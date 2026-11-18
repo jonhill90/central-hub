@@ -1,6 +1,6 @@
 {{- if eq (toString .Values.measure) "true" }}
 # The four route objects carry argocd.argoproj.io/ignore-healthcheck (Argo CD v3.5.5,
-# docs/user-guide/annotations-and-labels.md): on a fresh dev build the root renders them at stage
+# docs/operator-manual/health.md:294): on a fresh dev build the root renders them at stage
 # gitops, but the https-short listener comes only at dev-ca and the CA ConfigMap only at stage
 # openbao-measure, both after apps. So the HTTPRoute and BackendTLSPolicy are Degraded until then,
 # and the apps stage timed out on that (dev run 20261118T040207Z). Stage openbao-measure waits for
