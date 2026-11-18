@@ -178,6 +178,19 @@ sys.exit(1 if clash else 0)
 PY
 grep -q 'if last_status\["code"\] == 404:' "$files/opnsense-test-prove.py" && grep -q "get('%s')" "$files/opnsense-test-prove.py" \
   && ok "a 404 from the login prints what the authentication factory lists and returns" || bad "no factory read on a 404"
+# Item 10 (D-0037 rule 5): Keycloak stopped with the plugin's server on, then root's password. The wrapper hands
+# the prover the container's name; the prover stops it, shows the VM can't reach the issuer, then signs root in.
+grep -q '"$sshkey" "$files/known_hosts" "$KC_NAME"$' "$w" && ok "prove gets the Keycloak container's name" || bad "prove lacks the container's name"
+grep -q '\["podman", "stop", "--time", "10", kc_name\]' "$files/opnsense-test-prove.py" && grep -q 'set_server_enabled(True)' "$files/opnsense-test-prove.py" \
+  && grep -q '!= \["unreachable"\]:' "$files/opnsense-test-prove.py" && grep -q 'proof item 10: with the OIDC server enabled and the proof.s Keycloak stopped' "$files/opnsense-test-prove.py" \
+  && ok "item 10 stops Keycloak with the plugin's server on, checks the VM can't reach it, then signs root in" || bad "no Keycloak-stopped root sign-in"
+# Item 10 must be the prover's last sign-in: nothing after it may need Keycloak.
+python3 -I - "$files/opnsense-test-prove.py" <<'PY' && ok "item 10 runs after every item that needs Keycloak" || bad "an item that needs Keycloak runs after item 10"
+import sys
+t = open(sys.argv[1]).read()
+stop = t.index('["podman", "stop"')
+sys.exit(1 if any(t.find(s, stop) != -1 for s in ("keycloak_sign_in(", "approve(", "get(op, base + \"/api/openidconnect")) else 0)
+PY
 grep -q 'VMID=257$' "$w" && ok "the wrapper's VM ID is 257" || bad "VM ID"
 # The token can't delete files on local: destroy targets only the VM, and the seed leaves the state.
 code=$(grep -v '^[[:space:]]*#' "$w")   # code lines only, so a comment can't pass or fail these

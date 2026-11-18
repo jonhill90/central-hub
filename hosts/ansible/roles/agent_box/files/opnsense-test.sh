@@ -8,7 +8,7 @@
 #   hosts/terraform/home/opnsense-test with the agents' Proxmox token. Refused while dev has any VM.
 # configure: over SSH as root, check the release, measure dev's reach to the mirrors, seed /conf/config.xml,
 #   run the pinned opnsense-bootstrap, then pkg add the pinned os-openid-connect package.
-# prove: start the proof's Keycloak on this box, run proof items 2 to 7 and 9, stop Keycloak, remove its data.
+# prove: start the proof's Keycloak on this box, run proof items 2 to 7, 9 and 10 (10 stops Keycloak first), remove its data.
 # destroy: destroy VM 257 (proof item 8), the Keycloak container if still there, and the proof folder. The
 #   token cannot delete files on Proxmox's local storage, so the seed ISO leaves the state and stays on
 #   local, and the image stays in the state for the next proof; destroy lists both for the owner.
@@ -384,7 +384,7 @@ prove() {
     || { echo "opnsense-test: stopped, the VM does not reach Keycloak on the box over verified https"; return 1; }
   echo "opnsense-test: the VM reaches Keycloak over https, trusting the proof CA from its config.xml"
   vm 'cat /usr/local/etc/lighttpd_webgui/cert.pem' > "$proof/gui.pem"
-  "$py" -I "$libexec/opnsense-test-prove.py" "$addr" "$proof" "$sshkey" "$files/known_hosts"
+  "$py" -I "$libexec/opnsense-test-prove.py" "$addr" "$proof" "$sshkey" "$files/known_hosts" "$KC_NAME"
 }
 
 case $action in
