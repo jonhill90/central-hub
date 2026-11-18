@@ -84,7 +84,14 @@ sso:
     sha256: db126b4763bda3a3754fa2103232fc03ef1bf929cfeda35f2e9af39c875233b1
   # Same image as setup.image (curl, busybox unzip, the public CA bundle).
   initImage: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
-  # Keycloak's certificate comes from the lab CA (clusterissuer lab-ca). The CA's public root is not in
-  # git (its names may be private, as for k8s_gitops_sso_root_ca_file): Secret
-  # <name>-lab-root-ca, key lab-root-ca.pem, comes from playbooks/k8s-identity.yml. The init
-  # container adds it to a copy of the public bundle and Jellyfin reads the copy through SSL_CERT_FILE.
+  # Keycloak's certificate comes from the lab CA (ClusterIssuer lab-ca). Jellyfin needs the CA's public
+  # root to trust it. cert-manager writes that root as ca.crt into every Secret it issues, so a small
+  # Certificate in this namespace (templates/lab-ca.yaml) gets it with no file, no Ansible run and no
+  # private name in git. The init container adds it to a copy of the public bundle and Jellyfin reads
+  # the copy through SSL_CERT_FILE. Set certificate to false to read Secret <name>-lab-root-ca (key
+  # lab-root-ca.pem, from playbooks/k8s-identity.yml) instead.
+  labRoot:
+    certificate: true
+    issuer: lab-ca
+    secretName: jellyfin-lab-ca
+    key: ca.crt

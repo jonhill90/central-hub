@@ -30,7 +30,14 @@ spec:
           {{- if .Values.sso.enabled }}
           volumes:
             - name: lab-root-ca
-              secret: {secretName: {{ .Values.name }}-lab-root-ca, optional: true}
+              secret:
+                {{- if .Values.sso.labRoot.certificate }}
+                secretName: {{ .Values.sso.labRoot.secretName }}
+                items: [{key: {{ .Values.sso.labRoot.key }}, path: lab-root-ca.pem}]
+                {{- else }}
+                secretName: {{ .Values.name }}-lab-root-ca
+                {{- end }}
+                optional: true
       {{- end }}
           automountServiceAccountToken: false
           securityContext:
@@ -60,7 +67,7 @@ spec:
                 - {name: SSO_PROVIDER, value: {{ .Values.sso.provider | quote }}}
                 - {name: SSO_ISSUER, value: "https://{{ .Values.sso.issuerHost }}.{{ .Values.gateway.hostSuffix }}.{{ required "zone: set by the root Application" .Values.zone }}/realms/{{ .Values.sso.realm }}"}
                 - {name: SSO_CLIENT_ID, value: {{ .Values.sso.clientId | quote }}}
-                - {name: SSO_CA_NAME, value: "{{ .Values.name }}-lab-root-ca"}
+                - {name: SSO_CA_NAME, value: {{ ternary .Values.sso.labRoot.secretName (printf "%s-lab-root-ca" .Values.name) .Values.sso.labRoot.certificate | quote }}}
                 - {name: SSO_SECRET_NAME, value: {{ .Values.sso.secretName | quote }}}
                 - {name: SSO_ROLES, value: {{ join " " .Values.sso.roles | quote }}}
                 - {name: SSO_ADMIN_ROLES, value: {{ join " " .Values.sso.adminRoles | quote }}}

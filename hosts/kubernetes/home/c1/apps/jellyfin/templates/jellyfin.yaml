@@ -123,7 +123,14 @@ spec:
         - name: tmp
           emptyDir: {sizeLimit: 16Mi}
         - name: lab-root-ca
-          secret: {secretName: {{ $v.name }}-lab-root-ca, optional: true}
+          secret:
+            {{- if $v.sso.labRoot.certificate }}
+            secretName: {{ $v.sso.labRoot.secretName }}
+            items: [{key: {{ $v.sso.labRoot.key }}, path: lab-root-ca.pem}]
+            {{- else }}
+            secretName: {{ $v.name }}-lab-root-ca
+            {{- end }}
+            optional: true
         {{- end }}
 ---
 apiVersion: v1
