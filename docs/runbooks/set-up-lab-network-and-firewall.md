@@ -101,6 +101,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
 
    why: this is the firewall's whole lab setup as code ([hosts/ansible/README.md](../../hosts/ansible/README.md#what-it-builds), row `opnsense.yml`). The host overrides include `api.c1.prod` and the `*.apps.c1.prod` wildcard, so the names exist before c1 does.
    expect: a second run reports `changed=0`. WAN is still link-down; the WAN safety check below brings it up.
+   note: the lab test copy runs the same playbook against its own VM 100 first, through an SSH tunnel and without the DNS proof ([Build the lab test copy](build-the-lab-test-copy.md) step 7).
 
    Then the WAN safety check, and WAN up.
    VM 100's WAN (net1) sits on vmbr0, the home LAN. A firewall that answers there as a DHCP server or an IPv6 router hands home devices a wrong gateway, so WAN stays link-down (`opnsense_wan_connected = false`) until this check passes (`hosts/terraform/home/firewall/main.tf`). It checks three things.

@@ -88,8 +88,8 @@ grep -q "grep -cE '(vmx|svm)' /proc/cpuinfo" "$w" && grep -q "test -c /dev/kvm" 
   && ok "check stops when the copy's guests would run without KVM" || bad "no nested check"
 grep -q '^  plan) guards; tofu_run ;;$' "$w" && grep -q '^  apply) guards; tofu_run ;;$' "$w" \
   && ok "plan and apply both pass the guards" || bad "a build step skips the guards"
-grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, firstboot, destroy, log\]' \
-  && ok "the wrapper list allows plan, apply, check, host, lab, firstboot, destroy and log" || bad "the wrapper's sudo arguments"
+grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, firstboot, opnsense, destroy, log\]' \
+  && ok "the wrapper list allows plan, apply, check, host, lab, firstboot, opnsense, destroy and log" || bad "the wrapper's sudo arguments"
 
 # host: the inventory the copy's playbook runs with, the real inventory's shape with the copy's own values.
 python3 -I "$helper" inventory "$work/settings.json" "$vlans" /keys/lab-test-ssh /work/known_hosts "$work/hosts.yml"
@@ -172,6 +172,62 @@ assert "-detailed-exitcode" in f and "the second plan is not empty" in f
 PY
 grep -q 'openssl passwd -6 -stdin < "$files/root.pass" > "$files/root.hash"' "$w" && ok "root's hash is of the password the box keeps" || bad "root's hash and password"
 grep -q '"$files/inventory" "$files/state" "$files/copy-ca.pem"' "$w" && ok "destroy removes the copy's run folder states and its CA" || bad "destroy keeps lab's states"
+
+# opnsense: the copy's firewall inventory, in the shape opnsense_lab takes, and the run through the tunnel.
+mkdir -p "$work/fwinv/inventory"
+if python3 -I "$helper" firewall-inventory "$work/settings.json" "$vlans" 40443 /usr/bin/python3 "$work/fwinv/inventory/opnsense.yml" > /dev/null 2>&1; then
+  bad "firewall-inventory wrote an inventory with no copy CA next to it"
+else
+  ok "firewall-inventory refuses without the copy's CA"
+fi
+echo pem > "$work/fwinv/copy-ca.pem"
+python3 -I "$helper" firewall-inventory "$work/settings.json" "$vlans" 443 /usr/bin/python3 "$work/fwinv/inventory/opnsense.yml" > /dev/null 2>&1 \
+  && bad "firewall-inventory took port 443" || ok "firewall-inventory refuses a privileged tunnel port"
+python3 -I "$helper" firewall-inventory "$work/settings.json" "$vlans" 40443 /usr/bin/python3 "$work/fwinv/inventory/opnsense.yml"
+python3 -I - "$work/fwinv" "$vlans" "$role/../opnsense_lab/meta/argument_specs.yml" "$root/hosts/ansible/inventories/home/hosts.example.yml" <<'PY' \
+  && ok "the copy's firewall inventory: localhost on the tunnel's port, TLS bootstrap, every VLAN as hosts.example.yml, made-up private values, every required input but the key" \
+  || bad "the copy's firewall inventory"
+import ipaddress, os, sys, yaml
+d, vlans, specs, example = sys.argv[1:5]
+h = yaml.safe_load(open(os.path.join(d, "inventory/opnsense.yml")))["all"]["children"]["opnsense"]["hosts"]["opnsense_fw"]
+assert h["ansible_connection"] == "local" and h["ansible_python_interpreter"] == "/usr/bin/python3"
+assert h["opnsense_api_host"] == "localhost" and h["opnsense_cert_gui_port"] == 40443
+assert h["opnsense_lab_tls_bootstrap"] is True and h["opnsense_lab_ssl_ca_file"] == os.path.join(d, "copy-ca.pem")
+assert "opnsense_api_key" not in h and "opnsense_api_secret" not in h and "opnsense_lab_ssl_verify" not in h
+assert ipaddress.ip_network(h["opnsense_home_lan_cidr"]) == ipaddress.ip_network("192.0.2.0/24")
+assert h["opnsense_dns_zone"].endswith(".test")
+lab = yaml.safe_load(open(vlans))["lab_vlans"]
+assert h["opnsense_lab_mgmt_tag"] == [v["id"] for v in lab if v["name"] == "mgmt"][0]
+ex = yaml.safe_load(open(example))["all"]["children"]["opnsense"]["hosts"]["opnsense_fw"]
+assert h["opnsense_lab_vlan_settings"] == ex["opnsense_lab_vlan_settings"], "keep COPY_VLAN_SETTINGS as hosts.example.yml"
+assert set(h["opnsense_lab_vlan_settings"]) == {v["name"] for v in lab}
+nets = [ipaddress.ip_network(v["cidr"]) for v in lab]
+for o in h["opnsense_lab_host_overrides"]:
+    assert any(ipaddress.ip_address(o["address"]) in n for n in nets), o
+opts = yaml.safe_load(open(specs))["argument_specs"]["main"]["options"]
+required = {k for k, v in opts.items() if v.get("required")}
+missing = required - set(h) - {"opnsense_api_key", "opnsense_api_secret", "lab_vlans"}
+assert not missing, missing
+PY
+python3 -I - "$w" "$root/hosts/ansible/playbooks/opnsense.yml" <<'PY' && ok "opnsense tunnels to the mgmt gateway's 443, passes the key in a file, skips only the DNS proof, and needs changed=0 on the second run" || bad "opnsense's wiring"
+import re, sys
+t = open(sys.argv[1]).read()
+f = t[t.index("\nopnsense() {"):]
+f = f[:f.index("\n}\n")]
+assert '-L "127.0.0.1:$port:$gw:443" "root@$addr"' in f and "ExitOnForwardFailure=yes" in f
+assert 'firewall-inventory "$settings" "$vlans" "$port" "$py" "$files/inventory/opnsense.yml"' in f
+assert '-e @"$files/opnsense-api.vars.json" playbooks/opnsense.yml' in f and "--skip-tags dns_proof" in f
+assert "--tags" not in f.replace("--skip-tags", "") and "unset HTTPS_PROXY https_proxy" in f
+assert "opnsense-api.secret" in f and "opnsense_api_secret" in f and "kill $tunnel" in f
+assert "for n in 1 2; do" in f
+pat = re.search(r"grep -Eq '([^']+)' \"\$files/opnsense-run.log\"", f).group(1)
+assert re.search(pat, "opnsense_fw                 : ok=57   changed=0    unreachable=0    failed=0    skipped=9", re.M)
+assert not re.search(pat, "opnsense_fw                 : ok=57   changed=1    unreachable=0    failed=0    skipped=9", re.M)
+pb = open(sys.argv[2]).read()
+assert 'api_port: "{{ opnsense_cert_gui_port | default(443) }}"' in pb
+PY
+grep -q '"$files"/opnsense-api.\* "$files/opnsense-run.log"' "$w" \
+  && ok "destroy removes opnsense's log" || bad "destroy keeps opnsense's log"
 
 # firstboot: the console driver against a fake serial console that answers as OPNsense's does (a login, a wrong
 # first password, menu 8, then a shell that runs each line with sh), and the first-boot PHP against stubs of
