@@ -286,7 +286,6 @@ for block in re.findall(r"\{([^{}]*)\}", open(sys.argv[1]).read()):
 print(total)' "$TFVARS" "$DEV_MEMORY_MB_CONTROL_PLANE" "$DEV_MEMORY_MB_WORKER"
 }
 
-# The node's free memory in MiB and the field it came from ("MiB field"), or a failure that says why.
 # The node's whole memory picture, one line, read-only and never fatal: total, used, available, KSM's shared
 # pages and swap, all from /nodes/<node>/status (Proxmox reports ksm.shared in bytes). The guest list can't show
 # the guests the token can't see, so this says what the node as a whole holds.
@@ -302,6 +301,7 @@ print("preflight: node memory total %s used %s available %s MiB; ksm shared %s M
     || echo "preflight: node memory detail had an unexpected shape"
 }
 
+# The node's free memory in MiB and the field it came from ("MiB field"), or a failure that says why.
 preflight_read_free() { # node
   local body
   body=$(px_api GET "nodes/$1/status") \
