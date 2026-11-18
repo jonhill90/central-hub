@@ -505,8 +505,14 @@ run_stage() {
   # The dev-only measurement of the agent box's source address through the Gateway (MEASURE-1): on dev with
   # the in-cluster store (its seal key file set), every render of the root Application passes openbaoMeasure,
   # so a later stage never drops it mid-run. Prod, which will set the key file too, never gets it.
-  local measure=()
-  if [ "$ENV_NAME" = dev ] && [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then measure=(-e k8s_gitops_source_openbao_measure=true); fi
+  local rootvars=()
+  if [ "$ENV_NAME" = dev ] && [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then rootvars=(-e k8s_gitops_source_openbao_measure=true); fi
+  # Dev, on every render of the root Application too: no ClusterIssuer lab-ca (no `certs` stage; dev-ca comes after
+  # `checks`), so jellyfin's Certificate on it would hold `apps`; and no login-probe, whose names are prod's
+  # (k8s_gitops defaults, k8s_gitops_source_lab_ca_issuer and _login_probe).
+  if [ "$ENV_NAME" = dev ]; then
+    rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false)
+  fi
   case $1 in
     preflight)
       [ "$ENV_NAME" = dev ] || { echo "the memory preflight runs on dev only"; return 1; }
@@ -532,10 +538,10 @@ run_stage() {
     gitops)
       if [ "$ENV_NAME" = dev ] && kc -n gateway get secret apps-tls -o name >/dev/null 2>&1; then
         echo "gitops: the certificate's Secret exists (a re-run): the Gateway's HTTPS stays on"
-        ap playbooks/k8s-gitops.yml --tags install,source -e k8s_gitops_source_gateway_https=true "${measure[@]}"
+        ap playbooks/k8s-gitops.yml --tags install,source -e k8s_gitops_source_gateway_https=true "${rootvars[@]}"
       else
         [ "$ENV_NAME" != dev ] || echo "gitops: no certificate Secret yet (a fresh build): the Gateway's HTTPS stays off until dev-ca"
-        ap playbooks/k8s-gitops.yml --tags install,source "${measure[@]}"
+        ap playbooks/k8s-gitops.yml --tags install,source "${rootvars[@]}"
       fi ;;
     # Seeds namespace secret-source from SECRET_SOURCE_FILE (docs/runbooks/seed-secret-source.md) after
     # Argo CD made it and before apps wait on the ExternalSecrets that read it. Unset: skipped.
@@ -575,7 +581,7 @@ run_stage() {
       # The dev inventory turns the Gateway's HTTPS off (k8s_gateway_https), so Argo CD's root Application passes
       # gatewayHttps=false and the Gateway has no https listener. Turn it on first (measured on dev, 2026-11-14:
       # spec listeners http and http-short only), then make the certificate the listener waits for.
-      ap playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_gateway_https=true "${measure[@]}"
+      ap playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_gateway_https=true "${rootvars[@]}"
       ap playbooks/k8s-certs.yml --tags devca -e k8s_certs_dev_ca=true ;;
     # Dev only, after dev-ca (the https listener exists only from then on) and only with the in-cluster store:
     # the source address OpenBao sees for a box request through the Gateway, and whether c1 enforces the
@@ -583,7 +589,7 @@ run_stage() {
     # come from it. One PASS line names what it read; it changes nothing in OpenBao and prints no secret.
     openbao-measure)
       [ "$ENV_NAME" = dev ] || { echo "the measurement runs on dev only"; return 1; }
-      if [ ${#measure[@]} -eq 0 ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-measure skipped"; return 0; fi
+      if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-measure skipped"; return 0; fi
       ap playbooks/k8s-openbao-measure.yml ;;
     # Dev only, with the in-cluster store: the one-time hand-over of the store's admin login to this machine's
     # IDs (D-0038 rule 6). It runs on the first control-plane node; every secret goes to OpenBao's pod on stdin.
