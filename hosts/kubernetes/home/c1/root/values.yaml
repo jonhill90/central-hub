@@ -46,6 +46,11 @@ openbaoStoreHost: ""
 # out Services labelled central-hub/l2-policy, or that policy announces it from every node too.
 openbaoAdminAddress: ""
 
+# The agent notebook's CI runner as a pod (app notebook-runner). Ansible sets it to true on prod only
+# (k8s_gitops_source_notebook_runner, from the prod wrappers), so a dev cluster never registers a second
+# runner under the same name. false renders nothing.
+notebookRunner: false
+
 # The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
 # (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
 shareTarget: ""
@@ -260,6 +265,15 @@ apps:
     rootParameters:
       target: shareTarget
       authKey.store: appSecretsStore
+    autoSync: true
+    prune: false
+  # The agent notebook's CI runner (label `notebook`), one locked-down pod in place of VM 300, which stays
+  # as the fallback until the pod has run the notebook's checks green on three PRs
+  # (docs/runbooks/run-the-notebook-runner-on-c1.md). Prod only.
+  notebook-runner:
+    namespace: notebook-runner
+    local: true
+    enabledBy: notebookRunner
     autoSync: true
     prune: false
   # Certificates (spec step 6): cert-manager itself. The issuers and the Gateway's certificate stay

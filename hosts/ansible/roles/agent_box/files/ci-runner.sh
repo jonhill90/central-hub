@@ -3,7 +3,7 @@
 # (docs/runbooks/set-up-the-ci-runner.md). It runs as user `keys` through sudo, so the session that
 # asks for it never sees the Proxmox token, the runner's SSH key or the GitHub App key. Installed
 # by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/ci-runner.sh plan|apply|configure|destroy|bump
+#   sudo -n -u keys /usr/local/libexec/agent-box/ci-runner.sh plan|apply|configure|destroy|bump|c1-token
 #   (weekly is for the timer, which runs it as `keys` without sudo)
 # plan, apply, destroy: OpenTofu on hosts/terraform/home/ci-runner with the agents' Proxmox token.
 # configure: the ci_runner playbook over SSH, with a one-hour registration token minted from the
@@ -11,14 +11,17 @@
 # bump: if actions/runner has a release newer than the pin on main and at least two weeks old
 # (STD-0003), checks its SHA-256 against a download and opens a central-hub PR that moves the pin,
 # as the App. Changes nothing when the pin is current or that PR is open already.
+# c1-token: mint a one-hour registration token the same way and write it to prod's store (kv
+# c1/notebook-runner, key registration-token) through the prod secrets-store wrapper, for the notebook
+# runner pod on c1's first start (docs/runbooks/run-the-notebook-runner-on-c1.md). The token goes on stdin only.
 # weekly: configure, then bump. The agent box's timer runs it (role agent_box); the runner's
 # self-update is off, so this is how a merged pin reaches the runner.
 set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | destroy | bump | weekly) action=$1 ;;
-  *) echo "usage: ci-runner plan|apply|configure|destroy|bump|weekly" >&2; exit 2 ;;
+  plan | apply | configure | destroy | bump | weekly | c1-token) action=$1 ;;
+  *) echo "usage: ci-runner plan|apply|configure|destroy|bump|weekly|c1-token" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -275,6 +278,21 @@ for pattern, repl in [
     if n != 1:
         sys.exit(f"ci-runner bump: {path} no longer has exactly one line matching {pattern!r}; nothing opened")
 
+# The notebook runner pod on c1 pins the same release (its chart's values), so the same PR moves both.
+# Both files are checked before anything is written, so a PR never moves one pin without the other.
+chart = "hosts/kubernetes/home/c1/apps/notebook-runner/values.yaml"
+chart_on_main = call("GET", f"{api}/repos/{target}/contents/{chart}?ref={main_sha}")
+chart_new = base64.b64decode(chart_on_main["content"]).decode()
+for pattern, repl in [
+    (r"^# v\d+\.\d+\.\d+ and the SHA-256 of actions-runner-linux-x64-\d+\.\d+\.\d+\.tar\.gz\.",
+     f"# v{version} and the SHA-256 of {asset}."),
+    (r"^runnerVersion: \S+$", f"runnerVersion: {version}"),
+    (r"^runnerSha256: \S+$", f"runnerSha256: {noted}"),
+]:
+    chart_new, n = re.subn(pattern, repl, chart_new, flags=re.M)
+    if n != 1:
+        sys.exit(f"ci-runner bump: {chart} no longer has exactly one line matching {pattern!r}; nothing opened")
+
 # The branch is this job's own. One left by an earlier run that stopped before its PR (no PR above)
 # is moved to main_sha and used again, so a failed run never blocks the next one.
 if ref_exists("heads/" + branch):
@@ -287,13 +305,19 @@ call("PUT", f"{api}/repos/{target}/contents/{path}", {
     "sha": on_main["sha"],
     "branch": branch,
 })
+call("PUT", f"{api}/repos/{target}/contents/{chart}", {
+    "message": f"chore: bump the notebook runner pod to {version}",
+    "content": base64.b64encode(chart_new.encode()).decode(),
+    "sha": chart_on_main["sha"],
+    "branch": branch,
+})
 pr = call("POST", f"{api}/repos/{target}/pulls", {
     "title": f"chore: bump the CI runner to {version}",
     "head": branch,
     "base": "main",
     "body": "\n".join([
         "## Summary", "",
-        f"- Moves the notebook's CI runner pin from {pinned} to {version}, the newest actions/runner release at least two weeks old (STD-0003), published {published.date().isoformat()}.",
+        f"- Moves the notebook's CI runner pin (VM 300 and the c1 pod) from {pinned} to {version}, the newest actions/runner release at least two weeks old (STD-0003), published {published.date().isoformat()}.",
         f"- SHA-256 `{noted}`, from the release notes and matched against a download on {today}.",
         "", "## Issue", "", "- Closes: none.",
         "", "## Deploy impact", "",
@@ -309,9 +333,20 @@ print(f"ci-runner bump: opened PR #{pr['number']} moving the pin from {pinned} t
 PY
 }
 
+# The pod's registration token, into prod's store. Same user (keys), so the prod wrapper is run directly;
+# it keeps SOPS's copy too (secrets-store-kv.sh). The token never reaches an argument or the log.
+c1_token() {
+  local token
+  token=$(registration_token) || { echo "ci-runner: no registration token (does the App have Administration: write?)" >&2; return 1; }
+  [[ -n $token ]] || { echo "ci-runner: GitHub returned an empty registration token" >&2; return 1; }
+  printf '%s' "$token" | /usr/local/libexec/agent-box/secrets-store-prod.sh put c1/notebook-runner registration-token
+  echo "ci-runner: a one-hour registration token is in prod's store at kv c1/notebook-runner (registration-token)"
+}
+
 case $action in
   plan | apply | destroy) tofu_run ;;
   configure) configure ;;
+  c1-token) c1_token ;;
   bump) bump ;;
   weekly)
     # Each half runs even if the other fails, and the run fails if either did.

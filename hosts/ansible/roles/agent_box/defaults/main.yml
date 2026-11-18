@@ -21,9 +21,10 @@ agent_box_wrappers:
   - name: dev-vms
     args: [plan, apply, destroy]
   # bump opens a PR moving the runner pin; `weekly` (configure, then bump) is the timer's only, so
-  # sessions can't start it through sudo.
+  # sessions can't start it through sudo. c1-token writes the notebook runner pod's one-hour
+  # registration token to prod's store.
   - name: ci-runner
-    args: [plan, apply, configure, destroy, bump]
+    args: [plan, apply, configure, destroy, bump, c1-token]
   # The owner's desktop VM (docs/runbooks/set-up-the-desktop.md). Not applied until the owner says so.
   - name: desktop
     args: [plan, apply, configure, destroy]

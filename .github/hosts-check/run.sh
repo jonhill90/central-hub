@@ -369,6 +369,7 @@ check_backup() {
   bash "$here/tests/test_rebuild_log_pick.sh"
   bash "$here/tests/test_rebuild_diag_vms.sh"
   bash "$here/tests/test_opnsense_test.sh"
+  bash "$here/tests/test_notebook_runner.sh"
 }
 
 check_proxy() {
