@@ -51,6 +51,10 @@ spec:
         - name: shareTarget
           value: "{{ k8s_gitops_source_share_target }}"
 {% endif %}
+{% if k8s_gitops_source_app_secrets_store | default('') | length > 0 %}
+        - name: appSecretsStore
+          value: "{{ k8s_gitops_source_app_secrets_store }}"
+{% endif %}
 {% if k8s_gitops_source_local_path_stable_folders | bool %}
         - name: localPathStableFolders
           value: "true"

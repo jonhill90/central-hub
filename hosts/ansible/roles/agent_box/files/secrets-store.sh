@@ -28,12 +28,12 @@
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|compare|reseed" >&2; exit 2; }
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed" >&2; exit 2; }
 named='' kv_path='' kv_key=''
 env=dev
 if [[ ${1:-} == --prod ]]; then env=prod; shift; fi
 case ${1:-} in
-  recovery | status | snapshot | restore | clear-hold | compare | reseed) action=$1; [[ $# -eq 1 ]] || usage ;;
+  recovery | status | snapshot | restore | clear-hold | put-apps | compare | reseed) action=$1; [[ $# -eq 1 ]] || usage ;;
   # The value comes on stdin, never as an argument; the helper checks the path and key again.
   put)
     action=$1
@@ -236,6 +236,31 @@ put() {
   kv put "$kv_path" "$kv_key"
 }
 
+# Every value this environment's apps read through store c1 (namespace secret-source, docs/runbooks/seed-secret-source.md)
+# into SOPS, then OpenBao, at c1/<name>, key `value`: the path and key the apps' ExternalSecrets read once the root's
+# appSecretsStore is openbao (D-0058 rule 8; plan step 8a). The source is the file the rebuild seeds secret-source from:
+# dev's is the box's own (rebuild.sh), prod's is the controller's copy (rebuild-prod.sh). Every name is checked before
+# the first write. Each value goes from the file to the helper's stdin, byte for byte; only names are printed.
+put_apps() {
+  sops_copies
+  local src line name n=0
+  if [[ $env == dev ]]; then src=$keys/rebuild-secret-source.env; else src=$env_keys/secret-source.env; fi
+  [[ -s $src ]] || { echo "secrets-store: $src is missing or empty; nothing written" >&2; exit 1; }
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    name=${line%%=*}
+    [[ $line == *=* && $name =~ ^[a-z0-9][a-z0-9_-]*$ ]] ||
+      { echo "secrets-store: a line of $src is not <name>=<value> with a lowercase name; nothing written" >&2; exit 1; }
+  done < "$src"
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    name=${line%%=*}
+    printf '%s' "${line#*=}" | kv put "c1/$name" value
+    n=$((n + 1))
+  done < "$src"
+  echo "secrets-store: put-apps: $n values from ${src##*/} written to SOPS, then OpenBao, at c1/<name> key value"
+}
+
 compare() {
   sops_copies
   kv compare </dev/null
@@ -258,6 +283,7 @@ case $action in
   restore-rebuilt) restore_rebuilt ;;
   clear-hold) clear_hold ;;
   put) put ;;
+  put-apps) put_apps ;;
   compare) compare ;;
   reseed) reseed ;;
 esac
