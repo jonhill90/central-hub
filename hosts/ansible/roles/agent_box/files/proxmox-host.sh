@@ -1,10 +1,13 @@
 #!/bin/bash
 # /usr/local/libexec/agent-box/proxmox-host.sh: the pipeline job for the Proxmox host's web UI proxy (D-0041; Library
-# plans/r1-host-job/DESIGN.md v3.1). It runs playbooks/proxmox-proxy.yml from main, and nothing else, on the Proxmox
+# plans/r1-host-job/DESIGN.md v3.1). It runs one of two named playbooks from main, and nothing else, on the Proxmox
 # host as root, with the key in /etc/agent-keys-host/. It runs as user `hostops` through sudo, so no session and no
 # other wrapper can read that key. Installed by the agent_box role; root owns it.
-#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check
-#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply <pass message ID> <check hash, 12 hex>
+#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check [<job>]
+#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply [<job>] <pass message ID> <check hash, 12 hex>
+# <job> names which one playbook runs: `proxy` (the default, playbooks/proxmox-proxy.yml) or `agent-access` (playbooks/
+#   proxmox-agent-access.yml: it copies hosts/terraform/home/bootstrap/agent-access.sh from the same commit to the host and
+#   runs it as root, so the agents' Proxmox rights change by a reviewed PR and no longer need the Mac).
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh log
 # check: `--check --diff` on the code at origin/main. It saves a result file: the commit, the playbook, the
 #   SHA-256 of every diff's before and after text, and for each task its name, whether it changed and whether it
@@ -26,13 +29,13 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-playbook=playbooks/proxmox-proxy.yml
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
 result=$work/state/check.json
 
-usage() { echo "usage: proxmox-host check|apply <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2; exit 2; }
+usage() { echo "usage: proxmox-host check [proxy|agent-access]|apply [proxy|agent-access] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2; exit 2; }
 
 if [[ ${1:-} == log ]]; then
   [[ $# -eq 1 ]] || usage
@@ -40,11 +43,15 @@ if [[ ${1:-} == log ]]; then
   tail -n 5 -- "$summary"
   exit 0
 fi
-case ${1:-} in
-  check) [[ $# -eq 1 ]] || usage; action=check ;;
+# An optional job name comes right after the action; with none, the job is the proxy.
+action=${1:-} job=proxy
+if [[ $action == check || $action == apply ]] && [[ -n ${2:-} && -n ${jobs[${2:-x}]:-} ]]; then job=$2; set -- "$action" "${@:3}"; fi
+playbook=${jobs[$job]}
+case $action in
+  check) [[ $# -eq 1 ]] || usage ;;
   apply)
     [[ $# -eq 3 && ${2:-} =~ ^cmsg_[A-Za-z0-9]{10,80}$ && ${3:-} =~ ^[0-9a-f]{12}$ ]] || usage
-    action=apply; pass_ref=$2; want=$3 ;;
+    pass_ref=$2; want=$3 ;;
   *) usage ;;
 esac
 
@@ -65,7 +72,7 @@ git -C "$repo" fetch --quiet origin main
 git -C "$repo" checkout --quiet --detach origin/main
 commit=$(git -C "$repo" rev-parse HEAD)
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
-echo "proxmox-host: central-hub ${commit:0:12}"
+echo "proxmox-host: central-hub ${commit:0:12}, job $job"
 
 # One JSON line per run for the box's own record; stdout gets the same facts, none of them private.
 record() { # hash, counts, result

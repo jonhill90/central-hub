@@ -3,8 +3,8 @@ title: Apply the agent box's setup from the box itself
 status: draft
 kind: automated
 trigger: a reviewed change to the agent box's role is merged to main and touches none of the box's limits
-runner: a session on the agent box, through `box-apply plan` and `box-apply apply`; the install and every limit change are an agent lane on the controller, after the owner's go
-outcome: the box runs its own agent_box role from the commit main points to, without the controller, and stops for the owner on any change to its limits; a limit file changed during a run is put back
+runner: a session on the agent box, through `box-apply plan` and `box-apply apply`; the install and a limit change are an agent lane on the controller or an approved limit change on the box, after the agents' pass of the digest (D-0042 rule 4)
+outcome: the box runs its own agent_box role from the commit main points to, without the controller, and stops on any change to its limits until a pass approves it; a limit file changed during a run is put back
 needs: D-0036 accepted; the box set up from the controller (set-up-the-agent-box.md), with its Ansible virtual environment and collections; agent_box_self_apply true in the private inventory
 private-values: [agent-box-inventory]
 files: [hosts/ansible/roles/agent_box/files/box-apply.py, hosts/ansible/agent-box-limit-approvals.txt, hosts/ansible/roles/agent_box/tasks/self_apply.yml, hosts/ansible/roles/agent_box/tasks/self_apply_baseline.yml, hosts/ansible/roles/agent_box/templates/box-apply-limits.txt.j2, hosts/ansible/roles/agent_box/templates/sudoers.j2, .github/hosts-check/tests/test_box_apply.sh]
@@ -82,11 +82,19 @@ Run `box-apply` as the session user, without `sudo`: the front script calls `sud
 
 ### Apply a limit change (from the controller)
 
-`box-apply` exits 3 and names the limit. The change is applied from the controller, by an agent lane, after the owner's go naming the PR and its head (D-0036 rule 6). Apply it in full, so the baseline moves past it. A narrow `--tags` apply doesn't move the baseline, so `box-apply` keeps stopping until a full one.
+`box-apply` exits 3 and names the limit. The change is applied from the controller, by an agent lane, after the agents' pass of its digest (D-0036 rule 6, D-0042 rule 4). A change that also holds another D-0042 rule 6 step waits for the owner's tap on that step's card (see the list below). Apply it in full, so the baseline moves past it. A narrow `--tags` apply doesn't move the baseline, so `box-apply` keeps stopping until a full one.
 
 ### Apply an approved limit change (on the box, no controller)
 
-D-0044 (accepted) lets the box apply a change to its own limits when one line in the approvals file names it, so no run from the controller is needed (D-0036 rules 3(f) and 6 carry it). Write a line only after the owner's tap on a card that names the digest: the box would apply it.
+D-0044 (accepted) lets the box apply a change to its own limits when one line in the approvals file names it, so no run from the controller is needed (D-0036 rules 3(f) and 6 carry it). Write a line only after the agents' pass of the digest: the box would apply it. The owner's order of 2026-11-17 06:21:09 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh) dropped the owner's card for a limit change (D-0042 rule 4). A change that also holds another D-0042 rule 6 step keeps that step's card, and its line waits for the owner's tap. The limit paths that make a firewall change, so a change to them keeps the owner's firewall card (D-0036 rule 8, D-0042 rule 6):
+
+- the lifeline's packet filter, table `inet lifeline`: `hosts/ansible/roles/agent_box/templates/lifeline.nft.j2`, `templates/lifeline-nft.service.j2`, `templates/lifeline-up.service.j2`, `tasks/lifeline.yml` and `tasks/lifeline_cleanup.yml`, and the private inventory's `agent_box_lifeline_allow`, `agent_box_lifeline_interface` and `agent_box_lifeline_address`. Only an apply from the controller runs them, because `lifeline` is in `agent_box_self_apply_skip_tags`, so their card goes with that apply;
+- `agent_box_self_apply_skip_tags` in the role's defaults, when a change takes `lifeline` off it;
+- a change that would load another nftables table on the box, such as setting `agent_box_opnsense_test` in the private inventory, which turns on the OPNsense test stack's filter (`tasks/main.yml`, the include gated on that setting). Installing code whose filter stays off because its setting is empty loads nothing and needs no card.
+
+A change that copies secrets onto the box keeps the owner's secrets card (D-0042 rule 6): the controller's private lab files, `agent_box_prod_files` with the `prod_files` tasks, which run only from the controller when `agent_box_copy_prod_files` is turned on for one run (the `prod_files` tag is in `agent_box_self_apply_skip_tags` too), and a change to that list or that switch.
+
+A new credential for agents, or wider rights for one in another system (Proxmox, GitHub, the tailnet, OpenBao), keeps its access-rights card even when a wrapper uses it; a sudo rule, wrapper or user on the box is a limit and needs none.
 
 What this route never does: it does not change the box's inventory (D-0036 rule 7, so a setting that only the private inventory sets stays as it is), and it skips the firewall tasks, which the self-apply's skipped tags leave to a run from the controller (`agent_box_self_apply_skip_tags`).
 
@@ -97,14 +105,14 @@ What this route never does: it does not change the box's inventory (D-0036 rule 
    ```
 
    expect: exit 3, `main holds no approval line for it`, the limit files, and a line to approve: `<baseline> <main> <digest> <pass> <tap>`.
-2. The reviewer and the councils read that diff. Anyone can recompute the digest in a checkout of main:
+2. The reviewer reads that diff. Anyone can recompute the digest in a checkout of main:
 
    ```sh
    git diff --no-renames --binary --full-index <baseline> <main> -- <the limit files it named> | sha256sum
    ```
 
    why: the digest pins the exact bytes they passed, so a later change to those files needs its own line.
-3. Add the line to `hosts/ansible/agent-box-limit-approvals.txt` by a PR that merges like any other. Its five fields are `<from> <to> <digest> <pass> <tap>` (the baseline, the commit on main, and the digest, as `box-apply plan` printed them), `pass` is the id of the orchestrator's message that records the agents' pass of that digest, and `tap` the id of the owner's decide event (the choice, not the card) on a card that named the digest (D-0042 rule 6). A tap of `none` never counts. `to` must be a commit on main after which no limit changes.
+3. Add the line to `hosts/ansible/agent-box-limit-approvals.txt` by a PR that merges like any other. Its five fields are `<from> <to> <digest> <pass> <tap>` (the baseline, the commit on main, and the digest, as `box-apply plan` printed them), `pass` is the id of the orchestrator's message that records the agents' pass of that digest, and `tap` the owner's approval: the id of their order that dropped the box-install cards, `cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh`, or, for a change that keeps a card (above), the id of the owner's decide event (the choice, not the card) on a card that named the digest (D-0042 rule 4). A tap of `none` never counts. `to` must be a commit on main after which no limit changes.
 4. Plan, then apply:
 
    ```sh
@@ -120,12 +128,12 @@ What this route never does: it does not change the box's inventory (D-0036 rule 
 | Message | Cause and fix |
 |---|---|
 | `no baseline` | The role has not run in full from the controller since `agent_box_self_apply` was set. Run it in full. If the full run printed "box-apply's baseline is left as it was", that line names what was missing: a run from the first task, all tags, no skip tags, a commit, or a clean checkout (the files that weren't clean are listed). |
-| `a limit changed since the baseline` (exit 3) | Expected for a change to the role's tasks, templates, files, playbook, or a defaults key that isn't a pinned tool. It needs the owner's go and a full apply from the controller. A pinned tool's new value must be a plain literal (a version of digits and dots, or 64 hex digits for a SHA-256); anything else, Jinja included, stops with `must be a plain literal`. |
+| `a limit changed since the baseline` (exit 3) | Expected for a change to the role's tasks, templates, files, playbook, or a defaults key that isn't a pinned tool. It needs the agents' pass of its digest (D-0042 rule 4), and an approvals line or a full apply from the controller. A pinned tool's new value must be a plain literal (a version of digits and dots, or 64 hex digits for a SHA-256); anything else, Jinja included, stops with `must be a plain literal`. |
 | `the check run would change a limit on the box` (exit 3) | The box's limit files differ from what the role makes, for example after a narrow apply or a hand edit. A full apply from the controller sets them right. |
 | `the apply changed a limit on the box ... Put back` (exit 4) | A task changed a limit file anyway. It was put back, and `/var/lib/box-apply/stopped` says what. A changed user can't be put back safely: the message names it, and it needs the controller. Read the run's output in `/var/lib/box-apply/runs/`, fix the change by a PR, and end the stop with a full apply from the controller. |
 | `self-applies are stopped` | As above: only a full apply from the controller ends it. |
 | `main holds no approval line for it` (exit 3) | A limit changed and no line approves it. Approve it (above) or apply it from the controller. Lines that don't count are named first: `malformed` (wrong field count or format, or a tap of `none`), `not on main`, `a limit changed again after`, `no limit changed`, or `its digest is not the diff of`. |
-| `the approved apply changed limit paths its check run did not name` (exit 4) | The apply changed a limit path that its check run didn't list, so every limit change of the run was put back, and self-applies stop. Check mode can miss what a task does, for example a command task: read `/var/lib/box-apply/runs/`, then end the stop with a full apply from the controller. |
+| `the approved apply changed limit paths its check run did not name` (exit 4) | The apply changed a limit path that its check run didn't list, so every limit change of the run was put back, and self-applies stop. Check mode can miss what a task does, for example a command task. It also gives a file that is not on the box yet no path, so a looped task that can add a limit file labels each item with its destination (`loop_control: label:`), and `box-apply` reads that label; CI (`check-loop-labels.py`) fails a looped task that writes a file at a path built from its item without that label, and a new loop with a non-path label would stop here the first time it adds a file. Read `/var/lib/box-apply/runs/`, then end the stop with a full apply from the controller. |
 | `the check run failed` or `the apply failed` | The role failed on the box. Its JSON output is in `/var/lib/box-apply/runs/`. The baseline didn't move. |
 | `does not descend from the baseline` | main's history was rewritten. Run the role in full from the controller. |
 
@@ -134,7 +142,7 @@ What this route never does: it does not change the box's inventory (D-0036 rule 
 - Root on the box runs whatever reviewed main says. The checks before and after catch a plain change to a limit. They don't stop merged code written to get around them, for example a task that changes a limit file and then puts back its hash. Review and the green merge are the control (D-0036, Consequences).
 - Pinned tools and package sources change by a self-apply, and so change what a wrapper runs with the keys (D-0036, Consequences).
 - Users are compared, not put back.
-- An approved limit change rests on ids the box can't check: a made-up pass or tap id would be applied. The approvals file is not a limit, so any merged PR can add a line. Review, the green merge and the agents' pass are the control, as for the merge job (D-0042, Consequences).
+- An approved limit change rests on ids the box can't check: a made-up pass id, or the standing order's id on a change that needs a card, would be applied. The approvals file is not a limit, so any merged PR can add a line. Review, the green merge and the agents' pass are the control, as for the merge job (D-0042, Consequences).
 
 ## Exit
 

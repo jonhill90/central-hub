@@ -7,8 +7,8 @@ runner: the owner
 outcome: a test message and every new c1 alert show up in the ntfy app or web page, and resolved alerts say so
 needs: a phone or computer on the lab network or the tailnet; the ntfy app (Android, iOS) or a browser; ntfy's three values seeded into secret-source (step 0)
 private-values: [k8s_gateway_zone, secret-source.env]
-files: [hosts/kubernetes/home/c1/apps/alerts/, hosts/kubernetes/home/c1/apps/monitoring-extras/templates/alertmanager-ntfy.yaml, hosts/kubernetes/home/c1/apps/kube-prometheus-stack/values.yaml, hosts/ansible/roles/k8s_observability/vars/main.yml, hosts/ansible/playbooks/ntfy-access.yml, hosts/ansible/roles/proxmox_notify/]
-last-tested: not yet run on c1. CI renders the alerts chart and checks Alertmanager's values match the role's; the login and tokens (pick 171) are untested
+files: [hosts/kubernetes/home/c1/apps/alerts/, hosts/kubernetes/home/c1/apps/monitoring-extras/templates/alertmanager-ntfy.yaml, hosts/kubernetes/home/c1/apps/monitoring-extras/templates/panel-check.yaml, hosts/kubernetes/home/c1/apps/kube-prometheus-stack/values.yaml, hosts/ansible/roles/k8s_observability/vars/main.yml, hosts/ansible/playbooks/ntfy-access.yml, hosts/ansible/roles/proxmox_notify/]
+last-tested: 2026-11-18 on prod's c1, step 5 only. Read from the agent box at 04:32 UTC, on central-hub ab8caa1. Alertmanager restarted with receiver-name-in-metrics at about 04:15 UTC, then the 04:30 UTC panel check counted 3 alerts sent to ntfy and 0 failed. Steps 1 to 4, the owner's browser and phone, have not been run. CI renders the alerts chart and checks that Alertmanager's values match the role's
 superseded-by:
 ---
 
@@ -41,6 +41,9 @@ The ntfy page is reachable only from the lab network and the tailnet, through th
 4. Check Alertmanager's side: in Grafana, Alerting, then Contact points, or `kubectl -n monitoring get alertmanager`.
    expect: Alertmanager is running. The next firing alert arrives as `[FIRING] <alert name>`, and later `[RESOLVED]`.
 
+5. Check that alerts reach ntfy without a browser or a password: from the agent box, read the newest panel check's log ([check-c1-alerts-and-dashboard.md](check-c1-alerts-and-dashboard.md#read-the-panels-without-a-browser)).
+   expect: `Alerts sent to ntfy, 24h:` above 0 after any alert fired or resolved that day, `Failed sends to ntfy, 24h: 0`, and `Alerts firing, by name:` naming what was sent. The counts are Alertmanager's own (`alertmanager_notifications_total` and `alertmanager_notifications_failed_total` with `receiver_name="ntfy"`), so they show ntfy accepted each post, not that a phone showed it.
+
 ## Change it
 
 - **Swap the receiver** (Gotify, email, Matrix and so on): change only `alertmanager.config.receivers` in both `apps/kube-prometheus-stack/values.yaml` and `k8s_observability` `vars/main.yml`. CI's parity check fails if the two differ.
@@ -53,6 +56,7 @@ Argo CD makes ntfy and Alertmanager again; step 0 gives them their values. Phone
 
 ## If it fails
 
+- **`Failed sends to ntfy` above 0, or alert `C1AlertsNotDelivered`:** Alertmanager reached ntfy and was refused, or could not reach it; its log line names which.
 - **No messages at all:** `kubectl -n monitoring logs alertmanager-kube-prometheus-stack-alertmanager-0` shows the webhook's errors. `kubectl -n alerts logs deploy/ntfy` shows what reached ntfy.
 - **The phone shows nothing, the web page does:** the phone isn't on the lab network or the tailnet.
 - **401 or 403 in Alertmanager's log:** its token isn't in ntfy's list. Check `kubectl -n alerts get externalsecret ntfy-auth`, then restart ntfy, which reads the list only at start.

@@ -18,7 +18,8 @@ measure: false
 # of the node VMs does hold both (D-0058, Consequences).
 sealPath: /var/lib/central-hub/openbao-seal
 sealSize: 1Mi
-# Which kv/<env>/snapshot-mark the snapshot login may read (DESIGN section 6): dev today.
+# Which kv/<env>/snapshot-mark the snapshot login may read (DESIGN section 6): the root chart passes the cluster's env
+# label (openbaoMarkEnv), dev or prod; dev when unset.
 markEnv: dev
 # The hourly Raft snapshot (D-0058 rule 6; DESIGN section 6): a CronJob in this namespace that signs
 # in with OpenBao's Kubernetes login, role snapshot, and keeps the newest `keep` snapshots on a claim

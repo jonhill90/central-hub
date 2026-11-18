@@ -35,6 +35,12 @@ server:
   # The CLI inside the pod checks the listener against the same CA (kubectl exec ... bao status).
   extraEnvironmentVars:
     BAO_CACERT: /openbao/userconfig/openbao-tls/ca.crt
+  # A change to the config below restarts the pod on its own: the chart's checksum of the config goes
+  # on the pod (configAnnotation), and RollingUpdate replaces the pod when it changes. With one
+  # replica that is the same as deleting it by hand (the chart's default, OnDelete, waits for a
+  # person); the static seal unseals the new pod with no one there.
+  configAnnotation: true
+  updateStrategyType: RollingUpdate
   # From the openbao-store app: the server certificate (tls.crt, tls.key, ca.crt) and the policy
   # files the first start reads. Mounted read-only at /openbao/userconfig/<name>/.
   extraVolumes:
@@ -87,6 +93,16 @@ server:
         ports:
           - {port: 8200, protocol: TCP}
           - {port: 8201, protocol: TCP}
+      # Prometheus (app kube-prometheus-stack) reads /v1/sys/metrics; nothing else on 8200 from there.
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: monitoring
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: prometheus
+        ports:
+          - {port: 8200, protocol: TCP}
   dataStorage:
     enabled: true
     size: 2Gi
@@ -118,6 +134,20 @@ server:
           cluster_address = "[::]:8201"
           tls_cert_file   = "/openbao/userconfig/openbao-tls/tls.crt"
           tls_key_file    = "/openbao/userconfig/openbao-tls/tls.key"
+
+          # Prometheus reads /v1/sys/metrics with no token. The metrics are counts, timings and the
+          # seal state, no secret; only the callers the network policy above lets in reach the port
+          # (https://openbao.org/docs/configuration/listener/tcp/, telemetry parameters).
+          telemetry {
+            unauthenticated_metrics_access = true
+          }
+        }
+
+        # Metrics in Prometheus's format at /v1/sys/metrics?format=prometheus, names without the
+        # pod's name in them (https://openbao.org/docs/configuration/telemetry/).
+        telemetry {
+          prometheus_retention_time = "24h"
+          disable_hostname          = true
         }
 
         storage "raft" {
@@ -133,19 +163,18 @@ server:
           current_key    = "file:///openbao/seal/{{ .Values.centralHub.sealKeyId }}.key"
         }
 
-        # Self-init: runs once, on the first start of an empty store, then revokes the root token it
-        # used (https://openbao.org/docs/configuration/self-init/). Later starts skip it.
-        initialize "audit" {
-          request "file" {
-            operation = "update"
-            path      = "sys/audit/file"
-            data = {
-              type    = "file"
-              options = { file_path = "/openbao/audit/audit.log" }
-            }
+        # The audit device is declared here, not made by self-init: OpenBao refuses audit devices
+        # made through the API unless unsafe_allow_api_audit_creation is set, and self-init then
+        # stops with "refusing to unseal" (measured on c1, 2026-11-18;
+        # https://openbao.org/docs/configuration/audit/).
+        audit "file" "file" {
+          options {
+            file_path = "/openbao/audit/audit.log"
           }
         }
 
+        # Self-init: runs once, on the first start of an empty store, then revokes the root token it
+        # used (https://openbao.org/docs/configuration/self-init/). Later starts skip it.
         initialize "mounts" {
           request "kv" {
             operation = "update"
@@ -267,6 +296,19 @@ server:
         }
         {{- end }}
 
+        # The fixed, non-secret word ExternalSecret openbao-check reads (secret-store app, checkKey), so a
+        # fresh store syncs it with no write from outside and a dev rebuild's `apps` wait, which needs every
+        # ExternalSecret Ready, passes. It runs well after the kv mount. allow_failure: a refused write leaves
+        # the check not Ready, as before, and never stops the unseal.
+        initialize "check" {
+          request "word" {
+            operation     = "update"
+            path          = "kv/data/c1/check"
+            data          = { data = { value = "ok" } }
+            allow_failure = true
+          }
+        }
+
         # One-time hand-over of the admin login to the box. The box mints a short token for service
         # account openbao-bootstrap (no pod runs as it) with its cluster-admin kubeconfig, signs in
         # here, sets the admin's role ID and a secret ID from its keys folder, and deletes this role
@@ -286,6 +328,23 @@ server:
             }
           }
         }
+
+# Prometheus scrapes the active pod through the chart's own ServiceMonitor (in namespace openbao, so
+# it can name the CA Secret there), checking the listener's certificate against the namespace's CA.
+# Prometheus reads every ServiceMonitor in the cluster (kube-prometheus-stack values), so the label
+# below only says what made it. The dashboard and the alerts are in app monitoring-extras.
+serverTelemetry:
+  serviceMonitor:
+    enabled: true
+    selectors:
+      app.kubernetes.io/part-of: openbao
+    interval: 60s
+    tlsConfig:
+      ca:
+        secret:
+          name: openbao-tls
+          key: ca.crt
+      serverName: openbao-active.openbao.svc
 
 # Not the chart's: values only this repository's config above reads (through tpl).
 centralHub:

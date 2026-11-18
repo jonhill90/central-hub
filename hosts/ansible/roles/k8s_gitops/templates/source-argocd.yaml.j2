@@ -32,6 +32,8 @@ spec:
 {% if k8s_gitops_source_openbao_in_cluster | bool %}
         - name: openbaoInCluster
           value: "true"
+        - name: openbaoMarkEnv
+          value: "{{ k8s_gitops_cluster_labels.env }}"
 {% if k8s_gitops_source_openbao_seal_node | default('') | length > 0 %}
         - name: openbaoSealNode
           value: "{{ k8s_gitops_source_openbao_seal_node }}"

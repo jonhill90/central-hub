@@ -39,7 +39,7 @@
     mode: "0600"
   loop: "{{ agent_box_pf_stats.results | selectattr('stat.exists') | list }}"
   loop_control:
-    label: "{{ item.item.dest }}"
+    label: "{{ agent_box_keys_dir }}/prod/{{ item.item.dest }}"
   no_log: true
 
 - name: Find the controller's OpenTofu state files
@@ -59,7 +59,7 @@
     mode: "0600"
   loop: "{{ agent_box_pf_tfstates.files }}"
   loop_control:
-    label: "{{ item.path | basename }}"
+    label: "{{ agent_box_keys_dir }}/prod/state/{{ item.path | basename }}"
   no_log: true
 
 - name: Say which files were copied and which were missing (names only)

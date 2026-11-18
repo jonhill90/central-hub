@@ -27,9 +27,21 @@ agent_box_wrappers:
   # The owner's desktop VM (docs/runbooks/set-up-the-desktop.md). Not applied until the owner says so.
   - name: desktop
     args: [plan, apply, configure, destroy]
-  # The lab's secrets store, OpenBao, on dev (docs/runbooks/set-up-the-secrets-store.md, proposed D-0038).
+  # The lab's secrets store, OpenBao, inside the dev cluster (docs/runbooks/set-up-the-secrets-store.md, D-0058). The `*`
+  # on put lets sudo pass the path and key; the value comes on stdin, and the wrapper checks both arguments itself.
   - name: secrets-store
-    args: [plan, apply, configure, recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, destroy]
+    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", compare, reseed]
+  # The same wrapper for the store inside prod's c1 (D-0058): prod's keys folder, settings and inventory only.
+  - name: secrets-store-prod
+    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", compare, reseed]
+  # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal and
+  # seal-copy passes the owner's tap id, which the wrapper checks; key prints only the public half.
+  - name: openbao-prod
+    args: [key, check, "seal *", "seal-copy *", gitops, handover, reset-failed-start, log]
+  # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
+  # the owner's tap id, which the wrapper checks; the run needs dev to have passed at the same commit first.
+  - name: rebuild-prod
+    args: [check, "rebuild *", log]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself. Sessions get the
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge
@@ -52,8 +64,8 @@ agent_box_wrappers:
   # user, so no other wrapper can read the host key. Sessions may check and read the log; only the workflow's
   # runner (lab-proxmox-host.yml) may apply.
   - name: proxmox-host
-    args: [check, "apply *", log]
-    session_args: [check, log]
+    args: [check, "check *", "apply *", log]
+    session_args: [check, "check *", log]
     runner: true
     run_as: hostops   # the same name as agent_box_host_user
   # The tailnet policy file's pipeline job (D-0041, D-0046 rule 4): the same shape as tailnet-stack, for
@@ -68,6 +80,10 @@ agent_box_wrappers:
     args: [bootstrap, apply, secrets, "secrets rotate", status, log]
     session_args: [status, log]
     runner: true
+  # A throwaway OPNsense on dev, VM 257, for the sign-in proof (docs/runbooks/prove-opnsense-sign-in-on-dev.md).
+  # Built and destroyed only while dev is down; it runs a Keycloak container on this box during `prove`.
+  - name: opnsense-test
+    args: [plan, apply, configure, prove, destroy, log]
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]
@@ -253,13 +269,24 @@ agent_box_short_node: ""
 # key on the first worker (stage openbao-seal). The wrapper keeps that key as a SOPS copy, so true needs
 # agent_box_secrets_bundle set (the box's age identity). false (the default) removes the file: dev runs as before.
 agent_box_openbao_in_cluster: false
-# The secrets store's dev VM that the secrets-store wrapper builds (docs/runbooks/set-up-the-secrets-store.md).
-# Private, through the inventory: name, vm_id (500-599), address, cores, memory_mb, disk_gb,
-# proxmox_node_name, vnet, template_vm_id, box_address (this box's address, the only one the admin
-# AppRole works from), and optionally seal_key_id (default 1), admin_user and snapshot_box (default false; true only
-# by the owner's install tap of pick 240: configure then makes AppRole snapshot-box, and snapshot signs in with it).
-# Empty leaves the wrapper unset up.
+# The secrets-store wrapper's settings for the store inside the dev cluster (docs/runbooks/set-up-the-secrets-store.md,
+# D-0058). Private, through the inventory: address (the store's name as the box reaches it; it must equal the dev
+# inventory's k8s_gitops_source_openbao_store_host, D-0058 rule 10), and optionally snapshot_box (default false; true only
+# by the owner's install tap of pick 240) and sops_copies (default false; true only by the owner's access-right tap,
+# D-0058 rule 9: put, compare and reseed keep SOPS copies, and the weekly compare runs). Empty leaves the wrapper unset up.
 agent_box_secrets_store: {}
+# The same settings for the store inside prod's c1, written to <work_dir>/secrets-store-prod.json for the secrets-store-prod
+# wrapper. address must equal the prod inventory's k8s_gitops_source_openbao_store_host (the box's copy,
+# <work_dir>/openbao-prod/inventory/hosts.yml, which the openbao-prod wrapper builds from agent_box_openbao_prod.store_host);
+# snapshot_box and sops_copies as above, each set only by its own tap. It makes no recovery shares (D-0038 rule 5: prod
+# gets none). Empty leaves it unset up.
+agent_box_secrets_store_prod: {}
+# The openbao-prod wrapper's settings, private, written to <work_dir>/openbao-prod.json: seal_node (the prod k8s_nodes host
+# that holds the seal key, by its Kubernetes node name), store_host (the store's name as the box reaches it) and box_cidr
+# (the box's address as a /32, empty until the box's path to the store is set). Empty leaves the file out.
+agent_box_openbao_prod: {}
+# When the weekly compare of the store with its SOPS copy runs (systemd OnCalendar), once sops_copies is true.
+agent_box_secrets_store_compare_on_calendar: "Mon *-*-* 05:00:00"
 # The dev store's hourly snapshot off the box (pick 237, docs/runbooks/set-up-the-secrets-store.md), set up when both
 # agent_box_secrets_store and agent_box_opnsense_offbox are set. Its own restic repository in pick 222's container,
 # with pick 222's password; keeps 48 hourly, 14 daily and 6 monthly; prunes once a day, on the first run from 03:00 UTC.
@@ -273,6 +300,13 @@ agent_box_secrets_store_offbox_on_calendar: hourly
 # Private settings for the vps-host wrapper (D-0046), written to <work_dir>/vps-host.json: name (the VPS's name on
 # the tailnet). Empty does nothing.
 agent_box_vps_host: {}
+# Private settings for the opnsense-test wrapper, written to <work_dir>/opnsense-test.json: name (STD-0001), address
+# (the test VM's dev address), keycloak_address (this box's address the test VM reaches), cores, memory_mb (3072 or
+# more), disk_gb (16 or more) and proxmox_node_name. The VM ID is fixed at 257. Empty leaves the wrapper's tools,
+# filter and settings unset up.
+agent_box_opnsense_test: {}
+# The first subordinate UID and GID of the keys user, for the proof's rootless Keycloak container (65536 of each).
+agent_box_opnsense_test_subid_start: 300000
 # The controller's private files the prod_files tasks copy to <keys_dir>/prod (D-0035; paths from
 # docs/runbooks/rebuild-home-lab-from-scratch.md). from: clone (the controller's checkout of this
 # repo) or config (~/.config/central-hub). A missing file is skipped and named. Not listed on purpose:

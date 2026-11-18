@@ -231,6 +231,8 @@
     group: root
     mode: "0644"
   loop: "{{ agent_box_ca_files }}"
+  loop_control:
+    label: "/etc/pki/ca-trust/source/anchors/agent-box-{{ item | basename }}"
   notify: Rebuild the trust store
   tags: [ca]
 
@@ -351,6 +353,82 @@
   when: not ansible_check_mode
   tags: [wrappers]
 
+# Headless Chromium for the web proofs: agents sign in to a web page from the box and keep a screenshot
+# (`web-shot <url> <out.png>`). The version is pinned here, with the task, not in defaults, so a bump is a change
+# to the box's limits like the Ansible pin above. Playwright downloads its own Chromium into one root-owned folder.
+- name: Libraries headless Chromium needs
+  ansible.builtin.package:
+    name: [nss, nspr, atk, at-spi2-atk, cups-libs, libdrm, libxkbcommon, libXcomposite, libXdamage, libXfixes,
+           libXrandr, mesa-libgbm, pango, cairo, alsa-lib, liberation-fonts]
+    state: present
+  tags: [wrappers]
+
+- name: Playwright's hash-pinned requirements, root-owned
+  ansible.builtin.copy:
+    src: playwright-requirements.txt
+    dest: "{{ agent_box_libexec_dir }}/playwright-requirements.txt"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [wrappers]
+
+- name: Playwright, in its own virtual environment (every file checked against its hash)
+  ansible.builtin.pip:
+    requirements: "{{ agent_box_libexec_dir }}/playwright-requirements.txt"
+    extra_args: --require-hashes
+    virtualenv: "{{ agent_box_libexec_dir }}/playwright-venv"
+    virtualenv_command: python3 -m venv
+  when: not ansible_check_mode
+  tags: [wrappers]
+
+- name: Chromium for Playwright, in a root-owned folder
+  ansible.builtin.command:
+    cmd: "{{ agent_box_libexec_dir }}/playwright-venv/bin/playwright install chromium"
+    creates: "{{ agent_box_libexec_dir }}/playwright-browsers"
+  environment:
+    PLAYWRIGHT_BROWSERS_PATH: "{{ agent_box_libexec_dir }}/playwright-browsers"
+  when: not ansible_check_mode
+  tags: [wrappers]
+
+# A loop of one, so a check run names the file by its loop label before the file exists: box-apply allows an approved limit
+# apply to change only the limit paths its check run named, and a plain copy of a new file has no path in a check run's
+# result (the first apply of line I stopped on this, 2026-11-18 04:03Z).
+- name: The web-shot script, root-owned
+  ansible.builtin.copy:
+    src: web-shot.py
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: ["{{ agent_box_libexec_dir }}/web-shot.py"]
+  loop_control:
+    label: "{{ item }}"   # the destination, as for the wrappers
+  tags: [wrappers]
+
+- name: web-shot on the path
+  ansible.builtin.copy:
+    dest: "{{ agent_box_front_dir }}/web-shot"
+    content: |
+      #!/bin/sh
+      # Made by the agent_box role. web-shot <url> <out.png> [--insecure]
+      export PLAYWRIGHT_BROWSERS_PATH={{ agent_box_libexec_dir }}/playwright-browsers
+      exec {{ agent_box_libexec_dir }}/playwright-venv/bin/python -I {{ agent_box_libexec_dir }}/web-shot.py "$@"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+# lab-proof: a read-only check, run by sessions as themselves (no key), that each c1 app name resolves through the
+# lab DNS and that the Gateway's certificate verifies against the box's trust store (docs/runbooks/set-up-the-agent-box.md).
+- name: lab-proof on the path, root-owned
+  ansible.builtin.copy:
+    src: lab-proof.sh
+    dest: "{{ agent_box_front_dir }}/lab-proof"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
 - name: The Ansible collections the playbooks pin, from the keys user's checkout
   ansible.builtin.command:
     cmd: >-
@@ -371,7 +449,7 @@
     mode: "0755"
   loop: "{{ agent_box_wrappers }}"
   loop_control:
-    label: "{{ item.name }}"
+    label: "{{ agent_box_libexec_dir }}/{{ item.name }}.sh"   # the destination, so a check run names a file that is not there yet
   tags: [wrappers]
 
 - name: Front scripts that sessions run
@@ -383,7 +461,7 @@
     mode: "0755"
   loop: "{{ agent_box_wrappers }}"
   loop_control:
-    label: "{{ item.name }}"
+    label: "{{ agent_box_front_dir }}/{{ item.name }}"   # the destination, as above
   tags: [wrappers]
 
 - name: The ci-runner wrapper's private settings, from the inventory (no keys)
@@ -460,7 +538,10 @@
   loop:
     - secrets-store-restore.sh     # the guarded restores, same store and rebuilt
     - secrets-store-snapshots.sh   # rotation, and setting an earlier store's snapshots aside
-  when: agent_box_secrets_store | length > 0
+    - secrets-store-kv.sh          # SOPS copies: put, compare, reseed (D-0058 rule 8)
+  loop_control:
+    label: "{{ agent_box_libexec_dir }}/{{ item }}"
+  when: agent_box_secrets_store | length > 0 or agent_box_secrets_store_prod | length > 0
   tags: [wrappers]
 
 - name: The secrets-store wrapper's private settings, from the inventory (no keys)
@@ -473,6 +554,78 @@
   when: agent_box_secrets_store | length > 0
   tags: [wrappers]
 
+- name: The secrets-store-prod wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/secrets-store-prod.json"
+    content: "{{ agent_box_secrets_store_prod | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_secrets_store_prod | length > 0
+  tags: [wrappers]
+
+- name: The openbao-prod wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/openbao-prod.json"
+    content: "{{ agent_box_openbao_prod | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_openbao_prod | length > 0
+  tags: [wrappers]
+
+# The weekly compare of the store with its SOPS copy (D-0058 rule 8), only once sops_copies is true (the owner's
+# access-right tap, rule 9). Set back to false, the timer is stopped and disabled; the wrapper refuses compare then.
+- name: The SOPS copies need the secrets bundle, for the box's age identity and SOPS
+  ansible.builtin.assert:
+    that: agent_box_secrets_bundle | length > 0
+    fail_msg: agent_box_secrets_store.sops_copies needs agent_box_secrets_bundle set (the box's age identity and SOPS)
+    quiet: true
+  when: agent_box_secrets_store.sops_copies | default(false) is true
+  tags: [wrappers]
+
+- name: Weekly secrets-store compare service and timer (D-0058 rule 8)
+  ansible.builtin.template:
+    src: "secrets-store-compare.{{ item }}.j2"
+    dest: "/etc/systemd/system/secrets-store-compare.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/secrets-store-compare.{{ item }}"   # the destination, so a check run names a file not there yet
+  register: agent_box_store_compare_units
+  when: agent_box_secrets_store.sops_copies | default(false) is true
+  tags: [wrappers]
+
+- name: Weekly secrets-store compare timer on
+  ansible.builtin.systemd_service:
+    name: secrets-store-compare.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_store_compare_units is changed }}"
+  when: >-
+    agent_box_secrets_store.sops_copies | default(false) is true
+    and not (ansible_check_mode and agent_box_store_compare_units is changed)
+  tags: [wrappers]
+
+- name: Is there a secrets-store compare timer to turn off
+  ansible.builtin.stat:
+    path: /etc/systemd/system/secrets-store-compare.timer
+  register: agent_box_store_compare_timer
+  when: agent_box_secrets_store.sops_copies | default(false) is not true
+  tags: [wrappers]
+
+- name: Weekly secrets-store compare timer off, while sops_copies is not true
+  ansible.builtin.systemd_service:
+    name: secrets-store-compare.timer
+    enabled: false
+    state: stopped
+  when: >-
+    agent_box_secrets_store.sops_copies | default(false) is not true
+    and agent_box_store_compare_timer.stat.exists | default(false)
+  tags: [wrappers]
+
 - name: The vps-host wrapper's private settings, from the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/vps-host.json"
@@ -483,6 +636,14 @@
   when: agent_box_vps_host | length > 0
   tags: [wrappers]
 
+- name: The opnsense-test wrapper's tools, settings and packet filter
+  ansible.builtin.include_tasks:
+    file: opnsense_test.yml
+    apply:
+      tags: [wrappers]
+  when: agent_box_opnsense_test | length > 0
+  tags: [wrappers]
+
 - name: Weekly CI runner service and timer (pick 208)
   ansible.builtin.template:
     src: "ci-runner-weekly.{{ item }}.j2"
@@ -491,6 +652,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/ci-runner-weekly.{{ item }}"
   register: agent_box_ci_runner_units
   when: agent_box_ci_runner | length > 0
   tags: [wrappers]
@@ -541,6 +704,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/tailnet-cleanup.{{ item }}"
   register: agent_box_tailnet_cleanup_units
   when: agent_box_tailnet_cleanup | length > 0
   tags: [wrappers]
@@ -571,6 +736,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/pr-merge-sweep.{{ item }}"
   register: agent_box_merge_sweep_units
   when: agent_box_merge_sweep | bool
   tags: [wrappers]
@@ -760,6 +927,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/opnsense-backup.{{ item }}"
   register: agent_box_opnsense_backup_units
   when: agent_box_opnsense_backup | length > 0
   tags: [wrappers]

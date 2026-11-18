@@ -16,7 +16,7 @@ superseded-by:
 
 **Status:** draft, not yet run. Written 2026-11-10 from the code in `hosts/terraform/home/jumpbox`.
 
-The VM was first built by the jumpbox rehearsal kit, whose state also holds the rehearsal's container (CT 259). This runbook moves only the VM's entry into this folder's own state, then grows the VM. The container stays in the rehearsal state, untouched.
+The VM was first built by the jumpbox rehearsal kit, whose state also holds the rehearsal's container (CT 259). This runbook moves only the VM's entry into this folder's own state, then grows the VM. The container stays in the rehearsal state until it is deleted ([Delete the rehearsal's container](#delete-the-rehearsals-container)).
 
 ```mermaid
 flowchart LR
@@ -116,6 +116,29 @@ flowchart LR
    Read the peak used memory from both (`total - available`). Set `memory_mb` in `home.tfvars` to the peak plus 25 %, rounded up to the next 512 MiB, and not under 4096. Plan and apply as in steps 4 and 5; expect `1 to change`, `memory.dedicated` only.
    expect: the two peaks, the new `memory_mb` and the date are recorded in `hosts/AGENT-PICKS.md` pick 194, and this runbook's `outcome` line names the size.
 
+## Give the box a balloon
+
+The box's VM had no balloon device (`floating = 0`), so memory the box once touched never went back to the host. Its footprint grew until a dev rebuild no longer fit beside prod: 8414 MiB free with VM 300 stopped on 2026-11-18 at 03:51 UTC, against a 10240 MiB minimum. `floating = 4096` gives it a balloon. On a q35 machine of version 6.2 or later, Proxmox adds `free-page-reporting=on` to the balloon (qemu-server `src/PVE/QemuServer.pm`). Pages the guest frees then go back to the host, and the host's auto-ballooning may shrink the box down to 4096 MiB when the host runs short. This changes VM 258, so the owner taps it. The apply restarts the box, which ends every session running on it.
+
+On 2026-11-18 this change was made by hand on the host, on the owner's typed order at 04:01 UTC: `qm set 258 --balloon 4096`, then `qm reboot 258`. After that, `qm config 258` showed `balloon: 4096`, and the box came back at 04:01:34 UTC with a `virtio_balloon` device whose free page reporting bit is 1. Its guest then showed 4039 MiB, because the host had shrunk it to the floor. The next dev preflight read 10569 MiB free with VM 300 running. So once this folder's code has `floating = 4096`, step 1's plan shows no change; read it, and apply only if it shows one.
+
+1. Plan this folder and read the plan, as in step 4.
+
+   expect: `0 to add, 1 to change, 0 to destroy`, changing only `memory.floating` from 0 to 4096.
+   If the plan shows any other change, or says **must be replaced**, stop and apply nothing.
+
+2. Apply the saved plan, as in step 5.
+
+   expect: the VM reboots once. Proxmox's reboot shuts the VM down and starts it again, which applies pending hardware changes (qemu-server `src/PVE/API2/Qemu.pm`, `vm_reboot`). It comes back in under a minute.
+
+3. Check the balloon on the box.
+
+   ```sh
+   ls /sys/bus/virtio/drivers/virtio_balloon/
+   ```
+
+   expect: one `virtio<N>` entry. Its features string in `/sys/bus/virtio/devices/virtio<N>/features` has `1` at position 5 (`VIRTIO_BALLOON_F_REPORTING`). The next dev preflight's free memory should be back near the 01:49 UTC reading, 12887 MiB with VM 300 stopped.
+
 ## If it fails
 
 - The plan wants to replace the VM: run `tofu state mv` in reverse to put the entry back into the rehearsal state, and report the plan.
@@ -131,6 +154,52 @@ flowchart LR
 
   expect: the same fingerprint as SSH shows. Then run the agent_box role (it sets `manual_cache_clean`), and redo [set-up-the-agent-box.md](set-up-the-agent-box.md) step 4 if `tailscale status` says it is logged out.
 - `growpart` says `NOCHANGE`: cloud-init already grew the partition at boot; go straight to `xfs_growfs /`.
+
+## Delete the rehearsal's container
+
+The owner chose to delete CT 259 (tap of 2026-11-18 00:00:40 UTC). It has had no job since VM 258 became the agent box. VM 258 and every other guest stay as they are. The agents' Proxmox tokens have no right on CT 259, so this runs on the owner's Mac, which holds the kit's state, the `iac@pve!apply` token and root SSH to the host. An agent lane runs it there on the owner's typed line.
+
+1. Check that it is the rehearsal's container, and that the kit's state holds nothing else.
+
+   ```sh
+   ssh root@<proxmox host> 'pct config 259' | grep '^tags:'
+   tofu-jumpbox.sh init
+   tofu -chdir=<rehearsal kit folder> state list
+   ```
+
+   expect: the tags include `jumpbox` and `rehearsal`, and `state list` prints exactly one line, `proxmox_virtual_environment_container.j2`.
+   If `state list` prints anything else, such as `proxmox_virtual_environment_vm.j1`, stop: the kit's destroy deletes everything in its state, and that VM may be VM 258.
+
+2. Sign the container out of the tailnet and out of Claude Code, so no device or login is left behind.
+
+   ```sh
+   ssh root@<proxmox host> "pct exec 259 -- sh -c 'systemctl disable --now claude-rc; su -s /bin/sh claude -c \"/home/claude/.local/bin/claude auth logout\"; if command -v tailscale >/dev/null; then tailscale logout; fi'"
+   ```
+
+   expect: the output of each command, and no error from `pct`. A command that is missing in the container is reported, not a stop; step 5 covers what it leaves.
+
+3. Delete it with the kit.
+   why: the kit's state then holds nothing, so no later apply of the kit can build CT 259 again. Proxmox drops the container's ACLs with it.
+
+   ```sh
+   tofu-jumpbox.sh destroy
+   ```
+
+   expect: `Destroy complete! Resources: 1 destroyed.`
+
+4. Check.
+
+   ```sh
+   ssh root@<proxmox host> 'pct status 259; qm status 258'
+   ```
+
+   expect: `pct` says the container does not exist, and `qm status 258` prints `status: running`.
+
+5. Clear what is left outside the host.
+   - Tailnet: a device that step 2 did not sign out goes offline. If it carries a tag that the agent box's daily cleanup removes, the cleanup removes it after its days offline ([set-up-the-agent-box.md](set-up-the-agent-box.md), "Remove old tailnet devices"), and `tailnet-cleanup plan` lists it first.
+   - DNS: if the private records file names the container, remove that record and apply the DNS stack.
+   - Claude Code: its Remote Control registration shows offline, and its line on the temporary-access register closes.
+   - The kit: its state is empty. The kit's folder and `tofu-jumpbox.sh` stay on the Mac until the owner removes them.
 
 ## Exit
 

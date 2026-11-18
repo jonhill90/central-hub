@@ -32,9 +32,15 @@ resource "proxmox_virtual_environment_vm" "jumpbox" {
     cores = var.jumpbox.cores
   }
 
+  # floating > 0 gives the VM a balloon device. On a q35 machine (no version pinned, so 6.2 or later) Proxmox adds
+  # free-page-reporting=on to it (qemu-server src/PVE/QemuServer.pm, the balloon device), so pages the
+  # box frees go back to the host. With floating = 0 there was no balloon, and the box's footprint on the host
+  # only grew: the dev preflight's free memory fell from 12887 MiB (2026-11-18 01:49 UTC) to 8414 MiB (03:51 UTC)
+  # with the box's guest at 763 MiB used and 5787 MiB cache. 4096 is the least the host's auto-ballooning may
+  # shrink the box to when the host runs short.
   memory {
     dedicated = var.jumpbox.memory_mb
-    floating  = 0
+    floating  = 4096
   }
 
   agent {

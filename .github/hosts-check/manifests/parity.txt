@@ -12,7 +12,9 @@
 manifest c1 local-path k8s_storage local-path.yaml.j2
 # Dev turns stable folder names on (TASK-0240); both sides must still agree.
 manifest c1 local-path k8s_storage local-path.yaml.j2 {"k8s_storage_stable_folders":true} set=storageClass.stableFolders=true
-manifest c1 jellyfin k8s_jellyfin jellyfin.yaml.j2
+# The chart now also installs the SSO plugin (sign-in through Keycloak), which the Ansible role never did,
+# so parity is checked with sso.enabled off: every other object must still match.
+manifest c1 jellyfin k8s_jellyfin jellyfin.yaml.j2 {} set=sso.enabled=false
 values c1 metrics-server k8s_observability k8s_observability_metrics_server_values
 values c1 loki k8s_observability k8s_observability_loki_values
 values c1 alloy k8s_observability k8s_observability_alloy_values

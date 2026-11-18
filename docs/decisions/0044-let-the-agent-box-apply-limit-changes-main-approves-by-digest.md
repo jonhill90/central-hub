@@ -1,6 +1,6 @@
 ---
 id: D-0044
-title: Let the agent box apply a change to its own limits that main approves by its exact digest, with the owner's tap logged but not checked
+title: Let the agent box apply a change to its own limits that main approves by its exact digest, with the approval ids logged but not checked
 status: accepted
 date: 2026-11-15
 decision-makers: [owner]
@@ -20,7 +20,7 @@ accepted-evidence:
 revisit-when: the box can check the owner's tap itself (for example a GitHub environment approval once the agents have their own account, D-0030); a line in the approvals file names a pass or a tap that does not exist; an approved apply changes a limit path its check run did not name; the approvals file becomes a limit; or a cluster other than c1 reads the repository
 ---
 
-# Let the agent box apply a change to its own limits that main approves by its exact digest, with the owner's tap logged but not checked
+# Let the agent box apply a change to its own limits that main approves by its exact digest, with the approval ids logged but not checked
 
 ## Context and Problem Statement
 
@@ -38,14 +38,14 @@ The owner's message of 2026-11-14 07:47:50 UTC said they would no longer type go
 ## Decision Drivers
 
 - **The owner's messages.** Their message of 07:47:50 UTC said they would no longer type go lines (that this is for the greenfield build-out is the agents' reading of the owner's message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and their messages of 07:42 to 07:44 UTC said PRs should no longer come to them for approval. At 07:43:25 UTC they pointed to their earlier rules without listing them; D-0042 reads them as firewall and tailnet (D-0036 rule 8), deletes and secrets (agent picks).
-- **The owner's earlier answer that an agent can't loosen its own limits** (their tap of 2026-11-14 02:26 UTC on D-0036's card). D-0042 rule 6 keeps their tap for limit changes.
+- **The owner's earlier answer that an agent can't loosen its own limits** (their tap of 2026-11-14 02:26 UTC on D-0036's card). Their order of 2026-11-17 06:21:09 UTC, "drop the box-install cards" (cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh), replaced it: a limit change needs the agents' pass of its digest and no tap, unless it also holds another D-0042 rule 6 step (D-0042 rule 4).
 - **What the box can check, it checks.** It can check commits and bytes. It can't read chat messages or decision cards.
 - **Deterministic** (the owner's ranking of 2026-11-11).
 - **Replaceable** (REQ-0011): undone by emptying the approvals file, or by an older `box-apply`.
 
 ## Considered Options
 
-1. **An approvals file on main, pinned by digest.** Each line names the baseline, a commit, the sha256 of the limit files' diff between them, the pass's message id and the owner's tap id. `box-apply apply` applies that commit when the bytes match.
+1. **An approvals file on main, pinned by digest.** Each line names the baseline, a commit, the sha256 of the limit files' diff between them, the pass's message id and the owner's approval id. `box-apply apply` applies that commit when the bytes match.
 2. **A new `box-apply` argument that a runner job calls with the approval.** This needs a new sudo argument and a runner workflow, and it checks no more than option 1.
 3. **A line signed with a key on the box.** The agents hold every key the box holds, so a signature proves no more than a merged line.
 4. **A protected GitHub environment approval.** GitHub can stop the person who started a deployment from approving it (evidence, finding 5). But every agent acts as the owner's one account (AGENTS.md rule 1), so there is no second person. This waits for D-0030.
@@ -58,26 +58,26 @@ Chosen option: **1**. It needs no new sudo argument, and the box checks everythi
 ```mermaid
 flowchart LR
   pr["limit change<br/>merged to main"] --> plan["box-apply plan:<br/>stops, prints the line to approve"]
-  plan --> pass["reviewer + councils pass the digest;<br/>owner taps (D-0042 rule 6)"]
+  plan --> pass["reviewer passes the digest<br/>(D-0042 rule 4)"]
   pass --> line["PR adds the line to<br/>the approvals file"]
   line --> apply["box-apply apply:<br/>checks baseline, commit, digest;<br/>logs pass and tap"]
   apply --> done["applies that commit,<br/>baseline moves"]
 ```
 
-*In words:* a limit change merges. `box-apply plan` stops and prints the line that would approve it. The reviewer and the council pass that digest, and the owner taps the card that names it. A PR adds the line. `box-apply apply` checks the baseline, the commit and the digest, logs the pass and the tap ids, applies the change, and moves the baseline.
+*In words:* a limit change merges. `box-apply plan` stops and prints the line that would approve it. The reviewer passes that digest; the owner taps a card that names it only when the change also holds another D-0042 rule 6 step. A PR adds the line. `box-apply apply` checks the baseline, the commit and the digest, logs the pass and approval ids, applies the change, and moves the baseline.
 
 ### Rules
 
 1. **The approvals file.** `hosts/ansible/agent-box-limit-approvals.txt` holds one line per approved limit change: `<from> <to> <digest> <pass> <tap>`.
    - `from` is the baseline.
    - `to` is a commit on main after which no limit changes.
-   - `digest` is the sha256 of `git diff --no-renames --binary --full-index <from> <to> -- <the limit files that changed>`, the bytes the reviewer and the council read.
+   - `digest` is the sha256 of `git diff --no-renames --binary --full-index <from> <to> -- <the limit files that changed>`, the bytes the reviewer reads.
    - `pass` is the id of the orchestrator's message that records the agents' pass of that digest (D-0042 rule 1).
-   - `tap` is the id of the owner's tap on a card naming the digest (D-0042 rule 6). A tap of `none` never counts.
+   - `tap` is the owner's approval: the id of their order of 2026-11-17 06:21:09 UTC that dropped the box-install cards (cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh), or, when the change also holds another D-0042 rule 6 step (a firewall apply such as a packet filter on the box, an access right, a secret, a delete or money), the id of their tap on a card naming the digest (D-0042 rule 4). A tap of `none` never counts.
 
    The file sits outside the role, so adding a line is not itself a limit change. A line is added by a PR that merges like any other.
 2. **What the box checks.** `box-apply apply` uses a line only when its `from` is the baseline, its `to` is on main with no later limit change, and the digest matches. It then applies `to`, with the tasks that write `box-apply`, its settings and its list of limits switched on. The apply may change only the limit paths that its check run named. Any other change puts back every limit change of the run, and self-applies stop until an apply from the controller (D-0036 rule 5). After a good run, the baseline moves to `to`.
-3. **What the box can't check.** The box can't read the chat or the cards. It only logs the `pass` and `tap` ids, and it can't tell a real id from a made-up one. **So an agent can write a line with a made-up tap id and loosen the box's own limits without the owner.** Nothing on the box stops that. The controls are outside the box:
+3. **What the box can't check.** The box can't read the chat or the cards. It only logs the `pass` and `tap` ids, and it can't tell a real id from a made-up one. **So an agent can write a line with a made-up pass id, or with the standing order's id where a card is needed, and loosen the box's own limits without the agents' pass or the owner's card.** Nothing on the box stops that. The controls are outside the box:
    - the line merges only through review and the agents' pass, like every merge (D-0042 rules 1 and 2);
    - every line, with its ids, is in the repository's history and in the box's log;
    - the orchestrator lists every approved limit change in its next report to the owner (D-0042 rule 9), so a made-up id shows there;
@@ -85,14 +85,14 @@ flowchart LR
 4. **The inventory stays the controller's.** `box-apply`'s inventory, the box's private host variables, is still written only by an apply from the controller (D-0036 rule 7). A limit change that needs a new private value still fails and waits for one.
 5. **The one apply from the controller this needs.** The code for rules 1 and 2 (central-hub #308) is itself a limit change. The installed `box-apply` stops on it, and a self-apply never writes `box-apply`. So it reaches the box by one full apply from the controller, under D-0036 rule 6 as it stands. That apply also installs the 19 limit changes waiting since 9d519572. After it, limit changes go by rules 1 to 3.
 6. **What this changes, on acceptance.** D-0036 rule 3(f) (`box-apply` and its list now also change by an approved limit apply), rule 6 (a limit change is applied from the controller or by rules 1 and 2), and rule 7 (unchanged in substance; the inventory still only from the controller). D-0042 rule 4 ("still applied from the controller"). The acceptance PR edits each so it reads as the current rule (D-0001, Immutability), and adds one line to `CORRECTIONS.md`.
-7. **Unchanged.** D-0042 rule 6 keeps the owner's tap for limit changes; this record only says where the box records it. D-0036 rules 4 and 5 (the stop before, and the check after) stand for every run without a matching line.
+7. **Unchanged.** D-0042 rule 4 says who approves a limit change; this record only says where the box records it. D-0036 rules 4 and 5 (the stop before, and the check after) stand for every run without a matching line.
 
 ### Consequences
 
 - Good: after one more apply from the controller, limit changes reach the box with no Mac step, which the owner's end goal needs.
 - Good: the box checks the bytes. A line approves exactly the diff that was passed, and a later change to those files needs its own line.
 - Good: no new sudo argument, and the stop and the put-back of D-0036 still hold for every run without a line.
-- Bad: **an agent can loosen the box's limits with a made-up tap id** (rule 3). This is what D-0036 was written to prevent, and the box itself no longer prevents it. Compensating controls: review and the agents' pass on every line, the public history, the orchestrator's report, and the owner's no. This is the same gap D-0042 accepts for the merge job's message ids.
+- Bad: **an agent can loosen the box's limits with a made-up pass id, or with the standing order's id where a card is needed** (rule 3). This is what D-0036 was written to prevent, and the box itself no longer prevents it. Compensating controls: review and the agents' pass on every line, the public history, the orchestrator's report, and the owner's no. This is the same gap D-0042 accepts for the merge job's message ids.
 - Bad: the approvals file is not a limit, so the gate is the merge, not the box. Compensating control: a line counts only for its exact `from` and digest, so an old line can't be reused.
 - Bad: check mode can miss what a task does, for example a command task. Then an approved apply stops with nothing applied to the limits, and the controller has to end the stop. Compensating control: the stop is safe, and the run's output is kept.
 - Bad: one more apply from the controller is still needed (rule 5). That apply is the gap named in the design, reported to the owner once as a result.

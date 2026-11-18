@@ -85,7 +85,8 @@ argument_specs:
         description: >-
           All optional, for the daily SOPS-encrypted bundle of the box's private files (picks 228 and 236):
           mac_recipient (the Mac's age public key), keep (1 to 60, default 14), and for the off-box send
-          vault_secret, offbox_keep_daily (default 14) and offbox_keep_monthly (default 6). Empty does nothing.
+          vault_secret, offbox_keep_daily (default 14) and offbox_keep_monthly (default 6), and offbox (default false;
+          true turns the off-box send on, only with the owner's secrets card). Empty does nothing.
       agent_box_secrets_bundle_daily: {type: str, default: "*-*-* 15:30:00 UTC", description: "systemd OnCalendar for the daily bundle."}
       agent_box_secrets_bundle_offbox_daily: {type: str, default: "*-*-* 16:15:00 UTC", description: "systemd OnCalendar for the bundle's off-box send."}
       agent_box_sops_version: {type: str, description: "SOPS version for the bundle."}
@@ -202,6 +203,18 @@ argument_specs:
           the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name, vnet,
           template_vm_id), rdp_source (the tailnet connector's address, where RDP arrives from) and optionally admin_user. No key and no
           password goes in it. Empty skips the file.
+      agent_box_opnsense_test:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the opnsense-test wrapper, written to <work_dir>/opnsense-test.json (0600, the keys
+          user's): name, address (the test VM's dev address), keycloak_address (the box's address the VM reaches),
+          cores, memory_mb, disk_gb and proxmox_node_name. No key or password goes in it: the wrapper makes the
+          proof's own and removes them at destroy. Empty skips the wrapper's tools, filter and file.
+      agent_box_opnsense_test_subid_start:
+        type: int
+        default: 300000
+        description: The keys user's first subordinate UID and GID (65536 of each), for the proof's rootless Keycloak.
       agent_box_vps_host:
         type: dict
         default: {}
@@ -213,12 +226,33 @@ argument_specs:
         default: {}
         description: >-
           Private settings for the secrets-store wrapper, written to <work_dir>/secrets-store.json (0600, the
-          keys user's). The wrapper reads vm_id (its dev check, 550-599), address and snapshot_box. The store VM's
-          other fields (name, cores, memory_mb, disk_gb, proxmox_node_name, vnet, template_vm_id, box_address,
-          seal_key_id, admin_user) are read by nothing since the VM code was removed (D-0058); rework PR 3b reshapes
-          this for the store inside the cluster. snapshot_box: true (agent pick 240) makes snapshot sign in as AppRole
-          snapshot-box; it is set only by the owner's install tap, an access right and a box limit. No key goes in
-          it; the wrapper makes the keys in the keys folder. Empty skips the file.
+          keys user's), for the store inside the dev cluster (D-0058). address: the store's name as the box reaches
+          it; every action refuses unless it equals the dev inventory's k8s_gitops_source_openbao_store_host
+          (D-0058 rule 10). snapshot_box: true (agent pick 240) makes snapshot sign in as AppRole snapshot-box; it is
+          set only by the owner's install tap, an access right and a box limit. sops_copies: true lets put, compare
+          and reseed keep SOPS copies and turns on the weekly compare; it is set only by the owner's access-right tap
+          (D-0058 rule 9). Anything but true is false. No key goes in it; the wrapper makes the keys in the keys
+          folder. Empty skips the file.
+      agent_box_secrets_store_prod:
+        type: dict
+        default: {}
+        description: >-
+          The same settings for the store inside prod's c1, written to <work_dir>/secrets-store-prod.json for the
+          secrets-store-prod wrapper. address must equal k8s_gitops_source_openbao_store_host in the prod inventory the
+          openbao-prod wrapper builds (agent_box_openbao_prod.store_host); snapshot_box and sops_copies as for the dev settings, each set only by its own
+          tap. It makes no recovery shares (D-0038 rule 5: prod gets none). Empty skips the file.
+      agent_box_openbao_prod:
+        type: dict
+        default: {}
+        description: >-
+          Private settings for the openbao-prod wrapper, written to <work_dir>/openbao-prod.json (0600, the keys user's):
+          seal_node (the prod k8s_nodes host for the seal key, its Kubernetes node name), store_host (the store's name as the
+          box reaches it) and box_cidr (the box's address as a /32; empty until the box's path to the store is set). No key
+          goes in it. Empty skips the file.
+      agent_box_secrets_store_compare_on_calendar:
+        type: str
+        default: "Mon *-*-* 05:00:00"
+        description: systemd OnCalendar for the weekly compare of the store with its SOPS copy (only with sops_copies true).
       agent_box_secrets_store_offbox:
         type: dict
         default:

@@ -1,0 +1,15 @@
+# Managed by Ansible (role agent_box, tasks/opnsense_test.yml). The proof's Keycloak
+# (docs/runbooks/prove-opnsense-sign-in-on-dev.md) runs on the host network only during `opnsense-test prove`.
+# This table lets its port take connections from the OPNsense test VM's dev address and from the box itself,
+# and drops the rest, so nothing else can reach it even while it runs. Nothing else listens on that port.
+# `table` then `delete table` makes the file a clean replace in one transaction when it is loaded again.
+table inet opnsense_test
+delete table inet opnsense_test
+table inet opnsense_test {
+  chain input {
+    type filter hook input priority -10; policy accept;
+    tcp dport 8443 iifname "lo" accept
+    tcp dport 8443 ip saddr {{ agent_box_opnsense_test.address }} accept
+    tcp dport 8443 drop
+  }
+}

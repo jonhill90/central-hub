@@ -13,7 +13,8 @@
 #   8. A limit change with no approval line, a line whose tap is "none", a wrong digest, or a limit change after
 #      the line's commit stops and prints the digest to approve; a matching line applies that commit with the
 #      limit tasks on and moves the baseline to it, and the next run goes on to main; an approved apply that
-#      changes a limit path its check run did not name is put back and stops self-applies.
+#      changes a limit path its check run did not name is put back and stops self-applies; a file the apply adds
+#      is named by the loop label (the destination) in the check run, and passes only then.
 # Usage: .github/hosts-check/tests/test_box_apply.sh   (needs git and python3)
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
@@ -240,6 +241,27 @@ set +e; out=$(ba apply); rc=$?; set -e
 [[ $rc == 4 && $out == *"did not name"* && ! -e $t/box/sudoers.d/extra && $(base) == "$b9" && -f $t/state/stopped ]] \
   && ok "8h. an approved apply that changes a limit path its check run did not name is put back and stops" || bad "8h: exit $rc: $out"
 rm -f "$t/apply-hook" "$t/state/stopped"
+
+# 8i, 8j: an approved apply that adds a file. A check run gives a file that is not on the box yet no dest, path or
+# header, so only the role's loop label (the destination) names it.
+printf -- '- name: u\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
+l10=$(commit c10)
+w10=$(git -C "$t/src" diff --no-renames --binary --full-index "$b9" "$l10" -- "$r/tasks/main.yml" | sha256sum | cut -d' ' -f1)
+echo "$b9 $l10 $w10 cmsg_pass03 card_tap03" >> "$t/src/$appr"
+commit c10b >/dev/null
+newf="$t/box/sudoers.d/agent-box-new"
+printf '#!/bin/bash\necho "claude ALL=(keys) NOPASSWD: /y plan" > "%s"\n' "$newf" > "$t/apply-hook"
+chmod +x "$t/apply-hook"
+echo '{"plays":[{"tasks":[{"task":{"name":"Wrappers, root-owned"},"hosts":{"box1":{"changed":true,"results":[{"changed":true,"_ansible_item_label":"new","diff":[{"before":"","after":"x"}]}]}}}]}],"stats":{"box1":{"failures":0,"unreachable":0}}}' > "$t/check.json"
+set +e; out=$(ba apply); rc=$?; set -e
+[[ $rc == 4 && $out == *"added $newf"* && ! -e $newf && $(base) == "$b9" && -f $t/state/stopped ]] \
+  && ok "8i. a new file that the check run did not name by its path is put back and stops" || bad "8i: exit $rc: $out"
+rm -f "$t/state/stopped"
+echo '{"plays":[{"tasks":[{"task":{"name":"Wrappers, root-owned"},"hosts":{"box1":{"changed":true,"results":[{"changed":true,"_ansible_item_label":"'"$newf"'","diff":[{"before":"","after":"x"}]}]}}}]}],"stats":{"box1":{"failures":0,"unreachable":0}}}' > "$t/check.json"
+out=$(ba apply) || bad "8j: the approved apply failed: $out"
+[[ $out == *"applied the approved limit change ${l10:0:8}"* && $out == *"$newf"* && -f $newf && $(base) == "$l10" && ! -f $t/state/stopped ]] \
+  && ok "8j. the same new file, named by the loop label's destination, passes the guard and moves the baseline" || bad "8j: $out"
+rm -f "$t/apply-hook"
 
 [[ $fail == 0 ]] || exit 1
 echo "box-apply: all checks passed"

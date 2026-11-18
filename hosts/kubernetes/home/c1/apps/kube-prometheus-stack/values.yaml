@@ -8,6 +8,10 @@
 # receiver means changing only `receivers` here (pick 171).
 alertmanager:
   enabled: true
+  # Count notifications per receiver (alertmanager_notifications_total{receiver_name="ntfy"}), so
+  # the panel check and the dashboard can show that alerts reached ntfy, apart from the heartbeat's
+  # webhook. Alertmanager v0.34.1 adds the label only with this flag (notify/metrics.go).
+  enableFeatures: [receiver-name-in-metrics]
   config:
     route:
       receiver: ntfy

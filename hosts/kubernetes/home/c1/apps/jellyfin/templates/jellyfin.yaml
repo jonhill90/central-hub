@@ -50,9 +50,40 @@ spec:
         runAsUser: {{ $v.uid }}
         runAsGroup: {{ $v.uid }}
         seccompProfile: {type: RuntimeDefault}
+      {{- if $v.sso.enabled }}
+      initContainers:
+        # Installs the SSO plugin into /config/plugins (pinned version, sha256 checked) and builds
+        # the CA bundle Jellyfin trusts: the public bundle plus the lab root. Safe to run again.
+        - name: sso-plugin
+          image: {{ $v.sso.initImage }}
+          command: [/bin/sh, -c]
+          args:
+            - |
+{{ .Files.Get "files/install-sso-plugin.sh" | indent 14 }}
+          env:
+            - {name: PLUGIN_VERSION, value: {{ $v.sso.plugin.version | quote }}}
+            - {name: PLUGIN_URL, value: {{ $v.sso.plugin.url | quote }}}
+            - {name: PLUGIN_SHA256, value: {{ $v.sso.plugin.sha256 | quote }}}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: config, mountPath: /config}
+            - {name: tls, mountPath: /tls}
+            - {name: lab-root-ca, mountPath: /lab-ca, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      {{- end }}
       containers:
         - name: jellyfin
           image: {{ $v.image }}
+          {{- if $v.sso.enabled }}
+          env:
+            - {name: SSL_CERT_FILE, value: /tls/ca-bundle.crt}
+          {{- end }}
           ports:
             - {name: http, containerPort: {{ $v.port }}}
           startupProbe:
@@ -76,6 +107,9 @@ spec:
             - {name: config, mountPath: /config}
             - {name: cache, mountPath: /cache}
             - {name: media, mountPath: /media}
+            {{- if $v.sso.enabled }}
+            - {name: tls, mountPath: /tls, readOnly: true}
+            {{- end }}
       volumes:
         - name: config
           persistentVolumeClaim: {claimName: {{ $v.name }}-config}
@@ -83,6 +117,14 @@ spec:
           persistentVolumeClaim: {claimName: {{ $v.name }}-media}
         - name: cache
           emptyDir: {sizeLimit: {{ $v.storage.cacheLimit }}}
+        {{- if $v.sso.enabled }}
+        - name: tls
+          emptyDir: {sizeLimit: 2Mi}
+        - name: tmp
+          emptyDir: {sizeLimit: 16Mi}
+        - name: lab-root-ca
+          secret: {secretName: {{ $v.name }}-lab-root-ca, optional: true}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

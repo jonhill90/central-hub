@@ -7,7 +7,7 @@
 # own cluster goes back onto the same store, never forced.
 #   1 snapshot          the newest raft-*.snap whose .cluster file names the store's current cluster
 #   1b shares           see below
-#   2 mark moved        kv/dev/snapshot-mark is set to before-restore-<now>, so only the restore can put the
+#   2 mark moved        kv/<env>/snapshot-mark is set to before-restore-<now>, so only the restore can put the
 #                       snapshot's own time back
 #   3 restore           plain only; any refusal stops the run
 #   4 mark reads back   within WAIT seconds, sys/health 200 and a fresh login reads the snapshot's own time
@@ -26,7 +26,7 @@
 #                       refusal stops the run
 #   4 unsealed          sys/health 200 again
 #   5 old token refused the token from before the restore is refused: the data was replaced
-#   6 mark reads back   kv/dev/snapshot-mark holds the picked snapshot's own time
+#   6 mark reads back   kv/<env>/snapshot-mark holds the picked snapshot's own time
 #   then the hold is removed, so the hourly off-box send runs again.
 #
 # 1b shares (both modes, pick 239): once the recovery shares exist, a snapshot taken before them is refused. A
@@ -37,6 +37,9 @@
 set -euo pipefail
 umask 077
 mode=$1 addr=$2/v1 cacert=$3 keys=$4 snaps=$5 hold=$6 wait=$7 named=${8:-}
+# The environment is the keys folder's own name, dev or prod (the wrapper passes <keys>/<env>): it names the mark.
+env=$(basename -- "$keys")
+[[ $env == dev || $env == prod ]] || { echo "secrets-store-restore: the keys folder must be .../dev or .../prod" >&2; exit 2; }
 case $mode in
   same) name=restore ;;
   rebuilt) name=restore-rebuilt ;;
@@ -85,7 +88,7 @@ login() {
     "$keys/openbao-admin-role-id" "$keys/openbao-admin-secret-id" |
     curl -s --cacert "$cacert" -X POST --data @- "$addr/auth/approle/login" | field auth client_token
 }
-mark() { call GET kv/data/dev/snapshot-mark "$1" | field data data taken; }
+mark() { call GET kv/data/$env/snapshot-mark "$1" | field data data taken; }
 
 [[ $(health) == 200 ]] || die "0 store up" "sys/health is not 200; run apply and configure first"
 current=$(curl -s --cacert "$cacert" "$addr/sys/health" | field cluster_id) || die "0 store up" "no cluster ID in sys/health"
@@ -132,8 +135,8 @@ token=$(login) && [[ -n $token ]] || die "2 sign-in" "the admin AppRole did not 
 
 if [[ $mode == same ]]; then
   # 2. Move the mark off, so that only the restore can bring the snapshot's own time back.
-  rc=$(code POST kv/data/dev/snapshot-mark "$token" --data "{\"data\": {\"taken\": \"before-restore-$(date -u +%Y%m%dT%H%M%SZ)\"}}")
-  [[ $rc == 200 || $rc == 204 ]] || die "2 mark moved" "writing kv/dev/snapshot-mark answered HTTP $rc; nothing restored"
+  rc=$(code POST kv/data/$env/snapshot-mark "$token" --data "{\"data\": {\"taken\": \"before-restore-$(date -u +%Y%m%dT%H%M%SZ)\"}}")
+  [[ $rc == 200 || $rc == 204 ]] || die "2 mark moved" "writing kv/$env/snapshot-mark answered HTTP $rc; nothing restored"
   step "2 mark moved"
 
   # 3. Plain only.
@@ -215,7 +218,7 @@ step "5 old token refused"
 
 # 6. The mark inside the snapshot reads back.
 new_token=$(login) && [[ -n $new_token ]] || die "6 mark reads back" "the admin AppRole did not sign in after the restore"
-taken=$(mark "$new_token") || die "6 mark reads back" "no kv/dev/snapshot-mark"
+taken=$(mark "$new_token") || die "6 mark reads back" "no kv/$env/snapshot-mark"
 [[ $taken == "$stamp" ]] || die "6 mark reads back" "the mark is $taken, not $stamp"
 step "6 mark reads back"
 

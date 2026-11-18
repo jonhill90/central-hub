@@ -80,7 +80,7 @@
     # The same script the c1 nodes run (pick 189), so one copy of the certificate code is tested and kept.
     - {src: "{{ role_path }}/../k8s_backup/files/c1-backup-azure-cert.py", dest: azure-cert.py}
   loop_control:
-    label: "{{ item.dest }}"
+    label: "{{ agent_box_libexec_dir }}/{{ item.dest }}"
 
 # --- Settings ------------------------------------------------------------------
 
@@ -243,6 +243,8 @@
     group: root
     mode: "0644"
   loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/opnsense-offbox.{{ item }}"
   register: agent_box_offbox_units
 
 - name: Daily off-box copy timer on

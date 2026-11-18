@@ -36,6 +36,14 @@ k8s_backup_azure_cert_file: /etc/central-hub/azure/backup.pem
 # is uploaded to or removed from the app, and the controller needs no Azure sign-in. Empty: each
 # node makes its own, as above. The file's expiry is the one date to renew by hand.
 k8s_backup_azure_fixed_cert_file: ""
+# A rebuilt cluster that backs up again as before (prod, rebuilt from the agent box): the path, on the
+# controller, of a folder holding <inventory name>.pem and <inventory name>.pem.keyid, each node's own
+# key and certificate and its key ID on the app, copied off the node before its teardown. A rebuilt node
+# with no certificate of its own gets its earlier one back, so it signs in as before: nothing is uploaded
+# to or removed from the app, and the controller needs no Azure sign-in. The node's daily timer then rolls
+# it as usual. In reader mode (the rebuild's restore stage) a node signs in with the same file. Empty: each
+# node makes its own, as above.
+k8s_backup_azure_seed_dir: ""
 # A certificate lasts 90 days and is rolled once 30 or fewer are left, so a node that is off for up
 # to 60 days still rolls it by itself; after longer, the timers tag uploads a new one.
 k8s_backup_azure_cert_days: 90

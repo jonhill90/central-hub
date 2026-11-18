@@ -65,6 +65,46 @@ kc create realms -f /tmp/lab.json
 python3 -I "$here/check_realm.py" "$work/lab.json"
 echo "identity: realm imported, checked, deleted, imported again and checked"
 
+# The add-a-client path the role takes to put a client in the live realm without the replace (role
+# tasks/clients.yml): files/client-json.py fills the client's secret from the environment and
+# files/ensure-client.sh creates or updates it inside the container. Delete the client first so the
+# create path runs, then run it again for the update path, with a changed redirect, and check that
+# the other clients and the users are still there and untouched.
+roledir="$root/hosts/ansible/roles/k8s_identity/files"
+ensure() { # <clientId> <json file>
+  docker exec -i "$name" bash -c "$(cat "$roledir/ensure-client.sh")" ensure-client lab "$1" < "$2"
+}
+client=jellyfin
+JELLYFIN_CLIENT_SECRET=test-JELLYFIN_CLIENT_SECRET python3 -I "$roledir/client-json.py" "$realm_yaml" "$client" > "$work/client.json"
+before=$(kc get users -r lab --fields username --format csv --noquotes | sort | tr '\n' ' ')
+others=$(kc get clients -r lab --fields clientId --format csv --noquotes | grep -v "^$client$" | sort | tr '\n' ' ')
+id=$(kc get clients -r lab -q "clientId=$client" --fields id --format csv --noquotes)
+kc delete "clients/$id" -r lab
+out=$(ensure "$client" "$work/client.json")
+[ "$out" = created ] || { echo "FAIL: ensure-client.sh printed '$out' for a missing client, not 'created'" >&2; exit 1; }
+out=$(ensure "$client" "$work/client.json")
+[ "$out" = updated ] || { echo "FAIL: ensure-client.sh printed '$out' for an existing client, not 'updated'" >&2; exit 1; }
+python3 -I - "$work/client.json" > "$work/client-changed.json" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1]))
+c["redirectUris"] = c["redirectUris"] + ["https://changed.example.com/sso/OID/redirect/keycloak"]
+print(json.dumps(c))
+PY
+out=$(ensure "$client" "$work/client-changed.json")
+[ "$out" = updated ] || { echo "FAIL: ensure-client.sh printed '$out' for a changed client, not 'updated'" >&2; exit 1; }
+kc get clients -r lab -q "clientId=$client" --fields redirectUris | grep -q "changed.example.com" ||
+  { echo "FAIL: the changed redirect did not land" >&2; exit 1; }
+out=$(ensure "$client" "$work/client.json")
+after=$(kc get users -r lab --fields username --format csv --noquotes | sort | tr '\n' ' ')
+others_after=$(kc get clients -r lab --fields clientId --format csv --noquotes | grep -v "^$client$" | sort | tr '\n' ' ')
+[ "$before" = "$after" ] || { echo "FAIL: users changed: '$before' became '$after'" >&2; exit 1; }
+[ "$others" = "$others_after" ] || { echo "FAIL: other clients changed" >&2; exit 1; }
+if echo '{"clientId":"other"}' | ensure "$client" /dev/stdin 2>/dev/null; then
+  echo "FAIL: ensure-client.sh took JSON for another client" >&2; exit 1
+fi
+python3 -I "$here/check_realm.py" "$work/lab.json"
+echo "identity: a client deleted, added and updated through ensure-client.sh; users and other clients untouched; realm checked again"
+
 # The sign-in page uses the theme: Argo CD's client (no PKCE needed) asks for the page, and the page
 # links the theme's stylesheet, which Keycloak serves.
 if [ -n "$theme" ]; then

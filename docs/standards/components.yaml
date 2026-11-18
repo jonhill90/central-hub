@@ -32,7 +32,7 @@ components:
     paid-edition-source: https://docs.opnsense.org/vendor/deciso/oidc.html
     verdict: fail
     exit-path: a FOSS router (OpenWrt, IPFire, or Debian with nftables and Unbound); its config backup is exported daily
-    sources: [collection:oxlorg.opnsense]
+    sources: [collection:oxlorg.opnsense, url:pkg.opnsense.org, url:github.com/opnsense/, url:raw.githubusercontent.com/opnsense/]
     checked: 2026-11-14
   - name: os-openid-connect
     kind: software
@@ -42,8 +42,7 @@ components:
     paid-edition: none found; the repository names no paid edition
     paid-edition-source: https://github.com/jpawlowski/opnsense-openid-connect/tree/v1.0.0-beta5
     verdict: pass
-    sources: []
-    not-detected: an OPNsense package installed by hand from the project's GitHub release, pinned by SHA-256 in docs/runbooks/sign-in-to-opnsense-through-keycloak.md; no code in hosts/ installs it yet
+    sources: [url:github.com/jpawlowski/opnsense-openid-connect/]
     checked: 2026-11-17
   - name: Unbound
     kind: software
@@ -125,6 +124,16 @@ components:
     sources: []
     not-detected: installed with Proxmox VE from its ISO
     checked: 2026-11-14
+  - name: FreeBSD
+    kind: software
+    used-for: the cloud image the throwaway OPNsense test VM boots before the OPNsense bootstrap (opnsense-test)
+    licence: BSD-2-Clause (the FreeBSD Copyright)
+    licence-source: https://www.freebsd.org/copyright/freebsd-license/
+    paid-edition: none; "FreeBSD is available free of charge and comes with the source code"
+    paid-edition-source: https://www.freebsd.org/about/
+    verdict: pass
+    sources: [url:ftp-archive.freebsd.org/]
+    checked: 2026-11-17
   - name: AlmaLinux
     kind: software
     used-for: the OS of the Kubernetes nodes, the agent box and the desktop VM, and the packages roles install from its own repositories (GNOME and GNOME Remote Desktop on the desktop VM among them)
@@ -279,7 +288,7 @@ components:
     checked: 2026-11-14
   - name: OpenBao
     kind: software
-    used-for: the lab's secrets store, inside c1 from OpenBao's own Helm chart and image (D-0058); its chart, openbao-helm, is MPL-2.0 too (https://raw.githubusercontent.com/openbao/openbao-helm/main/LICENSE). The release package (url:github.com/openbao/) stays listed until the store VM's role is removed
+    used-for: the lab's secrets store, inside c1 from OpenBao's own Helm chart and image (D-0058); its chart, openbao-helm, is MPL-2.0 too (https://raw.githubusercontent.com/openbao/openbao-helm/main/LICENSE). The store VM's role, which installed the release package, is removed, so the package is no longer a source
     licence: MPL-2.0
     licence-source: https://raw.githubusercontent.com/openbao/openbao/main/LICENSE
     paid-edition: none found; the project states it is community-run under open governance with an OSI licence, and sells no edition
@@ -327,6 +336,16 @@ components:
     verdict: pass
     sources: [image:docker.io/jellyfin/jellyfin]
     checked: 2026-11-14
+  - name: Jellyfin SSO Authentication plugin (K0lin fork)
+    kind: software
+    used-for: sign-in to Jellyfin through Keycloak on c1
+    licence: GPL-3.0
+    licence-source: https://github.com/K0lin/jellyfin-plugin-sso/blob/main/LICENSE.txt
+    paid-edition: none found; the repository page names no paid edition or premium features
+    paid-edition-source: https://github.com/K0lin/jellyfin-plugin-sso
+    verdict: pass
+    sources: [url:github.com/K0lin/jellyfin-plugin-sso/releases/download/]
+    checked: 2026-11-18
   - name: ntfy
     kind: software
     used-for: alert notifications from c1
@@ -407,6 +426,28 @@ components:
     verdict: pass
     sources: [pypi:httpx]
     checked: 2026-11-14
+  - name: Playwright
+    kind: software
+    used-for: headless browser control for the agent box's web sign-in proofs (web-shot), with its Python dependencies greenlet, pyee and typing_extensions
+    licence: Apache-2.0 (Playwright for Python); greenlet MIT and PSF-2.0, pyee MIT, typing_extensions PSF-2.0
+    licence-source: https://raw.githubusercontent.com/microsoft/playwright-python/main/LICENSE
+    paid-edition: none found on the project's pages; Microsoft's paid Playwright Testing is a hosted test-run service we do not use, and the library has no gated features
+    paid-edition-source: https://playwright.dev/python/docs/browsers
+    verdict: pass
+    sources: [pypi:playwright, pypi:greenlet, pypi:pyee, pypi:typing-extensions, pypi:typing_extensions]
+    checked: 2026-11-18
+  - name: Chromium
+    kind: software
+    used-for: the browser Playwright drives on the agent box
+    licence: BSD-3-Clause (Chromium's own LICENSE file; the build also carries third-party code under its own licences)
+    licence-source: https://chromium.googlesource.com/chromium/src/+/refs/heads/main/LICENSE
+    paid-edition: none found; Playwright uses the open-source Chromium builds, not branded Chrome
+    paid-edition-source: https://playwright.dev/python/docs/browsers
+    verdict: pass
+    sources: []
+    carries: []
+    not-detected: "`playwright install chromium` (tasks/main.yml) downloads it from Playwright's own host at run time, so no address or package name in the code names it"
+    checked: 2026-11-18
   - name: lychee
     kind: software
     used-for: the docs link check in CI

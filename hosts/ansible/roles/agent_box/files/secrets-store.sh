@@ -1,30 +1,47 @@
 #!/bin/bash
 # /usr/local/libexec/agent-box/secrets-store.sh: the agent box's calls to the lab's secrets store, OpenBao,
-# on dev (docs/runbooks/set-up-the-secrets-store.md, D-0038 as D-0058 changes it). It runs as user `keys`
+# on dev, and with --prod on prod (docs/runbooks/set-up-the-secrets-store.md, D-0038 as D-0058 changes it). It runs as user `keys`
 # through sudo, so the session that asks for it never sees the AppRole IDs or the recovery shares. Installed
 # by the agent_box role; root owns it.
 #   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold
-# The store VM's actions (plan, apply, destroy and configure) are gone: no store VM was ever built, and the
-# store runs inside c1 (D-0058). Until the box's in-cluster work (rework PR 3b) points these calls at c1's
-# store, they still read the store's address and CA file from the settings below, and nothing writes the CA
-# file or the rebuild hold. recovery: makes the recovery shares once (self-
+#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store.sh put c1/<path> <key> < value   |   compare   |   reseed
+#   sudo -n -u keys /usr/local/libexec/agent-box/secrets-store-prod.sh <the same actions>   (passes --prod first)
+# The store runs inside the dev cluster and initialises itself (D-0058); the dev rebuild's stage openbao-handover
+# gives its admin login the IDs this wrapper keeps. Every call goes to the store's address in the settings below, and
+# is checked against the CA file beside the keys; the box's path to the store sets both (the Gateway PR). Until then
+# each call that signs in stops with the missing value named. recovery: makes the recovery shares once (self-
 # initialization makes none) into the keys folder, records their time and takes a snapshot that holds them.
-# status: sys/health, which holds no secret. snapshot: writes kv/dev/snapshot-mark (one key, its own time, no
+# status: sys/health, which holds no secret. snapshot: writes kv/<env>/snapshot-mark (one key, its own time, no
 # secret), then copies a Raft snapshot off the store into the keys folder, with the store's cluster ID beside it.
 # restore: puts the newest snapshot of the same cluster back, never forced, and proves it by the mark (D-0038
 # Confirmations 4 and 7, pick 239). restore-rebuilt: after a rebuild of the store, puts back the newest snapshot
 # of the store's previous cluster, forced only if OpenBao refuses it for the keys (Confirmation 5, pick 238).
 # Both refuse a snapshot older than the recovery shares. A rebuild leaves a hold that stops the hourly off-box send
 # until restore-rebuilt passes; clear-hold sets the earlier store's snapshots aside in a kept folder that rotation
-# never reads, then removes it, when the rebuilt store is to stay as it is. Dev only: every
-# action refuses a store outside 550-599.
+# never reads, then removes it, when the rebuilt store is to stay as it is. The rebuild wrapper writes the hold
+# before a run that leaves a fresh store. put, compare and reseed keep SOPS's copy of every secret (D-0058 rule 8,
+# secrets-store-kv.sh): put writes one key to SOPS, then to the store; compare names every key that differs; reseed
+# fills a fresh store from SOPS, then takes a snapshot. All three refuse until the settings' sops_copies is true
+# (the owner's access-right tap, D-0058 rule 9). One store per run (D-0058 rule 10): every action refuses unless the
+# store's address is the c1 store of its own environment, as that environment's inventory names it. --prod uses the
+# prod keys folder, settings and inventory, and makes no recovery shares (D-0038 rule 5: prod gets none).
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold" >&2; exit 2; }
-named=''
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|compare|reseed" >&2; exit 2; }
+named='' kv_path='' kv_key=''
+env=dev
+if [[ ${1:-} == --prod ]]; then env=prod; shift; fi
 case ${1:-} in
-  recovery | status | snapshot | restore | clear-hold) action=$1; [[ $# -eq 1 ]] || usage ;;
+  recovery | status | snapshot | restore | clear-hold | compare | reseed) action=$1; [[ $# -eq 1 ]] || usage ;;
+  # The value comes on stdin, never as an argument; the helper checks the path and key again.
+  put)
+    action=$1
+    [[ $# -eq 3 ]] || usage
+    kv_path=$2 kv_key=$3
+    [[ $kv_path =~ ^c1(/[a-z0-9][a-z0-9_-]*)+$ ]] || { echo "secrets-store: the path is c1/<name>[/<name>...], lowercase letters, digits, - and _" >&2; exit 2; }
+    [[ $kv_key =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]] || { echo "secrets-store: the key is letters, digits, _, . and -" >&2; exit 2; }
+    ;;
   # restore-rebuilt may name one snapshot file exactly, e.g. one moved back from the kept folder (pick 239).
   restore-rebuilt)
     action=$1
@@ -36,30 +53,57 @@ case ${1:-} in
 esac
 
 keys=/etc/agent-keys
-env_keys=$keys/dev   # dev only; prod follows D-0035 rule 3 with its own folder
+libexec=/usr/local/libexec/agent-box
 work=/var/lib/agent-box
-settings=$work/secrets-store.json   # private values the agent_box role writes from the inventory
+if [[ $env == dev ]]; then
+  inventory=$keys/rebuild-dev/inventory/hosts.yml   # the dev inventory the rebuild wrapper reads
+  settings=$work/secrets-store.json                 # private values the agent_box role writes from the inventory
+  hold=$work/state/secrets-store.rebuilding         # from a rebuild until restore-rebuilt passes; the off-box send skips meanwhile
+else
+  inventory=$work/openbao-prod/inventory/hosts.yml  # the prod inventory openbao-prod builds, with the store name from its settings
+  settings=$work/secrets-store-prod.json
+  hold=$work/state/secrets-store-prod.rebuilding
+fi
+env_keys=$keys/$env
 cacert=$env_keys/secrets-store-ca.crt
 snapshots=$env_keys/openbao-snapshots   # the store's Raft snapshots, readable only with the seal key
 snapshot_keep=24
 # An earlier store's snapshots that clear-hold set aside: rotation never reads this folder, so they stay until
 # the owner taps their removal (a delete under D-0042 rule 6).
 kept=$env_keys/openbao-snapshots-kept
-hold=$work/state/secrets-store.rebuilding   # from a rebuild until restore-rebuilt passes; the off-box send skips meanwhile
 export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin
 
-[[ -f $settings ]] || { echo "secrets-store: $settings is missing; set agent_box_secrets_store in the inventory and run the agent_box role" >&2; exit 1; }
+[[ -f $settings ]] || { echo "secrets-store: $settings is missing; set agent_box_secrets_store$([[ $env == dev ]] || echo _prod) in the inventory and run the agent_box role" >&2; exit 1; }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
 
-# Dev only. The store's IDs are 500-599 (agent pick 226, under STD-0001's next-free-hundred rule); dev
-# is 550-599, as dev is 250-257 among 200-299. A prod store gets its own wrapper and keys folder after
-# dev passes (D-0035 rule 3), and its recovery shares go only to the owner's Mac (D-0038 rule 5). The
-# in-cluster rework (PR 3b) replaces this check with the dev c1 store's address (D-0058 rule 10).
-vm_id=$(setting vm_id)
-[[ $vm_id =~ ^5[5-9][0-9]$ ]] || { echo "secrets-store: VM ID $vm_id is not a dev store ID (550-599); refused" >&2; exit 1; }
+# One store per run (D-0058 rule 10). The settings' address must be the one name this environment's inventory gives its
+# c1 store (k8s_gitops_source_openbao_store_host), so no call reaches another store: dev's settings, keys and inventory
+# never meet prod's.
+env_store() {
+  local address host
+  address=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("address") or "")' "$settings")
+  [[ -n $address ]] || { echo "secrets-store: the settings have no store address yet (agent_box_secrets_store.address, set with the box's path to the store); refused" >&2; exit 1; }
+  [[ -f $inventory ]] || { echo "secrets-store: the $env inventory $inventory is missing, so the $env store can't be checked; refused" >&2; exit 1; }
+  host=$("$libexec/ansible-venv/bin/python3" -I -c '
+import sys, yaml
+found = set()
+def walk(n):
+    if isinstance(n, dict):
+        for k, v in n.items():
+            if k == "k8s_gitops_source_openbao_store_host" and isinstance(v, str) and v: found.add(v)
+            else: walk(v)
+    elif isinstance(n, list):
+        for i in n: walk(i)
+walk(yaml.safe_load(open(sys.argv[1])))
+if len(found) != 1: sys.exit(1)
+print(found.pop())' "$inventory") ||
+    { echo "secrets-store: the $env inventory names no single $env store (k8s_gitops_source_openbao_store_host); refused" >&2; exit 1; }
+  [[ $address == "$host" ]] || { echo "secrets-store: the settings' store address is not the $env c1 store the $env inventory names; refused" >&2; exit 1; }
+}
+env_store
 
 # Only the root-owned helpers beside this file run with the keys. One run at a time.
-exec 9>"$work/state/secrets-store.lock"
+exec 9>"$work/state/secrets-store$([[ $env == dev ]] || echo -prod).lock"
 flock -n 9 || { echo "secrets-store: another secrets-store run is going; try again when it ends" >&2; exit 1; }
 
 # The admin AppRole's IDs (D-0038 rule 6), made here the first time and never printed. A file that exists
@@ -70,6 +114,16 @@ mkdir -p "$env_keys"
 [[ -f $env_keys/openbao-admin-secret-id ]] || openssl rand -hex 24 | tr -d '\n' > "$env_keys/openbao-admin-secret-id"
 
 addr() { echo "https://$(setting address)"; }
+
+# Every call that signs in checks the store against the CA file the box's path to the store writes.
+[[ -s $cacert ]] || { echo "secrets-store: $cacert is missing; the box's path to the store (the Gateway PR) writes it; refused" >&2; exit 1; }
+
+# SOPS's copy of every secret (D-0058 rules 8 and 9): only once the settings' sops_copies is true, the owner's tap.
+sops_copies() {
+  python3 -I -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("sops_copies") is True else 1)' "$settings" ||
+    { echo "secrets-store: $action keeps SOPS copies, which wait for the owner's tap (sops_copies: true in agent_box_secrets_store); refused" >&2; exit 1; }
+}
+kv() { "$libexec/secrets-store-kv.sh" "$1" "$(addr)" "$cacert" "$env_keys" "$libexec" "${@:2}"; }
 
 # snapshot-box when the settings say snapshot_box: true (the install tap), else admin. Anything but true is false.
 snapshot_login() {
@@ -91,8 +145,9 @@ admin_token() {
 
 recovery() {
   local out=$env_keys/openbao-recovery.json made=$env_keys/openbao-recovery.made token stamp
-  # Shares on the box are for dev only (D-0038 rule 5); checked again here, not only at the top.
-  [[ $vm_id =~ ^5[5-9][0-9]$ ]] || { echo "secrets-store: recovery shares are made on the box for dev stores only; refused" >&2; exit 1; }
+  # Shares on the box are for dev only (D-0038 rule 5, D-0058 rule 10: prod gets none); checked again here.
+  [[ $env == dev ]] || { echo "secrets-store: prod gets no recovery shares (D-0038 rule 5, D-0058 rule 10); refused" >&2; exit 1; }
+  ( env_store ) || { echo "secrets-store: recovery shares are made on the box for the dev store only; refused" >&2; exit 1; }
   [[ ! -s $out ]] || { echo "secrets-store: recovery shares exist already ($out); nothing done" >&2; exit 1; }
   # The follow-up snapshot below refuses during a rebuild, so refuse before any share is made (pick 239).
   [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt first; no shares made" >&2; exit 1; }
@@ -123,7 +178,7 @@ snapshot() {
   [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt first" >&2; exit 1; }
   # Through AppRole snapshot-box, not the admin, once the settings' snapshot_box is true (D-0038 rules 8 and 12,
   # agent pick 240). It is false until the owner's install tap.
-  "$(dirname "$0")/secrets-store-snapshots.sh" take "$(addr)" "$cacert" "$env_keys" "$snapshots" "$snapshot_keep" dev "$(snapshot_login)"
+  "$(dirname "$0")/secrets-store-snapshots.sh" take "$(addr)" "$cacert" "$env_keys" "$snapshots" "$snapshot_keep" "$env" "$(snapshot_login)"
 }
 
 # Put the newest snapshot of this store's own cluster back, never forced, and prove it by the mark, under the
@@ -158,6 +213,26 @@ clear_hold() {
   echo "secrets-store: rebuild hold removed; $moved earlier snapshot(s) set aside in $kept, not restored; removing them is the owner's tap"
 }
 
+# One key into SOPS, then the store (rule 8). The value is this run's stdin, passed straight to the helper.
+put() {
+  sops_copies
+  kv put "$kv_path" "$kv_key"
+}
+
+compare() {
+  sops_copies
+  kv compare </dev/null
+}
+
+# A fresh store, filled from SOPS when no snapshot can bring it back (rule 8). Not during a rebuild hold: the earlier
+# store's snapshots are then still waiting for restore-rebuilt, or for clear-hold to set them aside.
+reseed() {
+  sops_copies
+  [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt, or clear-hold first; nothing written" >&2; exit 1; }
+  kv reseed </dev/null
+  ( snapshot ) || { echo "secrets-store: reseeded, but the snapshot after it failed; run secrets-store snapshot" >&2; exit 1; }
+}
+
 case $action in
   status) status ;;
   recovery) recovery ;;
@@ -165,4 +240,7 @@ case $action in
   restore) restore ;;
   restore-rebuilt) restore_rebuilt ;;
   clear-hold) clear_hold ;;
+  put) put ;;
+  compare) compare ;;
+  reseed) reseed ;;
 esac

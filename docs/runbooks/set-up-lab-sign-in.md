@@ -61,14 +61,14 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 4. Sign in: open `https://grafana.<zone>/` (or `https://grafana.apps.c1.prod.<zone>/` without short names), choose "Lab sign-in", and sign in with your user name and the `PASSWORD_<USER NAME>` line from `identity.env`. A member of `lab-admins` is then asked for a code: first scan their seed into an authenticator app with `bootstrap/show-totp-qr.sh <user name>` on the controller, which shows it as a QR code on the controller's own screen for 120 seconds and then deletes the image; close the image window after scanning.
    why: proves the user, the password and Grafana's client end to end.
    expect: Grafana opens with the Admin role for a member of `lab-admins`.
-5. Argo CD and Jellyfin: once their own config points at the issuer and the secrets above (the c1 GitOps work owns `argocd-cm` and the Jellyfin plugin), sign in to each the same way.
-   why: this role makes their clients and secrets; it doesn't configure the apps.
+5. Argo CD and Jellyfin: this role makes their clients and secrets; it doesn't configure the apps. Argo CD's side is role `k8s_gitops`, tag `sso` ([runbook](sign-in-to-argo-cd-with-keycloak.md)). Jellyfin's side is its Argo CD chart: [the SSO section of move-jellyfin-to-argo-cd.md](move-jellyfin-to-argo-cd.md#sign-in-through-keycloak) installs the plugin and writes the provider. Sign in to each the same way.
    expect: Argo CD shows your groups under "User info"; Jellyfin signs you in through the plugin's "Sign in with keycloak" button.
 
 ## Change a password or add a user
 
 - Password: edit its line in `identity.env`, then step 2. The realm is imported again with the new value.
 - New user: add it to `k8s_identity_extra_users` in the inventory, then step 2. The role adds a random password line for it.
+- New app on a live realm without ending sessions: add its client to `realm.yaml.j2` (below), then `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,clients -e '{"k8s_identity_ensure_clients":["<client id>"]}'`. The run adds or updates only that client in Keycloak; the realm is not replaced. CI proves it in `.github/hosts-check/identity/test_realm.sh`.
 - New app: add a client to `realm.yaml.j2`, a `*_CLIENT_SECRET` key to `k8s_identity_client_secret_keys`, and a copy to the app's namespace in `tasks/secrets.yml`; CI's `identity` job checks the import.
 - Rotate everything at a lab rebuild: delete `identity.env`, then step 2.
 - Change the sign-in look: set `k8s_identity_theme_dir` in the inventory to a Keycloak theme folder on the controller (for example the owner's branding repository, cloned next to the lab clone), then step 2. Only its `login/` files below 500 KB are used; they go into ConfigMap `identity/keycloak-theme`, the Keycloak pod restarts with them, and the realm is imported again with `loginTheme` set to the folder's name. The path is private because the theme's name can name the zone. Empty goes back to Keycloak's own look.

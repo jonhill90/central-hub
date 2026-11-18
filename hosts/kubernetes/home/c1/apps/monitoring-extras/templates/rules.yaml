@@ -73,11 +73,27 @@ spec:
     - name: c1-apps
       rules:
         - alert: C1JellyfinDown
-          expr: kube_deployment_status_replicas_available{namespace="media", deployment="jellyfin"} < 1
+          expr: kube_deployment_status_replicas_available{namespace="{{ .Values.jellyfin.namespace }}", deployment="jellyfin"} < 1
           for: 10m
           labels: {severity: warning}
           annotations:
             summary: Jellyfin has no ready pod
+{{- if .Values.jellyfin.metrics }}
+        - alert: C1JellyfinNotScraped
+          expr: absent(up{namespace="{{ .Values.jellyfin.namespace }}", container="jellyfin"} == 1)
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Prometheus can't read Jellyfin's /metrics; check that the setup Job turned EnableMetrics on
+            runbook: docs/runbooks/move-jellyfin-to-argo-cd.md
+        - alert: C1JellyfinErrors
+          expr: sum(rate(http_requests_received_total{namespace="{{ .Values.jellyfin.namespace }}", code=~"5.."}[15m])) > {{ .Values.jellyfin.errorRatePerSecond }}
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Jellyfin has answered with server errors (5xx) for 15 minutes
+            runbook: docs/runbooks/move-jellyfin-to-argo-cd.md
+{{- end }}
         - alert: C1LokiDown
           expr: kube_statefulset_status_replicas_ready{namespace="logging", statefulset="loki"} < 1
           for: 10m
@@ -90,3 +106,44 @@ spec:
           labels: {severity: warning}
           annotations:
             summary: "{{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.pod {{ "}}" }} restarted more than 5 times in 30 minutes"
+{{- if eq (toString .Values.openbao.inCluster) "true" }}
+    # OpenBao inside the cluster (D-0058). Its readiness check is `bao status`, which fails while it is
+    # sealed, and a sealed pod also loses the openbao-active label the scrape selects, so "not ready"
+    # and "not scraped" are how a seal shows up; the seal gauge covers a scraped pod that is sealed.
+    - name: c1-openbao
+      rules:
+        - alert: C1OpenBaoNotReady
+          expr: kube_statefulset_status_replicas_ready{namespace="{{ .Values.openbao.namespace }}", statefulset="openbao"} < 1
+          for: 10m
+          labels: {severity: critical}
+          annotations:
+            summary: OpenBao has no ready pod for 10 minutes, so it is sealed or down and apps can't read their secrets
+            runbook: docs/runbooks/set-up-the-secrets-store.md
+        - alert: C1OpenBaoSealed
+          expr: max(vault_core_unsealed{namespace="{{ .Values.openbao.namespace }}"}) < 1
+          for: 5m
+          labels: {severity: critical}
+          annotations:
+            summary: OpenBao answers but is sealed
+            runbook: docs/runbooks/set-up-the-secrets-store.md
+        - alert: C1OpenBaoNotScraped
+          expr: absent(up{namespace="{{ .Values.openbao.namespace }}", service="openbao-active"} == 1)
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Prometheus can't read OpenBao's metrics, so the seal and audit alerts can't fire
+        - alert: C1OpenBaoAuditFailing
+          expr: increase(vault_audit_log_request_failure{namespace="{{ .Values.openbao.namespace }}"}[15m]) > 0
+          labels: {severity: critical}
+          annotations:
+            summary: OpenBao failed to write its audit log; it refuses requests it can't audit
+        - alert: C1OpenBaoSnapshotStale
+          expr: |
+            time() - max(kube_cronjob_status_last_successful_time{namespace="{{ .Values.openbao.namespace }}", cronjob="openbao-snapshot"})
+              > {{ .Values.openbao.snapshotStaleSeconds }}
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: "OpenBao's hourly snapshot has not succeeded for more than {{ div .Values.openbao.snapshotStaleSeconds 3600 }} hours"
+            runbook: docs/runbooks/set-up-the-secrets-store.md
+{{- end }}

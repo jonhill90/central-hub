@@ -1,0 +1,103 @@
+# The panel check: every half hour, ask Prometheus for the values the dashboard's OpenBao,
+# Jellyfin and alert delivery panels show, and print one line per panel. An agent reads them with
+# the read-only account (`c1-read logs -n monitoring job/<newest panel-check job>`), so the numbers
+# are seen without a browser, a password or a port-forward. It reads Prometheus only, inside the cluster, and holds no
+# token. A query that answers no series prints "no data" and makes the run fail, so a broken scrape
+# shows as a failed Job. The OpenBao lines are there only where OpenBao is in the cluster.
+{{- $p := .Values.panelCheck }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: panel-check
+  namespace: {{ .Release.Namespace }}
+data:
+  # One panel per line: the panel's title, a tab, its PromQL (the same as in dashboards/c1-lab.json).
+  queries.tsv: |
+    {{- if eq (toString .Values.openbao.inCluster) "true" }}
+    OpenBao unsealed	max(vault_core_unsealed{namespace="{{ .Values.openbao.namespace }}"})
+    OpenBao pod ready	kube_statefulset_status_replicas_ready{namespace="{{ .Values.openbao.namespace }}",statefulset="openbao"}
+    Hours since the last snapshot	(time() - max(kube_cronjob_status_last_successful_time{namespace="{{ .Values.openbao.namespace }}",cronjob="openbao-snapshot"})) / 3600
+    Audit log write failures, 24h	sum(increase(vault_audit_log_request_failure{namespace="{{ .Values.openbao.namespace }}"}[24h])) or vector(0)
+    OpenBao requests per second	sum(rate(vault_core_handle_request_count{namespace="{{ .Values.openbao.namespace }}"}[5m]))
+    OpenBao memory	sum(container_memory_working_set_bytes{namespace="{{ .Values.openbao.namespace }}",container="openbao"})
+    {{- end }}
+    Jellyfin pod ready	kube_deployment_status_replicas_available{namespace="{{ .Values.jellyfin.namespace }}",deployment="jellyfin"}
+    Jellyfin restarts, 24h	sum(increase(kube_pod_container_status_restarts_total{namespace="{{ .Values.jellyfin.namespace }}",container="jellyfin"}[24h])) or vector(0)
+    Jellyfin memory	sum(container_memory_working_set_bytes{namespace="{{ .Values.jellyfin.namespace }}",container="jellyfin"})
+    Jellyfin CPU (cores)	sum(rate(container_cpu_usage_seconds_total{namespace="{{ .Values.jellyfin.namespace }}",container="jellyfin"}[5m]))
+    {{- if .Values.jellyfin.metrics }}
+    Jellyfin requests per second	sum(rate(http_requests_received_total{namespace="{{ .Values.jellyfin.namespace }}"}[5m]))
+    Jellyfin server errors per second	sum(rate(http_requests_received_total{namespace="{{ .Values.jellyfin.namespace }}",code=~"5.."}[5m])) or vector(0)
+    {{- end }}
+    Alerts sent to ntfy, 24h	sum(increase(alertmanager_notifications_total{receiver_name="ntfy"}[24h]))
+    Failed sends to ntfy, 24h	sum(increase(alertmanager_notifications_failed_total{receiver_name="ntfy"}[24h]))
+    Alerts firing	count(ALERTS{alertstate="firing",alertname!="Watchdog"}) or vector(0)
+  check.sh: |
+    #!/bin/sh
+    # No heredocs: the root filesystem is read-only.
+    set -u
+    fail=0
+    echo "panel check against $PROMETHEUS at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    tab=$(printf '\t')
+    while IFS="$tab" read -r title query; do
+      [ -n "$title" ] || continue
+      out=$(curl -fsS --max-time 20 --get --data-urlencode "query=$query" "$PROMETHEUS/api/v1/query") || {
+        echo "$title: query failed"; fail=1; continue; }
+      # Each series' value is the second field of "value":[<time>,"<value>"].
+      vals=$(printf '%s' "$out" | grep -o '"value": *\[[^]]*\]' | sed 's/.*"\([^"]*\)" *\]$/\1/' | tr '\n' ' ')
+      if [ -z "$vals" ]; then echo "$title: no data"; fail=1; else echo "$title: $vals"; fi
+    done < /check/queries.tsv
+    # Which alerts are firing, by name and count, so the reader can tell them apart without a
+    # browser. It does not change the result: firing alerts are what the "Alerts firing" line counts.
+    if out=$(curl -fsS --max-time 20 --get --data-urlencode 'query=ALERTS{alertstate="firing",alertname!="Watchdog"}' "$PROMETHEUS/api/v1/query"); then
+      names=$(printf '%s' "$out" | grep -o '"alertname": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | sort | uniq -c | sed 's/^ *\([0-9]*\) \(.*\)/\2 x\1/' | tr '\n' ' ')
+      echo "Alerts firing, by name: ${names:-none}"
+    else
+      echo "Alerts firing, by name: query failed"
+    fi
+    [ "$fail" -eq 0 ] && echo "panel check: every panel has data" || echo "panel check: some panels have no data"
+    exit "$fail"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: panel-check
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: {{ $p.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: panel-check}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: check
+              image: {{ $p.image }}
+              command: [/bin/sh, /check/check.sh]
+              env:
+                - {name: PROMETHEUS, value: {{ $p.prometheus | quote }}}
+              resources:
+                requests: {cpu: 10m, memory: 16Mi}
+                limits: {memory: 64Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: check, mountPath: /check, readOnly: true}
+          volumes:
+            - name: check
+              configMap: {name: panel-check}

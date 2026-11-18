@@ -32,6 +32,13 @@ argument_specs:
         type: str
         default: ""
         description: "Reader only: controller path of a PEM (key and certificate) the read-only app knows; the nodes copy it. Empty: each node makes its own."
+      k8s_backup_azure_seed_dir:
+        type: str
+        default: ""
+        description: >-
+          Controller folder with <inventory name>.pem and .pem.keyid, each node's earlier certificate and key ID,
+          copied off the node before a rebuild; a rebuilt node gets its own back and signs in as before, with no
+          upload. Empty: each node makes its own.
       k8s_backup_azure_cert_days: {type: int, default: 90, description: Days each certificate lasts.}
       k8s_backup_azure_cert_renew_days: {type: int, default: 30, description: Days left at which the node rolls its certificate.}
       k8s_backup_azure_cert_schedule: {type: str, default: "*-*-* 01:40:00", description: systemd OnCalendar for the daily renewal check.}
