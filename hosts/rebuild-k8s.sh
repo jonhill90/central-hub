@@ -634,7 +634,7 @@ run_stage() {
         -e k8s_identity_owner_username=dev-admin -e k8s_identity_owner_email= \
         -e '{"k8s_identity_extra_users": [{"username": "dev-viewer", "groups": ["lab-viewers"]}, {"username": "dev-admin2", "groups": ["lab-admins"]}]}' \
         -e "{\"k8s_identity_openbao_hosts\": $store_hosts}" -e "k8s_identity_oidc_handoff_file=$handoff" \
-        -e k8s_app_route_proof=false -e k8s_identity_theme_dir= \
+        -e k8s_app_route_proof=false -e k8s_identity_theme_dir= -e k8s_identity_db_storage=local-path \
         -e "k8s_identity_values_file=$env_dir/identity.env" \
         -e "k8s_identity_realm_import_timeout=$DEV_REALM_IMPORT_TIMEOUT_S" ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;

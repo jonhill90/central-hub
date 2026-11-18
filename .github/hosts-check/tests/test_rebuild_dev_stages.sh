@@ -84,6 +84,7 @@ check "dev-ca fails without the tag" "$out" "rc=1" ""
 # The dev identity stage never needs the owner's private theme folder: it passes an empty theme dir.
 out=$(run dev identity-keycloak "$t/ok")
 check "identity-keycloak runs with an empty theme dir" "$out" "k8s_identity_theme_dir= " ""
+check "identity-keycloak puts the database on the data disk" "$out" "k8s_identity_db_storage=local-path" ""
 check "identity-keycloak adds the viewer the store must refuse" "$out" '"username": "dev-viewer", "groups": ["lab-viewers"]' ""
 check "identity-keycloak adds the second admin the store must refuse" "$out" '"username": "dev-admin2", "groups": ["lab-admins"]' ""
 check "identity-keycloak with no store adds no openbao client" "$out" '{"k8s_identity_openbao_hosts": []}' ""
