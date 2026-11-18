@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # roles/k8s_gitops/files/argocd-signin-check.py against a stand-in for Keycloak and Argo CD (plain HTTP on localhost, fake
 # values; the stand-in follows Argo CD's OIDC flow as the docs describe it: /auth/login with a state cookie, the callback,
-# the argocd.token cookie, /api/v1/session/userinfo and account/can-i).
+# the argocd.token cookie, /api/v1/session/userinfo and account/can-i/applications/sync/*, resource first as account.proto maps it).
 #   1. The whole flow for an admin: all seven steps pass.
 #   2. The whole flow for a viewer with expect_admin false: all seven steps pass.
 #   3. The password alone signing in fails step 3, and the run stops.
 #   4. Argo CD refusing the code (no session cookie) fails step 5.
 #   5. An admin whose groups claim lacks lab-admins fails step 6.
-#   6. An admin who cannot sync fails step 7.
+#   6. An admin who cannot sync fails step 7. The stand-in answers "no" on the swapped path can-i/sync/applications/*, so a script
+#      that asked it would fail the admin in cases 1 and 6's pair and pass the viewer for the wrong reason.
 #   7. A missing credentials file, a file others can read, and a file without a field are refused (exit 2) before any request.
 #   8. The password, the seed, the state, the code and the token never show in the output.
 # Usage: .github/hosts-check/tests/test_argocd_signin_check.sh   (needs python3)
@@ -54,7 +55,9 @@ class H(http.server.BaseHTTPRequestHandler):
             if not self.authed(): return self.send(200, json.dumps({"loggedIn": False}), ctype="application/json")
             groups = ["lab-viewers"] if mode in ("viewer", "wronggroup") else ["lab-admins"]
             return self.send(200, json.dumps({"loggedIn": True, "username": "u", "iss": KC + "/realms/lab", "groups": groups}), ctype="application/json")
-        if p.startswith("/api/v1/account/can-i/sync/applications/"):
+        if p.startswith("/api/v1/account/can-i/sync/applications/"):  # resource and action swapped: Argo CD would read "sync" as the resource
+            return self.send(200, json.dumps({"value": "no"}), ctype="application/json")
+        if p.startswith("/api/v1/account/can-i/applications/sync/"):
             yes = mode in ("normal", "norefusal") and self.authed()
             return self.send(200, json.dumps({"value": "yes" if yes else "no"}), ctype="application/json")
         self.send(404)
