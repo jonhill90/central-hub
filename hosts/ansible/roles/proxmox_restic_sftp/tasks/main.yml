@@ -149,10 +149,4 @@
   when: not ansible_check_mode
 
 - name: The host's ssh key, for the nodes' known_hosts
-  ansible.builtin.slurp:
-    src: /etc/ssh/ssh_host_ed25519_key.pub
-  register: proxmox_restic_sftp_hostkey_raw
-
-- name: Remember the host key
-  ansible.builtin.set_fact:
-    proxmox_restic_sftp_host_key: "{{ (proxmox_restic_sftp_hostkey_raw.content | b64decode).split()[:2] | join(' ') }}"
+  ansible.builtin.include_tasks: host_key.yml
