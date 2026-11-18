@@ -47,6 +47,21 @@ s=$chart/files/start.sh
 grep -q 'sha256sum -c -' "$s" && ok "the start script checks the release's SHA-256 before unpacking" || bad "no SHA-256 check"
 grep -q -- '--disableupdate' "$s" && ok "self-update stays off" || bad "self-update not off"
 bash -n "$s" && ok "the start script parses" || bad "start script syntax"
+# A pod made before its registration token exists must wait, not exit: an exit is a restart loop that pages ntfy (C1PodCrashLooping).
+fn=$(mktemp); tokf=$(mktemp -u); trap 'rm -f "$fn" "$tokf"' EXIT
+sed -n '/^# wait_for_token begin$/,/^# wait_for_token end$/p' "$s" > "$fn"
+if [ -s "$fn" ]; then
+  # No token: the function must still be running after 3 seconds (timeout exits 124), not have exited by itself.
+  rc=0; TOKEN_FILE=$tokf TOKEN_WAIT_SECONDS=1 timeout 3 bash -c ". $fn; wait_for_token" >/dev/null 2>&1 || rc=$?
+  [ "$rc" = 124 ] && ok "with no token the start script waits and does not exit" || bad "with no token the start script exited (rc $rc)"
+  # The token arrives later: it is returned alone on stdout.
+  ( sleep 1; printf 'tok123' > "$tokf" ) &
+  got=$(TOKEN_FILE=$tokf TOKEN_WAIT_SECONDS=1 timeout 5 bash -c ". $fn; wait_for_token" 2>/dev/null || true); wait
+  [ "$got" = tok123 ] && ok "the token written later is picked up" || bad "token not picked up (got '$got')"
+else
+  bad "start.sh has no wait_for_token function"
+fi
+if grep -q 'no registration token in the store' "$s"; then bad "start.sh still exits when the token is missing"; else ok "start.sh no longer exits when the token is missing"; fi
 if command -v helm > /dev/null; then
   out=$(helm template notebook-runner "$chart" --namespace notebook-runner)
   grep -q 'automountServiceAccountToken: false' <<<"$out" && ok "no ServiceAccount token" || bad "a token is mounted"

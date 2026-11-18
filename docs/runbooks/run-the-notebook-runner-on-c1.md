@@ -5,7 +5,7 @@ kind: automated
 trigger: once, to move the notebook's CI off VM 300; again after c1 is rebuilt, or when the runner's registration is lost
 runner: an agent session on the agent box
 outcome: one pod in namespace notebook-runner on c1 takes the notebook's jobs (label notebook), holds no lab key and no Kubernetes credential, reaches no lab address, and keeps running while a dev rebuild stops VM 300
-needs: this runbook's code installed on the agent box (a box-limit line); the box's prod node key on prod's nodes (set-up-the-secrets-store.md step 1); prod's store with its admin hand-over done; the GitHub App with Administration (write) on agent-notebook
+needs: this runbook's code installed on the agent box (a box-limit line); the box's prod node key on prod's nodes (set-up-the-secrets-store.md step 1); a firewall pass from the agent box to prod's store on 443, which step 3 uses and which does not exist yet (the rules are central-hub #491, unapplied, and applying them is the owner's firewall step, so `ci-runner c1-token` cannot run until then); prod's store with its admin hand-over done; the GitHub App with Administration (write) on agent-notebook
 private-values: []
 files: [hosts/kubernetes/home/c1/apps/notebook-runner/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_gitops/templates/source-argocd.yaml.j2, hosts/ansible/roles/agent_box/files/ci-runner.sh, hosts/ansible/roles/agent_box/files/openbao-prod.sh, hosts/ansible/roles/agent_box/files/rebuild-prod.sh]
 last-tested: not yet run
@@ -85,7 +85,7 @@ The pod is kept apart from the cluster because it runs the code in each notebook
 5. Check the pod registered: `c1-read logs -n notebook-runner deploy/notebook-runner`.
    expect: `Listening for Jobs`, and on the notebook's Settings, under Actions and Runners, runner `notebook-c1` is Idle with label `notebook`.
 
-   Run steps 3 to 5 within the hour the token lasts. If the pod starts after the token expired, config.sh is refused and the pod exits and restarts. Run step 3 again: the ExternalSecret reads the new token within an hour (`refreshInterval: 1h`), and the pod registers at its next restart.
+   Run steps 3 to 5 within the hour the token lasts. A pod made before any token exists (any `openbao-prod gitops` or `rebuild-prod` run after step 2 turns the app on) does not exit: `start.sh` prints "not registered and no registration token yet" and waits for `/token/value`, so it does not restart or page `C1PodCrashLooping`. It registers once the ExternalSecret writes the token (that the kubelet fills an optional Secret volume after the pod started is expected, not yet run). If the pod picks up a token after it expired, config.sh is refused and the pod exits and restarts. Run step 3 again: the ExternalSecret reads the new token within an hour (`refreshInterval: 1h`), and the pod registers at its next restart.
 
 6. Watch three notebook pull requests: each of their `org-check` jobs runs on `notebook-c1` and passes (the job log's first lines name the runner).
    expect: three green runs on `notebook-c1`. While each runs, read `c1-read top pod -n notebook-runner` and `c1-read top nodes` and write the pod's peak memory and the worker's peak working set into the pull request that retires VM 300. Until then VM 300 stays as the fallback, and GitHub gives each job to whichever runner is idle.
