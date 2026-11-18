@@ -719,6 +719,55 @@
   when: agent_box_tailnet_cleanup | length > 0 and not (ansible_check_mode and agent_box_tailnet_cleanup_units is changed)
   tags: [wrappers]
 
+# The box's page cache back to the host. The VM has a balloon with free page reporting (hosts/terraform/home/jumpbox),
+# but reporting returns only free pages, and the kernel keeps file cache as long as nothing else asks for memory:
+# on 2026-11-18 at 05:27 UTC, an hour after the balloon went on, the box held 5947 MiB of cache of 7935 MiB, and the
+# node had 9829 MiB free with VM 300 stopped, 411 MiB under the dev minimum. Dropping the clean cache every 5 minutes
+# turns it into free pages, which the balloon reports to the host (expected; the proof is the next dev preflight's
+# free line). Dirty pages are written first (sync); nothing the box needs is lost, files are only read again from
+# disk, so the first run of a tool after a drop is slower.
+- name: Page cache drop service and timer
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/box-drop-cache.{{ item.key }}"
+    content: "{{ item.value }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ {'service': agent_box_drop_cache_service, 'timer': agent_box_drop_cache_timer} | dict2items }}"
+  loop_control:
+    label: "/etc/systemd/system/box-drop-cache.{{ item.key }}"
+  vars:
+    agent_box_drop_cache_service: |
+      # Made by the agent_box role: the box's clean page cache back to the host (see tasks/main.yml).
+      [Unit]
+      Description=Drop the box's clean page cache so the balloon returns it to the host
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/sh -c 'sync && echo 1 > /proc/sys/vm/drop_caches'
+    agent_box_drop_cache_timer: |
+      # Made by the agent_box role.
+      [Unit]
+      Description=Drop the box's clean page cache every 5 minutes
+
+      [Timer]
+      OnBootSec=5min
+      OnUnitActiveSec=5min
+
+      [Install]
+      WantedBy=timers.target
+  register: agent_box_drop_cache_units
+  tags: [wrappers]
+
+- name: Page cache drop timer on
+  ansible.builtin.systemd_service:
+    name: box-drop-cache.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_drop_cache_units is changed }}"
+  when: not (ansible_check_mode and agent_box_drop_cache_units is changed)
+  tags: [wrappers]
+
 - name: The merge sweep's verdict script, root's (D-0042 rule 2)
   ansible.builtin.copy:
     src: pr-merge-verdict.py

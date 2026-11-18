@@ -66,6 +66,8 @@ CronJob `monitoring/panel-check` asks Prometheus for the OpenBao, Jellyfin and a
 | C1OpenBaoAuditFailing | OpenBao failed to write its audit log; it refuses requests it can't audit | the audit claim's free space: `kubectl -n openbao exec openbao-0 -- df -h /openbao/audit` |
 | C1OpenBaoSnapshotStale | No successful hourly snapshot for 3 hours | `kubectl -n openbao logs job/<newest openbao-snapshot job>` |
 
+The chart's own Kubernetes alerts fire too (for example `KubeJobFailed`, `KubePodNotReady`); each one's `runbook_url` explains it. `KubeCPUOvercommit` and `KubeMemoryOvercommit` are turned off on c1 (`defaultRules.disabled` in `apps/kube-prometheus-stack/values.yaml`): they ask whether the pods would still fit with the largest node lost, and with one worker they never would, so they fired for good. A pod that doesn't fit stays Pending, and `KubePodNotReady` fires for it. Turn the two back on once c1 has three nodes.
+
 ## Change it
 
 - A rule: edit `apps/monitoring-extras/templates/rules.yaml` by PR. Prometheus picks it up within a few minutes of the sync.

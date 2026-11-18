@@ -124,6 +124,22 @@
       changed_when: "'unchanged' not in measure_cm_apply.stdout"
       no_log: true
 
+    # The app's routes carry argocd.argoproj.io/ignore-healthcheck (apps/openbao-measure), so Argo CD's health
+    # does not say whether they work. Wait here until Gateway apps took path a's route: Accepted needs the
+    # https-short listener (made by dev-ca) and ResolvedRefs the Service. Up to 2 minutes, then fail.
+    - name: measure | Path a's route accepted by Gateway apps
+      ansible.builtin.command: >-
+        {{ measure_kubectl }} -n {{ measure_ns }} get httproute openbao-measure
+        -o jsonpath='{range .status.parents[*].conditions[*]}{.type}={.status} {end}'
+      register: measure_route
+      changed_when: false
+      check_mode: false
+      until: >-
+        'Accepted=True' in measure_route.stdout and 'ResolvedRefs=True' in measure_route.stdout
+        and '=False' not in measure_route.stdout
+      retries: 24
+      delay: 5
+
     # 3. The policy check (DESIGN item 7): the same Job in namespace openbao (allowed; it must answer) and in
     #    the check namespace (not allowed). A Job answered only when it succeeded (bao status exits 0 only
     #    on an unsealed store). Enforced only if the control succeeded and the test failed with a timeout.
