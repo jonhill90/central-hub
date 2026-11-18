@@ -63,6 +63,10 @@ k8s_gitops_source_app_secrets_store: ""
 # `openbaoInCluster` to the root chart, which then makes the apps openbao-store and openbao and the
 # secret-store app's store `openbao`. c1 keeps false: nothing changes.
 k8s_gitops_source_openbao_in_cluster: false
+# The agent notebook's CI runner as a pod (app notebook-runner, docs/runbooks/run-the-notebook-runner-on-c1.md).
+# True passes `notebookRunner` to the root chart. Only prod's wrappers set it (openbao-prod.sh,
+# rebuild-prod.sh), so a dev cluster never registers a second runner under the same name.
+k8s_gitops_source_notebook_runner: false
 # Private, no default, read only with the switch on: the node that holds the seal key's folder (its
 # kubernetes.io/hostname label), passed as `openbaoSealNode`; and the agent box's address as a /32,
 # the only source the admin AppRole signs in from, passed as `openbaoBoxCidr`. Unset, the seal

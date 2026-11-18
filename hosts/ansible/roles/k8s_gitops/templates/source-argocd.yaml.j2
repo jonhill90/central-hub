@@ -55,6 +55,10 @@ spec:
           value: "true"
 {% endif %}
 {% endif %}
+{% if k8s_gitops_source_notebook_runner | bool %}
+        - name: notebookRunner
+          value: "true"
+{% endif %}
 {% if k8s_gitops_source_share_target | default('') | length > 0 %}
         - name: shareTarget
           value: "{{ k8s_gitops_source_share_target }}"

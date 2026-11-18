@@ -134,7 +134,7 @@ DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args",
         "ansible_private_key_file", "ansible_host_key_checking",
         "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file", "k8s_gitops_source_openbao_measure",
         "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
-        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address"}
+        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -165,6 +165,8 @@ v = g.setdefault("vars", {})
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 v["k8s_gitops_source_openbao_in_cluster"] = True
+# The notebook CI runner pod is prod's only (docs/runbooks/run-the-notebook-runner-on-c1.md).
+v["k8s_gitops_source_notebook_runner"] = True
 v["k8s_gitops_source_openbao_seal_node"] = seal
 v["k8s_gitops_source_openbao_store_host"] = store
 if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr

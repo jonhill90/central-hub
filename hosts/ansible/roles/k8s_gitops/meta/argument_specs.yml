@@ -22,6 +22,10 @@ argument_specs:
         type: bool
         default: false
         description: "Run OpenBao inside the cluster from its Helm chart (D-0058): pass openbaoInCluster true to the root chart (dev first)."
+      k8s_gitops_source_notebook_runner:
+        type: bool
+        default: false
+        description: "Run the agent notebook's CI runner as a pod: pass notebookRunner true to the root chart (prod only)."
       k8s_gitops_source_openbao_seal_node:
         type: str
         description: "Node that holds the seal key's folder, passed as openbaoSealNode. Private; read only with the switch on."

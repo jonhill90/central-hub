@@ -16,6 +16,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Set up the agent box's users, keys, wrappers and guard rules](set-up-the-agent-box.md) | automated | draft |
 | [Apply the agent box's setup from the box itself](apply-the-agent-box-from-itself.md) | automated | draft |
 | [Set up the notebook's self-hosted CI runner](set-up-the-ci-runner.md) | automated | draft |
+| [Run the notebook's CI runner as a pod on c1](run-the-notebook-runner-on-c1.md) | automated | draft |
 | [Set up the owner's desktop VM](set-up-the-desktop.md) | manual | draft |
 | [Prove OPNsense sign-in through Keycloak on a throwaway dev VM](prove-opnsense-sign-in-on-dev.md) | automated | draft |
 | [Set up the lab's secrets store (OpenBao) on dev and prod](set-up-the-secrets-store.md) | automated | draft |
