@@ -21,7 +21,7 @@
 #   RESTORE_CHECK_HOOK  the command the `checks` stage runs to prove the restore; required with
 #                 RESTORE_HOOK
 #   PREFLIGHT_MIN_FREE_MIB  optional, dev only: the least free memory (MiB) the Proxmox node must have before the VMs are made
-#                 (default: the dev VMs' memory below, summed over the nodes the tfvars declare, plus a 2048 MiB margin)
+#                 (default: the dev VMs' memory below, summed over the nodes the tfvars declare, plus a 1024 MiB margin)
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
 #   OPENBAO_ADDR  optional: the secrets store, https://<name or address> with no path (proposed
 #                 D-0038). Set: stage `openbao` registers the cluster's new service-account key with
@@ -97,6 +97,8 @@ fi
 # the sizes in its own tfvars.
 DEV_MEMORY_MB_CONTROL_PLANE=4096
 DEV_MEMORY_MB_WORKER=7168
+# The preflight's margin is 1024 MiB (was 2048): on 2026-11-18 01:35 UTC the node had 13209 MiB free with VM 300 and the
+# desktop stopped, 103 MiB under the old minimum of 13312, and the worker can't go below 7168 (see above). 4096 + 7168 + 1024 = 12288.
 tofu_vars=(-var-file="$TFVARS")
 if [ "$ENV_NAME" = dev ]; then
   tofu_vars+=(-var "memory_mb_by_role={\"control-plane\" = $DEV_MEMORY_MB_CONTROL_PLANE, \"worker\" = $DEV_MEMORY_MB_WORKER}")
@@ -213,7 +215,7 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default: the dev VMs' memory by role, summed over the nodes
-# the tfvars declare, plus a 2048 MiB margin; 4096 + 7168 + 2048 = 13312 for one control plane and one worker). If the
+# the tfvars declare, plus a 1024 MiB margin; 4096 + 7168 + 1024 = 12288 for one control plane and one worker). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 # curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
 # use it, so neither can print the token.
@@ -391,7 +393,7 @@ for r in rows:
 }
 
 preflight_memory() {
-  local min node free field guests desktops needs margin=2048
+  local min node free field guests desktops needs margin=1024
   local existing declared
   # A re-run on VMs the state already holds allocates no new VMs, and their memory is already taken, so the
   # node's free memory says nothing about it (measured on the box, 2026-11-14: 3547 MiB free with dev up).
