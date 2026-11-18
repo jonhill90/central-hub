@@ -19,7 +19,7 @@ fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 
-mkdir -p "$t/bin" "$t/libexec/ansible-venv/bin" "$t/keys/dev" "$t/keys/prod" "$t/keys/rebuild-dev/inventory" "$t/work/state" "$t/run"
+mkdir -p "$t/bin" "$t/libexec/ansible-venv/bin" "$t/keys/dev" "$t/keys/prod" "$t/work/openbao-prod/inventory" "$t/keys/rebuild-dev/inventory" "$t/work/state" "$t/run"
 ln -s "$(command -v python3)" "$t/libexec/ansible-venv/bin/python3"
 cat > "$t/bin/curl" <<EOF
 #!/bin/bash
@@ -108,7 +108,7 @@ else bad "6. $r6a $o6a | $rc $out | $calls"; fi
 
 # 7
 echo '{"address": "bao-dev.invalid"}' > "$t/work/secrets-store-prod.json"
-printf '%s\n' "all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-prod.invalid" > "$t/keys/prod/inventory-hosts.yml"
+printf '%s\n' "all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-prod.invalid" > "$t/work/openbao-prod/inventory/hosts.yml"
 echo ca > "$t/keys/prod/secrets-store-ca.crt"
 run --prod status; r7a=$rc o7a=$out c7a=$calls
 echo '{"address": "bao-prod.invalid"}' > "$t/work/secrets-store-prod.json"

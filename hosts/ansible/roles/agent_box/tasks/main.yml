@@ -488,6 +488,16 @@
   when: agent_box_secrets_store_prod | length > 0
   tags: [wrappers]
 
+- name: The openbao-prod wrapper's private settings, from the inventory (no keys)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/openbao-prod.json"
+    content: "{{ agent_box_openbao_prod | to_nice_json }}\n"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_openbao_prod | length > 0
+  tags: [wrappers]
+
 # The weekly compare of the store with its SOPS copy (D-0058 rule 8), only once sops_copies is true (the owner's
 # access-right tap, rule 9). Set back to false, the timer is stopped and disabled; the wrapper refuses compare then.
 - name: The SOPS copies need the secrets bundle, for the box's age identity and SOPS

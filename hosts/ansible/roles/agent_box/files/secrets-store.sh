@@ -60,7 +60,7 @@ if [[ $env == dev ]]; then
   settings=$work/secrets-store.json                 # private values the agent_box role writes from the inventory
   hold=$work/state/secrets-store.rebuilding         # from a rebuild until restore-rebuilt passes; the off-box send skips meanwhile
 else
-  inventory=$keys/prod/inventory-hosts.yml          # the prod inventory the box's prod-files run copies (prod_files.yml)
+  inventory=$work/openbao-prod/inventory/hosts.yml  # the prod inventory openbao-prod builds, with the store name from its settings
   settings=$work/secrets-store-prod.json
   hold=$work/state/secrets-store-prod.rebuilding
 fi
