@@ -1,7 +1,7 @@
 ---
 id: D-0061
 title: Count the owner's standing go of 2026-11-18 as his go for every step D-0042 rule 6 keeps, except the limits he named
-status: proposed
+status: accepted
 date: 2026-11-18
 decision-makers: [owner]
 proposed-by: drafting-agent
@@ -9,6 +9,14 @@ consulted: []
 waits-on: [D-0034, D-0036, D-0042]
 supersedes: []
 superseded-by:
+accepted-evidence:
+  approved-by: agents
+  approved-at: 2026-11-18T08:09:57Z
+  approved-commit: 059a4bf4a3b8760a59340db85d275b0f4c592d43
+  approval-ref: the reviewer thread's clearance of PR #519 at head 059a4bf as the content to accept, 2026-11-18T08:09:57Z (cmsg_01X43rfNYp4H1dL1V2dkfkwN9vktrDHupagtUKnBQ2gcBL)
+  approval-names: "the clearance names central-hub PR #519, head 059a4bf and D-0061"
+  check: "approved-by is agents under D-0042 rule 1: the go this record holds is the owner's own words of 2026-11-18 07:40:44, 07:40:57 and 07:41:01 UTC, quoted in its Context, and D-0059 rule 1 lets a record that amends D-0042 merge on the agents' pass. This commit changes only status, date, accepted-evidence and the index row after 059a4bf (D-0001)"
+  merged: filled in after the merge (D-0006 step 6)
 revisit-when: the owner withdraws or narrows the standing go; a step taken under it does something the owner says it should not have; or the agents get GitHub identities of their own (D-0030) and GitHub can require the owner's approval itself
 ---
 
