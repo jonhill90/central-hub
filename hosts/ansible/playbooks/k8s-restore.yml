@@ -9,6 +9,53 @@
 # "Restore on dev".
 #   ansible-playbook -i <dev inventory> playbooks/k8s-restore.yml
 #   ansible-playbook -i <dev inventory> playbooks/k8s-restore.yml --tags restore_check
+# With k8s_backup_sftp (the Proxmox host as the target, agent pick 262), plays 1 and 2 also run: each worker makes
+# its own ssh key and the host lets it in as its read-only user (internal-sftp -R), from that worker's address only.
+
+- name: The workers' own keys for the Proxmox target
+  hosts: k8s_workers
+  become: true
+  tags: [timers, restore, restore_check]
+  vars:
+    k8s_backup_reader: true
+  tasks:
+    - name: Each worker's key, made on the worker
+      ansible.builtin.include_role:
+        name: k8s_backup
+        tasks_from: sftp_key
+      when: k8s_backup_sftp | default(false) | bool
+
+- name: The Proxmox host lets the workers read
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  tags: [timers, restore, restore_check]
+  vars:
+    k8s_backup_sftp_nodes: "{{ groups['k8s_workers'] | default([]) }}"
+    k8s_backup_sftp_keyed: >-
+      {%- set out = [] -%}
+      {%- for h in k8s_backup_sftp_nodes if (hostvars[h].k8s_backup_sftp_pubkey | default('')) | length > 0 -%}
+      {%- set _ = out.append({'key': hostvars[h].k8s_backup_sftp_pubkey, 'from': hostvars[h].ansible_host}) -%}
+      {%- endfor -%}
+      {{ out }}
+  tasks:
+    - name: Every worker or none has a key
+      ansible.builtin.assert:
+        that: k8s_backup_sftp_keyed | length in [0, k8s_backup_sftp_nodes | length]
+        fail_msg: >-
+          Only {{ k8s_backup_sftp_keyed | length }} of the {{ k8s_backup_sftp_nodes | length }} workers have a key in
+          this run, so run over every worker (no --limit). Nothing was changed on the host.
+        quiet: true
+
+    - name: The host's reader user, the workers' keys and the sshd settings
+      ansible.builtin.include_role:
+        name: proxmox_restic_sftp
+      vars:
+        proxmox_restic_sftp_set_reader: true
+        proxmox_restic_sftp_reader_keys: "{{ k8s_backup_sftp_keyed }}"
+        proxmox_restic_sftp_no_root_from: "{{ k8s_backup_sftp_keyed | map(attribute='from') | list }}"
+      when: k8s_backup_sftp_keyed | length > 0
+
 - name: Restore prod's volumes into this env, read-only
   hosts: k8s_workers
   become: true
@@ -16,6 +63,9 @@
     k8s_backup_reader: true
     # Only the workers sign in, so the orphan-certificate check counts the workers.
     k8s_backup_azure_cert_group: k8s_workers
+    k8s_backup_sftp_proxmox: "{{ groups['proxmox'] | default([]) | first | default('') }}"
+    k8s_backup_sftp_address: "{{ hostvars[k8s_backup_sftp_proxmox].proxmox_host_mgmt_address | default('') if k8s_backup_sftp_proxmox else '' }}"
+    k8s_backup_sftp_host_key: "{{ hostvars[k8s_backup_sftp_proxmox].proxmox_restic_sftp_host_key | default('') if k8s_backup_sftp_proxmox else '' }}"
   pre_tasks:
     - name: On dev, or on a prod rebuilt from the box, never with the backup timers on
       ansible.builtin.assert:

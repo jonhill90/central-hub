@@ -6,8 +6,75 @@
 #   ansible-playbook -i inventories/home/ playbooks/k8s-backup.yml --check --diff
 #   ansible-playbook -i inventories/home/ playbooks/k8s-backup.yml
 #   ansible-playbook -i inventories/home/ playbooks/k8s-backup.yml --tags drill -e k8s_backup_drill=true
+# With k8s_backup_sftp (the Proxmox host as the target, agent pick 262), plays 1, 2 and 4 also run: each node
+# makes its own ssh key, the host lets those keys in as its backup user, and after the backups the host makes
+# the repository's files readable by the read-only reader. Run it over every node: the host's list of keys is
+# the nodes this run reached, so a run limited to one node would lock the other out, and play 2 stops it.
+
+- name: The nodes' own keys for the Proxmox target
+  hosts: k8s_nodes
+  become: true
+  tags: [timers, drill]
+  tasks:
+    - name: Each node's key, made on the node
+      ansible.builtin.include_role:
+        name: k8s_backup
+        tasks_from: sftp_key
+      when: (k8s_backup_enabled | default(false) | bool) and (k8s_backup_sftp | default(false) | bool)
+
+- name: The Proxmox host takes the nodes' backups
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  tags: [timers, drill]
+  vars:
+    k8s_backup_sftp_nodes: "{{ groups['k8s_nodes'] | default([]) }}"
+    # One {key, from} per node that made its key in play 1: its public key and its own address.
+    k8s_backup_sftp_keyed: >-
+      {%- set out = [] -%}
+      {%- for h in k8s_backup_sftp_nodes if (hostvars[h].k8s_backup_sftp_pubkey | default('')) | length > 0 -%}
+      {%- set _ = out.append({'key': hostvars[h].k8s_backup_sftp_pubkey, 'from': hostvars[h].ansible_host}) -%}
+      {%- endfor -%}
+      {{ out }}
+  tasks:
+    - name: Every node or none has a key
+      ansible.builtin.assert:
+        that: k8s_backup_sftp_keyed | length in [0, k8s_backup_sftp_nodes | length]
+        fail_msg: >-
+          Only {{ k8s_backup_sftp_keyed | length }} of the {{ k8s_backup_sftp_nodes | length }} nodes have a key in
+          this run. The host's list of keys would drop the others, so run over every node (no --limit).
+          Nothing was changed on the host.
+        quiet: true
+
+    - name: The host's backup user, the nodes' keys and the sshd settings
+      ansible.builtin.include_role:
+        name: proxmox_restic_sftp
+      vars:
+        proxmox_restic_sftp_set_writer: true
+        proxmox_restic_sftp_writer_keys: "{{ k8s_backup_sftp_keyed }}"
+        proxmox_restic_sftp_no_root_from: "{{ k8s_backup_sftp_keyed | map(attribute='from') | list }}"
+      when: k8s_backup_sftp_keyed | length > 0
+
 - name: Off-box backups and restore tests
   hosts: k8s_nodes
   become: true
+  vars:
+    k8s_backup_sftp_proxmox: "{{ groups['proxmox'] | default([]) | first | default('') }}"
+    k8s_backup_sftp_address: "{{ hostvars[k8s_backup_sftp_proxmox].proxmox_host_mgmt_address | default('') if k8s_backup_sftp_proxmox else '' }}"
+    k8s_backup_sftp_host_key: "{{ hostvars[k8s_backup_sftp_proxmox].proxmox_restic_sftp_host_key | default('') if k8s_backup_sftp_proxmox else '' }}"
   roles:
     - role: k8s_backup
+
+- name: The repository's files, readable by the reader
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  tags: [timers, drill]
+  tasks:
+    - name: Group read on everything the nodes wrote
+      ansible.builtin.include_role:
+        name: proxmox_restic_sftp
+        tasks_from: group_read
+      when: >-
+        groups['k8s_nodes'] | default([])
+        | map('extract', hostvars, 'k8s_backup_sftp_pubkey') | map('default', '') | select | list | length > 0

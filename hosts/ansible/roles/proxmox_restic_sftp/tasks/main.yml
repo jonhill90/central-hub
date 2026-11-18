@@ -1,0 +1,158 @@
+---
+# The Proxmox host serves c1's restic repository over sftp (agent pick 262). Run by playbooks/k8s-backup.yml
+# (writer keys) and playbooks/k8s-restore.yml (reader keys), between the play that makes the nodes' keys and
+# the play that backs up or restores. Nothing is installed: OpenSSH's internal-sftp does the serving.
+
+- name: The backup HDD is mounted where the repository goes
+  ansible.builtin.command: findmnt --noheadings --output TARGET --mountpoint {{ proxmox_restic_sftp_mount }}
+  register: proxmox_restic_sftp_findmnt
+  changed_when: false
+  failed_when: proxmox_restic_sftp_findmnt.stdout | trim != proxmox_restic_sftp_mount
+  check_mode: false
+
+- name: Every key has an address, and every address is one IPv4 address
+  ansible.builtin.assert:
+    that:
+      - item.key is match('^(ssh-ed25519|ecdsa-sha2-nistp256) [A-Za-z0-9+/=]+( [^\n"]*)?$')
+      - item.from is match('^[0-9]{1,3}(\.[0-9]{1,3}){3}$')
+    fail_msg: "A key in the list has no address, or is not one ssh-ed25519 or ecdsa line. Nothing was changed."
+    quiet: true
+  loop: >-
+    {{ (proxmox_restic_sftp_writer_keys if proxmox_restic_sftp_set_writer else [])
+       + (proxmox_restic_sftp_reader_keys if proxmox_restic_sftp_set_reader else []) }}
+  loop_control:
+    label: "{{ item.from | default('') }}"
+
+# The writer's group holds the repository; the reader joins it to read.
+- name: The writer, with no shell and no home
+  ansible.builtin.user:
+    name: "{{ proxmox_restic_sftp_writer }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    create_home: false
+    password: "!"
+
+- name: The reader, in the writer's group, with no shell and no home
+  ansible.builtin.user:
+    name: "{{ proxmox_restic_sftp_reader }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    create_home: false
+    password: "!"
+    groups: ["{{ proxmox_restic_sftp_writer }}"]
+    append: false
+
+- name: The chroot, owned by root and writable by no one else
+  ansible.builtin.file:
+    path: "{{ proxmox_restic_sftp_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: The repository's folder, the writer's, readable by its group
+  ansible.builtin.file:
+    path: "{{ proxmox_restic_sftp_root }}/{{ proxmox_restic_sftp_repo }}"
+    state: directory
+    owner: "{{ proxmox_restic_sftp_writer }}"
+    group: "{{ proxmox_restic_sftp_writer }}"
+    mode: "0750"
+
+- name: The repository's files, group-readable
+  ansible.builtin.include_tasks: group_read.yml
+
+- name: The keys folder, outside the chroot
+  ansible.builtin.file:
+    path: "{{ proxmox_restic_sftp_keys_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: The writer's keys, each one only from its node
+  ansible.builtin.copy:
+    content: |
+      {% for k in proxmox_restic_sftp_writer_keys %}
+      restrict,from="{{ k.from }}" {{ k.key }}
+      {% endfor %}
+    dest: "{{ proxmox_restic_sftp_keys_dir }}/{{ proxmox_restic_sftp_writer }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: proxmox_restic_sftp_set_writer
+
+- name: The reader's keys, each one only from its node
+  ansible.builtin.copy:
+    content: |
+      {% for k in proxmox_restic_sftp_reader_keys %}
+      restrict,from="{{ k.from }}" {{ k.key }}
+      {% endfor %}
+    dest: "{{ proxmox_restic_sftp_keys_dir }}/{{ proxmox_restic_sftp_reader }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: proxmox_restic_sftp_set_reader
+
+# Root is refused from every address any key file names, the writer's and the reader's, whichever list this run
+# wrote, so a dev run never drops prod's addresses and a prod run never drops dev's.
+- name: The keys files as they are now
+  ansible.builtin.slurp:
+    src: "{{ proxmox_restic_sftp_keys_dir }}/{{ item }}"
+  loop: ["{{ proxmox_restic_sftp_writer }}", "{{ proxmox_restic_sftp_reader }}"]
+  register: proxmox_restic_sftp_keys_now
+  failed_when: false
+
+- name: Every address a key works from
+  ansible.builtin.set_fact:
+    proxmox_restic_sftp_no_root_all: >-
+      {{ (proxmox_restic_sftp_no_root_from
+          + (proxmox_restic_sftp_keys_now.results | selectattr('content', 'defined')
+             | map(attribute='content') | map('b64decode') | join(' ')
+             | regex_findall('from="([0-9.]+)"')))
+         | unique | sort }}
+
+# Checked on its own first, then with the whole config, before sshd reloads; a reload keeps open sessions.
+- name: The sshd settings for the two users
+  ansible.builtin.template:
+    src: sshd.conf.j2
+    dest: "{{ proxmox_restic_sftp_sshd_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: sshd -t -f %s
+  register: proxmox_restic_sftp_sshd
+
+- name: The whole sshd config still loads
+  ansible.builtin.command: sshd -t
+  changed_when: false
+  when: proxmox_restic_sftp_sshd is changed and not ansible_check_mode
+
+- name: sshd reloads
+  ansible.builtin.systemd_service:
+    name: ssh.service
+    state: reloaded
+  when: proxmox_restic_sftp_sshd is changed and not ansible_check_mode
+
+# The proof that sshd took the settings: its effective config for the writer coming from a node address.
+- name: sshd applies the chroot and internal-sftp to the writer
+  ansible.builtin.command: >-
+    sshd -T -C user={{ proxmox_restic_sftp_writer }},host=node,addr={{
+    (proxmox_restic_sftp_writer_keys | map(attribute='from') | first) | default('127.0.0.1') }}
+  register: proxmox_restic_sftp_effective
+  changed_when: false
+  failed_when: >-
+    ('chrootdirectory ' ~ proxmox_restic_sftp_root) not in proxmox_restic_sftp_effective.stdout_lines
+    or (proxmox_restic_sftp_effective.stdout_lines | select('match', '^forcecommand internal-sftp') | list | length) != 1
+    or 'permittty no' not in proxmox_restic_sftp_effective.stdout_lines
+  when: not ansible_check_mode
+
+- name: The host's ssh key, for the nodes' known_hosts
+  ansible.builtin.slurp:
+    src: /etc/ssh/ssh_host_ed25519_key.pub
+  register: proxmox_restic_sftp_hostkey_raw
+
+- name: Remember the host key
+  ansible.builtin.set_fact:
+    proxmox_restic_sftp_host_key: "{{ (proxmox_restic_sftp_hostkey_raw.content | b64decode).split()[:2] | join(' ') }}"
