@@ -11,6 +11,10 @@
 #   installs, and reboots into the installed system from the disk.
 # check: wait for SSH as root with the box's key, then read the Proxmox VE version and whether the copy's CPU shows
 #   vmx or svm and has /dev/kvm, which its own guests need. Changes nothing.
+# host: inside the copy, as on a fresh real host (docs/runbooks/set-up-proxmox-host.md steps 1 and 6b, then
+#   docs/runbooks/set-up-lab-network-and-firewall.md step 1): the no-subscription apt repository, iac-access.sh, the
+#   copy's own iac@pve!apply token (kept on the box, removed by destroy), then playbooks/proxmox-host.yml --tags vmbr1
+#   against the copy with an inventory the wrapper writes. Safe to run again.
 # destroy: destroy VM 256 only. The token cannot delete files on Proxmox's local storage, so the prepared ISO stays
 #   in the state and on local for the next build, which reuses it while the answer is unchanged; destroy lists it.
 # log: the last run's log, then VM 256's Proxmox state, read-only.
@@ -18,8 +22,8 @@ set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | check | destroy | log) action=$1 ;;
-  *) echo "usage: lab-test plan|apply|check|destroy|log" >&2; exit 2 ;;
+  plan | apply | check | host | destroy | log) action=$1 ;;
+  *) echo "usage: lab-test plan|apply|check|host|destroy|log" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -246,10 +250,14 @@ vm() { ssh -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyCh
   -o UserKnownHostsFile="$files/known_hosts" "root@$addr" "$@"; }
 
 # The install takes some minutes after apply; wait up to 30 for the installed system's SSH.
+wait_ssh() {
+  local _
+  for _ in $(seq 1 180); do vm true 2>/dev/null && return 0; sleep 10; done
+  echo "lab-test: no SSH to $addr after 30 minutes; run lab-test log, then destroy and report it"; return 1
+}
+
 check() {
-  local _ up=
-  for _ in $(seq 1 180); do vm true 2>/dev/null && { up=1; break; }; sleep 10; done
-  [[ -n $up ]] || { echo "lab-test: no SSH to $addr after 30 minutes; run lab-test log, then destroy and report it"; return 1; }
+  wait_ssh
   vm pveversion
   local flags
   flags=$(vm "grep -cE '(vmx|svm)' /proc/cpuinfo" || true)
@@ -262,13 +270,64 @@ check() {
   echo "lab-test: the copy's CPU shows vmx or svm on $flags threads and it has /dev/kvm; its own guests can use KVM"
 }
 
+# The copy's host steps, the same ones a person runs on a fresh real host. The apt step is the runbook's step 1
+# (set-up-proxmox-host.md lines 97-125): "Enabled: no" in each enterprise stanza, and the no-subscription repository.
+host() {
+  wait_ssh
+  vm 'sh -s' <<'SH'
+set -eu
+for f in /etc/apt/sources.list.d/pve-enterprise.sources /etc/apt/sources.list.d/ceph.sources; do
+  [ -f "$f" ] || continue
+  # One stanza per file on a fresh install; with more, "Enabled: no" at the end would cover only the last.
+  [ "$(grep -c '^Types:' "$f")" = 1 ] || { echo "lab-test: $f holds more than one stanza; not changed"; exit 1; }
+  grep -q '^Enabled: no$' "$f" || printf 'Enabled: no\n' >> "$f"
+done
+cat > /etc/apt/sources.list.d/proxmox.sources <<'EOF'
+Types: deb
+URIs: http://download.proxmox.com/debian/pve
+Suites: trixie
+Components: pve-no-subscription
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+EOF
+apt-get update -q
+SH
+  echo "lab-test: the copy's apt uses the no-subscription repository"
+  # iac-access.sh, the token, then the script again, as set-up-proxmox-host.md step 6b gives it. The token is the
+  # copy's own: it reaches only the copy, and destroy removes the file.
+  scp -q -i "$sshkey" -o BatchMode=yes -o UserKnownHostsFile="$files/known_hosts" \
+    "$repo/hosts/terraform/home/bootstrap/iac-access.sh" "root@$addr:/root/iac-access.sh"
+  vm 'sh /root/iac-access.sh'
+  if [[ ! -s $files/copy-token ]]; then
+    # A token whose secret is lost (the file is gone) can't be read again; replace it.
+    vm 'pveum user token remove iac@pve apply 2>/dev/null || true'
+    vm "pveum user token add iac@pve apply --privsep 1 --expire $(date -d '+2 days' +%s) --output-format json" \
+      | python3 -I -c 'import json,sys; print("iac@pve!apply=" + json.load(sys.stdin)["value"])' > "$files/copy-token.part"
+    mv "$files/copy-token.part" "$files/copy-token"
+    echo "lab-test: made the copy's iac@pve!apply token, valid 2 days"
+  fi
+  vm 'sh /root/iac-access.sh'
+  vm 'pveum user token permissions iac@pve apply --output-format json' | python3 -I -c 'import json,sys
+print("lab-test: the copy token reaches %d paths" % len(json.load(sys.stdin)))'
+  # The copy's inventory: the real inventory's shape (hosts.example.yml), the copy's own values.
+  mkdir -p "$files/inventory/group_vars/all"
+  cp "$vlans" "$files/inventory/group_vars/all/vlans.yml"
+  "$py" -I "$answer_py" inventory "$settings" "$vlans" "$sshkey" "$files/known_hosts" "$files/inventory/hosts.yml"
+  # The collections the role installs for the rebuild wrappers (rebuild.sh), from the same requirements file.
+  ( cd "$repo/hosts/ansible"
+    ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home \
+      ansible-playbook -i "$files/inventory" playbooks/proxmox-host.yml --tags vmbr1 )
+  vm 'ip -br link show vmbr1'
+}
+
 case $action in
   plan) guards; tofu_run ;;
   apply) guards; tofu_run ;;
   check) check ;;
+  host) host ;;
   destroy)
     tofu_run
-    rm -f "$files/known_hosts" "$files"/*.part
+    # The copy's token and inventory go with it; a new copy gets new ones.
+    rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory"
     echo "lab-test: VM $VMID destroyed"
     leftovers
     ;;
