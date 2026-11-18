@@ -65,9 +65,9 @@ k8s_gitops_source_login_probe: true
 # admin Secret can't sign in; hosts/rebuild-k8s.sh sets it false on dev. c1 keeps true.
 k8s_gitops_source_jellyfin_setup: true
 # Whether monitoring-extras' panel-check CronJob is suspended, passed to the root chart as `panelCheckSuspended` only
-# when true. Dev's OpenBao and Keycloak panels have no data until stages after `apps` (Jellyfin's request rate printed none
-# too, cause not measured), so hosts/rebuild-k8s.sh sets it
-# true on dev. c1 keeps false.
+# when true. A tick inside a dev run failed `checks` on seven panels with no data: Keycloak's has none before the
+# `identity-keycloak` stage, the five OpenBao ones and Jellyfin's request rate for a cause not measured. So
+# hosts/rebuild-k8s.sh sets it true on dev. c1 keeps false.
 k8s_gitops_source_panel_check_suspended: false
 # Where the apps' ExternalSecrets read their values (D-0058 rules 5 and 8), passed to the root chart as
 # `appSecretsStore` when set. Empty, as now: store c1, namespace secret-source. `openbao`: key c1/<name>

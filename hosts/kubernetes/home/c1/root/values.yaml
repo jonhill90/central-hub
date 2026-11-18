@@ -62,8 +62,9 @@ loginProbe: true
 # Secret, made fresh in that cluster, can't match, so every run signed in with a 401 and failed `checks`.
 jellyfinSetup: true
 # Whether monitoring-extras' panel-check CronJob is suspended. false, as on c1. Ansible sets it to true only for dev
-# (k8s_gitops_source_panel_check_suspended): there the OpenBao and Keycloak panels have no data until the stages after
-# `apps` (dev-ca, openbao-handover, identity-keycloak) run, so a tick inside the run failed the Job and `checks`.
+# (k8s_gitops_source_panel_check_suspended): there a tick inside the run failed the Job and `checks`, because seven panels
+# printed no data. Keycloak's has none before the `identity-keycloak` stage (after `apps`); the five OpenBao ones and
+# Jellyfin's request rate had none for a cause not measured.
 panelCheckSuspended: false
 
 # The agent notebook's CI runner as a pod (app notebook-runner). Ansible sets it to true on prod only
