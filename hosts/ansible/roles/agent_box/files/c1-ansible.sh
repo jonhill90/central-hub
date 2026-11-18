@@ -38,7 +38,7 @@ declare -A needs_var=([identity]=k8s_identity_values_file)
 declare -A fixed_vars=([identity]=k8s_identity_realm_replace=false)
 # Tags per name. identity runs every task plus the clients tag, which is off by default: it adds or updates the realm's clients
 # (argocd, argocd-cli, grafana, jellyfin, proxmox, openbao) in place, so a client the code adds reaches prod with no realm replace.
-declare -A fixed_tags=([identity]=all,clients)
+declare -A fixed_tags=([identity]="all,clients")
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
 action=${1:-} name='' clearance=''
