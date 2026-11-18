@@ -93,9 +93,9 @@ agent_box_wrappers:
   # destroyed only while dev is down and VM 257 is gone; check reads the copy over SSH and changes nothing; host
   # runs the fresh-host steps inside the copy; lab builds its own SDN, VM 100 and CT 900 and puts it on mgmt;
   # firstboot sets up the copy's VM 100 over its serial console; opnsense runs opnsense.yml against it; wancheck runs
-  # the WAN safety check on the copy's portless WAN bridge.
+  # the WAN safety check on the copy's portless WAN bridge; connector sets up CT 900's tailnet client, never joined.
   - name: lab-test
-    args: [plan, apply, check, host, lab, firstboot, opnsense, wancheck, destroy, log]
+    args: [plan, apply, check, host, lab, firstboot, opnsense, wancheck, connector, destroy, log]
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]

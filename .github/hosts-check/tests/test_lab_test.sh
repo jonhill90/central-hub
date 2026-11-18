@@ -88,8 +88,8 @@ grep -q "grep -cE '(vmx|svm)' /proc/cpuinfo" "$w" && grep -q "test -c /dev/kvm" 
   && ok "check stops when the copy's guests would run without KVM" || bad "no nested check"
 grep -q '^  plan) guards; tofu_run ;;$' "$w" && grep -q '^  apply) guards; tofu_run ;;$' "$w" \
   && ok "plan and apply both pass the guards" || bad "a build step skips the guards"
-grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, firstboot, opnsense, wancheck, destroy, log\]' \
-  && ok "the wrapper list allows plan, apply, check, host, lab, firstboot, opnsense, wancheck, destroy and log" || bad "the wrapper's sudo arguments"
+grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, firstboot, opnsense, wancheck, connector, destroy, log\]' \
+  && ok "the wrapper list allows plan, apply, check, host, lab, firstboot, opnsense, wancheck, connector, destroy and log" || bad "the wrapper's sudo arguments"
 
 # host: the inventory the copy's playbook runs with, the real inventory's shape with the copy's own values.
 python3 -I "$helper" inventory "$work/settings.json" "$vlans" /keys/lab-test-ssh /work/known_hosts "$work/hosts.yml"
@@ -102,6 +102,29 @@ assert h["ansible_host"] == "10.1.30.198" and h["ansible_user"] == "root" and h[
 assert "UserKnownHostsFile=/work/known_hosts" in h["ansible_ssh_common_args"]
 assert h["proxmox_host_mgmt_address"] == "10.1.50.2" and h["proxmox_network_lab_supernet"] == "10.1.0.0/16"
 assert int(h["proxmox_vmbr1_mac"].split(":")[0], 16) & 2, "not locally administered"
+PY
+python3 -I - "$w" "$work/hosts.yml" "$root/hosts/ansible/roles/tailnet_connector/meta/argument_specs.yml" <<'PY' && ok "connector: the runbook's install lines, never joined, tailnet-connector.yml twice with changed=0, the route and gateway checked" || bad "connector's wiring"
+import sys, yaml
+t = open(sys.argv[1]).read()
+h = yaml.safe_load(open(sys.argv[2]))["all"]["children"]["proxmox"]["hosts"]["proxmox_host"]
+assert h["tailnet_connector_extra_routes"] == ["10.1.30.198/32"] and h["tailnet_connector_lab_supernet"] == "10.1.0.0/16"
+opts = yaml.safe_load(open(sys.argv[3]))["argument_specs"]["main"]["options"]
+assert {k for k, v in opts.items() if v.get("required")} - set(h) == {"lab_vlans"}
+f = t[t.index("\nconnector() {"):]
+f = f[:f.index("\n}\n")]
+# Never joined: no auth key, no tailscale up or login anywhere in the wrapper; stop before anything when logged in.
+assert "tailscale up" not in t and "auth-key" not in t and "tailscale login" not in t
+assert f.index('[[ $state != Running && $state != Starting ]]') < f.index("vm 'bash -s'")
+assert f.rindex("[[ $state == NeedsLogin ]]") > f.index("playbooks/tailnet-connector.yml")
+for line in ["https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg", "https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list",
+             "apt-get install -y tailscale", "systemctl is-enabled tailscaled)\" = enabled", "/etc/sysctl.d/99-tailscale.conf"]:
+    assert line in f, line
+rb = open(sys.argv[1].replace("hosts/ansible/roles/agent_box/files/lab-test.sh", "docs/runbooks/set-up-tailnet-client-in-ct-900.md")).read()
+for line in ["https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg", "apt-get install -y tailscale",
+             'printf "net.ipv4.ip_forward = 1\\nnet.ipv6.conf.all.forwarding = 1\\n" > /etc/sysctl.d/99-tailscale.conf']:
+    assert line in rb and line in f, line
+assert "for n in 1 2; do" in f and "changed=0 +unreachable=0 +failed=0' \"$files/connector-run.log\"" in f
+assert "grep -q 'via $gw dev eth1'" in f and "ping -c 1 -W 2 -I eth1 $gw" in f
 PY
 # host runs the fresh-host steps in the runbook's order: apt, iac-access.sh, the token, iac-access.sh again, vmbr1.
 python3 -I - "$w" <<'PY' && ok "host runs apt, iac-access.sh, the token, iac-access.sh again, then vmbr1" || bad "host's order"
