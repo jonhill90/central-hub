@@ -36,6 +36,11 @@ run "one_nic_on_dev_in_pool_dev" {
     condition     = proxmox_virtual_environment_vm.opnsense.on_boot == false
     error_message = "A throwaway VM must not start with the host."
   }
+
+  assert {
+    condition     = length(coalesce(proxmox_virtual_environment_vm.opnsense.tags, [])) == 0
+    error_message = "The test VM sets no tags: a create's tags are checked on /vms/257, where the agents' token has no right."
+  }
 }
 
 run "boots_from_the_image_with_the_seed_attached" {
