@@ -111,3 +111,8 @@ k8s_identity_db_size: 2Gi
 # the secrets store's owner sign-in needs from this cluster (agent pick 233): the realm's issuer, the
 # Gateway's address and the CA root its certificate comes from. Empty: nothing is written.
 k8s_identity_oidc_handoff_file: ""
+
+# Clients that tasks/clients.yml adds to the live realm (tag clients), by client ID. They must be
+# clients of realm.yaml.j2. Use it to add a client without the realm replace, which ends every open
+# sign-in: for example [proxmox] once k8s_identity_proxmox_hosts is set.
+k8s_identity_ensure_clients: []
