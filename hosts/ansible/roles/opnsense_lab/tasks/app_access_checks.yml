@@ -1,0 +1,28 @@
+---
+# The app access rules' inputs (tasks/app_access.yml), checked before any rule is written; on its own so
+# .github/hosts-check/tests/test_opnsense_app_access.sh can run it with no firewall.
+- name: App access sources fit their sequences and have known names
+  ansible.builtin.assert:
+    that:
+      - opnsense_lab_app_access.gateway is match(opnsense_lab_ipv4_pattern)
+      - opnsense_lab_app_access.sources | length > 0
+      - opnsense_lab_app_access.sources | length <= opnsense_lab_app_access_sequences | length
+      - opnsense_lab_app_access.sources | map(attribute='name') | unique | length == opnsense_lab_app_access.sources | length
+      - opnsense_lab_app_access.sources | map(attribute='name') | difference(opnsense_lab_app_access_names) | length == 0
+      - >-
+        opnsense_lab_app_access.sources | map(attribute='address') | select('match', opnsense_lab_ipv4_pattern) | list | length
+        == opnsense_lab_app_access.sources | length
+      - opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_app_access.vlan) | list | length == 1
+      - >-
+        opnsense_lab_app_access_sequences[:opnsense_lab_app_access.sources | length]
+        | intersect(opnsense_lab_numbered_sequences) | length == 0
+      - >-
+        opnsense_lab_app_access_sequences[:opnsense_lab_app_access.sources | length] | max
+        < opnsense_lab_app_access_first_vlan_rule
+    fail_msg: >-
+      opnsense_lab_app_access needs the Gateway's IPv4 address, a VLAN tag in lab_vlans, and one to
+      {{ opnsense_lab_app_access_sequences | length }} sources, each an IPv4 address with its own name from
+      opnsense_lab_app_access_names ({{ opnsense_lab_app_access_names | join(', ') }}), at sequences no other rule uses
+      and below the VLAN's own first rule.
+    quiet: true
+  when: opnsense_lab_app_access is defined

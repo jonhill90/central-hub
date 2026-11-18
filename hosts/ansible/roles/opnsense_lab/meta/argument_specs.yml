@@ -104,6 +104,31 @@ argument_specs:
         elements: int
         default: [1, 2, 3, 4, 8, 9]
         description: The agent box rules' sequence numbers, in target order; below 10 and clear of the management rules.
+      opnsense_lab_app_access:
+        type: dict
+        required: false
+        description: Pass rules from named lab VMs to the c1 Gateway on tcp 443 (tasks/app_access.yml). Private.
+        options:
+          vlan: {type: int, required: true, description: "The sources' VLAN tag, for example 30 (dev)."}
+          gateway: {type: str, required: true, description: "The c1 Gateway's IPv4 address, without a prefix."}
+          sources:
+            type: list
+            elements: dict
+            required: true
+            description: One rule each, from that address only.
+            options:
+              name: {type: str, required: true, description: "Rule name; one of opnsense_lab_app_access_names."}
+              address: {type: str, required: true, description: "The source's IPv4 address, without a prefix."}
+      opnsense_lab_app_access_names:
+        type: list
+        elements: str
+        default: [agent box, desktop VM]
+        description: The names the app access rules may have; a name that is not a current source loses its rule.
+      opnsense_lab_app_access_sequences:
+        type: list
+        elements: int
+        default: [11, 12]
+        description: The app access rules' sequence numbers, in source order; clear of every other rule and below the source VLAN's first rule.
       opnsense_lab_host_overrides:
         type: list
         elements: dict

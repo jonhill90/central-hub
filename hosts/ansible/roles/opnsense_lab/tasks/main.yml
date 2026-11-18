@@ -51,6 +51,10 @@
   ansible.builtin.import_tasks: agent_box.yml
   tags: [rules, agent_box]
 
+- name: App access rules
+  ansible.builtin.import_tasks: app_access.yml
+  tags: [rules, app_access]
+
 - name: DNS override
   ansible.builtin.import_tasks: dns.yml
   tags: [dns]
