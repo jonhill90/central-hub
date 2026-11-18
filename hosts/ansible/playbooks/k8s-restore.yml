@@ -56,6 +56,16 @@
         proxmox_restic_sftp_no_root_from: "{{ k8s_backup_sftp_keyed | map(attribute='from') | list }}"
       when: k8s_backup_sftp_keyed | length > 0
 
+    # A first --check run makes no worker key, so the role above is skipped; the workers' play still needs the host's key.
+    - name: The host's ssh key, read only, when no worker has a key yet
+      ansible.builtin.include_role:
+        name: proxmox_restic_sftp
+        tasks_from: host_key
+      when: >-
+        k8s_backup_sftp_keyed | length == 0 and
+        (k8s_backup_sftp_nodes | map('extract', hostvars, 'k8s_backup_sftp') | map('default', false)
+        | map('bool') | select | list | length > 0)
+
 - name: Restore prod's volumes into this env, read-only
   hosts: k8s_workers
   become: true

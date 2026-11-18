@@ -14,6 +14,7 @@
 #      pass it lists and restores the snapshot with --no-lock, and every write (backup, forget, a lock) is refused.
 #      Root stays refused from both addresses after the reader run and after the next writer run, since each run
 #      writes one user's keys and the root refusal must cover both.
+#   6. The real k8s-backup.yml's first --check run on a node with no key gets through every play and changes nothing.
 # Usage: .github/hosts-check/tests/test_backup_sftp.sh   (needs docker that can run a privileged systemd container,
 # ansible-playbook, ssh-keygen, curl, bunzip2). RESTIC_BIN=<path> uses that restic instead of downloading the pin.
 set -euo pipefail
@@ -196,5 +197,29 @@ if play > "$t/6.log" 2>&1; then ok "5 a writer run after the reader run passes";
 root_refused "$node_ip" && root_refused "$dev_ip" && ok "5 after the next writer run, root is still refused from both" \
   || bad "5 after the next writer run, root is not refused from both addresses"
 on_dev "$read_env; restic --no-lock snapshots -q" >/dev/null && ok "5 the reader still reads after the writer run" || bad "5 the writer run cut the reader off"
+
+# 6
+# The real playbook's first --check run, on a node that never had a key: play 1 makes none in check mode, so play 2
+# skips the host role. It must still read the host's key, or play 3 stops at sftp.yml's assert and plays 2 to 4 go
+# unchecked (the first check run of the change on the Mac, 2026-11-18). Nothing may change on the node.
+fresh_ip=$(start fresh)
+F=central-hub-sftp-fresh-$$
+printf 'RESTIC_REPOSITORY=azure:c1-backup:/c1\nRESTIC_PASSWORD=x\n' > "$t/ctl6.env" && chmod 600 "$t/ctl6.env"
+cat > "$t/inv6.yml" <<INV
+all:
+  vars: { k8s_backup_enabled: true, k8s_backup_sftp: true, k8s_backup_env_file: $t/ctl6.env }
+  children:
+    k8s_nodes: { hosts: { fresh: { ansible_host: $fresh_ip, $common } } }
+    k8s_control_plane: { hosts: {} }
+    proxmox: { hosts: { host: { ansible_host: $host_ip, proxmox_host_mgmt_address: $host_ip, $common } } }
+INV
+if (cd "$root/hosts/ansible" && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i "$t/inv6.yml" playbooks/k8s-backup.yml \
+      --check --diff --tags drill) > "$t/7.log" 2>&1; then
+  ok "6 a first --check run of k8s-backup.yml gets through every play on a node with no key"
+else bad "6 the first --check run of k8s-backup.yml failed"; grep -E 'fatal|FAILED|msg' "$t/7.log" | head -10; fi
+grep -q "TASK \[proxmox_restic_sftp : Remember the host key\]" "$t/7.log" && ok "6 the host play read the host's key in check mode" \
+  || bad "6 the host play did not read the host's key"
+docker exec "$F" test -e /etc/central-hub/backup-ssh/id_ed25519 && bad "6 the check run made a key on the node" \
+  || ok "6 the check run left the node without a key"
 
 [[ $fail -eq 0 ]] && echo "backup sftp: all checks passed" || { echo "backup sftp: a check failed"; exit 1; }

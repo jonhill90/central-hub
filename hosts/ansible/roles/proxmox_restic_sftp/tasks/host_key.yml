@@ -1,0 +1,12 @@
+---
+# Read only. Run by main.yml, and on its own by the host plays of k8s-backup.yml and k8s-restore.yml when no node
+# has a key yet: a first --check run makes no node key, so the role is skipped, but the nodes' play still needs the
+# host's key to get through its checks (the Mac's first check run of #534, 2026-11-18 09:4x UTC, stopped there).
+- name: The host's ssh key, for the nodes' known_hosts
+  ansible.builtin.slurp:
+    src: /etc/ssh/ssh_host_ed25519_key.pub
+  register: proxmox_restic_sftp_hostkey_raw
+
+- name: Remember the host key
+  ansible.builtin.set_fact:
+    proxmox_restic_sftp_host_key: "{{ (proxmox_restic_sftp_hostkey_raw.content | b64decode).split()[:2] | join(' ') }}"
