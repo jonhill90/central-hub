@@ -149,6 +149,14 @@ The role installs headless Chromium through Playwright (pinned with hashes in `f
 
 `lab-proof` (a session runs it as itself, no key) reads c1's HTTPRoutes and the Gateway's address through `c1-read`, asks the box's resolver (the tailnet's, which hands lab names to Unbound) for each name with a short Python query, and opens a TLS connection to the Gateway with `openssl s_client`, checking the certificate against the box's trust store, where the lab root sits. It prints one line per route name and name number, with `dns=ok|FAIL` and the TLS verify result, then `PASS` or `FAIL`. It prints no host name, address or zone, so its output can go in a public record. It asks the question the `dns_proof` tag asks of the names c1 serves, but it is not that tag, and OPNsense's own name, which is not a c1 route, is not covered.
 
+## Change c1 from the box
+
+`c1-ansible` runs one named Ansible playbook against prod's c1 from the box, as the keys user, with the box's own prod node key (the one `openbao-prod key` makes), so the change leaves the Mac. `c1-ansible list` names what it runs (today `identity`, which is `k8s-identity.yml` with `k8s_identity_realm_replace=false`, fixed in the wrapper, so it never deletes and imports realm lab again on prod: that would end every sign-in). `c1-ansible check <name>` is read-only (`--check --diff`). `c1-ansible apply <name> <clearance id>` runs it for real; the id is the reviewer's clearance message for the head that is on main, and it goes in the log (D-0042 rule 1). `c1-ansible log` prints the newest run's lines.
+
+The wrapper runs only code on `main`, in its own checkout, one run at a time, on its own copy of the prod inventory (the controller's ssh settings and proxmox group dropped, the box's key and plain ssh set; a host that sets a proxy, another key or another env than prod is refused). A name that needs a private values file stops with that file's name until the controller's prod-files run puts it on the box; `identity` needs `identity.env` in the keys folder's `prod` folder.
+
+expect: `c1-ansible check identity` ends with the play recap and `c1-ansible: check identity done`. If it says no prod node key yet or the key is refused, the node key's public half is not on prod's nodes (`openbao-prod key`, then `openbao-prod check`).
+
 ## Merge pull requests from the box
 
 The box merges by a sweep, not by a workflow: a cloud session cannot start a GitHub workflow here (403, measured 2026-11-14). The page [Merge a pull request with the box's sweep](merge-a-pr-through-the-merge-job.md) is the how-to; this section is the setup.

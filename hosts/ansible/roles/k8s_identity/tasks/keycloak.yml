@@ -95,6 +95,6 @@
 - name: keycloak | Realm imported
   ansible.builtin.command: >-
     kubectl -n {{ k8s_identity_namespace }} wait keycloakrealmimport/realm-{{ k8s_identity_realm }}
-    --for=condition=Done --timeout=600s
+    --for=condition=Done --timeout={{ k8s_identity_realm_import_timeout | int }}s
   changed_when: false
   when: not ansible_check_mode

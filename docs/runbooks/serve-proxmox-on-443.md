@@ -92,6 +92,12 @@ The check run needs `python3-apt` on the host: Ansible's apt module installs it 
 
 To install Apache httpd and leave nginx serving, set `proxmox_proxy_cutover: false`.
 
+## Change the agents' Proxmox rights through the host job
+
+The same wrapper runs a second job, `agent-access`, so a change to `hosts/terraform/home/bootstrap/agent-access.sh` reaches the host by a reviewed PR and no longer needs the Mac: `proxmox-host check agent-access` copies the script from the checked-out commit to the host and shows what would change (the run itself is skipped in a check), then `proxmox-host apply agent-access <pass message ID> <check hash>` copies it and runs it as root. The pass and the hash work as for the proxy job above, and the hash covers the script's exact text. It needs the host job installed first (steps 1 to 3 of "Install the host job"). The run itself changes the agents' access rights, so it needs the owner's tap on a card that names the step and the commit (D-0042 rule 6); the check does not. The script is safe to run again, prints no token secret, and its desktop switch (`DESKTOP_ACCESS`) is a committed value, so the owner's rule of no desktop rights after a build still holds.
+
+expect: `proxmox-host: check <hash>: ...` with the job named in the line before it (`job agent-access`).
+
 ## If it fails
 
 - Apache httpd does not start after a reboot: `systemctl status apache2` and `journalctl -u apache2`. The drop-in makes it wait for `pve-cluster`; if `/etc/pve` is not mounted, fix that first. The web UI is still on 8006.

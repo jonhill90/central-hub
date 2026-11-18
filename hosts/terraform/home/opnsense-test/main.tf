@@ -28,8 +28,9 @@ resource "proxmox_virtual_environment_file" "image" {
 # The NoCloud seed ISO the wrapper built for this VM: meta-data (hostname) and a user-data script that
 # runs as root at first boot. Uploaded through the API (Datastore.AllocateTemplate on local). The agents'
 # token cannot delete files on local (no Datastore.Allocate), so each seed is named by its hash: a new
-# seed is a new file and never needs a delete, and `opnsense-test destroy` drops the old one from the
-# state, leaving the file for the owner to remove.
+# seed is a new file and never needs a delete. The wrapper builds the ISO byte for byte the same from the same
+# settings, so `opnsense-test destroy` keeps the seed in the state and the next plan reuses its file; only a
+# changed seed is dropped from the state by plan, leaving its old file on local.
 resource "proxmox_virtual_environment_file" "seed" {
   node_name    = var.proxmox_node_name
   datastore_id = "local"

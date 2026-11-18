@@ -5,7 +5,7 @@
 #   3. An empty session_args: the session user gets no line for that wrapper.
 #   4. The real wrapper list: tailnet-stack's session line has no apply, the runner's has it.
 #   5-6. pr-merge: sessions get `check *` only; pass-record: add, show, halt, resume; the runner gets neither.
-#   7. proxmox-host runs as its own user (run_as hostops): the session's line has check and log, the runner's adds
+#   7. proxmox-host runs as its own user (run_as hostops): the session's line has check, check <job> and log, the runner's adds
 #      apply, and neither runs it as the keys user.
 #   8-9. tailnet-policy: sessions get plan and log only; vps-host: status and log only; the runner gets every action (D-0046).
 # Usage: .github/hosts-check/tests/test_sudoers_session_args.sh   (needs python3 with jinja2 and pyyaml)
@@ -45,8 +45,8 @@ ph = [w for w in d if w["name"] == "proxmox-host"][0]
 h = render([ph]).splitlines()
 hs = [l for l in h if l.startswith("sess ALL=")]
 hr = [l for l in h if l.startswith("run ALL=")]
-print("7", hs == ["sess ALL=(hostops) NOPASSWD: /x/proxmox-host.sh check, /x/proxmox-host.sh log"],
-      hr == ["run ALL=(hostops) NOPASSWD: /x/proxmox-host.sh check, /x/proxmox-host.sh apply *, /x/proxmox-host.sh log"])
+print("7", hs == ["sess ALL=(hostops) NOPASSWD: /x/proxmox-host.sh check, /x/proxmox-host.sh check *, /x/proxmox-host.sh log"],
+      hr == ["run ALL=(hostops) NOPASSWD: /x/proxmox-host.sh check, /x/proxmox-host.sh check *, /x/proxmox-host.sh apply *, /x/proxmox-host.sh log"])
 tp = render([w for w in d if w["name"] == "tailnet-policy"])
 print("8", lines(tp, "sess") == ["sess ALL=(keys) NOPASSWD: /x/tailnet-policy.sh plan, /x/tailnet-policy.sh log"],
       lines(tp, "run") == ["run ALL=(keys) NOPASSWD: /x/tailnet-policy.sh plan, /x/tailnet-policy.sh apply *, /x/tailnet-policy.sh log"])

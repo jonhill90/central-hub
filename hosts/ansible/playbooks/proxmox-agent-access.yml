@@ -1,0 +1,23 @@
+---
+# The agents' Proxmox rights, applied from the box (the proxmox-host wrapper's job `agent-access`, D-0041): it copies
+# hosts/terraform/home/bootstrap/agent-access.sh from the commit this runs from to the host and runs it as root. The script
+# is written to be run again (roles, pools and ACLs, no token secret, nothing printed that is private). A --check run
+# shows the copy's diff and skips the run, so the check's hash names the exact script an apply will run.
+- name: The agents' Proxmox rights
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  tasks:
+    - name: agent-access | The script, from this commit
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../terraform/home/bootstrap/agent-access.sh"
+        dest: /usr/local/libexec/agent-access.sh
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: agent-access | Run it as root
+      ansible.builtin.command:
+        cmd: /usr/local/libexec/agent-access.sh
+      changed_when: true
+      when: not ansible_check_mode
