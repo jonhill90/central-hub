@@ -22,7 +22,7 @@ After `accepted` the body is not edited (D-0007 rule 5). Only the status, the ev
 
 ## The PR names its spec
 
-A pull request that changes a file under `hosts/` says in its description either `Spec: docs/specs/<file>.md`, naming a spec that exists in the checkout, or `No spec: <reason>` with a reason of at least 10 characters, each on a line of its own (the PR template has the `Spec:` line). The `spec-line` workflow (`.github/workflows/spec-line.yml`) fails the PR without one. Its checker is `.github/spec-check/check_spec_line.py`, taken from `main` so a PR can't edit the check that judges it; its tests are `.github/spec-check/tests/test_spec_check.sh`.
+The owner said yes to this rule on 2026-11-01 at 22:18 UTC; D-0007 rule 2 only says when a spec is needed, and that smaller changes need only the PR description. A pull request that changes a file under `hosts/` says in its description either `Spec: docs/specs/<file>.md`, naming a spec that exists in the checkout, or `No spec: <reason>` with a reason of at least 10 characters, each on a line of its own (the PR template has the `Spec:` line). The `spec-line` workflow (`.github/workflows/spec-line.yml`) fails the PR without one. Its checker is `.github/spec-check/check_spec_line.py`, taken from `main` so a PR can't edit the check that judges it; its tests are `.github/spec-check/tests/test_spec_check.sh`.
 
 ## Steps
 

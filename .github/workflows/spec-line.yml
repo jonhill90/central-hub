@@ -6,6 +6,8 @@
 name: spec-line
 on:
   pull_request:            # never pull_request_target (CLAUDE.md rule 5)
+    # edited: the check reads the PR description, so editing it must run the check again
+    types: [opened, edited, synchronize, reopened]
 permissions:
   contents: read
 jobs:
