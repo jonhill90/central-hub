@@ -1,7 +1,12 @@
 # {{ ansible_managed }}
-# Keycloak's PostgreSQL. A static local volume: a folder on one worker, bound by name, no
-# provisioner and no StorageClass (c1 has none yet). Retain keeps the folder's data when the volume
-# object is deleted. Exit path: pg_dump, then restore onto whatever storage S17 picks.
+# Keycloak's PostgreSQL. k8s_identity_db_storage picks where its data sits:
+#   static (default): a static local volume, a folder on one worker, bound by name, no provisioner
+#     and no StorageClass. Retain keeps the folder's data when the volume object is deleted.
+#   local-path (TASK-0225): a claim on StorageClass local-path, so the data sits on the data disk
+#     (k8s_storage) like Prometheus, Loki and Grafana. Moving an existing database from the first to the
+#     second is pg_dump, then restore (docs/runbooks/back-up-c1-off-box.md, "Move Keycloak's database
+#     onto the data disk"); the StatefulSet's claim template cannot be edited in place.
+{% if k8s_identity_db_storage == 'static' %}
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -25,6 +30,7 @@ spec:
               operator: In
               values: [{{ k8s_identity_db_node }}]
 ---
+{% endif %}
 apiVersion: v1
 kind: Service
 metadata:
@@ -90,8 +96,12 @@ spec:
         name: data
       spec:
         accessModes: [ReadWriteOnce]
+{% if k8s_identity_db_storage == 'static' %}
         storageClassName: ""
         volumeName: {{ k8s_identity_name }}-postgres
+{% else %}
+        storageClassName: {{ k8s_identity_db_storage_class }}
+{% endif %}
         resources:
           requests:
             storage: {{ k8s_identity_db_size }}
