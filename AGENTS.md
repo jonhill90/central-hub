@@ -44,6 +44,7 @@ When you do work on this system, its doc here is part of the work: a change that
 | Standards in force (names, IP address plan) | `docs/standards/README.md` |
 | What a word means here | `docs/glossary.md` |
 | How to do one job, step by step | `docs/runbooks/README.md` |
+| How a part works, with drawings | `docs/explanations/README.md` |
 | Reporting a vulnerability | `SECURITY.md` |
 
 ## Activation gate

@@ -4,11 +4,11 @@ status: draft
 kind: automated
 trigger: once, before the os-openid-connect plugin goes on the lab firewall (VM 100); again before a new plugin or OPNsense release goes there
 runner: an agent session on the agent box, while dev is down
-outcome: a throwaway OPNsense 26.1 (VM 257, dev only) shows that sign-in through Keycloak lands on the dashboard for a bound user, that an unknown user is queued without a session, that root signs in by password with the client off, and where the plugin keeps its settings; then the VM is destroyed and the proof's Keycloak and its data are gone
+outcome: a throwaway OPNsense 26.1 (VM 257, dev only) shows that sign-in through Keycloak lands on the dashboard for a bound user, that an unknown user is queued without a session, that root signs in by password with the client off and again with the client on and the proof's Keycloak stopped, and where the plugin keeps its settings; then the VM is destroyed and the proof's Keycloak and its data are gone
 needs: the agent box with the opnsense-test wrapper (agent_box_opnsense_test in the private inventory, one install of the box's role); dev torn down; the node's free memory at least the VM's 3072 MiB plus the 2048 MiB margin; dev reaching github.com and pkg.opnsense.org, and the test VM reaching the box's Keycloak port
 private-values: [agent_box_opnsense_test]
 files: [hosts/terraform/home/opnsense-test/, hosts/ansible/roles/agent_box/files/opnsense-test.sh, hosts/ansible/roles/agent_box/files/opnsense-test-seed.py, hosts/ansible/roles/agent_box/files/opnsense-test-prove.py, hosts/ansible/roles/agent_box/tasks/opnsense_test.yml, hosts/ansible/roles/agent_box/templates/opnsense-test.nft.j2, hosts/ansible/roles/agent_box/templates/opnsense-test-nft.service.j2, .github/hosts-check/opnsense-plugin-pin.sh, .github/hosts-check/tests/test_opnsense_test.sh]
-last-tested: "not run; offline tests only (the stack's tofu test, test_opnsense_test.sh)"
+last-tested: "2026-11-18, an agent, plan, apply, configure, prove and destroy from the agent box at central-hub d333499: every proof item held, prove rc 0, VM 257 destroyed; the stack's tofu test and test_opnsense_test.sh offline"
 superseded-by:
 ---
 
@@ -81,7 +81,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    opnsense-test prove
    ```
 
-   why: this step starts the proof's Keycloak and checks that the VM reaches it over verified https. It then prints one `proof item N:` line for items 2 to 7 and 9, and stops at the first that fails. Keycloak stops and its data is removed when the step ends, pass or fail.
+   why: this step starts the proof's Keycloak and checks that the VM reaches it over verified https. It then prints one `proof item N:` line for items 2 to 7, 9 and 10, and stops at the first that fails. Item 10 stops Keycloak itself, so it runs last. Keycloak's container and its data are removed when the step ends, pass or fail.
    ※ `opnsense-test-prove.py`
 5. Destroy:
 
@@ -107,6 +107,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 | 7 | Memory in use, from the kernel's page counts. |
 | 8 | `opnsense-test destroy`. |
 | 9 | The run reads admission `approval`, root not allowed, PAR disabled and shared signals off from the config, and checks that binding an identity to root (uid 0) is refused. |
+| 10 | Keycloak down, the break-glass case D-0037 rule 5 names: the plugin's server is turned on again, the proof's Keycloak container is stopped, the VM is shown not to reach its issuer, and root then signs in by password through the Local Database. Item 4 proves less, because with the server off the plugin never calls Keycloak. |
 
 ## If it fails
 
