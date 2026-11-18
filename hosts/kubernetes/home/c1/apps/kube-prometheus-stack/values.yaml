@@ -4,8 +4,9 @@
 # grafana."grafana.ini".server.root_url as a parameter (root values, zoneParameters).
 # Grafana's sign-in through Keycloak is in values-sso.yaml, used when the root lists it.
 # Alertmanager sends every alert to ntfy (app alerts) on topic c1-alerts, with ntfy's built-in
-# Alertmanager message format. Watchdog (always firing, by design) goes nowhere. Swapping the
-# receiver means changing only `receivers` here (pick 171).
+# Alertmanager message format, except Watchdog (always firing, by design), which goes to receiver
+# `heartbeat` for Healthchecks.io (pick 213) and not to ntfy. Swapping the ntfy receiver means
+# changing only `receivers` here (pick 171).
 alertmanager:
   enabled: true
   # Count notifications per receiver (alertmanager_notifications_total{receiver_name="ntfy"}), so
