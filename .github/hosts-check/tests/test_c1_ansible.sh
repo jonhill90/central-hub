@@ -70,13 +70,13 @@ if [[ $l == identity && $rc -ne 0 && $out == *"identity.env is missing"* && -z $
 echo "X=1" > "$t/keys/prod/identity.env"
 run check identity
 seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
-if [[ $rc -eq 0 && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false --check --diff" &&
+if [[ $rc -eq 0 && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false --tags all,clients --check --diff" &&
       $seen != *ProxyJump* && $seen != */Users/* && $seen != *pve-a* && $seen == *"$t/keys/prod-node-key"* ]]; then
   ok "3. check: --check --diff on the box's copy of the inventory"
 else bad "3. $rc [$calls] $out"; fi
 
 run apply identity "$clr"
-if [[ $rc -eq 0 && $calls != *--check* && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file="* && $calls == *"-e k8s_identity_realm_replace=false"* && $out == *"clearance $clr"* ]]; then
+if [[ $rc -eq 0 && $calls != *--check* && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file="* && $calls == *"-e k8s_identity_realm_replace=false"* && $calls == *"--tags all,clients"* && $out == *"clearance $clr"* ]]; then
   ok "4a. apply: no --check, the clearance id logged"
 else bad "4a. $rc [$calls] $out"; fi
 inventory "${prod_inv[@]}" "            cp-b: {ansible_host: 192.0.2.11, k8s_gitops_cluster_labels: {env: dev}}"
