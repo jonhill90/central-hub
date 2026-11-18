@@ -26,11 +26,15 @@ spec:
   rules:
 {{- if $v.metrics.enabled }}
     # /metrics stays inside the cluster (Prometheus reads the pod directly): from outside it gets a
-    # redirect to /. An Exact match wins over the PathPrefix "/" below (Gateway API match precedence).
+    # redirect to /. Jellyfin's routing ignores case, a trailing slash, percent-encoded letters and
+    # dot segments, and the Gateway's Exact and PathPrefix matches do not, so this is a regular
+    # expression: any path with a segment spelled "metrics" in any case, each letter either plain or
+    # percent-encoded. Cilium hands it to Envoy as an RE2 full match and tries it before any
+    # PathPrefix. The forms it must catch are tested in .github/hosts-check/tests/test_jellyfin_metrics_route.sh.
     - matches:
         - path:
-            type: Exact
-            value: /metrics
+            type: RegularExpression
+            value: {{ $v.metrics.blockPath | quote }}
       filters:
         - type: RequestRedirect
           requestRedirect:

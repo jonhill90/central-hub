@@ -102,7 +102,18 @@ Jellyfin serves Prometheus metrics at `/metrics` only when its `EnableMetrics` s
 |---|---|---|
 | The setting | the setup Job's `metrics` step in `files/setup.sh`, `metrics.enabled` in `values.yaml` | Signs in as `admin` and reads `GET /System/Configuration`. If `EnableMetrics` is false, it posts the same configuration back with only that value changed, then calls `POST /System/Restart`. Jellyfin then builds its host again in the same process (`Program.cs`, the restart loop), so the pod is not replaced. It waits until `/metrics` answers. Once the setting is on, a run changes nothing. |
 | The scrape | PodMonitor `jellyfin` in app `monitoring-extras` | Prometheus reads the pod's port `http` at `/metrics` every 60 s. The Service is left as it was. |
-| The route | `templates/route.yaml` | `/metrics` from outside the cluster gets a 302 to `/`, because the docs say to keep it off the public internet. Prometheus reads the pod directly. |
+| The route | `templates/route.yaml`, `metrics.blockPath` in `values.yaml` | A request from outside the cluster for any path with a segment spelled `metrics` gets a 302 to `/`, because the docs say to keep the endpoint off the public internet. Prometheus reads the pod directly. |
+
+Why the route uses a pattern: Jellyfin's routing ignores case and a trailing slash, and its web server decodes percent-encoded letters and removes `.` and `..` segments before routing, while the Gateway's `Exact` and `PathPrefix` matches compare the path as sent. So `/Metrics`, `/metrics/` or `/%6Detrics` would pass an `Exact` match on `/metrics` and still reach the endpoint. The rule is a `RegularExpression` match instead: Cilium hands it to Envoy as an RE2 full match on the path without its query string, and tries it before any `PathPrefix` (Cilium 1.20.4, `operator/pkg/model/ingestion/gateway.go` and `envoy_virtual_host.go`). `.github/hosts-check/tests/test_jellyfin_metrics_route.sh` renders the chart and checks the pattern against each spelling below, and against Jellyfin paths it must leave alone, such as `/web/metrics.js`.
+
+| Caught | Examples |
+|---|---|
+| Any case | `/Metrics`, `/METRICS` |
+| A trailing slash, or more segments after it | `/metrics/`, `/metrics/.`, `/metrics/x/..` |
+| Percent-encoded letters or slashes | `/%6Detrics`, `/%6D%65%74%72%69%63%73`, `/%2Fmetrics` |
+| Dot segments or a doubled slash before it | `/./metrics`, `/x/../metrics`, `//metrics` |
+
+What it does not promise: an encoding the web server accepts and the test does not list could still reach the endpoint. That would show the request counts and timings per endpoint, and the process's memory and CPU. The metrics hold no password, token or media name.
 
 The metric names are prometheus-net's, the library Jellyfin 12.2 ships (8.2.1): `http_requests_received_total` (labels `code`, `method`, `controller`, `action`, `endpoint`), `http_request_duration_seconds`, `http_requests_in_progress`, and `process_*` and `dotnet_*`. They were read out of the pinned image's `Prometheus.AspNetCore.dll` and `Prometheus.NetStandard.dll` on 2026-11-18.
 

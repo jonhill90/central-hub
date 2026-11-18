@@ -189,6 +189,8 @@ check_manifests() {
       return 1
     fi
   done
+  # Jellyfin's route sends every spelling of /metrics to the redirect.
+  bash "$here/tests/test_jellyfin_metrics_route.sh"
   # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
   if command -v promtool >/dev/null; then
     mkdir -p "$work/rules"
