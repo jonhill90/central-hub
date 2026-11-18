@@ -21,7 +21,9 @@
 # never reads, then removes it, when the rebuilt store is to stay as it is. The rebuild wrapper writes the hold
 # before a run that leaves a fresh store. put, compare and reseed keep SOPS's copy of every secret (D-0058 rule 8,
 # secrets-store-kv.sh): put writes one key to SOPS, then to the store; compare names every key that differs; reseed
-# fills a fresh store from SOPS, then takes a snapshot. All three refuse until the settings' sops_copies is true
+# fills a fresh store from SOPS, then takes a snapshot; put, put-apps and reseed write nothing during a rebuild hold.
+# put-apps writes every value the apps read; the dev rebuild's stage app-secrets runs it, then compare, once the box's
+# rebuild wrapper finds the gate open (sops_copies, box_cidr, the CA file, no hold). All of them refuse until the settings' sops_copies is true
 # (the owner's access-right tap, D-0058 rule 9). One store per run (D-0058 rule 10): every action refuses unless the
 # store's address is the c1 store of its own environment, as that environment's inventory names it. --prod uses the
 # prod keys folder, settings and inventory, and makes no recovery shares (D-0038 rule 5: prod gets none).
@@ -259,9 +261,16 @@ clear_hold() {
   echo "secrets-store: rebuild hold removed; $moved earlier snapshot(s) set aside in $kept, not restored; removing them is the owner's tap"
 }
 
+# No write during a rebuild hold: the store is then the fresh one, and a key in it makes restore-rebuilt refuse (its
+# empty-store step, secrets-store-restore.sh), so the earlier store's snapshots could no longer come back.
+no_hold() {
+  [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt, or clear-hold first; nothing written" >&2; exit 1; }
+}
+
 # One key into SOPS, then the store (rule 8). The value is this run's stdin, passed straight to the helper.
 put() {
   sops_copies
+  no_hold
   kv put "$kv_path" "$kv_key"
 }
 
@@ -278,6 +287,7 @@ put() {
 # Every file is read and every line checked before the first write. Only names are printed, never a value.
 put_apps() {
   sops_copies
+  no_hold
   local src ident token='' line name n=0 m=0 value
   if [[ $env == dev ]]; then
     src=$keys/rebuild-secret-source.env ident=$work/rebuild-dev/identity.env
@@ -327,7 +337,7 @@ compare() {
 # store's snapshots are then still waiting for restore-rebuilt, or for clear-hold to set them aside.
 reseed() {
   sops_copies
-  [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt, or clear-hold first; nothing written" >&2; exit 1; }
+  no_hold
   kv reseed </dev/null
   ( snapshot ) || { echo "secrets-store: reseeded, but the snapshot after it failed; run secrets-store snapshot" >&2; exit 1; }
 }

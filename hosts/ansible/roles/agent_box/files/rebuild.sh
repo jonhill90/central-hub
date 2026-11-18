@@ -247,6 +247,31 @@ fi
 # agent_box_secrets_bundle.offbox true, tasks/secrets_bundle.yml); until then
 # the dev key is only on the box and the node. Dev's key needs no tap (D-0058 rule 3). The VM store's wiring above
 # and this are never on together.
+# Dev only, with the store inside the cluster: the gate of stage app-secrets (hosts/rebuild-k8s.sh), which puts every
+# value the apps read into SOPS, then OpenBao, and compares the two (secrets-store.sh put-apps, then compare; D-0058
+# rule 8, plan step 8a). app_secrets_gate SETTINGS CACERT HOLD prints the one rebuild.env line: APP_SECRETS_HOOK when
+# the gate is open, else APP_SECRETS_SKIP with the first reason, in this order:
+#   1. the settings' sops_copies is not true: the owner's tap (D-0058 rule 9), off by default (agent_box_secrets_store);
+#   2. no box_cidr in the settings: no admin path from the box to the store (D-0062), so the admin login is refused;
+#   3. no CA file for the store beside the keys: every call that signs in checks the store against it;
+#   4. the rebuild hold is set: a write into the fresh store makes restore-rebuilt refuse (secrets-store.sh no_hold).
+# Shut, the stage prints one SKIP line naming the reason and writes nothing. The day the tap comes, opening it is a
+# settings change (sops_copies true), not new code. secrets-store.sh checks sops_copies and the hold again itself.
+app_secrets_gate() {
+  local reason=""
+  if ! python3 -I -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("sops_copies") is True else 1)' "$1" 2>/dev/null; then
+    reason="sops_copies is off: SOPS copies of the apps' secrets wait for the owner's tap (D-0058 rule 9); nothing written"
+  elif ! python3 -I -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("box_cidr") else 1)' "$1" 2>/dev/null; then
+    reason="no box_cidr in the secrets store's settings, so the box has no admin path to the store (D-0062); nothing written"
+  elif [[ ! -s $2 ]]; then
+    reason="no CA file for the store beside the keys (secrets-store-ca.crt); nothing written"
+  elif [[ -e $3 ]]; then
+    reason="the rebuild hold is set: run restore-rebuilt or clear-hold first; nothing written"
+  fi
+  if [[ -n $reason ]]; then printf 'APP_SECRETS_SKIP="%s"\n' "$reason"
+  else printf 'APP_SECRETS_HOOK="%s"\n' "$libexec/secrets-store.sh put-apps && $libexec/secrets-store.sh compare"; fi
+}
+app_secrets_env=""
 in_cluster=false
 seal_env=""
 seal_tmp=""
@@ -310,6 +335,8 @@ print(sum(len(r.get("instances", [])) for r in s.get("resources", [])
     [[ -e $work/state/secrets-store.rebuilding ]] || date -u +%FT%TZ > "$work/state/secrets-store.rebuilding"
     echo "rebuild: the secrets store's rebuild hold is set; after the run, restore-rebuilt (the owner's tap) or clear-hold"
   fi
+  # After the hold above, so a run that leaves a fresh store keeps the gate shut.
+  app_secrets_env=$(app_secrets_gate "$work/secrets-store.json" "$store_keys/secrets-store-ca.crt" "$work/state/secrets-store.rebuilding")
 fi
 # What a dev run does on a node short of memory is the owner's pick, never a default (rebuild-k8s.sh,
 # docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev or keep-dev, from the one-line file the
@@ -506,6 +533,7 @@ STAGES="$stages"
 SECRET_SOURCE_FILE=$ssfile
 $openbao_env
 $seal_env
+$app_secrets_env
 $short_node_env
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'

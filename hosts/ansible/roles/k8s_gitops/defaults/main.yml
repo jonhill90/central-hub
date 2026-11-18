@@ -60,6 +60,15 @@ k8s_gitops_source_lab_ca_issuer: true
 # Whether the cluster runs the sign-in checks (app login-probe), passed to the root chart as `loginProbe` only
 # when false. Dev's lab names resolve to prod's Gateway, so hosts/rebuild-k8s.sh sets it false on dev. c1 keeps true.
 k8s_gitops_source_login_probe: true
+# Whether Jellyfin's setup CronJob runs, passed to the root chart as `jellyfinSetup` only when false. Dev restores
+# prod's Jellyfin config (with prod's admin password) before the apps start, so the setup Job's own, freshly made
+# admin Secret can't sign in; hosts/rebuild-k8s.sh sets it false on dev. c1 keeps true.
+k8s_gitops_source_jellyfin_setup: true
+# Whether monitoring-extras' panel-check CronJob is suspended, passed to the root chart as `panelCheckSuspended` only
+# when true. A tick inside a dev run failed `checks` on seven panels with no data: Keycloak's has none before the
+# `identity-keycloak` stage, the five OpenBao ones and Jellyfin's request rate for a cause not measured. So
+# hosts/rebuild-k8s.sh sets it true on dev. c1 keeps false.
+k8s_gitops_source_panel_check_suspended: false
 # Where the apps' ExternalSecrets read their values (D-0058 rules 5 and 8), passed to the root chart as
 # `appSecretsStore` when set. Empty, as now: store c1, namespace secret-source. `openbao`: key c1/<name>
 # through store openbao, which needs k8s_gitops_source_openbao_in_cluster. Set it only once each value

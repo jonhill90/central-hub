@@ -138,6 +138,7 @@ On a new cluster with the root Application made, Argo CD makes every object, Ext
 ## If it fails
 
 - **The setup Job fails:** read the newest Job's log (`c1-read get jobs -n media`, then `c1-read logs -n media job/<newest jellyfin-setup job>`). The CronJob runs again every 10 minutes and every step is safe to repeat; a failed run marks the app Degraded until one passes, once the CronJob has had a first success (Argo CD shows a CronJob that never succeeded as Healthy). If the wizard was finished by hand, the Job sees that and does nothing.
+- **Dev has no setup Job:** the dev rebuild passes `jellyfinSetup` false, so dev makes no `jellyfin-setup` CronJob and no `jellyfin-admin` Secret. It restores prod's Jellyfin config first, which already holds prod's admin password; a fresh password made in dev could not sign in to it. Prod leaves the value true.
 - **The password is lost or must change:** delete the ExternalSecret and the Secret `jellyfin-admin`, then sync; a new password is made. Jellyfin still has the old one, so reset it in Jellyfin's Dashboard, Users, `admin`.
 - **The way back:** delete the `jellyfin` Application. It has no resources finalizer, so every object stays. Set `k8s_jellyfin_by_argocd: false` and run the Jellyfin playbook, and Ansible owns it again. The generated Secret also stays.
 - Tell the owner before trying anything not written here.
