@@ -55,7 +55,7 @@ def mutate(old, new):
 
 def check(name, got, want, mutant=None, d=None):
     global fails
-    ok = got.startswith(want)
+    ok = (got == want) if isinstance(want, bool) else got.startswith(want)
     print(("ok   " if ok else "FAIL ") + name + ("" if ok else ": got '%s'" % got))
     fails += not ok
     if mutant:
@@ -186,6 +186,18 @@ check("a removed record needs no head content", run(d), "GREEN")
 MANY = ["docs/many/f%d.md" % i for i in range(1642)]
 d = fx(MANY); check("1642 changed files are checked, not refused", run(d), "GREEN", mutate('len(files) >= 3000', 'len(files) >= 100'), d)
 d = fx(MANY + ["docs/many/g%d.md" % i for i in range(1400)]); check("3000 or more changed files are refused", run(d), "NOT GREEN: 3000 or more changed files", mutate('len(files) >= 3000', 'False'), d)
+# Unverified commits are named when GitHub says blocked; they never turn a clean merge into a refusal.
+def commits(d, rows): json.dump([{"sha": sha, "commit": {"verification": {"verified": ok, "reason": why}}} for sha, ok, why in rows], open(d + "/commits.json", "w"))
+BLK = {"mergeable_state": "blocked"}
+d = fx(DOC, pr_over=BLK); commits(d, [("d141d16" + "0" * 33, False, "no_user"), ("08af8d8" + "0" * 33, True, "valid")])
+check("blocked: the unverified commit is named with its reason", run(d), "NOT GREEN: GitHub does not report a clean merge (mergeable=True, state=blocked); commit d141d16 is not verified (no_user)", mutate('for c in bad[:5]:', 'for c in []:'), d)
+d = fx(DOC, pr_over=BLK); commits(d, [("08af8d8" + "0" * 33, True, "valid")])
+check("blocked with all commits verified names none", run(d), "NOT GREEN: GitHub does not report a clean merge (mergeable=True, state=blocked)")
+check("blocked with all commits verified adds no commit reason", "commit " in run(d) and "is not verified" in run(d), False)
+d = fx(DOC, pr_over=BLK)
+check("blocked with no commits file still refuses, without a commit reason", "is not verified" in run(d), False)
+d = fx(DOC, roles=["reviewer"]); commits(d, [("d141d16" + "0" * 33, False, "unknown_key")])
+check("a clean merge stays GREEN even if a commit reads unverified", run(d), "GREEN")
 d = tempfile.mkdtemp(dir=tmp)
 check("a missing input is a refusal, not a pass", run(d), "NOT GREEN: could not decide")
 shutil.rmtree(tmp)
