@@ -8,6 +8,12 @@ pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; fails=$((fails + 1)); }
 code() { curl -sS -o /dev/null -m 20 -w '%{http_code}' "$@" 2>/dev/null || echo 000; }
 
+# Where a redirect goes, with the scheme, host and query dropped, so the log shows the path and no host name.
+where() { printf '%s' "$1" | sed 's#^[A-Za-z]*://[^/]*##; s#[?].*##'; }
+hdrs() { curl -sS -o /dev/null -m 20 -D - "$1" 2>/dev/null | tr -d '\r'; }
+scode() { printf '%s\n' "$1" | sed -n '1s/^HTTP[^ ]* \([0-9]*\).*/\1/p'; }
+sloc() { printf '%s\n' "$1" | sed -n 's/^[Ll]ocation: *//p' | head -1; }
+
 auth="$KEYCLOAK/realms/$REALM/protocol/openid-connect/auth"
 
 echo "keycloak discovery"
@@ -24,7 +30,9 @@ for spec in $CLIENTS; do
   c=$(code -G "$auth" --data-urlencode "client_id=$id" --data-urlencode "redirect_uri=$ru" \
         --data-urlencode "response_type=code" --data-urlencode "scope=openid")
   [ "$c" = 200 ] && pass "keycloak sign-in page for client $id and its redirect (HTTP 200)" \
-                 || fail "keycloak answered HTTP $c for client $id and its redirect"
+                 || { h=$(curl -sS -o /dev/null -m 20 -D - -G "$auth" --data-urlencode "client_id=$id" --data-urlencode "redirect_uri=$ru" \
+                          --data-urlencode "response_type=code" --data-urlencode "scope=openid" 2>/dev/null | tr -d '\r')
+                      fail "keycloak answered HTTP $c for client $id and its redirect, not the sign-in page (goes to path: $(where "$(sloc "$h")"))"; }
 done
 c=$(code -G "$auth" --data-urlencode "client_id=login-probe-no-such-client" \
       --data-urlencode "redirect_uri=https://x.example.com/" --data-urlencode "response_type=code" --data-urlencode "scope=openid")
@@ -37,17 +45,17 @@ case $s in
   *'"name":"Lab sign-in"'*) pass "argo cd settings list the provider Lab sign-in" ;;
   *) fail "argo cd settings do not list the provider Lab sign-in" ;;
 esac
-loc=$(curl -sS -m 20 -o /dev/null -D - "$ARGOCD/auth/login?return_url=%2F" 2>/dev/null | sed -n 's/^[Ll]ocation: *//p' | tr -d '\r')
+h=$(hdrs "$ARGOCD/auth/login?return_url=%2F"); loc=$(sloc "$h")
 case $loc in
   *"/realms/$REALM/protocol/openid-connect/auth"*"client_id=argocd"*) pass "argo cd sends its login to keycloak realm $REALM" ;;
-  *) fail "argo cd login did not redirect to keycloak (redirect missing or wrong)" ;;
+  *) fail "argo cd login did not redirect to keycloak (HTTP $(scode "$h"), goes to path: $(where "$loc"))" ;;
 esac
 
 echo "jellyfin"
-loc=$(curl -sS -m 20 -o /dev/null -D - "$JELLYFIN/sso/OID/start/keycloak" 2>/dev/null | sed -n 's/^[Ll]ocation: *//p' | tr -d '\r')
+h=$(hdrs "$JELLYFIN/sso/OID/start/keycloak"); loc=$(sloc "$h")
 case $loc in
   *"/realms/$REALM/protocol/openid-connect/auth"*"client_id=jellyfin"*) pass "jellyfin's SSO plugin starts a login at keycloak" ;;
-  *) fail "jellyfin's SSO plugin did not start a login at keycloak (redirect missing or wrong)" ;;
+  *) fail "jellyfin's SSO plugin did not start a login at keycloak (HTTP $(scode "$h"), goes to path: $(where "$loc"))" ;;
 esac
 
 echo "$fails failed"
