@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The lab-test wrapper's helper (lab-test-answer.py), its pins and refusals, and the role's unpacking of the
-# assistant, offline. Made-up values. Needs: python3 3.11 or newer (tomllib) with PyYAML, xz.
+# assistant, offline. Made-up values. Needs: python3 3.11 or newer (tomllib) with PyYAML, xz, openssl, php.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
@@ -88,8 +88,8 @@ grep -q "grep -cE '(vmx|svm)' /proc/cpuinfo" "$w" && grep -q "test -c /dev/kvm" 
   && ok "check stops when the copy's guests would run without KVM" || bad "no nested check"
 grep -q '^  plan) guards; tofu_run ;;$' "$w" && grep -q '^  apply) guards; tofu_run ;;$' "$w" \
   && ok "plan and apply both pass the guards" || bad "a build step skips the guards"
-grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, destroy, log\]' \
-  && ok "the wrapper list allows plan, apply, check, host, lab, destroy and log" || bad "the wrapper's sudo arguments"
+grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, firstboot, destroy, log\]' \
+  && ok "the wrapper list allows plan, apply, check, host, lab, firstboot, destroy and log" || bad "the wrapper's sudo arguments"
 
 # host: the inventory the copy's playbook runs with, the real inventory's shape with the copy's own values.
 python3 -I "$helper" inventory "$work/settings.json" "$vlans" /keys/lab-test-ssh /work/known_hosts "$work/hosts.yml"
@@ -172,6 +172,151 @@ assert "-detailed-exitcode" in f and "the second plan is not empty" in f
 PY
 grep -q 'openssl passwd -6 -stdin < "$files/root.pass" > "$files/root.hash"' "$w" && ok "root's hash is of the password the box keeps" || bad "root's hash and password"
 grep -q '"$files/inventory" "$files/state" "$files/copy-ca.pem"' "$w" && ok "destroy removes the copy's run folder states and its CA" || bad "destroy keeps lab's states"
+
+# firstboot: the console driver against a fake serial console that answers as OPNsense's does (a login, a wrong
+# first password, menu 8, then a shell that runs each line with sh), and the first-boot PHP against stubs of
+# OPNsense's config, auth and util includes.
+mkdir -p "$work/fake/bin" "$work/fake/fw"
+cat > "$work/fake/console.py" <<'FAKE'
+import os, subprocess, sys
+pw, wd, bindir = sys.argv[1:4]
+def w(s):
+    os.write(1, s.encode() if isinstance(s, str) else s)
+def line():
+    b = b""
+    while True:
+        c = os.read(0, 1)
+        if not c:
+            sys.exit(0)
+        if c in (b"\r", b"\n"):
+            return b.decode()
+        b += c
+line()   # the driver's first wake
+w("\r\nFreeBSD/amd64 (OPNsense.internal) (ttyu0)\r\n\r\nlogin: ")
+while True:
+    u = line(); w(u + "\r\n")
+    if u != "root":
+        w("login: "); continue
+    w("Password:"); p = line(); w("\r\n")
+    if p == pw:
+        break
+    w("Login incorrect\r\nlogin: ")
+w("  0) Logout   8) Shell\r\n\r\nEnter an option: ")
+if line() != "8":
+    sys.exit(1)
+w("8\r\n\r\nroot@OPNsense:~ # ")
+while True:
+    cmd = line(); w(cmd + "\r\n")
+    if cmd == "exec /bin/sh":
+        w("# "); continue
+    if cmd == "reboot":
+        open(os.path.join(wd, "rebooted"), "w").close(); w("Rebooting...\r\n"); sys.exit(0)
+    r = subprocess.run(["sh", "-c", cmd], cwd=wd, capture_output=True, env={"PATH": bindir + ":/usr/bin:/bin"})
+    w((r.stdout + r.stderr).replace(b"\n", b"\r\n")); w("# ")
+FAKE
+printf '#!/bin/sh\n[ "$1" = -q ] && shift\nsha256sum "$1" | cut -d" " -f1\n' > "$work/fake/bin/sha256"
+chmod +x "$work/fake/bin/sha256"
+head -c 700 /dev/urandom > "$work/fake/payload.bin"
+fakeplan() { # commands as a JSON list
+  printf '{"passwords": ["opnsense", "right"], "dir": "%s", "files": {"payload.bin": "%s"}, "commands": %s, "reboot": true}\n' \
+    "$work/fake/fw/lab-test" "$work/fake/payload.bin" "$1" > "$work/fake/plan.json"
+}
+fakeplan '["test -s payload.bin", "echo ran > ran.txt"]'
+if timeout 120 python3 -I "$files/lab-test-console.py" "$work/fake/plan.json" python3 -I "$work/fake/console.py" right "$work/fake/fw" "$work/fake/bin" > "$work/fake/out" 2>&1 \
+  && cmp -s "$work/fake/payload.bin" "$work/fake/fw/lab-test/payload.bin" && [[ -f $work/fake/fw/lab-test/ran.txt && -f $work/fake/fw/rebooted ]] \
+  && grep -q 'signed in on the console' "$work/fake/out" && ! grep -q right "$work/fake/out"; then
+  ok "the console driver signs in with the second password, sends a file whole, runs the commands and reboots"
+else
+  bad "the console driver"; cat "$work/fake/out"
+fi
+rm -rf "$work/fake/fw" && mkdir -p "$work/fake/fw"
+fakeplan '["false", "echo ran > ran.txt"]'
+if timeout 120 python3 -I "$files/lab-test-console.py" "$work/fake/plan.json" python3 -I "$work/fake/console.py" opnsense "$work/fake/fw" "$work/fake/bin" > "$work/fake/out" 2>&1; then
+  bad "the console driver went on past a failed command"
+elif [[ ! -e $work/fake/fw/lab-test/ran.txt && ! -e $work/fake/fw/rebooted ]] && grep -q 'the command failed (exit 1): false' "$work/fake/out"; then
+  ok "the console driver stops at the first failed command and does not reboot"
+else
+  bad "the console driver's stop"; cat "$work/fake/out"
+fi
+grep -q '"socat UNIX-CONNECT:/var/run/qemu-server/100.serial0 STDIO"' "$w" && grep -q 'php opnsense-first-boot.php vtnet0 %s %s vtnet1 root.hash' "$w" \
+  && grep -q '"$files"/opnsense-root\.\*' "$w" \
+  && ok "firstboot reaches VM 100's serial0 socket, runs the first-boot PHP, and destroy removes OPNsense's root password" \
+  || bad "firstboot's wiring"
+
+# The first-boot PHP against stubs: config.inc holds the image's default config (config.xml.sample's parts it changes).
+mkdir -p "$work/php"
+cat > "$work/php/config.inc" <<'STUB'
+<?php
+$config = json_decode(file_get_contents(getenv('LT_CONFIG')), true);
+function &config_read_array() {
+    global $config;
+    $keys = func_get_args();
+    $insert = true;
+    if (is_bool(end($keys))) { $insert = array_pop($keys); }
+    $cur = &$config;
+    foreach ($keys as $k) {
+        if (!isset($cur[$k]) || !is_array($cur[$k])) {
+            if (!$insert) { $d = []; return $d; }
+            $cur[$k] = [];
+        }
+        $cur = &$cur[$k];
+    }
+    return $cur;
+}
+function config_push_array() {
+    $keys = func_get_args(); $new = array_pop($keys);
+    $a = &call_user_func_array('config_read_array', $keys); $a[] = $new;
+}
+function generate_uuid() { return 'u' . count($GLOBALS['config']['vlans']['vlan'] ?? []); }
+function write_config($desc = '') { global $config; file_put_contents(getenv('LT_CONFIG'), json_encode($config)); }
+STUB
+cat > "$work/php/auth.inc" <<'STUB'
+<?php
+function &getUserEntryByUID($uid) {
+    global $config;
+    foreach ($config['system']['user'] as &$u) { if ($u['uid'] == $uid) { return $u; } }
+    $r = false; return $r;
+}
+function local_user_set(&$user) { file_put_contents(getenv('LT_CONFIG') . '.set', $user['name']); }
+STUB
+echo '<?php' > "$work/php/util.inc"
+cat > "$work/php/config.json" <<'JSON'
+{"trigger_initial_wizard": "", "system": {"user": [{"name": "root", "uid": "0", "password": "$2y$10$default"}]},
+ "interfaces": {"wan": {"enable": "1", "if": "mismatch1", "ipaddr": "dhcp", "ipaddrv6": "dhcp6"},
+  "lan": {"enable": "1", "if": "mismatch0", "ipaddr": "192.168.1.1", "subnet": "24", "ipaddrv6": "idassoc6",
+          "subnetv6": "64", "track6-interface": "wan", "track6-prefix-id": "0"}},
+ "dnsmasq": {"enable": "1", "interface": "lan", "dhcp": {"enable_ra": "1"},
+  "dhcp_ranges": [{"interface": "lan", "start_addr": "192.168.1.100"}, {"interface": "lan", "start_addr": "::1000"}]}}
+JSON
+fb=$root/hosts/ansible/bootstrap/opnsense-first-boot.php
+for _ in 1 2; do
+  LT_CONFIG=$work/php/config.json php -d include_path="$work/php" "$fb" vtnet0 50 10.1.50.1/24 vtnet1 "$work/root.hash" > "$work/php/out" 2>&1 || { cat "$work/php/out"; break; }
+done
+python3 -I - "$work/php/config.json" "$work/root.hash" <<'PY' && ok "first boot (run twice): one mgmt VLAN, LAN on it with .1/24 and no IPv6, WAN DHCPv4 only, no LAN DHCP or RA, root's hash, no wizard" || bad "the first-boot PHP"
+import json, sys
+c = json.load(open(sys.argv[1]))
+assert [v["vlanif"] for v in c["vlans"]["vlan"]] == ["vtnet0_vlan50"] and c["vlans"]["vlan"][0]["if"] == "vtnet0"
+assert c["vlans"]["vlan"][0]["tag"] == "50"
+lan, wan = c["interfaces"]["lan"], c["interfaces"]["wan"]
+assert lan["if"] == "vtnet0_vlan50" and lan["ipaddr"] == "10.1.50.1" and lan["subnet"] == "24"
+assert not {"ipaddrv6", "subnetv6", "track6-interface", "track6-prefix-id"} & set(lan), lan
+assert wan["if"] == "vtnet1" and wan["ipaddr"] == "dhcp" and "ipaddrv6" not in wan
+assert not [r for r in c["dnsmasq"].get("dhcp_ranges", {}).values() if r["interface"] == "lan"] if isinstance(c["dnsmasq"].get("dhcp_ranges"), dict) \
+    else not [r for r in c["dnsmasq"].get("dhcp_ranges", []) if r["interface"] == "lan"]
+assert "enable_ra" not in c["dnsmasq"]["dhcp"] and "trigger_initial_wizard" not in c
+assert c["system"]["user"][0]["password"] == open(sys.argv[2]).read().strip()
+PY
+for bad_args in "vtnet0 50 10.1.50.1/24 vtnet0" "vtnet0 5000 10.1.50.1/24 vtnet1" "vtnet0 50 10.1.50.1 vtnet1"; do
+  # shellcheck disable=SC2086
+  if LT_CONFIG=$work/php/config.json php -d include_path="$work/php" "$fb" $bad_args "$work/root.hash" > /dev/null 2>&1; then
+    bad "the first-boot PHP took: $bad_args"
+  else
+    ok "the first-boot PHP refuses: $bad_args"
+  fi
+done
+echo plain > "$work/php/plain.hash"
+LT_CONFIG=$work/php/config.json php -d include_path="$work/php" "$fb" vtnet0 50 10.1.50.1/24 vtnet1 "$work/php/plain.hash" > /dev/null 2>&1 \
+  && bad "the first-boot PHP took a root hash that is not SHA-512 crypt" || ok "the first-boot PHP refuses a root hash that is not SHA-512 crypt"
 
 # The role takes the binary out of a .deb (an ar archive holding data.tar.xz) with Python only.
 mkdir -p "$work/deb/usr/bin"

@@ -89,6 +89,14 @@
     group: root
     mode: "0755"
 
+- name: lab_test | The wrapper's serial-console driver, root-owned
+  ansible.builtin.copy:
+    src: lab-test-console.py
+    dest: "{{ agent_box_libexec_dir }}/lab-test-console.py"
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: lab_test | The wrapper's private settings, from the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/lab-test.json"
