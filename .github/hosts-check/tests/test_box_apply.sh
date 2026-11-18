@@ -51,11 +51,11 @@ c0=$(g rev-parse HEAD)
 commit() { g add -A && g commit -qm "$1" && g push -q "$t/origin.git" main 2>/dev/null && g rev-parse HEAD; }
 
 # The box: limit files, a key folder, and box-apply with its paths moved under $t.
-mkdir -p "$t/box/sudoers.d" "$t/box/keys" "$t/etc" "$t/state" "$t/bin"
+mkdir -p "$t/box/sudoers.d" "$t/box/libexec" "$t/box/keys" "$t/etc" "$t/state" "$t/bin"
 echo 'claude ALL=(keys) NOPASSWD: /x plan' > "$t/box/sudoers.d/agent-box"
 chmod 700 "$t/box/keys"
 sed -e "s|^SETTINGS = .*|SETTINGS = \"$t/etc/settings.json\"|" -e "s|^LIMITS = .*|LIMITS = \"$t/etc/limits.txt\"|" \
-    -e "s|^STATE = .*|STATE = \"$t/state\"|" -e "s|^LOG = .*|LOG = \"$t/box-apply.log\"|" \
+    -e "s|^STATE = .*|STATE = \"$t/state\"|" -e "s|^COPY_DIRS = .*|COPY_DIRS = (\"$t/box/libexec/\",)|" -e "s|^LOG = .*|LOG = \"$t/box-apply.log\"|" \
     "$root/$r/files/box-apply.py" > "$t/box-apply.py"
 grep -q "^STATE = \"$t/state\"" "$t/box-apply.py" || { echo "FAIL the paths were not moved"; exit 1; }
 cat > "$t/etc/settings.json" <<EOF
@@ -71,6 +71,7 @@ path hosts/ansible/playbooks/agent-box.yml
 path hosts/ansible/ansible.cfg
 free-keys $r/defaults/main.yml agent_box_tofu_version
 box $t/box/sudoers.d/*
+box $t/box/libexec/*
 dir $t/box/keys
 user $(id -un)
 EOF
@@ -269,26 +270,36 @@ echo '{"plays":[{"tasks":[{"task":{"name":"Wrappers, root-owned"},"hosts":{"box1
 out=$(ba apply) || bad "8j: the approved apply failed: $out"
 [[ $out == *"applied the approved limit change ${l10:0:8}"* && $out == *"$newf"* && -f $newf && $(base) == "$l10" && ! -f $t/state/stopped ]] \
   && ok "8j. the same new file, named by the loop label's destination, passes the guard and moves the baseline" || bad "8j: $out"
-# 8k, 8l: a file added by a copy of a repository file to a destination the check run cannot name. For such a result
+# 8k to 8n: a file added by a copy of a repository file to a destination the check run cannot name. For such a result
 # the check run's only path is the source in the checkout (after_header), with no dest and no loop label. The apply
-# may add a limit file whose bytes equal that source and nothing else (8k); other bytes are put back (8l).
+# may add a limit file under the box's libexec folder whose bytes equal that source, one file for each such result;
+# any other added file is put back: other bytes (8k), a path outside that folder such as sudoers.d (8l), a second
+# file for one result (8m). One copy of the source passes (8n).
 printf -- '- name: v\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
 l11=$(commit c11)
 w11=$(git -C "$t/src" diff --no-renames --binary --full-index "$l10" "$l11" -- "$r/tasks/main.yml" | sha256sum | cut -d' ' -f1)
 echo "$l10 $l11 $w11 cmsg_pass04 card_tap04" >> "$t/src/$appr"
 commit c11b >/dev/null
 srcf="$t/state/central-hub/$r/tasks/main.yml"
-newg="$t/box/sudoers.d/agent-box-copied"
+newg="$t/box/libexec/copied.py"; newh="$t/box/libexec/copied2.py"; news="$t/box/sudoers.d/agent-box-copied"
 echo '{"plays":[{"tasks":[{"task":{"name":"The helper, root-owned"},"hosts":{"box1":{"changed":true,"diff":[{"before":"","after_header":"'"$srcf"'","after":"x"}]}}}]}],"stats":{"box1":{"failures":0,"unreachable":0}}}' > "$t/check.json"
+stops() { # name file... : the apply stops with exit 4 and each file is gone
+  local n=$1 f; shift
+  set +e; out=$(ba apply); rc=$?; set -e
+  for f in "$@"; do [[ ! -e $f ]] || { bad "$n: $f was left"; return; }; done
+  [[ $rc == 4 && $out == *"did not name"* && $(base) == "$l10" && -f $t/state/stopped ]] && ok "$n" || bad "$n: exit $rc: $out"
+  rm -f "$t/state/stopped"
+}
 printf '#!/bin/bash\necho "different bytes" > "%s"\n' "$newg" > "$t/apply-hook"
-set +e; out=$(ba apply); rc=$?; set -e
-[[ $rc == 4 && $out == *"added $newg"* && ! -e $newg && $(base) == "$l10" && -f $t/state/stopped ]] \
-  && ok "8k. a new file whose bytes are not those of the source the check run named is put back and stops" || bad "8k: exit $rc: $out"
-rm -f "$t/state/stopped"
+stops "8k. a new file whose bytes are not those of the source the check run named is put back and stops" "$newg"
+printf '#!/bin/bash\ncp "%s" "%s"\n' "$srcf" "$news" > "$t/apply-hook"
+stops "8l. a copy of the named source under sudoers.d is put back and stops" "$news"
+printf '#!/bin/bash\ncp "%s" "%s"\ncp "%s" "%s"\n' "$srcf" "$newg" "$srcf" "$newh" > "$t/apply-hook"
+stops "8m. two copies of one named source, from one result, are put back and stop" "$newg" "$newh"
 printf '#!/bin/bash\ncp "%s" "%s"\n' "$srcf" "$newg" > "$t/apply-hook"
-out=$(ba apply) || bad "8l: the approved apply failed: $out"
+out=$(ba apply) || bad "8n: the approved apply failed: $out"
 [[ $out == *"applied the approved limit change ${l11:0:8}"* && $out == *"$newg"* && -f $newg && $(base) == "$l11" && ! -f $t/state/stopped ]] \
-  && ok "8l. a new file with the bytes of the source the check run named, with no dest or label, passes the guard" || bad "8l: $out"
+  && ok "8n. one copy of the named source under the libexec folder, with no dest or label, passes the guard" || bad "8n: $out"
 rm -f "$t/apply-hook"
 
 [[ $fail == 0 ]] || exit 1

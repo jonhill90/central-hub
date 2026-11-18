@@ -438,27 +438,39 @@ def predicted(rules, out):
     return paths
 
 
+# Where an added limit file may be named by the bytes of its source alone: the box's own libexec and library folders.
+# Every other limit path (sudoers, systemd units, managed settings, trust anchors) must be named by its path.
+COPY_DIRS = ("/usr/local/libexec/agent-box/", "/var/lib/agent-box/")
+
+
 def copied_sources(out, repo):
-    """sha256 -> path of each file of the checkout that a changed result of the check run names as the source of a
-    new file. A copy of a repository file to a destination that is not on the box yet gives a check run no dest and
-    no path: its only path is that source (after_header). The destination is then known only by the source's bytes."""
+    """sha256 -> [path, how many changed results name it] for each file of the checkout that a changed result of the
+    check run names as the source of a new file. A copy of a repository file to a destination that is not on the box
+    yet gives a check run no dest and no path: its only path is that source (after_header). The destination is then
+    known only by the source's bytes, and each result justifies one added file."""
     root = os.path.realpath(repo) + os.sep
     found = {}
     for _, r in changed_results(out):
+        seen = set()
         for d in r.get("diff", []) if isinstance(r.get("diff"), list) else []:
             h = d.get("after_header") if isinstance(d, dict) else None
             if not isinstance(h, str) or not os.path.realpath(h).startswith(root):
                 continue
             try:
                 with open(os.path.realpath(h), "rb") as fh:
-                    found[hashlib.sha256(fh.read()).hexdigest()] = h
+                    seen.add((hashlib.sha256(fh.read()).hexdigest(), h))
             except OSError:
                 pass
+        for sha, h in seen:
+            found.setdefault(sha, [h, 0])[1] += 1
     return found
 
 
-def is_copy_of(path, sources):
-    """True when path is a regular file, not a link, whose bytes are those of one of the sources."""
+def claim_copy(path, sources):
+    """True, and uses up one result, when path is under COPY_DIRS and is a regular file, not a link, whose bytes are
+    those of a source with a result left."""
+    if not path.startswith(COPY_DIRS):
+        return False
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     except OSError:
@@ -466,7 +478,11 @@ def is_copy_of(path, sources):
     with os.fdopen(fd, "rb") as fh:
         if not stat.S_ISREG(os.fstat(fh.fileno()).st_mode):
             return False
-        return hashlib.sha256(fh.read()).hexdigest() in sources
+        sha = hashlib.sha256(fh.read()).hexdigest()
+    if sha in sources and sources[sha][1] > 0:
+        sources[sha][1] -= 1
+        return True
+    return False
 
 
 def failures(out):
@@ -491,14 +507,14 @@ def limit_apply(s, rules, repo, base, ok, mode):
     say("check run: limit paths it would change: " + ("; ".join(sorted(allowed)) if allowed else "none"))
     if sources:
         say("check run: files it copies to a destination it cannot name (an added limit file passes only with these "
-            "bytes): " + "; ".join(sorted(os.path.relpath(v, repo) for v in sources.values())))
+            "bytes): " + "; ".join(sorted(os.path.relpath(v[0], repo) for v in sources.values())))
     if mode == "plan":
         record("planned", f"approved limit change to {to[:8]}: {len(allowed)} limit path(s)")
         return
     before = snapshot(rules, os.path.join(STATE, "before"))
     rc, out = play(s, repo, check=False, limits=True)
     diff = compare(rules, before)
-    extra = [(k, p) for k, p in diff if p not in allowed and not (k == "added" and is_copy_of(p, sources))]
+    extra = [(k, p) for k, p in diff if p not in allowed and not (k == "added" and claim_copy(p, sources))]
     if extra:
         left = put_back(before, diff)
         what = "; ".join(f"{k} {p}" for k, p in extra)
