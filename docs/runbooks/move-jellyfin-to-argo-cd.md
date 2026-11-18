@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: Argo CD's Application `jellyfin` is Synced and Healthy, the setup Job has finished the first-run wizard, the admin password from Secret `jellyfin-admin` signs in, and Ansible no longer applies Jellyfin
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1); External Secrets running on c1
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/home/c1/apps/jellyfin/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_jellyfin/, hosts/ansible/playbooks/k8s-jellyfin.yml]
+files: [hosts/kubernetes/home/c1/apps/jellyfin/, hosts/kubernetes/home/c1/apps/monitoring-extras/templates/jellyfin-podmonitor.yaml, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_jellyfin/, hosts/ansible/playbooks/k8s-jellyfin.yml]
 last-tested: 2026-11-10 (sign-in through Keycloak, 2026-11-18 02:30 UTC, an agent lane from the agent box, logs read with c1-read after #451 synced, no password typed, the init container checked the plugin sha256 and installed 5.1.1, Jellyfin logged the line Loaded plugin SSO Authentication 5.1.1, Job completed and skipped the provider because Secret jellyfin-lab-root-ca does not exist yet; the provider write and a sign-in not run, see its section), steps 1 to 3, 5 and 6 on c1, auto-sync took over at 03:31 UTC (#140), Synced and Healthy, the setup Job ran and the pod did not restart; admin signed in with the password from Secret media/jellyfin-admin through the API (AuthenticateByName 200, IsAdministrator true); k8s-jellyfin.yml changed=0 twice. Step 4 (password to the env file) not yet run
 superseded-by:
 ---
@@ -93,6 +93,25 @@ Prove it without typing a password:
 4. The owner's sign-in with the Keycloak button, once, is the end-to-end proof.
 
 If it fails: **"plugin ... is not loaded"** means Jellyfin refused it (read the Jellyfin log for `targetAbi`); **a TLS error in the Jellyfin log** means the lab root is missing from the bundle (`kubectl -n media logs deploy/jellyfin -c sso-plugin` shows the certificate count). The way back is `sso.enabled: false` by PR; the plugin folder stays on the claim and does nothing.
+
+## Metrics
+
+Jellyfin serves Prometheus metrics at `/metrics` only when its `EnableMetrics` setting is on, which is off by default (<https://jellyfin.org/docs/general/post-install/networking/advanced/monitoring>). It reads the setting only when its web host starts (Jellyfin 12.2 `Jellyfin.Server/Startup.cs`, `UseHttpMetrics` and `MapMetrics`).
+
+| Part | Where | What it does |
+|---|---|---|
+| The setting | the setup Job's `metrics` step in `files/setup.sh`, `metrics.enabled` in `values.yaml` | Signs in as `admin` and reads `GET /System/Configuration`. If `EnableMetrics` is false, it posts the same configuration back with only that value changed, then calls `POST /System/Restart`. Jellyfin then builds its host again in the same process (`Program.cs`, the restart loop), so the pod is not replaced. It waits until `/metrics` answers. Once the setting is on, a run changes nothing. |
+| The scrape | PodMonitor `jellyfin` in app `monitoring-extras` | Prometheus reads the pod's port `http` at `/metrics` every 60 s. The Service is left as it was. |
+| The route | `templates/route.yaml` | `/metrics` from outside the cluster gets a 302 to `/`, because the docs say to keep it off the public internet. Prometheus reads the pod directly. |
+
+The metric names are prometheus-net's, the library Jellyfin 12.2 ships (8.2.1): `http_requests_received_total` (labels `code`, `method`, `controller`, `action`, `endpoint`), `http_request_duration_seconds`, `http_requests_in_progress`, and `process_*` and `dotnet_*`. They were read out of the pinned image's `Prometheus.AspNetCore.dll` and `Prometheus.NetStandard.dll` on 2026-11-18.
+
+Prove it without typing a password:
+
+1. `kubectl -n media logs job/jellyfin-setup` shows `metrics: /metrics answers`.
+2. The panel check prints `Jellyfin requests per second: <a number>` ([check-c1-alerts-and-dashboard.md](check-c1-alerts-and-dashboard.md#read-the-panels-without-a-browser)).
+
+If it fails: **`metrics: EnableMetrics not in the configuration`** means the API's answer no longer has that field: read the Jellyfin version's `ServerConfiguration`. **`C1JellyfinNotScraped`** with the Job's line present means the PodMonitor does not match the pod: compare its labels.
 
 ## Change it
 

@@ -214,3 +214,35 @@ tests:
             exp_annotations:
               summary: OpenBao's hourly snapshot has not succeeded for more than 3 hours
               runbook: docs/runbooks/set-up-the-secrets-store.md
+
+  - name: Jellyfin not scraped fires when its target is missing
+    interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: C1JellyfinNotScraped
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Prometheus can't read Jellyfin's /metrics; check that the setup Job turned EnableMetrics on
+              runbook: docs/runbooks/move-jellyfin-to-argo-cd.md
+
+  - name: Jellyfin server errors above 0.05 a second for 15 minutes fire; a few don't
+    interval: 1m
+    input_series:
+      # 6 errors a minute (0.1 a second), then a client error count that never counts.
+      - series: 'http_requests_received_total{namespace="media", code="500", method="GET", controller="Items", action="GetItems", endpoint=""}'
+        values: '0+6x40'
+      - series: 'http_requests_received_total{namespace="media", code="404", method="GET", controller="Items", action="GetItems", endpoint=""}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: C1JellyfinErrors
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: C1JellyfinErrors
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Jellyfin has answered with server errors (5xx) for 15 minutes
+              runbook: docs/runbooks/move-jellyfin-to-argo-cd.md

@@ -17,6 +17,10 @@ openbao:
 
 jellyfin:
   namespace: media   # where Jellyfin runs (app jellyfin)
+  # Read Jellyfin's own /metrics (app jellyfin's metrics.enabled must be true too).
+  metrics: true
+  # Requests a second answered with a 5xx, over 15 minutes, before C1JellyfinErrors fires.
+  errorRatePerSecond: 0.05
 
 certManager:
   namespace: cert-manager   # where cert-manager runs (app cert-manager)

@@ -1,0 +1,20 @@
+# Jellyfin's own metrics at /metrics (its EnableMetrics, which app jellyfin's setup Job turns on).
+# A PodMonitor, not a ServiceMonitor: it selects the pod by the label the Deployment already has, so
+# Jellyfin's Service is left as the Ansible role made it.
+{{- if .Values.jellyfin.metrics }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: jellyfin
+  namespace: {{ .Release.Namespace }}
+spec:
+  namespaceSelector:
+    matchNames: [{{ .Values.jellyfin.namespace }}]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jellyfin
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 60s
+{{- end }}

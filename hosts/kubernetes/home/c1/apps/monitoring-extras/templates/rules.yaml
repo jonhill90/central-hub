@@ -78,6 +78,22 @@ spec:
           labels: {severity: warning}
           annotations:
             summary: Jellyfin has no ready pod
+{{- if .Values.jellyfin.metrics }}
+        - alert: C1JellyfinNotScraped
+          expr: absent(up{namespace="{{ .Values.jellyfin.namespace }}", container="jellyfin"} == 1)
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Prometheus can't read Jellyfin's /metrics; check that the setup Job turned EnableMetrics on
+            runbook: docs/runbooks/move-jellyfin-to-argo-cd.md
+        - alert: C1JellyfinErrors
+          expr: sum(rate(http_requests_received_total{namespace="{{ .Values.jellyfin.namespace }}", code=~"5.."}[15m])) > {{ .Values.jellyfin.errorRatePerSecond }}
+          for: 15m
+          labels: {severity: warning}
+          annotations:
+            summary: Jellyfin has answered with server errors (5xx) for 15 minutes
+            runbook: docs/runbooks/move-jellyfin-to-argo-cd.md
+{{- end }}
         - alert: C1LokiDown
           expr: kube_statefulset_status_replicas_ready{namespace="logging", statefulset="loki"} < 1
           for: 10m

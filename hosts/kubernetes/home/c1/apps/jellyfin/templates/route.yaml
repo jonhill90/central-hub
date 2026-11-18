@@ -24,6 +24,21 @@ spec:
     - {{ $v.name }}.{{ $v.zone }}
 {{- end }}
   rules:
+{{- if $v.metrics.enabled }}
+    # /metrics stays inside the cluster (Prometheus reads the pod directly): from outside it gets a
+    # redirect to /. An Exact match wins over the PathPrefix "/" below (Gateway API match precedence).
+    - matches:
+        - path:
+            type: Exact
+            value: /metrics
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /
+            statusCode: 302
+{{- end }}
     - matches:
         - path:
             type: PathPrefix
