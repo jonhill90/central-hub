@@ -36,12 +36,12 @@ Alertmanager sends every alert to ntfy on c1 ([Get c1's alerts on a phone](get-c
 
 ## Read the panels without a browser
 
-CronJob `monitoring/panel-check` asks Prometheus for the OpenBao and Jellyfin panels' values every half hour, plus "Alerts firing", and prints one line per panel. It holds no token and reads only Prometheus, inside the cluster. A panel with no data fails the run. An agent reads it from the agent box with the read-only account ([give-agents-read-access-to-c1.md](give-agents-read-access-to-c1.md)):
+CronJob `monitoring/panel-check` asks Prometheus for the OpenBao and Jellyfin panels' values every half hour, plus "Alerts firing", and prints one line per panel, then the names of the alerts firing. It holds no token and reads only Prometheus, inside the cluster. A panel with no data fails the run. An agent reads it from the agent box with the read-only account ([give-agents-read-access-to-c1.md](give-agents-read-access-to-c1.md)):
 
 1. `c1-read get jobs -n monitoring --sort-by=.metadata.creationTimestamp`
    expect: the newest `panel-check-<number>` job is listed with completions `1/1`.
 2. `c1-read logs -n monitoring job/<that job>`
-   expect: one line per panel, for example `OpenBao unsealed: 1`, ending `panel check: every panel has data`.
+   expect: one line per panel, for example `OpenBao unsealed: 1`, then `Alerts firing, by name: none` (or each name with its count, such as `KubeJobFailed x2`; look each one up in the table below), ending `panel check: every panel has data`.
 
 ## The alerts
 

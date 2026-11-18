@@ -45,6 +45,14 @@ data:
       vals=$(printf '%s' "$out" | grep -o '"value": *\[[^]]*\]' | sed 's/.*"\([^"]*\)" *\]$/\1/' | tr '\n' ' ')
       if [ -z "$vals" ]; then echo "$title: no data"; fail=1; else echo "$title: $vals"; fi
     done < /check/queries.tsv
+    # Which alerts are firing, by name and count, so the reader can tell them apart without a
+    # browser. It does not change the result: firing alerts are what the "Alerts firing" line counts.
+    if out=$(curl -fsS --max-time 20 --get --data-urlencode 'query=ALERTS{alertstate="firing",alertname!="Watchdog"}' "$PROMETHEUS/api/v1/query"); then
+      names=$(printf '%s' "$out" | grep -o '"alertname": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | sort | uniq -c | sed 's/^ *\([0-9]*\) \(.*\)/\2 x\1/' | tr '\n' ' ')
+      echo "Alerts firing, by name: ${names:-none}"
+    else
+      echo "Alerts firing, by name: query failed"
+    fi
     [ "$fail" -eq 0 ] && echo "panel check: every panel has data" || echo "panel check: some panels have no data"
     exit "$fail"
 ---
