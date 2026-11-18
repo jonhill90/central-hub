@@ -9,7 +9,9 @@
 #      k8s_gitops_source_openbao_admin_address; one in the source inventory is dropped; one that is not IPv4, is loopback
 #      or comes without box_cidr stops the build.
 #   5. With the store on, box_cidr set and no admin_address in the settings, dev picks its own from the dev inventory's
-#      k8s_control_plane_lb_cidr: the highest address below the pool's last that is not the Gateway's, never printed.
+#      k8s_control_plane_lb_cidr: the highest address below the pool's last that is not the Gateway's (k8s_gateway_address
+#      or k8s_gitops_source_gateway_address, which may be a bare reference to the first), never printed. A Gateway value
+#      that is neither an IPv4 address nor such a reference stops the build.
 #      No pool in the inventory: none. A settings value wins. A pool that is not IPv4 or is under 4 addresses stops
 #      the build. Without box_cidr: no address, and a line that names box_cidr.
 # Usage: .github/hosts-check/tests/test_rebuild_box_inventory.sh   (needs python3 with PyYAML)
@@ -104,14 +106,15 @@ if [[ $r4 == "0:192.0.2.40 0:none 0:none 1:missing:1 1:missing:1 1:missing:1 1:m
 else bad "4. $r4"; fi
 
 # 5
-pool() { # pool gateway: the source inventory with dev's pool and Gateway address
+pool() { # pool source-gateway [gateway]: the source inventory with dev's pool and its two Gateway address values
   python3 -I -c '
 import sys, yaml
 d = yaml.safe_load(open(sys.argv[1]))
 v = d["all"]["children"]["k8s_nodes"]["vars"]
 if sys.argv[2]: v["k8s_control_plane_lb_cidr"] = sys.argv[2]
 if sys.argv[3]: v["k8s_gitops_source_gateway_address"] = sys.argv[3]
-yaml.safe_dump(d, open(sys.argv[1], "w"))' "$t/src.yml" "$1" "$2"
+if sys.argv[4]: d["all"].setdefault("vars", {})["k8s_gateway_address"] = sys.argv[4]
+yaml.safe_dump(d, open(sys.argv[1], "w"))' "$t/src.yml" "$1" "$2" "${3:-}"
 }
 cp "$t/src.yml" "$t/src.keep"
 r5=""
@@ -124,8 +127,15 @@ cp "$t/src.keep" "$t/src.yml"; build true '{"box_cidr": "192.0.2.30/32"}'; r5+="
 for p in 192.0.2.224/31 2001:db8::/120 192.0.2.225/27; do
   cp "$t/src.keep" "$t/src.yml"; pool "$p" ""; build true '{"box_cidr": "192.0.2.30/32"}'; r5+="$rc:$admin:$(grep -c 'k8s_control_plane_lb_cidr' "$t/err") "
 done
+# The Gateway given as a reference to k8s_gateway_address (hosts.example.yml), or only as k8s_gateway_address.
+cp "$t/src.keep" "$t/src.yml"; pool 192.0.2.224/27 '{{ k8s_gateway_address }}' 192.0.2.254; build true '{"box_cidr": "192.0.2.30/32"}'; r5+="$rc:$admin "
+cp "$t/src.keep" "$t/src.yml"; pool 192.0.2.224/27 "" 192.0.2.254; build true '{"box_cidr": "192.0.2.30/32"}'; r5+="$rc:$admin "
+# A Gateway value that is neither an address nor a bare reference to one stops the build.
+for g in '{{ k8s_gateway_address | default("x") }}' gw.invalid 2001:db8::1; do
+  cp "$t/src.keep" "$t/src.yml"; pool 192.0.2.224/27 "$g" 192.0.2.254; build true '{"box_cidr": "192.0.2.30/32"}'; r5+="$rc:$admin:$(grep -c 'must be one IPv4 address (or a reference to one)' "$t/err") "
+done
 cp "$t/src.keep" "$t/src.yml"
-if [[ $r5 == "0:192.0.2.254:1:0 0:192.0.2.253 0:192.0.2.240 0:none 0:none:1 0:none 1:missing:1 1:missing:1 1:missing:1 " ]]; then
+if [[ $r5 == "0:192.0.2.254:1:0 0:192.0.2.253 0:192.0.2.240 0:none 0:none:1 0:none 1:missing:1 1:missing:1 1:missing:1 0:192.0.2.253 0:192.0.2.253 1:missing:1 1:missing:1 1:missing:1 " ]]; then
   ok "5. no admin_address: dev's own pick below the pool's last, never the Gateway's, never printed; none without a pool, the store or box_cidr (named); a settings value wins; a bad pool stops the build"
 else bad "5. $r5 $(cat "$t/err")"; fi
 

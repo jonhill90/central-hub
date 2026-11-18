@@ -335,7 +335,7 @@ grep -q '^node_ssh_public_key = "ssh-ed25519 ' "$envdir/dev-vms.tfvars" || { ech
 rm -rf "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
-import ipaddress, json, os, sys, yaml
+import ipaddress, json, os, re, sys, yaml
 src, dst, key, known, keys, store_url, store_ca, in_cluster, store_settings = sys.argv[1:10]
 d = yaml.safe_load(open(src))
 # The box's own address as a /32, for the hand-over (the box's path to the store): the settings' box_cidr, private,
@@ -384,18 +384,30 @@ def value(n, name):
     return None
 # No admin_address in the settings: dev picks its own, so dev renders the admin path with no hand step (D-0062; the
 # owner's ask to rebuild from code with no hand steps). It is the highest address of dev's load-balancer pool below
-# the pool's last, other than dev's Gateway address, from the dev inventory's own values only (the role's default
-# pool is prod's). The address is private, so it is never printed. A settings value still wins.
+# the pool's last, other than dev's Gateway address (k8s_gateway_address and k8s_gitops_source_gateway_address), from the
+# dev inventory's own values only (the role's default pool is prod's). The address is private, so it is never printed. A settings value still wins.
 if in_cluster == "true" and box_cidr and not admin:
     pool = value(d, "k8s_control_plane_lb_cidr")
-    gw = value(d, "k8s_gitops_source_gateway_address") or ""
+    # Dev's Gateway address may be given twice, and the second as a reference to the first ("{{ k8s_gateway_address }}",
+    # hosts.example.yml): a bare reference to one variable is followed once; anything else must be one IPv4 address.
+    gws = set()
+    for name in ("k8s_gateway_address", "k8s_gitops_source_gateway_address"):
+        raw = value(d, name) or ""
+        m = re.fullmatch(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}", raw.strip())
+        if m: raw = value(d, m.group(1)) or ""
+        if not raw: continue
+        try: g = ipaddress.ip_address(raw)
+        except ValueError: g = None
+        if g is None or g.version != 4:
+            print("rebuild: %s in the dev inventory must be one IPv4 address (or a reference to one) for the admin address pick" % name, file=sys.stderr); sys.exit(1)
+        gws.add(str(g))
     if pool:
         try: net = ipaddress.ip_network(pool, strict=True)
         except ValueError: net = None
         if net is None or net.version != 4 or net.num_addresses < 4:
             print("rebuild: k8s_control_plane_lb_cidr in the dev inventory must be one IPv4 network of 4 addresses or more", file=sys.stderr); sys.exit(1)
         for i in range(int(net.broadcast_address) - 1, int(net.network_address), -1):
-            if str(ipaddress.ip_address(i)) != gw:
+            if str(ipaddress.ip_address(i)) not in gws:
                 admin = str(ipaddress.ip_address(i))
                 break
         print("rebuild: admin_address: none in the settings, so dev's own pick from its load-balancer pool", file=sys.stderr)
