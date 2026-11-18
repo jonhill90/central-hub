@@ -165,6 +165,13 @@ argument_specs:
         description: >-
           Set by box-apply, with agent_box_self_applying, on an approved limit apply (pick 232); the box-apply tasks
           then write box-apply, its settings and its limits, never its inventory.
+      agent_box_self_apply_timer:
+        type: bool
+        default: true
+        description: >-
+          With agent_box_self_apply, a root systemd timer that runs `box-apply apply` every
+          agent_box_self_apply_interval, so merged work reaches the box with no session running it.
+      agent_box_self_apply_interval: {type: str, default: 10min, description: "systemd OnUnitActiveSec between box-apply runs."}
       agent_box_prod_files:
         type: list
         elements: dict

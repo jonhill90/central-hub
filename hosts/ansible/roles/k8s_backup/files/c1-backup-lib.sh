@@ -8,6 +8,7 @@
 #   BACKUP_BIN              folder with restic, etcdctl, etcdutl and etcd (default: the folder of this file)
 #   BACKUP_HOST             the name snapshots are filed under (default: the short host name)
 #   BACKUP_STATE            local state: the last canary values (default /var/lib/central-hub-backup)
+#   BACKUP_METRICS_DIR      node_exporter's textfile folder (optional): a run that ends well writes the time there
 
 backup_lib_init() {
   local env_file=${CENTRAL_HUB_BACKUP_ENV:-/etc/central-hub/backup.env}
@@ -33,15 +34,42 @@ backup_lib_init() {
 }
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+
+# After a run ends well: c1_backup_last_success_timestamp_seconds{kind="<kind>"} in
+# $BACKUP_METRICS_DIR/c1-backup-<kind>.prom, for node_exporter's textfile collector, so Prometheus
+# can tell when the last good run was (apps/monitoring-extras, C1BackupStale). Written to a temporary
+# file and renamed, so the collector never reads half a file. Not set: nothing. A failed write is
+# logged and does not fail the backup that already ended well.
+backup_mark_success() {
+  local kind=$1 dir=${BACKUP_METRICS_DIR:-} f tmp
+  [ -n "$dir" ] || return 0
+  f=$dir/c1-backup-$kind.prom
+  tmp=$f.$$
+  if { printf '# HELP c1_backup_last_success_timestamp_seconds When a c1 backup or restore test last ended well.\n'
+       printf '# TYPE c1_backup_last_success_timestamp_seconds gauge\n'
+       printf 'c1_backup_last_success_timestamp_seconds{kind="%s"} %s\n' "$kind" "$(date +%s)"
+     } > "$tmp" && chmod 0644 "$tmp" && mv "$tmp" "$f"; then
+    log "recorded the $kind run's time in $f"
+  else
+    rm -f "$tmp"
+    log "could not write $f; the $kind run itself ended well"
+  fi
+}
 die() { log "FAIL: $*" >&2; exit 1; }
 
-# Make the repository the first time; leave it alone after that.
+# Make the repository the first time; leave it alone after that. Only restic's exit code 10, "repository
+# does not exist" (restic 0.17 and later), makes one: any other failure to read it (the network, the
+# sign-in, a wrong password, 12) stops the run: `init` is refused on a repository that is there (c1,
+# 2026-11-18 07:25 UTC), and the backup could not use it anyway.
 restic_ensure_repo() {
-  if "$RESTIC" cat config >/dev/null 2>&1; then
-    return 0
-  fi
-  log "no repository at the target yet: making one"
-  "$RESTIC" init
+  local rc=0 err
+  err=$("$RESTIC" cat config 2>&1 >/dev/null) || rc=$?
+  case $rc in
+    0) return 0 ;;
+    10) log "no repository at the target yet: making one"
+        "$RESTIC" init ;;
+    *) die "could not read the repository (restic exit $rc), so it was left alone: $(tail -n 3 <<<"$err" | tr '\n' ' ')" ;;
+  esac
 }
 
 # forget + prune with the retention from the env file (agent pick: 7 daily, 4 weekly, 6 monthly).

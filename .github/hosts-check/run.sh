@@ -85,6 +85,7 @@ check_ansible() {
   bash "$here/tests/test_proxmox_sso.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
   bash "$here/tests/test_tailnet_stack_args.sh" tailnet-policy
+  bash "$here/tests/test_tailnet_policy_log.sh"
   bash "$here/tests/test_tailnet_policy_sections.sh"
   bash "$here/tests/test_proxmox_host_args.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
@@ -235,6 +236,8 @@ check_backup() {
   # the agent box's off-box OPNsense copy against a local restic repository.
   bash "$here/tests/test_backup.sh"
   bash "$here/tests/test_backup_azure_cert.sh"
+  bash "$here/tests/test_backup_metrics.sh"
+  bash "$here/tests/test_backup_repo_init.sh"
   bash "$here/tests/test_opnsense_offbox.sh"
   bash "$here/tests/test_opnsense_escrow.sh"
   bash "$here/tests/test_secrets_bundle_offbox.sh"
@@ -254,6 +257,7 @@ check_backup() {
   bash "$here/tests/test_agent_access_desktop.sh"
   bash "$here/tests/test_rebuild_short_log.sh"
   bash "$here/tests/test_rebuild_box_inventory.sh"
+  bash "$here/tests/test_rebuild_diag_vms.sh"
   bash "$here/tests/test_opnsense_test.sh"
 }
 

@@ -6,16 +6,16 @@ set -eu
 dir="/config/plugins/SSO-Auth_$PLUGIN_VERSION"
 
 # 1/2 the CA bundle: the image's public roots plus the lab root, for SSL_CERT_FILE (.NET reads only
-# that file when it is set, so the public roots must be in it too). The lab root is not in git: the
-# Secret media/jellyfin-lab-root-ca comes from an Ansible run (role k8s_identity, from the
-# controller's file). With no Secret yet, Jellyfin starts as before and the setup Job skips the
-# sign-in; a file with no certificate in it is an error, never trusted.
+# that file when it is set, so the public roots must be in it too). The lab root is not in git: by
+# default cert-manager writes it as ca.crt into Secret media/jellyfin-lab-ca (templates/lab-ca.yaml),
+# mounted here as lab-root-ca.pem. With no Secret yet, Jellyfin starts as before and the setup Job
+# skips the sign-in; a file with no certificate in it is an error, never trusted.
 cp /etc/ssl/certs/ca-certificates.crt /tls/ca-bundle.crt
 if [ -e /lab-ca/lab-root-ca.pem ]; then
   grep -q 'BEGIN CERTIFICATE' /lab-ca/lab-root-ca.pem || { echo "lab-root-ca.pem holds no certificate" >&2; exit 1; }
   cat /lab-ca/lab-root-ca.pem >> /tls/ca-bundle.crt
 else
-  echo "no lab root yet (Secret jellyfin-lab-root-ca): sign-in stays off until it exists"
+  echo "no lab root yet (the lab CA's Secret): sign-in stays off until it exists"
 fi
 echo "ca bundle: $(grep -c 'BEGIN CERTIFICATE' /tls/ca-bundle.crt) certificates"
 

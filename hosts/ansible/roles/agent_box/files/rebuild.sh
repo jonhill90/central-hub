@@ -13,7 +13,8 @@
 # runs with the keys; there is no way to name another branch.
 # log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can
 # quote the realm and the nodes' output). It takes no argument and reads no other file.
-# diag: read-only look at the dev cluster, for a failed apps stage: the Argo CD applications' sync and
+# diag: read-only look at the dev cluster, for a failed apps stage: each dev VM's memory and CPU on Proxmox, the
+# node's memory, each dev node's free memory, load and pressure, the Argo CD applications' sync and
 # health, the newest events in the alerts and monitoring namespaces, pods that are not running, and
 # the monitoring pods and volume claims, and why each application is not Synced and Healthy with the last log lines of
 # each pod in Error (scrubbed). Fixed commands, no argument, no write, no Secret read; it
@@ -62,6 +63,35 @@ if [[ ${1:-} == diag && $# -eq 1 ]]; then
   }
   mkdir -p "$work/state"
   rm -f -- "$work/state/diag_known_hosts"   # the nodes' host keys change with every rebuild
+  # Each dev VM's memory and CPU as Proxmox sees them, and the node's memory, with the dev token the run uses (GET
+  # only, the token on curl's stdin), then each node's own memory, load and pressure, so a starved node is measured,
+  # not guessed (the 3072 MiB control plane of 2026-11-18 06:11 UTC). A failed read prints one line and goes on.
+  px_get() { # path after /api2/json
+    # shellcheck source=/dev/null
+    ( set -a; . "$keys/proxmox-dev.env"; set +a
+      insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+      printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+        curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" ) 2>/dev/null
+  }
+  echo "== dev VMs on Proxmox (VM IDs 250-257: status, memory used of max, CPU)"
+  px_get 'cluster/resources?type=vm' | python3 -I -c 'import json,sys
+for r in sorted(json.load(sys.stdin)["data"], key=lambda r: r.get("vmid", 0)):
+    if 250 <= int(r.get("vmid", 0)) <= 257:
+        print("vmid=%s status=%s mem=%s of %s MiB cpu=%.0f%% of %s vCPU" % (r.get("vmid"), r.get("status"),
+              int(r.get("mem", 0)) // 1048576, int(r.get("maxmem", 0)) // 1048576, 100 * float(r.get("cpu", 0)), r.get("maxcpu")))' \
+    || echo "(the guest list could not be read)"
+  dnode=$(sed -n 's/^[[:space:]]*proxmox_node_name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$keys/dev-vms.tfvars" | head -1)
+  px_get "nodes/$dnode/status" | python3 -I -c 'import json,sys
+d = json.load(sys.stdin)["data"]
+m, w = d.get("memory") or {}, d.get("swap") or {}
+mib = lambda v: "?" if v is None else str(int(v) // 1048576)
+print("node memory total %s used %s available %s MiB; swap used %s of %s MiB; cpu %.0f%%" % (mib(m.get("total")), mib(m.get("used")),
+      mib(m.get("available")), mib(w.get("used")), mib(w.get("total")), 100 * float(d.get("cpu", 0))))' \
+    || echo "(the node status could not be read)"
+  echo "== each dev node: free -m, load average, memory and CPU pressure"
+  ansible 'k8s_control_plane:k8s_workers' -i "$inventory/" -b -m ansible.builtin.shell \
+    -e "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$work/state/diag_known_hosts'" \
+    -a 'free -m; cat /proc/loadavg; for f in memory cpu; do echo "$f: $(head -1 /proc/pressure/$f)"; done' 2>&1 | grep -v '^\[WARNING\]' | cut -c1-300 || true
   echo "== argocd applications"
   diag_kc -n argocd get applications.argoproj.io -o 'custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,HEALTH_MESSAGE:.status.health.message,CONDITIONS:.status.conditions[*].message'
   for ns in alerts monitoring; do

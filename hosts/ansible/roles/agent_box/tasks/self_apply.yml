@@ -73,3 +73,28 @@
 - name: box-apply's inventory, the box's host variables as the controller has them
   ansible.builtin.include_tasks: self_apply_inventory_vars.yml
   when: not agent_box_self_applying | bool and not (ansible_check_mode and agent_box_box_apply_dirs is changed)
+
+# box-apply on a timer: the units are limits (/etc/systemd/system/*), so like box-apply itself they are written
+# only by an apply from the controller or an approved limit apply.
+- name: box-apply service and timer
+  ansible.builtin.template:
+    src: "box-apply.{{ item }}.j2"
+    dest: "/etc/systemd/system/box-apply.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/box-apply.{{ item }}"
+  register: agent_box_box_apply_units
+  when: agent_box_self_apply_timer | bool and (not agent_box_self_applying | bool or agent_box_limit_apply | bool)
+
+- name: box-apply timer on
+  ansible.builtin.systemd_service:
+    name: box-apply.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_box_apply_units is changed }}"
+  when: >-
+    agent_box_self_apply_timer | bool and (not agent_box_self_applying | bool or agent_box_limit_apply | bool)
+    and not (ansible_check_mode and agent_box_box_apply_units is changed)

@@ -96,7 +96,7 @@ fi
 # adds or overwrites it, so every run leaves the same state). Skipped when SSO is off or the client
 # secret Secret does not exist yet. Neither the token nor the secret is printed.
 [ "${SSO_ENABLED:-false}" = "true" ] || { echo "sso: off, nothing to do"; exit 0; }
-[ -s /lab-ca/lab-root-ca.pem ] || { echo "sso: Secret $SSO_CA_NAME is missing, so Jellyfin can't trust Keycloak: skipped (run playbooks/k8s-identity.yml)" >&2; exit 0; }
+[ -s /lab-ca/lab-root-ca.pem ] || { echo "sso: Secret $SSO_CA_NAME is missing, so Jellyfin can't trust Keycloak: skipped (cert-manager writes it once the lab CA is Ready; the next run retries)" >&2; exit 0; }
 [ -n "${SSO_CLIENT_SECRET:-}" ] || { echo "sso: Secret $SSO_SECRET_NAME has no client-secret yet: skipped (run playbooks/k8s-identity.yml)" >&2; exit 0; }
 
 echo "sso 1/3 sign in"

@@ -178,9 +178,10 @@ REF = re.compile(r"[A-Za-z0-9_.:-]{6,200}")
 
 def approved_limit_change(rules, repo, base, new):
     """The approval line on main for the limit change since the baseline, or None. A line counts when its from is
-    the baseline, its to is on main, no limit changed between to and main, its digest matches, and its pass and
-    tap are ids (the box can't check either; a tap of "none" never counts)."""
+    the baseline, its to is on main, its digest matches, and its pass and tap are ids (the box can't check either;
+    a tap of "none" never counts). A limit that changed again after to doesn't spoil the line: only to is applied."""
     text = git(repo, "show", f"{new}:{APPROVALS}", check=False).stdout
+    fallback = None
     for n, line in enumerate(text.splitlines(), 1):
         words = line.split("#", 1)[0].split()
         if not words:
@@ -198,10 +199,10 @@ def approved_limit_change(rules, repo, base, new):
         if git(repo, "merge-base", "--is-ancestor", to, new, check=False).returncode != 0:
             say(f"{APPROVALS} line {n}: {to[:8]} is not on main; left out")
             continue
+        # A limit that changed again after to is not in this line's digest. The apply checks out to itself, never
+        # main, so that later change stays out until its own line, from to, approves it; the line still counts.
         after = [f for f in git(repo, "diff", "--name-only", "--no-renames", "-z", to, new).stdout.split("\0") if f]
-        if limit_files(rules, after) + limit_keys(rules, repo, to, new, after):
-            say(f"{APPROVALS} line {n}: a limit changed again after {to[:8]}, which needs its own line; left out")
-            continue
+        later = bool(limit_files(rules, after) + limit_keys(rules, repo, to, new, after))
         changed = [f for f in git(repo, "diff", "--name-only", "--no-renames", "-z", base, to).stdout.split("\0") if f]
         files = hit_files(limit_files(rules, changed) + limit_keys(rules, repo, base, to, changed))
         if not files:
@@ -210,8 +211,16 @@ def approved_limit_change(rules, repo, base, new):
         if limit_digest(repo, base, to, files) != digest:
             say(f"{APPROVALS} line {n}: its digest is not the diff of {', '.join(files)}; left out")
             continue
-        return {"line": n, "to": to, "digest": digest, "pass": pass_ref, "tap": tap, "files": files}
-    return None
+        ok = {"line": n, "to": to, "digest": digest, "pass": pass_ref, "tap": tap, "files": files}
+        if not later:
+            return ok
+        # A line whose to has a later limit change is kept in case no line reaches further.
+        if fallback is None:
+            fallback = ok
+    if fallback is not None:
+        say(f"{APPROVALS} line {fallback['line']}: a limit changed again after {fallback['to'][:8]}; this applies "
+            f"{fallback['to'][:8]} only, and the later change needs its own line from it")
+    return fallback
 
 
 # --- The box's limit paths, before and after ----------------------------------------------------------------
@@ -476,10 +485,14 @@ def limit_apply(s, rules, repo, base, ok, mode):
 # --- Main ---------------------------------------------------------------------------------------------------
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in ("plan", "apply"):
-        print("usage: box-apply plan|apply", file=sys.stderr)
+    # tick is the timer's run (box-apply.service, root only; sudoers allows sessions plan and apply): an apply that
+    # ends at once when main has not moved past the baseline, so the timer doesn't re-run the role every time.
+    if len(sys.argv) != 2 or sys.argv[1] not in ("plan", "apply", "tick"):
+        print("usage: box-apply plan|apply|tick", file=sys.stderr)
         sys.exit(2)
-    mode = run["mode"] = sys.argv[1]
+    tick = sys.argv[1] == "tick"
+    mode = run["mode"] = "apply" if tick else sys.argv[1]
+    run["tick"] = tick
     os.umask(0o077)
     os.makedirs(STATE, mode=0o700, exist_ok=True)
     lock = open(os.path.join(STATE, "lock"), "w")
@@ -512,6 +525,10 @@ def main():
     git(repo, "checkout", "--quiet", "--detach", "--force", new)
     git(repo, "clean", "-ffdxq")
     say(f"main {new[:8]}, baseline {base[:8]}")
+    if tick and new == base:
+        say("nothing new on main since the baseline")
+        record("nothing-new")
+        return
 
     changed = [f for f in git(repo, "diff", "--name-only", "--no-renames", "-z", base, new).stdout.split("\0") if f]
     hits = limit_files(rules, changed) + limit_keys(rules, repo, base, new, changed)

@@ -359,6 +359,10 @@ agent_box_self_applying: false
 # Set by box-apply, with agent_box_self_applying, on an approved limit apply (-e; pick 232): the box-apply tasks
 # then write box-apply, its settings and its limits, never its inventory.
 agent_box_limit_apply: false
+# A root timer that runs `box-apply apply` on its own, so a merged change reaches the box without a session
+# remembering to run it. It does no more than a session's run: it stops on any limit change with no approval line.
+agent_box_self_apply_timer: true
+agent_box_self_apply_interval: 10min
 
 # The merge sweep (D-0042 rule 2): a systemd timer that runs `pr-merge.sh sweep` as the keys user. Off until the inventory
 # turns it on, because installing it is a change to the box's limits (D-0042 rule 6).

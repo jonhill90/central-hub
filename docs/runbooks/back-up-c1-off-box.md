@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: every night restic writes an encrypted snapshot of c1's etcd and of every volume folder to a repository off the Proxmox host, and every week a restore test proves the newest snapshots come back
 needs: the lab clone of central-hub with its private inventory; SSH to the c1 nodes as D-0022 says; a restic repository off the Proxmox host and its credentials; for Azure, the agents' service principal signed in to `az` on the Mac, with Graph `Application.ReadWrite.OwnedBy` (give-agents-access-to-azure.md)
 private-values: [c1-backup-restic-repository, c1-backup-restic-password, c1-backup-target-credentials, c1-backup-azure-storage-account, home-public-ip]
-files: [hosts/terraform/azure/backup/, hosts/ansible/playbooks/k8s-backup.yml, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/, .github/hosts-check/tests/test_backup.sh, .github/hosts-check/tests/test_backup_azure_cert.sh]
+files: [hosts/terraform/azure/backup/, hosts/ansible/playbooks/k8s-backup.yml, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/, .github/hosts-check/tests/test_backup.sh, .github/hosts-check/tests/test_backup_azure_cert.sh, .github/hosts-check/tests/test_backup_metrics.sh, hosts/kubernetes/home/c1/apps/monitoring-extras/]
 last-tested: 2026-11-08, an agent, the scripts end to end in CI's test (etcd 3.7.0, local restic repository); 2026-11-09, an agent, terraform/azure/backup's offline tests (mocked provider); 2026-11-09, an agent lane through the owner's Mac, the full apply and the playbook's drill on c1 against Azure Blob with a user delegation SAS (backups OK, restic check clean, etcd restore test PASS, volume restore test PASS on 2 folders); 2026-11-09, an agent, the node certificate script and azure_identity.yml against a stand-in for Entra ID and Graph in CI (test_backup_azure_cert.sh); the sign-in by certificate on c1 is not tested yet; 2026-11-09, an agent, CI's test with Keycloak's PostgreSQL image (18.6), a real `pg_dumpall` through a stand-in for crictl, then steps 2 and 3 of "Restore Keycloak's database" into a new database whose password had changed (all rows back, the new password still signs in)
 superseded-by:
 ---
@@ -227,14 +227,57 @@ The copy of `/var/lib/central-hub/identity-postgres` in a snapshot is read file 
 
 why: a dump is consistent by itself, so it restores the database whatever was happening on disk at the time (agent pick 190). The weekly restore test checks that each dump came back whole.
 
+## Know when a backup stops
+
+Every backup and restore test that ends well writes its time for Prometheus: `c1_backup_last_success_timestamp_seconds{kind="volumes"}` (and `etcd`, `restore-test-volumes`, `restore-test-etcd`) in `c1-backup-<kind>.prom` in `k8s_backup_metrics_dir` (`/var/lib/node-exporter/textfile`, mode 0755). That is `backup_mark_success` in `c1-backup-lib.sh`. A run that fails writes nothing, so its time grows old. kube-prometheus-stack's node-exporter reads the folder with its textfile collector, through the chart's read-only host root mount at `/host/root`. App `monitoring-extras` then raises:
+
+| Alert | Means |
+|---|---|
+| C1BackupStale | No good volume or etcd backup from a node for 30 hours (one missed night); critical |
+| C1RestoreTestStale | A weekly restore test on a node hasn't passed for 8 days |
+| C1BackupNotRecorded | No node reports a good volume or etcd backup at all for 2 hours, so C1BackupStale can't fire |
+
+A node whose folder node-exporter can't read raises the chart's own NodeTextFileCollectorScrapeError.
+
+The panel check prints the hours since the last volume and etcd backups and the days since the last volume restore test ([check-c1-alerts-and-dashboard.md](check-c1-alerts-and-dashboard.md)).
+
+Order, so nothing fires for the wrong reason:
+
+1. Merge the change, then run step 2 with `--tags install,timers`. The role makes the folder and the units pass `BACKUP_METRICS_DIR`.
+   expect: `ls -ld /var/lib/node-exporter/textfile` on every node shows the folder, mode `drwxr-xr-x`.
+2. After the next night's timers, or a drill (`--tags drill`), each node's folder holds its `.prom` files.
+   expect: `cat /var/lib/node-exporter/textfile/c1-backup-volumes.prom` on a node shows the line with tonight's time.
+3. One pull request turns it on, in both places that must match (`.github/hosts-check/parity.py`):
+   - `prometheus-node-exporter.extraArgs` in `apps/kube-prometheus-stack/values.yaml` and in `k8s_observability_kps_values` (role k8s_observability's `vars/main.yml`): the chart's two `--collector.filesystem` defaults (this list replaces them) plus `--collector.textfile.directory=/host/root/var/lib/node-exporter/textfile`;
+   - `backup.metrics: true` in `apps/monitoring-extras/values.yaml`.
+
+   why: node-exporter reports `node_textfile_scrape_error 1` for a folder that isn't there yet, and the chart's NodeTextFileCollectorScrapeError fires on it at once, so the collector waits for step 1. Until step 3 the three alerts and the panel lines are off.
+
 ## If it fails
 
 - **The env file check stops the run:** the file is missing, empty, or readable by others. Fix it on the controller; nothing on the nodes was changed.
-- **A backup fails at night:** `journalctl -u c1-backup-etcd -u c1-backup-volumes --since yesterday` on the node. The timers retry the next night; `Persistent=true` runs a missed one at boot.
+- **A backup fails at night** (C1BackupStale, or C1RestoreTestStale for the weekly test): `journalctl -u c1-backup-etcd -u c1-backup-volumes -u c1-restore-test --since yesterday` on the node named in the alert. The timers retry the next night; `Persistent=true` runs a missed one at boot.
 - **`AuthorizationFailure` or 403 from Azure:** the home's public address changed (set the new one in `azure.tfvars` and apply step A1 again), or the app's role from step A1 is missing or not yet in effect (role assignments can take a few minutes).
+- **`AuthorizationPermissionMismatch` on writes while reads work:** network blocks show as `AuthorizationFailure` instead ([403 errors in Blob Storage](https://learn.microsoft.com/troubleshoot/azure/azure-storage/blobs/authentication/storage-troubleshoot-403-errors)). First rule out the simpler causes, read-only, on the Mac:
+
+   1. Confirm the token is the backup app's. Decode only the `appid` and `oid` claims of a storage token that the node gets with its certificate, and compare `appid` with `tofu output -raw client_id`. Dev's reader app (`reader_client_id`) holds Storage Blob Data Reader on the same container (`main.tf`, `azurerm_role_assignment.reader`). It fails exactly this way: reads work and writes fail. If `appid` is the reader's, the node's env file is wrong; fix that, not Azure.
+   2. Run a plain `tofu plan -var-file=azure.tfvars` (no `-replace`). If it shows `azurerm_role_assignment.backup` as 1 to add and 0 to destroy, the assignment is gone, and applying that plan is the fix. It is an access right, so it too waits on the owner's go: his typed words naming this command and the commit, or a tap on an option the agents did not recommend (D-0034 rule 9).
+   3. Run `az role assignment list --assignee <client_id> --scope <the container's resource ID> --include-inherited`. Expect one Storage Blob Data Contributor at the container scope, with no `condition`.
+
+   If all three hold and the OPNsense off-box copy still writes (it uses the same pattern in the same account: a container-scope role and a certificate sign-in), the fault is c1's one assignment. Replace that assignment and nothing else. The replace deletes and remakes an access right, so it waits on the owner's go: his typed words naming this command and the commit, or a tap on an option the agents did not recommend (D-0034 rule 9). It runs on the Mac, as in step A1, with `az` signed in as agent-azure and the same state file:
+
+   ```sh
+   cd hosts/terraform/azure/backup
+   tofu init -backend-config="path=$HOME/.local/state/central-hub/azure-backup.tfstate"
+   tofu plan -var-file=azure.tfvars -replace=azurerm_role_assignment.backup -out=replace-backup-role.tfplan
+   tofu apply replace-backup-role.tfplan
+   ```
+
+   expect: the plan says `Plan: 1 to add, 0 to change, 1 to destroy`, and both lines name `azurerm_role_assignment.backup` only. If it names any other resource, stop: the folder has drifted, and that is a separate change. After the apply, the same Contributor role sits on the same container for the same principal, under a new assignment ID. Run one backup by hand on the control-plane node (`systemctl start c1-backup-etcd`) and read `journalctl -u c1-backup-etcd` for a new snapshot. Between the destroy and the add, the nodes can't write, so don't run it while a backup timer is due.
 - **Step A1 stops with `403 Insufficient privileges` on `azuread_application.backup`:** `agent-azure` lacks the Graph permission `Application.ReadWrite.OwnedBy`, or its admin consent never took. A fresh Graph token for `agent-azure` then has no `roles` claim. The owner grants it (step A2). The way back to the nodes' old SAS (`keep_sas_signer`, agent pick 182) was removed on 2026-11-16 (pick 247): that SAS reached its hard expiry on 2026-11-16 at 05:04 UTC, so there is nothing left to roll back to.
 - **`AADSTS700027` or no token:** Entra ID doesn't know the node's certificate, usually because it expired while the node was off for more than 60 days. Run step 2 with `--tags timers`: it uploads the node's certificate again. Look at `journalctl -u c1-backup-azure-cert` for why the roll failed.
 - **`ciphertext verification failed`** on every restic command: the repository holds keys from two `restic init` runs. If it holds no backup you need, tell the owner, delete the `c1/` folder in the container, and run step 2 again to make it once.
+- **`could not read the repository (restic exit N), so it was left alone`** (or `restic could not read the repository` from step 2): restic makes a repository only on its exit 10, "repository does not exist" ([restic exit codes](https://restic.readthedocs.io/en/stable/075_scripting.html)). Any other code is a fault at the target, for example a 403 (above), a lock (11, below) or a wrong password (12). Fix that fault; never run `restic init` against a repository that is there.
 - **The repository is locked** (a run was cut off): `restic unlock` with the env file loaded, as in step 4.
 - **The way back:** set `k8s_backup_enabled: false` and run step 2 again. The timers stop and the env file is removed from the nodes; the tools stay, and the repository and its snapshots are untouched.
 - Tell the owner before deleting snapshots or the repository.
