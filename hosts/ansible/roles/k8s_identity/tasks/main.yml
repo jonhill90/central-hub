@@ -24,6 +24,11 @@
   ansible.builtin.import_tasks: keycloak.yml
   tags: [keycloak]
 
+# Adds clients to the live realm without replacing it. Never runs by default: `--tags secrets,clients`.
+- name: Clients added to the live realm
+  ansible.builtin.import_tasks: clients.yml
+  tags: [clients, never]
+
 # The route's proof fetches the realm's OIDC discovery document by its public name: it answers 200
 # and names the realm's issuer, which is what every client checks.
 - name: Keycloak through the shared Gateway
