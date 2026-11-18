@@ -11,10 +11,30 @@ mkdir -p "$(dirname "$state")"
 nginx=no
 [ "$(systemctl show -P LoadState nginx.service)" = loaded ] && nginx=yes
 rollback() {
-  systemctl stop apache2.service || true
+  # A stop of the unit can land while "systemctl start apache2" is still in flight, so one stop may not take
+  # hold. Stop apache2 until it is down and 443 is free, then start nginx until it is up. The result is
+  # written from what is true, never from the intent.
+  local i
   systemctl mask apache2.service || true
-  [ "$nginx" = no ] || systemctl start nginx.service || true
-  echo "rolled-back $(date -u +%FT%TZ)" > "$state"
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    systemctl stop apache2.service || true
+    systemctl is-active --quiet apache2.service || break
+    sleep 1
+  done
+  if [ "$nginx" = no ]; then
+    echo "rolled-back $(date -u +%FT%TZ)" > "$state"
+    return
+  fi
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    systemctl reset-failed nginx.service || true
+    systemctl start nginx.service && break
+    sleep 1
+  done
+  if systemctl is-active --quiet nginx.service; then
+    echo "rolled-back $(date -u +%FT%TZ)" > "$state"
+  else
+    echo "rollback-failed $(date -u +%FT%TZ)" > "$state"
+  fi
 }
 on_exit() {
   local rc=$?
