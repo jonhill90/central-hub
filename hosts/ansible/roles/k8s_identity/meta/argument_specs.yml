@@ -5,7 +5,7 @@ argument_specs:
       Keycloak through its operator, with PostgreSQL and realm lab as code (groups, users, and the
       clients of Grafana, Argo CD and Jellyfin), served through the shared Gateway (BUILD-PATH S15, TASK-0019)
     options:
-      k8s_identity_version: {type: str, default: 26.8.1, description: "Keycloak and operator version (STD-0003); vars/main.yml pins the files for it."}
+      k8s_identity_version: {type: str, default: 26.8.2, description: "Keycloak and operator version (STD-0003); vars/main.yml pins the files for it."}
       k8s_identity_namespace: {type: str, default: identity, description: "Namespace for the operator, Keycloak and its database."}
       k8s_identity_name: {type: str, default: sso, description: "The Keycloak object's name and the first label of its hostname."}
       k8s_identity_zone: {type: str, required: true, description: "The DNS zone. Private; the inventory template sets it to k8s_gateway_zone."}
@@ -56,6 +56,13 @@ argument_specs:
         default: []
         description: >-
           Client IDs of realm.yaml.j2 that the clients tag adds to the live realm without replacing it.
+      k8s_identity_ensure_users:
+        type: list
+        elements: str
+        default: []
+        description: >-
+          User names of realm.yaml.j2 that the users tag adds to the live realm without replacing it. A user
+          that is already there is left as it is.
       k8s_identity_otp_group: {type: str, default: lab-admins, description: "Members get a TOTP seed and are asked for a code at every sign-in."}
       k8s_identity_otp_digits: {type: int, default: 6, description: "Digits in a TOTP code."}
       k8s_identity_otp_period: {type: int, default: 30, description: "Seconds a TOTP code lasts."}
