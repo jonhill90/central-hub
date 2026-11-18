@@ -43,6 +43,11 @@ agent_box_wrappers:
   # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The only name now is identity.
   - name: c1-ansible
     args: [list, "check *", "apply *", log]
+  # The three scripted sign-in checks (Jellyfin, Argo CD, Proxmox) against prod with the test user (files/signin-check.sh). It runs as
+  # the keys user, because the test user's password and seed are lines in identity.env. run makes nothing in any app; it reads
+  # signin-check.json, which the controller's prod-files run copies, and prints only the checks' numbered lines.
+  - name: signin-check
+    args: [run, log]
   # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
   # the owner's tap id, which the wrapper checks; the run needs dev to have passed at the same commit first.
   - name: rebuild-prod
@@ -347,6 +352,7 @@ agent_box_prod_files:
   - {from: clone, path: hosts/.env, dest: hosts.env}
   - {from: clone, path: hosts/ansible/inventories/home/hosts.yml, dest: inventory-hosts.yml}
   - {from: config, path: identity.env, dest: identity.env}
+  - {from: config, path: signin-check.json, dest: signin-check.json}
   - {from: clone, path: hosts/terraform/home/certificates/home.tfvars, dest: tfvars/certificates.tfvars}
   - {from: clone, path: hosts/terraform/home/dns-token/home.tfvars, dest: tfvars/dns-token.tfvars}
   - {from: clone, path: hosts/terraform/home/dns/home.tfvars, dest: tfvars/dns.tfvars}
