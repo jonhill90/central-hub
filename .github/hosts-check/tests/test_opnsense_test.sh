@@ -169,6 +169,9 @@ grep -q 'if \[\[ $have == "$want" \]\]' <<<"$code" && ok "plan reuses an unchang
 # The proof's Keycloak: prod profile (start-dev opens 8080 whatever --http-enabled says), and only loopback is exempt.
 if grep -q 'start-dev' <<<"$code"; then bad "the proof's Keycloak runs start-dev"; else ok "the proof's Keycloak runs start, not start-dev"; fi
 grep -q 'start --db=dev-file --cache=local --import-realm --http-enabled=false' <<<"$code" && ok "start uses the dev-file database, local caches and no HTTP" || bad "start options"
+# OPNsense 26.1 writes the GUI certificate under lighttpd_webgui (core src/etc/inc/plugins.inc.d/webgui.inc), not /var/etc.
+grep -q "cat /usr/local/etc/lighttpd_webgui/cert.pem' > \"\$proof/gui.pem\"" <<<"$code" && ! grep -q '/var/etc/cert.pem' <<<"$code" \
+  && ok "prove reads the GUI certificate from where OPNsense 26.1 writes it" || bad "GUI certificate path"
 
 [ "$fails" = 0 ] || { echo "$fails failed"; exit 1; }
 echo "opnsense-test: all checks passed"
