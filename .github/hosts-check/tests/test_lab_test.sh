@@ -178,7 +178,7 @@ prove_run() { # fail-at
   PROVE_CALLS=$work/prove-calls PROVE_FAIL_AT=$1 VMID=256 bash -c "set -euo pipefail; $body"$'\n'"set -- ; prove" "$work/prove-step.sh" > "$work/prove-out" 2>&1
 }
 pid_ok() { awk '{print $2}' "$work/prove-calls" | grep -vx 'parent=[0-9]\+' | grep -q . && return 1; return 0; }
-if prove_run "" && [[ $(awk '{print $1}' "$work/prove-calls" | paste -sd' ') == "plan apply check host lab firstboot opnsense wancheck connector safety destroy" ]] \
+if prove_run "" && [[ $(awk '{print $1}' "$work/prove-calls" | paste -sd' ') == "plan apply check host lab firstboot opnsense signin wancheck connector safety destroy" ]] \
   && pid_ok && grep -q 'every step passed, build to destroy' "$work/prove-out"; then
   ok "prove runs plan through safety in order, then destroy, each as a child that names its parent"
 else
@@ -726,6 +726,169 @@ for f in rsa.pub two.pub empty.pub shell.pub missing.pub; do
     ok "the SSH key PHP refuses $f and changes nothing"
   fi
 done
+
+# The sign-in settings PHP against stubs of 26.1.6's MVC loader: Config over an XML file, the user model, configd.
+mkdir -p "$work/oidc/script"
+cat > "$work/oidc/script/load_phalcon.php" <<'STUB'
+<?php
+namespace OPNsense\Core {
+    class Config {
+        private static $i = null; public $x;
+        public static function getInstance() { if (self::$i === null) { self::$i = new Config(); self::$i->x = simplexml_load_file(getenv('LT_XML')); } return self::$i; }
+        public function object() { return $this->x; }
+        public function save() { $this->x->asXML(getenv('LT_XML')); }
+    }
+    class Backend {
+        public function configdRun($c) { file_put_contents(getenv('LT_XML') . '.configd', "$c\n", FILE_APPEND); }
+        public function configdpRun($c, $a) { $this->configdRun($c . ' ' . implode(' ', $a)); }
+    }
+}
+namespace OPNsense\Auth {
+    class UserNode { public $name = ''; public $uid = ''; public $password = ''; public $descr = ''; public $priv = ''; }
+    class Users {
+        public $items = [];
+        public function iterateItems() { return $this->items; }
+        public function Add() { $n = new UserNode(); $u = [];
+            foreach ($this->items as $i) { $u[] = (int)$i->uid; }
+            for ($id = 2000; in_array($id, $u); $id++) {}
+            $n->uid = (string)$id; $this->items[] = $n; return $n; }
+    }
+    class User {
+        public $user;
+        public function __construct() { $this->user = new Users();
+            foreach (\OPNsense\Core\Config::getInstance()->object()->system->user as $x) {
+                $n = new UserNode(); foreach (['name', 'uid', 'password', 'descr', 'priv'] as $k) { $n->$k = (string)$x->$k; }
+                $this->user->items[] = $n; } }
+        public function generatePasswordHash($p) { return '$6$stub$' . md5($p); }
+        public function performValidation() { return []; }
+        public function serializeToConfig() {
+            $sys = \OPNsense\Core\Config::getInstance()->object()->system;
+            while (isset($sys->user[0])) { unset($sys->user[0]); }
+            foreach ($this->user->items as $n) { $x = $sys->addChild('user');
+                foreach (['name', 'uid', 'password', 'descr', 'priv'] as $k) { $x->addChild($k, htmlspecialchars((string)$n->$k)); } } }
+    }
+}
+STUB
+cat > "$work/oidc/config.xml" <<'XML'
+<?xml version="1.0"?>
+<opnsense><system><user><name>root</name><uid>0</uid></user><user><name>ansible</name><uid>2000</uid></user>
+<authserver><refid>x1</refid><type>ldap</type><name>ldap-elsewhere</name></authserver></system></opnsense>
+XML
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 -subj "/CN=t CA" -keyout "$work/oidc/ca.key" -out "$work/oidc/ca.pem" 2>/dev/null
+openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -subj "/CN=leaf" -keyout "$work/oidc/leaf.key" -out "$work/oidc/leaf.csr" 2>/dev/null
+openssl x509 -req -in "$work/oidc/leaf.csr" -CA "$work/oidc/ca.pem" -CAkey "$work/oidc/ca.key" -CAcreateserial -days 1 -out "$work/oidc/leaf.pem" 2>/dev/null
+oidc_json() { # out [key=json-value ...]: the settings file, with keys replaced or (value "-") removed
+  python3 -I - "$work/oidc/ca.pem" "$@" <<'PY'
+import json, sys
+ca, out = sys.argv[1], sys.argv[2]
+d = {"name": "keycloak-proof", "issuer": "https://127.0.0.1:8443/realms/opnsense-proof", "client_id": "opnsense",
+     "client_secret": "0123456789abcdef0123456789abcdef", "app_code": "keycloak",
+     "ca": {"descr": "lab-test signin proof CA", "pem": open(ca).read()}, "proof_admin": "proofadmin"}
+for kv in sys.argv[3:]:
+    k, v = kv.split("=", 1)
+    d.pop(k) if v == "-" else d.__setitem__(k, json.loads(v))
+json.dump(d, open(out, "w"))
+PY
+}
+oidc_php=$root/hosts/ansible/bootstrap/opnsense-oidc-server.php
+oidc_run() { LT_XML=$work/oidc/config.xml php -d include_path="$work/oidc" "$oidc_php" "$1"; }
+rm -f "$work/oidc/config.xml.configd"
+for _ in 1 2; do
+  oidc_json "$work/oidc/in.json"
+  oidc_run "$work/oidc/in.json" > "$work/oidc/out" 2>&1 || { cat "$work/oidc/out"; break; }
+  [[ ! -e $work/oidc/in.json ]] || bad "the sign-in settings PHP left its settings file"
+done
+python3 -I - "$work/oidc/config.xml" "$work/oidc/ca.pem" "$work/oidc/out" "$work/oidc/config.xml.configd" <<'PY' \
+  && ok "the sign-in settings PHP (run twice): one server with D-0037 rule 5's settings, the CA, a page-all proof admin uid 2001, trust and user reloaded" \
+  || bad "the sign-in settings PHP"
+import base64, sys, xml.etree.ElementTree as ET
+c = ET.parse(sys.argv[1]).getroot()
+s = [a for a in c.findall("system/authserver") if a.findtext("name") == "keycloak-proof"]
+assert len(s) == 1 and s[0].findtext("type") == "openidconnect", ET.tostring(c)
+want = {"openidconnect_enabled": "1", "openidconnect_app_code": "keycloak", "openidconnect_provider_profile": "keycloak",
+        "openidconnect_provider_url": "https://127.0.0.1:8443/realms/opnsense-proof", "openidconnect_client_id": "opnsense",
+        "openidconnect_client_secret": "0123456789abcdef0123456789abcdef", "openidconnect_par_mode": "disabled",
+        "openidconnect_ssf_enabled": "0", "openidconnect_logout_notifications": "off", "openidconnect_bootstrap_mode": "approval",
+        "openidconnect_create_users": "0", "openidconnect_allow_root": "0"}
+got = {e.tag: e.text for e in s[0] if e.tag.startswith("openidconnect_")}
+assert got == want, got
+assert [a.findtext("name") for a in c.findall("system/authserver")] == ["ldap-elsewhere", "keycloak-proof"]
+cas = c.findall("ca")
+assert len(cas) == 1 and cas[0].findtext("descr") == "lab-test signin proof CA" and cas[0].findtext("refid")
+assert base64.b64decode(cas[0].findtext("crt")).decode().strip() == open(sys.argv[2]).read().strip()
+users = {u.findtext("name"): u for u in c.findall("system/user")}
+assert sorted(users) == ["ansible", "proofadmin", "root"] and users["proofadmin"].findtext("uid") == "2001"
+assert users["proofadmin"].findtext("priv") == "page-all" and users["proofadmin"].findtext("password").startswith("$6$")
+assert "proof admin proofadmin uid 2001" in open(sys.argv[3]).read().splitlines()
+assert open(sys.argv[4]).read().splitlines() == ["system trust configure", "auth user changed proofadmin"] * 2
+PY
+oidc_json "$work/oidc/in.json" ca=- proof_admin=-
+cp "$work/oidc/config.xml" "$work/oidc/before.xml"
+oidc_run "$work/oidc/in.json" > "$work/oidc/out" 2>&1 && ! grep -q '^trust:\|^proof admin' "$work/oidc/out" \
+  && ok "the sign-in settings PHP sets only the server when the file names no CA or proof admin, as on the lab firewall" \
+  || { bad "the sign-in settings PHP without a CA or proof admin"; cat "$work/oidc/out"; }
+cp "$work/oidc/before.xml" "$work/oidc/config.xml"
+# One word each: no space outside the JSON strings, and \u0020 for the PEM header's spaces inside them.
+leaf=$(python3 -I -c 'import json, sys; print(json.dumps({"descr": "x", "pem": open(sys.argv[1]).read()}, separators=(",", ":")).replace(" ", "\\u0020"))' "$work/oidc/leaf.pem")
+two=$(python3 -I -c 'import json, sys; print(json.dumps({"descr": "x", "pem": open(sys.argv[1]).read() * 2}, separators=(",", ":")).replace(" ", "\\u0020"))' "$work/oidc/ca.pem")
+while IFS='|' read -r what change; do
+  # shellcheck disable=SC2086  # each case is one or more key=value words
+  oidc_json "$work/oidc/in.json" $change
+  [[ -s $work/oidc/in.json ]] || bad "no settings file for $what"
+  if oidc_run "$work/oidc/in.json" > "$work/oidc/out" 2>&1 || ! cmp -s "$work/oidc/config.xml" "$work/oidc/before.xml" || [[ -e $work/oidc/in.json ]]; then
+    bad "the sign-in settings PHP took $what, or left its file"
+  else
+    ok "the sign-in settings PHP refuses $what ($(head -1 "$work/oidc/out")), changes nothing and removes its file"
+  fi
+done <<CASES
+no client secret|client_secret=-
+a short client secret|client_secret="short"
+an http issuer|issuer="http://127.0.0.1:8443/realms/x"
+an issuer with a query|issuer="https://kc.example.com/realms/x?a=1"
+a server name of an LDAP server|name="ldap-elsewhere"
+a leaf certificate as the CA|ca=$leaf
+two certificates as the CA|ca=$two
+root as the proof admin|proof_admin="root"
+an existing user as the proof admin|proof_admin="ansible"
+an app code with a slash|app_code="a/b"
+CASES
+echo 'not json' > "$work/oidc/in.json"
+oidc_run "$work/oidc/in.json" > /dev/null 2>&1 && bad "the sign-in settings PHP took a file that is not JSON" \
+  || { [[ ! -e $work/oidc/in.json ]] && ok "the sign-in settings PHP refuses a file that is not JSON and removes it" || bad "the sign-in settings PHP left a bad file"; }
+
+# signin's wiring: the pins are opnsense-test's, Keycloak is on loopback only and reached by a reverse forward, the
+# prover gets the copy's SSH path and the GUI tunnel, and the client secret never goes on a command line.
+eval "$(grep -E '^  (url|sha|image)=\$\(sed -n ' "$w" | sed 's/"\$pins"/"$files\/opnsense-test.sh"/')"
+# shellcheck disable=SC2154  # set by the eval above
+[[ $url == "$(sed -n 's/^PLUGIN_URL=//p' "$files/opnsense-test.sh")" && $sha == "$(sed -n 's/^PLUGIN_SHA256=//p' "$files/opnsense-test.sh")" \
+   && $image == "$(sed -n 's/^KEYCLOAK_IMAGE=//p' "$files/opnsense-test.sh")" && -n $url && -n $sha && -n $image ]] \
+  && ok "signin reads the plugin and Keycloak pins from opnsense-test.sh, so both proofs install the same bytes" \
+  || bad "signin's pins (url=$url sha=$sha image=$image)"
+grep -q -- '--http-enabled=false --http-host=127.0.0.1 --https-port=8443' "$w" \
+  && grep -q -- '--hostname=https://127.0.0.1:8443 >/dev/null' "$w" \
+  && grep -q -- "-R 127.0.0.1:8443:127.0.0.1:8443 \"root@\$gw\" &" "$w" \
+  && grep -q "listens beyond loopback" "$w" \
+  && ok "signin's Keycloak listens on loopback only, and VM 100 reaches it through a reverse forward on its SSH" \
+  || bad "signin's Keycloak wiring"
+grep -q '"$py" -I "$prove_py" "$gw" "$s" "$files/opnsense-ssh.key" "$files/opnsense-ssh.known_hosts" "$KC_NAME" "$(vm100_proxy)" "$port"$' "$w" \
+  && grep -q -- '-L "127.0.0.1:$port:$gw:443" "root@$addr" &' "$w" \
+  && grep -q '"$py" -I "$seed_py" realm-at "https://$gw" "$s/realm.json"' "$w" \
+  && ok "signin runs opnsense-test's prover over the copy's SSH path and a GUI tunnel, with the realm at VM 100's origin" \
+  || bad "signin's prover call"
+python3 -I - "$w" <<'PY' && ok "signin's client secret goes in a file and the container's environment, never on a command line" || bad "signin's secret handling"
+import re, sys
+t = open(sys.argv[1]).read()
+body = re.search(r"\nsignin\(\) \{\n(.*?)\n\}\n", t, re.S).group(1)
+for line in body.splitlines():
+    if "client.secret" in line:
+        assert re.search(r'openssl rand -hex 24 > "\$s/\$f"|open\(s \+ "/client.secret"\)|KC_PROOF_CLIENT_SECRET=\$\(cat "\$s/client.secret"\)', line), line
+assert 'rm -f "$s/server.json"' in body and "rm -f /root/lab-test-signin.json" in body
+assert "trap \"kill \\$gui \\$rev 2>/dev/null; podman rm -f $KC_NAME >/dev/null 2>&1; rm -rf '$s'\" EXIT" in body
+PY
+grep -q 'podman rm -f "$KC_NAME" >/dev/null 2>&1 || true   # signin' "$w" && grep -q '"$files/opnsense-run.log" "$files/signin"' "$w" \
+  && ok "destroy removes signin's Keycloak and its folder" || bad "destroy keeps signin's leftovers"
+grep -q 'loop: \[opnsense-test-seed.py, opnsense-test-prove.py\]' "$role/tasks/lab_test.yml" && grep -q 'name: podman' "$role/tasks/lab_test.yml" \
+  && ok "the lab-test role part installs podman and opnsense-test's helpers, which signin needs" || bad "the lab-test role part lacks signin's needs"
 
 # The role takes the binary out of a .deb (an ar archive holding data.tar.xz) with Python only.
 mkdir -p "$work/deb/usr/bin"
