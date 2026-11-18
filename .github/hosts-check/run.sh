@@ -85,6 +85,7 @@ check_ansible() {
   bash "$here/tests/test_proxmox_sso.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
   bash "$here/tests/test_tailnet_stack_args.sh" tailnet-policy
+  bash "$here/tests/test_tailnet_policy_log.sh"
   bash "$here/tests/test_tailnet_policy_sections.sh"
   bash "$here/tests/test_proxmox_host_args.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
