@@ -67,6 +67,14 @@ defaultRules:
     kubeSchedulerAlerting: false
     kubeSchedulerRecording: false
     windows: false
+  # KubeCPUOvercommit and KubeMemoryOvercommit fire when the pods' requests would not fit if the
+  # largest node were lost. c1 has one worker and a tainted control plane, so losing the worker
+  # always loses its pods and the two fire for good (both firing on c1, 2026-11-18 04:30 UTC:
+  # requests 2.48 of 4 CPUs, 3.75 of 11.4 GiB, largest node 2 CPUs and 7.7 GiB). A pod that
+  # doesn't fit stays Pending, and KubePodNotReady covers that. Turn them back on at three nodes.
+  disabled:
+    KubeCPUOvercommit: true
+    KubeMemoryOvercommit: true
 windowsMonitoring: {enabled: false}
 prometheus:
   prometheusSpec:
