@@ -7,7 +7,7 @@ runner: a session on the agent box, through `box-apply plan` and `box-apply appl
 outcome: the box runs its own agent_box role from the commit main points to, without the controller, and stops on any change to its limits until a pass approves it; a limit file changed during a run is put back
 needs: D-0036 accepted; the box set up from the controller (set-up-the-agent-box.md), with its Ansible virtual environment and collections; agent_box_self_apply true in the private inventory
 private-values: [agent-box-inventory]
-files: [hosts/ansible/roles/agent_box/files/box-apply.py, hosts/ansible/agent-box-limit-approvals.txt, hosts/ansible/roles/agent_box/tasks/self_apply.yml, hosts/ansible/roles/agent_box/tasks/self_apply_baseline.yml, hosts/ansible/roles/agent_box/templates/box-apply-limits.txt.j2, hosts/ansible/roles/agent_box/templates/sudoers.j2, .github/hosts-check/tests/test_box_apply.sh]
+files: [hosts/ansible/roles/agent_box/files/box-apply.py, hosts/ansible/roles/agent_box/templates/box-apply.service.j2, hosts/ansible/roles/agent_box/templates/box-apply.timer.j2, hosts/ansible/agent-box-limit-approvals.txt, hosts/ansible/roles/agent_box/tasks/self_apply.yml, hosts/ansible/roles/agent_box/tasks/self_apply_baseline.yml, hosts/ansible/roles/agent_box/templates/box-apply-limits.txt.j2, hosts/ansible/roles/agent_box/templates/sudoers.j2, .github/hosts-check/tests/test_box_apply.sh]
 last-tested: 2026-11-14, an agent, box-apply.py against a local git repository and a stand-in for ansible-playbook (test_box_apply.sh, approved limit changes included), and the role's templates rendered; not installed on the box
 superseded-by:
 ---
@@ -79,6 +79,8 @@ Run `box-apply` as the session user, without `sudo`: the front script calls `sud
    ```
 
    expect: `applied <commit>: <n> task(s) changed`. The baseline is now that commit.
+
+The box also runs this apply on its own: `box-apply.timer` starts `box-apply.service` every `agent_box_self_apply_interval` (10 minutes by default), as root, the same run a session gets, so a merged change reaches the box without a session remembering it. A stop on a limit with no approval line (exit 3) counts as a normal end of that service; the run's record is the same log as a session's. A session's run while the timer's is going gets `another box-apply run is going`. Stop it with `systemctl stop box-apply.timer` from the controller; a plain self-apply never starts it again, because the timer tasks run only from the controller or in an approved limit apply. `agent_box_self_apply_timer: false` leaves it out.
 
 ### Apply a limit change (from the controller)
 

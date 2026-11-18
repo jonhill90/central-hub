@@ -1,0 +1,15 @@
+# Managed by the agent_box role (central-hub hosts/ansible). The same run a session gets from `box-apply apply`
+# (D-0036): it applies reviewed main and stops on any limit change that main holds no approval line for. Exit 3
+# (waiting on a line) is a normal stop, not a failure. Its record is /var/lib/box-apply's log, as for a session run.
+[Unit]
+Description=box-apply: apply this box's role from reviewed main
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/
+ExecStart={{ agent_box_libexec_dir }}/box-apply.py apply
+SuccessExitStatus=3
+TimeoutStartSec=30min
