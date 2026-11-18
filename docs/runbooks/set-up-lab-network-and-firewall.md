@@ -69,6 +69,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
 
    why: VM 100's net0 is the trunk on vmbr1 and net1 is WAN on vmbr0. WAN stays link-down on a fresh build (`opnsense_wan_connected = false`) so a firewall with default settings is never on the home LAN (`hosts/terraform/home/firewall/main.tf`). CT 900 gets eth0 on vmbr0 and eth1 on VNet mgmt; what runs inside it is not in this run folder.
    ※ the pools `firewall` and `remote-access` come from `iac-access.sh` ([Set up a Proxmox VE host](set-up-proxmox-host.md) step 6b).
+   note: the token cannot make CT 900. Proxmox lets only `root@pam` set a container's `keyctl` feature and its `/dev/net/tun` passthrough, and an API token never counts as `root@pam`, even root's own (pve-container `src/PVE/LXC.pm`, `check_ct_modify_config_perm`; the bpg provider's docs, `docs/index.md`, "Not all Proxmox API operations are supported via API Token"; agent pick 217). So `remote-access` runs with password sign-in as `root@pam`: `PROXMOX_VE_USERNAME=root@pam` and `PROXMOX_VE_PASSWORD` from the owner's private store, with `PROXMOX_VE_API_TOKEN` unset, for this folder only. This has never run on an empty host; the lab test copy runs it first ([Build the lab test copy](build-the-lab-test-copy.md)).
    expect: VM 100 and CT 900 are running; a second plan in each folder shows no changes.
 
 4. Give the host its address on VNet mgmt.
