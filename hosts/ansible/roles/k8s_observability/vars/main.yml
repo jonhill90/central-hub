@@ -130,6 +130,15 @@ k8s_observability_kps_values:
     grafana.ini: >-
       {{ {'server': {'root_url': 'https://' ~ k8s_observability_grafana_url_host ~ '/'}}
       | combine(k8s_observability_grafana_sso_ini if k8s_observability_grafana_sso | bool else {}) }}
+  # node-exporter's textfile collector reads the c1 backups' success times (role k8s_backup, k8s_backup_metrics_dir)
+  # through the chart's read-only host root mount. The two filesystem lines are the chart's own defaults (92.3.1),
+  # kept because this list replaces them. Same as apps/kube-prometheus-stack/values.yaml.
+  prometheus-node-exporter:
+    extraArgs:
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/containerd/.+|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+      - >-
+        --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|erofs)$
+      - --collector.textfile.directory=/host/root/var/lib/node-exporter/textfile
 
 # Grafana's OIDC sign-in (Grafana docs, "Configure Keycloak OAuth2 authentication"). Roles come
 # from the provider's `roles` claim: admin maps to Grafana Admin, anyone else to Viewer.

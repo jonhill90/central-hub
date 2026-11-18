@@ -107,3 +107,14 @@ grafana:
       uid: loki
       access: proxy
       url: http://loki.logging.svc.cluster.local:3100
+
+# node-exporter's textfile collector reads the c1 backups' success times (role k8s_backup,
+# k8s_backup_metrics_dir, written by c1-backup-lib.sh backup_mark_success) through the chart's host root
+# mount at /host/root, read-only. The two filesystem lines are the chart's own defaults (92.3.1
+# charts/prometheus-node-exporter/values.yaml extraArgs), kept because this list replaces them.
+# A node without the folder yet reports node_textfile_scrape_error 1 and nothing else changes.
+prometheus-node-exporter:
+  extraArgs:
+    - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/containerd/.+|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+    - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|erofs)$
+    - --collector.textfile.directory=/host/root/var/lib/node-exporter/textfile

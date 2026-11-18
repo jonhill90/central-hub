@@ -86,4 +86,5 @@ got_rev=$("$ETCDCTL" --endpoints "$client" endpoint status -w json \
 [ "$got_rev" = "$want_rev" ] || die "revision $got_rev, want $want_rev"
 [ -n "$("$ETCDCTL" --endpoints "$client" get "$CHECK_KEY" --keys-only)" ] || die "key $CHECK_KEY is missing"
 keys=$("$ETCDCTL" --endpoints "$client" get / --prefix --count-only -w fields | awk '/"Count"/ {print $3}')
+backup_mark_success restore-test-etcd
 log "PASS: etcd restore test, revision $got_rev, $keys keys under /, key $CHECK_KEY present, snapshot $snap_id of $snap_time"

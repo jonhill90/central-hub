@@ -51,3 +51,16 @@ panelCheck:
   prometheus: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
   # Same image as the Jellyfin setup Job (curl 8.22.0, 2026-09-02, multi-arch index digest).
   image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+
+# The off-site backups (role k8s_backup, to Azure): each node's node-exporter reads the time of the last good run
+# (c1_backup_last_success_timestamp_seconds, by kind). metrics: the alerts and panel check lines below. Set it true
+# only once role k8s_backup with k8s_backup_metrics_dir has reached every node and a night's backups have run, in
+# its own pull request; before that C1BackupNotRecorded would fire.
+backup:
+  metrics: false
+  # The nightly volume and etcd backups: stale after 30 hours (one missed night, with room for the timers'
+  # 5-minute random delay and a slow upload).
+  staleSeconds: 108000
+  # The weekly restore tests: stale after 8 days.
+  restoreTestStaleSeconds: 691200
+

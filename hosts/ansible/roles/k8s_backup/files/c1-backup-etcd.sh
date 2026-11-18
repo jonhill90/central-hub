@@ -54,4 +54,5 @@ restic_ensure_repo
 # Relative paths, so a restore lands as etcd/ and kubernetes/ under the target folder.
 (cd "$work" && "$RESTIC" backup --host "$BACKUP_HOST" --tag etcd --tag c1 etcd kubernetes)
 restic_retention etcd
+backup_mark_success etcd
 log "etcd backup done"
