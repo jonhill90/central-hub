@@ -88,8 +88,34 @@ grep -q "grep -cE '(vmx|svm)' /proc/cpuinfo" "$w" && grep -q "test -c /dev/kvm" 
   && ok "check stops when the copy's guests would run without KVM" || bad "no nested check"
 grep -q '^  plan) guards; tofu_run ;;$' "$w" && grep -q '^  apply) guards; tofu_run ;;$' "$w" \
   && ok "plan and apply both pass the guards" || bad "a build step skips the guards"
-grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, destroy, log\]' \
-  && ok "the wrapper list allows plan, apply, check, destroy and log" || bad "the wrapper's sudo arguments"
+grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, destroy, log\]' \
+  && ok "the wrapper list allows plan, apply, check, host, destroy and log" || bad "the wrapper's sudo arguments"
+
+# host: the inventory the copy's playbook runs with, the real inventory's shape with the copy's own values.
+python3 -I "$helper" inventory "$work/settings.json" "$vlans" /keys/lab-test-ssh /work/known_hosts "$work/hosts.yml"
+python3 -I - "$work/hosts.yml" <<'PY' && ok "the copy's inventory: one proxmox host, root by the wrapper's key, mgmt .2, vmbr1 MAC locally administered" || bad "the copy's inventory"
+import sys, yaml
+h = yaml.safe_load(open(sys.argv[1]))["all"]["children"]["proxmox"]["hosts"]
+assert list(h) == ["proxmox_host"], h
+h = h["proxmox_host"]
+assert h["ansible_host"] == "10.1.30.198" and h["ansible_user"] == "root" and h["ansible_ssh_private_key_file"] == "/keys/lab-test-ssh"
+assert "UserKnownHostsFile=/work/known_hosts" in h["ansible_ssh_common_args"]
+assert h["proxmox_host_mgmt_address"] == "10.1.50.2" and h["proxmox_network_lab_supernet"] == "10.1.0.0/16"
+assert int(h["proxmox_vmbr1_mac"].split(":")[0], 16) & 2, "not locally administered"
+PY
+# host runs the fresh-host steps in the runbook's order: apt, iac-access.sh, the token, iac-access.sh again, vmbr1.
+python3 -I - "$w" <<'PY' && ok "host runs apt, iac-access.sh, the token, iac-access.sh again, then vmbr1" || bad "host's order"
+import sys
+t = open(sys.argv[1]).read()
+body = t[t.index("\nhost() {"):]
+steps = ["Components: pve-no-subscription", "vm 'sh /root/iac-access.sh'", "pveum user token add iac@pve apply --privsep 1",
+         "vm 'sh /root/iac-access.sh'", "playbooks/proxmox-host.yml --tags vmbr1"]
+pos = -1
+for s in steps:
+    pos = body.index(s, pos + 1)
+PY
+grep -q 'rm -rf "$files/known_hosts" "$files"/\*.part "$files/copy-token" "$files/inventory"' "$w" \
+  && ok "destroy removes the copy's token and inventory" || bad "destroy keeps the copy's token"
 
 # The role takes the binary out of a .deb (an ar archive holding data.tar.xz) with Python only.
 mkdir -p "$work/deb/usr/bin"

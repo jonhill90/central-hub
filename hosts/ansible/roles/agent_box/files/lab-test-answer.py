@@ -5,6 +5,10 @@
       The automated installer's answer (Proxmox VE wiki, Automated Installation, "Answer File Format"):
       root by key, with a hashed password no one keeps; dev's static address, gateway and DNS; ext4 on the one disk.
 
+  lab-test-answer.py inventory <settings.json> <vlans.yml> <ssh key> <known_hosts> <out hosts.yml>
+      The copy's Ansible inventory, in the shape of hosts/ansible/inventories/home/hosts.example.yml: group proxmox
+      with one host, the copy, reached as root with the wrapper's key, and the copy's own network values.
+
 Exits non-zero with a reason when the settings are not what the copy needs. Needs PyYAML for the shared VLAN file.
 """
 import ipaddress
@@ -85,7 +89,33 @@ def answer(settings, vlans, pubkey, roothash, out):
         f.write("\n".join(lines))
 
 
+# The copy's own values, which are not private: its vmbr1 has no ports, so its MAC is seen only inside the copy
+# (a locally administered address from the VM ID), and its mgmt address is mgmt's .2, inside the copy only.
+COPY_VMBR1_MAC = "02:00:00:00:02:56"
+
+
+def inventory(settings, vlans, key, known_hosts, out):
+    s, net, gw, addr = load(settings, vlans)
+    lab = yaml.safe_load(open(vlans))["lab_vlans"]
+    mgmt = ipaddress.ip_network([v for v in lab if v["name"] == "mgmt"][0]["cidr"])
+    supernet = ipaddress.ip_network(f"{mgmt.network_address}/16", strict=False)
+    host = {
+        "ansible_host": str(addr),
+        "ansible_user": "root",
+        "ansible_ssh_private_key_file": key,
+        "ansible_ssh_common_args": f"-o UserKnownHostsFile={known_hosts} -o StrictHostKeyChecking=accept-new",
+        "proxmox_vmbr1_mac": COPY_VMBR1_MAC,
+        "proxmox_host_mgmt_address": str(mgmt.network_address + 2),
+        "proxmox_network_lab_supernet": str(supernet),
+    }
+    doc = {"all": {"children": {"proxmox": {"hosts": {"proxmox_host": host}}}}}
+    with open(out, "w") as f:
+        f.write("---\n# Written by lab-test host for the lab test copy, VM 256; not the real host.\n")
+        yaml.safe_dump(doc, f, default_flow_style=False, sort_keys=False)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 7 or sys.argv[1] != "answer":
+    fn = {"answer": answer, "inventory": inventory}
+    if len(sys.argv) != 7 or sys.argv[1] not in fn:
         sys.exit(__doc__)
-    answer(*sys.argv[2:])
+    fn[sys.argv[1]](*sys.argv[2:])

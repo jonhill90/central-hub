@@ -1,0 +1,214 @@
+---
+# Prod only: move Keycloak's PostgreSQL from its hand-made local volume to StorageClass local-path on the data disk
+# (TASK-0225), by pg_dumpall and restore. It is the runbook's "Move Keycloak's database onto the data disk"
+# (docs/runbooks/back-up-c1-off-box.md) as code. Written, not run on any cluster.
+#
+# Two parts, so a plain run changes nothing:
+#   1. Always (not in --check): the rehearsal. Reads the cluster, takes a dump of the running database into a mode-0700
+#      folder on the node and prints only its size and the rows of realms, users and clients. Nothing is stopped or deleted.
+#   2. Only with -e k8s_identity_move_delete=true (default false): the move. Keycloak is stopped through its operator, a
+#      final dump is taken, the StatefulSet, its claim and the static volume are DELETED, the database is applied again
+#      with k8s_identity_db_storage=local-path (role k8s_identity, tasks database.yml), the dump is loaded, Keycloak is
+#      started again and the rows are counted once more. The old folder on the worker is not touched (reclaim policy
+#      Retain), so the way back is still there. The delete steps are the owner's go (D-0042 rule 6; D-0061 once accepted).
+# The dump holds the realm's secrets and password hashes: it stays in mode-0700 folder k8s_identity_move_dir and only
+# counts are printed. On a failed move the dump is kept there, never removed.
+#   ansible-playbook -i <the box's prod inventory> playbooks/k8s-identity-db-move.yml                              # rehearsal
+#   ansible-playbook -i <the box's prod inventory> playbooks/k8s-identity-db-move.yml -e k8s_identity_move_delete=true   # the move
+- name: Move Keycloak's database onto the data disk
+  hosts: k8s_control_plane[0]
+  become: true
+  gather_facts: false
+  vars:
+    k8s_identity_move_delete: false
+    k8s_identity_move_class: local-path
+    k8s_identity_move_ns: "{{ k8s_identity_namespace | default('identity') }}"
+    k8s_identity_move_name: "{{ k8s_identity_name | default('sso') }}"
+    k8s_identity_move_kc: >-
+      kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_move_ns }}
+    k8s_identity_move_dir: /var/tmp/c1-identity-move
+    k8s_identity_move_dump: "{{ k8s_identity_move_dir }}/dump.sql"
+    k8s_identity_move_count_sql: >-
+      select (select count(*) from realm), (select count(*) from user_entity), (select count(*) from client)
+  pre_tasks:
+    - name: Only on prod
+      ansible.builtin.assert:
+        that:
+          - (k8s_gitops_cluster_labels | default({})).get('env', '') == 'prod'
+        fail_msg: This moves prod's Keycloak database only; dev builds it on local-path from the start. Nothing was changed.
+        quiet: true
+
+    - name: The claim's class now (empty is the static volume)
+      ansible.builtin.command: >-
+        {{ k8s_identity_move_kc }} get pvc data-{{ k8s_identity_move_name }}-postgres-0 -o jsonpath={.spec.storageClassName}
+      register: k8s_identity_move_now
+      changed_when: false
+      check_mode: false
+
+    - name: The StorageClass exists
+      ansible.builtin.command: >-
+        kubectl --kubeconfig /etc/kubernetes/admin.conf get storageclass {{ k8s_identity_move_class }} -o name
+      register: k8s_identity_move_sc
+      changed_when: false
+      check_mode: false
+      when: k8s_identity_move_now.stdout != k8s_identity_move_class
+
+    - name: Already moved
+      ansible.builtin.debug:
+        msg: "SKIP: identity-db-move: the claim is already on {{ k8s_identity_move_class }}; nothing to do"
+      when: k8s_identity_move_now.stdout == k8s_identity_move_class
+
+    - name: Stop the play when it has already moved
+      ansible.builtin.meta: end_play
+      when: k8s_identity_move_now.stdout == k8s_identity_move_class
+
+    - name: PostgreSQL is running
+      ansible.builtin.command: >-
+        {{ k8s_identity_move_kc }} get pod {{ k8s_identity_move_name }}-postgres-0 -o jsonpath={.status.phase}
+      register: k8s_identity_move_pg
+      changed_when: false
+      check_mode: false
+      failed_when: k8s_identity_move_pg.rc != 0 or k8s_identity_move_pg.stdout != 'Running'
+
+    - name: Keycloak's instance count now
+      ansible.builtin.command: >-
+        {{ k8s_identity_move_kc }} get keycloak {{ k8s_identity_move_name }} -o jsonpath={.spec.instances}
+      register: k8s_identity_move_instances
+      changed_when: false
+      check_mode: false
+      failed_when: k8s_identity_move_instances.rc != 0 or k8s_identity_move_instances.stdout is not match('^[1-9][0-9]*$')
+
+  tasks:
+    # Part 1: the rehearsal. Changes nothing in the cluster.
+    - name: Folder for the dump
+      ansible.builtin.file: {path: "{{ k8s_identity_move_dir }}", state: directory, mode: "0700"}
+
+    - name: Rehearsal dump of the running database
+      ansible.builtin.shell: >-
+        set -o pipefail && umask 077 &&
+        {{ k8s_identity_move_kc }} exec {{ k8s_identity_move_name }}-postgres-0 --
+        sh -c 'pg_dumpall -U "$POSTGRES_USER" --no-role-passwords' > {{ k8s_identity_move_dump }}.rehearsal &&
+        tail -n 5 {{ k8s_identity_move_dump }}.rehearsal | grep -q '^-- PostgreSQL database cluster dump complete' &&
+        echo "dump: $(stat -c %s {{ k8s_identity_move_dump }}.rehearsal) bytes, complete"
+      args: {executable: /bin/bash}
+      register: k8s_identity_move_rehearsal
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Rows now, as "realms users clients"
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        {{ k8s_identity_move_kc }} exec {{ k8s_identity_move_name }}-postgres-0 --
+        sh -c 'psql -U "$POSTGRES_USER" -d keycloak -v ON_ERROR_STOP=1 -tA -F " " -c "{{ k8s_identity_move_count_sql }}"'
+      args: {executable: /bin/bash}
+      register: k8s_identity_move_before
+      changed_when: false
+      check_mode: false
+
+    - name: Remove the rehearsal dump (only its size was kept)
+      ansible.builtin.file: {path: "{{ k8s_identity_move_dump }}.rehearsal", state: absent}
+      changed_when: false
+
+    - name: What the rehearsal found
+      ansible.builtin.debug:
+        msg: >-
+          {{ k8s_identity_move_rehearsal.stdout | default('dump: not taken in --check') }};
+          realms, users, clients {{ k8s_identity_move_before.stdout }};
+          {{ 'the move runs now' if k8s_identity_move_delete | bool else 'k8s_identity_move_delete is false: nothing is stopped or deleted' }}
+
+    # Part 2: the move. Every task that stops, deletes or replaces something is in this block, which runs only when
+    # k8s_identity_move_delete is true.
+    - name: The move (stops Keycloak, deletes the StatefulSet, its claim and the static volume)
+      when: k8s_identity_move_delete | bool
+      block:
+        - name: Stop Keycloak, and wait until its pods are gone
+          ansible.builtin.shell: >-
+            set -o pipefail &&
+            {{ k8s_identity_move_kc }} patch keycloak {{ k8s_identity_move_name }} --type merge -p '{"spec":{"instances":0}}' &&
+            for i in $(seq 120); do
+            n=$({{ k8s_identity_move_kc }} get statefulset {{ k8s_identity_move_name }} -o jsonpath='{.status.replicas}');
+            [ "${n:-0}" = 0 ] && [ -z "$({{ k8s_identity_move_kc }} get pod {{ k8s_identity_move_name }}-0 --ignore-not-found -o name)" ] && exit 0;
+            sleep 5; done; echo "Keycloak still runs after 600 s" >&2; exit 1
+          args: {executable: /bin/bash}
+          changed_when: true
+
+        - name: Final dump, with nothing writing
+          ansible.builtin.shell: >-
+            set -o pipefail && umask 077 &&
+            {{ k8s_identity_move_kc }} exec {{ k8s_identity_move_name }}-postgres-0 --
+            sh -c 'pg_dumpall -U "$POSTGRES_USER" --no-role-passwords' > {{ k8s_identity_move_dump }} &&
+            tail -n 5 {{ k8s_identity_move_dump }} | grep -q '^-- PostgreSQL database cluster dump complete' &&
+            echo "dump: $(stat -c %s {{ k8s_identity_move_dump }}) bytes, complete"
+          args: {executable: /bin/bash}
+          register: k8s_identity_move_final
+          changed_when: true
+
+        - name: Rows in the final dump's database
+          ansible.builtin.shell: >-
+            set -o pipefail &&
+            {{ k8s_identity_move_kc }} exec {{ k8s_identity_move_name }}-postgres-0 --
+            sh -c 'psql -U "$POSTGRES_USER" -d keycloak -v ON_ERROR_STOP=1 -tA -F " " -c "{{ k8s_identity_move_count_sql }}"'
+          args: {executable: /bin/bash}
+          register: k8s_identity_move_want
+          changed_when: false
+
+        # The deletes. The folder on the worker stays (reclaim policy Retain): it is the way back.
+        - name: Delete the StatefulSet, its claim and the static volume
+          ansible.builtin.shell: >-
+            set -o pipefail &&
+            {{ k8s_identity_move_kc }} delete statefulset {{ k8s_identity_move_name }}-postgres --wait=true &&
+            {{ k8s_identity_move_kc }} delete pvc data-{{ k8s_identity_move_name }}-postgres-0 --wait=true &&
+            kubectl --kubeconfig /etc/kubernetes/admin.conf delete pv {{ k8s_identity_move_name }}-postgres --wait=true
+          args: {executable: /bin/bash}
+          changed_when: true
+
+        - name: The database again, on the data disk (role k8s_identity, tasks database.yml)
+          ansible.builtin.include_role:
+            name: k8s_identity
+            tasks_from: database.yml
+          vars:
+            k8s_identity_db_storage: "{{ k8s_identity_move_class }}"
+
+        - name: Load the dump into the new database
+          ansible.builtin.shell: >-
+            set -o pipefail &&
+            {{ k8s_identity_move_kc }} exec -i {{ k8s_identity_move_name }}-postgres-0 --
+            sh -c 'dropdb -U "$POSTGRES_USER" --if-exists keycloak' &&
+            {{ k8s_identity_move_kc }} exec -i {{ k8s_identity_move_name }}-postgres-0 --
+            sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=0' < {{ k8s_identity_move_dump }} > {{ k8s_identity_move_dir }}/load.log 2>&1;
+            ! grep -q FATAL {{ k8s_identity_move_dir }}/load.log
+          args: {executable: /bin/bash}
+          changed_when: true
+
+        - name: Rows after the load
+          ansible.builtin.shell: >-
+            set -o pipefail &&
+            {{ k8s_identity_move_kc }} exec {{ k8s_identity_move_name }}-postgres-0 --
+            sh -c 'psql -U "$POSTGRES_USER" -d keycloak -v ON_ERROR_STOP=1 -tA -F " " -c "{{ k8s_identity_move_count_sql }}"'
+          args: {executable: /bin/bash}
+          register: k8s_identity_move_after
+          changed_when: false
+          failed_when: k8s_identity_move_after.rc != 0 or k8s_identity_move_after.stdout != k8s_identity_move_want.stdout
+
+        - name: Start Keycloak again, and wait until it is Ready
+          ansible.builtin.shell: >-
+            set -o pipefail &&
+            {{ k8s_identity_move_kc }} patch keycloak {{ k8s_identity_move_name }} --type merge
+            -p '{"spec":{"instances":{{ k8s_identity_move_instances.stdout | int }}}}' &&
+            for i in $(seq 60); do
+            {{ k8s_identity_move_kc }} get statefulset/{{ k8s_identity_move_name }} >/dev/null 2>&1 && break; sleep 5; done &&
+            {{ k8s_identity_move_kc }} rollout status statefulset/{{ k8s_identity_move_name }} --timeout=600s &&
+            {{ k8s_identity_move_kc }} wait keycloak/{{ k8s_identity_move_name }} --for=condition=Ready --timeout=600s
+          args: {executable: /bin/bash}
+          changed_when: true
+
+        # Only after everything above passed: the dumps leave the node. A failed move keeps them.
+        - name: Remove the dumps and the load log
+          ansible.builtin.file: {path: "{{ k8s_identity_move_dir }}", state: absent}
+          changed_when: true
+
+        - name: PASS line
+          ansible.builtin.debug:
+            msg: >-
+              PASS: identity-db-move: Keycloak's database is on {{ k8s_identity_move_class }}, realms, users, clients
+              {{ k8s_identity_move_after.stdout }}, as before; the old folder on the worker is kept
