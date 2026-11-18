@@ -9,7 +9,14 @@
 #   5. put hands the helper the path and key as arguments and the value on stdin only; a bad path or key is a usage error.
 #   6. reseed refuses during a rebuild hold; without one it runs the helper's reseed, then takes a snapshot.
 #   7. --prod reads only the prod settings, keys folder and inventory: dev's store address is refused, the prod store's
-#      is reached, and prod recovery refuses before any call (D-0038 rule 5: prod gets no recovery shares).
+#      is reached, and prod recovery refuses before any call (D-0038 rule 5: prod gets no recovery shares). Prod's calls
+#      carry no --resolve.
+#   8. Dev's calls go to dev's Gateway: with no gateway address in the dev inventory, two, or one that is not IPv4, every
+#      action refuses before any call; with one, curl gets --resolve <store>:443:<address> and the helpers get the same
+#      value in SECRETS_STORE_RESOLVE (dev's names resolve to prod's Gateway).
+#   9. put-apps refuses until sops_copies is true and on a missing file or a bad line, before any write; otherwise each
+#      <name>=<value> line of the environment's secret-source file goes to the helper as put c1/<name> value, the value
+#      on stdin byte for byte (an = inside it kept), comments and blank lines skipped; --prod reads prod's file only.
 # Usage: .github/hosts-check/tests/test_secrets_store_wrapper.sh   (needs python3 with PyYAML, openssl, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -29,7 +36,9 @@ EOF
 cat > "$t/libexec/secrets-store-kv.sh" <<EOF
 #!/bin/bash
 echo "kv \$*" >> $t/calls
+echo "\${SECRETS_STORE_RESOLVE:-unset}" > $t/kv-resolve
 cat > $t/kv-stdin
+{ printf '%s [' "\${*: -2}"; cat $t/kv-stdin; printf ']\n'; } >> $t/kv-log
 echo "kv helper ran \$1"
 EOF
 cat > "$t/run/secrets-store-snapshots.sh" <<EOF
@@ -47,7 +56,8 @@ grep -q "^keys=$t/keys" "$t/run/secrets-store.sh" && grep -q "^libexec=$t/libexe
 settings() { echo "$1" > "$t/work/secrets-store.json"; }
 inventory() { printf '%s\n' "$@" > "$t/keys/rebuild-dev/inventory/hosts.yml"; }
 run() { : > "$t/calls"; rm -f "$t/kv-stdin"; bash "$t/run/secrets-store.sh" "$@" > "$t/out" 2>&1; rc=$?; out=$(cat "$t/out"); calls=$(cat "$t/calls"); }
-store_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-dev.invalid")
+store_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-dev.invalid"
+           "        k8s_gitops_source_gateway_address: 192.0.2.10")
 
 # 1
 settings '{}'; inventory "${store_inv[@]}"; run status; r1a=$rc o1a=$out c1a=$calls
@@ -70,7 +80,7 @@ echo ca > "$t/keys/dev/secrets-store-ca.crt"
 
 # 2
 run status
-if [[ $rc -eq 0 && $calls == *"https://bao-dev.invalid/v1/sys/health"* ]]; then ok "2. the dev store's address: status reaches it"
+if [[ $rc -eq 0 && $calls == *"--resolve bao-dev.invalid:443:192.0.2.10 "*"https://bao-dev.invalid/v1/sys/health"* ]]; then ok "2. the dev store's address: status reaches it, through dev's Gateway"
 else bad "2. $rc $out $calls"; fi
 
 # 4
@@ -92,7 +102,7 @@ run put kv/dev/snapshot-mark taken < <(printf x); r5b=$rc c5b=$calls
 run put c1/app 'bad key' < <(printf x); r5c=$rc
 run put c1/app < <(printf x); r5d=$rc
 if [[ $r5a -eq 0 && $c5a == "kv put https://bao-dev.invalid $t/keys/dev/secrets-store-ca.crt $t/keys/dev $t/libexec c1/app/db password" &&
-      $s5a == value-Mx31 && $r5b -eq 2 && -z $c5b && $r5c -eq 2 && $r5d -eq 2 ]]; then
+      $s5a == value-Mx31 && $(cat "$t/kv-resolve") == bao-dev.invalid:443:192.0.2.10 && $r5b -eq 2 && -z $c5b && $r5c -eq 2 && $r5d -eq 2 ]]; then
   ok "5. put passes path and key as arguments and the value on stdin only; bad ones are usage errors"
 else bad "5. $r5a [$c5a] [$s5a] $r5b $r5c $r5d"; fi
 
@@ -115,9 +125,43 @@ echo '{"address": "bao-prod.invalid"}' > "$t/work/secrets-store-prod.json"
 run --prod status; r7b=$rc c7b=$calls
 run --prod recovery; r7c=$rc o7c=$out c7c=$calls
 if [[ $r7a -ne 0 && $o7a == *"is not the prod c1 store"* && -z $c7a && $r7b -eq 0 && $c7b == *"https://bao-prod.invalid/v1/sys/health"* &&
-      $c7b != *bao-dev* && $r7c -ne 0 && $o7c == *"prod gets no recovery shares"* && -z $c7c &&
+      $c7b != *bao-dev* && $c7b != *--resolve* && $r7c -ne 0 && $o7c == *"prod gets no recovery shares"* && -z $c7c &&
       -s $t/keys/prod/openbao-admin-role-id ]]; then
   ok "7. --prod: dev's address refused, the prod store reached, prod recovery refused"
 else bad "7. $r7a $o7a | $r7b $c7b | $r7c $o7c $c7c"; fi
+
+# 8
+settings '{"address": "bao-dev.invalid"}'
+r8=""
+for gw in "" "        k8s_gitops_source_gateway_address: gw.invalid" "        k8s_gitops_source_gateway_address: 192.0.2.10|        k8s_gitops_source_gateway_address: 192.0.2.11"; do
+  lines=("${store_inv[@]:0:5}")
+  [[ -z $gw ]] || { IFS='|' read -r -a extra <<<"$gw"; [[ ${#extra[@]} -eq 1 ]] && lines+=("${extra[0]}") || lines+=("${extra[0]}" "    k8s_workers:" "      vars:" "${extra[1]}"); }
+  inventory "${lines[@]}"; run status
+  r8+="$rc:${calls:-none}:$([[ $out == *"no single IPv4 k8s_gitops_source_gateway_address"* ]] && echo named) "
+done
+inventory "${store_inv[@]}"
+if [[ $r8 == "1:none:named 1:none:named 1:none:named " ]]; then ok "8. no gateway address, a name, or two: refused before any call"
+else bad "8. $r8"; fi
+
+# 9
+settings '{"address": "bao-dev.invalid"}'
+printf '%s\n' 'ntfy-owner-password=pw1' > "$t/keys/rebuild-secret-source.env"
+run put-apps; r9a=$rc o9a=$out c9a=$calls
+settings '{"address": "bao-dev.invalid", "sops_copies": true}'
+rm -f "$t/keys/rebuild-secret-source.env"; run put-apps; r9b=$rc o9b=$out c9b=$calls
+printf '%s\n' 'ntfy-owner-password=pw1' 'Bad_Name=x' > "$t/keys/rebuild-secret-source.env"; run put-apps; r9c=$rc o9c=$out c9c=$calls
+printf '%s\n' '# a comment' '' 'ntfy-owner-password=pw1' '  ' 'healthchecks-ping-url=https://hc.invalid/a?b=c' > "$t/keys/rebuild-secret-source.env"
+printf '%s' 'ntfy-proxmox-token=tk_last' >> "$t/keys/rebuild-secret-source.env"
+rm -f "$t/kv-log"; run put-apps; r9d=$rc o9d=$out log9d=$(cat "$t/kv-log" 2>/dev/null)
+printf '%s\n' 'share-pod-authkey=prodkey' > "$t/keys/prod/secret-source.env"
+echo '{"address": "bao-prod.invalid", "sops_copies": true}' > "$t/work/secrets-store-prod.json"
+rm -f "$t/kv-log"; run --prod put-apps; r9e=$rc log9e=$(cat "$t/kv-log" 2>/dev/null)
+want9d="c1/ntfy-owner-password value [pw1]"$'\n'"c1/healthchecks-ping-url value [https://hc.invalid/a?b=c]"$'\n'"c1/ntfy-proxmox-token value [tk_last]"
+if [[ $r9a -ne 0 && $o9a == *"wait for the owner's tap"* && -z $c9a && $r9b -ne 0 && $o9b == *"is missing or empty"* && -z $c9b &&
+      $r9c -ne 0 && $o9c == *"not <name>=<value>"* && -z $c9c && $r9d -eq 0 && $log9d == "$want9d" &&
+      $o9d == *"put-apps: 3 values from rebuild-secret-source.env"* && $o9d != *pw1* && $o9d != *tk_last* &&
+      $r9e -eq 0 && $log9e == "c1/share-pod-authkey value [prodkey]" ]]; then
+  ok "9. put-apps: refused without sops_copies, a file or good lines; otherwise each line as put c1/<name> value, value on stdin"
+else bad "9. $r9a $o9a | $r9b $o9b | $r9c $o9c | $r9d [$log9d] $o9d | $r9e [$log9e]"; fi
 
 exit $fail

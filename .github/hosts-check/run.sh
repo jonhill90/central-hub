@@ -193,6 +193,35 @@ check_manifests() {
       return 1
     fi
   done
+  # The apps' secrets read from OpenBao (appSecretsStore openbao, D-0058 rule 8): the root with it on,
+  # and the three charts whose ExternalSecrets it moves, so the c1/<name> keys are schema-checked. The
+  # root refuses it without OpenBao in the cluster, and refuses any other value.
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set appSecretsStore=openbao \
+    > "$work/rendered/root-c1-app-secrets-openbao.yaml"
+  helm template alerts hosts/kubernetes/home/c1/apps/alerts --namespace alerts --set zone=example.com \
+    --set auth.store=openbao > "$work/rendered/app-c1-alerts-openbao.yaml"
+  helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
+    --set ntfy.store=openbao --set heartbeat.store=openbao > "$work/rendered/app-c1-monitoring-extras-secrets-openbao.yaml"
+  helm template share-pod hosts/kubernetes/home/c1/apps/share-pod --namespace share-pod --set target=192.0.2.5:22 \
+    --set authKey.store=openbao > "$work/rendered/app-c1-share-pod-openbao.yaml"
+  local keys
+  keys=$(cat "$work/rendered/app-c1-alerts-openbao.yaml" "$work/rendered/app-c1-monitoring-extras-secrets-openbao.yaml" \
+    "$work/rendered/app-c1-share-pod-openbao.yaml" | grep -c 'remoteRef: {key: c1/')
+  if [ "$keys" != 6 ]; then
+    echo "manifests: with store openbao, expected 6 remoteRef keys under c1/, found $keys" >&2
+    return 1
+  fi
+  if helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set appSecretsStore=openbao >/dev/null 2>&1; then
+    echo "manifests: the root rendered appSecretsStore openbao without openbaoInCluster" >&2
+    return 1
+  fi
+  if helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set appSecretsStore=vault >/dev/null 2>&1; then
+    echo "manifests: the root rendered an appSecretsStore other than empty, c1 or openbao" >&2
+    return 1
+  fi
   # Jellyfin's route sends every spelling of /metrics to the redirect.
   bash "$here/tests/test_jellyfin_metrics_route.sh"
   # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
@@ -257,6 +286,7 @@ check_backup() {
   bash "$here/tests/test_rebuild_preflight.sh"
   bash "$here/tests/test_agent_access_desktop.sh"
   bash "$here/tests/test_rebuild_short_log.sh"
+  bash "$here/tests/test_rebuild_box_inventory.sh"
   bash "$here/tests/test_rebuild_diag_vms.sh"
   bash "$here/tests/test_opnsense_test.sh"
 }

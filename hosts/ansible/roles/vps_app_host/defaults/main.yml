@@ -32,3 +32,7 @@ vps_app_host_public_ports_allowed: [22]
 # (D-0042 rule 6). See tasks/harden.yml.
 vps_app_host_harden: false
 vps_app_host_tailnet_interface: tailscale0
+
+# The apps' Quadlet unit files (D-0046 rule 11): hosts/vps-apps/<app>/<app>.container. The playbook runs from a
+# checkout of reviewed main, so they are read from there. Each lands in its user's ~/.config/containers/systemd/.
+vps_app_host_units_dir: "{{ playbook_dir }}/../../vps-apps"

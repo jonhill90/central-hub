@@ -7,7 +7,7 @@ runner: the pipeline job .github/workflows/lab-vps-host.yml on the agent box's r
 outcome: the VPS has one Linux user per app with rootless Podman, user deploy whose sudo allows vps-apply only, Valkey on loopback with a password made on the host, and nothing new listening on a public address
 needs: D-0046; the agent box with the vps-host wrapper installed (a box limit, D-0036 rule 3); the tailnet steps S1 and S4 of D-0046 rule 4; the private inventory value below
 private-values: [vps-name]
-files: [hosts/ansible/roles/vps_app_host/, hosts/ansible/playbooks/vps-app-host.yml, hosts/ansible/roles/agent_box/files/vps-host.sh, .github/workflows/lab-vps-host.yml]
+files: [hosts/ansible/roles/vps_app_host/, hosts/vps-apps/, hosts/ansible/playbooks/vps-app-host.yml, hosts/ansible/roles/agent_box/files/vps-host.sh, .github/workflows/lab-vps-host.yml]
 last-tested: not yet run
 superseded-by:
 ---
@@ -46,6 +46,8 @@ No secret is made by the role. `vps-apply secrets` makes Valkey's password and O
    expect: it prints which secrets it made, never their values: `valkey password`, `VPS_OMNIROUTE_API_KEY` and `VPS_OMNIROUTE_WS_BRIDGE_SECRET`. Valkey starts.
 5. **Check.** Start `lab-vps-host` with action `status`.
    expect: the last good host apply is named; Valkey's password file is present; Valkey is `active`; and `valkey proof: pass`, which means a client with no password was refused and one with the password got `PONG`.
+
+**The apps' units.** Each app is a Quadlet unit in `hosts/vps-apps/<app>/<app>.container` (OmniRoute 2.5 GiB, OpenClaw 3 GiB, Hermes Agent 4 GiB, D-0046 rule 1), pinned to an image digest, with its host port on 127.0.0.1 only (OmniRoute 20128, OpenClaw 18789, Hermes none). Every `apply` copies each file to its app user's `~/.config/containers/systemd/`, runs `systemctl --user daemon-reload` as that user, and fails if the generated service carries no `--memory` cap. The units are installed, never started by the role: each skips itself until `~/.config/vps-apps/secrets.env` exists, which `vps-apply secrets` makes for OmniRoute (S5). Not done yet: OpenClaw and Hermes have no secrets file until the provider key step (S7) and their own config; the names `vps-apply` writes (`VPS_*`) are not yet the names OmniRoute reads, so a change must map them before OmniRoute's first real start. Linger is on and each unit has `WantedBy=default.target`, so once `secrets.env` exists a unit also starts at every boot of the VPS, with no apply. Images are pinned to the newest release at least two weeks old (STD-0003 rule 1; the version is in a comment above each `Image=`). To move to a newer image, change the digest in the unit file and merge.
 
 **Close the public SSH door (off until the owner's card).** The role's `harden.yml` turns off sshd password login, sets root to key only, and turns on firewalld with the tailnet's interface trusted and port 22 and Tailscale's UDP port open, only when `vps_app_host_harden` is `true` in the inventory. It refuses to start unless Tailscale SSH is on, the tailnet interface exists and root has some authorized key (the card says password login ends), and it checks `sshd -t` and the live firewall afterwards. Tailscale SSH does not go through sshd, so the agents' way in is untouched. Not run: it waits for the owner's card (D-0042 rule 6).
 

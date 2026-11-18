@@ -16,6 +16,9 @@
 #                            in KEPT is never overwritten: the run stops and moves nothing more. Removing anything
 #                            from KEPT is a delete under D-0042 rule 6, for the owner's tap; nothing here does it.
 set -euo pipefail
+# On dev, secrets-store.sh sets SECRETS_STORE_RESOLVE (<store name>:443:<dev Gateway address>), because dev's names
+# resolve to prod's Gateway; every curl here goes there. Unset (prod): curl as it is.
+curl() { if [[ -n ${SECRETS_STORE_RESOLVE:-} ]]; then command curl --resolve "$SECRETS_STORE_RESOLVE" "$@"; else command curl "$@"; fi; }
 umask 077
 
 rotate() { # DIR KEEP

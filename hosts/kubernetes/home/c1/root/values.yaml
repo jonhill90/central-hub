@@ -39,6 +39,12 @@ openbaoMeasure: false
 # The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
 # (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
 shareTarget: ""
+# Where the apps' ExternalSecrets read their values (D-0058 rules 5 and 8; plan step 8a). Empty or `c1`,
+# as now: Secret <name> in namespace secret-source, through store `c1`. `openbao`: key `c1/<name>` in
+# OpenBao, through store `openbao`, so it needs openbaoInCluster. Ansible sets it from
+# k8s_gitops_source_app_secrets_store, and only once every value is in OpenBao and in its SOPS copy
+# (docs/runbooks/set-up-the-secrets-store.md, "The apps' secrets"). The apps alerts, monitoring-extras and share-pod.
+appSecretsStore: ""
 
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
@@ -243,6 +249,7 @@ apps:
     local: true
     rootParameters:
       target: shareTarget
+      authKey.store: appSecretsStore
     autoSync: true
     prune: false
   # Certificates (spec step 6): cert-manager itself. The issuers and the Gateway's certificate stay
@@ -283,6 +290,9 @@ apps:
     # The OpenBao alerts only where the store is in the cluster (D-0058).
     switchParameters:
       openbao.inCluster: openbaoInCluster
+    rootParameters:
+      ntfy.store: appSecretsStore
+      heartbeat.store: appSecretsStore
     wave: 1
     autoSync: true
     prune: true
@@ -291,6 +301,8 @@ apps:
     namespace: alerts
     local: true
     needsZone: true
+    rootParameters:
+      auth.store: appSecretsStore
     autoSync: true
     prune: true
   # The secrets store inside the cluster (D-0058), only where openbaoInCluster is true (dev first).

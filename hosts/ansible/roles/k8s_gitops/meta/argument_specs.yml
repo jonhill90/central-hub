@@ -39,6 +39,14 @@ argument_specs:
         description: >-
           The shared node the share pod forwards to, <address>:<port>. Private. Passed to the root chart
           as shareTarget; empty, the share-pod app renders nothing.
+      k8s_gitops_source_app_secrets_store:
+        type: str
+        default: ""
+        choices: ["", c1, openbao]
+        description: >-
+          Where the apps' ExternalSecrets read their values, passed to the root chart as appSecretsStore when
+          set: c1 (namespace secret-source, as when empty) or openbao (key c1/<name>; needs
+          k8s_gitops_source_openbao_in_cluster). Set openbao only once every value is in OpenBao and SOPS.
       k8s_gitops_source_url: {type: str, default: "https://github.com/jonhill90/central-hub", description: Repository read over anonymous HTTPS.}
       k8s_gitops_source_branch: {type: str, default: main, description: Branch the cluster follows (D-0002).}
       k8s_gitops_source_path: {type: str, default: hosts/kubernetes/home/c1, description: Folder the cluster reads.}
