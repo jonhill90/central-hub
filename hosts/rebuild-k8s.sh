@@ -95,8 +95,8 @@ fi
 # (4096 + 7168 + the 1024 MiB margin = 12288) no longer fit. The dev VMs now sum to 9216 MiB, at least 1 GiB under
 # that reading: control plane 3072 (the dev control plane peaked at 2813 MiB at 4096 during identity-keycloak,
 # run 20261117T053037Z) and worker 6144 (the worker peaked at 4255 MiB at 7168 in that run; at 6144 the run of
-# 2026-11-17 04:33 UTC timed out in the Keycloak realm import with probes failing and CPU near 98%, so the node-top
-# lines of the next run show whether memory or CPU ran short). c1 (prod) keeps the sizes in its own tfvars.
+# 2026-11-17 04:33 UTC timed out in the Keycloak realm import with probes failing; CPU reached 98% in the 7168 run, so the node-top
+# lines of the next run at 6144 show whether memory or CPU ran short). c1 (prod) keeps the sizes in its own tfvars.
 DEV_MEMORY_MB_CONTROL_PLANE=3072
 DEV_MEMORY_MB_WORKER=6144
 # The preflight's margin is 1024 MiB: 3072 + 6144 + 1024 = 10240.
