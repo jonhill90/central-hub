@@ -39,7 +39,14 @@ log "2. restoring the canaries and database dumps of the newest volume snapshot 
 # restic setting a volume's label (c1's worker, 2026-11-09: "security.selinux" could not be set on
 # /var/lib/c1-data, 1 of 3790 files, exit 1). Files and contents are still checked; a real restore
 # keeps the labels (docs/runbooks/back-up-c1-off-box.md, "Restore a volume").
-"$RESTIC" restore latest --host "$BACKUP_HOST" --tag volumes --target "$work" --verify \
+# The snapshot is named before the restore, so the PASS line says which one was tested.
+read -r snap_id snap_time < <("$RESTIC" snapshots --json --host "$BACKUP_HOST" --tag volumes | python3 -c '
+import json, sys
+s = sorted(json.load(sys.stdin) or [], key=lambda x: x["time"])
+print(*((s[-1]["id"][:8], s[-1]["time"][:19]) if s else ("", "")))
+') || true
+[ -n "${snap_id:-}" ] || die "no volumes snapshot of $BACKUP_HOST in the repository"
+"$RESTIC" restore "$snap_id" --target "$work" --verify \
   --exclude-xattr 'security.selinux' --include '/**/.central-hub-backup-canary' --include "$BACKUP_STATE/db-dumps"
 
 log "3. checking each folder's canary"
@@ -59,4 +66,4 @@ for dump in "$work$BACKUP_STATE"/db-dumps/*.sql; do
   log "   $(basename "$dump"): complete, $(wc -c < "$dump") bytes"
   d=$((d + 1))
 done
-log "PASS: volume restore test, $n folders, $d database dumps"
+log "PASS: volume restore test, $n folders, $d database dumps, snapshot $snap_id of $snap_time"

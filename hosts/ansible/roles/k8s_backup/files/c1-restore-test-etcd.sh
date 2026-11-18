@@ -42,7 +42,14 @@ trap cleanup EXIT
 chmod 0700 "$work"
 
 log "1. restoring the newest etcd snapshot for $BACKUP_HOST from the repository"
-"$RESTIC" restore latest --host "$BACKUP_HOST" --tag etcd --target "$work/restored" --verify
+# The snapshot is named before the restore, so the PASS line says which one was tested.
+read -r snap_id snap_time < <("$RESTIC" snapshots --json --host "$BACKUP_HOST" --tag etcd | python3 -c '
+import json, sys
+s = sorted(json.load(sys.stdin) or [], key=lambda x: x["time"])
+print(*((s[-1]["id"][:8], s[-1]["time"][:19]) if s else ("", "")))
+') || true
+[ -n "${snap_id:-}" ] || die "no etcd snapshot of $BACKUP_HOST in the repository"
+"$RESTIC" restore "$snap_id" --target "$work/restored" --verify
 db=$work/restored/etcd/snapshot.db
 [ -s "$db" ] || die "the snapshot has no etcd/snapshot.db"
 
@@ -79,4 +86,4 @@ got_rev=$("$ETCDCTL" --endpoints "$client" endpoint status -w json \
 [ "$got_rev" = "$want_rev" ] || die "revision $got_rev, want $want_rev"
 [ -n "$("$ETCDCTL" --endpoints "$client" get "$CHECK_KEY" --keys-only)" ] || die "key $CHECK_KEY is missing"
 keys=$("$ETCDCTL" --endpoints "$client" get / --prefix --count-only -w fields | awk '/"Count"/ {print $3}')
-log "PASS: etcd restore test, revision $got_rev, $keys keys under /, key $CHECK_KEY present"
+log "PASS: etcd restore test, revision $got_rev, $keys keys under /, key $CHECK_KEY present, snapshot $snap_id of $snap_time"

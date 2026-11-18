@@ -208,4 +208,48 @@ for line in "AZURE_ACCOUNT_NAME=exampleaccount" "AZURE_CLIENT_ID=$client" "AZURE
 done
 grep -q SAS "$work/env.lines" && fail "env lines still name a SAS"
 echo "ok   7. azure_identity.yml uploads once, records the key ID, removes a certificate no node holds, writes the env lines"
-echo "backup azure cert: 7 checks passed"
+# 8. A rebuilt prod node backs up as before (k8s_backup_azure_seed_dir): the certificate copied off the
+# node before its teardown comes back, nothing is uploaded, and a seed Entra ID no longer knows stops the run.
+me=$(id -u)
+if [ "$me" = 0 ]; then asroot=(); elif sudo -n true 2>/dev/null; then asroot=(sudo -n); else asroot=(none); fi
+if [ "${asroot[0]:-}" = none ]; then
+  echo "ok   8. skipped: the carried certificate's root-owned copy needs root or passwordless sudo"
+  echo "backup azure cert: 7 checks passed, 1 skipped"
+  exit 0
+fi
+seed=$work/seed && mkdir -p "$seed" && chmod 0700 "$seed"
+cp "$pem" "$seed/localhost.pem" && cp "$pem.keyid" "$seed/localhost.pem.keyid"
+chmod 0600 "$seed/localhost.pem" "$seed/localhost.pem.keyid"
+node=$work/node/azure && node_pem=$node/backup.pem
+sed 's/azure_identity.yml/azure_seeded_cert.yml/' "$work/play.yml" > "$work/seeded.yml"
+uploads=$(grep -c '^ad app credential reset' "$work/state.json.az.log")
+run_seeded() {
+  "${asroot[@]}" env STUB_STATE="$work/state.json" STUB_CLIENT="$client" PATH="$PATH" \
+    ANSIBLE_ROLES_PATH="$root/hosts/ansible/roles" "$(command -v ansible-playbook)" -i localhost, -c local "$work/seeded.yml" \
+    -e "k8s_backup_az=$work/no-az" -e "out=$work/env.seeded" -e "k8s_backup_bin_dir=$root/hosts/ansible/roles/k8s_backup/files" \
+    -e "k8s_backup_azure_account=exampleaccount" -e "k8s_backup_azure_client_id=$client" \
+    -e "k8s_backup_azure_tenant_id=$tenant" -e "k8s_backup_azure_app_object_id=$object" \
+    -e "k8s_backup_azure_cert_file=$node_pem" -e "k8s_backup_azure_seed_dir=$seed" \
+    -e "ansible_python_interpreter=$(command -v python3)"
+}
+run_seeded > "$work/seeded.log" 2>&1 || { cat "$work/seeded.log"; fail "azure_seeded_cert.yml, carried certificate"; }
+cmp -s "$pem" "$node_pem" || fail "the carried certificate is not back on the node"
+cmp -s "$pem.keyid" "$node_pem.keyid" || fail "the carried key ID is not back on the node"
+[ "$(stat -c %a "$node_pem")" = 600 ] || fail "the node's certificate is not 0600"
+grep -qx "AZURE_APP_OBJECT_ID=$object" "$work/env.seeded" || fail "the env lines lack the app's object ID"
+grep -qx "AZURE_CLIENT_CERTIFICATE_PATH=$node_pem" "$work/env.seeded" || fail "the env lines name another certificate"
+[ "$(grep -c '^ad app credential reset' "$work/state.json.az.log")" = "$uploads" ] || fail "the carried certificate was uploaded"
+"${asroot[@]}" rm -rf "$work/node"
+chmod 0644 "$seed/localhost.pem"
+run_seeded > "$work/seeded.log" 2>&1 && fail "a seed readable by others was used"
+grep -q "must exist on the controller" "$work/seeded.log" || { cat "$work/seeded.log"; fail "no clear error for a loose seed"; }
+[ -e "$node_pem" ] && fail "a loose seed still changed the node"
+chmod 0600 "$seed/localhost.pem"
+AZURE_CLIENT_CERTIFICATE_PATH=$work/unknown.pem python3 "$script" init >/dev/null 2>&1 || fail "make an unknown certificate"
+cp "$work/unknown.pem" "$seed/localhost.pem" && chmod 0600 "$seed/localhost.pem"
+run_seeded > "$work/seeded.log" 2>&1 && fail "a seed Entra ID does not know was accepted"
+grep -q "Entra ID accepts the carried certificate" "$work/seeded.log" || { cat "$work/seeded.log"; fail "the unknown seed failed elsewhere"; }
+[ "$(grep -c '^ad app credential reset' "$work/state.json.az.log")" = "$uploads" ] || fail "the unknown seed was uploaded"
+"${asroot[@]}" rm -rf "$work/node"
+echo "ok   8. azure_seeded_cert.yml puts the carried certificate back, uploads nothing, and stops on a loose or unknown seed"
+echo "backup azure cert: 8 checks passed"

@@ -55,7 +55,7 @@ The rights reach every guest, so a guest someone adds by hand later is in reach 
 
    expect: no privileges on `/vms/258`; only `VM.Audit` and `Pool.Audit` on `/vms/900`; `VM.Allocate` and the `VM.Config.*` privileges on `/vms/200`.
 
-4. Make the token only once the box has a wrapper that reads it, so it never sits unused on the box. The secret goes from the host straight into the box's keys folder as `/etc/agent-keys/proxmox-lab.env` (mode 0600, owner `keys`), in the same two lines as the dev token, and is never printed:
+4. Make the token only once the box has a wrapper that reads it, so it never sits unused on the box. `rebuild-prod` reads it ([Rebuild prod from the box](rebuild-k8s-layer-with-one-command.md#rebuild-prod-from-the-box)). The secret goes from the host straight into the box's keys folder as `/etc/agent-keys/proxmox-lab.env` (mode 0600, owner `keys`), in the same two lines as the dev token, and is never printed:
 
    ```text
    PROXMOX_VE_ENDPOINT=https://<Proxmox API name>:8006/

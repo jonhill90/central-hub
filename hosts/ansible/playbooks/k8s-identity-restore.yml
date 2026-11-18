@@ -1,0 +1,123 @@
+---
+# Prod rebuilt from the agent box only: put prod's Keycloak database back from its pg_dumpall dump, in the
+# same volume snapshot the rebuild's restore stage used, so every account, its password and its one-time-code
+# device come back as they were and no one signs up again. It is the runbook's "Restore Keycloak's database"
+# (docs/runbooks/back-up-c1-off-box.md) as code: Keycloak stopped through its operator, the keycloak database
+# dropped and the whole dump loaded into the running PostgreSQL (c1-restore-identity.sh load, the script the
+# dev rebuild's checks stage already runs against a throwaway copy), Keycloak started again, the rows counted
+# once more, the dump removed. Run by hosts/rebuild-k8s.sh's identity-db stage, after identity.
+#   ansible-playbook -i <the box's prod inventory> playbooks/k8s-identity-restore.yml
+- name: Put prod's Keycloak database back from the restored snapshot
+  # k8s_identity's database node, the first worker (roles/k8s_identity/defaults/main.yml), which is also the
+  # node the restore stage restored and recorded the snapshot on.
+  hosts: k8s_workers[0]
+  become: true
+  gather_facts: false
+  vars:
+    k8s_identity_restore_kc: >-
+      kubectl --kubeconfig /etc/kubernetes/admin.conf -n {{ k8s_identity_namespace | default('identity') }}
+    k8s_identity_restore_name: "{{ k8s_identity_name | default('sso') }}"
+    k8s_identity_restore_cp: "{{ groups['k8s_control_plane'] | first }}"
+    k8s_identity_restore_env:
+      CENTRAL_HUB_BACKUP_ENV: /etc/central-hub/backup.env
+      BACKUP_STATE: /var/lib/central-hub-backup
+      RESTIC_CACHE_DIR: /var/cache/central-hub-backup
+      RESTORE_DUMP: /var/lib/central-hub-backup/db-dumps/identity_sso-postgres-0.sql
+    k8s_identity_restore_bin: /usr/local/libexec/central-hub-backup/c1-restore-identity.sh
+  pre_tasks:
+    - name: Only on prod rebuilt from the box, after the restore stage
+      ansible.builtin.assert:
+        that:
+          - (k8s_gitops_cluster_labels | default({})).get('env', '') == 'prod'
+          - k8s_backup_restore_own_env | default(false) | bool
+        fail_msg: >-
+          The database is put back only on prod rebuilt from the agent box (env prod and
+          k8s_backup_restore_own_env, which only its rebuild-prod wrapper sets). Nothing was changed.
+        quiet: true
+
+    - name: The node restored a snapshot (the restore stage's record)
+      ansible.builtin.stat:
+        path: /var/lib/central-hub-backup/restored-volumes
+      register: k8s_identity_restore_record
+
+    - name: Stop if it did not
+      ansible.builtin.assert:
+        that: k8s_identity_restore_record.stat.exists and k8s_identity_restore_record.stat.size > 0
+        fail_msg: No volume restore is recorded on this node, so there is no snapshot to take the dump from. Nothing was changed.
+        quiet: true
+
+  tasks:
+    # The dump is loaded into the running PostgreSQL, so it must be the one on this node.
+    - name: PostgreSQL runs on this node
+      ansible.builtin.command: >-
+        {{ k8s_identity_restore_kc }} get pod {{ k8s_identity_restore_name }}-postgres-0 -o jsonpath={.spec.nodeName}
+      register: k8s_identity_restore_pg_node
+      delegate_to: "{{ k8s_identity_restore_cp }}"
+      changed_when: false
+      failed_when: k8s_identity_restore_pg_node.rc != 0 or k8s_identity_restore_pg_node.stdout != inventory_hostname
+
+    - name: Keycloak's instance count now
+      ansible.builtin.command: >-
+        {{ k8s_identity_restore_kc }} get keycloak {{ k8s_identity_restore_name }} -o jsonpath={.spec.instances}
+      register: k8s_identity_restore_instances
+      delegate_to: "{{ k8s_identity_restore_cp }}"
+      changed_when: false
+      failed_when: k8s_identity_restore_instances.rc != 0 or k8s_identity_restore_instances.stdout is not match('^[1-9][0-9]*$')
+
+    # The runbook's step 1: no Keycloak may write while the database is swapped.
+    - name: Stop Keycloak, and wait until its pods are gone
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        {{ k8s_identity_restore_kc }} patch keycloak {{ k8s_identity_restore_name }} --type merge -p '{"spec":{"instances":0}}' &&
+        for i in $(seq 120); do
+        n=$({{ k8s_identity_restore_kc }} get statefulset {{ k8s_identity_restore_name }} -o jsonpath='{.status.replicas}');
+        [ "${n:-0}" = 0 ] && [ -z "$({{ k8s_identity_restore_kc }} get pod {{ k8s_identity_restore_name }}-0 --ignore-not-found -o name)" ] && exit 0;
+        sleep 5; done; echo "Keycloak still runs after 600 s" >&2; exit 1
+      args: {executable: /bin/bash}
+      delegate_to: "{{ k8s_identity_restore_cp }}"
+      changed_when: true
+
+    # The runbook's steps 2 and 3, on this node: the dump from the restored snapshot, its rows counted, the
+    # keycloak database dropped and the dump loaded, the rows counted again. Only counts are printed.
+    - name: Load the dump
+      ansible.builtin.command:
+        argv: ["{{ k8s_identity_restore_bin }}", load, "{{ k8s_identity_namespace | default('identity') }}"]
+      environment: "{{ k8s_identity_restore_env }}"
+      register: k8s_identity_restore_load
+      changed_when: true
+
+    - name: What the load said
+      ansible.builtin.debug:
+        msg: "{{ k8s_identity_restore_load.stdout_lines | select('match', '^(dump|load|PASS)') | list }}"
+
+    # The runbook's step 4, with the count read before the stop.
+    - name: Start Keycloak again, and wait until it is Ready
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        {{ k8s_identity_restore_kc }} patch keycloak {{ k8s_identity_restore_name }} --type merge
+        -p '{"spec":{"instances":{{ k8s_identity_restore_instances.stdout | int }}}}' &&
+        for i in $(seq 60); do
+        {{ k8s_identity_restore_kc }} get statefulset/{{ k8s_identity_restore_name }} >/dev/null 2>&1 && break; sleep 5; done &&
+        {{ k8s_identity_restore_kc }} rollout status statefulset/{{ k8s_identity_restore_name }} --timeout=600s &&
+        {{ k8s_identity_restore_kc }} wait keycloak/{{ k8s_identity_restore_name }} --for=condition=Ready --timeout=600s
+      args: {executable: /bin/bash}
+      delegate_to: "{{ k8s_identity_restore_cp }}"
+      changed_when: true
+
+    - name: The rows are still the dump's, after Keycloak started on them
+      ansible.builtin.command:
+        argv: ["{{ k8s_identity_restore_bin }}", recount, "{{ k8s_identity_namespace | default('identity') }}"]
+      environment: "{{ k8s_identity_restore_env }}"
+      register: k8s_identity_restore_recount
+      changed_when: false
+
+  post_tasks:
+    - name: Remove the counts (the dump went with the load)
+      ansible.builtin.command:
+        argv: ["{{ k8s_identity_restore_bin }}", clean]
+      environment: "{{ k8s_identity_restore_env }}"
+      changed_when: true
+
+    - name: PASS line
+      ansible.builtin.debug:
+        msg: "PASS: identity-db: {{ k8s_identity_restore_recount.stdout | regex_replace('^PASS: ', '') }}"

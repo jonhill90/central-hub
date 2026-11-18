@@ -104,6 +104,10 @@ A3. In step 1, leave out the `AZURE_` lines: the env file holds only `RESTIC_REP
    ※ restic 0.19.1, `internal/backend/azure/azure.go`: with no account key or SAS it signs in through azidentity's default credential chain, whose first link reads those three variables.
    expect: the drill passes; `systemctl list-timers c1-backup-azure-cert` on each node shows the daily check; the node env file has no `AZURE_ACCOUNT_SAS`.
 
+### A rebuilt node keeps its certificate
+
+When the agent box rebuilds prod ([Rebuild prod from the box](rebuild-k8s-layer-with-one-command.md#rebuild-prod-from-the-box)), it copies each node's `backup.pem` and `backup.pem.keyid` into its keys folder before the teardown and sets `k8s_backup_azure_seed_dir` to that folder. The `timers` tag then gives each rebuilt node its earlier certificate back (`tasks/azure_seeded_cert.yml`; a node that already has one keeps it), checks that Entra ID still accepts it, and stops if not. Nothing is uploaded to or removed from the app, so the box needs no Azure sign-in: the node's own daily roll (Graph `addKey`, proved by the current key) goes on as before. The restore stage, with backups off, reads the snapshot with the same carried certificate. A certificate Entra ID no longer knows needs a `timers` run from a controller with the Azure CLI and `k8s_backup_azure_seed_dir` empty.
+
 ### Dev reads a copy
 
 The same folder also makes `c1-backup-reader`, a second app registration with Storage Blob Data Reader on the container only (agent pick 205). Dev's worker signs in as it, with its own certificate made and uploaded the same way, and restores prod's newest volume snapshot at each dev rebuild, with `restic --no-lock`. It can list and read blobs and can't write or delete any. The steps are in [Rebuild one cluster's Kubernetes layer with one command, "Restore on dev"](rebuild-k8s-layer-with-one-command.md#restore-on-dev). Dev runs no timer, so its certificate isn't rolled: each rebuild makes a new node, which uploads a new certificate and removes the ones no dev worker holds.
@@ -155,7 +159,7 @@ A4. Nothing runs by hand after that. Each certificate lasts 90 days. Every day a
 
    why: a backup counts only once a restore of it has worked. The drill starts the same services the timers start, one node at a time, so it tests what runs every night.
    ※ [Test the etcd restore](test-etcd-restore.md)
-   expect: the last task shows `PASS: etcd restore test, revision …` on the control plane and `PASS: volume restore test, N folders, M database dumps` on the worker. The test restores only each folder's canary file and the database dumps, not the whole snapshot, so it never fills the node's OS disk; `restic check` reads a 2% sample of the rest each week. The control plane has no volume folders, so its volume test says `nothing to test`.
+   expect: the last task shows `PASS: etcd restore test, revision …, snapshot <id> of <time>` on the control plane and `PASS: volume restore test, N folders, M database dumps, snapshot <id> of <time>` on the worker. Each test names the snapshot it restored first and restores that one, so the line says which snapshot was proven (the time is the node's clock). The test restores only each folder's canary file and the database dumps, not the whole snapshot, so it never fills the node's OS disk; `restic check` reads a 2% sample of the rest each week. The control plane has no volume folders, so its volume test says `nothing to test`.
 
 4. Look at the repository from the control plane:
 

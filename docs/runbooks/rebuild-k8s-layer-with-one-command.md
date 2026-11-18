@@ -3,11 +3,11 @@ title: Rebuild one cluster's Kubernetes layer with one command
 status: tested
 kind: automated
 trigger: on request; to rehearse a rebuild on dev; after a lost cluster on prod
-runner: an agent lane, through the owner's Mac
+runner: an agent lane, through the owner's Mac; on dev and prod also the agent box's `rebuild` and `rebuild-prod` wrappers
 outcome: the env's node VMs, the cluster, on dev a read-only copy of prod's newest volume backup in place, Argo CD with its root app and every app Synced and Healthy, certificates, sign-in and the Argo CD UI, all from this repository, with one log line per stage
 needs: the controller from set-up-lab-controller.md; the lab network and Proxmox host as they are; the iac@pve!apply token file; an allow rule for hosts/rebuild-k8s.sh on the Mac
 private-values: [rebuild-env-dir, terraform-tfvars, terraform-state, ansible-inventory, c1-backup-restic-password, c1-backup-azure-storage-account, prod-volume-node-name]
-files: [hosts/rebuild-k8s.sh, hosts/rebuild.env.example, hosts/terraform/home/k8s/, hosts/ansible/playbooks/, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/files/c1-restore-volumes.sh, hosts/terraform/azure/backup/, hosts/kubernetes/home/c1/]
+files: [hosts/rebuild-k8s.sh, hosts/rebuild.env.example, hosts/ansible/roles/agent_box/files/rebuild-prod.sh, hosts/ansible/playbooks/k8s-identity-restore.yml, hosts/terraform/home/k8s/, hosts/ansible/playbooks/, hosts/ansible/playbooks/k8s-restore.yml, hosts/ansible/roles/k8s_backup/files/c1-restore-volumes.sh, hosts/terraform/azure/backup/, hosts/kubernetes/home/c1/]
 last-tested: 2026-11-17, run by an agent session on the agent box, dev, central-hub 69edf9b, `rebuild up` with the worker at 7168 MiB, every stage passed, `identity-keycloak` included (run 20261117T053037Z, see Proven runs). Before that, 2026-11-13, run by an agent session on the agent box (lane `agent box`), dev, central-hub 8861d3d, `rebuild rebuild` from teardown, all ten stages (teardown and the nine after it) passed in 14.4 minutes, the second such run in a row (see Proven runs); the output is the box's `rebuild log` for runs 20261113T084245Z and 20261113T085920Z, which holds the stage and PASS lines; the raw logs stay on the box (private), so there is no public link
 superseded-by:
 ---
@@ -49,6 +49,7 @@ On dev the stages are `preflight vms cluster storage restore gitops secrets apps
 | `openbao-measure` | `playbooks/k8s-openbao-measure.yml` | dev only, added after `dev-ca` when `OPENBAO_SEAL_KEY_FILE` is set (the secrets store inside the cluster), and skipped without it: the measurement of the box's path to OpenBao through the Gateway (MEASURE-1). With the key file set, a dev run's `gitops` and `dev-ca` also pass `-e k8s_gitops_source_openbao_measure=true`, so the root Application turns on the measure routes; prod never does. It ends with one `PASS: openbao-measure:` line: the policy reading and, for each probe, the HTTP code, the address OpenBao saw and the `X-Forwarded-For` it got ([set-up-the-secrets-store.md](set-up-the-secrets-store.md#measuring-the-boxs-path-through-the-gateway-dev-only)) |
 | `openbao-handover` | `playbooks/k8s-openbao-handover.yml -e openbao_admin_role_id_file=$OPENBAO_ADMIN_ROLE_ID_FILE -e openbao_admin_secret_id_file=$OPENBAO_ADMIN_SECRET_ID_FILE` | dev only, added after `openbao-measure` when `OPENBAO_SEAL_KEY_FILE` is set, and skipped without it. With neither ID file named (a box wrapper installed before the stage) it ends with a SKIP line; with one named but missing or empty it fails. The one-time hand-over of the store's admin login to the box's IDs, from inside OpenBao's pod, every value on stdin. While `k8s_gitops_source_openbao_box_cidr` is unset it hands nothing over and ends with a SKIP line (role `bootstrap` stays open); a store handed over before passes with `already handed over` ([set-up-the-secrets-store.md](set-up-the-secrets-store.md#handing-the-admin-login-to-the-box)) |
 | `identity-keycloak` | `playbooks/k8s-identity.yml --tags all,signin` with `k8s_identity_owner_username=dev-admin`, no extra users and `k8s_app_route_proof=false` and no sign-in theme (`k8s_identity_theme_dir` empty: Keycloak's own look, since the theme folder is the owner's private checkout) | dev only, added to every dev run after `dev-ca` (and `openbao-measure` and `openbao-handover`, when they run): the whole identity role, then the sign-in proof: the password alone stops at the one-time-code form, the password with a code computed from the dev admin's seed redirects back to Grafana's client with a code (the log has step names and HTTP codes only). Every secret is random and made in `identity.env` inside the dev env folder (passed as `k8s_identity_values_file`, so no prod file is read whichever machine runs it); the route's by-name proof is off because dev's names resolve to prod's Gateway, and the proof goes to this cluster's own Gateway address. The run's short log (`rebuild log`) keeps the preflight's branch line and the three sign-in step lines (step name, HTTP code, ok or the reason). |
+| `identity-db` | `playbooks/k8s-identity-restore.yml` | prod rebuilt from the box only (env prod and `k8s_backup_restore_own_env`): Keycloak stopped through its operator, the `keycloak` database dropped and prod's own dump from the snapshot `restore` used loaded into the running PostgreSQL (`c1-restore-identity.sh load`), Keycloak started again, the rows counted before and after. Not in the default list ([Rebuild prod from the box](#rebuild-prod-from-the-box)) |
 | `ui` | `playbooks/k8s-gitops.yml --tags ui,sso` | |
 | `backup` | `playbooks/k8s-backup.yml` | not in the default list; prod only, the script refuses it on dev |
 | `checks` | nodes Ready, pods Running, apps Synced and Healthy, a second `k8s.yml` with `changed=0`, `tofu plan` with no changes, then `RESTORE_CHECK_HOOK` when `RESTORE_HOOK` is set | |
@@ -161,6 +162,35 @@ The dump holds prod's realm, its client secrets and its users' password hashes. 
 ## Apps and auto-sync
 
 On a fresh cluster, Argo CD installs an app only if its `autoSync` is on in `hosts/kubernetes/home/c1/root/values.yaml`. The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). It is on for 8 of 12; `jellyfin`, `kube-prometheus-stack`, `local-path` and `secret-store` follow once their diffs on c1 are reconciled. Until then, the `apps` stage times out on a fresh cluster. `prune` stays off except for `monitoring-extras` and `alerts`. To leave the stage out, set `STAGES` in `rebuild.env`.
+
+## Rebuild prod from the box
+
+The agent box's `rebuild-prod` wrapper (`hosts/ansible/roles/agent_box/files/rebuild-prod.sh`) tears prod's Kubernetes layer (VMs 200-249) down and builds it again with this same script, then puts prod's data back. It runs as user `keys`, so a session never sees the Proxmox token, the node key, the seal key, the backup certificates or the inventory. It runs only the code on `main`, from its own checkout, and shares the dev rebuild's lock, so dev and prod never build at once. The host, OPNsense, the tailnet container, DNS and the backup target stay as they are.
+
+```sh
+sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check
+sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh rebuild <approval id>
+sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh log
+```
+
+`check` changes nothing. One `PASS` or `FAIL` line each:
+
+1. Every file the run needs is in the keys folder: the lab token (`proxmox-lab.env`, [give-agents-proxmox-rights-for-the-whole-lab.md](give-agents-proxmox-rights-for-the-whole-lab.md) step 4), prod's tfvars and OpenTofu state, the Mac's prod inventory, the box's prod node key (its public half already on every prod node), the private files the inventory names, the seal key's SOPS copy and the store's settings.
+2. The box's own copies: the tfvars with the box's node key, every node `vm_id` in 200-249; the inventory with the Mac's ssh settings and `proxmox` group dropped, plain ssh with the box's key, the private files pointed at the box's copies, and the rebuild's own settings (`k8s_backup_restore_own_env`, the first worker as the restore's source, `k8s_gitops_source_local_path_stable_folders`, `k8s_backup_azure_seed_dir`). A value that still points at the Mac fails the check by key name.
+3. `tofu plan` with the Mac's tfvars on the box's state gives no changes, so the box's state is the live prod; `tofu plan -destroy` deletes only node VMs in 200-249, never VM 258 or 259, and no more than the tfvars declare (D-0035 rules 2 and 6).
+4. Every prod node answers ssh with the box's key.
+5. The newest dev run on the box passed every stage at this same commit (D-0035 rule 3(a)). `rebuild-k8s.sh` writes `rebuild: central-hub <commit>` into each run's short log for this.
+
+`rebuild <approval id>` runs `check`, then the checks before a teardown (D-0035 rule 5). Each must pass or nothing is destroyed:
+
+1. A backup of every prod node now, then the restore tests (`k8s-backup.yml --tags drill`). The tests restore into a temporary folder on each node, never over its data, and each names the snapshot it restored: the first worker's volume test must restore at least one folder, and the control plane's etcd test must pass. Both `PASS` lines, with their snapshot IDs, go into the run's log. This is also the Azure restore test's proof.
+2. Each node's backup certificate and its key ID on the app, copied into the keys folder (mode 0600), so each rebuilt node signs in to the backup as before ([Back up c1 off the box](back-up-c1-off-box.md), "A rebuilt node keeps its certificate").
+3. The seal key's SOPS copy decrypts, in memory, to the same key as on the seal node, so the rebuilt store unseals.
+4. A fresh OPNsense configuration copy and a fresh secrets bundle (which holds this OpenTofu state), both sent off the box.
+
+Then it runs `hosts/rebuild-k8s.sh --teardown` with `ENV_NAME=prod` and stages `vms cluster storage openbao-seal restore gitops secrets apps gateway certs identity identity-db ui backup checks`. `restore` puts prod's own newest volume snapshot (the one step 1 just made) back onto the empty data disk with `k8s-restore.yml`, with backups off; `identity-db` loads Keycloak's database from the same snapshot; `backup` turns the timers on again with the carried certificates. When the box holds snapshots of the secrets store, the run sets the store's rebuild hold, so the rebuilt store waits for `secrets-store-prod restore-rebuilt` or `clear-hold` before a new snapshot replaces them.
+
+The approval id names the owner's go-ahead for the prod teardown (D-0035 rule 3(b), D-0042 rule 6) and goes into the log. After a box rebuild the Mac's prod tfstate is stale and its inventory needs `k8s_gitops_source_local_path_stable_folders: true`: take both from the box's run before any prod run from the Mac.
 
 ## Dev node sizes
 

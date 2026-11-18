@@ -236,6 +236,7 @@ check_backup() {
   bash "$here/tests/test_secrets_store_kv.sh"
   bash "$here/tests/test_secrets_store_wrapper.sh"
   bash "$here/tests/test_openbao_prod.sh"
+  bash "$here/tests/test_rebuild_prod.sh"
   bash "$here/tests/test_openbao_handover.sh"
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
