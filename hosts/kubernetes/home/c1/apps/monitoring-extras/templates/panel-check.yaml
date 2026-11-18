@@ -76,6 +76,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   schedule: {{ $p.schedule | quote }}
+  # true on a dev run (root value panelCheckSuspended): its OpenBao and Keycloak panels have no data until the
+  # stages after `checks`' apps (dev-ca, openbao-handover, identity-keycloak) bring them up, so a tick before then
+  # would fail the Job and `checks`. A suspended CronJob makes no Job; an agent runs one by hand when dev is up.
+  suspend: {{ $p.suspend | default false }}
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
