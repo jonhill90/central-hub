@@ -35,6 +35,10 @@ openbaoMarkEnv: ""
 # openbao attach a ListenerSet to Gateway apps. Only hosts/rebuild-k8s.sh sets it, on dev with the
 # in-cluster store (k8s_gitops_source_openbao_measure); c1 keeps false and renders as before.
 openbaoMeasure: false
+# The store's name as the agent box reaches it, private, set by Ansible (k8s_gitops_source_openbao_store_host)
+# with the in-cluster store on. Set: the agent box's path to the store through Gateway apps, TLS
+# passthrough (apps/openbao-store, box-path.yaml; the gateway app lets namespace openbao attach it).
+openbaoStoreHost: ""
 
 # The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
 # (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
@@ -276,9 +280,12 @@ apps:
     zoneParameters:
       address: "{gatewayAddress}"
       https: "{gatewayHttps}"
-    # Lets namespace openbao attach the measurement's ListenerSet, only with openbaoMeasure.
+    # Lets namespace openbao attach the measurement's ListenerSet, only with openbaoMeasure, and the
+    # agent box's path, only with openbaoStoreHost.
     switchParameters:
       openbaoMeasure: openbaoMeasure
+    rootParameters:
+      openbaoBoxHost: openbaoStoreHost
     wave: -1
     autoSync: true
     prune: false
@@ -316,6 +323,7 @@ apps:
     rootParameters:
       sealNode: openbaoSealNode
       markEnv: openbaoMarkEnv
+      boxHost: openbaoStoreHost
     switchParameters:
       measure: openbaoMeasure
     # The passthrough host on the store's certificate, only with measure (templates/tls.yaml).

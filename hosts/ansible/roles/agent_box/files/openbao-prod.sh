@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|gitops|handover|reset-failed-start <tap id>|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|gitops|ca|handover|reset-failed-start <tap id>|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -21,6 +21,9 @@
 # gitops    playbooks/k8s-gitops.yml --tags source: the root Application's parameters only, with the in-cluster store on
 #           (k8s_gitops_source_openbao_in_cluster, _seal_node, _box_cidr), so Argo CD makes openbao-store, openbao and the
 #           secret-store app's store `openbao`. Argo CD's install is left alone.
+# ca        the CA the box checks prod's store against on its path through the Gateway (TLS passthrough, so TLS ends at
+#           OpenBao): ca.crt of Secret openbao/openbao-tls, a public certificate, written to <keys>/prod/secrets-store-ca.crt
+#           only if it is one PEM certificate. Run it after gitops, and again after a rebuild, which makes a new CA.
 # handover  playbooks/k8s-openbao-handover.yml with prod's admin AppRole IDs (/etc/agent-keys/prod/openbao-admin-*, made
 #           once by the same rule as secrets-store.sh, never printed).
 # reset-failed-start  clears a first start that stopped in self-init (the pod's log says "self-initialization failed:
@@ -53,11 +56,11 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|gitops|handover|reset-failed-start <tap id>|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|gitops|ca|handover|reset-failed-start <tap id>|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | gitops | handover | log) [[ $# -eq 1 ]] || usage ;;
+  key | check | gitops | ca | handover | log) [[ $# -eq 1 ]] || usage ;;
   seal | seal-copy | reset-failed-start)
     [[ $# -eq 2 ]] || usage
     tap=$2
@@ -295,6 +298,20 @@ PY
     ;;
   gitops)
     ap playbooks/k8s-gitops.yml --tags source
+    ;;
+  ca)
+    mkdir -p "$store_keys"
+    # kc's arguments reach Ansible's command module as one string, which it splits as a shell would (shlex), so the
+    # inner single quotes keep the backslash before the key's dot: kubectl then reads key ca.crt, not ca then crt.
+    pem=$(kc -n openbao get secret openbao-tls -o "'jsonpath={.data.ca\.crt}'" | base64 -d) ||
+      { echo "openbao-prod: could not read ca.crt of Secret openbao/openbao-tls; nothing written" >&2; exit 1; }
+    if [[ $(grep -c -- '-----BEGIN CERTIFICATE-----' <<< "$pem") -ne 1 ]] || ! openssl x509 -noout <<< "$pem" 2>/dev/null; then
+      echo "openbao-prod: ca.crt of Secret openbao/openbao-tls is not one PEM certificate; nothing written" >&2
+      exit 1
+    fi
+    printf '%s\n' "$pem" > "$store_keys/secrets-store-ca.crt.part"
+    mv -- "$store_keys/secrets-store-ca.crt.part" "$store_keys/secrets-store-ca.crt"
+    echo "PASS: openbao-prod: ca: the store's CA written to $store_keys/secrets-store-ca.crt ($(openssl x509 -noout -subject -enddate <<< "$pem" | tr '\n' ' '))"
     ;;
   handover)
     mkdir -p "$store_keys"

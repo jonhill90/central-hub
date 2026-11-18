@@ -17,6 +17,9 @@ shortNames: true
 # The dev-only measurement (MEASURE-1, root value openbaoMeasure): true lets ListenerSets in namespace
 # openbao attach to this Gateway (spec.allowedListeners), for the measurement's passthrough listener.
 openbaoMeasure: false
+# The store's name as the agent box reaches it (root value openbaoStoreHost), private: set, it lets
+# namespace openbao attach the box path's ListenerSet (apps/openbao-store, box-path.yaml).
+openbaoBoxHost: ""
 
 # One HTTPRoute (https) plus a redirect route (http) per entry: <key>.apps.c1.prod.<zone>, and
 # <key>.<zone> with shortNames on, to the Service. Same shape as role k8s_app_route.

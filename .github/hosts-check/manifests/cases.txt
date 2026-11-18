@@ -9,6 +9,7 @@ k8s_gitops source-argocd.yaml.j2 gitops-source-argocd.yaml {"k8s_gitops_engine":
 k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-openbao.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_openbao_in_cluster":true,"k8s_gitops_source_openbao_seal_node":"node-1","k8s_gitops_source_openbao_box_cidr":"192.0.2.30/32"}
 k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-openbao-measure.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_openbao_in_cluster":true,"k8s_gitops_source_openbao_seal_node":"node-1","k8s_gitops_source_openbao_measure":true}
 k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-app-secrets-openbao.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_openbao_in_cluster":true,"k8s_gitops_source_openbao_seal_node":"node-1","k8s_gitops_source_app_secrets_store":"openbao"}
+k8s_gitops source-argocd.yaml.j2 gitops-source-argocd-openbao-store-host.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_source_openbao_in_cluster":true,"k8s_gitops_source_openbao_seal_node":"node-1","k8s_gitops_source_openbao_store_host":"bao.example.com"}
 k8s_gitops source-flux.yaml.j2 gitops-source-flux.yaml {"k8s_gitops_engine":"flux"}
 k8s_gitops argocd-ui-route.yaml.j2 gitops-ui-route.yaml {"k8s_gitops_engine":"argocd"}
 k8s_gitops argocd-ui-route.yaml.j2 gitops-ui-route-no-redirect.yaml {"k8s_gitops_engine":"argocd","k8s_gitops_ui_https_redirect":false}
