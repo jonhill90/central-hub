@@ -11,8 +11,9 @@
 # Dev only: the env file below fixes ENV_NAME=dev and the dev VM range 250-257, and rebuild-k8s.sh
 # refuses a tfvars whose VM IDs fall outside it or whose node_vnet isn't "dev". Only code on main
 # runs with the keys; there is no way to name another branch.
-# log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can
-# quote the realm and the nodes' output). It takes no argument and reads no other file.
+# log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can quote the realm
+# and the nodes' output). A newer run that only tore dev down is named in one line and skipped, so it can't hide
+# a failed run's diag. It takes no argument and reads no other file.
 # diag: read-only look at the dev cluster, for a failed apps stage: each dev VM's memory and CPU on Proxmox, the
 # node's memory, each dev node's free memory, load and pressure, the Argo CD applications' sync and
 # health, the newest events in the alerts and monitoring namespaces, pods that are not running, and
@@ -23,8 +24,18 @@ set -euo pipefail
 umask 077
 
 if [[ ${1:-} == log && $# -eq 1 ]]; then
-  newest=$(ls -1 /var/lib/agent-box/rebuild-dev/logs/rebuild-*.log 2>/dev/null | sort | tail -n 1)
-  [[ -n $newest ]] || { echo "rebuild: no run has been logged yet" >&2; exit 1; }
+  # The newest run that did more than a teardown: a `rebuild teardown` after a failed run must not hide that run's
+  # stage and diag lines (2026-11-18 07:43 UTC). A newer teardown-only run gets one line of its own.
+  newest="" td=""
+  while read -r f; do
+    if grep -Eq '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" && ! grep -E '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" | grep -vq ' teardown start$'; then
+      [[ -n $td ]] || td=$f
+      continue
+    fi
+    newest=$f; break
+  done < <(ls -1 /var/lib/agent-box/rebuild-dev/logs/rebuild-*.log 2>/dev/null | sort -r)
+  [[ -n $td ]] && echo "newer teardown-only run: ${td##*/}: $(grep -E ' teardown end ' "$td" | tail -n 1)"
+  [[ -n $newest ]] || { echo "rebuild: no run other than a teardown has been logged yet" >&2; exit 1; }
   echo "run: ${newest##*/}"
   cat -- "$newest"
   sed -E 's/\x1b\[[0-9;]*m//g' -- "${newest%.log}.raw" 2>/dev/null | grep -E '(^|[^A-Za-z])(PASS|FAIL):' | cut -c1-200 | head -n 60 || true
