@@ -116,6 +116,29 @@ flowchart LR
    Read the peak used memory from both (`total - available`). Set `memory_mb` in `home.tfvars` to the peak plus 25 %, rounded up to the next 512 MiB, and not under 4096. Plan and apply as in steps 4 and 5; expect `1 to change`, `memory.dedicated` only.
    expect: the two peaks, the new `memory_mb` and the date are recorded in `hosts/AGENT-PICKS.md` pick 194, and this runbook's `outcome` line names the size.
 
+## Give the box a balloon
+
+The box's VM had no balloon device (`floating = 0`), so memory the box once touched never went back to the host. Its footprint grew until a dev rebuild no longer fit beside prod: 8414 MiB free with VM 300 stopped on 2026-11-18 at 03:51 UTC, against a 10240 MiB minimum. `floating = 4096` gives it a balloon. On a q35 machine of version 6.2 or later, Proxmox adds `free-page-reporting=on` to the balloon (qemu-server `src/PVE/QemuServer.pm`). Pages the guest frees then go back to the host, and the host's auto-ballooning may shrink the box down to 4096 MiB when the host runs short. This changes VM 258, so the owner taps it. The apply restarts the box, which ends every session running on it.
+
+On 2026-11-18 this change was made by hand on the host, on the owner's typed order at 04:01 UTC: `qm set 258 --balloon 4096`, then `qm reboot 258`. After that, `qm config 258` showed `balloon: 4096`, and the box came back at 04:01:34 UTC with a `virtio_balloon` device whose free page reporting bit is 1. Its guest then showed 4039 MiB, because the host had shrunk it to the floor. The next dev preflight read 10569 MiB free with VM 300 running. So once this folder's code has `floating = 4096`, step 1's plan shows no change; read it, and apply only if it shows one.
+
+1. Plan this folder and read the plan, as in step 4.
+
+   expect: `0 to add, 1 to change, 0 to destroy`, changing only `memory.floating` from 0 to 4096.
+   If the plan shows any other change, or says **must be replaced**, stop and apply nothing.
+
+2. Apply the saved plan, as in step 5.
+
+   expect: the VM reboots once. Proxmox's reboot shuts the VM down and starts it again, which applies pending hardware changes (qemu-server `src/PVE/API2/Qemu.pm`, `vm_reboot`). It comes back in under a minute.
+
+3. Check the balloon on the box.
+
+   ```sh
+   ls /sys/bus/virtio/drivers/virtio_balloon/
+   ```
+
+   expect: one `virtio<N>` entry. Its features string in `/sys/bus/virtio/devices/virtio<N>/features` has `1` at position 5 (`VIRTIO_BALLOON_F_REPORTING`). The next dev preflight's free memory should be back near the 01:49 UTC reading, 12887 MiB with VM 300 stopped.
+
 ## If it fails
 
 - The plan wants to replace the VM: run `tofu state mv` in reverse to put the entry back into the rehearsal state, and report the plan.

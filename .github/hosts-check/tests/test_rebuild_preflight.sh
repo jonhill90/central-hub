@@ -8,7 +8,7 @@ src=$(cd "$(dirname "$0")/../../.." && pwd)/hosts/rebuild-k8s.sh
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 fail=0
-sed -n '/^CI_RUNNER_VMID=/p;/^DESKTOP_VMID=/p;/^OPNSENSE_TEST_VMID=/p;/^node_top_sampler() {/,/^}/p;/^DEV_MEMORY_MB_[A-Z_]*=/p;/^preflight_declared_mib() {/,/^}/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^preflight_stop_desktops() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
+sed -n '/^CI_RUNNER_VMID=/p;/^DESKTOP_VMID=/p;/^OPNSENSE_TEST_VMID=/p;/^node_top_sampler() {/,/^}/p;/^DEV_MEMORY_MB_[A-Z_]*=/p;/^preflight_declared_mib() {/,/^}/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_node_detail() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^preflight_stop_desktops() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
 grep -q '^preflight_memory' "$t/fn.sh" && grep -q '^run_stage' "$t/fn.sh" || { echo "FAIL: functions not found"; exit 1; }
 mkdir "$t/bin"
 cat > "$t/bin/curl" <<'F'
@@ -77,6 +77,7 @@ out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 11); 
 out=$(TFVARS_FILE="$t/norole.tfvars" run dev 31 1); check "a declared node with no role is refused, whatever the memory" "$out" "has no role control-plane or worker" "rc=0"
 out=$(STATE="$t/missing.tfstate" run dev 31 28); check "no state file means a fresh build and is checked" "$out" "branch checked" ""
 out=$(STATE="$t/empty.tfstate" run dev 31 17); check "an empty state is checked and passes with enough memory" "$out" "branch checked" "refused"
+out=$(run dev 31 28); check "the node's whole memory and KSM line is shown" "$out" "preflight: node memory total 31744 used 28672 available"
 out=$(run dev 31 28); check "the guest list is shown, sorted by VM ID" "$out" "guest vmid=411 type=qemu status=running maxmem=8192 MiB mem=4096 MiB name=agent-box"
 check "the list says VM 258 is not visible" "$out" "VM 258 is NoAccess for it"
 check "a name is cleaned to safe characters" "$out" "name=cirunner01" "name=ci runner;01"
