@@ -458,6 +458,16 @@ components:
     verdict: pass
     sources: [url:mirrors.ocf.berkeley.edu/blender/]
     checked: 2026-11-18
+  - name: Blender Lab MCP
+    kind: software
+    used-for: the Blender Python API reference and manual excerpts its repository bundles, which agents on the agent box search offline; its MCP server is not installed
+    licence: GPL-3.0-or-later (its LICENSE file, commit "Include GPL3+ license", 2026-09-29)
+    licence-source: https://projects.blender.org/lab/blender_mcp/src/branch/main/LICENSE
+    paid-edition: none found; a Blender Lab project with no paid edition named in its readme
+    paid-edition-source: https://projects.blender.org/lab/blender_mcp
+    verdict: pass
+    sources: [url:projects.blender.org/lab/blender_mcp]
+    checked: 2026-11-18
   - name: lychee
     kind: software
     used-for: the docs link check in CI

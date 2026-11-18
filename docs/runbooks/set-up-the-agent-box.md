@@ -162,6 +162,7 @@ expect: `Blender 5.2.3 LTS` from `blender -b --version`. Measured on the box on 
 - Use Cycles with `cycles.device = "CPU"` for finished images. EEVEE works only through Mesa's software EGL, so it is slower than Cycles here.
 - Check `free -m` before a render, and above all before EEVEE, which peaked at 2.5 GB on a small scene; the box shares the host with the dev rebuild.
 - The Vulkan warning at start is expected: Blender falls back to OpenGL through EGL.
+- docs.blender.org answers 403 to the box. The role keeps Blender Lab's MCP repository (projects.blender.org/lab/blender_mcp, pinned to commit dbbf836, 2026-09-29) under the libexec folder for the Python API reference and manual excerpts it bundles, about 4,500 RST files. Search them with `grep -rl <term> /usr/local/libexec/agent-box/blender-mcp/mcp/blmcp/data/`. Its MCP server is not installed, because sessions drive Blender directly with `blender -b --python`.
 
 ## Prove the lab's names from the box
 
