@@ -48,3 +48,32 @@ setup:
     path: /media
   # curl 8.22.0 (2026-09-02, STD-0003: at least two weeks old), multi-arch index digest.
   image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+
+# Sign-in through the lab's Keycloak (runbook set-up-lab-sign-in.md, step 5). Jellyfin has no OIDC
+# of its own, so the SSO plugin is installed from a pinned, checksummed zip before Jellyfin starts
+# (initContainer), and the setup Job writes the provider config through the plugin's API after each
+# sync. The client and its secret (Secret media/<secretName>, key client-secret) come from the
+# realm role k8s_identity; this chart only reads the secret.
+sso:
+  enabled: true
+  provider: keycloak
+  # Keycloak's name under the Gateway: <host>.<gateway.hostSuffix>.<zone>, realm lab.
+  issuerHost: sso
+  realm: lab
+  clientId: jellyfin
+  secretName: jellyfin-sso
+  # Realm roles from the `roles` claim the realm lab adds to every client (realm lab: admin, viewer).
+  roles: [admin, viewer]
+  adminRoles: [admin]
+  plugin:
+    # K0lin's maintained fork of 9p4/jellyfin-plugin-sso (the original is archived and stops at
+    # targetAbi 10.11). Version 5.1.1 targets Jellyfin 12.0.0.0 (its manifest and meta.json).
+    version: "5.1.1"
+    url: https://github.com/K0lin/jellyfin-plugin-sso/releases/download/v5.1.1/sso-authentication_5.1.1.zip
+    sha256: db126b4763bda3a3754fa2103232fc03ef1bf929cfeda35f2e9af39c875233b1
+  # Same image as setup.image (curl, busybox unzip, the public CA bundle).
+  initImage: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+  # Keycloak's certificate comes from the lab CA (clusterissuer lab-ca). The CA's public root is not in
+  # git (its names may be private, as for k8s_gitops_sso_root_ca_file): Secret
+  # <name>-lab-root-ca, key lab-root-ca.pem, comes from playbooks/k8s-identity.yml. The init
+  # container adds it to a copy of the public bundle and Jellyfin reads the copy through SSL_CERT_FILE.

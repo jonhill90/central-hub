@@ -296,6 +296,19 @@ server:
         }
         {{- end }}
 
+        # The fixed, non-secret word ExternalSecret openbao-check reads (secret-store app, checkKey), so a
+        # fresh store syncs it with no write from outside and a dev rebuild's `apps` wait, which needs every
+        # ExternalSecret Ready, passes. It runs well after the kv mount. allow_failure: a refused write leaves
+        # the check not Ready, as before, and never stops the unseal.
+        initialize "check" {
+          request "word" {
+            operation     = "update"
+            path          = "kv/data/c1/check"
+            data          = { data = { value = "ok" } }
+            allow_failure = true
+          }
+        }
+
         # One-time hand-over of the admin login to the box. The box mints a short token for service
         # account openbao-bootstrap (no pod runs as it) with its cluster-admin kubeconfig, signs in
         # here, sets the admin's role ID and a secret ID from its keys folder, and deletes this role

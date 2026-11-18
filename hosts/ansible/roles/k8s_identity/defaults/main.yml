@@ -80,6 +80,11 @@ k8s_identity_argocd_namespace: argocd
 k8s_identity_jellyfin_name: jellyfin
 k8s_identity_jellyfin_namespace: media
 k8s_identity_jellyfin_provider: keycloak
+# The lab CA's public root, a PEM file on the controller (private: its names may be, like
+# k8s_gitops_sso_root_ca_file). Copied to Secret <media ns>/jellyfin-lab-root-ca, key lab-root-ca.pem,
+# which Jellyfin's chart mounts to trust Keycloak's certificate. Empty: no Secret, and Jellyfin's
+# setup Job skips the sign-in step.
+k8s_identity_jellyfin_root_ca_file: ""
 
 # Proxmox VE's web UI (role proxmox_sso): its DNS names, the same as proxmox_cert_names. Private, from the
 # inventory. The client allows https://<name> for each, because the UI sends its own origin as the redirect
