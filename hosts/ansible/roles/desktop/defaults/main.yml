@@ -39,8 +39,14 @@ desktop_lock_admin: true
 # The trust check before the admin key is removed (tasks "The desktop trusts the lab's certificates"). The chain is
 # the lab CA chain file role k8s_node_trust reads on the controller; empty (the lab root not put in the store)
 # skips the check. The bundle is AlmaLinux's extracted system store, which curl reads. Each name in
-# desktop_trust_check_names (private, such as grafana.<zone>) is opened over https with that store; empty runs
-# only the chain check.
+# desktop_trust_check_names is opened over https with that store. By default the names are each app's short
+# name, <app>.<desktop_trust_check_zone>, for the apps the gateway's own name check opens; the agent box's
+# wrapper passes the zone (private) from the prod inventory it already holds. No zone and no names runs only the
+# chain check.
 desktop_trust_chain_file: "{{ k8s_node_trust_chain_file | default('') if (k8s_node_trust_enabled | default(false) | bool) else '' }}"
 desktop_trust_bundle: /etc/pki/tls/certs/ca-bundle.crt
-desktop_trust_check_names: []
+desktop_trust_check_zone: ""
+desktop_trust_check_apps: [grafana, argocd, sso, jellyfin, ntfy]
+desktop_trust_check_names: >-
+  {{ desktop_trust_check_apps | map('regex_replace', '$', '.' ~ desktop_trust_check_zone) | list
+  if desktop_trust_check_zone | length > 0 else [] }}

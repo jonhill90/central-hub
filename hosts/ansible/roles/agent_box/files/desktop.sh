@@ -29,6 +29,7 @@ sshkey=$keys/desktop-ssh
 # c1's lab intermediate with the root appended, the same file the prod rebuild hands to k8s_certs and
 # k8s_node_trust. configure puts its root in the desktop's trust store (role k8s_node_trust).
 labchain=$keys/prod/lab-ca/c1-intermediate-chain.crt
+prodinv=$keys/prod/inventory-hosts.yml   # the controller's prod inventory; configure reads the zone from it
 # Ansible comes from the box's own virtual environment (role agent_box), as in the rebuild wrapper.
 export HOME=$work PATH=/usr/local/libexec/agent-box/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/desktop TF_IN_AUTOMATION=1 ANSIBLE_COLLECTIONS_PATH=/usr/local/libexec/agent-box/collections ANSIBLE_HOME=$work/ansible-home
@@ -93,14 +94,33 @@ configure() {
   trap "rm -f '$extra' '$inventory'" EXIT
   # Without the lab root the desktop's browser warns on every lab name, so configure stops instead.
   [[ -s $labchain ]] || { echo "desktop: $labchain is missing; the desktop would not trust the lab's names (install the prod keys first)" >&2; exit 1; }
-  python3 -I - "$settings" "$inventory" "$extra" "$labchain" <<'PY'
-import json, sys
+  # The lab's zone, for the role's trust check: it opens https://<app>.<zone>/ from the VM before the admin key goes.
+  # Read from the prod inventory the controller's prod-files run copies here (c1-ansible reads the same file), so no
+  # new private value is needed. Never printed.
+  [[ -s $prodinv ]] || { echo "desktop: $prodinv is missing; the desktop's check of the apps' names needs the lab's zone (install the prod keys first)" >&2; exit 1; }
+  python3 -I - "$settings" "$inventory" "$extra" "$labchain" "$prodinv" <<'PY'
+import json, sys, yaml
 s = json.load(open(sys.argv[1]))
 admin = s.get("admin_user", "admin")
+zones = set()
+def walk(n):
+    if isinstance(n, dict):
+        for k, v in n.items():
+            if k == "k8s_gateway_zone" and isinstance(v, str) and v.strip():
+                zones.add(v.strip())
+            else:
+                walk(v)
+    elif isinstance(n, list):
+        for i in n:
+            walk(i)
+walk(yaml.safe_load(open(sys.argv[5])))
+if len(zones) != 1 or "{" in next(iter(zones)) or "/" in next(iter(zones)):
+    sys.exit("desktop: the prod inventory must set k8s_gateway_zone to one plain zone (found %d values)" % len(zones))
 json.dump({"desktop": {"hosts": {"desktop_vm": {
     "ansible_host": s["address"], "ansible_user": admin}}}}, open(sys.argv[2], "w"))
 json.dump({"desktop_rdp_source": s["rdp_source"], "desktop_admin_user": admin,
-           "k8s_node_trust_enabled": True, "k8s_node_trust_chain_file": sys.argv[4]},
+           "k8s_node_trust_enabled": True, "k8s_node_trust_chain_file": sys.argv[4],
+           "desktop_trust_check_zone": zones.pop()},
           open(sys.argv[3], "w"))
 PY
   mkdir -p "$work/.ssh"
