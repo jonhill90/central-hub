@@ -36,9 +36,11 @@ declare -A needs_var=([identity]=k8s_identity_values_file)
 # imports it again when its code changes, which on prod ends every sign-in and drops enrolled one-time codes. With false
 # the realm is only made when missing; a client is added in place by the role's clients tag.
 declare -A fixed_vars=([identity]=k8s_identity_realm_replace=false)
-# Tags per name. identity runs every task plus the clients tag, which is off by default: it adds or updates the realm's clients
-# (argocd, argocd-cli, grafana, jellyfin, proxmox, openbao) in place, so a client the code adds reaches prod with no realm replace.
+# Tags per name. identity runs every task plus the clients tag, which is off by default. The tag acts only on the clients in
+# k8s_identity_ensure_clients (empty by default), so the wrapper names one: proxmox, the client the realm gained after prod's
+# realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
 declare -A fixed_tags=([identity]="all,clients")
+declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}')
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
 action=${1:-} name='' clearance=''
@@ -75,6 +77,7 @@ if [[ -n ${needs_file[$name]:-} ]]; then
 fi
 [[ -n ${fixed_vars[$name]:-} ]] && extra+=(-e "${fixed_vars[$name]}")
 [[ -n ${fixed_tags[$name]:-} ]] && extra+=(--tags "${fixed_tags[$name]}")
+[[ -n ${fixed_json[$name]:-} ]] && extra+=(-e "${fixed_json[$name]}")
 
 mkdir -p "$envdir" "$logs" "$work/state"
 chmod 700 "$envdir"
