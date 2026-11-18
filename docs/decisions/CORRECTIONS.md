@@ -15,9 +15,9 @@ This PR: the agents' pass (D-0042 rule 1), with the owner's tap line if the merg
 
 ### Accepted with PR #512
 
-PR #512: approved 2026-11-18T07:39:58Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNCPFjLjGBC6Q958XkyTkvoF), head 882d697; merged as 03ceebf at 2026-11-18T07:42:10Z. The approval is the owner's typed line "Accept #512 at 882d697" in the project thread "Coordinate the project in my place", with the reviewer's clearance of that head at 07:32:32Z, as the orchestrator relayed it.
+PR #512: approved 2026-11-18T07:39:58Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNCPFjLjGBC6Q958XkyTkvoF), head 882d697; merged as 03ceebf at 2026-11-18T07:42:10Z. The approval is the owner's typed line "Accept #512 at 882d697" in the project thread "Coordinate the project in my place", with the reviewer's clearance of that head at 07:32:32Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNRQHbQM8W2wUJtDsVCEkCxj).
 
-- 2026-11-18 · D-0034 rule 9 (new); D-0042 rule 6's title and first sentence; AGENTS.md rule 1 · the owner's go for a rule 6 step is his typed words naming the step and the commit, or his tap on an option the agents did not recommend; a tap on the recommended option is the agents' pick. The old text said a tap on a card was his go, and on 2026-11-18 two taps on recommended options (06:35 UTC, a firewall apply and an access right) were acted on as his go until the agents corrected that at 06:56 UTC · the owner's project instructions, rule 12, in force on 2026-11-18; the owner's acceptance below
+- 2026-11-18 · D-0034 rule 9 (new); D-0042 rule 6's title and first sentence; AGENTS.md rule 1 · the owner's go for a rule 6 step is his typed words naming the step and the commit, or his tap on an option the agents did not recommend; a tap on the recommended option is the agents' pick. The old text said a tap on a card was his go, and on 2026-11-18 two taps on recommended options (06:35 UTC, a firewall apply and an access right) were acted on as his go until the agents corrected that at 06:56 UTC · the owner's project instructions, rule 12, in force on 2026-11-18; the owner's acceptance above
 
 ### Accepted with PR #429
 
