@@ -273,6 +273,23 @@ The copy of `/var/lib/central-hub/identity-postgres` in a snapshot is read file 
 
 why: a dump is consistent by itself, so it restores the database whatever was happening on disk at the time (agent pick 190). The weekly restore test checks that each dump came back whole.
 
+## Move Keycloak's database onto the data disk
+
+*Not run yet on any cluster (TASK-0225). Write the result here after the first dev run.*
+
+Keycloak's PostgreSQL sits on a hand-made local volume, the folder `/var/lib/central-hub/identity-postgres` on one worker. Role `k8s_identity` can instead claim StorageClass `local-path`, so the data sits under `/var/lib/c1-data/local-path` beside Prometheus, Loki and Grafana. The switch is `k8s_identity_db_storage` (`static`, the default, or `local-path`). A new cluster takes `local-path` from the first run. A cluster that already holds data needs this move, because a StatefulSet's claim template cannot be edited in place. The data is not lost on the way: the dump of step 1 is the same dump the nightly volume backup takes.
+
+1. Dump now, so the copy is newer than the last night: on the node, `sudo systemctl start c1-backup-volumes.service`, then check `db-dumps/identity_sso-postgres-0.sql` in `/var/lib/central-hub-backup` ends with `PostgreSQL database cluster dump complete`.
+2. Stop Keycloak as in [Restore Keycloak's database](#restore-keycloaks-database) step 1 (note `instances`).
+3. Delete the old pieces, in this order: `kubectl -n identity delete statefulset sso-postgres`, `kubectl -n identity delete pvc data-sso-postgres-0`, `kubectl delete pv sso-postgres`. The folder `/var/lib/central-hub/identity-postgres` stays on the node (reclaim policy Retain); it is the way back.
+4. Set `k8s_identity_db_storage: local-path` in the inventory and run the role with tag `database`. expect: pod `sso-postgres-0` ready, and `kubectl -n identity get pvc` shows `data-sso-postgres-0` bound to class `local-path`.
+5. Load the dump as in [Restore Keycloak's database](#restore-keycloaks-database) steps 3 and 4, then sign in.
+6. After a night's backup has run and the sign-in still works, delete `/var/lib/central-hub/identity-postgres`. Until then the nightly volume backup still lists it, which is harmless.
+
+**Way back:** stop Keycloak, delete the new StatefulSet and claim, set `k8s_identity_db_storage: static`, run the role: the old folder is bound again by name, with its old data.
+
+why: a dump is consistent by itself (agent pick 190), so the move needs no file copy. The gain is small and says so: prod's rebuild already restores from the same dump (`rebuild-k8s-layer-with-one-command.md`), so what changes is one storage path for every database on c1, one folder in the backup list, and no hand-made volume. Steps 3 and 6 delete things, so on prod they wait for the owner's go (D-0042 rule 6; D-0061 once accepted). Prod runs this only as a coded, named `c1-ansible` playbook, which does not exist yet; a dev run comes first.
+
 ## Know when a backup stops
 
 Every backup and restore test that ends well writes its time for Prometheus: `c1_backup_last_success_timestamp_seconds{kind="volumes"}` (and `etcd`, `restore-test-volumes`, `restore-test-etcd`) in `c1-backup-<kind>.prom` in `k8s_backup_metrics_dir` (`/var/lib/node-exporter/textfile`, mode 0755). That is `backup_mark_success` in `c1-backup-lib.sh`. A run that fails writes nothing, so its time grows old. kube-prometheus-stack's node-exporter reads the folder with its textfile collector, through the chart's read-only host root mount at `/host/root`. App `monitoring-extras` then raises:
