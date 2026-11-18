@@ -5,7 +5,7 @@ kind: manual
 trigger: once, on a test OPNsense first and then on the lab firewall with the owner's tap (D-0037 rule 5); again for every new plugin version and every OPNsense upgrade, on the test OPNsense first
 runner: an agent lane from the agent box for the test OPNsense and its throwaway Keycloak; the c1 realm and lab firewall step only after the owner's tap
 outcome: the OPNsense login page offers a Keycloak button; a Keycloak user bound to a local OPNsense account signs in with that account's rights; an unknown identity waits for an admin's approval; root signs in with its local password whatever Keycloak's state
-needs: for the test, the OPNsense test stack (a test OPNsense and a throwaway Keycloak on the agent box; not built yet); for the lab firewall, realm lab on c1 (set-up-lab-sign-in.md) and the GUI on a name in the lab CA's certificate (set-opnsense-gui-certificate.md); OPNsense reaches its Keycloak issuer on 443 for every sign-in
+needs: for the test, the opnsense-test wrapper on the agent box (prove-opnsense-sign-in-on-dev.md), with dev torn down; for the lab firewall, realm lab on c1 (set-up-lab-sign-in.md) and the GUI on a name in the lab CA's certificate (set-opnsense-gui-certificate.md); OPNsense reaches its Keycloak issuer on 443 for every sign-in
 private-values: [k8s_identity_opnsense_hosts, OPNSENSE_CLIENT_SECRET, opnsense-root-password]
 files: [hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/defaults/main.yml, hosts/ansible/roles/k8s_identity/vars/main.yml]
 last-tested: "not yet run; 2026-11-17, an agent, the realm rendered with the opnsense client for CI's realm import"
@@ -39,7 +39,7 @@ flowchart LR
 
 ## Steps
 
-Steps 1 to 4 run on the test OPNsense, which signs in at a throwaway Keycloak on the agent box, with DPoP on as in the lab. That Keycloak holds a minimal throwaway realm, not realm lab's template. Its one client `opnsense` has the lab client's settings: confidential, code flow with PKCE S256, application code `keycloak`, and the same callback and logout return paths on the test OPNsense's name. It has two users: one bound to a local admin account and one left unknown. The realm and its secrets are removed at the end. Realm lab on c1 is not touched until step 5.
+Steps 1 to 4 run on the test OPNsense, which signs in at a throwaway Keycloak on the agent box, with DPoP on as in the lab. The `opnsense-test` wrapper on the agent box does all four (`apply`, `configure`, `prove`, `destroy`); [prove-opnsense-sign-in-on-dev.md](prove-opnsense-sign-in-on-dev.md) gives its commands and what each prints, and the steps below say what it checks. That Keycloak holds a minimal throwaway realm, not realm lab's template. Its one client `opnsense` has the lab client's settings: confidential, code flow with PKCE S256, application code `keycloak`, and the same callback and logout return paths on the test OPNsense's name. It has two users: one bound to a local admin account and one left unknown. The realm and its secrets are removed at the end. Realm lab on c1 is not touched until step 5.
 
 1. **Check the package.** Download the package and its checksum from the `v1.0.0-beta5` release, then check both where `gh` is installed (the agent box has none, so the attestation check runs in CI), before the file goes to OPNsense:
 
@@ -54,7 +54,7 @@ Steps 1 to 4 run on the test OPNsense, which signs in at a throwaway Keycloak on
    why: the SHA-256 pins the bytes that were read, and the attestation ties them to the repository's own build ([the plugin's install guide](https://github.com/jpawlowski/opnsense-openid-connect/blob/v1.0.0-beta5/docs/setup/install.md)).
    expect: the SHA-256 in the table above, and a verified attestation. On any other value, stop.
 
-2. **Install and set it up on the test OPNsense.** Copy the checked file from the agent box and install it with `pkg add` of that local file; OPNsense never downloads the plugin. How the box reaches the firewall for this is decided by the test run and written here before step 5. Then, under System > Access > Servers, add an OpenID Connect server with these settings:
+2. **Install and set it up on the test OPNsense.** Copy the checked file from the agent box and install it with `pkg add` of that local file; OPNsense never downloads the plugin. On the test OPNsense, `opnsense-test configure` copies it over SSH as root with the box's own key for that VM, and seeds the server settings below into `/conf/config.xml`. How the box reaches the lab firewall is written here before step 5. On the lab firewall, under System > Access > Servers, add an OpenID Connect server with these settings:
    - provider profile Keycloak;
    - issuer: the throwaway Keycloak's realm; client `opnsense` and its secret;
    - application code `keycloak`;
