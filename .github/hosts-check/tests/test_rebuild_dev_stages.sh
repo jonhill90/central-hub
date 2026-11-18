@@ -107,6 +107,7 @@ for args in "dev gitops" "dev-fake dev gitops" "dev dev-ca"; do
   if [ "$1" = dev-fake ]; then out=$(FAKE_SECRET=yes run "$2" "$3" "$t/ok"); else out=$(run "$1" "$2" "$t/ok"); fi
   check "$args: lab-ca issuer off" "$out" "-e k8s_gitops_source_lab_ca_issuer=false" ""
   check "$args: login-probe off" "$out" "-e k8s_gitops_source_login_probe=false" ""
+  check "$args: jellyfin setup off" "$out" "-e k8s_gitops_source_jellyfin_setup=false" ""
 done
 out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gitops "$t/ok")
 check "dev with a key file: both off and the measurement on" "$out" "k8s_gitops_source_login_probe=false" ""
@@ -114,6 +115,7 @@ check "dev with a key file: the measurement still on" "$out" "k8s_gitops_source_
 out=$(run dev openbao-measure "$t/ok"); check "dev without a key file still skips the measurement" "$out" "openbao-measure skipped" "AP "
 out=$(FAKE_SECRET=yes run prod gitops "$t/ok"); check "prod gitops leaves the lab-ca issuer on" "$out" "AP " "lab_ca_issuer"
 check "prod gitops leaves login-probe on" "$out" "AP " "login_probe"
+check "prod gitops leaves jellyfin setup on" "$out" "AP " "jellyfin_setup"
 # The default list stays a default: dev appends the stages only when no --only is given, and the measurement
 # only with a key file, after dev-ca (which makes the https listener it goes through).
 sed -n '/^if \[ "\$ENV_NAME" = dev \] && \[ -z "\$only" \]; then$/,/^fi$/p' "$script" > "$t/append.sh"
