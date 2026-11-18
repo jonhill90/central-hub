@@ -94,6 +94,7 @@ How do the Proxmox host and OPNsense sign their administrators in through Keyclo
 
 - Nothing has run on the real host yet: no sign-in through Keycloak, no reach from the host to c1's Gateway on 443.
 - The os-openid-connect route has run only on the test OPNsense, against a throwaway Keycloak (finding 25); not on the lab firewall or against realm lab on c1. The code read covers the sign-in path and the root jobs, and its DPoP code (finding 24), not its PAR, back-channel logout, shared-signals and setup code, which the record leaves off.
+- Root's password sign-in was proven with the plugin's server disabled and Keycloak still running (finding 25), not with Keycloak stopped, which D-0037 rule 5 asks for. That check has not run yet.
 - The OPNsense LDAP and RADIUS routes are read from the documentation, not tried.
 - Findings 14 and 15 were read at Keycloak's tag 26.4.0; the lab runs 26.8.1, which CI's realm test (Keycloak 26.8.1) exercises for the direct grant flow only. The browser flow's code prompt is proven only by the first real sign-in.
 - WebAuthn and passkeys were not researched.
