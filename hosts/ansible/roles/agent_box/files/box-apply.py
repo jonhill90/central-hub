@@ -438,6 +438,37 @@ def predicted(rules, out):
     return paths
 
 
+def copied_sources(out, repo):
+    """sha256 -> path of each file of the checkout that a changed result of the check run names as the source of a
+    new file. A copy of a repository file to a destination that is not on the box yet gives a check run no dest and
+    no path: its only path is that source (after_header). The destination is then known only by the source's bytes."""
+    root = os.path.realpath(repo) + os.sep
+    found = {}
+    for _, r in changed_results(out):
+        for d in r.get("diff", []) if isinstance(r.get("diff"), list) else []:
+            h = d.get("after_header") if isinstance(d, dict) else None
+            if not isinstance(h, str) or not os.path.realpath(h).startswith(root):
+                continue
+            try:
+                with open(os.path.realpath(h), "rb") as fh:
+                    found[hashlib.sha256(fh.read()).hexdigest()] = h
+            except OSError:
+                pass
+    return found
+
+
+def is_copy_of(path, sources):
+    """True when path is a regular file, not a link, whose bytes are those of one of the sources."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return False
+    with os.fdopen(fd, "rb") as fh:
+        if not stat.S_ISREG(os.fstat(fh.fileno()).st_mode):
+            return False
+        return hashlib.sha256(fh.read()).hexdigest() in sources
+
+
 def failures(out):
     stats = out.get("stats", {})
     return sum(v.get("failures", 0) + v.get("unreachable", 0) for v in stats.values())
@@ -456,14 +487,18 @@ def limit_apply(s, rules, repo, base, ok, mode):
     if failures(out) or rc not in (0, 2):
         stop(f"the check run failed (exit {rc}); nothing applied. Its output is in {STATE}/runs/")
     allowed = predicted(rules, out)
+    sources = copied_sources(out, repo)
     say("check run: limit paths it would change: " + ("; ".join(sorted(allowed)) if allowed else "none"))
+    if sources:
+        say("check run: files it copies to a destination it cannot name (an added limit file passes only with these "
+            "bytes): " + "; ".join(sorted(os.path.relpath(v, repo) for v in sources.values())))
     if mode == "plan":
         record("planned", f"approved limit change to {to[:8]}: {len(allowed)} limit path(s)")
         return
     before = snapshot(rules, os.path.join(STATE, "before"))
     rc, out = play(s, repo, check=False, limits=True)
     diff = compare(rules, before)
-    extra = [(k, p) for k, p in diff if p not in allowed]
+    extra = [(k, p) for k, p in diff if p not in allowed and not (k == "added" and is_copy_of(p, sources))]
     if extra:
         left = put_back(before, diff)
         what = "; ".join(f"{k} {p}" for k, p in extra)

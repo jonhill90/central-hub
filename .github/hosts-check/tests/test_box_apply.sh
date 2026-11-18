@@ -14,7 +14,8 @@
 #      the line's commit stops and prints the digest to approve; a matching line applies that commit with the
 #      limit tasks on and moves the baseline to it, and the next run goes on to main; an approved apply that
 #      changes a limit path its check run did not name is put back and stops self-applies; a file the apply adds
-#      is named by the loop label (the destination) in the check run, and passes only then.
+#      is named by the loop label (the destination) in the check run, and passes only then; a file copied from a
+#      repository file without a loop is named by its source, and passes only with the source's bytes.
 # Usage: .github/hosts-check/tests/test_box_apply.sh   (needs git and python3)
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
@@ -268,6 +269,26 @@ echo '{"plays":[{"tasks":[{"task":{"name":"Wrappers, root-owned"},"hosts":{"box1
 out=$(ba apply) || bad "8j: the approved apply failed: $out"
 [[ $out == *"applied the approved limit change ${l10:0:8}"* && $out == *"$newf"* && -f $newf && $(base) == "$l10" && ! -f $t/state/stopped ]] \
   && ok "8j. the same new file, named by the loop label's destination, passes the guard and moves the baseline" || bad "8j: $out"
+# 8k, 8l: a file added by a copy of a repository file to a destination the check run cannot name. For such a result
+# the check run's only path is the source in the checkout (after_header), with no dest and no loop label. The apply
+# may add a limit file whose bytes equal that source and nothing else (8k); other bytes are put back (8l).
+printf -- '- name: v\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
+l11=$(commit c11)
+w11=$(git -C "$t/src" diff --no-renames --binary --full-index "$l10" "$l11" -- "$r/tasks/main.yml" | sha256sum | cut -d' ' -f1)
+echo "$l10 $l11 $w11 cmsg_pass04 card_tap04" >> "$t/src/$appr"
+commit c11b >/dev/null
+srcf="$t/state/central-hub/$r/tasks/main.yml"
+newg="$t/box/sudoers.d/agent-box-copied"
+echo '{"plays":[{"tasks":[{"task":{"name":"The helper, root-owned"},"hosts":{"box1":{"changed":true,"diff":[{"before":"","after_header":"'"$srcf"'","after":"x"}]}}}]}],"stats":{"box1":{"failures":0,"unreachable":0}}}' > "$t/check.json"
+printf '#!/bin/bash\necho "different bytes" > "%s"\n' "$newg" > "$t/apply-hook"
+set +e; out=$(ba apply); rc=$?; set -e
+[[ $rc == 4 && $out == *"added $newg"* && ! -e $newg && $(base) == "$l10" && -f $t/state/stopped ]] \
+  && ok "8k. a new file whose bytes are not those of the source the check run named is put back and stops" || bad "8k: exit $rc: $out"
+rm -f "$t/state/stopped"
+printf '#!/bin/bash\ncp "%s" "%s"\n' "$srcf" "$newg" > "$t/apply-hook"
+out=$(ba apply) || bad "8l: the approved apply failed: $out"
+[[ $out == *"applied the approved limit change ${l11:0:8}"* && $out == *"$newg"* && -f $newg && $(base) == "$l11" && ! -f $t/state/stopped ]] \
+  && ok "8l. a new file with the bytes of the source the check run named, with no dest or label, passes the guard" || bad "8l: $out"
 rm -f "$t/apply-hook"
 
 [[ $fail == 0 ]] || exit 1
