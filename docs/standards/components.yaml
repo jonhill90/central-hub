@@ -336,6 +336,16 @@ components:
     verdict: pass
     sources: [image:docker.io/jellyfin/jellyfin]
     checked: 2026-11-14
+  - name: Jellyfin SSO Authentication plugin (K0lin fork)
+    kind: software
+    used-for: sign-in to Jellyfin through Keycloak on c1
+    licence: GPL-3.0
+    licence-source: https://github.com/K0lin/jellyfin-plugin-sso/blob/main/LICENSE.txt
+    paid-edition: none found; the repository page names no paid edition or premium features
+    paid-edition-source: https://github.com/K0lin/jellyfin-plugin-sso
+    verdict: pass
+    sources: [url:github.com/K0lin/jellyfin-plugin-sso/releases/download/]
+    checked: 2026-11-18
   - name: ntfy
     kind: software
     used-for: alert notifications from c1

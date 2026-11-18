@@ -19,6 +19,11 @@ spec:
       labels: {app.kubernetes.io/name: jellyfin-setup}
     spec:
       restartPolicy: Never
+      {{- if .Values.sso.enabled }}
+      volumes:
+        - name: lab-root-ca
+          secret: {secretName: {{ .Values.name }}-lab-root-ca, optional: true}
+      {{- end }}
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -41,10 +46,26 @@ spec:
             - {name: LIBRARY_NAME, value: {{ $s.library.name | quote }}}
             - {name: LIBRARY_TYPE, value: {{ $s.library.collectionType | quote }}}
             - {name: LIBRARY_PATH, value: {{ $s.library.path | quote }}}
+            {{- if .Values.sso.enabled }}
+            - {name: SSO_ENABLED, value: "true"}
+            - {name: SSO_PROVIDER, value: {{ .Values.sso.provider | quote }}}
+            - {name: SSO_ISSUER, value: "https://{{ .Values.sso.issuerHost }}.{{ .Values.gateway.hostSuffix }}.{{ required "zone: set by the root Application" .Values.zone }}/realms/{{ .Values.sso.realm }}"}
+            - {name: SSO_CLIENT_ID, value: {{ .Values.sso.clientId | quote }}}
+            - {name: SSO_CA_NAME, value: "{{ .Values.name }}-lab-root-ca"}
+            - {name: SSO_SECRET_NAME, value: {{ .Values.sso.secretName | quote }}}
+            - {name: SSO_ROLES, value: {{ join " " .Values.sso.roles | quote }}}
+            - {name: SSO_ADMIN_ROLES, value: {{ join " " .Values.sso.adminRoles | quote }}}
+            - name: SSO_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ .Values.sso.secretName }}, key: client-secret, optional: true}}
+            {{- end }}
             - name: ADMIN_USER
               valueFrom: {secretKeyRef: {name: {{ .Values.name }}-admin, key: username}}
             - name: ADMIN_PASSWORD
               valueFrom: {secretKeyRef: {name: {{ .Values.name }}-admin, key: password}}
+          {{- if .Values.sso.enabled }}
+          volumeMounts:
+            - {name: lab-root-ca, mountPath: /lab-ca, readOnly: true}
+          {{- end }}
           resources:
             requests: {cpu: 10m, memory: 16Mi}
             limits: {memory: 64Mi}
