@@ -7,7 +7,7 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: Argo CD's sign-in page shows "Lab sign-in"; a lab-admins member gets admin, a lab-viewers member read-only, anyone else nothing; the built-in admin still works
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; Secret argocd/argocd-sso made by playbooks/k8s-identity.yml
 private-values: [k8s_gateway_zone, k8s_gitops_ui_zone]
-files: [hosts/ansible/roles/k8s_gitops/tasks/sso.yml, hosts/ansible/roles/k8s_gitops/templates/argocd-sso.yaml.j2, hosts/ansible/roles/k8s_gitops/defaults/main.yml]
+files: [hosts/ansible/roles/k8s_gitops/files/argocd-signin-check.py, .github/hosts-check/tests/test_argocd_signin_check.sh, hosts/ansible/roles/k8s_gitops/tasks/sso.yml, hosts/ansible/roles/k8s_gitops/templates/argocd-sso.yaml.j2, hosts/ansible/roles/k8s_gitops/defaults/main.yml]
 last-tested: 2026-11-18, an agent lane from the agent box, read only (c1-read, no password typed), on c1 `argocd-cm` holds `url` and `oidc.config` (issuer realm lab, clientID argocd, secret read from `argocd-sso`, the lab root as `rootCA`), `argocd-rbac-cm` holds the group table below, and `argocd-server` logs the setting sso as true. The CronJob login-probe ran inside c1 at 2026-11-18 06:11 UTC with no password and read through c1-read, Keycloak showed its sign-in page for client argocd and its redirect (HTTP 200), Argo CD listed the provider Lab sign-in and its login redirected to Keycloak realm lab. A typed sign-in, a lab-admins sign-in and step 4 not run. CI renders the manifest with sign-in on and off and checks both against the ConfigMap schema
 superseded-by:
 ---
@@ -41,6 +41,7 @@ Stop if any of these is not true.
 3. Open Argo CD's sign-in page in a private window.
    expect: a "Lab sign-in" button. Sign in as a lab-admins member: every Application shows, and Sync works. Sign in as a lab-viewers member: Applications show, and Sync is refused.
 
+   Scripted instead, with no browser and no owner account: `argocd-signin-check.py <file>` (`hosts/ansible/roles/k8s_gitops/files/`), run on the agent box against a test account that an access-rights step made, a member of `lab-admins` (the script needs a TOTP seed, and only that group has one). The file is JSON, held by the box, mode 0600 or 0400 and owned by the user running it: `base` (Keycloak), `argocd_base` (the host in `argocd-cm`'s `url`), `realm`, `user`, `password`, `seed`, `digits`, `period`, `expect_admin`, and optionally `admin_group`, `viewer_group`, `address`, `verify`. It follows Argo CD's own flow (`/auth/login`, Keycloak's password and then code, `/auth/callback` with the cookies from the start, the session cookie), then reads `/api/v1/session/userinfo` (logged in, Keycloak's issuer, the expected group) and `/api/v1/account/can-i/sync/applications/*` (yes exactly for an admin). It prints seven numbered lines and no password, seed, code, state or token. The stand-in test is `.github/hosts-check/tests/test_argocd_signin_check.sh`. It has not run against Argo CD, and a test user does not exist yet.
 4. Run step 2 again.
    expect: `changed=0`.
 
