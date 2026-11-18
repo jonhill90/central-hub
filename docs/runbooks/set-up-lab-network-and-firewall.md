@@ -90,6 +90,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
    On the controller, make a key and a secret and keep both in `~/.config/central-hub/opnsense-api.txt` (mode 0600). Send the firewall only `"<key>|$(openssl passwd -6 <secret>)"`, as `/root/ansible-apikey.line`, together with `hosts/ansible/bootstrap/opnsense-ansible-user.php`, through the QEMU guest agent in pieces under about 700 bytes, then run `qm guest exec 100 -- php /root/ansible-user.php` on the host.
    why: the user gets only the privileges `opnsense.yml` needs, and the secret never leaves the controller; OPNsense gets only its hash (the script's header; agent pick 29 in [hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)). Larger guest-agent payloads hung OPNsense's agent during the build.
    expect: the script prints no error; `opnsense_api_key` and `opnsense_api_secret` in the inventory are filled from the file.
+   note: the lab test copy runs the same script from a root shell over the serial console instead ([Build the lab test copy](build-the-lab-test-copy.md) step 6).
 
 7. Configure OPNsense: VLANs 10, 20 and 30, their interfaces and gateways, DHCP on 10 and 30, the four rules per lab VLAN, the WAN rules and the Unbound host overrides.
 

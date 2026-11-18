@@ -7,7 +7,7 @@ runner: an agent session on the agent box, while dev is down and VM 257 is gone
 outcome: VM 256 runs Proxmox VE 9.2 installed with no console, answers SSH as root with the box's key on its dev address, shows vmx or svm and /dev/kvm, so its own guests can use KVM, and has the fresh-host steps done (apt, iac@pve and its token, vmbr1, the nano image and the Debian 13 template), then holds its own SDN, VM 100 (OPNsense, WAN link-down) and CT 900 from the run folders, each with a second plan that shows no changes, its own address on mgmt, and VM 100 set up over its serial console with LAN on mgmt; destroy removes it
 needs: the agent box with the lab-test wrapper (agent_box_lab_test in the private inventory, one install of the box's role); dev torn down and VM 257 destroyed; the node's free memory at least the copy's 6144 MiB plus the 2048 MiB margin; 5 GB free on the box; the host's kvm module with nested on
 private-values: [agent_box_lab_test]
-files: [hosts/terraform/home/lab-test/, hosts/terraform/home/bootstrap/iac-access.sh, hosts/terraform/home/network/, hosts/terraform/home/firewall/, hosts/terraform/home/remote-access/, hosts/ansible/playbooks/proxmox-host.yml, hosts/ansible/roles/agent_box/files/lab-test.sh, hosts/ansible/roles/agent_box/files/lab-test-answer.py, hosts/ansible/roles/agent_box/files/lab-test-console.py, hosts/ansible/bootstrap/opnsense-first-boot.php, hosts/ansible/roles/agent_box/tasks/lab_test.yml, .github/hosts-check/tests/test_lab_test.sh]
+files: [hosts/terraform/home/lab-test/, hosts/terraform/home/bootstrap/iac-access.sh, hosts/terraform/home/network/, hosts/terraform/home/firewall/, hosts/terraform/home/remote-access/, hosts/ansible/playbooks/proxmox-host.yml, hosts/ansible/roles/agent_box/files/lab-test.sh, hosts/ansible/roles/agent_box/files/lab-test-answer.py, hosts/ansible/roles/agent_box/files/lab-test-console.py, hosts/ansible/bootstrap/opnsense-first-boot.php, hosts/ansible/bootstrap/opnsense-ansible-user.php, hosts/ansible/roles/agent_box/tasks/lab_test.yml, .github/hosts-check/tests/test_lab_test.sh]
 last-tested: "never on the box; the stack's tofu test and test_lab_test.sh offline"
 superseded-by:
 ---
@@ -102,13 +102,13 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    lab-test firstboot
    ```
 
-   why: this is [Set up the lab network](set-up-lab-network-and-firewall.md) step 5, which a person does by hand at the real firewall's console. The nano image has no installer, no SSH and no config on first boot. Its config importer waits for a key press at the console and asks for a device there (opnsense/core 26.1.6, `src/sbin/opnsense-importer`), and Proxmox VE's kernel can't write the image's UFS before import (Ubuntu builds it without `CONFIG_UFS_FS_WRITE`). So the console is the only way in.
+   why: this is [Set up the lab network](set-up-lab-network-and-firewall.md) steps 5 and 6. A person does step 5 by hand at the real firewall's console, and step 6 goes through the QEMU guest agent, which the copy's VM 100 does not have. The nano image has no installer, no SSH and no config on first boot. Its config importer waits for a key press at the console and asks for a device there (opnsense/core 26.1.6, `src/sbin/opnsense-importer`), and Proxmox VE's kernel can't write the image's UFS before import (Ubuntu builds it without `CONFIG_UFS_FS_WRITE`). So the console is the only way in.
 
    As root on the copy, the wrapper reaches VM 100's serial console the way `qm terminal` does, with `socat` on `/var/run/qemu-server/100.serial0` (qemu-server `src/PVE/CLI/qm.pm`). `lab-test-console.py` then:
    1. signs in as root with the image's default password, or with the copy's own on a second run;
    2. opens the shell from menu 8;
-   3. sends `hosts/ansible/bootstrap/opnsense-first-boot.php` and a root hash in short base64 lines, each checked by SHA-256;
-   4. runs the PHP and reboots VM 100.
+   3. sends `hosts/ansible/bootstrap/opnsense-first-boot.php`, a root hash, `hosts/ansible/bootstrap/opnsense-ansible-user.php` and the API key line in short base64 lines, each checked by SHA-256;
+   4. runs the first-boot PHP, then the API user PHP, removes the key line and the hash however that ends, and reboots VM 100.
 
    The PHP does what step 5 does:
    - the mgmt VLAN on the trunk, named `vtnet0_vlan50` as the console names it;
@@ -117,16 +117,18 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    - root's password set to a new random one that only the box keeps;
    - the setup wizard dropped.
 
-   It is written against 26.1.6's `config.inc`, `auth.inc`, `console.inc` and `config.xml.sample`. Last, the wrapper waits up to 10 minutes for the mgmt gateway to answer a ping from the copy. Safe to run again.
-   expect: `lab-test: console: php opnsense-first-boot.php ...`, then `first boot: LAN vtnet0_vlan50 10.1.50.1/24, WAN vtnet1 DHCPv4 only, root password set`, then `the mgmt gateway 10.1.50.1 answers from the copy`.
-   ※ `lab-test.sh`, `firstboot`; `lab-test-console.py`; `hosts/ansible/bootstrap/opnsense-first-boot.php`
+   The API user PHP is step 6's: user `ansible` with only the privileges `opnsense.yml` needs, and its API key. The key and secret are new and stay on the box; OPNsense gets only `<key>|<SHA-512 crypt of the secret>`, the format 26.1.6's `ApiKeyField` reads (`src/opnsense/mvc/app/models/OPNsense/Auth/FieldTypes/ApiKeyField.php`).
+
+   It is written against 26.1.6's `config.inc`, `auth.inc`, `console.inc` and `config.xml.sample`. Last, the wrapper waits up to 10 minutes for the mgmt gateway to answer a ping from the copy, then up to 5 for the API user to read `api/interfaces/vlan_settings/search_item` there, one of its own paths (`page-interfaces-vlan-edit`). curl gets the key and secret on stdin and skips the certificate check: OPNsense's certificate is self-signed, and the mgmt VLAN exists only inside the copy. Safe to run again.
+   expect: `lab-test: console: php opnsense-first-boot.php ...`, then `first boot: LAN vtnet0_vlan50 10.1.50.1/24, WAN vtnet1 DHCPv4 only, root password set`, then `ansible user saved, privileges: 9, api keys: 1`, then `the mgmt gateway 10.1.50.1 answers from the copy` and `the API user ansible answers on https://10.1.50.1/api`.
+   ※ `lab-test.sh`, `firstboot`; `lab-test-console.py`; `hosts/ansible/bootstrap/opnsense-first-boot.php`; `hosts/ansible/bootstrap/opnsense-ansible-user.php`
 7. Destroy when done:
 
    ```sh
    lab-test destroy
    ```
 
-   why: it removes VM 256 and its disk, and on the box the copy's token, inventory, CA, run folder states and OPNsense root password. The prepared ISO stays in the wrapper's state and on `local` for the next build, and on the box. Destroy ends by listing what it left on `local`.
+   why: it removes VM 256 and its disk, and on the box the copy's token, inventory, CA, run folder states, OPNsense root password and API key. The prepared ISO stays in the wrapper's state and on `local` for the next build, and on the box. Destroy ends by listing what it left on `local`.
 8. Bring dev back if it is needed (`rebuild.sh up`). The dev rebuild's preflight refuses while VM 256 exists.
 
 `lab-test log` prints the last run's output, then VM 256's state, uptime and memory from Proxmox. It changes nothing.
@@ -150,6 +152,8 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 | `none of the root passwords works` | VM 100's root password is neither the image's default nor the box's. Destroy and build again. |
 | `the command failed (exit N): php opnsense-first-boot.php ...` | The PHP refused or failed; its output is above the line. Report it. |
 | `the mgmt gateway ... does not answer` | VM 100 rebooted without LAN on the mgmt VLAN. Report the console output. |
+| `the command failed (exit N): cp ansible-apikey.line ...` | The API user PHP refused the key line or failed validation; its output is above the line. The key line is gone from VM 100 either way. Report it. |
+| `the API user ansible gets no answer` | The gateway answers but the API refuses the key, or the web GUI is not up. Report it with the console output. |
 | `stopped, the copy's CPU shows no vmx or svm` | The host's kvm module has nested off. Turning it on stops every guest on the host, so it is the owner's call ([Nested Virtualization](https://pve.proxmox.com/wiki/Nested_Virtualization)). Destroy, then report it. |
 
 ## Limits
@@ -161,7 +165,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 - CT 900's eth0 sits on the copy's vmbr0, so its DHCP request reaches dev, and dev's DHCP gives it a lease under its made-up name. Nothing runs in it until the tailnet step.
 - The copy's data volume is about 18 GB, and VM 100's 16 GB disk and CT 900's 2 GB are thin, so together they fill it on paper. Proxmox allows that on LVM-thin.
 - Root's password for the copy stays on the box with its hash while `agent_box_lab_test` is set, because the cached prepared ISO holds that hash. The copy is reachable only on dev.
-- Unproven until the copy runs: the 26.1 console's prompts as `lab-test-console.py` expects them (October's run measured 26.7), the first-boot PHP on a real OPNsense, that the bpg provider trusts the copy's CA through `SSL_CERT_FILE` (bpg 0.116.0 sets no roots of its own, `proxmox/api/client.go`), that VM 100's create passes through its pre-added pool membership, and that every folder's second plan is empty on an empty host.
+- Unproven until the copy runs: the 26.1 console's prompts as `lab-test-console.py` expects them (October's run measured 26.7), the first-boot and API user PHP on a real 26.1.6 OPNsense (the API user PHP ran on 26.7 in October), that the bpg provider trusts the copy's CA through `SSL_CERT_FILE` (bpg 0.116.0 sets no roots of its own, `proxmox/api/client.go`), that VM 100's create passes through its pre-added pool membership, and that every folder's second plan is empty on an empty host.
 - `iac-access.sh` adds VM 100 to pool `firewall` and CT 900 to pool `remote-access` before either exists on a fresh host. The pool update in Proxmox VE's API does not check that the guest exists (pve-manager `PVE/API2/Pool.pm`, the `vms` branch of the pool update), so the pool may list a guest that is not there yet. Whether the later create of VM 100 with that pool then fails has not been measured; the copy is where it will show.
 
 ## Exit

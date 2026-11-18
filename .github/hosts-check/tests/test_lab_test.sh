@@ -243,6 +243,33 @@ grep -q '"socat UNIX-CONNECT:/var/run/qemu-server/100.serial0 STDIO"' "$w" && gr
   && ok "firstboot reaches VM 100's serial0 socket, runs the first-boot PHP, and destroy removes OPNsense's root password" \
   || bad "firstboot's wiring"
 
+grep -q '"opnsense-ansible-user.php": sys.argv\[6\], "ansible-apikey.line": sys.argv\[7\]' "$w" \
+  && grep -q 'openssl passwd -6 -stdin < "$files/opnsense-api.secret"' "$w" \
+  && grep -q 'vm "curl -sk --fail --max-time 10 -K - -o /dev/null https://$gw/api/interfaces/vlan_settings/search_item"' "$w" \
+  && grep -q '"$files"/opnsense-root\.\* "$files"/opnsense-api\.\*' "$w" \
+  && ! grep -q 'opnsense-api.secret.*sys.argv\|curl[^|]*-u ' "$w" \
+  && ok "firstboot sends the API user script and only the key line, checks the API with the secret on stdin, and destroy removes the key" \
+  || bad "firstboot's API user wiring"
+# The API user command, as the console runs it in its directory, with /root moved to a test folder: the key line goes
+# whether the script works or fails, and its exit code comes through.
+apicmd=$(python3 -I -c 'import re, sys
+t = open(sys.argv[1]).read()
+m = re.search(r"\"(cp ansible-apikey\.line [^\"]*)\"\n\s*\" (&& php opnsense-ansible-user\.php;[^\"]*)\"", t)
+print(m.group(1) + " " + m.group(2))' "$w")
+mkdir -p "$work/apiu/bin"
+for want in 0 3; do
+  rm -rf "$work/apiu/root" "$work/apiu/dir" && mkdir -p "$work/apiu/root" "$work/apiu/dir"
+  echo 'k|$6$x' > "$work/apiu/dir/ansible-apikey.line"; echo h > "$work/apiu/dir/root.hash"
+  printf '#!/bin/sh\n[ -s %s/ansible-apikey.line ] || exit 9\nexit %s\n' "$work/apiu/root" "$want" > "$work/apiu/bin/php"
+  chmod +x "$work/apiu/bin/php"
+  got=0; ( cd "$work/apiu/dir" && PATH=$work/apiu/bin:$PATH sh -c "${apicmd//\/root\//$work/apiu/root/}" ) >/dev/null 2>&1 || got=$?
+  if [[ $got == "$want" && ! -e $work/apiu/root/ansible-apikey.line && ! -e $work/apiu/dir/ansible-apikey.line && ! -e $work/apiu/dir/root.hash ]]; then
+    ok "the API user command removes the key line and root's hash, and exits $want when the script does"
+  else
+    bad "the API user command (wanted exit $want, got $got)"
+  fi
+done
+
 # The first-boot PHP against stubs: config.inc holds the image's default config (config.xml.sample's parts it changes).
 mkdir -p "$work/php"
 cat > "$work/php/config.inc" <<'STUB'
