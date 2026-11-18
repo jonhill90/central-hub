@@ -5,7 +5,7 @@
 # again when the lab root Secret appears or the plugin loads later, which leaves the provider unwritten
 # (measured on c1, 2026-11-18: "Provider does not exist"). Every step is safe to repeat: once the wizard is done
 # the script says so and goes on, metrics changes only when it is off, and the provider write is the same
-# request each time. A failed run fails one Job, and Argo CD shows the app Degraded until a run passes.
+# request each time. A failed run fails one Job, and once the CronJob has had a first success Argo CD shows the app Degraded until a run passes.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
