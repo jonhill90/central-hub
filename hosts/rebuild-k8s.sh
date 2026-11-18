@@ -755,13 +755,23 @@ echo "rebuild: central-hub $(git -C "$repo" rev-parse HEAD 2>/dev/null || echo u
 # Dev only, while the sign-in stage runs: each node's CPU and memory from metrics-server (kubectl top nodes), every
 # 60 s, into the short log, so a slow or failed Keycloak stage shows whether the worker ran out of memory or CPU
 # (the 2026-11-17 04:33 UTC run timed out with no reading). Read-only, never fatal; stopped when the stage ends, and it
-# ends itself once the run's own shell is gone, so a run killed mid-stage leaves no loop behind.
+# ends itself once the run's own shell is gone, so a run killed mid-stage leaves no loop behind. A sample with no
+# node row logs one "no reading" line instead, with how long the call took and the first line of its error, so a gap
+# in the samples says whether the call hung or failed fast, and why (the 2026-11-18 21:22 UTC run had a 352 s gap with
+# no line at all).
 node_top_sampler() { # stage, the run's PID
-  local t
+  local t t0 e rows
   while kill -0 "$2" 2>/dev/null; do
-    t=$(date -u +%FT%TZ)
-    kc top nodes --no-headers 2>/dev/null \
-      | awk -v s="$1" -v t="$t" 'NF >= 5 {print "  " s ": node top " t " " $1 " cpu " $3 " memory " $4 " (" $5 ")"}' >> "$log" || true
+    t=$(date -u +%FT%TZ); t0=$(date +%s)
+    e=$(mktemp 2>/dev/null) || e=/dev/null
+    rows=$(kc top nodes --no-headers 2>"$e" \
+      | awk -v s="$1" -v t="$t" 'NF >= 5 {print "  " s ": node top " t " " $1 " cpu " $3 " memory " $4 " (" $5 ")"}') || true
+    if [ -n "$rows" ]; then
+      printf '%s\n' "$rows" >> "$log" || true
+    else
+      echo "  $1: node top $t no reading after $(( $(date +%s) - t0 ))s: $(head -n 1 "$e" 2>/dev/null | cut -c 1-200 | grep . || echo 'no node row and no error')" >> "$log" || true
+    fi
+    [ "$e" = /dev/null ] || rm -f "$e"
     sleep 60
   done
 }
