@@ -1,0 +1,6 @@
+apiVersion: v2
+name: login-probe
+description: A Job on c1 that checks the lab apps' Keycloak sign-in from inside the cluster, with no password, and prints PASS or FAIL lines
+type: application
+version: 0.1.0
+appVersion: "1"
