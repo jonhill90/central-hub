@@ -36,6 +36,18 @@
       {%- endfor -%}
       {{ out }}
 
+# Keycloak refuses a theme folder with no theme.properties, and a branding folder often holds only
+# its styles. Add the usual one then (the Keycloak v2 login theme as parent, the folder's own
+# css/styles.css when it has one); a theme.properties the folder has is never replaced.
+- name: theme | A default login/theme.properties when the folder has none
+  ansible.builtin.set_fact:
+    k8s_identity_theme_files: >-
+      {{ k8s_identity_theme_files + [{'key': 'f0-theme.properties', 'path': 'login/theme.properties',
+         'b64': ('parent=keycloak.v2\nimport=common/keycloak\n'
+                 ~ ('styles=css/styles.css\n' if (k8s_identity_theme_files | selectattr('path', 'equalto', 'login/resources/css/styles.css') | list | length) > 0 else ''))
+                | b64encode}] }}
+  when: k8s_identity_theme_files | selectattr('path', 'equalto', 'login/theme.properties') | list | length == 0
+
 - name: theme | The theme has a login/theme.properties and fits in a ConfigMap
   ansible.builtin.assert:
     that:
