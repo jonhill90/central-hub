@@ -1,77 +1,85 @@
 {{- if .Values.setup.enabled }}
 {{- $s := .Values.setup }}
-# Runs Jellyfin's first-run wizard through its startup API after each sync (Argo CD PostSync hook).
-# Once the wizard is done the script stops at its first check and changes nothing.
+# Runs Jellyfin's first-run wizard and settings through its startup API, then writes the SSO provider, every
+# 10 minutes (a CronJob, not an Argo CD PostSync hook). A hook runs only when a sync does, so it would not run
+# again when the lab root Secret appears or the plugin loads later, which leaves the provider unwritten
+# (measured on c1, 2026-11-18: "Provider does not exist"). Every step is safe to repeat: once the wizard is done
+# the script says so and goes on, metrics changes only when it is off, and the provider write is the same
+# request each time. A failed run fails one Job, and once the CronJob has had a first success Argo CD shows the app Degraded until a run passes.
 apiVersion: batch/v1
-kind: Job
+kind: CronJob
 metadata:
   name: {{ .Values.name }}-setup
   namespace: {{ .Release.Namespace }}
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
-  backoffLimit: 3
-  activeDeadlineSeconds: 900
-  ttlSecondsAfterFinished: 86400
-  template:
-    metadata:
-      labels: {app.kubernetes.io/name: jellyfin-setup}
+  schedule: {{ $s.schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
     spec:
-      restartPolicy: Never
-      {{- if .Values.sso.enabled }}
-      volumes:
-        - name: lab-root-ca
-          secret: {secretName: {{ .Values.name }}-lab-root-ca, optional: true}
-      {{- end }}
-      automountServiceAccountToken: false
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 100
-        runAsGroup: 101
-        seccompProfile: {type: RuntimeDefault}
-      containers:
-        - name: setup
-          image: {{ $s.image }}
-          command: [/bin/sh, -c]
-          args:
-            - |
-{{ .Files.Get "files/setup.sh" | indent 14 }}
-          env:
-            - {name: BASE, value: "http://{{ .Values.name }}.{{ .Release.Namespace }}.svc:{{ .Values.port }}"}
-            - {name: SERVER_NAME, value: {{ $s.serverName | quote }}}
-            - {name: UI_CULTURE, value: {{ $s.uiCulture | quote }}}
-            - {name: COUNTRY, value: {{ $s.metadataCountryCode | quote }}}
-            - {name: LANGUAGE, value: {{ $s.metadataLanguage | quote }}}
-            - {name: LIBRARY_NAME, value: {{ $s.library.name | quote }}}
-            - {name: LIBRARY_TYPE, value: {{ $s.library.collectionType | quote }}}
-            - {name: LIBRARY_PATH, value: {{ $s.library.path | quote }}}
-            - {name: METRICS_ENABLED, value: {{ .Values.metrics.enabled | toString | quote }}}
-            {{- if .Values.sso.enabled }}
-            - {name: SSO_ENABLED, value: "true"}
-            - {name: SSO_PROVIDER, value: {{ .Values.sso.provider | quote }}}
-            - {name: SSO_ISSUER, value: "https://{{ .Values.sso.issuerHost }}.{{ .Values.gateway.hostSuffix }}.{{ required "zone: set by the root Application" .Values.zone }}/realms/{{ .Values.sso.realm }}"}
-            - {name: SSO_CLIENT_ID, value: {{ .Values.sso.clientId | quote }}}
-            - {name: SSO_CA_NAME, value: "{{ .Values.name }}-lab-root-ca"}
-            - {name: SSO_SECRET_NAME, value: {{ .Values.sso.secretName | quote }}}
-            - {name: SSO_ROLES, value: {{ join " " .Values.sso.roles | quote }}}
-            - {name: SSO_ADMIN_ROLES, value: {{ join " " .Values.sso.adminRoles | quote }}}
-            - name: SSO_CLIENT_SECRET
-              valueFrom: {secretKeyRef: {name: {{ .Values.sso.secretName }}, key: client-secret, optional: true}}
-            {{- end }}
-            - name: ADMIN_USER
-              valueFrom: {secretKeyRef: {name: {{ .Values.name }}-admin, key: username}}
-            - name: ADMIN_PASSWORD
-              valueFrom: {secretKeyRef: {name: {{ .Values.name }}-admin, key: password}}
+      backoffLimit: 3
+      activeDeadlineSeconds: 900
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: jellyfin-setup}
+        spec:
+          restartPolicy: Never
           {{- if .Values.sso.enabled }}
-          volumeMounts:
-            - {name: lab-root-ca, mountPath: /lab-ca, readOnly: true}
-          {{- end }}
-          resources:
-            requests: {cpu: 10m, memory: 16Mi}
-            limits: {memory: 64Mi}
+          volumes:
+            - name: lab-root-ca
+              secret: {secretName: {{ .Values.name }}-lab-root-ca, optional: true}
+      {{- end }}
+          automountServiceAccountToken: false
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: setup
+              image: {{ $s.image }}
+              command: [/bin/sh, -c]
+              args:
+                - |
+{{ .Files.Get "files/setup.sh" | indent 18 }}
+              env:
+                - {name: BASE, value: "http://{{ .Values.name }}.{{ .Release.Namespace }}.svc:{{ .Values.port }}"}
+                - {name: SERVER_NAME, value: {{ $s.serverName | quote }}}
+                - {name: UI_CULTURE, value: {{ $s.uiCulture | quote }}}
+                - {name: COUNTRY, value: {{ $s.metadataCountryCode | quote }}}
+                - {name: LANGUAGE, value: {{ $s.metadataLanguage | quote }}}
+                - {name: LIBRARY_NAME, value: {{ $s.library.name | quote }}}
+                - {name: LIBRARY_TYPE, value: {{ $s.library.collectionType | quote }}}
+                - {name: LIBRARY_PATH, value: {{ $s.library.path | quote }}}
+                - {name: METRICS_ENABLED, value: {{ .Values.metrics.enabled | toString | quote }}}
+                {{- if .Values.sso.enabled }}
+                - {name: SSO_ENABLED, value: "true"}
+                - {name: SSO_PROVIDER, value: {{ .Values.sso.provider | quote }}}
+                - {name: SSO_ISSUER, value: "https://{{ .Values.sso.issuerHost }}.{{ .Values.gateway.hostSuffix }}.{{ required "zone: set by the root Application" .Values.zone }}/realms/{{ .Values.sso.realm }}"}
+                - {name: SSO_CLIENT_ID, value: {{ .Values.sso.clientId | quote }}}
+                - {name: SSO_CA_NAME, value: "{{ .Values.name }}-lab-root-ca"}
+                - {name: SSO_SECRET_NAME, value: {{ .Values.sso.secretName | quote }}}
+                - {name: SSO_ROLES, value: {{ join " " .Values.sso.roles | quote }}}
+                - {name: SSO_ADMIN_ROLES, value: {{ join " " .Values.sso.adminRoles | quote }}}
+                - name: SSO_CLIENT_SECRET
+                  valueFrom: {secretKeyRef: {name: {{ .Values.sso.secretName }}, key: client-secret, optional: true}}
+            {{- end }}
+                - name: ADMIN_USER
+                  valueFrom: {secretKeyRef: {name: {{ .Values.name }}-admin, key: username}}
+                - name: ADMIN_PASSWORD
+                  valueFrom: {secretKeyRef: {name: {{ .Values.name }}-admin, key: password}}
+              {{- if .Values.sso.enabled }}
+              volumeMounts:
+                - {name: lab-root-ca, mountPath: /lab-ca, readOnly: true}
+          {{- end }}
+              resources:
+                requests: {cpu: 10m, memory: 16Mi}
+                limits: {memory: 64Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
 {{- end }}
