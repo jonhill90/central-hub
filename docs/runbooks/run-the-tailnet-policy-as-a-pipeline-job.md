@@ -3,8 +3,8 @@ title: Change the tailnet policy file through the pipeline job
 status: draft
 kind: manual
 trigger: every change to the tailnet policy file, hosts/terraform/home/tailnet-policy (who may reach what, the SSH rules and the policy's tests)
-runner: an agent session starts the job; the owner taps a decision card for the apply
-outcome: the policy is planned on main, the owner taps a card that names the saved plan's hash, the same plan is applied, and both logs name the card
+runner: an agent session starts the job; the owner gives his go for the apply (D-0034 rule 9)
+outcome: the policy is planned on main, the owner's go names the saved plan's hash, the same plan is applied, and both logs name the card
 needs: D-0041; the agent_box role applied with the tailnet-policy wrapper (a box limit, so the agents' pass of its digest and no owner card, D-0042 rule 4); the runner registered; the controller's files on the box, with the policy's tfvars, including `external_tailnets`
 private-values: [tailscale-oauth-client, tailnet-policy-tfvars, tailnet-policy-state]
 files: [.github/workflows/lab-tailnet-policy.yml, hosts/ansible/roles/agent_box/files/tailnet-policy.sh, hosts/ansible/roles/agent_box/files/runner-job-started.sh, hosts/terraform/home/tailnet-policy/]
@@ -41,10 +41,10 @@ The rendered policy names the Proxmox host's address, so the run prints only the
    - why the second line: the whole policy is one resource, so the counts only ever say `1 to change`, and only the keys user can read the plan itself. `policy_sections.py` (in the stack's folder) compares the live and the new policy as data, with comments and trailing commas removed, and prints only the names of the top-level sections that differ, such as `grants` or `externalTailnets`, never their contents. The provider compares the formatted text, so a first run can show the whole file as changed when the meaning is the same; the names line is what counts. `none` means only formatting differs.
    - On the first plan, if `groups` is in the names line, stop: the box's tfvars doesn't match the live entry yet. Other sections the template changes, such as `externalTailnets`, `tagOwners`, `grants`, `ssh` and `tests` for the share pod, go on the card in step 2.
    - If a run fails, the sessions cannot read the box's log folder. `sudo -n -u keys /usr/local/libexec/agent-box/tailnet-policy.sh log` prints the last five summary lines and, when the newest run failed, that run's `Error:` lines with the three lines after each (at most 12), with addresses, e-mail addresses and tailnet names replaced. A status code such as 403 (the client lacks the scope) or 401 (wrong or expired secret) shows there.
-   - If the plan fails because the Tailscale OAuth client may not write the policy file, the client needs that scope. A wider right for an agents' credential is the owner's tap (D-0042 rule 6, access rights).
-2. A reviewing agent posts a decision card that names the repository, the commit, `tailnet-policy` and the 12-digit hash, and says in plain words what each changed section is (for example: `grants`, who may reach what; `ssh`, who may sign in where as which user; `groups`, named sets of people; `externalTailnets`, other tailnets that share devices in). One plan per card.
-3. The owner taps it.
-4. A reviewing agent checks the tap, then starts `lab-tailnet-policy` with `action: apply`, `card_id` and `plan_hash`.
+   - If the plan fails because the Tailscale OAuth client may not write the policy file, the client needs that scope. A wider right for an agents' credential needs the owner's go (D-0042 rule 6, access rights).
+2. A reviewing agent posts a decision card that names the repository, the commit, `tailnet-policy` and the 12-digit hash, and says in plain words what each changed section is (for example: `grants`, who may reach what; `ssh`, who may sign in where as which user; `groups`, named sets of people; `externalTailnets`, other tailnets that share devices in). One plan per card. The go option is never the recommended one (D-0034 rule 9).
+3. The owner gives his go: his typed line, or his tap on a card option the card did not recommend (D-0034 rule 9).
+4. A reviewing agent checks the go, then starts `lab-tailnet-policy` with `action: apply`, `card_id` and `plan_hash`.
    - expect: `tailnet-policy: applied plan <hash> (...), card <ID>`. The tailnet refuses to save a policy whose `tests` or `sshTests` fail, so a passed apply means they passed.
 5. Run `plan` again.
    - expect: `0 to add, 0 to change, 0 to destroy`.
