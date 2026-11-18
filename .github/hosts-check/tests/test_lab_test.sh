@@ -16,7 +16,7 @@ ok() { echo "ok - $1"; }
 bad() { echo "FAIL - $1"; fails=$((fails + 1)); }
 
 settings() { # address name domain
-  printf '{"name": "%s", "domain": "%s", "address": "%s", "cores": 2, "memory_mb": 6144, "disk_gb": 32, "proxmox_node_name": "examplehv01"}\n' \
+  printf '{"name": "%s", "domain": "%s", "address": "%s", "cores": 2, "memory_mb": 7168, "disk_gb": 32, "proxmox_node_name": "examplehv01"}\n' \
     "$2" "$3" "$1" > "$work/settings.json"
 }
 settings 10.1.30.198 ddehvdemo01 lab.example
