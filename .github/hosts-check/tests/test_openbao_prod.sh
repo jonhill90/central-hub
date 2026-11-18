@@ -163,9 +163,11 @@ g_names=$(grep ' delete ' "$t/kcalls" | sed 's/.*delete //; s/ --wait.*//' | tr 
 kube true "$fl" '{"initialized": false}'; run reset-failed-start; r_rc=$rc; r_del=$(grep -c ' delete ' "$t/kcalls")
 kube false 'some other error' '{"initialized": false}'; run reset-failed-start; l_rc=$rc; l_del=$(grep -c ' delete ' "$t/kcalls")
 kube false "$fl" '{"initialized": true}'; run reset-failed-start; i_rc=$rc; i_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" ''; run reset-failed-start; e_rc=$rc; e_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" 'not json at all'; run reset-failed-start; j_rc=$rc; j_del=$(grep -c ' delete ' "$t/kcalls")
 if [[ $g_rc -eq 0 && $g_del -eq 2 && $g_names == "pod/openbao-0 pvc/data-openbao-0 " && $g_out == *"before:"* && $g_out == *"after"* &&
-      $r_rc -ne 0 && $r_del -eq 0 && $l_rc -ne 0 && $l_del -eq 0 && $i_rc -ne 0 && $i_del -eq 0 ]]; then
-  ok "8. reset-failed-start: deletes the pod and its claim only on a confirmed failed start; Ready, no log line and initialized each refuse"
-else bad "8. good rc=$g_rc del=$g_del [$g_names] ready rc=$r_rc/$r_del log rc=$l_rc/$l_del init rc=$i_rc/$i_del"; fi
+      $r_rc -ne 0 && $r_del -eq 0 && $l_rc -ne 0 && $l_del -eq 0 && $i_rc -ne 0 && $i_del -eq 0 && $e_rc -ne 0 && $e_del -eq 0 && $j_rc -ne 0 && $j_del -eq 0 ]]; then
+  ok "8. reset-failed-start: deletes the pod and its claim only on a confirmed failed start; Ready, no log line, initialized, an empty status and an unreadable status each refuse"
+else bad "8. good rc=$g_rc del=$g_del [$g_names] ready rc=$r_rc/$r_del log rc=$l_rc/$l_del init rc=$i_rc/$i_del empty rc=$e_rc/$e_del junk rc=$j_rc/$j_del"; fi
 
 exit "$fail"

@@ -276,10 +276,11 @@ PY
     logs=$( { kc -n "$ns" logs "$pod" 2>&1; kc -n "$ns" logs "$pod" --previous 2>&1; } || true)
     grep -qF 'self-initialization failed: refusing to unseal' <<< "$logs" ||
       { echo "openbao-prod: refused: the pod's log does not show the self-init failure" >&2; exit 1; }
+    # Only a status that parses as JSON and says initialized false lets the delete go on: an unreadable status, a pod that
+    # cannot be reached or a store that says true all refuse.
     status=$(kc -n "$ns" exec "$pod" -- bao status -format=json 2>/dev/null) || true
-    if grep -Eq '"initialized": *true' <<< "$status"; then
-      echo "openbao-prod: refused: bao status says the store is initialized" >&2; exit 1
-    fi
+    python3 -I -c 'import json, sys; sys.exit(0 if json.loads(sys.stdin.read()).get("initialized") is False else 1)' <<< "$status" 2>/dev/null ||
+      { echo "openbao-prod: refused: bao status does not read as initialized false" >&2; exit 1; }
     echo "openbao-prod: the failed start is confirmed (self-init line in the log, pod not Ready, store not initialized)"
     kc -n "$ns" delete "pod/$pod" --wait=true --timeout=120s
     kc -n "$ns" delete "pvc/$claim" --wait=true --timeout=120s

@@ -116,9 +116,9 @@ case $action in
     fi
     if ! tofu plan -input=false -no-color "${vars[@]}" -out="$plan" >> "$raw" 2>&1; then
       record none none "FAIL: plan"; echo "tailnet-policy: FAIL: plan (details in the box's log $raw)" >&2
-      # Only the error lines, never the plan's own text (a diff of the policy holds private values); IPv4 and IPv6
-      # addresses are replaced, as for init.
-      grep -E 'Error' "$raw" | head -n 6 | cut -c1-240 | sed -E 's/\x1b\[[0-9;]*m//g; s/[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?/<ip>/g; s/\[?[0-9a-fA-F]*:[0-9a-fA-F:]*:[0-9a-fA-F]*\]?/<ip>/g' >&2
+      # Only the Error: summary lines, never the plan's own text (a diff of the policy holds private values). IPv4 and IPv6
+      # addresses, e-mail addresses and tailnet names (.ts.net) are replaced, as the error can quote any of them.
+      grep -E '^(.{0,4})Error: ' "$raw" | head -n 4 | cut -c1-200 | sed -E 's/\x1b\[[0-9;]*m//g; s/[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?/<ip>/g; s/\[?[0-9a-fA-F]*:[0-9a-fA-F:]*:[0-9a-fA-F]*\]?/<ip>/g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/<email>/g; s/[A-Za-z0-9.-]*\.ts\.net/<tailnet>/g' >&2
       exit 1
     fi
     hash=$(sha256sum "$plan" | cut -c1-12)
