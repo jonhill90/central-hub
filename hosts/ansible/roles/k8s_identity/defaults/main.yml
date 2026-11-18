@@ -52,6 +52,13 @@ k8s_identity_otp_period: 30
 # the owner reads a password there and changes one by editing the file and running the role again.
 k8s_identity_values_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/central-hub/identity.env"
 
+# Where c1 reads realm lab's Secret and each app's copy of its client secret from (plan step 8a, D-0058 rule 8).
+# "" (the default): this role makes them from the values file, as before. openbao: it makes an ExternalSecret for
+# each instead, read through ClusterSecretStore openbao from c1/identity, one key per line of the values file,
+# which the agent box's `secrets-store put-apps` writes (SOPS first, then OpenBao). It follows the root's
+# appSecretsStore (k8s_gitops_source_app_secrets_store), so one inventory value moves every app secret.
+k8s_identity_secrets_store: "{{ k8s_gitops_source_app_secrets_store | default('') }}"
+
 # When the realm's code or a value in the file changes, delete realm lab and import it again
 # (KeycloakRealmImport never updates a realm that exists). Sessions end; nothing else is lost,
 # because every part of the realm comes from this role. false: only create the realm once.
