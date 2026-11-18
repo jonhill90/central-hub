@@ -3,11 +3,11 @@ title: Serve the Proxmox web UI on port 443
 status: draft
 kind: manual
 trigger: once, after the Proxmox host's certificate is set (proxmox-cert.yml); again after each certificate renewal, at least every 30 days
-runner: the host job, workflow `lab-proxmox-host` on the agent box's runner through wrapper `proxmox-host` (pick 241); it runs proxmox-proxy.yml and nothing else. Built, not installed, so until the install below nothing applies this playbook
+runner: the host job, workflow `lab-proxmox-host` on the agent box's runner through wrapper `proxmox-host` (pick 241); it runs one of three named playbooks, chosen by the workflow's `job` input (`proxy`, `sso`, `agent-access`), and nothing else. Built, not installed, so until the install below nothing applies this playbook
 outcome: the Proxmox web UI answers on https://pve.<zone> with the lab certificate, on port 443 with no port in the address, served by Apache httpd; port 80 redirects to it; port 8006 stays as the fallback and the agent box's lifeline
 needs: the host's certificate from the lab CA (role proxmox_cert, playbook proxmox-cert.yml) with a DNS name for the host's web UI that resolves from where the owner browses; the host firewall rows for 443 and 80 (the same sources as 8006); the host job installed (below), which needs the owner's tap; python3-apt on the host for the check run
 private-values: [proxmox-cert-names, agent-box-proxmox-host, agent-box-lifeline-address, agent-box-lifeline-allow]
-files: [hosts/ansible/roles/proxmox_proxy/, hosts/ansible/playbooks/proxmox-proxy.yml, hosts/ansible/playbooks/proxmox-host-key.yml, hosts/ansible/roles/agent_box/files/proxmox-host.sh, hosts/ansible/roles/agent_box/tasks/proxmox_host.yml, hosts/ansible/roles/agent_box/tasks/proxmox_host_inventory.yml, .github/workflows/lab-proxmox-host.yml, hosts/ansible/roles/proxmox_firewall/defaults/main.yml, .github/hosts-check/tests/test_proxy.sh, .github/hosts-check/tests/test_proxmox_host_job.sh]
+files: [hosts/ansible/roles/proxmox_proxy/, hosts/ansible/playbooks/proxmox-proxy.yml, hosts/ansible/playbooks/proxmox-host-key.yml, hosts/ansible/roles/agent_box/files/proxmox-host.sh, hosts/ansible/roles/agent_box/tasks/proxmox_host.yml, hosts/ansible/roles/agent_box/tasks/proxmox_host_inventory.yml, .github/workflows/lab-proxmox-host.yml, hosts/ansible/roles/proxmox_firewall/defaults/main.yml, .github/hosts-check/tests/test_proxy.sh, .github/hosts-check/tests/test_proxmox_host_job.sh, .github/hosts-check/tests/test_proxmox_host_workflow.sh]
 last-tested: "not yet run on the host with Apache httpd; the role was tested on 2026-11-14 against a stand-in Proxmox host in a container (Debian trixie, systemd, nginx serving as the old role left it, a stand-in pveproxy): the install with nginx still serving, the move, a failing proof, a stopped move, a killed run, an open console across a graceful reload, and a host with no nginx (.github/hosts-check/tests/test_proxy.sh); the host job was tested the same day against the same stand-in: the key line with from=, a check that changes nothing, a wrong hash refused, an apply that moves 443 (.github/hosts-check/tests/test_proxmox_host_job.sh)"
 superseded-by:
 ---
@@ -61,7 +61,7 @@ Steps 2 and 3 need the controller, whose guard takes typed words only, so today 
 
 ## Steps (through the host job)
 
-The job runs only from `main`, started by hand: `lab-proxmox-host` with `action: check`, or a session on the box with `proxmox-host check`. A session can't start the workflow today (dispatch returns 403, Library plans/merge-off-mac/DESIGN.md line 33), so the apply waits on that decision. GitHub's log gets only the commit, the hash, counts and pass or fail; the full output stays in `/var/lib/agent-box-host/logs/`.
+The job runs only from `main`, started by hand: `lab-proxmox-host` with `job: proxy` and `action: check`, or a session on the box with `proxmox-host check`. The workflow's `job` input names the playbook (`proxy` is the default, `sso` is [sign-in-to-proxmox-through-keycloak.md](sign-in-to-proxmox-through-keycloak.md) step 3, `agent-access` is the section below); `test_proxmox_host_workflow.sh` fails if the input and the wrapper's job names ever differ. Before this input the workflow could only run `proxy`, and the wrapper lets only the runner apply, so `sso` and `agent-access` could be checked but not applied. A session can't start the workflow today (dispatch returns 403, Library plans/merge-off-mac/DESIGN.md line 33), so the apply waits on that decision. GitHub's log gets only the commit, the hash, counts and pass or fail; the full output stays in `/var/lib/agent-box-host/logs/`.
 
 The check run needs `python3-apt` on the host: Ansible's apt module installs it itself on a real run but not in a check, and fails the check without it. Whether the host has it is not measured; if the first check fails with "python3-apt must be installed to use check mode", that is the cause.
 
@@ -71,12 +71,13 @@ The check run needs `python3-apt` on the host: Ansible's apt module installs it 
 
    The reviewer passes that hash (D-0041 rule 6: the host has no dev twin).
 
-2. The run: `lab-proxmox-host` with `action: apply`, the pass's message ID and the hash. It checks again and refuses unless the hash is the same, so a new commit on `main` or a changed host stops it; then it runs the playbook, and fails the run if a task changed that the check showed neither changed nor skipped (D-0041 rule 4).
+2. The run: `lab-proxmox-host` with `job: proxy`, `action: apply`, the pass's message ID and the hash. It checks again and refuses unless the hash is the same, so a new commit on `main` or a changed host stops it; then it runs the playbook, and fails the run if a task changed that the check showed neither changed nor skipped (D-0041 rule 4).
    expect: `failed=0`; the task "The move, with its proofs" is `changed`; `/var/lib/proxmox-proxy/cutover.result` starts with `done`; `ss -ltnp 'sport = :443'` names `apache2`; the last task, "The proof holds", passes.
    If the move rolls back, nginx serves again and the run fails with the unit's error. Read `journalctl -u proxmox-proxy-cutover`, fix the cause, remove `cutover.result`, and run again; a re-run does not move a host whose file says `rolled-back`, `rollback-failed` or `started`.
 
-3. Open the address from the owner's device: `https://pve.<zone>`.
-   expect: the login page with no certificate warning and no port in the address. Open a VM's console (noVNC) and a node shell: both must connect. This is the part no check in the role can prove, because a console needs a login ticket.
+3. Prove the address with no browser: `signin-check.sh run` on the box ([sign-in-to-proxmox-through-keycloak.md](sign-in-to-proxmox-through-keycloak.md), step 4; it needs the test account, an access-rights step). Its Proxmox lines reach `https://pve.<zone>` by name on 443 with the certificate checked against the lab root (config `verify` left on) and end with a session for the test account.
+   expect: `1 auth url`, `5 proxmox login` and `6 permissions` each end `ok`, so the name answers on 443 with a certificate the box trusts and no port, and the login reaches `pveproxy` through Apache httpd.
+   Not proven by that check: a VM's console (noVNC) and a node shell. Both are WebSockets that need a login ticket and the console right, and no script here opens one, so they stay a look in a browser by the owner, once. `proxy-proofs.sh` shows only that the upgrade reaches `pveproxy` (it answers 401 without a ticket).
 
 4. After each certificate renewal (`proxmox-cert.yml`), run `proxmox-proxy.yml` again (steps 1 and 2). `proxmox-cert.yml` is not on the host job: it reaches c1 prod's first control-plane node as root, so it still runs from the controller.
    why: Apache httpd reads the certificate at a reload; the role reloads it gracefully when the certificate it serves is not the one on disk.
