@@ -26,6 +26,11 @@ run "jumpbox_on_dev_with_its_size" {
   }
 
   assert {
+    condition     = proxmox_virtual_environment_vm.jumpbox.memory[0].floating == 4096
+    error_message = "The jumpbox keeps a balloon (floating 4096), so the memory it frees goes back to the host."
+  }
+
+  assert {
     condition     = proxmox_virtual_environment_vm.jumpbox.initialization[0].ip_config[0].ipv4[0].gateway == "10.1.30.1"
     error_message = "The gateway must be the dev VLAN's .1 from the shared VLAN file."
   }
