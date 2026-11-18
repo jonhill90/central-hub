@@ -8,4 +8,9 @@
   hosts: desktop
   become: true
   roles:
+    # The lab root in the desktop's trust store (AlmaLinux ca-trust), so Firefox and curl there open
+    # the apps' names with no certificate warning (ask 275). The box's wrapper passes the switch and
+    # the chain file; run by hand without them, it stays off and removes any root an earlier run put
+    # there. Before the desktop role, whose last task removes the admin user's SSH key.
+    - role: k8s_node_trust
     - role: desktop

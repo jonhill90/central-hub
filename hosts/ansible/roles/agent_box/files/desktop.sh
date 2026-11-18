@@ -26,6 +26,9 @@ state=$work/state/desktop.tfstate
 plan=$work/state/desktop.tfplan
 vars=$work/state/desktop.tfvars.json
 sshkey=$keys/desktop-ssh
+# c1's lab intermediate with the root appended, the same file the prod rebuild hands to k8s_certs and
+# k8s_node_trust. configure puts its root in the desktop's trust store (role k8s_node_trust).
+labchain=$keys/prod/lab-ca/c1-intermediate-chain.crt
 # Ansible comes from the box's own virtual environment (role agent_box), as in the rebuild wrapper.
 export HOME=$work PATH=/usr/local/libexec/agent-box/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/desktop TF_IN_AUTOMATION=1 ANSIBLE_COLLECTIONS_PATH=/usr/local/libexec/agent-box/collections ANSIBLE_HOME=$work/ansible-home
@@ -88,13 +91,17 @@ configure() {
   # Expanded now: the trap runs after configure returns, when its locals are gone.
   # shellcheck disable=SC2064
   trap "rm -f '$extra' '$inventory'" EXIT
-  python3 -I - "$settings" "$inventory" "$extra" <<'PY'
+  # Without the lab root the desktop's browser warns on every lab name, so configure stops instead.
+  [[ -s $labchain ]] || { echo "desktop: $labchain is missing; the desktop would not trust the lab's names (install the prod keys first)" >&2; exit 1; }
+  python3 -I - "$settings" "$inventory" "$extra" "$labchain" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1]))
 admin = s.get("admin_user", "admin")
 json.dump({"desktop": {"hosts": {"desktop_vm": {
     "ansible_host": s["address"], "ansible_user": admin}}}}, open(sys.argv[2], "w"))
-json.dump({"desktop_rdp_source": s["rdp_source"], "desktop_admin_user": admin}, open(sys.argv[3], "w"))
+json.dump({"desktop_rdp_source": s["rdp_source"], "desktop_admin_user": admin,
+           "k8s_node_trust_enabled": True, "k8s_node_trust_chain_file": sys.argv[4]},
+          open(sys.argv[3], "w"))
 PY
   mkdir -p "$work/.ssh"
   cd "$repo/hosts/ansible"

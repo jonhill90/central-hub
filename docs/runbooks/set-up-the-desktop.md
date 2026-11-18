@@ -28,13 +28,14 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 |---|---|
 | VM | `hosts/terraform/home/desktop`: one VM with an ID from 400-499 (STD-0001), on VNet dev, cloned from template 9001 into pool `desktop` (so the agents' rights survive a teardown, as pool `dev`'s do) |
 | Software | role `desktop`: GNOME (gdm, gnome-shell, Nautilus, Ptyxis), `gnome-remote-desktop` in its system (headless remote login) mode with a certificate made on the VM, Firefox, all from the AlmaLinux 10 base repositories, a login user without sudo and with its password locked, firewalld (installed by the role) accepting 3389/tcp from the connector's address only, and the admin SSH key removed at the end, then ssh and cockpit removed from firewalld's public zone |
-| Playbook | `playbooks/desktop.yml`, hosts group `desktop` |
+| Playbook | `playbooks/desktop.yml`, hosts group `desktop`: role `k8s_node_trust` (the lab root in the system trust store), then role `desktop` |
 | Private values | the VM's name and address in `desktop.json` (the same shape as `home.tfvars.example`), the group in the inventory, `desktop_rdp_source` (the address RDP arrives from: the tailnet connector's own address on the mgmt VLAN, see below) |
 
 ## What is not built yet
 
 - The VM is built and configured (2026-11-14, see "Last tested"); the console passwords, the RDP handshake and GDM's login over RDP are not yet seen. The `desktop` wrapper (`plan|apply|configure|destroy`) is on the box once `agent_box_desktop` is set in the private inventory.
 - VM 400 still has ssh and cockpit open in firewalld's public zone, because its last run stopped at the key removal before the task that closes them existed. The closing task (`desktop | ssh and cockpit are removed from the public zone`) reaches the VM only on a rebuild from teardown.
+- The lab root reaches the desktop only on a rebuild from teardown, like the closing task above: VM 400 was configured before role `k8s_node_trust` was in the playbook.
 - Nothing changes on the Mac: the switch is the value `DESKTOP_ACCESS` in `agent-access.sh`, which the already-allowed `proxmox-agent-access.sh run` carries to the host.
 - No OPNsense rule is needed for RDP: the mgmt VLAN already passes to every lab VLAN, and the connector's address is what the VM sees. Narrowing which tailnet devices can reach 3389 is a tailnet policy change, not made.
 
@@ -48,7 +49,7 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
    expect: `1 to add`: one VM, ID in 400-499, bridge `dev`, in pool `desktop`.
 
 3. Apply it: `desktop apply`, then set up the VM: `desktop configure`.
-   expect: `failed=0`; the VM answers on SSH as the admin user until the role removes its key at the end of the run.
+   expect: `failed=0`; the VM answers on SSH as the admin user until the role removes its key at the end of the run. Role `k8s_node_trust` runs first and puts the lab root (the last certificate of the box's `/etc/agent-keys/prod/lab-ca/c1-intermediate-chain.crt`) in `/etc/pki/ca-trust/source/anchors/`, so the desktop opens the apps' names with no certificate warning. `configure` stops first with "the desktop would not trust the lab's names" if that file is missing on the box.
 
 4. Take the rights away again: a PR that sets `DESKTOP_ACCESS=off` merges, then `proxmox-agent-access.sh run`.
    why: no agent keeps a way into the VM where the owner will type passwords.
