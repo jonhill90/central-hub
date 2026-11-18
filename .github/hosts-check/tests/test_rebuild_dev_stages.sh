@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# hosts/rebuild-k8s.sh's dev-only stages, dev-ca, openbao-measure, openbao-handover and identity-keycloak: each refuses any
+# hosts/rebuild-k8s.sh's dev-only stages, dev-ca, openbao-measure, openbao-handover, identity-keycloak and app-secrets (its
+# gate: test_rebuild_app_secrets.sh): each refuses any
 # ENV_NAME other than dev before it runs Ansible, dev-ca stops with a clear message when the k8s_certs role
 # has no devca tag, the measurement, its root switch and the hand-over need OPENBAO_SEAL_KEY_FILE, the hand-over
 # also needs both admin ID files, and a dev run appends
@@ -123,7 +124,7 @@ appended() { # env, only, key file: the stage list after the block, starting fro
 }
 same() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: '$2'"; fail=1; fi; }
 same "a dev run without --only appends dev-ca and identity-keycloak" "$(appended dev "" "")" "base dev-ca identity-keycloak"
-same "with a key file the measurement goes after dev-ca, the hand-over after it" "$(appended dev "" /k)" "base dev-ca openbao-measure openbao-handover identity-keycloak"
+same "with a key file the measurement goes after dev-ca, the hand-over after it, the apps' secrets last" "$(appended dev "" /k)" "base dev-ca openbao-measure openbao-handover identity-keycloak app-secrets"
 same "--only appends nothing" "$(appended dev gitops /k)" "base"
 same "prod appends nothing" "$(appended prod "" /k)" "base"
 
@@ -143,4 +144,27 @@ same "the hand-over's SKIP line from its playbook reaches the short log" "$(cat 
 printf '===== openbao-handover\nSKIP: openbao-handover: not handed over, no admin ID files named; role bootstrap stays open\n' > "$t/raw"
 s=openbao-handover raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
 same "the stage's own SKIP line reaches the short log" "$(cat "$t/log")" '  openbao-handover: SKIP: openbao-handover: not handed over, no admin ID files named; role bootstrap stays open'
+# Stage app-secrets: dev only, skipped without the in-cluster store's key file. Its SKIP line, put-apps count, compare
+# PASS and DIFF lines reach the short log (names only); each key's own put line does not.
+for envname in prod staging ""; do
+  out=$(OPENBAO_SEAL_KEY_FILE=/k APP_SECRETS_HOOK='echo HOOK' run "$envname" app-secrets "$t/ok")
+  check "app-secrets refuses ENV_NAME='${envname}'" "$out" "rc=1" "HOOK"
+  check "app-secrets says dev only for '${envname}'" "$out" "dev only" ""
+done
+out=$(APP_SECRETS_HOOK='echo HOOK' run dev app-secrets "$t/ok")
+check "app-secrets without a key file is skipped" "$out" "app-secrets skipped" "HOOK"
+check "app-secrets without a key file succeeds" "$out" "rc=0" ""
+: > "$t/log"
+printf '%s\n' '===== app-secrets' "SKIP: app-secrets: sops_copies is off: SOPS copies of the apps' secrets wait for the owner's tap (D-0058 rule 9); nothing written" > "$t/raw"
+s=app-secrets raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
+same "the apps' secrets stage's SKIP line reaches the short log" "$(cat "$t/log")" "  app-secrets: SKIP: app-secrets: sops_copies is off: SOPS copies of the apps' secrets wait for the owner's tap (D-0058 rule 9); nothing written"
+: > "$t/log"
+printf '%s\n' '===== app-secrets' 'secrets-store put: kv/c1/identity key PASSWORD_OWNER written to SOPS, then OpenBao' \
+  'secrets-store: put-apps: 3 values from rebuild-secret-source.env at c1/<name> key value, 2 from identity.env at c1/identity key <KEY>, written to SOPS, then OpenBao' \
+  'DIFF: c1/ntfy-owner-password value differs' 'PASS: compare: 4 keys equal in SOPS and OpenBao' > "$t/raw"
+s=app-secrets raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
+same "the put-apps count, DIFF and compare PASS lines reach the short log, each key's put line does not" "$(cat "$t/log")" \
+  "  app-secrets: secrets-store: put-apps: 3 values from rebuild-secret-source.env at c1/<name> key value, 2 from identity.env at c1/identity key <KEY>, written to SOPS, then OpenBao
+  app-secrets: DIFF: c1/ntfy-owner-password value differs
+  app-secrets: PASS: compare: 4 keys equal in SOPS and OpenBao"
 exit $fail
