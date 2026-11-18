@@ -15,7 +15,7 @@
 #      the proxy and agent-access jobs are never given that variable.
 #  12. `apply-recorded <hash>`, the box's own apply (no pass ID argument): it re-checks, and refuses naming each thing missing unless
 #      the check gives the hash, the ledger holds a reviewer pass for the job, commit and hash, and an unused go for the job and
-#      commit. A pass or go for another hash, commit or job does not count; the wrong recorder is refused; a go is spent by one apply.
+#      commit. A pass or go for another hash, commit or job does not count; the wrong recorder is refused; a go line (by its message ID) is spent by one apply, and a new go line at the same commit works once.
 #   9. Nothing printed holds a diff's text or the host's address; log prints the summary lines.
 # Usage: .github/hosts-check/tests/test_proxmox_host_args.sh   (needs git and python3)
 set -uo pipefail
@@ -216,6 +216,17 @@ tail -n 1 "$t/work/logs/summary.jsonl" | grep -q "\"pass\": \"$ref1\"" && tail -
 : > "$t/calls"
 job apply-recorded "$h12" > "$t/12g.out" 2>&1; rc=$?
 if [ $rc = 1 ] && grep -q "was used already" "$t/12g.out" && only_check; then ok "12 the go is spent: a second apply is refused"; else bad "12g rc=$rc $(cat "$t/12g.out")"; fi
+# a new go line (a new message ID) at the same commit works once; the spent line stays spent
+job go "$c12" cmsg_cccccccccccc "$tm" orchestrator > /dev/null 2>&1
+: > "$t/calls"
+job apply-recorded "$h12" > "$t/12i.out" 2>&1; rc=$?
+if [ $rc = 0 ] && grep -q "applied check $h12" "$t/12i.out" && grep -qv -- '--check' "$t/calls"; then ok "12 a new go at the same commit applies"; else bad "12i rc=$rc $(cat "$t/12i.out")"; fi
+job apply-recorded "$h12" > "$t/12j.out" 2>&1; rc=$?
+if [ $rc = 1 ] && grep -q "was used already" "$t/12j.out"; then ok "12 and is spent in its turn: a third apply is refused"; else bad "12j rc=$rc $(cat "$t/12j.out")"; fi
+# the same message ID recorded twice is one go, not two
+job go "$c12" cmsg_cccccccccccc "$tm" orchestrator > /dev/null 2>&1
+job apply-recorded "$h12" > "$t/12k.out" 2>&1 && bad "12 a repeated go message ID applied again"
+grep -q "was used already" "$t/12k.out" && ok "12 a go line repeated under a spent message ID stays spent" || bad "12k $(cat "$t/12k.out")"
 job ledger > "$t/12h.out" 2>&1
 if grep -q "\"relay_ref\": \"$ref1\"" "$t/12h.out" && grep -q "\"relay_ref\": \"$ref2\"" "$t/12h.out" && grep -q '^(used: ' "$t/12h.out"; then
   ok "12 ledger prints the lines, marks the spent go"; else bad "12h $(cat "$t/12h.out")"; fi

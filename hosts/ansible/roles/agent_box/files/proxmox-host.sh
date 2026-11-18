@@ -24,7 +24,7 @@
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply-recorded [<job>] <check hash, 12 hex>
 # which re-checks main's head and refuses, naming each thing missing, unless (1) that check gives the hash named, (2) the job's
 # ledger holds a reviewer pass for this job, this commit and this hash, and (3) it holds a go, recorded by the orchestrator from
-# the owner's own words, for this job and this commit that no earlier apply used. Every job needs the go: sso and agent-access
+# the owner's own words, for this job and this commit, whose line (its message ID) no earlier apply used. Every job needs the go: sso and agent-access
 # change access rights, and the proxy changes what the host listens on; the wrapper can't tell from a diff which of its changes
 # touch the firewall, so it asks for the go on all three. The ledger is this user's own folder, written only by these actions:
 #   sudo -n -u hostops .../proxmox-host.sh pass [<job>] <commit, 40 hex> <check hash> <pass message ID> <ISO time> reviewer
@@ -111,7 +111,7 @@ case $action in
     [[ -d $ledger ]] || { echo "proxmox-host: the ledger is empty"; exit 0; }
     for f in "$ledger"/pass-"$job"-*.jsonl "$ledger"/go-"$job"-*.jsonl; do
       [[ -f $f ]] || continue
-      cat -- "$f"; [[ ! -e ${f%.jsonl}.used ]] || echo "(used: $(cat -- "${f%.jsonl}.used"))"
+      cat -- "$f"; [[ ! -s ${f%.jsonl}.used ]] || sed "s/^/(used: /;s/$/)/" "${f%.jsonl}.used"
     done
     exit 0 ;;
 esac
@@ -186,19 +186,27 @@ print(hashlib.sha256(text.encode()).hexdigest()[:12], sum(t["changed"] for t in 
 PY
 }
 
-# has_line <file> <recorder> <kind> <job> [<key> <value>]...: prints the relay_ref of the first line that has all of them.
+# has_line <file> <recorder> <kind> <job> [<key> <value>]... [--unspent <used file>]: prints the relay_ref of the first line that
+# has all of them and, with --unspent, whose relay_ref is not the third word of a line of the used file.
 has_line() {
   [[ -s $1 ]] || return 0
   python3 -I - "$@" <<'PY'
-import json, sys
+import json, os, sys
 path, recorder, kind, job, *kv = sys.argv[1:]
+spent = set()
+if "--unspent" in kv:
+    i = kv.index("--unspent")
+    used = kv[i + 1]
+    kv = kv[:i]
+    if os.path.exists(used):
+        spent = {l.split()[2] for l in open(used) if len(l.split()) >= 3}
 want = {"recorder": recorder, "kind": kind, "job": job, **dict(zip(kv[::2], kv[1::2]))}
 for line in open(path):
     try:
         d = json.loads(line)
     except ValueError:
         continue
-    if all(d.get(k) == v for k, v in want.items()):
+    if all(d.get(k) == v for k, v in want.items()) and d.get("relay_ref", "") not in spent:
         print(d.get("relay_ref", ""))
         break
 PY
@@ -238,17 +246,19 @@ case $action in
       missing=()
       pf=$ledger/pass-$job-$commit-$hash.jsonl gf=$ledger/go-$job-$commit.jsonl
       pass_ref=$(has_line "$pf" reviewer pass "$job" commit "$commit" hash "$hash")
-      go_ref=$(has_line "$gf" orchestrator go "$job" commit "$commit")
+      go_any=$(has_line "$gf" orchestrator go "$job" commit "$commit")
+      go_ref=$(has_line "$gf" orchestrator go "$job" commit "$commit" --unspent "${gf%.jsonl}.used")
       [[ -n $pass_ref ]] || missing+=("no reviewer pass for job $job, commit ${commit:0:12}, check $hash")
-      if [[ -z $go_ref ]]; then missing+=("no go for job $job, commit ${commit:0:12}")
-      elif [[ -e ${gf%.jsonl}.used ]]; then missing+=("the go for job $job, commit ${commit:0:12} was used already"); fi
+      if [[ -z $go_any ]]; then missing+=("no go for job $job, commit ${commit:0:12}")
+      elif [[ -z $go_ref ]]; then missing+=("every go for job $job, commit ${commit:0:12} was used already; a new go is needed"); fi
       if [[ ${#missing[@]} -gt 0 ]]; then
         record "$hash" "$changed changed, $skipped skipped, $total tasks" "refused: ledger"
         echo "proxmox-host: refused, nothing applied: $(IFS=';'; echo "${missing[*]}")" >&2
         exit 1
       fi
-      # The go is spent before the playbook runs, so a run that fails part-way needs a new go.
-      printf '%s %s\n' "$stamp" "$hash" > "${gf%.jsonl}.used"
+      # That one go line, by its message ID, is spent before the playbook runs, so a run that fails part-way needs a new go line
+      # (a new message ID, same commit); the other lines of the file stay as they were.
+      printf '%s %s %s\n' "$stamp" "$hash" "$go_ref" >> "${gf%.jsonl}.used"
     fi
     out=$logs/apply-$stamp.json
     if ! play "$out" --diff; then

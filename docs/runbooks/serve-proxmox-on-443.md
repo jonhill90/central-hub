@@ -99,7 +99,7 @@ The orchestrator's pick (relayed 2026-11-18, 22:36 UTC): the box applies a host 
 
 1. The re-check gives the hash named (so a new commit on `main` or a changed host stops it).
 2. The job's ledger holds a **reviewer pass** for this job, this commit and this hash: `proxmox-host pass [<job>] <commit, 40 hex> <check hash> <pass message ID> <ISO time> reviewer`. A pass for another hash, commit or job does not count.
-3. The ledger holds a **go** for this job and this commit that no earlier apply used: `proxmox-host go [<job>] <commit, 40 hex> <go message ID> <ISO time> orchestrator`, recorded from the owner's own words naming the job and the commit (D-0042 rule 6). The go is spent before the playbook runs, so a run that fails part-way needs a new go.
+3. The ledger holds a **go** for this job and this commit whose line no earlier apply used: `proxmox-host go [<job>] <commit, 40 hex> <go message ID> <ISO time> orchestrator`, recorded from the owner's own words naming the job and the commit (D-0042 rule 6). The go is spent per line, by its message ID, before the playbook runs: a run that fails part-way needs a new go line (a new message ID, same commit), which works once, and a go line recorded again under a spent ID stays spent.
 
 Every job needs the go. `sso` and `agent-access` change access rights; the proxy changes what the host listens on, and the wrapper can't tell from a diff which of its changes open 443 or 80 to the firewall, so it asks for the go on all three. `proxmox-host ledger [<job>]` prints the lines and marks a spent go. The ledger is `hostops`'s own folder, `/var/lib/agent-box-host/ledger/`, and only these actions write it.
 
