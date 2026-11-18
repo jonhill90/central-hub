@@ -181,17 +181,32 @@
     file: azure_identity.yml
     apply:
       tags: [timers]
-  when: (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_azure_identity and (k8s_backup_azure_fixed_cert_file | length == 0)
+  when: >-
+    (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_azure_identity and
+    (k8s_backup_azure_fixed_cert_file | length == 0) and (k8s_backup_azure_seed_dir | length == 0)
+  tags: [timers]
+
+# A rebuilt node that backs up as before: its own earlier certificate, carried over the rebuild by the
+# controller, so the controller needs no Azure sign-in (the agent box has none).
+- name: timers | Azure sign-in for the nodes, with each node's carried certificate
+  ansible.builtin.include_tasks:
+    file: azure_seeded_cert.yml
+    apply:
+      tags: [timers]
+  when: k8s_backup_enabled and not k8s_backup_reader and k8s_backup_azure_identity and (k8s_backup_azure_seed_dir | length > 0)
   tags: [timers]
 
 # A reader (dev) may sign in with one fixed read-only certificate instead of one made on each node:
-# the controller holds the file, so it needs no Azure write rights (the agent box has none).
+# the controller holds the file, so it needs no Azure write rights (the agent box has none). A reader on a
+# rebuilt prod signs in with each node's carried certificate (k8s_backup_azure_seed_dir) the same way.
 - name: timers | Azure sign-in for the nodes, with the fixed reader certificate
   ansible.builtin.include_tasks:
     file: azure_fixed_cert.yml
     apply:
       tags: [timers]
-  when: k8s_backup_reader and k8s_backup_azure_identity and (k8s_backup_azure_fixed_cert_file | length > 0)
+  when: >-
+    k8s_backup_reader and k8s_backup_azure_identity and
+    ((k8s_backup_azure_fixed_cert_file | length > 0) or (k8s_backup_azure_seed_dir | length > 0))
   tags: [timers]
 
 # The controller's env file, plus the Azure sign-in lines when the identity is on.

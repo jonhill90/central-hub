@@ -1,5 +1,6 @@
 ---
-# Reader mode with one fixed certificate (dev, from the agent box). The controller holds a PEM file
+# Reader mode with one fixed certificate (dev, from the agent box), or with each node's own carried
+# certificate (a rebuilt prod's restore stage, k8s_backup_azure_seed_dir). The controller holds a PEM file
 # (key and certificate) that the read-only backup app already knows. Each node gets a copy and signs
 # in with it; no node makes a key, and nothing is uploaded to or removed from the app, so the
 # controller needs no Azure sign-in. The one date to watch is the certificate's expiry.
@@ -25,11 +26,16 @@
 
 - name: timers | The fixed reader certificate on the node
   ansible.builtin.copy:
-    content: "{{ lookup('ansible.builtin.file', k8s_backup_azure_fixed_cert_file) }}"
+    content: "{{ lookup('ansible.builtin.file', k8s_backup_azure_fixed_cert_src) }}"
     dest: "{{ k8s_backup_azure_cert_file }}"
     owner: root
     group: root
     mode: "0600"
+  vars:
+    # The one fixed reader file, or this node's own carried certificate (k8s_backup_azure_seed_dir).
+    k8s_backup_azure_fixed_cert_src: >-
+      {{ k8s_backup_azure_fixed_cert_file if k8s_backup_azure_fixed_cert_file | length > 0
+         else k8s_backup_azure_seed_dir ~ '/' ~ inventory_hostname ~ '.pem' }}
   no_log: true
 
 - name: timers | Keep the sign-in settings for the node env file

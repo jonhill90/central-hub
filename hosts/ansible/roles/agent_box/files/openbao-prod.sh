@@ -61,7 +61,7 @@ case $action in
 esac
 
 if [[ $action == log ]]; then
-  newest=$(ls -1 "$logs"/run-*.log 2>/dev/null | sort | tail -n 1)
+  newest=$(ls -1 "$logs"/run-*.log 2>/dev/null | sort | tail -n 1 || true)
   [[ -n $newest ]] || { echo "openbao-prod: no run has been logged yet" >&2; exit 1; }
   echo "run: ${newest##*/}"
   sed -E 's/\x1b\[[0-9;]*m//g' -- "$newest" | grep -E '^(openbao-prod:|PLAY RECAP|.*(PASS|FAIL|SKIP):|[^ ]+ +: ok=)' | cut -c1-200 | head -n 60 || true
@@ -97,8 +97,8 @@ commit=$(git -C "$repo" rev-parse --short HEAD)
 rm -rf -- "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
-import ipaddress, json, sys, yaml
-src, dst, key, known, settings = sys.argv[1:6]
+import ipaddress, json, os, sys, yaml
+src, dst, key, known, settings, stable = sys.argv[1:7]
 s = json.load(open(settings))
 seal, store, cidr = s.get("seal_node") or "", s.get("store_host") or "", s.get("box_cidr") or ""
 def die(m):
@@ -149,9 +149,12 @@ v["k8s_gitops_source_openbao_in_cluster"] = True
 v["k8s_gitops_source_openbao_seal_node"] = seal
 v["k8s_gitops_source_openbao_store_host"] = store
 if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
+# Once rebuild-prod has built prod again, its local-path StorageClass names folders <namespace>/<claim>; a
+# StorageClass's parameters can't change in place, so every later render keeps that setting.
+if os.path.exists(stable): v["k8s_gitops_source_local_path_stable_folders"] = True
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$settings" || exit 1
+)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$settings" "$work/state/prod-stable-folders" || exit 1
 chmod 600 "$inventory/hosts.yml"
 
 # Every host: plain ssh to ansible_host with the box's key and nothing else; no host labelled another env than prod.

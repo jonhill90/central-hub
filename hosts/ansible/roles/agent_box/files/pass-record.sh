@@ -2,6 +2,7 @@
 # /usr/local/libexec/agent-box/pass-record.sh: the pass ledger the merge sweep reads (D-0042 rule 2, rule 8).
 # Runs as user `keys` through sudo. Installed by the agent_box role; root owns it.
 #   pass-record add ROLE OWNER/REPO PR HEAD RELAY_REF RELAY_TIME RECORDER   append one pass for this exact head
+#                                                                            (RECORDER: orchestrator, builder or reviewer; the reviewer records the role reviewer only)
 #   pass-record show OWNER/REPO HEAD                                         print that head's ledger
 #   pass-record halt RELAY_REF RECORDER | resume RELAY_REF RECORDER        set or clear the stop flag the sweep reads first
 #                                                                            (resume: recorder orchestrator only)
@@ -35,7 +36,10 @@ case ${1:-} in
     [[ $head =~ ^[0-9a-f]{40}$ ]] || die "HEAD must be the full 40-character head"
     ref_ok "$ref" || die "RELAY_REF must be a cmsg_ message id"
     [[ $rtime =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || die "RELAY_TIME must be an ISO time like 2026-11-14T13:00:00Z"
-    case $recorder in orchestrator | builder) ;; *) die "RECORDER must be orchestrator or builder" ;; esac
+    case $recorder in orchestrator | builder | reviewer) ;; *) die "RECORDER must be orchestrator, builder or reviewer" ;; esac
+    # The reviewer lane records its own pass, so a merge does not wait for the orchestrator (an agent pick, relayed by the
+    # orchestrator on 2026-11-18). It records the role reviewer only: never a council line (earlier ledgers keep theirs) and never an owner-tap.
+    [[ $recorder != reviewer || $role == reviewer ]] || die "the reviewer records only the role reviewer"
     # An owner-tap line is the orchestrator's word for a card tap the box cannot see; any session can call add, so
     # no other recorder may write one.
     [[ $role != owner-tap || $recorder == orchestrator ]] || die "owner-tap is recorded by the orchestrator only"

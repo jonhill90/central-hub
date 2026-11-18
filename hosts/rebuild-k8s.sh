@@ -9,7 +9,7 @@
 # rebuild.env (mode 0600), which sets:
 #   ENV_NAME      dev or prod
 #   VM_ID_MIN     lowest VM ID this env may touch (dev: 250)
-#   VM_ID_MAX     highest VM ID this env may touch (dev: 257; 258 and 259 are the jumpboxes)
+#   VM_ID_MAX     highest VM ID this env may touch (dev: 257; 258 is the agent box, 259 was the rehearsal container)
 #   TFVARS        the k8s run folder's tfvars for this env
 #   TFSTATE       its OpenTofu state file
 #   TOFU_ENV      a file that exports PROXMOX_VE_ENDPOINT, PROXMOX_VE_API_TOKEN (and _INSECURE)
@@ -243,7 +243,7 @@ preflight_guests() {
   printf '%s' "$out" | python3 -c 'import json,sys
 rows = sorted(json.load(sys.stdin)["data"], key=lambda r: r.get("vmid", 0))
 print("preflight: guest list from /cluster/resources?type=vm, %d guests visible to the token" % len(rows))
-print("preflight: guest note: only guests the token can see are listed; VM 258 and CT 259 are NoAccess for it (agent-access.sh, NO_ACCESS), so the memory these lines add up to undercounts")
+print("preflight: guest note: only guests the token can see are listed; VM 258 is NoAccess for it (agent-access.sh, NO_ACCESS), so the memory these lines add up to undercounts")
 for r in rows:
     print("preflight: guest vmid=%s type=%s status=%s maxmem=%s MiB mem=%s MiB name=%s pool=%s" % (
         r.get("vmid"), r.get("type"), r.get("status"), r.get("maxmem", 0) // 1048576, r.get("mem", 0) // 1048576,
@@ -520,6 +520,11 @@ run_stage() {
     apps) wait_apps && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
     certs) ap playbooks/k8s-certs.yml ;;
     identity) ap playbooks/k8s-identity.yml ;;
+    # Prod rebuilt from the agent box only, after identity: prod's Keycloak database back from its dump in the
+    # snapshot the restore stage used, so accounts and their one-time-code devices come back as they were.
+    identity-db)
+      [ "$ENV_NAME" = prod ] || { echo "the Keycloak database is put back on prod only"; return 1; }
+      ap playbooks/k8s-identity-restore.yml ;;
     # Dev only, and added to a dev run after `checks` (below): a throwaway in-cluster CA and the Gateway's
     # certificate from it, so dev has HTTPS with no prod secret (no Cloudflare token, no lab CA key).
     dev-ca)
@@ -655,6 +660,8 @@ runner_run_teardown() { # [failed]
 }
 
 echo "rebuild: env $ENV_NAME, stages: $stages, log $log"
+# The commit in the short log, so a later run can name the one it rests on (D-0035 rule 3(a): prod after dev).
+echo "rebuild: central-hub $(git -C "$repo" rev-parse HEAD 2>/dev/null || echo unknown)" | tee -a "$log"
 # Dev only, while the sign-in stage runs: each node's CPU and memory from metrics-server (kubectl top nodes), every
 # 60 s, into the short log, so a slow or failed Keycloak stage shows whether the worker ran out of memory or CPU
 # (the 2026-11-17 04:33 UTC run timed out with no reading). Read-only, never fatal; stopped when the stage ends, and it

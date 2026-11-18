@@ -78,7 +78,7 @@ out=$(TFVARS_FILE="$t/norole.tfvars" run dev 31 1); check "a declared node with 
 out=$(STATE="$t/missing.tfstate" run dev 31 28); check "no state file means a fresh build and is checked" "$out" "branch checked" ""
 out=$(STATE="$t/empty.tfstate" run dev 31 17); check "an empty state is checked and passes with enough memory" "$out" "branch checked" "refused"
 out=$(run dev 31 28); check "the guest list is shown, sorted by VM ID" "$out" "guest vmid=411 type=qemu status=running maxmem=8192 MiB mem=4096 MiB name=agent-box"
-check "the list says VM 258 and CT 259 are not visible" "$out" "VM 258 and CT 259 are NoAccess for it"
+check "the list says VM 258 is not visible" "$out" "VM 258 is NoAccess for it"
 check "a name is cleaned to safe characters" "$out" "name=cirunner01" "name=ci runner;01"
 check "the list says which API path and how many" "$out" "guest list from /cluster/resources?type=vm, 2 guests"
 check "the refusal still comes after the list" "$out" "refused" "rc=0"

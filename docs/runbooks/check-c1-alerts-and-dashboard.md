@@ -7,7 +7,7 @@ runner: the owner, or an agent lane with the Grafana URL
 outcome: you know whether every node, Argo CD Application and app on c1 is healthy, and which runbook to open if not
 needs: a browser on the lab network; Grafana's admin password (Secret monitoring/kube-prometheus-stack-grafana) or a lab sign-in once Grafana uses Keycloak
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/home/c1/apps/monitoring-extras/]
+files: [hosts/kubernetes/home/c1/apps/monitoring-extras/, hosts/kubernetes/home/c1/apps/openbao/values.yaml]
 last-tested: not yet run on c1
 superseded-by:
 ---
@@ -29,7 +29,19 @@ Alertmanager sends every alert to ntfy on c1 ([Get c1's alerts on a phone](get-c
 3. If "Alerts firing" is red, open Alerting, then Alert rules, and filter on `C1`.
    expect: the rule's summary says what is wrong. The table below says what each one means.
 
-4. Read the logs panel at the bottom for errors around the time the trouble began.
+4. Read the logs panels for errors around the time the trouble began.
+
+5. Read the **OpenBao** and **Jellyfin** rows.
+   expect: OpenBao reads Unsealed, its pod is ready, the last snapshot is under 3 hours old, and there are 0 audit write failures. Jellyfin's pod is ready with 0 restarts in 24 hours, and its requests panel shows mostly `200`. On a cluster without OpenBao inside it, the OpenBao panels show "No data".
+
+## Read the panels without a browser
+
+CronJob `monitoring/panel-check` asks Prometheus for the OpenBao and Jellyfin panels' values every half hour, plus "Alerts firing", and prints one line per panel. It holds no token and reads only Prometheus, inside the cluster. A panel with no data fails the run. An agent reads it from the agent box with the read-only account ([give-agents-read-access-to-c1.md](give-agents-read-access-to-c1.md)):
+
+1. `c1-read get jobs -n monitoring --sort-by=.metadata.creationTimestamp`
+   expect: the newest `panel-check-<number>` job is listed with completions `1/1`.
+2. `c1-read logs -n monitoring job/<that job>`
+   expect: one line per panel, for example `OpenBao unsealed: 1`, ending `panel check: every panel has data`.
 
 ## The alerts
 
@@ -43,6 +55,13 @@ Alertmanager sends every alert to ntfy on c1 ([Get c1's alerts on a phone](get-c
 | C1LokiDown | Loki has no ready pod; new logs are lost | [logging runbook](move-logging-to-argo-cd.md) |
 | C1AlertsNotDelivered | Alertmanager failed to hand alerts to ntfy | [alerts runbook](get-c1-alerts-on-your-phone.md) |
 | C1PodCrashLooping | A container restarted more than 5 times in 30 minutes | `kubectl -n <namespace> logs <pod> --previous` |
+| C1JellyfinNotScraped | Prometheus can't read Jellyfin's `/metrics` for 15 minutes | [Jellyfin runbook, Metrics](move-jellyfin-to-argo-cd.md#metrics) |
+| C1JellyfinErrors | Jellyfin answered more than 0.05 server errors (5xx) a second for 15 minutes | Jellyfin's log in the dashboard's logs panel |
+| C1OpenBaoNotReady | OpenBao has no ready pod for 10 minutes: sealed or down, so apps can't read secrets | [secrets store runbook](set-up-the-secrets-store.md#metrics-alerts-and-restarts) |
+| C1OpenBaoSealed | OpenBao answers but is sealed | the same runbook, "If it fails" |
+| C1OpenBaoNotScraped | Prometheus can't read OpenBao's metrics, so the seal and audit alerts can't fire | `kubectl -n openbao get endpoints openbao-active` and the NetworkPolicy |
+| C1OpenBaoAuditFailing | OpenBao failed to write its audit log; it refuses requests it can't audit | the audit claim's free space: `kubectl -n openbao exec openbao-0 -- df -h /openbao/audit` |
+| C1OpenBaoSnapshotStale | No successful hourly snapshot for 3 hours | `kubectl -n openbao logs job/<newest openbao-snapshot job>` |
 
 ## Change it
 

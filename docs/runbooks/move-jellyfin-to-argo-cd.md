@@ -7,8 +7,8 @@ runner: an agent lane, through the owner's Mac (D-0022)
 outcome: Argo CD's Application `jellyfin` is Synced and Healthy, the setup Job has finished the first-run wizard, the admin password from Secret `jellyfin-admin` signs in, and Ansible no longer applies Jellyfin
 needs: the lab clone of central-hub with its private inventory; SSH to c1's control plane as D-0022 says; the root Application `c1` already made (metrics-server runbook, step 1); External Secrets running on c1
 private-values: [k8s_gateway_zone]
-files: [hosts/kubernetes/home/c1/apps/jellyfin/, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_jellyfin/, hosts/ansible/playbooks/k8s-jellyfin.yml]
-last-tested: 2026-11-10, steps 1 to 3, 5 and 6 on c1, auto-sync took over at 03:31 UTC (#140), Synced and Healthy, the setup Job ran and the pod did not restart; admin signed in with the password from Secret media/jellyfin-admin through the API (AuthenticateByName 200, IsAdministrator true); k8s-jellyfin.yml changed=0 twice. Step 4 (password to the env file) not yet run
+files: [hosts/kubernetes/home/c1/apps/jellyfin/, hosts/kubernetes/home/c1/apps/monitoring-extras/templates/jellyfin-podmonitor.yaml, hosts/kubernetes/home/c1/root/values.yaml, hosts/ansible/roles/k8s_jellyfin/, hosts/ansible/playbooks/k8s-jellyfin.yml]
+last-tested: 2026-11-10 (sign-in through Keycloak, 2026-11-18 02:30 UTC, an agent lane from the agent box, logs read with c1-read after #451 synced, no password typed, the init container checked the plugin sha256 and installed 5.1.1, Jellyfin logged the line Loaded plugin SSO Authentication 5.1.1, Job completed and skipped the provider because Secret jellyfin-lab-root-ca does not exist yet; the provider write and a sign-in not run, see its section), steps 1 to 3, 5 and 6 on c1, auto-sync took over at 03:31 UTC (#140), Synced and Healthy, the setup Job ran and the pod did not restart; admin signed in with the password from Secret media/jellyfin-admin through the API (AuthenticateByName 200, IsAdministrator true); k8s-jellyfin.yml changed=0 twice. Step 4 (password to the env file) not yet run
 superseded-by:
 ---
 
@@ -72,6 +72,57 @@ The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `jellyfin`
 6. By PR, set `autoSync: true` for `jellyfin` in `hosts/kubernetes/home/c1/root/values.yaml`. In the private inventory, set `k8s_jellyfin_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-jellyfin.yml`.
    why: from now on git is the source of truth. The role skips every task, so it never fights Argo CD.
    expect: the play reports `changed=0`, and a second run reports `changed=0` too.
+
+## Sign in through Keycloak
+
+Jellyfin has no OpenID Connect of its own, so the chart adds it by plugin. Everything is in git; nothing is clicked.
+
+| Part | Where | What it does |
+|---|---|---|
+| Plugin | init container `sso-plugin` in `templates/jellyfin.yaml`, `files/install-sso-plugin.sh` | Before Jellyfin starts, downloads the SSO Authentication plugin 5.1.1 from K0lin's fork of `9p4/jellyfin-plugin-sso` (the original is archived and stops at Jellyfin 10.11; 5.1.1's `meta.json` has `targetAbi` 12.0.0.0), checks its sha256 and unpacks it into `/config/plugins`. |
+| Trust | the same init container, Secret `media/jellyfin-lab-root-ca` | Keycloak's certificate comes from the lab CA. The lab root is not in git (its names may be private); `playbooks/k8s-identity.yml` copies it there from the controller's file `k8s_identity_jellyfin_root_ca_file`. The container adds it to a copy of the public bundle and Jellyfin reads that through `SSL_CERT_FILE`. With no Secret yet, Jellyfin starts as before and the Job skips the sign-in; a file with no certificate stops the container. The role restarts Jellyfin when it first makes or changes that Secret, because the bundle is built when the pod starts; then sync again (or delete the Job) so the Job writes the provider. |
+| Provider | the setup Job's `sso` steps in `files/setup.sh` | After each sync: signs in as `admin`, waits until the plugin is loaded, writes provider `keycloak` (`POST /sso/OID/Add/keycloak`: issuer `https://sso.apps.c1.prod.<zone>/realms/lab`, client `jellyfin`, secret from `media/jellyfin-sso`, roles from the realm's `roles` claim; `admin` makes a Jellyfin admin) and reads it back. The call overwrites, so a second run changes nothing. |
+
+Its settings are the `sso:` block of `apps/jellyfin/values.yaml`. The client and the Secret `media/jellyfin-sso` come from `playbooks/k8s-identity.yml` ([set-up-lab-sign-in.md](set-up-lab-sign-in.md)); with no client secret, or no lab root Secret, yet the Job skips this part and says so.
+
+Prove it without typing a password:
+
+1. `kubectl -n media logs job/jellyfin-setup` ends with `done: sso provider keycloak set`.
+2. `kubectl -n media logs deploy/jellyfin -c jellyfin` shows `Loaded plugin: SSO Authentication`.
+3. From a machine that can reach the app: `curl -s https://jellyfin.apps.c1.prod.<zone>/sso/OID/start/keycloak` answers a redirect whose `Location` starts with the issuer above.
+4. The owner's sign-in with the Keycloak button, once, is the end-to-end proof.
+
+If it fails: **"plugin ... is not loaded"** means Jellyfin refused it (read the Jellyfin log for `targetAbi`); **a TLS error in the Jellyfin log** means the lab root is missing from the bundle (`kubectl -n media logs deploy/jellyfin -c sso-plugin` shows the certificate count). The way back is `sso.enabled: false` by PR; the plugin folder stays on the claim and does nothing.
+
+## Metrics
+
+Jellyfin serves Prometheus metrics at `/metrics` only when its `EnableMetrics` setting is on, which is off by default (<https://jellyfin.org/docs/general/post-install/networking/advanced/monitoring>). It reads the setting only when its web host starts (Jellyfin 12.2 `Jellyfin.Server/Startup.cs`, `UseHttpMetrics` and `MapMetrics`).
+
+| Part | Where | What it does |
+|---|---|---|
+| The setting | the setup Job's `metrics` step in `files/setup.sh`, `metrics.enabled` in `values.yaml` | Signs in as `admin` and reads `GET /System/Configuration`. If `EnableMetrics` is false, it posts the same configuration back with only that value changed, then calls `POST /System/Restart`. Jellyfin then builds its host again in the same process (`Program.cs`, the restart loop), so the pod is not replaced. It waits until `/metrics` answers. Once the setting is on, a run changes nothing. |
+| The scrape | PodMonitor `jellyfin` in app `monitoring-extras` | Prometheus reads the pod's port `http` at `/metrics` every 60 s. The Service is left as it was. |
+| The route | `templates/route.yaml`, `metrics.blockPath` in `values.yaml` | A request from outside the cluster for any path with a segment spelled `metrics` gets a 302 to `/`, because the docs say to keep the endpoint off the public internet. Prometheus reads the pod directly. |
+
+Why the route uses a pattern: Jellyfin's routing ignores case and a trailing slash, and its web server decodes percent-encoded letters and removes `.` and `..` segments before routing, while the Gateway's `Exact` and `PathPrefix` matches compare the path as sent. So `/Metrics`, `/metrics/` or `/%6Detrics` would pass an `Exact` match on `/metrics` and still reach the endpoint. The rule is a `RegularExpression` match instead: Cilium hands it to Envoy as an RE2 full match on the path without its query string, and tries it before any `PathPrefix` (Cilium 1.20.4, `operator/pkg/model/ingestion/gateway.go` and `envoy_virtual_host.go`). `.github/hosts-check/tests/test_jellyfin_metrics_route.sh` renders the chart and checks the pattern against each spelling below, and against Jellyfin paths it must leave alone, such as `/web/metrics.js`.
+
+| Caught | Examples |
+|---|---|
+| Any case | `/Metrics`, `/METRICS` |
+| A trailing slash, or more segments after it | `/metrics/`, `/metrics/.`, `/metrics/x/..` |
+| Percent-encoded letters or slashes | `/%6Detrics`, `/%6D%65%74%72%69%63%73`, `/%2Fmetrics` |
+| Dot segments or a doubled slash before it | `/./metrics`, `/x/../metrics`, `//metrics` |
+
+What it does not promise: an encoding the web server accepts and the test does not list could still reach the endpoint. That would show the request counts and timings per endpoint, and the process's memory and CPU. The metrics hold no password, token or media name.
+
+The metric names are prometheus-net's, the library Jellyfin 12.2 ships (8.2.1): `http_requests_received_total` (labels `code`, `method`, `controller`, `action`, `endpoint`), `http_request_duration_seconds`, `http_requests_in_progress`, and `process_*` and `dotnet_*`. They were read out of the pinned image's `Prometheus.AspNetCore.dll` and `Prometheus.NetStandard.dll` on 2026-11-18.
+
+Prove it without typing a password:
+
+1. `kubectl -n media logs job/jellyfin-setup` shows `metrics: /metrics answers`.
+2. The panel check prints `Jellyfin requests per second: <a number>` ([check-c1-alerts-and-dashboard.md](check-c1-alerts-and-dashboard.md#read-the-panels-without-a-browser)).
+
+If it fails: **`metrics: EnableMetrics not in the configuration`** means the API's answer no longer has that field: read the Jellyfin version's `ServerConfiguration`. **`C1JellyfinNotScraped`** with the Job's line present means the PodMonitor does not match the pod: compare its labels.
 
 ## Change it
 

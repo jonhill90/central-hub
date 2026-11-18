@@ -2,9 +2,9 @@
 title: Give agents Proxmox rights for the whole lab
 status: draft
 kind: manual
-trigger: once, before agents rebuild lab layers other than dev from the agent box; again after VM 258, CT 259 or CT 900 is destroyed and made again, and after the token is made or renewed
+trigger: once, before agents rebuild lab layers other than dev from the agent box; again after VM 258 or CT 900 is destroyed and made again, and after the token is made or renewed
 runner: the owner, as root on the Proxmox host (an agent lane through the owner's Mac may run it on the owner's go)
-outcome: user agentlab@pve and token agentlab@pve!lab may manage every guest on the host except VM 258 and CT 259, may only read CT 900, and may not change VNet dev
+outcome: user agentlab@pve and token agentlab@pve!lab may manage every guest on the host except VM 258, may only read CT 900, and may not change VNet dev
 needs: root SSH to the Proxmox host; a central-hub checkout on main
 private-values: [proxmox-host, proxmox-lab.env]
 files: [hosts/terraform/home/bootstrap/agent-access.sh]
@@ -14,12 +14,12 @@ superseded-by:
 
 # Give agents Proxmox rights for the whole lab
 
-The agents' first Proxmox user, `agent@pve`, reaches only the dev rebuild VMs (the first part of [agent-access.sh](../../hosts/terraform/home/bootstrap/agent-access.sh)). To rebuild the whole lab from the agent box, the owner picked "Everything on Proxmox" on 2026-11-13 at 05:08 UTC: every guest on the host, not the host install, and never VM 258 (the agent box) or CT 259. The second part of the same script makes a second user for that, `agentlab@pve`, and puts the limits in the token's own rights, so a bug in a wrapper can't cross them (pick 217 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)).
+The agents' first Proxmox user, `agent@pve`, reaches only the dev rebuild VMs (the first part of [agent-access.sh](../../hosts/terraform/home/bootstrap/agent-access.sh)). To rebuild the whole lab from the agent box, the owner picked "Everything on Proxmox" on 2026-11-13 at 05:08 UTC: every guest on the host, not the host install, and never VM 258 (the agent box). The second part of the same script makes a second user for that, `agentlab@pve`, and puts the limits in the token's own rights, so a bug in a wrapper can't cross them (pick 217 in [AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)).
 
 How the rights are laid out, and the Proxmox source that each part rests on:
 
 - Role `AgentLab` (the same privileges as `IacOps`, the Terraform role) on `/vms`, propagated. Every guest ID gets it, one that exists now or one made later, so a create or a clone never waits for a per-ID ACL, and a destroy can't take the rights away from the next build. A pool ACL alone isn't enough: Proxmox checks a new VM's tags on `/vms/<id>` before the VM joins its pool ([qemu-server `API2/Qemu.pm`](https://git.proxmox.com/?p=qemu-server.git;a=blob;f=src/PVE/API2/Qemu.pm;hb=HEAD), `assert_tag_permissions` before `add_vm_to_pool`).
-- `NoAccess` on `/vms/258` and `/vms/259`. An ACL on a deeper path replaces the roles that path inherits, and `NoAccess` is never trumped by a pool's roles ([pve-access-control `AccessControl.pm`](https://git.proxmox.com/?p=pve-access-control.git;a=blob;f=src/PVE/AccessControl.pm;hb=HEAD) `roles`, and `RPCEnvironment.pm` `compile_acl_path`). Proxmox drops a guest's ACLs only when that guest is destroyed, and the token can't destroy these two.
+- `NoAccess` on `/vms/258`. An ACL on a deeper path replaces the roles that path inherits, and `NoAccess` is never trumped by a pool's roles ([pve-access-control `AccessControl.pm`](https://git.proxmox.com/?p=pve-access-control.git;a=blob;f=src/PVE/AccessControl.pm;hb=HEAD) `roles`, and `RPCEnvironment.pm` `compile_acl_path`). Proxmox drops a guest's ACLs only when that guest is destroyed, and the token can't destroy it.
 - `NoAccess` on each VM in pool `desktop`, the owner's desktop, where they type passwords. Only the dev token, `agent@pve!dev`, may turn the desktop VM off (part 1 of the script, role `AgentDesktopPower`), because the dev rebuild's preflight runs with that token. The script reads the pool's members at run time, because the IDs are private, and sets these lines with the other limits, before the grant on `/vms`. The line drops with the VM, so run the script again after every desktop apply.
 - `AgentLabAudit` (`VM.Audit`) on `/vms/900`. CT 900, the tailnet connector, has the `keyctl` feature and `/dev/net/tun` passed through, and Proxmox lets only `root@pam` set those ([pve-container `LXC.pm`](https://git.proxmox.com/?p=pve-container.git;a=blob;f=src/PVE/LXC.pm;hb=HEAD), `check_ct_modify_config_perm`). No token can make CT 900 again, so the token may not destroy it either: losing it would cut remote access with no way back from the box.
 - `AgentLabUse` (`SDN.Audit`, `SDN.Use`) on `/sdn/zones/lab/dev`, the VNet the box sits on, under `AgentLab` on zone `lab`. An agent may rebuild the other VNets but may not change or delete the VNet dev object itself, which Proxmox checks on `/sdn/zones/<zone>/<vnet>` ([pve-network `API2/Network/SDN/Vnets.pm`](https://git.proxmox.com/?p=pve-network.git;a=blob;f=src/PVE/API2/Network/SDN/Vnets.pm;hb=HEAD)). Zone `lab`'s own settings stay editable through `AgentLab` on the zone; the zone can't be deleted while a VNet uses it ([`Zones/Plugin.pm`](https://git.proxmox.com/?p=pve-network.git;a=blob;f=src/PVE/Network/SDN/Zones/Plugin.pm;hb=HEAD), `on_delete_hook`).
@@ -43,7 +43,7 @@ The rights reach every guest, so a guest someone adds by hand later is in reach 
    ssh root@<proxmox-host> 'sh -s' < central-hub/hosts/terraform/home/bootstrap/agent-access.sh
    ```
 
-   expect: `agent-access: done (node <node>, desktop access <on|off>)`. The script ends by asking Proxmox for the computed rights on `/vms/258`, `/vms/259`, each desktop VM, `/vms/900` and VNet dev, and stops with `STOP` if any of them still allows more than it should.
+   expect: `agent-access: done (node <node>, desktop access <on|off>)`. The script ends by asking Proxmox for the computed rights on `/vms/258`, each desktop VM, `/vms/900` and VNet dev, and stops with `STOP` if any of them still allows more than it should.
 
 3. Check the rights by hand once, as root on the host.
 
@@ -55,7 +55,7 @@ The rights reach every guest, so a guest someone adds by hand later is in reach 
 
    expect: no privileges on `/vms/258`; only `VM.Audit` and `Pool.Audit` on `/vms/900`; `VM.Allocate` and the `VM.Config.*` privileges on `/vms/200`.
 
-4. Make the token only once the box has a wrapper that reads it, so it never sits unused on the box. The secret goes from the host straight into the box's keys folder as `/etc/agent-keys/proxmox-lab.env` (mode 0600, owner `keys`), in the same two lines as the dev token, and is never printed:
+4. Make the token only once the box has a wrapper that reads it, so it never sits unused on the box. `rebuild-prod` reads it ([Rebuild prod from the box](rebuild-k8s-layer-with-one-command.md#rebuild-prod-from-the-box)). The secret goes from the host straight into the box's keys folder as `/etc/agent-keys/proxmox-lab.env` (mode 0600, owner `keys`), in the same two lines as the dev token, and is never printed:
 
    ```text
    PROXMOX_VE_ENDPOINT=https://<Proxmox API name>:8006/
@@ -67,7 +67,7 @@ The rights reach every guest, so a guest someone adds by hand later is in reach 
 
 ## Renew or revoke
 
-Renew before the expiry: `pveum user token remove agentlab@pve lab`, then step 4. Revoke at once with the same `remove`. Run step 2 again after VM 258, CT 259 or CT 900 is destroyed and made again, because their limiting ACLs went with them.
+Renew before the expiry: `pveum user token remove agentlab@pve lab`, then step 4. Revoke at once with the same `remove`. Run step 2 again after VM 258 or CT 900 is destroyed and made again, because their limiting ACLs went with them.
 
 ## Exit
 
