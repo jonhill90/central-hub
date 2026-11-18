@@ -1,20 +1,20 @@
 ---
-title: Set up the lab's secrets store (OpenBao) on dev
+title: Set up the lab's secrets store (OpenBao) on dev and prod
 status: draft
 kind: automated
 trigger: once per env, after D-0058; again after a rebuild of the cluster
 runner: "the dev rebuild on the agent box (`rebuild up`), and an agent session through the `secrets-store` wrapper, once the box's path to the store is set"
-outcome: OpenBao 2.7.2 runs in namespace openbao in dev's cluster, starts and unseals with no person from its seal key on one node, initializes itself with audit, KV v2, AppRole and Kubernetes logins, takes an hourly Raft snapshot, and serves External Secrets through its Kubernetes login
+outcome: OpenBao 2.7.2 runs in namespace openbao in dev's cluster and in prod's, starts and unseals with no person from its seal key on one node, initializes itself with audit, KV v2, AppRole and Kubernetes logins, takes an hourly Raft snapshot, and serves External Secrets through its Kubernetes login
 needs: the agent box with the agent_box role applied; the dev cluster; the private inventory values listed below
 private-values: [seal-node, box-cidr, store-host, seal-key, admin-role-id, admin-secret-id, sops-copies]
 files: [hosts/kubernetes/home/c1/apps/openbao/, hosts/kubernetes/home/c1/apps/openbao-store/, hosts/kubernetes/home/c1/apps/openbao-measure/, hosts/ansible/playbooks/k8s-openbao-measure.yml, hosts/ansible/playbooks/k8s-openbao-handover.yml, .github/hosts-check/tests/test_openbao_handover.sh, hosts/kubernetes/home/c1/apps/secret-store/, hosts/kubernetes/home/c1/root/, hosts/ansible/roles/k8s_gitops/, hosts/ansible/roles/agent_box/files/secrets-store.sh, .github/hosts-check/tests/test_secrets_store_wrapper.sh, hosts/ansible/roles/agent_box/files/secrets-store-kv.sh, .github/hosts-check/tests/test_secrets_store_kv.sh, hosts/ansible/roles/agent_box/templates/secrets-store-compare.service.j2, hosts/ansible/roles/agent_box/templates/secrets-store-compare.timer.j2, hosts/ansible/roles/agent_box/files/secrets-store-offbox.sh, hosts/ansible/roles/agent_box/files/secrets-store-restore.sh, .github/hosts-check/tests/test_secrets_store_restore.sh, hosts/ansible/roles/agent_box/files/secrets-store-snapshots.sh, .github/hosts-check/tests/test_secrets_store_snapshots.sh, hosts/ansible/roles/agent_box/tasks/secrets_store_offbox.yml, .github/hosts-check/tests/test_secrets_store_offbox.sh, hosts/ansible/playbooks/k8s-openbao-auth.yml]
-last-tested: not yet run on dev. The dev rebuilds 20261117T043328Z and 20261117T053037Z (central-hub 69edf9b) on the agent box ran without the store, as neither stage list had openbao-seal or openbao-measure. The box's scripts and the hand-over are checked only by CI's stand-in tests (test_openbao_handover.sh and the five test_secrets_store_*.sh files)
+last-tested: 2026-11-18 on prod's c1, the store only. Central-hub 6d59d49 started openbao-0 (1/1, unsealed at 02:15:58 UTC) and the ClusterSecretStore openbao was Ready at 02:20 UTC, checked from the agent box. Not yet run on dev. The dev rebuilds 20261117T043328Z and 20261117T053037Z (central-hub 69edf9b) on the agent box ran without the store, as neither stage list had openbao-seal or openbao-measure. The box's scripts and the hand-over are checked only by CI's stand-in tests (test_openbao_handover.sh and the five test_secrets_store_*.sh files)
 superseded-by:
 ---
 
-# Set up the lab's secrets store (OpenBao) on dev
+# Set up the lab's secrets store (OpenBao) on dev and prod
 
-**Status:** draft, not run on the lab. Written from the code and the OpenBao 2.7.2 docs; every "expect" below is what the docs say, not yet seen on the lab. [What has run](#what-has-run) lists what has been run so far, and where. The records are [D-0038](../decisions/README.md) and [D-0058](../decisions/README.md), which moves the store into the cluster.
+**Status:** draft. The store runs in prod's c1 since 2026-11-18 (below); the dev steps, the snapshots and the box's calls have not run. Written from the code and the OpenBao 2.7.2 docs; an "expect" below is what the docs say unless [What has run](#what-has-run) says it was seen. [What has run](#what-has-run) lists what has been run so far, and where. The records are [D-0038](../decisions/README.md) and [D-0058](../decisions/README.md), which moves the store into the cluster.
 
 **Inside the cluster ([D-0058](../decisions/README.md)).** OpenBao runs inside the cluster from its own Helm chart, dev's cluster first, not on a VM of its own. No store VM was ever built, and its code is gone. [Inside the cluster](#inside-the-cluster-d-0058-dev-first) below is code only, not yet run. The box's calls to the store are listed after it. They are code only too, and they need the box's path to the store, which comes after the measurement below.
 
@@ -23,6 +23,7 @@ superseded-by:
 | Part | On dev | Checked so far |
 |---|---|---|
 | The store in the cluster (stages `openbao-seal`, `openbao-measure`, `openbao-handover`) | No. Two dev rebuilds ran on 2026-11-17, `20261117T043328Z` (started 04:33 UTC) and `20261117T053037Z` (started 05:30 UTC, central-hub 69edf9b). Neither stage list had an `openbao-` stage, because the box set no `OPENBAO_SEAL_KEY_FILE`. The box's `rebuild.sh` sets one only when its in-cluster switch, the file `openbao-in-cluster` in its work folder, reads `true`. | CI renders `openbao-store`, `secret-store` and the root with the store on. `test_rebuild_dev_stages.sh` checks the stage order, and `test_openbao_handover.sh` checks the hand-over against a stand-in OpenBao. |
+| The store in prod's c1 (apps `openbao-store` and `openbao`, the store `openbao`) | Prod, not dev. 2026-11-18: the first start failed because self-init made the audit device through the API, which OpenBao refuses by default. Central-hub 6d59d49 (#454) declares it in the server config. Then openbao-0 was 1/1 and unsealed at 02:15:58 UTC, and the ClusterSecretStore `openbao` was Ready at 02:20 UTC, checked from the agent box. It was started before `openbao-prod` (#452) was merged, so the steps [On prod](#on-prod) lists have not run as written. | CI renders both apps with the store on. |
 | The hourly snapshot in the cluster (CronJob `openbao-snapshot`) | No | CI renders it with the `openbao-store` chart and checks it with `kubeconform -strict`. No test runs it. |
 | The box's snapshot folder (`secrets-store-snapshots.sh`: rotate and keep) | No | `test_secrets_store_snapshots.sh` |
 | The box's `secrets-store` calls (`status`, `put`, `compare`, `reseed`, `restore`, `restore-rebuilt`) | No. They need the box's path to the store and, for `put`, `compare` and `reseed`, `sops_copies` on. | `test_secrets_store_wrapper.sh`, `test_secrets_store_kv.sh` (real SOPS and age against a stand-in OpenBao) and `test_secrets_store_restore.sh` |
@@ -66,6 +67,8 @@ The seal key on dev, from the box (D-0058 rule 3; dev's key needs no tap):
    expect: `rebuild log` shows `openbao-seal end rc=0`; a second run reports `changed=0` for the play.
 
 The file audit device at `/openbao/audit/audit.log` is declared in the server config, not made by self-init, because OpenBao refuses audit devices made through the API by default and self-init then refuses to unseal (first prod start, 2026-11-18; <https://openbao.org/docs/configuration/audit/>). What the first start does (self-init, <https://openbao.org/docs/configuration/self-init/>): KV v2 at `kv/`; AppRole and Kubernetes logins; policies `admin`, `eso-c1`, `snapshot` and `bootstrap` from the ConfigMap; the Kubernetes login's config (`kubernetes_host` `https://kubernetes.default.svc`, checked with OpenBao's own service account, which the chart binds to `system:auth-delegator`) and its roles `eso` (service account `store-openbao` in `external-secrets`, policy `eso-c1`, 15-minute tokens), `snapshot` (service account `openbao-snapshot` in `openbao`, policy `snapshot`, for the hourly job) and `bootstrap`; and the admin AppRole bound to the box's /32, with a random role ID and no secret ID. Then it revokes the root token it used. Later starts skip it.
+
+Self-init runs only on a store's first start. If that start fails part way, as the first prod start did, a fixed config and a restart do not run it again: OpenBao's way to repeat it is to "remove all storage and re-initialize from scratch" (<https://openbao.org/docs/configuration/self-init/>). See the self-init line in [If it fails](#if-it-fails).
 
 ### Handing the admin login to the box
 
@@ -245,6 +248,7 @@ If the box is down, nothing goes off-site; c1's hourly CronJob keeps its own 48 
 - `recovery`: `the shares are made, but the snapshot after them failed`: until a snapshot succeeds, nothing can be restored. Fix what the snapshot line says and run `secrets-store snapshot`.
 - After any restore, the token that took the snapshot exists again in the store: it was alive when the snapshot was taken, and its revoke is not in the snapshot. It stops at its TTL, an hour at most (D-0038 rule 6). Its revoke fails with "token not found" ([openbao #522](https://github.com/openbao/openbao/issues/522)), so leave it to expire.
 - `secrets-store: AppRole snapshot-box did not sign in`: its IDs are missing from the keys folder, or the store does not hold them yet. Never set `snapshot_box` by hand: it is the install tap's (an access right and a box limit).
+- The pod's log shows a self-init error, or `kubectl -n openbao exec openbao-0 -- bao status` shows `Initialized true` while `kv/`, the logins or the policies are missing: the first start failed part way, and later starts skip self-init. Fix the cause in git first. Then the store's data volume must be cleared so the next start is a first start: claim `data-openbao-0` in namespace `openbao` (the chart's `data` claim; `audit-openbao-0` holds only the audit log). Clearing it destroys the store's data, so it is a delete and waits for the owner's tap (D-0042 rule 6), on dev and on prod. A store that ever held secrets needs a snapshot first, if it unseals.
 - Tell the owner before trying anything not written here.
 
 ## Related

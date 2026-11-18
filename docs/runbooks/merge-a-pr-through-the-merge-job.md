@@ -33,14 +33,14 @@ pass-record add <role> jonhill90/<repo> <pr number> <40-character head> <relay m
 
 - `<role>` is one of `reviewer`, `council-a`, `council-b`, `council-c`, `owner-tap`. `<relay message id>` is a `cmsg_` id and `<relay time>` an ISO time like `2026-11-14T13:00:00Z`. A wrong argument exits 2 and writes nothing.
 - The builder lane records only when the orchestrator's session cannot reach the box, and never for a PR the builder wrote (the wrapper reads the PR body's `Author-Lane:` line, any label such as `OpenBao thread`, and refuses a builder record when the label contains the word `builder` in any case, as in `agent box builder`, or cannot be read).
-- One identity records all four roles, so a ledger line is the recorder's word and the relay id it gave, not four separate judgements. The sweep posts every line on the PR when it merges, for the owner to check.
+- Only `reviewer` is needed for a merge; a `council-a`, `council-b` or `council-c` line still parses and is not needed (`pr-merge-verdict.py`). One identity records every role, so a ledger line is the recorder's word and the relay id it gave, not a separate judgement. The sweep posts every line on the PR when it merges, for the owner to check.
 - `pass-record show jonhill90/<repo> <head>` prints a head's ledger.
 
 expect: `pass-record: <role> recorded for <repo>#<pr> <head7>`.
 
 ## What happens next
 
-The timer's next turn reads the ledger. With four roles recorded and every check green, it squash-merges pinned to the head and comments on the PR. Anything else, it skips and tries again next turn. Read `journalctl -t pr-merge -u pr-merge-sweep` on the box for the reasons, or run the read-only check yourself:
+The timer's next turn reads the ledger. With the reviewer's pass recorded for the head and every check green, it squash-merges pinned to the head and comments on the PR. Anything else, it skips and tries again next turn. Read `journalctl -t pr-merge -u pr-merge-sweep` on the box for the reasons, or run the read-only check yourself:
 
 ```text
 pr-merge check jonhill90/<repo> <pr number> <40-character head>
