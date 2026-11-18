@@ -125,6 +125,15 @@ def main():
     if pr["head"]["sha"] != head: why.append("head is %s, not the one named" % pr["head"]["sha"][:7])
     if pr.get("mergeable") is not True or pr.get("mergeable_state") not in ("clean", "has_hooks"):
         why.append("GitHub does not report a clean merge (mergeable=%s, state=%s)" % (pr.get("mergeable"), pr.get("mergeable_state")))
+        # Explanation only: it adds to this reason and never turns a clean merge into a refusal. main requires signatures, and GitHub
+        # counts the PR's own commits, so an unverified one blocks the merge; updating the branch does not fix that.
+        try:
+            bad = [c for c in load(d, "commits.json") if not ((c.get("commit") or {}).get("verification") or {}).get("verified")]
+        except (OSError, ValueError, TypeError, AttributeError):
+            bad = []
+        for c in bad[:5]:
+            v = (c.get("commit") or {}).get("verification") or {}
+            why.append("commit %s is not verified (%s): GitHub blocks the merge on it; re-make the head as verified commits, updating the branch will not fix it" % (str(c.get("sha", "?"))[:7], v.get("reason", "unknown")))
     if len(files) >= 3000: why.append("3000 or more changed files; GitHub lists no more, so the rest are not checked")
     runs = checks.get("check_runs", [])
     if checks.get("total_count", len(runs)) != len(runs): why.append("read %d of %d check runs; not checked" % (len(runs), checks["total_count"]))

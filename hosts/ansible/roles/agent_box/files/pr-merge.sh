@@ -145,6 +145,8 @@ evaluate() { # pr head
   rm -rf "$d"; mkdir -p "$d/content/base" "$d/content/head" "$d/approved"
   gh "$base/pulls/$pr" > "$d/pr.json" || return 1
   fetch_pr_files "$pr" "$d/files.json" || return 1
+  # Only to explain a "blocked" (the verdict names unverified commits); it decides nothing, so a failed read just leaves it out.
+  gh "$base/pulls/$pr/commits?per_page=100" > "$d/commits.json" 2>/dev/null || rm -f "$d/commits.json"
   gh "$base/commits/$head/check-runs?per_page=100" > "$d/checks.json" || return 1
   if [[ $have_status == 1 ]]; then gh "$base/commits/$head/status" > "$d/status.json" || return 1; else echo '{}' > "$d/status.json"; fi
   [[ -f $passes/$name/$head.jsonl ]] && cp "$passes/$name/$head.jsonl" "$d/ledger.jsonl" || true
