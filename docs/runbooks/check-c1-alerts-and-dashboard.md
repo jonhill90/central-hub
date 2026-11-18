@@ -71,7 +71,6 @@ CronJob `monitoring/panel-check` asks Prometheus for the OpenBao, Jellyfin, Keyc
 | C1BackupStale | No good off-site volume or etcd backup from a node for 30 hours | [backup runbook, Know when a backup stops](back-up-c1-off-box.md#know-when-a-backup-stops) |
 | C1RestoreTestStale | A node's weekly restore test hasn't passed for 8 days | the same runbook, "If it fails" |
 | C1BackupNotRecorded | No node reports a good backup at all, so C1BackupStale can't fire | `k8s_backup_metrics_dir` on the nodes and node-exporter's textfile collector |
-| C1BackupMetricsUnreadable | node-exporter can't read a node's textfile folder | the folder's mode (0755) on that node |
 
 The chart's own Kubernetes alerts fire too (for example `KubeJobFailed`, `KubePodNotReady`); each one's `runbook_url` explains it. `KubeCPUOvercommit` and `KubeMemoryOvercommit` are turned off on c1 (`defaultRules.disabled` in `apps/kube-prometheus-stack/values.yaml`): they ask whether the pods would still fit with the largest node lost, and with one worker they never would, so they fired for good. A pod that doesn't fit stays Pending, and `KubePodNotReady` fires for it. Turn the two back on once c1 has three nodes.
 

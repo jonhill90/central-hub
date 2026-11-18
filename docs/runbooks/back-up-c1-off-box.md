@@ -229,23 +229,29 @@ why: a dump is consistent by itself, so it restores the database whatever was ha
 
 ## Know when a backup stops
 
-Every backup and restore test that ends well writes its time for Prometheus: `c1_backup_last_success_timestamp_seconds{kind="volumes"}` (and `etcd`, `restore-test-volumes`, `restore-test-etcd`) in `c1-backup-<kind>.prom` in `k8s_backup_metrics_dir` (`/var/lib/node-exporter/textfile`, mode 0755). That is `backup_mark_success` in `c1-backup-lib.sh`. A run that fails writes nothing, so its time grows old. kube-prometheus-stack's node-exporter reads the folder with its textfile collector through its read-only host root mount (`apps/kube-prometheus-stack/values.yaml`). App `monitoring-extras` then raises:
+Every backup and restore test that ends well writes its time for Prometheus: `c1_backup_last_success_timestamp_seconds{kind="volumes"}` (and `etcd`, `restore-test-volumes`, `restore-test-etcd`) in `c1-backup-<kind>.prom` in `k8s_backup_metrics_dir` (`/var/lib/node-exporter/textfile`, mode 0755). That is `backup_mark_success` in `c1-backup-lib.sh`. A run that fails writes nothing, so its time grows old. kube-prometheus-stack's node-exporter reads the folder with its textfile collector, through the chart's read-only host root mount at `/host/root`. App `monitoring-extras` then raises:
 
 | Alert | Means |
 |---|---|
 | C1BackupStale | No good volume or etcd backup from a node for 30 hours (one missed night); critical |
 | C1RestoreTestStale | A weekly restore test on a node hasn't passed for 8 days |
 | C1BackupNotRecorded | No node reports a good volume or etcd backup at all for 2 hours, so C1BackupStale can't fire |
-| C1BackupMetricsUnreadable | node-exporter on a node can't read the folder |
+
+A node whose folder node-exporter can't read raises the chart's own NodeTextFileCollectorScrapeError.
 
 The panel check prints the hours since the last volume and etcd backups and the days since the last volume restore test ([check-c1-alerts-and-dashboard.md](check-c1-alerts-and-dashboard.md)).
 
 Order, so nothing fires for the wrong reason:
 
 1. Merge the change, then run step 2 with `--tags install,timers`. The role makes the folder and the units pass `BACKUP_METRICS_DIR`.
+   expect: `ls -ld /var/lib/node-exporter/textfile` on every node shows the folder, mode `drwxr-xr-x`.
 2. After the next night's timers, or a drill (`--tags drill`), each node's folder holds its `.prom` files.
    expect: `cat /var/lib/node-exporter/textfile/c1-backup-volumes.prom` on a node shows the line with tonight's time.
-3. A pull request sets `backup.metrics: true` in `apps/monitoring-extras/values.yaml`. Until then the four alerts and the panel lines are off.
+3. One pull request turns it on, in both places that must match (`.github/hosts-check/parity.py`):
+   - `prometheus-node-exporter.extraArgs` in `apps/kube-prometheus-stack/values.yaml` and in `k8s_observability_kps_values` (role k8s_observability's `vars/main.yml`): the chart's two `--collector.filesystem` defaults (this list replaces them) plus `--collector.textfile.directory=/host/root/var/lib/node-exporter/textfile`;
+   - `backup.metrics: true` in `apps/monitoring-extras/values.yaml`.
+
+   why: node-exporter reports `node_textfile_scrape_error 1` for a folder that isn't there yet, and the chart's NodeTextFileCollectorScrapeError fires on it at once, so the collector waits for step 1. Until step 3 the three alerts and the panel lines are off.
 
 ## If it fails
 

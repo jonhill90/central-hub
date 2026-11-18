@@ -201,11 +201,4 @@ spec:
           annotations:
             summary: No node reports a good volume or etcd backup, so C1BackupStale can't fire; check k8s_backup_metrics_dir and node-exporter's textfile collector
             runbook: docs/runbooks/back-up-c1-off-box.md
-        - alert: C1BackupMetricsUnreadable
-          expr: max by (instance) (node_textfile_scrape_error) > 0
-          for: 1h
-          labels: {severity: warning}
-          annotations:
-            summary: "node-exporter on {{ "{{" }} $labels.instance {{ "}}" }} can't read the textfile folder, so backup times from that node are missing"
-            runbook: docs/runbooks/back-up-c1-off-box.md
 {{- end }}
