@@ -679,11 +679,18 @@ socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=2).close()' "$
 #  - The browser: opnsense-test-prove.py with the copy's SSH path and a tunnel to VM 100's GUI, keeping https://<mgmt .1>
 #    as the origin, which the plugin accepts because it is VM 100's own address (RelyingParty::acceptedRedirectUri).
 # Its items 2 to 7, 9 and 10 must pass; item 10 stops Keycloak, so root signs in by password with Keycloak down.
+# The box is not in the node-memory guard that plan reads, so Keycloak gets a hard memory limit (its heap is capped at
+# 1024 MiB, as in opnsense-test) and signin refuses unless the box has that limit plus a 512 MiB margin available.
 KC_NAME=lab-test-keycloak
+KC_MEMORY_MB=1536
 signin() {
   wait_ssh
   [[ -s $files/opnsense-ssh.key && -s $files/opnsense-root.pass ]] || { echo "lab-test: VM 100's SSH key or root password is not on the box; run lab-test firstboot first"; return 1; }
   command -v podman >/dev/null && [[ -x $prove_py && -x $seed_py ]] || { echo "lab-test: podman or opnsense-test's helpers are not on the box; run the agent_box role"; return 1; }
+  local avail
+  avail=$(awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
+  echo "lab-test: signin: the box has $avail MiB available, need $(( KC_MEMORY_MB + 512 )) MiB (Keycloak's $KC_MEMORY_MB MiB limit plus 512)"
+  (( ${avail:-0} >= KC_MEMORY_MB + 512 )) || { echo "lab-test: refused, the box is short on memory for Keycloak; nothing done"; return 1; }
   local pins=$repo/hosts/ansible/roles/agent_box/files/opnsense-test.sh url sha image version
   url=$(sed -n 's/^PLUGIN_URL=\(https:\/\/github\.com\/jpawlowski\/opnsense-openid-connect\/releases\/download\/[^ ]*\.pkg\)$/\1/p' "$pins")
   sha=$(sed -n 's/^PLUGIN_SHA256=\([0-9a-f]\{64\}\)$/\1/p' "$pins")
@@ -744,7 +751,7 @@ json.dump({"name": "keycloak-proof", "issuer": "https://127.0.0.1:8443/realms/op
   # it listens on loopback only (http-host); nothing but the box and the reverse forward reach it.
   KC_BOOTSTRAP_ADMIN_PASSWORD=$(cat "$s/kc-admin.pass") KC_PROOF_CLIENT_SECRET=$(cat "$s/client.secret") \
   KC_PROOF_USER_PASS=$(cat "$s/user.pass") KC_PROOF_STRANGER_PASS=$(cat "$s/stranger.pass") \
-    podman run -d --name "$KC_NAME" --network host \
+    podman run -d --name "$KC_NAME" --network host --memory="${KC_MEMORY_MB}m" --memory-swap="${KC_MEMORY_MB}m" \
     --userns=keep-id:uid=1000,gid=1000 -v "$s/kc:/opt/keycloak/conf/proof:ro,Z" -v "$s/kc-import:/opt/keycloak/data/import:ro,Z" \
     -e KC_BOOTSTRAP_ADMIN_USERNAME=proof-admin -e KC_BOOTSTRAP_ADMIN_PASSWORD \
     -e KC_PROOF_CLIENT_SECRET -e KC_PROOF_USER_PASS -e KC_PROOF_STRANGER_PASS -e JAVA_OPTS_KC_HEAP="-Xms256m -Xmx1024m" \

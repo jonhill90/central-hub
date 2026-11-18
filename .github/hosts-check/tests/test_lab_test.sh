@@ -870,6 +870,12 @@ grep -q -- '--http-enabled=false --http-host=127.0.0.1 --https-port=8443' "$w" \
   && grep -q "listens beyond loopback" "$w" \
   && ok "signin's Keycloak listens on loopback only, and VM 100 reaches it through a reverse forward on its SSH" \
   || bad "signin's Keycloak wiring"
+grep -q '^KC_MEMORY_MB=1536$' "$w" \
+  && grep -q -- '--memory="${KC_MEMORY_MB}m" --memory-swap="${KC_MEMORY_MB}m"' "$w" \
+  && grep -q -- '-e JAVA_OPTS_KC_HEAP="-Xms256m -Xmx1024m"' "$w" \
+  && grep -q '(( ${avail:-0} >= KC_MEMORY_MB + 512 )) || { echo "lab-test: refused, the box is short on memory' "$w" \
+  && ok "signin caps Keycloak at 1536 MiB with no swap (heap 1024 MiB) and refuses unless the box has 2048 MiB available" \
+  || bad "signin's Keycloak memory limit or the box memory check is missing"
 grep -q '"$py" -I "$prove_py" "$gw" "$s" "$files/opnsense-ssh.key" "$files/opnsense-ssh.known_hosts" "$KC_NAME" "$(vm100_proxy)" "$port"$' "$w" \
   && grep -q -- '-L "127.0.0.1:$port:$gw:443" "root@$addr" &' "$w" \
   && grep -q '"$py" -I "$seed_py" realm-at "https://$gw" "$s/realm.json"' "$w" \
