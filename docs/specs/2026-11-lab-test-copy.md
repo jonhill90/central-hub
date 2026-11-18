@@ -52,7 +52,7 @@ The nested vmbr1 has no ports, as on the real host, so the nested firewall's LAN
 
 ## Memory
 
-The copy needs 6144 MiB plus the 2048 MiB margin the OPNsense test uses: 8192 MiB. A dev rebuild needs 11264 MiB ([Dev node sizes](../runbooks/rebuild-k8s-layer-with-one-command.md#dev-node-sizes)). With dev down, the node's free memory read 7568 MiB and 11414 MiB at two times on 2026-11-18. So the copy runs only while dev is down and VM 257 does not exist, and it would not have fitted at the lower reading, and its wrapper refuses otherwise, as the OPNsense test's does. The dev rebuild refuses while VM 256 exists.
+The copy needs 6144 MiB plus the 2048 MiB margin the OPNsense test uses: 8192 MiB. A dev rebuild needs 11008 MiB ([Dev node sizes](../runbooks/rebuild-k8s-layer-with-one-command.md#dev-node-sizes)). With dev down, the node's free memory read 7568 MiB and 11414 MiB at two times on 2026-11-18. So the copy runs only while dev is down and VM 257 does not exist, and it would not have fitted at the lower reading, and its wrapper refuses otherwise, as the OPNsense test's does. The dev rebuild refuses while VM 256 exists.
 
 ## Out of scope
 

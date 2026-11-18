@@ -89,22 +89,28 @@ if [ "$ENV_NAME" = dev ]; then
 fi
 
 # Dev only: the memory (MiB) each dev node gets by role, in place of its memory_mb in the tfvars (the k8s stack's
-# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so its total stays at 10240, what the host
-# has had free beside them (the run of 2026-11-18 13:14 UTC read 11296 MiB available, with 1264 MiB of the host's
-# swap in use), and the split follows the measured use. Worker 6656: at 6144 the worker never passed identity-keycloak
-# (runs 20261117T043328Z and 20261118T131441Z: in the second it read 4007 MiB, 68%, at 13:41:25 UTC, then <unknown>
-# at every sample, and was unreachable over ssh at 5729 of 6144 MiB); c1's worker runs the same apps in about
-# 4700 MiB of pods at rest (c1-read top pods, 14:11 UTC), and Keycloak's realm import adds to that. Control plane
-# 3584: dev's read 2403 to 2839 MiB at 4096 in that run, and 3072 starved the API server (run 20261118T061140Z).
-# The sum, 10240, plus the 1024 MiB margin is 11264. c1 (prod) keeps the sizes in its own tfvars.
+# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so it is sized to what the host has free beside
+# them: 11296 MiB at the run of 2026-11-18 13:14 UTC and 11237 MiB at 19:19 UTC with VM 300 stopped (run
+# 20261118T191933Z, refused at 10240 + 1024 = 11264). Control plane 3584: dev's read 2403 to 2839 MiB at 4096 in run
+# 20261118T131441Z, and 3072 starved the API server (run 20261118T061140Z). Worker 6400: at 6144 the worker never passed
+# identity-keycloak (runs 20261117T043328Z and 20261118T131441Z) while the realm import ran with the operator's default
+# memory, request 1700Mi and limit 2Gi, beside Keycloak's own pod; dev now caps the import at DEV_REALM_IMPORT_MEMORY
+# below, 1 GiB less, and the worker keeps 256 MiB more than the size that failed. The sum, 9984, plus the 1024 MiB
+# margin is 11008. c1 (prod) keeps the sizes in its own tfvars.
 DEV_MEMORY_MB_CONTROL_PLANE=3584
-DEV_MEMORY_MB_WORKER=6656
-# The preflight's margin is 1024 MiB: 3584 + 6656 + 1024 = 11264.
+DEV_MEMORY_MB_WORKER=6400
+# The preflight's margin is 1024 MiB: 3584 + 6400 + 1024 = 11008.
 # Dev only: how long identity-keycloak waits for the realm import (seconds; the role's default is 600). At 6144 MiB the
 # worker's import timed out at 600 s on 2026-11-17 at 04:33 UTC; at 7168 MiB the whole stage took 176 s (run
 # 20261117T053037Z). 1200 gives the smaller worker twice the wait that ran out; if it still times out, the node-top
 # lines say whether memory or CPU ran short.
 DEV_REALM_IMPORT_TIMEOUT_S=1200
+# Dev only: the realm import job's memory, request and limit (the role's k8s_identity_realm_import_memory). Unset,
+# the Keycloak operator 26.8.2 gives the job request 1700Mi and limit 2Gi (operator application.properties lines 15
+# and 16, applied by KeycloakRealmImportJobDependentResource line 173), and Keycloak's JVM takes half the limit as its
+# first heap (kc.sh line 100). 1Gi bounds the import's JVM to 70% of 1 GiB, so the import fails inside its own limit
+# rather than pressing on the whole worker.
+DEV_REALM_IMPORT_MEMORY=1Gi
 tofu_vars=(-var-file="$TFVARS")
 if [ "$ENV_NAME" = dev ]; then
   tofu_vars+=(-var "memory_mb_by_role={\"control-plane\" = $DEV_MEMORY_MB_CONTROL_PLANE, \"worker\" = $DEV_MEMORY_MB_WORKER}")
@@ -238,7 +244,7 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default: the dev VMs' memory by role, summed over the nodes
-# the tfvars declare, plus a 1024 MiB margin; 3584 + 6656 + 1024 = 11264 for one control plane and one worker). If the
+# the tfvars declare, plus a 1024 MiB margin; 3584 + 6400 + 1024 = 11008 for one control plane and one worker). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 # curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
 # use it, so neither can print the token.
@@ -636,7 +642,8 @@ run_stage() {
         -e "{\"k8s_identity_openbao_hosts\": $store_hosts}" -e "k8s_identity_oidc_handoff_file=$handoff" \
         -e k8s_app_route_proof=false -e k8s_identity_theme_dir= -e k8s_identity_db_storage=local-path \
         -e "k8s_identity_values_file=$env_dir/identity.env" \
-        -e "k8s_identity_realm_import_timeout=$DEV_REALM_IMPORT_TIMEOUT_S" ;;
+        -e "k8s_identity_realm_import_timeout=$DEV_REALM_IMPORT_TIMEOUT_S" \
+        -e "k8s_identity_realm_import_memory=$DEV_REALM_IMPORT_MEMORY" ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.

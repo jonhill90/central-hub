@@ -42,6 +42,12 @@ metadata:
 {% endif %}
 spec:
   keycloakCRName: {{ k8s_identity_name }}
+{% if k8s_identity_realm_import_memory | length > 0 %}
+  # The import job's memory (k8s_identity_realm_import_memory); without it the operator gives the job its own default.
+  resources:
+    requests: {memory: {{ k8s_identity_realm_import_memory }}}
+    limits: {memory: {{ k8s_identity_realm_import_memory }}}
+{% endif %}
   placeholders:
 {% for key in k8s_identity_value_keys %}
     {{ key }}:
