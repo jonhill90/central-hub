@@ -305,7 +305,9 @@ PY
     # inner single quotes keep the backslash before the key's dot: kubectl then reads key ca.crt, not ca then crt.
     pem=$(kc -n openbao get secret openbao-tls -o "'jsonpath={.data.ca\.crt}'" | base64 -d) ||
       { echo "openbao-prod: could not read ca.crt of Secret openbao/openbao-tls; nothing written" >&2; exit 1; }
-    if [[ $(grep -c -- '-----BEGIN CERTIFICATE-----' <<< "$pem") -ne 1 ]] || ! openssl x509 -noout <<< "$pem" 2>/dev/null; then
+    # Exactly one PEM block, and it a certificate: no second certificate and no other block, such as a key.
+    if [[ $(grep -c -- '-----BEGIN ' <<< "$pem") -ne 1 || $(grep -c -- '-----BEGIN CERTIFICATE-----' <<< "$pem") -ne 1 ]] ||
+      ! openssl x509 -noout <<< "$pem" 2>/dev/null; then
       echo "openbao-prod: ca.crt of Secret openbao/openbao-tls is not one PEM certificate; nothing written" >&2
       exit 1
     fi
