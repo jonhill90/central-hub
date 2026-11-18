@@ -127,6 +127,11 @@ prog=$(sed -n "s|^content=\$(awk '\(.*\)' /etc/pve/storage.cfg)$|\1|p" "$w")
 [[ -n $prog && $(awk "$prog" "$work/storage.cfg") == "iso,vztmpl,backup" ]] \
   && ok "the content line of storage local is read from storage.cfg, not local-lvm's" || bad "the storage.cfg read"
 
+# iac-access.sh, which host runs in the copy: zone lab can be made on an empty host (Zones.pm checks /sdn/zones).
+iac=$root/hosts/terraform/home/bootstrap/iac-access.sh
+grep -Eq '^acl /sdn/zones 0 ' "$iac" && ! grep -Eq '^acl /sdn/zones 1 ' "$iac" && ! grep -Eq '^acl /sdn 1 ' "$iac" \
+  && ok "iac-access.sh lets the token make a zone, without rights in other zones" || bad "iac-access.sh: no /sdn/zones ACL"
+
 # The role takes the binary out of a .deb (an ar archive holding data.tar.xz) with Python only.
 mkdir -p "$work/deb/usr/bin"
 printf '#!/bin/sh\necho example\n' > "$work/deb/usr/bin/proxmox-auto-install-assistant"
