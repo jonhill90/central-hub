@@ -9,7 +9,8 @@
     owner: "999"
     group: "999"
     mode: "0700"
-  delegate_to: "{{ k8s_identity_db_host }}"
+  # delegate_to is read even when `when` is false, so name no worker group unless the static volume needs one.
+  delegate_to: "{{ k8s_identity_db_host if k8s_identity_db_storage == 'static' else inventory_hostname }}"
 
 # The node's Kubernetes name, found by the address Ansible reaches it on, so no machine name is
 # written in this repository.

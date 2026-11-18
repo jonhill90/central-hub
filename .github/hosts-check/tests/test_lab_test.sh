@@ -16,7 +16,7 @@ ok() { echo "ok - $1"; }
 bad() { echo "FAIL - $1"; fails=$((fails + 1)); }
 
 settings() { # address name domain
-  printf '{"name": "%s", "domain": "%s", "address": "%s", "cores": 2, "memory_mb": 6144, "disk_gb": 32, "proxmox_node_name": "examplehv01"}\n' \
+  printf '{"name": "%s", "domain": "%s", "address": "%s", "cores": 2, "memory_mb": 7168, "disk_gb": 32, "proxmox_node_name": "examplehv01"}\n' \
     "$2" "$3" "$1" > "$work/settings.json"
 }
 settings 10.1.30.198 ddehvdemo01 lab.example
@@ -317,6 +317,11 @@ done
 echo plain > "$work/php/plain.hash"
 LT_CONFIG=$work/php/config.json php -d include_path="$work/php" "$fb" vtnet0 50 10.1.50.1/24 vtnet1 "$work/php/plain.hash" > /dev/null 2>&1 \
   && bad "the first-boot PHP took a root hash that is not SHA-512 crypt" || ok "the first-boot PHP refuses a root hash that is not SHA-512 crypt"
+
+# iac-access.sh, which host runs in the copy: zone lab can be made on an empty host (Zones.pm checks /sdn/zones).
+iac=$root/hosts/terraform/home/bootstrap/iac-access.sh
+grep -Eq '^acl /sdn/zones 0 ' "$iac" && ! grep -Eq '^acl /sdn/zones 1 ' "$iac" && ! grep -Eq '^acl /sdn 1 ' "$iac" \
+  && ok "iac-access.sh lets the token make a zone, without rights in other zones" || bad "iac-access.sh: no /sdn/zones ACL"
 
 # The role takes the binary out of a .deb (an ar archive holding data.tar.xz) with Python only.
 mkdir -p "$work/deb/usr/bin"
