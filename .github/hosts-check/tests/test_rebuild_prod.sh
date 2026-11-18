@@ -21,6 +21,7 @@
 #  10. The sign-in theme folder keeps its own name under prod/identity-theme/; one with no login/theme.properties is refused.
 #  11. rebuild builds the commit the go names, which must be on main; check reads main's newest.
 #  12. The backup target: sftp to the Proxmox host is refused at check; with no Azure sign-in no certificate is carried.
+#  13. rebuild refuses a commit older than the floor (PIN_FLOOR, the same as the dev wrapper's), before anything runs.
 # Usage: .github/hosts-check/tests/test_rebuild_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -46,7 +47,8 @@ case "\$*" in
             'exit \${ONE_RC:-0}' > "\$d/hosts/rebuild-k8s.sh" ;;
   *"rev-parse --quiet --verify "*) a="\${*: -1}"; a="\${a%^\{commit\}}"; [[ $sha == "\$a"* ]] && echo $sha || exit 1 ;;
   *rev-parse*) echo $sha ;;
-  *"merge-base --is-ancestor"*) exit \${NOT_ON_MAIN:-0} ;;
+  *"merge-base --is-ancestor "*" origin/main") exit \${NOT_ON_MAIN:-0} ;;
+  *"merge-base --is-ancestor "*) echo "floor \$5 \$6" >> $t/floorcalls; exit \${BELOW_FLOOR:-0} ;;
   *" checkout "*) echo "git \${*: -1}" >> $t/gitcalls ;;
 esac
 exit 0
@@ -315,5 +317,16 @@ if [[ $r12a -eq 1 && $o12a == *"k8s_backup_sftp is true (the Proxmox host as the
       $c12c != *backup.pem* && $c12c == *one-command* && ! -e $t/keys/prod/backup-certs ]]; then
   ok "12. the Proxmox host as backup target is refused before anything runs; no Azure sign-in: no certificate carried"
 else bad "12. $r12a $o12a | $r12b [$c12b] | $r12c $o12c"; fi
+
+# 13. The floor: rebuild asks whether PIN_FLOOR is an ancestor of the pinned commit, and refuses below it before anything runs;
+# check (no commit) never asks.
+floor=$(sed -n 's/^PIN_FLOOR=\([0-9a-f]\{40\}\)$/\1/p' hosts/ansible/roles/agent_box/files/rebuild-prod.sh)
+inventory; rm -f "$t/floorcalls"; run check; f13a=$(cat "$t/floorcalls" 2>/dev/null)
+rm -f "$t/floorcalls"; run rebuild "$tap" "$sha"; r13b=$rc f13b=$(cat "$t/floorcalls" 2>/dev/null)
+rm -f "$t/gitcalls"; BELOW_FLOOR=1 run rebuild "$tap" "$sha"; r13c=$rc o13c=$out c13c=$calls g13c=$(cat "$t/gitcalls" 2>/dev/null)
+if [[ -n $floor && -z $f13a && $r13b -eq 0 && $f13b == "floor $floor $sha" &&
+      $r13c -eq 1 && $o13c == *"commit $sha is older than the floor ${floor:0:7}"* && -z $c13c && -z $g13c ]]; then
+  ok "13. a commit below the floor is refused before any checkout or run; at or above it the rebuild goes on; check never asks"
+else bad "13. [$floor] [$f13a] $r13b [$f13b] | $r13c $o13c [$c13c] [$g13c]"; fi
 
 exit "$fail"
