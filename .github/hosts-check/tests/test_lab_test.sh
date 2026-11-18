@@ -88,8 +88,8 @@ grep -q "grep -cE '(vmx|svm)' /proc/cpuinfo" "$w" && grep -q "test -c /dev/kvm" 
   && ok "check stops when the copy's guests would run without KVM" || bad "no nested check"
 grep -q '^  plan) guards; tofu_run ;;$' "$w" && grep -q '^  apply) guards; tofu_run ;;$' "$w" \
   && ok "plan and apply both pass the guards" || bad "a build step skips the guards"
-grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, firstboot, opnsense, destroy, log\]' \
-  && ok "the wrapper list allows plan, apply, check, host, lab, firstboot, opnsense, destroy and log" || bad "the wrapper's sudo arguments"
+grep -Eq '^  - name: lab-test$' "$role/defaults/main.yml" && grep -A1 '^  - name: lab-test$' "$role/defaults/main.yml" | grep -q 'args: \[plan, apply, check, host, lab, firstboot, opnsense, wancheck, destroy, log\]' \
+  && ok "the wrapper list allows plan, apply, check, host, lab, firstboot, opnsense, wancheck, destroy and log" || bad "the wrapper's sudo arguments"
 
 # host: the inventory the copy's playbook runs with, the real inventory's shape with the copy's own values.
 python3 -I "$helper" inventory "$work/settings.json" "$vlans" /keys/lab-test-ssh /work/known_hosts "$work/hosts.yml"
@@ -174,6 +174,21 @@ assert f.index("if [[ $1 == remote-access ]]") < f.index("PROXMOX_VE_USERNAME=ro
     < f.index('PROXMOX_VE_API_TOKEN=$(cat "$files/copy-token")')
 assert "PROXMOX_VE_ENDPOINT=https://$addr:8006/ SSL_CERT_FILE=$files/copy-ca.pem" in f
 assert "-detailed-exitcode" in f and "the second plan is not empty" in f
+PY
+python3 -I - "$w" "$work/layers" <<'PY' && ok "wancheck: the copy's WAN on its own portless vmbr9, the console check before link-up, the watch at link-up and over a reboot, WAN down on any failure" || bad "wancheck's wiring"
+import json, os, sys
+t = open(sys.argv[1]).read()
+assert json.load(open(os.path.join(sys.argv[2], "firewall.tfvars.json")))["wan_bridge"] == "vmbr9"
+lab = t[t.index("\nlab() {"):]
+lab = lab[:lab.index("\n}\n")]
+assert lab.index('pvesh create "/nodes/$n/network" --iface vmbr9 --type bridge') < lab.index("for f in network firewall remote-access")
+f = t[t.index("\nwancheck() {"):]
+f = f[:f.index("\n}\n")]
+pre = f.index('pgrep -lf \\"dhclient.*vtnet1\\"", "! pgrep -lf \\"radvd|kea-dhcp|dhcp6c\\""')
+up = f.index("wan_link true")
+assert pre < f.index('"$console_py"') < up < f.index("vm 'qm reboot 100'")
+assert f.index("wan_watch 120 & watcher=$!") < up and 'vm "python3 -I - vmbr9 $wanmac $1" < "$wan_watch_py"' in f
+assert f.count("wan_link false; return 1") == 2 and f.count('wait "$watcher" ||') == 2
 PY
 grep -q 'openssl passwd -6 -stdin < "$files/root.pass" > "$files/root.hash"' "$w" && ok "root's hash is of the password the box keeps" || bad "root's hash and password"
 grep -q '"$files/inventory" "$files/state" "$files/copy-ca.pem"' "$w" && ok "destroy removes the copy's run folder states and its CA" || bad "destroy keeps lab's states"
@@ -330,6 +345,83 @@ for want in 0 3; do
     bad "the API user command (wanted exit $want, got $got)"
   fi
 done
+
+# wancheck's capture: the watch's frames and its sorting, offline; then, where this runs as root or with sudo, the whole
+# watch on a made-up bridge against a fake WAN that is a client only, a DHCPv4 server, an IPv6 router, or silent.
+wan_watch=$files/lab-test-wan-watch.py
+python3 -I - "$wan_watch" <<'PY' && ok "the WAN watch's probes carry valid checksums, and it sorts server-type frames from the WAN's MAC only" || bad "the WAN watch's frames"
+import importlib.util, socket, struct, sys
+sp = importlib.util.spec_from_file_location("w", sys.argv[1]); w = importlib.util.module_from_spec(sp); sp.loader.exec_module(w)
+d4, rs, sol = w.probes()
+assert w.csum(d4[14:34]) == 0 and d4[0:6] == b"\xff" * 6 and d4[6:12] == w.PROBE_MAC
+assert struct.unpack("!HH", d4[34:38]) == (68, 67) and d4[34 + 8 + 236:34 + 8 + 240] == b"\x63\x82\x53\x63"
+for f, nh in ((rs, 58), (sol, 17)):
+    ip6 = f[14:]
+    plen = struct.unpack("!H", ip6[4:6])[0]
+    assert ip6[6] == nh and len(ip6) == 40 + plen
+    pseudo = ip6[8:24] + ip6[24:40] + struct.pack("!I3xB", plen, nh)
+    assert w.csum(pseudo + ip6[40:]) == 0, nh
+assert rs[54] == 133 and struct.unpack("!HH", sol[54:58]) == (546, 547) and sol[62] == 1
+wan = bytes.fromhex("020000000101")
+def eth(src, etype, body): return b"\xff" * 6 + src + struct.pack("!H", etype) + body
+ip4 = lambda sport: bytes([0x45]) + b"\0" * 8 + bytes([17]) + b"\0" * 10 + struct.pack("!HH", sport, 68)
+assert w.classify(eth(wan, 0x0800, ip4(67)), wan) == "dhcp4-server"
+assert w.classify(eth(wan, 0x0800, ip4(68)), wan) == "other"
+assert w.classify(eth(b"\x02" * 6, 0x0800, ip4(67)), wan) is None
+assert w.classify(eth(wan, 0x8100, b"\0\x0a\x08\x00" + ip4(67)), wan) == "dhcp4-server"
+ip6 = lambda nh, body: b"\x60\0\0\0" + struct.pack("!H", len(body)) + bytes([nh, 255]) + b"\0" * 32 + body
+assert w.classify(eth(wan, 0x86DD, ip6(58, bytes([134, 0, 0, 0]))), wan) == "ra"
+assert w.classify(eth(wan, 0x86DD, ip6(58, bytes([135, 0, 0, 0]))), wan) == "other"
+assert w.classify(eth(wan, 0x86DD, ip6(17, struct.pack("!HH", 547, 546))), wan) == "dhcp6-server"
+PY
+sudo=()
+if [[ $(id -u) != 0 ]]; then
+  if sudo -n true 2>/dev/null; then sudo=(sudo -n); else sudo=(none); fi
+fi
+if [[ ${sudo[0]-} == none ]]; then
+  echo "skip - the live WAN watch needs root or sudo"
+else
+  cat > "$work/fakewan.py" <<'PY'
+import importlib.util, socket, struct, sys, time
+sp = importlib.util.spec_from_file_location("w", sys.argv[1]); w = importlib.util.module_from_spec(sp); sp.loader.exec_module(w)
+mode, secs, wan = sys.argv[2], float(sys.argv[3]), bytes.fromhex("020000000101")
+s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3)); s.bind(("ltwan0", 0)); s.settimeout(0.2)
+def udp4(sport, dport):
+    udp = struct.pack("!HHHH", sport, dport, 12, 0) + b"test"
+    ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(udp), 0, 0, 64, 17, 0, b"\0" * 4, b"\xff" * 4)
+    return b"\xff" * 6 + wan + b"\x08\x00" + ip[:10] + struct.pack("!H", w.csum(ip)) + ip[12:] + udp
+def ra():
+    body = w.ipv6(w.link_local(wan), socket.inet_pton(socket.AF_INET6, "ff02::1"), 58, bytes([134, 0, 0, 0]) + b"\0" * 12)
+    return b"\x33\x33\0\0\0\1" + wan + b"\x86\xdd" + body
+end, nxt = time.time() + secs, 0
+while time.time() < end:
+    if mode != "silent" and time.time() >= nxt:
+        s.send(udp4(68, 67)); nxt = time.time() + 2   # a DHCP client's discover, as dhclient sends
+    try:
+        f = s.recv(2048)
+    except socket.timeout:
+        continue
+    if f[6:12] != w.PROBE_MAC:
+        continue
+    if mode == "server" and f[12:14] == b"\x08\x00":
+        s.send(udp4(67, 68))
+    if mode == "router" and f[12:14] == b"\x86\xdd" and f[20] == 58:
+        s.send(ra())
+PY
+  "${sudo[@]}" ip link add vmbr97 type bridge && "${sudo[@]}" ip link set vmbr97 up \
+    && "${sudo[@]}" ip link add ltwan0 type veth peer name ltwan0br && "${sudo[@]}" ip link set ltwan0br master vmbr97 \
+    && "${sudo[@]}" ip link set ltwan0 address 02:00:00:00:01:01 && "${sudo[@]}" ip link set ltwan0br up && "${sudo[@]}" ip link set ltwan0 up
+  for want in client:0 server:3 router:3 silent:4; do
+    mode=${want%:*}; rc=0
+    "${sudo[@]}" python3 -I "$work/fakewan.py" "$wan_watch" "$mode" 14 & fake=$!
+    sleep 0.5
+    "${sudo[@]}" python3 -I "$wan_watch" vmbr97 02:00:00:00:01:01 12 > "$work/watch.out" 2>&1 || rc=$?
+    wait "$fake" || true
+    if [[ $rc == "${want#*:}" ]]; then ok "the live WAN watch exits $rc for a WAN that is $mode: $(head -1 "$work/watch.out")"
+    else bad "the live WAN watch for a $mode WAN (exit $rc)"; cat "$work/watch.out"; fi
+  done
+  "${sudo[@]}" ip link del ltwan0 || true; "${sudo[@]}" ip link del vmbr97 || true
+fi
 
 # The first-boot PHP against stubs: config.inc holds the image's default config (config.xml.sample's parts it changes).
 mkdir -p "$work/php"

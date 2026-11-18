@@ -43,3 +43,27 @@ run "running_lab_connects_wan" {
     error_message = "net1 must be connected when opnsense_wan_connected is true."
   }
 }
+
+# The lab test copy puts WAN on a bridge with no ports; the trunk can never be WAN.
+run "wan_bridge_can_move_off_the_home_lan" {
+  command = plan
+
+  variables {
+    wan_bridge = "vmbr9"
+  }
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.opnsense.network_device[1].bridge == "vmbr9" && proxmox_virtual_environment_vm.opnsense.network_device[0].bridge == "vmbr1"
+    error_message = "net1 must be on wan_bridge, net0 still on the trunk."
+  }
+}
+
+run "wan_bridge_is_never_the_trunk" {
+  command = plan
+
+  variables {
+    wan_bridge = "vmbr1"
+  }
+
+  expect_failures = [var.wan_bridge]
+}

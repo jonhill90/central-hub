@@ -33,6 +33,17 @@ variable "trunk_bridge" {
   default     = "vmbr1"
 }
 
+variable "wan_bridge" {
+  description = "Bridge for WAN (net1). vmbr0, the home LAN, on the real host. The lab test copy gives a bridge with no ports, so its WAN safety check reaches nothing outside the copy (docs/runbooks/build-the-lab-test-copy.md)."
+  type        = string
+  default     = "vmbr0"
+
+  validation {
+    condition     = can(regex("^vmbr[0-9]+$", var.wan_bridge)) && var.wan_bridge != var.trunk_bridge
+    error_message = "wan_bridge must be a vmbrN bridge other than the trunk."
+  }
+}
+
 variable "firewall_vm_name" {
   description = "Proxmox VM name of the firewall, an STD-0001 hostname (the owner, 2026-10-26 06:06 UTC: OS code op, role nw). No default: the real name stays out of this public repository (CLAUDE.md rule 4); set it in the git-ignored home.tfvars."
   type        = string

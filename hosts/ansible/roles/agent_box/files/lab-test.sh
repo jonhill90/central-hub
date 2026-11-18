@@ -3,7 +3,7 @@
 # its own SDN, OPNsense and connector container (docs/specs/2026-11-lab-test-copy.md,
 # docs/runbooks/build-the-lab-test-copy.md). It runs as user `keys` through sudo, so the session that asks for it
 # never sees the Proxmox token. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|opnsense|destroy|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|opnsense|wancheck|destroy|log
 # plan: the guards (dev down, no dev rebuild running, VM 257 gone, free memory and box disk), then download and
 #   check the Proxmox VE ISO, write the answer file, bake it into a copy of the ISO with the pinned
 #   proxmox-auto-install-assistant (--fetch-from iso), and save an OpenTofu plan for hosts/terraform/home/lab-test.
@@ -26,6 +26,9 @@
 # opnsense: inside the copy, set-up-lab-network-and-firewall.md step 7's playbooks/opnsense.yml against VM 100, from the
 #   box through an SSH tunnel to the copy (the copy's mgmt VLAN exists only inside it), with an inventory the wrapper
 #   writes; the DNS proof is left out (it asks the gateway directly). A second run must report changed=0.
+# wancheck: inside the copy, step 7's WAN safety check on VM 100, whose WAN is on the copy's portless vmbr9: WAN a DHCP
+#   client only (over the console), then a watch for server-type frames from the WAN at link-up and over a reboot.
+#   WAN goes down again on any failure.
 # destroy: destroy VM 256 only. The token cannot delete files on Proxmox's local storage, so the prepared ISO stays
 #   in the state and on local for the next build, which reuses it while the answer is unchanged; destroy lists it.
 # log: the last run's log, then VM 256's Proxmox state, read-only.
@@ -33,8 +36,8 @@ set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | check | host | lab | firstboot | opnsense | destroy | log) action=$1 ;;
-  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|opnsense|destroy|log" >&2; exit 2 ;;
+  plan | apply | check | host | lab | firstboot | opnsense | wancheck | destroy | log) action=$1 ;;
+  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|opnsense|wancheck|destroy|log" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -56,6 +59,7 @@ export TF_DATA_DIR=$work/tofu-data/lab-test TF_IN_AUTOMATION=1
 py=/usr/local/libexec/agent-box/ansible-venv/bin/python3   # has PyYAML, for the shared VLAN file
 answer_py=$libexec/lab-test-answer.py
 console_py=$libexec/lab-test-console.py
+wan_watch_py=$libexec/lab-test-wan-watch.py
 assistant=$libexec/proxmox-auto-install-assistant           # the role installs it from the pinned .deb
 
 VMID=256
@@ -416,6 +420,10 @@ lab() {
     curl -sS --fail --max-time 30 --cacert "$files/copy-ca.pem" -K - "https://$addr:8006/api2/json/version" >/dev/null \
     || { echo "lab-test: the copy's API does not answer with its own CA and the copy token"; return 1; }
   "$py" -I "$answer_py" layers "$settings" "$vlans" "$NANO_IMG" "$CT_TEMPLATE" "$files/state"
+  # VM 100's WAN bridge in the copy, with no ports (lab-test-answer.py, COPY_WAN_BRIDGE): the copy's vmbr0 is dev.
+  vm 'n=$(hostname); pvesh get "/nodes/$n/network/vmbr9" >/dev/null 2>&1 || {
+    pvesh create "/nodes/$n/network" --iface vmbr9 --type bridge --autostart 1 --comments "lab test copy: VM 100 WAN, no ports" &&
+    pvesh set "/nodes/$n/network"; }'
   local f
   for f in network firewall remote-access; do lab_folder "$f"; done
   ( cd "$repo/hosts/ansible"
@@ -534,6 +542,46 @@ socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=2).close()' "$
   echo "lab-test: opnsense.yml applied to the copy's VM 100; a second run shows changed=0"
 }
 
+# set-up-lab-network-and-firewall.md step 7's WAN safety check against the copy's VM 100, whose WAN is on the copy's
+# portless vmbr9 (lab). 1: before link-up, over the console, WAN is a DHCP client and nothing else: dhclient on vtnet1,
+# no radvd, Kea or dhcp6c. 2: link-up while lab-test-wan-watch.py watches vmbr9 on the copy, asking for a server every
+# 5 seconds. 3: the same watch over a reboot of VM 100. Any server-type frame from the WAN's MAC, or none at all, takes
+# WAN link-down again and stops. WAN stays up when all three pass; lab, run again, takes it down.
+wancheck() {
+  wait_ssh
+  [[ -s $files/opnsense-root.pass && -s $files/state/firewall.tfvars.json ]] || { echo "lab-test: run lab-test firstboot first"; return 1; }
+  local wanmac rc=0 watcher
+  wanmac=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["opnsense_wan_mac"])' "$files/state/firewall.tfvars.json")
+  python3 -I -c 'import json, sys
+print(json.dumps({"passwords": [open(sys.argv[1]).read().strip()], "dir": "/root/lab-test", "files": {},
+    "commands": ["pgrep -lf \"dhclient.*vtnet1\"", "! pgrep -lf \"radvd|kea-dhcp|dhcp6c\""], "reboot": False}))' \
+    "$files/opnsense-root.pass" > "$files/console-plan.json"
+  python3 -I "$console_py" "$files/console-plan.json" ssh -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 \
+    -o UserKnownHostsFile="$files/known_hosts" "root@$addr" "socat UNIX-CONNECT:/var/run/qemu-server/100.serial0 STDIO" || rc=$?
+  rm -f "$files/console-plan.json"
+  (( rc == 0 )) || { echo "lab-test: before link-up, WAN is not a DHCP client only; WAN stays down"; return 1; }
+  wan_link() { # true|false
+    python3 -I -c 'import json, sys
+p = sys.argv[1]; v = json.load(open(p)); v["opnsense_wan_connected"] = sys.argv[2] == "true"
+json.dump(v, open(p, "w"), indent=2)' "$files/state/firewall.tfvars.json" "$1"
+    lab_folder firewall
+  }
+  wan_watch() { # seconds; the watch's verdict is its exit code
+    vm "python3 -I - vmbr9 $wanmac $1" < "$wan_watch_py"
+  }
+  echo "lab-test: WAN link-up with the watch on vmbr9"
+  wan_watch 120 & watcher=$!
+  sleep 5
+  wan_link true
+  wait "$watcher" || { echo "lab-test: the WAN check failed at link-up; WAN goes down"; wan_link false; return 1; }
+  echo "lab-test: VM 100 reboots with the watch on vmbr9"
+  wan_watch 240 & watcher=$!
+  sleep 5
+  vm 'qm reboot 100'
+  wait "$watcher" || { echo "lab-test: the WAN check failed over the reboot; WAN goes down"; wan_link false; return 1; }
+  echo "lab-test: the WAN check passed at link-up and over a reboot; WAN stays up on the copy's vmbr9"
+}
+
 case $action in
   plan) guards; tofu_run ;;
   apply) guards; tofu_run ;;
@@ -542,6 +590,7 @@ case $action in
   lab) lab ;;
   firstboot) firstboot ;;
   opnsense) opnsense ;;
+  wancheck) wancheck ;;
   destroy)
     tofu_run
     # The copy's token, inventory and run folder states go with it; a new copy gets new ones. Root's password stays
