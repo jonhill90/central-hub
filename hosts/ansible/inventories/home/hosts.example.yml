@@ -95,6 +95,14 @@ all:
               # - { name: OPNsense API, address: "", port: 443 }   # the address opnsense.<zone> resolves to (mgmt)
               # SSH into the tenant lab VLAN (the sixth and last slot); an agent adds it before the apply, which needs the owner's card tap.
               # - { name: tenant lab SSH, address: "", prefix: 24, port: 22 }   # the VLAN's network address, e.g. 10.1.60.0
+          # Pass rules to the c1 Gateway on 443 (tasks/app_access.yml), so the desktop VM and the box open the apps'
+          # names; applied only on the owner's tap on a card naming the rule and the commit (D-0036 rule 8).
+          # opnsense_lab_app_access:
+          #   vlan: 30
+          #   gateway: ""   # the c1 Gateway's address (Gateway gateway/apps, status.addresses)
+          #   sources:
+          #     - { name: agent box, address: "" }    # VM 258's dev address
+          #     - { name: desktop VM, address: "" }   # VM 400's dev address
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
             - { hostname: pve, address: "", description: "Proxmox host GUI (its mgmt address)" }

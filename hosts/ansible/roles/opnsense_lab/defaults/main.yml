@@ -49,3 +49,18 @@ opnsense_lab_agent_box_target_names: [Proxmox API, c1 API, prod node 200 SSH, pr
 # The rules' sequence numbers, in target order: ahead of the dev VLAN's own rules (10 and up), and clear of the
 # management rules (5 to 7, one per other lab VLAN).
 opnsense_lab_agent_box_sequences: [1, 2, 3, 4, 8, 9]
+
+# Pass rules from named lab VMs to the c1 Gateway on 443 (tasks/app_access.yml), so a browser or a check there opens
+# the apps' names. Optional and private (addresses), from the inventory; unset = no such rules, and any left from an
+# earlier run are removed. Applying a change is a firewall change on the owner's tap (D-0036 rule 8).
+# opnsense_lab_app_access:
+#   vlan: 30                     # the sources' VLAN tag (dev)
+#   gateway: <address>           # the c1 Gateway's address (Gateway gateway/apps, status.addresses)
+#   sources:
+#     - { name: agent box, address: <VM 258's dev address> }
+#     - { name: desktop VM, address: <VM 400's dev address> }
+# The names the rules may have; a name that is not a current source loses its rule.
+opnsense_lab_app_access_names: [agent box, desktop VM]
+# The rules' sequence numbers, in source order: ahead of the dev VLAN's own rules (90 and up with today's VLAN file)
+# and clear of every other rule the role numbers; the role checks both.
+opnsense_lab_app_access_sequences: [11, 12]

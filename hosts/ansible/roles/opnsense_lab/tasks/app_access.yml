@@ -1,0 +1,43 @@
+---
+# Pass rules from named lab VMs to the c1 Gateway on 443, so a browser or a check there opens the apps' names
+# (ask 275; the desktop's trust check, roles/desktop/tasks/trust_check.yml). Without them the source VLAN's own rules
+# pass only ping and DNS to the firewall and the internet, so prod's Gateway times out from dev (measured from the
+# agent box, 2026-11-18 04:36 UTC). One rule per source, from that address only, to the Gateway's address only, on
+# tcp 443 only. Port 80 is not opened: the Gateway's port 80 only redirects to 443. Sequences come from
+# opnsense_lab_app_access_sequences in source order, ahead of the source VLAN's own rules and clear of every other
+# rule this role numbers. Applying them is a firewall change on the owner's tap (D-0036 rule 8).
+- name: App access inputs are checked
+  ansible.builtin.import_tasks: app_access_checks.yml
+
+- name: Named lab VMs to the c1 Gateway on 443
+  oxlorg.opnsense.rule:
+    description: "Allow {{ item.name }} to c1 Gateway HTTPS"
+    match_fields: [description]
+    sequence: "{{ opnsense_lab_app_access_sequences[opnsense_lab_app_access_index] }}"
+    action: pass
+    quick: true
+    interface: ["{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_app_access.vlan) | first).ifname }}"]
+    direction: in
+    ip_protocol: inet
+    protocol: TCP
+    source_net: "{{ item.address }}/32"
+    destination_net: "{{ opnsense_lab_app_access.gateway }}/32"
+    destination_port: "443"
+    log: false
+  loop: "{{ opnsense_lab_app_access.sources }}"
+  loop_control:
+    label: "{{ item.name }} to c1 Gateway HTTPS"
+    index_var: opnsense_lab_app_access_index
+  when: opnsense_lab_app_access is defined
+  notify: Apply rule changes
+
+# Every known name that is not a current source loses its rule: all of them when the input is unset.
+- name: No rules for app access sources that are gone
+  oxlorg.opnsense.rule:
+    description: "Allow {{ item }} to c1 Gateway HTTPS"
+    match_fields: [description]
+    state: absent
+  loop: >-
+    {{ opnsense_lab_app_access_names
+       | difference((opnsense_lab_app_access | default({})).sources | default([]) | map(attribute='name') | list) }}
+  notify: Apply rule changes
