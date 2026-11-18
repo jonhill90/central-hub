@@ -83,6 +83,7 @@ check_ansible() {
   python3 -I "$here/check-loop-labels.py" hosts/ansible/roles/agent_box/tasks
   bash "$here/tests/test_loop_labels.sh"
   bash "$here/tests/test_proxmox_sso.sh"
+  bash "$here/tests/test_identity_external_secrets.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
   bash "$here/tests/test_tailnet_stack_args.sh" tailnet-policy
   bash "$here/tests/test_tailnet_policy_log.sh"
@@ -104,6 +105,7 @@ check_ansible() {
   bash "$here/tests/test_opnsense_lab_tenant.sh"
   bash "$here/tests/test_desktop_configure_vars.sh"
   bash "$here/tests/test_opnsense_app_access.sh"
+  bash "$here/tests/test_opnsense_backup_target.sh"
 }
 
 check_manifests() {
@@ -192,6 +194,113 @@ check_manifests() {
       return 1
     fi
   done
+  # The agent box's path to the store through the Gateway (openbaoStoreHost; apps/openbao-store,
+  # box-path.yaml): the root with it set and the two charts it changes, so the ListenerSet, TLSRoute
+  # and CiliumNetworkPolicy are schema-checked. Unset, nothing of it renders and the root passes no
+  # store name to any app; set, the store's certificate names the host and the Gateway lets
+  # namespace openbao attach a listener.
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoStoreHost=bao.example.com \
+    > "$work/rendered/root-c1-openbao-box-path.yaml"
+  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set zone=example.com --set sealNode=node-1 --set boxHost=bao.example.com > "$work/rendered/app-c1-openbao-store-box-path.yaml"
+  helm template gateway hosts/kubernetes/home/c1/apps/gateway --namespace gateway \
+    --set zone=example.com --set address=192.0.2.10 --set openbaoBoxHost=bao.example.com > "$work/rendered/app-c1-gateway-box-path.yaml"
+  local box_kinds
+  box_kinds=$(grep -E '^kind: (ListenerSet|TLSRoute|CiliumNetworkPolicy)$' "$work/rendered/app-c1-openbao-store-box-path.yaml" | sort | tr '\n' ' ')
+  if [ "$box_kinds" != "kind: CiliumNetworkPolicy kind: ListenerSet kind: TLSRoute " ] ||
+    ! grep -q -- '- bao.example.com$' "$work/rendered/app-c1-openbao-store-box-path.yaml" ||
+    ! grep -q 'allowedListeners:' "$work/rendered/app-c1-gateway-box-path.yaml"; then
+    echo "manifests: with a box host, expected the ListenerSet, TLSRoute and CiliumNetworkPolicy, the host on the certificate and the Gateway's allowedListeners; got [$box_kinds]" >&2
+    return 1
+  fi
+  if grep -qE 'openbao-box|bao.example.com' "$work/rendered/app-c1-openbao-store.yaml" "$work/rendered/app-c1-openbao-store-seal.yaml" ||
+    grep -q 'allowedListeners:' "$work/rendered/app-c1-gateway.yaml" ||
+    grep -Eq -- '- name: "?(boxHost|openbaoBoxHost)"?$' "$work/rendered/root-c1-openbao.yaml"; then
+    echo "manifests: with no box host, the box path, its certificate name, allowedListeners or a box host parameter rendered" >&2
+    return 1
+  fi
+  # Ansible passes the store's name to the root only when it is set (cases.txt, store-host case).
+  if ! grep -q 'name: openbaoStoreHost' "$work/rendered/gitops-source-argocd-openbao-store-host.yaml" ||
+    grep -q 'openbaoStoreHost' "$work/rendered/gitops-source-argocd-openbao.yaml"; then
+    echo "manifests: k8s_gitops should pass openbaoStoreHost only when k8s_gitops_source_openbao_store_host is set" >&2
+    return 1
+  fi
+  if [ "$(grep -cE -- '- name: "?(boxHost|openbaoBoxHost)"?$' "$work/rendered/root-c1-openbao-box-path.yaml")" != 2 ]; then
+    echo "manifests: the root with openbaoStoreHost set should pass boxHost to openbao-store and openbaoBoxHost to gateway" >&2
+    return 1
+  fi
+  # The store's admin address (openbaoAdminAddress; apps/openbao-store, admin-path.yaml; D-0062): the root
+  # with it set and the chart, so the Service, the L2 announcement policy and the NetworkPolicy are
+  # schema-checked. Set, the Service asks for that address with Local, the policy announces it from the
+  # seal node only, and the NetworkPolicy lets the box's /32 in; unset, none of it renders and the root
+  # passes no admin address. The chart refuses it without the box's /32. Role k8s_control_plane's general
+  # policy must leave out the label the Service carries, or it would announce the address from every node.
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32 \
+    --set openbaoAdminAddress=192.0.2.40 > "$work/rendered/root-c1-openbao-admin-path.yaml"
+  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set sealNode=node-1 --set boxCidr=192.0.2.30/32 --set adminAddress=192.0.2.40 \
+    > "$work/rendered/app-c1-openbao-store-admin-path.yaml"
+  local admin=$work/rendered/app-c1-openbao-store-admin-path.yaml admin_kinds
+  admin_kinds=$(grep -E '^kind: (Service|CiliumL2AnnouncementPolicy|NetworkPolicy)$' "$admin" | sort | tr '\n' ' ')
+  if [ "$admin_kinds" != "kind: CiliumL2AnnouncementPolicy kind: NetworkPolicy kind: Service " ] ||
+    ! grep -q 'lbipam.cilium.io/ips: "192.0.2.40"' "$admin" || ! grep -q 'externalTrafficPolicy: Local' "$admin" ||
+    ! grep -q 'kubernetes.io/hostname: "node-1"' "$admin" || ! grep -q 'cidr: 192.0.2.30/32' "$admin" ||
+    ! grep -q 'central-hub/l2-policy: openbao-admin' "$admin"; then
+    echo "manifests: with an admin address, expected the Service (its address, Local, the label), the policy on node-1 and the box's /32; got [$admin_kinds]" >&2
+    return 1
+  fi
+  if grep -q 'openbao-admin' "$work/rendered/app-c1-openbao-store-seal.yaml" "$work/rendered/app-c1-openbao-store-box-path.yaml" ||
+    grep -Eq -- '- name: "?(adminAddress|openbaoAdminAddress)"?$' "$work/rendered/root-c1-openbao.yaml" ||
+    grep -q 'openbaoAdminAddress' "$work/rendered/gitops-source-argocd-openbao.yaml"; then
+    echo "manifests: with no admin address, the admin path or an admin address parameter rendered" >&2
+    return 1
+  fi
+  if ! grep -Eq -- '- name: "?adminAddress"?$' "$work/rendered/root-c1-openbao-admin-path.yaml" ||
+    ! grep -q 'name: openbaoAdminAddress' "$work/rendered/gitops-source-argocd-openbao-admin.yaml" ||
+    ! grep -q 'kind: CiliumL2AnnouncementPolicy' "$work/rendered/root-c1-openbao-admin-path.yaml"; then
+    echo "manifests: the admin address should pass from Ansible to the root and to openbao-store, and the project allow its L2 policy" >&2
+    return 1
+  fi
+  if helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set sealNode=node-1 --set adminAddress=192.0.2.40 >/dev/null 2>&1; then
+    echo "manifests: openbao-store rendered an admin path without the box's /32" >&2
+    return 1
+  fi
+  if ! grep -A1 -- '- key: central-hub/l2-policy$' hosts/ansible/roles/k8s_control_plane/tasks/main.yml | grep -q 'operator: DoesNotExist$'; then
+    echo "manifests: role k8s_control_plane's L2 policy no longer leaves out Services labelled central-hub/l2-policy" >&2
+    return 1
+  fi
+  # The apps' secrets read from OpenBao (appSecretsStore openbao, D-0058 rule 8): the root with it on,
+  # and the three charts whose ExternalSecrets it moves, so the c1/<name> keys are schema-checked. The
+  # root refuses it without OpenBao in the cluster, and refuses any other value.
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set appSecretsStore=openbao \
+    > "$work/rendered/root-c1-app-secrets-openbao.yaml"
+  helm template alerts hosts/kubernetes/home/c1/apps/alerts --namespace alerts --set zone=example.com \
+    --set auth.store=openbao > "$work/rendered/app-c1-alerts-openbao.yaml"
+  helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
+    --set ntfy.store=openbao --set heartbeat.store=openbao > "$work/rendered/app-c1-monitoring-extras-secrets-openbao.yaml"
+  helm template share-pod hosts/kubernetes/home/c1/apps/share-pod --namespace share-pod --set target=192.0.2.5:22 \
+    --set authKey.store=openbao > "$work/rendered/app-c1-share-pod-openbao.yaml"
+  local keys
+  keys=$(cat "$work/rendered/app-c1-alerts-openbao.yaml" "$work/rendered/app-c1-monitoring-extras-secrets-openbao.yaml" \
+    "$work/rendered/app-c1-share-pod-openbao.yaml" | grep -c 'remoteRef: {key: c1/')
+  if [ "$keys" != 6 ]; then
+    echo "manifests: with store openbao, expected 6 remoteRef keys under c1/, found $keys" >&2
+    return 1
+  fi
+  if helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set appSecretsStore=openbao >/dev/null 2>&1; then
+    echo "manifests: the root rendered appSecretsStore openbao without openbaoInCluster" >&2
+    return 1
+  fi
+  if helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set appSecretsStore=vault >/dev/null 2>&1; then
+    echo "manifests: the root rendered an appSecretsStore other than empty, c1 or openbao" >&2
+    return 1
+  fi
   # Jellyfin's route sends every spelling of /metrics to the redirect.
   bash "$here/tests/test_jellyfin_metrics_route.sh"
   # c1's own alert rules: promtool checks them and runs their unit tests (rules-tests/).
@@ -256,6 +365,8 @@ check_backup() {
   bash "$here/tests/test_rebuild_preflight.sh"
   bash "$here/tests/test_agent_access_desktop.sh"
   bash "$here/tests/test_rebuild_short_log.sh"
+  bash "$here/tests/test_rebuild_box_inventory.sh"
+  bash "$here/tests/test_rebuild_log_pick.sh"
   bash "$here/tests/test_rebuild_diag_vms.sh"
   bash "$here/tests/test_opnsense_test.sh"
 }
@@ -264,6 +375,8 @@ check_proxy() {
   # Role proxmox_proxy against a stand-in Proxmox host in a container: the install beside nginx, the move from
   # nginx, its rollbacks, a run killed part-way, an open console across a graceful reload, a host with no nginx.
   bash "$here/tests/test_proxy.sh"
+  # The Proxmox host as c1's restic target on the same stand-in: a real sftp backup, restore and read-only reader.
+  bash "$here/tests/test_backup_sftp.sh"
   # The Proxmox host job end to end on the same stand-in (key line, check, refusal, apply), and the lifeline's
   # per-user entry loaded by nft.
   collections

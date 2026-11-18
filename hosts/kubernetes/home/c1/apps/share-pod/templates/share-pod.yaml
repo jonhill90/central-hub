@@ -33,7 +33,8 @@ spec:
     creationPolicy: Owner
   data:
     - secretKey: TS_AUTHKEY
-      remoteRef: {key: {{ .Values.authKey.source }}, property: value}
+      # Store openbao reads key c1/<name>: policy eso-c1 reads kv/data/c1/* only (apps/openbao-store/policies/eso-c1.hcl).
+      remoteRef: {key: {{ if eq .Values.authKey.store "openbao" }}c1/{{ end }}{{ .Values.authKey.source }}, property: value}
 ---
 # What the pod forwards: the pod's own port to the shared node's port, as raw TCP, so the agent's
 # SSH key and host-key check stay end to end between the agent and the shared node.

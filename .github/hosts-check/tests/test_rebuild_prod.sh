@@ -6,7 +6,8 @@
 #   3. check with everything in place passes every line: the box's state is the live prod, the teardown destroys
 #      only VMs 200 and 201, every node answers, the box routes around the nodes, and dev passed at this commit.
 #   4. The box's inventory copy: the box's key and plain ssh, the private files at the box's copies, the rebuild's
-#      own settings (prod's own restore, stable folders, the carried certificates), no proxmox group.
+#      own settings (prod's own restore, stable folders, the carried certificates, the store's admin address), no proxmox
+#      group.
 #   5. check refuses, each alone: a plan with changes, a teardown that would destroy VM 258, a value still on the
 #      Mac, a dev run at another commit, a failed dev run, a node VM ID outside 200-249, the box's route to the
 #      Proxmox API or its default route through a prod node.
@@ -165,7 +166,7 @@ ssh-keygen -q -t ed25519 -N '' -C test -f "$t/keys/prod-node-key"
 for f in prod/c1-secrets-encryption.key c1-backup.env prod/identity.env prod/secret-source.env prod/cloudflare-dns01-token.txt \
          secrets-bundle/age-identity.txt; do echo x > "$t/keys/$f"; done
 printf 'K%.0s' {1..32} > "$t/node.key"; seal_copy "$t/node.key"
-echo '{"seal_node": "wk-a", "store_host": "bao.invalid"}' > "$t/work/openbao-prod.json"
+echo '{"seal_node": "wk-a", "store_host": "bao.invalid", "box_cidr": "192.0.2.50/32", "admin_address": "192.0.2.60"}' > "$t/work/openbao-prod.json"
 inventory; destroy 200 201; dev_log "$sha" "rebuild: all stages passed"
 
 # 3, 4
@@ -180,8 +181,9 @@ v=$(python3 -c 'import json, sys; d = json.loads(sys.argv[1]); v = d["all"]["chi
 print(v["ansible_ssh_private_key_file"] == k + "/prod-node-key", v["k8s_backup_env_file"] == k + "/c1-backup.env",
       v["k8s_identity_values_file"] == k + "/prod/identity.env", v["k8s_backup_restore_own_env"], v["k8s_backup_restore_source_host"],
       v["k8s_gitops_source_local_path_stable_folders"], v["k8s_backup_azure_seed_dir"] == k + "/prod/backup-certs",
-      v["k8s_gitops_source_openbao_seal_node"], "proxmox" in d["all"]["children"], v["k8s_backup_restore_check_identity"])' "$seen" "$t/keys" 2>/dev/null)
-if [[ $v == "True True True True wk-a True True wk-a False False" && $seen != *ProxyJump* && $seen != */Users/* ]] &&
+      v["k8s_gitops_source_openbao_seal_node"], "proxmox" in d["all"]["children"], v["k8s_backup_restore_check_identity"],
+      v["k8s_gitops_source_openbao_admin_address"])' "$seen" "$t/keys" 2>/dev/null)
+if [[ $v == "True True True True wk-a True True wk-a False False 192.0.2.60" && $seen != *ProxyJump* && $seen != */Users/* ]] &&
    grep -q "^node_ssh_public_key = \"$(cut -d' ' -f1-2 < "$t/keys/prod-node-key.pub")" "$t/work/rebuild-prod/k8s.tfvars"; then
   ok "4. the box's copies: its key, the box's files, prod's own restore, stable folders, the carried certificates"
 else bad "4. [$v]"; fi

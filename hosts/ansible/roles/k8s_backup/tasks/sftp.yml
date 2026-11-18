@@ -1,0 +1,57 @@
+---
+# The node reaches the Proxmox target through one ssh alias (agent pick 262): its own key, the host's key
+# pinned, batch mode, and nothing else. restic runs `ssh <alias> -s sftp` (restic's docs, "SFTP"), so the
+# alias is all RESTIC_REPOSITORY names.
+
+- name: sftp | The host's address and key are known
+  ansible.builtin.assert:
+    that:
+      - k8s_backup_sftp_address is match('^[0-9]{1,3}(\.[0-9]{1,3}){3}$')
+      - k8s_backup_sftp_host_key is match('^ssh-ed25519 [A-Za-z0-9+/=]+$')
+    fail_msg: >-
+      k8s_backup_sftp is true but the host's address (proxmox_host_mgmt_address in the inventory) or its ssh
+      key (read by the host play of k8s-backup.yml or k8s-restore.yml) is missing. Nothing was changed.
+    quiet: true
+
+- name: sftp | The host's key, pinned
+  ansible.builtin.copy:
+    content: "{{ k8s_backup_sftp_alias }} {{ k8s_backup_sftp_host_key }}\n"
+    dest: "{{ k8s_backup_sftp_dir }}/known_hosts"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: sftp | The ssh alias the repository names
+  ansible.builtin.copy:
+    content: |
+      # Managed by central-hub role k8s_backup (agent pick 262): restic's sftp target on the Proxmox host.
+      Host {{ k8s_backup_sftp_alias }}
+        HostName {{ k8s_backup_sftp_address }}
+        HostKeyAlias {{ k8s_backup_sftp_alias }}
+        User {{ k8s_backup_sftp_user }}
+        IdentityFile {{ k8s_backup_sftp_dir }}/id_ed25519
+        IdentitiesOnly yes
+        UserKnownHostsFile {{ k8s_backup_sftp_dir }}/known_hosts
+        GlobalKnownHostsFile /dev/null
+        StrictHostKeyChecking yes
+        BatchMode yes
+        ConnectTimeout 20
+        ServerAliveInterval 60
+        ServerAliveCountMax 240
+        ForwardAgent no
+        ForwardX11 no
+        ClearAllForwardings yes
+    dest: "{{ k8s_backup_sftp_ssh_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: sftp | The alias reaches the host and gets sftp only
+  ansible.builtin.command: >-
+    sftp -q -b - {{ k8s_backup_sftp_alias }}
+  args:
+    stdin: "pwd\n"
+  register: k8s_backup_sftp_probe
+  changed_when: false
+  failed_when: k8s_backup_sftp_probe.rc != 0 or ('/' ~ k8s_backup_sftp_repo) not in k8s_backup_sftp_probe.stdout
+  when: not ansible_check_mode

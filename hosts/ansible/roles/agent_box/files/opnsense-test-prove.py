@@ -14,6 +14,7 @@ import http.cookiejar
 import json
 import os
 import re
+import shlex
 import ssl
 import subprocess
 import sys
@@ -73,8 +74,32 @@ def get(op, url, data=None):
         return e.geturl(), e.read().decode(errors="replace")
 
 
+def on_vm(cmd):
+    """A diagnostic command on the VM, run by /bin/sh: root's login shell there is csh, which rejects `2>/dev/null`
+    ("Ambiguous output redirect", measured 2026-11-18 09:19 UTC). A failure is returned as text, never raised."""
+    try:   # vm() exits through fail() when SSH or the command fails
+        return vm("/bin/sh -c " + shlex.quote(cmd)).strip()
+    except SystemExit as e:
+        return f"(not read: {e})"
+
+
+# What OPNsense's AuthenticationFactory sees: the servers' names, the connector types and what get() returns for
+# the proof's server. loginAction answers 404 when get() throws or returns no OpenIDConnect object (os-openid-connect
+# v1.0.0-beta5 AuthController.php settingsFor). Names and types only, no server settings.
+FACTORY_PROBE = r"""
+$f = new \OPNsense\Auth\AuthenticationFactory();
+foreach (['servers' => 'listServers', 'connector types' => 'listConnectors'] as $label => $method) {
+    try { echo $label . ': ' . implode(', ', array_keys($f->$method())) . "\n"; }
+    catch (\Throwable $e) { echo $label . ': ' . get_class($e) . ': ' . $e->getMessage() . "\n"; }
+}
+try { $a = $f->get('%s'); echo 'get(): ' . ($a === null ? 'null' : get_class($a)) . "\n"; }
+catch (\Throwable $e) { echo 'get(): ' . get_class($e) . ': ' . $e->getMessage() . "\n"; }
+"""
+
+
 def why_no_redirect(page):
-    """What OPNsense answered in place of the redirect to Keycloak, and the plugin's own log lines.
+    """What OPNsense answered in place of the redirect to Keycloak, the plugin's own log lines and, for a 404,
+    what the authentication factory sees.
 
     The plugin's loginAction refuses with a short text page (404 no such server, 400 not under this
     address) or a protocol failure page, and it logs each refusal to syslog with an `OIDC:` prefix
@@ -82,12 +107,16 @@ def why_no_redirect(page):
     """
     text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", page)
     text = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", text)).split())[:300]
-    try:   # vm() exits through fail() when SSH fails; keep the refusal above either way
-        log = vm("grep -h -i -e 'OIDC' -e 'openidconnect' /var/log/system/latest.log /var/log/audit/latest.log"
-                 " 2>/dev/null | tail -n 12 | cut -c1-300; true").strip()
-    except SystemExit as e:
-        log = f"(log not read: {e})"
-    return f"HTTP {last_status['code']}, page text: {text or '(empty)'}\nthe VM's OIDC log lines:\n{log or '(none)'}"
+    log = on_vm("grep -h -i -e 'OIDC' -e 'openidconnect' /var/log/system/latest.log /var/log/audit/latest.log"
+                " 2>/dev/null | tail -n 12 | cut -c1-300; true")
+    out = f"HTTP {last_status['code']}, page text: {text or '(empty)'}\nthe VM's OIDC log lines:\n{log or '(none)'}"
+    if last_status["code"] == 404:
+        try:
+            probe = php(FACTORY_PROBE % SERVER).strip()
+        except SystemExit as e:
+            probe = f"(not read: {e})"
+        out += f"\nthe authentication factory:\n{probe or '(no output)'}"
+    return out
 
 
 def signed_in(op):

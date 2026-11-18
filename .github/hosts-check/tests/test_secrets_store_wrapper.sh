@@ -9,7 +9,20 @@
 #   5. put hands the helper the path and key as arguments and the value on stdin only; a bad path or key is a usage error.
 #   6. reseed refuses during a rebuild hold; without one it runs the helper's reseed, then takes a snapshot.
 #   7. --prod reads only the prod settings, keys folder and inventory: dev's store address is refused, the prod store's
-#      is reached, and prod recovery refuses before any call (D-0038 rule 5: prod gets no recovery shares).
+#      is reached, and prod recovery refuses before any call (D-0038 rule 5: prod gets no recovery shares). Prod's calls
+#      carry no --resolve.
+#   8. Dev's calls go to dev's Gateway: with no gateway address in the dev inventory, two, or one that is not IPv4, every
+#      action refuses before any call; with one, curl gets --resolve <store>:443:<address> and the helpers get the same
+#      value in SECRETS_STORE_RESOLVE (dev's names resolve to prod's Gateway).
+#   9. put-apps refuses until sops_copies is true and on a missing file or a bad line, before any write; otherwise each
+#      <name>=<value> line of the environment's secret-source file goes to the helper as put c1/<name> value, the value
+#      on stdin byte for byte (an = inside it kept), comments and blank lines skipped; then each KEY=value line of the
+#      identity values file as put c1/identity KEY; --prod reads prod's files only, and also puts the DNS-01 token,
+#      trimmed, as put c1/cloudflare-api-token value. A missing identity or token file, a bad identity line or a blank
+#      token writes nothing.
+#  10. The store's admin address (D-0062): on dev the settings' admin_address, on prod the prod inventory's
+#      k8s_gitops_source_openbao_admin_address; set, every call goes there by the store's name (curl and the helpers),
+#      in place of dev's Gateway; one that is not IPv4, or two in the prod inventory, is refused before any call.
 # Usage: .github/hosts-check/tests/test_secrets_store_wrapper.sh   (needs python3 with PyYAML, openssl, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -29,7 +42,9 @@ EOF
 cat > "$t/libexec/secrets-store-kv.sh" <<EOF
 #!/bin/bash
 echo "kv \$*" >> $t/calls
+echo "\${SECRETS_STORE_RESOLVE:-unset}" > $t/kv-resolve
 cat > $t/kv-stdin
+{ printf '%s [' "\${*: -2}"; cat $t/kv-stdin; printf ']\n'; } >> $t/kv-log
 echo "kv helper ran \$1"
 EOF
 cat > "$t/run/secrets-store-snapshots.sh" <<EOF
@@ -47,7 +62,8 @@ grep -q "^keys=$t/keys" "$t/run/secrets-store.sh" && grep -q "^libexec=$t/libexe
 settings() { echo "$1" > "$t/work/secrets-store.json"; }
 inventory() { printf '%s\n' "$@" > "$t/keys/rebuild-dev/inventory/hosts.yml"; }
 run() { : > "$t/calls"; rm -f "$t/kv-stdin"; bash "$t/run/secrets-store.sh" "$@" > "$t/out" 2>&1; rc=$?; out=$(cat "$t/out"); calls=$(cat "$t/calls"); }
-store_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-dev.invalid")
+store_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-dev.invalid"
+           "        k8s_gitops_source_gateway_address: 192.0.2.10")
 
 # 1
 settings '{}'; inventory "${store_inv[@]}"; run status; r1a=$rc o1a=$out c1a=$calls
@@ -70,7 +86,7 @@ echo ca > "$t/keys/dev/secrets-store-ca.crt"
 
 # 2
 run status
-if [[ $rc -eq 0 && $calls == *"https://bao-dev.invalid/v1/sys/health"* ]]; then ok "2. the dev store's address: status reaches it"
+if [[ $rc -eq 0 && $calls == *"--resolve bao-dev.invalid:443:192.0.2.10 "*"https://bao-dev.invalid/v1/sys/health"* ]]; then ok "2. the dev store's address: status reaches it, through dev's Gateway"
 else bad "2. $rc $out $calls"; fi
 
 # 4
@@ -92,7 +108,7 @@ run put kv/dev/snapshot-mark taken < <(printf x); r5b=$rc c5b=$calls
 run put c1/app 'bad key' < <(printf x); r5c=$rc
 run put c1/app < <(printf x); r5d=$rc
 if [[ $r5a -eq 0 && $c5a == "kv put https://bao-dev.invalid $t/keys/dev/secrets-store-ca.crt $t/keys/dev $t/libexec c1/app/db password" &&
-      $s5a == value-Mx31 && $r5b -eq 2 && -z $c5b && $r5c -eq 2 && $r5d -eq 2 ]]; then
+      $s5a == value-Mx31 && $(cat "$t/kv-resolve") == bao-dev.invalid:443:192.0.2.10 && $r5b -eq 2 && -z $c5b && $r5c -eq 2 && $r5d -eq 2 ]]; then
   ok "5. put passes path and key as arguments and the value on stdin only; bad ones are usage errors"
 else bad "5. $r5a [$c5a] [$s5a] $r5b $r5c $r5d"; fi
 
@@ -115,9 +131,81 @@ echo '{"address": "bao-prod.invalid"}' > "$t/work/secrets-store-prod.json"
 run --prod status; r7b=$rc c7b=$calls
 run --prod recovery; r7c=$rc o7c=$out c7c=$calls
 if [[ $r7a -ne 0 && $o7a == *"is not the prod c1 store"* && -z $c7a && $r7b -eq 0 && $c7b == *"https://bao-prod.invalid/v1/sys/health"* &&
-      $c7b != *bao-dev* && $r7c -ne 0 && $o7c == *"prod gets no recovery shares"* && -z $c7c &&
+      $c7b != *bao-dev* && $c7b != *--resolve* && $r7c -ne 0 && $o7c == *"prod gets no recovery shares"* && -z $c7c &&
       -s $t/keys/prod/openbao-admin-role-id ]]; then
   ok "7. --prod: dev's address refused, the prod store reached, prod recovery refused"
 else bad "7. $r7a $o7a | $r7b $c7b | $r7c $o7c $c7c"; fi
+
+# 8
+settings '{"address": "bao-dev.invalid"}'
+r8=""
+for gw in "" "        k8s_gitops_source_gateway_address: gw.invalid" "        k8s_gitops_source_gateway_address: 192.0.2.10|        k8s_gitops_source_gateway_address: 192.0.2.11"; do
+  lines=("${store_inv[@]:0:5}")
+  [[ -z $gw ]] || { IFS='|' read -r -a extra <<<"$gw"; [[ ${#extra[@]} -eq 1 ]] && lines+=("${extra[0]}") || lines+=("${extra[0]}" "    k8s_workers:" "      vars:" "${extra[1]}"); }
+  inventory "${lines[@]}"; run status
+  r8+="$rc:${calls:-none}:$([[ $out == *"no single IPv4 k8s_gitops_source_gateway_address"* ]] && echo named) "
+done
+inventory "${store_inv[@]}"
+if [[ $r8 == "1:none:named 1:none:named 1:none:named " ]]; then ok "8. no gateway address, a name, or two: refused before any call"
+else bad "8. $r8"; fi
+
+# 9
+settings '{"address": "bao-dev.invalid"}'
+mkdir -p "$t/work/rebuild-dev"
+printf '%s\n' 'GRAFANA_CLIENT_SECRET=g=1' 'PASSWORD_OWNER=pw-owner' > "$t/work/rebuild-dev/identity.env"
+printf '%s\n' 'ntfy-owner-password=pw1' > "$t/keys/rebuild-secret-source.env"
+run put-apps; r9a=$rc o9a=$out c9a=$calls
+settings '{"address": "bao-dev.invalid", "sops_copies": true}'
+rm -f "$t/keys/rebuild-secret-source.env"; run put-apps; r9b=$rc o9b=$out c9b=$calls
+printf '%s\n' 'ntfy-owner-password=pw1' 'Bad_Name=x' > "$t/keys/rebuild-secret-source.env"; run put-apps; r9c=$rc o9c=$out c9c=$calls
+printf '%s\n' '# a comment' '' 'ntfy-owner-password=pw1' '  ' 'healthchecks-ping-url=https://hc.invalid/a?b=c' > "$t/keys/rebuild-secret-source.env"
+printf '%s' 'ntfy-proxmox-token=tk_last' >> "$t/keys/rebuild-secret-source.env"
+mv "$t/work/rebuild-dev/identity.env" "$t/ident.keep"; run put-apps; r9f=$rc o9f=$out c9f=$calls
+printf '%s\n' 'GRAFANA_CLIENT_SECRET=g' 'lower_key=x' > "$t/work/rebuild-dev/identity.env"; run put-apps; r9g=$rc o9g=$out c9g=$calls
+mv "$t/ident.keep" "$t/work/rebuild-dev/identity.env"
+rm -f "$t/kv-log"; run put-apps; r9d=$rc o9d=$out log9d=$(cat "$t/kv-log" 2>/dev/null)
+printf '%s\n' 'share-pod-authkey=prodkey' > "$t/keys/prod/secret-source.env"
+printf '%s\n' 'ARGOCD_CLIENT_SECRET=a1' > "$t/keys/prod/identity.env"
+echo '{"address": "bao-prod.invalid", "sops_copies": true}' > "$t/work/secrets-store-prod.json"
+rm -f "$t/keys/prod/cloudflare-dns01-token.txt"; run --prod put-apps; r9h=$rc o9h=$out c9h=$calls
+printf '  \n' > "$t/keys/prod/cloudflare-dns01-token.txt"; run --prod put-apps; r9i=$rc o9i=$out c9i=$calls
+printf '  cf-token-1\n\n' > "$t/keys/prod/cloudflare-dns01-token.txt"
+rm -f "$t/kv-log"; run --prod put-apps; r9e=$rc o9e=$out log9e=$(cat "$t/kv-log" 2>/dev/null)
+want9d="c1/ntfy-owner-password value [pw1]"$'\n'"c1/healthchecks-ping-url value [https://hc.invalid/a?b=c]"$'\n'"c1/ntfy-proxmox-token value [tk_last]"
+want9d+=$'\n'"c1/identity GRAFANA_CLIENT_SECRET [g=1]"$'\n'"c1/identity PASSWORD_OWNER [pw-owner]"
+want9e="c1/share-pod-authkey value [prodkey]"$'\n'"c1/identity ARGOCD_CLIENT_SECRET [a1]"$'\n'"c1/cloudflare-api-token value [cf-token-1]"
+if [[ $r9a -ne 0 && $o9a == *"wait for the owner's tap"* && -z $c9a && $r9b -ne 0 && $o9b == *"is missing or empty"* && -z $c9b &&
+      $r9c -ne 0 && $o9c == *"not <name>=<value>"* && -z $c9c && $r9d -eq 0 && $log9d == "$want9d" &&
+      $o9d == *"put-apps: 3 values from rebuild-secret-source.env at c1/<name> key value, 2 from identity.env at c1/identity"* &&
+      $o9d != *pw1* && $o9d != *tk_last* && $o9d != *pw-owner* && $o9d != *"DNS-01"* &&
+      $r9f -ne 0 && $o9f == *"identity.env is missing or empty"* && -z $c9f &&
+      $r9g -ne 0 && $o9g == *"not KEY=<value>"* && -z $c9g &&
+      $r9h -ne 0 && $o9h == *"cloudflare-dns01-token.txt is missing or empty"* && -z $c9h &&
+      $r9i -ne 0 && $o9i == *"holds no single token"* && -z $c9i &&
+      $r9e -eq 0 && $log9e == "$want9e" && $o9e == *"and the DNS-01 token at c1/cloudflare-api-token"* && $o9e != *cf-token-1* ]]; then
+  ok "9. put-apps: refused without sops_copies, a file or good lines; otherwise each line as put c1/<name> value, each identity line as put c1/identity KEY, and on prod the trimmed DNS-01 token, value on stdin"
+else bad "9. $r9a $o9a | $r9b $o9b | $r9c $o9c | $r9d [$log9d] $o9d | $r9f $o9f | $r9g $o9g | $r9h $o9h | $r9i $o9i | $r9e [$log9e] $o9e"; fi
+
+# 10
+settings '{"address": "bao-dev.invalid", "sops_copies": true, "admin_address": "192.0.2.40"}'
+run status; r10a=$rc c10a=$calls
+run put c1/app/db password < <(printf v); r10b=$rc k10b=$(cat "$t/kv-resolve")
+settings '{"address": "bao-dev.invalid", "admin_address": "bao-admin.invalid"}'; run status; r10c=$rc o10c=$out c10c=$calls
+prod_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-prod.invalid")
+echo '{"address": "bao-prod.invalid"}' > "$t/work/secrets-store-prod.json"
+printf '%s\n' "${prod_inv[@]}" "        k8s_gitops_source_openbao_admin_address: 192.0.2.41" > "$t/work/openbao-prod/inventory/hosts.yml"
+run --prod status; r10d=$rc c10d=$calls
+printf '%s\n' "${prod_inv[@]}" "        k8s_gitops_source_openbao_admin_address: 192.0.2.41" "    k8s_workers:" "      vars:" \
+  "        k8s_gitops_source_openbao_admin_address: 192.0.2.42" > "$t/work/openbao-prod/inventory/hosts.yml"
+run --prod status; r10e=$rc o10e=$out c10e=$calls
+printf '%s\n' "${prod_inv[@]}" > "$t/work/openbao-prod/inventory/hosts.yml"
+settings '{"address": "bao-dev.invalid"}'
+if [[ $r10a -eq 0 && $c10a == *"--resolve bao-dev.invalid:443:192.0.2.40 "*"https://bao-dev.invalid/v1/sys/health"* && $c10a != *192.0.2.10* &&
+      $r10b -eq 0 && $k10b == bao-dev.invalid:443:192.0.2.40 &&
+      $r10c -ne 0 && $o10c == *"admin address is not one IPv4 address"* && -z $c10c &&
+      $r10d -eq 0 && $c10d == *"--resolve bao-prod.invalid:443:192.0.2.41 "*"https://bao-prod.invalid/v1/sys/health"* &&
+      $r10e -ne 0 && $o10e == *"gives two admin addresses"* && -z $c10e ]]; then
+  ok "10. the admin address: dev's from its settings, prod's from its inventory, every call there by name; not IPv4 or two: refused"
+else bad "10. $r10a [$c10a] | $r10b [$k10b] | $r10c $o10c | $r10d [$c10d] | $r10e $o10e"; fi
 
 exit $fail

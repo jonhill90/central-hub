@@ -60,9 +60,9 @@
   when: k8s_backup_enabled or k8s_backup_reader
   tags: [install, timers, drill, restore]
 
-- name: install | bzip2 for the restic release file, openssl for the Azure certificate
+- name: install | bzip2 for the restic release file, openssl for the Azure certificate, ssh for the Proxmox target
   ansible.builtin.dnf:
-    name: [bzip2, openssl]
+    name: [bzip2, openssl, openssh-clients]
     state: present
   tags: [install]
 
@@ -221,10 +221,21 @@
     ((k8s_backup_azure_fixed_cert_file | length > 0) or (k8s_backup_azure_seed_dir | length > 0))
   tags: [timers]
 
-# The controller's env file, plus the Azure sign-in lines when the identity is on.
+# The Proxmox host as the target: the node's ssh alias for it (agent pick 262). The key itself was made by
+# the playbook's first play (tasks/sftp_key.yml).
+- name: timers | The ssh alias for the Proxmox target
+  ansible.builtin.include_tasks:
+    file: sftp.yml
+    apply:
+      tags: [timers, drill, restore]
+  when: (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_sftp
+  tags: [timers, drill, restore]
+
+# The controller's env file, plus the Azure sign-in lines when the identity is on, or the Proxmox target's
+# repository line, which comes last so it wins.
 - name: timers | The env file on the node
   ansible.builtin.copy:
-    content: "{{ lookup('ansible.builtin.file', k8s_backup_env_file) }}\n{{ k8s_backup_azure_env_lines | default('') }}"
+    content: "{{ lookup('ansible.builtin.file', k8s_backup_env_file) }}\n{{ k8s_backup_azure_env_lines | default('') }}{{ k8s_backup_sftp_env_line }}\n"
     dest: "{{ k8s_backup_node_env_file }}"
     owner: root
     group: root
@@ -285,6 +296,24 @@
     state: "{{ 'started' if k8s_backup_enabled else 'stopped' }}"
     daemon_reload: "{{ k8s_backup_units_written is changed }}"
   loop: "{{ k8s_backup_timers }}"
+  tags: [timers]
+
+# k8s_backup_timers names the Azure certificate timer only while the Azure sign-in is on, so turning the sign-in
+# off (the Proxmox target, agent pick 262) left the timer running: its daily renew found no AZURE_* lines in the
+# new env file and failed on every node. The unit files stay, so turning the sign-in back on needs no rebuild.
+- name: timers | The Azure certificate timer, if a past run made it
+  ansible.builtin.stat:
+    path: /etc/systemd/system/c1-backup-azure-cert.timer
+  register: k8s_backup_azure_timer_file
+  when: not k8s_backup_azure_identity
+  tags: [timers]
+
+- name: timers | The Azure certificate timer off while the Azure sign-in is off
+  ansible.builtin.systemd_service:
+    name: c1-backup-azure-cert.timer
+    enabled: false
+    state: stopped
+  when: not k8s_backup_azure_identity and k8s_backup_azure_timer_file.stat.exists
   tags: [timers]
 
 # apply: a tag on include_tasks is not passed to the tasks it includes, so without it

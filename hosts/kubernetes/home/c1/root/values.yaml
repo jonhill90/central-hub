@@ -35,10 +35,26 @@ openbaoMarkEnv: ""
 # openbao attach a ListenerSet to Gateway apps. Only hosts/rebuild-k8s.sh sets it, on dev with the
 # in-cluster store (k8s_gitops_source_openbao_measure); c1 keeps false and renders as before.
 openbaoMeasure: false
+# The store's name as the agent box reaches it, private, set by Ansible (k8s_gitops_source_openbao_store_host)
+# with the in-cluster store on. Set: the agent box's path to the store through Gateway apps, TLS
+# passthrough (apps/openbao-store, box-path.yaml; the gateway app lets namespace openbao attach it).
+openbaoStoreHost: ""
+# The store's admin address, private, set by Ansible (k8s_gitops_source_openbao_admin_address) with the
+# in-cluster store on: one address of the load-balancer pool, on which OpenBao sees the agent box's own
+# address, so the admin AppRole's /32 binding passes (apps/openbao-store, admin-path.yaml). It needs
+# openbaoSealNode and openbaoBoxCidr. Set it only after role k8s_control_plane's general L2 policy leaves
+# out Services labelled central-hub/l2-policy, or that policy announces it from every node too.
+openbaoAdminAddress: ""
 
 # The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
 # (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
 shareTarget: ""
+# Where the apps' ExternalSecrets read their values (D-0058 rules 5 and 8; plan step 8a). Empty or `c1`,
+# as now: Secret <name> in namespace secret-source, through store `c1`. `openbao`: key `c1/<name>` in
+# OpenBao, through store `openbao`, so it needs openbaoInCluster. Ansible sets it from
+# k8s_gitops_source_app_secrets_store, and only once every value is in OpenBao and in its SOPS copy
+# (docs/runbooks/set-up-the-secrets-store.md, "The apps' secrets"). The apps alerts, monitoring-extras and share-pod.
+appSecretsStore: ""
 
 # Where the children read their values: this repository, anonymous HTTPS, no credential (D-0023).
 repoURL: https://github.com/jonhill90/central-hub
@@ -243,6 +259,7 @@ apps:
     local: true
     rootParameters:
       target: shareTarget
+      authKey.store: appSecretsStore
     autoSync: true
     prune: false
   # Certificates (spec step 6): cert-manager itself. The issuers and the Gateway's certificate stay
@@ -269,9 +286,12 @@ apps:
     zoneParameters:
       address: "{gatewayAddress}"
       https: "{gatewayHttps}"
-    # Lets namespace openbao attach the measurement's ListenerSet, only with openbaoMeasure.
+    # Lets namespace openbao attach the measurement's ListenerSet, only with openbaoMeasure, and the
+    # agent box's path, only with openbaoStoreHost.
     switchParameters:
       openbaoMeasure: openbaoMeasure
+    rootParameters:
+      openbaoBoxHost: openbaoStoreHost
     wave: -1
     autoSync: true
     prune: false
@@ -283,6 +303,9 @@ apps:
     # The OpenBao alerts only where the store is in the cluster (D-0058).
     switchParameters:
       openbao.inCluster: openbaoInCluster
+    rootParameters:
+      ntfy.store: appSecretsStore
+      heartbeat.store: appSecretsStore
     wave: 1
     autoSync: true
     prune: true
@@ -291,6 +314,8 @@ apps:
     namespace: alerts
     local: true
     needsZone: true
+    rootParameters:
+      auth.store: appSecretsStore
     autoSync: true
     prune: true
   # The secrets store inside the cluster (D-0058), only where openbaoInCluster is true (dev first).
@@ -304,13 +329,18 @@ apps:
     rootParameters:
       sealNode: openbaoSealNode
       markEnv: openbaoMarkEnv
+      boxHost: openbaoStoreHost
+      adminAddress: openbaoAdminAddress
+      boxCidr: openbaoBoxCidr
     switchParameters:
       measure: openbaoMeasure
     # The passthrough host on the store's certificate, only with measure (templates/tls.yaml).
     needsZone: true
-    # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume.
+    # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume. The admin
+    # path's L2 announcement policy (admin-path.yaml), only with openbaoAdminAddress.
     clusterResources:
       - {group: "", kind: PersistentVolume}
+      - {group: cilium.io, kind: CiliumL2AnnouncementPolicy}
     # After cert-manager (-2): its Issuers and Certificates need cert-manager's CRDs.
     wave: -1
     autoSync: true

@@ -1,0 +1,78 @@
+{{- with .Values.adminAddress }}
+{{- /*
+The agent box's admin path to the store, made when the root passes the store's admin address
+(openbaoAdminAddress). Through Gateway apps (box-path.yaml) OpenBao sees a Cilium ingress address,
+not the box's (Cilium v1.20.4 docs, gettingstarted/terminology.rst lines 211-212), so the admin
+AppRole, bound to the box's /32 (apps/openbao/values.yaml, centralHub.boxCidr), refuses there. Here:
+- a LoadBalancer Service on that address, 443 to OpenBao's 8200, with externalTrafficPolicy Local,
+  which keeps the client's address (network/kubernetes/kubeproxy-free.rst lines 324-328). TLS still
+  ends at OpenBao, and the box sends the store's name (boxHost), which its certificate carries;
+- its own L2 announcement policy, from the seal node only. L2 announcements ignore Local and could
+  announce from a node with no OpenBao pod (network/l2-announcements.rst lines 84-85), but
+  OpenBao's pod runs only on the seal node (seal.yaml, the volume's nodeAffinity), so only that node
+  may answer for the address. Role k8s_control_plane's general policy leaves out every Service with
+  the label central-hub/l2-policy, so it never announces this one from another node;
+- a NetworkPolicy that lets the box's /32, and nothing else from outside the cluster, reach 8200.
+*/ -}}
+{{- $boxCidr := required "boxCidr: the admin path needs the box's /32 (root value openbaoBoxCidr)" $.Values.boxCidr }}
+{{- $sealNode := required "sealNode: the admin path is announced from the seal node only (root value openbaoSealNode)" $.Values.sealNode }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: openbao-admin
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    # Which L2 announcement policy announces this Service: its own, below; the general one leaves it out.
+    central-hub/l2-policy: openbao-admin
+  annotations:
+    # The address, asked for from c1's load-balancer pool (network/lb-ipam.rst lines 425-455).
+    lbipam.cilium.io/ips: {{ . | quote }}
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  # The chart's server pods (openbao-helm 0.30.6, the same selector as its own Service openbao).
+  selector:
+    app.kubernetes.io/name: openbao
+    app.kubernetes.io/instance: openbao
+    component: server
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8200
+      protocol: TCP
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: openbao-admin
+spec:
+  serviceSelector:
+    matchLabels:
+      central-hub/l2-policy: openbao-admin
+      io.kubernetes.service.namespace: {{ $.Release.Namespace }}
+  nodeSelector:
+    matchLabels:
+      kubernetes.io/hostname: {{ $sealNode | quote }}
+  loadBalancerIPs: true
+---
+# Added to the store's NetworkPolicy (apps/openbao/values.yaml, networkPolicy): Kubernetes allows what
+# any policy that selects the pod allows.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openbao-admin
+  namespace: {{ $.Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openbao
+      app.kubernetes.io/instance: openbao
+      component: server
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: {{ $boxCidr }}
+      ports:
+        - {port: 8200, protocol: TCP}
+{{- end }}

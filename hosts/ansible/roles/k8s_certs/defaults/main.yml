@@ -74,6 +74,10 @@ k8s_certs_gateway_namespace: gateway
 k8s_certs_certificate_name: apps
 k8s_certs_secret_name: apps-tls   # k8s_gateway_tls_secret must name the same Secret
 k8s_certs_token_secret_name: cloudflare-api-token
+# Where the token Secret comes from (plan step 8a, D-0058 rule 8). "" (the default): this role makes it from
+# k8s_certs_cloudflare_token_file. openbao: an ExternalSecret reads it from c1/cloudflare-api-token on store
+# openbao. It follows the root's appSecretsStore (k8s_gitops_source_app_secrets_store).
+k8s_certs_token_store: "{{ k8s_gitops_source_app_secrets_store | default('') }}"
 # Also cover the short aliases <app>.<zone> (STD-0001 rules 5 and 6) with a second wildcard,
 # *.<zone>, for the Gateway's https-short listener (k8s_gateway_short_names). A wildcard still
 # keeps app names out of the Certificate Transparency logs.

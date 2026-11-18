@@ -116,6 +116,8 @@ def config(settings, vlans, pubkey, proof, out):
     # os-openid-connect server's settings (CODE-READ-v3): PAR disabled, shared signals off, logout
     # notifications off, admission `approval`, root not allowed, no account made on first login.
     # The plugin itself is not in here: `opnsense-test configure` installs it with pkg add.
+    # The server sits under <system>, where OPNsense reads it: AuthenticationFactory::listServers walks
+    # system's children (core stable/26.1). At the root, get() found no server and the login answered 404.
     xml = f"""<?xml version="1.0"?>
 <opnsense>
   <theme>opnsense</theme>
@@ -165,6 +167,23 @@ def config(settings, vlans, pubkey, proof, out):
       <permitrootlogin>1</permitrootlogin>
       <interfaces>lan</interfaces>
     </ssh>
+    <authserver>
+      <refid>{v['srv_ref']}</refid>
+      <type>openidconnect</type>
+      <name>{SERVER}</name>
+      <openidconnect_enabled>1</openidconnect_enabled>
+      <openidconnect_app_code>{APP_CODE}</openidconnect_app_code>
+      <openidconnect_provider_profile>keycloak</openidconnect_provider_profile>
+      <openidconnect_provider_url>{v['issuer']}</openidconnect_provider_url>
+      <openidconnect_client_id>{CLIENT}</openidconnect_client_id>
+      <openidconnect_client_secret>{v['secret']}</openidconnect_client_secret>
+      <openidconnect_par_mode>disabled</openidconnect_par_mode>
+      <openidconnect_ssf_enabled>0</openidconnect_ssf_enabled>
+      <openidconnect_logout_notifications>off</openidconnect_logout_notifications>
+      <openidconnect_bootstrap_mode>approval</openidconnect_bootstrap_mode>
+      <openidconnect_create_users>0</openidconnect_create_users>
+      <openidconnect_allow_root>0</openidconnect_allow_root>
+    </authserver>
   </system>
   <interfaces>
     <lan>
@@ -210,23 +229,6 @@ def config(settings, vlans, pubkey, proof, out):
     <descr>opnsense-test proof CA</descr>
     <crt>{v['ca']}</crt>
   </ca>
-  <authserver>
-    <refid>{v['srv_ref']}</refid>
-    <type>openidconnect</type>
-    <name>{SERVER}</name>
-    <openidconnect_enabled>1</openidconnect_enabled>
-    <openidconnect_app_code>{APP_CODE}</openidconnect_app_code>
-    <openidconnect_provider_profile>keycloak</openidconnect_provider_profile>
-    <openidconnect_provider_url>{v['issuer']}</openidconnect_provider_url>
-    <openidconnect_client_id>{CLIENT}</openidconnect_client_id>
-    <openidconnect_client_secret>{v['secret']}</openidconnect_client_secret>
-    <openidconnect_par_mode>disabled</openidconnect_par_mode>
-    <openidconnect_ssf_enabled>0</openidconnect_ssf_enabled>
-    <openidconnect_logout_notifications>off</openidconnect_logout_notifications>
-    <openidconnect_bootstrap_mode>approval</openidconnect_bootstrap_mode>
-    <openidconnect_create_users>0</openidconnect_create_users>
-    <openidconnect_allow_root>0</openidconnect_allow_root>
-  </authserver>
 </opnsense>
 """
     with open(out, "w") as f:

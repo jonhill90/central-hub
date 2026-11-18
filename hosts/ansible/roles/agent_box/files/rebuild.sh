@@ -11,8 +11,9 @@
 # Dev only: the env file below fixes ENV_NAME=dev and the dev VM range 250-257, and rebuild-k8s.sh
 # refuses a tfvars whose VM IDs fall outside it or whose node_vnet isn't "dev". Only code on main
 # runs with the keys; there is no way to name another branch.
-# log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can
-# quote the realm and the nodes' output). It takes no argument and reads no other file.
+# log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can quote the realm
+# and the nodes' output). A newer run that only tore dev down is named in one line and skipped, so it can't hide
+# a failed run's diag. It takes no argument and reads no other file.
 # diag: read-only look at the dev cluster, for a failed apps stage: each dev VM's memory and CPU on Proxmox, the
 # node's memory, each dev node's free memory, load and pressure, the Argo CD applications' sync and
 # health, the newest events in the alerts and monitoring namespaces, pods that are not running, and
@@ -23,8 +24,18 @@ set -euo pipefail
 umask 077
 
 if [[ ${1:-} == log && $# -eq 1 ]]; then
-  newest=$(ls -1 /var/lib/agent-box/rebuild-dev/logs/rebuild-*.log 2>/dev/null | sort | tail -n 1)
-  [[ -n $newest ]] || { echo "rebuild: no run has been logged yet" >&2; exit 1; }
+  # The newest run that did more than a teardown: a `rebuild teardown` after a failed run must not hide that run's
+  # stage and diag lines (2026-11-18 07:43 UTC). A newer teardown-only run gets one line of its own.
+  newest="" td=""
+  while read -r f; do
+    if grep -Eq '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" && ! grep -E '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" | grep -vq ' teardown start$'; then
+      [[ -n $td ]] || td=$f
+      continue
+    fi
+    newest=$f; break
+  done < <(ls -1 /var/lib/agent-box/rebuild-dev/logs/rebuild-*.log 2>/dev/null | sort -r)
+  [[ -n $td ]] && echo "newer teardown-only run: ${td##*/}: $(grep -E ' teardown end ' "$td" | tail -n 1)"
+  [[ -n $newest ]] || { echo "rebuild: no run other than a teardown has been logged yet" >&2; exit 1; }
   echo "run: ${newest##*/}"
   cat -- "$newest"
   sed -E 's/\x1b\[[0-9;]*m//g' -- "${newest%.log}.raw" 2>/dev/null | grep -E '(^|[^A-Za-z])(PASS|FAIL):' | cut -c1-200 | head -n 60 || true
@@ -221,7 +232,8 @@ fi
 # The copy is made here once, from the store VM's key file when one exists or else from 32 random bytes, and is never
 # replaced: a new key would make every snapshot unreadable. Each run decrypts it to a file in memory (/dev/shm) that
 # only this user can read and that is removed when the run ends. The keys folder is in the box's daily bundle, so the
-# copy leaves the box only once the bundle's off-box send is installed (agent_box_opnsense_offbox set); until then
+# copy leaves the box only once the bundle's off-box send is installed (agent_box_opnsense_offbox set and
+# agent_box_secrets_bundle.offbox true, tasks/secrets_bundle.yml); until then
 # the dev key is only on the box and the node. Dev's key needs no tap (D-0058 rule 3). The VM store's wiring above
 # and this are never on together.
 in_cluster=false
@@ -312,16 +324,37 @@ grep -q '^node_ssh_public_key = "ssh-ed25519 ' "$envdir/dev-vms.tfvars" || { ech
 rm -rf "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
-import sys, yaml
-src, dst, key, known, keys, store_url, store_ca, in_cluster = sys.argv[1:9]
+import ipaddress, json, os, sys, yaml
+src, dst, key, known, keys, store_url, store_ca, in_cluster, store_settings = sys.argv[1:10]
 d = yaml.safe_load(open(src))
+# The box's own address as a /32, for the hand-over (the box's path to the store): the settings' box_cidr, private,
+# empty until that path is set. Checked as openbao-prod.sh checks prod's.
+box_cidr = ""
+if in_cluster == "true" and os.path.isfile(store_settings):
+    box_cidr = json.load(open(store_settings)).get("box_cidr") or ""
+if box_cidr:
+    try: n = ipaddress.ip_network(box_cidr, strict=False)
+    except ValueError: n = None
+    if n is None or n.version != 4 or n.prefixlen != 32 or n.is_loopback:
+        print("rebuild: box_cidr in the secrets store's settings must be one IPv4 address as a /32, not loopback", file=sys.stderr); sys.exit(1)
+# The store's admin address (D-0062), private: one address of dev's load-balancer pool, on which OpenBao sees the box's
+# own address. It needs box_cidr, the one source its NetworkPolicy lets in.
+admin = ""
+if in_cluster == "true" and os.path.isfile(store_settings):
+    admin = json.load(open(store_settings)).get("admin_address") or ""
+if admin:
+    try: a = ipaddress.ip_address(admin)
+    except ValueError: a = None
+    if a is None or a.version != 4 or a.is_loopback or not box_cidr:
+        print("rebuild: admin_address in the secrets store's settings must be one IPv4 address, not loopback, with box_cidr set", file=sys.stderr); sys.exit(1)
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking",
         "k8s_gateway_smoke_client", "k8s_certs_smoke_client", "k8s_certs_smoke_root_file",
         "k8s_backup_env_file", "k8s_backup_azure_fixed_cert_file", "k8s_control_plane_encryption_key_file",
         "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file",
-        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr"}
+        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
+        "k8s_gitops_source_openbao_admin_address"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -356,16 +389,18 @@ if store_url:
 if in_cluster == "true":
     # The seal key's node: the first worker, which the openbao-seal stage writes the key to. Its inventory name is
     # its Kubernetes node name (STD-0001 hostnames); the stage checks that against the node's address and refuses
-    # if they differ. openbaoBoxCidr stays unset here: the box's path to the store comes after its measurement.
+    # if they differ. The box's /32 goes to the hand-over only once its settings have box_cidr (the box's path to the store).
     w = find(d, "k8s_workers")
     hosts = list((w or {}).get("hosts") or {})
     if not hosts:
         print("rebuild: the dev inventory has no k8s_workers host for the seal key", file=sys.stderr); sys.exit(1)
     v["k8s_gitops_source_openbao_in_cluster"] = True
     v["k8s_gitops_source_openbao_seal_node"] = hosts[0]
+    if box_cidr: v["k8s_gitops_source_openbao_box_cidr"] = box_cidr
+    if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster"
+)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster" "$work/secrets-store.json"
 [[ -f $inventory/hosts.yml ]] || { echo "rebuild: could not build the box's dev inventory from $inv_src/hosts.yml" >&2; exit 1; }
 chmod 600 "$inventory/hosts.yml"
 

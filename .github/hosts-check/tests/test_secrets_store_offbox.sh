@@ -5,6 +5,8 @@
 #   1. No store: the in-cluster store off, or no dev VM in the rebuild's state (no state file, or no VM in it):
 #      "skipped: no store", exit 0, nothing made.
 #   2. Dev up with the store on, but a store whose sys/health is not 200 (sealed, or no answer) fails, before any snapshot or send.
+#      The health call goes to dev's Gateway (--resolve <store>:443:<the dev inventory's gateway address>), and a dev
+#      inventory with no single IPv4 gateway address fails before any call.
 #   3. A normal hourly run makes its own repository, sends the snapshot and its .cluster file, reads back, and
 #      forgets without pruning.
 #   4. The first run from the prune hour prunes, once a day; the next run that day does not.
@@ -41,6 +43,7 @@ EOF
 # curl: sys/health answers what $t/health holds (000 is no answer).
 cat > "$t/bin/curl" <<EOF
 #!/bin/bash
+echo "\$*" >> $t/curl-args
 code=\$(cat $t/health); printf '%s' "\$code"; [[ \$code != 000 ]]
 EOF
 # The wrapper: `snapshot` writes a new raft-*.snap with fresh bytes, as the real one does.
@@ -67,6 +70,10 @@ RESTIC_REPOSITORY=$t/repo-opnsense
 RESTIC_PASSWORD_FILE=$t/keys/opnsense-offbox/restic.txt
 EOF
 echo '{"address": "store.invalid"}' > "$t/work/secrets-store.json"
+mkdir -p "$t/libexec/ansible-venv/bin" "$t/keys/rebuild-dev/inventory"
+ln -s "$(command -v python3)" "$t/libexec/ansible-venv/bin/python3"
+dev_inv() { printf '%s\n' "all:" "  vars:" "    k8s_gitops_source_gateway_address: ${1:-192.0.2.10}" > "$t/keys/rebuild-dev/inventory/hosts.yml"; }
+dev_inv
 : > "$t/ca.crt"
 own() { # repository, keep hourly
   cat > "$t/work/secrets-store-offbox.env" <<EOF
@@ -80,11 +87,12 @@ EOF
 own
 vm_state() { echo '{"resources": [{"mode": "managed", "type": "proxmox_virtual_environment_vm", "name": "node", "instances": [{}]}]}' > "$t/work/state/dev-vms.tfstate"; }
 sed -e "s|^work=.*|work=$t/work|" -e "s|^settings=.*|settings=$t/keys/opnsense-offbox/settings.env|" \
+    -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^inventory=.*|inventory=$t/keys/rebuild-dev/inventory/hosts.yml|" \
     -e "s|^cacert=.*|cacert=$t/ca.crt|" -e "s|^snapshots=.*|snapshots=$t/keys/dev/openbao-snapshots|" \
     -e "s|^wrapper=.*|wrapper=$t/wrapper|" -e "s|^restic=.*|restic=$t/bin/restic|" -e "s|^escrow=.*|escrow=$t/escrow|" \
     -e "s|^now=.*|now=\$(cat $t/now)|" -e "s|PATH=/usr/local/bin|PATH=$t/bin:/usr/local/bin|" \
     "$role/files/secrets-store-offbox.sh" > "$t/send.sh"
-grep -q "^escrow=$t/escrow" "$t/send.sh" && grep -q "^now=\$(cat $t/now)" "$t/send.sh" && grep -q "PATH=$t/bin:" "$t/send.sh" ||
+grep -q "^escrow=$t/escrow" "$t/send.sh" && grep -q "^inventory=$t/keys/" "$t/send.sh" && grep -q "^libexec=$t/libexec" "$t/send.sh" && grep -q "^now=\$(cat $t/now)" "$t/send.sh" && grep -q "PATH=$t/bin:" "$t/send.sh" ||
   { echo "FAIL: the test could not point the script at its folders"; exit 1; }
 
 fail=0
@@ -121,12 +129,18 @@ else bad "1. rc=$r1/$rc $o1 / $out"; fi
 
 # 2
 vm_state
+: > "$t/curl-args"
 echo 503 > "$t/health"; send; r2=$rc o2=$out
-echo 000 > "$t/health"; send
-if [[ $r2 -ne 0 && $o2 == *"answered 503"* && $rc -ne 0 && $out == *"answered nothing"* && ! -e $t/repo-store ]] && ! called; then
-  ok "2. a store that is sealed or does not answer fails, before any snapshot or send"
-else bad "2. rc=$r2/$rc $o2 / $out"; fi
+echo 000 > "$t/health"; send; r2b=$rc o2b=$out
+a2=$(cat "$t/curl-args")
 echo 200 > "$t/health"
+: > "$t/curl-args"; dev_inv gw.invalid; send; r2c=$rc o2c=$out a2c=$(cat "$t/curl-args")
+dev_inv
+if [[ $r2 -ne 0 && $o2 == *"answered 503"* && $r2b -ne 0 && $o2b == *"answered nothing"* && ! -e $t/repo-store ]] && ! called &&
+   [[ $a2 == *"--resolve store.invalid:443:192.0.2.10 "*"https://store.invalid/v1/sys/health"* &&
+      $r2c -ne 0 && $o2c == *"no single IPv4 k8s_gitops_source_gateway_address"* && -z $a2c ]]; then
+  ok "2. a store that is sealed or does not answer fails, before any snapshot or send; the call goes to dev's Gateway, and no gateway address fails first"
+else bad "2. rc=$r2/$r2b/$r2c $o2 / $o2b / $o2c / $a2"; fi
 
 # 3
 send

@@ -449,9 +449,12 @@
     owner: root
     group: root
     mode: "0644"
+  register: agent_box_blender_tarball
   when: not (ansible_check_mode and agent_box_downloads_dir is changed)
   tags: [wrappers]
 
+# A check run plans the download but does not make it, so the unpack and the link wait for a real run when the
+# tarball is not there yet (box-apply's check run failed on the missing file on 2026-11-18).
 - name: Unpack Blender, root-owned
   ansible.builtin.unarchive:
     src: "{{ agent_box_libexec_dir }}/downloads/blender-5.2.3-linux-x64.tar.xz"
@@ -460,7 +463,7 @@
     creates: "{{ agent_box_libexec_dir }}/blender-5.2.3-linux-x64/blender"
     owner: root
     group: root
-  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  when: not (ansible_check_mode and (agent_box_downloads_dir is changed or agent_box_blender_tarball is changed))
   tags: [wrappers]
 
 - name: Put blender on the path
@@ -469,7 +472,7 @@
     dest: "{{ agent_box_front_dir }}/blender"
     state: link
     force: true
-  when: not (ansible_check_mode and agent_box_downloads_dir is changed)
+  when: not (ansible_check_mode and (agent_box_downloads_dir is changed or agent_box_blender_tarball is changed))
   tags: [wrappers]
 
 # Blender Lab's MCP repository, for the Blender Python API reference and manual excerpts it bundles (about 4,500 RST
@@ -480,6 +483,16 @@
     repo: https://projects.blender.org/lab/blender_mcp.git
     dest: "{{ agent_box_libexec_dir }}/blender-mcp"
     version: dbbf836ad4b1025f14a2b3b504c43903f39e0b04
+    umask: "0022"
+  when: not ansible_check_mode
+  tags: [wrappers]
+
+- name: Blender Lab's MCP docs readable by the sessions (root's umask left the clone at 0700)
+  ansible.builtin.file:
+    path: "{{ agent_box_libexec_dir }}/blender-mcp"
+    state: directory
+    recurse: true
+    mode: "u=rwX,go=rX"
   when: not ansible_check_mode
   tags: [wrappers]
 

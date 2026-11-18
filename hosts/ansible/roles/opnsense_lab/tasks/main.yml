@@ -59,6 +59,10 @@
   ansible.builtin.import_tasks: app_access.yml
   tags: [rules, app_access]
 
+- name: Backup target rules
+  ansible.builtin.import_tasks: backup_target.yml
+  tags: [rules, backup_target]
+
 - name: DNS override
   ansible.builtin.import_tasks: dns.yml
   tags: [dns]

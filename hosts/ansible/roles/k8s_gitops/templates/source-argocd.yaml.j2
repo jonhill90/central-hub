@@ -42,6 +42,14 @@ spec:
         - name: openbaoBoxCidr
           value: "{{ k8s_gitops_source_openbao_box_cidr }}"
 {% endif %}
+{% if k8s_gitops_source_openbao_store_host | default('') | length > 0 %}
+        - name: openbaoStoreHost
+          value: "{{ k8s_gitops_source_openbao_store_host }}"
+{% endif %}
+{% if k8s_gitops_source_openbao_admin_address | default('') | length > 0 %}
+        - name: openbaoAdminAddress
+          value: "{{ k8s_gitops_source_openbao_admin_address }}"
+{% endif %}
 {% if k8s_gitops_source_openbao_measure | bool %}
         - name: openbaoMeasure
           value: "true"
@@ -50,6 +58,10 @@ spec:
 {% if k8s_gitops_source_share_target | default('') | length > 0 %}
         - name: shareTarget
           value: "{{ k8s_gitops_source_share_target }}"
+{% endif %}
+{% if k8s_gitops_source_app_secrets_store | default('') | length > 0 %}
+        - name: appSecretsStore
+          value: "{{ k8s_gitops_source_app_secrets_store }}"
 {% endif %}
 {% if k8s_gitops_source_local_path_stable_folders | bool %}
         - name: localPathStableFolders
