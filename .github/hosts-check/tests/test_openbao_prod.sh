@@ -13,7 +13,7 @@
 #   8. seal-copy: reads the seal node's key over ssh and keeps it as the SOPS copy, never printed; a second run only
 #      compares; a node key that differs fails and replaces nothing; a key that is not 32 bytes is refused; seal with a
 #      SOPS copy already kept makes no new key.
-#   9. reset-failed-start deletes only the pod and its claim, and only when the log shows the self-init failure, the pod
+#   9. reset-failed-start <tap id> deletes only the pod and its claim, and only when the log shows the self-init failure, the pod
 #      is not Ready and the store is not initialized.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
@@ -207,16 +207,19 @@ settings '{"seal_node":"wk-a","store_host":"bao.invalid","box_cidr":"192.0.2.50/
 inventory "${prod_inv[@]}"
 kube() { printf '%s' "$1" > "$t/kube/READY"; printf '%s' "$2" > "$t/kube/LOGS"; printf '%s' "$3" > "$t/kube/STATUS"; : > "$t/kcalls"; }
 fl='[ERROR] self-initialization failed: refusing to unseal'
-kube false "$fl" '{"initialized": false}'; run reset-failed-start; g_rc=$rc g_out=$out; g_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" '{"initialized": false}'; run reset-failed-start "$tap"; g_rc=$rc g_out=$out; g_del=$(grep -c ' delete ' "$t/kcalls")
 g_names=$(grep ' delete ' "$t/kcalls" | sed 's/.*delete //; s/ --wait.*//' | tr '\n' ' ')
-kube true "$fl" '{"initialized": false}'; run reset-failed-start; r_rc=$rc; r_del=$(grep -c ' delete ' "$t/kcalls")
-kube false 'some other error' '{"initialized": false}'; run reset-failed-start; l_rc=$rc; l_del=$(grep -c ' delete ' "$t/kcalls")
-kube false "$fl" '{"initialized": true}'; run reset-failed-start; i_rc=$rc; i_del=$(grep -c ' delete ' "$t/kcalls")
-kube false "$fl" ''; run reset-failed-start; e_rc=$rc; e_del=$(grep -c ' delete ' "$t/kcalls")
-kube false "$fl" 'not json at all'; run reset-failed-start; j_rc=$rc; j_del=$(grep -c ' delete ' "$t/kcalls")
+kube true "$fl" '{"initialized": false}'; run reset-failed-start "$tap"; r_rc=$rc; r_del=$(grep -c ' delete ' "$t/kcalls")
+kube false 'some other error' '{"initialized": false}'; run reset-failed-start "$tap"; l_rc=$rc; l_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" '{"initialized": true}'; run reset-failed-start "$tap"; i_rc=$rc; i_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" ''; run reset-failed-start "$tap"; e_rc=$rc; e_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" 'not json at all'; run reset-failed-start "$tap"; j_rc=$rc; j_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" '{"initialized": false}'; run reset-failed-start; n_rc=$rc; n_del=$(grep -c ' delete ' "$t/kcalls")
+kube false "$fl" '{"initialized": false}'; run reset-failed-start not-a-tap; m_rc=$rc; m_del=$(grep -c ' delete ' "$t/kcalls")
 if [[ $g_rc -eq 0 && $g_del -eq 2 && $g_names == "pod/openbao-0 pvc/data-openbao-0 " && $g_out == *"before:"* && $g_out == *"after"* &&
-      $r_rc -ne 0 && $r_del -eq 0 && $l_rc -ne 0 && $l_del -eq 0 && $i_rc -ne 0 && $i_del -eq 0 && $e_rc -ne 0 && $e_del -eq 0 && $j_rc -ne 0 && $j_del -eq 0 ]]; then
-  ok "9. reset-failed-start: deletes the pod and its claim only on a confirmed failed start; Ready, no log line, initialized, an empty status and an unreadable status each refuse"
-else bad "9. good rc=$g_rc del=$g_del [$g_names] ready rc=$r_rc/$r_del log rc=$l_rc/$l_del init rc=$i_rc/$i_del empty rc=$e_rc/$e_del junk rc=$j_rc/$j_del"; fi
+      $r_rc -ne 0 && $r_del -eq 0 && $l_rc -ne 0 && $l_del -eq 0 && $i_rc -ne 0 && $i_del -eq 0 && $e_rc -ne 0 && $e_del -eq 0 && $j_rc -ne 0 && $j_del -eq 0 &&
+      $g_out == *"owner tap $tap"* && $n_rc -eq 2 && $n_del -eq 0 && $m_rc -eq 2 && $m_del -eq 0 ]]; then
+  ok "9. reset-failed-start: deletes the pod and its claim only on a confirmed failed start; Ready, no log line, initialized, an empty status, an unreadable status, no tap id and a malformed one each refuse; the tap is logged"
+else bad "9. good rc=$g_rc del=$g_del [$g_names] ready rc=$r_rc/$r_del log rc=$l_rc/$l_del init rc=$i_rc/$i_del empty rc=$e_rc/$e_del junk rc=$j_rc/$j_del notap rc=$n_rc/$n_del badtap rc=$m_rc/$m_del"; fi
 
 exit "$fail"
