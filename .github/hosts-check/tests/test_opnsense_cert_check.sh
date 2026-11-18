@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # The box's check of the certificate the firewall's web UI serves (hosts/ansible/roles/agent_box/files/opnsense-cert-check.sh),
 # against a local `openssl s_server` with certificates made here (test values only, none of the lab's):
-#   1. A certificate that verifies against the chain and has more than 45 days left: exit 0, a line with the days and "verified yes".
-#   2. One with 10 days left: exit 1, WARN, and the line says fewer than 45 days.
+#   1. A certificate that verifies against the chain and has more than 25 days left: exit 0, a line with the days and "verified yes".
+#   2. One with 10 days left: exit 1, WARN, and the line says fewer than 25 days and that c1 has renewed (c1 renews at 30 days left).
+#   2b. One with 40 days left, before the 30 days left c1 renews at: exit 0, no warning (a copy then would be the same certificate).
+#   2c. The host setting as an IPv4 address checks the certificate's IP name instead of failing on a host name.
 #   3. One a different CA signed: exit 1, WARN, "does not verify".
 #   4. With no chain file, the system store decides: a CA it does not hold fails the run, and nothing is claimed verified.
 #   5. With nothing listening: exit 1, WARN, "no certificate could be read".
@@ -33,7 +35,7 @@ echo '{"host": "localhost", "keep": 14}' > "$t/work/opnsense-backup.json"
 make_ca() { openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 365 -subj "/CN=Test $1" -keyout "$t/$1.key" -out "$t/$1.crt" 2>/dev/null; }
 make_leaf() {
   openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -subj "/CN=localhost" -keyout "$t/leaf-$1-$2.key" -out "$t/leaf-$1-$2.csr" 2>/dev/null
-  printf 'subjectAltName=DNS:localhost\n' > "$t/ext.cnf"
+  printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\n' > "$t/ext.cnf"
   openssl x509 -req -in "$t/leaf-$1-$2.csr" -CA "$t/$1.crt" -CAkey "$t/$1.key" -CAcreateserial -days "$2" -extfile "$t/ext.cnf" \
     -out "$t/leaf-$1-$2.crt" 2>/dev/null
 }
@@ -44,18 +46,28 @@ serve() { # <ca name> <days>: stops any earlier server, starts one with that cer
   for _ in $(seq 1 50); do (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && break; sleep 0.1; done
 }
 make_ca lab; make_ca other
-make_leaf lab 100; make_leaf lab 10; make_leaf other 100
+make_leaf lab 100; make_leaf lab 10; make_leaf lab 40; make_leaf other 100
 cp "$t/lab.crt" "$t/keys/chain.crt"
 
 # 1
 serve lab 100
 check check > "$t/1.out" 2>&1; rc=$?
-if [ $rc = 0 ] && grep -qE '^opnsense-cert-check: notAfter [0-9-]{10}, (99|100) days left, verified yes$' "$t/1.out"; then ok "1 a verified certificate with more than 45 days: exit 0 and the days"; else bad "1 rc=$rc $(cat "$t/1.out")"; fi
+if [ $rc = 0 ] && grep -qE '^opnsense-cert-check: notAfter [0-9-]{10}, (99|100) days left, verified yes$' "$t/1.out"; then ok "1 a verified certificate with more than 25 days: exit 0 and the days"; else bad "1 rc=$rc $(cat "$t/1.out")"; fi
 
 # 2
 serve lab 10
 check check > "$t/2.out" 2>&1; rc=$?
-if [ $rc = 1 ] && grep -qE '^WARN .* (9|10) days left, verified yes; fewer than 45 days' "$t/2.out"; then ok "2 10 days left: exit 1 and a WARN naming the 45 days"; else bad "2 rc=$rc $(cat "$t/2.out")"; fi
+if [ $rc = 1 ] && grep -qE '^WARN .* (9|10) days left, verified yes; fewer than 25 days, and c1 renews at 30 days left' "$t/2.out"; then ok "2 10 days left: exit 1 and a WARN saying c1 has renewed"; else bad "2 rc=$rc $(cat "$t/2.out")"; fi
+
+# 2b, 2c
+serve lab 40
+check check > "$t/2b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && grep -qE '^opnsense-cert-check: notAfter [0-9-]{10}, (39|40) days left, verified yes$' "$t/2b.out"; then ok "2b 40 days left: exit 0, no warning before c1 has renewed"; else bad "2b rc=$rc $(cat "$t/2b.out")"; fi
+serve lab 100
+echo '{"host": "127.0.0.1", "keep": 14}' > "$t/work/opnsense-backup.json"
+check check > "$t/2c.out" 2>&1; rc=$?
+if [ $rc = 0 ] && grep -qE 'days left, verified yes$' "$t/2c.out"; then ok "2c the host setting as an IPv4 address verifies the certificate's IP name"; else bad "2c rc=$rc $(cat "$t/2c.out")"; fi
+echo '{"host": "localhost", "keep": 14}' > "$t/work/opnsense-backup.json"
 
 # 3
 serve other 100

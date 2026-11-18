@@ -6,7 +6,7 @@
 # and holds no key: it makes one TLS connection and reads the certificate off it.
 # Runs as user `keys` through sudo and from the box's daily timer. Installed by the agent_box role; root owns it.
 #   opnsense-cert-check check    connect, print one line, save it, exit 0 only when the certificate verifies and has at least
-#                                45 days left; exit 1 with the line starting WARN otherwise
+#                                25 days left; exit 1 with the line starting WARN otherwise
 #   opnsense-cert-check status   print the last saved line and when it was taken (no connection)
 # The firewall's name is the host in {work}/opnsense-backup.json, the setting the daily configuration backup already uses
 # (agent_box_opnsense_backup), so this needs no setting of its own. The chain is checked against the lab chain, the file the box's
@@ -22,7 +22,7 @@ work=/var/lib/agent-box
 settings=$work/opnsense-backup.json
 chain=/etc/agent-keys/prod/lab-ca/c1-intermediate-chain.crt
 port=443
-warn_days=45
+warn_days=25   # c1 renews 30 days before the end (lab_host_cert_renew_before 720h), so under 25 days a newer certificate is ready to copy
 state=$work/opnsense-cert
 status=$state/status.txt
 export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin
@@ -59,7 +59,9 @@ cafile_args=()
 if [[ -r $chain ]]; then cafile_args=(-CAfile "$chain" -no-CApath); fi
 out=$(mktemp)
 trap 'rm -f "$out"' EXIT
-if ! timeout 20 openssl s_client -connect "$host:$port" -servername "$host" -verify_hostname "$host" ${cafile_args[@]+"${cafile_args[@]}"} \
+# The host setting is a name or an IPv4 address: a name goes in SNI and is checked as a host name, an address as an IP.
+if [[ $host =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then host_args=(-verify_ip "$host"); else host_args=(-servername "$host" -verify_hostname "$host"); fi
+if ! timeout 20 openssl s_client -connect "$host:$port" "${host_args[@]}" ${cafile_args[@]+"${cafile_args[@]}"} \
      -verify_return_error </dev/null > "$out" 2>&1; then
   # A refused or failed handshake: tell the two causes apart, because the second one is the finding this check exists for.
   if grep -q 'Verification error\|verify error' "$out"; then
@@ -75,6 +77,6 @@ end=$(date -u -d "$enddate" +%s)
 days=$(( (end - $(date -u +%s)) / 86400 ))
 line="notAfter $(date -u -d "$enddate" +%Y-%m-%d), $days days left, verified yes"
 if (( days < warn_days )); then
-  save "WARN opnsense-cert-check: $line; fewer than $warn_days days: run Path A of set-opnsense-gui-certificate.md" 1
+  save "WARN opnsense-cert-check: $line; fewer than $warn_days days, and c1 renews at 30 days left, so a renewed certificate is ready: copy it with Path A of set-opnsense-gui-certificate.md" 1
 fi
 save "opnsense-cert-check: $line" 0
