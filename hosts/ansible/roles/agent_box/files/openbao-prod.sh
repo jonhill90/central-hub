@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|gitops|handover|reset-failed-start|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|gitops|handover|reset-failed-start <tap id>|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -27,7 +27,8 @@
 #           refusing to unseal"), so the store starts clean. It refuses unless that line is in the pod's log (this run's or
 #           the last one's), the pod is not Ready and `bao status` does not say the store is initialized. It deletes only
 #           the pod openbao-0 and the claim data-openbao-0 in namespace openbao, and prints both before and after. It
-#           replaces a hand delete; a store that was ever initialized is never touched.
+#           replaces a hand delete; a store that was ever initialized is never touched. <tap id> is the owner's tap on a
+#           card naming this step and the commit: it deletes a claim (D-0042 rule 6); it is checked and logged as for seal.
 # log       the newest run's lines: the action, the commit, the tap id, and the PASS, FAIL, SKIP and play-recap lines.
 # Settings (agent_box_openbao_prod, private, in <work>/openbao-prod.json): seal_node (a k8s_nodes host of the prod inventory,
 # its Kubernetes node name), store_host (the store's name as the box reaches it; secrets-store-prod checks its own address
@@ -52,12 +53,12 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|gitops|handover|reset-failed-start|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|gitops|handover|reset-failed-start <tap id>|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | gitops | handover | reset-failed-start | log) [[ $# -eq 1 ]] || usage ;;
-  seal | seal-copy)
+  key | check | gitops | handover | log) [[ $# -eq 1 ]] || usage ;;
+  seal | seal-copy | reset-failed-start)
     [[ $# -eq 2 ]] || usage
     tap=$2
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "openbao-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
