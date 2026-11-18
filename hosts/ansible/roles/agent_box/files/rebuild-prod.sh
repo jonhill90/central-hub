@@ -196,12 +196,15 @@ MAP = {"k8s_control_plane_encryption_key_file": pkeys + "/c1-secrets-encryption.
        "k8s_identity_values_file": pkeys + "/identity.env",
        "k8s_certs_lab_ca_cert_file": pkeys + "/lab-ca/c1-intermediate-chain.crt",
        "k8s_certs_lab_ca_key_file": pkeys + "/lab-ca/c1-intermediate.key",
-       "k8s_identity_theme_dir": pkeys + "/identity-theme",
        "k8s_gitops_sso_root_ca_file": pkeys + "/lab-ca/root.crt"}
+# The sign-in theme folder keeps its own name under <pkeys>/identity-theme/, where the controller's prod-files run copies it
+# (tasks/prod_files.yml) and c1-ansible.sh looks: the folder's name is the theme's name in Keycloak (k8s_identity vars).
 def remap(n):
     if isinstance(n, dict):
         for k in list(n):
             if k in MAP and isinstance(n[k], str) and n[k]: n[k] = MAP[k]
+            elif k == "k8s_identity_theme_dir" and isinstance(n[k], str) and n[k].strip("/"):
+                n[k] = pkeys + "/identity-theme/" + n[k].rstrip("/").rsplit("/", 1)[-1]
             else: remap(n[k])
     elif isinstance(n, list):
         for i in n: remap(i)
@@ -275,6 +278,11 @@ for h in sorted(nodes):
               "k8s_gitops_sso_root_ca_file"):
         p = v.get(k)
         if isinstance(p, str) and p and not os.path.exists(p): bad.append("%s is %s, which is not on the box" % (k, p))
+    # The identity role needs <theme>/login/theme.properties (k8s_identity tasks/theme.yml) and would stop on it only after
+    # the teardown, in stage identity.
+    th = v.get("k8s_identity_theme_dir")
+    if isinstance(th, str) and th and os.path.isdir(th) and not os.path.isfile(os.path.join(th, "login", "theme.properties")):
+        bad.append("k8s_identity_theme_dir is %s, which has no login/theme.properties" % th)
 # The backup target (docs/runbooks/back-up-c1-off-box.md). Azure: each node's certificate is carried to its rebuilt node
 # (step 2 of rebuild). The Proxmox host over sftp: each rebuilt node makes a new key, which only the host play (group
 # proxmox) lets in, and the box's copy drops that group because the box holds no key on the host (the runbook's P3), so a
