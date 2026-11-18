@@ -71,7 +71,7 @@
           PasswordAuthentication no
           KbdInteractiveAuthentication no
           PermitRootLogin prohibit-password
-      register: vps_app_host_sshd_dropin
+      notify: Reload sshd
 
     - name: Check sshd accepts the whole configuration before it reloads
       ansible.builtin.command: /usr/sbin/sshd -t
@@ -94,12 +94,9 @@
       ansible.builtin.fail:
         msg: sshd refused the hardening drop-in; it was removed and nothing was reloaded.
 
-# Reload must happen now, before the firewall steps, so it is a task and not a handler.
-- name: Reload sshd  # noqa: no-handler
-  ansible.builtin.systemd_service:
-    name: sshd
-    state: reloaded
-  when: vps_app_host_sshd_dropin is changed
+# The drop-in task notifies the handler; flush it now so sshd reloads before the firewall steps.
+- name: Reload sshd now
+  ansible.builtin.meta: flush_handlers
 
 - name: Install firewalld
   ansible.builtin.dnf:
@@ -159,7 +156,7 @@
   ansible.builtin.assert:
     that:
       - "vps_app_host_fw.stdout is search('(?s)trusted \\(active\\).*interfaces: ' ~ vps_app_host_tailnet_interface)"
-      - "vps_app_host_fw.stdout is search('(?s)public \\(.*ports:[^\\n]*22/tcp')"
+      - "vps_app_host_fw.stdout is search('(?s)public \\(.*ports:[^\\n]*(?<![0-9])22/tcp')"
     fail_msg: The firewall is not as the role set it; check firewall-cmd --list-all-zones by hand.
     quiet: true
 
