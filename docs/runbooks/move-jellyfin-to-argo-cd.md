@@ -20,7 +20,7 @@ Jellyfin is the media server on c1, at `https://jellyfin.apps.c1.prod.<zone>/`. 
 flowchart LR
   gen["Password generator<br/>(External Secrets)"] --> sec["Secret jellyfin-admin<br/>made once"]
   app["Application jellyfin<br/>(local chart)"] --> obj["Deployment, claims,<br/>Service, routes"]
-  app --> job["PostSync Job<br/>jellyfin-setup"]
+  app --> job["CronJob<br/>jellyfin-setup"]
   sec --> job
   job -- "startup API:<br/>settings, admin, library, complete" --> obj
 ```
@@ -81,7 +81,7 @@ Jellyfin has no OpenID Connect of its own, so the chart adds it by plugin. Every
 |---|---|---|
 | Plugin | init container `sso-plugin` in `templates/jellyfin.yaml`, `files/install-sso-plugin.sh` | Before Jellyfin starts, downloads the SSO Authentication plugin 5.1.1 from K0lin's fork of `9p4/jellyfin-plugin-sso` (the original is archived and stops at Jellyfin 10.11; 5.1.1's `meta.json` has `targetAbi` 12.0.0.0), checks its sha256 and unpacks it into `/config/plugins`. |
 | Trust | the same init container, Secret `media/jellyfin-lab-root-ca` | Keycloak's certificate comes from the lab CA. The lab root is not in git (its names may be private); `playbooks/k8s-identity.yml` copies it there from the controller's file `k8s_identity_jellyfin_root_ca_file`. The container adds it to a copy of the public bundle and Jellyfin reads that through `SSL_CERT_FILE`. With no Secret yet, Jellyfin starts as before and the Job skips the sign-in; a file with no certificate stops the container. The role restarts Jellyfin when it first makes or changes that Secret, because the bundle is built when the pod starts; then sync again (or delete the Job) so the Job writes the provider. |
-| Provider | the setup Job's `sso` steps in `files/setup.sh` | After each sync: signs in as `admin`, waits until the plugin is loaded, writes provider `keycloak` (`POST /sso/OID/Add/keycloak`: issuer `https://sso.apps.c1.prod.<zone>/realms/lab`, client `jellyfin`, secret from `media/jellyfin-sso`, roles from the realm's `roles` claim; `admin` makes a Jellyfin admin) and reads it back. The call overwrites, so a second run changes nothing. |
+| Provider | the setup CronJob's `sso` steps in `files/setup.sh` | Every 10 minutes (a CronJob, because a hook would run only on a sync): signs in as `admin`, waits until the plugin is loaded, writes provider `keycloak` (`POST /sso/OID/Add/keycloak`: issuer `https://sso.apps.c1.prod.<zone>/realms/lab`, client `jellyfin`, secret from `media/jellyfin-sso`, roles from the realm's `roles` claim; `admin` makes a Jellyfin admin) and reads it back. The call overwrites, so a second run changes nothing. |
 
 Its settings are the `sso:` block of `apps/jellyfin/values.yaml`. The client and the Secret `media/jellyfin-sso` come from `playbooks/k8s-identity.yml` ([set-up-lab-sign-in.md](set-up-lab-sign-in.md)); with no client secret, or no lab root Secret, yet the Job skips this part and says so.
 
@@ -135,7 +135,7 @@ On a new cluster with the root Application made, Argo CD makes every object, Ext
 
 ## If it fails
 
-- **The setup Job fails:** read `kubectl -n media logs job/jellyfin-setup`. The Job is safe to run again: sync again, or delete the Job and sync. If the wizard was finished by hand, the Job sees that and does nothing.
+- **The setup Job fails:** read the newest Job's log (`c1-read get jobs -n media`, then `c1-read logs -n media job/<newest jellyfin-setup job>`). The CronJob runs again every 10 minutes and every step is safe to repeat; a failed run marks the app Degraded until one passes. If the wizard was finished by hand, the Job sees that and does nothing.
 - **The password is lost or must change:** delete the ExternalSecret and the Secret `jellyfin-admin`, then sync; a new password is made. Jellyfin still has the old one, so reset it in Jellyfin's Dashboard, Users, `admin`.
 - **The way back:** delete the `jellyfin` Application. It has no resources finalizer, so every object stays. Set `k8s_jellyfin_by_argocd: false` and run the Jellyfin playbook, and Ansible owns it again. The generated Secret also stays.
 - Tell the owner before trying anything not written here.

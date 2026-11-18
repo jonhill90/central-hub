@@ -43,8 +43,10 @@ metrics:
 
 # First-run setup (templates/setup-*.yaml). The admin password is made once by External Secrets'
 # Password generator and kept in the Secret <name>-admin (keys: username, password); nothing
-# prints it. The Job runs after every sync and changes nothing once the wizard is done.
+# prints it. The setup CronJob runs every 10 minutes and changes nothing once the wizard is done.
 setup:
+  # How often the setup CronJob runs (see templates/setup-job.yaml for why it is not a hook).
+  schedule: "*/10 * * * *"
   enabled: true
   adminUser: admin
   serverName: jellyfin
