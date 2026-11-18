@@ -20,7 +20,7 @@ kube-prometheus-stack is Prometheus, its operator, Grafana, kube-state-metrics a
 
 | File | What |
 |---|---|
-| `root/values.yaml`, entry `kube-prometheus-stack` | Chart 92.3.1 (the same as the role used). Grafana's `root_url` is a parameter, because it holds the zone. Server-side apply. Argo CD ignores the data in Secret `kube-prometheus-stack-grafana`, because the chart makes a new random admin password every time it is rendered. |
+| `root/values.yaml`, entry `kube-prometheus-stack` | Chart 92.3.1 (the same as the role used). Grafana's `root_url` is a parameter, because it holds the zone. Server-side apply. Argo CD ignores the data in Secret `kube-prometheus-stack-grafana`, because the chart makes a new random admin password every time it is rendered, and that password's checksum on the Grafana Deployment (`checksum/secret`), which otherwise rolls Grafana out again at every sync (a new ReplicaSet every 5 to 10 minutes on c1, 2026-11-18). |
 | `apps/kube-prometheus-stack/values.yaml` | The role's values: no Alertmanager, the kubeadm-bound scrapes off, Prometheus 15d or 16GB on a 20Gi claim, Grafana on a 1Gi claim with Loki as a data source. |
 | `apps/kube-prometheus-stack/values-sso.yaml` | Grafana's sign-in through Keycloak. Used only when the inventory has `k8s_observability_grafana_sso: true`. |
 
