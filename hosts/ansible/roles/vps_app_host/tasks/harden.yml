@@ -94,7 +94,8 @@
       ansible.builtin.fail:
         msg: sshd refused the hardening drop-in; it was removed and nothing was reloaded.
 
-- name: Reload sshd
+# Reload must happen now, before the firewall steps, so it is a task and not a handler.
+- name: Reload sshd  # noqa: no-handler
   ansible.builtin.systemd_service:
     name: sshd
     state: reloaded
