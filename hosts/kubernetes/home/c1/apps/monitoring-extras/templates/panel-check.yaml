@@ -1,5 +1,5 @@
 # The panel check: every half hour, ask Prometheus for the values the dashboard's OpenBao and
-# Jellyfin panels show, and print one line per panel. An agent reads them with the read-only account
+# Jellyfin panels show, and print one line per panel, then the names of the alerts that fire. An agent reads them with the read-only account
 # (`c1-read logs -n monitoring job/<newest panel-check job>`), so the numbers are seen without a
 # browser, a password or a port-forward. It reads Prometheus only, inside the cluster, and holds no
 # token. A query that answers no series prints "no data" and makes the run fail, so a broken scrape
@@ -45,6 +45,18 @@ data:
       vals=$(printf '%s' "$out" | grep -o '"value": *\[[^]]*\]' | sed 's/.*"\([^"]*\)" *\]$/\1/' | tr '\n' ' ')
       if [ -z "$vals" ]; then echo "$title: no data"; fail=1; else echo "$title: $vals"; fi
     done < /check/queries.tsv
+    # Which alerts fire, by name and namespace, so a reader can tell them apart without Grafana.
+    q='count by (alertname, namespace) (ALERTS{alertstate="firing",alertname!="Watchdog"})'
+    if out=$(curl -fsS --max-time 20 --get --data-urlencode "query=$q" "$PROMETHEUS/api/v1/query"); then
+      names=$(printf '%s' "$out" | grep -o '"metric": *{[^}]*}' | while read -r m; do
+        n=$(printf '%s' "$m" | sed -n 's/.*"alertname": *"\([^"]*\)".*/\1/p')
+        ns=$(printf '%s' "$m" | sed -n 's/.*"namespace": *"\([^"]*\)".*/\1/p')
+        printf '%s%s; ' "$n" "${ns:+ ($ns)}"
+      done)
+      echo "Alerts firing, by name: ${names:-none}"
+    else
+      echo "Alerts firing, by name: query failed"; fail=1
+    fi
     [ "$fail" -eq 0 ] && echo "panel check: every panel has data" || echo "panel check: some panels have no data"
     exit "$fail"
 ---
