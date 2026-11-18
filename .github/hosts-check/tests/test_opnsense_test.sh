@@ -163,6 +163,19 @@ grep -q 'vm("/bin/sh -c " + shlex.quote(cmd))' "$files/opnsense-test-prove.py" &
 # No sh-only redirect may reach root's csh: every `2>` or `2>&1` command goes through on_vm (/bin/sh).
 if grep -n 'vm("' "$files/opnsense-test-prove.py" | grep -v 'on_vm("' | grep -q '2>'; then bad "a vm() command uses a sh-only redirect, which csh refuses"
 else ok "no vm() command passes a sh-only redirect to csh"; fi
+# A top-level assignment must not rebind one of the prover's functions: run 9 (2026-11-18) bound `read` to a
+# string after the DPoP check, and item 3's read("stranger.pass") failed with "'str' object is not callable".
+python3 -I - "$files/opnsense-test-prove.py" <<'PY' && ok "no top-level name in prove rebinds one of its functions" || bad "prove rebinds one of its own functions"
+import ast, sys
+tree = ast.parse(open(sys.argv[1]).read())
+funcs = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+bound = {t.id for n in tree.body if isinstance(n, (ast.Assign, ast.AnnAssign, ast.AugAssign))
+         for t in (n.targets if isinstance(n, ast.Assign) else [n.target]) if isinstance(t, ast.Name)}
+clash = funcs & bound
+if clash:
+    print("rebinds:", ", ".join(sorted(clash)))
+sys.exit(1 if clash else 0)
+PY
 grep -q 'if last_status\["code"\] == 404:' "$files/opnsense-test-prove.py" && grep -q "get('%s')" "$files/opnsense-test-prove.py" \
   && ok "a 404 from the login prints what the authentication factory lists and returns" || bad "no factory read on a 404"
 grep -q 'VMID=257$' "$w" && ok "the wrapper's VM ID is 257" || bad "VM ID"

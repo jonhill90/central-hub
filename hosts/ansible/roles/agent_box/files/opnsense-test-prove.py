@@ -166,10 +166,10 @@ print("opnsense-test: proof item 2: Keycloak sign-in as proof-user, once bound t
 # (os-openid-connect v1.0.0-beta5 DpopKeyStore.php, statePath and ensureDirectory).
 # /bin/sh, not root's csh: csh reads `cd dir 2>/dev/null` as two arguments to cd ("cd: Too many arguments."),
 # so run 8 (2026-11-18) saw no output and failed here after the sign-in had passed.
-read = on_vm("cd /var/db/openid-connect/dpop 2>/dev/null && stat -f '%Lp %N' . key-*.json 2>/dev/null || true")
-modes = [line.split(" ", 1) for line in read.split("\n") if line.strip()]
+store = on_vm("cd /var/db/openid-connect/dpop 2>/dev/null && stat -f '%Lp %N' . key-*.json 2>/dev/null || true")
+modes = [line.split(" ", 1) for line in store.split("\n") if line.strip()]
 if not modes or modes[0] != ["700", "."]:
-    fail("the plugin's DPoP key folder is missing or not mode 0700; read: " + (read or "(nothing)") + "\n"
+    fail("the plugin's DPoP key folder is missing or not mode 0700; read: " + (store or "(nothing)") + "\n"
          + on_vm("ls -ld /var/db/openid-connect /var/db/openid-connect/* 2>&1 | head -n 12; true"))
 keys = [name for mode, name in modes[1:] if mode == "600"]
 if not keys or len(keys) != len(modes) - 1:
