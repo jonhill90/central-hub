@@ -60,7 +60,7 @@ if [[ $r4a == "1 unmoved said" && $r4b == "0 pinned" && $r4c -eq 0 ]]; then
 else bad "3. [$r4a] [$r4b] $r4c"; fi
 
 # 4
-if grep -qF 'args: [up, "up *", rebuild, "rebuild *", teardown, identity, log, diag]' "$root/hosts/ansible/roles/agent_box/defaults/main.yml"; then
+if grep -qF 'args: [up, "up *", rebuild, "rebuild *", teardown, identity, log, diag, fit]' "$root/hosts/ansible/roles/agent_box/defaults/main.yml"; then
   ok "4. the sudo line lets a session pass the commit to up and rebuild, and nothing to the other actions"
 else bad "4. the rebuild wrapper's sudo args do not pass a commit to up and rebuild"; fi
 
