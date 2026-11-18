@@ -480,7 +480,6 @@
     repo: https://projects.blender.org/lab/blender_mcp.git
     dest: "{{ agent_box_libexec_dir }}/blender-mcp"
     version: dbbf836ad4b1025f14a2b3b504c43903f39e0b04
-    update: false
   when: not ansible_check_mode
   tags: [wrappers]
 
