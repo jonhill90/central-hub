@@ -1,0 +1,12 @@
+# Managed by the agent_box role (central-hub hosts/ansible). Reads the certificate the firewall's web UI serves and fails the
+# unit when it ends within 45 days or does not verify (ask 320). Runs as the keys user; it holds no key and changes nothing.
+[Unit]
+Description=Check the certificate the firewall serves
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ agent_box_keys_user }}
+Group={{ agent_box_keys_user }}
+ExecStart={{ agent_box_libexec_dir }}/opnsense-cert-check.sh check

@@ -1066,6 +1066,41 @@
   when: agent_box_opnsense_backup | length > 0 and not (ansible_check_mode and agent_box_opnsense_backup_units is changed)
   tags: [wrappers]
 
+# --- The certificate the firewall serves (ask 320) --------------------------------------------------
+
+- name: The check of the firewall's served certificate, root-owned
+  ansible.builtin.copy:
+    src: opnsense-cert-check.sh
+    dest: "{{ agent_box_libexec_dir }}/opnsense-cert-check.sh"
+    owner: root
+    group: root
+    mode: "0755"
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: Daily certificate check service and timer
+  ansible.builtin.template:
+    src: "opnsense-cert-check.{{ item }}.j2"
+    dest: "/etc/systemd/system/opnsense-cert-check.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/opnsense-cert-check.{{ item }}"
+  register: agent_box_opnsense_cert_check_units
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: Daily certificate check timer on
+  ansible.builtin.systemd_service:
+    name: opnsense-cert-check.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_opnsense_cert_check_units is changed }}"
+  when: agent_box_opnsense_backup | length > 0 and not (ansible_check_mode and agent_box_opnsense_cert_check_units is changed)
+  tags: [wrappers]
+
 # --- Off-box copy of those configurations (pick 222) ----------------------------------------------------
 
 - name: Copy the OPNsense backups off the box (only when agent_box_opnsense_offbox is set)

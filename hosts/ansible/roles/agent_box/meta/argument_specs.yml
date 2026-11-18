@@ -68,6 +68,7 @@ argument_specs:
           Private. host (OPNsense's name or address) and keep (copies kept, 3 to 60, default 14) for the daily
           configuration backup on the box. Empty does nothing.
       agent_box_opnsense_backup_daily: {type: str, default: "*-*-* 14:30:00 UTC", description: "systemd OnCalendar for the daily OPNsense backup."}
+      agent_box_opnsense_cert_check_daily: {type: str, default: "*-*-* 16:00:00 UTC", description: "systemd OnCalendar for the daily check of the certificate the firewall serves."}
       agent_box_opnsense_offbox:
         type: dict
         default: {}
