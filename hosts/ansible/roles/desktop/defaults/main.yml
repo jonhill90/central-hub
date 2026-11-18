@@ -45,7 +45,8 @@ desktop_lock_admin: true
 # chain check.
 # desktop_trust_check_reach stays false until the lab firewall passes the desktop to the c1 Gateway on 443: the dev
 # VLAN's rules (role opnsense_lab) pass no traffic to prod, so each name would fail as "not reached" and stop the
-# run. The pull request that adds that pass sets it true (docs/runbooks/set-up-the-desktop.md).
+# run. Once that pass is applied (a firewall change on the owner's tap), a one-line pull request sets it true
+# (docs/runbooks/set-up-the-desktop.md).
 desktop_trust_chain_file: "{{ k8s_node_trust_chain_file | default('') if (k8s_node_trust_enabled | default(false) | bool) else '' }}"
 desktop_trust_bundle: /etc/pki/tls/certs/ca-bundle.crt
 desktop_trust_check_zone: ""
