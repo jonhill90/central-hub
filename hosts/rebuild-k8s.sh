@@ -21,6 +21,8 @@
 #                 read-only copy of prod's newest volume snapshot (hosts/rebuild.env.example)
 #   RESTORE_CHECK_HOOK  the command the `checks` stage runs to prove the restore; required with
 #                 RESTORE_HOOK
+#   PREFLIGHT_KEEP_DESKTOP  optional, dev only: true leaves the owner's desktop VM running when memory is short (the box's
+#                 timer run sets it); the preflight then judges without it.
 #   PREFLIGHT_MIN_FREE_MIB  optional, dev only: the least free memory (MiB) the Proxmox node must have before the VMs are made
 #                 (default: the dev VMs' memory below, summed over the nodes the tfvars declare, plus a 1024 MiB margin)
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
@@ -490,7 +492,10 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
     # /pool/desktop, which the dev token does (it holds rights on /vms/<DESKTOP_VMID> only), and that ID is the
     # only one the token's VM.PowerMgmt covers.
     desktops=$(sed -n "s/^preflight: guest vmid=\($DESKTOP_VMID\) type=qemu status=running .*/\1/p" <<<"$guests")
-    if [ -n "$desktops" ] && ${PREFLIGHT_DRY:-false}; then
+    if [ -n "$desktops" ] && ${PREFLIGHT_KEEP_DESKTOP:-false}; then
+      # A timer run (the box's rebuild.sh auto) never stops the owner's desktop: it is judged without it.
+      echo "preflight: VM $DESKTOP_VMID (the desktop) is running and is left alone (PREFLIGHT_KEEP_DESKTOP: a timer run never stops it)"
+    elif [ -n "$desktops" ] && ${PREFLIGHT_DRY:-false}; then
       # A fit check stops nothing: it counts the desktop's maxmem as freed, which the stop frees at most.
       add=$(sed -n "s/^preflight: guest vmid=$DESKTOP_VMID type=qemu status=running maxmem=\([0-9]*\) MiB .*/\1/p" <<<"$guests")
       free=$(( free + ${add:-0} ))
