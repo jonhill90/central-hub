@@ -120,6 +120,8 @@ flowchart LR
 
 The box's VM had no balloon device (`floating = 0`), so memory the box once touched never went back to the host. Its footprint grew until a dev rebuild no longer fit beside prod: 8414 MiB free with VM 300 stopped on 2026-11-18 at 03:51 UTC, against a 10240 MiB minimum. `floating = 4096` gives it a balloon. On a q35 machine of version 6.2 or later, Proxmox adds `free-page-reporting=on` to the balloon (qemu-server `src/PVE/QemuServer.pm`). Pages the guest frees then go back to the host, and the host's auto-ballooning may shrink the box down to 4096 MiB when the host runs short. This changes VM 258, so the owner taps it. The apply restarts the box, which ends every session running on it.
 
+On 2026-11-18 this change was made by hand on the host, on the owner's typed order at 04:01 UTC: `qm set 258 --balloon 4096`, then `qm reboot 258`. After that, `qm config 258` showed `balloon: 4096`, and the box came back at 04:01:34 UTC with a `virtio_balloon` device whose free page reporting bit is 1. Its guest then showed 4039 MiB, because the host had shrunk it to the floor. The next dev preflight read 10569 MiB free with VM 300 running. So once this folder's code has `floating = 4096`, step 1's plan shows no change; read it, and apply only if it shows one.
+
 1. Plan this folder and read the plan, as in step 4.
 
    expect: `0 to add, 1 to change, 0 to destroy`, changing only `memory.floating` from 0 to 4096.
