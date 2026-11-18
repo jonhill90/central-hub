@@ -66,8 +66,9 @@ def check(name, got, want, mutant=None, d=None):
         fails += not bad
 
 DOC = ["docs/runbooks/x.md"]
-d = fx(DOC);                                               check("four passes on a green PR is GREEN", run(d), "GREEN")
-d = fx(DOC, roles=ROLES[:3]);                              check("three passes is not green", run(d), "NOT GREEN: ledger lacks council-c", mutate('missing = [r for r in ROLES if r not in roles]', 'missing = []'), d)
+d = fx(DOC, roles=["reviewer"]);                            check("the reviewer's pass alone on a green PR is GREEN", run(d), "GREEN")
+d = fx(DOC);                                               check("a ledger that still holds the councils' lines is GREEN too", run(d), "GREEN")
+d = fx(DOC, roles=ROLES[1:]);                              check("councils without the reviewer is not green", run(d), "NOT GREEN: ledger lacks reviewer", mutate('missing = [r for r in ROLES if r not in roles]', 'missing = []'), d)
 d = fx(DOC, roles=None);                                   check("no ledger is not green", run(d), "NOT GREEN: no ledger")
 d = fx(DOC, raw_ledger='{"role": "reviewer"');             check("a partial ledger line is not green", run(d), "NOT GREEN: ledger ends mid-line")
 d = fx(DOC, raw_ledger='not json\n');                      check("a ledger line that is not JSON is not green", run(d), "NOT GREEN: ledger line 1 is not JSON")
@@ -85,15 +86,15 @@ d = fx(["hosts/ansible/roles/proxmox_proxy/tasks/main.yml"]);  check("an edit to
 d = fx(["hosts/ansible/playbooks/proxmox-proxy.yml"]);           check("an edit to the host job's playbook is green with a NOTE", subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout.replace("NOTE: verdict v2\n", "", 1), "NOTE: this PR edits what the Proxmox host job runs")
 d = fx(["hosts/ansible/roles/proxmox_proxy/tasks/main.yml"]);  check("the host job's role still merges GREEN", run(d), "GREEN")
 # No owner-tap line is needed for any file: the merge guard's own files, D-0042 and D-0034, a record that amends them and the
-# role's defaults merge on the four passes like any other PR (D-0059).
+# role's defaults merge on the reviewer's pass like any other PR (D-0059).
 for f in ["docs/decisions/0042-let-the-reviewer.md", "docs/decisions/0034-x.md", "hosts/ansible/roles/agent_box/files/pr-merge.sh", "hosts/ansible/roles/agent_box/files/pr-merge-verdict.py", "hosts/ansible/roles/agent_box/files/pass-record.sh", "hosts/ansible/roles/agent_box/defaults/main.yml"]:
-    d = fx([f], head_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\n"}, base_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\nold\n"}); check("%s merges on the four passes with no owner tap" % f.split("/")[-1], run(d), "GREEN")
-d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: [D-0042]\n---\nThis amends rule 2 of D-0042.\n"}); check("a record that supersedes or amends D-0042 merges on the four passes", run(d), "GREEN")
-d = fx(["hosts/ansible/roles/agent_box/files/pr-merge.sh"], roles=ROLES[:3]); check("a guard file still needs all four passes", run(d), "NOT GREEN: ledger lacks council-c")
+    d = fx([f], head_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\n"}, base_text={f: "---\nid: D-0042\nstatus: proposed\nsupersedes: []\n---\nold\n"}); check("%s merges on the reviewer's pass with no owner tap" % f.split("/")[-1], run(d), "GREEN")
+d = fx(["docs/decisions/0099-x.md"], head_text={"docs/decisions/0099-x.md": "---\nid: D-0099\nstatus: proposed\nsupersedes: [D-0042]\n---\nThis amends rule 2 of D-0042.\n"}); check("a record that supersedes or amends D-0042 merges on the reviewer's pass", run(d), "GREEN")
+d = fx(["hosts/ansible/roles/agent_box/files/pr-merge.sh"], roles=ROLES[1:]); check("a guard file still needs the reviewer's pass", run(d), "NOT GREEN: ledger lacks reviewer")
 d = fx(DOC); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
 check("every run prints the verdict v2 marker", r, "NOTE: verdict v2")
-check("a GREEN prints the four roles it found", r.replace("NOTE: verdict v2\n", "", 1), "LEDGER: reviewer council-a council-b council-c")
-d = fx(DOC, roles=ROLES[:3]); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
+check("a GREEN prints the role it needs and found", r.replace("NOTE: verdict v2\n", "", 1), "LEDGER: reviewer")
+d = fx(DOC, roles=ROLES[1:]); r = subprocess.run([sys.executable, "-I", SRC, FULL, str(PR), H, d], capture_output=True, text=True).stdout
 check("a NOT GREEN prints no LEDGER line", "x" + ("bad" if "LEDGER:" in r else "ok"), "xok")
 check("a NOT GREEN still prints the verdict v2 marker", r, "NOTE: verdict v2")
 # Fold-in (D-0042 rule 3).
@@ -113,10 +114,10 @@ d = fx([REC], head_text={REC: rec("accepted")}, base_text={REC: base}, cmp_head=
 check("an extra changed line in the record refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: the PR's net change differs")
 d = fx([REC], head_text={REC: rec("accepted")}, base_text={REC: base}, cmp_head=cmp_(patch="@@ -9,3 +9,5 @@\n context moved\n+Some body line\n+Another body line\n"), approved=cmp_(status_line=False))
 check("different context lines (main moved the file) do not refuse", run(d), "GREEN")
-d = fx([REC], head_text={REC: rec("accepted")}, base_text={REC: base}, cmp_head=cmp_(), approved=cmp_(status_line=False), approved_roles=ROLES[:3])
-check("an approved commit with three passes refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-commit bbbbbbb lacks four passes", mutate('if aerr or any(r not in aroles for r in ROLES):', 'if False:'), d)
+d = fx([REC], head_text={REC: rec("accepted")}, base_text={REC: base}, cmp_head=cmp_(), approved=cmp_(status_line=False), approved_roles=ROLES[1:])
+check("an approved commit without the reviewer's pass refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-commit bbbbbbb lacks the reviewer's pass", mutate('if aerr or any(r not in aroles for r in ROLES):', 'if False:'), d)
 d = fx([REC], head_text={REC: rec("accepted")}, base_text={REC: base}, cmp_head=cmp_(), approved=None)
-check("a fold-in whose approved commit cannot be read refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-commit bbbbbbb lacks four passes")
+check("a fold-in whose approved commit cannot be read refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-commit bbbbbbb lacks the reviewer's pass")
 d = fx([REC], head_text={REC: rec("accepted").replace("approved-by: agents", "approved-by: someone")}, base_text={REC: base}, cmp_head=cmp_(), approved=cmp_(status_line=False))
 check("approved-by other than agents or owner refuses an acceptance", run(d), "NOT GREEN: docs/decisions/0099-x.md: status accepted needs approved-by: agents or owner", mutate('nev.get("approved-by") != "agents"', 'False'), d)
 # The owner's own card tap (approved-by: owner): an owner-tap line whose relay ref is the approval-ref, and only the acceptance fields change.
@@ -158,8 +159,8 @@ check("an owner-approved PR whose approved-commit compare cannot be read is refu
 REC2 = "docs/decisions/0098-y.md"
 d = fx([REC, REC2], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own(), REC2: own().replace("D-0099", "D-0098")}, base_text={REC: base, REC2: base.replace("D-0099", "D-0098")}, cmp_head={"files": [{"filename": REC, "patch": OWN_PATCH, "changes": 4}, {"filename": REC2, "patch": OWN_PATCH, "changes": 4}]})
 check("a PR that accepts two owner-approved records is refused (one record per PR)", run(d), "NOT GREEN: docs/decisions/0099-x.md: approved-by owner allows only the acceptance fields")
-d = fx([REC], roles=ROLES[:3] + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own()}, base_text={REC: base}, cmp_head=ocmp())
-check("an owner-approved acceptance still needs the four passes on the PR head", run(d), "NOT GREEN: ledger lacks council-c")
+d = fx([REC], roles=ROLES[1:] + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own()}, base_text={REC: base}, cmp_head=ocmp())
+check("an owner-approved acceptance still needs the reviewer's pass on the PR head", run(d), "NOT GREEN: ledger lacks reviewer")
 d = fx([REC], roles=ROLES + ["owner-tap"], refs={"owner-tap": TAP}, head_text={REC: own()}, base_text={REC: base}, cmp_head=None)
 check("an owner-approved acceptance with no compare refuses", run(d), "NOT GREEN: docs/decisions/0099-x.md: the compare for head could not be read")
 d = fx([REC], head_text={REC: rec("rejected").replace(ME, "short")}, base_text={REC: base}, cmp_head=cmp_(), approved=cmp_(status_line=False))

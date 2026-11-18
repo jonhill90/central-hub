@@ -49,7 +49,8 @@ yes_() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; fail=1; fi; }
 no_() { if eval "$2"; then echo "FAIL $1"; fail=1; else echo "ok   $1"; fi; }
 rm -rf "$t/work/passes"; out=$(run "$t/pr-merge.sh" sweep); check "no ledger: the sweep exits 0 quietly" "$out" "rc=0"; no_ "no ledger: nothing merged" merged
 no_ "no ledger: no check-runs read for the PR" "grep -q check-runs $t/calls"
-ledger reviewer council-a council-b; out=$(run "$t/pr-merge.sh" sweep); check "three passes: not green" "$out" "ledger lacks council-c"; no_ "three passes: nothing merged" merged
+ledger council-a council-b council-c; out=$(run "$t/pr-merge.sh" sweep); check "no reviewer pass: not green" "$out" "ledger lacks reviewer"; no_ "no reviewer pass: nothing merged" merged
+ledger reviewer; out=$(run "$t/pr-merge.sh" sweep); check "the reviewer's pass alone: GREEN" "$out" "${H:0:7}: GREEN"; yes_ "the reviewer's pass alone: the squash merge is called" merged
 ledger "${roles[@]}"; touch "$t/work/passes/HALT"; out=$(run "$t/pr-merge.sh" sweep); check "halt flag: the sweep says it is halted" "$out" "halt flag is set"; no_ "halt flag: nothing merged even with four passes" merged
 no_ "halt flag: no GitHub call at all" "test -s $t/calls"
 out=$(run "$t/pr-merge.sh" merge jonhill90/central-hub 7 "$H"); check "halt flag: pr-merge merge refuses too" "$out" "halt flag is set"; no_ "halt flag: merge did not call GitHub's merge" merged

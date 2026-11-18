@@ -15,8 +15,10 @@ import re
 import sys
 import urllib.parse
 
-ROLES = ("reviewer", "council-a", "council-b", "council-c")
-ALL_ROLES = ROLES + ("owner-tap",)
+# The reviewer's pass is the one an exact head needs (the owner's order of 2026-11-18 00:03 UTC dropped the three councils).
+# A ledger line of an earlier role still parses, so a head recorded before that order is read, not refused.
+ROLES = ("reviewer",)
+ALL_ROLES = ROLES + ("council-a", "council-b", "council-c", "owner-tap")
 RECORD_STATUS = ("accepted", "rejected", "parked")
 STANDARD_STATUS = ("active",)
 MAX_RECORDS = 20
@@ -137,7 +139,7 @@ def main():
     if gh:
         notes.append("NOTE: this PR edits %d files under .github/; green is from the PR's own copy of them (%s)" % (len(gh), ", ".join(gh[:5])))
 
-    # The ledger: four passes for this exact head.
+    # The ledger: the reviewer's pass for this exact head.
     roles, lines, err = read_ledger(os.path.join(d, "ledger.jsonl"), full, head, pr_no)
     if err: why.append(err)
     missing = [r for r in ROLES if r not in roles]
@@ -216,7 +218,7 @@ def main():
             why.append("%s: status %s needs a full approved-commit" % (n, st)); continue
         aroles, _al, aerr = read_ledger(os.path.join(d, "approved", ac + ".jsonl"), full, ac)
         if aerr or any(r not in aroles for r in ROLES):
-            why.append("%s: approved-commit %s lacks four passes (%s)" % (n, ac[:7], aerr or "incomplete")); continue
+            why.append("%s: approved-commit %s lacks the reviewer's pass (%s)" % (n, ac[:7], aerr or "incomplete")); continue
         try:
             acmp = load(os.path.join(d, "approved"), ac + ".compare.json")
             hcmp = load(d, "compare-head.json")

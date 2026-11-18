@@ -1,6 +1,6 @@
 ---
 id: D-0042
-title: Let the reviewer and the council approve in the owner's place, except the steps he keeps
+title: Let the reviewer approve in the owner's place, except the steps he keeps
 status: accepted
 date: 2026-11-14
 decision-makers: [owner]
@@ -20,7 +20,7 @@ accepted-evidence:
 revisit-when: the greenfield build-out of the lab ends; the lab comes to hold personal data or anything of value; a change approved under this record has to be undone after it harmed the lab, a cloud account or the repository; the owner says a pass was wrong; the agents get a GitHub identity of their own (D-0030) and GitHub can require an approval itself; or a cluster other than c1 reads the repository
 ---
 
-# Let the reviewer and the council approve in the owner's place, except the steps he keeps
+# Let the reviewer approve in the owner's place, except the steps he keeps
 
 ## Context and Problem Statement
 
@@ -53,7 +53,7 @@ The owner's words, above, decide only this much:
 - the lab is greenfield, so agents finish it;
 - this covers the lab, for now, during its greenfield build-out, not every PR (07:44:46 UTC).
 
-Everything else in this record is an agent pick, labelled `[agent pick]` in its rule, which the owner can change at any time (REQ-0035). That includes the reviewer and the council approving in his place: that role is one the agents gave themselves, because his messages end his own approval but do not name who approves instead.
+Everything else in this record is an agent pick, labelled `[agent pick]` in its rule, which the owner can change at any time (REQ-0035). That includes the reviewer approving in his place: that role is one the agents gave themselves, because his messages end his own approval but do not name who approves instead.
 
 His messages are a change of mind (REQ-0030). They reverse REQ-0009 (the owner makes every decision) and REQ-0012 (only the owner accepts a record; agents must not mark one accepted) in the requirements register, the project's standing instruction 1 (never mark anything accepted), and the second of the three Central Hub outcomes in the project's topic (he picks each permanent piece), whose work his card of 2026-11-11 at 04:03 UTC put ahead of other work, for the changes this record covers. The register and that outcome's text are kept outside this repository; both need updating, by their own process.
 
@@ -62,7 +62,7 @@ His messages are a change of mind (REQ-0030). They reverse REQ-0009 (the owner m
 - **The owner's requests of 2026-11-14** above.
 - **What can't be undone stays with a person.** A merge can be reverted and a lab layer rebuilt from code; a deleted backup, money spent or a leaked secret can't be taken back.
 - **Checks a machine runs.** What a job can check itself (the head, the checks, a clean merge) it checks, so it doesn't rest on the caller's word.
-- **Everything logged.** Each approval names the reviewer's and the council's messages, in a log the owner can read.
+- **Everything logged.** Each approval names the reviewer's message, in a log the owner can read.
 - **Replaceable** (REQ-0011): undone by a PR that puts the old rules back.
 
 ## Considered Options
@@ -73,13 +73,12 @@ His messages are a change of mind (REQ-0030). They reverse REQ-0009 (the owner m
 
 ## Decision Outcome
 
-Chosen option: **1**, because the owner ended his own approval of the lab's build-out, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules he pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8, deletes and secrets as agent picks. The rest of rule 6 (money, access rights), where in each step the tap falls, and rule 7, are agent picks. The box's limits need no tap since the owner's order of 2026-11-17 (rule 4).
+Chosen option: **1**, because the owner ended his own approval of the lab's build-out, and option 2 would leave him a tap for every acceptance and every production apply. Rule 6 keeps a tap for firewall and tailnet changes, deletes and secrets. These are the agents' reading of the earlier standing rules he pointed to at 07:43:25 UTC without listing them: firewall and tailnet from D-0036 rule 8, deletes and secrets as agent picks. The rest of rule 6 (money, access rights), where in each step the tap falls, and rule 7, are agent picks. The box's limits need no tap since the owner's order of 2026-11-17 (rule 4). The three councils were dropped at his word of 2026-11-18 at 00:03 UTC: the reviewer's clearance of the head is the whole pass (rules 1 and 2).
 
 ```mermaid
 flowchart LR
   pr["PR, CI green"] --> rv["reviewer thread clears the head"]
-  rv --> cn["council A, B, C each pass the head"]
-  cn --> job["merge sweep on the agent box:<br/>four passes on the head's ledger, checks, clean merge,<br/>then squash pinned to the head"]
+  rv --> job["merge sweep on the agent box:<br/>the reviewer's pass on the head's ledger, checks, clean merge,<br/>then squash pinned to the head"]
   job --> main["main"]
   main --> box["box limits: the agents' pass of the digest,<br/>no tap (rule 4)"]
   main --> dev["dev apply"]
@@ -87,17 +86,16 @@ flowchart LR
   prod -. "firewall or tailnet, a delete,<br/>a secret, money" .-> tap["one tap from the owner"]
 ```
 
-*In words:* a PR whose CI is green goes to the reviewer thread and then to the three council threads. When all four pass the same head, the orchestrator records the four passes on the agent box's ledger. The box's sweep checks the head, the checks and the merge itself before it squash-merges. What lands on `main` is then applied as the other records set out, with no tap, except for the steps in rule 6: firewall and tailnet applies, deletes, secrets and money.
+*In words:* a PR whose CI is green goes to the reviewer thread. When it clears the head, the orchestrator records the pass on the agent box's ledger. The box's sweep checks the head, the checks and the merge itself before it squash-merges. What lands on `main` is then applied as the other records set out, with no tap, except for the steps in rule 6: firewall and tailnet applies, deletes, secrets and money.
 
 ### Rules
 
 1. **The agents' pass.** [agent pick] The agents' pass for a head is:
-   - the reviewer thread's clearance of that head, and
-   - a pass from each of the three council threads for the same head, recorded by the orchestrator thread in one message.
+   - the reviewer thread's clearance of that head, recorded by the orchestrator thread.
 
-   It takes the place of the owner's go, typed or tapped, wherever these rules asked for it: AGENTS.md rules 1 and 2, D-0001's statuses, D-0031 rules 3 and 4, D-0034, D-0035 rule 3(b) and (c), and D-0041 rule 6. Rule 6 below is the exception. That a pass is needed at all follows from the owner's messages; that the reviewer and the council give it is the agents' own pick.
-2. **The merge job.** [agent pick] The merge sweep on the agent box merges a PR whose exact head holds the reviewer's pass and the passes of the three councils on its ledger of recorded passes (D-0056). The workflow `merge.yml` that this rule first named was removed (D-0056).
-   - A timer on the agent box runs `pr-merge sweep` as the keys user. For each open PR it reads the ledger of recorded passes for the head, and considers only a head with the reviewer's pass and the passes of councils A, B and C (D-0056 rules 1 and 3).
+   It takes the place of the owner's go, typed or tapped, wherever these rules asked for it: AGENTS.md rules 1 and 2, D-0001's statuses, D-0031 rules 3 and 4, D-0034, D-0035 rule 3(b) and (c), and D-0041 rule 6. Rule 6 below is the exception. That a pass is needed at all follows from the owner's messages; that the reviewer gives it is the agents' own pick.
+2. **The merge job.** [agent pick] The merge sweep on the agent box merges a PR whose exact head holds the reviewer's pass on its ledger of recorded passes (D-0056). The workflow `merge.yml` that this rule first named was removed (D-0056).
+   - A timer on the agent box runs `pr-merge sweep` as the keys user. For each open PR it reads the ledger of recorded passes for the head, and considers only a head with the reviewer's pass (D-0056 rules 1 and 3).
    - It merges as the project's GitHub App with the key kept inside the wrapper (D-0031), and refuses otherwise:
      - the PR is open, not a draft, and targets `main`;
      - its head is the one the ledger names;
@@ -135,12 +133,12 @@ flowchart LR
 ### Consequences
 
 - Good: the owner no longer types or taps for merges, acceptances and production and cloud applies. He keeps one tap for firewall and tailnet applies, deletes, secrets, access rights and money.
-- Good: each approval names a reviewer's and a council's message, and the sweep's own checks don't rest on the caller.
+- Good: each approval names a reviewer's message, and the sweep's own checks don't rest on the caller.
 - Good: merges made by the sweep show as the project's GitHub App in the PR's history, and each has a comment that names its passes.
 - Bad: agents approve agents' work, and all four checkers are the same kind of model, so they can share a blind spot. Compensating controls: four separate threads, each told to look for what is missing; the four-check rule before any "supported" or "not supported" claim; the public run log; the owner's no at any time (rule 8); every merge can be reverted and every lab layer rebuilt from code.
-- Bad: the sweep can't check the reviewer's and the council's messages. A session that can run `pass-record` could record a pass with a made-up id. Compensating controls: the ids are in the PR's comment and the orchestrator's report, so a made-up one shows; the sweep checks everything GitHub can tell it. This is the same gap D-0035 and D-0041 accept for card taps.
+- Bad: the sweep can't check the reviewer's message. A session that can run `pass-record` could record a pass with a made-up id. Compensating controls: the ids are in the PR's comment and the orchestrator's report, so a made-up one shows; the sweep checks everything GitHub can tell it. This is the same gap D-0035 and D-0041 accept for card taps.
 - Bad: the sweep's checks live in this repository, so a PR can change them (Activation gate item 2 is still open). Compensating controls: a change that drops or loosens a check, or removes a step from rule 6, needs the owner's tap (rule 11); the box runs the copy an approved install put there, never a PR's; every change to it is in the orchestrator's report.
-- Bad: a production or cloud apply now runs without the owner seeing its plan first. A wrong apply can break the lab until it is rebuilt. The owner gave his reason at 07:44:46 UTC: the lab is greenfield and holds no personal data or anything of value. If that stops being true, this record is revisited. Compensating controls: dev first for every layer that has a twin; the saved plan and the council's pass for those that don't; rule 6 for firewall, tailnet, deletes, secrets and money; the restore checks of D-0035 rule 5 before any teardown.
+- Bad: a production or cloud apply now runs without the owner seeing its plan first. A wrong apply can break the lab until it is rebuilt. The owner gave his reason at 07:44:46 UTC: the lab is greenfield and holds no personal data or anything of value. If that stops being true, this record is revisited. Compensating controls: dev first for every layer that has a twin; the saved plan and the reviewer's pass for those that don't; rule 6 for firewall, tailnet, deletes, secrets and money; the restore checks of D-0035 rule 5 before any teardown.
 - Bad: rule 7's steps still need the owner in person.
 - Bad: the sweep depends on the agent box. If the box is down, merges wait, or fall back to the Mac's checked merge or the owner's own merge on GitHub.
 - Bad: a box limit change, including the sweep's files, reaches the box on the agents' pass with no card for the owner, from the controller or from a line in main's approvals file (rule 4, D-0044). Compensating controls: the digest pins the bytes that were passed, every line is in the repository's history and the box's log, the orchestrator lists each install in its report (rule 9), and the owner's no wins at once (rule 8).

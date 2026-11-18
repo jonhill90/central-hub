@@ -69,7 +69,7 @@ The check run needs `python3-apt` on the host: Ansible's apt module installs it 
    On a host without Apache httpd, the check run shows the files it would write and says it skips the configuration test, the move and the proof, because apt installs nothing in check mode.
    expect: the diff shows the site, the drop-in, the two scripts and `proofs.env`, and nothing under `/etc/nginx/`.
 
-   The reviewer and Councils A, B and C pass that hash (D-0041 rule 6: the host has no dev twin).
+   The reviewer passes that hash (D-0041 rule 6: the host has no dev twin).
 
 2. The run: `lab-proxmox-host` with `action: apply`, the pass's message ID and the hash. It checks again and refuses unless the hash is the same, so a new commit on `main` or a changed host stops it; then it runs the playbook, and fails the run if a task changed that the check showed neither changed nor skipped (D-0041 rule 4).
    expect: `failed=0`; the task "The move, with its proofs" is `changed`; `/var/lib/proxmox-proxy/cutover.result` starts with `done`; `ss -ltnp 'sport = :443'` names `apache2`; the last task, "The proof holds", passes.
