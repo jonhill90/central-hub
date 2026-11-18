@@ -12,12 +12,12 @@
       - agent_box_lab_test.address is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
       - agent_box_lab_test.name is match('^[a-z][a-z0-9]{10,14}$')
       - agent_box_lab_test.domain | default('') | length > 0
-      - agent_box_lab_test.memory_mb | int >= 6144
+      - agent_box_lab_test.memory_mb | int >= 7168
       - agent_box_lab_test.disk_gb | int >= 32
       - agent_box_lab_test.cores | int >= 2
     fail_msg: >-
       agent_box_lab_test needs name (STD-0001), domain, address (the copy's dev address), cores (2 or more),
-      memory_mb (6144 or more), disk_gb (32 or more) and proxmox_node_name (docs/specs/2026-11-lab-test-copy.md)
+      memory_mb (7168 or more), disk_gb (32 or more) and proxmox_node_name (docs/specs/2026-11-lab-test-copy.md)
 
 - name: lab_test | The ISO tool and the assistant's libcrypt.so.1
   ansible.builtin.package:

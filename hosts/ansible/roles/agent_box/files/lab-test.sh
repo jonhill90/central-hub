@@ -14,7 +14,8 @@
 # host: inside the copy, as on a fresh real host (docs/runbooks/set-up-proxmox-host.md steps 1 and 6b, then
 #   docs/runbooks/set-up-lab-network-and-firewall.md step 1): the no-subscription apt repository, iac-access.sh, the
 #   copy's own iac@pve!apply token (kept on the box, removed by destroy), then playbooks/proxmox-host.yml --tags vmbr1
-#   against the copy with an inventory the wrapper writes. Safe to run again.
+#   against the copy with an inventory the wrapper writes, then the OPNsense nano image and the Debian 13 template
+#   inside the copy, each checked against its pin. Safe to run again.
 # destroy: destroy VM 256 only. The token cannot delete files on Proxmox's local storage, so the prepared ISO stays
 #   in the state and on local for the next build, which reuses it while the answer is unchanged; destroy lists it.
 # log: the last run's log, then VM 256's Proxmox state, read-only.
@@ -53,6 +54,16 @@ OPNSENSE_TEST_VMID=257
 ISO_NAME=proxmox-ve_9.2-1.iso
 ISO_URL=https://enterprise.proxmox.com/iso/$ISO_NAME
 ISO_SHA256=4e88fe416df9b527624a175f24c9aa07c714d3332afb1ee3dbf3879573ef2c6c
+# The images the copy's run folders need (docs/runbooks/stage-lab-images-on-proxmox.md), fetched inside the copy.
+# OPNsense 26.1.6 nano, the newest 26.1 image (the runbook's pick); the sha256 is its line in
+# https://pkg.opnsense.org/releases/26.1/OPNsense-26.1.6-checksums-amd64.sha256 (read 2026-11-18).
+NANO_IMG=OPNsense-26.1.6-nano-amd64.img
+NANO_URL=https://pkg.opnsense.org/releases/26.1/$NANO_IMG.bz2
+NANO_BZ2_SHA256=3c16267c791abfc3e41d5249fcb0c245c03cb91e2f1aa4d53017f0f3454d03a1
+# Debian 13 for CT 900, from Proxmox's template index (aplinfo-pve-9.dat, read 2026-11-18), which pveam checks
+# itself; the wrapper checks the same sha512 again.
+CT_TEMPLATE=debian-13-standard_13.6-1_amd64.tar.zst
+CT_TEMPLATE_SHA512=4c0c27ca6ceab5ef0b84db57825a00f26157ef1854bafe97297813e1cbe8ecb8cc9c453cab6b3b0efe1ba193a50c47ece1e41d950e411b8730b835b71e9e754b
 # What plan needs free in the box's work folder: the source ISO and one prepared copy, plus room.
 DISK_NEED_MB=5120
 
@@ -317,6 +328,35 @@ print("lab-test: the copy token reaches %d paths" % len(json.load(sys.stdin)))'
     ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home \
       ansible-playbook -i "$files/inventory" playbooks/proxmox-host.yml --tags vmbr1 )
   vm 'ip -br link show vmbr1'
+  images
+}
+
+# The runbook's steps 1, 2, 3 and 5 inside the copy: storage local takes import, the nano image checked against its
+# pin and unpacked under import/, and the Debian 13 template. Each is skipped when it is already there.
+images() {
+  vm "NANO_IMG=$NANO_IMG NANO_URL=$NANO_URL NANO_SHA=$NANO_BZ2_SHA256 CT=$CT_TEMPLATE CT_SHA=$CT_TEMPLATE_SHA512 sh -s" <<'SH'
+set -eu
+# storage.cfg: a "dir: local" line, then its indented options (a fresh install has "content iso,vztmpl,backup").
+content=$(awk '/^dir: local$/ {f=1; next} /^[a-z]/ {f=0} f && $1 == "content" {print $2}' /etc/pve/storage.cfg)
+[ -n "$content" ] || { echo "lab-test: storage local has no content line in /etc/pve/storage.cfg"; exit 1; }
+case ",$content," in *,import,*) ;; *) pvesm set local --content "$content,import" ;; esac
+command -v bzip2 >/dev/null || apt-get install -y -q bzip2
+mkdir -p /var/lib/vz/import
+cd /var/lib/vz/import
+if [ ! -f "$NANO_IMG" ]; then
+  curl -fsS --max-time 1800 -o "$NANO_IMG.bz2.part" "$NANO_URL"
+  echo "$NANO_SHA  $NANO_IMG.bz2.part" | sha256sum -c --quiet - || { rm -f "$NANO_IMG.bz2.part"; echo "lab-test: the nano image does not match its pin"; exit 1; }
+  bzip2 -dc "$NANO_IMG.bz2.part" > "$NANO_IMG.part" && mv "$NANO_IMG.part" "$NANO_IMG" && rm -f "$NANO_IMG.bz2.part"
+fi
+if [ ! -f "/var/lib/vz/template/cache/$CT" ]; then
+  pveam update
+  pveam download local "$CT"
+fi
+echo "$CT_SHA  /var/lib/vz/template/cache/$CT" | sha512sum -c --quiet - || { echo "lab-test: the Debian 13 template does not match its pin"; exit 1; }
+pvesm list local --content import | grep -F "local:import/$NANO_IMG"
+pveam list local | grep -F "local:vztmpl/$CT"
+SH
+  echo "lab-test: the copy holds local:import/$NANO_IMG and local:vztmpl/$CT_TEMPLATE"
 }
 
 case $action in

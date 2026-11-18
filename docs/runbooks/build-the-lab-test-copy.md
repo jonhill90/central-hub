@@ -4,8 +4,8 @@ status: draft
 kind: automated
 trigger: before a change to the host, network or firewall layer runs on prod, so it can pass on dev first (D-0035 rule 3(a))
 runner: an agent session on the agent box, while dev is down and VM 257 is gone
-outcome: VM 256 runs Proxmox VE 9.2 installed with no console, answers SSH as root with the box's key on its dev address, shows vmx or svm and /dev/kvm, so its own guests can use KVM, and has the fresh-host steps done (apt, iac@pve and its token, vmbr1); destroy removes it
-needs: the agent box with the lab-test wrapper (agent_box_lab_test in the private inventory, one install of the box's role); dev torn down and VM 257 destroyed; the node's free memory at least the copy's 6144 MiB plus the 2048 MiB margin; 5 GB free on the box; the host's kvm module with nested on
+outcome: VM 256 runs Proxmox VE 9.2 installed with no console, answers SSH as root with the box's key on its dev address, shows vmx or svm and /dev/kvm, so its own guests can use KVM, and has the fresh-host steps done (apt, iac@pve and its token, vmbr1, the nano image and the Debian 13 template); destroy removes it
+needs: the agent box with the lab-test wrapper (agent_box_lab_test in the private inventory, one install of the box's role); dev torn down and VM 257 destroyed; the node's free memory at least the copy's 7168 MiB plus the 2048 MiB margin; 5 GB free on the box; the host's kvm module with nested on
 private-values: [agent_box_lab_test]
 files: [hosts/terraform/home/lab-test/, hosts/terraform/home/bootstrap/iac-access.sh, hosts/ansible/playbooks/proxmox-host.yml, hosts/ansible/roles/agent_box/files/lab-test.sh, hosts/ansible/roles/agent_box/files/lab-test-answer.py, hosts/ansible/roles/agent_box/tasks/lab_test.yml, .github/hosts-check/tests/test_lab_test.sh]
 last-tested: "never on the box; the stack's tofu test and test_lab_test.sh offline"
@@ -31,7 +31,7 @@ flowchart LR
   w -- "SSH as root, box key" --> v["VM 256: Proxmox VE 9.2"]
 ```
 
-- **The VM.** VM 256 in pool dev, one NIC on the dev VNet, CPU type `host`, 2 cores, 6144 MiB with no ballooning, 32 GB. It never starts with the host. The empty disk comes first in the boot order, so the first boot falls through to the installer ISO and every later boot starts the installed system.
+- **The VM.** VM 256 in pool dev, one NIC on the dev VNet, CPU type `host`, 2 cores, 7168 MiB with no ballooning, 32 GB. It never starts with the host. The empty disk comes first in the boot order, so the first boot falls through to the installer ISO and every later boot starts the installed system.
   ※ `hosts/terraform/home/lab-test/`
 - **An install with no console.** The agents' Proxmox role has no `VM.Console`. The wrapper downloads the Proxmox VE 9.2-1 ISO, checks it against its pinned SHA-256, and bakes an answer file into a copy of it with `proxmox-auto-install-assistant prepare-iso --fetch-from iso`. That ISO's boot menu picks "Automated Installation" by itself after 10 seconds.
   ※ [Automated Installation](https://pve.proxmox.com/wiki/Automated_Installation), "Prepare an Installation ISO"
@@ -76,8 +76,8 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    lab-test host
    ```
 
-   why: these are the steps a person runs on a fresh real host before the lab network ([Set up a Proxmox VE host by hand](set-up-proxmox-host.md) steps 1 and 6b, then [Set up the lab network](set-up-lab-network-and-firewall.md) step 1), so they pass on the copy first. Inside the copy, it marks the enterprise apt repositories `Enabled: no` and adds the no-subscription repository, then runs `apt-get update`. It runs `iac-access.sh`, makes the copy's own `iac@pve!apply` token (valid 2 days, saved on the box only), and runs the script again so the token gets its ACLs. Last, it runs `playbooks/proxmox-host.yml --tags vmbr1` against the copy, with an inventory the wrapper writes in the shape of `hosts.example.yml`: the copy's address, root by the wrapper's key, vmbr1's MAC `02:00:00:00:02:56` (locally administered, seen only inside the copy) and mgmt address `.2`. Safe to run again.
-   expect: `pveum user token permissions` reaches the script's paths, and `ip -br link show vmbr1` in the copy shows that MAC.
+   why: these are the steps a person runs on a fresh real host before the lab network ([Set up a Proxmox VE host by hand](set-up-proxmox-host.md) steps 1 and 6b, then [Set up the lab network](set-up-lab-network-and-firewall.md) step 1), so they pass on the copy first. Inside the copy, it marks the enterprise apt repositories `Enabled: no` and adds the no-subscription repository, then runs `apt-get update`. It runs `iac-access.sh`, makes the copy's own `iac@pve!apply` token (valid 2 days, saved on the box only), and runs the script again so the token gets its ACLs. Then it runs `playbooks/proxmox-host.yml --tags vmbr1` against the copy, with an inventory the wrapper writes in the shape of `hosts.example.yml`: the copy's address, root by the wrapper's key, vmbr1's MAC `02:00:00:00:02:56` (locally administered, seen only inside the copy) and mgmt address `.2`. Last, it stages the two images the run folders need inside the copy, as [Put the OPNsense image and the Debian 13 template on the host](stage-lab-images-on-proxmox.md) steps 1, 2, 3 and 5 give it. Storage `local` takes `import`. The OPNsense 26.1.6 nano image is checked against its pinned SHA-256, from the release's checksum file, and unpacked under `import/`. The Debian 13 template `debian-13-standard_13.6-1` comes through `pveam`, which checks it against Proxmox's index, and the wrapper checks the same pinned SHA-512 again. Safe to run again.
+   expect: `pveum user token permissions` reaches the script's paths, `ip -br link show vmbr1` in the copy shows that MAC, and the last two lines name `local:import/OPNsense-26.1.6-nano-amd64.img` and `local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst`.
    ※ `lab-test.sh`, `host`; `lab-test-answer.py`, `inventory`
 5. Destroy when done:
 
@@ -108,6 +108,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 
 - Not run yet. Unproven on the box: that the assistant's binary runs on AlmaLinux 10 with `libxcrypt-compat`, that the answer installs as written, and that the host's kvm module has nested on.
 - The assistant's package comes over plain http and the ISO over https; each is checked against a pinned SHA-256.
+- The image step checks the nano image by its pinned SHA-256 only, not by OPNsense's signature. The 26.1 public key has no independent copy today: the mirror README now lists 26.7's key (read 2026-11-18).
 - The copy never joins the tailnet. That would be a tailnet change.
 - `iac-access.sh` adds VM 100 to pool `firewall` and CT 900 to pool `remote-access` before either exists on a fresh host. The pool update in Proxmox VE's API does not check that the guest exists (pve-manager `PVE/API2/Pool.pm`, the `vms` branch of the pool update), so the pool may list a guest that is not there yet. Whether the later create of VM 100 with that pool then fails has not been measured; the copy is where it will show.
 

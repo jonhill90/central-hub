@@ -16,7 +16,7 @@ ok() { echo "ok - $1"; }
 bad() { echo "FAIL - $1"; fails=$((fails + 1)); }
 
 settings() { # address name domain
-  printf '{"name": "%s", "domain": "%s", "address": "%s", "cores": 2, "memory_mb": 6144, "disk_gb": 32, "proxmox_node_name": "examplehv01"}\n' \
+  printf '{"name": "%s", "domain": "%s", "address": "%s", "cores": 2, "memory_mb": 7168, "disk_gb": 32, "proxmox_node_name": "examplehv01"}\n' \
     "$2" "$3" "$1" > "$work/settings.json"
 }
 settings 10.1.30.198 ddehvdemo01 lab.example
@@ -116,6 +116,16 @@ for s in steps:
 PY
 grep -q 'rm -rf "$files/known_hosts" "$files"/\*.part "$files/copy-token" "$files/inventory"' "$w" \
   && ok "destroy removes the copy's token and inventory" || bad "destroy keeps the copy's token"
+
+# host ends with the images: pins, checks, and the storage line read from storage.cfg.
+grep -Eq '^NANO_BZ2_SHA256=[0-9a-f]{64}$' "$w" && grep -Eq '^CT_TEMPLATE_SHA512=[0-9a-f]{128}$' "$w" \
+  && grep -q 'sha256sum -c --quiet - || { rm -f "$NANO_IMG.bz2.part"' "$w" && grep -q 'sha512sum -c --quiet -' "$w" \
+  && ok "the nano image and the Debian 13 template are pinned and checked" || bad "image pins or checks"
+grep -q '^  images$' "$w" && ok "host stages the images last" || bad "host does not stage the images"
+printf 'dir: local\n\tpath /var/lib/vz\n\tcontent iso,vztmpl,backup\n\nlvmthin: local-lvm\n\tcontent rootdir,images\n' > "$work/storage.cfg"
+prog=$(sed -n "s|^content=\$(awk '\(.*\)' /etc/pve/storage.cfg)$|\1|p" "$w")
+[[ -n $prog && $(awk "$prog" "$work/storage.cfg") == "iso,vztmpl,backup" ]] \
+  && ok "the content line of storage local is read from storage.cfg, not local-lvm's" || bad "the storage.cfg read"
 
 # iac-access.sh, which host runs in the copy: zone lab can be made on an empty host (Zones.pm checks /sdn/zones).
 iac=$root/hosts/terraform/home/bootstrap/iac-access.sh

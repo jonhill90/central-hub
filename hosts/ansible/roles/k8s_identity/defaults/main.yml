@@ -5,9 +5,10 @@
 # Everything apps see is plain OIDC, so a swap changes this role and the three endpoint URLs in
 # k8s_observability, nothing in the apps. How it is installed is listed in hosts/AGENT-PICKS.md. Every input is listed here (Red Hat CoP rule).
 
-# Keycloak and its operator, the newest release at least two weeks old on 2026-10-27 (26.8.1, 13
+# Keycloak and its operator: 26.8.2 (5 November 2026), taken under STD-0003 rule 2 because it holds many security fixes
+# (release note: https://www.keycloak.org/2026/11/keycloak-2682-released), TASK-0252. Before it: 26.8.1, 13
 # October 2026, STD-0003 rule 1). The upstream manifests are pinned by sha256 in vars/main.yml.
-k8s_identity_version: 26.8.1
+k8s_identity_version: 26.8.2
 k8s_identity_namespace: identity
 
 # The Keycloak object's name, also the first label of its hostname: https://sso.apps.c1.prod.<zone>/.
@@ -66,8 +67,12 @@ k8s_identity_realm_replace: true
 # Seconds the role waits for the realm import to finish (KeycloakRealmImport condition Done). The dev
 # rebuild raises it (hosts/rebuild-k8s.sh, stage identity-keycloak): at a 6144 MiB worker the run of
 # 2026-11-17 04:33 UTC timed out at 600 s, while at 7168 MiB the whole stage took 176 s. Dev's worker is
-# 6656 MiB since 2026-11-18 (DEV_MEMORY_MB_WORKER).
+# 6400 MiB since 2026-11-18 (DEV_MEMORY_MB_WORKER).
 k8s_identity_realm_import_timeout: 600
+# The realm import job's memory, set as both its request and its limit (KeycloakRealmImport spec.resources).
+# Empty: the operator's default for the job, request 1700Mi and limit 2Gi in operator 26.8.2. The dev rebuild sets
+# 1Gi (hosts/rebuild-k8s.sh, DEV_REALM_IMPORT_MEMORY).
+k8s_identity_realm_import_memory: ""
 # Short aliases (STD-0001 rules 5 and 7): Keycloak's own name, and so the issuer, is sso.<zone>, and
 # every client also accepts its app's short name <app>.<zone> next to the long one. Needs the
 # short names in the lab DNS and on the Gateway first (docs/runbooks/set-up-short-app-names.md).
@@ -153,3 +158,9 @@ k8s_identity_oidc_handoff_file: ""
 # clients of realm.yaml.j2. Use it to add a client without the realm replace, which ends every open
 # sign-in: for example [proxmox] once k8s_identity_proxmox_hosts is set.
 k8s_identity_ensure_clients: []
+
+# Users that tasks/users.yml adds to the live realm (tag users), by user name. They must be users of
+# realm.yaml.j2 (the owner or k8s_identity_extra_users). Use it to add a user, such as the sign-in test
+# user, without the realm replace, which ends every open sign-in. A user that is already there is not
+# changed.
+k8s_identity_ensure_users: []
