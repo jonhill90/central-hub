@@ -82,8 +82,11 @@ def why_no_redirect(page):
     """
     text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", page)
     text = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", text)).split())[:300]
-    log = vm("grep -h -i -e 'OIDC' -e 'openidconnect' /var/log/system/latest.log /var/log/audit/latest.log"
-             " 2>/dev/null | tail -n 12 | cut -c1-300; true").strip()
+    try:   # vm() exits through fail() when SSH fails; keep the refusal above either way
+        log = vm("grep -h -i -e 'OIDC' -e 'openidconnect' /var/log/system/latest.log /var/log/audit/latest.log"
+                 " 2>/dev/null | tail -n 12 | cut -c1-300; true").strip()
+    except SystemExit as e:
+        log = f"(log not read: {e})"
     return f"HTTP {last_status['code']}, page text: {text or '(empty)'}\nthe VM's OIDC log lines:\n{log or '(none)'}"
 
 
