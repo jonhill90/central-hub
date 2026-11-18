@@ -8,8 +8,8 @@ pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; fails=$((fails + 1)); }
 code() { curl -sS -o /dev/null -m 20 -w '%{http_code}' "$@" 2>/dev/null || echo 000; }
 
-# Where a redirect goes, with the scheme, host and query dropped, so the log shows the path and no host name.
-where() { printf '%s' "$1" | sed 's#^[A-Za-z]*://[^/]*##; s#[?].*##'; }
+# Where a redirect goes, with the scheme, host, query and fragment dropped, so the log shows the path and no host name.
+where() { printf '%s' "$1" | sed 's#^[A-Za-z]*://[^/]*##; s#^//[^/]*##; s#[?].*##; s|#.*||'; }
 hdrs() { curl -sS -o /dev/null -m 20 -D - "$1" 2>/dev/null | tr -d '\r'; }
 scode() { printf '%s\n' "$1" | sed -n '1s/^HTTP[^ ]* \([0-9]*\).*/\1/p'; }
 sloc() { printf '%s\n' "$1" | sed -n 's/^[Ll]ocation: *//p' | head -1; }
