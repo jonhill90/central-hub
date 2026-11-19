@@ -12,7 +12,7 @@ die() { echo "merge-checked: $*" >&2; exit "${2:-2}"; }
 [[ $# -eq 3 ]] || die "usage: merge-checked.sh OWNER/REPO PR_NUMBER HEAD_SHA"
 repo=$1 pr=$2 head=$3
 case $repo in
-  jonhill90/central-hub | jonhill90/inpara | jonhill90/agent-notebook | jonhill90/obsidian-graph-3d | jonhill90/wizards) ;;
+  jonhill90/central-hub | jonhill90/inpara | jonhill90/agent-notebook | jonhill90/obsidian-graph-3d | jonhill90/wizards | jonhill90/central-hub-app) ;;
   *) die "repository not in the list: $repo" ;;
 esac
 [[ $pr =~ ^[0-9]{1,7}$ ]] || die "PR number must be digits: $pr"
