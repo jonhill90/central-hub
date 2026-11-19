@@ -7,7 +7,9 @@
 #   checkpoint-note post N      N findings (1 to 999): "checkpoint: N finding(s) on the agent box at <time>."
 #   checkpoint-note log         the last 20 runs from the wrapper's own log.
 # The pull request is never an argument: it is `repo` and `number` in /var/lib/agent-box/checkpoint-note.json, which
-# the agent_box role writes, root-owned, from agent_box_checkpoint_note. The comment's text is fixed here; no argument
+# the agent_box role writes from agent_box_checkpoint_note. That folder is the keys user's, so code running as keys could
+# replace the file; what keeps a session out is that it runs as keys only through its sudo lines, and no wrapper but
+# this one names the file, which it only reads (test_checkpoint_note.sh check 7). The comment's text is fixed here; no argument
 # reaches it but the count. The token is narrowed to that one repository and Pull requests (write) alone, which
 # GitHub accepts for an issue comment on a pull request; it is never printed, logged or passed as an argument, and it
 # is revoked when the run ends. A pull request that is not open is refused, and nothing is posted.
@@ -31,7 +33,7 @@ fi
 keys=/etc/agent-keys
 work=/var/lib/agent-box
 settings=$work/ci-runner.json          # holds github_app_id; private, written by the agent_box role
-target=$work/checkpoint-note.json      # the one pull request, written by the agent_box role (root-owned)
+target=$work/checkpoint-note.json      # the one pull request, written by the agent_box role
 logf=$work/state/checkpoint-note.log
 export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin
 

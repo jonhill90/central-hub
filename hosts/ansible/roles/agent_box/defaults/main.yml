@@ -299,7 +299,7 @@ agent_box_ci_runner: {}
 # proxmox_node_name, vnet, template_vm_id, rdp_source (the tailnet connector's address, where RDP arrives from) and optionally
 # admin_user (default admin). Empty leaves the wrapper unset up.
 agent_box_desktop: {}
-# The one pull request the checkpoint-note wrapper comments on, written root-owned to <work_dir>/checkpoint-note.json:
+# The one pull request the checkpoint-note wrapper comments on, written to <work_dir>/checkpoint-note.json:
 # repo (one the App is installed on) and number. A session subscribed to it wakes on each comment. Empty leaves the
 # file out, and the wrapper refuses.
 agent_box_checkpoint_note: {repo: agent-notebook, number: 729}

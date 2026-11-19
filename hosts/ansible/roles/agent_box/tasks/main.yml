@@ -541,7 +541,7 @@
   when: agent_box_ci_runner | length > 0
   tags: [wrappers]
 
-- name: The checkpoint-note wrapper's one pull request, root-owned so the keys user can't change it
+- name: The checkpoint-note wrapper's one pull request (no wrapper but checkpoint-note names the file)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/checkpoint-note.json"
     content: "{{ agent_box_checkpoint_note | to_nice_json }}\n"

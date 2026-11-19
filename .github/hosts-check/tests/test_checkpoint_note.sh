@@ -10,7 +10,7 @@
 #   4. A pull request that is not open is refused before any comment, and logged.
 #   5. No settings file, a repository the App isn't installed on, or a number that isn't one: refused before any call.
 #   6. The token is never in curl's arguments, the output or the log.
-#   7. The role writes the settings file root-owned and the sudo line passes `post *` and `log` only.
+#   7. The role writes the settings file, the sudo line passes `post *` and `log` only, and no other wrapper names the file.
 # Usage: .github/hosts-check/tests/test_checkpoint_note.sh   (needs python3, openssl)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -116,9 +116,10 @@ task=$(awk '/^- name: The checkpoint-note wrapper.s one pull request/{on=1} on{p
 sudo=$(python3 -I -c 'import sys, yaml
 for w in yaml.safe_load(open(sys.argv[1]))["agent_box_wrappers"]:
     if w["name"] == "checkpoint-note": print(w.get("args"))' "$role/defaults/main.yml" 2>&1)
+others=$(grep -l 'checkpoint-note\.json' "$role"/files/* "$role"/templates/* 2>/dev/null | grep -v '/checkpoint-note\.sh$' || true)
 if [[ $task == *"dest: \"{{ agent_box_work_dir }}/checkpoint-note.json\""* && $task == *"owner: root"* && $task == *'mode: "0644"'* &&
-      $sudo == "['post *', 'log']" ]]; then
-  ok "7. the role writes the settings file root-owned 0644, and the sudo line passes post * and log only"
-else bad "7. [$sudo] [$task]"; fi
+      $sudo == "['post *', 'log']" && -z $others ]]; then
+  ok "7. the role writes the settings file, the sudo line passes post * and log only, and no other wrapper names the file"
+else bad "7. [$sudo] [$task] [others: $others]"; fi
 
 exit $fail
