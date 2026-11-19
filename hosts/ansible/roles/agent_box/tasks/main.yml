@@ -401,6 +401,7 @@
     group: root
     mode: "u=rwX,go=rX"
     recurse: true
+    follow: false
   loop:
     - "{{ agent_box_libexec_dir }}/playwright-venv"
     - "{{ agent_box_libexec_dir }}/playwright-browsers"
