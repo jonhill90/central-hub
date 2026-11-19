@@ -24,6 +24,8 @@
 #      in git, an unreadable Application or status, no tap id or a malformed one delete nothing; one not in the status is left.
 #  12. admin-firewall-check runs k8s-openbao-admin-firewall.yml with --check --diff and no tap; admin-firewall <tap id> runs it
 #      for real and logs the tap; admin-firewall with no tap id or a malformed one, or admin-firewall-check with one, runs nothing.
+#  13. refresh <tap id> runs k8s-openbao-refresh.yml with env prod and the admin IDs' files, and logs the tap; with no ID files
+#      (no hand-over yet), no tap id or a malformed one, it runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -340,5 +342,19 @@ if [[ $c_rc -eq 0 && $c_calls == "playbook -i $t/work/openbao-prod/inventory/ $p
       $n_rc -eq 2 && -z $n_calls && $m_rc -eq 2 && -z $m_calls && $x_rc -eq 2 && -z $x_calls ]]; then
   ok "12. admin-firewall-check: the play with --check --diff, no tap; admin-firewall <tap id>: the play, the tap logged, the box /32 and admin address in its inventory; no tap, a bad tap or a tap on check: nothing run"
 else bad "12. check rc=$c_rc [$c_calls] | apply rc=$a_rc [$a_calls] [$fw_seen] | notap rc=$n_rc [$n_calls] | badtap rc=$m_rc | checktap rc=$x_rc"; fi
+
+# 13
+mv "$t/keys/prod/openbao-admin-role-id" "$t/run/rid.keep"
+run refresh "$tap"; i_rc=$rc i_calls=$calls i_out=$out
+mv "$t/run/rid.keep" "$t/keys/prod/openbao-admin-role-id"
+run refresh "$tap"; a_rc=$rc a_calls=$calls a_out=$out
+run refresh; n_rc=$rc n_calls=$calls
+run refresh not-a-tap; m_rc=$rc m_calls=$calls
+p=playbooks/k8s-openbao-refresh.yml
+if [[ $i_rc -ne 0 && -z $i_calls && $i_out == *"run openbao-prod handover first"* &&
+      $a_rc -eq 0 && $a_calls == "playbook -i $t/work/openbao-prod/inventory/ $p -e openbao_refresh_env=prod -e openbao_admin_role_id_file=$t/keys/prod/openbao-admin-role-id -e openbao_admin_secret_id_file=$t/keys/prod/openbao-admin-secret-id" &&
+      $a_out == *"owner tap $tap"* && $n_rc -eq 2 && -z $n_calls && $m_rc -eq 2 && -z $m_calls ]]; then
+  ok "13. refresh <tap id>: the play with env prod and the IDs' files, the tap logged; no hand-over yet, no tap or a bad tap: nothing run"
+else bad "13. noids rc=$i_rc [$i_calls] | run rc=$a_rc [$a_calls] | notap rc=$n_rc [$n_calls] | badtap rc=$m_rc [$m_calls]"; fi
 
 exit "$fail"

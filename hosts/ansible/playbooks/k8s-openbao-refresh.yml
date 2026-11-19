@@ -1,0 +1,167 @@
+---
+# The secrets store's policies and its admin login's address binding, set again from git (docs/runbooks/
+# set-up-the-secrets-store.md, "On prod", step 7). OpenBao's self-init makes them once, at the store's first start
+# (apps/openbao/values.yaml, blocks "policies" and "roles"), and never runs again, so a store whose first start came
+# before a change keeps the old ones. Prod's store did: it started on 2026-11-18 at 02:15 UTC with no openbaoBoxCidr and
+# before openbaoMarkEnv existed, so its admin AppRole is bound to 127.0.0.1/32, not the box, and its snapshot policy
+# reads dev's mark, not prod's (the hourly job fails with 403 since).
+# The play signs in as the admin from inside OpenBao's own pod, to 127.0.0.1, so the login arrives from 127.0.0.1 and
+# passes such a binding; then it writes each policy whose text differs from the one in ConfigMap openbao-policies
+# (Argo CD renders it from git, with this environment's markEnv), sets role admin's secret_id_bound_cidrs and
+# token_bound_cidrs to the box's /32 (k8s_gitops_source_openbao_box_cidr), and revokes its token. After that the admin
+# signs in only from the box, so a second run is refused at its login: from then on the box's own admin path is the
+# way in. A store whose admin is already bound to the box fails the same way, and nothing is changed.
+#   ansible-playbook -i <inventory>/ playbooks/k8s-openbao-refresh.yml -e openbao_refresh_env=prod \
+#     -e openbao_admin_role_id_file=<keys>/openbao-admin-role-id -e openbao_admin_secret_id_file=<keys>/openbao-admin-secret-id
+# It needs the hand-over done (k8s-openbao-handover.yml), which gives the admin the box's IDs. The IDs and the token go
+# to the pod on stdin, never in an argument, and no task logs them; the play prints only the names of the policies it
+# changed and the role's two bindings, which hold no secret.
+- name: Set the secrets store's policies and admin binding from git
+  hosts: k8s_control_plane[0]
+  become: true
+  gather_facts: false
+  vars:
+    # As in the hand-over: piped, the module (which carries the IDs) never lands in a temp file on the node.
+    ansible_pipelining: true
+    refresh_kubectl: [kubectl, --kubeconfig, /etc/kubernetes/admin.conf, -n, openbao]
+    refresh_pod: openbao-0
+    # The pod calls its own listener on 127.0.0.1 (listener "[::]:8200"), checked as the name its certificate carries.
+    refresh_server_name: openbao.openbao.svc
+    refresh_policies: [admin, bootstrap, eso-c1, snapshot]
+    refresh_cidr: "{{ k8s_gitops_source_openbao_box_cidr | default('') }}"
+  tasks:
+    - name: refresh | With the store inside the cluster, for dev or prod, and the box's address a /32 that is not loopback
+      ansible.builtin.assert:
+        that:
+          - k8s_gitops_source_openbao_in_cluster | default(false) | bool
+          - openbao_refresh_env | default('') in ['dev', 'prod']
+          - refresh_cidr is match('^([0-9]{1,3}\\.){3}[0-9]{1,3}/32$')
+          - refresh_cidr is not match('^(127|0)\\.')
+        fail_msg: >-
+          needs the in-cluster store (k8s_gitops_source_openbao_in_cluster), openbao_refresh_env dev or prod, and
+          k8s_gitops_source_openbao_box_cidr the box's own address as a /32, not loopback; nothing changed
+        quiet: true
+
+    - name: refresh | The box's admin IDs, read on this machine
+      ansible.builtin.set_fact:
+        refresh_role_id: "{{ lookup('ansible.builtin.file', openbao_admin_role_id_file) }}"
+        refresh_secret_id: "{{ lookup('ansible.builtin.file', openbao_admin_secret_id_file) }}"
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: refresh | The IDs look right
+      ansible.builtin.assert:
+        that:
+          - refresh_role_id is match('^[0-9a-f]{48}$')
+          - refresh_secret_id is match('^[0-9a-f]{48}$')
+        fail_msg: the admin ID files are not 48 lowercase hex characters each (secrets-store.sh and openbao-prod make them)
+        quiet: true
+      no_log: true
+
+    - name: refresh | OpenBao's pod is Ready
+      ansible.builtin.command:
+        argv: "{{ refresh_kubectl + ['get', 'pod', refresh_pod, '-o', 'jsonpath={.status.containerStatuses[0].ready}'] }}"
+      register: refresh_ready
+      changed_when: false
+      failed_when: refresh_ready.rc != 0 or refresh_ready.stdout != 'true'
+
+    # The policies as git has them now: the ConfigMap Argo CD renders from apps/openbao-store/policies/ (no secret).
+    - name: refresh | ConfigMap openbao-policies
+      ansible.builtin.command:
+        argv: "{{ refresh_kubectl + ['get', 'configmap', 'openbao-policies', '-o', 'json'] }}"
+      register: refresh_cm
+      changed_when: false
+
+    - name: refresh | The policies to write
+      ansible.builtin.set_fact:
+        refresh_texts: "{{ (refresh_cm.stdout | from_json).data | default({}) }}"
+
+    - name: refresh | Every policy is there, rendered, and the snapshot policy reads this environment's mark
+      ansible.builtin.assert:
+        that:
+          - refresh_policies | map('regex_replace', '$', '.hcl') | difference(refresh_texts.keys() | list) | length == 0
+          - refresh_policies | map('regex_replace', '$', '.hcl') | map('extract', refresh_texts) | map('trim') | select('equalto', '') | list | length == 0
+          - refresh_texts.values() | select('search', '[{][{]') | list | length == 0
+          - refresh_texts['snapshot.hcl'] is search('path "kv/data/' ~ openbao_refresh_env ~ '/snapshot-mark"')
+        fail_msg: >-
+          ConfigMap openbao/openbao-policies lacks one of {{ refresh_policies | join(', ') }}, holds an empty or unrendered
+          one, or its snapshot policy does not read kv/data/{{ openbao_refresh_env }}/snapshot-mark (has Argo CD synced
+          openbao-store with markEnv {{ openbao_refresh_env }}?); nothing changed
+        quiet: true
+
+    # One exec, the script and its values on stdin. Each bao call gets its body on its own stdin through printf, a
+    # shell builtin, so no ID or token is in any process's arguments. The policy texts hold no secret.
+    - name: refresh | Sign in as the admin from inside the pod, write the changed policies, bind the admin to the box
+      ansible.builtin.command:
+        argv: "{{ refresh_kubectl + ['exec', '-i', refresh_pod, '-c', 'openbao', '--', 'sh', '-s'] }}"
+        stdin: |
+          set -eu
+          export BAO_ADDR=https://127.0.0.1:8200 BAO_TLS_SERVER_NAME={{ refresh_server_name }}
+          rid='{{ refresh_role_id }}'
+          sid='{{ refresh_secret_id }}'
+          if ! out=$(printf '{"role_id":"%s","secret_id":"%s"}' "$rid" "$sid" |
+            bao write -field=token auth/approle/login - 2>&1); then
+            why=$(printf '%s' "$out" | tr -s '\n' ' ' | cut -c1-200)
+            echo "REFRESH: admin login from inside the pod failed (no hand-over yet, or the admin is bound to the box already): $why"
+            exit 1
+          fi
+          # The capture holds stderr too, so take it as the token only when it is one bare token (never printed).
+          case $out in
+            '' | *[!A-Za-z0-9._-]*) echo "REFRESH: the admin login gave more than a token (not shown)"; exit 1 ;;
+          esac
+          BAO_TOKEN=$out
+          export BAO_TOKEN
+          trap 'bao token revoke -self >/dev/null 2>&1 || true' EXIT
+          changed=''
+          put() {
+            have=$(bao policy read "$1" 2>/dev/null || true)
+            want=$(printf '%s' "$2")
+            [ "$have" = "$want" ] && return 0
+            printf '%s\n' "$want" | bao policy write "$1" - >/dev/null
+            [ "$(bao policy read "$1")" = "$want" ] || { echo "REFRESH: policy $1 reads back different after its write"; exit 1; }
+            changed="$changed $1"
+          }
+          {% for p in refresh_policies %}
+          put {{ p }} {{ refresh_texts[p ~ '.hcl'] | quote }}
+          {% endfor %}
+          bao write auth/approle/role/admin secret_id_bound_cidrs={{ refresh_cidr }} token_bound_cidrs={{ refresh_cidr }} >/dev/null
+          echo "REFRESH: policies changed:${changed:- none}"
+          echo REFRESH-ROLE-BEGIN
+          bao read -format=json auth/approle/role/admin
+          echo REFRESH-ROLE-END
+          echo "REFRESH: done"
+      register: refresh_run
+      changed_when: "'REFRESH: done' in refresh_run.stdout"
+      # Judged by the next tasks, which print only REFRESH lines and the role's bindings: this one's output is never shown.
+      failed_when: false
+      no_log: true
+
+    - name: refresh | It ran, or why not (its REFRESH lines only, which hold no secret)
+      ansible.builtin.fail:
+        msg: >-
+          {{ refresh_run.stdout_lines | default([]) | select('match', '^REFRESH:') | list | join(' ')
+          | default('no REFRESH line', true) }} (exit {{ refresh_run.rc }})
+      when: >-
+        refresh_run.rc != 0 or 'REFRESH: done' not in refresh_run.stdout
+
+    # Role admin as OpenBao reads it back (its settings only; a role read holds no role ID or secret ID).
+    - name: refresh | Role admin's bindings
+      ansible.builtin.set_fact:
+        refresh_role: >-
+          {{ (refresh_run.stdout.split('REFRESH-ROLE-BEGIN')[1].split('REFRESH-ROLE-END')[0] | from_json).data }}
+
+    - name: refresh | Result
+      ansible.builtin.assert:
+        that:
+          - refresh_role.secret_id_bound_cidrs | default([]) == [refresh_cidr]
+          - refresh_role.token_bound_cidrs | default([]) == [refresh_cidr]
+          # The write changed only the two bindings: the role still gives policy admin.
+          - refresh_role.token_policies | default([]) == ['admin']
+        fail_msg: >-
+          FAIL: openbao-refresh: role admin reads back secret_id_bound_cidrs {{ refresh_role.secret_id_bound_cidrs | default('none') }},
+          token_bound_cidrs {{ refresh_role.token_bound_cidrs | default('none') }} and token_policies
+          {{ refresh_role.token_policies | default('none') }}, not [{{ refresh_cidr }}] twice and [admin]
+        success_msg: >-
+          PASS: openbao-refresh: {{ refresh_run.stdout_lines | select('match', '^REFRESH: policies changed:') | first
+          | regex_replace('^REFRESH: ', '') }}; role admin bound to the box's /32 for both secret IDs and tokens
