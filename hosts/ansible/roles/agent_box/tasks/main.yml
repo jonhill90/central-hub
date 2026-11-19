@@ -390,6 +390,25 @@
   when: not ansible_check_mode
   tags: [wrappers]
 
+# pip and Playwright made both folders with the install's umask, so they came out drwx------ (measured on the box on
+# 2026-11-19: `web-shot` ended "playwright-venv/bin/python: Permission denied" for a session user). A session runs web-shot as
+# itself, so both folders must be readable and enterable by others. They stay root-owned and nobody but root can write them.
+- name: Playwright's environment and browsers, root-owned and readable by sessions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "u=rwX,go=rX"
+    recurse: true
+  loop:
+    - "{{ agent_box_libexec_dir }}/playwright-venv"
+    - "{{ agent_box_libexec_dir }}/playwright-browsers"
+  loop_control:
+    label: "{{ item }}"   # the folder, as for the wrappers
+  when: not ansible_check_mode
+  tags: [wrappers]
+
 # A loop of one, so a check run names the file by its loop label before the file exists: box-apply allows an approved limit
 # apply to change only the limit paths its check run named, and a plain copy of a new file has no path in a check run's
 # result (the first apply of line I stopped on this, 2026-11-18 04:03Z).

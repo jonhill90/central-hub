@@ -87,6 +87,7 @@ check_ansible() {
   bash "$here/tests/test_proxmox_signin_check.sh"
   bash "$here/tests/test_agent_access_rights.sh"
   bash "$here/tests/test_iac_access_pools.sh"
+  bash "$here/tests/test_web_shot_modes.sh"
   bash "$here/tests/test_argocd_signin_check.sh"
   bash "$here/tests/test_proxmox_host_workflow.sh"
   bash "$here/tests/test_identity_external_secrets.sh"
