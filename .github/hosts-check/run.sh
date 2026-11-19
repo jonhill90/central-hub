@@ -109,6 +109,7 @@ check_ansible() {
   bash "$here/tests/test_pr_merge_verdict.sh"
   bash "$here/tests/test_pass_record.sh"
   bash "$here/tests/test_pr_merge_sweep.sh"
+  bash "$here/tests/test_repo_create.sh"
   bash "$here/tests/test_merge_checked.sh"
   bash "$here/tests/test_lifeline_nmcli_read.sh"
   bash "$here/tests/test_lifeline_cleanup.sh"
