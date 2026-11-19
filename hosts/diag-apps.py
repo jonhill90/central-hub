@@ -8,7 +8,7 @@
       the lines on stdin with secrets and long token-like strings replaced.
 
 Both modes scrub what they print: a value after password, secret, token, key, authorization, credential or bearer (quoted or
-not, and as a --flag), the password in a URL's userinfo, OpenBao and Vault tokens, and any run of 40 or more base64-like
+not, and as a --flag), the password in a URL's userinfo, OpenBao and Vault tokens, kubeadm bootstrap tokens (6.16 characters), and any run of 40 or more base64-like
 characters, become <redacted>. They read stdin only, write nothing and run no command.
 """
 import json
@@ -20,6 +20,7 @@ WORDS = re.compile(r"(?i)((?:pass(?:word|wd)?|secret|token|api[_-]?key|private[_
 FLAGS = re.compile(r"(?i)(--(?:pass(?:word|wd)?|token|secret|api[_-]?key)[A-Za-z0-9_-]*(?:=|\s+)[\"']?)[^\s,;\"']+")
 USERINFO = re.compile(r"(://[^/\s:@]+:)[^@\s/]+@")
 VAULT = re.compile(r"\b(?:hv[sbr]|[sbr])\.[A-Za-z0-9_-]{20,}")
+KUBEADM = re.compile(r"\b[a-z0-9]{6}\.[a-z0-9]{16}\b")  # a kubeadm bootstrap token: 6.16 characters
 LONG = re.compile(r"[A-Za-z0-9+/=_-]{40,}")
 
 
@@ -29,6 +30,7 @@ def scrub(text):
     text = FLAGS.sub(r"\1<redacted>", text)
     text = WORDS.sub(r"\1<redacted>", text)
     text = VAULT.sub("<redacted>", text)
+    text = KUBEADM.sub("<redacted>", text)
     return LONG.sub("<redacted>", text)
 
 
