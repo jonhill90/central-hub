@@ -13,7 +13,19 @@ argument_specs:
         elements: str
         default: [6443/tcp, 2379-2380/tcp, 10250/tcp, 10256/tcp, 10257/tcp, 10259/tcp, 8472/udp, 4240/tcp]
         description: Ports opened in that zone (runbook step 4).
-      k8s_node_kubelet_system_reserved_memory: {type: str, default: "", description: "Memory the kubelet holds back for the OS (kubelet systemReserved.memory, e.g. 384Mi). Empty: no kubelet drop-in is written."}
-      k8s_node_kubelet_kube_reserved_memory: {type: str, default: "", description: "Memory held back for the kubelet and containerd (kubeReserved.memory). Used only when the system reservation is set."}
-      k8s_node_kubelet_eviction_hard_memory: {type: str, default: "", description: "evictionHard memory.available threshold, e.g. 384Mi. Used only when the system reservation is set."}
-      k8s_node_kubelet_config_dir: {type: str, default: /etc/kubernetes/kubelet.conf.d, description: "The kubelet --config-dir folder the drop-in goes in."}
+      k8s_node_kubelet_system_reserved_memory:
+        type: str
+        default: ""
+        description: "Memory the kubelet holds back for the OS (kubelet systemReserved.memory, e.g. 384Mi). Empty: no kubelet drop-in is written."
+      k8s_node_kubelet_kube_reserved_memory:
+        type: str
+        default: ""
+        description: "Memory held back for the kubelet and containerd (kubeReserved.memory). Used only when the system reservation is set."
+      k8s_node_kubelet_eviction_hard_memory:
+        type: str
+        default: ""
+        description: "evictionHard memory.available threshold, e.g. 384Mi. Used only when the system reservation is set."
+      k8s_node_kubelet_config_dir:
+        type: str
+        default: /etc/kubernetes/kubelet.conf.d
+        description: "The kubelet --config-dir folder the drop-in goes in."
