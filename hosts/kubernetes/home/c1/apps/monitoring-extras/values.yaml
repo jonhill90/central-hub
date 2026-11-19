@@ -66,12 +66,13 @@ panelCheck:
   # Same image as the Jellyfin setup Job (curl 8.22.0, 2026-09-02, multi-arch index digest).
   image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
 
-# The off-site backups (role k8s_backup, to Azure): each node's node-exporter reads the time of the last good run
-# (c1_backup_last_success_timestamp_seconds, by kind). metrics: the alerts and panel check lines below. Set it true
-# only once role k8s_backup with k8s_backup_metrics_dir has reached every node and a night's backups have run, in
-# its own pull request; before that C1BackupNotRecorded would fire.
+# The off-box backups (role k8s_backup, to the Proxmox host's disk since 2026-11-19): each node's node-exporter
+# reads the time of the last good run (c1_backup_last_success_timestamp_seconds, by kind). metrics: the alerts and
+# panel check lines below. On since role k8s_backup with k8s_backup_metrics_dir reached every node and the drill
+# wrote each node's times (c1, 2026-11-19 20:02 UTC), with node-exporter's textfile collector turned on in the same
+# pull request (back-up-c1-off-box.md, "Know when a backup stops").
 backup:
-  metrics: false
+  metrics: true
   # The nightly volume and etcd backups: stale after 30 hours (one missed night, with room for the timers'
   # 5-minute random delay and a slow upload).
   staleSeconds: 108000
