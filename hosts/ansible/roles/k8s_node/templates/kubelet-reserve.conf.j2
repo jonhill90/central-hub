@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# Kubelet memory reservations and eviction (role k8s_node, k8s_node_kubelet_*). Read by the kubelet through --config-dir
+# (/etc/sysconfig/kubelet) and merged over /var/lib/kubelet/config.yaml.
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+systemReserved:
+  memory: {{ k8s_node_kubelet_system_reserved_memory }}
+kubeReserved:
+  memory: {{ k8s_node_kubelet_kube_reserved_memory }}
+# The kubelet's other hard thresholds, written out so this map keeps them (the kubelet's defaults on Linux).
+evictionHard:
+  memory.available: {{ k8s_node_kubelet_eviction_hard_memory }}
+  nodefs.available: 10%
+  nodefs.inodesFree: 5%
+  imagefs.available: 15%
+  imagefs.inodesFree: 5%

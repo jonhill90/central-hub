@@ -12,3 +12,16 @@ k8s_node_pod_cidr: 10.240.0.0/16
 # The firewalld zone for the lab NIC (runbook step 1 used a "tailnet" zone on tailscale0).
 k8s_node_firewall_zone: lab
 k8s_node_ports: [6443/tcp, 2379-2380/tcp, 10250/tcp, 10256/tcp, 10257/tcp, 10259/tcp, 8472/udp, 4240/tcp]
+
+# Kubelet memory reservations and eviction (the dev worker's loss under Keycloak, 2026-11-18 13:14 and 2026-11-19 06:19 UTC).
+# Without them the kubelet counts the whole VM as room for pods, and the kernel, containerd and the kubelet itself get
+# what is left: on a 6400 MiB dev worker with no swap, pods and page cache took it all, the node stopped answering and
+# every pod on it went Terminating or Pending. Set, they hold memory back for the system (systemReserved), for the
+# kubelet and containerd (kubeReserved), and make the kubelet evict pods while the node still has the hard threshold free,
+# so one pod is killed instead of the node. Written as a kubelet drop-in (--config-dir, kubelet 1.35+ GA).
+# "" (the default, and c1 prod): nothing is written and no kubelet restarts. The dev rebuild sets them
+# (hosts/rebuild-k8s.sh, DEV_KUBELET_*).
+k8s_node_kubelet_system_reserved_memory: ""
+k8s_node_kubelet_kube_reserved_memory: ""
+k8s_node_kubelet_eviction_hard_memory: ""
+k8s_node_kubelet_config_dir: /etc/kubernetes/kubelet.conf.d

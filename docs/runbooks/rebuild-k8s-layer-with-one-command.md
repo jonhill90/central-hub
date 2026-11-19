@@ -208,6 +208,14 @@ While `identity-keycloak` runs on dev, the run logs each node's CPU and memory e
 
 The box's own `dev-vms.sh plan` reads the box's tfvars without these sizes, so on dev VMs a rebuild made it shows a memory change for the worker; don't apply it there.
 
+### Kubelet reservations on dev nodes
+
+Added 2026-11-19 after the dev worker was lost twice under Keycloak: run `20261118T131441Z` (worker read 4007 MiB, 68%, at 13:41 UTC, then `<unknown>`) and run `20261119T055343Z` at central-hub `640ce91d` (`identity-keycloak end rc=2` after 1479 s; the worker read 4177 MiB, 68%, at 06:19:49 UTC, then the metrics API went down and pods went Terminating or Pending). Dev VMs have `floating = 0` (`hosts/terraform/home/k8s/main.tf`), so host ballooning is not the cause, and before this change nothing under `hosts/` set a kubelet reservation or eviction threshold (`git grep systemReserved hosts` found none), so the kubelet let pods and page cache take the whole 6400 MiB VM with no swap.
+
+On dev, `hosts/rebuild-k8s.sh` now passes `DEV_KUBELET_SYSTEM_RESERVED_MEMORY` (384Mi), `DEV_KUBELET_KUBE_RESERVED_MEMORY` (256Mi) and `DEV_KUBELET_EVICTION_HARD_MEMORY` (384Mi) to both `k8s.yml` runs (the `cluster` stage and the idempotency check). Role `k8s_node` (step 6a) then writes `/etc/kubernetes/kubelet.conf.d/10-central-hub-reserve.conf`, a KubeletConfiguration drop-in with `systemReserved`, `kubeReserved` and `evictionHard`, and points the kubelet at that folder with `--config-dir` in `/etc/sysconfig/kubelet`. The kubelet then evicts a pod while 384 MiB is still available, instead of the node going silent. c1 (prod) sets none of the three variables, so nothing is written and no kubelet restarts there. The offline check is `.github/hosts-check/tests/test_kubelet_reservations.sh`.
+
+Check on a live dev node: `kubectl describe node <worker>` shows Allocatable memory about 1 GiB below Capacity, and `cat /etc/kubernetes/kubelet.conf.d/10-central-hub-reserve.conf` shows the file. Not yet run on a cluster: the first dev run after this merges is its proof. Still unproven: that memory exhaustion was the cause of the two losses (the box's raw logs were not read for the 06:19 run, so no OOM-kill or eviction line has been seen). If the next dev run loses the worker again, read the kubelet and kernel journal (`journalctl -k -u kubelet`) from the node before changing sizes.
+
 ## On a node short of memory
 
 When the preflight finds less than `PREFLIGHT_MIN_FREE_MIB` free and VM 300 is running, the owner picks one of two values, set as `agent_box_short_node` in the private inventory and written to the box at the install (the box's rebuild wrapper reads it). There is no default, because each value costs something the owner weighs:

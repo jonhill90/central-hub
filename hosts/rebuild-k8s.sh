@@ -118,6 +118,22 @@ DEV_REALM_IMPORT_TIMEOUT_S=1200
 # first heap (kc.sh line 100). 1Gi bounds the import's JVM to 70% of 1 GiB, so the import fails inside its own limit
 # rather than pressing on the whole worker.
 DEV_REALM_IMPORT_MEMORY=1Gi
+# Dev only: kubelet memory reservations and eviction on every dev node (role k8s_node, k8s_node_kubelet_*). The dev worker was
+# lost under Keycloak in runs 20261118T131441Z (13:41 UTC) and 20261119T055343Z (06:19 UTC): the worker read 4007 and 4177 MiB
+# (68%), then stopped answering with pods Terminating or Pending. No kubelet reservation or eviction threshold existed under
+# hosts/, so pods and page cache could take the whole 6400 MiB VM (no swap, floating = 0) and starve the kubelet and containerd.
+# With these the kubelet holds back 384 + 256 MiB for the system and itself, and evicts pods when less than 384 MiB is
+# available, so a pod is killed before the node is lost. c1 (prod) sets none and keeps its kubelet as it is.
+# Unproven: the box's raw logs were not read for the 06:19 run, so memory exhaustion is the cause the evidence fits, not one seen.
+DEV_KUBELET_SYSTEM_RESERVED_MEMORY=384Mi
+DEV_KUBELET_KUBE_RESERVED_MEMORY=256Mi
+DEV_KUBELET_EVICTION_HARD_MEMORY=384Mi
+kubelet_vars=()
+if [ "$ENV_NAME" = dev ]; then
+  kubelet_vars=(-e "k8s_node_kubelet_system_reserved_memory=$DEV_KUBELET_SYSTEM_RESERVED_MEMORY"
+    -e "k8s_node_kubelet_kube_reserved_memory=$DEV_KUBELET_KUBE_RESERVED_MEMORY"
+    -e "k8s_node_kubelet_eviction_hard_memory=$DEV_KUBELET_EVICTION_HARD_MEMORY")
+fi
 tofu_vars=(-var-file="$TFVARS")
 if [ "$ENV_NAME" = dev ]; then
   tofu_vars+=(-var "memory_mb_by_role={\"control-plane\" = $DEV_MEMORY_MB_CONTROL_PLANE, \"worker\" = $DEV_MEMORY_MB_WORKER}")
@@ -253,7 +269,7 @@ checks() {
   [ -z "$pods" ] || { echo "pods not Running or Completed:"; echo "$pods"; return 1; }
   wait_apps
   # A second run of the cluster playbook must change nothing.
-  ap "$repo/hosts/ansible/playbooks/k8s.yml" >> "$raw" 2>&1
+  ap "$repo/hosts/ansible/playbooks/k8s.yml" "${kubelet_vars[@]}" >> "$raw" 2>&1
   [ "$(changed_total)" = 0 ] || { echo "second k8s.yml run changed $(changed_total) things"; return 1; }
   # And OpenTofu must see no drift (exit 0 = no changes, 2 = changes).
   tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE" >> "$raw" 2>&1
@@ -639,7 +655,7 @@ run_stage() {
       [ -z "${PRE_VMS_HOOK:-}" ] || bash -c "$PRE_VMS_HOOK"
       tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE"
       tofu_k8s apply -auto-approve -input=false "${tofu_vars[@]}" ;;
-    cluster) wait_ssh && ap playbooks/k8s.yml ;;
+    cluster) wait_ssh && ap playbooks/k8s.yml "${kubelet_vars[@]}" ;;
     # The data disks only: Argo CD installs the provisioner and StorageClass (move-local-path-to-argo-cd.md).
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
     # On dev, after the smoke test's call from this machine to the Gateway's address: every load-balancer address has
