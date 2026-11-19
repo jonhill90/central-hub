@@ -115,15 +115,15 @@ components:
     checked: 2026-11-14
   - name: Debian
     kind: software
-    used-for: the base of the Proxmox host
+    used-for: the base of the Proxmox host, and of CI's stand-in Proxmox host, whose pinned nginx build comes from Debian's snapshot archive
     licence: DFSG-free; "the Debian system and all its components will be free"
     licence-source: https://www.debian.org/social_contract.html
     paid-edition: none
     paid-edition-source: https://www.debian.org/social_contract.html
     verdict: pass
-    sources: []
-    not-detected: installed with Proxmox VE from its ISO
-    checked: 2026-11-14
+    sources: [url:snapshot.debian.org]
+    not-detected: the host's Debian is installed with Proxmox VE from its ISO
+    checked: 2026-11-19
   - name: FreeBSD
     kind: software
     used-for: the cloud image the throwaway OPNsense test VM boots before the OPNsense bootstrap (opnsense-test)
