@@ -77,10 +77,9 @@ server:
           drop: [ALL]
   # Designed so that only ESO and OpenBao's own namespace (the pod itself and the snapshot job)
   # reach port 8200 (and 8201, Raft). That c1 enforces NetworkPolicy is not measured yet (D-0058
-  # rule 6), so until it is, this is the design, not a proven limit. The agent box's path through
-  # the Gateway reaches 8200 by its own CiliumNetworkPolicy (apps/openbao-store, box-path.yaml); the
-  # admin login on it is expected to be refused by address, which is not yet measured
-  # (docs/runbooks/set-up-the-secrets-store.md, "The box's path to the store").
+  # rule 6), so until it is, this is the design, not a proven limit. The agent box reaches 8200 on
+  # the admin path, by its own NetworkPolicy for the box's /32 (apps/openbao-store, admin-path.yaml;
+  # docs/runbooks/set-up-the-secrets-store.md, "The box's admin path").
   networkPolicy:
     enabled: true
     ingress:

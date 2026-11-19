@@ -5,16 +5,12 @@
 # from its root value openbaoSealNode. Empty: no PersistentVolume is made, so the claim stays
 # Pending and OpenBao's pod waits; nothing starts without its key.
 sealNode: ""
-# The lab DNS zone, private, from the root Application. Used only with measure (below).
-zone: ""
-# The dev-only measurement (MEASURE-1, root value openbaoMeasure): true adds openbao-pass.<zone>, the
-# passthrough route's host, to the store's certificate, so the box can check it by name.
-measure: false
 # The store's name as the agent box reaches it (root value openbaoStoreHost, from
-# k8s_gitops_source_openbao_store_host), private. Set: templates/box-path.yaml gives the box its
-# path through Gateway apps, a TLS passthrough listener for this name on 443 to OpenBao's Service,
-# and the store's certificate carries the name, so TLS ends at OpenBao and the box checks the store's
-# own CA. Empty: no path.
+# k8s_gitops_source_openbao_store_host), private. Set: the store's certificate carries the name, so the
+# box, which sends it on the admin path (adminAddress, below), checks the store's own CA by it and TLS
+# ends at OpenBao. The box's earlier path through Gateway apps (a TLS passthrough ListenerSet for this
+# name) is gone: Cilium 1.20.4 never accepted it beside the https-short listener (*.<zone>), and
+# OpenBao would have seen a Cilium address there, not the box's (D-0062).
 boxHost: ""
 # The store's admin address (root value openbaoAdminAddress, from k8s_gitops_source_openbao_admin_address),
 # private: one address of c1's load-balancer pool, not its first or last. Set: templates/admin-path.yaml

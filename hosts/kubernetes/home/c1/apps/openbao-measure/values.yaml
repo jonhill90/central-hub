@@ -20,11 +20,9 @@ gateway:
 reencrypt:
   host: openbao-measure
   caConfigMap: openbao-measure-ca
-# Path b (passthrough, option b): a ListenerSet with one TLS Passthrough listener on 443, host
-# <host>.<zone>, and a TLSRoute to OpenBao's Service; TLS ends at OpenBao's own listener, whose
-# certificate carries this host (apps/openbao-store, measure).
-passthrough:
-  host: openbao-pass
+# Path b (passthrough, a ListenerSet on 443) is gone: Cilium 1.20.4 refuses a TLS passthrough listener on
+# 443 whose host the https-short listener (*.<zone>) also covers (ProtocolConflict;
+# operator/pkg/gateway-api/status_listener.go lines 245-251), so it was never Accepted.
 # OpenBao's Service and port (the chart's).
 service: openbao
 port: 8200

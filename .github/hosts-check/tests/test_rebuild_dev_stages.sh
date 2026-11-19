@@ -135,13 +135,13 @@ same "prod appends nothing" "$(appended prod "" /k)" "base"
 # The measurement's PASS line goes into the short log whole: its b, b_cert and ingress fields come last.
 sed -n '/^  if \[ "\$s" = restore \] .*; then$/,/^  fi$/p' "$script" > "$t/short.sh"
 [ -s "$t/short.sh" ] || { echo "FAIL: the short-log block is missing or changed"; fail=1; }
-long="PASS: openbao-measure: gateway=ok $(printf 'x%.0s' $(seq 1 250)); b=400 remote=- xff=-; b_cert=CN; ingress=192.0.2.5"
+long="PASS: openbao-measure: gateway=ok $(printf 'x%.0s' $(seq 1 250)); axff=400 remote=- xff=-; ingress=192.0.2.5"
 printf '===== openbao-measure\n    "msg": "%s"\n' "$long" > "$t/raw"
 s=openbao-measure raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
 same "the measurement's PASS line reaches the short log whole" "$(cat "$t/log")" "  openbao-measure: \"msg\": \"$long\""
 # A measurement where no probe got an answer ends with a SKIP line, which reaches the short log whole too.
 : > "$t/log"
-skipm="SKIP: openbao-measure: not measured, no probe got an HTTP answer from the Gateway; gateway=ok listenerset=x [y]; policy=enforced; a=curl: (28) Connection timed out"
+skipm="SKIP: openbao-measure: not measured, no probe got an HTTP answer from the Gateway; gateway=ok; policy=enforced; a=curl: (28) Connection timed out"
 printf '===== openbao-measure\n    "msg": "%s"\n' "$skipm" > "$t/raw"
 s=openbao-measure raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/short.sh"
 same "the measurement's SKIP line reaches the short log whole" "$(cat "$t/log")" "  openbao-measure: \"msg\": \"$skipm\""

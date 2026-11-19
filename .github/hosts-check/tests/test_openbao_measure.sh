@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# playbooks/k8s-openbao-measure.yml offline, with stub kubectl, curl and openssl:
-#   1. probes that OpenBao answers (400 on each path, with audit lines): the last line is the PASS line, with the
-#      remote address and X-Forwarded-For each probe's audit line gave, and the ListenerSet's own listener conditions;
+# playbooks/k8s-openbao-measure.yml offline, with stub kubectl and curl:
+#   1. probes that OpenBao answers (400 on path a and a+xff, with audit lines): the last line is the PASS line, with
+#      the remote address and X-Forwarded-For each probe's audit line gave, and no path b (it is gone: no ListenerSet
+#      read, no probe b, no b_cert);
 #   2. probes that get no HTTP answer at all (curl 28, as on dev run 20261118T212236Z): the play still passes, but its
 #      last line is a SKIP line that says nothing was measured, never a PASS line, and keeps curl's error per probe;
-#   3. a Gateway answer on path a only (503 while the control Job found the store unsealed): a PASS line, path a
+#   3. the Gateway's own answer (503 while the control Job found the store unsealed): a PASS line, path a
 #      "refused at gateway";
 #   4. a probe OpenBao answered with no audit line still fails the play.
 # Usage: .github/hosts-check/tests/test_openbao_measure.sh   (needs ansible-core)
@@ -24,8 +25,6 @@ a="\$*"
 case "\$a" in
   *"get gateway apps"*)
     printf '%s' '[{"name":"http","conditions":[{"type":"Programmed","status":"True"}]},{"name":"https","conditions":[{"type":"Programmed","status":"True"}]},{"name":"http-short","conditions":[{"type":"Programmed","status":"True"}]},{"name":"https-short","conditions":[{"type":"Programmed","status":"True"}]}]' ;;
-  *"get listenerset openbao-measure"*".status.listeners"*) printf '%s' 'openbao-pass:Accepted=False(UnsupportedProtocol), ' ;;
-  *"get listenerset openbao-measure"*) printf '%s' 'Accepted=False(ListenersNotValid) Programmed=False(ListenersNotValid) ' ;;
   *"get namespace openbao-measure"*) printf '%s' 'uid-1' ;;
   *"get secret openbao-tls"*|*"get secret apps-tls"*) printf '%s' "\$(printf 'CERT' | base64)" ;;
   *" apply -f -"*) cat > /dev/null; echo "applied" ;;
@@ -44,7 +43,7 @@ case "\$a" in
   *) echo "unexpected kubectl \$a" >&2; exit 3 ;;
 esac
 EOF
-# curl: PROBES=answer (400 everywhere), timeout (curl 28 everywhere) or gw503 (503 on path a and a+xff, 400 on b).
+# curl: PROBES=answer (400 everywhere), timeout (curl 28 everywhere) or gw503 (503 from the Gateway).
 cat > "$w/bin/curl" <<EOF
 #!/usr/bin/env bash
 nonce=""; host=""
@@ -62,14 +61,7 @@ esac
 echo "\$nonce" >> "$w/nonces"
 printf '400'
 EOF
-cat > "$w/bin/openssl" <<EOF
-#!/usr/bin/env bash
-case "\$1" in
-  s_client) [ "\${PROBES:-answer}" = timeout ] || echo CERT ;;
-  x509) [ -n "\$(cat)" ] && echo 'issuer=CN = stub store CA' ;;
-esac
-EOF
-chmod +x "$w/bin/kubectl" "$w/bin/curl" "$w/bin/openssl"
+chmod +x "$w/bin/kubectl" "$w/bin/curl"
 
 sed 's/^  hosts: k8s_control_plane\[0\]$/  hosts: all/' "$play" > "$w/play.yml"
 grep -q '^  hosts: all$' "$w/play.yml" || { echo "FAIL the play's hosts line changed"; exit 1; }
@@ -86,22 +78,23 @@ run() {
 
 # 1
 PROBES=answer run
-if [[ $rc -eq 0 && $line == "PASS: openbao-measure: gateway=ok listenerset=Accepted=False(ListenersNotValid) Programmed=False(ListenersNotValid) [openbao-pass:Accepted=False(UnsupportedProtocol),]; policy=enforced;"* &&
-      $line == *"a=400 remote=10.0.0.9 xff=192.0.2.50;"* && $line == *"b=400 remote=10.0.0.9"* && $line == *"b_cert=CN = stub store CA"* ]]; then
-  ok "1. answered probes: a PASS line with each probe's remote address and the listener's own conditions"
+if [[ $rc -eq 0 && $line == "PASS: openbao-measure: gateway=ok; policy=enforced;"* &&
+      $line == *"a=400 remote=10.0.0.9 xff=192.0.2.50;"* && $line == *"axff=400 remote=10.0.0.9"* &&
+      $line != *" b="* && $line != *"b_cert"* && $line != *"listenerset"* && $(wc -l < "$w/nonces") -eq 2 ]]; then
+  ok "1. answered probes: a PASS line with each probe's remote address, two probes, no path b"
 else bad "1. rc=$rc [$line] $(tail -5 "$w/out")"; fi
 
 # 2
 PROBES=timeout run
 if [[ $rc -eq 0 && $line == "SKIP: openbao-measure: not measured, no probe got an HTTP answer from the Gateway; gateway=ok"* &&
       $line == *"a=curl: (28) Connection timed out after 15002 milliseconds remote=- xff=-;"* &&
-      $line == *"b=curl: (28)"* && $(grep -c 'PASS: openbao-measure' "$w/out") -eq 0 ]]; then
+      $line == *"axff=curl: (28)"* && $(grep -c 'PASS: openbao-measure' "$w/out") -eq 0 ]]; then
   ok "2. no probe answered: the play passes with a SKIP line saying nothing was measured, never a PASS line"
 else bad "2. rc=$rc [$line] $(tail -5 "$w/out")"; fi
 
 # 3
 PROBES=gw503 run
-if [[ $rc -eq 0 && $line == "PASS: openbao-measure:"* && $line == *"a=503 refused at gateway remote=- xff=-;"* && $line == *"b=400 remote=10.0.0.9"* ]]; then
+if [[ $rc -eq 0 && $line == "PASS: openbao-measure:"* && $line == *"a=503 refused at gateway remote=- xff=-;"* && $line == *"axff=503 refused at gateway"* ]]; then
   ok "3. the Gateway's own 503 on path a: a PASS line with a refused at gateway"
 else bad "3. rc=$rc [$line] $(tail -5 "$w/out")"; fi
 

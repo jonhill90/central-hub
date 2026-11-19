@@ -30,14 +30,13 @@ openbaoBoxCidr: ""
 # k8s_gitops_cluster_labels.env with the switch on. Empty keeps apps/openbao-store's own value (dev).
 openbaoMarkEnv: ""
 # The dev-only measurement of the agent box's source address through the Gateway (ADDENDUM-1 v3 step 1,
-# MEASURE-1). true makes the openbao-measure app's routes, turns on OpenBao's audit of two request
-# headers at its first start, adds the passthrough host to the store's certificate and lets namespace
-# openbao attach a ListenerSet to Gateway apps. Only hosts/rebuild-k8s.sh sets it, on dev with the
+# MEASURE-1). true makes the openbao-measure app's routes and turns on OpenBao's audit of two request
+# headers at its first start. Only hosts/rebuild-k8s.sh sets it, on dev with the
 # in-cluster store (k8s_gitops_source_openbao_measure); c1 keeps false and renders as before.
 openbaoMeasure: false
 # The store's name as the agent box reaches it, private, set by Ansible (k8s_gitops_source_openbao_store_host)
-# with the in-cluster store on. Set: the agent box's path to the store through Gateway apps, TLS
-# passthrough (apps/openbao-store, box-path.yaml; the gateway app lets namespace openbao attach it).
+# with the in-cluster store on. Set: the store's certificate carries it (apps/openbao-store, tls.yaml), and the
+# box reaches the store by it on the admin address (openbaoAdminAddress).
 openbaoStoreHost: ""
 # The store's admin address, private, set by Ansible (k8s_gitops_source_openbao_admin_address) with the
 # in-cluster store on: one address of the load-balancer pool, on which OpenBao sees the agent box's own
@@ -331,12 +330,6 @@ apps:
     zoneParameters:
       address: "{gatewayAddress}"
       https: "{gatewayHttps}"
-    # Lets namespace openbao attach the measurement's ListenerSet, only with openbaoMeasure, and the
-    # agent box's path, only with openbaoStoreHost.
-    switchParameters:
-      openbaoMeasure: openbaoMeasure
-    rootParameters:
-      openbaoBoxHost: openbaoStoreHost
     wave: -1
     autoSync: true
     prune: false
@@ -378,10 +371,6 @@ apps:
       boxHost: openbaoStoreHost
       adminAddress: openbaoAdminAddress
       boxCidr: openbaoBoxCidr
-    switchParameters:
-      measure: openbaoMeasure
-    # The passthrough host on the store's certificate, only with measure (templates/tls.yaml).
-    needsZone: true
     # The seal key's local volume (D-0058 rule 3); no other app makes a PersistentVolume. The admin
     # path's L2 announcement policy (admin-path.yaml), only with openbaoAdminAddress.
     clusterResources:
