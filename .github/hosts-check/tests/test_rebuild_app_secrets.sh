@@ -16,6 +16,9 @@
 #      gives ca.crt of Secret openbao/openbao-tls, replacing an earlier run's file, and asks kc for that one field only.
 #      kc failing, giving a key with the certificate, or giving no certificate fails the stage with the file unchanged
 #      and nothing run. A gate line with no APP_SECRETS_CACERT (an older box wrapper) runs the hook as before.
+#   6. The CA file that stage writes never turns on the old store-VM wiring while the in-cluster switch is on: with the
+#      CA file, the rebuild role's two ID files and the settings all present, rebuild.sh's wiring block leaves store_url
+#      empty when openbao-in-cluster reads true, and still sets it when the switch is off or missing.
 # Usage: .github/hosts-check/tests/test_rebuild_app_secrets.sh   (needs python3 and openssl)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -145,5 +148,20 @@ if [[ $r5a == 0 && $same == yes && $c5a == "put-apps compare " && $k5a == "-n op
       $r5 == "fail:failed::1:said both:failed::1:said none:failed::1:said " && $r5o == 0 && $c5o == "put-apps compare " && -z $k5o ]]; then
   ok "5. gate open: the store's CA (ca.crt only) replaces the earlier file before put-apps; a failed read, a key beside it or no certificate fails with nothing written or run; an older wrapper's line runs as before"
 else bad "5. $r5a [$o5a] [$c5a] [$k5a] same=$same | [$r5] | $r5o [$c5o] [$k5o]"; fi
+
+# 6
+sed -n '/^store_keys=\$keys\/dev$/,/^fi$/p' "$box" > "$t/wiring.sh"
+grep -q 'store_url=https://' "$t/wiring.sh" || { echo "FAIL: the store-VM wiring block was not found in rebuild.sh"; exit 1; }
+mkdir -p "$t/w6/keys/dev" "$t/w6/work"
+for f in openbao-rebuild-role-id openbao-rebuild-secret-id secrets-store-ca.crt; do echo x > "$t/w6/keys/dev/$f"; done
+echo '{"address": "192.0.2.40"}' > "$t/w6/work/secrets-store.json"
+wiring() { # in-cluster file content, or "none": prints store_url
+  if [[ $1 == none ]]; then rm -f "$t/w6/work/openbao-in-cluster"; else echo "$1" > "$t/w6/work/openbao-in-cluster"; fi
+  keys=$t/w6/keys work=$t/w6/work bash -c 'store_url=""; . "$1"; printf "%s" "$store_url"' _ "$t/wiring.sh" 2>&1
+}
+r6="on:[$(wiring true)] off:[$(wiring false)] none:[$(wiring none)]"
+if [[ $r6 == "on:[] off:[https://192.0.2.40] none:[https://192.0.2.40]" ]]; then
+  ok "6. with the in-cluster switch on, the CA file and the rebuild IDs never turn on the old store-VM wiring; off or missing, they still do"
+else bad "6. $r6"; fi
 
 exit $fail

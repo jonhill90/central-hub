@@ -405,7 +405,10 @@ stages="vms cluster storage restore gitops secrets apps gateway checks"
 openbao_env=""
 store_url=""
 store_keys=$keys/dev
-if [[ -s $store_keys/openbao-rebuild-role-id && -s $store_keys/openbao-rebuild-secret-id && -s $store_keys/secrets-store-ca.crt && -s $work/secrets-store.json ]]; then
+# Never with the store inside the cluster switched on (below): stage app-secrets then writes this folder's
+# secrets-store-ca.crt for the in-cluster store, which must not turn this old wiring on and make the run refuse.
+if [[ ! ( -f $work/openbao-in-cluster && $(tr -d '[:space:]' < "$work/openbao-in-cluster") == true ) &&
+      -s $store_keys/openbao-rebuild-role-id && -s $store_keys/openbao-rebuild-secret-id && -s $store_keys/secrets-store-ca.crt && -s $work/secrets-store.json ]]; then
   store_addr=$(python3 -I -c 'import ipaddress, json, sys; print(ipaddress.ip_address(json.load(open(sys.argv[1]))["address"]))' "$work/secrets-store.json") \
     || { echo "rebuild: the secrets store's address in $work/secrets-store.json is not an IP address" >&2; exit 1; }
   store_url=https://$store_addr
