@@ -27,7 +27,7 @@ g() { git -c user.name=t -c user.email=t@example.invalid -c init.defaultBranch=m
 g init -q "$t/repo"
 mkdir -p "$t/repo/hosts" "$t/repo/docs"
 # The stand-in fit check: records its settings file, answers with FIT_RC.
-printf '%s\n' '#!/bin/bash' 'cp "$1/rebuild.env" "$FIT_SEEN"' 'echo "preflight: refused, estimate 9216 MiB is below 11008 MiB"' 'exit "${FIT_RC:-0}"' > "$t/repo/hosts/rebuild-k8s.sh"
+printf '%s\n' '#!/bin/bash' 'cp "$1/rebuild.env" "$FIT_SEEN"' 'echo "preflight: refused, estimate 9216 MiB is below 12800 MiB"' 'exit "${FIT_RC:-0}"' > "$t/repo/hosts/rebuild-k8s.sh"
 (cd "$t/repo" && g add -A && g commit -q -m c1 &&
  echo a > hosts/a && g add -A && g commit -q -m c2 &&
  echo d > docs/d && g add -A && g commit -q -m c3 &&
@@ -92,7 +92,7 @@ reset; o5c=$(FIT_RC=3 decide)
 if [[ $o5a == *"rc=0" && $s5a == *"ENV_NAME=dev"* && $s5a == *"PREFLIGHT_KEEP_DESKTOP=true"* && $s5a == *"PREFLIGHT_SHORT_NODE=ephemeral-dev"* &&
       $s5a == *"TFVARS=$keys/dev-vms.tfvars"* && $s5a == *"VM_ID_MAX=257"* &&
       $o5b == *"rc=0" && $s5b != *PREFLIGHT_SHORT_NODE* &&
-      $o5c == *"the memory preflight does not fit now (preflight: refused, estimate 9216 MiB is below 11008 MiB); nothing started"*"rc=1" &&
+      $o5c == *"the memory preflight does not fit now (preflight: refused, estimate 9216 MiB is below 12800 MiB); nothing started"*"rc=1" &&
       $(stat -c %a "$work/state/rebuild-fit") == 700 && $(stat -c %a "$work/state/rebuild-fit/rebuild.env") == 600 ]]; then
   ok "5. the fit check gets dev's settings, keeps the desktop, carries a valid short-node setting only; a failed fit stops it with the reason"
 else bad "5. $o5a [$s5a] | $o5b [$s5b] | $o5c"; fi

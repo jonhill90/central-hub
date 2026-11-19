@@ -25,7 +25,7 @@ A dev rebuild needs more memory than the host has free while VM 300, the noteboo
 | Node free memory, VM 300 running | 10297 |
 | Node free memory, after the preflight stopped VM 300 | 12210 |
 | What VM 300 held on the host (the difference) | 1913 |
-| What dev needs: control plane 4096, worker 6144, margin 1024 (the sizes then; since 2026-11-18 3584 and 6400, 11008 with the margin; since 2026-11-19 a 512 MiB margin, 10496, then the control plane back at 4096, 11008) | 11264 |
+| What dev needs: control plane 4096, worker 6144, margin 1024 (the sizes then; since 2026-11-18 3584 and 6400, 11008 with the margin; since 2026-11-19 a 512 MiB margin, 10496, then the control plane back at 4096, 11008, then the worker at 8192, 12800) | 11264 |
 
 With VM 300 running, dev is 967 MiB short. Shrinking VM 300 to 1024 MiB frees about 900 MiB, which still leaves dev short. Dev's VMs keep their memory until the teardown, so no stage frees memory for an earlier restart either. The runner VM stopped at 07:12:55 UTC and started again at 07:43:44 UTC, after the run's own teardown.
 

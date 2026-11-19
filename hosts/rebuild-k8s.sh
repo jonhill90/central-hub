@@ -99,14 +99,19 @@ fi
 # 14:27 UTC): with #693's kubelet reservations (384 + 256 MiB held back, eviction below 384 MiB available) 3584 left the
 # control plane at 103 to 110% of its allocatable memory, 173 MiB free and 735 available of 3405, and Ansible's sudo on it
 # timed out (12 s) in identity-keycloak (run 20261119T091356Z, `fail:` and `node psi` lines). At 4096 dev's read 2403 to
-# 2839 MiB in run 20261118T131441Z, and 3072 starved the API server (run 20261118T061140Z). Worker 6400: at 6144 the worker never passed
+# 2839 MiB in run 20261118T131441Z, and 3072 starved the API server (run 20261118T061140Z).
+# Worker 8192 since 2026-11-19 (6400 from 2026-11-18 14:27 UTC): at 6400, with the control plane at 4096 and
+# the kubelet reservations, run 20261119T095027Z lost the worker in identity-keycloak: it read 4725 MiB used, 141 free and
+# 1446 available of 6171 at 10:14:41 UTC, then answered no ssh (banner timeout) from 10:16 UTC while Proxmox counted 6108
+# to 6119 of 6400 MiB, and the realm import never finished (1200 s). At 7168 run 20261117T053037Z passed with the worker
+# at 4255 MiB; 8192 is the box's own tfvars size. Before that: at 6144 the worker never passed
 # identity-keycloak (runs 20261117T043328Z and 20261118T131441Z) while the realm import ran with the operator's default
 # memory, request 1700Mi and limit 2Gi, beside Keycloak's own pod; dev now caps the import at DEV_REALM_IMPORT_MEMORY
-# below, 1 GiB less, and the worker keeps 256 MiB more than the size that failed. The sum, 10496, plus the 512 MiB
-# margin is 11008; the node read 15409 MiB available with dev down (`rebuild fit`, 2026-11-19 09:38 UTC). c1 (prod) keeps the sizes in its own tfvars.
+# below, 1 GiB less, and the worker then kept 256 MiB more than the size that failed (6400). The sum, 12288, plus the 512 MiB
+# margin is 12800; the node read 15409 MiB available with dev down (`rebuild fit`, 2026-11-19 09:38 UTC). c1 (prod) keeps the sizes in its own tfvars.
 DEV_MEMORY_MB_CONTROL_PLANE=4096
-DEV_MEMORY_MB_WORKER=6400
-# The preflight's margin is 512 MiB: 4096 + 6400 + 512 = 11008. It was 1024 (11008) until 2026-11-19; the fit check at
+DEV_MEMORY_MB_WORKER=8192
+# The preflight's margin is 512 MiB: 4096 + 8192 + 512 = 12800. It was 1024 (11008) until 2026-11-19; the fit check at
 # 05:37 UTC that day read an estimate of 10562 MiB with VM 300 counted as freed, 446 short of 11008, with the agent
 # box already holding only 620 MiB of cache (its drop-cache timer) and 1195 of the node's 8191 MiB swap in use. The
 # margin guards the node, not dev's VMs, whose sizes are fixed above; the node keeps its swap beside it.
@@ -124,7 +129,7 @@ DEV_REALM_IMPORT_MEMORY=1Gi
 # Dev only: kubelet memory reservations and eviction on every dev node (role k8s_node, k8s_node_kubelet_*). The dev worker was
 # lost under Keycloak in runs 20261118T131441Z (13:41 UTC) and 20261119T055343Z (06:19 UTC): the worker read 4007 and 4177 MiB
 # (68%), then stopped answering with pods Terminating or Pending. No kubelet reservation or eviction threshold existed under
-# hosts/, so pods and page cache could take the whole 6400 MiB VM (no swap, floating = 0) and starve the kubelet and containerd.
+# hosts/, so pods and page cache could take the whole worker VM (no swap, floating = 0) and starve the kubelet and containerd.
 # With these the kubelet holds back 384 + 256 MiB for the system and itself, and evicts pods when less than 384 MiB is
 # available, so a pod is killed before the node is lost. c1 (prod) sets none and keeps its kubelet as it is.
 # Unproven: the box's raw logs were not read for the 06:19 run, so memory exhaustion is the cause the evidence fits, not one seen.
@@ -291,7 +296,7 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default: the dev VMs' memory by role, summed over the nodes
-# the tfvars declare, plus a 512 MiB margin; 4096 + 6400 + 512 = 11008 for one control plane and one worker). If the
+# the tfvars declare, plus a 512 MiB margin; 4096 + 8192 + 512 = 12800 for one control plane and one worker). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 # curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
 # use it, so neither can print the token.
