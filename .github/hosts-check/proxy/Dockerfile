@@ -4,8 +4,16 @@
 # when it was pinned (trixie-20261027, published 2026-10-28; STD-0003 rule 1), by digest.
 FROM debian@sha256:2dc419c6d7fe3dad0a2f9fd469c34cc90b0f9ba642d8fde837fe3d7d34a0e7f1
 ENV DEBIAN_FRONTEND=noninteractive
-# nginx at the version the host runs today (the old role's pin).
-RUN apt-get update \
+# nginx at the version the host runs today (the old role's pin). Debian's archive keeps only a package's newest
+# security build, and deb13u11 replaced deb13u10 by 2026-11-19 (proxy job on PR 715), so the pinned build comes
+# from snapshot.debian.org as trixie-security was on 2026-11-18: the base's own security stanza (its keyring, its
+# plain http) with the snapshot's URI, and no Valid-Until check, as a snapshot's Release file expires.
+RUN awk 'BEGIN { RS = "" } /debian-security/ { print }' /etc/apt/sources.list.d/debian.sources \
+      | sed 's#^URIs: .*#URIs: http://snapshot.debian.org/archive/debian-security/20261118T000000Z#' \
+      > /etc/apt/sources.list.d/snapshot-security.sources \
+ && echo 'Check-Valid-Until: no' >> /etc/apt/sources.list.d/snapshot-security.sources \
+ && grep -q '^URIs: http://snapshot.debian.org/' /etc/apt/sources.list.d/snapshot-security.sources \
+ && apt-get update \
  && apt-get install -y --no-install-recommends systemd systemd-sysv dbus openssh-server python3 curl openssl \
       ca-certificates iproute2 nginx=1.26.3-3+deb13u10 nginx-common=1.26.3-3+deb13u10 \
  && rm -rf /var/lib/apt/lists/* \
