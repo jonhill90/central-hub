@@ -49,6 +49,19 @@ echo "desktop: central-hub $(git -C "$repo" rev-parse --short HEAD)"
 # The VM's own SSH key, made here the first time. Only its public half leaves this folder.
 [[ -f $sshkey ]] || ssh-keygen -q -t ed25519 -N "" -C "keys@agent-box desktop" -f "$sshkey"
 
+# The destroyed VM's host key. Its rebuild comes up at the same address with a new key, which configure's
+# strict checking refuses ("REMOTE HOST IDENTIFICATION HAS CHANGED", desktop rebuild of 2026-11-19), and
+# only this wrapper can write keys' known_hosts. So a destroy that ran drops that address's line, and the
+# next configure meets the new VM's key fresh (accept-new).
+forget_host_key() {
+  local address known=$work/.ssh/known_hosts
+  address=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["address"])' "$settings")
+  [[ -f $known ]] || return 0
+  ssh-keygen -R "$address" -f "$known" >/dev/null 2>&1 || true
+  rm -f "$known.old"
+  echo "desktop: the destroyed VM's host key is forgotten"
+}
+
 tofu_run() {
   python3 -I - "$settings" "$sshkey.pub" "$repo" "$vars" <<'PY'
 import json, sys
@@ -80,6 +93,7 @@ PY
       tofu plan -destroy -input=false -var-file="$vars" -out="$plan"
       tofu apply -input=false "$plan"
       rm -f "$plan"
+      forget_host_key
       ;;
   esac
 }
@@ -125,8 +139,8 @@ json.dump({"desktop_rdp_source": s["rdp_source"], "desktop_admin_user": admin,
 PY
   mkdir -p "$work/.ssh"
   cd "$repo/hosts/ansible"
-  # A rebuilt VM has a new host key, and the run stops on it: remove its line from
-  # $work/.ssh/known_hosts after checking (docs/runbooks/set-up-the-desktop.md).
+  # A rebuilt VM has a new host key: `desktop destroy` drops the old one (forget_host_key), so the
+  # first configure after a rebuild accepts the new key, and any later key change stops the run.
   ANSIBLE_SSH_ARGS="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$work/.ssh/known_hosts" \
     ansible-playbook -i "$inventory" --private-key "$sshkey" -e "@$extra" playbooks/desktop.yml
 }

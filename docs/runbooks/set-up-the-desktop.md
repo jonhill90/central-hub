@@ -67,6 +67,7 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 
 ## If it fails
 
+- `configure` stops with "REMOTE HOST IDENTIFICATION HAS CHANGED": the VM at the desktop's address has a new host key that `desktop destroy` did not clear (the VM was removed some other way, or the destroy ran before this was added). Run `desktop destroy`, then `plan`, `apply` and `configure`: the destroy drops that address's line from the box's `known_hosts`, and the new VM's key is accepted on first contact.
 - `dnf` cannot find a package: the AlmaLinux 10 package set changed. The task `desktop | The desktop packages` names the step.
 - The run stops at `desktop | Every trust check passed`: the line above it names the check. "does not verify the lab chain" means the lab root is not in the extracted store (role `k8s_node_trust` and its `update-ca-trust extract` handler); "TLS failed" means a name's certificate does not chain to the store; "not reached" means the VM has no route to prod's port 443 or no DNS answer for that name (curl exit 6 is DNS, 7 or 28 the route). The admin key is still in place, so fix the cause and run `desktop configure` again.
 - The console shows a login prompt and never asks for the password: `desktop-set-password.service` did not run (the marker exists already, or getty took tty1). Check `systemctl status desktop-set-password` from the console as root, which is locked; rebuild the VM from teardown instead.

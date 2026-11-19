@@ -4,7 +4,8 @@
 #   1. the zone is read from the prod inventory's k8s_gateway_zone, wherever it sits, and passed as
 #      desktop_trust_check_zone; no zone, two different zones or a templated value stops the run;
 #   2. with a zone and desktop_trust_check_reach on, the role's default names are <app>.<zone> for the gateway name
-#      check's apps; with reach off (the default) or no zone, none.
+#      check's apps; with reach off (the default) or no zone, none;
+#   3. `desktop destroy` forgets the destroyed VM's SSH host key, so the rebuilt VM's first configure accepts its new one.
 # The wrapper's Python is cut from desktop.sh itself, so the test runs the shipped text.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -65,6 +66,23 @@ got=$(names)
 gw=$(python3 -I -c 'import sys,yaml; print(" ".join(yaml.safe_load(open(sys.argv[1]))["nameCheck"]["apps"]))' "$here/hosts/kubernetes/home/c1/apps/gateway/values.yaml")
 role=$(python3 -I -c 'import sys,yaml; print(" ".join(yaml.safe_load(open(sys.argv[1]))["desktop_trust_check_apps"]))' "$here/hosts/ansible/roles/desktop/defaults/main.yml")
 [[ $gw == "$role" ]] && echo "ok   the apps are the gateway name check's apps" || { echo "FAIL: apps differ: gateway '$gw', desktop '$role'"; fails=$((fails + 1)); }
+
+# A destroy forgets the destroyed VM's host key and keeps every other line (forget_host_key, cut from desktop.sh).
+awk '/^forget_host_key\(\) \{$/ {on=1} on {print} on && /^}$/ {exit}' "$wrapper" >"$t/forget.sh"
+grep -q 'ssh-keygen -R' "$t/forget.sh" || { echo "FAIL: forget_host_key was not found in desktop.sh"; fails=$((fails + 1)); }
+grep -q '^      forget_host_key$' "$wrapper" && echo "ok   destroy calls forget_host_key" || { echo "FAIL: destroy does not call forget_host_key"; fails=$((fails + 1)); }
+mkdir -p "$t/w/.ssh"
+ssh-keygen -q -t ed25519 -N "" -f "$t/k1"; ssh-keygen -q -t ed25519 -N "" -f "$t/k2"
+{ echo "192.0.2.91 $(cut -d' ' -f1,2 "$t/k1.pub")"; echo "192.0.2.92 $(cut -d' ' -f1,2 "$t/k2.pub")"; } >"$t/w/.ssh/known_hosts"
+out=$(work=$t/w settings=$t/settings.json bash -c "set -euo pipefail; source '$t/forget.sh'; forget_host_key")
+if ! grep -q '^192\.0\.2\.91 ' "$t/w/.ssh/known_hosts" && grep -q '^192\.0\.2\.92 ' "$t/w/.ssh/known_hosts" \
+   && [[ ! -e $t/w/.ssh/known_hosts.old && $out == *forgotten* ]]; then
+  echo "ok   destroy forgets the desktop's host key and keeps the others"
+else echo "FAIL: forget_host_key: $out"; cat "$t/w/.ssh/known_hosts"; fails=$((fails + 1)); fi
+rm -f "$t/w/.ssh/known_hosts"
+if work=$t/w settings=$t/settings.json bash -c "set -euo pipefail; source '$t/forget.sh'; forget_host_key" >/dev/null; then
+  echo "ok   with no known_hosts yet, destroy goes on"
+else echo "FAIL: forget_host_key without known_hosts"; fails=$((fails + 1)); fi
 
 if [[ $fails -gt 0 ]]; then echo "desktop configure vars: $fails test(s) failed"; exit 1; fi
 echo "desktop configure vars: all tests passed"
