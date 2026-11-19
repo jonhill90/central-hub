@@ -82,6 +82,8 @@ Set every switch in the filled-in inventory, never with `-e`: a later run withou
    ansible-playbook -i inventories/home/ playbooks/k8s-certs.yml --tags smoke
    ```
 
+   From the box, once `c1-ansible list` there prints `gateway`: `c1-ansible check gateway`, then `c1-ansible apply gateway <clearance id>`. The box runs the wrapper's fixed tags (`gateway`), which can be more than the Mac command above, and reads its own copy of the inventory ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)). The `k8s-certs.yml` smoke run stays on the Mac.
+
    why: the Gateway gets its HTTPS listener with Secret `apps-tls`, and the nodes open tcp 443; every app route after this attaches to that listener.
    expect: the smoke run calls an echo app over HTTPS from the host, then deletes it.
 

@@ -32,7 +32,7 @@ Stop if any of these is not true.
 
 ## Steps
 
-1. In the private inventory, set `k8s_gitops_sso: true`. Then run `ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags sso --check --diff`.
+1. In the private inventory, set `k8s_gitops_sso: true`. Then run `ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags sso --check --diff`. From the box, once `c1-ansible list` there prints `gitops`: `c1-ansible check gitops`, then `c1-ansible apply gitops <clearance id>`. The box runs the wrapper's fixed tags (`source,ui,sso`), which can be more than the Mac command above, and reads its own copy of the inventory ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)).
    expect: the diff adds the keys above and nothing else.
 
 2. Run the same command without `--check`.
