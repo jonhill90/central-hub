@@ -2,7 +2,7 @@
 # Bootstrap, run once as root on the Proxmox host, before the first tofu run. Safe to run again.
 # It creates what Terraform needs in order to log in, plus the pools Terraform puts machines in:
 #   - group iac, role IacOps (least privilege for hosts/terraform/home/*), user iac@pve in iac
-#   - pools firewall, remote-access and k8s (one per workload), with VM 100 and CT 900 moved in
+#   - pools firewall, remote-access and k8s (one per workload), with VM 100 and CT 900 moved in when they exist
 #   - ACLs for the group and for token iac@pve!apply (privilege-separated, so the token needs its own)
 # The token itself is made separately, because its secret must go straight to a file and never be
 # printed (see hosts/RUNLOG-2026-10-26.md, step 2):
@@ -29,9 +29,17 @@ pveum user list --output-format json | grep -q '"userid":"iac@pve"' || pveum use
 for pool in firewall remote-access k8s; do
   pveum pool list --output-format json | grep -q "\"poolid\":\"$pool\"" || pveum pool add "$pool" --comment "Workload $pool (hosts/terraform/home/$pool)"
 done
-# Move each machine into its workload's pool (a guest belongs to at most one pool).
-pvesh get /pools/firewall --output-format json | grep -q '"vmid":100' || pvesh set /pools/firewall --vms 100 --allow-move 1
-pvesh get /pools/remote-access --output-format json | grep -q '"vmid":900' || pvesh set /pools/remote-access --vms 900 --allow-move 1
+# Move each machine into its workload's pool (a guest belongs to at most one pool). Only a guest that
+# exists is moved: Proxmox stores the membership of a missing guest, but GET /pools/<id> lists only
+# guests that exist (pve-manager PVE/API2/Pool.pm, read: `next if !$vmdata`), so on an empty host a
+# second run would not see the first run's entry and `pvesh set` would stop with "VM <id> is already a
+# pool member" (same file, update). Terraform sets pool_id when it makes the guest.
+move_into_pool() {
+  pvesh get /cluster/resources --type vm --output-format json | grep -Eq "\"vmid\": ?$2[,}]" || return 0
+  pvesh get "/pools/$1" --output-format json | grep -Eq "\"vmid\": ?$2[,}]" || pvesh set "/pools/$1" --vms "$2" --allow-move 1
+}
+move_into_pool firewall 100
+move_into_pool remote-access 900
 
 # One ACL line per path: <path> <propagate>
 acl() {
