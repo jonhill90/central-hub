@@ -57,6 +57,10 @@ agent_box_wrappers:
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge
     args: ["check *"]
+  # Makes one empty public repository under the owner's account as the GitHub App, with a token narrowed to Repository
+  # creation (files/repo-create.sh). The `*` passes the name, which the wrapper checks; it refuses a name that exists.
+  - name: repo-create
+    args: ["create *", log]
   # Reads the certificate the firewall's web UI serves and says how many days it has left (files/opnsense-cert-check.sh). It
   # holds no key and writes nothing to the firewall; the daily timer (opnsense-cert-check.timer) runs `check` as the keys user.
   - name: opnsense-cert-check
