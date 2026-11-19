@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|drop-box-path <tap id>|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -39,6 +39,14 @@
 #           It deletes only those of the three that Argo CD's own status of Application openbao-store marks requiresPruning
 #           (no longer in git), refuses if any of them is still in git, and prints all three before and after. Deleting is a
 #           D-0042 rule 6 step: <tap id> is the owner's go (D-0061 rule 3: the message id of his standing go), logged as for seal.
+# admin-firewall-check  read-only: playbooks/k8s-openbao-admin-firewall.yml with --check --diff on prod's nodes. It prints,
+#           per node, "admin-fw: policy openbao-admin present|absent, rule for <box /32> to tcp 8200 present|absent" (read that
+#           line: the add tasks are skipped in check mode, so the recap's changed count is 0 either way), and changes nothing.
+# admin-firewall  the same playbook for real: on each prod node, firewalld policy openbao-admin from the lab zone to any
+#           zone, one rich rule, the box's /32 (box_cidr) to tcp 8200, accept, so the store's admin path crosses the node's
+#           forward path (D-0062; the dev rebuild runs the same play in stage gateway). Without box_cidr or admin_address in
+#           the settings it changes nothing and says SKIP. A node firewall change is the owner's go (D-0036 rule 8): <tap id>
+#           is his go (D-0061 rule 3: the message id of his standing go), logged as for seal.
 # log       the newest run's lines: the action, the commit, the tap id, and the PASS, FAIL, SKIP and play-recap lines.
 # Settings (agent_box_openbao_prod, private, in <work>/openbao-prod.json): seal_node (a k8s_nodes host of the prod inventory,
 # its Kubernetes node name), store_host (the store's name as the box reaches it; secrets-store-prod checks its own address
@@ -64,12 +72,12 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|drop-box-path <tap id>|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | l2-policy | gitops | ca | handover | log) [[ $# -eq 1 ]] || usage ;;
-  seal | seal-copy | reset-failed-start | drop-box-path)
+  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | log) [[ $# -eq 1 ]] || usage ;;
+  seal | seal-copy | reset-failed-start | drop-box-path | admin-firewall)
     [[ $# -eq 2 ]] || usage
     tap=$2
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "openbao-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
@@ -318,6 +326,12 @@ PY
     ;;
   gitops)
     ap playbooks/k8s-gitops.yml --tags source
+    ;;
+  admin-firewall-check)
+    ap playbooks/k8s-openbao-admin-firewall.yml --check --diff
+    ;;
+  admin-firewall)
+    ap playbooks/k8s-openbao-admin-firewall.yml
     ;;
   ca)
     mkdir -p "$store_keys"

@@ -16,7 +16,8 @@
 #   ansible-playbook -i <dev inventory>/ playbooks/k8s-openbao-admin-firewall.yml
 # The dev rebuild runs it in stage `gateway` while the store is in the cluster. Without both the admin address and
 # the box's /32 in the inventory it changes nothing and says so. On prod it is a node firewall change, run with
-# `openbao-prod` once a dev run has shown the admin login passing with it.
+# `openbao-prod admin-firewall <tap id>` (check first with `openbao-prod admin-firewall-check`); dev run
+# rebuild-20261119T121603Z passed the admin login with it.
 - name: The agent box's /32 to OpenBao's 8200 through the node firewall
   hosts: k8s_nodes
   become: true
@@ -67,6 +68,14 @@
           changed_when: false
           failed_when: false
           check_mode: false
+
+        # What each node has before any change, so a --check run tells a node with the rule from one without it (the
+        # add tasks are skipped in check mode, so their changed count says nothing there).
+        - name: admin-fw | What this node has now
+          ansible.builtin.debug:
+            msg: >-
+              admin-fw: policy {{ admin_fw_policy }} {{ 'present' if admin_fw_info.rc == 0 else 'absent' }},
+              rule for {{ admin_fw_box }} to tcp 8200 {{ 'present' if admin_fw_info.rc == 0 and admin_fw_query.rc == 0 else 'absent' }}
 
         - name: admin-fw | The box's /32 to tcp 8200, accept
           ansible.builtin.command:

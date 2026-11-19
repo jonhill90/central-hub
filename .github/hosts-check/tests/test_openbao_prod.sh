@@ -22,6 +22,8 @@
 #      failed read write nothing.
 #  11. drop-box-path <tap id> deletes only the openbao-box objects Argo CD marks requiresPruning on openbao-store; one still
 #      in git, an unreadable Application or status, no tap id or a malformed one delete nothing; one not in the status is left.
+#  12. admin-firewall-check runs k8s-openbao-admin-firewall.yml with --check --diff and no tap; admin-firewall <tap id> runs it
+#      for real and logs the tap; admin-firewall with no tap id or a malformed one, or admin-firewall-check with one, runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -321,5 +323,22 @@ if [[ $a_rc -eq 0 && $a_del == "$want_a" && $a_out == *"before:"* && $a_out == *
       $g_rc -eq 2 && -z $g_del && $h_rc -eq 2 && -z $h_del ]]; then
   ok "11. drop-box-path: deletes only the three objects Argo CD marks requiresPruning; one still in git, an unreadable Application or status, no tap id or a malformed one delete nothing; one not in the status is left"
 else bad "11. all rc=$a_rc [$a_del] | git rc=$b_rc [$b_del] $b_out | one rc=$c_rc [$c_del] | none rc=$d_rc [$d_del] | nostatus rc=$e_rc [$e_del] | noapp rc=$f_rc [$f_del] | notap rc=$g_rc | badtap rc=$h_rc"; fi
+
+# 12
+settings '{"seal_node":"wk-a","store_host":"bao.invalid","box_cidr":"192.0.2.50/32","admin_address":"192.0.2.60"}'
+inventory "${prod_inv[@]}"
+run admin-firewall-check; c_rc=$rc c_calls=$calls
+run admin-firewall "$tap"; a_rc=$rc a_calls=$calls a_out=$out
+fw_seen=$(grep -E 'box_cidr|admin_address' "$t/seen-inventory.yml" | tr -d ' ' | sort | tr '\n' ' ')
+run admin-firewall; n_rc=$rc n_calls=$calls
+run admin-firewall not-a-tap; m_rc=$rc m_calls=$calls
+run admin-firewall-check "$tap"; x_rc=$rc x_calls=$calls
+p=playbooks/k8s-openbao-admin-firewall.yml
+if [[ $c_rc -eq 0 && $c_calls == "playbook -i $t/work/openbao-prod/inventory/ $p --check --diff" &&
+      $a_rc -eq 0 && $a_calls == "playbook -i $t/work/openbao-prod/inventory/ $p" && $a_out == *"owner tap $tap"* &&
+      $fw_seen == "k8s_gitops_source_openbao_admin_address:192.0.2.60 k8s_gitops_source_openbao_box_cidr:192.0.2.50/32 " &&
+      $n_rc -eq 2 && -z $n_calls && $m_rc -eq 2 && -z $m_calls && $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "12. admin-firewall-check: the play with --check --diff, no tap; admin-firewall <tap id>: the play, the tap logged, the box /32 and admin address in its inventory; no tap, a bad tap or a tap on check: nothing run"
+else bad "12. check rc=$c_rc [$c_calls] | apply rc=$a_rc [$a_calls] [$fw_seen] | notap rc=$n_rc [$n_calls] | badtap rc=$m_rc | checktap rc=$x_rc"; fi
 
 exit "$fail"
