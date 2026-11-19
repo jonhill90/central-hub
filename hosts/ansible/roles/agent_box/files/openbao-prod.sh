@@ -24,8 +24,7 @@
 # gitops    playbooks/k8s-gitops.yml --tags source: the root Application's parameters only, with the in-cluster store on
 #           (k8s_gitops_source_openbao_in_cluster, _seal_node, _box_cidr, _store_host, _admin_address), so Argo CD makes
 #           openbao-store, openbao and the secret-store app's store `openbao`. Argo CD's install is left alone.
-# ca        the CA the box checks prod's store against on its path through the Gateway (TLS passthrough, so TLS ends at
-#           OpenBao): ca.crt of Secret openbao/openbao-tls, a public certificate, written to <keys>/prod/secrets-store-ca.crt
+# ca        the CA the box checks prod's store against on its admin path (TLS ends at OpenBao, D-0062): ca.crt of Secret openbao/openbao-tls, a public certificate, written to <keys>/prod/secrets-store-ca.crt
 #           only if it is one PEM certificate. Run it after gitops, and again after a rebuild, which makes a new CA.
 # handover  playbooks/k8s-openbao-handover.yml with prod's admin AppRole IDs (/etc/agent-keys/prod/openbao-admin-*, made
 #           once by the same rule as secrets-store.sh, never printed).
