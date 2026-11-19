@@ -2,9 +2,10 @@
 # The secrets store's policies and its admin login's address binding, set again from git (docs/runbooks/
 # set-up-the-secrets-store.md, "On prod", step 7). OpenBao's self-init makes them once, at the store's first start
 # (apps/openbao/values.yaml, blocks "policies" and "roles"), and never runs again, so a store whose first start came
-# before a change keeps the old ones. Prod's store did: it started on 2026-11-18 at 02:15 UTC with no openbaoBoxCidr and
-# before openbaoMarkEnv existed, so its admin AppRole is bound to 127.0.0.1/32, not the box, and its snapshot policy
-# reads dev's mark, not prod's (the hourly job fails with 403 since).
+# before a change keeps the old ones. Prod's store did: it started on 2026-11-18 at 02:15 UTC, before openbaoMarkEnv
+# existed, so its snapshot policy read dev's mark. The hourly job failed with 403 from 10:19 UTC that day, when a gitops
+# run first passed markEnv=prod (Argo CD's history of Application openbao-store, read 2026-11-19). Its admin AppRole was
+# bound to the box's /32 from that first start (see "box" below).
 # The play signs in as the admin, writes each policy whose text differs from the one in ConfigMap openbao-policies
 # (Argo CD renders it from git, with this environment's markEnv), sets role admin's secret_id_bound_cidrs and
 # token_bound_cidrs to the box's /32 (k8s_gitops_source_openbao_box_cidr), reads the role back and revokes its token.
