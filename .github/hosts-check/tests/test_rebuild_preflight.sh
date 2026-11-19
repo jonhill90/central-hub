@@ -54,9 +54,9 @@ run() { # env total_gib used_gib error
 }
 check() { if [[ $2 == *"$3"* ]] && { [ -z "${4:-}" ] || [[ $2 != *"$4"* ]]; }; then echo "ok   $1"; else echo "FAIL $1: $2"; fail=1; fi; }
 out=$(run dev 31 22); check "9 GiB free is refused" "$out" "refused" "rc=0"; check "it says the sizes" "$out" "9216 MiB"
-out=$(FAKE_AVAILABLE=$((11007 * 1048576)) SHORT_NODE="" run dev 31 1); check "one MiB under 11008 is refused" "$out" "refused" "rc=0"
-check "the minimum is the dev VMs plus the margin" "$out" "the declared dev VMs need 9984 MiB (control plane 3584, worker 6400); minimum 11008 MiB with the 1024 MiB margin"
-out=$(FAKE_AVAILABLE=$((11008 * 1048576)) run dev 31 1); check "11008 MiB free, the minimum itself, passes" "$out" "rc=0" "refused"
+out=$(FAKE_AVAILABLE=$((10495 * 1048576)) SHORT_NODE="" run dev 31 1); check "one MiB under 10496 is refused" "$out" "refused" "rc=0"
+check "the minimum is the dev VMs plus the margin" "$out" "the declared dev VMs need 9984 MiB (control plane 3584, worker 6400); minimum 10496 MiB with the 512 MiB margin"
+out=$(FAKE_AVAILABLE=$((10496 * 1048576)) run dev 31 1); check "10496 MiB free, the minimum itself, passes" "$out" "rc=0" "refused"
 out=$(FAKE_AVAILABLE=$((11914 * 1048576)) run dev 31 1); check "11914 MiB free, the 2026-11-18 06:11 UTC reading, passes" "$out" "rc=0" "refused"
 out=$(FAKE_AVAILABLE=$((11237 * 1048576)) run dev 31 1); check "11237 MiB free, the 2026-11-18 19:19 UTC reading that 11264 refused, passes" "$out" "rc=0" "refused"
 out=$(run dev 31 17); check "14 GiB free passes" "$out" "rc=0" "refused"
@@ -74,7 +74,7 @@ out=$(run dev 31 17); check "total-used is the fallback and is named" "$out" "(f
 out=$(STATE="$t/with-vms.tfstate" run dev 31 28); check "a state holding every declared VM skips the check, even with low memory" "$out" "branch skipped, all 2 declared dev VMs" "refused"
 check "a skipped run says rc=0" "$out" "rc=0"
 out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 28); check "a partial state (2 of 3) is checked and refused on low memory" "$out" "holds 2 of 3 declared" "rc=0"
-check "three declared nodes need three nodes' memory" "$out" "need 16384 MiB (control plane 3584, worker 6400); minimum 17408 MiB"
+check "three declared nodes need three nodes' memory" "$out" "need 16384 MiB (control plane 3584, worker 6400); minimum 16896 MiB"
 out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 11); check "a partial state passes with enough memory" "$out" "branch checked" "refused"
 out=$(TFVARS_FILE="$t/norole.tfvars" run dev 31 1); check "a declared node with no role is refused, whatever the memory" "$out" "has no role control-plane or worker" "rc=0"
 out=$(STATE="$t/missing.tfstate" run dev 31 28); check "no state file means a fresh build and is checked" "$out" "branch checked" ""
@@ -213,7 +213,7 @@ posts() { grep -c -- '-X POST' "$t/argv" || true; }
 out=$(PREFLIGHT_DRY=true run dev 31 22); check "fit: 9216 free plus VM 300's 2048 maxmem fits" "$out" "fit check: VM 300 is running; a run would stop it; its maxmem 2048 MiB counted as freed, estimate 11264 MiB" "refused"
 check "fit: it passes" "$out" "rc=0"; check "fit: no marker" "$out" "marker=no"
 check "fit: nothing stopped (no POST)" "posts=$(posts)" "posts=0"
-out=$(PREFLIGHT_DRY=true run dev 31 28); check "fit: 3072 free plus 2048 is refused" "$out" "refused, estimate 5120 MiB is below 11008 MiB" "rc=0"
+out=$(PREFLIGHT_DRY=true run dev 31 28); check "fit: 3072 free plus 2048 is refused" "$out" "refused, estimate 5120 MiB is below 10496 MiB" "rc=0"
 check "fit: refused, still nothing stopped" "posts=$(posts)" "posts=0"
 out=$(PREFLIGHT_DRY=true FAKE_DESKTOP=yes run dev 31 24); check "fit: the desktop's 4096 maxmem makes 7168 fit" "$out" "fit check: VM 400 (the desktop) is running; a run would stop it; its maxmem 4096 MiB counted as freed, estimate 11264 MiB" "refused"
 check "fit: the desktop alone was enough, VM 300 is not counted" "$out" "rc=0" "fit check: VM 300"
@@ -244,7 +244,7 @@ check "keep-desktop: the desktop is left alone" "$out" "VM 400 (the desktop) is 
 check "keep-desktop: VM 300 is still stopped and the run passes" "$out" "rc=0" "refused"
 if grep -q 'qemu/400/status/shutdown' "$t/argv"; then echo "FAIL keep-desktop: VM 400 got a shutdown"; fail=1; else echo "ok   keep-desktop: no shutdown sent to VM 400"; fi
 out=$(PREFLIGHT_KEEP_DESKTOP=true PREFLIGHT_DRY=true FAKE_DESKTOP=yes run dev 31 24)
-check "keep-desktop fit: 7168 plus VM 300's 2048 is refused, the desktop not counted" "$out" "refused, estimate 9216 MiB is below 11008 MiB" "maxmem 4096"
+check "keep-desktop fit: 7168 plus VM 300's 2048 is refused, the desktop not counted" "$out" "refused, estimate 9216 MiB is below 10496 MiB" "maxmem 4096"
 check "keep-desktop fit: nothing stopped" "posts=$(posts)" "posts=0"
 
 exit $fail
