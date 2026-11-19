@@ -61,6 +61,11 @@ agent_box_wrappers:
   # creation (files/repo-create.sh). The `*` passes the name, which the wrapper checks; it refuses a name that exists.
   - name: repo-create
     args: ["create *", log]
+  # Posts one fixed-format comment, as the GitHub App, on the one pull request agent_box_checkpoint_note names, so a session
+  # that watches it wakes on a box finding (files/checkpoint-note.sh). The `*` passes `test` or a count, which the wrapper
+  # checks; the pull request is never an argument.
+  - name: checkpoint-note
+    args: ["post *", log]
   # Reads the certificate the firewall's web UI serves and says how many days it has left (files/opnsense-cert-check.sh). It
   # holds no key and writes nothing to the firewall; the daily timer (opnsense-cert-check.timer) runs `check` as the keys user.
   - name: opnsense-cert-check
@@ -294,6 +299,10 @@ agent_box_ci_runner: {}
 # proxmox_node_name, vnet, template_vm_id, rdp_source (the tailnet connector's address, where RDP arrives from) and optionally
 # admin_user (default admin). Empty leaves the wrapper unset up.
 agent_box_desktop: {}
+# The one pull request the checkpoint-note wrapper comments on, written to <work_dir>/checkpoint-note.json:
+# repo (one the App is installed on) and number. A session subscribed to it wakes on each comment. Empty leaves the
+# file out, and the wrapper refuses.
+agent_box_checkpoint_note: {repo: agent-notebook, number: 729}
 # The owner's pick for a dev run on a node short of memory (docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev
 # (the run stops the CI runner, tears dev down at its end, then the runner starts) or keep-dev (the runner stops and dev stays up; the
 # notebook's queued jobs fail or are cancelled after 24 hours queued, so if dev stays up for more than a day its daily access-expiry
