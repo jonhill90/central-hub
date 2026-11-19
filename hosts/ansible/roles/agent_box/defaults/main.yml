@@ -70,6 +70,17 @@ agent_box_wrappers:
   # checkpoint-note only on a new finding; show prints the last report. The timer runs `run` as the keys user.
   - name: checkpoint-scan
     args: [run, show]
+  # The box pickup scan (files/pickup-scan.sh and .py): reads the notebook's task board and posts through pickup-note only
+  # when a project has a new ready task. Sessions may dry-run (post nothing) and show; `run` is the timer's, as the keys user.
+  - name: pickup-scan
+    args: [dry-run, run, show]
+    session_args: [dry-run, show]
+  # Posts one fixed comment, as the GitHub App, on a project's standing pull request (files/pickup-note.sh), called by the
+  # scan as the keys user. `post *` passes the project and the label, which the wrapper checks; the pull request is never an
+  # argument. A session gets no `post`: only the scan wakes the project.
+  - name: pickup-note
+    args: ["post *", log]
+    session_args: [log]
   # Reads the certificate the firewall's web UI serves and says how many days it has left (files/opnsense-cert-check.sh). It
   # holds no key and writes nothing to the firewall; the daily timer (opnsense-cert-check.timer) runs `check` as the keys user.
   - name: opnsense-cert-check
@@ -313,6 +324,17 @@ agent_box_checkpoint_note: {repo: agent-notebook, number: 729}
 # user. It reads only, with a token narrowed to Contents and Pull requests read; false leaves the timer off.
 agent_box_checkpoint_scan: true
 agent_box_checkpoint_scan_on_calendar: "*-*-* *:07:00 UTC"
+# The box pickup scan (files/pickup-scan.py): a systemd timer that runs `pickup-scan.sh <mode>` as the keys user every 10
+# minutes. It reads only, with a token narrowed to the notebook with Contents and Pull requests read; false leaves the timer off.
+# The mode is dry-run (print what it would post, post nothing) or run (post). Dry-run is the default until the owner's
+# pick turns posting on, which takes a standing pull request number under the project below.
+agent_box_pickup_scan: true
+agent_box_pickup_mode: dry-run
+agent_box_pickup_scan_on_calendar: "*-*-* *:00/10:00 UTC"
+# The projects the scan lists, written to <work_dir>/pickup.json: each project's name, as in the task notes' `project` and
+# `pickup` fields, with the repository and the number of its standing draft pull request that pickup-note comments on. A
+# project with no number can be scanned but not posted for. Only agent-notebook is listed for now.
+agent_box_pickup_projects: {agent-notebook: {repo: agent-notebook}}
 # The owner's pick for a dev run on a node short of memory (docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev
 # (the run stops the CI runner, tears dev down at its end, then the runner starts) or keep-dev (the runner stops and dev stays up; the
 # notebook's queued jobs fail or are cancelled after 24 hours queued, so if dev stays up for more than a day its daily access-expiry
