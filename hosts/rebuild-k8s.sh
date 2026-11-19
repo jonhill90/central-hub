@@ -951,7 +951,7 @@ node_top_sampler() { # stage, the run's PID
 # A failed stage's reason, in the short log (`rebuild log`), which until now held no Ansible error: the stage's last
 # Ansible task line, its fatal: and FAILED! lines and msg and stderr lines, at most 20, or the stage's last 5 lines when
 # none of those exist (a stage that is not Ansible). Each line is cut at 300 characters and scrubbed of secrets by
-# hosts/diag-apps.py, so the log names why a stage failed (the 2026-11-19 08:08 UTC identity-keycloak failure, 5 s, left
+# hosts/diag-apps.py and stripped of host names, IPv4 addresses and *.ts.net names, so the log names why a stage failed (the 2026-11-19 08:08 UTC identity-keycloak failure, 5 s, left
 # only `end rc=2`). Read-only, never fatal.
 stage_failure_lines() { # stage
   local sec lines
@@ -959,7 +959,12 @@ stage_failure_lines() { # stage
   lines=$(printf '%s\n' "$sec" | grep -E '^TASK \[|fatal:|FAILED!|"msg"|^msg:|"stderr"|^ *stderr:' | tail -n 20) || true
   [ -n "$lines" ] || lines=$(printf '%s\n' "$sec" | grep . | tail -n 5) || true
   [ -n "$lines" ] || lines="no output from the stage in the raw log"
-  printf '%s\n' "$lines" | python3 -I "$repo/hosts/diag-apps.py" scrub 2>/dev/null | cut -c1-300 | sed "s/^/  $1: fail: /" >> "$log" || true
+  # Then the names that must not reach a public record: the host in Ansible's `fatal: [host]`, every IPv4 address and
+  # every *.ts.net name (hosts/diag-apps.py masks secrets, not these; CLAUDE.md rule 4 of central-hub).
+  printf '%s\n' "$lines" | python3 -I "$repo/hosts/diag-apps.py" scrub 2>/dev/null |
+    sed -E -e 's/(fatal|failed|unreachable|changed|ok|skipping): \[[^]]+\]/\1: [<host>]/g' \
+      -e 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/<ip>/g' -e 's/[A-Za-z0-9._-]+\.ts\.net/<tailnet-name>/g' |
+    cut -c1-300 | sed "s/^/  $1: fail: /" >> "$log" || true
 }
 
 for s in $stages; do
