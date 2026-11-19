@@ -45,6 +45,11 @@ run "agent_box_gets_ssh_from_agents_and_no_path_out" {
   }
 
   assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "{\"action\": \"accept\", \"src\": [\"autogroup:admin\"], \"dst\": [\"tag:agent-box\"], \"users\": [\"admin\"]}")
+    error_message = "The owner's devices (autogroup:admin) must reach the agent box by Tailscale SSH as user admin, for controller runs."
+  }
+
+  assert {
     condition     = !strcontains(tailscale_acl.policy.acl, "\"src\": [\"tag:agent-box\"]")
     error_message = "tag:agent-box must have no grant or SSH rule of its own (no path to the Mac or the lab)."
   }
@@ -94,6 +99,7 @@ run "an_external_tailnet_gets_its_group_and_no_incoming_connections" {
   command = plan
 
   variables {
+    share_pod_enabled = true
     external_tailnets = {
       example = {
         external_id = "T123456CNTRL"
@@ -142,9 +148,42 @@ run "an_external_tailnet_gets_its_group_and_no_incoming_connections" {
 run "no_external_tailnets_renders_no_share_pod" {
   command = plan
 
+  variables {
+    share_pod_enabled = true
+  }
+
   assert {
     condition     = !strcontains(tailscale_acl.policy.acl, "tag:share-pod")
-    error_message = "With no external tailnets, the policy must not mention the share pod."
+    error_message = "With no external tailnets, the policy must not mention the share pod, even with share_pod_enabled."
+  }
+}
+
+run "an_external_tailnet_without_the_share_pod_switch_keeps_only_the_group" {
+  command = plan
+
+  variables {
+    external_tailnets = {
+      example = {
+        external_id = "T123456CNTRL"
+        group       = "example-admins"
+        members     = ["owner@example.com"]
+      }
+    }
+  }
+
+  assert {
+    condition     = !strcontains(tailscale_acl.policy.acl, "tag:share-pod")
+    error_message = "With share_pod_enabled false (the default), no share-pod tag, owner, grant or test may render."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"allowExternalReferencesTo\": [\"group:example-admins\"],")
+    error_message = "With the share pod off, the external tailnet may reference only its group."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"group:example-admins\": [\"owner@example.com\"]") && strcontains(tailscale_acl.policy.acl, "\"externalID\":                \"T123456CNTRL\"") && strcontains(tailscale_acl.policy.acl, "\"allowIncomingConnections\":  false")
+    error_message = "With the share pod off, groups and externalTailnets still render from external_tailnets."
   }
 }
 

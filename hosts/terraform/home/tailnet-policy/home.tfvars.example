@@ -12,3 +12,8 @@ proxmox_host_address = "192.0.2.10" # home/tailnet's connector_extra_routes addr
 #     members     = ["owner@example.com"]
 #   }
 # }
+
+# Optional. The share pod (apps/share-pod): its tag in allowExternalReferencesTo, its owner, the agent
+# box's grant to it and its tests. Takes effect only with an external_tailnets entry. Turning it on
+# is its own tailnet apply. Default false.
+# share_pod_enabled = true

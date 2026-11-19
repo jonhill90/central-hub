@@ -14,7 +14,7 @@
 set -euo pipefail
 umask 077
 
-repos=(jonhill90/central-hub jonhill90/inpara jonhill90/agent-notebook jonhill90/obsidian-graph-3d)
+repos=(jonhill90/central-hub jonhill90/inpara jonhill90/agent-notebook jonhill90/obsidian-graph-3d jonhill90/wizards)
 usage() { echo "usage: pr-merge check|merge OWNER/REPO PR_NUMBER HEAD_SHA | lane OWNER/REPO PR_NUMBER | sweep" >&2; exit 2; }
 action=${1:-}
 case $action in
@@ -25,8 +25,8 @@ case $action in
 esac
 check_repo() {
   case $1 in
-    jonhill90/central-hub | jonhill90/inpara | jonhill90/agent-notebook | jonhill90/obsidian-graph-3d) ;;
-    *) echo "pr-merge: $1 is not one of the project's four repositories" >&2; exit 2 ;;
+    jonhill90/central-hub | jonhill90/inpara | jonhill90/agent-notebook | jonhill90/obsidian-graph-3d | jonhill90/wizards) ;;
+    *) echo "pr-merge: $1 is not one of the project's repositories" >&2; exit 2 ;;
   esac
 }
 full=${2:-}; pr=${3:-}; head=${4:-}

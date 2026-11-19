@@ -63,3 +63,16 @@ variable "external_tailnets" {
     error_message = "Each group needs at least one member, and each member is one login name such as name@example.com."
   }
 }
+
+variable "share_pod_enabled" {
+  description = <<-EOT
+    Whether the policy holds the share pod (apps/share-pod on c1): tag:share-pod in each external
+    tailnet's allowExternalReferencesTo, its tagOwners line, the agent box's grant to it on tcp 2222,
+    and its two policy tests. It takes effect only with at least one external_tailnets entry. Off,
+    groups and externalTailnets still render from external_tailnets, with only the group in the
+    references, so a live share with no share pod is kept as it is. Turning it on is its own
+    tailnet apply (D-0036 rule 8). Default: false.
+  EOT
+  type        = bool
+  default     = false
+}

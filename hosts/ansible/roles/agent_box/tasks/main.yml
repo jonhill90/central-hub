@@ -541,6 +541,63 @@
   when: agent_box_ci_runner | length > 0
   tags: [wrappers]
 
+- name: The checkpoint-note wrapper's one pull request (no wrapper but checkpoint-note names the file)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/checkpoint-note.json"
+    content: "{{ agent_box_checkpoint_note | to_nice_json }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  when: agent_box_checkpoint_note | length > 0
+  tags: [wrappers]
+
+- name: The checkpoint scan's checks, root's (checkpoint-scan.sh runs it)
+  ansible.builtin.copy:
+    src: checkpoint-scan.py
+    dest: "{{ agent_box_libexec_dir }}/checkpoint-scan.py"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+- name: Hourly checkpoint scan service and timer
+  ansible.builtin.template:
+    src: "checkpoint-scan.{{ item }}.j2"
+    dest: "/etc/systemd/system/checkpoint-scan.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/checkpoint-scan.{{ item }}"
+  register: agent_box_checkpoint_scan_units
+  when: agent_box_checkpoint_scan | bool
+  tags: [wrappers]
+
+- name: Hourly checkpoint scan timer on
+  ansible.builtin.systemd_service:
+    name: checkpoint-scan.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_checkpoint_scan_units is changed }}"
+  when: agent_box_checkpoint_scan | bool and not (ansible_check_mode and agent_box_checkpoint_scan_units is changed)
+  tags: [wrappers]
+
+- name: Is there a checkpoint scan timer to turn off
+  ansible.builtin.stat:
+    path: /etc/systemd/system/checkpoint-scan.timer
+  register: agent_box_checkpoint_scan_timer
+  when: not (agent_box_checkpoint_scan | bool)
+  tags: [wrappers]
+
+- name: Hourly checkpoint scan timer off, while agent_box_checkpoint_scan is false
+  ansible.builtin.systemd_service:
+    name: checkpoint-scan.timer
+    enabled: false
+    state: stopped
+  when: not (agent_box_checkpoint_scan | bool) and agent_box_checkpoint_scan_timer.stat.exists | default(false)
+  tags: [wrappers]
+
 - name: The rebuild wrapper's short-node pick, from the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/short-node"
@@ -1173,12 +1230,36 @@
 
 # --- The dev secrets store's hourly snapshot off the box (pick 237) -------------------------------------
 
-- name: Send the dev secrets store's snapshots off the box (only when the store's wrapper and the off-box copy are set)
+# The send holds a delete (the daily prune, D-0042 rule 6) and sends the store's snapshots to a place they are not
+# kept yet, so it is off until the inventory says agent_box_secrets_store.offbox: true, even when the store's wrapper
+# and the off-box copy are set. Setting the store's address alone turns no send on.
+- name: Send the dev secrets store's snapshots off the box (only with its wrapper, the off-box copy and offbox set to true)
   ansible.builtin.include_tasks:
     file: secrets_store_offbox.yml
     apply:
       tags: [wrappers, secrets_store_offbox]
-  when: agent_box_secrets_store | length > 0 and agent_box_opnsense_offbox | length > 0
+  when:
+    - agent_box_secrets_store | length > 0
+    - agent_box_opnsense_offbox | length > 0
+    - agent_box_secrets_store.offbox | default(false) is true
+  tags: [wrappers, secrets_store_offbox]
+
+# The off path: while the send is off, a timer left from an earlier run is stopped and disabled.
+- name: Is there a snapshot send timer to turn off
+  ansible.builtin.stat:
+    path: /etc/systemd/system/secrets-store-offbox.timer
+  register: agent_box_store_offbox_timer
+  when: not (agent_box_secrets_store.offbox | default(false) is true and agent_box_opnsense_offbox | length > 0)
+  tags: [wrappers, secrets_store_offbox]
+
+- name: The snapshot send's timer off, while the send is not turned on
+  ansible.builtin.systemd_service:
+    name: secrets-store-offbox.timer
+    enabled: false
+    state: stopped
+  when:
+    - not (agent_box_secrets_store.offbox | default(false) is true and agent_box_opnsense_offbox | length > 0)
+    - agent_box_store_offbox_timer.stat.exists | default(false)
   tags: [wrappers, secrets_store_offbox]
 
 # --- The lifeline NIC (pick 220) ---------------------------------------------------------------------

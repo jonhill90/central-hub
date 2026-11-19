@@ -19,8 +19,8 @@ die() { echo "pass-record: $*" >&2; exit 2; }
 ref_ok() { [[ $1 =~ ^cmsg_[A-Za-z0-9]{10,64}$ ]]; }
 repo_ok() {
   case $1 in
-    jonhill90/central-hub | jonhill90/inpara | jonhill90/agent-notebook | jonhill90/obsidian-graph-3d) ;;
-    *) die "$1 is not one of the project's four repositories" ;;
+    jonhill90/central-hub | jonhill90/inpara | jonhill90/agent-notebook | jonhill90/obsidian-graph-3d | jonhill90/wizards) ;;
+    *) die "$1 is not one of the project's repositories" ;;
   esac
 }
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
