@@ -90,6 +90,14 @@ k8s_observability_kps_values:
       KubeCPUOvercommit: true
       KubeMemoryOvercommit: true
   windowsMonitoring: {enabled: false}
+  # node-exporter reads the backups' times (role k8s_backup, c1_backup_last_success_timestamp_seconds) with its
+  # textfile collector, through the chart's read-only host root mount at /host/root. This list replaces the
+  # chart's, so it keeps the chart's two filesystem defaults (kube-prometheus-stack 92.3.1 values.yaml).
+  prometheus-node-exporter:
+    extraArgs:
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/containerd/.+|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+      - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|erofs)$
+      - --collector.textfile.directory=/host/root/var/lib/node-exporter/textfile
   prometheus:
     prometheusSpec:
       retention: "{{ k8s_observability_prometheus_retention }}"
