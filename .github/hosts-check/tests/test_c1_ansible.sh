@@ -8,6 +8,8 @@
 #   4. apply runs the playbook without --check, never with realm replace, and logs the clearance id; a host labelled env dev
 #      refuses before any run.
 #   5. log prints the run's own lines.
+#   9. users runs the identity playbook with tags secrets,users, the values file, no realm replace and one fixed user; apply is its
+#      own verb; it never runs the keycloak tag.
 #   8. observability runs its playbook with its fixed tags and no extra variables.
 #   7. gateway and gitops run their own playbook with fixed tags and no extra variables or values file; certs and the install tag are not
 #      names; apply needs a clearance id for them too.
@@ -47,7 +49,7 @@ S
 chmod +x "$t/bin/git" "$venv/ansible-inventory" "$venv/ansible-playbook"
 sed -e "s|^keys=.*|keys=$t/keys|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
     -e "s|PATH=\$libexec/ansible-venv/bin:/usr/local/bin|PATH=\$libexec/ansible-venv/bin:$t/bin:/usr/local/bin|" \
-    -e "s|^declare -A needs_file=.*|declare -A needs_file=([identity]=\"$t/keys/prod/identity.env\")|" \
+    -e "s|^declare -A needs_file=.*|declare -A needs_file=([identity]=\"$t/keys/prod/identity.env\" [users]=\"$t/keys/prod/identity.env\")|" \
     hosts/ansible/roles/agent_box/files/c1-ansible.sh > "$t/run/c1-ansible.sh"
 if ! grep -q "^keys=$t/keys" "$t/run/c1-ansible.sh" || ! grep -q "identity.env" "$t/run/c1-ansible.sh"; then
   echo "FAIL the test could not point the wrapper at its folders"; exit 1
@@ -71,7 +73,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'gateway\ngitops\nidentity\nobservability' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'gateway\ngitops\nidentity\nobservability\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -125,4 +127,14 @@ if [[ $o1 == *"playbooks/k8s-observability.yml --tags metrics_server,metrics,log
       $o2rc -eq 0 && $o2 == *"playbooks/k8s-observability.yml --tags metrics_server,metrics,logs,route,proof" && $o2 != *--check* && $o2o == *"clearance $clr"* ]]; then
   ok "8. observability: own playbook, fixed tags, no extra variables, apply is its own verb"
 else bad "8. [$o1] [$o2]"; fi
+run check users; u1=$calls; u1rc=$rc
+run apply users "$clr"; u2=$calls; u2rc=$rc; u2o=$out
+uj='{"k8s_identity_ensure_users":["signin-test"]}'
+if [[ $u1rc -eq 0 && $u1 == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false --tags secrets,users -e $uj --check --diff" &&
+      $u2rc -eq 0 && $u2 == *"--tags secrets,users -e $uj" && $u2 != *--check* && $u2 != *keycloak* && $u2 != *all* && $u2o == *"clearance $clr"* ]]; then
+  ok "9. users: identity playbook, tags secrets,users, one fixed user, no realm replace, apply is its own verb"
+else bad "9. [$u1] [$u2]"; fi
+rm -f "$t/keys/prod/identity.env"
+run check users
+if [[ $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "9b. users stops while the values file is missing"; else bad "9b. $rc $out"; fi
 exit "$fail"
