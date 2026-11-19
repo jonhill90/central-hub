@@ -17,7 +17,7 @@
 #   8. `show` prints the last report; a second run while one is going does nothing.
 #   9. The wrapper passes dry-run, run and show only; the sessions' sudo line has dry-run and show only, pickup-note's
 #      has log only, and the runner user's has none; the role installs the scripts, the settings file, the service
-#      (SuccessExitStatus=3, mode from agent_box_pickup_mode, dry-run by default) and a timer every 10 minutes.
+#      (SuccessExitStatus=3, mode from agent_box_pickup_mode, run for agent-notebook since 2026-11-19) and a timer every 10 minutes.
 #  12. An announcement nobody claims is posted again 30 minutes after its last post (to the minute), at most 3 posts in
 #      all; 30 minutes after the third the scan adds the finding `unclaimed: TASK-NNNN (<project>) announced 3 times with
 #      no claim` and posts nothing more; a claim or a different first task resets the count; dry-run shows the repeat
@@ -660,7 +660,7 @@ run = [l for l in txt.splitlines() if l.startswith("run ALL=")]
 print(ws["pickup-scan"]["args"] == ["dry-run", "run", "show"], ws["pickup-note"]["args"] == ["post *", "log"], sess == [
     "sess ALL=(keys) NOPASSWD: /x/pickup-scan.sh dry-run, /x/pickup-scan.sh show",
     "sess ALL=(keys) NOPASSWD: /x/pickup-note.sh log"], run == [],
-    d["agent_box_pickup_mode"] == "dry-run", d["agent_box_pickup_scan"] is True, d["agent_box_pickup_projects"] == {"agent-notebook": {"repo": "agent-notebook"}},
+    d["agent_box_pickup_mode"] == "run", d["agent_box_pickup_scan"] is True, d["agent_box_pickup_projects"] == {"agent-notebook": {"repo": "agent-notebook", "number": 753}},
     d["agent_box_pickup_scan_on_calendar"] == "*-*-* *:00/10:00 UTC")
 PY
 )
@@ -676,7 +676,7 @@ if [[ $w1 == *"usage: pickup-scan dry-run | run | show"*"rc=2" && $w2 == *"rc=2"
       $svc == *"ExecStart={{ agent_box_libexec_dir }}/pickup-scan.sh {{ agent_box_pickup_mode }}"* && $svc == *"SuccessExitStatus=3"* &&
       $svc == *"User={{ agent_box_keys_user }}"* && $tmr == *"OnCalendar={{ agent_box_pickup_scan_on_calendar }}"* &&
       $specs == *"choices: [dry-run, run]"* ]]; then
-  ok "9. the wrapper passes dry-run, run and show only; sessions get dry-run, show and pickup-note log, the runner nothing; the role installs the scripts, settings, service (exit 3 ok, dry-run default) and a 10-minute timer"
+  ok "9. the wrapper passes dry-run, run and show only; sessions get dry-run, show and pickup-note log, the runner nothing; the role installs the scripts, settings, service (exit 3 ok, run for agent-notebook on #753) and a 10-minute timer"
 else bad "9. [$w1] [$w2] [$w3] [$nsudo]"; fi
 if command -v systemd-analyze >/dev/null 2>&1; then
   if systemd-analyze calendar "*-*-* *:00/10:00 UTC" >/dev/null 2>&1 && [[ ${cal:-0} -ge 1 ]]; then
