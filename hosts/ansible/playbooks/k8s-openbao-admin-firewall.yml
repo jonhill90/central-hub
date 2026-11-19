@@ -1,0 +1,88 @@
+---
+# Lets the agent box's /32 reach OpenBao's API port, 8200, through each node's firewall on the store's admin path
+# (D-0062; docs/runbooks/set-up-the-secrets-store.md, "The box's admin path").
+#
+# The admin Service (apps/openbao-store, admin-path.yaml) sends the box's packets to OpenBao's pod, not to a process
+# on the node as the Gateway's do. eBPF host routing needs eBPF masquerading, which roles/k8s_control_plane does not
+# set (vars/main.yml), so host routing is Legacy, where packets "still traverse through all of the iptables hooks"
+# (Cilium v1.20.4, Documentation/operations/performance/tuning.rst lines 174-178 and 197-200): the packet then
+# crosses the node's forward path, which firewalld's lab
+# zone does not open (roles/k8s_node, step 4, opens only the Kubernetes ports; the pod range is trusted only as a
+# source). Not yet measured: the failed-run diag records each node's firewalld policies and Cilium's host-routing
+# line, and this play is dropped if they show the forward path was never in the way.
+#
+# One firewalld policy, openbao-admin, from the lab zone to any zone: one rich rule, the box's /32 to tcp 8200,
+# accept. The store's NetworkPolicy openbao-admin still admits only that /32 at the pod.
+#   ansible-playbook -i <dev inventory>/ playbooks/k8s-openbao-admin-firewall.yml
+# The dev rebuild runs it in stage `gateway` while the store is in the cluster. Without both the admin address and
+# the box's /32 in the inventory it changes nothing and says so. On prod it is a node firewall change, run with
+# `openbao-prod` once a dev run has shown the admin login passing with it.
+- name: The agent box's /32 to OpenBao's 8200 through the node firewall
+  hosts: k8s_nodes
+  become: true
+  gather_facts: false
+  vars:
+    admin_fw_policy: openbao-admin
+    admin_fw_zone: "{{ k8s_node_firewall_zone | default('lab') }}"
+    admin_fw_box: "{{ k8s_gitops_source_openbao_box_cidr | default('') }}"
+    admin_fw_address: "{{ k8s_gitops_source_openbao_admin_address | default('') }}"
+    admin_fw_rule: >-
+      rule family="ipv4" source address="{{ admin_fw_box }}" port port="8200" protocol="tcp" accept
+  tasks:
+    - name: admin-fw | Nothing to open without the admin address and the box's /32
+      ansible.builtin.debug:
+        msg: "SKIP: openbao-admin-firewall: the inventory has no admin address or no box /32, so nothing was opened"
+      when: admin_fw_box | length == 0 or admin_fw_address | length == 0
+      run_once: true
+
+    - name: admin-fw | The rest only with both
+      when: admin_fw_box | length > 0 and admin_fw_address | length > 0
+      block:
+        - name: admin-fw | The box's /32 is one IPv4 /32
+          ansible.builtin.assert:
+            that: admin_fw_box is match('^([0-9]{1,3}\.){3}[0-9]{1,3}/32$')
+            fail_msg: k8s_gitops_source_openbao_box_cidr is not one IPv4 /32
+            quiet: true
+
+        - name: admin-fw | The policy exists?
+          ansible.builtin.command: firewall-cmd --permanent --info-policy={{ admin_fw_policy }}
+          register: admin_fw_info
+          changed_when: false
+          failed_when: false
+          check_mode: false
+
+        - name: admin-fw | Make the policy, from the lab zone to any zone
+          ansible.builtin.command: "{{ item }}"
+          loop:
+            - firewall-cmd --permanent --new-policy={{ admin_fw_policy }}
+            - firewall-cmd --permanent --policy={{ admin_fw_policy }} --add-ingress-zone={{ admin_fw_zone }}
+            - firewall-cmd --permanent --policy={{ admin_fw_policy }} --add-egress-zone=ANY
+          when: admin_fw_info.rc != 0
+          changed_when: true
+
+        - name: admin-fw | The rule there already?
+          ansible.builtin.command:
+            argv: [firewall-cmd, --permanent, "--policy={{ admin_fw_policy }}", "--query-rich-rule={{ admin_fw_rule }}"]
+          register: admin_fw_query
+          changed_when: false
+          failed_when: false
+          check_mode: false
+
+        - name: admin-fw | The box's /32 to tcp 8200, accept
+          ansible.builtin.command:
+            argv: [firewall-cmd, --permanent, "--policy={{ admin_fw_policy }}", "--add-rich-rule={{ admin_fw_rule }}"]
+          when: admin_fw_info.rc != 0 or admin_fw_query.rc != 0
+          changed_when: true
+
+        # Only when the permanent rules changed above (the same condition), so a run with nothing new reloads nothing.
+        - name: admin-fw | Load the permanent rules
+          ansible.builtin.command: firewall-cmd --reload
+          when: admin_fw_info.rc != 0 or admin_fw_query.rc != 0
+          changed_when: true
+
+        - name: admin-fw | The running policy carries the rule
+          ansible.builtin.command:
+            argv: [firewall-cmd, "--policy={{ admin_fw_policy }}", "--query-rich-rule={{ admin_fw_rule }}"]
+          changed_when: false
+          check_mode: false
+          when: not ansible_check_mode

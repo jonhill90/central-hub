@@ -4,9 +4,9 @@
 #   1. vm_mem_probe logs only this run's VM IDs from the guest list, never another guest.
 #   2. node_pressure_probe asks every node (-T 10) for /proc/pressure memory, cpu and io and free, and logs the reply.
 #   3. A hanging ansible is cut at the timeout, logs a "no reading" line and does not fail the caller.
-#   4. node_journal_diag asks for the kernel warnings and the kubelet and containerd journal with become, prefixes each
+#   4. node_journal_diag asks for the lab zone's ports, forward ports and firewalld policies, the kernel warnings and the kubelet and containerd journal with become, prefixes each
 #      line `diag:`, scrubs a secret, and survives a hanging ansible.
-#   5. The failed-run diag calls node_journal_diag, and the identity-keycloak sampler calls both probes each minute.
+#   5. The failed-run diag calls node_journal_diag and reads Cilium's host-routing line, and the identity-keycloak sampler calls both probes each minute.
 # Usage: .github/hosts-check/tests/test_node_probes.sh
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -51,13 +51,15 @@ start=$(date +%s); out=$(run hang node_pressure_probe idk); took=$(( $(date +%s)
   ok "3 a hanging ansible is cut at the timeout (${took}s), logged as no reading, caller not failed" || bad "3 hang handling wrong (${took}s): $out"
 out=$(run journal node_journal_diag x); a=$(cat "$ANSIBLE_ARGS")
 { printf '%s\n' "$out" | grep -q '^diag: Out of memory: Killed process' && printf '%s' "$a" | grep -q -- '-b' &&
-  printf '%s' "$a" | grep -q 'journalctl -k -p warning' && printf '%s' "$a" | grep -q 'journalctl -u kubelet -u containerd' &&
+  printf '%s' "$a" | grep -q 'journalctl -k -p warning' && printf '%s' "$a" | grep -q 'firewall-cmd --zone=lab --list-ports' &&
+  printf '%s' "$a" | grep -q 'firewall-cmd --zone=lab --list-forward-ports' && printf '%s' "$a" | grep -q 'firewall-cmd --get-policies' && printf '%s' "$a" | grep -q 'journalctl -u kubelet -u containerd' &&
   ! printf '%s\n' "$out" | grep -q 'abcDEF1234567890secret'; } &&
-  ok "4 node_journal_diag reads kernel and kubelet journals with become, prefixes diag:, scrubs the token" || bad "4 journal diag is wrong: $a / $out"
+  ok "4 node_journal_diag reads the lab zone's ports, forward ports and policies, kernel and kubelet journals with become, prefixes diag:, scrubs the token" || bad "4 journal diag is wrong: $a / $out"
 start=$(date +%s); run hang node_journal_diag x >/dev/null; took=$(( $(date +%s) - start ))
 { [ "$took" -lt 10 ] && ! grep -q 'rc=[1-9]' "$work/rc"; } && ok "4b journal diag survives a hanging ansible (${took}s)" || bad "4b journal diag hung or failed (${took}s)"
 if sed -n '/^runner_capture_diag() {/,/^}/p' "$script" | grep -q '^  node_journal_diag || true$' &&
+   sed -n '/^runner_capture_diag() {/,/^}/p' "$script" | grep -q "cilium-dbg status 2>&1 | grep -iE 'host routing|masquerading|kubeproxyreplacement'" &&
    sed -n '/^node_top_sampler() {/,/^}/p' "$script" | grep -q '^    node_pressure_probe "\$1"; vm_mem_probe "\$1"$'; then
-  ok "5 the failed-run diag and the sampler call the probes"
+  ok "5 the failed-run diag calls the node probe and reads Cilium's host routing, and the sampler calls the probes"
 else bad "5 a probe is not called from the diag or the sampler"; fi
 exit "$fail"
