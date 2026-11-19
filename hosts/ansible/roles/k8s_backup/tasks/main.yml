@@ -323,7 +323,7 @@
     file: drill.yml
     apply:
       tags: [drill]
-  when: k8s_backup_enabled and k8s_backup_drill
+  when: k8s_backup_enabled | bool and k8s_backup_drill | bool
   tags: [drill]
 
 # Reader mode only (dev, playbooks/k8s-restore.yml). restore runs before Argo CD exists in the env,
