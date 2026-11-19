@@ -121,8 +121,10 @@ fit_check() {
 # A lab-test run, or what one leaves behind, comes before the timer's dev build: the copy (VM 256) and dev both need
 # the node's memory, and a tick that lands between two proves would make the second refuse (lab-test.sh: its lock
 # $work/state/lab-test.lock, its state $work/state/lab-test.tfstate, its log $work/state/lab-test.log, written by every
-# run but `log`). Prints one line and returns 0 when the timer must skip: the lock is held, the state holds a resource
-# or can't be read, or the log was written less than LAB_TEST_QUIET_MIN minutes ago. Reads only; takes no lock for
+# run but `log`). Prints one line and returns 0 when the timer must skip: the lock is held, the state holds a VM
+# (a resource of type proxmox_virtual_environment_vm) or can't be read, or the log was written less than
+# LAB_TEST_QUIET_MIN minutes ago. Only VMs count: lab-test destroy keeps the installer ISO in the state for the next
+# build (lab-test.sh, destroy), so a state that holds only the ISO is an idle lab-test. Reads only; takes no lock for
 # more than the probe.
 LAB_TEST_QUIET_MIN=60
 lab_test_busy() {
@@ -132,9 +134,10 @@ lab_test_busy() {
     return 0
   fi
   if [[ -s $tf ]]; then
-    n=$(python3 -I -c 'import json,sys; print(len(json.load(open(sys.argv[1])).get("resources", [])))' "$tf" 2>/dev/null) || n=unreadable
+    n=$(python3 -I -c 'import json,sys
+print(sum(1 for r in json.load(open(sys.argv[1])).get("resources", []) if r["type"] == "proxmox_virtual_environment_vm"))' "$tf" 2>/dev/null) || n=unreadable
     if [[ $n != 0 ]]; then
-      echo "rebuild auto: the lab-test state holds $n resources (the copy, VM 256, may exist); nothing started"
+      echo "rebuild auto: the lab-test state holds $n VM resources (the copy, VM 256, may exist); nothing started"
       return 0
     fi
   fi
