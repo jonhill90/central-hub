@@ -2,8 +2,8 @@
 TLS on OpenBao's listener from the namespace's own CA, made by cert-manager: a self-signed Issuer
 signs the CA, the CA Issuer signs the server certificate. Secret openbao-tls carries tls.crt,
 tls.key and ca.crt; OpenBao reads the first two and ESO checks the listener against ca.crt (the
-secret-store app's caProvider). The agent box checks its path through the Gateway against ca.crt too
-(templates/box-path.yaml; `openbao-prod ca` copies it to the box).
+secret-store app's caProvider). The agent box checks the store against ca.crt too, on the admin
+path (templates/admin-path.yaml; `openbao-prod ca` copies it to the box).
 */ -}}
 apiVersion: cert-manager.io/v1
 kind: Issuer
@@ -59,12 +59,8 @@ spec:
     - openbao-active.{{ .Release.Namespace }}.svc
     - "*.openbao-internal"
     - "*.openbao-internal.{{ .Release.Namespace }}.svc"
-    {{- if eq (toString .Values.measure) "true" }}
-    # The measurement's passthrough host (MEASURE-1, dev only): TLS on that route ends here.
-    - openbao-pass.{{ required "zone: set by the root Application (k8s_gitops_source_zone)" .Values.zone }}
-    {{- end }}
     {{- with .Values.boxHost }}
-    # The agent box's path through the Gateway (templates/box-path.yaml): TLS on it ends here.
+    # The store's name as the agent box sends it on the admin path (templates/admin-path.yaml).
     - {{ . }}
     {{- end }}
   ipAddresses:

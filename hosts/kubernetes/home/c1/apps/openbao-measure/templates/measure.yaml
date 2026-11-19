@@ -1,5 +1,5 @@
 {{- if eq (toString .Values.measure) "true" }}
-# The four route objects carry argocd.argoproj.io/ignore-healthcheck (Argo CD v3.5.5,
+# The two route objects carry argocd.argoproj.io/ignore-healthcheck (Argo CD v3.5.5,
 # docs/operator-manual/health.md:294): on a fresh dev build the root renders them at stage
 # gitops, but the https-short listener comes only at dev-ca and the CA ConfigMap only at stage
 # openbao-measure, both after apps. So the HTTPRoute and BackendTLSPolicy are Degraded until then,
@@ -55,51 +55,4 @@ spec:
         kind: ConfigMap
         name: {{ .Values.reencrypt.caConfigMap }}
     hostname: {{ .Values.service }}.{{ .Release.Namespace }}.svc
----
-# Path b: one passthrough listener, attached to Gateway apps (its allowedListeners, measure only).
-apiVersion: gateway.networking.k8s.io/v1
-kind: ListenerSet
-metadata:
-  name: openbao-measure
-  namespace: {{ .Release.Namespace }}
-  annotations:
-    argocd.argoproj.io/ignore-healthcheck: "true"
-spec:
-  parentRef:
-    group: gateway.networking.k8s.io
-    kind: Gateway
-    name: {{ .Values.gateway.name }}
-    namespace: {{ .Values.gateway.namespace }}
-  listeners:
-    - name: openbao-pass
-      protocol: TLS
-      port: 443
-      hostname: {{ .Values.passthrough.host }}.{{ $zone }}
-      tls:
-        mode: Passthrough
-      allowedRoutes:
-        namespaces:
-          from: Same
-        kinds:
-          - kind: TLSRoute
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: TLSRoute
-metadata:
-  name: openbao-measure
-  namespace: {{ .Release.Namespace }}
-  annotations:
-    argocd.argoproj.io/ignore-healthcheck: "true"
-spec:
-  parentRefs:
-    - group: gateway.networking.k8s.io
-      kind: ListenerSet
-      name: openbao-measure
-      sectionName: openbao-pass
-  hostnames:
-    - {{ .Values.passthrough.host }}.{{ $zone }}
-  rules:
-    - backendRefs:
-        - name: {{ .Values.service }}
-          port: {{ .Values.port }}
 {{- end }}

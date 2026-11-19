@@ -52,7 +52,7 @@ argument_specs:
         type: str
         description: >-
           The store's name as the agent box reaches it, private, read only with the in-cluster store on. Passed
-          as openbaoStoreHost: the box's TLS passthrough path through Gateway apps (apps/openbao-store, box-path.yaml).
+          as openbaoStoreHost: the name on the store's certificate, which the box sends on the admin path (apps/openbao-store).
       k8s_gitops_source_openbao_admin_address:
         type: str
         description: >-

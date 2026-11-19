@@ -22,7 +22,6 @@
     measure_gateway_ns: gateway
     measure_listeners: [http, https, http-short, https-short]
     measure_reencrypt_host: "openbao-measure.{{ k8s_gitops_source_zone }}"
-    measure_pass_host: "openbao-pass.{{ k8s_gitops_source_zone }}"
     measure_ca_configmap: openbao-measure-ca
     # The Gateway's own answers when it can't reach OpenBao. OpenBao answers 503 too when sealed, so these
     # count as "refused at gateway" only on path a (TLS ends at the Gateway) and only while the control Job
@@ -48,9 +47,9 @@
 
     - name: measure | Nonces
       ansible.builtin.set_fact:
-        measure_nonce: {a: "{{ measure_run }}-a", axff: "{{ measure_run }}-axff", b: "{{ measure_run }}-b"}
+        measure_nonce: {a: "{{ measure_run }}-a", axff: "{{ measure_run }}-axff"}
 
-    # 1. Gateway apps' listeners and the measurement's ListenerSet, read before anything else.
+    # 1. Gateway apps' listeners, read before anything else.
     - name: measure | Gateway listeners
       ansible.builtin.command: >-
         {{ measure_kubectl }} -n {{ measure_gateway_ns }} get gateway {{ measure_gateway }} -o jsonpath='{.status.listeners}'
@@ -73,26 +72,6 @@
           {%- endfor -%}
           {{ ok }}
         measure_not_programmed: "{{ measure_listeners | reject('in', measure_programmed) | list }}"
-
-    - name: measure | The ListenerSet's conditions
-      ansible.builtin.command: >-
-        {{ measure_kubectl }} -n {{ measure_ns }} get listenerset openbao-measure
-        -o jsonpath='{range .status.conditions[*]}{.type}={.status}({.reason}) {end}'
-      register: measure_ls
-      changed_when: false
-      failed_when: false
-      check_mode: false
-
-    # Each of its listeners' own conditions: a ListenerSet that is not Accepted says only ListenersNotValid,
-    # and the listener's conditions say why (dev run 20261118T212236Z read only the first).
-    - name: measure | The ListenerSet's listeners
-      ansible.builtin.command: >-
-        {{ measure_kubectl }} -n {{ measure_ns }} get listenerset openbao-measure
-        -o jsonpath='{range .status.listeners[*]}{.name}:{range .conditions[*]}{.type}={.status}({.reason}),{end} {end}'
-      register: measure_ls_listeners
-      changed_when: false
-      failed_when: false
-      check_mode: false
 
     # 2. The CA as a ConfigMap for the BackendTLSPolicy (Cilium reads only ConfigMaps there), owned by the
     #    namespace the openbao-measure app makes, so it goes when that namespace is pruned.
@@ -251,13 +230,12 @@
       delegate_to: localhost
       become: false
 
-    - name: measure | Dev's Gateway CA and the store's CA, public certificates only
+    - name: measure | Dev's Gateway CA, a public certificate only
       ansible.builtin.command: >-
         {{ measure_kubectl }} -n {{ item.ns }} get secret {{ item.secret }} -o jsonpath='{.data.ca\.crt}'
       register: measure_cas
       loop:
         - {name: gateway, ns: "{{ measure_gateway_ns }}", secret: apps-tls}
-        - {name: store, ns: "{{ measure_ns }}", secret: openbao-tls}
       changed_when: false
       check_mode: false
       no_log: true
@@ -301,24 +279,7 @@
       loop:
         - {key: a, host: "{{ measure_reencrypt_host }}", ca: gateway}
         - {key: axff, host: "{{ measure_reencrypt_host }}", ca: gateway, xff: "X-Forwarded-For: 192.0.2.1"}
-        - {key: b, host: "{{ measure_pass_host }}", ca: store}
       register: measure_probes
-      delegate_to: localhost
-      become: false
-      changed_when: false
-      failed_when: false
-      check_mode: false
-
-    # On b, which certificate answered: the store's CA means the passthrough listener; dev's wildcard means
-    # https-short (*.<zone>, also on 443) took the name, and b is not measured.
-    - name: measure | The certificate b's name was answered with
-      ansible.builtin.shell: >-
-        set -o pipefail;
-        openssl s_client -connect {{ k8s_gitops_source_gateway_address }}:443 -servername {{ measure_pass_host }} </dev/null 2>/dev/null
-        | openssl x509 -noout -issuer
-      args:
-        executable: /bin/bash
-      register: measure_b_cert
       delegate_to: localhost
       become: false
       changed_when: false
@@ -332,7 +293,7 @@
       delegate_to: localhost
       become: false
 
-    # 5. OpenBao's audit lines for the three nonces. Registered without being printed; only three fields of
+    # 5. OpenBao's audit lines for the two nonces. Registered without being printed; only three fields of
     #    each are kept below.
     - name: measure | Audit lines for the probes
       ansible.builtin.command:
@@ -353,8 +314,6 @@
           - "{{ measure_nonce.a }}"
           - -e
           - "{{ measure_nonce.axff }}"
-          - -e
-          - "{{ measure_nonce.b }}"
           - /openbao/audit/audit.log
       register: measure_audit_raw
       changed_when: false
@@ -389,8 +348,7 @@
 
     # A 502, 503 or 504 on path a or a+xff is the Gateway's own answer when it can't reach OpenBao (for example
     # under an enforced NetworkPolicy): "refused at gateway", with no audit line to find (MEASURE-1 v5, Council C
-    # 02:41Z). Only while the control Job found the store unsealed: a sealed OpenBao answers 503 itself. Path b
-    # is passthrough, so any HTTP answer there is OpenBao's own (Council A 02:56Z).
+    # 02:41Z). Only while the control Job found the store unsealed: a sealed OpenBao answers 503 itself.
     - name: measure | Probes refused at the Gateway
       ansible.builtin.set_fact:
         measure_gw_refused: >-
@@ -412,21 +370,19 @@
           the measure value (its audited headers are set only at the first start)?
         quiet: true
 
-    # A run where no probe got an HTTP answer measured nothing: the box did not reach the Gateway on either path
-    # (dev run 20261118T212236Z: three curl timeouts). It says so with a SKIP line in place of the PASS one, and still
+    # A run where no probe got an HTTP answer measured nothing: the box did not reach the Gateway's 443 (dev runs
+    # 20261118T212236Z and 20261119T104715Z: curl timeouts). It says so with a SKIP line in place of the PASS one, and still
     # passes, because the stage records the box's path and does not judge it; the rest of the dev run goes on.
     - name: measure | Result
       ansible.builtin.debug:
         msg: >-
           {{ measure_head }}
-          gateway=ok listenerset={{ measure_ls.stdout | default('none') | trim | default('none', true) }}
-          [{{ measure_ls_listeners.stdout | default('') | trim | default('no listener status', true) }}];
+          gateway=ok;
           policy={{ measure_policy }};
-          {% for k in ['a', 'axff', 'b'] %}{% set p = measure_probes.results[loop.index0] %}{% set code = p.stdout | default('000') -%}
+          {% for k in ['a', 'axff'] %}{% set p = measure_probes.results[loop.index0] %}{% set code = p.stdout | default('000') -%}
           {{ k }}={{ (p.stderr | default('no answer') | truncate(60)) if code == '000'
           else (code ~ ' refused at gateway') if k in measure_gw_refused else code }}
           remote={{ measure_audit[k].remote | default('-') }} xff={{ measure_audit[k].xff | default('-') }}; {% endfor %}
-          b_cert={{ measure_b_cert.stdout | default('none') | regex_replace('^issuer=\s*', '') | truncate(60) }};
           ingress={{ measure_ingress.stdout | default('') | trim | default('unread', true) }}
       vars:
         measure_answered: "{{ measure_probes.results | selectattr('stdout', 'match', '^[1-5][0-9][0-9]$') | list }}"

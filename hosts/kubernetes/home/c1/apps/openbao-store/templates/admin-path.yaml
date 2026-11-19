@@ -1,7 +1,7 @@
 {{- with .Values.adminAddress }}
 {{- /*
 The agent box's admin path to the store, made when the root passes the store's admin address
-(openbaoAdminAddress). Through Gateway apps (box-path.yaml) OpenBao sees a Cilium ingress address,
+(openbaoAdminAddress). Through Gateway apps OpenBao would see a Cilium ingress address,
 not the box's (Cilium v1.20.4 docs, gettingstarted/terminology.rst lines 211-212), so the admin
 AppRole, bound to the box's /32 (apps/openbao/values.yaml, centralHub.boxCidr), refuses there. Here:
 - a LoadBalancer Service on that address, 443 to OpenBao's 8200, with externalTrafficPolicy Local,

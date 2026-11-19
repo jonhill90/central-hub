@@ -190,16 +190,16 @@ check_manifests() {
   helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
     --set openbao.inCluster=true > "$work/rendered/app-c1-monitoring-extras-openbao.yaml"
   # The dev-only measurement of the box's path through the Gateway (MEASURE-1) turned on: the root's
-  # switches and the four charts it changes, so its routes, listener and policy are schema-checked too.
+  # switch and the chart it changes, so its routes and policy are schema-checked too.
   helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
     --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoBoxCidr=192.0.2.30/32 --set openbaoMeasure=true \
     > "$work/rendered/root-c1-openbao-measure.yaml"
   helm template openbao-measure hosts/kubernetes/home/c1/apps/openbao-measure --namespace openbao \
     --set zone=example.com --set measure=true > "$work/rendered/app-c1-openbao-measure-on.yaml"
-  helm template gateway hosts/kubernetes/home/c1/apps/gateway --namespace gateway \
-    --set zone=example.com --set address=192.0.2.10 --set openbaoMeasure=true > "$work/rendered/app-c1-gateway-measure.yaml"
-  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
-    --set zone=example.com --set sealNode=node-1 --set measure=true > "$work/rendered/app-c1-openbao-store-measure.yaml"
+  if grep -qE '^kind: (ListenerSet|TLSRoute)$' "$work/rendered/app-c1-openbao-measure-on.yaml"; then
+    echo "manifests: the measurement renders a ListenerSet or TLSRoute; its passthrough path b is gone" >&2
+    return 1
+  fi
   # With openbaoMeasure unset, the root renders exactly as with it false, with and without OpenBao in
   # the cluster, and passes no measure switch to any app: prod's root is as before (MEASURE-1).
   local set unset
@@ -217,30 +217,24 @@ check_manifests() {
       return 1
     fi
   done
-  # The agent box's path to the store through the Gateway (openbaoStoreHost; apps/openbao-store,
-  # box-path.yaml): the root with it set and the two charts it changes, so the ListenerSet, TLSRoute
-  # and CiliumNetworkPolicy are schema-checked. Unset, nothing of it renders and the root passes no
-  # store name to any app; set, the store's certificate names the host and the Gateway lets
-  # namespace openbao attach a listener.
+  # The store's name (openbaoStoreHost): the root with it set and the chart. Set, the store's certificate
+  # names it, so the box checks the store by that name on the admin path; nothing else renders for it, since
+  # the box's passthrough path through Gateway apps is gone (no ListenerSet, TLSRoute or allowedListeners).
+  # Unset, the root passes no store name to any app.
   helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
     --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoStoreHost=bao.example.com \
-    > "$work/rendered/root-c1-openbao-box-path.yaml"
+    > "$work/rendered/root-c1-openbao-store-host.yaml"
   helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
-    --set zone=example.com --set sealNode=node-1 --set boxHost=bao.example.com > "$work/rendered/app-c1-openbao-store-box-path.yaml"
-  helm template gateway hosts/kubernetes/home/c1/apps/gateway --namespace gateway \
-    --set zone=example.com --set address=192.0.2.10 --set openbaoBoxHost=bao.example.com > "$work/rendered/app-c1-gateway-box-path.yaml"
-  local box_kinds
-  box_kinds=$(grep -E '^kind: (ListenerSet|TLSRoute|CiliumNetworkPolicy)$' "$work/rendered/app-c1-openbao-store-box-path.yaml" | sort | tr '\n' ' ')
-  if [ "$box_kinds" != "kind: CiliumNetworkPolicy kind: ListenerSet kind: TLSRoute " ] ||
-    ! grep -q -- '- bao.example.com$' "$work/rendered/app-c1-openbao-store-box-path.yaml" ||
-    ! grep -q 'allowedListeners:' "$work/rendered/app-c1-gateway-box-path.yaml"; then
-    echo "manifests: with a box host, expected the ListenerSet, TLSRoute and CiliumNetworkPolicy, the host on the certificate and the Gateway's allowedListeners; got [$box_kinds]" >&2
+    --set sealNode=node-1 --set boxHost=bao.example.com > "$work/rendered/app-c1-openbao-store-host.yaml"
+  if ! grep -q -- '- bao.example.com$' "$work/rendered/app-c1-openbao-store-host.yaml" ||
+    grep -qE '^kind: (ListenerSet|TLSRoute|CiliumNetworkPolicy)$' "$work/rendered/app-c1-openbao-store-host.yaml" ||
+    grep -q 'allowedListeners:' "$work/rendered/root-c1-openbao-store-host.yaml" "$work/rendered/app-c1-gateway.yaml"; then
+    echo "manifests: with a store name, expected the name on the certificate and no ListenerSet, TLSRoute, CiliumNetworkPolicy or allowedListeners" >&2
     return 1
   fi
-  if grep -qE 'openbao-box|bao.example.com' "$work/rendered/app-c1-openbao-store.yaml" "$work/rendered/app-c1-openbao-store-seal.yaml" ||
-    grep -q 'allowedListeners:' "$work/rendered/app-c1-gateway.yaml" ||
+  if grep -q 'bao.example.com' "$work/rendered/app-c1-openbao-store.yaml" "$work/rendered/app-c1-openbao-store-seal.yaml" ||
     grep -Eq -- '- name: "?(boxHost|openbaoBoxHost)"?$' "$work/rendered/root-c1-openbao.yaml"; then
-    echo "manifests: with no box host, the box path, its certificate name, allowedListeners or a box host parameter rendered" >&2
+    echo "manifests: with no store name, its certificate name or a store name parameter rendered" >&2
     return 1
   fi
   # Ansible passes the store's name to the root only when it is set (cases.txt, store-host case).
@@ -249,8 +243,9 @@ check_manifests() {
     echo "manifests: k8s_gitops should pass openbaoStoreHost only when k8s_gitops_source_openbao_store_host is set" >&2
     return 1
   fi
-  if [ "$(grep -cE -- '- name: "?(boxHost|openbaoBoxHost)"?$' "$work/rendered/root-c1-openbao-box-path.yaml")" != 2 ]; then
-    echo "manifests: the root with openbaoStoreHost set should pass boxHost to openbao-store and openbaoBoxHost to gateway" >&2
+  if [ "$(grep -cE -- '- name: "?boxHost"?$' "$work/rendered/root-c1-openbao-store-host.yaml")" != 1 ] ||
+    grep -Eq -- '- name: "?openbaoBoxHost"?$' "$work/rendered/root-c1-openbao-store-host.yaml"; then
+    echo "manifests: the root with openbaoStoreHost set should pass boxHost to openbao-store only" >&2
     return 1
   fi
   # The store's admin address (openbaoAdminAddress; apps/openbao-store, admin-path.yaml; D-0062): the root
@@ -274,7 +269,7 @@ check_manifests() {
     echo "manifests: with an admin address, expected the Service (its address, Local, the label), the policy on node-1 and the box's /32; got [$admin_kinds]" >&2
     return 1
   fi
-  if grep -q 'openbao-admin' "$work/rendered/app-c1-openbao-store-seal.yaml" "$work/rendered/app-c1-openbao-store-box-path.yaml" ||
+  if grep -q 'openbao-admin' "$work/rendered/app-c1-openbao-store-seal.yaml" "$work/rendered/app-c1-openbao-store-host.yaml" ||
     grep -Eq -- '- name: "?(adminAddress|openbaoAdminAddress)"?$' "$work/rendered/root-c1-openbao.yaml" ||
     grep -q 'openbaoAdminAddress' "$work/rendered/gitops-source-argocd-openbao.yaml"; then
     echo "manifests: with no admin address, the admin path or an admin address parameter rendered" >&2
