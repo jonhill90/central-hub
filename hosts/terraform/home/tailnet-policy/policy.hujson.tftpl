@@ -83,6 +83,7 @@
 	"ssh": [
 		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:vps"], "users": ["root", "autogroup:nonroot"]},
 		{"action": "accept", "src": ["tag:agent"], "dst": ["tag:agent-box"], "users": ["claude"]},
+		{"action": "accept", "src": ["autogroup:admin"], "dst": ["tag:agent-box"], "users": ["admin"]},
 		{"action": "accept", "src": ["tag:github-actions"], "dst": ["tag:vps"], "users": ["root", "deploy", "autogroup:nonroot"]},
 		{"action": "accept", "src": ["autogroup:admin"], "dst": ["tag:vps"], "users": ["root", "deploy", "autogroup:nonroot"]},
 		{"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"], "users": ["autogroup:nonroot", "root"]},
