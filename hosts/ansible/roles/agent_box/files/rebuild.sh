@@ -405,7 +405,10 @@ stages="vms cluster storage restore gitops secrets apps gateway checks"
 openbao_env=""
 store_url=""
 store_keys=$keys/dev
-if [[ -s $store_keys/openbao-rebuild-role-id && -s $store_keys/openbao-rebuild-secret-id && -s $store_keys/secrets-store-ca.crt && -s $work/secrets-store.json ]]; then
+# Never with the store inside the cluster switched on (below): stage app-secrets then writes this folder's
+# secrets-store-ca.crt for the in-cluster store, which must not turn this old wiring on and make the run refuse.
+if [[ ! ( -f $work/openbao-in-cluster && $(tr -d '[:space:]' < "$work/openbao-in-cluster") == true ) &&
+      -s $store_keys/openbao-rebuild-role-id && -s $store_keys/openbao-rebuild-secret-id && -s $store_keys/secrets-store-ca.crt && -s $work/secrets-store.json ]]; then
   store_addr=$(python3 -I -c 'import ipaddress, json, sys; print(ipaddress.ip_address(json.load(open(sys.argv[1]))["address"]))' "$work/secrets-store.json") \
     || { echo "rebuild: the secrets store's address in $work/secrets-store.json is not an IP address" >&2; exit 1; }
   store_url=https://$store_addr
@@ -431,12 +434,14 @@ fi
 # and this are never on together.
 # Dev only, with the store inside the cluster: the gate of stage app-secrets (hosts/rebuild-k8s.sh), which puts every
 # value the apps read into SOPS, then OpenBao, and compares the two (secrets-store.sh put-apps, then compare; D-0058
-# rule 8, plan step 8a). app_secrets_gate SETTINGS CACERT HOLD prints the one rebuild.env line: APP_SECRETS_HOOK when
-# the gate is open, else APP_SECRETS_SKIP with the first reason, in this order:
+# rule 8, plan step 8a). app_secrets_gate SETTINGS CACERT HOLD prints the rebuild.env lines: APP_SECRETS_HOOK and
+# APP_SECRETS_CACERT when the gate is open, else APP_SECRETS_SKIP with the first reason, in this order:
 #   1. the settings' sops_copies is not true: the owner's tap (D-0058 rule 9), off by default (agent_box_secrets_store);
 #   2. no box_cidr in the settings: no admin path from the box to the store (D-0062), so the admin login is refused;
-#   3. no CA file for the store beside the keys: every call that signs in checks the store against it;
-#   4. the rebuild hold is set: a write into the fresh store makes restore-rebuilt refuse (secrets-store.sh no_hold).
+#   3. the rebuild hold is set: a write into the fresh store makes restore-rebuilt refuse (secrets-store.sh no_hold).
+# The store's CA file is no gate: each run builds a fresh store with its own CA, which does not exist yet when the gate
+# is read. Open, the stage first writes this run's CA to CACERT from the store (rebuild-k8s.sh store_ca), and every
+# call that signs in checks the store against it.
 # Shut, the stage prints one SKIP line naming the reason and writes nothing. The day the tap comes, opening it is a
 # settings change (sops_copies true), not new code. secrets-store.sh checks sops_copies and the hold again itself.
 app_secrets_gate() {
@@ -445,13 +450,11 @@ app_secrets_gate() {
     reason="sops_copies is off: SOPS copies of the apps' secrets wait for the owner's tap (D-0058 rule 9); nothing written"
   elif ! python3 -I -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("box_cidr") else 1)' "$1" 2>/dev/null; then
     reason="no box_cidr in the secrets store's settings, so the box has no admin path to the store (D-0062); nothing written"
-  elif [[ ! -s $2 ]]; then
-    reason="no CA file for the store beside the keys (secrets-store-ca.crt); nothing written"
   elif [[ -e $3 ]]; then
     reason="the rebuild hold is set: run restore-rebuilt or clear-hold first; nothing written"
   fi
   if [[ -n $reason ]]; then printf 'APP_SECRETS_SKIP="%s"\n' "$reason"
-  else printf 'APP_SECRETS_HOOK="%s"\n' "$libexec/secrets-store.sh put-apps && $libexec/secrets-store.sh compare"; fi
+  else printf 'APP_SECRETS_HOOK="%s"\nAPP_SECRETS_CACERT="%s"\n' "$libexec/secrets-store.sh put-apps && $libexec/secrets-store.sh compare" "$2"; fi
 }
 app_secrets_env=""
 in_cluster=false
