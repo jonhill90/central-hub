@@ -99,6 +99,7 @@ check_ansible() {
   bash "$here/tests/test_c1_ansible.sh"
   bash "$here/tests/test_kubelet_reservations.sh"
   bash "$here/tests/test_node_probes.sh"
+  bash "$here/tests/test_rebuild_failure_lines.sh"
   bash "$here/tests/test_observability_deletes.sh"
   bash "$here/tests/test_signin_check_wrapper.sh"
   bash "$here/tests/test_opnsense_cert_check.sh"
