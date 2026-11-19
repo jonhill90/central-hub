@@ -90,17 +90,17 @@ All paths are under `hosts/ansible/` and read at central-hub `640ce91d`.
 
 | Step | What the code does | File and lines |
 |---|---|---|
-| 1, 2 | The two command lines, the host group, no `become` for the play | `playbooks/controller-trust.yml` lines 4-5, 7-9 |
-| 2 | Copies the host's CA to `controller_trust_ca_file` on the controller, `flat: true` | `roles/controller_trust/tasks/main.yml` lines 8-12 |
-| 2 | The source is `/etc/pve/pve-root-ca.pem`; the keychain is `/Library/Keychains/System.keychain`; the policy is `ssl` | `roles/controller_trust/defaults/main.yml` lines 6, 9, 12 |
-| 2 | Looks for the copied file, then reads its SHA-256 and SHA-1 with `openssl` and `shasum` on the controller | `roles/controller_trust/tasks/main.yml` lines 14-32 |
-| 2, 3, 4 | Lists the keychain with `security find-certificate -a -Z` | `roles/controller_trust/tasks/main.yml` lines 34-41 |
-| 2, 3 | Adds the CA with `security add-trusted-cert -d -r trustRoot -p ssl -k <keychain> <file>`, as root, only when the keychain's list has no `SHA-256 hash:` line for it | `roles/controller_trust/tasks/main.yml` lines 43-62 |
-| 2 | Prints the proof and the two removal commands | `roles/controller_trust/tasks/main.yml` lines 64-72 |
-| Before you start | `controller_trust_ca_file` is required, no default | `roles/controller_trust/meta/argument_specs.yml` lines 8-11 |
-| 1 | A first `--check` run fetches nothing, so nothing is looked up | `roles/controller_trust/tasks/main.yml` line 20 (comment) |
-| Intro, 5 | Why the Mac keychain: no CA setting in the provider, Go on macOS ignores `SSL_CERT_FILE` | `README.md` lines 199-209 |
-| 2 | Only the add needs root, measured 2026-10-28 | `README.md` line 207; `roles/controller_trust/tasks/main.yml` lines 4-6 |
+| 1, 2 | The two command lines, the host group, no `become` for the play | `hosts/ansible/playbooks/controller-trust.yml` lines 4-5, 7-9 |
+| 2 | Copies the host's CA to `controller_trust_ca_file` on the controller, `flat: true` | `hosts/ansible/roles/controller_trust/tasks/main.yml` lines 8-12 |
+| 2 | The source is `/etc/pve/pve-root-ca.pem`; the keychain is `/Library/Keychains/System.keychain`; the policy is `ssl` | `hosts/ansible/roles/controller_trust/defaults/main.yml` lines 6, 9, 12 |
+| 2 | Looks for the copied file, then reads its SHA-256 and SHA-1 with `openssl` and `shasum` on the controller | `hosts/ansible/roles/controller_trust/tasks/main.yml` lines 14-32 |
+| 2, 3, 4 | Lists the keychain with `security find-certificate -a -Z` | `hosts/ansible/roles/controller_trust/tasks/main.yml` lines 34-41 |
+| 2, 3 | Adds the CA with `security add-trusted-cert -d -r trustRoot -p ssl -k <keychain> <file>`, as root, only when the keychain's list has no `SHA-256 hash:` line for it | `hosts/ansible/roles/controller_trust/tasks/main.yml` lines 43-62 |
+| 2 | Prints the proof and the two removal commands | `hosts/ansible/roles/controller_trust/tasks/main.yml` lines 64-72 |
+| Before you start | `controller_trust_ca_file` is required, no default | `hosts/ansible/roles/controller_trust/meta/argument_specs.yml` lines 8-11 |
+| 1 | A first `--check` run fetches nothing, so nothing is looked up | `hosts/ansible/roles/controller_trust/tasks/main.yml` line 20 (comment) |
+| Intro, 5 | Why the Mac keychain: no CA setting in the provider, Go on macOS ignores `SSL_CERT_FILE` | `hosts/ansible/README.md` lines 199-209 |
+| 2 | Only the add needs root, measured 2026-10-28 | `hosts/ansible/README.md` line 207; `hosts/ansible/roles/controller_trust/tasks/main.yml` lines 4-6 |
 
 ## Afterwards
 
