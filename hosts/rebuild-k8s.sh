@@ -157,6 +157,26 @@ sys.exit(res.get("rc", 1))
   return "$rc"
 }
 
+# The secrets store's CA, for the box's calls that sign in (stage app-secrets' put-apps and compare, and the box's other
+# dev secrets-store calls until the next rebuild): ca.crt of Secret openbao/openbao-tls, a public certificate, read
+# from this run's store. Each store makes its own CA (apps/openbao-store templates/tls.yaml), so a copy from an earlier
+# run would fail TLS. The same read and checks as the box's openbao-prod ca: only the ca.crt field (the same Secret
+# holds the server's tls.key, which is never read), written only if it is exactly one PEM certificate.
+# kc's arguments reach Ansible's command module as one string, which it splits as a shell would (shlex), so the inner
+# single quotes keep the backslash before the key's dot: kubectl then reads key ca.crt, not ca then crt.
+store_ca() {
+  local pem
+  pem=$(kc -n openbao get secret openbao-tls -o "'jsonpath={.data.ca\.crt}'" | base64 -d) ||
+    { echo "app-secrets: could not read ca.crt of Secret openbao/openbao-tls; nothing written"; return 1; }
+  if [ "$(printf '%s\n' "$pem" | grep -c -- '-----BEGIN ')" -ne 1 ] ||
+     [ "$(printf '%s\n' "$pem" | grep -c -- '-----BEGIN CERTIFICATE-----')" -ne 1 ] ||
+     ! printf '%s\n' "$pem" | openssl x509 -noout 2>/dev/null; then
+    echo "app-secrets: ca.crt of Secret openbao/openbao-tls is not one PEM certificate; nothing written"; return 1
+  fi
+  printf '%s\n' "$pem" > "$1.part" && mv -- "$1.part" "$1"
+  echo "app-secrets: the store's CA written to $1 ($(printf '%s\n' "$pem" | openssl x509 -noout -subject -enddate | tr '\n' ' '))"
+}
+
 # The recap's "changed=" counts, summed over every host, from the last playbook run in $raw.
 changed_total() {
   awk '/PLAY RECAP/{n=0} /changed=/{for(i=1;i<=NF;i++) if($i ~ /^changed=/){split($i,a,"="); n+=a[2]}} END{print n+0}' "$raw"
@@ -726,14 +746,17 @@ run_stage() {
     # Dev only, with the in-cluster store, after identity-keycloak (which writes identity.env in this env folder): SOPS's
     # copy of every value the apps read, then OpenBao's, and a compare of the two (D-0058 rule 8, plan step 8a). The box's
     # rebuild wrapper sets APP_SECRETS_HOOK only once its gate is open: the owner's sops_copies tap (D-0058 rule 9), the
-    # box's admin path (box_cidr), the store's CA file and no rebuild hold. Shut, it sets APP_SECRETS_SKIP to the reason,
-    # and the stage prints one SKIP line with it and writes nothing. The apps still read store c1 (appSecretsStore off).
+    # box's admin path (box_cidr) and no rebuild hold. Shut, it sets APP_SECRETS_SKIP to the reason, and the stage prints
+    # one SKIP line with it and writes nothing. Open, it also sets APP_SECRETS_CACERT, and the stage first writes this
+    # run's store CA there (store_ca); a failed read fails the stage before any write. A box wrapper older than that sets
+    # no APP_SECRETS_CACERT and checked its own CA file. The apps still read store c1 (appSecretsStore off).
     app-secrets)
       [ "$ENV_NAME" = dev ] || { echo "the apps' secrets stage runs on dev only"; return 1; }
       if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "no OPENBAO_SEAL_KEY_FILE set: app-secrets skipped"; return 0; fi
       if [ -z "${APP_SECRETS_HOOK:-}" ]; then
         echo "SKIP: app-secrets: ${APP_SECRETS_SKIP:-not run, the rebuild wrapper on the box set no gate (an install older than this stage)}"; return 0
       fi
+      if [ -n "${APP_SECRETS_CACERT:-}" ]; then store_ca "$APP_SECRETS_CACERT" || return 1; fi
       hook "$APP_SECRETS_HOOK" ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
     backup)
@@ -890,9 +913,9 @@ for s in $stages; do
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
   # short log too, so the run's worklog can quote it; so does the measurement's whole PASS or SKIP line, and the
   # hand-over's PASS or SKIP line (its stage's own SKIP line is printed bare, not quoted by Ansible), and the apps'
-  # secrets stage's SKIP line, or its put-apps count, compare PASS and DIFF lines (names only, never a value).
+  # secrets stage's SKIP line, or its CA line, put-apps count, compare PASS and DIFF lines (names only, never a value).
   if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ] || [ "$s" = app-secrets ]; then
-    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: (openbao-handover|app-secrets):|^(PASS: compare:|DIFF: |secrets-store: put-apps:)' \
+    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: (openbao-handover|app-secrets):|^(PASS: compare:|DIFF: |secrets-store: put-apps:|app-secrets: the store.s CA written)' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
   fi
   # The panels stage's read lines: the panel check's output, the two up reads and the store's age.
