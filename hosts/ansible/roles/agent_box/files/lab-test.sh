@@ -3,7 +3,7 @@
 # its own SDN, OPNsense and connector container (docs/specs/2026-11-lab-test-copy.md,
 # docs/runbooks/build-the-lab-test-copy.md). It runs as user `keys` through sudo, so the session that asks for it
 # never sees the Proxmox token. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|opnsense|wancheck|connector|safety|prove|destroy|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|opnsense|signin|wancheck|connector|safety|prove|destroy|log
 # plan: the guards (dev down, no dev rebuild running, VM 257 gone, free memory and box disk), then download and
 #   check the Proxmox VE ISO, write the answer file, bake it into a copy of the ISO with the pinned
 #   proxmox-auto-install-assistant (--fetch-from iso), and save an OpenTofu plan for hosts/terraform/home/lab-test.
@@ -28,6 +28,10 @@
 #   box through an SSH tunnel to the copy (the copy's mgmt VLAN exists only inside it), with an inventory the wrapper
 #   writes; the DNS proof is left out (it asks the gateway directly). A second run must report changed=0, and SSH by
 #   firstboot's key must still answer, as firstboot left it.
+# signin: docs/runbooks/sign-in-to-opnsense-through-keycloak.md steps 1 to 3 on the copy's VM 100: the pinned
+#   os-openid-connect package by pkg add over firstboot's SSH, the plugin's server by hosts/ansible/bootstrap/
+#   opnsense-oidc-server.php, and opnsense-test's prover against a throwaway Keycloak on the box, which VM 100 reaches
+#   through a reverse forward on that SSH. Its secrets are made for the run and removed when it ends.
 # wancheck: inside the copy, step 7's WAN safety check on VM 100, whose WAN is on the copy's portless vmbr9: WAN a DHCP
 #   client only (over the console), then a watch for server-type frames from the WAN at link-up and over a reboot.
 #   WAN goes down again on any failure.
@@ -44,8 +48,8 @@ set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | check | host | lab | firstboot | opnsense | wancheck | connector | safety | prove | destroy | log) action=$1 ;;
-  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|opnsense|wancheck|connector|safety|prove|destroy|log" >&2; exit 2 ;;
+  plan | apply | check | host | lab | firstboot | opnsense | signin | wancheck | connector | safety | prove | destroy | log) action=$1 ;;
+  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|opnsense|signin|wancheck|connector|safety|prove|destroy|log" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -68,6 +72,8 @@ py=/usr/local/libexec/agent-box/ansible-venv/bin/python3   # has PyYAML, for the
 answer_py=$libexec/lab-test-answer.py
 console_py=$libexec/lab-test-console.py
 wan_watch_py=$libexec/lab-test-wan-watch.py
+seed_py=$libexec/opnsense-test-seed.py        # opnsense-test's helpers, which signin shares
+prove_py=$libexec/opnsense-test-prove.py
 assistant=$libexec/proxmox-auto-install-assistant           # the role installs it from the pinned .deb
 
 VMID=256
@@ -315,13 +321,16 @@ vm() { ssh -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyCh
 # LAN is the copy's mgmt VLAN, which exists only inside the copy. Root's shell there is csh behind opnsense-shell, so
 # a command must not use sh redirects. The key, its public line and VM 100's host key stay in $files/opnsense-ssh.*,
 # and destroy removes them.
+vm100_proxy() { echo "ssh -i $sshkey -o BatchMode=yes -o ConnectTimeout=10 -o UserKnownHostsFile=$files/known_hosts root@$addr -W %h:%p"; }
+vm100_opts() { # sets the array o to the ssh options for VM 100
+  o=(-i "$files/opnsense-ssh.key" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10
+     -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$files/opnsense-ssh.known_hosts" -o ProxyCommand="$(vm100_proxy)")
+}
 vm100() {
-  local _ gw
+  local _ gw o
   read -r _ gw _ < <(mgmt_values)
-  ssh -i "$files/opnsense-ssh.key" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 \
-    -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$files/opnsense-ssh.known_hosts" \
-    -o ProxyCommand="ssh -i $sshkey -o BatchMode=yes -o ConnectTimeout=10 -o UserKnownHostsFile=$files/known_hosts root@$addr -W %h:%p" \
-    "root@$gw" "$@"
+  vm100_opts
+  ssh "${o[@]}" "root@$gw" "$@"
 }
 
 # Reads VM 100's `sshd -T` on stdin and names what is not as opnsense-ssh-key.php sets it: root by key, password and
@@ -657,6 +666,136 @@ socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=2).close()' "$
   echo "lab-test: after opnsense.yml, VM 100 still answers SSH as root by the copy's key, on $gw only"
 }
 
+# Sign-in through Keycloak on the copy's VM 100 (docs/runbooks/sign-in-to-opnsense-through-keycloak.md steps 1 to 3), the
+# nano 26.1.6 image the lab firewall runs, set up by opnsense.yml. The plugin and Keycloak pins are opnsense-test's, read
+# from opnsense-test.sh in this checkout, so the two proofs install the same bytes.
+#  - The package: downloaded on the box, checked against its SHA-256, copied over firstboot's SSH, then `pkg add`.
+#  - The settings: hosts/ansible/bootstrap/opnsense-oidc-server.php, with D-0037 rule 5's settings fixed in it, the
+#    proof's CA, and a local admin for the test user; its settings file holds the client secret and goes however it ends.
+#  - Keycloak: opnsense-test's realm at VM 100's GUI origin, https://<mgmt .1>, in a container on the box that listens
+#    on loopback only. VM 100 reaches it at the same https://127.0.0.1:8443 through a reverse forward on the SSH to it,
+#    so neither the copy nor the box's filter changes. VM 100's LAN is the copy's mgmt VLAN, which nothing outside
+#    the copy reaches.
+#  - The browser: opnsense-test-prove.py with the copy's SSH path and a tunnel to VM 100's GUI, keeping https://<mgmt .1>
+#    as the origin, which the plugin accepts because it is VM 100's own address (RelyingParty::acceptedRedirectUri).
+# Its items 2 to 7, 9 and 10 must pass; item 10 stops Keycloak, so root signs in by password with Keycloak down.
+# The box is not in the node-memory guard that plan reads, so Keycloak gets a hard memory limit (its heap is capped at
+# 1024 MiB, as in opnsense-test) and signin refuses unless the box has that limit plus a 512 MiB margin available.
+KC_NAME=lab-test-keycloak
+KC_MEMORY_MB=1536
+signin() {
+  wait_ssh
+  [[ -s $files/opnsense-ssh.key && -s $files/opnsense-root.pass ]] || { echo "lab-test: VM 100's SSH key or root password is not on the box; run lab-test firstboot first"; return 1; }
+  command -v podman >/dev/null && [[ -x $prove_py && -x $seed_py ]] || { echo "lab-test: podman or opnsense-test's helpers are not on the box; run the agent_box role"; return 1; }
+  local avail
+  avail=$(awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
+  echo "lab-test: signin: the box has $avail MiB available, need $(( KC_MEMORY_MB + 512 )) MiB (Keycloak's $KC_MEMORY_MB MiB limit plus 512)"
+  (( ${avail:-0} >= KC_MEMORY_MB + 512 )) || { echo "lab-test: refused, the box is short on memory for Keycloak; nothing done"; return 1; }
+  local pins=$repo/hosts/ansible/roles/agent_box/files/opnsense-test.sh url sha image version
+  url=$(sed -n 's/^PLUGIN_URL=\(https:\/\/github\.com\/jpawlowski\/opnsense-openid-connect\/releases\/download\/[^ ]*\.pkg\)$/\1/p' "$pins")
+  sha=$(sed -n 's/^PLUGIN_SHA256=\([0-9a-f]\{64\}\)$/\1/p' "$pins")
+  image=$(sed -n 's/^KEYCLOAK_IMAGE=\(quay\.io\/keycloak\/keycloak@sha256:[0-9a-f]\{64\}\)$/\1/p' "$pins")
+  [[ -n $url && -n $sha && -n $image ]] || { echo "lab-test: the plugin or Keycloak pin is missing from opnsense-test.sh"; return 1; }
+  version=${url##*/os-openid-connect-}; version=${version%.pkg}
+  local tag gw prefix s=$files/signin o port f _
+  read -r tag gw prefix < <(mgmt_values)
+  gui="" rev=""   # the tunnels' PIDs, global so the EXIT trap still sees them when this function has returned
+  vm100_opts
+  rm -rf "$s" && mkdir -p "$s"
+  # shellcheck disable=SC2064  # the folder is known now; the tunnels' PIDs are read when the trap runs
+  trap "kill \$gui \$rev 2>/dev/null; podman rm -f $KC_NAME >/dev/null 2>&1; rm -rf '$s'" EXIT
+
+  curl -sS --fail --max-time 300 -L -o "$s/os-openid-connect.pkg.part" "$url"
+  echo "$sha  $s/os-openid-connect.pkg.part" | sha256sum -c --quiet - \
+    || { echo "lab-test: the os-openid-connect package does not match its pin $sha; nothing installed"; return 1; }
+  mv "$s/os-openid-connect.pkg.part" "$s/os-openid-connect.pkg"
+  echo "lab-test: signin: os-openid-connect $version matches sha256 $sha on the box"
+  scp -q "${o[@]}" "$s/os-openid-connect.pkg" "$repo/hosts/ansible/bootstrap/opnsense-oidc-server.php" "root@$gw:/root/"
+  vm100 'pkg add /root/os-openid-connect.pkg; set r = $status; rm -f /root/os-openid-connect.pkg; exit $r'
+  [[ $(vm100 "pkg query '%n %v' os-openid-connect") == "os-openid-connect $version" ]] \
+    || { echo "lab-test: os-openid-connect $version is not installed on VM 100"; return 1; }
+  echo "lab-test: signin: os-openid-connect $version installed on VM 100 by pkg add"
+
+  # The proof's secrets and CA, made for this run; Keycloak's certificate is for 127.0.0.1, where both sides reach it.
+  for f in client.secret user.pass stranger.pass; do openssl rand -hex 24 > "$s/$f"; done
+  cp "$files/opnsense-root.pass" "$s/root.pass"
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 -subj "/CN=lab-test signin proof CA" \
+    -keyout "$s/ca.key" -out "$s/ca.pem" 2>/dev/null
+  openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -subj "/CN=127.0.0.1" -keyout "$s/kc.key" -out "$s/kc.csr" 2>/dev/null
+  openssl x509 -req -in "$s/kc.csr" -CA "$s/ca.pem" -CAkey "$s/ca.key" -CAcreateserial -days 1 \
+    -extfile <(printf 'subjectAltName=IP:127.0.0.1\nextendedKeyUsage=serverAuth\n') -out "$s/kc.pem" 2>/dev/null
+  rm -f "$s/ca.key" "$s/kc.csr"
+
+  python3 -I -c 'import json, sys
+s = sys.argv[1]
+json.dump({"name": "keycloak-proof", "issuer": "https://127.0.0.1:8443/realms/opnsense-proof", "client_id": "opnsense",
+           "client_secret": open(s + "/client.secret").read().strip(), "app_code": "keycloak",
+           "ca": {"descr": "lab-test signin proof CA", "pem": open(s + "/ca.pem").read()}, "proof_admin": "proofadmin"},
+          open(s + "/server.json", "w"))' "$s"
+  scp -q "${o[@]}" "$s/server.json" "root@$gw:/root/lab-test-signin.json"
+  rm -f "$s/server.json"
+  local out
+  out=$(vm100 'php /root/opnsense-oidc-server.php /root/lab-test-signin.json; set r = $status; rm -f /root/lab-test-signin.json /root/opnsense-oidc-server.php; exit $r') \
+    || { echo "$out"; echo "lab-test: opnsense-oidc-server.php failed on VM 100"; return 1; }
+  echo "$out"
+  sed -n 's/^proof admin proofadmin uid \([0-9]\{4,\}\)$/\1/p' <<<"$out" > "$s/admin.uid"
+  [[ -s $s/admin.uid ]] || { echo "lab-test: the settings script named no proof admin uid"; return 1; }
+
+  "$py" -I "$seed_py" realm-at "https://$gw" "$s/realm.json"
+  mkdir -p "$s/kc" "$s/kc-import"
+  cp "$s/kc.pem" "$s/kc.key" "$s/kc/"
+  cp "$s/realm.json" "$s/kc-import/"
+  openssl rand -hex 24 > "$s/kc-admin.pass"
+  podman rm -f "$KC_NAME" >/dev/null 2>&1 || true
+  # As opnsense-test's: secrets by name from this command's environment, never in arguments or the realm file. Here
+  # it listens on loopback only (http-host); nothing but the box and the reverse forward reach it.
+  KC_BOOTSTRAP_ADMIN_PASSWORD=$(cat "$s/kc-admin.pass") KC_PROOF_CLIENT_SECRET=$(cat "$s/client.secret") \
+  KC_PROOF_USER_PASS=$(cat "$s/user.pass") KC_PROOF_STRANGER_PASS=$(cat "$s/stranger.pass") \
+    podman run -d --name "$KC_NAME" --network host --memory="${KC_MEMORY_MB}m" --memory-swap="${KC_MEMORY_MB}m" \
+    --userns=keep-id:uid=1000,gid=1000 -v "$s/kc:/opt/keycloak/conf/proof:ro,Z" -v "$s/kc-import:/opt/keycloak/data/import:ro,Z" \
+    -e KC_BOOTSTRAP_ADMIN_USERNAME=proof-admin -e KC_BOOTSTRAP_ADMIN_PASSWORD \
+    -e KC_PROOF_CLIENT_SECRET -e KC_PROOF_USER_PASS -e KC_PROOF_STRANGER_PASS -e JAVA_OPTS_KC_HEAP="-Xms256m -Xmx1024m" \
+    "$image" start --db=dev-file --cache=local --import-realm --http-enabled=false --http-host=127.0.0.1 --https-port=8443 \
+    --https-certificate-file=/opt/keycloak/conf/proof/kc.pem --https-certificate-key-file=/opt/keycloak/conf/proof/kc.key \
+    --hostname=https://127.0.0.1:8443 >/dev/null
+  for _ in $(seq 1 60); do
+    curl -sS --fail --max-time 5 --cacert "$s/ca.pem" https://127.0.0.1:8443/realms/opnsense-proof/.well-known/openid-configuration \
+      -o "$s/discovery.json" 2>/dev/null && break
+    sleep 5
+  done
+  [[ -s $s/discovery.json ]] || { echo "lab-test: the proof's Keycloak did not come up"; podman logs --tail 30 "$KC_NAME"; return 1; }
+  "$py" -I -c 'import json, sys; sys.exit("ES256" not in json.load(open(sys.argv[1])).get("dpop_signing_alg_values_supported", []))' \
+    "$s/discovery.json" || { echo "lab-test: stopped, Keycloak does not advertise DPoP with ES256"; return 1; }
+  local pids lines
+  pids=$(podman top "$KC_NAME" hpid | tail -n +2 | tr -s ' \n' '|' | sed 's/^|//; s/|$//')
+  [[ -n $pids ]] || { echo "lab-test: the Keycloak container's processes could not be read"; return 1; }
+  lines=$(ss -Hlntup | grep -E "pid=($pids),")
+  if awk '$5 !~ /^(127\.|\[::1\]:|\[::ffff:127\.)/' <<<"$lines" | grep -q .; then
+    echo "lab-test: stopped, the proof's Keycloak listens beyond loopback:"; awk '{print $1, $5}' <<<"$lines"; return 1
+  fi
+  awk '$1 == "tcp" && $5 == "127.0.0.1:8443"' <<<"$lines" | grep -q . || { echo "lab-test: the proof's Keycloak is not on 127.0.0.1:8443"; return 1; }
+  echo "lab-test: signin: Keycloak (realm opnsense-proof, DPoP on) listens on loopback only, at https://127.0.0.1:8443"
+
+  ssh -N "${o[@]}" -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -R 127.0.0.1:8443:127.0.0.1:8443 "root@$gw" &
+  rev=$!
+  port=$("$py" -I -c 'import socket
+s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+  ssh -N -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
+    -o UserKnownHostsFile="$files/known_hosts" -L "127.0.0.1:$port:$gw:443" "root@$addr" &
+  gui=$!
+  local up=0
+  for _ in $(seq 1 12); do
+    kill -0 "$rev" 2>/dev/null && kill -0 "$gui" 2>/dev/null || { echo "lab-test: the reverse forward or the GUI tunnel ended"; return 1; }
+    if vm100 'fetch -q -T 10 -o /dev/null https://127.0.0.1:8443/realms/opnsense-proof/.well-known/openid-configuration'; then up=1; break; fi
+    sleep 5
+  done
+  (( up )) || { echo "lab-test: VM 100 does not reach the proof's Keycloak over verified https through the forward"; return 1; }
+  echo "lab-test: signin: VM 100 reaches Keycloak at https://127.0.0.1:8443 through the forward, trusting the proof CA"
+  vm100 'cat /usr/local/etc/lighttpd_webgui/cert.pem' > "$s/gui.pem"
+  "$py" -I "$prove_py" "$gw" "$s" "$files/opnsense-ssh.key" "$files/opnsense-ssh.known_hosts" "$KC_NAME" "$(vm100_proxy)" "$port"
+  echo "lab-test: signin: proof items 2 to 7, 9 and 10 passed on VM 100 (nano 26.1.6, os-openid-connect $version)"
+}
+
 # set-up-lab-network-and-firewall.md step 7's WAN safety check against the copy's VM 100, whose WAN is on the copy's
 # portless vmbr9 (lab). 1: before link-up, over the console, WAN is a DHCP client and nothing else: dhclient on vtnet1,
 # no radvd, Kea or dhcp6c. 2: link-up while lab-test-wan-watch.py watches vmbr9 on the copy, asking for a server every
@@ -782,7 +921,7 @@ safety() {
 # Destroy runs whether the steps pass or not, so dev can come back; the log says where a run stopped.
 prove() {
   local step failed="" rc
-  for step in plan apply check host lab firstboot opnsense wancheck connector safety; do
+  for step in plan apply check host lab firstboot opnsense signin wancheck connector safety; do
     echo "lab-test: prove: $step"
     rc=0; LAB_TEST_PROVE_PARENT=$$ "$0" "$step" || rc=$?
     (( rc == 0 )) || { failed=$step; echo "lab-test: prove: $step failed (exit $rc)"; break; }
@@ -802,16 +941,18 @@ case $action in
   lab) lab ;;
   firstboot) firstboot ;;
   opnsense) opnsense ;;
+  signin) signin ;;
   wancheck) wancheck ;;
   connector) connector ;;
   safety) safety ;;
   prove) prove ;;
   destroy)
+    podman rm -f "$KC_NAME" >/dev/null 2>&1 || true   # signin's Keycloak, if a run ended without its trap
     tofu_run
     # The copy's token, inventory and run folder states go with it; a new copy gets new ones. Root's password stays
     # with its hash, which the cached prepared ISO holds.
     rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory" "$files/state" "$files/copy-ca.pem" \
-      "$files"/opnsense-root.* "$files"/opnsense-api.* "$files"/opnsense-ssh.* "$files/opnsense-run.log" \
+      "$files"/opnsense-root.* "$files"/opnsense-api.* "$files"/opnsense-ssh.* "$files/opnsense-run.log" "$files/signin" \
       "$files/connector-run.log" "$files/safety-run.log"
     echo "lab-test: VM $VMID destroyed"
     leftovers
