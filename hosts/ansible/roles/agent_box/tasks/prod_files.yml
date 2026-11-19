@@ -20,6 +20,65 @@
     mode: "0700"
   loop: [prod, prod/state, prod/tfvars, prod/identity-theme, prod/lab-ca]
 
+# The OpenTofu state files: the box's runs (rebuild-prod) change prod's state on the box, so the controller's copy goes
+# stale after one. Before anything is copied, each state file the box already holds is compared with the controller's
+# by OpenTofu's own marks: the same lineage, and a serial no higher than the controller's. Otherwise the run stops,
+# naming the file and both serials, and nothing is copied: a copy would put back an older state over the box's and the
+# next run would plan from it. Take the box's state to the controller first (rebuild-k8s-layer-with-one-command.md).
+- name: Find the controller's OpenTofu state files
+  ansible.builtin.find:
+    paths: "{{ agent_box_pf_state }}"
+    patterns: "*.tfstate"
+  delegate_to: localhost
+  become: false
+  register: agent_box_pf_tfstates
+
+- name: Look for the box's copy of each state file
+  ansible.builtin.stat:
+    path: "{{ agent_box_keys_dir }}/prod/state/{{ item.path | basename }}"
+    get_checksum: false
+  loop: "{{ agent_box_pf_tfstates.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  register: agent_box_pf_box_stats
+
+- name: Read the box's copies that exist
+  ansible.builtin.slurp:
+    src: "{{ item.stat.path }}"
+  loop: "{{ agent_box_pf_box_stats.results | selectattr('stat.exists') | list }}"
+  loop_control:
+    label: "{{ item.stat.path | basename }}"
+  register: agent_box_pf_box_reads
+  no_log: true
+
+- name: Pair each box copy's lineage and serial with the controller's (names and marks only)
+  ansible.builtin.set_fact:
+    agent_box_pf_ages: >-
+      {{ agent_box_pf_names | zip(agent_box_pf_box_json | map(attribute='lineage', default=''),
+                                  agent_box_pf_box_json | map(attribute='serial', default=0),
+                                  agent_box_pf_ctl_json | map(attribute='lineage', default=''),
+                                  agent_box_pf_ctl_json | map(attribute='serial', default=0)) | list }}
+  vars:
+    agent_box_pf_names: "{{ agent_box_pf_box_reads.results | map(attribute='item.item.path') | map('basename') | list }}"
+    agent_box_pf_box_json: "{{ agent_box_pf_box_reads.results | map(attribute='content') | map('b64decode') | map('from_json') | list }}"
+    agent_box_pf_ctl_json: >-
+      {{ (query('ansible.builtin.file', *(agent_box_pf_box_reads.results | map(attribute='item.item.path') | list))
+          if agent_box_pf_box_reads.results | length > 0 else []) | map('from_json') | list }}
+  no_log: true
+
+- name: Refuse a controller state older than the box's, or another state under the same name
+  ansible.builtin.fail:
+    msg: >-
+      prod files: nothing copied. {{ item[0] }}:
+      {{ 'the box holds another state (another lineage) than the controller'
+         if item[1] != item[3] else
+         'the box is at serial ' ~ item[2] ~ ' and the controller at ' ~ item[4] ~ ', so the controller copy is older' }}.
+      Take the box's state to the controller first.
+  loop: "{{ agent_box_pf_ages }}"
+  loop_control:
+    label: "{{ item[0] }}"
+  when: item[1] != item[3] or (item[2] | int) > (item[4] | int)
+
 - name: Look for each file on the controller
   ansible.builtin.stat:
     path: "{{ agent_box_pf_clone if item.from == 'clone' else agent_box_pf_config }}/{{ item.path }}"
@@ -41,14 +100,6 @@
   loop_control:
     label: "{{ agent_box_keys_dir }}/prod/{{ item.item.dest }}"
   no_log: true
-
-- name: Find the controller's OpenTofu state files
-  ansible.builtin.find:
-    paths: "{{ agent_box_pf_state }}"
-    patterns: "*.tfstate"
-  delegate_to: localhost
-  become: false
-  register: agent_box_pf_tfstates
 
 - name: Copy the state files
   ansible.builtin.copy:
