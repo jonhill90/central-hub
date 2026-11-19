@@ -36,9 +36,9 @@ agent_box_wrappers:
   - name: secrets-store-prod
     args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed]
   # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal,
-  # seal-copy, reset-failed-start and drop-box-path passes the owner's tap id, which the wrapper checks; key prints only the public half.
+  # seal-copy, reset-failed-start, drop-box-path and admin-firewall passes the owner's tap id, which the wrapper checks; key prints only the public half.
   - name: openbao-prod
-    args: [key, check, "seal *", "seal-copy *", l2-policy, gitops, ca, handover, "reset-failed-start *", "drop-box-path *", log]
+    args: [key, check, "seal *", "seal-copy *", l2-policy, gitops, ca, handover, "reset-failed-start *", "drop-box-path *", admin-firewall-check, "admin-firewall *", log]
   # Applies one named Ansible playbook to prod's c1 with the box's own prod node key (files/c1-ansible.sh). check is
   # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The names are identity, gateway, gitops, observability and users.
   - name: c1-ansible

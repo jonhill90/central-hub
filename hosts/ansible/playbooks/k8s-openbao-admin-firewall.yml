@@ -16,7 +16,8 @@
 #   ansible-playbook -i <dev inventory>/ playbooks/k8s-openbao-admin-firewall.yml
 # The dev rebuild runs it in stage `gateway` while the store is in the cluster. Without both the admin address and
 # the box's /32 in the inventory it changes nothing and says so. On prod it is a node firewall change, run with
-# `openbao-prod` once a dev run has shown the admin login passing with it.
+# `openbao-prod admin-firewall <tap id>` (check first with `openbao-prod admin-firewall-check`); dev run
+# rebuild-20261119T121603Z passed the admin login with it.
 - name: The agent box's /32 to OpenBao's 8200 through the node firewall
   hosts: k8s_nodes
   become: true
