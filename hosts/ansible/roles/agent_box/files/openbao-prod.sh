@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|drop-box-path <tap id>|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -35,6 +35,11 @@
 #           the pod openbao-0 and the claim data-openbao-0 in namespace openbao, and prints both before and after. It
 #           replaces a hand delete; a store that was ever initialized is never touched. <tap id> is the owner's tap on a
 #           card naming this step and the commit: it deletes a claim (D-0042 rule 6); it is checked and logged as for seal.
+# drop-box-path  deletes the store's old Gateway path on prod (ListenerSet, TLSRoute and CiliumNetworkPolicy openbao-box in
+#           namespace openbao), which left git with the passthrough paths and stays because openbao-store does not prune.
+#           It deletes only those of the three that Argo CD's own status of Application openbao-store marks requiresPruning
+#           (no longer in git), refuses if any of them is still in git, and prints all three before and after. Deleting is a
+#           D-0042 rule 6 step: <tap id> is the owner's go (D-0061 rule 3: the message id of his standing go), logged as for seal.
 # log       the newest run's lines: the action, the commit, the tap id, and the PASS, FAIL, SKIP and play-recap lines.
 # Settings (agent_box_openbao_prod, private, in <work>/openbao-prod.json): seal_node (a k8s_nodes host of the prod inventory,
 # its Kubernetes node name), store_host (the store's name as the box reaches it; secrets-store-prod checks its own address
@@ -60,12 +65,12 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|drop-box-path <tap id>|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
   key | check | l2-policy | gitops | ca | handover | log) [[ $# -eq 1 ]] || usage ;;
-  seal | seal-copy | reset-failed-start)
+  seal | seal-copy | reset-failed-start | drop-box-path)
     [[ $# -eq 2 ]] || usage
     tap=$2
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "openbao-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
@@ -358,6 +363,42 @@ PY
     echo "openbao-prod: after (the pod and its claim are made again by the StatefulSet):"
     sleep 20
     kc -n "$ns" get "pod/$pod" "pvc/$claim" --no-headers || true
+    ;;
+  drop-box-path)
+    objs="listenersets.gateway.networking.k8s.io/openbao-box tlsroutes.gateway.networking.k8s.io/openbao-box ciliumnetworkpolicies.cilium.io/openbao-box"
+    echo "openbao-prod: before:"
+    # shellcheck disable=SC2086  # three names, split on purpose
+    kc -n openbao get $objs --ignore-not-found --no-headers || true
+    app=$(kc -n argocd get application.argoproj.io/openbao-store -o json) || { echo "openbao-prod: cannot read Application openbao-store; nothing deleted" >&2; exit 1; }
+    # Argo CD's own word on each of the three: prune (in the cluster, no longer in git), git (still in git: refuse) or absent.
+    plan=$(python3 -I -c '
+import json, sys
+want = {("gateway.networking.k8s.io", "ListenerSet"): "listenersets.gateway.networking.k8s.io",
+        ("gateway.networking.k8s.io", "TLSRoute"): "tlsroutes.gateway.networking.k8s.io",
+        ("cilium.io", "CiliumNetworkPolicy"): "ciliumnetworkpolicies.cilium.io"}
+try:
+    res = json.loads(sys.stdin.read())["status"]["resources"]
+except Exception as e:
+    print("openbao-prod: Application openbao-store has no readable status.resources: %s" % e, file=sys.stderr); sys.exit(1)
+seen = {}
+for r in res:
+    k = (r.get("group", ""), r.get("kind", ""))
+    if k in want and r.get("namespace") == "openbao" and r.get("name") == "openbao-box":
+        seen[want[k]] = "prune" if r.get("requiresPruning") is True else "git"
+for n in want.values(): print(n, seen.get(n, "absent"))
+' <<< "$app") || exit 1
+    grep -q ' git$' <<< "$plan" && { echo "openbao-prod: refused: Argo CD still has these in git (the drop has not reached prod's sync): $(grep ' git$' <<< "$plan" | cut -d' ' -f1 | tr '\n' ' ')" >&2; exit 1; }
+    while read -r name state; do
+      if [[ $state == prune ]]; then
+        echo "openbao-prod: deleting $name/openbao-box (Argo CD: requiresPruning)"
+        kc -n openbao delete "$name/openbao-box" --wait=true --timeout=60s
+      else
+        echo "openbao-prod: $name/openbao-box: not in Argo CD's status; left alone"
+      fi
+    done <<< "$plan"
+    echo "openbao-prod: after:"
+    # shellcheck disable=SC2086
+    kc -n openbao get $objs --ignore-not-found --no-headers || true
     ;;
 esac
 echo "openbao-prod: $action done"

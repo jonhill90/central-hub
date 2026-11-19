@@ -20,6 +20,8 @@
 #  10. ca writes ca.crt of Secret openbao/openbao-tls to <keys>/prod/secrets-store-ca.crt, asking kubectl for that one key
 #      after Ansible's shell-style split; two certificates, a certificate with another PEM block, a non-certificate or a
 #      failed read write nothing.
+#  11. drop-box-path <tap id> deletes only the openbao-box objects Argo CD marks requiresPruning on openbao-store; one still
+#      in git, an unreadable Application or status, no tap id or a malformed one delete nothing; one not in the status is left.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -273,5 +275,51 @@ if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: ca: the store's CA written 
       $d_rc -ne 0 && $d_out == *"nothing written"* && $d_file == "$a_file" && ! -e $cafile.part && $e_rc -eq 2 ]]; then
   ok "10. ca: one certificate written from ca.crt, the key's dot kept through Ansible's split; two certificates, a certificate with a key block, a non-certificate or a failed read write nothing"
 else bad "10. good rc=$a_rc [$a_words] $a_out | two rc=$b_rc $b_out | key rc=$k_rc $k_out | junk rc=$c_rc $c_out | fail rc=$d_rc $d_out | extra rc=$e_rc"; fi
+
+# 11: a stand-in `ansible` that answers the Application read from $t/kube/APP (missing: a failed read) and records deletes.
+cat > "$venv/ansible" <<EOF
+#!/usr/bin/env python3
+import json, os, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+rc, out = 0, ""
+if " delete " in a: out = "deleted"
+elif "application.argoproj.io/openbao-store" in a:
+    p = "$t/kube/APP"
+    if os.path.exists(p): out = open(p).read()
+    else: rc, out = 1, ""
+elif " get " in a: out = "listenerset.gateway.networking.k8s.io/openbao-box"
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": rc, "stdout": out, "stderr": ""}}}]}]}))
+EOF
+chmod +x "$venv/ansible"
+app() { python3 -c 'import json, sys
+r = []
+for spec in sys.argv[1:]:
+    g, k, p = spec.split(":")
+    e = {"group": g, "kind": k, "namespace": "openbao", "name": "openbao-box"}
+    if p == "prune": e["requiresPruning"] = True
+    r.append(e)
+r.append({"group": "", "kind": "Namespace", "name": "openbao", "requiresPruning": True})
+print(json.dumps({"status": {"resources": r}}))' "$@" > "$t/kube/APP"; : > "$t/kcalls"; }
+dels() { grep ' delete ' "$t/kcalls" | sed 's/.* delete //; s/ --wait.*//' | tr '\n' ' '; }
+LS=gateway.networking.k8s.io:ListenerSet TR=gateway.networking.k8s.io:TLSRoute CNP=cilium.io:CiliumNetworkPolicy
+app "$LS:prune" "$TR:prune" "$CNP:prune"; run drop-box-path "$tap"; a_rc=$rc a_out=$out a_del=$(dels)
+app "$LS:prune" "$TR:git" "$CNP:prune"; run drop-box-path "$tap"; b_rc=$rc b_out=$out b_del=$(dels)
+app "$CNP:prune"; run drop-box-path "$tap"; c_rc=$rc c_out=$out c_del=$(dels)
+app; run drop-box-path "$tap"; d_rc=$rc d_del=$(dels)
+echo '{"status": {}}' > "$t/kube/APP"; : > "$t/kcalls"; run drop-box-path "$tap"; e_rc=$rc e_del=$(dels)
+rm -f "$t/kube/APP"; : > "$t/kcalls"; run drop-box-path "$tap"; f_rc=$rc f_out=$out f_del=$(dels)
+app "$LS:prune"; run drop-box-path; g_rc=$rc g_del=$(dels)
+app "$LS:prune"; run drop-box-path not-a-tap; h_rc=$rc h_del=$(dels)
+want_a="-n openbao listenersets.gateway.networking.k8s.io/openbao-box -n openbao tlsroutes.gateway.networking.k8s.io/openbao-box -n openbao ciliumnetworkpolicies.cilium.io/openbao-box "
+want_a=${want_a//-n openbao /}
+a_del=${a_del//-n openbao /}; c_del=${c_del//-n openbao /}
+if [[ $a_rc -eq 0 && $a_del == "$want_a" && $a_out == *"before:"* && $a_out == *"after:"* && $a_out == *"owner tap $tap"* &&
+      $b_rc -ne 0 && -z $b_del && $b_out == *"refused: Argo CD still has these in git"*"tlsroutes.gateway.networking.k8s.io"* &&
+      $c_rc -eq 0 && $c_del == "ciliumnetworkpolicies.cilium.io/openbao-box " && $c_out == *"listenersets.gateway.networking.k8s.io/openbao-box: not in Argo CD's status; left alone"* &&
+      $d_rc -eq 0 && -z $d_del && $e_rc -ne 0 && -z $e_del && $f_rc -ne 0 && -z $f_del && $f_out == *"cannot read Application openbao-store; nothing deleted"* &&
+      $g_rc -eq 2 && -z $g_del && $h_rc -eq 2 && -z $h_del ]]; then
+  ok "11. drop-box-path: deletes only the three objects Argo CD marks requiresPruning; one still in git, an unreadable Application or status, no tap id or a malformed one delete nothing; one not in the status is left"
+else bad "11. all rc=$a_rc [$a_del] | git rc=$b_rc [$b_del] $b_out | one rc=$c_rc [$c_del] | none rc=$d_rc [$d_del] | nostatus rc=$e_rc [$e_del] | noapp rc=$f_rc [$f_del] | notap rc=$g_rc | badtap rc=$h_rc"; fi
 
 exit "$fail"
