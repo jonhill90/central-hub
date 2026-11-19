@@ -53,8 +53,9 @@ call() {
 # with no HTTP answer, curl's exit code and its name (https://curl.se/libcurl/c/libcurl-errors.html); with one, the
 # HTTP code and OpenBao's error text. That text can quote the secret ID ("invalid secret_id %q") and the source
 # address ("source address %q unauthorized through CIDR restrictions on the secret ID"; OpenBao v2.7.2,
-# internal/builtin/credential/approle/path_login.go lines 269 and 291), so both IDs become <id>, and an IPv4 address
-# becomes <the box's /32> or <another address than the box's /32> by SECRETS_STORE_BOX_CIDR, never itself. The
+# internal/builtin/credential/approle/path_login.go lines 269 and 291), so both IDs become <id>; an IPv4 or IPv6
+# address becomes <the box's /32> or <another address than the box's /32> by SECRETS_STORE_BOX_CIDR (or <an address;
+# the box's /32 is not set> while it is empty), never itself; and a tailnet name (*.ts.net) becomes <tailnet name>. The
 # connect timeout ends a path that drops packets in 10 s, where the kernel's own retries took over two minutes.
 login() {
   local rc=0
@@ -92,8 +93,11 @@ except ValueError: net = None
 def addr(m):
     try: a = ipaddress.ip_address(m.group(0))
     except ValueError: return "<address>"
-    return "<the box'"'"'s /32>" if net is not None and a in net else "<another address than the box'"'"'s /32>"
+    if net is None: return "<an address; the box'"'"'s /32 is not set>"
+    return "<the box'"'"'s /32>" if a.version == net.version and a in net else "<another address than the box'"'"'s /32>"
+text = re.sub(r"(?<![\w:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f.]*(?![\w:])", addr, text)
 text = re.sub(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", addr, text)
+text = re.sub(r"[\w.-]+\.ts\.net\b", "<tailnet name>", text)
 put("the store answered HTTP %s: %s" % (code, text[:300]))' \
     "$tmp/login.json" "$tmp/login.code" "$rc" "$keys/openbao-admin-role-id" "$keys/openbao-admin-secret-id" "$tmp/login.why"
 }
