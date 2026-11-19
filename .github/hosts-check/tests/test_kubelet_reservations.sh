@@ -33,13 +33,28 @@ for k in ("nodefs.available", "nodefs.inodesFree", "imagefs.available", "imagefs
 print("rendered")
 PY
 ) && [ "$out" = rendered ] && ok "1 the drop-in renders as a KubeletConfiguration with the dev values ($sys, $kube, $ev)" || bad "1 the drop-in did not render right: $out"
-if grep -Eq '^k8s_node_kubelet_(system_reserved|kube_reserved|eviction_hard)_memory: ""$' "$role/defaults/main.yml" &&
-   [ "$(grep -c '^  when: k8s_node_kubelet_system_reserved_memory | length > 0$' "$role/tasks/main.yml")" = 3 ]; then
-  ok "2 the defaults are empty and all three tasks are gated on the reservation"
-else bad "2 a default is not empty or a task is not gated"; fi
-if [ "$(grep -c '"${kubelet_vars\[@\]}"' "$script")" = 2 ] && grep -Eq 'ap "\$repo/hosts/ansible/playbooks/k8s.yml" "\$\{kubelet_vars\[@\]\}"' "$script" &&
-   grep -Eq 'cluster\) wait_ssh && ap playbooks/k8s.yml "\$\{kubelet_vars\[@\]\}"' "$script" &&
-   grep -Eq '^if \[ "\$ENV_NAME" = dev \]; then$' "$script" && grep -q '^kubelet_vars=()$' "$script"; then
-  ok "3 both k8s.yml runs get the variables, set only on dev"
-else bad "3 a k8s.yml run does not get kubelet_vars"; fi
+# Every default must be exactly "" and every task that writes the drop-in must be gated; the check reads the YAML.
+gate=$(python3 - "$role/defaults/main.yml" "$role/tasks/main.yml" <<'PY'
+import sys, yaml
+d = yaml.safe_load(open(sys.argv[1]))
+for k in ("system_reserved", "kube_reserved", "eviction_hard"):
+    assert d["k8s_node_kubelet_%s_memory" % k] == "", k
+t = [x for x in yaml.safe_load(open(sys.argv[2])) if x.get("name", "").startswith("step6a")]
+assert len(t) == 3, len(t)
+for x in t:
+    assert x["when"] == "k8s_node_kubelet_system_reserved_memory | length > 0", x["name"]
+print("gated")
+PY
+)
+[ "$gate" = gated ] && ok "2 all three defaults are empty and all three step6a tasks are gated on the reservation" || bad "2 a default is not empty or a task is not gated: $gate"
+# The assignment must sit inside the dev branch: kubelet_vars=() then "if dev", the -e lines, then "fi".
+blk=$(awk '/^kubelet_vars=\(\)$/{f=1;n=0;next} f{n++; b[n]=$0; if($0=="fi"){for(i=1;i<=n;i++)print b[i]; exit}}' "$script")
+if [ "$(printf '%s\n' "$blk" | head -1)" = 'if [ "$ENV_NAME" = dev ]; then' ] &&
+   printf '%s\n' "$blk" | sed -n 2p | grep -q '^  kubelet_vars=(-e "k8s_node_kubelet_system_reserved_memory=' &&
+   [ "$(printf '%s\n' "$blk" | grep -c 'k8s_node_kubelet_')" = 3 ] &&
+   [ "$(grep -c '"${kubelet_vars\[@\]}"' "$script")" = 2 ] &&
+   grep -Eq 'ap "\$repo/hosts/ansible/playbooks/k8s.yml" "\$\{kubelet_vars\[@\]\}"' "$script" &&
+   grep -Eq 'cluster\) wait_ssh && ap playbooks/k8s.yml "\$\{kubelet_vars\[@\]\}"' "$script"; then
+  ok "3 both k8s.yml runs get the variables, set only inside the dev branch"
+else bad "3 kubelet_vars is not set only under the dev branch, or a k8s.yml run lacks it"; fi
 exit "$fail"
