@@ -8,3 +8,7 @@
 
 - name: Restart containerd
   ansible.builtin.systemd: {name: containerd, state: restarted}
+
+# Before kubeadm init or join the kubelet only restarts in a loop, so this is harmless on a new node.
+- name: Restart kubelet
+  ansible.builtin.systemd: {name: kubelet, state: restarted}

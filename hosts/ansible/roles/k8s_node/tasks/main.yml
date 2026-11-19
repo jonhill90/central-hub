@@ -258,3 +258,24 @@
 
 - name: step6 | kubelet enabled (it restarts until kubeadm configures it)
   ansible.builtin.systemd: {name: kubelet, enabled: true, state: started}
+
+# Step 6a. Kubelet memory reservations and eviction, only when k8s_node_kubelet_system_reserved_memory is set (dev).
+- name: step6a | Kubelet drop-in folder
+  ansible.builtin.file: {path: "{{ k8s_node_kubelet_config_dir }}", state: directory, mode: "0755"}
+  when: k8s_node_kubelet_system_reserved_memory | length > 0
+
+- name: step6a | Kubelet memory reservations and eviction threshold
+  ansible.builtin.template:
+    src: kubelet-reserve.conf.j2
+    dest: "{{ k8s_node_kubelet_config_dir }}/10-central-hub-reserve.conf"
+    mode: "0644"
+  when: k8s_node_kubelet_system_reserved_memory | length > 0
+  notify: Restart kubelet
+
+- name: step6a | The kubelet reads that folder
+  ansible.builtin.copy:
+    dest: /etc/sysconfig/kubelet
+    content: "KUBELET_EXTRA_ARGS=--config-dir={{ k8s_node_kubelet_config_dir }}\n"
+    mode: "0644"
+  when: k8s_node_kubelet_system_reserved_memory | length > 0
+  notify: Restart kubelet
