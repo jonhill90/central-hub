@@ -19,8 +19,9 @@
 #                check 2) and kv/<env>/snapshot-mark (a time, no secret, which any snapshot writes, so the hourly off-box
 #                send leaves one within the hour), gets every path of the SOPS file, each only if still absent (cas 0).
 set -euo pipefail
-# secrets-store.sh sets SECRETS_STORE_RESOLVE (<store name>:443:<the store's admin address>, D-0062) on dev and prod;
-# every curl here goes there. Unset (a helper run on its own, as in its test): curl as it is.
+# secrets-store.sh sets SECRETS_STORE_RESOLVE (<store name>:443:<the store's admin address>, D-0062) on dev, and on
+# prod once prod has an admin address; every curl here goes there. Unset (prod with no admin address yet, or a helper
+# run on its own, as in its test): curl as it is.
 curl() { if [[ -n ${SECRETS_STORE_RESOLVE:-} ]]; then command curl --resolve "$SECRETS_STORE_RESOLVE" "$@"; else command curl "$@"; fi; }
 umask 077
 action=$1 addr=$2/v1 cacert=$3 keys=$4 libexec=$5

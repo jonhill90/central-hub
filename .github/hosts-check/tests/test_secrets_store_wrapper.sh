@@ -12,9 +12,10 @@
 #   7. --prod reads only the prod settings, keys folder and inventory: dev's store address is refused, the prod store's
 #      is reached on prod's admin address, and prod recovery refuses before any call (D-0038 rule 5: prod gets no
 #      recovery shares).
-#   8. No admin address, no call (D-0062: the box's only path to the store): with no rebuild copy of the dev inventory,
-#      a copy without k8s_gitops_source_openbao_admin_address, or a prod inventory without it, every action refuses
-#      before any call and says so; a gateway address in the dev inventory is never used.
+#   8. No admin address on dev, no call (D-0062: dev's only path to its store): with no rebuild copy of the dev
+#      inventory, or a copy without k8s_gitops_source_openbao_admin_address, every action refuses before any call and
+#      says so; a gateway address in the dev inventory is never used. A prod inventory without one keeps prod's path
+#      from before the admin path: the call goes by the store's name, with no --resolve.
 #   9. put-apps refuses until sops_copies is true and on a missing file or a bad line, before any write; otherwise each
 #      <name>=<value> line of the environment's secret-source file goes to the helper as put c1/<name> value, the value
 #      on stdin byte for byte (an = inside it kept), comments and blank lines skipped; then each KEY=value line of the
@@ -153,9 +154,9 @@ printf '%s\n' "all:" "  vars:" "    other: 1" > "$dev_inv"; run status; r8+="$rc
 admin_copy
 printf '%s\n' "all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-prod.invalid" > "$t/work/openbao-prod/inventory/hosts.yml"
 echo '{"address": "bao-prod.invalid"}' > "$t/work/secrets-store-prod.json"
-run --prod status; r8+="$rc:${calls:-none}:$([[ $out == *"the prod store has no admin address"*"openbao-prod gitops"* ]] && echo named) "
+run --prod status; r8+="$rc:$([[ $calls == *"https://bao-prod.invalid/v1/sys/health"* && $calls != *--resolve* ]] && echo by-name) "
 printf '%s\n' "all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-prod.invalid" "$prod_admin" > "$t/work/openbao-prod/inventory/hosts.yml"
-if [[ $r8 == "1:none:named 1:none:named 1:none:named " ]]; then ok "8. no admin address (no dev copy, a copy without one, or a prod inventory without one): refused before any call"
+if [[ $r8 == "1:none:named 1:none:named 0:by-name " ]]; then ok "8. no admin address on dev (no copy, or a copy without one): refused before any call; prod without one: by the store's name, no --resolve"
 else bad "8. $r8"; fi
 
 # 9
