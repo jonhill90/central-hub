@@ -107,7 +107,7 @@ fi
 # at 4255 MiB; 8192 is the box's own tfvars size. Before that: at 6144 the worker never passed
 # identity-keycloak (runs 20261117T043328Z and 20261118T131441Z) while the realm import ran with the operator's default
 # memory, request 1700Mi and limit 2Gi, beside Keycloak's own pod; dev now caps the import at DEV_REALM_IMPORT_MEMORY
-# below, 1 GiB less, and the worker keeps 256 MiB more than the size that failed. The sum, 12288, plus the 512 MiB
+# below, 1 GiB less, and the worker then kept 256 MiB more than the size that failed (6400). The sum, 12288, plus the 512 MiB
 # margin is 12800; the node read 15409 MiB available with dev down (`rebuild fit`, 2026-11-19 09:38 UTC). c1 (prod) keeps the sizes in its own tfvars.
 DEV_MEMORY_MB_CONTROL_PLANE=4096
 DEV_MEMORY_MB_WORKER=8192
