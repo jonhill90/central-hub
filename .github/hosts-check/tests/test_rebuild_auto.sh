@@ -20,8 +20,8 @@ fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 
-sed -n '/^auto_decide() {/,/^}/p' "$src" > "$t/fn.sh"
-grep -q 'rebuild-k8s.sh" "$fitdir" --fit' "$t/fn.sh" || { echo "FAIL: auto_decide was not found in rebuild.sh"; exit 1; }
+sed -n '/^fit_check() {/,/^}/p;/^LAB_TEST_QUIET_MIN=/p;/^lab_test_busy() {/,/^}/p;/^auto_decide() {/,/^}/p' "$src" > "$t/fn.sh"
+grep -q 'rebuild-k8s.sh" "$fitdir" --fit' "$t/fn.sh" && grep -q '^auto_decide() {' "$t/fn.sh" && grep -q '^lab_test_busy() {' "$t/fn.sh" || { echo "FAIL: fit_check and auto_decide were not found in rebuild.sh"; exit 1; }
 
 g() { git -c user.name=t -c user.email=t@example.invalid -c init.defaultBranch=main "$@"; }
 g init -q "$t/repo"
@@ -120,5 +120,51 @@ if [[ $r6a -eq 2 ]] && grep -q 'usage: rebuild .*|auto' "$t/out" &&
    grep -q 'ExecStart={{ agent_box_libexec_dir }}/rebuild.sh auto$' "$root/hosts/ansible/roles/agent_box/templates/rebuild-auto.service.j2"; then
   ok "7. auto takes no argument, exits 0 while a run holds the lock, has no sudo line, keeps the desktop; the role installs its timer"
 else bad "7. $r6a $(cat "$t/out")"; fi
+
+# 8: the fit action: the fit check's lines, then the 12 running guests with the most memory, read-only. A stand-in
+# curl returns a fixed guest list; the exit code is the fit check's.
+sed -n '/^if \[\[ \${1:-} == fit && \$# -eq 1 \]\]; then$/,/^fi$/p' "$src" > "$t/fitact.sh"
+grep -q 'exit $(( rc == 0' "$t/fitact.sh" || bad "8. the fit action was not found in rebuild.sh"
+sed -n '/^fit_check() {/,/^}/p' "$src" > "$t/fitfn.sh"
+mkdir -p "$t/keys8" "$t/bin8"
+echo 'PROXMOX_VE_API_TOKEN=x' > "$t/keys8/proxmox-dev.env"; echo 'x = 1' > "$t/keys8/dev-vms.tfvars"
+printf '%s\n' '#!/bin/bash' 'cat > /dev/null' 'echo "{\"data\": [{\"vmid\": 100, \"name\": \"small\", \"status\": \"running\", \"mem\": 1073741824, \"maxmem\": 2147483648}, {\"vmid\": 258, \"name\": \"big\", \"status\": \"running\", \"mem\": 8589934592, \"maxmem\": 8589934592}, {\"vmid\": 300, \"name\": \"off\", \"status\": \"stopped\", \"mem\": 0, \"maxmem\": 1}]}"' > "$t/bin8/curl"
+chmod +x "$t/bin8/curl"
+fitact() { FIT_SEEN=$t/fit-seen8 FIT_RC=$1 repo=$t/repo work=$t/work8 keys=$t/keys8 inventory="$t/env/inventory" PATH=$t/bin8:$PATH \
+  bash -c 'mkdir -p "$work"; . "$1"; f=$2; set -- fit; . "$f"' _ "$t/fitfn.sh" "$t/fitact.sh" 2>&1; echo "rc=$?"; }
+o8a=$(fitact 0); o8b=$(fitact 3)
+# An older checkout: the stand-in dies on --fit as rebuild-k8s.sh did before #635.
+cp "$t/repo/hosts/rebuild-k8s.sh" "$t/rk8s.keep"
+printf '%s\n' '#!/bin/bash' 'echo "rebuild-k8s: unknown argument: --fit" >&2' 'exit 2' > "$t/repo/hosts/rebuild-k8s.sh"
+o8c=$(fitact 0)
+cp "$t/rk8s.keep" "$t/repo/hosts/rebuild-k8s.sh"
+if [[ $o8a == *"preflight: refused, estimate 9216 MiB"* && $o8a == *"vmid=258 name=big status=running mem=8192 of 8192 MiB"* &&
+      $o8a != *"name=off"* && $o8a == *"rc=0" && $o8b == *"rc=3" && $o8b == *"vmid=258"* &&
+      $o8a == *"fit: checkout "* && $o8c == *"older than the --fit flag"* && $o8a != *"older than the --fit flag"* ]]; then
+  ok "8. fit prints the fit check's lines and the running guests by memory, biggest first, and exits with the fit check's code"
+else bad "8. [$o8a] [$o8b] [$o8c]"; fi
+
+# 9: lab-test comes first. Each gate stops the tick with its own line before the fit check: the lock held (a probe,
+# the lock is free again after it), a state that holds a resource or can't be read, a log written less than 60 minutes
+# ago. With none of them, or a log older than the window and an empty state, it goes on.
+lt=$work/state; mkdir -p "$lt"
+rm -f "$lt"/lab-test.*
+reset; logf 20261118T010000Z "$c2" pass
+: > "$lt/lab-test.lock"
+( exec 9> "$lt/lab-test.lock"; flock -n 9 && sleep 4 ) & sleep 1
+o9a=$(decide); wait
+o9a2=$(decide)
+rm -f "$lt/lab-test.lock" "$t/fit-seen"
+echo '{"resources": [{"type": "proxmox_virtual_environment_vm"}]}' > "$lt/lab-test.tfstate"; o9b=$(decide)
+echo 'not json' > "$lt/lab-test.tfstate"; o9c=$(decide)
+echo '{"resources": []}' > "$lt/lab-test.tfstate"; : > "$lt/lab-test.log"; o9d=$(decide)
+touch -d '2 hours ago' "$lt/lab-test.log"; rm -f "$t/fit-seen"; o9e=$(decide)
+if [[ $o9a == *"a lab-test run holds its lock; nothing started"*"rc=1" && $o9a2 != *"holds its lock"* &&
+      $o9b == *"lab-test state holds 1 resources"*"rc=1" && $o9c == *"lab-test state holds unreadable resources"*"rc=1" &&
+      $o9d == *"wrote its log 0 minutes ago, inside the 60-minute quiet window; nothing started"*"rc=1" &&
+      $o9e == *"building main's head"*"rc=0" && -e $t/fit-seen ]]; then
+  ok "9. the timer skips for a held lab-test lock, a state with resources or unreadable, and a log under 60 minutes old, each with its own line; an idle lab-test lets it go on"
+else bad "9. [$o9a] [$o9a2] [$o9b] [$o9c] [$o9d] [$o9e]"; fi
+rm -f "$lt"/lab-test.*
 
 exit $fail

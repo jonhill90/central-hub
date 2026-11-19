@@ -124,6 +124,39 @@
     group: root
     mode: "0755"
 
+# `lab-test signin` runs opnsense-test's prover against a throwaway Keycloak on this box, as `opnsense-test prove` does:
+# podman, rootless as the keys user with its subordinate IDs, and opnsense-test's helpers. The same lines as
+# tasks/opnsense_test.yml, so either role part leaves them the same. The proof's Keycloak listens on loopback only, so it
+# needs no packet filter of its own.
+- name: lab_test | Container tool for the sign-in proof's Keycloak
+  ansible.builtin.package:
+    name: podman
+    state: present
+
+- name: lab_test | The keys user's subordinate IDs, for rootless podman
+  ansible.builtin.lineinfile:
+    path: "/etc/{{ item }}"
+    regexp: "^{{ agent_box_keys_user }}:"
+    line: "{{ agent_box_keys_user }}:{{ agent_box_opnsense_test_subid_start }}:65536"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [subuid, subgid]
+  loop_control:
+    label: "/etc/{{ item }}"
+
+- name: lab_test | opnsense-test's realm helper and prover, which signin shares, root-owned
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ agent_box_libexec_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: [opnsense-test-seed.py, opnsense-test-prove.py]
+  loop_control:
+    label: "{{ agent_box_libexec_dir }}/{{ item }}"
+
 - name: lab_test | The wrapper's private settings, from the default and the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/lab-test.json"

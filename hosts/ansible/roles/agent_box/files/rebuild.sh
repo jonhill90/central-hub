@@ -3,10 +3,11 @@
 # (hosts/rebuild-k8s.sh, docs/runbooks/rebuild-k8s-layer-with-one-command.md) from the agent box.
 # It runs as user `keys` through sudo, so the session that asks for it never sees the Proxmox
 # token, the node SSH key or the dev inventory. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild [<commit>]|teardown|identity|log|diag
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild [<commit>]|teardown|identity|log|diag|fit
 #   rebuild.sh auto   (the rebuild-auto timer only, as the keys user; no sudo line)
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
-# auto: an `up` of main's newest commit, started only when all hold: no run is going (the lock), dev is down (no VM
+# auto: an `up` of main's newest commit, started only when all hold: no lab-test run is going or lately ended (its lock,
+# its state, its log's age: 60 minutes), no run is going (the lock), dev is down (no VM
 # in the dev state), the newest full
 # run did not already build that commit, a file under hosts/ changed since the newest full pass (or there is none on
 # main), and the memory preflight fits (rebuild-k8s.sh --fit) without stopping the owner's desktop VM, which a timer
@@ -22,6 +23,8 @@
 # log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can quote the realm
 # and the nodes' output). A newer run that only tore dev down is named in one line and skipped, so it can't hide
 # a failed run's diag. It takes no argument and reads no other file.
+# fit: read-only. Would the dev memory preflight pass now (rebuild-k8s.sh --fit, nothing stopped, no run log), and the 12
+# running guests with the most memory on the cluster (vmid, name, memory), to name what grew. Exits 0 if it fits, 3 if not.
 # diag: read-only look at the dev cluster, for a failed apps stage: each dev VM's memory and CPU on Proxmox, the
 # node's memory, each dev node's free memory, load and pressure, the Argo CD applications' sync and
 # health, the newest events in the alerts and monitoring namespaces, pods that are not running, and
@@ -51,7 +54,7 @@ if [[ ${1:-} == log && $# -eq 1 ]]; then
   exit 0
 fi
 
-usage() { echo "usage: rebuild up|rebuild [<commit>]|teardown|identity|log|diag|auto" >&2; exit 2; }
+usage() { echo "usage: rebuild up|rebuild [<commit>]|teardown|identity|log|diag|fit|auto" >&2; exit 2; }
 action=${1:-}
 want=""
 case $action in
@@ -60,6 +63,7 @@ case $action in
   teardown) extra=(--only teardown) ;;
   identity) extra=(--only identity-keycloak) ;;
   diag) extra=() ;;   # handled below, before anything is changed
+  fit) extra=() ;;    # handled below, before anything is changed
   auto) extra=() ;;   # an `up`, when auto_decide says so
   *) usage ;;
 esac
@@ -97,13 +101,63 @@ checkout_main() { # repo [commit]
   fi
 }
 
+# The memory preflight alone (rebuild-k8s.sh --fit): nothing is stopped and no run log is written. Its output is left in
+# $work/state/rebuild-fit/fit.out; returns its exit code. Used by auto and by the fit action.
+fit_check() {
+  local sn="" fitdir
+  if [[ -f $work/short-node ]]; then
+    sn=$(tr -d '[:space:]' < "$work/short-node")
+    case $sn in ephemeral-dev|keep-dev) ;; *) sn="" ;; esac
+  fi
+  fitdir=$work/state/rebuild-fit
+  install -d -m 700 "$fitdir"
+  printf '%s\n' ENV_NAME=dev VM_ID_MIN=250 VM_ID_MAX=257 "TFVARS=$keys/dev-vms.tfvars" "TFSTATE=$work/state/dev-vms.tfstate" \
+    "TOFU_ENV=$keys/proxmox-dev.env" "INVENTORY=$inventory/" PREFLIGHT_KEEP_DESKTOP=true ${sn:+"PREFLIGHT_SHORT_NODE=$sn"} > "$fitdir/rebuild.env"
+  chmod 600 "$fitdir/rebuild.env"
+  if ! bash "$repo/hosts/rebuild-k8s.sh" "$fitdir" --fit > "$fitdir/fit.out" 2>&1; then
+    return 1
+  fi
+  return 0
+}
+
+# A lab-test run, or what one leaves behind, comes before the timer's dev build: the copy (VM 256) and dev both need
+# the node's memory, and a tick that lands between two proves would make the second refuse (lab-test.sh: its lock
+# $work/state/lab-test.lock, its state $work/state/lab-test.tfstate, its log $work/state/lab-test.log, written by every
+# run but `log`). Prints one line and returns 0 when the timer must skip: the lock is held, the state holds a resource
+# or can't be read, or the log was written less than LAB_TEST_QUIET_MIN minutes ago. Reads only; takes no lock for
+# more than the probe.
+LAB_TEST_QUIET_MIN=60
+lab_test_busy() {
+  local lock=$work/state/lab-test.lock tf=$work/state/lab-test.tfstate lg=$work/state/lab-test.log n age
+  if [[ -e $lock ]] && ! ( flock -n 7 ) 7< "$lock" 2>/dev/null; then
+    echo "rebuild auto: a lab-test run holds its lock; nothing started"
+    return 0
+  fi
+  if [[ -s $tf ]]; then
+    n=$(python3 -I -c 'import json,sys; print(len(json.load(open(sys.argv[1])).get("resources", [])))' "$tf" 2>/dev/null) || n=unreadable
+    if [[ $n != 0 ]]; then
+      echo "rebuild auto: the lab-test state holds $n resources (the copy, VM 256, may exist); nothing started"
+      return 0
+    fi
+  fi
+  if [[ -e $lg ]]; then
+    age=$(( ( $(date +%s) - $(stat -c %Y "$lg") ) / 60 ))
+    if (( age < LAB_TEST_QUIET_MIN )); then
+      echo "rebuild auto: the last lab-test run wrote its log $age minutes ago, inside the $LAB_TEST_QUIET_MIN-minute quiet window; nothing started"
+      return 0
+    fi
+  fi
+  return 1
+}
+
 # auto: whether the timer's run starts. Prints one line and returns 1 when it does not. The newest full run is the newest
 # log with a `vms` stage (a teardown or identity run has none); a full pass also ends every stage, `checks` included, and
 # says `rebuild: all stages passed`. Reads the logs, the checkout and the node's memory (rebuild-k8s.sh --fit); writes
 # only the fit check's own settings file.
 auto_decide() {
-  local head f newest="" pass="" nc pc changed fitdir sn="" up
+  local head f newest="" pass="" nc pc changed up
   head=$(git -C "$repo" rev-parse HEAD)
+  if lab_test_busy; then return 1; fi
   # Dev must be down: with dev VMs in the state the preflight skips its memory check (a re-run makes no new VMs), so
   # --fit would say yes, and a timer run would build over a dev someone kept up. An unreadable state counts as up.
   up=$(python3 -I -c '
@@ -139,17 +193,8 @@ print(sum(len(r.get("instances", [])) for r in s.get("resources", [])
   else
     echo "rebuild auto: no full pass on main is logged, so main's head is built"
   fi
-  if [[ -f $work/short-node ]]; then
-    sn=$(tr -d '[:space:]' < "$work/short-node")
-    case $sn in ephemeral-dev|keep-dev) ;; *) sn="" ;; esac
-  fi
-  fitdir=$work/state/rebuild-fit
-  install -d -m 700 "$fitdir"
-  printf '%s\n' ENV_NAME=dev VM_ID_MIN=250 VM_ID_MAX=257 "TFVARS=$keys/dev-vms.tfvars" "TFSTATE=$work/state/dev-vms.tfstate" \
-    "TOFU_ENV=$keys/proxmox-dev.env" "INVENTORY=$inventory/" PREFLIGHT_KEEP_DESKTOP=true ${sn:+"PREFLIGHT_SHORT_NODE=$sn"} > "$fitdir/rebuild.env"
-  chmod 600 "$fitdir/rebuild.env"
-  if ! bash "$repo/hosts/rebuild-k8s.sh" "$fitdir" --fit > "$fitdir/fit.out" 2>&1; then
-    echo "rebuild auto: the memory preflight does not fit now ($(grep -E 'refused|could not be read' "$fitdir/fit.out" | tail -n 1 | cut -c1-200)); nothing started"
+  if ! fit_check; then
+    echo "rebuild auto: the memory preflight does not fit now ($(grep -E 'refused|could not be read' "$work/state/rebuild-fit/fit.out" | tail -n 1 | cut -c1-200)); nothing started"
     return 1
   fi
   echo "rebuild auto: the memory preflight fits; building main's head ${head:0:7}"
@@ -166,6 +211,35 @@ nodekey=$keys/rebuild-node-key
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/rebuild-dev TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
+
+if [[ ${1:-} == fit && $# -eq 1 ]]; then
+  # Read-only: would the dev memory preflight pass now, and which guests hold the node's memory. The preflight is
+  # rebuild-k8s.sh --fit (nothing stopped, no run log); the guest table is one GET of the dev token's guest list.
+  [[ -f $keys/proxmox-dev.env && -f $keys/dev-vms.tfvars ]] || { echo "rebuild: the dev token or tfvars is missing" >&2; exit 1; }
+  [[ -f $repo/hosts/rebuild-k8s.sh ]] || { echo "rebuild: no checkout yet; run rebuild up once" >&2; exit 1; }
+  mkdir -p "$work/state"
+  rc=0; fit_check || rc=$?
+  # fit uses the box's checkout as it is, without fetching: one older than the --fit flag (#635) fails with "unknown
+  # argument", which must not read as "does not fit".
+  echo "fit: checkout $(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  if grep -q 'unknown argument' "$work/state/rebuild-fit/fit.out"; then
+    echo "fit: this checkout is older than the --fit flag, so no answer; run rebuild up once to update it"
+  fi
+  grep -E 'preflight|refused|could not be read|^fit:' "$work/state/rebuild-fit/fit.out" | cut -c1-300 | tail -n 20 || true
+  echo "== the 12 guests holding the most memory on the cluster (vmid, name, status, memory used of max, MiB)"
+  # shellcheck source=/dev/null
+  ( set -a; . "$keys/proxmox-dev.env"; set +a
+    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/cluster/resources?type=vm" 2>/dev/null ) |
+    python3 -I -c 'import json,sys
+rows = [r for r in json.load(sys.stdin)["data"] if r.get("status") == "running"]
+for r in sorted(rows, key=lambda r: -int(r.get("mem", 0)))[:12]:
+    print("vmid=%s name=%s status=%s mem=%s of %s MiB" % (r.get("vmid"), r.get("name"), r.get("status"),
+          int(r.get("mem", 0)) // 1048576, int(r.get("maxmem", 0)) // 1048576))' \
+    || echo "(the guest list could not be read)"
+  exit $(( rc == 0 ? 0 : 3 ))
+fi
 
 if [[ ${1:-} == diag && $# -eq 1 ]]; then
   [[ -f $inventory/hosts.yml ]] || { echo "rebuild: no dev inventory yet; run rebuild up first" >&2; exit 1; }

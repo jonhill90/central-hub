@@ -58,6 +58,7 @@ flowchart LR
    ```
 
    why: a full run is the only one that writes the baseline. If the controller runs from a pinned copy that is not a git checkout, add `-e agent_box_self_apply_commit=<the commit it was made from>`.
+   note: measured once, at 23:30 UTC on 2026-11-18, the controller's direct SSH to the box timed out on its first try and the run went over the Proxmox jump (`failed=0`). The cause was not looked for; if it recurs, go over the jump and look at the route from the controller.
    expect: `failed=0`. On the box, `sudo -l` as the session user lists the one `(root)` line for `box-apply.py plan` and `apply`. The proofs check that line and accept no other root line.
 3. If sessions on the box need an allow rule to run it, add `Bash(box-apply plan)` and `Bash(box-apply apply)` to the private allow list. That list is itself a limit, so it is part of this same apply.
 

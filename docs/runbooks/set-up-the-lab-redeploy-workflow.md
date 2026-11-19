@@ -56,7 +56,7 @@ These are repository settings and a registration, so they are the owner's. Do th
 ## What an agent does on the box
 
 1. Set `agent_box_runner_user` in the private inventory (for example a user named for its job) and run the `agent_box` role from the Mac or the box: it makes the user with no extra groups and adds the sudoers lines for the wrappers marked `runner: true`.
-   expect: `failed=0`; `sudo -l -U <runner-user>` lists only `rebuild.sh up`, `up *`, `rebuild`, `rebuild *`, `teardown`, `identity`, `log` and `diag` as the keys user (the `*` is a commit on main, which the wrapper checks; the workflow passes none, so it builds main's newest).
+   expect: `failed=0`; `sudo -l -U <runner-user>` lists only `rebuild.sh up`, `up *`, `rebuild`, `rebuild *`, `teardown`, `identity`, `log`, `diag` and `fit` as the keys user (the `*` is a commit on main, which the wrapper checks; the workflow passes none, so it builds main's newest).
 
 2. After the owner has registered the runner, start the workflow with the default action.
    expect: the `read` job runs `diag` and ends green.

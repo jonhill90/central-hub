@@ -97,6 +97,54 @@ assert sorted(u["credentials"][0]["value"] for u in r["users"]) == ["${KC_PROOF_
 PY
 if grep -qe 'client-secret-example' -e 'user-pass-example' -e 'stranger-pass-example' "$work/realm.json"; then bad "the realm file holds a secret"; else ok "the realm file holds placeholders, not the secret or passwords"; fi
 
+# realm-at: the same realm for `lab-test signin`, at the copy's VM 100 origin; only the origin differs.
+python3 -I "$seed" realm-at https://10.1.50.1 "$work/realm-at.json"
+python3 -I - "$work/realm.json" "$work/realm-at.json" <<'PY' && ok "realm-at: the same realm at another GUI origin, only the origin's URIs differ" || bad "realm-at"
+import json, sys
+a = json.dumps(json.load(open(sys.argv[1]))).replace("https://10.1.30.199", "ORIGIN")
+b = json.dumps(json.load(open(sys.argv[2])))
+assert "https://10.1.50.1/api/openidconnect/auth/callback/keycloak" in b and "10.1.30.199" not in b
+assert a == b.replace("https://10.1.50.1", "ORIGIN")
+PY
+for o in http://10.1.50.1 https://firewall.example.com https://10.1.50.1:8443 "https://10.1.50.1/x"; do
+  if python3 -I "$seed" realm-at "$o" "$work/bad-realm.json" >/dev/null 2>&1; then bad "realm-at took $o"; else ok "realm-at refuses $o"; fi
+done
+
+# The prover's GUI tunnel for `lab-test signin`: https to the VM's address on 443 goes into the box's tunnel port, with
+# the VM's address kept as the Host header (the origin the plugin accepts), and no HTTPS_PROXY in the environment
+# carries it. Here the "tunnel" is a TLS server on loopback.
+HTTPS_PROXY=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 python3 -I - "$files/opnsense-test-prove.py" "$work" <<'PY' && ok "the prover's tunnel sends https://<VM address> to the tunnel port with the VM's address as Host" || bad "the prover's tunnel"
+import ast, http.client, http.server, os, socket, ssl, subprocess, sys, threading, urllib.request
+src, work = sys.argv[1], sys.argv[2]
+tree = ast.parse(open(src).read())
+keep = [n for n in tree.body if isinstance(n, (ast.ClassDef, ast.FunctionDef)) and n.name in ("Tunneled", "TunnelHandler", "browser")]
+assert len(keep) == 3
+subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "1",
+                "-subj", "/CN=gui", "-keyout", f"{work}/gui.key", "-out", f"{work}/gui.pem"], check=True, capture_output=True)
+seen = []
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        seen.append(self.headers["Host"]); self.send_response(200); self.end_headers(); self.wfile.write(b"gui")
+    def log_message(self, *a): pass
+srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+sctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); sctx.load_cert_chain(f"{work}/gui.pem", f"{work}/gui.key")
+srv.socket = sctx.wrap_socket(srv.socket, server_side=True)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+ctx = ssl.create_default_context(cafile=f"{work}/gui.pem"); ctx.check_hostname = False
+import http.cookiejar
+ns = {"http": http, "socket": socket, "urllib": urllib, "ctx": ctx, "addr": "192.0.2.77", "tunnel": srv.server_address[1]}
+exec(compile(ast.Module(body=keep, type_ignores=[]), src, "exec"), ns)
+with ns["browser"]().open("https://192.0.2.77/x", timeout=10) as r:
+    assert r.read() == b"gui"
+assert seen == ["192.0.2.77"], seen
+srv.shutdown()
+PY
+grep -q 'if len(sys.argv) not in (6, 8):' "$files/opnsense-test-prove.py" \
+  && grep -q 'via = \["-o", "IdentitiesOnly=yes", "-o", f"ProxyCommand={proxy}"\] if proxy else \[\]' "$files/opnsense-test-prove.py" \
+  && ok "the prover takes the copy's SSH ProxyCommand and tunnel port only as a pair, and opnsense-test's five arguments as before" \
+  || bad "the prover's arguments"
+python3 -I "$files/opnsense-test-prove.py" a b c d e f >/dev/null 2>&1 && bad "the prover took six arguments" || ok "the prover refuses a ProxyCommand without a tunnel port"
+
 # Refusals: an address outside dev, the gateway itself, a bad name, a key that is not one ed25519 key.
 refuse() { # label, settings JSON
   echo "$2" > "$work/bad.json"
