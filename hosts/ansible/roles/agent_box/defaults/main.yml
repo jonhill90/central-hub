@@ -374,7 +374,10 @@ agent_box_pve_assistant_sha256: 94b562ac026bf9a989e0a5834538ad24e38606f8858367af
 # The controller's private files the prod_files tasks copy to <keys_dir>/prod (D-0035; paths from
 # docs/runbooks/rebuild-home-lab-from-scratch.md). from: clone (the controller's checkout of this
 # repo) or config (~/.config/central-hub). A missing file is skipped and named. Not listed on purpose:
-# the Proxmox apply token, the Cloudflare bootstrap token, the nodes' SSH keys and the lab CA.
+# the Proxmox apply token, the Cloudflare bootstrap token, the nodes' SSH keys, and the lab root CA's key and
+# passphrase (lab-ca/root.key, lab-ca/lab-ca.env), needed only to sign the next intermediate.
+# The lab CA files listed are the three rebuild-prod.sh points the prod inventory at (k8s_certs_lab_ca_cert_file,
+# k8s_certs_lab_ca_key_file, k8s_gitops_sso_root_ca_file): c1's intermediate chain, its key and the public root.
 agent_box_prod_files:
   - {from: clone, path: hosts/.env, dest: hosts.env}
   - {from: clone, path: hosts/ansible/inventories/home/hosts.yml, dest: inventory-hosts.yml}
@@ -395,6 +398,8 @@ agent_box_prod_files:
   - {from: config, path: cloudflare-dns.token, dest: cloudflare-dns01-token.txt}
   - {from: config, path: pve-root-ca.pem, dest: pve-root-ca.pem}
   - {from: config, path: lab-ca/root.crt, dest: lab-ca/root.crt}
+  - {from: config, path: lab-ca/c1-intermediate-chain.crt, dest: lab-ca/c1-intermediate-chain.crt}
+  - {from: config, path: lab-ca/c1-intermediate.key, dest: lab-ca/c1-intermediate.key}
 # Switch for the prod_files tasks, which copy the controller's private lab files to the box. Off: a
 # run that copies them is a decision (docs/runbooks/set-up-the-agent-box.md, "Copy the controller's
 # private files to the box"), so it is turned on for one run and off again.
