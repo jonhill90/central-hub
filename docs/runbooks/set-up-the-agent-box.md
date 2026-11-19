@@ -208,7 +208,7 @@ expect: `pr-merge check` prints `GREEN` or `NOT GREEN: <reasons>` and changes no
 - Unproven until the first real run: that an installation token can create a repository on a personal account (GitHub added Repository creation for Apps on 2026-10-13, [changelog](https://github.blog/changelog/2026-10-13-github-app-improvements-for-least-privilege-and-management); older community answers say it could not), that a token request takes the permission under the key `repository_creation`, and that it is enough alone: the table marks each Repository creation row "Multiple permissions are required, or a different permission may be used". If the token is refused, the run stops at that step with GitHub's message, before any lookup or create.
 - The App's installation must have accepted Repository creation (write) first (step 2 of [The agents' GitHub App](#the-agents-github-app)); without it the run stops with `no token with Repository creation`.
 
-expect: `repo-create create <name>` prints `repo-create: made https://github.com/<owner>/<name> (empty, public)`, and `repo-create log` shows the line `<time> create <name> created <owner>/<name>`.
+expect: `repo-create create <name>` prints `repo-create: made <owner>/<name> on GitHub (empty, public)`, and `repo-create log` shows the line `<time> create <name> created <owner>/<name>`.
 
 ## Rebuild dev from the box
 

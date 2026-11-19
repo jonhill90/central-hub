@@ -107,4 +107,4 @@ if [[ $made != "$owner/$name" ]]; then
   die made-elsewhere "$made" "GitHub made $made, not $owner/$name; look at it before anything else uses it"
 fi
 note created "$made"
-echo "repo-create: made https://github.com/$made (empty, public)"
+echo "repo-create: made $made on GitHub (empty, public)"

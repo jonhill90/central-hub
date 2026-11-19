@@ -75,7 +75,7 @@ else bad "1. [$r1] $r1b"; fi
 # 2
 before=$(lines); run -- create new-repo-1
 want=$'GET https://api.github.com/users/jonhill90/installation \nPOST https://api.github.com/app/installations/42/access_tokens {"permissions":{"repository_creation":"write"}}\nGET https://api.github.com/repos/jonhill90/new-repo-1 \nPOST https://api.github.com/user/repos {"name":"new-repo-1","private":false,"auto_init":false}\nDELETE https://api.github.com/installation/token '
-if [[ $rc -eq 0 && $calls == "$want" && $out == "repo-create: made https://github.com/jonhill90/new-repo-1 (empty, public)" &&
+if [[ $rc -eq 0 && $calls == "$want" && $out == "repo-create: made jonhill90/new-repo-1 on GitHub (empty, public)" &&
       $(lines) -eq $((before + 1)) && $(tail -n 1 "$t/work/state/repo-create.log") == *" create new-repo-1 created jonhill90/new-repo-1" ]]; then
   ok "2. a new name: token with Repository creation alone, lookup, empty public create, token revoked, one log line"
 else bad "2. rc=$rc out=[$out] calls=[$calls]"; fi
