@@ -5,7 +5,7 @@
 
 - name: sftp | Not together with the Azure sign-in
   ansible.builtin.assert:
-    that: not k8s_backup_azure_identity
+    that: not (k8s_backup_azure_identity | bool)
     fail_msg: >-
       k8s_backup_sftp and k8s_backup_azure_identity are both true. The node env file can name one
       repository only. Nothing was changed.
