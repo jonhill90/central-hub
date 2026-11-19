@@ -316,6 +316,9 @@ The restore and SOPS helpers take the environment from the keys folder's name, s
    4. `openbao-prod gitops`, which passes it as `openbaoAdminAddress`.
       expect: `c1-read -n openbao get svc openbao-admin` shows the address under EXTERNAL-IP.
    5. `secrets-store-prod status` again: now on the admin address.
+10. `openbao-prod drop-box-path <tap id>`, once, after the change that dropped the store's Gateway passthrough paths has reached prod (`openbao-store` synced at that commit). A prod store turned on before that change still holds ListenerSet, TLSRoute and CiliumNetworkPolicy `openbao-box` in namespace `openbao`: `openbao-store` does not prune (root `values.yaml`, `prune: false`), so Argo CD keeps them, shows the app OutOfSync, and the CiliumNetworkPolicy still lets the Gateway's identity reach port 8200. The run deletes only those of the three that Argo CD's status of `openbao-store` marks `requiresPruning`, and refuses if any of them is still in git. Deleting is the owner's go (D-0042 rule 6): under D-0061 the tap id is the message ID of his standing go, and the PR or the run's log names the step and the commit.
+    Read first, with nothing changed: `c1-read get -n openbao listenerset.gateway.networking.k8s.io/openbao-box tlsroute.gateway.networking.k8s.io/openbao-box ciliumnetworkpolicy.cilium.io/openbao-box`. Three `NotFound` lines mean there is nothing to delete and this step is skipped.
+    expect: `before:` with the objects, one `deleting <kind>/openbao-box (Argo CD: requiresPruning)` line for each, `after:` with none, and `openbao-prod: drop-box-path done`; then `c1-read get applications -n argocd` shows `openbao-store` Synced.
 
 ## The apps' secrets
 
