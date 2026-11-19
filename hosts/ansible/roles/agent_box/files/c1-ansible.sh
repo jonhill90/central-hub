@@ -31,9 +31,10 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # name -> playbook (under hosts/ansible), and the private file it needs on the box (empty: none) with the variable that names it.
 # gateway: the shared Gateway and its node firewall ports (tag gateway only: not the smoke test, which applies and removes an app).
 # gitops: the GitOps engine's source, web UI route and sign-in settings (tags source, ui, sso only: never install, the pinned
-# upstream install of Argo CD). Neither needs a private file on the box: the inventory carries their values. k8s-certs.yml is not
+# upstream install of Argo CD). observability: metrics-server, kube-prometheus-stack, Loki, Alloy and Grafana's route, with every tag the
+# role has named, so a tag added later is not run until this line names it. None of them needs a private file on the box: the inventory carries their values. k8s-certs.yml is not
 # a name here: it needs the lab CA's key and the Cloudflare token on the controller, and the box holds neither.
-declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml)
+declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file)
 # Fixed extra variables per name. identity never replaces realm lab on prod: the role's default deletes the realm and
@@ -43,7 +44,7 @@ declare -A fixed_vars=([identity]=k8s_identity_realm_replace=false)
 # Tags per name. identity runs every task plus the clients tag, which is off by default. The tag acts only on the clients in
 # k8s_identity_ensure_clients (empty by default), so the wrapper names one: proxmox, the client the realm gained after prod's
 # realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
-declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso")
+declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof")
 declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}')
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
