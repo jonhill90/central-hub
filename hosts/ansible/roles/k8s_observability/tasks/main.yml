@@ -24,6 +24,23 @@
 # Once Argo CD manages metrics-server (hosts/kubernetes/home/c1/apps/metrics-server/), Ansible stops
 # installing it and removes Helm's old release records, which Argo CD does not use (it renders
 # charts with `helm template`, D-0023). The objects stay: Argo CD owns them now.
+# A check run skips the delete below (a command task), so this read, which runs in check mode too, prints
+# what the delete would remove: the owner reads it before an apply.
+- name: Old Helm release records of metrics-server now
+  ansible.builtin.command: >-
+    kubectl -n kube-system get secret -l owner=helm,name=metrics-server -o name
+  register: k8s_observability_metrics_server_helm_now
+  changed_when: false
+  check_mode: false
+  when: k8s_observability_metrics_server_by_argocd | bool
+  tags: [metrics_server, deletes]
+
+- name: Old Helm release records of metrics-server, what the delete would remove
+  ansible.builtin.debug:
+    msg: "metrics-server's delete would remove: {{ k8s_observability_metrics_server_helm_now.stdout_lines | join(', ') or 'nothing' }}"
+  when: k8s_observability_metrics_server_by_argocd | bool
+  tags: [metrics_server, deletes]
+
 - name: metrics-server's old Helm release records, once Argo CD manages it
   ansible.builtin.command: >-
     kubectl -n kube-system delete secret -l owner=helm,name=metrics-server
@@ -31,7 +48,7 @@
   register: k8s_observability_metrics_server_helm_records
   changed_when: k8s_observability_metrics_server_helm_records.stdout | length > 0
   when: k8s_observability_metrics_server_by_argocd | bool
-  tags: [metrics_server]
+  tags: [metrics_server, deletes]
 
 # node-exporter uses the host network, so the scrape from Prometheus on another node goes through
 # that node's input filter.
@@ -117,7 +134,16 @@
   changed_when: false
   check_mode: false
   when: not k8s_observability_logs_by_argocd | bool
-  tags: [logs]
+  tags: [logs, deletes]
+
+- name: Loki's delete would remove
+  ansible.builtin.debug:
+    msg: >-
+      {{ "Loki's delete would remove: StatefulSet loki and its pod (no claim templates: the logs in emptyDir are lost once)"
+      if k8s_observability_loki_sts.stdout | trim == 'loki'
+      else "Loki's delete would remove: nothing (the StatefulSet is absent or already has claim templates)" }}
+  when: not k8s_observability_logs_by_argocd | bool
+  tags: [logs, deletes]
 
 - name: Loki's emptyDir StatefulSet is deleted, so Helm can make it again with a claim
   ansible.builtin.command: >-
@@ -126,7 +152,7 @@
     - not k8s_observability_logs_by_argocd | bool
     - k8s_observability_loki_sts.stdout | trim == 'loki'
   changed_when: true
-  tags: [logs]
+  tags: [logs, deletes]
 
 - name: Logs store (Loki, monolithic)
   ansible.builtin.include_role:
@@ -161,6 +187,27 @@
 # Once Argo CD manages logs (apps loki, alloy) or metrics (app kube-prometheus-stack), Ansible stops
 # installing them and removes Helm's old release records, as for metrics-server above. Grafana's
 # route moves with the Gateway (app gateway, spec step 9): k8s_observability_grafana_route_by_argocd.
+- name: Old Helm release records now, for each release Argo CD manages
+  ansible.builtin.command: >-
+    kubectl -n {{ item.namespace }} get secret -l owner=helm,name={{ item.name }} -o name
+  loop:
+    - {name: loki, namespace: "{{ k8s_observability_logs_namespace }}", by_argocd: "{{ k8s_observability_logs_by_argocd }}"}
+    - {name: alloy, namespace: "{{ k8s_observability_logs_namespace }}", by_argocd: "{{ k8s_observability_logs_by_argocd }}"}
+    - {name: kube-prometheus-stack, namespace: "{{ k8s_observability_metrics_namespace }}", by_argocd: "{{ k8s_observability_metrics_by_argocd }}"}
+  loop_control: {label: "{{ item.name }}"}
+  register: k8s_observability_helm_now
+  changed_when: false
+  check_mode: false
+  when: item.by_argocd | bool
+  tags: [metrics, logs, deletes]
+
+- name: Old Helm release records, what the delete would remove
+  ansible.builtin.debug:
+    msg: "{{ item.item.name }}'s delete would remove: {{ item.stdout_lines | join(', ') or 'nothing' }}"
+  loop: "{{ k8s_observability_helm_now.results | rejectattr('skipped', 'defined') | list }}"
+  loop_control: {label: "{{ item.item.name }}"}
+  tags: [metrics, logs, deletes]
+
 - name: Old Helm release records, for each release Argo CD now manages
   ansible.builtin.command: >-
     kubectl -n {{ item.namespace }} delete secret -l owner=helm,name={{ item.name }}
@@ -173,7 +220,7 @@
   register: k8s_observability_helm_records
   changed_when: k8s_observability_helm_records.stdout | length > 0
   when: item.by_argocd | bool
-  tags: [metrics, logs]
+  tags: [metrics, logs, deletes]
 
 - name: Grafana through the shared Gateway
   ansible.builtin.include_role:
