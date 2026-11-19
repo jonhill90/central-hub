@@ -73,6 +73,7 @@ The copy needs 7168 MiB plus the 2048 MiB margin the OPNsense test uses: 9216 Mi
 - [ ] On the nested host: a second `tofu plan` in `network`, `firewall` and `remote-access` shows no changes, and `opnsense.yml --check` reports `changed=0`.
 - [ ] The WAN safety check's three moments on the nested WAN bridge pass: before link-up only a DHCP client runs, and the captures at link-up and over a reboot each count 0 server-type packets and more than 0 frames from the WAN.
 - [ ] `proxmox-safety.yml` ends with its dead-man timer cancelled.
+- [ ] `lab-test signin` passes the OPNsense sign-in prover's items 2 to 7, 9 and 10 on the copy's VM 100, with the pinned os-openid-connect package installed by `pkg add` and its server set by `opnsense-oidc-server.php` on the running firewall.
 - [ ] The copy's VM 100 answers SSH as root by a key made on the box for that copy, and its `sshd -T` shows password sign-in off and listen addresses on LAN and loopback only, after first boot and again after `opnsense.yml`.
 - [ ] Two clean runs in a row from the agent box, build to destroy, with no hand step, each with its log in the agent notebook's run records.
 
@@ -95,3 +96,4 @@ The copy needs 7168 MiB plus the 2048 MiB margin the OPNsense test uses: 9216 Mi
 - 2026-11-18: the automated installer, not Debian 13 with the Proxmox packages added. The installer is what a person would use on the real host, so the answer file is proven too. Agent pick.
 - 2026-11-18: the nested firewall's WAN on a nested bridge with no ports (`firewall`'s `wan_bridge`, default `vmbr0`), not the nested vmbr0, which is VNet dev; the capture asks for a server itself, since nothing else on that bridge would. Agent pick.
 - 2026-11-18: SSH for root on the copy's VM 100 by a key the box makes for each copy and destroy removes, set by a PHP over the console like first boot, LAN only, password sign-in off. The prover and the package install need a shell on the firewall, and the API has none. Agent pick.
+- 2026-11-18: the sign-in proof as a step of the copy, `lab-test signin`, after `opnsense`, and not only on VM 257. The copy runs the nano 26.1.6 image and the config the lab firewall runs, and the package and settings go on the way they can go on a running firewall. Its Keycloak runs on the box on loopback only, and VM 100 reaches it through a reverse forward on its SSH, so neither the copy nor the box's filter changes. Agent pick.
