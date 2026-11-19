@@ -104,6 +104,7 @@ The one gap is therefore not a missing right but a step that needs the owner's w
 |---|---|
 | `Keycloak's discovery document, from the host` fails with a certificate error | The host doesn't trust the lab root: run `playbooks/proxmox-cert.yml` first. |
 | The same task times out or can't resolve | No `/etc/hosts` line (`proxmox_sso_address` empty), or the host can't reach c1's Gateway on 443 from the mgmt VLAN. The second is a firewall change and needs the owner's words. |
+| A `--check` run prints `The discovery read waits for the apply` | The `/etc/hosts` line isn't on the host yet, and a check run doesn't write it, so the host can't resolve the issuer's name until the apply. This is expected on a first run. The apply writes the line, then reads the document. |
 | `has no PROXMOX_CLIENT_SECRET line` | Step 2 wasn't run on this controller. |
 | `builds user names from another claim` | The realm was made with another claim. Changing it changes every user name: `pveum realm delete sso` on the host, then step 3; users sign in as new accounts. |
 | Keycloak says "Invalid parameter: redirect_uri" | The name in the browser isn't in `k8s_identity_proxmox_hosts`, or the UI was opened on :8006. Use the name on 443, or add the name and run step 2. |

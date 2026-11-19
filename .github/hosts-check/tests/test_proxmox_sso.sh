@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Role proxmox_sso (sign-in to Proxmox through Keycloak) against stand-ins: pveum and pvesh that keep their
 # state in a JSON file, and a local HTTPS server with Keycloak's discovery document. Fake values only.
-#   1. A check run changes nothing.
+#   1. A check run changes nothing, and ends with no failure.
+#   1b. A check run whose issuer name resolves only through the /etc/hosts line it would write ends with no
+#       failure, and says the discovery read waits for the apply.
 #   2. A first run makes the two groups, their ACLs on /, the realm (every setting, the secret as client key),
 #      the /etc/hosts line, and passes the sign-in link proof.
 #   3. A second run changes nothing.
@@ -105,7 +107,14 @@ changed() { grep -o 'changed=[0-9]*' <<<"$1" | tail -1 | cut -d= -f2; }
 q() { python3 -I -c "import json,sys; s = json.load(open('$t/pve.json')); print(($1))"; }
 
 out=$(run --check)
-[[ ! -e $t/pve.json ]] && ! grep -q proxmox_sso "$t/hosts" && ok "1. a check run changes nothing" || bad "1: $out"
+[[ ! -e $t/pve.json ]] && ! grep -q proxmox_sso "$t/hosts" && grep -q 'failed=0' <<<"$out" \
+  && ok "1. a check run changes nothing, and ends with no failure" || bad "1: $out"
+sed "s|proxmox_sso_issuer: .*|proxmox_sso_issuer: \"https://sso.invalid/realms/lab\"|" "$t/play.yml" > "$t/play-unresolved.yml"
+out=$( (cd "$root/hosts/ansible" && PVE_STATE=$t/pve.json PATH=$t/bin:$PATH SSL_CERT_FILE=$t/cert.pem ANSIBLE_CONFIG=ansible.cfg \
+  ansible-playbook -i localhost, -c local "$t/play-unresolved.yml" --check 2>&1) || true)
+[[ ! -e $t/pve.json ]] && ! grep -q proxmox_sso "$t/hosts" && grep -q 'failed=0' <<<"$out" \
+  && grep -q 'the apply reads Keycloak' <<<"$out" \
+  && ok "1b. a check run before the hosts line exists ends with no failure" || bad "1b: $out"
 out=$(run); echo "$out" > "$t/out-all"
 if grep -q 'failed=0' <<<"$out" \
    && [[ $(q 'sorted(s["groups"])') == "['lab-admins-sso', 'lab-viewers-sso']" ]] \
