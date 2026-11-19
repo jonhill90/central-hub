@@ -206,7 +206,11 @@
       ansible.builtin.assert:
         that:
           - refresh_role.secret_id_bound_cidrs | default([]) == [refresh_cidr]
-          - refresh_role.token_bound_cidrs | default([]) == [refresh_cidr]
+          # OpenBao reads a token CIDR of one address back without its /32 (prod, 2026-11-19 16:36 UTC), so compare the
+          # addresses with any /32 taken off.
+          - >-
+            refresh_role.token_bound_cidrs | default([]) | map('regex_replace', '/32$', '') | list
+            == [refresh_cidr | regex_replace('/32$', '')]
           # The write changed only the two bindings: the role still gives policy admin.
           - refresh_role.token_policies | default([]) == ['admin']
         fail_msg: >-
