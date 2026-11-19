@@ -39,6 +39,7 @@
 #   run of this wrapper under this run's lock and log. One clean prove is one of the spec's two clean runs.
 # destroy: destroy VM 256 only. The token cannot delete files on Proxmox's local storage, so the prepared ISO stays
 #   in the state and on local for the next build, which reuses it while the answer is unchanged; destroy lists it.
+#   If a guard stopped VM 300 (the CI runner), destroy then starts it again once the node has room for it.
 # log: the last run's log, then VM 256's Proxmox state, read-only.
 set -euo pipefail
 umask 077
@@ -72,6 +73,11 @@ assistant=$libexec/proxmox-auto-install-assistant           # the role installs 
 
 VMID=256
 OPNSENSE_TEST_VMID=257
+# The notebook's CI runner, pool ci: the one guest besides VM 256 that lab-test may stop or start. The agents' token
+# holds VM.PowerMgmt on it (hosts/terraform/home/bootstrap/agent-access.sh, /pool/ci and /vms/300 AgentDev), the same
+# right the dev rebuild's preflight uses to stop it (hosts/rebuild-k8s.sh, preflight_stop_runner).
+CI_RUNNER_VMID=300
+runner_mark=$work/state/lab-test-runner-stopped   # written before the stop; destroy starts VM 300 while it is there
 # Proxmox VE 9.2-1, the release the copy installs; the sha256 is the ISO's line in
 # https://enterprise.proxmox.com/iso/SHA256SUMS (read 2026-11-18).
 ISO_NAME=proxmox-ve_9.2-1.iso
@@ -106,6 +112,15 @@ px_api() { # path
       curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" )
 }
 
+# The same call as a POST, for VM 300's shutdown and start only.
+px_post() { # path [form data]
+  # shellcheck source=/dev/null
+  ( set -a; . "$keys/proxmox-dev.env"; set +a
+    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - -X POST ${2:+--data "$2"} "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" )
+}
+
 # The node the copy runs on: the settings' proxmox_node_name when the inventory sets one, otherwise the node the agents'
 # token sees at GET /nodes, read at run time and never written to a file in the repository. More or fewer than one node
 # is a refusal, because the wrapper will not guess between nodes.
@@ -129,6 +144,7 @@ d = json.load(sys.stdin)["data"]
 print("lab-test: VM %s is %s, uptime %ss, memory %s of %s MiB" % (sys.argv[1], d.get("status"), d.get("uptime", 0),
       d.get("mem", 0) // 1048576, d.get("maxmem", 0) // 1048576))' "$VMID" 2>/dev/null \
     || echo "lab-test: VM $VMID is not on the node, or the token cannot read it"
+  [[ ! -f $runner_mark ]] || echo "lab-test: VM $CI_RUNNER_VMID (the CI runner) was stopped by lab-test at $(cat "$runner_mark"); lab-test destroy starts it again"
   exit 0
 fi
 
@@ -154,6 +170,73 @@ vlans=$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml
 [[ -f $sshkey ]] || ssh-keygen -q -t ed25519 -N "" -C "keys@agent-box lab-test" -f "$sshkey"
 addr=$(setting address)
 
+# The node's free memory in MiB: memory.available (the kernel's MemAvailable, PVE 9), else total minus used.
+node_free() { # node
+  px_api "nodes/$1/status" | python3 -I -c 'import json,sys
+m = json.load(sys.stdin)["data"]["memory"]
+print((m["available"] if m.get("available") is not None else m["total"] - m["used"]) // 1048576)'
+}
+
+vm_status() { # node vmid
+  px_api "nodes/$1/qemu/$2/status/current" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["data"].get("status", ""))'
+}
+
+# When a guard is short and VM 300 is running, stop VM 300 (a shutdown, 120 s to stop) and nothing else, as the dev
+# rebuild's preflight does. Only with the owner's short-node pick set (agent_box_short_node, either value): with
+# none, the dev rebuild refuses before it stops VM 300, and so does this. The copy is always destroyed at the end, so
+# either value means the same here: VM 300 is down for the copy's life. Stopping it ends any notebook job on it.
+runner_stop() { # node
+  local sn="" i st
+  [[ ! -f $work/short-node ]] || sn=$(tr -d '[:space:]' < "$work/short-node")
+  case $sn in
+    ephemeral-dev | keep-dev) ;;
+    *) echo "lab-test: VM $CI_RUNNER_VMID was not stopped: the owner's short-node pick (agent_box_short_node) is not set"; return 1 ;;
+  esac
+  echo "lab-test: runner stop: short on memory and VM $CI_RUNNER_VMID (the CI runner) is running; asking it to shut down (short-node pick $sn; no other guest is touched)"
+  date -u +%FT%TZ > "$runner_mark"
+  px_post "nodes/$1/qemu/$CI_RUNNER_VMID/status/shutdown" "timeout=60" >/dev/null \
+    || { echo "lab-test: runner stop: the shutdown request failed"; rm -f "$runner_mark"; return 1; }
+  for i in $(seq 1 24); do
+    st=$(vm_status "$1" "$CI_RUNNER_VMID" 2>/dev/null) || st=""
+    [[ $st != stopped ]] || { echo "lab-test: runner stop: VM $CI_RUNNER_VMID is stopped after $(( (i - 1) * 5 )) s; lab-test destroy starts it again"; return 0; }
+    sleep 5
+  done
+  echo "lab-test: runner stop: VM $CI_RUNNER_VMID did not stop within 120 s"; return 1
+}
+
+# After destroy: start VM 300 again if lab-test stopped it, once the node has its memory (maxmem) plus 2048 MiB free,
+# the dev rebuild's rule (runner_restart), so the start can't push the node back into the shortage. Up to 30 s for the
+# node to count VM 256's memory as free. Never fatal: if it can't start, the marker stays and the next destroy tries.
+runner_restart() {
+  [[ -f $runner_mark ]] || return 0
+  local node maxmem="" free="" st i
+  node=$(node_name) || { echo "lab-test: runner left stopped: the node name could not be read; run lab-test destroy again"; return 0; }
+  st=$(vm_status "$node" "$CI_RUNNER_VMID" 2>/dev/null) || st=""
+  if [[ $st == running ]]; then
+    echo "lab-test: VM $CI_RUNNER_VMID is already running"; rm -f "$runner_mark"; return 0
+  fi
+  maxmem=$(px_api "nodes/$node/qemu/$CI_RUNNER_VMID/status/current" | python3 -I -c 'import json,sys
+print(json.load(sys.stdin)["data"]["maxmem"] // 1048576)' 2>/dev/null) || maxmem=""
+  for i in 1 2 3 4 5 6 7; do
+    free=$(node_free "$node" 2>/dev/null) || free=""
+    [[ -n $maxmem && -n $free ]] && (( free >= maxmem + 2048 )) && break
+    (( i == 7 )) || sleep 5
+  done
+  if [[ -z $maxmem || -z $free ]]; then
+    echo "lab-test: runner left stopped: the memory figures could not be read; run lab-test destroy again"; return 0
+  fi
+  if (( free < maxmem + 2048 )); then
+    echo "lab-test: runner left stopped: free $free MiB, needs $(( maxmem + 2048 )) MiB; run lab-test destroy again when the node has it"; return 0
+  fi
+  if px_post "nodes/$node/qemu/$CI_RUNNER_VMID/status/start" >/dev/null; then
+    echo "lab-test: runner restart: VM $CI_RUNNER_VMID started again (free $free MiB, needs $(( maxmem + 2048 )) MiB)"
+    rm -f "$runner_mark"
+  else
+    echo "lab-test: runner restart: the start request failed; the marker stays, so the next lab-test destroy tries again"
+  fi
+  return 0
+}
+
 # The copy never runs beside dev or the OPNsense test VM: the node has the memory for one of the three
 # (docs/specs/2026-11-lab-test-copy.md). Dev's state must hold no resource, dev's tfvars must not declare VM 256,
 # no dev rebuild may run, VM 257 must not exist, and the node must have the copy's memory plus the margin.
@@ -175,11 +258,16 @@ guards() {
   fi
   node=$(node_name) || { echo "lab-test: refused, the node name could not be read"; return 1; }
   need=$(( $(setting memory_mb) + 2048 ))
-  free=$(px_api "nodes/$node/status" | python3 -I -c 'import json,sys
-m = json.load(sys.stdin)["data"]["memory"]
-print((m["available"] if m.get("available") is not None else m["total"] - m["used"]) // 1048576)') \
-    || { echo "lab-test: refused, the node's free memory could not be read"; return 1; }
+  free=$(node_free "$node") || { echo "lab-test: refused, the node's free memory could not be read"; return 1; }
   echo "lab-test: preflight: node free memory $free MiB, need $need MiB (the copy plus the 2048 MiB margin)"
+  if (( free < need )) && python3 -I -c 'import json,sys
+sys.exit(0 if any(g.get("vmid") == int(sys.argv[1]) and g.get("status") == "running" for g in json.load(sys.stdin)["data"]) else 1)' \
+      "$CI_RUNNER_VMID" <<<"$guests"; then
+    runner_stop "$node" || { echo "lab-test: refused, short on memory and VM $CI_RUNNER_VMID could not be stopped"; return 1; }
+    sleep 5
+    free=$(node_free "$node") || { echo "lab-test: refused, the node's free memory could not be read"; return 1; }
+    echo "lab-test: preflight: node free memory $free MiB after VM $CI_RUNNER_VMID stopped, need $need MiB"
+  fi
   (( free >= need )) || { echo "lab-test: refused, short on memory"; return 1; }
   free=$(df -Pm "$files" | awk 'NR == 2 {print $4}')
   echo "lab-test: preflight: box disk free $free MiB in $files, need $DISK_NEED_MB MiB"
@@ -815,5 +903,6 @@ case $action in
       "$files/connector-run.log" "$files/safety-run.log"
     echo "lab-test: VM $VMID destroyed"
     leftovers
+    runner_restart
     ;;
 esac
