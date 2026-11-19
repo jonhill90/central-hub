@@ -19,6 +19,7 @@
 #   9. A corrupted read-back fails the run.
 #  10. No password shows in the output.
 #  11. While the wrapper's rebuild hold exists, the run skips with no snapshot; a hold over 24 hours old fails it.
+#  12. The role installs the send only when agent_box_secrets_store.offbox is true, and turns a left timer off otherwise.
 # restic comes from its GitHub release, checked against the SHA-256 the role installs.
 # Usage: .github/hosts-check/tests/test_secrets_store_offbox.sh   (needs curl, python3 with PyYAML, bunzip2)
 set -euo pipefail
@@ -230,6 +231,22 @@ if [[ $r11 -eq 0 && $o11 == *"skipped: store rebuild in progress"* && $rc -ne 0 
   ok "11. a rebuild hold skips the run (exit 0) with no snapshot; a hold over 24 hours old fails it"
 else bad "11. rc=$r11/$rc $o11 / $out"; fi
 rm -f "$t/work/state/secrets-store.rebuilding"
+
+# 12: the role includes the send only when agent_box_secrets_store.offbox is true, and turns a left timer off otherwise
+if python3 - "$role/tasks/main.yml" <<'PY'
+import sys, yaml
+tasks = yaml.safe_load(open(sys.argv[1]))
+by = {t.get("name", ""): t for t in tasks}
+inc = by["Send the dev secrets store's snapshots off the box (only with its wrapper, the off-box copy and offbox set to true)"]
+w = inc["when"]
+assert "agent_box_secrets_store.offbox | default(false) is true" in w, w
+assert "agent_box_opnsense_offbox | length > 0" in w and "agent_box_secrets_store | length > 0" in w, w
+off = by["The snapshot send's timer off, while the send is not turned on"]
+assert off["ansible.builtin.systemd_service"]["enabled"] is False and off["ansible.builtin.systemd_service"]["state"] == "stopped"
+assert any(x.startswith("not (agent_box_secrets_store.offbox") for x in off["when"]), off["when"]
+PY
+then ok "12. the snapshot send needs agent_box_secrets_store.offbox: true, and a left timer is turned off"
+else bad "12. the snapshot send is not guarded by agent_box_secrets_store.offbox: true"; fi
 
 # 10
 if [[ $all == *"$(cat "$t/keys/opnsense-offbox/restic.txt")"* ]]; then bad "10. the password shows in the output"
