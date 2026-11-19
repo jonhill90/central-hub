@@ -208,6 +208,10 @@ While `identity-keycloak` runs on dev, the run logs each node's CPU and memory e
 
 The box's own `dev-vms.sh plan` reads the box's tfvars without these sizes, so on dev VMs a rebuild made it shows a memory change for the worker; don't apply it there.
 
+### Why a stage failed, in `rebuild log`
+
+Added 2026-11-19 after the dev run `20261119T074634Z` at `dadd6c7` failed `identity-keycloak` in 5 s (`end rc=2 5s`) with no reason in the short log. When any stage ends non-zero, `hosts/rebuild-k8s.sh` (`stage_failure_lines`) now copies from that stage's part of the raw log into the short log, as `<stage>: fail: ...` lines: the last Ansible `TASK [...]` lines, the `fatal:` and `FAILED!` lines and the `msg` and `stderr` lines, at most 20 in all, scrubbed by `hosts/diag-apps.py`; a stage with none of those (not Ansible) gets its last 5 lines. The check is `.github/hosts-check/tests/test_rebuild_failure_lines.sh`. Not yet seen on a real failed run. Also, the Keycloak operator's upstream files are now downloaded with 3 tries 5 s apart (`roles/k8s_identity/tasks/operator.yml`), because that download is the first task in the stage that leaves the lab; whether it caused the 08:08 failure is unproven.
+
 ### What a dev run records while `identity-keycloak` runs
 
 Added 2026-11-19 after run `20261119T055343Z` and the 06:45 UTC auto run at `409ebee` both lost the worker: in the second, `kubectl top` read the worker at 4343Mi (71% of 6400) at 07:19:32 UTC, then `<unknown>`, so working-set memory alone did not explain the loss. While that stage runs, `hosts/rebuild-k8s.sh` now adds two lines per minute to the short log, next to the `node top` lines, each read bounded by a timeout (`PROBE_TIMEOUT_S`, 45 s) so a dead node cannot hang the run:

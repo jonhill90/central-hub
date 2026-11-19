@@ -948,6 +948,20 @@ node_top_sampler() { # stage, the run's PID
   done
 }
 
+# A failed stage's reason, in the short log (`rebuild log`), which until now held no Ansible error: the stage's last
+# Ansible task line, its fatal: and FAILED! lines and msg and stderr lines, at most 20, or the stage's last 5 lines when
+# none of those exist (a stage that is not Ansible). Each line is cut at 300 characters and scrubbed of secrets by
+# hosts/diag-apps.py, so the log names why a stage failed (the 2026-11-19 08:08 UTC identity-keycloak failure, 5 s, left
+# only `end rc=2`). Read-only, never fatal.
+stage_failure_lines() { # stage
+  local sec lines
+  sec=$(awk -v s="$1" '$0 == "===== " s {on=1; next} /^===== / {on=0} on' "$raw" 2>/dev/null) || true
+  lines=$(printf '%s\n' "$sec" | grep -E '^TASK \[|fatal:|FAILED!|"msg"|^msg:|"stderr"|^ *stderr:' | tail -n 20) || true
+  [ -n "$lines" ] || lines=$(printf '%s\n' "$sec" | grep . | tail -n 5) || true
+  [ -n "$lines" ] || lines="no output from the stage in the raw log"
+  printf '%s\n' "$lines" | python3 -I "$repo/hosts/diag-apps.py" scrub 2>/dev/null | cut -c1-300 | sed "s/^/  $1: fail: /" >> "$log" || true
+}
+
 for s in $stages; do
   t0=$(date +%s)
   echo "$(date -u +%FT%TZ) $s start" | tee -a "$log"
@@ -987,6 +1001,7 @@ for s in $stages; do
       | sed "s/^/  $s: /" >> "$log" || true
   fi
   if [ "$rc" -ne 0 ]; then
+    stage_failure_lines "$s"
     echo "rebuild: stage $s failed; last lines of $raw:" >&2
     tail -n 20 "$raw" >&2
     runner_run_teardown failed || true
