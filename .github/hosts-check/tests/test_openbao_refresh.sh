@@ -85,7 +85,7 @@ case "\$*" in
     [ "\$BAO_TOKEN" = tok-secret-1 ] || exit 4
     c=\$(cat "$w/store/role-cidr"); p=admin
     [ "\${ROLE:-ok}" = ok ] || p=default
-    printf '{\n  "data": {\n    "secret_id_bound_cidrs": ["%s"],\n    "token_bound_cidrs": ["%s"],\n    "token_policies": ["%s"],\n    "token_ttl": 900\n  }\n}\n' "\$c" "\$c" "\$p" ;;
+    printf '{\n  "data": {\n    "secret_id_bound_cidrs": ["%s"],\n    "token_bound_cidrs": ["%s"],\n    "token_policies": ["%s"],\n    "token_ttl": 900\n  }\n}\n' "\$c" "\${c%/32}" "\$p" ;;
   "token revoke -self") ;;
   *) echo "unexpected bao \$*" >&2; exit 3 ;;
 esac
@@ -198,7 +198,7 @@ class H(http.server.BaseHTTPRequestHandler):
             b = self.body(); open(os.path.join(store, "role-cidr"), "w").write(b["secret_id_bound_cidrs"][0]); return self.reply(204)
         if path == "auth/approle/role/admin" and method == "GET":
             c = open(os.path.join(store, "role-cidr")).read()
-            return self.reply(200, {"data": {"secret_id_bound_cidrs": [c], "token_bound_cidrs": [c], "token_policies": ["admin"]}})
+            return self.reply(200, {"data": {"secret_id_bound_cidrs": [c], "token_bound_cidrs": [c[:-3] if c.endswith("/32") else c], "token_policies": ["admin"]}})
         if path == "auth/token/revoke-self": return self.reply(204)
         return self.reply(404, {"errors": ["unexpected"]})
     def do_GET(self): self.handle_one("GET")
