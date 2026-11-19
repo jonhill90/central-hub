@@ -19,9 +19,9 @@
 		"${alias}": {
 			"externalID":                ${jsonencode(t.external_id)},
 			"allowIncomingConnections":  false,
-			// The group, and the share pod's tag (below): the pod is the only device that gets a path
-			// to the shared node, so no one's own machine needs one.
-			"allowExternalReferencesTo": ["group:${t.group}", "tag:share-pod"],
+			// The group, and with share_pod_enabled the share pod's tag (below): the pod is the only
+			// device that gets a path to the shared node, so no one's own machine needs one.
+			"allowExternalReferencesTo": ["group:${t.group}"%{ if share_pod }, "tag:share-pod"%{ endif }],
 		},
 %{ endfor ~}
 	},
@@ -35,7 +35,7 @@
 		"tag:connector":      ["autogroup:admin"],
 		// The agent box on dev (the owner's yes of 2026-11-09 at 08:14 UTC; tag name chosen 2026-11-10 at 06:18 UTC)
 		"tag:agent-box":      ["autogroup:admin"],
-%{ if length(external_tailnets) > 0 ~}
+%{ if share_pod ~}
 		// The share pod on c1 (apps/share-pod): holds no lab secret, reaches only the shared node
 		"tag:share-pod":      ["autogroup:admin"],
 %{ endif ~}
@@ -71,7 +71,7 @@
 
 		// GitHub Actions runners: the VPS on SSH only
 		{"src": ["tag:github-actions"], "dst": ["tag:vps"], "ip": ["tcp:22"]},
-%{ if length(external_tailnets) > 0 ~}
+%{ if share_pod ~}
 
 		// The agent box reaches the share pod on one port, which forwards to the shared node. The
 		// pod gets no grant here, so it reaches nothing of this tailnet; what it reaches in the
@@ -101,7 +101,7 @@
 			"src":  "tag:agent-box",
 			"deny": ["${proxmox_host_address}:22", "tag:vps:22"],
 		},
-%{ if length(external_tailnets) > 0 ~}
+%{ if share_pod ~}
 		{
 			"src":    "tag:agent-box",
 			"accept": ["tag:share-pod:2222"],

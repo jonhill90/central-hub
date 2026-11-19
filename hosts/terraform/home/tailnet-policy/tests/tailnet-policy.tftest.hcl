@@ -99,6 +99,7 @@ run "an_external_tailnet_gets_its_group_and_no_incoming_connections" {
   command = plan
 
   variables {
+    share_pod_enabled = true
     external_tailnets = {
       example = {
         external_id = "T123456CNTRL"
@@ -147,9 +148,42 @@ run "an_external_tailnet_gets_its_group_and_no_incoming_connections" {
 run "no_external_tailnets_renders_no_share_pod" {
   command = plan
 
+  variables {
+    share_pod_enabled = true
+  }
+
   assert {
     condition     = !strcontains(tailscale_acl.policy.acl, "tag:share-pod")
-    error_message = "With no external tailnets, the policy must not mention the share pod."
+    error_message = "With no external tailnets, the policy must not mention the share pod, even with share_pod_enabled."
+  }
+}
+
+run "an_external_tailnet_without_the_share_pod_switch_keeps_only_the_group" {
+  command = plan
+
+  variables {
+    external_tailnets = {
+      example = {
+        external_id = "T123456CNTRL"
+        group       = "example-admins"
+        members     = ["owner@example.com"]
+      }
+    }
+  }
+
+  assert {
+    condition     = !strcontains(tailscale_acl.policy.acl, "tag:share-pod")
+    error_message = "With share_pod_enabled false (the default), no share-pod tag, owner, grant or test may render."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"allowExternalReferencesTo\": [\"group:example-admins\"],")
+    error_message = "With the share pod off, the external tailnet may reference only its group."
+  }
+
+  assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "\"group:example-admins\": [\"owner@example.com\"]") && strcontains(tailscale_acl.policy.acl, "\"externalID\":                \"T123456CNTRL\"") && strcontains(tailscale_acl.policy.acl, "\"allowIncomingConnections\":  false")
+    error_message = "With the share pod off, groups and externalTailnets still render from external_tailnets."
   }
 }
 
