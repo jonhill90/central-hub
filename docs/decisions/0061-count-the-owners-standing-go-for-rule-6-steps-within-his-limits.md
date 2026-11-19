@@ -16,7 +16,7 @@ accepted-evidence:
   approval-ref: cmsg_01X43rfNYp4H1dL1V2dkfkwN5rbceJLXfh5UkZLgTQpStz
   approval-names: "the owner's own words \"Accept, yes, yes\" in the project thread \"Coordinate the project in my place\", answering the orchestrator's list of 2026-11-19T01:18Z (cmsg_01X43rfNYp4H1dL1V2dkfkwNQg5itTEnJsbydSHVvSzvaj), whose item 1 was \"Accept D-0061, so your 07:40 standing go covers firewall, access and secrets steps\" with the pick \"Accept\"; his first word answers item 1. The record is D-0061 as proposed in #519 (d77f018, on main and unchanged since), apart from these acceptance fields"
   check: "the orchestrator read the owner's message and the list it answers by id in the project thread; this PR changes only this record's status, date and accepted-evidence and its index row, the only change an owner acceptance may carry through the merge sweep (merge runbook, owner card tap); the sentences for D-0042 rule 6 and AGENTS.md rule 1 that More Information names follow in their own PR on top"
-  merged: not yet
+  merged: "PR #658 squash-merged at head 4523c39 as 93570cb, whose commit time is 2026-11-19T01:52:45Z (GitHub's merged_at for the PR is 01:52:46Z); the follow-up PR that adds this line changes nothing else in this record (D-0001)"
 revisit-when: the owner withdraws or narrows the standing go; a step taken under it does something the owner says it should not have; or the agents get GitHub identities of their own (D-0030) and GitHub can require the owner's approval itself
 ---
 
