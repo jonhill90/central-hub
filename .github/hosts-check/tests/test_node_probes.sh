@@ -30,8 +30,8 @@ export PATH="$work/bin:$PATH" ANSIBLE_ARGS="$work/args"
 fn=$(sed -n '/^node_pressure_probe() {/,/^# A failed ephemeral-dev run/p' "$script" | sed '$d')
 [ -n "$fn" ] || { echo "FAIL could not read the probe functions from $script"; exit 1; }
 run() { # mode, function, label ; stdout: the log
-  ( log="$work/log"; raw="$work/raw"; : > "$log"; : > "$raw"; repo=$repo; INVENTORY=/x; ids=$'250\n251'
-    PROBE_TIMEOUT_S=2; JOURNAL_TIMEOUT_S=2; export ANSIBLE_MODE=$1
+  ( log="$work/log"; raw="$work/raw"; : > "$log"; : > "$raw"; export repo INVENTORY=/x ids=$'250\n251'
+    export PROBE_TIMEOUT_S=2 JOURNAL_TIMEOUT_S=2 ANSIBLE_MODE=$1
     preflight_guests() { printf '%s\n' 'preflight: guest vmid=250 type=qemu status=running maxmem=3584 MiB mem=2900 MiB name=cp pool=dev' \
       'preflight: guest vmid=2500 type=qemu status=running maxmem=1 MiB mem=1 MiB name=other pool=x' \
       'preflight: guest vmid=300 type=qemu status=running maxmem=2048 MiB mem=1836 MiB name=runner pool=ci'; }
