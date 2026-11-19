@@ -828,6 +828,38 @@ if [ "$ENV_NAME" = dev ]; then
   trap runner_restart EXIT
 fi
 
+# Dev only: what the worker's own kernel and Proxmox say while a stage runs, for the losses of 2026-11-18 13:41 UTC and
+# 2026-11-19 07:20 UTC, where `kubectl top` went <unknown> with the worker at 71% working set. Two read-only probes, each
+# with a hard timeout so a dead node can't hang the run, never fatal:
+#   node_pressure_probe: on every node, one line each: /proc/pressure memory, cpu and io (PSI) and `free -m`'s Mem row.
+#   vm_mem_probe: this run's VMs from Proxmox's /cluster/resources: the memory the host counts for each (mem, maxmem).
+node_pressure_probe() { # label
+  local out
+  out=$(cd "$repo/hosts/ansible" && timeout "${PROBE_TIMEOUT_S:-45}" ansible k8s_nodes -i "$INVENTORY" -T 10 -o -m ansible.builtin.shell \
+    -a "tr '\n' ' ' </proc/pressure/memory; tr '\n' ' ' </proc/pressure/cpu; tr '\n' ' ' </proc/pressure/io; free -m | sed -n 2p" 2>&1) || true
+  if [ -n "$out" ]; then
+    printf '%s\n' "$out" | cut -c1-500 | sed "s/^/  $1: node psi $(date -u +%FT%TZ) /" >> "$log" || true
+  else
+    echo "  $1: node psi $(date -u +%FT%TZ) no reading (timed out or no output)" >> "$log" || true
+  fi
+}
+vm_mem_probe() { # label
+  local out
+  out=$(preflight_guests 2>&1 || true)   # curl's own --max-time 30 bounds it
+  [ -n "$out" ] || out="preflight: no reading"
+  printf '%s\n' "$out" | grep -E "guest vmid=($(printf '%s' "$ids" | tr '\n ' '||' | sed 's/|*$//'))( |$)|could not be read|unexpected shape|no reading" |
+    sed "s/^preflight: /  $1: vm $(date -u +%FT%TZ) /" | cut -c1-300 >> "$log" || true
+}
+# On a failed ephemeral-dev run, before the teardown: each node's kernel warnings and kubelet and containerd journal of
+# the last 30 minutes, when ssh still answers (an unreachable node prints one line). Secrets are scrubbed.
+node_journal_diag() {
+  {
+    echo "== node journals: kernel warnings, then kubelet and containerd, last 30 minutes (when ssh answers)"
+    (cd "$repo/hosts/ansible" && timeout "${JOURNAL_TIMEOUT_S:-90}" ansible k8s_nodes -i "$INVENTORY" -T 10 -b -m ansible.builtin.shell \
+      -a "echo '-- kernel warnings'; journalctl -k -p warning --since -30min --no-pager | tail -n 60; echo '-- kubelet and containerd'; journalctl -u kubelet -u containerd --since -30min --no-pager | tail -n 200" 2>&1) |
+      python3 -I "$repo/hosts/diag-apps.py" scrub
+  } 2>&1 | cut -c1-300 | head -n 500 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
+}
 # A failed ephemeral-dev run: read the cluster before it is torn down (what `rebuild diag` shows: the Argo CD
 # applications and why each is not Synced and Healthy, the pods not running, the last log lines of each pod in Error,
 # the newest events), into the short log, each line prefixed `diag:`. Never fatal.
@@ -855,6 +887,7 @@ runner_capture_diag() {
         kc -n "$pns" logs "$pod" --tail=30 --all-containers=true 2>&1 | python3 -I "$repo/hosts/diag-apps.py" scrub
       done
   } 2>&1 | cut -c1-300 | head -n 260 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
+  node_journal_diag || true
   return 0
 }
 
@@ -910,6 +943,7 @@ node_top_sampler() { # stage, the run's PID
       echo "  $1: node top $t no reading after $(( $(date +%s) - t0 ))s: $(head -n 1 "$e" 2>/dev/null | cut -c 1-200 | grep . || echo 'no node row and no error')" >> "$log" || true
     fi
     [ "$e" = /dev/null ] || rm -f "$e"
+    node_pressure_probe "$1"; vm_mem_probe "$1"
     sleep 60
   done
 }
