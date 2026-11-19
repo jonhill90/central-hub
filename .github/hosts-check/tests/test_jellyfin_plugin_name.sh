@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The Jellyfin setup script's plugin check (hosts/kubernetes/home/c1/apps/jellyfin/files/setup.sh, "sso 2/3"): it takes the
+# The Jellyfin setup script's plugin check (hosts/kubernetes/home/c1/apps/jellyfin/files/setup.sh, "sso 2/4"): it takes the
 # grep out of the script itself and runs it on sample GET /Plugins replies.
 #   1. The names c1's Jellyfin 12 listed on 2026-11-18, which hold "SSO-Auth", match.
 #   2. meta.json's name, "SSO Authentication", still matches, in either key case, with or without spaces.

@@ -105,6 +105,7 @@ check_ansible() {
   bash "$here/tests/test_signin_check_wrapper.sh"
   bash "$here/tests/test_opnsense_cert_check.sh"
   bash "$here/tests/test_jellyfin_plugin_name.sh"
+  bash "$here/tests/test_jellyfin_login_button.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
   python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml

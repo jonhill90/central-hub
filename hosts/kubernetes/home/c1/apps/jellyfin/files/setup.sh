@@ -99,10 +99,10 @@ fi
 [ -s /lab-ca/lab-root-ca.pem ] || { echo "sso: Secret $SSO_CA_NAME is missing, so Jellyfin can't trust Keycloak: skipped (cert-manager writes it once the lab CA is Ready; the next run retries)" >&2; exit 0; }
 [ -n "${SSO_CLIENT_SECRET:-}" ] || { echo "sso: Secret $SSO_SECRET_NAME has no client-secret yet: skipped (run playbooks/k8s-identity.yml)" >&2; exit 0; }
 
-echo "sso 1/3 sign in"
+echo "sso 1/4 sign in"
 signin
 
-echo "sso 2/3 plugin loaded?"
+echo "sso 2/4 plugin loaded?"
 i=0
 # Jellyfin lists a plugin by the Name its code gives, not by meta.json's name: the SSO plugin's dll holds "SSO-Auth" and
 # not "SSO Authentication" (the meta.json name, which only the startup log shows), and c1's GET /Plugins listed "SSO-Auth".
@@ -117,11 +117,22 @@ until api -H "$authz" "$BASE/Plugins" | grep -Eiq '"name" *: *"(SSO-Auth|SSO Aut
   sleep 5
 done
 
-echo "sso 3/3 provider $SSO_PROVIDER"
+echo "sso 3/4 provider $SSO_PROVIDER"
 roles=$(printf '"%s",' $SSO_ROLES | sed 's/,$//')
 admin_roles=$(printf '"%s",' $SSO_ADMIN_ROLES | sed 's/,$//')
 printf '{"oidEndpoint":"%s","oidClientId":"%s","oidSecret":"%s","enabled":true,"enableAuthorization":true,"enableAllFolders":true,"roleClaim":"roles","roles":[%s],"adminRoles":[%s],"preserveAdminPermissions":true,"defaultUsernameClaim":"preferred_username","schemeOverride":"https"}' \
   "$SSO_ISSUER" "$SSO_CLIENT_ID" "$SSO_CLIENT_SECRET" "$roles" "$admin_roles" |
   api -X POST -H "$authz" -o /dev/null --data-binary @- "$BASE/sso/OID/Add/$SSO_PROVIDER"
 api -H "$authz" "$BASE/sso/OID/Get" | grep -q "\"$SSO_PROVIDER\"" || { echo "sso: provider $SSO_PROVIDER not listed after the write" >&2; exit 1; }
+
+# The plugin has no button of its own: the login page links to it only through Jellyfin's branding (the plugin's README,
+# "Creating A Login Button On The Main Page", at the pinned v5.1.1: a form in the "Login disclaimer" and two CSS rules in
+# "Custom CSS code"). POST /System/Configuration/Branding replaces both fields and the splashscreen switch, so this script
+# owns them, and a run leaves the same state. The form's action is a path, so no host name is written into the page.
+echo "sso 4/4 login button for $SSO_PROVIDER"
+printf '{"LoginDisclaimer":"<form action=\\"/sso/OID/start/%s\\"><button class=\\"raised block emby-button button-submit\\">Sign in with Keycloak</button></form>","CustomCss":"a.raised.emby-button { padding: 0.9em 1em; color: inherit !important; } .disclaimerContainer { display: block; }","SplashscreenEnabled":false}' \
+  "$SSO_PROVIDER" |
+  api -X POST -H "$authz" -o /dev/null --data-binary @- "$BASE/System/Configuration/Branding"
+# Branding/Configuration is open to anyone, which is how the login page reads it.
+api "$BASE/Branding/Configuration" | grep -q "/sso/OID/start/$SSO_PROVIDER" || { echo "sso: the login button is not in the branding after the write" >&2; exit 1; }
 echo "done: sso provider $SSO_PROVIDER set, issuer $SSO_ISSUER"
