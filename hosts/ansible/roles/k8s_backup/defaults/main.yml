@@ -64,7 +64,7 @@ k8s_backup_sftp_address: ""
 k8s_backup_sftp_host_key: ""   # "ssh-ed25519 AAAA...", the host's own; the playbook reads it from the host
 k8s_backup_sftp_alias: c1-backup-target
 k8s_backup_sftp_repo: c1
-k8s_backup_sftp_user: "{{ 'c1restore' if k8s_backup_reader else 'c1backup' }}"
+k8s_backup_sftp_user: "{{ 'c1restore' if (k8s_backup_reader | bool) else 'c1backup' }}"
 k8s_backup_sftp_dir: /etc/central-hub/backup-ssh
 k8s_backup_sftp_ssh_conf: /etc/ssh/ssh_config.d/40-central-hub-backup.conf
 
