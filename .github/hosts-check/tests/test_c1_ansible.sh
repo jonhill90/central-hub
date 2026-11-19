@@ -42,6 +42,7 @@ cat > "$venv/ansible-playbook" <<S
 echo "playbook \$*" >> $t/calls
 cp "\${2%/}/hosts.yml" $t/seen-inventory.yml
 echo "PLAY RECAP"
+echo "    \"msg\": \"loki's delete would remove: nothing\""
 S
 chmod +x "$t/bin/git" "$venv/ansible-inventory" "$venv/ansible-playbook"
 sed -e "s|^keys=.*|keys=$t/keys|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
@@ -91,7 +92,7 @@ if [[ $rc -ne 0 && -z $calls && $out == *"not prod"* ]]; then ok "4b. a host lab
 
 inventory "${prod_inv[@]}"
 run check identity; run log
-if [[ $rc -eq 0 && $out == *"c1-ansible: check identity at central-hub abc1234"* && $out == *"PLAY RECAP"* ]]; then ok "5. log prints the run's own lines"; else bad "5. $rc $out"; fi
+if [[ $rc -eq 0 && $out == *"c1-ansible: check identity at central-hub abc1234"* && $out == *"PLAY RECAP"* && $out == *"delete would remove: nothing"* ]]; then ok "5. log prints the run's own lines, and the delete-would-remove lines"; else bad "5. $rc $out"; fi
 
 inventory "all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_identity_theme_dir: /Users/someone/branding/example-theme/" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}"
 run check identity; r6a="$rc:${calls:-none}:$out"

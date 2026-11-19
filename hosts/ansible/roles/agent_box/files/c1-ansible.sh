@@ -7,7 +7,8 @@
 # check   read-only: the playbook with --check --diff. It changes nothing on c1.
 # apply   the playbook for real. <clearance id> is the cmsg_ id of the reviewer's clearance of the head that is on main
 #         (D-0042 rule 1); it goes into the log, and the wrapper cannot read the chat to check it.
-# log     the newest run's lines: the action, the commit, the clearance id, and the PASS, FAIL, task and recap lines.
+# log     the newest run's lines: the action, the commit, the clearance id, and the PASS, FAIL, task and recap lines, and the
+#         "delete would remove:" lines of the observability role (what each of its deletes would remove).
 # Names are fixed in the table below, each one playbook with no extra argument from the session. Only code on main runs,
 # in this wrapper's own checkout. The inventory is the box's copy from the controller (<keys>/prod/inventory-hosts.yml); this
 # wrapper builds its own copy with the box's node key and plain ssh, and refuses any host that sets a proxy, another
@@ -68,7 +69,7 @@ if [[ $action == log ]]; then
   newest=$(find "$logs" -maxdepth 1 -name 'run-*.log' 2>/dev/null | sort | tail -n 1)
   [[ -n $newest ]] || { echo "c1-ansible: no run has been logged yet" >&2; exit 1; }
   echo "run: ${newest##*/}"
-  sed -E 's/\x1b\[[0-9;]*m//g' -- "$newest" | grep -E '^(c1-ansible:|PLAY RECAP|TASK \[|.*(PASS|FAIL|SKIP):|fatal:|[^ ]+ +: ok=)' | cut -c1-200 | tail -n 60 || true
+  sed -E 's/\x1b\[[0-9;]*m//g' -- "$newest" | grep -E '^(c1-ansible:|PLAY RECAP|TASK \[|.*(PASS|FAIL|SKIP):|.*delete would remove:|fatal:|[^ ]+ +: ok=)' | cut -c1-200 | tail -n 60 || true
   exit 0
 fi
 
