@@ -166,6 +166,18 @@ argument_specs:
         type: int
         default: 15
         description: The store admin rule's sequence number; clear of every other rule and below the box VLAN's first rule.
+      opnsense_lab_proxmox_web:
+        type: dict
+        required: false
+        description: One pass rule from the agent box to the Proxmox host's web UI on tcp 443 (tasks/proxmox_web.yml). Private.
+        options:
+          vlan: {type: int, required: true, description: "The box's VLAN tag, for example 30 (dev)."}
+          source: {type: str, required: true, description: "The box's IPv4 address, without a prefix."}
+          address: {type: str, required: true, description: "The Proxmox host's mgmt IPv4 address, without a prefix."}
+      opnsense_lab_proxmox_web_sequence:
+        type: int
+        default: 16
+        description: The Proxmox web rule's sequence number; clear of every other rule and below the box VLAN's first rule.
       opnsense_lab_host_overrides:
         type: list
         elements: dict

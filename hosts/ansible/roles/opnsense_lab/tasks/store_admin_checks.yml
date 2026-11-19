@@ -11,7 +11,8 @@
         opnsense_lab_store_admin_sequence
         not in (opnsense_lab_numbered_sequences
                 + opnsense_lab_app_access_sequences[:(opnsense_lab_app_access | default({})).sources | default([]) | length]
-                + opnsense_lab_backup_target_sequences[:(opnsense_lab_backup_target | default({})).sources | default([]) | length])
+                + opnsense_lab_backup_target_sequences[:(opnsense_lab_backup_target | default({})).sources | default([]) | length]
+                + ([opnsense_lab_proxmox_web_sequence] if opnsense_lab_proxmox_web is defined else []))
       - opnsense_lab_store_admin_sequence < (opnsense_lab_store_admin_first_vlan_rule | int)
     fail_msg: >-
       opnsense_lab_store_admin needs the box's IPv4 address as source, the store's admin IPv4 address as address, and a

@@ -113,6 +113,12 @@ all:
           #   vlan: 30
           #   source: ""    # VM 258's dev address
           #   address: ""   # the store's admin address, admin_address in agent_box_openbao_prod
+          # One pass rule from the box to the Proxmox host's web UI on 443 (tasks/proxmox_web.yml), so the scripted Proxmox
+          # sign-in check reaches the web UI's name; applied only on the owner's go naming the rule and the commit (D-0036 rule 8).
+          # opnsense_lab_proxmox_web:
+          #   vlan: 30
+          #   source: ""    # VM 258's dev address
+          #   address: ""   # the Proxmox host's mgmt address, proxmox_host_mgmt_address
           opnsense_lab_host_overrides:   # lab-only DNS names; addresses are private
             - { hostname: api.c1.prod, address: "", description: "Kubernetes c1 API (control-plane node)" }
             - { hostname: pve, address: "", description: "Proxmox host GUI (its mgmt address)" }

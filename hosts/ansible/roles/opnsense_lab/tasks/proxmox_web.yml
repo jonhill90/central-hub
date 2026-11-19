@@ -1,0 +1,37 @@
+---
+# One pass rule from the agent box to the Proxmox host's web UI, on tcp 443. The box already has a rule to the host's API
+# on 8006 (tasks/agent_box.yml); the web UI's name on 443 (role proxmox_proxy) sits on the host's mgmt address, which the
+# dev VLAN's own rules block like the rest of RFC 1918 (tasks/rules.yml). The scripted Proxmox sign-in check
+# (roles/proxmox_sso/files/proxmox-signin-check.py, run by the box's signin-check) reaches that name on 443, and ended
+# "auth url: HTTP none FAIL: URLError" while this rule was missing (curl to the name timed out after 8002 ms and tcp 8006
+# on the same address opened, measured from the box on 2026-11-19). From the box's address only, to the host's address only,
+# on tcp 443 only. Applying it is a firewall change on the owner's go (D-0036 rule 8).
+- name: Proxmox web rule input is checked
+  ansible.builtin.import_tasks: proxmox_web_checks.yml
+
+- name: Agent box to the Proxmox web UI on 443
+  oxlorg.opnsense.rule:
+    description: "Allow agent box to Proxmox web UI HTTPS"
+    match_fields: [description]
+    sequence: "{{ opnsense_lab_proxmox_web_sequence }}"
+    action: pass
+    quick: true
+    interface: ["{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_proxmox_web.vlan) | first).ifname }}"]
+    direction: in
+    ip_protocol: inet
+    protocol: TCP
+    source_net: "{{ opnsense_lab_proxmox_web.source }}/32"
+    destination_net: "{{ opnsense_lab_proxmox_web.address }}/32"
+    destination_port: "443"
+    log: false
+  when: opnsense_lab_proxmox_web is defined
+  notify: Apply rule changes
+
+# With the input unset, the rule is removed, so taking the entry out of the inventory takes the rule away.
+- name: No Proxmox web rule when its input is unset
+  oxlorg.opnsense.rule:
+    description: "Allow agent box to Proxmox web UI HTTPS"
+    match_fields: [description]
+    state: absent
+  when: opnsense_lab_proxmox_web is not defined
+  notify: Apply rule changes

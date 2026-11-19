@@ -69,8 +69,8 @@ opnsense_lab_rule_kinds:
 
 # Every sequence number the role gives a rule (tasks/rules.yml, tasks/agent_box.yml): the four rules per lab VLAN,
 # the tailnet block of each VLAN kept off the tailnet, the management passes and the agent box's targets. The app
-# access rules (tasks/app_access.yml) and the store admin rule (tasks/store_admin.yml) must use none of them, and must
-# sit below their source VLAN's first rule.
+# access rules (tasks/app_access.yml), the store admin rule (tasks/store_admin.yml) and the Proxmox web rule
+# (tasks/proxmox_web.yml) must use none of them, and must sit below their source VLAN's first rule.
 opnsense_lab_numbered_sequences: >-
   {%- set out = [] -%}
   {%- for v in opnsense_lab_vlans -%}
@@ -87,5 +87,8 @@ opnsense_lab_app_access_first_vlan_rule: >-
 opnsense_lab_store_admin_first_vlan_rule: >-
   {{ 10 + (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_store_admin.vlan) | first).pos * 40
   if opnsense_lab_store_admin is defined else 0 }}
+opnsense_lab_proxmox_web_first_vlan_rule: >-
+  {{ 10 + (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_proxmox_web.vlan) | first).pos * 40
+  if opnsense_lab_proxmox_web is defined else 0 }}
 # An IPv4 address with no prefix (the app access inputs; ansible.utils is not installed).
 opnsense_lab_ipv4_pattern: '^(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])){3}$'

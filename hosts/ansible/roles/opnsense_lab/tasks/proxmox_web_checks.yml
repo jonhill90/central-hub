@@ -1,0 +1,22 @@
+---
+# The Proxmox web rule's input (tasks/proxmox_web.yml), checked before the rule is written; on its own so
+# .github/hosts-check/tests/test_opnsense_proxmox_web.sh can run it with no firewall.
+- name: The Proxmox web rule's addresses, VLAN and sequence are checked
+  ansible.builtin.assert:
+    that:
+      - opnsense_lab_proxmox_web.source is match(opnsense_lab_ipv4_pattern)
+      - opnsense_lab_proxmox_web.address is match(opnsense_lab_ipv4_pattern)
+      - opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_proxmox_web.vlan) | list | length == 1
+      - >-
+        opnsense_lab_proxmox_web_sequence
+        not in (opnsense_lab_numbered_sequences
+                + opnsense_lab_app_access_sequences[:(opnsense_lab_app_access | default({})).sources | default([]) | length]
+                + opnsense_lab_backup_target_sequences[:(opnsense_lab_backup_target | default({})).sources | default([]) | length]
+                + ([opnsense_lab_store_admin_sequence] if opnsense_lab_store_admin is defined else []))
+      - opnsense_lab_proxmox_web_sequence < (opnsense_lab_proxmox_web_first_vlan_rule | int)
+    fail_msg: >-
+      opnsense_lab_proxmox_web needs the box's IPv4 address as source, the Proxmox host's IPv4 address as address, and a
+      VLAN tag in lab_vlans, and opnsense_lab_proxmox_web_sequence ({{ opnsense_lab_proxmox_web_sequence }}) must be a
+      sequence no other rule uses, below the VLAN's own first rule.
+    quiet: true
+  when: opnsense_lab_proxmox_web is defined

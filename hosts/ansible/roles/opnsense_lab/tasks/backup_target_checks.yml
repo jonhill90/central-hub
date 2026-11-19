@@ -17,7 +17,8 @@
         opnsense_lab_backup_target_sequences[:opnsense_lab_backup_target.sources | length]
         | intersect(opnsense_lab_numbered_sequences
                     + opnsense_lab_app_access_sequences[:(opnsense_lab_app_access | default({})).sources | default([]) | length]
-                    + ([opnsense_lab_store_admin_sequence] if opnsense_lab_store_admin is defined else []))
+                    + ([opnsense_lab_store_admin_sequence] if opnsense_lab_store_admin is defined else [])
+                    + ([opnsense_lab_proxmox_web_sequence] if opnsense_lab_proxmox_web is defined else []))
         | length == 0
     fail_msg: >-
       opnsense_lab_backup_target needs the host's IPv4 address, a VLAN tag in lab_vlans, and one to
