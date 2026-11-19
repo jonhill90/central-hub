@@ -141,7 +141,7 @@ When the root Application passes `openbaoStoreHost` (`k8s_gitops_source_openbao_
 
 The CA the box checks the store against is `ca.crt` of Secret `openbao/openbao-tls`: the namespace's own CA (`templates/tls.yaml`), a public certificate. On prod, `openbao-prod ca` copies it to `/etc/agent-keys/prod/secrets-store-ca.crt` ([On prod](#on-prod), step 6). A rebuild of the store makes a new CA, so run it again after one. On dev, each run makes a fresh store, so the rebuild's stage `app-secrets`, once its gate is open, first writes that run's CA to `/etc/agent-keys/dev/secrets-store-ca.crt` with the same read and checks ([below](#the-dev-rebuilds-stage-app-secrets)); while the gate is shut, nothing writes dev's CA file.
 
-So the `secrets-store` wrapper and the hourly off-box copy's health call go only to the admin address, and with none they refuse before any call ([below](#the-boxs-calls-to-the-store)). Until 2026-11-19 they fell back to dev's Gateway (dev) or to the store's name (prod), which with no listener for the name met the `https-short` listener's wildcard certificate and failed the CA check.
+So on dev the `secrets-store` wrapper and the hourly off-box copy's health call go only to the admin address, and with none they refuse before any call ([below](#the-boxs-calls-to-the-store)). Until 2026-11-19 dev fell back to dev's Gateway, which with no listener for the name met the `https-short` listener's wildcard certificate and failed the CA check. Prod with no admin address still calls by the store's name, which fails the same way, until prod's admin address is set ([On prod](#on-prod), step 9).
 
 ### The box's admin path
 
