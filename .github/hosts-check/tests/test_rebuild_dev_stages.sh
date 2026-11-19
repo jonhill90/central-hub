@@ -80,9 +80,9 @@ out=$(run dev dev-ca "$t/ok")
 check "dev-ca turns the Gateway's HTTPS on first" "$out" "k8s_gitops_source_gateway_https=true" ""
 first=${out%%playbooks/k8s-certs*}
 check "the HTTPS switch comes before the certificate" "$first" "k8s_gitops_source_gateway_https=true" ""
-check "dev-ca opens 443 in the node firewall once HTTPS is on" "$out" "AP playbooks/k8s-gateway.yml --tags gateway -e k8s_gateway_https=true" ""
+check "dev-ca opens 443 in the node firewall once HTTPS is on" "$out" "AP playbooks/k8s-gateway.yml --tags gateway -e {\"k8s_gateway_https\": true}" "k8s_gateway_https=true"
 after=${out#*playbooks/k8s-certs}
-check "the 443 opening comes after the certificate" "$after" "k8s_gateway_https=true" ""
+check "the 443 opening comes after the certificate" "$after" "\"k8s_gateway_https\": true" ""
 # The store's admin-path firewall rule: on dev with the in-cluster store only, in stage gateway, before the L2 report.
 out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gateway "$t/ok")
 check "dev gateway with the store opens the admin path in the node firewall" "$out" "AP playbooks/k8s-openbao-admin-firewall.yml" "rc=1"
