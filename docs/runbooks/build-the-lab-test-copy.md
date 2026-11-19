@@ -61,7 +61,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    lab-test apply
    ```
 
-   why: `plan` checks the guards (dev's state empty, VM 256 not in dev's tfvars, no dev rebuild running, VM 257 gone, the node's free memory, the box's free disk), downloads and checks the ISO, writes and validates the answer, prepares the ISO and saves a plan. `apply` checks the guards again, then applies only that saved plan. The VM starts and installs.
+   why: `plan` checks the guards (dev's state empty, VM 256 not in dev's tfvars, no dev rebuild running, VM 257 gone, the node's free memory, the box's free disk), downloads and checks the ISO, writes and validates the answer, prepares the ISO and saves a plan. `apply` checks the guards again, then applies only that saved plan. The VM starts and installs. When a guard finds the node short and VM 300 (the notebook's CI runner) running, it shuts VM 300 down and reads the memory again, as the dev rebuild's preflight does: the same token's `VM.PowerMgmt` on pool `ci`, no other guest touched, VM 400 included. It does so only when the owner's short-node pick (`agent_box_short_node`) is set, either value; with none it refuses and stops nothing. Stopping VM 300 ends any notebook job on it, and notebook checks queue until destroy starts it again (log lines `runner stop` and `runner restart`).
    ※ `lab-test.sh`, `guards`, `source_iso` and `prepared`
 3. Check:
 
@@ -222,7 +222,7 @@ All steps run on the agent box as the session user. The wrapper takes no other a
    lab-test destroy
    ```
 
-   why: it removes VM 256 and its disk, and on the box the copy's token, inventory, CA, run folder states, OPNsense root password, API key, VM 100's SSH key and its host key, the sign-in proof's folder and Keycloak container if a run left them, and the last `opnsense`, `connector` and `safety` logs. The prepared ISO stays in the wrapper's state and on `local` for the next build, and on the box. Destroy ends by listing what it left on `local`.
+   why: it removes VM 256 and its disk, and on the box the copy's token, inventory, CA, run folder states, OPNsense root password, API key, VM 100's SSH key and its host key, the sign-in proof's folder and Keycloak container if a run left them, and the last `opnsense`, `connector` and `safety` logs. The prepared ISO stays in the wrapper's state and on `local` for the next build, and on the box. Destroy then lists what it left on `local`. If a guard stopped VM 300, destroy last starts it again once the node has VM 300's memory plus 2048 MiB free, waiting up to 30 s for VM 256's memory to come back; otherwise it prints `runner left stopped` and keeps its mark, so the next `lab-test destroy` tries again.
 13. Bring dev back if it is needed (`rebuild.sh up`). The dev rebuild's preflight refuses while VM 256 exists.
 
 `lab-test log` prints the last run's output, then VM 256's state, uptime and memory from Proxmox. It changes nothing.
@@ -233,7 +233,9 @@ All steps run on the agent box as the session user. The wrapper takes no other a
 |---|---|
 | `refused, dev's state holds N resources` | Dev is up. Tear it down first (step 1). |
 | `refused, VM 257 (the OPNsense test) exists` | Run `opnsense-test destroy` first (step 1). |
-| `refused, short on memory` | The node lacks the copy's memory plus the margin. Stop nothing else; report it. |
+| `refused, short on memory` | The node lacks the copy's memory plus the margin, after stopping VM 300 if it was running. Stop nothing else; report it with the `preflight` lines. |
+| `VM 300 was not stopped: the owner's short-node pick (agent_box_short_node) is not set` | The node is short and only VM 300 could free memory, but the owner has not picked what a short node may stop. Report it; don't set the pick yourself. |
+| `runner left stopped` | VM 256 is gone but the node does not yet have VM 300's memory plus 2048 MiB free. Run `lab-test destroy` again later; it starts VM 300 when the node has room. `lab-test log` says while VM 300 is still stopped. |
 | `refused, short on box disk` | The box's work folder has less than 5 GB free for the source ISO and one prepared copy. Report it. |
 | `refused, VM 256 is in the state` | An earlier copy was not destroyed. Run `lab-test destroy`, then plan again. |
 | `the ISO does not match its pin` | The downloaded ISO is not the pinned one. Nothing is built. Check the release's SHA256SUMS before you move the pin. |

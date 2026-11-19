@@ -935,4 +935,75 @@ out=$(nn_run '{"name": "x"}' '{"data": [{"node": "a1"}, {"node": "b1"}]}') && ba
   || { grep -q 'shows 2 nodes' <<<"$out" && ok "node_name refuses two nodes" || bad "node_name two-node message: $out"; }
 out=$(nn_run '{"name": "x"}' '{"data": [{"node": "bad node"}]}') && bad "node_name accepted a node with a space" || ok "node_name refuses a node name that is not plain"
 
+# The CI runner stop: when a guard is short and VM 300 is running, with the owner's short-node pick set, the guard shuts
+# VM 300 down, and only VM 300, then reads the memory again; destroy starts it again once the node has room. Run
+# against stubs of the Proxmox API that answer as the node would, and that log every POST.
+rs=$work/rs
+for f in node_free vm_status runner_stop runner_restart guards; do sed -n "/^$f() {/,/^}/p" "$w"; done > "$work/runner.sh"; runner_sh=$work/runner.sh
+rs_run() { # what [free before] [free after] [VM 300 state] [short-node] [mark]
+  rm -rf "$rs"; mkdir -p "$rs/state"
+  [[ -z ${5:-} ]] || printf '%s\n' "$5" > "$rs/short-node"
+  [[ ${4:-running} == running ]] || touch "$rs/stopped"
+  [[ -z ${6:-} ]] || echo 2026-11-18T23:54:36Z > "$rs/state/lab-test-runner-stopped"
+  # shellcheck disable=SC2034,SC2329,SC1090,SC1091
+  ( work=$rs keys=$rs files=$rs VMID=256 OPNSENSE_TEST_VMID=257 CI_RUNNER_VMID=300 DISK_NEED_MB=1
+    runner_mark=$rs/state/lab-test-runner-stopped before=${2:-0} after=${3:-0}
+    setting() { echo 7168; }
+    node_name() { echo n1; }
+    sleep() { :; }
+    px_api() {
+      case $1 in
+        "cluster/resources?type=vm")
+          s=running; [[ ! -f $rs/stopped ]] || s=stopped
+          printf '{"data": [{"vmid": 300, "status": "%s"}, {"vmid": 400, "status": "running"}, {"vmid": 258, "status": "running"}]}\n' "$s" ;;
+        nodes/n1/status)
+          m=$before; [[ ! -f $rs/stopped ]] || m=$after
+          printf '{"data": {"memory": {"available": %d}}}\n' $(( m * 1048576 )) ;;
+        nodes/n1/qemu/300/status/current)
+          s=running; [[ ! -f $rs/stopped ]] || s=stopped
+          printf '{"data": {"status": "%s", "maxmem": %d}}\n' "$s" $(( 2048 * 1048576 )) ;;
+        *) echo "unexpected GET $1" >&2; return 1 ;;
+      esac
+    }
+    px_post() {
+      echo "POST $1 ${2:-}" >> "$rs/posts"
+      case $1 in
+        nodes/n1/qemu/300/status/shutdown) touch "$rs/stopped" ;;
+        nodes/n1/qemu/300/status/start) rm -f "$rs/stopped" ;;
+      esac
+    }
+    . "$runner_sh"
+    "$1" ) 2>&1
+}
+posts() { cat "$rs/posts" 2>/dev/null || true; }
+out=$(rs_run guards 7607 9700 running ephemeral-dev) \
+  && [[ $(posts) == "POST nodes/n1/qemu/300/status/shutdown timeout=60" && -f $rs/state/lab-test-runner-stopped ]] \
+  && grep -q 'node free memory 9700 MiB after VM 300 stopped, need 9216 MiB' <<<"$out" \
+  && ok "a short guard shuts down VM 300 and nothing else (VM 400 running too), marks it, and passes on the new reading" \
+  || bad "the guard's runner stop: $out / $(posts)"
+out=$(rs_run guards 7607 9700 running "") && bad "the guard stopped VM 300 with no short-node pick" \
+  || { [[ -z $(posts) && ! -f $rs/state/lab-test-runner-stopped ]] && grep -q "short-node pick (agent_box_short_node) is not set" <<<"$out" \
+       && ok "with no short-node pick the guard refuses and stops nothing" || bad "no-pick refusal: $out / $(posts)"; }
+out=$(rs_run guards 7607 8000 running keep-dev) && bad "the guard passed while still short" \
+  || { [[ -f $rs/state/lab-test-runner-stopped ]] && grep -q 'refused, short on memory$' <<<"$out" \
+       && ok "still short after the stop: refused, and the mark stays so destroy starts VM 300 again" || bad "still short: $out"; }
+out=$(rs_run guards 9245 9245 running ephemeral-dev) && [[ -z $(posts) ]] \
+  && ok "a guard with room stops nothing" || bad "a guard with room: $out / $(posts)"
+out=$(rs_run guards 7607 7607 stopped ephemeral-dev) && bad "the guard passed short with VM 300 already stopped" \
+  || { [[ -z $(posts) ]] && ok "short with VM 300 already stopped: refused, nothing posted" || bad "VM 300 stopped: $(posts)"; }
+out=$(rs_run runner_restart 0 12000 stopped "" mark) \
+  && [[ $(posts) == "POST nodes/n1/qemu/300/status/start " && ! -f $rs/state/lab-test-runner-stopped ]] \
+  && grep -q 'VM 300 started again (free 12000 MiB, needs 4096 MiB)' <<<"$out" \
+  && ok "destroy starts VM 300 again when it has its memory plus 2048 MiB, and clears the mark" || bad "restart: $out / $(posts)"
+out=$(rs_run runner_restart 0 3000 stopped "" mark) \
+  && [[ -z $(posts) && -f $rs/state/lab-test-runner-stopped ]] && grep -q 'runner left stopped: free 3000 MiB, needs 4096 MiB' <<<"$out" \
+  && ok "short after destroy: VM 300 stays stopped, the mark stays, and the run still passes" || bad "restart while short: $out / $(posts)"
+out=$(rs_run runner_restart 12000 12000 running "" mark) && [[ -z $(posts) && ! -f $rs/state/lab-test-runner-stopped ]] \
+  && ok "VM 300 already running: no start, the mark goes" || bad "restart with VM 300 running: $out / $(posts)"
+out=$(rs_run runner_restart 0 12000 stopped "") && [[ -z $(posts) ]] \
+  && ok "no mark: destroy starts nothing" || bad "restart with no mark: $(posts)"
+[[ $(grep -c 'px_post "' "$w") == 2 ]] && [[ $(grep 'px_post "' "$w" | grep -vc 'qemu/$CI_RUNNER_VMID/status/\(shutdown\|start\)') == 0 ]] \
+  && grep -q '^CI_RUNNER_VMID=300$' "$w" && sed -n '/^  destroy)$/,/^    ;;$/p' "$w" | grep -q '^    runner_restart$' \
+  && ok "the only POSTs are VM 300's shutdown and start, and destroy runs the restart" || bad "lab-test POSTs to another guest, or destroy skips the restart"
+
 [ "$fails" -eq 0 ] && echo "lab-test: all checks passed" || { echo "lab-test: $fails failed"; exit 1; }
