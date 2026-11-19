@@ -668,7 +668,12 @@ run_stage() {
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
     # On dev, after the smoke test's call from this machine to the Gateway's address: every load-balancer address has
     # a node announcing it (D-0062).
-    gateway) ap playbooks/k8s-gateway.yml; [ "$ENV_NAME" != dev ] || l2_report ;;
+    # On dev with the store in the cluster, also the node firewall rule for the store's admin path (dev only until a
+    # dev run shows the admin login passing with it; the play skips without an admin address).
+    gateway)
+      ap playbooks/k8s-gateway.yml
+      [ "$ENV_NAME" != dev ] || [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ] || ap playbooks/k8s-openbao-admin-firewall.yml
+      [ "$ENV_NAME" != dev ] || l2_report ;;
     # A dev re-run keeps the Gateway's HTTPS on in the root Application: the dev inventory leaves it off, and
     # flipping it off here and on again in `dev-ca` left the gateway and jellyfin apps OutOfSync for 18 minutes on
     # a re-run (measured on dev, run 8, 2026-11-14), so `apps` never finished. It does so only when the
@@ -721,7 +726,11 @@ run_stage() {
       # gatewayHttps=false and the Gateway has no https listener. Turn it on first (measured on dev, 2026-11-14:
       # spec listeners http and http-short only), then make the certificate the listener waits for.
       ap playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_gateway_https=true "${rootvars[@]}"
-      ap playbooks/k8s-certs.yml --tags devca -e k8s_certs_dev_ca=true ;;
+      ap playbooks/k8s-certs.yml --tags devca -e k8s_certs_dev_ca=true
+      # The dev inventory's HTTPS off also left 443/tcp shut in each node's firewall (k8s_gateway opens it only with
+      # k8s_gateway_https: roles/k8s_gateway/vars/main.yml), and Envoy takes Gateway traffic through the node's input
+      # filter, so nothing reached dev's https listeners from outside. Open it now that the listener has its Secret.
+      ap playbooks/k8s-gateway.yml --tags gateway -e k8s_gateway_https=true ;;
     # Dev only, after dev-ca (the https listener exists only from then on) and only with the in-cluster store:
     # the source address OpenBao sees for a box request through the Gateway, and whether c1 enforces the
     # store's NetworkPolicy (MEASURE-1, ADDENDUM-1 v3 step 1). It runs on this machine, so its requests
@@ -862,9 +871,9 @@ vm_mem_probe() { # label
 # the last 30 minutes, when ssh still answers (an unreachable node prints one line). Secrets are scrubbed.
 node_journal_diag() {
   {
-    echo "== node journals: kernel warnings, then kubelet and containerd, last 30 minutes (when ssh answers)"
+    echo "== node firewall, then journals: kernel warnings, then kubelet and containerd, last 30 minutes (when ssh answers)"
     (cd "$repo/hosts/ansible" && timeout "${JOURNAL_TIMEOUT_S:-90}" ansible k8s_nodes -i "$INVENTORY" -T 10 -b -m ansible.builtin.shell \
-      -a "echo '-- kernel warnings'; journalctl -k -p warning --since -30min --no-pager | tail -n 60; echo '-- kubelet and containerd'; journalctl -u kubelet -u containerd --since -30min --no-pager | tail -n 200" 2>&1) |
+      -a "echo '-- firewall: lab zone ports, its forward ports, policies'; firewall-cmd --zone=lab --list-ports; firewall-cmd --zone=lab --list-forward-ports; firewall-cmd --get-policies; echo '-- kernel warnings'; journalctl -k -p warning --since -30min --no-pager | tail -n 60; echo '-- kubelet and containerd'; journalctl -u kubelet -u containerd --since -30min --no-pager | tail -n 200" 2>&1) |
       python3 -I "$repo/hosts/diag-apps.py" scrub
   } 2>&1 | cut -c1-300 | head -n 500 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
 }
@@ -880,6 +889,8 @@ runner_capture_diag() {
     kc -n argocd get applications.argoproj.io --no-headers -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
     echo "== load-balancer addresses and the nodes announcing them (D-0062)"
     l2_report || true
+    echo "== cilium: host routing, masquerading, kube-proxy replacement (whether load-balancer traffic to a pod crosses the node firewall)"
+    kc -n kube-system exec ds/cilium -c cilium-agent -- cilium-dbg status 2>&1 | grep -iE 'host routing|masquerading|kubeproxyreplacement' | head -n 5
     echo "== pods not Running or Completed, all namespaces"
     kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
     echo "== newest events, all namespaces"
