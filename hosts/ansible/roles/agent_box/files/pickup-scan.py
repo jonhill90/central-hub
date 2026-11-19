@@ -18,16 +18,23 @@ checkout is needed and nothing is written. For each project named in /var/lib/ag
      request; `plan-order` first, then the label. This copy is why the scan never runs code from the notebook's
      main under the App key.
   2. stops there if a task with `pickup: <project>` is `doing` (work in progress is capped at 1). If that claim is
-     more than STALE_AGE old by its `doing-since`, or has none, that is a finding instead.
+     more than STALE_AGE old by its `doing-since`, or has none, that is a finding instead, and its text names the
+     exit: `; reset it to ready by a PR`. The scan writes nothing to the notebook (its token is read-only).
   3. otherwise announces the first task of the list, the one a worker would take, with
      `pickup-note post <project> <TASK-NNNN>`: one fixed comment on that project's standing pull request.
+  4. posts that announcement again if nobody claims it: while the same task is still the first of the list and
+     nothing is `doing`, the scan posts it again once REANNOUNCE_AGE (30 minutes) has passed since its last post, at
+     most REANNOUNCE_POSTS (3) posts in all for that announcement. REANNOUNCE_AGE after the third post it adds the
+     finding `unclaimed: TASK-NNNN (<project>) announced 3 times with no claim`. The posts' times and count are kept
+     in the state file's `posts` (a post's time is the scan's own clock, to the minute). An announcement that drops
+     out (claimed, done, or no longer first) loses its count, so if it returns it starts again at one post.
 
 A finding is a line of text with no age or run time in it, so the same finding reads the same every run. Only an
 announcement or a finding that was not in the last `run`'s set posts: an announcement through pickup-note, findings
 through `checkpoint-note post <count>` (the checkpoint's own pull request). One that stays posts nothing; one that
 drops out and comes back posts again; a failed post is tried again next run. A scan that cannot run, and a crash
 of the scan, are findings too, so a broken scan never reads as a quiet board. `dry-run` never changes that memory,
-so the first `run` after it still announces everything ready.
+so the first `run` after it still announces everything ready, and no repeat post is counted.
 Exit: 0 nothing new, 3 something new (the timer's unit counts 3 as success), 2 usage.
 No token, key or note text is printed: only project names, task labels, note names and times.
 """
@@ -46,6 +53,9 @@ OWNER = "jonhill90"
 NOTEBOOK = "agent-notebook"
 TASKS = "01-notes/01t-tasks"
 STALE_AGE = datetime.timedelta(hours=3)             # a `doing` claim older than this is a finding (the work-in-progress cap's age)
+REANNOUNCE_AGE = datetime.timedelta(minutes=30)     # an announcement nobody claimed is posted again after this long
+REANNOUNCE_POSTS = 3                                # at most this many posts in all for one announcement, then a finding
+RESET_HINT = "; reset it to ready by a PR"          # the exit from a stale claim, said in the finding
 PROJECT = re.compile(r"^[a-z][a-z0-9-]{0,40}$")
 LABEL = r"TASK-\d{4,}"
 SINCE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})Z$")
@@ -297,9 +307,9 @@ def scan(t, mode):
                 since = fm.get("doing-since", "").strip()
                 m = minutes(since)
                 if m is None:
-                    res["findings"].append("stale: %s (%s) is doing with no valid doing-since" % (label, project))
+                    res["findings"].append("stale: %s (%s) is doing with no valid doing-since%s" % (label, project, RESET_HINT))
                 elif n - m > STALE_AGE.total_seconds() // 60:
-                    res["findings"].append("stale: %s (%s) has been doing since %s" % (label, project, since))
+                    res["findings"].append("stale: %s (%s) has been doing since %s%s" % (label, project, since, RESET_HINT))
             continue
         if mode == "run" and not isinstance(cfg.get("number"), int):
             res["findings"].append("scan error: %s has no standing pull request in pickup.json, so nothing can be posted" % project)
@@ -313,6 +323,22 @@ def scan(t, mode):
 
 def key(project, label):
     return "ready %s %s" % (project, label)
+
+
+def parse(s):
+    try:
+        return datetime.datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def minutes_since(last, t):
+    """Whole minutes from the time `last` (an iso string) to t, both cut to the minute so a run's seconds don't matter."""
+    a = parse(last)
+    if a is None:
+        return None
+    cut = lambda x: x.replace(second=0, microsecond=0)
+    return int((cut(t) - cut(a)).total_seconds() // 60)
 
 
 def post_ready(project, label):
@@ -345,7 +371,27 @@ def run(mode):
     except (OSError, ValueError):
         last = {}
     known = set(last.get("known", []))
+    old = last.get("posts") if isinstance(last.get("posts"), dict) else {}
     announce = [(p, l, key(p, l)) for p, l in res["announce"]]
+    # What each announcement still announced has had posted: {key: {first, last, count}}. A known key with no entry
+    # (written before this memory existed) counts as posted once, now.
+    posts_now = {}
+    for p, l, k in announce:
+        e = old.get(k)
+        if k in known and not (isinstance(e, dict) and parse(e.get("last")) and isinstance(e.get("count"), int)):
+            e = {"first": iso(t), "last": iso(t), "count": 1}
+        if k in known:
+            posts_now[k] = e
+    again, label_of = [], {k: (p, l) for p, l, k in announce}
+    for k, e in posts_now.items():
+        if minutes_since(e["last"], t) < REANNOUNCE_AGE.total_seconds() // 60:
+            continue
+        p, l = label_of[k]
+        if e["count"] < REANNOUNCE_POSTS:
+            again.append((p, l))
+        else:
+            res["findings"].append("unclaimed: %s (%s) announced %d times with no claim" % (l, p, REANNOUNCE_POSTS))
+    res["findings"] = sorted(set(res["findings"]))
     new_ready = [(p, l) for p, l, k in announce if k not in known]
     new_other = [f for f in res["findings"] if f not in known]
     print("pickup-scan: %s at %s, board main %s" % (mode, iso(t), res["main"][:7] or "not read"))
@@ -356,21 +402,31 @@ def run(mode):
     posted = set()
     for p, l, k in announce:
         text = "pickup: %s is ready for %s" % (l, p)
-        print(("new: " if (p, l) in new_ready else "ready: ") + text)
+        if (p, l) in again:
+            print("again: %s (post %d of %d)" % (text, posts_now[k]["count"] + 1, REANNOUNCE_POSTS))
+        else:
+            print(("new: " if (p, l) in new_ready else "ready: ") + text)
     for f in res["findings"]:
         print(("new: " if f in new_other else "finding: ") + f)
     if mode == "dry-run":
         wake = "dry-run: nothing posted"
-        if new_ready or new_other:
-            wake += "; a run would post %d announcement(s) and %d finding(s)" % (len(new_ready), len(new_other))
+        if new_ready or again or new_other:
+            wake += "; a run would post %d announcement(s) and %d finding(s)" % (len(new_ready) + len(again), len(new_other))
     else:
         wake = "nothing new"
         bits = []
-        for p, l in new_ready:
+        for p, l in new_ready + again:
+            k = key(p, l)
             rc = post_ready(p, l)
             if rc == 0:
-                posted.add(key(p, l))
-                bits.append("posted %s for %s" % (l, p))
+                posted.add(k)
+                if (p, l) in again:
+                    e = posts_now[k]
+                    posts_now[k] = {"first": e["first"], "last": iso(t), "count": e["count"] + 1}
+                    bits.append("posted %s for %s again (post %d of %d)" % (l, p, e["count"] + 1, REANNOUNCE_POSTS))
+                else:
+                    posts_now[k] = {"first": iso(t), "last": iso(t), "count": 1}
+                    bits.append("posted %s for %s" % (l, p))
             else:
                 bits.append("pickup-note failed for %s (rc %d); the next run tries again" % (l, rc))
         if new_other:
@@ -385,10 +441,12 @@ def run(mode):
     print("pickup-scan: wake: " + wake)
     if mode == "run":
         known_next = sorted(k for k in [k for _, _, k in announce] + res["findings"] if k in known or k in posted)
+        posts_next = {k: posts_now[k] for k in known_next if k in posts_now}
     else:
         known_next = sorted(known)
+        posts_next = old
     report = {"time": iso(t), "mode": mode, "main": res["main"], "lists": res["lists"], "capped": res["capped"],
-              "findings": res["findings"], "known": known_next, "wake": wake}
+              "findings": res["findings"], "known": known_next, "posts": posts_next, "wake": wake}
     tmp = statef + ".part"
     with open(tmp, "w") as f:
         json.dump(report, f, indent=1, sort_keys=True)
@@ -396,7 +454,7 @@ def run(mode):
     os.replace(tmp, statef)
     subprocess.run(["logger", "-t", "pickup-scan", "%s: %d ready, %d finding(s); wake: %s"
                     % (mode, len(announce), len(res["findings"]), wake)], capture_output=True)
-    return 3 if (new_ready or new_other) else 0
+    return 3 if (new_ready or again or new_other) else 0
 
 
 def show():
