@@ -18,6 +18,11 @@
 #   9. The wrapper passes dry-run, run and show only; the sessions' sudo line has dry-run and show only, pickup-note's
 #      has log only, and the runner user's has none; the role installs the scripts, the settings file, the service
 #      (SuccessExitStatus=3, mode from agent_box_pickup_mode, dry-run by default) and a timer every 10 minutes.
+#  12. An announcement nobody claims is posted again 30 minutes after its last post (to the minute), at most 3 posts in
+#      all; 30 minutes after the third the scan adds the finding `unclaimed: TASK-NNNN (<project>) announced 3 times with
+#      no claim` and posts nothing more; a claim or a different first task resets the count; dry-run shows the repeat
+#      and changes no memory; a state file from before this memory counts as one post, now. A stale claim's finding ends
+#      `; reset it to ready by a PR`.
 #  10. The oracle's copies still have the hashes the pickup-oracle README records.
 #  11. Read-only and no model: the scan names no write call to GitHub except revoking its own token, and no model.
 # Usage: .github/hosts-check/tests/test_pickup_scan.sh   (needs python3, openssl, PyYAML, Jinja2)
@@ -291,6 +296,7 @@ def c3():
         FakeGH.answer = data(board(note("TASK-0010"), note("TASK-0011", state="doing", extra=["doing-since: " + since] if since else [])))
         rc, out = run("run")
         if finding:
+            assert ("finding: " + finding + "; reset it to ready by a PR\n" in out or "new: " + finding + "; reset it to ready by a PR\n" in out), out
             assert ("finding: " + finding in out or "new: " + finding in out) and posts == [("findings", 1)] and rc == 3, (posts, out)
         else:
             assert "stale" not in out and posts == [] and rc == 0, (posts, out)
@@ -393,6 +399,89 @@ def c6():
     assert rc == 0 and posts == [("findings", 2), ("findings", 2)], (rc, posts)
 
 
+# ---- 12 re-announce
+def at(minutes):
+    m.now = lambda: T + datetime.timedelta(minutes=minutes)
+
+
+def report():
+    return json.load(open(os.path.join(m.WORK, "state", "pickup-scan.json")))
+
+
+def c12():
+    A = note("TASK-0010")
+    ann = ("ready", "agent-notebook", "TASK-0010")
+    unclaimed = "unclaimed: TASK-0010 (agent-notebook) announced 3 times with no claim"
+    posts = setup("again")
+    FakeGH.answer = data(board(A))
+    rc, out = run("run")                                  # 12:00 post 1
+    assert rc == 3 and posts == [ann] and report()["posts"]["ready agent-notebook TASK-0010"] == {"first": "2026-11-19T12:00:00Z", "last": "2026-11-19T12:00:00Z", "count": 1}, (posts, report())
+    at(29)
+    rc, out = run("run")
+    assert rc == 0 and posts == [ann] and "again:" not in out, (posts, out)
+    # dry-run at 12:30 shows the repeat, posts nothing and leaves the memory alone
+    at(30)
+    before = report()["posts"]
+    rc, out = run("dry-run")
+    assert rc == 3 and posts == [ann] and "again: pickup: TASK-0010 is ready for agent-notebook (post 2 of 3)" in out and "a run would post 1 announcement(s)" in out, (rc, posts, out)
+    assert report()["posts"] == before and report()["mode"] == "dry-run", report()
+    rc, out = run("run")                                  # 12:30 post 2
+    assert rc == 3 and posts == [ann, ann] and "posted TASK-0010 for agent-notebook again (post 2 of 3)" in out, (posts, out)
+    assert report()["posts"]["ready agent-notebook TASK-0010"] == {"first": "2026-11-19T12:00:00Z", "last": "2026-11-19T12:30:00Z", "count": 2}, report()
+    at(59)
+    run("run")
+    assert len(posts) == 2, posts
+    at(60)
+    rc, out = run("run")                                  # 13:00 post 3, no finding yet
+    assert rc == 3 and posts == [ann] * 3 and "unclaimed" not in out, (posts, out)
+    at(89)
+    rc, out = run("run")
+    assert rc == 0 and len(posts) == 3 and "unclaimed" not in out, (posts, out)
+    at(90)
+    rc, out = run("run")                                  # 13:30 the finding, not a fourth post
+    assert rc == 3 and posts == [ann] * 3 + [("findings", 1)] and "new: " + unclaimed in out, (posts, out)
+    for mins in (91, 120, 600):                           # then quiet: no fourth post, the finding does not post again
+        at(mins)
+        rc, out = run("run")
+        assert rc == 0 and len(posts) == 4 and "finding: " + unclaimed in out and report()["posts"]["ready agent-notebook TASK-0010"]["count"] == 3, (mins, posts, out)
+    # a claim resets it: nothing posts and the count is forgotten; when it is ready again it is a first post
+    FakeGH.answer = data(board(note("TASK-0010", state="doing", extra=["doing-since: " + ago(minutes=-596)])))   # claimed 5 minutes before 601
+    at(601)
+    rc, out = run("run")
+    assert rc == 0 and len(posts) == 4 and report()["posts"] == {} and "unclaimed" not in out, (posts, out, report())
+    FakeGH.answer = data(board(A))
+    at(602)
+    rc, out = run("run")
+    assert rc == 3 and posts[-1] == ann and len(posts) == 5 and report()["posts"]["ready agent-notebook TASK-0010"]["count"] == 1, (posts, report())
+    # a different first task resets it too, and a failed repeat is tried again next run without counting
+    posts = setup("again2")
+    B = note("TASK-0011", extra=["plan-order: 5"])
+    FakeGH.answer = data(board(A))
+    run("run")
+    at(30)
+    m.post_ready = lambda p, l: posts.append(("failed", p, l)) or 1
+    rc, out = run("run")
+    assert rc == 3 and "pickup-note failed for TASK-0010 (rc 1); the next run tries again" in out and report()["posts"]["ready agent-notebook TASK-0010"]["count"] == 1, (out, report())
+    m.post_ready = lambda p, l: posts.append(("ready", p, l)) or 0
+    at(40)
+    rc, out = run("run")
+    assert rc == 3 and posts[-1] == ann and report()["posts"]["ready agent-notebook TASK-0010"]["count"] == 2, (posts, report())
+    FakeGH.answer = data(board(A, B))
+    at(41)
+    run("run")
+    assert posts[-1] == ("ready", "agent-notebook", "TASK-0011") and list(report()["posts"]) == ["ready agent-notebook TASK-0011"], (posts, report())
+    # a state file written before this memory existed (a known key, no posts) counts as one post, now
+    posts = setup("legacy")
+    FakeGH.answer = data(board(A))
+    os.makedirs(os.path.join(m.WORK, "state"))
+    json.dump({"known": ["ready agent-notebook TASK-0010"]}, open(os.path.join(m.WORK, "state", "pickup-scan.json"), "w"))
+    rc, out = run("run")
+    assert rc == 0 and posts == [] and report()["posts"]["ready agent-notebook TASK-0010"]["count"] == 1, (posts, report())
+    at(30)
+    rc, out = run("run")
+    assert rc == 3 and posts == [ann], posts
+
+
 # ---- 7 errors
 def c7():
     base = board(note("TASK-0010"))
@@ -474,6 +563,7 @@ CASES = {"1": ("token for the notebook alone, Contents and Pull requests read on
          "4": ("a task an open pull request changes is left out; a cut-off list is a finding", c4),
          "5": ("dry-run prints what it would post, posts nothing and keeps no memory", c5),
          "6": ("posts a new label once; a returning label posts again; failed posts retry; findings post as a count", c6),
+         "12": ("an unclaimed announcement is posted again after 30 minutes, 3 posts at most, then an unclaimed finding; a claim resets it; dry-run keeps no memory", c12),
          "7": ("a scan that can't run, a crash and a project with no pull request number are findings", c7),
          "8": ("show prints the last report; a second run at once does nothing", c8),
          "11": ("read-only and no model: one DELETE (its own token), two POSTs (token, GraphQL), no model named", c11)}
