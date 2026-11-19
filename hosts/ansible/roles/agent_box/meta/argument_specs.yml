@@ -273,7 +273,10 @@ argument_specs:
           to the store is set. admin_address: the store's admin address, one address of dev's load-balancer pool,
           which needs box_cidr; the dev rebuild passes it on (k8s_gitops_source_openbao_admin_address) and every
           call goes there (D-0062). Without it, every dev call goes to dev's Gateway by the dev inventory's
-          k8s_gitops_source_gateway_address. No key goes in it; the wrapper makes the keys in the keys folder.
+          k8s_gitops_source_gateway_address. offbox: true installs the dev store's hourly off-box snapshot send
+          (pick 237) when agent_box_opnsense_offbox is set too; it is set only by the owner's tap, since the send's
+          daily prune is a delete (D-0042 rule 6). Anything but true is false, and a left send timer is turned off.
+          No key goes in it; the wrapper makes the keys in the keys folder.
           Empty skips the file.
       agent_box_secrets_store_prod:
         type: dict

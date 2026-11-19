@@ -237,7 +237,7 @@ if python3 - "$role/tasks/main.yml" <<'PY'
 import sys, yaml
 tasks = yaml.safe_load(open(sys.argv[1]))
 by = {t.get("name", ""): t for t in tasks}
-inc = by["Send the dev secrets store's snapshots off the box (only when the store's wrapper and the off-box copy are set and the store's offbox is true)"]
+inc = by["Send the dev secrets store's snapshots off the box (only with its wrapper, the off-box copy and offbox set to true)"]
 w = inc["when"]
 assert "agent_box_secrets_store.offbox | default(false) is true" in w, w
 assert "agent_box_opnsense_offbox | length > 0" in w and "agent_box_secrets_store | length > 0" in w, w

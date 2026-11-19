@@ -1186,7 +1186,7 @@
 # The send holds a delete (the daily prune, D-0042 rule 6) and sends the store's snapshots to a place they are not
 # kept yet, so it is off until the inventory says agent_box_secrets_store.offbox: true, even when the store's wrapper
 # and the off-box copy are set. Setting the store's address alone turns no send on.
-- name: Send the dev secrets store's snapshots off the box (only when the store's wrapper and the off-box copy are set and the store's offbox is true)
+- name: Send the dev secrets store's snapshots off the box (only with its wrapper, the off-box copy and offbox set to true)
   ansible.builtin.include_tasks:
     file: secrets_store_offbox.yml
     apply:
