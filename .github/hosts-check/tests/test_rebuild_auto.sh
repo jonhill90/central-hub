@@ -145,8 +145,10 @@ if [[ $o8a == *"preflight: refused, estimate 9216 MiB"* && $o8a == *"vmid=258 na
 else bad "8. [$o8a] [$o8b] [$o8c]"; fi
 
 # 9: lab-test comes first. Each gate stops the tick with its own line before the fit check: the lock held (a probe,
-# the lock is free again after it), a state that holds a resource or can't be read, a log written less than 60 minutes
-# ago. With none of them, or a log older than the window and an empty state, it goes on.
+# the lock is free again after it), a state that holds a VM or can't be read, a log written less than 60 minutes
+# ago. With none of them, or a log older than the window and an empty state, it goes on. The states have the shape
+# tofu writes for hosts/terraform/home/lab-test: after destroy only the installer ISO stays (lab-test.sh, destroy),
+# which is an idle lab-test; with the copy built, VM 256 is there too.
 lt=$work/state; mkdir -p "$lt"
 rm -f "$lt"/lab-test.*
 reset; logf 20261118T010000Z "$c2" pass
@@ -155,16 +157,21 @@ reset; logf 20261118T010000Z "$c2" pass
 o9a=$(decide); wait
 o9a2=$(decide)
 rm -f "$lt/lab-test.lock" "$t/fit-seen"
-echo '{"resources": [{"type": "proxmox_virtual_environment_vm"}]}' > "$lt/lab-test.tfstate"; o9b=$(decide)
+iso='{"mode": "managed", "type": "proxmox_virtual_environment_file", "name": "installer", "instances": [{"attributes": {"id": "local:iso/lab-test-256-pve-auto-ecf64d480ea7.iso"}}]}'
+vm='{"mode": "managed", "type": "proxmox_virtual_environment_vm", "name": "host", "instances": [{"attributes": {"vm_id": 256}}]}'
+echo "{\"version\": 4, \"resources\": [$iso, $vm]}" > "$lt/lab-test.tfstate"; o9b=$(decide)
 echo 'not json' > "$lt/lab-test.tfstate"; o9c=$(decide)
 echo '{"resources": []}' > "$lt/lab-test.tfstate"; : > "$lt/lab-test.log"; o9d=$(decide)
 touch -d '2 hours ago' "$lt/lab-test.log"; rm -f "$t/fit-seen"; o9e=$(decide)
+fit9e=no; [[ ! -e $t/fit-seen ]] || fit9e=yes
+echo "{\"version\": 4, \"resources\": [$iso]}" > "$lt/lab-test.tfstate"; rm -f "$t/fit-seen"; o9f=$(decide); fit9f=no; [[ ! -e $t/fit-seen ]] || fit9f=yes
 if [[ $o9a == *"a lab-test run holds its lock; nothing started"*"rc=1" && $o9a2 != *"holds its lock"* &&
-      $o9b == *"lab-test state holds 1 resources"*"rc=1" && $o9c == *"lab-test state holds unreadable resources"*"rc=1" &&
+      $o9b == *"lab-test state holds 1 VM resources"*"rc=1" && $o9c == *"lab-test state holds unreadable VM resources"*"rc=1" &&
       $o9d == *"wrote its log 0 minutes ago, inside the 60-minute quiet window; nothing started"*"rc=1" &&
-      $o9e == *"building main's head"*"rc=0" && -e $t/fit-seen ]]; then
-  ok "9. the timer skips for a held lab-test lock, a state with resources or unreadable, and a log under 60 minutes old, each with its own line; an idle lab-test lets it go on"
-else bad "9. [$o9a] [$o9a2] [$o9b] [$o9c] [$o9d] [$o9e]"; fi
+      $o9e == *"building main's head"*"rc=0" && $fit9e == yes &&
+      $o9f != *"lab-test state holds"* && $o9f == *"building main's head"*"rc=0" && $fit9f == yes ]]; then
+  ok "9. the timer skips for a held lab-test lock, a state with VM 256 or unreadable, and a log under 60 minutes old, each with its own line; an idle lab-test, or a state with only the kept installer ISO, lets it go on"
+else bad "9. [$o9a] [$o9a2] [$o9b] [$o9c] [$o9d] [$o9e] [$o9f]"; fi
 rm -f "$lt"/lab-test.*
 
 exit $fail
