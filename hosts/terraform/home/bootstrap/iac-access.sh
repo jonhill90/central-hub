@@ -2,7 +2,7 @@
 # Bootstrap, run once as root on the Proxmox host, before the first tofu run. Safe to run again.
 # It creates what Terraform needs in order to log in, plus the pools Terraform puts machines in:
 #   - group iac, role IacOps (least privilege for hosts/terraform/home/*), user iac@pve in iac
-#   - pools firewall, remote-access and k8s (one per workload), with VM 100 and CT 900 moved in
+#   - pools firewall, remote-access and k8s (one per workload), with VM 100 and CT 900 moved in when they exist
 #   - ACLs for the group and for token iac@pve!apply (privilege-separated, so the token needs its own)
 # The token itself is made separately, because its secret must go straight to a file and never be
 # printed (see hosts/RUNLOG-2026-10-26.md, step 2):
@@ -29,9 +29,17 @@ pveum user list --output-format json | grep -q '"userid":"iac@pve"' || pveum use
 for pool in firewall remote-access k8s; do
   pveum pool list --output-format json | grep -q "\"poolid\":\"$pool\"" || pveum pool add "$pool" --comment "Workload $pool (hosts/terraform/home/$pool)"
 done
-# Move each machine into its workload's pool (a guest belongs to at most one pool).
-pvesh get /pools/firewall --output-format json | grep -q '"vmid":100' || pvesh set /pools/firewall --vms 100 --allow-move 1
-pvesh get /pools/remote-access --output-format json | grep -q '"vmid":900' || pvesh set /pools/remote-access --vms 900 --allow-move 1
+# Move each machine into its workload's pool (a guest belongs to at most one pool). Only a guest that
+# exists is moved: Proxmox stores the membership of a missing guest, but GET /pools/<id> lists only
+# guests that exist (pve-manager PVE/API2/Pool.pm, read: `next if !$vmdata`), so on an empty host a
+# second run would not see the first run's entry and `pvesh set` would stop with "VM <id> is already a
+# pool member" (same file, update). Terraform sets pool_id when it makes the guest.
+move_into_pool() {
+  pvesh get /cluster/resources --type vm --output-format json | grep -Eq "\"vmid\": ?$2[,}]" || return 0
+  pvesh get "/pools/$1" --output-format json | grep -Eq "\"vmid\": ?$2[,}]" || pvesh set "/pools/$1" --vms "$2" --allow-move 1
+}
+move_into_pool firewall 100
+move_into_pool remote-access 900
 
 # One ACL line per path: <path> <propagate>
 acl() {
@@ -58,7 +66,9 @@ acl /pool/k8s 1                          # c1 node VMs and their template
 # failed on /vms/9000 VM.Config.Options), so each planned k8s VM ID gets its own ACL.
 # 250-259 are the dev rehearsal VMs (k8s 250-251, k8s-talos 252-253, and spares); measured: the
 # first Talos rehearsal failed on /vms/252 and /vms/253 VM.Config.Options on 2026-11-09.
-for id in 9000 200 201 250 251 252 253 254 255 256 257 258 259; do acl "/vms/$id" 0; done
+# VM 100 (firewall) and CT 900 (remote-access) are made by Terraform too, and the script no longer puts them in
+# their pools before they exist (move_into_pool), so the token's create of each is checked on /vms/<id> as well.
+for id in 100 900 9000 200 201 250 251 252 253 254 255 256 257 258 259; do acl "/vms/$id" 0; done
 acl /storage/local-lvm 0                 # guest disks
 acl /storage/local 0                     # the container template and the AlmaLinux image download
 acl "/nodes/$NODE" 0                     # read the node and its networks
