@@ -541,6 +541,16 @@
   when: agent_box_ci_runner | length > 0
   tags: [wrappers]
 
+- name: The checkpoint-note wrapper's one pull request, root-owned so the keys user can't change it
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/checkpoint-note.json"
+    content: "{{ agent_box_checkpoint_note | to_nice_json }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  when: agent_box_checkpoint_note | length > 0
+  tags: [wrappers]
+
 - name: The rebuild wrapper's short-node pick, from the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/short-node"
