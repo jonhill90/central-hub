@@ -114,6 +114,7 @@ check_ansible() {
   bash "$here/tests/test_lifeline_cleanup.sh"
   bash "$here/tests/test_box_apply_inventory_vars.sh"
   bash "$here/tests/test_prod_files_state_age.sh"
+  bash "$here/tests/test_prod_files_lab_ca.sh"
   bash "$here/tests/test_opnsense_lab_tenant.sh"
   bash "$here/tests/test_desktop_configure_vars.sh"
   bash "$here/tests/test_opnsense_app_access.sh"
