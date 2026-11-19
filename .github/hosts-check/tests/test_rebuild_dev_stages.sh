@@ -22,6 +22,7 @@ run() {
     OPENBAO_ADMIN_SECRET_ID_FILE=${OPENBAO_ADMIN_SECRET_ID_FILE:-} bash -c '
     ap() { echo "AP $*"; }
     kc() { [ "${FAKE_SECRET:-}" = yes ]; }
+    l2_report() { echo "L2 report"; }
     . "$1"
     set +e
     run_stage "$2"; echo "rc=$?"' _ "$t/fn.sh" "$2"
@@ -79,6 +80,15 @@ out=$(run dev dev-ca "$t/ok")
 check "dev-ca turns the Gateway's HTTPS on first" "$out" "k8s_gitops_source_gateway_https=true" ""
 first=${out%%playbooks/k8s-certs*}
 check "the HTTPS switch comes before the certificate" "$first" "k8s_gitops_source_gateway_https=true" ""
+check "dev-ca opens 443 in the node firewall once HTTPS is on" "$out" "AP playbooks/k8s-gateway.yml --tags gateway -e k8s_gateway_https=true" ""
+after=${out#*playbooks/k8s-certs}
+check "the 443 opening comes after the certificate" "$after" "k8s_gateway_https=true" ""
+# The store's admin-path firewall rule: on dev with the in-cluster store only, in stage gateway, before the L2 report.
+out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gateway "$t/ok")
+check "dev gateway with the store opens the admin path in the node firewall" "$out" "AP playbooks/k8s-openbao-admin-firewall.yml" "rc=1"
+check "dev gateway still reports the L2 leases" "$out" "L2 report" ""
+out=$(run dev gateway "$t/ok"); check "dev gateway without the store leaves the admin firewall alone" "$out" "AP playbooks/k8s-gateway.yml" "admin-firewall"
+out=$(OPENBAO_SEAL_KEY_FILE=/k run prod gateway "$t/ok"); check "prod gateway never runs the dev admin firewall" "$out" "AP playbooks/k8s-gateway.yml" "admin-firewall"
 out=$(run dev dev-ca "$t/bad")
 check "dev-ca names the missing devca tag" "$out" "has no devca tag" "AP "
 check "dev-ca fails without the tag" "$out" "rc=1" ""
