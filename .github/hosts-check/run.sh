@@ -95,6 +95,7 @@ check_ansible() {
   bash "$here/tests/test_tailnet_policy_log.sh"
   bash "$here/tests/test_tailnet_policy_sections.sh"
   bash "$here/tests/test_proxmox_host_args.sh"
+  bash "$here/tests/test_c1_ansible.sh"
   bash "$here/tests/test_signin_check_wrapper.sh"
   bash "$here/tests/test_opnsense_cert_check.sh"
   bash "$here/tests/test_jellyfin_plugin_name.sh"
