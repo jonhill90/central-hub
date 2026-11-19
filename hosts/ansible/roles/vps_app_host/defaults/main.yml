@@ -32,6 +32,11 @@ vps_app_host_public_ports_allowed: [22]
 # (D-0042 rule 6). See tasks/harden.yml.
 vps_app_host_harden: false
 vps_app_host_tailnet_interface: tailscale0
+# With hardening on, whether the public zone still lets in port 22 (the owner's sshd from the internet). false closes it:
+# sshd is then reached only over the tailnet, whose interface is trusted, and Tailscale SSH does not use sshd at all.
+# Jon, 2026-11-19 04:40:35 UTC: "make sure that VPS is setup and on the tailnet and not available to ssh to over internet."
+# The provider's own web console stays the way back if the tailnet is down.
+vps_app_host_public_ssh: false
 
 # The apps' Quadlet unit files (D-0046 rule 11): hosts/vps-apps/<app>/<app>.container. The playbook runs from a
 # checkout of reviewed main, so they are read from there. Each lands in its user's ~/.config/containers/systemd/.
