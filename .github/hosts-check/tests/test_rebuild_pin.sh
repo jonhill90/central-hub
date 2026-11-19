@@ -7,6 +7,8 @@
 #   3. A commit on main older than the floor (PIN_FLOOR) is refused, the floor itself is taken, and rebuild.sh names
 #      the floor as one full commit ID.
 #   4. The box's sudo line lets a session pass the commit to up and rebuild.
+#   5. rebuild.sh and rebuild-prod.sh name the same floor, and (where the checkout holds its history) the floor's own
+#      rebuild-k8s.sh tears dev down after every full run under ephemeral-dev (#624), so no pin leaves dev up.
 # Usage: .github/hosts-check/tests/test_rebuild_pin.sh   (needs git)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -63,5 +65,20 @@ else bad "3. [$r4a] [$r4b] $r4c"; fi
 if grep -qF 'args: [up, "up *", rebuild, "rebuild *", teardown, identity, log, diag, fit]' "$root/hosts/ansible/roles/agent_box/defaults/main.yml"; then
   ok "4. the sudo line lets a session pass the commit to up and rebuild, and nothing to the other actions"
 else bad "4. the rebuild wrapper's sudo args do not pass a commit to up and rebuild"; fi
+
+# 5
+prod=$root/hosts/ansible/roles/agent_box/files/rebuild-prod.sh
+f_dev=$(sed -n 's/^PIN_FLOOR=\([0-9a-f]\{40\}\)$/\1/p' "$src") f_prod=$(sed -n 's/^PIN_FLOOR=\([0-9a-f]\{40\}\)$/\1/p' "$prod")
+r5=same
+[[ -n $f_dev && $f_dev == "$f_prod" ]] || r5="dev [$f_dev] prod [$f_prod]"
+if git -C "$root" cat-file -e "$f_dev^{commit}" 2>/dev/null; then
+  git -C "$root" show "$f_dev:hosts/rebuild-k8s.sh" | grep -q 'dev lasts one run and is torn down now' ||
+    r5+=", the floor's rebuild-k8s.sh lacks the every-run teardown"
+else
+  echo "note 5. the floor ${f_dev:0:7} is not in this checkout's history (a shallow clone), so its rebuild-k8s.sh is not read"
+fi
+if [[ $r5 == same ]]; then
+  ok "5. both wrappers name the same floor, and the floor's rebuild-k8s.sh tears dev down after every full run"
+else bad "5. $r5"; fi
 
 exit $fail
