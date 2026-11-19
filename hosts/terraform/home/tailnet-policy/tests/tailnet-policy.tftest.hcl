@@ -45,6 +45,11 @@ run "agent_box_gets_ssh_from_agents_and_no_path_out" {
   }
 
   assert {
+    condition     = strcontains(tailscale_acl.policy.acl, "{\"action\": \"accept\", \"src\": [\"autogroup:admin\"], \"dst\": [\"tag:agent-box\"], \"users\": [\"admin\"]}")
+    error_message = "The owner's devices (autogroup:admin) must reach the agent box by Tailscale SSH as user admin, for controller runs."
+  }
+
+  assert {
     condition     = !strcontains(tailscale_acl.policy.acl, "\"src\": [\"tag:agent-box\"]")
     error_message = "tag:agent-box must have no grant or SSH rule of its own (no path to the Mac or the lab)."
   }

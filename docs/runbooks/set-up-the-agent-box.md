@@ -81,7 +81,7 @@ There are twenty-three wrappers (the entries of `agent_box_wrappers` in the role
    expect: the STD-0001 name. At claude.ai/code the box comes back under an entry with the new name. The old entry, under the rehearsal name, goes stale and can be ignored.
 
 4. Join the tailnet as `tag:agent-box`, as the admin user.
-   why: cloud sessions reach the box by Tailscale SSH as `claude` (the tailnet policy's SSH rule from `tag:agent` to `tag:agent-box`, `hosts/terraform/home/tailnet-policy`). The policy's OAuth client can't mint auth keys, so the join uses a login link.
+   why: cloud sessions reach the box by Tailscale SSH as `claude` (the tailnet policy's SSH rule from `tag:agent` to `tag:agent-box`, `hosts/terraform/home/tailnet-policy`). The owner's devices (`autogroup:admin`) reach the box by Tailscale SSH as `admin`, for controller runs (the SSH rule from `autogroup:admin` to `tag:agent-box`). The policy's OAuth client can't mint auth keys, so the join uses a login link.
 
    ```sh
    sudo tailscale up --advertise-tags=tag:agent-box --ssh
