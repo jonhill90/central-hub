@@ -38,8 +38,8 @@ Read from `main` at `8bca3cd` on 2026-11-18; no step was run again for this page
 |---|---|---|
 | Argo CD syncs the app | `root/values.yaml`, entry `gateway`: `wave: -1`, `autoSync: true`, `prune: false` | nothing in this repository |
 | The Ansible switches | `k8s_gateway_by_argocd: false` and `k8s_observability_grafana_route_by_argocd: false` are the role defaults (`roles/k8s_gateway/defaults/main.yml`, `roles/k8s_observability/defaults/main.yml`); step 4 sets them true in the private inventory | what the private inventory holds is not readable here, so whether they are true is unproven by this page |
-| Who runs the playbooks | `k8s-gateway.yml` and `k8s-observability.yml` are not names the box's `c1-ansible` wrapper runs (its table holds `identity` only, `files/c1-ansible.sh:32`), so the Mac lane keeps the runner line | nothing |
-| The last run | `last-tested`: 2026-11-09, steps 1 to 4 | the page predates the short-name listeners; a rerun of "Before you start" would show four listeners |
+| Who runs the playbooks | today `k8s-gateway.yml` and `k8s-observability.yml` are not names the box's `c1-ansible` wrapper runs (its table holds `identity` only, `files/c1-ansible.sh:32`), so the Mac lane keeps the runner line. Pull request #645 (open) adds `gateway` (`k8s-gateway.yml --tags gateway`) to that wrapper; once it is merged and the box has installed it, that playbook runs from the box. `k8s-observability.yml` is not in #645 and stays on the Mac | #645's review and the box-limit install |
+| The last run | `last-tested`: 2026-11-09, steps 1 to 4, four listeners Programmed, `autoSync` on by pull request | nothing on main; whether the private switches are still true is not readable here |
 
 ## Before you start
 
