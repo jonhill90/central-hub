@@ -46,7 +46,7 @@ The owner chose auto-sync for every app (card, 2026-11-10 02:50 UTC). `kube-prom
 3. Sync once, by hand.
    expect: Synced and Healthy. Grafana rolls once to a new pod, because the sync rewrites its Deployment (2026-11-10). Grafana at `https://grafana.apps.c1.prod.<zone>/` signs in with the same admin password as before (Secret `monitoring/kube-prometheus-stack-grafana`). Prometheus's claim is the same one, and old graphs still show.
 
-4. By PR, set `autoSync: true` in `root/values.yaml`. In the private inventory, set `k8s_observability_metrics_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics,proof`.
+4. By PR, set `autoSync: true` in `root/values.yaml`. In the private inventory, set `k8s_observability_metrics_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics,proof`. From the box, once `c1-ansible list` there prints `observability`: `c1-ansible check observability`, then `c1-ansible apply observability <clearance id>`. The box runs the wrapper's fixed tags (`metrics_server,metrics,logs,route,proof`), which can be more than the Mac command above, and reads its own copy of the inventory ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)). The rule for `apply observability` applies.
    why: Ansible stops installing the chart and deletes Helm's old release records. Grafana's route moves with the Gateway ([gateway runbook](move-gateway-to-argo-cd.md)).
    expect: the first run reports the Helm records deleted; a second run reports `changed=0`.
 

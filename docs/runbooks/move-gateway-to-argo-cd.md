@@ -45,7 +45,7 @@ Read from `main` at `8bca3cd` on 2026-11-18; no step was run again for this page
 
 - `kubectl -n gateway get gateway apps` shows Programmed, with the address from the inventory.
 - In the private inventory, `k8s_gateway_https` is true. If it is false, set `https: false` in `apps/gateway/values.yaml` by PR first.
-- In the private inventory, `k8s_gitops_source_gateway_address: "{{ k8s_gateway_address }}"` is set (as in `hosts.example.yml`). Then run `ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags source` so the root Application carries it.
+- In the private inventory, `k8s_gitops_source_gateway_address: "{{ k8s_gateway_address }}"` is set (as in `hosts.example.yml`). Then run `ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags source` so the root Application carries it. From the box, once `c1-ansible list` there prints `gitops`: `c1-ansible check gitops`, then `c1-ansible apply gitops <clearance id>`. The box runs the wrapper's fixed tags (`source,ui,sso`), which can be more than the Mac command above, and reads its own copy of the inventory ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)).
 - `kubectl -n argocd get application c1` shows Synced.
 
 Stop if any of these is not true.
@@ -62,7 +62,7 @@ Stop if any of these is not true.
 3. Sync once, by hand.
    expect: Synced and Healthy. The Gateway is still Programmed at the same address, with all its listeners Programmed (four with `shortNames`). `https://grafana.apps.c1.prod.<zone>/login` opens, and `http://` for the same name answers 301.
 
-4. By PR, set `autoSync: true` for `gateway` in `root/values.yaml` (main already has it: entry `gateway`, `autoSync: true`, `prune: false`). In the private inventory, set `k8s_gateway_by_argocd: true` and `k8s_observability_grafana_route_by_argocd: true`. Then run `ansible-playbook -i inventories/home/ playbooks/k8s-gateway.yml` and `playbooks/k8s-observability.yml --tags route`.
+4. By PR, set `autoSync: true` for `gateway` in `root/values.yaml` (main already has it: entry `gateway`, `autoSync: true`, `prune: false`). In the private inventory, set `k8s_gateway_by_argocd: true` and `k8s_observability_grafana_route_by_argocd: true`. Then run `ansible-playbook -i inventories/home/ playbooks/k8s-gateway.yml` and `playbooks/k8s-observability.yml --tags route`. From the box, once `c1-ansible list` there prints `gateway`: `c1-ansible check gateway`, then `c1-ansible apply gateway <clearance id>`. The box runs the wrapper's fixed tags (`gateway`), which can be more than the Mac command above, and reads its own copy of the inventory ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)). For the route, `c1-ansible check observability`, then `apply observability <clearance id>` the same way, under the rule for `apply observability` there.
    expect: the Gateway and route apply tasks are skipped. The route play reports `changed=0`; the gateway play reports only its smoke-test app as changed (it is applied and removed on every run), still opens the firewall ports and checks the Gateway, and its smoke test passes.
 
 ## Change it

@@ -33,7 +33,7 @@ Stop if any of these is not true.
 
 Since 2026-11-10, `autoSync` is on for this app in `root/values.yaml` (the owner's card, 02:50 UTC), so Argo CD syncs it on its own and a fresh cluster installs it from git. It was already Synced on c1 when the switch went on. On a cluster where Ansible already runs it, steps 1 to 3 are now a check after the fact: read the app's sync result instead of syncing by hand. Step 4's Ansible switch is still needed, so the role stops applying the same objects.
 
-1. In the private inventory, set `k8s_gitops_source_enabled: true` (once, for the first component only), then run `ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags source`.
+1. In the private inventory, set `k8s_gitops_source_enabled: true` (once, for the first component only), then run `ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags source`. From the box, once `c1-ansible list` there prints `gitops`: `c1-ansible check gitops`, then `c1-ansible apply gitops <clearance id>`. The box runs the wrapper's fixed tags (`source,ui,sso`), which can be more than the Mac command above, and reads its own copy of the inventory ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)).
    why: this makes the one root Application `c1`, which reads `hosts/kubernetes/home/c1/root/` from `main` and makes a child Application for each component listed there.
    ※ [D-0027](../decisions/0027-let-c1-read-central-hub-before-the-activation-gate.md), [D-0023 rule 5](../decisions/0023-use-argo-cd-as-the-gitops-engine.md)
    expect: `kubectl -n argocd get application c1` shows Synced and Healthy, and `metrics-server` appears as OutOfSync or Synced.
@@ -47,7 +47,7 @@ Since 2026-11-10, `autoSync` is on for this app in `root/values.yaml` (the owner
    why: Argo CD applies the same objects and marks them as its own.
    expect: Synced, Healthy; the pod is not restarted when nothing changed; `kubectl top nodes` still answers.
 
-4. By PR, set `autoSync: true` for `metrics-server` in `hosts/kubernetes/home/c1/root/values.yaml`. In the private inventory, set `k8s_observability_metrics_server_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics_server,proof`.
+4. By PR, set `autoSync: true` for `metrics-server` in `hosts/kubernetes/home/c1/root/values.yaml`. In the private inventory, set `k8s_observability_metrics_server_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags metrics_server,proof`. From the box, once `c1-ansible list` there prints `observability`: `c1-ansible check observability`, then `c1-ansible apply observability <clearance id>`. The box runs the wrapper's fixed tags (`metrics_server,metrics,logs,route,proof`), which can be more than the Mac command above, and reads its own copy of the inventory ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)). The rule for `apply observability` applies.
    why: from now on git is the source of truth, and self-heal puts back any drift. Ansible stops installing metrics-server and deletes Helm's old release records, which Argo CD doesn't use.
    expect: the first run reports one change (the Helm records deleted), and a second run reports `changed=0`. The proof's `kubectl top` passes.
 

@@ -95,6 +95,8 @@ Read from `main` at `8bca3cd` on 2026-11-18, not run again here:
    ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags ui,sso
    ```
 
+   From the box, once `c1-ansible list` there prints `gitops`: `c1-ansible check gitops`, then `c1-ansible apply gitops <clearance id>`. The box runs the wrapper's fixed tags (`source,ui,sso`), which can be more than the Mac command above, and reads its own copy of the inventory ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)).
+
    why: the Gateway gains listeners `http-short` and `https-short`, each route adds its short name, ntfy builds links with `ntfy.<zone>`, and Argo CD's `url` becomes `https://argocd.<zone>` with the issuer `https://sso.<zone>/realms/lab`.
    expect: `kubectl -n gateway get gateway apps -o jsonpath='{range .status.listeners[*]}{.name}={.conditions[?(@.type=="Programmed")].status} {end}'` shows all four listeners `True`. `https://argocd.<zone>/` opens on the Mac.
 
