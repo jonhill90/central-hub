@@ -20,6 +20,19 @@
 #   comes after the run; the role's own proofs and roll-back guard the host during it. The pass's message ID is
 #   required and goes into both logs. The box can't check the pass itself; a reviewing agent does, before the job.
 # log: the newest runs' summary lines.
+# The box's own apply (D-0042 rule 2's shape, for a host job): no workflow dispatch and so no new token. A session on the box runs
+#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply-recorded [<job>] <check hash, 12 hex>
+# which re-checks main's head and refuses, naming each thing missing, unless (1) that check gives the hash named, (2) the job's
+# ledger holds a reviewer pass for this job, this commit and this hash, and (3) it holds a go, recorded by the orchestrator from
+# the owner's own words, for this job and this commit, whose line (its message ID) no earlier apply used. Every job needs the go: sso and agent-access
+# change access rights, and the proxy changes what the host listens on; the wrapper can't tell from a diff which of its changes
+# touch the firewall, so it asks for the go on all three. The ledger is this user's own folder, written only by these actions:
+#   sudo -n -u hostops .../proxmox-host.sh pass [<job>] <commit, 40 hex> <check hash> <pass message ID> <ISO time> reviewer
+#   sudo -n -u hostops .../proxmox-host.sh go [<job>] <commit, 40 hex> <go message ID> <ISO time> orchestrator
+#   sudo -n -u hostops .../proxmox-host.sh ledger [<job>]
+# Any session can name itself the reviewer or the orchestrator, so a ledger line proves a recorder's word and the message ID it
+# gave, not the owner's; the pass-record ledger has the same limit (its header says so). The runner's three-argument `apply` below
+# is unchanged and is not gated by the ledger.
 # What is printed (and so what GitHub's public run log holds): the commit, the hash, counts of tasks, the pass ID,
 # pass or fail. Never a task's diff, a host name or an address. The full output stays in {work}/logs/.
 set -euo pipefail
@@ -37,7 +50,12 @@ logs=$work/logs
 summary=$logs/summary.jsonl
 result=$work/state/check.json
 
-usage() { echo "usage: proxmox-host check [proxy|agent-access|sso]|apply [proxy|agent-access|sso] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2; exit 2; }
+ledger=$work/ledger
+usage() {
+  echo "usage: proxmox-host check [proxy|agent-access|sso]|apply [proxy|agent-access|sso] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
+  echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
+  exit 2
+}
 
 if [[ ${1:-} == log ]]; then
   [[ $# -eq 1 ]] || usage
@@ -47,14 +65,55 @@ if [[ ${1:-} == log ]]; then
 fi
 # An optional job name comes right after the action; with none, the job is the proxy.
 action=${1:-} job=proxy
-if [[ $action == check || $action == apply ]] && [[ -n ${2:-} && -n ${jobs[${2:-x}]:-} ]]; then job=$2; set -- "$action" "${@:3}"; fi
+case $action in check | apply | apply-recorded | pass | go | ledger)
+  if [[ -n ${2:-} && -n ${jobs[${2:-x}]:-} ]]; then job=$2; set -- "$action" "${@:3}"; fi ;;
+esac
 playbook=${jobs[$job]}
+ref_ok() { [[ $1 =~ ^cmsg_[A-Za-z0-9]{10,80}$ ]]; }
 case $action in
   check) [[ $# -eq 1 ]] || usage ;;
   apply)
     [[ $# -eq 3 && ${2:-} =~ ^cmsg_[A-Za-z0-9]{10,80}$ && ${3:-} =~ ^[0-9a-f]{12}$ ]] || usage
     pass_ref=$2; want=$3 ;;
+  apply-recorded)
+    [[ $# -eq 2 && ${2:-} =~ ^[0-9a-f]{12}$ ]] || usage
+    want=$2 ;;
+  pass)
+    [[ $# -eq 6 && $2 =~ ^[0-9a-f]{40}$ && $3 =~ ^[0-9a-f]{12}$ && $5 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] && ref_ok "$4" || usage
+    [[ $6 == reviewer ]] || { echo "proxmox-host: a pass is recorded by the reviewer only" >&2; exit 2; } ;;
+  go)
+    [[ $# -eq 5 && $2 =~ ^[0-9a-f]{40}$ && $4 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] && ref_ok "$3" || usage
+    [[ $5 == orchestrator ]] || { echo "proxmox-host: a go is recorded by the orchestrator only, from the owner's own words" >&2; exit 2; } ;;
+  ledger) [[ $# -eq 1 ]] || usage ;;
   *) usage ;;
+esac
+
+# The ledger actions need no key and no inventory. Each line says who recorded it, with which message ID, and when.
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+ledger_line() { # kind, then key=value pairs; prints one JSON line
+  python3 -I -c 'import json, sys
+d = dict(a.split("=", 1) for a in sys.argv[2:])
+d["kind"] = sys.argv[1]
+print(json.dumps(d, sort_keys=True))' "$@"
+}
+case $action in
+  pass)
+    install -d -m 0700 "$ledger"
+    ledger_line pass "job=$job" "commit=$2" "hash=$3" "relay_ref=$4" "relay_time=$5" "recorder=$6" "box_time=$(now)" >> "$ledger/pass-$job-$2-$3.jsonl"
+    echo "proxmox-host: reviewer pass recorded for job $job, commit ${2:0:12}, check $3"
+    exit 0 ;;
+  go)
+    install -d -m 0700 "$ledger"
+    ledger_line go "job=$job" "commit=$2" "relay_ref=$3" "relay_time=$4" "recorder=$5" "box_time=$(now)" >> "$ledger/go-$job-$2.jsonl"
+    echo "proxmox-host: go recorded for job $job, commit ${2:0:12}"
+    exit 0 ;;
+  ledger)
+    [[ -d $ledger ]] || { echo "proxmox-host: the ledger is empty"; exit 0; }
+    for f in "$ledger"/pass-"$job"-*.jsonl "$ledger"/go-"$job"-*.jsonl; do
+      [[ -f $f ]] || continue
+      cat -- "$f"; [[ ! -s ${f%.jsonl}.used ]] || sed "s/^/(used: /;s/$/)/" "${f%.jsonl}.used"
+    done
+    exit 0 ;;
 esac
 
 [[ -f $inventory && -f $dir/id_ed25519 && -f $dir/known_hosts ]] \
@@ -127,6 +186,32 @@ print(hashlib.sha256(text.encode()).hexdigest()[:12], sum(t["changed"] for t in 
 PY
 }
 
+# has_line <file> <recorder> <kind> <job> [<key> <value>]... [--unspent <used file>]: prints the relay_ref of the first line that
+# has all of them and, with --unspent, whose relay_ref is not the third word of a line of the used file.
+has_line() {
+  [[ -s $1 ]] || return 0
+  python3 -I - "$@" <<'PY'
+import json, os, sys
+path, recorder, kind, job, *kv = sys.argv[1:]
+spent = set()
+if "--unspent" in kv:
+    i = kv.index("--unspent")
+    used = kv[i + 1]
+    kv = kv[:i]
+    if os.path.exists(used):
+        spent = {l.split()[2] for l in open(used) if len(l.split()) >= 3}
+want = {"recorder": recorder, "kind": kind, "job": job, **dict(zip(kv[::2], kv[1::2]))}
+for line in open(path):
+    try:
+        d = json.loads(line)
+    except ValueError:
+        continue
+    if all(d.get(k) == v for k, v in want.items()) and d.get("relay_ref", "") not in spent:
+        print(d.get("relay_ref", ""))
+        break
+PY
+}
+
 do_check() { # prints the hash line; returns non-zero if the check run failed
   local out=$logs/check-$stamp.json
   if ! play "$out" --check --diff; then
@@ -146,7 +231,7 @@ case $action in
     echo "proxmox-host: check $hash: $changed changed, $skipped skipped, $total tasks"
     echo "proxmox-host: the agents' pass for an apply names this commit (${commit:0:12}) and this hash ($hash)"
     ;;
-  apply)
+  apply | apply-recorded)
     if ! line=$(do_check); then
       record none none "FAIL: re-check"; echo "proxmox-host: FAIL: the re-check before the apply failed; nothing applied" >&2; exit 1
     fi
@@ -155,6 +240,25 @@ case $action in
       record "$hash" "$changed changed, $skipped skipped, $total tasks" "refused: hash"
       echo "proxmox-host: the check now gives $hash, not the hash named ($want): main or the host changed since; nothing applied" >&2
       exit 1
+    fi
+    if [[ $action == apply-recorded ]]; then
+      # (2) a reviewer pass for this job, commit and hash; (3) an unused go for this job and commit. Every gap is named, then nothing runs.
+      missing=()
+      pf=$ledger/pass-$job-$commit-$hash.jsonl gf=$ledger/go-$job-$commit.jsonl
+      pass_ref=$(has_line "$pf" reviewer pass "$job" commit "$commit" hash "$hash")
+      go_any=$(has_line "$gf" orchestrator go "$job" commit "$commit")
+      go_ref=$(has_line "$gf" orchestrator go "$job" commit "$commit" --unspent "${gf%.jsonl}.used")
+      [[ -n $pass_ref ]] || missing+=("no reviewer pass for job $job, commit ${commit:0:12}, check $hash")
+      if [[ -z $go_any ]]; then missing+=("no go for job $job, commit ${commit:0:12}")
+      elif [[ -z $go_ref ]]; then missing+=("every go for job $job, commit ${commit:0:12} was used already; a new go is needed"); fi
+      if [[ ${#missing[@]} -gt 0 ]]; then
+        record "$hash" "$changed changed, $skipped skipped, $total tasks" "refused: ledger"
+        echo "proxmox-host: refused, nothing applied: $(IFS=';'; echo "${missing[*]}")" >&2
+        exit 1
+      fi
+      # That one go line, by its message ID, is spent before the playbook runs, so a run that fails part-way needs a new go line
+      # (a new message ID, same commit); the other lines of the file stay as they were.
+      printf '%s %s %s\n' "$stamp" "$hash" "$go_ref" >> "${gf%.jsonl}.used"
     fi
     out=$logs/apply-$stamp.json
     if ! play "$out" --diff; then

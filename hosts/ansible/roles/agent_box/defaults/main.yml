@@ -91,10 +91,12 @@ agent_box_wrappers:
   # The Proxmox host's proxy playbook as a pipeline job (D-0041; Library plans/r1-host-job/DESIGN.md v3.1):
   # check, then apply the check whose hash has the agents' pass. It runs as agent_box_host_user, not the keys
   # user, so no other wrapper can read the host key. Sessions may check and read the log; only the workflow's
-  # runner (lab-proxmox-host.yml) may apply.
+  # runner (lab-proxmox-host.yml) may apply. The box's own apply (`apply-recorded`) is open to sessions because the wrapper
+  # decides: it refuses unless the check hash matches, the ledger holds a reviewer pass for it and a go for the job and
+  # commit; `pass`, `go` and `ledger` write and read that ledger (the wrapper's header says what each line proves).
   - name: proxmox-host
-    args: [check, "check *", "apply *", log]
-    session_args: [check, "check *", log]
+    args: [check, "check *", "apply *", "apply-recorded *", "pass *", "go *", ledger, "ledger *", log]
+    session_args: [check, "check *", "apply-recorded *", "pass *", "go *", ledger, "ledger *", log]
     runner: true
     run_as: hostops   # the same name as agent_box_host_user
   # The tailnet policy file's pipeline job (D-0041, D-0046 rule 4): the same shape as tailnet-stack, for

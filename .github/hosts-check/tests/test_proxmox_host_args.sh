@@ -13,6 +13,9 @@
 #      an unknown name is refused, and `apply agent-access <pass> <hash>` takes the same pass and hash as the proxy job.
 #  11. `check sso` runs proxmox-sso.yml with the secret file's path as proxmox_sso_values_file, and refuses with no such file;
 #      the proxy and agent-access jobs are never given that variable.
+#  12. `apply-recorded <hash>`, the box's own apply (no pass ID argument): it re-checks, and refuses naming each thing missing unless
+#      the check gives the hash, the ledger holds a reviewer pass for the job, commit and hash, and an unused go for the job and
+#      commit. A pass or go for another hash, commit or job does not count; the wrong recorder is refused; a go line (by its message ID) is spent by one apply, and a new go line at the same commit works once.
 #   9. Nothing printed holds a diff's text or the host's address; log prints the summary lines.
 # Usage: .github/hosts-check/tests/test_proxmox_host_args.sh   (needs git and python3)
 set -uo pipefail
@@ -161,5 +164,72 @@ if [ "$rc11a" = 1 ] && [ -z "$c11a" ] && grep -q 'proxmox-sso.env is missing' "$
    [[ $c11c != *proxmox_sso_values_file* && $c11d != *proxmox_sso_values_file* ]] && ! grep -q 'stand-in-not-a-secret' "$t"/11?.out; then
   ok "11 the sso job needs its secret file, runs proxmox-sso.yml with that path, and the other jobs get no such variable"
 else bad "11 rc=$rc11a/$rc11b [$c11a] [$c11b] [$c11c] [$c11d] $(cat "$t/11a.out")"; fi
+
+# 12
+json "new" "/tmp/a" "write config" "move" none > "$t/out-check.json"
+json "new" "/tmp/a" "write config" "move" none > "$t/out-apply.json"
+c12=$(git -C "$t/main.git" rev-parse main)
+h12=$(job check 2>&1 | sed -n 's/^proxmox-host: check \([0-9a-f]\{12\}\): .*/\1/p')
+ref1=cmsg_aaaaaaaaaaaa; ref2=cmsg_bbbbbbbbbbbb; tm=2026-11-18T23:00:00Z
+only_check() { ! grep -qv -- '--check' "$t/calls"; }
+: > "$t/calls"
+job apply-recorded "$h12" > "$t/12a.out" 2>&1; rc=$?
+if [ $rc = 1 ] && grep -q "no reviewer pass for job proxy" "$t/12a.out" && grep -q "no go for job proxy" "$t/12a.out" && only_check; then
+  ok "12 no pass and no go: refused naming both, only the check ran"; else bad "12a rc=$rc $(cat "$t/12a.out")"; fi
+job apply-recorded 0123456789ab > "$t/12b.out" 2>&1; rc=$?
+if [ $rc = 1 ] && grep -q "not the hash named" "$t/12b.out"; then ok "12 a hash that is not the check's refuses first"; else bad "12b rc=$rc $(cat "$t/12b.out")"; fi
+# wrong recorders and shapes are refused before anything is written
+job pass "$c12" "$h12" "$ref1" "$tm" builder > /dev/null 2>&1; r1=$?
+job go "$c12" "$ref2" "$tm" reviewer > /dev/null 2>&1; r2=$?
+job pass "$c12" "$h12" "notanid" "$tm" reviewer > /dev/null 2>&1; r3=$?
+job go "${c12:0:12}" "$ref2" "$tm" orchestrator > /dev/null 2>&1; r4=$?
+if [ "$r1" = 2 ] && [ "$r2" = 2 ] && [ "$r3" = 2 ] && [ "$r4" = 2 ] && [ ! -e "$t/work/ledger" ]; then
+  ok "12 pass by a builder, go by a reviewer, a bad ID, a short commit: all refused, nothing written"; else bad "12 recorders $r1 $r2 $r3 $r4"; fi
+# a pass for another hash, another commit or another job does not count
+job pass "$c12" 0123456789ab "$ref1" "$tm" reviewer > /dev/null 2>&1
+job pass "0123456789012345678901234567890123456789" "$h12" "$ref1" "$tm" reviewer > /dev/null 2>&1
+job pass agent-access "$c12" "$h12" "$ref1" "$tm" reviewer > /dev/null 2>&1
+job go "$c12" "$ref2" "$tm" orchestrator > /dev/null 2>&1
+: > "$t/calls"
+job apply-recorded "$h12" > "$t/12c.out" 2>&1; rc=$?
+if [ $rc = 1 ] && grep -q "no reviewer pass for job proxy" "$t/12c.out" && ! grep -q "no go for" "$t/12c.out" && only_check; then
+  ok "12 a pass for another hash, commit or job does not count; the go alone is named as present"; else bad "12c rc=$rc $(cat "$t/12c.out")"; fi
+# a pass without a go
+rm -rf "$t/work/ledger"
+job pass "$c12" "$h12" "$ref1" "$tm" reviewer > /dev/null 2>&1
+: > "$t/calls"
+job apply-recorded "$h12" > "$t/12d.out" 2>&1; rc=$?
+if [ $rc = 1 ] && grep -q "no go for job proxy" "$t/12d.out" && ! grep -q "no reviewer pass" "$t/12d.out" && only_check; then
+  ok "12 a pass without a go: refused, naming the go"; else bad "12d rc=$rc $(cat "$t/12d.out")"; fi
+# a go for the same commit but another job does not count
+job go agent-access "$c12" "$ref2" "$tm" orchestrator > /dev/null 2>&1
+job apply-recorded "$h12" > "$t/12e.out" 2>&1 && bad "12 a go for another job let the proxy apply"
+grep -q "no go for job proxy" "$t/12e.out" && ok "12 a go for another job does not count" || bad "12e $(cat "$t/12e.out")"
+# both: it applies, the log line holds the pass ID, and the go is spent
+job go "$c12" "$ref2" "$tm" orchestrator > /dev/null 2>&1
+: > "$t/calls"
+job apply-recorded "$h12" > "$t/12f.out" 2>&1; rc=$?
+if [ $rc = 0 ] && grep -q "applied check $h12" "$t/12f.out" && grep -qv -- '--check' "$t/calls" && grep -c . "$t/calls" | grep -q '^2$'; then
+  ok "12 pass and go present: re-check, then the playbook runs and passes"; else bad "12f rc=$rc $(cat "$t/12f.out")"; fi
+tail -n 1 "$t/work/logs/summary.jsonl" | grep -q "\"pass\": \"$ref1\"" && tail -n 1 "$t/work/logs/summary.jsonl" | grep -q '"action": "apply-recorded"' \
+  && ok "12 the log line names the reviewer pass's ID and the action" || bad "12 log: $(tail -n 1 "$t/work/logs/summary.jsonl")"
+: > "$t/calls"
+job apply-recorded "$h12" > "$t/12g.out" 2>&1; rc=$?
+if [ $rc = 1 ] && grep -q "was used already" "$t/12g.out" && only_check; then ok "12 the go is spent: a second apply is refused"; else bad "12g rc=$rc $(cat "$t/12g.out")"; fi
+# a new go line (a new message ID) at the same commit works once; the spent line stays spent
+job go "$c12" cmsg_cccccccccccc "$tm" orchestrator > /dev/null 2>&1
+: > "$t/calls"
+job apply-recorded "$h12" > "$t/12i.out" 2>&1; rc=$?
+if [ $rc = 0 ] && grep -q "applied check $h12" "$t/12i.out" && grep -qv -- '--check' "$t/calls"; then ok "12 a new go at the same commit applies"; else bad "12i rc=$rc $(cat "$t/12i.out")"; fi
+job apply-recorded "$h12" > "$t/12j.out" 2>&1; rc=$?
+if [ $rc = 1 ] && grep -q "was used already" "$t/12j.out"; then ok "12 and is spent in its turn: a third apply is refused"; else bad "12j rc=$rc $(cat "$t/12j.out")"; fi
+# the same message ID recorded twice is one go, not two
+job go "$c12" cmsg_cccccccccccc "$tm" orchestrator > /dev/null 2>&1
+job apply-recorded "$h12" > "$t/12k.out" 2>&1 && bad "12 a repeated go message ID applied again"
+grep -q "was used already" "$t/12k.out" && ok "12 a go line repeated under a spent message ID stays spent" || bad "12k $(cat "$t/12k.out")"
+job ledger > "$t/12h.out" 2>&1
+if grep -q "\"relay_ref\": \"$ref1\"" "$t/12h.out" && grep -q "\"relay_ref\": \"$ref2\"" "$t/12h.out" && grep -q '^(used: ' "$t/12h.out"; then
+  ok "12 ledger prints the lines, marks the spent go"; else bad "12h $(cat "$t/12h.out")"; fi
+if grep -q -e '192.0.2.10' -e 'secret-name' "$t"/12?.out "$t/work/ledger"/* 2>/dev/null; then bad "12 private text printed or stored"; else ok "12 no private text in the output or the ledger"; fi
 
 exit "$fail"

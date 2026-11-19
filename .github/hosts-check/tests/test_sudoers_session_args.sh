@@ -45,8 +45,10 @@ ph = [w for w in d if w["name"] == "proxmox-host"][0]
 h = render([ph]).splitlines()
 hs = [l for l in h if l.startswith("sess ALL=")]
 hr = [l for l in h if l.startswith("run ALL=")]
-print("7", hs == ["sess ALL=(hostops) NOPASSWD: /x/proxmox-host.sh check, /x/proxmox-host.sh check *, /x/proxmox-host.sh log"],
-      hr == ["run ALL=(hostops) NOPASSWD: /x/proxmox-host.sh check, /x/proxmox-host.sh check *, /x/proxmox-host.sh apply *, /x/proxmox-host.sh log"])
+ses7 = "sess ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh " + x for x in ["check", "check *", "apply-recorded *", "pass *", "go *", "ledger", "ledger *", "log"])
+run7 = "run ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh " + x for x in ["check", "check *", "apply *", "apply-recorded *", "pass *", "go *", "ledger", "ledger *", "log"])
+# The session line has no three-argument `apply`: that form takes a pass ID the box cannot check, so only the runner has it.
+print("7", hs == [ses7] and " apply *" not in hs[0], hr == [run7])
 tp = render([w for w in d if w["name"] == "tailnet-policy"])
 print("8", lines(tp, "sess") == ["sess ALL=(keys) NOPASSWD: /x/tailnet-policy.sh plan, /x/tailnet-policy.sh log"],
       lines(tp, "run") == ["run ALL=(keys) NOPASSWD: /x/tailnet-policy.sh plan, /x/tailnet-policy.sh apply *, /x/tailnet-policy.sh log"])
@@ -66,7 +68,7 @@ check 3 "3. empty session_args: the session gets no line"
 check 4 "4. tailnet-stack: no apply in the session's line, apply in the runner's"
 check 5 "5. sessions: pr-merge check only (no merge, no sweep); pass-record add, show, halt, resume"
 check 6 "6. the runner user gets no pr-merge or pass-record line (the merge job is gone)"
-check 7 "7. proxmox-host: as hostops; the session checks and reads the log, only the runner applies"
+check 7 "7. proxmox-host: as hostops; the session checks and reads the log, only the runner has the ungated apply; sessions have apply-recorded"
 check 8 "8. tailnet-policy: the session gets plan and log only, the runner also apply"
 check 9 "9. vps-host: the session gets status and log only, the runner every action"
 check 10 "10. opnsense-cert-check: the session gets check and status as the keys user, the runner nothing"
