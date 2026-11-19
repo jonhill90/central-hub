@@ -13,6 +13,8 @@ resource "tailscale_acl" "policy" {
     proxmox_host_address = var.proxmox_host_address
     lab_ranges           = [for v in yamldecode(file(var.vlans_file)).lab_vlans : v.cidr if lookup(v, "tailnet", true)]
     external_tailnets    = var.external_tailnets
+    # The share pod's tag, owner, grant and tests, only with its own switch and a share to reach.
+    share_pod = var.share_pod_enabled && length(var.external_tailnets) > 0
   })
 
   overwrite_existing_content = false
