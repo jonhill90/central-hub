@@ -1,0 +1,15 @@
+# Managed by the agent_box role (central-hub hosts/ansible). The box pickup scan: it reads the notebook's task board and
+# wakes a session through pickup-note only when a project has a new ready task. Runs as the keys user, the same user the
+# wrapper runs as through sudo. The mode is agent_box_pickup_mode (dry-run posts nothing). Exit 3 means something new, not a failure.
+[Unit]
+Description=Pickup scan: wake a session only when a project has a new ready task
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ agent_box_keys_user }}
+Group={{ agent_box_keys_user }}
+ExecStart={{ agent_box_libexec_dir }}/pickup-scan.sh {{ agent_box_pickup_mode }}
+SuccessExitStatus=3
+TimeoutStartSec=5min

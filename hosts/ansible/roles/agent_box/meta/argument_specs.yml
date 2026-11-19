@@ -228,6 +228,27 @@ argument_specs:
           Install and start checkpoint-scan.timer, which runs `checkpoint-scan.sh run` as the keys user. It reads only and
           posts through checkpoint-note on a new finding. False stops and disables the timer.
       agent_box_checkpoint_scan_on_calendar: {type: str, default: "*-*-* *:07:00 UTC", description: "systemd OnCalendar for the checkpoint scan."}
+      agent_box_pickup_scan:
+        type: bool
+        default: true
+        description: >-
+          Install and start pickup-scan.timer, which runs `pickup-scan.sh <agent_box_pickup_mode>` as the keys user every
+          10 minutes. It reads only. False stops and disables the timer.
+      agent_box_pickup_mode:
+        type: str
+        default: dry-run
+        choices: [dry-run, run]
+        description: >-
+          dry-run prints what the scan would post and posts nothing; run posts a fixed comment for each newly ready
+          task on its project's standing pull request.
+      agent_box_pickup_scan_on_calendar: {type: str, default: "*-*-* *:00/10:00 UTC", description: "systemd OnCalendar for the pickup scan."}
+      agent_box_pickup_projects:
+        type: dict
+        default: {agent-notebook: {repo: agent-notebook}}
+        description: >-
+          The projects the pickup scan lists, written to <work_dir>/pickup.json: project name to repo (one the App is
+          installed on) and number (the project's standing draft pull request, which pickup-note comments on; left out
+          until that pull request exists). Empty skips the file, and the scan reports that as a finding.
       agent_box_opnsense_test:
         type: dict
         default: {}

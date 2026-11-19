@@ -598,6 +598,63 @@
   when: not (agent_box_checkpoint_scan | bool) and agent_box_checkpoint_scan_timer.stat.exists | default(false)
   tags: [wrappers]
 
+- name: The pickup scan's and the pickup wrapper's one list of projects (no wrapper but pickup-note names the file)
+  ansible.builtin.copy:
+    dest: "{{ agent_box_work_dir }}/pickup.json"
+    content: "{{ {'projects': agent_box_pickup_projects} | to_nice_json }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  when: agent_box_pickup_projects | length > 0
+  tags: [wrappers]
+
+- name: The pickup scan's checks, root's (pickup-scan.sh runs it)
+  ansible.builtin.copy:
+    src: pickup-scan.py
+    dest: "{{ agent_box_libexec_dir }}/pickup-scan.py"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+- name: Pickup scan service and timer
+  ansible.builtin.template:
+    src: "pickup-scan.{{ item }}.j2"
+    dest: "/etc/systemd/system/pickup-scan.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/pickup-scan.{{ item }}"
+  register: agent_box_pickup_scan_units
+  when: agent_box_pickup_scan | bool
+  tags: [wrappers]
+
+- name: Pickup scan timer on
+  ansible.builtin.systemd_service:
+    name: pickup-scan.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_pickup_scan_units is changed }}"
+  when: agent_box_pickup_scan | bool and not (ansible_check_mode and agent_box_pickup_scan_units is changed)
+  tags: [wrappers]
+
+- name: Is there a pickup scan timer to turn off
+  ansible.builtin.stat:
+    path: /etc/systemd/system/pickup-scan.timer
+  register: agent_box_pickup_scan_timer
+  when: not (agent_box_pickup_scan | bool)
+  tags: [wrappers]
+
+- name: Pickup scan timer off, while agent_box_pickup_scan is false
+  ansible.builtin.systemd_service:
+    name: pickup-scan.timer
+    enabled: false
+    state: stopped
+  when: not (agent_box_pickup_scan | bool) and agent_box_pickup_scan_timer.stat.exists | default(false)
+  tags: [wrappers]
+
 - name: The rebuild wrapper's short-node pick, from the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/short-node"
