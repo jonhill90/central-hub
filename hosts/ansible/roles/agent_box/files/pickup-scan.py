@@ -19,7 +19,9 @@ checkout is needed and nothing is written. For each project named in /var/lib/ag
      main under the App key.
   2. stops there if a task with `pickup: <project>` is `doing` (work in progress is capped at 1). If that claim is
      more than STALE_AGE old by its `doing-since`, or has none, that is a finding instead, and its text names the
-     exit: `; reset it to ready by a PR`. The scan writes nothing to the notebook (its token is read-only).
+     exit: `; reset it to ready by a PR`. The scan writes nothing to the notebook (its token is read-only). The stale
+     claim also wakes a session: `pickup-note post-stale <project> <TASK-NNNN>`, the fixed comment
+     `pickup: TASK-NNNN is stale for <project>.` on the standing pull request, once per claim (see below).
   3. otherwise announces the first task of the list, the one a worker would take, with
      `pickup-note post <project> <TASK-NNNN>`: one fixed comment on that project's standing pull request.
   4. posts that announcement again if nobody claims it: while the same task is still the first of the list and
@@ -30,7 +32,8 @@ checkout is needed and nothing is written. For each project named in /var/lib/ag
      out (claimed, done, or no longer first) loses its count, so if it returns it starts again at one post.
 
 A finding is a line of text with no age or run time in it, so the same finding reads the same every run. Only an
-announcement or a finding that was not in the last `run`'s set posts: an announcement through pickup-note, findings
+announcement, a stale wake (key `stale <project> <label>`, its own key, apart from the ready key) or a finding that
+was not in the last `run`'s set posts: an announcement through pickup-note, findings
 through `checkpoint-note post <count>` (the checkpoint's own pull request). One that stays posts nothing; one that
 drops out and comes back posts again; a failed post is tried again next run. A scan that cannot run, and a crash
 of the scan, are findings too, so a broken scan never reads as a quiet board. `dry-run` never changes that memory,
@@ -245,7 +248,7 @@ def settings():
 
 def scan(t, mode):
     """{main, lists, capped, announce, findings}: the board read once, each project judged."""
-    res = {"main": "", "lists": {}, "capped": {}, "announce": [], "findings": []}
+    res = {"main": "", "lists": {}, "capped": {}, "announce": [], "stale": [], "findings": []}
     try:
         projects, faults = settings()
     except ScanError as e:
@@ -308,14 +311,17 @@ def scan(t, mode):
                 m = minutes(since)
                 if m is None:
                     res["findings"].append("stale: %s (%s) is doing with no valid doing-since%s" % (label, project, RESET_HINT))
+                    res["stale"].append((project, label))
                 elif n - m > STALE_AGE.total_seconds() // 60:
                     res["findings"].append("stale: %s (%s) has been doing since %s%s" % (label, project, since, RESET_HINT))
+                    res["stale"].append((project, label))
             continue
         if mode == "run" and not isinstance(cfg.get("number"), int):
             res["findings"].append("scan error: %s has no standing pull request in pickup.json, so nothing can be posted" % project)
         if rows:
             res["announce"].append((project, rows[0][0]))
     res["findings"] = sorted(set(res["findings"]))
+    res["stale"] = sorted(set(res["stale"]))
     return res
 
 
@@ -341,6 +347,15 @@ def minutes_since(last, t):
     return int((cut(t) - cut(a)).total_seconds() // 60)
 
 
+def stale_key(project, label):
+    return "stale %s %s" % (project, label)
+
+
+def post_stale(project, label):
+    """The stale wake: one fixed comment on the standing pull request. Returns pickup-note's exit code."""
+    return subprocess.run([os.path.join(LIBEXEC, "pickup-note.sh"), "post-stale", project, label]).returncode
+
+
 def post_ready(project, label):
     """The wake: one fixed comment on the project's standing pull request. Returns pickup-note's exit code."""
     return subprocess.run([os.path.join(LIBEXEC, "pickup-note.sh"), "post", project, label]).returncode
@@ -364,7 +379,7 @@ def run(mode):
     try:
         res = scan(t, mode)
     except Exception as e:  # any other fault is a finding too, named by its type only (its text may hold data)
-        res = {"main": "", "lists": {}, "capped": {}, "announce": [], "findings": ["scan crashed: %s" % type(e).__name__]}
+        res = {"main": "", "lists": {}, "capped": {}, "announce": [], "stale": [], "findings": ["scan crashed: %s" % type(e).__name__]}
     statef = os.path.join(state_dir, "pickup-scan.json")
     try:
         last = json.load(open(statef))
@@ -393,6 +408,8 @@ def run(mode):
             res["findings"].append("unclaimed: %s (%s) announced %d times with no claim" % (l, p, REANNOUNCE_POSTS))
     res["findings"] = sorted(set(res["findings"]))
     new_ready = [(p, l) for p, l, k in announce if k not in known]
+    stale = [(p, l, stale_key(p, l)) for p, l in res["stale"]]
+    new_stale = [(p, l) for p, l, k in stale if k not in known]
     new_other = [f for f in res["findings"] if f not in known]
     print("pickup-scan: %s at %s, board main %s" % (mode, iso(t), res["main"][:7] or "not read"))
     for project in sorted(res["lists"]):
@@ -406,12 +423,14 @@ def run(mode):
             print("again: %s (post %d of %d)" % (text, posts_now[k]["count"] + 1, REANNOUNCE_POSTS))
         else:
             print(("new: " if (p, l) in new_ready else "ready: ") + text)
+    for p, l, k in stale:
+        print(("new: " if (p, l) in new_stale else "stale: ") + "pickup: %s is stale for %s" % (l, p))
     for f in res["findings"]:
         print(("new: " if f in new_other else "finding: ") + f)
     if mode == "dry-run":
         wake = "dry-run: nothing posted"
-        if new_ready or again or new_other:
-            wake += "; a run would post %d announcement(s) and %d finding(s)" % (len(new_ready) + len(again), len(new_other))
+        if new_ready or again or new_stale or new_other:
+            wake += "; a run would post %d announcement(s) and %d finding(s)" % (len(new_ready) + len(again) + len(new_stale), len(new_other))
     else:
         wake = "nothing new"
         bits = []
@@ -429,6 +448,13 @@ def run(mode):
                     bits.append("posted %s for %s" % (l, p))
             else:
                 bits.append("pickup-note failed for %s (rc %d); the next run tries again" % (l, rc))
+        for p, l in new_stale:
+            rc = post_stale(p, l)
+            if rc == 0:
+                posted.add(stale_key(p, l))
+                bits.append("posted stale %s for %s" % (l, p))
+            else:
+                bits.append("pickup-note failed for stale %s (rc %d); the next run tries again" % (l, rc))
         if new_other:
             rc = post_findings(len(new_other))
             if rc == 0:
@@ -440,7 +466,7 @@ def run(mode):
             wake = "; ".join(bits)
     print("pickup-scan: wake: " + wake)
     if mode == "run":
-        known_next = sorted(k for k in [k for _, _, k in announce] + res["findings"] if k in known or k in posted)
+        known_next = sorted(k for k in [k for _, _, k in announce] + [k for _, _, k in stale] + res["findings"] if k in known or k in posted)
         posts_next = {k: posts_now[k] for k in known_next if k in posts_now}
     else:
         known_next = sorted(known)
@@ -454,7 +480,7 @@ def run(mode):
     os.replace(tmp, statef)
     subprocess.run(["logger", "-t", "pickup-scan", "%s: %d ready, %d finding(s); wake: %s"
                     % (mode, len(announce), len(res["findings"]), wake)], capture_output=True)
-    return 3 if (new_ready or again or new_other) else 0
+    return 3 if (new_ready or again or new_stale or new_other) else 0
 
 
 def show():

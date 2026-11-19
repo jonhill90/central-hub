@@ -1,9 +1,10 @@
 #!/bin/bash
 # /usr/local/libexec/agent-box/pickup-note.sh: post one fixed-format comment, as the GitHub App "Central Hub Agents",
 # on the standing pull request the box's own settings name for one project, so a session that watches that pull
-# request wakes when the project has a ready task and never on the clock. It runs as user `keys`, called by
+# request wakes when the project has a ready task or a stale claim and never on the clock. It runs as user `keys`, called by
 # pickup-scan.py; a session has no sudo line for `post`, so it never sees the App key or the token.
-#   pickup-note post <project> <TASK-NNNN>   "pickup: TASK-NNNN is ready for <project>."
+#   pickup-note post <project> <TASK-NNNN>        "pickup: TASK-NNNN is ready for <project>."
+#   pickup-note post-stale <project> <TASK-NNNN>  "pickup: TASK-NNNN is stale for <project>."
 #   pickup-note log                          the last 20 runs from the wrapper's own log.
 # The pull request is never an argument: it is `repo` and `number` under that project in
 # /var/lib/agent-box/pickup.json, which the agent_box role writes from agent_box_pickup_projects. The comment's text is
@@ -15,16 +16,16 @@ set -euo pipefail
 umask 077
 
 owner=jonhill90   # the account the App is installed on
-usage() { echo "usage: pickup-note post <project> <TASK-NNNN> | log" >&2; exit 2; }
+usage() { echo "usage: pickup-note post|post-stale <project> <TASK-NNNN> | log" >&2; exit 2; }
 action=${1:-}
 case $action in
-  post) [[ $# == 3 ]] || usage ;;
+  post | post-stale) [[ $# == 3 ]] || usage ;;
   log) [[ $# == 1 ]] || usage ;;
   *) usage ;;
 esac
 project=${2:-}
 label=${3:-}
-if [[ $action == post ]]; then
+if [[ $action == post || $action == post-stale ]]; then
   [[ $project =~ ^[a-z][a-z0-9-]{0,40}$ ]] || { echo "pickup-note: the project is not a project name" >&2; exit 2; }
   [[ $label =~ ^TASK-[0-9]{4}$ ]] || { echo "pickup-note: the label must look like TASK-0123" >&2; exit 2; }
 fi
@@ -44,8 +45,8 @@ fi
 
 ref="-"
 note() { # result, then detail: one line in the log and in the journal; never a token
-  printf '%s post %s %s %s %s %s\n' "$(date -u +%FT%TZ)" "$project" "$label" "$ref" "$1" "${2:-}" >> "$logf"
-  logger -t pickup-note "post $project $label $ref $1 ${2:-}" 2>/dev/null || true
+  printf '%s %s %s %s %s %s %s\n' "$(date -u +%FT%TZ)" "$action" "$project" "$label" "$ref" "$1" "${2:-}" >> "$logf"
+  logger -t pickup-note "$action $project $label $ref $1 ${2:-}" 2>/dev/null || true
 }
 die() { note "$1" "${2:-}"; echo "pickup-note: ${3:-$2}" >&2; exit 1; }
 
@@ -104,7 +105,7 @@ split
 state=$(printf '%s' "$body" | jsonget state)
 [[ $state == open ]] || die refused "not-open" "pull request $ref is $state, not open; nothing posted"
 
-text="pickup: $label is ready for $project."
+if [[ $action == post-stale ]]; then text="pickup: $label is stale for $project."; else text="pickup: $label is ready for $project."; fi
 payload=$(python3 -I -c 'import json,sys; print(json.dumps({"body": sys.argv[1]}))' "$text")
 out=$(BEARER=$tok call -X POST -d "$payload" "https://api.github.com/repos/$owner/$repo/issues/$number/comments") ||
   die failed "curl" "GitHub did not answer"

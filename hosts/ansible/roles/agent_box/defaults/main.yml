@@ -77,7 +77,8 @@ agent_box_wrappers:
     session_args: [dry-run, show]
   # Posts one fixed comment, as the GitHub App, on a project's standing pull request (files/pickup-note.sh), called by the
   # scan as the keys user. `post *` passes the project and the label, which the wrapper checks; the pull request is never an
-  # argument. A session gets no `post`: only the scan wakes the project.
+  # argument. The scan also calls `post-stale` (not matched by `post *`, which needs a space; the scan runs as the keys user, no sudo).
+  # A session gets no `post`: only the scan wakes the project.
   - name: pickup-note
     args: ["post *", log]
     session_args: [log]
