@@ -133,9 +133,15 @@ chmod +x "$t/bin8/curl"
 fitact() { FIT_SEEN=$t/fit-seen8 FIT_RC=$1 repo=$t/repo work=$t/work8 keys=$t/keys8 inventory="$t/env/inventory" PATH=$t/bin8:$PATH \
   bash -c 'mkdir -p "$work"; . "$1"; f=$2; set -- fit; . "$f"' _ "$t/fitfn.sh" "$t/fitact.sh" 2>&1; echo "rc=$?"; }
 o8a=$(fitact 0); o8b=$(fitact 3)
+# An older checkout: the stand-in dies on --fit as rebuild-k8s.sh did before #635.
+cp "$t/repo/hosts/rebuild-k8s.sh" "$t/rk8s.keep"
+printf '%s\n' '#!/bin/bash' 'echo "rebuild-k8s: unknown argument: --fit" >&2' 'exit 2' > "$t/repo/hosts/rebuild-k8s.sh"
+o8c=$(fitact 0)
+cp "$t/rk8s.keep" "$t/repo/hosts/rebuild-k8s.sh"
 if [[ $o8a == *"preflight: refused, estimate 9216 MiB"* && $o8a == *"vmid=258 name=big status=running mem=8192 of 8192 MiB"* &&
-      $o8a != *"name=off"* && $o8a == *"rc=0" && $o8b == *"rc=3" && $o8b == *"vmid=258"* ]]; then
+      $o8a != *"name=off"* && $o8a == *"rc=0" && $o8b == *"rc=3" && $o8b == *"vmid=258"* &&
+      $o8a == *"fit: checkout "* && $o8c == *"older than the --fit flag"* && $o8a != *"older than the --fit flag"* ]]; then
   ok "8. fit prints the fit check's lines and the running guests by memory, biggest first, and exits with the fit check's code"
-else bad "8. [$o8a] [$o8b]"; fi
+else bad "8. [$o8a] [$o8b] [$o8c]"; fi
 
 exit $fail

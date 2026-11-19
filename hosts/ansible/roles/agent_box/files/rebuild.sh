@@ -185,6 +185,12 @@ if [[ ${1:-} == fit && $# -eq 1 ]]; then
   [[ -f $repo/hosts/rebuild-k8s.sh ]] || { echo "rebuild: no checkout yet; run rebuild up once" >&2; exit 1; }
   mkdir -p "$work/state"
   rc=0; fit_check || rc=$?
+  # fit uses the box's checkout as it is, without fetching: one older than the --fit flag (#635) fails with "unknown
+  # argument", which must not read as "does not fit".
+  echo "fit: checkout $(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  if grep -q 'unknown argument' "$work/state/rebuild-fit/fit.out"; then
+    echo "fit: this checkout is older than the --fit flag, so no answer; run rebuild up once to update it"
+  fi
   grep -E 'preflight|refused|could not be read|^fit:' "$work/state/rebuild-fit/fit.out" | cut -c1-300 | tail -n 20 || true
   echo "== the 12 guests holding the most memory on the cluster (vmid, name, status, memory used of max, MiB)"
   # shellcheck source=/dev/null
