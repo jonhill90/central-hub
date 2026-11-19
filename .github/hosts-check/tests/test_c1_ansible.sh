@@ -8,6 +8,7 @@
 #   4. apply runs the playbook without --check, never with realm replace, and logs the clearance id; a host labelled env dev
 #      refuses before any run.
 #   5. log prints the run's own lines.
+#   8. observability runs its playbook with its fixed tags and no extra variables.
 #   7. gateway and gitops run their own playbook with fixed tags and no extra variables or values file; certs and the install tag are not
 #      names; apply needs a clearance id for them too.
 #   6. An inventory that names a theme folder (a controller path) is remapped to <keys>/prod/identity-theme/<its name>; with no
@@ -28,7 +29,7 @@ cat > "$t/bin/git" <<'S'
 #!/bin/bash
 case "$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops certs; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
+  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
   *rev-parse*) echo abc1234 ;;
 esac
 exit 0
@@ -69,7 +70,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'gateway\ngitops\nidentity' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'gateway\ngitops\nidentity\nobservability' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -117,4 +118,10 @@ for args in "check certs" "check k8s-certs" "apply certs $clr" "check gitops-ins
   run $args; r7+="$rc:${calls:-none} "
 done
 if [[ $r7 == "2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "7b. certs and install are not names; apply needs a clearance id"; else bad "7b. $r7"; fi
+run check observability; o1=$calls
+run apply observability "$clr"; o2=$calls; o2rc=$rc; o2o=$out
+if [[ $o1 == *"playbooks/k8s-observability.yml --tags metrics_server,metrics,logs,route,proof --check --diff" && $o1 != *" -e "* &&
+      $o2rc -eq 0 && $o2 == *"playbooks/k8s-observability.yml --tags metrics_server,metrics,logs,route,proof" && $o2 != *--check* && $o2o == *"clearance $clr"* ]]; then
+  ok "8. observability: own playbook, fixed tags, no extra variables, apply is its own verb"
+else bad "8. [$o1] [$o2]"; fi
 exit "$fail"
