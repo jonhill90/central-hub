@@ -16,15 +16,15 @@ and the box's own pass ledger (/var/lib/agent-box/passes, which pass-record writ
      the post (F218) is not caught here.
   4. moved head: an open pull request whose head has no reviewer pass, while an earlier head of it has one.
 
-A check that cannot run is itself a finding, so a broken scan never reads as a clean one. The findings, sorted, are
-the report. A report that differs from the last one posted is posted as `checkpoint-note post <count>`; the same
-report is not posted twice in a row, and an empty report clears that memory. Exit: 0 no finding, 3 findings, 2 usage.
+A check that cannot run is itself a finding, and so is a crash of the scan, so a broken scan never reads as a clean
+one. A finding's text holds no age or run time, so the same finding reads the same every run. Only a finding not in
+the last run's set wakes a session: `checkpoint-note post <count of new findings>`. A finding that stays, or drops
+out, posts nothing; one that drops out and comes back posts again. Exit: 0 no finding, 3 findings, 2 usage.
 No token, key or ledger value but heads, numbers and times is printed.
 """
 import base64
 import datetime
 import fcntl
-import hashlib
 import json
 import os
 import re
@@ -208,6 +208,8 @@ def check_said(gh, t):
         raise ScanError("%s is not on %s's main" % (SAID_PATH, NOTEBOOK))
     changed = {}
     for r in ranges:
+        if not isinstance(r.get("commit"), dict) or not r["commit"].get("committedDate"):
+            continue
         when = parse_time(r["commit"]["committedDate"])
         for n in range(r["startingLine"], r["endingLine"] + 1):
             changed[n] = when
@@ -217,8 +219,7 @@ def check_said(gh, t):
             continue
         age = t - changed[n]
         if age > OPEN_AGE:
-            out.append("said-i-would: line %d (said %s) is Open, unchanged since %s (%dh %02dm)"
-                       % (n, said, iso(changed[n]), age.seconds // 3600 + age.days * 24, age.seconds % 3600 // 60))
+            out.append("said-i-would: line %d (said %s) is Open, unchanged since %s" % (n, said, iso(changed[n])))
     return out
 
 
@@ -317,32 +318,36 @@ def run():
         print("checkpoint-scan: another run is going")
         return 0
     t = now()
-    findings = scan(t)
+    try:
+        findings = scan(t)
+    except Exception as e:  # any other fault is a finding too, named by its type only (its text may hold data)
+        findings = ["scan crashed: %s" % type(e).__name__]
     statef = os.path.join(state_dir, "checkpoint-scan.json")
     try:
         last = json.load(open(statef))
     except (OSError, ValueError):
         last = {}
-    digest = hashlib.sha256("\n".join(findings).encode()).hexdigest() if findings else ""
-    posted = last.get("posted", "")
+    known = set(last.get("known", []))
+    new = [f for f in findings if f not in known]
     if not findings:
         print("checkpoint-scan: no findings at %s" % iso(t))
-        posted = ""
         wake = "none"
     else:
-        print("checkpoint-scan: %d finding(s) at %s" % (len(findings), iso(t)))
+        print("checkpoint-scan: %d finding(s), %d new, at %s" % (len(findings), len(new), iso(t)))
         for f in findings:
-            print("finding: " + f)
-        if digest == posted:
-            wake = "same report as the last one posted; not posted again"
+            print(("new: " if f in new else "finding: ") + f)
+        if not new:
+            wake = "no new finding; not posted"
         else:
-            rc = post(len(findings))
+            rc = post(len(new))
             if rc == 0:
-                posted, wake = digest, "posted"
+                wake = "posted %d new" % len(new)
             else:
                 wake = "checkpoint-note failed (rc %d); the next run tries again" % rc
+                new = [f for f in new if f in known]   # not posted: still new next run
         print("checkpoint-scan: wake: " + wake)
-    report = {"time": iso(t), "findings": findings, "posted": posted, "wake": wake}
+    known = sorted(f for f in findings if f in known or f in new) if findings else []
+    report = {"time": iso(t), "findings": findings, "known": known, "wake": wake}
     tmp = statef + ".part"
     with open(tmp, "w") as f:
         json.dump(report, f, indent=1, sort_keys=True)

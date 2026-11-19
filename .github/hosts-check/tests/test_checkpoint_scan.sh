@@ -11,9 +11,12 @@
 #   5. Moved heads: an open pull request whose pass is on an earlier head is a finding; one with no pass at all, and
 #      one whose current head has the pass, are not.
 #   6. A clean scan prints "no findings", exits 0 and posts nothing.
-#   7. Findings exit 3 and post once with their count; the same report is not posted again; a changed report is; a
-#      clean scan clears the memory, so a recurrence posts again. `show` prints the last report.
+#   7. Findings exit 3 and post the count of new ones; a finding seen in the last run posts nothing, and neither does
+#      one dropping out; a clean scan clears the memory, so a recurrence posts again; a failed post is tried again
+#      next run. `show` prints the last report.
 #   8. A GitHub read that fails is itself a finding, and is posted.
+#  10. The same stale said-i-would row, scanned at three times, reads the same and posts once (no age in the text).
+#  11. A crash of the scan (any other exception) is a finding, named by its type only, and is posted.
 #   9. The wrapper passes run and show only; the sudo line passes run and show only; the role installs the script, the
 #      service with SuccessExitStatus=3, and the timer.
 # Usage: .github/hosts-check/tests/test_checkpoint_scan.sh   (needs python3, openssl, PyYAML)
@@ -140,10 +143,30 @@ elif case == "dedupe":
     r4 = run()                                                    # clean: memory cleared
     FIX["closed:central-hub"] = [{"number": 11, "merged_at": ago(hours=1), "head": {"sha": H("b")}}]
     r5 = run(); r6 = run()
+    FIX["closed:central-hub"].append({"number": 14, "merged_at": ago(hours=1), "head": {"sha": H("5")}})
+    m.post = lambda n: posts.append(-n) or 1                     # checkpoint-note fails once
+    r7 = run()
+    m.post = lambda n: posts.append(n) or 0
+    r8 = run(); r9 = run()
     out = io.StringIO()
     with contextlib.redirect_stdout(out): m.show()
-    print(json.dumps({"rcs": [r[0] for r in (r1, r2, r3, r4, r5, r6)], "posts": posts, "show": out.getvalue(),
-                      "wakes": [r[1].strip().splitlines()[-1] for r in (r1, r2, r3, r5, r6)]}))
+    print(json.dumps({"rcs": [r[0] for r in (r1, r2, r3, r4, r5, r6, r7, r8, r9)], "posts": posts, "show": out.getvalue(),
+                      "wakes": [r[1].strip().splitlines()[-1] for r in (r1, r2, r3, r5, r6, r7, r8, r9)]}))
+elif case == "aging":
+    FIX["closed:central-hub"] = FIX["closed:central-hub"][:1]
+    FIX["open:central-hub"] = FIX["open:central-hub"][1:]
+    write_ledger(LEDGER[:1] + LEDGER[2:3])
+    r1 = run()
+    T = T + datetime.timedelta(minutes=30); m.now = lambda: T
+    r2 = run()
+    T = T + datetime.timedelta(minutes=30); m.now = lambda: T     # line 6 (blamed 11:00) is then exactly 2h old, not over
+    r3 = run()
+    print(json.dumps({"rcs": [r1[0], r2[0], r3[0]], "posts": posts, "outs": [r1[1], r2[1], r3[1]]}))
+elif case == "crash":
+    def boom(self, path): raise KeyError("id")
+    FakeGH.get = boom
+    r1 = run(); r2 = run()
+    print(json.dumps({"rcs": [r1[0], r2[0]], "posts": posts, "out": r1[1]}))
 elif case == "error":
     FakeGH.fail = "state=open"
     FIX["blame"]["repository"]["defaultBranchRef"]["target"]["blame"]["ranges"][0]["commit"]["committedDate"] = ago(minutes=5)
@@ -168,7 +191,7 @@ r=$(h checks)
 chk() { python3 -I -c 'import json,sys; d=json.loads(sys.argv[1]); exec(sys.argv[2])' "$r" "$1" 2>"$t/err"; }
 # 2
 if chk 'o=d["out"]
-assert "said-i-would: line 5 (said 11-19 01:00) is Open, unchanged since 2026-11-19T09:00:00Z (3h 00m)" in o, o
+assert "said-i-would: line 5 (said 11-19 01:00) is Open, unchanged since 2026-11-19T09:00:00Z\n" in o, o
 assert "line 6" not in o and "line 7" not in o and "line 8" not in o and "line 10" not in o, o'; then
   ok "2. said-i-would: only the Open row unchanged for over 2 hours is a finding"
 else bad "2. $(cat "$t/err")"; fi
@@ -201,13 +224,15 @@ else bad "6. $(cat "$t/err")"; fi
 
 # 7
 r=$(h dedupe)
-if chk 'assert d["rcs"] == [3, 3, 3, 0, 3, 3], d["rcs"]
-assert d["posts"] == [5, 4, 1], d["posts"]
+if chk 'assert d["rcs"] == [3, 3, 3, 0, 3, 3, 3, 3, 3], d["rcs"]
+assert d["posts"] == [5, 1, -1, 1], d["posts"]
 w=d["wakes"]
-assert w[0].endswith("wake: posted") and "not posted again" in w[1] and w[2].endswith("wake: posted"), w
-assert w[3].endswith("wake: posted") and "not posted again" in w[4], w
-assert d["show"].startswith("checkpoint-scan: last scan at 2026-11-19T12:00:00Z, 1 finding(s)") and "unpassed merge: central-hub#11" in d["show"], d["show"]'; then
-  ok "7. posts once per new report (5, then 4), not again for the same one, and again after a clean scan; show prints it"
+assert w[0].endswith("wake: posted 5 new") and w[1].endswith("wake: no new finding; not posted"), w
+assert w[2].endswith("wake: no new finding; not posted"), w
+assert w[3].endswith("wake: posted 1 new") and w[4].endswith("wake: no new finding; not posted"), w
+assert "checkpoint-note failed (rc 1)" in w[5] and w[6].endswith("wake: posted 1 new") and w[7].endswith("not posted"), w
+assert d["show"].startswith("checkpoint-scan: last scan at 2026-11-19T12:00:00Z, 2 finding(s)") and "unpassed merge: central-hub#14" in d["show"], d["show"]'; then
+  ok "7. posts only new findings (5; none for the same or a dropped one; 1 for a recurrence); a failed post is retried; show prints it"
 else bad "7. $(cat "$t/err")"; fi
 
 # 8
@@ -217,6 +242,21 @@ assert "scan error: central-hub open pull requests: GitHub returned 502 for /rep
 assert d["rc"] == 3 and d["posts"] == [2], (d["rc"], d["posts"])'; then
   ok "8. a failed GitHub read is a finding of its own, and is posted"
 else bad "8. $(cat "$t/err")"; fi
+
+# 10
+r=$(h aging)
+if chk 'assert d["rcs"] == [3, 3, 3] and d["posts"] == [1], (d["rcs"], d["posts"])
+assert all("said-i-would: line 5 (said 11-19 01:00) is Open, unchanged since 2026-11-19T09:00:00Z" in o for o in d["outs"]), d["outs"]
+assert "wake: no new finding" in d["outs"][1] and "wake: no new finding" in d["outs"][2], d["outs"]'; then
+  ok "10. the same stale row scanned at 12:00, 12:30 and 13:00 reads the same and posts once"
+else bad "10. $(cat "$t/err")"; fi
+
+# 11
+r=$(h crash)
+if chk 'assert d["rcs"] == [3, 3] and d["posts"] == [1], (d["rcs"], d["posts"])
+assert "new: scan crashed: KeyError" in d["out"] and "id" not in d["out"].split("KeyError")[1].split("\n")[0], d["out"]'; then
+  ok "11. a crash is a finding named by its type only, posted once"
+else bad "11. $(cat "$t/err")"; fi
 
 # 9
 w1=$(bash "$files/checkpoint-scan.sh" sweep 2>&1; echo "rc=$?")
