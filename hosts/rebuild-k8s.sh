@@ -730,7 +730,9 @@ run_stage() {
       # The dev inventory's HTTPS off also left 443/tcp shut in each node's firewall (k8s_gateway opens it only with
       # k8s_gateway_https: roles/k8s_gateway/vars/main.yml), and Envoy takes Gateway traffic through the node's input
       # filter, so nothing reached dev's https listeners from outside. Open it now that the listener has its Secret.
-      ap playbooks/k8s-gateway.yml --tags gateway -e k8s_gateway_https=true ;;
+      # JSON, so the value is a boolean: a key=value -e makes the string "true", which the role's `when: k8s_gateway_https`
+      # refuses (ansible-core: "Conditionals must have a boolean result"; dev run 20261119T114435Z, stage dev-ca).
+      ap playbooks/k8s-gateway.yml --tags gateway -e '{"k8s_gateway_https": true}' ;;
     # Dev only, after dev-ca (the https listener exists only from then on) and only with the in-cluster store:
     # the source address OpenBao sees for a box request through the Gateway, and whether c1 enforces the
     # store's NetworkPolicy (MEASURE-1, ADDENDUM-1 v3 step 1). It runs on this machine, so its requests
