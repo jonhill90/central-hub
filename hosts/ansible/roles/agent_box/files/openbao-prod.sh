@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -28,6 +28,13 @@
 #           only if it is one PEM certificate. Run it after gitops, and again after a rebuild, which makes a new CA.
 # handover  playbooks/k8s-openbao-handover.yml with prod's admin AppRole IDs (/etc/agent-keys/prod/openbao-admin-*, made
 #           once by the same rule as secrets-store.sh, never printed).
+# refresh   playbooks/k8s-openbao-refresh.yml, once, after handover: the store's policies and its admin login's address
+#           binding set again from git. Self-init makes them only at the store's first start, and prod's came before
+#           openbaoBoxCidr and openbaoMarkEnv reached it, so its admin is bound to 127.0.0.1/32 and its snapshot policy reads
+#           dev's mark. The play signs in as the admin from inside OpenBao's pod (so from 127.0.0.1), writes each policy that
+#           differs from ConfigMap openbao-policies, binds role admin to box_cidr, and prints the changed policy names and
+#           PASS. Then the admin signs in only from the box, so a rerun is refused at its login. It changes access rights
+#           (D-0042 rule 6): <tap id> is the owner's go (D-0061 rule 3: the message id of his standing go), logged as for seal.
 # reset-failed-start  clears a first start that stopped in self-init (the pod's log says "self-initialization failed:
 #           refusing to unseal"), so the store starts clean. It refuses unless that line is in the pod's log (this run's or
 #           the last one's), the pod is not Ready and `bao status` does not say the store is initialized. It deletes only
@@ -72,12 +79,12 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
   key | check | l2-policy | gitops | ca | handover | admin-firewall-check | log) [[ $# -eq 1 ]] || usage ;;
-  seal | seal-copy | reset-failed-start | drop-box-path | admin-firewall)
+  seal | seal-copy | refresh | reset-failed-start | drop-box-path | admin-firewall)
     [[ $# -eq 2 ]] || usage
     tap=$2
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "openbao-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
@@ -354,6 +361,13 @@ PY
     [[ -f $store_keys/openbao-admin-role-id ]] || openssl rand -hex 24 | tr -d '\n' > "$store_keys/openbao-admin-role-id"
     [[ -f $store_keys/openbao-admin-secret-id ]] || openssl rand -hex 24 | tr -d '\n' > "$store_keys/openbao-admin-secret-id"
     ap playbooks/k8s-openbao-handover.yml -e "openbao_admin_role_id_file=$store_keys/openbao-admin-role-id" \
+      -e "openbao_admin_secret_id_file=$store_keys/openbao-admin-secret-id"
+    ;;
+  refresh)
+    for f in openbao-admin-role-id openbao-admin-secret-id; do
+      [[ -s $store_keys/$f ]] || { echo "openbao-prod: $store_keys/$f is missing; run openbao-prod handover first; nothing changed" >&2; exit 1; }
+    done
+    ap playbooks/k8s-openbao-refresh.yml -e openbao_refresh_env=prod -e "openbao_admin_role_id_file=$store_keys/openbao-admin-role-id" \
       -e "openbao_admin_secret_id_file=$store_keys/openbao-admin-secret-id"
     ;;
   reset-failed-start)

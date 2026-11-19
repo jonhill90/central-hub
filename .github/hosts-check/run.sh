@@ -415,6 +415,7 @@ check_backup() {
   bash "$here/tests/test_openbao_prod.sh"
   bash "$here/tests/test_rebuild_prod.sh"
   bash "$here/tests/test_openbao_handover.sh"
+  bash "$here/tests/test_openbao_refresh.sh"
   bash "$here/tests/test_openbao_measure.sh"
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
