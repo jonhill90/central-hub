@@ -66,6 +66,10 @@ agent_box_wrappers:
   # checks; the pull request is never an argument.
   - name: checkpoint-note
     args: ["post *", log]
+  # The hourly checkpoint as a box script (files/checkpoint-scan.sh and .py): run scans once and posts through
+  # checkpoint-note only on a new finding; show prints the last report. The timer runs `run` as the keys user.
+  - name: checkpoint-scan
+    args: [run, show]
   # Reads the certificate the firewall's web UI serves and says how many days it has left (files/opnsense-cert-check.sh). It
   # holds no key and writes nothing to the firewall; the daily timer (opnsense-cert-check.timer) runs `check` as the keys user.
   - name: opnsense-cert-check
@@ -303,6 +307,10 @@ agent_box_desktop: {}
 # repo (one the App is installed on) and number. A session subscribed to it wakes on each comment. Empty leaves the
 # file out, and the wrapper refuses.
 agent_box_checkpoint_note: {repo: agent-notebook, number: 729}
+# The hourly checkpoint scan (files/checkpoint-scan.py): a systemd timer that runs `checkpoint-scan.sh run` as the keys
+# user. It reads only, with a token narrowed to Contents and Pull requests read; false leaves the timer off.
+agent_box_checkpoint_scan: true
+agent_box_checkpoint_scan_on_calendar: "*-*-* *:07:00 UTC"
 # The owner's pick for a dev run on a node short of memory (docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev
 # (the run stops the CI runner, tears dev down at its end, then the runner starts) or keep-dev (the runner stops and dev stays up; the
 # notebook's queued jobs fail or are cancelled after 24 hours queued, so if dev stays up for more than a day its daily access-expiry

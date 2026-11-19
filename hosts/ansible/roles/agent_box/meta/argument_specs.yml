@@ -221,6 +221,13 @@ argument_specs:
           The one pull request the checkpoint-note wrapper comments on, written to <work_dir>/checkpoint-note.json:
           repo, one the App is installed on, and number. No other wrapper names the file. The wrapper
           takes no pull request as an argument. Empty skips the file, and the wrapper refuses.
+      agent_box_checkpoint_scan:
+        type: bool
+        default: true
+        description: >-
+          Install and start checkpoint-scan.timer, which runs `checkpoint-scan.sh run` as the keys user. It reads only and
+          posts through checkpoint-note on a new finding. False stops and disables the timer.
+      agent_box_checkpoint_scan_on_calendar: {type: str, default: "*-*-* *:07:00 UTC", description: "systemd OnCalendar for the checkpoint scan."}
       agent_box_opnsense_test:
         type: dict
         default: {}
