@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # The box's pickup-note wrapper (hosts/ansible/roles/agent_box/files/pickup-note.sh), against a fake curl first on PATH
 # and a throwaway App key, so no GitHub account is needed:
-#   1. Anything but `post <project> <TASK-NNNN>` or `log` is a usage error before any call: a label that is not
+#   1. Anything but `post <project> <TASK-NNNN>`, `post-stale <project> <TASK-NNNN>` or `log` is a usage error before any call: a label that is not
 #      TASK-0000, a project that is not a name, a pull request, a repository or an extra argument can't be passed.
 #   2. `post`: the token is asked for with that project's one repository and Pull requests (write) alone, the pull
 #      request is read, then one comment with the fixed text goes to the pull request the settings name for that
 #      project; the token is revoked; one log line.
 #   3. A project the settings don't name, one with no pull request number, or a repository the App isn't installed on:
 #      refused before any call. No settings file: refused.
+#   2b. `post-stale` does the same with the fixed text "pickup: TASK-NNNN is stale for <project>." and logs `post-stale`.
 #   4. A pull request that is not open is refused before any comment, and logged.
 #   5. The token is never in curl's arguments, the output or the log.
 #   6. The role writes the settings file, the wrapper's sudo line gives sessions `log` only (the scan posts as the keys
@@ -64,12 +65,16 @@ comment_body() { sed -n 's|^POST https://api.github.com/repos/jonhill90/agent-no
 r1=""; n=0
 for args in "post" "post agent-notebook" "post agent-notebook TASK-1" "post agent-notebook TASK-12345" "post agent-notebook task-0001" \
             "post agent-notebook TASK-0001 extra" "post Agent-Notebook TASK-0001" "post agent-notebook;x TASK-0001" \
-            "post 801 TASK-0001" "post agent-notebook TASK-0001;x" "log extra" "delete agent-notebook TASK-0001" ""; do
+            "post 801 TASK-0001" "post agent-notebook TASK-0001;x" "log extra" "delete agent-notebook TASK-0001" "" \
+            "post-stale" "post-stale agent-notebook" "post-stale agent-notebook TASK-1" "post-stale agent-notebook TASK-12345" \
+            "post-stale agent-notebook task-0001" "post-stale agent-notebook TASK-0001 extra" "post-stale Agent-Notebook TASK-0001" \
+            "post-stale agent-notebook;x TASK-0001" "post-stale 801 TASK-0001" "post-stale agent-notebook TASK-0001;x" \
+            "post_stale agent-notebook TASK-0001" "poststale agent-notebook TASK-0001" "post-stale-x agent-notebook TASK-0001"; do
   # shellcheck disable=SC2086
   run -- $args; r1+="$rc:$([[ -s $t/calls ]] && echo called || echo none) "; n=$((n + 1))
 done
 if [[ $r1 == "$(printf '2:none %.0s' $(seq $n))" ]]; then
-  ok "1. anything but post <project> <TASK-0000> or log is a usage error before any call"
+  ok "1. anything but post or post-stale <project> <TASK-0000>, or log, is a usage error before any call"
 else bad "1. [$r1]"; fi
 
 # 2
@@ -82,6 +87,20 @@ if [[ $rc -eq 0 && $calls == "$want"$'\n'"POST https://api.github.com/repos/jonh
       $(lines) -eq $((before + 1)) && $(tail -n 1 "$t/work/state/pickup-note.log") == *" post agent-notebook TASK-0305 agent-notebook#801 posted comment-555" ]]; then
   ok "2. post: token for that project's one repository with Pull requests (write) alone, the PR read, one fixed comment on its standing PR, token revoked, one log line"
 else bad "2. rc=$rc [$calls] [$body2] [$out]"; fi
+
+# 2b
+before=$(lines); run -- post-stale agent-notebook TASK-0305
+body2b=$(comment_body)
+if [[ $rc -eq 0 && $calls == "$want"$'\n'"POST https://api.github.com/repos/jonhill90/agent-notebook/issues/801/comments "*$'\n'"DELETE https://api.github.com/installation/token " &&
+      $body2b == "pickup: TASK-0305 is stale for agent-notebook." &&
+      $out == "pickup-note: posted comment 555 on jonhill90/agent-notebook#801: pickup: TASK-0305 is stale for agent-notebook." &&
+      $(lines) -eq $((before + 1)) && $(tail -n 1 "$t/work/state/pickup-note.log") == *" post-stale agent-notebook TASK-0305 agent-notebook#801 posted comment-555" ]]; then
+  ok "2b. post-stale: the same token, PR read, one fixed stale comment on the standing PR, token revoked, one log line naming post-stale"
+else bad "2b. rc=$rc [$calls] [$body2b] [$out]"; fi
+run FAKE_STATE=closed -- post-stale agent-notebook TASK-0305
+if [[ $rc -ne 0 && $calls != *"/comments"* && $out == *"is closed, not open; nothing posted"* ]]; then
+  ok "2c. post-stale on a pull request that is not open is refused before any comment"
+else bad "2c. rc=$rc [$calls] [$out]"; fi
 
 # 3
 r3=""

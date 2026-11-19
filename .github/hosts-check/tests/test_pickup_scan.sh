@@ -23,6 +23,9 @@
 #      no claim` and posts nothing more; a claim or a different first task resets the count; dry-run shows the repeat
 #      and changes no memory; a state file from before this memory counts as one post, now. A stale claim's finding ends
 #      `; reset it to ready by a PR`.
+#  13. A stale `doing` claim (over 3 hours, or no valid doing-since) also posts `pickup-note post-stale <project> <label>`
+#      once: its own memory key, never repeated while it stays, posted again after it drops out and returns; a claim
+#      of exactly 3 hours does not; dry-run posts nothing and keeps no memory; a failed wake is tried again.
 #  10. The oracle's copies still have the hashes the pickup-oracle README records.
 #  11. Read-only and no model: the scan names no write call to GitHub except revoking its own token, and no model.
 # Usage: .github/hosts-check/tests/test_pickup_scan.sh   (needs python3, openssl, PyYAML, Jinja2)
@@ -120,6 +123,7 @@ def setup(name, projects=None):
     posts = []
     m.post_ready = lambda p, l: posts.append(("ready", p, l)) or 0
     m.post_findings = lambda n: posts.append(("findings", n)) or 0
+    m.post_stale = lambda p, l: posts.append(("stale", p, l)) or 0
     return posts
 
 
@@ -292,12 +296,13 @@ def c3():
     for since, finding in ((ago(hours=3, minutes=1), "stale: TASK-0011 (agent-notebook) has been doing since %s" % ago(hours=3, minutes=1)),
                            (None, "stale: TASK-0011 (agent-notebook) is doing with no valid doing-since"),
                            (ago(hours=3), None)):
-        posts = setup("stale")
+        posts = setup("stale" + str(since)[-5:])
         FakeGH.answer = data(board(note("TASK-0010"), note("TASK-0011", state="doing", extra=["doing-since: " + since] if since else [])))
         rc, out = run("run")
         if finding:
             assert ("finding: " + finding + "; reset it to ready by a PR\n" in out or "new: " + finding + "; reset it to ready by a PR\n" in out), out
-            assert ("finding: " + finding in out or "new: " + finding in out) and posts == [("findings", 1)] and rc == 3, (posts, out)
+            assert ("finding: " + finding in out or "new: " + finding in out) and posts == [("stale", "agent-notebook", "TASK-0011"), ("findings", 1)] and rc == 3, (posts, out)
+            assert "new: pickup: TASK-0011 is stale for agent-notebook\n" in out, out
         else:
             assert "stale" not in out and posts == [] and rc == 0, (posts, out)
 
@@ -385,18 +390,19 @@ def c6():
                                note("TASK-0012", state="doing", extra=["doing-since: " + ago(hours=6)])))
     m.post_findings = lambda n: posts.append(("findings", n)) or 1
     rc, out = run("run")
-    assert rc == 3 and posts == [("findings", 2)] and "checkpoint-note failed (rc 1)" in out, (rc, posts, out)
+    S = [("stale", "agent-notebook", "TASK-0011"), ("stale", "agent-notebook", "TASK-0012")]
+    assert rc == 3 and posts == S + [("findings", 2)] and "checkpoint-note failed (rc 1)" in out, (rc, posts, out)
     m.post_findings = lambda n: posts.append(("findings", n)) or 0
     run("run")
     rc, out = run("run")
-    assert posts == [("findings", 2), ("findings", 2)] and rc == 0, posts
+    assert posts == S + [("findings", 2), ("findings", 2)] and rc == 0, posts
     # a text with no age or run time in it: the same finding at 12:00 and 13:00 reads the same
     t1 = out
     m.now = lambda: T + datetime.timedelta(hours=1)
     FakeGH.answer = data(board(A, note("TASK-0011", state="doing", extra=["doing-since: " + ago(hours=5)]),
                                note("TASK-0012", state="doing", extra=["doing-since: " + ago(hours=6)])))
     rc, out = run("run")
-    assert rc == 0 and posts == [("findings", 2), ("findings", 2)], (rc, posts)
+    assert rc == 0 and posts == S + [("findings", 2), ("findings", 2)], (rc, posts)
 
 
 # ---- 12 re-announce
@@ -482,6 +488,61 @@ def c12():
     assert rc == 3 and posts == [ann], posts
 
 
+# ---- 13 stale wake
+def c13():
+    stale_f = lambda since: note("TASK-0011", state="doing", extra=["doing-since: " + since])
+    wake = ("stale", "agent-notebook", "TASK-0011")
+    posts = setup("sw")
+    FakeGH.answer = data(board(note("TASK-0010"), stale_f(ago(hours=3, minutes=1))))
+    rc, out = run("dry-run")                              # dry-run shows it, posts nothing, keeps no memory
+    assert rc == 3 and posts == [] and "new: pickup: TASK-0011 is stale for agent-notebook\n" in out and "a run would post 1 announcement(s) and 1 finding(s)" in out, (rc, posts, out)
+    assert report()["known"] == [], report()
+    rc, out = run("run")                                  # run: the wake and the finding, each once
+    assert rc == 3 and posts == [wake, ("findings", 1)] and "wake: posted stale TASK-0011 for agent-notebook; posted 1 finding(s)" in out, (posts, out)
+    assert "stale agent-notebook TASK-0011" in report()["known"] and "ready agent-notebook TASK-0011" not in report()["known"], report()
+    for mins in (10, 30, 600):                            # and never again while the claim stays stale (no repeat schedule)
+        m.now = lambda mins=mins: T + datetime.timedelta(minutes=mins)
+        FakeGH.answer = data(board(note("TASK-0010"), stale_f(ago(hours=3, minutes=1))))
+        rc, out = run("run")
+        assert rc == 0 and len(posts) == 2 and "stale: pickup: TASK-0011 is stale for agent-notebook" in out, (mins, posts, out)
+    # it drops out (the claim is reset to ready, then done), then comes back stale: it posts again
+    m.now = lambda: T + datetime.timedelta(minutes=700)
+    FakeGH.answer = data(board(note("TASK-0010"), note("TASK-0011")))
+    run("run")
+    assert "stale agent-notebook TASK-0011" not in report()["known"], report()
+    FakeGH.answer = data(board(note("TASK-0010"), stale_f(ago(hours=5))))
+    n = len(posts)
+    rc, out = run("run")
+    assert [x for x in posts[n:] if x[0] == "stale"] == [wake], posts
+    # no valid doing-since is stale too; a claim inside 3 hours, and exactly 3 hours, are not
+    posts = setup("sw2")
+    FakeGH.answer = data(board(note("TASK-0011", state="doing")))
+    run("run")
+    assert wake in posts, posts
+    for since in (ago(hours=3), ago(minutes=5)):
+        posts = setup("sw3" + since[-5:])
+        FakeGH.answer = data(board(stale_f(since)))
+        rc, out = run("run")
+        assert posts == [] and "stale" not in out, (posts, out)
+    # a failed wake is tried again next run, and the other post still goes
+    posts = setup("sw4")
+    FakeGH.answer = data(board(stale_f(ago(hours=4))))
+    m.post_stale = lambda p, l: posts.append(("failed",) + (p, l)) or 1
+    rc, out = run("run")
+    assert rc == 3 and "pickup-note failed for stale TASK-0011 (rc 1); the next run tries again" in out and ("findings", 1) in posts, (posts, out)
+    m.post_stale = lambda p, l: posts.append(("stale", p, l)) or 0
+    run("run")
+    rc, out = run("run")
+    assert posts.count(wake) == 1 and rc == 0, posts
+    # the ready key and the stale key are apart: a task that was announced ready then goes stale still posts the wake
+    posts = setup("sw5")
+    FakeGH.answer = data(board(note("TASK-0011")))
+    run("run")
+    FakeGH.answer = data(board(stale_f(ago(hours=4))))
+    run("run")
+    assert posts[0] == ("ready", "agent-notebook", "TASK-0011") and wake in posts, posts
+
+
 # ---- 7 errors
 def c7():
     base = board(note("TASK-0010"))
@@ -564,6 +625,7 @@ CASES = {"1": ("token for the notebook alone, Contents and Pull requests read on
          "5": ("dry-run prints what it would post, posts nothing and keeps no memory", c5),
          "6": ("posts a new label once; a returning label posts again; failed posts retry; findings post as a count", c6),
          "12": ("an unclaimed announcement is posted again after 30 minutes, 3 posts at most, then an unclaimed finding; a claim resets it; dry-run keeps no memory", c12),
+         "13": ("a stale claim also posts the stale wake once per key (its own key), dry-run keeps no memory, a failed wake retries", c13),
          "7": ("a scan that can't run, a crash and a project with no pull request number are findings", c7),
          "8": ("show prints the last report; a second run at once does nothing", c8),
          "11": ("read-only and no model: one DELETE (its own token), two POSTs (token, GraphQL), no model named", c11)}
