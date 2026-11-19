@@ -20,9 +20,12 @@
 #      identity values file as put c1/identity KEY; --prod reads prod's files only, and also puts the DNS-01 token,
 #      trimmed, as put c1/cloudflare-api-token value. A missing identity or token file, a bad identity line or a blank
 #      token writes nothing.
-#  10. The store's admin address (D-0062): on dev the settings' admin_address, on prod the prod inventory's
+#  10. The store's admin address (D-0062): on dev the rebuild's copy of the dev inventory's (a settings value alone is
+#      not used; with no copy yet, the Gateway path), on prod the prod inventory's
 #      k8s_gitops_source_openbao_admin_address; set, every call goes there by the store's name (curl and the helpers),
 #      in place of dev's Gateway; one that is not IPv4, or two in the prod inventory, is refused before any call.
+#  11. put and put-apps write nothing during a rebuild hold, on dev and with --prod (a key in the fresh store would make
+#      restore-rebuilt refuse); with the hold gone, both run again.
 # Usage: .github/hosts-check/tests/test_secrets_store_wrapper.sh   (needs python3 with PyYAML, openssl, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -187,10 +190,17 @@ if [[ $r9a -ne 0 && $o9a == *"wait for the owner's tap"* && -z $c9a && $r9b -ne 
 else bad "9. $r9a $o9a | $r9b $o9b | $r9c $o9c | $r9d [$log9d] $o9d | $r9f $o9f | $r9g $o9g | $r9h $o9h | $r9i $o9i | $r9e [$log9e] $o9e"; fi
 
 # 10
-settings '{"address": "bao-dev.invalid", "sops_copies": true, "admin_address": "192.0.2.40"}'
+# Dev's address comes from the rebuild's copy of the dev inventory, never from the settings.
+dev_inv=$t/work/rebuild-dev/inventory/hosts.yml
+mkdir -p "$(dirname "$dev_inv")"
+settings '{"address": "bao-dev.invalid", "sops_copies": true, "admin_address": "192.0.2.49"}'
+run status; r10f=$rc c10f=$calls
+printf '%s\n' "all:" "  vars:" "    k8s_gitops_source_openbao_admin_address: 192.0.2.40" > "$dev_inv"
 run status; r10a=$rc c10a=$calls
 run put c1/app/db password < <(printf v); r10b=$rc k10b=$(cat "$t/kv-resolve")
-settings '{"address": "bao-dev.invalid", "admin_address": "bao-admin.invalid"}'; run status; r10c=$rc o10c=$out c10c=$calls
+printf '%s\n' "all:" "  vars:" "    k8s_gitops_source_openbao_admin_address: bao-admin.invalid" > "$dev_inv"
+run status; r10c=$rc o10c=$out c10c=$calls
+rm -f "$dev_inv"
 prod_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_source_openbao_store_host: bao-prod.invalid")
 echo '{"address": "bao-prod.invalid"}' > "$t/work/secrets-store-prod.json"
 printf '%s\n' "${prod_inv[@]}" "        k8s_gitops_source_openbao_admin_address: 192.0.2.41" > "$t/work/openbao-prod/inventory/hosts.yml"
@@ -200,12 +210,31 @@ printf '%s\n' "${prod_inv[@]}" "        k8s_gitops_source_openbao_admin_address:
 run --prod status; r10e=$rc o10e=$out c10e=$calls
 printf '%s\n' "${prod_inv[@]}" > "$t/work/openbao-prod/inventory/hosts.yml"
 settings '{"address": "bao-dev.invalid"}'
-if [[ $r10a -eq 0 && $c10a == *"--resolve bao-dev.invalid:443:192.0.2.40 "*"https://bao-dev.invalid/v1/sys/health"* && $c10a != *192.0.2.10* &&
+if [[ $r10f -eq 0 && $c10f == *"--resolve bao-dev.invalid:443:192.0.2.10 "* && $c10f != *192.0.2.49* &&
+      $r10a -eq 0 && $c10a == *"--resolve bao-dev.invalid:443:192.0.2.40 "*"https://bao-dev.invalid/v1/sys/health"* && $c10a != *192.0.2.10* &&
       $r10b -eq 0 && $k10b == bao-dev.invalid:443:192.0.2.40 &&
       $r10c -ne 0 && $o10c == *"admin address is not one IPv4 address"* && -z $c10c &&
       $r10d -eq 0 && $c10d == *"--resolve bao-prod.invalid:443:192.0.2.41 "*"https://bao-prod.invalid/v1/sys/health"* &&
       $r10e -ne 0 && $o10e == *"gives two admin addresses"* && -z $c10e ]]; then
-  ok "10. the admin address: dev's from its settings, prod's from its inventory, every call there by name; not IPv4 or two: refused"
-else bad "10. $r10a [$c10a] | $r10b [$k10b] | $r10c $o10c | $r10d [$c10d] | $r10e $o10e"; fi
+  ok "10. the admin address: dev's from the rebuild's inventory copy (not the settings), prod's from its inventory, every call there by name; not IPv4 or two: refused"
+else bad "10. $r10f [$c10f] | $r10a [$c10a] | $r10b [$k10b] | $r10c $o10c | $r10d [$c10d] | $r10e $o10e"; fi
+
+# 11
+settings '{"address": "bao-dev.invalid", "sops_copies": true}'
+date -u > "$t/work/state/secrets-store.rebuilding"
+run put c1/app/db password < <(printf v); r11a=$rc o11a=$out c11a=$calls
+run put-apps; r11b=$rc o11b=$out c11b=$calls
+rm -f "$t/work/state/secrets-store.rebuilding"
+run put-apps; r11c=$rc
+echo '{"address": "bao-prod.invalid", "sops_copies": true}' > "$t/work/secrets-store-prod.json"
+date -u > "$t/work/state/secrets-store-prod.rebuilding"
+run --prod put-apps; r11d=$rc o11d=$out c11d=$calls
+rm -f "$t/work/state/secrets-store-prod.rebuilding"
+run --prod put-apps; r11e=$rc
+if [[ $r11a -ne 0 && $o11a == *"a rebuild is in progress"*"nothing written"* && -z $c11a &&
+      $r11b -ne 0 && $o11b == *"a rebuild is in progress"*"nothing written"* && -z $c11b && $r11c -eq 0 &&
+      $r11d -ne 0 && $o11d == *"secrets-store-prod.rebuilding"* && -z $c11d && $r11e -eq 0 ]]; then
+  ok "11. put and put-apps write nothing during a rebuild hold, dev and prod; without it they run"
+else bad "11. $r11a $o11a [$c11a] | $r11b $o11b [$c11b] | $r11c | $r11d $o11d [$c11d] | $r11e"; fi
 
 exit $fail

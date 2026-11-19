@@ -8,7 +8,7 @@ outcome: realm lab in Keycloak matches the code; Grafana, Argo CD and Jellyfin e
 needs: the filled-in inventory, SSH to the c1 control plane, HTTPS on Gateway apps (playbooks/k8s-gateway.yml, k8s-certs.yml)
 private-values: [k8s_identity_zone, k8s_identity_owner_username, k8s_identity_owner_email, k8s_identity_proxmox_hosts, PASSWORD_USER_NAME, GRAFANA_CLIENT_SECRET, ARGOCD_CLIENT_SECRET, JELLYFIN_CLIENT_SECRET, PROXMOX_CLIENT_SECRET, TOTP_USER_NAME]
 files: [hosts/ansible/playbooks/k8s-identity.yml, hosts/kubernetes/home/c1/apps/login-probe/, hosts/ansible/roles/k8s_identity/, hosts/ansible/bootstrap/show-totp-qr.sh, ~/.config/central-hub/identity.env]
-last-tested: 2026-11-09, the owner on the Mac, step 4 at https://grafana.<zone>/ after an agent lane ran steps 1-3 on c1 (2026-11-08 at b20c975; again 2026-11-09 for the owner's renamed user and the sign-in theme); step 5 not yet done
+last-tested: 2026-11-09, the owner on the Mac, step 4 at https://grafana.<zone>/ after an agent lane ran steps 1-3 on c1 (2026-11-08 at b20c975; again 2026-11-09 for the owner's renamed user and the sign-in theme); step 5 not yet done, step 6 ran on 2026-11-18 at 06:11 UTC from c1 with no password and 7 of 8 checks passed, only Jellyfin's SSO start failed (Provider does not exist); that was before #511 and #517, and at 2026-11-18 13:13 UTC the orchestrator read through c1-read the probe job login-probe-29916790: RESULT: PASS, 8 of 8 checks, Jellyfin's SSO start included (after #558 and #563); a typed sign-in to Jellyfin through to a session has not been run
 superseded-by:
 ---
 
@@ -36,7 +36,7 @@ flowchart LR
 | `jellyfin` | confidential | `https://jellyfin.apps.c1.prod.<zone>/sso/OID/redirect/keycloak` and `/sso/OID/r/keycloak` | `media/jellyfin-sso`, key `client-secret` |
 | `proxmox` (only with `k8s_identity_proxmox_hosts`) | confidential | `https://<web UI name>` for each name | the controller's `identity.env`, read by role `proxmox_sso` ([runbook](sign-in-to-proxmox-through-keycloak.md)) |
 
-Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `groups` (`lab-admins`, `lab-viewers`) and `roles` (`admin`, `viewer`).
+Issuer for every app: `https://sso.<zone>/realms/lab` (short names on, `k8s_identity_short_names: true`, the default; with them off, `https://sso.apps.c1.prod.<zone>/realms/lab`). Claims: `groups` (`lab-admins`, `lab-viewers`) and `roles` (`admin`, `viewer`).
 
 ## Before you start
 
@@ -72,6 +72,7 @@ Issuer for every app: `https://sso.apps.c1.prod.<zone>/realms/lab`. Claims: `gro
 - Password: edit its line in `identity.env`, then step 2. The realm is imported again with the new value.
 - New user: add it to `k8s_identity_extra_users` in the inventory, then step 2. The role adds a random password line for it.
 - New app on a live realm without ending sessions: add its client to `realm.yaml.j2` (below), then `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,clients -e '{"k8s_identity_ensure_clients":["<client id>"]}'`. The run adds or updates only that client in Keycloak; the realm is not replaced. CI proves it in `.github/hosts-check/identity/test_realm.sh`.
+- New user on a live realm without ending sessions: add it to `k8s_identity_extra_users` (an admin gets a TOTP seed line too), then `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,users -e '{"k8s_identity_ensure_users":["<user name>"]}'`. The `secrets` tag first adds the user's `PASSWORD_` and `TOTP_` lines to `identity.env`. The run creates only that user in Keycloak (`files/ensure-user.sh`, with its groups, password and, for an admin, its TOTP credential), and a user that is already there is left as it is, so a changed password still needs the realm replace. Creating a user is an access right, which waits on the owner's own go. CI proves the create path in `.github/hosts-check/identity/test_realm.sh` by deleting the admin and adding it back through the script, then checking it signs in with the password and a code; nothing has run on c1.
 - New app: add a client to `realm.yaml.j2`, a `*_CLIENT_SECRET` key to `k8s_identity_client_secret_keys`, and a copy to the app's namespace in `tasks/secrets.yml`; CI's `identity` job checks the import.
 - Rotate everything at a lab rebuild: delete `identity.env`, then step 2.
 - Change the sign-in look: set `k8s_identity_theme_dir` in the inventory to a Keycloak theme folder on the controller (for example the owner's branding repository, cloned next to the lab clone), then step 2. Only its `login/` files below 500 KB are used; they go into ConfigMap `identity/keycloak-theme`, the Keycloak pod restarts with them, and the realm is imported again with `loginTheme` set to the folder's name. The path is private because the theme's name can name the zone. Empty goes back to Keycloak's own look.

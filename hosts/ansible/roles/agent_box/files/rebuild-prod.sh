@@ -4,17 +4,19 @@
 # "Rebuild prod from the box"). It runs hosts/rebuild-k8s.sh, the same one command as dev, as user `keys` through sudo,
 # so the session never sees the Proxmox token, the node key, the seal key, the backup certificates or the inventory.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check|rebuild <tap id>|log
-# check    read-only. Names every file the run needs that is missing; builds the box's copies of the prod inventory
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check|rebuild <tap id> <commit>|log
+# check    read-only, at main's newest commit. Names every file the run needs that is missing; builds the box's copies of the prod inventory
 #          and tfvars and refuses one that still points at the Mac; plans OpenTofu with the Mac's own tfvars on the
 #          box's state and needs "no changes" (the box's state is the live prod); lists what a teardown would destroy
 #          and refuses anything but node VMs 200-249, VM 258 or 259, or more VMs than the tfvars declare; reaches every
 #          prod node with the box's key; checks that neither the box's default route nor its route to the Proxmox
 #          API goes through a node VM (D-0035 rule 5); and needs the newest dev run to have passed every stage at this commit
 #          (D-0035 rule 3(a)). One PASS or FAIL line each; exit 0 only when every line passes.
-# rebuild  <tap id> is the owner's tap on a decision card that names rebuild-prod and this main commit (D-0035
-#          rule 3(b), D-0042 rule 6: a delete); it is written to the log. It runs check, then the checks before a
-#          teardown (D-0035 rule 5), each of which must pass or nothing is destroyed:
+# rebuild  <tap id> is the owner's go that names rebuild-prod and <commit> (D-0035 rule 3(b), D-0042 rule 6: a delete);
+#          it is written to the log. <commit> (7 to 40 hex digits) must be on main; the run builds that commit, not
+#          main's newest, so a merge after the dev run and the go neither moves the code under the go nor forces dev
+#          again. It runs check at that commit, then the checks before a teardown (D-0035 rule 5), each of which must
+#          pass or nothing is destroyed:
 #            1. a backup of every prod node now, and the restore tests on it (k8s-backup.yml --tags drill), so the
 #               newest snapshot is minutes old and its restore test passed, each test naming the snapshot it restored
 #               into a temporary folder (never over prod's data);
@@ -55,15 +57,17 @@ export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/rebuild-prod TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: rebuild-prod check|rebuild <tap id>|log" >&2; exit 2; }
+usage() { echo "usage: rebuild-prod check|rebuild <tap id> <commit>|log" >&2; exit 2; }
 action=${1:-}
 tap=''
+want=''
 case $action in
   check | log) [[ $# -eq 1 ]] || usage ;;
   rebuild)
-    [[ $# -eq 2 ]] || usage
-    tap=$2
+    [[ $# -eq 3 ]] || usage
+    tap=$2 want=$3
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "rebuild-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
+    [[ $want =~ ^[0-9a-f]{7,40}$ ]] || { echo "rebuild-prod: the commit is the one the owner's go names, 7 to 40 hex digits" >&2; exit 2; }
     ;;
   *) usage ;;
 esac
@@ -82,12 +86,28 @@ fi
 mkdir -p "$envdir" "$logs" "$work/state"
 chmod 700 "$envdir"
 
+# The oldest commit a go may name: main's merge of #573, the same floor as the dev wrapper's (rebuild.sh). The run uses
+# that commit's own hosts/rebuild-k8s.sh, and one below it lacks the refusal while VM 256 exists and (below #343) the
+# memory preflight. Raise it with rebuild.sh's whenever rebuild-k8s.sh gains a refusal every run must keep.
+PIN_FLOOR=f3e9c3ed09c431bf00cdacdad04fb3858e516317
+
 # One rebuild at a time, dev's or prod's, in this wrapper's own checkout of main.
 exec 9>"$work/state/rebuild.lock"
 flock -n 9 || { echo "rebuild-prod: another rebuild run (dev or prod) is going; try again when it ends" >&2; exit 1; }
 [[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
 git -C "$repo" fetch --quiet origin main
-git -C "$repo" checkout --quiet --detach origin/main
+if [[ -n $want ]]; then
+  # The commit the go names, and only if it is on main: never a branch, never a commit main does not hold.
+  pinned=$(git -C "$repo" rev-parse --quiet --verify "$want^{commit}" 2>/dev/null) ||
+    { echo "rebuild-prod: commit $want is not in the box's checkout of main" >&2; exit 1; }
+  git -C "$repo" merge-base --is-ancestor "$pinned" origin/main ||
+    { echo "rebuild-prod: commit $want is not on main" >&2; exit 1; }
+  git -C "$repo" merge-base --is-ancestor "$PIN_FLOOR" "$pinned" ||
+    { echo "rebuild-prod: commit $want is older than the floor ${PIN_FLOOR:0:7}, whose rebuild-k8s.sh has the refusals a run must keep" >&2; exit 1; }
+  git -C "$repo" checkout --quiet --detach "$pinned"
+else
+  git -C "$repo" checkout --quiet --detach origin/main
+fi
 commit=$(git -C "$repo" rev-parse HEAD)
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -131,12 +151,12 @@ fi
 # The inventory: the Mac's, with every ssh login, key and proxy setting and the proxmox group dropped; the box's
 # key and plain ssh set; the store's settings (openbao-prod.json) added; the private files pointed at the box's
 # copies; the rebuild's own settings set. Any value still pointing at the Mac stops the run, by key name.
-rm -rf -- "$inventory"
+rm -rf -- "$inventory" "$envdir/backup-mode"
 install -d -m 700 "$inventory"
 inv_ok=false
 if [[ -s $pkeys/inventory-hosts.yml && -s $settings ]] && python3 -I -c "$(cat <<'PY'
 import ipaddress, json, os, sys, yaml
-src, dst, key, known, pkeys, keys, certs, settings = sys.argv[1:9]
+src, dst, key, known, pkeys, keys, certs, settings, repo = sys.argv[1:10]
 def die(m):
     print("FAIL: rebuild-prod: " + m); sys.exit(1)
 s = json.load(open(settings))
@@ -158,7 +178,7 @@ DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args",
         "ansible_private_key_file", "ansible_host_key_checking", "k8s_gateway_smoke_client", "k8s_certs_smoke_client",
         "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file", "k8s_gitops_source_openbao_measure",
         "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
-        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_backup_azure_fixed_cert_file"}
+        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner", "k8s_backup_azure_fixed_cert_file"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -196,20 +216,39 @@ MAP = {"k8s_control_plane_encryption_key_file": pkeys + "/c1-secrets-encryption.
        "k8s_identity_values_file": pkeys + "/identity.env",
        "k8s_certs_lab_ca_cert_file": pkeys + "/lab-ca/c1-intermediate-chain.crt",
        "k8s_certs_lab_ca_key_file": pkeys + "/lab-ca/c1-intermediate.key",
-       "k8s_identity_theme_dir": pkeys + "/identity-theme"}
+       "k8s_gitops_sso_root_ca_file": pkeys + "/lab-ca/root.crt"}
+# The sign-in theme folder keeps its own name under <pkeys>/identity-theme/, where the controller's prod-files run copies it
+# (tasks/prod_files.yml) and c1-ansible.sh looks: the folder's name is the theme's name in Keycloak (k8s_identity vars).
 def remap(n):
     if isinstance(n, dict):
         for k in list(n):
             if k in MAP and isinstance(n[k], str) and n[k]: n[k] = MAP[k]
+            elif k == "k8s_identity_theme_dir" and isinstance(n[k], str) and n[k].strip("/"):
+                n[k] = pkeys + "/identity-theme/" + n[k].rstrip("/").rsplit("/", 1)[-1]
             else: remap(n[k])
     elif isinstance(n, list):
         for i in n: remap(i)
 remap(d)
+# The plays that restore prod (k8s-restore.yml, k8s-identity-restore.yml) read k8s_gitops_cluster_labels.env in their
+# pre_tasks, where the k8s_gitops role's default (env prod) is not loaded. The Mac's inventory leaves the labels to that
+# default, so with no labels set anywhere the box's copy gets the role's own default labels, which say prod. Labels set
+# anywhere in the inventory are left as they are, and the check below still refuses one whose env is not prod.
+def has_key(n, name):
+    if isinstance(n, dict): return name in n or any(has_key(x, name) for x in n.values())
+    if isinstance(n, list): return any(has_key(x, name) for x in n)
+    return False
+if not has_key(d, "k8s_gitops_cluster_labels"):
+    role = yaml.safe_load(open(repo + "/hosts/ansible/roles/k8s_gitops/defaults/main.yml"))
+    labels = role.get("k8s_gitops_cluster_labels")
+    if not isinstance(labels, dict) or labels.get("env") != "prod": die("the k8s_gitops role's default labels do not say env prod")
+    v["k8s_gitops_cluster_labels"] = labels
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 v["k8s_gateway_smoke_client"] = "localhost"
 v["k8s_certs_smoke_client"] = "localhost"
 v["k8s_gitops_source_openbao_in_cluster"] = True
+# The notebook CI runner pod is prod's only (docs/runbooks/run-the-notebook-runner-on-c1.md).
+v["k8s_gitops_source_notebook_runner"] = True
 v["k8s_gitops_source_openbao_seal_node"] = seal
 v["k8s_gitops_source_openbao_store_host"] = store
 if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
@@ -223,13 +262,13 @@ v["k8s_backup_azure_seed_dir"] = certs
 v["k8s_backup_restore_check_identity"] = False
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$pkeys/inventory-hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$pkeys" "$keys" "$certs" "$settings"; then
+)" "$pkeys/inventory-hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$pkeys" "$keys" "$certs" "$settings" "$repo"; then
   chmod 600 "$inventory/hosts.yml"
   # Every k8s_nodes host as Ansible sees it: plain ssh with the box's key, labelled env prod, at an address, and no
   # value that still names a file on the Mac. The names of the mapped files must exist on the box.
   if ansible-inventory -i "$inventory/" --list | python3 -I -c "$(cat <<'PY'
 import json, os, re, sys
-nodekey, known = sys.argv[1:3]
+nodekey, known, backup_mode = sys.argv[1:4]
 inv = json.load(sys.stdin)
 hv = inv.get("_meta", {}).get("hostvars", {})
 def members(g, seen=None):
@@ -255,14 +294,33 @@ for h in sorted(nodes):
     for k, val in v.items():
         if isinstance(val, str) and mac.search(val): bad.append("host %s: %s still points at the Mac" % (h, k))
     for k in ("k8s_control_plane_encryption_key_file", "k8s_backup_env_file", "k8s_certs_cloudflare_token_file",
-              "k8s_identity_values_file", "k8s_certs_lab_ca_cert_file", "k8s_certs_lab_ca_key_file", "k8s_identity_theme_dir"):
+              "k8s_identity_values_file", "k8s_certs_lab_ca_cert_file", "k8s_certs_lab_ca_key_file", "k8s_identity_theme_dir",
+              "k8s_gitops_sso_root_ca_file"):
         p = v.get(k)
         if isinstance(p, str) and p and not os.path.exists(p): bad.append("%s is %s, which is not on the box" % (k, p))
+    # The identity role needs <theme>/login/theme.properties (k8s_identity tasks/theme.yml) and would stop on it only after
+    # the teardown, in stage identity.
+    th = v.get("k8s_identity_theme_dir")
+    if isinstance(th, str) and th and os.path.isdir(th) and not os.path.isfile(os.path.join(th, "login", "theme.properties")):
+        bad.append("k8s_identity_theme_dir is %s, which has no login/theme.properties" % th)
+# The backup target (docs/runbooks/back-up-c1-off-box.md). Azure: each node's certificate is carried to its rebuilt node
+# (step 2 of rebuild). The Proxmox host over sftp: each rebuilt node makes a new key, which only the host play (group
+# proxmox) lets in, and the box's copy drops that group because the box holds no key on the host (the runbook's P3), so a
+# rebuild from the box would lose its backup and restore after the teardown. Refused here, before anything is destroyed.
+truthy = lambda x: x is True or str(x).lower() in ("true", "yes", "1")
+sftp = sorted(h for h in nodes if truthy(hv.get(h, {}).get("k8s_backup_sftp")))
+azure = sorted(h for h in nodes if truthy(hv.get(h, {}).get("k8s_backup_azure_identity")))
+if sftp:
+    bad.append("k8s_backup_sftp is true (the Proxmox host as the backup target): the box can't let the rebuilt nodes' new keys in on the host, "
+               "because its copy has no proxmox group and the box holds no key there (back-up-c1-off-box.md, P3); rebuild prod from the controller")
+elif azure and len(azure) != len(nodes):
+    bad.append("k8s_backup_azure_identity is true on some prod nodes only: %s" % " ".join(azure))
 for b in sorted(set(bad)): print("FAIL: rebuild-prod: inventory: " + b)
 if bad: sys.exit(1)
+open(backup_mode, "w").write("azure\n" if azure else "none\n")
 print("PASS: rebuild-prod: %d prod nodes, plain ssh with the box's key, every private file at the box's copy" % len(nodes))
 PY
-)" "$nodekey" "$envdir/known_hosts"; then inv_ok=true; else fails=$((fails + 1)); fi
+)" "$nodekey" "$envdir/known_hosts" "$envdir/backup-mode"; then inv_ok=true; else fails=$((fails + 1)); fi
 else
   fails=$((fails + 1))
 fi
@@ -356,11 +414,30 @@ if [[ $inv_ok == true && -s $tofu_env && -s $node_list ]]; then
 fi
 
 # --- 5. Dev first (D-0035 rule 3(a)): the newest dev run passed every stage at this same commit.
-dev_short=$(ls -1 "$dev_logs"/rebuild-*.log 2>/dev/null | sort | tail -n 1 || true)
-if [[ -z $dev_short ]]; then fail "no dev run is logged on the box"
+# The newest run that did more than a teardown, the way `rebuild log` reads it (rebuild.sh): a teardown run after a
+# good full run must not hide that run. Dev is torn down after a run: hosts/rebuild-k8s.sh runner_run_teardown tears it
+# down at the end of every full run under ephemeral-dev, pass or fail, and the runbook's hand `rebuild teardown` does the same.
+# A teardown-only log alone, or newest with no full run behind it, still fails below.
+dev_short=""
+while read -r f; do
+  if grep -Eq '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" && ! grep -E '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" | grep -vq ' teardown start$'; then
+    continue
+  fi
+  dev_short=$f; break
+done < <(ls -1 "$dev_logs"/rebuild-*.log 2>/dev/null | sort -r)
+if [[ -z $dev_short ]]; then fail "no dev run other than a teardown is logged on the box; run dev in full first"
 elif ! grep -qx 'rebuild: all stages passed' "$dev_short"; then fail "the newest dev run (${dev_short##*/}) did not pass every stage"
 elif ! grep -qx "rebuild: central-hub $commit" "$dev_short"; then fail "the newest dev run (${dev_short##*/}) ran another commit than ${commit:0:12}; run dev again first"
-else pass "dev passed every stage at ${commit:0:12} (run ${dev_short##*/})"; dev_run=${dev_short##*/}; fi
+else
+  # A teardown-only run (rebuild.sh teardown) also ends "all stages passed", so that line alone is no pass.
+  # The run must hold a good end line for each stage every full dev run has (rebuild.sh's stage lists).
+  not_ended=""
+  for s in vms cluster storage restore gitops secrets apps gateway checks; do
+    grep -Eq "^[0-9TZ:-]+ $s end rc=0( |\$)" "$dev_short" || not_ended+="$s "
+  done
+  if [[ -n $not_ended ]]; then fail "the newest dev run (${dev_short##*/}) is not a full run: no good end line for stage(s) ${not_ended% }; run dev in full first"
+  else pass "dev passed every stage at ${commit:0:12} (run ${dev_short##*/})"; dev_run=${dev_short##*/}; fi
+fi
 
 if [[ $fails -gt 0 ]]; then echo "rebuild-prod: $action: $fails checks failed; nothing was changed"; exit 1; fi
 if [[ $action == check ]]; then echo "rebuild-prod: check: every check passed; nothing was changed"; exit 0; fi
@@ -384,7 +461,9 @@ if [[ -z $vol_pass || -z $etcd_pass ]]; then
 fi
 echo "PASS: rebuild-prod: every prod node backed up now, and its restore test passed: ${vol_pass#PASS: }; ${etcd_pass#PASS: }"
 
-# 2. Each node's backup certificate and key ID, kept in the keys folder; never printed.
+# 2. Each node's backup certificate and key ID, kept in the keys folder; never printed. Only with the Azure sign-in
+# (k8s_backup_azure_identity): with none, the nodes hold no certificate and there is nothing to carry.
+if [[ $(cat -- "$envdir/backup-mode" 2>/dev/null) == azure ]]; then
 install -d -m 700 "$certs"
 while read -r name host user; do
   sudo_=""; [[ $user == root ]] || sudo_="sudo -n "
@@ -399,6 +478,9 @@ while read -r name host user; do
   chmod 600 "$certs/$name.pem" "$certs/$name.pem.keyid"
 done < "$node_list"
 echo "PASS: rebuild-prod: each node's backup certificate kept for its rebuilt node"
+else
+  echo "PASS: rebuild-prod: no Azure sign-in on the prod nodes (k8s_backup_azure_identity off), so no backup certificate to carry"
+fi
 
 # 3. The seal key: its SOPS copy decrypts to the 32 bytes on the seal node, and stays in memory only for this run.
 identity=$keys/secrets-bundle/age-identity.txt

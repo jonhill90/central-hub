@@ -8,7 +8,7 @@
 #   hosts/terraform/home/opnsense-test with the agents' Proxmox token. Refused while dev has any VM.
 # configure: over SSH as root, check the release, measure dev's reach to the mirrors, seed /conf/config.xml,
 #   run the pinned opnsense-bootstrap, then pkg add the pinned os-openid-connect package.
-# prove: start the proof's Keycloak on this box, run proof items 2 to 7 and 9, stop Keycloak, remove its data.
+# prove: start the proof's Keycloak on this box, run proof items 2 to 7, 9 and 10 (10 stops Keycloak first), remove its data.
 # destroy: destroy VM 257 (proof item 8), the Keycloak container if still there, and the proof folder. The
 #   token cannot delete files on Proxmox's local storage, so the seed ISO leaves the state and stays on
 #   local, and the image stays in the state for the next proof; destroy lists both for the owner.
@@ -57,8 +57,8 @@ BOOTSTRAP_SHA256=0289fb42845edfc4e4b5f29de5e3510f20065d4073f5c0c892cb698169f1e9c
 # `gh attestation verify` on this exact file and digest; here the box checks the digest before it leaves.
 PLUGIN_URL=https://github.com/jpawlowski/opnsense-openid-connect/releases/download/v1.0.0-beta5/os-openid-connect-1.0.0.beta5.pkg
 PLUGIN_SHA256=4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406a41b117c
-# Keycloak 26.8.1, the release c1 runs, by the digest .github/hosts-check/identity/test_realm.sh pins.
-KEYCLOAK_IMAGE=quay.io/keycloak/keycloak@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+# Keycloak 26.8.2, the release c1 runs, by the digest .github/hosts-check/identity/test_realm.sh pins.
+KEYCLOAK_IMAGE=quay.io/keycloak/keycloak@sha256:c68e286cacd87b942ac1939a0a1481461109d6acd3a57dc496969a319a76bbf0
 KC_NAME=opnsense-test-keycloak
 
 if [[ $action == log ]]; then
@@ -133,6 +133,13 @@ guards() {
   fi
   exec 8>"$work/state/rebuild.lock"
   flock -n 8 || { echo "opnsense-test: refused, a dev rebuild run is going"; return 1; }
+  # VM 256, the lab test copy (hosts/terraform/home/lab-test), is built only while dev is down too; the two never
+  # run together, because the node does not have the memory for both (docs/specs/2026-11-lab-test-copy.md).
+  local guests
+  guests=$(px_api "cluster/resources?type=vm") || { echo "opnsense-test: refused, the guest list could not be read"; return 1; }
+  if python3 -I -c 'import json,sys; sys.exit(0 if any(g.get("vmid") == 256 for g in json.load(sys.stdin)["data"]) else 1)' <<<"$guests"; then
+    echo "opnsense-test: refused, VM 256 (the lab test copy) exists; run lab-test destroy first"; return 1
+  fi
   local node free need
   node=$(setting proxmox_node_name)
   need=$(( $(setting memory_mb) + 2048 ))
@@ -356,7 +363,7 @@ keycloak_up() {
     "$proof/discovery.json" || { echo "opnsense-test: stopped, Keycloak does not advertise DPoP with ES256"; return 1; }
   # On the host network the filter covers only 8443, so the container may listen on nothing else (TCP or UDP)
   # that another host could reach. A loopback-only socket is reachable from the box alone and is listed apart:
-  # Keycloak 26.8.1 opens one on a random port even with dev-file's AUTO_SERVER off (measured on the box,
+  # Keycloak opens one on a random port even with dev-file's AUTO_SERVER off (measured on the box,
   # 2026-11-18). start-dev listens on 8080 whatever --http-enabled says (its log, 2026-11-18 03:11 UTC), so the
   # proof runs start (prod profile) with the dev-file database and local caches.
   local pids lines ports loop
@@ -368,7 +375,7 @@ keycloak_up() {
   echo "opnsense-test: Keycloak listens on: $(tr '\n' ' ' <<<"$ports")"
   [[ -z $loop ]] || echo "opnsense-test: and on loopback only: $(tr '\n' ' ' <<<"$loop")"
   [[ $ports == "tcp 8443" ]] || { echo "opnsense-test: stopped, the Keycloak container listens on more than tcp 8443"; return 1; }
-  echo "opnsense-test: Keycloak 26.8.1 is up at https://$kc_addr:8443 (realm opnsense-proof, DPoP on)"
+  echo "opnsense-test: Keycloak 26.8.2 is up at https://$kc_addr:8443 (realm opnsense-proof, DPoP on)"
 }
 keycloak_down() {
   podman rm -f "$KC_NAME" >/dev/null 2>&1 || true
@@ -384,7 +391,7 @@ prove() {
     || { echo "opnsense-test: stopped, the VM does not reach Keycloak on the box over verified https"; return 1; }
   echo "opnsense-test: the VM reaches Keycloak over https, trusting the proof CA from its config.xml"
   vm 'cat /usr/local/etc/lighttpd_webgui/cert.pem' > "$proof/gui.pem"
-  "$py" -I "$libexec/opnsense-test-prove.py" "$addr" "$proof" "$sshkey" "$files/known_hosts"
+  "$py" -I "$libexec/opnsense-test-prove.py" "$addr" "$proof" "$sshkey" "$files/known_hosts" "$KC_NAME"
 }
 
 case $action in

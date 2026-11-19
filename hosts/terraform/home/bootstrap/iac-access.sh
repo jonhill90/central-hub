@@ -45,6 +45,10 @@ acl() {
 }
 acl /sdn 0                               # the SDN applier (PUT /cluster/sdn)
 acl /sdn/zones/lab 1                     # zone lab, its VNets and subnets
+# Creating a zone is checked on /sdn/zones itself (pve-network, API2/Network/SDN/Zones.pm, create), which
+# neither line above reaches, so an empty host's first network apply needs this one. Not propagated: the
+# token can add a zone but gets no rights in any other zone.
+acl /sdn/zones 0                         # create zone lab on an empty host
 acl /sdn/zones/localnetwork/vmbr0 0      # attach the WAN NIC and the connector's eth0
 acl /sdn/zones/localnetwork/vmbr1 0      # attach the firewall's trunk NIC
 acl /pool/firewall 1                     # VM 100

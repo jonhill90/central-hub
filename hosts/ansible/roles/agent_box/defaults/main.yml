@@ -21,9 +21,10 @@ agent_box_wrappers:
   - name: dev-vms
     args: [plan, apply, destroy]
   # bump opens a PR moving the runner pin; `weekly` (configure, then bump) is the timer's only, so
-  # sessions can't start it through sudo.
+  # sessions can't start it through sudo. c1-token writes the notebook runner pod's one-hour
+  # registration token to prod's store.
   - name: ci-runner
-    args: [plan, apply, configure, destroy, bump]
+    args: [plan, apply, configure, destroy, bump, c1-token]
   # The owner's desktop VM (docs/runbooks/set-up-the-desktop.md). Not applied until the owner says so.
   - name: desktop
     args: [plan, apply, configure, destroy]
@@ -39,23 +40,34 @@ agent_box_wrappers:
   - name: openbao-prod
     args: [key, check, "seal *", "seal-copy *", l2-policy, gitops, ca, handover, "reset-failed-start *", log]
   # Applies one named Ansible playbook to prod's c1 with the box's own prod node key (files/c1-ansible.sh). check is
-  # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The only name now is identity.
+  # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The names are identity, gateway and gitops.
   - name: c1-ansible
     args: [list, "check *", "apply *", log]
+  # The three scripted sign-in checks (Jellyfin, Argo CD, Proxmox) against prod with the test user (files/signin-check.sh). It runs as
+  # the keys user, because the test user's password and seed are lines in identity.env. run makes nothing in any app; it reads
+  # signin-check.json, which the controller's prod-files run copies, and prints only the checks' numbered lines.
+  - name: signin-check
+    args: [run, log]
   # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
-  # the owner's tap id, which the wrapper checks; the run needs dev to have passed at the same commit first.
+  # the owner's tap id and the commit the go names, which the wrapper checks (7 to 40 hex digits, on main); the run
+  # needs dev to have passed at that same commit first.
   - name: rebuild-prod
     args: [check, "rebuild *", log]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself. Sessions get the
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge
     args: ["check *"]
+  # Reads the certificate the firewall's web UI serves and says how many days it has left (files/opnsense-cert-check.sh). It
+  # holds no key and writes nothing to the firewall; the daily timer (opnsense-cert-check.timer) runs `check` as the keys user.
+  - name: opnsense-cert-check
+    args: [check, status]
   # The pass ledger the merge sweep reads (D-0042 rule 2) and its stop switch (rule 8). The wrapper checks every argument.
   - name: pass-record
     args: ["add *", "show *", "halt *", "resume *"]
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
-    args: [up, rebuild, teardown, identity, log, diag]
+    # up and rebuild may name the commit to build (`*`); the wrapper takes only 7 to 40 hex digits on main.
+    args: [up, "up *", rebuild, "rebuild *", teardown, identity, log, diag, fit]
     runner: true   # the dev redeploy workflow (.github/workflows/lab-redeploy-dev.yml)
   # The tailnet stack's pipeline job (D-0041): plan, then apply the saved plan the owner's card named. The
   # workflow lab-tailnet.yml calls it on the runner; the card ID and the plan hash are required arguments.
@@ -88,6 +100,14 @@ agent_box_wrappers:
   # Built and destroyed only while dev is down; it runs a Keycloak container on this box during `prove`.
   - name: opnsense-test
     args: [plan, apply, configure, prove, destroy, log]
+  # The lab test copy, VM 256, a nested Proxmox VE on dev (docs/runbooks/build-the-lab-test-copy.md). Built and
+  # destroyed only while dev is down and VM 257 is gone; check reads the copy over SSH and changes nothing; host
+  # runs the fresh-host steps inside the copy; lab builds its own SDN, VM 100 and CT 900 and puts it on mgmt;
+  # firstboot sets up the copy's VM 100 over its serial console; opnsense runs opnsense.yml against it; wancheck runs
+  # the WAN safety check on the copy's portless WAN bridge; connector sets up CT 900's tailnet client, never joined;
+  # safety turns the copy's host firewall on; prove runs every step, then destroy.
+  - name: lab-test
+    args: [plan, apply, check, host, lab, firstboot, opnsense, wancheck, connector, safety, prove, destroy, log]
   # Lists what the daily timer would remove from the tailnet; `run` is the timer's only (pick 214).
   - name: tailnet-cleanup
     args: [plan]
@@ -171,6 +191,8 @@ agent_box_tls_check_url: ""
 agent_box_opnsense_backup: {}
 # When the daily OPNsense backup starts (systemd OnCalendar).
 agent_box_opnsense_backup_daily: "*-*-* 14:30:00 UTC"
+# The daily check of the certificate the firewall serves (needs agent_box_opnsense_backup, whose host it reads).
+agent_box_opnsense_cert_check_daily: "*-*-* 16:00:00 UTC"
 # The off-box copy of those configurations (pick 222, docs/runbooks/copy-opnsense-backup-off-box.md): restic sends them
 # daily to their own container in the Azure backup account (hosts/terraform/azure/backup), signed in as their own app
 # with a certificate made on the box. Private, through the inventory, from that folder's tofu outputs: account
@@ -321,6 +343,30 @@ agent_box_vps_host: {}
 agent_box_opnsense_test: {}
 # The first subordinate UID and GID of the keys user, for the proof's rootless Keycloak container (65536 of each).
 agent_box_opnsense_test_subid_start: 300000
+# Settings for the lab-test wrapper, written to <work_dir>/lab-test.json: name (STD-0001), domain (the copy's search
+# domain), address (its dev address), cores (2 or more), memory_mb (7168 or more), disk_gb (32 or more) and, only if
+# the inventory sets it, proxmox_node_name. The VM ID is fixed at 256 (docs/specs/2026-11-lab-test-copy.md). The copy
+# is a throwaway on dev's VLAN, so these defaults are made up: a name in the STD-0001 form that no real host has, a
+# .invalid domain (RFC 6761: it never resolves) and one address in dev's 10.1.30.0/24 below the load-balancer pool
+# (docs/standards/0002-ip-address-plan.md). Without a proxmox_node_name the wrapper reads the node at run time from the
+# Proxmox API (GET /nodes) with the agents' token, so no node name is written into the repository.
+agent_box_lab_test_default:
+  name: ddehvlabtest01
+  domain: lab-test.invalid
+  address: 10.1.30.199
+  cores: 2
+  memory_mb: 7168
+  disk_gb: 32
+# The inventory's own settings, merged over the default key by key. Empty uses the default as it is.
+agent_box_lab_test: {}
+# false skips the wrapper's assistant, helper and settings file.
+agent_box_lab_test_enabled: true
+# proxmox-auto-install-assistant for the lab-test wrapper, matching the Proxmox VE 9.2 ISO it prepares; the sha256 is
+# the package's line in pve-no-subscription's trixie Packages index (read 2026-11-18). Its download is plain http,
+# so the pin is the only integrity check.
+agent_box_pve_assistant_version: 9.2.8
+agent_box_pve_assistant_base: http://download.proxmox.com/debian/pve/dists/trixie/pve-no-subscription/binary-amd64
+agent_box_pve_assistant_sha256: 94b562ac026bf9a989e0a5834538ad24e38606f8858367af0e665af0bcbdc2e2
 # The controller's private files the prod_files tasks copy to <keys_dir>/prod (D-0035; paths from
 # docs/runbooks/rebuild-home-lab-from-scratch.md). from: clone (the controller's checkout of this
 # repo) or config (~/.config/central-hub). A missing file is skipped and named. Not listed on purpose:
@@ -329,6 +375,7 @@ agent_box_prod_files:
   - {from: clone, path: hosts/.env, dest: hosts.env}
   - {from: clone, path: hosts/ansible/inventories/home/hosts.yml, dest: inventory-hosts.yml}
   - {from: config, path: identity.env, dest: identity.env}
+  - {from: config, path: signin-check.json, dest: signin-check.json}
   - {from: clone, path: hosts/terraform/home/certificates/home.tfvars, dest: tfvars/certificates.tfvars}
   - {from: clone, path: hosts/terraform/home/dns-token/home.tfvars, dest: tfvars/dns-token.tfvars}
   - {from: clone, path: hosts/terraform/home/dns/home.tfvars, dest: tfvars/dns.tfvars}
@@ -343,6 +390,7 @@ agent_box_prod_files:
   - {from: config, path: c1-secrets-encryption.key, dest: c1-secrets-encryption.key}
   - {from: config, path: cloudflare-dns.token, dest: cloudflare-dns01-token.txt}
   - {from: config, path: pve-root-ca.pem, dest: pve-root-ca.pem}
+  - {from: config, path: lab-ca/root.crt, dest: lab-ca/root.crt}
 # Switch for the prod_files tasks, which copy the controller's private lab files to the box. Off: a
 # run that copies them is a decision (docs/runbooks/set-up-the-agent-box.md, "Copy the controller's
 # private files to the box"), so it is turned on for one run and off again.
@@ -375,6 +423,13 @@ agent_box_limit_apply: false
 # remembering to run it. It does no more than a session's run: it stops on any limit change with no approval line.
 agent_box_self_apply_timer: true
 agent_box_self_apply_interval: 10min
+
+# The dev rebuild's timer run (files/rebuild.sh auto, TASK-0291 row 2b): every interval it builds main's newest commit on
+# dev, but only when no rebuild run is going, the newest full run did not already build that commit, a file under hosts/
+# changed since the newest full pass, and the memory preflight fits without stopping the owner's desktop VM. Each run
+# that starts stops VM 300 for its length under ephemeral-dev, as a hand run does.
+agent_box_rebuild_auto: true
+agent_box_rebuild_auto_interval: 2h
 
 # The merge sweep (D-0042 rule 2): a systemd timer that runs `pr-merge.sh sweep` as the keys user. Off until the inventory
 # turns it on, because installing it is a change to the box's limits (D-0042 rule 6).

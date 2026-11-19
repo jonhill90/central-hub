@@ -711,6 +711,14 @@
   when: agent_box_opnsense_test | length > 0
   tags: [wrappers]
 
+- name: The lab-test wrapper's assistant, helper and settings
+  ansible.builtin.include_tasks:
+    file: lab_test.yml
+    apply:
+      tags: [wrappers]
+  when: agent_box_lab_test_enabled | bool
+  tags: [wrappers]
+
 - name: Weekly CI runner service and timer (pick 208)
   ansible.builtin.template:
     src: "ci-runner-weekly.{{ item }}.j2"
@@ -833,6 +841,44 @@
     state: started
     daemon_reload: "{{ agent_box_drop_cache_units is changed }}"
   when: not (ansible_check_mode and agent_box_drop_cache_units is changed)
+  tags: [wrappers]
+
+- name: Dev rebuild timer service and timer (rebuild.sh auto)
+  ansible.builtin.template:
+    src: "rebuild-auto.{{ item }}.j2"
+    dest: "/etc/systemd/system/rebuild-auto.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/rebuild-auto.{{ item }}"
+  register: agent_box_rebuild_auto_units
+  when: agent_box_rebuild_auto | bool
+  tags: [wrappers]
+
+- name: Dev rebuild timer on
+  ansible.builtin.systemd_service:
+    name: rebuild-auto.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_rebuild_auto_units is changed }}"
+  when: agent_box_rebuild_auto | bool and not (ansible_check_mode and agent_box_rebuild_auto_units is changed)
+  tags: [wrappers]
+
+- name: Is there a dev rebuild timer to turn off
+  ansible.builtin.stat:
+    path: /etc/systemd/system/rebuild-auto.timer
+  register: agent_box_rebuild_auto_timer
+  when: not (agent_box_rebuild_auto | bool)
+  tags: [wrappers]
+
+- name: Dev rebuild timer off, while agent_box_rebuild_auto is false
+  ansible.builtin.systemd_service:
+    name: rebuild-auto.timer
+    enabled: false
+    state: stopped
+  when: not (agent_box_rebuild_auto | bool) and agent_box_rebuild_auto_timer.stat.exists | default(false)
   tags: [wrappers]
 
 - name: The merge sweep's verdict script, root's (D-0042 rule 2)
@@ -1056,6 +1102,41 @@
     state: started
     daemon_reload: "{{ agent_box_opnsense_backup_units is changed }}"
   when: agent_box_opnsense_backup | length > 0 and not (ansible_check_mode and agent_box_opnsense_backup_units is changed)
+  tags: [wrappers]
+
+# --- The certificate the firewall serves (ask 320) --------------------------------------------------
+
+- name: The check of the firewall's served certificate, root-owned
+  ansible.builtin.copy:
+    src: opnsense-cert-check.sh
+    dest: "{{ agent_box_libexec_dir }}/opnsense-cert-check.sh"
+    owner: root
+    group: root
+    mode: "0755"
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: Daily certificate check service and timer
+  ansible.builtin.template:
+    src: "opnsense-cert-check.{{ item }}.j2"
+    dest: "/etc/systemd/system/opnsense-cert-check.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/opnsense-cert-check.{{ item }}"
+  register: agent_box_opnsense_cert_check_units
+  when: agent_box_opnsense_backup | length > 0
+  tags: [wrappers]
+
+- name: Daily certificate check timer on
+  ansible.builtin.systemd_service:
+    name: opnsense-cert-check.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_opnsense_cert_check_units is changed }}"
+  when: agent_box_opnsense_backup | length > 0 and not (ansible_check_mode and agent_box_opnsense_cert_check_units is changed)
   tags: [wrappers]
 
 # --- Off-box copy of those configurations (pick 222) ----------------------------------------------------

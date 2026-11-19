@@ -4,6 +4,7 @@
 # as they are (the owner's card, 2026-11-09 23:21 UTC). It stops at the first stage that fails.
 #
 # Usage: hosts/rebuild-k8s.sh <env-dir> [--teardown] [--only <stage>[,<stage>...]]
+#        hosts/rebuild-k8s.sh <env-dir> --fit   (dev only: would the memory preflight pass now? read-only, no log)
 #
 # <env-dir> is a private folder on the controller (mode 0700), outside the repository. It holds
 # rebuild.env (mode 0600), which sets:
@@ -20,6 +21,8 @@
 #                 read-only copy of prod's newest volume snapshot (hosts/rebuild.env.example)
 #   RESTORE_CHECK_HOOK  the command the `checks` stage runs to prove the restore; required with
 #                 RESTORE_HOOK
+#   PREFLIGHT_KEEP_DESKTOP  optional, dev only: true leaves the owner's desktop VM running when memory is short (the box's
+#                 timer run sets it); the preflight then judges without it.
 #   PREFLIGHT_MIN_FREE_MIB  optional, dev only: the least free memory (MiB) the Proxmox node must have before the VMs are made
 #                 (default: the dev VMs' memory below, summed over the nodes the tfvars declare, plus a 1024 MiB margin)
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
@@ -56,13 +59,14 @@ default_stages="vms cluster storage openbao-seal restore gitops secrets openbao 
 
 die() { echo "rebuild: $*" >&2; exit 1; }
 
-[ $# -ge 1 ] || die "usage: $0 <env-dir> [--teardown] [--only <stage>[,<stage>...]]"
+[ $# -ge 1 ] || die "usage: $0 <env-dir> [--teardown] [--only <stage>[,<stage>...]] | --fit"
 env_dir=$1; shift
-teardown=false; only=""
+teardown=false; only=""; fit=false
 while [ $# -gt 0 ]; do
   case $1 in
     --teardown) teardown=true ;;
     --only) shift; only=${1:-} ;;
+    --fit) fit=true ;;
     *) die "unknown argument: $1" ;;
   esac
   shift
@@ -89,32 +93,39 @@ if [ "$ENV_NAME" = dev ]; then
 fi
 
 # Dev only: the memory (MiB) each dev node gets by role, in place of its memory_mb in the tfvars (the k8s stack's
-# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so it is sized to fit them. Control plane
-# 4096: at 3072 the run of 2026-11-18 06:11 UTC (rebuild-20261118T061140Z) failed in apps, with the API server timing
-# out lease renewals and kube-controller-manager and cilium-operator in CrashLoopBackOff, so openbao's volume claims
-# stayed Pending. c1's control plane, which runs only the control-plane pods, used 2530 MiB that day, 1809 MiB of it
-# kube-apiserver (c1-read top, 06:46 UTC). Worker 6144 (the worker peaked at 4255 MiB at 7168 in run 20261117T053037Z;
-# the 06:11 run at 6144 showed no eviction and no OOM kill in its diag). The sum, 10240, plus the 1024 MiB margin is
-# 11264, under the 11914 MiB the preflight read at 06:11 UTC with the box's drop-cache timer on. c1 (prod) keeps the
-# sizes in its own tfvars.
-DEV_MEMORY_MB_CONTROL_PLANE=4096
-DEV_MEMORY_MB_WORKER=6144
-# The preflight's margin is 1024 MiB: 4096 + 6144 + 1024 = 11264.
+# memory_mb_by_role). Dev is a rebuild test beside the always-on guests, so it is sized to what the host has free beside
+# them: 11296 MiB at the run of 2026-11-18 13:14 UTC and 11237 MiB at 19:19 UTC with VM 300 stopped (run
+# 20261118T191933Z, refused at 10240 + 1024 = 11264). Control plane 3584: dev's read 2403 to 2839 MiB at 4096 in run
+# 20261118T131441Z, and 3072 starved the API server (run 20261118T061140Z). Worker 6400: at 6144 the worker never passed
+# identity-keycloak (runs 20261117T043328Z and 20261118T131441Z) while the realm import ran with the operator's default
+# memory, request 1700Mi and limit 2Gi, beside Keycloak's own pod; dev now caps the import at DEV_REALM_IMPORT_MEMORY
+# below, 1 GiB less, and the worker keeps 256 MiB more than the size that failed. The sum, 9984, plus the 1024 MiB
+# margin is 11008. c1 (prod) keeps the sizes in its own tfvars.
+DEV_MEMORY_MB_CONTROL_PLANE=3584
+DEV_MEMORY_MB_WORKER=6400
+# The preflight's margin is 1024 MiB: 3584 + 6400 + 1024 = 11008.
 # Dev only: how long identity-keycloak waits for the realm import (seconds; the role's default is 600). At 6144 MiB the
 # worker's import timed out at 600 s on 2026-11-17 at 04:33 UTC; at 7168 MiB the whole stage took 176 s (run
 # 20261117T053037Z). 1200 gives the smaller worker twice the wait that ran out; if it still times out, the node-top
 # lines say whether memory or CPU ran short.
 DEV_REALM_IMPORT_TIMEOUT_S=1200
+# Dev only: the realm import job's memory, request and limit (the role's k8s_identity_realm_import_memory). Unset,
+# the Keycloak operator 26.8.2 gives the job request 1700Mi and limit 2Gi (operator application.properties lines 15
+# and 16, applied by KeycloakRealmImportJobDependentResource line 173), and Keycloak's JVM takes half the limit as its
+# first heap (kc.sh line 100). 1Gi bounds the import's JVM to 70% of 1 GiB, so the import fails inside its own limit
+# rather than pressing on the whole worker.
+DEV_REALM_IMPORT_MEMORY=1Gi
 tofu_vars=(-var-file="$TFVARS")
 if [ "$ENV_NAME" = dev ]; then
   tofu_vars+=(-var "memory_mb_by_role={\"control-plane\" = $DEV_MEMORY_MB_CONTROL_PLANE, \"worker\" = $DEV_MEMORY_MB_WORKER}")
 fi
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
-mkdir -p "$env_dir/logs"
+$fit || mkdir -p "$env_dir/logs"
 log="$env_dir/logs/rebuild-$stamp.log"
 raw="$env_dir/logs/rebuild-$stamp.raw"
-: > "$log"; : > "$raw"; chmod 600 "$log" "$raw"
+# --fit writes no run log: `rebuild log` and rebuild-prod's dev-first check read these logs, and a fit check is no run.
+if $fit; then log=/dev/null raw=/dev/null; else : > "$log"; : > "$raw"; chmod 600 "$log" "$raw"; fi
 
 tf="$repo/hosts/terraform/home/k8s"
 ap() { (cd "$repo/hosts/ansible" && ansible-playbook -i "$INVENTORY" "$@"); }
@@ -194,6 +205,23 @@ wait_secrets() {
     || { echo "alertmanager-0 not Ready after ${timeout}s"; return 1; }
 }
 
+# Dev, at the end of the gateway stage and in a failed run's capture: every LoadBalancer Service, its address, the L2
+# announcement policy meant to announce it and the node holding its lease, by the role's own report
+# (hosts/ansible/roles/k8s_control_plane/files/l2-report.py, which `openbao-prod l2-policy` runs on prod). D-0062
+# narrowed the general policy to Services without the label central-hub/l2-policy, so a Service with an address and no
+# lease holder is one no policy announces: it fails. Read-only.
+l2_report() {
+  local d rc=0
+  d=$(mktemp -d)
+  if kc get svc -A -o json > "$d/svc" && kc -n kube-system get leases -o json > "$d/leases"; then
+    python3 -I "$repo/hosts/ansible/roles/k8s_control_plane/files/l2-report.py" "$d/svc" "$d/leases" || rc=$?
+  else
+    echo "l2: FAIL: the Services or the leases could not be read"; rc=1
+  fi
+  rm -rf "$d"
+  return "$rc"
+}
+
 checks() {
   local notready pods
   notready=$(kc get nodes --no-headers | awk '$2 != "Ready"')
@@ -221,7 +249,7 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default: the dev VMs' memory by role, summed over the nodes
-# the tfvars declare, plus a 1024 MiB margin; 4096 + 6144 + 1024 = 11264 for one control plane and one worker). If the
+# the tfvars declare, plus a 1024 MiB margin; 3584 + 6400 + 1024 = 11008 for one control plane and one worker). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 # curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
 # use it, so neither can print the token.
@@ -324,6 +352,7 @@ else:
 CI_RUNNER_VMID=300
 DESKTOP_VMID=400   # the one desktop VM the token may stop (agent-access.sh, DESKTOP_POWER_VMID)
 OPNSENSE_TEST_VMID=257
+LAB_TEST_VMID=256   # the lab test copy (hosts/terraform/home/lab-test), built only while dev is down
 runner_mark() { printf '%s' "$env_dir/ci-runner-stopped"; }
 preflight_stop_runner() { # node
   local node=$1 i st out
@@ -414,7 +443,7 @@ for r in rows:
 }
 
 preflight_memory() {
-  local min node free field guests desktops needs margin=1024
+  local min node free field guests desktops needs margin=1024 add
   local existing declared
   # A re-run on VMs the state already holds allocates no new VMs, and their memory is already taken, so the
   # node's free memory says nothing about it (measured on the box, 2026-11-14: 3547 MiB free with dev up).
@@ -450,14 +479,28 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
     echo "preflight: refused, VM $OPNSENSE_TEST_VMID (the OPNsense test VM) exists; run opnsense-test destroy first"
     return 1
   fi
-  grep -q "guest list from" <<<"$guests" || echo "preflight: the guest list was not read, so VM $OPNSENSE_TEST_VMID (the OPNsense test VM) could not be checked"
+  # VM 256 is the lab test copy (hosts/terraform/home/lab-test, docs/specs/2026-11-lab-test-copy.md), built only while
+  # dev is down, for the same reason.
+  if grep -q "guest vmid=$LAB_TEST_VMID " <<<"$guests"; then
+    echo "preflight: refused, VM $LAB_TEST_VMID (the lab test copy) exists; run lab-test destroy first"
+    return 1
+  fi
+  grep -q "guest list from" <<<"$guests" || echo "preflight: the guest list was not read, so VM $OPNSENSE_TEST_VMID (the OPNsense test VM) and VM $LAB_TEST_VMID (the lab test copy) could not be checked"
   preflight_storage "$node" || true
   if [ "$free" -lt "$min" ]; then
     # Matched by its ID alone: /cluster/resources leaves out the pool field when the token lacks Pool.Audit on
     # /pool/desktop, which the dev token does (it holds rights on /vms/<DESKTOP_VMID> only), and that ID is the
     # only one the token's VM.PowerMgmt covers.
     desktops=$(sed -n "s/^preflight: guest vmid=\($DESKTOP_VMID\) type=qemu status=running .*/\1/p" <<<"$guests")
-    if [ -n "$desktops" ]; then
+    if [ -n "$desktops" ] && ${PREFLIGHT_KEEP_DESKTOP:-false}; then
+      # A timer run (the box's rebuild.sh auto) never stops the owner's desktop: it is judged without it.
+      echo "preflight: VM $DESKTOP_VMID (the desktop) is running and is left alone (PREFLIGHT_KEEP_DESKTOP: a timer run never stops it)"
+    elif [ -n "$desktops" ] && ${PREFLIGHT_DRY:-false}; then
+      # A fit check stops nothing: it counts the desktop's maxmem as freed, which the stop frees at most.
+      add=$(sed -n "s/^preflight: guest vmid=$DESKTOP_VMID type=qemu status=running maxmem=\([0-9]*\) MiB .*/\1/p" <<<"$guests")
+      free=$(( free + ${add:-0} ))
+      echo "preflight: fit check: VM $DESKTOP_VMID (the desktop) is running; a run would stop it; its maxmem ${add:-0} MiB counted as freed, estimate ${free} MiB, minimum ${min} MiB"
+    elif [ -n "$desktops" ]; then
       # shellcheck disable=SC2086
       preflight_stop_desktops "$node" $desktops || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB and a desktop VM could not be stopped"; return 1; }
       sleep 5
@@ -475,6 +518,13 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
          return 1 ;;
     esac
     echo "preflight: short-node setting is ${PREFLIGHT_SHORT_NODE}"
+    if ${PREFLIGHT_DRY:-false}; then
+      add=$(sed -n "s/^preflight: guest vmid=$CI_RUNNER_VMID type=qemu status=running maxmem=\([0-9]*\) MiB .*/\1/p" <<<"$guests")
+      free=$(( free + ${add:-0} ))
+      echo "preflight: fit check: VM $CI_RUNNER_VMID is running; a run would stop it; its maxmem ${add:-0} MiB counted as freed, estimate ${free} MiB, minimum ${min} MiB"
+      [ "$free" -ge "$min" ] || { echo "preflight: refused, estimate ${free} MiB is below ${min} MiB"; return 1; }
+      return 0
+    fi
     preflight_stop_runner "$node" || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB and VM $CI_RUNNER_VMID could not be stopped"; return 1; }
     sleep 5
     free=$(preflight_read_free "$node") || { echo "$free"; return 1; }
@@ -484,12 +534,77 @@ print(sum(len(r.get("instances", [])) for r in st.get("resources", [])
   [ "$free" -ge "$min" ] || { echo "preflight: refused, free memory ${free} MiB is below ${min} MiB"; return 1; }
 }
 
+# Dev only, the last stage of a full dev run, before the end-of-run teardown: what an agent read by hand after a run,
+# read inside it, so it is in the short log when ephemeral-dev tears dev down. One Job from the suspended panel-check
+# CronJob (the dashboard's panels, then the alerts firing), whether Prometheus scrapes namespaces openbao and media, and
+# the store's StatefulSet's age (a [5m] rate has no data in a store's first minutes). It changes nothing but that one
+# Job. A fresh store has no snapshot until its CronJob's first tick at minute 17, so its snapshot panel has no data;
+# the stage says so. It never fails the run: each `read:` line says what was read, or why it was not.
+PANELS_WAIT_STEPS=${PANELS_WAIT_STEPS:-34}
+PANELS_WAIT_S=${PANELS_WAIT_S:-10}
+panels_read() {
+  local job out state="" i q ts age
+  local prom=/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:9090/proxy/api/v1/query
+  job=panel-check-run-$(printf '%s' "$stamp" | tr 'A-Z' 'a-z')
+  if kc -n monitoring create job --from=cronjob/panel-check "$job" >/dev/null; then
+    for i in $(seq 1 "$PANELS_WAIT_STEPS"); do
+      out=$(kc -n monitoring get job "$job" -o 'jsonpath={.status.succeeded}/{.status.failed}' 2>/dev/null) || out=""
+      case $out in 1/*) state="ended, every panel has data"; break ;; */1) state="ended with panels that have no data (the Job failed)"; break ;; esac
+      [ "$i" -eq "$PANELS_WAIT_STEPS" ] || sleep "$PANELS_WAIT_S"
+    done
+    echo "read: panel check $job ${state:-had no result after $PANELS_WAIT_STEPS reads}"
+    { kc -n monitoring logs "job/$job" 2>&1 || true; } | cut -c1-300 | head -n 60 | sed 's/^/read: /'
+  else
+    echo "read: panel check not run: no Job could be made from CronJob monitoring/panel-check"
+  fi
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then
+    ts=$(kc -n openbao get cronjob openbao-snapshot -o 'jsonpath={.status.lastSuccessfulTime}' 2>/dev/null) || ts=""
+    [ -n "$ts" ] || echo "read: no snapshot of this store has run yet (CronJob openbao/openbao-snapshot ticks at minute 17), so the snapshot panel's no data is expected"
+  fi
+  for q in openbao media; do
+    out=$(kc get --raw "$prom?query=up%7Bnamespace%3D%22$q%22%7D" 2>/dev/null) || out=""
+    printf '%s' "$out" | python3 -I -c '
+import json, sys
+q = sys.argv[1]
+try:
+    res = json.load(sys.stdin)["data"]["result"]
+except Exception:
+    print("read: up{namespace=\"%s\"}: not read, Prometheus did not answer through the API server" % q); sys.exit(0)
+if not res:
+    print("read: up{namespace=\"%s\"}: no series, Prometheus scrapes nothing there" % q)
+for r in res[:10]:
+    m = r.get("metric", {})
+    print("read: up{namespace=\"%s\"}: job=%s pod=%s up=%s" % (q, m.get("job", "-"), m.get("pod", "-"), r.get("value", ["", "?"])[1]))
+' "$q" || true
+  done
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then
+    ts=$(kc -n openbao get statefulset openbao -o 'jsonpath={.metadata.creationTimestamp}' 2>/dev/null) || ts=""
+    if [ -n "$ts" ] && age=$(( $(date +%s) - $(date -d "$ts" +%s 2>/dev/null || echo x) )) 2>/dev/null; then
+      echo "read: StatefulSet openbao/openbao made $ts, ${age}s before this read"
+    else
+      echo "read: StatefulSet openbao/openbao: not read"
+    fi
+  else
+    echo "read: StatefulSet openbao/openbao: not read, the store is not in this cluster (no OPENBAO_SEAL_KEY_FILE)"
+  fi
+  return 0
+}
+
 run_stage() {
   # The dev-only measurement of the agent box's source address through the Gateway (MEASURE-1): on dev with
   # the in-cluster store (its seal key file set), every render of the root Application passes openbaoMeasure,
   # so a later stage never drops it mid-run. Prod, which will set the key file too, never gets it.
-  local measure=()
-  if [ "$ENV_NAME" = dev ] && [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then measure=(-e k8s_gitops_source_openbao_measure=true); fi
+  local rootvars=()
+  if [ "$ENV_NAME" = dev ] && [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then rootvars=(-e k8s_gitops_source_openbao_measure=true); fi
+  # Dev, on every render of the root Application too: no ClusterIssuer lab-ca (no `certs` stage; dev-ca comes after
+  # `checks`), so jellyfin's Certificate on it would hold `apps`; and no login-probe, whose names are prod's
+  # (k8s_gitops defaults, k8s_gitops_source_lab_ca_issuer and _login_probe); and no Jellyfin setup CronJob, because
+  # `restore` puts prod's Jellyfin config, with prod's admin password, in place before the apps start (k8s_gitops_source_jellyfin_setup); and a suspended panel-check CronJob, whose
+  # Keycloak panel has no data before the `identity-keycloak` stage; the OpenBao panels and Jellyfin's request rate
+  # also printed no data in the run that failed, cause not measured (k8s_gitops_source_panel_check_suspended).
+  if [ "$ENV_NAME" = dev ]; then
+    rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false -e k8s_gitops_source_jellyfin_setup=false -e k8s_gitops_source_panel_check_suspended=true)
+  fi
   case $1 in
     preflight)
       [ "$ENV_NAME" = dev ] || { echo "the memory preflight runs on dev only"; return 1; }
@@ -504,7 +619,9 @@ run_stage() {
     cluster) wait_ssh && ap playbooks/k8s.yml ;;
     # The data disks only: Argo CD installs the provisioner and StorageClass (move-local-path-to-argo-cd.md).
     storage) ap playbooks/k8s-storage.yml --tags disk ;;
-    gateway) ap playbooks/k8s-gateway.yml ;;
+    # On dev, after the smoke test's call from this machine to the Gateway's address: every load-balancer address has
+    # a node announcing it (D-0062).
+    gateway) ap playbooks/k8s-gateway.yml; [ "$ENV_NAME" != dev ] || l2_report ;;
     # A dev re-run keeps the Gateway's HTTPS on in the root Application: the dev inventory leaves it off, and
     # flipping it off here and on again in `dev-ca` left the gateway and jellyfin apps OutOfSync for 18 minutes on
     # a re-run (measured on dev, run 8, 2026-11-14), so `apps` never finished. It does so only when the
@@ -513,10 +630,10 @@ run_stage() {
     gitops)
       if [ "$ENV_NAME" = dev ] && kc -n gateway get secret apps-tls -o name >/dev/null 2>&1; then
         echo "gitops: the certificate's Secret exists (a re-run): the Gateway's HTTPS stays on"
-        ap playbooks/k8s-gitops.yml --tags install,source -e k8s_gitops_source_gateway_https=true "${measure[@]}"
+        ap playbooks/k8s-gitops.yml --tags install,source -e k8s_gitops_source_gateway_https=true "${rootvars[@]}"
       else
         [ "$ENV_NAME" != dev ] || echo "gitops: no certificate Secret yet (a fresh build): the Gateway's HTTPS stays off until dev-ca"
-        ap playbooks/k8s-gitops.yml --tags install,source "${measure[@]}"
+        ap playbooks/k8s-gitops.yml --tags install,source "${rootvars[@]}"
       fi ;;
     # Seeds namespace secret-source from SECRET_SOURCE_FILE (docs/runbooks/seed-secret-source.md) after
     # Argo CD made it and before apps wait on the ExternalSecrets that read it. Unset: skipped.
@@ -556,7 +673,7 @@ run_stage() {
       # The dev inventory turns the Gateway's HTTPS off (k8s_gateway_https), so Argo CD's root Application passes
       # gatewayHttps=false and the Gateway has no https listener. Turn it on first (measured on dev, 2026-11-14:
       # spec listeners http and http-short only), then make the certificate the listener waits for.
-      ap playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_gateway_https=true "${measure[@]}"
+      ap playbooks/k8s-gitops.yml --tags source -e k8s_gitops_source_gateway_https=true "${rootvars[@]}"
       ap playbooks/k8s-certs.yml --tags devca -e k8s_certs_dev_ca=true ;;
     # Dev only, after dev-ca (the https listener exists only from then on) and only with the in-cluster store:
     # the source address OpenBao sees for a box request through the Gateway, and whether c1 enforces the
@@ -564,7 +681,7 @@ run_stage() {
     # come from it. One PASS line names what it read; it changes nothing in OpenBao and prints no secret.
     openbao-measure)
       [ "$ENV_NAME" = dev ] || { echo "the measurement runs on dev only"; return 1; }
-      if [ ${#measure[@]} -eq 0 ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-measure skipped"; return 0; fi
+      if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "no OPENBAO_SEAL_KEY_FILE set: openbao-measure skipped"; return 0; fi
       ap playbooks/k8s-openbao-measure.yml ;;
     # Dev only, with the in-cluster store: the one-time hand-over of the store's admin login to this machine's
     # IDs (D-0038 rule 6). It runs on the first control-plane node; every secret goes to OpenBao's pod on stdin.
@@ -602,9 +719,22 @@ run_stage() {
         -e k8s_identity_owner_username=dev-admin -e k8s_identity_owner_email= \
         -e '{"k8s_identity_extra_users": [{"username": "dev-viewer", "groups": ["lab-viewers"]}, {"username": "dev-admin2", "groups": ["lab-admins"]}]}' \
         -e "{\"k8s_identity_openbao_hosts\": $store_hosts}" -e "k8s_identity_oidc_handoff_file=$handoff" \
-        -e k8s_app_route_proof=false -e k8s_identity_theme_dir= \
+        -e k8s_app_route_proof=false -e k8s_identity_theme_dir= -e k8s_identity_db_storage=local-path \
         -e "k8s_identity_values_file=$env_dir/identity.env" \
-        -e "k8s_identity_realm_import_timeout=$DEV_REALM_IMPORT_TIMEOUT_S" ;;
+        -e "k8s_identity_realm_import_timeout=$DEV_REALM_IMPORT_TIMEOUT_S" \
+        -e "k8s_identity_realm_import_memory=$DEV_REALM_IMPORT_MEMORY" ;;
+    # Dev only, with the in-cluster store, after identity-keycloak (which writes identity.env in this env folder): SOPS's
+    # copy of every value the apps read, then OpenBao's, and a compare of the two (D-0058 rule 8, plan step 8a). The box's
+    # rebuild wrapper sets APP_SECRETS_HOOK only once its gate is open: the owner's sops_copies tap (D-0058 rule 9), the
+    # box's admin path (box_cidr), the store's CA file and no rebuild hold. Shut, it sets APP_SECRETS_SKIP to the reason,
+    # and the stage prints one SKIP line with it and writes nothing. The apps still read store c1 (appSecretsStore off).
+    app-secrets)
+      [ "$ENV_NAME" = dev ] || { echo "the apps' secrets stage runs on dev only"; return 1; }
+      if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "no OPENBAO_SEAL_KEY_FILE set: app-secrets skipped"; return 0; fi
+      if [ -z "${APP_SECRETS_HOOK:-}" ]; then
+        echo "SKIP: app-secrets: ${APP_SECRETS_SKIP:-not run, the rebuild wrapper on the box set no gate (an install older than this stage)}"; return 0
+      fi
+      hook "$APP_SECRETS_HOOK" ;;
     ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.
@@ -618,19 +748,32 @@ run_stage() {
       fi
       hook "$RESTORE_HOOK" ;;
     checks) checks ;;
+    panels)
+      [ "$ENV_NAME" = dev ] || { echo "the panels stage runs on dev only"; return 1; }
+      panels_read ;;
     *) echo "unknown stage: $1"; return 1 ;;
   esac
 }
+
+# --fit: the memory preflight alone, with PREFLIGHT_DRY: the same reads and refusals as a run's, but nothing is stopped
+# (a guest a run would stop counts as its maxmem freed) and no log is written. For the box's timer, which starts a dev
+# run only when this says it fits. Exit 0 fits, 3 does not or could not be read.
+if $fit; then
+  [ "$ENV_NAME" = dev ] || die "--fit is for dev only"
+  if PREFLIGHT_DRY=true preflight_memory; then echo "fit: yes"; exit 0; fi
+  echo "fit: no"; exit 3
+fi
 
 stages=${STAGES:-$default_stages}
 [ -z "$only" ] || stages=${only//,/ }
 # A dev run ends with its own HTTPS and sign-in proof, on the stages the box's wrapper sets, with no change to
 # that wrapper: the box's own checkout of main supplies them.
 # With the in-cluster store, the measurement (MEASURE-1) runs after dev-ca, which first makes the https listener,
-# and the admin hand-over after it.
+# and the admin hand-over after it; the apps' secrets go into SOPS and OpenBao after identity-keycloak. The
+# read-only `panels` stage is last on every full dev run, so its reads come before the end-of-run teardown.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then
-  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak"
-  else stages="$stages dev-ca identity-keycloak"; fi
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak app-secrets panels"
+  else stages="$stages dev-ca identity-keycloak panels"; fi
 fi
 # A dev run starts with the memory preflight, after a teardown has freed its VMs and before it makes new ones.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="preflight $stages"; fi
@@ -653,6 +796,8 @@ runner_capture_diag() {
     kc top nodes --no-headers
     echo "== argocd applications (name, sync, health)"
     kc -n argocd get applications.argoproj.io --no-headers -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
+    echo "== load-balancer addresses and the nodes announcing them (D-0062)"
+    l2_report || true
     echo "== pods not Running or Completed, all namespaces"
     kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
     echo "== newest events, all namespaces"
@@ -671,16 +816,23 @@ runner_capture_diag() {
   return 0
 }
 
-# The owner's pick for a short node is ephemeral-dev: when this run stopped VM 300, dev can't stay up beside it, so
-# the run tears dev down at its end, pass or fail, and the exit trap then starts VM 300 under its memory rule. VM 300
-# is down for one run, not for as long as dev lives. A failed run reads the cluster first (runner_capture_diag), so
-# its state is in the log. Never on any env but dev, never with keep-dev, never for a marker from another run.
+# The owner's pick for a short node is ephemeral-dev: dev lasts one run. Every full run (no --only) tears dev down at its
+# end, pass or fail, whether or not it had to stop VM 300. Before 2026-11-18 a run with memory to spare left dev up, and
+# an agent tore it down by hand; this closes that hand step. When this run stopped VM 300,
+# the exit trap then starts it under its memory rule, so VM 300 is down for one run. A run with --only tears down only
+# when it stopped VM 300 itself (it has no preflight, so it never does). A failed run reads the cluster first
+# (runner_capture_diag), so its state is in the log. Never on any env but dev, never with keep-dev or no setting.
 runner_run_teardown() { # [failed]
-  local trc t0
+  local trc t0 mine=false
   [ "$ENV_NAME" = dev ] || return 0
   [ "${PREFLIGHT_SHORT_NODE:-}" = ephemeral-dev ] || return 0
-  [ -f "$(runner_mark)" ] && [ "$(cat "$(runner_mark)")" = "$stamp" ] || return 0
-  echo "runner stop: this run stopped VM $CI_RUNNER_VMID and the short-node setting is ephemeral-dev, so dev is torn down now (dev can't stay up while memory is short)" | tee -a "$log"
+  [ -f "$(runner_mark)" ] && [ "$(cat "$(runner_mark)")" = "$stamp" ] && mine=true
+  [ -z "${only:-}" ] || $mine || return 0
+  if $mine; then
+    echo "runner stop: this run stopped VM $CI_RUNNER_VMID and the short-node setting is ephemeral-dev, so dev is torn down now (dev can't stay up while memory is short)" | tee -a "$log"
+  else
+    echo "runner stop: the short-node setting is ephemeral-dev, so dev lasts one run and is torn down now" | tee -a "$log"
+  fi
   [ "${1:-}" != failed ] || runner_capture_diag
   t0=$(date +%s)
   echo "$(date -u +%FT%TZ) teardown start" | tee -a "$log"
@@ -699,13 +851,23 @@ echo "rebuild: central-hub $(git -C "$repo" rev-parse HEAD 2>/dev/null || echo u
 # Dev only, while the sign-in stage runs: each node's CPU and memory from metrics-server (kubectl top nodes), every
 # 60 s, into the short log, so a slow or failed Keycloak stage shows whether the worker ran out of memory or CPU
 # (the 2026-11-17 04:33 UTC run timed out with no reading). Read-only, never fatal; stopped when the stage ends, and it
-# ends itself once the run's own shell is gone, so a run killed mid-stage leaves no loop behind.
+# ends itself once the run's own shell is gone, so a run killed mid-stage leaves no loop behind. A sample with no
+# node row logs one "no reading" line instead, with how long the call took and the first line of its error, so a gap
+# in the samples says whether the call hung or failed fast, and why (the 2026-11-18 21:22 UTC run had a 352 s gap with
+# no line at all).
 node_top_sampler() { # stage, the run's PID
-  local t
+  local t t0 e rows
   while kill -0 "$2" 2>/dev/null; do
-    t=$(date -u +%FT%TZ)
-    kc top nodes --no-headers 2>/dev/null \
-      | awk -v s="$1" -v t="$t" 'NF >= 5 {print "  " s ": node top " t " " $1 " cpu " $3 " memory " $4 " (" $5 ")"}' >> "$log" || true
+    t=$(date -u +%FT%TZ); t0=$(date +%s)
+    e=$(mktemp 2>/dev/null) || e=/dev/null
+    rows=$(kc top nodes --no-headers 2>"$e" \
+      | awk -v s="$1" -v t="$t" 'NF >= 5 {print "  " s ": node top " t " " $1 " cpu " $3 " memory " $4 " (" $5 ")"}') || true
+    if [ -n "$rows" ]; then
+      printf '%s\n' "$rows" >> "$log" || true
+    else
+      echo "  $1: node top $t no reading after $(( $(date +%s) - t0 ))s: $(head -n 1 "$e" 2>/dev/null | cut -c 1-200 | grep . || echo 'no node row and no error')" >> "$log" || true
+    fi
+    [ "$e" = /dev/null ] || rm -f "$e"
     sleep 60
   done
 }
@@ -726,11 +888,20 @@ for s in $stages; do
   if [ -n "$sampler" ]; then kill "$sampler" 2>/dev/null || true; wait "$sampler" 2>/dev/null || true; fi
   echo "$(date -u +%FT%TZ) $s end rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$log"
   # The restore's own record (snapshot ID, each folder's files and bytes, PASS lines) goes into the
-  # short log too, so the run's worklog can quote it; so does the measurement's whole PASS line, and the
-  # hand-over's PASS or SKIP line (its stage's own SKIP line is printed bare, not quoted by Ansible).
-  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ]; then
-    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: openbao-handover:' \
+  # short log too, so the run's worklog can quote it; so does the measurement's whole PASS or SKIP line, and the
+  # hand-over's PASS or SKIP line (its stage's own SKIP line is printed bare, not quoted by Ansible), and the apps'
+  # secrets stage's SKIP line, or its put-apps count, compare PASS and DIFF lines (names only, never a value).
+  if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ] || [ "$s" = app-secrets ]; then
+    sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: (openbao-handover|app-secrets):|^(PASS: compare:|DIFF: |secrets-store: put-apps:)' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
+  fi
+  # The panels stage's read lines: the panel check's output, the two up reads and the store's age.
+  if [ "$s" = panels ]; then
+    awk '$0 == "===== panels" {on=1; next} /^===== / {on=0} on' "$raw" | grep -E '^read: ' | sed "s/^/  $s: /" >> "$log" || true
+  fi
+  # The gateway stage's L2 lines (D-0062): each LoadBalancer Service, its address, policy and lease holder.
+  if [ "$s" = gateway ]; then
+    awk '$0 == "===== gateway" {on=1; next} /^===== / {on=0} on' "$raw" | grep -E '^l2: ' | sed "s/^/  $s: /" >> "$log" || true
   fi
   # The preflight's branch and the sign-in proof's step lines (step name, HTTP code, ok or the reason; the script
   # prints nothing else) go into the short log too, so a session reading `rebuild log` sees what was proved.

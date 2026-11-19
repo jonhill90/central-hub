@@ -8,6 +8,8 @@
       proofadmin.hash and client.secret.
   opnsense-test-seed.py realm  <settings.json> <proof dir> <out file>
       the throwaway Keycloak realm, with ${...} placeholders where the client secret and passwords go.
+  opnsense-test-seed.py realm-at <GUI origin> <out file>
+      the same realm for a GUI at another origin, https://<IPv4 address>: `lab-test signin`'s, the copy's VM 100.
   opnsense-test-seed.py dev-hosts <settings.json> <vlans.yml>
       dev's host addresses, one per line, for `opnsense-test log` to ping once; nothing if the file is missing.
   opnsense-test-seed.py last-start <tasks.json>
@@ -237,7 +239,18 @@ def config(settings, vlans, pubkey, proof, out):
 
 def realm(settings, proof, out):
     s = json.load(open(settings))
-    origin = f"https://{s['address']}"
+    realm_json(f"https://{s['address']}", out)
+
+
+def realm_at(origin, out):
+    m = re.fullmatch(r"https://([0-9.]+)", origin)
+    if not m:
+        sys.exit("opnsense-test: the GUI origin is not https://<IPv4 address>")
+    ipaddress.IPv4Address(m.group(1))
+    realm_json(origin, out)
+
+
+def realm_json(origin, out):
     # The client secret and passwords stay out of this file: Keycloak fills each ${...} placeholder from its own
     # environment at import (keycloak.org/server/importExport, "Using Environment Variables within the Realm
     # Configuration Files"), and the wrapper hands them to the container by name, from the proof folder.
@@ -334,7 +347,7 @@ def status(settings, folder):
 
 if __name__ == "__main__":
     cmd, args = (sys.argv[1], sys.argv[2:]) if len(sys.argv) > 1 else ("", [])
-    fn = {"seed": (seed, 4), "config": (config, 5), "realm": (realm, 3), "dev-hosts": (dev_hosts, 2),
+    fn = {"seed": (seed, 4), "config": (config, 5), "realm": (realm, 3), "realm-at": (realm_at, 2), "dev-hosts": (dev_hosts, 2),
           "last-start": (last_start, 1), "status": (status, 2)}.get(cmd)
     if fn is None or len(args) != fn[1]:
         sys.exit(__doc__)

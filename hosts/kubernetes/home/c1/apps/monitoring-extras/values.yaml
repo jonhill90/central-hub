@@ -60,6 +60,8 @@ dataFreeWarnRatio: 0.15
 # panels without a browser, a password or a port-forward. It reads Prometheus only, in the cluster.
 panelCheck:
   schedule: "*/30 * * * *"
+  # true only on dev (root value panelCheckSuspended): no Job is made on a schedule there; see templates/panel-check.yaml.
+  suspend: false
   prometheus: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
   # Same image as the Jellyfin setup Job (curl 8.22.0, 2026-09-02, multi-arch index digest).
   image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777

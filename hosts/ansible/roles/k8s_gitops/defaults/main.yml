@@ -53,6 +53,22 @@ k8s_gitops_source_gateway_https: "{{ k8s_gateway_https | default(true) }}"
 # folder where the claim will look (TASK-0240, agent pick 205). c1 keeps false: its StorageClass's
 # parameters can't change in place.
 k8s_gitops_source_local_path_stable_folders: false
+# Whether the cluster has ClusterIssuer lab-ca, passed to the root chart as `labCaIssuer` only when false. Dev
+# has none (no `certs` stage; its own CA is dev-ca, made after `checks`), so hosts/rebuild-k8s.sh sets it false
+# on dev and jellyfin reads its lab root from the optional Secret instead. c1 keeps true.
+k8s_gitops_source_lab_ca_issuer: true
+# Whether the cluster runs the sign-in checks (app login-probe), passed to the root chart as `loginProbe` only
+# when false. Dev's lab names resolve to prod's Gateway, so hosts/rebuild-k8s.sh sets it false on dev. c1 keeps true.
+k8s_gitops_source_login_probe: true
+# Whether Jellyfin's setup CronJob runs, passed to the root chart as `jellyfinSetup` only when false. Dev restores
+# prod's Jellyfin config (with prod's admin password) before the apps start, so the setup Job's own, freshly made
+# admin Secret can't sign in; hosts/rebuild-k8s.sh sets it false on dev. c1 keeps true.
+k8s_gitops_source_jellyfin_setup: true
+# Whether monitoring-extras' panel-check CronJob is suspended, passed to the root chart as `panelCheckSuspended` only
+# when true. A tick inside a dev run failed `checks` on seven panels with no data: Keycloak's has none before the
+# `identity-keycloak` stage, the five OpenBao ones and Jellyfin's request rate for a cause not measured. So
+# hosts/rebuild-k8s.sh sets it true on dev. c1 keeps false.
+k8s_gitops_source_panel_check_suspended: false
 # Where the apps' ExternalSecrets read their values (D-0058 rules 5 and 8), passed to the root chart as
 # `appSecretsStore` when set. Empty, as now: store c1, namespace secret-source. `openbao`: key c1/<name>
 # through store openbao, which needs k8s_gitops_source_openbao_in_cluster. Set it only once each value
@@ -63,6 +79,10 @@ k8s_gitops_source_app_secrets_store: ""
 # `openbaoInCluster` to the root chart, which then makes the apps openbao-store and openbao and the
 # secret-store app's store `openbao`. c1 keeps false: nothing changes.
 k8s_gitops_source_openbao_in_cluster: false
+# The agent notebook's CI runner as a pod (app notebook-runner, docs/runbooks/run-the-notebook-runner-on-c1.md).
+# True passes `notebookRunner` to the root chart. Only prod's wrappers set it (openbao-prod.sh,
+# rebuild-prod.sh), so a dev cluster never registers a second runner under the same name.
+k8s_gitops_source_notebook_runner: false
 # Private, no default, read only with the switch on: the node that holds the seal key's folder (its
 # kubernetes.io/hostname label), passed as `openbaoSealNode`; and the agent box's address as a /32,
 # the only source the admin AppRole signs in from, passed as `openbaoBoxCidr`. Unset, the seal

@@ -97,6 +97,54 @@ assert sorted(u["credentials"][0]["value"] for u in r["users"]) == ["${KC_PROOF_
 PY
 if grep -qe 'client-secret-example' -e 'user-pass-example' -e 'stranger-pass-example' "$work/realm.json"; then bad "the realm file holds a secret"; else ok "the realm file holds placeholders, not the secret or passwords"; fi
 
+# realm-at: the same realm for `lab-test signin`, at the copy's VM 100 origin; only the origin differs.
+python3 -I "$seed" realm-at https://10.1.50.1 "$work/realm-at.json"
+python3 -I - "$work/realm.json" "$work/realm-at.json" <<'PY' && ok "realm-at: the same realm at another GUI origin, only the origin's URIs differ" || bad "realm-at"
+import json, sys
+a = json.dumps(json.load(open(sys.argv[1]))).replace("https://10.1.30.199", "ORIGIN")
+b = json.dumps(json.load(open(sys.argv[2])))
+assert "https://10.1.50.1/api/openidconnect/auth/callback/keycloak" in b and "10.1.30.199" not in b
+assert a == b.replace("https://10.1.50.1", "ORIGIN")
+PY
+for o in http://10.1.50.1 https://firewall.example.com https://10.1.50.1:8443 "https://10.1.50.1/x"; do
+  if python3 -I "$seed" realm-at "$o" "$work/bad-realm.json" >/dev/null 2>&1; then bad "realm-at took $o"; else ok "realm-at refuses $o"; fi
+done
+
+# The prover's GUI tunnel for `lab-test signin`: https to the VM's address on 443 goes into the box's tunnel port, with
+# the VM's address kept as the Host header (the origin the plugin accepts), and no HTTPS_PROXY in the environment
+# carries it. Here the "tunnel" is a TLS server on loopback.
+HTTPS_PROXY=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 python3 -I - "$files/opnsense-test-prove.py" "$work" <<'PY' && ok "the prover's tunnel sends https://<VM address> to the tunnel port with the VM's address as Host" || bad "the prover's tunnel"
+import ast, http.client, http.server, os, socket, ssl, subprocess, sys, threading, urllib.request
+src, work = sys.argv[1], sys.argv[2]
+tree = ast.parse(open(src).read())
+keep = [n for n in tree.body if isinstance(n, (ast.ClassDef, ast.FunctionDef)) and n.name in ("Tunneled", "TunnelHandler", "browser")]
+assert len(keep) == 3
+subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "1",
+                "-subj", "/CN=gui", "-keyout", f"{work}/gui.key", "-out", f"{work}/gui.pem"], check=True, capture_output=True)
+seen = []
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        seen.append(self.headers["Host"]); self.send_response(200); self.end_headers(); self.wfile.write(b"gui")
+    def log_message(self, *a): pass
+srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+sctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); sctx.load_cert_chain(f"{work}/gui.pem", f"{work}/gui.key")
+srv.socket = sctx.wrap_socket(srv.socket, server_side=True)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+ctx = ssl.create_default_context(cafile=f"{work}/gui.pem"); ctx.check_hostname = False
+import http.cookiejar
+ns = {"http": http, "socket": socket, "urllib": urllib, "ctx": ctx, "addr": "192.0.2.77", "tunnel": srv.server_address[1]}
+exec(compile(ast.Module(body=keep, type_ignores=[]), src, "exec"), ns)
+with ns["browser"]().open("https://192.0.2.77/x", timeout=10) as r:
+    assert r.read() == b"gui"
+assert seen == ["192.0.2.77"], seen
+srv.shutdown()
+PY
+grep -q 'if len(sys.argv) not in (6, 8):' "$files/opnsense-test-prove.py" \
+  && grep -q 'via = \["-o", "IdentitiesOnly=yes", "-o", f"ProxyCommand={proxy}"\] if proxy else \[\]' "$files/opnsense-test-prove.py" \
+  && ok "the prover takes the copy's SSH ProxyCommand and tunnel port only as a pair, and opnsense-test's five arguments as before" \
+  || bad "the prover's arguments"
+python3 -I "$files/opnsense-test-prove.py" a b c d e f >/dev/null 2>&1 && bad "the prover took six arguments" || ok "the prover refuses a ProxyCommand without a tunnel port"
+
 # Refusals: an address outside dev, the gateway itself, a bad name, a key that is not one ed25519 key.
 refuse() { # label, settings JSON
   echo "$2" > "$work/bad.json"
@@ -150,7 +198,7 @@ else ok "status makes GET calls only"; fi
 # Pins: the wrapper's Keycloak is the digest the identity check pins, and the plugin is Plan's beta5 file.
 w=$files/opnsense-test.sh
 kc=$(sed -n 's/^image=\(quay.io\/keycloak\/keycloak@sha256:[0-9a-f]*\)$/\1/p' "$here/../identity/test_realm.sh")
-grep -qx "KEYCLOAK_IMAGE=$kc" "$w" && ok "Keycloak image is the identity check's 26.8.1 digest" || bad "Keycloak image pin differs"
+grep -qx "KEYCLOAK_IMAGE=$kc" "$w" && ok "Keycloak image is the identity check's 26.8.2 digest" || bad "Keycloak image pin differs"
 grep -qx 'PLUGIN_SHA256=4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406a41b117c' "$w" && ok "plugin pin is beta5's sha256" || bad "plugin pin"
 if grep -q -- '--features-disabled' "$w"; then bad "the proof's Keycloak turns a feature off"; else ok "the proof's Keycloak keeps DPoP on, as the lab does"; fi
 grep -q '"ES256" not in json.load' "$w" && ok "prove stops unless discovery lists ES256 for DPoP" || bad "no DPoP discovery check"
@@ -160,8 +208,39 @@ grep -q 'no Keycloak sign-in form after {url}\\n{why_no_redirect(page)}' "$files
   && ok "a login that doesn't reach Keycloak prints OPNsense's answer and its OIDC log lines" || bad "no reason when the login doesn't redirect"
 # Root's login shell on the VM is csh, which refuses `2>/dev/null`: diagnostic reads run under /bin/sh.
 grep -q 'vm("/bin/sh -c " + shlex.quote(cmd))' "$files/opnsense-test-prove.py" && ok "the VM's diagnostic reads run under /bin/sh, not root's csh" || bad "diagnostic reads run in csh"
+# No sh-only redirect may reach root's csh: every `2>` or `2>&1` command goes through on_vm (/bin/sh).
+if grep -n 'vm("' "$files/opnsense-test-prove.py" | grep -v 'on_vm("' | grep -q '2>'; then bad "a vm() command uses a sh-only redirect, which csh refuses"
+else ok "no vm() command passes a sh-only redirect to csh"; fi
+# A top-level assignment must not rebind one of the prover's functions: run 9 (2026-11-18) bound `read` to a
+# string after the DPoP check, and item 3's read("stranger.pass") failed with "'str' object is not callable".
+python3 -I - "$files/opnsense-test-prove.py" <<'PY' && ok "no top-level name in prove rebinds one of its functions" || bad "prove rebinds one of its own functions"
+import ast, sys
+tree = ast.parse(open(sys.argv[1]).read())
+funcs = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+bound = {t.id for n in tree.body if isinstance(n, (ast.Assign, ast.AnnAssign, ast.AugAssign))
+         for t in (n.targets if isinstance(n, ast.Assign) else [n.target]) if isinstance(t, ast.Name)}
+clash = funcs & bound
+if clash:
+    print("rebinds:", ", ".join(sorted(clash)))
+sys.exit(1 if clash else 0)
+PY
 grep -q 'if last_status\["code"\] == 404:' "$files/opnsense-test-prove.py" && grep -q "get('%s')" "$files/opnsense-test-prove.py" \
   && ok "a 404 from the login prints what the authentication factory lists and returns" || bad "no factory read on a 404"
+grep -q 'refused, VM 256 (the lab test copy) exists' "$w" && grep -q 'g.get("vmid") == 256' "$w" \
+  && ok "plan refuses while VM 256, the lab test copy, exists" || bad "no refusal while the lab test copy exists"
+# Item 10 (D-0037 rule 5): Keycloak stopped with the plugin's server on, then root's password. The wrapper hands
+# the prover the container's name; the prover stops it, shows the VM can't reach the issuer, then signs root in.
+grep -q '"$sshkey" "$files/known_hosts" "$KC_NAME"$' "$w" && ok "prove gets the Keycloak container's name" || bad "prove lacks the container's name"
+grep -q '\["podman", "stop", "--time", "10", kc_name\]' "$files/opnsense-test-prove.py" && grep -q 'set_server_enabled(True)' "$files/opnsense-test-prove.py" \
+  && grep -q '!= \["unreachable"\]:' "$files/opnsense-test-prove.py" && grep -q 'proof item 10: with the OIDC server enabled and the proof.s Keycloak stopped' "$files/opnsense-test-prove.py" \
+  && ok "item 10 stops Keycloak with the plugin's server on, checks the VM can't reach it, then signs root in" || bad "no Keycloak-stopped root sign-in"
+# Item 10 must be the prover's last sign-in: nothing after it may need Keycloak.
+python3 -I - "$files/opnsense-test-prove.py" <<'PY' && ok "item 10 runs after every item that needs Keycloak" || bad "an item that needs Keycloak runs after item 10"
+import sys
+t = open(sys.argv[1]).read()
+stop = t.index('["podman", "stop"')
+sys.exit(1 if any(t.find(s, stop) != -1 for s in ("keycloak_sign_in(", "approve(", "get(op, base + \"/api/openidconnect")) else 0)
+PY
 grep -q 'VMID=257$' "$w" && ok "the wrapper's VM ID is 257" || bad "VM ID"
 # The token can't delete files on local: destroy targets only the VM, and the seed leaves the state.
 code=$(grep -v '^[[:space:]]*#' "$w")   # code lines only, so a comment can't pass or fail these

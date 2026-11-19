@@ -1,20 +1,30 @@
 #!/usr/bin/python3 -I
-"""Proof items 2 to 7 and 9 against the throwaway OPNsense (docs/runbooks/prove-opnsense-sign-in-on-dev.md).
+"""Proof items 2 to 7, 9 and 10 against the throwaway OPNsense (docs/runbooks/prove-opnsense-sign-in-on-dev.md).
 
-  opnsense-test-prove.py <VM address> <proof dir> <SSH key> <known_hosts>
+  opnsense-test-prove.py <VM address> <proof dir> <SSH key> <known_hosts> <Keycloak container name>
+                         [<SSH ProxyCommand> <GUI tunnel port>]
 
-The opnsense-test wrapper runs it from `prove`, with the proof's Keycloak up. Each item prints one
-`proof item N:` line saying what was measured; the run fails on the first item that does not hold.
+The opnsense-test wrapper runs it from `prove`, with the proof's Keycloak up. `lab-test signin` runs it against the
+lab test copy's VM 100, which the box reaches only through the copy: SSH goes through the ProxyCommand, and every
+https request to the VM's address goes into the box's tunnel port to the VM's GUI, with the VM's address kept as
+the request's host, the address the plugin accepts as the GUI's origin (RelyingParty::acceptedRedirectUri).
+When the proof dir holds admin.uid, the test user is bound to that uid, not 2000.
+
+Each item prints one `proof item N:` line saying what was measured; the run fails on the first item that does not
+hold.
+Item 10 stops the proof's Keycloak container, so it runs last.
 Browser steps are made with urllib: the GUI's own certificate (read over SSH) and the proof CA are
 the only trust anchors, and no certificate check is turned off.
 """
 import base64
 import html
+import http.client
 import http.cookiejar
 import json
 import os
 import re
 import shlex
+import socket
 import ssl
 import subprocess
 import sys
@@ -22,9 +32,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-addr, proof, sshkey, known_hosts = sys.argv[1:5]
+if len(sys.argv) not in (6, 8):
+    sys.exit(__doc__)
+addr, proof, sshkey, known_hosts, kc_name = sys.argv[1:6]
+proxy, tunnel = (sys.argv[6], int(sys.argv[7])) if len(sys.argv) == 8 else (None, None)
 SERVER = "keycloak-proof"
-PROOF_ADMIN_UID = "2000"
+PROOF_ADMIN_UID = (open(os.path.join(proof, "admin.uid")).read().strip() if os.path.exists(os.path.join(proof, "admin.uid"))
+                   else "2000")
+if not PROOF_ADMIN_UID.isdigit() or PROOF_ADMIN_UID == "0":
+    sys.exit(f"opnsense-test: proof failed: the proof admin's uid {PROOF_ADMIN_UID!r} is not a user's")
 base = f"https://{addr}"
 
 # The GUI's self-signed certificate names the VM's hostname, not its address, so the name check is
@@ -43,7 +59,8 @@ def read(name):
 
 
 def vm(cmd, stdin=None):
-    r = subprocess.run(["ssh", "-i", sshkey, "-o", "BatchMode=yes", "-o", f"UserKnownHostsFile={known_hosts}",
+    via = ["-o", "IdentitiesOnly=yes", "-o", f"ProxyCommand={proxy}"] if proxy else []
+    r = subprocess.run(["ssh", "-i", sshkey, "-o", "BatchMode=yes", "-o", f"UserKnownHostsFile={known_hosts}", *via,
                         f"root@{addr}", cmd], input=stdin, capture_output=True, text=True, timeout=120)
     if r.returncode != 0:
         fail(f"{cmd!r} on the VM: {r.stderr.strip()[:300]}")
@@ -55,8 +72,26 @@ def php(body):
     return vm("php", "<?php\nrequire_once '/usr/local/opnsense/mvc/script/load_phalcon.php';\n" + body)
 
 
+class Tunneled(http.client.HTTPSConnection):
+    """https to the VM's address on 443 goes into the tunnel; the TLS session and the Host header stay the VM's."""
+    def connect(self):
+        if self.host == addr and self.port == 443:
+            self.sock = self._context.wrap_socket(socket.create_connection(("127.0.0.1", tunnel), self.timeout),
+                                                  server_hostname=self.host)
+        else:
+            super().connect()
+
+
+class TunnelHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(Tunneled, req, context=self._context)
+
+
 def browser():
-    return urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx),
+    """Every address the browser opens is the VM's or the proof Keycloak's, never one a proxy should carry, so any
+    HTTPS_PROXY in the environment is ignored."""
+    handler = TunnelHandler(context=ctx) if tunnel else urllib.request.HTTPSHandler(context=ctx)
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), handler,
                                        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 
 
@@ -155,19 +190,22 @@ rows = pending("proof-user")
 if len(rows) != 1:
     fail(f"expected one pending request for proof-user, found {len(rows)}")
 if not approve(rows[0]["id"], PROOF_ADMIN_UID):
-    fail("the approval of proof-user to uid 2000 was refused")
+    fail(f"the approval of proof-user to uid {PROOF_ADMIN_UID} was refused")
 op = keycloak_sign_in("proof-user", read("user.pass"))
 if not signed_in(op):
     fail("the bound test user did not land on the dashboard")
-print("opnsense-test: proof item 2: Keycloak sign-in as proof-user, once bound to local admin uid 2000, lands on the dashboard")
+print(f"opnsense-test: proof item 2: Keycloak sign-in as proof-user, once bound to local admin uid {PROOF_ADMIN_UID}, lands on the dashboard")
 
 # Item 2 (part): Keycloak advertises DPoP (prove checked discovery), so the plugin's sign-in used it.
 # Its key store is /var/db/openid-connect/dpop, a 0700 folder of 0600 key-<binding>.json files
 # (os-openid-connect v1.0.0-beta5 DpopKeyStore.php, statePath and ensureDirectory).
-modes = vm("cd /var/db/openid-connect/dpop 2>/dev/null && stat -f '%Lp %N' . key-*.json 2>/dev/null || true").split("\n")
-modes = [line.split(" ", 1) for line in modes if line.strip()]
+# /bin/sh, not root's csh: csh reads `cd dir 2>/dev/null` as two arguments to cd ("cd: Too many arguments."),
+# so run 8 (2026-11-18) saw no output and failed here after the sign-in had passed.
+store = on_vm("cd /var/db/openid-connect/dpop 2>/dev/null && stat -f '%Lp %N' . key-*.json 2>/dev/null || true")
+modes = [line.split(" ", 1) for line in store.split("\n") if line.strip()]
 if not modes or modes[0] != ["700", "."]:
-    fail("the plugin's DPoP key folder is missing or not mode 0700")
+    fail("the plugin's DPoP key folder is missing or not mode 0700; read: " + (store or "(nothing)") + "\n"
+         + on_vm("ls -ld /var/db/openid-connect /var/db/openid-connect/* 2>&1 | head -n 12; true"))
 keys = [name for mode, name in modes[1:] if mode == "600"]
 if not keys or len(keys) != len(modes) - 1:
     fail("the bound sign-in left no DPoP key, or a key file is not mode 0600")
@@ -216,20 +254,31 @@ if approve(stranger[0]["id"], "0"):
     fail("an identity was bound to root")
 print("opnsense-test: proof item 9: binding an identity to root (uid 0) is refused")
 
-# Item 4: with the client disabled, root signs in by password through the Local Database.
-php(f"""$c = \\OPNsense\\Core\\Config::getInstance(); $done = false;
-foreach ($c->object()->system->authserver as $s) {{ if ((string)$s->name === '{SERVER}') {{ $s->openidconnect_enabled = '0'; $done = true; }} }}
+def set_server_enabled(on):
+    """Turn the plugin's server on or off in /conf/config.xml."""
+    value = "1" if on else "0"
+    php(f"""$c = \\OPNsense\\Core\\Config::getInstance(); $done = false;
+foreach ($c->object()->system->authserver as $s) {{ if ((string)$s->name === '{SERVER}') {{ $s->openidconnect_enabled = '{value}'; $done = true; }} }}
 if (!$done) {{ exit(1); }} $c->save(); echo "ok";""")
-op = browser()
-_, page = get(op, base + "/")
-form = re.search(r'<form[^>]*id="iform".*?</form>', page, re.S)
-if not form:
-    fail("no local login form on the GUI")
-fields = dict(re.findall(r'<input[^>]*type="hidden"[^>]*name="([^"]+)"[^>]*value="([^"]*)"', form.group(0)))
-fields.update({"usernamefld": "root", "passwordfld": read("root.pass"), "login": "1"})
-get(op, base + "/", fields)
-if not signed_in(op):
-    fail("root could not sign in by password with the client disabled")
+
+
+def root_password_sign_in(why):
+    """root's password through the GUI's local login form (the Local Database)."""
+    op = browser()
+    _, page = get(op, base + "/")
+    form = re.search(r'<form[^>]*id="iform".*?</form>', page, re.S)
+    if not form:
+        fail(f"no local login form on the GUI {why}")
+    fields = dict(re.findall(r'<input[^>]*type="hidden"[^>]*name="([^"]+)"[^>]*value="([^"]*)"', form.group(0)))
+    fields.update({"usernamefld": "root", "passwordfld": read("root.pass"), "login": "1"})
+    get(op, base + "/", fields)
+    if not signed_in(op):
+        fail(f"root could not sign in by password {why}")
+
+
+# Item 4: with the client disabled, root signs in by password through the Local Database.
+set_server_enabled(False)
+root_password_sign_in("with the client disabled")
 print("opnsense-test: proof item 4: with the OIDC server disabled, root signs in by password (Local Database)")
 
 # Item 5: from the code, not a run. The firmware API's install takes a package name, sanitized as
@@ -254,4 +303,19 @@ page_size = int(mem["hw.pagesize"])
 total = int(mem["hw.physmem"]) // 1048576
 free = (int(mem["vm.stats.vm.v_free_count"]) + int(mem["vm.stats.vm.v_inactive_count"])) * page_size // 1048576
 print(f"opnsense-test: proof item 7: {total - free} MiB in use of {total} MiB (free plus inactive pages counted as free)")
+
+# Item 10: Keycloak down, the break-glass case D-0037 rule 5 names. The plugin's server is on again, the proof's
+# Keycloak container is stopped, the VM is shown not to reach its issuer, and root then signs in by password
+# through the Local Database. Item 4 left the server off, which proves less: the plugin then never calls Keycloak.
+issuer = json.load(open(os.path.join(proof, "discovery.json")))["issuer"]
+set_server_enabled(True)
+stop = subprocess.run(["podman", "stop", "--time", "10", kc_name], capture_output=True, text=True, timeout=90)
+if stop.returncode != 0:
+    fail(f"the proof's Keycloak container did not stop: {stop.stderr.strip()[:300]}")
+reach = on_vm("fetch -q -T 10 -o /dev/null " + shlex.quote(issuer + "/.well-known/openid-configuration")
+              + " && echo reached || echo unreachable")
+if reach.strip().splitlines()[-1:] != ["unreachable"]:
+    fail("the VM still reaches the proof's Keycloak after its container stopped: " + reach.strip()[-300:])
+root_password_sign_in("with the OIDC server enabled and Keycloak stopped")
+print("opnsense-test: proof item 10: with the OIDC server enabled and the proof's Keycloak stopped (the VM does not reach its issuer), root signs in by password (Local Database)")
 print("opnsense-test: proof item 8 is `opnsense-test destroy`, the proof's last step")

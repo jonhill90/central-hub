@@ -17,6 +17,11 @@
 #   7. rebuild with a seal key that differs from the node's, a failed backup test, or a drill whose restore tests
 #      name no snapshot (a node with nothing to test), destroys nothing.
 #   8. log prints the run's lines.
+#   9. The Mac's inventory with no labels gets the role's default (env prod); the sign-in CA is mapped.
+#  10. The sign-in theme folder keeps its own name under prod/identity-theme/; one with no login/theme.properties is refused.
+#  11. rebuild builds the commit the go names, which must be on main; check reads main's newest.
+#  12. The backup target: sftp to the Proxmox host is refused at check; with no Azure sign-in no certificate is carried.
+#  13. rebuild refuses a commit older than the floor (PIN_FLOOR, the same as the dev wrapper's), before anything runs.
 # Usage: .github/hosts-check/tests/test_rebuild_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -35,11 +40,16 @@ cat > "$t/bin/git" <<EOF
 #!/bin/bash
 case "\$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) d="\${@: -1}"; mkdir -p "\$d/.git" "\$d/hosts/ansible" "\$d/hosts/terraform/home/k8s"
+  clone*) d="\${@: -1}"; mkdir -p "\$d/.git" "\$d/hosts/ansible/roles/k8s_gitops/defaults" "\$d/hosts/terraform/home/k8s"
+          printf '%s\n' 'k8s_gitops_cluster_labels:' '  place: home' '  env: prod' '  purpose: apps' > "\$d/hosts/ansible/roles/k8s_gitops/defaults/main.yml"
           printf '%s\n' '#!/bin/bash' 'echo "one-command \$*" >> $t/calls' 'cp "\$1/rebuild.env" $t/seen-rebuild.env' \
             'f=\$(sed -n "s/^OPENBAO_SEAL_KEY_FILE=//p" "\$1/rebuild.env"); [ -s "\$f" ] && echo "seal-in-memory \$(wc -c < "\$f")" >> $t/calls' \
             'exit \${ONE_RC:-0}' > "\$d/hosts/rebuild-k8s.sh" ;;
+  *"rev-parse --quiet --verify "*) a="\${*: -1}"; a="\${a%^\{commit\}}"; [[ $sha == "\$a"* ]] && echo $sha || exit 1 ;;
   *rev-parse*) echo $sha ;;
+  *"merge-base --is-ancestor "*" origin/main") exit \${NOT_ON_MAIN:-0} ;;
+  *"merge-base --is-ancestor "*) echo "floor \$5 \$6" >> $t/floorcalls; exit \${BELOW_FLOOR:-0} ;;
+  *" checkout "*) echo "git \${*: -1}" >> $t/gitcalls ;;
 esac
 exit 0
 EOF
@@ -127,14 +137,21 @@ grep -q "^keys=$t/keys" "$t/run/rebuild-prod.sh" && grep -q "^work=$t/work" "$t/
   grep -q ":$t/bin:" "$t/run/rebuild-prod.sh" || { echo "FAIL the test could not point the wrapper at its folders"; exit 1; }
 
 run() { : > "$t/calls"; bash "$t/run/rebuild-prod.sh" "$@" > "$t/out" 2>&1; rc=$?; out=$(cat "$t/out"); calls=$(cat "$t/calls"); }
-dev_log() { printf '%s\n' "rebuild: central-hub $1" "2026-11-18T03:00:00Z vms start" "$2" > "$t/work/rebuild-dev/logs/rebuild-20261118T030000Z.log"; }
+full_stages() { for st in vms cluster storage restore gitops secrets apps gateway checks; do printf '%s\n' "2026-11-18T03:00:00Z $st start" "2026-11-18T03:00:01Z $st end rc=0 1s"; done; }
+ld=$t/work/rebuild-dev/logs
+# dev_log: the dev folder holds this one run (03:00). dev_log_teardown: a teardown-only run, alone or after another run
+# (the log of `rebuild.sh teardown`: the same ending line, but only the teardown stage ran).
+dev_log() { rm -f "$ld"/*; { printf '%s\n' "rebuild: central-hub $1"; full_stages; printf '%s\n' "$2"; } > "$ld/rebuild-20261118T030000Z.log"; }
+dev_log_teardown() { printf '%s\n' "rebuild: central-hub $1" "2026-11-18T0${2:-3}:00:00Z teardown start" "2026-11-18T0${2:-3}:00:20Z teardown end rc=0 20s" \
+  "rebuild: all stages passed" > "$ld/rebuild-20261118T0${2:-3}0000Z.log"; }
+dev_log_later() { { printf '%s\n' "rebuild: central-hub $1"; full_stages; printf '%s\n' "$3"; } > "$ld/rebuild-20261118T0${2}0000Z.log"; }
 destroy() { python3 -c 'import json, sys; print(json.dumps({"resource_changes": [
   {"type": "proxmox_virtual_environment_vm", "address": "a%d" % i, "change": {"actions": ["delete"], "before": {"vm_id": i}}}
   for i in map(int, sys.argv[1:])]}))' "$@" > "$t/destroy.json"; }
 inventory() { printf '%s\n' "all:" "  children:" "    proxmox:" "      hosts:" "        pve-a: {ansible_host: 192.0.2.1}" \
   "    k8s_nodes:" "      vars:" "        ansible_user: almalinux" "        ansible_ssh_common_args: -o ProxyJump=root@192.0.2.1" \
   "        ansible_ssh_private_key_file: /Users/someone/.ssh/id" "        k8s_gitops_cluster_labels: {env: prod}" \
-  "        k8s_backup_enabled: true" "        k8s_backup_env_file: /Users/someone/.config/central-hub/c1-backup.env" \
+  "        k8s_backup_enabled: true" "        k8s_backup_azure_identity: true" "        k8s_backup_env_file: /Users/someone/.config/central-hub/c1-backup.env" \
   "        k8s_identity_values_file: /Users/someone/.config/central-hub/identity.env" "$@" \
   "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}" \
   "        k8s_workers:" "          hosts:" "            wk-a: {ansible_host: 192.0.2.11}" > "$t/keys/prod/inventory-hosts.yml"; }
@@ -143,11 +160,12 @@ seal_copy() { python3 -c 'import base64, json, sys; print(json.dumps({"data": ba
 
 # 1
 r1=""
-for args in "" "apply" "rebuild" "rebuild notatap" "rebuild cmsg_short" "check extra"; do
+for args in "" "apply" "rebuild" "rebuild notatap" "rebuild cmsg_short" "check extra" "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
+            "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ main" "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123"; do
   # shellcheck disable=SC2086
   run $args; r1+="$rc:${calls:-none} "
 done
-if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "1. usage errors, nothing run"; else bad "1. $r1"; fi
+if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "1. usage errors (rebuild with no commit, or one that is not 7 to 40 hex digits, too), nothing run"; else bad "1. $r1"; fi
 
 # 2
 run check
@@ -197,18 +215,23 @@ run check; [[ $rc -eq 1 && $out == *"k8s_certs_smoke_root_file still points at t
 dev_log 1111111111111111111111111111111111111111 "rebuild: all stages passed"
 run check; [[ $rc -eq 1 && $out == *"ran another commit"* ]] && r5+="d"
 dev_log "$sha" "rebuild: stage apps failed"; run check; [[ $rc -eq 1 && $out == *"did not pass every stage"* ]] && r5+="e"
+rm -f "$ld"/*; dev_log_teardown "$sha"; run check; [[ $rc -eq 1 && $out == *"no dev run other than a teardown is logged"* ]] && r5+="i"
+dev_log "$sha" "rebuild: all stages passed"; dev_log_teardown "$sha" 4; run check
+[[ $rc -eq 0 && $out == *"dev passed every stage at ${sha:0:12} (run rebuild-20261118T030000Z.log)"* ]] && r5+="j"
+dev_log "$sha" "rebuild: all stages passed"; dev_log_later "$sha" 4 "rebuild: stage apps failed"; dev_log_teardown "$sha" 5; run check
+[[ $rc -eq 1 && $out == *"the newest dev run (rebuild-20261118T040000Z.log) did not pass every stage"* ]] && r5+="k"
 dev_log "$sha" "rebuild: all stages passed"
 sed -i 's/vm_id = 201/vm_id = 301/' "$t/keys/prod/tfvars/k8s.tfvars"
 run check; [[ $rc -eq 1 && $out == *"outside 200-249: 301"* ]] && r5+="f"
 sed -i 's/vm_id = 301/vm_id = 201/' "$t/keys/prod/tfvars/k8s.tfvars"
 ROUTE_VIA=192.0.2.11 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"* ]] && r5+="g"
 DEFAULT_VIA=192.0.2.10 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"*"default via 192.0.2.10"* ]] && r5+="h"
-if [[ $r5 == abcdefgh ]]; then ok "5. check refuses a plan with changes, VM 258, a Mac path, another dev commit, a failed dev run, VM 301, a route through a node"
+if [[ $r5 == abcdeijkfgh ]]; then ok "5. check passes a teardown after a full pass, and refuses a plan with changes, VM 258, a Mac path, another dev commit, a failed dev run, a teardown-only dev run alone, VM 301, a route through a node"
 else bad "5. [$r5] $out"; fi
 
 # 6
 tap=cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ
-run rebuild "$tap"
+run rebuild "$tap" "${sha:0:12}"
 order=$(grep -oE '^(playbook [^ ]+ [^ ]+ [^ ]+|ssh [^ ]+ .*(backup.pem|seal-1.key)$|job [a-z-]+|one-command .*|seal-in-memory [0-9]+)' "$t/calls" |
   sed -E 's/^playbook -i [^ ]+ /playbook /; s/^ssh [^ ]+ (sudo -n )?cat .*\/(backup.pem|seal-1.key)$/ssh \2/' | uniq | tr '\n' '|')
 want="playbook playbooks/k8s-backup.yml|ssh backup.pem|ssh seal-1.key|job opnsense-backup|job opnsense-offbox|job secrets-bundle|job secrets-bundle-offbox|one-command $t/work/rebuild-prod --teardown|seal-in-memory 32|"
@@ -225,9 +248,9 @@ if [[ $rc -eq 0 && $order == "$want" && $calls == *"playbooks/k8s-backup.yml --t
 else bad "6. $rc [$order] [$stages] $out"; fi
 
 # 7
-printf 'J%.0s' {1..32} > "$t/node.key"; run rebuild "$tap"; r7a=$rc o7a=$out c7a=$calls
-printf 'K%.0s' {1..32} > "$t/node.key"; DRILL_RC=2 run rebuild "$tap"; r7b=$rc o7b=$out c7b=$calls
-DRILL_NOSNAP=1 run rebuild "$tap"; r7c=$rc o7c=$out c7c=$calls
+printf 'J%.0s' {1..32} > "$t/node.key"; run rebuild "$tap" "$sha"; r7a=$rc o7a=$out c7a=$calls
+printf 'K%.0s' {1..32} > "$t/node.key"; DRILL_RC=2 run rebuild "$tap" "$sha"; r7b=$rc o7b=$out c7b=$calls
+DRILL_NOSNAP=1 run rebuild "$tap" "$sha"; r7c=$rc o7c=$out c7c=$calls
 if [[ $r7a -eq 1 && $o7a == *"differs from the seal node's key"* && $c7a != *one-command* && $c7a != *job* &&
       $r7b -eq 1 && $o7b == *"backup and restore test before the teardown failed"* && $c7b != *one-command* && $c7b != *"ssh "*backup.pem* &&
       $r7c -eq 1 && $o7c == *"named no tested volume snapshot"* && $c7c != *one-command* && $c7c != *"ssh "*backup.pem* ]]; then
@@ -238,5 +261,72 @@ else bad "7. $r7a $o7a | $r7b $o7b | $r7c $o7c"; fi
 run log
 if [[ $rc -eq 0 && $out == *"rebuild-prod: rebuild at central-hub ${sha:0:12}, owner tap $tap"* ]]; then ok "8. log prints the run's lines"
 else bad "8. $rc $out"; fi
+
+# 9. The Mac's inventory leaves the labels to the k8s_gitops role's default (env prod) and names its sign-in CA on the Mac.
+inventory "        k8s_gitops_sso_root_ca_file: /Users/someone/.config/central-hub/lab-ca/root.crt"
+sed -i '/k8s_gitops_cluster_labels/d' "$t/keys/prod/inventory-hosts.yml"
+run check; o9a=$out
+mkdir -p "$t/keys/prod/lab-ca"; echo x > "$t/keys/prod/lab-ca/root.crt"
+run check; o9b=$out
+box=$(python3 -c 'import sys, yaml; d = yaml.safe_load(open(sys.argv[1])); v = d["all"]["children"]["k8s_nodes"]["vars"]; l = v["k8s_gitops_cluster_labels"]; print(l["env"], l["place"], l["purpose"], v["k8s_gitops_sso_root_ca_file"])' "$t/work/rebuild-prod/inventory/hosts.yml" 2>&1)
+inventory "        k8s_gitops_cluster_labels: {env: dev}"
+run check; o9c=$out
+if [[ $o9a == *"k8s_gitops_sso_root_ca_file is $t/keys/prod/lab-ca/root.crt, which is not on the box"* && $o9a != *"labelled env"* && $o9a != *"still points at the Mac"* &&
+      $o9b == *"every private file at the box's copy"* && $o9b != *"labelled env"* && $box == "prod home apps $t/keys/prod/lab-ca/root.crt" &&
+      $o9c == *"is labelled env dev, not prod"* ]]; then
+  ok "9. no labels in the Mac's inventory: the box's copy gets the role's default (env prod); an env other than prod is still refused; the sign-in CA is mapped"
+else bad "9. [$box] $o9a | $o9b | $o9c"; fi
+
+# 10. The sign-in theme folder: the box's copy keeps the folder's own name under prod/identity-theme/, where the
+# controller's prod-files run puts it, and check refuses one with no login/theme.properties before any teardown.
+inventory "        k8s_identity_theme_dir: /Users/someone/src/brand-theme/"
+run check; o10a=$out
+mkdir -p "$t/keys/prod/identity-theme/brand-theme/login"
+run check; o10b=$out
+echo 'parent=keycloak' > "$t/keys/prod/identity-theme/brand-theme/login/theme.properties"
+run check; o10c=$out r10c=$rc
+th=$(python3 -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1]))["all"]["children"]["k8s_nodes"]["vars"]["k8s_identity_theme_dir"])' "$t/work/rebuild-prod/inventory/hosts.yml" 2>&1)
+if [[ $o10a == *"k8s_identity_theme_dir is $t/keys/prod/identity-theme/brand-theme, which is not on the box"* &&
+      $o10b == *"k8s_identity_theme_dir is $t/keys/prod/identity-theme/brand-theme, which has no login/theme.properties"* &&
+      $r10c -eq 0 && $o10c != *FAIL* && $th == "$t/keys/prod/identity-theme/brand-theme" ]]; then
+  ok "10. the theme folder keeps its name under prod/identity-theme/, and one with no login/theme.properties is refused"
+else bad "10. [$th] $o10a | $o10b | $r10c $o10c"; fi
+# 11. rebuild builds the commit the go names, never main's newest, and only a commit on main.
+inventory; rm -f "$t/gitcalls"; run check; g11a=$(cat "$t/gitcalls" 2>/dev/null)
+rm -f "$t/gitcalls"; run rebuild "$tap" "${sha:0:12}"; r11b=$rc g11b=$(cat "$t/gitcalls" 2>/dev/null)
+NOT_ON_MAIN=1 run rebuild "$tap" "$sha"; r11c=$rc o11c=$out c11c=$calls
+run rebuild "$tap" fedcba9; r11d=$rc o11d=$out c11d=$calls
+if [[ $g11a == "git origin/main" && $r11b -eq 0 && $g11b == "git $sha" &&
+      $r11c -eq 1 && $o11c == *"commit $sha is not on main"* && -z $c11c &&
+      $r11d -eq 1 && $o11d == *"commit fedcba9 is not in the box's checkout of main"* && -z $c11d ]]; then
+  ok "11. rebuild checks out the commit the go names (check, main's newest); a commit not on main, or unknown, runs nothing"
+else bad "11. [$g11a] $r11b [$g11b] | $r11c $o11c [$c11c] | $r11d $o11d [$c11d]"; fi
+# 12. The backup target: the Proxmox host over sftp is refused before anything is destroyed (the box can't let the rebuilt
+# nodes' keys in on the host); with no Azure sign-in there is no certificate to carry, and the rebuild goes on without one.
+inventory "        k8s_backup_sftp: true"
+sed -i '/k8s_backup_azure_identity/d' "$t/keys/prod/inventory-hosts.yml"
+dev_log "$sha" "rebuild: all stages passed"
+run check; r12a=$rc o12a=$out
+run rebuild "$tap" "$sha"; r12b=$rc c12b=$calls
+inventory; sed -i '/k8s_backup_azure_identity/d' "$t/keys/prod/inventory-hosts.yml"
+rm -rf "$t/keys/prod/backup-certs"
+run rebuild "$tap" "$sha"; r12c=$rc o12c=$out c12c=$calls
+if [[ $r12a -eq 1 && $o12a == *"k8s_backup_sftp is true (the Proxmox host as the backup target): the box can't let the rebuilt nodes' new keys in"* &&
+      $r12b -eq 1 && $c12b != *playbook* && $c12b != *one-command* &&
+      $r12c -eq 0 && $o12c == *"no Azure sign-in on the prod nodes (k8s_backup_azure_identity off), so no backup certificate to carry"* &&
+      $c12c != *backup.pem* && $c12c == *one-command* && ! -e $t/keys/prod/backup-certs ]]; then
+  ok "12. the Proxmox host as backup target is refused before anything runs; no Azure sign-in: no certificate carried"
+else bad "12. $r12a $o12a | $r12b [$c12b] | $r12c $o12c"; fi
+
+# 13. The floor: rebuild asks whether PIN_FLOOR is an ancestor of the pinned commit, and refuses below it before anything runs;
+# check (no commit) never asks.
+floor=$(sed -n 's/^PIN_FLOOR=\([0-9a-f]\{40\}\)$/\1/p' hosts/ansible/roles/agent_box/files/rebuild-prod.sh)
+inventory; rm -f "$t/floorcalls"; run check; f13a=$(cat "$t/floorcalls" 2>/dev/null)
+rm -f "$t/floorcalls"; run rebuild "$tap" "$sha"; r13b=$rc f13b=$(cat "$t/floorcalls" 2>/dev/null)
+rm -f "$t/gitcalls"; BELOW_FLOOR=1 run rebuild "$tap" "$sha"; r13c=$rc o13c=$out c13c=$calls g13c=$(cat "$t/gitcalls" 2>/dev/null)
+if [[ -n $floor && -z $f13a && $r13b -eq 0 && $f13b == "floor $floor $sha" &&
+      $r13c -eq 1 && $o13c == *"commit $sha is older than the floor ${floor:0:7}"* && -z $c13c && -z $g13c ]]; then
+  ok "13. a commit below the floor is refused before any checkout or run; at or above it the rebuild goes on; check never asks"
+else bad "13. [$floor] [$f13a] $r13b [$f13b] | $r13c $o13c [$c13c] [$g13c]"; fi
 
 exit "$fail"

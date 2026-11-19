@@ -21,7 +21,9 @@
 # never reads, then removes it, when the rebuilt store is to stay as it is. The rebuild wrapper writes the hold
 # before a run that leaves a fresh store. put, compare and reseed keep SOPS's copy of every secret (D-0058 rule 8,
 # secrets-store-kv.sh): put writes one key to SOPS, then to the store; compare names every key that differs; reseed
-# fills a fresh store from SOPS, then takes a snapshot. All three refuse until the settings' sops_copies is true
+# fills a fresh store from SOPS, then takes a snapshot; put, put-apps and reseed write nothing during a rebuild hold.
+# put-apps writes every value the apps read; the dev rebuild's stage app-secrets runs it, then compare, once the box's
+# rebuild wrapper finds the gate open (sops_copies, box_cidr, the CA file, no hold). All of them refuse until the settings' sops_copies is true
 # (the owner's access-right tap, D-0058 rule 9). One store per run (D-0058 rule 10): every action refuses unless the
 # store's address is the c1 store of its own environment, as that environment's inventory names it. --prod uses the
 # prod keys folder, settings and inventory, and makes no recovery shares (D-0038 rule 5: prod gets none).
@@ -113,11 +115,13 @@ env_store
 # Once the store has its admin address (D-0062), every call goes there instead, on both environments, still by the
 # store's name: through the Gateway OpenBao sees a Cilium address, so the admin login, bound to the box's /32, is
 # refused (docs/runbooks/set-up-the-secrets-store.md, "The box's admin path"). The address is the one the cluster was
-# given: on dev the settings' admin_address, which the dev rebuild passes on; on prod the one
-# k8s_gitops_source_openbao_admin_address in the inventory openbao-prod builds from its own settings.
-if [[ $env == dev ]]; then
-  admin=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("admin_address") or "")' "$settings")
-else
+# given: the one k8s_gitops_source_openbao_admin_address in the inventory the cluster was built from. On dev that is
+# the rebuild wrapper's copy of the dev inventory (its settings' admin_address, or dev's own pick from its pool); none
+# until a rebuild has written it. On prod it is the inventory openbao-prod builds from its own settings.
+admin_inv=$inventory
+[[ $env == prod ]] || admin_inv=$work/rebuild-dev/inventory/hosts.yml
+admin=''
+if [[ $env == prod || -f $admin_inv ]]; then
   admin=$("$libexec/ansible-venv/bin/python3" -I -c '
 import sys, yaml
 found = set()
@@ -130,8 +134,8 @@ def walk(n):
         for i in n: walk(i)
 walk(yaml.safe_load(open(sys.argv[1])))
 if len(found) > 1: sys.exit(1)
-print(found.pop() if found else "")' "$inventory") ||
-    { echo "secrets-store: the prod inventory gives two admin addresses (k8s_gitops_source_openbao_admin_address); refused" >&2; exit 1; }
+print(found.pop() if found else "")' "$admin_inv") ||
+    { echo "secrets-store: the $env inventory gives two admin addresses (k8s_gitops_source_openbao_admin_address); refused" >&2; exit 1; }
 fi
 [[ -z $admin || $admin =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
   { echo "secrets-store: the store's admin address is not one IPv4 address; refused" >&2; exit 1; }
@@ -257,9 +261,16 @@ clear_hold() {
   echo "secrets-store: rebuild hold removed; $moved earlier snapshot(s) set aside in $kept, not restored; removing them is the owner's tap"
 }
 
+# No write during a rebuild hold: the store is then the fresh one, and a key in it makes restore-rebuilt refuse (its
+# empty-store step, secrets-store-restore.sh), so the earlier store's snapshots could no longer come back.
+no_hold() {
+  [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt, or clear-hold first; nothing written" >&2; exit 1; }
+}
+
 # One key into SOPS, then the store (rule 8). The value is this run's stdin, passed straight to the helper.
 put() {
   sops_copies
+  no_hold
   kv put "$kv_path" "$kv_key"
 }
 
@@ -276,6 +287,7 @@ put() {
 # Every file is read and every line checked before the first write. Only names are printed, never a value.
 put_apps() {
   sops_copies
+  no_hold
   local src ident token='' line name n=0 m=0 value
   if [[ $env == dev ]]; then
     src=$keys/rebuild-secret-source.env ident=$work/rebuild-dev/identity.env
@@ -325,7 +337,7 @@ compare() {
 # store's snapshots are then still waiting for restore-rebuilt, or for clear-hold to set them aside.
 reseed() {
   sops_copies
-  [[ ! -e $hold ]] || { echo "secrets-store: a rebuild is in progress ($hold); run restore-rebuilt, or clear-hold first; nothing written" >&2; exit 1; }
+  no_hold
   kv reseed </dev/null
   ( snapshot ) || { echo "secrets-store: reseeded, but the snapshot after it failed; run secrets-store snapshot" >&2; exit 1; }
 }

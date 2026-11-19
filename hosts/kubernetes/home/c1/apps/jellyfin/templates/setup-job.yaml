@@ -65,7 +65,7 @@ spec:
                 {{- if .Values.sso.enabled }}
                 - {name: SSO_ENABLED, value: "true"}
                 - {name: SSO_PROVIDER, value: {{ .Values.sso.provider | quote }}}
-                - {name: SSO_ISSUER, value: "https://{{ .Values.sso.issuerHost }}.{{ .Values.gateway.hostSuffix }}.{{ required "zone: set by the root Application" .Values.zone }}/realms/{{ .Values.sso.realm }}"}
+                - {name: SSO_ISSUER, value: "https://{{ .Values.sso.issuerHost }}.{{ if not .Values.sso.shortNames }}{{ .Values.gateway.hostSuffix }}.{{ end }}{{ required "zone: set by the root Application" .Values.zone }}/realms/{{ .Values.sso.realm }}"}
                 - {name: SSO_CLIENT_ID, value: {{ .Values.sso.clientId | quote }}}
                 - {name: SSO_CA_NAME, value: {{ ternary .Values.sso.labRoot.secretName (printf "%s-lab-root-ca" .Values.name) .Values.sso.labRoot.certificate | quote }}}
                 - {name: SSO_SECRET_NAME, value: {{ .Values.sso.secretName | quote }}}

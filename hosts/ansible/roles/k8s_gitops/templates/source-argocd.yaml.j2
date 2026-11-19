@@ -55,6 +55,10 @@ spec:
           value: "true"
 {% endif %}
 {% endif %}
+{% if k8s_gitops_source_notebook_runner | bool %}
+        - name: notebookRunner
+          value: "true"
+{% endif %}
 {% if k8s_gitops_source_share_target | default('') | length > 0 %}
         - name: shareTarget
           value: "{{ k8s_gitops_source_share_target }}"
@@ -62,6 +66,22 @@ spec:
 {% if k8s_gitops_source_app_secrets_store | default('') | length > 0 %}
         - name: appSecretsStore
           value: "{{ k8s_gitops_source_app_secrets_store }}"
+{% endif %}
+{% if not (k8s_gitops_source_lab_ca_issuer | bool) %}
+        - name: labCaIssuer
+          value: "false"
+{% endif %}
+{% if not (k8s_gitops_source_login_probe | bool) %}
+        - name: loginProbe
+          value: "false"
+{% endif %}
+{% if k8s_gitops_source_panel_check_suspended | bool %}
+        - name: panelCheckSuspended
+          value: "true"
+{% endif %}
+{% if not (k8s_gitops_source_jellyfin_setup | bool) %}
+        - name: jellyfinSetup
+          value: "false"
 {% endif %}
 {% if k8s_gitops_source_local_path_stable_folders | bool %}
         - name: localPathStableFolders

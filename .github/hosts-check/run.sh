@@ -82,14 +82,23 @@ check_ansible() {
   bash "$here/tests/test_box_apply_baseline.sh"
   python3 -I "$here/check-loop-labels.py" hosts/ansible/roles/agent_box/tasks
   bash "$here/tests/test_loop_labels.sh"
+  bash "$here/tests/test_check_realm_otp.sh"
   bash "$here/tests/test_proxmox_sso.sh"
+  bash "$here/tests/test_proxmox_signin_check.sh"
+  bash "$here/tests/test_agent_access_rights.sh"
+  bash "$here/tests/test_argocd_signin_check.sh"
+  bash "$here/tests/test_proxmox_host_workflow.sh"
   bash "$here/tests/test_identity_external_secrets.sh"
+  bash "$here/tests/test_identity_db_move.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
   bash "$here/tests/test_tailnet_stack_args.sh" tailnet-policy
   bash "$here/tests/test_tailnet_policy_log.sh"
   bash "$here/tests/test_tailnet_policy_sections.sh"
   bash "$here/tests/test_proxmox_host_args.sh"
   bash "$here/tests/test_c1_ansible.sh"
+  bash "$here/tests/test_signin_check_wrapper.sh"
+  bash "$here/tests/test_opnsense_cert_check.sh"
+  bash "$here/tests/test_jellyfin_plugin_name.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
   python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml
@@ -107,6 +116,7 @@ check_ansible() {
   bash "$here/tests/test_desktop_configure_vars.sh"
   bash "$here/tests/test_opnsense_app_access.sh"
   bash "$here/tests/test_opnsense_backup_target.sh"
+  bash "$here/tests/test_opnsense_store_admin.sh"
 }
 
 check_manifests() {
@@ -273,6 +283,41 @@ check_manifests() {
     echo "manifests: role k8s_control_plane's L2 policy no longer leaves out Services labelled central-hub/l2-policy" >&2
     return 1
   fi
+  # A cluster without ClusterIssuer lab-ca and with names that are not its own (dev: labCaIssuer, loginProbe
+  # and jellyfinSetup false and panelCheckSuspended true, from k8s_gitops_source_lab_ca_issuer, _login_probe and _jellyfin_setup): the root passes
+  # jellyfin sso.labRoot.certificate and setup.enabled false and makes no login-probe, and jellyfin then makes no Certificate on lab-ca and no setup CronJob or admin
+  # Secret. c1, which leaves all three true, renders none of these changes, and Ansible passes them only when false (cases.txt).
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set labCaIssuer=false --set loginProbe=false --set jellyfinSetup=false --set panelCheckSuspended=true > "$work/rendered/root-c1-dev-no-lab-ca.yaml"
+  helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
+    --set panelCheck.suspend=true > "$work/rendered/app-c1-monitoring-extras-dev-suspended.yaml"
+  helm template jellyfin hosts/kubernetes/home/c1/apps/jellyfin --namespace media --set zone=example.com \
+    --set sso.labRoot.certificate=false --set setup.enabled=false > "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml"
+  if ! grep -q 'name: "sso.labRoot.certificate"' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
+    grep -q 'name: login-probe$' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
+    grep -q 'kind: Certificate' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    ! grep -q 'name: "setup.enabled"' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
+    ! grep -q 'name: "panelCheck.suspend"' "$work/rendered/root-c1-dev-no-lab-ca.yaml" ||
+    grep -q 'panelCheck.suspend' "$work/rendered/root-c1.yaml" ||
+    ! grep -qE '^  suspend: true$' "$work/rendered/app-c1-monitoring-extras-dev-suspended.yaml" ||
+    ! grep -qE '^  suspend: false$' "$work/rendered/app-c1-monitoring-extras.yaml" ||
+    grep -qE 'kind: CronJob|kind: ExternalSecret' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    grep -q 'setup.enabled' "$work/rendered/root-c1.yaml" ||
+    ! grep -q 'kind: CronJob' "$work/rendered/app-c1-jellyfin.yaml" ||
+    grep -q 'sso.labRoot.certificate' "$work/rendered/root-c1.yaml" ||
+    ! grep -q 'name: login-probe$' "$work/rendered/root-c1.yaml" ||
+    ! grep -q 'kind: Certificate' "$work/rendered/app-c1-jellyfin.yaml"; then
+    echo "manifests: with labCaIssuer and loginProbe false, jellyfin should get sso.labRoot.certificate false and no Certificate, and login-probe should not be made; with both true (c1), neither change" >&2
+    return 1
+  fi
+  if ! grep -q 'name: labCaIssuer' "$work/rendered/gitops-source-argocd-dev.yaml" ||
+    ! grep -q 'name: loginProbe' "$work/rendered/gitops-source-argocd-dev.yaml" ||
+    ! grep -q 'name: jellyfinSetup' "$work/rendered/gitops-source-argocd-dev.yaml" ||
+    ! grep -q 'name: panelCheckSuspended' "$work/rendered/gitops-source-argocd-dev.yaml" ||
+    grep -qE 'labCaIssuer|loginProbe|jellyfinSetup|panelCheckSuspended' "$work/rendered/gitops-source-argocd.yaml"; then
+    echo "manifests: k8s_gitops should pass labCaIssuer, loginProbe and jellyfinSetup only when they are false, and panelCheckSuspended only when true" >&2
+    return 1
+  fi
   # The apps' secrets read from OpenBao (appSecretsStore openbao, D-0058 rule 8): the root with it on,
   # and the three charts whose ExternalSecrets it moves, so the c1/<name> keys are schema-checked. The
   # root refuses it without OpenBao in the cluster, and refuses any other value.
@@ -292,6 +337,8 @@ check_manifests() {
     echo "manifests: with store openbao, expected 6 remoteRef keys under c1/, found $keys" >&2
     return 1
   fi
+  # The keys those charts read, the names dev's secret-source file holds and the runbook's list agree.
+  bash "$here/tests/test_app_secrets_contract.sh"
   if helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
     --set appSecretsStore=openbao >/dev/null 2>&1; then
     echo "manifests: the root rendered appSecretsStore openbao without openbaoInCluster" >&2
@@ -329,15 +376,16 @@ check_manifests() {
 
 check_identity() {
   # Realm lab imported into a real Keycloak in a container (identity/test_realm.sh), rendered with
-  # an extra user so the users loop is tested with more than the owner, a Proxmox client (role proxmox_sso), a secrets store client (k8s_identity_openbao_hosts), and with the test sign-in
+  # an extra user so the users loop is tested with more than the owner, a Proxmox client (role proxmox_sso), a secrets store client (k8s_identity_openbao_hosts), an OPNsense client (k8s_identity_opnsense_hosts), and with the test sign-in
   # theme identity/theme/lab mounted the way the role mounts k8s_identity_theme_dir.
   collections
   mkdir -p "$work/identity"
   (cd hosts/ansible && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i localhost, \
     "$here/manifests/render.yml" -e role=k8s_identity -e template=realm.yaml.j2 \
     -e dest="$work/identity/realm.yaml" \
-    -e '{"k8s_identity_owner_email":"owner@example.com","k8s_identity_extra_users":[{"username":"viewer.one","groups":["lab-viewers"]}],"k8s_identity_proxmox_hosts":["pve.example.com"],"k8s_identity_openbao_hosts":["bao.example.com"]}' \
+    -e '{"k8s_identity_owner_email":"owner@example.com","k8s_identity_extra_users":[{"username":"viewer.one","groups":["lab-viewers"]}],"k8s_identity_proxmox_hosts":["pve.example.com"],"k8s_identity_openbao_hosts":["bao.example.com"],"k8s_identity_opnsense_hosts":["fw.example.com"]}' \
     -e k8s_identity_theme_dir="$here/identity/theme/lab" >/dev/null)
+  bash "$here/tests/test_user_json.sh"
   bash "$here/identity/test_realm.sh" "$work/identity/realm.yaml" "$here/identity/theme/lab"
 }
 
@@ -355,21 +403,31 @@ check_backup() {
   bash "$here/tests/test_secrets_store_restore.sh"
   bash "$here/tests/test_secrets_store_snapshots.sh"
   bash "$here/tests/test_secrets_store_kv.sh"
+  bash "$here/tests/test_secrets_store_kv_openbao.sh"
   bash "$here/tests/test_secrets_store_wrapper.sh"
   bash "$here/tests/test_openbao_prod.sh"
   bash "$here/tests/test_rebuild_prod.sh"
   bash "$here/tests/test_openbao_handover.sh"
+  bash "$here/tests/test_openbao_measure.sh"
   bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
   bash "$here/tests/test_opnsense_backup_keyfile.sh"
   bash "$here/tests/test_identity_signin.sh"
+  bash "$here/tests/test_jellyfin_signin_check.sh"
   bash "$here/tests/test_rebuild_dev_stages.sh"
+  bash "$here/tests/test_rebuild_panels.sh"
+  bash "$here/tests/test_rebuild_app_secrets.sh"
   bash "$here/tests/test_rebuild_preflight.sh"
   bash "$here/tests/test_agent_access_desktop.sh"
   bash "$here/tests/test_rebuild_short_log.sh"
+  bash "$here/tests/test_rebuild_l2_report.sh"
   bash "$here/tests/test_rebuild_box_inventory.sh"
   bash "$here/tests/test_rebuild_log_pick.sh"
+  bash "$here/tests/test_rebuild_pin.sh"
+  bash "$here/tests/test_rebuild_auto.sh"
   bash "$here/tests/test_rebuild_diag_vms.sh"
   bash "$here/tests/test_opnsense_test.sh"
+  bash "$here/tests/test_lab_test.sh"
+  bash "$here/tests/test_notebook_runner.sh"
 }
 
 check_proxy() {

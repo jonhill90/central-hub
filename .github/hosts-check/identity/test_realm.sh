@@ -13,9 +13,10 @@ root=$(cd "$here/../../.." && pwd)
 realm_yaml=$1
 theme=${2:-}
 
-# The same Keycloak release the operator runs (k8s_identity_version), pinned by digest: the 26.8.1
-# image published 2026-10-23, the newest build of it at least two weeks old (STD-0003 rule 1).
-image=quay.io/keycloak/keycloak@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+# The same Keycloak release the operator runs (k8s_identity_version), pinned by digest: the 26.8.2 image
+# the tag pointed at on 2026-11-12 13:34 UTC (the tag moved on 11-05, 11-09 and 11-12; quay.io tag history). 26.8.2 holds
+# many security fixes, so STD-0003 rule 2 lets it go in sooner than two weeks (TASK-0252).
+image=quay.io/keycloak/keycloak@sha256:c68e286cacd87b942ac1939a0a1481461109d6acd3a57dc496969a319a76bbf0
 name=central-hub-realm-test-$$
 host=https://sso.example.com
 work=$(mktemp -d)
@@ -51,6 +52,9 @@ kc config credentials --server http://localhost:8080 --realm master --user test-
 
 # The checks, in Python on this side; the container only answers kcadm calls.
 export name
+# The checks run three times in this one Keycloak; Keycloak refuses a TOTP code it already took, so the runs share the last time step used.
+OTP_STEP_FILE=$work/otp-step
+export OTP_STEP_FILE
 python3 -I "$here/check_realm.py" "$work/lab.json"
 
 # The replace path the role takes when the realm changes: the role's own delete script, inside the
@@ -109,6 +113,37 @@ if echo '{"clientId":"other"}' | ensure "$client" /dev/stdin 2>/dev/null; then
 fi
 python3 -I "$here/check_realm.py" "$work/lab.json"
 echo "identity: a client deleted, added and updated through ensure-client.sh; users and other clients untouched; realm checked again"
+
+# The add-a-user path the role takes to put a user in the live realm without the replace (role
+# tasks/users.yml): files/user-json.py fills the user's password and seed from the environment and
+# files/ensure-user.sh creates the user inside the container. Delete the admin first, so the create path runs
+# with its groups, password and TOTP credential, then run it again for the "exists" path, and check that the
+# other users and the clients are untouched and that the new user signs in with the password and a TOTP code.
+ensure_user() { # <username> <json file>
+  docker exec -i "$name" bash -c "$(cat "$roledir/ensure-user.sh")" ensure-user lab "$1" < "$2"
+}
+adm=$(python3 -I -c 'import json, sys; print(next(u["username"] for u in json.load(open(sys.argv[1]))["users"] if any(c["type"] == "otp" for c in u["credentials"])))' "$work/lab.json")
+adm_key=$(printf '%s' "$adm" | tr 'a-z' 'A-Z' | tr -c 'A-Z0-9' '_')
+pw_value=test-PASSWORD_$adm_key
+seed_value=$(python3 -I -c 'import base64, sys; print(base64.b32encode(sys.argv[1].encode()).decode().rstrip("="))' "test-TOTP_$adm_key")
+env "PASSWORD_$adm_key=$pw_value" "TOTP_$adm_key=$seed_value" python3 -I "$roledir/user-json.py" "$realm_yaml" "$adm" > "$work/user.json"
+users_before=$(kc get users -r lab --fields username --format csv --noquotes | grep -v "^$adm$" | sort | tr '\n' ' ')
+clients_before=$(kc get clients -r lab --fields clientId --format csv --noquotes | sort | tr '\n' ' ')
+uid=$(kc get users -r lab -q "username=$adm" -q exact=true --fields id --format csv --noquotes)
+kc delete "users/$uid" -r lab
+out=$(ensure_user "$adm" "$work/user.json")
+[ "$out" = created ] || { echo "FAIL: ensure-user.sh printed '$out' for a missing user, not 'created'" >&2; exit 1; }
+out=$(ensure_user "$adm" "$work/user.json")
+[ "$out" = exists ] || { echo "FAIL: ensure-user.sh printed '$out' for an existing user, not 'exists'" >&2; exit 1; }
+users_after=$(kc get users -r lab --fields username --format csv --noquotes | grep -v "^$adm$" | sort | tr '\n' ' ')
+clients_after=$(kc get clients -r lab --fields clientId --format csv --noquotes | sort | tr '\n' ' ')
+[ "$users_before" = "$users_after" ] || { echo "FAIL: other users changed: '$users_before' became '$users_after'" >&2; exit 1; }
+[ "$clients_before" = "$clients_after" ] || { echo "FAIL: clients changed" >&2; exit 1; }
+if echo '{"username":"other"}' | ensure_user "$adm" /dev/stdin 2>/dev/null; then
+  echo "FAIL: ensure-user.sh took JSON for another user" >&2; exit 1
+fi
+python3 -I "$here/check_realm.py" "$work/lab.json"
+echo "identity: a user deleted and added through ensure-user.sh with its groups, password and TOTP seed; other users and clients untouched; realm checked again"
 
 # The sign-in page uses the theme: Argo CD's client (no PKCE needed) asks for the page, and the page
 # links the theme's stylesheet, which Keycloak serves.

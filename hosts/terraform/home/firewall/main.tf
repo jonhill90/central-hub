@@ -1,6 +1,6 @@
 # VM 100: the OPNsense firewall for the lab VLANs.
 # net0 is the trunk on vmbr1 (all lab VLANs, tagged inside OPNsense) and must stay first.
-# net1 is WAN on vmbr0; it stays link-down on a fresh build until the WAN safety check passes.
+# net1 is WAN on vmbr0 (wan_bridge); it stays link-down on a fresh build until the WAN safety check passes.
 # Needs home/network applied first (the VLANs ride on vmbr1).
 # The console steps inside the VM (password, mgmt VLAN, LAN address, API key) are not done here.
 
@@ -64,7 +64,7 @@ resource "proxmox_virtual_environment_vm" "opnsense" {
   }
 
   network_device {
-    bridge       = "vmbr0"
+    bridge       = var.wan_bridge
     model        = "virtio"
     mac_address  = var.opnsense_wan_mac
     disconnected = !var.opnsense_wan_connected

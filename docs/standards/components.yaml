@@ -111,7 +111,7 @@ components:
     paid-edition: none for features; "all other Proxmox VE features are available at every level", plans add support and the Enterprise Repository
     paid-edition-source: https://www.proxmox.com/en/products/proxmox-virtual-environment/pricing
     verdict: pass
-    sources: [provider:bpg/proxmox]
+    sources: [provider:bpg/proxmox, url:enterprise.proxmox.com/iso, url:download.proxmox.com/debian/pve]
     checked: 2026-11-14
   - name: Debian
     kind: software
@@ -288,14 +288,14 @@ components:
     checked: 2026-11-14
   - name: OpenBao
     kind: software
-    used-for: the lab's secrets store, inside c1 from OpenBao's own Helm chart and image (D-0058); its chart, openbao-helm, is MPL-2.0 too (https://raw.githubusercontent.com/openbao/openbao-helm/main/LICENSE). The store VM's role, which installed the release package, is removed, so the package is no longer a source
+    used-for: the lab's secrets store, inside c1 from OpenBao's own Helm chart and image (D-0058); its chart, openbao-helm, is MPL-2.0 too (https://raw.githubusercontent.com/openbao/openbao-helm/main/LICENSE). The store VM's role, which installed the release package, is removed, so the package's server binary is used only by CI's test of the SOPS copies against a real store (test_secrets_store_kv_openbao.sh), checked by its SHA-256
     licence: MPL-2.0
     licence-source: https://raw.githubusercontent.com/openbao/openbao/main/LICENSE
     paid-edition: none found; the project states it is community-run under open governance with an OSI licence, and sells no edition
     paid-edition-source: https://raw.githubusercontent.com/openbao/openbao/main/README.md
     verdict: pass
-    sources: [url:openbao.github.io/openbao-helm, image:quay.io/openbao/]
-    checked: 2026-11-16
+    sources: [url:openbao.github.io/openbao-helm, image:quay.io/openbao/, url:github.com/openbao/openbao/releases/download/]
+    checked: 2026-11-18
   - name: SOPS
     kind: software
     used-for: encrypting the agent box's daily bundle of its private files to age recipients (proposed D-0038 rule 10)
@@ -376,6 +376,16 @@ components:
     verdict: pass
     sources: [image:docker.io/curlimages/curl]
     checked: 2026-11-14
+  - name: Python
+    kind: software
+    used-for: the notebook runner pod's job environment on c1 (the official python image, on a Debian base)
+    licence: Python Software Foundation License (PSF-2.0), GPL-compatible
+    licence-source: https://docs.python.org/3/license.html
+    paid-edition: none found; the page says all Python releases are Open Source and free to use
+    paid-edition-source: https://docs.python.org/3/license.html
+    verdict: pass
+    sources: [image:docker.io/library/python]
+    checked: 2026-11-18
   - name: restic
     kind: software
     used-for: backups of c1 and of OPNsense's configuration

@@ -8,6 +8,8 @@
 #   4. apply runs the playbook without --check, never with realm replace, and logs the clearance id; a host labelled env dev
 #      refuses before any run.
 #   5. log prints the run's own lines.
+#   7. gateway and gitops run their own playbook with fixed tags and no extra variables or values file; certs and the install tag are not
+#      names; apply needs a clearance id for them too.
 #   6. An inventory that names a theme folder (a controller path) is remapped to <keys>/prod/identity-theme/<its name>; with no
 #      login/theme.properties there the run stops before any playbook, and with it the run goes on.
 # Usage: .github/hosts-check/tests/test_c1_ansible.sh   (needs python3 with PyYAML, flock)
@@ -26,7 +28,7 @@ cat > "$t/bin/git" <<'S'
 #!/bin/bash
 case "$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; : > "${@: -1}/hosts/ansible/playbooks/k8s-identity.yml" ;;
+  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops certs; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
   *rev-parse*) echo abc1234 ;;
 esac
 exit 0
@@ -67,7 +69,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == identity && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'gateway\ngitops\nidentity' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -98,4 +100,21 @@ if [[ $r6a == 1:none:*"no login/theme.properties on the box"* && $r6a == *"$t/ke
    [[ $rc -eq 0 && $seen == *"k8s_identity_theme_dir: $t/keys/prod/identity-theme/example-theme"* && $seen != */Users/* ]]; then
   ok "6. the theme folder is remapped to the box's copy; a missing copy stops the run first"
 else bad "6. [$r6a] $rc [$calls] $out"; fi
+inventory "${prod_inv[@]}"
+run check gateway; g1=$calls
+run check gitops; g2=$calls
+run apply gateway "$clr"; g3=$calls; g3rc=$rc
+run apply gitops "$clr"; g4=$calls; g4o=$out
+if [[ $g1 == *"playbooks/k8s-gateway.yml --tags gateway --check --diff" && $g1 != *" -e "* &&
+      $g2 == *"playbooks/k8s-gitops.yml --tags source,ui,sso --check --diff" && $g2 != *" -e "* &&
+      $g3rc -eq 0 && $g3 == *"playbooks/k8s-gateway.yml --tags gateway" && $g3 != *--check* &&
+      $g4 == *"playbooks/k8s-gitops.yml --tags source,ui,sso" && $g4 != *--check* && $g4o == *"clearance $clr"* ]]; then
+  ok "7a. gateway and gitops: own playbook, fixed tags, no extra variables, apply is its own verb"
+else bad "7a. [$g1] [$g2] [$g3] [$g4]"; fi
+r7=""
+for args in "check certs" "check k8s-certs" "apply certs $clr" "check gitops-install" "apply gateway" "apply gitops badid"; do
+  # shellcheck disable=SC2086
+  run $args; r7+="$rc:${calls:-none} "
+done
+if [[ $r7 == "2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "7b. certs and install are not names; apply needs a clearance id"; else bad "7b. $r7"; fi
 exit "$fail"

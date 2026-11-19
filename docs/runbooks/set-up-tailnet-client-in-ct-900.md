@@ -89,6 +89,8 @@ Run on the Proxmox host as root. Every command goes into the container with `pct
 - The key is refused: it expired, or the tag isn't in `tagOwners`. Make a new key.
 - To undo: `pct exec 900 -- tailscale logout`, then remove the device in the admin console.
 
+The lab test copy runs steps 1 to 3 and step 6's playbook in its own CT 900 first, never steps 4 and 5 ([Build the lab test copy](build-the-lab-test-copy.md) step 9).
+
 ## Afterwards
 
 Set `last-tested`. The Proxmox host firewall's probes check `tailscale status --json` in CT 900 ([Set up the lab network and firewall](set-up-lab-network-and-firewall.md) step 8), so run that step after this one on a fresh build.

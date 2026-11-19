@@ -3,7 +3,7 @@ title: Set up the lab network, the OPNsense firewall and the tailnet connector c
 status: draft
 kind: automated
 trigger: on request; after the Proxmox host is set up on a fresh install
-runner: an agent lane, through the owner's Mac; step 5 is the owner at the OPNsense console
+runner: an agent lane, through the owner's Mac; step 3's `remote-access` apply is the owner's, with his root password; step 5 is the owner at the OPNsense console
 outcome: SDN zone lab and its four VNets exist, VM 100 (OPNsense) routes and filters the lab VLANs with DHCP and lab DNS names, CT 900 exists on vmbr0 and VNet mgmt, and the Proxmox host has its address on mgmt, notifications, backups and its own firewall
 needs: the controller from set-up-lab-controller.md; the Proxmox host from set-up-proxmox-host.md steps 0-6; the iac@pve!apply token file; root SSH to the host; the OPNsense nano image and the Debian 13 container template on the host's storage
 private-values: [proxmox_node_name, proxmox_vmbr1_mac, proxmox_host_mgmt_address, opnsense_lan_mac, opnsense_wan_mac, firewall_vm_name, connector_hostname, connector_eth0_mac, connector_mgmt_address, opnsense_api_key, opnsense_api_secret, opnsense_home_lan_cidr, opnsense_dns_zone, proxmox_firewall_home_lan_cidr, proxmox_backup_disk]
@@ -69,6 +69,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
 
    why: VM 100's net0 is the trunk on vmbr1 and net1 is WAN on vmbr0. WAN stays link-down on a fresh build (`opnsense_wan_connected = false`) so a firewall with default settings is never on the home LAN (`hosts/terraform/home/firewall/main.tf`). CT 900 gets eth0 on vmbr0 and eth1 on VNet mgmt; what runs inside it is not in this run folder.
    ※ the pools `firewall` and `remote-access` come from `iac-access.sh` ([Set up a Proxmox VE host](set-up-proxmox-host.md) step 6b).
+   note: the token cannot make CT 900. Proxmox lets only `root@pam` set a container's `keyctl` feature and its `/dev/net/tun` passthrough, and an API token never counts as `root@pam`, even root's own (pve-container `src/PVE/LXC.pm`, `check_ct_modify_config_perm`; the bpg provider's docs, `docs/index.md`, "Not all Proxmox API operations are supported via API Token"; agent pick 217). So `remote-access` needs password sign-in as `root@pam` (`PROXMOX_VE_USERNAME=root@pam` and `PROXMOX_VE_PASSWORD`, with `PROXMOX_VE_API_TOKEN` unset, for this folder only). On the real host that password is the owner's, and agents never use it, so this one apply is the owner's own step. It waits on his go naming the step and the commit (a secret, [D-0042](../decisions/0042-let-agents-approve-every-reversible-change-in-the-owners-place.md) rule 6), and he signs in himself; no agent lane runs it with his password. In the lab test copy, the wrapper signs in with the copy's own root password, which it made for the copy and which no one else holds. This has never run on an empty host; the lab test copy runs it first ([Build the lab test copy](build-the-lab-test-copy.md)).
    expect: VM 100 and CT 900 are running; a second plan in each folder shows no changes.
 
 4. Give the host its address on VNet mgmt.
@@ -84,12 +85,13 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
 5. At the OPNsense console (VM 100 in the Proxmox web UI), by hand: set the root password, make VLAN 50 on the trunk the LAN interface with the mgmt gateway address (`10.1.50.1/24`), and leave WAN unassigned until the next step works.
    why: the API can't be reached before the mgmt VLAN has an address, so the role leaves the mgmt VLAN and its LAN slot alone (`hosts/README.md` step 4).
    expect: from the host, `ping 10.1.50.1` answers.
-   note: the root password goes only in the owner's private store; this step has no code.
+   note: the root password goes only in the owner's private store; this step has no code that has run on the real firewall. `hosts/ansible/bootstrap/opnsense-first-boot.php` makes this step's settings from a root shell, and the lab test copy runs it over the serial console first ([Build the lab test copy](build-the-lab-test-copy.md) step 6).
 
 6. Make the OPNsense API user `ansible` and its key, with no GUI login.
    On the controller, make a key and a secret and keep both in `~/.config/central-hub/opnsense-api.txt` (mode 0600). Send the firewall only `"<key>|$(openssl passwd -6 <secret>)"`, as `/root/ansible-apikey.line`, together with `hosts/ansible/bootstrap/opnsense-ansible-user.php`, through the QEMU guest agent in pieces under about 700 bytes, then run `qm guest exec 100 -- php /root/ansible-user.php` on the host.
    why: the user gets only the privileges `opnsense.yml` needs, and the secret never leaves the controller; OPNsense gets only its hash (the script's header; agent pick 29 in [hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md)). Larger guest-agent payloads hung OPNsense's agent during the build.
    expect: the script prints no error; `opnsense_api_key` and `opnsense_api_secret` in the inventory are filled from the file.
+   note: the lab test copy runs the same script from a root shell over the serial console instead ([Build the lab test copy](build-the-lab-test-copy.md) step 6).
 
 7. Configure OPNsense: VLANs 10, 20 and 30, their interfaces and gateways, DHCP on 10 and 30, the four rules per lab VLAN, the WAN rules and the Unbound host overrides.
 
@@ -100,6 +102,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
 
    why: this is the firewall's whole lab setup as code ([hosts/ansible/README.md](../../hosts/ansible/README.md#what-it-builds), row `opnsense.yml`). The host overrides include `api.c1.prod` and the `*.apps.c1.prod` wildcard, so the names exist before c1 does.
    expect: a second run reports `changed=0`. WAN is still link-down; the WAN safety check below brings it up.
+   note: the lab test copy runs the same playbook against its own VM 100 first, through an SSH tunnel and without the DNS proof ([Build the lab test copy](build-the-lab-test-copy.md) step 7).
 
    Then the WAN safety check, and WAN up.
    VM 100's WAN (net1) sits on vmbr0, the home LAN. A firewall that answers there as a DHCP server or an IPv6 router hands home devices a wrong gateway, so WAN stays link-down (`opnsense_wan_connected = false`) until this check passes (`hosts/terraform/home/firewall/main.tf`). It checks three things.
@@ -128,6 +131,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
    why: this is the check the build session ran on 2026-10-23 and 2026-10-24, at link-up, after a reboot, after the rules and after a firmware update, each time with 0 server-type packets (the owner's private build log; no values from it are copied here). The OPNsense nano image starts with LAN on the first NIC at 192.168.1.1/24 with its own DHCP server and WAN as a DHCP client (OPNsense manual, "Installation"), which is why net0, the trunk, must stay first.
    If it fails: set `opnsense_wan_connected = false` and apply at once, which takes WAN link-down; then fix the interface assignment at the console before trying again.
    Agent pick: the capture filter and the three moments to check; the build session watched the same packet types by hand.
+   note: the lab test copy runs the same three moments as code, with WAN on a bridge inside the copy (`wan_bridge`, default `vmbr0`) and `lab-test-wan-watch.py` in place of `tcpdump` ([Build the lab test copy](build-the-lab-test-copy.md) step 8).
 
    Then, once the agent box exists, let it (VM 258 on VNet dev) reach the Proxmox API and c1's API, and nothing else in the lab. Only when the box exists.
    why: the dev VLAN's own rules allow only the internet, ping and DNS, so the box's tools can't reach the APIs they run against. The owner said yes on 2026-11-10 at 05:16 UTC to one rule from the box's address only, to those two ports, once a reach test showed them blocked. Lane C measured that at 07:47 UTC: both timed out.
@@ -155,6 +159,15 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
 
    expect: the diff adds two pass rules on the dev interface, `Allow agent box to c1 Gateway HTTPS` at sequence 11 and `Allow desktop VM to c1 Gateway HTTPS` at sequence 12, and changes nothing else. From the box, `curl -sS -o /dev/null -w '%{http_code}' --cacert <lab CA chain> https://grafana.<zone>/` prints a status, not a timeout; any other port on the Gateway's address, and 443 on any other prod address, still times out. Then the desktop's trust check opens the names (`desktop_trust_check_reach`, [set-up-the-desktop.md](set-up-the-desktop.md)). To remove a rule, take its source out of `opnsense_lab_app_access`, or remove the whole entry, and run the same two commands; the role removes each rule whose source is gone.
    To remove one rule, delete its target from the inventory; to remove them all, delete `opnsense_lab_agent_box`. Then run the same two commands. expect: the diff removes only the rules whose targets are gone. The role takes at most six targets, each named from `opnsense_lab_agent_box_target_names`, at sequences 1 to 4, 8 and 9 in target order, and stops with an error otherwise.
+   For the secrets store's admin path in prod's c1 (D-0062, [set-up-the-secrets-store.md](set-up-the-secrets-store.md) prod step 9): the agent box calls OpenBao on its admin address, one address of prod's load-balancer pool, which the dev VLAN's rules block like the rest of RFC 1918. Role `opnsense_lab` has one pass rule for it, `tasks/store_admin.yml`: from the box's address only, to the admin address only, tcp 443 only, at sequence 15 (`opnsense_lab_store_admin_sequence`), which no other rule uses, the app access and backup target rules included, and which sits before dev's own rules (90 and up with today's VLAN file); the role checks both and stops otherwise. It is the outer of three locks: the store's NetworkPolicy and its admin login also take only the box's /32. Applied only on the owner's go naming the rule and the commit (D-0036 rule 8). Fill `opnsense_lab_store_admin` in the inventory (`hosts.example.yml` shows it): VLAN 30, the box's dev address, and the admin address, the same value as `admin_address` in `agent_box_openbao_prod`. Then:
+
+   ```sh
+   cd hosts/ansible
+   ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags store_admin --check --diff
+   ansible-playbook -i inventories/home/ playbooks/opnsense.yml --tags store_admin
+   ```
+
+   expect: the diff adds one pass rule on the dev interface, `Allow agent box to OpenBao admin HTTPS`, at sequence 15, and changes nothing else. Once `openbao-prod gitops` has made Service `openbao-admin`, `secrets-store-prod status` answers on the admin address, not a timeout; 443 on any other prod address the box has no rule for still times out. To remove the rule, take `opnsense_lab_store_admin` out of the inventory and run the same two commands; the role removes it while the input is unset.
 
    The tenant lab VLAN (VLAN 60, `10.1.60.0/24`, a place for one tenant's hosts, kept off the tailnet) is in the VLAN file and STD-0002 but is applied only on the owner's go naming the step and the commit (his typed line, or his tap on a card option the card did not recommend; D-0034 rule 9, D-0036 rule 8, D-0042 rule 6). That go is for the firewall apply, not a pull request approval, and the pull request stays open until then. Nothing here advertises the VLAN to the tailnet or turns on its route, which are tailnet changes that need their own go; and nothing opens a management VLAN rule into it, which is a firewall rule held for the same kind of go.
    why: the tenant's hosts must reach the internet and nothing of ours. The VLAN gets the four standard lab rules, plus one block rule to `100.64.0.0/10` at sequence 195, before its internet rule at 200, because "not RFC 1918" would otherwise let it reach tailnet addresses (agent pick). `tailnet: false` in the VLAN file keeps it out of the connector's routes, the routes `home/tailnet` turns on and the tailnet policy's lab ranges. `mgmt_pass: false` in the firewall's settings keeps the management VLAN's pass rule out; the role stops if a `tailnet: false` VLAN has settings but no `mgmt_pass`. A VLAN with no settings at all is held, not applied (step 2).

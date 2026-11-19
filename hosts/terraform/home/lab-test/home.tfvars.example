@@ -1,0 +1,7 @@
+# The lab-test wrapper writes the real values from the box's private settings. Made-up values
+# shaped by STD-0001.
+proxmox_node_name    = "examplehv01"
+vnet                 = "dev"
+installer_iso_path   = "/var/lib/agent-box/lab-test/proxmox-ve-auto.iso"
+installer_iso_sha256 = "2222222222222222222222222222222222222222222222222222222222222222"
+vm = { name = "ddehvdemo01", vm_id = 256, cores = 2, memory_mb = 7168, disk_gb = 32 }

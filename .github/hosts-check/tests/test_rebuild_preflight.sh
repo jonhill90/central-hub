@@ -8,7 +8,7 @@ src=$(cd "$(dirname "$0")/../../.." && pwd)/hosts/rebuild-k8s.sh
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 fail=0
-sed -n '/^CI_RUNNER_VMID=/p;/^DESKTOP_VMID=/p;/^OPNSENSE_TEST_VMID=/p;/^node_top_sampler() {/,/^}/p;/^DEV_MEMORY_MB_[A-Z_]*=/p;/^preflight_declared_mib() {/,/^}/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_node_detail() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^preflight_stop_desktops() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
+sed -n '/^CI_RUNNER_VMID=/p;/^DESKTOP_VMID=/p;/^OPNSENSE_TEST_VMID=/p;/^LAB_TEST_VMID=/p;/^node_top_sampler() {/,/^}/p;/^DEV_MEMORY_MB_[A-Z_]*=/p;/^preflight_declared_mib() {/,/^}/p;/^preflight_storage() {/,/^}/p;/^runner_capture_diag() {/,/^}/p;/^runner_run_teardown() {/,/^}/p;/^runner_mark() /p;/^px_api() {/,/^}/p;/^preflight_node_detail() {/,/^}/p;/^preflight_read_free() {/,/^}/p;/^preflight_stop_runner() {/,/^}/p;/^preflight_stop_desktops() {/,/^}/p;/^runner_restart() {/,/^}/p;/^preflight_clean() {/,/^}/p;/^preflight_guests() {/,/^}/p;/^preflight_memory() {/,/^}/p;/^run_stage() {/,/^}/p' "$src" > "$t/fn.sh"
 grep -q '^preflight_memory' "$t/fn.sh" && grep -q '^run_stage' "$t/fn.sh" || { echo "FAIL: functions not found"; exit 1; }
 mkdir "$t/bin"
 cat > "$t/bin/curl" <<'F'
@@ -25,6 +25,7 @@ case "$*" in *"-X POST"*status/shutdown*) : > "$FAKE_DIR/stopped"; echo '{"data"
 case "$*" in *cluster/resources*)
   [ -n "$FAKE_GUESTS_ERROR" ] && { echo "curl: (22) The requested URL returned error: 403 token=SECRETTOKEN" >&2; exit 22; }
   [ -n "$FAKE_GUEST_257" ] && { echo '{"data":[{"vmid":257,"type":"qemu","status":"running","maxmem":3221225472,"mem":1073741824,"name":"opnsense-test"}]}'; exit 0; }
+  [ -n "$FAKE_GUEST_256" ] && { echo '{"data":[{"vmid":256,"type":"qemu","status":"running","maxmem":6442450944,"mem":2147483648,"name":"lab-test"}]}'; exit 0; }
   [ -n "$FAKE_OTHER_DESKTOP" ] && { echo '{"data":[{"vmid":401,"type":"qemu","status":"running","maxmem":4294967296,"mem":3221225472,"name":"otherdesk","pool":"desktop"}]}'; exit 0; }
   [ -n "$FAKE_DESKTOP" ] && { echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":400,"type":"qemu","status":"running","maxmem":4294967296,"mem":3221225472,"name":"deskvm"}]}'; exit 0; }
   echo '{"data":[{"vmid":300,"type":"qemu","status":"running","maxmem":2147483648,"mem":1073741824,"name":"ci runner;01"},{"vmid":411,"type":"qemu","status":"running","maxmem":8589934592,"mem":4294967296,"name":"agent-box"}]}'
@@ -48,15 +49,16 @@ printf 'export PROXMOX_VE_ENDPOINT=%s\nexport PROXMOX_VE_API_TOKEN=agent@pve!dev
 GIB=1073741824
 run() { # env total_gib used_gib error
   rm -rf "$t/state" "$t/envdir" "$t/calls" "$t/argv"; mkdir -p "$t/state" "$t/envdir"; : > "$t/calls"; : > "$t/argv"
-  PATH="$t/bin:$PATH" TFVARS="${TFVARS_FILE:-$t/vars.tfvars}" TFSTATE="${STATE:-$t/empty.tfstate}" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_GUESTS_ERROR=${FAKE_GUESTS_ERROR:-} FAKE_GUEST_257=${FAKE_GUEST_257:-} FAKE_AFTER_AVAILABLE=${FAKE_AFTER_AVAILABLE:-} FAKE_NEVER_STOPS=${FAKE_NEVER_STOPS:-} FAKE_START_FAILS=${FAKE_START_FAILS:-} FAKE_STORAGE_ERROR=${FAKE_STORAGE_ERROR:-} stamp=run1 PREFLIGHT_SHORT_NODE="${SHORT_NODE-ephemeral-dev}" FAKE_DIR="$t/state" FAKE_CALLS="$t/calls" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" env_dir="$t/envdir" log="$t/rebuild.log" \
+  PATH="$t/bin:$PATH" TFVARS="${TFVARS_FILE:-$t/vars.tfvars}" TFSTATE="${STATE:-$t/empty.tfstate}" TOFU_ENV="$t/tofu.env" ENV_NAME=$1 FAKE_TOTAL=$(($2 * GIB)) FAKE_USED=$(($3 * GIB)) FAKE_CURL_ERROR=${4:-} FAKE_AVAILABLE=${FAKE_AVAILABLE:-} FAKE_GUESTS_ERROR=${FAKE_GUESTS_ERROR:-} FAKE_GUEST_257=${FAKE_GUEST_257:-} FAKE_GUEST_256=${FAKE_GUEST_256:-} FAKE_AFTER_AVAILABLE=${FAKE_AFTER_AVAILABLE:-} FAKE_NEVER_STOPS=${FAKE_NEVER_STOPS:-} FAKE_START_FAILS=${FAKE_START_FAILS:-} FAKE_STORAGE_ERROR=${FAKE_STORAGE_ERROR:-} stamp=run1 PREFLIGHT_SHORT_NODE="${SHORT_NODE-ephemeral-dev}" FAKE_DIR="$t/state" FAKE_CALLS="$t/calls" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" env_dir="$t/envdir" log="$t/rebuild.log" \
     bash -c '. "$1"; set +e; run_stage preflight; echo "rc=$?"; echo "marker=$([ -f "$env_dir/ci-runner-stopped" ] && echo yes || echo no)"' _ "$t/fn.sh" 2>&1
 }
 check() { if [[ $2 == *"$3"* ]] && { [ -z "${4:-}" ] || [[ $2 != *"$4"* ]]; }; then echo "ok   $1"; else echo "FAIL $1: $2"; fail=1; fi; }
 out=$(run dev 31 22); check "9 GiB free is refused" "$out" "refused" "rc=0"; check "it says the sizes" "$out" "9216 MiB"
-out=$(FAKE_AVAILABLE=$((11263 * 1048576)) SHORT_NODE="" run dev 31 1); check "one MiB under 11264 is refused" "$out" "refused" "rc=0"
-check "the minimum is the dev VMs plus the margin" "$out" "the declared dev VMs need 10240 MiB (control plane 4096, worker 6144); minimum 11264 MiB with the 1024 MiB margin"
-out=$(FAKE_AVAILABLE=$((11264 * 1048576)) run dev 31 1); check "11264 MiB free, the minimum itself, passes" "$out" "rc=0" "refused"
+out=$(FAKE_AVAILABLE=$((11007 * 1048576)) SHORT_NODE="" run dev 31 1); check "one MiB under 11008 is refused" "$out" "refused" "rc=0"
+check "the minimum is the dev VMs plus the margin" "$out" "the declared dev VMs need 9984 MiB (control plane 3584, worker 6400); minimum 11008 MiB with the 1024 MiB margin"
+out=$(FAKE_AVAILABLE=$((11008 * 1048576)) run dev 31 1); check "11008 MiB free, the minimum itself, passes" "$out" "rc=0" "refused"
 out=$(FAKE_AVAILABLE=$((11914 * 1048576)) run dev 31 1); check "11914 MiB free, the 2026-11-18 06:11 UTC reading, passes" "$out" "rc=0" "refused"
+out=$(FAKE_AVAILABLE=$((11237 * 1048576)) run dev 31 1); check "11237 MiB free, the 2026-11-18 19:19 UTC reading that 11264 refused, passes" "$out" "rc=0" "refused"
 out=$(run dev 31 17); check "14 GiB free passes" "$out" "rc=0" "refused"
 out=$(run dev 31 16); check "15 GiB free passes" "$out" "rc=0" "refused"
 if grep -q SECRETTOKEN "$t/argv"; then echo "FAIL: the token is in curl's arguments"; fail=1; else echo "ok   the token is not in curl's arguments"; fi
@@ -72,7 +74,7 @@ out=$(run dev 31 17); check "total-used is the fallback and is named" "$out" "(f
 out=$(STATE="$t/with-vms.tfstate" run dev 31 28); check "a state holding every declared VM skips the check, even with low memory" "$out" "branch skipped, all 2 declared dev VMs" "refused"
 check "a skipped run says rc=0" "$out" "rc=0"
 out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 28); check "a partial state (2 of 3) is checked and refused on low memory" "$out" "holds 2 of 3 declared" "rc=0"
-check "three declared nodes need three nodes' memory" "$out" "need 16384 MiB (control plane 4096, worker 6144); minimum 17408 MiB"
+check "three declared nodes need three nodes' memory" "$out" "need 16384 MiB (control plane 3584, worker 6400); minimum 17408 MiB"
 out=$(STATE="$t/with-vms.tfstate" TFVARS_FILE="$t/three.tfvars" run dev 31 11); check "a partial state passes with enough memory" "$out" "branch checked" "refused"
 out=$(TFVARS_FILE="$t/norole.tfvars" run dev 31 1); check "a declared node with no role is refused, whatever the memory" "$out" "has no role control-plane or worker" "rc=0"
 out=$(STATE="$t/missing.tfstate" run dev 31 28); check "no state file means a fresh build and is checked" "$out" "branch checked" ""
@@ -88,7 +90,9 @@ check "the memory refusal still stands" "$out" "refused"
 check "the guest read error does not print the token" "$out" "guest list could not be read" "SECRETTOKEN"
 out=$(run dev 31 17); check "a pass lists guests too and passes" "$out" "guest vmid=300" "refused"
 out=$(FAKE_GUEST_257=yes run dev 31 1); check "VM 257, the OPNsense test VM, refuses a dev build whatever the memory" "$out" "refused, VM 257 (the OPNsense test VM) exists" "rc=0"
+out=$(FAKE_GUEST_256=yes run dev 31 1); check "VM 256, the lab test copy, refuses a dev build whatever the memory" "$out" "refused, VM 256 (the lab test copy) exists" "rc=0"
 out=$(FAKE_GUESTS_ERROR=yes run dev 31 17); check "an unreadable guest list says VM 257 was not checked" "$out" "could not be checked" ""
+check "an unreadable guest list says VM 256 was not checked" "$out" "VM 256 (the lab test copy) could not be checked" ""
 check "the token is never in the guest request's arguments" "$(cat "$t/argv")" "cluster/resources" "SECRETTOKEN"
 grep -q 'stages="preflight \$stages"' "$src" && echo "ok   a dev run gets the preflight" || { echo "FAIL: the preflight is not added to a dev run"; fail=1; }
 # The node sampler: one line per node with CPU and memory, from kubectl top nodes, and only on dev's sign-in stage.
@@ -96,6 +100,14 @@ out=$(log="$t/top.log" bash -c '. "$1"; kc() { printf "%s\n" "dalcpkube01 120m 6
 check "the sampler logs each node's CPU and memory" "$out" "identity-keycloak: node top " ""
 check "the worker's line has its memory and percent" "$out" "dalwkkube01 cpu 45% memory 6900Mi (96%)" ""
 check "a short line is dropped" "$out" "dalcpkube01" "junk"
+check "a sample with node rows logs no \"no reading\" line" "$out" "dalwkkube01" "no reading"
+# A sample with no node row logs one line: how long the call took and the first line of its error, or that it had none.
+out=$(log="$t/top3.log" bash -c '. "$1"; kc() { echo "error: Metrics API not available" >&2; echo "second line" >&2; return 1; }; sleep() { exit 0; }; node_top_sampler identity-keycloak "$$"' _ "$t/fn.sh"; cat "$t/top3.log")
+check "a failed sample logs one no-reading line with its error's first line" "$out" "identity-keycloak: node top 20" "second line"
+check "the no-reading line says how long the call took and why" "$out" "s: error: Metrics API not available" ""
+[ "$(printf '%s\n' "$out" | grep -c 'no reading after [0-9]*s: ')" = 1 ] && echo "ok   one no-reading line per empty sample" || { echo "FAIL: not one no-reading line: [$out]"; fail=1; }
+out=$(log="$t/top4.log" bash -c '. "$1"; kc() { echo "junk"; }; sleep() { exit 0; }; node_top_sampler identity-keycloak "$$"' _ "$t/fn.sh"; cat "$t/top4.log")
+check "a sample with no node row and no error says so" "$out" "no reading after 0s: no node row and no error" "junk"
 # A sampler whose run is gone stops by itself: the PID it watches is a process that has already exited.
 sh -c 'exit 0' & gone=$!; wait "$gone" || true
 out=$(log="$t/top2.log" timeout 10 bash -c '. "$1"; kc() { echo "n1 1m 1% 1Mi 1%"; }; sleep() { :; }; node_top_sampler gone "$2"; echo "sampler-ended"' _ "$t/fn.sh" "$gone" 2>&1 || true)
@@ -167,18 +179,22 @@ out=$(SHORT_NODE=keep-dev FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); che
 check "keep-dev says it stopped" "$out" "runner stop: VM 300 is stopped" ""
 out=$(SHORT_NODE=ephemeral-dev FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); check "ephemeral-dev stops VM 300 and the run passes" "$out" "short-node setting is ephemeral-dev" "refused"
 out=$(SHORT_NODE="" run dev 31 17); check "enough memory needs no setting" "$out" "rc=0" "refused"
-# The end-of-run teardown, only for ephemeral-dev on dev with this run's marker; a failed run reads the cluster first.
-td() { # marker content (empty: no marker), teardown rc, env, short-node value, "failed" or empty
+# The end-of-run teardown, for ephemeral-dev on dev: every full run, and a run with --only only with this run's marker;
+# a failed run reads the cluster first.
+td() { # marker content (empty: no marker), teardown rc, env, short-node value, "failed" or empty, --only value
   rm -rf "$t/envdir" "$t/tdcalls" "$t/rebuild.log"; mkdir -p "$t/envdir"; : > "$t/tdcalls"; : > "$t/rebuild.log"; [ -z "$1" ] || printf '%s\n' "$1" > "$t/envdir/ci-runner-stopped"
-  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 TDRC=${2:-0} ENV_NAME=${3:-dev} PREFLIGHT_SHORT_NODE=${4-ephemeral-dev} bash -c '. "$1"; kc() { echo "kc $*" >> "'"$t"'/tdcalls"; echo "fake-app Synced Healthy"; }; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; if runner_run_teardown "$2"; then echo "rc=0"; else echo "rc=$?"; fi' _ "$t/fn.sh" "${5:-}" 2>&1; }
+  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 only="${6:-}" TDRC=${2:-0} ENV_NAME=${3:-dev} PREFLIGHT_SHORT_NODE=${4-ephemeral-dev} bash -c '. "$1"; kc() { echo "kc $*" >> "'"$t"'/tdcalls"; echo "fake-app Synced Healthy"; }; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; if runner_run_teardown "$2"; then echo "rc=0"; else echo "rc=$?"; fi' _ "$t/fn.sh" "${5:-}" 2>&1; }
 out=$(td run1); check "this run's marker tears dev down" "$out" "this run stopped VM 300 and the short-node setting is ephemeral-dev, so dev is torn down now" "rc=1"
 check "the teardown stage ran" "$(cat "$t/tdcalls")" "teardown" ""
 check "and says rc=0" "$out" "teardown end rc=0" ""
 check "a pass reads no diag" "$(cat "$t/tdcalls")" "teardown" "kc "
-out=$(td run0); check "a marker from an earlier run is not this run's" "$out" "rc=0" "torn down"
-check "no teardown stage ran for it" "x$(cat "$t/tdcalls")" "x" "teardown"
-out=$(td ""); check "no marker means no teardown" "$out" "rc=0" "torn down"
-check "no teardown stage ran without a marker" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td run0); check "a full run with a marker from an earlier run still tears dev down: dev lasts one run" "$out" "ephemeral-dev, so dev lasts one run and is torn down now" "this run stopped"
+check "the teardown stage ran for it" "$(cat "$t/tdcalls")" "teardown" ""
+out=$(td ""); check "a full run that stopped nothing tears dev down too" "$out" "dev lasts one run and is torn down now" "rc=1"
+check "the teardown stage ran without a marker" "$(cat "$t/tdcalls")" "teardown" ""
+out=$(td "" 0 dev ephemeral-dev "" identity-keycloak); check "a run with --only and no marker of its own leaves dev up" "$out" "rc=0" "torn down"
+check "no teardown stage ran for the --only run" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td run0 0 dev ephemeral-dev "" identity-keycloak); check "a run with --only and an earlier run's marker leaves dev up" "$out" "rc=0" "torn down"
 out=$(td run1 1); check "a failed teardown is returned" "$out" "rc=1" "rc=0"
 out=$(td run1 0 prod); check "a prod env never tears down" "$out" "rc=0" "torn down"
 check "no teardown stage ran on prod" "x$(cat "$t/tdcalls")" "x" "teardown"
@@ -191,4 +207,44 @@ check "the diag lines are in the log with their prefix" "$(cat "$t/rebuild.log")
 check "the diag is read before the teardown" "$(tr '\n' ' ' < "$t/tdcalls")" "kc -n argocd get applications" ""
 if [ "$(grep -n 'kc ' "$t/tdcalls" | head -1 | cut -d: -f1)" -lt "$(grep -n '^teardown$' "$t/tdcalls" | head -1 | cut -d: -f1)" ]; then echo "ok   the first diag call comes before the teardown stage"; else echo "FAIL: the diag did not come first"; fail=1; fi
 grep -q 'runner_run_teardown || { echo' "$src" && grep -q 'runner_run_teardown failed || true' "$src" && echo "ok   the run tears dev down at its end, on a pass and on a failure" || { echo "FAIL: the end-of-run teardown is not wired both ways"; fail=1; }
+# --fit (PREFLIGHT_DRY): the same reads and refusals, but nothing is stopped and no POST is sent; a guest a run would
+# stop counts as its maxmem freed.
+posts() { grep -c -- '-X POST' "$t/argv" || true; }
+out=$(PREFLIGHT_DRY=true run dev 31 22); check "fit: 9216 free plus VM 300's 2048 maxmem fits" "$out" "fit check: VM 300 is running; a run would stop it; its maxmem 2048 MiB counted as freed, estimate 11264 MiB" "refused"
+check "fit: it passes" "$out" "rc=0"; check "fit: no marker" "$out" "marker=no"
+check "fit: nothing stopped (no POST)" "posts=$(posts)" "posts=0"
+out=$(PREFLIGHT_DRY=true run dev 31 28); check "fit: 3072 free plus 2048 is refused" "$out" "refused, estimate 5120 MiB is below 11008 MiB" "rc=0"
+check "fit: refused, still nothing stopped" "posts=$(posts)" "posts=0"
+out=$(PREFLIGHT_DRY=true FAKE_DESKTOP=yes run dev 31 24); check "fit: the desktop's 4096 maxmem makes 7168 fit" "$out" "fit check: VM 400 (the desktop) is running; a run would stop it; its maxmem 4096 MiB counted as freed, estimate 11264 MiB" "refused"
+check "fit: the desktop alone was enough, VM 300 is not counted" "$out" "rc=0" "fit check: VM 300"
+check "fit: the desktop is not stopped" "posts=$(posts)" "posts=0"
+out=$(PREFLIGHT_DRY=true SHORT_NODE="" run dev 31 22); check "fit: with no short-node setting it refuses as a run would" "$out" "the short-node setting is not set" "rc=0"
+out=$(PREFLIGHT_DRY=true FAKE_GUEST_256=yes run dev 31 1); check "fit: VM 256 still refuses" "$out" "VM 256 (the lab test copy) exists" "rc=0"
+out=$(PREFLIGHT_DRY=true run dev 31 17); check "fit: enough memory fits with no estimate" "$out" "rc=0" "fit check"
+
+# rebuild-k8s.sh --fit end to end: exit 0 and "fit: yes", or 3 and "fit: no"; no logs folder; dev only.
+fitrun() { # env used_gib
+  rm -rf "$t/fitenv" "$t/state" "$t/calls" "$t/argv"; mkdir -p "$t/fitenv" "$t/state"; chmod 700 "$t/fitenv"; : > "$t/calls"; : > "$t/argv"
+  printf 'proxmox_node_name = "node-a"\nnode_vnet = "dev"\nnodes = {\n a = { vm_id = 250, role = "control-plane" }\n b = { vm_id = 251, role = "worker" }\n}\n' > "$t/fit.tfvars"
+  printf 'ENV_NAME=%s\nVM_ID_MIN=250\nVM_ID_MAX=257\nTFVARS=%s\nTFSTATE=%s\nTOFU_ENV=%s\nINVENTORY=%s\nPREFLIGHT_SHORT_NODE=ephemeral-dev\n' \
+    "$1" "$t/fit.tfvars" "$t/empty.tfstate" "$t/tofu.env" "$t/none.yml" > "$t/fitenv/rebuild.env"
+  PATH="$t/bin:$PATH" FAKE_TOTAL=$((31 * GIB)) FAKE_USED=$(($2 * GIB)) FAKE_DIR="$t/state" FAKE_CALLS="$t/calls" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" \
+    bash "$src" "$t/fitenv" --fit 2>&1; echo "rc=$?"
+}
+out=$(fitrun dev 22); check "--fit: fits, exit 0" "$out" "fit: yes
+rc=0" ""
+check "--fit: no logs folder, so no run is logged" "$([ -e "$t/fitenv/logs" ] && echo logs || echo none) posts=$(posts)" "none posts=0"
+out=$(fitrun dev 28); check "--fit: does not fit, exit 3" "$out" "fit: no
+rc=3" ""
+out=$(fitrun prod 22); check "--fit: dev only" "$out" "--fit is for dev only" "fit: yes"
+
+# PREFLIGHT_KEEP_DESKTOP (the box's timer run): the desktop is never stopped, in a run or a fit check; VM 300 still may be.
+out=$(PREFLIGHT_KEEP_DESKTOP=true FAKE_DESKTOP=yes FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 24)
+check "keep-desktop: the desktop is left alone" "$out" "VM 400 (the desktop) is running and is left alone" "desktop stop"
+check "keep-desktop: VM 300 is still stopped and the run passes" "$out" "rc=0" "refused"
+if grep -q 'qemu/400/status/shutdown' "$t/argv"; then echo "FAIL keep-desktop: VM 400 got a shutdown"; fail=1; else echo "ok   keep-desktop: no shutdown sent to VM 400"; fi
+out=$(PREFLIGHT_KEEP_DESKTOP=true PREFLIGHT_DRY=true FAKE_DESKTOP=yes run dev 31 24)
+check "keep-desktop fit: 7168 plus VM 300's 2048 is refused, the desktop not counted" "$out" "refused, estimate 9216 MiB is below 11008 MiB" "maxmem 4096"
+check "keep-desktop fit: nothing stopped" "posts=$(posts)" "posts=0"
+
 exit $fail

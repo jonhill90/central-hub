@@ -1,0 +1,5 @@
+apiVersion: v2
+name: notebook-runner
+description: The agent notebook's self-hosted GitHub Actions runner as one pod on c1, in place of its own VM, so a dev rebuild no longer has to stop it
+type: application
+version: 0.1.0

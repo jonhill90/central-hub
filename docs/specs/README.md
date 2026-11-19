@@ -20,6 +20,10 @@ One file per change, for work that spans several sessions or crosses systems (D-
 
 After `accepted` the body is not edited (D-0007 rule 5). Only the status, the evidence and the decision log grow. A merged spec is history, not a description of how things are now.
 
+## The PR names its spec
+
+The owner said yes to this rule on 2026-11-01 at 22:18 UTC; D-0007 rule 2 only says when a spec is needed, and that smaller changes need only the PR description. A pull request that changes a file under `hosts/` says in its description either `Spec: docs/specs/<file>.md`, naming a spec that exists in the checkout, or `No spec: <reason>` with a reason of at least 10 characters, each on a line of its own (the PR template has the `Spec:` line). The `spec-line` workflow (`.github/workflows/spec-line.yml`) fails the PR without one. Its checker is `.github/spec-check/check_spec_line.py`, taken from `main` so a PR can't edit the check that judges it; its tests are `.github/spec-check/tests/test_spec_check.sh`.
+
 ## Steps
 
 1. Branch per D-0002. Copy the template below to `docs/specs/YYYY-MM-<slug>.md`.
@@ -77,3 +81,4 @@ The agent that writes the code does not edit the acceptance criteria in the same
 | [Let c1's backups sign in to Azure with c1's own service-account tokens, so nothing has to renew a token](2026-11-c1-backups-without-a-renewed-token.md) | proposed | 2026-11-09 |
 | [Pass the Activation gate, so a cluster may read central-hub](2026-10-activation-gate.md) | proposed | 2026-10-28 |
 | [Rebuild c1 on its permanent choices and restore its apps from backup](2026-11-c1-rebuild.md) | accepted | 2026-11-11 |
+| [Rebuild the lab's host, network and firewall layer on a test copy in dev before prod](2026-11-lab-test-copy.md) | proposed | 2026-11-18 |

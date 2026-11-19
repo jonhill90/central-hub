@@ -46,6 +46,32 @@ openbaoStoreHost: ""
 # out Services labelled central-hub/l2-policy, or that policy announces it from every node too.
 openbaoAdminAddress: ""
 
+# Whether the cluster has ClusterIssuer lab-ca, the lab CA that signs Keycloak's certificate (role k8s_certs,
+# lab_ca.yml). true, as on c1: jellyfin gets the CA's public root from a Certificate on lab-ca
+# (apps/jellyfin, templates/lab-ca.yaml). Ansible sets it to false only for a cluster without it
+# (k8s_gitops_source_lab_ca_issuer): dev, which runs no `certs` stage and whose own CA, dev-ca, is made only
+# after its `checks` stage, so that Certificate would wait for ever and hold the `apps` stage.
+labCaIssuer: true
+# Whether the cluster runs the sign-in checks (app login-probe). true, as on c1. Ansible sets it to false only
+# for a cluster whose names are not its own (k8s_gitops_source_login_probe): dev, whose lab names resolve to
+# prod's Gateway, so its probe would call prod's names from dev (apps/login-probe/values.yaml, hostSuffix).
+loginProbe: true
+# Whether Jellyfin's setup CronJob (and the admin Secret it signs in with) is made. true, as on c1. Ansible sets it
+# to false only for a cluster that restores prod's volumes before the apps start (k8s_gitops_source_jellyfin_setup):
+# dev. The restored Jellyfin config already holds prod's admin user and password, which the setup Job's own
+# Secret, made fresh in that cluster, can't match, so every run signed in with a 401 and failed `checks`.
+jellyfinSetup: true
+# Whether monitoring-extras' panel-check CronJob is suspended. false, as on c1. Ansible sets it to true only for dev
+# (k8s_gitops_source_panel_check_suspended): there a tick inside the run failed the Job and `checks`, because seven panels
+# printed no data. Keycloak's has none before the `identity-keycloak` stage (after `apps`); the five OpenBao ones and
+# Jellyfin's request rate had none for a cause not measured.
+panelCheckSuspended: false
+
+# The agent notebook's CI runner as a pod (app notebook-runner). Ansible sets it to true on prod only
+# (k8s_gitops_source_notebook_runner, from the prod wrappers), so a dev cluster never registers a second
+# runner under the same name. false renders nothing.
+notebookRunner: false
+
 # The shared node the share pod forwards to, <address>:<port>. Private; set by Ansible
 # (k8s_gitops_source_share_target). Empty, as now: the share-pod app renders nothing.
 shareTarget: ""
@@ -112,6 +138,8 @@ c1Project:
 #                private, so a URL that holds it can't sit in a values file)
 #   switchParameters  value path -> name of a true/false root value; the parameter "true" is passed
 #                only when that root value is true, so a cluster that leaves it false renders as before
+#   switchOffParameters  value path -> name of a true/false root value; the parameter "false" is passed
+#                only when that root value is false, so a cluster that leaves it true renders as before
 #   valueFiles   the values files in appsPath/<name>/, in order (default: values.yaml)
 #   syncOptions  Argo CD sync options, for example ServerSideApply=true for charts with large CRDs
 #   ignoreDifferences  fields Argo CD leaves alone, for example a password the chart makes at random
@@ -153,6 +181,13 @@ apps:
     needsZone: true
     zoneParameters:
       gateway.https: "{gatewayHttps}"
+    # No ClusterIssuer lab-ca (dev): read the lab root from its optional Secret instead, which is not there,
+    # so Jellyfin's SSO setup skips (apps/jellyfin, files/setup.sh).
+    # No setup CronJob on a cluster that restores prod's Jellyfin config (dev, jellyfinSetup false): the config
+    # already has prod's admin password, which the fresh admin Secret there can't match.
+    switchOffParameters:
+      sso.labRoot.certificate: labCaIssuer
+      setup.enabled: jellyfinSetup
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
   # Logs (spec step 3): two releases in namespace logging, as k8s_observability installed them.
@@ -248,6 +283,7 @@ apps:
   login-probe:
     namespace: login-probe
     local: true
+    enabledBy: loginProbe
     needsZone: true
     autoSync: true
     prune: false
@@ -260,6 +296,15 @@ apps:
     rootParameters:
       target: shareTarget
       authKey.store: appSecretsStore
+    autoSync: true
+    prune: false
+  # The agent notebook's CI runner (label `notebook`), one locked-down pod in place of VM 300, which stays
+  # as the fallback until the pod has run the notebook's checks green on three PRs
+  # (docs/runbooks/run-the-notebook-runner-on-c1.md). Prod only.
+  notebook-runner:
+    namespace: notebook-runner
+    local: true
+    enabledBy: notebookRunner
     autoSync: true
     prune: false
   # Certificates (spec step 6): cert-manager itself. The issuers and the Gateway's certificate stay
@@ -303,6 +348,7 @@ apps:
     # The OpenBao alerts only where the store is in the cluster (D-0058).
     switchParameters:
       openbao.inCluster: openbaoInCluster
+      panelCheck.suspend: panelCheckSuspended
     rootParameters:
       ntfy.store: appSecretsStore
       heartbeat.store: appSecretsStore
