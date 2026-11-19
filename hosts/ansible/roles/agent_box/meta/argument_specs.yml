@@ -218,8 +218,8 @@ argument_specs:
         type: dict
         default: {repo: agent-notebook, number: 729}
         description: >-
-          The one pull request the checkpoint-note wrapper comments on, written to <work_dir>/checkpoint-note.json
-          (0644, root's, so the keys user can't change it): repo, one the App is installed on, and number. The wrapper
+          The one pull request the checkpoint-note wrapper comments on, written to <work_dir>/checkpoint-note.json:
+          repo, one the App is installed on, and number. No other wrapper names the file. The wrapper
           takes no pull request as an argument. Empty skips the file, and the wrapper refuses.
       agent_box_opnsense_test:
         type: dict
