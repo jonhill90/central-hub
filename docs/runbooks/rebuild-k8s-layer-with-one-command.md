@@ -208,6 +208,15 @@ While `identity-keycloak` runs on dev, the run logs each node's CPU and memory e
 
 The box's own `dev-vms.sh plan` reads the box's tfvars without these sizes, so on dev VMs a rebuild made it shows a memory change for the worker; don't apply it there.
 
+### What a dev run records while `identity-keycloak` runs
+
+Added 2026-11-19 after run `20261119T055343Z` and the 06:45 UTC auto run at `409ebee` both lost the worker: in the second, `kubectl top` read the worker at 4343Mi (71% of 6400) at 07:19:32 UTC, then `<unknown>`, so working-set memory alone did not explain the loss. While that stage runs, `hosts/rebuild-k8s.sh` now adds two lines per minute to the short log, next to the `node top` lines, each read bounded by a timeout (`PROBE_TIMEOUT_S`, 45 s) so a dead node cannot hang the run:
+
+- `node psi <time> <node> ... some avg10=... Mem: ...`: on every node, `/proc/pressure/memory`, `cpu` and `io` and the `Mem:` row of `free -m`, over ssh. A node that stops answering leaves a `no reading` line.
+- `vm <time> guest vmid=... maxmem=... mem=...`: Proxmox's own count of this run's VMs, from `/cluster/resources`. It shows what the host counts used when the guest stops answering (5729 of 6144 MiB in the 11-18 run).
+
+A failed run that is about to be torn down (`ephemeral-dev`) also reads, in `runner_capture_diag`, each node's kernel warnings (`journalctl -k -p warning`, 60 lines) and its kubelet and containerd journal (200 lines) of the last 30 minutes, when ssh answers (`JOURNAL_TIMEOUT_S`, 90 s), into `rebuild log` as `diag:` lines, with secrets scrubbed by `hosts/diag-apps.py`. Read them first: an `Out of memory: Killed process` line says the kernel ran out; a PSI `some avg10` near 100 on io or cpu says the node was starved without running out of memory. The offline check is `.github/hosts-check/tests/test_node_probes.sh`. Not yet seen on a real run.
+
 ### Kubelet reservations on dev nodes
 
 Added 2026-11-19 after the dev worker was lost twice under Keycloak: run `20261118T131441Z` (worker read 4007 MiB, 68%, at 13:41 UTC, then `<unknown>`) and run `20261119T055343Z` at central-hub `640ce91d` (`identity-keycloak end rc=2` after 1479 s; the worker read 4177 MiB, 68%, at 06:19:49 UTC, then the metrics API went down and pods went Terminating or Pending). Dev VMs have `floating = 0` (`hosts/terraform/home/k8s/main.tf`), so host ballooning is not the cause, and before this change nothing under `hosts/` set a kubelet reservation or eviction threshold (`git grep systemReserved hosts` found none), so the kubelet let pods and page cache take the whole 6400 MiB VM with no swap.
