@@ -11,11 +11,11 @@ k8s_backup_units: >-
         if k8s_backup_is_control_plane else [])
      + ([{'src': 'c1-backup-azure-cert.service.j2', 'dest': 'c1-backup-azure-cert.service'},
          {'src': 'c1-backup-azure-cert.timer.j2', 'dest': 'c1-backup-azure-cert.timer'}]
-        if k8s_backup_azure_identity else []) }}
+        if (k8s_backup_azure_identity | bool) else []) }}
 k8s_backup_timers: >-
   {{ ['c1-backup-volumes.timer', 'c1-restore-test.timer']
      + (['c1-backup-etcd.timer'] if k8s_backup_is_control_plane else [])
-     + (['c1-backup-azure-cert.timer'] if k8s_backup_azure_identity else []) }}
+     + (['c1-backup-azure-cert.timer'] if (k8s_backup_azure_identity | bool) else []) }}
 k8s_backup_backup_services: >-
   {{ ['c1-backup-volumes.service']
      + (['c1-backup-etcd.service'] if k8s_backup_is_control_plane else []) }}
@@ -31,4 +31,4 @@ k8s_backup_azure_script_env:
   BACKUP_CERT_RENEW_DAYS: "{{ k8s_backup_azure_cert_renew_days }}"
 # The Proxmox target's repository line (agent pick 262), after the controller's env file so it wins. No newline
 # here: the env file task adds it (a '\n' in a Jinja literal stays two characters under Ansible).
-k8s_backup_sftp_env_line: "{{ ('RESTIC_REPOSITORY=sftp:' ~ k8s_backup_sftp_alias ~ ':/' ~ k8s_backup_sftp_repo) if k8s_backup_sftp else '' }}"
+k8s_backup_sftp_env_line: "{{ ('RESTIC_REPOSITORY=sftp:' ~ k8s_backup_sftp_alias ~ ':/' ~ k8s_backup_sftp_repo) if (k8s_backup_sftp | bool) else '' }}"

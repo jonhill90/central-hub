@@ -8,7 +8,7 @@
 # A reader must never write to the repository, so it never runs the backup timers.
 - name: install | Reader mode and backups are not both on
   ansible.builtin.assert:
-    that: not (k8s_backup_enabled and k8s_backup_reader)
+    that: not ((k8s_backup_enabled | bool) and (k8s_backup_reader | bool))
     fail_msg: >-
       k8s_backup_enabled and k8s_backup_reader are both true. A reader (dev) restores only and must
       never back up into prod's repository. Nothing was changed.
@@ -17,7 +17,7 @@
 
 - name: install | A fixed reader certificate is for a reader only
   ansible.builtin.assert:
-    that: k8s_backup_reader or (k8s_backup_azure_fixed_cert_file | length == 0)
+    that: (k8s_backup_reader | bool) or (k8s_backup_azure_fixed_cert_file | length == 0)
     fail_msg: >-
       k8s_backup_azure_fixed_cert_file is set but k8s_backup_reader is false. The fixed certificate
       is for a read-only dev restore; a cluster that backs up makes its own node certificates.
@@ -33,7 +33,7 @@
       k8s_backup_enabled is true but k8s_backup_env_file is empty. Make the env file on the
       controller first (docs/runbooks/back-up-c1-off-box.md, step 1).
     quiet: true
-  when: k8s_backup_enabled or k8s_backup_reader
+  when: (k8s_backup_enabled | bool) or (k8s_backup_reader | bool)
   tags: [install, timers, drill, restore]
 
 - name: install | The env file on the controller
@@ -43,7 +43,7 @@
   delegate_to: localhost
   become: false
   run_once: true
-  when: k8s_backup_enabled or k8s_backup_reader
+  when: (k8s_backup_enabled | bool) or (k8s_backup_reader | bool)
   tags: [install, timers, drill, restore]
 
 # The file holds the repository password, so only its owner may read it.
@@ -57,7 +57,7 @@
       {{ k8s_backup_env_file }} must exist on the controller, not be empty, and be mode 0600 or
       0400. Nothing was changed.
     quiet: true
-  when: k8s_backup_enabled or k8s_backup_reader
+  when: (k8s_backup_enabled | bool) or (k8s_backup_reader | bool)
   tags: [install, timers, drill, restore]
 
 - name: install | bzip2 for the restic release file, openssl for the Azure certificate, ssh for the Proxmox target
@@ -185,7 +185,7 @@
       nodes sign in with their own certificate. Nothing was changed.
     quiet: true
   no_log: true
-  when: (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_azure_identity
+  when: ((k8s_backup_enabled | bool) or (k8s_backup_reader | bool)) and (k8s_backup_azure_identity | bool)
   tags: [timers]
 
 - name: timers | Azure sign-in for the nodes
@@ -194,7 +194,7 @@
     apply:
       tags: [timers]
   when: >-
-    (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_azure_identity and
+    ((k8s_backup_enabled | bool) or (k8s_backup_reader | bool)) and (k8s_backup_azure_identity | bool) and
     (k8s_backup_azure_fixed_cert_file | length == 0) and (k8s_backup_azure_seed_dir | length == 0)
   tags: [timers]
 
@@ -205,7 +205,7 @@
     file: azure_seeded_cert.yml
     apply:
       tags: [timers]
-  when: k8s_backup_enabled and not k8s_backup_reader and k8s_backup_azure_identity and (k8s_backup_azure_seed_dir | length > 0)
+  when: (k8s_backup_enabled | bool) and not (k8s_backup_reader | bool) and (k8s_backup_azure_identity | bool) and (k8s_backup_azure_seed_dir | length > 0)
   tags: [timers]
 
 # A reader (dev) may sign in with one fixed read-only certificate instead of one made on each node:
@@ -217,7 +217,7 @@
     apply:
       tags: [timers]
   when: >-
-    k8s_backup_reader and k8s_backup_azure_identity and
+    (k8s_backup_reader | bool) and (k8s_backup_azure_identity | bool) and
     ((k8s_backup_azure_fixed_cert_file | length > 0) or (k8s_backup_azure_seed_dir | length > 0))
   tags: [timers]
 
@@ -228,7 +228,7 @@
     file: sftp.yml
     apply:
       tags: [timers, drill, restore]
-  when: (k8s_backup_enabled or k8s_backup_reader) and k8s_backup_sftp
+  when: ((k8s_backup_enabled | bool) or (k8s_backup_reader | bool)) and (k8s_backup_sftp | bool)
   tags: [timers, drill, restore]
 
 # The controller's env file, plus the Azure sign-in lines when the identity is on, or the Proxmox target's
@@ -241,14 +241,14 @@
     group: root
     mode: "0600"
   no_log: true
-  when: k8s_backup_enabled or k8s_backup_reader
+  when: (k8s_backup_enabled | bool) or (k8s_backup_reader | bool)
   tags: [timers]
 
 - name: timers | No env file on the node when backups are off
   ansible.builtin.file:
     path: "{{ k8s_backup_node_env_file }}"
     state: absent
-  when: not (k8s_backup_enabled or k8s_backup_reader)
+  when: not ((k8s_backup_enabled | bool) or (k8s_backup_reader | bool))
   tags: [timers]
 
 # The repository is made here, once, from one node, before any timer or drill can start a backup.
@@ -273,7 +273,7 @@
   register: k8s_backup_repo_init
   changed_when: k8s_backup_repo_init.stdout == 'made'
   run_once: true
-  when: k8s_backup_enabled and not ansible_check_mode
+  when: (k8s_backup_enabled | bool) and not ansible_check_mode
   tags: [timers, drill]
 
 - name: timers | systemd units
@@ -292,8 +292,8 @@
 - name: timers | Timers on or off
   ansible.builtin.systemd_service:
     name: "{{ item }}"
-    enabled: "{{ k8s_backup_enabled }}"
-    state: "{{ 'started' if k8s_backup_enabled else 'stopped' }}"
+    enabled: "{{ (k8s_backup_enabled | bool) }}"
+    state: "{{ 'started' if (k8s_backup_enabled | bool) else 'stopped' }}"
     daemon_reload: "{{ k8s_backup_units_written is changed }}"
   loop: "{{ k8s_backup_timers }}"
   tags: [timers]
@@ -305,7 +305,7 @@
   ansible.builtin.stat:
     path: /etc/systemd/system/c1-backup-azure-cert.timer
   register: k8s_backup_azure_timer_file
-  when: not k8s_backup_azure_identity
+  when: not (k8s_backup_azure_identity | bool)
   tags: [timers]
 
 - name: timers | The Azure certificate timer off while the Azure sign-in is off
@@ -313,7 +313,7 @@
     name: c1-backup-azure-cert.timer
     enabled: false
     state: stopped
-  when: not k8s_backup_azure_identity and k8s_backup_azure_timer_file.stat.exists
+  when: not (k8s_backup_azure_identity | bool) and k8s_backup_azure_timer_file.stat.exists
   tags: [timers]
 
 # apply: a tag on include_tasks is not passed to the tasks it includes, so without it
@@ -333,7 +333,7 @@
     file: restore.yml
     apply:
       tags: [restore]
-  when: k8s_backup_reader
+  when: (k8s_backup_reader | bool)
   tags: [restore]
 
 # Only when asked for (tag restore_check), from the rebuild's checks stage, after the apps synced.
@@ -342,5 +342,5 @@
     file: restore_check.yml
     apply:
       tags: [restore_check]
-  when: k8s_backup_reader
+  when: (k8s_backup_reader | bool)
   tags: [restore_check, never]
