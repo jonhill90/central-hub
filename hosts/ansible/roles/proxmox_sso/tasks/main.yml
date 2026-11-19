@@ -52,9 +52,13 @@
     regexp: '# central-hub proxmox_sso$'
     line: "{{ proxmox_sso_address }} {{ proxmox_sso_issuer | urlsplit('hostname') }}  # central-hub proxmox_sso"
     state: "{{ 'present' if proxmox_sso_address | length > 0 else 'absent' }}"
+  register: proxmox_sso_hosts_line
 
 # The host must reach Keycloak and trust its certificate (the lab root, role proxmox_cert): the same call
 # Proxmox makes first when a sign-in starts. A failure here names the cause before the realm exists.
+# A check run doesn't write the /etc/hosts line, so while that line would change the host may not resolve
+# the issuer's name yet (the first check on the real host, 2026-11-19 19:53 UTC: "Name or service not
+# known"). Then the read waits for the apply, which writes the line first.
 - name: sso | Keycloak's discovery document, from the host
   ansible.builtin.uri:
     url: "{{ proxmox_sso_issuer }}/.well-known/openid-configuration"
@@ -62,12 +66,19 @@
     timeout: 15
   register: proxmox_sso_discovery
   check_mode: false
+  when: not (ansible_check_mode and proxmox_sso_hosts_line is changed)
+
+- name: sso | The discovery read waits for the apply
+  ansible.builtin.debug:
+    msg: The /etc/hosts line for the issuer is not written yet, so the apply reads Keycloak's discovery document after writing it.
+  when: proxmox_sso_discovery is skipped
 
 - name: sso | The discovery document names this issuer
   ansible.builtin.assert:
     that: proxmox_sso_discovery.json.issuer == proxmox_sso_issuer
     fail_msg: "Keycloak says its issuer is {{ proxmox_sso_discovery.json.issuer }}, not {{ proxmox_sso_issuer }}."
     quiet: true
+  when: proxmox_sso_discovery is not skipped
 
 - name: sso | Groups and ACLs now
   ansible.builtin.command:
