@@ -3,7 +3,7 @@
 # its own SDN, OPNsense and connector container (docs/specs/2026-11-lab-test-copy.md,
 # docs/runbooks/build-the-lab-test-copy.md). It runs as user `keys` through sudo, so the session that asks for it
 # never sees the Proxmox token. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|opnsense|wancheck|connector|safety|prove|destroy|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/lab-test.sh plan|apply|check|host|lab|firstboot|opnsense|signin|wancheck|connector|safety|prove|destroy|log
 # plan: the guards (dev down, no dev rebuild running, VM 257 gone, free memory and box disk), then download and
 #   check the Proxmox VE ISO, write the answer file, bake it into a copy of the ISO with the pinned
 #   proxmox-auto-install-assistant (--fetch-from iso), and save an OpenTofu plan for hosts/terraform/home/lab-test.
@@ -22,10 +22,16 @@
 # firstboot: inside the copy, set-up-lab-network-and-firewall.md step 5 with no person: over VM 100's serial console,
 #   as root on the copy, sign in, run hosts/ansible/bootstrap/opnsense-first-boot.php (mgmt VLAN, LAN, WAN, root's
 #   password, kept on the box) and then step 6's opnsense-ansible-user.php (the API user, its key and secret kept on
-#   the box), reboot VM 100, and wait for the mgmt gateway and the API user to answer. Safe to run again.
+#   the box), then opnsense-ssh-key.php (SSH for root by a key the box makes for this copy, LAN only), reboot VM 100,
+#   and wait for the mgmt gateway, the API user and SSH by that key to answer. Safe to run again.
 # opnsense: inside the copy, set-up-lab-network-and-firewall.md step 7's playbooks/opnsense.yml against VM 100, from the
 #   box through an SSH tunnel to the copy (the copy's mgmt VLAN exists only inside it), with an inventory the wrapper
-#   writes; the DNS proof is left out (it asks the gateway directly). A second run must report changed=0.
+#   writes; the DNS proof is left out (it asks the gateway directly). A second run must report changed=0, and SSH by
+#   firstboot's key must still answer, as firstboot left it.
+# signin: docs/runbooks/sign-in-to-opnsense-through-keycloak.md steps 1 to 3 on the copy's VM 100: the pinned
+#   os-openid-connect package by pkg add over firstboot's SSH, the plugin's server by hosts/ansible/bootstrap/
+#   opnsense-oidc-server.php, and opnsense-test's prover against a throwaway Keycloak on the box, which VM 100 reaches
+#   through a reverse forward on that SSH. Its secrets are made for the run and removed when it ends.
 # wancheck: inside the copy, step 7's WAN safety check on VM 100, whose WAN is on the copy's portless vmbr9: WAN a DHCP
 #   client only (over the console), then a watch for server-type frames from the WAN at link-up and over a reboot.
 #   WAN goes down again on any failure.
@@ -37,13 +43,14 @@
 #   run of this wrapper under this run's lock and log. One clean prove is one of the spec's two clean runs.
 # destroy: destroy VM 256 only. The token cannot delete files on Proxmox's local storage, so the prepared ISO stays
 #   in the state and on local for the next build, which reuses it while the answer is unchanged; destroy lists it.
+#   If a guard stopped VM 300 (the CI runner), destroy then starts it again once the node has room for it.
 # log: the last run's log, then VM 256's Proxmox state, read-only.
 set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | check | host | lab | firstboot | opnsense | wancheck | connector | safety | prove | destroy | log) action=$1 ;;
-  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|opnsense|wancheck|connector|safety|prove|destroy|log" >&2; exit 2 ;;
+  plan | apply | check | host | lab | firstboot | opnsense | signin | wancheck | connector | safety | prove | destroy | log) action=$1 ;;
+  *) echo "usage: lab-test plan|apply|check|host|lab|firstboot|opnsense|signin|wancheck|connector|safety|prove|destroy|log" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -66,10 +73,17 @@ py=/usr/local/libexec/agent-box/ansible-venv/bin/python3   # has PyYAML, for the
 answer_py=$libexec/lab-test-answer.py
 console_py=$libexec/lab-test-console.py
 wan_watch_py=$libexec/lab-test-wan-watch.py
+seed_py=$libexec/opnsense-test-seed.py        # opnsense-test's helpers, which signin shares
+prove_py=$libexec/opnsense-test-prove.py
 assistant=$libexec/proxmox-auto-install-assistant           # the role installs it from the pinned .deb
 
 VMID=256
 OPNSENSE_TEST_VMID=257
+# The notebook's CI runner, pool ci: the one guest besides VM 256 that lab-test may stop or start. The agents' token
+# holds VM.PowerMgmt on it (hosts/terraform/home/bootstrap/agent-access.sh, /pool/ci and /vms/300 AgentDev), the same
+# right the dev rebuild's preflight uses to stop it (hosts/rebuild-k8s.sh, preflight_stop_runner).
+CI_RUNNER_VMID=300
+runner_mark=$work/state/lab-test-runner-stopped   # written before the stop; destroy starts VM 300 while it is there
 # Proxmox VE 9.2-1, the release the copy installs; the sha256 is the ISO's line in
 # https://enterprise.proxmox.com/iso/SHA256SUMS (read 2026-11-18).
 ISO_NAME=proxmox-ve_9.2-1.iso
@@ -92,7 +106,7 @@ if [[ $action == log ]]; then
   cat "$logfile" 2>/dev/null || echo "lab-test: no log yet"
   [[ -f $settings ]] || exit 0
 fi
-[[ -f $settings ]] || { echo "lab-test: $settings is missing; set agent_box_lab_test in the inventory and run the agent_box role" >&2; exit 1; }
+[[ -f $settings ]] || { echo "lab-test: $settings is missing; run the agent_box role (it writes the file from the role's default or the inventory's agent_box_lab_test)" >&2; exit 1; }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
 
 # One Proxmox API call with the agents' token, as the dev rebuild makes them; the token goes to curl on stdin.
@@ -104,13 +118,39 @@ px_api() { # path
       curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" )
 }
 
+# The same call as a POST, for VM 300's shutdown and start only.
+px_post() { # path [form data]
+  # shellcheck source=/dev/null
+  ( set -a; . "$keys/proxmox-dev.env"; set +a
+    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - -X POST ${2:+--data "$2"} "${PROXMOX_VE_ENDPOINT%/}/api2/json/$1" )
+}
+
+# The node the copy runs on: the settings' proxmox_node_name when the inventory sets one, otherwise the node the agents'
+# token sees at GET /nodes, read at run time and never written to a file in the repository. More or fewer than one node
+# is a refusal, because the wrapper will not guess between nodes.
+node_name() {
+  local n
+  n=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("proxmox_node_name", ""))' "$settings") || return 1
+  if [[ -z $n ]]; then
+    n=$(px_api nodes | python3 -I -c 'import json,sys
+names = [x["node"] for x in json.load(sys.stdin)["data"]]
+sys.exit("lab-test: GET /nodes shows %d nodes, not one" % len(names)) if len(names) != 1 else print(names[0])') \
+      || { echo "lab-test: the node name could not be read from GET /nodes" >&2; return 1; }
+  fi
+  [[ $n =~ ^[A-Za-z0-9-]+$ ]] || { echo "lab-test: the node name is not a plain host name" >&2; return 1; }
+  printf '%s\n' "$n"
+}
+
 if [[ $action == log ]]; then
   echo "lab-test: status at $(date -u +%FT%TZ)"
-  px_api "nodes/$(setting proxmox_node_name)/qemu/$VMID/status/current" | python3 -I -c 'import json, sys
+  px_api "nodes/$(node_name)/qemu/$VMID/status/current" | python3 -I -c 'import json, sys
 d = json.load(sys.stdin)["data"]
 print("lab-test: VM %s is %s, uptime %ss, memory %s of %s MiB" % (sys.argv[1], d.get("status"), d.get("uptime", 0),
       d.get("mem", 0) // 1048576, d.get("maxmem", 0) // 1048576))' "$VMID" 2>/dev/null \
     || echo "lab-test: VM $VMID is not on the node, or the token cannot read it"
+  [[ ! -f $runner_mark ]] || echo "lab-test: VM $CI_RUNNER_VMID (the CI runner) was stopped by lab-test at $(cat "$runner_mark"); lab-test destroy starts it again"
   exit 0
 fi
 
@@ -136,6 +176,73 @@ vlans=$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml
 [[ -f $sshkey ]] || ssh-keygen -q -t ed25519 -N "" -C "keys@agent-box lab-test" -f "$sshkey"
 addr=$(setting address)
 
+# The node's free memory in MiB: memory.available (the kernel's MemAvailable, PVE 9), else total minus used.
+node_free() { # node
+  px_api "nodes/$1/status" | python3 -I -c 'import json,sys
+m = json.load(sys.stdin)["data"]["memory"]
+print((m["available"] if m.get("available") is not None else m["total"] - m["used"]) // 1048576)'
+}
+
+vm_status() { # node vmid
+  px_api "nodes/$1/qemu/$2/status/current" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["data"].get("status", ""))'
+}
+
+# When a guard is short and VM 300 is running, stop VM 300 (a shutdown, 120 s to stop) and nothing else, as the dev
+# rebuild's preflight does. Only with the owner's short-node pick set (agent_box_short_node, either value): with
+# none, the dev rebuild refuses before it stops VM 300, and so does this. The copy is always destroyed at the end, so
+# either value means the same here: VM 300 is down for the copy's life. Stopping it ends any notebook job on it.
+runner_stop() { # node
+  local sn="" i st
+  [[ ! -f $work/short-node ]] || sn=$(tr -d '[:space:]' < "$work/short-node")
+  case $sn in
+    ephemeral-dev | keep-dev) ;;
+    *) echo "lab-test: VM $CI_RUNNER_VMID was not stopped: the owner's short-node pick (agent_box_short_node) is not set"; return 1 ;;
+  esac
+  echo "lab-test: runner stop: short on memory and VM $CI_RUNNER_VMID (the CI runner) is running; asking it to shut down (short-node pick $sn; no other guest is touched)"
+  date -u +%FT%TZ > "$runner_mark"
+  px_post "nodes/$1/qemu/$CI_RUNNER_VMID/status/shutdown" "timeout=60" >/dev/null \
+    || { echo "lab-test: runner stop: the shutdown request failed"; rm -f "$runner_mark"; return 1; }
+  for i in $(seq 1 24); do
+    st=$(vm_status "$1" "$CI_RUNNER_VMID" 2>/dev/null) || st=""
+    [[ $st != stopped ]] || { echo "lab-test: runner stop: VM $CI_RUNNER_VMID is stopped after $(( (i - 1) * 5 )) s; lab-test destroy starts it again"; return 0; }
+    sleep 5
+  done
+  echo "lab-test: runner stop: VM $CI_RUNNER_VMID did not stop within 120 s"; return 1
+}
+
+# After destroy: start VM 300 again if lab-test stopped it, once the node has its memory (maxmem) plus 2048 MiB free,
+# the dev rebuild's rule (runner_restart), so the start can't push the node back into the shortage. Up to 30 s for the
+# node to count VM 256's memory as free. Never fatal: if it can't start, the marker stays and the next destroy tries.
+runner_restart() {
+  [[ -f $runner_mark ]] || return 0
+  local node maxmem="" free="" st i
+  node=$(node_name) || { echo "lab-test: runner left stopped: the node name could not be read; run lab-test destroy again"; return 0; }
+  st=$(vm_status "$node" "$CI_RUNNER_VMID" 2>/dev/null) || st=""
+  if [[ $st == running ]]; then
+    echo "lab-test: VM $CI_RUNNER_VMID is already running"; rm -f "$runner_mark"; return 0
+  fi
+  maxmem=$(px_api "nodes/$node/qemu/$CI_RUNNER_VMID/status/current" | python3 -I -c 'import json,sys
+print(json.load(sys.stdin)["data"]["maxmem"] // 1048576)' 2>/dev/null) || maxmem=""
+  for i in 1 2 3 4 5 6 7; do
+    free=$(node_free "$node" 2>/dev/null) || free=""
+    [[ -n $maxmem && -n $free ]] && (( free >= maxmem + 2048 )) && break
+    (( i == 7 )) || sleep 5
+  done
+  if [[ -z $maxmem || -z $free ]]; then
+    echo "lab-test: runner left stopped: the memory figures could not be read; run lab-test destroy again"; return 0
+  fi
+  if (( free < maxmem + 2048 )); then
+    echo "lab-test: runner left stopped: free $free MiB, needs $(( maxmem + 2048 )) MiB; run lab-test destroy again when the node has it"; return 0
+  fi
+  if px_post "nodes/$node/qemu/$CI_RUNNER_VMID/status/start" >/dev/null; then
+    echo "lab-test: runner restart: VM $CI_RUNNER_VMID started again (free $free MiB, needs $(( maxmem + 2048 )) MiB)"
+    rm -f "$runner_mark"
+  else
+    echo "lab-test: runner restart: the start request failed; the marker stays, so the next lab-test destroy tries again"
+  fi
+  return 0
+}
+
 # The copy never runs beside dev or the OPNsense test VM: the node has the memory for one of the three
 # (docs/specs/2026-11-lab-test-copy.md). Dev's state must hold no resource, dev's tfvars must not declare VM 256,
 # no dev rebuild may run, VM 257 must not exist, and the node must have the copy's memory plus the margin.
@@ -155,13 +262,18 @@ guards() {
       "$OPNSENSE_TEST_VMID" <<<"$guests"; then
     echo "lab-test: refused, VM $OPNSENSE_TEST_VMID (the OPNsense test) exists; run opnsense-test destroy first"; return 1
   fi
-  node=$(setting proxmox_node_name)
+  node=$(node_name) || { echo "lab-test: refused, the node name could not be read"; return 1; }
   need=$(( $(setting memory_mb) + 2048 ))
-  free=$(px_api "nodes/$node/status" | python3 -I -c 'import json,sys
-m = json.load(sys.stdin)["data"]["memory"]
-print((m["available"] if m.get("available") is not None else m["total"] - m["used"]) // 1048576)') \
-    || { echo "lab-test: refused, the node's free memory could not be read"; return 1; }
+  free=$(node_free "$node") || { echo "lab-test: refused, the node's free memory could not be read"; return 1; }
   echo "lab-test: preflight: node free memory $free MiB, need $need MiB (the copy plus the 2048 MiB margin)"
+  if (( free < need )) && python3 -I -c 'import json,sys
+sys.exit(0 if any(g.get("vmid") == int(sys.argv[1]) and g.get("status") == "running" for g in json.load(sys.stdin)["data"]) else 1)' \
+      "$CI_RUNNER_VMID" <<<"$guests"; then
+    runner_stop "$node" || { echo "lab-test: refused, short on memory and VM $CI_RUNNER_VMID could not be stopped"; return 1; }
+    sleep 5
+    free=$(node_free "$node") || { echo "lab-test: refused, the node's free memory could not be read"; return 1; }
+    echo "lab-test: preflight: node free memory $free MiB after VM $CI_RUNNER_VMID stopped, need $need MiB"
+  fi
   (( free >= need )) || { echo "lab-test: refused, short on memory"; return 1; }
   free=$(df -Pm "$files" | awk 'NR == 2 {print $4}')
   echo "lab-test: preflight: box disk free $free MiB in $files, need $DISK_NEED_MB MiB"
@@ -208,7 +320,7 @@ prepared() {
 }
 
 write_vars() {
-  python3 -I - "$settings" "$iso_out" "$vars" <<'PY'
+  python3 -I - "$settings" "$iso_out" "$vars" "$(node_name)" <<'PY'
 import hashlib, json, sys
 s = json.load(open(sys.argv[1]))
 h = hashlib.sha256()
@@ -216,7 +328,7 @@ with open(sys.argv[2], "rb") as f:
     for b in iter(lambda: f.read(1 << 20), b""):
         h.update(b)
 json.dump({
-    "proxmox_node_name": s["proxmox_node_name"], "vnet": "dev",
+    "proxmox_node_name": sys.argv[4], "vnet": "dev",
     "installer_iso_path": sys.argv[2], "installer_iso_sha256": h.hexdigest(),
     "vm": {"name": s["name"], "vm_id": 256, "cores": s["cores"], "memory_mb": s["memory_mb"], "disk_gb": s["disk_gb"]},
 }, open(sys.argv[3], "w"))
@@ -280,7 +392,7 @@ tofu_run() {
 
 # What destroy leaves on the node's local storage, for the owner to remove. A read of the storage's content list.
 leftovers() {
-  px_api "nodes/$(setting proxmox_node_name)/storage/local/content" | python3 -I -c 'import json, sys
+  px_api "nodes/$(node_name)/storage/local/content" | python3 -I -c 'import json, sys
 for v in json.load(sys.stdin)["data"]:
     i = v.get("volid", "")
     if i and i == sys.argv[2]:
@@ -292,6 +404,53 @@ for v in json.load(sys.stdin)["data"]:
 
 vm() { ssh -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
   -o UserKnownHostsFile="$files/known_hosts" "root@$addr" "$@"; }
+
+# A command on the copy's VM 100 as root, over SSH by the key firstboot made for this copy, through the copy: VM 100's
+# LAN is the copy's mgmt VLAN, which exists only inside the copy. Root's shell there is csh behind opnsense-shell, so
+# a command must not use sh redirects. The key, its public line and VM 100's host key stay in $files/opnsense-ssh.*,
+# and destroy removes them.
+vm100_proxy() { echo "ssh -i $sshkey -o BatchMode=yes -o ConnectTimeout=10 -o UserKnownHostsFile=$files/known_hosts root@$addr -W %h:%p"; }
+vm100_opts() { # sets the array o to the ssh options for VM 100
+  o=(-i "$files/opnsense-ssh.key" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10
+     -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$files/opnsense-ssh.known_hosts" -o ProxyCommand="$(vm100_proxy)")
+}
+vm100() {
+  local _ gw o
+  read -r _ gw _ < <(mgmt_values)
+  vm100_opts
+  ssh "${o[@]}" "root@$gw" "$@"
+}
+
+# Reads VM 100's `sshd -T` on stdin and names what is not as opnsense-ssh-key.php sets it: root by key, password and
+# keyboard-interactive sign-in off, and sshd listening on the mgmt gateway (LAN) and loopback only, never WAN.
+# OPNsense listens on every address of the chosen interfaces and lo0, link-local ones with their scope
+# (openssh.inc, openssh_configure_do; interfaces.inc, interfaces_addresses), so a link-local address is let through
+# unless its scope is the WAN device.
+sshd_settings_ok() { # mgmt gateway, WAN device
+  python3 -I -c 'import ipaddress, sys
+gw, wan, got, bad = sys.argv[1], sys.argv[2], {}, []
+for line in sys.stdin:
+    k, _, v = line.strip().partition(" ")
+    got.setdefault(k.lower(), []).append(v)
+for k, want in (("permitrootlogin", "yes"), ("pubkeyauthentication", "yes"), ("passwordauthentication", "no"),
+                ("kbdinteractiveauthentication", "no")):
+    if got.get(k) != [want]:
+        bad.append("%s is %s" % (k, " ".join(got.get(k, ["unset"]))))
+def allowed(a):
+    host = a.split(" ", 1)[0].rsplit(":", 1)[0].strip("[]")
+    host, _, scope = host.partition("%")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_loopback or (ip.is_link_local and scope not in ("", wan))
+listen = got.get("listenaddress", [])
+if gw + ":22" not in listen or any(a != gw + ":22" and not allowed(a) for a in listen):
+    bad.append("listenaddress is " + (" ".join(listen) or "unset"))
+if bad:
+    print("; ".join(bad))
+    sys.exit(1)' "$1" "$2"
+}
 
 # The install takes some minutes after apply; wait up to 30 for the installed system's SSH.
 wait_ssh() {
@@ -479,20 +638,29 @@ firstboot() {
   [[ -s $files/opnsense-api.secret ]] || openssl rand -hex 40 > "$files/opnsense-api.secret"
   printf '%s|%s\n' "$(cat "$files/opnsense-api.key")" "$(openssl passwd -6 -stdin < "$files/opnsense-api.secret")" \
     > "$files/opnsense-api.line"
+  # SSH for root on VM 100, LAN only, so later steps can run commands there: the key is made here for this copy and
+  # stays on the box; VM 100 gets only its public line (hosts/ansible/bootstrap/opnsense-ssh-key.php).
+  if [[ ! -s $files/opnsense-ssh.key || ! -s $files/opnsense-ssh.key.pub ]]; then
+    rm -f "$files/opnsense-ssh.key" "$files/opnsense-ssh.key.pub"
+    ssh-keygen -q -t ed25519 -N "" -C lab-test-vm100 -f "$files/opnsense-ssh.key"
+  fi
   # net0 is the trunk (vtnet0) and net1 is WAN (vtnet1), in firewall/main.tf's order.
   python3 -I -c 'import json, sys
 print(json.dumps({
     "passwords": ["opnsense", open(sys.argv[1]).read().strip()], "dir": "/root/lab-test",
     "files": {"opnsense-first-boot.php": sys.argv[2], "root.hash": sys.argv[3],
-              "opnsense-ansible-user.php": sys.argv[6], "ansible-apikey.line": sys.argv[7]},
+              "opnsense-ansible-user.php": sys.argv[6], "ansible-apikey.line": sys.argv[7],
+              "opnsense-ssh-key.php": sys.argv[8], "root-ssh.pub": sys.argv[9]},
     "commands": [
         "php opnsense-first-boot.php vtnet0 %s %s vtnet1 root.hash" % (sys.argv[4], sys.argv[5]),
         # The script reads /root/ansible-apikey.line; the line goes however the script ends.
         "cp ansible-apikey.line /root/ansible-apikey.line && chmod 600 /root/ansible-apikey.line"
-        " && php opnsense-ansible-user.php; r=$?; rm -f /root/ansible-apikey.line ansible-apikey.line root.hash; (exit $r)"],
+        " && php opnsense-ansible-user.php; r=$?; rm -f /root/ansible-apikey.line ansible-apikey.line root.hash; (exit $r)",
+        "php opnsense-ssh-key.php root-ssh.pub; r=$?; rm -f root-ssh.pub; (exit $r)"],
     "reboot": True}))' "$files/opnsense-root.pass" "$repo/hosts/ansible/bootstrap/opnsense-first-boot.php" \
     "$files/opnsense-root.hash" "$tag" "$gw/$prefix" "$repo/hosts/ansible/bootstrap/opnsense-ansible-user.php" \
-    "$files/opnsense-api.line" > "$files/console-plan.json"
+    "$files/opnsense-api.line" "$repo/hosts/ansible/bootstrap/opnsense-ssh-key.php" "$files/opnsense-ssh.key.pub" \
+    > "$files/console-plan.json"
   local rc=0
   python3 -I "$console_py" "$files/console-plan.json" ssh -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 \
     -o UserKnownHostsFile="$files/known_hosts" "root@$addr" "socat UNIX-CONNECT:/var/run/qemu-server/100.serial0 STDIO" || rc=$?
@@ -509,14 +677,28 @@ print(json.dumps({
   # The API user answers on one of its own paths (api/interfaces/vlan_settings, privilege page-interfaces-vlan-edit).
   # -k: OPNsense's own certificate is self-signed, and the mgmt VLAN exists only inside the copy (its vmbr1 has no
   # ports). The key and secret go to curl on stdin, never on a command line.
+  up=0
   for _ in $(seq 1 30); do
     if printf 'user = "%s:%s"\n' "$(cat "$files/opnsense-api.key")" "$(cat "$files/opnsense-api.secret")" |
         vm "curl -sk --fail --max-time 10 -K - -o /dev/null https://$gw/api/interfaces/vlan_settings/search_item"; then
-      echo "lab-test: the API user ansible answers on https://$gw/api"; return 0
+      up=1; break
     fi
     sleep 10
   done
-  echo "lab-test: the API user ansible gets no answer on https://$gw/api after 5 minutes"; return 1
+  (( up )) || { echo "lab-test: the API user ansible gets no answer on https://$gw/api after 5 minutes"; return 1; }
+  echo "lab-test: the API user ansible answers on https://$gw/api"
+  # SSH by the copy's key: sshd's own view of its settings, read over that SSH.
+  local sshd=""
+  up=0
+  for _ in $(seq 1 30); do
+    if sshd=$(vm100 /usr/local/sbin/sshd -T); then up=1; break; fi
+    sleep 10
+  done
+  (( up )) || { echo "lab-test: VM 100 does not answer SSH as root by the copy's key after 5 minutes"; return 1; }
+  local problems
+  problems=$(sshd_settings_ok "$gw" vtnet1 <<<"$sshd") \
+    || { echo "lab-test: VM 100's sshd is not as opnsense-ssh-key.php sets it: $problems"; return 1; }
+  echo "lab-test: VM 100 answers SSH as root by the copy's key, on $gw only, with password sign-in off"
 }
 
 # set-up-lab-network-and-firewall.md step 7 against the copy's VM 100: playbooks/opnsense.yml as the controller runs it,
@@ -528,6 +710,7 @@ print(json.dumps({
 opnsense() {
   wait_ssh
   [[ -s $files/opnsense-api.key && -s $files/opnsense-api.secret ]] || { echo "lab-test: the API key is not on the box; run lab-test firstboot first"; return 1; }
+  [[ -s $files/opnsense-ssh.key ]] || { echo "lab-test: VM 100's SSH key is not on the box; run lab-test firstboot first"; return 1; }
   [[ -f $files/inventory/hosts.yml && -s $files/copy-ca.pem ]] || { echo "lab-test: run lab-test lab first"; return 1; }
   local tag gw prefix port tunnel n rc=0 _
   read -r tag gw prefix < <(mgmt_values)
@@ -562,6 +745,143 @@ socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=2).close()' "$
   grep -Eq '^opnsense_fw +: ok=[0-9]+ +changed=0 +unreachable=0 +failed=0' "$files/opnsense-run.log" \
     || { echo "lab-test: the second opnsense.yml run changed something; the role does not converge on the copy"; return 1; }
   echo "lab-test: opnsense.yml applied to the copy's VM 100; a second run shows changed=0"
+  # The role's config must leave firstboot's SSH as it was: later steps run commands on VM 100 over it.
+  local sshd problems
+  sshd=$(vm100 /usr/local/sbin/sshd -T) \
+    || { echo "lab-test: after opnsense.yml, VM 100 does not answer SSH as root by the copy's key"; return 1; }
+  problems=$(sshd_settings_ok "$gw" vtnet1 <<<"$sshd") \
+    || { echo "lab-test: after opnsense.yml, VM 100's sshd is not as opnsense-ssh-key.php sets it: $problems"; return 1; }
+  echo "lab-test: after opnsense.yml, VM 100 still answers SSH as root by the copy's key, on $gw only"
+}
+
+# Sign-in through Keycloak on the copy's VM 100 (docs/runbooks/sign-in-to-opnsense-through-keycloak.md steps 1 to 3), the
+# nano 26.1.6 image the lab firewall runs, set up by opnsense.yml. The plugin and Keycloak pins are opnsense-test's, read
+# from opnsense-test.sh in this checkout, so the two proofs install the same bytes.
+#  - The package: downloaded on the box, checked against its SHA-256, copied over firstboot's SSH, then `pkg add`.
+#  - The settings: hosts/ansible/bootstrap/opnsense-oidc-server.php, with D-0037 rule 5's settings fixed in it, the
+#    proof's CA, and a local admin for the test user; its settings file holds the client secret and goes however it ends.
+#  - Keycloak: opnsense-test's realm at VM 100's GUI origin, https://<mgmt .1>, in a container on the box that listens
+#    on loopback only. VM 100 reaches it at the same https://127.0.0.1:8443 through a reverse forward on the SSH to it,
+#    so neither the copy nor the box's filter changes. VM 100's LAN is the copy's mgmt VLAN, which nothing outside
+#    the copy reaches.
+#  - The browser: opnsense-test-prove.py with the copy's SSH path and a tunnel to VM 100's GUI, keeping https://<mgmt .1>
+#    as the origin, which the plugin accepts because it is VM 100's own address (RelyingParty::acceptedRedirectUri).
+# Its items 2 to 7, 9 and 10 must pass; item 10 stops Keycloak, so root signs in by password with Keycloak down.
+# The box is not in the node-memory guard that plan reads, so Keycloak gets a hard memory limit (its heap is capped at
+# 1024 MiB, as in opnsense-test) and signin refuses unless the box has that limit plus a 512 MiB margin available.
+KC_NAME=lab-test-keycloak
+KC_MEMORY_MB=1536
+signin() {
+  wait_ssh
+  [[ -s $files/opnsense-ssh.key && -s $files/opnsense-root.pass ]] || { echo "lab-test: VM 100's SSH key or root password is not on the box; run lab-test firstboot first"; return 1; }
+  command -v podman >/dev/null && [[ -x $prove_py && -x $seed_py ]] || { echo "lab-test: podman or opnsense-test's helpers are not on the box; run the agent_box role"; return 1; }
+  local avail
+  avail=$(awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
+  echo "lab-test: signin: the box has $avail MiB available, need $(( KC_MEMORY_MB + 512 )) MiB (Keycloak's $KC_MEMORY_MB MiB limit plus 512)"
+  (( ${avail:-0} >= KC_MEMORY_MB + 512 )) || { echo "lab-test: refused, the box is short on memory for Keycloak; nothing done"; return 1; }
+  local pins=$repo/hosts/ansible/roles/agent_box/files/opnsense-test.sh url sha image version
+  url=$(sed -n 's/^PLUGIN_URL=\(https:\/\/github\.com\/jpawlowski\/opnsense-openid-connect\/releases\/download\/[^ ]*\.pkg\)$/\1/p' "$pins")
+  sha=$(sed -n 's/^PLUGIN_SHA256=\([0-9a-f]\{64\}\)$/\1/p' "$pins")
+  image=$(sed -n 's/^KEYCLOAK_IMAGE=\(quay\.io\/keycloak\/keycloak@sha256:[0-9a-f]\{64\}\)$/\1/p' "$pins")
+  [[ -n $url && -n $sha && -n $image ]] || { echo "lab-test: the plugin or Keycloak pin is missing from opnsense-test.sh"; return 1; }
+  version=${url##*/os-openid-connect-}; version=${version%.pkg}
+  local tag gw prefix s=$files/signin o port f _
+  read -r tag gw prefix < <(mgmt_values)
+  gui="" rev=""   # the tunnels' PIDs, global so the EXIT trap still sees them when this function has returned
+  vm100_opts
+  rm -rf "$s" && mkdir -p "$s"
+  # shellcheck disable=SC2064  # the folder is known now; the tunnels' PIDs are read when the trap runs
+  trap "kill \$gui \$rev 2>/dev/null; podman rm -f $KC_NAME >/dev/null 2>&1; rm -rf '$s'" EXIT
+
+  curl -sS --fail --max-time 300 -L -o "$s/os-openid-connect.pkg.part" "$url"
+  echo "$sha  $s/os-openid-connect.pkg.part" | sha256sum -c --quiet - \
+    || { echo "lab-test: the os-openid-connect package does not match its pin $sha; nothing installed"; return 1; }
+  mv "$s/os-openid-connect.pkg.part" "$s/os-openid-connect.pkg"
+  echo "lab-test: signin: os-openid-connect $version matches sha256 $sha on the box"
+  scp -q "${o[@]}" "$s/os-openid-connect.pkg" "$repo/hosts/ansible/bootstrap/opnsense-oidc-server.php" "root@$gw:/root/"
+  vm100 'pkg add /root/os-openid-connect.pkg; set r = $status; rm -f /root/os-openid-connect.pkg; exit $r'
+  [[ $(vm100 "pkg query '%n %v' os-openid-connect") == "os-openid-connect $version" ]] \
+    || { echo "lab-test: os-openid-connect $version is not installed on VM 100"; return 1; }
+  echo "lab-test: signin: os-openid-connect $version installed on VM 100 by pkg add"
+
+  # The proof's secrets and CA, made for this run; Keycloak's certificate is for 127.0.0.1, where both sides reach it.
+  for f in client.secret user.pass stranger.pass; do openssl rand -hex 24 > "$s/$f"; done
+  cp "$files/opnsense-root.pass" "$s/root.pass"
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 -subj "/CN=lab-test signin proof CA" \
+    -keyout "$s/ca.key" -out "$s/ca.pem" 2>/dev/null
+  openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -subj "/CN=127.0.0.1" -keyout "$s/kc.key" -out "$s/kc.csr" 2>/dev/null
+  openssl x509 -req -in "$s/kc.csr" -CA "$s/ca.pem" -CAkey "$s/ca.key" -CAcreateserial -days 1 \
+    -extfile <(printf 'subjectAltName=IP:127.0.0.1\nextendedKeyUsage=serverAuth\n') -out "$s/kc.pem" 2>/dev/null
+  rm -f "$s/ca.key" "$s/kc.csr"
+
+  python3 -I -c 'import json, sys
+s = sys.argv[1]
+json.dump({"name": "keycloak-proof", "issuer": "https://127.0.0.1:8443/realms/opnsense-proof", "client_id": "opnsense",
+           "client_secret": open(s + "/client.secret").read().strip(), "app_code": "keycloak",
+           "ca": {"descr": "lab-test signin proof CA", "pem": open(s + "/ca.pem").read()}, "proof_admin": "proofadmin"},
+          open(s + "/server.json", "w"))' "$s"
+  scp -q "${o[@]}" "$s/server.json" "root@$gw:/root/lab-test-signin.json"
+  rm -f "$s/server.json"
+  local out
+  out=$(vm100 'php /root/opnsense-oidc-server.php /root/lab-test-signin.json; set r = $status; rm -f /root/lab-test-signin.json /root/opnsense-oidc-server.php; exit $r') \
+    || { echo "$out"; echo "lab-test: opnsense-oidc-server.php failed on VM 100"; return 1; }
+  echo "$out"
+  sed -n 's/^proof admin proofadmin uid \([0-9]\{4,\}\)$/\1/p' <<<"$out" > "$s/admin.uid"
+  [[ -s $s/admin.uid ]] || { echo "lab-test: the settings script named no proof admin uid"; return 1; }
+
+  "$py" -I "$seed_py" realm-at "https://$gw" "$s/realm.json"
+  mkdir -p "$s/kc" "$s/kc-import"
+  cp "$s/kc.pem" "$s/kc.key" "$s/kc/"
+  cp "$s/realm.json" "$s/kc-import/"
+  openssl rand -hex 24 > "$s/kc-admin.pass"
+  podman rm -f "$KC_NAME" >/dev/null 2>&1 || true
+  # As opnsense-test's: secrets by name from this command's environment, never in arguments or the realm file. Here
+  # it listens on loopback only (http-host); nothing but the box and the reverse forward reach it.
+  KC_BOOTSTRAP_ADMIN_PASSWORD=$(cat "$s/kc-admin.pass") KC_PROOF_CLIENT_SECRET=$(cat "$s/client.secret") \
+  KC_PROOF_USER_PASS=$(cat "$s/user.pass") KC_PROOF_STRANGER_PASS=$(cat "$s/stranger.pass") \
+    podman run -d --name "$KC_NAME" --network host --memory="${KC_MEMORY_MB}m" --memory-swap="${KC_MEMORY_MB}m" \
+    --userns=keep-id:uid=1000,gid=1000 -v "$s/kc:/opt/keycloak/conf/proof:ro,Z" -v "$s/kc-import:/opt/keycloak/data/import:ro,Z" \
+    -e KC_BOOTSTRAP_ADMIN_USERNAME=proof-admin -e KC_BOOTSTRAP_ADMIN_PASSWORD \
+    -e KC_PROOF_CLIENT_SECRET -e KC_PROOF_USER_PASS -e KC_PROOF_STRANGER_PASS -e JAVA_OPTS_KC_HEAP="-Xms256m -Xmx1024m" \
+    "$image" start --db=dev-file --cache=local --import-realm --http-enabled=false --http-host=127.0.0.1 --https-port=8443 \
+    --https-certificate-file=/opt/keycloak/conf/proof/kc.pem --https-certificate-key-file=/opt/keycloak/conf/proof/kc.key \
+    --hostname=https://127.0.0.1:8443 >/dev/null
+  for _ in $(seq 1 60); do
+    curl -sS --fail --max-time 5 --cacert "$s/ca.pem" https://127.0.0.1:8443/realms/opnsense-proof/.well-known/openid-configuration \
+      -o "$s/discovery.json" 2>/dev/null && break
+    sleep 5
+  done
+  [[ -s $s/discovery.json ]] || { echo "lab-test: the proof's Keycloak did not come up"; podman logs --tail 30 "$KC_NAME"; return 1; }
+  "$py" -I -c 'import json, sys; sys.exit("ES256" not in json.load(open(sys.argv[1])).get("dpop_signing_alg_values_supported", []))' \
+    "$s/discovery.json" || { echo "lab-test: stopped, Keycloak does not advertise DPoP with ES256"; return 1; }
+  local pids lines
+  pids=$(podman top "$KC_NAME" hpid | tail -n +2 | tr -s ' \n' '|' | sed 's/^|//; s/|$//')
+  [[ -n $pids ]] || { echo "lab-test: the Keycloak container's processes could not be read"; return 1; }
+  lines=$(ss -Hlntup | grep -E "pid=($pids),")
+  if awk '$5 !~ /^(127\.|\[::1\]:|\[::ffff:127\.)/' <<<"$lines" | grep -q .; then
+    echo "lab-test: stopped, the proof's Keycloak listens beyond loopback:"; awk '{print $1, $5}' <<<"$lines"; return 1
+  fi
+  awk '$1 == "tcp" && $5 == "127.0.0.1:8443"' <<<"$lines" | grep -q . || { echo "lab-test: the proof's Keycloak is not on 127.0.0.1:8443"; return 1; }
+  echo "lab-test: signin: Keycloak (realm opnsense-proof, DPoP on) listens on loopback only, at https://127.0.0.1:8443"
+
+  ssh -N "${o[@]}" -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -R 127.0.0.1:8443:127.0.0.1:8443 "root@$gw" &
+  rev=$!
+  port=$("$py" -I -c 'import socket
+s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+  ssh -N -i "$sshkey" -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
+    -o UserKnownHostsFile="$files/known_hosts" -L "127.0.0.1:$port:$gw:443" "root@$addr" &
+  gui=$!
+  local up=0
+  for _ in $(seq 1 12); do
+    kill -0 "$rev" 2>/dev/null && kill -0 "$gui" 2>/dev/null || { echo "lab-test: the reverse forward or the GUI tunnel ended"; return 1; }
+    if vm100 'fetch -q -T 10 -o /dev/null https://127.0.0.1:8443/realms/opnsense-proof/.well-known/openid-configuration'; then up=1; break; fi
+    sleep 5
+  done
+  (( up )) || { echo "lab-test: VM 100 does not reach the proof's Keycloak over verified https through the forward"; return 1; }
+  echo "lab-test: signin: VM 100 reaches Keycloak at https://127.0.0.1:8443 through the forward, trusting the proof CA"
+  vm100 'cat /usr/local/etc/lighttpd_webgui/cert.pem' > "$s/gui.pem"
+  "$py" -I "$prove_py" "$gw" "$s" "$files/opnsense-ssh.key" "$files/opnsense-ssh.known_hosts" "$KC_NAME" "$(vm100_proxy)" "$port"
+  echo "lab-test: signin: proof items 2 to 7, 9 and 10 passed on VM 100 (nano 26.1.6, os-openid-connect $version)"
 }
 
 # set-up-lab-network-and-firewall.md step 7's WAN safety check against the copy's VM 100, whose WAN is on the copy's
@@ -689,7 +1009,7 @@ safety() {
 # Destroy runs whether the steps pass or not, so dev can come back; the log says where a run stopped.
 prove() {
   local step failed="" rc
-  for step in plan apply check host lab firstboot opnsense wancheck connector safety; do
+  for step in plan apply check host lab firstboot opnsense signin wancheck connector safety; do
     echo "lab-test: prove: $step"
     rc=0; LAB_TEST_PROVE_PARENT=$$ "$0" "$step" || rc=$?
     (( rc == 0 )) || { failed=$step; echo "lab-test: prove: $step failed (exit $rc)"; break; }
@@ -709,18 +1029,21 @@ case $action in
   lab) lab ;;
   firstboot) firstboot ;;
   opnsense) opnsense ;;
+  signin) signin ;;
   wancheck) wancheck ;;
   connector) connector ;;
   safety) safety ;;
   prove) prove ;;
   destroy)
+    podman rm -f "$KC_NAME" >/dev/null 2>&1 || true   # signin's Keycloak, if a run ended without its trap
     tofu_run
     # The copy's token, inventory and run folder states go with it; a new copy gets new ones. Root's password stays
     # with its hash, which the cached prepared ISO holds.
     rm -rf "$files/known_hosts" "$files"/*.part "$files/copy-token" "$files/inventory" "$files/state" "$files/copy-ca.pem" \
-      "$files"/opnsense-root.* "$files"/opnsense-api.* "$files/opnsense-run.log" \
+      "$files"/opnsense-root.* "$files"/opnsense-api.* "$files"/opnsense-ssh.* "$files/opnsense-run.log" "$files/signin" \
       "$files/connector-run.log" "$files/safety-run.log"
     echo "lab-test: VM $VMID destroyed"
     leftovers
+    runner_restart
     ;;
 esac

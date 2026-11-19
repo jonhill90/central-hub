@@ -7,7 +7,8 @@
 # check   read-only: the playbook with --check --diff. It changes nothing on c1.
 # apply   the playbook for real. <clearance id> is the cmsg_ id of the reviewer's clearance of the head that is on main
 #         (D-0042 rule 1); it goes into the log, and the wrapper cannot read the chat to check it.
-# log     the newest run's lines: the action, the commit, the clearance id, and the PASS, FAIL, task and recap lines.
+# log     the newest run's lines: the action, the commit, the clearance id, and the PASS, FAIL, task and recap lines, and the
+#         "delete would remove:" lines of the observability role (what each of its deletes would remove).
 # Names are fixed in the table below, each one playbook with no extra argument from the session. Only code on main runs,
 # in this wrapper's own checkout. The inventory is the box's copy from the controller (<keys>/prod/inventory-hosts.yml); this
 # wrapper builds its own copy with the box's node key and plain ssh, and refuses any host that sets a proxy, another
@@ -29,18 +30,27 @@ export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
 # name -> playbook (under hosts/ansible), and the private file it needs on the box (empty: none) with the variable that names it.
-declare -A playbook=([identity]=playbooks/k8s-identity.yml)
-declare -A needs_file=([identity]="$keys/prod/identity.env")
-declare -A needs_var=([identity]=k8s_identity_values_file)
+# gateway: the shared Gateway and its node firewall ports (tag gateway only: not the smoke test, which applies and removes an app).
+# gitops: the GitOps engine's source, web UI route and sign-in settings (tags source, ui, sso only: never install, the pinned
+# upstream install of Argo CD). observability: metrics-server, kube-prometheus-stack, Loki, Alloy and Grafana's route, with every tag the
+# role has named, so a tag added later is not run until this line names it. None of them needs a private file on the box: the inventory carries their values. k8s-certs.yml is not
+# a name here: it needs the lab CA's key and the Cloudflare token on the controller, and the box holds neither.
+# users: adds the sign-in test user, `signin-test`, to the live realm (tags secrets and users, which never replace the realm: the
+# role's keycloak tag does that and this name does not run it). The user must be in the private inventory's k8s_identity_extra_users,
+# or the run stops at user-json.py; a user already there is left as it is. The secrets tag also adds a random password and seed to the
+# box's own identity.env for a key it lacks, and writes the realm's Secret in c1.
+declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml)
+declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env")
+declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file)
 # Fixed extra variables per name. identity never replaces realm lab on prod: the role's default deletes the realm and
 # imports it again when its code changes, which on prod ends every sign-in and drops enrolled one-time codes. With false
 # the realm is only made when missing; a client is added in place by the role's clients tag.
-declare -A fixed_vars=([identity]=k8s_identity_realm_replace=false)
+declare -A fixed_vars=([identity]=k8s_identity_realm_replace=false [users]=k8s_identity_realm_replace=false)
 # Tags per name. identity runs every task plus the clients tag, which is off by default. The tag acts only on the clients in
 # k8s_identity_ensure_clients (empty by default), so the wrapper names one: proxmox, the client the realm gained after prod's
 # realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
-declare -A fixed_tags=([identity]="all,clients")
-declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}')
+declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof" [users]="secrets,users")
+declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}')
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
 action=${1:-} name='' clearance=''
@@ -63,7 +73,7 @@ if [[ $action == log ]]; then
   newest=$(find "$logs" -maxdepth 1 -name 'run-*.log' 2>/dev/null | sort | tail -n 1)
   [[ -n $newest ]] || { echo "c1-ansible: no run has been logged yet" >&2; exit 1; }
   echo "run: ${newest##*/}"
-  sed -E 's/\x1b\[[0-9;]*m//g' -- "$newest" | grep -E '^(c1-ansible:|PLAY RECAP|TASK \[|.*(PASS|FAIL|SKIP):|fatal:|[^ ]+ +: ok=)' | cut -c1-200 | tail -n 60 || true
+  sed -E 's/\x1b\[[0-9;]*m//g' -- "$newest" | grep -E '^(c1-ansible:|PLAY RECAP|TASK \[|.*(PASS|FAIL|SKIP):|.*delete would remove:|fatal:|[^ ]+ +: ok=)' | cut -c1-200 | tail -n 60 || true
   exit 0
 fi
 

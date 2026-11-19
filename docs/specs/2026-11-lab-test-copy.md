@@ -54,9 +54,12 @@ The nested vmbr1 has no ports, as on the real host, so the nested firewall's LAN
 
 The copy needs 7168 MiB plus the 2048 MiB margin the OPNsense test uses: 9216 MiB. A dev rebuild needs 11008 MiB ([Dev node sizes](../runbooks/rebuild-k8s-layer-with-one-command.md#dev-node-sizes)). With dev down, the node's free memory read 7568 MiB and 11414 MiB at two times on 2026-11-18. So the copy runs only while dev is down and VM 257 does not exist; it would not have fitted at the lower reading, and it fits at the higher one with 2198 MiB to spare; and its wrapper refuses otherwise, as the OPNsense test's does. The dev rebuild refuses while VM 256 exists.
 
+The first `prove` runs on 2026-11-18 met that lower range: 7431 MiB at 23:37 UTC, then 9245 MiB at plan and 7607 MiB at apply five seconds later, at 23:54 UTC. So when a guard is short and VM 300, the notebook's CI runner, is running, the guard stops VM 300 and nothing else, as the dev rebuild's preflight does, and destroy starts it again. VM 300 held 1913 MiB of the node's memory in the dev run of 2026-11-18 07:12 UTC ([Run the notebook runner on c1](../runbooks/run-the-notebook-runner-on-c1.md)). It stops only when the owner's short-node pick is set, because that pick is where the owner accepted that a short node may stop the runner.
+
 ## Out of scope
 
 - **The real lab:** VM 100, CT 900, the real SDN and the host's own settings. The copy proves the code; a prod run of this layer is a separate step with the owner's go (D-0042 rule 6, D-0035 rule 3(b)).
+- **SSH for agents on the real VM 100.** The copy's VM 100 gets it, so later steps can run commands there (installing a package from a file, for one). On the real firewall it is a new access right, which waits for the owner's go (D-0042 rule 6).
 - **The tailnet:** the nested connector container is built and its client installed, but it never joins the tailnet, because that is a tailnet change.
 - **The Kubernetes layer:** it is already proven on dev, and the copy has no memory for it.
 - **Installing Proxmox on the real host:** D-0035 rule 1 leaves it to a person at the machine. The answer file this change writes is what that person would use.
@@ -72,6 +75,8 @@ The copy needs 7168 MiB plus the 2048 MiB margin the OPNsense test uses: 9216 Mi
 - [ ] On the nested host: a second `tofu plan` in `network`, `firewall` and `remote-access` shows no changes, and `opnsense.yml --check` reports `changed=0`.
 - [ ] The WAN safety check's three moments on the nested WAN bridge pass: before link-up only a DHCP client runs, and the captures at link-up and over a reboot each count 0 server-type packets and more than 0 frames from the WAN.
 - [ ] `proxmox-safety.yml` ends with its dead-man timer cancelled.
+- [ ] `lab-test signin` passes the OPNsense sign-in prover's items 2 to 7, 9 and 10 on the copy's VM 100, with the pinned os-openid-connect package installed by `pkg add` and its server set by `opnsense-oidc-server.php` on the running firewall.
+- [ ] The copy's VM 100 answers SSH as root by a key made on the box for that copy, and its `sshd -T` shows password sign-in off and listen addresses on LAN and loopback only, after first boot and again after `opnsense.yml`.
 - [ ] Two clean runs in a row from the agent box, build to destroy, with no hand step, each with its log in the agent notebook's run records.
 
 ### Manual (what the owner checks)
@@ -92,3 +97,6 @@ The copy needs 7168 MiB plus the 2048 MiB margin the OPNsense test uses: 9216 Mi
 - 2026-11-18: 7168 MiB, not 6144. The first size counted the nested OPNsense at 3072 MiB, the OPNsense test's minimum, but the copy runs the firewall run folder as it is, and that gives VM 100 4096 MiB. Agent pick.
 - 2026-11-18: the automated installer, not Debian 13 with the Proxmox packages added. The installer is what a person would use on the real host, so the answer file is proven too. Agent pick.
 - 2026-11-18: the nested firewall's WAN on a nested bridge with no ports (`firewall`'s `wan_bridge`, default `vmbr0`), not the nested vmbr0, which is VNet dev; the capture asks for a server itself, since nothing else on that bridge would. Agent pick.
+- 2026-11-18: SSH for root on the copy's VM 100 by a key the box makes for each copy and destroy removes, set by a PHP over the console like first boot, LAN only, password sign-in off. The prover and the package install need a shell on the firewall, and the API has none. Agent pick.
+- 2026-11-18: the sign-in proof as a step of the copy, `lab-test signin`, after `opnsense`, and not only on VM 257. The copy runs the nano 26.1.6 image and the config the lab firewall runs, and the package and settings go on the way they can go on a running firewall. Its Keycloak runs on the box on loopback only, and VM 100 reaches it through a reverse forward on its SSH, so neither the copy nor the box's filter changes. Agent pick.
+- 2026-11-19: a short guard stops VM 300, the CI runner, and destroy starts it again, as the dev rebuild does, and only with the owner's short-node pick set. The copy's two readings of 2026-11-18 23:54 UTC differed by 1638 MiB in five seconds with dev down. Agent pick.

@@ -2,20 +2,29 @@
 """Proof items 2 to 7, 9 and 10 against the throwaway OPNsense (docs/runbooks/prove-opnsense-sign-in-on-dev.md).
 
   opnsense-test-prove.py <VM address> <proof dir> <SSH key> <known_hosts> <Keycloak container name>
+                         [<SSH ProxyCommand> <GUI tunnel port>]
 
-The opnsense-test wrapper runs it from `prove`, with the proof's Keycloak up. Each item prints one
-`proof item N:` line saying what was measured; the run fails on the first item that does not hold.
+The opnsense-test wrapper runs it from `prove`, with the proof's Keycloak up. `lab-test signin` runs it against the
+lab test copy's VM 100, which the box reaches only through the copy: SSH goes through the ProxyCommand, and every
+https request to the VM's address goes into the box's tunnel port to the VM's GUI, with the VM's address kept as
+the request's host, the address the plugin accepts as the GUI's origin (RelyingParty::acceptedRedirectUri).
+When the proof dir holds admin.uid, the test user is bound to that uid, not 2000.
+
+Each item prints one `proof item N:` line saying what was measured; the run fails on the first item that does not
+hold.
 Item 10 stops the proof's Keycloak container, so it runs last.
 Browser steps are made with urllib: the GUI's own certificate (read over SSH) and the proof CA are
 the only trust anchors, and no certificate check is turned off.
 """
 import base64
 import html
+import http.client
 import http.cookiejar
 import json
 import os
 import re
 import shlex
+import socket
 import ssl
 import subprocess
 import sys
@@ -23,9 +32,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+if len(sys.argv) not in (6, 8):
+    sys.exit(__doc__)
 addr, proof, sshkey, known_hosts, kc_name = sys.argv[1:6]
+proxy, tunnel = (sys.argv[6], int(sys.argv[7])) if len(sys.argv) == 8 else (None, None)
 SERVER = "keycloak-proof"
-PROOF_ADMIN_UID = "2000"
+PROOF_ADMIN_UID = (open(os.path.join(proof, "admin.uid")).read().strip() if os.path.exists(os.path.join(proof, "admin.uid"))
+                   else "2000")
+if not PROOF_ADMIN_UID.isdigit() or PROOF_ADMIN_UID == "0":
+    sys.exit(f"opnsense-test: proof failed: the proof admin's uid {PROOF_ADMIN_UID!r} is not a user's")
 base = f"https://{addr}"
 
 # The GUI's self-signed certificate names the VM's hostname, not its address, so the name check is
@@ -44,7 +59,8 @@ def read(name):
 
 
 def vm(cmd, stdin=None):
-    r = subprocess.run(["ssh", "-i", sshkey, "-o", "BatchMode=yes", "-o", f"UserKnownHostsFile={known_hosts}",
+    via = ["-o", "IdentitiesOnly=yes", "-o", f"ProxyCommand={proxy}"] if proxy else []
+    r = subprocess.run(["ssh", "-i", sshkey, "-o", "BatchMode=yes", "-o", f"UserKnownHostsFile={known_hosts}", *via,
                         f"root@{addr}", cmd], input=stdin, capture_output=True, text=True, timeout=120)
     if r.returncode != 0:
         fail(f"{cmd!r} on the VM: {r.stderr.strip()[:300]}")
@@ -56,8 +72,26 @@ def php(body):
     return vm("php", "<?php\nrequire_once '/usr/local/opnsense/mvc/script/load_phalcon.php';\n" + body)
 
 
+class Tunneled(http.client.HTTPSConnection):
+    """https to the VM's address on 443 goes into the tunnel; the TLS session and the Host header stay the VM's."""
+    def connect(self):
+        if self.host == addr and self.port == 443:
+            self.sock = self._context.wrap_socket(socket.create_connection(("127.0.0.1", tunnel), self.timeout),
+                                                  server_hostname=self.host)
+        else:
+            super().connect()
+
+
+class TunnelHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(Tunneled, req, context=self._context)
+
+
 def browser():
-    return urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx),
+    """Every address the browser opens is the VM's or the proof Keycloak's, never one a proxy should carry, so any
+    HTTPS_PROXY in the environment is ignored."""
+    handler = TunnelHandler(context=ctx) if tunnel else urllib.request.HTTPSHandler(context=ctx)
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), handler,
                                        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 
 
@@ -156,11 +190,11 @@ rows = pending("proof-user")
 if len(rows) != 1:
     fail(f"expected one pending request for proof-user, found {len(rows)}")
 if not approve(rows[0]["id"], PROOF_ADMIN_UID):
-    fail("the approval of proof-user to uid 2000 was refused")
+    fail(f"the approval of proof-user to uid {PROOF_ADMIN_UID} was refused")
 op = keycloak_sign_in("proof-user", read("user.pass"))
 if not signed_in(op):
     fail("the bound test user did not land on the dashboard")
-print("opnsense-test: proof item 2: Keycloak sign-in as proof-user, once bound to local admin uid 2000, lands on the dashboard")
+print(f"opnsense-test: proof item 2: Keycloak sign-in as proof-user, once bound to local admin uid {PROOF_ADMIN_UID}, lands on the dashboard")
 
 # Item 2 (part): Keycloak advertises DPoP (prove checked discovery), so the plugin's sign-in used it.
 # Its key store is /var/db/openid-connect/dpop, a 0700 folder of 0600 key-<binding>.json files

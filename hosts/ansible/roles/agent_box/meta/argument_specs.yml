@@ -68,6 +68,10 @@ argument_specs:
           Private. host (OPNsense's name or address) and keep (copies kept, 3 to 60, default 14) for the daily
           configuration backup on the box. Empty does nothing.
       agent_box_opnsense_backup_daily: {type: str, default: "*-*-* 14:30:00 UTC", description: "systemd OnCalendar for the daily OPNsense backup."}
+      agent_box_opnsense_cert_check_daily:
+        type: str
+        default: "*-*-* 16:00:00 UTC"
+        description: "systemd OnCalendar for the daily check of the certificate the firewall serves."
       agent_box_opnsense_offbox:
         type: dict
         default: {}
@@ -210,6 +214,20 @@ argument_specs:
           the VM (name, vm_id, address, cores, memory_mb, disk_gb), where it goes (proxmox_node_name, vnet,
           template_vm_id), rdp_source (the tailnet connector's address, where RDP arrives from) and optionally admin_user. No key and no
           password goes in it. Empty skips the file.
+      agent_box_checkpoint_note:
+        type: dict
+        default: {repo: agent-notebook, number: 729}
+        description: >-
+          The one pull request the checkpoint-note wrapper comments on, written to <work_dir>/checkpoint-note.json:
+          repo, one the App is installed on, and number. No other wrapper names the file. The wrapper
+          takes no pull request as an argument. Empty skips the file, and the wrapper refuses.
+      agent_box_checkpoint_scan:
+        type: bool
+        default: true
+        description: >-
+          Install and start checkpoint-scan.timer, which runs `checkpoint-scan.sh run` as the keys user. It reads only and
+          posts through checkpoint-note on a new finding. False stops and disables the timer.
+      agent_box_checkpoint_scan_on_calendar: {type: str, default: "*-*-* *:07:00 UTC", description: "systemd OnCalendar for the checkpoint scan."}
       agent_box_opnsense_test:
         type: dict
         default: {}
@@ -222,13 +240,22 @@ argument_specs:
         type: int
         default: 300000
         description: The keys user's first subordinate UID and GID (65536 of each), for the proof's rootless Keycloak.
+      agent_box_lab_test_default:
+        type: dict
+        description: >-
+          The lab-test wrapper's made-up settings (name in the STD-0001 form, a .invalid domain, one dev address, cores,
+          memory_mb, disk_gb). The node name is not in it; the wrapper reads the node from the Proxmox API at run time.
       agent_box_lab_test:
         type: dict
         default: {}
         description: >-
-          Private settings for the lab-test wrapper, written to <work_dir>/lab-test.json (0600, the keys user's):
-          name, domain, address (the copy's dev address), cores, memory_mb, disk_gb and proxmox_node_name. No key or
-          password goes in it. Empty skips the wrapper's assistant, helper and file.
+          The inventory's lab-test settings, merged key by key over agent_box_lab_test_default and written with it to
+          <work_dir>/lab-test.json (0600, the keys user's): name, domain, address, cores, memory_mb, disk_gb and,
+          optionally, proxmox_node_name. No key or password goes in it.
+      agent_box_lab_test_enabled:
+        type: bool
+        default: true
+        description: false skips the wrapper's assistant, helper and settings file.
       agent_box_pve_assistant_version: {type: str, description: "proxmox-auto-install-assistant version for the lab-test wrapper."}
       agent_box_pve_assistant_base: {type: str, description: "The package pool folder the assistant's .deb is downloaded from."}
       agent_box_pve_assistant_sha256: {type: str, description: "SHA-256 of that version's .deb, from pve-no-subscription's Packages index."}
@@ -253,7 +280,10 @@ argument_specs:
           to the store is set. admin_address: the store's admin address, one address of dev's load-balancer pool,
           which needs box_cidr; the dev rebuild passes it on (k8s_gitops_source_openbao_admin_address) and every
           call goes there (D-0062). Without it, every dev call goes to dev's Gateway by the dev inventory's
-          k8s_gitops_source_gateway_address. No key goes in it; the wrapper makes the keys in the keys folder.
+          k8s_gitops_source_gateway_address. offbox: true installs the dev store's hourly off-box snapshot send
+          (pick 237) when agent_box_opnsense_offbox is set too; it is set only by the owner's tap, since the send's
+          daily prune is a delete (D-0042 rule 6). Anything but true is false, and a left send timer is turned off.
+          No key goes in it; the wrapper makes the keys in the keys folder.
           Empty skips the file.
       agent_box_secrets_store_prod:
         type: dict

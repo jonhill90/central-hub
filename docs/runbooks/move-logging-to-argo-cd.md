@@ -48,7 +48,7 @@ Since 2026-11-10, `autoSync` is on for this app in `root/values.yaml` (the owner
 3. Sync `loki`, then `alloy`, by hand.
    expect: both Synced and Healthy. The Loki pod is not restarted. In Grafana, Explore, data source Loki, `{namespace="logging"}` shows lines from the last minute.
 
-4. By PR, set `autoSync: true` for `loki` and `alloy` in `root/values.yaml`. In the private inventory, set `k8s_observability_logs_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags logs,proof`.
+4. By PR, set `autoSync: true` for `loki` and `alloy` in `root/values.yaml`. In the private inventory, set `k8s_observability_logs_by_argocd: true`, then run `ansible-playbook -i inventories/home/ playbooks/k8s-observability.yml --tags logs,proof`. From the box, once `c1-ansible list` there prints `observability`: `c1-ansible check observability`, then `c1-ansible apply observability <clearance id>`. The box runs the wrapper's fixed tags (`metrics_server,metrics,logs,route,proof`), which can be more than the Mac command above, and reads its own copy of the inventory ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)). With the switch true, this run deletes Helm's old release Secrets for `loki` and `alloy`; the rule for `apply observability` applies.
    why: from now on git is the source of truth. Ansible stops installing both charts and deletes Helm's old release records, which Argo CD doesn't use.
    expect: the first run reports the Helm records deleted; a second run reports `changed=0`.
 

@@ -40,7 +40,7 @@ agent_box_wrappers:
   - name: openbao-prod
     args: [key, check, "seal *", "seal-copy *", l2-policy, gitops, ca, handover, "reset-failed-start *", log]
   # Applies one named Ansible playbook to prod's c1 with the box's own prod node key (files/c1-ansible.sh). check is
-  # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The only name now is identity.
+  # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The names are identity, gateway, gitops, observability and users.
   - name: c1-ansible
     args: [list, "check *", "apply *", log]
   # The three scripted sign-in checks (Jellyfin, Argo CD, Proxmox) against prod with the test user (files/signin-check.sh). It runs as
@@ -49,19 +49,38 @@ agent_box_wrappers:
   - name: signin-check
     args: [run, log]
   # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
-  # the owner's tap id, which the wrapper checks; the run needs dev to have passed at the same commit first.
+  # the owner's tap id and the commit the go names, which the wrapper checks (7 to 40 hex digits, on main); the run
+  # needs dev to have passed at that same commit first.
   - name: rebuild-prod
     args: [check, "rebuild *", log]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself. Sessions get the
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge
     args: ["check *"]
+  # Makes one empty public repository under the owner's account as the GitHub App, with a token narrowed to Repository
+  # creation (files/repo-create.sh). The `*` passes the name, which the wrapper checks; it refuses a name that exists.
+  - name: repo-create
+    args: ["create *", log]
+  # Posts one fixed-format comment, as the GitHub App, on the one pull request agent_box_checkpoint_note names, so a session
+  # that watches it wakes on a box finding (files/checkpoint-note.sh). The `*` passes `test` or a count, which the wrapper
+  # checks; the pull request is never an argument.
+  - name: checkpoint-note
+    args: ["post *", log]
+  # The hourly checkpoint as a box script (files/checkpoint-scan.sh and .py): run scans once and posts through
+  # checkpoint-note only on a new finding; show prints the last report. The timer runs `run` as the keys user.
+  - name: checkpoint-scan
+    args: [run, show]
+  # Reads the certificate the firewall's web UI serves and says how many days it has left (files/opnsense-cert-check.sh). It
+  # holds no key and writes nothing to the firewall; the daily timer (opnsense-cert-check.timer) runs `check` as the keys user.
+  - name: opnsense-cert-check
+    args: [check, status]
   # The pass ledger the merge sweep reads (D-0042 rule 2) and its stop switch (rule 8). The wrapper checks every argument.
   - name: pass-record
     args: ["add *", "show *", "halt *", "resume *"]
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
-    args: [up, rebuild, teardown, identity, log, diag]
+    # up and rebuild may name the commit to build (`*`); the wrapper takes only 7 to 40 hex digits on main.
+    args: [up, "up *", rebuild, "rebuild *", teardown, identity, log, diag, fit]
     runner: true   # the dev redeploy workflow (.github/workflows/lab-redeploy-dev.yml)
   # The tailnet stack's pipeline job (D-0041): plan, then apply the saved plan the owner's card named. The
   # workflow lab-tailnet.yml calls it on the runner; the card ID and the plan hash are required arguments.
@@ -187,6 +206,8 @@ agent_box_tls_check_url: ""
 agent_box_opnsense_backup: {}
 # When the daily OPNsense backup starts (systemd OnCalendar).
 agent_box_opnsense_backup_daily: "*-*-* 14:30:00 UTC"
+# The daily check of the certificate the firewall serves (needs agent_box_opnsense_backup, whose host it reads).
+agent_box_opnsense_cert_check_daily: "*-*-* 16:00:00 UTC"
 # The off-box copy of those configurations (pick 222, docs/runbooks/copy-opnsense-backup-off-box.md): restic sends them
 # daily to their own container in the Azure backup account (hosts/terraform/azure/backup), signed in as their own app
 # with a certificate made on the box. Private, through the inventory, from that folder's tofu outputs: account
@@ -284,6 +305,14 @@ agent_box_ci_runner: {}
 # proxmox_node_name, vnet, template_vm_id, rdp_source (the tailnet connector's address, where RDP arrives from) and optionally
 # admin_user (default admin). Empty leaves the wrapper unset up.
 agent_box_desktop: {}
+# The one pull request the checkpoint-note wrapper comments on, written to <work_dir>/checkpoint-note.json:
+# repo (one the App is installed on) and number. A session subscribed to it wakes on each comment. Empty leaves the
+# file out, and the wrapper refuses.
+agent_box_checkpoint_note: {repo: agent-notebook, number: 729}
+# The hourly checkpoint scan (files/checkpoint-scan.py): a systemd timer that runs `checkpoint-scan.sh run` as the keys
+# user. It reads only, with a token narrowed to Contents and Pull requests read; false leaves the timer off.
+agent_box_checkpoint_scan: true
+agent_box_checkpoint_scan_on_calendar: "*-*-* *:07:00 UTC"
 # The owner's pick for a dev run on a node short of memory (docs/runbooks/rebuild-k8s-layer-with-one-command.md): ephemeral-dev
 # (the run stops the CI runner, tears dev down at its end, then the runner starts) or keep-dev (the runner stops and dev stays up; the
 # notebook's queued jobs fail or are cancelled after 24 hours queued, so if dev stays up for more than a day its daily access-expiry
@@ -301,7 +330,8 @@ agent_box_openbao_in_cluster: false
 # D-0058 rule 9: put, compare and reseed keep SOPS copies, and the weekly compare runs), and box_cidr (the box's own address
 # as a /32, which the dev rebuild passes to stage openbao-handover; empty until the box's path to the store is set), and
 # admin_address (the store's admin address, one address of dev's load-balancer pool, which needs box_cidr; the dev rebuild
-# passes it on and every call goes there, D-0062). Empty leaves the wrapper unset up.
+# passes it on and every call goes there, D-0062), and offbox (default false; true only by the owner's tap, since the
+# hourly send below holds a delete, its daily prune, D-0042 rule 6). Empty leaves the wrapper unset up.
 agent_box_secrets_store: {}
 # The same settings for the store inside prod's c1, written to <work_dir>/secrets-store-prod.json for the secrets-store-prod
 # wrapper. address must equal the prod inventory's k8s_gitops_source_openbao_store_host (the box's copy,
@@ -317,9 +347,10 @@ agent_box_secrets_store_prod: {}
 agent_box_openbao_prod: {}
 # When the weekly compare of the store with its SOPS copy runs (systemd OnCalendar), once sops_copies is true.
 agent_box_secrets_store_compare_on_calendar: "Mon *-*-* 05:00:00"
-# The dev store's hourly snapshot off the box (pick 237, docs/runbooks/set-up-the-secrets-store.md), set up when both
-# agent_box_secrets_store and agent_box_opnsense_offbox are set. Its own restic repository in pick 222's container,
-# with pick 222's password; keeps 48 hourly, 14 daily and 6 monthly; prunes once a day, on the first run from 03:00 UTC.
+# The dev store's hourly snapshot off the box (pick 237, docs/runbooks/set-up-the-secrets-store.md), set up only when
+# agent_box_secrets_store and agent_box_opnsense_offbox are both set and agent_box_secrets_store.offbox is true. Its own
+# restic repository in pick 222's container, with pick 222's password; keeps 48 hourly, 14 daily and 6 monthly;
+# prunes once a day, on the first run from 03:00 UTC.
 agent_box_secrets_store_offbox:
   repository: azure:opnsense-backup:/openbao-dev
   keep_hourly: 48
@@ -337,11 +368,24 @@ agent_box_vps_host: {}
 agent_box_opnsense_test: {}
 # The first subordinate UID and GID of the keys user, for the proof's rootless Keycloak container (65536 of each).
 agent_box_opnsense_test_subid_start: 300000
-# Private settings for the lab-test wrapper, written to <work_dir>/lab-test.json: name (STD-0001), domain (the copy's
-# search domain), address (its dev address), cores (2 or more), memory_mb (7168 or more), disk_gb (32 or more) and
-# proxmox_node_name. The VM ID is fixed at 256 (docs/specs/2026-11-lab-test-copy.md). Empty leaves the wrapper's
-# tools and settings not set up.
+# Settings for the lab-test wrapper, written to <work_dir>/lab-test.json: name (STD-0001), domain (the copy's search
+# domain), address (its dev address), cores (2 or more), memory_mb (7168 or more), disk_gb (32 or more) and, only if
+# the inventory sets it, proxmox_node_name. The VM ID is fixed at 256 (docs/specs/2026-11-lab-test-copy.md). The copy
+# is a throwaway on dev's VLAN, so these defaults are made up: a name in the STD-0001 form that no real host has, a
+# .invalid domain (RFC 6761: it never resolves) and one address in dev's 10.1.30.0/24 below the load-balancer pool
+# (docs/standards/0002-ip-address-plan.md). Without a proxmox_node_name the wrapper reads the node at run time from the
+# Proxmox API (GET /nodes) with the agents' token, so no node name is written into the repository.
+agent_box_lab_test_default:
+  name: ddehvlabtest01
+  domain: lab-test.invalid
+  address: 10.1.30.199
+  cores: 2
+  memory_mb: 7168
+  disk_gb: 32
+# The inventory's own settings, merged over the default key by key. Empty uses the default as it is.
 agent_box_lab_test: {}
+# false skips the wrapper's assistant, helper and settings file.
+agent_box_lab_test_enabled: true
 # proxmox-auto-install-assistant for the lab-test wrapper, matching the Proxmox VE 9.2 ISO it prepares; the sha256 is
 # the package's line in pve-no-subscription's trixie Packages index (read 2026-11-18). Its download is plain http,
 # so the pin is the only integrity check.
@@ -351,7 +395,10 @@ agent_box_pve_assistant_sha256: 94b562ac026bf9a989e0a5834538ad24e38606f8858367af
 # The controller's private files the prod_files tasks copy to <keys_dir>/prod (D-0035; paths from
 # docs/runbooks/rebuild-home-lab-from-scratch.md). from: clone (the controller's checkout of this
 # repo) or config (~/.config/central-hub). A missing file is skipped and named. Not listed on purpose:
-# the Proxmox apply token, the Cloudflare bootstrap token, the nodes' SSH keys and the lab CA.
+# the Proxmox apply token, the Cloudflare bootstrap token, the nodes' SSH keys, and the lab root CA's key and
+# passphrase (lab-ca/root.key, lab-ca/lab-ca.env), needed only to sign the next intermediate.
+# The lab CA files listed are the three rebuild-prod.sh points the prod inventory at (k8s_certs_lab_ca_cert_file,
+# k8s_certs_lab_ca_key_file, k8s_gitops_sso_root_ca_file): c1's intermediate chain, its key and the public root.
 agent_box_prod_files:
   - {from: clone, path: hosts/.env, dest: hosts.env}
   - {from: clone, path: hosts/ansible/inventories/home/hosts.yml, dest: inventory-hosts.yml}
@@ -372,6 +419,8 @@ agent_box_prod_files:
   - {from: config, path: cloudflare-dns.token, dest: cloudflare-dns01-token.txt}
   - {from: config, path: pve-root-ca.pem, dest: pve-root-ca.pem}
   - {from: config, path: lab-ca/root.crt, dest: lab-ca/root.crt}
+  - {from: config, path: lab-ca/c1-intermediate-chain.crt, dest: lab-ca/c1-intermediate-chain.crt}
+  - {from: config, path: lab-ca/c1-intermediate.key, dest: lab-ca/c1-intermediate.key}
 # Switch for the prod_files tasks, which copy the controller's private lab files to the box. Off: a
 # run that copies them is a decision (docs/runbooks/set-up-the-agent-box.md, "Copy the controller's
 # private files to the box"), so it is turned on for one run and off again.
@@ -404,6 +453,13 @@ agent_box_limit_apply: false
 # remembering to run it. It does no more than a session's run: it stops on any limit change with no approval line.
 agent_box_self_apply_timer: true
 agent_box_self_apply_interval: 10min
+
+# The dev rebuild's timer run (files/rebuild.sh auto, TASK-0291 row 2b): every interval it builds main's newest commit on
+# dev, but only when no rebuild run is going, the newest full run did not already build that commit, a file under hosts/
+# changed since the newest full pass, and the memory preflight fits without stopping the owner's desktop VM. Each run
+# that starts stops VM 300 for its length under ephemeral-dev, as a hand run does.
+agent_box_rebuild_auto: true
+agent_box_rebuild_auto_interval: 2h
 
 # The merge sweep (D-0042 rule 2): a systemd timer that runs `pr-merge.sh sweep` as the keys user. Off until the inventory
 # turns it on, because installing it is a change to the box's limits (D-0042 rule 6).

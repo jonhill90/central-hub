@@ -179,18 +179,22 @@ out=$(SHORT_NODE=keep-dev FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); che
 check "keep-dev says it stopped" "$out" "runner stop: VM 300 is stopped" ""
 out=$(SHORT_NODE=ephemeral-dev FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); check "ephemeral-dev stops VM 300 and the run passes" "$out" "short-node setting is ephemeral-dev" "refused"
 out=$(SHORT_NODE="" run dev 31 17); check "enough memory needs no setting" "$out" "rc=0" "refused"
-# The end-of-run teardown, only for ephemeral-dev on dev with this run's marker; a failed run reads the cluster first.
-td() { # marker content (empty: no marker), teardown rc, env, short-node value, "failed" or empty
+# The end-of-run teardown, for ephemeral-dev on dev: every full run, and a run with --only only with this run's marker;
+# a failed run reads the cluster first.
+td() { # marker content (empty: no marker), teardown rc, env, short-node value, "failed" or empty, --only value
   rm -rf "$t/envdir" "$t/tdcalls" "$t/rebuild.log"; mkdir -p "$t/envdir"; : > "$t/tdcalls"; : > "$t/rebuild.log"; [ -z "$1" ] || printf '%s\n' "$1" > "$t/envdir/ci-runner-stopped"
-  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 TDRC=${2:-0} ENV_NAME=${3:-dev} PREFLIGHT_SHORT_NODE=${4-ephemeral-dev} bash -c '. "$1"; kc() { echo "kc $*" >> "'"$t"'/tdcalls"; echo "fake-app Synced Healthy"; }; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; if runner_run_teardown "$2"; then echo "rc=0"; else echo "rc=$?"; fi' _ "$t/fn.sh" "${5:-}" 2>&1; }
+  env_dir="$t/envdir" log="$t/rebuild.log" raw="$t/raw" stamp=run1 only="${6:-}" TDRC=${2:-0} ENV_NAME=${3:-dev} PREFLIGHT_SHORT_NODE=${4-ephemeral-dev} bash -c '. "$1"; kc() { echo "kc $*" >> "'"$t"'/tdcalls"; echo "fake-app Synced Healthy"; }; run_stage() { echo "$1" >> "'"$t"'/tdcalls"; return "$TDRC"; }; if runner_run_teardown "$2"; then echo "rc=0"; else echo "rc=$?"; fi' _ "$t/fn.sh" "${5:-}" 2>&1; }
 out=$(td run1); check "this run's marker tears dev down" "$out" "this run stopped VM 300 and the short-node setting is ephemeral-dev, so dev is torn down now" "rc=1"
 check "the teardown stage ran" "$(cat "$t/tdcalls")" "teardown" ""
 check "and says rc=0" "$out" "teardown end rc=0" ""
 check "a pass reads no diag" "$(cat "$t/tdcalls")" "teardown" "kc "
-out=$(td run0); check "a marker from an earlier run is not this run's" "$out" "rc=0" "torn down"
-check "no teardown stage ran for it" "x$(cat "$t/tdcalls")" "x" "teardown"
-out=$(td ""); check "no marker means no teardown" "$out" "rc=0" "torn down"
-check "no teardown stage ran without a marker" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td run0); check "a full run with a marker from an earlier run still tears dev down: dev lasts one run" "$out" "ephemeral-dev, so dev lasts one run and is torn down now" "this run stopped"
+check "the teardown stage ran for it" "$(cat "$t/tdcalls")" "teardown" ""
+out=$(td ""); check "a full run that stopped nothing tears dev down too" "$out" "dev lasts one run and is torn down now" "rc=1"
+check "the teardown stage ran without a marker" "$(cat "$t/tdcalls")" "teardown" ""
+out=$(td "" 0 dev ephemeral-dev "" identity-keycloak); check "a run with --only and no marker of its own leaves dev up" "$out" "rc=0" "torn down"
+check "no teardown stage ran for the --only run" "x$(cat "$t/tdcalls")" "x" "teardown"
+out=$(td run0 0 dev ephemeral-dev "" identity-keycloak); check "a run with --only and an earlier run's marker leaves dev up" "$out" "rc=0" "torn down"
 out=$(td run1 1); check "a failed teardown is returned" "$out" "rc=1" "rc=0"
 out=$(td run1 0 prod); check "a prod env never tears down" "$out" "rc=0" "torn down"
 check "no teardown stage ran on prod" "x$(cat "$t/tdcalls")" "x" "teardown"
@@ -203,4 +207,44 @@ check "the diag lines are in the log with their prefix" "$(cat "$t/rebuild.log")
 check "the diag is read before the teardown" "$(tr '\n' ' ' < "$t/tdcalls")" "kc -n argocd get applications" ""
 if [ "$(grep -n 'kc ' "$t/tdcalls" | head -1 | cut -d: -f1)" -lt "$(grep -n '^teardown$' "$t/tdcalls" | head -1 | cut -d: -f1)" ]; then echo "ok   the first diag call comes before the teardown stage"; else echo "FAIL: the diag did not come first"; fail=1; fi
 grep -q 'runner_run_teardown || { echo' "$src" && grep -q 'runner_run_teardown failed || true' "$src" && echo "ok   the run tears dev down at its end, on a pass and on a failure" || { echo "FAIL: the end-of-run teardown is not wired both ways"; fail=1; }
+# --fit (PREFLIGHT_DRY): the same reads and refusals, but nothing is stopped and no POST is sent; a guest a run would
+# stop counts as its maxmem freed.
+posts() { grep -c -- '-X POST' "$t/argv" || true; }
+out=$(PREFLIGHT_DRY=true run dev 31 22); check "fit: 9216 free plus VM 300's 2048 maxmem fits" "$out" "fit check: VM 300 is running; a run would stop it; its maxmem 2048 MiB counted as freed, estimate 11264 MiB" "refused"
+check "fit: it passes" "$out" "rc=0"; check "fit: no marker" "$out" "marker=no"
+check "fit: nothing stopped (no POST)" "posts=$(posts)" "posts=0"
+out=$(PREFLIGHT_DRY=true run dev 31 28); check "fit: 3072 free plus 2048 is refused" "$out" "refused, estimate 5120 MiB is below 11008 MiB" "rc=0"
+check "fit: refused, still nothing stopped" "posts=$(posts)" "posts=0"
+out=$(PREFLIGHT_DRY=true FAKE_DESKTOP=yes run dev 31 24); check "fit: the desktop's 4096 maxmem makes 7168 fit" "$out" "fit check: VM 400 (the desktop) is running; a run would stop it; its maxmem 4096 MiB counted as freed, estimate 11264 MiB" "refused"
+check "fit: the desktop alone was enough, VM 300 is not counted" "$out" "rc=0" "fit check: VM 300"
+check "fit: the desktop is not stopped" "posts=$(posts)" "posts=0"
+out=$(PREFLIGHT_DRY=true SHORT_NODE="" run dev 31 22); check "fit: with no short-node setting it refuses as a run would" "$out" "the short-node setting is not set" "rc=0"
+out=$(PREFLIGHT_DRY=true FAKE_GUEST_256=yes run dev 31 1); check "fit: VM 256 still refuses" "$out" "VM 256 (the lab test copy) exists" "rc=0"
+out=$(PREFLIGHT_DRY=true run dev 31 17); check "fit: enough memory fits with no estimate" "$out" "rc=0" "fit check"
+
+# rebuild-k8s.sh --fit end to end: exit 0 and "fit: yes", or 3 and "fit: no"; no logs folder; dev only.
+fitrun() { # env used_gib
+  rm -rf "$t/fitenv" "$t/state" "$t/calls" "$t/argv"; mkdir -p "$t/fitenv" "$t/state"; chmod 700 "$t/fitenv"; : > "$t/calls"; : > "$t/argv"
+  printf 'proxmox_node_name = "node-a"\nnode_vnet = "dev"\nnodes = {\n a = { vm_id = 250, role = "control-plane" }\n b = { vm_id = 251, role = "worker" }\n}\n' > "$t/fit.tfvars"
+  printf 'ENV_NAME=%s\nVM_ID_MIN=250\nVM_ID_MAX=257\nTFVARS=%s\nTFSTATE=%s\nTOFU_ENV=%s\nINVENTORY=%s\nPREFLIGHT_SHORT_NODE=ephemeral-dev\n' \
+    "$1" "$t/fit.tfvars" "$t/empty.tfstate" "$t/tofu.env" "$t/none.yml" > "$t/fitenv/rebuild.env"
+  PATH="$t/bin:$PATH" FAKE_TOTAL=$((31 * GIB)) FAKE_USED=$(($2 * GIB)) FAKE_DIR="$t/state" FAKE_CALLS="$t/calls" FAKE_ARGV="$t/argv" FAKE_STDIN="$t/stdin" \
+    bash "$src" "$t/fitenv" --fit 2>&1; echo "rc=$?"
+}
+out=$(fitrun dev 22); check "--fit: fits, exit 0" "$out" "fit: yes
+rc=0" ""
+check "--fit: no logs folder, so no run is logged" "$([ -e "$t/fitenv/logs" ] && echo logs || echo none) posts=$(posts)" "none posts=0"
+out=$(fitrun dev 28); check "--fit: does not fit, exit 3" "$out" "fit: no
+rc=3" ""
+out=$(fitrun prod 22); check "--fit: dev only" "$out" "--fit is for dev only" "fit: yes"
+
+# PREFLIGHT_KEEP_DESKTOP (the box's timer run): the desktop is never stopped, in a run or a fit check; VM 300 still may be.
+out=$(PREFLIGHT_KEEP_DESKTOP=true FAKE_DESKTOP=yes FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 24)
+check "keep-desktop: the desktop is left alone" "$out" "VM 400 (the desktop) is running and is left alone" "desktop stop"
+check "keep-desktop: VM 300 is still stopped and the run passes" "$out" "rc=0" "refused"
+if grep -q 'qemu/400/status/shutdown' "$t/argv"; then echo "FAIL keep-desktop: VM 400 got a shutdown"; fail=1; else echo "ok   keep-desktop: no shutdown sent to VM 400"; fi
+out=$(PREFLIGHT_KEEP_DESKTOP=true PREFLIGHT_DRY=true FAKE_DESKTOP=yes run dev 31 24)
+check "keep-desktop fit: 7168 plus VM 300's 2048 is refused, the desktop not counted" "$out" "refused, estimate 9216 MiB is below 11008 MiB" "maxmem 4096"
+check "keep-desktop fit: nothing stopped" "posts=$(posts)" "posts=0"
+
 exit $fail

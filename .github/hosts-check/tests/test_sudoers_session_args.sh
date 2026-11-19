@@ -55,6 +55,8 @@ print("8", lines(tp, "sess") == ["sess ALL=(keys) NOPASSWD: /x/tailnet-policy.sh
 vh = render([w for w in d if w["name"] == "vps-host"])
 print("9", lines(vh, "sess") == ["sess ALL=(keys) NOPASSWD: /x/vps-host.sh status, /x/vps-host.sh log"],
       lines(vh, "run") == ["run ALL=(keys) NOPASSWD: /x/vps-host.sh bootstrap, /x/vps-host.sh apply, /x/vps-host.sh secrets, /x/vps-host.sh secrets rotate, /x/vps-host.sh status, /x/vps-host.sh log"])
+oc = render([w for w in d if w["name"] == "opnsense-cert-check"])
+print("10", lines(oc, "sess") == ["sess ALL=(keys) NOPASSWD: /x/opnsense-cert-check.sh check, /x/opnsense-cert-check.sh status"], lines(oc, "run") == [])
 PY
 )
 check() { # number, text
@@ -69,4 +71,5 @@ check 6 "6. the runner user gets no pr-merge or pass-record line (the merge job 
 check 7 "7. proxmox-host: as hostops; the session checks and reads the log, only the runner has the ungated apply; sessions have apply-recorded"
 check 8 "8. tailnet-policy: the session gets plan and log only, the runner also apply"
 check 9 "9. vps-host: the session gets status and log only, the runner every action"
+check 10 "10. opnsense-cert-check: the session gets check and status as the keys user, the runner nothing"
 exit "$fail"

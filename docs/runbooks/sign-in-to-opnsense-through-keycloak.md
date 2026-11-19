@@ -4,11 +4,11 @@ status: draft
 kind: manual
 trigger: once, on a test OPNsense first and then on the lab firewall with the owner's tap (D-0037 rule 5); again for every new plugin version and every OPNsense upgrade, on the test OPNsense first
 runner: an agent lane from the agent box for the test OPNsense and its throwaway Keycloak; the c1 realm and lab firewall step only after the owner's tap
-outcome: the OPNsense login page offers a Keycloak button; a Keycloak user bound to a local OPNsense account signs in with that account's rights; an unknown identity waits for an admin's approval; root signs in with its local password with the plugin's server disabled (proven), and with Keycloak stopped (D-0037 rule 5, not yet proven)
+outcome: the OPNsense login page offers a Keycloak button; a Keycloak user bound to a local OPNsense account signs in with that account's rights; an unknown identity waits for an admin's approval; root signs in with its local password with the plugin's server disabled, and with it enabled and Keycloak stopped (D-0037 rule 5); all proven on the test OPNsense
 needs: for the test, the opnsense-test wrapper on the agent box (prove-opnsense-sign-in-on-dev.md), with dev torn down; for the lab firewall, realm lab on c1 (set-up-lab-sign-in.md) and the GUI on a name in the lab CA's certificate (set-opnsense-gui-certificate.md); OPNsense reaches its Keycloak issuer on 443 for every sign-in
 private-values: [k8s_identity_opnsense_hosts, OPNSENSE_CLIENT_SECRET, opnsense-root-password]
-files: [hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/defaults/main.yml, hosts/ansible/roles/k8s_identity/vars/main.yml]
-last-tested: "2026-11-17, an agent, the realm rendered with the opnsense client for CI's realm import; 2026-11-18, an agent, steps 1 to 4 on the test OPNsense with opnsense-test at central-hub d333499 (OPNsense 26.1.11, os-openid-connect 1.0.0.beta5, Keycloak 26.8.1 with DPoP on), step 3's first four checks passed, its fifth (root signs in with Keycloak stopped) not run; step 5 not run"
+files: [hosts/ansible/bootstrap/opnsense-oidc-server.php, hosts/ansible/roles/k8s_identity/templates/realm.yaml.j2, hosts/ansible/roles/k8s_identity/defaults/main.yml, hosts/ansible/roles/k8s_identity/vars/main.yml]
+last-tested: "2026-11-17, an agent, the realm rendered with the opnsense client for CI's realm import; 2026-11-18, an agent, steps 1 to 4 on the test OPNsense with opnsense-test at central-hub d333499 (OPNsense 26.1.11, os-openid-connect 1.0.0.beta5, Keycloak 26.8.1 with DPoP on), step 3's first four checks passed, its fifth (root signs in with Keycloak stopped) not run; 2026-11-18, an agent, steps 1 to 4 again at central-hub 78efb14, all five of step 3's checks passed (the fifth is the prover's item 10); step 5 not run"
 superseded-by:
 ---
 
@@ -54,7 +54,7 @@ Steps 1 to 4 run on the test OPNsense, which signs in at a throwaway Keycloak on
    why: the SHA-256 pins the bytes that were read, and the attestation ties them to the repository's own build ([the plugin's install guide](https://github.com/jpawlowski/opnsense-openid-connect/blob/v1.0.0-beta5/docs/setup/install.md)).
    expect: the SHA-256 in the table above, and a verified attestation. On any other value, stop.
 
-2. **Install and set it up on the test OPNsense.** Copy the checked file from the agent box and install it with `pkg add` of that local file; OPNsense never downloads the plugin. On the test OPNsense, `opnsense-test configure` copies it over SSH as root with the box's own key for that VM, and seeds the server settings below into `/conf/config.xml`. How the box reaches the lab firewall is written here before step 5. On the lab firewall, under System > Access > Servers, add an OpenID Connect server with these settings:
+2. **Install and set it up on the test OPNsense.** Copy the checked file from the agent box and install it with `pkg add` of that local file; OPNsense never downloads the plugin. On the test OPNsense, `opnsense-test configure` copies it over SSH as root with the box's own key for that VM, and seeds the server settings below into `/conf/config.xml`. On the lab test copy's VM 100, the nano image the lab firewall runs, `lab-test signin` installs the same file over the copy's SSH and sets these settings on the running firewall with `hosts/ansible/bootstrap/opnsense-oidc-server.php`, which fixes D-0037 rule 5's settings in code ([build-the-lab-test-copy.md](build-the-lab-test-copy.md) step 8). How the box reaches the lab firewall is written here before step 5. On the lab firewall, under System > Access > Servers, add an OpenID Connect server with these settings:
    - provider profile Keycloak;
    - issuer: the throwaway Keycloak's realm; client `opnsense` and its secret;
    - application code `keycloak`;
@@ -74,7 +74,7 @@ Steps 1 to 4 run on the test OPNsense, which signs in at a throwaway Keycloak on
    - The sign-in used DPoP: Keycloak's discovery lists ES256 under `dpop_signing_alg_values_supported`, and the plugin's test sign-in reports its DPoP sender constraint.
    - An unknown Keycloak user is refused or waits in the approval queue.
    - With the plugin's server disabled, root signs in with its local password through the Local Database.
-   - With the throwaway Keycloak stopped, root signs in with its local password (D-0037 rule 5). Not yet proven: the 2026-11-18 run disabled the plugin's server with Keycloak still up (`hosts/ansible/roles/agent_box/files/opnsense-test-prove.py`, item 4).
+   - With the plugin's server enabled and the throwaway Keycloak stopped, root signs in with its local password (D-0037 rule 5). The prover stops the container first and checks that the VM no longer reaches its issuer (`hosts/ansible/roles/agent_box/files/opnsense-test-prove.py`, item 10).
 
    expect: all five. Keep the run's log in the agent notebook's run records, with no secret in it.
 

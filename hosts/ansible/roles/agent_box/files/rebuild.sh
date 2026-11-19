@@ -3,8 +3,17 @@
 # (hosts/rebuild-k8s.sh, docs/runbooks/rebuild-k8s-layer-with-one-command.md) from the agent box.
 # It runs as user `keys` through sudo, so the session that asks for it never sees the Proxmox
 # token, the node SSH key or the dev inventory. Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild|teardown|identity|log|diag
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild [<commit>]|teardown|identity|log|diag|fit
+#   rebuild.sh auto   (the rebuild-auto timer only, as the keys user; no sudo line)
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
+# auto: an `up` of main's newest commit, started only when all hold: no lab-test run is going or lately ended (its lock,
+# its state, its log's age: 60 minutes), no run is going (the lock), dev is down (no VM
+# in the dev state), the newest full
+# run did not already build that commit, a file under hosts/ changed since the newest full pass (or there is none on
+# main), and the memory preflight fits (rebuild-k8s.sh --fit) without stopping the owner's desktop VM, which a timer
+# run never stops (PREFLIGHT_KEEP_DESKTOP). Otherwise it says why in one line and exits 0.
+# up and rebuild build main's newest commit, or <commit> (7 to 40 hex digits) when given, which must be on main: the
+# commit a prod go names (rebuild-prod.sh rebuild <tap id> <commit>), so dev and prod build the same one.
 # identity: only the stage identity-keycloak (k8s-identity.yml --tags secrets,keycloak,signin: Keycloak and its
 # realm, then the owner's sign-in proof, step names and HTTP codes only) on the existing dev
 # cluster. Same dev guard, lock, checkout and log as the other runs; `log` shows it.
@@ -14,6 +23,8 @@
 # log: print the newest run's stage lines and its PASS/FAIL lines, nothing else (the raw log can quote the realm
 # and the nodes' output). A newer run that only tore dev down is named in one line and skipped, so it can't hide
 # a failed run's diag. It takes no argument and reads no other file.
+# fit: read-only. Would the dev memory preflight pass now (rebuild-k8s.sh --fit, nothing stopped, no run log), and the 12
+# running guests with the most memory on the cluster (vmid, name, memory), to name what grew. Exits 0 if it fits, 3 if not.
 # diag: read-only look at the dev cluster, for a failed apps stage: each dev VM's memory and CPU on Proxmox, the
 # node's memory, each dev node's free memory, load and pressure, the Argo CD applications' sync and
 # health, the newest events in the alerts and monitoring namespaces, pods that are not running, and
@@ -43,15 +54,154 @@ if [[ ${1:-} == log && $# -eq 1 ]]; then
   exit 0
 fi
 
+usage() { echo "usage: rebuild up|rebuild [<commit>]|teardown|identity|log|diag|fit|auto" >&2; exit 2; }
 action=${1:-}
+want=""
 case $action in
   up) extra=() ;;
   rebuild) extra=(--teardown) ;;
   teardown) extra=(--only teardown) ;;
   identity) extra=(--only identity-keycloak) ;;
   diag) extra=() ;;   # handled below, before anything is changed
-  *) echo "usage: rebuild up|rebuild|teardown|identity|log|diag" >&2; exit 2 ;;
+  fit) extra=() ;;    # handled below, before anything is changed
+  auto) extra=() ;;   # an `up`, when auto_decide says so
+  *) usage ;;
 esac
+# Only up and rebuild take an argument, the commit to build; every other action takes none.
+if [[ $action == up || $action == rebuild ]]; then
+  [[ $# -le 2 ]] || usage
+  want=${2:-}
+  [[ -z $want || $want =~ ^[0-9a-f]{7,40}$ ]] || usage
+else
+  [[ $# -eq 1 ]] || usage
+fi
+
+# The oldest commit a pin may name: main's merge of #624. A pin runs that commit's own hosts/rebuild-k8s.sh, and one
+# below it would leave dev up after a full run that had memory to spare (#624 tears dev down after every full run
+# under ephemeral-dev), below #573 run without the refusal while VM 256 (the lab test copy) exists, or below #343
+# without the memory preflight that stops VM 300 to fit dev. Raise it whenever rebuild-k8s.sh gains a refusal or an
+# end step every dev run must keep, and raise rebuild-prod.sh's with it.
+PIN_FLOOR=8c2f4cacca14de78bf0f5502d054ce3e92e33a74
+
+# The code a run builds: main's newest, or the commit named, only if main holds it and it is not older than
+# PIN_FLOOR. Never a branch, never a commit main does not hold (D-0035 rule 4).
+checkout_main() { # repo [commit]
+  local pinned
+  git -C "$1" fetch --quiet origin main || return 1
+  if [[ -n ${2:-} ]]; then
+    pinned=$(git -C "$1" rev-parse --quiet --verify "$2^{commit}") ||
+      { echo "rebuild: commit $2 is not in the box's checkout of main" >&2; return 1; }
+    git -C "$1" merge-base --is-ancestor "$pinned" origin/main ||
+      { echo "rebuild: commit $2 is not on main" >&2; return 1; }
+    git -C "$1" merge-base --is-ancestor "$PIN_FLOOR" "$pinned" ||
+      { echo "rebuild: commit $2 is older than the floor ${PIN_FLOOR:0:7}, whose rebuild-k8s.sh has the refusals and the teardown a dev run must keep" >&2; return 1; }
+    git -C "$1" checkout --quiet --detach "$pinned"
+  else
+    git -C "$1" checkout --quiet --detach origin/main
+  fi
+}
+
+# The memory preflight alone (rebuild-k8s.sh --fit): nothing is stopped and no run log is written. Its output is left in
+# $work/state/rebuild-fit/fit.out; returns its exit code. Used by auto and by the fit action.
+fit_check() {
+  local sn="" fitdir
+  if [[ -f $work/short-node ]]; then
+    sn=$(tr -d '[:space:]' < "$work/short-node")
+    case $sn in ephemeral-dev|keep-dev) ;; *) sn="" ;; esac
+  fi
+  fitdir=$work/state/rebuild-fit
+  install -d -m 700 "$fitdir"
+  printf '%s\n' ENV_NAME=dev VM_ID_MIN=250 VM_ID_MAX=257 "TFVARS=$keys/dev-vms.tfvars" "TFSTATE=$work/state/dev-vms.tfstate" \
+    "TOFU_ENV=$keys/proxmox-dev.env" "INVENTORY=$inventory/" PREFLIGHT_KEEP_DESKTOP=true ${sn:+"PREFLIGHT_SHORT_NODE=$sn"} > "$fitdir/rebuild.env"
+  chmod 600 "$fitdir/rebuild.env"
+  if ! bash "$repo/hosts/rebuild-k8s.sh" "$fitdir" --fit > "$fitdir/fit.out" 2>&1; then
+    return 1
+  fi
+  return 0
+}
+
+# A lab-test run, or what one leaves behind, comes before the timer's dev build: the copy (VM 256) and dev both need
+# the node's memory, and a tick that lands between two proves would make the second refuse (lab-test.sh: its lock
+# $work/state/lab-test.lock, its state $work/state/lab-test.tfstate, its log $work/state/lab-test.log, written by every
+# run but `log`). Prints one line and returns 0 when the timer must skip: the lock is held, the state holds a VM
+# (a resource of type proxmox_virtual_environment_vm) or can't be read, or the log was written less than
+# LAB_TEST_QUIET_MIN minutes ago. Only VMs count: lab-test destroy keeps the installer ISO in the state for the next
+# build (lab-test.sh, destroy), so a state that holds only the ISO is an idle lab-test. Reads only; takes no lock for
+# more than the probe.
+LAB_TEST_QUIET_MIN=60
+lab_test_busy() {
+  local lock=$work/state/lab-test.lock tf=$work/state/lab-test.tfstate lg=$work/state/lab-test.log n age
+  if [[ -e $lock ]] && ! ( flock -n 7 ) 7< "$lock" 2>/dev/null; then
+    echo "rebuild auto: a lab-test run holds its lock; nothing started"
+    return 0
+  fi
+  if [[ -s $tf ]]; then
+    n=$(python3 -I -c 'import json,sys
+print(sum(1 for r in json.load(open(sys.argv[1])).get("resources", []) if r["type"] == "proxmox_virtual_environment_vm"))' "$tf" 2>/dev/null) || n=unreadable
+    if [[ $n != 0 ]]; then
+      echo "rebuild auto: the lab-test state holds $n VM resources (the copy, VM 256, may exist); nothing started"
+      return 0
+    fi
+  fi
+  if [[ -e $lg ]]; then
+    age=$(( ( $(date +%s) - $(stat -c %Y "$lg") ) / 60 ))
+    if (( age < LAB_TEST_QUIET_MIN )); then
+      echo "rebuild auto: the last lab-test run wrote its log $age minutes ago, inside the $LAB_TEST_QUIET_MIN-minute quiet window; nothing started"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# auto: whether the timer's run starts. Prints one line and returns 1 when it does not. The newest full run is the newest
+# log with a `vms` stage (a teardown or identity run has none); a full pass also ends every stage, `checks` included, and
+# says `rebuild: all stages passed`. Reads the logs, the checkout and the node's memory (rebuild-k8s.sh --fit); writes
+# only the fit check's own settings file.
+auto_decide() {
+  local head f newest="" pass="" nc pc changed up
+  head=$(git -C "$repo" rev-parse HEAD)
+  if lab_test_busy; then return 1; fi
+  # Dev must be down: with dev VMs in the state the preflight skips its memory check (a re-run makes no new VMs), so
+  # --fit would say yes, and a timer run would build over a dev someone kept up. An unreadable state counts as up.
+  up=$(python3 -I -c '
+import json, sys
+try:
+    s = json.load(open(sys.argv[1]))
+except FileNotFoundError:
+    print(0); sys.exit()
+print(sum(len(r.get("instances", [])) for r in s.get("resources", [])
+          if r.get("type") == "proxmox_virtual_environment_vm" and r.get("mode") == "managed"))' "$work/state/dev-vms.tfstate" 2>/dev/null) || up=unreadable
+  if [[ $up != 0 ]]; then
+    echo "rebuild auto: dev is up ($up VMs in the dev state), so a timer run would not start from an empty dev; nothing started"
+    return 1
+  fi
+  while read -r f; do
+    grep -Eq '^[0-9TZ:-]+ vms start$' "$f" || continue
+    [[ -n $newest ]] || newest=$f
+    if grep -qx 'rebuild: all stages passed' "$f" && grep -Eq '^[0-9TZ:-]+ checks end rc=0 ' "$f"; then pass=$f; break; fi
+  done < <(ls -1 "$envdir"/logs/rebuild-*.log 2>/dev/null | sort -r)
+  nc=$( [[ -z $newest ]] || sed -n 's/^rebuild: central-hub \([0-9a-f]\{40\}\)$/\1/p' "$newest" | head -n 1)
+  if [[ -n $nc && $nc == "$head" ]]; then
+    echo "rebuild auto: the newest full run, ${newest##*/}, already built main's head ${head:0:7} ($([[ $newest == "$pass" ]] && echo passed || echo 'did not pass')); nothing started"
+    return 1
+  fi
+  pc=$( [[ -z $pass ]] || sed -n 's/^rebuild: central-hub \([0-9a-f]\{40\}\)$/\1/p' "$pass" | head -n 1)
+  if [[ -n $pc ]] && git -C "$repo" merge-base --is-ancestor "$pc" "$head" 2>/dev/null; then
+    changed=$(git -C "$repo" diff --name-only "$pc" "$head" -- hosts/ | wc -l)
+    if [[ $changed -eq 0 ]]; then
+      echo "rebuild auto: nothing under hosts/ changed since the newest full pass at ${pc:0:7} (${pass##*/}); nothing started"
+      return 1
+    fi
+    echo "rebuild auto: $changed files under hosts/ changed since the newest full pass at ${pc:0:7}"
+  else
+    echo "rebuild auto: no full pass on main is logged, so main's head is built"
+  fi
+  if ! fit_check; then
+    echo "rebuild auto: the memory preflight does not fit now ($(grep -E 'refused|could not be read' "$work/state/rebuild-fit/fit.out" | tail -n 1 | cut -c1-200)); nothing started"
+    return 1
+  fi
+  echo "rebuild auto: the memory preflight fits; building main's head ${head:0:7}"
+}
 
 keys=/etc/agent-keys
 work=/var/lib/agent-box
@@ -64,6 +214,35 @@ nodekey=$keys/rebuild-node-key
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export TF_DATA_DIR=$work/tofu-data/rebuild-dev TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
+
+if [[ ${1:-} == fit && $# -eq 1 ]]; then
+  # Read-only: would the dev memory preflight pass now, and which guests hold the node's memory. The preflight is
+  # rebuild-k8s.sh --fit (nothing stopped, no run log); the guest table is one GET of the dev token's guest list.
+  [[ -f $keys/proxmox-dev.env && -f $keys/dev-vms.tfvars ]] || { echo "rebuild: the dev token or tfvars is missing" >&2; exit 1; }
+  [[ -f $repo/hosts/rebuild-k8s.sh ]] || { echo "rebuild: no checkout yet; run rebuild up once" >&2; exit 1; }
+  mkdir -p "$work/state"
+  rc=0; fit_check || rc=$?
+  # fit uses the box's checkout as it is, without fetching: one older than the --fit flag (#635) fails with "unknown
+  # argument", which must not read as "does not fit".
+  echo "fit: checkout $(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  if grep -q 'unknown argument' "$work/state/rebuild-fit/fit.out"; then
+    echo "fit: this checkout is older than the --fit flag, so no answer; run rebuild up once to update it"
+  fi
+  grep -E 'preflight|refused|could not be read|^fit:' "$work/state/rebuild-fit/fit.out" | cut -c1-300 | tail -n 20 || true
+  echo "== the 12 guests holding the most memory on the cluster (vmid, name, status, memory used of max, MiB)"
+  # shellcheck source=/dev/null
+  ( set -a; . "$keys/proxmox-dev.env"; set +a
+    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - "${PROXMOX_VE_ENDPOINT%/}/api2/json/cluster/resources?type=vm" 2>/dev/null ) |
+    python3 -I -c 'import json,sys
+rows = [r for r in json.load(sys.stdin)["data"] if r.get("status") == "running"]
+for r in sorted(rows, key=lambda r: -int(r.get("mem", 0)))[:12]:
+    print("vmid=%s name=%s status=%s mem=%s of %s MiB" % (r.get("vmid"), r.get("name"), r.get("status"),
+          int(r.get("mem", 0)) // 1048576, int(r.get("maxmem", 0)) // 1048576))' \
+    || echo "(the guest list could not be read)"
+  exit $(( rc == 0 ? 0 : 3 ))
+fi
 
 if [[ ${1:-} == diag && $# -eq 1 ]]; then
   [[ -f $inventory/hosts.yml ]] || { echo "rebuild: no dev inventory yet; run rebuild up first" >&2; exit 1; }
@@ -166,10 +345,13 @@ openssl x509 -checkend 2592000 -noout -in "$keys/azure-reader.env" > /dev/null \
 # One rebuild run at a time, in its own checkout: no other run, of this wrapper or another, can
 # move the code under it. The lock is held until the run and everything it starts end.
 exec 9>"$work/state/rebuild.lock"
-flock -n 9 || { echo "rebuild: another rebuild run is going; try again when it ends" >&2; exit 1; }
+if ! flock -n 9; then
+  [[ $action != auto ]] || { echo "rebuild auto: a rebuild run (dev or prod) is going; nothing started"; exit 0; }
+  echo "rebuild: another rebuild run is going; try again when it ends" >&2; exit 1
+fi
 [[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"
-git -C "$repo" fetch --quiet origin main
-git -C "$repo" checkout --quiet --detach origin/main
+checkout_main "$repo" "$want" || exit 1
+if [[ $action == auto ]]; then auto_decide || exit 0; fi
 echo "rebuild: central-hub $(git -C "$repo" rev-parse --short HEAD)"
 # Rebuilt dev VMs get new SSH host keys, and the inventory's accept-new setting refuses a changed key.
 # This file only holds keys learned from earlier dev runs, so each run starts without it (after the lock,
@@ -223,7 +405,10 @@ stages="vms cluster storage restore gitops secrets apps gateway checks"
 openbao_env=""
 store_url=""
 store_keys=$keys/dev
-if [[ -s $store_keys/openbao-rebuild-role-id && -s $store_keys/openbao-rebuild-secret-id && -s $store_keys/secrets-store-ca.crt && -s $work/secrets-store.json ]]; then
+# Never with the store inside the cluster switched on (below): stage app-secrets then writes this folder's
+# secrets-store-ca.crt for the in-cluster store, which must not turn this old wiring on and make the run refuse.
+if [[ ! ( -f $work/openbao-in-cluster && $(tr -d '[:space:]' < "$work/openbao-in-cluster") == true ) &&
+      -s $store_keys/openbao-rebuild-role-id && -s $store_keys/openbao-rebuild-secret-id && -s $store_keys/secrets-store-ca.crt && -s $work/secrets-store.json ]]; then
   store_addr=$(python3 -I -c 'import ipaddress, json, sys; print(ipaddress.ip_address(json.load(open(sys.argv[1]))["address"]))' "$work/secrets-store.json") \
     || { echo "rebuild: the secrets store's address in $work/secrets-store.json is not an IP address" >&2; exit 1; }
   store_url=https://$store_addr
@@ -249,12 +434,14 @@ fi
 # and this are never on together.
 # Dev only, with the store inside the cluster: the gate of stage app-secrets (hosts/rebuild-k8s.sh), which puts every
 # value the apps read into SOPS, then OpenBao, and compares the two (secrets-store.sh put-apps, then compare; D-0058
-# rule 8, plan step 8a). app_secrets_gate SETTINGS CACERT HOLD prints the one rebuild.env line: APP_SECRETS_HOOK when
-# the gate is open, else APP_SECRETS_SKIP with the first reason, in this order:
+# rule 8, plan step 8a). app_secrets_gate SETTINGS CACERT HOLD prints the rebuild.env lines: APP_SECRETS_HOOK and
+# APP_SECRETS_CACERT when the gate is open, else APP_SECRETS_SKIP with the first reason, in this order:
 #   1. the settings' sops_copies is not true: the owner's tap (D-0058 rule 9), off by default (agent_box_secrets_store);
 #   2. no box_cidr in the settings: no admin path from the box to the store (D-0062), so the admin login is refused;
-#   3. no CA file for the store beside the keys: every call that signs in checks the store against it;
-#   4. the rebuild hold is set: a write into the fresh store makes restore-rebuilt refuse (secrets-store.sh no_hold).
+#   3. the rebuild hold is set: a write into the fresh store makes restore-rebuilt refuse (secrets-store.sh no_hold).
+# The store's CA file is no gate: each run builds a fresh store with its own CA, which does not exist yet when the gate
+# is read. Open, the stage first writes this run's CA to CACERT from the store (rebuild-k8s.sh store_ca), and every
+# call that signs in checks the store against it.
 # Shut, the stage prints one SKIP line naming the reason and writes nothing. The day the tap comes, opening it is a
 # settings change (sops_copies true), not new code. secrets-store.sh checks sops_copies and the hold again itself.
 app_secrets_gate() {
@@ -263,13 +450,11 @@ app_secrets_gate() {
     reason="sops_copies is off: SOPS copies of the apps' secrets wait for the owner's tap (D-0058 rule 9); nothing written"
   elif ! python3 -I -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("box_cidr") else 1)' "$1" 2>/dev/null; then
     reason="no box_cidr in the secrets store's settings, so the box has no admin path to the store (D-0062); nothing written"
-  elif [[ ! -s $2 ]]; then
-    reason="no CA file for the store beside the keys (secrets-store-ca.crt); nothing written"
   elif [[ -e $3 ]]; then
     reason="the rebuild hold is set: run restore-rebuilt or clear-hold first; nothing written"
   fi
   if [[ -n $reason ]]; then printf 'APP_SECRETS_SKIP="%s"\n' "$reason"
-  else printf 'APP_SECRETS_HOOK="%s"\n' "$libexec/secrets-store.sh put-apps && $libexec/secrets-store.sh compare"; fi
+  else printf 'APP_SECRETS_HOOK="%s"\nAPP_SECRETS_CACERT="%s"\n' "$libexec/secrets-store.sh put-apps && $libexec/secrets-store.sh compare" "$2"; fi
 }
 app_secrets_env=""
 in_cluster=false
@@ -330,7 +515,7 @@ print(sum(len(r.get("instances", [])) for r in s.get("resources", [])
     { echo "rebuild: the dev state at $work/state/dev-vms.tfstate could not be read" >&2; exit 1; }
   fresh=false
   [[ ${extra[*]} == *teardown* ]] && fresh=true
-  [[ $action == up && $dev_vms == 0 ]] && fresh=true
+  [[ ($action == up || $action == auto) && $dev_vms == 0 ]] && fresh=true
   if [[ $fresh == true ]] && compgen -G "$store_keys/openbao-snapshots/raft-*.snap" >/dev/null; then
     [[ -e $work/state/secrets-store.rebuilding ]] || date -u +%FT%TZ > "$work/state/secrets-store.rebuilding"
     echo "rebuild: the secrets store's rebuild hold is set; after the run, restore-rebuilt (the owner's tap) or clear-hold"
@@ -352,6 +537,9 @@ if [[ -f $work/short-node ]]; then
 fi
 short_node_env=""
 [[ -z $short_node ]] || short_node_env="PREFLIGHT_SHORT_NODE=$short_node"
+# A timer run (auto) never stops the owner's desktop VM: the preflight leaves it running and judges without it.
+keep_desktop_env=""
+[[ $action != auto ]] || keep_desktop_env="PREFLIGHT_KEEP_DESKTOP=true"
 # A copy of the tfvars whose node key is the box's own, so the nodes accept the box.
 # The agents' token clones into pool dev, whose ACL survives a teardown, and clones only template 9001, the copy of template 9000 on VNet dev
 # (hosts/terraform/home/bootstrap/agent-access.sh); the Mac's tfvars name 9000, for its root token.
@@ -535,6 +723,7 @@ $openbao_env
 $seal_env
 $app_secrets_env
 $short_node_env
+$keep_desktop_env
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'
 ENV

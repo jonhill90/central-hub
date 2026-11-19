@@ -127,8 +127,8 @@ appended() { # env, only, key file: the stage list after the block, starting fro
   ENV_NAME=$1 only=$2 OPENBAO_SEAL_KEY_FILE=$3 bash -c 'stages=base; . "$1"; echo "$stages"' _ "$t/append.sh"
 }
 same() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: '$2'"; fail=1; fi; }
-same "a dev run without --only appends dev-ca and identity-keycloak" "$(appended dev "" "")" "base dev-ca identity-keycloak"
-same "with a key file the measurement goes after dev-ca, the hand-over after it, the apps' secrets last" "$(appended dev "" /k)" "base dev-ca openbao-measure openbao-handover identity-keycloak app-secrets"
+same "a dev run without --only appends dev-ca, identity-keycloak and panels last" "$(appended dev "" "")" "base dev-ca identity-keycloak panels"
+same "with a key file the measurement goes after dev-ca, the hand-over after it, the apps' secrets, then panels last" "$(appended dev "" /k)" "base dev-ca openbao-measure openbao-handover identity-keycloak app-secrets panels"
 same "--only appends nothing" "$(appended dev gitops /k)" "base"
 same "prod appends nothing" "$(appended prod "" /k)" "base"
 
