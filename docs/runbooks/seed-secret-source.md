@@ -8,13 +8,13 @@ outcome: every line of the controller's secret-source file is a Secret named aft
 needs: ClusterSecretStore c1 Ready (install-c1-add-ons-with-ansible.md step 1, or move-external-secrets-to-argo-cd.md); SSH to c1's control plane as D-0022 says; kubectl on the controller
 private-values: [secret-source.env, c1-control-plane]
 files: [hosts/kubernetes/home/c1/apps/secret-store/templates/store.yaml, hosts/ansible/roles/k8s_secrets/templates/store.yaml.j2, hosts/ansible/roles/k8s_secrets/defaults/main.yml]
-last-tested: not yet run
+last-tested: 2026-11-13 on dev, by the rebuild's `secrets` stage, not by the by-hand steps below. Run 20261113T085920Z (central-hub 8861d3d, from the agent box) logged `secrets` 45 s, `end rc=0`, and its `apps` stage then passed (170 s), which on dev waits for every ExternalSecret to be Ready. The stage runs `playbooks/k8s-secret-source.yml` on a file of `<name>=<value>` lines. Run 20261113T084245Z passed it too (46 s). The two later runs on 2026-11-18 are not counted here, because with `SECRET_SOURCE_FILE` unset the stage ends `rc=0` with a skip line, and no `secrets` timing is on record for them. The by-hand steps below, over SSH from the Mac, have not run
 superseded-by:
 ---
 
 # Seed namespace secret-source on c1 from the controller
 
-**Status:** draft. Written on 2026-11-08 from the store's manifest and the repository's search for its users. Not run.
+**Status:** draft. Written on 2026-11-08 from the store's manifest and the repository's search for its users. The by-hand steps have not run; dev's rebuild has run the same seeding from code (see `last-tested`).
 
 ## What goes in `secret-source` today
 
