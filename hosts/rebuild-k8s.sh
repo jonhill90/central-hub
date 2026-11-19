@@ -24,7 +24,7 @@
 #   PREFLIGHT_KEEP_DESKTOP  optional, dev only: true leaves the owner's desktop VM running when memory is short (the box's
 #                 timer run sets it); the preflight then judges without it.
 #   PREFLIGHT_MIN_FREE_MIB  optional, dev only: the least free memory (MiB) the Proxmox node must have before the VMs are made
-#                 (default: the dev VMs' memory below, summed over the nodes the tfvars declare, plus a 1024 MiB margin)
+#                 (default: the dev VMs' memory below, summed over the nodes the tfvars declare, plus a 512 MiB margin)
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
 #   OPENBAO_ADDR  optional: the secrets store, https://<name or address> with no path (proposed
 #                 D-0038). Set: stage `openbao` registers the cluster's new service-account key with
@@ -99,11 +99,14 @@ fi
 # 20261118T131441Z, and 3072 starved the API server (run 20261118T061140Z). Worker 6400: at 6144 the worker never passed
 # identity-keycloak (runs 20261117T043328Z and 20261118T131441Z) while the realm import ran with the operator's default
 # memory, request 1700Mi and limit 2Gi, beside Keycloak's own pod; dev now caps the import at DEV_REALM_IMPORT_MEMORY
-# below, 1 GiB less, and the worker keeps 256 MiB more than the size that failed. The sum, 9984, plus the 1024 MiB
-# margin is 11008. c1 (prod) keeps the sizes in its own tfvars.
+# below, 1 GiB less, and the worker keeps 256 MiB more than the size that failed. The sum, 9984, plus the 512 MiB
+# margin is 10496. c1 (prod) keeps the sizes in its own tfvars.
 DEV_MEMORY_MB_CONTROL_PLANE=3584
 DEV_MEMORY_MB_WORKER=6400
-# The preflight's margin is 1024 MiB: 3584 + 6400 + 1024 = 11008.
+# The preflight's margin is 512 MiB: 3584 + 6400 + 512 = 10496. It was 1024 (11008) until 2026-11-19; the fit check at
+# 05:37 UTC that day read an estimate of 10562 MiB with VM 300 counted as freed, 446 short of 11008, with the agent
+# box already holding only 620 MiB of cache (its drop-cache timer) and 1195 of the node's 8191 MiB swap in use. The
+# margin guards the node, not dev's VMs, whose sizes are fixed above; the node keeps its swap beside it.
 # Dev only: how long identity-keycloak waits for the realm import (seconds; the role's default is 600). At 6144 MiB the
 # worker's import timed out at 600 s on 2026-11-17 at 04:33 UTC; at 7168 MiB the whole stage took 176 s (run
 # 20261117T053037Z). 1200 gives the smaller worker twice the wait that ran out; if it still times out, the node-top
@@ -269,7 +272,7 @@ hook() { REPO=$repo INVENTORY=$INVENTORY bash -c "$1"; }
 # log says which branch ran): the Proxmox node must have enough free memory for the dev VMs beside the guests
 # already running (an agent pick from the measured RAM figures, the capacity plan v2.4 that Councils A, B and C passed on 2026-11-14). It reads the node's memory with the same token
 # the VMs use and refuses below PREFLIGHT_MIN_FREE_MIB (default: the dev VMs' memory by role, summed over the nodes
-# the tfvars declare, plus a 1024 MiB margin; 3584 + 6400 + 1024 = 11008 for one control plane and one worker). If the
+# the tfvars declare, plus a 512 MiB margin; 3584 + 6400 + 512 = 10496 for one control plane and one worker). If the
 # read fails, it refuses too: a number nobody saw is not a pass. Prints sizes in MiB only, never the token.
 # curl's error text in one short line, with the Proxmox token's secret part replaced by ***. Both preflight calls
 # use it, so neither can print the token.
@@ -463,7 +466,7 @@ for r in rows:
 }
 
 preflight_memory() {
-  local min node free field guests desktops needs margin=1024 add
+  local min node free field guests desktops needs margin=512 add
   local existing declared
   # A re-run on VMs the state already holds allocates no new VMs, and their memory is already taken, so the
   # node's free memory says nothing about it (measured on the box, 2026-11-14: 3547 MiB free with dev up).
