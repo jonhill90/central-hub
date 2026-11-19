@@ -15,6 +15,9 @@
 #   8. A path outside c1/, a bad key name and an empty value are refused before anything is written.
 #   9. With SECRETS_STORE_RESOLVE set (dev: the wrapper points every call at dev's Gateway), every curl call carries
 #      --resolve with that value; without it (every run above), none does.
+#  10. A failed sign-in names its cause and nothing private: no HTTP answer gives curl's exit code and its name; a
+#      refusal gives the HTTP code and OpenBao's text, with the secret ID as <id> and the source address only as the
+#      box's /32 or another address (SECRETS_STORE_BOX_CIDR). The login's curl carries a connect timeout.
 # SOPS and age come from their GitHub releases, checked against the SHA-256s the role installs.
 # Usage: .github/hosts-check/tests/test_secrets_store_kv.sh   (needs curl, python3 with PyYAML)
 set -uo pipefail
@@ -64,7 +67,7 @@ while i < len(args):
     if a == "-X": method = args[i + 1]; i += 2; continue
     if a == "-o": out = args[i + 1]; i += 2; continue
     if a == "-w": fmt = args[i + 1]; i += 2; continue
-    if a in ("--cacert", "--resolve"): i += 2; continue
+    if a in ("--cacert", "--resolve", "--connect-timeout", "--max-time"): i += 2; continue
     if a == "-H" and args[i + 1] == "@-": hdr_stdin = True; i += 2; continue
     if a in ("--data", "--data-binary"):
         v = args[i + 1]
@@ -89,6 +92,12 @@ def reply(code, obj=None):
     sys.exit(0)
 if path == "auth/approle/login":
     b = json.loads(body)
+    if mode == "noanswer":   # nothing answered: curl prints 000 for the code and exits 28
+        if fmt: sys.stdout.write("000")
+        sys.exit(28)
+    if mode == "cidr": reply(400, {"errors": ['source address "192.0.2.77" unauthorized through CIDR restrictions on the secret ID']})
+    if mode == "cidrbox": reply(400, {"errors": ['source address "192.0.2.30" unauthorized through CIDR restrictions on the secret ID']})
+    if mode == "echo": reply(400, {"errors": ['invalid secret_id "%s"' % b.get("secret_id")]})
     if mode == "nologin" or b != {"role_id": "$rid", "secret_id": "$sid"}: reply(400, {"errors": ["invalid"]})
     reply(200, {"auth": {"client_token": "tok-secret-1"}})
 if token != "tok-secret-1": reply(403, {"errors": ["permission denied"]})
@@ -173,7 +182,7 @@ r5c=$rc o5c=$out
 BAO=race kv put c1/app/db password < <(printf '%s' fifth-value-Rb44t)
 r5d=$rc o5d=$out
 if [[ $r5a -ne 0 && $o5a == *"the SOPS write failed; OpenBao was not written"* && -z $c5a && $s5a == same ]] &&
-   [[ $r5b -ne 0 && $o5b == *"SOPS is written, but the admin AppRole did not sign in, so OpenBao is not"* ]] &&
+   [[ $r5b -ne 0 && $o5b == *"SOPS is written, but the admin AppRole did not sign in (the store answered HTTP 400: invalid), so OpenBao is not"* ]] &&
    [[ $r5c -ne 0 && $o5c == *"SOPS is written, but OpenBao refused the write (HTTP 500)"* ]] &&
    [[ $r5d -ne 0 && $o5d == *"OpenBao refused the write (HTTP 400)"* && $(bao_val c1/app/db password) == "$v1" ]]; then
   ok "5. order: a failed SOPS write leaves OpenBao alone; a failed sign-in or refused write names which; a write in between is refused"
@@ -236,9 +245,28 @@ if [[ $r9a -ne 0 && $r9b -eq 0 && $r9c -eq 0 && $r9d -gt 0 ]]; then
   ok "9. with SECRETS_STORE_RESOLVE every curl call carries --resolve with it; without it none does"
 else bad "9. resolve before=$r9a rc=$r9b without=$r9c calls=$r9d"; fi
 
+# 10
+: > "$t/calls"
+BAO=noanswer kv compare </dev/null; r10a=$rc o10a=$out
+BAO=cidr SECRETS_STORE_BOX_CIDR=192.0.2.30/32 kv compare </dev/null; r10b=$rc o10b=$out
+BAO=cidrbox SECRETS_STORE_BOX_CIDR=192.0.2.30/32 kv compare </dev/null; r10c=$rc o10c=$out
+BAO="echo" kv put c1/app/db password < <(printf '%s' tenth-value-Mx31q); r10d=$rc o10d=$out
+cp "$t/sops.before" "$t/keys/dev/openbao-kv.sops.json"   # the put above left SOPS ahead, as its message says
+BAO=nologin kv compare </dev/null; r10e=$rc o10e=$out
+logins=$(grep '^curl ' "$t/args" | grep -c 'auth/approle/login')
+timed=$(grep '^curl ' "$t/args" | grep 'auth/approle/login' | grep -c -- '--connect-timeout 10 --max-time 30 ')
+if [[ $r10a -ne 0 && $o10a == *"the admin AppRole did not sign in (no HTTP answer: curl exit 28 (timed out))"* ]] &&
+   [[ $r10b -ne 0 && $o10b == *'did not sign in (the store answered HTTP 400: source address "<another address than the box'"'"'s /32>" unauthorized through CIDR restrictions on the secret ID)'* && $o10b != *192.0.2.77* ]] &&
+   [[ $r10c -ne 0 && $o10c == *'source address "<the box'"'"'s /32>" unauthorized'* && $o10c != *192.0.2.30* ]] &&
+   [[ $r10d -ne 0 && $o10d == *'did not sign in (the store answered HTTP 400: invalid secret_id "<id>"), so OpenBao is not'* && $o10d != *"$sid"* ]] &&
+   [[ $r10e -ne 0 && $o10e == *"did not sign in (the store answered HTTP 400: invalid)"* ]] &&
+   [[ $logins -gt 0 && $logins -eq $timed ]]; then
+  ok "10. a failed sign-in names its cause (curl exit and name, or HTTP code and OpenBao's text) with the ID and address masked; every login has a connect timeout"
+else bad "10. $r10a/$r10b/$r10c/$r10d/$r10e logins=$logins timed=$timed | $o10a | $o10b | $o10c | $o10d | $o10e"; fi
+
 # 4 (over every run above)
 leak=0
-for s in "$v1" "$v2" first-value second-value Wv93m fifth-value tok-secret-1 "$rid" "$sid" changed-in-bao only-in-bao; do
+for s in "$v1" "$v2" first-value second-value Wv93m fifth-value tenth-value tok-secret-1 "$rid" "$sid" changed-in-bao only-in-bao 192.0.2.77; do
   if grep -qF -- "$s" "$t/args"; then echo "     in an argument: $s"; leak=1; fi
   if [[ $all == *"$s"* ]]; then echo "     in the output: $s"; leak=1; fi
 done
