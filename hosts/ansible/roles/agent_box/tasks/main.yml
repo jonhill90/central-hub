@@ -1183,12 +1183,36 @@
 
 # --- The dev secrets store's hourly snapshot off the box (pick 237) -------------------------------------
 
-- name: Send the dev secrets store's snapshots off the box (only when the store's wrapper and the off-box copy are set)
+# The send holds a delete (the daily prune, D-0042 rule 6) and sends the store's snapshots to a place they are not
+# kept yet, so it is off until the inventory says agent_box_secrets_store.offbox: true, even when the store's wrapper
+# and the off-box copy are set. Setting the store's address alone turns no send on.
+- name: Send the dev secrets store's snapshots off the box (only when the store's wrapper and the off-box copy are set and the store's offbox is true)
   ansible.builtin.include_tasks:
     file: secrets_store_offbox.yml
     apply:
       tags: [wrappers, secrets_store_offbox]
-  when: agent_box_secrets_store | length > 0 and agent_box_opnsense_offbox | length > 0
+  when:
+    - agent_box_secrets_store | length > 0
+    - agent_box_opnsense_offbox | length > 0
+    - agent_box_secrets_store.offbox | default(false) is true
+  tags: [wrappers, secrets_store_offbox]
+
+# The off path: while the send is off, a timer left from an earlier run is stopped and disabled.
+- name: Is there a snapshot send timer to turn off
+  ansible.builtin.stat:
+    path: /etc/systemd/system/secrets-store-offbox.timer
+  register: agent_box_store_offbox_timer
+  when: not (agent_box_secrets_store.offbox | default(false) is true and agent_box_opnsense_offbox | length > 0)
+  tags: [wrappers, secrets_store_offbox]
+
+- name: The snapshot send's timer off, while the send is not turned on
+  ansible.builtin.systemd_service:
+    name: secrets-store-offbox.timer
+    enabled: false
+    state: stopped
+  when:
+    - not (agent_box_secrets_store.offbox | default(false) is true and agent_box_opnsense_offbox | length > 0)
+    - agent_box_store_offbox_timer.stat.exists | default(false)
   tags: [wrappers, secrets_store_offbox]
 
 # --- The lifeline NIC (pick 220) ---------------------------------------------------------------------

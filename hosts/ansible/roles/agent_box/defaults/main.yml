@@ -320,7 +320,8 @@ agent_box_openbao_in_cluster: false
 # D-0058 rule 9: put, compare and reseed keep SOPS copies, and the weekly compare runs), and box_cidr (the box's own address
 # as a /32, which the dev rebuild passes to stage openbao-handover; empty until the box's path to the store is set), and
 # admin_address (the store's admin address, one address of dev's load-balancer pool, which needs box_cidr; the dev rebuild
-# passes it on and every call goes there, D-0062). Empty leaves the wrapper unset up.
+# passes it on and every call goes there, D-0062), and offbox (default false; true only by the owner's tap, since the
+# hourly send below holds a delete, its daily prune, D-0042 rule 6). Empty leaves the wrapper unset up.
 agent_box_secrets_store: {}
 # The same settings for the store inside prod's c1, written to <work_dir>/secrets-store-prod.json for the secrets-store-prod
 # wrapper. address must equal the prod inventory's k8s_gitops_source_openbao_store_host (the box's copy,
@@ -336,8 +337,8 @@ agent_box_secrets_store_prod: {}
 agent_box_openbao_prod: {}
 # When the weekly compare of the store with its SOPS copy runs (systemd OnCalendar), once sops_copies is true.
 agent_box_secrets_store_compare_on_calendar: "Mon *-*-* 05:00:00"
-# The dev store's hourly snapshot off the box (pick 237, docs/runbooks/set-up-the-secrets-store.md), set up when both
-# agent_box_secrets_store and agent_box_opnsense_offbox are set. Its own restic repository in pick 222's container,
+# The dev store's hourly snapshot off the box (pick 237, docs/runbooks/set-up-the-secrets-store.md), set up only when
+# agent_box_secrets_store and agent_box_opnsense_offbox are both set and agent_box_secrets_store.offbox is true. Its own restic repository in pick 222's container,
 # with pick 222's password; keeps 48 hourly, 14 daily and 6 monthly; prunes once a day, on the first run from 03:00 UTC.
 agent_box_secrets_store_offbox:
   repository: azure:opnsense-backup:/openbao-dev

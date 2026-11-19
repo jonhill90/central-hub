@@ -383,7 +383,7 @@ On dev, every rebuild makes a fresh store. So the switch stays off there until t
 
 ## Off-box copy of the snapshots
 
-Pick 237, proposed D-0038 rule 8. **Not installed yet:** it is a box limit, which needs no card (D-0042 rule 4), and it holds a delete (the daily prune) under D-0042 rule 6, so it waits for the owner's tap. It also waits on the blocker in [the bundle's runbook](make-the-box-secrets-bundle.md#before-you-start): no agent or pipeline identity may hold role-assignment rights on the backup vault or container.
+Pick 237, proposed D-0038 rule 8. **Not installed yet:** it is a box limit, which needs no card (D-0042 rule 4), and it holds a delete (the daily prune) under D-0042 rule 6, so it waits for the owner's tap. The role installs it only when `agent_box_secrets_store.offbox` is `true` (false by default) and `agent_box_opnsense_offbox` is set: setting the store's `address` alone installs nothing, and while `offbox` is not true a timer left from an earlier run is stopped and disabled. It also waits on the blocker in [the bundle's runbook](make-the-box-secrets-bundle.md#before-you-start): no agent or pipeline identity may hold role-assignment rights on the backup vault or container.
 
 Each hour, while the box is up, `secrets-store-offbox.sh`:
 
