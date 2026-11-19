@@ -24,8 +24,8 @@
 #      in git, an unreadable Application or status, no tap id or a malformed one delete nothing; one not in the status is left.
 #  12. admin-firewall-check runs k8s-openbao-admin-firewall.yml with --check --diff and no tap; admin-firewall <tap id> runs it
 #      for real and logs the tap; admin-firewall with no tap id or a malformed one, or admin-firewall-check with one, runs nothing.
-#  13. refresh <tap id> runs k8s-openbao-refresh.yml with env prod and the admin IDs' files, and logs the tap; with no ID files
-#      (no hand-over yet), no tap id or a malformed one, it runs nothing.
+#  13. refresh <tap id> runs k8s-openbao-refresh.yml with env prod, the admin IDs' files and the CA file, and logs the tap; with
+#      no ID files (no hand-over yet), an admin address but no CA file, no tap id or a malformed one, it runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -350,11 +350,15 @@ mv "$t/run/rid.keep" "$t/keys/prod/openbao-admin-role-id"
 run refresh "$tap"; a_rc=$rc a_calls=$calls a_out=$out
 run refresh; n_rc=$rc n_calls=$calls
 run refresh not-a-tap; m_rc=$rc m_calls=$calls
+mv "$t/keys/prod/secrets-store-ca.crt" "$t/run/ca.keep"
+run refresh "$tap"; c_rc=$rc c_calls=$calls c_out=$out
+mv "$t/run/ca.keep" "$t/keys/prod/secrets-store-ca.crt"
 p=playbooks/k8s-openbao-refresh.yml
 if [[ $i_rc -ne 0 && -z $i_calls && $i_out == *"run openbao-prod handover first"* &&
-      $a_rc -eq 0 && $a_calls == "playbook -i $t/work/openbao-prod/inventory/ $p -e openbao_refresh_env=prod -e openbao_admin_role_id_file=$t/keys/prod/openbao-admin-role-id -e openbao_admin_secret_id_file=$t/keys/prod/openbao-admin-secret-id" &&
-      $a_out == *"owner tap $tap"* && $n_rc -eq 2 && -z $n_calls && $m_rc -eq 2 && -z $m_calls ]]; then
-  ok "13. refresh <tap id>: the play with env prod and the IDs' files, the tap logged; no hand-over yet, no tap or a bad tap: nothing run"
-else bad "13. noids rc=$i_rc [$i_calls] | run rc=$a_rc [$a_calls] | notap rc=$n_rc [$n_calls] | badtap rc=$m_rc [$m_calls]"; fi
+      $a_rc -eq 0 && $a_calls == "playbook -i $t/work/openbao-prod/inventory/ $p -e openbao_refresh_env=prod -e openbao_admin_role_id_file=$t/keys/prod/openbao-admin-role-id -e openbao_admin_secret_id_file=$t/keys/prod/openbao-admin-secret-id -e openbao_refresh_ca_file=$t/keys/prod/secrets-store-ca.crt" &&
+      $a_out == *"owner tap $tap"* && $n_rc -eq 2 && -z $n_calls && $m_rc -eq 2 && -z $m_calls &&
+      $c_rc -ne 0 && -z $c_calls && $c_out == *"run openbao-prod ca first"* ]]; then
+  ok "13. refresh <tap id>: the play with env prod, the IDs' files and the CA file, the tap logged; no hand-over yet, an admin address with no CA file, no tap or a bad tap: nothing run"
+else bad "13. noids rc=$i_rc [$i_calls] | run rc=$a_rc [$a_calls] | notap rc=$n_rc [$n_calls] | badtap rc=$m_rc [$m_calls] | noca rc=$c_rc [$c_calls]"; fi
 
 exit "$fail"
