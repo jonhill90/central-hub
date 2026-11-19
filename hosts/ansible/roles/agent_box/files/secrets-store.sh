@@ -148,6 +148,10 @@ elif [[ $env == dev ]]; then
   SECRETS_STORE_RESOLVE="$(setting address):443:$gateway"
 fi
 export SECRETS_STORE_RESOLVE
+# The box's /32 from the settings (empty until set), so a refused login can say whether OpenBao saw the box's own
+# address without printing any address (secrets-store-kv.sh, login).
+SECRETS_STORE_BOX_CIDR=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("box_cidr") or "")' "$settings")
+export SECRETS_STORE_BOX_CIDR
 curl() { if [[ -n ${SECRETS_STORE_RESOLVE:-} ]]; then command curl --resolve "$SECRETS_STORE_RESOLVE" "$@"; else command curl "$@"; fi; }
 
 # Only the root-owned helpers beside this file run with the keys. One run at a time.

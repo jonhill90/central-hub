@@ -49,14 +49,60 @@ call() {
   shift 2
   curl -s --cacert "$cacert" -X "$method" -H @- "$@" "$addr/$path" <<<"X-Vault-Token: $token"
 }
+# login: prints the admin token. On a failure it prints nothing and leaves the reason in $tmp/login.why, for why():
+# with no HTTP answer, curl's exit code and its name (https://curl.se/libcurl/c/libcurl-errors.html); with one, the
+# HTTP code and OpenBao's error text. That text can quote the secret ID ("invalid secret_id %q") and the source
+# address ("source address %q unauthorized through CIDR restrictions on the secret ID"; OpenBao v2.7.2,
+# internal/builtin/credential/approle/path_login.go lines 269 and 291), so both IDs become <id>; an IPv4 or IPv6
+# address becomes <the box's /32> or <another address than the box's /32> by SECRETS_STORE_BOX_CIDR (or <an address;
+# the box's /32 is not set> while it is empty), never itself; and a tailnet name (*.ts.net) becomes <tailnet name>. The
+# connect timeout ends a path that drops packets in 10 s, where the kernel's own retries took over two minutes.
 login() {
+  local rc=0
   python3 -I -c 'import json, sys; print(json.dumps({"role_id": open(sys.argv[1]).read().strip(), "secret_id": open(sys.argv[2]).read().strip()}))' \
     "$keys/openbao-admin-role-id" "$keys/openbao-admin-secret-id" |
-    curl -s --cacert "$cacert" -X POST --data @- "$addr/auth/approle/login" |
-    python3 -I -c 'import json, sys
-try: print(json.load(sys.stdin)["auth"]["client_token"])
-except Exception: pass'
+    curl -s --connect-timeout 10 --max-time 30 --cacert "$cacert" -X POST --data @- -o "$tmp/login.json" -w '%{http_code}' \
+      "$addr/auth/approle/login" > "$tmp/login.code" || rc=$?
+  python3 -I -c '
+import ipaddress, json, os, re, sys
+out, code_file, rc, rid_file, sid_file, why = sys.argv[1:7]
+def read(p):
+    try: return open(p).read()
+    except OSError: return ""
+def put(s): open(why, "w").write(s)
+code, body = read(code_file).strip(), read(out)
+if code == "200":
+    try: print(json.loads(body)["auth"]["client_token"]); sys.exit()
+    except Exception: put("the store answered HTTP 200 with no token"); sys.exit()
+if code in ("", "000"):
+    names = {"6": "the name did not resolve", "7": "the connection was refused or had no route", "28": "timed out",
+             "35": "the TLS handshake failed", "52": "the store sent nothing", "55": "sending failed",
+             "56": "receiving failed", "60": "the store'"'"'s certificate did not verify against the CA file"}
+    put("no HTTP answer: curl exit %s (%s)" % (rc, names.get(rc, "see curl'"'"'s exit codes")))
+    sys.exit()
+try: errs = json.loads(body).get("errors") or []
+except Exception: errs = []
+text = "; ".join(str(e) for e in errs) or "no error text"
+for f in (rid_file, sid_file):
+    v = read(f).strip()
+    if v: text = text.replace(v, "<id>")
+text = re.sub(r"[0-9a-fA-F-]{24,}", "<id>", text)
+box = os.environ.get("SECRETS_STORE_BOX_CIDR", "")
+try: net = ipaddress.ip_network(box, strict=False) if box else None
+except ValueError: net = None
+def addr(m):
+    try: a = ipaddress.ip_address(m.group(0))
+    except ValueError: return "<address>"
+    if net is None: return "<an address; the box'"'"'s /32 is not set>"
+    return "<the box'"'"'s /32>" if a.version == net.version and a in net else "<another address than the box'"'"'s /32>"
+text = re.sub(r"(?<![\w:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f.]*(?![\w:])", addr, text)
+text = re.sub(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", addr, text)
+text = re.sub(r"[\w.-]+\.ts\.net\b", "<tailnet name>", text)
+put("the store answered HTTP %s: %s" % (code, text[:300]))' \
+    "$tmp/login.json" "$tmp/login.code" "$rc" "$keys/openbao-admin-role-id" "$keys/openbao-admin-secret-id" "$tmp/login.why"
 }
+# why: the last failed login's reason, for the message that names it.
+why() { cat -- "$tmp/login.why" 2>/dev/null || echo "no reason recorded"; }
 # The SOPS file, decrypted into the private folder.
 plain() {
   "$libexec/sops" decrypt --input-type json --output-type json --output "$tmp/plain.json" "$kvfile" ||
@@ -86,7 +132,7 @@ case $action in
       "$libexec/sops" set --value-stdin "$kvfile" "$index" ||
       die "the SOPS write failed; OpenBao was not written"
     # 2. OpenBao: read, merge the one key, write back with check-and-set.
-    token=$(login) && [[ -n $token ]] || die "SOPS is written, but the admin AppRole did not sign in, so OpenBao is not; run put again"
+    token=$(login) && [[ -n $token ]] || die "SOPS is written, but the admin AppRole did not sign in ($(why)), so OpenBao is not; run put again"
     rc=$(call GET "kv/data/$path" -o "$tmp/current.json" -w '%{http_code}') || true
     [[ $rc == 200 || $rc == 404 ]] || die "SOPS is written, but reading kv/$path answered HTTP ${rc:-nothing}, so OpenBao is not; run put again"
     python3 -I -c '
@@ -105,7 +151,7 @@ json.dump({"options": {"cas": version}, "data": data}, open(out, "w"))' "$tmp/cu
   compare)
     [[ -e $kvfile ]] || die "no SOPS file ($kvfile): nothing has been written through put"
     plain
-    token=$(login) && [[ -n $token ]] || die "the admin AppRole did not sign in"
+    token=$(login) && [[ -n $token ]] || die "the admin AppRole did not sign in ($(why))"
     python3 -I -c 'import json, sys; print("\n".join(k for k in json.load(open(sys.argv[1])) if k != "sops"))' "$tmp/plain.json" > "$tmp/paths"
     differ=0 count=0
     while read -r path; do
@@ -133,7 +179,7 @@ for k in sorted(set(want) | set(have)):
   reseed)
     [[ -e $kvfile ]] || die "no SOPS file ($kvfile): nothing to reseed from"
     plain
-    token=$(login) && [[ -n $token ]] || die "the admin AppRole did not sign in"
+    token=$(login) && [[ -n $token ]] || die "the admin AppRole did not sign in ($(why))"
     # The empty-store guard, as secrets-store-restore.sh check 2: only 200 and 404 are answers; any key but
     # c1/check and the snapshot mark <env>/snapshot-mark means the store is not fresh, and nothing is written.
     found=() queue=("")
