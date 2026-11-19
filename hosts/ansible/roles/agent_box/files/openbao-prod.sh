@@ -28,12 +28,13 @@
 #           only if it is one PEM certificate. Run it after gitops, and again after a rebuild, which makes a new CA.
 # handover  playbooks/k8s-openbao-handover.yml with prod's admin AppRole IDs (/etc/agent-keys/prod/openbao-admin-*, made
 #           once by the same rule as secrets-store.sh, never printed).
-# refresh   playbooks/k8s-openbao-refresh.yml, once, after handover: the store's policies and its admin login's address
+# refresh   playbooks/k8s-openbao-refresh.yml, after handover: the store's policies and its admin login's address
 #           binding set again from git. Self-init makes them only at the store's first start, and prod's came before
-#           openbaoBoxCidr and openbaoMarkEnv reached it, so its admin is bound to 127.0.0.1/32 and its snapshot policy reads
-#           dev's mark. The play signs in as the admin from inside OpenBao's pod (so from 127.0.0.1), writes each policy that
-#           differs from ConfigMap openbao-policies, binds role admin to box_cidr, and prints the changed policy names and
-#           PASS. Then the admin signs in only from the box, so a rerun is refused at its login. It changes access rights
+#           openbaoMarkEnv reached it, so its snapshot policy reads dev's mark. With admin_address in the settings the play
+#           signs in as the admin from the box over the admin address (prod's admin is bound to the box's /32), checked
+#           against <keys>/prod/secrets-store-ca.crt (run ca first); without one, from inside OpenBao's pod, for a store
+#           still bound to 127.0.0.1/32. It writes each policy that differs from ConfigMap openbao-policies, binds role admin
+#           to box_cidr, and prints the changed policy names and PASS. It changes access rights
 #           (D-0042 rule 6): <tap id> is the owner's go (D-0061 rule 3: the message id of his standing go), logged as for seal.
 # reset-failed-start  clears a first start that stopped in self-init (the pod's log says "self-initialization failed:
 #           refusing to unseal"), so the store starts clean. It refuses unless that line is in the pod's log (this run's or
@@ -367,8 +368,13 @@ PY
     for f in openbao-admin-role-id openbao-admin-secret-id; do
       [[ -s $store_keys/$f ]] || { echo "openbao-prod: $store_keys/$f is missing; run openbao-prod handover first; nothing changed" >&2; exit 1; }
     done
+    # With an admin address the play signs in from the box over it (prod's admin is bound to the box), checked against
+    # the CA file that `ca` writes.
+    if [[ -n $(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("admin_address") or "")' "$settings") ]]; then
+      [[ -s $store_keys/secrets-store-ca.crt ]] || { echo "openbao-prod: $store_keys/secrets-store-ca.crt is missing; run openbao-prod ca first; nothing changed" >&2; exit 1; }
+    fi
     ap playbooks/k8s-openbao-refresh.yml -e openbao_refresh_env=prod -e "openbao_admin_role_id_file=$store_keys/openbao-admin-role-id" \
-      -e "openbao_admin_secret_id_file=$store_keys/openbao-admin-secret-id"
+      -e "openbao_admin_secret_id_file=$store_keys/openbao-admin-secret-id" -e "openbao_refresh_ca_file=$store_keys/secrets-store-ca.crt"
     ;;
   reset-failed-start)
     ns=openbao pod=openbao-0 claim=data-openbao-0
