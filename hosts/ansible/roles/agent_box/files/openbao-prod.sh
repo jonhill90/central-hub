@@ -39,8 +39,9 @@
 #           It deletes only those of the three that Argo CD's own status of Application openbao-store marks requiresPruning
 #           (no longer in git), refuses if any of them is still in git, and prints all three before and after. Deleting is a
 #           D-0042 rule 6 step: <tap id> is the owner's go (D-0061 rule 3: the message id of his standing go), logged as for seal.
-# admin-firewall-check  read-only: playbooks/k8s-openbao-admin-firewall.yml with --check --diff on prod's nodes. It says
-#           whether each node's firewalld already has policy openbao-admin with the box's /32 to tcp 8200, and changes nothing.
+# admin-firewall-check  read-only: playbooks/k8s-openbao-admin-firewall.yml with --check --diff on prod's nodes. It prints,
+#           per node, "admin-fw: policy openbao-admin present|absent, rule for <box /32> to tcp 8200 present|absent" (read that
+#           line: the add tasks are skipped in check mode, so the recap's changed count is 0 either way), and changes nothing.
 # admin-firewall  the same playbook for real: on each prod node, firewalld policy openbao-admin from the lab zone to any
 #           zone, one rich rule, the box's /32 (box_cidr) to tcp 8200, accept, so the store's admin path crosses the node's
 #           forward path (D-0062; the dev rebuild runs the same play in stage gateway). Without box_cidr or admin_address in

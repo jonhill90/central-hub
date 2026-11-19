@@ -69,6 +69,14 @@
           failed_when: false
           check_mode: false
 
+        # What each node has before any change, so a --check run tells a node with the rule from one without it (the
+        # add tasks are skipped in check mode, so their changed count says nothing there).
+        - name: admin-fw | What this node has now
+          ansible.builtin.debug:
+            msg: >-
+              admin-fw: policy {{ admin_fw_policy }} {{ 'present' if admin_fw_info.rc == 0 else 'absent' }},
+              rule for {{ admin_fw_box }} to tcp 8200 {{ 'present' if admin_fw_info.rc == 0 and admin_fw_query.rc == 0 else 'absent' }}
+
         - name: admin-fw | The box's /32 to tcp 8200, accept
           ansible.builtin.command:
             argv: [firewall-cmd, --permanent, "--policy={{ admin_fw_policy }}", "--add-rich-rule={{ admin_fw_rule }}"]
