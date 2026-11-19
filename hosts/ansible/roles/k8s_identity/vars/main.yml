@@ -6,8 +6,8 @@
 # rebuild-20261119T083151Z's identity-keycloak stage on kubernetes.yml's checksum. A commit's raw URL serves the same bytes for
 # as long as GitHub keeps the commit. Measured against the pin of 2026-11-18 (TASK-0252, research RB-0092 rows L21-L22): the
 # four CRD files are byte-identical; kubernetes.yml's new build differs from 26.8.1's only in the version labels and image
-# tags (26.8.1 to 26.8.2), quarkus-version 3.40.1 to 3.40.1.1, the commit-id and the build-timestamps (2026-11-19 07:39:51
-# and 07:43:42 UTC). The rebuild before it is no longer served, so it was not diffed. A new version needs a new commit and new pins.
+# tags (26.8.1 to 26.8.2), quarkus-version 3.40.1 to 3.40.1.1, the commit-id and the build-timestamp (2026-11-19 07:39:51
+# UTC). The rebuild before it is no longer served, so it was not diffed. A new version needs a new commit and new pins.
 k8s_identity_operator_commit: 2cdaeb2ed3c24beca5381a33d47fb66171be6a5f
 k8s_identity_operator_base: https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/{{ k8s_identity_operator_commit }}/kubernetes
 k8s_identity_operator_files:
