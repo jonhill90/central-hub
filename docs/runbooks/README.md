@@ -42,6 +42,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Install c1's add-ons and apps with Ansible](install-c1-add-ons-with-ansible.md) | automated | draft |
 | [Build a single-node kubeadm cluster by hand (CKA practice)](build-kubeadm-cluster.md) | manual | draft |
 | [Set up a Proxmox VE host by hand](set-up-proxmox-host.md) | manual | draft |
+| [Trust the Proxmox host's CA on the controller](trust-the-proxmox-host-ca-on-the-controller.md) | automated | draft |
 | [Create the lab root CA and c1's intermediate by hand](create-lab-root-ca.md) | manual | draft |
 | [Trust the lab root CA on a Mac](trust-lab-root-ca-on-mac.md) | manual | draft |
 | [Restore c1's intermediate CA into cert-manager](restore-c1-intermediate-ca.md) | manual | draft |

@@ -109,7 +109,7 @@ expect: that runbook's step 6 `expect:` line.
 
 Trust the host's CA on the controller.
 why: OpenTofu's Proxmox provider has no CA setting, so the Mac's System keychain must trust the host's CA ([hosts/ansible/README.md, Proxmox CA on the controller](../../hosts/ansible/README.md#proxmox-ca-on-the-controller)).
-runbook: none of its own; the README section above is the procedure (`playbooks/controller-trust.yml --tags trust --ask-become-pass`).
+runbook: [Trust the Proxmox host's CA on the controller](trust-the-proxmox-host-ca-on-the-controller.md) (`playbooks/controller-trust.yml --tags trust --ask-become-pass`); `draft`, not yet run as written.
 expect: a second run reports no change.
 
 ### OPNsense and the lab network
