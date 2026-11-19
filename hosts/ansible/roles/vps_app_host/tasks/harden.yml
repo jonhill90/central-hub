@@ -1,6 +1,7 @@
 ---
 # Close the VPS's public SSH door (audit finding F144): no password login, root by key only, and a host
-# firewall that lets in port 22 (the owner's own sshd) and the tailnet's interface and nothing else.
+# firewall that lets in the tailnet's interface and Tailscale's UDP port, and port 22 from the internet only when
+# vps_app_host_public_ssh is true (it is false by default: sshd is then reached over the tailnet only).
 # Off by default: `vps_app_host_harden: true` is set only after the owner's card for this change
 # (D-0042 rule 6: firewall; access). Tailscale SSH is served by tailscaled, not by sshd, so these changes
 # do not touch how the agents sign in. Order matters: the checks come first and stop the run before
@@ -119,15 +120,23 @@
     permanent: true
     state: enabled
 
-- name: Allow only the listed public ports in the default zone
+# Port 22 from the internet only when vps_app_host_public_ssh is true; otherwise both the port and the vendor's
+# ssh service leave the public zone, so sshd answers only on the trusted tailnet interface.
+- name: Set port 22 in the public zone
   ansible.posix.firewalld:
     zone: public
-    port: "{{ item }}/tcp"
+    port: 22/tcp
     permanent: true
-    state: enabled
-  loop: "{{ vps_app_host_public_ports_allowed }}"
+    state: "{{ 'enabled' if vps_app_host_public_ssh | bool else 'disabled' }}"
 
-# Port 22 is also allowed as a service in the vendor's public zone; remove everything else it allows.
+- name: Set the vendor zone's ssh service in the public zone
+  ansible.posix.firewalld:
+    zone: public
+    service: ssh
+    permanent: true
+    state: "{{ 'enabled' if vps_app_host_public_ssh | bool else 'disabled' }}"
+
+# Remove everything else the vendor's public zone allows.
 - name: Remove the vendor zone's other services
   ansible.posix.firewalld:
     zone: public
@@ -146,17 +155,25 @@
   ansible.builtin.command: firewall-cmd --reload
   changed_when: false
 
-# Proof, run last: the tailnet interface is trusted and 22 is open, and sshd's way in is still up.
+# Proof, run last: the tailnet interface is trusted, port 22 is open to the internet only if asked, and sshd is still up.
 - name: Read the live firewall
   ansible.builtin.command: firewall-cmd --list-all-zones
   register: vps_app_host_fw
   changed_when: false
 
-- name: Check the firewall holds the tailnet interface and the listed ports
+# firewall-cmd refuses --list-ports and --list-services together, so they are two calls.
+- name: Read the public zone's ports and services
+  ansible.builtin.shell: firewall-cmd --zone=public --list-ports && firewall-cmd --zone=public --list-services
+  register: vps_app_host_fw_public
+  changed_when: false
+
+- name: Check the firewall holds the tailnet interface, and port 22 is public only if asked
   ansible.builtin.assert:
     that:
       - "vps_app_host_fw.stdout is search('(?s)trusted \\(active\\).*interfaces: ' ~ vps_app_host_tailnet_interface)"
-      - "vps_app_host_fw.stdout is search('(?s)public \\(.*ports:[^\\n]*(?<![0-9])22/tcp')"
+      - "('22/tcp' in vps_app_host_fw_public.stdout.split()) == (vps_app_host_public_ssh | bool)"
+      - "('ssh' in vps_app_host_fw_public.stdout.split()) == (vps_app_host_public_ssh | bool)"
+      - "'41641/udp' in vps_app_host_fw_public.stdout.split()"
     fail_msg: The firewall is not as the role set it; check firewall-cmd --list-all-zones by hand.
     quiet: true
 
