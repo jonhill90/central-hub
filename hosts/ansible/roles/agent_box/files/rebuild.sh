@@ -6,7 +6,8 @@
 #   sudo -n -u keys /usr/local/libexec/agent-box/rebuild.sh up|rebuild [<commit>]|teardown|identity|log|diag|fit
 #   rebuild.sh auto   (the rebuild-auto timer only, as the keys user; no sudo line)
 # up: all stages. rebuild: tear the dev VMs down first, then all stages. teardown: only the teardown.
-# auto: an `up` of main's newest commit, started only when all hold: no run is going (the lock), dev is down (no VM
+# auto: an `up` of main's newest commit, started only when all hold: no lab-test run is going or lately ended (its lock,
+# its state, its log's age: 60 minutes), no run is going (the lock), dev is down (no VM
 # in the dev state), the newest full
 # run did not already build that commit, a file under hosts/ changed since the newest full pass (or there is none on
 # main), and the memory preflight fits (rebuild-k8s.sh --fit) without stopping the owner's desktop VM, which a timer
@@ -117,6 +118,36 @@ fit_check() {
   return 0
 }
 
+# A lab-test run, or what one leaves behind, comes before the timer's dev build: the copy (VM 256) and dev both need
+# the node's memory, and a tick that lands between two proves would make the second refuse (lab-test.sh: its lock
+# $work/state/lab-test.lock, its state $work/state/lab-test.tfstate, its log $work/state/lab-test.log, written by every
+# run but `log`). Prints one line and returns 0 when the timer must skip: the lock is held, the state holds a resource
+# or can't be read, or the log was written less than LAB_TEST_QUIET_MIN minutes ago. Reads only; takes no lock for
+# more than the probe.
+LAB_TEST_QUIET_MIN=60
+lab_test_busy() {
+  local lock=$work/state/lab-test.lock tf=$work/state/lab-test.tfstate lg=$work/state/lab-test.log n age
+  if [[ -e $lock ]] && ! ( flock -n 7 ) 7< "$lock" 2>/dev/null; then
+    echo "rebuild auto: a lab-test run holds its lock; nothing started"
+    return 0
+  fi
+  if [[ -s $tf ]]; then
+    n=$(python3 -I -c 'import json,sys; print(len(json.load(open(sys.argv[1])).get("resources", [])))' "$tf" 2>/dev/null) || n=unreadable
+    if [[ $n != 0 ]]; then
+      echo "rebuild auto: the lab-test state holds $n resources (the copy, VM 256, may exist); nothing started"
+      return 0
+    fi
+  fi
+  if [[ -e $lg ]]; then
+    age=$(( ( $(date +%s) - $(stat -c %Y "$lg") ) / 60 ))
+    if (( age < LAB_TEST_QUIET_MIN )); then
+      echo "rebuild auto: the last lab-test run wrote its log $age minutes ago, inside the $LAB_TEST_QUIET_MIN-minute quiet window; nothing started"
+      return 0
+    fi
+  fi
+  return 1
+}
+
 # auto: whether the timer's run starts. Prints one line and returns 1 when it does not. The newest full run is the newest
 # log with a `vms` stage (a teardown or identity run has none); a full pass also ends every stage, `checks` included, and
 # says `rebuild: all stages passed`. Reads the logs, the checkout and the node's memory (rebuild-k8s.sh --fit); writes
@@ -124,6 +155,7 @@ fit_check() {
 auto_decide() {
   local head f newest="" pass="" nc pc changed up
   head=$(git -C "$repo" rev-parse HEAD)
+  if lab_test_busy; then return 1; fi
   # Dev must be down: with dev VMs in the state the preflight skips its memory check (a re-run makes no new VMs), so
   # --fit would say yes, and a timer run would build over a dev someone kept up. An unreadable state counts as up.
   up=$(python3 -I -c '
