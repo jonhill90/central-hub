@@ -551,6 +551,53 @@
   when: agent_box_checkpoint_note | length > 0
   tags: [wrappers]
 
+- name: The checkpoint scan's checks, root's (checkpoint-scan.sh runs it)
+  ansible.builtin.copy:
+    src: checkpoint-scan.py
+    dest: "{{ agent_box_libexec_dir }}/checkpoint-scan.py"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+- name: Hourly checkpoint scan service and timer
+  ansible.builtin.template:
+    src: "checkpoint-scan.{{ item }}.j2"
+    dest: "/etc/systemd/system/checkpoint-scan.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+  loop_control:
+    label: "/etc/systemd/system/checkpoint-scan.{{ item }}"
+  register: agent_box_checkpoint_scan_units
+  when: agent_box_checkpoint_scan | bool
+  tags: [wrappers]
+
+- name: Hourly checkpoint scan timer on
+  ansible.builtin.systemd_service:
+    name: checkpoint-scan.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ agent_box_checkpoint_scan_units is changed }}"
+  when: agent_box_checkpoint_scan | bool and not (ansible_check_mode and agent_box_checkpoint_scan_units is changed)
+  tags: [wrappers]
+
+- name: Is there a checkpoint scan timer to turn off
+  ansible.builtin.stat:
+    path: /etc/systemd/system/checkpoint-scan.timer
+  register: agent_box_checkpoint_scan_timer
+  when: not (agent_box_checkpoint_scan | bool)
+  tags: [wrappers]
+
+- name: Hourly checkpoint scan timer off, while agent_box_checkpoint_scan is false
+  ansible.builtin.systemd_service:
+    name: checkpoint-scan.timer
+    enabled: false
+    state: stopped
+  when: not (agent_box_checkpoint_scan | bool) and agent_box_checkpoint_scan_timer.stat.exists | default(false)
+  tags: [wrappers]
+
 - name: The rebuild wrapper's short-node pick, from the inventory (no keys)
   ansible.builtin.copy:
     dest: "{{ agent_box_work_dir }}/short-node"
