@@ -13,10 +13,12 @@ cat > "$w/bin/hostname" <<'S'
 #!/bin/sh
 echo pvetest
 S
-# pveum: every list says everything exists, so only the pool moves are under test.
+# pveum: every list says everything exists, so only the pool moves and the ACLs are under test. Each acl
+# modify is logged to $ACLS.
 cat > "$w/bin/pveum" <<'S'
 #!/bin/sh
 case "$*" in
+  "acl modify "*) echo "$*" >> "$ACLS" ;;
   *" list "*|*" list") echo '[{"groupid":"iac","roleid":"IacOps","userid":"iac@pve","tokenid":"apply","poolid":"firewall"},{"poolid":"remote-access"},{"poolid":"k8s"}]' ;;
 esac
 exit 0
@@ -43,10 +45,10 @@ chmod +x "$w/bin/"*
 fail=0
 run() { # <label> <guests...>: run the script twice with these guests, report both exits and the stored members
   local label=$1; shift
-  : > "$w/state"; printf '%s\n' "$@" > "$w/guests"
+  : > "$w/state"; : > "$w/acls"; printf '%s\n' "$@" > "$w/guests"
   local rc1=0 rc2=0
-  PATH="$w/bin:$PATH" STATE="$w/state" GUESTS="$w/guests" sh "$script" >"$w/out1" 2>&1 || rc1=$?
-  PATH="$w/bin:$PATH" STATE="$w/state" GUESTS="$w/guests" sh "$script" >"$w/out2" 2>&1 || rc2=$?
+  PATH="$w/bin:$PATH" STATE="$w/state" GUESTS="$w/guests" ACLS="$w/acls" sh "$script" >"$w/out1" 2>&1 || rc1=$?
+  PATH="$w/bin:$PATH" STATE="$w/state" GUESTS="$w/guests" ACLS="$w/acls" sh "$script" >"$w/out2" 2>&1 || rc2=$?
   echo "$label: run 1 exit $rc1, run 2 exit $rc2, stored: $(tr '\n' ';' < "$w/state")"
   cat "$w/out2" | grep -i "failed" || true
   RC1=$rc1; RC2=$rc2
@@ -61,4 +63,12 @@ else echo "not ok  existing guests must be moved into their pools once"; fail=1;
 run "only VM 100 exists" 100
 if [ "$RC1" = 0 ] && [ "$RC2" = 0 ] && [ "$(cat "$w/state")" = "firewall 100" ]; then echo "ok   a missing CT 900 is skipped while VM 100 is moved"
 else echo "not ok  VM 100 only"; fail=1; fi
+# The create of a guest is checked on /vms/<id> before the guest is in its pool (iac-access.sh, the /vms ACL lines;
+# measured for template 9000 on /vms/9000 VM.Config.Options). With no pre-added pool member, an empty host's
+# create of VM 100 and CT 900 by the token needs its own /vms ACL, so each must be granted to the token.
+run "empty host, ACLs" ""
+for id in 100 900; do
+  if grep -q "^acl modify /vms/$id --tokens iac@pve!apply --roles IacOps" "$w/acls"; then echo "ok   the token holds IacOps on /vms/$id, so its create there passes the /vms check on an empty host"
+  else echo "not ok  the token has no ACL on /vms/$id: its create of the guest on an empty host would fail"; fail=1; fi
+done
 [ "$fail" -eq 0 ]

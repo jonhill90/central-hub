@@ -66,7 +66,9 @@ acl /pool/k8s 1                          # c1 node VMs and their template
 # failed on /vms/9000 VM.Config.Options), so each planned k8s VM ID gets its own ACL.
 # 250-259 are the dev rehearsal VMs (k8s 250-251, k8s-talos 252-253, and spares); measured: the
 # first Talos rehearsal failed on /vms/252 and /vms/253 VM.Config.Options on 2026-11-09.
-for id in 9000 200 201 250 251 252 253 254 255 256 257 258 259; do acl "/vms/$id" 0; done
+# VM 100 (firewall) and CT 900 (remote-access) are made by Terraform too, and the script no longer puts them in
+# their pools before they exist (move_into_pool), so the token's create of each is checked on /vms/<id> as well.
+for id in 100 900 9000 200 201 250 251 252 253 254 255 256 257 258 259; do acl "/vms/$id" 0; done
 acl /storage/local-lvm 0                 # guest disks
 acl /storage/local 0                     # the container template and the AlmaLinux image download
 acl "/nodes/$NODE" 0                     # read the node and its networks
