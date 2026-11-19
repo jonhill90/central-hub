@@ -7,6 +7,9 @@
 #   4. A session for a user without the admin policy, when admin is expected, fails step 7.
 #   5. A missing credentials file, a file others can read, and a file without a field are refused (exit 2) before any request.
 #   6. The password, the seed, the state and the token never show in the output.
+#   7. A start link that holds only request_uri, which Keycloak answers with a redirect to its login-actions page (the plugin's
+#      pushed authorization request, measured on prod on 2026-11-19), still passes all seven steps; a redirect anywhere
+#      else fails step 2.
 # Usage: .github/hosts-check/tests/test_jellyfin_signin_check.sh   (needs python3)
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -38,6 +41,10 @@ class H(http.server.BaseHTTPRequestHandler):
         if p.startswith("/sso/OID/start/keycloak"):
             return self.send(302, loc=KC + "/realms/lab/protocol/openid-connect/auth?client_id=jellyfin&response_type=code")
         if p.startswith("/realms/lab/protocol/openid-connect/auth"):
+            if mode == "par": return self.send(302, loc=KC + "/realms/lab/login-actions/authenticate?client_id=jellyfin&tab_id=t")
+            if mode == "parelsewhere": return self.send(302, loc="http://evil.invalid:%d/login" % port)
+            return self.send(200, '<form action="/login?x=1&amp;y=2" method="post"><input name="username"><input name="password"></form>')
+        if p.startswith("/realms/lab/login-actions/authenticate"):
             return self.send(200, '<form action="/login?x=1&amp;y=2" method="post"><input name="username"><input name="password"></form>')
         if p.startswith("/sso/OID/redirect/keycloak"):
             if mode == "norefusal": return self.send(400, "Error logging in", ctype="text/plain")
@@ -87,5 +94,9 @@ python3 -I "$check" "$t/creds.json" > "$t/out-open" 2>&1 && rc=0 || rc=$?
 printf '{"base":"x"}' > "$t/short.json"; chmod 600 "$t/short.json"
 python3 -I "$check" "$t/short.json" > "$t/out-short" 2>&1 && rc=0 || rc=$?
 [[ $rc -eq 2 ]] && grep -q '^refused: the credentials file lacks: jellyfin_base' "$t/out-short" && ok "5c. a file without a field is refused" || bad "5c. rc=$rc $(cat "$t/out-short")"
+run par
+[[ $rc -eq 0 && $(grep -c ' ok$' "$t/out") -eq 7 ]] && ok "7a. a pushed authorization request's redirect to login-actions is followed: seven steps pass" || bad "7a. $(cat "$t/out")"
+run parelsewhere
+[[ $rc -ne 0 ]] && grep -q '^2 login page: HTTP 302 FAIL: no login form' "$t/out" && ok "7b. a redirect to any other host is not followed: step 2 fails" || bad "7b. $(cat "$t/out")"
 if ! cat "$t"/out* | grep -Eq 'pw-secret-value|state-secret-value|token-secret-value|JBSWY3DP'; then ok "6. no secret value in the output"; else bad "6. a secret value showed"; fi
 exit "$fail"
