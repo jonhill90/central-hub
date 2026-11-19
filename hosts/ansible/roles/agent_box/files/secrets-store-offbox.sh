@@ -28,7 +28,7 @@ libexec=/usr/local/libexec/agent-box
 settings=/etc/agent-keys/opnsense-offbox/settings.env   # pick 222's settings; no secret in it
 own=$work/secrets-store-offbox.env                       # this job's settings; no secret in it
 store_settings=$work/secrets-store.json                  # the wrapper's settings: the store's address
-inventory=/etc/agent-keys/rebuild-dev/inventory/hosts.yml   # the dev inventory: dev's Gateway address
+admin_inv=$work/rebuild-dev/inventory/hosts.yml          # the rebuild's copy of the dev inventory: the store's admin address
 state=$work/state/dev-vms.tfstate                        # the dev rebuild's OpenTofu state: the cluster the store is in
 in_cluster=$work/openbao-in-cluster                      # "true" while the store inside the dev cluster is on
 hold=$work/state/secrets-store.rebuilding               # the rebuild wrapper writes it; restore-rebuilt or clear-hold removes it
@@ -70,23 +70,24 @@ if [[ -e $hold ]]; then
   exit 0
 fi
 address=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["address"])' "$store_settings")
-# Dev's names resolve to prod's Gateway, so the call goes to dev's Gateway by the dev inventory's address, as
-# secrets-store.sh does (k8s_gitops_source_gateway_address, exactly one, IPv4).
-gateway=$("$libexec/ansible-venv/bin/python3" -I -c '
+# The call goes to the store's admin address by the store's name, as secrets-store.sh does (D-0062): the one
+# k8s_gitops_source_openbao_admin_address in the rebuild's copy of the dev inventory, IPv4. The Gateway has no
+# listener for the store's name, so there is no other path.
+admin=$("$libexec/ansible-venv/bin/python3" -I -c '
 import sys, yaml
 found = set()
 def walk(n):
     if isinstance(n, dict):
         for k, v in n.items():
-            if k == "k8s_gitops_source_gateway_address" and isinstance(v, str) and v: found.add(v)
+            if k == "k8s_gitops_source_openbao_admin_address" and isinstance(v, str) and v: found.add(v)
             else: walk(v)
     elif isinstance(n, list):
         for i in n: walk(i)
 walk(yaml.safe_load(open(sys.argv[1])))
 if len(found) != 1: sys.exit(1)
-print(found.pop())' "$inventory" 2>/dev/null) && [[ $gateway =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
-  die "the dev inventory $inventory gives no single IPv4 k8s_gitops_source_gateway_address; nothing sent"
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --resolve "$address:443:$gateway" --cacert "$cacert" "https://$address/v1/sys/health" || true)
+print(found.pop())' "$admin_inv" 2>/dev/null) && [[ $admin =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
+  die "the rebuild's dev inventory $admin_inv gives no single IPv4 k8s_gitops_source_openbao_admin_address, the store's only path; nothing sent"
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --resolve "$address:443:$admin" --cacert "$cacert" "https://$address/v1/sys/health" || true)
 [[ $code =~ ^[1-9] ]] || code=nothing   # curl prints 000 when nothing answered
 [[ $code == 200 ]] || die "dev is up with the store on, but sys/health answered $code (200 is unsealed and active); nothing sent"
 

@@ -108,16 +108,17 @@ env_store() {
 }
 env_store
 
-# Dev uses c1's names, and the lab's wildcard DNS sends them to prod's Gateway (docs/runbooks/
-# rebuild-k8s-layer-with-one-command.md, k8s_lab_dns_points_here). So on dev every call goes to dev's Gateway by its
-# address, the dev inventory's k8s_gitops_source_gateway_address, with the store's name kept for TLS and routing.
-# Exported for the helpers below, which call curl the same way. Prod's names resolve to prod's Gateway: none there.
-# Once the store has its admin address (D-0062), every call goes there instead, on both environments, still by the
-# store's name: through the Gateway OpenBao sees a Cilium address, so the admin login, bound to the box's /32, is
-# refused (docs/runbooks/set-up-the-secrets-store.md, "The box's admin path"). The address is the one the cluster was
-# given: the one k8s_gitops_source_openbao_admin_address in the inventory the cluster was built from. On dev that is
-# the rebuild wrapper's copy of the dev inventory (its settings' admin_address, or dev's own pick from its pool); none
-# until a rebuild has written it. On prod it is the inventory openbao-prod builds from its own settings.
+# Every call goes to the store's admin address (D-0062) once the store has one, by the store's name, which its
+# certificate carries: curl's --resolve <store name>:443:<admin address>, exported for the helpers below, which call curl
+# the same way. Through Gateway apps OpenBao sees a Cilium address, so the admin login, bound to the box's /32, is
+# refused there, and no listener for the store's name exists on the Gateway any more
+# (docs/runbooks/set-up-the-secrets-store.md, "The box's path to the store"). On dev, with no admin address, every
+# action refuses before any call: dev's names resolve to prod's Gateway, so dev has no other path. On prod, with no
+# admin address yet, calls go by the store's name as they did before the admin path, unchanged until prod's admin
+# address is set (that runbook, "On prod", step 9). The address is the one the cluster was given: the one
+# k8s_gitops_source_openbao_admin_address in the inventory the cluster was built from. On dev that is the rebuild
+# wrapper's copy of the dev inventory (its settings' admin_address, or dev's own pick from its pool); none until a
+# rebuild has written it. On prod it is the inventory openbao-prod builds from its own settings.
 admin_inv=$inventory
 [[ $env == prod ]] || admin_inv=$work/rebuild-dev/inventory/hosts.yml
 admin=''
@@ -139,14 +140,12 @@ print(found.pop() if found else "")' "$admin_inv") ||
 fi
 [[ -z $admin || $admin =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
   { echo "secrets-store: the store's admin address is not one IPv4 address; refused" >&2; exit 1; }
+[[ -n $admin || $env == prod ]] || {
+  echo "secrets-store: the dev store has no admin address (k8s_gitops_source_openbao_admin_address in $admin_inv), the box's only path to it (D-0062); a dev rebuild with box_cidr in the settings writes one; refused" >&2
+  exit 1
+}
 SECRETS_STORE_RESOLVE=''
-if [[ -n $admin ]]; then
-  SECRETS_STORE_RESOLVE="$(setting address):443:$admin"
-elif [[ $env == dev ]]; then
-  gateway=$(inventory_value k8s_gitops_source_gateway_address) && [[ $gateway =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
-    { echo "secrets-store: the dev inventory gives no single IPv4 k8s_gitops_source_gateway_address for dev's Gateway; refused" >&2; exit 1; }
-  SECRETS_STORE_RESOLVE="$(setting address):443:$gateway"
-fi
+[[ -z $admin ]] || SECRETS_STORE_RESOLVE="$(setting address):443:$admin"
 export SECRETS_STORE_RESOLVE
 # The box's /32 from the settings (empty until set), so a refused login can say whether OpenBao saw the box's own
 # address without printing any address (secrets-store-kv.sh, login).
