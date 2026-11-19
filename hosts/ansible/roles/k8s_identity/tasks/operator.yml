@@ -11,9 +11,10 @@
     checksum: "sha256:{{ item.sha256 }}"
     mode: "0600"
   register: k8s_identity_operator_download
-  # A download from raw.githubusercontent.com is the first thing in this role that leaves the lab, and the first thing that can
-  # fail within seconds on a network blip (the 2026-11-19 08:08 UTC dev stage failed in 5 s with no reason in the log). A
-  # wrong checksum fails the same way each time, so the retries cost 10 s at most there.
+  # A download from raw.githubusercontent.com is the first thing in this role that leaves the lab, so it retries a network blip.
+  # A wrong checksum fails the same way each time, so the retries cost 10 s at most there. The 2026-11-19 08:08 and 08:57 UTC
+  # dev stages failed here in 5 s and 22 s: upstream had rebuilt tag 26.8.2 at 07:43 UTC and kubernetes.yml's sha256 no
+  # longer matched (run rebuild-20261119T083151Z's failure lines). vars/main.yml now fetches by commit, not by tag.
   until: k8s_identity_operator_download is succeeded
   retries: 3
   delay: 5
