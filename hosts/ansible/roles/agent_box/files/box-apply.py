@@ -214,8 +214,10 @@ def approved_limit_change(rules, repo, base, new):
         ok = {"line": n, "to": to, "digest": digest, "pass": pass_ref, "tap": tap, "files": files}
         if not later:
             return ok
-        # A line whose to has a later limit change is kept in case no line reaches further.
-        if fallback is None:
+        # A line whose to has a later limit change is kept in case no line reaches further. Of two such lines the
+        # one that reaches further wins (the other's to is an ancestor of its to), not the first one met: an old
+        # line that stalled would otherwise shadow every newer one for good.
+        if fallback is None or git(repo, "merge-base", "--is-ancestor", fallback["to"], to, check=False).returncode == 0:
             fallback = ok
     if fallback is not None:
         say(f"{APPROVALS} line {fallback['line']}: a limit changed again after {fallback['to'][:8]}; this applies "
