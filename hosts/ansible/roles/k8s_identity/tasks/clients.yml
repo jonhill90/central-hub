@@ -25,6 +25,18 @@
   changed_when: false
   check_mode: false
 
+- name: clients | Each client is in the rendered realm and every secret it needs is set
+  ansible.builtin.command:
+    argv: [python3, -I, "{{ role_path }}/files/client-json.py", "{{ k8s_identity_clients_dir.path }}/realm.yaml", "{{ __client }}", --check]
+  environment: "{{ k8s_identity_values }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+  loop: "{{ k8s_identity_ensure_clients }}"
+  loop_control: {loop_var: __client}
+  # prints only "client X: ok" or why not, never the secret, so no_log stays off here
+
 - name: clients | The client's JSON, secrets filled in
   ansible.builtin.command:
     argv: [python3, -I, "{{ role_path }}/files/client-json.py", "{{ k8s_identity_clients_dir.path }}/realm.yaml", "{{ __client }}"]

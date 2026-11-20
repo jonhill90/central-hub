@@ -5,7 +5,11 @@ Every ${KEY} in the client is replaced by the environment variable KEY, the way 
 replaces it from the realm's placeholders; a key with no variable is an error, so no client ever
 gets a literal "${...}" as its secret.
 
-Usage: client-json.py <rendered realm.yaml> <clientId>
+With --check as the third argument nothing is printed but "client <id>: ok" when the client is
+there and every key has a variable; a failure prints the same reason as without it. The reason
+never holds a secret, so a task that runs --check can show it where the JSON task has no_log.
+
+Usage: client-json.py <rendered realm.yaml> <clientId> [--check]
 """
 import json
 import os
@@ -15,7 +19,7 @@ import sys
 import yaml
 
 
-def main(src: str, client_id: str) -> int:
+def main(src: str, client_id: str, check: bool = False) -> int:
     with open(src, encoding="utf-8") as f:
         clients = yaml.safe_load(f)["spec"]["realm"].get("clients", [])
     found = [c for c in clients if c["clientId"] == client_id]
@@ -28,9 +32,9 @@ def main(src: str, client_id: str) -> int:
             print(f"client {client_id} uses ${{{key}}}, which is not in the environment", file=sys.stderr)
             return 1
         text = text.replace("${" + key + "}", json.dumps(os.environ[key])[1:-1])
-    print(text)
+    print(f"client {client_id}: ok" if check else text)
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(*sys.argv[1:3]))
+    sys.exit(main(*sys.argv[1:3], check=sys.argv[3:] == ["--check"]))
