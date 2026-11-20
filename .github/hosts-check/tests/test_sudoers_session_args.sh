@@ -67,7 +67,7 @@ print("11", gl == ["guardops ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-h
 lt = [w for w in d if w["name"] == "lab-token"][0]
 lp = [w for w in d if w["name"] == "lab-token-put"][0]
 ltt = render([lt, lp])
-print("12", [l for l in ltt.splitlines() if l.startswith("sess ")] == ["sess ALL=(hostops) NOPASSWD: /x/lab-token.sh status, /x/lab-token.sh mint"],
+print("12", [l for l in ltt.splitlines() if l.startswith("sess ")] == ["sess ALL=(hostops) NOPASSWD: /x/lab-token.sh status, /x/lab-token.sh mint *"],
       [l for l in ltt.splitlines() if l.startswith("hostops ")] == ["hostops ALL=(keys) NOPASSWD: /x/lab-token-put.sh exists, /x/lab-token-put.sh put"])
 PY
 )

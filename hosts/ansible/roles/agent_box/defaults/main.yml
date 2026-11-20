@@ -124,7 +124,7 @@ agent_box_wrappers:
   # token on the host and pipes it to lab-token-put, which runs as the keys user and writes /etc/agent-keys/proxmox-lab.env
   # (the API URL line copied from proxmox-dev.env). Only hostops may call lab-token-put; a session has no argument there.
   - name: lab-token
-    args: [status, mint]
+    args: [status, "mint *"]
     run_as: hostops   # the same name as agent_box_host_user
   - name: lab-token-put
     args: [exists, put]

@@ -18,6 +18,7 @@ SECRET=11111111-2222-3333-4444-555555555555
 printf 'PROXMOX_VE_ENDPOINT=https://pve.example.invalid:8006/\nPROXMOX_VE_API_TOKEN=agent@pve!dev=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\n' > "$t/keys/proxmox-dev.env"
 printf 'proxmox:\n  hosts:\n    proxmox_host:\n      ansible_host: "192.0.2.10"\n' > "$t/host/inventory/hosts.yml"
 : > "$t/host/id_ed25519"; : > "$t/host/known_hosts"
+GO=cmsg_01X43rfNYp4H1dL1V2dkfkwN0000000000000000000000
 good="{\"full-tokenid\":\"agentlab@pve!lab\",\"value\":\"$SECRET\",\"info\":{\"privsep\":\"1\"}}"
 
 out=$(printf '%s' "$good" | "$t/lib/lab-token-put.sh" put 2>&1) || true
@@ -47,8 +48,8 @@ cat > "$t/bin/ssh" <<'S'
 cmd="${*: -1}"
 echo "$cmd" >> "$LOG"
 case $cmd in
-  *"token list"*) [[ ${HOST_HAS:-no} == yes ]] && echo '[{"tokenid":"lab"}]' || echo '[]' ;;
-  *"token add"*) printf '%s' "$GOOD" ;;
+  *"token list"*) [[ -n ${LIST_FAIL:-} ]] && exit 255; [[ ${HOST_HAS:-no} == yes ]] && echo '[{"tokenid":"lab"}]' || echo '[]' ;;
+  *"token add"*) [[ -n ${ADD_FAIL:-} ]] && exit 1; printf '%s' "$GOOD" ;;
   *"token remove"*) : ;;
 esac
 S
@@ -59,20 +60,29 @@ exec "$@"
 S
 chmod +x "$t/bin/ssh" "$t/bin/sudo"
 export PATH="$t/bin:$PATH" LOG="$t/log" GOOD="$good"
-: > "$t/log"; out=$("$t/lib/lab-token.sh" mint 2>&1) && rc=0 || rc=$?
+: > "$t/log"; out=$("$t/lib/lab-token.sh" mint $GO 2>&1) && rc=0 || rc=$?
 if [[ $rc -eq 0 && $out == *"PASS: token made"* && $out != *"$SECRET"* && -f $t/keys/proxmox-lab.env &&
       $(grep -c 'token add agentlab@pve lab --privsep 1 --expire [0-9]* --output-format json' "$t/log") -eq 1 ]]; then
   ok "7. mint makes the token privsep with an expiry, stores it, and prints no secret"
 else bad "7. $rc $out"; fi
-rc=0; out=$("$t/lib/lab-token.sh" mint 2>&1) || rc=$?
+rc=0; out=$("$t/lib/lab-token.sh" mint $GO 2>&1) || rc=$?
 [[ $rc -ne 0 && $out == *"already has proxmox-lab.env"* ]] && ok "8. mint refuses when the box has the file" || bad "8. $rc $out"
 rm -f "$t/keys/proxmox-lab.env"
-rc=0; out=$(HOST_HAS=yes "$t/lib/lab-token.sh" mint 2>&1) || rc=$?
+rc=0; out=$(HOST_HAS=yes "$t/lib/lab-token.sh" mint $GO 2>&1) || rc=$?
 [[ $rc -ne 0 && $out == *"host already has agentlab@pve!lab"* && ! -e $t/keys/proxmox-lab.env ]] && ok "9. mint refuses when the host has the token" || bad "9. $rc $out"
-: > "$t/log"; rc=0; out=$(GOOD='{"full-tokenid":"agentlab@pve!lab","value":"bad"}' "$t/lib/lab-token.sh" mint 2>&1) || rc=$?
+: > "$t/log"; rc=0; out=$(GOOD='{"full-tokenid":"agentlab@pve!lab","value":"bad"}' "$t/lib/lab-token.sh" mint $GO 2>&1) || rc=$?
 if [[ $rc -ne 0 && $out == *"the host's token was removed again"* && $(grep -c 'token remove agentlab@pve lab' "$t/log") -eq 1 && ! -e $t/keys/proxmox-lab.env ]]; then
   ok "10. a failed store removes the host's token again"
 else bad "10. $rc $out"; fi
 rc=0; out=$("$t/lib/lab-token.sh" status 2>&1) || rc=$?
 [[ $rc -eq 0 && $out == "lab-token: token on the host: no; file on the box: absent" ]] && ok "11. status only reads" || bad "11. $rc $out"
+# A failed token list read stops the run and removes nothing; a failed add removes nothing; a bad or missing go id runs nothing.
+: > "$t/log"; rc=0; out=$(LIST_FAIL=1 "$t/lib/lab-token.sh" mint $GO 2>&1) || rc=$?
+if [[ $rc -ne 0 && $out == *"could not read the host's token list"* && $(grep -c 'token add\|token remove' "$t/log") -eq 0 ]]; then ok "12. a failed token list read stops the run, no add, no remove"; else bad "12. $rc $out"; fi
+: > "$t/log"; rc=0; out=$(ADD_FAIL=1 "$t/lib/lab-token.sh" mint $GO 2>&1) || rc=$?
+if [[ $rc -ne 0 && $out == *"nothing was removed"* && $(grep -c 'token remove' "$t/log") -eq 0 ]]; then ok "13. a failed add removes nothing (never a token this run did not make)"; else bad "13. $rc $out"; fi
+rc=0; out=$("$t/lib/lab-token.sh" mint 2>&1) || rc=$?; rc2=0; "$t/lib/lab-token.sh" mint notanid >/dev/null 2>&1 || rc2=$?
+[[ $rc -eq 2 && $rc2 -eq 2 ]] && ok "14. mint needs a go id of the right shape" || bad "14. $rc $rc2"
+rm -f "$t/keys/proxmox-lab.env"; out=$("$t/lib/lab-token.sh" mint $GO 2>&1) || true
+[[ $out == *"mint under the standing go $GO"* ]] && ok "15. mint logs the go id" || bad "15. $out"
 echo "$fails failed"; [[ $fails -eq 0 ]]
