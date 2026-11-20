@@ -9,6 +9,7 @@
 #      second apply-recorded on the same go is refused.
 #   6. The key and secret reach the playbook only in a vars file (-e @file), never on its command line, and the vars
 #      file is gone after the run; nothing printed holds them.
+#   8. Every run gets the checkout's VLAN file before the vars file; a failed check names the failed tasks, not their messages.
 #   7. The way back (D-0063 rule 4): the apply arms the host's guard before the playbook runs and confirms it after a check
 #      that works; a failed apply is rolled back at once; a guard that can't be armed stops the run before the playbook; a confirm
 #      the host refuses (its timer fired during a slow run) makes the apply a failure.
@@ -143,5 +144,23 @@ job apply-recorded "$h1" > "$t/7c.out" 2>&1; rc=$?
   && ! grep -q "applied check" "$t/7c.out" && tail -n 1 "$t/work/logs/summary.jsonl" | grep -q '"result": "FAIL: guard confirm' \
   && ok "7 a confirm the host refuses (timer fired) is a failed apply, not an applied one" || bad "7 confirm refused: rc=$rc $(cat "$t/7c.out")"
 rm -f "$t/guard-rc-confirm"
+
+# 8
+grep -v -- '--check' "$t/calls" | head -1 | grep -q -- "-e @$t/work/checkout/hosts/ansible/inventories/home/group_vars/all/vlans.yml -e @" \
+  && ok "8 the VLAN file goes to every run" || bad "8 calls: $(head -1 "$t/calls")"
+cp "$t/out.json" "$t/out.ok"
+python3 - > "$t/out.json" <<'PY'
+import json
+print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [
+    {"task": {"name": "Check that the VLAN values are not empty"}, "hosts": {"opnsense_fw": {"failed": True, "msg": "TESTSECRET4567 private"}}}]}]}))
+PY
+cat > "$t/bin/ansible-playbook" <<EOF
+#!/bin/sh
+cat "$t/out.json"; exit 2
+EOF
+job check > "$t/8.out" 2>&1; rc=$?
+[ $rc = 1 ] && grep -q "failed task(s): Check that the VLAN values are not empty" "$t/8.out" && ! grep -q "TESTSECRET4567" "$t/8.out" \
+  && ok "8 a failed check names the failed task and not its message" || bad "8 rc=$rc $(cat "$t/8.out")"
+cp "$t/out.ok" "$t/out.json"; cp "$t/ap.ok" "$t/bin/ansible-playbook"
 
 exit $fail
