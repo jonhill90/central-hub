@@ -117,9 +117,13 @@ commit=$(git -C "$repo" rev-parse --short HEAD)
 # box's node key and plain ssh set. Nothing is printed but a count or the refused host.
 rm -rf -- "$inventory"
 install -d -m 700 "$inventory"
+# The folder of carried sftp files the plays read. A prod rebuild fills <keys>/prod/backup-sftp; backup-check has no rebuild, so it
+# reads only each live node's pinned host key (public) into its own folder, below, and no private key is ever copied for it.
+seed_dir=$keys/prod/backup-sftp
+[[ $name != backup-check ]] || seed_dir=$work/state/backup-check-seed
 python3 -I -c "$(cat <<'PY'
 import sys, yaml
-src, dst, key, known, themes, sftp_keys = sys.argv[1:7]
+src, dst, key, known, themes, sftp_keys, which = sys.argv[1:8]
 def die(m):
     print("c1-ansible: " + m, file=sys.stderr); sys.exit(1)
 d = yaml.safe_load(open(src))
@@ -202,11 +206,13 @@ if pve_addr:
     try: ipaddress.ip_address(pve_addr)
     except ValueError: die("proxmox_host_mgmt_address is not an IP address")
     v["k8s_backup_sftp_seed_address"] = pve_addr
+if which == "backup-check":
+    print("c1-ansible: backup alias: the host address was %s in the inventory" % ("found" if pve_addr else "NOT found (proxmox_host_mgmt_address on the proxmox group)"))
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys/prod/identity-theme" "$keys/prod/backup-sftp" || exit 1
+)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys/prod/identity-theme" "${seed_dir}" "$name" || exit 1
 chmod 600 "$inventory/hosts.yml"
 
 # Every k8s node: plain ssh to ansible_host with the box's key and nothing else; no host labelled another env than prod.
@@ -238,6 +244,26 @@ for h in nodes:
 print("c1-ansible: %d prod nodes, plain ssh with the box's key" % len(nodes))
 PY
 )" "$nodekey" "$envdir/known_hosts" || exit 1
+
+if [[ $name == backup-check ]]; then
+  rm -rf -- "$seed_dir"; install -d -m 700 "$seed_dir"
+  read_n=0
+  while read -r n h u; do
+    sudo_=""; [[ $u == root ]] || sudo_="sudo -n "
+    if ssh -n -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$envdir/known_hosts" -i "$nodekey" "$u@$h" \
+         "${sudo_}cat /etc/central-hub/backup-ssh/known_hosts" > "$seed_dir/$n.known_hosts" 2>/dev/null && grep -q ' ssh-ed25519 ' "$seed_dir/$n.known_hosts"; then
+      read_n=$((read_n + 1))
+    else rm -f -- "$seed_dir/$n.known_hosts"; fi
+  done < <(ansible-inventory -i "$inventory/" --list | python3 -I -c '
+import json, sys
+inv = json.load(sys.stdin); hv = inv["_meta"]["hostvars"]
+def members(g):
+    out = set(inv.get(g, {}).get("hosts", []))
+    for c in inv.get(g, {}).get("children", []): out |= members(c)
+    return out
+for h in sorted(members("k8s_nodes")): print(h, hv[h]["ansible_host"], hv[h].get("ansible_user", "root"))')
+  echo "c1-ansible: backup-check: the pinned host key was read from $read_n node(s) (public keys only)"
+fi
 
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 log=$logs/run-$stamp.log

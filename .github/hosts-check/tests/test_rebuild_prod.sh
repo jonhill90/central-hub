@@ -240,7 +240,8 @@ if [[ $rc -eq 0 && $order == "$want" && $calls == *"playbooks/k8s-backup.yml --t
       -s $t/keys/prod/backup-certs/wk-a.pem && -s $t/keys/prod/backup-certs/cp-a.pem.keyid &&
       $(stat -c %a "$t/keys/prod/backup-certs/wk-a.pem") == 600 && $out != *"BEGIN PRIVATE KEY"* && $out != *KKKK* &&
       $stages == '"vms cluster storage openbao-seal restore gitops secrets apps gateway certs identity identity-db ui backup checks"' &&
-      $(cat "$t/seen-rebuild.env") == *"ENV_NAME=prod"* && $(cat "$t/seen-rebuild.env") == *"TOFU_ENV=$t/keys/proxmox-lab.env"* &&
+      $(cat "$t/seen-rebuild.env") == *"ENV_NAME=prod"* && $(cat "$t/seen-rebuild.env") == *"TEARDOWN_TARGET=proxmox_virtual_environment_vm.node"* &&
+      $(grep -c 'plan .*-destroy -target=proxmox_virtual_environment_vm.node ' "$t/calls") -ge 1 && $(cat "$t/seen-rebuild.env") == *"TOFU_ENV=$t/keys/proxmox-lab.env"* &&
       $(cat "$t/seen-rebuild.env") == *"k8s-restore.yml -e k8s_backup_enabled=false"* && -e $t/work/state/prod-stable-folders &&
       $out == *"owner tap $tap"* && $out == *"restore test passed: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321"*"etcd restore test"*"snapshot c5523412"* && $out == *"PASS: rebuild-prod: prod torn down and built again"* &&
       -z $(ls -d /dev/shm/rebuild-prod-seal.test-* 2>/dev/null) ]]; then
@@ -323,14 +324,26 @@ else bad "12. $r12a $o12a | $r12b [$c12b] | $r12c $o12c"; fi
 # 12c. A plan with changes names what it changes by type, name and VM ID, never by address: a node's address carries its private
 # hostname as the index. The stand-in `tofu show` gives a node resource keyed by a fake hostname; the output must not hold it.
 cat > "$t/plan-changes.json" <<'J'
-{"resource_changes":[{"address":"proxmox_virtual_environment_vm.node[\"fakehost-zq.example.invalid\"]","type":"proxmox_virtual_environment_vm","name":"node","index":"fakehost-zq.example.invalid","change":{"actions":["update"],"before":{"vm_id":200,"memory":4096},"after":{"vm_id":200,"memory":8192}}}]}
+{"resource_changes":[{"address":"proxmox_virtual_environment_vm.node[\"fakehost-zq.example.invalid\"]","type":"proxmox_virtual_environment_vm","name":"node","index":"fakehost-zq.example.invalid","change":{"actions":["update"],"before":{"vm_id":200,"memory":4096},"after":{"vm_id":200,"memory":8192}}},
+{"address":"proxmox_download_file.almalinux10[0]","previous_address":"proxmox_download_file.almalinux10","type":"proxmox_download_file","name":"almalinux10","change":{"actions":["no-op"],"before":{"file_name":"x"},"after":{"file_name":"x"}}}]}
 J
 inventory "        k8s_backup_azure_identity: true"
 dev_log "$sha" "rebuild: all stages passed"
 TOFU_PLAN_RC=2 TOFU_SHOW_FILE="$t/plan-changes.json" run check; r12c2=$rc o12c2=$out
-if [[ $o12c2 == *"plan: proxmox_virtual_environment_vm.node vm_id 200 update; differs in: memory"* && $o12c2 != *fakehost-zq* ]]; then
+if [[ $o12c2 == *"plan: proxmox_virtual_environment_vm.node vm_id 200 update; differs in: memory"* && $o12c2 == *"plan: proxmox_download_file.almalinux10 moved in the state"* && $o12c2 != *fakehost-zq* ]]; then
   ok "12c. a plan with changes is named by type, name and VM ID, and a node's hostname never appears"
 else bad "12c. $r12c2 $o12c2"; fi
+
+# 12d. A plan whose only changes are moves in the state (the code's moved blocks, the state older than the code) passes the plan
+# check, naming the count; a real change next to a move still fails (12c).
+cat > "$t/plan-moves.json" <<'J'
+{"resource_changes":[{"address":"proxmox_download_file.almalinux10[0]","previous_address":"proxmox_download_file.almalinux10","type":"proxmox_download_file","name":"almalinux10","change":{"actions":["no-op"],"before":{"file_name":"x"},"after":{"file_name":"x"}}},
+{"address":"proxmox_virtual_environment_vm.template[0]","previous_address":"proxmox_virtual_environment_vm.template","type":"proxmox_virtual_environment_vm","name":"template","change":{"actions":["no-op"],"before":{"vm_id":9000},"after":{"vm_id":9000}}}]}
+J
+TOFU_PLAN_RC=2 TOFU_SHOW_FILE="$t/plan-moves.json" run check; o12d=$out
+if [[ $o12d == *"PASS: rebuild-prod: OpenTofu: the only plan changes are state moves (nothing changes on the host): 2 resource(s)"* && $o12d != *"plans changes with the Mac"* ]]; then
+  ok "12d. a plan of state moves only passes, naming the count"
+else bad "12d. $o12d"; fi
 
 # 12b. The wrapper's PATH reaches `ip` (/usr/sbin on the box, where the route check reads the routing table): on the box the check
 # failed with "no route to the Proxmox API's address" because `ip` was not found.

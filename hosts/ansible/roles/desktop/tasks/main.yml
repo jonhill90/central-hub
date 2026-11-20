@@ -106,30 +106,65 @@
 
 # Test build only: the passwords come from the box, so the console script is skipped (the marker exists). Neither
 # password is on a command line (stdin) or in the log.
-- name: desktop | Test build, the login password is set from the box
-  ansible.builtin.shell: 'set -o pipefail; printf "%s:%s\n" "{{ desktop_user }}" "$DESKTOP_PW" | chpasswd'
-  args:
-    executable: /bin/bash
-  environment: {DESKTOP_PW: "{{ desktop_test_login_password }}"}
-  no_log: true
-  changed_when: true
-  when: desktop_test_login | bool
-
-- name: desktop | Test build, the RDP credential is set from the box
-  ansible.builtin.shell: 'set -o pipefail; printf "%s\n" "$DESKTOP_PW" | grdctl --system rdp set-credentials "{{ desktop_user }}" && grdctl --system rdp enable'
-  args:
-    executable: /bin/bash
-  environment: {DESKTOP_PW: "{{ desktop_test_rdp_password }}"}
-  no_log: true
-  changed_when: true
-  when: desktop_test_login | bool
-
-- name: desktop | Test build, the password marker is written
-  ansible.builtin.file:
+# Test build: the console prompt runs for real, with throwaway passwords fed in on standard input instead of typed on
+# tty1, so a test build exercises the prompt's own script, its marker and its ExecStartPost, the path the owner's build
+# takes. The file (0600, root, in /run) is removed by the unit's own ExecStartPost, and /run is gone at the next boot.
+- name: desktop | The password marker is looked up
+  ansible.builtin.stat:
     path: "{{ desktop_password_marker }}"
-    state: touch
+  register: desktop_marker
+
+# Written only while the marker is absent: with the marker there the prompt is skipped and nothing would consume the file.
+- name: desktop | Test build, the throwaway passwords are fed to the console prompt
+  ansible.builtin.copy:
+    dest: /run/desktop-test-passwords
+    content: |
+      {{ desktop_test_login_password }}
+      {{ desktop_test_login_password }}
+      {{ desktop_test_rdp_password }}
+      {{ desktop_test_rdp_password }}
+    mode: "0600"
+    owner: root
+    group: root
+  no_log: true
+  when: desktop_test_login | bool and not desktop_marker.stat.exists
+
+- name: desktop | Folder for the console prompt's drop-in
+  ansible.builtin.file:
+    path: /etc/systemd/system/desktop-set-password.service.d
+    state: directory
+    mode: "0755"
+
+- name: desktop | Test build, the console prompt reads them
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/desktop-set-password.service.d/10-test-passwords.conf
+    content: |
+      # Written by role desktop on a test build only: the prompt reads the box's throwaway passwords, not the console.
+      # ExecStopPost also runs when ExecStart fails, so the file never outlives a run.
+      [Service]
+      StandardInput=file:/run/desktop-test-passwords
+      ExecStartPost=/usr/bin/rm -f /run/desktop-test-passwords
+      ExecStopPost=/usr/bin/rm -f /run/desktop-test-passwords
     mode: "0644"
   when: desktop_test_login | bool
+
+# The owner's build: a VM that was a test build keeps the admin key, so a plain configure can reach it. Neither the drop-in
+# nor a left-over feed file may survive onto it.
+- name: desktop | Not a test build, the test drop-in and the feed file are removed
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/desktop-set-password.service.d/10-test-passwords.conf
+    - /run/desktop-test-passwords
+  when: not (desktop_test_login | bool)
+
+# A marker already there on a test build: no prompt runs, so the feed file is not left behind.
+- name: desktop | The feed file is absent when the prompt will not run
+  ansible.builtin.file:
+    path: /run/desktop-test-passwords
+    state: absent
+  when: desktop_marker.stat.exists
 
 - name: desktop | The units are enabled
   ansible.builtin.systemd_service:
@@ -140,6 +175,26 @@
     - desktop-set-password.service
     - desktop-rdp.path
     - gnome-remote-desktop.service
+
+# gdm and the console password prompt both want tty1 (the prompt's service sets TTYPath=/dev/tty1 and takes the getty's place;
+# gdm's greeter takes vt1 and its own unit conflicts with getty@tty1). gdm therefore starts after the prompt: while the
+# owner has not typed the passwords gdm waits behind the prompt, and once the marker exists the prompt is skipped and gdm
+# starts at once. The system RDP daemon waits for gdm (measured 2026-11-20: gdm inactive, the daemon stuck "activating"
+# and nothing on 3389 until a reboot started gdm), so the RDP service is up without a reboot.
+- name: desktop | Folder for gdm's drop-in
+  ansible.builtin.file:
+    path: /etc/systemd/system/gdm.service.d
+    state: directory
+    mode: "0755"
+
+- name: desktop | gdm starts after the console password prompt
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gdm.service.d/10-after-password-prompt.conf
+    content: |
+      # Written by role desktop: the console password prompt owns tty1 until the owner has typed the passwords.
+      [Unit]
+      After=desktop-set-password.service
+    mode: "0644"
 
 # Enabling a path unit does not start it until the next boot. Started now, it starts the remote desktop the moment
 # the marker exists: at once on a test build, and when the owner has typed the password otherwise. Seen on the
@@ -190,6 +245,15 @@
   ansible.builtin.systemd_service:
     name: desktop-set-password.service
     state: started
+    no_block: true
+
+# Not waited for: on the owner's build the start job queues behind the console prompt, which holds tty1 until the owner
+# has typed the passwords, so a plain start would block this run. On a test build the prompt is skipped and gdm starts now.
+- name: desktop | gdm is started
+  ansible.builtin.systemd_service:
+    name: gdm.service
+    state: started
+    daemon_reload: true
     no_block: true
 
 # The proof that the desktop trusts the lab's certificates (ask 275), while an agent can still look: the run fails

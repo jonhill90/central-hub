@@ -49,6 +49,18 @@ Read from `main` at `8bca3cd` on 2026-11-18, not run again here:
 | The firewall pass for the box and the desktop VM on tcp 443 | merged: role `opnsense_lab`, `tasks/app_access.yml` | the owner's go, and a run from a machine that holds the private inventory; whether it has run is not shown by this repository |
 | The desktop's own check of the names | `desktop_trust_check_reach: false` (`roles/desktop/defaults/main.yml`), a switch a one-line pull request sets after the firewall pass | the firewall pass above; [set-up-the-desktop.md](set-up-the-desktop.md) |
 
+## Proven runs, 2026-11-20
+
+A second kind of run, from the agent box: the sixth short name, `central-hub-app`, with no step on the owner's Mac.
+
+| Part | What ran | Result |
+|---|---|---|
+| Unbound override (#773) | `opnsense-prod.sh check`, then the reviewer's pass, the standing go and `apply-recorded` | check 282cc9b547f0: 1 changed, 10 skipped, 47 tasks; applied at 09:27 to 09:29 UTC, no rollback |
+| Resolve and open the page | from the box, `getent hosts central-hub-app.<zone>`, then `curl https://central-hub-app.<zone>/` | the Gateway's address; `200`, certificate verified against the lab CA, page title `Central Hub`; `/api/v1/catalog` `200` |
+| Tailnet split DNS (#785, #788) | `tailnet-stack.sh plan`, the reviewer's pass, the standing go and `apply-recorded` | plan 755385b91b0c: 1 to add; applied at 10:30 UTC; a fresh plan shows 0 to add |
+
+Not proven: that a tailnet device resolves the new name through split DNS. The box and the agent cloud session do not use split DNS (a query for `grafana.<zone>` to `100.100.100.100` from the cloud session also returned NXDOMAIN), so the check is the owner's Mac or phone opening `https://central-hub-app.<zone>/`.
+
 ## Before you start
 
 1. The lab DNS runbook is done: `dscacheutil -q host -a name grafana.apps.c1.prod.<zone>` on the Mac prints the Gateway's address.

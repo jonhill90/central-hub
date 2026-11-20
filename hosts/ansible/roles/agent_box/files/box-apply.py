@@ -392,6 +392,30 @@ def changed_results(out):
                         yield t.get("task", {}).get("name", "?"), r
 
 
+def failed_tasks(out):
+    """The names of the tasks whose result failed or was unreachable, names only (never a message: it can carry a
+    value), so that a failed run can be read without root."""
+    names = []
+    for pl in out.get("plays", []):
+        for t in pl.get("tasks", []):
+            for res in t.get("hosts", {}).values():
+                rs = [res] + list(res.get("results", []) if isinstance(res.get("results"), list) else [])
+                if any(isinstance(r, dict) and (r.get("failed") or r.get("unreachable")) for r in rs):
+                    names.append(t.get("task", {}).get("name", "?"))
+    return names
+
+
+def failed_note(out):
+    names = failed_tasks(out)
+    return " Failed tasks: " + "; ".join(names[:10]) + "." if names else ""
+
+
+def result_user(r):
+    """The user a result is about: the module's name, or the loop label of a one-item loop (a check run's result
+    that the role marks changed for a group that does not exist yet carries no name)."""
+    return r.get("name") or r.get("_ansible_item_label")
+
+
 def touched_paths(r):
     found = set()
 
@@ -421,8 +445,8 @@ def check_hits(rules, out):
         for p in touched_paths(r):
             if any(fnmatch.fnmatchcase(p, g) for g in rules["box"]) or p in rules["dir"]:
                 hits.append(f"{name}: {p}")
-        if r.get("name") in rules["user"] and ("uid" in r or "groups" in r or "shell" in r):
-            hits.append(f"{name}: user {r['name']}")
+        if result_user(r) in rules["user"] and ("uid" in r or "groups" in r or "shell" in r or "msg" in r):
+            hits.append(f"{name}: user {result_user(r)}")
     return sorted(set(hits))
 
 
@@ -433,8 +457,8 @@ def predicted(rules, out):
         for p in touched_paths(r):
             if any(fnmatch.fnmatchcase(p, g) for g in rules["box"]) or p in rules["dir"]:
                 paths.add(p)
-        if r.get("name") in rules["user"]:
-            paths.add(r["name"])
+        if result_user(r) in rules["user"]:
+            paths.add(result_user(r))
     return paths
 
 
@@ -501,7 +525,7 @@ def limit_apply(s, rules, repo, base, ok, mode):
         f"pass {ok['pass']}, tap {ok['tap']} (the box can't check the pass or the tap): {', '.join(ok['files'])}")
     rc, out = play(s, repo, check=True, limits=True)
     if failures(out) or rc not in (0, 2):
-        stop(f"the check run failed (exit {rc}); nothing applied. Its output is in {STATE}/runs/")
+        stop(f"the check run failed (exit {rc}); nothing applied.{failed_note(out)} Its output is in {STATE}/runs/")
     allowed = predicted(rules, out)
     sources = copied_sources(out, repo)
     say("check run: limit paths it would change: " + ("; ".join(sorted(allowed)) if allowed else "none"))
@@ -524,7 +548,7 @@ def limit_apply(s, rules, repo, base, ok, mode):
              "change of this run" + (f", except: {'; '.join(left)}" if left else "")
              + ". Self-applies are stopped until the next full apply from the controller.", code=4)
     if failures(out) or rc != 0:
-        stop(f"the approved apply failed (exit {rc}); the baseline stays {base[:8]}. Its output is in {STATE}/runs/")
+        stop(f"the approved apply failed (exit {rc}); the baseline stays {base[:8]}.{failed_note(out)} Its output is in {STATE}/runs/")
     with open(os.path.join(STATE, "baseline.new"), "w") as f:
         f.write(to + "\n")
     os.replace(os.path.join(STATE, "baseline.new"), os.path.join(STATE, "baseline"))
@@ -595,7 +619,7 @@ def main():
 
     rc, out = play(s, repo, check=True)
     if failures(out) or rc not in (0, 2):
-        stop(f"the check run failed (exit {rc}); nothing applied. Its output is in {STATE}/runs/")
+        stop(f"the check run failed (exit {rc}); nothing applied.{failed_note(out)} Its output is in {STATE}/runs/")
     hits = check_hits(rules, out)
     if hits:
         stop("the check run would change a limit on the box, so nothing is applied: " + "; ".join(hits), code=3)
@@ -617,7 +641,7 @@ def main():
              + (f", except: {'; '.join(left)}" if left else "")
              + ". Self-applies are stopped until the next full apply from the controller.", code=4)
     if failures(out) or rc != 0:
-        stop(f"the apply failed (exit {rc}); the baseline stays {base[:8]}. Its output is in {STATE}/runs/")
+        stop(f"the apply failed (exit {rc}); the baseline stays {base[:8]}.{failed_note(out)} Its output is in {STATE}/runs/")
     with open(os.path.join(STATE, "baseline.new"), "w") as f:
         f.write(new + "\n")
     os.replace(os.path.join(STATE, "baseline.new"), os.path.join(STATE, "baseline"))
