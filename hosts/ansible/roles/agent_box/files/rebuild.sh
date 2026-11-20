@@ -17,6 +17,8 @@
 # identity: only the stage identity-keycloak (k8s-identity.yml --tags secrets,keycloak,signin: Keycloak and its
 # realm, then the owner's sign-in proof, step names and HTTP codes only) on the existing dev
 # cluster. Same dev guard, lock, checkout and log as the other runs; `log` shows it.
+# After every teardown the wrapper's env file has the run delete dev's SOPS file of the apps' secrets (TEARDOWN_HOOK,
+# dev-secrets.sh remove), once the dev state holds 0 VMs; the daily bundle leaves dev out while dev is down.
 # Dev only: the env file below fixes ENV_NAME=dev and the dev VM range 250-257, and rebuild-k8s.sh
 # refuses a tfvars whose VM IDs fall outside it or whose node_vnet isn't "dev". Only code on main
 # runs with the keys; there is no way to name another branch.
@@ -724,6 +726,7 @@ $seal_env
 $app_secrets_env
 $short_node_env
 $keep_desktop_env
+TEARDOWN_HOOK='$libexec/dev-secrets.sh remove'
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'
 ENV
