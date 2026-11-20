@@ -20,7 +20,7 @@ resource "tailscale_device_subnet_routes" "connector" {
 }
 
 resource "tailscale_dns_split_nameservers" "lab" {
-  for_each = toset(var.split_dns_names)
+  for_each = toset(concat(var.split_dns_names, var.app_split_dns_names))
 
   domain = "${each.value}.${var.zone}"
   nameservers = [
