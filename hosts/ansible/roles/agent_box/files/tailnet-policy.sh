@@ -22,7 +22,7 @@
 # log: the newest run's summary lines, and, if that run failed, its scrubbed error lines.
 # What is printed (and so what GitHub's public run log holds): the stack, the commit, the plan's hash, the
 # counts of changes, the card ID, pass or fail, and on a failed init the last 12 lines of init's output with IP
-# addresses replaced. Never the policy's text (it names the Proxmox host's address), a value or a secret. The full output stays on the box in {work}/logs/tailnet-policy/.
+# addresses replaced. Never the policy's text (it names the Proxmox host's address), a value or a secret. The full output stays on the box in {work}/logs/.
 set -euo pipefail
 umask 077
 
