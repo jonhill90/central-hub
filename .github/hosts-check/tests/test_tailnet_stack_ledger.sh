@@ -64,7 +64,7 @@ job apply-recorded "$h" > "$t/2b.out" 2>&1; rc=$?
 job pass "$c" "$h" cmsg_0123456789ab "$tm" reviewer >/dev/null
 job go "$c" cmsg_0123456789cd "$tm" orchestrator >/dev/null
 job apply-recorded "$h" > "$t/3.out" 2>&1; rc=$?
-[ $rc = 0 ] && grep -q "applied plan $h" "$t/3.out" && [ "$(grep -c -- ' apply -input' "$t/calls")" = 1 ] && ok "3 with a pass and a go it applies once" || bad "3 rc=$rc $(cat "$t/3.out")"
+[ $rc = 0 ] && grep -q "applied plan $h.*reviewer pass cmsg_0123456789ab, go cmsg_0123456789cd" "$t/3.out" && [ "$(grep -c -- ' apply -input' "$t/calls")" = 1 ] && ok "3 with a pass and a go it applies once" || bad "3 rc=$rc $(cat "$t/3.out")"
 h2=$(job plan 2>&1 | sed -n 's/^tailnet-stack: plan \([0-9a-f]\{12\}\):.*/\1/p')
 job pass "$c" "$h2" cmsg_0123456789ab "$tm" reviewer >/dev/null
 job apply-recorded "$h2" > "$t/3b.out" 2>&1; rc=$?

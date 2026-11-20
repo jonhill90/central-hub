@@ -103,7 +103,7 @@ agent_box_wrappers:
   # A session may also apply a saved plan through `apply-recorded`, which the wrapper refuses without a reviewer pass for
   # the plan's hash and an unused go (D-0063 rule 3; `pass`, `go` and `ledger` write and read that ledger).
   - name: tailnet-stack
-    args: [plan, "apply *", "apply-recorded *", "pass *", "go *", ledger, log]
+    args: [plan, "apply *", log]   # the workflow only plans and applies; the ledger actions are the sessions'
     session_args: [plan, "apply-recorded *", "pass *", "go *", ledger, log]   # the card-ID `apply` stays the workflow runner's (D-0041 rules 2 and 3)
     runner: true
   # The Proxmox host's proxy playbook as a pipeline job (D-0041; Library plans/r1-host-job/DESIGN.md v3.1):
