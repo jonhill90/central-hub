@@ -27,6 +27,14 @@
     or (box_guard_user_res.failed | default(false) and ansible_check_mode
     and ('Group ' ~ agent_box_devaddr_group ~ ' does not exist') in (box_guard_user_res.msg | default('')))
 
+- name: guard_job | The folder where it says whether the dev worker's firewall rule was applied (a hash, for the keys user to read)
+  ansible.builtin.file:
+    path: "{{ agent_box_guard_applied_dir }}"
+    state: directory
+    owner: "{{ agent_box_guard_user }}"
+    group: "{{ agent_box_devaddr_group }}"
+    mode: "2750"
+
 - name: guard_job | Its key folder and its work folder, its own only
   ansible.builtin.file:
     path: "{{ item }}"

@@ -68,6 +68,7 @@ sed -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^guard_cmd=.*|guard_cmd=($t/bin
     "$root/hosts/ansible/roles/agent_box/files/opnsense-prod.sh" > "$t/job.sh"
 grep -q "^guard_cmd=($t/bin/host-guard" "$t/job.sh" && grep -q "^repo_url=$t/main.git" "$t/job.sh" && grep -q "^ansible_bin=$t/bin" "$t/job.sh" ||
   { echo "FAIL: the test could not point the wrapper at its folders"; exit 1; }
+mkdir -p "$t/ga"; sed -i -e "s|applied_dir=/var/lib/agent-box-guard-applied|applied_dir=$t/ga|" -e "s|applied_group=devaddr|applied_group=$(id -gn)|" "$t/job.sh"
 job() { bash "$t/job.sh" "$@"; }
 
 # 1
@@ -190,5 +191,26 @@ for v in '10.1.30.230' '10.1.30.0' '10.1.20.5' '10.1.30.5/32' '10.1.30.5 10.1.30
 done
 ok "10c 8 bad shapes stop the check before the playbook, naming no value"
 rm -f "$t/handoff/dev-worker-address"
+
+# 11 a confirmed apply leaves a marker: the sha256 of the dev address it opened (nothing else), so the box's rebuild wrapper switches dev to the
+#    Proxmox target only when the firewall has the rule; an apply with no dev address removes it; a check never writes it
+printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"
+want=$(printf '10.1.30.12\n' | sha256sum | cut -c1-64)
+rm -f "$t/ga/dev-rule-applied"; job check > "$t/11a.out" 2>&1
+c11=$(git -C "$t/main.git" rev-parse main); h11=$(sed -n 's/^opnsense-prod: check \([0-9a-f]\{12\}\):.*/\1/p' "$t/11a.out")
+job pass "$c11" "$h11" cmsg_0123456789aa "$tm" reviewer > /dev/null
+[ ! -e "$t/ga/dev-rule-applied" ] && ok "11a a check writes no marker" || bad "11a a check wrote the marker"
+job go "$c11" cmsg_0123456789e1 "$tm" orchestrator > /dev/null
+job apply-recorded "$h11" > "$t/11b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && [ "$(cat "$t/ga/dev-rule-applied" 2>/dev/null)" = "$want" ] && [ "$(stat -c %a "$t/ga/dev-rule-applied")" = 640 ] && ! grep -q "10.1.30.12" "$t/11b.out"; then
+  ok "11b a confirmed apply with the dev address leaves the marker (the address's sha256, 0640) and prints no address"
+else bad "11b rc=$rc marker=[$(cat "$t/ga/dev-rule-applied" 2>/dev/null)] $(cat "$t/11b.out")"; fi
+rm -f "$t/handoff/dev-worker-address"
+job go "$c11" cmsg_0123456789e2 "$tm" orchestrator > /dev/null
+job apply-recorded "$h11" > "$t/11c.out" 2>&1; rc=$?
+[ $rc = 0 ] && [ ! -e "$t/ga/dev-rule-applied" ] && ok "11c an apply with no dev address removes the marker" || bad "11c rc=$rc $(ls "$t/ga")"
+
+grep -q 'applied_group=devaddr' "$root/hosts/ansible/roles/agent_box/files/opnsense-prod.sh" && grep -q 'mode: "2750"' "$root/hosts/ansible/roles/agent_box/tasks/guard_job.yml" \
+  && ok "11d the marker's real group is devaddr and the role makes its folder setgid (2750)" || bad "11d the marker's group or its folder's mode is not as expected"
 
 exit $fail

@@ -314,6 +314,16 @@ PY
       exit 1
     fi
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok
+    # Say whether the dev worker's rule was in this apply (sha256 of the address it opened; nothing else), so the box's rebuild wrapper
+    # switches dev to the Proxmox target only when the firewall has the rule. No dev address in this apply: the rule is gone, so is the marker.
+    applied_dir=/var/lib/agent-box-guard-applied
+    applied_group=devaddr
+    if [[ -d $applied_dir ]]; then
+      if [[ -n $dev_addr ]]; then
+        printf '%s\n' "$(printf '%s\n' "$dev_addr" | sha256sum | cut -c1-64)" > "$applied_dir/dev-rule-applied.part" && chmod 0640 "$applied_dir/dev-rule-applied.part" \
+          && chgrp "$applied_group" "$applied_dir/dev-rule-applied.part" && mv -f -- "$applied_dir/dev-rule-applied.part" "$applied_dir/dev-rule-applied" || rm -f -- "$applied_dir/dev-rule-applied.part"
+      else rm -f -- "$applied_dir/dev-rule-applied"; fi
+    fi
     echo "opnsense-prod: applied check $hash ($changed changed, $skipped skipped, $total tasks), pass $pass_ref"
     ;;
 esac

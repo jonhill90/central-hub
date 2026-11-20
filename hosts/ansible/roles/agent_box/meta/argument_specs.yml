@@ -21,6 +21,10 @@ argument_specs:
         type: path
         default: /var/lib/agent-box-hostkey
         description: "The folder where the host job publishes the Proxmox host's public host key (hostops:devaddr, 2750)."
+      agent_box_guard_applied_dir:
+        type: path
+        default: /var/lib/agent-box-guard-applied
+        description: "Where the firewall job says its last apply held the dev worker's rule (guardops:devaddr, 2750)."
       agent_box_handoff_dir: {type: path, default: /var/lib/agent-box-handoff, description: "The folder of that one handoff file (keys:devaddr, 0750)."}
       agent_box_runner_user:
         type: str
