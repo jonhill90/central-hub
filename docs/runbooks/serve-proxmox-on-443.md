@@ -111,6 +111,14 @@ The same wrapper runs a second job, `agent-access`, so a change to `hosts/terraf
 
 expect: `proxmox-host: check <hash>: ...` with the job named in the line before it (`job agent-access`).
 
+## See who holds the host's memory (read-only)
+
+The same wrapper has a read-only job, `memory`, for when a dev rebuild is refused for memory and the preflight (which sees only the guests its token can see) does not say who holds it: `sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check memory`. It runs `playbooks/proxmox-memory.yml` on the host, which reads the guests' resource list, the host's memory counters, each VM process's resident memory and the kernel's same-page merging (KSM) counters, and changes nothing.
+
+expect: `proxmox-host: memory: ...` lines: `guest <vmid> <qemu|lxc> <status> maxmem <MiB> mem <MiB>`, `kvm id <vmid> rss <MiB>`, `host <memtotal|memavailable|swaptotal|swapfree|shmem> <MiB>` and `host ksm <run|pages_shared|pages_sharing> <n>`, then a count of the lines.
+
+why: the wrapper prints only lines that match that fixed shape (digits and fixed words), so no guest name or address can reach a session, whatever the host answers.
+
 ## If it fails
 
 - Apache httpd does not start after a reboot: `systemctl status apache2` and `journalctl -u apache2`. The drop-in makes it wait for `pve-cluster`; if `/etc/pve` is not mounted, fix that first. The web UI is still on 8006.

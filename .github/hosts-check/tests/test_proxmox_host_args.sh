@@ -295,6 +295,27 @@ if [ $rc16 = 0 ] && [[ $c16 == *playbooks/proxmox-guests.yml* ]] && grep -qx 'pr
   ok "16 the guests job runs proxmox-guests.yml and prints the guest that exists"
 else bad "16 rc=$rc16 [$c16] $(cat "$t/16.out")"; fi
 
+# 16b the memory job runs proxmox-memory.yml and prints only the report lines that match its allowlist: a line with a name, an address
+#     or any extra word is dropped, so nothing private can pass
+python3 - > "$t/out-check.json" <<'PY'
+import json
+msg = "\n".join(["guest 301 qemu running maxmem 4096 mem 3072", "kvm id 301 rss 4096", "host memavailable 8407", "host ksm run 0",
+                 "guest 302 qemu running maxmem 4096 mem 3072 name secret-host-name", "host 192.0.2.10 5", "pve-secret.example 1",
+                 "kvm id 258 rss 1024 -name other"])
+t = lambda n, **r: {"task": {"name": n}, "hosts": {"proxmox_host": r}}
+print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [t("memory | Read the guests' resources", changed=False),
+      t("memory | REPORT", changed=False, msg=msg)]}], "stats": {}}))
+PY
+: > "$t/calls"
+job check memory > "$t/16b.out" 2>&1; rc16b=$?
+c16b=$(cat "$t/calls")
+if [ $rc16b = 0 ] && [[ $c16b == *playbooks/proxmox-memory.yml* ]] && grep -qx 'proxmox-host: memory: guest 301 qemu running maxmem 4096 mem 3072' "$t/16b.out" \
+   && grep -qx 'proxmox-host: memory: kvm id 301 rss 4096' "$t/16b.out" && grep -qx 'proxmox-host: memory: host memavailable 8407' "$t/16b.out" \
+   && grep -qx 'proxmox-host: memory: host ksm run 0' "$t/16b.out" && grep -qx 'proxmox-host: memory: 4 line(s)' "$t/16b.out" \
+   && ! grep -q 'secret\|192.0.2.10\|pve-secret\|-name' "$t/16b.out"; then
+  ok "16b the memory job prints the allowlisted report lines and drops any other text"
+else bad "16b rc=$rc16b [$c16b] $(cat "$t/16b.out")"; fi
+
 # 17 restore-reader takes the dev worker's address from the handoff file, in a vars file and never on the command line;
 #    no file, or a file that is not exactly one dev node address, stops it before the playbook runs, and no output shows the value
 cat > "$t/bin/ansible-playbook" <<EOF
