@@ -28,7 +28,7 @@ Until now the policy file ran as a raw OpenTofu apply on the owner's Mac. This j
 | Wrapper | `tailnet-stack` | `tailnet-policy` |
 | Folder | `hosts/terraform/home/tailnet` | `hosts/terraform/home/tailnet-policy` |
 | tfvars on the box | `/etc/agent-keys/prod/tfvars/tailnet.tfvars` | `/etc/agent-keys-guard/tailnet-policy.tfvars` (user `guardops`, D-0063) |
-| State | copied once from the controller | the controller's copy if one was put on the box; otherwise the first `plan` adopts the live policy with `tofu import`, which only reads the tailnet |
+| State | copied once from the controller | none is copied: the first `plan` adopts the live policy with `tofu import`, which only reads the tailnet, into the guard user's `/var/lib/agent-box-guard/tailnet-policy/state/` (D-0063) |
 | `vlans_file` | from the tfvars | always this checkout's `hosts/ansible/inventories/home/group_vars/all/vlans.yml`, since the tfvars names a path on the controller |
 | Box log | `/var/lib/agent-box/logs/tailnet-stack/` | `/var/lib/agent-box-guard/tailnet-policy/logs/` |
 
