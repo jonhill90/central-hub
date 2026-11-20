@@ -66,6 +66,12 @@ k8s_backup_sftp_alias: c1-backup-target
 k8s_backup_sftp_repo: c1
 k8s_backup_sftp_user: "{{ 'c1restore' if (k8s_backup_reader | bool) else 'c1backup' }}"
 k8s_backup_sftp_dir: /etc/central-hub/backup-ssh
+# A rebuilt node keeps its sftp key (rebuild-prod.sh, from the agent box): the folder on the controller or the box that holds
+# <node>.key, <node>.pub and <node>.known_hosts carried off each node before a teardown. Empty: a node makes its own key.
+k8s_backup_sftp_seed_dir: ""
+# The Proxmox host's address on VNet mgmt when the inventory has no proxmox group (the agent box's copy drops it): the playbooks
+# use it in place of the group's proxmox_host_mgmt_address, with the host key read from the carried known_hosts.
+k8s_backup_sftp_seed_address: ""
 k8s_backup_sftp_ssh_conf: /etc/ssh/ssh_config.d/40-central-hub-backup.conf
 
 # Where the tools and scripts go on the nodes, apart from the PATH so nothing else picks up this

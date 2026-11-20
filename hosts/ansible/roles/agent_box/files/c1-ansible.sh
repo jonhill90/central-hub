@@ -48,7 +48,10 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # backup-restore-test: starts each node's c1-restore-test.service now (the Sunday timer's own unit: restic check, then the newest snapshots restored
 # into temporary folders and compared, never over a volume) and stops unless each node names the snapshot it restored and leaves no folder behind.
 # check starts nothing; apply starts it. It takes no backup.
-declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml)
+# backup-check: plays playbooks/k8s-backup.yml in check mode only, to prove the sftp alias tasks (the carried key seeds, the host address
+# from the Mac's inventory) before a prod rebuild; apply is refused, because the wrapper never takes a backup. The seed folder is the one
+# rebuild-prod.sh fills (<keys>/prod/backup-sftp); the host address is read before the proxmox group is dropped, as rebuild-prod.sh does.
+declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file)
 # Fixed extra variables per name. identity, users and clients also set k8s_identity_secrets_store=openbao, so the realm's Secrets
@@ -70,6 +73,7 @@ case $action in
   apply)
     [[ $# -eq 3 ]] || usage
     name=$2 clearance=$3
+    [[ $name != backup-check ]] || { echo "c1-ansible: backup-check is check only; it never takes a backup" >&2; exit 2; }
     [[ $clearance =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "c1-ansible: the clearance id is the reviewer's message id, cmsg_<letters and digits>" >&2; exit 2; }
     ;;
   *) usage ;;
@@ -115,7 +119,7 @@ rm -rf -- "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
 import sys, yaml
-src, dst, key, known, themes = sys.argv[1:6]
+src, dst, key, known, themes, sftp_keys = sys.argv[1:7]
 def die(m):
     print("c1-ansible: " + m, file=sys.stderr); sys.exit(1)
 d = yaml.safe_load(open(src))
@@ -140,6 +144,23 @@ def pve_names(n):
             if r: return r
     return []
 names = pve_names(d)
+def pve_address(n):
+    if isinstance(n, dict):
+        p = n.get("proxmox")
+        if isinstance(p, dict) and ("hosts" in p or "children" in p or "vars" in p):
+            for part in [p.get("vars")] + list((p.get("hosts") or {}).values()):
+                a = (part or {}).get("proxmox_host_mgmt_address") if isinstance(part, dict) else None
+                if isinstance(a, str) and a: return a
+            return ""
+        for x in n.values():
+            r = pve_address(x)
+            if r: return r
+    elif isinstance(n, list):
+        for x in n:
+            r = pve_address(x)
+            if r: return r
+    return ""
+pve_addr = pve_address(d)
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking"}
@@ -175,11 +196,17 @@ v = g.setdefault("vars", {})
 if names:
     v["k8s_identity_proxmox_hosts"] = sorted(set(names))
     print("c1-ansible: %d Proxmox web names passed to the identity play" % len(set(names)))
+import ipaddress
+v["k8s_backup_sftp_seed_dir"] = sftp_keys
+if pve_addr:
+    try: ipaddress.ip_address(pve_addr)
+    except ValueError: die("proxmox_host_mgmt_address is not an IP address")
+    v["k8s_backup_sftp_seed_address"] = pve_addr
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys/prod/identity-theme" || exit 1
+)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys/prod/identity-theme" "$keys/prod/backup-sftp" || exit 1
 chmod 600 "$inventory/hosts.yml"
 
 # Every k8s node: plain ssh to ansible_host with the box's key and nothing else; no host labelled another env than prod.

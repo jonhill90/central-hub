@@ -49,6 +49,7 @@ tfvars_src=$pkeys/tfvars/k8s.tfvars
 tfstate=$pkeys/state/home-k8s.tfstate
 tofu_env=$keys/proxmox-lab.env
 certs=$pkeys/backup-certs
+sftp_keys=$pkeys/backup-sftp
 settings=$work/openbao-prod.json
 dev_logs=$work/rebuild-dev/logs
 vm_min=200
@@ -158,7 +159,7 @@ install -d -m 700 "$inventory"
 inv_ok=false
 if [[ -s $pkeys/inventory-hosts.yml && -s $settings ]] && python3 -I -c "$(cat <<'PY'
 import ipaddress, json, os, sys, yaml
-src, dst, key, known, pkeys, keys, certs, settings, repo = sys.argv[1:10]
+src, dst, key, known, pkeys, keys, certs, settings, repo, sftp_keys = sys.argv[1:11]
 def die(m):
     print("FAIL: rebuild-prod: " + m); sys.exit(1)
 s = json.load(open(settings))
@@ -175,6 +176,26 @@ if admin:
     if a is None or a.version != 4 or a.is_loopback: die("admin_address must be one IPv4 address, not loopback")
     if not cidr: die("admin_address needs box_cidr: only the box's /32 may reach the admin address")
 d = yaml.safe_load(open(src))
+# The Proxmox host's address on VNet mgmt (proxmox_host_mgmt_address, on the proxmox group or its hosts) is read before the group
+# is dropped, so the nodes' sftp alias can name the host with no proxmox group in the box's copy. Only that one address passes,
+# as a variable on k8s_nodes; the group's logins and keys do not reach the box. Nothing is printed.
+def pve_address(n):
+    if isinstance(n, dict):
+        p = n.get("proxmox")
+        if isinstance(p, dict) and ("hosts" in p or "children" in p or "vars" in p):
+            for part in [p.get("vars")] + list((p.get("hosts") or {}).values()):
+                a = (part or {}).get("proxmox_host_mgmt_address") if isinstance(part, dict) else None
+                if isinstance(a, str) and a: return a
+            return ""
+        for x in n.values():
+            r = pve_address(x)
+            if r: return r
+    elif isinstance(n, list):
+        for x in n:
+            r = pve_address(x)
+            if r: return r
+    return ""
+pve_addr = pve_address(d)
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking", "k8s_gateway_smoke_client", "k8s_certs_smoke_client",
@@ -261,10 +282,17 @@ v["k8s_backup_restore_own_env"] = True
 v["k8s_backup_restore_source_host"] = workers[0]
 v["k8s_gitops_source_local_path_stable_folders"] = True
 v["k8s_backup_azure_seed_dir"] = certs
+# With the Proxmox host as the backup target the rebuilt nodes get their old sftp keys back (carried off the nodes in step 1a)
+# and name the host by the address read above; the host already lets those keys in, and the box holds no key on the host.
+v["k8s_backup_sftp_seed_dir"] = sftp_keys
+if pve_addr:
+    try: ipaddress.ip_address(pve_addr)
+    except ValueError: die("proxmox_host_mgmt_address is not an IP address")
+    v["k8s_backup_sftp_seed_address"] = pve_addr
 v["k8s_backup_restore_check_identity"] = False
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$pkeys/inventory-hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$pkeys" "$keys" "$certs" "$settings" "$repo"; then
+)" "$pkeys/inventory-hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$pkeys" "$keys" "$certs" "$settings" "$repo" "$sftp_keys"; then
   chmod 600 "$inventory/hosts.yml"
   # Every k8s_nodes host as Ansible sees it: plain ssh with the box's key, labelled env prod, at an address, and no
   # value that still names a file on the Mac. The names of the mapped files must exist on the box.
@@ -306,20 +334,25 @@ for h in sorted(nodes):
     if isinstance(th, str) and th and os.path.isdir(th) and not os.path.isfile(os.path.join(th, "login", "theme.properties")):
         bad.append("k8s_identity_theme_dir is %s, which has no login/theme.properties" % th)
 # The backup target (docs/runbooks/back-up-c1-off-box.md). Azure: each node's certificate is carried to its rebuilt node
-# (step 2 of rebuild). The Proxmox host over sftp: each rebuilt node makes a new key, which only the host play (group
-# proxmox) lets in, and the box's copy drops that group because the box holds no key on the host (the runbook's P3), so a
-# rebuild from the box would lose its backup and restore after the teardown. Refused here, before anything is destroyed.
+# (step 2 of rebuild). The Proxmox host over sftp: each node's own key pair and its pinned host key are carried the same way
+# (step 1a), so the host, which already lets those keys in, needs no change and the box needs no key on it; the host's address
+# comes from the Mac's inventory (proxmox_host_mgmt_address), read before the proxmox group is dropped.
 truthy = lambda x: x is True or str(x).lower() in ("true", "yes", "1")
 sftp = sorted(h for h in nodes if truthy(hv.get(h, {}).get("k8s_backup_sftp")))
 azure = sorted(h for h in nodes if truthy(hv.get(h, {}).get("k8s_backup_azure_identity")))
-if sftp:
-    bad.append("k8s_backup_sftp is true (the Proxmox host as the backup target): the box can't let the rebuilt nodes' new keys in on the host, "
-               "because its copy has no proxmox group and the box holds no key there (back-up-c1-off-box.md, P3); rebuild prod from the controller")
+if sftp and len(sftp) != len(nodes):
+    bad.append("k8s_backup_sftp is true on some prod nodes only: %s" % " ".join(sftp))
+elif sftp and azure:
+    bad.append("k8s_backup_sftp and k8s_backup_azure_identity are both true on prod nodes; the node env file can name one repository only")
+elif sftp:
+    for h in sftp:
+        if not hv.get(h, {}).get("k8s_backup_sftp_seed_address"):
+            bad.append("k8s_backup_sftp is true but the box's copy has no host address for node %s: the Mac's inventory needs proxmox_host_mgmt_address on its proxmox group" % h)
 elif azure and len(azure) != len(nodes):
     bad.append("k8s_backup_azure_identity is true on some prod nodes only: %s" % " ".join(azure))
 for b in sorted(set(bad)): print("FAIL: rebuild-prod: inventory: " + b)
 if bad: sys.exit(1)
-open(backup_mode, "w").write("azure\n" if azure else "none\n")
+open(backup_mode, "w").write("sftp\n" if sftp else ("azure\n" if azure else "none\n"))
 print("PASS: rebuild-prod: %d prod nodes, plain ssh with the box's key, every private file at the box's copy" % len(nodes))
 PY
 )" "$nodekey" "$envdir/known_hosts" "$envdir/backup-mode"; then inv_ok=true; else fails=$((fails + 1)); fi
@@ -448,6 +481,26 @@ if [[ $action == check ]]; then echo "rebuild-prod: check: every check passed; n
 echo "rebuild-prod: rebuild of prod at ${commit:0:12}, owner tap $tap, after dev run $dev_run"
 ap() { (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory/" "$@"); }
 old_args="ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$old_known'"
+
+# 1a. Each node's sftp key pair and the host key it pinned, kept in the keys folder; never printed. Only with the Proxmox host as
+# the backup target (k8s_backup_sftp): the rebuilt node gets the same key back, which the host already lets in (the box holds no
+# key on the host to let a new one in), and the playbooks read the host's key from the carried known_hosts. Before the drill,
+# which runs the backup play on the live nodes with this same inventory.
+if [[ $(cat -- "$envdir/backup-mode" 2>/dev/null) == sftp ]]; then
+install -d -m 700 "$sftp_keys"
+while read -r name host user; do
+  sudo_=""; [[ $user == root ]] || sudo_="sudo -n "
+  for f in id_ed25519:key id_ed25519.pub:pub known_hosts:known_hosts; do
+    ssh_node "$host" "$user" "${sudo_}cat /etc/central-hub/backup-ssh/${f%%:*}" > "$sftp_keys/$name.${f##*:}.part" </dev/null ||
+      { rm -f -- "$sftp_keys/$name".*.part; echo "FAIL: rebuild-prod: could not read node $name's backup ssh file ${f%%:*}; nothing was destroyed"; exit 1; }
+  done
+  grep -q -- 'PRIVATE KEY-----' "$sftp_keys/$name.key.part" && grep -q -- '^ssh-ed25519 ' "$sftp_keys/$name.pub.part" &&
+    grep -q -- ' ssh-ed25519 ' "$sftp_keys/$name.known_hosts.part" ||
+    { rm -f -- "$sftp_keys/$name".*.part; echo "FAIL: rebuild-prod: node $name's backup ssh key, public key or pinned host key is not whole; nothing was destroyed"; exit 1; }
+  for e in key pub known_hosts; do mv -- "$sftp_keys/$name.$e.part" "$sftp_keys/$name.$e"; chmod 600 "$sftp_keys/$name.$e"; done
+done < "$node_list"
+echo "PASS: rebuild-prod: each node's sftp backup key and pinned host key kept for its rebuilt node"
+fi
 
 # 1. A backup of every node now, then the restore tests on it.
 # The restore tests restore into a temporary folder on each node, never over its data. The first worker's
