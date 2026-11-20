@@ -403,7 +403,7 @@ If the box is down, nothing goes off-site; c1's hourly CronJob keeps its own 48 
 **Box lost (break-glass, Activation gate item 7).** The owner alone, with their own Azure sign-in:
 
 1. Grant their own account Key Vault Secrets User on the backup vault and Storage Blob Data Reader on the container.
-2. Read the restic password and the box's age identity, and restore the newest secrets bundle as [its runbook](make-the-box-secrets-bundle.md#recover-the-bundle-when-the-box-is-lost-break-glass) says; the bundle holds the seal key's SOPS copy.
+2. Read the restic password and the box's age identity, and restore the newest secrets bundle that holds `dev/` as [its runbook](make-the-box-secrets-bundle.md#recover-the-bundle-when-the-box-is-lost-break-glass) says; that bundle holds the seal key's SOPS copy. A bundle made while dev is down has no `dev/` ([Dev's secrets leave at teardown](make-the-box-secrets-bundle.md#devs-secrets-leave-at-teardown)), and only the newest 14 bundles are kept: after dev has been down for 14 days no bundle holds the seal key's copy, so the dev snapshots in step 3 can't be opened. Dev holds only made-up secrets and is rebuilt from code, so then skip steps 3 and 4 and rebuild dev with a new seal key.
 3. `restic -r azure:opnsense-backup:/openbao-dev restore --tag openbao-dev latest --target <folder>`.
 4. Rebuild the store from code with that seal key, put the snapshot and its `.cluster` file (both are in the restic snapshot) in `/etc/agent-keys/dev/openbao-snapshots/`, and run `secrets-store restore-rebuilt`.
 5. Take both roles away.

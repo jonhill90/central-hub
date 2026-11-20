@@ -3,8 +3,8 @@
 # prod only while dev is down (hosts/ansible/roles/agent_box/files/dev-secrets.sh, secrets-bundle.sh).
 #   1. remove with 0 VMs in the state deletes openbao-kv.sops.json and keeps the seal key's copy, the AppRole IDs, the CA and
 #      the snapshots; a second remove is a no-op that still passes.
-#   2. remove with a VM in the state, an unreadable state or no state keeps the file and fails.
-#   3. down is 0 only for a readable state with 0 VMs.
+#   2. remove with a VM in the state or an unreadable state keeps the file and fails; no state file counts as 0 VMs.
+#   3. down is 0 only for no state file or a readable state with 0 VMs.
 #   4. secrets-bundle.sh leaves dev out while dev is down, keeps it while a VM exists or the state is unreadable, and
 #      always keeps prod. (sops and age-keygen are stand-ins that copy; the tar inside is read back.)
 #   5. Every teardown path reaches the hook: the teardown stage runs TEARDOWN_HOOK after the destroy and not when the
@@ -40,8 +40,8 @@ if "$t/dev-secrets.sh" remove 2>/dev/null; then bad "a VM in the state: remove p
 echo 'not json' > "$state"
 if "$t/dev-secrets.sh" remove 2>/dev/null; then bad "unreadable state: remove passed"; else [[ -e $t/keys/dev/openbao-kv.sops.json ]] && ok "unreadable state: kv file kept" || bad "unreadable state: the kv file was deleted"; fi
 rm -f "$state"
-if "$t/dev-secrets.sh" remove 2>/dev/null; then bad "no state: remove passed"; else [[ -e $t/keys/dev/openbao-kv.sops.json ]] && ok "no state file: kv file kept" || bad "no state file: the kv file was deleted"; fi
-if "$t/dev-secrets.sh" down; then bad "down passed with no state"; else ok "down fails with no state"; fi
+if "$t/dev-secrets.sh" remove >/dev/null 2>&1 && [[ ! -e $t/keys/dev/openbao-kv.sops.json ]]; then ok "no state file (dev never built, as rebuild.sh counts it): remove deletes the kv file and passes"; else bad "no state file: remove failed or kept the file"; fi
+"$t/dev-secrets.sh" down && ok "down passes with no state file" || bad "down failed with no state file"
 echo '{"resources":[]}' > "$state"; "$t/dev-secrets.sh" down && ok "down passes with 0 VMs" || bad "down failed with 0 VMs"
 if "$t/dev-secrets.sh" bogus 2>/dev/null; then bad "an unknown action passed"; else ok "an unknown action is refused"; fi
 

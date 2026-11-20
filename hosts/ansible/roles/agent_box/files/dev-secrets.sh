@@ -2,8 +2,9 @@
 # /usr/local/libexec/agent-box/dev-secrets.sh: the one place that decides when dev's secrets leave the box's disk
 # (TASK-0362; the owner's "Delete at teardown" tap, 2026-11-20 03:12:59 UTC; docs/runbooks/make-the-box-secrets-bundle.md).
 # Runs as user `keys`; no session runs it and it has no sudo line. Two callers, one rule:
-#   dev-secrets.sh down     exit 0 only when the dev state file (dev-vms.tfstate) reads and holds no VM; 1 when dev has a VM
-#                           or the state can't be read (a number nobody saw is not a pass). secrets-bundle.sh asks it, and
+#   dev-secrets.sh down     exit 0 only when the dev state file (dev-vms.tfstate) holds no VM, or does not exist (dev was
+#                           never built, or a destroy of an empty state wrote none: rebuild.sh counts it as 0 VMs too); 1 when
+#                           dev has a VM or the file can't be read (a number nobody saw is not a pass). secrets-bundle.sh asks it, and
 #                           leaves the dev folder out of the daily bundle while dev is down.
 #   dev-secrets.sh remove   if dev is down, delete the dev SOPS file of the apps' secrets (openbao-kv.sops.json) and say so.
 #                           rebuild-k8s.sh's teardown stage runs it as TEARDOWN_HOOK, after the destroy, so every teardown
@@ -19,8 +20,9 @@ state=$work/state/dev-vms.tfstate
 kvfile=$keys/dev/openbao-kv.sops.json
 export PATH=/usr/local/bin:/usr/bin:/bin
 
-# Prints the number of dev VMs in the state, or nothing when the file is missing or unreadable.
+# Prints the number of dev VMs in the state (0 when there is no state file), or nothing when it is unreadable.
 vms() {
+  [[ -e $state ]] || { echo 0; return; }
   python3 -I -c '
 import json, sys
 try:
