@@ -409,7 +409,17 @@ print("SUMMARY real=%d moves=%d" % (real, moves))
          fi ;;
       *) fail "OpenTofu plan failed (rc $rc): $(grep -m1 -E 'Error' "$envdir/tofu-plan.out" | cut -c1-160)" ;;
     esac
-    rc=0; tofu_k8s plan -input=false -lock=false -destroy -target="$teardown_target" -var-file="$tfvars_src" -out="$envdir/destroy.plan" > "$envdir/tofu-destroy.out" 2>&1 || rc=$?
+    # A targeted destroy refuses a state that still holds resources the code has moved ("Moved resource instances excluded by
+    # targeting"), so the plan is made on a COPY of the state that has had the moves written by a refresh-only apply (state
+    # only; nothing changes on the host, and the live state is not written). The real teardown does the same first.
+    settled=$envdir/state-moves-settled.tfstate
+    rc=0
+    { cp -- "$tfstate" "$settled" &&
+      tofu_k8s init -input=false -reconfigure -backend-config="path=$settled" &&
+      tofu_k8s apply -refresh-only -auto-approve -input=false -lock=false -var-file="$tfvars_src" &&
+      tofu_k8s plan -input=false -lock=false -destroy -target="$teardown_target" -var-file="$tfvars_src" -out="$envdir/destroy.plan"; } > "$envdir/tofu-destroy.out" 2>&1 || rc=$?
+    rm -f -- "$settled" "$settled.backup"
+    tofu_k8s init -input=false -reconfigure -backend-config="path=$tfstate" > "$envdir/tofu-init.out" 2>&1 || true
     if [[ $rc -eq 0 ]] && tofu_k8s show -json "$envdir/destroy.plan" > "$envdir/destroy.json" 2>/dev/null; then
       if out=$(python3 -I -c "$(cat <<'PY'
 import json, sys

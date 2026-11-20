@@ -87,6 +87,23 @@ run_teardown() { # <destroy rc> -> prints hook lines
 }
 run_teardown 0 | grep -q HOOK-RAN && ok "the teardown stage runs TEARDOWN_HOOK after a passing destroy" || bad "the hook did not run after the destroy"
 run_teardown 1 | grep -q HOOK-RAN && bad "the hook ran although the destroy failed" || ok "a failed destroy does not run the hook"
+# A teardown with a target (prod) writes the state's moves first with a refresh-only apply, then destroys only the target; one
+# without a target (dev) does not.
+run_calls() { # <target or empty> -> prints the tofu_k8s calls, one per line
+  bash -c '
+    ENV_NAME=prod; TFSTATE=/x; tofu_vars=(-var-file=v); repo=/r; INVENTORY=/i
+    TEARDOWN_TARGET="$2"
+    tofu_k8s() { echo "tofu_k8s $*"; }
+    preflight_memory() { :; }
+    . "$1"
+    ( set -e; run_stage teardown )' _ "$t/fn.sh" "$1" 2>&1 || true
+}
+c=$(run_calls proxmox_virtual_environment_vm.node | tr '\n' '|')
+[[ $c == *"tofu_k8s init "*"|tofu_k8s apply -refresh-only -auto-approve -input=false -var-file=v|tofu_k8s destroy -auto-approve -input=false -target=proxmox_virtual_environment_vm.node -var-file=v|"* ]] \
+  && ok "a teardown with a target writes the state's moves (refresh-only apply) before the targeted destroy" || bad "target teardown calls: $c"
+c=$(run_calls "" | tr '\n' '|')
+[[ $c != *"-refresh-only"* && $c == *"tofu_k8s destroy -auto-approve -input=false -var-file=v|"* ]] \
+  && ok "a teardown without a target does no refresh-only apply" || bad "plain teardown calls: $c"
 grep -q "^TEARDOWN_HOOK='\$libexec/dev-secrets.sh remove'" "$role/files/rebuild.sh" && ok "rebuild.sh's env file sets TEARDOWN_HOOK for every action that writes it" || bad "rebuild.sh does not set TEARDOWN_HOOK"
 grep -q "src: dev-secrets.sh" "$role/tasks/secrets_bundle.yml" && ok "the role installs dev-secrets.sh" || bad "the role does not install dev-secrets.sh"
 bash -n "$role/files/dev-secrets.sh" "$role/files/secrets-bundle.sh" "$role/files/rebuild.sh" "$src/hosts/rebuild-k8s.sh" && ok "bash -n passes on every changed script" || bad "bash -n failed"
