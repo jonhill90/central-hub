@@ -330,6 +330,8 @@ PY
     if [[ $extra != 0 ]]; then
       record "$hash" "$changed changed" "FAIL: $extra task(s) changed that the check did not show"
       echo "proxmox-host: FAIL: the apply changed $extra task(s) that check $hash did not show (D-0041 rule 4; details in $out)" >&2
+      # The names are the repository's own task titles (never a diff, host name or address), so they may be printed.
+      sed 's/^/proxmox-host:   unlisted task: /' "$out.extra" >&2
       exit 1
     fi
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok
