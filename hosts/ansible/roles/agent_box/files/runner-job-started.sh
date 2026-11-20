@@ -15,7 +15,7 @@ set -euo pipefail
 allowed=(
   "45ba4675fa9d39e5953690e5861f4f74fd513eb504771b66f80d704c1bc79907 .github/workflows/lab-redeploy-dev.yml"
   "b61c975faa57620a94e4e2f4a178f30f33094543349c223b1f7c8bf29dfd378d .github/workflows/lab-tailnet.yml"
-  "3f670148fe43c35545bbdda9c4feb7e2f1f9c6c805bed5da02ba24615a29f56f .github/workflows/lab-proxmox-host.yml"
+  "f898d5ff226bb05789db60134fb254599de1c2df985dcc35e9cd6a56a2735cfe .github/workflows/lab-proxmox-host.yml"
   "196fecc5a766435ddd8a77a84c03d9bcf5666d49b5c7d74db5d64879dba6d3ab .github/workflows/lab-tailnet-policy.yml"
   "a924ac479b9613d8a62f807b380cc7ba842298ed16181922f14d3fa234bb293d .github/workflows/lab-vps-host.yml"
 )
