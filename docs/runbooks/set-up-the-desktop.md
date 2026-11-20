@@ -69,6 +69,8 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 7. The owner connects with an RDP client to the VM's name (or its address), port 3389, as user `owner`, over the tailnet (the owner's device on the tailnet, with the tailnet connector's route to the dev range on).
    expect: the RDP login, then GDM's login screen, then a GNOME session. Untested until the first run.
 
+**gdm and the console prompt share tty1.** The prompt's service takes tty1 in place of the getty (`TTYPath=/dev/tty1`, `Conflicts=` and `Before=getty@tty1.service`), and gdm's greeter takes vt1. The role writes a gdm drop-in, `After=desktop-set-password.service`, and starts gdm without waiting: on the owner's build gdm queues behind the prompt until the owner has typed the passwords, and on a test build the prompt is skipped and gdm starts at once. The system RDP daemon waits for gdm (measured 2026-11-20: gdm inactive, the daemon stuck "activating", `rdp-check` refused until a reboot started gdm), so the RDP service comes up without a reboot. Written, not run on a VM at the time of writing; the first test build after it is the run.
+
 ## Prove RDP from the agent box (test build)
 
 Why: RDP stays off until the owner types both passwords at the console, and firewalld takes 3389 from the connector only, so before this nothing on the box could ever see the service answer (the 2026-11-19 rebuild never did). A test build lets the box prove it, then the owner's build replaces it.

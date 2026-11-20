@@ -37,17 +37,6 @@
     name: gdm.service
     enabled: true
 
-# Measured on the 2026-11-20 test build: enabling gdm and setting the graphical target does not start gdm on the running
-# VM, and the system remote desktop daemon then sat in "activating (start)" and never listened on 3389 (rdp-check:
-# connection refused; diag: gdm inactive). After a reboot gdm ran and rdp-check passed ("the server picked CredSSP (NLA)",
-# "TLS handshake done"). A test build starts gdm now. The owner's build is left as it was, because gdm takes tty1, where the
-# console password script runs (untested); the owner's build waits on how the owner's passwords are to reach the VM.
-- name: desktop | Test build, gdm is started
-  ansible.builtin.systemd_service:
-    name: gdm.service
-    state: started
-  when: desktop_test_login | bool
-
 - name: desktop | The default target is graphical
   ansible.builtin.command: systemctl set-default graphical.target
   register: desktop_default_target
@@ -152,6 +141,26 @@
     - desktop-rdp.path
     - gnome-remote-desktop.service
 
+# gdm and the console password prompt both want tty1 (the prompt's service sets TTYPath=/dev/tty1 and takes the getty's place;
+# gdm's greeter takes vt1 and its own unit conflicts with getty@tty1). gdm therefore starts after the prompt: while the
+# owner has not typed the passwords gdm waits behind the prompt, and once the marker exists the prompt is skipped and gdm
+# starts at once. The system RDP daemon waits for gdm (measured 2026-11-20: gdm inactive, the daemon stuck "activating"
+# and nothing on 3389 until a reboot started gdm), so the RDP service is up without a reboot.
+- name: desktop | Folder for gdm's drop-in
+  ansible.builtin.file:
+    path: /etc/systemd/system/gdm.service.d
+    state: directory
+    mode: "0755"
+
+- name: desktop | gdm starts after the console password prompt
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gdm.service.d/10-after-password-prompt.conf
+    content: |
+      # Written by role desktop: the console password prompt owns tty1 until the owner has typed the passwords.
+      [Unit]
+      After=desktop-set-password.service
+    mode: "0644"
+
 # Enabling a path unit does not start it until the next boot. Started now, it starts the remote desktop the moment
 # the marker exists: at once on a test build, and when the owner has typed the password otherwise. Seen on the
 # 2026-11-20 test build: with the unit only enabled, 3389 refused connections until a reboot.
@@ -201,6 +210,15 @@
   ansible.builtin.systemd_service:
     name: desktop-set-password.service
     state: started
+    no_block: true
+
+# Not waited for: on the owner's build the start job queues behind the console prompt, which holds tty1 until the owner
+# has typed the passwords, so a plain start would block this run. On a test build the prompt is skipped and gdm starts now.
+- name: desktop | gdm is started
+  ansible.builtin.systemd_service:
+    name: gdm.service
+    state: started
+    daemon_reload: true
     no_block: true
 
 # The proof that the desktop trusts the lab's certificates (ask 275), while an agent can still look: the run fails

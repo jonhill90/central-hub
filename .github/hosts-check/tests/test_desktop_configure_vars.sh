@@ -137,11 +137,17 @@ t = [x for x in yaml.safe_load(open(sys.argv[1])) if x.get("name") == "desktop |
 assert t["retries"] >= 3 and "until" in t
 PY
 
-# A test build starts gdm: without it the system RDP daemon never listens (2026-11-20).
-python3 -I - "$here/hosts/ansible/roles/desktop/tasks/main.yml" <<'PY' && echo "ok   a test build starts gdm" || { echo "FAIL: no task starts gdm in a test build"; fails=$((fails + 1)); }
+# gdm is started on every build, queued behind the console password prompt (tty1), without blocking the run (2026-11-20).
+python3 -I - "$here/hosts/ansible/roles/desktop/tasks/main.yml" <<'PY' && echo "ok   gdm starts after the console prompt, without blocking" || { echo "FAIL: gdm start or its ordering is missing"; fails=$((fails + 1)); }
 import sys, yaml
-t = [x for x in yaml.safe_load(open(sys.argv[1])) if x.get("name") == "desktop | Test build, gdm is started"][0]
-assert t["ansible.builtin.systemd_service"] == {"name": "gdm.service", "state": "started"} and "desktop_test_login" in t["when"]
+tasks = yaml.safe_load(open(sys.argv[1]))
+byname = {x["name"]: x for x in tasks}
+t = byname["desktop | gdm is started"]
+assert t["ansible.builtin.systemd_service"] == {"name": "gdm.service", "state": "started", "daemon_reload": True, "no_block": True} and "when" not in t
+d = byname["desktop | gdm starts after the console password prompt"]["ansible.builtin.copy"]
+assert "After=desktop-set-password.service" in d["content"] and d["dest"].startswith("/etc/systemd/system/gdm.service.d/")
+names = [x["name"] for x in tasks]
+assert names.index("desktop | The console prompt starts now") < names.index("desktop | gdm is started")
 PY
 
 if [[ $fails -gt 0 ]]; then echo "desktop configure vars: $fails test(s) failed"; exit 1; fi
