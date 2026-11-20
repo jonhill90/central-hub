@@ -23,7 +23,7 @@ Since then two things changed:
 - D-0041 put a key for the Proxmox host on the box, used by one wrapper as its own user (`hostops`, `proxmox-host.sh`), so a host job runs from reviewed main without the Mac.
 - D-0061 made the owner's standing go of 2026-11-18 07:40:44 UTC his go for firewall and tailnet applies.
 
-So the Mac lane's remaining jobs are mostly these keys. In the Mac lane's 25 newest posts before 2026-11-20 01:05 UTC, 6 jobs were firewall applies, secret copies and inventory edits, and 1 used a browser (agent-notebook research batch RB-0286, synthesis note "A browser and session for agents that doesn't need Jon's Mac", table "What the Mac does today").
+So the Mac lane's remaining jobs are mostly these keys. In the Mac lane's 25 newest posts before 2026-11-20 01:05 UTC, 6 jobs were firewall applies, secret copies and inventory edits, and 1 used a browser (agent-notebook research batch RB-0286, synthesis note 2026112001100001, table "What the Mac does today").
 
 On 2026-11-20 the orchestrator asked, on a decision card, "Move the firewall, tailnet and box keys off your Mac to the agent box?" The option "Move them to the box" said: "Firewall and tailnet applies, secret copies and inventory edits run from the box, so most Mac lane jobs end. The box then holds the keys to the firewall." The owner tapped it at 03:13:29 UTC. It was the recommended option, so under D-0034 rule 9 it is the agents' pick. Copying a secret to a place it is not kept today still needs the owner's own words (D-0061 rule 2, the line on leaking data), and that question went to him on its own card. This record says how the box holds and uses the keys once they are there.
 
