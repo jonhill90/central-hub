@@ -240,6 +240,18 @@ set +e; out=$(ba plan); rc=$?; set -e
 [[ $rc == 0 && $out == *"a limit changed again after ${l9:0:8}; this applies ${l9:0:8} only"* \
   && $out == *"approved limit change"*"to ${l9:0:8}"* && $(base) == "$b9" ]] \
   && ok "8g. a limit change after the line's commit leaves the line good for its own commit only" || bad "8g: exit $rc: $out"
+# 8g2: two lines from the baseline, an older one (to l9) and a newer one that reaches further (to lx, which holds l9),
+# with a limit change after both: the box applies the newer line, not the first one met.
+printf -- '- name: x\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
+lx=$(commit c9x)
+wx=$(git -C "$t/src" diff --no-renames --binary --full-index "$b9" "$lx" -- "$r/tasks/main.yml" | sha256sum | cut -d' ' -f1)
+echo "$b9 $lx $wx cmsg_pass02x card_tap02x" >> "$t/src/$appr"
+printf -- '- name: z\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
+commit c9y >/dev/null
+set +e; out=$(ba plan); rc=$?; set -e
+[[ $rc == 0 && $out == *"a limit changed again after ${lx:0:8}; this applies ${lx:0:8} only"* && $out != *"this applies ${l9:0:8} only"* \
+  && $out == *"line "*": ${b9:0:8} to ${lx:0:8}"* && $(base) == "$b9" ]] \
+  && ok "8g2. of two lines that both have a later limit change, the one that reaches further is applied" || bad "8g2: exit $rc: $out"
 git -C "$t/src" checkout -q "$l9" -- "$r/tasks/main.yml"
 commit c9c >/dev/null
 echo '{"plays":[{"tasks":[{"task":{"name":"One sudoers line per wrapper"},"hosts":{"box1":{"changed":true,"diff":[{"before_header":"'"$t"'/box/sudoers.d/agent-box"}]}}}]}],"stats":{"box1":{"failures":0,"unreachable":0}}}' > "$t/check.json"
