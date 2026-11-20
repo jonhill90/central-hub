@@ -113,18 +113,26 @@ install -d -m 0700 "$logs" "$work/state"
 # prints it only to this capture, never to a terminal: no file means dev has no worker and no rule; a file that is not exactly one dev
 # node address stops the run. The address goes to the playbook in the vars file below, as the backup target's one extra source.
 dev_addr=$("$libexec/dev-worker-address.sh" read) || exit 1
+# The box's own address toward the Proxmox host's backup store, from the box's handoff (dev-worker-address.sh box-key), the same way: it is the backup
+# target's other extra source, so the box's off-box copies reach the host's sftp through the firewall. No file, no rule; a bad shape stops the run.
+box_addr=$("$libexec/dev-worker-address.sh" read-box-address) || exit 1
 # The key and secret, lines 1 and 2 of the key file, into a vars file of this user's own for this run only.
 vars_file=$(mktemp "$work/state/vars.XXXXXX")
 trap 'rm -f "$vars_file"' EXIT
-DEV_WORKER_ADDRESS=$dev_addr python3 -I - "$dir/opnsense-api.txt" "$dir/lab-root.crt" "$ansible_bin/python3" "$vars_file" <<'PY'
+DEV_WORKER_ADDRESS=$dev_addr BOX_BACKUP_ADDRESS=$box_addr python3 -I - "$dir/opnsense-api.txt" "$dir/lab-root.crt" "$ansible_bin/python3" "$vars_file" <<'PY'
 import json, os, sys
 lines = [l.strip() for l in open(sys.argv[1]).read().splitlines() if l.strip()]
 if len(lines) < 2:
     sys.exit("opnsense-prod: the key file needs the key on line 1 and the secret on line 2")
 v = {"opnsense_api_key": lines[0], "opnsense_api_secret": lines[1], "opnsense_lab_ssl_ca_file": sys.argv[2],
      "ansible_python_interpreter": sys.argv[3]}
+extra = []
 if os.environ.get("DEV_WORKER_ADDRESS"):
-    v["opnsense_lab_backup_target_extra_sources"] = [{"name": "dev worker", "address": os.environ["DEV_WORKER_ADDRESS"], "vlan": 30}]
+    extra.append({"name": "dev worker", "address": os.environ["DEV_WORKER_ADDRESS"], "vlan": 30})
+if os.environ.get("BOX_BACKUP_ADDRESS"):
+    extra.append({"name": "agent box", "address": os.environ["BOX_BACKUP_ADDRESS"], "vlan": 30})
+if extra:
+    v["opnsense_lab_backup_target_extra_sources"] = extra
 json.dump(v, open(sys.argv[4], "w"))
 PY
 # Only reviewed code on main runs with the key, never a checkout a session can edit. One run at a time.

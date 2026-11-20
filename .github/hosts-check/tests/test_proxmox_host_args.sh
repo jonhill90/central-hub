@@ -411,4 +411,33 @@ job apply proxy cmsg_0123456789abc "$h20" > "$t/20d.out" 2>&1
 [ "$(cat "$t/hostkey/reader-applied")" = stale ] && ok "20d another job's apply leaves the marker alone" || bad "20d the marker changed"
 rm -f "$t/handoff/dev-worker-address"
 
+# 21 box-writer takes the box's public backup key and address from the handoff (proxmox_restic_box_key and proxmox_restic_box_from, in the vars file
+#    only); no key or no address, or a bad key line, stops it before the playbook; the other jobs are not given them
+k21=$(ssh-keygen -q -t ed25519 -N '' -f "$t/k21" && cut -d' ' -f1,2 "$t/k21.pub")
+rm -f "$t/handoff/box-backup.pub" "$t/handoff/box-backup-address"; : > "$t/calls"
+job check box-writer > "$t/21a.out" 2>&1; rc=$?
+[ $rc = 1 ] && [ ! -s "$t/calls" ] && grep -q "no box backup key or address" "$t/21a.out" && ok "21a box-writer with no key and no address stops before the playbook" || bad "21a rc=$rc $(cat "$t/21a.out")"
+printf '%s\n' "$k21" > "$t/handoff/box-backup.pub"; : > "$t/calls"
+job check box-writer > "$t/21a.out" 2>&1; rc=$?
+[ $rc = 1 ] && [ ! -s "$t/calls" ] && ok "21a a key with no address stops it too" || bad "21a key only: rc=$rc"
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check box-writer > "$t/21b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && grep -q "playbooks/proxmox-restic-box.yml" "$t/calls" && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v=={"proxmox_restic_box_key":sys.argv[2],"proxmox_restic_box_from":"10.1.30.31"}, v' "$t/vars-seen.json" "$k21" \
+   && ! grep -qF "$k21" "$t/calls" "$t/21b.out" && ! grep -q "10.1.30.31" "$t/calls" "$t/21b.out" && [ ! -e "$(head -1 "$t/vars-paths")" ]; then
+  ok "21b the key and the address reach the playbook in a vars file, not on the command line or in the output, and the file is gone after"
+else bad "21b rc=$rc [$(cat "$t/calls")] $(cat "$t/21b.out")"; fi
+for v in 'ssh-rsa AAAAB3' 'ssh-ed25519 AAAA' "$k21 comment" ''; do
+  printf '%s\n' "$v" > "$t/handoff/box-backup.pub"; : > "$t/calls"
+  job check box-writer > "$t/21c.out" 2>&1; rc=$?
+  if [ $rc = 1 ] && [ ! -s "$t/calls" ] && ! grep -qF "$k21" "$t/21c.out"; then :; else bad "21c shape '$v' rc=$rc [$(cat "$t/calls")]"; fi
+done
+ok "21c four bad key shapes stop it before the playbook"
+printf '%s\n' "$k21" > "$t/handoff/box-backup.pub"; printf '10.1.20.5\n' > "$t/handoff/box-backup-address"; : > "$t/calls"
+job check box-writer > "$t/21c.out" 2>&1; rc=$?
+[ $rc = 1 ] && [ ! -s "$t/calls" ] && ! grep -q "10.1.20.5" "$t/21c.out" && ok "21c an address outside the dev range stops it before the playbook, naming no value" || bad "21c address rc=$rc"
+printf '%s\n' "$k21" > "$t/handoff/box-backup.pub"; printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"
+job check proxy > "$t/21d.out" 2>&1
+! grep -q "proxmox_restic_box_key\|@" "$t/calls" && ok "21d the other jobs are not given the key" || bad "21d $(cat "$t/calls")"
+rm -f "$t/handoff/box-backup.pub" "$t/handoff/box-backup-address"
+
 exit "$fail"

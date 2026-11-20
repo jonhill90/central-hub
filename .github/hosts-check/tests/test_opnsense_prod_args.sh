@@ -191,6 +191,25 @@ for v in '10.1.30.230' '10.1.30.0' '10.1.20.5' '10.1.30.5/32' '10.1.30.5 10.1.30
 done
 ok "10c 8 bad shapes stop the check before the playbook, naming no value"
 rm -f "$t/handoff/dev-worker-address"
+# 10d the box's own address (box-backup-address) is a second extra source, named agent box, on VLAN 30, in the vars file only; alone or after the dev
+#     worker; a bad shape stops the run before the playbook, naming no value
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"
+job check > "$t/10d.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v["opnsense_lab_backup_target_extra_sources"]==[{"name":"agent box","address":"10.1.30.31","vlan":30}], v' "$t/vars-seen.json" \
+   && ! grep -q "10.1.30.31" "$t/calls" "$t/10d.out"; then ok "10d the box's address alone is one extra source named agent box on VLAN 30, in the vars file only"
+else bad "10d rc=$rc $(cat "$t/10d.out")"; fi
+printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"; : > "$t/calls"
+job check > "$t/10e.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert [x["name"] for x in v["opnsense_lab_backup_target_extra_sources"]]==["dev worker","agent box"], v' "$t/vars-seen.json"; then
+  ok "10e with both addresses the sources are dev worker, then agent box"
+else bad "10e rc=$rc $(cat "$t/10e.out")"; fi
+for v in '10.1.30.230' '10.1.20.5' '10.1.30.5 10.1.30.6' 'abc' ''; do
+  printf '%s\n' "$v" > "$t/handoff/box-backup-address"; : > "$t/calls"
+  job check > "$t/10f.out" 2>&1; rc=$?
+  if [ $rc = 1 ] && [ ! -s "$t/calls" ] && { [ -z "$v" ] || ! grep -qF -- "$v" "$t/10f.out"; }; then :; else bad "10f shape '$v' rc=$rc [$(cat "$t/calls")] $(cat "$t/10f.out")"; fi
+done
+ok "10f 5 bad box address shapes stop the check before the playbook, naming no value"
+rm -f "$t/handoff/dev-worker-address" "$t/handoff/box-backup-address"
 
 # 11 a confirmed apply leaves a marker: the sha256 of the dev address it opened (nothing else), so the box's rebuild wrapper switches dev to the
 #    Proxmox target only when the firewall has the rule; an apply with no dev address removes it; a check never writes it

@@ -20,7 +20,7 @@ bad() { echo "FAIL $*"; fail=1; }
 
 mkdir -p "$t/work/state" "$t/handoff" "$t/libexec/ansible-venv/bin"
 mkdir -p "$t/keys" "$t/hostkey"
-sed -e "s|^work=.*|work=$t/work|" -e "s|^handoff=.*|handoff=$t/handoff|" -e "s|^keys=.*|keys=$t/keys|" -e "s|^hostkey_file=.*|hostkey_file=$t/hostkey/proxmox-host.pub|" -e "s|^group=.*|group=$(id -gn)|" -e "s|^libexec=.*|libexec=$t/libexec|" \
+sed -e "s|^work=.*|work=$t/work|" -e "s|^handoff=.*|handoff=$t/handoff|" -e "s|^keys=.*|keys=$t/keys|" -e "s|^hostkey_file=.*|hostkey_file=$t/hostkey/proxmox-host.pub|" -e "s|^group=.*|group=$(id -gn)|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "/^source_toward()/c\\source_toward() { cat \"$t/probe\"; }" \
   "$role/files/dev-worker-address.sh" > "$t/h.sh"
 chmod +x "$t/h.sh"
 file=$t/handoff/dev-worker-address
@@ -106,4 +106,46 @@ for v in '' 'ssh-rsa AAAAB3' "ssh-ed25519 AAAA" "$pub extra" "$pub\n$pub"; do
 done
 ok "7 read-key refuses five bad shapes and prints no value"
 rm -f "$t/handoff/dev-worker-backup.pub"; out=$("$t/h.sh" read-key) && [[ -z $out ]] && ok "7 read-key: no file, nothing, and it passes" || bad "7 read-key missing"
+# 8 box-key: the box's own pair for the Proxmox host's backup store, made once; its public half handed over; the host's key pinned
+rm -rf "$t/keys/box-backup" "$t/handoff/box-backup.pub" "$t/handoff/box-backup-address"; printf '%s\n' "$hk" > "$t/hostkey/proxmox-host.pub"
+pve() { printf '{"_meta":{"hostvars":{"pve":{"proxmox_host_mgmt_address":"%s"},"n1":{}}}}\n' "$1" > "$t/inv.json"; }
+pve 10.1.1.2; echo 10.1.30.31 > "$t/probe"
+"$t/h.sh" box-key >/dev/null 2>&1 || bad "8 box-key failed"
+bd=$t/keys/box-backup
+bpub=$(cut -d' ' -f1,2 "$bd/id_ed25519.pub")
+[[ -s $bd/id_ed25519 && $(stat -c %a "$bd/id_ed25519") == 600 && $(cat "$t/handoff/box-backup.pub") == "$bpub" && $(stat -c %a "$t/handoff/box-backup.pub") == 640 \
+   && $("$t/h.sh" read-box-key) == "$bpub" && ! -e "$t/handoff/box-backup.pub.part" ]] \
+  && ok "8 box-key makes the pair once and hands over the public half only, at 0640, with no comment" || bad "8 box-key"
+[[ $(cat "$bd/known_hosts") == "box-backup-target $hk" && $(stat -c %a "$bd/known_hosts") == 600 ]] && ok "8 the published host key becomes known_hosts" || bad "8 known_hosts"
+before=$(sha256sum "$bd/id_ed25519" "$bd/id_ed25519.pub" | cut -d' ' -f1 | tr -d '\n'); "$t/h.sh" box-key >/dev/null
+after=$(sha256sum "$bd/id_ed25519" "$bd/id_ed25519.pub" | cut -d' ' -f1 | tr -d '\n')
+[[ $before == "$after" ]] && ok "8 a second box-key run leaves the pair as it was" || bad "8 the pair changed"
+printf 'ssh-rsa AAAAB3\n' > "$t/hostkey/proxmox-host.pub"; rm -f "$bd/known_hosts"; "$t/h.sh" box-key >/dev/null
+[[ ! -e $bd/known_hosts ]] && ok "8 a host key that is not ssh-ed25519 is not pinned" || bad "8 bad host key pinned"
+for v in '' 'ssh-rsa AAAAB3' "ssh-ed25519 AAAA" "$bpub extra" "$bpub\n$bpub"; do
+  printf "$v\n" > "$t/handoff/box-backup.pub"
+  out=$("$t/h.sh" read-box-key 2>&1) && bad "8 read-box-key accepted '$v'" || { grep -qF "AAAA" <<<"$out" && bad "8 read-box-key printed a value" || true; }
+done
+ok "8 read-box-key refuses five bad shapes and prints no value"
+baddr=$t/handoff/box-backup-address
+[[ $(cat "$baddr") == 10.1.30.31 && $(stat -c %a "$baddr") == 640 && $("$t/h.sh" read-box-address) == 10.1.30.31 && ! -e "$baddr.part" ]] \
+  && ok "8 box-key hands over the box's source address toward the host, at 0640" || bad "8 box address file [$(cat "$baddr" 2>/dev/null)]"
+out=$("$t/h.sh" box-key 2>&1); grep -q "10.1.30.31\|10.1.1.2" <<<"$out" && bad "8 box-key printed an address" || ok "8 box-key prints no address"
+echo 192.168.1.50 > "$t/probe"
+out=$("$t/h.sh" box-key 2>&1) && bad "8 a source outside the dev range was accepted" || { [[ ! -e $baddr ]] && ! grep -q "192.168.1.50\|10.1.1.2" <<<"$out" && ok "8 a source outside the dev range (a lifeline route) is refused, with no file and no value printed" || bad "8 lifeline source: file kept or value printed"; }
+echo 10.1.30.31 > "$t/probe"; "$t/h.sh" box-key >/dev/null
+printf '{"_meta":{"hostvars":{"pve":{"proxmox_host_mgmt_address":"10.1.1.2"},"pve2":{"proxmox_host_mgmt_address":"10.1.1.3"}}}}\n' > "$t/inv.json"
+out=$("$t/h.sh" box-key 2>&1) && bad "8 two different host addresses were accepted" || { [[ ! -e $baddr ]] && ! grep -q "10.1.1" <<<"$out" && ok "8 two different host addresses in the inventory: refused, no file" || bad "8 two addresses: file kept or value printed"; }
+printf '{"_meta":{"hostvars":{}}}\n' > "$t/inv.json"
+"$t/h.sh" box-key >/dev/null 2>&1 && bad "8 no host address was accepted" || ok "8 no host address in the inventory: refused"
+pve 10.1.1.2; "$t/h.sh" box-key >/dev/null
+for v in '' '10.1.30.230' '10.1.20.5' '10.1.30.5 10.1.30.6' 'abc' '10.1.30.5/32'; do
+  printf '%s\n' "$v" > "$baddr"
+  out=$("$t/h.sh" read-box-address 2>&1) && bad "8 read-box-address accepted '$v'" || { [[ -z $v ]] || ! grep -qF -- "$v" <<<"$out" || bad "8 read-box-address printed a value"; }
+done
+ok "8 read-box-address refuses six bad shapes and prints no value"
+rm -f "$baddr"; out=$("$t/h.sh" read-box-address) && [[ -z $out ]] && ok "8 read-box-address: no file, nothing, and it passes" || bad "8 read-box-address missing"
+rm -f "$t/handoff/box-backup.pub"; out=$("$t/h.sh" read-box-key) && [[ -z $out ]] && ok "8 read-box-key: no file, nothing, and it passes" || bad "8 read-box-key missing"
+# the box's pair is separate from dev's worker pair
+[[ ! -e $t/keys/dev/backup-sftp/box-backup.pub && $(cut -d' ' -f1,2 "$kd/w1.pub") == "$pub" ]] && ok "8 the box's pair does not touch the dev worker's pair" || bad "8 pairs mixed"
 exit "$fail"
