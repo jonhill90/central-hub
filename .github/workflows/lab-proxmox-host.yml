@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       job:
-        description: "which playbook: proxy (the Proxmox web UI on 443), sso (sign-in through Keycloak), agent-access (the agents' Proxmox rights) or firewall (the host firewall, D-0063); the same names as the wrapper's"
+        description: "which playbook: proxy (the Proxmox web UI on 443), sso (sign-in through Keycloak), agent-access (the agents' Proxmox rights), firewall (the host firewall, D-0063) or guests (read-only: which guests exist); the same names as the wrapper's"
         type: choice
         default: proxy
         options: [proxy, sso, agent-access, firewall, guests]
