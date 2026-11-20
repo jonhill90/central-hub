@@ -176,8 +176,8 @@
       (ksm_have['pages_sharing'] | int * 4 // 1024) + 1024 < ksm_free_mib | int
       or ksm_prior['run'] | default('0') == '1'
     fail_msg: >-
-      unmerging {{ ksm_have['pages_sharing'] | int * 4 // 1024 }} MiB (every page KSM saves comes back as its own copy: pages_sharing, ksm.rst) would leave less than 1024 MiB
-      of the {{ ksm_free_mib }} MiB free; free memory first
+      unmerging {{ ksm_have['pages_sharing'] | int * 4 // 1024 }} MiB (every page KSM saves comes back as its own copy:
+      pages_sharing, ksm.rst) would leave less than 1024 MiB of the {{ ksm_free_mib }} MiB free; free memory first
     quiet: true
   when: not proxmox_ksm_enabled
 
