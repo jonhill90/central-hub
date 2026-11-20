@@ -67,6 +67,12 @@ agent_box_wrappers:
   # needs dev to have passed at that same commit first.
   - name: rebuild-prod
     args: [check, "rebuild *", log]
+  # The box's own key, address and backend switch for the off-box sends to the Proxmox host's store (files/dev-worker-address.sh): box-key
+  # makes the key once and hands over its public half and the box's address (public data, nothing printed); box-backend-on and -off switch the
+  # two sends between Azure and the host's store. The script's other actions (write, remove, read, key, read-key and the box's two readers)
+  # have no sudo line: the dev rebuild calls the first ones as the keys user, and the host and firewall jobs call the readers.
+  - name: dev-worker-address
+    args: [box-key, box-backend-on, box-backend-off]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself. Sessions get the
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge

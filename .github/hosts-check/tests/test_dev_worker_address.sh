@@ -117,6 +117,19 @@ bpub=$(cut -d' ' -f1,2 "$bd/id_ed25519.pub")
    && $("$t/h.sh" read-box-key) == "$bpub" && ! -e "$t/handoff/box-backup.pub.part" ]] \
   && ok "8 box-key makes the pair once and hands over the public half only, at 0640, with no comment" || bad "8 box-key"
 [[ $(cat "$bd/known_hosts") == "box-backup-target $hk" && $(stat -c %a "$bd/known_hosts") == 600 ]] && ok "8 the published host key becomes known_hosts" || bad "8 known_hosts"
+[[ $(stat -c %a "$bd/ssh_config") == 600 ]] && grep -qx "Host box-backup-target" "$bd/ssh_config" && grep -qx "  HostName 10.1.1.2" "$bd/ssh_config" && grep -qx "  User boxbackup" "$bd/ssh_config" \
+  && grep -qx "  IdentityFile $bd/id_ed25519" "$bd/ssh_config" && grep -qx "  StrictHostKeyChecking yes" "$bd/ssh_config" && grep -qx "  UserKnownHostsFile $bd/known_hosts" "$bd/ssh_config" \
+  && grep -qx "  BatchMode yes" "$bd/ssh_config" && [[ ! -e $bd/ssh_config.part ]] && ok "8 box-key writes the ssh config (alias, host, user, key, pinned host key, batch mode) at 0600" || bad "8 ssh config: $(cat "$bd/ssh_config" 2>/dev/null)"
+# box-backend-on writes the switch file the two sends read; off removes it; on refuses with a piece missing
+"$t/h.sh" box-backend-on >/dev/null 2>&1; [[ $(cat "$bd/backend.env") == $'RESTIC_REPOSITORY=sftp:box-backup-target:/box\nOFFBOX_RESTIC_SSH_CONFIG='"$bd/ssh_config" && $(stat -c %a "$bd/backend.env") == 600 && ! -e $bd/backend.env.part ]] \
+  && ok "8 box-backend-on writes backend.env (the sftp repository and the ssh config's path) at 0600" || bad "8 backend.env: $(cat "$bd/backend.env" 2>/dev/null)"
+"$t/h.sh" box-backend-off >/dev/null && [[ ! -e $bd/backend.env ]] && "$t/h.sh" box-backend-off >/dev/null && ok "8 box-backend-off removes it, and passes with none" || bad "8 box-backend-off"
+for f in known_hosts ssh_config id_ed25519.pub; do
+  mv "$bd/$f" "$bd/$f.keep"; "$t/h.sh" box-backend-on >/dev/null 2>&1 && bad "8 box-backend-on passed without $f"; [[ ! -e $bd/backend.env ]] || bad "8 backend.env written without $f"; mv "$bd/$f.keep" "$bd/$f"
+done
+ok "8 box-backend-on refuses with the pinned host key, the ssh config or the public key missing, and writes nothing"
+pve 'not-an-ip'; out=$("$t/h.sh" box-key 2>&1) && bad "8 a host address that is not an IP was accepted" || { ! grep -q "not-an-ip" <<<"$out" && ok "8 a host mgmt address that is not an IPv4 address is refused, not printed" || bad "8 printed"; }
+pve 10.1.1.2; "$t/h.sh" box-key >/dev/null
 before=$(sha256sum "$bd/id_ed25519" "$bd/id_ed25519.pub" | cut -d' ' -f1 | tr -d '\n'); "$t/h.sh" box-key >/dev/null
 after=$(sha256sum "$bd/id_ed25519" "$bd/id_ed25519.pub" | cut -d' ' -f1 | tr -d '\n')
 [[ $before == "$after" ]] && ok "8 a second box-key run leaves the pair as it was" || bad "8 the pair changed"
