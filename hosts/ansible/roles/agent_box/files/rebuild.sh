@@ -694,6 +694,17 @@ if pve_addr:
     try: ipaddress.ip_address(pve_addr)
     except ValueError: print("rebuild: proxmox_host_mgmt_address is not an IP address", file=sys.stderr); sys.exit(1)
     v["k8s_backup_sftp_seed_address"] = pve_addr
+# Dev restores from the Proxmox host's copy once everything it needs is in place: the host's address, and for the one worker its own key
+# pair and the pinned host key (made by dev-worker-address.sh key, which runs after this inventory is built, so the first run after the
+# install still restores from Azure and the next one from the host). The flags are not in the repository (dev's inventory is the private
+# copy; the repository's group_vars are shared with prod), so the box's built copy sets them: sftp on, the Azure reader off (the role
+# refuses both). Anything missing leaves the inventory's own values.
+w = find(d, "k8s_workers")
+wh = list((w or {}).get("hosts") or {})
+seed = keys + "/dev/backup-sftp"
+if pve_addr and len(wh) == 1 and all(os.path.isfile("%s/%s.%s" % (seed, wh[0], e)) for e in ("key", "pub", "known_hosts")):
+    v["k8s_backup_sftp"] = True
+    v["k8s_backup_azure_identity"] = False
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
 )" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster" "$work/secrets-store.json" "$keys/prod/inventory-hosts.yml"
