@@ -197,10 +197,14 @@ vm_power() { # status|start
 }
 
 # Speaks RDP to the VM's port 3389 and prints what answers: the X.224 negotiation (the protocol the server
-# picks), then the TLS handshake and the certificate's subject. It sends no password, so it proves the remote
-# desktop service answers from this box, not that a login works.
+# picks), then the TLS handshake and the certificate's subject. It sends no password, so on its own it proves the
+# remote desktop service answers from this box, not that a login works. On a test build (the test login file
+# exists) it then does a real network-level login with xfreerdp's +auth-only and the box-made RDP password, and
+# prints only PASS or FAIL. The password goes to xfreerdp on stdin (/args-from:stdin), never on a command line,
+# and is never printed. +auth-only stops after the login is accepted: it does not open a GDM session.
 rdp_check() {
-  python3 -I - "$(setting address)" <<'PY'
+  local rc=0 xfr
+  python3 -I - "$(setting address)" "$([[ -e $keys/desktop-test-login ]] && echo test || echo plain)" <<'PY'
 import socket, ssl, struct, sys
 host = sys.argv[1]
 req = b"Cookie: mstshash=probe\r\n"
@@ -222,8 +226,24 @@ ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT); ctx.check_hostname = False; ctx.v
 t = ctx.wrap_socket(s)
 der = t.getpeercert(True)
 print("desktop rdp-check: TLS handshake done (%s), certificate %d bytes" % (t.version(), len(der)))
-print("desktop rdp-check: RDP service answers; no login was tried")
+print("desktop rdp-check: RDP service answers" + ("" if sys.argv[2] == "test" else "; no login was tried"))
 PY
+  [[ -e $keys/desktop-test-login ]] || return 0
+  xfr=$(command -v xfreerdp3 || command -v xfreerdp || true)
+  [[ -n $xfr ]] || { echo "desktop rdp-check: login check not run: no xfreerdp on this box" >&2; exit 1; }
+  # The test RDP user is the role's default desktop_user; HOME and XDG_CONFIG_HOME point at the work folder so
+  # xfreerdp writes nothing into the keys user's own folders.
+  python3 -I - "$(setting address)" "$keys/desktop-test-login" <<'PY' | HOME="$work/state" XDG_CONFIG_HOME="$work/state" "$xfr" /args-from:stdin >/dev/null 2>&1 || rc=$?
+import json, sys
+pw = json.load(open(sys.argv[2]))["rdp_password"]
+for a in ("+auth-only", "/v:%s:3389" % sys.argv[1], "/cert:ignore", "/sec:nla", "/u:owner", "/p:" + pw, "/log-level:OFF"):
+    print(a)
+PY
+  if [[ $rc -eq 0 ]]; then
+    echo "desktop rdp-check: login PASS (NLA accepted the box-made test login; no GDM session was opened)"
+  else
+    echo "desktop rdp-check: login FAIL (xfreerdp exit $rc)"; exit 1
+  fi
 }
 
 # Read-only look inside a TEST build: configure-test leaves the admin key and ssh in place (the test VM is

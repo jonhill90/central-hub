@@ -125,6 +125,43 @@ out=$(settings=$t/settings.json bash -c "set -euo pipefail; setting() { echo 127
 out=$(bash -c "set -euo pipefail; setting() { echo 127.0.0.1; }; source '$t/rdp-port.sh'; rdp_check" 2>&1) || true
 [[ $out == *"did not answer"* ]] && echo "ok   rdp-check says so when nothing answers" || { echo "FAIL: rdp-check closed port: $out"; fails=$((fails + 1)); }
 
+# On a test build rdp-check then does a real login with xfreerdp +auth-only. A stub xfreerdp stands in: it reads the
+# arguments from stdin (/args-from:stdin), records its own command line, and exits 0 only for the right password.
+# The password must reach it on stdin only, and must never be printed.
+mkdir -p "$t/lk" "$t/bin" "$t/state"
+echo '{"login_password": "LOGINPW", "rdp_password": "RDPPW-test"}' >"$t/lk/desktop-test-login"
+cat >"$t/bin/xfreerdp3" <<'STUB'
+#!/bin/bash
+echo "$*" >"$STUBDIR/argv"
+cat >"$STUBDIR/stdin"
+grep -qx '/p:RDPPW-test' "$STUBDIR/stdin" && exit 0 || exit 131
+STUB
+chmod +x "$t/bin/xfreerdp3"
+start_stub() {
+python3 -I - "$t" <<'PY'
+import os, socket, ssl, sys
+t = sys.argv[1]
+srv = socket.socket(); srv.bind(("127.0.0.1", 0)); srv.listen(1)
+open(t + "/port", "w").write(str(srv.getsockname()[1]))
+if os.fork() == 0:
+    c, _ = srv.accept(); c.recv(512)
+    c.sendall(bytes([3, 0, 0, 19, 14, 0xD0, 0, 0, 0, 0, 0, 2, 0, 8, 0, 2, 0, 0, 0]))
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(t + "/s.crt", t + "/s.key")
+    ctx.wrap_socket(c, server_side=True).close(); os._exit(0)
+PY
+sed "s/3389/$(cat "$t/port")/" "$t/rdp.sh" >"$t/rdp-port.sh"
+}
+run_login() { PATH="$t/bin:$PATH" STUBDIR=$t work=$t/state keys=$t/lk bash -c "set -euo pipefail; setting() { echo 127.0.0.1; }; source '$t/rdp-port.sh'; rdp_check" 2>&1; }
+start_stub; out=$(run_login) || true
+[[ $out == *"login PASS"* && $out != *RDPPW* ]] && echo "ok   a test build's rdp-check prints login PASS and no password" || { echo "FAIL: rdp-check login pass: $out"; fails=$((fails + 1)); }
+grep -q 'args-from:stdin' "$t/argv" && ! grep -q RDPPW "$t/argv" && grep -q '^+auth-only$' "$t/stdin" && grep -q '^/u:owner$' "$t/stdin" && echo "ok   the password goes on stdin, not the command line" || { echo "FAIL: argv/stdin: $(cat "$t/argv")"; fails=$((fails + 1)); }
+echo '{"login_password": "LOGINPW", "rdp_password": "WRONG"}' >"$t/lk/desktop-test-login"
+start_stub; out=$(run_login) || true
+[[ $out == *"login FAIL (xfreerdp exit 131)"* && $out != *WRONG* ]] && echo "ok   a refused login prints login FAIL and no password" || { echo "FAIL: rdp-check login fail: $out"; fails=$((fails + 1)); }
+rm -f "$t/bin/xfreerdp3"; start_stub; out=$(PATH=/usr/bin:/bin STUBDIR=$t work=$t/state keys=$t/lk bash -c "set -euo pipefail; setting() { echo 127.0.0.1; }; source '$t/rdp-port.sh'; rdp_check" 2>&1) || true
+if command -v xfreerdp3 xfreerdp >/dev/null 2>&1; then echo "skip rdp-check without a client (this machine has one)"; else
+[[ $out == *"no xfreerdp"* ]] && echo "ok   a test build without xfreerdp says so" || { echo "FAIL: no-client message: $out"; fails=$((fails + 1)); }; fi
+
 # The test passwords never outlive a test build: destroy and a plain configure delete the keys file.
 n=$(grep -c 'rm -f "\$keys/desktop-test-login"' "$wrapper")
 [[ $n -eq 2 ]] && echo "ok   destroy and plain configure both delete the test login file" || { echo "FAIL: the test login file is deleted in $n place(s), want 2"; fails=$((fails + 1)); }

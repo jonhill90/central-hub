@@ -396,6 +396,15 @@
     state: present
   tags: [wrappers]
 
+# An RDP client with no window: `desktop rdp-check` on a test build uses xfreerdp's +auth-only to prove a real
+# network-level login to the desktop VM. AlmaLinux AppStream's freerdp (3.x); it pulls the X11 and Wayland
+# client libraries but no server. A change to this list is a change to the box's limits.
+- name: An RDP client for the desktop's login check
+  ansible.builtin.package:
+    name: [freerdp]
+    state: present
+  tags: [wrappers]
+
 - name: Playwright's hash-pinned requirements, root-owned
   ansible.builtin.copy:
     src: playwright-requirements.txt
