@@ -137,6 +137,13 @@ sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply-recorded k
 
 `ksm-off` restores the saved state: `run` 2 first when scanning was off before (it unmerges every merged page, which needs the memory back, so the play refuses when the free memory would not cover the merged pages plus 1 GiB), then the saved pace and the saved `run`, `ksmtuned` as it was, and removes the boot file and the saved state. It refuses when no saved state exists. `allow-ksm 0` stays on the protected VMs: it is a protection, not part of the saving.
 
+**Use it for the dev-run window only.** VMs 100 and 258 stay mergeable until they restart (see 2), so KSM is not left on. The order, every time:
+
+1. `ksm` (check, then apply-recorded), and note `host ksm full_scans` from `check memory`.
+2. Wait until `full_scans` has gone up by at least one: only then has a whole pass over the guests' memory run, and `pages_sharing` shows the saving.
+3. Run the dev rebuild's fit check (`rebuild fit`), then the dev run.
+4. `ksm-off` straight after the run, whether it passed or failed.
+
 Measure with `check memory` before, then at 20 and 40 minutes (a full scan of about 20 GiB of guest memory at this pace takes about 17 minutes; `host ksm full_scans` counts the passes). Read `host ksm pages_sharing` (4 KiB pages) and `host memavailable` (MiB), and `host ksmd utime` and `host ksmd stime` with `host clk_tck`: the CPU share is the change in `utime` plus `stime`, divided by `clk_tck`, divided by the seconds between the two reads.
 
 ## If it fails
