@@ -79,7 +79,7 @@ opnsense_lab_app_access_sequences: [11, 12]
 # The names the rules may have; a name that is not a current source loses its rule.
 opnsense_lab_backup_target_names: [prod node 200, prod node 201, dev worker]
 # The rules' sequence numbers, in source order, clear of every other rule the role numbers; the role checks it.
-opnsense_lab_backup_target_sequences: [13, 14, 15]
+opnsense_lab_backup_target_sequences: [13, 14, 17]
 
 # One pass rule from the agent box to the secrets store's admin address in prod's c1 on 443 (tasks/store_admin.yml,
 # D-0062 rule 4). Optional and private (addresses), from the inventory; unset = no such rule, and one left from an

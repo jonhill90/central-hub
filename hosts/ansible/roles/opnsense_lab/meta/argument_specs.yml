@@ -153,7 +153,7 @@ argument_specs:
       opnsense_lab_backup_target_sequences:
         type: list
         elements: int
-        default: [13, 14, 15]
+        default: [13, 14, 17]
         description: The backup target rules' sequence numbers, in source order; clear of every other rule.
       opnsense_lab_store_admin:
         type: dict

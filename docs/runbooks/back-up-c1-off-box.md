@@ -148,7 +148,7 @@ P1. Firewall. The nodes are on VLAN 10 and the host's address is on VNet mgmt, a
      sources:
        - { name: prod node 200, address: <VM 200's address> }
        - { name: prod node 201, address: <VM 201's address> }
-       # P3, dev's read-only restore: a source may name its own VLAN (sequence 15):
+       # P3, dev's read-only restore: a source may name its own VLAN (sequence 17):
        # - { name: dev worker, address: <dev worker's address>, vlan: 30 }
    # proxmox_host (playbooks/proxmox-safety.yml), only if proxmox_firewall_enable is true:
    proxmox_firewall_extra_rules:
