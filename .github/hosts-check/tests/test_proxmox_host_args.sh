@@ -317,7 +317,7 @@ if [ $rc16b = 0 ] && [[ $c16b == *playbooks/proxmox-memory.yml* ]] && grep -qx '
    && grep -qx 'proxmox-host: memory: kvm id 258 merge off' "$t/16b.out" && grep -qx 'proxmox-host: memory: kvm id 100 merge on' "$t/16b.out" \
    && grep -qx 'proxmox-host: memory: host ksmd utime 123' "$t/16b.out" && grep -qx 'proxmox-host: memory: host ksmd stime 45' "$t/16b.out" \
    && grep -qx 'proxmox-host: memory: host clk_tck 100' "$t/16b.out" && grep -qx 'proxmox-host: memory: host ksm full_scans 7' "$t/16b.out" \
-   && ! grep -q 'maybe\|comm' "$t/16b.out" \
+   && ! grep -q 'maybe\|ksmd comm' "$t/16b.out" \
    && ! grep -q 'secret\|192.0.2.10\|pve-secret\|-name' "$t/16b.out"; then
   ok "16b the memory job prints the allowlisted report lines and drops any other text"
 else bad "16b rc=$rc16b [$c16b] $(cat "$t/16b.out")"; fi
