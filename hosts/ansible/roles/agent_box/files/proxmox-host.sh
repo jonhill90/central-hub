@@ -12,6 +12,8 @@
 #   runs it as root, so the agents' Proxmox rights change by a reviewed PR and no longer need the Mac) or `firewall`
 #   (playbooks/proxmox-firewall.yml, proxmox-safety.yml's firewall role alone: the host firewall, with the role's dead-man timer and its
 #   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller),
+#   `memory` (playbooks/proxmox-memory.yml: read-only; `check memory` prints, per guest and per host counter, numbers and fixed words only,
+#     the lines its REPORT task writes that match this wrapper's allowlist, so a session can see who holds the host's memory)
 #   `guests` (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell)
 #   or `restore-reader` (playbooks/proxmox-restic-reader.yml: the proxmox_restic_sftp role's read-only user `c1restore` and the keys
 #   that sign in as it, one per dev worker, each only from its own address; the list is in this job's inventory, written by the
@@ -55,7 +57,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -64,7 +66,7 @@ result=$work/state/check.json
 ledger=$work/ledger
 usage() {
   echo "       proxmox-host guard arm|confirm|rollback|clear|status" >&2
-  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|restore-reader]|apply [proxy|agent-access|sso|firewall|guests|restore-reader] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
+  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|restore-reader|memory]|apply [proxy|agent-access|sso|firewall|guests|restore-reader|memory] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
   echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
   exit 2
 }
@@ -339,6 +341,31 @@ case $action in
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok
     echo "proxmox-host: check $hash: $changed changed, $skipped skipped, $total tasks"
     echo "proxmox-host: the agents' pass for an apply names this commit (${commit:0:12}) and this hash ($hash)"
+    if [[ $job == memory ]]; then
+      # The read-only memory job's answer: the lines of its REPORT task that match the allowlist, and nothing else (no name or address
+      # can pass: every line is fixed words and digits).
+      python3 -I - "$logs/check-$stamp.json" <<'PY'
+import json, re, sys
+ok = [re.compile(p) for p in (
+    r"guest [0-9]{1,9} (qemu|lxc) [a-z]{1,12} maxmem [0-9]{1,9} mem [0-9]{1,9}",
+    r"kvm id [0-9]{1,9} rss [0-9]{1,9}",
+    r"host (memtotal|memavailable|swaptotal|swapfree|shmem) [0-9]{1,9}",
+    r"host ksm (run|pages_shared|pages_sharing) [0-9]{1,12}")]
+n = 0
+for play in json.load(open(sys.argv[1])).get("plays", []):
+    for t in play.get("tasks", []):
+        if t["task"]["name"] != "memory | REPORT":
+            continue
+        for r in t.get("hosts", {}).values():
+            msg = r.get("msg", "")
+            for line in (msg if isinstance(msg, list) else str(msg).split("\n")):
+                line = str(line).strip()
+                if any(p.fullmatch(line) for p in ok):
+                    print("proxmox-host: memory: " + line)
+                    n += 1
+print("proxmox-host: memory: %d line(s)" % n)
+PY
+    fi
     if [[ $job == guests ]]; then
       # The read-only job's answer: its tasks that show as changed name a guest that exists (names come from the reviewed playbook).
       python3 -I - "$result" <<'PY'

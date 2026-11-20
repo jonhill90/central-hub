@@ -1,0 +1,60 @@
+---
+# What holds the Proxmox host's memory, read from the box (the proxmox-host wrapper's job `memory`). Read-only: it reads the host's
+# own counters and prints one line per guest and per fact, numbers and fixed words only, so a session on the box can tell who holds
+# the memory a dev rebuild needs (the dev preflight sees only the guests its token can see). The wrapper prints only the lines of
+# the REPORT task that match its allowlist (no name, address or other text), so nothing else this play reads can reach a session.
+#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check memory
+# Lines (sizes in MiB, KSM counters in pages):
+#   guest <vmid> <qemu|lxc> <status> maxmem <configured> mem <in use as the host's resource list reports it>
+#   kvm id <vmid> rss <MiB the VM's process holds on the host>
+#   host <memtotal|memavailable|swaptotal|swapfree|shmem> <MiB>
+#   host ksm <run|pages_shared|pages_sharing> <value>
+- name: What holds the host's memory
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  tasks:
+    # `check_mode: false`: these commands only read, and a check run has to run them (check-check-mode.py allows a fixed command
+    # line with changed_when: false).
+    - name: memory | Read the guests' resources
+      ansible.builtin.command: pvesh get /cluster/resources --type vm --output-format json
+      register: memory_guests
+      changed_when: false
+      check_mode: false
+
+    - name: memory | Read the host's memory counters
+      ansible.builtin.command: grep -E "^(MemTotal|MemAvailable|SwapTotal|SwapFree|Shmem):" /proc/meminfo
+      register: memory_host
+      changed_when: false
+      check_mode: false
+
+    - name: memory | Read the VM processes' resident memory
+      ansible.builtin.command: ps -C kvm -o rss=,args=
+      register: memory_kvm
+      changed_when: false
+      failed_when: memory_kvm.rc > 1
+      check_mode: false
+
+    - name: memory | Read the kernel's same-page merging counters
+      ansible.builtin.command: grep -H . /sys/kernel/mm/ksm/run /sys/kernel/mm/ksm/pages_shared /sys/kernel/mm/ksm/pages_sharing
+      register: memory_ksm
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: memory | REPORT
+      ansible.builtin.debug:
+        msg: |-
+          {% for g in (memory_guests.stdout | from_json) %}{% if g.type | default('') in ['qemu', 'lxc'] %}
+          {% set gmax = ((g.maxmem | default(0)) | int) // 1048576 %}{% set gmem = ((g.mem | default(0)) | int) // 1048576 %}
+          guest {{ g.vmid | int }} {{ g.type }} {{ (g.status | default('unknown')) | regex_replace('[^a-z]', '') }} maxmem {{ gmax }} mem {{ gmem }}
+          {% endif %}{% endfor %}
+          {% for l in memory_kvm.stdout_lines %}{% set m = l | regex_search('-id ([0-9]+)', '\\1') %}{% if m %}
+          kvm id {{ m[0] | int }} rss {{ ((l.split()[0]) | int) // 1024 }}
+          {% endif %}{% endfor %}
+          {% for l in memory_host.stdout_lines %}
+          host {{ (l.split(':')[0]) | lower }} {{ ((l.split()[1]) | int) // 1024 }}
+          {% endfor %}
+          {% for l in memory_ksm.stdout_lines %}
+          host ksm {{ l.split('/')[-1].split(':')[0] }} {{ l.split(':')[-1] | int }}
+          {% endfor %}
