@@ -10,7 +10,7 @@
 #   user only) or `agent-access` (playbooks/
 #   proxmox-agent-access.yml: it copies hosts/terraform/home/bootstrap/agent-access.sh from the same commit to the host and
 #   runs it as root, so the agents' Proxmox rights change by a reviewed PR and no longer need the Mac) or `firewall`
-#   (playbooks/proxmox-safety.yml with --tags firewall only: the host firewall, with the role's dead-man timer and its
+#   (playbooks/proxmox-firewall.yml, proxmox-safety.yml's firewall role alone: the host firewall, with the role's dead-man timer and its
 #   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller).
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh log
 # check: `--check --diff` on the code at origin/main. It saves a result file: the commit, the playbook, the
@@ -46,7 +46,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-safety.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -130,11 +130,11 @@ if [[ $job == sso ]]; then
 fi
 
 repo=$work/checkout   # this wrapper's own checkout of central-hub
-# The firewall job runs only the playbook's firewall role, with the shared VLAN file from the same checkout (the job's
+# The firewall job runs with the shared VLAN file from the same checkout (the job's
 # inventory is one file, so the inventory folder's group_vars are not next to it).
 fw_args=()
 if [[ $job == firewall ]]; then
-  fw_args=(--tags firewall -e "@$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml")
+  fw_args=(-e "@$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml")
 fi
 export HOME=$work PATH=$ansible_bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_CONFIG=$repo/hosts/ansible/ansible.cfg ANSIBLE_COLLECTIONS_PATH=$collections ANSIBLE_HOME=$work/ansible-home
