@@ -130,5 +130,12 @@ n=$(grep -c 'rm -f "\$keys/desktop-test-login"' "$wrapper")
 [[ $n -eq 2 ]] && echo "ok   destroy and plain configure both delete the test login file" || { echo "FAIL: the test login file is deleted in $n place(s), want 2"; fails=$((fails + 1)); }
 grep -q 'status/shutdown' "$wrapper" && echo "ok   desktop stop asks the VM to shut down" || { echo "FAIL: no desktop stop"; fails=$((fails + 1)); }
 
+# The package install is retried: the first dnf run on a fresh VM loses a cache file (2026-11-19 and 11-20).
+python3 -I - "$here/hosts/ansible/roles/desktop/tasks/main.yml" <<'PY' && echo "ok   the desktop package task is retried" || { echo "FAIL: the desktop package task has no retry"; fails=$((fails + 1)); }
+import sys, yaml
+t = [x for x in yaml.safe_load(open(sys.argv[1])) if x.get("name") == "desktop | The desktop packages"][0]
+assert t["retries"] >= 3 and "until" in t
+PY
+
 if [[ $fails -gt 0 ]]; then echo "desktop configure vars: $fails test(s) failed"; exit 1; fi
 echo "desktop configure vars: all tests passed"
