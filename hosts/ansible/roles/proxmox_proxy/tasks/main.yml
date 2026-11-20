@@ -56,10 +56,13 @@
         update_cache: true
         cache_valid_time: 3600
   always:
+    # A check run never writes policy-rc.d, so removing it shows as unchanged there although the run removes it;
+    # skipped in a check, it shows as a step the run may take (the host job compares the two, D-0041 rule 4).
     - name: proxy | Service starts are allowed again
       ansible.builtin.file:
         path: /usr/sbin/policy-rc.d
         state: absent
+      when: not ansible_check_mode
 
 # After the move, a new pinned version installs the ordinary way, and a graceful reload loads it.
 - name: proxy | Apache httpd at the pinned Debian version, after the move
