@@ -151,7 +151,7 @@ evaluate() { # pr head
   # Only to explain a "blocked" (the verdict names unverified commits); it decides nothing, so a failed read just leaves it out.
   gh "$base/pulls/$pr/commits?per_page=100" > "$d/commits.json" 2>/dev/null || rm -f "$d/commits.json"
   gh "$base/commits/$head/check-runs?per_page=100" > "$d/checks.json" || return 1
-  # Which workflow and event made each check run, so a run a newer run of the same job replaced is not counted. A failed
+  # Which workflow and event made each check run, so a run is not counted once a newer run of the same job passed. A failed
   # read leaves the file out, and then the verdict counts every run, as before.
   { [[ -n $atok ]] && BEARER=$atok api "$base/actions/runs?head_sha=$head&per_page=100" > "$d/runs.json" 2>/dev/null; } || rm -f "$d/runs.json"
   if [[ $have_status == 1 ]]; then gh "$base/commits/$head/status" > "$d/status.json" || return 1; else echo '{}' > "$d/status.json"; fi

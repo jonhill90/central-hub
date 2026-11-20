@@ -217,6 +217,11 @@ d = fx(DOC, roles=["reviewer"], checks=OLDNEW); runs(d, [wr(1, 77), wr(2, 77)], 
 check("a partial runs.json drops nothing", run(d), "NOT GREEN: check line: failure", mutate('if wr.get("total_count", len(wruns)) != len(wruns): return set()', 'pass'), d)
 d = fx(DOC, roles=["reviewer"], checks={"total_count": 2, "check_runs": [cr(10, "line", "success", 1), cr(20, "line", "failure", 2)]}); runs(d, [wr(1, 77), wr(2, 77)])
 check("a newer failed run is not hidden by an older pass", run(d), "NOT GREEN: check line: failure", mutate('if k not in newest or r["id"] > newest[k]', 'if k not in newest or r["id"] < newest[k]'), d)
+d = fx(DOC, roles=["reviewer"], checks={"total_count": 2, "check_runs": [cr(10, "tests", "failure", 1), cr(20, "tests", "skipped", 2)]}); runs(d, [wr(1, 77), wr(2, 77)])
+check("a newer skipped run does not hide a failure", run(d), "NOT GREEN: check tests: failure", mutate('and n.get("conclusion") == "success"', ''), d)
+pend = {"id": 20, "name": "tests", "status": "in_progress", "conclusion": None, "check_suite": {"id": 2}}
+d = fx(DOC, roles=["reviewer"], checks={"total_count": 2, "check_runs": [cr(10, "tests", "failure", 1), pend]}); runs(d, [wr(1, 77), wr(2, 77)])
+check("a newer pending run does not hide a failure", run(d), "NOT GREEN: check tests: failure")
 d = fx(DOC, roles=["reviewer"], checks={"total_count": 2, "check_runs": [cr(10, "CodeQL", "failure", 5), cr(20, "CodeQL", "success", 6)]}); runs(d, [])
 check("check runs with no workflow run behind them all count", run(d), "NOT GREEN: check CodeQL: failure")
 d = fx(DOC, roles=["reviewer"], checks=OLDNEW); open(d + "/runs.json", "w").write("not json")
