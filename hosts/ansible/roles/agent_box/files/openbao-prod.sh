@@ -21,7 +21,7 @@
 # l2-policy playbooks/k8s.yml --tags lb on the first control plane only: role k8s_control_plane's load-balancer pool and
 #           general L2 announcement policy, which leaves out Services labelled central-hub/l2-policy (D-0062). Run it once
 #           before the settings get admin_address, so that policy never announces the admin address from every node.
-# gitops    playbooks/k8s-gitops.yml --tags source: the root Application's parameters only, with the in-cluster store on
+# gitops    first `secrets-store.sh --prod compare` must pass (the apps read store openbao); then playbooks/k8s-gitops.yml --tags source: the root Application's parameters only, with the in-cluster store on
 #           (k8s_gitops_source_openbao_in_cluster, _seal_node, _box_cidr, _store_host, _admin_address), so Argo CD makes
 #           openbao-store, openbao and the secret-store app's store `openbao`. Argo CD's install is left alone.
 # ca        the CA the box checks prod's store against on its admin path (TLS ends at OpenBao, D-0062): ca.crt of Secret openbao/openbao-tls, a public certificate, written to <keys>/prod/secrets-store-ca.crt
@@ -337,6 +337,12 @@ PY
     ap playbooks/k8s.yml --tags lb --limit 'k8s_control_plane[0]'
     ;;
   gitops)
+    # The root passes appSecretsStore=openbao, so the apps read their secrets from the store. A fresh or partly filled store (after a
+    # rebuild of the store, say) would leave them reading empty values: stop unless every key of the SOPS copy is in the store.
+    if ! "$libexec/secrets-store.sh" --prod compare; then
+      echo "FAIL: openbao-prod: gitops: secrets-store-prod compare did not pass, so the apps would read an incomplete store; run put-apps, then compare, then this again; nothing applied" >&2
+      exit 1
+    fi
     ap playbooks/k8s-gitops.yml --tags source
     ;;
   admin-firewall-check)
