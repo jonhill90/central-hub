@@ -35,7 +35,7 @@ Every part is an agent pick ([hosts/AGENT-PICKS.md](../../hosts/AGENT-PICKS.md),
 
 - c1 is up: `kubectl get nodes` shows both nodes `Ready`.
 - The worker's data disk is mounted: `findmnt /var/lib/c1-data` on the worker shows it ([Storage on c1](../../hosts/ansible/README.md#storage-on-c1)).
-- You have a place for the repository. The owner's words of 2026-11-18 07:44 UTC put it on the Proxmox host for now ("just ... back on the proxmox for now"), on the backup HDD, through [The Proxmox host](#the-proxmox-host) below. That copy shares the PC with the data it protects, so a lost PC loses both: it is a second, file-level copy, not an off-site one. Azure Blob is parked, and its steps stay below, off. restic can write to many kinds of target; this role works with any of them, because the target lives only in the env file:
+- You have a place for the repository. The owner's words of 2026-11-18 07:44 UTC put it on the Proxmox host for now (backups stay on the Proxmox host for now), on the backup HDD, through [The Proxmox host](#the-proxmox-host) below. That copy shares the PC with the data it protects, so a lost PC loses both: it is a second, file-level copy, not an off-site one. Azure Blob is parked, and its steps stay below, off. restic can write to many kinds of target; this role works with any of them, because the target lives only in the env file:
 
   | Target | `RESTIC_REPOSITORY` | Extra lines in the env file |
   |---|---|---|

@@ -99,7 +99,7 @@ Stop if you can't sign in as a Global Administrator: nothing below works without
 ## Afterwards
 
 - The secret from step 4 expires; note its end date (`az ad app credential list --id <appId>`) and reset it before then.
-- On 2026-11-09 at 03:33 UTC the owner also gave `agent-azure` **Owner** on the subscription, so agents can assign the roles their code needs (for example the backup app's data role in `hosts/terraform/azure/backup`). The owner's words: "make you owner for now ... you need to be able to flesh the things out. It does not have a cc" and "just dont charge anything strange. like all we need is this storage account" (2026-11-09 03:32-03:33 UTC). So agents make no other billable resource there without the owner's yes. To go back to Contributor plus the backup roles only, see [Narrow agent-azure's rights](#narrow-agent-azures-rights).
+- On 2026-11-09 at 03:33 UTC the owner also gave `agent-azure` **Owner** on the subscription, so agents can assign the roles their code needs (for example the backup app's data role in `hosts/terraform/azure/backup`). The owner gave the role for now so the agents could set up what they need, said the subscription has no payment card attached, and asked that nothing unusual be charged, since only the storage account is needed (2026-11-09 03:32-03:33 UTC). So agents make no other billable resource there without the owner's yes. To go back to Contributor plus the backup roles only, see [Narrow agent-azure's rights](#narrow-agent-azures-rights).
 - Each new kind of job (for example an Entra app registration for Keycloak) needs its own Microsoft Graph permission, added by the owner with admin consent, one at a time. Record each one here:
 
   | Graph application permission | Given | For | What it allows |

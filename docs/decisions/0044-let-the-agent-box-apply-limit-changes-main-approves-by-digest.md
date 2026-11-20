@@ -38,7 +38,7 @@ The owner's message of 2026-11-14 07:47:50 UTC said they would no longer type go
 ## Decision Drivers
 
 - **The owner's messages.** Their message of 07:47:50 UTC said they would no longer type go lines (that this is for the greenfield build-out is the agents' reading of the owner's message of 2026-11-14 19:26 UTC, cmsg_01X43rfNYp4H1dL1V2dkfkwNWrXE8oivDrxhnfXaQEuvkN, which speaks of the PR-approval change), and their messages of 07:42 to 07:44 UTC said PRs should no longer come to them for approval. At 07:43:25 UTC they pointed to their earlier rules without listing them; D-0042 reads them as firewall and tailnet (D-0036 rule 8), deletes and secrets (agent picks).
-- **The owner's earlier answer that an agent can't loosen its own limits** (their tap of 2026-11-14 02:26 UTC on D-0036's card). Their order of 2026-11-17 06:21:09 UTC, "drop the box-install cards" (cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh), replaced it: a limit change needs the agents' pass of its digest and no tap, unless it also holds another D-0042 rule 6 step (D-0042 rule 4).
+- **The owner's earlier answer that an agent can't loosen its own limits** (their tap of 2026-11-14 02:26 UTC on D-0036's card). Their order of 2026-11-17 06:21:09 UTC, that box-limit installs need no card (cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh), replaced it: a limit change needs the agents' pass of its digest and no tap, unless it also holds another D-0042 rule 6 step (D-0042 rule 4).
 - **What the box can check, it checks.** It can check commits and bytes. It can't read chat messages or decision cards.
 - **Deterministic** (the owner's ranking of 2026-11-11).
 - **Replaceable** (REQ-0011): undone by emptying the approvals file, or by an older `box-apply`.

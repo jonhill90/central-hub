@@ -14,7 +14,7 @@ Can the VPS be a rebuild jump box for the lab without giving the internet-facing
 
 ## Findings
 
-1. **The owner's ask.** The VPS is "another jump box" if Proxmox goes down (cmsg_01X43rfNYp4H1dL1V2dkfkwNXDyf8bn8y8AKU2K7JFBKhu, 2026-11-18 06:04:55 UTC) [1] (read).
+1. **The owner's ask.** The VPS is a second jump box if Proxmox goes down (cmsg_01X43rfNYp4H1dL1V2dkfkwNXDyf8bn8y8AKU2K7JFBKhu, 2026-11-18 06:04:55 UTC) [1] (read).
 2. **The VPS today.** AlmaLinux 10.2, 4 vCPU, 15 GiB; port 22 and the tailnet's own ports listen; the host layer of D-0046 is applied, so users `omniroute`, `openclaw` and `hermes` have working rootless Podman [2] (measured over Tailscale SSH, 06:12 to 06:15 UTC).
 3. **The only lab route.** The lab's tailnet connector is CT 900, made by `hosts/terraform/home/remote-access` as a container on the Proxmox host [3] (read). When the host is down it is down.
 4. **The policy.** No grant has `tag:vps` as source; `tag:agent` already reaches the Proxmox host's port 22 through the connector; the box's tag has no destination of its own [4] (read, `policy.hujson.tftpl` on main 279c726). Tailnet grants and SSH rules name device tags, which is why a second login with its own tag needs a second node.

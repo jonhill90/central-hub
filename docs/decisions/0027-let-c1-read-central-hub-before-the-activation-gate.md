@@ -31,7 +31,7 @@ On 2026-11-08 at 07:06 UTC the owner asked to switch all of c1's Kubernetes work
 ## Decision Drivers
 
 - **Learn Kubernetes the GitOps way now.** The owner's goal for c1 is learning, and GitOps is the target way of working (D-0002).
-- **Greenfield.** On 2026-10-26 at 06:30 UTC the owner said all the infrastructure is "greenfield not in use... v0.1".
+- **Greenfield.** On 2026-10-26 at 06:30 UTC the owner said all the infrastructure is greenfield, not in use, at version 0.1.
 - **Replaceable and documented.** On 2026-11-08 at 07:09 UTC the owner asked that every piece be replaceable and documented (REQ-0011).
 - **What the gate protects against.** An agent acting as the owner's GitHub account could change `main`, and a cluster that reads `main` would then apply the change (AGENTS.md rule 2, Foundation C9).
 
@@ -77,12 +77,12 @@ flowchart LR
 ### 2. Finish the gate first
 
 - Good: no exception to the gate.
-- Bad: GitOps waits for per-agent identities, which are parked (TASK-0022), so the move the owner asked for "as soon as we can" waits indefinitely.
+- Bad: GitOps waits for per-agent identities, which are parked (TASK-0022), so the move the owner asked for, as soon as possible, waits indefinitely.
 
 ### 3. Read now, sync by hand
 
 - Good: nothing changes on c1 without a person pressing sync.
-- Bad: a manual step at every change, which the owner has asked to avoid ("deterministic idempotent code", 2026-10-27 02:49 UTC); the spec still starts each component with automatic sync off until its diff is clean.
+- Bad: a manual step at every change, which the owner has asked to avoid, preferring deterministic, idempotent code (2026-10-27 02:49 UTC); the spec still starts each component with automatic sync off until its diff is clean.
 
 ## More Information
 
