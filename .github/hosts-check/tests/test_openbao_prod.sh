@@ -260,7 +260,11 @@ else bad "9. good rc=$g_rc del=$g_del [$g_names] ready rc=$r_rc/$r_del log rc=$l
 cat > "$venv/ansible" <<EOF
 #!/usr/bin/env python3
 import base64, json, os, shlex, sys
-words = shlex.split(sys.argv[sys.argv.index("-a") + 1])
+arg = sys.argv[sys.argv.index("-a") + 1]
+if arg.startswith("{"):
+    open("$t/kcm", "w").write(arg)
+    print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0, "stdout": "configmap/openbao-ca-bundle configured", "stderr": ""}}}]}]})); sys.exit(0)
+words = shlex.split(arg)
 open("$t/kwords", "w").write("\\n".join(words))
 path = "$t/kube/CA"
 if not os.path.exists(path):
@@ -282,12 +286,16 @@ echo 'not a certificate' > "$t/kube/CA"; run ca; c_rc=$rc c_out=$out; c_file=$(c
 rm -f "$t/kube/CA"; run ca; d_rc=$rc d_out=$out; d_file=$(cat "$cafile" 2>/dev/null)
 run ca extra; e_rc=$rc
 want_words=$'-n\nopenbao\nget\nsecret\nopenbao-tls\n-o\njsonpath={.data.ca\\.crt}'
+cm_ok=$(python3 -c 'import json, sys
+d = json.load(open(sys.argv[1])); m = json.loads(d["stdin"])
+print(d["argv"][-3:], m["kind"], m["metadata"]["name"], m["metadata"]["namespace"], m["data"]["ca.crt"] == open(sys.argv[2]).read())' "$t/kcm" "$t/ca1.pem" 2>&1)
 if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: ca: the store's CA written to $cafile"* && $a_out == *"test-ca-1"* &&
       -n $a_file && $a_file == "$(cat "$t/ca1.pem")" && $a_words == *"$want_words" &&
       $b_rc -ne 0 && $b_out == *"is not one PEM certificate; nothing written"* && $b_file == "$a_file" &&
       $k_rc -ne 0 && $k_out == *"is not one PEM certificate; nothing written"* && $k_file == "$a_file" &&
       $c_rc -ne 0 && $c_out == *"is not one PEM certificate; nothing written"* && $c_file == "$a_file" &&
-      $d_rc -ne 0 && $d_out == *"nothing written"* && $d_file == "$a_file" && ! -e $cafile.part && $e_rc -eq 2 ]]; then
+      $d_rc -ne 0 && $d_out == *"nothing written"* && $d_file == "$a_file" && ! -e $cafile.part && $e_rc -eq 2 &&
+      $a_out == *"ConfigMap openbao/openbao-ca-bundle applied"* && $cm_ok == "['apply', '-f', '-'] ConfigMap openbao-ca-bundle openbao True" ]]; then
   ok "10. ca: one certificate written from ca.crt, the key's dot kept through Ansible's split; two certificates, a certificate with a key block, a non-certificate or a failed read write nothing"
 else bad "10. good rc=$a_rc [$a_words] $a_out | two rc=$b_rc $b_out | key rc=$k_rc $k_out | junk rc=$c_rc $c_out | fail rc=$d_rc $d_out | extra rc=$e_rc"; fi
 

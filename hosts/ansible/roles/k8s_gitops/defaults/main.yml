@@ -94,6 +94,9 @@ k8s_gitops_source_notebook_runner: false
 # load-balancer pool (not its first or last), passed as `openbaoAdminAddress`. The box's admin login goes
 # there, so OpenBao sees the box's own address (D-0062). Set it only after role k8s_control_plane's general
 # L2 policy leaves out Services labelled central-hub/l2-policy. Unset: no admin path.
+# k8s_gitops_source_openbao_route: names openbao.<zone> and vault.<zone> for the store's web UI and API on Gateway apps
+# (apps/openbao-store, templates/route.yaml); needs the in-cluster store. Default false.
+k8s_gitops_source_openbao_route: false
 # k8s_gitops_source_openbao_admin_address: <address>
 # The dev-only measurement of the agent box's source address through the Gateway (MEASURE-1), read only
 # with the switch above on: true passes `openbaoMeasure`. Never set in an inventory: hosts/rebuild-k8s.sh

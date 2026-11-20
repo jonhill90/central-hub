@@ -34,6 +34,9 @@ openbaoMarkEnv: ""
 # headers at its first start. Only hosts/rebuild-k8s.sh sets it, on dev with the
 # in-cluster store (k8s_gitops_source_openbao_measure); c1 keeps false and renders as before.
 openbaoMeasure: false
+# Names for the store's web UI and API on Gateway apps: openbao.<zone> and vault.<zone> (apps/openbao-store,
+# templates/route.yaml). Ansible sets it from k8s_gitops_source_openbao_route; false renders as before.
+openbaoRoute: false
 # The store's name as the agent box reaches it, private, set by Ansible (k8s_gitops_source_openbao_store_host)
 # with the in-cluster store on. Set: the store's certificate carries it (apps/openbao-store, tls.yaml), and the
 # box reaches the store by it on the admin address (openbaoAdminAddress).
@@ -372,6 +375,9 @@ apps:
     namespace: openbao
     local: true
     enabledBy: openbaoInCluster
+    needsZone: true
+    switchParameters:
+      route: openbaoRoute
     rootParameters:
       sealNode: openbaoSealNode
       markEnv: openbaoMarkEnv

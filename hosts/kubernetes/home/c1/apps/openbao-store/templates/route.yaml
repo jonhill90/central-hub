@@ -1,0 +1,98 @@
+{{- if eq (toString .Values.route) "true" }}
+{{- /*
+The store's web UI and API by name (Jon, 2026-11-20 07:31 UTC: openbao and vault names), the same way the other
+apps get theirs: an HTTPRoute on Gateway apps's https-short listener (*.<zone>, the wildcard certificate) and a
+redirect for plain http, for every name in routeNames. D-0058 rule 4: "reached by name on 443 like every c1 app".
+TLS starts again to OpenBao (path a of the dev measurement, apps/openbao-measure), checked by a BackendTLSPolicy
+against the namespace's CA, which a ConfigMap carries because Cilium 1.20.4 reads only a ConfigMap there
+(`openbao-prod ca` makes it). The two routes carry argocd.argoproj.io/ignore-healthcheck, like the measurement's,
+so the ConfigMap coming later does not stall the sync. The admin AppRole stays bound to the box's /32, which
+OpenBao does not see on this path, so it is refused here: the UI and API are for other logins.
+*/ -}}
+{{- $zone := required "zone: set by the root Application (k8s_gitops_source_zone)" .Values.zone }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: openbao-ui
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/ignore-healthcheck: "true"
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+      sectionName: https-short
+  hostnames:
+    {{- range .Values.routeNames }}
+    - {{ . }}.{{ $zone }}
+    {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: openbao
+          port: 8200
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: openbao-ui-redirect
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/ignore-healthcheck: "true"
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+      sectionName: http-short
+  hostnames:
+    {{- range .Values.routeNames }}
+    - {{ . }}.{{ $zone }}
+    {{- end }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: openbao-ui
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/ignore-healthcheck: "true"
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: openbao
+  validation:
+    caCertificateRefs:
+      - group: ""
+        kind: ConfigMap
+        name: {{ .Values.caConfigMap }}
+    hostname: openbao.{{ .Release.Namespace }}.svc
+---
+# Cilium's Gateway API traffic reaches a pod as the reserved "ingress" identity, which the chart's Kubernetes
+# NetworkPolicy (apps/openbao, networkPolicy) can't select. Only port 8200 of OpenBao's server pod.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: openbao-ui-ingress
+  namespace: {{ .Release.Namespace }}
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: openbao
+      app.kubernetes.io/instance: openbao
+      component: server
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports:
+            - {port: "8200", protocol: TCP}
+{{- end }}

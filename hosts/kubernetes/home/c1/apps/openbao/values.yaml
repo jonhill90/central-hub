@@ -12,7 +12,8 @@ global:
   tlsDisable: false
 
 # The injector's image is HashiCorp's (docker.io hashicorp/vault-k8s), and nothing here uses it.
-# No web UI: neither the chart's UI Service nor `ui` in the config below; the box uses the API.
+# The web UI is served by the listener itself (`ui = true` in the config below), reached through the
+# openbao-store route (templates/route.yaml); the chart's own UI Service is not needed.
 injector:
   enabled: false
 csi:
@@ -127,7 +128,7 @@ server:
       setNodeId: true
       # Passed through Helm's tpl: only {{ .Values.centralHub.* }} below is filled in.
       config: |
-        ui            = false
+        ui            = true
         disable_mlock = true
 
         listener "tcp" {
