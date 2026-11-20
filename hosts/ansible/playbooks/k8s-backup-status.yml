@@ -1,7 +1,8 @@
 ---
 # Read-only status of c1's off-box backups, for the agent box's `c1-ansible check|apply backup-status`
 # (plan step 5, TASK-0296).
-# It changes nothing on a node: every task only reads, and restic runs with --no-lock and --no-cache so it writes no lock into the repository and no cache on the node.
+# It changes nothing on a node: every task only reads, and restic runs with --no-lock and --no-cache, so it writes no lock into the
+# repository and no cache on the node.
 # It prints each node's timers, the last result of each backup service, the PASS and FAIL lines of the last 3 days from the
 # journal, and the repository's snapshots (id, time, tags), so a session can say whether backups run and where they go.
 # The env file is sourced in a subshell that prints only the repository's scheme and path, with any user:password in a URL removed.
