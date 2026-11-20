@@ -35,6 +35,10 @@
     [ "$(grep -c 'BEGIN CERTIFICATE' "$f")" = 1 ] || { echo "not exactly one certificate"; exit 1; }
     ! grep -q 'PRIVATE KEY' "$f" || { echo "holds a private key"; exit 1; }
     openssl x509 -in "$f" -noout -ext basicConstraints | grep -q 'CA:TRUE' || { echo "not a CA certificate"; exit 1; }
+    # A root signs itself: an intermediate (subject differs from issuer) must not pass as the root.
+    subj=$(openssl x509 -in "$f" -noout -subject -nameopt RFC2253 | sed 's/^subject=//')
+    iss=$(openssl x509 -in "$f" -noout -issuer -nameopt RFC2253 | sed 's/^issuer=//')
+    [ "$subj" = "$iss" ] || { echo "not self-signed: subject differs from issuer"; exit 1; }
   args:
     executable: /bin/bash
   changed_when: false

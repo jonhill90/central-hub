@@ -40,13 +40,19 @@ openssl req -x509 -newkey rsa:2048 -nodes -keyout "$t/ca.key" -out "$t/ca.crt" -
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$t/leaf.key" -out "$t/leaf.crt" -days 2 -subj "/CN=Leaf" \
   -addext "basicConstraints=CA:FALSE" > /dev/null 2>&1
 
+# An intermediate CA: signed by the root, so subject differs from issuer.
+openssl req -newkey rsa:2048 -nodes -keyout "$t/int.key" -out "$t/int.csr" -subj "/CN=Test Intermediate" > /dev/null 2>&1
+printf 'basicConstraints=critical,CA:TRUE\n' > "$t/int.ext"
+openssl x509 -req -in "$t/int.csr" -CA "$t/ca.crt" -CAkey "$t/ca.key" -CAcreateserial -out "$t/int.crt" -days 2 -extfile "$t/int.ext" > /dev/null 2>&1
+
 # 2. Refused files install nothing.
-for case in leaf two key; do
+for case in leaf two key intermediate; do
   rm -rf "$t/keys"
   case $case in
     leaf) cp "$t/leaf.crt" "$t/guard/lab-root.crt" ;;
     two) cat "$t/ca.crt" "$t/leaf.crt" > "$t/guard/lab-root.crt" ;;
     key) cat "$t/ca.crt" "$t/ca.key" > "$t/guard/lab-root.crt" ;;
+    intermediate) cp "$t/int.crt" "$t/guard/lab-root.crt" ;;
   esac
   if run; then bad "a $case file was accepted"; elif [ -e "$dest" ]; then bad "a $case file was installed"; else ok "a $case file is refused and nothing is installed"; fi
 done

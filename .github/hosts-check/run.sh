@@ -89,6 +89,7 @@ check_ansible() {
   bash "$here/tests/test_iac_access_pools.sh"
   bash "$here/tests/test_web_shot_modes.sh"
   bash "$here/tests/test_lab_token.sh"
+  bash "$here/tests/test_sftp_key_carry.sh"
   bash "$here/tests/test_prod_lab_root.sh"
   bash "$here/tests/test_agent_browser.sh"
   bash "$here/tests/test_argocd_signin_check.sh"

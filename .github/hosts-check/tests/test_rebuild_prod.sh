@@ -301,8 +301,8 @@ if [[ $g11a == "git origin/main" && $r11b -eq 0 && $g11b == "git $sha" &&
       $r11d -eq 1 && $o11d == *"commit fedcba9 is not in the box's checkout of main"* && -z $c11d ]]; then
   ok "11. rebuild checks out the commit the go names (check, main's newest); a commit not on main, or unknown, runs nothing"
 else bad "11. [$g11a] $r11b [$g11b] | $r11c $o11c [$c11c] | $r11d $o11d [$c11d]"; fi
-# 12. The backup target: the Proxmox host over sftp is refused before anything is destroyed (the box can't let the rebuilt
-# nodes' keys in on the host); with no Azure sign-in there is no certificate to carry, and the rebuild goes on without one.
+# 12. The backup target: the Proxmox host over sftp is refused before anything is destroyed when the box's copy has no host
+# address for the nodes' alias (the carried keys need it); with no Azure sign-in there is no certificate to carry, and the rebuild goes on without one.
 inventory "        k8s_backup_sftp: true"
 sed -i '/k8s_backup_azure_identity/d' "$t/keys/prod/inventory-hosts.yml"
 dev_log "$sha" "rebuild: all stages passed"
@@ -310,12 +310,14 @@ run check; r12a=$rc o12a=$out
 run rebuild "$tap" "$sha"; r12b=$rc c12b=$calls
 inventory; sed -i '/k8s_backup_azure_identity/d' "$t/keys/prod/inventory-hosts.yml"
 rm -rf "$t/keys/prod/backup-certs"
+mkdir -p "$t/keys/prod/backup-sftp"; echo carried > "$t/keys/prod/backup-sftp/n.key"
 run rebuild "$tap" "$sha"; r12c=$rc o12c=$out c12c=$calls
-if [[ $r12a -eq 1 && $o12a == *"k8s_backup_sftp is true (the Proxmox host as the backup target): the box can't let the rebuilt nodes' new keys in"* &&
+if [[ $r12a -eq 1 && $o12a == *"k8s_backup_sftp is true but the box's copy has no host address for node"* &&
       $r12b -eq 1 && $c12b != *playbook* && $c12b != *one-command* &&
       $r12c -eq 0 && $o12c == *"no Azure sign-in on the prod nodes (k8s_backup_azure_identity off), so no backup certificate to carry"* &&
-      $c12c != *backup.pem* && $c12c == *one-command* && ! -e $t/keys/prod/backup-certs ]]; then
-  ok "12. the Proxmox host as backup target is refused before anything runs; no Azure sign-in: no certificate carried"
+      $c12c != *backup.pem* && $c12c == *one-command* && ! -e $t/keys/prod/backup-certs &&
+      $o12c == *"the carried sftp keys were deleted from the box"* && ! -e $t/keys/prod/backup-sftp ]]; then
+  ok "12. the Proxmox host as backup target with no host address is refused before anything runs; no Azure sign-in: no certificate carried"
 else bad "12. $r12a $o12a | $r12b [$c12b] | $r12c $o12c"; fi
 
 # 13. The floor: rebuild asks whether PIN_FLOOR is an ancestor of the pinned commit, and refuses below it before anything runs;
