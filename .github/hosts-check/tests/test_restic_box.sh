@@ -5,7 +5,7 @@
 # the box does (the play is given this machine's address, as the host job is given the box's, so the key works from here). Test values only.
 #   1. A host with nothing mounted is refused; a bad key line is refused with nothing changed.
 #   2. The play passes on a host whose chroot and keys folder c1's role made; a second run changes nothing.
-#   3. restic (the k8s_backup role's pin, checked against its SHA-256) through the box's key: cat config exits 10 on the empty folder, init,
+#   3. restic (the k8s_backup role's pin, checked against its SHA-256) through the box's ssh alias (-o sftp.args=-F, as its scripts do): cat config exits 10 on the empty folder, init,
 #      backup, a full restore equal to the source, dump of one file, and forget --prune.
 #   4. The user gets nothing but sftp in its chroot: no shell command runs, /etc/passwd can't be read, c1's repository folder can't be
 #      read (a canary file is there), a write outside /box is refused; the key is refused from another address; sshd's effective
@@ -102,8 +102,19 @@ grep -qF "from=\"$src\"" <(docker exec "$H" cat /etc/ssh/central-hub-restic/boxb
 
 # 3
 sshopt=(-i "$t/boxkey" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
-sftpcmd="ssh ${sshopt[*]} boxbackup@$host_ip -s sftp"
-rx() { RESTIC_PASSWORD=test-only-password RESTIC_CACHE_DIR="$t/cache" "$t/restic" -r "sftp:boxbackup@$host_ip:/box" -o "sftp.command=$sftpcmd" "$@"; }
+# The ssh config the box writes (dev-worker-address.sh box-key), with this machine's test values; restic reaches the repository through its
+# alias, as the box's two off-box scripts do (-o sftp.args=-F <config>).
+cat > "$t/ssh_config" <<CONF
+Host box-backup-target
+  HostName $host_ip
+  User boxbackup
+  IdentityFile $t/boxkey
+  IdentitiesOnly yes
+  BatchMode yes
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+CONF
+rx() { RESTIC_PASSWORD=test-only-password RESTIC_CACHE_DIR="$t/cache" "$t/restic" -r sftp:box-backup-target:/box -o "sftp.args=-F $t/ssh_config" "$@"; }
 mkdir -p "$t/src/a" && head -c 300000 /dev/urandom > "$t/src/a/blob" && echo canary-1 > "$t/src/canary"
 rc=0; rx cat config >/dev/null 2>&1 || rc=$?
 [ "$rc" = 10 ] && ok "3 cat config on the empty folder exits 10" || bad "3 cat config exited $rc, not 10"
