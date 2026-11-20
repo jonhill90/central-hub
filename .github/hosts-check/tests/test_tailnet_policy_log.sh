@@ -11,9 +11,9 @@ src=$root/hosts/ansible/roles/agent_box/files/tailnet-policy.sh
 t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
 fail=0
 check() { if [[ $2 == ok ]]; then echo "ok   $1"; else echo "FAIL $1"; fail=1; fi; }
-sed "s#^work=/var/lib/agent-box#work=$t#" "$src" > "$t/w.sh"
-mkdir -p "$t/logs/tailnet-policy"
-l=$t/logs/tailnet-policy
+sed "s#^work=.*#work=$t#" "$src" > "$t/w.sh"
+mkdir -p "$t/logs"
+l=$t/logs
 printf '%s\n' '{"stack": "tailnet-policy", "result": "FAIL: plan"}' > "$l/summary.jsonl"
 printf '%s\n' 'tofu: refreshing' 'rule 100.64.1.2 grants tcp:22' 'Error: Failed to fetch ACL' '' '  unexpected status 403 for 10.0.0.5 from alice@example.com on tail1234.ts.net' > "$l/run-20261118T000000Z.txt"
 out=$(bash "$t/w.sh" log 2>&1)
