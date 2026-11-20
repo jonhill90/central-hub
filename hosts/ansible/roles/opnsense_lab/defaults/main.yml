@@ -90,3 +90,14 @@ opnsense_lab_backup_target_sequences: [13, 14]
 # The rule's sequence number: ahead of the dev VLAN's own rules (90 and up with today's VLAN file) and clear of every
 # other rule the role numbers, the app access and backup target rules included; the role checks both.
 opnsense_lab_store_admin_sequence: 15
+
+# One pass rule from the agent box to the Proxmox host's web UI on 443 (tasks/proxmox_web.yml), so the scripted Proxmox
+# sign-in check reaches the web UI's name. Optional and private (addresses), from the inventory; unset = no such rule, and
+# one left from an earlier run is removed. Applying a change is a firewall change on the owner's go (D-0036 rule 8).
+# opnsense_lab_proxmox_web:
+#   vlan: 30                     # the box's VLAN tag (dev)
+#   source: <address>            # VM 258's dev address
+#   address: <address>           # the host's address on VNet mgmt (proxmox_host_mgmt_address)
+# The rule's sequence number: ahead of the dev VLAN's own rules (90 and up with today's VLAN file) and clear of every
+# other rule the role numbers; the role checks both.
+opnsense_lab_proxmox_web_sequence: 16

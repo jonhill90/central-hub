@@ -67,6 +67,10 @@
   ansible.builtin.import_tasks: store_admin.yml
   tags: [rules, store_admin]
 
+- name: Proxmox web rule
+  ansible.builtin.import_tasks: proxmox_web.yml
+  tags: [rules, proxmox_web]
+
 - name: DNS override
   ansible.builtin.import_tasks: dns.yml
   tags: [dns]
