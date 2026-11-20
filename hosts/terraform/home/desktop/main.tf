@@ -21,6 +21,12 @@ resource "proxmox_virtual_environment_vm" "desktop" {
   on_boot = true
   started = false
 
+  # started = false is only the state at creation. The provider shuts a running VM down on a later apply when `started` differs
+  # (bpg v0.116.0, vm.go), and the owner's desktop runs: so a later apply must not touch it.
+  lifecycle {
+    ignore_changes = [started]
+  }
+
   clone {
     vm_id = var.template_vm_id
     full  = true

@@ -2,6 +2,8 @@
 # The desktop VM (400) is built out of the host's same-page merging, because the owner types passwords into it (the reviewer's condition
 # on playbooks/proxmox-ksm.yml):
 #   1. Its tofu creates it stopped (started = false): the provider has no allow-ksm field, so the flag has to be set before its first start.
+#      A later apply must not shut a running desktop down (the provider does that when `started` differs), so the VM resource has
+#      lifecycle { ignore_changes = [started] }.
 #   2. `desktop apply` runs tofu apply, then keep_out_of_ksm_and_start, in that order.
 #   3. keep_out_of_ksm_and_start sets allow-ksm=0 through the API, then starts the VM; if the API refuses it, the VM stays stopped and
 #      the run stops with a message (no start).
@@ -19,6 +21,15 @@ if grep -qE '^[[:space:]]*started[[:space:]]*=[[:space:]]*false' "$root/hosts/te
    && ! grep -qE '^[[:space:]]*started[[:space:]]*=[[:space:]]*true' "$root/hosts/terraform/home/desktop/main.tf"; then
   ok "1. the desktop's tofu creates the VM stopped"
 else bad "1. main.tf does not say started = false"; fi
+
+if python3 -I - "$root/hosts/terraform/home/desktop/main.tf" <<'PY'
+import re, sys
+s = open(sys.argv[1]).read()
+m = re.search(r'resource "proxmox_virtual_environment_vm" "desktop" \{(.*)', s, re.S)
+body = m.group(1) if m else ""
+sys.exit(0 if re.search(r'lifecycle\s*\{[^}]*ignore_changes\s*=\s*\[[^\]]*\bstarted\b[^\]]*\]', body) else 1)
+PY
+then ok "1b. the desktop VM ignores later changes to started, so a second apply never shuts it down"; else bad "1b. no lifecycle ignore_changes = [started] on the desktop VM"; fi
 
 order=$(awk '/^    apply\)$/ {on=1; next} on && /^    destroy\)$/ {exit} on {print}' "$wrapper" | grep -oE 'tofu apply|keep_out_of_ksm_and_start' | tr '\n' ' ')
 if [[ $order == "tofu apply keep_out_of_ksm_and_start " ]]; then ok "2. apply runs tofu apply, then keep_out_of_ksm_and_start"; else bad "2. apply runs: $order"; fi
