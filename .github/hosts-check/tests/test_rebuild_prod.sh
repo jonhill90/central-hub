@@ -57,7 +57,7 @@ cat > "$t/bin/tofu" <<EOF
 #!/bin/bash
 echo "tofu \${*:2}" >> $t/calls
 case " \$* " in
-  *" init "*) exit 0 ;;
+  *" init "*) [ -z "\${TOFU_INIT_TEXT:-}" ] || echo "\$TOFU_INIT_TEXT"; exit \${TOFU_INIT_RC:-0} ;;
   *" apply "*) exit \${TOFU_APPLY_RC:-0} ;;
   *" show "*) cat \${TOFU_SHOW_FILE:-$t/destroy.json}; exit 0 ;;
   *" -destroy "*) for a in "\$@"; do case \$a in -out=*) : > "\${a#-out=}" ;; esac; done; exit 0 ;;
@@ -360,6 +360,24 @@ TOFU_APPLY_RC=1 run check; o12f=$out
 if [[ $o12f == *"FAIL: rebuild-prod: OpenTofu could not plan the teardown (rc 1)"* && $(grep -c -- '-destroy' "$t/calls") == 0 ]]; then
   ok "12f. a failed refresh-only apply fails the check and plans no destroy"
 else bad "12f. $o12f"; fi
+
+# 12g. A failed OpenTofu step prints fixed facts only (the output's line count and which phrases of a closed list it holds), never a
+# line of its own text. Each case carries a value that a mask would miss, or the token itself, and none may reach the output.
+leak_case() { # <label> <text> <secret...>: the secrets must not appear, the fixed facts must
+  local label=$1 text=$2 sec o good=1; shift 2
+  TOFU_INIT_RC=1 TOFU_INIT_TEXT=$text run check; o=$out
+  [[ $o == *"FAIL: rebuild-prod: OpenTofu init failed: "*"output line(s); phrases found: "* ]] || good=0
+  for sec in "$@"; do [[ $o != *"$sec"* ]] || good=0; done
+  if (( good )); then ok "12g. $label: only fixed facts are printed, no secret"; else bad "12g. $label: $o"; fi
+}
+leak_case "a broken env-file line holding the token" $'/keys/proxmox-lab.env: line 2: PVEAPIToken=tok-SECRET-1234: command not found' SECRET PVEAPIToken tok-
+leak_case "a one-dot hostname" $'dial failed for pve.invalid 192.0.2.10' pve.invalid 192.0.2.10
+leak_case "a dotless hostname" $'Error: cannot reach pvehost-private on 8006' pvehost-private
+leak_case "an IPv6 address" $'Failed to query 2001:db8::10 refused' 2001:db8
+TOFU_INIT_RC=1 TOFU_INIT_TEXT=$'one\nregistry thing\nPermission denied here' run check; o12h=$out
+if [[ $o12h == *"OpenTofu init failed: 3 output line(s); phrases found: Permission denied,registry"* ]]; then
+  ok "12h. the closed list names the phrases found, comma-separated, with the line count"
+else bad "12h. $o12h"; fi
 
 # 12b. The wrapper's PATH reaches `ip` (/usr/sbin on the box, where the route check reads the routing table): on the box the check
 # failed with "no route to the Proxmox API's address" because `ip` was not found.

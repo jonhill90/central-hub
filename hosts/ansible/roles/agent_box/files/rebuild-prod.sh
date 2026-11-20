@@ -366,6 +366,18 @@ tf=$repo/hosts/terraform/home/k8s
 # from, and a full destroy would delete both and download the image again. The address names the resource, not an instance
 # (an instance's key is a node's hostname), so it destroys every node VM and nothing else.
 teardown_target=proxmox_virtual_environment_vm.node
+# tf_note <output file>: what to print for a failed OpenTofu step. Fixed facts only, never the step's own text: the output's line
+# count and which phrases from a closed list it holds. Its text can carry a private value (a broken env-file line prints the token it
+# could not run, and masking cannot catch every address or hostname shape), so no line of it is ever printed.
+tf_note() {
+  local f=$1 n=0 hit=() p
+  [[ -r $f ]] || { printf 'output not readable'; return 0; }
+  n=$(grep -c '' "$f" 2>/dev/null || true)
+  for p in 'Permission denied' 'No such file' 'command not found' 'Failed to query' 'registry' 'Error'; do
+    if grep -q -F -- "$p" "$f" 2>/dev/null; then hit+=("$p"); fi
+  done
+  printf '%s output line(s); phrases found: %s' "${n:-0}" "$( (IFS=,; printf '%s' "${hit[*]:-none}") )"
+}
 # shellcheck source=/dev/null
 tofu_k8s() { (set -a; . "$tofu_env"; set +a; tofu -chdir="$tf" "$@"); }
 if [[ -s $tofu_env && -s $tfstate && -s $tfvars_src ]] && command -v tofu >/dev/null; then
@@ -407,7 +419,7 @@ print("SUMMARY real=%d moves=%d" % (real, moves))
            fail "OpenTofu plans changes with the Mac's tfvars: the box's state or tfvars differ from the live prod; copy the controller's files again"
            grep -v '^SUMMARY' <<< "$plan_view" || true
          fi ;;
-      *) fail "OpenTofu plan failed (rc $rc): $(grep -m1 -E 'Error' "$envdir/tofu-plan.out" | cut -c1-160)" ;;
+      *) fail "OpenTofu plan failed (rc $rc): $(tf_note "$envdir/tofu-plan.out")" ;;
     esac
     # A targeted destroy refuses a state that still holds resources the code has moved ("Moved resource instances excluded by
     # targeting"), so the plan is made on a COPY of the state that has had the moves written by a refresh-only apply (state
@@ -440,11 +452,11 @@ print("a teardown destroys only VMs " + " ".join(str(i) for i in sorted(ids)))
 PY
 )" "$envdir/destroy.json" "$vm_min" "$vm_max" "${nodes_declared:-0}"); then pass "$out"; else fail "$out"; fi
     else
-      fail "OpenTofu could not plan the teardown (rc $rc): $(grep -m1 -E 'Error' "$envdir/tofu-destroy.out" | cut -c1-160)"
+      fail "OpenTofu could not plan the teardown (rc $rc): $(tf_note "$envdir/tofu-destroy.out")"
     fi
     rm -f -- "$envdir/destroy.plan" "$envdir/destroy.json" "$envdir/tofu-plan.bin"
   else
-    fail "OpenTofu init failed: $(grep -m1 -E 'Error' "$envdir/tofu-init.out" | cut -c1-160)"
+    fail "OpenTofu init failed: $(tf_note "$envdir/tofu-init.out")"
   fi
 fi
 
