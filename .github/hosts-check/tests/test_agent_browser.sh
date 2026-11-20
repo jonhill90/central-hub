@@ -1,7 +1,7 @@
 #!/bin/bash
 # agent-browser's argument checks, run with no browser: a bad call exits 2 with the usage line, `status` and `stop` with
 # nothing running say so, and the role installs the script and its front wrapper. The browser itself (start, open, shot,
-# a sign-in kept across a restart, the timer) was run by hand with Playwright 1.64.1 on 2026-11-20 (agent-notebook RB-0286).
+# a sign-in kept across a restart, the timer) was run by hand with Playwright 1.64.1 on 2026-11-20.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 script=hosts/ansible/roles/agent_box/files/agent-browser.py

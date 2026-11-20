@@ -13,7 +13,7 @@ full headless mode, because AlmaLinux 10 ships no X server (no Xvfb or Xvnc in B
 2026-11-20). Its DevTools port is bound to 127.0.0.1 only, so a session drives the browser with Playwright's
 connect_over_cdp, or Playwright MCP with --cdp-endpoint, and a person watches or takes over through DevTools' own page
 view (http://127.0.0.1:9222 through an SSH tunnel). The browser stops by itself after N minutes, so it never holds
-memory that a dev rebuild needs. Design: agent-notebook RB-0286.
+memory that a dev rebuild needs.
 """
 import json
 import os
