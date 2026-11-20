@@ -42,6 +42,7 @@ cat > "$t/bin/ansible-playbook" <<EOF
 #!/bin/sh
 echo "\$*" >> "$t/calls"
 case " \$* " in *" --check "*) cat "$t/out-check.json" ;; *) cat "$t/out-apply.json" ;; esac
+exit \$(cat "$t/rc" 2>/dev/null || echo 0)
 EOF
 chmod +x "$t/bin/ansible-playbook"
 # json <after text> <header> <changed task> <skipped task> <extra changed task, or none>
@@ -261,5 +262,33 @@ for g in arm confirm rollback clear status; do
   [[ $c == *playbooks/opnsense-guard.yml* && $c == *"opnsense_guard_action=$g"* && $c != *--check* && $(wc -l < "$t/calls") -eq 1 ]] || { ok14=0; echo "  guard $g ran [$c]"; }
 done
 [ $ok14 = 1 ] && ok "14 guard runs opnsense-guard.yml once with its action, no ledger; other guard actions are refused" || bad "14 guard"
+
+# 15 a failed check names the failed task and prints no private text from its message
+python3 - > "$t/out-check.json" <<'PY'
+import json
+t = lambda n, **r: {"task": {"name": n}, "hosts": {"proxmox_host": r}}
+print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [t("read state", changed=False),
+      t("Check the host firewall values", failed=True, msg="no 192.0.2.10 secret-name.example")]}], "stats": {}}))
+PY
+echo 2 > "$t/rc"
+job check > "$t/15.out" 2>&1; rc15=$?
+rm -f "$t/rc"
+if [ $rc15 != 0 ] && grep -q 'failed task(s): Check the host firewall values' "$t/15.out" && ! grep -q '192.0.2.10\|secret-name' "$t/15.out"; then
+  ok "15 a failed check names the failed task and no private text"
+else bad "15 rc=$rc15 $(cat "$t/15.out")"; fi
+
+# 16 the guests job runs proxmox-guests.yml and prints which guests the changed tasks name, nothing else
+python3 - > "$t/out-check.json" <<'PY'
+import json
+t = lambda n, **r: {"task": {"name": n}, "hosts": {"proxmox_host": r}}
+print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [t("guests | Look for the container 259 config", changed=False),
+      t("guests | EXISTS container 259", changed=True), t("guests | EXISTS VM 258", changed=False)]}], "stats": {}}))
+PY
+: > "$t/calls"
+job check guests > "$t/16.out" 2>&1; rc16=$?
+c16=$(cat "$t/calls")
+if [ $rc16 = 0 ] && [[ $c16 == *playbooks/proxmox-guests.yml* ]] && grep -qx 'proxmox-host: guests found: container 259' "$t/16.out"; then
+  ok "16 the guests job runs proxmox-guests.yml and prints the guest that exists"
+else bad "16 rc=$rc16 [$c16] $(cat "$t/16.out")"; fi
 
 exit "$fail"

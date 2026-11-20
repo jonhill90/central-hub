@@ -11,8 +11,9 @@
 #   proxmox-agent-access.yml: it copies hosts/terraform/home/bootstrap/agent-access.sh from the same commit to the host and
 #   runs it as root, so the agents' Proxmox rights change by a reviewed PR and no longer need the Mac) or `firewall`
 #   (playbooks/proxmox-firewall.yml, proxmox-safety.yml's firewall role alone: the host firewall, with the role's dead-man timer and its
-#   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller) or
-#   `restore-reader` (playbooks/proxmox-restic-reader.yml: the proxmox_restic_sftp role's read-only user `c1restore` and the keys
+#   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller),
+#   `guests` (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell)
+#   or `restore-reader` (playbooks/proxmox-restic-reader.yml: the proxmox_restic_sftp role's read-only user `c1restore` and the keys
 #   that sign in as it, one per dev worker, each only from its own address; the list is in this job's inventory, written by the
 #   controller. An access right, and the only one this job can grant: no write, no shell, no root).
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh log
@@ -54,7 +55,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [restore-reader]=playbooks/proxmox-restic-reader.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -63,7 +64,7 @@ result=$work/state/check.json
 ledger=$work/ledger
 usage() {
   echo "       proxmox-host guard arm|confirm|rollback|clear|status" >&2
-  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|restore-reader]|apply [proxy|agent-access|sso|firewall|restore-reader] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
+  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|restore-reader]|apply [proxy|agent-access|sso|firewall|guests|restore-reader] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
   echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
   exit 2
 }
@@ -262,6 +263,22 @@ for line in open(path):
 PY
 }
 
+# failed_tasks <json output>: the names of the tasks that failed or could not reach the host, for a session to read. Names
+# come from the reviewed code; a task's message can hold private values, so it stays in the box's log (same as opnsense-prod.sh).
+failed_tasks() {
+  python3 -I - "$1" <<'PY' 2>/dev/null || echo "no readable result"
+import json, sys
+data = json.load(open(sys.argv[1]))
+names = []
+for play in data.get("plays", []):
+    for t in play.get("tasks", []):
+        for r in t.get("hosts", {}).values():
+            if (r.get("failed") or r.get("unreachable")) and t["task"]["name"] not in names:
+                names.append(t["task"]["name"])
+print("; ".join(names) or "none (the run stopped before a task: see the box's log)")
+PY
+}
+
 do_check() { # prints the hash line; returns non-zero if the check run failed
   local out=$logs/check-$stamp.json
   if ! play "$out" --check --diff; then
@@ -274,16 +291,24 @@ case $action in
   check)
     rm -f "$result"
     if ! line=$(do_check); then
-      record none none "FAIL: check"; echo "proxmox-host: FAIL: check (details in the box's log $logs/check-$stamp.json)" >&2; exit 1
+      record none none "FAIL: check"; echo "proxmox-host: FAIL: check; failed task(s): $(failed_tasks "$logs/check-$stamp.json") (details in the box's log $logs/check-$stamp.json)" >&2; exit 1
     fi
     read -r hash changed skipped total <<< "$line"
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok
     echo "proxmox-host: check $hash: $changed changed, $skipped skipped, $total tasks"
     echo "proxmox-host: the agents' pass for an apply names this commit (${commit:0:12}) and this hash ($hash)"
+    if [[ $job == guests ]]; then
+      # The read-only job's answer: its tasks that show as changed name a guest that exists (names come from the reviewed playbook).
+      python3 -I - "$result" <<'PY'
+import json, sys
+t = json.load(open(sys.argv[1]))["tasks"]
+print("proxmox-host: guests found: " + ("; ".join(x["name"].split("EXISTS ", 1)[1] for x in t if x["changed"] and "EXISTS " in x["name"]) or "none of the two named"))
+PY
+    fi
     ;;
   apply | apply-recorded)
     if ! line=$(do_check); then
-      record none none "FAIL: re-check"; echo "proxmox-host: FAIL: the re-check before the apply failed; nothing applied" >&2; exit 1
+      record none none "FAIL: re-check"; echo "proxmox-host: FAIL: the re-check before the apply failed; nothing applied; failed task(s): $(failed_tasks "$logs/check-$stamp.json")" >&2; exit 1
     fi
     read -r hash changed skipped total <<< "$line"
     if [[ $hash != "$want" ]]; then
