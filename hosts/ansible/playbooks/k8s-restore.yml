@@ -81,7 +81,9 @@
     # With a proxmox group (the controller's inventory): its address, and its key read by the host play. Without one (the agent
     # box's copy, which holds no key on the host): the address the box passes as k8s_backup_sftp_seed_address, and the host
     # key from the known_hosts carried off this node before the teardown (<seed dir>/<node>.known_hosts: "<alias> ssh-ed25519 AAAA...").
-    k8s_backup_sftp_address: "{{ hostvars[k8s_backup_sftp_proxmox].proxmox_host_mgmt_address | default('') if k8s_backup_sftp_proxmox else (k8s_backup_sftp_seed_address | default('')) }}"
+    k8s_backup_sftp_address: >-
+      {{ hostvars[k8s_backup_sftp_proxmox].proxmox_host_mgmt_address | default('') if k8s_backup_sftp_proxmox else
+         (k8s_backup_sftp_seed_address | default('')) }}
     k8s_backup_sftp_host_key: >-
       {{ hostvars[k8s_backup_sftp_proxmox].proxmox_restic_sftp_host_key | default('') if k8s_backup_sftp_proxmox else
          ((query('ansible.builtin.file', k8s_backup_sftp_seed_dir ~ '/' ~ inventory_hostname ~ '.known_hosts', errors='ignore')

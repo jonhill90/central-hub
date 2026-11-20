@@ -25,7 +25,7 @@ cat > "$t/play.yml" <<Y
   tasks:
     - ansible.builtin.include_role: { name: k8s_backup, tasks_from: sftp_key }
 Y
-play() { ANSIBLE_ROLES_PATH="$t/roles" ANSIBLE_LOCALHOST_WARNING=false ansible-playbook -i localhost, "$t/play.yml" "$@" >"$t/out" 2>&1 || true; }
+play() { ANSIBLE_ROLES_PATH="$t/roles" ANSIBLE_LOCALHOST_WARNING=false ansible-playbook -i localhost, "$t/play.yml" >"$t/out" 2>&1 || true; }
 # On a copy: owner and group need root, so a non-root run drops them.
 sed -i '/^    owner: root$/d;/^    group: root$/d' "$t/roles/k8s_backup/tasks/sftp_key.yml"
 

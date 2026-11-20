@@ -51,8 +51,16 @@ argument_specs:
           it in, and the node env file gets RESTIC_REPOSITORY=sftp:<alias>:/<repo>. Not with k8s_backup_azure_identity.
       k8s_backup_sftp_address: {type: str, default: "", description: "The host's address on VNet mgmt; the playbook passes proxmox_host_mgmt_address. Private."}
       k8s_backup_sftp_host_key: {type: str, default: "", description: "The host's ssh-ed25519 public key; the playbook reads it from the host."}
-      k8s_backup_sftp_seed_dir: {type: str, default: "", description: "A folder holding <node>.key and <node>.pub carried off each node before a teardown; a rebuilt node gets its old key back instead of making a new one."}
-      k8s_backup_sftp_seed_address: {type: str, default: "", description: "The host's address on VNet mgmt for an inventory with no proxmox group (the agent box's copy). Private."}
+      k8s_backup_sftp_seed_dir:
+        type: str
+        default: ""
+        description: >-
+          A folder holding <node>.key and <node>.pub carried off each node before a teardown; a rebuilt node gets its old key back instead of making a new one.
+      k8s_backup_sftp_seed_address:
+        type: str
+        default: ""
+        description: >-
+          The host's address on VNet mgmt for an inventory with no proxmox group (the agent box's copy). Private.
       k8s_backup_sftp_alias: {type: str, default: c1-backup-target, description: "The ssh alias RESTIC_REPOSITORY names."}
       k8s_backup_sftp_repo: {type: str, default: c1, description: "The repository's folder inside the host's chroot."}
       k8s_backup_sftp_user: {type: str, default: "c1backup, or c1restore in reader mode", description: "The host user the node signs in as."}
