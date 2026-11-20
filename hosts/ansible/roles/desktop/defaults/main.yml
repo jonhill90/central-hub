@@ -55,3 +55,11 @@ desktop_trust_check_apps: [grafana, argocd, sso, jellyfin, ntfy]
 desktop_trust_check_names: >-
   {{ desktop_trust_check_apps | map('regex_replace', '$', '.' ~ desktop_trust_check_zone) | list
   if (desktop_trust_check_reach | bool) and desktop_trust_check_zone | length > 0 else [] }}
+
+# A test build (`desktop configure-test` on the box): the box made the two passwords, so no one types them at the
+# console, and RDP is also accepted from the extra addresses (the box's own), so `desktop rdp-check` can prove the
+# service from the box. false (the default) is the owner's build: the owner types both passwords at the console.
+desktop_test_login: false
+desktop_test_login_password: ""
+desktop_test_rdp_password: ""
+desktop_rdp_extra_sources: []

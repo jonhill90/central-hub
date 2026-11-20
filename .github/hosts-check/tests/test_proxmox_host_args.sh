@@ -125,6 +125,7 @@ tail -n 1 "$t/work/logs/summary.jsonl" | grep -q '"pass": "cmsg_0123456789ab"' &
 json "new" "/tmp/a" "write config" "move" "restart something" > "$t/out-apply.json"
 job apply cmsg_0123456789ab "$h7" > "$t/8.out" 2>&1 && bad "8 apply passed with an undeclared change"
 grep -q "changed 1 task(s) that check $h7 did not show" "$t/8.out" && ok "8 an undeclared change fails the run" || bad "8 $(cat "$t/8.out")"
+grep -q "unlisted task: restart something" "$t/8.out" && ok "8 the run names the unlisted task" || bad "8 no name: $(cat "$t/8.out")"
 json "new" "/tmp/a" "write config" "move" none > "$t/out-apply.json"
 python3 - "$t/out-apply.json" <<'PY'
 import json, sys

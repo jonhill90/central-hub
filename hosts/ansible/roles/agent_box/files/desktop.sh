@@ -4,6 +4,12 @@
 # asks for it never sees the Proxmox token or the VM's SSH key. Installed by the agent_box role;
 # root owns it.
 #   sudo -n -u keys /usr/local/libexec/agent-box/desktop.sh plan|apply|configure|destroy
+#   sudo -n -u keys /usr/local/libexec/agent-box/desktop.sh configure-test|start|stop|status|rdp-check
+# configure-test is configure for a VM that is a test build: the box makes two random passwords (login and
+# RDP, kept in the keys folder, never printed), the role sets them without the console and lets RDP in from
+# the box's own address too, so rdp-check can prove the RDP service from the box. The owner's own desktop is a
+# rebuild with plain configure afterwards (the owner types the passwords at the console). start and status
+# read and power VM 400 with the dev token (VM.Audit, VM.PowerMgmt); rdp-check speaks RDP to the VM's port 3389.
 # plan, apply, destroy: OpenTofu on hosts/terraform/home/desktop with the agents' Proxmox token.
 # configure: the desktop playbook over SSH as the cloud-init admin user. The role removes that
 # user's key at the end of its run, so a second configure on the same VM can't log in: a change is a
@@ -13,8 +19,8 @@ set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | destroy) action=$1 ;;
-  *) echo "usage: desktop plan|apply|configure|destroy" >&2; exit 2 ;;
+  plan | apply | configure | destroy | configure-test | start | stop | status | rdp-check) action=$1 ;;
+  *) echo "usage: desktop plan|apply|configure|destroy|configure-test|start|stop|status|rdp-check" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -94,6 +100,8 @@ PY
       tofu apply -input=false "$plan"
       rm -f "$plan"
       forget_host_key
+      rm -f "$keys/desktop-test-login"
+      echo "desktop: the test login file is deleted"
       ;;
   esac
 }
@@ -112,8 +120,8 @@ configure() {
   # Read from the prod inventory the controller's prod-files run copies here (c1-ansible reads the same file), so no
   # new private value is needed. Never printed.
   [[ -s $prodinv ]] || { echo "desktop: $prodinv is missing; the desktop's check of the apps' names needs the lab's zone (install the prod keys first)" >&2; exit 1; }
-  python3 -I - "$settings" "$inventory" "$extra" "$labchain" "$prodinv" <<'PY'
-import json, sys, yaml
+  python3 -I - "$settings" "$inventory" "$extra" "$labchain" "$prodinv" "${test_login:-}" "$keys/desktop-test-login" <<'PY'
+import json, os, sys, yaml
 s = json.load(open(sys.argv[1]))
 admin = s.get("admin_user", "admin")
 zones = set()
@@ -136,7 +144,23 @@ json.dump({"desktop_rdp_source": s["rdp_source"], "desktop_admin_user": admin,
            "k8s_node_trust_enabled": True, "k8s_node_trust_chain_file": sys.argv[4],
            "desktop_trust_check_zone": zones.pop()},
           open(sys.argv[3], "w"))
+if sys.argv[6]:
+    # A test build: two random passwords, kept in the keys folder (0600, the keys user's) and never printed.
+    import secrets, socket
+    login, rdp = secrets.token_urlsafe(24), secrets.token_urlsafe(24)
+    fd = os.open(sys.argv[7], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"login_password": login, "rdp_password": rdp}, f)
+    u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); u.connect((s["address"], 3389))
+    extra = json.load(open(sys.argv[3]))
+    extra.update({"desktop_test_login": True, "desktop_test_login_password": login,
+                  "desktop_test_rdp_password": rdp, "desktop_rdp_extra_sources": [u.getsockname()[0] + "/32"]})
+    fd = os.open(sys.argv[3], os.O_WRONLY | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(extra, f)
 PY
+  # A plain configure is the owner's build: the test passwords of an earlier test build are not kept.
+  [[ -n ${test_login:-} ]] || { rm -f "$keys/desktop-test-login"; echo "desktop: the test login file is deleted"; }
   mkdir -p "$work/.ssh"
   cd "$repo/hosts/ansible"
   # A rebuilt VM has a new host key: `desktop destroy` drops the old one (forget_host_key), so the
@@ -145,7 +169,66 @@ PY
     ansible-playbook -i "$inventory" --private-key "$sshkey" -e "@$extra" playbooks/desktop.yml
 }
 
+# One call to the Proxmox API with the dev token (header on stdin, never in curl's arguments).
+px_api() { # method path
+  (set -a; . "$keys/proxmox-dev.env"; set +a
+    insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
+      curl -sS --fail --max-time 30 "${insecure[@]}" -K - -X "$1" "${PROXMOX_VE_ENDPOINT%/}/api2/json/$2")
+}
+setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
+
+vm_power() { # status|start
+  local node vmid cur free need
+  node=$(setting proxmox_node_name); vmid=$(setting vm_id)
+  cur=$(px_api GET "nodes/$node/qemu/$vmid/status/current" | python3 -I -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(d["status"], d.get("maxmem",0)//1048576)')
+  echo "desktop: VM $vmid is ${cur% *} (memory ${cur#* } MiB)"
+  if [[ $1 == stop ]]; then
+    [[ ${cur% *} == running ]] || return 0
+    px_api POST "nodes/$node/qemu/$vmid/status/shutdown" >/dev/null && echo "desktop: shutdown requested, the VM's memory is freed once it stops"
+    return 0
+  fi
+  [[ $1 == start && ${cur% *} != running ]] || return 0
+  need=$(( ${cur#* } + 512 ))
+  free=$(px_api GET "nodes/$node/status" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["data"]["memory"]["available"]//1048576)')
+  (( free >= need )) || { echo "desktop: not started, the node has $free MiB available and the VM needs $need MiB" >&2; exit 1; }
+  px_api POST "nodes/$node/qemu/$vmid/status/start" >/dev/null && echo "desktop: start requested ($free MiB available)"
+}
+
+# Speaks RDP to the VM's port 3389 and prints what answers: the X.224 negotiation (the protocol the server
+# picks), then the TLS handshake and the certificate's subject. It sends no password, so it proves the remote
+# desktop service answers from this box, not that a login works.
+rdp_check() {
+  python3 -I - "$(setting address)" <<'PY'
+import socket, ssl, struct, sys
+host = sys.argv[1]
+req = b"Cookie: mstshash=probe\r\n"
+neg = struct.pack("<BBHI", 1, 0, 8, 3)   # RDP_NEG_REQ: TLS (1) and CredSSP/NLA (2)
+x224 = bytes([6 + len(req) + len(neg), 0xE0, 0, 0, 0, 0, 0]) + req + neg
+pkt = struct.pack(">BBH", 3, 0, 4 + len(x224)) + x224
+try:
+    s = socket.create_connection((host, 3389), timeout=10)
+except OSError as e:
+    sys.exit("desktop rdp-check: port 3389 did not answer: %s" % e)
+s.sendall(pkt)
+r = s.recv(512)
+if len(r) < 19 or r[5] != 0xD0 or r[11] != 2:
+    sys.exit("desktop rdp-check: not an RDP connection confirm: %r" % r[:32])
+proto = struct.unpack("<I", r[15:19])[0]
+names = {1: "TLS", 2: "CredSSP (NLA)", 3: "TLS and CredSSP"}
+print("desktop rdp-check: X.224 connection confirm, the server picked %s" % names.get(proto, proto))
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+t = ctx.wrap_socket(s)
+der = t.getpeercert(True)
+print("desktop rdp-check: TLS handshake done (%s), certificate %d bytes" % (t.version(), len(der)))
+print("desktop rdp-check: RDP service answers; no login was tried")
+PY
+}
+
 case $action in
   configure) configure ;;
+  configure-test) test_login=1 configure ;;
+  status | start | stop) vm_power "$action" ;;
+  rdp-check) rdp_check ;;
   *) tofu_run ;;
 esac
