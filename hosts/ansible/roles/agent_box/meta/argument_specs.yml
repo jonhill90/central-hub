@@ -109,6 +109,10 @@ argument_specs:
         type: str
         default: "1:1.1.5-6.el10_2"
         description: The nftables package version (epoch:version-release) installed only if the package is missing.
+      agent_box_browser_cdp_port:
+        type: int
+        default: 9222
+        description: agent-browser's DevTools port on 127.0.0.1. A packet filter lets only agent_box_user's sockets connect to it.
       agent_box_nft_bin:
         type: path
         default: /usr/sbin/nft

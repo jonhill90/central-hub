@@ -34,5 +34,29 @@ grep -q 'dest: "{{ agent_box_front_dir }}/agent-browser"' "$tasks" && ok "role p
 grep -q -- '--remote-debugging-address=127.0.0.1' "$script" && ok "DevTools bound to 127.0.0.1" \
   || bad "DevTools is not bound to 127.0.0.1"
 
+# The DevTools port filter: rendered from the role's template with a test user, the session user connects and
+# another user is reset. Without the filter the other user connects, which the last step shows. The live part needs
+# root and nftables (a container without them runs only the render check).
+nftt=hosts/ansible/roles/agent_box/templates/agent-browser.nft.j2
+sed -e 's/{{ agent_box_browser_cdp_port }}/9222/; s/{{ agent_box_user }}/ab-session/' "$nftt" > "$t/ab.nft"
+grep -q 'oifname "lo" tcp dport 9222 meta skuid != "ab-session" reject' "$t/ab.nft" \
+  && ok "filter resets other users' connections to the DevTools port" || bad "filter rule missing from $nftt"
+grep -q 'src: agent-browser.nft.j2' "$tasks" && grep -q 'agent-browser-nft.service' "$tasks" \
+  && ok "role installs the filter and its unit" || bad "role does not install the DevTools port filter"
+if [ "$(id -u)" = 0 ] && command -v nft >/dev/null && nft list tables >/dev/null 2>&1 && command -v curl >/dev/null; then
+  for u in ab-session ab-other; do id "$u" >/dev/null 2>&1 || useradd -M -s /bin/bash "$u"; done
+  python3 -m http.server 9222 --bind 127.0.0.1 >/dev/null 2>&1 & srv=$!; sleep 1
+  as() { su -s /bin/bash "$1" -c 'curl -s -o /dev/null -w "%{http_code}" --max-time 3 http://127.0.0.1:9222/' || true; }
+  nft -f "$t/ab.nft"
+  [ "$(as ab-session)" = 200 ] && ok "session user reaches the port" || bad "session user is blocked"
+  [ "$(as ab-other)" != 200 ] && ok "another user is reset" || bad "another user reached the port through the filter"
+  nft delete table inet agent_browser
+  [ "$(as ab-other)" = 200 ] && ok "without the filter another user connects (the check above is real)" \
+    || bad "the port answered no one without the filter, so the test proves nothing"
+  kill "$srv"
+else
+  echo "skip live filter test: needs root and nftables"
+fi
+
 echo "$fails failed"
 [ "$fails" -eq 0 ]
