@@ -137,5 +137,45 @@ t = [x for x in yaml.safe_load(open(sys.argv[1])) if x.get("name") == "desktop |
 assert t["retries"] >= 3 and "until" in t
 PY
 
+# gdm is started on every build, queued behind the console password prompt (tty1), without blocking the run (2026-11-20).
+python3 -I - "$here/hosts/ansible/roles/desktop/tasks/main.yml" <<'PY' && echo "ok   gdm starts after the console prompt, without blocking" || { echo "FAIL: gdm start or its ordering is missing"; fails=$((fails + 1)); }
+import sys, yaml
+tasks = yaml.safe_load(open(sys.argv[1]))
+byname = {x["name"]: x for x in tasks}
+t = byname["desktop | gdm is started"]
+assert t["ansible.builtin.systemd_service"] == {"name": "gdm.service", "state": "started", "daemon_reload": True, "no_block": True} and "when" not in t
+d = byname["desktop | gdm starts after the console password prompt"]["ansible.builtin.copy"]
+assert "After=desktop-set-password.service" in d["content"] and d["dest"].startswith("/etc/systemd/system/gdm.service.d/")
+names = [x["name"] for x in tasks]
+assert names.index("desktop | The console prompt starts now") < names.index("desktop | gdm is started")
+PY
+
+# The prompt's ExecStartPost starts gdm, not getty@tty1 (gdm conflicts with it, so a getty start would cancel gdm's queued
+# start), and a test build feeds throwaway passwords to the real prompt unit on stdin (2026-11-20, reviewer on #795).
+tpl=$here/hosts/ansible/roles/desktop/templates/desktop-set-password.service.j2
+if grep -q '^ExecStartPost=/usr/bin/systemctl --no-block start gdm.service$' "$tpl" && ! grep -q '^ExecStartPost=.*getty' "$tpl"; then
+  echo "ok   the prompt's ExecStartPost starts gdm, not the getty"
+else echo "FAIL: the prompt's ExecStartPost"; fails=$((fails + 1)); fi
+python3 -I - "$here/hosts/ansible/roles/desktop/tasks/main.yml" <<'PY' && echo "ok   a test build runs the real prompt on throwaway passwords" || { echo "FAIL: the test build's prompt feed"; fails=$((fails + 1)); }
+import sys, yaml
+tasks = yaml.safe_load(open(sys.argv[1]))
+by = {x["name"]: x for x in tasks}
+f = by["desktop | Test build, the throwaway passwords are fed to the console prompt"]["ansible.builtin.copy"]
+assert f["dest"] == "/run/desktop-test-passwords" and f["mode"] == "0600" and f["content"].count("\n") == 4
+assert "desktop_marker.stat.exists" in by["desktop | Test build, the throwaway passwords are fed to the console prompt"]["when"]
+assert by["desktop | Test build, the throwaway passwords are fed to the console prompt"]["no_log"] is True
+d = by["desktop | Test build, the console prompt reads them"]["ansible.builtin.copy"]
+assert "StandardInput=file:/run/desktop-test-passwords" in d["content"] and "ExecStartPost=/usr/bin/rm -f /run/desktop-test-passwords" in d["content"]
+assert "ExecStopPost=/usr/bin/rm -f /run/desktop-test-passwords" in d["content"]
+r = by["desktop | Not a test build, the test drop-in and the feed file are removed"]
+assert r["ansible.builtin.file"]["state"] == "absent" and "10-test-passwords.conf" in " ".join(r["loop"]) and "desktop_test_login" in r["when"]
+assert by["desktop | The feed file is absent when the prompt will not run"]["ansible.builtin.file"]["state"] == "absent"
+names = [x["name"] for x in tasks]
+assert names.index("desktop | Not a test build, the test drop-in and the feed file are removed") < names.index("desktop | The units are enabled") < names.index("desktop | The console prompt starts now")
+# no task sets the passwords or the marker for the test build behind the prompt's back
+assert names.index("desktop | The password marker is looked up") < names.index("desktop | Test build, the throwaway passwords are fed to the console prompt")
+assert not [n for n in names if n in ("desktop | Test build, the password marker is written", "desktop | Test build, the login password is set from the box")]
+PY
+
 if [[ $fails -gt 0 ]]; then echo "desktop configure vars: $fails test(s) failed"; exit 1; fi
 echo "desktop configure vars: all tests passed"
