@@ -1,0 +1,25 @@
+---
+# The guard jobs (D-0063): their own user and folders. Everything here is a box limit (D-0036 rule 3 (c) and (d)).
+# The role writes no key here; guard_files.yml copies them from the controller.
+
+- name: guard_job | The jobs' user, a system user that can't log in and has no other groups
+  ansible.builtin.user:
+    name: "{{ agent_box_guard_user }}"
+    system: true
+    shell: /sbin/nologin
+    home: "{{ agent_box_guard_work_dir }}"
+    create_home: false
+    groups: ""
+    append: false
+
+- name: guard_job | Its key folder and its work folder, its own only
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ agent_box_guard_user }}"
+    group: "{{ agent_box_guard_user }}"
+    mode: "0700"
+  loop:
+    - "{{ agent_box_guard_dir }}"
+    - "{{ agent_box_guard_dir }}/inventory"
+    - "{{ agent_box_guard_work_dir }}"

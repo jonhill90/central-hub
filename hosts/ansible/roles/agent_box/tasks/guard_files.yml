@@ -1,0 +1,38 @@
+---
+# Copy the controller's guard files onto the agent box, into {{ agent_box_guard_dir }} (owner {{ agent_box_guard_user }},
+# files 0600), so the firewall and tailnet-policy jobs run with no Mac in the loop (D-0063 rule 1). A run from the
+# controller only (tag guard_files, which self-applies skip), and only when agent_box_copy_guard_files is true. A file
+# the controller lacks is skipped and named; no content is ever printed (no_log).
+
+- name: guard_files | Name the controller's folders
+  ansible.builtin.set_fact:
+    agent_box_gf_clone: "{{ agent_box_prod_files_clone if agent_box_prod_files_clone | length > 0 else playbook_dir ~ '/../../..' }}"
+    agent_box_gf_config: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/central-hub"
+
+- name: guard_files | Look for each file on the controller
+  ansible.builtin.stat:
+    path: "{{ agent_box_gf_clone if item.from == 'clone' else agent_box_gf_config }}/{{ item.path }}"
+  delegate_to: localhost
+  become: false
+  loop: "{{ agent_box_guard_files }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  register: agent_box_gf_stats
+
+- name: guard_files | Copy the files that exist
+  ansible.builtin.copy:
+    src: "{{ item.stat.path }}"
+    dest: "{{ agent_box_guard_dir }}/{{ item.item.dest }}"
+    owner: "{{ agent_box_guard_user }}"
+    group: "{{ agent_box_guard_user }}"
+    mode: "0600"
+  loop: "{{ agent_box_gf_stats.results | selectattr('stat.exists') | list }}"
+  loop_control:
+    label: "{{ agent_box_guard_dir }}/{{ item.item.dest }}"
+  no_log: true
+
+- name: guard_files | Say which files were copied and which were missing (names only)
+  ansible.builtin.debug:
+    msg:
+      copied: "{{ agent_box_gf_stats.results | selectattr('stat.exists') | map(attribute='item.dest') | list }}"
+      missing: "{{ agent_box_gf_stats.results | rejectattr('stat.exists') | map(attribute='item.dest') | list }}"

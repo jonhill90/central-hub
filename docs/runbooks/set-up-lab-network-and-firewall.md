@@ -201,6 +201,17 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
    expect: the run ends with the timer cancelled; then set `proxmox_firewall_enable: true` in the inventory. Prove one backup by hand: `vzdump 900 --storage hdd-backup --mode snapshot --compress zstd`, then `pvesm list hdd-backup`.
    note: the CT 900 probe expects the tailnet client to run in CT 900. On a fresh build, run [Install the tailnet client in CT 900](set-up-tailnet-client-in-ct-900.md) first.
 
+## A firewall change from the agent box
+
+Built by [D-0063](../decisions/0063-let-the-agent-box-hold-the-keys-that-guard-it.md); not run on the box yet, because the guard files are not there until the owner's go for the copy. Once a controller run with `--tags guard_files -e agent_box_copy_guard_files=true` has put them in `/etc/agent-keys-guard/` (owner `guardops`), a change to the firewall's code in `playbooks/opnsense.yml` or the `opnsense_lab` role applies from the box with no Mac step:
+
+1. Merge the change to `main` (reviewed, green).
+2. `sudo -n -u guardops /usr/local/libexec/agent-box/opnsense-prod.sh check`. It prints `check <hash>: N changed, N skipped, N tasks` and the commit.
+3. The reviewer records its pass: `opnsense-prod.sh pass <commit> <hash> <pass message ID> <ISO time> reviewer`. The orchestrator records the go: `opnsense-prod.sh go <commit> <go message ID> <ISO time> orchestrator`, where the message ID is the owner's standing go (D-0061 rule 3).
+4. `opnsense-prod.sh apply-recorded <hash>`. It re-checks main's head and refuses, naming what is missing, unless the hash matches and the ledger holds the pass and an unused go.
+
+expect: `applied check <hash> (...)`, and a line in `opnsense-prod.sh log`. The playbook has no rollback of its own: if an apply cuts the box off, use the box's lifeline and the daily configuration backup ([Give the agent box a lifeline](set-up-the-box-lifeline.md)).
+
 ## If it fails
 
 - A `tofu apply` that fails part way: run `tofu plan` again and read it; each folder has its own state, so the others are untouched. `tofu destroy` in that folder removes only what it made.
