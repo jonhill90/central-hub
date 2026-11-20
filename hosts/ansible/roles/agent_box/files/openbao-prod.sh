@@ -155,7 +155,7 @@ DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args",
         "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file", "k8s_gitops_source_openbao_measure",
         "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
         "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner",
-        "k8s_gitops_source_app_secrets_store"}
+        "k8s_gitops_source_app_secrets_store", "k8s_gitops_source_openbao_route"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -193,6 +193,8 @@ v["k8s_gitops_source_openbao_store_host"] = store
 # The apps read their secrets through store `openbao` (plan step 8a, D-0058 rule 8), once `secrets-store-prod put-apps`
 # and `compare` have passed (set-up-the-secrets-store.md, "Moving them"). Prod has the store on, so this is always valid here.
 v["k8s_gitops_source_app_secrets_store"] = "openbao"
+# Names for the store's web UI and API on Gateway apps (templates/route.yaml of openbao-store).
+v["k8s_gitops_source_openbao_route"] = True
 if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
 if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
 # Once rebuild-prod has built prod again, its local-path StorageClass names folders <namespace>/<claim>; a
@@ -365,6 +367,15 @@ PY
     fi
     printf '%s\n' "$pem" > "$store_keys/secrets-store-ca.crt.part"
     mv -- "$store_keys/secrets-store-ca.crt.part" "$store_keys/secrets-store-ca.crt"
+    # The same public certificate as ConfigMap openbao/openbao-ca-bundle, for the BackendTLSPolicy of the store's name route
+    # (apps/openbao-store, templates/route.yaml): Cilium 1.20.4 reads only a ConfigMap there. The command module's JSON form
+    # takes the manifest on stdin, so the PEM's newlines are not split.
+    cm_args=$(python3 -I -c 'import json, sys
+cm = {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "openbao-ca-bundle", "namespace": "openbao"}, "data": {"ca.crt": sys.argv[1] + "\n"}}
+print(json.dumps({"argv": ["kubectl", "--kubeconfig", "/etc/kubernetes/admin.conf", "apply", "-f", "-"], "stdin": json.dumps(cm)}))' "$pem")
+    (cd "$repo/hosts/ansible" && ansible 'k8s_control_plane[0]' -i "$inventory/" -b -m ansible.builtin.command -a "$cm_args") > /dev/null ||
+      { echo "openbao-prod: the CA file is written, but ConfigMap openbao/openbao-ca-bundle was not applied" >&2; exit 1; }
+    echo "openbao-prod: ca: ConfigMap openbao/openbao-ca-bundle applied (the same certificate)"
     echo "PASS: openbao-prod: ca: the store's CA written to $store_keys/secrets-store-ca.crt ($(openssl x509 -noout -subject -enddate <<< "$pem" | tr '\n' ' '))"
     ;;
   handover)

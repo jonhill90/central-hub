@@ -49,3 +49,13 @@ snapshot:
   # OpenBao's own image, for its `bao` CLI; the same version the openbao app runs (v2.7.2), by digest.
   image: quay.io/openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
   address: https://openbao.openbao.svc:8200
+# The store's web UI and API by name on Gateway apps: `<name>.<zone>` for each name below (root value
+# openbaoRoute, from k8s_gitops_source_openbao_route; the zone comes from the root, needsZone). TLS ends at
+# the Gateway (the wildcard certificate) and starts again to OpenBao, checked against the namespace's CA
+# in ConfigMap `caConfigMap` (Cilium 1.20.4 reads only a ConfigMap there; `openbao-prod ca` makes it).
+# Only lab and tailnet clients reach Gateway apps: its address is on the lab network and no public
+# route to it exists. Names are in DNS only once the private short-name list has them.
+route: false
+zone: ""
+routeNames: [openbao, vault]
+caConfigMap: openbao-ca-bundle

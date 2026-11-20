@@ -293,6 +293,36 @@ check_manifests() {
     echo "manifests: the admin address should pass from Ansible to the root and to openbao-store, and the project allow its L2 policy" >&2
     return 1
   fi
+  # The store's names on Gateway apps (openbaoRoute; apps/openbao-store, route.yaml): set, two HTTPRoutes on
+  # https-short and http-short for openbao.<zone> and vault.<zone>, a BackendTLSPolicy against the CA ConfigMap
+  # and a CiliumNetworkPolicy for Cilium's ingress identity on 8200; unset, none of it renders. The root passes
+  # the route switch and the zone to openbao-store only with openbaoRoute true.
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set openbaoRoute=true \
+    > "$work/rendered/root-c1-openbao-route.yaml"
+  helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set sealNode=node-1 --set route=true --set zone=example.com \
+    > "$work/rendered/app-c1-openbao-store-route.yaml"
+  local route=$work/rendered/app-c1-openbao-store-route.yaml route_kinds
+  route_kinds=$(grep -E '^kind: (HTTPRoute|BackendTLSPolicy|CiliumNetworkPolicy)$' "$route" | sort | tr '\n' ' ')
+  if [ "$route_kinds" != "kind: BackendTLSPolicy kind: CiliumNetworkPolicy kind: HTTPRoute kind: HTTPRoute " ] ||
+    ! grep -q -- '- openbao.example.com$' "$route" || ! grep -q -- '- vault.example.com$' "$route" ||
+    ! grep -q 'sectionName: https-short' "$route" || ! grep -q 'sectionName: http-short' "$route" ||
+    ! grep -q 'name: openbao-ca-bundle' "$route" || ! grep -q 'fromEntities: \[ingress\]' "$route"; then
+    echo "manifests: with route on, expected two routes, a backend TLS policy and an ingress policy for openbao.example.com and vault.example.com; got [$route_kinds]" >&2
+    return 1
+  fi
+  if grep -qE '^kind: (HTTPRoute|BackendTLSPolicy)$' "$work/rendered/app-c1-openbao-store-seal.yaml" ||
+    ! grep -Eq -- '- name: "?route"?$' "$work/rendered/root-c1-openbao-route.yaml" ||
+    grep -Eq -- '- name: "?route"?$' "$work/rendered/root-c1-openbao-store-host.yaml"; then
+    echo "manifests: the openbao-store route should render only with openbaoRoute true" >&2
+    return 1
+  fi
+  if helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
+    --set sealNode=node-1 --set route=true >/dev/null 2>&1; then
+    echo "manifests: openbao-store rendered its route without a zone" >&2
+    return 1
+  fi
   if helm template openbao-store hosts/kubernetes/home/c1/apps/openbao-store --namespace openbao \
     --set sealNode=node-1 --set adminAddress=192.0.2.40 >/dev/null 2>&1; then
     echo "manifests: openbao-store rendered an admin path without the box's /32" >&2

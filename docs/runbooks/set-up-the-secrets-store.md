@@ -207,6 +207,19 @@ expect:
 
 A box that has not installed the admin path's code yet ignores `admin_address`, so the order of this step and that install doesn't matter. Then a dev rebuild (`rebuild up`) passes the address on as `k8s_gitops_source_openbao_admin_address` (`rebuild.sh`), and the checks above follow. The `gateway` stage's L2 report then lists `openbao/openbao-admin` with policy `openbao-admin` and the seal node as its lease holder.
 
+### The store's names: `openbao` and `vault`
+
+The owner, 2026-11-20 07:31 UTC: OpenBao is to answer at `openbao` and `vault` names in the lab's zone. D-0058 rule 4 already has the store "reached by name on 443 like every c1 app"; no record forbids a web UI (the earlier `ui = false` and "no web UI" were a values choice in `apps/openbao/values.yaml`, not a record, and D-0046's evidence expects the UI). With root value `openbaoRoute` on (Ansible: `k8s_gitops_source_openbao_route`, which `openbao-prod gitops` always sets on prod), app `openbao-store` makes (`templates/route.yaml`):
+
+| Object | What it does |
+|---|---|
+| HTTPRoute `openbao-ui` | `openbao.<zone>` and `vault.<zone>` on Gateway `apps`, listener `https-short` (the wildcard certificate), to Service `openbao` port 8200 |
+| HTTPRoute `openbao-ui-redirect` | plain http for the same names gets a 301 to https |
+| BackendTLSPolicy `openbao-ui` | the Gateway calls OpenBao over TLS and checks it against the namespace's CA in ConfigMap `openbao-ca-bundle`, by `openbao.openbao.svc` (Cilium 1.20.4 reads only a ConfigMap there) |
+| CiliumNetworkPolicy `openbao-ui-ingress` | lets Cilium's `ingress` identity (Gateway traffic) reach port 8200 of OpenBao's server pod; the chart's own NetworkPolicy can't select it |
+
+OpenBao's config now has `ui = true` (the chart's UI Service stays off). `openbao-prod ca` also applies ConfigMap `openbao/openbao-ca-bundle` from the same public certificate, so run it after `gitops` and after any rebuild of the store. Only lab and tailnet clients can reach Gateway `apps` (its address is on the lab network; no public route or port forward exists to it), and the names exist in DNS only once the private short-name lists have them (`opnsense_lab_short_app_names` for the firewall's resolver and the tailnet split-DNS list, [set-up-lab-network-and-firewall.md](set-up-lab-network-and-firewall.md)), which is a private-inventory change and then a firewall and a tailnet apply. Through the Gateway OpenBao sees a Cilium address, not the box's, so the admin AppRole (bound to the box's /32) is refused on these names by design; the UI and API there are for other logins, and none exists yet for a person. Not run on prod; path "a" (this re-encryption) has not printed a `PASS` line on dev either (see [Measuring the box's path](#measuring-the-boxs-path-through-the-gateway-dev-only)).
+
 ## The box's calls to the store
 
 The agent box's `secrets-store` wrapper calls the store inside the dev cluster, run as user `keys`: `status`, `recovery`, `snapshot`, `restore`, `restore-rebuilt [raft-<time>.snap]`, `clear-hold`, `put c1/<path> <key>` (the value on stdin), `put-apps`, `compare` and `reseed`, plus the hourly off-box copy and the weekly compare. The store VM's actions (`plan`, `apply`, `destroy`, `configure`) are gone from the wrapper and from its sudo line (D-0058: no store VM was ever built).
