@@ -77,6 +77,7 @@ Why: RDP stays off until the owner types both passwords at the console, and fire
 2. `desktop configure-test` instead of `desktop configure` on a fresh VM (same steps 1 to 3 above, rights on and off around the apply). The box makes two different random passwords, keeps them in `/etc/agent-keys/desktop-test-login` (0600, the keys user's, never printed), the role sets them with no console step, and firewalld also accepts 3389 from the box's own address.
 3. `desktop rdp-check`: opens 3389, sends the X.224 connection request, reads the server's protocol choice, and does the TLS handshake. It sends no password. expect: `the server picked CredSSP (NLA)` (or TLS), `TLS handshake done`, and `RDP service answers; no login was tried`.
 
+3b. `desktop diag` (test builds only) shows the remote desktop's unit state, journal, listening ports and firewall, over the admin key that a test build keeps (`desktop_lock_admin` false, ssh open; it needs the test login file, so it refuses on the owner's build). Use it when `rdp-check` fails.
 4. `desktop stop` right after the check. The test VM must not hold 4096 MiB against a dev rebuild (the timer's rebuild keeps a running desktop and refuses when memory is short). It asks the VM to shut down; `desktop status` shows `stopped`.
 
 The box's copy of the test passwords, `/etc/agent-keys/desktop-test-login`, is deleted by `desktop destroy` and by a plain `desktop configure`, so no test build leaves a credential on the box.

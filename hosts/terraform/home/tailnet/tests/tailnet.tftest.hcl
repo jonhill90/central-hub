@@ -77,3 +77,26 @@ run "rejects_a_name_with_a_trailing_dot" {
 
   expect_failures = [var.split_dns_names]
 }
+
+run "app_names_survive_a_private_split_dns_list" {
+  command = plan
+
+  variables {
+    split_dns_names = ["c1.prod", "grafana"]
+  }
+
+  assert {
+    condition     = toset(keys(tailscale_dns_split_nameservers.lab)) == toset(["c1.prod", "grafana", "central-hub-app"])
+    error_message = "A private split_dns_names list must not drop the app aliases in app_split_dns_names."
+  }
+}
+
+run "rejects_an_app_name_with_a_trailing_dot" {
+  command = plan
+
+  variables {
+    app_split_dns_names = ["central-hub-app."]
+  }
+
+  expect_failures = [var.app_split_dns_names]
+}
