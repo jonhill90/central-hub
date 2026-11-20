@@ -272,6 +272,8 @@ agent_box_lifeline_address: ""
 # nftables for the lifeline NIC's packet filter. The role installs it only if the package is missing, at this
 # version (epoch:version-release, the newest in the AlmaLinux 10 BaseOS when it was read, 2026-11-14).
 agent_box_nftables_version: "1:1.1.5-6.el10_2"
+# agent-browser's DevTools port on 127.0.0.1; a filter lets only agent_box_user's sockets connect to it.
+agent_box_browser_cdp_port: 9222
 # The nft binary the filter's unit and the proof use.
 agent_box_nft_bin: /usr/sbin/nft
 # What the box may reach over that NIC, and nothing else (the rest is rejected): a list of

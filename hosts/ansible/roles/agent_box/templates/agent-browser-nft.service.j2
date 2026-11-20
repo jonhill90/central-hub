@@ -1,0 +1,18 @@
+# Managed by Ansible (role agent_box). Loads the filter that keeps agent-browser's DevTools port to the session user
+# (/etc/nftables/agent-browser.nft), before any session can start the browser.
+[Unit]
+Description=Packet filter for agent-browser's DevTools port
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart={{ agent_box_nft_bin }} -f /etc/nftables/agent-browser.nft
+ExecReload={{ agent_box_nft_bin }} -f /etc/nftables/agent-browser.nft
+ExecStop=-{{ agent_box_nft_bin }} delete table inet agent_browser
+
+[Install]
+WantedBy=multi-user.target

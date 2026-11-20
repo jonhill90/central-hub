@@ -1,0 +1,13 @@
+# Managed by Ansible (role agent_box, "agent-browser" tasks). Chromium's DevTools port has no sign-in: anyone who
+# can connect to it drives the browser and its signed-in profile, and can read local files through file:// pages.
+# It listens on 127.0.0.1 only, and this table lets only the session user's own sockets ({{ agent_box_user }}) open a
+# connection to it; every other user's, root's included, is reset. meta skuid is the UID of the originating socket.
+# `table` then `delete table` makes the file a clean replace in one transaction when it is loaded again.
+table inet agent_browser
+delete table inet agent_browser
+table inet agent_browser {
+  chain output {
+    type filter hook output priority -10; policy accept;
+    oifname "lo" tcp dport {{ agent_box_browser_cdp_port }} meta skuid != "{{ agent_box_user }}" reject with tcp reset
+  }
+}

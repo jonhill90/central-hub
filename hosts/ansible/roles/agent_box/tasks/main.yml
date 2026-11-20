@@ -438,6 +438,95 @@
     mode: "0755"
   tags: [wrappers]
 
+# agent-browser: a long-running headless Chromium that keeps its sign-ins in the session user's own profile, for agents'
+# own accounts only (never the owner's). It reuses the Playwright pin and Chromium above, adds no package, binds DevTools to
+# 127.0.0.1 and stops by itself after N minutes (docs/runbooks/set-up-the-agent-box.md, "A browser that keeps its
+# sign-ins"). A loop of one, for the same reason as web-shot's script.
+- name: The agent-browser script, root-owned
+  ansible.builtin.copy:
+    src: agent-browser.py
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: ["{{ agent_box_libexec_dir }}/agent-browser.py"]
+  loop_control:
+    label: "{{ item }}"   # the destination, as for the wrappers
+  tags: [wrappers]
+
+- name: agent-browser on the path
+  ansible.builtin.copy:
+    dest: "{{ agent_box_front_dir }}/agent-browser"
+    content: |
+      #!/bin/sh
+      # Made by the agent_box role. agent-browser start [--minutes N] | status | open <url> | shot <out.png> | stop
+      export PLAYWRIGHT_BROWSERS_PATH={{ agent_box_libexec_dir }}/playwright-browsers
+      export AGENT_BROWSER_CDP_PORT={{ agent_box_browser_cdp_port }}
+      exec {{ agent_box_libexec_dir }}/playwright-venv/bin/python -I {{ agent_box_libexec_dir }}/agent-browser.py "$@"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+# DevTools has no sign-in, so whoever can connect to the port drives the browser, its agent sign-ins and file://
+# pages. A packet filter lets only agent_box_user's own sockets connect to it on lo (templates/agent-browser.nft.j2);
+# every other user's, the runner's and root's included, is reset. Loaded by its own root unit at boot.
+- name: agent-browser | The installed packages
+  ansible.builtin.package_facts:
+    manager: rpm
+  tags: [wrappers]
+
+- name: agent-browser | nftables is installed, at the pinned version, only if it was missing
+  ansible.builtin.dnf:
+    name: "nftables-{{ agent_box_nftables_version }}"
+    state: present
+  when: "'nftables' not in ansible_facts.packages"
+  tags: [wrappers]
+
+- name: agent-browser | Folder for the filter
+  ansible.builtin.file:
+    path: /etc/nftables
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
+- name: agent-browser | The filter keeps the DevTools port to the session user
+  ansible.builtin.template:
+    src: agent-browser.nft.j2
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+    validate: "{{ agent_box_nft_bin }} -c -f %s"
+  loop: [/etc/nftables/agent-browser.nft]
+  loop_control:
+    label: "{{ item }}"   # the destination, as for the wrappers
+  notify: Reload the agent-browser filter
+  tags: [wrappers]
+
+- name: agent-browser | The unit that loads the filter at boot
+  ansible.builtin.template:
+    src: agent-browser-nft.service.j2
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [/etc/systemd/system/agent-browser-nft.service]
+  loop_control:
+    label: "{{ item }}"   # the destination, as for the wrappers
+  notify: Reload the agent-browser filter
+  tags: [wrappers]
+
+- name: agent-browser | The filter's unit is enabled
+  ansible.builtin.systemd_service:
+    name: agent-browser-nft.service
+    enabled: true
+    daemon_reload: true
+  when: not ansible_check_mode
+  tags: [wrappers]
+
 # lab-proof: a read-only check, run by sessions as themselves (no key), that each c1 app name resolves through the
 # lab DNS and that the Gateway's certificate verifies against the box's trust store (docs/runbooks/set-up-the-agent-box.md).
 - name: lab-proof on the path, root-owned

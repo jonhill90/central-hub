@@ -146,6 +146,27 @@ Exit: uninstall the App and delete it in GitHub's settings, then delete `/etc/ag
 
 The role installs headless Chromium through Playwright (pinned with hashes in `files/playwright-requirements.txt`, in its own virtual environment, browsers in a root-owned folder under the libexec folder) and the command `web-shot <url> <out.png> [--insecure]`. It loads the page as the session user, with no key, saves a full-page screenshot and prints the final address, the page title and the HTTP status. `--insecure` is for a dev cluster's throwaway CA only. It types nothing, so a sign-in that needs a form still goes through the proof scripts. Chromium's download comes from Playwright's own host at the first install, so the first run needs that outbound route. A bump of the pin is a change to the box's limits (D-0044). The role makes both folders readable and enterable by others (root-owned, writable by root only), because pip and Playwright left them `drwx------` and a session could not run `web-shot` (measured on the box on 2026-11-19: "playwright-venv/bin/python: Permission denied"); that fix is a box-limit change and reaches the box only by an install, and `.github/hosts-check/tests/test_web_shot_modes.sh` runs the task against folders of that mode.
 
+## A browser that keeps its sign-ins
+
+`web-shot` starts a fresh browser for every page. For web steps that need a session to stay signed in, the role also installs `agent-browser`, which uses the same Playwright pin and Chromium and adds no package. Only agent accounts sign in there, never the owner's.
+
+```sh
+agent-browser start --minutes 30   # Chromium in its full headless mode; stops by itself after 30 minutes (1 to 240)
+agent-browser status               # running or not, its DevTools address, minutes left
+agent-browser open https://example.com
+agent-browser shot ~/shots/page.png
+agent-browser stop                 # closes Chromium through DevTools, so the profile is written to disk first
+```
+
+- The profile is `~/.agent-browser/profile` (mode 700), so cookies and local storage are still there after a stop and a start.
+- DevTools has no sign-in: whoever connects to its port drives the browser, its agent sign-ins and `file://` pages. So a packet filter, `/etc/nftables/agent-browser.nft`, loaded at boot by `agent-browser-nft.service`, lets only the session user's (`agent_box_user`) own sockets connect to the port on `lo`. Every other user's connection is reset, the runner's and root's included. The test runs this filter live as root: the session user connects, another user is reset, and without the filter that user connects.
+- DevTools listens on `127.0.0.1:9222` only (`agent_box_browser_cdp_port`). A session drives the browser with Playwright's `connect_over_cdp("http://127.0.0.1:9222")`, or with Playwright MCP's `--cdp-endpoint`. A person watches it or takes over through DevTools' own page view at that address, reached by an SSH tunnel to the box. The only packet rule is the box-local filter above; no OPNsense, Proxmox firewall or tailnet rule is added.
+- It runs headless because AlmaLinux 10 has no X server package (no Xvfb or Xvnc in BaseOS, AppStream or CRB, checked 2026-11-20).
+- It stops by itself after its minutes, so it doesn't hold memory that a dev rebuild needs.
+- `.github/hosts-check/tests/test_agent_browser.sh` checks its arguments and the role's tasks. The browser itself (start, open, shot, a sign-in kept across a restart, the timer) was run by hand with Playwright 1.64.1 on 2026-11-20.
+
+Exit: delete the agent-browser role tasks, `agent-browser.py`, the filter and its unit (`systemctl disable --now agent-browser-nft.service`, which deletes the table), and each session user's `~/.agent-browser`.
+
 ## Render with Blender from the box
 
 The role installs Blender 5.2.3 LTS (the newest release at least two weeks old on 2026-11-18, STD-0003) from the official Linux tarball, checked against the SHA-256 that download.blender.org publishes, into a root-owned folder under the libexec folder, links `blender` into `/usr/local/bin`, and installs the libraries it needs with no display or GPU: the X client libraries `ldd` found missing (`libSM`, `libICE`, `libXxf86vm`, `libX11-xcb`), and Mesa's software OpenGL, EGL and Vulkan. The tarball comes from an official mirror, because `download.blender.org` answers 403 to the box. A bump of the pin is a change to the box's limits (D-0044).
