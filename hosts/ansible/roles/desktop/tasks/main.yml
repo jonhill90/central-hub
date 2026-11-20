@@ -109,6 +109,12 @@
 # Test build: the console prompt runs for real, with throwaway passwords fed in on standard input instead of typed on
 # tty1, so a test build exercises the prompt's own script, its marker and its ExecStartPost, the path the owner's build
 # takes. The file (0600, root, in /run) is removed by the unit's own ExecStartPost, and /run is gone at the next boot.
+- name: desktop | The password marker is looked up
+  ansible.builtin.stat:
+    path: "{{ desktop_password_marker }}"
+  register: desktop_marker
+
+# Written only while the marker is absent: with the marker there the prompt is skipped and nothing would consume the file.
 - name: desktop | Test build, the throwaway passwords are fed to the console prompt
   ansible.builtin.copy:
     dest: /run/desktop-test-passwords
@@ -121,25 +127,44 @@
     owner: root
     group: root
   no_log: true
-  when: desktop_test_login | bool
+  when: desktop_test_login | bool and not desktop_marker.stat.exists
 
-- name: desktop | Test build, folder for the console prompt's drop-in
+- name: desktop | Folder for the console prompt's drop-in
   ansible.builtin.file:
     path: /etc/systemd/system/desktop-set-password.service.d
     state: directory
     mode: "0755"
-  when: desktop_test_login | bool
 
 - name: desktop | Test build, the console prompt reads them
   ansible.builtin.copy:
     dest: /etc/systemd/system/desktop-set-password.service.d/10-test-passwords.conf
     content: |
       # Written by role desktop on a test build only: the prompt reads the box's throwaway passwords, not the console.
+      # ExecStopPost also runs when ExecStart fails, so the file never outlives a run.
       [Service]
       StandardInput=file:/run/desktop-test-passwords
       ExecStartPost=/usr/bin/rm -f /run/desktop-test-passwords
+      ExecStopPost=/usr/bin/rm -f /run/desktop-test-passwords
     mode: "0644"
   when: desktop_test_login | bool
+
+# The owner's build: a VM that was a test build keeps the admin key, so a plain configure can reach it. Neither the drop-in
+# nor a left-over feed file may survive onto it.
+- name: desktop | Not a test build, the test drop-in and the feed file are removed
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/desktop-set-password.service.d/10-test-passwords.conf
+    - /run/desktop-test-passwords
+  when: not (desktop_test_login | bool)
+
+# A marker already there on a test build: no prompt runs, so the feed file is not left behind.
+- name: desktop | The feed file is absent when the prompt will not run
+  ansible.builtin.file:
+    path: /run/desktop-test-passwords
+    state: absent
+  when: desktop_marker.stat.exists
 
 - name: desktop | The units are enabled
   ansible.builtin.systemd_service:

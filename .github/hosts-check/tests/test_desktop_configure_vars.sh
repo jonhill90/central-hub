@@ -162,12 +162,18 @@ tasks = yaml.safe_load(open(sys.argv[1]))
 by = {x["name"]: x for x in tasks}
 f = by["desktop | Test build, the throwaway passwords are fed to the console prompt"]["ansible.builtin.copy"]
 assert f["dest"] == "/run/desktop-test-passwords" and f["mode"] == "0600" and f["content"].count("\n") == 4
+assert "desktop_marker.stat.exists" in by["desktop | Test build, the throwaway passwords are fed to the console prompt"]["when"]
 assert by["desktop | Test build, the throwaway passwords are fed to the console prompt"]["no_log"] is True
 d = by["desktop | Test build, the console prompt reads them"]["ansible.builtin.copy"]
-assert "StandardInput=file:/run/desktop-test-passwords" in d["content"] and "rm -f /run/desktop-test-passwords" in d["content"]
+assert "StandardInput=file:/run/desktop-test-passwords" in d["content"] and "ExecStartPost=/usr/bin/rm -f /run/desktop-test-passwords" in d["content"]
+assert "ExecStopPost=/usr/bin/rm -f /run/desktop-test-passwords" in d["content"]
+r = by["desktop | Not a test build, the test drop-in and the feed file are removed"]
+assert r["ansible.builtin.file"]["state"] == "absent" and "10-test-passwords.conf" in " ".join(r["loop"]) and "desktop_test_login" in r["when"]
+assert by["desktop | The feed file is absent when the prompt will not run"]["ansible.builtin.file"]["state"] == "absent"
 names = [x["name"] for x in tasks]
-assert names.index("desktop | Test build, the console prompt reads them") < names.index("desktop | The units are enabled") < names.index("desktop | The console prompt starts now")
+assert names.index("desktop | Not a test build, the test drop-in and the feed file are removed") < names.index("desktop | The units are enabled") < names.index("desktop | The console prompt starts now")
 # no task sets the passwords or the marker for the test build behind the prompt's back
+assert names.index("desktop | The password marker is looked up") < names.index("desktop | Test build, the throwaway passwords are fed to the console prompt")
 assert not [n for n in names if n in ("desktop | Test build, the password marker is written", "desktop | Test build, the login password is set from the box")]
 PY
 
