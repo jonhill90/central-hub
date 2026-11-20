@@ -11,11 +11,13 @@
   tasks:
     # The address from the agent box's handoff file (proxmox_restic_reader_from, in the job's vars file) is the one every key works
     # from, and wins over a `from` in the inventory's list, so a stale address there can't stay. With no handoff (a run from the
-    # controller) each key keeps its own `from`.
+    # controller) each key keeps its own `from`. The worker's public key comes the same way (proxmox_restic_reader_key, the box's handoff) and
+    # wins over the inventory's list.
     - name: Every key with the one address it works from
       ansible.builtin.set_fact:
         proxmox_restic_reader_keys_now: >-
-          {{ proxmox_restic_reader_keys | default([])
+          {{ ([{'key': proxmox_restic_reader_key}] if (proxmox_restic_reader_key | default('')) | length > 0
+               else proxmox_restic_reader_keys | default([]))
              | map('combine', ({'from': proxmox_restic_reader_from} if (proxmox_restic_reader_from | default('')) | length > 0 else {}))
              | list }}
 

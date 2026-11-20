@@ -45,4 +45,10 @@ refuse "an empty list" '{"proxmox_restic_reader_keys":[]}'
 refuse "no from anywhere" "{\"proxmox_restic_reader_keys\":[{\"key\":\"$key\"}]}"
 refuse "a handoff address that is not an address" "{\"proxmox_restic_reader_keys\":[{\"key\":\"$key\"}],\"proxmox_restic_reader_from\":\"10.1.30.5/32\"}"
 ! grep -Eq 'set_writer|writer_keys' "$src/hosts/ansible/playbooks/proxmox-restic-reader.yml" && ok "4 the playbook never sets the writer's keys" || bad "4 it mentions the writer's keys"
+key2='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIother dev-worker-2'
+if run "{\"proxmox_restic_reader_keys\":[{\"key\":\"$key\",\"from\":\"192.0.2.99\"}],\"proxmox_restic_reader_key\":\"$key2\",\"proxmox_restic_reader_from\":\"10.1.30.12\"}" \
+   && [[ $(rd keys) == "[{\"key\": \"$key2\", \"from\": \"10.1.30.12\"}]" && $(rd no_root) == '["10.1.30.12"]' ]]; then
+  ok "5 the handoff key (proxmox_restic_reader_key) is the one key, over the inventory's list, with the handoff address"
+else bad "5 $(tail -5 "$t/out") keys=$(rd keys 2>&1)"; fi
+refuse "a handoff key that is not ed25519" '{"proxmox_restic_reader_key":"ssh-rsa AAAAB3","proxmox_restic_reader_from":"10.1.30.12"}'
 exit "$fail"

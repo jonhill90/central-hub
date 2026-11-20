@@ -64,9 +64,9 @@ PY
 
 # The handoff helper, the real script pointed into the test's folders: a file in $t/handoff is what the wrappers read.
 mkdir -p "$t/libexec" "$t/handoff"
-sed -e "s|^handoff=.*|handoff=$t/handoff|" "$root/hosts/ansible/roles/agent_box/files/dev-worker-address.sh" > "$t/libexec/dev-worker-address.sh"
+sed -e "s|^handoff=.*|handoff=$t/handoff|" -e "s|^keys=.*|keys=$t/keys|" "$root/hosts/ansible/roles/agent_box/files/dev-worker-address.sh" > "$t/libexec/dev-worker-address.sh"
 chmod +x "$t/libexec/dev-worker-address.sh"
-sed -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^dir=.*|dir=$t/dir|" -e "s|^work=.*|work=$t/work|" -e "s|^ansible_bin=.*|ansible_bin=$t/bin|" \
+sed -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^hostkey_dir=.*|hostkey_dir=$t/hostkey|" -e "s|^dir=.*|dir=$t/dir|" -e "s|^work=.*|work=$t/work|" -e "s|^ansible_bin=.*|ansible_bin=$t/bin|" \
     -e "s|^collections=.*|collections=$t/collections|" -e "s|^repo_url=.*|repo_url=$t/main.git|" \
     "$root/hosts/ansible/roles/agent_box/files/proxmox-host.sh" > "$t/job.sh"
 grep -q "^repo_url=$t/main.git" "$t/job.sh" && grep -q "^ansible_bin=$t/bin" "$t/job.sh" ||
@@ -328,5 +328,31 @@ job check restore-reader > "$t/17c.out" 2>&1; [ $? = 1 ] && [ ! -s "$t/calls" ] 
 printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"; : > "$t/calls"
 job check proxy > "$t/17d.out" 2>&1
 ! grep -q "proxmox_restic_reader_from\|@" "$t/calls" && ok "17d the other jobs are not given the address" || bad "17d $(cat "$t/calls")"
+
+# 18 restore-reader also takes the worker's public key from the handoff (proxmox_restic_reader_key, in the vars file only); a bad key line
+#    stops it before the playbook; no key file leaves the inventory's own list in use
+mkdir -p "$t/hostkey"
+printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"
+k18=$(ssh-keygen -q -t ed25519 -N '' -f "$t/k18" && cut -d' ' -f1,2 "$t/k18.pub")
+rm -f "$t/handoff/dev-worker-backup.pub"; : > "$t/calls"; rm -f "$t/vars-seen.json"
+job check restore-reader > "$t/18a.out" 2>&1; rc=$?
+[ $rc = 0 ] && ! grep -q proxmox_restic_reader_key "$t/vars-seen.json" && ok "18a no key file: the vars hold no key (the inventory's list is used)" || bad "18a rc=$rc $(cat "$t/18a.out")"
+printf '%s\n' "$k18" > "$t/handoff/dev-worker-backup.pub"; : > "$t/calls"
+job check restore-reader > "$t/18b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v["proxmox_restic_reader_key"]==sys.argv[2], v' "$t/vars-seen.json" "$k18" \
+   && ! grep -qF "$k18" "$t/calls" "$t/18b.out"; then ok "18b the worker's key reaches the playbook in the vars file, not on the command line or in the output"
+else bad "18b rc=$rc $(cat "$t/18b.out")"; fi
+printf 'ssh-rsa AAAAB3\n' > "$t/handoff/dev-worker-backup.pub"; : > "$t/calls"
+job check restore-reader > "$t/18c.out" 2>&1; rc=$?
+[ $rc = 1 ] && [ ! -s "$t/calls" ] && ok "18c a key line that is not ssh-ed25519 stops it before the playbook" || bad "18c rc=$rc $(cat "$t/calls")"
+rm -f "$t/handoff/dev-worker-backup.pub" "$t/handoff/dev-worker-address"
+
+# 19 the host's public host key is published for the keys user's rebuild wrapper: two fields, mode 0640, from this job's own known_hosts
+hk19=$(ssh-keygen -q -t ed25519 -N '' -f "$t/k19" && cut -d' ' -f1,2 "$t/k19.pub")
+printf '192.0.2.1 %s\n' "$hk19" > "$t/dir/known_hosts"; rm -f "$t/hostkey/proxmox-host.pub"
+job check > "$t/19.out" 2>&1
+if [[ $(cat "$t/hostkey/proxmox-host.pub" 2>/dev/null) == "$hk19" && $(stat -c %a "$t/hostkey/proxmox-host.pub") == 640 ]] && ! grep -qF "${hk19#* }" "$t/19.out" "$t/calls"; then
+  ok "19 the host's public host key is published (two fields, 0640) and not printed"
+else bad "19 published=[$(cat "$t/hostkey/proxmox-host.pub" 2>/dev/null)] $(cat "$t/19.out")"; fi
 
 exit "$fail"

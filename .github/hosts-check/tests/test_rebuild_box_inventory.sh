@@ -44,7 +44,7 @@ Y
 build() { # in_cluster settings-json-or-none
   rm -f "$t/out.yml"
   if [[ $2 == none ]]; then rm -f "$t/settings.json"; else echo "$2" > "$t/settings.json"; fi
-  python3 -I -c "$(cat "$t/build.py")" "$t/src.yml" "$t/out.yml" /k/node.key /k/known_hosts /k "" /k/ca.crt "$1" "$t/settings.json" > "$t/err" 2>&1
+  python3 -I -c "$(cat "$t/build.py")" "$t/src.yml" "$t/out.yml" /k/node.key /k/known_hosts /k "" /k/ca.crt "$1" "$t/settings.json" "${PROD_INV:-/nonexistent/inventory-hosts.yml}" > "$t/err" 2>&1
   rc=$?
   cidr=$(python3 -I -c '
 import sys, yaml
@@ -138,5 +138,26 @@ cp "$t/src.keep" "$t/src.yml"
 if [[ $r5 == "0:192.0.2.254:1:0 0:192.0.2.253 0:192.0.2.240 0:none 0:none:1 0:none 1:missing:1 1:missing:1 1:missing:1 0:192.0.2.253 0:192.0.2.253 1:missing:1 1:missing:1 1:missing:1 " ]]; then
   ok "5. no admin_address: dev's own pick below the pool's last, never the Gateway's, never printed; none without a pool, the store or box_cidr (named); a settings value wins; a bad pool stops the build"
 else bad "5. $r5 $(cat "$t/err")"; fi
+
+# 6. Dev's restore from the Proxmox host's copy: the seed folder is always set, and the seed address is the host's address read from the
+#    proxmox group of this inventory, or else of the prod inventory copy, never printed; one that is not an address stops the build.
+seedvars() { python3 -I -c 'import sys, yaml
+d = yaml.safe_load(open(sys.argv[1]))
+def find(n):
+    if isinstance(n, dict):
+        if "k8s_nodes" in n and isinstance(n["k8s_nodes"], dict): return n["k8s_nodes"].get("vars", {})
+        for x in n.values():
+            r = find(x)
+            if r is not None: return r
+v = find(d)
+print(v.get("k8s_backup_sftp_seed_dir", "-"), v.get("k8s_backup_sftp_seed_address", "-"))' "$t/out.yml"; }
+cp "$t/src.keep" "$t/src.yml"; build false none; r6a=$(seedvars)
+printf 'all:\n  children:\n    proxmox:\n      hosts:\n        pve: {proxmox_host_mgmt_address: 192.0.2.50}\n' > "$t/prod.yml"
+PROD_INV=$t/prod.yml build false none; r6b=$(seedvars)
+printf 'all:\n  children:\n    proxmox:\n      hosts:\n        pve: {proxmox_host_mgmt_address: pve.example.com}\n' > "$t/prod.yml"
+PROD_INV=$t/prod.yml build false none; rc6=$rc; err6=$(cat "$t/err")
+if [[ $r6a == "/k/dev/backup-sftp -" && $r6b == "/k/dev/backup-sftp 192.0.2.50" && $rc6 == 1 && $err6 == *"proxmox_host_mgmt_address is not an IP address"* && $err6 != *pve.example.com* ]]; then
+  ok "6. the seed folder is set; the host's address comes from the prod copy, none without one, a bad one stops the build and is not printed"
+else bad "6. [$r6a] [$r6b] rc=$rc6 $err6"; fi
 
 exit $fail

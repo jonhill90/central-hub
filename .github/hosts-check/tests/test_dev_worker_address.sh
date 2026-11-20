@@ -19,7 +19,8 @@ ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 
 mkdir -p "$t/work/state" "$t/handoff" "$t/libexec/ansible-venv/bin"
-sed -e "s|^work=.*|work=$t/work|" -e "s|^handoff=.*|handoff=$t/handoff|" -e "s|^group=.*|group=$(id -gn)|" -e "s|^libexec=.*|libexec=$t/libexec|" \
+mkdir -p "$t/keys" "$t/hostkey"
+sed -e "s|^work=.*|work=$t/work|" -e "s|^handoff=.*|handoff=$t/handoff|" -e "s|^keys=.*|keys=$t/keys|" -e "s|^hostkey_file=.*|hostkey_file=$t/hostkey/proxmox-host.pub|" -e "s|^group=.*|group=$(id -gn)|" -e "s|^libexec=.*|libexec=$t/libexec|" \
   "$role/files/dev-worker-address.sh" > "$t/h.sh"
 chmod +x "$t/h.sh"
 file=$t/handoff/dev-worker-address
@@ -81,4 +82,28 @@ chk=$(grep -n 'every inventory host must be one of those addresses' "$role/files
 env=$(grep -n '^cat > "\$envdir/rebuild.env"' "$role/files/rebuild.sh" | cut -d: -f1)
 [[ $tear == 1 && -n $call && -n $chk && -n $env && $chk -lt $call && $call -lt $env ]] && ok "5 the teardown hook leaves the file, and the wrapper writes it after the inventory checks, before every run" || bad "5 the wrapper's calls are not as expected (tear=$tear chk=$chk call=$call env=$env)"
 grep -q 'dest: "{{ agent_box_libexec_dir }}/dev-worker-address.sh"' "$role/tasks/main.yml" && ok "5 the role installs the script" || bad "5 not installed"
+# 7 key: the worker's own pair, made once; its public half handed over; the host's pinned key beside the pair
+down; inv '"w1"' 10.1.30.12; rm -f "$t/handoff/dev-worker-backup.pub"
+"$t/h.sh" key >/dev/null 2>&1 || bad "7 key failed"
+kd=$t/keys/dev/backup-sftp
+pub=$(cut -d' ' -f1,2 "$kd/w1.pub")
+[[ -s $kd/w1.key && $(stat -c %a "$kd/w1.key") == 600 && $(cat "$t/handoff/dev-worker-backup.pub") == "$pub" && $(stat -c %a "$t/handoff/dev-worker-backup.pub") == 640 \
+   && $("$t/h.sh" read-key) == "$pub" ]] && ok "7 key makes the pair once and hands over the public half only, at 0640, with no comment" || bad "7 key"
+before=$(sha256sum "$kd/w1.key" "$kd/w1.pub" | cut -d' ' -f1 | tr -d '\n'); "$t/h.sh" key >/dev/null
+after=$(sha256sum "$kd/w1.key" "$kd/w1.pub" | cut -d' ' -f1 | tr -d '\n')
+[[ $before == "$after" ]] && ok "7 a second key run leaves the pair as it was" || bad "7 the pair changed"
+[[ ! -e $kd/w1.known_hosts ]] && ok "7 no published host key: no known_hosts" || bad "7 known_hosts without a host key"
+hk=$(ssh-keygen -q -t ed25519 -N '' -f "$t/hk" && cut -d' ' -f1,2 "$t/hk.pub")
+printf '%s\n' "$hk" > "$t/hostkey/proxmox-host.pub"; "$t/h.sh" key >/dev/null
+[[ $(cat "$kd/w1.known_hosts") == "c1-backup-target $hk" && $(stat -c %a "$kd/w1.known_hosts") == 600 ]] && ok "7 the published host key becomes <worker>.known_hosts" || bad "7 known_hosts"
+printf 'ssh-rsa AAAAB3\n' > "$t/hostkey/proxmox-host.pub"; rm -f "$kd/w1.known_hosts"; "$t/h.sh" key >/dev/null
+[[ ! -e $kd/w1.known_hosts ]] && ok "7 a host key that is not ssh-ed25519 is not pinned" || bad "7 bad host key pinned"
+inv '"w1","w2"' 10.1.30.12; if "$t/h.sh" key >/dev/null 2>&1; then bad "7 two workers: key passed"; else [[ ! -e $t/handoff/dev-worker-backup.pub ]] && ok "7 two workers: no key handed over" || bad "7 file kept"; fi
+inv '"w1"' 10.1.30.12; "$t/h.sh" key >/dev/null
+for v in '' 'ssh-rsa AAAAB3' "ssh-ed25519 AAAA" "$pub extra" "$pub\n$pub"; do
+  printf "$v\n" > "$t/handoff/dev-worker-backup.pub"
+  out=$("$t/h.sh" read-key 2>&1) && bad "7 read-key accepted '$v'" || { grep -qF "AAAA" <<<"$out" && bad "7 read-key printed a value" || true; }
+done
+ok "7 read-key refuses five bad shapes and prints no value"
+rm -f "$t/handoff/dev-worker-backup.pub"; out=$("$t/h.sh" read-key) && [[ -z $out ]] && ok "7 read-key: no file, nothing, and it passes" || bad "7 read-key missing"
 exit "$fail"

@@ -132,6 +132,23 @@ esac
 
 [[ -f $inventory && -f $dir/id_ed25519 && -f $dir/known_hosts ]] \
   || { echo "proxmox-host: no inventory or key in $dir; the install from the controller has not run (docs/runbooks/serve-proxmox-on-443.md)" >&2; exit 1; }
+# Publish the host's public host key (two fields: type and key, public data) for the keys user's rebuild wrapper, which pins it for dev's
+# worker (dev-worker-address.sh key). Written from this job's own known_hosts, by this user, into a folder it owns and the devaddr group reads;
+# best effort, never a stop. It is the key the host job itself already trusts.
+hostkey_dir=/var/lib/agent-box-hostkey
+if [[ -d $hostkey_dir ]]; then
+  python3 -I -c '
+import os, sys
+for line in open(sys.argv[1]):
+    f = line.split()
+    if len(f) == 3 and f[1] == "ssh-ed25519":
+        tmp = sys.argv[2] + ".part"
+        open(tmp, "w").write(f[1] + " " + f[2] + "\n")
+        os.chmod(tmp, 0o640)
+        os.replace(tmp, sys.argv[2])
+        break' "$dir/known_hosts" "$hostkey_dir/proxmox-host.pub" 2>/dev/null || true
+fi
+
 # The sso job reads the proxmox client's secret from one file of this user's own, made by the controller's run (tag
 # proxmox_host_inventory); the playbook is told its path, so it never looks in the controller's home or the keys user's folder.
 sso_args=()
@@ -152,7 +169,12 @@ if [[ $job == restore-reader ]]; then
   install -d -m 0700 "$work/state"
   rr_vars=$(mktemp "$work/state/rr-vars.XXXXXX")
   trap 'rm -f "$rr_vars"' EXIT
-  RR_ADDR=$rr_addr python3 -I -c 'import json, os, sys; json.dump({"proxmox_restic_reader_from": os.environ["RR_ADDR"]}, open(sys.argv[1], "w"))' "$rr_vars"
+  # The worker's public key, from the same handoff (one ed25519 line, or nothing: the inventory's own list is used then).
+  rr_key=$("$libexec/dev-worker-address.sh" read-key) || exit 1
+  RR_ADDR=$rr_addr RR_KEY=$rr_key python3 -I -c 'import json, os, sys
+v = {"proxmox_restic_reader_from": os.environ["RR_ADDR"]}
+if os.environ.get("RR_KEY"): v["proxmox_restic_reader_key"] = os.environ["RR_KEY"]
+json.dump(v, open(sys.argv[1], "w"))' "$rr_vars"
   rr_args=(-e "@$rr_vars")
 fi
 

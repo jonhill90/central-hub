@@ -13,6 +13,14 @@
     groups: "{{ agent_box_devaddr_group }}"   # only the handoff group, which carries one private address
     append: false
 
+- name: proxmox_host | The folder where it publishes the host's public host key, for the keys user to read through the handoff group
+  ansible.builtin.file:
+    path: "{{ agent_box_hostkey_dir }}"
+    state: directory
+    owner: "{{ agent_box_host_user }}"
+    group: "{{ agent_box_devaddr_group }}"
+    mode: "0750"
+
 - name: proxmox_host | Its key folder and its work folder, its own only
   ansible.builtin.file:
     path: "{{ item }}"

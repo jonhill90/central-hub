@@ -11,6 +11,9 @@ agent_box_keys_user: keys
 # can read by one private address, an access right under D-0061 (D-0042 rule 6).
 agent_box_devaddr_group: devaddr
 agent_box_handoff_dir: /var/lib/agent-box-handoff
+# The Proxmox host's public host key, published by the host job (agent_box_host_user) for the keys user to pin on dev's worker
+# (proxmox-host.sh, dev-worker-address.sh key). Public data; hostops:devaddr 0750.
+agent_box_hostkey_dir: /var/lib/agent-box-hostkey
 # The user the GitHub Actions runner runs as (docs/runbooks/set-up-the-lab-redeploy-workflow.md). It gets
 # sudo only for the wrappers marked `runner: true`, with their args as listed. Empty does nothing.
 agent_box_runner_user: ""
