@@ -57,7 +57,7 @@ cat > "$t/bin/tofu" <<EOF
 #!/bin/bash
 echo "tofu \${*:2}" >> $t/calls
 case " \$* " in
-  *" init "*) exit 0 ;;
+  *" init "*) [ -z "\${TOFU_INIT_TEXT:-}" ] || echo "\$TOFU_INIT_TEXT"; exit \${TOFU_INIT_RC:-0} ;;
   *" apply "*) exit \${TOFU_APPLY_RC:-0} ;;
   *" show "*) cat \${TOFU_SHOW_FILE:-$t/destroy.json}; exit 0 ;;
   *" -destroy "*) for a in "\$@"; do case \$a in -out=*) : > "\${a#-out=}" ;; esac; done; exit 0 ;;
@@ -360,6 +360,18 @@ TOFU_APPLY_RC=1 run check; o12f=$out
 if [[ $o12f == *"FAIL: rebuild-prod: OpenTofu could not plan the teardown (rc 1)"* && $(grep -c -- '-destroy' "$t/calls") == 0 ]]; then
   ok "12f. a failed refresh-only apply fails the check and plans no destroy"
 else bad "12f. $o12f"; fi
+
+# 12g. An OpenTofu init that fails with no line saying Error (a file that could not be read, say) still shows what it printed: the last
+# lines, with an address and a hostname masked; a line that says Error is shown as before.
+TOFU_INIT_RC=1 TOFU_INIT_TEXT=$'bash: line 1: /keys/proxmox-lab.env: Permission denied\nregistry.invalid.example 192.0.2.10 refused' run check; o12g=$out
+if [[ $o12g == *"FAIL: rebuild-prod: OpenTofu init failed: bash: line 1: /keys/proxmox-lab.env: Permission denied|<name> <ip> refused"* &&
+      $o12g != *192.0.2.10* && $o12g != *registry.invalid.example* ]]; then
+  ok "12g. an init failure with no Error line shows its last lines, with the address and the hostname masked"
+else bad "12g. $o12g"; fi
+TOFU_INIT_RC=1 TOFU_INIT_TEXT=$'one\nError: no backend here 192.0.2.10' run check; o12h=$out
+if [[ $o12h == *"OpenTofu init failed: Error: no backend here <ip>"* && $o12h != *192.0.2.10* ]]; then
+  ok "12h. an init failure with an Error line shows that line, the address masked"
+else bad "12h. $o12h"; fi
 
 # 12b. The wrapper's PATH reaches `ip` (/usr/sbin on the box, where the route check reads the routing table): on the box the check
 # failed with "no route to the Proxmox API's address" because `ip` was not found.
