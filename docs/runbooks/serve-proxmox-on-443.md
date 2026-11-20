@@ -119,6 +119,19 @@ expect: `proxmox-host: memory: ...` lines: `guest <vmid> <qemu|lxc> <status> max
 
 why: the wrapper prints only lines that match that fixed shape (digits and fixed words), so no guest name or address can reach a session, whatever the host answers.
 
+## Make the host's memory go further with same-page merging (KSM)
+
+The always-on guests and a dev rebuild run the same image, so the host can keep one copy of each identical page: kernel same-page merging. It is off on the host (`host ksm run 0` in `check memory`). Two jobs of the same wrapper turn it on and off:
+
+```bash
+sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check ksm        # or ksm-off
+sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply-recorded ksm <check hash>
+```
+
+`ksm` runs `playbooks/proxmox-ksm.yml`: it stops and disables Proxmox's own tuning daemon (`ksmtuned`, which would rewrite the values), sets the scan pace (`sleep_millisecs` 200, `pages_to_scan` 1000) and then the switch (`run` 1), and writes the same three values to `/etc/tmpfiles.d/central-hub-ksm.conf` so a reboot keeps them. `ksm-off` is the way back: `run` 0 (pages already merged stay merged until a guest writes to them), the boot file removed, `ksmtuned` enabled and started again. The wrapper refuses an apply without a reviewer pass for the check's hash and a go for the commit, like every host job. A check run shows one changed task when the kernel's values differ from the wanted ones.
+
+Measure the saving with `check memory` before, ten minutes after and thirty minutes after: `host ksm pages_sharing` (4 KiB pages) and `host memavailable` (MiB). Expect `pages_sharing` to climb for the first minutes and level off. A scan at this pace uses a small share of one core.
+
 ## If it fails
 
 - Apache httpd does not start after a reboot: `systemctl status apache2` and `journalctl -u apache2`. The drop-in makes it wait for `pve-cluster`; if `/etc/pve` is not mounted, fix that first. The web UI is still on 8006.

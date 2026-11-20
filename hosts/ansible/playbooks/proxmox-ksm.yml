@@ -1,0 +1,15 @@
+---
+# Kernel same-page merging on, on the Proxmox host (the proxmox-host wrapper's job `ksm`); `ksm-off` undoes it
+# (proxmox-ksm-off.yml). What it does and why: tasks/proxmox-ksm.yml. Measure with `check memory` (pages_sharing, memavailable).
+#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check ksm
+- name: Proxmox host, same-page merging on
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  vars:
+    proxmox_ksm_enabled: true
+    proxmox_ksm_sleep_millisecs: 200
+    proxmox_ksm_pages_to_scan: 1000
+  tasks:
+    - name: ksm | Same-page merging on
+      ansible.builtin.import_tasks: tasks/proxmox-ksm.yml

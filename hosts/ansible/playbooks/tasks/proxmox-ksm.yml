@@ -1,0 +1,83 @@
+---
+# Kernel same-page merging on the Proxmox host, on or off (proxmox-ksm.yml and proxmox-ksm-off.yml import this with
+# proxmox_ksm_enabled true or false). Why: the always-on guests and a dev rebuild run the same image, so identical pages can be
+# kept once; the host's own memory report (`check memory`, playbooks/proxmox-memory.yml) shows the saving as pages_sharing.
+# QEMU marks guest RAM mergeable by default, so the setting below is all a guest needs.
+# On: Proxmox's own tuning daemon (ksmtuned) is stopped and disabled, because it rewrites these three values while it runs; the
+# values are written to the kernel now and again at every boot (a tmpfiles.d file, so a reboot keeps them). Off: scanning stops
+# (run 0; pages already merged stay merged until their guests write to them), the file goes, and ksmtuned is back as Proxmox
+# ships it. Every task is a plain change in a check run (no check_mode: false except the fixed reads).
+- name: ksm | Read whether ksmtuned is installed
+  ansible.builtin.command: systemctl list-unit-files ksmtuned.service --no-legend
+  register: ksm_unit
+  changed_when: false
+  failed_when: ksm_unit.rc > 1
+  check_mode: false
+
+- name: ksm | Read the kernel's current values
+  ansible.builtin.command: grep -H . /sys/kernel/mm/ksm/run /sys/kernel/mm/ksm/sleep_millisecs /sys/kernel/mm/ksm/pages_to_scan
+  register: ksm_now
+  changed_when: false
+  check_mode: false
+
+- name: ksm | The values this play sets
+  ansible.builtin.set_fact:
+    ksm_want:
+      run: "{{ '1' if proxmox_ksm_enabled else '0' }}"
+      sleep_millisecs: "{{ proxmox_ksm_sleep_millisecs | string }}"
+      pages_to_scan: "{{ proxmox_ksm_pages_to_scan | string }}"
+    ksm_have: >-
+      {{ dict(ksm_now.stdout_lines
+              | map('regex_replace', '^/sys/kernel/mm/ksm/([a-z_]+):(.*)$', '\1=\2')
+              | map('split', '=') | list) }}
+    ksm_has_unit: "{{ (ksm_unit.stdout | default('') | trim | length) > 0 }}"
+
+# A check run skips the kernel writes below (a command is not run in check mode), so this task shows them in the check as a change:
+# it is "changed" when any value the kernel holds differs from the one wanted.
+- name: ksm | The kernel's values differ from the wanted ones
+  ansible.builtin.debug:
+    msg: "same-page merging: kernel values differ from the wanted ones"
+  changed_when: ksm_have['run'] != ksm_want['run'] or (proxmox_ksm_enabled and (ksm_have['sleep_millisecs'] != ksm_want['sleep_millisecs'] or ksm_have['pages_to_scan'] != ksm_want['pages_to_scan']))
+
+- name: ksm | ksmtuned stopped and disabled while this play pins the values
+  ansible.builtin.systemd:
+    name: ksmtuned
+    state: stopped
+    enabled: false
+  when: proxmox_ksm_enabled and ksm_has_unit
+
+- name: ksm | The three values, kept across a reboot
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/central-hub-ksm.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Kernel same-page merging, set by playbooks/tasks/proxmox-ksm.yml.
+      w /sys/kernel/mm/ksm/sleep_millisecs - - - - {{ proxmox_ksm_sleep_millisecs }}
+      w /sys/kernel/mm/ksm/pages_to_scan - - - - {{ proxmox_ksm_pages_to_scan }}
+      w /sys/kernel/mm/ksm/run - - - - 1
+  when: proxmox_ksm_enabled
+
+- name: ksm | The boot file removed
+  ansible.builtin.file:
+    path: /etc/tmpfiles.d/central-hub-ksm.conf
+    state: absent
+  when: not proxmox_ksm_enabled
+
+- name: ksm | The kernel's pace, then its switch (the pace first, so the scan never starts at the old pace)
+  ansible.builtin.command:
+    argv: [tee, "/sys/kernel/mm/ksm/{{ item }}"]
+    stdin: "{{ ksm_want[item] }}"
+  loop: "{{ ['sleep_millisecs', 'pages_to_scan', 'run'] if proxmox_ksm_enabled else ['run'] }}"
+  loop_control:
+    label: "{{ item }}"
+  when: ksm_have[item] != ksm_want[item]
+  changed_when: true
+
+- name: ksm | ksmtuned back as Proxmox ships it
+  ansible.builtin.systemd:
+    name: ksmtuned
+    state: started
+    enabled: true
+  when: not proxmox_ksm_enabled and ksm_has_unit
