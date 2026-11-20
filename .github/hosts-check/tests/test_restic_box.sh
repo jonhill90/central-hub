@@ -80,19 +80,20 @@ INV
 play() { (cd "$root/hosts/ansible" && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i "$t/inv.yml" playbooks/proxmox-restic-box.yml "$@"); }
 
 src=$(ip -4 route get "$host_ip" | sed -n 's/.* src \([0-9.]*\).*/\1/p')   # the address the host sees this machine at
+xv() { python3 -c 'import json,sys; print(json.dumps({"proxmox_restic_box_key": sys.argv[1], "proxmox_restic_box_from": sys.argv[2]}))' "$1" "$src"; }   # JSON extra vars: a key line has spaces
 # 1
-if play -l bare -e "proxmox_restic_box_key=$boxpub" -e "proxmox_restic_box_from=$src" > "$t/1.log" 2>&1; then bad "1 a host with nothing mounted was not refused"
+if play -l bare -e "$(xv "$boxpub")" > "$t/1.log" 2>&1; then bad "1 a host with nothing mounted was not refused"
 elif grep -q "The backup disk is mounted" "$t/1.log"; then ok "1 a host with nothing mounted at /mnt/hdd-backup is refused"
 else bad "1 the run failed some other way"; tail -20 "$t/1.log"; fi
 for v in '' 'ssh-rsa AAAAB3NzaC1yc2E' "$boxpub comment"; do
-  if play -l proxmox_host -e "proxmox_restic_box_key=$v" -e "proxmox_restic_box_from=$src" > "$t/1b.log" 2>&1; then bad "1 key '$v' was accepted"; fi
+  if play -l proxmox_host -e "$(xv "$v")" > "$t/1b.log" 2>&1; then bad "1 key '$v' was accepted"; fi
 done
 docker exec "$H" bash -c '! id boxbackup 2>/dev/null && [ ! -e /etc/ssh/sshd_config.d/41-central-hub-restic-box.conf ]' \
   && ok "1 three bad key lines are refused and nothing was changed" || bad "1 a bad key line changed the host"
 
 # 2
-if play -l proxmox_host -e "proxmox_restic_box_key=$boxpub" -e "proxmox_restic_box_from=$src" > "$t/2.log" 2>&1; then ok "2 the play passes"; else bad "2 the run failed"; tail -40 "$t/2.log"; fi
-if play -l proxmox_host -e "proxmox_restic_box_key=$boxpub" -e "proxmox_restic_box_from=$src" > "$t/2b.log" 2>&1 && grep -Eq 'changed=0 +unreachable=0 +failed=0' <(grep '^proxmox_host ' "$t/2b.log"); then
+if play -l proxmox_host -e "$(xv "$boxpub")" > "$t/2.log" 2>&1; then ok "2 the play passes"; else bad "2 the run failed"; tail -40 "$t/2.log"; fi
+if play -l proxmox_host -e "$(xv "$boxpub")" > "$t/2b.log" 2>&1 && grep -Eq 'changed=0 +unreachable=0 +failed=0' <(grep '^proxmox_host ' "$t/2b.log"); then
   ok "2 a second run changes nothing (and signed in as root)"
 else bad "2 a second run changed something or failed"; grep '^proxmox_host ' "$t/2b.log" || tail -30 "$t/2b.log"; fi
 [ "$(docker exec "$H" stat -c '%U:%a' /mnt/hdd-backup/restic/box)" = "boxbackup:700" ] && ok "2 /box is the user's alone (0700)" || bad "2 /box is not boxbackup 0700"
