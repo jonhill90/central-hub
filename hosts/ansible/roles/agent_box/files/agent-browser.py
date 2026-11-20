@@ -69,6 +69,30 @@ def launch_chromium(log):
         stdout=log, stderr=log, start_new_session=True)
 
 
+def listener_uids(port):
+    """The uids that hold a listening TCP socket on 127.0.0.1:port or 0.0.0.0:port, from /proc/net/tcp.
+
+    Another local user could listen on the port first and answer like Chromium. So start refuses a port that is
+    already taken, and every command checks that the listener is this user's own before it talks to it."""
+    want = {f"0100007F:{port:04X}", f"00000000:{port:04X}"}
+    uids = set()
+    try:
+        with open(os.environ.get("AGENT_BROWSER_PROC_TCP", "/proc/net/tcp")) as f:
+            next(f)
+            for line in f:
+                cols = line.split()
+                if len(cols) > 7 and cols[1] in want and cols[3] == "0A":   # 0A: LISTEN
+                    uids.add(int(cols[7]))
+    except OSError:
+        pass
+    return uids
+
+
+def port_is_mine():
+    uids = listener_uids(CDP_PORT)
+    return bool(uids) and uids == {os.getuid()}
+
+
 def cdp_up(timeout_s=20):
     end = time.time() + timeout_s
     while time.time() < end:
@@ -84,6 +108,10 @@ def start(minutes):
     if running():
         print("agent-browser: already running; `agent-browser status` shows it")
         return 0
+    if listener_uids(CDP_PORT):
+        print(f"agent-browser: port {CDP_PORT} on 127.0.0.1 is already taken, by uid(s) "
+              f"{sorted(listener_uids(CDP_PORT))}; refusing to start", file=sys.stderr)
+        return 1
     os.makedirs(PROFILE, mode=0o700, exist_ok=True)
     os.chmod(STATE_DIR, 0o700)
     log = open(os.path.join(STATE_DIR, "browser.log"), "ab")
@@ -93,6 +121,10 @@ def start(minutes):
         print(f"agent-browser: Chromium did not start ({exc})", file=sys.stderr)
         return 1
     version = cdp_up()
+    if version and not port_is_mine():
+        os.killpg(chrome.pid, signal.SIGTERM)
+        print("agent-browser: the DevTools port is held by another user; refusing it", file=sys.stderr)
+        return 1
     if not version:
         os.killpg(chrome.pid, signal.SIGTERM)
         print(f"agent-browser: Chromium's DevTools did not answer; see {STATE_DIR}/browser.log", file=sys.stderr)
@@ -115,7 +147,7 @@ def stop():
         return 0
     # Close Chromium the way its own Quit does, through DevTools, so the profile (cookies, local storage) is written
     # to disk before the process ends. A signal alone lost local storage in the test of 2026-11-20.
-    if alive(st.get("chromium_pid")):
+    if alive(st.get("chromium_pid")) and port_is_mine():
         try:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as p:
@@ -164,6 +196,9 @@ def with_page(fn):
     st = running()
     if not st:
         print("agent-browser: not running; `agent-browser start` first", file=sys.stderr)
+        return 1
+    if not port_is_mine():
+        print("agent-browser: the DevTools port is not held by this user; refusing to connect", file=sys.stderr)
         return 1
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:

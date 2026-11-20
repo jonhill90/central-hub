@@ -28,6 +28,18 @@ expect_rc 1 "status with nothing running" status
 expect_rc 0 "stop with nothing running" stop
 expect_rc 1 "open with nothing running" open https://example.com
 
+# A port held by someone else: start refuses it, and open refuses to talk to it. A fake /proc/net/tcp names the
+# listener's uid (65534, not this user), so this part needs no second user and no root.
+printf '%s\n' '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode' \
+  '   0: 0100007F:2406 00000000:0000 0A 00000000:00000000 00:00000000 00000000 65534        0 1 1 0000000000000000 100 0 0 10 0' \
+  > "$t/tcp-other"
+AGENT_BROWSER_PROC_TCP="$t/tcp-other" expect_rc 1 "start refuses a port another uid listens on" start
+grep -q "already taken" <<<"$(AGENT_BROWSER_PROC_TCP="$t/tcp-other" python3 -I "$script" start 2>&1)" \
+  && ok "start says the port is taken" || bad "start did not say the port is taken"
+mkdir -p "$t/state"; printf '{"chromium_pid": %s, "cdp": "http://127.0.0.1:9222", "stop_at": 0}' "$$" > "$t/state/state.json"
+AGENT_BROWSER_PROC_TCP="$t/tcp-other" expect_rc 1 "open refuses a port held by another uid" open https://example.com
+rm -f "$t/state/state.json"
+
 grep -q 'src: agent-browser.py' "$tasks" && ok "role copies the script" || bad "role does not copy agent-browser.py"
 grep -q 'dest: "{{ agent_box_front_dir }}/agent-browser"' "$tasks" && ok "role puts agent-browser on the path" \
   || bad "role has no agent-browser front wrapper"
@@ -51,6 +63,15 @@ if [ "$(id -u)" = 0 ] && command -v nft >/dev/null && nft list tables >/dev/null
   [ "$(as ab-session)" = 200 ] && ok "session user reaches the port" || bad "session user is blocked"
   [ "$(as ab-other)" != 200 ] && ok "another user is reset" || bad "another user reached the port through the filter"
   nft delete table inet agent_browser
+  kill "$srv"
+  # A real squatter: another user listens on the port first; the session user's start refuses it.
+  su -s /bin/bash ab-other -c 'exec python3 -m http.server 9222 --bind 127.0.0.1' >/dev/null 2>&1 & sq=$!; sleep 1
+  chmod 755 "$t"
+  out=$(su -s /bin/bash ab-session -c "AGENT_BROWSER_STATE=$t/sq python3 -I $PWD/$script start" 2>&1 || true)
+  grep -q "already taken" <<<"$out" && ok "start refuses a port another user really listens on" \
+    || bad "start accepted another user's listener: $out"
+  kill "$sq" 2>/dev/null || true
+  python3 -m http.server 9222 --bind 127.0.0.1 >/dev/null 2>&1 & srv=$!; sleep 1
   [ "$(as ab-other)" = 200 ] && ok "without the filter another user connects (the check above is real)" \
     || bad "the port answered no one without the filter, so the test proves nothing"
   kill "$srv"
