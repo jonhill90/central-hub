@@ -22,7 +22,9 @@
       ansible.builtin.systemd_service:
         name: c1-restore-test.service
         state: started
+      register: k8s_backup_rt_start_result
       changed_when: true
+      ignore_errors: true
 
     - name: What the restore test said
       ansible.builtin.shell: >-
@@ -37,7 +39,7 @@
       check_mode: false
 
     - name: Temporary folders the test left behind
-      ansible.builtin.shell: set -o pipefail; ls -d /var/tmp/c1-restore-test-* 2>/dev/null | wc -l
+      ansible.builtin.shell: set -o pipefail; find /var/tmp -maxdepth 1 -name 'c1-restore-test-*' | wc -l
       args:
         executable: /bin/bash
       register: k8s_backup_rt_left
@@ -57,6 +59,9 @@
           - k8s_backup_rt_log.stdout_lines | select('search', 'PASS: .*snapshot [0-9a-f]{8} of ') | list | length >= 1
           - k8s_backup_rt_log.stdout_lines | select('search', 'FAIL|Fatal|ERROR') | list | length == 0
           - k8s_backup_rt_left.stdout | trim == '0'
-        fail_msg: "{{ k8s_backup_rt_log.stdout_lines }}; left {{ k8s_backup_rt_left.stdout | trim }}"
+          - k8s_backup_rt_start_result is not failed
+        fail_msg: >-
+          {{ k8s_backup_rt_log.stdout_lines }}; left {{ k8s_backup_rt_left.stdout | trim }};
+          start: {{ k8s_backup_rt_start_result.msg | default('ok') }}
         quiet: true
       when: not ansible_check_mode
