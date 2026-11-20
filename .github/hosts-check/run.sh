@@ -101,6 +101,7 @@ check_ansible() {
   bash "$here/tests/test_tailnet_policy_log.sh"
   bash "$here/tests/test_tailnet_policy_sections.sh"
   bash "$here/tests/test_tailnet_policy_ledger.sh"
+  bash "$here/tests/test_tailnet_stack_ledger.sh"
   bash "$here/tests/test_proxmox_host_args.sh"
   bash "$here/tests/test_opnsense_prod_args.sh"
   bash "$here/tests/test_opnsense_guard_playbook.sh"

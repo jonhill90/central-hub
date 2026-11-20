@@ -43,9 +43,20 @@ The run prints only the commit, the plan's hash, the counts of changes (`N to ad
 5. Run `plan` again.
    - expect: `0 to add, 0 to change, 0 to destroy`. A plan that still shows changes means the apply did not do what its plan showed; stop and read the box's log.
 
+## From the box itself (D-0063)
+
+A session on the box can also apply a saved plan with no workflow and no card, through the box's own ledger (the same shape as the policy job, [run-the-tailnet-policy-as-a-pipeline-job.md](run-the-tailnet-policy-as-a-pipeline-job.md)). The wrapper still runs as the `keys` user with the controller's OAuth client.
+
+1. `sudo -n -u keys /usr/local/libexec/agent-box/tailnet-stack.sh plan`, run from `/tmp` (the keys user cannot read a session's home).
+2. The reviewer records its pass: `tailnet-stack.sh pass <commit> <hash> <pass message ID> <ISO time> reviewer`. The orchestrator records the go: `tailnet-stack.sh go <commit> <go message ID> <ISO time> orchestrator`, with the owner's standing go (D-0061 rule 3).
+3. `tailnet-stack.sh apply-recorded <hash>`. It applies the saved plan only if its hash is the one named, main has not moved since, and the ledger holds the pass and an unused go; otherwise it names what is missing and applies nothing.
+
+expect: `applied plan <hash> (...)`, then `plan` again shows `0 to add, 0 to change, 0 to destroy`. A ledger line proves a recorder's word and its message ID, not the owner's; a reviewing agent checks the IDs. The card-ID `apply` stays the workflow's.
+
 ## What it refuses
 
-- An `apply` with no card ID, a card ID that is not `cmsg_...`, or a hash that is not 12 lowercase hex digits (exit 2).
+- An `apply` with no card ID, a card ID that is not `cmsg_...`, or a hash that is not 12 lowercase hex digits, and an `apply-recorded`, `pass`, `go` or `ledger` call with a malformed argument or the wrong recorder (exit 2).
+- An `apply-recorded` with no reviewer pass for the commit and hash, or no unused go for the commit: it names what is missing and applies nothing.
 - An `apply` whose hash is not the saved plan's, or when `main` moved since the plan: run `plan` again, nothing is applied.
 - Any workflow but the listed ones, any ref but `main`, and any event but `workflow_dispatch`: the runner's job-started hook refuses it before a step runs.
 

@@ -3,7 +3,7 @@
 #   1. A wrapper with session_args: the session's line has them, the runner's line has the full args.
 #   2. A wrapper without session_args: both users get args, as before.
 #   3. An empty session_args: the session user gets no line for that wrapper.
-#   4. The real wrapper list: tailnet-stack's session line has no apply, the runner's has it.
+#   4. The real wrapper list: tailnet-stack's session line has no card-ID apply (it has apply-recorded), the runner's has it.
 #   5-6. pr-merge: sessions get `check *` only; pass-record: add, show, halt, resume; the runner gets neither.
 #   7. proxmox-host runs as its own user (run_as hostops): the session's line has check, check <job>, log and guard status, the
 #      runner's adds apply, and neither runs it as the keys user. Sessions may also run guard clear.
@@ -37,7 +37,7 @@ print("3", lines(c, "sess") == [], len(lines(c, "run")) == 1)
 d = yaml.safe_load(open(role + "defaults/main.yml"))["agent_box_wrappers"]
 ts = [w for w in d if w["name"] == "tailnet-stack"][0]
 e = render([ts])
-print("4", len(lines(e, "sess")) == 1 and "apply" not in lines(e, "sess")[0], "apply *" in lines(e, "run")[0])
+print("4", len(lines(e, "sess")) == 1 and " apply *" not in lines(e, "sess")[0] and "apply-recorded *" in lines(e, "sess")[0], "apply *" in lines(e, "run")[0])
 pm = [w for w in d if w["name"] == "pr-merge"][0]
 pr = [w for w in d if w["name"] == "pass-record"][0]
 g = render([pm, pr])
@@ -77,7 +77,7 @@ check() { # number, text
 check 1 "1. session_args for the session, full args for the runner"
 check 2 "2. no session_args: both get args"
 check 3 "3. empty session_args: the session gets no line"
-check 4 "4. tailnet-stack: no apply in the session's line, apply in the runner's"
+check 4 "4. tailnet-stack: no card-ID apply in the session's line (apply-recorded yes), apply in the runner's"
 check 5 "5. sessions: pr-merge check only (no merge, no sweep); pass-record add, show, halt, resume"
 check 6 "6. the runner user gets no pr-merge or pass-record line (the merge job is gone)"
 check 7 "7. proxmox-host: as hostops; the session checks and reads the log, only the runner has the ungated apply; sessions have apply-recorded"
