@@ -250,6 +250,7 @@ A run killed before its end can leave dev up and VM 300 stopped (the marker file
 - The script prints the stage, its `rc` and the last 20 lines of the `.raw` file. Fix the cause, then run again from that stage with `--only <stage>,<next>,...`.
 - `vm_id ... is outside` or `a dev run needs node_vnet`: the tfvars is for the wrong env. Nothing has run.
 - On dev, `--teardown` puts the env back to empty. On prod, stop and tell the owner before any teardown.
+- `cluster` fails at `step8a | Restart the API server for a changed encryption config` with `DeadlineExceeded` (rc 123, 2.02 s; dev run `20261120T070308Z`, the second of two runs at dc3335b; the first passed): crictl's own call deadline is 2 s and the API server stops slower. The task now calls crictl with `--timeout 60s` and retries 3 times, 10 s apart. Not yet run on a cluster.
 - `restore` fails with `can't be mapped`, `UNKNOWN` or `DUPLICATE`: prod's snapshot holds a folder that is not a volume, or two folders for one claim (a deleted claim's folder, kept by `Retain`). The message names them. Nothing was written. Remove the stray folder on prod, run one volume backup, and run again.
 - `restore` fails with `is not empty and holds no recorded restore`: dev's data disk holds data this restore didn't put there. Run again with `--teardown`.
 - `restore` fails with `AuthorizationFailure` or `AADSTS700027`: the reader app's role or its certificate isn't in effect yet; see [Back up c1 off the box](back-up-c1-off-box.md), "If it fails".

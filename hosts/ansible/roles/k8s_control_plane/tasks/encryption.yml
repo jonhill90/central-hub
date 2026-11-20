@@ -69,14 +69,20 @@
   changed_when: true
 
 # The API server reads the encryption config only when it starts. If the file changed while the
-# manifest already had the flag, stop the container; the kubelet starts it again.
+# manifest already had the flag, stop the container; the kubelet starts it again. crictl's own
+# call deadline is 2 s, and the API server needs longer to shut down: dev run 20261120T070308Z
+# failed here with DeadlineExceeded after 2.02 s (rc 123). So the call gets 60 s, and a stop that
+# still times out is tried again (stopping a stopped container is not an error).
 - name: step8a | Restart the API server for a changed encryption config
   ansible.builtin.shell: >-
     set -o pipefail;
-    crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps --name '^kube-apiserver$' -q
-    | xargs -r crictl --runtime-endpoint unix:///run/containerd/containerd.sock stop
+    crictl --timeout 60s --runtime-endpoint unix:///run/containerd/containerd.sock ps --name '^kube-apiserver$' -q
+    | xargs -r crictl --timeout 60s --runtime-endpoint unix:///run/containerd/containerd.sock stop
   when: k8s_cp_enc_config is changed and k8s_cp_apiserver_has_enc
   register: k8s_cp_apiserver_restart
+  retries: 3
+  delay: 10
+  until: k8s_cp_apiserver_restart is succeeded
   changed_when: true
 
 # Proof that the running API server encrypts: write a throwaway Secret and read it straight from
