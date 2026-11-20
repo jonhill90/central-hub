@@ -99,14 +99,18 @@
 # Test build only: the passwords come from the box, so the console script is skipped (the marker exists). Neither
 # password is on a command line (stdin) or in the log.
 - name: desktop | Test build, the login password is set from the box
-  ansible.builtin.shell: 'printf "%s:%s\n" "{{ desktop_user }}" "$DESKTOP_PW" | chpasswd'
+  ansible.builtin.shell: 'set -o pipefail; printf "%s:%s\n" "{{ desktop_user }}" "$DESKTOP_PW" | chpasswd'
+  args:
+    executable: /bin/bash
   environment: {DESKTOP_PW: "{{ desktop_test_login_password }}"}
   no_log: true
   changed_when: true
   when: desktop_test_login | bool
 
 - name: desktop | Test build, the RDP credential is set from the box
-  ansible.builtin.shell: 'printf "%s\n" "$DESKTOP_PW" | grdctl --system rdp set-credentials "{{ desktop_user }}" && grdctl --system rdp enable'
+  ansible.builtin.shell: 'set -o pipefail; printf "%s\n" "$DESKTOP_PW" | grdctl --system rdp set-credentials "{{ desktop_user }}" && grdctl --system rdp enable'
+  args:
+    executable: /bin/bash
   environment: {DESKTOP_PW: "{{ desktop_test_rdp_password }}"}
   no_log: true
   changed_when: true
