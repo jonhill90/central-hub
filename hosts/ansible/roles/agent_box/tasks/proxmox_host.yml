@@ -19,7 +19,7 @@
     state: directory
     owner: "{{ agent_box_host_user }}"
     group: "{{ agent_box_devaddr_group }}"
-    mode: "0750"
+    mode: "2750"   # setgid: what the job writes there gets the devaddr group, so the keys user can read it
 
 - name: proxmox_host | Its key folder and its work folder, its own only
   ansible.builtin.file:

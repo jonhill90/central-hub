@@ -135,18 +135,23 @@ esac
 # Publish the host's public host key (two fields: type and key, public data) for the keys user's rebuild wrapper, which pins it for dev's
 # worker (dev-worker-address.sh key). Written from this job's own known_hosts, by this user, into a folder it owns and the devaddr group reads;
 # best effort, never a stop. It is the key the host job itself already trusts.
+# Files this user makes carry its own group, so the file is given the handoff group (the keys user is in it) before it is moved into place.
 hostkey_dir=/var/lib/agent-box-hostkey
+handoff_group=devaddr
+publish() { # <file in the hostkey folder> <text>: atomically, mode 0640, group devaddr; best effort
+  local f=$hostkey_dir/$1 tmp=$hostkey_dir/$1.part
+  [[ -d $hostkey_dir ]] || return 0
+  printf '%s\n' "$2" > "$tmp" && chmod 0640 "$tmp" && chgrp "$handoff_group" "$tmp" && mv -f -- "$tmp" "$f" || rm -f -- "$tmp"
+}
 if [[ -d $hostkey_dir ]]; then
-  python3 -I -c '
-import os, sys
+  hk=$(python3 -I -c '
+import sys
 for line in open(sys.argv[1]):
     f = line.split()
     if len(f) == 3 and f[1] == "ssh-ed25519":
-        tmp = sys.argv[2] + ".part"
-        open(tmp, "w").write(f[1] + " " + f[2] + "\n")
-        os.chmod(tmp, 0o640)
-        os.replace(tmp, sys.argv[2])
-        break' "$dir/known_hosts" "$hostkey_dir/proxmox-host.pub" 2>/dev/null || true
+        print(f[1] + " " + f[2])
+        break' "$dir/known_hosts" 2>/dev/null || true)
+  [[ -z $hk ]] || publish proxmox-host.pub "$hk"
 fi
 
 # The sso job reads the proxmox client's secret from one file of this user's own, made by the controller's run (tag

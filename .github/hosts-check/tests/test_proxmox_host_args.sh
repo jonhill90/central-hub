@@ -351,8 +351,16 @@ rm -f "$t/handoff/dev-worker-backup.pub" "$t/handoff/dev-worker-address"
 hk19=$(ssh-keygen -q -t ed25519 -N '' -f "$t/k19" && cut -d' ' -f1,2 "$t/k19.pub")
 printf '192.0.2.1 %s\n' "$hk19" > "$t/dir/known_hosts"; rm -f "$t/hostkey/proxmox-host.pub"
 job check > "$t/19.out" 2>&1
+# These tests run as one user, so the file's group would be right by luck: a stand-in chgrp records the group and the file it is asked to set, and the
+# file must be given group devaddr before it is moved into place (the job's user is not in the group as a primary one: files it makes get its own).
+printf '#!/bin/sh\necho "$*" >> "%s/chgrp-calls"\nexec /usr/bin/chgrp "$@"\n' "$t" > "$t/bin/chgrp"; chmod +x "$t/bin/chgrp"
+sed -i "s|^handoff_group=.*|handoff_group=$(id -gn)|" "$t/job.sh"; : > "$t/chgrp-calls"
+PATH=$t/bin:$PATH job check > "$t/19.out" 2>&1
 if [[ $(cat "$t/hostkey/proxmox-host.pub" 2>/dev/null) == "$hk19" && $(stat -c %a "$t/hostkey/proxmox-host.pub") == 640 ]] && ! grep -qF "${hk19#* }" "$t/19.out" "$t/calls"; then
   ok "19 the host's public host key is published (two fields, 0640) and not printed"
 else bad "19 published=[$(cat "$t/hostkey/proxmox-host.pub" 2>/dev/null)] $(cat "$t/19.out")"; fi
+grep -q "^$(id -gn) $t/hostkey/proxmox-host.pub.part$" "$t/chgrp-calls" && ok "19 the file is given the handoff group before it is moved into place" || bad "19 no chgrp of the published file: $(cat "$t/chgrp-calls")"
+grep -q 'handoff_group=devaddr' "$root/hosts/ansible/roles/agent_box/files/proxmox-host.sh" && grep -q 'mode: "2750"' "$root/hosts/ansible/roles/agent_box/tasks/proxmox_host.yml" \
+  && ok "19 the real group is devaddr and the role makes the folder setgid (2750)" || bad "19 the group or the folder mode is not as expected"
 
 exit "$fail"
