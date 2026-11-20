@@ -137,5 +137,12 @@ t = [x for x in yaml.safe_load(open(sys.argv[1])) if x.get("name") == "desktop |
 assert t["retries"] >= 3 and "until" in t
 PY
 
+# A test build starts gdm: without it the system RDP daemon never listens (2026-11-20).
+python3 -I - "$here/hosts/ansible/roles/desktop/tasks/main.yml" <<'PY' && echo "ok   a test build starts gdm" || { echo "FAIL: no task starts gdm in a test build"; fails=$((fails + 1)); }
+import sys, yaml
+t = [x for x in yaml.safe_load(open(sys.argv[1])) if x.get("name") == "desktop | Test build, gdm is started"][0]
+assert t["ansible.builtin.systemd_service"] == {"name": "gdm.service", "state": "started"} and "desktop_test_login" in t["when"]
+PY
+
 if [[ $fails -gt 0 ]]; then echo "desktop configure vars: $fails test(s) failed"; exit 1; fi
 echo "desktop configure vars: all tests passed"

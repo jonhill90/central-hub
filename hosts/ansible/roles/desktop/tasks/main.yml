@@ -37,6 +37,17 @@
     name: gdm.service
     enabled: true
 
+# Measured on the 2026-11-20 test build: enabling gdm and setting the graphical target does not start gdm on the running
+# VM, and the system remote desktop daemon then sat in "activating (start)" and never listened on 3389 (rdp-check:
+# connection refused; diag: gdm inactive). After a reboot gdm ran and rdp-check passed ("the server picked CredSSP (NLA)",
+# "TLS handshake done"). A test build starts gdm now. The owner's build is left as it was, because gdm takes tty1, where the
+# console password script runs (untested); the owner's build waits on how the owner's passwords are to reach the VM.
+- name: desktop | Test build, gdm is started
+  ansible.builtin.systemd_service:
+    name: gdm.service
+    state: started
+  when: desktop_test_login | bool
+
 - name: desktop | The default target is graphical
   ansible.builtin.command: systemctl set-default graphical.target
   register: desktop_default_target
