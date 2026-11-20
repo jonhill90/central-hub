@@ -82,13 +82,13 @@ Why: RDP stays off until the owner types both passwords at the console, and fire
 3b. `desktop diag` (test builds only) shows the remote desktop's unit state, journal, listening ports and firewall, over the admin key that a test build keeps (`desktop_lock_admin` false, ssh open; it needs the test login file, so it refuses on the owner's build). Use it when `rdp-check` fails.
 4. `desktop stop` right after the check. The test VM must not hold 4096 MiB against a dev rebuild (the timer's rebuild keeps a running desktop and refuses when memory is short). It asks the VM to shut down; `desktop status` shows `stopped`.
 
-The box's copy of the test passwords, `/etc/agent-keys/desktop-test-login`, is deleted by `desktop destroy` and by a plain `desktop configure`, so no test build leaves a credential on the box.
+The box's copy of the test passwords, `/etc/agent-keys/desktop-test-login`, is deleted by `desktop destroy`, and a plain `desktop configure` refuses while it exists, so a test-built VM can never become the owner's desktop and no test build leaves a credential on the box.
 
 `grdctl --system rdp set-credentials <user>` with no password argument reads the password from standard input: in GNOME's `src/grd-ctl.c` (main branch, read 2026-11-20) `rdp_set_credentials` calls `prompt_for_input`, which reads one line from `STDIN_FILENO` and changes the terminal only when it is a tty. That is the source on main, not the version on AlmaLinux 10, so the first test build is where it is seen working.
 
 Not proven by this (not done): that GDM then shows a session. `+auth-only` stops after the login is accepted. The box gets its RDP client from the `freerdp` package (AlmaLinux 10 AppStream, 3.32.2 listed by `dnf` on the box 2026-11-20), installed by the `agent_box` role.
 
-The test build holds a credential the agents know, which the owner's desktop must not. After the check, rebuild from teardown with plain `desktop configure` so the owner types their own passwords at the console.
+The test build holds a credential the agents know, which the owner's desktop must not. After the check, run `desktop destroy`, `desktop apply`, then plain `desktop configure` so the owner types their own passwords at the console.
 
 ## If it fails
 

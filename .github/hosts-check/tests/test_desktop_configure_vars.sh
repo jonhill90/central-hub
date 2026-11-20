@@ -162,9 +162,10 @@ rm -f "$t/bin/xfreerdp3"; start_stub; out=$(PATH=/usr/bin:/bin STUBDIR=$t work=$
 if command -v xfreerdp3 xfreerdp >/dev/null 2>&1; then echo "skip rdp-check without a client (this machine has one)"; else
 [[ $out == *"no xfreerdp"* ]] && echo "ok   a test build without xfreerdp says so" || { echo "FAIL: no-client message: $out"; fails=$((fails + 1)); }; fi
 
-# The test passwords never outlive a test build: destroy and a plain configure delete the keys file.
+# The test passwords never outlive a test build: destroy deletes the keys file, and a plain configure refuses while it exists.
 n=$(grep -c 'rm -f "\$keys/desktop-test-login"' "$wrapper")
-[[ $n -eq 2 ]] && echo "ok   destroy and plain configure both delete the test login file" || { echo "FAIL: the test login file is deleted in $n place(s), want 2"; fails=$((fails + 1)); }
+[[ $n -eq 1 ]] && echo "ok   destroy deletes the test login file" || { echo "FAIL: the test login file is deleted in $n place(s), want 1"; fails=$((fails + 1)); }
+if grep -q -- '-z \${test_login:-} && -e \$keys/desktop-test-login' "$wrapper"; then echo "ok   a plain configure refuses on a test-built VM"; else echo "FAIL: no refusal of plain configure on a test-built VM"; fails=$((fails + 1)); fi
 grep -q 'status/shutdown' "$wrapper" && echo "ok   desktop stop asks the VM to shut down" || { echo "FAIL: no desktop stop"; fails=$((fails + 1)); }
 
 # The package install is retried: the first dnf run on a fresh VM loses a cache file (2026-11-19 and 11-20).

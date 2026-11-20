@@ -8,7 +8,8 @@
 # configure-test is configure for a VM that is a test build: the box makes two random passwords (login and
 # RDP, kept in the keys folder, never printed), the role sets them without the console and lets RDP in from
 # the box's own address too, so rdp-check can prove the RDP service from the box. The owner's own desktop is a
-# rebuild with plain configure afterwards (the owner types the passwords at the console). start and status
+# rebuild afterwards: destroy, apply, then plain configure (the owner types the passwords at the console; a plain
+# configure refuses on a VM that configure-test built). start and status
 # read and power VM 400 with the dev token (VM.Audit, VM.PowerMgmt); rdp-check speaks RDP to the VM's port 3389.
 # plan, apply, destroy: OpenTofu on hosts/terraform/home/desktop with the agents' Proxmox token.
 # configure: the desktop playbook over SSH as the cloud-init admin user. The role removes that
@@ -108,6 +109,12 @@ PY
 
 configure() {
   local extra inventory
+  # A VM built by configure-test keeps its admin key and ssh open and has known test passwords, so a plain
+  # configure on it would give the owner a VM that is not the owner's build. Only destroy clears the test login.
+  if [[ -z ${test_login:-} && -e $keys/desktop-test-login ]]; then
+    echo "desktop: this VM was built by configure-test (known test passwords). Run destroy, then apply and configure for the owner's build." >&2
+    exit 1
+  fi
   extra=$(mktemp --suffix=.json "$work/state/desktop-extra.XXXXXX")
   # The .json suffix makes Ansible read the inventory as YAML (JSON), not INI.
   inventory=$(mktemp --suffix=.json "$work/state/desktop-inventory.XXXXXX")
@@ -160,8 +167,6 @@ if sys.argv[6]:
     with os.fdopen(fd, "w") as f:
         json.dump(extra, f)
 PY
-  # A plain configure is the owner's build: the test passwords of an earlier test build are not kept.
-  [[ -n ${test_login:-} ]] || { rm -f "$keys/desktop-test-login"; echo "desktop: the test login file is deleted"; }
   mkdir -p "$work/.ssh"
   cd "$repo/hosts/ansible"
   # A rebuilt VM has a new host key: `desktop destroy` drops the old one (forget_host_key), so the
