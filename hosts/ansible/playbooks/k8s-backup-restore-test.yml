@@ -24,7 +24,7 @@
         state: started
       register: k8s_backup_rt_start_result
       changed_when: true
-      failed_when: false
+      ignore_errors: true
 
     - name: What the restore test said
       ansible.builtin.shell: >-
