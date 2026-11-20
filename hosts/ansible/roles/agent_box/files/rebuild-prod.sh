@@ -54,7 +54,7 @@ settings=$work/openbao-prod.json
 dev_logs=$work/rebuild-dev/logs
 vm_min=200
 vm_max=249
-export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
+export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 export TF_DATA_DIR=$work/tofu-data/rebuild-prod TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 

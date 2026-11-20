@@ -320,6 +320,10 @@ if [[ $r12a -eq 1 && $o12a == *"k8s_backup_sftp is true but the box's copy has n
   ok "12. the Proxmox host as backup target with no host address is refused before anything runs; no Azure sign-in: no certificate carried"
 else bad "12. $r12a $o12a | $r12b [$c12b] | $r12c $o12c"; fi
 
+# 12b. The wrapper's PATH reaches `ip` (/usr/sbin on the box, where the route check reads the routing table): on the box the check
+# failed with "no route to the Proxmox API's address" because `ip` was not found.
+if grep -qE '^export HOME=.* PATH=[^ ]*:/usr/sbin(:|$)' hosts/ansible/roles/agent_box/files/rebuild-prod.sh; then ok "12b. the wrapper's PATH includes /usr/sbin, so the route check finds ip"; else bad "12b. PATH lacks /usr/sbin"; fi
+
 # 13. The floor: rebuild asks whether PIN_FLOOR is an ancestor of the pinned commit, and refuses below it before anything runs;
 # check (no commit) never asks.
 floor=$(sed -n 's/^PIN_FLOOR=\([0-9a-f]\{40\}\)$/\1/p' hosts/ansible/roles/agent_box/files/rebuild-prod.sh)
