@@ -117,7 +117,7 @@ check_ansible() {
   bash "$here/tests/test_client_json_check.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
-  python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml
+  python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml playbooks/proxmox-ksm.yml playbooks/proxmox-ksm-off.yml
   bash "$here/tests/test_check_check_mode.sh"
   python3 "$here/check-hook-allowlist.py" .
   bash "$here/tests/test_runner_hook.sh"
@@ -504,6 +504,8 @@ check_scripts() {
   bash "$here/tests/test_box_apply.sh"
   bash "$here/tests/test_box_user_check_group.sh"
   bash "$here/tests/test_proxmox_memory_report.sh"
+  bash "$here/tests/test_proxmox_ksm_job.sh"
+  bash "$here/tests/test_desktop_allow_ksm.sh"
   bash "$here/tests/test_narrow_agent_access.sh"
   bash "$here/tests/test_desktop_trust_check.sh"
   actionlint -shellcheck="$(command -v shellcheck)"

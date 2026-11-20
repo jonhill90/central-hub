@@ -8,7 +8,9 @@
 #   guest <vmid> <qemu|lxc> <status> maxmem <configured> mem <in use as the host's resource list reports it>
 #   kvm id <vmid> rss <MiB the VM's process holds on the host>
 #   host <memtotal|memavailable|swaptotal|swapfree|shmem> <MiB>
-#   host ksm <run|pages_shared|pages_sharing> <value>
+#   host ksm <run|pages_shared|pages_sharing|sleep_millisecs|pages_to_scan|full_scans> <value>
+#   kvm id <vmid> merge <on|off>   off: the VM was started with mem-merge=off (Proxmox's allow-ksm 0), so KSM cannot merge its pages
+#   host ksmd <utime|stime> <clock ticks>, host clk_tck <ticks per second>   (ksmd's CPU time; the share is the delta over the wall time)
 - name: What holds the host's memory
   hosts: proxmox
   become: false
@@ -36,8 +38,26 @@
       check_mode: false
 
     - name: memory | Read the kernel's same-page merging counters
-      ansible.builtin.command: grep -H . /sys/kernel/mm/ksm/run /sys/kernel/mm/ksm/pages_shared /sys/kernel/mm/ksm/pages_sharing
+      ansible.builtin.command: >-
+        grep -H . /sys/kernel/mm/ksm/run /sys/kernel/mm/ksm/pages_shared /sys/kernel/mm/ksm/pages_sharing
+        /sys/kernel/mm/ksm/sleep_millisecs /sys/kernel/mm/ksm/pages_to_scan /sys/kernel/mm/ksm/full_scans
       register: memory_ksm
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    # ksmd's own CPU time (utime and stime, in clock ticks, fields 14 and 15 of its stat file) and the tick rate: two reads some minutes
+    # apart give the scan's CPU share. A host with no ksmd prints nothing here, and the report has no such line.
+    - name: memory | Read ksmd's CPU time
+      ansible.builtin.command: sh -c 'cat /proc/$(pgrep -x ksmd)/stat'
+      register: memory_ksmd
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: memory | Read the clock tick rate
+      ansible.builtin.command: getconf CLK_TCK
+      register: memory_tick
       changed_when: false
       failed_when: false
       check_mode: false
@@ -51,6 +71,7 @@
           {% endif %}{% endfor %}
           {% for l in memory_kvm.stdout_lines %}{% set m = l | regex_search('-id ([0-9]+)', '\\1') %}{% if m %}
           kvm id {{ m[0] | int }} rss {{ ((l.split()[0]) | int) // 1024 }}
+          kvm id {{ m[0] | int }} merge {{ 'off' if 'mem-merge=off' in l else 'on' }}
           {% endif %}{% endfor %}
           {% for l in memory_host.stdout_lines %}
           host {{ (l.split(':')[0]) | lower }} {{ ((l.split()[1]) | int) // 1024 }}
@@ -58,3 +79,9 @@
           {% for l in memory_ksm.stdout_lines %}
           host ksm {{ l.split('/')[-1].split(':')[0] }} {{ l.split(':')[-1] | int }}
           {% endfor %}
+          {% set kd = (memory_ksmd.stdout | default('')).split(') ')[-1].split() %}{% if kd | length > 12 %}
+          host ksmd utime {{ kd[11] | int }}
+          host ksmd stime {{ kd[12] | int }}
+          {% endif %}{% if (memory_tick.stdout | default('') | trim) is match('^[0-9]+$') %}
+          host clk_tck {{ memory_tick.stdout | trim | int }}
+          {% endif %}

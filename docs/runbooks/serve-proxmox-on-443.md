@@ -119,6 +119,33 @@ expect: `proxmox-host: memory: ...` lines: `guest <vmid> <qemu|lxc> <status> max
 
 why: the wrapper prints only lines that match that fixed shape (digits and fixed words), so no guest name or address can reach a session, whatever the host answers.
 
+## Make the host's memory go further with same-page merging (KSM)
+
+The always-on guests and a dev rebuild run the same image, so the host can keep one copy of each identical page: kernel same-page merging. It is off on the host (`host ksm run 0` in `check memory`). Two jobs of the same wrapper turn it on and off:
+
+```bash
+sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check ksm        # or ksm-off
+sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply-recorded ksm <check hash>
+```
+
+`ksm` runs `playbooks/proxmox-ksm.yml`, and the wrapper refuses an apply without a reviewer pass for the check's hash and a go for the commit, like every host job. It does four things, in this order:
+
+1. **Saves the prior state** once, to a root-only file on the host: the kernel's `run`, `sleep_millisecs` and `pages_to_scan`, and whether `ksmtuned` (Proxmox's tuning daemon, which rewrites those values while it runs) was enabled and active. A second `ksm` never overwrites it.
+2. **Keeps VMs 100 (the firewall), 258 (the agent box, which holds the keys) and 400 (the desktop) out of merging**, with `qm set <id> --allow-ksm 0`, because Proxmox warns that KSM can expose guests to side-channel attacks. Proxmox turns the setting into QEMU's `-machine ...,mem-merge=off` when the VM's process starts ([qemu-server, `PVE/QemuServer.pm`](https://git.proxmox.com/?p=qemu-server.git;a=blob;f=src/PVE/QemuServer.pm), the line that pushes `mem-merge=off` onto the machine flags), so on a VM that is already running the setting is pending until its next start, and nothing here restarts one. `check memory` says which VMs are protected now: `kvm id <vmid> merge off` is protected, `merge on` is not yet. A VM with no config (400 while the desktop is off) is skipped; run `ksm` again after it is rebuilt.
+3. Stops and disables `ksmtuned`, pins the scan pace (`sleep_millisecs` 200, `pages_to_scan` 1000) and sets `run` 1.
+4. Writes the same three values to `/etc/tmpfiles.d/central-hub-ksm.conf`, so a reboot keeps them.
+
+`ksm-off` restores the saved state: `run` 2 first when scanning was off before (it unmerges every merged page, which needs the memory back, so the play refuses when the free memory would not cover the merged pages plus 1 GiB), then the saved pace and the saved `run`, `ksmtuned` as it was, and removes the boot file and the saved state. It refuses when no saved state exists. `allow-ksm 0` stays on the protected VMs: it is a protection, not part of the saving.
+
+**Use it for the dev-run window only.** VMs 100 and 258 stay mergeable until they restart (see 2), so KSM is not left on. The order, every time:
+
+1. `ksm` (check, then apply-recorded), and note `host ksm full_scans` from `check memory`.
+2. Wait until `full_scans` has gone up by at least one: only then has a whole pass over the guests' memory run, and `pages_sharing` shows the saving.
+3. Run the dev rebuild's fit check (`rebuild fit`), then the dev run.
+4. `ksm-off` straight after the run, whether it passed or failed.
+
+Measure with `check memory` before, then at 20 and 40 minutes (a full scan of about 20 GiB of guest memory at this pace takes about 17 minutes; `host ksm full_scans` counts the passes). Read `host ksm pages_sharing` (4 KiB pages) and `host memavailable` (MiB), and `host ksmd utime` and `host ksmd stime` with `host clk_tck`: the CPU share is the change in `utime` plus `stime`, divided by `clk_tck`, divided by the seconds between the two reads.
+
 ## If it fails
 
 - Apache httpd does not start after a reboot: `systemctl status apache2` and `journalctl -u apache2`. The drop-in makes it wait for `pve-cluster`; if `/etc/pve` is not mounted, fix that first. The web UI is still on 8006.

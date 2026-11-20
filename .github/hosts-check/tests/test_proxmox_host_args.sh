@@ -301,7 +301,9 @@ python3 - > "$t/out-check.json" <<'PY'
 import json
 msg = "\n".join(["guest 301 qemu running maxmem 4096 mem 3072", "kvm id 301 rss 4096", "host memavailable 8407", "host ksm run 0",
                  "guest 302 qemu running maxmem 4096 mem 3072 name secret-host-name", "host 192.0.2.10 5", "pve-secret.example 1",
-                 "kvm id 258 rss 1024 -name other"])
+                 "kvm id 258 rss 1024 -name other",
+                 "kvm id 258 merge off", "kvm id 100 merge on", "kvm id 100 merge maybe secret", "host ksmd utime 123", "host ksmd stime 45",
+                 "host clk_tck 100", "host ksm full_scans 7", "host ksm pages_to_scan 1000", "host ksmd comm ksmd"])
 t = lambda n, **r: {"task": {"name": n}, "hosts": {"proxmox_host": r}}
 print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [t("memory | Read the guests' resources", changed=False),
       t("memory | REPORT", changed=False, msg=msg)]}], "stats": {}}))
@@ -311,7 +313,11 @@ job check memory > "$t/16b.out" 2>&1; rc16b=$?
 c16b=$(cat "$t/calls")
 if [ $rc16b = 0 ] && [[ $c16b == *playbooks/proxmox-memory.yml* ]] && grep -qx 'proxmox-host: memory: guest 301 qemu running maxmem 4096 mem 3072' "$t/16b.out" \
    && grep -qx 'proxmox-host: memory: kvm id 301 rss 4096' "$t/16b.out" && grep -qx 'proxmox-host: memory: host memavailable 8407' "$t/16b.out" \
-   && grep -qx 'proxmox-host: memory: host ksm run 0' "$t/16b.out" && grep -qx 'proxmox-host: memory: 4 line(s)' "$t/16b.out" \
+   && grep -qx 'proxmox-host: memory: host ksm run 0' "$t/16b.out" && grep -qx 'proxmox-host: memory: 11 line(s)' "$t/16b.out" \
+   && grep -qx 'proxmox-host: memory: kvm id 258 merge off' "$t/16b.out" && grep -qx 'proxmox-host: memory: kvm id 100 merge on' "$t/16b.out" \
+   && grep -qx 'proxmox-host: memory: host ksmd utime 123' "$t/16b.out" && grep -qx 'proxmox-host: memory: host ksmd stime 45' "$t/16b.out" \
+   && grep -qx 'proxmox-host: memory: host clk_tck 100' "$t/16b.out" && grep -qx 'proxmox-host: memory: host ksm full_scans 7' "$t/16b.out" \
+   && ! grep -q 'maybe\|ksmd comm' "$t/16b.out" \
    && ! grep -q 'secret\|192.0.2.10\|pve-secret\|-name' "$t/16b.out"; then
   ok "16b the memory job prints the allowlisted report lines and drops any other text"
 else bad "16b rc=$rc16b [$c16b] $(cat "$t/16b.out")"; fi

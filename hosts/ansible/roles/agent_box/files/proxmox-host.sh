@@ -14,6 +14,8 @@
 #   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller),
 #   `memory` (playbooks/proxmox-memory.yml: read-only; `check memory` prints, per guest and per host counter, numbers and fixed words only,
 #     the lines its REPORT task writes that match this wrapper's allowlist, so a session can see who holds the host's memory)
+#   `ksm` and `ksm-off` (playbooks/proxmox-ksm.yml, proxmox-ksm-off.yml: kernel same-page merging on the host, on with a pinned pace and off again;
+#     what it does: playbooks/tasks/proxmox-ksm.yml. A setting, so a session applies it only through `apply-recorded` with a reviewer pass and a go)
 #   `guests` (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell)
 #   or `restore-reader` (playbooks/proxmox-restic-reader.yml: the proxmox_restic_sftp role's read-only user `c1restore` and the keys
 #   that sign in as it, one per dev worker, each only from its own address; the list is in this job's inventory, written by the
@@ -57,7 +59,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -66,7 +68,7 @@ result=$work/state/check.json
 ledger=$work/ledger
 usage() {
   echo "       proxmox-host guard arm|confirm|rollback|clear|status" >&2
-  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|restore-reader|memory]|apply [proxy|agent-access|sso|firewall|guests|restore-reader|memory] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
+  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|restore-reader|memory|ksm|ksm-off]|apply [proxy|agent-access|sso|firewall|guests|restore-reader|memory|ksm|ksm-off] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
   echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
   exit 2
 }
@@ -349,8 +351,11 @@ import json, re, sys
 ok = [re.compile(p) for p in (
     r"guest [0-9]{1,9} (qemu|lxc) [a-z]{1,12} maxmem [0-9]{1,9} mem [0-9]{1,9}",
     r"kvm id [0-9]{1,9} rss [0-9]{1,9}",
+    r"kvm id [0-9]{1,9} merge (on|off)",
     r"host (memtotal|memavailable|swaptotal|swapfree|shmem) [0-9]{1,9}",
-    r"host ksm (run|pages_shared|pages_sharing) [0-9]{1,12}")]
+    r"host ksm (run|pages_shared|pages_sharing|sleep_millisecs|pages_to_scan|full_scans) [0-9]{1,12}",
+    r"host ksmd (utime|stime) [0-9]{1,15}",
+    r"host clk_tck [0-9]{1,6}")]
 n = 0
 for play in json.load(open(sys.argv[1])).get("plays", []):
     for t in play.get("tasks", []):
