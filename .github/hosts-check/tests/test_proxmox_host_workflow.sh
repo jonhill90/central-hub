@@ -14,7 +14,9 @@ ok() { echo "ok   $1"; }
 bad() { echo "not ok  $1"; fail=1; }
 
 # 1. The workflow's choices equal the wrapper's job names.
-want=$(grep -oE '^declare -A jobs=\(.*\)' "$wrapper" | grep -oE '\[[a-z-]+\]=' | tr -d '[]=' | sort | tr '\n' ' ')
+# `memory` is read-only and for a session on the box (`proxmox-host check memory`); it is not offered by the workflow, which runs on the
+# box and whose file's hash the runner hook pins (D-0042 rule 4), so a change to the workflow is a change to that pin too.
+want=$(grep -oE '^declare -A jobs=\(.*\)' "$wrapper" | grep -oE '\[[a-z-]+\]=' | tr -d '[]=' | grep -vx memory | sort | tr '\n' ' ')
 have=$(python3 -I - "$wf" <<'PY'
 import sys, yaml
 d = yaml.safe_load(open(sys.argv[1]))
