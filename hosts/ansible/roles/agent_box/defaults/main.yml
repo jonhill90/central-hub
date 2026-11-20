@@ -120,6 +120,18 @@ agent_box_wrappers:
         args: ["guard arm", "guard confirm", "guard rollback", "guard status"]
     runner: true
     run_as: hostops   # the same name as agent_box_host_user
+  # The agents' lab token (agentlab@pve!lab) for rebuild-prod: lab-token runs as hostops, which holds the host key, makes the
+  # token on the host and pipes it to lab-token-put, which runs as the keys user and writes /etc/agent-keys/proxmox-lab.env
+  # (the API URL line copied from proxmox-dev.env). Only hostops may call lab-token-put; a session has no argument there.
+  - name: lab-token
+    args: [status, mint]
+    run_as: hostops   # the same name as agent_box_host_user
+  - name: lab-token-put
+    args: [exists, put]
+    session_args: []
+    callers:
+      - user: hostops   # the same name as agent_box_host_user
+        args: [exists, put]
   # The tailnet policy file's pipeline job (D-0041, D-0046 rule 4): the same shape as tailnet-stack, for
   # hosts/terraform/home/tailnet-policy, which until now only the owner's Mac applied.
   # Since D-0063 it runs as the guard user with the policy's own client, and a session may also apply a saved plan

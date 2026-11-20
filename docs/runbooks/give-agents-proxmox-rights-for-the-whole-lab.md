@@ -62,7 +62,9 @@ The rights reach every guest, so a guest someone adds by hand later is in reach 
    PROXMOX_VE_API_TOKEN=agentlab@pve!lab=<secret>
    ```
 
-   Mint it with `pveum user token add agentlab@pve lab --privsep 1 --expire <epoch 30 days on> --output-format json`, piped into the keys wrapper as [set-up-the-agent-box.md](set-up-the-agent-box.md) step 5 does for the dev token. Then run step 2 again: a privilege-separated token gets only its own ACLs, and the script adds them only once the token exists.
+   From the box, with no typed line: `sudo -n -u hostops /usr/local/libexec/agent-box/lab-token.sh status` says whether the host has the token and the box has the file, and `... lab-token.sh mint` makes the token as below (privilege-separated, 30 days) and stores the file through `lab-token-put.sh`, which copies the API URL line from `proxmox-dev.env`. It never prints the secret, refuses when the host has the token or the box has the file (a renewal is a delete and waits on its own go), and removes the host's token again if storing fails. Then run the `agent-access` job once so the token gets its ACLs. Written and tested in CI with stand-ins (`test_lab_token.sh`); not yet run on the box.
+
+   By hand, mint it with `pveum user token add agentlab@pve lab --privsep 1 --expire <epoch 30 days on> --output-format json`, piped into the keys wrapper as [set-up-the-agent-box.md](set-up-the-agent-box.md) step 5 does for the dev token. Then run step 2 again: a privilege-separated token gets only its own ACLs, and the script adds them only once the token exists.
    expect: step 2 prints `done` again, and its checks now run against the token.
 
 ## Renew or revoke

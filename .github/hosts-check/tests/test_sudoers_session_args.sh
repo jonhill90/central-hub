@@ -64,6 +64,11 @@ print("10", lines(oc, "sess") == ["sess ALL=(keys) NOPASSWD: /x/opnsense-cert-ch
 gl = [l for l in h if l.startswith("guardops ")]
 print("11", gl == ["guardops ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh guard " + x for x in ["arm", "confirm", "rollback", "status"])],
       "Defaults:guardops env_reset" in h and not any("guard " in l for l in hr))
+lt = [w for w in d if w["name"] == "lab-token"][0]
+lp = [w for w in d if w["name"] == "lab-token-put"][0]
+ltt = render([lt, lp])
+print("12", [l for l in ltt.splitlines() if l.startswith("sess ")] == ["sess ALL=(hostops) NOPASSWD: /x/lab-token.sh status, /x/lab-token.sh mint"],
+      [l for l in ltt.splitlines() if l.startswith("hostops ")] == ["hostops ALL=(keys) NOPASSWD: /x/lab-token-put.sh exists, /x/lab-token-put.sh put"])
 PY
 )
 check() { # number, text
@@ -80,4 +85,5 @@ check 8 "8. tailnet-policy: as guardops, the session gets plan, the ledger and a
 check 9 "9. vps-host: the session gets status and log only, the runner every action"
 check 10 "10. opnsense-cert-check: the session gets check and status as the keys user, the runner nothing"
 check 11 "11. guardops: only proxmox-host guard arm, confirm, rollback and status as hostops; the runner gets no guard"
+check 12 "12. lab-token: the session may status and mint as hostops; only hostops may run lab-token-put (as keys); the session has no line for it"
 exit "$fail"
