@@ -35,22 +35,26 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # upstream install of Argo CD). observability: metrics-server, kube-prometheus-stack, Loki, Alloy and Grafana's route, with every tag the
 # role has named, so a tag added later is not run until this line names it. None of them needs a private file on the box: the inventory carries their values. k8s-certs.yml is not
 # a name here: it needs the lab CA's key and the Cloudflare token on the controller, and the box holds neither.
+# clients: makes sure client `proxmox` is in the live realm (tags secrets and clients, the role's add-in-place path: files/ensure-client.sh
+# creates a client that is missing and updates one that is there; users, groups and the other clients are not touched, and the realm is
+# never replaced). Unlike `identity` it does not run the operator, database or keycloak tags, so a pending Keycloak or operator version
+# change on prod is not rolled out by it.
 # users: adds the sign-in test user, `signin-test`, to the live realm (tags secrets and users, which never replace the realm: the
 # role's keycloak tag does that and this name does not run it). The user must be in the private inventory's k8s_identity_extra_users,
 # or the run stops at user-json.py; a user already there is left as it is. The secrets tag also adds a random password and seed to the
 # box's own identity.env for a key it lacks, and writes the realm's Secret in c1.
-declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml)
-declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env")
-declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file)
+declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml)
+declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env")
+declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file)
 # Fixed extra variables per name. identity never replaces realm lab on prod: the role's default deletes the realm and
 # imports it again when its code changes, which on prod ends every sign-in and drops enrolled one-time codes. With false
 # the realm is only made when missing; a client is added in place by the role's clients tag.
-declare -A fixed_vars=([identity]=k8s_identity_realm_replace=false [users]=k8s_identity_realm_replace=false)
+declare -A fixed_vars=([identity]=k8s_identity_realm_replace=false [users]=k8s_identity_realm_replace=false [clients]=k8s_identity_realm_replace=false)
 # Tags per name. identity runs every task plus the clients tag, which is off by default. The tag acts only on the clients in
 # k8s_identity_ensure_clients (empty by default), so the wrapper names one: proxmox, the client the realm gained after prod's
 # realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
-declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof" [users]="secrets,users")
-declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}')
+declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof" [users]="secrets,users" [clients]="secrets,clients")
+declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}' [clients]='{"k8s_identity_ensure_clients":["proxmox"]}')
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
 action=${1:-} name='' clearance=''
