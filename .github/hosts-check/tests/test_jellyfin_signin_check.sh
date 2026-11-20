@@ -27,9 +27,11 @@ import base64, hashlib, hmac, http.server, json, struct, sys, time, urllib.parse
 port, mode, seed = int(sys.argv[1]), sys.argv[2], sys.argv[3]
 KC, JF = "http://kc.invalid:%d" % port, "http://jf.invalid:%d" % port
 def totp(off):
-    mac = hmac.new(base64.b32decode(seed), struct.pack(">Q", int(time.time() // 30) + off), hashlib.sha1).digest()
+    mac = hmac.new(base64.b32decode(seed), struct.pack(">Q", int(time.time() // P) + off), hashlib.sha1).digest()
     o = mac[-1] & 15
     return str((struct.unpack(">I", mac[o:o + 4])[0] & 0x7FFFFFFF) % 10 ** 6).zfill(6)
+OTP, BURNED = [0], set()
+P = 2 if mode == "burned" else 30
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def send(self, code, body="", loc=None, ctype="text/html"):
@@ -64,6 +66,11 @@ class H(http.server.BaseHTTPRequestHandler):
             if f.get("password") != ["pw-secret-value"]: return self.send(200, "<form action='/login'>bad</form>")
             if mode == "nootp": return self.send(302, loc=JF + "/sso/OID/redirect/keycloak?code=abc")
             return self.send(200, '<form action="/otp" method="post"><input name="otp"></form>')
+        if f.get("otp") is not None:
+            OTP[0] += 1
+            if mode == "burned" and OTP[0] == 1: BURNED.update([totp(0), totp(1)])  # another check used this window's and the next window's code
+            if mode == "alwaysused" or f.get("otp")[0] in BURNED:  # a code Keycloak has already accepted
+                return self.send(200, '<form action="/otp" method="post"><input name="otp"></form>')
         if f.get("otp") in ([totp(0)], [totp(-1)], [totp(1)]):
             return self.send(302, loc=JF + "/sso/OID/redirect/keycloak?code=abc&state=s")
         self.send(200, '<form action="/otp" method="post"><input name="otp"></form>')
@@ -73,12 +80,17 @@ run() { # mode
   [[ -z $srv ]] || { kill "$srv" 2>/dev/null; wait "$srv" 2>/dev/null || true; }
   python3 -I "$t/server.py" "$port" "$1" "$seed" & srv=$!
   sleep 0.5
-  printf '{"base":"http://kc.invalid:%s","jellyfin_base":"http://jf.invalid:%s","realm":"lab","provider":"keycloak","user":"u","password":"pw-secret-value","seed":"%s","address":"127.0.0.1","verify":true,"expect_admin":true}' "$port" "$port" "$seed" > "$t/creds.json"
+  printf '{"base":"http://kc.invalid:%s","jellyfin_base":"http://jf.invalid:%s","realm":"lab","provider":"keycloak","user":"u","password":"pw-secret-value","seed":"%s","address":"127.0.0.1","verify":true,"retry_wait":0.1,"expect_admin":true}' "$port" "$port" "$seed" > "$t/creds.json"
+  [[ $1 != burned ]] || sed -i 's/"retry_wait":0.1,/"retry_wait":2.1,"period":2,/' "$t/creds.json"
   chmod 600 "$t/creds.json"
   python3 -I "$check" "$t/creds.json" > "$t/out" 2>&1 && rc=0 || rc=$?
 }
 run normal
 [[ $rc -eq 0 && $(grep -c ' ok$' "$t/out") -eq 7 ]] && ok "1. the whole flow: seven steps pass" || bad "1. $(cat "$t/out")"
+run burned
+[[ $rc -eq 0 && $(grep -c ' ok$' "$t/out") -eq 7 ]] && ok "1b. a code, and the next window's, already accepted by Keycloak: the check waits for a later window and: seven steps pass" || bad "1b. $(cat "$t/out")"
+run alwaysused
+[[ $rc -ne 0 ]] && grep -q '^4 password + code: HTTP 200 FAIL' "$t/out" && ! grep -q '^5 ' "$t/out" && ok "1c. a code refused three times fails step 4 and stops" || bad "1c. $(cat "$t/out")"
 cp "$t/out" "$t/out-normal"
 run nootp
 [[ $rc -ne 0 ]] && grep -q '^3 password only: HTTP 302 FAIL' "$t/out" && ! grep -q '^4 ' "$t/out" && ok "2. the password alone signing in fails step 3 and stops" || bad "2. $(cat "$t/out")"
