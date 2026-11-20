@@ -194,7 +194,6 @@ rm -f "$t/handoff/dev-worker-address"
 
 # 11 a confirmed apply leaves a marker: the sha256 of the dev address it opened (nothing else), so the box's rebuild wrapper switches dev to the
 #    Proxmox target only when the firewall has the rule; an apply with no dev address removes it; a check never writes it
-tm2=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"
 want=$(printf '10.1.30.12\n' | sha256sum | cut -c1-64)
 rm -f "$t/ga/dev-rule-applied"; job check > "$t/11a.out" 2>&1
