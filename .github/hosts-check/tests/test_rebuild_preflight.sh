@@ -118,7 +118,7 @@ grep -q 'the declared dev VMs need\[^"\]\*' "$src" && echo "ok   the short log k
 # The dev sizes reach OpenTofu on dev only, and every tofu call that takes the tfvars takes the same set.
 grep -q '^if \[ "\$ENV_NAME" = dev \]; then$' "$src" && grep -q '^  tofu_vars+=(-var "memory_mb_by_role=' "$src" && echo "ok   a dev run passes the dev sizes" || { echo "FAIL: the dev sizes are not passed on dev"; fail=1; }
 if grep -n 'tofu_k8s .*-var-file="\$TFVARS"' "$src"; then echo "FAIL: a tofu call takes the tfvars without the dev sizes"; fail=1; else echo "ok   no tofu call takes the tfvars alone"; fi
-[ "$(grep -c 'tofu_k8s [a-z]* .*"\${tofu_vars\[@\]}"' "$src")" = 3 ] && echo "ok   plan, apply and destroy take the same set" || { echo "FAIL: not every tofu call takes the same set"; fail=1; }
+[ "$(grep -c 'tofu_k8s [a-z]* .*"\${tofu_vars\[@\]}"' "$src")" = 4 ] && echo "ok   plan, apply, the teardown's refresh-only apply and destroy take the same set" || { echo "FAIL: not every tofu call takes the same set"; fail=1; }
 # Short, VM 300 running: stop it, re-read, and pass when it now fits. The marker stays until the trap starts it.
 out=$(FAKE_AFTER_AVAILABLE=$((16 * GIB)) run dev 31 28); check "short then fits: VM 300 is stopped and the run passes" "$out" "runner stop: VM 300 is stopped" "refused"
 check "it re-reads the memory and says so" "$out" "16384 MiB (field: available) after VM 300 stopped" "refused"
