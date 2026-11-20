@@ -13,7 +13,8 @@ The steps follow the plugin's own page script (jellyfin-plugin-sso 5.1.1, SSOCon
 so no browser is needed. Each is printed as "<number> <name>: HTTP <code> <ok or FAIL: reason>" and nothing else:
   1 sso start        GET /sso/OID/start/<provider> on Jellyfin's own host; Jellyfin must redirect to Keycloak's
                      authorization endpoint for client jellyfin.
-  2 login page       GET that URL; the login form must come back (200).
+  2 login page       GET that URL; the login form must come back (200), after at most one redirect to Keycloak's
+                     login-actions page, which is where a pushed authorization request leads.
   3 password only    POST user name and password; Keycloak must answer with the one-time-code form, never a redirect.
   4 password + code  POST a code computed from the seed; Keycloak must redirect back to Jellyfin's
                      /sso/OID/redirect/<provider> with a code.
@@ -139,7 +140,14 @@ def main():
                 "no redirect to keycloak's authorization endpoint for client jellyfin"):
         return 1
 
-    code, _, body = call(loc)
+    code, headers, body = call(loc)
+    # The plugin starts the flow with a pushed authorization request (the link holds only client_id and request_uri), and Keycloak
+    # answers that link with one redirect to its login-actions page, where the form is. Followed once, and only to that path on
+    # Keycloak's own host. Measured on prod on 2026-11-19: step 2 ended "HTTP 302 FAIL: no login form" without this.
+    redirect = headers.get("Location", "") if headers else ""
+    if code in (301, 302, 303) and redirect.startswith(base + "/realms/" + cfg["realm"] + "/login-actions/"):
+        loc = redirect
+        code, _, body = call(loc)
     form = action(body)
     if not line(2, "login page", code, code == 200 and form is not None and 'name="password"' in body, "no login form"):
         return 1
