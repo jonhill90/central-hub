@@ -4,7 +4,7 @@
 # asks for it never sees the Proxmox token or the VM's SSH key. Installed by the agent_box role;
 # root owns it.
 #   sudo -n -u keys /usr/local/libexec/agent-box/desktop.sh plan|apply|configure|destroy
-#   sudo -n -u keys /usr/local/libexec/agent-box/desktop.sh configure-test|start|status|rdp-check
+#   sudo -n -u keys /usr/local/libexec/agent-box/desktop.sh configure-test|start|stop|status|rdp-check
 # configure-test is configure for a VM that is a test build: the box makes two random passwords (login and
 # RDP, kept in the keys folder, never printed), the role sets them without the console and lets RDP in from
 # the box's own address too, so rdp-check can prove the RDP service from the box. The owner's own desktop is a
@@ -19,8 +19,8 @@ set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | destroy | configure-test | start | status | rdp-check) action=$1 ;;
-  *) echo "usage: desktop plan|apply|configure|destroy|configure-test|start|status|rdp-check" >&2; exit 2 ;;
+  plan | apply | configure | destroy | configure-test | start | stop | status | rdp-check) action=$1 ;;
+  *) echo "usage: desktop plan|apply|configure|destroy|configure-test|start|stop|status|rdp-check" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -100,6 +100,8 @@ PY
       tofu apply -input=false "$plan"
       rm -f "$plan"
       forget_host_key
+      rm -f "$keys/desktop-test-login"
+      echo "desktop: the test login file is deleted"
       ;;
   esac
 }
@@ -157,6 +159,8 @@ if sys.argv[6]:
     with os.fdopen(fd, "w") as f:
         json.dump(extra, f)
 PY
+  # A plain configure is the owner's build: the test passwords of an earlier test build are not kept.
+  [[ -n ${test_login:-} ]] || { rm -f "$keys/desktop-test-login"; echo "desktop: the test login file is deleted"; }
   mkdir -p "$work/.ssh"
   cd "$repo/hosts/ansible"
   # A rebuilt VM has a new host key: `desktop destroy` drops the old one (forget_host_key), so the
@@ -179,6 +183,11 @@ vm_power() { # status|start
   node=$(setting proxmox_node_name); vmid=$(setting vm_id)
   cur=$(px_api GET "nodes/$node/qemu/$vmid/status/current" | python3 -I -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(d["status"], d.get("maxmem",0)//1048576)')
   echo "desktop: VM $vmid is ${cur% *} (memory ${cur#* } MiB)"
+  if [[ $1 == stop ]]; then
+    [[ ${cur% *} == running ]] || return 0
+    px_api POST "nodes/$node/qemu/$vmid/status/shutdown" >/dev/null && echo "desktop: shutdown requested, the VM's memory is freed once it stops"
+    return 0
+  fi
   [[ $1 == start && ${cur% *} != running ]] || return 0
   need=$(( ${cur#* } + 512 ))
   free=$(px_api GET "nodes/$node/status" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["data"]["memory"]["available"]//1048576)')
@@ -219,7 +228,7 @@ PY
 case $action in
   configure) configure ;;
   configure-test) test_login=1 configure ;;
-  status | start) vm_power "$action" ;;
+  status | start | stop) vm_power "$action" ;;
   rdp-check) rdp_check ;;
   *) tofu_run ;;
 esac

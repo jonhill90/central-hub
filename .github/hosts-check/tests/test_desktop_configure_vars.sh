@@ -125,5 +125,10 @@ out=$(settings=$t/settings.json bash -c "set -euo pipefail; setting() { echo 127
 out=$(bash -c "set -euo pipefail; setting() { echo 127.0.0.1; }; source '$t/rdp-port.sh'; rdp_check" 2>&1) || true
 [[ $out == *"did not answer"* ]] && echo "ok   rdp-check says so when nothing answers" || { echo "FAIL: rdp-check closed port: $out"; fails=$((fails + 1)); }
 
+# The test passwords never outlive a test build: destroy and a plain configure delete the keys file.
+n=$(grep -c 'rm -f "\$keys/desktop-test-login"' "$wrapper")
+[[ $n -eq 2 ]] && echo "ok   destroy and plain configure both delete the test login file" || { echo "FAIL: the test login file is deleted in $n place(s), want 2"; fails=$((fails + 1)); }
+grep -q 'status/shutdown' "$wrapper" && echo "ok   desktop stop asks the VM to shut down" || { echo "FAIL: no desktop stop"; fails=$((fails + 1)); }
+
 if [[ $fails -gt 0 ]]; then echo "desktop configure vars: $fails test(s) failed"; exit 1; fi
 echo "desktop configure vars: all tests passed"
