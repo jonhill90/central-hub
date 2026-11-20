@@ -43,7 +43,7 @@ cat > "$w/check.yml" <<YML
   tasks:
     - ansible.builtin.import_tasks: "$role/tasks/backup_target_checks.yml"
     - ansible.builtin.copy:
-        content: "{{ {'numbered': opnsense_lab_numbered_sequences} | to_json }}"
+        content: "{{ {'numbered': opnsense_lab_numbered_sequences, 'sources': opnsense_lab_backup_target.sources} | to_json }}"
         dest: "$w/seq.json"
         mode: "0600"
 YML
@@ -86,8 +86,14 @@ refuse "sequence 15 collides with the store admin rule when it is set" "$(echo "
 # The box's own extra source (the firewall job's vars file: the dev worker's handoff address) joins the inventory's two and is checked like them.
 extra=$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 30}]')
 if check "$extra"; then ok "an extra source named dev worker on VLAN 30 joins the two prod nodes and passes"; else bad "the extra source is refused"; cat "$w/out"; fi
+# A dev worker already in the inventory's list is replaced by the box's extra source of the same name (the box's address wins), so the
+# unique-name check can't stop the firewall job.
+dup=$(sub 'd["opnsense_lab_backup_target"]["sources"].append({"name": "dev worker", "address": "192.0.2.77", "vlan": 30}); d["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 30}]')
+if check "$dup" && python3 -I -c 'import json,sys; s=json.load(open(sys.argv[1]))["sources"]; assert [x["address"] for x in s if x["name"]=="dev worker"]==["192.0.2.30"] and len(s)==3, s' "$w/seq.json"; then
+  ok "a dev worker already in the inventory is replaced by the box's address, once"
+else bad "a dev worker in the inventory and the box's extra source are not joined cleanly"; cat "$w/out"; fi
 refuse "an extra source with an unknown VLAN is refused" "$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 99}]')"
-refuse "an extra source repeating a name is refused" "$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "prod node 200", "address": "192.0.2.30", "vlan": 30}]')"
+refuse "two extra sources with one name are refused" "$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 30}, {"name": "dev worker", "address": "192.0.2.31", "vlan": 30}]')"
 refuse "an extra source that is not an address is refused" "$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.0/24", "vlan": 30}]')"
 refuse "an extra source beyond the sequences is refused" "$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 30}]; d["opnsense_lab_backup_target_sequences"]=[13, 14]')"
 refuse "a source VLAN tag not in the file is refused" "$(sub 'd["opnsense_lab_backup_target"]["sources"].append({"name": "dev worker", "address": "192.0.2.30", "vlan": 99})')"
