@@ -1,0 +1,62 @@
+---
+# Run c1's restore test now, from the agent box's `c1-ansible apply backup-restore-test` (plan step 5, TASK-0296).
+# It starts the node's own c1-restore-test.service, the one the Sunday timer starts. That service takes no backup and writes over
+# no volume: it checks the repository, restores the newest etcd snapshot into a throwaway etcd and the newest volume snapshot's
+# canary files and database dumps into a temporary folder, compares them, and removes the folder (c1-restore-test-*.sh).
+# Then this play prints the run's PASS and FAIL lines, stops unless each node names the snapshot it restored, and stops if a
+# temporary folder is left behind. With --check (`c1-ansible check backup-restore-test`) nothing is started.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-backup-restore-test.yml
+- name: Restore test now
+  hosts: k8s_nodes
+  become: true
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: The time this run starts
+      ansible.builtin.command: date -u +%s
+      register: k8s_backup_rt_start
+      changed_when: false
+      check_mode: false
+
+    - name: Start the node's restore test and wait for it to end
+      ansible.builtin.systemd_service:
+        name: c1-restore-test.service
+        state: started
+      changed_when: true
+
+    - name: What the restore test said
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        journalctl -u c1-restore-test.service --since "@{{ k8s_backup_rt_start.stdout | trim }}" --no-pager -o cat
+        | grep -E 'PASS|FAIL|Fatal|ERROR|matches|complete' | cut -c1-240
+      args:
+        executable: /bin/bash
+      register: k8s_backup_rt_log
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Temporary folders the test left behind
+      ansible.builtin.shell: set -o pipefail; ls -d /var/tmp/c1-restore-test-* 2>/dev/null | wc -l
+      args:
+        executable: /bin/bash
+      register: k8s_backup_rt_left
+      changed_when: false
+      check_mode: false
+
+    - name: Print it
+      ansible.builtin.debug:
+        msg: |
+          == {{ inventory_hostname }} ==
+          {{ k8s_backup_rt_log.stdout }}
+          temporary folders left: {{ k8s_backup_rt_left.stdout | trim }}
+
+    - name: Each node restored a named snapshot, nothing failed, nothing is left behind
+      ansible.builtin.assert:
+        that:
+          - k8s_backup_rt_log.stdout_lines | select('search', 'PASS: .*snapshot [0-9a-f]{8} of ') | list | length >= 1
+          - k8s_backup_rt_log.stdout_lines | select('search', 'FAIL|Fatal|ERROR') | list | length == 0
+          - k8s_backup_rt_left.stdout | trim == '0'
+        fail_msg: "{{ k8s_backup_rt_log.stdout_lines }}; left {{ k8s_backup_rt_left.stdout | trim }}"
+        quiet: true
+      when: not ansible_check_mode
