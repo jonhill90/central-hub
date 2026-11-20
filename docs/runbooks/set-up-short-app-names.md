@@ -27,6 +27,8 @@ flowchart LR
 
 Each short name is its own DNS entry, in Unbound and in the tailnet's split DNS, so every other name in the zone still resolves publicly. On the Gateway one pair of listeners takes `*.<zone>`, and each app's route adds its short name. The certificate gets a second wildcard, `*.<zone>`, so no app name reaches Certificate Transparency logs with a public issuer.
 
+An app whose short name needs no private value gets its Unbound override from the role's own list, `opnsense_lab_short_app_names` (`roles/opnsense_lab/defaults/main.yml`, today `central-hub-app`), pointing at `k8s_gateway_address`; it needs no line in the private inventory. The firewall pipeline on the agent box runs it from `main` (`opnsense-prod.sh check`, then a reviewer's pass and `apply-recorded`, D-0063), and the box's own check of the name is `dig` or `getent hosts <app>.<zone>`. The tailnet split-DNS entry for that name is separate (step 3).
+
 Every part has its own switch, all on by default: `k8s_gateway_short_names`, `k8s_certs_short_names`, `k8s_app_route_short_names`, `k8s_identity_short_names`, `k8s_gitops_ui_short_names`, `k8s_observability_short_names`, and `shortNames` in the `gateway`, `jellyfin` and `alerts` charts.
 
 ## What needs the owner's hands

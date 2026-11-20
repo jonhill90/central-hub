@@ -36,6 +36,14 @@ opnsense_lab_parent: vtnet0
 # goes in the inventory.
 opnsense_lab_host_overrides: []
 
+# App short aliases <app>.<zone> (STD-0001 rule 5) that need no private value of their own: each
+# becomes an Unbound host override pointing at the c1 Gateway, k8s_gateway_address. The names are
+# the apps' own (they are already public here), so they live in the role, not in the private
+# inventory. An alias also listed in opnsense_lab_host_overrides is harmless: both match on the
+# same host and domain.
+opnsense_lab_short_app_names:
+  - central-hub-app
+
 # The DNS server the proof (tag dns_proof) asks. Empty means the mgmt gateway, Unbound itself; on a
 # tailnet device, 100.100.100.100 proves split DNS end to end.
 opnsense_lab_dns_proof_server: ""

@@ -41,3 +41,24 @@
   loop: "{{ opnsense_lab_host_overrides }}"
   loop_control:
     label: "{{ item.hostname }}.{{ (item.subdomain ~ '.') if item.subdomain | default('') | length > 0 else '' }}<zone>"
+
+# Short aliases whose name is not private: <app>.<zone> to the c1 Gateway (STD-0001 rule 5).
+- name: The Gateway address is set for the short aliases
+  ansible.builtin.assert:
+    that: k8s_gateway_address | default('') | length > 0
+    fail_msg: opnsense_lab_short_app_names needs k8s_gateway_address in the inventory.
+    quiet: true
+  when: opnsense_lab_short_app_names | length > 0
+
+- name: Unbound host overrides for app short aliases
+  oxlorg.opnsense.unbound_host:
+    hostname: "{{ item }}"
+    domain: "{{ opnsense_dns_zone }}"
+    record_type: A
+    value: "{{ k8s_gateway_address }}"
+    description: "Short alias, {{ item }} on c1"
+    match_fields: [hostname, domain]
+    reload: true
+  loop: "{{ opnsense_lab_short_app_names }}"
+  loop_control:
+    label: "{{ item }}.<zone>"
