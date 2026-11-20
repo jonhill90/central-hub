@@ -25,6 +25,14 @@
   changed_when: false
   check_mode: false
 
+- name: clients | How many Proxmox web names the render has (a count; the names are private)
+  ansible.builtin.debug:
+    msg: >-
+      k8s_identity_proxmox_hosts has {{ k8s_identity_proxmox_hosts | length }} name(s);
+      host proxmox_host is {{ 'in' if 'proxmox_host' in hostvars else 'not in' }} the inventory
+  run_once: true
+  when: "'proxmox' in k8s_identity_ensure_clients"
+
 - name: clients | Each client is in the rendered realm and every secret it needs is set
   ansible.builtin.command:
     argv: [python3, -I, "{{ role_path }}/files/client-json.py", "{{ k8s_identity_clients_dir.path }}/realm.yaml", "{{ __client }}", --check]
