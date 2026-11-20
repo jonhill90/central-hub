@@ -27,7 +27,7 @@ agent_box_wrappers:
     args: [plan, apply, configure, destroy, bump, c1-token]
   # The owner's desktop VM (docs/runbooks/set-up-the-desktop.md). Not applied until the owner says so.
   - name: desktop
-    args: [plan, apply, configure, destroy]
+    args: [plan, apply, configure, destroy, configure-test, start, status, rdp-check]
   # The lab's secrets store, OpenBao, inside the dev cluster (docs/runbooks/set-up-the-secrets-store.md, D-0058). The `*`
   # on put lets sudo pass the path and key; the value comes on stdin, and the wrapper checks both arguments itself.
   - name: secrets-store

@@ -67,6 +67,18 @@ The owner asked for a desktop in the lab, to sign in over RDP or VNC and log in 
 7. The owner connects with an RDP client to the VM's name (or its address), port 3389, as user `owner`, over the tailnet (the owner's device on the tailnet, with the tailnet connector's route to the dev range on).
    expect: the RDP login, then GDM's login screen, then a GNOME session. Untested until the first run.
 
+## Prove RDP from the agent box (test build)
+
+Why: RDP stays off until the owner types both passwords at the console, and firewalld takes 3389 from the connector only, so before this nothing on the box could ever see the service answer (the 2026-11-19 rebuild never did). A test build lets the box prove it, then the owner's build replaces it.
+
+1. VM 400 must be running (it is stopped whenever a dev rebuild needs the memory): `desktop status`, then `desktop start`. `start` refuses unless the node has the VM's memory plus 512 MiB available.
+2. `desktop configure-test` instead of `desktop configure` on a fresh VM (same steps 1 to 3 above, rights on and off around the apply). The box makes two different random passwords, keeps them in `/etc/agent-keys/desktop-test-login` (0600, the keys user's, never printed), the role sets them with no console step, and firewalld also accepts 3389 from the box's own address.
+3. `desktop rdp-check`: opens 3389, sends the X.224 connection request, reads the server's protocol choice, and does the TLS handshake. It sends no password. expect: `the server picked CredSSP (NLA)` (or TLS), `TLS handshake done`, and `RDP service answers; no login was tried`.
+
+Not proven by this: that a login works (NLA with the stored password) or that GDM then shows a session. The box has no RDP client (no `xfreerdp` in AlmaLinux 10's base repositories, checked on the box 2026-11-20), so that last step stays the owner's.
+
+The test build holds a credential the agents know, which the owner's desktop must not. After the check, rebuild from teardown with plain `desktop configure` so the owner types their own passwords at the console.
+
 ## If it fails
 
 - `configure` stops with "REMOTE HOST IDENTIFICATION HAS CHANGED": the VM at the desktop's address has a new host key that `desktop destroy` did not clear (the VM was removed some other way, or the destroy ran before this was added). Run `desktop destroy`, then `plan`, `apply` and `configure`: the destroy drops that address's line from the box's `known_hosts`, and the new VM's key is accepted on first contact.

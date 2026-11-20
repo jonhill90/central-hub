@@ -13,13 +13,13 @@ wrapper=$here/hosts/ansible/roles/agent_box/files/desktop.sh
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 
-awk '/"\$prodinv" <<'"'"'PY'"'"'$/ {on=1; next} on && /^PY$/ {exit} on {print}' "$wrapper" >"$t/vars.py"
+awk '/"\$prodinv" .*<<'"'"'PY'"'"'$/ {on=1; next} on && /^PY$/ {exit} on {print}' "$wrapper" >"$t/vars.py"
 [[ -s $t/vars.py ]] || { echo "FAIL: the configure Python was not found in desktop.sh"; exit 1; }
 echo '{"address": "192.0.2.91", "rdp_source": "192.0.2.5/32"}' >"$t/settings.json"
 echo "chain" >"$t/chain.crt"
 
 fails=0
-run() { python3 -I "$t/vars.py" "$t/settings.json" "$t/inv.json" "$t/extra.json" "$t/chain.crt" "$t/prod.yml"; }
+run() { python3 -I "$t/vars.py" "$t/settings.json" "$t/inv.json" "$t/extra.json" "$t/chain.crt" "$t/prod.yml" "" "$t/test-login.json"; }
 case_ok() { # description, inventory YAML, wanted zone
   printf '%s\n' "$2" >"$t/prod.yml"; rm -f "$t/extra.json"
   if run 2>"$t/err" && [[ $(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["desktop_trust_check_zone"])' "$t/extra.json") == "$3" ]]; then
@@ -83,6 +83,47 @@ rm -f "$t/w/.ssh/known_hosts"
 if work=$t/w settings=$t/settings.json bash -c "set -euo pipefail; source '$t/forget.sh'; forget_host_key" >/dev/null; then
   echo "ok   with no known_hosts yet, destroy goes on"
 else echo "FAIL: forget_host_key without known_hosts"; fails=$((fails + 1)); fi
+
+# configure-test: two random passwords go to the keys file (0600) and the extra vars, and the box's own address
+# becomes an extra RDP source. The plain configure writes neither.
+printf 'all: {vars: {k8s_gateway_zone: lab.example.com}}\n' >"$t/prod.yml"
+echo '{"address": "127.0.0.1", "rdp_source": "192.0.2.5/32"}' >"$t/settings.json"
+rm -f "$t/test-login.json" "$t/extra.json"
+(umask 077; python3 -I "$t/vars.py" "$t/settings.json" "$t/inv.json" "$t/extra.json" "$t/chain.crt" "$t/prod.yml" 1 "$t/test-login.json")
+if python3 -I - "$t/extra.json" "$t/test-login.json" <<'PY'
+import json, os, stat, sys
+e, k = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+assert e["desktop_test_login"] is True and e["desktop_rdp_extra_sources"] == ["127.0.0.1/32"]
+assert e["desktop_test_login_password"] == k["login_password"] and e["desktop_test_rdp_password"] == k["rdp_password"]
+assert k["login_password"] != k["rdp_password"] and len(k["rdp_password"]) >= 24
+assert stat.S_IMODE(os.stat(sys.argv[2]).st_mode) == 0o600 and stat.S_IMODE(os.stat(sys.argv[1]).st_mode) == 0o600
+PY
+then echo "ok   configure-test makes two different passwords, 0600, and the box as an extra source"
+else echo "FAIL: configure-test values"; fails=$((fails + 1)); fi
+rm -f "$t/test-login.json"; run
+[[ ! -e $t/test-login.json ]] && ! grep -q desktop_test_login "$t/extra.json" && echo "ok   plain configure makes no test login" || { echo "FAIL: plain configure wrote a test login"; fails=$((fails + 1)); }
+
+# rdp-check (cut from desktop.sh) against a stand-in that answers like an RDP server: X.224 confirm choosing
+# CredSSP, then TLS. It must print the protocol and the handshake, and fail with a clear line on a closed port.
+awk '/^rdp_check\(\) \{$/ {on=1} on {print} on && /^}$/ {exit}' "$wrapper" >"$t/rdp.sh"
+python3 -I - "$t" <<'PY'
+import os, socket, ssl, subprocess, sys
+t = sys.argv[1]
+subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=stub",
+                "-keyout", t + "/s.key", "-out", t + "/s.crt"], check=True, capture_output=True)
+srv = socket.socket(); srv.bind(("127.0.0.1", 0)); srv.listen(1)
+open(t + "/port", "w").write(str(srv.getsockname()[1]))
+if os.fork() == 0:
+    c, _ = srv.accept(); c.recv(512)
+    c.sendall(bytes([3, 0, 0, 19, 14, 0xD0, 0, 0, 0, 0, 0, 2, 0, 8, 0, 2, 0, 0, 0]))
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(t + "/s.crt", t + "/s.key")
+    ctx.wrap_socket(c, server_side=True).close(); os._exit(0)
+PY
+sed "s/3389/$(cat "$t/port")/" "$t/rdp.sh" >"$t/rdp-port.sh"
+out=$(settings=$t/settings.json bash -c "set -euo pipefail; setting() { echo 127.0.0.1; }; source '$t/rdp-port.sh'; rdp_check" 2>&1) || true
+[[ $out == *"picked CredSSP (NLA)"* && $out == *"TLS handshake done"* ]] && echo "ok   rdp-check reads the negotiation and the TLS handshake" || { echo "FAIL: rdp-check: $out"; fails=$((fails + 1)); }
+out=$(bash -c "set -euo pipefail; setting() { echo 127.0.0.1; }; source '$t/rdp-port.sh'; rdp_check" 2>&1) || true
+[[ $out == *"did not answer"* ]] && echo "ok   rdp-check says so when nothing answers" || { echo "FAIL: rdp-check closed port: $out"; fails=$((fails + 1)); }
 
 if [[ $fails -gt 0 ]]; then echo "desktop configure vars: $fails test(s) failed"; exit 1; fi
 echo "desktop configure vars: all tests passed"

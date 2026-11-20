@@ -96,6 +96,29 @@
     dest: /etc/systemd/system/desktop-rdp.path
     mode: "0644"
 
+# Test build only: the passwords come from the box, so the console script is skipped (the marker exists). Neither
+# password is on a command line (stdin) or in the log.
+- name: desktop | Test build, the login password is set from the box
+  ansible.builtin.shell: 'printf "%s:%s\n" "{{ desktop_user }}" "$DESKTOP_PW" | chpasswd'
+  environment: {DESKTOP_PW: "{{ desktop_test_login_password }}"}
+  no_log: true
+  changed_when: true
+  when: desktop_test_login | bool
+
+- name: desktop | Test build, the RDP credential is set from the box
+  ansible.builtin.shell: 'printf "%s\n" "$DESKTOP_PW" | grdctl --system rdp set-credentials "{{ desktop_user }}" && grdctl --system rdp enable'
+  environment: {DESKTOP_PW: "{{ desktop_test_rdp_password }}"}
+  no_log: true
+  changed_when: true
+  when: desktop_test_login | bool
+
+- name: desktop | Test build, the password marker is written
+  ansible.builtin.file:
+    path: "{{ desktop_password_marker }}"
+    state: touch
+    mode: "0644"
+  when: desktop_test_login | bool
+
 - name: desktop | The units are enabled
   ansible.builtin.systemd_service:
     name: "{{ item }}"
@@ -119,6 +142,17 @@
     permanent: true
     immediate: true
     state: enabled
+
+- name: desktop | firewalld also accepts RDP from the extra addresses (a test build)
+  ansible.posix.firewalld:
+    zone: public
+    rich_rule: 'rule family="ipv4" source address="{{ item }}" port port="{{ desktop_rdp_port }}" protocol="tcp" accept'
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ desktop_rdp_extra_sources }}"
+  loop_control:
+    label: "extra RDP source"
 
 # Started now, without waiting: the oneshot holds tty1 until the owner has typed the password, so a plain
 # start would block this run. Nothing reboots the VM, so without this the console keeps its getty.
