@@ -1,0 +1,30 @@
+---
+# Which guests the Proxmox host holds, read from the box (the proxmox-host wrapper's job `guests`). It only reads: stat on the
+# host's guest config files, which exist for every container (/etc/pve/lxc/<id>.conf) and VM (/etc/pve/qemu-server/<id>.conf).
+# Each task below shows as "changed" in a check run when its guest exists, and the wrapper prints the names of the changed
+# tasks (names come from this file, so no host name or address is ever printed). It changes nothing on the host.
+#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check guests
+- name: Which guests the host holds
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  tasks:
+    - name: guests | Look for the container 259 config
+      ansible.builtin.stat:
+        path: /etc/pve/lxc/259.conf
+      register: ct259
+
+    - name: guests | Look for the VM 258 config
+      ansible.builtin.stat:
+        path: /etc/pve/qemu-server/258.conf
+      register: vm258
+
+    - name: guests | EXISTS container 259
+      ansible.builtin.debug:
+        msg: "container 259 {{ 'exists' if ct259.stat.exists else 'is absent' }}"
+      changed_when: ct259.stat.exists
+
+    - name: guests | EXISTS VM 258
+      ansible.builtin.debug:
+        msg: "VM 258 {{ 'exists' if vm258.stat.exists else 'is absent' }}"
+      changed_when: vm258.stat.exists
