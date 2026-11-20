@@ -554,7 +554,7 @@ rm -rf "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
 import ipaddress, json, os, re, sys, yaml
-src, dst, key, known, keys, store_url, store_ca, in_cluster, store_settings, prod_inv = sys.argv[1:11]
+src, dst, key, known, keys, store_url, store_ca, in_cluster, store_settings, prod_inv, handoff, hostkey, applied = sys.argv[1:14]
 d = yaml.safe_load(open(src))
 # The box's own address as a /32, for the hand-over (the box's path to the store): the settings' box_cidr, private,
 # empty until that path is set. Checked as openbao-prod.sh checks prod's.
@@ -702,12 +702,25 @@ if pve_addr:
 w = find(d, "k8s_workers")
 wh = list((w or {}).get("hosts") or {})
 seed = keys + "/dev/backup-sftp"
-if pve_addr and len(wh) == 1 and all(os.path.isfile("%s/%s.%s" % (seed, wh[0], e)) for e in ("key", "pub", "known_hosts")):
+# It also needs the host to have the key and the firewall the rule: the restore-reader apply and the firewall apply each leave a marker, a
+# sha256 of what they applied (the key line and the address; the address), which must match the handoff files as they are now. A key or address
+# that changed since leaves the markers stale, so dev stays on Azure until both jobs have run again.
+import hashlib
+def sha(*lines):
+    return hashlib.sha256("".join(l + "\n" for l in lines).encode()).hexdigest()
+def rd(path):
+    try: return open(path).read().strip()
+    except OSError: return ""
+h_addr, h_key = rd(handoff + "/dev-worker-address"), rd(handoff + "/dev-worker-backup.pub")
+applied_ok = bool(h_addr and h_key) \
+    and rd(hostkey + "/reader-applied") == sha(h_key, h_addr) \
+    and rd(applied + "/dev-rule-applied") == sha(h_addr)
+if pve_addr and len(wh) == 1 and applied_ok and all(os.path.isfile("%s/%s.%s" % (seed, wh[0], e)) for e in ("key", "pub", "known_hosts")):
     v["k8s_backup_sftp"] = True
     v["k8s_backup_azure_identity"] = False
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster" "$work/secrets-store.json" "$keys/prod/inventory-hosts.yml"
+)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster" "$work/secrets-store.json" "$keys/prod/inventory-hosts.yml" /var/lib/agent-box-handoff /var/lib/agent-box-hostkey /var/lib/agent-box-guard-applied
 [[ -f $inventory/hosts.yml ]] || { echo "rebuild: could not build the box's dev inventory from $inv_src/hosts.yml" >&2; exit 1; }
 chmod 600 "$inventory/hosts.yml"
 

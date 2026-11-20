@@ -12,6 +12,14 @@
     groups: "{{ agent_box_devaddr_group }}"   # only the handoff group, which carries one private address
     append: false
 
+- name: guard_job | The folder where it says whether the dev worker's firewall rule was applied (a hash, for the keys user to read)
+  ansible.builtin.file:
+    path: "{{ agent_box_guard_applied_dir }}"
+    state: directory
+    owner: "{{ agent_box_guard_user }}"
+    group: "{{ agent_box_devaddr_group }}"
+    mode: "2750"
+
 - name: guard_job | Its key folder and its work folder, its own only
   ansible.builtin.file:
     path: "{{ item }}"

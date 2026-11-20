@@ -363,4 +363,25 @@ grep -q "^$(id -gn) $t/hostkey/proxmox-host.pub.part$" "$t/chgrp-calls" && ok "1
 grep -q 'handoff_group=devaddr' "$root/hosts/ansible/roles/agent_box/files/proxmox-host.sh" && grep -q 'mode: "2750"' "$root/hosts/ansible/roles/agent_box/tasks/proxmox_host.yml" \
   && ok "19 the real group is devaddr and the role makes the folder setgid (2750)" || bad "19 the group or the folder mode is not as expected"
 
+# 20 an apply of restore-reader leaves the marker the box's rebuild wrapper needs: the sha256 of the key line and the address it put on the host
+#    (neither itself); a check does not write it; an apply with no key from the handoff removes it; another job's apply never touches it
+printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"; printf '%s\n' "$k18" > "$t/handoff/dev-worker-backup.pub"
+cp "$t/out-check.json" "$t/out-apply.json"
+want20=$(printf '%s\n%s\n' "$k18" 10.1.30.12 | sha256sum | cut -c1-64)
+rm -f "$t/hostkey/reader-applied"
+h20=$(job check restore-reader 2>&1 | sed -n 's/^proxmox-host: check \([0-9a-f]\{12\}\):.*/\1/p')
+[ -n "$h20" ] && [ ! -e "$t/hostkey/reader-applied" ] && ok "20a a check writes no marker" || bad "20a h=$h20 marker=$(ls "$t/hostkey")"
+job apply restore-reader cmsg_0123456789abc "$h20" > "$t/20b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && [ "$(cat "$t/hostkey/reader-applied" 2>/dev/null)" = "$want20" ] && [ "$(stat -c %a "$t/hostkey/reader-applied")" = 640 ] && ! grep -qF "$k18" "$t/20b.out" && ! grep -q 10.1.30.12 "$t/20b.out"; then
+  ok "20b a restore-reader apply leaves the marker (sha256 of the key line and the address, 0640), printing neither"
+else bad "20b rc=$rc marker=[$(cat "$t/hostkey/reader-applied" 2>/dev/null)] $(cat "$t/20b.out")"; fi
+rm -f "$t/handoff/dev-worker-backup.pub"
+h20=$(job check restore-reader 2>&1 | sed -n 's/^proxmox-host: check \([0-9a-f]\{12\}\):.*/\1/p')
+job apply restore-reader cmsg_0123456789abc "$h20" > "$t/20c.out" 2>&1
+[ ! -e "$t/hostkey/reader-applied" ] && ok "20c an apply with no key from the handoff removes the marker" || bad "20c the marker stayed"
+echo stale > "$t/hostkey/reader-applied"; h20=$(job check proxy 2>&1 | sed -n 's/^proxmox-host: check \([0-9a-f]\{12\}\):.*/\1/p')
+job apply proxy cmsg_0123456789abc "$h20" > "$t/20d.out" 2>&1
+[ "$(cat "$t/hostkey/reader-applied")" = stale ] && ok "20d another job's apply leaves the marker alone" || bad "20d the marker changed"
+rm -f "$t/handoff/dev-worker-address"
+
 exit "$fail"

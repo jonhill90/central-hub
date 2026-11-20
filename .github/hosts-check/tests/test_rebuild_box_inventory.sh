@@ -44,7 +44,7 @@ Y
 build() { # in_cluster settings-json-or-none
   rm -f "$t/out.yml"
   if [[ $2 == none ]]; then rm -f "$t/settings.json"; else echo "$2" > "$t/settings.json"; fi
-  python3 -I -c "$(cat "$t/build.py")" "$t/src.yml" "$t/out.yml" /k/node.key /k/known_hosts /k "" /k/ca.crt "$1" "$t/settings.json" "${PROD_INV:-/nonexistent/inventory-hosts.yml}" > "$t/err" 2>&1
+  python3 -I -c "$(cat "$t/build.py")" "$t/src.yml" "$t/out.yml" /k/node.key /k/known_hosts /k "" /k/ca.crt "$1" "$t/settings.json" "${PROD_INV:-/nonexistent/inventory-hosts.yml}" "$t/ho" "$t/hk" "$t/ga" > "$t/err" 2>&1
   rc=$?
   cidr=$(python3 -I -c '
 import sys, yaml
@@ -170,18 +170,29 @@ if [[ $r6a == "/k/dev/backup-sftp -" && $r6b == "/k/dev/backup-sftp 192.0.2.50" 
   ok "6. the seed folder is set; the host's address comes from the prod copy, none without one, a bad one stops the build and is not printed"
 else bad "6. [$r6a] [$r6b] rc=$rc6 $err6"; fi
 
-# 7. Step 3: dev's restore moves to the Proxmox host's copy only when everything is in place (the host's address, and for the one worker its
-#    key pair and pinned host key): then sftp on and the Azure reader off in the box's built copy; anything missing leaves the inventory's own values.
-mkdir -p "$t/kd/dev/backup-sftp"
-buildk() { rm -f "$t/out.yml"; python3 -I -c "$(cat "$t/build.py")" "$t/src.yml" "$t/out.yml" /k/node.key /k/known_hosts "$t/kd" "" /k/ca.crt false "$t/none.json" "$t/prod.yml" > "$t/err" 2>&1; rc=$?; }
+# 7. Step 3: dev's restore moves to the Proxmox host's copy only when everything is in place: the host's address, the worker's key pair and the
+#    pinned host key, AND the two jobs' markers (the restore-reader apply put this key on the host for this address; the firewall apply opened
+#    this address), each a sha256 that must match the handoff files as they are now. Then sftp on and the Azure reader off in the box's built
+#    copy. Anything missing or stale leaves the inventory's own values.
+mkdir -p "$t/kd/dev/backup-sftp" "$t/ho" "$t/hk" "$t/ga"
+buildk() { rm -f "$t/out.yml"; python3 -I -c "$(cat "$t/build.py")" "$t/src.yml" "$t/out.yml" /k/node.key /k/known_hosts "$t/kd" "" /k/ca.crt false "$t/none.json" "$t/prod.yml" "$t/ho" "$t/hk" "$t/ga" > "$t/err" 2>&1; rc=$?; }
+sha() { python3 -I -c 'import hashlib,sys; print(hashlib.sha256("".join(l + "\n" for l in sys.argv[1:]).encode()).hexdigest())' "$@"; }
 printf 'all:\n  children:\n    proxmox:\n      hosts:\n        pve: {proxmox_host_mgmt_address: 192.0.2.50}\n' > "$t/prod.yml"
 cp "$t/src.keep" "$t/src.yml"
+key7='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample'; addr7=10.1.30.12
 buildk; f7a=$(flags)
 for e in key pub; do echo x > "$t/kd/dev/backup-sftp/node-w1.$e"; done; buildk; f7b=$(flags)
-echo "c1-backup-target ssh-ed25519 AAAA" > "$t/kd/dev/backup-sftp/node-w1.known_hosts"; buildk; f7c=$(flags)
-printf 'all:\n  children:\n    proxmox:\n      hosts:\n        pve: {}\n' > "$t/prod.yml"; buildk; f7d=$(flags)
-if [[ $f7a == "- -" && $f7b == "- -" && $f7c == "True False" && $f7d == "- -" ]]; then
-  ok "7. sftp on and the Azure reader off only with the host's address, the worker's pair and the pinned host key all there; any one missing leaves the inventory alone"
-else bad "7. [$f7a] [$f7b] [$f7c] [$f7d] $(cat "$t/err")"; fi
+echo "c1-backup-target ssh-ed25519 AAAA" > "$t/kd/dev/backup-sftp/node-w1.known_hosts"; buildk; f7c=$(flags)   # files, no markers
+echo "$addr7" > "$t/ho/dev-worker-address"; echo "$key7" > "$t/ho/dev-worker-backup.pub"
+sha "$key7" "$addr7" > "$t/hk/reader-applied"; buildk; f7d=$(flags)                                              # the key is on the host, no rule
+sha "$addr7" > "$t/ga/dev-rule-applied"; buildk; f7e=$(flags)                                                     # both: switch
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIother" > "$t/ho/dev-worker-backup.pub"; buildk; f7f=$(flags)           # key changed since: stale
+echo "$key7" > "$t/ho/dev-worker-backup.pub"; echo 10.1.30.13 > "$t/ho/dev-worker-address"; buildk; f7g=$(flags) # address changed since: stale
+echo "$addr7" > "$t/ho/dev-worker-address"; rm -f "$t/hk/reader-applied"; buildk; f7h=$(flags)                    # the host marker is gone
+sha "$key7" "$addr7" > "$t/hk/reader-applied"
+printf 'all:\n  children:\n    proxmox:\n      hosts:\n        pve: {}\n' > "$t/prod.yml"; buildk; f7i=$(flags)  # no host address
+if [[ $f7a == "- -" && $f7b == "- -" && $f7c == "- -" && $f7d == "- -" && $f7e == "True False" && $f7f == "- -" && $f7g == "- -" && $f7h == "- -" && $f7i == "- -" ]]; then
+  ok "7. sftp on and the Azure reader off only with the files, the host's address and both jobs' markers matching the handoff; a missing or stale one leaves the inventory alone"
+else bad "7. [$f7a] [$f7b] [$f7c] [$f7d] [$f7e] [$f7f] [$f7g] [$f7h] [$f7i] $(cat "$t/err")"; fi
 
 exit $fail

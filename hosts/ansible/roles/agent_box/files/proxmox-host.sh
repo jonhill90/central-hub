@@ -405,6 +405,11 @@ PY
       exit 1
     fi
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok
+    # restore-reader: say what it put on the host, so the box's rebuild wrapper switches dev to this target only when the key and its address
+    # are really there (sha256 of the key line and the address; the key and the address themselves are not published here).
+    if [[ $job == restore-reader ]]; then
+      if [[ -n ${rr_key:-} ]]; then publish reader-applied "$(printf '%s\n%s\n' "$rr_key" "$rr_addr" | sha256sum | cut -c1-64)"; else rm -f -- "$hostkey_dir/reader-applied"; fi
+    fi
     echo "proxmox-host: applied check $hash ($changed changed, $skipped skipped, $total tasks), pass $pass_ref"
     ;;
 esac
