@@ -711,6 +711,12 @@ print("rebuild: %d inventory hosts, all dev node addresses" % len(hv))
 PY
 )" "$keys/dev-vms.tfvars" "$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml" "$nodekey" "$envdir/known_hosts" || exit 1
 
+# Dev's worker address is fixed by the inventory (a static cloud-init address from dev-vms.tfvars, which the check above makes the only
+# addresses an inventory host may have), so the firewall job's rule and the host job's reader key follow the inventory, not the VMs:
+# hand the address over every time the inventory is parsed, and keep it across a teardown. A refusal removes the file. Not a stop: a
+# dev run's own stages do not need it.
+"$libexec/dev-worker-address.sh" write || true
+
 # The same state file as dev-vms, so the two wrappers agree about which VMs exist.
 cat > "$envdir/rebuild.env" <<ENV
 ENV_NAME=dev
@@ -727,8 +733,8 @@ $seal_env
 $app_secrets_env
 $short_node_env
 $keep_desktop_env
-TEARDOWN_HOOK='$libexec/dev-secrets.sh remove && $libexec/dev-worker-address.sh remove'
-RESTORE_HOOK='$libexec/dev-worker-address.sh write || true; cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
+TEARDOWN_HOOK='$libexec/dev-secrets.sh remove'
+RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'
 ENV
 chmod 600 "$envdir/rebuild.env"

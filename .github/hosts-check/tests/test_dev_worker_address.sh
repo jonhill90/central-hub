@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # The handoff of dev's worker address (hosts/ansible/roles/agent_box/files/dev-worker-address.sh), with the script's folders
 # pointed into a temp folder and a stand-in ansible-inventory:
-#   1. write, with a dev VM in the state, puts exactly one line, the worker's address, in the file (mode 0640), and prints no address.
-#   2. write with no dev VM, an unreadable state, no worker or two workers leaves no file (and removes an older one).
+#   1. write puts exactly one line, the worker's address, in the file (mode 0640), and prints no address; it does not look at the VMs.
+#   2. write with no worker or two workers leaves no file (and removes an older one).
 #   3. write refuses an address that is not one dev node address, and leaves no file.
 #   4. read prints the address, prints nothing and passes for a missing file, and refuses (naming no value) a file that is empty, holds
 #      two lines, no final newline, spaces, a prefix length, a leading zero, another VLAN, .0, or .224 and up.
-#   5. remove deletes the file and passes when there is none; the teardown hook and the restore hook call it.
+#   5. remove deletes the file and passes when there is none. The file survives a teardown: the teardown hook does not touch it, and
+#      rebuild.sh writes it each time it has parsed the inventory (and so also on `teardown`).
 #   6. A write leaves no temp file behind (the move is the only step that makes the file appear).
 set -euo pipefail
 src=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -31,6 +32,7 @@ chmod +x "$t/libexec/ansible-venv/bin/ansible-inventory"
 inv() { printf '{"k8s_workers":{"hosts":[%s]},"_meta":{"hostvars":{"w1":{"ansible_host":"%s"},"w2":{"ansible_host":"10.1.30.14"}}}}\n' "$1" "$2" > "$t/inv.json"; }
 vm='{"mode":"managed","type":"proxmox_virtual_environment_vm","instances":[{}]}'
 up() { echo "{\"resources\":[$vm]}" > "$state"; }
+down() { echo '{"resources":[]}' > "$state"; }
 
 # 1
 up; inv '"w1"' 10.1.30.12; rm -f "$file"
@@ -41,11 +43,10 @@ out=$("$t/h.sh" write 2>&1) || bad "1 write failed: $out"
 [[ ! -e $file.part ]] && ok "6 a write leaves no temp file" || bad "6 temp file left"
 
 # 2
-for case in "no VM|echo '{\"resources\":[]}' > $state" "unreadable state|echo 'not json' > $state" ; do
-  up; "$t/h.sh" write >/dev/null; eval "${case#*|}"
-  "$t/h.sh" write >/dev/null 2>&1 || true
-  [[ ! -e $file ]] && ok "2 ${case%%|*}: no file" || bad "2 ${case%%|*}: the old file stayed"
-done
+down; inv '"w1"' 10.1.30.12; rm -f "$file"; "$t/h.sh" write >/dev/null
+[[ $(cat "$file" 2>/dev/null) == 10.1.30.12 ]] && ok "1 with 0 dev VMs in the state (after a teardown) the file is still written: it follows the inventory" || bad "1 no file with 0 VMs"
+echo 'not json' > "$state"; echo 10.1.30.77 > "$file"; "$t/h.sh" write >/dev/null
+[[ $(cat "$file") == 10.1.30.12 ]] && ok "1 an unreadable state changes nothing" || bad "1 unreadable state"
 up; inv '' 10.1.30.12; "$t/h.sh" write >/dev/null 2>&1 && bad "2 no worker: write passed"; [[ ! -e $file ]] && ok "2 no worker: no file" || bad "2 no worker: file"
 up; inv '"w1","w2"' 10.1.30.12; "$t/h.sh" write >/dev/null 2>&1 && bad "2 two workers: write passed"; [[ ! -e $file ]] && ok "2 two workers: no file" || bad "2 two workers: file"
 
@@ -73,7 +74,11 @@ printf '10.1.30.1\n' > "$file"; [[ $("$t/h.sh" read) == 10.1.30.1 ]] && ok "4 .1
 
 # 5
 echo 10.1.30.12 > "$file"; "$t/h.sh" remove; [[ ! -e $file ]] && "$t/h.sh" remove && ok "5 remove deletes the file and passes with none" || bad "5 remove"
-grep -q "dev-worker-address.sh remove'" "$role/files/rebuild.sh" && grep -q "dev-worker-address.sh write || true; cd" "$role/files/rebuild.sh" \
-  && ok "5 the wrapper's teardown hook removes it and the restore hook writes it" || bad "5 the hooks are not wired"
+tear=$(grep -c "^TEARDOWN_HOOK='\$libexec/dev-secrets.sh remove'$" "$role/files/rebuild.sh")
+# the call sits after the inventory's checks and before the env file, in the same wrapper that runs every action
+call=$(grep -n 'dev-worker-address.sh" write || true' "$role/files/rebuild.sh" | cut -d: -f1)
+chk=$(grep -n 'every inventory host must be one of those addresses' "$role/files/rebuild.sh" | cut -d: -f1)
+env=$(grep -n '^cat > "\$envdir/rebuild.env"' "$role/files/rebuild.sh" | cut -d: -f1)
+[[ $tear == 1 && -n $call && -n $chk && -n $env && $chk -lt $call && $call -lt $env ]] && ok "5 the teardown hook leaves the file, and the wrapper writes it after the inventory checks, before every run" || bad "5 the wrapper's calls are not as expected (tear=$tear chk=$chk call=$call env=$env)"
 grep -q 'dest: "{{ agent_box_libexec_dir }}/dev-worker-address.sh"' "$role/tasks/main.yml" && ok "5 the role installs the script" || bad "5 not installed"
 exit "$fail"

@@ -87,7 +87,7 @@ run_teardown() { # <destroy rc> -> prints hook lines
 }
 run_teardown 0 | grep -q HOOK-RAN && ok "the teardown stage runs TEARDOWN_HOOK after a passing destroy" || bad "the hook did not run after the destroy"
 run_teardown 1 | grep -q HOOK-RAN && bad "the hook ran although the destroy failed" || ok "a failed destroy does not run the hook"
-grep -q "^TEARDOWN_HOOK='\$libexec/dev-secrets.sh remove && \$libexec/dev-worker-address.sh remove'" "$role/files/rebuild.sh" && ok "rebuild.sh's env file sets TEARDOWN_HOOK for every action that writes it" || bad "rebuild.sh does not set TEARDOWN_HOOK"
+grep -q "^TEARDOWN_HOOK='\$libexec/dev-secrets.sh remove'" "$role/files/rebuild.sh" && ok "rebuild.sh's env file sets TEARDOWN_HOOK for every action that writes it" || bad "rebuild.sh does not set TEARDOWN_HOOK"
 grep -q "src: dev-secrets.sh" "$role/tasks/secrets_bundle.yml" && ok "the role installs dev-secrets.sh" || bad "the role does not install dev-secrets.sh"
 bash -n "$role/files/dev-secrets.sh" "$role/files/secrets-bundle.sh" "$role/files/rebuild.sh" "$src/hosts/rebuild-k8s.sh" && ok "bash -n passes on every changed script" || bad "bash -n failed"
 
