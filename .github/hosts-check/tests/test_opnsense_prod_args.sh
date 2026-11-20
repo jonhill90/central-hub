@@ -59,7 +59,11 @@ echo "\$*" >> "$t/guard-calls"
 exit 0
 EOF
 chmod +x "$t/bin/host-guard"
-sed -e "s|^guard_cmd=.*|guard_cmd=($t/bin/host-guard guard)|" -e "s|^dir=.*|dir=$t/dir|" -e "s|^work=.*|work=$t/work|" -e "s|^ansible_bin=.*|ansible_bin=$t/bin|" \
+# The handoff helper, the real script pointed into the test's folders: a file in $t/handoff is what the wrappers read.
+mkdir -p "$t/libexec" "$t/handoff"
+sed -e "s|^handoff=.*|handoff=$t/handoff|" "$root/hosts/ansible/roles/agent_box/files/dev-worker-address.sh" > "$t/libexec/dev-worker-address.sh"
+chmod +x "$t/libexec/dev-worker-address.sh"
+sed -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^guard_cmd=.*|guard_cmd=($t/bin/host-guard guard)|" -e "s|^dir=.*|dir=$t/dir|" -e "s|^work=.*|work=$t/work|" -e "s|^ansible_bin=.*|ansible_bin=$t/bin|" \
     -e "s|^collections=.*|collections=$t/collections|" -e "s|^repo_url=.*|repo_url=$t/main.git|" \
     "$root/hosts/ansible/roles/agent_box/files/opnsense-prod.sh" > "$t/job.sh"
 grep -q "^guard_cmd=($t/bin/host-guard" "$t/job.sh" && grep -q "^repo_url=$t/main.git" "$t/job.sh" && grep -q "^ansible_bin=$t/bin" "$t/job.sh" ||
@@ -168,5 +172,23 @@ cp "$t/out.ok" "$t/out.json"; cp "$t/ap.ok" "$t/bin/ansible-playbook"
 n_all=$(grep -c . "$t/calls"); n_skip=$(grep -c -- "--skip-tags dns_proof" "$t/calls")
 [ "$n_all" -gt 0 ] && [ "$n_all" = "$n_skip" ] && grep -v -- '--check' "$t/calls" | grep -q -- "--skip-tags dns_proof" \
   && ok "9 every run skips dns_proof, the apply too ($n_skip of $n_all)" || bad "9 $n_skip of $n_all runs skip dns_proof"
+
+# 10 the dev worker's address from the handoff file joins the playbook's vars as the one extra backup source: in the vars file only,
+#    never on the command line or in the output; no file adds nothing; a file that is not exactly one dev node address stops the run
+rm -f "$t/handoff/dev-worker-address"; : > "$t/calls"
+job check > "$t/10a.out" 2>&1; rc=$?
+if [ $rc = 0 ] && ! grep -q "opnsense_lab_backup_target_extra_sources" "$t/vars-seen.json"; then ok "10a no handoff file: no extra source"; else bad "10a rc=$rc $(cat "$t/10a.out")"; fi
+printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"; : > "$t/calls"
+job check > "$t/10b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v["opnsense_lab_backup_target_extra_sources"]==[{"name":"dev worker","address":"10.1.30.12","vlan":30}], v' "$t/vars-seen.json" \
+   && ! grep -q "10.1.30.12" "$t/calls" "$t/10b.out"; then ok "10b the address is one extra source named dev worker on VLAN 30, in the vars file only"
+else bad "10b rc=$rc $(cat "$t/10b.out")"; fi
+for v in '10.1.30.230' '10.1.30.0' '10.1.20.5' '10.1.30.5/32' '10.1.30.5 10.1.30.6' 'abc' '010.1.30.5' ''; do
+  printf '%s\n' "$v" > "$t/handoff/dev-worker-address"; : > "$t/calls"
+  job check > "$t/10c.out" 2>&1; rc=$?
+  if [ $rc = 1 ] && [ ! -s "$t/calls" ] && { [ -z "$v" ] || ! grep -qF -- "$v" "$t/10c.out"; }; then :; else bad "10c shape '$v' rc=$rc [$(cat "$t/calls")] $(cat "$t/10c.out")"; fi
+done
+ok "10c 8 bad shapes stop the check before the playbook, naming no value"
+rm -f "$t/handoff/dev-worker-address"
 
 exit $fail

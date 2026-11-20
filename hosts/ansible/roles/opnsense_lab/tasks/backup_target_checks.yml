@@ -1,6 +1,17 @@
 ---
 # The backup target rules' inputs (tasks/backup_target.yml), checked before any rule is written; on its own so
 # .github/hosts-check/tests/test_opnsense_backup_target.sh can run it with no firewall.
+# Sources the agent box adds from its own state (a vars file of the firewall job: the dev worker's address, read from the box's
+# handoff file) join the inventory's, so one list is checked and one list gets rules. Empty by default: nothing changes.
+- name: The sources the box adds join the inventory's
+  ansible.builtin.set_fact:
+    opnsense_lab_backup_target: >-
+      {{ opnsense_lab_backup_target
+         | combine({'sources': opnsense_lab_backup_target.sources | default([]) + opnsense_lab_backup_target_extra_sources}) }}
+  when:
+    - opnsense_lab_backup_target is defined
+    - opnsense_lab_backup_target_extra_sources | length > 0
+
 - name: Backup sources fit their sequences and have known names
   ansible.builtin.assert:
     that:

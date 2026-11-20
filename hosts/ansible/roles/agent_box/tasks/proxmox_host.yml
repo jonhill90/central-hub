@@ -3,14 +3,14 @@
 # folders and the key that logs in to the Proxmox host as root. Everything here is a box limit (D-0036 rule 3 (c)
 # and (d)). The key is made only when agent_box_proxmox_host_job is true, the owner's tap (D-0042 rule 6).
 
-- name: proxmox_host | The job's user, a system user that can't log in and has no other groups
+- name: proxmox_host | The job's user, a system user that can't log in and has no other groups than the handoff group
   ansible.builtin.user:
     name: "{{ agent_box_host_user }}"
     system: true
     shell: /sbin/nologin
     home: "{{ agent_box_host_work_dir }}"
     create_home: false
-    groups: ""
+    groups: "{{ agent_box_devaddr_group }}"   # only the handoff group, which carries one private address
     append: false
 
 - name: proxmox_host | Its key folder and its work folder, its own only

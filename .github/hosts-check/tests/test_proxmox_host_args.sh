@@ -33,7 +33,7 @@ bad() { echo "FAIL $*"; fail=1; }
 mkdir -p "$t/bin" "$t/dir/inventory" "$t/work" "$t/collections"
 touch "$t/dir/inventory/hosts.yml" "$t/dir/id_ed25519" "$t/dir/known_hosts"
 # main: a local repository holding the playbook path the wrapper runs.
-git init -q -b main "$t/src" && mkdir -p "$t/src/hosts/ansible/playbooks" && echo "- hosts: proxmox" > "$t/src/hosts/ansible/playbooks/proxmox-proxy.yml"
+git init -q -b main "$t/src" && mkdir -p "$t/src/hosts/ansible/playbooks" && echo "- hosts: proxmox" > "$t/src/hosts/ansible/playbooks/proxmox-proxy.yml" && echo "- hosts: proxmox" > "$t/src/hosts/ansible/playbooks/proxmox-restic-reader.yml"
 git -C "$t/src" add -A && git -C "$t/src" -c user.name=t -c user.email=t@t commit -q -m one
 git clone -q --bare "$t/src" "$t/main.git"
 
@@ -62,7 +62,11 @@ print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": tasks}], "stats": {
 PY
 }
 
-sed -e "s|^dir=.*|dir=$t/dir|" -e "s|^work=.*|work=$t/work|" -e "s|^ansible_bin=.*|ansible_bin=$t/bin|" \
+# The handoff helper, the real script pointed into the test's folders: a file in $t/handoff is what the wrappers read.
+mkdir -p "$t/libexec" "$t/handoff"
+sed -e "s|^handoff=.*|handoff=$t/handoff|" "$root/hosts/ansible/roles/agent_box/files/dev-worker-address.sh" > "$t/libexec/dev-worker-address.sh"
+chmod +x "$t/libexec/dev-worker-address.sh"
+sed -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^dir=.*|dir=$t/dir|" -e "s|^work=.*|work=$t/work|" -e "s|^ansible_bin=.*|ansible_bin=$t/bin|" \
     -e "s|^collections=.*|collections=$t/collections|" -e "s|^repo_url=.*|repo_url=$t/main.git|" \
     "$root/hosts/ansible/roles/agent_box/files/proxmox-host.sh" > "$t/job.sh"
 grep -q "^repo_url=$t/main.git" "$t/job.sh" && grep -q "^ansible_bin=$t/bin" "$t/job.sh" ||
@@ -290,5 +294,39 @@ c16=$(cat "$t/calls")
 if [ $rc16 = 0 ] && [[ $c16 == *playbooks/proxmox-guests.yml* ]] && grep -qx 'proxmox-host: guests found: container 259' "$t/16.out"; then
   ok "16 the guests job runs proxmox-guests.yml and prints the guest that exists"
 else bad "16 rc=$rc16 [$c16] $(cat "$t/16.out")"; fi
+
+# 17 restore-reader takes the dev worker's address from the handoff file, in a vars file and never on the command line;
+#    no file, or a file that is not exactly one dev node address, stops it before the playbook runs, and no output shows the value
+cat > "$t/bin/ansible-playbook" <<EOF
+#!/bin/sh
+echo "\$*" >> "$t/calls"
+for a in "\$@"; do case "\$a" in @*) cat "\${a#@}" > "$t/vars-seen.json"; echo "\${a#@}" >> "$t/vars-paths" ;; esac; done
+case " \$* " in *" --check "*) cat "$t/out-check.json" ;; *) cat "$t/out-apply.json" ;; esac
+EOF
+python3 - > "$t/out-check.json" <<'PY'
+import json
+t = lambda n, **r: {"task": {"name": n}, "hosts": {"proxmox_host": r}}
+print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [t("keys", changed=True)]}], "stats": {}}))
+PY
+rm -f "$t/handoff/dev-worker-address"; : > "$t/calls"
+job check restore-reader > "$t/17a.out" 2>&1; rc=$?
+if [ $rc = 1 ] && [ ! -s "$t/calls" ] && grep -q "no dev worker address" "$t/17a.out"; then ok "17a restore-reader with no handoff file stops before the playbook"
+else bad "17a rc=$rc $(cat "$t/17a.out")"; fi
+printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check restore-reader > "$t/17b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && grep -q "playbooks/proxmox-restic-reader.yml" "$t/calls" && grep -q '"proxmox_restic_reader_from": "10.1.30.12"' "$t/vars-seen.json" \
+   && ! grep -q "10.1.30.12" "$t/calls" "$t/17b.out" && [ ! -e "$(head -1 "$t/vars-paths")" ]; then
+  ok "17b the address reaches the playbook in a vars file, not on the command line or in the output, and the file is gone after"
+else bad "17b rc=$rc [$(cat "$t/calls")] $(cat "$t/17b.out")"; fi
+for v in '10.1.30.230' '10.1.30.0' '10.1.20.5' '10.1.30.5/32' '10.1.30.5 10.1.30.6' 'abc' '010.1.30.5' ''; do
+  printf '%s\n' "$v" > "$t/handoff/dev-worker-address"; : > "$t/calls"
+  job check restore-reader > "$t/17c.out" 2>&1; rc=$?
+  if [ $rc = 1 ] && [ ! -s "$t/calls" ] && { [ -z "$v" ] || ! grep -qF -- "$v" "$t/17c.out"; }; then :; else bad "17c shape '$v' rc=$rc [$(cat "$t/calls")] $(cat "$t/17c.out")"; fi
+done
+printf '10.1.30.5\n10.1.30.6\n' > "$t/handoff/dev-worker-address"; : > "$t/calls"
+job check restore-reader > "$t/17c.out" 2>&1; [ $? = 1 ] && [ ! -s "$t/calls" ] && ok "17c a bad shape stops it before the playbook, naming no value (8 shapes and two lines)" || bad "17c two lines"
+printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"; : > "$t/calls"
+job check proxy > "$t/17d.out" 2>&1
+! grep -q "proxmox_restic_reader_from\|@" "$t/calls" && ok "17d the other jobs are not given the address" || bad "17d $(cat "$t/calls")"
 
 exit "$fail"

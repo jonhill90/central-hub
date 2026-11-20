@@ -727,8 +727,8 @@ $seal_env
 $app_secrets_env
 $short_node_env
 $keep_desktop_env
-TEARDOWN_HOOK='$libexec/dev-secrets.sh remove'
-RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
+TEARDOWN_HOOK='$libexec/dev-secrets.sh remove && $libexec/dev-worker-address.sh remove'
+RESTORE_HOOK='$libexec/dev-worker-address.sh write || true; cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check'
 ENV
 chmod 600 "$envdir/rebuild.env"

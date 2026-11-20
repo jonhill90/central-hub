@@ -39,7 +39,7 @@ cat > "$w/check.yml" <<YML
 - hosts: localhost
   connection: local
   gather_facts: false
-  vars_files: ["$vlan_file", "$w/settings.yml", "$role/defaults/main.yml", "$role/vars/main.yml"]
+  vars_files: ["$vlan_file", "$w/settings.yml", "$role/defaults/main.yml", "$role/vars/main.yml", "$w/case.json"]
   tasks:
     - ansible.builtin.import_tasks: "$role/tasks/backup_target_checks.yml"
     - ansible.builtin.copy:
@@ -47,7 +47,8 @@ cat > "$w/check.yml" <<YML
         dest: "$w/seq.json"
         mode: "0600"
 YML
-check() { ANSIBLE_LOCALHOST_WARNING=False ansible-playbook -i localhost, -e ansible_python_interpreter=auto_silent "$w/check.yml" -e "$1" >"$w/out" 2>&1; }
+# The case goes in as a vars file, not as extra vars, which no set_fact can override (the check joins the box's extra sources with set_fact, as inventory vars are).
+check() { printf '%s' "$1" > "$w/case.json"; ANSIBLE_LOCALHOST_WARNING=False ansible-playbook -i localhost, -e ansible_python_interpreter=auto_silent "$w/check.yml" >"$w/out" 2>&1; }
 
 if check "$good"; then
   ok "the two prod nodes at sequences 13 and 14 pass the check"
@@ -82,6 +83,13 @@ if check "$withdev"; then ok "a dev worker on VLAN 30 as a third source at seque
 withstore=$(sub 'd["opnsense_lab_backup_target"]["sources"].append({"name": "dev worker", "address": "192.0.2.30", "vlan": 30}); d["opnsense_lab_store_admin"]={"vlan": 30}; d["opnsense_lab_proxmox_web"]={"vlan": 30}')
 if check "$withstore"; then ok "with the store admin and Proxmox web rules set, the third source at sequence 17 passes"; else bad "the third source is refused with the store admin rule set"; cat "$w/out"; fi
 refuse "sequence 15 collides with the store admin rule when it is set" "$(echo "$withstore" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["opnsense_lab_backup_target_sequences"]=[13, 14, 15]; print(json.dumps(d))')"
+# The box's own extra source (the firewall job's vars file: the dev worker's handoff address) joins the inventory's two and is checked like them.
+extra=$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 30}]')
+if check "$extra"; then ok "an extra source named dev worker on VLAN 30 joins the two prod nodes and passes"; else bad "the extra source is refused"; cat "$w/out"; fi
+refuse "an extra source with an unknown VLAN is refused" "$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 99}]')"
+refuse "an extra source repeating a name is refused" "$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "prod node 200", "address": "192.0.2.30", "vlan": 30}]')"
+refuse "an extra source that is not an address is refused" "$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.0/24", "vlan": 30}]')"
+refuse "an extra source beyond the sequences is refused" "$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 30}]; d["opnsense_lab_backup_target_sequences"]=[13, 14]')"
 refuse "a source VLAN tag not in the file is refused" "$(sub 'd["opnsense_lab_backup_target"]["sources"].append({"name": "dev worker", "address": "192.0.2.30", "vlan": 99})')"
 
 # The rule as written: tcp 22 only, /32 at both ends, the sources' VLAN, pass, quick.
