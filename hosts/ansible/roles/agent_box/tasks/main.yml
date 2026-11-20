@@ -438,6 +438,35 @@
     mode: "0755"
   tags: [wrappers]
 
+# agent-browser: a long-running headless Chromium that keeps its sign-ins in the session user's own profile, for agents'
+# own accounts only (never the owner's). It reuses the Playwright pin and Chromium above, adds no package, binds DevTools to
+# 127.0.0.1 and stops by itself after N minutes (docs/runbooks/set-up-the-agent-box.md, "A browser that keeps its
+# sign-ins"). A loop of one, for the same reason as web-shot's script.
+- name: The agent-browser script, root-owned
+  ansible.builtin.copy:
+    src: agent-browser.py
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: ["{{ agent_box_libexec_dir }}/agent-browser.py"]
+  loop_control:
+    label: "{{ item }}"   # the destination, as for the wrappers
+  tags: [wrappers]
+
+- name: agent-browser on the path
+  ansible.builtin.copy:
+    dest: "{{ agent_box_front_dir }}/agent-browser"
+    content: |
+      #!/bin/sh
+      # Made by the agent_box role. agent-browser start [--minutes N] | status | open <url> | shot <out.png> | stop
+      export PLAYWRIGHT_BROWSERS_PATH={{ agent_box_libexec_dir }}/playwright-browsers
+      exec {{ agent_box_libexec_dir }}/playwright-venv/bin/python -I {{ agent_box_libexec_dir }}/agent-browser.py "$@"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [wrappers]
+
 # lab-proof: a read-only check, run by sessions as themselves (no key), that each c1 app name resolves through the
 # lab DNS and that the Gateway's certificate verifies against the box's trust store (docs/runbooks/set-up-the-agent-box.md).
 - name: lab-proof on the path, root-owned
