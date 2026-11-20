@@ -58,6 +58,7 @@ cat > "$t/bin/tofu" <<EOF
 echo "tofu \${*:2}" >> $t/calls
 case " \$* " in
   *" init "*) exit 0 ;;
+  *" apply "*) exit \${TOFU_APPLY_RC:-0} ;;
   *" show "*) cat \${TOFU_SHOW_FILE:-$t/destroy.json}; exit 0 ;;
   *" -destroy "*) for a in "\$@"; do case \$a in -out=*) : > "\${a#-out=}" ;; esac; done; exit 0 ;;
   *" plan "*) exit \${TOFU_PLAN_RC:-0} ;;
@@ -344,6 +345,21 @@ TOFU_PLAN_RC=2 TOFU_SHOW_FILE="$t/plan-moves.json" run check; o12d=$out
 if [[ $o12d == *"PASS: rebuild-prod: OpenTofu: the only plan changes are state moves (nothing changes on the host): 2 resource(s)"* && $o12d != *"plans changes with the Mac"* ]]; then
   ok "12d. a plan of state moves only passes, naming the count"
 else bad "12d. $o12d"; fi
+
+# 12e. A targeted destroy refuses a state that still holds moved resources ("Moved resource instances excluded by targeting"), so the
+# check plans the teardown on a COPY of the state after a refresh-only apply, never on the live state, then points back at the live
+# state; a refresh-only apply that fails fails the check and no destroy is planned.
+: > "$t/calls"
+run check; o12e=$out
+seq12e=$(grep -E '^tofu (init .*path=|apply -refresh-only|plan .*-destroy -target)' "$t/calls" | sed -E 's/^tofu init .*state-moves-settled.*/init-copy/; s/^tofu init .*home-k8s.tfstate.*/init-live/; s/^tofu apply -refresh-only.*/refresh-only/; s/^tofu plan .*-destroy -target=([^ ]+).*/destroy-plan \1/' | tr '\n' '|')
+if [[ $seq12e == *"init-live|init-copy|refresh-only|destroy-plan proxmox_virtual_environment_vm.node|init-live|"* && $(find "$t" -name 'state-moves-settled*' | wc -l) == 0 ]]; then
+  ok "12e. the teardown is planned on a copy of the state after a refresh-only apply, and the live state is pointed at again"
+else bad "12e. [$seq12e] $o12e"; fi
+: > "$t/calls"
+TOFU_APPLY_RC=1 run check; o12f=$out
+if [[ $o12f == *"FAIL: rebuild-prod: OpenTofu could not plan the teardown (rc 1)"* && $(grep -c -- '-destroy' "$t/calls") == 0 ]]; then
+  ok "12f. a failed refresh-only apply fails the check and plans no destroy"
+else bad "12f. $o12f"; fi
 
 # 12b. The wrapper's PATH reaches `ip` (/usr/sbin on the box, where the route check reads the routing table): on the box the check
 # failed with "no route to the Proxmox API's address" because `ip` was not found.

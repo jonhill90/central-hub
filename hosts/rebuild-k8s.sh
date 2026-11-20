@@ -663,6 +663,10 @@ run_stage() {
       preflight_memory ;;
     teardown)
       tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE"
+      # A targeted destroy refuses a state that still holds resources the code has moved to new addresses ("Moved
+      # resource instances excluded by targeting"). A refresh-only apply writes those moves into the state and
+      # changes nothing on the host, so it comes first; an untargeted destroy needs nothing.
+      [ -z "${TEARDOWN_TARGET:-}" ] || tofu_k8s apply -refresh-only -auto-approve -input=false "${tofu_vars[@]}"
       tofu_k8s destroy -auto-approve -input=false ${TEARDOWN_TARGET:+"-target=$TEARDOWN_TARGET"} "${tofu_vars[@]}"
       # Set by the box's rebuild wrapper (dev only): dev's SOPS file of the apps' secrets is deleted once the state shows
       # 0 VMs. Every teardown path runs this stage, so every one reaches the hook. Unset: nothing.
