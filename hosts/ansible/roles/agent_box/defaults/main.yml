@@ -119,6 +119,14 @@ agent_box_wrappers:
     args: [plan, "apply *", log]
     session_args: [plan, log]   # a session cannot apply; only the workflow's runner can
     runner: true
+  # The firewall's (OPNsense) pipeline job (D-0063): playbooks/opnsense.yml from main, with the prod OPNsense API key,
+  # as its own user agent_box_guard_user, so no keys-user wrapper can read that key. The same check, pass, go and
+  # apply-recorded shape as proxmox-host; sessions may run all of it, because the wrapper refuses an apply without a
+  # reviewer pass for the exact check hash and an unused go for the commit in its own ledger.
+  - name: opnsense-prod
+    args: [check, "apply-recorded *", "pass *", "go *", ledger, log]
+    session_args: [check, "apply-recorded *", "pass *", "go *", ledger, log]
+    run_as: guardops   # the same name as agent_box_guard_user
   # The VPS apps host (D-0046): bootstrap once as root, then apply and secrets as user deploy through the VPS's
   # own vps-apply. Only the workflow lab-vps-host.yml runs the changing actions; a session may read only.
   - name: vps-host
@@ -291,6 +299,22 @@ agent_box_host_user: hostops
 agent_box_host_dir: /etc/agent-keys-host
 agent_box_host_work_dir: /var/lib/agent-box-host
 agent_box_proxmox_host_job: false
+# The guard jobs (D-0063): their own system user holds the firewall's API key, the tailnet policy's OAuth client and a
+# copy of the controller's private inventory, in its own folder, so the keys user's wrappers can't read them. Those
+# files are put there only by a run from the controller under the `guard_files` tag, which self-applies skip
+# (D-0036 rule 7), and only when agent_box_copy_guard_files is true.
+agent_box_guard_user: guardops
+agent_box_guard_dir: /etc/agent-keys-guard
+agent_box_guard_work_dir: /var/lib/agent-box-guard
+agent_box_copy_guard_files: false
+# What the guard_files tasks copy, {from: clone|config, path: on the controller, dest: under agent_box_guard_dir}.
+# opnsense-api.txt holds the key on line 1 and the secret on line 2; lab-ca/root.crt is the public lab root the
+# OPNsense API's certificate chains to (pick 30).
+agent_box_guard_files:
+  - {from: clone, path: hosts/ansible/inventories/home/hosts.yml, dest: inventory/hosts.yml}
+  - {from: config, path: opnsense-api.txt, dest: opnsense-api.txt}
+  - {from: config, path: lab-ca/root.crt, dest: lab-root.crt}
+  - {from: config, path: tailnet-policy.env, dest: tailnet-policy.env}
 # Private, through the controller's inventory: {address: the host's lifeline-side IPv4 (the same as its
 # agent_box_lifeline_allow entry), hostkey: the host's "ssh-ed25519 AAAA..." public host key}. The certificate's
 # names come from proxmox_cert_names. Empty: the inventory is not written and the job refuses to run.
@@ -469,7 +493,7 @@ agent_box_prod_files_clone: ""
 agent_box_self_apply: false
 # Tags a self-apply skips: tasks that read the controller's files (ca, prod_files, and the off-box copy's
 # certificate upload), the lifeline's firewall (D-0036 rule 8) and the proofs. A limit itself (defaults key).
-agent_box_self_apply_skip_tags: [ca, prod_files, opnsense_offbox, lifeline, verify, proxmox_host_inventory]
+agent_box_self_apply_skip_tags: [ca, prod_files, opnsense_offbox, lifeline, verify, proxmox_host_inventory, guard_files]
 # The commit a controller's pinned copy was made from, when that copy is not a git checkout (-e only).
 agent_box_self_apply_commit: ""
 # Set by box-apply on its own runs (-e); the box-apply tasks then write nothing.

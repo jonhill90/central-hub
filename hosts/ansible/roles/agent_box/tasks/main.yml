@@ -147,6 +147,13 @@
       tags: [users, proxmox_host]
   tags: [users, proxmox_host]
 
+- name: The guard jobs' user and folders (D-0063)
+  ansible.builtin.include_tasks:
+    file: guard_job.yml
+    apply:
+      tags: [users, guard_job]
+  tags: [users, guard_job]
+
 # The role never writes a key into the key folder. It only makes sure every file already in it belongs to
 # the keys user and is readable by it alone.
 - name: Find the key files
@@ -1261,6 +1268,14 @@
       tags: [verify]
 
 # --- Prod files from the controller ----------------------------------------------------------
+
+- name: Copy the controller's guard files to the guard user's folder (only when agent_box_copy_guard_files is true)
+  ansible.builtin.include_tasks:
+    file: guard_files.yml
+    apply:
+      tags: [guard_files]
+  when: agent_box_copy_guard_files | bool
+  tags: [guard_files]
 
 - name: Copy the controller's private lab files to the box (only when agent_box_copy_prod_files is true)
   ansible.builtin.include_tasks:

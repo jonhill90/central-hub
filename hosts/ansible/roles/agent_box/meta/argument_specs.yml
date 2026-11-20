@@ -155,7 +155,7 @@ argument_specs:
       agent_box_self_apply_skip_tags:
         type: list
         elements: str
-        default: [ca, prod_files, opnsense_offbox, lifeline, verify]
+        default: [ca, prod_files, opnsense_offbox, lifeline, verify, proxmox_host_inventory, guard_files]
         description: The tags a self-apply skips.
       agent_box_self_apply_commit:
         type: str
@@ -180,6 +180,18 @@ argument_specs:
           With agent_box_self_apply, a root systemd timer that runs `box-apply apply` every
           agent_box_self_apply_interval, so merged work reaches the box with no session running it.
       agent_box_self_apply_interval: {type: str, default: 10min, description: "systemd OnUnitActiveSec between box-apply runs."}
+      agent_box_copy_guard_files:
+        type: bool
+        default: false
+        description: >-
+          Copy the controller's guard files (the firewall's API key, the tailnet policy's OAuth client, the private
+          inventory and the lab root) to the guard user's folder in this run (the guard_files tasks, D-0063).
+      agent_box_guard_files:
+        type: list
+        elements: dict
+        description: >-
+          The controller files the guard_files tasks copy to the guard user's folder: from (clone or config), path,
+          dest. Names only are ever printed.
       agent_box_prod_files:
         type: list
         elements: dict

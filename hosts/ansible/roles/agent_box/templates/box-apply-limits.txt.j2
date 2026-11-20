@@ -44,9 +44,14 @@ dir {{ agent_box_host_dir }}
 dir {{ agent_box_host_work_dir }}
 box {{ agent_box_host_dir }}/inventory/hosts.yml
 box {{ agent_box_host_dir }}/known_hosts
+dir {{ agent_box_guard_dir }}
+dir {{ agent_box_guard_dir }}/inventory
+dir {{ agent_box_guard_work_dir }}
+box {{ agent_box_guard_dir }}/inventory/hosts.yml
 user {{ agent_box_user }}
 user {{ agent_box_keys_user }}
 user {{ agent_box_host_user }}
+user {{ agent_box_guard_user }}
 {% if agent_box_runner_user | length > 0 %}
 user {{ agent_box_runner_user }}
 {% endif %}

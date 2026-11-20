@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# The firewall's pipeline job (hosts/ansible/roles/agent_box/files/opnsense-prod.sh; D-0063), with a stand-in
+# ansible-playbook that prints set JSON and a local repository as main:
+#   1. Any other argument is refused, before anything runs; `apply` (the runner's form) does not exist here.
+#   2. With no inventory, key file or lab root, it refuses.
+#   3. check prints a 12-hex hash, and the same firewall gives the same hash twice.
+#   4. apply-recorded refuses, naming each thing missing, with no pass and no go; the wrong recorder is refused.
+#   5. With a reviewer pass for the commit and hash and a go for the commit, it applies; the go is then spent, and a
+#      second apply-recorded on the same go is refused.
+#   6. The key and secret reach the playbook only in a vars file (-e @file), never on its command line, and the vars
+#      file is gone after the run; nothing printed holds them.
+# Usage: .github/hosts-check/tests/test_opnsense_prod_args.sh   (needs git and python3)
+set -uo pipefail
+cd "$(dirname "$0")/../../.." || exit 1
+root=$PWD
+t=$(mktemp -d)
+trap 'rm -rf "$t"' EXIT
+fail=0
+ok() { echo "ok   $*"; }
+bad() { echo "FAIL $*"; fail=1; }
+
+mkdir -p "$t/bin" "$t/dir/inventory" "$t/work" "$t/collections"
+touch "$t/dir/inventory/hosts.yml"
+echo "- {}" > "$t/dir/inventory/hosts.yml"
+printf 'TESTKEY0123\nTESTSECRET4567\n' > "$t/dir/opnsense-api.txt"
+echo "-----BEGIN CERTIFICATE-----" > "$t/dir/lab-root.crt"
+git init -q -b main "$t/src" && mkdir -p "$t/src/hosts/ansible/playbooks" && echo "- hosts: opnsense" > "$t/src/hosts/ansible/playbooks/opnsense.yml"
+git -C "$t/src" add -A && git -C "$t/src" -c user.name=t -c user.email=t@t commit -q -m one
+git clone -q --bare "$t/src" "$t/main.git"
+
+# The stand-in: records its arguments and a copy of the vars file it was given, prints set JSON.
+cat > "$t/bin/ansible-playbook" <<EOF
+#!/bin/sh
+echo "\$*" >> "$t/calls"
+for a in "\$@"; do case "\$a" in @*) cat "\${a#@}" > "$t/vars-seen.json"; echo "\${a#@}" >> "$t/vars-paths" ;; esac; done
+cat "$t/out.json"
+EOF
+chmod +x "$t/bin/ansible-playbook"
+python3 - > "$t/out.json" <<'PY'
+import json
+def task(name, **r):
+    return {"task": {"name": name}, "hosts": {"opnsense_fw": r}}
+print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [
+    task("read", changed=False),
+    task("rule", changed=True, diff=[{"before": "old", "after": "new"}]),
+    task("dns", skipped=True, changed=False)]}], "stats": {}}))
+PY
+
+sed -e "s|^dir=.*|dir=$t/dir|" -e "s|^work=.*|work=$t/work|" -e "s|^ansible_bin=.*|ansible_bin=$t/bin|" \
+    -e "s|^collections=.*|collections=$t/collections|" -e "s|^repo_url=.*|repo_url=$t/main.git|" \
+    "$root/hosts/ansible/roles/agent_box/files/opnsense-prod.sh" > "$t/job.sh"
+grep -q "^repo_url=$t/main.git" "$t/job.sh" && grep -q "^ansible_bin=$t/bin" "$t/job.sh" ||
+  { echo "FAIL: the test could not point the wrapper at its folders"; exit 1; }
+job() { bash "$t/job.sh" "$@"; }
+
+# 1
+for a in "" "plan" "check extra" "apply cmsg_0123456789ab 0123456789ab" "apply-recorded" "apply-recorded 0123456789AB" \
+         "ledger x" "log x" "go abc cmsg_0123456789ab 2026-11-20T00:00:00Z orchestrator"; do
+  # shellcheck disable=SC2086
+  job $a >/dev/null 2>&1; rc=$?
+  [ "$rc" = 2 ] || bad "1 '$a' gave $rc, not 2"
+done
+[ ! -e "$t/calls" ] && ok "1 other arguments are refused before anything runs" || bad "1 the playbook ran on a refused call"
+
+# 2
+for f in inventory/hosts.yml opnsense-api.txt lab-root.crt; do
+  mv "$t/dir/$f" "$t/hold"
+  job check > "$t/2.out" 2>&1 && bad "2 check ran with no $f" || grep -q "no inventory, API key or lab root" "$t/2.out" || bad "2 wrong message for $f: $(cat "$t/2.out")"
+  mv "$t/hold" "$t/dir/$f"
+done
+[ ! -e "$t/calls" ] && ok "2 refuses with any guard file missing" || bad "2 the playbook ran with a file missing"
+
+# 3
+h1=$(job check 2>&1 | sed -n 's/^opnsense-prod: check \([0-9a-f]\{12\}\):.*/\1/p')
+h2=$(job check 2>&1 | sed -n 's/^opnsense-prod: check \([0-9a-f]\{12\}\):.*/\1/p')
+[ -n "$h1" ] && [ "$h1" = "$h2" ] && ok "3 check gives the same 12-hex hash twice ($h1)" || bad "3 hashes '$h1' '$h2'"
+c=$(git -C "$t/main.git" rev-parse main)
+tm=2026-11-20T00:00:00Z
+
+# 4
+job apply-recorded "$h1" > "$t/4.out" 2>&1; rc=$?
+[ $rc = 1 ] && grep -q "no reviewer pass for job firewall" "$t/4.out" && grep -q "no go for job firewall" "$t/4.out" \
+  && ok "4 no pass and no go: refused, naming both" || bad "4 rc=$rc $(cat "$t/4.out")"
+job pass "$c" "$h1" cmsg_0123456789ab "$tm" builder > /dev/null 2>&1; r1=$?
+job go "$c" cmsg_0123456789cd "$tm" reviewer > /dev/null 2>&1; r2=$?
+[ $r1 = 2 ] && [ $r2 = 2 ] && [ ! -d "$t/work/ledger" ] && ok "4 the wrong recorders are refused, nothing written" || bad "4 recorders $r1 $r2"
+
+# 5
+job pass "$c" "$h1" cmsg_0123456789ab "$tm" reviewer > /dev/null
+job go "$c" cmsg_0123456789cd "$tm" orchestrator > /dev/null
+n0=$(grep -vc -- '--check' "$t/calls")
+job apply-recorded "$h1" > "$t/5.out" 2>&1; rc=$?
+n1=$(grep -vc -- '--check' "$t/calls")
+[ $rc = 0 ] && [ "$n1" = $((n0 + 1)) ] && grep -q "applied check $h1" "$t/5.out" && ok "5 with a pass and a go it applies once" || bad "5 rc=$rc runs $n0->$n1 $(cat "$t/5.out")"
+job apply-recorded "$h1" > "$t/5b.out" 2>&1; rc=$?
+[ $rc = 1 ] && grep -q "was used already" "$t/5b.out" && ok "5 the go is spent: a second apply is refused" || bad "5b rc=$rc $(cat "$t/5b.out")"
+
+# 6
+if grep -q 'TESTKEY0123\|TESTSECRET4567' "$t/calls"; then bad "6 the key reached a command line"; else ok "6 the key is never on the playbook's command line"; fi
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["opnsense_api_key"]=="TESTKEY0123" and d["opnsense_api_secret"]=="TESTSECRET4567" else 1)' "$t/vars-seen.json" \
+  && ok "6 the playbook got the key and secret in its vars file" || bad "6 vars file: $(cat "$t/vars-seen.json")"
+left=0; while read -r p; do [ -e "$p" ] && left=1; done < "$t/vars-paths"
+[ $left = 0 ] && ok "6 every vars file is gone after its run" || bad "6 a vars file was left behind"
+if cat "$t"/*.out | grep -q 'TESTKEY0123\|TESTSECRET4567'; then bad "6 the key was printed"; else ok "6 nothing printed holds the key"; fi
+
+exit $fail
