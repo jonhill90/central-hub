@@ -58,7 +58,7 @@ cat > "$t/bin/tofu" <<EOF
 echo "tofu \${*:2}" >> $t/calls
 case " \$* " in
   *" init "*) exit 0 ;;
-  *" show "*) cat $t/destroy.json; exit 0 ;;
+  *" show "*) cat \${TOFU_SHOW_FILE:-$t/destroy.json}; exit 0 ;;
   *" -destroy "*) for a in "\$@"; do case \$a in -out=*) : > "\${a#-out=}" ;; esac; done; exit 0 ;;
   *" plan "*) exit \${TOFU_PLAN_RC:-0} ;;
 esac
@@ -319,6 +319,18 @@ if [[ $r12a -eq 1 && $o12a == *"k8s_backup_sftp is true but the box's copy has n
       $o12c == *"the carried sftp keys were deleted from the box"* && ! -e $t/keys/prod/backup-sftp ]]; then
   ok "12. the Proxmox host as backup target with no host address is refused before anything runs; no Azure sign-in: no certificate carried"
 else bad "12. $r12a $o12a | $r12b [$c12b] | $r12c $o12c"; fi
+
+# 12c. A plan with changes names what it changes by type, name and VM ID, never by address: a node's address carries its private
+# hostname as the index. The stand-in `tofu show` gives a node resource keyed by a fake hostname; the output must not hold it.
+cat > "$t/plan-changes.json" <<'J'
+{"resource_changes":[{"address":"proxmox_virtual_environment_vm.node[\"fakehost-zq.example.invalid\"]","type":"proxmox_virtual_environment_vm","name":"node","index":"fakehost-zq.example.invalid","change":{"actions":["update"],"before":{"vm_id":200,"memory":4096},"after":{"vm_id":200,"memory":8192}}}]}
+J
+inventory "        k8s_backup_azure_identity: true"
+dev_log "$sha" "rebuild: all stages passed"
+TOFU_PLAN_RC=2 TOFU_SHOW_FILE="$t/plan-changes.json" run check; r12c2=$rc o12c2=$out
+if [[ $o12c2 == *"plan: proxmox_virtual_environment_vm.node vm_id 200 update; differs in: memory"* && $o12c2 != *fakehost-zq* ]]; then
+  ok "12c. a plan with changes is named by type, name and VM ID, and a node's hostname never appears"
+else bad "12c. $r12c2 $o12c2"; fi
 
 # 12b. The wrapper's PATH reaches `ip` (/usr/sbin on the box, where the route check reads the routing table): on the box the check
 # failed with "no route to the Proxmox API's address" because `ip` was not found.

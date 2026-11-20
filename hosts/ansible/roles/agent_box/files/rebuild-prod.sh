@@ -371,7 +371,8 @@ if [[ -s $tofu_env && -s $tfstate && -s $tfvars_src ]] && command -v tofu >/dev/
       0) pass "OpenTofu: no changes with the Mac's tfvars, so the box's state is the live prod" ;;
       2) fail "OpenTofu plans changes with the Mac's tfvars: the box's state or tfvars differ from the live prod; copy the controller's files again"
          # What it would change, so the cause can be read without the plan file (which only this user can read): each resource's
-         # address and its actions, then the names of the attributes that differ. Never a value, and no more than 30 lines.
+         # type and name (with a VM's ID) and its actions, then the names of the attributes that differ. Never an address (its index is a
+         # node's hostname) and never a value, and no more than 30 lines.
          tofu_k8s show -json "$envdir/tofu-plan.bin" 2>/dev/null | python3 -I -c '
 import json, sys
 try: plan = json.load(sys.stdin)
@@ -382,7 +383,10 @@ for rc in plan.get("resource_changes", []):
     if acts in (["no-op"], ["read"]): continue
     b, a = ch.get("before") or {}, ch.get("after") or {}
     diff = sorted(k for k in set(b) | set(a) if b.get(k) != a.get(k))
-    print("  plan: %s %s; differs in: %s" % (rc.get("address"), "+".join(acts), ", ".join(diff[:12]) or "(unknown until apply)"))
+    # type.name and, for a VM, its ID: never rc[address], whose index is a private node hostname.
+    vm = b.get("vm_id", a.get("vm_id"))
+    what = "%s.%s%s" % (rc.get("type"), rc.get("name"), " vm_id %d" % vm if isinstance(vm, int) else "")
+    print("  plan: %s %s; differs in: %s" % (what, "+".join(acts), ", ".join(diff[:12]) or "(unknown until apply)"))
     n += 1
     if n >= 30: break
 ' || true ;;
