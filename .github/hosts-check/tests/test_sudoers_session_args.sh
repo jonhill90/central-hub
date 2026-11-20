@@ -7,7 +7,8 @@
 #   5-6. pr-merge: sessions get `check *` only; pass-record: add, show, halt, resume; the runner gets neither.
 #   7. proxmox-host runs as its own user (run_as hostops): the session's line has check, check <job> and log, the runner's adds
 #      apply, and neither runs it as the keys user.
-#   8-9. tailnet-policy: sessions get plan and log only; vps-host: status and log only; the runner gets every action (D-0046).
+#   8-9. tailnet-policy: as guardops (D-0063), sessions get plan, the ledger actions, apply-recorded and log, the runner also the
+#        card-ID apply; vps-host: status and log only; the runner gets every action (D-0046).
 # Usage: .github/hosts-check/tests/test_sudoers_session_args.sh   (needs python3 with jinja2 and pyyaml)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -50,8 +51,9 @@ run7 = "run ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh " + x for 
 # The session line has no three-argument `apply`: that form takes a pass ID the box cannot check, so only the runner has it.
 print("7", hs == [ses7] and " apply *" not in hs[0], hr == [run7])
 tp = render([w for w in d if w["name"] == "tailnet-policy"])
-print("8", lines(tp, "sess") == ["sess ALL=(keys) NOPASSWD: /x/tailnet-policy.sh plan, /x/tailnet-policy.sh log"],
-      lines(tp, "run") == ["run ALL=(keys) NOPASSWD: /x/tailnet-policy.sh plan, /x/tailnet-policy.sh apply *, /x/tailnet-policy.sh log"])
+tpl = tp.splitlines()
+print("8", [l for l in tpl if l.startswith("sess ALL=")] == ["sess ALL=(guardops) NOPASSWD: /x/tailnet-policy.sh plan, /x/tailnet-policy.sh apply-recorded *, /x/tailnet-policy.sh pass *, /x/tailnet-policy.sh go *, /x/tailnet-policy.sh ledger, /x/tailnet-policy.sh log"],
+      [l for l in tpl if l.startswith("run ALL=")] == ["run ALL=(guardops) NOPASSWD: /x/tailnet-policy.sh plan, /x/tailnet-policy.sh apply *, /x/tailnet-policy.sh apply-recorded *, /x/tailnet-policy.sh pass *, /x/tailnet-policy.sh go *, /x/tailnet-policy.sh ledger, /x/tailnet-policy.sh log"])
 vh = render([w for w in d if w["name"] == "vps-host"])
 print("9", lines(vh, "sess") == ["sess ALL=(keys) NOPASSWD: /x/vps-host.sh status, /x/vps-host.sh log"],
       lines(vh, "run") == ["run ALL=(keys) NOPASSWD: /x/vps-host.sh bootstrap, /x/vps-host.sh apply, /x/vps-host.sh secrets, /x/vps-host.sh secrets rotate, /x/vps-host.sh status, /x/vps-host.sh log"])
@@ -69,7 +71,7 @@ check 4 "4. tailnet-stack: no apply in the session's line, apply in the runner's
 check 5 "5. sessions: pr-merge check only (no merge, no sweep); pass-record add, show, halt, resume"
 check 6 "6. the runner user gets no pr-merge or pass-record line (the merge job is gone)"
 check 7 "7. proxmox-host: as hostops; the session checks and reads the log, only the runner has the ungated apply; sessions have apply-recorded"
-check 8 "8. tailnet-policy: the session gets plan and log only, the runner also apply"
+check 8 "8. tailnet-policy: as guardops, the session gets plan, the ledger and apply-recorded, the runner also the card-ID apply"
 check 9 "9. vps-host: the session gets status and log only, the runner every action"
 check 10 "10. opnsense-cert-check: the session gets check and status as the keys user, the runner nothing"
 exit "$fail"

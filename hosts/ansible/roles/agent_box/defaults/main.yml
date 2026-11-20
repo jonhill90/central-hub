@@ -115,10 +115,13 @@ agent_box_wrappers:
     run_as: hostops   # the same name as agent_box_host_user
   # The tailnet policy file's pipeline job (D-0041, D-0046 rule 4): the same shape as tailnet-stack, for
   # hosts/terraform/home/tailnet-policy, which until now only the owner's Mac applied.
+  # Since D-0063 it runs as the guard user with the policy's own client, and a session may also apply a saved plan
+  # through `apply-recorded`, which the wrapper refuses without a reviewer pass for the plan's hash and an unused go.
   - name: tailnet-policy
-    args: [plan, "apply *", log]
-    session_args: [plan, log]   # a session cannot apply; only the workflow's runner can
+    args: [plan, "apply *", "apply-recorded *", "pass *", "go *", ledger, log]
+    session_args: [plan, "apply-recorded *", "pass *", "go *", ledger, log]   # the card-ID `apply` stays the runner's
     runner: true
+    run_as: guardops   # the same name as agent_box_guard_user
   # The firewall's (OPNsense) pipeline job (D-0063): playbooks/opnsense.yml from main, with the prod OPNsense API key,
   # as its own user agent_box_guard_user, so no keys-user wrapper can read that key. The same check, pass, go and
   # apply-recorded shape as proxmox-host; sessions may run all of it, because the wrapper refuses an apply without a
@@ -315,6 +318,7 @@ agent_box_guard_files:
   - {from: config, path: opnsense-api.txt, dest: opnsense-api.txt}
   - {from: config, path: lab-ca/root.crt, dest: lab-root.crt}
   - {from: config, path: tailnet-policy.env, dest: tailnet-policy.env}
+  - {from: clone, path: hosts/terraform/home/tailnet-policy/home.tfvars, dest: tailnet-policy.tfvars}
 # Private, through the controller's inventory: {address: the host's lifeline-side IPv4 (the same as its
 # agent_box_lifeline_allow entry), hostkey: the host's "ssh-ed25519 AAAA..." public host key}. The certificate's
 # names come from proxmox_cert_names. Empty: the inventory is not written and the job refuses to run.
