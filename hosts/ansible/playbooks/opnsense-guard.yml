@@ -120,7 +120,8 @@
             systemctl reset-failed {{ opnsense_guard_unit }}.service 2>/dev/null || true
             systemd-run --unit={{ opnsense_guard_unit }} \
               --on-active={{ opnsense_guard_minutes | int }}min --timer-property=AccuracySec=1s \
-              /bin/sh -c 'touch {{ opnsense_guard_marker }} && exec /usr/sbin/qm rollback {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }} --start 1'
+              /bin/sh -c 'touch {{ opnsense_guard_marker }} &&
+                exec /usr/sbin/qm rollback {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }} --start 1'
           changed_when: true
       rescue:
         - name: The timer did not start, so delete the snapshot again
