@@ -173,6 +173,14 @@ def main(root: Path) -> int:
             if rel.startswith(f"docs/{folder}/") and f"({Path(rel).name})" not in index:
                 errors.append(f"docs/{folder}/README.md: does not list {Path(rel).name}")
 
+    # Records and evidence state the owner's words in neutral third person (D-0016 rule 5).
+    quote = re.compile(r'\b(?:owner|he|she|they) (?:wrote|typed|said):\s*["“]')
+    for rel in docs:
+        if re.match(r"docs/(decisions|evidence)/\d{4}-", rel):
+            for n, line in enumerate((root / rel).read_text().splitlines(), 1):
+                if quote.search(line):
+                    errors.append(f"{rel}:{n}: quotes the owner's words; state the request in neutral third person (D-0016 rule 5)")
+
     # The decision index rows match the records (D-0001 "Index").
     index = (root / "docs/decisions/README.md").read_text() if (root / "docs/decisions/README.md").exists() else ""
     for did, (rel, fm, _) in decisions.items():

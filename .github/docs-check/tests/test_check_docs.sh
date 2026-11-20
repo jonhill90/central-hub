@@ -39,6 +39,7 @@ case_ "unknown field"                  's/^title: Test/title: Test\ncolour: blue
 case_ "waits-on a missing record"      's/^waits-on: \[\]/waits-on: [D-0099]/'      "has no record"
 case_ "waits-on a backlog item"       's/^waits-on: \[\]/waits-on: [TASK-0111]/'      ""
 case_ "waits-on a malformed label"     's/^waits-on: \[\]/waits-on: [TASK-111]/'       "waits-on"
+case_ "owner's words quoted"           's/^# Test/# Test\nThe owner wrote: "do it"./' "neutral third person"
 gen_case() { # name, sed expression applied to the good record, expected text: gen_index.py --check must fail with it
   d=$(mktemp -d); mkdir -p "$d/docs/decisions" "$d/docs/standards"
   printf '%s' "$good" | sed "$2" > "$d/docs/decisions/0001-test.md"
