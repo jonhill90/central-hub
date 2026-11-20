@@ -20,8 +20,13 @@
 # What is printed: the commit, the hash, counts of tasks, the pass ID, pass or fail. Never a task's diff, a name or an
 #   address. The full output stays in {work}/logs/. The API key and secret go to the playbook in a vars file of this
 #   user's own, mode 0600, deleted when the run ends; never on a command line.
-# The way back (D-0063 rule 4): the playbook has no rollback of its own; the box's lifeline to the Proxmox host and the
-#   daily configuration backup are the way back from an apply that cuts the box off.
+# The way back (D-0063 rule 4): OPNsense 26.7's API has no savepoint, so the undo is on the Proxmox host. Before the playbook
+#   runs, the host job (proxmox-host.sh guard arm, as hostops, through its own sudo line) snapshots the firewall's VM and starts
+#   a timer on the host that rolls the VM back. After the run, the apply is confirmed (guard confirm: timer stopped, snapshot
+#   deleted) only if a fresh check through the firewall's API works and the box still reaches GitHub through the firewall.
+#   If the run fails, changes a task the check did not show, or the check after it fails, the wrapper rolls back at once (guard
+#   rollback); if the box can't reach the host to do that, the host's timer does it. guard confirm itself fails when the timer
+#   was not armed to the end or has already fired (a slow run), and the apply is then reported as failed: it may be undone.
 set -euo pipefail
 umask 077
 
@@ -31,6 +36,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
+guard_cmd=(sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh guard)   # the firewall VM's way back (D-0063 rule 4)
 job=firewall
 playbook=playbooks/opnsense.yml
 inventory=$dir/inventory/hosts.yml
@@ -239,11 +245,20 @@ case $action in
     # That one go line, by its message ID, is spent before the playbook runs, so a run that fails part-way needs a new go line
     # (a new message ID, same commit); the other lines of the file stay as they were.
     printf '%s %s %s\n' "$stamp" "$hash" "$go_ref" >> "${gf%.jsonl}.used"
-    out=$logs/apply-$stamp.json
-    if ! play "$out" --diff; then
-      record "$hash" "$changed changed" "FAIL: apply"
-      echo "opnsense-prod: FAIL: apply of check $hash (details in the box's log $out)" >&2; exit 1
+    if ! "${guard_cmd[@]}" arm; then
+      record "$hash" "$changed changed" "FAIL: guard arm"
+      echo "opnsense-prod: FAIL: the firewall VM's snapshot and timer could not be set up; nothing applied" >&2; exit 1
     fi
+    # roll_back <reason>: undo now through the host; if that fails, the host's timer does it.
+    roll_back() {
+      local how="rolled back"
+      "${guard_cmd[@]}" rollback || how="roll-back could not be started from the box; the host's timer rolls the firewall back"
+      record "$hash" "$changed changed" "FAIL: $1; $how"
+      echo "opnsense-prod: FAIL: $1 of check $hash; $how (details in the box's log $logs)" >&2
+      exit 1
+    }
+    out=$logs/apply-$stamp.json
+    play "$out" --diff || roll_back "apply"
     # Every task the apply changed must be one the check showed as changed or skipped.
     extra=$(python3 -I - "$out" "$result" "$out.extra" <<'PY'
 import json, sys
@@ -259,9 +274,13 @@ open(sys.argv[3], "w").write("".join(n + "\n" for n in sorted(extra)))   # the b
 print(len(extra))
 PY
 )
-    if [[ $extra != 0 ]]; then
-      record "$hash" "$changed changed" "FAIL: $extra task(s) changed that the check did not show"
-      echo "opnsense-prod: FAIL: the apply changed $extra task(s) that check $hash did not show (D-0063 rule 3; details in $out)" >&2
+    [[ $extra == 0 ]] || roll_back "the apply changed $extra task(s) that the check did not show (D-0063 rule 3)"
+    # The confirm: a fresh check through the firewall's API, and the box still reaches GitHub through the firewall.
+    play "$logs/confirm-$stamp.json" --check || roll_back "the check after the apply failed"
+    git ls-remote --exit-code --quiet "$repo_url" main > /dev/null || roll_back "the box no longer reaches GitHub after the apply"
+    if ! "${guard_cmd[@]}" confirm; then
+      record "$hash" "$changed changed" "FAIL: guard confirm; the host's timer has rolled the firewall back or will"
+      echo "opnsense-prod: FAIL: the apply ran but was not confirmed on the host: its timer fired already or was not armed, or the host was not reached; treat the apply as undone (proxmox-host.sh guard status)" >&2
       exit 1
     fi
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok

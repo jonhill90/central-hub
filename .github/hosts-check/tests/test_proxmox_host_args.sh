@@ -17,6 +17,8 @@
 #      the check gives the hash, the ledger holds a reviewer pass for the job, commit and hash, and an unused go for the job and
 #      commit. A pass or go for another hash, commit or job does not count; the wrong recorder is refused; a go line (by its message ID) is spent by one apply, and a new go line at the same commit works once.
 #  13. `check firewall` runs proxmox-firewall.yml with the checkout's VLAN file; the other jobs don't get it.
+#  14. `guard arm|confirm|rollback|clear|status` runs opnsense-guard.yml with that action and needs no ledger; any other guard
+#      action is refused before anything runs.
 #   9. Nothing printed holds a diff's text or the host's address; log prints the summary lines.
 # Usage: .github/hosts-check/tests/test_proxmox_host_args.sh   (needs git and python3)
 set -uo pipefail
@@ -242,5 +244,21 @@ if [ $rc13 = 0 ] && [[ $c13 == *playbooks/proxmox-firewall.yml* && $c13 != *"--t
    [[ $c13b != *vlans.yml* ]]; then
   ok "13 the firewall job runs proxmox-firewall.yml with the VLAN file; the proxy job doesn't get it"
 else bad "13 rc=$rc13 [$c13] [$c13b] $(cat "$t/13a.out")"; fi
+
+# 14
+for a in "guard" "guard apply" "guard arm x" "guard firewall arm"; do
+  : > "$t/calls"
+  # shellcheck disable=SC2086
+  job $a > /dev/null 2>&1; rc=$?
+  { [ "$rc" = 2 ] && [ ! -s "$t/calls" ]; } || bad "14 '$a' gave $rc, not 2, or ran the playbook"
+done
+ok14=1
+for g in arm confirm rollback clear status; do
+  : > "$t/calls"
+  job guard "$g" > "$t/14-$g.out" 2>&1 || { ok14=0; echo "  guard $g failed: $(cat "$t/14-$g.out")"; }
+  c=$(cat "$t/calls")
+  [[ $c == *playbooks/opnsense-guard.yml* && $c == *"opnsense_guard_action=$g"* && $c != *--check* && $(wc -l < "$t/calls") -eq 1 ]] || { ok14=0; echo "  guard $g ran [$c]"; }
+done
+[ $ok14 = 1 ] && ok "14 guard runs opnsense-guard.yml once with its action, no ledger; other guard actions are refused" || bad "14 guard"
 
 exit "$fail"

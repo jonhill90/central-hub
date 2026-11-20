@@ -108,9 +108,14 @@ agent_box_wrappers:
   # runner (lab-proxmox-host.yml) may apply. The box's own apply (`apply-recorded`) is open to sessions because the wrapper
   # decides: it refuses unless the check hash matches, the ledger holds a reviewer pass for it and a go for the job and
   # commit; `pass`, `go` and `ledger` write and read that ledger (the wrapper's header says what each line proves).
+  # `guard` is the firewall VM's way back (D-0063 rule 4): only the firewall's wrapper, as the guard user, may arm, confirm
+  # or roll back (callers); a session may read its status and clear a left-over snapshot, which is refused while armed.
   - name: proxmox-host
     args: [check, "check *", "apply *", "apply-recorded *", "pass *", "go *", ledger, "ledger *", log]
-    session_args: [check, "check *", "apply-recorded *", "pass *", "go *", ledger, "ledger *", log]
+    session_args: [check, "check *", "apply-recorded *", "pass *", "go *", ledger, "ledger *", log, "guard status", "guard clear"]
+    callers:
+      - user: guardops   # the same name as agent_box_guard_user
+        args: ["guard arm", "guard confirm", "guard rollback", "guard status"]
     runner: true
     run_as: hostops   # the same name as agent_box_host_user
   # The tailnet policy file's pipeline job (D-0041, D-0046 rule 4): the same shape as tailnet-stack, for

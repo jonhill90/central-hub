@@ -43,6 +43,16 @@ argument_specs:
             type: str
             required: false
             description: "The user the wrapper's sudo line runs it as, instead of the keys user (the proxmox-host job's own user)."
+          callers:
+            type: list
+            elements: dict
+            required: false
+            description: >-
+              Other users (another wrapper's own user) that may run this wrapper as its run_as user, each with its own
+              arguments only. D-0063 uses it so the firewall's wrapper can arm and confirm the host's guard.
+            options:
+              user: {type: str, required: true, description: The calling user.}
+              args: {type: list, elements: str, required: true, description: The only first arguments sudo allows that user.}
       agent_box_tofu_version: {type: str, description: OpenTofu version for the wrappers.}
       agent_box_tofu_sha256: {type: str, description: SHA-256 of the linux_amd64 zip of that version.}
       agent_box_kubectl_version: {type: str, description: "kubectl version for the c1-read wrapper, the one c1 runs."}

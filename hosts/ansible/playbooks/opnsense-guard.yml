@@ -1,0 +1,150 @@
+---
+# The firewall's way back for an apply from the agent box (D-0063 rule 4). OPNsense 26.7 has no savepoint or rollback in
+# its firewall API (26.1's FilterBaseController had savepoint, apply/<revision> and cancelRollback; 26.7's has none), so the
+# undo lives on the Proxmox host: a disk snapshot of the firewall's VM and a timer on the host that rolls the VM back to it
+# unless the apply is confirmed in time. The timer runs on the host, so it still fires when the change cuts the box off.
+# Run by the host job's wrapper (proxmox-host.sh guard <action>), which the firewall's wrapper (opnsense-prod.sh) calls
+# around each apply:
+#   arm      snapshot the VM and start the timer; refuses if a guard snapshot is already there (an earlier apply was neither
+#            confirmed nor cleared: look at it first). If the timer can't be started, the snapshot is deleted again.
+#   confirm  stop the timer and delete the snapshot: the apply is kept. Fails, and keeps the snapshot, if the timer was not
+#            armed or has already fired (the timer's command leaves a marker file before it rolls back), because then the
+#            apply was undone or was never guarded.
+#   rollback stop the timer and roll the VM back to the snapshot now, then start it; the snapshot stays, so the next arm
+#            refuses until it is cleared
+#   clear    delete a guard snapshot left by a rollback or a failed confirm, and the marker; refused while the timer is armed
+#   status   print whether a guard snapshot, the timer and the marker exist
+# A disk-only snapshot (no RAM): the rollback restarts the firewall, about a minute without the lab network, and undoes
+# everything written to the VM's disk since the snapshot (the runbook lists what).
+#   ansible-playbook -i <host inventory> playbooks/opnsense-guard.yml -e opnsense_guard_action=status
+- name: Firewall VM guard
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  vars:
+    opnsense_guard_vmid: 100   # hosts/terraform/home/firewall/main.tf
+    opnsense_guard_snapshot: agentguard
+    opnsense_guard_unit: opnsense-guard-rollback
+    opnsense_guard_minutes: 15
+    opnsense_guard_marker: /var/lib/opnsense-guard-fired   # written by the timer's command just before its rollback
+  tasks:
+    - name: Check the action
+      ansible.builtin.assert:
+        that:
+          - opnsense_guard_action | default('') in ['arm', 'confirm', 'rollback', 'clear', 'status']
+          - opnsense_guard_vmid | int > 0
+          - opnsense_guard_minutes | int >= 5
+        fail_msg: opnsense_guard_action is one of arm, confirm, rollback, clear, status
+        quiet: true
+
+    - name: Read the VM's snapshots
+      ansible.builtin.command: qm listsnapshot {{ opnsense_guard_vmid | int }}
+      register: opnsense_guard_snapshots
+      changed_when: false
+      check_mode: false
+
+    - name: Read the timer
+      ansible.builtin.command: systemctl is-active {{ opnsense_guard_unit }}.timer  # noqa: command-instead-of-module (a read: is the timer armed)
+      register: opnsense_guard_timer
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Note what is there
+      ansible.builtin.set_fact:
+        opnsense_guard_has_snapshot: >-
+          {{ opnsense_guard_snapshots.stdout_lines | map('trim') | map('regex_replace', '^`-> ', '')
+             | map('split') | map('first') | select('equalto', opnsense_guard_snapshot) | list | length > 0 }}
+        opnsense_guard_armed: "{{ opnsense_guard_timer.stdout | trim == 'active' }}"
+
+    # On confirm, the timer is stopped first and the marker read after, so a timer that fires during the confirm is seen.
+    - name: Stop the timer
+      ansible.builtin.systemd:
+        name: "{{ opnsense_guard_unit }}.timer"
+        state: stopped
+      when: opnsense_guard_action in ['confirm', 'rollback'] and opnsense_guard_armed | bool
+
+    - name: Read the marker the timer leaves when it fires
+      ansible.builtin.stat:
+        path: "{{ opnsense_guard_marker }}"
+      register: opnsense_guard_fired
+
+    - name: Status
+      ansible.builtin.debug:
+        msg: >-
+          guard snapshot: {{ opnsense_guard_has_snapshot | ternary('yes', 'no') }},
+          timer: {{ opnsense_guard_armed | ternary('armed', 'off') }},
+          fired: {{ opnsense_guard_fired.stat.exists | ternary('yes', 'no') }}
+      when: opnsense_guard_action == 'status'
+
+    - name: Refuse to arm over an old guard snapshot
+      ansible.builtin.fail:
+        msg: >-
+          A guard snapshot is already there: an earlier apply was not confirmed, or it was rolled back. Look at the firewall
+          and the apply's log, then run guard clear before the next apply.
+      when: opnsense_guard_action == 'arm' and (opnsense_guard_has_snapshot | bool or opnsense_guard_armed | bool)
+
+    - name: Refuse to confirm an apply the timer did not guard to the end
+      ansible.builtin.fail:
+        msg: >-
+          {{ 'The timer has fired: the firewall was rolled back to the snapshot, so the apply is undone.'
+             if opnsense_guard_fired.stat.exists else
+             'The timer was not armed, so the apply was not guarded to the end; any guard snapshot is kept.' }}
+          Run guard status, look at the firewall, then guard clear.
+      when: >-
+        opnsense_guard_action == 'confirm'
+        and (opnsense_guard_fired.stat.exists or not (opnsense_guard_armed | bool) or not (opnsense_guard_has_snapshot | bool))
+
+    - name: Refuse to clear while the timer is armed
+      ansible.builtin.fail:
+        msg: The timer is armed, so an apply is still being guarded; confirm or roll back first.
+      when: opnsense_guard_action == 'clear' and opnsense_guard_armed | bool
+
+    - name: Arm
+      when: opnsense_guard_action == 'arm'
+      block:
+        - name: Remove an old marker
+          ansible.builtin.file:
+            path: "{{ opnsense_guard_marker }}"
+            state: absent
+
+        - name: Snapshot the firewall VM
+          ansible.builtin.command: >-
+            qm snapshot {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }}
+            --description "before an apply from the agent box (D-0063)"
+          changed_when: true
+
+        - name: Start the timer that rolls the VM back unless the apply is confirmed
+          ansible.builtin.shell: |  # noqa: command-instead-of-module (systemd-run has no module)
+            set -e
+            systemctl reset-failed {{ opnsense_guard_unit }}.service 2>/dev/null || true
+            systemd-run --unit={{ opnsense_guard_unit }} \
+              --on-active={{ opnsense_guard_minutes | int }}min --timer-property=AccuracySec=1s \
+              /bin/sh -c 'touch {{ opnsense_guard_marker }} &&
+                exec /usr/sbin/qm rollback {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }} --start 1'
+          changed_when: true
+      rescue:
+        - name: The timer did not start, so delete the snapshot again
+          ansible.builtin.command: qm delsnapshot {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }}
+          changed_when: true
+          failed_when: false
+
+        - name: Fail the arm
+          ansible.builtin.fail:
+            msg: The rollback timer could not be started; the snapshot was deleted again and nothing may be applied.
+
+    - name: Delete the guard snapshot (the apply is kept)
+      ansible.builtin.command: qm delsnapshot {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }}
+      when: opnsense_guard_action == 'confirm' or (opnsense_guard_action == 'clear' and opnsense_guard_has_snapshot | bool)
+      changed_when: true
+
+    - name: Remove the marker
+      ansible.builtin.file:
+        path: "{{ opnsense_guard_marker }}"
+        state: absent
+      when: opnsense_guard_action == 'clear'
+
+    - name: Roll the firewall VM back to the guard snapshot and start it
+      ansible.builtin.command: qm rollback {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }} --start 1
+      when: opnsense_guard_action == 'rollback'
+      changed_when: true

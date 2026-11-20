@@ -100,6 +100,7 @@ check_ansible() {
   bash "$here/tests/test_tailnet_policy_ledger.sh"
   bash "$here/tests/test_proxmox_host_args.sh"
   bash "$here/tests/test_opnsense_prod_args.sh"
+  bash "$here/tests/test_opnsense_guard_playbook.sh"
   bash "$here/tests/test_c1_ansible.sh"
   bash "$here/tests/test_kubelet_reservations.sh"
   bash "$here/tests/test_node_probes.sh"

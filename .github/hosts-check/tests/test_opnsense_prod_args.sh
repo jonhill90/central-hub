@@ -9,6 +9,9 @@
 #      second apply-recorded on the same go is refused.
 #   6. The key and secret reach the playbook only in a vars file (-e @file), never on its command line, and the vars
 #      file is gone after the run; nothing printed holds them.
+#   7. The way back (D-0063 rule 4): the apply arms the host's guard before the playbook runs and confirms it after a check
+#      that works; a failed apply is rolled back at once; a guard that can't be armed stops the run before the playbook; a confirm
+#      the host refuses (its timer fired during a slow run) makes the apply a failure.
 # Usage: .github/hosts-check/tests/test_opnsense_prod_args.sh   (needs git and python3)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -46,10 +49,18 @@ print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [
     task("dns", skipped=True, changed=False)]}], "stats": {}}))
 PY
 
-sed -e "s|^dir=.*|dir=$t/dir|" -e "s|^work=.*|work=$t/work|" -e "s|^ansible_bin=.*|ansible_bin=$t/bin|" \
+# The host guard's stand-in: records each call; exits with the code in $t/guard-rc-<action>, if there is one.
+cat > "$t/bin/host-guard" <<EOF
+#!/bin/sh
+echo "\$*" >> "$t/guard-calls"
+[ -f "$t/guard-rc-\$2" ] && exit "\$(cat "$t/guard-rc-\$2")"
+exit 0
+EOF
+chmod +x "$t/bin/host-guard"
+sed -e "s|^guard_cmd=.*|guard_cmd=($t/bin/host-guard guard)|" -e "s|^dir=.*|dir=$t/dir|" -e "s|^work=.*|work=$t/work|" -e "s|^ansible_bin=.*|ansible_bin=$t/bin|" \
     -e "s|^collections=.*|collections=$t/collections|" -e "s|^repo_url=.*|repo_url=$t/main.git|" \
     "$root/hosts/ansible/roles/agent_box/files/opnsense-prod.sh" > "$t/job.sh"
-grep -q "^repo_url=$t/main.git" "$t/job.sh" && grep -q "^ansible_bin=$t/bin" "$t/job.sh" ||
+grep -q "^guard_cmd=($t/bin/host-guard" "$t/job.sh" && grep -q "^repo_url=$t/main.git" "$t/job.sh" && grep -q "^ansible_bin=$t/bin" "$t/job.sh" ||
   { echo "FAIL: the test could not point the wrapper at its folders"; exit 1; }
 job() { bash "$t/job.sh" "$@"; }
 
@@ -95,6 +106,9 @@ n1=$(grep -vc -- '--check' "$t/calls")
 job apply-recorded "$h1" > "$t/5b.out" 2>&1; rc=$?
 [ $rc = 1 ] && grep -q "was used already" "$t/5b.out" && ok "5 the go is spent: a second apply is refused" || bad "5b rc=$rc $(cat "$t/5b.out")"
 
+[ "$(cat "$t/guard-calls" 2>/dev/null | tr '\n' ' ')" = "guard arm guard confirm " ] && ok "7 the apply armed the guard, then confirmed it" \
+  || bad "7 guard calls: $(cat "$t/guard-calls" 2>/dev/null)"
+
 # 6
 if grep -q 'TESTKEY0123\|TESTSECRET4567' "$t/calls"; then bad "6 the key reached a command line"; else ok "6 the key is never on the playbook's command line"; fi
 python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["opnsense_api_key"]=="TESTKEY0123" and d["opnsense_api_secret"]=="TESTSECRET4567" else 1)' "$t/vars-seen.json" \
@@ -102,5 +116,32 @@ python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d[
 left=0; while read -r p; do [ -e "$p" ] && left=1; done < "$t/vars-paths"
 [ $left = 0 ] && ok "6 every vars file is gone after its run" || bad "6 a vars file was left behind"
 if cat "$t"/*.out | grep -q 'TESTKEY0123\|TESTSECRET4567'; then bad "6 the key was printed"; else ok "6 nothing printed holds the key"; fi
+
+# 7 (more): a failed apply is rolled back; an arm that fails stops the run before the playbook.
+rm -f "$t/guard-calls"
+job go "$c" cmsg_0123456789ef "$tm" orchestrator > /dev/null
+cp "$t/bin/ansible-playbook" "$t/ap.ok"
+cat > "$t/bin/ansible-playbook" <<EOF
+#!/bin/sh
+case "\$*" in *--check*) cat "$t/out.json" ;; *) echo "\$*" >> "$t/calls"; exit 2 ;; esac
+EOF
+job apply-recorded "$h1" > "$t/7.out" 2>&1; rc=$?
+[ $rc = 1 ] && [ "$(tr '\n' ' ' < "$t/guard-calls")" = "guard arm guard rollback " ] && grep -q "rolled back" "$t/7.out" \
+  && ok "7 a failed apply is rolled back at once" || bad "7 failed apply: rc=$rc guard=$(cat "$t/guard-calls") $(cat "$t/7.out")"
+cp "$t/ap.ok" "$t/bin/ansible-playbook"
+rm -f "$t/guard-calls"; echo 1 > "$t/guard-rc-arm"
+job go "$c" cmsg_0123456789gh "$tm" orchestrator > /dev/null
+n0=$(grep -vc -- '--check' "$t/calls")
+job apply-recorded "$h1" > "$t/7b.out" 2>&1; rc=$?
+n1=$(grep -vc -- '--check' "$t/calls")
+[ $rc = 1 ] && [ "$n0" = "$n1" ] && grep -q "nothing applied" "$t/7b.out" && ok "7 no guard, no apply" || bad "7 arm failed: rc=$rc runs $n0->$n1 $(cat "$t/7b.out")"
+rm -f "$t/guard-rc-arm"
+rm -f "$t/guard-calls"; echo 1 > "$t/guard-rc-confirm"
+job go "$c" cmsg_0123456789ij "$tm" orchestrator > /dev/null
+job apply-recorded "$h1" > "$t/7c.out" 2>&1; rc=$?
+[ $rc = 1 ] && [ "$(tr '\n' ' ' < "$t/guard-calls")" = "guard arm guard confirm " ] && grep -q "not confirmed on the host" "$t/7c.out" \
+  && ! grep -q "applied check" "$t/7c.out" && tail -n 1 "$t/work/logs/summary.jsonl" | grep -q '"result": "FAIL: guard confirm' \
+  && ok "7 a confirm the host refuses (timer fired) is a failed apply, not an applied one" || bad "7 confirm refused: rc=$rc $(cat "$t/7c.out")"
+rm -f "$t/guard-rc-confirm"
 
 exit $fail
