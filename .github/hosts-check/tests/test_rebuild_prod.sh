@@ -361,16 +361,22 @@ if [[ $o12f == *"FAIL: rebuild-prod: OpenTofu could not plan the teardown (rc 1)
   ok "12f. a failed refresh-only apply fails the check and plans no destroy"
 else bad "12f. $o12f"; fi
 
-# 12g. An OpenTofu init that fails with no line saying Error (a file that could not be read, say) still shows what it printed: the last
-# lines, with an address and a hostname masked; a line that says Error is shown as before.
-TOFU_INIT_RC=1 TOFU_INIT_TEXT=$'bash: line 1: /keys/proxmox-lab.env: Permission denied\nregistry.invalid.example 192.0.2.10 refused' run check; o12g=$out
-if [[ $o12g == *"FAIL: rebuild-prod: OpenTofu init failed: bash: line 1: /keys/proxmox-lab.env: Permission denied|<name> <ip> refused"* &&
-      $o12g != *192.0.2.10* && $o12g != *registry.invalid.example* ]]; then
-  ok "12g. an init failure with no Error line shows its last lines, with the address and the hostname masked"
-else bad "12g. $o12g"; fi
-TOFU_INIT_RC=1 TOFU_INIT_TEXT=$'one\nError: no backend here 192.0.2.10' run check; o12h=$out
-if [[ $o12h == *"OpenTofu init failed: Error: no backend here <ip>"* && $o12h != *192.0.2.10* ]]; then
-  ok "12h. an init failure with an Error line shows that line, the address masked"
+# 12g. A failed OpenTofu step prints fixed facts only (the output's line count and which phrases of a closed list it holds), never a
+# line of its own text. Each case carries a value that a mask would miss, or the token itself, and none may reach the output.
+leak_case() { # <label> <text> <secret...>: the secrets must not appear, the fixed facts must
+  local label=$1 text=$2 sec o good=1; shift 2
+  TOFU_INIT_RC=1 TOFU_INIT_TEXT=$text run check; o=$out
+  [[ $o == *"FAIL: rebuild-prod: OpenTofu init failed: "*"output line(s); phrases found: "* ]] || good=0
+  for sec in "$@"; do [[ $o != *"$sec"* ]] || good=0; done
+  if (( good )); then ok "12g. $label: only fixed facts are printed, no secret"; else bad "12g. $label: $o"; fi
+}
+leak_case "a broken env-file line holding the token" $'/keys/proxmox-lab.env: line 2: PVEAPIToken=tok-SECRET-1234: command not found' SECRET PVEAPIToken tok-
+leak_case "a one-dot hostname" $'dial failed for pve.invalid 192.0.2.10' pve.invalid 192.0.2.10
+leak_case "a dotless hostname" $'Error: cannot reach pvehost-private on 8006' pvehost-private
+leak_case "an IPv6 address" $'Failed to query 2001:db8::10 refused' 2001:db8
+TOFU_INIT_RC=1 TOFU_INIT_TEXT=$'one\nregistry thing\nPermission denied here' run check; o12h=$out
+if [[ $o12h == *"OpenTofu init failed: 3 output line(s); phrases found: Permission denied,registry"* ]]; then
+  ok "12h. the closed list names the phrases found, comma-separated, with the line count"
 else bad "12h. $o12h"; fi
 
 # 12b. The wrapper's PATH reaches `ip` (/usr/sbin on the box, where the route check reads the routing table): on the box the check

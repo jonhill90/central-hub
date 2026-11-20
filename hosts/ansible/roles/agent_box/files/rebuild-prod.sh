@@ -366,17 +366,17 @@ tf=$repo/hosts/terraform/home/k8s
 # from, and a full destroy would delete both and download the image again. The address names the resource, not an instance
 # (an instance's key is a node's hostname), so it destroys every node VM and nothing else.
 teardown_target=proxmox_virtual_environment_vm.node
-# tf_note <output file>: what to print for a failed OpenTofu step. The first line that says Error; with none (a failure
-# that is not OpenTofu's own, for example a file that could not be read), the last three non-empty lines, with IPv4 addresses and
-# names that have two or more dots (hostnames) masked, control characters dropped and each line cut, so a repeat can be read
-# without a private value reaching a session. Either way IPv4 addresses and hostnames are masked.
+# tf_note <output file>: what to print for a failed OpenTofu step. Fixed facts only, never the step's own text: the output's line
+# count and which phrases from a closed list it holds. Its text can carry a private value (a broken env-file line prints the token it
+# could not run, and masking cannot catch every address or hostname shape), so no line of it is ever printed.
 tf_note() {
-  local mask='s/[0-9]{1,3}(\.[0-9]{1,3}){3}/<ip>/g; s/[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){2,}/<name>/g'
-  if grep -q -E 'Error' "$1" 2>/dev/null; then
-    grep -m1 -E 'Error' "$1" | tr -d '\000-\010\013-\037' | sed -E "$mask" | cut -c1-160
-  else
-    grep -v '^[[:space:]]*$' "$1" 2>/dev/null | tail -n 3 | tr -d '\000-\010\013-\037' | sed -E "$mask" | cut -c1-160 | paste -sd '|' - || true
-  fi
+  local f=$1 n=0 hit=() p
+  [[ -r $f ]] || { printf 'output not readable'; return 0; }
+  n=$(grep -c '' "$f" 2>/dev/null || true)
+  for p in 'Permission denied' 'No such file' 'command not found' 'Failed to query' 'registry' 'Error'; do
+    if grep -q -F -- "$p" "$f" 2>/dev/null; then hit+=("$p"); fi
+  done
+  printf '%s output line(s); phrases found: %s' "${n:-0}" "$( (IFS=,; printf '%s' "${hit[*]:-none}") )"
 }
 # shellcheck source=/dev/null
 tofu_k8s() { (set -a; . "$tofu_env"; set +a; tofu -chdir="$tf" "$@"); }
