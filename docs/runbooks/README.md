@@ -57,6 +57,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Move c1's Gateway and app routes from Ansible to Argo CD](move-gateway-to-argo-cd.md) | automated | draft |
 | [Check c1's health from its dashboard and alerts](check-c1-alerts-and-dashboard.md) | manual | draft |
 | [Get c1's alerts on a phone or in a browser](get-c1-alerts-on-your-phone.md) | manual | draft |
+| [Run the Central Hub web app on c1](run-the-central-hub-app-on-c1.md) | manual | draft |
 | [Know when c1 itself is down, from a heartbeat outside the lab](know-when-c1-is-down.md) | manual | draft |
 | [Turn on sign-in to Argo CD through the lab's Keycloak](sign-in-to-argo-cd-with-keycloak.md) | automated | draft |
 | [Back up c1 off the box](back-up-c1-off-box.md) | automated | draft |

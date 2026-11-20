@@ -1,0 +1,5 @@
+apiVersion: v2
+name: central-hub-app
+description: The Central Hub web app on c1, built at pod start from a pinned commit of its public repository, with no image of its own
+type: application
+version: 0.1.0

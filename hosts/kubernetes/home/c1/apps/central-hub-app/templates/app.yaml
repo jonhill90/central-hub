@@ -1,0 +1,164 @@
+{{- /*
+The Central Hub web app as one pod: an init container fetches the pinned commit by its sha, runs npm ci
+and the build into an emptyDir, and the app container runs the result. No image of our own exists, so every
+restart needs github.com and the npm registry; a registry holding our image is the way off this (spec).
+Restricted pod security, no ServiceAccount token, egress to DNS and public addresses only (as the notebook
+runner), ingress only from the Gateway.
+*/ -}}
+{{- $v := .Values }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $v.name }}-build
+  namespace: {{ .Release.Namespace }}
+data:
+  build.sh: |
+{{ .Files.Get "files/build.sh" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+  labels: {app.kubernetes.io/name: {{ $v.name }}}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: {{ $v.name }}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: {{ $v.name }}}
+    spec:
+      serviceAccountName: {{ $v.name }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ $v.uid }}
+        runAsGroup: {{ $v.uid }}
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        - name: build
+          image: {{ $v.image }}
+          command: [/bin/sh, /build/build.sh]
+          env:
+            - {name: REPO_URL, value: {{ $v.source.repoURL | quote }}}
+            - {name: COMMIT, value: {{ required "source.commit: the full sha to build" $v.source.commit | quote }}}
+            - {name: HOME, value: /work/home}
+            - {name: npm_config_cache, value: /work/npm-cache}
+            - {name: NEXT_TELEMETRY_DISABLED, value: "1"}
+          resources:
+            requests: {cpu: {{ $v.resources.build.requests.cpu }}, memory: {{ $v.resources.build.requests.memory }}}
+            limits: {memory: {{ $v.resources.build.limits.memory }}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: build-script, mountPath: /build, readOnly: true}
+            - {name: work, mountPath: /work}
+            - {name: out, mountPath: /out}
+            - {name: tmp, mountPath: /tmp}
+      containers:
+        - name: app
+          image: {{ $v.image }}
+          command: [node, server.js]
+          workingDir: /app
+          env:
+            - {name: NODE_ENV, value: production}
+            - {name: PORT, value: {{ $v.port | quote }}}
+            - {name: HOSTNAME, value: 0.0.0.0}
+          ports:
+            - {name: http, containerPort: {{ $v.port }}}
+          startupProbe:
+            httpGet: {path: /api/v1/catalog, port: http}
+            periodSeconds: 5
+            failureThreshold: 12
+          readinessProbe:
+            httpGet: {path: /api/v1/catalog, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /api/v1/catalog, port: http}
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: {{ $v.resources.run.requests.cpu }}, memory: {{ $v.resources.run.requests.memory }}}
+            limits: {memory: {{ $v.resources.run.limits.memory }}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: out, mountPath: /app, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: build-script
+          configMap: {name: {{ $v.name }}-build}
+        - name: work
+          emptyDir: {sizeLimit: {{ $v.workSize }}}
+        - name: out
+          emptyDir: {sizeLimit: {{ $v.outSize }}}
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $v.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector: {app.kubernetes.io/name: {{ $v.name }}}
+  ports:
+    - {name: http, port: {{ $v.port }}, targetPort: http}
+---
+# Takes nothing in except through the Gateway; sends out only DNS and public addresses (GitHub, npm), so
+# the pod has no path to a lab address.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $v.name }}-egress
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]
+---
+# Cilium's Gateway API traffic reaches a pod as the reserved "ingress" identity, which a Kubernetes
+# NetworkPolicy namespace rule can't select.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ $v.name }}-ingress
+  namespace: {{ .Release.Namespace }}
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities: [ingress]
