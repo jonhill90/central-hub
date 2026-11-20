@@ -37,7 +37,7 @@ cat > "$t/bin/git" <<'S'
 #!/bin/bash
 case "$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
+  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status backup-restore-test; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
   *rev-parse*) echo abc1234 ;;
 esac
 exit 0
@@ -79,7 +79,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'backup-status\nclients\ngateway\ngitops\nidentity\nobservability\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'backup-restore-test\nbackup-status\nclients\ngateway\ngitops\nidentity\nobservability\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -133,6 +133,11 @@ if [[ $b1rc -eq 0 && $b1 == *"playbooks/k8s-backup-status.yml --check --diff" &&
 else bad "12. $b1rc [$b1]"; fi
 grep -q "check_mode: false" hosts/ansible/playbooks/k8s-backup-status.yml && ! grep -E "^\s+(ansible.builtin.(copy|file|template|systemd|service|lineinfile)):" hosts/ansible/playbooks/k8s-backup-status.yml >/dev/null \
   && ok "12b. the playbook only reads: every command task is check_mode false and none writes a file or service" || bad "12b. the playbook writes"
+run check backup-restore-test; r1=$calls; run apply backup-restore-test "$clr"; r2=$calls; r2rc=$rc
+if [[ $r1 == *"playbooks/k8s-backup-restore-test.yml --check --diff" && $r2rc -eq 0 && $r2 == *"playbooks/k8s-backup-restore-test.yml" && $r2 != *--check* && $r1$r2 != *" -e "* && $r1$r2 != *--tags* ]]; then
+  ok "13. backup-restore-test: own playbook, no tags or extra variables, check starts nothing, apply needs a clearance id"
+else bad "13. [$r1] [$r2]"; fi
+run apply backup-restore-test; [[ $rc -eq 2 && -z $calls ]] && ok "13b. apply backup-restore-test without a clearance id runs nothing" || bad "13b. $rc [$calls]"
 run check observability; o1=$calls
 run apply observability "$clr"; o2=$calls; o2rc=$rc; o2o=$out
 if [[ $o1 == *"playbooks/k8s-observability.yml --tags metrics_server,metrics,logs,route,proof --check --diff" && $o1 != *" -e "* &&

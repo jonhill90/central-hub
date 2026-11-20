@@ -296,6 +296,8 @@ why: a dump is consistent by itself (agent pick 190), so the move needs no file 
 
 From the box, `sudo -n -u keys /usr/local/libexec/agent-box/c1-ansible.sh check backup-status` runs `playbooks/k8s-backup-status.yml` on each prod node. It only reads: the `c1-*` timers, each backup service's last result, the PASS, FAIL and ERROR lines of the last 3 days from the journal, and `restic snapshots --no-lock` on the repository the env file names (the scheme and path only; never a password). `c1-ansible log` prints the run's lines. A repository of `azure:` means the node still targets Azure; `sftp:c1-backup-target:/c1` means the Proxmox host. Nothing is changed, so it needs no go; adding the name is a box-limit change (a digest pass).
 
+`c1-ansible.sh apply backup-restore-test <clearance id>` starts each node's own `c1-restore-test.service` now (the Sunday timer's unit; `check backup-restore-test` starts nothing). It takes no backup and writes over no volume: it restores into temporary folders under /var/tmp and removes them. The play prints the PASS lines, stops unless every node names the snapshot it restored (`snapshot <id> of <time>`), and stops if a `c1-restore-test-*` folder is left behind. Read the PASS lines carefully: a worker with no volume folders prints `PASS: no volume backups recorded ...; nothing to test`, which proves nothing about volumes.
+
 why: until this name, the box had no path to a node's timers or journal, so "are backups running" could be answered only from the Mac.
 
 ## Know when a backup stops

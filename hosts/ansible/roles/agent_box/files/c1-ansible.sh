@@ -45,7 +45,10 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # box's own identity.env for a key it lacks, and writes the realm's Secret in c1.
 # backup-status: reads the c1 nodes' backup timers, last results, journal PASS/FAIL lines and restic snapshots (playbooks/k8s-backup-status.yml:
 # every task only reads; restic runs with --no-lock). It changes nothing, so check and apply both read; it runs no backup and no restore.
-declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml)
+# backup-restore-test: starts each node's c1-restore-test.service now (the Sunday timer's own unit: restic check, then the newest snapshots restored
+# into temporary folders and compared, never over a volume) and stops unless each node names the snapshot it restored and leaves no folder behind.
+# check starts nothing; apply starts it. It takes no backup.
+declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file)
 # Fixed extra variables per name. identity, users and clients also set k8s_identity_secrets_store=openbao, so the realm's Secrets
