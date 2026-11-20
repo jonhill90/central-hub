@@ -133,11 +133,29 @@
     - desktop-rdp.path
     - gnome-remote-desktop.service
 
+# Enabling a path unit does not start it until the next boot. Started now, it starts the remote desktop the moment
+# the marker exists: at once on a test build, and when the owner has typed the password otherwise. Seen on the
+# 2026-11-20 test build: with the unit only enabled, 3389 refused connections until a reboot.
+- name: desktop | The path unit is running
+  ansible.builtin.systemd_service:
+    name: desktop-rdp.path
+    state: started
+
 - name: desktop | firewalld runs
   ansible.builtin.systemd_service:
     name: firewalld.service
     enabled: true
     state: started
+
+# The daemon answers a moment after its unit starts; the next module refuses with "firewall is not currently running"
+# before that (seen on the 2026-11-20 test build, run 2).
+- name: desktop | firewalld answers
+  ansible.builtin.command: firewall-cmd --state
+  register: desktop_firewalld_state
+  until: desktop_firewalld_state.rc == 0
+  retries: 15
+  delay: 2
+  changed_when: false
 
 - name: desktop | firewalld accepts RDP from the connector's address only
   ansible.posix.firewalld:
@@ -178,21 +196,18 @@
   when: desktop_trust_chain_file | length > 0
 
 # Last: the agents keep no SSH login. A later change is a rebuild from teardown.
-- name: desktop | The admin user's SSH keys are removed
-  ansible.builtin.file:
-    path: "/home/{{ desktop_admin_user }}/.ssh/authorized_keys"
-    state: absent
-  when: desktop_lock_admin | bool
-
-# After the key is gone, the public zone's ssh and cockpit services are closed too: nothing needs them, and the
-# default zone would otherwise accept them from any address that reaches the VM. Last on purpose: this run's own
-# SSH connection is already open and survives, and a later change is a rebuild from teardown.
-- name: desktop | ssh and cockpit are removed from the public zone
-  ansible.posix.firewalld:
-    zone: public
-    service: "{{ item }}"
-    permanent: true
-    immediate: true
-    state: disabled
-  loop: [ssh, cockpit]
+# One task, one SSH connection: the admin key is removed and the public zone's ssh and cockpit are closed together.
+# Ansible opens a new connection per task, so the key removal and the closing as two tasks could never both run:
+# after the first, the next login is refused (seen on the 2026-11-14, 11-19 and 11-20 runs: the key task ended
+# "Permission denied" and the closing task never ran). Nothing needs ssh or cockpit once the key is gone, and the
+# default zone would otherwise accept them from any address that reaches the VM. A later change is a rebuild.
+- name: desktop | The admin user's SSH keys are removed and ssh and cockpit are closed
+  ansible.builtin.shell: |
+    set -eu
+    firewall-cmd --permanent --zone=public --remove-service=ssh --remove-service=cockpit
+    firewall-cmd --zone=public --remove-service=ssh --remove-service=cockpit
+    rm -f "/home/{{ desktop_admin_user }}/.ssh/authorized_keys"
+  args:
+    executable: /bin/bash
+  changed_when: true
   when: desktop_lock_admin | bool
