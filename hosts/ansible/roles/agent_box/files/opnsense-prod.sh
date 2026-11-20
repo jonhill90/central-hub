@@ -141,9 +141,13 @@ print(json.dumps({"job": "opnsense-prod", "time": a[1], "action": a[2], "commit"
 # The shared VLAN list (lab_vlans) is in the checkout's group_vars, which the job's one-file inventory does not have next to it;
 # it goes in the same way as for the host job's firewall run.
 vlans_file=$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml
+# Every run skips the tag dns_proof: that proof runs `dig` on the controller (here the box, which has no dig and no path to the
+# mgmt gateway's DNS) and is skipped in check mode, so a real apply would fail at it after the check passed. lab-test.sh skips it
+# for the same reason; the controller's own runs keep it.
 play() { # out-file, extra ansible-playbook arguments...
   local out=$1; shift
-  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" -e "@$vlans_file" -e "@$vars_file" "$playbook" "$@") > "$out" 2>> "$logs/run-$stamp.err"
+  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" -e "@$vlans_file" -e "@$vars_file" --skip-tags dns_proof "$playbook" "$@") \
+    > "$out" 2>> "$logs/run-$stamp.err"
 }
 # failed_tasks <json output>: the names of the tasks that failed or could not reach the host, for a session to read. Names
 # come from the reviewed code; a task's message can hold private values, so it stays in the box's log.

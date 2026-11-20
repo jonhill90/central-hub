@@ -203,12 +203,14 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
 
 ## A firewall change from the agent box
 
-Built by [D-0063](../decisions/0063-let-the-agent-box-hold-the-keys-that-guard-it.md); not run on the box yet, because the guard files are not there until the owner's go for the copy. Once a controller run with `--tags guard_files -e agent_box_copy_guard_files=true` has put them in `/etc/agent-keys-guard/` (owner `guardops`), a change to the firewall's code in `playbooks/opnsense.yml` or the `opnsense_lab` role applies from the box with no Mac step:
+Built by [D-0063](../decisions/0063-let-the-agent-box-hold-the-keys-that-guard-it.md). The guard files were copied on the owner's go on 2026-11-20, and the box's `check` ran with 0 changes that day; no apply has run from the box yet. Once a controller run with `--tags guard_files -e agent_box_copy_guard_files=true` has put them in `/etc/agent-keys-guard/` (owner `guardops`), a change to the firewall's code in `playbooks/opnsense.yml` or the `opnsense_lab` role applies from the box with no Mac step:
 
 1. Merge the change to `main` (reviewed, green).
 2. `sudo -n -u guardops /usr/local/libexec/agent-box/opnsense-prod.sh check`. It prints `check <hash>: N changed, N skipped, N tasks` and the commit.
 3. The reviewer records its pass: `opnsense-prod.sh pass <commit> <hash> <pass message ID> <ISO time> reviewer`. The orchestrator records the go: `opnsense-prod.sh go <commit> <go message ID> <ISO time> orchestrator`, where the message ID is the owner's standing go (D-0061 rule 3).
 4. `opnsense-prod.sh apply-recorded <hash>`. It re-checks main's head and refuses, naming what is missing, unless the hash matches and the ledger holds the pass and an unused go. Then it arms the way back, runs the playbook, and confirms or rolls back (below).
+
+Every run of the box's job skips the tag `dns_proof`: that proof runs `dig` on the controller against the mgmt gateway, and the box has neither `dig` nor that path. Prove DNS from the controller or from a tailnet device instead ([Set up lab DNS](set-up-lab-dns.md)).
 
 The Proxmox host's firewall (step 8's `--tags firewall` run; on the box it is `playbooks/proxmox-firewall.yml`, that role alone) goes the same way through the host job: `sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check firewall`, then `pass firewall ...` and `go firewall ...`, then `apply-recorded firewall <hash>`. Its values (`proxmox_firewall_home_lan_cidr`, `proxmox_firewall_enable`, `proxmox_firewall_extra_rules` and the nodes the checks probe) come from the host job's inventory, which a controller run with `--tags proxmox_host_inventory` writes from the controller's entry for the host. The dead-man timer guards it as it does from the controller.
 

@@ -9,6 +9,7 @@
 #      second apply-recorded on the same go is refused.
 #   6. The key and secret reach the playbook only in a vars file (-e @file), never on its command line, and the vars
 #      file is gone after the run; nothing printed holds them.
+#   9. Every run (check, apply, the check after it) skips the tag dns_proof, which needs dig and the mgmt DNS on the controller.
 #   8. Every run gets the checkout's VLAN file before the vars file; a failed check names the failed tasks, not their messages.
 #   7. The way back (D-0063 rule 4): the apply arms the host's guard before the playbook runs and confirms it after a check
 #      that works; a failed apply is rolled back at once; a guard that can't be armed stops the run before the playbook; a confirm
@@ -162,5 +163,10 @@ job check > "$t/8.out" 2>&1; rc=$?
 [ $rc = 1 ] && grep -q "failed task(s): Check that the VLAN values are not empty" "$t/8.out" && ! grep -q "TESTSECRET4567" "$t/8.out" \
   && ok "8 a failed check names the failed task and not its message" || bad "8 rc=$rc $(cat "$t/8.out")"
 cp "$t/out.ok" "$t/out.json"; cp "$t/ap.ok" "$t/bin/ansible-playbook"
+
+# 9
+n_all=$(grep -c . "$t/calls"); n_skip=$(grep -c -- "--skip-tags dns_proof" "$t/calls")
+[ "$n_all" -gt 0 ] && [ "$n_all" = "$n_skip" ] && grep -v -- '--check' "$t/calls" | grep -q -- "--skip-tags dns_proof" \
+  && ok "9 every run skips dns_proof, the apply too ($n_skip of $n_all)" || bad "9 $n_skip of $n_all runs skip dns_proof"
 
 exit $fail
