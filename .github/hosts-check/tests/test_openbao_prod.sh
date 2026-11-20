@@ -92,6 +92,12 @@ echo "playbook \$*" >> $t/calls
 cp "\${2%/}/hosts.yml" $t/seen-inventory.yml
 echo "PLAY RECAP"
 EOF
+cat > "$t/libexec/secrets-store.sh" <<'STUB'
+#!/bin/bash
+echo "secrets-store $*" >> "$(dirname "$0")/../ss_calls"
+exit "$(cat "$(dirname "$0")/../ss_rc" 2>/dev/null || echo 0)"
+STUB
+chmod +x "$t/libexec/secrets-store.sh"
 chmod +x "$t/bin/git" "$t/bin/ssh" "$t/libexec/sops" "$t/libexec/age-keygen" "$venv/ansible-inventory" "$venv/ansible-playbook"
 sed -e "s|^keys=.*|keys=$t/keys|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
     -e "s|PATH=\$libexec/ansible-venv/bin:/usr/local/bin|PATH=\$libexec/ansible-venv/bin:$t/bin:/usr/local/bin|" \
@@ -152,14 +158,19 @@ seen=$(python3 -c 'import json, sys, yaml; print(json.dumps(yaml.safe_load(open(
 v=$(python3 -c 'import json, sys; d = json.loads(sys.argv[1]); v = d["all"]["children"]["k8s_nodes"]["vars"]
 print(v["ansible_ssh_private_key_file"], v["ansible_ssh_common_args"], v["k8s_gitops_source_openbao_in_cluster"],
       v["k8s_gitops_source_openbao_seal_node"], v["k8s_gitops_source_openbao_store_host"], v["k8s_gitops_source_openbao_box_cidr"],
-      v["k8s_gitops_source_openbao_admin_address"], "proxmox" in d["all"]["children"])' "$seen" 2>/dev/null)
-want="$t/keys/prod-node-key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$t/work/openbao-prod/known_hosts True wk-a bao.invalid 192.0.2.50/32 192.0.2.60 False"
+      v["k8s_gitops_source_openbao_admin_address"], v["k8s_gitops_source_app_secrets_store"], "proxmox" in d["all"]["children"])' "$seen" 2>/dev/null)
+want="$t/keys/prod-node-key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$t/work/openbao-prod/known_hosts True wk-a bao.invalid 192.0.2.50/32 192.0.2.60 openbao False"
 if [[ $rc -eq 0 && $v == "$want" && $seen != *ProxyJump* && $seen != */Users/* && $no_admin == 0 ]]; then
-  ok "4. the box's copy: the Mac's ssh settings and proxmox group gone; the box's key and the store's settings set"
+  ok "4. the box's copy: the Mac's ssh settings and proxmox group gone; the box's key and the store's settings set; the apps read store openbao"
 else bad "4. $rc [$v] $out"; fi
 if [[ $calls == "playbook -i $t/work/openbao-prod/inventory/ playbooks/k8s-gitops.yml --tags source" && $out == *"prod nodes, plain ssh"* ]]; then
   ok "5. gitops: k8s-gitops.yml --tags source only"
 else bad "5. [$calls]"; fi
+echo 1 > "$t/ss_rc"; run gitops; r5g=$rc c5g=$calls o5g=$out
+echo 0 > "$t/ss_rc"
+if [[ $r5g -ne 0 && -z $c5g && $o5g == *"compare did not pass"* && $(cat "$t/ss_calls") == *"secrets-store --prod compare"* ]]; then
+  ok "5a. gitops: stops with nothing applied when secrets-store compare does not pass"
+else bad "5a. $r5g [$c5g] $o5g"; fi
 run l2-policy
 if [[ $rc -eq 0 && $calls == "playbook -i $t/work/openbao-prod/inventory/ playbooks/k8s.yml --tags lb --limit k8s_control_plane[0]" ]]; then
   ok "5b. l2-policy: k8s.yml --tags lb on the first control plane only"

@@ -85,13 +85,13 @@ echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
 run check identity
 seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
-if [[ $rc -eq 0 && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false --tags all,clients -e $ens --check --diff" &&
+if [[ $rc -eq 0 && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao --tags all,clients -e $ens --check --diff" &&
       $seen != *ProxyJump* && $seen != */Users/* && $seen != *pve-a* && $seen == *"$t/keys/prod-node-key"* ]]; then
   ok "3. check: --check --diff on the box's copy of the inventory"
 else bad "3. $rc [$calls] $out"; fi
 
 run apply identity "$clr"
-if [[ $rc -eq 0 && $calls != *--check* && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file="* && $calls == *"-e k8s_identity_realm_replace=false"* && $calls == *"--tags all,clients"* && $calls == *"$ens"* && $out == *"clearance $clr"* ]]; then
+if [[ $rc -eq 0 && $calls != *--check* && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file="* && $calls == *"-e k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao"* && $calls == *"--tags all,clients"* && $calls == *"$ens"* && $out == *"clearance $clr"* ]]; then
   ok "4a. apply: no --check, the clearance id logged"
 else bad "4a. $rc [$calls] $out"; fi
 inventory "${prod_inv[@]}" "            cp-b: {ansible_host: 192.0.2.11, k8s_gitops_cluster_labels: {env: dev}}"
@@ -142,7 +142,7 @@ else bad "8. [$o1] [$o2]"; fi
 run check users; u1=$calls; u1rc=$rc
 run apply users "$clr"; u2=$calls; u2rc=$rc; u2o=$out
 uj='{"k8s_identity_ensure_users":["signin-test"]}'
-if [[ $u1rc -eq 0 && $u1 == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false --tags secrets,users -e $uj --check --diff" &&
+if [[ $u1rc -eq 0 && $u1 == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao --tags secrets,users -e $uj --check --diff" &&
       $u2rc -eq 0 && $u2 == *"--tags secrets,users -e $uj" && $u2 != *--check* && $u2 != *keycloak* && $u2 != *all* && $u2o == *"clearance $clr"* ]]; then
   ok "9. users: identity playbook, tags secrets,users, one fixed user, no realm replace, apply is its own verb"
 else bad "9. [$u1] [$u2]"; fi
@@ -161,7 +161,7 @@ if [[ $rc -eq 0 && $seen != *k8s_identity_proxmox_hosts* && $out != *"Proxmox we
 run check clients; c1=$calls; c1rc=$rc
 run apply clients "$clr"; c2=$calls; c2rc=$rc; c2o=$out
 run apply clients; c3rc=$rc; c3=$calls
-if [[ $c1rc -eq 0 && $c1 == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false --tags secrets,clients -e $ens --check --diff" &&
+if [[ $c1rc -eq 0 && $c1 == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao --tags secrets,clients -e $ens --check --diff" &&
       $c2rc -eq 0 && $c2 == *"--tags secrets,clients -e $ens" && $c2 != *--check* && $c2 != *keycloak* && $c2 != *operator* && $c2 != *database* && $c2 != *all* &&
       $c2o == *"clearance $clr"* && $c3rc -eq 2 && -z $c3 ]]; then
   ok "11. clients: identity playbook, tags secrets,clients, one fixed client, no realm replace, apply needs a clearance id"
