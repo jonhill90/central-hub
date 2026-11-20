@@ -554,7 +554,7 @@ rm -rf "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
 import ipaddress, json, os, re, sys, yaml
-src, dst, key, known, keys, store_url, store_ca, in_cluster, store_settings = sys.argv[1:10]
+src, dst, key, known, keys, store_url, store_ca, in_cluster, store_settings, prod_inv = sys.argv[1:11]
 d = yaml.safe_load(open(src))
 # The box's own address as a /32, for the hand-over (the box's path to the store): the settings' box_cidr, private,
 # empty until that path is set. Checked as openbao-prod.sh checks prod's.
@@ -667,9 +667,36 @@ if in_cluster == "true":
     v["k8s_gitops_source_openbao_seal_node"] = hosts[0]
     if box_cidr: v["k8s_gitops_source_openbao_box_cidr"] = box_cidr
     if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
+# Dev's restore from the Proxmox host's copy: the worker's own key and the host's pinned key are in <keys>/dev/backup-sftp (made by
+# dev-worker-address.sh key), and the host's address is read, as rebuild-prod.sh reads it, from proxmox_host_mgmt_address on the proxmox
+# group of this inventory, or else of the box's prod inventory copy. Never printed. No address: no seed address, and the role refuses to use sftp.
+def pve_address(n):
+    if isinstance(n, dict):
+        p = n.get("proxmox")
+        if isinstance(p, dict) and ("hosts" in p or "children" in p or "vars" in p):
+            for part in [p.get("vars")] + list((p.get("hosts") or {}).values()):
+                a = (part or {}).get("proxmox_host_mgmt_address") if isinstance(part, dict) else None
+                if isinstance(a, str) and a: return a
+            return ""
+        for x in n.values():
+            r = pve_address(x)
+            if r: return r
+    elif isinstance(n, list):
+        for x in n:
+            r = pve_address(x)
+            if r: return r
+    return ""
+pve_addr = pve_address(d)
+if not pve_addr and os.path.isfile(prod_inv):
+    pve_addr = pve_address(yaml.safe_load(open(prod_inv)))
+v["k8s_backup_sftp_seed_dir"] = keys + "/dev/backup-sftp"
+if pve_addr:
+    try: ipaddress.ip_address(pve_addr)
+    except ValueError: print("rebuild: proxmox_host_mgmt_address is not an IP address", file=sys.stderr); sys.exit(1)
+    v["k8s_backup_sftp_seed_address"] = pve_addr
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster" "$work/secrets-store.json"
+)" "$inv_src/hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys" "$store_url" "$store_keys/secrets-store-ca.crt" "$in_cluster" "$work/secrets-store.json" "$keys/prod/inventory-hosts.yml"
 [[ -f $inventory/hosts.yml ]] || { echo "rebuild: could not build the box's dev inventory from $inv_src/hosts.yml" >&2; exit 1; }
 chmod 600 "$inventory/hosts.yml"
 
@@ -716,6 +743,9 @@ PY
 # hand the address over every time the inventory is parsed, and keep it across a teardown. A refusal removes the file. Not a stop: a
 # dev run's own stages do not need it.
 "$libexec/dev-worker-address.sh" write || true
+# The worker's own key on the Proxmox host (made once, in <keys>/dev/backup-sftp; its public half goes to the host job through the same
+# folder) and the pinned host key beside it, for the restore play's seed (k8s_backup_sftp_seed_dir, set in the inventory above).
+"$libexec/dev-worker-address.sh" key || true
 
 # The same state file as dev-vms, so the two wrappers agree about which VMs exist.
 cat > "$envdir/rebuild.env" <<ENV
