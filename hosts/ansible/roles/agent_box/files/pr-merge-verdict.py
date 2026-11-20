@@ -33,6 +33,35 @@ def load(d, name):
         return json.load(f)
 
 
+def superseded(runs, d, head):
+    """Ids of check runs that a newer, passing run of the same Actions job replaced: same workflow, same event, same
+    job name, this head. Editing a PR description runs spec-line again (it reads the description), and the older run's failure
+    stays on the commit, so only the newest run of a job decides. A run with no workflow run behind it (CodeQL, another
+    app) is never dropped, and without a full runs.json (the head's workflow runs) nothing is dropped."""
+    try:
+        wr = load(d, "runs.json")
+        wruns = wr["workflow_runs"]
+        if wr.get("total_count", len(wruns)) != len(wruns): return set()
+        job = {w["check_suite_id"]: (w["workflow_id"], w["event"]) for w in wruns if w.get("head_sha") == head}
+        newest = {}
+        for r in runs:
+            k = job.get((r.get("check_suite") or {}).get("id"))
+            if k is None or not isinstance(r.get("id"), int): continue
+            k = k + (r["name"],)
+            if k not in newest or r["id"] > newest[k]["id"]: newest[k] = r
+        out = set()
+        for r in runs:
+            k = job.get((r.get("check_suite") or {}).get("id"))
+            if k is None or not isinstance(r.get("id"), int): continue
+            n = newest[k + (r["name"],)]
+            # Only a newer run that passed replaces an older one: a skip counts as green only when the workflow
+            # skips on purpose (D-0031 rule 1), so a newer skipped or pending run never hides an older failure.
+            if n["id"] != r["id"] and n.get("status") == "completed" and n.get("conclusion") == "success": out.add(r["id"])
+        return out
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return set()
+
+
 def read_ledger(path, full, head, pr=None):
     """Returns (set of roles, lines, error). A ledger that does not parse is an error."""
     if not os.path.isfile(path):
@@ -138,7 +167,10 @@ def main():
     runs = checks.get("check_runs", [])
     if checks.get("total_count", len(runs)) != len(runs): why.append("read %d of %d check runs; not checked" % (len(runs), checks["total_count"]))
     if not runs and not status.get("statuses"): why.append("no checks reported on this head")
+    gone = superseded(runs, d, head)
+    if gone: notes.append("NOTE: %d check run(s) replaced by a newer passing run of the same job on this head, not counted: %s" % (len(gone), ", ".join(sorted("%s %s" % (r["name"], r.get("conclusion")) for r in runs if r.get("id") in gone))))
     for r in runs:
+        if r.get("id") in gone: continue
         if r["status"] != "completed": why.append("check %s is %s" % (r["name"], r["status"]))
         elif r["conclusion"] not in ("success", "skipped"): why.append("check %s: %s" % (r["name"], r["conclusion"]))
     if status.get("statuses") and status.get("state") != "success": why.append("commit status is %s" % status.get("state"))
