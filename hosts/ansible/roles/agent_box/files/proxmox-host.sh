@@ -9,7 +9,9 @@
 #   the web UI's sign-in through Keycloak; its client secret is the one line in $dir/proxmox-sso.env, read on the box by this
 #   user only) or `agent-access` (playbooks/
 #   proxmox-agent-access.yml: it copies hosts/terraform/home/bootstrap/agent-access.sh from the same commit to the host and
-#   runs it as root, so the agents' Proxmox rights change by a reviewed PR and no longer need the Mac).
+#   runs it as root, so the agents' Proxmox rights change by a reviewed PR and no longer need the Mac) or `firewall`
+#   (playbooks/proxmox-safety.yml with --tags firewall only: the host firewall, with the role's dead-man timer and its
+#   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller).
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh log
 # check: `--check --diff` on the code at origin/main. It saves a result file: the commit, the playbook, the
 #   SHA-256 of every diff's before and after text, and for each task its name, whether it changed and whether it
@@ -44,7 +46,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-safety.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -52,7 +54,7 @@ result=$work/state/check.json
 
 ledger=$work/ledger
 usage() {
-  echo "usage: proxmox-host check [proxy|agent-access|sso]|apply [proxy|agent-access|sso] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
+  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall]|apply [proxy|agent-access|sso|firewall] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
   echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
   exit 2
 }
@@ -128,6 +130,12 @@ if [[ $job == sso ]]; then
 fi
 
 repo=$work/checkout   # this wrapper's own checkout of central-hub
+# The firewall job runs only the playbook's firewall role, with the shared VLAN file from the same checkout (the job's
+# inventory is one file, so the inventory folder's group_vars are not next to it).
+fw_args=()
+if [[ $job == firewall ]]; then
+  fw_args=(--tags firewall -e "@$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml")
+fi
 export HOME=$work PATH=$ansible_bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_CONFIG=$repo/hosts/ansible/ansible.cfg ANSIBLE_COLLECTIONS_PATH=$collections ANSIBLE_HOME=$work/ansible-home
 export ANSIBLE_STDOUT_CALLBACK=ansible.posix.json ANSIBLE_NOCOLOR=1 ANSIBLE_RETRY_FILES_ENABLED=0
@@ -153,7 +161,7 @@ print(json.dumps({"job": "proxmox-host", "time": a[1], "action": a[2], "commit":
 
 play() { # out-file, extra ansible-playbook arguments...
   local out=$1; shift
-  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" "$playbook" ${sso_args[@]+"${sso_args[@]}"} "$@") > "$out" 2>> "$logs/run-$stamp.err"
+  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" "$playbook" ${sso_args[@]+"${sso_args[@]}"} ${fw_args[@]+"${fw_args[@]}"} "$@") > "$out" 2>> "$logs/run-$stamp.err"
 }
 
 # summarize <json output> <result file>: writes the result file and prints "<hash> <changed> <skipped> <tasks>".

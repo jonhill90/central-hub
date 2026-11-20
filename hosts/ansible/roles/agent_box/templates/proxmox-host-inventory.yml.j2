@@ -14,3 +14,12 @@ proxmox:
       proxmox_sso_issuer: {{ agent_box_proxmox_host_sso.issuer | to_json }}
       proxmox_sso_address: {{ agent_box_proxmox_host_sso.address | default('') | to_json }}
 {% endif %}
+{% set __pf = hostvars[groups['proxmox'][0]] if (groups['proxmox'] | default([]) | length) > 0 else {} %}
+{% if __pf.proxmox_firewall_home_lan_cidr is defined %}
+      # Role proxmox_firewall (job firewall, D-0063): the host's private firewall values, from the controller's own entry for the
+      # host. The nodes the checks probe are listed here, because this inventory has no k8s_nodes group.
+      proxmox_firewall_home_lan_cidr: {{ __pf.proxmox_firewall_home_lan_cidr | to_json }}
+      proxmox_firewall_enable: {{ __pf.proxmox_firewall_enable | default(false) | bool | to_json }}
+      proxmox_firewall_extra_rules: {{ __pf.proxmox_firewall_extra_rules | default([]) | to_json }}
+      proxmox_firewall_check_targets: {{ (groups['k8s_nodes'] | default([])) | map('extract', hostvars) | map(attribute='ansible_host', default='') | select | list | to_json }}
+{% endif %}
