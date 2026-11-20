@@ -5,6 +5,8 @@
 #   2. The check fails for: an unknown source name, a repeated name, a source with a prefix, a host that is not an
 #      IPv4 address, a VLAN tag not in the file, more sources than sequences, a sequence another rule uses (10,
 #      prod's own first rule; 5, a management pass; 1, an agent box target; 11, an app access rule).
+#   4. A source may name its own VLAN (dev's worker on 30 at sequence 17, as well as the two prod nodes on 10); the check
+#      refuses a source VLAN tag that is not in the file, and the rule's interface follows the source's VLAN.
 #   3. The rule task opens tcp 22 only, to the host's /32, from each node's /32, on the sources' VLAN.
 # Usage: .github/hosts-check/tests/test_opnsense_backup_target.sh   (needs ansible-core)
 set -uo pipefail
@@ -49,10 +51,10 @@ check() { ANSIBLE_LOCALHOST_WARNING=False ansible-playbook -i localhost, -e ansi
 
 if check "$good"; then
   ok "the two prod nodes at sequences 13 and 14 pass the check"
-  python3 -I - "$w/seq.json" <<'PY' && ok "the role's numbered sequences hold neither 13 nor 14, and prod's own rules are 10 to 40" || bad "numbered sequences are not as expected"
+  python3 -I - "$w/seq.json" <<'PY' && ok "the role's numbered sequences hold none of 13, 14 and 17, and prod's own rules are 10 to 40" || bad "numbered sequences are not as expected"
 import json, sys
 d = json.load(open(sys.argv[1]))
-assert 13 not in d["numbered"] and 14 not in d["numbered"], d
+assert not {13, 14, 17} & set(d["numbered"]), d
 assert {1, 2, 5, 6, 7, 10, 20, 30, 40}.issubset(d["numbered"]), d
 PY
 else bad "the good input fails the check"; cat "$w/out"; fi
@@ -72,6 +74,16 @@ refuse "a management pass sequence is refused" "$(sub 'd["opnsense_lab_backup_ta
 refuse "an agent box sequence is refused" "$(sub 'd["opnsense_lab_backup_target_sequences"]=[1, 14]')"
 refuse "an app access sequence in use is refused" "$(sub 'd["opnsense_lab_backup_target_sequences"]=[11, 14]')"
 
+# A dev worker on its own VLAN passes; a source VLAN not in the file is refused.
+withdev=$(sub 'd["opnsense_lab_backup_target"]["sources"].append({"name": "dev worker", "address": "192.0.2.30", "vlan": 30})')
+if check "$withdev"; then ok "a dev worker on VLAN 30 as a third source at sequence 17 passes"; else bad "a dev worker on VLAN 30 is refused"; cat "$w/out"; fi
+# The store admin rule (default sequence 15) and the Proxmox web rule (16) are set at the same time: the dev worker's default 17 is clear of both,
+# and the old 15 would collide.
+withstore=$(sub 'd["opnsense_lab_backup_target"]["sources"].append({"name": "dev worker", "address": "192.0.2.30", "vlan": 30}); d["opnsense_lab_store_admin"]={"vlan": 30}; d["opnsense_lab_proxmox_web"]={"vlan": 30}')
+if check "$withstore"; then ok "with the store admin and Proxmox web rules set, the third source at sequence 17 passes"; else bad "the third source is refused with the store admin rule set"; cat "$w/out"; fi
+refuse "sequence 15 collides with the store admin rule when it is set" "$(echo "$withstore" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["opnsense_lab_backup_target_sequences"]=[13, 14, 15]; print(json.dumps(d))')"
+refuse "a source VLAN tag not in the file is refused" "$(sub 'd["opnsense_lab_backup_target"]["sources"].append({"name": "dev worker", "address": "192.0.2.30", "vlan": 99})')"
+
 # The rule as written: tcp 22 only, /32 at both ends, the sources' VLAN, pass, quick.
 python3 -I - "$role/tasks/backup_target.yml" <<'PY' && ok "the rule opens tcp 22 only, from each node's /32 to the host's /32" || bad "the rule task is not as narrow as it should be"
 import sys, yaml
@@ -81,7 +93,7 @@ assert r["action"] == "pass" and r["quick"] is True and r["direction"] == "in", 
 assert r["protocol"] == "TCP" and r["destination_port"] == "22", r
 assert r["source_net"] == "{{ item.address }}/32", r
 assert r["destination_net"] == "{{ opnsense_lab_backup_target.host }}/32", r
-assert "opnsense_lab_backup_target.vlan" in r["interface"][0], r
+assert "item.vlan | default(opnsense_lab_backup_target.vlan)" in r["interface"][0], r
 gone = next(t for t in tasks if t.get("name") == "No rules for backup sources that are gone")["oxlorg.opnsense.rule"]
 assert gone["state"] == "absent" and gone["description"] == "Allow {{ item }} to Proxmox backup SSH", gone
 PY

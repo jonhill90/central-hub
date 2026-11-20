@@ -1,8 +1,9 @@
 ---
 # Pass rules from the c1 nodes to the Proxmox host's ssh, so restic reaches its sftp target there (agent pick 262).
 # Without them prod's own rules pass only ping and DNS to the firewall and the internet (tasks/rules.yml), so the
-# host's VNet mgmt address is dropped. One rule per node, from that address only, to the host's address only, on
-# tcp 22 only. On the host, sshd lets those addresses in only as the backup users, never as root (role
+# host's VNet mgmt address is dropped. One rule per source, from that address only, to the host's address only, on
+# tcp 22 only, on the interface of the source's own `vlan` (the target's `vlan` when the source names none: prod's
+# nodes sit on VLAN 10, a dev worker on VLAN 30). On the host, sshd lets those addresses in only as the backup users, never as root (role
 # proxmox_restic_sftp). Applying them is a firewall change on the owner's go (D-0036 rule 8).
 - name: Backup target inputs are checked
   ansible.builtin.import_tasks: backup_target_checks.yml
@@ -14,7 +15,7 @@
     sequence: "{{ opnsense_lab_backup_target_sequences[opnsense_lab_backup_target_index] }}"
     action: pass
     quick: true
-    interface: ["{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', opnsense_lab_backup_target.vlan) | first).ifname }}"]
+    interface: ["{{ (opnsense_lab_vlans | selectattr('tag', 'equalto', item.vlan | default(opnsense_lab_backup_target.vlan)) | first).ifname }}"]
     direction: in
     ip_protocol: inet
     protocol: TCP
