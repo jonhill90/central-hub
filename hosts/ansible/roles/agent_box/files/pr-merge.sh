@@ -100,6 +100,9 @@ setup_repo() {
       { echo "pr-merge: no installation token (has the installation accepted contents and pull requests write, and checks read?)" >&2; return 1; }
     echo "pr-merge: the installation has not accepted Commit statuses (read); legacy statuses are not checked" >&2
   }
+  # A second token with Actions (read) alone, only to tell which workflow made each check run. Without it the verdict
+  # counts every run, as before, so a failure here never passes anything.
+  atok=$(mint '{"actions":"read"}' 2>/dev/null) || atok=
 }
 gh() { BEARER=$tok api "$@"; }
 
@@ -148,6 +151,9 @@ evaluate() { # pr head
   # Only to explain a "blocked" (the verdict names unverified commits); it decides nothing, so a failed read just leaves it out.
   gh "$base/pulls/$pr/commits?per_page=100" > "$d/commits.json" 2>/dev/null || rm -f "$d/commits.json"
   gh "$base/commits/$head/check-runs?per_page=100" > "$d/checks.json" || return 1
+  # Which workflow and event made each check run, so a run a newer run of the same job replaced is not counted. A failed
+  # read leaves the file out, and then the verdict counts every run, as before.
+  { [[ -n $atok ]] && BEARER=$atok api "$base/actions/runs?head_sha=$head&per_page=100" > "$d/runs.json" 2>/dev/null; } || rm -f "$d/runs.json"
   if [[ $have_status == 1 ]]; then gh "$base/commits/$head/status" > "$d/status.json" || return 1; else echo '{}' > "$d/status.json"; fi
   [[ -f $passes/$name/$head.jsonl ]] && cp "$passes/$name/$head.jsonl" "$d/ledger.jsonl" || true
   if [[ $full == jonhill90/central-hub ]]; then

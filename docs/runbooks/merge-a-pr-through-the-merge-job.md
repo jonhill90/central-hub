@@ -20,7 +20,7 @@ A cloud session cannot start a GitHub workflow here (the GitHub integration answ
 
 ## Before you start
 
-1. CI is green on the PR's head. The sweep checks it again itself: open, not a draft, base `main`, a clean merge, every check on the head completed and passed or skipped, at least one ran, fewer than 3000 files (the most GitHub lists for a PR; a server not yet updated by the tapped apply still stops at 100).
+1. CI is green on the PR's head. The sweep checks it again itself: open, not a draft, base `main`, a clean merge, every check on the head completed and passed or skipped (a run that a newer run of the same Actions job replaced on that head does not count), at least one ran, fewer than 3000 files (the most GitHub lists for a PR; a server not yet updated by the tapped apply still stops at 100).
    If the sweep says GitHub does not report a clean merge (`state=blocked`) on a green PR, read the rest of its line: it names each commit of the PR that GitHub does not verify, because `main` requires signed commits and GitHub counts the PR's own commits (measured 2026-11-18: the blocked PRs each held an unverified commit; a PR far behind `main` with all commits verified was `clean`). Updating the branch does not fix that and replaces the head, so the recorded pass no longer matches. Re-make the head as verified commits and record a new pass. Before the box installs the change, the line says only `blocked`; list the commits with `GET /repos/OWNER/REPO/pulls/N/commits` and read each `commit.verification`.
 2. You have read, in the project's chat, the reviewer's clearance of that exact head. A pass for an older head does not count: the ledger is a file per head.
 
