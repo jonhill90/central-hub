@@ -46,7 +46,8 @@
       ansible.builtin.debug:
         msg: |-
           {% for g in (memory_guests.stdout | from_json) %}{% if g.type | default('') in ['qemu', 'lxc'] %}
-          guest {{ g.vmid | int }} {{ g.type }} {{ (g.status | default('unknown')) | regex_replace('[^a-z]', '') }} maxmem {{ ((g.maxmem | default(0)) | int) // 1048576 }} mem {{ ((g.mem | default(0)) | int) // 1048576 }}
+          {% set gmax = ((g.maxmem | default(0)) | int) // 1048576 %}{% set gmem = ((g.mem | default(0)) | int) // 1048576 %}
+          guest {{ g.vmid | int }} {{ g.type }} {{ (g.status | default('unknown')) | regex_replace('[^a-z]', '') }} maxmem {{ gmax }} mem {{ gmem }}
           {% endif %}{% endfor %}
           {% for l in memory_kvm.stdout_lines %}{% set m = l | regex_search('-id ([0-9]+)', '\\1') %}{% if m %}
           kvm id {{ m[0] | int }} rss {{ ((l.split()[0]) | int) // 1024 }}
