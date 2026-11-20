@@ -1285,6 +1285,14 @@
   when: agent_box_copy_prod_files | bool
   tags: [prod_files]
 
+# The lab's public root, installed for the prod rebuild from the box's own guard copy (no Mac, no private file).
+- name: Install the lab root certificate for the prod rebuild from the guard copy
+  ansible.builtin.include_tasks:
+    file: prod_lab_root.yml
+    apply:
+      tags: [prod_lab_root]
+  tags: [prod_lab_root]
+
 # --- OPNsense configuration backup (pick 220) -----------------------------------------------------
 
 - name: The OPNsense backup's settings hold

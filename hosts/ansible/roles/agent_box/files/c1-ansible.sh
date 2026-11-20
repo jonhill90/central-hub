@@ -49,7 +49,7 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # into temporary folders and compared, never over a volume) and stops unless each node names the snapshot it restored and leaves no folder behind.
 # check starts nothing; apply starts it. It takes no backup.
 # backup-check: plays playbooks/k8s-backup.yml in check mode only, to prove the sftp alias tasks (the carried key seeds, the host address
-# from the Mac's inventory) before a prod rebuild; apply is refused, because the wrapper never takes a backup. The seed folder is the one
+# from the box's copy of the prod inventory) before a prod rebuild; apply is refused, because the wrapper never takes a backup. The seed folder is the one
 # rebuild-prod.sh fills (<keys>/prod/backup-sftp); the host address is read before the proxmox group is dropped, as rebuild-prod.sh does.
 declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env")

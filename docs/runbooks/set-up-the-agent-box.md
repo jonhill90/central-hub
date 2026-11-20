@@ -352,6 +352,10 @@ A device goes only when all of these hold: it carries one of the settings' tags;
 4. Run `tailnet-cleanup plan` and read the list before the first timer run.
    expect: `remove:` lines only for devices you expect to go, and a last line with the counts.
 
+## The lab root certificate for the prod rebuild, from the box itself
+
+`rebuild-prod.sh check` needs the lab's public root certificate at `/etc/agent-keys/prod/lab-ca/root.crt`. The role's `prod_lab_root` tasks (tag `prod_lab_root`, which a self-apply does not skip) install it from the box's own guard copy, `/etc/agent-keys-guard/lab-root.crt`, with no Mac and no private file: they stop unless the file is exactly one CA certificate and holds no key, then copy it, byte for byte, to that path (owner `keys`, mode 0600). A box with no guard copy skips and says so. The controller's `prod_files` run still lists the same file and writes the same public certificate. Offline test: `.github/hosts-check/tests/test_prod_lab_root.sh` (run for real against temp folders). Not yet run on the box: the first box install after this merges is its proof, and `rebuild-prod.sh check` no longer printing `k8s_gitops_sso_root_ca_file ... which is not on the box` is the sign.
+
 ## Copy the controller's private files to the box
 
 For the agent to tear down and rebuild layers beyond dev (D-0035), the box needs the private files the lab was built from. The role's `prod_files` tasks copy them from the controller into `/etc/agent-keys/prod/` (owned by `keys`, folders 0700, files 0600). They never run by default: they run only when `agent_box_copy_prod_files` is true for that run (a role variable, default false), so a wrapper that can't pass tags can still do it by a one-line change to the default, reverted after the run.

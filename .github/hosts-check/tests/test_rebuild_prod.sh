@@ -310,11 +310,13 @@ run check; r12a=$rc o12a=$out
 run rebuild "$tap" "$sha"; r12b=$rc c12b=$calls
 inventory; sed -i '/k8s_backup_azure_identity/d' "$t/keys/prod/inventory-hosts.yml"
 rm -rf "$t/keys/prod/backup-certs"
+mkdir -p "$t/keys/prod/backup-sftp"; echo carried > "$t/keys/prod/backup-sftp/n.key"
 run rebuild "$tap" "$sha"; r12c=$rc o12c=$out c12c=$calls
 if [[ $r12a -eq 1 && $o12a == *"k8s_backup_sftp is true but the box's copy has no host address for node"* &&
       $r12b -eq 1 && $c12b != *playbook* && $c12b != *one-command* &&
       $r12c -eq 0 && $o12c == *"no Azure sign-in on the prod nodes (k8s_backup_azure_identity off), so no backup certificate to carry"* &&
-      $c12c != *backup.pem* && $c12c == *one-command* && ! -e $t/keys/prod/backup-certs ]]; then
+      $c12c != *backup.pem* && $c12c == *one-command* && ! -e $t/keys/prod/backup-certs &&
+      $o12c == *"the carried sftp keys were deleted from the box"* && ! -e $t/keys/prod/backup-sftp ]]; then
   ok "12. the Proxmox host as backup target with no host address is refused before anything runs; no Azure sign-in: no certificate carried"
 else bad "12. $r12a $o12a | $r12b [$c12b] | $r12c $o12c"; fi
 

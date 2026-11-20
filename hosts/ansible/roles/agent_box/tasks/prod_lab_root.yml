@@ -1,0 +1,51 @@
+---
+# Put the lab's public root certificate where the prod rebuild looks for it, from the copy the box already holds, with no
+# Mac in the loop. `rebuild-prod.sh check` fails when `<keys>/prod/lab-ca/root.crt` is missing, and until now only the
+# controller's prod_files run (a copy from the Mac) made it. The same public root is already on the box as
+# `lab-root.crt` in the guard user's folder (agent_box_guard_files). A root certificate holds no private key. The play runs
+# as root on the box, so it can read the guard folder, which no session and no other wrapper can. Nothing is printed but
+# whether the file was installed. A box with no guard copy skips and says so; the file is never made up.
+
+- name: prod_lab_root | Look for the box's copy of the lab root
+  ansible.builtin.stat:
+    path: "{{ agent_box_guard_dir }}/lab-root.crt"
+    get_checksum: false
+  register: agent_box_plr_src
+
+- name: prod_lab_root | Say when there is no copy to install
+  ansible.builtin.debug:
+    msg: "prod_lab_root: {{ agent_box_guard_dir }}/lab-root.crt is not on the box, so nothing is installed"
+  when: not agent_box_plr_src.stat.exists
+
+- name: prod_lab_root | The prod folders on the box, the keys user's
+  ansible.builtin.file:
+    path: "{{ agent_box_keys_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0700"
+  loop: [prod, prod/lab-ca]
+  when: agent_box_plr_src.stat.exists
+
+# One certificate, and a CA. A private key or a chain in the file would stop the run here: the file is only ever the root.
+- name: prod_lab_root | The file is exactly one CA certificate and holds no key
+  ansible.builtin.shell: |
+    set -o pipefail
+    f={{ (agent_box_guard_dir ~ '/lab-root.crt') | quote }}
+    [ "$(grep -c 'BEGIN CERTIFICATE' "$f")" = 1 ] || { echo "not exactly one certificate"; exit 1; }
+    ! grep -q 'PRIVATE KEY' "$f" || { echo "holds a private key"; exit 1; }
+    openssl x509 -in "$f" -noout -ext basicConstraints | grep -q 'CA:TRUE' || { echo "not a CA certificate"; exit 1; }
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: agent_box_plr_src.stat.exists
+
+- name: prod_lab_root | Install it as the prod rebuild's lab root
+  ansible.builtin.copy:
+    src: "{{ agent_box_guard_dir }}/lab-root.crt"
+    remote_src: true
+    dest: "{{ agent_box_keys_dir }}/prod/lab-ca/root.crt"
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_keys_user }}"
+    mode: "0600"
+  when: agent_box_plr_src.stat.exists

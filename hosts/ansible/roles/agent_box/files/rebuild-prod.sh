@@ -336,7 +336,7 @@ for h in sorted(nodes):
 # The backup target (docs/runbooks/back-up-c1-off-box.md). Azure: each node's certificate is carried to its rebuilt node
 # (step 2 of rebuild). The Proxmox host over sftp: each node's own key pair and its pinned host key are carried the same way
 # (step 1a), so the host, which already lets those keys in, needs no change and the box needs no key on it; the host's address
-# comes from the Mac's inventory (proxmox_host_mgmt_address), read before the proxmox group is dropped.
+# comes from the box's copy of the prod inventory, prod/inventory-hosts.yml (proxmox_host_mgmt_address), read before the proxmox group is dropped.
 truthy = lambda x: x is True or str(x).lower() in ("true", "yes", "1")
 sftp = sorted(h for h in nodes if truthy(hv.get(h, {}).get("k8s_backup_sftp")))
 azure = sorted(h for h in nodes if truthy(hv.get(h, {}).get("k8s_backup_azure_identity")))
@@ -347,7 +347,7 @@ elif sftp and azure:
 elif sftp:
     for h in sftp:
         if not hv.get(h, {}).get("k8s_backup_sftp_seed_address"):
-            bad.append("k8s_backup_sftp is true but the box's copy has no host address for node %s: the Mac's inventory needs proxmox_host_mgmt_address on its proxmox group" % h)
+            bad.append("k8s_backup_sftp is true but the box's copy has no host address for node %s: the box's copy of the prod inventory (prod/inventory-hosts.yml) needs proxmox_host_mgmt_address on its proxmox group, which the controller's prod-files run copies" % h)
 elif azure and len(azure) != len(nodes):
     bad.append("k8s_backup_azure_identity is true on some prod nodes only: %s" % " ".join(azure))
 for b in sorted(set(bad)): print("FAIL: rebuild-prod: inventory: " + b)
@@ -595,6 +595,11 @@ chmod 600 "$envdir/rebuild.env"
 echo "rebuild-prod: teardown and build start: $stages"
 rc=0
 bash "$repo/hosts/rebuild-k8s.sh" "$envdir" --teardown || rc=$?
-if [[ $rc -eq 0 ]]; then echo "PASS: rebuild-prod: prod torn down and built again at ${commit:0:12}, data back, backups on"
+if [[ $rc -eq 0 ]]; then
+  # The carried sftp private keys have done their job once the rebuilt nodes hold them and the backup stage and checks passed;
+  # the host accepts those keys as the writer, so the box must not keep a key on the host (D-0042 rule 6, an access right
+  # under the standing go of D-0061, named in the PR). On a failed run they stay: a stopped run is resumed from them.
+  if [[ -d $sftp_keys ]]; then rm -rf -- "$sftp_keys"; echo "rebuild-prod: the carried sftp keys were deleted from the box"; fi
+  echo "PASS: rebuild-prod: prod torn down and built again at ${commit:0:12}, data back, backups on"
 else echo "FAIL: rebuild-prod: the one command stopped (rc $rc); rebuild-prod log names the stage"; fi
 exit "$rc"
