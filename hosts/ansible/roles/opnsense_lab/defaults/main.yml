@@ -70,15 +70,16 @@ opnsense_lab_app_access_sequences: [11, 12]
 # Optional and private (addresses), from the inventory; unset = no such rules, and any left from an earlier run are
 # removed. Applying a change is a firewall change on the owner's go (D-0036 rule 8).
 # opnsense_lab_backup_target:
-#   vlan: 10                     # the sources' VLAN tag (prod)
+#   vlan: 10                     # the sources' VLAN tag (prod); a source may name its own `vlan`
 #   host: <address>              # the host's address on VNet mgmt (proxmox_host_mgmt_address)
 #   sources:
 #     - { name: prod node 200, address: <VM 200's address> }
 #     - { name: prod node 201, address: <VM 201's address> }
+#     - { name: dev worker, address: <dev worker's address>, vlan: 30 }   # dev's read-only restore (runbook P3)
 # The names the rules may have; a name that is not a current source loses its rule.
-opnsense_lab_backup_target_names: [prod node 200, prod node 201]
+opnsense_lab_backup_target_names: [prod node 200, prod node 201, dev worker]
 # The rules' sequence numbers, in source order, clear of every other rule the role numbers; the role checks it.
-opnsense_lab_backup_target_sequences: [13, 14]
+opnsense_lab_backup_target_sequences: [13, 14, 15]
 
 # One pass rule from the agent box to the secrets store's admin address in prod's c1 on 443 (tasks/store_admin.yml,
 # D-0062 rule 4). Optional and private (addresses), from the inventory; unset = no such rule, and one left from an

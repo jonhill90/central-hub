@@ -144,15 +144,16 @@ argument_specs:
             options:
               name: {type: str, required: true, description: "Rule name; one of opnsense_lab_backup_target_names."}
               address: {type: str, required: true, description: "The node's IPv4 address, without a prefix."}
+              vlan: {type: int, required: false, description: "This source's own VLAN tag, for example 30 (dev); the target's vlan when unset."}
       opnsense_lab_backup_target_names:
         type: list
         elements: str
-        default: [prod node 200, prod node 201]
+        default: [prod node 200, prod node 201, dev worker]
         description: The names the backup target rules may have; a name that is not a current source loses its rule.
       opnsense_lab_backup_target_sequences:
         type: list
         elements: int
-        default: [13, 14]
+        default: [13, 14, 15]
         description: The backup target rules' sequence numbers, in source order; clear of every other rule.
       opnsense_lab_store_admin:
         type: dict
