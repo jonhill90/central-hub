@@ -7,12 +7,10 @@
 # values are written to the kernel now and again at every boot (a tmpfiles.d file, so a reboot keeps them). Off: scanning stops
 # (run 0; pages already merged stay merged until their guests write to them), the file goes, and ksmtuned is back as Proxmox
 # ships it. Every task is a plain change in a check run (no check_mode: false except the fixed reads).
-- name: ksm | Read whether ksmtuned is installed
-  ansible.builtin.command: systemctl list-unit-files ksmtuned.service --no-legend
+- name: ksm | Look for the ksmtuned unit file
+  ansible.builtin.stat:
+    path: /lib/systemd/system/ksmtuned.service
   register: ksm_unit
-  changed_when: false
-  failed_when: ksm_unit.rc > 1
-  check_mode: false
 
 - name: ksm | Read the kernel's current values
   ansible.builtin.command: grep -H . /sys/kernel/mm/ksm/run /sys/kernel/mm/ksm/sleep_millisecs /sys/kernel/mm/ksm/pages_to_scan
@@ -30,14 +28,18 @@
       {{ dict(ksm_now.stdout_lines
               | map('regex_replace', '^/sys/kernel/mm/ksm/([a-z_]+):(.*)$', '\1=\2')
               | map('split', '=') | list) }}
-    ksm_has_unit: "{{ (ksm_unit.stdout | default('') | trim | length) > 0 }}"
+    ksm_has_unit: "{{ ksm_unit.stat.exists }}"
 
 # A check run skips the kernel writes below (a command is not run in check mode), so this task shows them in the check as a change:
 # it is "changed" when any value the kernel holds differs from the one wanted.
 - name: ksm | The kernel's values differ from the wanted ones
   ansible.builtin.debug:
     msg: "same-page merging: kernel values differ from the wanted ones"
-  changed_when: ksm_have['run'] != ksm_want['run'] or (proxmox_ksm_enabled and (ksm_have['sleep_millisecs'] != ksm_want['sleep_millisecs'] or ksm_have['pages_to_scan'] != ksm_want['pages_to_scan']))
+  changed_when: >-
+    ksm_have['run'] != ksm_want['run']
+    or (proxmox_ksm_enabled
+        and (ksm_have['sleep_millisecs'] != ksm_want['sleep_millisecs']
+             or ksm_have['pages_to_scan'] != ksm_want['pages_to_scan']))
 
 - name: ksm | ksmtuned stopped and disabled while this play pins the values
   ansible.builtin.systemd:

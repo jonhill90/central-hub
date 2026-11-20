@@ -41,7 +41,7 @@ for name, (enabled, run) in cases.items():
              "/sys/kernel/mm/ksm/pages_to_scan:%d" % (1000 if run else 100)]
     play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
              "vars": {"proxmox_ksm_enabled": enabled, "proxmox_ksm_sleep_millisecs": 200, "proxmox_ksm_pages_to_scan": 1000},
-             "tasks": [{"name": "fake", "ansible.builtin.set_fact": {"ksm_now": {"stdout_lines": lines}, "ksm_unit": {"stdout": "ksmtuned.service enabled enabled"}}},
+             "tasks": [{"name": "fake", "ansible.builtin.set_fact": {"ksm_now": {"stdout_lines": lines}, "ksm_unit": {"stat": {"exists": True}}}},
                        parse, diff]}]
     yaml.safe_dump(play, open("%s/%s.yml" % (sys.argv[2], name), "w"))
 PY
