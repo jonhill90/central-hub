@@ -1,6 +1,16 @@
 ---
 # The backup target rules' inputs (tasks/backup_target.yml), checked before any rule is written; on its own so
 # .github/hosts-check/tests/test_opnsense_backup_target.sh can run it with no firewall.
+# Extra sources have nowhere to go without a backup target (the rules below run only when the target is set): refuse, so an apply that
+# could not open the dev worker's rule fails and the box's wrapper writes no marker saying it did.
+- name: Extra backup sources need the backup target
+  ansible.builtin.assert:
+    that: opnsense_lab_backup_target_extra_sources | length == 0 or opnsense_lab_backup_target is defined
+    fail_msg: >-
+      opnsense_lab_backup_target_extra_sources is set but opnsense_lab_backup_target is not: the extra sources have no host to reach, so no
+      rule would be written. Set opnsense_lab_backup_target in the firewall inventory, or give no extra source.
+    quiet: true
+
 # Sources the agent box adds from its own state (a vars file of the firewall job: the dev worker's address, read from the box's
 # handoff file) join the inventory's, so one list is checked and one list gets rules. A source of the same name already in the
 # inventory is replaced, so the box's address wins and the unique-name check can't stop the job. Empty by default: nothing changes.
