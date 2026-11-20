@@ -33,7 +33,7 @@ On 2026-11-08 at 07:08 UTC the owner asked for that step: a PKI that still works
 - **Survive a rebuild.** Rebuilding c1 must not change the root that devices trust.
 - **Trust once.** Each device trusts one root, one time.
 - **Replaceable** (REQ-0011). Any issuer can be swapped by signing it a new intermediate under the same root.
-- **Nothing extra to run** unless it is needed. On 2026-11-08 at 07:41 UTC the owner wrote: "I feel like a vm just forr a ca is alot."
+- **Nothing extra to run** unless it is needed. On 2026-11-08 at 07:41 UTC the owner said a separate VM for the CA looked like more than the job needs.
 - **No names in public logs.** Public certificates put every name in Certificate Transparency logs; private ones don't.
 
 ## Considered Options

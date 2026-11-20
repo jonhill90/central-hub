@@ -28,11 +28,11 @@ D-0042 rule 6 keeps some steps for the owner: firewall and tailnet applies, dele
 
 On 2026-11-18 the orchestrator asked the owner to type several such lines. He answered in the project thread "Coordinate the project in my place":
 
-- 07:40:44 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNFcHLPyEs7Kus4RCG73RKe6): "any other lines. Like i accept everyint but you lifting my creds and buy [...] and like dont wipe my mac or install virus or leak my data".
-- 07:40:57 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNGkWQaRP1PcetVDtg9g7ZZZ): "dont run rm -rf ~".
-- 07:41:01 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN8YtLJBAkzt1i6tykNmWLTf): "you know normal [...]". The agents read this as the usual limits.
-- 07:41:29 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN6a639VYLJZA5t7LB8SD6tZ): he asked why he had to type "Accept #512 at" a commit id.
-- 07:45:23 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN21gcct7pZfawWtAx2DAxFu): "stop making me type so much".
+- 07:40:44 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNFcHLPyEs7Kus4RCG73RKe6): he accepts every step except the agents taking his own credentials, buying anything, wiping his Mac, installing malware or leaking his data.
+- 07:40:57 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwNGkWQaRP1PcetVDtg9g7ZZZ): the agents must not run a command that deletes his home folder.
+- 07:41:01 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN8YtLJBAkzt1i6tykNmWLTf): the usual limits apply. The agents read this as the ordinary safety limits.
+- 07:41:29 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN6a639VYLJZA5t7LB8SD6tZ): he asked why a typed line naming the PR and its commit id was needed.
+- 07:45:23 UTC (cmsg_01X43rfNYp4H1dL1V2dkfkwN21gcct7pZfawWtAx2DAxFu): he asked the agents to reduce how much he has to type.
 
 The 07:40:44 UTC line names no step and no commit, so under D-0034 rule 9 it is not his go for any one step. The orchestrator still acted on it as his go for four steps. This record says how that line counts.
 
@@ -79,4 +79,4 @@ The reviewer checks that each PR or run log of a rule 6 step names the step and 
 ## More Information
 
 - **What changes elsewhere.** Once this record is accepted, D-0042 rule 6 and AGENTS.md rule 1 say the same, in the acceptance PR (D-0001: the later record keeps the reasons). Until then they are unchanged, because an accepted rule must not rest on a proposed record.
-- **How this record is accepted.** By the owner's own words naming D-0061 (the orchestrator's ruling of 2026-11-18 11:07 UTC). The PR that adds it holds it as proposed. A later PR changes its status, date and accepted-evidence and its index row, and adds the sentences to D-0042 rule 6 and AGENTS.md rule 1, citing his words. The go it records is the owner's own words, quoted above.
+- **How this record is accepted.** By the owner's own words naming D-0061 (the orchestrator's ruling of 2026-11-18 11:07 UTC). The PR that adds it holds it as proposed. A later PR changes its status, date and accepted-evidence and its index row, and adds the sentences to D-0042 rule 6 and AGENTS.md rule 1, citing his words. The go it records is the owner's own words, summarised above and kept in the chat archive under the ids given.
