@@ -45,6 +45,14 @@ import urllib.parse
 import urllib.request
 
 
+def wait_next_window(cfg):
+    """Sleep until the next one-time-code window starts (retry_wait, in seconds, replaces that; a test sets it).
+    Keycloak refuses a code it has already accepted, so a check that finds its code used, because another check of this run
+    signed in with the same seed in the same window, tries again with the next window's own code."""
+    period = int(cfg.get("period", 30))
+    time.sleep(float(cfg["retry_wait"]) if "retry_wait" in cfg else period - time.time() % period + 1)
+
+
 def totp(seed, offset=0, digits=6, period=30):
     key = base64.b32decode(seed.replace(" ", "").upper() + "=" * (-len(seed.replace(" ", "")) % 8))
     counter = int(time.time() // period) + offset
@@ -159,7 +167,10 @@ def main():
         return 1
 
     loc = ""
-    for offset in (0, 1):  # the second try is the next window, if the first sat on a boundary
+    for attempt in range(3):  # a rejected code is tried again in the next window, with that window's own code
+        offset = 0
+        if attempt:
+            wait_next_window(cfg)
         code, headers, body = call(form, {"otp": totp(cfg["seed"], offset, int(cfg.get("digits", 6)), int(cfg.get("period", 30))),
                                           "credentialId": ""})
         loc = headers.get("Location", "") if headers else ""
