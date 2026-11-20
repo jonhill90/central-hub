@@ -21,7 +21,10 @@ no browser is needed. Each step is printed as "<number> <name>: HTTP <code> <ok 
                      must redirect on, setting its session cookie argocd.token.
   6 who am i         GET /api/v1/session/userinfo; loggedIn, the issuer is Keycloak's realm, and the groups claim holds the
                      expected group.
-  7 rights           GET /api/v1/account/can-i/applications/sync/*; "yes" exactly when admin is expected.
+  7 rights           GET /api/v1/account/can-i/applications/sync/*/*; "yes" exactly when admin is expected.
+                     The object is project/app, matched against the policy's "*/*" with a glob that needs the slash, so "*"
+                     alone answers "no" even for role:admin (Argo CD v3.5.5, util/rbac/rbac.go, globMatchFunc; the route's
+                     subresource is "**", server/account/account.proto line 80).
 No password, seed, code, state or token, and no page text, is ever printed.
 """
 import base64
@@ -183,7 +186,7 @@ def main():
                 "the groups claim lacks the expected group"):
         return 1
 
-    code, _, body = call(argo + "/api/v1/account/can-i/applications/sync/*", headers={"Accept": "application/json"})
+    code, _, body = call(argo + "/api/v1/account/can-i/applications/sync/*/*", headers={"Accept": "application/json"})
     try:
         answer = json.loads(body)
     except ValueError:

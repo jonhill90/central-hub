@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # roles/k8s_gitops/files/argocd-signin-check.py against a stand-in for Keycloak and Argo CD (plain HTTP on localhost, fake
 # values; the stand-in follows Argo CD's OIDC flow as the docs describe it: /auth/login with a state cookie, the callback,
-# the argocd.token cookie, /api/v1/session/userinfo and account/can-i/applications/sync/*, resource first as account.proto maps it).
+# the argocd.token cookie, /api/v1/session/userinfo and account/can-i/applications/sync/*/*, resource first as account.proto maps it).
 #   1. The whole flow for an admin: all seven steps pass.
 #   2. The whole flow for a viewer with expect_admin false: all seven steps pass.
 #   3. The password alone signing in fails step 3, and the run stops.
@@ -9,6 +9,8 @@
 #   5. An admin whose groups claim lacks lab-admins fails step 6.
 #   6. An admin who cannot sync fails step 7. The stand-in answers "no" on the swapped path can-i/sync/applications/*, so a script
 #      that asked it would fail the admin in cases 1 and 6's pair and pass the viewer for the wrong reason.
+#      The stand-in also answers "no" for a subresource without a slash, as Argo CD does for the policy object "*/*": the script
+#      asked for `sync/*` and failed an admin on prod on 2026-11-20 with "sync is no, expected yes".
 #   7. A missing credentials file, a file others can read, and a file without a field are refused (exit 2) before any request.
 #   8. The password, the seed, the state, the code and the token never show in the output.
 # Usage: .github/hosts-check/tests/test_argocd_signin_check.sh   (needs python3)
@@ -58,7 +60,10 @@ class H(http.server.BaseHTTPRequestHandler):
         if p.startswith("/api/v1/account/can-i/sync/applications/"):  # resource and action swapped: Argo CD would read "sync" as the resource
             return self.send(200, json.dumps({"value": "no"}), ctype="application/json")
         if p.startswith("/api/v1/account/can-i/applications/sync/"):
-            yes = mode in ("normal", "norefusal") and self.authed()
+            # Argo CD matches the subresource against the policy's object glob "*/*" (project/app), which needs a slash:
+            # "*" alone answers "no" even for role:admin (rbac.go globMatchFunc, glob.Match("*/*", "*") is false).
+            rest = p[len("/api/v1/account/can-i/applications/sync/"):].split("?")[0]
+            yes = mode in ("normal", "norefusal") and self.authed() and "/" in rest
             return self.send(200, json.dumps({"value": "yes" if yes else "no"}), ctype="application/json")
         self.send(404)
     def do_POST(self):
