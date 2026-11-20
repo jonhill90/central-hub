@@ -20,11 +20,22 @@ variable "zone" {
 variable "split_dns_names" {
   description = "Names under var.zone that tailnet devices ask the lab's DNS server for, each relative to the zone. A name covers itself and every name below it, so c1.prod covers api.c1.prod and *.apps.c1.prod. The app names are the short aliases <app>.<zone> (STD-0001 rule 5), one entry each so the rest of the zone stays public. Every other name in the zone still goes to public DNS."
   type        = list(string)
-  default     = ["c1.prod", "opnsense", "pve", "grafana", "argocd", "sso", "jellyfin", "ntfy", "central-hub-app"]
+  default     = ["c1.prod", "opnsense", "pve", "grafana", "argocd", "sso", "jellyfin", "ntfy"]
 
   validation {
     condition     = length(var.split_dns_names) > 0 && alltrue([for n in var.split_dns_names : can(regex("^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", n))])
     error_message = "split_dns_names needs at least one name, each lowercase letters, digits, dots and hyphens, relative to the zone (no leading or trailing dot)."
+  }
+}
+
+variable "app_split_dns_names" {
+  description = "App short aliases <app>.<zone> (STD-0001 rule 5) that tailnet devices ask the lab's DNS server for, added to split_dns_names. The names are the apps' own and public, so they live here and a private home.tfvars that sets split_dns_names does not hide them. A name listed in both is one entry."
+  type        = list(string)
+  default     = ["central-hub-app"]
+
+  validation {
+    condition     = alltrue([for n in var.app_split_dns_names : can(regex("^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", n))])
+    error_message = "app_split_dns_names: each name lowercase letters, digits, dots and hyphens, relative to the zone (no leading or trailing dot)."
   }
 }
 
