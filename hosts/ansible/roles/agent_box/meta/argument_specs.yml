@@ -13,6 +13,11 @@ argument_specs:
           VM under this name too, so the VM's name in OpenTofu must match it.
       agent_box_user: {type: str, default: claude, description: The user that runs Claude Code sessions.}
       agent_box_keys_user: {type: str, default: keys, description: The user that owns the lab keys.}
+      agent_box_devaddr_group:
+        type: str
+        default: devaddr
+        description: "The group through which the keys user hands dev's worker address to the host and firewall jobs."
+      agent_box_handoff_dir: {type: path, default: /var/lib/agent-box-handoff, description: "The folder of that one handoff file (keys:devaddr, 0750)."}
       agent_box_runner_user:
         type: str
         default: ""

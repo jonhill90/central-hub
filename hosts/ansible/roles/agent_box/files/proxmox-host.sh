@@ -141,6 +141,21 @@ if [[ $job == sso ]]; then
   sso_args=(-e "proxmox_sso_values_file=$dir/proxmox-sso.env")
 fi
 
+# The restore-reader job lets in the dev worker's address, read from the handoff the keys user's rebuild wrapper writes while dev is up
+# (dev-worker-address.sh; it prints the address only to this capture). No file, no worker: the job stops, since a reader key with no
+# address to work from would be a key that works from nowhere. The address goes to the playbook in a vars file of this user's own,
+# mode 0600, deleted when the run ends; never on a command line.
+rr_args=()
+if [[ $job == restore-reader ]]; then
+  rr_addr=$("$libexec/dev-worker-address.sh" read) || exit 1
+  [[ -n $rr_addr ]] || { echo "proxmox-host: no dev worker address (the handoff file is missing: dev has no worker up); restore-reader stops" >&2; exit 1; }
+  install -d -m 0700 "$work/state"
+  rr_vars=$(mktemp "$work/state/rr-vars.XXXXXX")
+  trap 'rm -f "$rr_vars"' EXIT
+  RR_ADDR=$rr_addr python3 -I -c 'import json, os, sys; json.dump({"proxmox_restic_reader_from": os.environ["RR_ADDR"]}, open(sys.argv[1], "w"))' "$rr_vars"
+  rr_args=(-e "@$rr_vars")
+fi
+
 repo=$work/checkout   # this wrapper's own checkout of central-hub
 # The firewall job runs with the shared VLAN file from the same checkout (the job's
 # inventory is one file, so the inventory folder's group_vars are not next to it).
@@ -204,7 +219,7 @@ print(json.dumps({"job": "proxmox-host", "time": a[1], "action": a[2], "commit":
 
 play() { # out-file, extra ansible-playbook arguments...
   local out=$1; shift
-  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" "$playbook" ${sso_args[@]+"${sso_args[@]}"} ${fw_args[@]+"${fw_args[@]}"} "$@") > "$out" 2>> "$logs/run-$stamp.err"
+  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" "$playbook" ${sso_args[@]+"${sso_args[@]}"} ${fw_args[@]+"${fw_args[@]}"} ${rr_args[@]+"${rr_args[@]}"} "$@") > "$out" 2>> "$logs/run-$stamp.err"
 }
 
 # summarize <json output> <result file>: writes the result file and prints "<hash> <changed> <skipped> <tasks>".

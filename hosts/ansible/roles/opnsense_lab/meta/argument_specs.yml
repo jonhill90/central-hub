@@ -150,6 +150,13 @@ argument_specs:
         elements: str
         default: [prod node 200, prod node 201, dev worker]
         description: The names the backup target rules may have; a name that is not a current source loses its rule.
+      opnsense_lab_backup_target_extra_sources:
+        type: list
+        elements: dict
+        default: []
+        description: >-
+          Sources added from outside the inventory (the agent box's firewall job, the dev worker's handoff address), each
+          {name, address, vlan}; joined to the backup target's sources and checked the same way.
       opnsense_lab_backup_target_sequences:
         type: list
         elements: int

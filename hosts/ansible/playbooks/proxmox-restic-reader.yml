@@ -9,17 +9,29 @@
   become: false
   gather_facts: false
   tasks:
+    # The address from the agent box's handoff file (proxmox_restic_reader_from, in the job's vars file) is the one every key works
+    # from, and wins over a `from` in the inventory's list, so a stale address there can't stay. With no handoff (a run from the
+    # controller) each key keeps its own `from`.
+    - name: Every key with the one address it works from
+      ansible.builtin.set_fact:
+        proxmox_restic_reader_keys_now: >-
+          {{ proxmox_restic_reader_keys | default([])
+             | map('combine', ({'from': proxmox_restic_reader_from} if (proxmox_restic_reader_from | default('')) | length > 0 else {}))
+             | list }}
+
     - name: The key list is there
       ansible.builtin.assert:
         that:
-          - proxmox_restic_reader_keys | default([]) | length > 0
+          - proxmox_restic_reader_keys_now | length > 0
           - >-
-            proxmox_restic_reader_keys | map(attribute='key', default='') | select('match', '^ssh-ed25519 [A-Za-z0-9+/=]+( .*)?$')
-            | list | length == proxmox_restic_reader_keys | length
+            proxmox_restic_reader_keys_now | map(attribute='key', default='') | select('match', '^ssh-ed25519 [A-Za-z0-9+/=]+( .*)?$')
+            | list | length == proxmox_restic_reader_keys_now | length
           - >-
-            proxmox_restic_reader_keys | map(attribute='from', default='') | select('match', '^([0-9]{1,3}[.]){3}[0-9]{1,3}$')
-            | list | length == proxmox_restic_reader_keys | length
-        fail_msg: "proxmox_restic_reader_keys needs items with key (an ssh-ed25519 public key line) and from (one IPv4 address)"
+            proxmox_restic_reader_keys_now | map(attribute='from', default='') | select('match', '^([0-9]{1,3}[.]){3}[0-9]{1,3}$')
+            | list | length == proxmox_restic_reader_keys_now | length
+        fail_msg: >-
+          proxmox_restic_reader_keys needs items with key (an ssh-ed25519 public key line) and from (one IPv4 address, or the
+          handoff address in proxmox_restic_reader_from)
         quiet: true
 
     - name: The reader user, its keys and the sshd settings
@@ -27,5 +39,5 @@
         name: proxmox_restic_sftp
       vars:
         proxmox_restic_sftp_set_reader: true
-        proxmox_restic_sftp_reader_keys: "{{ proxmox_restic_reader_keys }}"
-        proxmox_restic_sftp_no_root_from: "{{ proxmox_restic_reader_keys | map(attribute='from') | list }}"
+        proxmox_restic_sftp_reader_keys: "{{ proxmox_restic_reader_keys_now }}"
+        proxmox_restic_sftp_no_root_from: "{{ proxmox_restic_reader_keys_now | map(attribute='from') | list }}"

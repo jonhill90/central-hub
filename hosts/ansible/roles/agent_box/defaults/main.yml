@@ -6,6 +6,11 @@
 
 agent_box_user: claude
 agent_box_keys_user: keys
+# The handoff of dev's worker address (files/dev-worker-address.sh): a group that the keys user writes as and the two jobs
+# (agent_box_host_user, agent_box_guard_user) read through, and the one folder that holds the one file. It widens what the jobs
+# can read by one private address, an access right under D-0061 (D-0042 rule 6).
+agent_box_devaddr_group: devaddr
+agent_box_handoff_dir: /var/lib/agent-box-handoff
 # The user the GitHub Actions runner runs as (docs/runbooks/set-up-the-lab-redeploy-workflow.md). It gets
 # sudo only for the wrappers marked `runner: true`, with their args as listed. Empty does nothing.
 agent_box_runner_user: ""

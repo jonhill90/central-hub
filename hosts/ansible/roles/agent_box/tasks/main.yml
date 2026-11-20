@@ -114,13 +114,39 @@
   when: agent_box_runner_user | length > 0
   tags: [users]
 
-- name: Keys user, a system user that can't log in
+- name: The group that carries dev's worker address from the keys user to the host and firewall jobs
+  ansible.builtin.group:
+    name: "{{ agent_box_devaddr_group }}"
+    system: true
+  tags: [users]
+
+- name: Keys user, a system user that can't log in, in the handoff group only
   ansible.builtin.user:
     name: "{{ agent_box_keys_user }}"
     system: true
     shell: /sbin/nologin
     home: "{{ agent_box_work_dir }}"
     create_home: false
+    groups: "{{ agent_box_devaddr_group }}"
+    append: true
+  tags: [users]
+
+- name: The handoff folder, written by the keys user and read by the group (its one file holds one private address)
+  ansible.builtin.file:
+    path: "{{ agent_box_handoff_dir }}"
+    state: directory
+    owner: "{{ agent_box_keys_user }}"
+    group: "{{ agent_box_devaddr_group }}"
+    mode: "0750"
+  tags: [users]
+
+- name: The handoff script, root-owned (write and remove as the keys user, read as the host and firewall jobs)
+  ansible.builtin.copy:
+    src: dev-worker-address.sh
+    dest: "{{ agent_box_libexec_dir }}/dev-worker-address.sh"
+    owner: root
+    group: root
+    mode: "0755"
   tags: [users]
 
 - name: Key folder and the keys user's work folders
