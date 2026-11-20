@@ -13,11 +13,11 @@
 #   (playbooks/proxmox-firewall.yml, proxmox-safety.yml's firewall role alone: the host firewall, with the role's dead-man timer and its
 #   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller).
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh log
-#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh guard arm|confirm|rollback|status
+#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh guard arm|confirm|rollback|clear|status
 # guard: the firewall VM's way back (playbooks/opnsense-guard.yml, D-0063 rule 4): a snapshot of the firewall's VM and a timer on
 #   the host that rolls it back unless the apply is confirmed. Not a change of the host's settings, so no check, pass or go: the
-#   firewall's wrapper (opnsense-prod.sh, as guardops) calls arm before its apply and confirm or rollback after it; a session may
-#   read the status.
+#   firewall's wrapper (opnsense-prod.sh, as guardops) calls arm before its apply and confirm or rollback after it. A session may
+#   read the status, and clear a snapshot left by a rollback or a failed confirm (refused while the timer is armed).
 # check: `--check --diff` on the code at origin/main. It saves a result file: the commit, the playbook, the
 #   SHA-256 of every diff's before and after text, and for each task its name, whether it changed and whether it
 #   was skipped. It prints the first 12 hex digits of that file's SHA-256: the hash the agents pass (D-0041 rule 6).
@@ -59,7 +59,7 @@ result=$work/state/check.json
 
 ledger=$work/ledger
 usage() {
-  echo "       proxmox-host guard arm|confirm|rollback|status" >&2
+  echo "       proxmox-host guard arm|confirm|rollback|clear|status" >&2
   echo "usage: proxmox-host check [proxy|agent-access|sso|firewall]|apply [proxy|agent-access|sso|firewall] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
   echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
   exit 2
@@ -93,7 +93,7 @@ case $action in
     [[ $# -eq 5 && $2 =~ ^[0-9a-f]{40}$ && $4 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] && ref_ok "$3" || usage
     [[ $5 == orchestrator ]] || { echo "proxmox-host: a go is recorded by the orchestrator only, from the owner's own words" >&2; exit 2; } ;;
   ledger) [[ $# -eq 1 ]] || usage ;;
-  guard) [[ $# -eq 2 && $2 =~ ^(arm|confirm|rollback|status)$ ]] || usage
+  guard) [[ $# -eq 2 && $2 =~ ^(arm|confirm|rollback|clear|status)$ ]] || usage
     guard_action=$2 playbook=playbooks/opnsense-guard.yml ;;
   *) usage ;;
 esac

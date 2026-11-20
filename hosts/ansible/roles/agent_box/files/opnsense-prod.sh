@@ -24,8 +24,9 @@
 #   runs, the host job (proxmox-host.sh guard arm, as hostops, through its own sudo line) snapshots the firewall's VM and starts
 #   a timer on the host that rolls the VM back. After the run, the apply is confirmed (guard confirm: timer stopped, snapshot
 #   deleted) only if a fresh check through the firewall's API works and the box still reaches GitHub through the firewall.
-#   If the run fails, changes a task the check did not show, or the confirm fails, the wrapper rolls back at once (guard
-#   rollback); if the box can't reach the host to do that, the host's timer does it.
+#   If the run fails, changes a task the check did not show, or the check after it fails, the wrapper rolls back at once (guard
+#   rollback); if the box can't reach the host to do that, the host's timer does it. guard confirm itself fails when the timer
+#   was not armed to the end or has already fired (a slow run), and the apply is then reported as failed: it may be undone.
 set -euo pipefail
 umask 077
 
@@ -278,8 +279,8 @@ PY
     play "$logs/confirm-$stamp.json" --check || roll_back "the check after the apply failed"
     git ls-remote --exit-code --quiet "$repo_url" main > /dev/null || roll_back "the box no longer reaches GitHub after the apply"
     if ! "${guard_cmd[@]}" confirm; then
-      record "$hash" "$changed changed" "FAIL: guard confirm; the host's timer rolls the firewall back"
-      echo "opnsense-prod: FAIL: the apply worked but could not be confirmed on the host; its timer rolls the firewall back" >&2
+      record "$hash" "$changed changed" "FAIL: guard confirm; the host's timer has rolled the firewall back or will"
+      echo "opnsense-prod: FAIL: the apply ran but was not confirmed on the host: its timer fired already or was not armed, or the host was not reached; treat the apply as undone (proxmox-host.sh guard status)" >&2
       exit 1
     fi
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok

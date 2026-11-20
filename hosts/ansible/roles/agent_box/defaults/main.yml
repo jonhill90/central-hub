@@ -109,10 +109,10 @@ agent_box_wrappers:
   # decides: it refuses unless the check hash matches, the ledger holds a reviewer pass for it and a go for the job and
   # commit; `pass`, `go` and `ledger` write and read that ledger (the wrapper's header says what each line proves).
   # `guard` is the firewall VM's way back (D-0063 rule 4): only the firewall's wrapper, as the guard user, may arm, confirm
-  # or roll back (callers); a session may read its status.
+  # or roll back (callers); a session may read its status and clear a left-over snapshot, which is refused while armed.
   - name: proxmox-host
     args: [check, "check *", "apply *", "apply-recorded *", "pass *", "go *", ledger, "ledger *", log]
-    session_args: [check, "check *", "apply-recorded *", "pass *", "go *", ledger, "ledger *", log, "guard status"]
+    session_args: [check, "check *", "apply-recorded *", "pass *", "go *", ledger, "ledger *", log, "guard status", "guard clear"]
     callers:
       - user: guardops   # the same name as agent_box_guard_user
         args: ["guard arm", "guard confirm", "guard rollback", "guard status"]

@@ -17,7 +17,7 @@
 #      the check gives the hash, the ledger holds a reviewer pass for the job, commit and hash, and an unused go for the job and
 #      commit. A pass or go for another hash, commit or job does not count; the wrong recorder is refused; a go line (by its message ID) is spent by one apply, and a new go line at the same commit works once.
 #  13. `check firewall` runs proxmox-firewall.yml with the checkout's VLAN file; the other jobs don't get it.
-#  14. `guard arm|confirm|rollback|status` runs opnsense-guard.yml with that action and needs no ledger; any other guard
+#  14. `guard arm|confirm|rollback|clear|status` runs opnsense-guard.yml with that action and needs no ledger; any other guard
 #      action is refused before anything runs.
 #   9. Nothing printed holds a diff's text or the host's address; log prints the summary lines.
 # Usage: .github/hosts-check/tests/test_proxmox_host_args.sh   (needs git and python3)
@@ -253,7 +253,7 @@ for a in "guard" "guard apply" "guard arm x" "guard firewall arm"; do
   { [ "$rc" = 2 ] && [ ! -s "$t/calls" ]; } || bad "14 '$a' gave $rc, not 2, or ran the playbook"
 done
 ok14=1
-for g in arm confirm rollback status; do
+for g in arm confirm rollback clear status; do
   : > "$t/calls"
   job guard "$g" > "$t/14-$g.out" 2>&1 || { ok14=0; echo "  guard $g failed: $(cat "$t/14-$g.out")"; }
   c=$(cat "$t/calls")

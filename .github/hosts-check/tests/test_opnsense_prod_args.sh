@@ -10,7 +10,8 @@
 #   6. The key and secret reach the playbook only in a vars file (-e @file), never on its command line, and the vars
 #      file is gone after the run; nothing printed holds them.
 #   7. The way back (D-0063 rule 4): the apply arms the host's guard before the playbook runs and confirms it after a check
-#      that works; a failed apply is rolled back at once; a guard that can't be armed stops the run before the playbook.
+#      that works; a failed apply is rolled back at once; a guard that can't be armed stops the run before the playbook; a confirm
+#      the host refuses (its timer fired during a slow run) makes the apply a failure.
 # Usage: .github/hosts-check/tests/test_opnsense_prod_args.sh   (needs git and python3)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -135,5 +136,12 @@ job apply-recorded "$h1" > "$t/7b.out" 2>&1; rc=$?
 n1=$(grep -vc -- '--check' "$t/calls")
 [ $rc = 1 ] && [ "$n0" = "$n1" ] && grep -q "nothing applied" "$t/7b.out" && ok "7 no guard, no apply" || bad "7 arm failed: rc=$rc runs $n0->$n1 $(cat "$t/7b.out")"
 rm -f "$t/guard-rc-arm"
+rm -f "$t/guard-calls"; echo 1 > "$t/guard-rc-confirm"
+job go "$c" cmsg_0123456789ij "$tm" orchestrator > /dev/null
+job apply-recorded "$h1" > "$t/7c.out" 2>&1; rc=$?
+[ $rc = 1 ] && [ "$(tr '\n' ' ' < "$t/guard-calls")" = "guard arm guard confirm " ] && grep -q "not confirmed on the host" "$t/7c.out" \
+  && ! grep -q "applied check" "$t/7c.out" && tail -n 1 "$t/work/logs/summary.jsonl" | grep -q '"result": "FAIL: guard confirm' \
+  && ok "7 a confirm the host refuses (timer fired) is a failed apply, not an applied one" || bad "7 confirm refused: rc=$rc $(cat "$t/7c.out")"
+rm -f "$t/guard-rc-confirm"
 
 exit $fail

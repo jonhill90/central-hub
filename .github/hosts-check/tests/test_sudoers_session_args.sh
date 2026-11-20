@@ -6,7 +6,7 @@
 #   4. The real wrapper list: tailnet-stack's session line has no apply, the runner's has it.
 #   5-6. pr-merge: sessions get `check *` only; pass-record: add, show, halt, resume; the runner gets neither.
 #   7. proxmox-host runs as its own user (run_as hostops): the session's line has check, check <job>, log and guard status, the
-#      runner's adds apply, and neither runs it as the keys user.
+#      runner's adds apply, and neither runs it as the keys user. Sessions may also run guard clear.
 #   8-9. tailnet-policy: as guardops (D-0063), sessions get plan, the ledger actions, apply-recorded and log, the runner also the
 #        card-ID apply; vps-host: status and log only; the runner gets every action (D-0046).
 #   11. callers (D-0063 rule 4): guardops may run proxmox-host's guard arm, confirm, rollback and status as hostops, and nothing
@@ -48,7 +48,7 @@ ph = [w for w in d if w["name"] == "proxmox-host"][0]
 h = render([ph]).splitlines()
 hs = [l for l in h if l.startswith("sess ALL=")]
 hr = [l for l in h if l.startswith("run ALL=")]
-ses7 = "sess ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh " + x for x in ["check", "check *", "apply-recorded *", "pass *", "go *", "ledger", "ledger *", "log", "guard status"])
+ses7 = "sess ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh " + x for x in ["check", "check *", "apply-recorded *", "pass *", "go *", "ledger", "ledger *", "log", "guard status", "guard clear"])
 run7 = "run ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh " + x for x in ["check", "check *", "apply *", "apply-recorded *", "pass *", "go *", "ledger", "ledger *", "log"])
 # The session line has no three-argument `apply`: that form takes a pass ID the box cannot check, so only the runner has it.
 print("7", hs == [ses7] and " apply *" not in hs[0], hr == [run7])
