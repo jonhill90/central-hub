@@ -46,10 +46,11 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file)
-# Fixed extra variables per name. identity never replaces realm lab on prod: the role's default deletes the realm and
+# Fixed extra variables per name. identity, users and clients also set k8s_identity_secrets_store=openbao, so the realm's Secrets
+# are made as ExternalSecrets on store `openbao` (plan step 8a; put-apps must have written the values first). identity never replaces realm lab on prod: the role's default deletes the realm and
 # imports it again when its code changes, which on prod ends every sign-in and drops enrolled one-time codes. With false
 # the realm is only made when missing; a client is added in place by the role's clients tag.
-declare -A fixed_vars=([identity]=k8s_identity_realm_replace=false [users]=k8s_identity_realm_replace=false [clients]=k8s_identity_realm_replace=false)
+declare -A fixed_vars=([identity]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [users]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [clients]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao")
 # Tags per name. identity runs every task plus the clients tag, which is off by default. The tag acts only on the clients in
 # k8s_identity_ensure_clients (empty by default), so the wrapper names one: proxmox, the client the realm gained after prod's
 # realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.

@@ -152,10 +152,10 @@ seen=$(python3 -c 'import json, sys, yaml; print(json.dumps(yaml.safe_load(open(
 v=$(python3 -c 'import json, sys; d = json.loads(sys.argv[1]); v = d["all"]["children"]["k8s_nodes"]["vars"]
 print(v["ansible_ssh_private_key_file"], v["ansible_ssh_common_args"], v["k8s_gitops_source_openbao_in_cluster"],
       v["k8s_gitops_source_openbao_seal_node"], v["k8s_gitops_source_openbao_store_host"], v["k8s_gitops_source_openbao_box_cidr"],
-      v["k8s_gitops_source_openbao_admin_address"], "proxmox" in d["all"]["children"])' "$seen" 2>/dev/null)
-want="$t/keys/prod-node-key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$t/work/openbao-prod/known_hosts True wk-a bao.invalid 192.0.2.50/32 192.0.2.60 False"
+      v["k8s_gitops_source_openbao_admin_address"], v["k8s_gitops_source_app_secrets_store"], "proxmox" in d["all"]["children"])' "$seen" 2>/dev/null)
+want="$t/keys/prod-node-key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$t/work/openbao-prod/known_hosts True wk-a bao.invalid 192.0.2.50/32 192.0.2.60 openbao False"
 if [[ $rc -eq 0 && $v == "$want" && $seen != *ProxyJump* && $seen != */Users/* && $no_admin == 0 ]]; then
-  ok "4. the box's copy: the Mac's ssh settings and proxmox group gone; the box's key and the store's settings set"
+  ok "4. the box's copy: the Mac's ssh settings and proxmox group gone; the box's key and the store's settings set; the apps read store openbao"
 else bad "4. $rc [$v] $out"; fi
 if [[ $calls == "playbook -i $t/work/openbao-prod/inventory/ playbooks/k8s-gitops.yml --tags source" && $out == *"prod nodes, plain ssh"* ]]; then
   ok "5. gitops: k8s-gitops.yml --tags source only"

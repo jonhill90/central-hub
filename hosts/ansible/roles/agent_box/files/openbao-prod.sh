@@ -154,7 +154,8 @@ DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args",
         "ansible_private_key_file", "ansible_host_key_checking",
         "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file", "k8s_gitops_source_openbao_measure",
         "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
-        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner"}
+        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner",
+        "k8s_gitops_source_app_secrets_store"}
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -189,6 +190,9 @@ v["k8s_gitops_source_openbao_in_cluster"] = True
 v["k8s_gitops_source_notebook_runner"] = True
 v["k8s_gitops_source_openbao_seal_node"] = seal
 v["k8s_gitops_source_openbao_store_host"] = store
+# The apps read their secrets through store `openbao` (plan step 8a, D-0058 rule 8), once `secrets-store-prod put-apps`
+# and `compare` have passed (set-up-the-secrets-store.md, "Moving them"). Prod has the store on, so this is always valid here.
+v["k8s_gitops_source_app_secrets_store"] = "openbao"
 if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
 if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
 # Once rebuild-prod has built prod again, its local-path StorageClass names folders <namespace>/<claim>; a
