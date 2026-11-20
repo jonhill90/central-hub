@@ -505,6 +505,7 @@ check_scripts() {
   bash "$here/tests/test_box_user_check_group.sh"
   bash "$here/tests/test_proxmox_memory_report.sh"
   bash "$here/tests/test_proxmox_ksm_job.sh"
+  bash "$here/tests/test_desktop_allow_ksm.sh"
   bash "$here/tests/test_narrow_agent_access.sh"
   bash "$here/tests/test_desktop_trust_check.sh"
   actionlint -shellcheck="$(command -v shellcheck)"

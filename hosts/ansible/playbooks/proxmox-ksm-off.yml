@@ -11,7 +11,6 @@
     proxmox_ksm_sleep_millisecs: 200
     proxmox_ksm_pages_to_scan: 1000
     proxmox_ksm_prior_file: /root/.central-hub-ksm-prior
-    proxmox_ksm_protected_vmids: [100, 258, 400]
   tasks:
     - name: ksm | Same-page merging off
       ansible.builtin.import_tasks: tasks/proxmox-ksm.yml

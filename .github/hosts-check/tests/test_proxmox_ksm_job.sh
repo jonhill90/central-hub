@@ -9,7 +9,9 @@
 #   3. On again: the saved file keeps the state from before the first run (it is not overwritten with the state ksm left).
 #   4. Off: run 2 first (unmerge), then the saved pace, then the saved run; ksmtuned as it was; the saved file and the boot file go.
 #      With ksmtuned saved as stopped and disabled it stays stopped and disabled; with KSM saved as already on there is no run 2.
-#   5. Off refuses with no saved state, and refuses an unmerge that would leave less than 1 GiB of free memory.
+#   5. Off refuses with no saved state, and refuses an unmerge that would leave less than 1 GiB of free memory. The memory an
+#      unmerge needs is pages_sharing in full (the saving, ksm.rst), not pages_sharing minus pages_shared.
+#   6. On refuses while VM 400 is running with merging on, and goes on when its process has mem-merge=off or it is not running.
 # Usage: .github/hosts-check/tests/test_proxmox_ksm_job.sh   (needs ansible-playbook and python3 with PyYAML)
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -29,7 +31,8 @@ on = yaml.safe_load(open(sys.argv[1] + "/proxmox-ksm.yml"))[0]["vars"]
 off = yaml.safe_load(open(sys.argv[1] + "/proxmox-ksm-off.yml"))[0]["vars"]
 print("pace-same" if on["proxmox_ksm_sleep_millisecs"] == off["proxmox_ksm_sleep_millisecs"] and on["proxmox_ksm_pages_to_scan"] == off["proxmox_ksm_pages_to_scan"] else "pace-differs")
 print("flags-ok" if on["proxmox_ksm_enabled"] is True and off["proxmox_ksm_enabled"] is False else "flags-wrong")
-print("vms-ok" if on["proxmox_ksm_protected_vmids"] == [100, 258, 400] == off["proxmox_ksm_protected_vmids"] else "vms-wrong")
+t = open(sys.argv[1] + "/tasks/proxmox-ksm.yml").read()
+print("vms-ok" if all("/etc/pve/qemu-server/%d.conf" % n in t for n in (100, 258, 400)) else "vms-wrong")
 PY
 )
 jobs_ok=0
@@ -57,6 +60,8 @@ for task in tasks:
         play_tasks.append({"name": n, "ansible.builtin.set_fact": {"ksm_now": {"stdout_lines": case["ksm"]}}})
     elif n == "ksm | Read the free memory":
         play_tasks.append({"name": n, "ansible.builtin.set_fact": {"ksm_mem": {"stdout": "MemAvailable: %d kB" % (case["free_mib"] * 1024)}}})
+    elif n == "ksm | Read the VM processes' command lines":
+        play_tasks.append({"name": n, "ansible.builtin.set_fact": {"ksm_procs": {"stdout_lines": case.get("procs", [])}}})
     elif n.startswith("ksm | Read which protected VMs"):
         play_tasks.append({"name": n, "ansible.builtin.set_fact": {"ksm_allow": {"stdout_lines": case["allow"]}}})
     elif n == "ksm | Protected VMs kept out of merging (applies at each one's next start)":
@@ -82,7 +87,7 @@ for task in tasks:
         play_tasks.append(task)
 play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
          "vars": {"proxmox_ksm_enabled": case["enabled"], "proxmox_ksm_sleep_millisecs": 200, "proxmox_ksm_pages_to_scan": 1000,
-                  "proxmox_ksm_prior_file": t + "/prior", "proxmox_ksm_protected_vmids": [100, 258, 400],
+                  "proxmox_ksm_prior_file": t + "/prior",
                   "ansible_facts": {"services": case["services"]}},
          "tasks": play_tasks}]
 yaml.safe_dump(play, open(out, "w"))
@@ -136,4 +141,15 @@ if [[ $(cat "$t/off_none/rc") == 1 && $(cat "$t/off_none/out") == *"no saved sta
 BIG='["/sys/kernel/mm/ksm/run:1", "/sys/kernel/mm/ksm/sleep_millisecs:200", "/sys/kernel/mm/ksm/pages_to_scan:1000", "/sys/kernel/mm/ksm/pages_shared:1000", "/sys/kernel/mm/ksm/pages_sharing:3001000"]'
 run_case off_big "{\"enabled\": false, \"ksm\": $BIG, \"free_mib\": 4000, \"allow\": [], \"services\": $STOPPED}" "$want_prior"
 if [[ $(cat "$t/off_big/rc") == 1 && $(cat "$t/off_big/out") == *"would leave less than 1024 MiB"* && -z $(log off_big) ]]; then ok "5b. off refuses an unmerge of 11.7 GiB into 4000 MiB free, and writes nothing"; else bad "5b. $(tail -6 "$t/off_big/out") / $(log off_big)"; fi
+# The reviewer's case: 1,000,000 sharing and 900,000 shared is 3906 MiB that comes back; with 4500 MiB free that leaves 594 (under 1024).
+# Counting only the difference (390 MiB) would pass it.
+OVER='["/sys/kernel/mm/ksm/run:1", "/sys/kernel/mm/ksm/sleep_millisecs:200", "/sys/kernel/mm/ksm/pages_to_scan:1000", "/sys/kernel/mm/ksm/pages_shared:900000", "/sys/kernel/mm/ksm/pages_sharing:1000000"]'
+run_case off_over "{\"enabled\": false, \"ksm\": $OVER, \"free_mib\": 4500, \"allow\": [], \"services\": $STOPPED}" "$want_prior"
+if [[ $(cat "$t/off_over/rc") == 1 && $(cat "$t/off_over/out") == *"unmerging 3906 MiB"* && -z $(log off_over) ]]; then ok "5c. the unmerge counts pages_sharing in full: 3906 MiB into 4500 free is refused"; else bad "5c. $(tail -6 "$t/off_over/out") / $(log off_over)"; fi
+
+# 6. The desktop.
+run_case on_desk "{\"enabled\": true, \"ksm\": $KSM_OFF, \"free_mib\": 8000, \"allow\": $ALLOW, \"services\": $RUNNING, \"procs\": [\"/usr/bin/kvm -id 400 -name x -cpu host\", \"/usr/bin/kvm -id 258 -name y -machine type=q35,mem-merge=off\"]}"
+if [[ $(cat "$t/on_desk/rc") == 1 && $(cat "$t/on_desk/out") == *"VM 400 (the desktop"* && -z $(log on_desk) && ! -e $t/on_desk/prior ]]; then ok "6a. on refuses while VM 400 runs with merging on, and changes nothing"; else bad "6a. $(tail -6 "$t/on_desk/out") / $(log on_desk)"; fi
+run_case on_desk_off "{\"enabled\": true, \"ksm\": $KSM_OFF, \"free_mib\": 8000, \"allow\": $ALLOW, \"services\": $RUNNING, \"procs\": [\"/usr/bin/kvm -id 400 -name x -machine type=q35,mem-merge=off\", \"/usr/bin/kvm -id 4000 -name z\"]}"
+if [[ $(cat "$t/on_desk_off/rc") == 0 && $(log on_desk_off) == *"tee run=1"* ]]; then ok "6b. on goes ahead when VM 400 has mem-merge=off (and VM 4000 is not VM 400)"; else bad "6b. $(tail -6 "$t/on_desk_off/out") / $(log on_desk_off)"; fi
 exit $fail

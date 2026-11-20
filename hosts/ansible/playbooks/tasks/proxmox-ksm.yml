@@ -8,7 +8,7 @@
 #   1. Saves the host's prior state once, to a root-only file (proxmox_ksm_prior_file): the three kernel values and whether
 #      ksmtuned (Proxmox's tuning daemon, which rewrites those values while it runs) was enabled and active. A second `ksm` run
 #      never overwrites it, so the file always holds the state before this job first changed anything.
-#   2. Keeps the guests in proxmox_ksm_protected_vmids out of merging (`qm set <id> --allow-ksm 0`): Proxmox warns that KSM can
+#   2. Keeps VMs 100, 258 and 400 out of merging (`qm set <id> --allow-ksm 0`): Proxmox warns that KSM can
 #      expose guests to side-channel attacks. allow-ksm 0 becomes QEMU's `-machine ...,mem-merge=off`, a flag fixed when the VM's
 #      process starts (qemu-server, PVE/QemuServer.pm), so on a VM that is already running the setting is pending until its next
 #      start: `check memory` prints `kvm id <vmid> merge off` for a VM the setting protects now, and `merge on` for one it does not yet.
@@ -46,6 +46,13 @@
   ansible.builtin.command: grep -E "^MemAvailable:" /proc/meminfo
   register: ksm_mem
   changed_when: false
+  check_mode: false
+
+- name: ksm | Read the VM processes' command lines
+  ansible.builtin.command: ps -C kvm -o args=
+  register: ksm_procs
+  changed_when: false
+  failed_when: ksm_procs.rc > 1
   check_mode: false
 
 - name: ksm | Read which protected VMs already have allow-ksm 0, in their config or pending
@@ -88,6 +95,17 @@
          | sort }}
 
 # ---- On
+- name: ksm | The desktop (VM 400) is not running with merging on
+  ansible.builtin.assert:
+    that: >-
+      ksm_procs.stdout_lines
+      | select('search', '-id 400 ') | reject('search', 'mem-merge=off') | list | length == 0
+    fail_msg: >-
+      VM 400 (the desktop, where the owner types passwords) is running with merging on, so KSM would merge its pages with the
+      other guests; shut it down, or start it after allow-ksm 0 is set, and run this again
+    quiet: true
+  when: proxmox_ksm_enabled
+
 - name: ksm | The prior state, saved once
   ansible.builtin.copy:
     dest: "{{ proxmox_ksm_prior_file }}"
@@ -155,10 +173,10 @@
 - name: ksm | The unmerge fits in the free memory
   ansible.builtin.assert:
     that: >-
-      ((ksm_have['pages_sharing'] | int - ksm_have['pages_shared'] | int) * 4 // 1024) + 1024 < ksm_free_mib | int
+      (ksm_have['pages_sharing'] | int * 4 // 1024) + 1024 < ksm_free_mib | int
       or ksm_prior['run'] | default('0') == '1'
     fail_msg: >-
-      unmerging {{ (ksm_have['pages_sharing'] | int - ksm_have['pages_shared'] | int) * 4 // 1024 }} MiB would leave less than 1024 MiB
+      unmerging {{ ksm_have['pages_sharing'] | int * 4 // 1024 }} MiB (every page KSM saves comes back as its own copy: pages_sharing, ksm.rst) would leave less than 1024 MiB
       of the {{ ksm_free_mib }} MiB free; free memory first
     quiet: true
   when: not proxmox_ksm_enabled

@@ -102,3 +102,7 @@ The test build holds a credential the agents know, which the owner's desktop mus
 ## Exit
 
 the same order: access on, `desktop destroy` (tofu destroy with this folder's state), access off. The VM holds nothing the rest of the lab needs.
+
+## Kept out of the host's same-page merging
+
+The owner types passwords into this VM, so it must never share pages with other guests (the host can turn same-page merging on for a dev run: [serve-proxmox-on-443.md](serve-proxmox-on-443.md), "Make the host's memory go further"). The tofu creates it stopped (`started = false`), and `desktop apply` then sets `allow-ksm 0` through the API (the agents' token holds `VM.Config.Memory`; the provider has no field for it and `args` is root-only) and starts it, so its process is born with QEMU's `mem-merge=off`. `check memory` shows `kvm id 400 merge off`. The `ksm` host job refuses to run while VM 400 is running with merging on. If the API refuses the setting, the VM stays stopped and `desktop apply` stops with a message.

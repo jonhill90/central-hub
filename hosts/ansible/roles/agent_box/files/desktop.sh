@@ -69,6 +69,17 @@ forget_host_key() {
   echo "desktop: the destroyed VM's host key is forgotten"
 }
 
+# The VM is created stopped (its tofu has started = false). The owner types passwords into it, so before its first start it is kept out of
+# the host's same-page merging: allow-ksm 0 becomes QEMU's mem-merge=off when the VM's process starts, and only then. Then the usual start.
+keep_out_of_ksm_and_start() {
+  local node vmid
+  node=$(setting proxmox_node_name); vmid=$(setting vm_id)
+  px_api PUT "nodes/$node/qemu/$vmid/config" "allow-ksm=0" > /dev/null \
+    || { echo "desktop: VM $vmid was not kept out of same-page merging (allow-ksm 0), so it is left stopped" >&2; exit 1; }
+  echo "desktop: VM $vmid is kept out of same-page merging (allow-ksm 0), set before its first start"
+  vm_power start
+}
+
 tofu_run() {
   python3 -I - "$settings" "$sshkey.pub" "$repo" "$vars" <<'PY'
 import json, sys
@@ -95,6 +106,7 @@ PY
       [[ -f $plan ]] || { echo "desktop: no saved plan; run desktop plan first" >&2; exit 1; }
       tofu apply -input=false "$plan"
       rm -f "$plan"
+      keep_out_of_ksm_and_start
       ;;
     destroy)
       tofu plan -destroy -input=false -var-file="$vars" -out="$plan"
@@ -176,11 +188,12 @@ PY
 }
 
 # One call to the Proxmox API with the dev token (header on stdin, never in curl's arguments).
-px_api() { # method path
+px_api() { # method path [form field, for example allow-ksm=0]
   (set -a; . "$keys/proxmox-dev.env"; set +a
     insecure=(); case "${PROXMOX_VE_INSECURE:-}" in true|1) insecure=(-k) ;; esac
+    data=(); [[ -z ${3:-} ]] || data=(--data "$3")
     printf 'header = "Authorization: PVEAPIToken=%s"\n' "$PROXMOX_VE_API_TOKEN" |
-      curl -sS --fail --max-time 30 "${insecure[@]}" -K - -X "$1" "${PROXMOX_VE_ENDPOINT%/}/api2/json/$2")
+      curl -sS --fail --max-time 30 "${insecure[@]}" "${data[@]}" -K - -X "$1" "${PROXMOX_VE_ENDPOINT%/}/api2/json/$2")
 }
 setting() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$settings" "$1"; }
 
