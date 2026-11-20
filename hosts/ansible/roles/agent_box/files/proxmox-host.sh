@@ -11,7 +11,8 @@
 #   proxmox-agent-access.yml: it copies hosts/terraform/home/bootstrap/agent-access.sh from the same commit to the host and
 #   runs it as root, so the agents' Proxmox rights change by a reviewed PR and no longer need the Mac) or `firewall`
 #   (playbooks/proxmox-firewall.yml, proxmox-safety.yml's firewall role alone: the host firewall, with the role's dead-man timer and its
-#   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller).
+#   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller) or `guests`
+#   (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell).
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh log
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh guard arm|confirm|rollback|clear|status
 # guard: the firewall VM's way back (playbooks/opnsense-guard.yml, D-0063 rule 4): a snapshot of the firewall's VM and a timer on
@@ -51,7 +52,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -277,6 +278,14 @@ case $action in
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok
     echo "proxmox-host: check $hash: $changed changed, $skipped skipped, $total tasks"
     echo "proxmox-host: the agents' pass for an apply names this commit (${commit:0:12}) and this hash ($hash)"
+    if [[ $job == guests ]]; then
+      # The read-only job's answer: its tasks that show as changed name a guest that exists (names come from the reviewed playbook).
+      python3 -I - "$result" <<'PY'
+import json, sys
+t = json.load(open(sys.argv[1]))["tasks"]
+print("proxmox-host: guests found: " + ("; ".join(x["name"].split("EXISTS ", 1)[1] for x in t if x["changed"] and "EXISTS " in x["name"]) or "none of the two named"))
+PY
+    fi
     ;;
   apply | apply-recorded)
     if ! line=$(do_check); then
