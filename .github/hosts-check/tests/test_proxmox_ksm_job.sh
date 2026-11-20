@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# The same-page merging job (playbooks/proxmox-ksm.yml and proxmox-ksm-off.yml, both importing playbooks/tasks/proxmox-ksm.yml):
-#   1. Both playbooks are valid, `ksm` sets enabled true and `ksm-off` false with the same pace, and the wrapper maps both jobs.
-#   2. On fake reads, the tasks that parse the kernel's values and say whether they differ: on with run 0 is a change; on with the
-#      wanted values is no change; off with run 1 is a change; off with run 0 is no change (the pace is not compared when off).
-#   3. The shipped tasks pin the pace, write it to a boot file, stop ksmtuned when on, and start it again when off.
+# The same-page merging job (playbooks/proxmox-ksm.yml and proxmox-ksm-off.yml, both importing playbooks/tasks/proxmox-ksm.yml).
+# The real tasks run on localhost with the host's reads replaced by made-up values and its writes (tee, qm, systemd, the boot file)
+# replaced by one log line each, in the order they would run:
+#   1. Both playbooks are valid, `ksm` is on and `ksm-off` off, and the wrapper maps both jobs.
+#   2. On, on a fresh host: the prior state (three kernel values, ksmtuned enabled and active) is saved to a file; allow-ksm 0 is set for
+#      each protected VM that exists and lacks it (not for one with no config, not for one that has it); ksmtuned is stopped and
+#      disabled; the pace is written before the switch.
+#   3. On again: the saved file keeps the state from before the first run (it is not overwritten with the state ksm left).
+#   4. Off: run 2 first (unmerge), then the saved pace, then the saved run; ksmtuned as it was; the saved file and the boot file go.
+#      With ksmtuned saved as stopped and disabled it stays stopped and disabled; with KSM saved as already on there is no run 2.
+#   5. Off refuses with no saved state, and refuses an unmerge that would leave less than 1 GiB of free memory.
 # Usage: .github/hosts-check/tests/test_proxmox_ksm_job.sh   (needs ansible-playbook and python3 with PyYAML)
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -23,36 +29,111 @@ on = yaml.safe_load(open(sys.argv[1] + "/proxmox-ksm.yml"))[0]["vars"]
 off = yaml.safe_load(open(sys.argv[1] + "/proxmox-ksm-off.yml"))[0]["vars"]
 print("pace-same" if on["proxmox_ksm_sleep_millisecs"] == off["proxmox_ksm_sleep_millisecs"] and on["proxmox_ksm_pages_to_scan"] == off["proxmox_ksm_pages_to_scan"] else "pace-differs")
 print("flags-ok" if on["proxmox_ksm_enabled"] is True and off["proxmox_ksm_enabled"] is False else "flags-wrong")
+print("vms-ok" if on["proxmox_ksm_protected_vmids"] == [100, 258, 400] == off["proxmox_ksm_protected_vmids"] else "vms-wrong")
 PY
 )
 jobs_ok=0
 grep -q '\[ksm\]=playbooks/proxmox-ksm.yml' "$wrapper" && grep -q '\[ksm-off\]=playbooks/proxmox-ksm-off.yml' "$wrapper" && jobs_ok=1
-if [[ $r == *pace-same* && $r == *flags-ok* && $jobs_ok == 1 ]]; then ok "1. both playbooks are valid, on and off differ only in the switch, and the wrapper maps both jobs"; else bad "1. $r jobs_ok=$jobs_ok"; fi
+if [[ $r == *pace-same* && $r == *flags-ok* && $r == *vms-ok* && $jobs_ok == 1 ]]; then ok "1. both playbooks are valid, on and off differ only in the switch, the protected VMs are 100, 258 and 400, and the wrapper maps both jobs"; else bad "1. $r jobs_ok=$jobs_ok"; fi
 
-# 2. Run the tasks that parse and compare, on fake reads.
-python3 -I - "$pb/tasks/proxmox-ksm.yml" "$t" <<'PY'
-import sys, yaml
-tasks = yaml.safe_load(open(sys.argv[1]))
-parse = next(x for x in tasks if x["name"] == "ksm | The values this play sets")
-diff = next(x for x in tasks if x["name"].startswith("ksm | The kernel's values differ"))
-cases = {"on-from-0": (True, 0), "on-same": (True, 1), "off-from-1": (False, 1), "off-same": (False, 0)}
-for name, (enabled, run) in cases.items():
-    lines = ["/sys/kernel/mm/ksm/run:%d" % run, "/sys/kernel/mm/ksm/sleep_millisecs:%d" % (200 if run else 20),
-             "/sys/kernel/mm/ksm/pages_to_scan:%d" % (1000 if run else 100)]
-    play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
-             "vars": {"proxmox_ksm_enabled": enabled, "proxmox_ksm_sleep_millisecs": 200, "proxmox_ksm_pages_to_scan": 1000},
-             "tasks": [{"name": "fake", "ansible.builtin.set_fact": {"ksm_now": {"stdout_lines": lines}, "ksm_unit": {"stat": {"exists": True}}}},
-                       parse, diff]}]
-    yaml.safe_dump(play, open("%s/%s.yml" % (sys.argv[2], name), "w"))
+# The harness: the real tasks, with reads and writes replaced.
+cat > "$t/make.py" <<'PY'
+import json, sys, yaml
+tasks_file, out, case = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
+t = case["dir"]
+tasks = yaml.safe_load(open(tasks_file))
+log = t + "/writes.log"
+def logline(line, **kw):
+    d = {"ansible.builtin.lineinfile": {"path": log, "line": line, "create": True}}
+    d.update(kw)
+    return d
+play_tasks = []
+for task in tasks:
+    n = task["name"]
+    keep = {k: v for k, v in task.items() if k in ("name", "when", "loop", "loop_control")}
+    if n == "ksm | Read the services":
+        continue
+    if n == "ksm | Read the kernel's current values":
+        play_tasks.append({"name": n, "ansible.builtin.set_fact": {"ksm_now": {"stdout_lines": case["ksm"]}}})
+    elif n == "ksm | Read the free memory":
+        play_tasks.append({"name": n, "ansible.builtin.set_fact": {"ksm_mem": {"stdout": "MemAvailable: %d kB" % (case["free_mib"] * 1024)}}})
+    elif n.startswith("ksm | Read which protected VMs"):
+        play_tasks.append({"name": n, "ansible.builtin.set_fact": {"ksm_allow": {"stdout_lines": case["allow"]}}})
+    elif n == "ksm | Protected VMs kept out of merging (applies at each one's next start)":
+        play_tasks.append(dict(keep, **logline("qm set {{ item }} --allow-ksm 0")))
+    elif n.startswith("ksm | ksmtuned stopped and disabled"):
+        play_tasks.append(dict(keep, **logline("systemd ksmtuned stopped disabled")))
+    elif n == "ksm | ksmtuned as it was":
+        play_tasks.append(dict(keep, **logline("systemd ksmtuned {{ 'started' if ksm_prior['ksmtuned_active'] | default('no') == 'yes' else 'stopped' }} enabled={{ ksm_prior['ksmtuned_enabled'] | default('no') == 'yes' }}")))
+    elif n == "ksm | The three values, kept across a reboot":
+        play_tasks.append(dict(keep, **logline("boot file written")))
+    elif n.startswith("ksm | The kernel's pace, then its switch"):
+        play_tasks.append(dict(keep, **logline("tee {{ item }}={{ ksm_want[item] }}")))
+    elif n == "ksm | The kernel put back as it was":
+        play_tasks.append(dict(keep, **logline("tee {{ item.k }}={{ item.v }}")))
+    elif n == "ksm | The boot file and the saved state removed":
+        play_tasks.append(dict(keep, **{"ansible.builtin.file": {"path": "{{ item }}", "state": "absent"}}))
+        play_tasks[-1]["loop"] = ["{{ proxmox_ksm_prior_file }}"]
+        play_tasks.append(logline("boot file removed", when=task["when"]))
+    elif "ansible.builtin.copy" in task and task["ansible.builtin.copy"]["dest"] == "{{ proxmox_ksm_prior_file }}":
+        c = dict(task["ansible.builtin.copy"]); c.pop("owner"); c.pop("group")
+        play_tasks.append(dict(keep, **{"ansible.builtin.copy": c}))
+    else:
+        play_tasks.append(task)
+play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
+         "vars": {"proxmox_ksm_enabled": case["enabled"], "proxmox_ksm_sleep_millisecs": 200, "proxmox_ksm_pages_to_scan": 1000,
+                  "proxmox_ksm_prior_file": t + "/prior", "proxmox_ksm_protected_vmids": [100, 258, 400],
+                  "ansible_facts": {"services": case["services"]}},
+         "tasks": play_tasks}]
+yaml.safe_dump(play, open(out, "w"))
 PY
-want() { # <case> <changed|ok>
-  local out; out=$(ANSIBLE_NOCOLOR=1 ansible-playbook -i localhost, "$t/$1.yml" 2>&1 || true)
-  if grep -qE "^$2: \[localhost\]" <(grep -A0 -E "^(changed|ok): \[localhost\]" <<<"$out" | tail -1); then ok "2. $1: $2"; else bad "2. $1 wanted $2: $out"; fi
+run_case() { # <name> <json: enabled ksm free_mib allow services> [prior file text]
+  local name=$1 json=$2 prior=${3:-}
+  mkdir -p "$t/$name"; : > "$t/$name/writes.log"
+  [[ -z $prior ]] || printf '%s\n' "$prior" > "$t/$name/prior"
+  python3 -I "$t/make.py" "$root/hosts/ansible/playbooks/tasks/proxmox-ksm.yml" "$t/$name.yml" "$(python3 -I -c 'import json,sys; d=json.loads(sys.argv[1]); d["dir"]=sys.argv[2]; print(json.dumps(d))' "$json" "$t/$name")"
+  ANSIBLE_NOCOLOR=1 ansible-playbook -i localhost, "$t/$name.yml" > "$t/$name/out" 2>&1 && echo 0 > "$t/$name/rc" || echo 1 > "$t/$name/rc"
 }
-want on-from-0 changed; want on-same ok; want off-from-1 changed; want off-same ok
+log() { tr '\n' '|' < "$t/$1/writes.log"; }
+RUNNING='{"ksmtuned.service": {"state": "running", "status": "enabled"}}'
+STOPPED='{"ksmtuned.service": {"state": "stopped", "status": "disabled"}}'
+KSM_OFF='["/sys/kernel/mm/ksm/run:0", "/sys/kernel/mm/ksm/sleep_millisecs:20", "/sys/kernel/mm/ksm/pages_to_scan:100", "/sys/kernel/mm/ksm/pages_shared:0", "/sys/kernel/mm/ksm/pages_sharing:0"]'
+KSM_ON='["/sys/kernel/mm/ksm/run:1", "/sys/kernel/mm/ksm/sleep_millisecs:200", "/sys/kernel/mm/ksm/pages_to_scan:1000", "/sys/kernel/mm/ksm/pages_shared:1000", "/sys/kernel/mm/ksm/pages_sharing:5000"]'
+ALLOW='["/etc/pve/qemu-server/100.conf:0", "/etc/pve/qemu-server/258.conf:0"]'
 
-# 3. What the shipped tasks do.
-tf=$pb/tasks/proxmox-ksm.yml
-if grep -q 'central-hub-ksm.conf' "$tf" && grep -q 'name: ksmtuned' "$tf" && grep -q 'state: stopped' "$tf" && grep -q 'state: started' "$tf" \
-   && grep -q "'sleep_millisecs', 'pages_to_scan', 'run'" "$tf"; then ok "3. the tasks pin the pace first, keep it across a reboot, stop ksmtuned when on and start it when off"; else bad "3. a pinned step is missing from $tf"; fi
+# 2. On, on a fresh host: VM 400 has no config (skipped), 100 and 258 lack allow-ksm 0.
+run_case on_fresh "{\"enabled\": true, \"ksm\": $KSM_OFF, \"free_mib\": 8000, \"allow\": $ALLOW, \"services\": $RUNNING}"
+want_prior=$'run=0\nsleep_millisecs=20\npages_to_scan=100\nksmtuned_enabled=yes\nksmtuned_active=yes'
+if [[ $(cat "$t/on_fresh/prior" 2>/dev/null) == "$want_prior" ]]; then ok "2a. on saves the prior values and ksmtuned's state to the file"; else bad "2a. prior: $(cat "$t/on_fresh/prior" 2>&1) / $(tail -5 "$t/on_fresh/out")"; fi
+if [[ $(log on_fresh) == "qm set 100 --allow-ksm 0|qm set 258 --allow-ksm 0|systemd ksmtuned stopped disabled|boot file written|tee sleep_millisecs=200|tee pages_to_scan=1000|tee run=1|" ]]; then
+  ok "2b. on sets allow-ksm 0 for the protected VMs that exist (not 400), stops ksmtuned, then writes the pace before the switch"
+else bad "2b. $(log on_fresh)"; fi
+# A VM that already has it is not set again.
+run_case on_has "{\"enabled\": true, \"ksm\": $KSM_OFF, \"free_mib\": 8000, \"allow\": [\"/etc/pve/qemu-server/100.conf:1\", \"/etc/pve/qemu-server/258.conf:0\"], \"services\": $RUNNING}"
+if [[ $(log on_has) == "qm set 258 --allow-ksm 0|"* && $(log on_has) != *"qm set 100"* ]]; then ok "2c. a VM that already has allow-ksm 0 is not set again"; else bad "2c. $(log on_has)"; fi
+
+# 3. On again, with the state ksm left: the saved file keeps the state from before the first run.
+run_case on_again "{\"enabled\": true, \"ksm\": $KSM_ON, \"free_mib\": 8000, \"allow\": [\"/etc/pve/qemu-server/100.conf:1\", \"/etc/pve/qemu-server/258.conf:1\"], \"services\": $STOPPED}" "$want_prior"
+if [[ $(cat "$t/on_again/prior") == "$want_prior" && -z $(log on_again | tr -d '|' | sed 's/boot file written//;s/systemd ksmtuned stopped disabled//') ]]; then
+  ok "3. a second on keeps the first run's saved state and writes nothing it does not need to"
+else bad "3. $(cat "$t/on_again/prior") / $(log on_again)"; fi
+
+# 4. Off.
+run_case off_back "{\"enabled\": false, \"ksm\": $KSM_ON, \"free_mib\": 8000, \"allow\": [], \"services\": $STOPPED}" "$want_prior"
+if [[ $(log off_back) == "tee run=2|tee sleep_millisecs=20|tee pages_to_scan=100|tee run=0|systemd ksmtuned started enabled=True|boot file removed|" && ! -e $t/off_back/prior ]]; then
+  ok "4a. off unmerges (run 2), restores the saved pace and run, starts and enables ksmtuned as it was, and removes the saved file"
+else bad "4a. $(log off_back) prior-exists=$([[ -e $t/off_back/prior ]] && echo y || echo n) $(tail -8 "$t/off_back/out")"; fi
+tuned_off=$'run=0\nsleep_millisecs=20\npages_to_scan=100\nksmtuned_enabled=no\nksmtuned_active=no'
+run_case off_tuned "{\"enabled\": false, \"ksm\": $KSM_ON, \"free_mib\": 8000, \"allow\": [], \"services\": $STOPPED}" "$tuned_off"
+if [[ $(log off_tuned) == *"systemd ksmtuned stopped enabled=False"* ]]; then ok "4b. ksmtuned saved as stopped and disabled stays so"; else bad "4b. $(log off_tuned)"; fi
+was_on=$'run=1\nsleep_millisecs=100\npages_to_scan=500\nksmtuned_enabled=yes\nksmtuned_active=yes'
+run_case off_wason "{\"enabled\": false, \"ksm\": $KSM_ON, \"free_mib\": 8000, \"allow\": [], \"services\": $STOPPED}" "$was_on"
+if [[ $(log off_wason) == "tee sleep_millisecs=100|tee pages_to_scan=500|systemd ksmtuned started enabled=True|boot file removed|" ]]; then ok "4c. with KSM saved as already on there is no run 2 and no change to run"; else bad "4c. $(log off_wason)"; fi
+
+# 5. Refusals.
+run_case off_none "{\"enabled\": false, \"ksm\": $KSM_ON, \"free_mib\": 8000, \"allow\": [], \"services\": $STOPPED}"
+if [[ $(cat "$t/off_none/rc") == 1 && $(cat "$t/off_none/out") == *"no saved state"* && -z $(log off_none) ]]; then ok "5a. off with no saved state refuses and writes nothing"; else bad "5a. $(tail -6 "$t/off_none/out") / $(log off_none)"; fi
+BIG='["/sys/kernel/mm/ksm/run:1", "/sys/kernel/mm/ksm/sleep_millisecs:200", "/sys/kernel/mm/ksm/pages_to_scan:1000", "/sys/kernel/mm/ksm/pages_shared:1000", "/sys/kernel/mm/ksm/pages_sharing:3001000"]'
+run_case off_big "{\"enabled\": false, \"ksm\": $BIG, \"free_mib\": 4000, \"allow\": [], \"services\": $STOPPED}" "$want_prior"
+if [[ $(cat "$t/off_big/rc") == 1 && $(cat "$t/off_big/out") == *"would leave less than 1024 MiB"* && -z $(log off_big) ]]; then ok "5b. off refuses an unmerge of 11.7 GiB into 4000 MiB free, and writes nothing"; else bad "5b. $(tail -6 "$t/off_big/out") / $(log off_big)"; fi
 exit $fail

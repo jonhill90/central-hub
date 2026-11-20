@@ -22,8 +22,11 @@ guests = [{"vmid": 301, "type": "qemu", "status": "running", "maxmem": 429496729
 facts = {"memory_guests": {"stdout": json.dumps(guests)},
          "memory_host": {"stdout_lines": ["MemTotal:       32786344 kB", "MemAvailable:    8609340 kB", "Shmem:  2048 kB"]},
          "memory_kvm": {"stdout_lines": ["4194304 /usr/bin/kvm -id 301 -name secret-host-name,debug-threads=on -cpu host 192.0.2.10",
-                                         "1048576 /usr/bin/kvm -id 258 -name other"]},
-         "memory_ksm": {"stdout_lines": ["/sys/kernel/mm/ksm/run:0", "/sys/kernel/mm/ksm/pages_shared:7", "/sys/kernel/mm/ksm/pages_sharing:9"]}}
+                                         "1048576 /usr/bin/kvm -id 258 -name other -machine type=q35+pve0,mem-merge=off"]},
+         "memory_ksm": {"stdout_lines": ["/sys/kernel/mm/ksm/run:0", "/sys/kernel/mm/ksm/pages_shared:7", "/sys/kernel/mm/ksm/pages_sharing:9",
+                                         "/sys/kernel/mm/ksm/sleep_millisecs:200", "/sys/kernel/mm/ksm/pages_to_scan:1000", "/sys/kernel/mm/ksm/full_scans:3"]},
+         "memory_ksmd": {"stdout": "514 (ksmd) S 2 0 0 0 -1 2129984 0 0 0 0 120 45 0 0 25 5 1 0 100 0 0 18446744073709551615"},
+         "memory_tick": {"stdout": "100\n"}}
 play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
          "tasks": [{"name": "fake", "ansible.builtin.set_fact": facts}, report]}]
 yaml.safe_dump(play, open(sys.argv[2], "w"))
@@ -32,13 +35,21 @@ out=$(ANSIBLE_NOCOLOR=1 ANSIBLE_CALLBACK_RESULT_FORMAT=yaml ansible-playbook -i 
 want='guest 301 qemu running maxmem 4096 mem 3072
 guest 900 lxc stopped maxmem 512 mem 0
 kvm id 301 rss 4096
+kvm id 301 merge on
 kvm id 258 rss 1024
+kvm id 258 merge off
 host memtotal 32017
 host memavailable 8407
 host shmem 2
 host ksm run 0
 host ksm pages_shared 7
-host ksm pages_sharing 9'
+host ksm pages_sharing 9
+host ksm sleep_millisecs 200
+host ksm pages_to_scan 1000
+host ksm full_scans 3
+host ksmd utime 120
+host ksmd stime 45
+host clk_tck 100'
 got=$(grep -E '^ +(guest|kvm|host) ' <<<"$out" | sed -E 's/^ +//')
 if [[ $got == "$want" ]]; then ok "1. the report has one line per guest, process and counter, in MiB"; else bad "1. got: $got"; fi
 if ! grep -q 'secret-host-name\|192.0.2.10\|debug-threads\|storage/x' <<<"$got"; then ok "2. no name, argument or address reaches the report"; else bad "2. $got"; fi

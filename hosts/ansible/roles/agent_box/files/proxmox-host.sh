@@ -351,8 +351,11 @@ import json, re, sys
 ok = [re.compile(p) for p in (
     r"guest [0-9]{1,9} (qemu|lxc) [a-z]{1,12} maxmem [0-9]{1,9} mem [0-9]{1,9}",
     r"kvm id [0-9]{1,9} rss [0-9]{1,9}",
+    r"kvm id [0-9]{1,9} merge (on|off)",
     r"host (memtotal|memavailable|swaptotal|swapfree|shmem) [0-9]{1,9}",
-    r"host ksm (run|pages_shared|pages_sharing) [0-9]{1,12}")]
+    r"host ksm (run|pages_shared|pages_sharing|sleep_millisecs|pages_to_scan|full_scans) [0-9]{1,12}",
+    r"host ksmd (utime|stime) [0-9]{1,15}",
+    r"host clk_tck [0-9]{1,6}")]
 n = 0
 for play in json.load(open(sys.argv[1])).get("plays", []):
     for t in play.get("tasks", []):
