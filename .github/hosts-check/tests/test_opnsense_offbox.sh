@@ -68,6 +68,7 @@ EOF
 write_settings
 sed -e "s|^work=.*|work=$t/work|" -e "s|^settings=.*|settings=$t/keys/settings.env|" \
     -e "s|^restic=.*|restic=$t/restic|" -e "s|^cert=.*|cert=$t/cert|" -e "s|^escrow=.*|escrow=$t/escrow|" \
+    -e "s|^backend=.*|backend=$t/keys/backend.env|" \
     "$role/files/opnsense-offbox.sh" > "$t/offbox.sh"
 grep -q "^work=$t/work" "$t/offbox.sh" && grep -q "^restic=$t/restic" "$t/offbox.sh" && grep -q "^escrow=$t/escrow" "$t/offbox.sh" || { echo "FAIL: the test could not point the script at its folders"; exit 1; }
 
@@ -117,5 +118,29 @@ echo wrong > "$t/keys/wrong.txt"
 write_settings "$t/keys/wrong.txt"
 refuse "a wrong password fails, and makes no new repository" "could not open the repository"
 write_settings
+
+# 6 the Proxmox host's store: with the switch file (box-backup/backend.env) every restic call goes through the ssh config's alias, and without it none does.
+#   A stand-in restic records its arguments and the repository it was given, and answers as a healthy repository would.
+cat > "$t/restic-log" <<STUB
+#!/bin/bash
+echo "\$RESTIC_REPOSITORY|\$*" >> $t/restic-calls
+case " \$* " in *" dump "*) cat "\${!#}" ;; esac
+exit 0
+STUB
+chmod +x "$t/restic-log"
+sed -e "s|^restic=.*|restic=$t/restic-log|" "$t/offbox.sh" > "$t/offbox-log.sh"
+rm -f "$t/restic-calls" "$t/keys/backend.env"
+bash "$t/offbox-log.sh" >/dev/null 2>&1 && [[ $(wc -l < "$t/restic-calls") == 4 ]] && ! grep -q "sftp.args" "$t/restic-calls" \
+  && ok "6a with no switch file no restic call carries an sftp option, and the repository is the settings'" || bad "6a $(cat "$t/restic-calls" 2>/dev/null)"
+printf '# ssh config\n' > "$t/ssh_config"
+printf 'RESTIC_REPOSITORY=sftp:box-backup-target:/box\nOFFBOX_RESTIC_SSH_CONFIG=%s\n' "$t/ssh_config" > "$t/keys/backend.env"
+rm -f "$t/restic-calls"
+out=$(bash "$t/offbox-log.sh" 2>&1) && [[ $(wc -l < "$t/restic-calls") == 4 && $(grep -c "^sftp:box-backup-target:/box|-o sftp.args=-F $t/ssh_config " "$t/restic-calls") == 4 ]] \
+  && [[ $out == *"reads back the same"* ]] && ok "6b with the switch file all four restic calls (cat config, backup, forget, dump) use the sftp repository and the ssh config" || bad "6b $out $(cat "$t/restic-calls" 2>/dev/null)"
+printf 'RESTIC_REPOSITORY=%s\nOFFBOX_RESTIC_SSH_CONFIG=%s\n' "$t/repo" "$t/ssh_config" > "$t/keys/backend.env"
+if out=$(bash "$t/offbox-log.sh" 2>&1); then bad "6c an ssh config with a repository that is not sftp: should stop"; elif [[ $out == *"is not an sftp one"* ]]; then ok "6c an ssh config with a repository that is not sftp stops the run"; else bad "6c $out"; fi
+printf 'RESTIC_REPOSITORY=sftp:box-backup-target:/box\nOFFBOX_RESTIC_SSH_CONFIG=%s\n' "$t/missing" > "$t/keys/backend.env"; rm -f "$t/restic-calls"
+if out=$(bash "$t/offbox-log.sh" 2>&1); then bad "6d a missing ssh config: should stop"; elif [[ $out == *"is missing; dev-worker-address.sh box-key writes it"* && ! -e $t/restic-calls ]]; then ok "6d a missing ssh config stops the run before any restic call"; else bad "6d $out"; fi
+rm -f "$t/keys/backend.env"
 
 exit "$fail"

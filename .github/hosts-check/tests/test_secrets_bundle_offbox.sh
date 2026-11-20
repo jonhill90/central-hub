@@ -84,7 +84,7 @@ sed -e "s|^work=.*|work=$t/work|" -e "s|^settings=.*|settings=$t/keys/opnsense-o
     -e "s|^bundle_settings=.*|bundle_settings=$t/keys/secrets-bundle/settings.env|" \
     -e "s|^identity=.*|identity=$t/keys/secrets-bundle/age-identity.txt|" \
     -e "s|^bundles=.*|bundles=$t/keys/secrets-bundle/bundles|" -e "s|^restic=.*|restic=$t/bin/restic|" \
-    -e "s|^sops=.*|sops=$t/bin/sops|" -e "s|^age_keygen=.*|age_keygen=$t/bin/age-keygen|" -e "s|^escrow=.*|escrow=$t/escrow|" \
+    -e "s|^sops=.*|sops=$t/bin/sops|" -e "s|^age_keygen=.*|age_keygen=$t/bin/age-keygen|" -e "s|^escrow=.*|escrow=$t/escrow|" -e "s|^backend=.*|backend=$t/keys/backend.env|" \
     "$role/files/secrets-bundle-offbox.sh" > "$t/send.sh"
 grep -q "^escrow=$t/escrow" "$t/send.sh" && grep -q "^bundles=$t/" "$t/send.sh" || { echo "FAIL: the test could not point the script at its folders"; exit 1; }
 
@@ -181,4 +181,27 @@ secret=$(grep AGE-SECRET-KEY "$t/keys/secrets-bundle/age-identity.txt")
 if [[ $all == *"$secret"* || $all == *"$(cat "$t/keys/opnsense-offbox/restic.txt")"* || $all == *fake-prod-file-content* ]]; then
   bad "7. a value shows in the output"
 else ok "7. no password, identity or file content in the output"; fi
+# 10 the Proxmox host's store: with the switch file (box-backup/backend.env) every restic call goes through the ssh config's alias, and without it none does.
+#    A stand-in restic records its arguments and the repository it was given, and answers as a healthy repository would.
+cat > "$t/restic-log" <<STUB
+#!/bin/bash
+echo "\$RESTIC_REPOSITORY|\$*" >> $t/restic-calls
+case " \$* " in *" dump "*) cat "\${!#}" ;; esac
+exit 0
+STUB
+chmod +x "$t/restic-log"
+sed -e "s|^restic=.*|restic=$t/restic-log|" "$t/send.sh" > "$t/send-log.sh"
+write_bundle_settings; make_bundle bundle-20261201T153000Z.sops.json "$box"
+rm -f "$t/restic-calls" "$t/keys/backend.env"
+out=$(bash "$t/send-log.sh" 2>&1) && [[ $(wc -l < "$t/restic-calls") == 4 ]] && ! grep -q "sftp.args" "$t/restic-calls" \
+  && ok "10a with no switch file no restic call carries an sftp option" || bad "10a $out $(cat "$t/restic-calls" 2>/dev/null)"
+printf '# ssh config\n' > "$t/ssh_config"
+printf 'RESTIC_REPOSITORY=sftp:box-backup-target:/box\nOFFBOX_RESTIC_SSH_CONFIG=%s\n' "$t/ssh_config" > "$t/keys/backend.env"
+rm -f "$t/restic-calls"
+out=$(bash "$t/send-log.sh" 2>&1) && [[ $(wc -l < "$t/restic-calls") == 4 && $(grep -c "^sftp:box-backup-target:/box|-o sftp.args=-F $t/ssh_config " "$t/restic-calls") == 4 ]] \
+  && ok "10b with the switch file all four restic calls (cat config, backup, forget, dump) use the sftp repository and the ssh config" || bad "10b $out $(cat "$t/restic-calls" 2>/dev/null)"
+printf 'RESTIC_REPOSITORY=%s\nOFFBOX_RESTIC_SSH_CONFIG=%s\n' "$t/repo" "$t/ssh_config" > "$t/keys/backend.env"; rm -f "$t/restic-calls"
+if out=$(bash "$t/send-log.sh" 2>&1); then bad "10c an ssh config with a repository that is not sftp: should stop"; elif [[ $out == *"is not an sftp one"* && ! -e $t/restic-calls ]]; then ok "10c an ssh config with a repository that is not sftp stops the send before restic"; else bad "10c $out"; fi
+rm -f "$t/keys/backend.env"
+
 exit "$fail"

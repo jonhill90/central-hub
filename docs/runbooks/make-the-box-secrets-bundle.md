@@ -8,7 +8,7 @@ outcome: every day the box writes one SOPS-encrypted bundle of /etc/agent-keys/p
 needs: the agent_box role applied once from the controller; the OPNsense off-box copy set up and its repository made (copy-opnsense-backup-off-box.md); no agent or pipeline identity holding role-assignment rights on the backup vault or container (see Before you start); optionally the Mac's age public recipient (age1...) in the private inventory as agent_box_secrets_bundle.mac_recipient
 private-values: [mac-age-recipient, c1-backup-azure-storage-account, opnsense-offbox-vault-name]
 files: [hosts/ansible/roles/agent_box/tasks/secrets_bundle.yml, hosts/ansible/roles/agent_box/files/secrets-bundle.sh, hosts/ansible/roles/agent_box/files/dev-secrets.sh, hosts/ansible/roles/agent_box/files/secrets-bundle-offbox.sh, hosts/ansible/roles/agent_box/files/opnsense-escrow.py, hosts/ansible/roles/agent_box/templates/secrets-bundle-settings.env.j2, hosts/ansible/roles/agent_box/templates/secrets-bundle.service.j2, hosts/ansible/roles/agent_box/templates/secrets-bundle.timer.j2, hosts/ansible/roles/agent_box/templates/secrets-bundle-offbox.service.j2, hosts/ansible/roles/agent_box/templates/secrets-bundle-offbox.timer.j2, .github/hosts-check/tests/test_secrets_bundle_offbox.sh, .github/hosts-check/tests/test_dev_secrets_teardown.sh, .github/hosts-check/tests/test_opnsense_escrow.sh]
-last-tested: "dev-secrets.sh and the bundle's dev rule (2026-11-20): written and tested offline by test_dev_secrets_teardown.sh, not run on the box. The rest: not run on the box; written 2026-11-14 from the code in this change, which passed ShellCheck, ansible-lint and the offline tests test_secrets_bundle_offbox.sh (a local restic repository with the real restic, SOPS and age) and test_opnsense_escrow.sh"
+last-tested: "dev-secrets.sh and the bundle's dev rule (2026-11-20): written and tested offline by test_dev_secrets_teardown.sh, not run on the box. The rest: not run on the box; written 2026-11-14 from the code in this change, which passed ShellCheck, ansible-lint and the offline tests test_secrets_bundle_offbox.sh (a local restic repository with the real restic, SOPS and age) and test_opnsense_escrow.sh; the sftp switch (2026-11-20) passed offline tests with a stand-in restic; not run on the box"
 superseded-by:
 ---
 
@@ -64,6 +64,10 @@ The lab's private files live in the agent box's keys folder, and on the owner's 
 4. Only if a Mac recipient is set: check that the Mac can decrypt it.
    On the Mac, with its age identity: `SOPS_AGE_KEY_FILE=<Mac identity> sops decrypt --input-type json --output-type binary <bundle> | tar -t`
    expect: the `prod/` and `dev/` file names.
+
+## Sending the bundle to the Proxmox host's disk instead of Azure (2026-11-20, written, not yet run on the box)
+
+The send reuses the OPNsense copy's repository, so it moves with it: with `dev-worker-address.sh box-backend-on` the same `restic` calls go to `sftp:box-backup-target:/box` on the host's backup disk (see [`copy-opnsense-backup-off-box.md`](copy-opnsense-backup-off-box.md#where-the-copy-goes-now-2026-11-20-written-not-yet-run-on-the-box) and [`back-up-c1-off-box.md`](back-up-c1-off-box.md), P5), and `box-backend-off` puts Azure back. The repository must exist first: the OPNsense copy makes it, and `rebuild-prod.sh` runs that job before this one. The escrows of the restic password and the age identity stay in the Key Vault, so the break-glass recovery below still starts from the vault; only the repository's address changes, to a folder on the Proxmox host that the owner reads as root. The read-back and the opening with the box's identity run on every send, so a send that prints `reads back the same and opens with the box's identity` has restored the bundle from the host's disk.
 
 ## Dev's secrets leave at teardown
 
