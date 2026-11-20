@@ -20,3 +20,18 @@
   failed_when: >-
     opnsense_lab_dns_proof.rc != 0 or
     item.address not in opnsense_lab_dns_proof.stdout_lines
+
+- name: Ask the lab DNS server for every app short alias
+  ansible.builtin.command: >-
+    dig +short +time=3 +tries=2 A {{ (item ~ '.' ~ opnsense_dns_zone) | quote }}
+    @{{ opnsense_lab_dns_proof_server | default(opnsense_lab_mgmt_gateway, true) }}
+  loop: "{{ opnsense_lab_short_app_names }}"
+  loop_control:
+    label: "{{ item }}.<zone>"
+  register: opnsense_lab_short_proof
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+  failed_when: >-
+    opnsense_lab_short_proof.rc != 0 or
+    k8s_gateway_address not in opnsense_lab_short_proof.stdout_lines
