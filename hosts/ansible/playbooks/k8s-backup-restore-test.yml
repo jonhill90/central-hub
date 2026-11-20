@@ -56,7 +56,7 @@
     - name: Each node restored a named snapshot, nothing failed, nothing is left behind
       ansible.builtin.assert:
         that:
-          - k8s_backup_rt_log.stdout_lines | select('search', 'PASS: .*snapshot [0-9a-f]{8} of ') | list | length >= 1
+          - "k8s_backup_rt_log.stdout_lines | select('search', 'PASS: .*snapshot [0-9a-f]{8} of ') | list | length >= 1"
           - k8s_backup_rt_log.stdout_lines | select('search', 'FAIL|Fatal|ERROR') | list | length == 0
           - k8s_backup_rt_left.stdout | trim == '0'
           - k8s_backup_rt_start_result is not failed
