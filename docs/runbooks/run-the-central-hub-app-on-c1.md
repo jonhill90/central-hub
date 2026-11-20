@@ -31,9 +31,11 @@ The app (public repository `jonhill90/central-hub-app`) runs as one pod in names
    expect: the Hub with its menu; `/api/v1/catalog` answers 200.
 
 ## If it fails
+
 - Init container `OOMKilled`: raise `resources.build.limits.memory` in values; the prod worker has about 7.9 GiB shared, so check node memory first (`c1-read top nodes`).
 - Init container fails at `git fetch` or `npm ci`: the pod has no route to github.com or the npm registry; read the NetworkPolicy and the Cilium policy verdicts. The app stays on the old pod until the new one is ready (strategy Recreate stops the old one first, so it goes down).
 - 503 from the Gateway with a Running pod: the Cilium ingress policy (`central-hub-app-ingress`) blocked it; check `c1-read -n central-hub-app get ciliumnetworkpolicy`.
 
 ## Take it off
+
 Delete the app's folder here, its entry in `root/values.yaml` and its route in `apps/gateway/values.yaml`. Argo CD keeps no finalizer, so delete namespace `central-hub-app` with the owner's say (it holds no data).

@@ -386,6 +386,16 @@ components:
     verdict: pass
     sources: [image:docker.io/library/python]
     checked: 2026-11-18
+  - name: Node.js
+    kind: software
+    used-for: builds and runs the Central Hub web app on c1 (the official node image, on a Debian base)
+    licence: MIT (the permission grant at the top of the project's LICENSE file; the file also lists third-party licences for bundled parts)
+    licence-source: https://raw.githubusercontent.com/nodejs/node/main/LICENSE
+    paid-edition: none found on the project's about page, read 2026-11-20
+    paid-edition-source: https://nodejs.org/en/about
+    verdict: pass
+    sources: [image:docker.io/library/node]
+    checked: 2026-11-20
   - name: restic
     kind: software
     used-for: backups of c1 and of OPNsense's configuration
