@@ -86,7 +86,7 @@ The box's copy of the test passwords, `/etc/agent-keys/desktop-test-login`, is d
 
 `grdctl --system rdp set-credentials <user>` with no password argument reads the password from standard input: in GNOME's `src/grd-ctl.c` (main branch, read 2026-11-20) `rdp_set_credentials` calls `prompt_for_input`, which reads one line from `STDIN_FILENO` and changes the terminal only when it is a tty. That is the source on main, not the version on AlmaLinux 10, so the first test build is where it is seen working.
 
-Not proven by this: that GDM then shows a session. `+auth-only` stops after the login is accepted. The box gets its RDP client from the `freerdp` package (AlmaLinux 10 AppStream, 3.32.2 listed by `dnf` on the box 2026-11-20), installed by the `agent_box` role; before that change the box had no `xfreerdp`, and a login check was not possible.
+Not proven by this (not done): that GDM then shows a session. `+auth-only` stops after the login is accepted. The box gets its RDP client from the `freerdp` package (AlmaLinux 10 AppStream, 3.32.2 listed by `dnf` on the box 2026-11-20), installed by the `agent_box` role.
 
 The test build holds a credential the agents know, which the owner's desktop must not. After the check, rebuild from teardown with plain `desktop configure` so the owner types their own passwords at the console.
 
