@@ -82,8 +82,9 @@ fi
 # below it would leave dev up after a full run that had memory to spare (#624 tears dev down after every full run
 # under ephemeral-dev), below #573 run without the refusal while VM 256 (the lab test copy) exists, or below #343
 # without the memory preflight that stops VM 300 to fit dev. Raise it whenever rebuild-k8s.sh gains a refusal or an
-# end step every dev run must keep, and raise rebuild-prod.sh's with it.
-PIN_FLOOR=8c2f4cacca14de78bf0f5502d054ce3e92e33a74
+# end step every dev run must keep, and raise rebuild-prod.sh's with it. Since #748 (24ed84e): the teardown stage runs
+# TEARDOWN_HOOK, which deletes dev's SOPS file of the apps' secrets, and an older rebuild-k8s.sh ignores it.
+PIN_FLOOR=24ed84e6dc0810fb00bc5fe35a3884e91b723b39
 
 # The code a run builds: main's newest, or the commit named, only if main holds it and it is not older than
 # PIN_FLOOR. Never a branch, never a commit main does not hold (D-0035 rule 4).

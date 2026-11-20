@@ -89,8 +89,9 @@ chmod 700 "$envdir"
 # The oldest commit a go may name: main's merge of #624, the same floor as the dev wrapper's (rebuild.sh). The run uses
 # that commit's own hosts/rebuild-k8s.sh, and one below it leaves dev up after a full run that had memory to spare
 # (below #624), lacks the refusal while VM 256 exists (below #573) and the memory preflight (below #343). Raise it with
-# rebuild.sh's whenever rebuild-k8s.sh gains a refusal or an end step every run must keep.
-PIN_FLOOR=8c2f4cacca14de78bf0f5502d054ce3e92e33a74
+# rebuild.sh's whenever rebuild-k8s.sh gains a refusal or an end step every run must keep. Since #748 (24ed84e) it is
+# the commit whose teardown stage runs TEARDOWN_HOOK, as in rebuild.sh.
+PIN_FLOOR=24ed84e6dc0810fb00bc5fe35a3884e91b723b39
 
 # One rebuild at a time, dev's or prod's, in this wrapper's own checkout of main.
 exec 9>"$work/state/rebuild.lock"
