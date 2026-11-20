@@ -3,6 +3,8 @@
 # rule 10, pick 228, docs/runbooks/make-the-box-secrets-bundle.md). Runs as user `keys` from its daily timer; no
 # session runs it, so it has no sudo line.
 #   1. tar the keys folder's environment folders (prod and dev, whichever exist), never this job's own folder.
+#      The dev folder is left out while dev-secrets.sh says dev is down (no VM in the dev state): dev's secrets then
+#      stay on the box and the bundle holds prod only (TASK-0362). If the state can't be read, dev stays in.
 #   2. SOPS encrypts the tar as a binary file to the box's own age identity, and to the owner's Mac when its
 #      recipient is set (optional since pick 236), so either can decrypt it and nobody else can.
 #   3. The bundle must decrypt again with the box's identity to the same bytes, or it is deleted and the run fails.
@@ -37,7 +39,14 @@ box_recipient=$("$libexec/age-keygen" -y "$identity")
 [[ $box_recipient =~ ^age1[0-9a-z]{58}$ ]] || die "the box's identity gives no age recipient"
 
 srcs=()
-for env in prod dev; do [[ -d $keys/$env ]] && srcs+=("$env"); done
+for env in prod dev; do
+  [[ -d $keys/$env ]] || continue
+  if [[ $env == dev ]] && "$libexec/dev-secrets.sh" down; then
+    echo "secrets-bundle: dev is down (0 VMs in its state); the dev folder is left out of this bundle" >&2
+    continue
+  fi
+  srcs+=("$env")
+done
 (( ${#srcs[@]} > 0 )) || die "no prod or dev folder in $keys to bundle"
 
 mkdir -p "$out"
