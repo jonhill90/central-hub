@@ -42,7 +42,7 @@ The app reads no secret, writes nothing, holds no data and has no sign-in yet; i
 
 - [ ] From the agent box, `c1-read -n central-hub-app get pods` shows the pod Running, and the `build` init container's log ends with `built <the pinned commit>`.
 - [ ] `https://central-hub-app.apps.c1.prod.<zone>/` shows the Hub and its menu from the lab network, and `/api/v1/catalog` answers 200.
-- [ ] The `name-check` job lists `central-hub-app` among its lines without failure.
+- [ ] The pod is Ready (its readiness probe is `GET /api/v1/catalog` inside the pod), and the owner opens the name above and sees the Hub. The gateway `name-check` does not list this app: the desktop role's trust check must list the same apps, and it checks short names that do not resolve yet.
 
 ## Points to
 

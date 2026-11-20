@@ -31,5 +31,5 @@ nameCheck:
   enabled: true
   schedule: "15,45 * * * *"
   # The apps on the shared Gateway, by route key, whether this chart or the app's own chart makes the route.
-  apps: [grafana, argocd, sso, jellyfin, ntfy, central-hub-app]
+  apps: [grafana, argocd, sso, jellyfin, ntfy]
   image: docker.io/curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
