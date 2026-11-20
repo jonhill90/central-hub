@@ -150,5 +150,26 @@ names = [x["name"] for x in tasks]
 assert names.index("desktop | The console prompt starts now") < names.index("desktop | gdm is started")
 PY
 
+# The prompt's ExecStartPost starts gdm, not getty@tty1 (gdm conflicts with it, so a getty start would cancel gdm's queued
+# start), and a test build feeds throwaway passwords to the real prompt unit on stdin (2026-11-20, reviewer on #795).
+tpl=$here/hosts/ansible/roles/desktop/templates/desktop-set-password.service.j2
+if grep -q '^ExecStartPost=/usr/bin/systemctl --no-block start gdm.service$' "$tpl" && ! grep -q '^ExecStartPost=.*getty' "$tpl"; then
+  echo "ok   the prompt's ExecStartPost starts gdm, not the getty"
+else echo "FAIL: the prompt's ExecStartPost"; fails=$((fails + 1)); fi
+python3 -I - "$here/hosts/ansible/roles/desktop/tasks/main.yml" <<'PY' && echo "ok   a test build runs the real prompt on throwaway passwords" || { echo "FAIL: the test build's prompt feed"; fails=$((fails + 1)); }
+import sys, yaml
+tasks = yaml.safe_load(open(sys.argv[1]))
+by = {x["name"]: x for x in tasks}
+f = by["desktop | Test build, the throwaway passwords are fed to the console prompt"]["ansible.builtin.copy"]
+assert f["dest"] == "/run/desktop-test-passwords" and f["mode"] == "0600" and f["content"].count("\n") == 4
+assert by["desktop | Test build, the throwaway passwords are fed to the console prompt"]["no_log"] is True
+d = by["desktop | Test build, the console prompt reads them"]["ansible.builtin.copy"]
+assert "StandardInput=file:/run/desktop-test-passwords" in d["content"] and "rm -f /run/desktop-test-passwords" in d["content"]
+names = [x["name"] for x in tasks]
+assert names.index("desktop | Test build, the console prompt reads them") < names.index("desktop | The units are enabled") < names.index("desktop | The console prompt starts now")
+# no task sets the passwords or the marker for the test build behind the prompt's back
+assert not [n for n in names if n in ("desktop | Test build, the password marker is written", "desktop | Test build, the login password is set from the box")]
+PY
+
 if [[ $fails -gt 0 ]]; then echo "desktop configure vars: $fails test(s) failed"; exit 1; fi
 echo "desktop configure vars: all tests passed"

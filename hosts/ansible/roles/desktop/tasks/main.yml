@@ -106,28 +106,38 @@
 
 # Test build only: the passwords come from the box, so the console script is skipped (the marker exists). Neither
 # password is on a command line (stdin) or in the log.
-- name: desktop | Test build, the login password is set from the box
-  ansible.builtin.shell: 'set -o pipefail; printf "%s:%s\n" "{{ desktop_user }}" "$DESKTOP_PW" | chpasswd'
-  args:
-    executable: /bin/bash
-  environment: {DESKTOP_PW: "{{ desktop_test_login_password }}"}
+# Test build: the console prompt runs for real, with throwaway passwords fed in on standard input instead of typed on
+# tty1, so a test build exercises the prompt's own script, its marker and its ExecStartPost, the path the owner's build
+# takes. The file (0600, root, in /run) is removed by the unit's own ExecStartPost, and /run is gone at the next boot.
+- name: desktop | Test build, the throwaway passwords are fed to the console prompt
+  ansible.builtin.copy:
+    dest: /run/desktop-test-passwords
+    content: |
+      {{ desktop_test_login_password }}
+      {{ desktop_test_login_password }}
+      {{ desktop_test_rdp_password }}
+      {{ desktop_test_rdp_password }}
+    mode: "0600"
+    owner: root
+    group: root
   no_log: true
-  changed_when: true
   when: desktop_test_login | bool
 
-- name: desktop | Test build, the RDP credential is set from the box
-  ansible.builtin.shell: 'set -o pipefail; printf "%s\n" "$DESKTOP_PW" | grdctl --system rdp set-credentials "{{ desktop_user }}" && grdctl --system rdp enable'
-  args:
-    executable: /bin/bash
-  environment: {DESKTOP_PW: "{{ desktop_test_rdp_password }}"}
-  no_log: true
-  changed_when: true
-  when: desktop_test_login | bool
-
-- name: desktop | Test build, the password marker is written
+- name: desktop | Test build, folder for the console prompt's drop-in
   ansible.builtin.file:
-    path: "{{ desktop_password_marker }}"
-    state: touch
+    path: /etc/systemd/system/desktop-set-password.service.d
+    state: directory
+    mode: "0755"
+  when: desktop_test_login | bool
+
+- name: desktop | Test build, the console prompt reads them
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/desktop-set-password.service.d/10-test-passwords.conf
+    content: |
+      # Written by role desktop on a test build only: the prompt reads the box's throwaway passwords, not the console.
+      [Service]
+      StandardInput=file:/run/desktop-test-passwords
+      ExecStartPost=/usr/bin/rm -f /run/desktop-test-passwords
     mode: "0644"
   when: desktop_test_login | bool
 
