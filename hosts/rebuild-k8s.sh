@@ -19,6 +19,9 @@
 #   PRE_VMS_HOOK  optional: a command run before the VMs are made (Proxmox /vms ACLs, R4 step 0)
 #   TEARDOWN_HOOK  optional: a command the `teardown` stage runs once the destroy has passed (the box's dev wrapper
 #                 sets dev-secrets.sh remove, which deletes dev's SOPS file of the apps' secrets while the state holds 0 VMs)
+#   TEARDOWN_TARGET  optional: one OpenTofu resource address (no instance key) the `teardown` stage destroys instead of the whole
+#                 state. The box's prod wrapper sets proxmox_virtual_environment_vm.node, so a prod teardown destroys the node VMs and
+#                 keeps the image and the template they clone from (which prod's state owns). Unset: everything in the state.
 #   RESTORE_HOOK  the restore command for stage `restore`; required on dev, where it restores a
 #                 read-only copy of prod's newest volume snapshot (hosts/rebuild.env.example)
 #   RESTORE_CHECK_HOOK  the command the `checks` stage runs to prove the restore; required with
@@ -660,7 +663,7 @@ run_stage() {
       preflight_memory ;;
     teardown)
       tofu_k8s init -input=false -reconfigure -backend-config="path=$TFSTATE"
-      tofu_k8s destroy -auto-approve -input=false "${tofu_vars[@]}"
+      tofu_k8s destroy -auto-approve -input=false ${TEARDOWN_TARGET:+"-target=$TEARDOWN_TARGET"} "${tofu_vars[@]}"
       # Set by the box's rebuild wrapper (dev only): dev's SOPS file of the apps' secrets is deleted once the state shows
       # 0 VMs. Every teardown path runs this stage, so every one reaches the hook. Unset: nothing.
       [ -z "${TEARDOWN_HOOK:-}" ] || hook "$TEARDOWN_HOOK" ;;

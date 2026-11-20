@@ -240,7 +240,8 @@ if [[ $rc -eq 0 && $order == "$want" && $calls == *"playbooks/k8s-backup.yml --t
       -s $t/keys/prod/backup-certs/wk-a.pem && -s $t/keys/prod/backup-certs/cp-a.pem.keyid &&
       $(stat -c %a "$t/keys/prod/backup-certs/wk-a.pem") == 600 && $out != *"BEGIN PRIVATE KEY"* && $out != *KKKK* &&
       $stages == '"vms cluster storage openbao-seal restore gitops secrets apps gateway certs identity identity-db ui backup checks"' &&
-      $(cat "$t/seen-rebuild.env") == *"ENV_NAME=prod"* && $(cat "$t/seen-rebuild.env") == *"TOFU_ENV=$t/keys/proxmox-lab.env"* &&
+      $(cat "$t/seen-rebuild.env") == *"ENV_NAME=prod"* && $(cat "$t/seen-rebuild.env") == *"TEARDOWN_TARGET=proxmox_virtual_environment_vm.node"* &&
+      $(grep -c 'plan .*-destroy -target=proxmox_virtual_environment_vm.node ' "$t/calls") -ge 1 && $(cat "$t/seen-rebuild.env") == *"TOFU_ENV=$t/keys/proxmox-lab.env"* &&
       $(cat "$t/seen-rebuild.env") == *"k8s-restore.yml -e k8s_backup_enabled=false"* && -e $t/work/state/prod-stable-folders &&
       $out == *"owner tap $tap"* && $out == *"restore test passed: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321"*"etcd restore test"*"snapshot c5523412"* && $out == *"PASS: rebuild-prod: prod torn down and built again"* &&
       -z $(ls -d /dev/shm/rebuild-prod-seal.test-* 2>/dev/null) ]]; then

@@ -362,6 +362,10 @@ fi
 
 # --- 3. OpenTofu: the box's state is the live prod, and the teardown would destroy only prod's node VMs.
 tf=$repo/hosts/terraform/home/k8s
+# A prod teardown destroys the node VMs only: prod's state also owns the AlmaLinux image and the template (VM 9000) the nodes clone
+# from, and a full destroy would delete both and download the image again. The address names the resource, not an instance
+# (an instance's key is a node's hostname), so it destroys every node VM and nothing else.
+teardown_target=proxmox_virtual_environment_vm.node
 # shellcheck source=/dev/null
 tofu_k8s() { (set -a; . "$tofu_env"; set +a; tofu -chdir="$tf" "$@"); }
 if [[ -s $tofu_env && -s $tfstate && -s $tfvars_src ]] && command -v tofu >/dev/null; then
@@ -392,7 +396,7 @@ for rc in plan.get("resource_changes", []):
 ' || true ;;
       *) fail "OpenTofu plan failed (rc $rc): $(grep -m1 -E 'Error' "$envdir/tofu-plan.out" | cut -c1-160)" ;;
     esac
-    rc=0; tofu_k8s plan -input=false -lock=false -destroy -var-file="$tfvars_src" -out="$envdir/destroy.plan" > "$envdir/tofu-destroy.out" 2>&1 || rc=$?
+    rc=0; tofu_k8s plan -input=false -lock=false -destroy -target="$teardown_target" -var-file="$tfvars_src" -out="$envdir/destroy.plan" > "$envdir/tofu-destroy.out" 2>&1 || rc=$?
     if [[ $rc -eq 0 ]] && tofu_k8s show -json "$envdir/destroy.plan" > "$envdir/destroy.json" 2>/dev/null; then
       if out=$(python3 -I -c "$(cat <<'PY'
 import json, sys
@@ -606,6 +610,7 @@ TFSTATE=$tfstate
 TOFU_ENV=$tofu_env
 INVENTORY=$inventory/
 STAGES="$stages"
+TEARDOWN_TARGET=$teardown_target
 SECRET_SOURCE_FILE=$pkeys/secret-source.env
 OPENBAO_SEAL_KEY_FILE=$seal_tmp/openbao-seal.key
 RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml -e k8s_backup_enabled=false'
