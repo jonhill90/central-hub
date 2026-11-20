@@ -14,7 +14,7 @@ superseded-by:
 
 # Run the Central Hub web app on c1
 
-The app (public repository `jonhill90/central-hub-app`) runs as one pod in namespace `central-hub-app` (Argo CD app `central-hub-app`). An init container fetches the commit named in `apps/central-hub-app/values.yaml` (`source.commit`, a full sha) by git, checks it, runs `npm ci` and `npm run build`, and the app container runs the output. It has no image of its own; the [spec](../specs/2026-11-central-hub-app-on-c1.md) says why and names the way off. Names: `central-hub-app.apps.c1.prod.<zone>` and `central-hub-app.<zone>`.
+The app (public repository `jonhill90/central-hub-app`) runs as one pod in namespace `central-hub-app` (Argo CD app `central-hub-app`). An init container fetches the commit named in `apps/central-hub-app/values.yaml` (`source.commit`, a full sha) by git, checks it, runs `npm ci` and `npm run build`, and the app container runs the output. It has no image of its own; the [spec](../specs/2026-11-central-hub-app-on-c1.md) says why and names the way off. Name: `central-hub-app.apps.c1.prod.<zone>`. The Gateway route also accepts the short alias `central-hub-app.<zone>`, but that name does not resolve for people until it has its own Unbound host override and tailnet split-DNS entry ([set-up-short-app-names.md](set-up-short-app-names.md)); that is not done.
 
 ## Steps
 
@@ -33,7 +33,7 @@ The app (public repository `jonhill90/central-hub-app`) runs as one pod in names
 ## If it fails
 
 - Init container `OOMKilled`: raise `resources.build.limits.memory` in values; the prod worker has about 7.9 GiB shared, so check node memory first (`c1-read top nodes`).
-- Init container fails at `git fetch` or `npm ci`: the pod has no route to github.com or the npm registry; read the NetworkPolicy and the Cilium policy verdicts. The app stays on the old pod until the new one is ready (strategy Recreate stops the old one first, so it goes down).
+- Init container fails at `git fetch` or `npm ci`: the pod has no route to github.com or the npm registry; read the NetworkPolicy and the Cilium policy verdicts. Strategy Recreate stops the old pod first, so the app is down until the new pod's build has finished and it is ready.
 - 503 from the Gateway with a Running pod: the Cilium ingress policy (`central-hub-app-ingress`) blocked it; check `c1-read -n central-hub-app get ciliumnetworkpolicy`.
 
 ## Take it off

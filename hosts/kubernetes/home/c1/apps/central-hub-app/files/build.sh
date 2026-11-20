@@ -1,3 +1,4 @@
+#!/bin/sh
 set -eu
 # Fetch one commit by its full sha with git (not a tarball), check it, then build the standalone output.
 cd /work

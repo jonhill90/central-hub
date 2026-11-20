@@ -61,6 +61,8 @@ spec:
             - {name: HOME, value: /work/home}
             - {name: npm_config_cache, value: /work/npm-cache}
             - {name: NEXT_TELEMETRY_DISABLED, value: "1"}
+            # V8 collects garbage before the container's memory limit kills the build.
+            - {name: NODE_OPTIONS, value: --max-old-space-size=1024}
           resources:
             requests: {cpu: {{ $v.resources.build.requests.cpu }}, memory: {{ $v.resources.build.requests.memory }}}
             limits: {memory: {{ $v.resources.build.limits.memory }}}
