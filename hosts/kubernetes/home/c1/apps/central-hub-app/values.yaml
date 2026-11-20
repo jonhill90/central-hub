@@ -1,0 +1,24 @@
+# The Central Hub web app on c1 (spec 2026-11-central-hub-app-on-c1). Every value here is public.
+name: central-hub-app
+
+# The app's own repository, read anonymously over HTTPS, and the one commit to build, by its full sha
+# (Activation gate items 3 and 6: no token, no image automation; a new commit is a reviewed pull request).
+source:
+  repoURL: https://github.com/jonhill90/central-hub-app.git
+  commit: "85d1503ed42005d3eceb2fb7021a84d255f6739f"
+
+# One stock image builds and runs the app: it has git and npm. Node 22.21.1 on Debian bookworm, tag last
+# pushed 2026-01-13 (Docker Hub tag API), multi-arch index digest. D-0054: Docker Hub by digest, no account.
+image: docker.io/library/node:22.21.1-bookworm@sha256:b84d52cd45bfe261096ccbf886955d431b8b9ed01b72eaef588e8886bda09e78
+uid: 1000
+port: 3000
+
+resources:
+  build:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {memory: 1536Mi}
+  run:
+    requests: {cpu: 20m, memory: 96Mi}
+    limits: {memory: 384Mi}
+workSize: 2Gi
+outSize: 256Mi

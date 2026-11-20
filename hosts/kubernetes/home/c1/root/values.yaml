@@ -189,6 +189,13 @@ apps:
       setup.enabled: jellyfinSetup
     autoSync: true    # on 2026-11-10: its diff on c1 at 03:08 UTC was Argo CD's tracking only
     prune: false
+  # The Central Hub web app (spec 2026-11-central-hub-app-on-c1): built at pod start from a pinned commit of
+  # its own public repository. Its route is in the gateway app (routes: central-hub-app).
+  central-hub-app:
+    namespace: central-hub-app
+    local: true
+    autoSync: true
+    prune: false
   # Logs (spec step 3): two releases in namespace logging, as k8s_observability installed them.
   loki:
     namespace: logging
