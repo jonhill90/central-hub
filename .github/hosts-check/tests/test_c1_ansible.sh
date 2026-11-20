@@ -13,6 +13,9 @@
 #   8. observability runs its playbook with its fixed tags and no extra variables.
 #   7. gateway and gitops run their own playbook with fixed tags and no extra variables or values file; certs and the install tag are not
 #      names; apply needs a clearance id for them too.
+#  10. The Proxmox web names (proxmox_cert_names on the proxmox group's hosts or vars) reach the box's copy as a literal
+#      k8s_identity_proxmox_hosts on k8s_nodes, so the identity render has the proxmox client; the group's logins and keys
+#      still do not, and with no names no such variable is written.
 #   6. An inventory that names a theme folder (a controller path) is remapped to <keys>/prod/identity-theme/<its name>; with no
 #      login/theme.properties there the run stops before any playbook, and with it the run goes on.
 # Usage: .github/hosts-check/tests/test_c1_ansible.sh   (needs python3 with PyYAML, flock)
@@ -134,6 +137,18 @@ if [[ $u1rc -eq 0 && $u1 == *"playbooks/k8s-identity.yml -e k8s_identity_values_
       $u2rc -eq 0 && $u2 == *"--tags secrets,users -e $uj" && $u2 != *--check* && $u2 != *keycloak* && $u2 != *all* && $u2o == *"clearance $clr"* ]]; then
   ok "9. users: identity playbook, tags secrets,users, one fixed user, no realm replace, apply is its own verb"
 else bad "9. [$u1] [$u2]"; fi
+echo "X=1" > "$t/keys/prod/identity.env"
+inventory "all:" "  children:" "    proxmox:" "      vars: {proxmox_cert_names: [pve.vars.example.test]}" "      hosts:" "        pve-a: {ansible_host: 192.0.2.1, proxmox_cert_names: [pve.host.example.test, pve.vars.example.test], ansible_ssh_common_args: -o ProxyJump=root@192.0.2.1}" \
+          "    k8s_nodes:" "      vars:" "        k8s_identity_proxmox_hosts: \"{{ hostvars['proxmox_host'].proxmox_cert_names }}\"" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}"
+run check identity; seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
+names=$(python3 -I -c 'import sys, yaml; d = yaml.safe_load(open(sys.argv[1])); print(d["all"]["children"]["k8s_nodes"]["vars"]["k8s_identity_proxmox_hosts"])' "$t/seen-inventory.yml" 2>&1)
+if [[ $rc -eq 0 && $names == "['pve.host.example.test', 'pve.vars.example.test']" && $seen != *pve-a* && $seen != *ProxyJump* && $seen != *hostvars* &&
+      $out == *"2 Proxmox web names"* && $out != *example.test* ]]; then
+  ok "10a. the Proxmox web names reach k8s_nodes as a literal, nothing else of the group does, and only a count is printed"
+else bad "10a. $rc [$names] $out"; fi
+inventory "${prod_inv[@]}"
+run check identity; seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
+if [[ $rc -eq 0 && $seen != *k8s_identity_proxmox_hosts* && $out != *"Proxmox web names"* ]]; then ok "10b. no names in the proxmox group: no variable written"; else bad "10b. $rc $out"; fi
 rm -f "$t/keys/prod/identity.env"
 run check users
 if [[ $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "9b. users stops while the values file is missing"; else bad "9b. $rc $out"; fi

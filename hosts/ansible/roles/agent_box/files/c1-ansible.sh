@@ -109,6 +109,27 @@ src, dst, key, known, themes = sys.argv[1:6]
 def die(m):
     print("c1-ansible: " + m, file=sys.stderr); sys.exit(1)
 d = yaml.safe_load(open(src))
+# The Proxmox web UI's DNS names (proxmox_cert_names, on the proxmox group or its hosts) are read before the group is dropped: the
+# Keycloak client `proxmox` is rendered only when k8s_identity_proxmox_hosts holds them, and the group's logins and keys must not
+# reach the box. Only the names pass, as a literal on k8s_nodes; the box's copy is private (0600), nothing is printed but a count.
+def pve_names(n):
+    if isinstance(n, dict):
+        p = n.get("proxmox")
+        if isinstance(p, dict) and ("hosts" in p or "children" in p or "vars" in p):
+            found = []
+            for part in [p.get("vars")] + list((p.get("hosts") or {}).values()):
+                v = (part or {}).get("proxmox_cert_names") if isinstance(part, dict) else None
+                if isinstance(v, list): found += [x for x in v if isinstance(x, str) and x]
+            return found
+        for v in n.values():
+            r = pve_names(v)
+            if r: return r
+    elif isinstance(n, list):
+        for i in n:
+            r = pve_names(i)
+            if r: return r
+    return []
+names = pve_names(d)
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking"}
@@ -141,6 +162,9 @@ def find(n, name):
 g = find(d, "k8s_nodes")
 if g is None: die("the prod inventory has no k8s_nodes group")
 v = g.setdefault("vars", {})
+if names:
+    v["k8s_identity_proxmox_hosts"] = sorted(set(names))
+    print("c1-ansible: %d Proxmox web names passed to the identity play" % len(set(names)))
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
