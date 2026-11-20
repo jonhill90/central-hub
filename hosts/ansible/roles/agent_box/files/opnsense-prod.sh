@@ -138,9 +138,27 @@ print(json.dumps({"job": "opnsense-prod", "time": a[1], "action": a[2], "commit"
     "$stamp" "$action" "$commit" "$1" "$2" "${pass_ref:-}" "$3" >> "$summary"
 }
 
+# The shared VLAN list (lab_vlans) is in the checkout's group_vars, which the job's one-file inventory does not have next to it;
+# it goes in the same way as for the host job's firewall run.
+vlans_file=$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml
 play() { # out-file, extra ansible-playbook arguments...
   local out=$1; shift
-  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" -e "@$vars_file" "$playbook" "$@") > "$out" 2>> "$logs/run-$stamp.err"
+  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" -e "@$vlans_file" -e "@$vars_file" "$playbook" "$@") > "$out" 2>> "$logs/run-$stamp.err"
+}
+# failed_tasks <json output>: the names of the tasks that failed or could not reach the host, for a session to read. Names
+# come from the reviewed code; a task's message can hold private values, so it stays in the box's log.
+failed_tasks() {
+  python3 -I - "$1" <<'PY' 2>/dev/null || echo "no readable result"
+import json, sys
+data = json.load(open(sys.argv[1]))
+names = []
+for play in data.get("plays", []):
+    for t in play.get("tasks", []):
+        for r in t.get("hosts", {}).values():
+            if (r.get("failed") or r.get("unreachable")) and t["task"]["name"] not in names:
+                names.append(t["task"]["name"])
+print("; ".join(names) or "none (the run stopped before a task: see the box's log)")
+PY
 }
 
 # summarize <json output> <result file>: writes the result file and prints "<hash> <changed> <skipped> <tasks>".
@@ -211,7 +229,8 @@ case $action in
   check)
     rm -f "$result"
     if ! line=$(do_check); then
-      record none none "FAIL: check"; echo "opnsense-prod: FAIL: check (details in the box's log $logs/check-$stamp.json)" >&2; exit 1
+      record none none "FAIL: check"
+      echo "opnsense-prod: FAIL: check; failed task(s): $(failed_tasks "$logs/check-$stamp.json") (details in the box's log $logs/check-$stamp.json)" >&2; exit 1
     fi
     read -r hash changed skipped total <<< "$line"
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok
