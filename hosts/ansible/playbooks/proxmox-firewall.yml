@@ -1,0 +1,11 @@
+---
+# The Proxmox host's firewall alone: the proxmox_firewall role of playbooks/proxmox-safety.yml, without the notify and
+# backup roles, whose argument checks run under any --tags and need inputs the agent box's host job does not hold
+# (proxmox_backup_disk). The agent box's host job `firewall` runs this (D-0063); the controller can run it the same way.
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-firewall.yml --check --diff
+- name: Proxmox host firewall
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  roles:
+    - role: proxmox_firewall

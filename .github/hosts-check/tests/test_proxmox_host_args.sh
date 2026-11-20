@@ -16,6 +16,7 @@
 #  12. `apply-recorded <hash>`, the box's own apply (no pass ID argument): it re-checks, and refuses naming each thing missing unless
 #      the check gives the hash, the ledger holds a reviewer pass for the job, commit and hash, and an unused go for the job and
 #      commit. A pass or go for another hash, commit or job does not count; the wrong recorder is refused; a go line (by its message ID) is spent by one apply, and a new go line at the same commit works once.
+#  13. `check firewall` runs proxmox-firewall.yml with the checkout's VLAN file; the other jobs don't get it.
 #   9. Nothing printed holds a diff's text or the host's address; log prints the summary lines.
 # Usage: .github/hosts-check/tests/test_proxmox_host_args.sh   (needs git and python3)
 set -uo pipefail
@@ -231,5 +232,15 @@ job ledger > "$t/12h.out" 2>&1
 if grep -q "\"relay_ref\": \"$ref1\"" "$t/12h.out" && grep -q "\"relay_ref\": \"$ref2\"" "$t/12h.out" && grep -q '^(used: ' "$t/12h.out"; then
   ok "12 ledger prints the lines, marks the spent go"; else bad "12h $(cat "$t/12h.out")"; fi
 if grep -q -e '192.0.2.10' -e 'secret-name' "$t"/12?.out "$t/work/ledger"/* 2>/dev/null; then bad "12 private text printed or stored"; else ok "12 no private text in the output or the ledger"; fi
+
+# 13
+: > "$t/calls"
+job check firewall > "$t/13a.out" 2>&1; rc13=$?
+c13=$(cat "$t/calls"); : > "$t/calls"
+job check > /dev/null 2>&1; c13b=$(cat "$t/calls")
+if [ $rc13 = 0 ] && [[ $c13 == *playbooks/proxmox-firewall.yml* && $c13 != *"--tags"* && $c13 == *"-e @$t/work/checkout/hosts/ansible/inventories/home/group_vars/all/vlans.yml"* ]] &&
+   [[ $c13b != *vlans.yml* ]]; then
+  ok "13 the firewall job runs proxmox-firewall.yml with the VLAN file; the proxy job doesn't get it"
+else bad "13 rc=$rc13 [$c13] [$c13b] $(cat "$t/13a.out")"; fi
 
 exit "$fail"

@@ -210,6 +210,8 @@ Built by [D-0063](../decisions/0063-let-the-agent-box-hold-the-keys-that-guard-i
 3. The reviewer records its pass: `opnsense-prod.sh pass <commit> <hash> <pass message ID> <ISO time> reviewer`. The orchestrator records the go: `opnsense-prod.sh go <commit> <go message ID> <ISO time> orchestrator`, where the message ID is the owner's standing go (D-0061 rule 3).
 4. `opnsense-prod.sh apply-recorded <hash>`. It re-checks main's head and refuses, naming what is missing, unless the hash matches and the ledger holds the pass and an unused go.
 
+The Proxmox host's firewall (step 8's `--tags firewall` run; on the box it is `playbooks/proxmox-firewall.yml`, that role alone) goes the same way through the host job: `sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check firewall`, then `pass firewall ...` and `go firewall ...`, then `apply-recorded firewall <hash>`. Its values (`proxmox_firewall_home_lan_cidr`, `proxmox_firewall_enable`, `proxmox_firewall_extra_rules` and the nodes the checks probe) come from the host job's inventory, which a controller run with `--tags proxmox_host_inventory` writes from the controller's entry for the host. The dead-man timer guards it as it does from the controller.
+
 expect: `applied check <hash> (...)`, and a line in `opnsense-prod.sh log`. The playbook has no rollback of its own: if an apply cuts the box off, use the box's lifeline and the daily configuration backup ([Give the agent box a lifeline](set-up-the-box-lifeline.md)).
 
 ## If it fails

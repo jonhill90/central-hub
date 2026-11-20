@@ -1,7 +1,7 @@
 # The Proxmox host job (D-0041 rules 2, 4, 6 and 7; Library plans/r1-host-job/DESIGN.md v3.1). It runs only when
 # started by hand (workflow_dispatch), only from main, on the box's own runner; the box's `proxmox-host` wrapper
 # does the work as its own user, with a key this workflow never sees. It runs one of the wrapper's three named
-# playbooks (input `job`: proxy, sso or agent-access) and nothing else. No pull_request trigger of any kind.
+# playbooks (input `job`: proxy, sso, agent-access or firewall) and nothing else. No pull_request trigger of any kind.
 #   check  runs the playbook with --check --diff and prints the commit, the hash and counts of tasks.
 #   apply  checks again, refuses unless the hash is the one the agents passed, then runs the playbook.
 # GitHub's run log is public, so the wrapper prints only the commit, the hash, counts and pass or fail.
@@ -10,10 +10,10 @@ on:
   workflow_dispatch:
     inputs:
       job:
-        description: "which playbook: proxy (the Proxmox web UI on 443), sso (sign-in through Keycloak) or agent-access (the agents' Proxmox rights); the same names as the wrapper's"
+        description: "which playbook: proxy (the Proxmox web UI on 443), sso (sign-in through Keycloak), agent-access (the agents' Proxmox rights) or firewall (the host firewall, D-0063); the same names as the wrapper's"
         type: choice
         default: proxy
-        options: [proxy, sso, agent-access]
+        options: [proxy, sso, agent-access, firewall]
       action:
         description: "check prints a hash; apply runs the playbook when the check gives the hash the agents passed"
         type: choice
