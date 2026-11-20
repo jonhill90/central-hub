@@ -23,3 +23,8 @@ proxmox:
       proxmox_firewall_extra_rules: {{ __pf.proxmox_firewall_extra_rules | default([]) | to_json }}
       proxmox_firewall_check_targets: {{ (groups['k8s_nodes'] | default([])) | map('extract', hostvars) | map(attribute='ansible_host', default='') | select | list | to_json }}
 {% endif %}
+{% if agent_box_proxmox_host_restic_reader | length > 0 %}
+      # Role proxmox_restic_sftp (job restore-reader): the read-only backup user's keys, each {key, from}: one ssh public key line and
+      # the one address it works from (a dev worker's). The key lines are public.
+      proxmox_restic_reader_keys: {{ agent_box_proxmox_host_restic_reader | to_json }}
+{% endif %}

@@ -1,6 +1,6 @@
 #!/bin/bash
 # /usr/local/libexec/agent-box/proxmox-host.sh: the pipeline job for the Proxmox host's web UI proxy (D-0041; Library
-# plans/r1-host-job/DESIGN.md v3.1). It runs one of three named playbooks from main, and nothing else, on the Proxmox
+# plans/r1-host-job/DESIGN.md v3.1). It runs one of the named playbooks from main, and nothing else, on the Proxmox
 # host as root, with the key in /etc/agent-keys-host/. It runs as user `hostops` through sudo, so no session and no
 # other wrapper can read that key. Installed by the agent_box role; root owns it.
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check [<job>]
@@ -11,8 +11,11 @@
 #   proxmox-agent-access.yml: it copies hosts/terraform/home/bootstrap/agent-access.sh from the same commit to the host and
 #   runs it as root, so the agents' Proxmox rights change by a reviewed PR and no longer need the Mac) or `firewall`
 #   (playbooks/proxmox-firewall.yml, proxmox-safety.yml's firewall role alone: the host firewall, with the role's dead-man timer and its
-#   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller) or `guests`
-#   (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell).
+#   checks before and after, D-0063 rule 4; its private values come from this job's inventory, written by the controller),
+#   `guests` (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell)
+#   or `restore-reader` (playbooks/proxmox-restic-reader.yml: the proxmox_restic_sftp role's read-only user `c1restore` and the keys
+#   that sign in as it, one per dev worker, each only from its own address; the list is in this job's inventory, written by the
+#   controller. An access right, and the only one this job can grant: no write, no shell, no root).
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh log
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh guard arm|confirm|rollback|clear|status
 # guard: the firewall VM's way back (playbooks/opnsense-guard.yml, D-0063 rule 4): a snapshot of the firewall's VM and a timer on
@@ -52,7 +55,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -61,7 +64,7 @@ result=$work/state/check.json
 ledger=$work/ledger
 usage() {
   echo "       proxmox-host guard arm|confirm|rollback|clear|status" >&2
-  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall]|apply [proxy|agent-access|sso|firewall] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
+  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|restore-reader]|apply [proxy|agent-access|sso|firewall|guests|restore-reader] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
   echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
   exit 2
 }

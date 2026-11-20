@@ -349,6 +349,10 @@ agent_box_proxmox_host: {}
 # controller also writes {{ agent_box_host_dir }}/proxmox-sso.env, the one PROXMOX_CLIENT_SECRET line of the controller's
 # identity.env, owner agent_box_host_user, mode 0600. Empty: no such file, and the sso job refuses to run.
 agent_box_proxmox_host_sso: {}
+# Private, through the controller's inventory, for the host job's `restore-reader` job (role proxmox_restic_sftp): a list of
+# {key: "ssh-ed25519 AAAA... comment", from: the dev worker's IPv4}. Written into the job's inventory as proxmox_restic_reader_keys.
+# Empty: the job refuses to run.
+agent_box_proxmox_host_restic_reader: []
 # Any other top-level settings, merged over the rest (for example autoUpdatesChannel).
 agent_box_managed_settings_extra: {}
 # When the weekly `ci-runner weekly` run starts (systemd OnCalendar): it reinstalls the merged pin on
