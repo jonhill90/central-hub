@@ -11,13 +11,17 @@ printed, never their contents: the policy holds the Proxmox host's address and o
 that is not a plain word is printed as `(unnamed)`. Exit 0 on any answer it could give, 1 when the plan or a
 policy cannot be read (the line then says why, without content).
 
-Usage: tofu show -json plan.tfplan | python3 -I policy_sections.py
+Usage: tofu show -json plan.tfplan | python3 -I policy_sections.py [--attributes]
+
+With --attributes it prints instead the names of the resource's attributes that differ (TASK-0385: a plan that says "1 to change"
+with no section differing).
 """
 import json
 import re
 import sys
 
 PLAIN = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,40}$")
+ATTR = re.compile(r"^[a-z][a-z0-9_]{0,60}$")
 MISSING = object()
 
 
@@ -79,8 +83,23 @@ def changed_sections(plan):
     return ", ".join(k if PLAIN.match(k) else "(unnamed)" for k in differ) or "none"
 
 
+def changed_attributes(plan):
+    """Names of the tailscale_acl attributes whose planned value differs from the live one, `acl` included when its text
+    differs even though the data does not (the provider compares formatted text, so comments and spacing count). Names only."""
+    acls = [r for r in plan.get("resource_changes", []) if r.get("type") == "tailscale_acl"]
+    if not acls:
+        return "none"
+    change = acls[0].get("change", {})
+    before, after = change.get("before") or {}, change.get("after") or {}
+    names = sorted(k for k in set(before) | set(after) if before.get(k, MISSING) != after.get(k, MISSING))
+    return ", ".join(k if ATTR.match(k) else "(unnamed)" for k in names) or "none"
+
+
 def main():
     try:
+        if "--attributes" in sys.argv[1:]:
+            print(changed_attributes(json.load(sys.stdin)))
+            return 0
         print(changed_sections(json.load(sys.stdin)))
         return 0
     except (ValueError, KeyError, TypeError, AttributeError) as e:

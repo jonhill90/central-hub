@@ -44,4 +44,13 @@ check "5. a key that is not a plain word" "(unnamed)" 0 "$(plan '{"a b": 1}' '{"
 check "6. no policy change in the plan" "none" 0 '{"resource_changes": [{"type": "null_resource", "change": {}}]}'
 check "7. no live policy text" "unknown: the plan has no live or no rendered policy text" 1 \
   '{"resource_changes": [{"type": "tailscale_acl", "change": {"before": null, "after": {"acl": "{}"}}}]}'
+# 8. --attributes names the attributes that differ, and not their values
+attrs() { printf '%s' "$1" | python3 -I "$s" --attributes; }
+out=$(attrs "$(plan "$live" "$same")")
+[[ $out == "acl" ]] && echo "ok   8a. formatting only: the acl text differs, the data does not" || { echo "FAIL 8a ($out)"; fail=1; }
+two='{"resource_changes": [{"type": "tailscale_acl", "change": {"before": {"acl": "{}", "reset_acl_on_destroy": false}, "after": {"acl": "{}", "reset_acl_on_destroy": true, "overwrite_existing_content": true}}}]}'
+out=$(attrs "$two")
+[[ $out == "overwrite_existing_content, reset_acl_on_destroy" ]] && echo "ok   8b. two non-text attributes named" || { echo "FAIL 8b ($out)"; fail=1; }
+out=$(attrs '{"resource_changes": []}')
+[[ $out == "none" ]] && echo "ok   8c. no policy change: none" || { echo "FAIL 8c ($out)"; fail=1; }
 exit "$fail"

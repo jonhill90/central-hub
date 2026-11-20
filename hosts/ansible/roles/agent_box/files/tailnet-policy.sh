@@ -186,6 +186,8 @@ case $action in
     record "$hash" "$n" ok
     echo "tailnet-policy: plan $hash: $n"
     echo "tailnet-policy: policy sections that differ: ${sections:-unknown}"
+    attrs=$(tofu show -json "$plan" | python3 -I "$folder/policy_sections.py" --attributes) || true
+    echo "tailnet-policy: resource attributes that differ: ${attrs:-unknown}"
     echo "tailnet-policy: the owner's card for an apply names this commit (${commit:0:12}) and this plan hash ($hash)"
     ;;
   apply | apply-recorded)
