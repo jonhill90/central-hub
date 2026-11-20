@@ -93,7 +93,7 @@ rm -f "$t/test-login.json" "$t/extra.json"
 if python3 -I - "$t/extra.json" "$t/test-login.json" <<'PY'
 import json, os, stat, sys
 e, k = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
-assert e["desktop_test_login"] is True and e["desktop_rdp_extra_sources"] == ["127.0.0.1/32"]
+assert e["desktop_test_login"] is True and e["desktop_lock_admin"] is False and e["desktop_rdp_extra_sources"] == ["127.0.0.1/32"]
 assert e["desktop_test_login_password"] == k["login_password"] and e["desktop_test_rdp_password"] == k["rdp_password"]
 assert k["login_password"] != k["rdp_password"] and len(k["rdp_password"]) >= 24
 assert stat.S_IMODE(os.stat(sys.argv[2]).st_mode) == 0o600 and stat.S_IMODE(os.stat(sys.argv[1]).st_mode) == 0o600

@@ -4,7 +4,7 @@
 # asks for it never sees the Proxmox token or the VM's SSH key. Installed by the agent_box role;
 # root owns it.
 #   sudo -n -u keys /usr/local/libexec/agent-box/desktop.sh plan|apply|configure|destroy
-#   sudo -n -u keys /usr/local/libexec/agent-box/desktop.sh configure-test|start|stop|status|rdp-check
+#   sudo -n -u keys /usr/local/libexec/agent-box/desktop.sh configure-test|start|stop|status|rdp-check|diag
 # configure-test is configure for a VM that is a test build: the box makes two random passwords (login and
 # RDP, kept in the keys folder, never printed), the role sets them without the console and lets RDP in from
 # the box's own address too, so rdp-check can prove the RDP service from the box. The owner's own desktop is a
@@ -19,8 +19,8 @@ set -euo pipefail
 umask 077
 
 case ${1:-} in
-  plan | apply | configure | destroy | configure-test | start | stop | status | rdp-check) action=$1 ;;
-  *) echo "usage: desktop plan|apply|configure|destroy|configure-test|start|stop|status|rdp-check" >&2; exit 2 ;;
+  plan | apply | configure | destroy | configure-test | start | stop | status | rdp-check | diag) action=$1 ;;
+  *) echo "usage: desktop plan|apply|configure|destroy|configure-test|start|stop|status|rdp-check|diag" >&2; exit 2 ;;
 esac
 
 keys=/etc/agent-keys
@@ -154,7 +154,8 @@ if sys.argv[6]:
     u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); u.connect((s["address"], 3389))
     extra = json.load(open(sys.argv[3]))
     extra.update({"desktop_test_login": True, "desktop_test_login_password": login,
-                  "desktop_test_rdp_password": rdp, "desktop_rdp_extra_sources": [u.getsockname()[0] + "/32"]})
+                  "desktop_test_rdp_password": rdp, "desktop_lock_admin": False,
+                  "desktop_rdp_extra_sources": [u.getsockname()[0] + "/32"]})
     fd = os.open(sys.argv[3], os.O_WRONLY | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(extra, f)
@@ -225,7 +226,17 @@ print("desktop rdp-check: RDP service answers; no login was tried")
 PY
 }
 
+# Read-only look inside a TEST build: configure-test leaves the admin key and ssh in place (the test VM is
+# destroyed after the check, and the owner's build is a plain configure that removes both). Runs fixed commands only.
+diag() {
+  [[ -f $keys/desktop-test-login ]] || { echo "desktop diag: only for a test build (no test login file: this VM is the owner's build)" >&2; exit 1; }
+  ssh -n -i "$sshkey" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$work/.ssh/known_hosts" -o BatchMode=yes -o ConnectTimeout=15 \
+    "$(python3 -I -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s.get("admin_user","admin")+"@"+s["address"])' "$settings")" \
+    'systemctl is-active gnome-remote-desktop.service desktop-rdp.path gdm.service firewalld; systemctl status gnome-remote-desktop.service --no-pager -l | head -30; journalctl -u gnome-remote-desktop -u desktop-rdp.path -b --no-pager | tail -40; ss -ltn | grep -E "3389|State"; ls -l /var/lib/desktop/ /etc/gnome-remote-desktop/ /var/lib/gnome-remote-desktop/ 2>&1 | head -30; firewall-cmd --list-all'
+}
+
 case $action in
+  diag) mkdir -p "$work/.ssh"; diag ;;
   configure) configure ;;
   configure-test) test_login=1 configure ;;
   status | start | stop) vm_power "$action" ;;
