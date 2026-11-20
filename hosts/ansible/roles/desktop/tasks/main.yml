@@ -12,10 +12,18 @@
     fail_msg: set desktop_rdp_source (the tailnet connector's address) and desktop_admin_user in the inventory
     quiet: true
 
+# On a freshly booted VM the first dnf run lost a cache file mid-install on 2026-11-19 and again, on every first try,
+# on 2026-11-20 ("No such file or directory: /var/cache/dnf/baseos-.../kernel-core-....rpm"), and the second run passed.
+# The cause is not measured (a background dnf job or cloud-init on the new VM is the guess), so the task tries again,
+# up to three times, instead of failing the whole run; the dnf module rebuilds its cache on each try.
 - name: desktop | The desktop packages
   ansible.builtin.dnf:
     name: "{{ desktop_packages }}"
     state: present
+  register: desktop_packages_result
+  until: desktop_packages_result is succeeded
+  retries: 3
+  delay: 20
 
 # No password yet: the account's password stays locked until the owner sets it at the console.
 - name: desktop | The login user, password locked

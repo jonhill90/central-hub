@@ -93,7 +93,7 @@ rm -f "$t/test-login.json" "$t/extra.json"
 if python3 -I - "$t/extra.json" "$t/test-login.json" <<'PY'
 import json, os, stat, sys
 e, k = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
-assert e["desktop_test_login"] is True and e["desktop_rdp_extra_sources"] == ["127.0.0.1/32"]
+assert e["desktop_test_login"] is True and e["desktop_lock_admin"] is False and e["desktop_rdp_extra_sources"] == ["127.0.0.1/32"]
 assert e["desktop_test_login_password"] == k["login_password"] and e["desktop_test_rdp_password"] == k["rdp_password"]
 assert k["login_password"] != k["rdp_password"] and len(k["rdp_password"]) >= 24
 assert stat.S_IMODE(os.stat(sys.argv[2]).st_mode) == 0o600 and stat.S_IMODE(os.stat(sys.argv[1]).st_mode) == 0o600
@@ -129,6 +129,13 @@ out=$(bash -c "set -euo pipefail; setting() { echo 127.0.0.1; }; source '$t/rdp-
 n=$(grep -c 'rm -f "\$keys/desktop-test-login"' "$wrapper")
 [[ $n -eq 2 ]] && echo "ok   destroy and plain configure both delete the test login file" || { echo "FAIL: the test login file is deleted in $n place(s), want 2"; fails=$((fails + 1)); }
 grep -q 'status/shutdown' "$wrapper" && echo "ok   desktop stop asks the VM to shut down" || { echo "FAIL: no desktop stop"; fails=$((fails + 1)); }
+
+# The package install is retried: the first dnf run on a fresh VM loses a cache file (2026-11-19 and 11-20).
+python3 -I - "$here/hosts/ansible/roles/desktop/tasks/main.yml" <<'PY' && echo "ok   the desktop package task is retried" || { echo "FAIL: the desktop package task has no retry"; fails=$((fails + 1)); }
+import sys, yaml
+t = [x for x in yaml.safe_load(open(sys.argv[1])) if x.get("name") == "desktop | The desktop packages"][0]
+assert t["retries"] >= 3 and "until" in t
+PY
 
 if [[ $fails -gt 0 ]]; then echo "desktop configure vars: $fails test(s) failed"; exit 1; fi
 echo "desktop configure vars: all tests passed"
