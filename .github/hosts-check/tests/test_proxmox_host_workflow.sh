@@ -41,4 +41,14 @@ for job in $have; do
   got=$(tr '\n' '|' < "$t/calls")
   [ "$got" = "check $job|apply $job cmsg_0123456789abc 0123456789ab|" ] && ok "job $job: check and apply reach the wrapper with the job first" || bad "job $job: the wrapper got [$got]"
 done
+# 3. Job restore-reader runs the reader playbook, and that playbook grants the read-only user only: it sets the reader's keys
+#    and never the writer's (a write login on the backup disk is a different right and needs its own job).
+pb=$root/hosts/ansible/playbooks/proxmox-restic-reader.yml
+grep -Eq '^declare -A jobs=.*\[restore-reader\]=playbooks/proxmox-restic-reader\.yml[ )]' "$wrapper" \
+  && ok "job restore-reader runs playbooks/proxmox-restic-reader.yml" || bad "job restore-reader does not run playbooks/proxmox-restic-reader.yml"
+if grep -q 'proxmox_restic_sftp_set_reader: true' "$pb" && ! grep -Eq 'set_writer|writer_keys' "$pb"; then
+  ok "the reader playbook sets the reader's keys and never the writer's"
+else
+  bad "the reader playbook must set set_reader true and must not mention set_writer or writer_keys"
+fi
 exit "$fail"
