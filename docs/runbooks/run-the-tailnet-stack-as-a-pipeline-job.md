@@ -51,7 +51,7 @@ A session on the box can also apply a saved plan with no workflow and no card, t
 2. The reviewer records its pass: `tailnet-stack.sh pass <commit> <hash> <pass message ID> <ISO time> reviewer`. The orchestrator records the go: `tailnet-stack.sh go <commit> <go message ID> <ISO time> orchestrator`, with the owner's standing go (D-0061 rule 3).
 3. `tailnet-stack.sh apply-recorded <hash>`. It applies the saved plan only if its hash is the one named, main has not moved since, and the ledger holds the pass and an unused go; otherwise it names what is missing and applies nothing.
 
-expect: `applied plan <hash> (...)`, then `plan` again shows `0 to add, 0 to change, 0 to destroy`. A ledger line proves a recorder's word and its message ID, not the owner's; a reviewing agent checks the IDs. The card-ID `apply` stays the workflow's.
+expect: `applied plan <hash> (...), reviewer pass <ID>, go <ID>`, then `plan` again shows `0 to add, 0 to change, 0 to destroy`. A ledger line proves a recorder's word and its message ID, not the owner's; a reviewing agent checks the IDs. The card-ID `apply` stays the workflow's.
 
 ## What it refuses
 

@@ -212,7 +212,11 @@ PY
     if tofu apply -input=false -no-color "$plan" >> "$raw" 2>&1; then
       rm -f "$plan" "$meta"
       record "$have" "$n" ok
-      echo "tailnet-stack: applied plan $have ($n), card $card"
+      if [[ $action == apply-recorded ]]; then
+        echo "tailnet-stack: applied plan $have ($n), reviewer pass $card, go $go_ref"
+      else
+        echo "tailnet-stack: applied plan $have ($n), card $card"
+      fi
     else
       record "$have" "$n" "FAIL: apply"
       echo "tailnet-stack: FAIL: apply of plan $have (details in the box's log $raw)" >&2; exit 1
