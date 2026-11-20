@@ -1,0 +1,63 @@
+---
+# Read-only status of c1's off-box backups, for the agent box's `c1-ansible check|apply backup-status`
+# (plan step 5, TASK-0296).
+# It changes nothing on a node: every task only reads, and restic runs with --no-lock and --no-cache, so it writes no lock into the
+# repository and no cache on the node.
+# It prints each node's timers, the last result of each backup service, the PASS and FAIL lines of the last 3 days from the
+# journal, and the repository's snapshots (id, time, tags), so a session can say whether backups run and where they go.
+# The env file is sourced in a subshell that prints only the repository's scheme and path, with any user:password in a URL removed.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-backup-status.yml
+- name: What the nodes' backups did
+  hosts: k8s_nodes
+  become: true
+  gather_facts: false
+  vars:
+    k8s_backup_status_bin: /usr/local/libexec/central-hub-backup
+  tasks:
+    - name: Timers and the last result of each backup service
+      ansible.builtin.shell: |
+        set -o pipefail
+        systemctl list-timers 'c1-*' --all --no-pager || true
+        for u in c1-backup-etcd c1-backup-volumes c1-restore-test; do
+          systemctl show "$u.service" -p Result -p ExecMainStatus -p ExecMainExitTimestamp 2>/dev/null | sed "s/^/$u: /"
+        done
+      args:
+        executable: /bin/bash
+      register: k8s_backup_status_timers
+      changed_when: false
+      check_mode: false
+
+    - name: The journal's PASS, FAIL and ERROR lines of the last 3 days
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        journalctl -u c1-backup-etcd -u c1-backup-volumes -u c1-restore-test --since -3d --no-pager 2>/dev/null
+        | grep -E 'PASS|FAIL|ERROR|Fatal|recorded' | cut -c1-240 | tail -n 40; true
+      args:
+        executable: /bin/bash
+      register: k8s_backup_status_journal
+      changed_when: false
+      check_mode: false
+
+    - name: The repository the env file names, and its snapshots
+      ansible.builtin.shell: |
+        set -o pipefail
+        [ -r /etc/central-hub/backup.env ] || { echo "no /etc/central-hub/backup.env"; exit 0; }
+        (set -a; . /etc/central-hub/backup.env
+         echo "repository: ${RESTIC_REPOSITORY%%:*}:$(printf '%s' "${RESTIC_REPOSITORY#*:}" | sed -E 's#//[^/@]*@#//#' | cut -c1-80)"
+         {{ k8s_backup_status_bin }}/restic snapshots --no-lock --no-cache --compact 2>&1 | cut -c1-200 | tail -n 25)
+      args:
+        executable: /bin/bash
+      register: k8s_backup_status_snapshots
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Print it
+      ansible.builtin.debug:
+        msg: |
+          == {{ inventory_hostname }} timers ==
+          {{ k8s_backup_status_timers.stdout }}
+          == {{ inventory_hostname }} journal ==
+          {{ k8s_backup_status_journal.stdout }}
+          == {{ inventory_hostname }} repository and snapshots ==
+          {{ k8s_backup_status_snapshots.stdout }}

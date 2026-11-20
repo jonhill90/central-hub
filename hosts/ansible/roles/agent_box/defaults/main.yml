@@ -42,7 +42,8 @@ agent_box_wrappers:
     args: [key, check, "seal *", "seal-copy *", l2-policy, gitops, ca, handover, "refresh *", "reset-failed-start *",
            "drop-box-path *", admin-firewall-check, "admin-firewall *", log]
   # Applies one named Ansible playbook to prod's c1 with the box's own prod node key (files/c1-ansible.sh). check is
-  # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The names are identity, gateway, gitops, observability, users and clients.
+  # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The names are identity, gateway, gitops,
+  # observability, users, clients and backup-status (read-only: the nodes' backup timers, journal and snapshots).
   - name: c1-ansible
     args: [list, "check *", "apply *", log]
   # The three scripted sign-in checks (Jellyfin, Argo CD, Proxmox) against prod with the test user (files/signin-check.sh). It runs as

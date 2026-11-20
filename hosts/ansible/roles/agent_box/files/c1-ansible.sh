@@ -43,7 +43,9 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # role's keycloak tag does that and this name does not run it). The user must be in the private inventory's k8s_identity_extra_users,
 # or the run stops at user-json.py; a user already there is left as it is. The secrets tag also adds a random password and seed to the
 # box's own identity.env for a key it lacks, and writes the realm's Secret in c1.
-declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml)
+# backup-status: reads the c1 nodes' backup timers, last results, journal PASS/FAIL lines and restic snapshots (playbooks/k8s-backup-status.yml:
+# every task only reads; restic runs with --no-lock). It changes nothing, so check and apply both read; it runs no backup and no restore.
+declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file)
 # Fixed extra variables per name. identity never replaces realm lab on prod: the role's default deletes the realm and

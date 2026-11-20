@@ -292,6 +292,12 @@ Keycloak's PostgreSQL sits on a hand-made local volume, the folder `/var/lib/cen
 
 why: a dump is consistent by itself (agent pick 190), so the move needs no file copy. The gain is small and says so: prod's rebuild already restores from the same dump (`rebuild-k8s-layer-with-one-command.md`), so what changes is one storage path for every database on c1, one folder in the backup list, and no hand-made volume. Steps 3 and 6 delete things, so on prod they wait for the owner's go (D-0042 rule 6; D-0061 once accepted). Prod runs this only as a coded, named `c1-ansible` playbook, which does not exist yet; a dev run comes first.
 
+## Read the backups' state from the agent box
+
+From the box, `sudo -n -u keys /usr/local/libexec/agent-box/c1-ansible.sh check backup-status` runs `playbooks/k8s-backup-status.yml` on each prod node. It only reads: the `c1-*` timers, each backup service's last result, the PASS, FAIL and ERROR lines of the last 3 days from the journal, and `restic snapshots --no-lock` on the repository the env file names (the scheme and path only; never a password). `c1-ansible log` prints the run's lines. A repository of `azure:` means the node still targets Azure; `sftp:c1-backup-target:/c1` means the Proxmox host. Nothing is changed, so it needs no go; adding the name is a box-limit change (a digest pass).
+
+why: until this name, the box had no path to a node's timers or journal, so "are backups running" could be answered only from the Mac.
+
 ## Know when a backup stops
 
 Every backup and restore test that ends well writes its time for Prometheus: `c1_backup_last_success_timestamp_seconds{kind="volumes"}` (and `etcd`, `restore-test-volumes`, `restore-test-etcd`) in `c1-backup-<kind>.prom` in `k8s_backup_metrics_dir` (`/var/lib/node-exporter/textfile`, mode 0755). That is `backup_mark_success` in `c1-backup-lib.sh`. A run that fails writes nothing, so its time grows old. kube-prometheus-stack's node-exporter reads the folder with its textfile collector, through the chart's read-only host root mount at `/host/root`. App `monitoring-extras` then raises:

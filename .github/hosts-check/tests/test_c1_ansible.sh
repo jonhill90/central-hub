@@ -9,6 +9,7 @@
 #      refuses before any run.
 #  11. clients runs the identity playbook with tags secrets,clients, the values file, no realm replace and the one fixed client; it
 #      never runs the operator, database or keycloak tags; apply is its own verb and needs a clearance id.
+#  12. backup-status runs its read-only playbook with no tags, no extra variables and no values file, on the box's inventory copy.
 #   5. log prints the run's own lines.
 #   9. users runs the identity playbook with tags secrets,users, the values file, no realm replace and one fixed user; apply is its
 #      own verb; it never runs the keycloak tag.
@@ -36,7 +37,7 @@ cat > "$t/bin/git" <<'S'
 #!/bin/bash
 case "$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
+  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
   *rev-parse*) echo abc1234 ;;
 esac
 exit 0
@@ -78,7 +79,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'clients\ngateway\ngitops\nidentity\nobservability\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'backup-status\nclients\ngateway\ngitops\nidentity\nobservability\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -126,6 +127,12 @@ for args in "check certs" "check k8s-certs" "apply certs $clr" "check gitops-ins
   run $args; r7+="$rc:${calls:-none} "
 done
 if [[ $r7 == "2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "7b. certs and install are not names; apply needs a clearance id"; else bad "7b. $r7"; fi
+run check backup-status; b1=$calls; b1rc=$rc
+if [[ $b1rc -eq 0 && $b1 == *"playbooks/k8s-backup-status.yml --check --diff" && $b1 != *" -e "* && $b1 != *--tags* ]]; then
+  ok "12. backup-status: its own playbook, no tags, no extra variables"
+else bad "12. $b1rc [$b1]"; fi
+grep -q "check_mode: false" hosts/ansible/playbooks/k8s-backup-status.yml && ! grep -E "^\s+(ansible.builtin.(copy|file|template|systemd|service|lineinfile)):" hosts/ansible/playbooks/k8s-backup-status.yml >/dev/null \
+  && ok "12b. the playbook only reads: every command task is check_mode false and none writes a file or service" || bad "12b. the playbook writes"
 run check observability; o1=$calls
 run apply observability "$clr"; o2=$calls; o2rc=$rc; o2o=$out
 if [[ $o1 == *"playbooks/k8s-observability.yml --tags metrics_server,metrics,logs,route,proof --check --diff" && $o1 != *" -e "* &&
