@@ -3,7 +3,7 @@ title: Serve the Proxmox web UI on port 443
 status: draft
 kind: manual
 trigger: once, after the Proxmox host's certificate is set (proxmox-cert.yml); again after each certificate renewal, at least every 30 days
-runner: the host job, workflow `lab-proxmox-host` on the agent box's runner through wrapper `proxmox-host` (pick 241); it runs one of three named playbooks, chosen by the workflow's `job` input (`proxy`, `sso`, `agent-access`), and nothing else. Built, not installed, so until the install below nothing applies this playbook
+runner: the host job, workflow `lab-proxmox-host` on the agent box's runner through wrapper `proxmox-host` (pick 241); it runs one of the named playbooks, chosen by the workflow's `job` input (`proxy`, `sso`, `agent-access`, `firewall`, `restore-reader`), and nothing else. Built, not installed, so until the install below nothing applies this playbook
 outcome: the Proxmox web UI answers on https://pve.<zone> with the lab certificate, on port 443 with no port in the address, served by Apache httpd; port 80 redirects to it; port 8006 stays as the fallback and the agent box's lifeline
 needs: the host's certificate from the lab CA (role proxmox_cert, playbook proxmox-cert.yml) with a DNS name for the host's web UI that resolves from where the owner browses; the host firewall rows for 443 and 80 (the same sources as 8006); the host job installed (below), which needs the owner's tap; python3-apt on the host for the check run
 private-values: [proxmox-cert-names, agent-box-proxmox-host, agent-box-lifeline-address, agent-box-lifeline-allow]

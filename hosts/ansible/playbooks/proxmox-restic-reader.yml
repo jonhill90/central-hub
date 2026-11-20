@@ -1,0 +1,31 @@
+---
+# The Proxmox host's read-only backup user alone: the proxmox_restic_sftp role with the reader's keys, which come from this
+# job's inventory (proxmox_restic_reader_keys, written by the controller), never from the repository. The agent box's host
+# job `restore-reader` runs this. Each key works only from its own address (`restrict`, from=), and the user can only read:
+# internal-sftp -R. Root is refused from those addresses too. The controller can run it the same way:
+#   ansible-playbook -i inventories/home/ playbooks/proxmox-restic-reader.yml --check --diff
+- name: Proxmox host, the read-only backup user's keys
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  tasks:
+    - name: The key list is there
+      ansible.builtin.assert:
+        that:
+          - proxmox_restic_reader_keys | default([]) | length > 0
+          - >-
+            proxmox_restic_reader_keys | map(attribute='key', default='') | select('match', '^ssh-ed25519 [A-Za-z0-9+/=]+( .*)?$')
+            | list | length == proxmox_restic_reader_keys | length
+          - >-
+            proxmox_restic_reader_keys | map(attribute='from', default='') | select('match', '^([0-9]{1,3}[.]){3}[0-9]{1,3}$')
+            | list | length == proxmox_restic_reader_keys | length
+        fail_msg: "proxmox_restic_reader_keys needs items with key (an ssh-ed25519 public key line) and from (one IPv4 address)"
+        quiet: true
+
+    - name: The reader user, its keys and the sshd settings
+      ansible.builtin.include_role:
+        name: proxmox_restic_sftp
+      vars:
+        proxmox_restic_sftp_set_reader: true
+        proxmox_restic_sftp_reader_keys: "{{ proxmox_restic_reader_keys }}"
+        proxmox_restic_sftp_no_root_from: "{{ proxmox_restic_reader_keys | map(attribute='from') | list }}"
