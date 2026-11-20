@@ -138,10 +138,19 @@ if [[ $r1 == *"playbooks/k8s-backup-restore-test.yml --check --diff" && $r2rc -e
   ok "13. backup-restore-test: own playbook, no tags or extra variables, check starts nothing, apply needs a clearance id"
 else bad "13. [$r1] [$r2]"; fi
 run apply backup-restore-test; [[ $rc -eq 2 && -z $calls ]] && ok "13b. apply backup-restore-test without a clearance id runs nothing" || bad "13b. $rc [$calls]"
-run check backup-check; bc1=$calls; bc1rc=$rc
+cat > "$t/bin/ssh" <<'S'
+#!/bin/bash
+echo "ssh $*" >> "$SSH_LOG"
+case "${*: -1}" in *"cat /etc/central-hub/backup-ssh/known_hosts") echo "c1-backup-target ssh-ed25519 AAAAfakehostkey" ;; *) exit 1 ;; esac
+S
+chmod +x "$t/bin/ssh"; export SSH_LOG="$t/sshcalls"; : > "$SSH_LOG"
+run check backup-check; bc1=$calls; bc1rc=$rc; bc1out=$out
 run apply backup-check "$clr"; bc2rc=$rc bc2=$calls
 if [[ $bc1rc -eq 0 && $bc1 == *"playbooks/k8s-backup.yml"* && $bc1 == *"-e k8s_backup_env_file=$t/keys/c1-backup.env"* && $bc1 == *"--check --diff" &&
-      $bc2rc -eq 2 && -z $bc2 && $(grep -c 'k8s_backup_sftp_seed_dir: .*/backup-sftp' "$t/seen-inventory.yml") -ge 1 ]]; then
+      $bc2rc -eq 2 && -z $bc2 && $(grep -c 'k8s_backup_sftp_seed_dir: .*/backup-check-seed' "$t/seen-inventory.yml") -ge 1 &&
+      $bc1out == *"pinned host key was read from 1 node(s) (public keys only)"* && $bc1out == *"the host address was NOT found"* &&
+      $(cat "$t/work/state/backup-check-seed/cp-a.known_hosts") == "c1-backup-target ssh-ed25519 AAAAfakehostkey" &&
+      $(grep -c 'cat /etc/central-hub/backup-ssh/id_ed25519\|\.pub' "$SSH_LOG") -eq 0 ]]; then
   ok "14. backup-check: the backup playbook in check mode with the box's own env file and the seed folder; apply is refused"
 else bad "14. $bc1rc [$bc1] $bc2rc [$bc2]"; fi
 run check observability; o1=$calls
