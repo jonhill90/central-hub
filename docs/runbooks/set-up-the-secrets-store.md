@@ -207,7 +207,7 @@ expect:
 
 A box that has not installed the admin path's code yet ignores `admin_address`, so the order of this step and that install doesn't matter. Then a dev rebuild (`rebuild up`) passes the address on as `k8s_gitops_source_openbao_admin_address` (`rebuild.sh`), and the checks above follow. The `gateway` stage's L2 report then lists `openbao/openbao-admin` with policy `openbao-admin` and the seal node as its lease holder.
 
-### The store's names: openbao.<zone> and vault.<zone>
+### The store's names: `openbao` and `vault`
 
 The owner, 2026-11-20 07:31 UTC: OpenBao is to answer at `openbao` and `vault` names in the lab's zone. D-0058 rule 4 already has the store "reached by name on 443 like every c1 app"; no record forbids a web UI (the earlier `ui = false` and "no web UI" were a values choice in `apps/openbao/values.yaml`, not a record, and D-0046's evidence expects the UI). With root value `openbaoRoute` on (Ansible: `k8s_gitops_source_openbao_route`, which `openbao-prod gitops` always sets on prod), app `openbao-store` makes (`templates/route.yaml`):
 
