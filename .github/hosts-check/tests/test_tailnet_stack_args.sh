@@ -26,4 +26,8 @@ refuse "apply with a hash of capitals" apply "$card" 0123456789AB
 refuse "apply with a short hash" apply "$card" 0123456789a
 refuse "apply with a long hash" apply "$card" 0123456789abc
 refuse "apply with an extra argument" apply "$card" 0123456789ab extra
+refuse "apply-recorded with no hash" apply-recorded
+refuse "apply-recorded with a hash of capitals" apply-recorded 0123456789AB
+refuse "apply-recorded with an extra argument" apply-recorded 0123456789ab extra
+refuse "ledger with an extra argument" ledger now
 exit "$fail"
