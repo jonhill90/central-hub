@@ -1,0 +1,98 @@
+---
+# The firewall's way back for an apply from the agent box (D-0063 rule 4). OPNsense 26.7 has no savepoint or rollback in
+# its firewall API (26.1's FilterBaseController had savepoint, apply/<revision> and cancelRollback; 26.7's has none), so the
+# undo lives on the Proxmox host: a disk snapshot of the firewall's VM and a timer on the host that rolls the VM back to it
+# unless the apply is confirmed in time. The timer runs on the host, so it still fires when the change cuts the box off.
+# Run by the host job's wrapper (proxmox-host.sh guard <action>), which the firewall's wrapper (opnsense-prod.sh) calls
+# around each apply:
+#   arm      snapshot the VM and start the timer; refuses if a guard snapshot is already there (an earlier apply was neither
+#            confirmed nor cleaned up: look at it first)
+#   confirm  stop the timer and delete the snapshot: the apply is kept
+#   rollback stop the timer and roll the VM back to the snapshot now, then start it; the snapshot stays, so the next arm
+#            refuses until someone has looked
+#   status   print whether a guard snapshot and timer exist
+# A disk-only snapshot (no RAM): the rollback restarts the firewall, about a minute without the lab network.
+#   ansible-playbook -i <host inventory> playbooks/opnsense-guard.yml -e opnsense_guard_action=status
+- name: Firewall VM guard
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  vars:
+    opnsense_guard_vmid: 100   # hosts/terraform/home/firewall/main.tf
+    opnsense_guard_snapshot: agentguard
+    opnsense_guard_unit: opnsense-guard-rollback
+    opnsense_guard_minutes: 15
+  tasks:
+    - name: Check the action
+      ansible.builtin.assert:
+        that:
+          - opnsense_guard_action | default('') in ['arm', 'confirm', 'rollback', 'status']
+          - opnsense_guard_vmid | int > 0
+          - opnsense_guard_minutes | int >= 5
+        fail_msg: opnsense_guard_action is one of arm, confirm, rollback, status
+        quiet: true
+
+    - name: Read the VM's snapshots
+      ansible.builtin.command: qm listsnapshot {{ opnsense_guard_vmid | int }}
+      register: opnsense_guard_snapshots
+      changed_when: false
+      check_mode: false
+
+    - name: Read the timer
+      ansible.builtin.command: systemctl is-active {{ opnsense_guard_unit }}.timer  # noqa: command-instead-of-module (a read: is the timer armed)
+      register: opnsense_guard_timer
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Note what is there
+      ansible.builtin.set_fact:
+        opnsense_guard_has_snapshot: >-
+          {{ opnsense_guard_snapshots.stdout_lines | map('trim') | map('regex_replace', '^`-> ', '')
+             | map('split') | map('first') | select('equalto', opnsense_guard_snapshot) | list | length > 0 }}
+        opnsense_guard_armed: "{{ opnsense_guard_timer.stdout | trim == 'active' }}"
+
+    - name: Status
+      ansible.builtin.debug:
+        msg: "guard snapshot: {{ opnsense_guard_has_snapshot | ternary('yes', 'no') }}, timer: {{ opnsense_guard_armed | ternary('armed', 'off') }}"
+      when: opnsense_guard_action == 'status'
+
+    - name: Refuse to arm over an old guard snapshot
+      ansible.builtin.fail:
+        msg: >-
+          A guard snapshot is already there: an earlier apply was not confirmed, or it was rolled back. Look at the firewall,
+          then delete the snapshot by hand (qm delsnapshot) before the next apply.
+      when: opnsense_guard_action == 'arm' and opnsense_guard_has_snapshot | bool
+
+    - name: Snapshot the firewall VM
+      ansible.builtin.command: >-
+        qm snapshot {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }}
+        --description "before an apply from the agent box (D-0063)"
+      when: opnsense_guard_action == 'arm'
+      changed_when: true
+
+    - name: Start the timer that rolls the VM back unless the apply is confirmed
+      ansible.builtin.shell: |  # noqa: command-instead-of-module (systemd-run has no module)
+        set -e
+        systemctl reset-failed {{ opnsense_guard_unit }}.service 2>/dev/null || true
+        systemd-run --unit={{ opnsense_guard_unit }} \
+          --on-active={{ opnsense_guard_minutes | int }}min --timer-property=AccuracySec=1s \
+          /usr/sbin/qm rollback {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }} --start 1
+      when: opnsense_guard_action == 'arm'
+      changed_when: true
+
+    - name: Stop the timer
+      ansible.builtin.systemd:
+        name: "{{ opnsense_guard_unit }}.timer"
+        state: stopped
+      when: opnsense_guard_action in ['confirm', 'rollback'] and opnsense_guard_armed | bool
+
+    - name: Delete the guard snapshot (the apply is kept)
+      ansible.builtin.command: qm delsnapshot {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }}
+      when: opnsense_guard_action == 'confirm' and opnsense_guard_has_snapshot | bool
+      changed_when: true
+
+    - name: Roll the firewall VM back to the guard snapshot and start it
+      ansible.builtin.command: qm rollback {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }} --start 1
+      when: opnsense_guard_action == 'rollback'
+      changed_when: true

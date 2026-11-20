@@ -208,15 +208,25 @@ Built by [D-0063](../decisions/0063-let-the-agent-box-hold-the-keys-that-guard-i
 1. Merge the change to `main` (reviewed, green).
 2. `sudo -n -u guardops /usr/local/libexec/agent-box/opnsense-prod.sh check`. It prints `check <hash>: N changed, N skipped, N tasks` and the commit.
 3. The reviewer records its pass: `opnsense-prod.sh pass <commit> <hash> <pass message ID> <ISO time> reviewer`. The orchestrator records the go: `opnsense-prod.sh go <commit> <go message ID> <ISO time> orchestrator`, where the message ID is the owner's standing go (D-0061 rule 3).
-4. `opnsense-prod.sh apply-recorded <hash>`. It re-checks main's head and refuses, naming what is missing, unless the hash matches and the ledger holds the pass and an unused go.
+4. `opnsense-prod.sh apply-recorded <hash>`. It re-checks main's head and refuses, naming what is missing, unless the hash matches and the ledger holds the pass and an unused go. Then it arms the way back, runs the playbook, and confirms or rolls back (below).
 
 The Proxmox host's firewall (step 8's `--tags firewall` run; on the box it is `playbooks/proxmox-firewall.yml`, that role alone) goes the same way through the host job: `sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check firewall`, then `pass firewall ...` and `go firewall ...`, then `apply-recorded firewall <hash>`. Its values (`proxmox_firewall_home_lan_cidr`, `proxmox_firewall_enable`, `proxmox_firewall_extra_rules` and the nodes the checks probe) come from the host job's inventory, which a controller run with `--tags proxmox_host_inventory` writes from the controller's entry for the host. The dead-man timer guards it as it does from the controller.
 
-expect: `applied check <hash> (...)`, and a line in `opnsense-prod.sh log`. The playbook has no rollback of its own: if an apply cuts the box off, use the box's lifeline and the daily configuration backup ([Give the agent box a lifeline](set-up-the-box-lifeline.md)).
+expect: `proxmox-host: guard arm ...`, then `proxmox-host: guard confirm ...`, then `applied check <hash> (...)`, and a line in `opnsense-prod.sh log`.
+
+**The way back (D-0063 rule 4).** OPNsense 26.7's API has no savepoint or rollback (26.1's firewall API had `savepoint`, `apply/<revision>` and `cancelRollback`; 26.7's `FilterBaseController.php` has none), so the undo is on the Proxmox host, through the host job (`playbooks/opnsense-guard.yml`, run as `hostops`):
+
+- Before the playbook runs, `proxmox-host.sh guard arm` takes a disk snapshot of the firewall's VM (`agentguard`) and starts a timer on the host that runs `qm rollback <vmid> agentguard --start 1` after 15 minutes. It refuses if a guard snapshot is already there, and then nothing is applied.
+- After the run, the apply is kept only if a fresh check through the firewall's API works and the box still reaches GitHub through the firewall: then `guard confirm` stops the timer and deletes the snapshot.
+- If the playbook fails, changes a task the check did not show, or the confirm fails, the wrapper runs `guard rollback` at once. If the box can't reach the host to do that (the host job's SSH goes through the firewall), the host's timer does it. The rollback restarts the firewall: about a minute without the lab network.
+- After a rollback the snapshot stays, so the next apply refuses until someone has looked at what went wrong and deleted it on the host (`qm delsnapshot <vmid> agentguard`). `sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh guard status` shows whether a snapshot and a timer are there.
+
+If both the box and the host's timer fail, the box's lifeline and the daily configuration backup are still there ([Give the agent box a lifeline](set-up-the-box-lifeline.md)).
 
 ## If it fails
 
 - A `tofu apply` that fails part way: run `tofu plan` again and read it; each folder has its own state, so the others are untouched. `tofu destroy` in that folder removes only what it made.
+- An apply from the agent box that cut the box off: wait 15 minutes for the host's timer to roll the firewall's VM back, then check `proxmox-host.sh guard status` and read the apply's log on the box before deleting the snapshot.
 - Lost the firewall's API after step 7: use the console from step 5. The rules allow the home LAN to the mgmt gateway on tcp 443, so a wrong rule shows up as a timeout from the controller.
 - The host firewall locks you out: wait 10 minutes for the dead-man timer, or follow the rollback in [hosts/ansible/README.md, Host firewall](../../hosts/ansible/README.md#host-firewall).
 

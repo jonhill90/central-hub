@@ -9,6 +9,13 @@ Defaults:{{ agent_box_user }} env_reset
 {{ agent_box_user }} ALL=({{ w.run_as | default(agent_box_keys_user) }}) NOPASSWD: {{ __args | map('regex_replace', '^', agent_box_libexec_dir ~ '/' ~ w.name ~ '.sh ') | join(', ') }}
 {% endif %}
 {% endfor %}
+{% for w in agent_box_wrappers %}
+{% for c in w.callers | default([]) %}
+# {{ c.user }} may run {{ w.name }} as {{ w.run_as | default(agent_box_keys_user) }}, with these arguments only (another wrapper's own step).
+Defaults:{{ c.user }} env_reset
+{{ c.user }} ALL=({{ w.run_as | default(agent_box_keys_user) }}) NOPASSWD: {{ c.args | map('regex_replace', '^', agent_box_libexec_dir ~ '/' ~ w.name ~ '.sh ') | join(', ') }}
+{% endfor %}
+{% endfor %}
 {% if agent_box_self_apply | bool %}
 # box-apply (D-0036): the box applies its own role from reviewed main, as root, with plan or apply only.
 {{ agent_box_user }} ALL=(root) NOPASSWD: {{ agent_box_libexec_dir }}/box-apply.py plan, {{ agent_box_libexec_dir }}/box-apply.py apply

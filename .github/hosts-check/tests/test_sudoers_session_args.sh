@@ -5,10 +5,12 @@
 #   3. An empty session_args: the session user gets no line for that wrapper.
 #   4. The real wrapper list: tailnet-stack's session line has no apply, the runner's has it.
 #   5-6. pr-merge: sessions get `check *` only; pass-record: add, show, halt, resume; the runner gets neither.
-#   7. proxmox-host runs as its own user (run_as hostops): the session's line has check, check <job> and log, the runner's adds
-#      apply, and neither runs it as the keys user.
+#   7. proxmox-host runs as its own user (run_as hostops): the session's line has check, check <job>, log and guard status, the
+#      runner's adds apply, and neither runs it as the keys user.
 #   8-9. tailnet-policy: as guardops (D-0063), sessions get plan, the ledger actions, apply-recorded and log, the runner also the
 #        card-ID apply; vps-host: status and log only; the runner gets every action (D-0046).
+#   11. callers (D-0063 rule 4): guardops may run proxmox-host's guard arm, confirm, rollback and status as hostops, and nothing
+#       else; a session may run guard status only.
 # Usage: .github/hosts-check/tests/test_sudoers_session_args.sh   (needs python3 with jinja2 and pyyaml)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -46,7 +48,7 @@ ph = [w for w in d if w["name"] == "proxmox-host"][0]
 h = render([ph]).splitlines()
 hs = [l for l in h if l.startswith("sess ALL=")]
 hr = [l for l in h if l.startswith("run ALL=")]
-ses7 = "sess ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh " + x for x in ["check", "check *", "apply-recorded *", "pass *", "go *", "ledger", "ledger *", "log"])
+ses7 = "sess ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh " + x for x in ["check", "check *", "apply-recorded *", "pass *", "go *", "ledger", "ledger *", "log", "guard status"])
 run7 = "run ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh " + x for x in ["check", "check *", "apply *", "apply-recorded *", "pass *", "go *", "ledger", "ledger *", "log"])
 # The session line has no three-argument `apply`: that form takes a pass ID the box cannot check, so only the runner has it.
 print("7", hs == [ses7] and " apply *" not in hs[0], hr == [run7])
@@ -59,6 +61,9 @@ print("9", lines(vh, "sess") == ["sess ALL=(keys) NOPASSWD: /x/vps-host.sh statu
       lines(vh, "run") == ["run ALL=(keys) NOPASSWD: /x/vps-host.sh bootstrap, /x/vps-host.sh apply, /x/vps-host.sh secrets, /x/vps-host.sh secrets rotate, /x/vps-host.sh status, /x/vps-host.sh log"])
 oc = render([w for w in d if w["name"] == "opnsense-cert-check"])
 print("10", lines(oc, "sess") == ["sess ALL=(keys) NOPASSWD: /x/opnsense-cert-check.sh check, /x/opnsense-cert-check.sh status"], lines(oc, "run") == [])
+gl = [l for l in h if l.startswith("guardops ")]
+print("11", gl == ["guardops ALL=(hostops) NOPASSWD: " + ", ".join("/x/proxmox-host.sh guard " + x for x in ["arm", "confirm", "rollback", "status"])],
+      "Defaults:guardops env_reset" in h and not any("guard " in l for l in hr))
 PY
 )
 check() { # number, text
@@ -74,4 +79,5 @@ check 7 "7. proxmox-host: as hostops; the session checks and reads the log, only
 check 8 "8. tailnet-policy: as guardops, the session gets plan, the ledger and apply-recorded, the runner also the card-ID apply"
 check 9 "9. vps-host: the session gets status and log only, the runner every action"
 check 10 "10. opnsense-cert-check: the session gets check and status as the keys user, the runner nothing"
+check 11 "11. guardops: only proxmox-host guard arm, confirm, rollback and status as hostops; the runner gets no guard"
 exit "$fail"
