@@ -134,7 +134,7 @@ The owner sets it up once, in GitHub's web UI:
 
    Leave out Workflows, so a push that changes `.github/workflows/` is refused (rule 5). Leave out Secrets, Environments and Deployments too.
    why: least privilege. A permission added later must be accepted again on the installation.
-3. Install it on the owner's account with "Only select repositories": central-hub, inpara, agent-notebook, obsidian-graph-3d, wizards and central-hub-app (which the App made itself, with the box's repo-create wrapper). Add the App to no ruleset bypass list.
+3. Install it on the owner's account with "All repositories", so a repository the App makes with the box's repo-create wrapper is covered without a step in the owner's browser. The installation was switched from "Only select repositories" to "All repositories" on 2026-11-20 at 03:15:55 UTC, on the owner's choice. Its permissions did not change, and the wrappers narrow their tokens as before. Add the App to no ruleset bypass list.
    why: `main` stays protected, so the App merges and accepts nothing (rules 1 and 2).
 4. Generate a private key, then put it on the box from the Mac with `agent-box-keys.sh put-github-app` ([allow-a-command-for-agents.md](allow-a-command-for-agents.md)). It lands as `/etc/agent-keys/github-app.pem`, owned by `keys`, mode 0600, and is never read, printed or copied anywhere else.
 5. Put the App's ID in the private inventory, as `github_app_id` in `agent_box_ci_runner` ([hosts.example.yml](../../hosts/ansible/inventories/home/hosts.example.yml)), then run step 2 of the CI runner runbook.
