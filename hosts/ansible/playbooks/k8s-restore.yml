@@ -73,9 +73,21 @@
     k8s_backup_reader: true
     # Only the workers sign in, so the orphan-certificate check counts the workers.
     k8s_backup_azure_cert_group: k8s_workers
+    # A prod rebuilt from the agent box reads its own snapshot as the node's writer user: the carried key is the one the host
+    # already lets in as that user, and no host play can let in a reader key from the box (the box holds no key on the host).
+    # Dev keeps the reader user.
+    k8s_backup_sftp_user: "{{ 'c1backup' if (k8s_backup_restore_own_env | default(false) | bool) else 'c1restore' }}"
     k8s_backup_sftp_proxmox: "{{ groups['proxmox'] | default([]) | first | default('') }}"
-    k8s_backup_sftp_address: "{{ hostvars[k8s_backup_sftp_proxmox].proxmox_host_mgmt_address | default('') if k8s_backup_sftp_proxmox else '' }}"
-    k8s_backup_sftp_host_key: "{{ hostvars[k8s_backup_sftp_proxmox].proxmox_restic_sftp_host_key | default('') if k8s_backup_sftp_proxmox else '' }}"
+    # With a proxmox group (the controller's inventory): its address, and its key read by the host play. Without one (the agent
+    # box's copy, which holds no key on the host): the address the box passes as k8s_backup_sftp_seed_address, and the host
+    # key from the known_hosts carried off this node before the teardown (<seed dir>/<node>.known_hosts: "<alias> ssh-ed25519 AAAA...").
+    k8s_backup_sftp_address: >-
+      {{ hostvars[k8s_backup_sftp_proxmox].proxmox_host_mgmt_address | default('') if k8s_backup_sftp_proxmox else
+         (k8s_backup_sftp_seed_address | default('')) }}
+    k8s_backup_sftp_host_key: >-
+      {{ hostvars[k8s_backup_sftp_proxmox].proxmox_restic_sftp_host_key | default('') if k8s_backup_sftp_proxmox else
+         ((query('ansible.builtin.file', k8s_backup_sftp_seed_dir ~ '/' ~ inventory_hostname ~ '.known_hosts', errors='ignore')
+           | first | default('')).split()[1:3] | join(' ') if (k8s_backup_sftp_seed_dir | default('') | length > 0) else '') }}
   pre_tasks:
     - name: On dev, or on a prod rebuilt from the box, never with the backup timers on
       ansible.builtin.assert:

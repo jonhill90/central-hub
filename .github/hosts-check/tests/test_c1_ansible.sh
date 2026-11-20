@@ -37,7 +37,7 @@ cat > "$t/bin/git" <<'S'
 #!/bin/bash
 case "$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status backup-restore-test; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
+  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status backup-restore-test backup; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
   *rev-parse*) echo abc1234 ;;
 esac
 exit 0
@@ -79,7 +79,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'backup-restore-test\nbackup-status\nclients\ngateway\ngitops\nidentity\nobservability\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\nclients\ngateway\ngitops\nidentity\nobservability\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'

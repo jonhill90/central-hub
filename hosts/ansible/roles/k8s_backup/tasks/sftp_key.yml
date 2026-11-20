@@ -19,6 +19,37 @@
     group: root
     mode: "0700"
 
+# A rebuilt node keeps its key (rebuild-prod.sh carries each node's pair off the node before the teardown into
+# k8s_backup_sftp_seed_dir, as <node>.key and <node>.pub): the host already lets that public key in, and the agent box
+# holds no key on the host to let a new one in. Never over a key the node already has (force: false), and only both halves.
+- name: sftp | Look for a carried key for this node
+  ansible.builtin.stat:
+    path: "{{ k8s_backup_sftp_seed_dir }}/{{ inventory_hostname }}.{{ item }}"
+    get_checksum: false
+  delegate_to: localhost
+  become: false
+  loop: [key, pub]
+  register: k8s_backup_sftp_seed_stat
+  when: k8s_backup_sftp_seed_dir | length > 0
+
+- name: sftp | A carried key, put back (both halves, never over an existing key)
+  ansible.builtin.copy:
+    src: "{{ k8s_backup_sftp_seed_dir }}/{{ inventory_hostname }}.{{ item.0 }}"
+    dest: "{{ k8s_backup_sftp_dir }}/{{ item.1 }}"
+    owner: root
+    group: root
+    mode: "{{ item.2 }}"
+    force: false
+  loop:
+    - [key, id_ed25519, "0600"]
+    - [pub, id_ed25519.pub, "0644"]
+  loop_control:
+    label: "{{ item.1 }}"
+  no_log: true
+  when:
+    - k8s_backup_sftp_seed_dir | length > 0
+    - k8s_backup_sftp_seed_stat.results | map(attribute='stat.exists') | list == [true, true]
+
 - name: sftp | The node's key, made once on the node
   ansible.builtin.command: >-
     ssh-keygen -q -t ed25519 -N '' -C {{ (k8s_backup_sftp_user ~ '@' ~ inventory_hostname) | quote }}
