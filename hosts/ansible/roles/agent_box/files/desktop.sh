@@ -232,7 +232,8 @@ diag() {
   [[ -f $keys/desktop-test-login ]] || { echo "desktop diag: only for a test build (no test login file: this VM is the owner's build)" >&2; exit 1; }
   ssh -n -i "$sshkey" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$work/.ssh/known_hosts" -o BatchMode=yes -o ConnectTimeout=15 \
     "$(python3 -I -c 'import json,sys; s=json.load(open(sys.argv[1])); print(s.get("admin_user","admin")+"@"+s["address"])' "$settings")" \
-    'systemctl is-active gnome-remote-desktop.service desktop-rdp.path gdm.service firewalld; systemctl status gnome-remote-desktop.service --no-pager -l | head -30; journalctl -u gnome-remote-desktop -u desktop-rdp.path -b --no-pager | tail -40; ss -ltn | grep -E "3389|State"; ls -l /var/lib/desktop/ /etc/gnome-remote-desktop/ /var/lib/gnome-remote-desktop/ 2>&1 | head -30; firewall-cmd --list-all'
+    'systemctl is-active gnome-remote-desktop.service desktop-rdp.path gdm.service firewalld; sudo -n systemctl status gnome-remote-desktop.service --no-pager -l | head -30; sudo -n journalctl -u gnome-remote-desktop -u desktop-rdp.path -b --no-pager | tail -40; echo listening ports:; ss -ltnH | awk "{print \$4}" | sed "s/.*://"; sudo -n ls -l /var/lib/desktop/ /etc/gnome-remote-desktop/ /var/lib/gnome-remote-desktop/ 2>&1 | head -30; sudo -n firewall-cmd --list-all' 2>&1 |
+    sed -E 's/[0-9]{1,3}(\.[0-9]{1,3}){3}(\/[0-9]+)?/<ipv4>/g'   # no address is printed (lab-token's rule)
 }
 
 case $action in
