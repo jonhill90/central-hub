@@ -14,7 +14,7 @@ superseded-by:
 
 # Give lab apps short names under the zone
 
-STD-0001 rule 5 lets each prod app have a short alias, `<app>.<zone>`, next to its service name `<app>.apps.c1.prod.<zone>`. Rule 7 says an app builds its links with the name people use. This runbook turns the short names on for the five apps on c1 (`grafana`, `argocd`, `sso`, `jellyfin`, `ntfy`).
+STD-0001 rule 5 lets each prod app have a short alias, `<app>.<zone>`, next to its service name `<app>.apps.c1.prod.<zone>`. Rule 7 says an app builds its links with the name people use. This runbook turns the short names on for the apps on c1 (`grafana`, `argocd`, `sso`, `jellyfin`, `ntfy`, and `central-hub-app`).
 
 ```mermaid
 flowchart LR
