@@ -122,13 +122,28 @@
 
 - name: Keys user, a system user that can't log in, in the handoff group only
   ansible.builtin.user:
-    name: "{{ agent_box_keys_user }}"
+    name: "{{ item }}"
     system: true
     shell: /sbin/nologin
     home: "{{ agent_box_work_dir }}"
     create_home: false
     groups: "{{ agent_box_devaddr_group }}"
     append: true
+  # One item, so that a check run names the user in the result (box-apply reads it from the loop label).
+  loop: ["{{ agent_box_keys_user }}"]
+  loop_control:
+    label: "{{ item }}"
+  register: box_keys_user_res
+  # In a check run the group task above reports changed but does not create the group, so this task would fail
+  # with "Group ... does not exist" for a group the real run creates first. That one message, in a check run
+  # only, counts as a change; any other failure still fails.
+  failed_when: >-
+    box_keys_user_res.failed | default(false)
+    and not (ansible_check_mode and ('Group ' ~ agent_box_devaddr_group ~ ' does not exist') in (box_keys_user_res.msg | default('')))
+  changed_when: >-
+    box_keys_user_res.changed | default(false)
+    or (box_keys_user_res.failed | default(false) and ansible_check_mode
+    and ('Group ' ~ agent_box_devaddr_group ~ ' does not exist') in (box_keys_user_res.msg | default('')))
   tags: [users]
 
 - name: The handoff folder, written by the keys user and read by the group (its one file holds one private address)
