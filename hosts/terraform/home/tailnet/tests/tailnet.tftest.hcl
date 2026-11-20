@@ -48,7 +48,7 @@ run "split_dns_goes_to_the_mgmt_gateway" {
   command = plan
 
   assert {
-    condition     = toset(keys(tailscale_dns_split_nameservers.lab)) == toset(["c1.prod", "opnsense", "pve", "grafana", "argocd", "sso", "jellyfin", "ntfy"])
+    condition     = toset(keys(tailscale_dns_split_nameservers.lab)) == toset(["c1.prod", "opnsense", "pve", "grafana", "argocd", "sso", "jellyfin", "ntfy", "central-hub-app"])
     error_message = "One split DNS entry per name in split_dns_names."
   }
 
