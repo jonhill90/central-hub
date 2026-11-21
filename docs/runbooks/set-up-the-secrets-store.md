@@ -222,19 +222,19 @@ OpenBao's config now has `ui = true` (the chart's UI Service stays off). `openba
 
 ### The owner's sign-in to the store's page
 
-The owner signs in to the page at `openbao.<zone>` with the Keycloak account they already have (password and one-time code) and manages secrets under `kv/owner/*`, with no other rights. Everything is code; nothing is typed into a console.
+The owner signs in to the page at `openbao.<zone>` with the Keycloak account they already have (password and one-time code) and manages secrets under `kv/owner/*` and the apps' secrets under `kv/c1/*`, with no other rights. Everything is code; nothing is typed into a console.
 
 | Piece | Where it is made |
 |---|---|
 | Keycloak client `openbao` (confidential, code flow, callback `https://openbao.<zone>/ui/vault/auth/oidc/oidc/callback`) | `k8s_identity` role, `realm.yaml.j2`, made only when `k8s_identity_openbao_hosts` names the store's page; added to the live realm by `c1-ansible apply clients <clearance id>` |
 | OpenBao login `oidc`, its config (Keycloak's issuer, client `openbao`, the lab CA) and role `owner` (bound to the owner's user name, one redirect URI, 15-minute tokens) | `secrets-store-prod owner-login owner` (`secrets-store-owner.sh`), through the admin AppRole |
-| Policy `owner`: create, read, update, delete and list on `kv/owner/*`, no other path (OpenBao's `default` policy, for a token's own lookup and the page, still comes with every token) | the same call |
+| Policy `owner`: create, read, update, delete and list on `kv/owner/*` (his own area) and `kv/c1/*` (the secrets the apps read; the owner's tap of 2026-11-21 00:40 UTC), no other path (OpenBao's `default` policy, for a token's own lookup and the page, still comes with every token) | the same call |
 
 Settings, `agent_box_secrets_store_prod.owner_login` in the private inventory: `issuer` (`https://<keycloak>/realms/lab`), `host` (the page's name, which must be the one in `k8s_identity_openbao_hosts`), `username` (the owner's Keycloak user name) and, for the proof, `test_username` (default `signin-test`). The client secret `OPENBAO_CLIENT_SECRET` is read from the box's `identity.env` and is never printed.
 
 Order: names first (the section above), then the client (`clients` run), then `owner-login`. Prove it with the test user before the owner's account: `owner-login test`, then `owner-login check-test` (the test user signs in through Keycloak, writes and reads `kv/login-test/probe`, and must be refused on `kv/owner/probe`, `kv/c1/check` and the policy list), then `owner-login remove-test`. Keycloak asks the one-time code, so the second factor is checked there only: OpenBao's own login MFA does not work in the page with OIDC (openbao/openbao#3281).
 
-What is not proven yet: that the OpenBao pod reaches Keycloak and trusts its certificate with the store's CA file (the lab CA signs both; the first `owner-login owner` run shows it), that Keycloak puts `preferred_username` in the token, and that the page works through the Gateway end to end. A failed run says which step.
+A secret written to `kv/c1/*` in the page has no SOPS copy (D-0058 rule 8): `secrets-store-prod compare` names the difference by path and key, and a `put` from the box brings SOPS level again. What is not proven yet: that the OpenBao pod reaches Keycloak and trusts its certificate with the store's CA file (the lab CA signs both; the first `owner-login owner` run shows it), that Keycloak puts `preferred_username` in the token, and that the page works through the Gateway end to end. A failed run says which step.
 
 ## The box's calls to the store
 

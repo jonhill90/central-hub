@@ -3,7 +3,7 @@
 # Keycloak (OIDC), set up and proved from the box. Called by secrets-store.sh (never directly), as user `keys`, with:
 #   secrets-store-owner.sh <action> <store address> <CA file> <keys folder> <settings file> <libexec>
 # Actions (the wrapper's `owner-login <action>`):
-#   owner        policy `owner` (create, read, update, delete, list on kv/owner/*, no other path), the OIDC login `oidc`
+#   owner        policy `owner` (create, read, update, delete, list on kv/owner/* and kv/c1/*, no other path), the OIDC login `oidc`
 #                against realm lab (client `openbao`), and role `owner` bound to the owner's user name, 15-minute tokens
 #   test         the same with a test role and policy: role `login-test`, policy `login-test` on kv/login-test/* only,
 #                bound to the test user (default signin-test)
@@ -12,7 +12,7 @@
 #   remove-test  deletes role and policy `login-test` and the probe, so the test user can no longer get a token
 # The client secret and the test user's password and seed come from the prod identity.env in the keys folder and
 # are never printed. Every call uses the admin AppRole (D-0062), so it runs only from the box's /32.
-# The policy `owner` gives the owner no path but kv/owner/* (OpenBao's `default` policy, for token self-service and the
+# The policy `owner` gives the owner no path but kv/owner/* and kv/c1/* (the secrets the apps read) (OpenBao's `default` policy, for token self-service and the
 # page, still comes with every token).
 # Settings (agent_box_secrets_store_prod.owner_login, private inventory): issuer (https://<keycloak>/realms/lab),
 # host (the store's name the page is reached at), username (the owner's Keycloak user name), test_username
@@ -63,21 +63,24 @@ put_json() {
   [[ $code == 200 || $code == 204 ]] || die "writing $1 answered HTTP ${code:-nothing}: $(python3 -I -c 'import json,sys; print("; ".join(json.load(open(sys.argv[1])).get("errors",[]))[:200])' "$tmp/reply.json" 2>/dev/null)"
 }
 
-policy_for() {  # policy_for NAME PREFIX: all of kv/<prefix>/* and no other path
-  cat <<EOF
-path "kv/data/$2/*"     { capabilities = ["create", "read", "update", "delete", "list"] }
-path "kv/metadata/$2/*" { capabilities = ["read", "list", "delete"] }
-path "kv/metadata/$2"   { capabilities = ["list"] }
+policy_for() {  # policy_for NAME "PREFIX...": all of kv/<prefix>/* for each prefix, and no other path
+  local p
+  for p in $2; do
+    cat <<EOF
+path "kv/data/$p/*"     { capabilities = ["create", "read", "update", "delete", "list"] }
+path "kv/metadata/$p/*" { capabilities = ["read", "list", "delete"] }
+path "kv/metadata/$p"   { capabilities = ["list"] }
 EOF
+  done
 }
 
-# setup NAME PREFIX USER: policy, the login, the role.
+# setup NAME "PREFIX..." USER: policy, the login, the role.
 setup() {
   local name=$1 prefix=$2 user=$3 code
   policy_for "$name" "$prefix" > "$tmp/policy.hcl"
   python3 -I -c 'import json,sys; print(json.dumps({"policy": open(sys.argv[1]).read()}))' "$tmp/policy.hcl" > "$tmp/policy.json"
   put_json "sys/policies/acl/$name" "$tmp/policy.json"
-  echo "PASS: policy $name holds kv/$prefix/* only"
+  echo "PASS: policy $name written, create/read/update/delete/list under kv/ for: $prefix (and no other path)"
   code=$(call GET sys/auth -o "$tmp/auth.json" -w '%{http_code}') || true
   [[ $code == 200 ]] || die "reading sys/auth answered HTTP ${code:-nothing}"
   if ! python3 -I -c 'import json,sys; sys.exit(0 if "oidc/" in json.load(open(sys.argv[1])).get("data", json.load(open(sys.argv[1]))) else 1)' "$tmp/auth.json"; then
@@ -110,7 +113,8 @@ print(json.dumps({"role_type": "oidc", "user_claim": "preferred_username", "boun
 }
 
 case $action in
-  owner) setup owner owner "$owner_user" ;;
+  # The owner writes his own area and the secrets the apps read (kv/c1/*): his tap of 2026-11-21 00:40 UTC.
+  owner) setup owner "owner c1" "$owner_user" ;;
   test) setup login-test login-test "$test_user" ;;
   remove-test)
     # Each DELETE must answer 204 (200 is fine too); the probe may also be 404, if check-test never wrote it.

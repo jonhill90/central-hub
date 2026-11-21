@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The owner's sign-in set-up (hosts/ansible/roles/agent_box/files/secrets-store-owner.sh), with a stub curl that
 # records every call and body (no real store):
-#   1. owner writes policy `owner` that holds kv/data/owner/* and kv/metadata/owner/* and nothing else, enables the
+#   1. owner writes policy `owner` that holds kv/owner/* and kv/c1/* (data, metadata, list) and no other path, enables the
 #      login `oidc` when it is missing, configures it with the issuer, client `openbao` and the store CA, and writes
 #      role `owner` bound to the owner's user name, with the one redirect URI of the store's page and 15-minute tokens.
 #   2. test does the same for role and policy `login-test` on kv/login-test/*, bound to the test user.
@@ -67,8 +67,8 @@ if [[ $rc -eq 0 && -f $b ]] && python3 -I -c '
 import json,sys
 p=json.load(open(sys.argv[1]))["policy"]
 paths=[l.split("\"")[1] for l in p.splitlines() if l.startswith("path")]
-sys.exit(0 if paths==["kv/data/owner/*","kv/metadata/owner/*","kv/metadata/owner"] else 1)' "$b"; then
-  ok "1a. owner: policy owner holds kv/owner/* and nothing else"
+sys.exit(0 if paths==["kv/data/owner/*","kv/metadata/owner/*","kv/metadata/owner","kv/data/c1/*","kv/metadata/c1/*","kv/metadata/c1"] else 1)' "$b"; then
+  ok "1a. owner: policy owner holds kv/owner/* and kv/c1/* (the owner's tap) and no other path"
 else bad "1a. rc=$rc $out"; fi
 if python3 -I -c '
 import json,sys
