@@ -16,7 +16,7 @@
 #     the lines its REPORT task writes that match this wrapper's allowlist, so a session can see who holds the host's memory)
 #   `ksm` and `ksm-off` (playbooks/proxmox-ksm.yml, proxmox-ksm-off.yml: kernel same-page merging on the host, on with a pinned pace and off again;
 #     what it does: playbooks/tasks/proxmox-ksm.yml. A setting, so a session applies it only through `apply-recorded` with a reviewer pass and a go)
-#   `connector` (playbooks/proxmox-connector.yml: read-only; `check connector` prints which of nine facts about container 900 are true: running, online, advertises and has approved a lab range,
+#   `connector` (playbooks/proxmox-connector.yml: read-only; `check connector` prints which of the facts about container 900 are true: running, online, advertises and has approved a lab range,
 #     forwards, has a lab route, reaches the management, prod and dev gateways; fixed words from the reviewed playbook, no name or address)
 #   `guests` (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell)
 #   `ct259-destroy` (playbooks/proxmox-ct259-destroy.yml: deletes the rehearsal's container CT 259 after tag, privilege and mount-point guards.
