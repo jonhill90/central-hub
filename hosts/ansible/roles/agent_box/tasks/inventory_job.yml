@@ -28,7 +28,7 @@
     - "{{ agent_box_inventory_dir }}"
     - "{{ agent_box_inventory_work_dir }}"
 
-- name: inventory_job | The sealed folder, where the wrapper writes and the keys user's bundle reads (what is in it is encrypted, and the bundle user can not open it)
+- name: inventory_job | The sealed folder, where the wrapper writes and the bundle user reads (encrypted, so it can not open it)
   ansible.builtin.file:
     path: "{{ agent_box_inventory_sealed_dir }}"
     state: directory

@@ -98,7 +98,8 @@ out=$(inv import-compare 2>&1); echo "$out" | grep -qx 'only in prod: k8s_nodes.
 [ -s "$t/sealed/inventory.sops.json" ] && [ "$(stat -c %a "$t/sealed/inventory.sops.json")" = 640 ] && ok "the sealed copy exists, mode 0640 (the keys user's group reads it)" || bad "the sealed copy is missing or its mode is wrong"
 grep -q "^--encrypt\|^encrypt --input-type binary --output-type json --age $R1,$R2 " "$t/sealed/sops.args" && ok "sops got both recipients, binary input and JSON output" || bad "sops args: $(cat "$t/sealed/sops.args")"
 ! grep -q "$ADDR" "$t/sealed/inventory.sops.json" && ok "the sealed file does not hold a sample address in the clear" || bad "the sealed file shows a sample address"
-ls "$t/sealed" | grep -q '\.[A-Za-z0-9]\{6\}$' && bad "a temp file was left in the sealed folder" || ok "no temp file is left in the sealed folder"
+left=$(find "$t/sealed" -name '*.[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]' | head -1)
+if [ -n "$left" ]; then bad "a temp file was left in the sealed folder"; else ok "no temp file is left in the sealed folder"; fi
 cp "$t/sealed/inventory.sops.json" "$t/sealed.before"
 printf 'age1bad\n' > "$t/keys/inventory/recipients.txt"
 rc=0; inv seal >/dev/null 2>"$t/err" || rc=$?
