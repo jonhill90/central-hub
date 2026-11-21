@@ -340,6 +340,12 @@ v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnown
 v["k8s_gateway_smoke_client"] = "localhost"
 v["k8s_certs_smoke_client"] = "localhost"
 v["k8s_gitops_source_openbao_in_cluster"] = True
+# Argo CD makes cert-manager and the Gateway on a rebuilt cluster, so the certs and gateway stages must not apply the same objects
+# again: dev's inventory sets these true (runbook, "The env's inventory hands every app to Argo CD"). Rerun 7 (2026-11-21) ran
+# the certs stage's own helm install over the cert-manager Argo CD had made and stopped there. Only the switches of the stages
+# that run after apps; the stages that already passed on prod keep the Mac inventory's values.
+for name in ("k8s_certs_cert_manager_by_argocd", "k8s_gateway_by_argocd"):
+    v[name] = True
 # The notebook CI runner pod is prod's only (docs/runbooks/run-the-notebook-runner-on-c1.md).
 v["k8s_gitops_source_notebook_runner"] = True
 v["k8s_gitops_source_openbao_seal_node"] = seal
