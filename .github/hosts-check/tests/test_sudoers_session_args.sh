@@ -9,6 +9,7 @@
 #      runner's adds apply, and neither runs it as the keys user. Sessions may also run guard clear.
 #   8-9. tailnet-policy: as guardops (D-0063), sessions get plan, the ledger actions, apply-recorded and log, the runner also the
 #        card-ID apply; vps-host: status and log only; the runner gets every action (D-0046).
+#   14. inventory: see the case in the script (invops, no session view, exact view parts, two exact cat lines).
 #   11. callers (D-0063 rule 4): guardops may run proxmox-host's guard arm, confirm, rollback and status as hostops, and nothing
 #       else; a session may run guard status only.
 # Usage: .github/hosts-check/tests/test_sudoers_session_args.sh   (needs python3 with jinja2 and pyyaml)
@@ -72,6 +73,22 @@ print("12", [l for l in ltt.splitlines() if l.startswith("sess ")] == ["sess ALL
 sp = [w for w in d if w["name"] == "secrets-store-prod"][0]
 spl = lines(render([sp]), "sess")
 forms = ["/x/secrets-store-prod.sh owner-login " + x for x in ("owner", "test", "check-test", "remove-test", "plan")]
+# 14. inventory (spec 2026-11-private-values-on-the-box): the session may set, get, names, diff, log, import prod|guard and import-compare as
+#     invops, and never view; only keys, hostops and guardops may view, one exact part each; invops reads the two old copies with two exact cat commands.
+iv = [w for w in d if w["name"] == "inventory"][0]
+ivt = t.render(agent_box_wrappers=[iv], agent_box_user="sess", agent_box_keys_user="keys", agent_box_libexec_dir="/x", agent_box_self_apply=False,
+               agent_box_runner_user="run", agent_box_inventory_user="invops", agent_box_keys_dir="/k", agent_box_guard_user="guardops", agent_box_guard_dir="/g")
+isess = [l for l in ivt.splitlines() if l.startswith("sess ALL=")]
+iforms = isess[0].split("NOPASSWD: ")[1].split(", ") if len(isess) == 1 else []
+want = ["/x/inventory.sh " + x for x in ("set *", "get *", "names", "diff", "log", "import prod", "import guard", "import-compare")]
+ok14a = isess[0].startswith("sess ALL=(invops)") and iforms == want and not any("view" in x for x in iforms) and "run ALL" not in ivt
+callers = {l.split(" ")[0]: l for l in ivt.splitlines() if l.split(" ")[0] in ("keys", "hostops", "guardops")}
+ok14b = (callers.get("keys") == "keys ALL=(invops) NOPASSWD: /x/inventory.sh view k8s_nodes"
+         and callers.get("hostops") == "hostops ALL=(invops) NOPASSWD: /x/inventory.sh view proxmox"
+         and callers.get("guardops") == "guardops ALL=(invops) NOPASSWD: /x/inventory.sh view opnsense")
+cats = [l for l in ivt.splitlines() if l.startswith("invops ALL=")]
+ok14c = cats == ["invops ALL=(keys) NOPASSWD: /usr/bin/cat /k/prod/inventory-hosts.yml", "invops ALL=(guardops) NOPASSWD: /usr/bin/cat /g/inventory/hosts.yml"]
+print("14", ok14a and ok14b, ok14c)
 print("13", len(spl) == 1 and all(f in spl[0].split(", ") or spl[0].endswith(": " + f) or (", " + f) in spl[0] for f in forms) and "owner-login *" not in spl[0],
       "owner-login *" not in render([sp]))
 PY
@@ -91,5 +108,6 @@ check 9 "9. vps-host: the session gets status and log only, the runner every act
 check 10 "10. opnsense-cert-check: the session gets check and status as the keys user, the runner nothing"
 check 11 "11. guardops: only proxmox-host guard arm, confirm, rollback and status as hostops; the runner gets no guard"
 check 12 "12. lab-token: the session may status and mint as hostops; only hostops may run lab-token-put (as keys); the session has no line for it"
+check 14 "14. inventory: the session sets, gets, lists, diffs, logs, imports and compares as invops and has no view; keys, hostops and guardops view one exact part each; invops cats the two old copies with two exact commands"
 check 13 "13. secrets-store-prod: the five exact owner-login forms are in the sudoers line, no owner-login *"
 exit "$fail"

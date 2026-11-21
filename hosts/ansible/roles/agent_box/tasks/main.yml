@@ -195,6 +195,13 @@
       tags: [users, guard_job]
   tags: [users, guard_job]
 
+- name: The private inventory's user and folders (spec 2026-11-private-values-on-the-box)
+  ansible.builtin.include_tasks:
+    file: inventory_job.yml
+    apply:
+      tags: [users, inventory_job]
+  tags: [users, inventory_job]
+
 # The role never writes a key into the key folder. It only makes sure every file already in it belongs to
 # the keys user and is readable by it alone.
 - name: Find the key files

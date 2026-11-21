@@ -23,10 +23,17 @@ ln -s "$(command -v python3)" "$t/libexec/ansible-venv/bin/python3"
 cp "$list" "$t/libexec/editable-values.yml"
 sed -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
   -e "s|^store=.*|store=$t/keys/inventory/hosts.yml|" -e "s|^tagkey=.*|tagkey=$t/keys/inventory/tag.key|" -e "s|^prev=.*|prev=$t/keys/inventory/hosts.yml.prev|" \
-  -e "s|^prod_src=.*|prod_src=$t/prod.yml|" -e "s|^guard_src=.*|guard_src=$t/guard.yml|" "$wrapper" > "$t/inventory.sh"
-for v in libexec work store tagkey prev prod_src guard_src; do
+  -e "s|^prod_cmd=.*|prod_cmd=(cat $t/prod.yml)|" -e "s|^guard_cmd=.*|guard_cmd=(cat $t/guard.yml)|" "$wrapper" > "$t/inventory.sh"
+for v in libexec work store tagkey prev; do
   grep -q "^$v=$t" "$t/inventory.sh" || { bad "the wrapper no longer sets $v on its own line, so the test can't point it at the temp folder"; exit 1; }
 done
+for v in prod_cmd guard_cmd; do
+  grep -q "^$v=(cat $t/" "$t/inventory.sh" || { bad "the wrapper no longer sets $v on its own line"; exit 1; }
+done
+# The real lines read the two old copies with exactly the commands the role's sudoers file allows (sudoers.j2, inventory first fill).
+grep -qxF 'prod_cmd=(sudo -n -u keys /usr/bin/cat /etc/agent-keys/prod/inventory-hosts.yml)' "$wrapper" \
+  && grep -qxF 'guard_cmd=(sudo -n -u guardops /usr/bin/cat /etc/agent-keys-guard/inventory/hosts.yml)' "$wrapper" \
+  && ok "the wrapper reads the prod and guard copies through the two exact sudo commands" || bad "the import commands changed"
 inv() { bash "$t/inventory.sh" "$@"; }
 
 # Sample values the output must never show.

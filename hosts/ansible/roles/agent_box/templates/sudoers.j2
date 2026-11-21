@@ -16,6 +16,13 @@ Defaults:{{ c.user }} env_reset
 {{ c.user }} ALL=({{ w.run_as | default(agent_box_keys_user) }}) NOPASSWD: {{ c.args | map('regex_replace', '^', agent_box_libexec_dir ~ '/' ~ w.name ~ '.sh ') | join(', ') }}
 {% endfor %}
 {% endfor %}
+{% if agent_box_inventory_user | length > 0 %}
+# inventory.sh's first fill (spec 2026-11-private-values-on-the-box, choice 7): {{ agent_box_inventory_user }} reads the two old copies of the inventory, each as
+# its owner, with one exact command and no argument that a caller chooses.
+Defaults:{{ agent_box_inventory_user }} env_reset
+{{ agent_box_inventory_user }} ALL=({{ agent_box_keys_user }}) NOPASSWD: /usr/bin/cat {{ agent_box_keys_dir }}/prod/inventory-hosts.yml
+{{ agent_box_inventory_user }} ALL=({{ agent_box_guard_user }}) NOPASSWD: /usr/bin/cat {{ agent_box_guard_dir }}/inventory/hosts.yml
+{% endif %}
 {% if agent_box_self_apply | bool %}
 # box-apply (D-0036): the box applies its own role from reviewed main, as root, with plan or apply only.
 {{ agent_box_user }} ALL=(root) NOPASSWD: {{ agent_box_libexec_dir }}/box-apply.py plan, {{ agent_box_libexec_dir }}/box-apply.py apply
