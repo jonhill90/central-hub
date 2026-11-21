@@ -30,6 +30,7 @@
 #      restore-rebuilt refuse); with the hold gone, both run again.
 #  12. owner-login owner, test and check-test (they write keys) refuse during a rebuild hold; remove-test and a run
 #      without the hold go through; dev is refused.
+#  13. owner-login passes the helper the zone and the owner's user name from the inventory.
 # Usage: .github/hosts-check/tests/test_secrets_store_wrapper.sh   (needs python3 with PyYAML, openssl, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -60,7 +61,7 @@ echo "snapshots \$1" >> $t/calls
 EOF
 cat > "$t/libexec/secrets-store-owner.sh" <<EOF
 #!/bin/bash
-echo "owner \$1" >> $t/calls
+echo "owner \$1 zone=\${OWNER_LOGIN_ZONE:-} key=\${OWNER_LOGIN_ZONE_KEY:-} user=\${OWNER_LOGIN_USER:-}" >> $t/calls
 EOF
 chmod +x "$t/libexec/secrets-store-owner.sh" "$t/bin/curl" "$t/libexec/secrets-store-kv.sh" "$t/run/secrets-store-snapshots.sh"
 sed -e "s|^keys=.*|keys=$t/keys|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
@@ -264,5 +265,15 @@ if [[ $r12a -ne 0 && $r12b -ne 0 && $r12c -ne 0 && $o12a == *"a rebuild is in pr
       $r12e -eq 0 && $c12e == *"owner owner"* && $r12f -ne 0 && $o12f == *"prod store only"* ]]; then
   ok "12. owner-login owner, test and check-test write nothing during a rebuild hold; remove-test and a run without a hold go; dev is refused"
 else bad "12. $r12a $o12a [$c12a] | $r12d [$c12d] | $r12e [$c12e] | $r12f $o12f"; fi
+
+# 13
+printf '%s\n' "${prod_inv[@]}" "$prod_admin" "        k8s_identity_zone: zone.example.test" "        k8s_identity_owner_username: owner.name" > "$t/work/openbao-prod/inventory/hosts.yml"
+run --prod owner-login plan; r13a=$rc c13a=$calls
+printf '%s\n' "${prod_inv[@]}" "$prod_admin" "        k8s_identity_zone: \"{{ k8s_gateway_zone }}\"" "        k8s_gateway_zone: gw.example.test" > "$t/work/openbao-prod/inventory/hosts.yml"
+run --prod owner-login plan; r13b=$rc c13b=$calls
+if [[ $r13a -eq 0 && $c13a == *"owner plan zone=zone.example.test key=k8s_identity_zone user=owner.name"* &&
+      $r13b -eq 0 && $c13b == *"zone=gw.example.test key=k8s_gateway_zone user="* ]]; then
+  ok "13. owner-login derives the zone and the owner's user name from the inventory (a template value is skipped for the next key); plan needs no hold"
+else bad "13. $r13a [$c13a] | $r13b [$c13b]"; fi
 
 exit $fail

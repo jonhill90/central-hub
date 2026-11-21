@@ -92,6 +92,12 @@ k8s_identity_grafana_name: grafana
 k8s_identity_grafana_namespace: monitoring
 k8s_identity_grafana_deployment: kube-prometheus-stack-grafana
 
+# The Central Hub web app's client (hosts/kubernetes/home/c1/apps/central-hub-app; spec 0007 in jonhill90/central-hub-app).
+# Its secret is copied to Secret <ns>/central-hub-app-sso, key client-secret, and the two public names it needs
+# (the issuer and the origins it is served on) to Secret <ns>/central-hub-app-oidc, which the pod mounts as files.
+k8s_identity_central_hub_app_name: central-hub-app
+k8s_identity_central_hub_app_namespace: central-hub-app
+
 # Argo CD's clients (k8s_gitops): argocd for the web UI, argocd-cli (public, PKCE) for
 # `argocd login --sso`. The secret is copied to Secret <argocd ns>/argocd-sso, key clientSecret,
 # labelled part-of argocd so argocd-cm can name it as $argocd-sso:clientSecret.
@@ -118,10 +124,12 @@ k8s_identity_jellyfin_root_ca_file: ""
 k8s_identity_proxmox_hosts: []
 
 # The secrets store's web page (the owner's sign-in, agent pick 233): the names the owner's
-# browser uses for it. Private, from the inventory. The client allows the store's OIDC callback on each.
-# Empty: realm lab has no openbao client and the values file needs no OPENBAO_CLIENT_SECRET, so adding the
-# client is a realm change only when a name is set. The store's sign-in reads that secret from the same file.
-k8s_identity_openbao_hosts: []
+# browser uses for it. The client allows the store's OIDC callback on each. The default is the short name the
+# store's route gets (openbao.<zone>, #812), so no inventory value is needed; set the list to [] (or turn
+# k8s_identity_openbao_client off, or short names off) for a realm with no openbao client, which then needs no
+# OPENBAO_CLIENT_SECRET in the values file. The store's sign-in reads that secret from the same file.
+k8s_identity_openbao_client: true
+k8s_identity_openbao_hosts: "{{ ['openbao.' ~ k8s_identity_zone] if (k8s_identity_openbao_client | bool and k8s_identity_short_names | bool) else [] }}"
 
 # The OPNsense web GUI, through the community plugin os-openid-connect (D-0037 rule 5): the names the
 # browser uses for the GUI. Private, from the inventory. The client allows the plugin's callback for its
