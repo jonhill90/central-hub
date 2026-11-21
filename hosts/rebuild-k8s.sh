@@ -281,10 +281,36 @@ l2_report() {
   return "$rc"
 }
 
+# The OpenBao snapshot CronJob ticks at minute 17 of every hour (openbao-store values). A tick that lands while the store is
+# still coming up fails, and its failed Job keeps Error pods that the pod check below counts (dev run 10, 2026-11-21: two Error
+# pods of the 23:17 tick, apps running 23:16 to 23:22; the other dev runs' apps windows missed minute 17). Such a Job says
+# nothing about the finished cluster, so when one exists the snapshot Job is run once now: it must complete, and only then
+# are the earlier failed Jobs removed. A snapshot Job that fails with the store up still fails the run.
+settle_snapshot_jobs() {
+  local failed j
+  failed=$(kc -n openbao get jobs -o json | python3 -I -c '
+import json, sys
+for j in json.load(sys.stdin)["items"]:
+    if any(o.get("kind") == "CronJob" and o.get("name") == "openbao-snapshot" for o in j["metadata"].get("ownerReferences") or []):
+        s = j.get("status") or {}
+        if s.get("failed", 0) and not s.get("succeeded", 0): print(j["metadata"]["name"])
+') || { echo "could not read the Jobs of the openbao namespace"; return 1; }
+  [ -n "$failed" ] || return 0
+  echo "failed snapshot Job(s) from the bring-up: $(echo $failed); running the snapshot Job once now"
+  kc -n openbao delete job openbao-snapshot-rebuild-check --ignore-not-found > /dev/null || true
+  kc -n openbao create job openbao-snapshot-rebuild-check --from=cronjob/openbao-snapshot > /dev/null \
+    || { echo "could not start the snapshot Job"; return 1; }
+  kc -n openbao wait --for=condition=complete job/openbao-snapshot-rebuild-check --timeout=300s > /dev/null \
+    || { echo "the snapshot Job does not complete with the store up"; return 1; }
+  for j in $failed; do kc -n openbao delete job "$j" > /dev/null; done
+  kc -n openbao delete job openbao-snapshot-rebuild-check > /dev/null
+}
+
 checks() {
   local notready pods
   notready=$(kc get nodes --no-headers | awk '$2 != "Ready"')
   [ -z "$notready" ] || { echo "nodes not Ready: $notready"; return 1; }
+  settle_snapshot_jobs || return 1
   pods=$(kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"')
   [ -z "$pods" ] || { echo "pods not Running or Completed:"; echo "$pods"; return 1; }
   wait_apps
