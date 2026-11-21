@@ -17,8 +17,17 @@ port: 3000
 # the identity role (k8s_identity) makes Secrets central-hub-app-oidc and central-hub-app-sso in this namespace and the
 # pod reads them as files, so this public chart names no host. Until they exist the pod is up but answers 503.
 # The token and key requests go to Keycloak inside the cluster; the browser uses the public address.
+#
+# Sign-in is OFF until the realm has client central-hub-app and the two Secrets exist in this namespace. With it on and no
+# Secrets, every page and the data API answer 503 while Argo CD still shows Healthy (the probe stays up on purpose, so a
+# rebuild's apps stage can finish before its identity stage), which put the live front door dark on 2026-11-21. So the
+# chart refuses mode oidc unless secretsConfirmed is true too, and CI renders both cases (.github/hosts-check/run.sh,
+# "central-hub-app: sign-in guard"). Set secretsConfirmed only after reading, from the box, that the client is in the
+# realm and the app's health says signIn: on or its Secrets are listed (runbook sign-in-to-the-central-hub-app-with-keycloak.md,
+# "Turn it on").
 auth:
-  mode: oidc
+  mode: "off"
+  secretsConfirmed: false
   internalURL: http://sso-service.identity.svc:8080/realms/lab
   allowedGroups: lab-admins,lab-viewers
   identityNamespace: identity
