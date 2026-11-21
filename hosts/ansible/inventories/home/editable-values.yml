@@ -1,0 +1,33 @@
+---
+# The values of the lab's private inventory that a session may change through the box's inventory wrapper
+# (hosts/ansible/roles/agent_box/files/inventory.sh; docs/specs/2026-11-private-values-on-the-box.md, choice 4).
+# This file holds names and types only, never a value, so it is public. The wrapper reads its installed copy, root-owned,
+# so a change here reaches the box only through the role.
+#
+# path: <scope>.<variable>. The scope is `all` (the inventory's all.vars), a group name that has `vars`, or a host name.
+# part: which view the value belongs to (proxmox, opnsense or k8s_nodes); the wrapper's `view` hands a consumer only its part.
+# type: address, cidr, cidrs, port, bool, name, names, url, email, choice (with `values`) or rules.
+# class: plain needs no extra word. firewall, tailnet, access and money need the standing go's message ID on the `set`
+#        line (D-0061 rules 1 and 3). A value whose class would be D-0061 rule 2 (the owner's own credentials, buying,
+#        his Mac, malware, leaking his data) is never listed.
+#
+# refused: names that are never set through the wrapper, whatever the list says: the example marks the first two `# secret`
+# (hosts.example.yml:73-74). An unlisted variable whose name has secret, token, password, passwd, private or _key in it is refused with that reason. A listed name is reviewed here: `k8s_gitops_source_app_secrets_store` only says which store the apps read, and holds c1 or openbao.
+refused:
+  - opnsense_api_key
+  - opnsense_api_secret
+entries:
+  - { path: all.k8s_gateway_address, part: opnsense, type: address, class: firewall }
+  - { path: all.k8s_gitops_source_app_secrets_store, part: k8s_nodes, type: choice, values: ["", c1, openbao], class: plain }
+  - { path: proxmox_host.proxmox_firewall_enable, part: proxmox, type: bool, class: firewall }
+  - { path: proxmox_host.proxmox_firewall_home_lan_cidr, part: proxmox, type: cidr, class: firewall }
+  - { path: proxmox_host.proxmox_firewall_extra_rules, part: proxmox, type: rules, class: firewall }
+  - { path: proxmox_host.proxmox_notify_ntfy_url, part: proxmox, type: url, class: plain }
+  - { path: proxmox_host.proxmox_cert_names, part: proxmox, type: names, class: plain }
+  - { path: proxmox_host.proxmox_sso_issuer, part: proxmox, type: url, class: access }
+  - { path: proxmox_host.tailnet_connector_extra_routes, part: proxmox, type: cidrs, class: tailnet }
+  - { path: opnsense_fw.opnsense_home_lan_cidr, part: opnsense, type: cidr, class: firewall }
+  - { path: opnsense_fw.opnsense_dns_zone, part: opnsense, type: name, class: plain }
+  - { path: opnsense_fw.opnsense_cert_names, part: opnsense, type: names, class: plain }
+  - { path: k8s_nodes.k8s_certs_acme_email, part: k8s_nodes, type: email, class: plain }
+  - { path: k8s_nodes.k8s_certs_issue, part: k8s_nodes, type: bool, class: plain }
