@@ -33,7 +33,7 @@
 #                                  the ssh config's path), which both scripts read after their settings; off removes it. On refuses until the pair,
 #                                  the pinned host key and the ssh config are there.
 #   dev-worker-address.sh box-prove  as keys: proves what the box's key can and cannot do on the host's store, with the box's own ssh config, and
-#                                  prints ok or FAIL lines (check 3 has two), no address and no key: (1) it signs in over sftp and its folder is /box;
+#                                  prints ok or FAIL lines (check 3 has two; with no sign-in it stops after check 1 and says why by class: timed out, refused, key not accepted, host key, no route), no address and no key: (1) it signs in over sftp and its folder is /box;
 #                                  (2) it writes a test file there, reads it back the same, and removes it; (3) it cannot write to /, and cannot
 #                                  open any other folder it can see in /; (4) it cannot read a file outside the chroot (/etc/passwd); (5) a
 #                                  command over ssh runs no shell. Exit 0 only when all five hold; 1 if any check fails or the sign-in does not work.
@@ -179,17 +179,35 @@ case $1 in
     tdir=$(mktemp -d)
     trap 'rm -rf -- "$tdir"' EXIT
     printf 'box-prove %s\n' "$$" > "$tdir/in"
-    sf() { sftp -F "$cfg" -b - box-backup-target 2>&1 <<< "$1"; }   # batch mode: a failing command gives a non-zero exit
+    # batch mode: a failing command gives a non-zero exit; each call is bounded (a stalled connection fails in 30 s, not never)
+    sf() { timeout 30 sftp -F "$cfg" -o ConnectTimeout=10 -b - box-backup-target 2>&1 <<< "$1"; }
     bad=0
     pass() { echo "box-prove: ok   $1"; }
     fail() { echo "box-prove: FAIL $1"; bad=1; }
     # 1 sign-in, and the folder it lands in
-    if out=$(sf 'pwd') && grep -qx 'Remote working directory: /box' <<< "$out"; then pass "1 signs in over sftp; its folder is /box"; else fail "1 no sign-in, or its folder is not /box"; fi
+    out=$(sf 'pwd') && rc=0 || rc=$?
+    if [[ $rc -eq 0 ]] && grep -qx 'Remote working directory: /box' <<< "$out"; then
+      pass "1 signs in over sftp; its folder is /box"
+    else
+      # Say why, by class only: no address, host name or key is printed.
+      if [[ $rc -eq 124 ]]; then why="no answer within 30 s (a stalled connection)"
+      elif grep -qi 'timed out' <<< "$out"; then why="connection timed out"
+      elif grep -qi 'refused' <<< "$out"; then why="connection refused"
+      elif grep -qi 'no route\|unreachable' <<< "$out"; then why="no route to the host"
+      elif grep -qi 'host key' <<< "$out"; then why="host key not accepted"
+      elif grep -qi 'permission denied' <<< "$out"; then why="sign-in refused (key not accepted)"
+      elif [[ $rc -eq 0 ]]; then why="signed in, but the folder is not /box"
+      else why="sftp failed (exit $rc)"; fi
+      fail "1 no sign-in, or its folder is not /box: $why"
+      echo "box-prove: FAIL 2-5 not run: without a sign-in none of them proves anything"
+      exit 1
+    fi
     # 2 write, read back, remove
     if sf "put $tdir/in $name" >/dev/null && sf "get $name $tdir/back" >/dev/null && cmp -s "$tdir/in" "$tdir/back" && sf "rm $name" >/dev/null; then pass "2 writes a test file in /box, reads it back the same, removes it"; else fail "2 write, read-back or remove in /box"; sf "rm $name" >/dev/null || true; fi
     # 3 / is not writable, and no other folder in / opens
     if sf "put $tdir/in /$name" >/dev/null; then fail "3 / is writable (the test file was written)"; sf "rm /$name" >/dev/null || true; else pass "3 cannot write to /"; fi
-    others=$(sf 'ls -1 /' | grep -v '^sftp>' | sed 's|^/||' | grep -v -x -e box -e '' || true)
+    lsroot=$(sf 'ls -1 /') || { echo "box-prove: FAIL 3 could not list / to look at the other folders"; exit 1; }
+    others=$(grep -v '^sftp>' <<< "$lsroot" | sed 's|^/||' | grep -v -x -e box -e '' || true)
     open=0
     for d in $others; do
       if sf "ls /$d" >/dev/null; then open=$((open + 1)); fi
