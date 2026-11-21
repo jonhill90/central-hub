@@ -62,8 +62,8 @@
 - name: The sha256 of the off-box scripts this role ships
   ansible.builtin.copy:
     content: |
-      {{ lookup('ansible.builtin.file', 'opnsense-offbox.sh') | hash('sha256') }}  opnsense-offbox.sh
-      {{ lookup('ansible.builtin.file', 'secrets-bundle-offbox.sh') | hash('sha256') }}  secrets-bundle-offbox.sh
+      {{ lookup('ansible.builtin.file', 'opnsense-offbox.sh', rstrip=false) | hash('sha256') }}  opnsense-offbox.sh
+      {{ lookup('ansible.builtin.file', 'secrets-bundle-offbox.sh', rstrip=false) | hash('sha256') }}  secrets-bundle-offbox.sh
     dest: "{{ agent_box_libexec_dir }}/backend-files.sha256"
     owner: root
     group: root
