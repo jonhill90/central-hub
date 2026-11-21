@@ -77,6 +77,30 @@
   no_log: true
   when: agent_box_proxmox_host_sso | length > 0
 
+# The firewall's sign-in (job opnsense-sso) needs no inventory value: Keycloak's issuer is derived from what the inventory already
+# holds, as the identity role builds it (roles/k8s_identity/vars/main.yml: https://<name>.<zone>/realms/<realm>, with the role's
+# defaults sso and lab and short names): the zone is the first plain one of k8s_identity_zone, k8s_gateway_zone on the first
+# k8s_nodes host. agent_box_proxmox_host_opnsense_sso.issuer overrides it. With no zone and no override the job gets no setting.
+- name: proxmox_host_inventory | Keycloak's issuer for the firewall's sign-in
+  ansible.builtin.set_fact:
+    agent_box_host_opnsense_issuer: >-
+      {%- set __n = hostvars[groups['k8s_nodes'][0]] if (groups['k8s_nodes'] | default([]) | length) > 0 else {} -%}
+      {%- set __zone = (__n.k8s_identity_zone | default('')) or (__n.k8s_gateway_zone | default('')) -%}
+      {{ agent_box_proxmox_host_opnsense_sso.issuer
+         | default(('https://' ~ (__n.k8s_identity_name | default('sso')) ~ '.' ~ __zone ~ '/realms/' ~ (__n.k8s_identity_realm | default('lab')))
+                   if __zone | length > 0 else '') }}
+
+- name: proxmox_host_inventory | The opnsense-sso settings are complete
+  ansible.builtin.assert:
+    that: agent_box_host_opnsense_issuer is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?/realms/[A-Za-z0-9_-]+$')
+    fail_msg: >-
+      agent_box_proxmox_host_opnsense_sso.issuer is set but is not https://sso.<zone>/realms/lab
+    quiet: true
+  when: agent_box_host_opnsense_issuer | length > 0
+
+# The client's secret is not written here: the job's own run asks the keys user's opnsense-sso-secret wrapper for it (the box's
+# prod identity.env holds it, made by c1-ansible's identity-values), so nothing needs the Mac.
+
 - name: proxmox_host_inventory | Read the key's public half
   ansible.builtin.slurp:
     src: "{{ agent_box_host_dir }}/id_ed25519.pub"

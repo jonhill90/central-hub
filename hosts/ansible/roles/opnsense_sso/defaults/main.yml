@@ -1,0 +1,26 @@
+---
+# Sign-in to the OPNsense web GUI through Keycloak, installed on the real firewall (VM 100) through the Proxmox host's
+# QEMU guest agent, so the firewall needs no SSH (D-0037 rule 5; docs/runbooks/sign-in-to-opnsense-through-keycloak.md
+# step 5). The same package and settings script the lab test copy proves (opnsense-test, lab-test signin).
+#
+# Private, no default, from the inventory: Keycloak's issuer for realm lab, the same as k8s_identity_issuer:
+# opnsense_sso_issuer: https://sso.<zone>/realms/lab
+
+# The firewall's VM on the Proxmox host.
+opnsense_sso_vm: 100
+# The pinned package. The same two values as PLUGIN_URL and PLUGIN_SHA256 in agent_box/files/opnsense-test.sh, so the
+# firewall gets the bytes the throwaway proof ran; tests/test_opnsense_sso.sh fails if the two files differ, and the CI
+# job plugin-pin checks the build attestation of that pin.
+opnsense_sso_plugin_url: https://github.com/jpawlowski/opnsense-openid-connect/releases/download/v1.0.0-beta5/os-openid-connect-1.0.0.beta5.pkg
+opnsense_sso_plugin_sha256: 4b222b0de4ff9523cf3c86b23e984507e21c9a92a02bafe7cc01e406a41b117c
+# The Keycloak client (k8s_identity's realm.yaml.j2) and the file and key its secret is read from on this job's controller.
+opnsense_sso_client_id: opnsense
+opnsense_sso_values_file: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/central-hub/identity.env"
+opnsense_sso_secret_key: OPNSENSE_CLIENT_SECRET
+# The server's name in OPNsense and the redirect path's last part (k8s_identity_opnsense_app_code).
+opnsense_sso_server_name: keycloak
+opnsense_sso_app_code: keycloak
+# The settings script, which fixes D-0037 rule 5's settings in code.
+opnsense_sso_script: "{{ playbook_dir }}/../bootstrap/opnsense-oidc-server.php"
+# The discovery read checks Keycloak's certificate (the host trusts the lab root, role proxmox_cert). Only a test turns this off.
+opnsense_sso_validate_certs: true

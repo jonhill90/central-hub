@@ -89,6 +89,7 @@ check_ansible() {
   bash "$here/tests/test_iac_access_pools.sh"
   bash "$here/tests/test_web_shot_modes.sh"
   bash "$here/tests/test_lab_token.sh"
+  bash "$here/tests/test_opnsense_sso_secret.sh"
   bash "$here/tests/test_sftp_key_carry.sh"
   bash "$here/tests/test_prod_lab_root.sh"
   bash "$here/tests/test_agent_browser.sh"
@@ -144,6 +145,8 @@ check_ansible() {
   bash "$here/tests/test_opnsense_backup_target.sh"
   bash "$here/tests/test_opnsense_store_admin.sh"
   bash "$here/tests/test_opnsense_proxmox_web.sh"
+  bash "$here/tests/test_opnsense_sso.sh"
+  bash "$here/tests/test_opnsense_sso_derive.sh"
 }
 
 check_manifests() {
