@@ -209,8 +209,9 @@ print(v["ansible_ssh_private_key_file"] == k + "/prod-node-key", v["k8s_backup_e
       v["k8s_identity_values_file"] == k + "/prod/identity.env", v["k8s_backup_restore_own_env"], v["k8s_backup_restore_source_host"],
       v["k8s_gitops_source_local_path_stable_folders"], v["k8s_backup_azure_seed_dir"] == k + "/prod/backup-certs",
       v["k8s_gitops_source_openbao_seal_node"], "proxmox" in d["all"]["children"], v["k8s_backup_restore_check_identity"], v["k8s_certs_cert_manager_by_argocd"], v["k8s_gateway_by_argocd"],
-      v["k8s_gitops_source_openbao_admin_address"])' "$seen" "$t/keys" 2>/dev/null)
-if [[ $v == "True True True True wk-a True True wk-a False False True True 192.0.2.60" && $seen != *ProxyJump* && $seen != */Users/* ]] &&
+      v["k8s_gitops_source_openbao_admin_address"],
+      v["k8s_certs_smoke_root_file"].endswith("/lab-root-ca.crt") and not v["k8s_certs_smoke_root_file"].startswith("/root"))' "$seen" "$t/keys" 2>/dev/null)
+if [[ $v == "True True True True wk-a True True wk-a False False True True 192.0.2.60 True" && $seen != *ProxyJump* && $seen != */Users/* ]] &&
    grep -q "^node_ssh_public_key = \"$(cut -d' ' -f1-2 < "$t/keys/prod-node-key.pub")" "$t/work/rebuild-prod/k8s.tfvars"; then
   ok "4. the box's copies: its key, the box's files, prod's own restore, stable folders, the carried certificates"
 else bad "4. [$v]"; fi
@@ -229,8 +230,13 @@ mv "$t/keep.sha" "$t/libexec/backend-files.sha256"
 r5=""
 TOFU_PLAN_RC=2 run check; [[ $rc -eq 1 && $out == *"plans changes with the box's tfvars copy and with the Mac's tfvars"* ]] && r5+="a"
 destroy 200 201 258; run check; [[ $rc -eq 1 && $out == *"other than prod's node VMs: VM 258"* ]] && r5+="b"; destroy 200 201
-inventory "        k8s_certs_smoke_root_file: /Users/someone/.config/central-hub/lab-ca/root.crt"
-run check; [[ $rc -eq 1 && $out == *"k8s_certs_smoke_root_file still points at the Mac"* ]] && r5+="c"; inventory
+inventory "        k8s_identity_oidc_handoff_file: /Users/someone/.config/central-hub/oidc-handoff"
+run check; [[ $rc -eq 1 && $out == *"k8s_identity_oidc_handoff_file still points at the Mac"* ]] && r5+="c"; inventory
+inventory "        k8s_identity_jellyfin_root_ca_file: $t/keys/nope.crt"
+run check; [[ $rc -eq 1 && $out == *"k8s_identity_jellyfin_root_ca_file is $t/keys/nope.crt, which is not on the box"* ]] && r5+="l"; inventory
+if [[ $(id -u) -eq 0 ]]; then chown 65534 "$t/keys/prod/identity.env"; else chmod 444 "$t/keys/prod/identity.env"; fi
+run check; [[ $rc -eq 1 && $out == *"k8s_identity_values_file is $t/keys/prod/identity.env, which the box's user can't write and chmod"* ]] && r5+="m"
+if [[ $(id -u) -eq 0 ]]; then chown 0 "$t/keys/prod/identity.env"; else chmod 644 "$t/keys/prod/identity.env"; fi
 dev_log 1111111111111111111111111111111111111111 "rebuild: all stages passed"
 run check; [[ $rc -eq 1 && $out == *"ran another commit"* ]] && r5+="d"
 dev_log "$sha" "rebuild: stage apps failed"; run check; [[ $rc -eq 1 && $out == *"did not pass every stage"* ]] && r5+="e"
@@ -245,7 +251,7 @@ run check; [[ $rc -eq 1 && $out == *"outside 200-249: 301"* ]] && r5+="f"
 sed -i 's/vm_id = 301/vm_id = 201/' "$t/keys/prod/tfvars/k8s.tfvars"
 ROUTE_VIA=192.0.2.11 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"* ]] && r5+="g"
 DEFAULT_VIA=192.0.2.10 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"*"default via 192.0.2.10"* ]] && r5+="h"
-if [[ $r5 == abcdeijkfgh ]]; then ok "5. check passes a teardown after a full pass, and refuses a plan with changes, VM 258, a Mac path, another dev commit, a failed dev run, a teardown-only dev run alone, VM 301, a route through a node"
+if [[ $r5 == abclmdeijkfgh ]]; then ok "5. check passes a teardown after a full pass, and refuses a plan with changes, VM 258, a Mac path, a jellyfin root or values file the box cannot use, another dev commit, a failed dev run, a teardown-only dev run alone, VM 301, a route through a node"
 else bad "5. [$r5] $out"; fi
 
 # 6

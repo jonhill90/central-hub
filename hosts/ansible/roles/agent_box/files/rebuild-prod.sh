@@ -339,6 +339,10 @@ v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
 v["k8s_gateway_smoke_client"] = "localhost"
 v["k8s_certs_smoke_client"] = "localhost"
+# The certs smoke (k8s_certs/tasks/smoke.yml) writes the lab root to this file on the smoke client, which is the box and runs as
+# keys. The role's default is under /root, which keys can't read: rerun 9 (2026-11-21) stopped there with "Permission denied".
+# Dev's wrapper does the same: a file in the run's own folder, which keys owns. The Mac's value is refused above.
+v["k8s_certs_smoke_root_file"] = known.rsplit("/", 1)[0] + "/lab-root-ca.crt"
 v["k8s_gitops_source_openbao_in_cluster"] = True
 # Argo CD makes cert-manager and the Gateway on a rebuilt cluster, so the certs and gateway stages must not apply the same objects
 # again: dev's inventory sets these true (runbook, "The env's inventory hands every app to Argo CD"). Rerun 7 (2026-11-21) ran
@@ -401,9 +405,15 @@ for h in sorted(nodes):
         if isinstance(val, str) and mac.search(val): bad.append("host %s: %s still points at the Mac" % (h, k))
     for k in ("k8s_control_plane_encryption_key_file", "k8s_backup_env_file", "k8s_certs_cloudflare_token_file",
               "k8s_identity_values_file", "k8s_certs_lab_ca_cert_file", "k8s_certs_lab_ca_key_file", "k8s_identity_theme_dir",
-              "k8s_gitops_sso_root_ca_file"):
+              "k8s_gitops_sso_root_ca_file", "k8s_identity_jellyfin_root_ca_file"):
         p = v.get(k)
         if isinstance(p, str) and p and not os.path.exists(p): bad.append("%s is %s, which is not on the box" % (k, p))
+    # The identity role makes, touches and chmods its values file on the controller, as the user this runs as (k8s_identity
+    # tasks/secrets.yml, "values" task, delegated to localhost): a file that user can't write or doesn't own stops the identity
+    # stage after the teardown.
+    vf = v.get("k8s_identity_values_file")
+    if isinstance(vf, str) and vf and os.path.exists(vf) and not (os.access(vf, os.W_OK) and os.stat(vf).st_uid == os.geteuid()):
+        bad.append("k8s_identity_values_file is %s, which the box's user can't write and chmod: the identity role does both" % vf)
     # The identity role needs <theme>/login/theme.properties (k8s_identity tasks/theme.yml) and would stop on it only after
     # the teardown, in stage identity.
     th = v.get("k8s_identity_theme_dir")
