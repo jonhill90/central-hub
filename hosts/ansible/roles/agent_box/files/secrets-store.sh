@@ -30,7 +30,7 @@
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test" >&2; exit 2; }
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan" >&2; exit 2; }
 named='' kv_path='' kv_key=''
 env=dev
 if [[ ${1:-} == --prod ]]; then env=prod; shift; fi
@@ -39,7 +39,7 @@ case ${1:-} in
   # The owner's sign-in to the store's page (secrets-store-owner.sh): prod only.
   owner-login)
     action=$1
-    [[ $# -eq 2 && $2 =~ ^(owner|test|check-test|remove-test)$ ]] || usage
+    [[ $# -eq 2 && $2 =~ ^(owner|test|check-test|remove-test|plan)$ ]] || usage
     named=$2
     [[ $env == prod ]] || { echo "secrets-store: owner-login is for the prod store only; refused" >&2; exit 1; }
     ;;
@@ -363,7 +363,21 @@ case $action in
   put-apps) put_apps ;;
   # owner, test and check-test write keys, and a key in a fresh rebuilt store makes restore-rebuilt refuse, so they wait for the
   # hold like put; remove-test only deletes, so it may run (the reviewer's ask on #821).
-  owner-login) [[ $named == remove-test ]] || no_hold; "$libexec/secrets-store-owner.sh" "$named" "$(addr)" "$cacert" "$env_keys" "$settings" "$libexec" ;;
+  owner-login)
+    [[ $named == remove-test || $named == plan ]] || no_hold
+    # What the page's sign-in needs, from this environment's inventory where it already holds it (the helper's settings
+    # override each): the zone (the first of k8s_gitops_source_zone, k8s_identity_zone and k8s_gateway_zone that is one plain
+    # value, not a template) and the owner's user name (k8s_identity_owner_username). A key that is missing or is a template
+    # is left empty, and the helper says which setting to give instead.
+    plain_inventory_value() { local v; v=$(inventory_value "$1" 2>/dev/null) || return 1; [[ -n $v && $v != *"{{"* ]] || return 1; printf '%s' "$v"; }
+    OWNER_LOGIN_ZONE='' OWNER_LOGIN_ZONE_KEY=''
+    for k in k8s_gitops_source_zone k8s_identity_zone k8s_gateway_zone; do
+      if OWNER_LOGIN_ZONE=$(plain_inventory_value "$k"); then OWNER_LOGIN_ZONE_KEY=$k; break; fi
+      OWNER_LOGIN_ZONE=''
+    done
+    OWNER_LOGIN_USER=$(plain_inventory_value k8s_identity_owner_username) || OWNER_LOGIN_USER=''
+    export OWNER_LOGIN_ZONE OWNER_LOGIN_ZONE_KEY OWNER_LOGIN_USER
+    "$libexec/secrets-store-owner.sh" "$named" "$(addr)" "$cacert" "$env_keys" "$settings" "$libexec" ;;
   compare) compare ;;
   reseed) reseed ;;
 esac

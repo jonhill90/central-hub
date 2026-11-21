@@ -7,6 +7,9 @@
 #   2. test does the same for role and policy `login-test` on kv/login-test/*, bound to the test user.
 #   3. remove-test deletes the role, the policy and the probe, and writes nothing else.
 #   4. The client secret and both AppRole IDs are in no curl argument and not in the output.
+#   6. With no issuer, page name or user name in the settings, they come from the zone and the owner's user name the wrapper
+#      derives from the inventory (OWNER_LOGIN_ZONE, OWNER_LOGIN_USER); with no zone, owner stops and says which keys to set;
+#      plan prints where each value comes from, makes no call and prints no name.
 #   5. A refused admin login stops before any other call and says the HTTP code; settings that are not an https issuer
 #      or a store name are refused before any call.
 # Usage: .github/hosts-check/tests/test_secrets_store_owner.sh   (needs python3)
@@ -121,4 +124,23 @@ cp "$t/settings.json" "$t/settings.good"
 echo '{"owner_login": {"issuer": "http://id.example.test/realms/lab", "host": "openbao.example.test", "username": "o"}}' > "$t/settings.json"
 run owner
 if [[ $rc -ne 0 && ! -s $t/log/urls ]]; then ok "5b. an http issuer is refused before any call"; else bad "5b. rc=$rc"; fi
+cat > "$t/settings.json" <<'J'
+{"owner_login": {}}
+J
+OWNER_LOGIN_ZONE=zone.example.test OWNER_LOGIN_ZONE_KEY=k8s_identity_zone OWNER_LOGIN_USER=derived.user run owner
+if [[ $rc -eq 0 ]] && python3 -I -c '
+import json,sys
+r=json.load(open(sys.argv[1])); c=json.load(open(sys.argv[2]))
+ok = (c["oidc_discovery_url"]=="https://sso.zone.example.test/realms/lab" and r["bound_claims"]=={"preferred_username":["derived.user"]}
+      and r["allowed_redirect_uris"]==["https://openbao.zone.example.test/ui/vault/auth/oidc/oidc/callback"])
+sys.exit(0 if ok else 1)' "$t/log/body.auth_oidc_role_owner" "$t/log/body.auth_oidc_config"; then
+  ok "6a. issuer, page name and user name derived from the inventory's zone and owner user name"
+else bad "6a. rc=$rc $out"; fi
+OWNER_LOGIN_ZONE='' OWNER_LOGIN_USER=u run owner
+if [[ $rc -ne 0 && $out == *"k8s_gitops_source_zone"* && ! -s $t/log/urls ]]; then ok "6b. no zone: owner stops before any call and names the keys"; else bad "6b. rc=$rc $out"; fi
+OWNER_LOGIN_ZONE=zone.example.test OWNER_LOGIN_ZONE_KEY=k8s_identity_zone OWNER_LOGIN_USER=derived.user run plan
+if [[ $rc -eq 0 && $out == *"issuer from the zone from k8s_identity_zone"* && $out == *"k8s_identity_owner_username in the inventory"* &&
+      $out != *zone.example.test* && $out != *derived.user* && ! -s $t/log/urls ]]; then
+  ok "6c. plan names where each value comes from, prints no name and makes no call"
+else bad "6c. rc=$rc $out"; fi
 exit $fail

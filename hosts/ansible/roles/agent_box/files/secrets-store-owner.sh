@@ -14,16 +14,15 @@
 # are never printed. Every call uses the admin AppRole (D-0062), so it runs only from the box's /32.
 # The policy `owner` gives the owner no path but kv/owner/* and kv/c1/* (the secrets the apps read) (OpenBao's `default` policy, for token self-service and the
 # page, still comes with every token).
-# Settings (agent_box_secrets_store_prod.owner_login, private inventory): issuer (https://<keycloak>/realms/lab),
-# host (the store's name the page is reached at), username (the owner's Keycloak user name), test_username
-# (default signin-test). The store's CA file also verifies Keycloak's certificate (both come from the lab CA).
+# Values (see plan): the settings agent_box_secrets_store_prod.owner_login override; else the prod inventory gives them.
+# The store's CA file also verifies Keycloak's certificate (both come from the lab CA).
 set -euo pipefail
 umask 077
 
 action=${1:-} addr=${2:-}/v1 cacert=${3:-} keys=${4:-} settings=${5:-} libexec=${6:-}
 die() { echo "secrets-store owner-login $action: $*" >&2; exit 1; }
 [[ -n $cacert && -n $keys && -n $settings ]] || die "called without the wrapper's arguments"
-case $action in owner | test | check-test | remove-test) ;; *) die "action must be owner, test, check-test or remove-test" ;; esac
+case $action in owner | test | check-test | remove-test | plan) ;; *) die "action must be owner, test, check-test, remove-test or plan" ;; esac
 
 # The wrapper's --resolve <store name>:443:<admin address> (D-0062) applies to every curl call here.
 curl() { if [[ -n ${SECRETS_STORE_RESOLVE:-} ]]; then command curl --resolve "$SECRETS_STORE_RESOLVE" "$@"; else command curl "$@"; fi; }
@@ -42,11 +41,39 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Each value is the settings' (owner_login in the private inventory) when set, else derived from what the prod inventory
+# already holds: the zone (OWNER_LOGIN_ZONE, from the first of k8s_gitops_source_zone, k8s_identity_zone and k8s_gateway_zone
+# that is one plain value) and the owner's user name (OWNER_LOGIN_USER, from k8s_identity_owner_username). Keycloak's name and
+# realm are the identity role's defaults (sso, lab; settings keycloak_name and realm override), the page's name is
+# openbao.<zone>, and the test user is signin-test.
 cfg() { python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])).get("owner_login",{}).get(sys.argv[2]); print(v if v else sys.argv[3])' "$settings" "$1" "${2:-}"; }
-issuer=$(cfg issuer) host=$(cfg host) owner_user=$(cfg username) test_user=$(cfg test_username signin-test)
-[[ $issuer =~ ^https://[^/]+/realms/[A-Za-z0-9_-]+$ ]] || die "settings owner_login.issuer must be https://<keycloak>/realms/<realm>"
-[[ $host =~ ^[a-z0-9.-]+$ ]] || die "settings owner_login.host must be the store's name"
-[[ $owner_user =~ ^[A-Za-z0-9._-]+$ && $test_user =~ ^[A-Za-z0-9._-]+$ ]] || die "settings owner_login.username and test_username must be user names"
+zone=${OWNER_LOGIN_ZONE:-}
+issuer=$(cfg issuer) host=$(cfg host) owner_user=$(cfg username "${OWNER_LOGIN_USER:-}") test_user=$(cfg test_username signin-test)
+src_issuer=settings src_host=settings src_user=settings
+if [[ -z $issuer ]]; then
+  [[ -n $zone ]] || die "no issuer: set owner_login.issuer, or a plain zone in the inventory (k8s_gitops_source_zone, k8s_identity_zone or k8s_gateway_zone)"
+  issuer="https://$(cfg keycloak_name sso).$zone/realms/$(cfg realm lab)" src_issuer="the zone from ${OWNER_LOGIN_ZONE_KEY:-the inventory}, name and realm of the identity role"
+fi
+if [[ -z $host ]]; then
+  [[ -n $zone ]] || die "no page name: set owner_login.host, or a plain zone in the inventory (k8s_gitops_source_zone, k8s_identity_zone or k8s_gateway_zone)"
+  host="openbao.$zone" src_host="openbao. and the zone from ${OWNER_LOGIN_ZONE_KEY:-the inventory}"
+fi
+if [[ -z $owner_user ]]; then
+  [[ $action == plan || $action == test || $action == check-test || $action == remove-test ]] || die "no owner user name: set owner_login.username, or k8s_identity_owner_username in the inventory"
+  src_user="none (only owner needs it)"
+elif [[ -n ${OWNER_LOGIN_USER:-} && $owner_user == "$OWNER_LOGIN_USER" ]]; then src_user="k8s_identity_owner_username in the inventory"; fi
+[[ $issuer =~ ^https://[^/]+/realms/[A-Za-z0-9_-]+$ ]] || die "the issuer must be https://<keycloak>/realms/<realm>"
+[[ $host =~ ^[a-z0-9.-]+$ ]] || die "the page's name must be lowercase letters, digits, . and -"
+[[ -z $owner_user && $action != owner ]] || [[ $owner_user =~ ^[A-Za-z0-9._-]+$ ]] || die "the owner's user name must be letters, digits, ., _ and -"
+[[ $test_user =~ ^[A-Za-z0-9._-]+$ ]] || die "owner_login.test_username must be a user name"
+if [[ $action == plan ]]; then
+  # No value is printed: the names are private. Only where each one comes from, so the missing ones can be set.
+  echo "plan: issuer from $src_issuer"
+  echo "plan: page name from $src_host"
+  echo "plan: owner user name from $src_user"
+  echo "plan: test user name from $([[ -n $(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("owner_login",{}).get("test_username",""))' "$settings") ]] && echo settings || echo "the default (signin-test)")"
+  exit 0
+fi
 redirect="https://$host/ui/vault/auth/oidc/oidc/callback"
 
 # One admin token for the run; the secret ID goes to curl on stdin and neither ID is printed.
