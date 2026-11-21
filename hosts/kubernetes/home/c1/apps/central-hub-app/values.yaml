@@ -5,7 +5,7 @@ name: central-hub-app
 # (Activation gate items 3 and 6: no token, no image automation; a new commit is a reviewed pull request).
 source:
   repoURL: https://github.com/jonhill90/central-hub-app.git
-  commit: "85d1503ed42005d3eceb2fb7021a84d255f6739f"
+  commit: "304d0d41bdc4c79360421e293a2da28eb67328ba"
 
 # One stock image builds and runs the app: it has git and npm. Node 22.21.1 on Debian bookworm, tag last
 # pushed 2026-01-13 (Docker Hub tag API), multi-arch index digest. D-0054: Docker Hub by digest, no account.
