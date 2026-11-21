@@ -221,6 +221,7 @@ settled_map() {
     echo "more than one folder for one claim: reading which volume the etcd backup taken with snapshot $id bound each claim to" >&2
     if RESTORE_SOURCE_HOST=${RESTORE_SOURCE_HOST:-} RESTORE_SNAPSHOT=$id RESTORE_ETCD_HOST=${RESTORE_ETCD_HOST:-} "$BACKUP_BIN/c1-restore-pv-map.sh" > "$work/pv-map" 2> "$work/pv-map.err"; then
       RESTORE_PV_MAP=$work/pv-map
+      cat "$work/pv-map.err" >&2
       grep -P '^etcd\t' "$work/pv-map" | sed 's/^/etcd backup used (id, time, revision): /' >&2 || true
       if snapshot_map "$id" > "$out" 2> "$err"; then
         install -m 0600 "$work/pv-map" "$BACKUP_STATE/pv-map"

@@ -51,7 +51,8 @@ vol_json=$("$RESTIC" --no-lock snapshots --json "$vol")
 etcd_hosts=()
 [ -z "${RESTORE_ETCD_HOST:-}" ] || etcd_hosts=(--host "$RESTORE_ETCD_HOST")
 etcd_json=$("$RESTIC" --no-lock snapshots --json "${etcd_hosts[@]}" --tag etcd)
-read -r eid etime < <(python3 -c '
+pick_etcd() { # <etcd snapshots json> <single: 1 = refuse when more than one host has one in the window>
+  python3 -c '
 import json, sys
 from datetime import datetime, timezone
 def t(s):
@@ -72,12 +73,25 @@ def t(s):
 vol = t(json.loads(sys.argv[1])[0]["time"])
 window = int(sys.argv[3])
 best = None
+hosts = set()
 for s in json.loads(sys.argv[2]) or []:
     gap = abs((t(s["time"]) - vol).total_seconds())
-    if gap <= window and (best is None or gap < best[0]):
-        best = (gap, s["id"], s["time"][:19])
-print(*((best[1], best[2]) if best else ("", "")))
-' "$vol_json" "$etcd_json" "${RESTORE_ETCD_WINDOW:-900}")
+    if gap <= window:
+        hosts.add(s.get("hostname", ""))
+        if best is None or gap < best[0]:
+            best = (gap, s["id"], s["time"][:19], s.get("hostname", ""))
+if best and sys.argv[4] == "1" and len(hosts) != 1:
+    best = None
+print(*((best[1], best[2], best[3]) if best else ("", "", "")))
+' "$vol_json" "$1" "${RESTORE_ETCD_WINDOW:-900}" "$2"
+}
+read -r eid etime ehost < <(pick_etcd "$etcd_json" 0)
+if [ -z "${eid:-}" ] && [ -n "${RESTORE_ETCD_HOST:-}" ]; then
+  # The named host has none in the window (a dev cluster's control plane is not named like the source's): take another
+  # host's only when exactly one host has one, so it can't be a guess between clusters.
+  read -r eid etime ehost < <(pick_etcd "$("$RESTIC" --no-lock snapshots --json --tag etcd)" 1)
+  [ -z "${eid:-}" ] || echo "no etcd snapshot of host $RESTORE_ETCD_HOST within ${RESTORE_ETCD_WINDOW:-900}s of volume snapshot $vol; using $eid of host $ehost, the only host with one in the window" >&2
+fi
 [ -n "${eid:-}" ] || die "no etcd snapshot within ${RESTORE_ETCD_WINDOW:-900}s of volume snapshot $vol in the repository: which volume each claim was bound to is not on record"
 
 "$RESTIC" --no-lock restore "$eid" --target "$work/restored" --verify >/dev/null
