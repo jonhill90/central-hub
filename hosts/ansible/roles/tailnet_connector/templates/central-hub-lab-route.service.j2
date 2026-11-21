@@ -5,12 +5,13 @@
 Description=Route the lab range through the mgmt gateway
 After=network-online.target
 Wants=network-online.target
-Before=tailscaled.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/sbin/ip route replace {{ tailnet_connector_lab_supernet }} via {{ tailnet_connector_gateway }} dev {{ tailnet_connector_mgmt_interface }}
+# The interface can come up after this unit starts, and one failed try left the unit inactive with no route (measured 2026-11-21:
+# unit enabled, not active, no route to prod or dev). So it tries for about a minute before it gives up.
+ExecStart=/bin/sh -c 'for i in $(seq 1 30); do /sbin/ip route replace {{ tailnet_connector_lab_supernet }} via {{ tailnet_connector_gateway }} dev {{ tailnet_connector_mgmt_interface }} && exit 0; sleep 2; done; exit 1'
 ExecStop=/sbin/ip route del {{ tailnet_connector_lab_supernet }} via {{ tailnet_connector_gateway }} dev {{ tailnet_connector_mgmt_interface }}
 
 [Install]
