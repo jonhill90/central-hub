@@ -295,6 +295,20 @@ if [ $rc16 = 0 ] && [[ $c16 == *playbooks/proxmox-guests.yml* ]] && grep -qx 'pr
   ok "16 the guests job runs proxmox-guests.yml and prints the guest that exists"
 else bad "16 rc=$rc16 [$c16] $(cat "$t/16.out")"; fi
 
+# 16a the connector job runs proxmox-connector.yml and prints only the facts its changed tasks name
+python3 - > "$t/out-check.json" <<'PY'
+import json
+t = lambda n, **r: {"task": {"name": n}, "hosts": {"proxmox_host": r}}
+print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [t("connector | Read the container's state", changed=False),
+      t("connector | FACT container 900 is running", changed=True), t("connector | FACT it advertises at least one lab range", changed=False)]}], "stats": {}}))
+PY
+: > "$t/calls"
+job check connector > "$t/16a.out" 2>&1; rc16a=$?
+c16a=$(cat "$t/calls")
+if [ $rc16a = 0 ] && [[ $c16a == *playbooks/proxmox-connector.yml* ]] && grep -qx 'proxmox-host: connector facts true: container 900 is running' "$t/16a.out"; then
+  ok "16a the connector job runs proxmox-connector.yml and prints the facts that are true"
+else bad "16a rc=$rc16a [$c16a] $(cat "$t/16a.out")"; fi
+
 # 16b the memory job runs proxmox-memory.yml and prints only the report lines that match its allowlist: a line with a name, an address
 #     or any extra word is dropped, so nothing private can pass
 python3 - > "$t/out-check.json" <<'PY'
