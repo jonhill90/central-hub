@@ -206,7 +206,7 @@ Run every Ansible step from `hosts/ansible/` with `-i inventories/home/`, first 
 Built by [D-0063](../decisions/0063-let-the-agent-box-hold-the-keys-that-guard-it.md). The guard files were copied on the owner's go on 2026-11-20, and the box's `check` ran with 0 changes that day; no apply has run from the box yet. Once a controller run with `--tags guard_files -e agent_box_copy_guard_files=true` has put them in `/etc/agent-keys-guard/` (owner `guardops`), a change to the firewall's code in `playbooks/opnsense.yml` or the `opnsense_lab` role applies from the box with no Mac step:
 
 1. Merge the change to `main` (reviewed, green).
-2. `sudo -n -u guardops /usr/local/libexec/agent-box/opnsense-prod.sh check`. It prints `check <hash>: N changed, N skipped, N tasks` and the commit.
+2. `sudo -n -u guardops /usr/local/libexec/agent-box/opnsense-prod.sh check`. It prints `check <hash>: N changed, N skipped, N tasks` and the commit, then one line `changed: <task name> (<host label>)` for each changed task (names from the reviewed playbook, never a diff or a value), so each change can be tied to its PR before the pass.
 3. The reviewer records its pass: `opnsense-prod.sh pass <commit> <hash> <pass message ID> <ISO time> reviewer`. The orchestrator records the go: `opnsense-prod.sh go <commit> <go message ID> <ISO time> orchestrator`, where the message ID is the owner's standing go (D-0061 rule 3).
 4. `opnsense-prod.sh apply-recorded <hash>`. It re-checks main's head and refuses, naming what is missing, unless the hash matches and the ledger holds the pass and an unused go. Then it arms the way back, runs the playbook, and confirms or rolls back (below).
 
