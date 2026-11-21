@@ -410,6 +410,10 @@ TOFU_INIT_RC=1 TOFU_INIT_TEXT=$'one\nregistry thing\nPermission denied here' run
 if [[ $o12h == *"OpenTofu init failed: 3 output line(s); phrases found: Permission denied,registry"* ]]; then
   ok "12h. the closed list names the phrases found, comma-separated, with the line count"
 else bad "12h. $o12h"; fi
+TOFU_INIT_RC=1 TOFU_INIT_TEXT='Killed 10.9.8.7 secret-token-xyz' run check; o12i=$out
+if [[ $o12i == *"OpenTofu init failed: 1 output line(s); phrases found: Killed"* && $o12i != *secret-token-xyz* && $o12i != *10.9.8.7* ]]; then
+  ok "12i. a one-line failure with a kill or timeout word names the word and never the line"
+else bad "12i. $o12i"; fi
 
 # 12b. The wrapper's PATH reaches `ip` (/usr/sbin on the box, where the route check reads the routing table): on the box the check
 # failed with "no route to the Proxmox API's address" because `ip` was not found.

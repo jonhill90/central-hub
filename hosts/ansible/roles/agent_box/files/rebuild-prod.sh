@@ -487,7 +487,7 @@ tf_note() {
   local f=$1 n=0 hit=() p
   [[ -r $f ]] || { printf 'output not readable'; return 0; }
   n=$(grep -c '' "$f" 2>/dev/null || true)
-  for p in 'Permission denied' 'No such file' 'command not found' 'Failed to query' 'registry' 'Error'; do
+  for p in 'Permission denied' 'No such file' 'command not found' 'Failed to query' 'registry' 'Error' 'Killed' 'timed out' 'deadline' 'lock' 'busy' 'signal' 'Initializing' 'Warning' 'denied' 'HTTP' 'EOF' 'connection' 'certificate' 'Unsupported' 'version' 'checksum' 'cache'; do
     if grep -q -F -- "$p" "$f" 2>/dev/null; then hit+=("$p"); fi
   done
   printf '%s output line(s); phrases found: %s' "${n:-0}" "$( (IFS=,; printf '%s' "${hit[*]:-none}") )"
