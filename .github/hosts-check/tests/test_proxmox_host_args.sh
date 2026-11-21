@@ -494,4 +494,28 @@ job check proxy > "$t/22d.out" 2>&1
 ! grep -q "box_ssh_source\|@" "$t/calls" && ok "22d the other jobs are not given the variable" || bad "22d $(cat "$t/calls")"
 rm -f "$t/handoff/box-backup-address"
 
+# 23 the firewall job also lets dev's worker reach ssh for its read-only restore: the worker's address from the same handoff as restore-reader's
+#    goes in the same vars file (proxmox_firewall_reader_ssh_source), beside the box's address when there is one; never on a command line or in
+#    the output; a bad shape stops the job before the playbook
+printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/23a.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v=={"proxmox_firewall_reader_ssh_source":"10.1.30.12"}, v' "$t/vars-seen.json" \
+   && ! grep -q "10.1.30.12" "$t/calls" "$t/23a.out" && [ ! -e "$(tail -1 "$t/vars-paths")" ]; then
+  ok "23a firewall with only a dev worker address: the reader rule variable alone, in a vars file, gone after"
+else bad "23a rc=$rc [$(cat "$t/calls")] $(cat "$t/23a.out")"; fi
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/23b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v=={"proxmox_firewall_box_ssh_source":"10.1.30.31","proxmox_firewall_reader_ssh_source":"10.1.30.12"}, v' "$t/vars-seen.json" \
+   && ! grep -q "10.1.30.12\|10.1.30.31" "$t/calls" "$t/23b.out"; then
+  ok "23b firewall with both addresses: both variables in the one vars file"
+else bad "23b rc=$rc [$(cat "$t/calls")] $(cat "$t/23b.out")"; fi
+rm -f "$t/handoff/box-backup-address"
+for v in 10.1.20.5 '10.1.30.12/32' 'abc'; do
+  printf '%s\n' "$v" > "$t/handoff/dev-worker-address"; : > "$t/calls"
+  job check firewall > "$t/23c.out" 2>&1; rc=$?
+  if [ $rc != 0 ] && [ ! -s "$t/calls" ] && ! grep -qF "$v" "$t/23c.out"; then :; else bad "23c address '$v' rc=$rc [$(cat "$t/calls")]"; fi
+done
+ok "23c three bad dev worker address shapes stop the firewall job before the playbook, naming no value"
+rm -f "$t/handoff/dev-worker-address"
+
 exit "$fail"

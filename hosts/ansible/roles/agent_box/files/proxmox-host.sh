@@ -232,11 +232,19 @@ if [[ $job == firewall ]]; then
   # restic sftp works from, handed over by dev-worker-address.sh box-key) gets one more IN rule, tcp 22 from that address alone. No address
   # in the handoff: no rule, and the job runs as before. It reaches the playbook in a vars file of this user's own, never on a command line.
   fw_addr=$("$libexec/dev-worker-address.sh" read-box-address) || exit 1
-  if [[ -n $fw_addr ]]; then
+  # The same holds for dev's worker, whose read-only restore user (job restore-reader) the host's sshd lets in from that worker's address
+  # alone: its address, from the same handoff as restore-reader's, gets one more IN rule, tcp 22 from that address alone (prod run 6 and dev
+  # run 2, 2026-11-21: with the host firewall on, dev's restore over sftp got "Connection closed" after 20 s). No file: no rule.
+  dw_addr=$("$libexec/dev-worker-address.sh" read) || exit 1
+  if [[ -n $fw_addr || -n $dw_addr ]]; then
     install -d -m 0700 "$work/state"
     fw_vars=$(mktemp "$work/state/fw-vars.XXXXXX")
     trap 'rm -f "$fw_vars"' EXIT
-    FW_ADDR=$fw_addr python3 -I -c 'import json, os, sys; json.dump({"proxmox_firewall_box_ssh_source": os.environ["FW_ADDR"]}, open(sys.argv[1], "w"))' "$fw_vars"
+    FW_ADDR=$fw_addr DW_ADDR=$dw_addr python3 -I -c 'import json, os, sys
+v = {}
+if os.environ["FW_ADDR"]: v["proxmox_firewall_box_ssh_source"] = os.environ["FW_ADDR"]
+if os.environ["DW_ADDR"]: v["proxmox_firewall_reader_ssh_source"] = os.environ["DW_ADDR"]
+json.dump(v, open(sys.argv[1], "w"))' "$fw_vars"
     fw_args+=(-e "@$fw_vars")
   fi
 fi
