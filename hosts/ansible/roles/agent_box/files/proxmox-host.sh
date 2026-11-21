@@ -19,6 +19,8 @@
 #   `connector` (playbooks/proxmox-connector.yml: read-only; `check connector` prints which of nine facts about container 900 are true: running, online, advertises and has approved a lab range,
 #     forwards, has a lab route, reaches the management, prod and dev gateways; fixed words from the reviewed playbook, no name or address)
 #   `guests` (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell)
+#   `ct259-destroy` (playbooks/proxmox-ct259-destroy.yml: deletes the rehearsal's container CT 259 after tag, privilege and mount-point guards.
+#     A delete, so a session applies it only through `apply-recorded` with a reviewer pass and a go)
 #   `box-writer` (playbooks/proxmox-restic-box.yml: the user `boxbackup` for the agent box's own backups, replacing Azure for them: one key, only from
 #     the address this job runs from, only the folder /box on the backup disk, internal-sftp, no shell, no root. The public half of the box's key comes
 #     from the handoff (dev-worker-address.sh read-box-key), in a vars file of this user's own and never on a command line. An access right, so a
@@ -65,7 +67,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [connector]=playbooks/proxmox-connector.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml [box-writer]=playbooks/proxmox-restic-box.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [connector]=playbooks/proxmox-connector.yml [ct259-destroy]=playbooks/proxmox-ct259-destroy.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml [box-writer]=playbooks/proxmox-restic-box.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -74,7 +76,7 @@ result=$work/state/check.json
 ledger=$work/ledger
 usage() {
   echo "       proxmox-host guard arm|confirm|rollback|clear|status" >&2
-  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|connector|restore-reader|memory|ksm|ksm-off|box-writer]|apply [proxy|agent-access|sso|firewall|guests|connector|restore-reader|memory|ksm|ksm-off|box-writer] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
+  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|connector|ct259-destroy|restore-reader|memory|ksm|ksm-off|box-writer]|apply [proxy|agent-access|sso|firewall|guests|connector|ct259-destroy|restore-reader|memory|ksm|ksm-off|box-writer] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
   echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
   exit 2
 }
