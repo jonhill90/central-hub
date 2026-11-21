@@ -265,7 +265,7 @@ spec:
         serviceAccountsEnabled: false
         rootUrl: https://{{ k8s_identity_openbao_hosts | first }}
         baseUrl: /ui/
-        redirectUris: {{ k8s_identity_openbao_hosts | map('regex_replace', '^(.*)$', 'https://\\1/ui/vault/auth/oidc/oidc/callback') | list | to_json }}
+        redirectUris: {{ (k8s_identity_openbao_hosts | map('regex_replace', '^(.*)$', 'https://\\1/ui/vault/auth/oidc/oidc/callback') | list + ['http://localhost:8250/oidc/callback']) | to_json }}
         webOrigins: {{ k8s_identity_openbao_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
 {{ mappers }}
 {% endif %}

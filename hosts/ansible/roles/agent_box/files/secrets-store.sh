@@ -30,8 +30,8 @@
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan" >&2; exit 2; }
-named='' kv_path='' kv_key=''
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan|ssh-ca plan|apply|check|public <folder>|sign-host <key> <names> <out>" >&2; exit 2; }
+named='' kv_path='' kv_key='' ssh_args=()
 env=dev
 if [[ ${1:-} == --prod ]]; then env=prod; shift; fi
 case ${1:-} in
@@ -42,6 +42,12 @@ case ${1:-} in
     [[ $# -eq 2 && $2 =~ ^(owner|test|check-test|remove-test|plan)$ ]] || usage
     named=$2
     [[ $env == prod ]] || { echo "secrets-store: owner-login is for the prod store only; refused" >&2; exit 1; }
+    ;;
+  # The SSH certificate sign-in for the lab's Linux boxes (secrets-store-ssh.sh, D-0064).
+  ssh-ca)
+    action=$1
+    [[ $# -ge 2 && $2 =~ ^(plan|apply|check|public|sign-host)$ ]] || usage
+    named=$2; shift 2; ssh_args=("$@")
     ;;
   # The value comes on stdin, never as an argument; the helper checks the path and key again.
   put)
@@ -378,6 +384,18 @@ case $action in
     OWNER_LOGIN_USER=$(plain_inventory_value k8s_identity_owner_username) || OWNER_LOGIN_USER=''
     export OWNER_LOGIN_ZONE OWNER_LOGIN_ZONE_KEY OWNER_LOGIN_USER
     "$libexec/secrets-store-owner.sh" "$named" "$(addr)" "$cacert" "$env_keys" "$settings" "$libexec" ;;
+  ssh-ca)
+    [[ $named == plan || $named == check || $named == public ]] || no_hold
+    plain_inventory_value() { local v; v=$(inventory_value "$1" 2>/dev/null) || return 1; [[ -n $v && $v != *"{{"* ]] || return 1; printf '%s' "$v"; }
+    SSH_CA_ZONE='' SSH_CA_ZONE_KEY=''
+    for k in k8s_gitops_source_zone k8s_identity_zone k8s_gateway_zone; do
+      if SSH_CA_ZONE=$(plain_inventory_value "$k"); then SSH_CA_ZONE_KEY=$k; break; fi
+      SSH_CA_ZONE=''
+    done
+    SSH_CA_ISSUER=''
+    [[ -z $SSH_CA_ZONE ]] || SSH_CA_ISSUER="https://sso.$SSH_CA_ZONE/realms/lab"
+    export SSH_CA_ZONE SSH_CA_ZONE_KEY SSH_CA_ISSUER
+    "$libexec/secrets-store-ssh.sh" "$named" "$(addr)" "$cacert" "$env_keys" "$settings" "$libexec" "${ssh_args[@]}" ;;
   compare) compare ;;
   reseed) reseed ;;
 esac
