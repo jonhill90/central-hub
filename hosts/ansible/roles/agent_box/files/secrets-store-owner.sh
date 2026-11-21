@@ -71,7 +71,7 @@ EOF
 
 # setup NAME PREFIX USER: policy, the login, the role.
 setup() {
-  local name=$1 prefix=$2 user=$3 secret code
+  local name=$1 prefix=$2 user=$3 code
   policy_for "$name" "$prefix" > "$tmp/policy.hcl"
   python3 -I -c 'import json,sys; print(json.dumps({"policy": open(sys.argv[1]).read()}))' "$tmp/policy.hcl" > "$tmp/policy.json"
   put_json "sys/policies/acl/$name" "$tmp/policy.json"
