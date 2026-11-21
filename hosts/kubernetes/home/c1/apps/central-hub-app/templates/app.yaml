@@ -6,6 +6,12 @@ Restricted pod security, no ServiceAccount token, egress to DNS and public addre
 runner), ingress only from the Gateway.
 */ -}}
 {{- $v := .Values }}
+{{- if not (has $v.auth.mode (list "off" "oidc")) }}
+{{- fail (printf "auth.mode must be exactly \"off\" or \"oidc\", not %v" $v.auth.mode) }}
+{{- end }}
+{{- if and (eq $v.auth.mode "oidc") (not (and (kindIs "bool" $v.auth.secretsConfirmed) $v.auth.secretsConfirmed)) }}
+{{- fail "auth.mode oidc needs auth.secretsConfirmed: true (a real boolean, not a quoted string), set only after the realm client and the Secrets central-hub-app-sso and central-hub-app-oidc exist (runbook sign-in-to-the-central-hub-app-with-keycloak.md, Turn it on)" }}
+{{- end }}
 apiVersion: v1
 kind: Namespace
 metadata:

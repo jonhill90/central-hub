@@ -140,6 +140,7 @@ check_ansible() {
   bash "$here/tests/test_opnsense_lab_tenant.sh"
   bash "$here/tests/test_desktop_configure_vars.sh"
   bash "$here/tests/test_opnsense_app_access.sh"
+  bash "$here/tests/test_opnsense_client_derive.sh"
   bash "$here/tests/test_opnsense_backup_target.sh"
   bash "$here/tests/test_opnsense_store_admin.sh"
   bash "$here/tests/test_opnsense_proxmox_web.sh"
@@ -188,6 +189,29 @@ check_manifests() {
     helm template "$(basename "$chart")" "$chart" --namespace "$(basename "$chart")" --set zone=example.com --set address=192.0.2.10 \
       > "$work/rendered/app-$(basename "$(dirname "$(dirname "$chart")")")-$(basename "$chart").yaml"
   done
+  # central-hub-app: sign-in guard. Off by default; oidc without secretsConfirmed must fail to render (a pod that starts
+  # with sign-in on and no Secrets answers 503 to everyone while Argo CD shows Healthy); oidc with it confirmed renders
+  # the env and the optional Secret volume.
+  local app=hosts/kubernetes/home/c1/apps/central-hub-app
+  helm template central-hub-app "$app" --namespace central-hub-app | grep -q 'name: HUB_AUTH, value: "off"' ||
+    { echo "central-hub-app: sign-in should be off by default" >&2; return 1; }
+  if helm template central-hub-app "$app" --namespace central-hub-app --set auth.mode=oidc > /dev/null 2>&1; then
+    echo "central-hub-app: auth.mode=oidc without auth.secretsConfirmed should not render" >&2; return 1
+  fi
+  # A quoted "true" is a string, and any mode but exactly off or oidc is refused (a typo like "OIDC" or "on" must not render).
+  if helm template central-hub-app "$app" --namespace central-hub-app --set auth.mode=oidc --set-string auth.secretsConfirmed=true > /dev/null 2>&1; then
+    echo "central-hub-app: a quoted auth.secretsConfirmed string should not pass the guard" >&2; return 1
+  fi
+  local badmode
+  for badmode in OIDC on true ""; do
+    if helm template central-hub-app "$app" --namespace central-hub-app --set-string auth.mode="$badmode" > /dev/null 2>&1; then
+      echo "central-hub-app: auth.mode '$badmode' should not render" >&2; return 1
+    fi
+  done
+  helm template central-hub-app "$app" --namespace central-hub-app --set auth.mode=oidc --set auth.secretsConfirmed=true \
+    > "$work/rendered/app-central-hub-app-oidc.yaml"
+  grep -q 'name: central-hub-app-oidc' "$work/rendered/app-central-hub-app-oidc.yaml" && grep -q 'name: HUB_OIDC_DIR' "$work/rendered/app-central-hub-app-oidc.yaml" ||
+    { echo "central-hub-app: oidc render lacks the Secret volume or env" >&2; return 1; }
   # The secret-store app with OpenBao in the cluster turned on (dev first, D-0058), so its `openbao`
   # store and test ExternalSecret are schema-checked too.
   helm template secret-store hosts/kubernetes/home/c1/apps/secret-store --namespace external-secrets \
