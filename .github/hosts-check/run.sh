@@ -457,6 +457,7 @@ check_backup() {
   bash "$here/tests/test_secrets_store_kv.sh"
   bash "$here/tests/test_secrets_store_kv_openbao.sh"
   bash "$here/tests/test_secrets_store_wrapper.sh"
+  bash "$here/tests/test_secrets_store_owner.sh"
   bash "$here/tests/test_openbao_prod.sh"
   bash "$here/tests/test_rebuild_prod.sh"
   bash "$here/tests/test_openbao_handover.sh"

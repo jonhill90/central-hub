@@ -886,6 +886,8 @@
     - secrets-store-restore.sh     # the guarded restores, same store and rebuilt
     - secrets-store-snapshots.sh   # rotation, and setting an earlier store's snapshots aside
     - secrets-store-kv.sh          # SOPS copies: put, compare, reseed (D-0058 rule 8)
+    - secrets-store-owner.sh       # the owner's OIDC sign-in to the store's page: set up and proved from the box
+    - owner-login-check.py         # its end-to-end proof with the test user
   loop_control:
     label: "{{ agent_box_libexec_dir }}/{{ item }}"
   when: agent_box_secrets_store | length > 0 or agent_box_secrets_store_prod | length > 0

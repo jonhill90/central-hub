@@ -352,7 +352,7 @@ argument_specs:
           The same settings for the store inside prod's c1, written to <work_dir>/secrets-store-prod.json for the
           secrets-store-prod wrapper. address must equal k8s_gitops_source_openbao_store_host in the prod inventory the
           openbao-prod wrapper builds (agent_box_openbao_prod.store_host); snapshot_box and sops_copies as for the dev settings, each set only by its own
-          tap. It makes no recovery shares (D-0038 rule 5: prod gets none). Empty skips the file.
+          tap. It makes no recovery shares (D-0038 rule 5: prod gets none). owner_login: issuer, host, username and test_username for `secrets-store-prod owner-login` (the owner's OIDC sign-in to the store's page; the runbook says each). Empty skips the file.
       agent_box_openbao_prod:
         type: dict
         default: {}

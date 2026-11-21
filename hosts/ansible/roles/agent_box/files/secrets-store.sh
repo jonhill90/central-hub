@@ -30,12 +30,19 @@
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed" >&2; exit 2; }
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test" >&2; exit 2; }
 named='' kv_path='' kv_key=''
 env=dev
 if [[ ${1:-} == --prod ]]; then env=prod; shift; fi
 case ${1:-} in
   recovery | status | snapshot | restore | clear-hold | put-apps | compare | reseed) action=$1; [[ $# -eq 1 ]] || usage ;;
+  # The owner's sign-in to the store's page (secrets-store-owner.sh): prod only.
+  owner-login)
+    action=$1
+    [[ $# -eq 2 && $2 =~ ^(owner|test|check-test|remove-test)$ ]] || usage
+    named=$2
+    [[ $env == prod ]] || { echo "secrets-store: owner-login is for the prod store only; refused" >&2; exit 1; }
+    ;;
   # The value comes on stdin, never as an argument; the helper checks the path and key again.
   put)
     action=$1
@@ -354,6 +361,7 @@ case $action in
   clear-hold) clear_hold ;;
   put) put ;;
   put-apps) put_apps ;;
+  owner-login) "$libexec/secrets-store-owner.sh" "$named" "$(addr)" "$cacert" "$env_keys" "$settings" "$libexec" ;;
   compare) compare ;;
   reseed) reseed ;;
 esac
