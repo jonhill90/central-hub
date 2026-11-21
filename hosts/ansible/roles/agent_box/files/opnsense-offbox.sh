@@ -24,6 +24,7 @@ restic=$libexec/restic
 backend=/etc/agent-keys/box-backup/backend.env   # written by dev-worker-address.sh box-backend-on; absent: the settings' repository (Azure)
 cert=$libexec/azure-cert.py
 escrow=$libexec/opnsense-escrow.py
+hostescrow=$libexec/host-escrow.sh
 src=$work/opnsense-backup
 host=agent-box   # one fixed host name, so retention groups every snapshot even if the box is renamed
 export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin
@@ -54,7 +55,7 @@ done
 
 # The repository is Azure's (the default) or the Proxmox host's backup store, over sftp (the owner, 2026-11-18: back up on the Proxmox
 # host, not Azure). With OFFBOX_RESTIC_SSH_CONFIG set, restic reaches the repository through that ssh config (its alias, the key and the
-# pinned host key); the Azure sign-in below is still used for the vault, where the two small escrow secrets stay.
+# pinned host key). Then the escrow is the host's too (host-escrow.sh), and the Azure certificate and vault are not touched.
 ropts=()
 if [[ -n ${OFFBOX_RESTIC_SSH_CONFIG:-} ]]; then
   [[ $RESTIC_REPOSITORY == sftp:* ]] || die "OFFBOX_RESTIC_SSH_CONFIG is set but the repository is not an sftp one"
@@ -69,13 +70,19 @@ copies=("$src"/config-*.xml)
 newest=$(printf '%s\n' "${copies[@]}" | sort | tail -n 1)
 
 status=0
-if ! CENTRAL_HUB_BACKUP_ENV=$settings "$cert" renew; then
-  echo "opnsense-offbox: the certificate renewal failed; trying the copy with the current certificate" >&2
-  status=1
+if [[ -n ${OFFBOX_RESTIC_SSH_CONFIG:-} ]]; then
+  # The host's store is the backend: no Azure at all (its subscription is disabled, and the box's Azure certificate is for the vault and
+  # the Azure repository). The password is made if missing, and its one off-box copy is the host's escrow folder, beside the repository.
+  CENTRAL_HUB_BACKUP_ENV=$settings "$escrow" password || die "the repository password file could not be made; nothing copied"
+  "$hostescrow" restic-password "$RESTIC_PASSWORD_FILE" || die "the host does not hold the current repository password; nothing copied"
+else
+  if ! CENTRAL_HUB_BACKUP_ENV=$settings "$cert" renew; then
+    echo "opnsense-offbox: the certificate renewal failed; trying the copy with the current certificate" >&2
+    status=1
+  fi
+  # The password's one off-box copy comes first: with no copy in the vault, nothing is sent.
+  CENTRAL_HUB_BACKUP_ENV=$settings "$escrow" ensure || die "the vault does not hold the current repository password; nothing copied"
 fi
-
-# The password's one off-box copy comes first: with no copy in the vault, nothing is sent.
-CENTRAL_HUB_BACKUP_ENV=$settings "$escrow" ensure || die "the vault does not hold the current repository password; nothing copied"
 [[ -s $RESTIC_PASSWORD_FILE ]] || die "the repository password file is missing after the escrow step"
 
 err=$(mktemp "$work/.offbox.XXXXXX")

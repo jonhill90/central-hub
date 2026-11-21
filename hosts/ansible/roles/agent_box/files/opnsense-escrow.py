@@ -11,6 +11,10 @@ docs/runbooks/copy-opnsense-backup-off-box.md). Run as the keys user by opnsense
           the same is then done for that file's content under that secret name: the box's age identity, which opens
           every secrets bundle. The file must exist already; this script never makes it.
 
+  password  Make the password file (0600) if it is missing, and do nothing else: no sign-in, no network. For when the host's
+          backup store is the backend and its escrow (host-escrow.sh) keeps the password, not the vault. Needs only
+          RESTIC_PASSWORD_FILE.
+
 The value goes from the file to Key Vault's HTTPS API and nowhere else: it is never printed or logged.
 Sign-in is the box's own certificate, through azure-cert.py (the c1 nodes' script, same folder).
 Settings come from the same env file (CENTRAL_HUB_BACKUP_ENV): AZURE_CLIENT_ID, AZURE_TENANT_ID,
@@ -139,11 +143,16 @@ def escrow(conf, bearer, secret, value, content_type, what):
     az.log(f"wrote the current {what} to the vault")
 
 
+def cmd_password(conf):
+    az.need(conf, "RESTIC_PASSWORD_FILE")
+    password(conf["RESTIC_PASSWORD_FILE"])
+
+
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] != "ensure":
-        sys.exit(f"usage: {sys.argv[0]} ensure")
+    if len(sys.argv) != 2 or sys.argv[1] not in ("ensure", "password"):
+        sys.exit(f"usage: {sys.argv[0]} ensure|password")
     os.umask(0o077)
-    cmd_ensure(az.settings())
+    (cmd_ensure if sys.argv[1] == "ensure" else cmd_password)(az.settings())
 
 
 if __name__ == "__main__":

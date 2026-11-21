@@ -5,7 +5,7 @@
 # It reuses everything the OPNsense off-box copy has (pick 222): its settings, its Azure sign-in, its container,
 # its restic repository and password, and its Key Vault, so it needs no Azure right of its own. With the switch on
 # (dev-worker-address.sh box-backend-on) that repository is the OPNsense copy's folder on the Proxmox host's disk, over sftp (runbook
-# back-up-c1-off-box.md, P5); the escrows stay in the vault.
+# back-up-c1-off-box.md, P5); the escrows go to the host as well (host-escrow.sh).
 #   1. The newest bundle must be encrypted to the box's own age recipient (and the Mac's, when one is set).
 #   2. Both escrows must hold before anything is sent: the restic password, and the box's age identity as secret
 #      BUNDLE_VAULT_SECRET. The box can write them and never read them back; the owner reads them at break-glass.
@@ -29,6 +29,7 @@ backend=/etc/agent-keys/box-backup/backend.env   # written by dev-worker-address
 sops=$libexec/sops
 age_keygen=$libexec/age-keygen
 escrow=$libexec/opnsense-escrow.py
+hostescrow=$libexec/host-escrow.sh
 host=agent-box
 export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin
 
@@ -60,7 +61,7 @@ done
 
 # The repository is Azure's (the default) or the Proxmox host's backup store, over sftp (the owner, 2026-11-18: back up on the Proxmox
 # host, not Azure). With OFFBOX_RESTIC_SSH_CONFIG set, restic reaches the repository through that ssh config (its alias, the key and the
-# pinned host key); the Azure sign-in below is still used for the vault, where the two small escrow secrets stay.
+# pinned host key). Then both escrows are the host's too (host-escrow.sh), and the Azure vault is not touched.
 ropts=()
 if [[ -n ${OFFBOX_RESTIC_SSH_CONFIG:-} ]]; then
   [[ $RESTIC_REPOSITORY == sftp:* ]] || die "OFFBOX_RESTIC_SSH_CONFIG is set but the repository is not an sftp one"
@@ -83,8 +84,16 @@ if [[ -n ${BUNDLE_MAC_RECIPIENT:-} && " $recipients " != *" $BUNDLE_MAC_RECIPIEN
 fi
 
 # 2. The escrows come first: with no off-box copy of the password and the identity, nothing is sent.
-CENTRAL_HUB_BACKUP_ENV=$settings BACKUP_ESCROW_FILE=$identity BACKUP_ESCROW_SECRET=$BUNDLE_VAULT_SECRET "$escrow" ensure \
-  || die "the vault does not hold the current repository password and age identity; nothing sent"
+if [[ -n ${OFFBOX_RESTIC_SSH_CONFIG:-} ]]; then
+  # The host's store is the backend: both escrows go to the host's escrow folder, not the Azure vault (its subscription is disabled).
+  CENTRAL_HUB_BACKUP_ENV=$settings "$escrow" password || die "the repository password file could not be made; nothing sent"
+  [[ -s $RESTIC_PASSWORD_FILE ]] || die "the repository password file is missing after the escrow step"
+  "$hostescrow" restic-password "$RESTIC_PASSWORD_FILE" || die "the host does not hold the current repository password; nothing sent"
+  "$hostescrow" age-identity "$identity" || die "the host does not hold the box's age identity; nothing sent"
+else
+  CENTRAL_HUB_BACKUP_ENV=$settings BACKUP_ESCROW_FILE=$identity BACKUP_ESCROW_SECRET=$BUNDLE_VAULT_SECRET "$escrow" ensure \
+    || die "the vault does not hold the current repository password and age identity; nothing sent"
+fi
 [[ -s $RESTIC_PASSWORD_FILE ]] || die "the repository password file is missing after the escrow step"
 
 err=$(mktemp "$work/.bundle-offbox.XXXXXX")
