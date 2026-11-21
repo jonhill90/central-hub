@@ -91,6 +91,10 @@ ok14c = cats == ["invops ALL=(keys) NOPASSWD: /usr/bin/cat /k/prod/inventory-hos
 print("14", ok14a and ok14b, ok14c)
 print("13", len(spl) == 1 and all(f in spl[0].split(", ") or spl[0].endswith(": " + f) or (", " + f) in spl[0] for f in forms) and "owner-login *" not in spl[0],
       "owner-login *" not in render([sp]))
+ss = [w for w in d if w["name"] == "opnsense-sso-secret"][0]
+sst = render([ss])
+print("14", [l for l in sst.splitlines() if l.startswith("hostops ")] == ["hostops ALL=(keys) NOPASSWD: /x/opnsense-sso-secret.sh read"],
+      not [l for l in sst.splitlines() if l.startswith("sess ")])
 PY
 )
 check() { # number, text
@@ -110,4 +114,5 @@ check 11 "11. guardops: only proxmox-host guard arm, confirm, rollback and statu
 check 12 "12. lab-token: the session may status and mint as hostops; only hostops may run lab-token-put (as keys); the session has no line for it"
 check 14 "14. inventory: the session sets, gets, lists, diffs, logs, imports and compares as invops and has no view; keys, hostops and guardops view one exact part each; invops cats the two old copies with two exact commands"
 check 13 "13. secrets-store-prod: the five exact owner-login forms are in the sudoers line, no owner-login *"
+check 14 "14. opnsense-sso-secret: only hostops may run read (as keys); the session has no line for it"
 exit "$fail"

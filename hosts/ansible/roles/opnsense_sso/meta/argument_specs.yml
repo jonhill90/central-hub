@@ -1,0 +1,19 @@
+---
+argument_specs:
+  main:
+    short_description: Install os-openid-connect on the firewall's VM through the guest agent and set its Keycloak server, with local root kept
+    options:
+      opnsense_sso_issuer:
+        type: str
+        required: true
+        description: Keycloak's issuer for realm lab, https://sso.<zone>/realms/lab. Private.
+      opnsense_sso_vm: {type: int, default: 100, description: "The firewall's VM ID."}
+      opnsense_sso_plugin_url: {type: str, description: "The pinned package's release URL."}
+      opnsense_sso_plugin_sha256: {type: str, description: "The package's SHA-256, checked on the firewall before pkg add."}
+      opnsense_sso_client_id: {type: str, default: opnsense, description: "The Keycloak client's ID."}
+      opnsense_sso_values_file: {type: path, description: "The file that holds the client secret."}
+      opnsense_sso_secret_key: {type: str, default: OPNSENSE_CLIENT_SECRET, description: "The secret's key in that file."}
+      opnsense_sso_server_name: {type: str, default: keycloak, description: "The server's name in OPNsense."}
+      opnsense_sso_app_code: {type: str, default: keycloak, description: "The redirect path's last part."}
+      opnsense_sso_script: {type: path, description: "bootstrap/opnsense-oidc-server.php."}
+      opnsense_sso_validate_certs: {type: bool, default: true, description: "Check Keycloak's certificate on the discovery read; only a test turns this off."}

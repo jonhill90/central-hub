@@ -1,0 +1,11 @@
+---
+# The firewall's web sign-in through Keycloak, run on the Proxmox host through the QEMU guest agent
+# (docs/runbooks/sign-in-to-opnsense-through-keycloak.md step 5; the host job `opnsense-sso` of proxmox-host.sh).
+#   ansible-playbook -i inventories/home/ playbooks/opnsense-sso.yml --check --diff
+- name: OPNsense sign-in through Keycloak
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  roles:
+    - role: opnsense_sso
+      tags: [opnsense_sso]
