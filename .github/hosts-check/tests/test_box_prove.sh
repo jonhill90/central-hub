@@ -99,7 +99,7 @@ tags = set(inc[0]["tags"]) | set(inc[0]["ansible.builtin.include_tasks"]["apply"
 assert "wrappers" in tags and not (tags & skip), (tags, skip)
 tasks = yaml.safe_load(open(role + "/tasks/offbox_scripts.yml"))
 man = [t for t in tasks if "backend-files.sha256" in str(t)]
-assert len(man) == 1 and all(n in man[0]["ansible.builtin.copy"]["content"] for n in ("opnsense-offbox.sh", "secrets-bundle-offbox.sh"))
+assert len(man) == 1 and all(n in man[0]["ansible.builtin.copy"]["content"] for n in ("opnsense-offbox.sh", "secrets-bundle-offbox.sh", "host-escrow.sh", "opnsense-escrow.py"))
 dests = str(tasks)
 assert "secrets-bundle-offbox.sh" in dests and "opnsense-offbox.sh" in dests
 PY

@@ -13,7 +13,7 @@ fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 mkdir -p "$t/roles/r/tasks" "$t/roles/r/files" "$t/out"
-for f in opnsense-offbox.sh secrets-bundle-offbox.sh; do cp "$src/files/$f" "$t/roles/r/files/$f"; done
+for f in opnsense-offbox.sh secrets-bundle-offbox.sh host-escrow.sh opnsense-escrow.py; do cp "$src/files/$f" "$t/roles/r/files/$f"; done
 python3 -I - "$src/tasks/offbox_scripts.yml" "$t/roles/r/tasks/main.yml" <<'PY'
 import sys, yaml
 tasks = [x for x in yaml.safe_load(open(sys.argv[1])) if "backend-files.sha256" in str(x)]
@@ -26,7 +26,7 @@ PY
 printf -- '- hosts: localhost\n  connection: local\n  gather_facts: false\n  vars:\n    agent_box_libexec_dir: %s\n  roles: [r]\n' "$t/out" > "$t/pb.yml"
 ANSIBLE_ROLES_PATH=$t/roles ANSIBLE_HOME=$t/home ansible-playbook -i localhost, "$t/pb.yml" > "$t/ansible.out" 2>&1 || { bad "the manifest task did not render: $(tail -5 "$t/ansible.out")"; exit 1; }
 # each manifest line is the sha256 of the script file, and sha256sum -c accepts it
-( cd "$t/out" && cp "$t/roles/r/files/"*.sh . && sha256sum -c backend-files.sha256 > "$t/check.out" 2>&1 ) \
-  && ok "1 sha256sum -c accepts the rendered manifest for both scripts: $(tr '\n' ' ' < "$t/check.out")" || bad "1 the manifest differs from sha256sum: $(cat "$t/check.out")"
-[[ $(wc -l < "$t/out/backend-files.sha256") == 2 ]] && ok "2 the manifest has two lines" || bad "2 manifest lines: $(cat "$t/out/backend-files.sha256")"
+( cd "$t/out" && cp "$t/roles/r/files/"* . && sha256sum -c backend-files.sha256 > "$t/check.out" 2>&1 ) \
+  && ok "1 sha256sum -c accepts the rendered manifest for each script: $(tr '\n' ' ' < "$t/check.out")" || bad "1 the manifest differs from sha256sum: $(cat "$t/check.out")"
+[[ $(wc -l < "$t/out/backend-files.sha256") == 4 ]] && ok "2 the manifest has four lines"  || bad "2 manifest lines: $(cat "$t/out/backend-files.sha256")"
 exit "$fail"

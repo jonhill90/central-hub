@@ -44,6 +44,7 @@
   loop:
     - {src: opnsense-offbox.sh, dest: opnsense-offbox.sh}
     - {src: opnsense-escrow.py, dest: opnsense-escrow.py}
+    - {src: host-escrow.sh, dest: host-escrow.sh}
     # The same script the c1 nodes run (pick 189), so one copy of the certificate code is tested and kept.
     - {src: "{{ role_path }}/../k8s_backup/files/c1-backup-azure-cert.py", dest: azure-cert.py}
   loop_control:
@@ -57,13 +58,15 @@
     group: root
     mode: "0755"
 
-# What box-prove and rebuild-prod.sh compare the installed scripts with: written from this role's own files in this same run,
-# so a script left behind differs from it.
+# What box-prove and rebuild-prod.sh compare the installed scripts with (the two sends and the two escrow scripts they call):
+# written from this role's own files in this same run, so a script left behind differs from it.
 - name: The sha256 of the off-box scripts this role ships
   ansible.builtin.copy:
     content: |
       {{ lookup('ansible.builtin.file', 'opnsense-offbox.sh', rstrip=false) | hash('sha256') }}  opnsense-offbox.sh
       {{ lookup('ansible.builtin.file', 'secrets-bundle-offbox.sh', rstrip=false) | hash('sha256') }}  secrets-bundle-offbox.sh
+      {{ lookup('ansible.builtin.file', 'host-escrow.sh', rstrip=false) | hash('sha256') }}  host-escrow.sh
+      {{ lookup('ansible.builtin.file', 'opnsense-escrow.py', rstrip=false) | hash('sha256') }}  opnsense-escrow.py
     dest: "{{ agent_box_libexec_dir }}/backend-files.sha256"
     owner: root
     group: root

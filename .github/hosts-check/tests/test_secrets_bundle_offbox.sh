@@ -56,11 +56,21 @@ head -c 32 /dev/urandom | base64 > "$t/keys/opnsense-offbox/restic.txt"
 echo 0 > "$t/escrow-rc"
 cat > "$t/escrow" <<EOF
 #!/bin/bash
+[ "\$1" = password ] && { echo "\$CENTRAL_HUB_BACKUP_ENV" >> $t/escrow-password-calls; exit 0; }
 [ "\$1" = ensure ] || exit 9
 echo "\$CENTRAL_HUB_BACKUP_ENV|\$BACKUP_ESCROW_FILE|\$BACKUP_ESCROW_SECRET" > $t/escrow-args
 exit "\$(cat $t/escrow-rc)"
 EOF
 chmod +x "$t/escrow"
+# Stand-in for host-escrow.sh: records its two arguments, and exits with what $t/hostescrow-rc holds (or 1 for the name in $t/hostescrow-fail-on).
+echo 0 > "$t/hostescrow-rc"
+cat > "$t/hostescrow" <<STANDIN
+#!/bin/bash
+echo "\$1|\$2" >> $t/hostescrow-calls
+[ "\$1" = "\$(cat $t/hostescrow-fail-on 2>/dev/null)" ] && exit 1
+exit "\$(cat $t/hostescrow-rc)"
+STANDIN
+chmod +x "$t/hostescrow"
 cat > "$t/keys/opnsense-offbox/settings.env" <<EOF
 RESTIC_REPOSITORY=$t/repo
 RESTIC_PASSWORD_FILE=$t/keys/opnsense-offbox/restic.txt
@@ -84,7 +94,7 @@ sed -e "s|^work=.*|work=$t/work|" -e "s|^settings=.*|settings=$t/keys/opnsense-o
     -e "s|^bundle_settings=.*|bundle_settings=$t/keys/secrets-bundle/settings.env|" \
     -e "s|^identity=.*|identity=$t/keys/secrets-bundle/age-identity.txt|" \
     -e "s|^bundles=.*|bundles=$t/keys/secrets-bundle/bundles|" -e "s|^restic=.*|restic=$t/bin/restic|" \
-    -e "s|^sops=.*|sops=$t/bin/sops|" -e "s|^age_keygen=.*|age_keygen=$t/bin/age-keygen|" -e "s|^escrow=.*|escrow=$t/escrow|" -e "s|^backend=.*|backend=$t/keys/backend.env|" \
+    -e "s|^sops=.*|sops=$t/bin/sops|" -e "s|^age_keygen=.*|age_keygen=$t/bin/age-keygen|" -e "s|^escrow=.*|escrow=$t/escrow|" -e "s|^hostescrow=.*|hostescrow=$t/hostescrow|" -e "s|^backend=.*|backend=$t/keys/backend.env|" \
     "$role/files/secrets-bundle-offbox.sh" > "$t/send.sh"
 grep -q "^escrow=$t/escrow" "$t/send.sh" && grep -q "^bundles=$t/" "$t/send.sh" || { echo "FAIL: the test could not point the script at its folders"; exit 1; }
 
@@ -207,5 +217,19 @@ out=$(bash "$t/send-log.sh" 2>&1) && [[ $(wc -l < "$t/restic-calls") == 4 && $(g
 printf 'RESTIC_REPOSITORY=%s\nOFFBOX_RESTIC_SSH_CONFIG=%s\n' "$t/repo" "$t/ssh_config" > "$t/keys/backend.env"; rm -f "$t/restic-calls"
 if out=$(bash "$t/send-log.sh" 2>&1); then bad "10c an ssh config with a repository that is not sftp: should stop"; elif [[ $out == *"is not an sftp one"* && ! -e $t/restic-calls ]]; then ok "10c an ssh config with a repository that is not sftp stops the send before restic"; else bad "10c $out"; fi
 rm -f "$t/keys/backend.env"
+
+# 11 with the switch file both escrows are the host's (the password file, then the box's age identity), and the Azure vault escrow is not run;
+#    when either fails nothing is sent.
+printf 'RESTIC_REPOSITORY=sftp:box-backup-target:/box\nOFFBOX_RESTIC_SSH_CONFIG=%s\n' "$t/ssh_config" > "$t/keys/backend.env"
+rm -f "$t/restic-calls" "$t/hostescrow-calls" "$t/escrow-args" "$t/escrow-password-calls"
+out=$(bash "$t/send-log.sh" 2>&1) && [[ $(cat "$t/hostescrow-calls") == "restic-password|$t/keys/opnsense-offbox/restic.txt
+age-identity|$t/keys/secrets-bundle/age-identity.txt" && ! -e $t/escrow-args && -e $t/escrow-password-calls && $(wc -l < "$t/restic-calls") == 4 ]] \
+  && ok "11a with the switch file the host's escrow gets the password file and the age identity, the vault escrow is not run, and it sends" || bad "11a $out $(cat "$t/hostescrow-calls" 2>&1)"
+for name in restic-password age-identity; do
+  echo "$name" > "$t/hostescrow-fail-on"; rm -f "$t/restic-calls"
+  if out=$(bash "$t/send-log.sh" 2>&1); then bad "11b $name escrow fails: should stop"; elif [[ $out == *"nothing sent"* && ! -e $t/restic-calls ]]; then ok "11b a failed host escrow of $name stops the send before any restic call"; else bad "11b $name: $out"; fi
+done
+rm -f "$t/hostescrow-fail-on" "$t/keys/backend.env" "$t/hostescrow-calls"
+bash "$t/send-log.sh" >/dev/null 2>&1; [[ ! -e $t/hostescrow-calls && -e $t/escrow-args ]] && ok "11c without the switch file the host's escrow is never called and the vault escrow runs" || bad "11c"
 
 exit "$fail"

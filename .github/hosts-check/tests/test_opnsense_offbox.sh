@@ -44,12 +44,20 @@ chmod +x "$t/cert"
 echo 0 > "$t/escrow-rc"
 cat > "$t/escrow" <<STANDIN
 #!/bin/bash
-[ "\$1" = ensure ] || exit 9
+case "\$1" in ensure|password) echo "\$1" >> $t/escrow-calls ;; *) exit 9 ;; esac
 . "\$CENTRAL_HUB_BACKUP_ENV"
 [ -s "\$RESTIC_PASSWORD_FILE" ] || (umask 077; head -c 32 /dev/urandom | base64 > "\$RESTIC_PASSWORD_FILE")
 exit "\$(cat $t/escrow-rc)"
 STANDIN
 chmod +x "$t/escrow"
+# Stand-in for host-escrow.sh: records its two arguments, and exits with what $t/hostescrow-rc holds.
+echo 0 > "$t/hostescrow-rc"
+cat > "$t/hostescrow" <<STANDIN
+#!/bin/bash
+echo "\$1|\$2" >> $t/hostescrow-calls
+exit "\$(cat $t/hostescrow-rc)"
+STANDIN
+chmod +x "$t/hostescrow"
 write_settings() {
   cat > "$t/keys/settings.env" <<EOF
 RESTIC_REPOSITORY=$t/repo
@@ -67,7 +75,7 @@ EOF
 }
 write_settings
 sed -e "s|^work=.*|work=$t/work|" -e "s|^settings=.*|settings=$t/keys/settings.env|" \
-    -e "s|^restic=.*|restic=$t/restic|" -e "s|^cert=.*|cert=$t/cert|" -e "s|^escrow=.*|escrow=$t/escrow|" \
+    -e "s|^restic=.*|restic=$t/restic|" -e "s|^cert=.*|cert=$t/cert|" -e "s|^escrow=.*|escrow=$t/escrow|" -e "s|^hostescrow=.*|hostescrow=$t/hostescrow|" \
     -e "s|^backend=.*|backend=$t/keys/backend.env|" \
     "$role/files/opnsense-offbox.sh" > "$t/offbox.sh"
 grep -q "^work=$t/work" "$t/offbox.sh" && grep -q "^restic=$t/restic" "$t/offbox.sh" && grep -q "^escrow=$t/escrow" "$t/offbox.sh" || { echo "FAIL: the test could not point the script at its folders"; exit 1; }
@@ -142,5 +150,30 @@ if out=$(bash "$t/offbox-log.sh" 2>&1); then bad "6c an ssh config with a reposi
 printf 'RESTIC_REPOSITORY=sftp:box-backup-target:/box\nOFFBOX_RESTIC_SSH_CONFIG=%s\n' "$t/missing" > "$t/keys/backend.env"; rm -f "$t/restic-calls"
 if out=$(bash "$t/offbox-log.sh" 2>&1); then bad "6d a missing ssh config: should stop"; elif [[ $out == *"is missing; dev-worker-address.sh box-key writes it"* && ! -e $t/restic-calls ]]; then ok "6d a missing ssh config stops the run before any restic call"; else bad "6d $out"; fi
 rm -f "$t/keys/backend.env"
+
+# 7 with the switch file the escrow is the host's, and Azure is not touched: no certificate renewal (a failing one would fail the run), no vault escrow.
+printf 'RESTIC_REPOSITORY=sftp:box-backup-target:/box\nOFFBOX_RESTIC_SSH_CONFIG=%s\n' "$t/ssh_config" > "$t/keys/backend.env"
+echo 1 > "$t/cert-rc"; rm -f "$t/restic-calls" "$t/escrow-calls" "$t/hostescrow-calls"
+out=$(bash "$t/offbox-log.sh" 2>&1); rc=$?
+[[ $rc == 0 && $out != *"certificate renewal failed"* && $(cat "$t/escrow-calls") == password && $(cat "$t/hostescrow-calls") == "restic-password|$t/keys/restic.txt" ]] \
+  && ok "7a with the switch file the certificate is not renewed, the vault escrow is not run, and the host's escrow gets the password file" || bad "7a rc=$rc $out | $(cat "$t/escrow-calls" "$t/hostescrow-calls" 2>&1)"
+echo 1 > "$t/hostescrow-rc"; rm -f "$t/restic-calls"
+if out=$(bash "$t/offbox-log.sh" 2>&1); then bad "7b a failed host escrow: should stop"; elif [[ $out == *"the host does not hold the current repository password; nothing copied"* && ! -e $t/restic-calls ]]; then ok "7b a failed host escrow stops the run before any restic call"; else bad "7b $out"; fi
+echo 0 > "$t/hostescrow-rc"
+rm -f "$t/keys/backend.env" "$t/hostescrow-calls" "$t/escrow-calls"; echo 0 > "$t/cert-rc"
+bash "$t/offbox-log.sh" >/dev/null 2>&1; [[ ! -e $t/hostescrow-calls && $(cat "$t/escrow-calls") == ensure ]] \
+  && ok "7c without the switch file the host's escrow is never called and the vault escrow runs" || bad "7c $(cat "$t/hostescrow-calls" "$t/escrow-calls" 2>&1)"
+
+# 8 real restic, a repository folder that already holds the host's escrow/ folder (the escrow is written before the repository is made, and it
+#   stays beside the repository): init, backup, forget with prune and check all work and leave it alone.
+mkdir -p "$t/repo8/escrow"; echo escrow-file > "$t/repo8/escrow/restic-password"
+export8() { RESTIC_REPOSITORY=$t/repo8 RESTIC_PASSWORD_FILE=$t/keys/restic.txt "$t/restic" "$@"; }
+if export8 cat config >/dev/null 2>&1; then bad "8 a folder with only escrow/ should not look like a repository"
+elif [[ $? == 10 || -n $(export8 cat config 2>&1 | grep -i "does not exist\|unable to open config") ]] && export8 init -q >/dev/null 2>&1 \
+   && export8 backup -q --host agent-box --tag opnsense "$t/work/opnsense-backup" >/dev/null 2>&1 \
+   && export8 forget -q --host agent-box --tag opnsense --keep-daily 1 --prune >/dev/null 2>&1 && export8 check >/dev/null 2>&1 \
+   && [[ $(cat "$t/repo8/escrow/restic-password") == escrow-file ]]; then
+  ok "8 restic makes, fills, prunes and checks a repository whose folder already holds escrow/, and leaves it alone"
+else bad "8 restic does not cope with an escrow/ folder beside the repository"; fi
 
 exit "$fail"
