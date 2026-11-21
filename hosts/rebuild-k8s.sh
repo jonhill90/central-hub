@@ -284,7 +284,8 @@ l2_report() {
 # The OpenBao snapshot CronJob ticks at minute 17 of every hour (openbao-store values). A tick that lands while the store is
 # still coming up fails, and its failed Job keeps Error pods that the pod check below counts (dev run 10, 2026-11-21: two Error
 # pods of the 23:17 tick, apps running 23:16 to 23:22; the other dev runs' apps windows missed minute 17). Such a Job says
-# nothing about the finished cluster, so when one exists the snapshot Job is run once now: it must complete, and only then
+# nothing about the finished cluster, so when one exists (also one that failed once and then succeeded: with backoffLimit 1 and
+# restartPolicy Never its first pod stays in Error) the snapshot Job is run once now: it must complete, and only then
 # are the earlier failed Jobs removed. A snapshot Job that fails with the store up still fails the run.
 settle_snapshot_jobs() {
   local failed j
@@ -293,7 +294,7 @@ import json, sys
 for j in json.load(sys.stdin)["items"]:
     if any(o.get("kind") == "CronJob" and o.get("name") == "openbao-snapshot" for o in j["metadata"].get("ownerReferences") or []):
         s = j.get("status") or {}
-        if s.get("failed", 0) and not s.get("succeeded", 0): print(j["metadata"]["name"])
+        if s.get("failed", 0): print(j["metadata"]["name"])
 ') || { echo "could not read the Jobs of the openbao namespace"; return 1; }
   [ -n "$failed" ] || return 0
   echo "failed snapshot Job(s) from the bring-up: $(echo $failed); running the snapshot Job once now"

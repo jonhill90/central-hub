@@ -5,7 +5,8 @@
 #   2. A failed snapshot Job (never succeeded) and the check Job completes: the check Job is made from the CronJob, waited for, and the
 #      failed Job and the check Job are deleted.
 #   3. The check Job does not complete: the function fails and deletes no failed Job.
-#   4. A failed Job of another CronJob, or one of the snapshot's that later succeeded, is left alone and nothing is run.
+#   4. A failed Job of another CronJob is left alone and nothing is run.
+#   5. A snapshot Job that failed once and then succeeded (backoffLimit 1: its first pod stays in Error) is settled like case 2.
 # Usage: .github/hosts-check/tests/test_rebuild_snapshot_jobs.sh
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -31,6 +32,8 @@ want=$'kc -n openbao get jobs -o json\nkc -n openbao delete job openbao-snapshot
 [[ $out == *"rc=0" && $calls == "$want" ]] && ok "2. a failed snapshot Job: the Job is run once from the CronJob, waited for, then the failed Job and the check Job go, each with --cascade=foreground so their pods are gone before the pod check" || bad "2. $out | $calls"
 run "$(job openbao-snapshot-1 openbao-snapshot 2 0)" 1
 [[ $out == *"the snapshot Job does not complete with the store up"* && $out == *"rc=1" && $calls != *"delete job openbao-snapshot-1"* ]] && ok "3. a check Job that does not complete fails and keeps the failed Job" || bad "3. $out | $calls"
-run "$(job other-1 other 3 0),$(job openbao-snapshot-2 openbao-snapshot 1 1)" 0
-[[ $out == "rc=0" && $calls == "kc -n openbao get jobs -o json" ]] && ok "4. another CronJob's failure and a snapshot Job that later succeeded are left alone" || bad "4. $out | $calls"
+run "$(job other-1 other 3 0)" 0
+[[ $out == "rc=0" && $calls == "kc -n openbao get jobs -o json" ]] && ok "4. another CronJob's failed Job is left alone" || bad "4. $out | $calls"
+run "$(job openbao-snapshot-2 openbao-snapshot 1 1)" 0
+[[ $out == *"rc=0" && $calls == *"create job openbao-snapshot-rebuild-check"* && $calls == *"delete job openbao-snapshot-2 --cascade=foreground"* ]] && ok "5. a snapshot Job that failed once and then succeeded is settled too" || bad "5. $out | $calls"
 exit $fail
