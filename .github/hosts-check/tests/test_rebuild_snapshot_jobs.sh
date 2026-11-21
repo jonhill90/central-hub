@@ -27,8 +27,8 @@ run() { # <jobs json items> <wait rc>
 run "$(job openbao-snapshot-1 openbao-snapshot 0 1)" 0
 [[ $out == "rc=0" && $calls == "kc -n openbao get jobs -o json" ]] && ok "1. only a good snapshot Job: nothing run or deleted" || bad "1. $out | $calls"
 run "$(job openbao-snapshot-1 openbao-snapshot 2 0)" 0
-want=$'kc -n openbao get jobs -o json\nkc -n openbao delete job openbao-snapshot-rebuild-check --ignore-not-found\nkc -n openbao create job openbao-snapshot-rebuild-check --from=cronjob/openbao-snapshot\nkc -n openbao wait --for=condition=complete job/openbao-snapshot-rebuild-check --timeout=300s\nkc -n openbao delete job openbao-snapshot-1\nkc -n openbao delete job openbao-snapshot-rebuild-check'
-[[ $out == *"rc=0" && $calls == "$want" ]] && ok "2. a failed snapshot Job: the Job is run once from the CronJob, waited for, then the failed Job and the check Job go" || bad "2. $out | $calls"
+want=$'kc -n openbao get jobs -o json\nkc -n openbao delete job openbao-snapshot-rebuild-check --ignore-not-found --cascade=foreground\nkc -n openbao create job openbao-snapshot-rebuild-check --from=cronjob/openbao-snapshot\nkc -n openbao wait --for=condition=complete job/openbao-snapshot-rebuild-check --timeout=300s\nkc -n openbao delete job openbao-snapshot-1 --cascade=foreground\nkc -n openbao delete job openbao-snapshot-rebuild-check --cascade=foreground'
+[[ $out == *"rc=0" && $calls == "$want" ]] && ok "2. a failed snapshot Job: the Job is run once from the CronJob, waited for, then the failed Job and the check Job go, each with --cascade=foreground so their pods are gone before the pod check" || bad "2. $out | $calls"
 run "$(job openbao-snapshot-1 openbao-snapshot 2 0)" 1
 [[ $out == *"the snapshot Job does not complete with the store up"* && $out == *"rc=1" && $calls != *"delete job openbao-snapshot-1"* ]] && ok "3. a check Job that does not complete fails and keeps the failed Job" || bad "3. $out | $calls"
 run "$(job other-1 other 3 0),$(job openbao-snapshot-2 openbao-snapshot 1 1)" 0

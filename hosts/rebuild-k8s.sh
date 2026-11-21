@@ -297,13 +297,14 @@ for j in json.load(sys.stdin)["items"]:
 ') || { echo "could not read the Jobs of the openbao namespace"; return 1; }
   [ -n "$failed" ] || return 0
   echo "failed snapshot Job(s) from the bring-up: $(echo $failed); running the snapshot Job once now"
-  kc -n openbao delete job openbao-snapshot-rebuild-check --ignore-not-found > /dev/null || true
+  kc -n openbao delete job openbao-snapshot-rebuild-check --ignore-not-found --cascade=foreground > /dev/null || true
   kc -n openbao create job openbao-snapshot-rebuild-check --from=cronjob/openbao-snapshot > /dev/null \
     || { echo "could not start the snapshot Job"; return 1; }
   kc -n openbao wait --for=condition=complete job/openbao-snapshot-rebuild-check --timeout=300s > /dev/null \
     || { echo "the snapshot Job does not complete with the store up"; return 1; }
-  for j in $failed; do kc -n openbao delete job "$j" > /dev/null; done
-  kc -n openbao delete job openbao-snapshot-rebuild-check > /dev/null
+  # Foreground, so kubectl waits until the Jobs' pods are gone: a background delete leaves them listed for the pod check next.
+  for j in $failed; do kc -n openbao delete job "$j" --cascade=foreground > /dev/null; done
+  kc -n openbao delete job openbao-snapshot-rebuild-check --cascade=foreground > /dev/null
 }
 
 checks() {
