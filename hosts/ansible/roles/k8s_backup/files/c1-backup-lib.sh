@@ -79,3 +79,18 @@ restic_retention() {
     --keep-daily "${BACKUP_KEEP_DAILY:-7}" --keep-weekly "${BACKUP_KEEP_WEEKLY:-4}" \
     --keep-monthly "${BACKUP_KEEP_MONTHLY:-6}" --prune
 }
+
+# The volume snapshot a restore takes: <source host> <snapshot ID, or latest>. Prints its full ID. A given ID (or its
+# prefix) must be a volume snapshot of that host, else this fails: restic matches the filters before it takes the ID.
+# Read-only (--no-lock). The rebuild of prod passes the ID of the snapshot it backed up before the teardown, so a later
+# snapshot of rebuilt, empty nodes is never the one that comes back.
+restore_snapshot_id() {
+  local src=$1 snap=$2 sel out
+  if [ "$snap" = latest ]; then sel=(--latest 1); else sel=("$snap"); fi
+  out=$("$RESTIC" --no-lock snapshots --json --host "$src" --tag volumes "${sel[@]}") || return 1
+  python3 -c '
+import json, sys
+snaps = sorted(json.load(sys.stdin) or [], key=lambda s: s["time"])
+print(snaps[-1]["id"] if snaps else "")
+' <<< "$out"
+}

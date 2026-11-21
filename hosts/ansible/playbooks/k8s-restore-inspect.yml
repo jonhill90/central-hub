@@ -1,0 +1,33 @@
+---
+# What a restore would do with prod's newest volume snapshot, read only, for the agent box's `c1-ansible check|apply restore-inspect`
+# (the prod rebuild that stopped at its restore stage, 2026-11-21: three folders for openbao/data-openbao-0). On each worker,
+# c1-restore-volumes.sh inspect prints the snapshot, the etcd backup it read, and every folder with files, bytes, newest file time and
+# what the restore does with it. The snapshot is the newest volume snapshot of the first worker, or restore_inspect_snapshot when the
+# box passes the one in its restore pin. restic runs with --no-lock; nothing is written to the repository or the node.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-restore-inspect.yml
+- name: What the restore would do with the newest volume snapshot
+  hosts: k8s_workers
+  become: true
+  gather_facts: false
+  vars:
+    restore_inspect_bin: /usr/local/libexec/central-hub-backup
+    restore_inspect_source: "{{ groups['k8s_workers'] | first }}"
+    restore_inspect_snapshot: latest
+  tasks:
+    - name: Inspect the snapshot
+      ansible.builtin.command:
+        argv: ["{{ restore_inspect_bin }}/c1-restore-volumes.sh", inspect]
+      environment:
+        CENTRAL_HUB_BACKUP_ENV: /etc/central-hub/backup.env
+        BACKUP_STATE: /var/lib/central-hub-backup
+        RESTIC_CACHE_DIR: /var/cache/central-hub-backup
+        RESTORE_SOURCE_HOST: "{{ restore_inspect_source }}"
+        RESTORE_SNAPSHOT: "{{ restore_inspect_snapshot }}"
+      register: restore_inspect_out
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: What it said
+      ansible.builtin.debug:
+        msg: "{{ (restore_inspect_out.stdout_lines + restore_inspect_out.stderr_lines) | list }}"

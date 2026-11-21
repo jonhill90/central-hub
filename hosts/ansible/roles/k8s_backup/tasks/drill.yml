@@ -29,3 +29,28 @@
       - "k8s_backup_drill_log.stdout_lines | select('search', ' PASS: ') | list | length >= k8s_backup_drill_expected | int"
     fail_msg: "{{ k8s_backup_drill_log.stdout_lines[-15:] }}"
     success_msg: "{{ k8s_backup_drill_log.stdout_lines | select('search', 'PASS: ') | list }}"
+
+# Before a prod teardown (rebuild-prod runs this drill): the restore's own folder mapping on the volume snapshot just taken,
+# strictly. Two folders for one claim in a snapshot (a claim made again, its old folder kept by reclaim policy Retain) stop
+# the rebuild here, while prod is still up, and not at the restore stage after the teardown (prod run 4, 2026-11-21, three
+# folders for openbao/data-openbao-0). Only on the node the restore reads from, which holds every volume. The play stops, and
+# nothing is destroyed, unless the line comes back: PASS: plan: snapshot <full ID>.
+- name: drill | The restore's folder mapping on the newest volume snapshot, strict
+  ansible.builtin.command:
+    argv: ["{{ k8s_backup_bin_dir }}/c1-restore-volumes.sh", plan]
+  environment:
+    CENTRAL_HUB_BACKUP_ENV: "{{ k8s_backup_node_env_file }}"
+    BACKUP_STATE: "{{ k8s_backup_state_dir }}"
+    RESTIC_CACHE_DIR: /var/cache/central-hub-backup
+    RESTORE_SOURCE_HOST: "{{ k8s_backup_restore_source_host }}"
+    RESTORE_PLAN_STRICT: "1"
+  register: k8s_backup_drill_plan
+  changed_when: false
+  when:
+    - k8s_backup_restore_source_host | default('') | length > 0
+    - inventory_hostname == k8s_backup_restore_source_host
+
+- name: drill | What the mapping said
+  ansible.builtin.debug:
+    msg: "{{ k8s_backup_drill_plan.stdout_lines | select('match', '^PASS: plan: ') | list }}"
+  when: k8s_backup_drill_plan is not skipped
