@@ -1,0 +1,3 @@
+---
+- name: Reload sshd
+  ansible.builtin.systemd: {name: "{{ 'ssh' if ansible_facts.os_family | default('') == 'Debian' else 'sshd' }}", state: reloaded}

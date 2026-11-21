@@ -1,0 +1,16 @@
+---
+argument_specs:
+  main:
+    short_description: A box trusts the lab's SSH user CA, a revocation list and principals, and may carry a host certificate (D-0064)
+    options:
+      ssh_ca_trust_user_ca_file: {type: str, required: true, description: "The user CA's public key on the controller (the box wrapper's `ssh-ca public` writes it). Not a secret."}
+      ssh_ca_trust_accounts: {type: list, elements: str, required: true, description: "Accounts on this box that take certificates with the principal. Private, from the inventory."}
+      ssh_ca_trust_principal: {type: str, default: lab-admin, description: The principal the role lists for each account.}
+      ssh_ca_trust_krl_file: {type: str, default: "", description: "The revocation list on the controller. Empty: an empty list is made on the box."}
+      ssh_ca_trust_host_cert_file: {type: str, default: "", description: "A signed host certificate on the controller. Empty: no host certificate is set."}
+      ssh_ca_trust_dropin: {type: str, default: /etc/ssh/sshd_config.d/02-lab-ssh-ca.conf, description: The sshd drop-in.}
+      ssh_ca_trust_user_ca_dest: {type: str, default: /etc/ssh/lab-user-ca.pub, description: Where the CA key goes on the box.}
+      ssh_ca_trust_krl_dest: {type: str, default: /etc/ssh/lab-user.krl, description: Where the revocation list goes on the box.}
+      ssh_ca_trust_principals_dir: {type: str, default: /etc/ssh/auth_principals, description: One file per account.}
+      ssh_ca_trust_host_cert_dest: {type: str, default: /etc/ssh/ssh_host_ed25519_key-cert.pub, description: Where the host certificate goes.}
+      ssh_ca_trust_remove: {type: bool, default: false, description: Undo the role's files and settings.}
