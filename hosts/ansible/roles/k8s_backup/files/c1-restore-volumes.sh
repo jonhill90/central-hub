@@ -363,6 +363,25 @@ chmod 0700 "$work"
 settled_map "$id" > "$work/map" 2> "$work/map.err" || die "snapshot $id can't be mapped: $(cat "$work/map.err"). Nothing was changed."
 [ ! -s "$work/map.err" ] || sed 's/^/note: /' "$work/map.err"
 [ -s "$work/map" ] || die "snapshot $id holds no volume folder under $path"
+# Claims another env's store must not hold (RESTORE_SKIP_CLAIMS, "<namespace>/<claim>" separated by spaces): when the snapshot is
+# another node's (RESTORE_SOURCE_HOST is not this node), their folders are not restored, so dev gets neither prod's secrets nor
+# data that only opens with prod's seal key. A restore of this node's own snapshot (prod's rebuild) skips nothing.
+include_args=(--include "$path")
+if [ -n "${RESTORE_SKIP_CLAIMS:-}" ] && [ "$src" != "$BACKUP_HOST" ]; then
+  skipped=
+  for claim in $RESTORE_SKIP_CLAIMS; do
+    awk -F'\t' -v c="$claim" '$2 == c {found = 1} END {exit !found}' "$work/map" || continue
+    skipped="$skipped $(awk -F'\t' -v c="$claim" '$2 == c {printf "%s ", $1}' "$work/map")"
+    awk -F'\t' -v c="$claim" '$2 != c' "$work/map" > "$work/map.kept" && mv "$work/map.kept" "$work/map"
+  done
+  [ -z "$skipped" ] || echo "SKIP: folders of claims not restored on this env (RESTORE_SKIP_CLAIMS $RESTORE_SKIP_CLAIMS):$skipped"
+  [ -s "$work/map" ] || die "snapshot $id holds no volume folder under $path once RESTORE_SKIP_CLAIMS is applied"
+  # restic takes includes or excludes, not both: with claims left out, name each folder that stays (and the canary).
+  if [ -n "$skipped" ]; then
+    include_args=(--include "$path/$canary")
+    while IFS=$'\t' read -r from _; do include_args+=(--include "$path/$from"); done < "$work/map"
+  fi
+fi
 cut -f2-4 "$work/map" | sort > "$work/want"
 
 # 4. Restore, read back against the repository, into a staging folder beside $path on the same
@@ -373,7 +392,7 @@ stage=$(dirname "$path")/.c1-restore-stage
 rm -rf "$stage"
 mkdir -m 0700 "$stage"
 log "restoring $path from snapshot $id of $src ($when)"
-r restore "$id" --target "$stage" --include "$path" --verify --exclude-xattr 'security.selinux'
+r restore "$id" --target "$stage" "${include_args[@]}" --verify --exclude-xattr 'security.selinux'
 while IFS=$'\t' read -r from to _; do
   mkdir -p "$path/$(dirname "$to")"
   mv "$stage$path/$from" "$path/$to"

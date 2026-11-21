@@ -250,6 +250,19 @@ if env_dev 33 RESTORE_SOURCE_HOST=ci-prod5 RESTORE_ETCD_HOST=ci-dev-cp "$bin/c1-
 grep -q 'no etcd snapshot within' "$work/r.log" || { cat "$work/r.log"; fail "the restore with two hosts in the window failed for another reason"; }
 ok "a control plane named like no host falls back to the only host with an etcd snapshot in the window, and refuses when two have one"
 
+# Claims another env's store must not hold: skipped when the snapshot is another node's, restored when it is the node's own.
+fresh
+env_dev 34 RESTORE_SOURCE_HOST=ci-prod5 RESTORE_ETCD_HOST=ci-cp "RESTORE_SKIP_CLAIMS=openbao/data-openbao-0 openbao/nothing" "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1 || { cat "$work/r.log"; fail "the restore with a skip list failed"; }
+grep -q "^SKIP: folders of claims not restored.*${B}_openbao_data-openbao-0" "$work/r.log" || { cat "$work/r.log"; fail "the restore did not print the skip line naming the folders"; }
+[ ! -e "$dev/openbao" ] || fail "a skipped claim's folder was restored"
+[ -d "$dev/media/jellyfin-config" ] || fail "a claim not on the skip list was not restored"
+grep -q '^PASS: restored' "$work/r.log" || fail "the restore with a skip list did not pass its checks"
+fresh
+env BACKUP_HOST=ci-prod5 "BACKUP_STATE=$work/own-state" RESTORE_SOURCE_HOST=ci-prod5 "RESTORE_PATH=$dev" RESTORE_REQUIRE_MOUNT= RESTORE_ETCD_HOST=ci-cp "RESTORE_SKIP_CLAIMS=openbao/data-openbao-0" "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1 || { cat "$work/r.log"; fail "the restore of the node's own snapshot failed"; }
+[ "$(cat "$dev/openbao/data-openbao-0/vault.db")" = generation-b ] || fail "the node's own snapshot skipped a claim, or restored the wrong folder"
+if grep -q '^SKIP: folders' "$work/r.log"; then fail "the node's own snapshot printed a skip line"; fi
+ok "another node's snapshot leaves the skip list's claims out and says which folders; the node's own snapshot restores them all"
+
 # The forget hold: with it set a backup forgets nothing; without it, retention runs as before.
 hold_env=(BACKUP_HOST=ci-hold "BACKUP_STATE=$work/hold-state" "BACKUP_VOLUME_PATHS=$data" BACKUP_KEEP_DAILY=1 BACKUP_KEEP_WEEKLY=0 BACKUP_KEEP_MONTHLY=0)
 count() { "$bin/restic" snapshots --json --host ci-hold --tag volumes | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
