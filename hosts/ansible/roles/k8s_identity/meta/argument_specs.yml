@@ -84,7 +84,9 @@ argument_specs:
         type: list
         elements: str
         default: []
-        description: "The OPNsense web GUI names, for client opnsense (D-0037 rule 5). Default: opnsense_cert_names on the opnsense group's first host, else opnsense.<zone>; empty: no client."
+        description: >-
+          The OPNsense web GUI names, for client opnsense (D-0037 rule 5). Default: opnsense_cert_names on the opnsense group's
+          first host, else opnsense.<zone>; empty: no client.
       k8s_identity_opnsense_app_code:
         type: str
         default: keycloak
