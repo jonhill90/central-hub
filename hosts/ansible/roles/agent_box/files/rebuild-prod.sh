@@ -637,6 +637,13 @@ if [[ $(cat -- "$envdir/backup-mode" 2>/dev/null) == sftp ]]; then
 install -d -m 700 "$sftp_keys"
 while read -r name host user; do
   sudo_=""; [[ $user == root ]] || sudo_="sudo -n "
+  # After a run that stopped past its teardown the nodes are rebuilt and empty: their keys are the ones that run kept here before it
+  # destroyed them (the dev run of 2026-11-21 showed the read failing on the empty nodes; prod run 5 stopped there). Kept and whole, they stand.
+  if [[ -n $torn ]] && grep -q -- 'PRIVATE KEY-----' "$sftp_keys/$name.key" 2>/dev/null && grep -q -- '^ssh-ed25519 ' "$sftp_keys/$name.pub" 2>/dev/null &&
+     grep -q -- ' ssh-ed25519 ' "$sftp_keys/$name.known_hosts" 2>/dev/null; then
+    echo "rebuild-prod: node $name: the stopped run ($torn) kept its sftp backup key, public key and pinned host key before its teardown; they stand"
+    continue
+  fi
   for f in id_ed25519:key id_ed25519.pub:pub known_hosts:known_hosts; do
     ssh_node "$host" "$user" "${sudo_}cat /etc/central-hub/backup-ssh/${f%%:*}" > "$sftp_keys/$name.${f##*:}.part" </dev/null ||
       { rm -f -- "$sftp_keys/$name".*.part; echo "FAIL: rebuild-prod: could not read node $name's backup ssh file ${f%%:*}; nothing was destroyed"; exit 1; }

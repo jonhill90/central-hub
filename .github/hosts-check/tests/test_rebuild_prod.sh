@@ -488,4 +488,26 @@ if [[ $r15a -eq 0 && $o15a == *"no changes with the Mac's tfvars (the VMs hold t
 else bad "15. $r15a $o15a | $r15b $o15b"; fi
 grep -q 'var-file=.*k8s.tfvars' "$t/calls" && ok "15b. the destroy plan reads a tfvars file the check settled on" || bad "15b. no var-file in the destroy plan"
 
+# 16. A rerun after a run that stopped past its teardown, with the Proxmox host as backup target: the nodes are rebuilt and empty, so
+# their sftp keys cannot be read; the ones the stopped run kept before its teardown stand (prod run 5, 2026-11-21, stopped reading them).
+# Without the kept keys the rerun stops before anything is destroyed.
+inventory "        k8s_backup_sftp: true"
+sed -i '/k8s_backup_azure_identity/d; s/pve-a: {ansible_host: 192.0.2.1}/pve-a: {ansible_host: 192.0.2.1, proxmox_host_mgmt_address: 192.0.2.1}/' "$t/keys/prod/inventory-hosts.yml"
+rm -rf "$t/keys/prod/backup-certs" "$t/keys/prod/backup-sftp"; rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+torn_log yes
+run rebuild "$tap" "$sha" "$pinid"; r16a=$rc o16a=$out c16a=$calls
+mkdir -p "$t/keys/prod/backup-sftp"
+for n in cp-a wk-a; do
+  printf '%s\n' '-----BEGIN OPENSSH PRIVATE KEY-----' 'AAAA' '-----END OPENSSH PRIVATE KEY-----' > "$t/keys/prod/backup-sftp/$n.key"
+  echo 'ssh-ed25519 AAAAkept x' > "$t/keys/prod/backup-sftp/$n.pub"
+  echo '192.0.2.1 ssh-ed25519 AAAAhost' > "$t/keys/prod/backup-sftp/$n.known_hosts"
+done
+run rebuild "$tap" "$sha" "$pinid"; r16b=$rc o16b=$out c16b=$calls
+if [[ $r16a -eq 1 && $o16a == *"could not read node"*"backup ssh file"*"nothing was destroyed"* && $c16a != *one-command* &&
+      $r16b -eq 0 && $o16b == *"node cp-a: the stopped run (run-29990101T000000Z.log) kept its sftp backup key"* && $c16b != *"cat /etc/central-hub/backup-ssh"* &&
+      $c16b == *one-command* ]]; then
+  ok "16. after a stopped-past-teardown run, the sftp keys it kept stand and the empty nodes are not read; with none kept the rerun stops before the teardown"
+else bad "16. $r16a $o16a [$c16a] | $r16b $o16b [$c16b]"; fi
+rm -f "$logd"/*
+
 exit "$fail"
