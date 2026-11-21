@@ -209,8 +209,9 @@ print(v["ansible_ssh_private_key_file"] == k + "/prod-node-key", v["k8s_backup_e
       v["k8s_identity_values_file"] == k + "/prod/identity.env", v["k8s_backup_restore_own_env"], v["k8s_backup_restore_source_host"],
       v["k8s_gitops_source_local_path_stable_folders"], v["k8s_backup_azure_seed_dir"] == k + "/prod/backup-certs",
       v["k8s_gitops_source_openbao_seal_node"], "proxmox" in d["all"]["children"], v["k8s_backup_restore_check_identity"], v["k8s_certs_cert_manager_by_argocd"], v["k8s_gateway_by_argocd"],
-      v["k8s_gitops_source_openbao_admin_address"])' "$seen" "$t/keys" 2>/dev/null)
-if [[ $v == "True True True True wk-a True True wk-a False False True True 192.0.2.60" && $seen != *ProxyJump* && $seen != */Users/* ]] &&
+      v["k8s_gitops_source_openbao_admin_address"],
+      v["k8s_certs_smoke_root_file"].endswith("/lab-root-ca.crt") and not v["k8s_certs_smoke_root_file"].startswith("/root"))' "$seen" "$t/keys" 2>/dev/null)
+if [[ $v == "True True True True wk-a True True wk-a False False True True 192.0.2.60 True" && $seen != *ProxyJump* && $seen != */Users/* ]] &&
    grep -q "^node_ssh_public_key = \"$(cut -d' ' -f1-2 < "$t/keys/prod-node-key.pub")" "$t/work/rebuild-prod/k8s.tfvars"; then
   ok "4. the box's copies: its key, the box's files, prod's own restore, stable folders, the carried certificates"
 else bad "4. [$v]"; fi
