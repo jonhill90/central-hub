@@ -5,6 +5,15 @@
 #
 #   c1-restore-volumes.sh restore   restore the snapshot, then prove every folder came back whole
 #   c1-restore-volumes.sh check     prove the restore is still in place (the rebuild's checks stage)
+#   c1-restore-volumes.sh plan      read only, for the drill before a prod teardown: the folder mapping the restore will
+#                                   run, on the newest volume snapshot of the source host (or RESTORE_SNAPSHOT). With
+#                                   RESTORE_PLAN_STRICT=1 it fails if any claim has more than one folder in the snapshot
+#                                   or any name can't be mapped, even where the etcd record could settle it: a prod
+#                                   that is about to be torn down is cleaned first, not trusted to a later guess.
+#                                   Prints "PASS: plan: snapshot <full ID>: ..." or the reason it fails.
+#   c1-restore-volumes.sh inspect   read only: what the snapshot holds, folder by folder (files, bytes, newest file
+#                                   time), which folder each claim would take, and why a claim with several is not
+#                                   resolved. It writes nothing, needs no mounted data disk and no empty folder.
 #   c1-restore-volumes.sh owner <namespace>/<claim> <uid>
 #                                   prove one restored folder is as the app needs it (checks stage):
 #                                   the folder's own owner, group and mode equal its copy in the
@@ -22,8 +31,13 @@
 # strings.Join([PVName, PVC.Namespace, PVC.Name], "_")). Namespaces, claim names and pvc-<uid>
 # are DNS names with no "_", so each such folder splits into exactly those three parts and maps to
 # <namespace>/<claim>. A <namespace>/<claim> folder in the snapshot passes through as it is. Any
-# other name, or two folders that map to the same <namespace>/<claim> (a leftover of a deleted
-# claim, kept by reclaim policy Retain), stops the restore before anything is written.
+# other name stops the restore before anything is written. So do two folders that map to the same
+# <namespace>/<claim> (a leftover of a deleted claim, kept by reclaim policy Retain), unless the etcd
+# backup taken with this snapshot names the volume the claim was bound to (RESTORE_PV_MAP, made on the
+# control plane by c1-restore-pv-map.sh): then that one folder is restored and the others are not,
+# whatever their sizes or times. A claim with no such record, a record for another snapshot, a claim
+# the etcd backup names two volumes for, or a bound volume whose folder is not in the snapshot stops
+# the restore as before. A guess by size or time is never made.
 #
 # restore passes only when all of these hold, and stops at the first that doesn't:
 #   1. this node has the data disk mounted (else SKIP, exit 0: it holds no volumes)
@@ -41,7 +55,11 @@
 # Settings (besides those in c1-backup-lib.sh):
 #   RESTORE_SOURCE_HOST    the prod node's host name, as restic snapshots lists it (required)
 #   RESTORE_PATH           the folder to restore (default /var/lib/c1-data/local-path)
-#   RESTORE_SNAPSHOT       a snapshot ID, or latest (default)
+#   RESTORE_SNAPSHOT       a snapshot ID, or latest (default). The rebuild of prod always passes the ID of the
+#                          snapshot it backed up before the teardown: "latest" there could be a snapshot of the
+#                          rebuilt, empty nodes
+#   RESTORE_PV_MAP         the file c1-restore-pv-map.sh printed (optional; only read for a claim with two or
+#                          more folders)
 #   RESTORE_REQUIRE_MOUNT  the mount point that must be there (default: RESTORE_PATH's parent;
 #                          empty skips the check, for CI)
 set -euo pipefail
@@ -49,7 +67,7 @@ set -euo pipefail
 . "$(dirname "$0")/c1-backup-lib.sh"
 
 cmd=${1:-}
-case $cmd in restore|check|owner) ;; *) echo "usage: $0 restore|check|owner <namespace>/<claim> <uid>" >&2; exit 2 ;; esac
+case $cmd in restore|check|owner|inspect|plan) ;; *) echo "usage: $0 restore|check|owner <namespace>/<claim> <uid>|inspect|plan" >&2; exit 2 ;; esac
 
 backup_lib_init
 path=${RESTORE_PATH:-/var/lib/c1-data/local-path}
@@ -72,14 +90,18 @@ disk_counts() {
 
 # What snapshot $1 holds under $path: each volume folder, where it goes, its files and bytes, and
 # the folder's own owner and mode, as "source<TAB>destination<TAB>files<TAB>bytes<TAB>uid:gid mode".
-# Exits non-zero, saying why, on a name it can't map or two folders for one claim.
+# Exits non-zero, saying why, on a name it can't map or two folders for one claim that the etcd backup (RESTORE_PV_MAP)
+# doesn't settle. "snapshot_map <ID> inspect" prints every folder instead, "source<TAB>destination<TAB>files<TAB>bytes<TAB>
+# newest file time<TAB>what the restore does with it", and fails on nothing.
 snapshot_map() {
   r ls --json --recursive "$1" "$path" | python3 -c '
 import json, re, sys
 base = sys.argv[1].rstrip("/") + "/"
+pvfile, snapid, mode = sys.argv[2], sys.argv[3], sys.argv[4]
 dns = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$")
 folders = {}   # source folder (relative) -> [files, bytes]
 meta = {}      # source folder -> "uid:gid mode", the folder itself
+newest = {}    # source folder -> newest mtime of anything inside it (first 19 characters, restic writes UTC)
 bad = []
 for line in sys.stdin:
     line = line.strip()
@@ -108,6 +130,8 @@ for line in sys.stdin:
             bad.append(p[len(base):])
         continue
     f = folders.setdefault(key, [0, 0])
+    if n.get("type") != "dir" and n.get("mtime", "")[:19] > newest.get(key, ""):
+        newest[key] = n["mtime"][:19]
     if n.get("type") == "file":
         f[0] += 1
         f[1] += n.get("size", 0)
@@ -126,15 +150,88 @@ for src in sorted(folders):
             continue
         d = src
     dest.setdefault(d, []).append(src)
+# The etcd backup taken with this snapshot: which volume each claim was bound to (c1-restore-pv-map.sh).
+pv, ambiguous, pv_snap = {}, set(), ""
+if pvfile:
+    try:
+        recs = open(pvfile).read().splitlines()
+    except OSError:
+        recs = []
+    for rec in recs:
+        f = rec.split("\t")
+        if f[0] == "snapshot" and len(f) == 2:
+            pv_snap = f[1]
+        elif f[0] == "pv" and len(f) == 3:
+            pv[f[1]] = f[2]
+        elif f[0] == "ambiguous" and len(f) == 2:
+            ambiguous.add(f[1])
+def settle(d, srcs):
+    """The one folder the etcd backup binds claim d to, or (None, why not)."""
+    if not pv_snap:
+        return None, "no record of which volume it was bound to (no etcd backup read)"
+    if pv_snap != snapid:
+        return None, "the record of its volume is for snapshot %s, not %s" % (pv_snap[:12], snapid[:12])
+    if d in ambiguous:
+        return None, "the etcd backup names more than one volume for it"
+    name = pv.get(d)
+    if not name:
+        return None, "the etcd backup holds no bound volume for it"
+    want = name + "_" + d.replace("/", "_")
+    if want not in srcs:
+        return None, "the etcd backup binds it to %s, which has no folder in the snapshot" % name
+    return want, ""
+if mode == "inspect":
+    for d in sorted(dest):
+        srcs = dest[d]
+        chosen, why = (srcs[0], "") if len(srcs) == 1 else settle(d, srcs)
+        for src in srcs:
+            role = "only folder for the claim" if len(srcs) == 1 else ("BOUND: restored" if src == chosen else ("not bound: left out" if chosen else "NOT SETTLED: %s" % why))
+            print("%s\t%s\t%d\t%d\t%s\t%s" % (src, d, folders[src][0], folders[src][1], newest.get(src, "-"), role))
+    for src in bad:
+        print("%s\t?\t-\t-\t-\tUNKNOWN NAME: stops the restore" % src)
+    sys.exit(0)
 if bad:
     sys.exit("UNKNOWN: folders that are not <namespace>/<claim> or pvc-<uid>_<namespace>_<claim>: %s" % ", ".join(bad))
-dup = {d: s for d, s in dest.items() if len(s) > 1}
-if dup:
-    sys.exit("DUPLICATE: more than one folder for the same claim: %s" % "; ".join("%s <- %s" % (d, ", ".join(s)) for d, s in sorted(dup.items())))
+dups = {d: s for d, s in dest.items() if len(s) > 1}
+stuck = []
+for d, srcs in sorted(dups.items()):
+    chosen, why = settle(d, srcs)
+    if chosen:
+        dest[d] = [chosen]
+    else:
+        stuck.append("%s <- %s (%s)" % (d, ", ".join(srcs), why))
+if stuck:
+    sys.exit("DUPLICATE: more than one folder for the same claim: %s" % "; ".join(stuck))
 for d in sorted(dest):
     src = dest[d][0]
     print("%s\t%s\t%d\t%d\t%s" % (src, d, folders[src][0], folders[src][1], meta.get(src, "?")))
-' "$path"
+' "$path" "${RESTORE_PV_MAP:-}" "$1" "${2:-map}"
+}
+
+# snapshot_map, and for a claim with two or more folders the etcd backup's record of the volume it was bound to
+# (c1-restore-pv-map.sh, which needs the etcd tools; run only when a claim has several folders, so a restore without
+# any pays nothing). The record is kept in $BACKUP_STATE/pv-map, so the checks stage's `owner` maps the same folders.
+# Notes go to stderr; on failure stderr says why (a failed record read is added to the DUPLICATE line, and nothing is guessed).
+settled_map() {
+  local id=$1 out err given=${RESTORE_PV_MAP:+1}
+  [ -n "${RESTORE_PV_MAP:-}" ] || { [ -s "$BACKUP_STATE/pv-map" ] && RESTORE_PV_MAP=$BACKUP_STATE/pv-map || true; }
+  out=$work/map.try err=$work/map.try.err
+  if snapshot_map "$id" > "$out" 2> "$err"; then cat "$out"; return 0; fi
+  if grep -q '^DUPLICATE' "$err" && [ -z "$given" ] && [ -x "$BACKUP_BIN/c1-restore-pv-map.sh" ]; then
+    echo "more than one folder for one claim: reading which volume the etcd backup taken with snapshot $id bound each claim to" >&2
+    if RESTORE_SOURCE_HOST=${RESTORE_SOURCE_HOST:-} RESTORE_SNAPSHOT=$id RESTORE_ETCD_HOST=${RESTORE_ETCD_HOST:-} "$BACKUP_BIN/c1-restore-pv-map.sh" > "$work/pv-map" 2> "$work/pv-map.err"; then
+      RESTORE_PV_MAP=$work/pv-map
+      grep -P '^etcd\t' "$work/pv-map" | sed 's/^/etcd backup used (id, time, revision): /' >&2 || true
+      if snapshot_map "$id" > "$out" 2> "$err"; then
+        install -m 0600 "$work/pv-map" "$BACKUP_STATE/pv-map"
+        cat "$out"; return 0
+      fi
+    else
+      printf 'the etcd record could not be read: %s\n' "$(tail -n 2 "$work/pv-map.err" | tr '\n' ' ')" >> "$err"
+    fi
+  fi
+  cat "$err" >&2
+  return 1
 }
 
 if [ "$cmd" = owner ]; then
@@ -150,7 +247,7 @@ if [ "$cmd" = owner ]; then
   id=$(awk -F'\t' '$1 == "snapshot" {print $2}' "$record")
   work=$(mktemp -d "${TMPDIR:-/var/tmp}/c1-restore-volumes.XXXXXX")
   trap 'rm -rf "$work"' EXIT
-  snapshot_map "$id" > "$work/map" 2> "$work/map.err" || die "snapshot $id can't be mapped: $(cat "$work/map.err")"
+  settled_map "$id" > "$work/map" 2> "$work/map.err" || die "snapshot $id can't be mapped: $(cat "$work/map.err")"
   want=$(awk -F'\t' -v d="$rel" '$2 == d {print $5}' "$work/map")
   [ -n "$want" ] || die "$rel is not in snapshot $id"
   got="$(stat -c '%u:%g' "$dir") $(printf '%o' $((0$(stat -c '%a' "$dir") & 0777)))"
@@ -188,25 +285,59 @@ src=${RESTORE_SOURCE_HOST:?RESTORE_SOURCE_HOST is not set: the prod node whose s
 snap=${RESTORE_SNAPSHOT:-latest}
 mnt=${RESTORE_REQUIRE_MOUNT-$(dirname "$path")}
 
-# 1. Only a node whose data disk is mounted holds volumes; never fill the OS disk.
-if [ -n "$mnt" ] && ! mountpoint -q "$mnt"; then
+# 1. Only a node whose data disk is mounted holds volumes; never fill the OS disk. (inspect reads only: it needs no disk.)
+if [ "$cmd" != inspect ] && [ "$cmd" != plan ] && [ -n "$mnt" ] && ! mountpoint -q "$mnt"; then
   echo "SKIP: $mnt is not mounted on $BACKUP_HOST, so it holds no volumes; nothing restored"
   exit 0
 fi
 
-# Which snapshot: the newest volume snapshot of the prod node, or the one asked for.
-if [ "$snap" = latest ]; then
-  sel=(--latest 1)
-else
-  sel=("$snap")
-fi
-id=$(r snapshots --json --host "$src" --tag volumes "${sel[@]}" | python3 -c '
-import json, sys
-snaps = sorted(json.load(sys.stdin) or [], key=lambda s: s["time"])
-print(snaps[-1]["id"] if snaps else "")
-')
+# Which snapshot: the newest volume snapshot of the prod node, or the one asked for (the ID the rebuild of prod pins).
+id=$(restore_snapshot_id "$src" "$snap") || die "no volume snapshot of host $src ($snap) in the repository"
 [ -n "$id" ] || die "no volume snapshot of host $src ($snap) in the repository"
 when=$(r snapshots --json "$id" | python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["time"])')
+
+if [ "$cmd" = plan ]; then
+  work=$(mktemp -d "${TMPDIR:-/var/tmp}/c1-restore-volumes.XXXXXX")
+  trap 'rm -rf "$work"' EXIT
+  chmod 0700 "$work"
+  snapshot_map "$id" inspect > "$work/all"
+  n=$(wc -l < "$work/all" | tr -d ' ')
+  [ "$n" -gt 0 ] || die "plan: snapshot $id holds no volume folder under $path"
+  unknown=$(awk -F'\t' '$2 == "?" {print $1}' "$work/all" | tr '\n' ' ')
+  [ -z "$unknown" ] || die "plan: snapshot $id holds folders that are not <namespace>/<claim> or pvc-<uid>_<namespace>_<claim>: $unknown"
+  many=$(awk -F'\t' '{f[$2] = f[$2] " " $1; c[$2]++} END {for (k in c) if (c[k] > 1) printf "%s <-%s; ", k, f[k]}' "$work/all")
+  if [ -n "$many" ]; then
+    if [ "${RESTORE_PLAN_STRICT:-}" = 1 ]; then
+      die "plan: snapshot $id has more than one folder for the same claim: $many. Clean them up on the live nodes before a teardown; nothing was changed."
+    fi
+    settled_map "$id" > "$work/map" 2> "$work/map.err" || die "plan: snapshot $id can't be mapped: $(cat "$work/map.err")"
+  fi
+  claims=$(cut -f2 "$work/all" | sort -u | wc -l | tr -d ' ')
+  if [ -n "$many" ]; then note=" (more than one folder for: $many settled by the etcd record)"; else note=", no claim has more than one folder"; fi
+  echo "PASS: plan: snapshot $id: $n folders map to $claims claims$note"
+  exit 0
+fi
+
+if [ "$cmd" = inspect ]; then
+  echo "snapshot	$id	$src	$when"
+  work=$(mktemp -d "${TMPDIR:-/var/tmp}/c1-restore-volumes.XXXXXX")
+  trap 'rm -rf "$work"' EXIT
+  chmod 0700 "$work"
+  if [ -z "${RESTORE_PV_MAP:-}" ] && [ -x "$BACKUP_BIN/c1-restore-pv-map.sh" ] &&
+     RESTORE_SOURCE_HOST=$src RESTORE_SNAPSHOT=$id "$BACKUP_BIN/c1-restore-pv-map.sh" > "$work/pv-map" 2> "$work/pv-map.err"; then
+    RESTORE_PV_MAP=$work/pv-map
+  elif [ -z "${RESTORE_PV_MAP:-}" ] && [ -s "$work/pv-map.err" ]; then
+    echo "pv-record	could not be read: $(tail -n 2 "$work/pv-map.err" | tr '\n' ' ')"
+  fi
+  if [ -n "${RESTORE_PV_MAP:-}" ] && [ -s "$RESTORE_PV_MAP" ]; then
+    sed -n '/^\(snapshot\|etcd\)\t/ s/^/pv-record\t/p' "$RESTORE_PV_MAP"
+  else
+    echo "pv-record	none"
+  fi
+  echo "folder	claim	files	bytes	newest file (UTC)	what the restore does"
+  snapshot_map "$id" inspect
+  exit 0
+fi
 
 # 2. Never over live data: an empty folder, or this same restore already done.
 mkdir -p "$path"
@@ -228,7 +359,8 @@ fi
 work=$(mktemp -d "${TMPDIR:-/var/tmp}/c1-restore-volumes.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 chmod 0700 "$work"
-snapshot_map "$id" > "$work/map" 2> "$work/map.err" || die "snapshot $id can't be mapped: $(cat "$work/map.err"). Nothing was changed."
+settled_map "$id" > "$work/map" 2> "$work/map.err" || die "snapshot $id can't be mapped: $(cat "$work/map.err"). Nothing was changed."
+[ ! -s "$work/map.err" ] || sed 's/^/note: /' "$work/map.err"
 [ -s "$work/map" ] || die "snapshot $id holds no volume folder under $path"
 cut -f2-4 "$work/map" | sort > "$work/want"
 
@@ -246,6 +378,10 @@ while IFS=$'\t' read -r from to _; do
   mv "$stage$path/$from" "$path/$to"
   [ "$from" = "$to" ] || echo "mapped $from -> $to"
 done < "$work/map"
+# Folders of a claim with several that were not the bound one stay in the staging folder, which goes. They are named.
+for left in "$stage$path"/pvc-*; do
+  [ -d "$left" ] && echo "not restored: ${left##*/} (not the volume its claim was bound to)"
+done
 if [ -e "$stage$path/$canary" ]; then mv "$stage$path/$canary" "$path/$canary"; fi
 rm -rf "$stage"
 
@@ -268,6 +404,8 @@ got_canary=$(cat "$path/$canary" 2>/dev/null) || die "no canary file restored in
 } > "$record.new"
 chmod 0600 "$record.new"
 mv "$record.new" "$record"
+# The nodes' backups forget nothing until the checks stage has proven this restore (c1-backup-lib.sh, restic_retention).
+printf 'held by the restore of snapshot %s at %s\n' "$id" "$(date -u +%FT%TZ)" > "$BACKUP_STATE/forget-hold"
 cat "$record"
 files=$(awk -F'\t' '{f+=$2} END{print f+0}' "$work/got")
 bytes=$(awk -F'\t' '{b+=$3} END{print b+0}' "$work/got")

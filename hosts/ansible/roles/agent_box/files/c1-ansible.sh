@@ -53,10 +53,15 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # backup-restore-test: starts each node's c1-restore-test.service now (the Sunday timer's own unit: restic check, then the newest snapshots restored
 # into temporary folders and compared, never over a volume) and stops unless each node names the snapshot it restored and leaves no folder behind.
 # check starts nothing; apply starts it. It takes no backup.
+# restore-inspect: reads what a restore would do with prod's newest volume snapshot (the one in the box's restore pin, when a rebuild
+# stopped after its teardown): on each worker, c1-restore-volumes.sh inspect, which lists every folder in the snapshot with its
+# files, bytes and newest file time, which folder each claim would take (the volume the etcd backup binds it to) and why one is not
+# settled. It writes nothing: restic runs with --no-lock, and no file is written but a temporary one it removes. check and apply both read.
+# Like backup-status it starts from no known hosts, so nodes rebuilt since the last run (new host keys) are reachable.
 # backup-check: plays playbooks/k8s-backup.yml in check mode only, to prove the sftp alias tasks (the carried key seeds, the host address
 # from the box's copy of the prod inventory) before a prod rebuild; apply is refused, because the wrapper never takes a backup. The seed folder is the one
 # rebuild-prod.sh fills (<keys>/prod/backup-sftp); the env file is the box's own <keys>/c1-backup.env, as in rebuild-prod.sh (the first run's play 3 stopped on the default path under the keys user's home); the host address is read before the proxmox group is dropped, as rebuild-prod.sh does.
-declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml)
+declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml [restore-inspect]=playbooks/k8s-restore-inspect.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env" [identity-values]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file [identity-values]=k8s_identity_values_file)
 # Fixed extra variables per name. identity, users and clients also set k8s_identity_secrets_store=openbao, so the realm's Secrets
@@ -108,9 +113,15 @@ fi
 [[ -n ${fixed_vars[$name]:-} ]] && extra+=(-e "${fixed_vars[$name]}")
 [[ -n ${fixed_tags[$name]:-} ]] && extra+=(--tags "${fixed_tags[$name]}")
 [[ -n ${fixed_json[$name]:-} ]] && extra+=(-e "${fixed_json[$name]}")
+if [[ $name == restore-inspect && -s $work/state/prod-restore-pin ]]; then
+  pin=$(head -n 1 -- "$work/state/prod-restore-pin")
+  [[ $pin =~ ^[0-9a-f]{8,64}$ ]] && extra+=(-e "restore_inspect_snapshot=$pin")
+fi
 
 mkdir -p "$envdir" "$logs" "$work/state"
 chmod 700 "$envdir"
+# A read-only name starts from no known hosts: a rebuilt node has a new host key, and the old one would stop the run.
+case $name in backup-status | restore-inspect) rm -f -- "$envdir/known_hosts" ;; esac
 exec 9>"$work/state/c1-ansible.lock"
 flock -n 9 || { echo "c1-ansible: another c1-ansible run is going; try again when it ends" >&2; exit 1; }
 [[ -d $repo/.git ]] || git clone --quiet --no-checkout "$(git -C "$work/central-hub" remote get-url origin)" "$repo"

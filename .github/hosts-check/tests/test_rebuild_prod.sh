@@ -125,6 +125,11 @@ cp "\${2%/}/hosts.yml" $t/seen-inventory.yml
 if [[ "\$*" == *"--tags drill"* && -z "\${DRILL_NOSNAP:-}" ]]; then
   echo '    "2026-11-18T03:00:30Z PASS: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321 of 2026-11-18T03:00:26",'
   echo '    "2026-11-18T03:00:20Z PASS: etcd restore test, revision 202, 201 keys under /, key /registry/namespaces/kube-system present, snapshot c5523412 of 2026-11-18T03:00:17"'
+  case "\${DRILL_PLAN:-ok}" in
+    ok) echo '    "PASS: plan: snapshot 36fe4321aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 4 folders map to 4 claims, no claim has more than one folder"' ;;
+    other) echo '    "PASS: plan: snapshot 99999999aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 4 folders map to 4 claims, no claim has more than one folder"' ;;
+    none) echo '    "FAIL: plan: snapshot 36fe4321: more than one folder for the same claim: openbao/data-openbao-0 <- a b c"' ;;
+  esac
 elif [[ "\$*" == *"--tags drill"* ]]; then
   echo '    "2026-11-18T03:00:30Z PASS: no volume backups recorded on node; nothing to test",'
 fi
@@ -254,7 +259,7 @@ if [[ $rc -eq 0 && $order == "$want" && $calls == *"playbooks/k8s-backup.yml --t
       $stages == '"vms cluster storage openbao-seal restore gitops secrets apps gateway certs identity identity-db ui backup checks"' &&
       $(cat "$t/seen-rebuild.env") == *"ENV_NAME=prod"* && $(cat "$t/seen-rebuild.env") == *"TEARDOWN_TARGET=proxmox_virtual_environment_vm.node"* &&
       $(grep -c 'plan .*-destroy -target=proxmox_virtual_environment_vm.node ' "$t/calls") -ge 1 && $(cat "$t/seen-rebuild.env") == *"TOFU_ENV=$t/keys/proxmox-lab.env"* &&
-      $(cat "$t/seen-rebuild.env") == *"k8s-restore.yml -e k8s_backup_enabled=false"* && -e $t/work/state/prod-stable-folders &&
+      $(cat "$t/seen-rebuild.env") == *"k8s-restore.yml -e k8s_backup_enabled=false -e k8s_backup_restore_snapshot=36fe4321aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"* && ! -e $t/work/state/prod-restore-pin && -e $t/work/state/prod-stable-folders &&
       $out == *"owner tap $tap"* && $out == *"restore test passed: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321"*"etcd restore test"*"snapshot c5523412"* && $out == *"PASS: rebuild-prod: prod torn down and built again"* &&
       -z $(ls -d /dev/shm/rebuild-prod-seal.test-* 2>/dev/null) ]]; then
   ok "6. rebuild: the checks before a teardown in order, the certificates kept, then the one command with prod's stages"
@@ -404,5 +409,67 @@ if [[ -n $floor && -z $f13a && $r13b -eq 0 && $f13b == "floor $floor $sha" &&
       $r13c -eq 1 && $o13c == *"commit $sha is older than the floor ${floor:0:7}"* && -z $c13c && -z $g13c ]]; then
   ok "13. a commit below the floor is refused before any checkout or run; at or above it the rebuild goes on; check never asks"
 else bad "13. [$floor] [$f13a] $r13b [$f13b] | $r13c $o13c [$c13c] [$g13c]"; fi
+
+# 14. The restore snapshot is pinned and the mapping is checked before a teardown (prod run 4, 2026-11-21: three folders for one
+# claim stopped the restore after the teardown, and a rerun's own backup would have snapshotted the rebuilt, empty nodes).
+logd=$t/work/rebuild-prod/logs
+pinid=36fe4321aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+inventory; dev_log "$sha" "rebuild: all stages passed"; rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+DRILL_PLAN=none run rebuild "$tap" "$sha"; r14a=$rc o14a=$out c14a=$calls
+DRILL_PLAN=other run rebuild "$tap" "$sha"; r14b=$rc o14b=$out c14b=$calls
+if [[ $r14a -eq 1 && $o14a == *"mapping of the volume snapshot (c1-restore-volumes.sh plan) did not pass"* && $c14a != *one-command* && $c14a != *"ssh "*backup.pem* && ! -e $t/work/state/prod-restore-pin &&
+      $r14b -eq 1 && $o14b == *"the drill mapped snapshot 99999999 but its restore test passed on 36fe4321"* && $c14b != *one-command* ]]; then
+  ok "14a. a drill whose mapping of the snapshot fails (more than one folder for a claim), or maps another snapshot than the one tested, destroys nothing"
+else bad "14a. $r14a $o14a | $r14b $o14b"; fi
+rm -f "$logd"/*
+run rebuild "$tap" "$sha"; r14c=$rc o14c=$out
+if [[ $r14c -eq 0 && $o14c == *"the restore's folder mapping on snapshot 36fe4321aaaa gives each claim exactly one folder"* && $o14c == *"the restore snapshot is pinned: 36fe4321aaaa"* &&
+      $o14c == *"the restore pin was cleared"* && ! -e $t/work/state/prod-restore-pin ]]; then
+  ok "14b. a good run pins the full snapshot ID before the teardown, passes it to the restore, and clears the pin when it ends well"
+else bad "14b. $r14c $o14c"; fi
+# A run that stopped after its teardown: the pin stays; the rerun takes no backup and restores the pinned snapshot.
+rm -f "$logd"/*
+ONE_RC=2 run rebuild "$tap" "$sha"; r14d=$rc
+pin_kept=$(head -n 1 "$t/work/state/prod-restore-pin" 2>/dev/null)
+sleep 1; run rebuild "$tap" "$sha"; r14e=$rc o14e=$out c14e=$calls
+if [[ $r14d -eq 2 && $pin_kept == "$pinid" && $r14e -eq 0 && $c14e != *"--tags drill"* && $o14e == *"restore snapshot 36fe4321aaaa is pinned (the last run, "*" stopped after its teardown)"* &&
+      $(cat "$t/seen-rebuild.env") == *"k8s_backup_restore_snapshot=$pinid"* && ! -e $t/work/state/prod-restore-pin ]]; then
+  ok "14c. a failed run keeps the pin; the rerun takes no backup, restores the pinned snapshot and clears the pin when it ends well"
+else bad "14c. $r14d [$pin_kept] $r14e $o14e [$c14e]"; fi
+# The same stop with no pin file (a run from before the pin existed): the rerun refuses without the ID, before any backup.
+rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+torn_log() { # <with the tested-snapshot line: yes|no>
+  printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" > "$logd/run-29990101T000000Z.log"
+  [ "$1" = no ] || echo "PASS: rebuild-prod: every prod node backed up now, and its restore test passed: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321 of 2026-11-18T03:00:26; etcd restore test, revision 202, 201 keys under /, key /registry/namespaces/kube-system present, snapshot c5523412 of 2026-11-18T03:00:17" >> "$logd/run-29990101T000000Z.log"
+  printf '%s\n' "rebuild-prod: teardown and build start: vms cluster" "FAIL: rebuild-prod: the one command stopped (rc 2); rebuild-prod log names the stage" >> "$logd/run-29990101T000000Z.log"
+}
+torn_log yes
+run rebuild "$tap" "$sha"; r14f=$rc o14f=$out c14f=$calls
+run rebuild "$tap" "$sha" "$pinid"; r14g=$rc o14g=$out c14g=$calls
+if [[ $r14f -eq 1 && $o14f == *"stopped after its teardown"*"Give the full ID of the volume snapshot"* && -z $c14f &&
+      $r14g -eq 0 && $c14g != *"--tags drill"* && $o14g == *"is pinned (the last run, run-29990101T000000Z.log, stopped after its teardown), named by the go"* &&
+      $(cat "$t/seen-rebuild.env") == *"k8s_backup_restore_snapshot=$pinid"* ]]; then
+  ok "14d. after a run that stopped after its teardown, a rebuild with no pin is refused before any backup, and with the full ID it restores that snapshot"
+else bad "14d. $r14f $o14f [$c14f] | $r14g $o14g"; fi
+rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+run rebuild "$tap" "$sha" "$pinid"; r14h=$rc o14h=$out c14h=$calls
+run rebuild "$tap" "$sha" 36fe4321; r14i=$rc o14i=$out
+if [[ $r14h -eq 1 && $o14h == *"only for a run after one that stopped after its teardown"* && -z $c14h && $r14i -eq 2 && $o14i == *"64 hex digits"* ]]; then
+  ok "14e. a snapshot ID is refused when no run stopped after its teardown (prod holds live data), and a short ID is a usage error"
+else bad "14e. $r14h $o14h [$c14h] | $r14i $o14i"; fi
+
+# 14f. With no pin file, the ID given must start with the snapshot the stopped run's own log says it backed up and tested; an older
+# daily snapshot of the same host is refused, and so is a stopped run whose log names none.
+rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+torn_log yes
+older=99999999bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+run rebuild "$tap" "$sha" "$older"; r14j=$rc o14j=$out c14j=$calls
+torn_log no
+run rebuild "$tap" "$sha" "$pinid"; r14k=$rc o14k=$out c14k=$calls
+if [[ $r14j -eq 1 && $o14j == *"is not the snapshot the stopped run (run-29990101T000000Z.log) backed up and tested before its teardown (36fe4321...)"* && -z $c14j &&
+      $r14k -eq 1 && $o14k == *"names no tested volume snapshot, so the ID given cannot be checked"* && -z $c14k ]]; then
+  ok "14f. with no pin file, an ID that is not the snapshot the stopped run tested is refused, and so is a stopped run whose log names none"
+else bad "14f. $r14j $o14j [$c14j] | $r14k $o14k [$c14k]"; fi
+rm -f "$logd"/*
 
 exit "$fail"

@@ -30,6 +30,13 @@
 #          key, prod's own newest volume snapshot back onto the empty data disk (k8s-restore.yml), Argo CD and every
 #          app, the certificates, sign-in, Keycloak's database back from the same snapshot (k8s-identity-restore.yml),
 #          the Argo CD UI, the backup timers on again with the carried certificates, and the checks.
+#          The volume snapshot the restore brings back is always pinned: the snapshot the drill backed up and tested before
+#          the teardown (or the one named by the optional <volume snapshot id>), never "latest". Once the teardown starts,
+#          the box keeps the pin (<state>/prod-restore-pin) until a run ends well. A run that finds the last rebuild
+#          stopped after its teardown (prod's nodes rebuilt and empty) takes no backup, because that would snapshot empty
+#          nodes and the repository's retention (daily, weekly, monthly: the newest of a day wins) would forget the good
+#          snapshot: it needs the pin (kept, or given as the fourth argument) and refuses without it, before anything
+#          is backed up or destroyed.
 # log      the newest run's lines: the action, the commit, the tap id, the dev run, the stage lines, PASS and FAIL.
 # A run's VM IDs must be 200-249; VM 258 (this box) and 259 are refused in any plan. One run at a time, with the
 # dev rebuild's lock, so dev and prod never build at once. Only code on main runs with the keys.
@@ -58,15 +65,17 @@ export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin:/u
 export TF_DATA_DIR=$work/tofu-data/rebuild-prod TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: rebuild-prod check|rebuild <tap id> <commit>|log" >&2; exit 2; }
+usage() { echo "usage: rebuild-prod check|rebuild <tap id> <commit> [<volume snapshot id>]|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 want=''
+given_pin=''
 case $action in
   check | log) [[ $# -eq 1 ]] || usage ;;
   rebuild)
-    [[ $# -eq 3 ]] || usage
-    tap=$2 want=$3
+    [[ $# -eq 3 || $# -eq 4 ]] || usage
+    tap=$2 want=$3 given_pin=${4:-}
+    [[ -z $given_pin || $given_pin =~ ^[0-9a-f]{64}$ ]] || { echo "rebuild-prod: the volume snapshot ID is the full restic ID, 64 hex digits" >&2; exit 2; }
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "rebuild-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
     [[ $want =~ ^[0-9a-f]{7,40}$ ]] || { echo "rebuild-prod: the commit is the one the owner's go names, 7 to 40 hex digits" >&2; exit 2; }
     ;;
@@ -117,6 +126,49 @@ stamp=$(date -u +%Y%m%dT%H%M%SZ)
 log=$logs/run-$stamp.log
 exec > >(tee -a "$log") 2>&1
 echo "rebuild-prod: $action at central-hub ${commit:0:12}${tap:+, owner tap $tap}"
+
+# --- 0. The restore pin, and whether the last rebuild stopped after its teardown (prod's nodes rebuilt and empty).
+pin_file=$work/state/prod-restore-pin
+pin=$(head -n 1 -- "$pin_file" 2>/dev/null || true)
+torn=''
+if [[ $action == rebuild ]]; then
+  prev=''
+  while IFS= read -r f; do
+    [[ $f == "$log" ]] && continue
+    if grep -q '^rebuild-prod: rebuild at ' -- "$f"; then prev=$f; break; fi
+  done < <(ls -1r "$logs"/run-*.log 2>/dev/null || true)
+  if [[ -n $prev ]] && grep -q '^rebuild-prod: teardown and build start' -- "$prev" &&
+     ! grep -q '^PASS: rebuild-prod: prod torn down and built again' -- "$prev"; then torn=${prev##*/}; fi
+  if [[ -n $given_pin && -z $torn ]]; then
+    echo "FAIL: rebuild-prod: a volume snapshot ID is only for a run after one that stopped after its teardown; the last rebuild run did not, so prod holds live data and the drill takes a new backup first. Nothing was backed up or destroyed."; exit 1
+  fi
+  if [[ -z $torn && -n $pin ]]; then echo "rebuild-prod: ignoring a restore pin left in the box's state: no run stopped after its teardown, so nothing was rebuilt empty"; pin=''; fi
+  # The snapshot the torn run's own drill tested and backed up before its teardown, from its log (a pin file may be missing: a run from before
+  # the pin existed leaves none). A snapshot ID given with no pin file must start with it: an older snapshot of the same host would
+  # otherwise restore stale data.
+  if [[ -n $torn && -z $pin && -n $given_pin ]]; then
+    tested=$(sed -nE 's/^PASS: rebuild-prod: every prod node backed up now, and its restore test passed: volume restore test, [^;]*snapshot ([0-9a-f]{8}) of .*/\1/p; s/^PASS: rebuild-prod: restore snapshot ([0-9a-f]{12}) is pinned.*/\1/p' -- "$logs/$torn" | head -n 1)
+    if [[ -z $tested ]]; then
+      echo "FAIL: rebuild-prod: the box holds no restore pin and the log of the stopped run ($torn) names no tested volume snapshot, so the ID given cannot be checked against it; nothing was backed up or destroyed"; exit 1
+    fi
+    if [[ $given_pin != "$tested"* ]]; then
+      echo "FAIL: rebuild-prod: the snapshot ID given ($given_pin) is not the snapshot the stopped run ($torn) backed up and tested before its teardown ($tested...); nothing was backed up or destroyed"; exit 1
+    fi
+  fi
+  if [[ -n $given_pin ]]; then
+    if [[ -n $pin && $given_pin != "$pin"* ]]; then
+      echo "FAIL: rebuild-prod: the box holds the restore pin $pin, and the snapshot ID given is $given_pin, which is another snapshot; nothing was backed up or destroyed"; exit 1
+    fi
+    pin=$given_pin
+  fi
+  if [[ -n $torn && -z $pin ]]; then
+    echo "FAIL: rebuild-prod: the last rebuild run ($torn) stopped after its teardown, so prod's nodes are rebuilt and empty, and a backup now would snapshot them and let the repository forget the good one. Give the full ID of the volume snapshot to restore as the fourth argument: rebuild <tap id> <commit> <volume snapshot id>. Nothing was backed up or destroyed."; exit 1
+  fi
+  if [[ -n $torn ]]; then
+    # The nodes are the rebuilt ones: their host keys are new, and the old ones the pre-teardown steps pinned no longer match.
+    rm -f -- "$envdir/known_hosts.old" "$work/c1-ansible/known_hosts"
+  fi
+fi
 
 fails=0
 pass() { echo "PASS: rebuild-prod: $*"; }
@@ -581,6 +633,9 @@ fi
 # The restore tests restore into a temporary folder on each node, never over its data. The first worker's
 # volume test and the control plane's etcd test must each name the snapshot they restored: a node with no
 # volume record passes with nothing to test, and that is not a backup of prod's data.
+if [[ -n $pin ]]; then
+  pass "restore snapshot ${pin:0:12} is pinned${torn:+ (the last run, $torn, stopped after its teardown)}${given_pin:+, named by the go}: no backup is taken of the nodes, so a snapshot of rebuilt, empty nodes can never be the one that comes back or make the repository forget it"
+else
 drill_out=$envdir/drill-$stamp.log
 ap playbooks/k8s-backup.yml --tags drill -e k8s_backup_drill=true -e "$old_args" | tee "$drill_out" ||
   { echo "FAIL: rebuild-prod: the backup and restore test before the teardown failed; nothing was destroyed"; exit 1; }
@@ -590,6 +645,20 @@ if [[ -z $vol_pass || -z $etcd_pass ]]; then
   echo "FAIL: rebuild-prod: the drill named no tested volume snapshot or no tested etcd snapshot; nothing was destroyed"; exit 1
 fi
 echo "PASS: rebuild-prod: every prod node backed up now, and its restore test passed: ${vol_pass#PASS: }; ${etcd_pass#PASS: }"
+  pin=$(sed -E 's/.*snapshot ([0-9a-f]{8}) of .*/\1/' <<< "$vol_pass")
+  # The restore's own folder mapping, run strictly on that snapshot by the drill (k8s_backup drill.yml, c1-restore-volumes.sh plan):
+  # one folder for each claim, or nothing is destroyed. The full ID it names must be the snapshot the restore test passed on.
+  plan_pass=$(grep -oE 'PASS: plan: snapshot [0-9a-f]{64}: [0-9]+ folders map to [0-9]+ claims, no claim has more than one folder' "$drill_out" | head -n 1 || true)
+  if [[ -z $plan_pass ]]; then
+    echo "FAIL: rebuild-prod: the drill's mapping of the volume snapshot (c1-restore-volumes.sh plan) did not pass: see the plan's lines above; nothing was destroyed"; exit 1
+  fi
+  plan_id=$(grep -oE '[0-9a-f]{64}' <<< "$plan_pass")
+  if [[ $plan_id != "$pin"* ]]; then
+    echo "FAIL: rebuild-prod: the drill mapped snapshot ${plan_id:0:8} but its restore test passed on ${pin}; nothing was destroyed"; exit 1
+  fi
+  pin=$plan_id
+  echo "PASS: rebuild-prod: the restore's folder mapping on snapshot ${plan_id:0:12} gives each claim exactly one folder (${plan_pass#PASS: plan: })"
+fi
 
 # 2. Each node's backup certificate and key ID, kept in the keys folder; never printed. Only with the Azure sign-in
 # (k8s_backup_azure_identity): with none, the nodes hold no certificate and there is nothing to carry.
@@ -646,10 +715,14 @@ if compgen -G "$pkeys/openbao-snapshots/raft-*.snap" >/dev/null; then
   echo "rebuild-prod: the secrets store's rebuild hold is set; after the run, restore-rebuilt (the owner's tap) or clear-hold"
 fi
 
+# The restore snapshot is pinned from here until a run ends well: a later run takes it from this file, and never takes a backup.
+printf '%s\n%s %s\n' "$pin" "$(date -u +%FT%TZ)" "${log##*/}" > "$pin_file"
+echo "rebuild-prod: the restore snapshot is pinned: ${pin:0:12}${given_pin:+ (full ID given)}; kept in the box's state until a run ends well"
+
 # From here prod's cluster is built with stable folder names, which the box's other prod copies follow (openbao-prod).
 date -u +%FT%TZ > "$work/state/prod-stable-folders"
 # The rebuilt nodes have new host keys: the build starts with no known hosts.
-rm -f -- "$envdir/known_hosts"
+rm -f -- "$envdir/known_hosts" "$envdir/known_hosts.old" "$work/c1-ansible/known_hosts"
 
 stages="vms cluster storage openbao-seal restore gitops secrets apps gateway certs identity identity-db ui backup checks"
 cat > "$envdir/rebuild.env" <<ENV
@@ -664,7 +737,7 @@ STAGES="$stages"
 TEARDOWN_TARGET=$teardown_target
 SECRET_SOURCE_FILE=$pkeys/secret-source.env
 OPENBAO_SEAL_KEY_FILE=$seal_tmp/openbao-seal.key
-RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml -e k8s_backup_enabled=false'
+RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml -e k8s_backup_enabled=false -e k8s_backup_restore_snapshot=$pin'
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check -e k8s_backup_enabled=false'
 ENV
 chmod 600 "$envdir/rebuild.env"
@@ -676,6 +749,7 @@ if [[ $rc -eq 0 ]]; then
   # the host accepts those keys as the writer, so the box must not keep a key on the host (D-0042 rule 6, an access right
   # under the standing go of D-0061, named in the PR). On a failed run they stay: a stopped run is resumed from them.
   if [[ -d $sftp_keys ]]; then rm -rf -- "$sftp_keys"; echo "rebuild-prod: the carried sftp keys were deleted from the box"; fi
+  rm -f -- "$pin_file"; echo "rebuild-prod: the restore pin was cleared: the run ended well"
   echo "PASS: rebuild-prod: prod torn down and built again at ${commit:0:12}, data back, backups on"
 else echo "FAIL: rebuild-prod: the one command stopped (rc $rc); rebuild-prod log names the stage"; fi
 exit "$rc"
