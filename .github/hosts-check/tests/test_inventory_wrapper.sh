@@ -22,9 +22,9 @@ mkdir -p "$t/libexec/ansible-venv/bin" "$t/keys/inventory" "$t/work"
 ln -s "$(command -v python3)" "$t/libexec/ansible-venv/bin/python3"
 cp "$list" "$t/libexec/editable-values.yml"
 sed -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
-  -e "s|^store=.*|store=$t/keys/inventory/hosts.yml|" -e "s|^prev=.*|prev=$t/keys/inventory/hosts.yml.prev|" \
+  -e "s|^store=.*|store=$t/keys/inventory/hosts.yml|" -e "s|^tagkey=.*|tagkey=$t/keys/inventory/tag.key|" -e "s|^prev=.*|prev=$t/keys/inventory/hosts.yml.prev|" \
   -e "s|^prod_src=.*|prod_src=$t/prod.yml|" -e "s|^guard_src=.*|guard_src=$t/guard.yml|" "$wrapper" > "$t/inventory.sh"
-for v in libexec work store prev prod_src guard_src; do
+for v in libexec work store tagkey prev prod_src guard_src; do
   grep -q "^$v=$t" "$t/inventory.sh" || { bad "the wrapper no longer sets $v on its own line, so the test can't point it at the temp folder"; exit 1; }
 done
 inv() { bash "$t/inventory.sh" "$@"; }
@@ -121,10 +121,27 @@ leak=''
 for s in "$ADDR" "$ADDR2" "$HOST" "$MAIL" "$ZONE" 10.9.8.55 10.9.8.0 private.example.com KEYVALUE1; do echo "$all" | grep -q "$s" && leak="$leak $s"; done
 [ -z "$leak" ] && ok "get, names, diff and log print no sample address, name or email" || bad "output showed:$leak"
 inv get all.k8s_gateway_address | grep -Eq '^address [0-9a-f]{12}$' && ok "get prints a type and a 12-hex prefix" || bad "get output: $(inv get all.k8s_gateway_address)"
-echo "$rules_diff" | grep -q 'proxmox_host.proxmox_firewall_extra_rules: .*-> \[ACCEPT tcp port 443 source <cidr>\]' && ! echo "$rules_diff" | grep -q 10.9.8 \
-  && ok "diff shows the shape of a rule: action, protocol, port, source <cidr>" || bad "diff gave: $rules_diff"
-inv diff | grep -q 'k8s_nodes.k8s_certs_acme_email: <email> -> <email>' && ok "diff shows an email change as <email> -> <email>" || bad "diff gave: $(inv diff)"
+echo "$rules_diff" | grep -qx 'proxmox_host.proxmox_firewall_extra_rules: changed' && ! echo "$rules_diff" | grep -Eq '10\.9\.8|ACCEPT|443|tcp|<' \
+  && ok "diff prints a key path and the word changed for a rules change, no value and no shape" || bad "diff gave: $rules_diff"
+inv diff | grep -qx 'k8s_nodes.k8s_certs_acme_email: changed' && ! inv diff | grep -q '<email>' && ok "diff of an email change is the key path and changed only" || bad "diff gave: $(inv diff)"
+printf 'true' | inv set k8s_nodes.k8s_certs_issue >/dev/null   # same value as before: nothing changes
+inv diff | grep -qx 'inventory: 0 path(s) changed since the copy before the last set' && ok "a set that changes nothing gives 0 changed paths" || bad "diff gave: $(inv diff)"
 inv names | grep -qx 'proxmox_host.proxmox_firewall_enable' && ! inv names | grep -q "$HOST" && ok "names lists key paths and no node name" || bad "names output wrong"
+
+# 3b. the tag: HMAC under a key only this user holds
+[ "$(stat -c %a "$t/keys/inventory/tag.key")" = 600 ] && [ "$(stat -c %s "$t/keys/inventory/tag.key")" -ge 32 ] && ok "the tag key exists, mode 0600, at least 32 bytes" || bad "the tag key is wrong"
+printf 'true' | inv set k8s_nodes.k8s_certs_issue >/dev/null
+tag_a=$(inv get k8s_nodes.k8s_certs_issue | cut -d' ' -f2)
+plain=$(python3 -c 'import hashlib,json;print(hashlib.sha256(json.dumps(True,sort_keys=True,separators=(",",":")).encode()).hexdigest()[:12])')
+[ "$tag_a" != "$plain" ] && ok "the tag of a bool is not the plain SHA-256 prefix, so a fixed table of prefixes does not name it" || bad "the tag equals the plain SHA-256 prefix"
+[ "$tag_a" = "$(inv get k8s_nodes.k8s_certs_issue | cut -d' ' -f2)" ] && ok "the same value under the same key gives the same tag" || bad "the tag is not stable"
+cp "$t/keys/inventory/tag.key" "$t/key.old"; head -c 32 /dev/urandom > "$t/keys/inventory/tag.key"
+tag_b=$(inv get k8s_nodes.k8s_certs_issue | cut -d' ' -f2)
+[ "$tag_a" != "$tag_b" ] && ok "the same value under two different keys gives different tags" || bad "two keys gave the same tag"
+keyhex=$(python3 -c 'import sys;print(open(sys.argv[1],"rb").read().hex())' "$t/key.old")
+leakkey=$( { inv get k8s_nodes.k8s_certs_issue; inv log; inv names; inv diff; } 2>&1 | grep -c "$keyhex" || true )
+[ "$leakkey" = 0 ] && ok "no action prints the key" || bad "the key was printed"
+rm -f "$t/keys/inventory/tag.key"; inv get k8s_nodes.k8s_certs_issue >/dev/null && [ -s "$t/keys/inventory/tag.key" ] && ok "a missing key is made on first use" || bad "a missing key was not made"
 
 # 4. view
 v=$(inv view proxmox)

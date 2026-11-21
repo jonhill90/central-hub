@@ -3,16 +3,17 @@
 # (docs/specs/2026-11-private-values-on-the-box.md). It runs as user `invops` through sudo, so the session that asks for it
 # never reads a value. The working copy is /etc/agent-keys/inventory/hosts.yml, mode 0600 in a 0700 folder.
 #   inventory.sh set <scope.variable> [<cmsg_...>] < value   one listed value, as YAML or JSON on standard input
-#   inventory.sh get <scope.variable>                         prints the value's type and the first 12 hex digits of its SHA-256
+#   inventory.sh get <scope.variable>                         prints the value's type and a 12-hex tag: HMAC-SHA-256 of the value under this user's own key
 #   inventory.sh names                                        prints the key paths the working copy holds, never a value
-#   inventory.sh diff                                         the last change, with every address, name and email replaced
+#   inventory.sh diff                                         the key paths the last change touched, each as `changed`; never a value or a shape
 #   inventory.sh log                                          the last 5 lines of the change log (paths, classes, hash prefixes)
 #   inventory.sh view <proxmox|opnsense|k8s_nodes>            for the wrapper users only: the group and all.vars, as an inventory
 #   inventory.sh import prod|guard                            first fill: the prod or guard copy becomes the working copy
 #   inventory.sh import-compare                               the key paths where the prod and guard copies differ
 # A key path is accepted only if the reviewed list editable-values.yml (installed beside this file, root-owned) names it, with a
 # type the value must pass and a class. The classes firewall, tailnet, access and money need the standing go's message ID after the path.
-# No value is printed by any action but `view`. The working copy is written from parsed data, so a `set` drops the comments the
+# No value is printed by any action but `view`. The tag key (tag.key beside the working copy, mode 0600, made on first use, never printed)
+# keeps a tag from being brute-forced the way a plain hash of a short value can be; deleting the key changes every tag. The working copy is written from parsed data, so a `set` drops the comments the
 # example file carries; the values stay. The role gives this user read access to the two import sources and installs this file
 # and the list (the wiring is a later change, see the spec's "Points to").
 set -euo pipefail
@@ -25,6 +26,7 @@ usage() {
 libexec=/usr/local/libexec/agent-box
 work=/var/lib/agent-box
 store=/etc/agent-keys/inventory/hosts.yml
+tagkey=/etc/agent-keys/inventory/tag.key
 prev=/etc/agent-keys/inventory/hosts.yml.prev
 logs=$work/inventory-logs
 allow=$libexec/editable-values.yml
@@ -46,10 +48,10 @@ esac
 [[ $action != get && $action != set || ${2:-} =~ ^[a-z0-9_]+\.[a-z0-9_]+$ ]] || { echo "inventory: a key path is <scope>.<variable>, lowercase letters, digits and _" >&2; exit 2; }
 
 code=$(cat <<'PY'
-import copy, datetime, hashlib, ipaddress, json, os, re, sys, yaml
+import copy, datetime, hashlib, hmac, ipaddress, json, os, re, sys, yaml
 
-action, store, prev, logs, allow, prod_src, guard_src = sys.argv[1:8]
-args = sys.argv[8:]
+action, store, prev, logs, allow, prod_src, guard_src, tagkey = sys.argv[1:9]
+args = sys.argv[9:]
 GROUP_HOSTS = ("proxmox", "agent_box", "opnsense")   # groups whose host names are walked; node names are never walked
 SECRETISH = re.compile(r"secret|token|password|passwd|private|_key", re.I)
 NAME = re.compile(r"[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?")
@@ -73,8 +75,28 @@ def load(path):
     return d if isinstance(d, dict) else None
 
 
+def key():
+    """The tag key: 32 random bytes, mode 0600, made on first use. Never printed or logged."""
+    try:
+        with open(tagkey, "rb") as f:
+            k = f.read()
+        if len(k) >= 32: return k
+        die("the tag key file is too short; remove it to make a new one (every tag changes)")
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(tagkey), mode=0o700, exist_ok=True)
+    try:
+        fd = os.open(tagkey, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return key()
+    with os.fdopen(fd, "wb") as f:
+        f.write(os.urandom(32))
+    return key()
+
+
 def sha(v):
-    return hashlib.sha256(json.dumps(v, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:12]
+    """A 12-hex tag of a value: HMAC-SHA-256 under the tag key, so a short or guessable value can't be recovered from it."""
+    return hmac.new(key(), json.dumps(v, sort_keys=True, separators=(",", ":")).encode(), hashlib.sha256).hexdigest()[:12]
 
 
 # --- the types a value must pass ---
@@ -120,22 +142,6 @@ def check_type(entry, v):
     if t == "cidrs": return ok_list(v, ok_cidr, 1, 50)
     if t == "rules": return ok_list(v, ok_rule, 0, 100)
     return False
-
-
-def shape(v, entry):
-    """What a reviewer may read: types and counts, with every address, name and email replaced."""
-    t = entry["type"] if entry else None
-    if t == "bool" or isinstance(v, bool): return str(v).lower()
-    if t == "port" or is_int(v): return str(v)
-    if t == "choice": return repr(v)
-    if t == "rules" and isinstance(v, list):
-        return "[" + "; ".join("%s %s port %s source <cidr>" % (r.get("action", "?"), r.get("proto", "?"), r.get("dport", "?"))
-                               if isinstance(r, dict) and r.get("action") in ("ACCEPT", "DROP") and r.get("proto") in ("tcp", "udp")
-                               else "<rule>" for r in v) + "]"
-    if v is None: return "unset"
-    if isinstance(v, list): return "<list of %d>" % len(v)
-    if isinstance(v, dict): return "<map of %d>" % len(v)
-    return {"address": "<ip>", "cidr": "<cidr>", "name": "<name>", "url": "<url>", "email": "<email>"}.get(t, "<text>")
 
 
 # --- where a value lives in the inventory ---
@@ -233,14 +239,12 @@ elif action == "diff":
     cur = load(store) or die("no working copy yet (run inventory import)")
     old = load(prev)
     if old is None: die("no earlier copy to compare with (no set has run)")
-    _, ents = entries()
     a, b = flatten(old), flatten(cur)
     n = 0
     for p in sorted(set(a) | set(b)):
         if p in a and p in b and a[p] == b[p]: continue
-        e = ents.get(p)
-        print("%s: %s -> %s" % (p, shape(a[p], e) if p in a else "unset", shape(b[p], e) if p in b else "unset")); n += 1
-    print("inventory: %d path(s) differ" % n)
+        print("%s: changed" % p); n += 1
+    print("inventory: %d path(s) changed since the copy before the last set" % n)
 elif action == "log":
     p = os.path.join(logs, "set.jsonl")
     if not os.path.exists(p): die("no set has been logged yet")
@@ -273,4 +277,4 @@ elif action == "import-compare":
     print("inventory: %d key path(s) differ between the prod and guard copies" % n)
 PY
 )
-exec "$py" -I -c "$code" "$action" "$store" "$prev" "$logs" "$allow" "$prod_src" "$guard_src" "${@:2}"
+exec "$py" -I -c "$code" "$action" "$store" "$prev" "$logs" "$allow" "$prod_src" "$guard_src" "$tagkey" "${@:2}"
