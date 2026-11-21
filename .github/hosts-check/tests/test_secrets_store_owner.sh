@@ -46,6 +46,7 @@ echo "$*" >> "$STUB_LOG/args"
 if [[ $body == @- ]]; then cat > "$STUB_LOG/stdin.last"; elif [[ $body == @* ]]; then cp "${body#@}" "$STUB_LOG/body.$(echo "$url" | sed 's#.*/v1/##; s#/#_#g')"; fi
 echo "$url" >> "$STUB_LOG/urls"
 code=200
+[[ $(echo "$*" | grep -c -- '-X DELETE') -eq 0 ]] || code=${STUB_DELETE_CODE:-204}
 reply='{}'
 case $url in
   */auth/approle/login) code=${STUB_LOGIN_CODE:-200}; reply='{"auth":{"client_token":"TOKEN0123456789"}}' ;;
@@ -100,6 +101,11 @@ if [[ $rc -eq 0 ]] && grep -q 'auth/oidc/role/login-test' "$t/log/urls" && grep 
    grep -q 'kv/metadata/login-test/probe' "$t/log/urls" && ! grep -q 'sys/policies/acl/owner\|role/owner\|config' "$t/log/urls"; then
   ok "3. remove-test: deletes role, policy and probe, touches nothing else"
 else bad "3. rc=$rc $(cat "$t/log/urls")"; fi
+
+STUB_DELETE_CODE=403 run remove-test
+if [[ $rc -ne 0 && $out == *"HTTP 403"* && $out != *PASS* ]]; then ok "3b. remove-test fails, with no PASS line, when a DELETE is refused"; else bad "3b. rc=$rc $out"; fi
+STUB_DELETE_CODE=404 run remove-test
+if [[ $rc -ne 0 ]]; then ok "3c. a 404 on the role or the policy fails; only the probe may be absent"; else bad "3c. rc=$rc"; fi
 
 run owner
 if [[ $out != *CLIENTSECRET* && $out != *SECRETID0123* && $out != *ROLEID0123* && $out != *TOKEN0123* ]] &&

@@ -130,7 +130,9 @@ def main(addr, cafile, envfile, issuer, redirect, user):
                                     ("GET", "/sys/policies/acl?list=true", None)):
             c, _, _ = call(addr + path, body=body_, token=token, method=method)
             denied.append(c)
-        return 0 if line(6, "other paths", all(c == 403 for c in denied), "HTTP %s, wanted 403 each" % denied) else 1
+        ok6 = line(6, "other paths", all(c == 403 for c in denied), "HTTP %s, wanted 403 each" % denied)
+        call(addr + "/auth/token/revoke-self", body={}, token=token)  # the test token ends with the check
+        return 0 if ok6 else 1
     except Exception as e:  # network, TLS or parse: the class name only
         print("0 run: FAIL: %s" % type(e).__name__)
         return 1

@@ -228,7 +228,7 @@ The owner signs in to the page at `openbao.<zone>` with the Keycloak account the
 |---|---|
 | Keycloak client `openbao` (confidential, code flow, callback `https://openbao.<zone>/ui/vault/auth/oidc/oidc/callback`) | `k8s_identity` role, `realm.yaml.j2`, made only when `k8s_identity_openbao_hosts` names the store's page; added to the live realm by `c1-ansible apply clients <clearance id>` |
 | OpenBao login `oidc`, its config (Keycloak's issuer, client `openbao`, the lab CA) and role `owner` (bound to the owner's user name, one redirect URI, 15-minute tokens) | `secrets-store-prod owner-login owner` (`secrets-store-owner.sh`), through the admin AppRole |
-| Policy `owner`: create, read, update, delete and list on `kv/owner/*`, nothing else | the same call |
+| Policy `owner`: create, read, update, delete and list on `kv/owner/*`, no other path (OpenBao's `default` policy, for a token's own lookup and the page, still comes with every token) | the same call |
 
 Settings, `agent_box_secrets_store_prod.owner_login` in the private inventory: `issuer` (`https://<keycloak>/realms/lab`), `host` (the page's name, which must be the one in `k8s_identity_openbao_hosts`), `username` (the owner's Keycloak user name) and, for the proof, `test_username` (default `signin-test`). The client secret `OPENBAO_CLIENT_SECRET` is read from the box's `identity.env` and is never printed.
 
