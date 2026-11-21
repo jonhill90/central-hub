@@ -33,7 +33,7 @@ The pod mounts the two Secrets as one folder (optional, so the pod starts before
 ## Steps
 
 1. On a rebuild, nothing to do: the `identity` stage (`hosts/rebuild-k8s.sh`) imports the realm with the client and makes both Secrets, after the `apps` stage has made the namespace.
-2. On a live c1 that is not being rebuilt, add the client without ending any session, from the controller: `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,clients -e '{"k8s_identity_ensure_clients": ["central-hub-app"]}'` ([set-up-lab-sign-in.md](set-up-lab-sign-in.md)). The agent box's `c1-ansible clients` names only `proxmox` (`hosts/ansible/roles/agent_box/files/c1-ansible.sh`); naming this client there is a box-limit change with its own pull request and install ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)), not part of this one.
+2. On a live c1 that is not being rebuilt, add the client without ending any session. From the agent box, once the box has installed this change: `c1-ansible check clients`, then `c1-ansible apply clients <clearance id>` (tags `secrets,clients`, no realm replace; the wrapper's client list is `proxmox` and `central-hub-app`). The `secrets` tag adds `CENTRAL_HUB_APP_CLIENT_SECRET` to the box's `identity.env` if it is missing, and with the store on prod the copy into the app's namespace is an ExternalSecret that reads `c1/identity`, so run the box's `secrets-store put-apps` ([set-up-the-secrets-store.md](set-up-the-secrets-store.md)) after the first apply so OpenBao holds the new key. From a controller: `ansible-playbook -i inventories/home/ playbooks/k8s-identity.yml --tags secrets,clients -e '{"k8s_identity_ensure_clients": ["central-hub-app"]}'` ([set-up-lab-sign-in.md](set-up-lab-sign-in.md)).
    why: a realm replace (tag `keycloak`) deletes and imports realm `lab`, which ends every open sign-in.
    expect: the run prints `client central-hub-app: ok` and ends with `failed=0`; the two Secrets exist (`c1-read get secrets -n central-hub-app`).
 3. Prove it without a password:
@@ -47,7 +47,7 @@ The pod mounts the two Secrets as one folder (optional, so the pod starts before
 
 - **503 on every page:** the Secrets are missing or malformed. `c1-read get secrets -n central-hub-app` and `curl -s https://<app>/api/v1/health` (`signIn: not configured`); run step 2.
 - **Keycloak says "Invalid parameter: redirect_uri":** the host in the address bar is not one the client lists. The short and long names are listed; another name needs `k8s_identity_central_hub_app_hosts` extended.
-- **"the identity provider's keys are not available":** the pod cannot reach `sso-service.identity.svc:8080`; the chart's egress rule for the identity namespace is missing.
+- **502 about the identity provider's keys:** the pod cannot reach `sso-service.identity.svc:8080`; the chart's egress rule for the identity namespace is missing.
 - **Signed in, "not in a group that may open the app":** the account has no group in `HUB_OIDC_ALLOWED_GROUPS`.
 - **The way back:** set `auth.mode: "off"` in the chart values (the app is then open again) and sync, or revert the app's pin.
 

@@ -35,7 +35,7 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # upstream install of Argo CD). observability: metrics-server, kube-prometheus-stack, Loki, Alloy and Grafana's route, with every tag the
 # role has named, so a tag added later is not run until this line names it. None of them needs a private file on the box: the inventory carries their values. k8s-certs.yml is not
 # a name here: it needs the lab CA's key and the Cloudflare token on the controller, and the box holds neither.
-# clients: makes sure client `proxmox` is in the live realm (tags secrets and clients, the role's add-in-place path: files/ensure-client.sh
+# clients: makes sure clients `proxmox` and `central-hub-app` are in the live realm (tags secrets and clients, the role's add-in-place path: files/ensure-client.sh
 # creates a client that is missing and updates one that is there; users, groups and the other clients are not touched, and the realm is
 # never replaced). Unlike `identity` it does not run the operator, database or keycloak tags, so a pending Keycloak or operator version
 # change on prod is not rolled out by it.
@@ -63,7 +63,7 @@ declare -A fixed_vars=([identity]="k8s_identity_realm_replace=false k8s_identity
 # k8s_identity_ensure_clients (empty by default), so the wrapper names one: proxmox, the client the realm gained after prod's
 # realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
 declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof" [users]="secrets,users" [clients]="secrets,clients")
-declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}' [clients]='{"k8s_identity_ensure_clients":["proxmox"]}')
+declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}' [clients]='{"k8s_identity_ensure_clients":["proxmox","central-hub-app"]}')
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
 action=${1:-} name='' clearance=''
