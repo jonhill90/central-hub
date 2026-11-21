@@ -61,7 +61,7 @@ case " \$* " in
   *" apply "*) exit \${TOFU_APPLY_RC:-0} ;;
   *" show "*) cat \${TOFU_SHOW_FILE:-$t/destroy.json}; exit 0 ;;
   *" -destroy "*) for a in "\$@"; do case \$a in -out=*) : > "\${a#-out=}" ;; esac; done; exit 0 ;;
-  *" plan "*) exit \${TOFU_PLAN_RC:-0} ;;
+  *" plan "*) case " \$* " in *"-var-file=$t/keys/prod/tfvars/k8s.tfvars "*) exit \${TOFU_PLAN_RC_MAC:-\${TOFU_PLAN_RC:-0}} ;; *) exit \${TOFU_PLAN_RC:-0} ;; esac ;;
 esac
 EOF
 # ssh: the last argument is the command; each answers as a node would.
@@ -197,7 +197,7 @@ inventory; destroy 200 201; dev_log "$sha" "rebuild: all stages passed"
 # 3, 4
 run check
 seen=$(python3 -c 'import json, sys, yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))' "$t/work/rebuild-prod/inventory/hosts.yml" 2>/dev/null)
-if [[ $rc -eq 0 && $out == *"every check passed; nothing was changed"* && $out == *"no changes with the Mac's tfvars"* &&
+if [[ $rc -eq 0 && $out == *"every check passed; nothing was changed"* && $out == *"no changes with the box's tfvars copy"* &&
       $out == *"destroys only VMs 200 201"* && $out == *"reaches all 2 prod nodes"* && $out == *"routes do not go through a prod node: Proxmox API next hop 192.0.2.254, default via 192.0.2.254"* && $out == *"dev passed every stage at ${sha:0:12}"* &&
       $out != *FAIL* && $calls != *playbook* && $calls != *one-command* && $calls != *job* ]]; then
   ok "3. check passes every line and changes nothing"
@@ -225,7 +225,7 @@ mv "$t/keep.sha" "$t/libexec/backend-files.sha256"
 
 # 5
 r5=""
-TOFU_PLAN_RC=2 run check; [[ $rc -eq 1 && $out == *"plans changes with the Mac's tfvars"* ]] && r5+="a"
+TOFU_PLAN_RC=2 run check; [[ $rc -eq 1 && $out == *"plans changes with the box's tfvars copy and with the Mac's tfvars"* ]] && r5+="a"
 destroy 200 201 258; run check; [[ $rc -eq 1 && $out == *"other than prod's node VMs: VM 258"* ]] && r5+="b"; destroy 200 201
 inventory "        k8s_certs_smoke_root_file: /Users/someone/.config/central-hub/lab-ca/root.crt"
 run check; [[ $rc -eq 1 && $out == *"k8s_certs_smoke_root_file still points at the Mac"* ]] && r5+="c"; inventory
@@ -471,5 +471,21 @@ if [[ $r14j -eq 1 && $o14j == *"is not the snapshot the stopped run (run-2999010
   ok "14f. with no pin file, an ID that is not the snapshot the stopped run tested is refused, and so is a stopped run whose log names none"
 else bad "14f. $r14j $o14j [$c14j] | $r14k $o14k [$c14k]"; fi
 rm -f "$logd"/*
+
+# 15. The plan check uses the tfvars the rebuild applies (the Mac's with the box's node key): VMs a box run built hold the box's key, and
+# the Mac's key made the check fail for ever after run 4 (2026-11-21). VMs built from the Mac still pass on the second try.
+cat > "$t/plan-key.json" <<'J'
+{"resource_changes":[{"address":"proxmox_virtual_environment_vm.node[\"fakehost-zq\"]","type":"proxmox_virtual_environment_vm","name":"node","change":{"actions":["update"],
+"before":{"vm_id":200,"initialization":[{"user_account":[{"keys":["ssh-ed25519 AAAA-MAC-KEY-SECRET"],"username":"x"}]}]},
+"after":{"vm_id":200,"initialization":[{"user_account":[{"keys":["ssh-ed25519 AAAA-BOX-KEY-SECRET"],"username":"x"}]}]}}}]}
+J
+inventory; dev_log "$sha" "rebuild: all stages passed"; rm -f "$logd"/*
+TOFU_PLAN_RC=2 TOFU_PLAN_RC_MAC=0 run check; r15a=$rc o15a=$out
+TOFU_PLAN_RC=2 TOFU_PLAN_RC_MAC=2 TOFU_SHOW_FILE="$t/plan-key.json" run check; r15b=$rc o15b=$out
+if [[ $r15a -eq 0 && $o15a == *"no changes with the Mac's tfvars (the VMs hold the Mac's node key)"* &&
+      $r15b -eq 1 && $o15b == *"differs in: initialization.user_account.keys"* && $o15b != *SECRET* && $o15b != *fakehost-zq* ]]; then
+  ok "15. the plan check tries the box's tfvars copy, then the Mac's, and names a changed attribute down into a block, never a value"
+else bad "15. $r15a $o15a | $r15b $o15b"; fi
+grep -q 'var-file=.*k8s.tfvars' "$t/calls" && ok "15b. the destroy plan reads a tfvars file the check settled on" || bad "15b. no var-file in the destroy plan"
 
 exit "$fail"

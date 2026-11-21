@@ -450,9 +450,19 @@ tf_note() {
 tofu_k8s() { (set -a; . "$tofu_env"; set +a; tofu -chdir="$tf" "$@"); }
 if [[ -s $tofu_env && -s $tfstate && -s $tfvars_src ]] && command -v tofu >/dev/null; then
   if tofu_k8s init -input=false -reconfigure -backend-config="path=$tfstate" > "$envdir/tofu-init.out" 2>&1; then
-    rc=0; tofu_k8s plan -input=false -lock=false -detailed-exitcode -var-file="$tfvars_src" -out="$envdir/tofu-plan.bin" > "$envdir/tofu-plan.out" 2>&1 || rc=$?
+    # The box's copy first: it is the file the rebuild applies (the Mac's tfvars with the box's node key, TFVARS below), so the VMs a
+    # box run built hold the box's key in initialization.user_account.keys, and planning them with the Mac's key shows a change there
+    # for ever (prod run 4, 2026-11-21: "differs in: initialization" on VMs 200 and 201). VMs built from the Mac hold the Mac's key:
+    # the Mac's file is the second try. Either clean says the box's state is the live prod; both changed is the failure.
+    planvars=$tfvars
+    rc=0; tofu_k8s plan -input=false -lock=false -detailed-exitcode -var-file="$tfvars" -out="$envdir/tofu-plan.bin" > "$envdir/tofu-plan.out" 2>&1 || rc=$?
+    if [[ $rc -eq 2 ]]; then
+      rc_mac=0; tofu_k8s plan -input=false -lock=false -detailed-exitcode -var-file="$tfvars_src" -out="$envdir/tofu-plan-mac.bin" > "$envdir/tofu-plan-mac.out" 2>&1 || rc_mac=$?
+      if [[ $rc_mac -eq 0 ]]; then rc=0 planvars=$tfvars_src; fi
+    fi
     case $rc in
-      0) pass "OpenTofu: no changes with the Mac's tfvars, so the box's state is the live prod" ;;
+      0) if [[ $planvars == "$tfvars" ]]; then pass "OpenTofu: no changes with the box's tfvars copy (the Mac's with the box's node key, as the rebuild applies it), so the box's state is the live prod"
+         else pass "OpenTofu: no changes with the Mac's tfvars (the VMs hold the Mac's node key), so the box's state is the live prod"; fi ;;
       2) # What it would change, read from the plan file (which only this user can read): each resource's type and name (with a VM's
          # ID) and its actions, then the names of the attributes that differ. Never an address (its index is a node's hostname) and
          # never a value, and no more than 30 lines. A plan whose only changes are moves of a resource's address in the state (a
@@ -473,7 +483,17 @@ for rc in plan.get("resource_changes", []):
     if acts in (["no-op"], ["read"]): continue
     real += 1
     b, a = ch.get("before") or {}, ch.get("after") or {}
-    diff = sorted(k for k in set(b) | set(a) if b.get(k) != a.get(k))
+    # Attribute names only, down into a block (initialization.user_account.keys), never a value.
+    def paths(x, y, pre=""):
+        out = []
+        if isinstance(x, list) and len(x) == 1 and isinstance(y, list) and len(y) == 1: x, y = x[0], y[0]
+        if isinstance(x, dict) and isinstance(y, dict):
+            for k in sorted(set(x) | set(y)):
+                out += paths(x.get(k), y.get(k), pre + k + ".")
+        elif x != y:
+            out.append(pre[:-1])
+        return out
+    diff = sorted(set(paths(b, a))) if isinstance(b, dict) and isinstance(a, dict) else sorted(k for k in set(b) | set(a) if b.get(k) != a.get(k))
     # type.name and, for a VM, its ID: never rc[address], whose index is a private node hostname.
     vm = b.get("vm_id", a.get("vm_id"))
     what = "%s.%s%s" % (rc.get("type"), rc.get("name"), " vm_id %d" % vm if isinstance(vm, int) else "")
@@ -484,7 +504,7 @@ print("SUMMARY real=%d moves=%d" % (real, moves))
          if [[ $plan_view == *"SUMMARY real=0 moves="[1-9]* ]]; then
            pass "OpenTofu: the only plan changes are state moves (nothing changes on the host): $(grep -c 'moved in the state' <<< "$plan_view") resource(s)"
          else
-           fail "OpenTofu plans changes with the Mac's tfvars: the box's state or tfvars differ from the live prod; copy the controller's files again"
+           fail "OpenTofu plans changes with the box's tfvars copy and with the Mac's tfvars: the box's state or tfvars differ from the live prod; copy the controller's files again"
            grep -v '^SUMMARY' <<< "$plan_view" || true
          fi ;;
       *) fail "OpenTofu plan failed (rc $rc): $(tf_note "$envdir/tofu-plan.out")" ;;
@@ -496,8 +516,8 @@ print("SUMMARY real=%d moves=%d" % (real, moves))
     rc=0
     { cp -- "$tfstate" "$settled" &&
       tofu_k8s init -input=false -reconfigure -backend-config="path=$settled" &&
-      tofu_k8s apply -refresh-only -auto-approve -input=false -lock=false -var-file="$tfvars_src" &&
-      tofu_k8s plan -input=false -lock=false -destroy -target="$teardown_target" -var-file="$tfvars_src" -out="$envdir/destroy.plan"; } > "$envdir/tofu-destroy.out" 2>&1 || rc=$?
+      tofu_k8s apply -refresh-only -auto-approve -input=false -lock=false -var-file="$planvars" &&
+      tofu_k8s plan -input=false -lock=false -destroy -target="$teardown_target" -var-file="$planvars" -out="$envdir/destroy.plan"; } > "$envdir/tofu-destroy.out" 2>&1 || rc=$?
     rm -f -- "$settled" "$settled.backup"
     tofu_k8s init -input=false -reconfigure -backend-config="path=$tfstate" > "$envdir/tofu-init.out" 2>&1 || true
     if [[ $rc -eq 0 ]] && tofu_k8s show -json "$envdir/destroy.plan" > "$envdir/destroy.json" 2>/dev/null; then
