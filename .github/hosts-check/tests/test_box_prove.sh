@@ -87,4 +87,21 @@ for f in ssh_config id_ed25519 known_hosts; do
   [[ $rc == 1 && $out != *"box-prove: ok"* && $out == *"needs the ssh config"* ]] && ok "7 refuses with $f missing, runs no check" || bad "7 $f missing: rc=$rc out=$out"
   mv "$bd/$f.keep" "$bd/$f"
 done
+# 10: the box's self-apply installs the off-box scripts and the manifest: their include carries no skip tag, and the manifest lists both scripts
+if python3 -I - "$role" <<'PY'
+import sys, yaml
+role = sys.argv[1]
+main = yaml.safe_load(open(role + "/tasks/main.yml"))
+skip = set(yaml.safe_load(open(role + "/defaults/main.yml"))["agent_box_self_apply_skip_tags"])
+inc = [t for t in main if (t.get("ansible.builtin.include_tasks") or {}).get("file") == "offbox_scripts.yml"]
+assert len(inc) == 1, "one include of offbox_scripts.yml"
+tags = set(inc[0]["tags"]) | set(inc[0]["ansible.builtin.include_tasks"]["apply"]["tags"])
+assert "wrappers" in tags and not (tags & skip), (tags, skip)
+tasks = yaml.safe_load(open(role + "/tasks/offbox_scripts.yml"))
+man = [t for t in tasks if "backend-files.sha256" in str(t)]
+assert len(man) == 1 and all(n in man[0]["ansible.builtin.copy"]["content"] for n in ("opnsense-offbox.sh", "secrets-bundle-offbox.sh"))
+dests = str(tasks)
+assert "secrets-bundle-offbox.sh" in dests and "opnsense-offbox.sh" in dests
+PY
+then ok "10 the self-apply installs the off-box scripts and the manifest (no skip tag on their include)"; else bad "10 the off-box scripts are behind a skip tag, or the manifest is wrong"; fi
 exit "$fail"

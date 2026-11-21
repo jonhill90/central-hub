@@ -76,7 +76,7 @@ Nothing here needs the owner's own Azure rights except the recovery read.
    ansible-playbook -i inventories/home/ playbooks/agent-box.yml --tags opnsense_offbox
    ```
 
-   why: the run does the following:
+   why: the box's own self-apply (`box-apply.py`) skips the `opnsense_offbox` tag, which needs the controller's Azure sign-in, so restic, `opnsense-offbox.sh`, `opnsense-escrow.py`, the certificate script and `secrets-bundle-offbox.sh` are installed by `tasks/offbox_scripts.yml` under the `wrappers` tag alone. A change to those scripts therefore reaches the box through a box-limit install, with no controller run. The same file writes `backend-files.sha256` from the role's copies of `opnsense-offbox.sh` and `secrets-bundle-offbox.sh`; `dev-worker-address.sh box-prove` (check 6) and `rebuild-prod.sh check` fail when an installed script differs from it, is missing, or the manifest is missing. Only the settings, the box's certificate and its first upload stay controller-only. The controller run does the following:
    - installs restic 0.19.1, checked by SHA-256;
    - makes the box's key and certificate;
    - uploads the public certificate as agent-azure, then waits until Entra ID accepts it steadily;

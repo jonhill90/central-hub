@@ -155,19 +155,23 @@ send
   || bad "8. rc=$rc before=$before after=$(snapshots) $out"
 write_bundle_settings
 
-# 9: the role's three send tasks run only on agent_box_bundle_offbox_send, which needs offbox: true and the off-box copy
+# 9: the role's send units and timer run only on agent_box_bundle_offbox_send, which needs offbox: true and the off-box copy
 if python3 - "$role/tasks/secrets_bundle.yml" <<'PY'
 import sys, yaml
 tasks = yaml.safe_load(open(sys.argv[1]))
 by = {t.get("name", ""): t for t in tasks}
 fact = by["Is the off-box send turned on (the off-box copy is set and the bundle's offbox is true)"]["ansible.builtin.set_fact"]["agent_box_bundle_offbox_send"]
 assert "agent_box_opnsense_offbox" in fact and "agent_box_secrets_bundle.offbox" in fact and "is true" in fact, fact
-names = ["The off-box send's script, root-owned", "The off-box send's units", "The off-box send's timer runs"]
+names = ["The off-box send's units", "The off-box send's timer runs"]
 for n in names:
     w = by[n]["when"]
     w = w if isinstance(w, list) else [w]
     assert "agent_box_bundle_offbox_send | bool" in w, (n, w)
     assert not any("agent_box_opnsense_offbox" in x for x in w), (n, w)
+# the script itself is installed with the off-box copy's tools (offbox_scripts.yml, tag wrappers), not by this switch
+assert "The off-box send's script, root-owned" not in by
+sc = [t for t in yaml.safe_load(open(sys.argv[1].replace("secrets_bundle.yml", "offbox_scripts.yml"))) if t.get("name") == "The secrets bundle's off-box send script, root-owned"]
+assert len(sc) == 1 and "when" not in sc[0]
 off = by["The off-box send's timer off, while the send is not turned on"]
 assert off["ansible.builtin.systemd_service"]["enabled"] is False and off["ansible.builtin.systemd_service"]["state"] == "stopped"
 assert "not (agent_box_bundle_offbox_send | bool)" in off["when"]

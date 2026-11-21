@@ -100,6 +100,7 @@ EOF
 for job in opnsense-backup opnsense-offbox secrets-bundle secrets-bundle-offbox; do
   printf '#!/bin/bash\necho "job %s" >> %s/calls\n' "$job" "$t" > "$t/libexec/$job.sh"
 done
+( cd "$t/libexec" && sha256sum opnsense-offbox.sh secrets-bundle-offbox.sh > backend-files.sha256 )
 cat > "$venv/ansible-inventory" <<'EOF'
 #!/usr/bin/env python3
 import json, os, sys, yaml
@@ -206,6 +207,16 @@ if [[ $v == "True True True True wk-a True True wk-a False False 192.0.2.60" && 
    grep -q "^node_ssh_public_key = \"$(cut -d' ' -f1-2 < "$t/keys/prod-node-key.pub")" "$t/work/rebuild-prod/k8s.tfvars"; then
   ok "4. the box's copies: its key, the box's files, prod's own restore, stable folders, the carried certificates"
 else bad "4. [$v]"; fi
+
+# 3b: the off-box scripts against the role's manifest: an old copy, a missing script and a missing manifest each stop the check
+echo old > "$t/libexec/opnsense-offbox.sh"; run check
+[[ $rc -eq 1 && $out == *"FAIL: rebuild-prod: opnsense-offbox.sh is missing or differs"* && $calls != *job* ]] && ok "3b. an old off-box script fails the check" || bad "3b old: $rc $out"
+rm -f "$t/libexec/opnsense-offbox.sh"; run check
+[[ $rc -eq 1 && $out == *"FAIL: rebuild-prod: opnsense-offbox.sh is missing or differs"* ]] && ok "3b. a missing off-box script fails the check" || bad "3b missing: $rc $out"
+printf '#!/bin/bash\necho "job opnsense-offbox" >> %s/calls\n' "$t" > "$t/libexec/opnsense-offbox.sh"; chmod +x "$t/libexec/opnsense-offbox.sh"
+mv "$t/libexec/backend-files.sha256" "$t/keep.sha"; run check
+[[ $rc -eq 1 && $out == *"backend-files.sha256 is missing"* ]] && ok "3b. no manifest fails the check" || bad "3b no manifest: $rc $out"
+mv "$t/keep.sha" "$t/libexec/backend-files.sha256"
 
 # 5
 r5=""
