@@ -228,6 +228,28 @@ env_dev 31 RESTORE_SOURCE_HOST=ci-prod5 "$bin/c1-restore-volumes.sh" restore > "
 [ "$(cat "$dev/openbao/data-openbao-0/vault.db")" = generation-c ] || fail "with no host named, the nearest etcd snapshot was not the other host's (the test does not show the filter)"
 ok "the etcd snapshot comes from the named control plane even when another host's is nearer in time (and the test shows it would otherwise be taken)"
 
+# A control plane named like no host in the repository (a dev cluster restoring prod's snapshot): another host's
+# etcd snapshot is used only when exactly one host has one in the window, and the run says so.
+gap_other=$(python3 - "$("$bin/restic" snapshots --json --host ci-prod5 --tag volumes)" "$("$bin/restic" snapshots --json --host ci-other --tag etcd)" <<'PY'
+import json, math, sys
+from datetime import datetime
+def t(s):
+    h, _, tail = s.replace("Z", "+00:00").partition(".")
+    frac = "".join(c for c in tail if c.isdigit())[:6].ljust(6, "0")
+    zone = tail[len("".join(c for c in tail if c.isdigit())):] if tail else ""
+    return datetime.fromisoformat(h + "." + frac + zone)
+print(math.ceil(abs((t(json.loads(sys.argv[1])[0]["time"]) - t(json.loads(sys.argv[2])[0]["time"])).total_seconds())))
+PY
+)
+fresh
+env_dev 32 RESTORE_SOURCE_HOST=ci-prod5 RESTORE_ETCD_HOST=ci-dev-cp "RESTORE_ETCD_WINDOW=$gap_other" "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1 || { cat "$work/r.log"; fail "the restore failed where exactly one other host has an etcd snapshot in the window"; }
+grep -q 'only host with one in the window' "$work/r.log" || fail "the restore did not say it used another host's etcd snapshot"
+[ "$(cat "$dev/openbao/data-openbao-0/vault.db")" = generation-c ] || fail "the single other host's etcd snapshot was not the one used"
+fresh
+if env_dev 33 RESTORE_SOURCE_HOST=ci-prod5 RESTORE_ETCD_HOST=ci-dev-cp "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1; then fail "the restore guessed between two hosts' etcd snapshots"; fi
+grep -q 'no etcd snapshot within' "$work/r.log" || { cat "$work/r.log"; fail "the restore with two hosts in the window failed for another reason"; }
+ok "a control plane named like no host falls back to the only host with an etcd snapshot in the window, and refuses when two have one"
+
 # The forget hold: with it set a backup forgets nothing; without it, retention runs as before.
 hold_env=(BACKUP_HOST=ci-hold "BACKUP_STATE=$work/hold-state" "BACKUP_VOLUME_PATHS=$data" BACKUP_KEEP_DAILY=1 BACKUP_KEEP_WEEKLY=0 BACKUP_KEEP_MONTHLY=0)
 count() { "$bin/restic" snapshots --json --host ci-hold --tag volumes | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
