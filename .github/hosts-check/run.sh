@@ -471,6 +471,9 @@ check_backup() {
   # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository, and
   # the agent box's off-box OPNsense copy against a local restic repository.
   bash "$here/tests/test_backup.sh"
+  bash "$here/tests/test_restore_pv.sh"
+  bash "$here/tests/test_restore_hold.sh"
+  bash "$here/tests/test_restore_skip_env.sh"
   bash "$here/tests/test_backup_azure_cert.sh"
   bash "$here/tests/test_backup_metrics.sh"
   bash "$here/tests/test_backup_repo_init.sh"
@@ -493,6 +496,8 @@ check_backup() {
   bash "$here/tests/test_secrets_store_owner.sh"
   bash "$here/tests/test_openbao_prod.sh"
   bash "$here/tests/test_rebuild_prod.sh"
+  bash "$here/tests/test_wait_apps.sh"
+  bash "$here/tests/test_rebuild_certs_order.sh"
   bash "$here/tests/test_openbao_handover.sh"
   bash "$here/tests/test_openbao_refresh.sh"
   bash "$here/tests/test_openbao_measure.sh"

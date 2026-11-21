@@ -322,3 +322,13 @@
     - name: restore_check | identity | Cleanup done
       ansible.builtin.debug:
         msg: "{{ k8s_backup_identity_clean.stdout_lines + ['PASS: namespace ' ~ k8s_backup_restore_check_identity_namespace ~ ' deleted'] }}"
+
+# Every restored folder has been proven on every node that restored (a failed node leaves the hold): the backups may forget again.
+- name: restore_check | Release every node's forget hold
+  ansible.builtin.file:
+    path: "{{ k8s_backup_state_dir }}/forget-hold"
+    state: absent
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_nodes'] }}"
+  run_once: true
+  when: ansible_play_hosts_all | length == ansible_play_hosts | length
