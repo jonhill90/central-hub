@@ -2,6 +2,9 @@
 # /usr/local/libexec/agent-box/opnsense-offbox.sh: copy the box's OPNsense configuration backups off the box, into
 # their own container in the Azure backup account (pick 222, docs/runbooks/copy-opnsense-backup-off-box.md). Runs as
 # user `keys` from its daily timer; no session runs it, so it has no sudo line.
+# With the switch on (dev-worker-address.sh box-backend-on, which writes /etc/agent-keys/box-backup/backend.env) the repository is a folder
+# on the Proxmox host's backup disk, over sftp, instead of the Azure container (docs/runbooks/back-up-c1-off-box.md, P5); the escrow of the
+# password (step 2) and the certificate (step 1) stay Azure's either way, since the vault is where the one off-box copy of the password lives.
 #   1. The box's own Azure certificate is rolled when 30 or fewer days are left (azure-cert.py renew, Graph addKey).
 #      The key is made on the box and never leaves it; no Azure secret is stored anywhere.
 #   2. The repository password is made on the box on the first run, and its one off-box copy is checked: the
@@ -18,6 +21,7 @@ work=/var/lib/agent-box
 libexec=/usr/local/libexec/agent-box
 settings=/etc/agent-keys/opnsense-offbox/settings.env   # written by the agent_box role; no secret in it
 restic=$libexec/restic
+backend=/etc/agent-keys/box-backup/backend.env   # written by dev-worker-address.sh box-backend-on; absent: the settings' repository (Azure)
 cert=$libexec/azure-cert.py
 escrow=$libexec/opnsense-escrow.py
 src=$work/opnsense-backup
@@ -33,6 +37,13 @@ set -a
 . "$settings"
 set +a
 # restic uses an account key or SAS before any other sign-in, so neither may come in from outside.
+# The Proxmox host's store instead of Azure, when the owner's switch is on (dev-worker-address.sh box-backend-on writes this file; box-backend-off removes it).
+if [[ -f $backend ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$backend"
+  set +a
+fi
 unset AZURE_ACCOUNT_KEY AZURE_ACCOUNT_SAS
 for v in RESTIC_REPOSITORY RESTIC_PASSWORD_FILE AZURE_ACCOUNT_NAME AZURE_CLIENT_ID AZURE_TENANT_ID \
          AZURE_CLIENT_CERTIFICATE_PATH AZURE_APP_OBJECT_ID OFFBOX_VAULT_URL OFFBOX_VAULT_SECRET \
@@ -40,6 +51,17 @@ for v in RESTIC_REPOSITORY RESTIC_PASSWORD_FILE AZURE_ACCOUNT_NAME AZURE_CLIENT_
   [[ -n ${!v:-} ]] || die "$v is not set in $settings"
 done
 [[ $OFFBOX_KEEP_DAILY =~ ^[0-9]+$ && $OFFBOX_KEEP_MONTHLY =~ ^[0-9]+$ ]] || die "the keep settings must be whole numbers"
+
+# The repository is Azure's (the default) or the Proxmox host's backup store, over sftp (the owner, 2026-11-18: back up on the Proxmox
+# host, not Azure). With OFFBOX_RESTIC_SSH_CONFIG set, restic reaches the repository through that ssh config (its alias, the key and the
+# pinned host key); the Azure sign-in below is still used for the vault, where the two small escrow secrets stay.
+ropts=()
+if [[ -n ${OFFBOX_RESTIC_SSH_CONFIG:-} ]]; then
+  [[ $RESTIC_REPOSITORY == sftp:* ]] || die "OFFBOX_RESTIC_SSH_CONFIG is set but the repository is not an sftp one"
+  [[ -r $OFFBOX_RESTIC_SSH_CONFIG ]] || die "$OFFBOX_RESTIC_SSH_CONFIG is missing; dev-worker-address.sh box-key writes it"
+  ropts=(-o "sftp.args=-F $OFFBOX_RESTIC_SSH_CONFIG")
+fi
+rs() { "$restic" ${ropts[@]+"${ropts[@]}"} "$@"; }
 
 shopt -s nullglob
 copies=("$src"/config-*.xml)
@@ -62,19 +84,19 @@ trap 'rm -f "$err" "$back"' EXIT
 
 # Make the repository once. Exit 10 is restic's "repository does not exist"; anything else is a real failure.
 rc=0
-"$restic" --retry-lock 30m cat config >/dev/null 2>"$err" || rc=$?
+rs --retry-lock 30m cat config >/dev/null 2>"$err" || rc=$?
 case $rc in
   0) ;;
-  10) "$restic" init >/dev/null; say "made the repository" ;;
+  10) rs init >/dev/null; say "made the repository" ;;
   *) cat "$err" >&2; die "restic could not open the repository (exit $rc)" ;;
 esac
 
-"$restic" --retry-lock 30m backup --quiet --host "$host" --tag opnsense "$src"
-"$restic" --retry-lock 30m forget --quiet --host "$host" --tag opnsense \
+rs --retry-lock 30m backup --quiet --host "$host" --tag opnsense "$src"
+rs --retry-lock 30m forget --quiet --host "$host" --tag opnsense \
   --keep-daily "$OFFBOX_KEEP_DAILY" --keep-monthly "$OFFBOX_KEEP_MONTHLY" --prune
 
 # A copy counts only once it reads back.
-"$restic" --retry-lock 30m dump --host "$host" --tag opnsense latest "$newest" > "$back"
+rs --retry-lock 30m dump --host "$host" --tag opnsense latest "$newest" > "$back"
 head -c 4096 "$back" | grep -q '<opnsense>' || die "the newest copy read back from the repository is not an OPNsense configuration"
 cmp -s "$back" "$newest" || die "the newest copy read back from the repository differs from $newest"
 
