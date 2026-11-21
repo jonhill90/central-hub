@@ -692,6 +692,16 @@
     label: "{{ agent_box_libexec_dir }}/{{ item.name }}.sh"   # the destination, so a check run names a file that is not there yet
   tags: [wrappers]
 
+# After the wrapper folder above exists: on a fresh box the copy has nowhere to go before it (tests/test_inventory_wiring.sh).
+- name: The reviewed list of values a session may set through the inventory wrapper (names and types, no value), root-owned
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../inventories/home/editable-values.yml"
+    dest: "{{ agent_box_libexec_dir }}/editable-values.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [wrappers]
+
 - name: Front scripts that sessions run
   ansible.builtin.template:
     src: front.sh.j2

@@ -1,7 +1,7 @@
 ---
-# The private inventory's wrapper (files/inventory.sh): its own user and folders, and the reviewed list of paths a session may
-# set. Everything here is a box limit (D-0036 rule 3 (c) and (d)). The role writes no value: the working copy is made by
-# `inventory import prod` and changed by `inventory set`; the inventory's values never pass through this role.
+# The private inventory's wrapper (files/inventory.sh): its own user and folders. Everything here is a box limit (D-0036 rule 3 (c) and (d)).
+# The role writes no value: the working copy is made by `inventory import prod` and changed by `inventory set`; the inventory's
+# values never pass through this role. The reviewed list of settable paths is installed in main.yml, after the wrapper folder exists.
 
 - name: inventory_job | The wrapper's user, a system user that can't log in and has no other groups
   ansible.builtin.user:
@@ -27,11 +27,3 @@
   loop:
     - "{{ agent_box_inventory_dir }}"
     - "{{ agent_box_inventory_work_dir }}"
-
-- name: inventory_job | The reviewed list of values a session may set (names and types, no value), root-owned
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../inventories/home/editable-values.yml"
-    dest: "{{ agent_box_libexec_dir }}/editable-values.yml"
-    owner: root
-    group: root
-    mode: "0644"
