@@ -3,8 +3,9 @@
 # their own container in the Azure backup account (pick 222, docs/runbooks/copy-opnsense-backup-off-box.md). Runs as
 # user `keys` from its daily timer; no session runs it, so it has no sudo line.
 # With the switch on (dev-worker-address.sh box-backend-on, which writes /etc/agent-keys/box-backup/backend.env) the repository is a folder
-# on the Proxmox host's backup disk, over sftp, instead of the Azure container (docs/runbooks/back-up-c1-off-box.md, P5); the escrow of the
-# password (step 2) and the certificate (step 1) stay Azure's either way, since the vault is where the one off-box copy of the password lives.
+# on the Proxmox host's backup disk, over sftp, instead of the Azure container (docs/runbooks/back-up-c1-off-box.md, P5), and Azure is not
+# touched at all: no certificate renewal (step 1) and no vault (step 2); the password's one off-box copy is the host's escrow folder
+# (host-escrow.sh), which refuses to overwrite a different copy it holds. Without the switch file, steps 1 and 2 are Azure's as written below.
 #   1. The box's own Azure certificate is rolled when 30 or fewer days are left (azure-cert.py renew, Graph addKey).
 #      The key is made on the box and never leaves it; no Azure secret is stored anywhere.
 #   2. The repository password is made on the box on the first run, and its one off-box copy is checked: the

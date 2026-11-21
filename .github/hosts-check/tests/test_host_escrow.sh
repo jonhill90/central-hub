@@ -33,7 +33,8 @@ while IFS= read -r line; do
   case "\$1" in
     -mkdir) mkdir -p "\$r/\$2" ;;
     put) has putfails && { echo "remote open(\"/box/\$3\"): Permission denied" >&2; exit 1; }; if has torn; then head -c 3 "\$2" > "\$r/\$3"; else cp "\$2" "\$r/\$3"; fi ;;
-    get) [[ -f \$r/\$2 ]] || { echo "File \"/box/\$2\" not found." >&2; exit 1; }; cp "\$r/\$2" "\$3" ;;
+    get) has getfails && { echo "Permission denied" >&2; exit 1; }; [[ -f \$r/\$2 ]] || { echo "File \"/box/\$2\" not found." >&2; exit 1; }; cp "\$r/\$2" "\$3" ;;
+    rename) has renamefails && { echo "Couldn't rename file" >&2; exit 1; }; mv "\$r/\$2" "\$r/\$3" ;;
   esac
 done
 STUB
@@ -41,21 +42,32 @@ chmod +x "$t/bin/sftp"
 run() { echo "$1" > "$t/mode"; shift; rc=0; out=$(bash "$t/h.sh" "$@" 2>&1) || rc=$?; }
 
 run "" restic-password "$t/file"
-[[ $rc == 0 && $out == *"wrote the current restic-password to the host, and it reads back the same"* && $(cat "$t/remote/box/escrow/restic-password") == "$secret" ]] && ok "1 first call writes, reads back, says so" || bad "1 rc=$rc $out"
+[[ $rc == 0 && $out == *"wrote the current restic-password to the host, and it reads back the same"* && $(cat "$t/remote/box/escrow/restic-password") == "$secret" && ! -e $t/remote/box/escrow/restic-password.part ]] \
+  && ok "1 not held: written through .part, checked, renamed, read back; no .part left" || bad "1 rc=$rc $out"
+n=$(wc -l < "$t/sftp-calls")
 run "" restic-password "$t/file"
-[[ $rc == 0 && $out == *"already holds the current restic-password"* && $(wc -l < "$t/sftp-calls") == 4 ]] && ok "2 the same file again writes nothing (one read, no write)" || bad "2 rc=$rc calls=$(wc -l < "$t/sftp-calls") $out"
-echo "${secret}-changed" > "$t/file"
-run "" restic-password "$t/file"
-[[ $rc == 0 && $out == *"wrote the current"* && $(cat "$t/remote/box/escrow/restic-password") == "${secret}-changed" ]] && ok "3 a changed file is written again" || bad "3 rc=$rc $out"
-echo "${secret}-b" > "$t/file"
-run putfails restic-password "$t/file"
-[[ $rc == 1 && $out == *"could not write restic-password"* && $out != *nothing* ]] && ok "4 a failed write stops it" || bad "4 rc=$rc $out"
-run torn restic-password "$t/file"
-[[ $rc == 1 && $out == *"read back from the host differs"* ]] && ok "5 a read-back that differs stops it" || bad "5 rc=$rc $out"
-run refused restic-password "$t/file"
-[[ $rc == 1 && $out == *"could not write"* ]] && ok "6a a refused connection stops it" || bad "6a rc=$rc $out"
+[[ $rc == 0 && $out == *"already holds the current restic-password"* && $(( $(wc -l < "$t/sftp-calls") - n )) == 1 ]] && ok "2 the same file again writes nothing (one read)" || bad "2 rc=$rc $out"
+echo "${secret}-changed" > "$t/file2"
+run "" restic-password "$t/file2"
+[[ $rc == 1 && $out == *"FAIL: the host holds a different restic-password"* && $out == *"Nothing was sent"* && $(cat "$t/remote/box/escrow/restic-password") == "$secret" ]] \
+  && ok "3 a held copy that differs is refused, said to be unsent, and left exactly as it was (never overwritten)" || bad "3 rc=$rc $out"
+run getfails restic-password "$t/file2"
+[[ $rc == 1 && $out == *"could not tell whether the host holds restic-password"* && $out == *"Nothing was sent"* && $(cat "$t/remote/box/escrow/restic-password") == "$secret" ]] \
+  && ok "4 a read error that is not 'not found' refuses, writes nothing" || bad "4 rc=$rc $out"
+run refused restic-password "$t/file2"
+[[ $rc == 1 && $out == *"could not tell whether"* && $(cat "$t/remote/box/escrow/restic-password") == "$secret" ]] && ok "5 a refused connection refuses, and the held copy is untouched" || bad "5 rc=$rc $out"
+echo "${secret}-b" > "$t/file3"
+run putfails age-identity "$t/file3"
+[[ $rc == 1 && $out == *"could not write age-identity"* && $out == *"Nothing was sent"* && ! -e $t/remote/box/escrow/age-identity ]] && ok "6 a failed write stops it, nothing at the final name" || bad "6 rc=$rc $out"
+run torn age-identity "$t/file3"
+[[ $rc == 1 && $out == *"differs from the file (a torn write); it was not kept"* && ! -e $t/remote/box/escrow/age-identity ]] && ok "7 a torn write fails at the .part and never reaches the final name" || bad "7 rc=$rc $out"
+run renamefails age-identity "$t/file3"
+[[ $rc == 1 && $out == *"could not rename"* && ! -e $t/remote/box/escrow/age-identity ]] && ok "8 a failed rename leaves nothing at the final name" || bad "8 rc=$rc $out"
+# a good copy held, then a torn attempt with a different file: the good copy stays (refused at the read, never reaches the write)
+run torn restic-password "$t/file2"
+[[ $rc == 1 && $(cat "$t/remote/box/escrow/restic-password") == "$secret" ]] && ok "9 with a good copy held, a torn attempt cannot damage it" || bad "9 rc=$rc $out"
 # a stalled connection: every sftp call is bounded (a real stall would take 30 s per call, so the test checks the bound, not the wait)
-grep -q 'timeout 30 sftp .*-o ConnectTimeout=10' "$t/h.sh" && ok "6b every sftp call is bounded by timeout 30 and ConnectTimeout=10" || bad "6b sftp calls are not bounded"
+grep -q 'timeout 30 sftp .*-o ConnectTimeout=10' "$t/h.sh" && ok "10 every sftp call is bounded by timeout 30 and ConnectTimeout=10" || bad "6b sftp calls are not bounded"
 before=$(wc -l < "$t/sftp-calls")
 run "" restic-password "$t/missing"; [[ $rc == 1 && $out == *"is missing or empty"* ]] && ok "6c a missing file stops it" || bad "6c rc=$rc $out"
 : > "$t/empty"; run "" restic-password "$t/empty"; [[ $rc == 1 && $out == *"is missing or empty"* ]] && ok "6d an empty file stops it" || bad "6d rc=$rc $out"
