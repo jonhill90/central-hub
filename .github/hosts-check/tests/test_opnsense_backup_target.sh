@@ -55,7 +55,7 @@ if check "$good"; then
   python3 -I - "$w/seq.json" <<'PY' && ok "the role's numbered sequences hold none of 13, 14 and 17, and prod's own rules are 10 to 40" || bad "numbered sequences are not as expected"
 import json, sys
 d = json.load(open(sys.argv[1]))
-assert not {13, 14, 17} & set(d["numbered"]), d
+assert not {13, 14, 17, 18} & set(d["numbered"]), d
 assert {1, 2, 5, 6, 7, 10, 20, 30, 40}.issubset(d["numbered"]), d
 PY
 else bad "the good input fails the check"; cat "$w/out"; fi
@@ -86,6 +86,12 @@ refuse "sequence 15 collides with the store admin rule when it is set" "$(echo "
 # The box's own extra source (the firewall job's vars file: the dev worker's handoff address) joins the inventory's two and is checked like them.
 extra=$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 30}]')
 if check "$extra"; then ok "an extra source named dev worker on VLAN 30 joins the two prod nodes and passes"; else bad "the extra source is refused"; cat "$w/out"; fi
+# The box's address joins as a fourth source, named agent box, at sequence 18; alone it is the third, at 17; both are clear of the store admin (15) and the Proxmox web (16) rules.
+both=$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 30}, {"name": "agent box", "address": "192.0.2.10", "vlan": 30}]; d["opnsense_lab_store_admin"]={"vlan": 30}; d["opnsense_lab_proxmox_web"]={"vlan": 30}')
+if check "$both"; then ok "the dev worker and the agent box as extra sources (four sources, sequences 13 14 17 18) pass with the store admin and Proxmox web rules set"; else bad "dev worker and agent box are refused"; cat "$w/out"; fi
+boxonly=$(sub 'd["opnsense_lab_backup_target_extra_sources"]=[{"name": "agent box", "address": "192.0.2.10", "vlan": 30}]')
+if check "$boxonly"; then ok "the agent box alone as an extra source passes"; else bad "the agent box alone is refused"; cat "$w/out"; fi
+refuse "a fourth source with the sequences cut to three is refused" "$(echo "$both" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); d["opnsense_lab_backup_target_sequences"]=[13, 14, 17]; print(json.dumps(d))')"
 # A dev worker already in the inventory's list is replaced by the box's extra source of the same name (the box's address wins), so the
 # unique-name check can't stop the firewall job.
 dup=$(sub 'd["opnsense_lab_backup_target"]["sources"].append({"name": "dev worker", "address": "192.0.2.77", "vlan": 30}); d["opnsense_lab_backup_target_extra_sources"]=[{"name": "dev worker", "address": "192.0.2.30", "vlan": 30}]')

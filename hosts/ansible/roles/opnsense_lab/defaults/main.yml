@@ -90,9 +90,9 @@ opnsense_lab_app_access_sequences: [11, 12]
 # dev worker's address here from its handoff file (hosts/ansible/roles/agent_box/files/dev-worker-address.sh). They are joined to
 # opnsense_lab_backup_target.sources and go through the same checks. Empty: nothing is added.
 opnsense_lab_backup_target_extra_sources: []
-opnsense_lab_backup_target_names: [prod node 200, prod node 201, dev worker]
+opnsense_lab_backup_target_names: [prod node 200, prod node 201, dev worker, agent box]
 # The rules' sequence numbers, in source order, clear of every other rule the role numbers; the role checks it.
-opnsense_lab_backup_target_sequences: [13, 14, 17]
+opnsense_lab_backup_target_sequences: [13, 14, 17, 18]
 
 # One pass rule from the agent box to the secrets store's admin address in prod's c1 on 443 (tasks/store_admin.yml,
 # D-0062 rule 4). Optional and private (addresses), from the inventory; unset = no such rule, and one left from an

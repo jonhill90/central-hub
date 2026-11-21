@@ -117,7 +117,7 @@ check_ansible() {
   bash "$here/tests/test_client_json_check.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
-  python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml playbooks/proxmox-ksm.yml playbooks/proxmox-ksm-off.yml
+  python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml playbooks/proxmox-ksm.yml playbooks/proxmox-ksm-off.yml playbooks/proxmox-restic-box.yml
   bash "$here/tests/test_check_check_mode.sh"
   python3 "$here/check-hook-allowlist.py" .
   bash "$here/tests/test_runner_hook.sh"
@@ -489,6 +489,8 @@ check_proxy() {
   bash "$here/tests/test_proxy.sh"
   # The Proxmox host as c1's restic target on the same stand-in: a real sftp backup, restore and read-only reader.
   bash "$here/tests/test_backup_sftp.sh"
+  # The agent box's own backup user on the same stand-in: a real restic backup and restore through its key, and every refusal.
+  bash "$here/tests/test_restic_box.sh"
   # The Proxmox host job end to end on the same stand-in (key line, check, refusal, apply), and the lifeline's
   # per-user entry loaded by nft.
   collections

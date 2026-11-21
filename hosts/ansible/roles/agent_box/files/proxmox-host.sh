@@ -17,6 +17,10 @@
 #   `ksm` and `ksm-off` (playbooks/proxmox-ksm.yml, proxmox-ksm-off.yml: kernel same-page merging on the host, on with a pinned pace and off again;
 #     what it does: playbooks/tasks/proxmox-ksm.yml. A setting, so a session applies it only through `apply-recorded` with a reviewer pass and a go)
 #   `guests` (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell)
+#   `box-writer` (playbooks/proxmox-restic-box.yml: the user `boxbackup` for the agent box's own backups, replacing Azure for them: one key, only from
+#     the address this job runs from, only the folder /box on the backup disk, internal-sftp, no shell, no root. The public half of the box's key comes
+#     from the handoff (dev-worker-address.sh read-box-key), in a vars file of this user's own and never on a command line. An access right, so a
+#     session applies it only through `apply-recorded` with a reviewer pass and a go)
 #   or `restore-reader` (playbooks/proxmox-restic-reader.yml: the proxmox_restic_sftp role's read-only user `c1restore` and the keys
 #   that sign in as it, one per dev worker, each only from its own address; the list is in this job's inventory, written by the
 #   controller. An access right, and the only one this job can grant: no write, no shell, no root).
@@ -59,7 +63,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml [box-writer]=playbooks/proxmox-restic-box.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -68,7 +72,7 @@ result=$work/state/check.json
 ledger=$work/ledger
 usage() {
   echo "       proxmox-host guard arm|confirm|rollback|clear|status" >&2
-  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|restore-reader|memory|ksm|ksm-off]|apply [proxy|agent-access|sso|firewall|guests|restore-reader|memory|ksm|ksm-off] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
+  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|restore-reader|memory|ksm|ksm-off|box-writer]|apply [proxy|agent-access|sso|firewall|guests|restore-reader|memory|ksm|ksm-off|box-writer] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
   echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
   exit 2
 }
@@ -187,6 +191,20 @@ json.dump(v, open(sys.argv[1], "w"))' "$rr_vars"
   rr_args=(-e "@$rr_vars")
 fi
 
+# The box-writer job lets in the box's own backup key and the one address it works from, read from the handoff (dev-worker-address.sh box-key makes
+# the pair and hands over the public half and the address). No key or no address, no job. It goes to the playbook in a vars file of this user's own, mode 0600, deleted when the run ends; never on a command line.
+bw_args=()
+if [[ $job == box-writer ]]; then
+  bw_key=$("$libexec/dev-worker-address.sh" read-box-key) || exit 1
+  bw_addr=$("$libexec/dev-worker-address.sh" read-box-address) || exit 1
+  [[ -n $bw_key && -n $bw_addr ]] || { echo "proxmox-host: no box backup key or address (the handoff files are missing: run dev-worker-address.sh box-key as the keys user); box-writer stops" >&2; exit 1; }
+  install -d -m 0700 "$work/state"
+  bw_vars=$(mktemp "$work/state/bw-vars.XXXXXX")
+  trap 'rm -f "$bw_vars"' EXIT
+  BW_KEY=$bw_key BW_ADDR=$bw_addr python3 -I -c 'import json, os, sys; json.dump({"proxmox_restic_box_key": os.environ["BW_KEY"], "proxmox_restic_box_from": os.environ["BW_ADDR"]}, open(sys.argv[1], "w"))' "$bw_vars"
+  bw_args=(-e "@$bw_vars")
+fi
+
 repo=$work/checkout   # this wrapper's own checkout of central-hub
 # The firewall job runs with the shared VLAN file from the same checkout (the job's
 # inventory is one file, so the inventory folder's group_vars are not next to it).
@@ -250,7 +268,7 @@ print(json.dumps({"job": "proxmox-host", "time": a[1], "action": a[2], "commit":
 
 play() { # out-file, extra ansible-playbook arguments...
   local out=$1; shift
-  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" "$playbook" ${sso_args[@]+"${sso_args[@]}"} ${fw_args[@]+"${fw_args[@]}"} ${rr_args[@]+"${rr_args[@]}"} "$@") > "$out" 2>> "$logs/run-$stamp.err"
+  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" "$playbook" ${sso_args[@]+"${sso_args[@]}"} ${fw_args[@]+"${fw_args[@]}"} ${rr_args[@]+"${rr_args[@]}"} ${bw_args[@]+"${bw_args[@]}"} "$@") > "$out" 2>> "$logs/run-$stamp.err"
 }
 
 # summarize <json output> <result file>: writes the result file and prints "<hash> <changed> <skipped> <tasks>".

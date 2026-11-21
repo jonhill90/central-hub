@@ -18,6 +18,22 @@
 #                                  <worker>.known_hosts beside the pair, the pinned key the restore play reads. Public data only goes out.
 #   dev-worker-address.sh read-key as hostops (group devaddr): that one public key line on stdout, nothing for no file, refusal (no value)
 #                                  for anything that is not exactly one ssh-ed25519 line.
+#   dev-worker-address.sh box-key  as keys: the box's own key for the Proxmox host's backup store (the OPNsense configuration copy and the
+#                                  secrets bundle go there, not to Azure). Same shape as `key`: the pair once, in <keys>/box-backup/id_ed25519
+#                                  and .pub (never over an existing pair), the public half (one ed25519 line) to box-backup.pub in the handoff
+#                                  folder, and, when hostops has published the host's public host key, <keys>/box-backup/known_hosts.
+#                                  It also hands over the address the box's own traffic to the Proxmox host's backup store comes from (the box's
+#                                  source address toward the host's mgmt address, read from the box's prod inventory copy): box-backup-address, one
+#                                  address of the dev VLAN's node range like dev-worker-address. A route that does not go through the firewall
+#                                  (the lifeline) gives an address outside that range: refused, with no file and no value printed.
+#                                  It also writes the ssh config the box's restic uses (<keys>/box-backup/ssh_config: the alias box-backup-target, the
+#                                  host's mgmt address, the key, the pinned host key, batch mode); mode 0600, no secret in it.
+#   dev-worker-address.sh box-backend-on   as keys: switches the box's two off-box sends (opnsense-offbox.sh, secrets-bundle-offbox.sh) from Azure to
+#   dev-worker-address.sh box-backend-off  the host's store, by writing <keys>/box-backup/backend.env (the repository sftp:box-backup-target:/box and
+#                                  the ssh config's path), which both scripts read after their settings; off removes it. On refuses until the pair,
+#                                  the pinned host key and the ssh config are there.
+#   dev-worker-address.sh read-box-key as hostops (group devaddr): that one public key line, nothing for no file, refusal for anything else.
+#   dev-worker-address.sh read-box-address as hostops or guardops (group devaddr): that address, nothing for no file, refusal for a bad shape.
 # The file is keys:devaddr, mode 0640, in a folder keys:devaddr mode 0750; it holds one line, one address, nothing else.
 # Exit codes: 0 done, 1 refused, 2 usage.
 set -euo pipefail
@@ -26,14 +42,17 @@ work=/var/lib/agent-box
 handoff=/var/lib/agent-box-handoff
 file=$handoff/dev-worker-address
 keyfile=$handoff/dev-worker-backup.pub
+boxkeyfile=$handoff/box-backup.pub
+boxaddrfile=$handoff/box-backup-address
 keys=/etc/agent-keys
+prod_inventory=$keys/prod/inventory-hosts.yml   # the box's copy of the prod inventory; the host's mgmt address is in it
 hostkey_file=/var/lib/agent-box-hostkey/proxmox-host.pub   # written by proxmox-host.sh (hostops): the host's public host key, two fields
 group=devaddr
 inventory=$work/rebuild-dev/inventory
 libexec=/usr/local/libexec/agent-box
 export PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 
-usage() { echo "usage: dev-worker-address.sh write|remove|read|key|read-key" >&2; exit 2; }
+usage() { echo "usage: dev-worker-address.sh write|remove|read|key|read-key|box-key|read-box-key|read-box-address|box-backend-on|box-backend-off" >&2; exit 2; }
 [[ $# -eq 1 ]] || usage
 
 # One IPv4 address of the dev nodes' range, from stdin; the address on stdout, or nothing and exit 1. No value is printed on failure.
@@ -76,6 +95,35 @@ if len(h) != 1 or not re.fullmatch(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?", h[0]):
 sys.stdout.write(h[0] + "\n")'
 }
 
+
+# One IPv4 address, from stdin, any range; the address on stdout, or nothing and exit 1.
+check_ipv4() {
+  python3 -I -c '
+import ipaddress, sys
+v = sys.stdin.read().strip()
+try:
+    ip = ipaddress.IPv4Address(v)
+except ValueError:
+    sys.exit(1)
+if str(ip) != v:
+    sys.exit(1)
+print(v)'
+}
+# The host's mgmt address (the one the c1 nodes' backups use), from the prod inventory copy; or nothing and exit 1.
+host_mgmt_address() {
+  ansible-inventory -i "$prod_inventory" --list | python3 -I -c '
+import json, sys
+inv = json.load(sys.stdin)
+hv = inv.get("_meta", {}).get("hostvars", {})
+found = {str(v.get("proxmox_host_mgmt_address", "")) for v in hv.values() if v.get("proxmox_host_mgmt_address")}
+found |= {str(v) for g in inv.values() if isinstance(g, dict) for k, v in (g.get("vars") or {}).items() if k == "proxmox_host_mgmt_address"}
+if len(found) != 1:
+    sys.exit(1)
+sys.stdout.write(found.pop() + "\n")'
+}
+# The source address the kernel would use toward an address (a UDP connect sends nothing); the address on stdout.
+source_toward() { python3 -I -c 'import socket, sys; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect((sys.argv[1], 22)); print(s.getsockname()[0])' "$1"; }
+
 case $1 in
   read-key)
     [[ -e $keyfile ]] || exit 0
@@ -106,6 +154,76 @@ case $1 in
       mv -f -- "$kd/$w.known_hosts.part" "$kd/$w.known_hosts"
     fi
     echo "dev-worker-address: the worker's backup key is in place (public half handed over, nothing else shown)" ;;
+  box-backend-on)
+    kd=$keys/box-backup
+    for f in id_ed25519 id_ed25519.pub known_hosts ssh_config; do
+      [[ -s $kd/$f ]] || { echo "dev-worker-address: $kd/$f is missing; run box-key (and a host job, which publishes the host's key) first; the Azure send stays" >&2; exit 1; }
+    done
+    printf 'RESTIC_REPOSITORY=sftp:box-backup-target:/box\nOFFBOX_RESTIC_SSH_CONFIG=%s\n' "$kd/ssh_config" > "$kd/backend.env.part"
+    chmod 600 "$kd/backend.env.part"
+    mv -f -- "$kd/backend.env.part" "$kd/backend.env"
+    echo "dev-worker-address: the box's off-box sends now go to the Proxmox host's store" ;;
+  box-backend-off)
+    rm -f -- "$keys/box-backup/backend.env" "$keys/box-backup/backend.env.part"
+    echo "dev-worker-address: the box's off-box sends are back on the settings' repository (Azure)" ;;
+  read-box-address)
+    [[ -e $boxaddrfile ]] || exit 0
+    [[ -r $boxaddrfile ]] || { echo "dev-worker-address: the box's address file is there but this user can't read it" >&2; exit 1; }
+    out=$(check_shape < "$boxaddrfile") || { echo "dev-worker-address: the box's address file is not exactly one dev node address; refusing" >&2; exit 1; }
+    printf '%s\n' "$out" ;;
+  read-box-key)
+    [[ -e $boxkeyfile ]] || exit 0
+    [[ -r $boxkeyfile ]] || { echo "dev-worker-address: the box's backup key file is there but this user can't read it" >&2; exit 1; }
+    out=$(check_pub < "$boxkeyfile") && [[ $out == "$(cat "$boxkeyfile")" ]] \
+      || { echo "dev-worker-address: the box's backup key file is not exactly one ssh-ed25519 line (two fields, no comment); refusing" >&2; exit 1; }
+    printf '%s\n' "$out" ;;
+  box-key)
+    [[ -d $handoff ]] || { echo "dev-worker-address: $handoff is missing (the agent_box role makes it)" >&2; exit 1; }
+    kd=$keys/box-backup
+    install -d -m 0700 "$kd"
+    if [[ ! -e $kd/id_ed25519 || ! -e $kd/id_ed25519.pub ]]; then
+      rm -f -- "$kd/id_ed25519.part" "$kd/id_ed25519.part.pub"
+      ssh-keygen -q -t ed25519 -N '' -C "boxbackup@agent-box" -f "$kd/id_ed25519.part"
+      chmod 600 "$kd/id_ed25519.part" "$kd/id_ed25519.part.pub"
+      mv -f -- "$kd/id_ed25519.part.pub" "$kd/id_ed25519.pub"
+      mv -f -- "$kd/id_ed25519.part" "$kd/id_ed25519"
+    fi
+    pub=$(check_pub < "$kd/id_ed25519.pub") || { echo "dev-worker-address: the box's public backup key is not one ssh-ed25519 line" >&2; exit 1; }
+    printf '%s\n' "$pub" > "$boxkeyfile.part"
+    chgrp "$group" "$boxkeyfile.part"
+    chmod 0640 "$boxkeyfile.part"
+    mv -f -- "$boxkeyfile.part" "$boxkeyfile"
+    if [[ -r $hostkey_file ]] && hk=$(check_pub < "$hostkey_file" 2>/dev/null); then
+      printf 'box-backup-target %s\n' "$hk" > "$kd/known_hosts.part"
+      chmod 600 "$kd/known_hosts.part"
+      mv -f -- "$kd/known_hosts.part" "$kd/known_hosts"
+    fi
+    mg=$(host_mgmt_address) || { rm -f -- "$boxaddrfile"; echo "dev-worker-address: the box's prod inventory copy does not name exactly one proxmox_host_mgmt_address; no address handed over" >&2; exit 1; }
+    mg=$(printf '%s\n' "$mg" | check_ipv4) || { rm -f -- "$boxaddrfile"; echo "dev-worker-address: the host's mgmt address in the box's prod inventory copy is not one IPv4 address" >&2; exit 1; }
+    ba=$(source_toward "$mg" | check_shape) \
+      || { rm -f -- "$boxaddrfile"; echo "dev-worker-address: the box reaches the host's mgmt address from an address that is not a dev node address (a route outside the firewall?); no address handed over" >&2; exit 1; }
+    cat > "$kd/ssh_config.part" <<CONF
+# Written by dev-worker-address.sh box-key: how restic reaches the Proxmox host's backup store. No secret in it.
+Host box-backup-target
+  HostName $mg
+  HostKeyAlias box-backup-target
+  User boxbackup
+  IdentityFile $kd/id_ed25519
+  IdentitiesOnly yes
+  BatchMode yes
+  StrictHostKeyChecking yes
+  UserKnownHostsFile $kd/known_hosts
+  ForwardAgent no
+  ConnectTimeout 20
+  ServerAliveInterval 30
+CONF
+    chmod 600 "$kd/ssh_config.part"
+    mv -f -- "$kd/ssh_config.part" "$kd/ssh_config"
+    printf '%s\n' "$ba" > "$boxaddrfile.part"
+    chgrp "$group" "$boxaddrfile.part"
+    chmod 0640 "$boxaddrfile.part"
+    mv -f -- "$boxaddrfile.part" "$boxaddrfile"
+    echo "dev-worker-address: the box's backup key and address are in place (public half and address handed over, nothing else shown)" ;;
   read)
     [[ -e $file ]] || exit 0
     [[ -r $file ]] || { echo "dev-worker-address: the handoff file is there but this user can't read it" >&2; exit 1; }
