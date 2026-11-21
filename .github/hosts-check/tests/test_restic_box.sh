@@ -135,9 +135,10 @@ sftp_run "get /c1/config $t/c1config" >/dev/null 2>&1 || true; [ ! -s "$t/c1conf
 if sftp_run 'ls /c1' >/dev/null 2>&1; then bad "4 c1's folder was listed"; else ok "4 c1's folder can't be listed"; fi
 sftp_run "put $t/src/canary /c1/x" >/dev/null 2>&1 || true; docker exec "$H" test -e /mnt/hdd-backup/restic/c1/x && bad "4 a write into c1 worked" || ok "4 a write into c1 is refused"
 sftp_run "put $t/src/canary /outside" >/dev/null 2>&1 || true; docker exec "$H" test -e /mnt/hdd-backup/restic/outside && bad "4 a write beside /box worked" || ok "4 a write outside /box is refused"
-[ "$(docker exec "$H" stat -c %a /mnt/hdd-backup/restic/box/config)" = 600 ] && ok "4 files the user makes are 0600" || bad "4 file mode: $(docker exec "$H" stat -c %a /mnt/hdd-backup/restic/box/config)"
-docker cp "$t/boxkey" "$O:/tmp/boxkey" >/dev/null && docker exec "$O" chmod 600 /tmp/boxkey
-docker exec "$O" bash -c "ssh -F /dev/null -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i /tmp/boxkey -s boxbackup@$host_ip sftp </dev/null >/dev/null 2>&1" \
+mode=$(docker exec "$H" stat -c %a /mnt/hdd-backup/restic/box/config)
+[[ $mode =~ ^[0-7]00$ ]] && ok "4 files the user makes have no group or other access (config is $mode; restic makes it read-only)" || bad "4 file mode: $mode"
+docker cp "$t/boxkey" "$O:/root/boxkey" >/dev/null && docker exec "$O" chmod 600 /root/boxkey
+docker exec "$O" bash -c "ssh -F /dev/null -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i /root/boxkey -s boxbackup@$host_ip sftp </dev/null >/dev/null 2>&1" \
   && bad "4 the key worked from another address" || ok "4 the key is refused from any other address"
 eff=$(docker exec "$H" sshd -T -C "user=boxbackup,host=box,addr=$src")
 for want in "allowtcpforwarding no" "allowagentforwarding no" "allowstreamlocalforwarding no" "permittunnel no" "permittty no" \
