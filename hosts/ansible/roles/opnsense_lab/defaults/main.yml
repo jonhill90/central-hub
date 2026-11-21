@@ -44,6 +44,8 @@ opnsense_lab_host_overrides: []
 # twice.
 opnsense_lab_short_app_names:
   - central-hub-app
+  - openbao
+  - vault
 
 # The DNS server the proof (tag dns_proof) asks. Empty means the mgmt gateway, Unbound itself; on a
 # tailnet device, 100.100.100.100 proves split DNS end to end.
