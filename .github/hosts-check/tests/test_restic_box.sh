@@ -130,9 +130,9 @@ out=$(ssh "${sshopt[@]}" boxbackup@"$host_ip" id 2>&1 || true)
 sftp_run() { printf '%s\n' "$1" | sftp -q "${sshopt[@]}" -b - boxbackup@"$host_ip" 2>&1; }
 out=$(sftp_run 'ls /' | grep -v '^sftp>' | tr -s ' \n' ' ' | sed 's/ $//' | tr ' ' '\n' | sort | tr '\n' ' ')
 [ "$out" = "/box /c1 " ] && ok "4 the chroot lists only box and c1 (names only)" || bad "4 ls / showed: $out"
-sftp_run 'get /etc/passwd /tmp/p' | grep -qi "not found\|No such file" && ok "4 /etc/passwd can't be read" || bad "4 /etc/passwd read"
+sftp_run "get /etc/passwd $t/passwd" >/dev/null 2>&1; [ ! -s "$t/passwd" ] && ok "4 /etc/passwd can't be read" || bad "4 /etc/passwd read"
 sftp_run "get /c1/config $t/c1config" >/dev/null 2>&1; [ ! -s "$t/c1config" ] && ok "4 c1's repository file can't be read" || bad "4 c1's canary was read"
-sftp_run 'ls /c1' | grep -qi "denied\|permission" && ok "4 c1's folder can't be listed" || bad "4 c1's folder was listed"
+if sftp_run 'ls /c1' >/dev/null 2>&1; then bad "4 c1's folder was listed"; else ok "4 c1's folder can't be listed"; fi
 sftp_run "put $t/src/canary /c1/x" | grep -qi "denied\|permission\|failure" ; docker exec "$H" test -e /mnt/hdd-backup/restic/c1/x && bad "4 a write into c1 worked" || ok "4 a write into c1 is refused"
 sftp_run "put $t/src/canary /outside" | grep -qi "denied\|permission\|failure" ; docker exec "$H" test -e /mnt/hdd-backup/restic/outside && bad "4 a write beside /box worked" || ok "4 a write outside /box is refused"
 [ "$(docker exec "$H" stat -c %a /mnt/hdd-backup/restic/box/config)" = 600 ] && ok "4 files the user makes are 0600" || bad "4 file mode: $(docker exec "$H" stat -c %a /mnt/hdd-backup/restic/box/config)"
