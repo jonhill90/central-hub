@@ -64,4 +64,29 @@ build "$t/hosts/ansible/playbooks/old.yml" 0
 if ansible-playbook -c local -i localhost, "$t/hosts/ansible/playbooks/old.yml" >"$t/old.log" 2>&1; then
   bad "3. the copy alone should fail on an empty box, so the test would not catch the old order"
 else grep -q 'does not exist' "$t/old.log" && ok "3. the copies without the folder task fail on an empty box with 'does not exist' (the old order)" || bad "3. the copy alone failed for another reason: $(tail -3 "$t/old.log")"; fi
+
+# 4. The seal recipients the role writes: the box's public recipient, then the Mac's when set; the task comes after the identity is made,
+#    and the sealed folder is made by inventory_job.yml, owner invops and group keys, mode 2750.
+python3 - "$role" <<'PY' && ok "4. the recipients file holds the box's recipient and the Mac's when set; the sealed folder is invops:keys 2750; the identity comes first" || bad "4. the seal recipients or the sealed folder are wrong"
+import sys, yaml, jinja2
+role = sys.argv[1]
+tasks = yaml.safe_load(open(role + "/tasks/secrets_bundle.yml"))
+names = [x.get("name", "") for x in tasks]
+ident = names.index("The box's age identity")
+rec = next(i for i, n in enumerate(names) if n.startswith("The box's age recipient"))
+cp = next(x for x in tasks if x.get("name", "").startswith("The inventory wrapper's seal recipients"))
+content = cp["ansible.builtin.copy"]["content"]
+env = jinja2.Environment(keep_trailing_newline=True, trim_blocks=True, lstrip_blocks=True)
+box = "age1" + "q" * 58
+mac = "age1" + "p" * 58
+def render(mac_recipient):
+    return env.from_string(content).render(agent_box_inventory_recipient={"stdout": box}, agent_box_secrets_bundle={"mac_recipient": mac_recipient})
+two = render(mac).split("\n")
+one = render("").split("\n")
+job = yaml.safe_load(open(role + "/tasks/inventory_job.yml"))
+sd = next(x for x in job if "sealed folder" in x.get("name", ""))["ansible.builtin.file"]
+good = (ident < rec and [l for l in two if l] == [box, mac] and [l for l in one if l] == [box]
+        and sd["mode"] == "2750" and "inventory_user" in sd["owner"] and "keys_user" in sd["group"] and sd["state"] == "directory")
+sys.exit(0 if good else 1)
+PY
 exit "$fail"

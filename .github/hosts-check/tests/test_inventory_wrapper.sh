@@ -18,13 +18,14 @@ fail=0
 ok() { echo "ok   $1"; }
 bad() { echo "not ok  $1"; fail=1; }
 
-mkdir -p "$t/libexec/ansible-venv/bin" "$t/keys/inventory" "$t/work"
+mkdir -p "$t/libexec/ansible-venv/bin" "$t/keys/inventory" "$t/work" "$t/sealed"
 ln -s "$(command -v python3)" "$t/libexec/ansible-venv/bin/python3"
 cp "$list" "$t/libexec/editable-values.yml"
 sed -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
   -e "s|^store=.*|store=$t/keys/inventory/hosts.yml|" -e "s|^tagkey=.*|tagkey=$t/keys/inventory/tag.key|" -e "s|^prev=.*|prev=$t/keys/inventory/hosts.yml.prev|" \
+  -e "s|^recipients=.*|recipients=$t/keys/inventory/recipients.txt|" -e "s|^sealed=.*|sealed=$t/sealed/inventory.sops.json|" \
   -e "s|^prod_cmd=.*|prod_cmd=(cat $t/prod.yml)|" -e "s|^guard_cmd=.*|guard_cmd=(cat $t/guard.yml)|" "$wrapper" > "$t/inventory.sh"
-for v in libexec work store tagkey prev; do
+for v in libexec work store tagkey prev recipients sealed; do
   grep -q "^$v=$t" "$t/inventory.sh" || { bad "the wrapper no longer sets $v on its own line, so the test can't point it at the temp folder"; exit 1; }
 done
 for v in prod_cmd guard_cmd; do
@@ -34,6 +35,16 @@ done
 grep -qxF 'prod_cmd=(sudo -n -u keys /usr/bin/cat /etc/agent-keys/prod/inventory-hosts.yml)' "$wrapper" \
   && grep -qxF 'guard_cmd=(sudo -n -u guardops /usr/bin/cat /etc/agent-keys-guard/inventory/hosts.yml)' "$wrapper" \
   && ok "the wrapper reads the prod and guard copies through the two exact sudo commands" || bad "the import commands changed"
+# A stand-in for sops: it records its arguments and "encrypts" by base64 into --output (this tests the wrapper's plumbing, not sops).
+cat > "$t/libexec/sops" <<'EOS'
+#!/bin/bash
+[ -n "${FAKE_SOPS_FAIL:-}" ] && exit 1
+out=""; prev=""; for a in "$@"; do [[ $prev == --output ]] && out=$a; prev=$a; done
+printf '%s\n' "$*" > "${out%/*}/sops.args"
+{ echo SEALED; base64 -w0 -- "${@: -1}"; } > "$out"
+EOS
+chmod +x "$t/libexec/sops"
+R1=age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq R2=age1pppppppppppppppppppppppppppppppppppppppppppppppppppppppppp
 inv() { bash "$t/inventory.sh" "$@"; }
 
 # Sample values the output must never show.
@@ -71,12 +82,30 @@ EOF
 cp "$t/prod.yml" "$t/guard.yml"
 sed -i 's/^        k8s_certs_issue: false$/&\n        k8s_gitops_source_app_secrets_store: openbao/' "$t/prod.yml"
 
-# 5. first fill
-out=$(inv import prod 2>&1) && ok "import prod fills the first copy: $out" || bad "import prod failed: $out"
+# 5. first fill. With no recipients file the copy is made and the seal is refused with a message and exit 3.
+rc=0; out=$(inv import prod 2>&1) || rc=$?
+[ "$rc" = 3 ] && [ -s "$t/keys/inventory/hosts.yml" ] && [ ! -e "$t/sealed/inventory.sops.json" ] && echo "$out" | grep -q 'recipients.txt is missing' \
+  && ok "no recipients file: the first copy is written, the seal is refused (exit 3) and says why" || bad "no recipients file: rc=$rc out=[$out]"
+rm -f "$t/keys/inventory/hosts.yml"
+printf '%s\n%s\n' "$R1" "$R2" > "$t/keys/inventory/recipients.txt"
+out=$(inv import prod 2>&1) && ok "import prod fills the first copy and seals it: $out" || bad "import prod failed: $out"
 out=$(inv import prod 2>&1) && bad "a second import was accepted" || ok "a second import is refused"
 [ "$(stat -c %a "$t/keys/inventory/hosts.yml")" = 600 ] && ok "the working copy is mode 0600" || bad "the working copy is not mode 0600"
 out=$(inv import-compare 2>&1); echo "$out" | grep -qx 'only in prod: k8s_nodes.k8s_gitops_source_app_secrets_store' && echo "$out" | grep -q ' 1 key path(s)' \
   && ok "import-compare names the one path that differs" || bad "import-compare gave [$out]"
+
+# 5b. the sealed copy
+[ -s "$t/sealed/inventory.sops.json" ] && [ "$(stat -c %a "$t/sealed/inventory.sops.json")" = 640 ] && ok "the sealed copy exists, mode 0640 (the keys user's group reads it)" || bad "the sealed copy is missing or its mode is wrong"
+grep -q "^--encrypt\|^encrypt --input-type binary --output-type json --age $R1,$R2 " "$t/sealed/sops.args" && ok "sops got both recipients, binary input and JSON output" || bad "sops args: $(cat "$t/sealed/sops.args")"
+! grep -q "$ADDR" "$t/sealed/inventory.sops.json" && ok "the sealed file does not hold a sample address in the clear" || bad "the sealed file shows a sample address"
+ls "$t/sealed" | grep -q '\.[A-Za-z0-9]\{6\}$' && bad "a temp file was left in the sealed folder" || ok "no temp file is left in the sealed folder"
+cp "$t/sealed/inventory.sops.json" "$t/sealed.before"
+printf 'age1bad\n' > "$t/keys/inventory/recipients.txt"
+rc=0; inv seal >/dev/null 2>"$t/err" || rc=$?
+[ "$rc" = 3 ] && cmp -s "$t/sealed.before" "$t/sealed/inventory.sops.json" && ok "a bad recipient line: seal refused (exit 3) and the earlier sealed copy is kept" || bad "bad recipient: rc=$rc"
+printf '%s\n%s\n' "$R1" "$R2" > "$t/keys/inventory/recipients.txt"
+rc=0; FAKE_SOPS_FAIL=1 inv seal >/dev/null 2>"$t/err" || rc=$?
+[ "$rc" = 3 ] && cmp -s "$t/sealed.before" "$t/sealed/inventory.sops.json" && [ "$(ls "$t/sealed" | wc -l)" = 2 ] && ok "sops failing: seal refused (exit 3), the earlier copy and no temp file are left" || bad "sops failing: rc=$rc files=$(ls "$t/sealed")"
 
 # 1. refusals
 refuse() { # what, then the command; the command must fail and the working copy must not change
@@ -99,7 +128,9 @@ VAL=x refuse "a bad message ID" set k8s_nodes.k8s_certs_issue notacmsg
 
 # 2. set of one listed key
 cp "$t/keys/inventory/hosts.yml" "$t/before.yml"
-out=$(printf 'true' | inv set k8s_nodes.k8s_certs_issue 2>&1) && ok "set of a plain bool without a message ID is accepted: $out" || bad "set failed: $out"
+out=$(printf 'true' | inv set k8s_nodes.k8s_certs_issue 2>&1) && ok "set of a plain bool without a message ID is accepted (and seals): $out"
+! cmp -s "$t/sealed.before" "$t/sealed/inventory.sops.json" && ok "a set seals again: the sealed copy changed" || bad "the sealed copy did not change after a set"
+true || bad "set failed: $out"
 python3 -I - "$t/before.yml" "$t/keys/inventory/hosts.yml" <<'PY' && ok "set changed only that key" || bad "set changed more than the one key"
 import sys, yaml
 a, b = (yaml.safe_load(open(p)) for p in sys.argv[1:3])

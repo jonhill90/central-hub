@@ -97,6 +97,7 @@ check_ansible() {
   bash "$here/tests/test_proxmox_host_workflow.sh"
   bash "$here/tests/test_inventory_wrapper.sh"
   bash "$here/tests/test_inventory_wiring.sh"
+  bash "$here/tests/test_secrets_bundle_sealed.sh"
   bash "$here/tests/test_identity_external_secrets.sh"
   bash "$here/tests/test_identity_db_move.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"

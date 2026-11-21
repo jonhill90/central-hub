@@ -52,6 +52,7 @@ box {{ agent_box_guard_dir }}/inventory/hosts.yml
 # `set` changes on purpose and a put-back would undo.
 dir {{ agent_box_inventory_dir }}
 dir {{ agent_box_inventory_work_dir }}
+dir {{ agent_box_inventory_sealed_dir }}
 box {{ agent_box_libexec_dir }}/editable-values.yml
 user {{ agent_box_user }}
 user {{ agent_box_keys_user }}

@@ -10,6 +10,8 @@
 #   inventory.sh view <proxmox|opnsense|k8s_nodes>            for the wrapper users only: the group and all.vars, as an inventory
 #   inventory.sh import prod|guard                            first fill: the prod or guard copy becomes the working copy (refused once a copy exists)
 #   inventory.sh import-compare                               the key paths where the prod and guard copies differ
+#   inventory.sh seal                                         encrypts the working copy to the bundle's recipients (the box's and, if set, the Mac's age public keys) into
+#                                                             the sealed folder, where the keys user's daily bundle picks it up; set and import run it after they write
 # A key path is accepted only if the reviewed list editable-values.yml (installed beside this file, root-owned) names it, with a
 # type the value must pass and a class. The classes firewall, tailnet, access and money need the standing go's message ID after the path.
 # No value is printed by any action but `view`. The tag key (tag.key beside the working copy, mode 0600, made on first use, never printed)
@@ -22,7 +24,7 @@ set -euo pipefail
 umask 077
 
 usage() {
-  echo "usage: inventory set <scope.variable> [<cmsg_...>] < value | get <scope.variable> | names | diff | log | view <proxmox|opnsense|k8s_nodes> | import prod|guard | import-compare" >&2
+  echo "usage: inventory set <scope.variable> [<cmsg_...>] < value | get <scope.variable> | names | diff | log | seal | view <proxmox|opnsense|k8s_nodes> | import prod|guard | import-compare" >&2
   exit 2
 }
 libexec=/usr/local/libexec/agent-box
@@ -30,6 +32,9 @@ work=/var/lib/agent-box-inventory
 store=/etc/agent-keys-inventory/hosts.yml
 tagkey=/etc/agent-keys-inventory/tag.key
 prev=/etc/agent-keys-inventory/hosts.yml.prev
+recipients=/etc/agent-keys-inventory/recipients.txt   # public age keys, one per line; the role writes it from the secrets bundle's settings
+sealed=/etc/agent-keys-inventory-sealed/inventory.sops.json   # the folder is this user's, group keys, so the keys user's bundle can read the file
+sops=$libexec/sops
 logs=$work/logs
 allow=$libexec/editable-values.yml
 # The two old copies are read as their owners, with the exact commands the sudoers file allows this user (no path is an argument).
@@ -42,7 +47,7 @@ action=${1:-}
 case $action in
   set) [[ $# -ge 2 && $# -le 3 ]] || usage ;;
   get | view | import) [[ $# -eq 2 ]] || usage ;;
-  names | diff | log | import-compare) [[ $# -eq 1 ]] || usage ;;
+  names | diff | log | seal | import-compare) [[ $# -eq 1 ]] || usage ;;
   *) usage ;;
 esac
 [[ $action != set || -z ${3:-} || ${3:-} =~ ^cmsg_[A-Za-z0-9]{10,80}$ ]] || { echo "inventory: the message ID is cmsg_..." >&2; exit 2; }
@@ -287,4 +292,29 @@ elif action == "import-compare":
     print("inventory: %d key path(s) differ between the prod and guard copies" % n)
 PY
 )
+# Seals the working copy to the bundle's recipients with sops (the keys user's bundle carries the result; this user holds no identity,
+# so it can not open what it makes). A failure here leaves the change made and says so.
+seal_it() {
+  local list='' r tmp
+  [[ -s $recipients ]] || { echo "inventory: $recipients is missing or empty, so the copy is not sealed (the role writes it when the secrets bundle is set)" >&2; return 3; }
+  while IFS= read -r r; do
+    [[ -z $r ]] && continue
+    [[ $r =~ ^age1[0-9a-z]{58}$ ]] || { echo "inventory: a line of $recipients is not an age recipient; not sealed" >&2; return 3; }
+    list+=${list:+,}$r
+  done < "$recipients"
+  [[ -n $list ]] || { echo "inventory: $recipients holds no recipient; not sealed" >&2; return 3; }
+  tmp=$(mktemp "$sealed.XXXXXX") || { echo "inventory: can not write in the sealed folder; not sealed" >&2; return 3; }
+  if "$sops" encrypt --input-type binary --output-type json --age "$list" --output "$tmp" "$store" 2>/dev/null && [[ -s $tmp ]]; then
+    chmod 0640 "$tmp" && mv -f -- "$tmp" "$sealed" && echo "inventory: sealed copy written for the bundle" && return 0
+  fi
+  rm -f -- "$tmp"; echo "inventory: sops could not seal the copy; not sealed" >&2; return 3
+}
+
+if [[ $action == seal ]]; then
+  [[ -f $store ]] || { echo "inventory: no working copy yet (run inventory import)" >&2; exit 1; }
+  seal_it; exit $?
+fi
 "$py" -I -c "$code" "$action" "$store" "$prev" "$logs" "$allow" "$prod_src" "$guard_src" "$tagkey" "${@:2}"
+if [[ $action == set || $action == import ]]; then
+  seal_it || { echo "inventory: the change is made; run inventory seal after the cause is fixed" >&2; exit 3; }
+fi
