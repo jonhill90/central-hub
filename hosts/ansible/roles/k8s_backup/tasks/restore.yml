@@ -26,7 +26,9 @@
     RESTORE_PATH: "{{ k8s_backup_restore_path }}"
     RESTORE_SNAPSHOT: "{{ k8s_backup_restore_snapshot }}"
     RESTORE_ETCD_HOST: "{{ groups['k8s_control_plane'] | first }}"
-    RESTORE_SKIP_CLAIMS: "{{ k8s_backup_restore_skip_claims | join(' ') }}"
+    # Another env's snapshot only: prod's own rebuild (k8s_backup_restore_own_env, set by rebuild-prod.sh alone) never skips a claim;
+    # the script's own host test is a second layer.
+    RESTORE_SKIP_CLAIMS: "{{ '' if (k8s_backup_restore_own_env | default(false) | bool) else (k8s_backup_restore_skip_claims | join(' ')) }}"
   register: k8s_backup_restore
   changed_when: "'RESTORED' in k8s_backup_restore.stdout"
   when: not ansible_check_mode
