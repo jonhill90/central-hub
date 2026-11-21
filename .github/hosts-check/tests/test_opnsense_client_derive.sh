@@ -4,6 +4,8 @@
 #   1. The client's names are the opnsense group's opnsense_cert_names when it has them.
 #   2. With no opnsense group, or none of that key, they are opnsense.<zone> from k8s_identity_zone (itself a template on k8s_gateway_zone).
 #   3. k8s_identity_opnsense_client false, or no zone, gives no name.
+#   4. A run with tags always (the box's `identity-values`) adds OPNSENSE_CLIENT_SECRET to a values file as 64 random hex digits, prints only
+#      the key's name, keeps the other lines, and a second run adds nothing.
 # Usage: .github/hosts-check/tests/test_opnsense_client_derive.sh   (needs ansible-core, PyYAML)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -45,4 +47,23 @@ o=$(run hosts.yml 'all:
     k8s_nodes:
       hosts: {n1: {ansible_connection: local}}
       vars: {k8s_identity_zone: ""}'); [ "$o" = 'HOSTS=[]' ] && ok "3b. no zone: no name" || bad "3b. [$o]"
+# 4
+cat > "$t/vinv.yml" <<'INV'
+all:
+  children:
+    k8s_control_plane:
+      hosts: {cp1: {ansible_connection: local}}
+      vars: {k8s_identity_zone: zone.example.test, k8s_identity_owner_username: owner}
+    k8s_workers:
+      hosts: {w1: {ansible_connection: local}}
+INV
+printf 'GRAFANA_CLIENT_SECRET=keep-me\n' > "$t/identity.env"
+vrun() { ( cd "$root/hosts/ansible" && ANSIBLE_ROLES_PATH=roles ANSIBLE_NOCOLOR=1 ansible-playbook -i "$t/vinv.yml" playbooks/k8s-identity.yml --tags always \
+  -e ansible_become=false -e "k8s_identity_values_file=$t/identity.env" 2>&1 ); }
+out1=$(vrun); rc1=$?; sum1=$(sha256sum "$t/identity.env" | cut -d' ' -f1); out2=$(vrun); sum2=$(sha256sum "$t/identity.env" | cut -d' ' -f1)
+val=$(sed -n 's/^OPNSENSE_CLIENT_SECRET=//p' "$t/identity.env")
+if [ $rc1 = 0 ] && [[ $val =~ ^[0-9a-f]{64}$ ]] && grep -q '^GRAFANA_CLIENT_SECRET=keep-me$' "$t/identity.env" && [ "$sum1" = "$sum2" ] && [[ $out2 == *"changed=0"* ]] &&
+   [[ $out1 != *"$val"* ]]; then
+  ok "4. tags always adds a random OPNSENSE_CLIENT_SECRET, keeps the other lines, prints no value, and a second run changes nothing"
+else bad "4. rc=$rc1 value-shape=$([[ $val =~ ^[0-9a-f]{64}$ ]] && echo ok || echo no)"; fi
 exit $fail

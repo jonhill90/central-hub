@@ -55,7 +55,7 @@ S
 chmod +x "$t/bin/git" "$venv/ansible-inventory" "$venv/ansible-playbook"
 sed -e "s|^keys=.*|keys=$t/keys|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
     -e "s|PATH=\$libexec/ansible-venv/bin:/usr/local/bin|PATH=\$libexec/ansible-venv/bin:$t/bin:/usr/local/bin|" \
-    -e "s|^declare -A needs_file=.*|declare -A needs_file=([identity]=\"$t/keys/prod/identity.env\" [users]=\"$t/keys/prod/identity.env\" [clients]=\"$t/keys/prod/identity.env\")|" \
+    -e "s|^declare -A needs_file=.*|declare -A needs_file=([identity]=\"$t/keys/prod/identity.env\" [users]=\"$t/keys/prod/identity.env\" [clients]=\"$t/keys/prod/identity.env\" [identity-values]=\"$t/keys/prod/identity.env\")|" \
     hosts/ansible/roles/agent_box/files/c1-ansible.sh > "$t/run/c1-ansible.sh"
 if ! grep -q "^keys=$t/keys" "$t/run/c1-ansible.sh" || ! grep -q "identity.env" "$t/run/c1-ansible.sh"; then
   echo "FAIL the test could not point the wrapper at its folders"; exit 1
@@ -79,7 +79,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\nclients\ngateway\ngitops\nidentity\nobservability\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\nclients\ngateway\ngitops\nidentity\nidentity-values\nobservability\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -182,6 +182,13 @@ if [[ $rc -eq 0 && $seen != *k8s_identity_proxmox_hosts* && $out != *"Proxmox we
 run check clients; c1=$calls; c1rc=$rc
 run apply clients "$clr"; c2=$calls; c2rc=$rc; c2o=$out
 run apply clients; c3rc=$rc; c3=$calls
+run check identity-values; iv1rc=$rc; iv1=$calls
+run apply identity-values "$clr"; iv2rc=$rc; iv2=$calls
+run apply identity-values; iv3rc=$rc; iv3=$calls
+if [[ $iv1rc -eq 2 && -z $iv1 && $iv2rc -eq 0 && $iv2 == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env --tags always" && $iv2 != *--check* &&
+      $iv2 != *clients* && $iv2 != *secrets* && $iv3rc -ne 0 && -z $iv3 ]]; then
+  ok "11c. identity-values: identity playbook, tags always only (the values file's missing keys), no check, apply needs a clearance id"
+else bad "11c. $iv1rc [$iv1] $iv2rc [$iv2] $iv3rc"; fi
 if [[ $c1rc -eq 0 && $c1 == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao --tags secrets,clients -e $ens_c --check --diff" &&
       $c2rc -eq 0 && $c2 == *"--tags secrets,clients -e $ens_c" && $c2 != *--check* && $c2 != *keycloak* && $c2 != *operator* && $c2 != *database* && $c2 != *all* &&
       $c2o == *"clearance $clr"* && $c3rc -eq 2 && -z $c3 ]]; then

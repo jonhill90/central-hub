@@ -43,6 +43,11 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # role's keycloak tag does that and this name does not run it). The user must be in the private inventory's k8s_identity_extra_users,
 # or the run stops at user-json.py; a user already there is left as it is. The secrets tag also adds a random password and seed to the
 # box's own identity.env for a key it lacks, and writes the realm's Secret in c1.
+# identity-values: adds a random value for each key the realm needs that the box's own identity.env lacks (the role's first task,
+# tags always: secrets.yml, `openssl rand -hex 32` for a client secret, only the key's name printed), and nothing else: no cluster
+# call, no realm, no secret object. It exists so a new client's secret (OPNSENSE_CLIENT_SECRET) is made on the box, then written to the
+# store by `secrets-store-prod put-apps`, before the `clients` run makes the ExternalSecret that reads it. It changes a file, so there is no
+# check: apply only, with a clearance id.
 # backup-status: reads the c1 nodes' backup timers, last results, journal PASS/FAIL lines and restic snapshots (playbooks/k8s-backup-status.yml:
 # every task only reads; restic runs with --no-lock). It changes nothing, so check and apply both read; it runs no backup and no restore.
 # backup-restore-test: starts each node's c1-restore-test.service now (the Sunday timer's own unit: restic check, then the newest snapshots restored
@@ -51,9 +56,9 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # backup-check: plays playbooks/k8s-backup.yml in check mode only, to prove the sftp alias tasks (the carried key seeds, the host address
 # from the box's copy of the prod inventory) before a prod rebuild; apply is refused, because the wrapper never takes a backup. The seed folder is the one
 # rebuild-prod.sh fills (<keys>/prod/backup-sftp); the env file is the box's own <keys>/c1-backup.env, as in rebuild-prod.sh (the first run's play 3 stopped on the default path under the keys user's home); the host address is read before the proxmox group is dropped, as rebuild-prod.sh does.
-declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml)
-declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env")
-declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file)
+declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml)
+declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env" [identity-values]="$keys/prod/identity.env")
+declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file [identity-values]=k8s_identity_values_file)
 # Fixed extra variables per name. identity, users and clients also set k8s_identity_secrets_store=openbao, so the realm's Secrets
 # are made as ExternalSecrets on store `openbao` (plan step 8a; put-apps must have written the values first). identity never replaces realm lab on prod: the role's default deletes the realm and
 # imports it again when its code changes, which on prod ends every sign-in and drops enrolled one-time codes. With false
@@ -62,14 +67,15 @@ declare -A fixed_vars=([identity]="k8s_identity_realm_replace=false k8s_identity
 # Tags per name. identity runs every task plus the clients tag, which is off by default. The tag acts only on the clients in
 # k8s_identity_ensure_clients (empty by default), so the wrapper names them: proxmox, the client the realm gained after prod's
 # realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
-declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof" [users]="secrets,users" [clients]="secrets,clients")
+declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof" [users]="secrets,users" [clients]="secrets,clients" [identity-values]="always")
 declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}' [clients]='{"k8s_identity_ensure_clients":["proxmox","openbao","opnsense"]}')
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
 action=${1:-} name='' clearance=''
 case $action in
   list | log) [[ $# -eq 1 ]] || usage ;;
-  check) [[ $# -eq 2 ]] || usage; name=$2 ;;
+  check) [[ $# -eq 2 ]] || usage; name=$2
+    [[ $name != identity-values ]] || { echo "c1-ansible: identity-values has no check: it only adds missing keys to the box's identity.env; use apply" >&2; exit 2; } ;;
   apply)
     [[ $# -eq 3 ]] || usage
     name=$2 clearance=$3
