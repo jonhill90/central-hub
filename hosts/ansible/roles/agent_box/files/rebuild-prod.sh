@@ -788,6 +788,7 @@ TOFU_ENV=$tofu_env
 INVENTORY=$inventory/
 STAGES="$stages"
 APPS_DEFER="gateway jellyfin"
+CERTS_SMOKE_LATE=true
 TEARDOWN_TARGET=$teardown_target
 SECRET_SOURCE_FILE=$pkeys/secret-source.env
 OPENBAO_SEAL_KEY_FILE=$seal_tmp/openbao-seal.key

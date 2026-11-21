@@ -31,6 +31,8 @@
 #   PREFLIGHT_MIN_FREE_MIB  optional, dev only: the least free memory (MiB) the Proxmox node must have before the VMs are made
 #                 (default: the dev VMs' memory below, summed over the nodes the tfvars declare, plus a 512 MiB margin)
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
+#   CERTS_SMOKE_LATE  optional: true runs the `certs` stage without its smoke test, which runs at the end of the `gateway` stage
+#                 (after the Gateway play opens 443), followed by a wait for every app. The box's prod wrapper sets it.
 #   APPS_DEFER    optional: Argo CD apps (space-separated names) the `apps` wait leaves out; `checks` still waits for every app.
 #                 The box's prod wrapper sets "gateway jellyfin": on prod the Gateway's HTTPS listener and Jellyfin's lab-CA
 #                 Certificate need what the `certs` stage makes (the Gateway's certificate Secret, ClusterIssuer lab-ca),
@@ -687,8 +689,15 @@ run_stage() {
     # a node announcing it (D-0062).
     # On dev with the store in the cluster, also the node firewall rule for the store's admin path (dev only until a
     # dev run shows the admin login passing with it; the play skips without an admin address).
+    # CERTS_SMOKE_LATE (the box's prod wrapper sets it): certs ran without its smoke test (see `certs`), so it runs here, once the
+    # gateway play has opened 443 and waited for the listener, and then every app must be Synced and Healthy, the two APPS_DEFER
+    # left out of the `apps` wait included (identity's restart of deploy/jellyfin needs that deployment past its Certificate).
     gateway)
       ap playbooks/k8s-gateway.yml
+      if [ "${CERTS_SMOKE_LATE:-}" = true ]; then
+        ap playbooks/k8s-certs.yml --tags smoke
+        wait_apps
+      fi
       [ "$ENV_NAME" != dev ] || [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ] || ap playbooks/k8s-openbao-admin-firewall.yml
       [ "$ENV_NAME" != dev ] || l2_report ;;
     # A dev re-run keeps the Gateway's HTTPS on in the root Application: the dev inventory leaves it off, and
@@ -726,7 +735,10 @@ run_stage() {
         -e "openbao_rebuild_role_id_file=$OPENBAO_ROLE_ID_FILE" -e "openbao_rebuild_secret_id_file=$OPENBAO_SECRET_ID_FILE" ;;
     # The ExternalSecret wait is dev only: it annotates every ExternalSecret, which a prod run doesn't need.
     apps) wait_apps "${APPS_DEFER:-}" && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
-    certs) ap playbooks/k8s-certs.yml ;;
+    # CERTS_SMOKE_LATE: not the smoke test here: it opens the Gateway's 443 from the Proxmox host, which only the `gateway` stage opens in
+    # the node firewall, and it checks the HTTPS listener once with no retry (prod run 6 review, 2026-11-21).
+    certs)
+      if [ "${CERTS_SMOKE_LATE:-}" = true ]; then ap playbooks/k8s-certs.yml --skip-tags smoke; else ap playbooks/k8s-certs.yml; fi ;;
     identity) ap playbooks/k8s-identity.yml ;;
     # Prod rebuilt from the agent box only, after identity: prod's Keycloak database back from its dump in the
     # snapshot the restore stage used, so accounts and their one-time-code devices come back as they were.
