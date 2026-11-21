@@ -44,7 +44,8 @@ agent_box_wrappers:
     args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed]
   # The same wrapper for the store inside prod's c1 (D-0058): prod's keys folder, settings and inventory only.
   - name: secrets-store-prod
-    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed]
+    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed,
+           "owner-login owner", "owner-login test", "owner-login check-test", "owner-login remove-test"]
   # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal,
   # seal-copy, refresh, reset-failed-start, drop-box-path and admin-firewall passes the owner's tap id, which the wrapper
   # checks; key prints only the public half.
@@ -69,10 +70,11 @@ agent_box_wrappers:
     args: [check, "rebuild *", log]
   # The box's own key, address and backend switch for the off-box sends to the Proxmox host's store (files/dev-worker-address.sh): box-key
   # makes the key once and hands over its public half and the box's address (public data, nothing printed); box-backend-on and -off switch the
-  # two sends between Azure and the host's store. The script's other actions (write, remove, read, key, read-key and the box's two readers)
+  # two sends between Azure and the host's store; box-prove checks, with the box's own ssh config, that the key reaches /box and nothing else
+  # (prints ok or FAIL lines only). The script's other actions (write, remove, read, key, read-key and the box's two readers)
   # have no sudo line: the dev rebuild calls the first ones as the keys user, and the host and firewall jobs call the readers.
   - name: dev-worker-address
-    args: [box-key, box-backend-on, box-backend-off]
+    args: [box-key, box-backend-on, box-backend-off, box-prove]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself. Sessions get the
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge

@@ -60,10 +60,10 @@ declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_v
 # the realm is only made when missing; a client is added in place by the role's clients tag.
 declare -A fixed_vars=([identity]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [users]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [clients]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [backup-check]="k8s_backup_env_file=$keys/c1-backup.env")
 # Tags per name. identity runs every task plus the clients tag, which is off by default. The tag acts only on the clients in
-# k8s_identity_ensure_clients (empty by default), so the wrapper names one: proxmox, the client the realm gained after prod's
+# k8s_identity_ensure_clients (empty by default), so the wrapper names them: proxmox, the client the realm gained after prod's
 # realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
 declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof" [users]="secrets,users" [clients]="secrets,clients")
-declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}' [clients]='{"k8s_identity_ensure_clients":["proxmox"]}')
+declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}' [clients]='{"k8s_identity_ensure_clients":["proxmox","openbao"]}')
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
 action=${1:-} name='' clearance=''
