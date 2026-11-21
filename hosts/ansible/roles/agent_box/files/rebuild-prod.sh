@@ -135,7 +135,9 @@ if [[ $action == rebuild ]]; then
   prev=''
   while IFS= read -r f; do
     [[ $f == "$log" ]] && continue
-    if grep -q '^rebuild-prod: rebuild at ' -- "$f"; then prev=$f; break; fi
+    # The newest run that reached its teardown decides. A later run that stopped before it (prod run 5, on the empty nodes' sftp keys)
+    # destroyed nothing and says nothing about the state the teardown left.
+    if grep -q '^rebuild-prod: teardown and build start' -- "$f"; then prev=$f; break; fi
   done < <(ls -1r "$logs"/run-*.log 2>/dev/null || true)
   if [[ -n $prev ]] && grep -q '^rebuild-prod: teardown and build start' -- "$prev" &&
      ! grep -q '^PASS: rebuild-prod: prod torn down and built again' -- "$prev"; then torn=${prev##*/}; fi

@@ -548,4 +548,17 @@ if [[ $r16f -eq 1 && $o16f == *"does not show it compared the SOPS copy with the
 else bad "16d. $r16f $o16f | $r16g $o16g | $r16h $o16h"; fi
 rm -f "$logd"/*
 
+# 17. A later run that stopped before its teardown (prod run 5) does not hide the run that stopped after it: the torn state stays, and the
+# rerun still needs the ID. A run that reached its teardown and ended well after that makes the state not torn again.
+rm -f "$logd"/* "$t/work/state/prod-restore-pin"; torn_reset
+printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" "FAIL: rebuild-prod: could not read node cp-a's backup ssh file id_ed25519; nothing was destroyed" > "$logd/run-29990102T000000Z.log"
+run rebuild "$tap" "$sha"; r17a=$rc o17a=$out c17a=$calls
+printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" "rebuild-prod: teardown and build start: vms" "PASS: rebuild-prod: prod torn down and built again at 0123456789ab, data back, backups on" > "$logd/run-29990103T000000Z.log"
+run rebuild "$tap" "$sha" "$pinid"; r17b=$rc o17b=$out
+if [[ $r17a -eq 1 && $o17a == *"stopped after its teardown"*"Give the full ID of the volume snapshot"* && $o17a == *"run-29990101T000000Z.log"* && -z $c17a &&
+      $r17b -eq 1 && $o17b == *"a volume snapshot ID is only for a run after one that stopped after its teardown"* ]]; then
+  ok "17. a later run that stopped before its teardown does not hide the torn state; a later run that ended well clears it"
+else bad "17. $r17a $o17a [$c17a] | $r17b $o17b"; fi
+rm -f "$logd"/*
+
 exit "$fail"
