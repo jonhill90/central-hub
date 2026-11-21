@@ -692,8 +692,13 @@ run_stage() {
     # CERTS_SMOKE_LATE (the box's prod wrapper sets it): certs ran without its smoke test (see `certs`), so it runs here, once the
     # gateway play has opened 443 and waited for the listener, and then every app must be Synced and Healthy, the two APPS_DEFER
     # left out of the `apps` wait included (identity's restart of deploy/jellyfin needs that deployment past its Certificate).
+    # Prod only: the HTTP smoke test of the gateway play is run from a prod worker, on the Gateway's own VLAN. The wrapper's
+    # inventory names the box (localhost) as the client, and from the box (another VLAN) port 80 of prod's Gateway gives no
+    # answer while 443 does (prod rerun 8, 2026-11-21, `smoke | The test name answers ... timed out`).
     gateway)
-      ap playbooks/k8s-gateway.yml
+      gateway_vars=()
+      [ "$ENV_NAME" != prod ] || gateway_vars=(-e "k8s_gateway_smoke_client={{ groups['k8s_workers'] | first }}")
+      ap playbooks/k8s-gateway.yml "${gateway_vars[@]}"
       if [ "${CERTS_SMOKE_LATE:-}" = true ]; then
         ap playbooks/k8s-certs.yml --tags smoke
         wait_apps
