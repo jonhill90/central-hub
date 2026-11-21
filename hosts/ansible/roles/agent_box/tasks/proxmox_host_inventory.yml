@@ -77,29 +77,37 @@
   no_log: true
   when: agent_box_proxmox_host_sso | length > 0
 
+# The firewall's sign-in (job opnsense-sso) needs no inventory value: Keycloak's issuer is derived from what the inventory already
+# holds, as the identity role builds it (roles/k8s_identity/vars/main.yml: https://<name>.<zone>/realms/<realm>, with the role's
+# defaults sso and lab and short names): the zone is the first plain one of k8s_identity_zone, k8s_gateway_zone on the first
+# k8s_nodes host. agent_box_proxmox_host_opnsense_sso.issuer overrides it. With no zone and no override the job gets no setting.
+- name: proxmox_host_inventory | Keycloak's issuer for the firewall's sign-in
+  ansible.builtin.set_fact:
+    agent_box_host_opnsense_issuer: >-
+      {%- set __n = hostvars[groups['k8s_nodes'][0]] if (groups['k8s_nodes'] | default([]) | length) > 0 else {} -%}
+      {%- set __zone = (__n.k8s_identity_zone | default('')) or (__n.k8s_gateway_zone | default('')) -%}
+      {{ agent_box_proxmox_host_opnsense_sso.issuer
+         | default(('https://' ~ (__n.k8s_identity_name | default('sso')) ~ '.' ~ __zone ~ '/realms/' ~ (__n.k8s_identity_realm | default('lab')))
+                   if __zone | length > 0 else '') }}
+
 - name: proxmox_host_inventory | The opnsense-sso settings are complete
   ansible.builtin.assert:
-    that: agent_box_proxmox_host_opnsense_sso.issuer | default('') is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?/realms/[A-Za-z0-9_-]+$')
-    fail_msg: agent_box_proxmox_host_opnsense_sso needs issuer, https://sso.<zone>/realms/lab
+    that: agent_box_host_opnsense_issuer is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?/realms/[A-Za-z0-9_-]+$')
+    fail_msg: >-
+      agent_box_proxmox_host_opnsense_sso.issuer is set but is not https://sso.<zone>/realms/lab
     quiet: true
-  when: agent_box_proxmox_host_opnsense_sso | length > 0
+  when: agent_box_host_opnsense_issuer | length > 0
 
+# The secret file is written when the controller's identity.env holds the client's secret (k8s_identity makes it once client
+# opnsense is in the realm); before that the job refuses to run with its own message, and this run does not fail.
 - name: proxmox_host_inventory | The opnsense client's secret line, from the controller's identity.env
   ansible.builtin.set_fact:
     agent_box_host_opnsense_sso_line: >-
-      {{ lookup('ansible.builtin.file', lookup('ansible.builtin.env', 'HOME') ~ '/.config/central-hub/identity.env').splitlines()
+      {{ (lookup('ansible.builtin.file', lookup('ansible.builtin.env', 'HOME') ~ '/.config/central-hub/identity.env', errors='ignore')
+             | default('', true)).splitlines()
          | select('match', '^OPNSENSE_CLIENT_SECRET=.{32,}$') | first | default('') }}
   no_log: true
-  when: agent_box_proxmox_host_opnsense_sso | length > 0
-
-- name: proxmox_host_inventory | The opnsense secret is there
-  ansible.builtin.assert:
-    that: agent_box_host_opnsense_sso_line | length > 0
-    fail_msg: >-
-      The controller's identity.env has no OPNSENSE_CLIENT_SECRET line of 32 characters or more. Set k8s_identity_opnsense_hosts
-      and run playbooks/k8s-identity.yml --tags secrets first (docs/runbooks/sign-in-to-opnsense-through-keycloak.md step 5).
-    quiet: true
-  when: agent_box_proxmox_host_opnsense_sso | length > 0
+  when: agent_box_host_opnsense_issuer | length > 0
 
 - name: proxmox_host_inventory | The opnsense-sso job's secret file
   ansible.builtin.copy:
@@ -109,7 +117,7 @@
     group: "{{ agent_box_host_user }}"
     mode: "0600"
   no_log: true
-  when: agent_box_proxmox_host_opnsense_sso | length > 0
+  when: agent_box_host_opnsense_issuer | length > 0 and agent_box_host_opnsense_sso_line | length > 0
 
 - name: proxmox_host_inventory | Read the key's public half
   ansible.builtin.slurp:

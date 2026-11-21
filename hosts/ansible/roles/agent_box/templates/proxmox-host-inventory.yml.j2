@@ -14,9 +14,9 @@ proxmox:
       proxmox_sso_issuer: {{ agent_box_proxmox_host_sso.issuer | to_json }}
       proxmox_sso_address: {{ agent_box_proxmox_host_sso.address | default('') | to_json }}
 {% endif %}
-{% if agent_box_proxmox_host_opnsense_sso | length > 0 %}
+{% if agent_box_host_opnsense_issuer | default('') | length > 0 %}
       # Role opnsense_sso (job opnsense-sso): Keycloak's issuer for realm lab, for the firewall's sign-in.
-      opnsense_sso_issuer: {{ agent_box_proxmox_host_opnsense_sso.issuer | to_json }}
+      opnsense_sso_issuer: {{ agent_box_host_opnsense_issuer | to_json }}
 {% endif %}
 {% set __pf = hostvars[groups['proxmox'][0]] if (groups['proxmox'] | default([]) | length) > 0 else {} %}
 {% if __pf.proxmox_firewall_home_lan_cidr is defined %}
