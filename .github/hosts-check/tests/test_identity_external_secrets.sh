@@ -67,6 +67,8 @@ cat > "$t/play.yml" <<EOF
   vars:
     k8s_identity_zone: example.com
     k8s_identity_owner_username: owner
+    # The default adds client openbao (openbao.<zone>) and its secret; this test is about the other clients' secrets.
+    k8s_identity_openbao_client: false
     k8s_identity_values_file: $t/identity.env
     k8s_identity_jellyfin_root_ca_file: $t/ca.pem
   tasks:
