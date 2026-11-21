@@ -14,7 +14,7 @@ superseded-by:
 
 # Run the Central Hub web app on c1
 
-The app (public repository `jonhill90/central-hub-app`) runs as one pod in namespace `central-hub-app` (Argo CD app `central-hub-app`). An init container fetches the commit named in `apps/central-hub-app/values.yaml` (`source.commit`, a full sha) by git, checks it, runs `npm ci` and `npm run build`, and the app container runs the output. It has no image of its own; the [spec](../specs/2026-11-central-hub-app-on-c1.md) says why and names the way off. Name: `central-hub-app.apps.c1.prod.<zone>`. The Gateway route also accepts the short alias `central-hub-app.<zone>`, but that name does not resolve for people until it has its own Unbound host override and tailnet split-DNS entry ([set-up-short-app-names.md](set-up-short-app-names.md)); that is not done.
+The app (public repository `jonhill90/central-hub-app`) runs as one pod in namespace `central-hub-app` (Argo CD app `central-hub-app`). An init container fetches the commit named in `apps/central-hub-app/values.yaml` (`source.commit`, a full sha) by git, checks it, runs `npm ci` and `npm run build`, and the app container runs the output. It has no image of its own; the [spec](../specs/2026-11-central-hub-app-on-c1.md) says why and names the way off. Names: `hub.apps.c1.prod.<zone>` and the short alias `hub.<zone>` (the owner's name for it; the Gateway route key is `hub`). The short name resolves for people through its Unbound host override and tailnet split-DNS entry ([set-up-short-app-names.md](set-up-short-app-names.md)).
 
 ## Steps
 
