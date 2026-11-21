@@ -138,6 +138,12 @@ k8s_backup_restore_source_host: ""
 k8s_backup_restore_path: /var/lib/c1-data/local-path
 # A snapshot ID instead of the newest one.
 k8s_backup_restore_snapshot: latest
+# Claims whose folders a restore of another node's snapshot leaves out: the secrets store. Dev has its own store and seal key,
+# and prod's store data must not be on dev. A restore of the node's own snapshot (prod's rebuild) skips nothing.
+k8s_backup_restore_skip_claims:
+  - openbao/data-openbao-0
+  - openbao/audit-openbao-0
+  - openbao/openbao-snapshots
 # The app-level proof (tag restore_check): this Deployment is Ready with this claim mounted, the
 # claim's volume is the restored folder <path>/<namespace>/<claim>, and the folder belongs to the
 # Deployment's runAsUser.

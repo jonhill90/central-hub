@@ -26,6 +26,7 @@
     RESTORE_PATH: "{{ k8s_backup_restore_path }}"
     RESTORE_SNAPSHOT: "{{ k8s_backup_restore_snapshot }}"
     RESTORE_ETCD_HOST: "{{ groups['k8s_control_plane'] | first }}"
+    RESTORE_SKIP_CLAIMS: "{{ k8s_backup_restore_skip_claims | join(' ') }}"
   register: k8s_backup_restore
   changed_when: "'RESTORED' in k8s_backup_restore.stdout"
   when: not ansible_check_mode
