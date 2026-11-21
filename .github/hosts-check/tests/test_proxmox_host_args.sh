@@ -17,6 +17,7 @@
 #      the check gives the hash, the ledger holds a reviewer pass for the job, commit and hash, and an unused go for the job and
 #      commit. A pass or go for another hash, commit or job does not count; the wrong recorder is refused; a go line (by its message ID) is spent by one apply, and a new go line at the same commit works once.
 #  13. `check firewall` runs proxmox-firewall.yml with the checkout's VLAN file; the other jobs don't get it.
+#  22. (at the end) the proxy, firewall, connector and sso jobs take the settable host values from `inventory view proxmox` in a 0600 vars file deleted after the run; a failing view stops the job; read-only jobs never ask.
 #  14. `guard arm|confirm|rollback|clear|status` runs opnsense-guard.yml with that action and needs no ledger; any other guard
 #      action is refused before anything runs.
 #   9. Nothing printed holds a diff's text or the host's address; log prints the summary lines.
@@ -34,6 +35,7 @@ mkdir -p "$t/bin" "$t/dir/inventory" "$t/work" "$t/collections"
 touch "$t/dir/inventory/hosts.yml" "$t/dir/id_ed25519" "$t/dir/known_hosts"
 # main: a local repository holding the playbook path the wrapper runs.
 git init -q -b main "$t/src" && mkdir -p "$t/src/hosts/ansible/playbooks" && echo "- hosts: proxmox" > "$t/src/hosts/ansible/playbooks/proxmox-proxy.yml" && echo "- hosts: proxmox" > "$t/src/hosts/ansible/playbooks/proxmox-restic-reader.yml"
+mkdir -p "$t/src/hosts/ansible/inventories/home" && cp "$root/hosts/ansible/inventories/home/editable-values.yml" "$t/src/hosts/ansible/inventories/home/"
 git -C "$t/src" add -A && git -C "$t/src" -c user.name=t -c user.email=t@t commit -q -m one
 git clone -q --bare "$t/src" "$t/main.git"
 
@@ -45,6 +47,29 @@ case " \$* " in *" --check "*) cat "$t/out-check.json" ;; *) cat "$t/out-apply.j
 exit \$(cat "$t/rc" 2>/dev/null || echo 0)
 EOF
 chmod +x "$t/bin/ansible-playbook"
+# The inventory wrapper's `view proxmox`, through a stand-in sudo: it prints $t/view.yml (exit $t/view-rc) and records its arguments.
+# The wrapper reads the view with the venv's python, so the stand-in folder gets this machine's python3 (with yaml) under that name.
+ln -s "$(command -v python3)" "$t/bin/python3"
+cat > "$t/bin/sudo" <<EOF
+#!/bin/sh
+echo "\$*" >> "$t/sudo-calls"
+case "\$*" in "-n -u invops "*" view proxmox") cat "$t/view.yml"; exit \$(cat "$t/view-rc" 2>/dev/null || echo 0) ;; esac
+exit 99
+EOF
+chmod +x "$t/bin/sudo"
+cat > "$t/view.yml" <<'EOF'
+all:
+  vars:
+    k8s_gateway_address: 192.0.2.1
+  children:
+    proxmox:
+      hosts:
+        proxmox_host:
+          proxmox_cert_names: [test-one.example]
+          proxmox_firewall_enable: true
+          proxmox_firewall_home_lan_cidr: 192.0.2.0/24
+          proxmox_not_listed: must-not-pass
+EOF
 # json <after text> <header> <changed task> <skipped task> <extra changed task, or none>
 json() {
   python3 - "$@" <<'PY'
@@ -368,7 +393,7 @@ printf '10.1.30.5\n10.1.30.6\n' > "$t/handoff/dev-worker-address"; : > "$t/calls
 job check restore-reader > "$t/17c.out" 2>&1; [ $? = 1 ] && [ ! -s "$t/calls" ] && ok "17c a bad shape stops it before the playbook, naming no value (8 shapes and two lines)" || bad "17c two lines"
 printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"; : > "$t/calls"
 job check proxy > "$t/17d.out" 2>&1
-! grep -q "proxmox_restic_reader_from\|@" "$t/calls" && ok "17d the other jobs are not given the address" || bad "17d $(cat "$t/calls")"
+! grep -q "proxmox_restic_reader_from\|rr-vars\|bw-vars" "$t/calls" && ok "17d the other jobs are not given the address" || bad "17d $(cat "$t/calls")"
 
 # 18 restore-reader also takes the worker's public key from the handoff (proxmox_restic_reader_key, in the vars file only); a bad key line
 #    stops it before the playbook; no key file leaves the inventory's own list in use
@@ -451,7 +476,7 @@ job check box-writer > "$t/21c.out" 2>&1; rc=$?
 [ $rc = 1 ] && [ ! -s "$t/calls" ] && ! grep -q "10.1.20.5" "$t/21c.out" && ok "21c an address outside the dev range stops it before the playbook, naming no value" || bad "21c address rc=$rc"
 printf '%s\n' "$k21" > "$t/handoff/box-backup.pub"; printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"
 job check proxy > "$t/21d.out" 2>&1
-! grep -q "proxmox_restic_box_key\|@" "$t/calls" && ok "21d the other jobs are not given the key" || bad "21d $(cat "$t/calls")"
+! grep -q "proxmox_restic_box_key\|rr-vars\|bw-vars" "$t/calls" && ok "21d the other jobs are not given the key" || bad "21d $(cat "$t/calls")"
 rm -f "$t/handoff/box-backup.pub" "$t/handoff/box-backup-address"
 
 # 19 ct259-destroy runs its own playbook on a check, and an apply without a pass is refused with nothing run
@@ -468,5 +493,41 @@ if [ $rc18a = 0 ] && [[ $c18 == *playbooks/proxmox-ct259-destroy.yml* && $c18 ==
    ! grep -qv -e '--check' "$t/calls"; then
   ok "19 ct259-destroy: the check runs its playbook; apply-recorded with no pass or go only re-checks"
 else bad "19 rc=$rc18a/$rc18b [$c18] [$(cat "$t/calls")] $(cat "$t/18b.out")"; fi
+
+# 22 the proxy, firewall, connector and sso jobs take the settable host values from `view proxmox`, as a 0600 vars file that is gone after the run
+iv_file() { sed -n 's/.* -e @\([^ ]*iv-vars[^ ]*\).*/\1/p' "$t/calls" | head -1; }
+json "new" "/tmp/a" "write config" "move" none > "$t/out-check.json"
+: > "$t/calls"; : > "$t/sudo-calls"
+job check firewall > "$t/22a.out" 2>&1; rc22=$?
+ivf=$(iv_file)
+if [ $rc22 = 0 ] && [ -n "$ivf" ] && [ ! -e "$ivf" ] && grep -q -- "-u invops $t/libexec/inventory.sh view proxmox" "$t/sudo-calls"; then
+  ok "22 firewall: asks the inventory wrapper for view proxmox as invops, passes a vars file, deletes it after"
+else bad "22 rc=$rc22 file=[$ivf] sudo=[$(cat "$t/sudo-calls")] $(cat "$t/22a.out")"; fi
+# the file's content and mode, caught while the playbook runs
+cat > "$t/bin/ansible-playbook" <<EOF
+#!/bin/sh
+echo "\$*" >> "$t/calls"
+for a in "\$@"; do case \$a in @*iv-vars*) f=\${a#@}; stat -c %a "\$f" > "$t/iv-mode"; cp "\$f" "$t/iv-copy" ;; esac; done
+case " \$* " in *" --check "*) cat "$t/out-check.json" ;; *) cat "$t/out-apply.json" ;; esac
+EOF
+job check proxy > "$t/22b.out" 2>&1
+if python3 - "$t/iv-copy" "$(cat "$t/iv-mode" 2>/dev/null)" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert sys.argv[2] == "600", sys.argv[2]
+assert d == {"proxmox_cert_names": ["test-one.example"], "proxmox_firewall_enable": True, "proxmox_firewall_home_lan_cidr": "192.0.2.0/24"}, d
+PY
+then ok "22 the vars file is 0600 and holds the listed names only (no unlisted name, no all.vars)"
+else bad "22 vars file wrong: $(cat "$t/iv-copy" 2>/dev/null) mode=$(cat "$t/iv-mode" 2>/dev/null)"; fi
+# no view, no job; the read-only jobs never ask
+: > "$t/calls"; echo 1 > "$t/view-rc"
+job check proxy > "$t/22c.out" 2>&1; rc22c=$?
+rm -f "$t/view-rc"
+if [ $rc22c = 1 ] && [ ! -s "$t/calls" ] && grep -q "view proxmox gave no usable values" "$t/22c.out"; then
+  ok "22 a failing view stops the job before the playbook, with no silent fallback"
+else bad "22 rc=$rc22c calls=[$(cat "$t/calls")] $(cat "$t/22c.out")"; fi
+: > "$t/sudo-calls"
+job check memory > "$t/22d.out" 2>&1
+[ ! -s "$t/sudo-calls" ] && ok "22 the memory job never asks for the view" || bad "22 memory asked: $(cat "$t/sudo-calls")"
 
 exit "$fail"

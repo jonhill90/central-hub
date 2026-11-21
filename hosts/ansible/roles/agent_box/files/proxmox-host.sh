@@ -275,6 +275,30 @@ print(json.dumps({"job": "proxmox-host", "time": a[1], "action": "guard " + a[2]
 fi
 echo "proxmox-host: central-hub ${commit:0:12}, job $job"
 
+# The jobs that use settable host values (the cert names, the firewall's cidr, switch and extra rules, the notify address, the sign-in issuer,
+# the connector's routes) take them from the box's inventory wrapper, `view proxmox`, not from the file the controller wrote. Only the
+# names the reviewed list editable-values.yml (from this checkout) gives for the host are taken, written to a vars file of this user's own,
+# mode 0600, deleted when the run ends, passed after the inventory so it wins. No view, no job: a silent fallback to the old copy would
+# let the two drift apart.
+iv_args=()
+case $job in proxy | firewall | connector | sso)
+  iv_vars=$(mktemp "$work/state/iv-vars.XXXXXX")
+  trap 'rm -f "$iv_vars"' EXIT
+  sudo -n -u invops "$libexec/inventory.sh" view proxmox 2> "$logs/view-$stamp.err" \
+    | "$ansible_bin/python3" -I -c 'import json, sys, yaml
+allow = yaml.safe_load(open(sys.argv[2]))["entries"]
+names = {e["path"].split(".", 1)[1] for e in allow if e["path"].startswith("proxmox_host.")}
+inv = yaml.safe_load(sys.stdin) or {}
+hv = {}
+for grp in ((inv.get("all") or {}).get("children") or {}).values():
+    hv.update((((grp or {}).get("hosts") or {}).get("proxmox_host") or {}))
+out = {k: v for k, v in hv.items() if k in names}
+if not out: sys.exit("the view holds none of the settable host values")
+json.dump(out, open(sys.argv[1], "w"))' "$iv_vars" "$repo/hosts/ansible/inventories/home/editable-values.yml" \
+    || { echo "proxmox-host: the inventory wrapper's view proxmox gave no usable values (details in the box's log $logs/view-$stamp.err); $job stops" >&2; exit 1; }
+  iv_args=(-e "@$iv_vars") ;;
+esac
+
 # One JSON line per run for the box's own record; stdout gets the same facts, none of them private.
 record() { # hash, counts, result
   python3 -I -c 'import json, sys
@@ -285,7 +309,7 @@ print(json.dumps({"job": "proxmox-host", "time": a[1], "action": a[2], "commit":
 
 play() { # out-file, extra ansible-playbook arguments...
   local out=$1; shift
-  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" "$playbook" ${sso_args[@]+"${sso_args[@]}"} ${fw_args[@]+"${fw_args[@]}"} ${rr_args[@]+"${rr_args[@]}"} ${bw_args[@]+"${bw_args[@]}"} "$@") > "$out" 2>> "$logs/run-$stamp.err"
+  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory" "$playbook" ${sso_args[@]+"${sso_args[@]}"} ${fw_args[@]+"${fw_args[@]}"} ${rr_args[@]+"${rr_args[@]}"} ${bw_args[@]+"${bw_args[@]}"} ${iv_args[@]+"${iv_args[@]}"} "$@") > "$out" 2>> "$logs/run-$stamp.err"
 }
 
 # summarize <json output> <result file>: writes the result file and prints "<hash> <changed> <skipped> <tasks>".
