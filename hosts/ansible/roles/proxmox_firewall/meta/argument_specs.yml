@@ -47,7 +47,9 @@ argument_specs:
       proxmox_firewall_box_ssh_source:
         type: str
         default: ""
-        description: "The agent box's backup address (one IPv4 address, from the host job's handoff): one more IN rule, tcp 22 from that address alone. Empty writes no rule."
+        description: >-
+          The agent box's backup address (one IPv4 address, from the host job's handoff): one more IN rule,
+          tcp 22 from that address alone. Empty writes no rule.
       proxmox_firewall_conntrack_allow_invalid:
         type: bool
         default: true
