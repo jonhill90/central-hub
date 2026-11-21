@@ -83,6 +83,7 @@ if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\nclients\ngateway
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
+ens_c='{"k8s_identity_ensure_clients":["proxmox","openbao"]}'   # the clients name also makes the store's sign-in client
 run check identity
 seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
 if [[ $rc -eq 0 && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao --tags all,clients -e $ens --check --diff" &&
@@ -181,8 +182,8 @@ if [[ $rc -eq 0 && $seen != *k8s_identity_proxmox_hosts* && $out != *"Proxmox we
 run check clients; c1=$calls; c1rc=$rc
 run apply clients "$clr"; c2=$calls; c2rc=$rc; c2o=$out
 run apply clients; c3rc=$rc; c3=$calls
-if [[ $c1rc -eq 0 && $c1 == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao --tags secrets,clients -e $ens --check --diff" &&
-      $c2rc -eq 0 && $c2 == *"--tags secrets,clients -e $ens" && $c2 != *--check* && $c2 != *keycloak* && $c2 != *operator* && $c2 != *database* && $c2 != *all* &&
+if [[ $c1rc -eq 0 && $c1 == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao --tags secrets,clients -e $ens_c --check --diff" &&
+      $c2rc -eq 0 && $c2 == *"--tags secrets,clients -e $ens_c" && $c2 != *--check* && $c2 != *keycloak* && $c2 != *operator* && $c2 != *database* && $c2 != *all* &&
       $c2o == *"clearance $clr"* && $c3rc -eq 2 && -z $c3 ]]; then
   ok "11. clients: identity playbook, tags secrets,clients, one fixed client, no realm replace, apply needs a clearance id"
 else bad "11. [$c1] [$c2] $c3rc"; fi
