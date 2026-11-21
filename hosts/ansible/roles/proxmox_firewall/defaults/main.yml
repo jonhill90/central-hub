@@ -28,6 +28,10 @@ proxmox_firewall_extra_rules: []
 # in only as the user boxbackup, never as root: role proxmox_restic_sftp). Empty: no rule. It is written by
 # playbooks/proxmox-firewall.yml's host job from the handoff, not typed into the inventory.
 proxmox_firewall_box_ssh_source: ""
+# Dev's worker address, read by the host job from the same handoff as job restore-reader: one more IN rule, tcp 22 from that one
+# address, so dev's restore reaches the host's sshd, which lets it in only as the read-only user c1restore (role
+# proxmox_restic_sftp). Empty: no rule. Written by the host job from the handoff, not typed into the inventory.
+proxmox_firewall_reader_ssh_source: ""
 
 # pve-firewall drops conntrack-INVALID packets in its FORWARD chain, which every bridged guest
 # packet passes through once the firewall is on (bridge-nf-call-iptables). 1 skips that drop,

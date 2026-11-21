@@ -15,3 +15,6 @@ IN {{ rule.action }}{% if rule.source is defined %} -source {{ rule.source }}{% 
 {% if proxmox_firewall_box_ssh_source | length > 0 %}
 IN ACCEPT -source {{ proxmox_firewall_box_ssh_source }} -p tcp -dport 22 # restic sftp from the agent box (boxbackup only)
 {% endif %}
+{% if proxmox_firewall_reader_ssh_source | length > 0 %}
+IN ACCEPT -source {{ proxmox_firewall_reader_ssh_source }} -p tcp -dport 22 # restic sftp read-only from the dev worker (c1restore only)
+{% endif %}
