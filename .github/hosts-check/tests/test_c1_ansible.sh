@@ -37,7 +37,7 @@ cat > "$t/bin/git" <<'S'
 #!/bin/bash
 case "$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status backup-restore-test backup; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
+  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status backup-restore-test backup restore-inspect; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
   *rev-parse*) echo abc1234 ;;
 esac
 exit 0
@@ -79,7 +79,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\nclients\ngateway\ngitops\nidentity\nidentity-values\nobservability\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\nclients\ngateway\ngitops\nidentity\nidentity-values\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -134,6 +134,17 @@ if [[ $b1rc -eq 0 && $b1 == *"playbooks/k8s-backup-status.yml --check --diff" &&
 else bad "12. $b1rc [$b1]"; fi
 grep -q "check_mode: false" hosts/ansible/playbooks/k8s-backup-status.yml && ! grep -E "^\s+(ansible.builtin.(copy|file|template|systemd|service|lineinfile)):" hosts/ansible/playbooks/k8s-backup-status.yml >/dev/null \
   && ok "12b. the playbook only reads: every command task is check_mode false and none writes a file or service" || bad "12b. the playbook writes"
+echo stale-key > "$t/work/c1-ansible/known_hosts" 2>/dev/null || { mkdir -p "$t/work/c1-ansible"; echo stale-key > "$t/work/c1-ansible/known_hosts"; }
+run check restore-inspect; i1=$calls; i1rc=$rc; k1=$(ls "$t/work/c1-ansible/known_hosts" 2>/dev/null)
+printf '%s\n' 36fe4321aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "$t/work/state/prod-restore-pin"
+run check restore-inspect; i2=$calls
+rm -f "$t/work/state/prod-restore-pin"
+if [[ $i1rc -eq 0 && $i1 == *"playbooks/k8s-restore-inspect.yml --check --diff" && $i1 != *" -e "* && $i1 != *--tags* && -z $k1 &&
+      $i2 == *"-e restore_inspect_snapshot=36fe4321aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"* ]]; then
+  ok "12c. restore-inspect: its own playbook, no tags, starts from no known hosts, takes the restore pin as the snapshot when the box holds one"
+else bad "12c. $i1rc [$i1] [$k1] [$i2]"; fi
+grep -q "check_mode: false" hosts/ansible/playbooks/k8s-restore-inspect.yml && ! grep -E "^\s+(ansible.builtin.(copy|file|template|systemd|service|lineinfile)):" hosts/ansible/playbooks/k8s-restore-inspect.yml >/dev/null \
+  && ok "12d. the restore-inspect playbook only reads" || bad "12d. the restore-inspect playbook writes"
 run check backup-restore-test; r1=$calls; run apply backup-restore-test "$clr"; r2=$calls; r2rc=$rc
 if [[ $r1 == *"playbooks/k8s-backup-restore-test.yml --check --diff" && $r2rc -eq 0 && $r2 == *"playbooks/k8s-backup-restore-test.yml" && $r2 != *--check* && $r1$r2 != *" -e "* && $r1$r2 != *--tags* ]]; then
   ok "13. backup-restore-test: own playbook, no tags or extra variables, check starts nothing, apply needs a clearance id"
