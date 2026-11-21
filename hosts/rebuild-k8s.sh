@@ -31,6 +31,10 @@
 #   PREFLIGHT_MIN_FREE_MIB  optional, dev only: the least free memory (MiB) the Proxmox node must have before the VMs are made
 #                 (default: the dev VMs' memory below, summed over the nodes the tfvars declare, plus a 512 MiB margin)
 #   APPS_TIMEOUT  optional: seconds to wait for every Argo CD app to be Synced and Healthy (1200)
+#   APPS_DEFER    optional: Argo CD apps (space-separated names) the `apps` wait leaves out; `checks` still waits for every app.
+#                 The box's prod wrapper sets "gateway jellyfin": on prod the Gateway's HTTPS listener and Jellyfin's lab-CA
+#                 Certificate need what the `certs` stage makes (the Gateway's certificate Secret, ClusterIssuer lab-ca),
+#                 which runs after `apps`, so those two cannot be Healthy until then (prod run 6, 2026-11-21).
 #   OPENBAO_ADDR  optional: the secrets store, https://<name or address> with no path (proposed
 #                 D-0038). Set: stage `openbao` registers the cluster's new service-account key with
 #                 it. Unset: that stage is skipped.
@@ -214,13 +218,14 @@ changed_total() {
   awk '/PLAY RECAP/{n=0} /changed=/{for(i=1;i<=NF;i++) if($i ~ /^changed=/){split($i,a,"="); n+=a[2]}} END{print n+0}' "$raw"
 }
 
+# wait_apps [<apps to leave out>]: only the `apps` stage passes APPS_DEFER; `checks` waits for every app.
 wait_apps() {
-  local timeout=${APPS_TIMEOUT:-1200} start apps bad
+  local defer=${1:-} timeout=${APPS_TIMEOUT:-1200} start apps bad
   start=$(date +%s)
   while :; do
     apps=$(kc -n argocd get applications.argoproj.io --no-headers \
       -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status)
-    bad=$(printf '%s\n' "$apps" | awk 'NF && ($2 != "Synced" || $3 != "Healthy")')
+    bad=$(printf '%s\n' "$apps" | awk -v defer=" $defer " 'NF && ($2 != "Synced" || $3 != "Healthy") && index(defer, " " $1 " ") == 0')
     if [ -z "$bad" ] && [ "$(printf '%s\n' "$apps" | awk 'NF' | wc -l)" -gt 1 ]; then
       return 0
     fi
@@ -720,7 +725,7 @@ run_stage() {
       ap playbooks/k8s-openbao-auth.yml -e "openbao_url=$OPENBAO_ADDR" -e "openbao_cacert=$OPENBAO_CACERT" \
         -e "openbao_rebuild_role_id_file=$OPENBAO_ROLE_ID_FILE" -e "openbao_rebuild_secret_id_file=$OPENBAO_SECRET_ID_FILE" ;;
     # The ExternalSecret wait is dev only: it annotates every ExternalSecret, which a prod run doesn't need.
-    apps) wait_apps && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
+    apps) wait_apps "${APPS_DEFER:-}" && { [ "$ENV_NAME" != dev ] || wait_secrets; } ;;
     certs) ap playbooks/k8s-certs.yml ;;
     identity) ap playbooks/k8s-identity.yml ;;
     # Prod rebuilt from the agent box only, after identity: prod's Keycloak database back from its dump in the

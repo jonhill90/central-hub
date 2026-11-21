@@ -258,7 +258,7 @@ stages=$(sed -n 's/^STAGES=//p' "$t/seen-rebuild.env")
 if [[ $rc -eq 0 && $order == "$want" && $calls == *"playbooks/k8s-backup.yml --tags drill -e k8s_backup_drill=true"* &&
       -s $t/keys/prod/backup-certs/wk-a.pem && -s $t/keys/prod/backup-certs/cp-a.pem.keyid &&
       $(stat -c %a "$t/keys/prod/backup-certs/wk-a.pem") == 600 && $out != *"BEGIN PRIVATE KEY"* && $out != *KKKK* &&
-      $stages == '"vms cluster storage openbao-seal restore gitops secrets apps gateway certs identity identity-db ui backup checks"' &&
+      $stages == '"vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks"' && $(cat "$t/seen-rebuild.env") == *'APPS_DEFER="gateway jellyfin"'* &&
       $(cat "$t/seen-rebuild.env") == *"ENV_NAME=prod"* && $(cat "$t/seen-rebuild.env") == *"TEARDOWN_TARGET=proxmox_virtual_environment_vm.node"* &&
       $(grep -c 'plan .*-destroy -target=proxmox_virtual_environment_vm.node ' "$t/calls") -ge 1 && $(cat "$t/seen-rebuild.env") == *"TOFU_ENV=$t/keys/proxmox-lab.env"* &&
       $(cat "$t/seen-rebuild.env") == *"k8s-restore.yml -e k8s_backup_enabled=false -e k8s_backup_restore_snapshot=36fe4321aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"* && ! -e $t/work/state/prod-restore-pin && -e $t/work/state/prod-stable-folders &&
