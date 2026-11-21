@@ -17,7 +17,7 @@ The owner asked on 2026-11-20 for the Central Hub web app (repository `jonhill90
 
 This change runs it on c1 without an image. One pod uses a stock Node image pinned by digest (Docker Hub by digest, D-0054). An init container fetches one commit of the app's repository by its full sha with git, checks the sha, runs `npm ci` and `npm run build` into an emptyDir, and the app container runs the result. The commit is a value in `apps/central-hub-app/values.yaml`; a new version is a reviewed pull request that changes it. Reachable at `central-hub-app.apps.c1.prod.<zone>` through the shared Gateway, from the lab and the tailnet only. The short alias `central-hub-app.<zone>` is accepted by the route but does not resolve for people until it gets its own Unbound host override and tailnet split-DNS entry (the short-names runbook); that is out of scope here.
 
-The app reads no secret, writes nothing, holds no data and has no sign-in yet; it shows catalog files from its own repository.
+The app reads no secret, writes nothing, holds no data and, until the 2026-11-21 entry below, had no sign-in; it shows catalog files from its own repository.
 
 ## Out of scope
 
@@ -56,3 +56,4 @@ Build an image of the commit in the app's CI, store it in a registry chosen by t
 ## Decision log
 
 - 2026-11-20: built at pod start from a pinned commit, because no registry can hold our image today without an account or a browser step. The reviewer cleared the route with six conditions: fetch by full sha with git, `npm ci` with the lockfile, build in an init container with memory limits, say that every restart needs GitHub and npm and name the registry as the way off, copy notebook-runner's egress policy with ingress only from the Gateway, and leave sign-in to a separate Keycloak client change.
+- 2026-11-21: sign-in through Keycloak, as the reviewer's last condition asked, in a separate change. The app gets the code flow (its spec 0007, decision 0005); realm lab gets client `central-hub-app` in `realm.yaml.j2`, so every rebuild's identity stage makes it; the role copies the client secret to `central-hub-app/central-hub-app-sso` and the realm address and public origins to `central-hub-app/central-hub-app-oidc`, which the pod mounts as optional files; the chart allows egress to Keycloak's Service, probes `/api/v1/health` (up while sign-in is not yet configured, because the rebuild waits for every app to be healthy before the identity stage), and the login probe checks the client. Runbook: `docs/runbooks/sign-in-to-the-central-hub-app-with-keycloak.md`.

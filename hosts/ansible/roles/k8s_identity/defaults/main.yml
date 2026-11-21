@@ -92,6 +92,12 @@ k8s_identity_grafana_name: grafana
 k8s_identity_grafana_namespace: monitoring
 k8s_identity_grafana_deployment: kube-prometheus-stack-grafana
 
+# The Central Hub web app's client (hosts/kubernetes/home/c1/apps/central-hub-app; spec 0007 in jonhill90/central-hub-app).
+# Its secret is copied to Secret <ns>/central-hub-app-sso, key client-secret, and the two public names it needs
+# (the issuer and the origins it is served on) to Secret <ns>/central-hub-app-oidc, which the pod mounts as files.
+k8s_identity_central_hub_app_name: central-hub-app
+k8s_identity_central_hub_app_namespace: central-hub-app
+
 # Argo CD's clients (k8s_gitops): argocd for the web UI, argocd-cli (public, PKCE) for
 # `argocd login --sso`. The secret is copied to Secret <argocd ns>/argocd-sso, key clientSecret,
 # labelled part-of argocd so argocd-cm can name it as $argocd-sso:clientSecret.
