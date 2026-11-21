@@ -137,8 +137,8 @@ appended() { # env, only, key file: the stage list after the block, starting fro
   ENV_NAME=$1 only=$2 OPENBAO_SEAL_KEY_FILE=$3 bash -c 'stages=base; . "$1"; echo "$stages"' _ "$t/append.sh"
 }
 same() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: '$2'"; fail=1; fi; }
-same "a dev run without --only appends dev-ca, identity-keycloak and panels last" "$(appended dev "" "")" "base dev-ca identity-keycloak panels"
-same "with a key file the measurement goes after dev-ca, the hand-over after it, the apps' secrets, then panels last" "$(appended dev "" /k)" "base dev-ca openbao-measure openbao-handover identity-keycloak app-secrets panels"
+same "a dev run without --only appends dev-ca, identity-keycloak, ssh-ca-proof and panels last" "$(appended dev "" "")" "base dev-ca identity-keycloak ssh-ca-proof panels"
+same "with a key file the measurement goes after dev-ca, the hand-over after it, the apps' secrets, the SSH sign-in proof, then panels last" "$(appended dev "" /k)" "base dev-ca openbao-measure openbao-handover identity-keycloak app-secrets ssh-ca-proof panels"
 same "--only appends nothing" "$(appended dev gitops /k)" "base"
 same "prod appends nothing" "$(appended prod "" /k)" "base"
 
@@ -187,4 +187,29 @@ same "the put-apps count, DIFF and compare PASS lines reach the short log, each 
   "  app-secrets: secrets-store: put-apps: 3 values from rebuild-secret-source.env at c1/<name> key value, 2 from identity.env at c1/identity key <KEY>, written to SOPS, then OpenBao
   app-secrets: DIFF: c1/ntfy-owner-password value differs
   app-secrets: PASS: compare: 4 keys equal in SOPS and OpenBao"
+# Stage ssh-ca-proof (RB-0295): dev only, skipped without the in-cluster store's key file, never fails the run (a failed
+# playbook leaves one line), and its "ssh-ca:" and "opkssh:" lines reach the short log, the Ansible quoting dropped.
+for envname in prod staging ""; do
+  out=$(OPENBAO_SEAL_KEY_FILE=/k run "$envname" ssh-ca-proof "$t/ok")
+  check "ssh-ca-proof refuses ENV_NAME='${envname}'" "$out" "rc=1" "AP "
+  check "ssh-ca-proof says dev only for '${envname}'" "$out" "dev only" ""
+done
+out=$(run dev ssh-ca-proof "$t/ok")
+check "ssh-ca-proof without a key file ends with a SKIP line" "$out" "SKIP: ssh-ca-proof:" "AP "
+check "ssh-ca-proof without a key file succeeds" "$out" "rc=0" ""
+out=$(OPENBAO_SEAL_KEY_FILE=/k env_dir=/e run dev ssh-ca-proof "$t/ok")
+check "ssh-ca-proof runs its playbook with this run's identity.env" "$out" "AP playbooks/k8s-ssh-ca-proof.yml -e k8s_identity_values_file=/e/identity.env" "rc=1"
+out=$(ENV_NAME=dev repo="$t/ok" OPENBAO_SEAL_KEY_FILE=/k env_dir=/e bash -c 'ap() { return 2; }; . "$1"; set +e; (set -e; run_stage ssh-ca-proof); echo "rc=$?"' _ "$t/fn.sh")
+check "ssh-ca-proof whose playbook fails still passes the stage" "$out" "rc=0" ""
+check "ssh-ca-proof whose playbook fails says so" "$out" "the playbook stopped before its result" ""
+sed -n '/^  if \[ "\$s" = ssh-ca-proof \]; then$/,/^  fi$/p' "$script" > "$t/proof.sh"
+[ -s "$t/proof.sh" ] || { echo "FAIL: the ssh-ca-proof short-log block is missing or changed"; fail=1; }
+: > "$t/log"
+printf '%s\n' '===== ssh-ca-proof' '    "msg": [' '        "ssh-ca: login: dev-admin'"'"'s Keycloak token gets an OpenBao token: ok",' \
+  '        "opkssh: ssh: the opkssh key logs in as opkproof: ok"' '    ]' '    "msg": "ssh-ca: PASS (rc 0); opkssh: FAIL (rc 1)"' '===== panels' 'ssh-ca: not this stage' > "$t/raw"
+s=ssh-ca-proof raw=$t/raw log=$t/log bash -c '. "$1"' _ "$t/proof.sh"
+same "the proof's lines reach the short log, unquoted, and only its own stage's" "$(cat "$t/log")" \
+  "  ssh-ca-proof: ssh-ca: login: dev-admin's Keycloak token gets an OpenBao token: ok
+  ssh-ca-proof: opkssh: ssh: the opkssh key logs in as opkproof: ok
+  ssh-ca-proof: ssh-ca: PASS (rc 0); opkssh: FAIL (rc 1)"
 exit $fail
