@@ -1,21 +1,23 @@
 #!/bin/bash
 # /usr/local/libexec/agent-box/inventory.sh: the one reader and editor of the lab's private inventory on the agent box
 # (docs/specs/2026-11-private-values-on-the-box.md). It runs as user `invops` through sudo, so the session that asks for it
-# never reads a value. The working copy is /etc/agent-keys/inventory/hosts.yml, mode 0600 in a 0700 folder.
+# never reads a value. The working copy is /etc/agent-keys-inventory/hosts.yml, mode 0600 in a 0700 folder of this user.
 #   inventory.sh set <scope.variable> [<cmsg_...>] < value   one listed value, as YAML or JSON on standard input
 #   inventory.sh get <scope.variable>                         prints the value's type and a 12-hex tag: HMAC-SHA-256 of the value under this user's own key
 #   inventory.sh names                                        prints the key paths the working copy holds, never a value
 #   inventory.sh diff                                         the key paths the last change touched, each as `changed`; never a value or a shape
-#   inventory.sh log                                          the last 5 lines of the change log (paths, classes, hash prefixes)
+#   inventory.sh log                                          the last 5 lines of the change log (paths, classes, message IDs, tags)
 #   inventory.sh view <proxmox|opnsense|k8s_nodes>            for the wrapper users only: the group and all.vars, as an inventory
-#   inventory.sh import prod|guard                            first fill: the prod or guard copy becomes the working copy
+#   inventory.sh import prod|guard                            first fill: the prod or guard copy becomes the working copy (refused once a copy exists)
 #   inventory.sh import-compare                               the key paths where the prod and guard copies differ
 # A key path is accepted only if the reviewed list editable-values.yml (installed beside this file, root-owned) names it, with a
 # type the value must pass and a class. The classes firewall, tailnet, access and money need the standing go's message ID after the path.
 # No value is printed by any action but `view`. The tag key (tag.key beside the working copy, mode 0600, made on first use, never printed)
-# keeps a tag from being brute-forced the way a plain hash of a short value can be; deleting the key changes every tag. The working copy is written from parsed data, so a `set` drops the comments the
-# example file carries; the values stay. The role gives this user read access to the two import sources and installs this file
-# and the list (the wiring is a later change, see the spec's "Points to").
+# keeps a tag from being brute-forced the way a plain hash of a short value can be; deleting the key changes every tag. The working copy
+# is written from parsed data, so a `set` drops the comments the example file carries; the values stay. The agent_box role installs this
+# file, the list and the user (tasks/inventory_job.yml, tasks/main.yml). The two old copies are read through two exact sudo lines of the
+# role's sudoers file (templates/sudoers.j2), as their owners; this user has no other access to either. A session runs everything
+# but `view` and no consumer reads this copy yet: each switches to `view` in its own change.
 set -euo pipefail
 umask 077
 
