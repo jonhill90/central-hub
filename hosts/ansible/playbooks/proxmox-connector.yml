@@ -1,0 +1,79 @@
+---
+# Is the tailnet connector, container 900, carrying the lab? Read from the box (the proxmox-host wrapper's job `connector`).
+# It only reads: `pct status`, `tailscale debug prefs`, `tailscale status --json`, `ip route` and four pings, all run in the
+# container through the host. Each FACT task below shows as "changed" in a check run when its statement is true, and the
+# wrapper prints the names of the changed tasks. The names come from this file, so no host name, address or key is ever
+# printed. It changes nothing.
+#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check connector
+- name: What the tailnet connector carries
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  vars:
+    connector_vmid: 900
+  tasks:
+    - name: connector | Read the container's state
+      ansible.builtin.shell:
+        cmd: |
+          set -u
+          p() { echo "$1"; }
+          st=$(pct status {{ connector_vmid | quote }} 2>/dev/null | awk '{print $2}')
+          [ "$st" = running ] && p running
+          pct exec {{ connector_vmid | quote }} -- tailscale debug prefs 2>/dev/null | python3 -c '
+          import json, sys
+          r = json.load(sys.stdin).get("AdvertiseRoutes") or []
+          print("adv_total %d" % len(r)); print("adv_lan %d" % len([x for x in r if x.startswith("10.")]))'
+          pct exec {{ connector_vmid | quote }} -- tailscale status --json 2>/dev/null | python3 -c '
+          import json, sys
+          s = json.load(sys.stdin)["Self"]
+          r = s.get("PrimaryRoutes") or []
+          print("approved_lan %d" % len([x for x in r if x.startswith("10.")]))
+          print("online %s" % s.get("Online"))'
+          [ "$(pct exec {{ connector_vmid | quote }} -- sysctl -n net.ipv4.ip_forward 2>/dev/null)" = 1 ] && p forward
+          pct exec {{ connector_vmid | quote }} -- ip -4 route show 10.0.0.0/8 2>/dev/null | grep -q ' via ' && p labroute
+          gw=$(pct exec {{ connector_vmid | quote }} -- ip -4 -o addr show eth1 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | awk -F. '{print $1"."$2"."$3".1"}')
+          [ -n "$gw" ] && pct exec {{ connector_vmid | quote }} -- ping -c1 -W2 "$gw" >/dev/null 2>&1 && p ping_gateway
+          pct exec {{ connector_vmid | quote }} -- ping -c1 -W2 10.1.10.1 >/dev/null 2>&1 && p ping_prod_gateway
+          pct exec {{ connector_vmid | quote }} -- ping -c1 -W2 10.1.30.1 >/dev/null 2>&1 && p ping_dev_gateway
+          true
+        executable: /bin/bash
+      register: connector_state
+      changed_when: false
+      check_mode: false
+
+    - name: connector | FACT container 900 is running
+      ansible.builtin.debug:
+        msg: "running"
+      changed_when: "'running' in connector_state.stdout_lines"
+    - name: connector | FACT it advertises at least one lab range
+      ansible.builtin.debug:
+        msg: "advertises"
+      changed_when: "(connector_state.stdout_lines | select('match', '^adv_lan [1-9]') | list | length) > 0"
+    - name: connector | FACT the tailnet has approved at least one lab range
+      ansible.builtin.debug:
+        msg: "approved"
+      changed_when: "(connector_state.stdout_lines | select('match', '^approved_lan [1-9]') | list | length) > 0"
+    - name: connector | FACT it is online on the tailnet
+      ansible.builtin.debug:
+        msg: "online"
+      changed_when: "'online True' in connector_state.stdout_lines"
+    - name: connector | FACT IP forwarding is on
+      ansible.builtin.debug:
+        msg: "forward"
+      changed_when: "'forward' in connector_state.stdout_lines"
+    - name: connector | FACT it has a route into the lab range
+      ansible.builtin.debug:
+        msg: "labroute"
+      changed_when: "'labroute' in connector_state.stdout_lines"
+    - name: connector | FACT it reaches the management gateway
+      ansible.builtin.debug:
+        msg: "ping_gateway"
+      changed_when: "'ping_gateway' in connector_state.stdout_lines"
+    - name: connector | FACT it reaches the prod gateway
+      ansible.builtin.debug:
+        msg: "ping_prod_gateway"
+      changed_when: "'ping_prod_gateway' in connector_state.stdout_lines"
+    - name: connector | FACT it reaches the dev gateway
+      ansible.builtin.debug:
+        msg: "ping_dev_gateway"
+      changed_when: "'ping_dev_gateway' in connector_state.stdout_lines"
