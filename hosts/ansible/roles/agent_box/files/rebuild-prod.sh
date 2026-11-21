@@ -805,7 +805,7 @@ if $resuming; then
   # --- Resume: what must hold before the stages after the stop run. Each is a PASS line, or nothing is run.
   # (a) The stages before the resume point ended well in the one command's own logs since the stopped run's teardown.
   t_stamp=${torn#run-}; t_stamp=${t_stamp%.log}
-  resume_from=''; resume_stages=''; first_bad=''
+  resume_stages=''; first_bad=''
   for st in vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks; do
     last=''
     for f in $(ls -1 "$envdir"/logs/rebuild-*.log 2>/dev/null | sort); do
