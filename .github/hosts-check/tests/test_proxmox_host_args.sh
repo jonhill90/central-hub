@@ -469,4 +469,29 @@ if [ $rc18a = 0 ] && [[ $c18 == *playbooks/proxmox-ct259-destroy.yml* && $c18 ==
   ok "19 ct259-destroy: the check runs its playbook; apply-recorded with no pass or go only re-checks"
 else bad "19 rc=$rc18a/$rc18b [$c18] [$(cat "$t/calls")] $(cat "$t/18b.out")"; fi
 
+# 22 the firewall job lets the box's backup address reach ssh: the one address from the handoff goes in a vars file (proxmox_firewall_box_ssh_source),
+#    never on a command line or in the output; with no address the job runs as before (the VLAN file only); a bad address stops it before the playbook;
+#    the other jobs are not given the variable
+rm -f "$t/handoff/box-backup-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/22a.out" 2>&1; rc=$?
+if [ $rc = 0 ] && [[ $(cat "$t/calls") == *playbooks/proxmox-firewall.yml* && $(cat "$t/calls") != *box_ssh_source* ]] && [ "$(wc -l < "$t/vars-paths")" = 1 ]; then
+  ok "22a firewall with no box address: only the VLAN file, no rule variable"
+else bad "22a rc=$rc [$(cat "$t/calls")] $(cat "$t/22a.out")"; fi
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/22b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v=={"proxmox_firewall_box_ssh_source":"10.1.30.31"}, v' "$t/vars-seen.json" \
+   && grep -q "vlans.yml" "$t/calls" && ! grep -q "10.1.30.31" "$t/calls" "$t/22b.out" && [ ! -e "$(tail -1 "$t/vars-paths")" ]; then
+  ok "22b firewall: the box address reaches the playbook in a vars file beside the VLAN file, not on the command line or in the output, and the file is gone after"
+else bad "22b rc=$rc [$(cat "$t/calls")] $(cat "$t/22b.out")"; fi
+for v in 10.1.20.5 10.1.30.0 10.1.30.224 '10.1.30.31/32' 'abc'; do
+  printf '%s\n' "$v" > "$t/handoff/box-backup-address"; : > "$t/calls"
+  job check firewall > "$t/22c.out" 2>&1; rc=$?
+  if [ $rc = 1 ] && [ ! -s "$t/calls" ] && ! grep -qF "$v" "$t/22c.out"; then :; else bad "22c address '$v' rc=$rc [$(cat "$t/calls")]"; fi
+done
+ok "22c five bad address shapes stop the firewall job before the playbook, naming no value"
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"
+job check proxy > "$t/22d.out" 2>&1
+! grep -q "box_ssh_source\|@" "$t/calls" && ok "22d the other jobs are not given the variable" || bad "22d $(cat "$t/calls")"
+rm -f "$t/handoff/box-backup-address"
+
 exit "$fail"

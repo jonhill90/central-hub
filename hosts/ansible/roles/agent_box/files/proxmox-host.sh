@@ -228,6 +228,17 @@ repo=$work/checkout   # this wrapper's own checkout of central-hub
 fw_args=()
 if [[ $job == firewall ]]; then
   fw_args=(-e "@$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml")
+  # The host's own firewall drops ssh from any source outside its management set, so the box's backup address (the one address its
+  # restic sftp works from, handed over by dev-worker-address.sh box-key) gets one more IN rule, tcp 22 from that address alone. No address
+  # in the handoff: no rule, and the job runs as before. It reaches the playbook in a vars file of this user's own, never on a command line.
+  fw_addr=$("$libexec/dev-worker-address.sh" read-box-address) || exit 1
+  if [[ -n $fw_addr ]]; then
+    install -d -m 0700 "$work/state"
+    fw_vars=$(mktemp "$work/state/fw-vars.XXXXXX")
+    trap 'rm -f "$fw_vars"' EXIT
+    FW_ADDR=$fw_addr python3 -I -c 'import json, os, sys; json.dump({"proxmox_firewall_box_ssh_source": os.environ["FW_ADDR"]}, open(sys.argv[1], "w"))' "$fw_vars"
+    fw_args+=(-e "@$fw_vars")
+  fi
 fi
 export HOME=$work PATH=$ansible_bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_CONFIG=$repo/hosts/ansible/ansible.cfg ANSIBLE_COLLECTIONS_PATH=$collections ANSIBLE_HOME=$work/ansible-home
