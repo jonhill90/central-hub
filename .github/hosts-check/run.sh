@@ -138,6 +138,7 @@ check_ansible() {
   bash "$here/tests/test_opnsense_lab_tenant.sh"
   bash "$here/tests/test_desktop_configure_vars.sh"
   bash "$here/tests/test_opnsense_app_access.sh"
+  bash "$here/tests/test_opnsense_client_derive.sh"
   bash "$here/tests/test_opnsense_backup_target.sh"
   bash "$here/tests/test_opnsense_store_admin.sh"
   bash "$here/tests/test_opnsense_proxmox_web.sh"
