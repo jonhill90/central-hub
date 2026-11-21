@@ -82,6 +82,8 @@ cat > "$t/bin/ssh" <<EOF
 #!/bin/bash
 cmd="\${*: -1}"
 echo "ssh \${*: -2}" >> $t/calls
+# EMPTY_NODES: rebuilt nodes that answer a login and nothing else (no keys, no certificate, no seal key).
+if [ -n "\$EMPTY_NODES" ]; then [ "\$cmd" = true ] && exit 0; echo "cat: \$cmd: No such file or directory" >&2; exit 1; fi
 case \$cmd in
   true) exit 0 ;;
   *backup.pem.keyid) echo keyid-\${2:-x}; exit 0 ;;
@@ -488,26 +490,48 @@ if [[ $r15a -eq 0 && $o15a == *"no changes with the Mac's tfvars (the VMs hold t
 else bad "15. $r15a $o15a | $r15b $o15b"; fi
 grep -q 'var-file=.*k8s.tfvars' "$t/calls" && ok "15b. the destroy plan reads a tfvars file the check settled on" || bad "15b. no var-file in the destroy plan"
 
-# 16. A rerun after a run that stopped past its teardown, with the Proxmox host as backup target: the nodes are rebuilt and empty, so
-# their sftp keys cannot be read; the ones the stopped run kept before its teardown stand (prod run 5, 2026-11-21, stopped reading them).
-# Without the kept keys the rerun stops before anything is destroyed.
-inventory "        k8s_backup_sftp: true"
-sed -i '/k8s_backup_azure_identity/d; s/pve-a: {ansible_host: 192.0.2.1}/pve-a: {ansible_host: 192.0.2.1, proxmox_host_mgmt_address: 192.0.2.1}/' "$t/keys/prod/inventory-hosts.yml"
-rm -rf "$t/keys/prod/backup-certs" "$t/keys/prod/backup-sftp"; rm -f "$logd"/* "$t/work/state/prod-restore-pin"
-torn_log yes
-run rebuild "$tap" "$sha" "$pinid"; r16a=$rc o16a=$out c16a=$calls
-mkdir -p "$t/keys/prod/backup-sftp"
-for n in cp-a wk-a; do
+# 16. The whole torn path end to end: a rerun after a run that stopped past its teardown, with the nodes rebuilt and empty (they answer a
+# login and nothing else) and the pin given. Every step before the teardown that reads a node (the sftp keys, the backup certificate,
+# the seal key) must use what the stopped run kept, or note the empty node, and the run must reach the teardown (prod run 5, 2026-11-21,
+# stopped reading the sftp keys). Without the kept files it stops before anything is destroyed.
+keep_sftp() { mkdir -p "$t/keys/prod/backup-sftp"; for n in cp-a wk-a; do
   printf '%s\n' '-----BEGIN OPENSSH PRIVATE KEY-----' 'AAAA' '-----END OPENSSH PRIVATE KEY-----' > "$t/keys/prod/backup-sftp/$n.key"
   echo 'ssh-ed25519 AAAAkept x' > "$t/keys/prod/backup-sftp/$n.pub"
-  echo '192.0.2.1 ssh-ed25519 AAAAhost' > "$t/keys/prod/backup-sftp/$n.known_hosts"
-done
-run rebuild "$tap" "$sha" "$pinid"; r16b=$rc o16b=$out c16b=$calls
+  echo '192.0.2.1 ssh-ed25519 AAAAhost' > "$t/keys/prod/backup-sftp/$n.known_hosts"; done; }
+keep_certs() { mkdir -p "$t/keys/prod/backup-certs"; for n in cp-a wk-a; do
+  printf '%s\n' '-----BEGIN PRIVATE KEY-----' 'AAAA' '-----END PRIVATE KEY-----' '-----BEGIN CERTIFICATE-----' 'BBBB' '-----END CERTIFICATE-----' > "$t/keys/prod/backup-certs/$n.pem"
+  echo keyid-kept > "$t/keys/prod/backup-certs/$n.pem.keyid"; done; }
+torn_reset() { rm -f "$logd"/* "$t/work/state/prod-restore-pin"; rm -rf "$t/keys/prod/backup-sftp" "$t/keys/prod/backup-certs"; torn_log yes; }
+# sftp mode
+inventory "        k8s_backup_sftp: true"
+sed -i '/k8s_backup_azure_identity/d; s/pve-a: {ansible_host: 192.0.2.1}/pve-a: {ansible_host: 192.0.2.1, proxmox_host_mgmt_address: 192.0.2.1}/' "$t/keys/prod/inventory-hosts.yml"
+torn_reset
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16a=$rc o16a=$out c16a=$calls
+torn_reset; keep_sftp
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16b=$rc o16b=$out c16b=$calls
 if [[ $r16a -eq 1 && $o16a == *"could not read node"*"backup ssh file"*"nothing was destroyed"* && $c16a != *one-command* &&
-      $r16b -eq 0 && $o16b == *"node cp-a: the stopped run (run-29990101T000000Z.log) kept its sftp backup key"* && $c16b != *"cat /etc/central-hub/backup-ssh"* &&
-      $c16b == *one-command* ]]; then
-  ok "16. after a stopped-past-teardown run, the sftp keys it kept stand and the empty nodes are not read; with none kept the rerun stops before the teardown"
-else bad "16. $r16a $o16a [$c16a] | $r16b $o16b [$c16b]"; fi
+      $r16b -eq 0 && $o16b == *"node cp-a: the stopped run (run-29990101T000000Z.log) kept its sftp backup key"* &&
+      $o16b == *"the seal node is rebuilt and holds no seal key"* && $o16b == *"restore snapshot 36fe4321aaaa is pinned (the last run, "* &&
+      $c16b != *backup-ssh* && $c16b == *one-command* && $c16b != *"--tags drill"* ]]; then
+  ok "16a. torn path, sftp mode, empty nodes: the kept sftp keys stand, the seal key is read as absent, the run reaches the teardown; with none kept it stops before it"
+else bad "16a. $r16a $o16a [$c16a] | $r16b $o16b [$c16b]"; fi
+# azure mode
+inventory; torn_reset
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16c=$rc o16c=$out c16c=$calls
+torn_reset; keep_certs
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16d=$rc o16d=$out c16d=$calls
+if [[ $r16c -eq 1 && $o16c == *"could not read node"*"backup certificate"*"nothing was destroyed"* && $c16c != *one-command* &&
+      $r16d -eq 0 && $o16d == *"node cp-a: the stopped run (run-29990101T000000Z.log) kept its backup certificate"* && $c16d != *azure/backup* && $c16d == *one-command* ]]; then
+  ok "16b. torn path, Azure mode, empty nodes: the kept certificates stand and the run reaches the teardown; with none kept it stops before it"
+else bad "16b. $r16c $o16c [$c16c] | $r16d $o16d [$c16d]"; fi
+# a seal node that answers with a different key is still refused in a torn run
+cp "$t/node.key" "$t/node.key.keep"; printf 'x%.0s' {1..32} > "$t/node.key"
+torn_reset; keep_certs
+run rebuild "$tap" "$sha" "$pinid"; r16e=$rc o16e=$out c16e=$calls
+cp "$t/node.key.keep" "$t/node.key"
+if [[ $r16e -eq 1 && $o16e == *"the seal key's SOPS copy differs from the seal node's key"* && $c16e != *one-command* ]]; then
+  ok "16c. torn path: a seal node that holds a different key is still refused before the teardown"
+else bad "16c. $r16e $o16e [$c16e]"; fi
 rm -f "$logd"/*
 
 exit "$fail"

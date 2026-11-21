@@ -693,6 +693,12 @@ if [[ $(cat -- "$envdir/backup-mode" 2>/dev/null) == azure ]]; then
 install -d -m 700 "$certs"
 while read -r name host user; do
   sudo_=""; [[ $user == root ]] || sudo_="sudo -n "
+  # A stopped-past-teardown run left the nodes rebuilt and empty: the certificate it kept before its teardown stands when whole.
+  if [[ -n $torn && -s $certs/$name.pem.keyid ]] && grep -q -- '-----BEGIN CERTIFICATE-----' "$certs/$name.pem" 2>/dev/null &&
+     grep -q -- 'PRIVATE KEY-----' "$certs/$name.pem" 2>/dev/null; then
+    echo "rebuild-prod: node $name: the stopped run ($torn) kept its backup certificate before its teardown; it stands"
+    continue
+  fi
   for ext in pem pem.keyid; do
     ssh_node "$host" "$user" "${sudo_}cat /etc/central-hub/azure/backup.$ext" > "$certs/$name.$ext.part" </dev/null ||
       { rm -f -- "$certs/$name.$ext.part"; echo "FAIL: rebuild-prod: could not read node $name's backup certificate ($ext); nothing was destroyed"; exit 1; }
@@ -722,12 +728,19 @@ seal_node=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["
 read -r _ seal_host seal_user < <(awk -v n="$seal_node" '$1 == n' "$node_list")
 [[ -n ${seal_host:-} ]] || { echo "FAIL: rebuild-prod: the seal node is not among the prod nodes; nothing was destroyed"; exit 1; }
 sudo_=""; [[ $seal_user == root ]] || sudo_="sudo -n "
-ssh_node "$seal_host" "$seal_user" "${sudo_}cat /var/lib/central-hub/openbao-seal/seal-1.key" > "$seal_tmp/node.key" </dev/null ||
-  { echo "FAIL: rebuild-prod: could not read the seal key on the seal node; nothing was destroyed"; exit 1; }
-cmp -s "$seal_tmp/node.key" "$seal_tmp/openbao-seal.key" ||
-  { echo "FAIL: rebuild-prod: the seal key's SOPS copy differs from the seal node's key (run openbao-prod seal-copy); nothing was destroyed"; exit 1; }
-rm -f -- "$seal_tmp/node.key"
-echo "PASS: rebuild-prod: the seal key's SOPS copy equals the seal node's key"
+if ssh_node "$seal_host" "$seal_user" "${sudo_}cat /var/lib/central-hub/openbao-seal/seal-1.key" > "$seal_tmp/node.key" </dev/null; then
+  cmp -s "$seal_tmp/node.key" "$seal_tmp/openbao-seal.key" ||
+    { echo "FAIL: rebuild-prod: the seal key's SOPS copy differs from the seal node's key (run openbao-prod seal-copy); nothing was destroyed"; exit 1; }
+  rm -f -- "$seal_tmp/node.key"
+  echo "PASS: rebuild-prod: the seal key's SOPS copy equals the seal node's key"
+elif [[ -n $torn ]]; then
+  # The rebuilt seal node holds no key yet: the stopped run compared the SOPS copy with the live key before it destroyed it, and the
+  # openbao-seal stage installs this copy on the rebuilt node.
+  rm -f -- "$seal_tmp/node.key"
+  echo "rebuild-prod: the seal node is rebuilt and holds no seal key; the SOPS copy (32 bytes, decrypts with the box's identity) is the key the stopped run ($torn) compared with the live one before its teardown"
+else
+  echo "FAIL: rebuild-prod: could not read the seal key on the seal node; nothing was destroyed"; exit 1
+fi
 
 # 4 and 5. The firewall's configuration and the secrets bundle (with this state file), fresh and off the box.
 for job in opnsense-backup opnsense-offbox secrets-bundle secrets-bundle-offbox; do
