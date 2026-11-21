@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hosts/rebuild-k8s.sh `certs` and `gateway` stages, run_stage from a copy with `ap` and `wait_apps` stubbed (prod run 6, 2026-11-21):
 #   1. With CERTS_SMOKE_LATE=true (the prod wrapper) `certs` runs k8s-certs.yml with --skip-tags smoke and nothing else.
-#   2. With it, `gateway` runs k8s-gateway.yml, then k8s-certs.yml --tags smoke, then waits for every app, in that order.
+#   2. With it, `gateway` runs k8s-gateway.yml (on prod with a prod worker as the smoke client), then k8s-certs.yml --tags smoke, then waits for every app, in that order.
 #   3. Without it (dev, other envs) `certs` runs k8s-certs.yml whole and `gateway` runs the gateway play only, no smoke, no wait.
 # Usage: .github/hosts-check/tests/test_rebuild_certs_order.sh
 set -uo pipefail
@@ -22,10 +22,12 @@ run() { # <env> <stage> [CERTS_SMOKE_LATE value]
 out=$(run prod certs true)
 [[ $out == *"AP playbooks/k8s-certs.yml --skip-tags smoke"* && $out == *"rc=0" && $(grep -c '^AP' <<< "$out") -eq 1 ]] && ok "1. prod certs skips the smoke test" || bad "1. $out"
 out=$(run prod gateway true)
-want=$'AP playbooks/k8s-gateway.yml\nAP playbooks/k8s-certs.yml --tags smoke\nWAIT_APPS\nrc=0'
-[[ $out == "$want" ]] && ok "2. prod gateway: the gateway play, then the certs smoke test, then the wait for every app" || bad "2. $out"
+want=$'AP playbooks/k8s-gateway.yml -e k8s_gateway_smoke_client={{ groups[\'k8s_workers\'] | first }}\nAP playbooks/k8s-certs.yml --tags smoke\nWAIT_APPS\nrc=0'
+[[ $out == "$want" ]] && ok "2. prod gateway: the gateway play with a prod worker as the smoke client, then the certs smoke test, then the wait for every app" || bad "2. $out"
 out=$(run staging certs)
 [[ $out == *"AP playbooks/k8s-certs.yml"* && $out != *"--skip-tags"* ]] && ok "3a. without the switch certs runs whole" || bad "3a. $out"
 out=$(run staging gateway)
 [[ $out == *"AP playbooks/k8s-gateway.yml"* && $out != *"--tags smoke"* && $out != *WAIT_APPS* ]] && ok "3b. without the switch gateway runs the gateway play only" || bad "3b. $out"
+out=$(run dev gateway)
+[[ $out == *"AP playbooks/k8s-gateway.yml"* && $out != *smoke_client* ]] && ok "4. dev's gateway play keeps the inventory's smoke client" || bad "4. $out"
 exit $fail
