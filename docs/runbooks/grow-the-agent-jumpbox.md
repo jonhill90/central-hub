@@ -157,7 +157,18 @@ On 2026-11-18 this change was made by hand on the host, on the owner's typed ord
 
 ## Delete the rehearsal's container
 
-The owner chose to delete CT 259 (tap of 2026-11-18 00:00:40 UTC). It has had no job since VM 258 became the agent box. VM 258 and every other guest stay as they are. The agents' Proxmox tokens have no right on CT 259, so this runs on the owner's Mac, which holds the kit's state, the `iac@pve!apply` token and root SSH to the host. An agent lane runs it there on the owner's typed line.
+The owner chose to delete CT 259 (tap of 2026-11-18 00:00:40 UTC). It has had no job since VM 258 became the agent box. VM 258 and every other guest stay as they are.
+
+**From the agent box (host job `ct259-destroy`).** The host job `guests` says whether it is there (`proxmox-host.sh check guests` prints `guests found: container 259; VM 258` while it exists; measured 2026-11-21 00:5x UTC). The job `ct259-destroy` (`playbooks/proxmox-ct259-destroy.yml`) deletes it. Its guards: the container's config must carry the tags `jumpbox` and `rehearsal`, be unprivileged and have no mount point, and VM 258 must be there before and after. A delete is a step the standing go covers (D-0061), so it runs the way the box's other host jobs apply:
+
+```sh
+sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check ct259-destroy
+sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply-recorded ct259-destroy <check hash>
+```
+
+expect: the check prints `1 changed` for the delete task; the apply needs a reviewer pass and a go recorded for that commit and hash, and then `guests found:` no longer lists container 259. The Mac's kit state still holds the container; empty it with `tofu state rm` on the Mac when convenient, or leave the kit, whose folder was already kept (step 5).
+
+**On the owner's Mac (the original way, no longer needed).** The agents' Proxmox tokens have no right on CT 259, so this ran on the owner's Mac, which holds the kit's state, the `iac@pve!apply` token and root SSH to the host. An agent lane runs it there on the owner's typed line.
 
 1. Check that it is the rehearsal's container, and that the kit's state holds nothing else.
 

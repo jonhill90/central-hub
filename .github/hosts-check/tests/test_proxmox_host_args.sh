@@ -440,4 +440,19 @@ job check proxy > "$t/21d.out" 2>&1
 ! grep -q "proxmox_restic_box_key\|@" "$t/calls" && ok "21d the other jobs are not given the key" || bad "21d $(cat "$t/calls")"
 rm -f "$t/handoff/box-backup.pub" "$t/handoff/box-backup-address"
 
+# 19 ct259-destroy runs its own playbook on a check, and an apply without a pass is refused with nothing run
+python3 - > "$t/out-check.json" <<'PY'
+import json
+t = lambda n, **r: {"task": {"name": n}, "hosts": {"proxmox_host": r}}
+print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [t("ct259 | A check run shows the delete as a change", changed=True)]}], "stats": {}}))
+PY
+: > "$t/calls"
+job check ct259-destroy > "$t/18a.out" 2>&1; rc18a=$?
+c18=$(cat "$t/calls"); : > "$t/calls"
+job apply-recorded ct259-destroy 0123456789ab > "$t/18b.out" 2>&1; rc18b=$?
+if [ $rc18a = 0 ] && [[ $c18 == *playbooks/proxmox-ct259-destroy.yml* && $c18 == *--check* ]] && [ $rc18b != 0 ] &&
+   ! grep -qv -e '--check' "$t/calls"; then
+  ok "19 ct259-destroy: the check runs its playbook; apply-recorded with no pass or go only re-checks"
+else bad "19 rc=$rc18a/$rc18b [$c18] [$(cat "$t/calls")] $(cat "$t/18b.out")"; fi
+
 exit "$fail"
