@@ -472,6 +472,7 @@ check_backup() {
   # the agent box's off-box OPNsense copy against a local restic repository.
   bash "$here/tests/test_backup.sh"
   bash "$here/tests/test_restore_pv.sh"
+  bash "$here/tests/test_restore_hold.sh"
   bash "$here/tests/test_backup_azure_cert.sh"
   bash "$here/tests/test_backup_metrics.sh"
   bash "$here/tests/test_backup_repo_init.sh"
