@@ -14,7 +14,7 @@ superseded-by:
 
 # Run the Central Hub web app on c1
 
-The app (public repository `jonhill90/central-hub-app`) runs as one pod in namespace `central-hub-app` (Argo CD app `central-hub-app`). An init container fetches the commit named in `apps/central-hub-app/values.yaml` (`source.commit`, a full sha) by git, checks it, runs `npm ci` and `npm run build`, and the app container runs the output. It has no image of its own; the [spec](../specs/2026-11-central-hub-app-on-c1.md) says why and names the way off. Name: `central-hub-app.apps.c1.prod.<zone>`. The Gateway route also accepts the short alias `central-hub-app.<zone>`, but that name does not resolve for people until it has its own Unbound host override and tailnet split-DNS entry ([set-up-short-app-names.md](set-up-short-app-names.md)); that is not done.
+The app (public repository `jonhill90/central-hub-app`) runs as one pod in namespace `central-hub-app` (Argo CD app `central-hub-app`). An init container fetches the commit named in `apps/central-hub-app/values.yaml` (`source.commit`, a full sha) by git, checks it, runs `npm ci` and `npm run build`, and the app container runs the output. It has no image of its own; the [spec](../specs/2026-11-central-hub-app-on-c1.md) says why and names the way off. Names: `hub.apps.c1.prod.<zone>` and the short alias `hub.<zone>` (the owner's name for it; the Gateway route key is `hub`). The short name resolves for people through its Unbound host override and tailnet split-DNS entry ([set-up-short-app-names.md](set-up-short-app-names.md)).
 
 ## Steps
 
@@ -27,7 +27,7 @@ The app (public repository `jonhill90/central-hub-app`) runs as one pod in names
 3. After the merge and Argo CD's sync, read the pod. On the agent box: `c1-read -n central-hub-app get pods`, then `c1-read -n central-hub-app logs deploy/central-hub-app -c build --tail=5`.
    expect: the pod is `Running 1/1`, and the log's last line is `built <the sha from step 1>`.
 
-4. Open the app. `https://central-hub-app.apps.c1.prod.<zone>/` from the lab network or the tailnet.
+4. Open the app. `https://hub.<zone>/` (or the long name `https://hub.apps.c1.prod.<zone>/`) from the lab network or the tailnet. The Gateway route key is `hub` (`apps/gateway/values.yaml`); the Argo CD app, the namespace and the Service stay `central-hub-app`.
    expect: the Hub with its menu; `/api/v1/catalog` answers 200.
 
 ## If it fails
