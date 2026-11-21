@@ -195,6 +195,13 @@
       tags: [users, guard_job]
   tags: [users, guard_job]
 
+- name: The private inventory's user and folders (spec 2026-11-private-values-on-the-box)
+  ansible.builtin.include_tasks:
+    file: inventory_job.yml
+    apply:
+      tags: [users, inventory_job]
+  tags: [users, inventory_job]
+
 # The role never writes a key into the key folder. It only makes sure every file already in it belongs to
 # the keys user and is readable by it alone.
 - name: Find the key files
@@ -683,6 +690,16 @@
   loop: "{{ agent_box_wrappers }}"
   loop_control:
     label: "{{ agent_box_libexec_dir }}/{{ item.name }}.sh"   # the destination, so a check run names a file that is not there yet
+  tags: [wrappers]
+
+# After the wrapper folder above exists: on a fresh box the copy has nowhere to go before it (tests/test_inventory_wiring.sh).
+- name: The reviewed list of values a session may set through the inventory wrapper (names and types, no value), root-owned
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../inventories/home/editable-values.yml"
+    dest: "{{ agent_box_libexec_dir }}/editable-values.yml"
+    owner: root
+    group: root
+    mode: "0644"
   tags: [wrappers]
 
 - name: Front scripts that sessions run

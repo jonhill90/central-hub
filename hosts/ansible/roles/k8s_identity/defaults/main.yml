@@ -132,11 +132,18 @@ k8s_identity_openbao_client: true
 k8s_identity_openbao_hosts: "{{ ['openbao.' ~ k8s_identity_zone] if (k8s_identity_openbao_client | bool and k8s_identity_short_names | bool) else [] }}"
 
 # The OPNsense web GUI, through the community plugin os-openid-connect (D-0037 rule 5): the names the
-# browser uses for the GUI. Private, from the inventory. The client allows the plugin's callback for its
-# application code on each name, and its lifecycle-test logout return. Empty: realm lab has no opnsense client
-# and the values file needs no OPNSENSE_CLIENT_SECRET, so adding the client is a realm change only when a
-# name is set.
-k8s_identity_opnsense_hosts: []
+# browser uses for the GUI. The client allows the plugin's callback for its application code on each name, and
+# its lifecycle-test logout return. No inventory value is needed: the default is the GUI names the inventory
+# already holds for the firewall's certificate (opnsense_cert_names on the `opnsense` group's first host, as
+# roles/opnsense_cert/tasks/main.yml uses them, hosts.example.yml), else opnsense.<zone>, the name the firewall
+# has everywhere in the runbooks (hosts.example.yml, opnsense_api_host). Set the list to [] (or turn
+# k8s_identity_opnsense_client off) for a realm with no opnsense client, which then needs no OPNSENSE_CLIENT_SECRET.
+k8s_identity_opnsense_client: true
+k8s_identity_opnsense_hosts: >-
+  {{ (hostvars[groups['opnsense'][0]].opnsense_cert_names
+      if (groups['opnsense'] | default([]) | length) > 0 and (hostvars[groups['opnsense'][0]].opnsense_cert_names | default([]) | length) > 0
+      else (['opnsense.' ~ k8s_identity_zone] if k8s_identity_zone | default('') | length > 0 else []))
+     if k8s_identity_opnsense_client | bool else [] }}
 # The plugin's application code (its setting openidconnect_app_code; its Keycloak guide uses keycloak). Every
 # callback path ends in it.
 k8s_identity_opnsense_app_code: keycloak

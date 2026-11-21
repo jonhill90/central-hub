@@ -89,11 +89,17 @@ argument_specs:
         description: >-
           The secrets store's web page names, for client openbao (the owner's sign-in, agent pick 233). Default
           openbao.<zone> with short names and k8s_identity_openbao_client on; empty: no client.
+      k8s_identity_opnsense_client:
+        type: bool
+        default: true
+        description: "Whether the realm has client opnsense when k8s_identity_opnsense_hosts is left at its default."
       k8s_identity_opnsense_hosts:
         type: list
         elements: str
         default: []
-        description: "The OPNsense web GUI names, for client opnsense (plugin os-openid-connect, D-0037 rule 5). Empty: no client. Private."
+        description: >-
+          The OPNsense web GUI names, for client opnsense (D-0037 rule 5). Default: opnsense_cert_names on the opnsense group's
+          first host, else opnsense.<zone>; empty: no client.
       k8s_identity_opnsense_app_code:
         type: str
         default: keycloak

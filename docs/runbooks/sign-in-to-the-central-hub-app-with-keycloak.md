@@ -23,11 +23,11 @@ The app (`jonhill90/central-hub-app`) signs visitors in with the authorization c
 | The realm's address and the app's public origins | `central-hub-app/central-hub-app-oidc`, keys `issuer` and `public-urls`, made by the same role from the zone |
 | Which accounts may open it | `HUB_OIDC_ALLOWED_GROUPS` in the chart: `lab-admins` and `lab-viewers` |
 
-The pod mounts the two Secrets as one folder (optional, so the pod starts before they exist) and reads the files on each request. Until they exist the app is up but answers 503 on everything except `/api/v1/health`, which says `signIn: not configured`. The rebuild waits for every app to be healthy before it makes the Secrets, so the probe must stay green; that is why.
+Sign-in ships off; see "Turn it on" below. The pod mounts the two Secrets as one folder (optional, so the pod starts before they exist) and reads the files on each request. Until they exist the app is up but answers 503 on everything except `/api/v1/health`, which says `signIn: not configured`. The rebuild waits for every app to be healthy before it makes the Secrets, so the probe must stay green; that is why.
 
 ## Before you start
 
-- The Central Hub app runs from a commit that holds the sign-in code: `source.commit` in `hosts/kubernetes/home/c1/apps/central-hub-app/values.yaml` is at or after the merge of the app's spec 0007.
+- The Central Hub app runs from a commit that holds the sign-in code (central-hub-app commit 304d0d41 or later): `source.commit` in `hosts/kubernetes/home/c1/apps/central-hub-app/values.yaml` is at or after the merge of the app's spec 0007.
   why: the chart sets `HUB_AUTH=oidc` and probes `/api/v1/health`; older code has no such path.
 
 ## Steps
@@ -42,6 +42,15 @@ The pod mounts the two Secrets as one folder (optional, so the pod starts before
    expect: all of the above.
 4. A typed sign-in is the owner's: open the app, sign in with the lab account and its code, and the home page opens.
    expect: the home page; closing the browser's cookies for the app sends it back to sign-in.
+
+## Turn it on
+
+Sign-in is off in the chart (`auth.mode: "off"`) until the platform side exists, because with it on and no Secrets the whole app answers 503 while Argo CD still shows Healthy. The chart refuses `auth.mode: oidc` unless `auth.secretsConfirmed: true` is set too, and CI renders both cases. Turn it on in a pull request that sets both, after steps 1 or 2:
+
+1. Read that the client and the Secrets are there: `c1-read get externalsecrets -n central-hub-app` shows `central-hub-app-sso` Ready (store on), and Keycloak lists client `central-hub-app` (the `c1-ansible clients` run prints `client central-hub-app: ok`).
+2. Set `auth.mode: oidc` and `auth.secretsConfirmed: true` in `hosts/kubernetes/home/c1/apps/central-hub-app/values.yaml`, and add `{id: central-hub-app, host: central-hub-app, redirect: /auth/callback}` to `clients` in `hosts/kubernetes/home/c1/apps/login-probe/values.yaml` (it is left out while sign-in is off, so the probe does not fail on a client the live realm does not have yet).
+   why: the probe is the password-free check that Keycloak knows the client.
+3. After the sync, `curl -s https://<app>/api/v1/health` says `"signIn":"on"` and step 3 below passes. If it says `not configured`, set `auth.mode` back to `"off"` at once.
 
 ## If it fails
 
