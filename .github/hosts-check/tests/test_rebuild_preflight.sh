@@ -107,7 +107,8 @@ check "a failed sample logs one no-reading line with its error's first line" "$o
 check "the no-reading line says how long the call took and why" "$out" "s: error: Metrics API not available" ""
 [ "$(printf '%s\n' "$out" | grep -c 'no reading after [0-9]*s: ')" = 1 ] && echo "ok   one no-reading line per empty sample" || { echo "FAIL: not one no-reading line: [$out]"; fail=1; }
 out=$(log="$t/top4.log" bash -c '. "$1"; kc() { echo "junk"; }; sleep() { exit 0; }; node_top_sampler identity-keycloak "$$"' _ "$t/fn.sh"; cat "$t/top4.log")
-check "a sample with no node row and no error says so" "$out" "no reading after 0s: no node row and no error" "junk"
+# The call may cross a second boundary, so the time is 0s or 1s; the reason is what this checks.
+check "a sample with no node row and no error says so" "$out" "s: no node row and no error" "junk"
 # A sampler whose run is gone stops by itself: the PID it watches is a process that has already exited.
 sh -c 'exit 0' & gone=$!; wait "$gone" || true
 out=$(log="$t/top2.log" timeout 10 bash -c '. "$1"; kc() { echo "n1 1m 1% 1Mi 1%"; }; sleep() { :; }; node_top_sampler gone "$2"; echo "sampler-ended"' _ "$t/fn.sh" "$gone" 2>&1 || true)
