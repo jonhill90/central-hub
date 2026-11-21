@@ -80,7 +80,7 @@ ivt = t.render(agent_box_wrappers=[iv], agent_box_user="sess", agent_box_keys_us
                agent_box_runner_user="run", agent_box_inventory_user="invops", agent_box_keys_dir="/k", agent_box_guard_user="guardops", agent_box_guard_dir="/g")
 isess = [l for l in ivt.splitlines() if l.startswith("sess ALL=")]
 iforms = isess[0].split("NOPASSWD: ")[1].split(", ") if len(isess) == 1 else []
-want = ["/x/inventory.sh " + x for x in ("set *", "get *", "names", "diff", "log", "import prod", "import guard", "import-compare")]
+want = ["/x/inventory.sh " + x for x in ("set *", "get *", "names", "diff", "log", "seal", "import prod", "import guard", "import-compare")]
 ok14a = isess[0].startswith("sess ALL=(invops)") and iforms == want and not any("view" in x for x in iforms) and "run ALL" not in ivt
 callers = {l.split(" ")[0]: l for l in ivt.splitlines() if l.split(" ")[0] in ("keys", "hostops", "guardops")}
 ok14b = (callers.get("keys") == "keys ALL=(invops) NOPASSWD: /x/inventory.sh view k8s_nodes"

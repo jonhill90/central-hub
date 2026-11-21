@@ -181,7 +181,7 @@ agent_box_wrappers:
   # list key paths, see which paths the last change touched, read the change log, fill the first copy and compare the two old
   # copies. `view` is for the jobs' own users only, one exact part each (the callers); a session has no `view`.
   - name: inventory
-    args: ["set *", "get *", names, diff, log, "import prod", "import guard", import-compare]
+    args: ["set *", "get *", names, diff, log, seal, "import prod", "import guard", import-compare]
     run_as: invops   # the same name as agent_box_inventory_user
     callers:
       - user: keys   # the same name as agent_box_keys_user: c1-ansible, openbao-prod and the rebuild wrappers
@@ -375,6 +375,8 @@ agent_box_copy_guard_files: false
 agent_box_inventory_user: invops
 agent_box_inventory_dir: /etc/agent-keys-inventory
 agent_box_inventory_work_dir: /var/lib/agent-box-inventory
+# Where the wrapper leaves its sealed copy (SOPS, to the bundle's recipients) for the keys user's daily bundle: invops writes, group keys reads.
+agent_box_inventory_sealed_dir: /etc/agent-keys-inventory-sealed
 # What the guard_files tasks copy, {from: clone|config, path: on the controller, dest: under agent_box_guard_dir}.
 # opnsense-api.txt holds the key on line 1 and the secret on line 2; lab-ca/root.crt is the public lab root the
 # OPNsense API's certificate chains to (pick 30).
