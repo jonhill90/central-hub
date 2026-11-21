@@ -109,10 +109,25 @@
   changed_when: false
   check_mode: false
 
+- name: opnsense_sso | Does the firewall need a change
+  ansible.builtin.set_fact:
+    opnsense_sso_needs_change: >-
+      {{ opnsense_sso_installed.rc == 1 or opnsense_sso_marker_now.rc != 0
+         or opnsense_sso_marker_now.stdout | trim != opnsense_sso_marker }}
+  no_log: true
+
+# A check run changes nothing and the block below is skipped in it, so this reports the change the apply would make: it
+# shows as changed in the check, and so the check's hash differs from "nothing to do" (the shape of the guest job's check).
+- name: opnsense_sso | What a check run would change on the firewall
+  ansible.builtin.debug:
+    msg: >-
+      would {{ 'install os-openid-connect, then ' if opnsense_sso_installed.rc == 1 else '' }}set the OpenID Connect server
+      {{ opnsense_sso_server_name }} (issuer, client and secret) in the firewall; the local login is not touched
+  changed_when: true
+  when: ansible_check_mode and opnsense_sso_needs_change | bool
+
 - name: opnsense_sso | Put the script and the settings on the firewall, run the script
-  when: >-
-    not ansible_check_mode and (opnsense_sso_installed.rc == 1 or opnsense_sso_marker_now.rc != 0
-    or opnsense_sso_marker_now.stdout | trim != opnsense_sso_marker)
+  when: not ansible_check_mode and opnsense_sso_needs_change | bool
   block:
     - name: opnsense_sso | A private folder on the host for the files to send
       ansible.builtin.tempfile: {state: directory, suffix: .opnsense_sso}

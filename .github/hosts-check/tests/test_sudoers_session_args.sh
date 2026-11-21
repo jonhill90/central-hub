@@ -74,6 +74,10 @@ spl = lines(render([sp]), "sess")
 forms = ["/x/secrets-store-prod.sh owner-login " + x for x in ("owner", "test", "check-test", "remove-test")]
 print("13", len(spl) == 1 and all(f in spl[0].split(", ") or spl[0].endswith(": " + f) or (", " + f) in spl[0] for f in forms) and "owner-login *" not in spl[0],
       "owner-login *" not in render([sp]))
+ss = [w for w in d if w["name"] == "opnsense-sso-secret"][0]
+sst = render([ss])
+print("14", [l for l in sst.splitlines() if l.startswith("hostops ")] == ["hostops ALL=(keys) NOPASSWD: /x/opnsense-sso-secret.sh read"],
+      not [l for l in sst.splitlines() if l.startswith("sess ")])
 PY
 )
 check() { # number, text
@@ -92,4 +96,5 @@ check 10 "10. opnsense-cert-check: the session gets check and status as the keys
 check 11 "11. guardops: only proxmox-host guard arm, confirm, rollback and status as hostops; the runner gets no guard"
 check 12 "12. lab-token: the session may status and mint as hostops; only hostops may run lab-token-put (as keys); the session has no line for it"
 check 13 "13. secrets-store-prod: the four exact owner-login forms are in the sudoers line, no owner-login *"
+check 14 "14. opnsense-sso-secret: only hostops may run read (as keys); the session has no line for it"
 exit "$fail"

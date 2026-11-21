@@ -70,10 +70,11 @@ agent_box_wrappers:
     args: [check, "rebuild *", log]
   # The box's own key, address and backend switch for the off-box sends to the Proxmox host's store (files/dev-worker-address.sh): box-key
   # makes the key once and hands over its public half and the box's address (public data, nothing printed); box-backend-on and -off switch the
-  # two sends between Azure and the host's store. The script's other actions (write, remove, read, key, read-key and the box's two readers)
+  # two sends between Azure and the host's store; box-prove checks, with the box's own ssh config, that the key reaches /box and nothing else
+  # (prints ok or FAIL lines only). The script's other actions (write, remove, read, key, read-key and the box's two readers)
   # have no sudo line: the dev rebuild calls the first ones as the keys user, and the host and firewall jobs call the readers.
   - name: dev-worker-address
-    args: [box-key, box-backend-on, box-backend-off]
+    args: [box-key, box-backend-on, box-backend-off, box-prove]
   # The `*` lets sudo pass the repository, number and head; the wrapper checks each one itself. Sessions get the
   # read-only `check` only: `merge` and `sweep` have no sudo line, the timer's unit runs the sweep as the keys user.
   - name: pr-merge
@@ -145,6 +146,14 @@ agent_box_wrappers:
   - name: lab-token
     args: [status, "mint *"]
     run_as: hostops   # the same name as agent_box_host_user
+  # The opnsense client's secret for the host job `opnsense-sso`: the keys user's wrapper prints the one OPNSENSE_CLIENT_SECRET line of
+  # the box's prod identity.env to a pipe, for proxmox-host.sh (hostops) to keep in its own file. Only hostops may call it; a session has no argument.
+  - name: opnsense-sso-secret
+    args: [read]
+    session_args: []
+    callers:
+      - user: hostops   # the same name as agent_box_host_user
+        args: [read]
   - name: lab-token-put
     args: [exists, put]
     session_args: []
@@ -368,9 +377,7 @@ agent_box_proxmox_host: {}
 agent_box_proxmox_host_sso: {}
 # For the host job's `opnsense-sso` job (role opnsense_sso): optional override {issuer: Keycloak's https://sso.<zone>/realms/lab}.
 # Empty: the issuer is derived from the zone the controller's inventory holds (tasks/proxmox_host_inventory.yml), so no inventory
-# value is needed. A run from the controller also writes {{ agent_box_host_dir }}/opnsense-sso.env, the one OPNSENSE_CLIENT_SECRET
-# line of the controller's identity.env, owner agent_box_host_user, mode 0600, once that file holds the line; until then the job
-# refuses to run.
+# value is needed. The client's secret comes from the box's own prod identity.env at run time (wrapper opnsense-sso-secret).
 agent_box_proxmox_host_opnsense_sso: {}
 # Private, through the controller's inventory, for the host job's `restore-reader` job (role proxmox_restic_sftp): a list of
 # {key: "ssh-ed25519 AAAA... comment", from: the dev worker's IPv4}. Written into the job's inventory as proxmox_restic_reader_keys.

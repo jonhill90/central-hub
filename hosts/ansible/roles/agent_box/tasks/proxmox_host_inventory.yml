@@ -98,26 +98,8 @@
     quiet: true
   when: agent_box_host_opnsense_issuer | length > 0
 
-# The secret file is written when the controller's identity.env holds the client's secret (k8s_identity makes it once client
-# opnsense is in the realm); before that the job refuses to run with its own message, and this run does not fail.
-- name: proxmox_host_inventory | The opnsense client's secret line, from the controller's identity.env
-  ansible.builtin.set_fact:
-    agent_box_host_opnsense_sso_line: >-
-      {{ (lookup('ansible.builtin.file', lookup('ansible.builtin.env', 'HOME') ~ '/.config/central-hub/identity.env', errors='ignore')
-             | default('', true)).splitlines()
-         | select('match', '^OPNSENSE_CLIENT_SECRET=.{32,}$') | first | default('') }}
-  no_log: true
-  when: agent_box_host_opnsense_issuer | length > 0
-
-- name: proxmox_host_inventory | The opnsense-sso job's secret file
-  ansible.builtin.copy:
-    dest: "{{ agent_box_host_dir }}/opnsense-sso.env"
-    content: "{{ agent_box_host_opnsense_sso_line }}\n"
-    owner: "{{ agent_box_host_user }}"
-    group: "{{ agent_box_host_user }}"
-    mode: "0600"
-  no_log: true
-  when: agent_box_host_opnsense_issuer | length > 0 and agent_box_host_opnsense_sso_line | length > 0
+# The client's secret is not written here: the job's own run asks the keys user's opnsense-sso-secret wrapper for it (the box's
+# prod identity.env holds it, made by c1-ansible's identity-values), so nothing needs the Mac.
 
 - name: proxmox_host_inventory | Read the key's public half
   ansible.builtin.slurp:

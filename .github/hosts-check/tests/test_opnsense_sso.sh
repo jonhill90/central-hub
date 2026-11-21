@@ -118,6 +118,8 @@ guest_state() { find "$G/root" "$G/conf" -type f ! -name config.xml | sort | sed
 run --check; rc=$?
 if [ $rc = 0 ] && [ ! -e "$G/PKG_INSTALLED" ] && [ -z "$(guest_state)" ]; then ok "a check run changes nothing on the guest"; else bad "check run: rc $rc, state '$(guest_state)'"; tail -20 "$t/out"; fi
 
+grep -q 'changed=1 ' "$t/out" && grep -q "would install os-openid-connect" "$t/out" && ok "a check run on a firewall without the package shows one change, saying what would be done" || { bad "check run shows no change"; tail -20 "$t/out"; }
+
 # 3
 run; rc=$?
 if [ $rc = 0 ] && [ -e "$G/PKG_INSTALLED" ] && grep -q "^pkg add" "$G/log" && grep -q "^php ran" "$G/log"; then ok "first run installs the package and runs the settings script"; else bad "first run: rc $rc"; tail -30 "$t/out"; fi
@@ -130,6 +132,9 @@ max=$(grep -o 'printf %s [A-Za-z0-9+/=]*' "$G/qm.log" | awk '{ print length($3) 
 before=$(wc -l < "$G/log"); run; rc=$?
 after=$(wc -l < "$G/log")
 [ $rc = 0 ] && [ "$before" = "$after" ] && ok "a second run changes nothing" || { bad "second run: rc $rc, log lines $before to $after"; tail -20 "$t/out"; }
+
+run --check; rc=$?
+[ $rc = 0 ] && grep -q 'changed=0 ' "$t/out" && ok "a check run after the apply shows no change" || { bad "check after apply: rc $rc"; tail -20 "$t/out"; }
 
 # 5
 printf 'OPNSENSE_CLIENT_SECRET=%s\n' "$secret2" > "$t/values.env"

@@ -32,6 +32,11 @@
 #   dev-worker-address.sh box-backend-off  the host's store, by writing <keys>/box-backup/backend.env (the repository sftp:box-backup-target:/box and
 #                                  the ssh config's path), which both scripts read after their settings; off removes it. On refuses until the pair,
 #                                  the pinned host key and the ssh config are there.
+#   dev-worker-address.sh box-prove  as keys: proves what the box's key can and cannot do on the host's store, with the box's own ssh config, and
+#                                  prints ok or FAIL lines (check 3 has two), no address and no key: (1) it signs in over sftp and its folder is /box;
+#                                  (2) it writes a test file there, reads it back the same, and removes it; (3) it cannot write to /, and cannot
+#                                  open any other folder it can see in /; (4) it cannot read a file outside the chroot (/etc/passwd); (5) a
+#                                  command over ssh runs no shell. Exit 0 only when all five hold; 1 if any check fails or the sign-in does not work.
 #   dev-worker-address.sh read-box-key as hostops (group devaddr): that one public key line, nothing for no file, refusal for anything else.
 #   dev-worker-address.sh read-box-address as hostops or guardops (group devaddr): that address, nothing for no file, refusal for a bad shape.
 # The file is keys:devaddr, mode 0640, in a folder keys:devaddr mode 0750; it holds one line, one address, nothing else.
@@ -52,7 +57,7 @@ inventory=$work/rebuild-dev/inventory
 libexec=/usr/local/libexec/agent-box
 export PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 
-usage() { echo "usage: dev-worker-address.sh write|remove|read|key|read-key|box-key|read-box-key|read-box-address|box-backend-on|box-backend-off" >&2; exit 2; }
+usage() { echo "usage: dev-worker-address.sh write|remove|read|key|read-key|box-key|read-box-key|read-box-address|box-backend-on|box-backend-off|box-prove" >&2; exit 2; }
 [[ $# -eq 1 ]] || usage
 
 # One IPv4 address of the dev nodes' range, from stdin; the address on stdout, or nothing and exit 1. No value is printed on failure.
@@ -166,6 +171,36 @@ case $1 in
   box-backend-off)
     rm -f -- "$keys/box-backup/backend.env" "$keys/box-backup/backend.env.part"
     echo "dev-worker-address: the box's off-box sends are back on the settings' repository (Azure)" ;;
+  box-prove)
+    kd=$keys/box-backup
+    cfg=$kd/ssh_config
+    [[ -r $cfg && -r $kd/id_ed25519 && -s $kd/known_hosts ]] || { echo "dev-worker-address: box-prove needs the ssh config, the key and the pinned host key (run box-key and a host job first)" >&2; exit 1; }
+    name=boxprove-$$.tmp
+    tdir=$(mktemp -d)
+    trap 'rm -rf -- "$tdir"' EXIT
+    printf 'box-prove %s\n' "$$" > "$tdir/in"
+    sf() { sftp -F "$cfg" -b - box-backup-target 2>&1 <<< "$1"; }   # batch mode: a failing command gives a non-zero exit
+    bad=0
+    pass() { echo "box-prove: ok   $1"; }
+    fail() { echo "box-prove: FAIL $1"; bad=1; }
+    # 1 sign-in, and the folder it lands in
+    if out=$(sf 'pwd') && grep -qx 'Remote working directory: /box' <<< "$out"; then pass "1 signs in over sftp; its folder is /box"; else fail "1 no sign-in, or its folder is not /box"; fi
+    # 2 write, read back, remove
+    if sf "put $tdir/in $name" >/dev/null && sf "get $name $tdir/back" >/dev/null && cmp -s "$tdir/in" "$tdir/back" && sf "rm $name" >/dev/null; then pass "2 writes a test file in /box, reads it back the same, removes it"; else fail "2 write, read-back or remove in /box"; sf "rm $name" >/dev/null || true; fi
+    # 3 / is not writable, and no other folder in / opens
+    if sf "put $tdir/in /$name" >/dev/null; then fail "3 / is writable (the test file was written)"; sf "rm /$name" >/dev/null || true; else pass "3 cannot write to /"; fi
+    others=$(sf 'ls -1 /' | grep -v '^sftp>' | sed 's|^/||' | grep -v -x -e box -e '' || true)
+    open=0
+    for d in $others; do
+      if sf "ls /$d" >/dev/null; then open=$((open + 1)); fi
+    done
+    [[ $open -eq 0 ]] && pass "3 cannot open any other folder in / (folders seen: $(wc -w <<< "$others"))" || fail "3 $open other folder(s) in / open"
+    # 4 nothing outside the chroot
+    if sf 'get /etc/passwd '"$tdir"'/pw' >/dev/null; then fail "4 /etc/passwd was read"; else pass "4 cannot read /etc/passwd"; fi
+    # 5 no shell: a command over ssh must not run
+    sh_out=$(timeout 30 ssh -n -F "$cfg" box-backup-target 'id -u' 2>&1 || true)
+    if grep -Eq '^[0-9]+$' <<< "$sh_out"; then fail "5 a command over ssh ran (it printed a user id)"; else pass "5 a command over ssh runs no shell"; fi
+    exit "$bad" ;;
   read-box-address)
     [[ -e $boxaddrfile ]] || exit 0
     [[ -r $boxaddrfile ]] || { echo "dev-worker-address: the box's address file is there but this user can't read it" >&2; exit 1; }

@@ -16,6 +16,8 @@
 #     the lines its REPORT task writes that match this wrapper's allowlist, so a session can see who holds the host's memory)
 #   `ksm` and `ksm-off` (playbooks/proxmox-ksm.yml, proxmox-ksm-off.yml: kernel same-page merging on the host, on with a pinned pace and off again;
 #     what it does: playbooks/tasks/proxmox-ksm.yml. A setting, so a session applies it only through `apply-recorded` with a reviewer pass and a go)
+#   `connector` (playbooks/proxmox-connector.yml: read-only; `check connector` prints which of nine facts about container 900 are true: running, online, advertises and has approved a lab range,
+#     forwards, has a lab route, reaches the management, prod and dev gateways; fixed words from the reviewed playbook, no name or address)
 #   `guests` (playbooks/proxmox-guests.yml: read-only; `check guests` prints which of container 259 and VM 258 exist, so a session on the box can tell)
 #   `box-writer` (playbooks/proxmox-restic-box.yml: the user `boxbackup` for the agent box's own backups, replacing Azure for them: one key, only from
 #     the address this job runs from, only the folder /box on the backup disk, internal-sftp, no shell, no root. The public half of the box's key comes
@@ -63,7 +65,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [opnsense-sso]=playbooks/opnsense-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml [box-writer]=playbooks/proxmox-restic-box.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [opnsense-sso]=playbooks/opnsense-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [connector]=playbooks/proxmox-connector.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml [box-writer]=playbooks/proxmox-restic-box.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -72,7 +74,7 @@ result=$work/state/check.json
 ledger=$work/ledger
 usage() {
   echo "       proxmox-host guard arm|confirm|rollback|clear|status" >&2
-  echo "usage: proxmox-host check [proxy|agent-access|sso|opnsense-sso|firewall|guests|restore-reader|memory|ksm|ksm-off|box-writer]|apply [proxy|agent-access|sso|opnsense-sso|firewall|guests|restore-reader|memory|ksm|ksm-off|box-writer] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
+  echo "usage: proxmox-host check [proxy|agent-access|sso|opnsense-sso|firewall|guests|connector|restore-reader|memory|ksm|ksm-off|box-writer]|apply [proxy|agent-access|sso|opnsense-sso|firewall|guests|connector|restore-reader|memory|ksm|ksm-off|box-writer] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
   echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
   exit 2
 }
@@ -171,11 +173,16 @@ if [[ $job == sso ]]; then
   sso_args=(-e "proxmox_sso_values_file=$dir/proxmox-sso.env")
 fi
 
-# The opnsense-sso job (role opnsense_sso) reads the opnsense client's secret from one file of this user's own, the same way
-# (the controller's proxmox_host_inventory run makes $dir/opnsense-sso.env: the one OPNSENSE_CLIENT_SECRET line).
+# The opnsense-sso job (role opnsense_sso) reads the opnsense client's secret from one file of this user's own, $dir/opnsense-sso.env.
+# The box's prod identity.env holds the secret (c1-ansible's identity-values makes it, the one Keycloak's realm reads), and only the keys
+# user can read that file, so this user asks the keys user's opnsense-sso-secret.sh for the one line, on a pipe, and keeps it 0600.
+# It is never printed here. A check and an apply both refresh it, so the job always uses what Keycloak holds.
 if [[ $job == opnsense-sso ]]; then
-  [[ -s $dir/opnsense-sso.env ]] \
-    || { echo "proxmox-host: $dir/opnsense-sso.env is missing; the controller's proxmox_host_inventory run makes it (docs/runbooks/sign-in-to-opnsense-through-keycloak.md)" >&2; exit 1; }
+  os_line=$(sudo -n -u keys "$libexec/opnsense-sso-secret.sh" read) \
+    || { echo "proxmox-host: the keys user has no OPNSENSE_CLIENT_SECRET to hand over (run c1-ansible identity-values; docs/runbooks/sign-in-to-opnsense-through-keycloak.md)" >&2; exit 1; }
+  [[ $os_line =~ ^OPNSENSE_CLIENT_SECRET=[0-9a-f]{64}$ ]] || { echo "proxmox-host: the handed-over secret line is malformed" >&2; exit 1; }
+  ( umask 077; printf '%s\n' "$os_line" > "$dir/opnsense-sso.env.new" ) && mv -f -- "$dir/opnsense-sso.env.new" "$dir/opnsense-sso.env"
+  unset os_line
   sso_args=(-e "opnsense_sso_values_file=$dir/opnsense-sso.env")
 fi
 
@@ -395,6 +402,14 @@ for play in json.load(open(sys.argv[1])).get("plays", []):
                     print("proxmox-host: memory: " + line)
                     n += 1
 print("proxmox-host: memory: %d line(s)" % n)
+PY
+    fi
+    if [[ $job == connector ]]; then
+      # The read-only job's answer: the FACT tasks that show as changed are the facts that are true (names come from the reviewed playbook).
+      python3 -I - "$result" <<'PY'
+import json, sys
+t = json.load(open(sys.argv[1]))["tasks"]
+print("proxmox-host: connector facts true: " + ("; ".join(x["name"].split("FACT ", 1)[1] for x in t if x["changed"] and "FACT " in x["name"]) or "none"))
 PY
     fi
     if [[ $job == guests ]]; then

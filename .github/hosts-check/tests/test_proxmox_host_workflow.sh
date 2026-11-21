@@ -14,10 +14,10 @@ ok() { echo "ok   $1"; }
 bad() { echo "not ok  $1"; fail=1; }
 
 # 1. The workflow's choices equal the wrapper's job names.
-# `memory` is read-only and for a session on the box (`proxmox-host check memory`); `ksm` and `ksm-off` are applied by a session
+# `memory` and `connector` are read-only and for a session on the box (`proxmox-host check memory`, `check connector`); `ksm` and `ksm-off` are applied by a session
 # through `apply-recorded` (a reviewer pass and a go for the commit). None is offered by the workflow, which runs on the
 # box and whose file's hash the runner hook pins (D-0042 rule 4), so a change to the workflow is a change to that pin too.
-want=$(grep -oE '^declare -A jobs=\(.*\)' "$wrapper" | grep -oE '\[[a-z-]+\]=' | tr -d '[]=' | grep -Evx 'memory|ksm|ksm-off|box-writer|opnsense-sso' | sort | tr '\n' ' ')
+want=$(grep -oE '^declare -A jobs=\(.*\)' "$wrapper" | grep -oE '\[[a-z-]+\]=' | tr -d '[]=' | grep -Evx 'memory|connector|ksm|ksm-off|box-writer|opnsense-sso' | sort | tr '\n' ' ')
 have=$(python3 -I - "$wf" <<'PY'
 import sys, yaml
 d = yaml.safe_load(open(sys.argv[1]))
