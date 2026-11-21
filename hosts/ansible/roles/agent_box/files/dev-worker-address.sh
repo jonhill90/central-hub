@@ -218,6 +218,21 @@ case $1 in
     # 5 no shell: a command over ssh must not run
     sh_out=$(timeout 30 ssh -n -F "$cfg" box-backup-target 'id -u' 2>&1 || true)
     if grep -Eq '^[0-9]+$' <<< "$sh_out"; then fail "5 a command over ssh ran (it printed a user id)"; else pass "5 a command over ssh runs no shell"; fi
+    # 6 the scripts that read the backend switch are the ones this commit ships: the role writes backend-files.sha256 from its own files in a
+    # step the box's self-apply does not skip, so a script left behind (skip tag, off switch) differs from or is missing against it.
+    man=$libexec/backend-files.sha256
+    if [[ ! -s $man ]]; then
+      fail "6 $man is missing: the installed off-box scripts cannot be compared with the repo"
+    else
+      miss=0; n=0
+      while read -r want name extra; do
+        [[ -n $want && -n $name && -z ${extra:-} && $name != */* ]] || { miss=$((miss + 1)); continue; }
+        n=$((n + 1))
+        have=$(sha256sum -- "$libexec/$name" 2>/dev/null | cut -d' ' -f1) || have=
+        [[ -n $have && $have == "$want" ]] || { echo "box-prove: FAIL 6 $name is missing or differs from the repo's copy"; miss=$((miss + 1)); }
+      done < "$man"
+      if [[ $miss -eq 0 && $n -gt 0 ]]; then pass "6 the $n off-box script(s) the backend switch needs match the repo's copies"; else bad=1; [[ $n -gt 0 ]] || echo "box-prove: FAIL 6 the manifest lists no script"; fi
+    fi
     exit "$bad" ;;
   read-box-address)
     [[ -e $boxaddrfile ]] || exit 0

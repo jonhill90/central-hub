@@ -37,50 +37,9 @@
   vars:
     agent_box_guid: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 
-# --- restic and the scripts ------------------------------------------------------------------------
-
-- name: Download restic, checked against its SHA-256
-  ansible.builtin.get_url:
-    url: "https://github.com/restic/restic/releases/download/v{{ agent_box_restic_version }}/restic_{{ agent_box_restic_version }}_linux_amd64.bz2"
-    dest: "{{ agent_box_libexec_dir }}/downloads/restic_{{ agent_box_restic_version }}.bz2"
-    checksum: "sha256:{{ agent_box_restic_sha256 }}"
-    owner: root
-    group: root
-    mode: "0644"
-  when: not (ansible_check_mode and agent_box_downloads_dir | default({}) is changed)
-
-- name: Unpack restic {{ agent_box_restic_version }}
-  ansible.builtin.shell:
-    cmd: >-
-      bunzip2 -c {{ agent_box_libexec_dir }}/downloads/restic_{{ agent_box_restic_version }}.bz2
-      > {{ agent_box_libexec_dir }}/restic-{{ agent_box_restic_version }}.new &&
-      chmod 0755 {{ agent_box_libexec_dir }}/restic-{{ agent_box_restic_version }}.new &&
-      mv {{ agent_box_libexec_dir }}/restic-{{ agent_box_restic_version }}.new {{ agent_box_libexec_dir }}/restic-{{ agent_box_restic_version }}
-    creates: "{{ agent_box_libexec_dir }}/restic-{{ agent_box_restic_version }}"
-  when: not ansible_check_mode
-
-- name: restic points at that version
-  ansible.builtin.file:
-    src: restic-{{ agent_box_restic_version }}
-    dest: "{{ agent_box_libexec_dir }}/restic"
-    state: link
-    force: true
-  when: not ansible_check_mode
-
-- name: The off-box copy's script and the certificate script, root-owned
-  ansible.builtin.copy:
-    src: "{{ item.src }}"
-    dest: "{{ agent_box_libexec_dir }}/{{ item.dest }}"
-    owner: root
-    group: root
-    mode: "0755"
-  loop:
-    - {src: opnsense-offbox.sh, dest: opnsense-offbox.sh}
-    - {src: opnsense-escrow.py, dest: opnsense-escrow.py}
-    # The same script the c1 nodes run (pick 189), so one copy of the certificate code is tested and kept.
-    - {src: "{{ role_path }}/../k8s_backup/files/c1-backup-azure-cert.py", dest: azure-cert.py}
-  loop_control:
-    label: "{{ agent_box_libexec_dir }}/{{ item.dest }}"
+# --- restic and the scripts -----------------------------------------------------------------------
+# restic, the off-box scripts and the certificate script are installed by offbox_scripts.yml, which the box's self-apply runs
+# (tag wrappers only); this file keeps what needs the controller (settings, the box's certificate, its first upload).
 
 # --- Settings ------------------------------------------------------------------
 

@@ -39,6 +39,21 @@ def totp(seed, offset=0, digits=6, period=30):
     return str((struct.unpack(">I", mac[o:o + 4])[0] & 0x7FFFFFFF) % 10 ** digits).zfill(digits)
 
 
+def wait_next_window(period=30):
+    time.sleep(period - time.time() % period + 1)
+
+
+def page_kind(body):
+    """What page Keycloak answered with, by form id and error marker only, never its text."""
+    ids = re.findall(r'<form[^>]*\bid="([A-Za-z0-9_-]+)"', body or "")
+    kind = "form " + ",".join(ids) if ids else "no form"
+    if 'name="otp"' in (body or ""):
+        kind += ", the one-time-code form again"
+    if re.search(r'id="input-error[A-Za-z0-9_-]*"|class="[^"]*alert-error', body or ""):
+        kind += ", with an error"
+    return kind
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *a, **k):
         return None
@@ -144,13 +159,18 @@ def main():
                             "HTTP %s, no one-time-code form" % code):
                     ok_all = False
                     continue
-                for offset in (0, 1):
-                    code, headers, body = call(form, {"otp": totp(u["seed"], offset), "credentialId": ""})
+                # Keycloak refuses a code it has already accepted, and this run's sign-in check used the same seed
+                # minutes before, so a refused code is tried again in the next window, with that window's own code
+                # (as argocd-signin-check.py does).
+                for attempt in range(3):
+                    if attempt:
+                        wait_next_window()
+                    code, headers, body = call(form, {"otp": totp(u["seed"]), "credentialId": ""})
                     loc = redirected(code, headers)
-                    if loc:
+                    if loc or code != 200:
                         break
                     form = action(body) or form
-            if not line(user, "code", bool(loc), "HTTP %s, no redirect with a code" % code):
+            if not line(user, "code", bool(loc), "HTTP %s, no redirect with a code (%s)" % (code, page_kind(body))):
                 ok_all = False
                 continue
             grant = urllib.parse.parse_qs(urllib.parse.urlsplit(loc).query)["code"][0]

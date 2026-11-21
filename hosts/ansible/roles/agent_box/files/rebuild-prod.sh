@@ -131,6 +131,22 @@ missing=()
 for f in "${need[@]}"; do [[ -s $f ]] || missing+=("$f"); done
 if (( ${#missing[@]} )); then fail "missing: ${missing[*]}"; else pass "every file the run needs is on the box"; fi
 command -v tofu >/dev/null || fail "OpenTofu is not installed; run the agent_box role"
+# The two off-box send scripts the pre-teardown steps run must be the copies of the commit the box last applied: the role writes
+# backend-files.sha256 from its own files, so an old, missing or hand-edited script differs from it (the first prod run stopped at step 4
+# because the box still had an old opnsense-offbox.sh and no secrets-bundle-offbox.sh).
+man=$libexec/backend-files.sha256
+if [[ ! -s $man ]]; then
+  fail "$man is missing: the installed off-box scripts cannot be compared with the repo (run the agent_box role)"
+else
+  n=0; badn=0
+  while read -r want name extra; do
+    [[ -n $want && -n $name && -z ${extra:-} && $name != */* ]] || { badn=$((badn + 1)); continue; }
+    n=$((n + 1))
+    have=$(sha256sum -- "$libexec/$name" 2>/dev/null | cut -d' ' -f1) || have=
+    [[ -n $have && $have == "$want" ]] || { fail "$name is missing or differs from the box's baseline copy (installed ${have:0:12}, expected ${want:0:12})"; badn=$((badn + 1)); }
+  done < "$man"
+  if (( badn == 0 && n > 0 )); then pass "the $n off-box script(s) match the box's baseline copies"; elif (( n == 0 )); then fail "$man lists no script"; fi
+fi
 
 # --- 2. The box's own copies of the tfvars and the inventory.
 # The tfvars: the Mac's, with the box's prod node key in place of the Mac's, so the rebuilt nodes take the box's
