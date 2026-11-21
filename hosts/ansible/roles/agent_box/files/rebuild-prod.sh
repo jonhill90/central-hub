@@ -734,10 +734,19 @@ if ssh_node "$seal_host" "$seal_user" "${sudo_}cat /var/lib/central-hub/openbao-
   rm -f -- "$seal_tmp/node.key"
   echo "PASS: rebuild-prod: the seal key's SOPS copy equals the seal node's key"
 elif [[ -n $torn ]]; then
-  # The rebuilt seal node holds no key yet: the stopped run compared the SOPS copy with the live key before it destroyed it, and the
-  # openbao-seal stage installs this copy on the rebuilt node.
+  # The rebuilt seal node may hold no seal key yet. That stands only when all three hold: the stopped run's own log says it compared the
+  # SOPS copy with the live key before its teardown, the SOPS file is older than that log (not replaced since), and the node says
+  # cleanly that the file is not there (test ! -e); any other failure (a sudo or ssh error, an unreadable file) refuses.
   rm -f -- "$seal_tmp/node.key"
-  echo "rebuild-prod: the seal node is rebuilt and holds no seal key; the SOPS copy (32 bytes, decrypts with the box's identity) is the key the stopped run ($torn) compared with the live one before its teardown"
+  seal_file=/var/lib/central-hub/openbao-seal/seal-1.key
+  if ! grep -qxF "PASS: rebuild-prod: the seal key's SOPS copy equals the seal node's key" -- "$logs/$torn"; then
+    echo "FAIL: rebuild-prod: the seal node's key could not be read, and the log of the stopped run ($torn) does not show it compared the SOPS copy with the live key; nothing was destroyed"; exit 1
+  elif [[ ! $seal_sops -ot $logs/$torn ]]; then
+    echo "FAIL: rebuild-prod: the seal node's key could not be read, and the SOPS copy ($seal_sops) is not older than the stopped run's log ($torn), so it may have changed since that run compared it; nothing was destroyed"; exit 1
+  elif ! ssh_node "$seal_host" "$seal_user" "${sudo_}test ! -e $seal_file" </dev/null >/dev/null 2>&1; then
+    echo "FAIL: rebuild-prod: the seal node's key could not be read and the node does not say the file is absent (an ssh or sudo error, or a file that exists but cannot be read); nothing was destroyed"; exit 1
+  fi
+  echo "rebuild-prod: the seal node is rebuilt and the node says the seal key file is absent; the SOPS copy (32 bytes, decrypts with the box's identity, older than the stopped run's log) is the key that run ($torn) compared with the live one before its teardown"
 else
   echo "FAIL: rebuild-prod: could not read the seal key on the seal node; nothing was destroyed"; exit 1
 fi

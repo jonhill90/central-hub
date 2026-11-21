@@ -83,7 +83,7 @@ cat > "$t/bin/ssh" <<EOF
 cmd="\${*: -1}"
 echo "ssh \${*: -2}" >> $t/calls
 # EMPTY_NODES: rebuilt nodes that answer a login and nothing else (no keys, no certificate, no seal key).
-if [ -n "\$EMPTY_NODES" ]; then [ "\$cmd" = true ] && exit 0; echo "cat: \$cmd: No such file or directory" >&2; exit 1; fi
+if [ -n "\$EMPTY_NODES" ]; then [ "\$cmd" = true ] && exit 0; case \$cmd in *"test ! -e"*) exit \${TEST_RC:-0} ;; esac; echo "cat: \$cmd: No such file or directory" >&2; exit 1; fi
 case \$cmd in
   true) exit 0 ;;
   *backup.pem.keyid) echo keyid-\${2:-x}; exit 0 ;;
@@ -443,6 +443,7 @@ rm -f "$logd"/* "$t/work/state/prod-restore-pin"
 torn_log() { # <with the tested-snapshot line: yes|no>
   printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" > "$logd/run-29990101T000000Z.log"
   [ "$1" = no ] || echo "PASS: rebuild-prod: every prod node backed up now, and its restore test passed: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321 of 2026-11-18T03:00:26; etcd restore test, revision 202, 201 keys under /, key /registry/namespaces/kube-system present, snapshot c5523412 of 2026-11-18T03:00:17" >> "$logd/run-29990101T000000Z.log"
+  [ "${SEAL_LINE:-yes}" = no ] || echo "PASS: rebuild-prod: the seal key's SOPS copy equals the seal node's key" >> "$logd/run-29990101T000000Z.log"
   printf '%s\n' "rebuild-prod: teardown and build start: vms cluster" "FAIL: rebuild-prod: the one command stopped (rc 2); rebuild-prod log names the stage" >> "$logd/run-29990101T000000Z.log"
 }
 torn_log yes
@@ -501,7 +502,8 @@ keep_sftp() { mkdir -p "$t/keys/prod/backup-sftp"; for n in cp-a wk-a; do
 keep_certs() { mkdir -p "$t/keys/prod/backup-certs"; for n in cp-a wk-a; do
   printf '%s\n' '-----BEGIN PRIVATE KEY-----' 'AAAA' '-----END PRIVATE KEY-----' '-----BEGIN CERTIFICATE-----' 'BBBB' '-----END CERTIFICATE-----' > "$t/keys/prod/backup-certs/$n.pem"
   echo keyid-kept > "$t/keys/prod/backup-certs/$n.pem.keyid"; done; }
-torn_reset() { rm -f "$logd"/* "$t/work/state/prod-restore-pin"; rm -rf "$t/keys/prod/backup-sftp" "$t/keys/prod/backup-certs"; torn_log yes; }
+torn_reset() { rm -f "$logd"/* "$t/work/state/prod-restore-pin"; rm -rf "$t/keys/prod/backup-sftp" "$t/keys/prod/backup-certs"; torn_log yes
+  touch -d '2 hours ago' "$t/keys/prod/openbao-seal.key.sops.json"; }
 # sftp mode
 inventory "        k8s_backup_sftp: true"
 sed -i '/k8s_backup_azure_identity/d; s/pve-a: {ansible_host: 192.0.2.1}/pve-a: {ansible_host: 192.0.2.1, proxmox_host_mgmt_address: 192.0.2.1}/' "$t/keys/prod/inventory-hosts.yml"
@@ -511,7 +513,7 @@ torn_reset; keep_sftp
 EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16b=$rc o16b=$out c16b=$calls
 if [[ $r16a -eq 1 && $o16a == *"could not read node"*"backup ssh file"*"nothing was destroyed"* && $c16a != *one-command* &&
       $r16b -eq 0 && $o16b == *"node cp-a: the stopped run (run-29990101T000000Z.log) kept its sftp backup key"* &&
-      $o16b == *"the seal node is rebuilt and holds no seal key"* && $o16b == *"restore snapshot 36fe4321aaaa is pinned (the last run, "* &&
+      $o16b == *"the seal node is rebuilt and the node says the seal key file is absent"* && $o16b == *"restore snapshot 36fe4321aaaa is pinned (the last run, "* &&
       $c16b != *backup-ssh* && $c16b == *one-command* && $c16b != *"--tags drill"* ]]; then
   ok "16a. torn path, sftp mode, empty nodes: the kept sftp keys stand, the seal key is read as absent, the run reaches the teardown; with none kept it stops before it"
 else bad "16a. $r16a $o16a [$c16a] | $r16b $o16b [$c16b]"; fi
@@ -532,6 +534,18 @@ cp "$t/node.key.keep" "$t/node.key"
 if [[ $r16e -eq 1 && $o16e == *"the seal key's SOPS copy differs from the seal node's key"* && $c16e != *one-command* ]]; then
   ok "16c. torn path: a seal node that holds a different key is still refused before the teardown"
 else bad "16c. $r16e $o16e [$c16e]"; fi
+# The seal fallback needs all three: the stopped run's compare line, a SOPS file not newer than that log, a clean "absent" from the node.
+inventory; torn_reset; keep_certs; SEAL_LINE=no torn_log yes; touch -d '2 hours ago' "$t/keys/prod/openbao-seal.key.sops.json"
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16f=$rc o16f=$out c16f=$calls
+torn_reset; keep_certs; touch "$t/keys/prod/openbao-seal.key.sops.json"; touch -d '1 hour ago' "$logd/run-29990101T000000Z.log"
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16g=$rc o16g=$out c16g=$calls
+torn_reset; keep_certs
+TEST_RC=1 EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16h=$rc o16h=$out c16h=$calls
+if [[ $r16f -eq 1 && $o16f == *"does not show it compared the SOPS copy with the live key"* && $c16f != *one-command* &&
+      $r16g -eq 1 && $o16g == *"is not older than the stopped run's log"* && $c16g != *one-command* &&
+      $r16h -eq 1 && $o16h == *"does not say the file is absent"* && $c16h != *one-command* ]]; then
+  ok "16d. torn path: an unreadable seal key stands only with the stopped run's compare line, a SOPS file older than its log and a clean absent from the node; each missing one refuses"
+else bad "16d. $r16f $o16f | $r16g $o16g | $r16h $o16h"; fi
 rm -f "$logd"/*
 
 exit "$fail"
