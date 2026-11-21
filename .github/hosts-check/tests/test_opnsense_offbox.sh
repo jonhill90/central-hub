@@ -164,4 +164,16 @@ rm -f "$t/keys/backend.env" "$t/hostescrow-calls" "$t/escrow-calls"; echo 0 > "$
 bash "$t/offbox-log.sh" >/dev/null 2>&1; [[ ! -e $t/hostescrow-calls && $(cat "$t/escrow-calls") == ensure ]] \
   && ok "7c without the switch file the host's escrow is never called and the vault escrow runs" || bad "7c $(cat "$t/hostescrow-calls" "$t/escrow-calls" 2>&1)"
 
+# 8 real restic, a repository folder that already holds the host's escrow/ folder (the escrow is written before the repository is made, and it
+#   stays beside the repository): init, backup, forget with prune and check all work and leave it alone.
+mkdir -p "$t/repo8/escrow"; echo escrow-file > "$t/repo8/escrow/restic-password"
+export8() { RESTIC_REPOSITORY=$t/repo8 RESTIC_PASSWORD_FILE=$t/keys/restic.txt "$t/restic" "$@"; }
+if export8 cat config >/dev/null 2>&1; then bad "8 a folder with only escrow/ should not look like a repository"
+elif [[ $? == 10 || -n $(export8 cat config 2>&1 | grep -i "does not exist\|unable to open config") ]] && export8 init -q >/dev/null 2>&1 \
+   && export8 backup -q --host agent-box --tag opnsense "$t/work/opnsense-backup" >/dev/null 2>&1 \
+   && export8 forget -q --host agent-box --tag opnsense --keep-daily 1 --prune >/dev/null 2>&1 && export8 check >/dev/null 2>&1 \
+   && [[ $(cat "$t/repo8/escrow/restic-password") == escrow-file ]]; then
+  ok "8 restic makes, fills, prunes and checks a repository whose folder already holds escrow/, and leaves it alone"
+else bad "8 restic does not cope with an escrow/ folder beside the repository"; fi
+
 exit "$fail"
