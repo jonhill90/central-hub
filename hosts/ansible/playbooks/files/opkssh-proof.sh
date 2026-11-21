@@ -87,7 +87,9 @@ useradd -m -s /bin/bash "$acct" >/dev/null 2>&1 || true
 useradd -m -s /bin/bash "$other" >/dev/null 2>&1 || true
 email=$(kcadm get users -r lab -q "username=$user" --fields email --format csv --noquotes 2>/dev/null | head -n 1)
 [ -n "$email" ] || { say "FAIL: could not read $user's email in realm lab"; exit 1; }
-echo "$issuer $client 24h" > /etc/opk/providers
+# Policy oidc: a key ends when the Keycloak ID token in it ends, the shortest of opkssh's policies (12h, 24h, 48h,
+# 1week, oidc, oidc_refreshed; README v0.19.2, "Expiration policy"), which stands in for the revocation list it lacks.
+echo "$issuer $client oidc" > /etc/opk/providers
 echo "$acct $email $issuer" > /etc/opk/auth_id
 chown root:opksshuser /etc/opk/providers /etc/opk/auth_id && chmod 640 /etc/opk/providers /etc/opk/auth_id
 systemctl reload sshd; sleep 2
@@ -99,9 +101,12 @@ HOME=$work/home timeout 240 /usr/local/bin/opkssh login --provider="$issuer,$cli
 lp=$!
 url=""
 for _ in $(seq 1 30); do
-  url=$(grep -oE 'https?://[^ "<>]+' "$work/login.out" | head -n 1); [ -n "$url" ] && break; sleep 1
+  # opkssh prints "Open your browser to: http://localhost:<port>/login" (openpubkey v0.30.0,
+  # providers/standard_provider.go, presentLoginURI); other lines may hold other addresses.
+  url=$(grep -oE 'Open your browser to: http://localhost:[0-9]+/login' "$work/login.out" | head -n 1 | sed 's/^Open your browser to: //')
+  [ -n "$url" ] && break; sleep 1
 done
-[ -n "$url" ] || { say "FAIL: opkssh login printed no address to open"; kill $lp 2>/dev/null; exit 1; }
+[ -n "$url" ] || { say "FAIL: opkssh login printed no local login address; its first lines: $(head -n 3 "$work/login.out" | tr -cd 'A-Za-z0-9 :/._\n-' | tr -s '\n' ' ' | cut -c1-200)"; kill $lp 2>/dev/null; exit 1; }
 python3 -I -c 'import json,sys; c=json.load(open(sys.argv[1])); c.update(url=sys.argv[2], user=sys.argv[3]); print(json.dumps(c))' "$work/user.json" "$url" "$user" |
   python3 -I "$work/opkssh-proof-login.py"
 wait $lp; lrc=$?
@@ -114,7 +119,7 @@ try() { # account, expected output or ""
 }
 check "ssh: the opkssh key logs in as $acct" try "$acct" "$acct"
 check "ssh: the same key is refused as $other, which auth_id does not name" try "$other" ""
-say "note: opkssh keys end at the provider line's 24h, the shortest it offers is 12h, and it has no revocation list (README, /etc/opk/providers)"
+say "note: these opkssh keys end with the Keycloak ID token (policy oidc); opkssh has no revocation list (README v0.19.2)"
 
 if [ "$fails" -eq 0 ]; then say "PASS: Keycloak sign-in through opkssh, ssh login, and a refused account"; exit 0; fi
 say "FAIL: $fails check(s) failed"; exit 1

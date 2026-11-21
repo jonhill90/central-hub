@@ -41,7 +41,21 @@ def page_kind(body):
         kind += ", the one-time-code form again"
     if re.search(r'id="input-error[A-Za-z0-9_-]*"|class="[^"]*alert-error', body or ""):
         kind += ", with an error"
+    if kc_error(body):
+        kind += ", Keycloak says: " + kc_error(body)
     return kind
+
+
+def where(url):
+    """Scheme, host, port and path of an address, never its query (which holds state and codes)."""
+    u = urllib.parse.urlsplit(url)
+    return "%s://%s%s" % (u.scheme, u.netloc, u.path)
+
+
+def kc_error(body):
+    """Keycloak's own error message on an error page (such as "Invalid parameter: redirect_uri"), cut short."""
+    m = re.search(r'id="kc-error-message"[^>]*>\s*<p[^>]*>([^<]{1,120})', body or "")
+    return re.sub(r"[^A-Za-z0-9 :_./-]", "", html.unescape(m.group(1))).strip()[:100] if m else ""
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -81,7 +95,8 @@ def main():
     try:
         code, body, at = follow(cfg["url"])
         action = form(body, at)
-        if not line("login page", code == 200 and action is not None and 'name="password"' in body, "HTTP %s, no login form" % code):
+        if not line("login page", code == 200 and action is not None and 'name="password"' in body,
+                    "HTTP %s at %s, no login form (%s)" % (code, where(at), page_kind(body))):
             return 1
         code, body, at = follow(action, {"username": cfg["user"], "password": cfg["password"], "credentialId": ""})
         if cfg.get("seed"):
