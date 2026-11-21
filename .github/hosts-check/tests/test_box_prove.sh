@@ -9,6 +9,7 @@
 #   6. FAIL when the sign-in does not work (refused, timed out, refused connection) or the folder is not /box, naming the class of failure,
 #      with no ok line (nothing passes for want of a sign-in), checks 2-5 reported as not run, and no address printed;
 #   7. refuse, writing and printing nothing, when the ssh config, key or pinned host key is missing;
+#   9. FAIL (check 6) when an installed off-box script differs from, or is missing against, the role's manifest, or the manifest is missing;
 #   8. leave no test file behind in /box, and print no address or key.
 set -euo pipefail
 src=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -48,11 +49,15 @@ exit 0
 STUB
 chmod +x "$t/libexec/ansible-venv/bin/sftp" "$t/libexec/ansible-venv/bin/ssh"
 
+# The off-box scripts and the manifest the role writes from them (check 6).
+for n in opnsense-offbox.sh secrets-bundle-offbox.sh; do echo "script $n" > "$t/libexec/$n"; done
+( cd "$t/libexec" && sha256sum opnsense-offbox.sh secrets-bundle-offbox.sh > backend-files.sha256 )
+
 run() { echo "$1" > "$t/mode"; rc=0; out=$("$t/h.sh" box-prove 2>&1) || rc=$?; }
 leftover() { find "$t/remote" -name 'boxprove-*' | wc -l; }
 
 run ""
-[[ $rc == 0 && $(grep -c 'box-prove: ok' <<<"$out") == 6 && $out != *FAIL* ]] && ok "1 a store set up as the host role makes it: six ok lines (check 3 has two), exit 0" || bad "1 rc=$rc out=$out"
+[[ $rc == 0 && $(grep -c 'box-prove: ok' <<<"$out") == 7 && $out != *FAIL* ]] && ok "1 a store set up as the host role makes it: seven ok lines (check 3 has two), exit 0" || bad "1 rc=$rc out=$out"
 [[ $(leftover) == 0 ]] && ok "8 no test file left in /box" || bad "8 test file left"
 ! grep -Eq '10\.|ssh-ed25519|AAAA' <<<"$out" && ok "8 no address or key printed" || bad "8 printed a value: $out"
 
@@ -66,6 +71,16 @@ for case in "rootwritable|3 / is writable" "opens|3 .* other folder" "passwd|4 /
     [[ $out != *"box-prove: ok"* && $out == *"FAIL 2-5 not run"* && $out != *10.9.9.9* ]] && ok "6 mode '$m': no ok line, checks 2-5 reported as not run, no address printed" || bad "mode '$m' printed an ok, or an address: $out"
   fi
 done
+
+# check 6: a script left behind (differs), a script missing, no manifest
+echo "old script" > "$t/libexec/opnsense-offbox.sh"; run ""
+[[ $rc == 1 && $out == *"FAIL 6 opnsense-offbox.sh is missing or differs"* ]] && ok "9 an installed script that differs from the manifest fails check 6" || bad "9 differs: rc=$rc out=$out"
+rm -f "$t/libexec/opnsense-offbox.sh"; run ""
+[[ $rc == 1 && $out == *"FAIL 6 opnsense-offbox.sh is missing or differs"* ]] && ok "9 a missing installed script fails check 6" || bad "9 missing: rc=$rc out=$out"
+echo "script opnsense-offbox.sh" > "$t/libexec/opnsense-offbox.sh"
+mv "$t/libexec/backend-files.sha256" "$t/keep.sha"; run ""
+[[ $rc == 1 && $out == *"FAIL 6"*"is missing"* ]] && ok "9 a missing manifest fails check 6" || bad "9 no manifest: rc=$rc out=$out"
+mv "$t/keep.sha" "$t/libexec/backend-files.sha256"
 
 for f in ssh_config id_ed25519 known_hosts; do
   mv "$bd/$f" "$bd/$f.keep"; run ""

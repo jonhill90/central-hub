@@ -310,6 +310,19 @@
     mode: "0755"
   tags: [users, wrappers]
 
+# What box-prove compares the installed off-box scripts with. It is written from the role's own files, in a step the box's
+# self-apply does not skip, so a script that stayed behind (opnsense_offbox is a skip tag; the bundle send can be off) differs from it.
+- name: The sha256 of the off-box scripts this role ships, for box-prove
+  ansible.builtin.copy:
+    content: |
+      {{ lookup('ansible.builtin.file', 'opnsense-offbox.sh') | hash('sha256') }}  opnsense-offbox.sh
+      {{ lookup('ansible.builtin.file', 'secrets-bundle-offbox.sh') | hash('sha256') }}  secrets-bundle-offbox.sh
+    dest: "{{ agent_box_libexec_dir }}/backend-files.sha256"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [users, wrappers]
+
 
 # In check mode on a fresh box the folders above only report "would create", so the steps that
 # write into them are skipped there rather than failing. A check never writes to the box.
