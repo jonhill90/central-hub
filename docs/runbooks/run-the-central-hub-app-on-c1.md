@@ -27,7 +27,7 @@ The app (public repository `jonhill90/central-hub-app`) runs as one pod in names
 3. After the merge and Argo CD's sync, read the pod. On the agent box: `c1-read -n central-hub-app get pods`, then `c1-read -n central-hub-app logs deploy/central-hub-app -c build --tail=5`.
    expect: the pod is `Running 1/1`, and the log's last line is `built <the sha from step 1>`.
 
-4. Open the app. `https://central-hub-app.apps.c1.prod.<zone>/` from the lab network or the tailnet.
+4. Open the app. `https://hub.<zone>/` (or the long name `https://hub.apps.c1.prod.<zone>/`) from the lab network or the tailnet. The Gateway route key is `hub` (`apps/gateway/values.yaml`); the Argo CD app, the namespace and the Service stay `central-hub-app`.
    expect: the Hub with its menu; `/api/v1/catalog` answers 200.
 
 ## If it fails

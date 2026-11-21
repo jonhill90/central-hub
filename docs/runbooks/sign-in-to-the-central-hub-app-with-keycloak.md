@@ -38,7 +38,7 @@ Sign-in ships off; see "Turn it on" below. The pod mounts the two Secrets as one
    expect: the run prints `client central-hub-app: ok` and ends with `failed=0`; the two Secrets exist (`c1-read get secrets -n central-hub-app`).
 3. Prove it without a password:
    - Keycloak knows the client: the login-probe Job's newest log has `PASS: keycloak sign-in page for client central-hub-app and its redirect (HTTP 200)` (`c1-read logs -n login-probe job/<newest>`).
-   - The app asks for sign-in: `curl -sI https://central-hub-app.<zone>/` answers 307 to `/auth/login`, and `curl -sI https://central-hub-app.<zone>/auth/login` answers 307 to `https://sso.<zone>/realms/lab/protocol/openid-connect/auth?...client_id=central-hub-app...code_challenge_method=S256`; `curl -s -o /dev/null -w '%{http_code}' https://central-hub-app.<zone>/api/v1/catalog` is 401; `/api/v1/health` is 200.
+   - The app asks for sign-in: `curl -sI https://hub.<zone>/` answers 307 to `/auth/login`, and `curl -sI https://hub.<zone>/auth/login` answers 307 to `https://sso.<zone>/realms/lab/protocol/openid-connect/auth?...client_id=central-hub-app...code_challenge_method=S256`; `curl -s -o /dev/null -w '%{http_code}' https://hub.<zone>/api/v1/catalog` is 401; `/api/v1/health` is 200.
    expect: all of the above.
 4. A typed sign-in is the owner's: open the app, sign in with the lab account and its code, and the home page opens.
    expect: the home page; closing the browser's cookies for the app sends it back to sign-in.
@@ -48,7 +48,7 @@ Sign-in ships off; see "Turn it on" below. The pod mounts the two Secrets as one
 Sign-in is off in the chart (`auth.mode: "off"`) until the platform side exists, because with it on and no Secrets the whole app answers 503 while Argo CD still shows Healthy. The chart refuses `auth.mode: oidc` unless `auth.secretsConfirmed: true` is set too, and CI renders both cases. Turn it on in a pull request that sets both, after steps 1 or 2:
 
 1. Read that the client and the Secrets are there: `c1-read get externalsecrets -n central-hub-app` shows `central-hub-app-sso` Ready (store on), and Keycloak lists client `central-hub-app` (the `c1-ansible clients` run prints `client central-hub-app: ok`).
-2. Set `auth.mode: oidc` and `auth.secretsConfirmed: true` in `hosts/kubernetes/home/c1/apps/central-hub-app/values.yaml`, and add `{id: central-hub-app, host: central-hub-app, redirect: /auth/callback}` to `clients` in `hosts/kubernetes/home/c1/apps/login-probe/values.yaml` (it is left out while sign-in is off, so the probe does not fail on a client the live realm does not have yet).
+2. Set `auth.mode: oidc` and `auth.secretsConfirmed: true` in `hosts/kubernetes/home/c1/apps/central-hub-app/values.yaml`, and add `{id: central-hub-app, host: hub, redirect: /auth/callback}` to `clients` in `hosts/kubernetes/home/c1/apps/login-probe/values.yaml` (it is left out while sign-in is off, so the probe does not fail on a client the live realm does not have yet).
    why: the probe is the password-free check that Keycloak knows the client.
 3. After the sync, `curl -s https://<app>/api/v1/health` says `"signIn":"on"` and step 3 below passes. If it says `not configured`, set `auth.mode` back to `"off"` at once.
 
