@@ -405,9 +405,15 @@ for h in sorted(nodes):
         if isinstance(val, str) and mac.search(val): bad.append("host %s: %s still points at the Mac" % (h, k))
     for k in ("k8s_control_plane_encryption_key_file", "k8s_backup_env_file", "k8s_certs_cloudflare_token_file",
               "k8s_identity_values_file", "k8s_certs_lab_ca_cert_file", "k8s_certs_lab_ca_key_file", "k8s_identity_theme_dir",
-              "k8s_gitops_sso_root_ca_file"):
+              "k8s_gitops_sso_root_ca_file", "k8s_identity_jellyfin_root_ca_file"):
         p = v.get(k)
         if isinstance(p, str) and p and not os.path.exists(p): bad.append("%s is %s, which is not on the box" % (k, p))
+    # The identity role makes, touches and chmods its values file on the controller, as the user this runs as (k8s_identity
+    # tasks/secrets.yml, "values" task, delegated to localhost): a file that user can't write or doesn't own stops the identity
+    # stage after the teardown.
+    vf = v.get("k8s_identity_values_file")
+    if isinstance(vf, str) and vf and os.path.exists(vf) and not (os.access(vf, os.W_OK) and os.stat(vf).st_uid == os.geteuid()):
+        bad.append("k8s_identity_values_file is %s, which the box's user can't write and chmod: the identity role does both" % vf)
     # The identity role needs <theme>/login/theme.properties (k8s_identity tasks/theme.yml) and would stop on it only after
     # the teardown, in stage identity.
     th = v.get("k8s_identity_theme_dir")
