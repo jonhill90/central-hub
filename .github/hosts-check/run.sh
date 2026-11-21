@@ -498,6 +498,7 @@ check_backup() {
   bash "$here/tests/test_rebuild_prod.sh"
   bash "$here/tests/test_wait_apps.sh"
   bash "$here/tests/test_rebuild_certs_order.sh"
+  bash "$here/tests/test_rebuild_snapshot_jobs.sh"
   bash "$here/tests/test_openbao_handover.sh"
   bash "$here/tests/test_openbao_refresh.sh"
   bash "$here/tests/test_openbao_measure.sh"
