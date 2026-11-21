@@ -3,7 +3,8 @@
 # ansible-playbook that prints set JSON and a local repository as main:
 #   1. Any other argument is refused, before anything runs; `apply` (the runner's form) does not exist here.
 #   2. With no inventory, key file or lab root, it refuses.
-#   3. check prints a 12-hex hash, and the same firewall gives the same hash twice.
+#   3. check prints a 12-hex hash, and the same firewall gives the same hash twice; it also prints one line per changed task
+#      (name and host only, 3b).
 #   4. apply-recorded refuses, naming each thing missing, with no pass and no go; the wrong recorder is refused.
 #   5. With a reviewer pass for the commit and hash and a go for the commit, it applies; the go is then spent, and a
 #      second apply-recorded on the same go is refused.
@@ -92,6 +93,12 @@ done
 h1=$(job check 2>&1 | sed -n 's/^opnsense-prod: check \([0-9a-f]\{12\}\):.*/\1/p')
 h2=$(job check 2>&1 | sed -n 's/^opnsense-prod: check \([0-9a-f]\{12\}\):.*/\1/p')
 [ -n "$h1" ] && [ "$h1" = "$h2" ] && ok "3 check gives the same 12-hex hash twice ($h1)" || bad "3 hashes '$h1' '$h2'"
+# 3b: check names each changed task and its host, and nothing else (no unchanged or skipped task, no diff text)
+job check > "$t/3b.out" 2>&1
+n=$(grep -c '^opnsense-prod: changed: ' "$t/3b.out")
+if grep -qxF 'opnsense-prod: changed: rule (opnsense_fw)' "$t/3b.out" && [ "$n" = 1 ] && ! grep -qE 'changed: (read|dns)|old|new' "$t/3b.out"; then
+  ok "3b check prints one line per changed task, its name and host, and no diff text"
+else bad "3b changed-task lines: $(cat "$t/3b.out")"; fi
 c=$(git -C "$t/main.git" rev-parse main)
 tm=2026-11-20T00:00:00Z
 

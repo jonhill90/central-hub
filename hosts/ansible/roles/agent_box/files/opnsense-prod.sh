@@ -246,6 +246,14 @@ case $action in
     read -r hash changed skipped total <<< "$line"
     record "$hash" "$changed changed, $skipped skipped, $total tasks" ok
     echo "opnsense-prod: check $hash: $changed changed, $skipped skipped, $total tasks"
+    # One line per changed task: its name and host label from the reviewed playbook, never a diff or a value, so a reviewer can
+    # tie each change to its PR before passing the apply.
+    python3 -I - "$result" <<'PY2'
+import json, sys
+for t in json.load(open(sys.argv[1]))["tasks"]:
+    if t["changed"]:
+        print("opnsense-prod: changed: %s (%s)" % (t["name"], t["host"]))
+PY2
     echo "opnsense-prod: the agents' pass for an apply names this commit (${commit:0:12}) and this hash ($hash)"
     ;;
   apply-recorded)
