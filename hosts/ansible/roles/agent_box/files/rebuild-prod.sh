@@ -775,7 +775,9 @@ date -u +%FT%TZ > "$work/state/prod-stable-folders"
 # The rebuilt nodes have new host keys: the build starts with no known hosts.
 rm -f -- "$envdir/known_hosts" "$envdir/known_hosts.old" "$work/c1-ansible/known_hosts"
 
-stages="vms cluster storage openbao-seal restore gitops secrets apps gateway certs identity identity-db ui backup checks"
+# certs runs before gateway: the Gateway's HTTPS listener waits on the certificate's Secret, and `apps` leaves out the two apps that
+# need what certs makes (APPS_DEFER); `checks` waits for every app (prod run 6, 2026-11-21, stopped at apps on gateway and jellyfin).
+stages="vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks"
 cat > "$envdir/rebuild.env" <<ENV
 ENV_NAME=prod
 VM_ID_MIN=$vm_min
@@ -785,6 +787,8 @@ TFSTATE=$tfstate
 TOFU_ENV=$tofu_env
 INVENTORY=$inventory/
 STAGES="$stages"
+APPS_DEFER="gateway jellyfin"
+CERTS_SMOKE_LATE=true
 TEARDOWN_TARGET=$teardown_target
 SECRET_SOURCE_FILE=$pkeys/secret-source.env
 OPENBAO_SEAL_KEY_FILE=$seal_tmp/openbao-seal.key
