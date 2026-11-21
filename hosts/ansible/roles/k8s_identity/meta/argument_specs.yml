@@ -37,7 +37,10 @@ argument_specs:
         default: kube-prometheus-stack-grafana
         description: "Grafana's Deployment, restarted when its client secret changes."
       k8s_identity_central_hub_app_name: {type: str, default: central-hub-app, description: "The Central Hub app's client id."}
-      k8s_identity_central_hub_app_host_label: {type: str, default: hub, description: "First label of the Central Hub app's hostnames (hub.<zone> and hub.apps.c1.prod.<zone>), the gateway route key."}
+      k8s_identity_central_hub_app_host_label:
+        type: str
+        default: hub
+        description: "First label of the Central Hub app's hostnames (hub.<zone>, hub.apps.c1.prod.<zone>); the gateway route key."
       k8s_identity_central_hub_app_namespace:
         type: str
         default: central-hub-app
