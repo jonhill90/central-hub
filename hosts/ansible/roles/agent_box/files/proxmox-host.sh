@@ -5,7 +5,7 @@
 # other wrapper can read that key. Installed by the agent_box role; root owns it.
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check [<job>]
 #   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh apply [<job>] <pass message ID> <check hash, 12 hex>
-# <job> names which one playbook runs: `proxy` (the default, playbooks/proxmox-proxy.yml), `sso` (playbooks/proxmox-sso.yml:
+# <job> names which one playbook runs: `proxy` (the default, playbooks/proxmox-proxy.yml), `opnsense-sso` (playbooks/opnsense-sso.yml: the firewall's web sign-in, installed through VM 100's guest agent; its secret is the one line in $dir/opnsense-sso.env), `sso` (playbooks/proxmox-sso.yml:
 #   the web UI's sign-in through Keycloak; its client secret is the one line in $dir/proxmox-sso.env, read on the box by this
 #   user only) or `agent-access` (playbooks/
 #   proxmox-agent-access.yml: it copies hosts/terraform/home/bootstrap/agent-access.sh from the same commit to the host and
@@ -63,7 +63,7 @@ libexec=/usr/local/libexec/agent-box
 ansible_bin=$libexec/ansible-venv/bin
 collections=$libexec/collections
 repo_url=https://github.com/jonhill90/central-hub.git   # public; the reviewed code this job runs
-declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml [box-writer]=playbooks/proxmox-restic-box.yml)
+declare -A jobs=([proxy]=playbooks/proxmox-proxy.yml [agent-access]=playbooks/proxmox-agent-access.yml [sso]=playbooks/proxmox-sso.yml [opnsense-sso]=playbooks/opnsense-sso.yml [firewall]=playbooks/proxmox-firewall.yml [guests]=playbooks/proxmox-guests.yml [restore-reader]=playbooks/proxmox-restic-reader.yml [memory]=playbooks/proxmox-memory.yml [ksm]=playbooks/proxmox-ksm.yml [ksm-off]=playbooks/proxmox-ksm-off.yml [box-writer]=playbooks/proxmox-restic-box.yml)
 inventory=$dir/inventory/hosts.yml
 logs=$work/logs
 summary=$logs/summary.jsonl
@@ -72,7 +72,7 @@ result=$work/state/check.json
 ledger=$work/ledger
 usage() {
   echo "       proxmox-host guard arm|confirm|rollback|clear|status" >&2
-  echo "usage: proxmox-host check [proxy|agent-access|sso|firewall|guests|restore-reader|memory|ksm|ksm-off|box-writer]|apply [proxy|agent-access|sso|firewall|guests|restore-reader|memory|ksm|ksm-off|box-writer] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
+  echo "usage: proxmox-host check [proxy|agent-access|sso|opnsense-sso|firewall|guests|restore-reader|memory|ksm|ksm-off|box-writer]|apply [proxy|agent-access|sso|opnsense-sso|firewall|guests|restore-reader|memory|ksm|ksm-off|box-writer] <pass message ID, cmsg_...> <check hash, 12 hex digits>|log" >&2
   echo "       proxmox-host apply-recorded [job] <check hash>|pass [job] <commit> <check hash> <cmsg_...> <ISO time> reviewer|go [job] <commit> <cmsg_...> <ISO time> orchestrator|ledger [job]" >&2
   exit 2
 }
@@ -169,6 +169,14 @@ if [[ $job == sso ]]; then
   [[ -s $dir/proxmox-sso.env ]] \
     || { echo "proxmox-host: $dir/proxmox-sso.env is missing; the controller's proxmox_host_inventory run makes it (docs/runbooks/sign-in-to-proxmox-through-keycloak.md)" >&2; exit 1; }
   sso_args=(-e "proxmox_sso_values_file=$dir/proxmox-sso.env")
+fi
+
+# The opnsense-sso job (role opnsense_sso) reads the opnsense client's secret from one file of this user's own, the same way
+# (the controller's proxmox_host_inventory run makes $dir/opnsense-sso.env: the one OPNSENSE_CLIENT_SECRET line).
+if [[ $job == opnsense-sso ]]; then
+  [[ -s $dir/opnsense-sso.env ]] \
+    || { echo "proxmox-host: $dir/opnsense-sso.env is missing; the controller's proxmox_host_inventory run makes it (docs/runbooks/sign-in-to-opnsense-through-keycloak.md)" >&2; exit 1; }
+  sso_args=(-e "opnsense_sso_values_file=$dir/opnsense-sso.env")
 fi
 
 # The restore-reader job lets in the dev worker's address, read from the handoff the keys user's rebuild wrapper writes while dev is up

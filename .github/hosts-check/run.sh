@@ -141,6 +141,7 @@ check_ansible() {
   bash "$here/tests/test_opnsense_backup_target.sh"
   bash "$here/tests/test_opnsense_store_admin.sh"
   bash "$here/tests/test_opnsense_proxmox_web.sh"
+  bash "$here/tests/test_opnsense_sso.sh"
 }
 
 check_manifests() {

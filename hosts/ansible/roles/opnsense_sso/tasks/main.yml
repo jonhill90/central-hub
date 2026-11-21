@@ -1,0 +1,202 @@
+---
+# The firewall's sign-in through Keycloak, run on the Proxmox host. Every command on the firewall goes through
+# files/guest-exec.py (`qm guest exec`), so the firewall needs no SSH and no new access. Reads run in check mode
+# too; changes don't. The client secret is read here and reaches the firewall only inside a settings file that the
+# settings script deletes as soon as it has read it (no_log everywhere it is held). Root's local login is not touched
+# (D-0037 rule 2): the script adds a server and never removes the Local Database.
+
+- name: opnsense_sso | Check the inputs
+  ansible.builtin.assert:
+    that:
+      - opnsense_sso_issuer is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?/realms/[A-Za-z0-9_-]+$')
+      - opnsense_sso_plugin_sha256 is match('^[0-9a-f]{64}$')
+      - opnsense_sso_plugin_url is match('^https://github[.]com/jpawlowski/opnsense-openid-connect/releases/download/[A-Za-z0-9._/-]+[.]pkg$')
+      - opnsense_sso_vm | string is match('^[0-9]+$')
+    fail_msg: Set opnsense_sso_issuer (https://sso.<zone>/realms/lab) in the inventory; the package pin is in the role's defaults.
+    quiet: true
+
+- name: opnsense_sso | The controller's values file
+  ansible.builtin.stat:
+    path: "{{ opnsense_sso_values_file }}"
+  delegate_to: localhost
+  become: false
+  register: opnsense_sso_values_stat
+
+- name: opnsense_sso | The client secret, from the values file
+  ansible.builtin.set_fact:
+    opnsense_sso_secret: >-
+      {{ lookup('ansible.builtin.file', opnsense_sso_values_file).splitlines()
+         | select('match', '^' ~ opnsense_sso_secret_key ~ '=') | map('regex_replace', '^[^=]*=', '') | first | default('') }}
+  no_log: true
+  when: opnsense_sso_values_stat.stat.exists
+
+- name: opnsense_sso | The values file holds the client secret
+  ansible.builtin.assert:
+    that: opnsense_sso_values_stat.stat.exists and opnsense_sso_secret | length >= 32
+    fail_msg: >-
+      {{ opnsense_sso_values_file }} has no {{ opnsense_sso_secret_key }} line. Run playbooks/k8s-identity.yml with the
+      OPNsense GUI name set first: it adds the line and the client to realm lab.
+    quiet: true
+
+- name: opnsense_sso | Keycloak's discovery document, from the host
+  ansible.builtin.uri:
+    url: "{{ opnsense_sso_issuer }}/.well-known/openid-configuration"
+    return_content: true
+    timeout: 15
+    validate_certs: "{{ opnsense_sso_validate_certs }}"
+  register: opnsense_sso_discovery
+  check_mode: false
+
+- name: opnsense_sso | The discovery document names this issuer
+  ansible.builtin.assert:
+    that: opnsense_sso_discovery.json.issuer == opnsense_sso_issuer
+    fail_msg: "Keycloak says its issuer is {{ opnsense_sso_discovery.json.issuer }}, not {{ opnsense_sso_issuer }}."
+    quiet: true
+
+- name: opnsense_sso | The guest agent answers
+  ansible.builtin.command:
+    argv: [qm, agent, "{{ opnsense_sso_vm }}", ping]
+  changed_when: false
+  check_mode: false
+
+- name: opnsense_sso | Is the package installed
+  ansible.builtin.script:
+    cmd: "guest-exec.py {{ opnsense_sso_vm }} run 60 -- /usr/sbin/pkg info -e os-openid-connect"
+    executable: /usr/bin/python3
+  register: opnsense_sso_installed
+  failed_when: opnsense_sso_installed.rc not in [0, 1]
+  changed_when: false
+  check_mode: false
+
+- name: opnsense_sso | Download the package on the firewall and check its SHA-256 there
+  ansible.builtin.script:
+    cmd: >-
+      guest-exec.py {{ opnsense_sso_vm }} run 300 -- /bin/sh -c
+      '/usr/bin/fetch -q -o /root/os-openid-connect.pkg {{ opnsense_sso_plugin_url }} &&
+      test "$(/sbin/sha256 -q /root/os-openid-connect.pkg)" = {{ opnsense_sso_plugin_sha256 }}'
+    executable: /usr/bin/python3
+  when: opnsense_sso_installed.rc == 1 and not ansible_check_mode
+  changed_when: true
+
+- name: opnsense_sso | Install the package
+  ansible.builtin.script:
+    cmd: >-
+      guest-exec.py {{ opnsense_sso_vm }} run 300 -- /bin/sh -c
+      '/usr/sbin/pkg add /root/os-openid-connect.pkg; r=$?; rm -f /root/os-openid-connect.pkg; exit $r'
+    executable: /usr/bin/python3
+  when: opnsense_sso_installed.rc == 1 and not ansible_check_mode
+  changed_when: true
+
+# The settings file is the script's JSON (its header). The marker holds the SHA-256 of the settings and of the script, so a
+# run changes the firewall only when the secret, the issuer or the script's text changed.
+- name: opnsense_sso | The settings, and the marker they give
+  ansible.builtin.set_fact:
+    opnsense_sso_settings: >-
+      {{ {'name': opnsense_sso_server_name, 'issuer': opnsense_sso_issuer, 'client_id': opnsense_sso_client_id,
+          'client_secret': opnsense_sso_secret, 'app_code': opnsense_sso_app_code} | to_json }}
+    opnsense_sso_marker: >-
+      {{ ({'name': opnsense_sso_server_name, 'issuer': opnsense_sso_issuer, 'client_id': opnsense_sso_client_id,
+           'client_secret': opnsense_sso_secret, 'app_code': opnsense_sso_app_code} | to_json ~
+          lookup('ansible.builtin.file', opnsense_sso_script)) | hash('sha256') }}
+  no_log: true
+
+- name: opnsense_sso | The marker on the firewall
+  ansible.builtin.script:
+    cmd: "guest-exec.py {{ opnsense_sso_vm }} run 60 -- /bin/cat /conf/.central-hub-opnsense-sso"
+    executable: /usr/bin/python3
+  register: opnsense_sso_marker_now
+  failed_when: opnsense_sso_marker_now.rc not in [0, 1]
+  changed_when: false
+  check_mode: false
+
+- name: opnsense_sso | Put the script and the settings on the firewall, run the script
+  when: >-
+    not ansible_check_mode and (opnsense_sso_installed.rc == 1 or opnsense_sso_marker_now.rc != 0
+    or opnsense_sso_marker_now.stdout | trim != opnsense_sso_marker)
+  block:
+    - name: opnsense_sso | A private folder on the host for the files to send
+      ansible.builtin.tempfile: {state: directory, suffix: .opnsense_sso}
+      register: opnsense_sso_tmp
+      changed_when: false
+
+    - name: opnsense_sso | The script, in that folder
+      ansible.builtin.copy:
+        src: "{{ opnsense_sso_script }}"
+        dest: "{{ opnsense_sso_tmp.path }}/server.php"
+        mode: "0600"
+      changed_when: false
+
+    - name: opnsense_sso | The settings, in that folder
+      ansible.builtin.copy:
+        content: "{{ opnsense_sso_settings }}"
+        dest: "{{ opnsense_sso_tmp.path }}/settings.json"
+        mode: "0600"
+      no_log: true
+      changed_when: false
+
+    - name: opnsense_sso | The marker, in that folder
+      ansible.builtin.copy:
+        content: "{{ opnsense_sso_marker }}\n"
+        dest: "{{ opnsense_sso_tmp.path }}/marker"
+        mode: "0600"
+      no_log: true
+      changed_when: false
+
+    - name: opnsense_sso | Send the script
+      ansible.builtin.script:
+        cmd: "guest-exec.py {{ opnsense_sso_vm }} put /root/opnsense-oidc-server.php 0600 {{ opnsense_sso_tmp.path }}/server.php"
+        executable: /usr/bin/python3
+      changed_when: false
+
+    - name: opnsense_sso | Send the settings
+      ansible.builtin.script:
+        cmd: "guest-exec.py {{ opnsense_sso_vm }} put /root/opnsense-oidc-settings.json 0600 {{ opnsense_sso_tmp.path }}/settings.json"
+        executable: /usr/bin/python3
+      no_log: true
+      changed_when: false
+
+    - name: opnsense_sso | Run the script, which deletes the settings file as it reads it
+      ansible.builtin.script:
+        cmd: "guest-exec.py {{ opnsense_sso_vm }} run 120 -- /bin/sh -c 'php /root/opnsense-oidc-server.php /root/opnsense-oidc-settings.json'"
+        executable: /usr/bin/python3
+      register: opnsense_sso_ran
+      changed_when: true
+
+    - name: opnsense_sso | Keep the marker
+      ansible.builtin.script:
+        cmd: "guest-exec.py {{ opnsense_sso_vm }} put /conf/.central-hub-opnsense-sso 0600 {{ opnsense_sso_tmp.path }}/marker"
+        executable: /usr/bin/python3
+      changed_when: false
+  always:
+    - name: opnsense_sso | Remove the host's private folder
+      ansible.builtin.file: {path: "{{ opnsense_sso_tmp.path }}", state: absent}
+      changed_when: false
+      when: opnsense_sso_tmp is defined and opnsense_sso_tmp.path is defined
+    - name: opnsense_sso | No settings file, script or package left on the firewall
+      ansible.builtin.script:
+        cmd: >-
+          guest-exec.py {{ opnsense_sso_vm }} run 60 -- /bin/rm -f /root/opnsense-oidc-settings.json
+          /root/opnsense-oidc-server.php /root/os-openid-connect.pkg
+        executable: /usr/bin/python3
+      changed_when: false
+      when: not ansible_check_mode
+
+- name: opnsense_sso | Say what the script did
+  ansible.builtin.debug:
+    msg: "{{ opnsense_sso_ran.stdout_lines | default(['nothing to change']) }}"
+
+# The proof the first half of a sign-in works, with no user: the package is installed and the server is in the firewall's
+# own config. The full sign-in with the box's test user is the box's scripted check (signin-check opnsense).
+- name: opnsense_sso | Proof, the package and the server are there
+  when: not ansible_check_mode
+  block:
+    - name: opnsense_sso | The package
+      ansible.builtin.script:
+        cmd: "guest-exec.py {{ opnsense_sso_vm }} run 60 -- /usr/sbin/pkg info -e os-openid-connect"
+        executable: /usr/bin/python3
+      changed_when: false
+    - name: opnsense_sso | The server in /conf/config.xml, by name, with no secret printed
+      ansible.builtin.script:
+        cmd: "guest-exec.py {{ opnsense_sso_vm }} run 60 -- /bin/sh -c 'grep -c \"<name>{{ opnsense_sso_server_name }}</name>\" /conf/config.xml'"
+        executable: /usr/bin/python3
+      changed_when: false
