@@ -112,6 +112,7 @@ grep -q "^not restored: ${C}_openbao_data-openbao-0" <<< "$out" || fail "the new
 [ "$(cat "$dev/media/jellyfin-config/vault.db")" = only-one ] || fail "the claim with one folder did not come back"
 [ ! -e "$work/prod/.c1-restore-stage" ] && [ -z "$(find "$dev" -name '*generation-[ac]*')" ] || fail "a folder that is not bound was moved into place"
 grep -qP "^snapshot\t$snap3\tci-prod" <<< "$out" || fail "the record does not name the snapshot"
+[ -s "$work/dev-state-1/forget-hold" ] || fail "the restore did not set the forget hold"
 ok "three folders for one claim: the one the etcd backup binds (neither newest nor first) comes back whole, the other two never move, a claim with one folder is as before"
 
 out=$(env_dev 1 "$bin/c1-restore-volumes.sh" check 2>&1) || { echo "$out"; fail "check failed after the restore"; }
@@ -210,5 +211,37 @@ BACKUP_HOST=ci-bad BACKUP_STATE=$work/prod-state-bad BACKUP_VOLUME_PATHS=$data "
 if out=$(plan 24 RESTORE_SOURCE_HOST=ci-bad RESTORE_PLAN_STRICT=1 2>&1); then fail "the strict plan passed with a name it can't map"; fi
 grep -q 'not <namespace>/<claim>' <<< "$out" || { echo "$out"; fail "the plan failed for another reason on a name it can't map"; }
 ok "the plan fails on a folder name it can't map"
+
+echo "== 5. the etcd snapshot of the control plane, and the forget hold"
+# Another host's etcd snapshot, taken nearer in time and saying another volume: ignored once the control plane is named.
+seed yes
+etcd_backup                                   # ci-cp: the claim is bound to B
+sleep 3
+e put /registry/persistentvolumeclaims/openbao/data-openbao-0 "bytes volumeName=$C" >/dev/null
+BACKUP_HOST=ci-other BACKUP_STATE=$work/other-state ETCDCTL_ENDPOINTS=$ep ETCD_CACERT='' KUBE_DIR=$work/kube "$bin/c1-backup-etcd.sh" > "$work/etcd-other.log" 2>&1 || { cat "$work/etcd-other.log"; fail "the other host's etcd backup failed"; }
+BACKUP_HOST=ci-prod5 BACKUP_STATE=$work/prod-state5 BACKUP_VOLUME_PATHS=$data "$bin/c1-backup-volumes.sh" > "$work/vol.log" 2>&1 || fail "the fifth volume backup failed"
+fresh
+env_dev 30 RESTORE_SOURCE_HOST=ci-prod5 RESTORE_ETCD_HOST=ci-cp "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1 || { cat "$work/r.log"; fail "the restore naming the control plane failed"; }
+[ "$(cat "$dev/openbao/data-openbao-0/vault.db")" = generation-b ] || fail "the other host's etcd snapshot was used although the control plane was named"
+fresh
+env_dev 31 RESTORE_SOURCE_HOST=ci-prod5 "$bin/c1-restore-volumes.sh" restore > "$work/r.log" 2>&1 || { cat "$work/r.log"; fail "the restore with no host named failed"; }
+[ "$(cat "$dev/openbao/data-openbao-0/vault.db")" = generation-c ] || fail "with no host named, the nearest etcd snapshot was not the other host's (the test does not show the filter)"
+ok "the etcd snapshot comes from the named control plane even when another host's is nearer in time (and the test shows it would otherwise be taken)"
+
+# The forget hold: with it set a backup forgets nothing; without it, retention runs as before.
+hold_env=(BACKUP_HOST=ci-hold "BACKUP_STATE=$work/hold-state" BACKUP_VOLUME_PATHS=$data BACKUP_KEEP_DAILY=1 BACKUP_KEEP_WEEKLY=0 BACKUP_KEEP_MONTHLY=0)
+count() { "$bin/restic" snapshots --json --host ci-hold --tag volumes | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
+env "${hold_env[@]}" "$bin/c1-backup-volumes.sh" > "$work/vol.log" 2>&1 || fail "the first hold backup failed"
+mkdir -p "$work/hold-state" && echo held > "$work/hold-state/forget-hold"
+env "${hold_env[@]}" "$bin/c1-backup-volumes.sh" > "$work/vol.log" 2>&1 || fail "the held backup failed"
+env "${hold_env[@]}" "$bin/c1-backup-volumes.sh" > "$work/vol.log" 2>&1 || fail "the second held backup failed"
+grep -q 'retention skipped' "$work/vol.log" || fail "the held backup did not say it skipped the retention"
+[ "$(count)" = 3 ] || fail "a backup under the hold forgot a snapshot ($(count) left, want 3)"
+rm -f "$work/hold-state/forget-hold"
+env "${hold_env[@]}" "$bin/c1-backup-volumes.sh" > "$work/vol.log" 2>&1 || fail "the backup after the hold failed"
+[ "$(count)" = 1 ] || fail "retention did not run once the hold was released ($(count) left, want 1)"
+ok "a backup under the forget hold forgets nothing; once it is released the retention runs as before"
+grep -q 'forget-hold' "$role/tasks/restore.yml" && grep -q 'state: absent' "$role/tasks/restore_check.yml" && grep -q 'forget-hold' "$role/tasks/restore_check.yml" || fail "the role does not set and release the hold"
+ok "the restore stage sets the hold on every node and the checks stage releases it"
 
 echo "restore-pv: $pass checks passed"

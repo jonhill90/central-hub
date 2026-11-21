@@ -143,6 +143,18 @@ if [[ $action == rebuild ]]; then
     echo "FAIL: rebuild-prod: a volume snapshot ID is only for a run after one that stopped after its teardown; the last rebuild run did not, so prod holds live data and the drill takes a new backup first. Nothing was backed up or destroyed."; exit 1
   fi
   if [[ -z $torn && -n $pin ]]; then echo "rebuild-prod: ignoring a restore pin left in the box's state: no run stopped after its teardown, so nothing was rebuilt empty"; pin=''; fi
+  # The snapshot the torn run's own drill tested and backed up before its teardown, from its log (a pin file may be missing: a run from before
+  # the pin existed leaves none). A snapshot ID given with no pin file must start with it: an older snapshot of the same host would
+  # otherwise restore stale data.
+  if [[ -n $torn && -z $pin && -n $given_pin ]]; then
+    tested=$(sed -nE 's/^PASS: rebuild-prod: every prod node backed up now, and its restore test passed: volume restore test, [^;]*snapshot ([0-9a-f]{8}) of .*/\1/p; s/^PASS: rebuild-prod: restore snapshot ([0-9a-f]{12}) is pinned.*/\1/p' -- "$logs/$torn" | head -n 1)
+    if [[ -z $tested ]]; then
+      echo "FAIL: rebuild-prod: the box holds no restore pin and the log of the stopped run ($torn) names no tested volume snapshot, so the ID given cannot be checked against it; nothing was backed up or destroyed"; exit 1
+    fi
+    if [[ $given_pin != "$tested"* ]]; then
+      echo "FAIL: rebuild-prod: the snapshot ID given ($given_pin) is not the snapshot the stopped run ($torn) backed up and tested before its teardown ($tested...); nothing was backed up or destroyed"; exit 1
+    fi
+  fi
   if [[ -n $given_pin ]]; then
     if [[ -n $pin && $given_pin != "$pin"* ]]; then
       echo "FAIL: rebuild-prod: the box holds the restore pin $pin, and the snapshot ID given is $given_pin, which is another snapshot; nothing was backed up or destroyed"; exit 1

@@ -73,8 +73,16 @@ restic_ensure_repo() {
 }
 
 # forget + prune with the retention from the env file (agent pick: 7 daily, 4 weekly, 6 monthly).
+# While $BACKUP_STATE/forget-hold exists it forgets nothing: a rebuilt prod's restore writes it on every node, and the checks stage
+# removes it once every restored folder has been proven. Until then the snapshot the restore came from, and the etcd snapshot that
+# said which volumes were bound, are the only good copy, and the retention (the newest of each day, week and month wins) would
+# forget them at the first backup of the rebuilt nodes.
 restic_retention() {
   local tag=$1
+  if [ -e "$BACKUP_STATE/forget-hold" ]; then
+    log "retention skipped: $BACKUP_STATE/forget-hold is set (the restore has not been proven yet); nothing was forgotten"
+    return 0
+  fi
   "$RESTIC" forget --host "$BACKUP_HOST" --tag "$tag" --group-by host,tags \
     --keep-daily "${BACKUP_KEEP_DAILY:-7}" --keep-weekly "${BACKUP_KEEP_WEEKLY:-4}" \
     --keep-monthly "${BACKUP_KEEP_MONTHLY:-6}" --prune

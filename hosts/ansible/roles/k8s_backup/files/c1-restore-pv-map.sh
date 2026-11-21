@@ -18,7 +18,8 @@
 # object (spec.volumeName), read from /registry/persistentvolumeclaims/<namespace>/<claim>; a retained, released volume
 # of a deleted claim is not in that object, which is why the claim's object is read and not the volumes'.
 #
-# Settings (besides those in c1-backup-lib.sh): RESTORE_SOURCE_HOST (required), RESTORE_SNAPSHOT (default latest),
+# Settings (besides those in c1-backup-lib.sh): RESTORE_SOURCE_HOST (required), RESTORE_ETCD_HOST (the control plane whose etcd
+# snapshots count; the restore play sets it; unset, any host's), RESTORE_SNAPSHOT (default latest),
 # RESTORE_ETCD_WINDOW, RESTORE_PV_CLIENT_PORT (23791), RESTORE_PV_PEER_PORT (23801), RESTORE_TIMEOUT (60).
 set -euo pipefail
 # shellcheck source=c1-backup-lib.sh
@@ -46,7 +47,10 @@ chmod 0700 "$work"
 vol=$(restore_snapshot_id "$src" "${RESTORE_SNAPSHOT:-latest}") || die "no volume snapshot of host $src (${RESTORE_SNAPSHOT:-latest}) in the repository"
 [ -n "$vol" ] || die "no volume snapshot of host $src (${RESTORE_SNAPSHOT:-latest}) in the repository"
 vol_json=$("$RESTIC" --no-lock snapshots --json "$vol")
-etcd_json=$("$RESTIC" --no-lock snapshots --json --tag etcd)
+# Only the control plane's own etcd snapshots (RESTORE_ETCD_HOST): another host's snapshot of the same hour says nothing about this cluster.
+etcd_hosts=()
+[ -z "${RESTORE_ETCD_HOST:-}" ] || etcd_hosts=(--host "$RESTORE_ETCD_HOST")
+etcd_json=$("$RESTIC" --no-lock snapshots --json "${etcd_hosts[@]}" --tag etcd)
 read -r eid etime < <(python3 -c '
 import json, sys
 from datetime import datetime, timezone

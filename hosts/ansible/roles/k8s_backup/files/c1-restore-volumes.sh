@@ -219,7 +219,7 @@ settled_map() {
   if snapshot_map "$id" > "$out" 2> "$err"; then cat "$out"; return 0; fi
   if grep -q '^DUPLICATE' "$err" && [ -z "$given" ] && [ -x "$BACKUP_BIN/c1-restore-pv-map.sh" ]; then
     echo "more than one folder for one claim: reading which volume the etcd backup taken with snapshot $id bound each claim to" >&2
-    if RESTORE_SOURCE_HOST=${RESTORE_SOURCE_HOST:-} RESTORE_SNAPSHOT=$id "$BACKUP_BIN/c1-restore-pv-map.sh" > "$work/pv-map" 2> "$work/pv-map.err"; then
+    if RESTORE_SOURCE_HOST=${RESTORE_SOURCE_HOST:-} RESTORE_SNAPSHOT=$id RESTORE_ETCD_HOST=${RESTORE_ETCD_HOST:-} "$BACKUP_BIN/c1-restore-pv-map.sh" > "$work/pv-map" 2> "$work/pv-map.err"; then
       RESTORE_PV_MAP=$work/pv-map
       grep -P '^etcd\t' "$work/pv-map" | sed 's/^/etcd backup used (id, time, revision): /' >&2 || true
       if snapshot_map "$id" > "$out" 2> "$err"; then
@@ -404,6 +404,8 @@ got_canary=$(cat "$path/$canary" 2>/dev/null) || die "no canary file restored in
 } > "$record.new"
 chmod 0600 "$record.new"
 mv "$record.new" "$record"
+# The nodes' backups forget nothing until the checks stage has proven this restore (c1-backup-lib.sh, restic_retention).
+printf 'held by the restore of snapshot %s at %s\n' "$id" "$(date -u +%FT%TZ)" > "$BACKUP_STATE/forget-hold"
 cat "$record"
 files=$(awk -F'\t' '{f+=$2} END{print f+0}' "$work/got")
 bytes=$(awk -F'\t' '{b+=$3} END{print b+0}' "$work/got")

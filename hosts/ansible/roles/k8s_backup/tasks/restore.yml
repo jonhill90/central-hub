@@ -25,6 +25,7 @@
     RESTORE_SOURCE_HOST: "{{ k8s_backup_restore_source_host }}"
     RESTORE_PATH: "{{ k8s_backup_restore_path }}"
     RESTORE_SNAPSHOT: "{{ k8s_backup_restore_snapshot }}"
+    RESTORE_ETCD_HOST: "{{ groups['k8s_control_plane'] | first }}"
   register: k8s_backup_restore
   changed_when: "'RESTORED' in k8s_backup_restore.stdout"
   when: not ansible_check_mode
@@ -43,5 +44,19 @@
       | select('search', '(?m)^PASS') | list | length > 0
     fail_msg: No node in this run restored anything (every node said SKIP, so none has its data disk mounted).
     quiet: true
+  run_once: true
+  when: not ansible_check_mode
+
+# The restore is the only good copy until the checks stage has proven it: no node forgets a snapshot meanwhile (the hold file is
+# read by c1-backup-lib.sh, restic_retention). The control plane too, whose etcd snapshot says which volumes were bound.
+- name: restore | Hold every node's forget until the restore is proven
+  ansible.builtin.copy:
+    dest: "{{ k8s_backup_state_dir }}/forget-hold"
+    content: "held by the restore of {{ inventory_hostname }}; the checks stage removes it\n"
+    owner: root
+    group: root
+    mode: "0600"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['k8s_nodes'] }}"
   run_once: true
   when: not ansible_check_mode

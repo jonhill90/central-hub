@@ -438,8 +438,12 @@ if [[ $r14d -eq 2 && $pin_kept == "$pinid" && $r14e -eq 0 && $c14e != *"--tags d
 else bad "14c. $r14d [$pin_kept] $r14e $o14e [$c14e]"; fi
 # The same stop with no pin file (a run from before the pin existed): the rerun refuses without the ID, before any backup.
 rm -f "$logd"/* "$t/work/state/prod-restore-pin"
-printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" "rebuild-prod: teardown and build start: vms cluster" \
-  "FAIL: rebuild-prod: the one command stopped (rc 2); rebuild-prod log names the stage" > "$logd/run-29990101T000000Z.log"
+torn_log() { # <with the tested-snapshot line: yes|no>
+  printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" > "$logd/run-29990101T000000Z.log"
+  [ "$1" = no ] || echo "PASS: rebuild-prod: every prod node backed up now, and its restore test passed: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321 of 2026-11-18T03:00:26; etcd restore test, revision 202, 201 keys under /, key /registry/namespaces/kube-system present, snapshot c5523412 of 2026-11-18T03:00:17" >> "$logd/run-29990101T000000Z.log"
+  printf '%s\n' "rebuild-prod: teardown and build start: vms cluster" "FAIL: rebuild-prod: the one command stopped (rc 2); rebuild-prod log names the stage" >> "$logd/run-29990101T000000Z.log"
+}
+torn_log yes
 run rebuild "$tap" "$sha"; r14f=$rc o14f=$out c14f=$calls
 run rebuild "$tap" "$sha" "$pinid"; r14g=$rc o14g=$out c14g=$calls
 if [[ $r14f -eq 1 && $o14f == *"stopped after its teardown"*"Give the full ID of the volume snapshot"* && -z $c14f &&
@@ -453,5 +457,19 @@ run rebuild "$tap" "$sha" 36fe4321; r14i=$rc o14i=$out
 if [[ $r14h -eq 1 && $o14h == *"only for a run after one that stopped after its teardown"* && -z $c14h && $r14i -eq 2 && $o14i == *"64 hex digits"* ]]; then
   ok "14e. a snapshot ID is refused when no run stopped after its teardown (prod holds live data), and a short ID is a usage error"
 else bad "14e. $r14h $o14h [$c14h] | $r14i $o14i"; fi
+
+# 14f. With no pin file, the ID given must start with the snapshot the stopped run's own log says it backed up and tested; an older
+# daily snapshot of the same host is refused, and so is a stopped run whose log names none.
+rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+torn_log yes
+older=99999999bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+run rebuild "$tap" "$sha" "$older"; r14j=$rc o14j=$out c14j=$calls
+torn_log no
+run rebuild "$tap" "$sha" "$pinid"; r14k=$rc o14k=$out c14k=$calls
+if [[ $r14j -eq 1 && $o14j == *"is not the snapshot the stopped run (run-29990101T000000Z.log) backed up and tested before its teardown (36fe4321...)"* && -z $c14j &&
+      $r14k -eq 1 && $o14k == *"names no tested volume snapshot, so the ID given cannot be checked"* && -z $c14k ]]; then
+  ok "14f. with no pin file, an ID that is not the snapshot the stopped run tested is refused, and so is a stopped run whose log names none"
+else bad "14f. $r14j $o14j [$c14j] | $r14k $o14k [$c14k]"; fi
+rm -f "$logd"/*
 
 exit "$fail"
