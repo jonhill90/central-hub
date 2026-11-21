@@ -95,7 +95,7 @@ realm=$(es ExternalSecret/identity/realm-lab-secrets 2>/dev/null); argo=$(es Ext
 realm_keys=$(python3 -I -c 'import json, sys; d = json.loads(sys.argv[1])["spec"]
 print(d["secretStoreRef"]["name"], d["target"]["creationPolicy"],
       ",".join(sorted(e["secretKey"] + "=" + e["remoteRef"]["key"] + ":" + e["remoteRef"]["property"] for e in d["data"])))' "$realm" 2>/dev/null)
-want_keys="openbao Owner ARGOCD_CLIENT_SECRET=c1/identity:ARGOCD_CLIENT_SECRET,CENTRAL_HUB_APP_CLIENT_SECRET=c1/identity:CENTRAL_HUB_APP_CLIENT_SECRET,GRAFANA_CLIENT_SECRET=c1/identity:GRAFANA_CLIENT_SECRET,JELLYFIN_CLIENT_SECRET=c1/identity:JELLYFIN_CLIENT_SECRET,PASSWORD_OWNER=c1/identity:PASSWORD_OWNER,PROXMOX_CLIENT_SECRET=c1/identity:PROXMOX_CLIENT_SECRET,TOTP_OWNER=c1/identity:TOTP_OWNER"
+want_keys="openbao Owner ARGOCD_CLIENT_SECRET=c1/identity:ARGOCD_CLIENT_SECRET,CENTRAL_HUB_APP_CLIENT_SECRET=c1/identity:CENTRAL_HUB_APP_CLIENT_SECRET,GRAFANA_CLIENT_SECRET=c1/identity:GRAFANA_CLIENT_SECRET,JELLYFIN_CLIENT_SECRET=c1/identity:JELLYFIN_CLIENT_SECRET,OPNSENSE_CLIENT_SECRET=c1/identity:OPNSENSE_CLIENT_SECRET,PASSWORD_OWNER=c1/identity:PASSWORD_OWNER,PROXMOX_CLIENT_SECRET=c1/identity:PROXMOX_CLIENT_SECRET,TOTP_OWNER=c1/identity:TOTP_OWNER"
 want_w1="ExternalSecret/argocd/argocd-sso ExternalSecret/central-hub-app/central-hub-app-sso ExternalSecret/identity/realm-lab-secrets ExternalSecret/media/jellyfin-sso ExternalSecret/monitoring/grafana-sso Secret/central-hub-app/central-hub-app-oidc Secret/media/jellyfin-lab-root-ca"
 if [[ $r1 -eq 0 && $w1 == "$want_w1" && $realm_keys == "$want_keys" &&
       $argo == *'"app.kubernetes.io/part-of": "argocd"'* && $argo == *'"property": "ARGOCD_CLIENT_SECRET"'* && $argo == *'"secretKey": "clientSecret"'* ]]; then
