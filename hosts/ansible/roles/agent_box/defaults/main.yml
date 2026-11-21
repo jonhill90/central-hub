@@ -169,6 +169,19 @@ agent_box_wrappers:
     args: [check, "apply-recorded *", "pass *", "go *", ledger, log]
     session_args: [check, "apply-recorded *", "pass *", "go *", ledger, log]
     run_as: guardops   # the same name as agent_box_guard_user
+  # The lab's private inventory on the box (spec 2026-11-private-values-on-the-box): sessions may set one listed value, read its tag,
+  # list key paths, see which paths the last change touched, read the change log, fill the first copy and compare the two old
+  # copies. `view` is for the jobs' own users only, one exact part each (the callers); a session has no `view`.
+  - name: inventory
+    args: ["set *", "get *", names, diff, log, "import prod", "import guard", import-compare]
+    run_as: invops   # the same name as agent_box_inventory_user
+    callers:
+      - user: keys   # the same name as agent_box_keys_user: c1-ansible, openbao-prod and the rebuild wrappers
+        args: ["view k8s_nodes"]
+      - user: hostops   # the same name as agent_box_host_user
+        args: ["view proxmox"]
+      - user: guardops   # the same name as agent_box_guard_user
+        args: ["view opnsense"]
   # The VPS apps host (D-0046): bootstrap once as root, then apply and secrets as user deploy through the VPS's
   # own vps-apply. Only the workflow lab-vps-host.yml runs the changing actions; a session may read only.
   - name: vps-host
@@ -349,6 +362,11 @@ agent_box_guard_user: guardops
 agent_box_guard_dir: /etc/agent-keys-guard
 agent_box_guard_work_dir: /var/lib/agent-box-guard
 agent_box_copy_guard_files: false
+# The private inventory's working copy (files/inventory.sh, docs/specs/2026-11-private-values-on-the-box.md): its own system user
+# holds it in its own folder, so no other wrapper's user can read it; each job gets only its part, through `view`.
+agent_box_inventory_user: invops
+agent_box_inventory_dir: /etc/agent-keys-inventory
+agent_box_inventory_work_dir: /var/lib/agent-box-inventory
 # What the guard_files tasks copy, {from: clone|config, path: on the controller, dest: under agent_box_guard_dir}.
 # opnsense-api.txt holds the key on line 1 and the secret on line 2; lab-ca/root.crt is the public lab root the
 # OPNsense API's certificate chains to (pick 30).

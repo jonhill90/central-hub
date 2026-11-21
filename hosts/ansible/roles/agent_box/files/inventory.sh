@@ -24,14 +24,15 @@ usage() {
   exit 2
 }
 libexec=/usr/local/libexec/agent-box
-work=/var/lib/agent-box
-store=/etc/agent-keys/inventory/hosts.yml
-tagkey=/etc/agent-keys/inventory/tag.key
-prev=/etc/agent-keys/inventory/hosts.yml.prev
-logs=$work/inventory-logs
+work=/var/lib/agent-box-inventory
+store=/etc/agent-keys-inventory/hosts.yml
+tagkey=/etc/agent-keys-inventory/tag.key
+prev=/etc/agent-keys-inventory/hosts.yml.prev
+logs=$work/logs
 allow=$libexec/editable-values.yml
-prod_src=/etc/agent-keys/prod/inventory-hosts.yml
-guard_src=/etc/agent-keys-guard/inventory/hosts.yml
+# The two old copies are read as their owners, with the exact commands the sudoers file allows this user (no path is an argument).
+prod_cmd=(sudo -n -u keys /usr/bin/cat /etc/agent-keys/prod/inventory-hosts.yml)
+guard_cmd=(sudo -n -u guardops /usr/bin/cat /etc/agent-keys-guard/inventory/hosts.yml)
 py=$libexec/ansible-venv/bin/python3
 export HOME=$work PATH=/usr/local/bin:/usr/bin:/bin
 
@@ -46,6 +47,13 @@ esac
 [[ $action != view || ${2:-} =~ ^(proxmox|opnsense|k8s_nodes)$ ]] || { echo "inventory: view takes proxmox, opnsense or k8s_nodes (agent_box is the box's own limit and is not a part)" >&2; exit 2; }
 [[ $action != import || ${2:-} =~ ^(prod|guard)$ ]] || usage
 [[ $action != get && $action != set || ${2:-} =~ ^[a-z0-9_]+\.[a-z0-9_]+$ ]] || { echo "inventory: a key path is <scope>.<variable>, lowercase letters, digits and _" >&2; exit 2; }
+
+prod_src=/dev/null guard_src=/dev/null
+if [[ $action == import || $action == import-compare ]]; then
+  tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+  if [[ $action == import-compare || ${2:-} == prod ]]; then "${prod_cmd[@]}" > "$tmp/prod.yml" || { echo "inventory: could not read the prod copy" >&2; exit 1; }; prod_src=$tmp/prod.yml; fi
+  if [[ $action == import-compare || ${2:-} == guard ]]; then "${guard_cmd[@]}" > "$tmp/guard.yml" || { echo "inventory: could not read the guard copy" >&2; exit 1; }; guard_src=$tmp/guard.yml; fi
+fi
 
 code=$(cat <<'PY'
 import copy, datetime, hashlib, hmac, ipaddress, json, os, re, sys, yaml
@@ -277,4 +285,4 @@ elif action == "import-compare":
     print("inventory: %d key path(s) differ between the prod and guard copies" % n)
 PY
 )
-exec "$py" -I -c "$code" "$action" "$store" "$prev" "$logs" "$allow" "$prod_src" "$guard_src" "$tagkey" "${@:2}"
+"$py" -I -c "$code" "$action" "$store" "$prev" "$logs" "$allow" "$prod_src" "$guard_src" "$tagkey" "${@:2}"

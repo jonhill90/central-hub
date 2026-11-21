@@ -48,10 +48,16 @@ dir {{ agent_box_guard_dir }}
 dir {{ agent_box_guard_dir }}/inventory
 dir {{ agent_box_guard_work_dir }}
 box {{ agent_box_guard_dir }}/inventory/hosts.yml
+# The private inventory's wrapper: its folders' owner and mode, and the list of settable paths. Not its working copy, which a
+# `set` changes on purpose and a put-back would undo.
+dir {{ agent_box_inventory_dir }}
+dir {{ agent_box_inventory_work_dir }}
+box {{ agent_box_libexec_dir }}/editable-values.yml
 user {{ agent_box_user }}
 user {{ agent_box_keys_user }}
 user {{ agent_box_host_user }}
 user {{ agent_box_guard_user }}
+user {{ agent_box_inventory_user }}
 {% if agent_box_runner_user | length > 0 %}
 user {{ agent_box_runner_user }}
 {% endif %}
