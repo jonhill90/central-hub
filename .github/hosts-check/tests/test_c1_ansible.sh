@@ -83,7 +83,7 @@ if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\nclients\ngateway
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
-ens_c='{"k8s_identity_ensure_clients":["proxmox","openbao","opnsense"]}'   # the clients name also makes the store's and the firewall's sign-in clients
+ens_c='{"k8s_identity_ensure_clients":["proxmox","openbao","opnsense","central-hub-app"]}'   # the clients name also makes the store's, the firewall's and the Central Hub app's sign-in clients
 run check identity
 seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
 if [[ $rc -eq 0 && $calls == *"playbooks/k8s-identity.yml -e k8s_identity_values_file=$t/keys/prod/identity.env -e k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao --tags all,clients -e $ens --check --diff" &&

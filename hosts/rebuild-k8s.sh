@@ -821,6 +821,16 @@ run_stage() {
       fi
       hook "$RESTORE_HOOK" ;;
     checks) checks ;;
+    # Dev only, after the identity stage made this run's test users: the proof for the choice of how the lab's Linux
+    # boxes trust a Keycloak sign-in (OpenBao SSH certificates and opkssh, playbooks/k8s-ssh-ca-proof.yml). It uses the
+    # in-cluster store's OpenBao image for its own throwaway store and never touches that store. Like `panels`, it never
+    # fails the run: its "ssh-ca:" and "opkssh:" lines in the short log say what passed.
+    ssh-ca-proof)
+      [ "$ENV_NAME" = dev ] || { echo "the SSH sign-in proof runs on dev only"; return 1; }
+      if [ -z "${OPENBAO_SEAL_KEY_FILE:-}" ]; then echo "SKIP: ssh-ca-proof: no OPENBAO_SEAL_KEY_FILE set, so no OpenBao image in this cluster"; return 0; fi
+      ap playbooks/k8s-ssh-ca-proof.yml -e "k8s_identity_values_file=$env_dir/identity.env" \
+        || echo "ssh-ca-proof: the playbook stopped before its result; the raw log says where"
+      return 0 ;;
     panels)
       [ "$ENV_NAME" = dev ] || { echo "the panels stage runs on dev only"; return 1; }
       panels_read ;;
@@ -845,8 +855,8 @@ stages=${STAGES:-$default_stages}
 # and the admin hand-over after it; the apps' secrets go into SOPS and OpenBao after identity-keycloak. The
 # read-only `panels` stage is last on every full dev run, so its reads come before the end-of-run teardown.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then
-  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak app-secrets panels"
-  else stages="$stages dev-ca identity-keycloak panels"; fi
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak app-secrets ssh-ca-proof panels"
+  else stages="$stages dev-ca identity-keycloak ssh-ca-proof panels"; fi
 fi
 # A dev run starts with the memory preflight, after a teardown has freed its VMs and before it makes new ones.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="preflight $stages"; fi
@@ -1022,6 +1032,12 @@ for s in $stages; do
   if [ "$s" = restore ] || [ "$s" = checks ] || [ "$s" = openbao ] || [ "$s" = openbao-measure ] || [ "$s" = openbao-handover ] || [ "$s" = app-secrets ]; then
     sed -n "/^===== $s\$/,\$p" "$raw" | grep -E '"(snapshot|canary|folder|PASS|RESTORED|ALREADY|SKIP)|^SKIP: (openbao-handover|app-secrets):|^(PASS: compare:|DIFF: |secrets-store: put-apps:|app-secrets: the store.s CA written)' \
       | sed -e 's/^ *//' -e "s/^/  $s: /" >> "$log" || true
+  fi
+  # The SSH sign-in proof's lines: each check of each route, ok or FAIL, and its result (no secret is printed).
+  if [ "$s" = ssh-ca-proof ]; then
+    awk '$0 == "===== ssh-ca-proof" {on=1; next} /^===== / {on=0} on' "$raw" \
+      | grep -oE '(ssh-ca|opkssh): [^"]*|SKIP: ssh-ca-proof: [^"]*|ssh-ca-proof: the playbook stopped[^"]*' \
+      | sed "s/^/  $s: /" >> "$log" || true
   fi
   # The panels stage's read lines: the panel check's output, the two up reads and the store's age.
   if [ "$s" = panels ]; then

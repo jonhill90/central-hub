@@ -84,17 +84,23 @@ spec:
             - {name: NODE_ENV, value: production}
             - {name: PORT, value: {{ $v.port | quote }}}
             - {name: HOSTNAME, value: 0.0.0.0}
+            - {name: HUB_AUTH, value: {{ $v.auth.mode | quote }}}
+{{- if eq $v.auth.mode "oidc" }}
+            - {name: HUB_OIDC_DIR, value: /var/run/hub/oidc}
+            - {name: HUB_OIDC_INTERNAL_URL, value: {{ $v.auth.internalURL | quote }}}
+            - {name: HUB_OIDC_ALLOWED_GROUPS, value: {{ $v.auth.allowedGroups | quote }}}
+{{- end }}
           ports:
             - {name: http, containerPort: {{ $v.port }}}
           startupProbe:
-            httpGet: {path: /api/v1/catalog, port: http}
+            httpGet: {path: /api/v1/health, port: http}
             periodSeconds: 5
             failureThreshold: 12
           readinessProbe:
-            httpGet: {path: /api/v1/catalog, port: http}
+            httpGet: {path: /api/v1/health, port: http}
             periodSeconds: 10
           livenessProbe:
-            httpGet: {path: /api/v1/catalog, port: http}
+            httpGet: {path: /api/v1/health, port: http}
             periodSeconds: 30
             timeoutSeconds: 5
           resources:
@@ -107,6 +113,9 @@ spec:
           volumeMounts:
             - {name: out, mountPath: /app, readOnly: true}
             - {name: tmp, mountPath: /tmp}
+{{- if eq $v.auth.mode "oidc" }}
+            - {name: oidc, mountPath: /var/run/hub/oidc, readOnly: true}
+{{- end }}
       volumes:
         - name: build-script
           configMap: {name: {{ $v.name }}-build}
@@ -116,6 +125,16 @@ spec:
           emptyDir: {sizeLimit: {{ $v.outSize }}}
         - name: tmp
           emptyDir: {sizeLimit: 64Mi}
+{{- if eq $v.auth.mode "oidc" }}
+        # optional: a rebuild starts this pod before the identity stage makes the Secrets; the kubelet fills the
+        # folders when they appear and the app reads the files on each request, so nothing restarts.
+        # One folder, three files: client-secret, issuer, public-urls.
+        - name: oidc
+          projected:
+            sources:
+              - secret: {name: {{ $v.name }}-sso, optional: true}
+              - secret: {name: {{ $v.name }}-oidc, optional: true}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -148,6 +167,15 @@ spec:
       ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
+{{- if eq $v.auth.mode "oidc" }}
+    # Keycloak's Service, for the token and key requests of sign-in (the browser uses the public address).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $v.auth.identityNamespace }}
+      ports:
+        - {protocol: TCP, port: {{ $v.auth.identityPort }}}
+{{- end }}
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

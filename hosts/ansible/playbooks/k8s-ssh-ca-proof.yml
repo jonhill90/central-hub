@@ -1,0 +1,178 @@
+---
+# Dev only: the proof behind the choice of how the lab's Linux boxes trust a Keycloak sign-in (the owner's pick of
+# 2026-11-21 01:19:58 UTC, "Research more first": test the top two end to end on dev before he picks).
+# Run by the rebuild's dev-only stage `ssh-ca-proof`, after `app-secrets`:
+#   ansible-playbook -i <dev inventory>/ playbooks/k8s-ssh-ca-proof.yml -e k8s_identity_values_file=<env dir>/identity.env
+# Two routes, each on dev's first control-plane node, each undone at its end:
+#   ssh-ca  a throwaway OpenBao in dev mode signs SSH certificates for a Keycloak user it trusts by JWT; sshd trusts
+#           its CA (files/ssh-ca-proof.sh)
+#   opkssh  OpenPubkey SSH puts the Keycloak ID token inside the SSH key; sshd checks it (files/opkssh-proof.sh)
+# The store the apps use is never touched. Passwords, seeds, the client secret and every token travel on stdin
+# or in a mode-0700 folder that is removed at the end, and no task logs them. The proof reports through its lines
+# ("ssh-ca: ..." and "opkssh: ..."), which the rebuild copies into its short log; it never fails the run.
+- name: Prove SSH sign-in through Keycloak on dev, by OpenBao certificates and by opkssh
+  hosts: k8s_control_plane[0]
+  become: true
+  gather_facts: false
+  vars:
+    ansible_pipelining: true
+    proof_kubectl: [kubectl, --kubeconfig, /etc/kubernetes/admin.conf]
+    proof_user: dev-admin
+    proof_refused_user: dev-viewer
+  tasks:
+    - name: proof | Dev only
+      ansible.builtin.assert:
+        that: (k8s_gitops_cluster_labels | default({})).env | default('') == 'dev'
+        fail_msg: the SSH sign-in proof runs on dev only (k8s_gitops_cluster_labels.env)
+        quiet: true
+
+    # Keycloak's public name and issuer, this cluster's Gateway, the root of dev's CA, Grafana's callback (the
+    # client whose browser flow gives the ssh-ca route its ID tokens) and the store's own OpenBao image.
+    - name: proof | Read the cluster's facts
+      ansible.builtin.shell: |
+        set -euo pipefail
+        k() { kubectl --kubeconfig /etc/kubernetes/admin.conf "$@"; }
+        k -n identity get keycloak sso -o jsonpath='{.spec.hostname.hostname}'; echo
+        k -n gateway get gateway apps -o jsonpath='{.status.addresses[0].value}'; echo
+        k -n gateway get secret apps-tls -o jsonpath='{.metadata.annotations.cert-manager\.io/issuer-name}'; echo
+        k get httproute -A -o jsonpath='{range .items[*]}{range .spec.hostnames[*]}{@}{"\n"}{end}{end}' | grep -m1 '^grafana\.'
+        k -n openbao get statefulset openbao -o jsonpath='{.spec.template.spec.containers[0].image}'; echo
+      args: {executable: /bin/bash}
+      register: proof_facts
+      changed_when: false
+      failed_when: proof_facts.rc != 0 or proof_facts.stdout_lines | length != 5
+      check_mode: false
+
+    - name: proof | The facts by name
+      ansible.builtin.set_fact:
+        proof_kc_base: "{{ proof_facts.stdout_lines[0] }}"
+        proof_kc_host: "{{ proof_facts.stdout_lines[0] | regex_replace('^https://', '') | regex_replace('/.*$', '') }}"
+        proof_issuer: "{{ proof_facts.stdout_lines[0] }}/realms/lab"
+        proof_gateway: "{{ proof_facts.stdout_lines[1] }}"
+        proof_verify: "{{ proof_facts.stdout_lines[2] not in ['letsencrypt-staging', 'dev-ca'] }}"
+        proof_redirect: "https://{{ proof_facts.stdout_lines[3] }}/login/generic_oauth"
+        proof_image: "{{ proof_facts.stdout_lines[4] }}"
+
+    # The values the identity stage made for this run (random, dev only), read on this machine; never logged.
+    - name: proof | The test users' passwords and seeds, and Grafana's client secret
+      ansible.builtin.command:
+        argv: [python3, -I, -c, "{{ proof_env_reader }}", "{{ k8s_identity_values_file }}"]
+      vars:
+        proof_env_reader: |
+          import json, sys
+          v = {}
+          for l in open(sys.argv[1], encoding="utf-8"):
+              k, _, x = l.rstrip("\n").partition("=")
+              v[k.strip()] = x.strip().strip("\"'")
+          need = ["GRAFANA_CLIENT_SECRET", "PASSWORD_DEV_ADMIN", "TOTP_DEV_ADMIN", "PASSWORD_DEV_VIEWER"]
+          missing = [k for k in need if not v.get(k)]
+          if missing:
+              sys.exit("identity.env lacks " + ", ".join(missing))
+          print(json.dumps({k: v[k] for k in need}))
+      register: proof_values
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: proof | A private work folder on the node
+      ansible.builtin.tempfile: {state: directory, suffix: .ssh-proof}
+      register: proof_work
+      changed_when: false
+      check_mode: false
+
+    - name: proof | The proof's scripts
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ proof_work.path }}/{{ item }}"
+        mode: "0700"
+      loop: [ssh-ca-proof-token.py, ssh-ca-proof.sh, opkssh-proof.sh, opkssh-proof-login.py]
+      changed_when: false
+      check_mode: false
+
+    - name: proof | Route ssh-ca, Keycloak ID tokens for the allowed and the refused user
+      ansible.builtin.command:
+        cmd: python3 -I {{ proof_work.path }}/ssh-ca-proof-token.py
+        stdin: >-
+          {{ {'base': proof_kc_base, 'realm': 'lab', 'client': 'grafana', 'redirect': proof_redirect,
+          'secret': (proof_values.stdout | from_json).GRAFANA_CLIENT_SECRET, 'address': proof_gateway,
+          'verify': proof_verify | bool, 'pem_out': proof_work.path ~ '/realm.pem',
+          'users': [
+            {'user': proof_user, 'password': (proof_values.stdout | from_json).PASSWORD_DEV_ADMIN,
+             'seed': (proof_values.stdout | from_json).TOTP_DEV_ADMIN, 'out': proof_work.path ~ '/' ~ proof_user ~ '.jwt'},
+            {'user': proof_refused_user, 'password': (proof_values.stdout | from_json).PASSWORD_DEV_VIEWER,
+             'seed': '', 'out': proof_work.path ~ '/' ~ proof_refused_user ~ '.jwt'}]} | to_json }}
+      register: proof_tokens
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      no_log: true
+
+    # The script prints step names and ok or the reason only, so its lines are shown.
+    - name: proof | Token lines
+      ansible.builtin.debug:
+        msg: "{{ proof_tokens.stdout_lines | select('match', '^ssh-ca: ') | list }}"
+
+    - name: proof | Route ssh-ca, OpenBao certificates
+      ansible.builtin.command:
+        argv:
+          - bash
+          - "{{ proof_work.path }}/ssh-ca-proof.sh"
+          - "{{ proof_work.path }}"
+          - "{{ proof_issuer }}"
+          - "{{ proof_image }}"
+          - "{{ proof_user }}"
+          - "{{ proof_refused_user }}"
+      register: proof_ssh_ca
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: proof | ssh-ca lines
+      ansible.builtin.debug:
+        msg: "{{ proof_ssh_ca.stdout_lines | select('match', '^ssh-ca: ') | list }}"
+
+    - name: proof | Route opkssh, its inputs (dev's CA root, the user's password and seed)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        kubectl --kubeconfig /etc/kubernetes/admin.conf -n gateway get secret apps-tls -o jsonpath='{.data.ca\.crt}' \
+          | base64 -d > {{ proof_work.path }}/dev-ca.pem
+        cat > {{ proof_work.path }}/user.json
+      args:
+        executable: /bin/bash
+        stdin: >-
+          {{ {'password': (proof_values.stdout | from_json).PASSWORD_DEV_ADMIN, 'seed': (proof_values.stdout | from_json).TOTP_DEV_ADMIN} | to_json }}
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: proof | Route opkssh, Keycloak's token inside the SSH key
+      ansible.builtin.command:
+        argv:
+          - bash
+          - "{{ proof_work.path }}/opkssh-proof.sh"
+          - "{{ proof_work.path }}"
+          - "{{ proof_kc_host }}"
+          - "{{ proof_issuer }}"
+          - "{{ proof_gateway }}"
+          - "{{ proof_user }}"
+      register: proof_opkssh
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: proof | opkssh lines
+      ansible.builtin.debug:
+        msg: "{{ proof_opkssh.stdout_lines | select('match', '^opkssh: ') | list }}"
+
+    - name: proof | Remove the work folder
+      ansible.builtin.file: {path: "{{ proof_work.path }}", state: absent}
+      changed_when: false
+      check_mode: false
+
+    - name: proof | Result
+      ansible.builtin.debug:
+        msg: >-
+          ssh-ca: {{ 'PASS' if proof_ssh_ca.rc == 0 else 'FAIL' }} (rc {{ proof_ssh_ca.rc }});
+          opkssh: {{ 'PASS' if proof_opkssh.rc == 0 else 'FAIL' }} (rc {{ proof_opkssh.rc }})

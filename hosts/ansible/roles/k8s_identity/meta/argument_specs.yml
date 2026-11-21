@@ -36,6 +36,11 @@ argument_specs:
         type: str
         default: kube-prometheus-stack-grafana
         description: "Grafana's Deployment, restarted when its client secret changes."
+      k8s_identity_central_hub_app_name: {type: str, default: central-hub-app, description: "First label of the Central Hub app's hostname, and its client id."}
+      k8s_identity_central_hub_app_namespace:
+        type: str
+        default: central-hub-app
+        description: "The Central Hub app's namespace; gets Secrets central-hub-app-sso and central-hub-app-oidc."
       k8s_identity_argocd_name: {type: str, default: argocd, description: "First label of Argo CD's hostname (k8s_gitops_ui_name)."}
       k8s_identity_argocd_namespace: {type: str, default: argocd, description: "Argo CD's namespace; gets Secret argocd-sso."}
       k8s_identity_jellyfin_name: {type: str, default: jellyfin, description: "First label of Jellyfin's hostname (k8s_jellyfin_name)."}
@@ -71,11 +76,19 @@ argument_specs:
         elements: str
         default: []
         description: "Proxmox VE's web UI names (proxmox_cert_names), for client proxmox (role proxmox_sso). Empty: no client. Private."
+      k8s_identity_openbao_client:
+        type: bool
+        default: true
+        description: >-
+          Whether the realm has client openbao for the secrets store's web page when k8s_identity_openbao_hosts is
+          left at its default (openbao.<zone>, with short names on).
       k8s_identity_openbao_hosts:
         type: list
         elements: str
-        default: []
-        description: "The secrets store's web page names, for client openbao (the owner's sign-in, agent pick 233). Empty: no client. Private."
+        default: ["openbao.<zone>"]
+        description: >-
+          The secrets store's web page names, for client openbao (the owner's sign-in, agent pick 233). Default
+          openbao.<zone> with short names and k8s_identity_openbao_client on; empty: no client.
       k8s_identity_opnsense_client:
         type: bool
         default: true

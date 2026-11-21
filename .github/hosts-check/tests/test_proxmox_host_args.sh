@@ -295,6 +295,20 @@ if [ $rc16 = 0 ] && [[ $c16 == *playbooks/proxmox-guests.yml* ]] && grep -qx 'pr
   ok "16 the guests job runs proxmox-guests.yml and prints the guest that exists"
 else bad "16 rc=$rc16 [$c16] $(cat "$t/16.out")"; fi
 
+# 16a the connector job runs proxmox-connector.yml and prints only the facts its changed tasks name
+python3 - > "$t/out-check.json" <<'PY'
+import json
+t = lambda n, **r: {"task": {"name": n}, "hosts": {"proxmox_host": r}}
+print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [t("connector | Read the container's state", changed=False),
+      t("connector | FACT container 900 is running", changed=True), t("connector | FACT it advertises at least one lab range", changed=False)]}], "stats": {}}))
+PY
+: > "$t/calls"
+job check connector > "$t/16a.out" 2>&1; rc16a=$?
+c16a=$(cat "$t/calls")
+if [ $rc16a = 0 ] && [[ $c16a == *playbooks/proxmox-connector.yml* ]] && grep -qx 'proxmox-host: connector facts true: container 900 is running' "$t/16a.out"; then
+  ok "16a the connector job runs proxmox-connector.yml and prints the facts that are true"
+else bad "16a rc=$rc16a [$c16a] $(cat "$t/16a.out")"; fi
+
 # 16b the memory job runs proxmox-memory.yml and prints only the report lines that match its allowlist: a line with a name, an address
 #     or any extra word is dropped, so nothing private can pass
 python3 - > "$t/out-check.json" <<'PY'
@@ -439,5 +453,20 @@ printf '%s\n' "$k21" > "$t/handoff/box-backup.pub"; printf '10.1.30.31\n' > "$t/
 job check proxy > "$t/21d.out" 2>&1
 ! grep -q "proxmox_restic_box_key\|@" "$t/calls" && ok "21d the other jobs are not given the key" || bad "21d $(cat "$t/calls")"
 rm -f "$t/handoff/box-backup.pub" "$t/handoff/box-backup-address"
+
+# 19 ct259-destroy runs its own playbook on a check, and an apply without a pass is refused with nothing run
+python3 - > "$t/out-check.json" <<'PY'
+import json
+t = lambda n, **r: {"task": {"name": n}, "hosts": {"proxmox_host": r}}
+print(json.dumps({"plays": [{"play": {"name": "p"}, "tasks": [t("ct259 | A check run shows the delete as a change", changed=True)]}], "stats": {}}))
+PY
+: > "$t/calls"
+job check ct259-destroy > "$t/18a.out" 2>&1; rc18a=$?
+c18=$(cat "$t/calls"); : > "$t/calls"
+job apply-recorded ct259-destroy 0123456789ab > "$t/18b.out" 2>&1; rc18b=$?
+if [ $rc18a = 0 ] && [[ $c18 == *playbooks/proxmox-ct259-destroy.yml* && $c18 == *--check* ]] && [ $rc18b != 0 ] &&
+   ! grep -qv -e '--check' "$t/calls"; then
+  ok "19 ct259-destroy: the check runs its playbook; apply-recorded with no pass or go only re-checks"
+else bad "19 rc=$rc18a/$rc18b [$c18] [$(cat "$t/calls")] $(cat "$t/18b.out")"; fi
 
 exit "$fail"

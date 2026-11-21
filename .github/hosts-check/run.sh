@@ -94,6 +94,7 @@ check_ansible() {
   bash "$here/tests/test_agent_browser.sh"
   bash "$here/tests/test_argocd_signin_check.sh"
   bash "$here/tests/test_proxmox_host_workflow.sh"
+  bash "$here/tests/test_inventory_wrapper.sh"
   bash "$here/tests/test_identity_external_secrets.sh"
   bash "$here/tests/test_identity_db_move.sh"
   bash "$here/tests/test_tailnet_stack_args.sh"
@@ -117,7 +118,7 @@ check_ansible() {
   bash "$here/tests/test_client_json_check.sh"
   bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
-  python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml playbooks/proxmox-ksm.yml playbooks/proxmox-ksm-off.yml playbooks/proxmox-restic-box.yml
+  python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml playbooks/proxmox-connector.yml playbooks/proxmox-ksm.yml playbooks/proxmox-ksm-off.yml playbooks/proxmox-restic-box.yml
   bash "$here/tests/test_check_check_mode.sh"
   python3 "$here/check-hook-allowlist.py" .
   bash "$here/tests/test_runner_hook.sh"
@@ -454,6 +455,7 @@ check_backup() {
   bash "$here/tests/test_secrets_store_snapshots.sh"
   bash "$here/tests/test_dev_secrets_teardown.sh"
   bash "$here/tests/test_dev_worker_address.sh"
+  bash "$here/tests/test_box_prove.sh"
   bash "$here/tests/test_proxmox_restic_reader.sh"
   bash "$here/tests/test_secrets_store_kv.sh"
   bash "$here/tests/test_secrets_store_kv_openbao.sh"

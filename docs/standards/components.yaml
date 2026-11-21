@@ -296,6 +296,16 @@ components:
     verdict: pass
     sources: [url:openbao.github.io/openbao-helm, image:quay.io/openbao/, url:github.com/openbao/openbao/releases/download/]
     checked: 2026-11-18
+  - name: opkssh
+    kind: software
+    used-for: dev only, the SSH sign-in proof (stage ssh-ca-proof, playbooks/files/opkssh-proof.sh), which tests whether the lab's Linux boxes can trust a Keycloak ID token inside an SSH key; v0.19.2, its release binary, install script and SELinux policy each checked by SHA-256, installed on dev's first control-plane node only and gone with dev at the end of the run
+    licence: Apache-2.0
+    licence-source: https://raw.githubusercontent.com/openpubkey/opkssh/main/LICENSE
+    paid-edition: none found; it builds on OpenPubkey, which states it is a Linux Foundation project under Apache-2.0
+    paid-edition-source: https://raw.githubusercontent.com/openpubkey/openpubkey/main/README.md
+    verdict: pass
+    sources: [url:github.com/openpubkey/opkssh/releases/download, url:raw.githubusercontent.com/openpubkey/opkssh/refs/tags]
+    checked: 2026-11-21
   - name: SOPS
     kind: software
     used-for: encrypting the agent box's daily bundle of its private files to age recipients (proposed D-0038 rule 10)

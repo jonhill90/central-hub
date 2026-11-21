@@ -147,6 +147,9 @@ def main(src):
               f"client {want['clientId']} redirects only to {want['redirectUris']}")
         check(have.get("publicClient") == want["publicClient"],
               f"client {want['clientId']} publicClient={want['publicClient']}")
+        if "pkce.code.challenge.method" in want.get("attributes", {}):
+            check(have.get("attributes", {}).get("pkce.code.challenge.method") == want["attributes"]["pkce.code.challenge.method"],
+                  f"client {want['clientId']} requires PKCE {want['attributes']['pkce.code.challenge.method']}")
 
     for user in realm["users"]:
         name = user["username"]

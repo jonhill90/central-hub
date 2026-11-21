@@ -127,6 +127,26 @@ spec:
           # Keycloak separates several post-logout redirect URIs with "##".
           post.logout.redirect.uris: "{{ k8s_identity_grafana_hosts | map('regex_replace', '^(.*)$', 'https://\\1/login') | join('##') }}"
 {{ mappers }}
+      # The Central Hub web app: a confidential client, code flow with PKCE S256 (its spec 0007). It calls back to
+      # /auth/callback and returns to its home page after sign-out; it reads the `groups` claim.
+      - clientId: {{ k8s_identity_central_hub_app_name }}
+        name: Central Hub app
+        protocol: openid-connect
+        publicClient: false
+        clientAuthenticatorType: client-secret
+        secret: "${CENTRAL_HUB_APP_CLIENT_SECRET}"
+        standardFlowEnabled: true
+        directAccessGrantsEnabled: false
+        implicitFlowEnabled: false
+        serviceAccountsEnabled: false
+        rootUrl: https://{{ k8s_identity_central_hub_app_hosts | first }}
+        baseUrl: /
+        redirectUris: {{ k8s_identity_central_hub_app_hosts | map('regex_replace', '^(.*)$', 'https://\\1/auth/callback') | list | to_json }}
+        webOrigins: {{ k8s_identity_central_hub_app_hosts | map('regex_replace', '^(.*)$', 'https://\\1') | list | to_json }}
+        attributes:
+          pkce.code.challenge.method: S256
+          post.logout.redirect.uris: "{{ k8s_identity_central_hub_app_hosts | map('regex_replace', '^(.*)$', 'https://\\1/') | join('##') }}"
+{{ mappers }}
       # Argo CD's web UI (Argo CD docs, "Keycloak"): confidential, code flow. PKCE is allowed, not
       # required, so it works whether or not argocd-cm sets enablePKCEAuthentication. Argo CD's
       # callback is /auth/callback on its own name.

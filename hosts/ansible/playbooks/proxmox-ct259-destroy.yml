@@ -1,0 +1,93 @@
+---
+# Delete the jumpbox rehearsal's container, CT 259, from the agent box (the proxmox-host wrapper's job `ct259-destroy`;
+# docs/runbooks/grow-the-agent-jumpbox.md, "Delete the rehearsal's container"). The owner chose the delete (tap of
+# 2026-11-18 00:00:40 UTC) and the standing go of D-0061 covers it. It runs only through `apply-recorded` (a reviewer pass and a
+# go for the commit). Guards, in the order they are checked, so a wrong container is never deleted:
+#   1. the config file of container 259 must hold the tags `jumpbox` and `rehearsal` (the runbook's step 1 test);
+#   2. it must be unprivileged, with no mount point (`mp0:`..) that could hold data;
+#   3. VM 258 must be there afterwards (a task proves it), and no other guest is touched: every command names 259.
+# A --check run reads, asserts, and shows "changed" for the tasks that would act; it changes nothing.
+#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check ct259-destroy
+- name: Delete the rehearsal's container, CT 259
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  tasks:
+    - name: ct259 | Look for the container 259 config
+      ansible.builtin.stat:
+        path: /etc/pve/lxc/259.conf
+      register: ct259
+
+    - name: ct259 | Read its config
+      ansible.builtin.slurp:
+        src: /etc/pve/lxc/259.conf
+      register: ct259_conf
+      when: ct259.stat.exists
+
+    - name: ct259 | Its tags line and its other lines
+      ansible.builtin.set_fact:
+        ct259_lines: "{{ (ct259_conf.content | b64decode).split('\n') }}"
+        ct259_tags: "{{ ((ct259_conf.content | b64decode).split('\n') | select('match', '^tags: ') | list) }}"
+      when: ct259.stat.exists
+
+    - name: ct259 | It is the rehearsal's container (tags jumpbox and rehearsal), unprivileged, with no mount point
+      ansible.builtin.assert:
+        that:
+          - "ct259_tags | length == 1"
+          - "ct259_tags[0] is search('(^|[ :;])jumpbox([ :;]|$)')"
+          - "ct259_tags[0] is search('(^|[ :;])rehearsal([ :;]|$)')"
+          - "ct259_lines | select('match', '^unprivileged: 1$') | list | length == 1"
+          - "ct259_lines | select('match', '^mp[0-9]+:') | list | length == 0"
+        quiet: true
+      when: ct259.stat.exists
+
+    - name: ct259 | VM 258, the agent box, is there
+      ansible.builtin.stat:
+        path: /etc/pve/qemu-server/258.conf
+      register: vm258
+      failed_when: not vm258.stat.exists
+
+    - name: ct259 | Its state
+      ansible.builtin.command: pct status 259
+      register: ct259_status
+      changed_when: false
+      check_mode: false
+      when: ct259.stat.exists
+
+    - name: ct259 | Sign it out of the tailnet and Claude Code (a command that is missing is not a stop)
+      ansible.builtin.shell: |
+        pct exec 259 -- sh -c 'systemctl disable --now claude-rc; if command -v tailscale >/dev/null; then tailscale logout; fi'
+      changed_when: ct259.stat.exists
+      failed_when: false
+      when: ct259.stat.exists and 'running' in ct259_status.stdout and not ansible_check_mode
+
+    - name: ct259 | Stop it
+      ansible.builtin.command: pct stop 259
+      changed_when: true
+      when: ct259.stat.exists and 'running' in ct259_status.stdout and not ansible_check_mode
+
+    - name: ct259 | Destroy it and its disk
+      ansible.builtin.command: pct destroy 259 --purge
+      changed_when: true
+      when: ct259.stat.exists and not ansible_check_mode
+
+    - name: ct259 | A check run shows the delete as a change
+      ansible.builtin.debug:
+        msg: container 259 would be destroyed
+      changed_when: ct259.stat.exists
+      when: ansible_check_mode
+
+    - name: ct259 | It is gone and VM 258 is still there
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: [/etc/pve/lxc/259.conf, /etc/pve/qemu-server/258.conf]
+      register: ct259_after
+      when: not ansible_check_mode
+
+    - name: ct259 | The proof holds
+      ansible.builtin.assert:
+        that:
+          - not ct259_after.results[0].stat.exists
+          - ct259_after.results[1].stat.exists
+        quiet: true
+      when: not ansible_check_mode
