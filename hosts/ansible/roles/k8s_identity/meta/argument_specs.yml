@@ -74,12 +74,16 @@ argument_specs:
       k8s_identity_openbao_client:
         type: bool
         default: true
-        description: "Whether the realm has client openbao for the secrets store's web page when k8s_identity_openbao_hosts is left at its default (openbao.<zone>, with short names on)."
+        description: >-
+          Whether the realm has client openbao for the secrets store's web page when k8s_identity_openbao_hosts is
+          left at its default (openbao.<zone>, with short names on).
       k8s_identity_openbao_hosts:
         type: list
         elements: str
         default: ["openbao.<zone>"]
-        description: "The secrets store's web page names, for client openbao (the owner's sign-in, agent pick 233). Default openbao.<zone> with short names and k8s_identity_openbao_client on; empty: no client."
+        description: >-
+          The secrets store's web page names, for client openbao (the owner's sign-in, agent pick 233). Default
+          openbao.<zone> with short names and k8s_identity_openbao_client on; empty: no client.
       k8s_identity_opnsense_hosts:
         type: list
         elements: str
