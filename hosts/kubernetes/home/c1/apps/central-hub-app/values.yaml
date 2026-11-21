@@ -5,13 +5,24 @@ name: central-hub-app
 # (Activation gate items 3 and 6: no token, no image automation; a new commit is a reviewed pull request).
 source:
   repoURL: https://github.com/jonhill90/central-hub-app.git
-  commit: "85d1503ed42005d3eceb2fb7021a84d255f6739f"
+  commit: "304d0d41bdc4c79360421e293a2da28eb67328ba"
 
 # One stock image builds and runs the app: it has git and npm. Node 22.21.1 on Debian bookworm, tag last
 # pushed 2026-01-13 (Docker Hub tag API), multi-arch index digest. D-0054: Docker Hub by digest, no account.
 image: docker.io/library/node:22.21.1-bookworm@sha256:b84d52cd45bfe261096ccbf886955d431b8b9ed01b72eaef588e8886bda09e78
 uid: 1000
 port: 3000
+
+# Sign-in through Keycloak (spec 0007 of the app). The issuer, the public origins and the client secret are not here:
+# the identity role (k8s_identity) makes Secrets central-hub-app-oidc and central-hub-app-sso in this namespace and the
+# pod reads them as files, so this public chart names no host. Until they exist the pod is up but answers 503.
+# The token and key requests go to Keycloak inside the cluster; the browser uses the public address.
+auth:
+  mode: oidc
+  internalURL: http://sso-service.identity.svc:8080/realms/lab
+  allowedGroups: lab-admins,lab-viewers
+  identityNamespace: identity
+  identityPort: 8080
 
 resources:
   build:
