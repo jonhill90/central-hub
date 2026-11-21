@@ -18,6 +18,9 @@ python3 -I - "$src/tasks/offbox_scripts.yml" "$t/roles/r/tasks/main.yml" <<'PY'
 import sys, yaml
 tasks = [x for x in yaml.safe_load(open(sys.argv[1])) if "backend-files.sha256" in str(x)]
 assert len(tasks) == 1, "one manifest task"
+# the content is what is under test; the owner is root on the box and a runner cannot chown
+for k in ("owner", "group"):
+    tasks[0]["ansible.builtin.copy"].pop(k, None)
 yaml.safe_dump(tasks, open(sys.argv[2], "w"))
 PY
 printf -- '- hosts: localhost\n  connection: local\n  gather_facts: false\n  vars:\n    agent_box_libexec_dir: %s\n  roles: [r]\n' "$t/out" > "$t/pb.yml"
