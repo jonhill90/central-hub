@@ -361,7 +361,9 @@ case $action in
   clear-hold) clear_hold ;;
   put) put ;;
   put-apps) put_apps ;;
-  owner-login) "$libexec/secrets-store-owner.sh" "$named" "$(addr)" "$cacert" "$env_keys" "$settings" "$libexec" ;;
+  # owner, test and check-test write keys, and a key in a fresh rebuilt store makes restore-rebuilt refuse, so they wait for the
+  # hold like put; remove-test only deletes, so it may run (the reviewer's ask on #821).
+  owner-login) [[ $named == remove-test ]] || no_hold; "$libexec/secrets-store-owner.sh" "$named" "$(addr)" "$cacert" "$env_keys" "$settings" "$libexec" ;;
   compare) compare ;;
   reseed) reseed ;;
 esac

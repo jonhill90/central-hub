@@ -71,6 +71,13 @@ path "kv/data/$p/*"     { capabilities = ["create", "read", "update", "delete", 
 path "kv/metadata/$p/*" { capabilities = ["read", "list", "delete"] }
 path "kv/metadata/$p"   { capabilities = ["list"] }
 EOF
+    # kv/c1/check is the word the empty-store guards look for (restore, reseed): read only, so it can't be changed or deleted.
+    if [[ $p == c1 ]]; then
+      cat <<EOF
+path "kv/data/c1/check"     { capabilities = ["read"] }
+path "kv/metadata/c1/check" { capabilities = ["read", "list"] }
+EOF
+    fi
   done
 }
 

@@ -67,8 +67,8 @@ if [[ $rc -eq 0 && -f $b ]] && python3 -I -c '
 import json,sys
 p=json.load(open(sys.argv[1]))["policy"]
 paths=[l.split("\"")[1] for l in p.splitlines() if l.startswith("path")]
-sys.exit(0 if paths==["kv/data/owner/*","kv/metadata/owner/*","kv/metadata/owner","kv/data/c1/*","kv/metadata/c1/*","kv/metadata/c1"] else 1)' "$b"; then
-  ok "1a. owner: policy owner holds kv/owner/* and kv/c1/* (the owner's tap) and no other path"
+sys.exit(0 if paths==["kv/data/owner/*","kv/metadata/owner/*","kv/metadata/owner","kv/data/c1/*","kv/metadata/c1/*","kv/metadata/c1","kv/data/c1/check","kv/metadata/c1/check"] else 1)' "$b"; then
+  ok "1a. owner: policy owner holds kv/owner/* and kv/c1/* (read only on kv/c1/check) and no other path"
 else bad "1a. rc=$rc $out"; fi
 if python3 -I -c '
 import json,sys

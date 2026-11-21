@@ -28,6 +28,8 @@
 #      one that is not IPv4, or two in the prod inventory, is refused before any call.
 #  11. put and put-apps write nothing during a rebuild hold, on dev and with --prod (a key in the fresh store would make
 #      restore-rebuilt refuse); with the hold gone, both run again.
+#  12. owner-login owner, test and check-test (they write keys) refuse during a rebuild hold; remove-test and a run
+#      without the hold go through; dev is refused.
 # Usage: .github/hosts-check/tests/test_secrets_store_wrapper.sh   (needs python3 with PyYAML, openssl, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -56,7 +58,11 @@ cat > "$t/run/secrets-store-snapshots.sh" <<EOF
 #!/bin/bash
 echo "snapshots \$1" >> $t/calls
 EOF
-chmod +x "$t/bin/curl" "$t/libexec/secrets-store-kv.sh" "$t/run/secrets-store-snapshots.sh"
+cat > "$t/libexec/secrets-store-owner.sh" <<EOF
+#!/bin/bash
+echo "owner \$1" >> $t/calls
+EOF
+chmod +x "$t/libexec/secrets-store-owner.sh" "$t/bin/curl" "$t/libexec/secrets-store-kv.sh" "$t/run/secrets-store-snapshots.sh"
 sed -e "s|^keys=.*|keys=$t/keys|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
     -e "s|PATH=/usr/local/bin|PATH=$t/bin:/usr/local/bin|" \
     hosts/ansible/roles/agent_box/files/secrets-store.sh > "$t/run/secrets-store.sh"
@@ -242,5 +248,21 @@ if [[ $r11a -ne 0 && $o11a == *"a rebuild is in progress"*"nothing written"* && 
       $r11d -ne 0 && $o11d == *"secrets-store-prod.rebuilding"* && -z $c11d && $r11e -eq 0 ]]; then
   ok "11. put and put-apps write nothing during a rebuild hold, dev and prod; without it they run"
 else bad "11. $r11a $o11a [$c11a] | $r11b $o11b [$c11b] | $r11c | $r11d $o11d [$c11d] | $r11e"; fi
+
+# 12
+echo '{"address": "bao-prod.invalid", "sops_copies": true}' > "$t/work/secrets-store-prod.json"
+date -u > "$t/work/state/secrets-store-prod.rebuilding"
+run --prod owner-login owner; r12a=$rc o12a=$out c12a=$calls
+run --prod owner-login test; r12b=$rc c12b=$calls
+run --prod owner-login check-test; r12c=$rc c12c=$calls
+run --prod owner-login remove-test; r12d=$rc c12d=$calls
+rm -f "$t/work/state/secrets-store-prod.rebuilding"
+run --prod owner-login owner; r12e=$rc c12e=$calls
+run owner-login owner; r12f=$rc o12f=$out
+if [[ $r12a -ne 0 && $r12b -ne 0 && $r12c -ne 0 && $o12a == *"a rebuild is in progress"* &&
+      -z $c12a && -z $c12b && -z $c12c && $r12d -eq 0 && $c12d == *"owner remove-test"* &&
+      $r12e -eq 0 && $c12e == *"owner owner"* && $r12f -ne 0 && $o12f == *"prod store only"* ]]; then
+  ok "12. owner-login owner, test and check-test write nothing during a rebuild hold; remove-test and a run without a hold go; dev is refused"
+else bad "12. $r12a $o12a [$c12a] | $r12d [$c12d] | $r12e [$c12e] | $r12f $o12f"; fi
 
 exit $fail
