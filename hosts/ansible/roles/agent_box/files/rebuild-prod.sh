@@ -4,7 +4,7 @@
 # "Rebuild prod from the box"). It runs hosts/rebuild-k8s.sh, the same one command as dev, as user `keys` through sudo,
 # so the session never sees the Proxmox token, the node key, the seal key, the backup certificates or the inventory.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check|rebuild <tap id> <commit>|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check|rebuild <tap id> <commit>|resume <tap id> <commit>|log
 # check    read-only, at main's newest commit. Names every file the run needs that is missing; builds the box's copies of the prod inventory
 #          and tfvars and refuses one that still points at the Mac; plans OpenTofu with the Mac's own tfvars on the
 #          box's state and needs "no changes" (the box's state is the live prod); lists what a teardown would destroy
@@ -37,6 +37,14 @@
 #          nodes and the repository's retention (daily, weekly, monthly: the newest of a day wins) would forget the good
 #          snapshot: it needs the pin (kept, or given as the fourth argument) and refuses without it, before anything
 #          is backed up or destroyed.
+# resume   <tap id> <commit>: carries on a rebuild that stopped after its teardown, on the cluster it already built, from the first
+#          stage that has no good end line, with no new teardown, no backup and no restore. It destroys nothing and takes no new
+#          go: <tap id> must be the one the stopped run was started with (the go that covered the teardown), and <commit> is any commit
+#          on main (usually the fix that follows the stop), checked by the same check and the same dev-first rule as a rebuild. It
+#          resumes only when all of these hold, each a PASS line, else nothing is run: the last run that reached its teardown did not
+#          end well; its restore pin is kept; every stage before the resume point has a good end line in the logs since that teardown;
+#          every prod node answers and is Ready, and OpenTofu plans no change (the VMs are the ones the run built). It then runs
+#          hosts/rebuild-k8s.sh --only <the remaining stages>, with the same settings file and seal key (in memory) as the rebuild.
 # log      the newest run's lines: the action, the commit, the tap id, the dev run, the stage lines, PASS and FAIL.
 # A run's VM IDs must be 200-249; VM 258 (this box) and 259 are refused in any plan. One run at a time, with the
 # dev rebuild's lock, so dev and prod never build at once. Only code on main runs with the keys.
@@ -65,15 +73,15 @@ export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin:/u
 export TF_DATA_DIR=$work/tofu-data/rebuild-prod TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: rebuild-prod check|rebuild <tap id> <commit> [<volume snapshot id>]|log" >&2; exit 2; }
+usage() { echo "usage: rebuild-prod check|rebuild <tap id> <commit> [<volume snapshot id>]|resume <tap id> <commit>|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 want=''
 given_pin=''
 case $action in
   check | log) [[ $# -eq 1 ]] || usage ;;
-  rebuild)
-    [[ $# -eq 3 || $# -eq 4 ]] || usage
+  rebuild | resume)
+    if [[ $action == resume ]]; then [[ $# -eq 3 ]] || usage; else [[ $# -eq 3 || $# -eq 4 ]] || usage; fi
     tap=$2 want=$3 given_pin=${4:-}
     [[ -z $given_pin || $given_pin =~ ^[0-9a-f]{64}$ ]] || { echo "rebuild-prod: the volume snapshot ID is the full restic ID, 64 hex digits" >&2; exit 2; }
     [[ $tap =~ ^cmsg_[A-Za-z0-9]{20,60}$ ]] || { echo "rebuild-prod: the tap id is the owner's tap message id, cmsg_<letters and digits>" >&2; exit 2; }
@@ -131,7 +139,8 @@ echo "rebuild-prod: $action at central-hub ${commit:0:12}${tap:+, owner tap $tap
 pin_file=$work/state/prod-restore-pin
 pin=$(head -n 1 -- "$pin_file" 2>/dev/null || true)
 torn=''
-if [[ $action == rebuild ]]; then
+resuming=false; [[ $action == resume ]] && resuming=true
+if [[ $action == rebuild || $action == resume ]]; then
   prev=''
   while IFS= read -r f; do
     [[ $f == "$log" ]] && continue
@@ -140,7 +149,14 @@ if [[ $action == rebuild ]]; then
     if grep -q '^rebuild-prod: teardown and build start' -- "$f"; then prev=$f; break; fi
   done < <(ls -1r "$logs"/run-*.log 2>/dev/null || true)
   if [[ -n $prev ]] && grep -q '^rebuild-prod: teardown and build start' -- "$prev" &&
-     ! grep -q '^PASS: rebuild-prod: prod torn down and built again' -- "$prev"; then torn=${prev##*/}; fi
+     ! grep -q '^PASS: rebuild-prod: prod torn down and built again' -- "$prev"; then
+    torn=${prev##*/}
+    # A resume that ended well finishes that run: a later run log with the same PASS line clears it.
+    while IFS= read -r f; do
+      [[ $f == "$log" || ! $f > $prev ]] && continue
+      if grep -q '^PASS: rebuild-prod: prod torn down and built again' -- "$f"; then torn=''; break; fi
+    done < <(ls -1 "$logs"/run-*.log 2>/dev/null | sort || true)
+  fi
   if [[ -n $given_pin && -z $torn ]]; then
     echo "FAIL: rebuild-prod: a volume snapshot ID is only for a run after one that stopped after its teardown; the last rebuild run did not, so prod holds live data and the drill takes a new backup first. Nothing was backed up or destroyed."; exit 1
   fi
@@ -162,6 +178,18 @@ if [[ $action == rebuild ]]; then
       echo "FAIL: rebuild-prod: the box holds the restore pin $pin, and the snapshot ID given is $given_pin, which is another snapshot; nothing was backed up or destroyed"; exit 1
     fi
     pin=$given_pin
+  fi
+  if $resuming; then
+    if [[ -z $torn ]]; then
+      echo "FAIL: rebuild-prod: resume needs a rebuild that stopped after its teardown, and the last run that reached its teardown ended well or none did; nothing was run"; exit 1
+    fi
+    if [[ -z $pin ]]; then
+      echo "FAIL: rebuild-prod: the stopped run ($torn) left no restore pin in the box's state, so the cluster's data cannot be shown to be the tested snapshot; nothing was run"; exit 1
+    fi
+    go_tap=$(sed -nE 's/^rebuild-prod: rebuild at central-hub [0-9a-f]+, owner tap (cmsg_[A-Za-z0-9]+)$/\1/p' -- "$logs/$torn" | head -n 1)
+    if [[ -z $go_tap || $go_tap != "$tap" ]]; then
+      echo "FAIL: rebuild-prod: the tap id given is not the go the stopped run ($torn) started under; resume continues that run and takes no new go; nothing was run"; exit 1
+    fi
   fi
   if [[ -n $torn && -z $pin ]]; then
     echo "FAIL: rebuild-prod: the last rebuild run ($torn) stopped after its teardown, so prod's nodes are rebuilt and empty, and a backup now would snapshot them and let the repository forget the good one. Give the full ID of the volume snapshot to restore as the fourth argument: rebuild <tap id> <commit> <volume snapshot id>. Nothing was backed up or destroyed."; exit 1
@@ -459,7 +487,7 @@ tf_note() {
   local f=$1 n=0 hit=() p
   [[ -r $f ]] || { printf 'output not readable'; return 0; }
   n=$(grep -c '' "$f" 2>/dev/null || true)
-  for p in 'Permission denied' 'No such file' 'command not found' 'Failed to query' 'registry' 'Error'; do
+  for p in 'Permission denied' 'No such file' 'command not found' 'Failed to query' 'registry' 'Error' 'Killed' 'timed out' 'deadline' 'lock' 'busy' 'signal' 'Initializing' 'Warning' 'denied' 'HTTP' 'EOF' 'connection' 'certificate' 'Unsupported' 'version' 'checksum' 'cache'; do
     if grep -q -F -- "$p" "$f" 2>/dev/null; then hit+=("$p"); fi
   done
   printf '%s output line(s); phrases found: %s' "${n:-0}" "$( (IFS=,; printf '%s' "${hit[*]:-none}") )"
@@ -643,10 +671,12 @@ if [[ $fails -gt 0 ]]; then echo "rebuild-prod: $action: $fails checks failed; n
 if [[ $action == check ]]; then echo "rebuild-prod: check: every check passed; nothing was changed"; exit 0; fi
 
 # ===== rebuild: the checks before a teardown (D-0035 rule 5). Any failure stops the run before anything is destroyed.
-echo "rebuild-prod: rebuild of prod at ${commit:0:12}, owner tap $tap, after dev run $dev_run"
+if $resuming; then echo "rebuild-prod: resume of prod at ${commit:0:12}, under the go of the stopped run ($torn), tap $tap, after dev run $dev_run"
+else echo "rebuild-prod: rebuild of prod at ${commit:0:12}, owner tap $tap, after dev run $dev_run"; fi
 ap() { (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory/" "$@"); }
 old_args="ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$old_known'"
 
+if ! $resuming; then   # a resume takes no backup and carries nothing: the stopped run kept the keys, and the pin holds the snapshot
 # 1a. Each node's sftp key pair and the host key it pinned, kept in the keys folder; never printed. Only with the Proxmox host as
 # the backup target (k8s_backup_sftp): the rebuilt node gets the same key back, which the host already lets in (the box holds no
 # key on the host to let a new one in), and the playbooks read the host's key from the carried known_hosts. Before the drill,
@@ -732,6 +762,8 @@ else
   echo "PASS: rebuild-prod: no Azure sign-in on the prod nodes (k8s_backup_azure_identity off), so no backup certificate to carry"
 fi
 
+fi
+
 # 3. The seal key: its SOPS copy decrypts to the 32 bytes on the seal node, and stays in memory only for this run.
 identity=$keys/secrets-bundle/age-identity.txt
 seal_sops=$pkeys/openbao-seal.key.sops.json
@@ -769,6 +801,41 @@ else
   echo "FAIL: rebuild-prod: could not read the seal key on the seal node; nothing was destroyed"; exit 1
 fi
 
+if $resuming; then
+  # --- Resume: what must hold before the stages after the stop run. Each is a PASS line, or nothing is run.
+  # (a) The stages before the resume point ended well in the one command's own logs since the stopped run's teardown.
+  t_stamp=${torn#run-}; t_stamp=${t_stamp%.log}
+  resume_stages=''; first_bad=''
+  for st in vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks; do
+    last=''
+    for f in $(ls -1 "$envdir"/logs/rebuild-*.log 2>/dev/null | sort); do
+      fs=${f##*/rebuild-}; fs=${fs%.log}
+      [[ $fs < $t_stamp ]] && continue
+      l=$(grep -E "^[0-9TZ:-]+ $st end rc=[0-9]+" -- "$f" | tail -n 1 || true)
+      [[ -z $l ]] || last=$l
+    done
+    if [[ $last =~ ' end rc=0' ]]; then
+      [[ -z $first_bad ]] || { echo "FAIL: rebuild-prod: stage $st ended well but the stage before it ($first_bad) did not; the run's logs are out of order; nothing was run"; exit 1; }
+    else
+      [[ -n $first_bad ]] || first_bad=$st
+      resume_stages+="$st,"
+    fi
+  done
+  if [[ -z $first_bad ]]; then
+    echo "FAIL: rebuild-prod: every stage has a good end line since the stopped run's teardown ($torn); there is nothing to resume; check the run's last lines with rebuild-prod log; nothing was run"; exit 1
+  fi
+  resume_stages=${resume_stages%,}
+  echo "PASS: rebuild-prod: every stage before $first_bad has a good end line in the logs since the teardown of $torn; resuming from $first_bad: $resume_stages"
+  # (b) The nodes the run built are there and Ready, and the box's OpenTofu plan (checked above) shows no change to the VMs.
+  nodes_json=$( (cd "$repo/hosts/ansible" && ansible 'k8s_control_plane[0]' -i "$inventory/" -b -m ansible.builtin.command -a "kubectl --kubeconfig /etc/kubernetes/admin.conf get nodes --no-headers") 2>&1 || true)
+  ready=$(grep -cE '^[^ ]+ +Ready( |$)' <<< "$nodes_json" || true)
+  total_nodes=$(wc -l < "$node_list")
+  if [[ $ready -eq $total_nodes && $total_nodes -gt 0 ]]; then
+    echo "PASS: rebuild-prod: all $total_nodes prod nodes are Ready, and the OpenTofu plan shows no change to the VMs the run built"
+  else
+    echo "FAIL: rebuild-prod: $ready of $total_nodes prod nodes are Ready; the cluster the stopped run built is not whole, so a resume could not stand on it; nothing was run"; exit 1
+  fi
+else
 # 4 and 5. The firewall's configuration and the secrets bundle (with this state file), fresh and off the box.
 for job in opnsense-backup opnsense-offbox secrets-bundle secrets-bundle-offbox; do
   "$libexec/$job.sh" || { echo "FAIL: rebuild-prod: $job failed; nothing was destroyed"; exit 1; }
@@ -791,6 +858,8 @@ date -u +%FT%TZ > "$work/state/prod-stable-folders"
 # The rebuilt nodes have new host keys: the build starts with no known hosts.
 rm -f -- "$envdir/known_hosts" "$envdir/known_hosts.old" "$work/c1-ansible/known_hosts"
 
+fi
+
 # certs runs before gateway: the Gateway's HTTPS listener waits on the certificate's Secret, and `apps` leaves out the two apps that
 # need what certs makes (APPS_DEFER); `checks` waits for every app (prod run 6, 2026-11-21, stopped at apps on gateway and jellyfin).
 stages="vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks"
@@ -812,9 +881,14 @@ RESTORE_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" pla
 RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTORY" playbooks/k8s-restore.yml --tags restore_check -e k8s_backup_enabled=false'
 ENV
 chmod 600 "$envdir/rebuild.env"
-echo "rebuild-prod: teardown and build start: $stages"
 rc=0
-bash "$repo/hosts/rebuild-k8s.sh" "$envdir" --teardown || rc=$?
+if $resuming; then
+  echo "rebuild-prod: resume start, no teardown: $resume_stages"
+  bash "$repo/hosts/rebuild-k8s.sh" "$envdir" --only "$resume_stages" || rc=$?
+else
+  echo "rebuild-prod: teardown and build start: $stages"
+  bash "$repo/hosts/rebuild-k8s.sh" "$envdir" --teardown || rc=$?
+fi
 if [[ $rc -eq 0 ]]; then
   # The carried sftp private keys have done their job once the rebuilt nodes hold them and the backup stage and checks passed;
   # the host accepts those keys as the writer, so the box must not keep a key on the host (D-0042 rule 6, an access right

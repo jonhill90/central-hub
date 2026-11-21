@@ -137,6 +137,14 @@ elif [[ "\$*" == *"--tags drill"* ]]; then
 fi
 exit \${DRILL_RC:-0}
 EOF
+cat > "$venv/ansible" <<EOF
+#!/bin/bash
+echo "adhoc \$*" >> $t/calls
+echo "cp-a | CHANGED | rc=0 >>"
+echo "cp-a   Ready      control-plane   5m   v1.31.0"
+echo "wk-a   \${NODE_WK_STATE:-Ready}   <none>          5m   v1.31.0"
+EOF
+chmod +x "$venv/ansible"
 chmod +x "$t/bin/"* "$t/libexec/"*.sh "$t/libexec/sops" "$venv/ansible-inventory" "$venv/ansible-playbook"
 sed -e "s|^keys=.*|keys=$t/keys|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
     -e "s|PATH=\$libexec/ansible-venv/bin:/usr/local/bin|PATH=\$libexec/ansible-venv/bin:$t/bin:/usr/local/bin|" \
@@ -170,11 +178,11 @@ seal_copy() { python3 -c 'import base64, json, sys; print(json.dumps({"data": ba
 # 1
 r1=""
 for args in "" "apply" "rebuild" "rebuild notatap" "rebuild cmsg_short" "check extra" "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
-            "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ main" "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123"; do
+            "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ main" "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123" "resume" "resume cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ"; do
   # shellcheck disable=SC2086
   run $args; r1+="$rc:${calls:-none} "
 done
-if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "1. usage errors (rebuild with no commit, or one that is not 7 to 40 hex digits, too), nothing run"; else bad "1. $r1"; fi
+if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "1. usage errors (rebuild with no commit, or one that is not 7 to 40 hex digits, too), nothing run"; else bad "1. $r1"; fi
 
 # 2
 run check
@@ -402,6 +410,10 @@ TOFU_INIT_RC=1 TOFU_INIT_TEXT=$'one\nregistry thing\nPermission denied here' run
 if [[ $o12h == *"OpenTofu init failed: 3 output line(s); phrases found: Permission denied,registry"* ]]; then
   ok "12h. the closed list names the phrases found, comma-separated, with the line count"
 else bad "12h. $o12h"; fi
+TOFU_INIT_RC=1 TOFU_INIT_TEXT='Killed 10.9.8.7 secret-token-xyz' run check; o12i=$out
+if [[ $o12i == *"OpenTofu init failed: 1 output line(s); phrases found: Killed"* && $o12i != *secret-token-xyz* && $o12i != *10.9.8.7* ]]; then
+  ok "12i. a one-line failure with a kill or timeout word names the word and never the line"
+else bad "12i. $o12i"; fi
 
 # 12b. The wrapper's PATH reaches `ip` (/usr/sbin on the box, where the route check reads the routing table): on the box the check
 # failed with "no route to the Proxmox API's address" because `ip` was not found.
@@ -565,6 +577,44 @@ if [[ $r17a -eq 1 && $o17a == *"stopped after its teardown"*"Give the full ID of
       $r17b -eq 1 && $o17b == *"a volume snapshot ID is only for a run after one that stopped after its teardown"* ]]; then
   ok "17. a later run that stopped before its teardown does not hide the torn state; a later run that ended well clears it"
 else bad "17. $r17a $o17a [$c17a] | $r17b $o17b"; fi
+rm -f "$logd"/*
+
+
+# 18. resume: carry on a stopped rebuild from the first stage with no good end line, on the cluster it built; no teardown, backup or restore.
+resume_logs() { # <stage that failed>
+  rm -f "$logd"/*; torn_log yes
+  printf '%s\n' "rebuild: env prod, stages: x" "2999-01-01T01:00:00Z vms end rc=0 5s" "2999-01-01T01:00:01Z cluster end rc=0 5s" \
+    "2999-01-01T01:00:02Z storage end rc=0 5s" "2999-01-01T01:00:03Z openbao-seal end rc=0 5s" "2999-01-01T01:00:04Z restore end rc=0 5s" \
+    "2999-01-01T01:00:05Z gitops end rc=0 5s" "2999-01-01T01:00:06Z secrets end rc=0 5s" "2999-01-01T01:00:07Z apps end rc=0 5s" \
+    "2999-01-01T01:00:08Z certs end rc=0 5s" "2999-01-01T01:00:09Z $1 end rc=2 5s" > "$logd/rebuild-29990101T010000Z.log"
+  printf '%s\n%s\n' "$pinid" "2999-01-01T00:00:00Z run-29990101T000000Z.log" > "$t/work/state/prod-restore-pin"
+}
+inventory; dev_log "$sha" "rebuild: all stages passed"; rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+run resume "$tap" "$sha"; r18a=$rc o18a=$out c18a=$calls
+resume_logs gateway
+run resume cmsg_01ZZZZZZZZZZZZZZZZZZZZZZZZZZ "$sha"; r18b=$rc o18b=$out c18b=$calls
+NODE_WK_STATE=NotReady run resume "$tap" "$sha"; r18c=$rc o18c=$out c18c=$calls
+run resume "$tap" "$sha"; r18d=$rc o18d=$out c18d=$calls
+if [[ $r18a -eq 1 && $o18a == *"resume needs a rebuild that stopped after its teardown"* && $c18a != *one-command* &&
+      $r18b -eq 1 && $o18b == *"not the go the stopped run"* && $c18b != *one-command* &&
+      $r18c -eq 1 && $o18c == *"1 of 2 prod nodes are Ready"* && $c18c != *one-command* &&
+      $r18d -eq 0 && $o18d == *"every stage before gateway has a good end line"*"resuming from gateway: gateway,identity,identity-db,ui,backup,checks"* &&
+      $c18d == *"one-command "*"--only gateway,identity,identity-db,ui,backup,checks"* && $c18d != *"--teardown"* && $c18d != *"--tags drill"* &&
+      $c18d != *"job "* && $c18d != *"tofu destroy"* && $(cat "$t/seen-rebuild.env") == *"k8s_backup_restore_snapshot=$pinid"* &&
+      $o18d == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin ]]; then
+  ok "18. resume refuses with no stopped run, another go's tap or a node not Ready; otherwise runs only the stages from the first with no good end line, with no teardown, backup or bundle, and clears the pin"
+else bad "18. $r18a $o18a | $r18b $o18b | $r18c $o18c | $r18d $o18d [$c18d]"; fi
+# 18b. After a resumed run that ended well the stop no longer counts; a resume with every stage already good has nothing to run.
+resume_logs gateway
+printf '%s\n' "rebuild-prod: resume at central-hub 0123456789ab, owner tap $tap" "PASS: rebuild-prod: prod torn down and built again at 0123456789ab, data back, backups on" > "$logd/run-29990103T000000Z.log"
+run rebuild "$tap" "$sha" "$pinid"; r18e=$rc o18e=$out
+resume_logs gateway
+printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" "2999-01-01T01:00:11Z identity end rc=0 5s" "2999-01-01T01:00:12Z identity-db end rc=0 5s" \
+  "2999-01-01T01:00:13Z ui end rc=0 5s" "2999-01-01T01:00:14Z backup end rc=0 5s" "2999-01-01T01:00:15Z checks end rc=0 5s" > "$logd/rebuild-29990101T020000Z.log"
+run resume "$tap" "$sha"; r18f=$rc o18f=$out c18f=$calls
+if [[ $r18e -eq 1 && $o18e == *"only for a run after one that stopped after its teardown"* && $r18f -eq 1 && $o18f == *"nothing to resume"* && $c18f != *one-command* ]]; then
+  ok "18b. a resumed run that ended well ends the stop; a resume with every stage already good has nothing to run"
+else bad "18b. $r18e $o18e | $r18f $o18f"; fi
 rm -f "$logd"/*
 
 exit "$fail"
