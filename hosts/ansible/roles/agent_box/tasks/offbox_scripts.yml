@@ -58,8 +58,8 @@
     group: root
     mode: "0755"
 
-# What box-prove and rebuild-prod.sh compare the installed scripts with (the two sends and the two escrow scripts they call): written from this role's own files in this same run,
-# so a script left behind differs from it.
+# What box-prove and rebuild-prod.sh compare the installed scripts with (the two sends and the two escrow scripts they call):
+# written from this role's own files in this same run, so a script left behind differs from it.
 - name: The sha256 of the off-box scripts this role ships
   ansible.builtin.copy:
     content: |
