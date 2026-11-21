@@ -160,7 +160,7 @@ destroy() { python3 -c 'import json, sys; print(json.dumps({"resource_changes": 
 inventory() { printf '%s\n' "all:" "  children:" "    proxmox:" "      hosts:" "        pve-a: {ansible_host: 192.0.2.1}" \
   "    k8s_nodes:" "      vars:" "        ansible_user: almalinux" "        ansible_ssh_common_args: -o ProxyJump=root@192.0.2.1" \
   "        ansible_ssh_private_key_file: /Users/someone/.ssh/id" "        k8s_gitops_cluster_labels: {env: prod}" \
-  "        k8s_backup_enabled: true" "        k8s_backup_azure_identity: true" "        k8s_backup_env_file: /Users/someone/.config/central-hub/c1-backup.env" \
+  "        k8s_backup_enabled: true" "        k8s_certs_cert_manager_by_argocd: false" "        k8s_backup_azure_identity: true" "        k8s_backup_env_file: /Users/someone/.config/central-hub/c1-backup.env" \
   "        k8s_identity_values_file: /Users/someone/.config/central-hub/identity.env" "$@" \
   "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}" \
   "        k8s_workers:" "          hosts:" "            wk-a: {ansible_host: 192.0.2.11}" > "$t/keys/prod/inventory-hosts.yml"; }
@@ -208,9 +208,9 @@ v=$(python3 -c 'import json, sys; d = json.loads(sys.argv[1]); v = d["all"]["chi
 print(v["ansible_ssh_private_key_file"] == k + "/prod-node-key", v["k8s_backup_env_file"] == k + "/c1-backup.env",
       v["k8s_identity_values_file"] == k + "/prod/identity.env", v["k8s_backup_restore_own_env"], v["k8s_backup_restore_source_host"],
       v["k8s_gitops_source_local_path_stable_folders"], v["k8s_backup_azure_seed_dir"] == k + "/prod/backup-certs",
-      v["k8s_gitops_source_openbao_seal_node"], "proxmox" in d["all"]["children"], v["k8s_backup_restore_check_identity"],
+      v["k8s_gitops_source_openbao_seal_node"], "proxmox" in d["all"]["children"], v["k8s_backup_restore_check_identity"], v["k8s_certs_cert_manager_by_argocd"], v["k8s_gateway_by_argocd"],
       v["k8s_gitops_source_openbao_admin_address"])' "$seen" "$t/keys" 2>/dev/null)
-if [[ $v == "True True True True wk-a True True wk-a False False 192.0.2.60" && $seen != *ProxyJump* && $seen != */Users/* ]] &&
+if [[ $v == "True True True True wk-a True True wk-a False False True True 192.0.2.60" && $seen != *ProxyJump* && $seen != */Users/* ]] &&
    grep -q "^node_ssh_public_key = \"$(cut -d' ' -f1-2 < "$t/keys/prod-node-key.pub")" "$t/work/rebuild-prod/k8s.tfvars"; then
   ok "4. the box's copies: its key, the box's files, prod's own restore, stable folders, the carried certificates"
 else bad "4. [$v]"; fi
