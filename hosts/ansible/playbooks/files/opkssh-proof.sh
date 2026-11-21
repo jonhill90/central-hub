@@ -74,6 +74,12 @@ client_id=$(printf '%s\n' "$out" | grep -E '^[0-9a-f-]{36}$' | head -n 1)
 say "keycloak: temporary public client $client made in realm lab"
 
 # 4. The server side: opkssh's own installer, realm lab as the only provider, one identity for one account.
+# The installer refuses to start without wget, even with local files (dev run of 2026-11-21 05:02 UTC), so the
+# node gets it from its own package repositories; dev is torn down at the end of the run.
+if ! command -v wget >/dev/null 2>&1; then
+  dnf -y -q install wget >/dev/null 2>&1 || { say "FAIL: could not install wget, which opkssh's installer needs"; exit 1; }
+  say "server: wget installed for opkssh's installer"
+fi
 if ! bash "$work/install-linux.sh" --install-from="$work/opkssh-linux-amd64" --install-te-from="$work/opkssh.te" --no-home-policy > "$work/install.log" 2>&1; then
   say "FAIL: opkssh's installer failed: $(tail -n 3 "$work/install.log" | tr -s '\n' ' ' | cut -c1-200)"; exit 1
 fi
@@ -89,7 +95,7 @@ say "server: opkssh $ver installed; provider realm lab, client $client; $user ma
 
 # 5. The client side: opkssh login, with the browser played by the script.
 mkdir -p "$work/home"
-HOME=$work/home timeout 120 /usr/local/bin/opkssh login --provider="$issuer,$client" --disable-browser-open -i "$work/opk" > "$work/login.out" 2>&1 &
+HOME=$work/home timeout 240 /usr/local/bin/opkssh login --provider="$issuer,$client" --disable-browser-open -i "$work/opk" > "$work/login.out" 2>&1 &
 lp=$!
 url=""
 for _ in $(seq 1 30); do
