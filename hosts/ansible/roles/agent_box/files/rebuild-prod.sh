@@ -135,7 +135,9 @@ if [[ $action == rebuild ]]; then
   prev=''
   while IFS= read -r f; do
     [[ $f == "$log" ]] && continue
-    if grep -q '^rebuild-prod: rebuild at ' -- "$f"; then prev=$f; break; fi
+    # The newest run that reached its teardown decides. A later run that stopped before it (prod run 5, on the empty nodes' sftp keys)
+    # destroyed nothing and says nothing about the state the teardown left.
+    if grep -q '^rebuild-prod: teardown and build start' -- "$f"; then prev=$f; break; fi
   done < <(ls -1r "$logs"/run-*.log 2>/dev/null || true)
   if [[ -n $prev ]] && grep -q '^rebuild-prod: teardown and build start' -- "$prev" &&
      ! grep -q '^PASS: rebuild-prod: prod torn down and built again' -- "$prev"; then torn=${prev##*/}; fi
@@ -637,6 +639,13 @@ if [[ $(cat -- "$envdir/backup-mode" 2>/dev/null) == sftp ]]; then
 install -d -m 700 "$sftp_keys"
 while read -r name host user; do
   sudo_=""; [[ $user == root ]] || sudo_="sudo -n "
+  # After a run that stopped past its teardown the nodes are rebuilt and empty: their keys are the ones that run kept here before it
+  # destroyed them (the dev run of 2026-11-21 showed the read failing on the empty nodes; prod run 5 stopped there). Kept and whole, they stand.
+  if [[ -n $torn ]] && grep -q -- 'PRIVATE KEY-----' "$sftp_keys/$name.key" 2>/dev/null && grep -q -- '^ssh-ed25519 ' "$sftp_keys/$name.pub" 2>/dev/null &&
+     grep -q -- ' ssh-ed25519 ' "$sftp_keys/$name.known_hosts" 2>/dev/null; then
+    echo "rebuild-prod: node $name: the stopped run ($torn) kept its sftp backup key, public key and pinned host key before its teardown; they stand"
+    continue
+  fi
   for f in id_ed25519:key id_ed25519.pub:pub known_hosts:known_hosts; do
     ssh_node "$host" "$user" "${sudo_}cat /etc/central-hub/backup-ssh/${f%%:*}" > "$sftp_keys/$name.${f##*:}.part" </dev/null ||
       { rm -f -- "$sftp_keys/$name".*.part; echo "FAIL: rebuild-prod: could not read node $name's backup ssh file ${f%%:*}; nothing was destroyed"; exit 1; }
@@ -686,6 +695,12 @@ if [[ $(cat -- "$envdir/backup-mode" 2>/dev/null) == azure ]]; then
 install -d -m 700 "$certs"
 while read -r name host user; do
   sudo_=""; [[ $user == root ]] || sudo_="sudo -n "
+  # A stopped-past-teardown run left the nodes rebuilt and empty: the certificate it kept before its teardown stands when whole.
+  if [[ -n $torn && -s $certs/$name.pem.keyid ]] && grep -q -- '-----BEGIN CERTIFICATE-----' "$certs/$name.pem" 2>/dev/null &&
+     grep -q -- 'PRIVATE KEY-----' "$certs/$name.pem" 2>/dev/null; then
+    echo "rebuild-prod: node $name: the stopped run ($torn) kept its backup certificate before its teardown; it stands"
+    continue
+  fi
   for ext in pem pem.keyid; do
     ssh_node "$host" "$user" "${sudo_}cat /etc/central-hub/azure/backup.$ext" > "$certs/$name.$ext.part" </dev/null ||
       { rm -f -- "$certs/$name.$ext.part"; echo "FAIL: rebuild-prod: could not read node $name's backup certificate ($ext); nothing was destroyed"; exit 1; }
@@ -715,12 +730,28 @@ seal_node=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["
 read -r _ seal_host seal_user < <(awk -v n="$seal_node" '$1 == n' "$node_list")
 [[ -n ${seal_host:-} ]] || { echo "FAIL: rebuild-prod: the seal node is not among the prod nodes; nothing was destroyed"; exit 1; }
 sudo_=""; [[ $seal_user == root ]] || sudo_="sudo -n "
-ssh_node "$seal_host" "$seal_user" "${sudo_}cat /var/lib/central-hub/openbao-seal/seal-1.key" > "$seal_tmp/node.key" </dev/null ||
-  { echo "FAIL: rebuild-prod: could not read the seal key on the seal node; nothing was destroyed"; exit 1; }
-cmp -s "$seal_tmp/node.key" "$seal_tmp/openbao-seal.key" ||
-  { echo "FAIL: rebuild-prod: the seal key's SOPS copy differs from the seal node's key (run openbao-prod seal-copy); nothing was destroyed"; exit 1; }
-rm -f -- "$seal_tmp/node.key"
-echo "PASS: rebuild-prod: the seal key's SOPS copy equals the seal node's key"
+if ssh_node "$seal_host" "$seal_user" "${sudo_}cat /var/lib/central-hub/openbao-seal/seal-1.key" > "$seal_tmp/node.key" </dev/null; then
+  cmp -s "$seal_tmp/node.key" "$seal_tmp/openbao-seal.key" ||
+    { echo "FAIL: rebuild-prod: the seal key's SOPS copy differs from the seal node's key (run openbao-prod seal-copy); nothing was destroyed"; exit 1; }
+  rm -f -- "$seal_tmp/node.key"
+  echo "PASS: rebuild-prod: the seal key's SOPS copy equals the seal node's key"
+elif [[ -n $torn ]]; then
+  # The rebuilt seal node may hold no seal key yet. That stands only when all three hold: the stopped run's own log says it compared the
+  # SOPS copy with the live key before its teardown, the SOPS file is older than that log (not replaced since), and the node says
+  # cleanly that the file is not there (test ! -e); any other failure (a sudo or ssh error, an unreadable file) refuses.
+  rm -f -- "$seal_tmp/node.key"
+  seal_file=/var/lib/central-hub/openbao-seal/seal-1.key
+  if ! grep -qxF "PASS: rebuild-prod: the seal key's SOPS copy equals the seal node's key" -- "$logs/$torn"; then
+    echo "FAIL: rebuild-prod: the seal node's key could not be read, and the log of the stopped run ($torn) does not show it compared the SOPS copy with the live key; nothing was destroyed"; exit 1
+  elif [[ ! $seal_sops -ot $logs/$torn ]]; then
+    echo "FAIL: rebuild-prod: the seal node's key could not be read, and the SOPS copy ($seal_sops) is not older than the stopped run's log ($torn), so it may have changed since that run compared it; nothing was destroyed"; exit 1
+  elif ! ssh_node "$seal_host" "$seal_user" "${sudo_}test ! -e $seal_file" </dev/null >/dev/null 2>&1; then
+    echo "FAIL: rebuild-prod: the seal node's key could not be read and the node does not say the file is absent (an ssh or sudo error, or a file that exists but cannot be read); nothing was destroyed"; exit 1
+  fi
+  echo "rebuild-prod: the seal node is rebuilt and the node says the seal key file is absent; the SOPS copy (32 bytes, decrypts with the box's identity, older than the stopped run's log) is the key that run ($torn) compared with the live one before its teardown"
+else
+  echo "FAIL: rebuild-prod: could not read the seal key on the seal node; nothing was destroyed"; exit 1
+fi
 
 # 4 and 5. The firewall's configuration and the secrets bundle (with this state file), fresh and off the box.
 for job in opnsense-backup opnsense-offbox secrets-bundle secrets-bundle-offbox; do

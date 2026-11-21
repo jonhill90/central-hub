@@ -82,6 +82,8 @@ cat > "$t/bin/ssh" <<EOF
 #!/bin/bash
 cmd="\${*: -1}"
 echo "ssh \${*: -2}" >> $t/calls
+# EMPTY_NODES: rebuilt nodes that answer a login and nothing else (no keys, no certificate, no seal key).
+if [ -n "\$EMPTY_NODES" ]; then [ "\$cmd" = true ] && exit 0; case \$cmd in *"test ! -e"*) exit \${TEST_RC:-0} ;; esac; echo "cat: \$cmd: No such file or directory" >&2; exit 1; fi
 case \$cmd in
   true) exit 0 ;;
   *backup.pem.keyid) echo keyid-\${2:-x}; exit 0 ;;
@@ -441,6 +443,7 @@ rm -f "$logd"/* "$t/work/state/prod-restore-pin"
 torn_log() { # <with the tested-snapshot line: yes|no>
   printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" > "$logd/run-29990101T000000Z.log"
   [ "$1" = no ] || echo "PASS: rebuild-prod: every prod node backed up now, and its restore test passed: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321 of 2026-11-18T03:00:26; etcd restore test, revision 202, 201 keys under /, key /registry/namespaces/kube-system present, snapshot c5523412 of 2026-11-18T03:00:17" >> "$logd/run-29990101T000000Z.log"
+  [ "${SEAL_LINE:-yes}" = no ] || echo "PASS: rebuild-prod: the seal key's SOPS copy equals the seal node's key" >> "$logd/run-29990101T000000Z.log"
   printf '%s\n' "rebuild-prod: teardown and build start: vms cluster" "FAIL: rebuild-prod: the one command stopped (rc 2); rebuild-prod log names the stage" >> "$logd/run-29990101T000000Z.log"
 }
 torn_log yes
@@ -487,5 +490,75 @@ if [[ $r15a -eq 0 && $o15a == *"no changes with the Mac's tfvars (the VMs hold t
   ok "15. the plan check tries the box's tfvars copy, then the Mac's, and names a changed attribute down into a block, never a value"
 else bad "15. $r15a $o15a | $r15b $o15b"; fi
 grep -q 'var-file=.*k8s.tfvars' "$t/calls" && ok "15b. the destroy plan reads a tfvars file the check settled on" || bad "15b. no var-file in the destroy plan"
+
+# 16. The whole torn path end to end: a rerun after a run that stopped past its teardown, with the nodes rebuilt and empty (they answer a
+# login and nothing else) and the pin given. Every step before the teardown that reads a node (the sftp keys, the backup certificate,
+# the seal key) must use what the stopped run kept, or note the empty node, and the run must reach the teardown (prod run 5, 2026-11-21,
+# stopped reading the sftp keys). Without the kept files it stops before anything is destroyed.
+keep_sftp() { mkdir -p "$t/keys/prod/backup-sftp"; for n in cp-a wk-a; do
+  printf '%s\n' '-----BEGIN OPENSSH PRIVATE KEY-----' 'AAAA' '-----END OPENSSH PRIVATE KEY-----' > "$t/keys/prod/backup-sftp/$n.key"
+  echo 'ssh-ed25519 AAAAkept x' > "$t/keys/prod/backup-sftp/$n.pub"
+  echo '192.0.2.1 ssh-ed25519 AAAAhost' > "$t/keys/prod/backup-sftp/$n.known_hosts"; done; }
+keep_certs() { mkdir -p "$t/keys/prod/backup-certs"; for n in cp-a wk-a; do
+  printf '%s\n' '-----BEGIN PRIVATE KEY-----' 'AAAA' '-----END PRIVATE KEY-----' '-----BEGIN CERTIFICATE-----' 'BBBB' '-----END CERTIFICATE-----' > "$t/keys/prod/backup-certs/$n.pem"
+  echo keyid-kept > "$t/keys/prod/backup-certs/$n.pem.keyid"; done; }
+torn_reset() { rm -f "$logd"/* "$t/work/state/prod-restore-pin"; rm -rf "$t/keys/prod/backup-sftp" "$t/keys/prod/backup-certs"; torn_log yes
+  touch -d '2 hours ago' "$t/keys/prod/openbao-seal.key.sops.json"; }
+# sftp mode
+inventory "        k8s_backup_sftp: true"
+sed -i '/k8s_backup_azure_identity/d; s/pve-a: {ansible_host: 192.0.2.1}/pve-a: {ansible_host: 192.0.2.1, proxmox_host_mgmt_address: 192.0.2.1}/' "$t/keys/prod/inventory-hosts.yml"
+torn_reset
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16a=$rc o16a=$out c16a=$calls
+torn_reset; keep_sftp
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16b=$rc o16b=$out c16b=$calls
+if [[ $r16a -eq 1 && $o16a == *"could not read node"*"backup ssh file"*"nothing was destroyed"* && $c16a != *one-command* &&
+      $r16b -eq 0 && $o16b == *"node cp-a: the stopped run (run-29990101T000000Z.log) kept its sftp backup key"* &&
+      $o16b == *"the seal node is rebuilt and the node says the seal key file is absent"* && $o16b == *"restore snapshot 36fe4321aaaa is pinned (the last run, "* &&
+      $c16b != *backup-ssh* && $c16b == *one-command* && $c16b != *"--tags drill"* ]]; then
+  ok "16a. torn path, sftp mode, empty nodes: the kept sftp keys stand, the seal key is read as absent, the run reaches the teardown; with none kept it stops before it"
+else bad "16a. $r16a $o16a [$c16a] | $r16b $o16b [$c16b]"; fi
+# azure mode
+inventory; torn_reset
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16c=$rc o16c=$out c16c=$calls
+torn_reset; keep_certs
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16d=$rc o16d=$out c16d=$calls
+if [[ $r16c -eq 1 && $o16c == *"could not read node"*"backup certificate"*"nothing was destroyed"* && $c16c != *one-command* &&
+      $r16d -eq 0 && $o16d == *"node cp-a: the stopped run (run-29990101T000000Z.log) kept its backup certificate"* && $c16d != *azure/backup* && $c16d == *one-command* ]]; then
+  ok "16b. torn path, Azure mode, empty nodes: the kept certificates stand and the run reaches the teardown; with none kept it stops before it"
+else bad "16b. $r16c $o16c [$c16c] | $r16d $o16d [$c16d]"; fi
+# a seal node that answers with a different key is still refused in a torn run
+cp "$t/node.key" "$t/node.key.keep"; printf 'x%.0s' {1..32} > "$t/node.key"
+torn_reset; keep_certs
+run rebuild "$tap" "$sha" "$pinid"; r16e=$rc o16e=$out c16e=$calls
+cp "$t/node.key.keep" "$t/node.key"
+if [[ $r16e -eq 1 && $o16e == *"the seal key's SOPS copy differs from the seal node's key"* && $c16e != *one-command* ]]; then
+  ok "16c. torn path: a seal node that holds a different key is still refused before the teardown"
+else bad "16c. $r16e $o16e [$c16e]"; fi
+# The seal fallback needs all three: the stopped run's compare line, a SOPS file not newer than that log, a clean "absent" from the node.
+inventory; torn_reset; keep_certs; SEAL_LINE=no torn_log yes; touch -d '2 hours ago' "$t/keys/prod/openbao-seal.key.sops.json"
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16f=$rc o16f=$out c16f=$calls
+torn_reset; keep_certs; touch "$t/keys/prod/openbao-seal.key.sops.json"; touch -d '1 hour ago' "$logd/run-29990101T000000Z.log"
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16g=$rc o16g=$out c16g=$calls
+torn_reset; keep_certs
+TEST_RC=1 EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16h=$rc o16h=$out c16h=$calls
+if [[ $r16f -eq 1 && $o16f == *"does not show it compared the SOPS copy with the live key"* && $c16f != *one-command* &&
+      $r16g -eq 1 && $o16g == *"is not older than the stopped run's log"* && $c16g != *one-command* &&
+      $r16h -eq 1 && $o16h == *"does not say the file is absent"* && $c16h != *one-command* ]]; then
+  ok "16d. torn path: an unreadable seal key stands only with the stopped run's compare line, a SOPS file older than its log and a clean absent from the node; each missing one refuses"
+else bad "16d. $r16f $o16f | $r16g $o16g | $r16h $o16h"; fi
+rm -f "$logd"/*
+
+# 17. A later run that stopped before its teardown (prod run 5) does not hide the run that stopped after it: the torn state stays, and the
+# rerun still needs the ID. A run that reached its teardown and ended well after that makes the state not torn again.
+rm -f "$logd"/* "$t/work/state/prod-restore-pin"; torn_reset
+printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" "FAIL: rebuild-prod: could not read node cp-a's backup ssh file id_ed25519; nothing was destroyed" > "$logd/run-29990102T000000Z.log"
+run rebuild "$tap" "$sha"; r17a=$rc o17a=$out c17a=$calls
+printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" "rebuild-prod: teardown and build start: vms" "PASS: rebuild-prod: prod torn down and built again at 0123456789ab, data back, backups on" > "$logd/run-29990103T000000Z.log"
+run rebuild "$tap" "$sha" "$pinid"; r17b=$rc o17b=$out
+if [[ $r17a -eq 1 && $o17a == *"stopped after its teardown"*"Give the full ID of the volume snapshot"* && $o17a == *"run-29990101T000000Z.log"* && -z $c17a &&
+      $r17b -eq 1 && $o17b == *"a volume snapshot ID is only for a run after one that stopped after its teardown"* ]]; then
+  ok "17. a later run that stopped before its teardown does not hide the torn state; a later run that ended well clears it"
+else bad "17. $r17a $o17a [$c17a] | $r17b $o17b"; fi
+rm -f "$logd"/*
 
 exit "$fail"
