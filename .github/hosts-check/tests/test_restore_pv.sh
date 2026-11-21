@@ -229,7 +229,7 @@ env_dev 31 RESTORE_SOURCE_HOST=ci-prod5 "$bin/c1-restore-volumes.sh" restore > "
 ok "the etcd snapshot comes from the named control plane even when another host's is nearer in time (and the test shows it would otherwise be taken)"
 
 # The forget hold: with it set a backup forgets nothing; without it, retention runs as before.
-hold_env=(BACKUP_HOST=ci-hold "BACKUP_STATE=$work/hold-state" BACKUP_VOLUME_PATHS=$data BACKUP_KEEP_DAILY=1 BACKUP_KEEP_WEEKLY=0 BACKUP_KEEP_MONTHLY=0)
+hold_env=(BACKUP_HOST=ci-hold "BACKUP_STATE=$work/hold-state" "BACKUP_VOLUME_PATHS=$data" BACKUP_KEEP_DAILY=1 BACKUP_KEEP_WEEKLY=0 BACKUP_KEEP_MONTHLY=0)
 count() { "$bin/restic" snapshots --json --host ci-hold --tag volumes | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
 env "${hold_env[@]}" "$bin/c1-backup-volumes.sh" > "$work/vol.log" 2>&1 || fail "the first hold backup failed"
 mkdir -p "$work/hold-state" && echo held > "$work/hold-state/forget-hold"
