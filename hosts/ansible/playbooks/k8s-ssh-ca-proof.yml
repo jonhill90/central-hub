@@ -1,7 +1,6 @@
 ---
-# Dev only: the proof behind the choice of how the lab's Linux boxes trust a Keycloak sign-in (notebook research
-# RB-0295; the owner's pick of 2026-11-21 01:19:58 UTC, "Research more first": test the top two end to end on dev
-# before he picks). Run by the rebuild's dev-only stage `ssh-ca-proof`, after `identity-keycloak`:
+# Dev only: the proof behind the choice of how the lab's Linux boxes trust a Keycloak sign-in (the owner's pick of
+# 2026-11-21 01:19:58 UTC, "Research more first": test the top two end to end on dev before he picks). Run by the rebuild's dev-only stage `ssh-ca-proof`, after `identity-keycloak`:
 #   ansible-playbook -i <dev inventory>/ playbooks/k8s-ssh-ca-proof.yml -e k8s_identity_values_file=<env dir>/identity.env
 # Two routes, each on dev's first control-plane node, each undone at its end:
 #   ssh-ca  a throwaway OpenBao in dev mode signs SSH certificates for a Keycloak user it trusts by JWT; sshd trusts
