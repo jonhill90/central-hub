@@ -483,6 +483,7 @@ check_backup() {
   bash "$here/tests/test_dev_secrets_teardown.sh"
   bash "$here/tests/test_dev_worker_address.sh"
   bash "$here/tests/test_box_prove.sh"
+  bash "$here/tests/test_offbox_manifest.sh"
   bash "$here/tests/test_proxmox_firewall_box_rule.sh"
   bash "$here/tests/test_proxmox_restic_reader.sh"
   bash "$here/tests/test_secrets_store_kv.sh"
