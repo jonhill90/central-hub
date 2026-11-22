@@ -31,6 +31,7 @@
 #      a failed read stops it with an error; a tap or another argument runs nothing.
 #  15. jobs-status lists the Jobs with failed pods and each one's last 30 log lines, scrubbed; get and logs only; a tap runs nothing.
 #  16. prune-status lists the resources Argo CD marks requiresPruning per Application with one get; a tap runs nothing.
+#  18. targets-status lists the node-exporter pods, the down targets and the backup times by instance, from get calls only; a tap runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -500,5 +501,33 @@ if [[ $a_rc -eq 0 && $a_out == *"app gateway: sync=OutOfSync health=Healthy"* &&
       $(wc -l <<< "$a_calls") -eq 1 && $a_calls == *"get applications.argoproj.io -o json"* && $x_rc -eq 2 && -z $x_calls ]]; then
   ok "16. prune-status: lists only the resources Argo CD marks requiresPruning, per Application, with one get; a tap runs nothing"
 else bad "16. rc=$a_rc calls=[$a_calls] | tap rc=$x_rc [$x_calls] | $a_out"; fi
+# 18: targets-status reads the node-exporter pods, what Prometheus says is down, and which instance reports each backup time; get only.
+: > "$t/kcalls"
+cat > "$venv/ansible" <<EOS
+#!/usr/bin/env python3
+import json, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+def res(rows): return json.dumps({"status": "success", "data": {"resultType": "vector", "result": rows}})
+if "get pods" in a: out = "monitoring kube-prometheus-stack-prometheus-node-exporter-aaaaa 1/1 Running 0 5m 10.0.0.1 cp-a <none> <none>\\nmonitoring kube-prometheus-stack-prometheus-node-exporter-bbbbb 1/1 Running 0 5m 10.0.0.2 wk-a <none> <none>\\nmedia jellyfin-x 1/1 Running 0 5m 10.0.0.3 wk-a <none> <none>"
+elif "get nodes" in a: out = "cp-a Ready control-plane\\nwk-a Ready <none>"
+elif "get --raw" in a and "up%3D%3D0" in a: out = res([{"metric": {"job": "node-exporter", "namespace": "monitoring", "pod": "node-exporter-aaaaa", "instance": "10.0.0.1:9100"}, "value": [1, "0"]}])
+elif "get --raw" in a: out = res([{"metric": {"kind": "volumes", "instance": "10.0.0.2:9100"}, "value": [1, "1700000000"]}])
+else: out = ""
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0 if out else 1, "stdout": out, "stderr": ""}}}]}]}))
+EOS
+chmod +x "$venv/ansible"
+run targets-status; a_rc=$rc a_out=$out
+a_calls=$(cat "$t/kcalls")
+write_calls=$(grep -cE ' (apply|delete|create|patch|annotate|edit|replace|exec|cp) |get secret|-o yaml' <<< "$a_calls" || true)
+run targets-status "$tap"; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"node-exporter-aaaaa 1/1 Running cp-a"* && $a_out == *"node-exporter-bbbbb 1/1 Running wk-a"* && $a_out != *"jellyfin-x"* &&
+      $a_out == *"job=node-exporter namespace=monitoring pod=node-exporter-aaaaa instance=10.0.0.1:9100 value=0"* && $a_out == *"(1 series)"* &&
+      $a_out == *"kind=volumes instance=10.0.0.2:9100 value=1700000000"* &&
+      $a_out == *"PASS: openbao-prod: targets-status: read, nothing changed"* && $write_calls -eq 0 &&
+      $(grep -c 'get --raw /api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:9090/proxy/api/v1/query' <<< "$a_calls") -eq 2 &&
+      $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "18. targets-status: the node-exporter pods by node, the down targets and the backup times by instance, from get calls only; a tap runs nothing"
+else bad "18. rc=$a_rc writes=$write_calls calls=[$a_calls] | tap rc=$x_rc [$x_calls] | $a_out"; fi
 
 exit "$fail"
