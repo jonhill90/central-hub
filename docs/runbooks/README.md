@@ -47,6 +47,7 @@ A runbook is living: it is edited in place, and git keeps the history. No hostna
 | [Trust the Proxmox host's CA on the controller](trust-the-proxmox-host-ca-on-the-controller.md) | automated | draft |
 | [Create the lab root CA and c1's intermediate by hand](create-lab-root-ca.md) | manual | draft |
 | [Trust the lab root CA on a Mac](trust-lab-root-ca-on-mac.md) | manual | draft |
+| [Trust the lab root CA on an iPhone](trust-lab-root-ca-on-iphone.md) | manual | draft |
 | [Restore c1's intermediate CA into cert-manager](restore-c1-intermediate-ca.md) | manual | draft |
 | [Give the OPNsense web UI a certificate from the lab CA, by CLI or in the web UI](set-opnsense-gui-certificate.md) | manual | draft |
 | [Move metrics-server on c1 from Ansible to Argo CD](move-metrics-server-to-argo-cd.md) | automated | draft |
