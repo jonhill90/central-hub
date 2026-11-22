@@ -142,31 +142,16 @@ rm -rf -- "$inventory"
 install -d -m 700 "$inventory"
 python3 -I -c "$(cat <<'PY'
 import ipaddress, json, os, sys, yaml
-src, dst, key, known, settings, stable = sys.argv[1:7]
-s = json.load(open(settings))
-seal, store, cidr = s.get("seal_node") or "", s.get("store_host") or "", s.get("box_cidr") or ""
+src, dst, key, known, settings, stable, rootvars = sys.argv[1:8]
 def die(m):
     print("openbao-prod: " + m, file=sys.stderr); sys.exit(1)
-if not seal: die("the settings have no seal_node")
-if not store: die("the settings have no store_host")
-if cidr:
-    try: n = ipaddress.ip_network(cidr, strict=False)
-    except ValueError: die("box_cidr must be one address as a /32, not loopback")
-    if n.prefixlen != 32 or n.is_loopback: die("box_cidr must be one address as a /32, not loopback")
-admin = s.get("admin_address") or ""
-if admin:
-    try: a = ipaddress.ip_address(admin)
-    except ValueError: a = None
-    if a is None or a.version != 4 or a.is_loopback: die("admin_address must be one IPv4 address, not loopback")
-    if not cidr: die("admin_address needs box_cidr: only the box's /32 may reach the admin address")
+exec(open(rootvars).read())   # prod-root-vars.py: the root Application's variables, shared with rebuild-prod.sh and c1-ansible.sh
+seal, store, cidr, admin = read_root_settings(settings, die)
 d = yaml.safe_load(open(src))
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking",
-        "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file", "k8s_gitops_source_openbao_measure",
-        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
-        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner",
-        "k8s_gitops_source_app_secrets_store", "k8s_gitops_source_openbao_route"}
+        "k8s_gitops_source_app_secrets_store", "k8s_gitops_source_openbao_route"} | ROOT_VARS_DROP
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -192,28 +177,21 @@ def hosts(n):
             if k == "hosts" and isinstance(v, dict): names.update(v)
             else: hosts(v)
 hosts(g)
-if seal not in names: die("seal_node is not a k8s_nodes host of the prod inventory")
 v = g.setdefault("vars", {})
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
-v["k8s_gitops_source_openbao_in_cluster"] = True
-# The notebook CI runner pod is prod's only (docs/runbooks/run-the-notebook-runner-on-c1.md).
-v["k8s_gitops_source_notebook_runner"] = True
-v["k8s_gitops_source_openbao_seal_node"] = seal
-v["k8s_gitops_source_openbao_store_host"] = store
+# The root's own variables, the same as prod's rebuild and c1-ansible pass (prod-root-vars.py). The stable local-path folders only once
+# rebuild-prod has built prod again: its StorageClass names folders <namespace>/<claim>, and a StorageClass's parameters can't change in
+# place, so every later render keeps that setting.
+set_root_vars(v, names, seal, store, cidr, admin, die, stable=os.path.exists(stable))
 # The apps read their secrets through store `openbao` (plan step 8a, D-0058 rule 8), once `secrets-store-prod put-apps`
 # and `compare` have passed (set-up-the-secrets-store.md, "Moving them"). Prod has the store on, so this is always valid here.
 v["k8s_gitops_source_app_secrets_store"] = "openbao"
 # Names for the store's web UI and API on Gateway apps (templates/route.yaml of openbao-store).
 v["k8s_gitops_source_openbao_route"] = True
-if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
-if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
-# Once rebuild-prod has built prod again, its local-path StorageClass names folders <namespace>/<claim>; a
-# StorageClass's parameters can't change in place, so every later render keeps that setting.
-if os.path.exists(stable): v["k8s_gitops_source_local_path_stable_folders"] = True
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$settings" "$work/state/prod-stable-folders" || exit 1
+)" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$settings" "$work/state/prod-stable-folders" "$libexec/prod-root-vars.py" || exit 1
 chmod 600 "$inventory/hosts.yml"
 
 # Every host: plain ssh to ansible_host with the box's key and nothing else; no host labelled another env than prod.

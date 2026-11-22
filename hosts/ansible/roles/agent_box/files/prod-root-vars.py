@@ -35,7 +35,7 @@ def read_root_settings(path, die):
     return seal, store, cidr, admin
 
 
-def set_root_vars(v, names, seal, store, cidr, admin, die):
+def set_root_vars(v, names, seal, store, cidr, admin, die, stable=True):
     """Set prod's root-source variables on the k8s_nodes vars `v`. `names` is the set of k8s_nodes host names."""
     if seal not in names: die("seal_node is not a k8s_nodes host of the prod inventory")
     v["k8s_gitops_source_openbao_in_cluster"] = True
@@ -45,5 +45,6 @@ def set_root_vars(v, names, seal, store, cidr, admin, die):
     v["k8s_gitops_source_openbao_store_host"] = store
     if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
     if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
-    # Prod's own snapshot comes back onto stable folder names, so the new claims find the restored folders.
-    v["k8s_gitops_source_local_path_stable_folders"] = True
+    # Prod's own snapshot comes back onto stable folder names, so the new claims find the restored folders. `stable` false only for
+    # openbao-prod, which may run before a rebuild has made prod's StorageClass that way.
+    if stable: v["k8s_gitops_source_local_path_stable_folders"] = True
