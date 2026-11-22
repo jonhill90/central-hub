@@ -287,14 +287,19 @@ l2_report() {
 # restartPolicy Never a Job that failed once and then succeeded keeps its first pod in Error, too) says nothing about the finished
 # cluster when something later answers it, so for every CronJob in every namespace:
 #   - a failed Job followed by a newer clean Complete Job of the same CronJob is settled: the failed Job is deleted;
+#   - a failed Job of a SUSPENDED CronJob (dev's panel-check; Jellyfin's setup where the config is restored) is deleted with no rerun:
+#     nothing will tick again, and a suspended CronJob is how a render says "off" while the Application does not prune;
 #   - with no such newer Job, one Job is made from the CronJob now (`kubectl create job --from=cronjob/<name>`, the documented
 #     way to run a CronJob once by hand) and must complete within 300 s: only then are the failed Jobs deleted. A Job that does
 #     not complete with the cluster up fails the run, and the last 30 log lines of its pod, scrubbed, go into the output.
 # Deletes are foreground, so kubectl waits until the Jobs' pods are gone before the pod check lists them.
 settle_cronjob_jobs() {
-  local plan kind ns cj names j chk
+  local plan kind ns cj names j chk cjfile
+  cjfile=$(mktemp)
+  kc get cronjobs -A -o json > "$cjfile" || { rm -f "$cjfile"; echo "could not read the CronJobs"; return 1; }
   plan=$(kc get jobs -A -o json | python3 -I -c '
 import json, sys
+susp = {(c["metadata"].get("namespace", ""), c["metadata"]["name"]): bool((c.get("spec") or {}).get("suspend")) for c in json.load(open(sys.argv[1]))["items"]}
 by = {}
 for j in json.load(sys.stdin)["items"]:
     m = j["metadata"]
@@ -308,13 +313,21 @@ for (ns, cj), js in sorted(by.items()):
     if not bad:
         continue
     clean_later = any(st(j).get("succeeded", 0) and not st(j).get("failed", 0) for j in js[bad[-1] + 1:])
-    print("settle" if clean_later else "rerun", ns, cj, *[js[i]["metadata"]["name"] for i in bad])
-') || { echo "could not read the Jobs"; return 1; }
+    kind = "settle" if clean_later else "rerun"
+    if susp.get((ns, cj)):
+        kind = "suspended"
+    print(kind, ns, cj, *[js[i]["metadata"]["name"] for i in bad])
+' "$cjfile") || { rm -f "$cjfile"; echo "could not read the Jobs"; return 1; }
+  rm -f "$cjfile"
   [ -n "$plan" ] || return 0
   while read -r kind ns cj names; do
     [ -n "$kind" ] || continue
-    if [ "$kind" = settle ]; then
-      echo "failed Job(s) of CronJob $ns/$cj, answered by a newer Job that completed: $names; removing them"
+    if [ "$kind" = settle ] || [ "$kind" = suspended ]; then
+      if [ "$kind" = suspended ]; then
+        echo "failed Job(s) of CronJob $ns/$cj, which is suspended (no new ticks, nothing to rerun): $names; removing them"
+      else
+        echo "failed Job(s) of CronJob $ns/$cj, answered by a newer Job that completed: $names; removing them"
+      fi
       for j in $names; do kc -n "$ns" delete job "$j" --cascade=foreground > /dev/null; done
       continue
     fi
@@ -332,11 +345,24 @@ for (ns, cj), js in sorted(by.items()):
   done <<< "$plan"
 }
 
+# Argo CD's argocd-cm holds oidc.config with the provider name `Lab sign-in` (k8s_gitops_sso_name, tag sso). Read-only: one ConfigMap,
+# no Secret. Prod only, where the sign-in is on.
+argocd_signin_listed() {
+  kc -n argocd get configmap argocd-cm -o json | python3 -I -c '
+import json, sys
+cm = json.load(sys.stdin).get("data") or {}
+if "name: Lab sign-in" not in (cm.get("oidc.config") or ""):
+    print("argocd-cm has no oidc.config naming Lab sign-in: Argo CD would not offer the Keycloak sign-in"); sys.exit(1)
+print("argocd-cm lists the Lab sign-in provider")
+'
+}
+
 checks() {
   local notready pods
   notready=$(kc get nodes --no-headers | awk '$2 != "Ready"')
   [ -z "$notready" ] || { echo "nodes not Ready: $notready"; return 1; }
   settle_cronjob_jobs || return 1
+  if [ "$ENV_NAME" = prod ]; then argocd_signin_listed || return 1; fi
   pods=$(kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"')
   [ -z "$pods" ] || { echo "pods not Running or Completed:"; echo "$pods"; return 1; }
   wait_apps
@@ -887,7 +913,9 @@ run_stage() {
       fi
       if [ -n "${APP_SECRETS_CACERT:-}" ]; then store_ca "$APP_SECRETS_CACERT" || return 1; fi
       hook "$APP_SECRETS_HOOK" ;;
-    ui) ap playbooks/k8s-gitops.yml --tags ui,sso ;;
+    # Prod: right after the ui and sso tags, Argo CD's own ConfigMap must list the provider the sso tag writes (name Lab sign-in), so a
+    # run that passed while the keys were not there, or that something removes later, shows at once (checks asks again).
+    ui) ap playbooks/k8s-gitops.yml --tags ui,sso && { [ "$ENV_NAME" != prod ] || argocd_signin_listed; } ;;
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.
       [ "$ENV_NAME" = prod ] || { echo "backup timers run on prod only"; return 1; }

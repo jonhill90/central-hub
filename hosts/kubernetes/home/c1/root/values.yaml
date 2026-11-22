@@ -342,7 +342,10 @@ apps:
       https: "{gatewayHttps}"
     wave: -1
     autoSync: true
-    prune: false
+    # Prunes: its objects are the Gateway's routes and listeners, so a route that leaves git must leave the cluster. With prune
+    # false, #856 (route key central-hub-app became hub, 2026-11-22 03:17 UTC) left the old HTTPRoute behind and the app OutOfSync,
+    # which failed dev's `apps` stage while a run was going and would fail prod's `checks`. Its cycles have run clean since 2026-11-10.
+    prune: true
   # c1's own alert rules, the Argo CD scrape and the lab dashboard (needs the CRDs from
   # kube-prometheus-stack, so it waits for it).
   monitoring-extras:

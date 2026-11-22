@@ -13,6 +13,7 @@
 #   5. A Job that failed once and then succeeded (its first pod stays in Error) with nothing newer is rerun like case 2.
 #   6. Two CronJobs in two namespaces (media and monitoring) are each handled in their own namespace.
 #   7. A newer Job that itself failed does not settle an older failed one.
+#   9. A failed Job of a suspended CronJob is deleted with no rerun;
 #   8. prod_capture_diag reads with get only (applications, pods, events, why-not-ready), prefixes `diag:`, scrubs secrets, and
 #      never fails; the failed-stage branch of the script calls it on prod.
 # Usage: .github/hosts-check/tests/test_rebuild_cronjob_jobs.sh
@@ -28,20 +29,22 @@ job() { # <ns> <name> <cronjob> <failed> <succeeded> <created>
   printf '{"metadata":{"namespace":"%s","name":"%s","creationTimestamp":"%s","ownerReferences":[{"kind":"CronJob","name":"%s"}]},"status":{"failed":%s,"succeeded":%s}}' "$1" "$2" "$6" "$3" "$4" "$5"; }
 run() { # <jobs json items> <wait rc>
   printf '{"items":[%s]}' "$1" > "$t/jobs.json"
+  printf '{"items":[%s]}' "${CJ:-}" > "$t/cj.json"
   WAIT_RC=$2 T=$t repo=$PWD bash -c '
     kc() { echo "kc $*" >> "$T/calls"
       case "$*" in "get jobs -A -o json") cat "$T/jobs.json" ;;
+        "get cronjobs -A -o json") cat "$T/cj.json" ;;
         *"wait "*) return "$WAIT_RC" ;;
         *" logs "*) echo "starting setup password=hunter2 failed to reach jellyfin" ;; esac; }
     . "$T/fn.sh"; settle_cronjob_jobs; echo "rc=$?"' > "$t/out" 2>&1
   out=$(cat "$t/out"); calls=$(cat "$t/calls" 2>/dev/null); rm -f "$t/calls"; }
-read_only="kc get jobs -A -o json"
+read_only=$'kc get cronjobs -A -o json\nkc get jobs -A -o json'
 
 run "$(job media a-1 jellyfin-setup 0 1 2026-11-22T01:00:00Z),$(job monitoring b-1 panel-check 0 1 2026-11-22T01:10:00Z)" 0
 [[ $out == "rc=0" && $calls == "$read_only" ]] && ok "1. only Complete Jobs: nothing run or deleted" || bad "1. $out | $calls"
 
 run "$(job media jellyfin-setup-1 jellyfin-setup 2 0 2026-11-22T01:00:00Z)" 0
-want=$'kc get jobs -A -o json\nkc -n media delete job jellyfin-setup-rebuild-check --ignore-not-found --cascade=foreground\nkc -n media create job jellyfin-setup-rebuild-check --from=cronjob/jellyfin-setup\nkc -n media wait --for=condition=complete job/jellyfin-setup-rebuild-check --timeout=300s\nkc -n media delete job jellyfin-setup-1 --cascade=foreground\nkc -n media delete job jellyfin-setup-rebuild-check --cascade=foreground'
+want=$'kc get cronjobs -A -o json\nkc get jobs -A -o json\nkc -n media delete job jellyfin-setup-rebuild-check --ignore-not-found --cascade=foreground\nkc -n media create job jellyfin-setup-rebuild-check --from=cronjob/jellyfin-setup\nkc -n media wait --for=condition=complete job/jellyfin-setup-rebuild-check --timeout=300s\nkc -n media delete job jellyfin-setup-1 --cascade=foreground\nkc -n media delete job jellyfin-setup-rebuild-check --cascade=foreground'
 [[ $out == *"rc=0" && $calls == "$want" ]] && ok "2. a failed Job: one Job from its CronJob in its namespace, waited for, then the failed Job and the check Job go (foreground)" || bad "2. $out | $calls"
 
 run "$(job media jellyfin-setup-1 jellyfin-setup 2 0 2026-11-22T01:00:00Z)" 1
@@ -50,7 +53,7 @@ run "$(job media jellyfin-setup-1 jellyfin-setup 2 0 2026-11-22T01:00:00Z)" 1
   ok "3. a Job that does not complete fails with its last 30 log lines scrubbed and keeps the failed Job" || bad "3. $out | $calls"
 
 run "$(job monitoring panel-check-1 panel-check 1 0 2026-11-22T01:00:00Z),$(job monitoring panel-check-2 panel-check 0 1 2026-11-22T01:10:00Z)" 0
-[[ $out == *"rc=0" && $calls == $'kc get jobs -A -o json\nkc -n monitoring delete job panel-check-1 --cascade=foreground' ]] &&
+[[ $out == *"rc=0" && $calls == $'kc get cronjobs -A -o json\nkc get jobs -A -o json\nkc -n monitoring delete job panel-check-1 --cascade=foreground' ]] &&
   ok "4. a failed Job with a newer clean Job: deleted, nothing made" || bad "4. $out | $calls"
 
 run "$(job openbao openbao-snapshot-2 openbao-snapshot 1 1 2026-11-22T01:00:00Z)" 0
@@ -65,6 +68,17 @@ run "$(job media jf-1 jellyfin-setup 2 0 2026-11-22T01:00:00Z),$(job monitoring 
 run "$(job media jf-1 jellyfin-setup 2 0 2026-11-22T01:00:00Z),$(job media jf-2 jellyfin-setup 3 0 2026-11-22T01:10:00Z)" 0
 [[ $out == *"rc=0" && $calls == *"create job jellyfin-setup-rebuild-check"* && $calls == *"delete job jf-1 "* && $calls == *"delete job jf-2 "* ]] &&
   ok "7. a newer Job that failed settles nothing: both failed Jobs wait for the rerun" || bad "7. $out | $calls"
+
+
+# 9: a failed Job of a suspended CronJob (the render's way of saying "off") is deleted with no rerun; an active CronJob's is rerun.
+cjob() { printf '{"metadata":{"namespace":"%s","name":"%s"},"spec":{"suspend":%s}}' "$1" "$2" "$3"; }
+CJ="$(cjob media jellyfin-setup true)" run "$(job media jf-1 jellyfin-setup 2 0 2026-11-22T01:00:00Z),$(job media jf-2 jellyfin-setup 3 0 2026-11-22T01:10:00Z)" 0
+[[ $out == *"rc=0" && $out == *"which is suspended"* && $calls == *"-n media delete job jf-1 --cascade=foreground"* && $calls == *"-n media delete job jf-2 --cascade=foreground"* &&
+   $calls != *create* && $calls != *wait* ]] &&
+  ok "9. a suspended CronJob's failed Jobs are deleted, nothing is made or waited for" || bad "9. $out | $calls"
+CJ="$(cjob media jellyfin-setup false),$(cjob monitoring panel-check true)" run "$(job media jf-1 jellyfin-setup 2 0 2026-11-22T01:00:00Z),$(job monitoring pc-1 panel-check 1 0 2026-11-22T01:05:00Z)" 0
+[[ $out == *"rc=0" && $calls == *"-n media create job jellyfin-setup-rebuild-check"* && $calls != *"-n monitoring create"* && $calls == *"-n monitoring delete job pc-1 --cascade=foreground"* ]] &&
+  ok "9b. with one active and one suspended CronJob: the active one is rerun, the suspended one's Job is only deleted" || bad "9b. $out | $calls"
 
 # 8
 sed -n '/^diag_why_not_ready() {/,/^}/p;/^prod_capture_diag() {/,/^}/p' hosts/rebuild-k8s.sh > "$t/diag.sh"
