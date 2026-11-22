@@ -281,38 +281,62 @@ l2_report() {
   return "$rc"
 }
 
-# The OpenBao snapshot CronJob ticks at minute 17 of every hour (openbao-store values). A tick that lands while the store is
-# still coming up fails, and its failed Job keeps Error pods that the pod check below counts (dev run 10, 2026-11-21: two Error
-# pods of the 23:17 tick, apps running 23:16 to 23:22; the other dev runs' apps windows missed minute 17). Such a Job says
-# nothing about the finished cluster, so when one exists (also one that failed once and then succeeded: with backoffLimit 1 and
-# restartPolicy Never its first pod stays in Error) the snapshot Job is run once now: it must complete, and only then
-# are the earlier failed Jobs removed. A snapshot Job that fails with the store up still fails the run.
-settle_snapshot_jobs() {
-  local failed j
-  failed=$(kc -n openbao get jobs -o json | python3 -I -c '
+# A CronJob's tick that lands while the cluster is still coming up fails, and its failed Job keeps Error pods that the pod check
+# below counts. Seen on dev run 10 (2026-11-21, the OpenBao snapshot tick at minute 17: two Error pods of the 23:17 tick) and
+# on prod's resume 4 (2026-11-22: jellyfin-setup and panel-check ticks during bring-up). A failed Job (status.failed above 0; with
+# restartPolicy Never a Job that failed once and then succeeded keeps its first pod in Error, too) says nothing about the finished
+# cluster when something later answers it, so for every CronJob in every namespace:
+#   - a failed Job followed by a newer clean Complete Job of the same CronJob is settled: the failed Job is deleted;
+#   - with no such newer Job, one Job is made from the CronJob now (`kubectl create job --from=cronjob/<name>`, the documented
+#     way to run a CronJob once by hand) and must complete within 300 s: only then are the failed Jobs deleted. A Job that does
+#     not complete with the cluster up fails the run, and the last 30 log lines of its pod, scrubbed, go into the output.
+# Deletes are foreground, so kubectl waits until the Jobs' pods are gone before the pod check lists them.
+settle_cronjob_jobs() {
+  local plan kind ns cj names j chk
+  plan=$(kc get jobs -A -o json | python3 -I -c '
 import json, sys
+by = {}
 for j in json.load(sys.stdin)["items"]:
-    if any(o.get("kind") == "CronJob" and o.get("name") == "openbao-snapshot" for o in j["metadata"].get("ownerReferences") or []):
-        s = j.get("status") or {}
-        if s.get("failed", 0): print(j["metadata"]["name"])
-') || { echo "could not read the Jobs of the openbao namespace"; return 1; }
-  [ -n "$failed" ] || return 0
-  echo "failed snapshot Job(s) from the bring-up: $(echo $failed); running the snapshot Job once now"
-  kc -n openbao delete job openbao-snapshot-rebuild-check --ignore-not-found --cascade=foreground > /dev/null || true
-  kc -n openbao create job openbao-snapshot-rebuild-check --from=cronjob/openbao-snapshot > /dev/null \
-    || { echo "could not start the snapshot Job"; return 1; }
-  kc -n openbao wait --for=condition=complete job/openbao-snapshot-rebuild-check --timeout=300s > /dev/null \
-    || { echo "the snapshot Job does not complete with the store up"; return 1; }
-  # Foreground, so kubectl waits until the Jobs' pods are gone: a background delete leaves them listed for the pod check next.
-  for j in $failed; do kc -n openbao delete job "$j" --cascade=foreground > /dev/null; done
-  kc -n openbao delete job openbao-snapshot-rebuild-check --cascade=foreground > /dev/null
+    m = j["metadata"]
+    for o in m.get("ownerReferences") or []:
+        if o.get("kind") == "CronJob":
+            by.setdefault((m.get("namespace", ""), o["name"]), []).append(j)
+st = lambda j: j.get("status") or {}
+for (ns, cj), js in sorted(by.items()):
+    js.sort(key=lambda j: j["metadata"].get("creationTimestamp", ""))
+    bad = [i for i, j in enumerate(js) if st(j).get("failed", 0)]
+    if not bad:
+        continue
+    clean_later = any(st(j).get("succeeded", 0) and not st(j).get("failed", 0) for j in js[bad[-1] + 1:])
+    print("settle" if clean_later else "rerun", ns, cj, *[js[i]["metadata"]["name"] for i in bad])
+') || { echo "could not read the Jobs"; return 1; }
+  [ -n "$plan" ] || return 0
+  while read -r kind ns cj names; do
+    [ -n "$kind" ] || continue
+    if [ "$kind" = settle ]; then
+      echo "failed Job(s) of CronJob $ns/$cj, answered by a newer Job that completed: $names; removing them"
+      for j in $names; do kc -n "$ns" delete job "$j" --cascade=foreground > /dev/null; done
+      continue
+    fi
+    chk="${cj:0:45}-rebuild-check"
+    echo "failed Job(s) of CronJob $ns/$cj from the bring-up: $names; running one Job from the CronJob now"
+    kc -n "$ns" delete job "$chk" --ignore-not-found --cascade=foreground > /dev/null || true
+    kc -n "$ns" create job "$chk" --from="cronjob/$cj" > /dev/null || { echo "could not start a Job from CronJob $ns/$cj"; return 1; }
+    if ! kc -n "$ns" wait --for=condition=complete "job/$chk" --timeout=300s > /dev/null; then
+      echo "CronJob $ns/$cj: its Job does not complete with the cluster up; last 30 log lines of its pod:"
+      kc -n "$ns" logs "job/$chk" --tail=30 --all-containers=true 2>&1 | python3 -I "$repo/hosts/diag-apps.py" scrub || true
+      return 1
+    fi
+    for j in $names; do kc -n "$ns" delete job "$j" --cascade=foreground > /dev/null; done
+    kc -n "$ns" delete job "$chk" --cascade=foreground > /dev/null
+  done <<< "$plan"
 }
 
 checks() {
   local notready pods
   notready=$(kc get nodes --no-headers | awk '$2 != "Ready"')
   [ -z "$notready" ] || { echo "nodes not Ready: $notready"; return 1; }
-  settle_snapshot_jobs || return 1
+  settle_cronjob_jobs || return 1
   pods=$(kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"')
   [ -z "$pods" ] || { echo "pods not Running or Completed:"; echo "$pods"; return 1; }
   wait_apps
@@ -951,6 +975,34 @@ node_journal_diag() {
       python3 -I "$repo/hosts/diag-apps.py" scrub
   } 2>&1 | cut -c1-300 | head -n 500 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
 }
+# Why an application is not Synced and Healthy: its message, its conditions and each resource that is not, then the
+# last 30 log lines of each pod in Error; both are scrubbed of secrets (hosts/diag-apps.py). Read-only, prints `==` sections.
+diag_why_not_ready() {
+    echo "== applications not Synced and Healthy: messages and resources"
+    kc -n argocd get applications.argoproj.io -o json | python3 -I "$repo/hosts/diag-apps.py" apps
+    echo "== last 30 log lines of each pod in Error (at most 6 pods)"
+    kc get pods -A --no-headers | awk '$4 ~ /^(Error|CrashLoopBackOff|OOMKilled|CreateContainerError|RunContainerError|Init:Error|Init:CrashLoopBackOff)$/ {print $1, $2}' | head -n 6 |
+      while read -r pns pod; do
+        echo "-- $pns/$pod"
+        kc -n "$pns" logs "$pod" --tail=30 --all-containers=true 2>&1 | python3 -I "$repo/hosts/diag-apps.py" scrub
+      done
+}
+# A failed prod run: the read-only part of runner_capture_diag, into the short log (lines prefixed `diag:`): the Argo CD
+# applications, the pods not running, the newest events, why each application is not Synced and Healthy, and the last log lines
+# of each pod in Error, all scrubbed. Never fatal, and it changes nothing. Dev reads more, before its teardown (below).
+prod_capture_diag() {
+  echo "diag: the run failed, so prod's cluster is read (read-only)" | tee -a "$log"
+  {
+    echo "== argocd applications (name, sync, health)"
+    kc -n argocd get applications.argoproj.io --no-headers -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status
+    echo "== pods not Running or Completed, all namespaces"
+    kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
+    echo "== newest events, all namespaces"
+    kc get events -A --sort-by=.lastTimestamp --no-headers | tail -n 25
+    diag_why_not_ready
+  } 2>&1 | cut -c1-300 | head -n 200 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
+  return 0
+}
 # A failed ephemeral-dev run: read the cluster before it is torn down (what `rebuild diag` shows: the Argo CD
 # applications and why each is not Synced and Healthy, the pods not running, the last log lines of each pod in Error,
 # the newest events), into the short log, each line prefixed `diag:`. Never fatal.
@@ -969,16 +1021,7 @@ runner_capture_diag() {
     kc get pods -A --no-headers | awk '$4 != "Running" && $4 != "Completed"'
     echo "== newest events, all namespaces"
     kc get events -A --sort-by=.lastTimestamp --no-headers | tail -n 25
-    # Why an application is not Synced and Healthy: its message, its conditions and each resource that is not, then the
-    # last 30 log lines of each pod in Error; both are scrubbed of secrets (hosts/diag-apps.py).
-    echo "== applications not Synced and Healthy: messages and resources"
-    kc -n argocd get applications.argoproj.io -o json | python3 -I "$repo/hosts/diag-apps.py" apps
-    echo "== last 30 log lines of each pod in Error (at most 6 pods)"
-    kc get pods -A --no-headers | awk '$4 ~ /^(Error|CrashLoopBackOff|OOMKilled|CreateContainerError|RunContainerError|Init:Error|Init:CrashLoopBackOff)$/ {print $1, $2}' | head -n 6 |
-      while read -r pns pod; do
-        echo "-- $pns/$pod"
-        kc -n "$pns" logs "$pod" --tail=30 --all-containers=true 2>&1 | python3 -I "$repo/hosts/diag-apps.py" scrub
-      done
+    diag_why_not_ready
   } 2>&1 | cut -c1-300 | head -n 260 | sed 's/^/diag: /' | tee -a "$log" >> "$raw" || true
   node_journal_diag || true
   return 0
@@ -1108,6 +1151,7 @@ for s in $stages; do
     stage_failure_lines "$s"
     echo "rebuild: stage $s failed; last lines of $raw:" >&2
     tail -n 20 "$raw" >&2
+    if [ "$ENV_NAME" = prod ]; then prod_capture_diag || true; fi
     runner_run_teardown failed || true
     exit "$rc"
   fi

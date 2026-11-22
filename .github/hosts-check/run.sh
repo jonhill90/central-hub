@@ -529,7 +529,7 @@ check_backup() {
   suite bash "$here/tests/test_rebuild_prod.sh"
   suite bash "$here/tests/test_wait_apps.sh"
   suite bash "$here/tests/test_rebuild_certs_order.sh"
-  suite bash "$here/tests/test_rebuild_snapshot_jobs.sh"
+  suite bash "$here/tests/test_rebuild_cronjob_jobs.sh"
   suite bash "$here/tests/test_openbao_handover.sh"
   suite bash "$here/tests/test_openbao_refresh.sh"
   suite bash "$here/tests/test_openbao_measure.sh"
