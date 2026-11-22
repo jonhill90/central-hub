@@ -337,6 +337,32 @@ out=$(env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check 2>&1) || { echo "$o
 grep -q 'PASS: restore of snapshot .* still in place, 4 folders, canary matches' <<< "$out" || { echo "$out"; fail "check did not pass"; }
 ok "a second run does nothing, and check passes"
 
+# A volume backup that runs after the restore (prod's backup-drill stage, the nightly timer) writes a new canary into every folder. check
+# accepts that only when this node recorded the canary after the restore and the newest volumes snapshot holds exactly the canary on disk.
+chmod -R u+w "$RESTIC_REPOSITORY"
+dev_state=$work/dev-state
+sleep 1
+env BACKUP_HOST=ci-dev "BACKUP_STATE=$dev_state" "BACKUP_VOLUME_PATHS=$prod_path" "$bin/c1-backup-volumes.sh" > "$work/dev-backup.log" 2>&1 || { cat "$work/dev-backup.log"; fail "the dev node's own volume backup failed"; }
+new_canary=$(cat "$prod_path/.central-hub-backup-canary")
+[ "$new_canary" != "$(cat "$work/prod-as-backed-up/.central-hub-backup-canary")" ] || fail "the second backup did not change the canary"
+out=$(env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check 2>&1) || { echo "$out"; fail "check failed after a backup that ran after the restore"; }
+grep -q 'canary matches the one the node.s own backup recorded after the restore, and the newest volumes snapshot holds it' <<< "$out" || { echo "$out"; fail "check did not say it used the later backup"; }
+ok "check passes after a backup that ran after the restore: the canary is the one the node recorded then, and the newest snapshot holds it"
+echo unrecorded-by-any-backup > "$prod_path/.central-hub-backup-canary"
+if env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check > /dev/null 2>&1; then fail "check passed with a canary no backup recorded"; fi
+# The record alone is not trusted: a record and a disk that agree on a value the snapshot does not hold fail.
+printf '%s\t%s\n' "$prod_path" unrecorded-by-any-backup > "$dev_state/canary-volumes"
+sleep 1; touch "$dev_state/canary-volumes"
+out=$(env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check 2>&1) && { echo "$out"; fail "check passed with a record the snapshot does not hold"; }
+grep -q 'newest volumes snapshot of ci-dev holds' <<< "$out" || { echo "$out"; fail "check did not name the snapshot's canary"; }
+# A recorded canary from before the restore does not count.
+printf '%s\t%s\n' "$prod_path" "$new_canary" > "$dev_state/canary-volumes"
+echo "$new_canary" > "$prod_path/.central-hub-backup-canary"
+touch -d '2001-01-01' "$dev_state/canary-volumes"
+if env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check > /dev/null 2>&1; then fail "check passed with a backup record older than the restore"; fi
+ok "check fails on a canary no backup recorded, on a record the snapshot does not hold, and on a record older than the restore"
+cp "$work/prod-as-backed-up/.central-hub-backup-canary" "$prod_path/"
+
 echo "changed" > "$prod_path/.central-hub-backup-canary"
 if env "${dev_env[@]}" "$bin/c1-restore-volumes.sh" check > /dev/null 2>&1; then fail "check passed with a wrong canary"; fi
 rm -rf "$prod_path/logging/storage-loki-0"
