@@ -334,6 +334,13 @@ if [ $rc16a = 0 ] && [[ $c16a == *playbooks/proxmox-connector.yml* ]] && grep -q
   ok "16a the connector job runs proxmox-connector.yml and prints the facts that are true"
 else bad "16a rc=$rc16a [$c16a] $(cat "$t/16a.out")"; fi
 
+# 16c connector-route runs proxmox-connector-route.yml
+: > "$t/calls"
+job check connector-route > "$t/16c.out" 2>&1; rc16c=$?
+c16c=$(cat "$t/calls")
+if [ $rc16c = 0 ] && [[ $c16c == *playbooks/proxmox-connector-route.yml* ]]; then ok "16c connector-route runs proxmox-connector-route.yml"
+else bad "16c rc=$rc16c [$c16c] $(cat "$t/16c.out")"; fi
+
 # 16b the memory job runs proxmox-memory.yml and prints only the report lines that match its allowlist: a line with a name, an address
 #     or any extra word is dropped, so nothing private can pass
 python3 - > "$t/out-check.json" <<'PY'
@@ -543,15 +550,62 @@ done
 ok "23c three bad dev worker address shapes stop the firewall job before the playbook, naming no value"
 rm -f "$t/handoff/dev-worker-address"
 
-# 24 the proxy, firewall, connector and sso jobs take the settable host values from `view proxmox`, as a 0600 vars file that is gone after the run
+# 24 the opnsense-sso apply sets its own way back: guard arm first, the job's apply, then guard confirm; a failed apply rolls the VM back
+#    and does not confirm; a guard that cannot arm stops everything before the job runs. The secret is handed over by the keys user's
+#    wrapper (a stand-in sudo and wrapper here) and never printed.
+cat > "$t/bin/ansible-playbook" <<'STUB'
+#!/bin/sh
+echo "$*" >> "$T/calls"
+case " $* " in
+  *" opnsense_guard_action=arm "*) [ -e "$T/failarm" ] && exit 1 ;;
+  *" playbooks/opnsense-sso.yml "*) case " $* " in *" --check "*) ;; *) [ -e "$T/failsso" ] && exit 1 ;; esac ;;
+esac
+case " $* " in *" --check "*) cat "$T/out-check.json" ;; *) cat "$T/out-apply.json" ;; esac
+exit 0
+STUB
+sed -i "s|\$T|$t|g" "$t/bin/ansible-playbook"
+printf '#!/bin/sh\nshift 3; exec "$@"\n' > "$t/bin/sudo"; chmod +x "$t/bin/sudo"
+s24=$(openssl rand -hex 32)
+printf '#!/bin/sh\necho "OPNSENSE_CLIENT_SECRET=%s"\n' "$s24" > "$t/libexec/opnsense-sso-secret.sh"; chmod +x "$t/libexec/opnsense-sso-secret.sh"
+json "new" "/tmp/a" "write config" "move" none > "$t/out-check.json"; cp "$t/out-check.json" "$t/out-apply.json"
+c24=$(git -C "$t/main.git" rev-parse main)
+h24=$(PATH="$t/bin:$PATH" job check opnsense-sso 2>&1 | sed -n 's/^proxmox-host: check \([0-9a-f]\{12\}\):.*/\1/p')
+job pass opnsense-sso "$c24" "$h24" cmsg_cccccccccccc "$tm" reviewer >/dev/null 2>&1
+job go opnsense-sso "$c24" cmsg_dddddddddddd "$tm" orchestrator >/dev/null 2>&1
+: > "$t/calls"; PATH="$t/bin:$PATH" job apply-recorded opnsense-sso "$h24" > "$t/24a.out" 2>&1; rc=$?
+order=$(grep -o 'opnsense_guard_action=[a-z]*\|playbooks/opnsense-sso.yml' "$t/calls" | tr '\n' ' ')
+if [ $rc = 0 ] && [[ $order == "playbooks/opnsense-sso.yml opnsense_guard_action=arm playbooks/opnsense-sso.yml opnsense_guard_action=confirm " ]] && ! grep -q "$s24" "$t/24a.out" "$t/calls"; then
+  ok "24a opnsense-sso apply: re-check, guard arm, the job, guard confirm; the secret is not printed"
+else bad "24a rc=$rc order=[$order] $(cat "$t/24a.out") [$(cat "$t/calls")]"; fi
+job go opnsense-sso "$c24" cmsg_eeeeeeeeeeee "$tm" orchestrator >/dev/null 2>&1; touch "$t/failsso"; : > "$t/calls"
+PATH="$t/bin:$PATH" job apply-recorded opnsense-sso "$h24" > "$t/24b.out" 2>&1; rc=$?
+if [ $rc != 0 ] && grep -q "opnsense_guard_action=arm" "$t/calls" && grep -q "opnsense_guard_action=rollback" "$t/calls" && ! grep -q "opnsense_guard_action=confirm" "$t/calls" && grep -q "rolled back" "$t/24b.out"; then
+  ok "24b a failed apply rolls the firewall VM back and does not confirm"
+else bad "24b rc=$rc [$(cat "$t/calls")] $(cat "$t/24b.out")"; fi
+rm -f "$t/failsso"; touch "$t/failarm"; job go opnsense-sso "$c24" cmsg_ffffffffffff "$tm" orchestrator >/dev/null 2>&1; : > "$t/calls"
+PATH="$t/bin:$PATH" job apply-recorded opnsense-sso "$h24" > "$t/24c.out" 2>&1; rc=$?
+if [ $rc != 0 ] && ! grep -v -e '--check' "$t/calls" | grep -q "playbooks/opnsense-sso.yml" && grep -q "could not be set" "$t/24c.out"; then
+  ok "24c a guard that cannot arm stops the apply before the job runs"
+else bad "24c rc=$rc [$(cat "$t/calls")] $(cat "$t/24c.out")"; fi
+rm -f "$t/failarm"
+
+# The sudo stand-in of the top of this file again: case 24 above replaced it with a pass-through for its own wrapper.
+cat > "$t/bin/sudo" <<EOF
+#!/bin/sh
+echo "\$*" >> "$t/sudo-calls"
+case "\$*" in "-n -u invops "*" view proxmox") cat "$t/view.yml"; exit \$(cat "$t/view-rc" 2>/dev/null || echo 0) ;; esac
+exit 99
+EOF
+chmod +x "$t/bin/sudo"
+# 25 the proxy, firewall, connector and sso jobs take the settable host values from `view proxmox`, as a 0600 vars file that is gone after the run
 iv_file() { sed -n 's/.* -e @\([^ ]*iv-vars[^ ]*\).*/\1/p' "$t/calls" | head -1; }
 json "new" "/tmp/a" "write config" "move" none > "$t/out-check.json"
 : > "$t/calls"; : > "$t/sudo-calls"
-job check firewall > "$t/24a.out" 2>&1; rc24=$?
+job check firewall > "$t/25a.out" 2>&1; rc25x=$?
 ivf=$(iv_file)
-if [ $rc24 = 0 ] && [ -n "$ivf" ] && [ ! -e "$ivf" ] && grep -q -- "-u invops $t/libexec/inventory.sh view proxmox" "$t/sudo-calls"; then
-  ok "24 firewall: asks the inventory wrapper for view proxmox as invops, passes a vars file, deletes it after"
-else bad "24 rc=$rc24 file=[$ivf] sudo=[$(cat "$t/sudo-calls")] $(cat "$t/24a.out")"; fi
+if [ $rc25x = 0 ] && [ -n "$ivf" ] && [ ! -e "$ivf" ] && grep -q -- "-u invops $t/libexec/inventory.sh view proxmox" "$t/sudo-calls"; then
+  ok "25 firewall: asks the inventory wrapper for view proxmox as invops, passes a vars file, deletes it after"
+else bad "25 rc=$rc25x file=[$ivf] sudo=[$(cat "$t/sudo-calls")] $(cat "$t/25a.out")"; fi
 # the file's content and mode, caught while the playbook runs
 cat > "$t/bin/ansible-playbook" <<EOF
 #!/bin/sh
@@ -560,34 +614,34 @@ for a in "\$@"; do case \$a in @*iv-vars*) f=\${a#@}; stat -c %a "\$f" > "$t/iv-
 case " \$* " in *" --check "*) cat "$t/out-check.json" ;; *) cat "$t/out-apply.json" ;; esac
 exit \$(cat "$t/rc" 2>/dev/null || echo 0)
 EOF
-job check proxy > "$t/24b.out" 2>&1
+job check proxy > "$t/25b.out" 2>&1
 if python3 - "$t/iv-copy" "$(cat "$t/iv-mode" 2>/dev/null)" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert sys.argv[2] == "600", sys.argv[2]
 assert d == {"proxmox_cert_names": ["test-one.example"], "proxmox_firewall_enable": True, "proxmox_firewall_home_lan_cidr": "192.0.2.0/24"}, d
 PY
-then ok "24 the vars file is 0600 and holds the listed names only (no unlisted name, no all.vars)"
-else bad "24 vars file wrong: $(cat "$t/iv-copy" 2>/dev/null) mode=$(cat "$t/iv-mode" 2>/dev/null)"; fi
+then ok "25 the vars file is 0600 and holds the listed names only (no unlisted name, no all.vars)"
+else bad "25 vars file wrong: $(cat "$t/iv-copy" 2>/dev/null) mode=$(cat "$t/iv-mode" 2>/dev/null)"; fi
 # no view, no job; the read-only jobs never ask
 : > "$t/calls"; echo 1 > "$t/view-rc"
-job check proxy > "$t/24c.out" 2>&1; rc24c=$?
+job check proxy > "$t/25c.out" 2>&1; rc25xc=$?
 rm -f "$t/view-rc"
-if [ $rc24c = 1 ] && [ ! -s "$t/calls" ] && grep -q "view proxmox gave no usable values" "$t/24c.out"; then
-  ok "24 a failing view stops the job before the playbook, with no silent fallback"
-else bad "24 rc=$rc24c calls=[$(cat "$t/calls")] $(cat "$t/24c.out")"; fi
+if [ $rc25xc = 1 ] && [ ! -s "$t/calls" ] && grep -q "view proxmox gave no usable values" "$t/25c.out"; then
+  ok "25 a failing view stops the job before the playbook, with no silent fallback"
+else bad "25 rc=$rc25xc calls=[$(cat "$t/calls")] $(cat "$t/25c.out")"; fi
 : > "$t/sudo-calls"
-job check memory > "$t/24d.out" 2>&1
-[ ! -s "$t/sudo-calls" ] && ok "24 the memory job never asks for the view" || bad "24 memory asked: $(cat "$t/sudo-calls")"
+job check memory > "$t/25d.out" 2>&1
+[ ! -s "$t/sudo-calls" ] && ok "25 the memory job never asks for the view" || bad "25 memory asked: $(cat "$t/sudo-calls")"
 
-# 25 one run that makes two vars files (the firewall job: the box address, fw, and the inventory view, iv) leaves neither behind
+# 26 one run that makes two vars files (the firewall job: the box address, fw, and the inventory view, iv) leaves neither behind
 printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"
-job check firewall > "$t/25.out" 2>&1; rc25=$?
+job check firewall > "$t/26.out" 2>&1; rc25=$?
 made=$(grep -o 'state/[a-z]*-vars\.[A-Za-z0-9]*' "$t/calls" | sed 's|state/\([a-z]*\)-vars.*|\1|' | sort | tr '\n' ' ')
 left=$(find "$t/work/state" -name '*-vars.*' | wc -l)
 if [ $rc25 = 0 ] && [ "$made" = "fw iv " ] && [ "$left" = 0 ]; then
-  ok "25 the firewall run made an fw and an iv vars file and left no vars file behind"
-else bad "25 rc=$rc25 made=[$made] left=$left $(cat "$t/25.out")"; fi
+  ok "26 the firewall run made an fw and an iv vars file and left no vars file behind"
+else bad "26 rc=$rc25 made=[$made] left=$left $(cat "$t/26.out")"; fi
 rm -f "$t/handoff/box-backup-address"
 
 exit "$fail"
