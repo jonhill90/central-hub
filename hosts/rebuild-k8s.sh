@@ -320,7 +320,7 @@ for (ns, cj), js in sorted(by.items()):
 ' "$cjfile") || { rm -f "$cjfile"; echo "could not read the Jobs"; return 1; }
   rm -f "$cjfile"
   [ -n "$plan" ] || return 0
-  while read -r kind ns cj names; do
+  while read -r -u 3 kind ns cj names; do
     [ -n "$kind" ] || continue
     if [ "$kind" = settle ] || [ "$kind" = suspended ]; then
       if [ "$kind" = suspended ]; then
@@ -334,14 +334,14 @@ for (ns, cj), js in sorted(by.items()):
     chk="${cj:0:45}-rebuild-check"
     echo "failed Job(s) of CronJob $ns/$cj from the bring-up: $names; running one Job from the CronJob now"
     kc -n "$ns" delete job "$chk" --ignore-not-found --cascade=foreground > /dev/null || true
-    # The Job is made from the CronJob's template but with no owner: `create job --from` makes the CronJob its owner, and the CronJob
-    # controller then counts it in the history limit (failedJobsHistoryLimit) and deleted this one when the CronJob's own tick failed
-    # too (prod resume 6, 2026-11-22: "SawCompletedJob ... Deleted job panel-check-rebuild-check", so the log read got NotFound).
-    kc -n "$ns" create job "$chk" --from="cronjob/$cj" --dry-run=client -o json |
-      python3 -I -c 'import json, sys
-d = json.load(sys.stdin)
-d["metadata"].pop("ownerReferences", None)
-json.dump(d, sys.stdout)' | kc -n "$ns" create -f - > /dev/null || { echo "could not start a Job from CronJob $ns/$cj"; return 1; }
+    # The Job gets no owner: `create job --from` makes the CronJob its owner, and the CronJob controller then counts it in the history
+    # limit (failedJobsHistoryLimit) and deleted this one when the CronJob's own tick failed too (prod resume 6, 2026-11-22: "SawCompletedJob
+    # ... Deleted job panel-check-rebuild-check", so the log read got NotFound). kc is an Ansible ad-hoc command on the node, which has no
+    # stdin, so the owner comes off with a patch whose argument carries its own single quotes: kc joins its words with spaces and the
+    # node splits them again, keeping what is inside the quotes as one word.
+    kc -n "$ns" create job "$chk" --from="cronjob/$cj" > /dev/null || { echo "could not start a Job from CronJob $ns/$cj"; return 1; }
+    kc -n "$ns" patch job "$chk" --type=json -p "'"'[{"op":"remove","path":"/metadata/ownerReferences"}]'"'" > /dev/null ||
+      { echo "could not take the owner off Job $ns/$chk"; return 1; }
     # Done when it succeeded or failed (backoffLimit 0 fails in seconds, so a wait for completion alone sat out its whole timeout).
     waited=0 res=''
     while [ "$waited" -lt 300 ]; do
@@ -356,7 +356,7 @@ json.dump(d, sys.stdout)' | kc -n "$ns" create -f - > /dev/null || { echo "could
     fi
     for j in $names; do kc -n "$ns" delete job "$j" --cascade=foreground > /dev/null; done
     kc -n "$ns" delete job "$chk" --cascade=foreground > /dev/null
-  done <<< "$plan"
+  done 3<<< "$plan"  # fd 3: a kc inside the loop must not read the plan from stdin
 }
 
 # Argo CD's argocd-cm holds oidc.config with the provider name `Lab sign-in` (k8s_gitops_sso_name, tag sso). Read-only: one ConfigMap,
