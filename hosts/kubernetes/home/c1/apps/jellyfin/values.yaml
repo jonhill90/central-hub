@@ -44,6 +44,11 @@ metrics:
 # First-run setup (templates/setup-*.yaml). The admin password is made once by External Secrets'
 # Password generator and kept in the Secret <name>-admin (keys: username, password); nothing
 # prints it. The setup CronJob runs every 10 minutes and changes nothing once the wizard is done.
+# Where the admin password comes from (plan step 8a): `openbao` reads c1/jellyfin-admin (key password) through store openbao, else the
+# in-cluster generator makes it once. The root chart sets it from appSecretsStore.
+adminSecret:
+  store: c1
+
 setup:
   # How often the setup CronJob runs (see templates/setup-job.yaml for why it is not a hook).
   schedule: "*/10 * * * *"

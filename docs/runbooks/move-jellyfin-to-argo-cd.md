@@ -31,7 +31,7 @@ flowchart LR
 |---|---|
 | `apps/jellyfin/templates/jellyfin.yaml` | The namespace, the claims `jellyfin-config` (5Gi) and `jellyfin-media` (100Gi), the Deployment and the Service. The same objects the Ansible role applied, so the first diff is empty. The namespace and both claims are marked so Argo CD never deletes them. |
 | `apps/jellyfin/templates/route.yaml` | The HTTPS route on the shared Gateway, and the plain-HTTP redirect to it. The hostname takes the zone from the root Application. |
-| `apps/jellyfin/templates/setup-secret.yaml` | External Secrets makes a 32-character password once (letters and digits) into Secret `jellyfin-admin`, keys `username` and `password`. It never changes it after. |
+| `apps/jellyfin/templates/setup-secret.yaml` | External Secrets makes a 32-character password once (letters and digits) into Secret `jellyfin-admin`, keys `username` and `password`. It never changes it after. With `adminSecret.store` openbao (the root passes it from `appSecretsStore`, plan step 8a) the password comes instead from OpenBao, `c1/jellyfin-admin` key `password`, through an ExternalSecret that refreshes hourly; `openbao-prod adopt` put the running cluster's value there, so the password does not change, and the generator is still rendered. |
 | `apps/jellyfin/templates/setup-job.yaml` and `files/setup.sh` | After each sync, a Job calls Jellyfin's startup API: server settings, the admin user, the library `Media` at `/media`, then "complete". If the wizard is already done it stops at its first check. It never prints the password. |
 | `apps/jellyfin/values.yaml` | Every setting above. |
 

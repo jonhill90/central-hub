@@ -450,6 +450,27 @@ check_manifests() {
     echo "manifests: with store openbao, expected 6 remoteRef keys under c1/, found $keys" >&2
     return 1
   fi
+  # Jellyfin's admin password (plan step 8a): with adminSecret.store openbao an ExternalSecret reads c1/jellyfin-admin key password through
+  # store openbao and the in-cluster generator is still rendered (the Application does not prune); with it unset the generator and its
+  # CreatedOnce ExternalSecret are all there is. The root passes the store from appSecretsStore.
+  helm template jellyfin hosts/kubernetes/home/c1/apps/jellyfin --namespace media --set zone=example.com \
+    --set adminSecret.store=openbao > "$work/rendered/app-c1-jellyfin-admin-openbao.yaml"
+  helm template jellyfin hosts/kubernetes/home/c1/apps/jellyfin --namespace media --set zone=example.com \
+    > "$work/rendered/app-c1-jellyfin-admin-generator.yaml"
+  if ! grep -q 'remoteRef: {key: c1/jellyfin-admin, property: password}' "$work/rendered/app-c1-jellyfin-admin-openbao.yaml" ||
+    grep -q 'refreshPolicy: CreatedOnce' "$work/rendered/app-c1-jellyfin-admin-openbao.yaml" ||
+    ! grep -q 'kind: Password' "$work/rendered/app-c1-jellyfin-admin-openbao.yaml" ||
+    grep -q 'c1/jellyfin-admin' "$work/rendered/app-c1-jellyfin-admin-generator.yaml" ||
+    ! grep -q 'refreshPolicy: CreatedOnce' "$work/rendered/app-c1-jellyfin-admin-generator.yaml"; then
+    echo "manifests: jellyfin's admin Secret should read c1/jellyfin-admin with store openbao (generator still rendered), and be the generator's otherwise" >&2
+    return 1
+  fi
+  helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
+    --set openbaoInCluster=true --set openbaoSealNode=node-1 --set appSecretsStore=openbao > "$work/rendered/root-c1-jellyfin-store.yaml"
+  if ! grep -A40 '^  name: jellyfin$' "$work/rendered/root-c1-jellyfin-store.yaml" | grep -q 'adminSecret.store'; then
+    echo "manifests: the root should pass adminSecret.store to jellyfin when appSecretsStore is set" >&2
+    return 1
+  fi
   # The keys those charts read, the names dev's secret-source file holds and the runbook's list agree.
   bash "$here/tests/test_app_secrets_contract.sh"
   if helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
