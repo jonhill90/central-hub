@@ -30,7 +30,6 @@
 #      and for each one not Ready its message and the controller's log lines naming it (at most 20); all Ready prints no log;
 #      a failed read stops it with an error; a tap or another argument runs nothing.
 #  15. jobs-status lists the Jobs with failed pods and each one's last 30 log lines, scrubbed; get and logs only; a tap runs nothing.
-#  16. prune-status lists the resources Argo CD marks requiresPruning per Application with one get; a tap runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -470,34 +469,5 @@ if [[ $a_rc -eq 0 && $a_out == *"media jellyfin-setup-1 jellyfin-setup failed=2 
       $a_out == *"PASS: openbao-prod: jobs-status: read, nothing changed"* && $writes -eq 0 && $x_rc -eq 2 && -z $x_calls ]]; then
   ok "15. jobs-status: the failed Jobs (not the good one) with their owner, and each one's last log lines scrubbed; only get and logs; a tap runs nothing"
 else bad "15. rc=$a_rc writes=$writes | tap rc=$x_rc [$x_calls] | $a_out"; fi
-
-# 16: prune-status lists, for every Application, what Argo CD marks requiresPruning; one kc get, nothing written.
-: > "$t/kcalls"
-cat > "$venv/ansible" <<EOS
-#!/usr/bin/env python3
-import json, sys
-a = sys.argv[sys.argv.index("-a") + 1]
-open("$t/kcalls", "a").write(a + "\\n")
-res = lambda g, k, ns, n, p=False: {"group": g, "kind": k, "namespace": ns, "name": n, **({"requiresPruning": True} if p else {})}
-items = [{"metadata": {"name": "gateway"}, "status": {"sync": {"status": "OutOfSync"}, "health": {"status": "Healthy"}, "resources": [
-            res("gateway.networking.k8s.io", "HTTPRoute", "central-hub-app", "central-hub-app", True),
-            res("gateway.networking.k8s.io", "HTTPRoute", "central-hub-app", "central-hub-app-redirect", True),
-            res("gateway.networking.k8s.io", "HTTPRoute", "central-hub-app", "hub")]}},
-         {"metadata": {"name": "jellyfin"}, "status": {"sync": {"status": "Synced"}, "health": {"status": "Healthy"}, "resources": [res("", "Secret", "media", "jellyfin-admin")]}}]
-out = json.dumps({"items": items}) if "get applications" in a else ""
-print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0 if out else 1, "stdout": out, "stderr": ""}}}]}]}))
-EOS
-chmod +x "$venv/ansible"
-run prune-status; a_rc=$rc a_out=$out
-a_calls=$(cat "$t/kcalls")
-run prune-status "$tap"; x_rc=$rc x_calls=$calls
-if [[ $a_rc -eq 0 && $a_out == *"app gateway: sync=OutOfSync health=Healthy"* &&
-      $a_out == *"prune gateway: gateway.networking.k8s.io/HTTPRoute central-hub-app/central-hub-app"* &&
-      $a_out == *"prune gateway: gateway.networking.k8s.io/HTTPRoute central-hub-app/central-hub-app-redirect"* &&
-      $a_out != *"prune gateway: gateway.networking.k8s.io/HTTPRoute central-hub-app/hub"* && $a_out != *"prune jellyfin"* &&
-      $a_out == *"2 resource(s) marked requiresPruning"* && $a_out == *"PASS: openbao-prod: prune-status: read, nothing changed"* &&
-      $(wc -l <<< "$a_calls") -eq 1 && $a_calls == *"get applications.argoproj.io -o json"* && $x_rc -eq 2 && -z $x_calls ]]; then
-  ok "16. prune-status: lists only the resources Argo CD marks requiresPruning, per Application, with one get; a tap runs nothing"
-else bad "16. rc=$a_rc calls=[$a_calls] | tap rc=$x_rc [$x_calls] | $a_out"; fi
 
 exit "$fail"

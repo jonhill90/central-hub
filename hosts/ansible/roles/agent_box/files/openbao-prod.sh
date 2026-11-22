@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -63,9 +63,6 @@
 #           succeeded counts, start time), and for each of the first 6 the last 30 log lines of its pods (`kubectl logs job/<name>
 #           --all-containers`, then each failed pod by name), scrubbed of secrets by hosts/diag-apps.py. Reads nothing else and
 #           changes nothing. No tap.
-# prune-status  read-only: what Argo CD would delete if an Application pruned. For every Application in argocd, each resource its
-#           status marks requiresPruning true (in the cluster, no longer in git): application, group, kind, namespace/name, and each
-#           Application's sync status. Reads one list and changes nothing. No tap.
 # log       the newest run's lines: the action, the commit, the tap id, and the PASS, FAIL, SKIP and play-recap lines.
 # Settings (agent_box_openbao_prod, private, in <work>/openbao-prod.json): seal_node (a k8s_nodes host of the prod inventory,
 # its Kubernetes node name), store_host (the store's name as the box reaches it; secrets-store-prod checks its own address
@@ -91,11 +88,11 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | secrets-status | jobs-status | prune-status | log) [[ $# -eq 1 ]] || usage ;;
+  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | secrets-status | jobs-status | log) [[ $# -eq 1 ]] || usage ;;
   seal | seal-copy | refresh | reset-failed-start | drop-box-path | admin-firewall)
     [[ $# -eq 2 ]] || usage
     tap=$2
@@ -421,24 +418,6 @@ for j in json.load(sys.stdin)["items"]:
       { kc -n "$jns" logs "job/$jname" --tail=30 --all-containers=true 2>&1 || true; } | python3 -I "$repo/hosts/diag-apps.py" scrub | cut -c1-400
     done <<< "$jobs"
     echo "PASS: openbao-prod: jobs-status: read, nothing changed"
-    ;;
-  prune-status)
-    # Read-only (one kc get). Argo CD's own word on each resource, the same status field drop-box-path reads.
-    apps=$(kc -n argocd get applications.argoproj.io -o json) || { echo "openbao-prod: could not read the Applications" >&2; exit 1; }
-    python3 -I -c '
-import json, sys
-items = json.load(sys.stdin).get("items", [])
-n = 0
-for a in sorted(items, key=lambda a: a["metadata"]["name"]):
-    st = a.get("status") or {}
-    print("app %s: sync=%s health=%s" % (a["metadata"]["name"], (st.get("sync") or {}).get("status", "?"), (st.get("health") or {}).get("status", "?")))
-    for r in st.get("resources") or []:
-        if r.get("requiresPruning") is True:
-            n += 1
-            print("prune %s: %s/%s %s/%s" % (a["metadata"]["name"], r.get("group", "") or "core", r.get("kind", ""), r.get("namespace", "") or "-", r.get("name", "")))
-print("openbao-prod: %d resource(s) marked requiresPruning" % n)
-' <<< "$apps" || { echo "openbao-prod: the Applications have no readable status" >&2; exit 1; }
-    echo "PASS: openbao-prod: prune-status: read, nothing changed"
     ;;
   ca)
     mkdir -p "$store_keys"
