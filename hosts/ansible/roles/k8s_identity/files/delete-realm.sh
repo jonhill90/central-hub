@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Delete one realm in Keycloak, run inside the Keycloak container: bash -s <realm> < delete-realm.sh
 # Signs in to the master realm with the first admin account from the container's own environment
-# (the operator sets it from Secret <name>-initial-admin), so no admin password leaves the pod.
+# (the operator sets it from the bootstrap admin Secret: <name>-initial-admin, or <name>-bootstrap-admin with the secrets store openbao), so no admin password leaves the pod.
 # Prints "deleted" when it deleted the realm; a realm that isn't there is not an error.
 set -euo pipefail
 realm=$1
