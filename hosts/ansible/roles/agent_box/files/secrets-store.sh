@@ -30,7 +30,7 @@
 set -euo pipefail
 umask 077
 
-usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan|ssh-ca plan|apply|check|public <folder>|sign-host <key> <names> <out>" >&2; exit 2; }
+usage() { echo "usage: secrets-store recovery|status|snapshot|restore|restore-rebuilt [raft-<time>.snap]|clear-hold|put c1/<path> <key>|put-apps|compare|reseed|owner-login owner|test|check-test|remove-test|plan|ssh-ca plan|apply|check|public|sign-host <names>" >&2; exit 2; }
 named='' kv_path='' kv_key='' ssh_args=()
 env=dev
 if [[ ${1:-} == --prod ]]; then env=prod; shift; fi
@@ -47,7 +47,9 @@ case ${1:-} in
   ssh-ca)
     action=$1
     [[ $# -ge 2 && $2 =~ ^(plan|apply|check|public|sign-host)$ ]] || usage
-    named=$2; shift 2; ssh_args=("$@")
+    named=$2
+    # sign-host takes the names and nothing else (the host key comes on stdin); the others take no argument.
+    if [[ $named == sign-host ]]; then [[ $# -eq 3 ]] || usage; ssh_args=("$3"); else [[ $# -eq 2 ]] || usage; fi
     ;;
   # The value comes on stdin, never as an argument; the helper checks the path and key again.
   put)

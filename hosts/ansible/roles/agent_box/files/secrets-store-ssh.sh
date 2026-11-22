@@ -9,8 +9,10 @@
 #               policy `ssh-sign` (create and update on ssh-user/sign/admin, nothing else) and the OIDC login role
 #               `ssh-admin`, bound to Keycloak group lab-admins (D-0064 rules 1 to 3). Safe to run again.
 #   check       reads all of it back and compares it with what apply writes; prints PASS or FAIL lines
-#   public      writes the two CA public keys (not secrets) to <folder>/user-ca.pub and <folder>/host-ca.pub
-#   sign-host   <host public key file> <names, comma separated> <out file>: signs a box's host key for its names
+#   public      writes the two CA public keys (not secrets) to <keys folder>/ssh-ca/user-ca.pub and host-ca.pub
+#   sign-host   <names, comma separated>, the box's host public key on stdin: signs it for those names and writes
+#               <keys folder>/ssh-ca/host-<first name>-cert.pub
+# Both writes go only into that one folder, which this helper makes; a session names no path (the reviewer's ask on #883).
 # (The wrapper also passes its libexec folder as the sixth argument; this helper does not use it.)
 # Every call uses the admin AppRole (D-0062), so it runs only from the box's /32. No token, ID or secret is printed.
 # Values: the settings' ssh_ca keys (admin_group, principal, user_ttl, host_ttl, zone, redirect) override what the
@@ -137,27 +139,30 @@ case $action in
     echo "PASS: ssh-ca set-up reads back as written"
     ;;
   public)
-    out=${1:-}
-    [[ -n $out && -d $out ]] || die "public needs an existing folder"
+    out=$keys/ssh-ca
+    mkdir -p "$out"; chmod 755 "$out"
     for pair in ssh-user:user-ca.pub ssh-host:host-ca.pub; do
       m=${pair%%:*}
       has_ca "$m" || die "$m has no CA key; run apply first"
       jq_ 'import json,sys; print(json.load(open(sys.argv[1]))["data"]["public_key"].strip())' "$tmp/ca.json" > "$out/${pair##*:}"
       chmod 644 "$out/${pair##*:}"
-      echo "PASS: ${pair##*:} written ($(cut -d' ' -f1 "$out/${pair##*:}"))"
+      echo "PASS: ssh-ca/${pair##*:} written ($(cut -d' ' -f1 "$out/${pair##*:}"))"
     done
     ;;
   sign-host)
-    pub=${1:-} names=${2:-} out=${3:-}
-    [[ -s $pub && -n $out ]] || die "sign-host needs a host public key file, the names, and an output file"
-    [[ $names =~ ^[A-Za-z0-9.,-]+$ ]] || die "names may hold letters, digits, ., , and - only"
-    [[ $(wc -l < "$pub") -le 1 && $(head -c 3 "$pub") == ssh ]] || die "the key file must be one public key line"
+    names=${1:-}
+    [[ $names =~ ^[A-Za-z0-9][A-Za-z0-9.,-]*$ ]] || die "sign-host needs the names (letters, digits, ., , and -), and the host public key on stdin"
+    head -c 4096 > "$tmp/host.pub"
+    [[ $(wc -l < "$tmp/host.pub") -le 1 && $(head -c 3 "$tmp/host.pub") == ssh ]] || die "stdin must be one public key line"
     host_role > /dev/null
-    jq_ 'import json,sys; print(json.dumps({"public_key": open(sys.argv[1]).read().strip(), "cert_type": "host", "valid_principals": sys.argv[2], "ttl": sys.argv[3]}))' "$pub" "$names" "$host_ttl" > "$tmp/sign.json"
+    jq_ 'import json,sys; print(json.dumps({"public_key": open(sys.argv[1]).read().strip(), "cert_type": "host", "valid_principals": sys.argv[2], "ttl": sys.argv[3]}))' "$tmp/host.pub" "$names" "$host_ttl" > "$tmp/sign.json"
     code=$(call POST ssh-host/sign/hosts --data-binary "@$tmp/sign.json" -o "$tmp/signed.json" -w '%{http_code}') || true
     [[ $code == 200 ]] || die "signing answered HTTP ${code:-nothing}"
+    mkdir -p "$keys/ssh-ca"; chmod 755 "$keys/ssh-ca"
+    out="$keys/ssh-ca/host-${names%%,*}-cert.pub"
     jq_ 'import json,sys; print(json.load(open(sys.argv[1]))["data"]["signed_key"].strip())' "$tmp/signed.json" > "$out"
-    grep -q '^ssh-.*-cert-v01@openssh.com ' "$out" || die "the answer holds no certificate"
-    echo "PASS: host certificate for $names written ($host_ttl)"
+    grep -q '^ssh-.*-cert-v01@openssh.com ' "$out" || { rm -f "$out"; die "the answer holds no certificate"; }
+    chmod 644 "$out"
+    echo "PASS: host certificate for $names written to ssh-ca/host-${names%%,*}-cert.pub ($host_ttl)"
     ;;
 esac

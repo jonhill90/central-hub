@@ -5,7 +5,7 @@
 #      (one principal, 1h, permit-pty), role hosts, policy ssh-sign (one path) and login role ssh-admin (group, redirect, 15m).
 #   2. apply never writes config/ca when the CA exists (a second write would replace the key).
 #   3. no AppRole ID appears in an argument; a refused admin login stops before any write.
-#   4. sign-host sends a host-type request for the given names; names with a space are refused before signing.
+#   4. sign-host takes the names as its argument and the key on stdin, and writes only ssh-ca/host-<name>-cert.pub in the keys folder; public writes only ssh-ca/user-ca.pub and host-ca.pub there.
 # Usage: .github/hosts-check/tests/test_secrets_store_ssh.sh   (needs python3)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -52,7 +52,7 @@ exit 0
 STUB
 chmod +x "$t/bin/curl"
 export PATH="$t/bin:$PATH" STUB_LOG="$t/log"
-run() { : > "$t/log/args"; : > "$t/log/urls"; rm -f "$t"/log/body.*; out=$(bash "$helper" "$@" 2>&1); rc=$?; }
+run() { : > "$t/log/args"; : > "$t/log/urls"; rm -f "$t"/log/body.*; out=$(bash "$helper" "$@" 2>&1 < "${STDIN:-/dev/null}"); rc=$?; }
 base=(https://openbao.example.test "$t/ca.crt" "$t/keys" "$t/settings.json" "$t")
 
 run apply "${base[@]}"
@@ -75,12 +75,20 @@ if ! grep -q 'ROLEID0123456789abcdef\|SECRETID0123456789abcdef' "$t/log/args" &&
 STUB_LOGIN_CODE=403 run apply "${base[@]}"
 if [[ $rc -ne 0 && $out == *"HTTP 403"* && $(grep -c 'sys/mounts\|roles' "$t/log/urls") -eq 0 ]]; then ok "3b. a refused admin login stops before any write"; else bad "3b. rc=$rc $out"; fi
 
-run sign-host "${base[@]}" "$t/host.pub" box1.example.test "$t/host-cert.pub"
-if [[ $rc -eq 0 ]] && grep -q 'cert-v01' "$t/host-cert.pub" && python3 -I -c '
+# The action comes first, then the helper's arguments: sign-host takes the names only, with the key on stdin.
+STDIN=$t/host.pub run sign-host "${base[@]}" box1.example.test
+if [[ $rc -eq 0 ]] && grep -q 'cert-v01' "$t/keys/ssh-ca/host-box1.example.test-cert.pub" && python3 -I -c '
 import json,sys
-b=json.load(open(sys.argv[1])); sys.exit(0 if b["cert_type"]=="host" and b["valid_principals"]=="box1.example.test" else 1)' "$t/log/body.ssh-host_sign_hosts"; then ok "4. sign-host asks for a host certificate for the given names"; else bad "4. rc=$rc $out"; fi
-run sign-host "${base[@]}" "$t/host.pub" 'a b' "$t/x"
+b=json.load(open(sys.argv[1])); sys.exit(0 if b["cert_type"]=="host" and b["valid_principals"]=="box1.example.test" else 1)' "$t/log/body.ssh-host_sign_hosts"; then ok "4. sign-host asks for a host certificate for the names and writes it only in <keys>/ssh-ca/"; else bad "4. rc=$rc $out"; fi
+STDIN=$t/host.pub run sign-host "${base[@]}" 'a b'
 if [[ $rc -ne 0 ]] && ! grep -q "sign/hosts" "$t/log/urls"; then ok "4b. names with a space are refused before any signing call"; else bad "4b. rc=$rc $out"; fi
+STDIN=$t/host.pub run sign-host "${base[@]}" ../../etc/x
+if [[ $rc -ne 0 ]] && ! grep -q "sign/hosts" "$t/log/urls" && [[ ! -e $t/etc ]]; then ok "4c. a name that is a path is refused (no path argument exists)"; else bad "4c. rc=$rc"; fi
+echo 'not a key' > "$t/bad.pub"
+STDIN=$t/bad.pub run sign-host "${base[@]}" box2.example.test
+if [[ $rc -ne 0 ]] && ! grep -q "sign/hosts" "$t/log/urls"; then ok "4d. a stdin that is not one public key line is refused"; else bad "4d. rc=$rc"; fi
+STUB_HAVE_CA=1 run public "${base[@]}"
+if [[ $rc -eq 0 && -s $t/keys/ssh-ca/user-ca.pub && -s $t/keys/ssh-ca/host-ca.pub ]]; then ok "4e. public writes the two CA keys in <keys>/ssh-ca/ and takes no path"; else bad "4e. rc=$rc $out"; fi
 run plan "${base[@]}"
 if [[ $rc -eq 0 && ! -s $t/log/urls && $out != *example.test* ]]; then ok "5. plan makes no call and prints no name"; else bad "5. rc=$rc $out"; fi
 exit $fail
