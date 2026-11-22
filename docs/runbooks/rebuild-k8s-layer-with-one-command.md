@@ -178,7 +178,7 @@ The agent box's `rebuild-prod` wrapper (`hosts/ansible/roles/agent_box/files/reb
 
 ```sh
 sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh check
-sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh rebuild <tap id> <commit> [<volume snapshot id>]
+sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh rebuild --full-teardown <tap id> <commit> [<volume snapshot id>]
 sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh resume <tap id> <commit>
 sudo -n -u keys /usr/local/libexec/agent-box/rebuild-prod.sh log
 ```
@@ -297,3 +297,8 @@ Set `last-tested` after a clean run, and `status: tested` after two clean runs i
 - [Rebuild the home lab from bare metal](rebuild-home-lab-from-scratch.md): the whole order, including the layers this script leaves alone.
 - [Move c1's volume provisioner to Argo CD](move-local-path-to-argo-cd.md): why `storage` runs only the `disk` tag.
 - [D-0012](../decisions/0012-sort-docs-by-kind-of-document.md): runbook format.
+
+### Shipping a fix to prod (owner's order of 2026-11-22)
+
+- `rebuild` tears prod down, so it needs `--full-teardown` and refuses without it. A fix goes through `resume <tap id> <commit>`, from the failed stage, or an apply in place; prod is never torn down again to ship a fix.
+- The dev-first check accepts the newest full dev pass at an older commit when that commit is behind the one being run and every file changed since is one dev never reads: `docs/`, any `.md`, `.github/`, the box's `agent_box` role and its limit-approvals file. Any other changed file, such as `hosts/rebuild-k8s.sh`, a playbook or a role dev runs, needs a new full dev run. The prod run from the failed stage is the proof for the rest.

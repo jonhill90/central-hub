@@ -73,8 +73,18 @@ export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin:/u
 export TF_DATA_DIR=$work/tofu-data/rebuild-prod TF_IN_AUTOMATION=1
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: rebuild-prod check|rebuild <tap id> <commit> [<volume snapshot id>]|resume <tap id> <commit>|log" >&2; exit 2; }
+usage() { echo "usage: rebuild-prod check|rebuild --full-teardown <tap id> <commit> [<volume snapshot id>]|resume <tap id> <commit>|log" >&2; exit 2; }
+# Jon's order of 2026-11-22 (cmsg_01X43rfNYp4H1dL1V2dkfkwNVBcuyUkmW5nUdXtdxgFTWb), item 4: never tear prod down to ship a fix.
+# `rebuild` tears prod down, so it runs only when the go asks for that by name; a fix goes through `resume` (or an apply in place).
+full_teardown=false
+args=()
+for a in "$@"; do if [[ $a == --full-teardown ]]; then full_teardown=true; else args+=("$a"); fi; done
+set -- "${args[@]}"
 action=${1:-}
+if [[ $action == rebuild ]] && ! $full_teardown; then
+  echo "rebuild-prod: rebuild tears prod down and builds it again. To ship a fix, use resume (from the failed stage) or apply it in place. A full teardown needs --full-teardown, named in the owner's go." >&2; exit 2
+fi
+[[ $action == resume ]] && $full_teardown && { echo "rebuild-prod: --full-teardown goes with rebuild, not resume" >&2; exit 2; }
 tap=''
 want=''
 given_pin=''
@@ -646,6 +656,28 @@ fi
 # good full run must not hide that run. Dev is torn down after a run: hosts/rebuild-k8s.sh runner_run_teardown tears it
 # down at the end of every full run under ephemeral-dev, pass or fail, and the runbook's hand `rebuild teardown` does the same.
 # A teardown-only log alone, or newest with no full run behind it, still fails below.
+# Jon's order of 2026-11-22, item 1: a fix that touches only files dev never reads needs no new full dev run. The dev run's commit D must be
+# an ancestor of this commit, and every file changed since D must be on the prod-only list below (the docs, the box's own role and
+# the checks); the prod run itself is the proof, from the failed stage. Any other path, such as hosts/rebuild-k8s.sh, a playbook or
+# a role dev runs, needs a new full dev run.
+dev_scope_note=""; dev_scope_why=""
+prod_only_path() {
+  case $1 in
+    docs/* | *.md | .github/* | hosts/ansible/roles/agent_box/* | hosts/ansible/agent-box-limit-approvals.txt) return 0 ;;
+  esac
+  return 1
+}
+dev_scoped_ok() {
+  local d f other=""
+  d=$(sed -n 's/^rebuild: central-hub \([0-9a-f]\{40\}\)$/\1/p' -- "$dev_short" | head -n 1)
+  [[ -n $d ]] || return 1
+  git -C "$repo" cat-file -e "$d^{commit}" 2>/dev/null || { dev_scope_why=" (its commit is not in the box's checkout)"; return 1; }
+  git -C "$repo" merge-base --is-ancestor "$d" "$commit" || { dev_scope_why=" (that commit is not behind this one)"; return 1; }
+  while IFS= read -r f; do [[ -n $f ]] && ! prod_only_path "$f" && other+="$f "; done < <(git -C "$repo" diff --no-renames --name-only "$d" "$commit")
+  if [[ -n $other ]]; then dev_scope_why=" and the changes since it touch files dev reads: ${other% }"; return 1; fi
+  dev_scope_note="dev passed every stage at ${d:0:12} (run ${dev_short##*/}); every file changed since it, up to ${commit:0:12}, is one dev never reads, so the prod run from the failed stage is the proof (owner's order of 2026-11-22)"
+  return 0
+}
 dev_short=""
 while read -r f; do
   if grep -Eq '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" && ! grep -E '^[0-9TZ:-]+ [a-z0-9-]+ start$' "$f" | grep -vq ' teardown start$'; then
@@ -655,7 +687,7 @@ while read -r f; do
 done < <(ls -1 "$dev_logs"/rebuild-*.log 2>/dev/null | sort -r)
 if [[ -z $dev_short ]]; then fail "no dev run other than a teardown is logged on the box; run dev in full first"
 elif ! grep -qx 'rebuild: all stages passed' "$dev_short"; then fail "the newest dev run (${dev_short##*/}) did not pass every stage"
-elif ! grep -qx "rebuild: central-hub $commit" "$dev_short"; then fail "the newest dev run (${dev_short##*/}) ran another commit than ${commit:0:12}; run dev again first"
+elif ! grep -qx "rebuild: central-hub $commit" "$dev_short" && ! dev_scoped_ok; then fail "the newest dev run (${dev_short##*/}) ran another commit than ${commit:0:12}$dev_scope_why; run dev again first"
 else
   # A teardown-only run (rebuild.sh teardown) also ends "all stages passed", so that line alone is no pass.
   # The run must hold a good end line for each stage every full dev run has (rebuild.sh's stage lists).
@@ -664,6 +696,7 @@ else
     grep -Eq "^[0-9TZ:-]+ $s end rc=0( |\$)" "$dev_short" || not_ended+="$s "
   done
   if [[ -n $not_ended ]]; then fail "the newest dev run (${dev_short##*/}) is not a full run: no good end line for stage(s) ${not_ended% }; run dev in full first"
+  elif [[ -n $dev_scope_note ]]; then pass "$dev_scope_note"; dev_run=${dev_short##*/}
   else pass "dev passed every stage at ${commit:0:12} (run ${dev_short##*/})"; dev_run=${dev_short##*/}; fi
 fi
 
