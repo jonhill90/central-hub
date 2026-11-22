@@ -741,6 +741,16 @@ run_stage() {
   if [ "$ENV_NAME" = dev ]; then
     rootvars+=(-e k8s_gitops_source_lab_ca_issuer=false -e k8s_gitops_source_login_probe=false -e k8s_gitops_source_panel_check_suspended=true)
   fi
+  # Dev's Argo CD follows the commit the run is made from, not `main`: the root Application reads it
+  # (k8s_gitops_source_branch) and passes it to every child (k8s_gitops_source_target_revision). Only a full
+  # 40-character commit that the checkout reports; anything else leaves `main`, as before.
+  if [ "$ENV_NAME" = dev ]; then
+    local run_commit
+    run_commit=$(git -C "$repo" rev-parse HEAD 2>/dev/null || true)
+    if [[ $run_commit =~ ^[0-9a-f]{40}$ ]]; then
+      rootvars+=(-e "k8s_gitops_source_branch=$run_commit" -e "k8s_gitops_source_target_revision=$run_commit")
+    fi
+  fi
   # No Jellyfin setup CronJob on any run that restores a Jellyfin config (dev always; prod, whose rebuild restores its own
   # backup): `restore` puts the config, with its admin password, in place before the apps start, and the setup Job's admin
   # Secret is made fresh in the new cluster (External Secrets' Password generator, refreshPolicy CreatedOnce), so it can't sign

@@ -14,6 +14,10 @@ k8s_gitops_source_enabled: false
 # one folder per cluster (D-0002, D-0011 `hosts/kubernetes/<place>/<cluster>/`).
 k8s_gitops_source_url: https://github.com/jonhill90/central-hub
 k8s_gitops_source_branch: main
+# The revision the child Applications read, passed to the root chart as `targetRevision` only when set. Empty: the
+# chart's own `main`. A rebuild on dev sets it to the commit the run is made from (hosts/rebuild-k8s.sh), so the
+# cluster the run proves runs that code, not whatever `main` has moved to.
+k8s_gitops_source_target_revision: ""
 k8s_gitops_source_path: hosts/kubernetes/home/c1
 k8s_gitops_source_interval: 5m
 
