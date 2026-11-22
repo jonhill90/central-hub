@@ -1,0 +1,5 @@
+---
+# A command, not the systemd module, so a test can stand in for systemctl (.github/hosts-check/tests/test_ssh_ca_trust.sh).
+- name: Reload sshd
+  ansible.builtin.command: "systemctl reload {{ ssh_ca_trust_unit }}"  # noqa: command-instead-of-module
+  changed_when: true

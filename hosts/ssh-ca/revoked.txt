@@ -1,0 +1,2 @@
+# Serials of revoked SSH user certificates (D-0064 rule 7), one per line, as ssh-keygen -k reads them: "serial: <number>".
+# Serials only: no names, no keys. Empty means nothing is revoked.
