@@ -78,6 +78,13 @@ common = {k: c[k] for k in ("base", "realm", "user", "expect_admin", "address", 
 common.update(password=env["PASSWORD_" + key], seed=env["TOTP_" + key])
 files = {"jellyfin": dict(common, jellyfin_base=c["jellyfin_base"], provider=c.get("provider", "keycloak")),
          "argocd": dict(common, argocd_base=c["argocd_base"])}
+# Grafana: its name is grafana_base, or the Argo CD name with its first label argocd swapped for grafana (both are app names under the
+# same zone). With neither the run is refused before any request, so a missing Grafana never reads as a pass.
+graf = c.get("grafana_base") or re.sub(r"^(https?://)argocd\.", r"\1grafana.", c["argocd_base"], count=1)
+if graf and graf != c["argocd_base"]:
+    files["grafana"] = dict(common, grafana_base=graf)
+else:
+    die("signin-check.json has no grafana_base and argocd_base has no argocd label to swap for grafana")
 if c.get("pve_base"):
     files["proxmox"] = dict(common, pve_base=c["pve_base"], pve_realm=c.get("pve_realm", "sso"))
     if c.get("pve_address"):
@@ -91,7 +98,7 @@ PY
 )" "$conf" "$values" "$tmp") || { echo "signin-check: $checks" >&2; exit 1; }
 
 declare -A script=([jellyfin]=roles/k8s_identity/files/jellyfin-signin-check.py [argocd]=roles/k8s_gitops/files/argocd-signin-check.py
-                   [proxmox]=roles/proxmox_sso/files/proxmox-signin-check.py)
+                   [proxmox]=roles/proxmox_sso/files/proxmox-signin-check.py [grafana]=roles/k8s_observability/files/grafana-signin-check.py)
 rc=0
 {
   echo "signin-check: commit $commit"
