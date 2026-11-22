@@ -31,6 +31,7 @@
 #      a failed read stops it with an error; a tap or another argument runs nothing.
 #  15. jobs-status lists the Jobs with failed pods and each one's last 30 log lines, scrubbed; get and logs only; a tap runs nothing.
 #  16. prune-status lists the resources Argo CD marks requiresPruning per Application with one get; a tap runs nothing.
+#  19. c1-readonly makes the box's read-only kubeconfig again from Secret agent-read/agent-read-token and proves it before it replaces the old one; any failure leaves the old file.
 #  18. targets-status lists the node-exporter pods, the down targets and the backup times by instance, from get calls only; a tap runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
@@ -536,5 +537,58 @@ if [[ $a_rc -eq 0 && $a_out == *"node-exporter-aaaaa true Running cp-1"* && $a_o
       $x_rc -eq 2 && -z $x_calls ]]; then
   ok "18. targets-status: the node-exporter pods by node, the down targets and the backup times by instance, from get calls only; a tap runs nothing"
 else bad "18. rc=$a_rc writes=$write_calls calls=[$a_calls] | tap rc=$x_rc [$x_calls] | $a_out"; fi
+
+# 19: c1-readonly makes the box's read-only kubeconfig again from Secret agent-read/agent-read-token, keeps the file's API address, proves the
+# new file (reads nodes, no to listing Secrets and creating Pods) before it replaces the old one, and never prints the token.
+mkdir -p "$t/kube"
+cat > "$venv/ansible" <<EOS
+#!/usr/bin/env python3
+import base64, json, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+key = "token" if "data.token" in a else "ca"
+v = open("$t/kube/RO" + key.upper()).read().rstrip("\\n") if __import__("os").path.exists("$t/kube/RO" + key.upper()) else ""
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0 if v else 1, "stdout": base64.b64encode(v.encode()).decode() if v else "", "stderr": "" if v else "not found"}}}]}]}))
+EOS
+chmod +x "$venv/ansible"
+cat > "$t/bin/kubectl" <<EOS
+#!/bin/bash
+echo "kubectl \$*" >> $t/kcalls
+case "\$*" in
+  *"get nodes"*) printf 'cp-a Ready\nwk-a Ready\n' ;;
+  *"list secrets"*) cat $t/kube/CANI_SECRETS 2>/dev/null || echo no ;;
+  *"create pods"*) echo no ;;
+esac
+EOS
+chmod +x "$t/bin/kubectl"
+ro=$t/keys/c1-readonly.kubeconfig
+mkcfg() { printf 'apiVersion: v1\nkind: Config\nclusters:\n- name: c1\n  cluster:\n    server: https://api.example.invalid:6443\n    certificate-authority-data: T0xE\nusers:\n- name: agent-read\n  user:\n    token: oldtoken\n' > "$ro"; }
+: > "$t/kcalls"
+mkcfg; printf 'newtoken-%s' abc123 > "$t/kube/ROTOKEN"; cp "$t/ca2.pem" "$t/kube/ROCA"
+run c1-readonly; a_rc=$rc a_out=$out; a_file=$(cat "$ro"); a_mode=$(stat -c %a "$ro"); a_calls=$(cat "$t/kcalls")
+want_ca=$(printf "%s" "$(cat "$t/ca2.pem")" | base64 -w0)
+# the proof fails: the new file may list Secrets, so the old one stays
+mkcfg; echo yes > "$t/kube/CANI_SECRETS"
+run c1-readonly; b_rc=$rc b_out=$out; b_file=$(cat "$ro"); b_part=""; [[ -e $ro.part ]] && b_part=left
+rm -f "$t/kube/CANI_SECRETS"
+# no token yet, then two certificates, then no Secret at all: the old file stays each time
+mkcfg; : > "$t/kube/ROTOKEN"; run c1-readonly; c_rc=$rc c_out=$out; c_file=$(cat "$ro")
+printf 'newtoken-%s' abc123 > "$t/kube/ROTOKEN"; cat "$t/ca1.pem" "$t/ca2.pem" > "$t/kube/ROCA"; run c1-readonly; d_rc=$rc d_out=$out; d_file=$(cat "$ro")
+rm -f "$t/kube/ROCA" "$t/kube/ROTOKEN"; run c1-readonly; e_rc=$rc e_out=$out; e_file=$(cat "$ro")
+# no file and no endpoint in the inventory: nothing written
+rm -f "$ro"; printf 'newtoken-%s' abc123 > "$t/kube/ROTOKEN"; cp "$t/ca2.pem" "$t/kube/ROCA"
+run c1-readonly; f_rc=$rc f_out=$out
+run c1-readonly extra; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: c1-readonly:"* && $a_out == *"reads 2 nodes"* && $a_out != *newtoken* &&
+      $a_file == *"server: https://api.example.invalid:6443"* && $a_file == *"token: newtoken-abc123"* && $a_file == *"certificate-authority-data: $want_ca"* &&
+      $a_file != *oldtoken* && $a_mode == 600 && ! -e $ro.part && $a_calls != *newtoken* &&
+      $b_rc -ne 0 && $b_out == *"failed its proof"* && $b_out == *"list secrets: yes"* && $b_file == *oldtoken* && -z $b_part &&
+      $c_rc -ne 0 && $c_out == *"could not read Secret agent-read/agent-read-token"* && $c_file == *oldtoken* &&
+      $d_rc -ne 0 && $d_out == *"is not one PEM certificate; nothing written"* && $d_file == *oldtoken* &&
+      $e_rc -ne 0 && $e_file == *oldtoken* &&
+      $f_rc -ne 0 && $f_out == *"no API address"* && ! -e $ro &&
+      $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "19. c1-readonly: the live cluster's token and CA in the old file's address; the old file stays when the proof fails, the token is missing, the CA is not one certificate or the Secret is unreadable; no address, nothing written; the token never printed"
+else bad "19. rc=$a_rc $a_out | proof rc=$b_rc $b_out | token rc=$c_rc $c_out | ca rc=$d_rc $d_out | read rc=$e_rc $e_out | addr rc=$f_rc $f_out | extra rc=$x_rc"; fi
 
 exit "$fail"

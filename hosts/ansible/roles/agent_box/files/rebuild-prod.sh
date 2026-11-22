@@ -33,7 +33,8 @@
 #          Then four steps this wrapper runs itself, each logged as a stage (store-admin, store-ca, identity-values, store-secrets), so a
 #          resume carries on from the one that failed (owner, 2026-11-22; they were run by hand, each with a clearance, after prod run 9):
 #            store-admin     openbao-prod admin-firewall <tap id>: the node firewall rule for the store's admin path;
-#            store-ca        openbao-prod ca: the rebuilt store's new CA, written for the box and as ConfigMap openbao-ca-bundle;
+#            store-ca        openbao-prod ca: the rebuilt store's new CA, written for the box and as ConfigMap openbao-ca-bundle, then
+#                            openbao-prod c1-readonly: the box's c1-read kubeconfig made again from the new cluster (a failure there only warns);
 #            identity-values c1-ansible apply identity-values <tap id>: any key the realm needs that the box's identity.env lacks;
 #            store-secrets   secrets-store-prod clear-hold (only when the rebuild hold is set), put-apps, compare.
 #          The run's own tap is the clearance each takes. The hold is cleared, not restored from a snapshot: restore-rebuilt has not been run
@@ -947,6 +948,12 @@ post_step() { # <stage> <command...>
   echo "$(date -u +%FT%TZ) $name end rc=$prc $(( $(date +%s) - t0 ))s" >> "$post_log"
   return "$prc"
 }
+# The store's new CA, then the box's read-only kubeconfig for c1, which a rebuild leaves with the old cluster's CA and token. The second
+# never stops the run: the store's CA is what the stages after it need, and `openbao-prod c1-readonly` can be run again by hand.
+store_ca() {
+  "$libexec/openbao-prod.sh" ca || return 1
+  "$libexec/openbao-prod.sh" c1-readonly || echo "WARN: rebuild-prod: the box's c1-read kubeconfig was not made again; run openbao-prod c1-readonly once app agent-read is Synced"
+}
 store_secrets() {
   local out moved
   if [[ -e $work/state/secrets-store-prod.rebuilding ]]; then
@@ -986,7 +993,7 @@ for st in teardown $full_seq; do
       flush_group || { rc=$?; break; }
       case $st in
         store-admin) post_step "$st" "$libexec/openbao-prod.sh" admin-firewall "$tap" || rc=$? ;;
-        store-ca) post_step "$st" "$libexec/openbao-prod.sh" ca || rc=$? ;;
+        store-ca) post_step "$st" store_ca || rc=$? ;;
         identity-values) post_step "$st" "$libexec/c1-ansible.sh" apply identity-values "$tap" || rc=$? ;;
         store-secrets) post_step "$st" store_secrets || rc=$? ;;
       esac
