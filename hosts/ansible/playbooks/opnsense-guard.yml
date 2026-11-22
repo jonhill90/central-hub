@@ -10,8 +10,8 @@
 #   confirm  stop the timer and delete the snapshot: the apply is kept. Fails, and keeps the snapshot, if the timer was not
 #            armed or has already fired (the timer's command leaves a marker file before it rolls back), because then the
 #            apply was undone or was never guarded.
-#   rollback stop the timer and roll the VM back to the snapshot now, then start it; the snapshot stays, so the next arm
-#            refuses until it is cleared
+#   rollback roll the VM back to the snapshot now and start it, and only then stop the timer (a rollback that fails leaves the timer
+#            armed, so the automatic rollback still comes); the snapshot stays, so the next arm refuses until it is cleared
 #   clear    delete a guard snapshot left by a rollback or a failed confirm, and the marker; refused while the timer is armed
 #   status   print whether a guard snapshot, the timer and the marker exist
 # A disk-only snapshot (no RAM): the rollback restarts the firewall, about a minute without the lab network, and undoes
@@ -58,11 +58,13 @@
         opnsense_guard_armed: "{{ opnsense_guard_timer.stdout | trim == 'active' }}"
 
     # On confirm, the timer is stopped first and the marker read after, so a timer that fires during the confirm is seen.
+    # On rollback it is not: the timer stays armed until `qm rollback` has succeeded (below), so a rollback that fails leaves the
+    # automatic one still pending instead of a changed VM with nothing guarding it.
     - name: Stop the timer
       ansible.builtin.systemd:
         name: "{{ opnsense_guard_unit }}.timer"
         state: stopped
-      when: opnsense_guard_action in ['confirm', 'rollback'] and opnsense_guard_armed | bool
+      when: opnsense_guard_action == 'confirm' and opnsense_guard_armed | bool
 
     - name: Read the marker the timer leaves when it fires
       ansible.builtin.stat:
@@ -148,3 +150,9 @@
       ansible.builtin.command: qm rollback {{ opnsense_guard_vmid | int }} {{ opnsense_guard_snapshot }} --start 1
       when: opnsense_guard_action == 'rollback'
       changed_when: true
+
+    - name: Stop the timer now that the rollback is done
+      ansible.builtin.systemd:
+        name: "{{ opnsense_guard_unit }}.timer"
+        state: stopped
+      when: opnsense_guard_action == 'rollback' and opnsense_guard_armed | bool

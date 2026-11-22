@@ -12,3 +12,9 @@ log_level_in: {{ proxmox_firewall_log_level_in }}
 {% for rule in proxmox_firewall_rules + proxmox_firewall_extra_rules %}
 IN {{ rule.action }}{% if rule.source is defined %} -source {{ rule.source }}{% endif %} -p {{ rule.proto }}{% if rule.dport is defined %} -dport {{ rule.dport }}{% endif %} # {{ rule.comment }}
 {% endfor %}
+{% if proxmox_firewall_box_ssh_source | length > 0 %}
+IN ACCEPT -source {{ proxmox_firewall_box_ssh_source }} -p tcp -dport 22 # restic sftp from the agent box (boxbackup only)
+{% endif %}
+{% if proxmox_firewall_reader_ssh_source | length > 0 %}
+IN ACCEPT -source {{ proxmox_firewall_reader_ssh_source }} -p tcp -dport 22 # restic sftp read-only from the dev worker (c1restore only)
+{% endif %}

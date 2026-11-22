@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run the hosts checks (STD-0005). CI runs the same commands.
-# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|proxy|all]   (default: all)
+# Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|proxy|all] [K/N]   (default: all)
+# K/N (backup and ansible only) runs one shard of the job: see the shard note below.
 # Needs: python3 with requirements.txt installed; tofu, tflint, kubeconform and helm on PATH, or
 # TOOLS=<dir> holding them (install-tools.sh builds them); for ansible and manifests, the
 # collections in hosts/ansible/requirements.yml (this script installs them when missing); for
@@ -15,6 +16,26 @@ tools=${TOOLS:-$here/.tools/bin}
 [ -d "$tools" ] && PATH="$tools:$PATH"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
+
+# Shards (D-0019's CI speed note): `run.sh <job> K/N` runs every N-th test suite of the job, starting at the K-th, so the
+# job can be split over N runners. Every suite belongs to exactly one K by its position, so the N shards together run
+# each suite once. The steps that are not test suites (syntax check, lint, python checks) run in shard 1 only. With no
+# K/N everything runs, as before.
+shard_k=1 shard_n=1 suite_i=0 suite_ran=0
+if [[ -n ${2:-} ]]; then
+  [[ ${2} =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] || { echo "run.sh: the shard is K/N, for example 2/3" >&2; exit 2; }
+  shard_k=${BASH_REMATCH[1]} shard_n=${BASH_REMATCH[2]}
+  (( shard_k <= shard_n )) || { echo "run.sh: shard $2: K is more than N" >&2; exit 2; }
+fi
+suite() {
+  suite_i=$((suite_i + 1))
+  if (( (suite_i - 1) % shard_n + 1 == shard_k )); then
+    suite_ran=$((suite_ran + 1))
+    # HOSTS_CHECK_LIST=1 prints the suites this shard would run, runs nothing (tests/test_run_shards.sh uses it).
+    if [[ -n ${HOSTS_CHECK_LIST:-} ]]; then echo "suite: $*"; else "$@"; fi
+  fi
+}
+shard_report() { echo "run.sh: shard $shard_k/$shard_n ran $suite_ran of $suite_i test suites"; }
 
 check_terraform() {
   # STD-0004 rules a script can see, with its own test cases.
@@ -59,6 +80,7 @@ check_terraform() {
 }
 
 collections() {
+  [[ -z ${HOSTS_CHECK_LIST:-} ]] || return 0
   [ -d hosts/ansible/collections/ansible_collections ] && return 0
   # Galaxy sometimes answers without its results list, and ansible-galaxy then keeps that broken
   # answer in its cache (seen in CI on 2026-11-08), so each try skips the cache and waits longer.
@@ -71,83 +93,90 @@ collections() {
   done
 }
 
-check_ansible() {
-  collections
+ansible_syntax_all() {
   local playbook
   for playbook in hosts/ansible/playbooks/*.yml; do
     (cd hosts/ansible && ansible-playbook --syntax-check -i localhost, "${playbook#hosts/ansible/}")
   done
+}
+ansible_lint_all() {
   (cd hosts/ansible && ansible-lint --project-dir . -c "$here/ansible-lint.yml" playbooks roles)
-  python3 "$here/check-deny-rules.py"
-  bash "$here/tests/test_box_apply_baseline.sh"
-  python3 -I "$here/check-loop-labels.py" hosts/ansible/roles/agent_box/tasks
-  bash "$here/tests/test_loop_labels.sh"
-  bash "$here/tests/test_check_realm_otp.sh"
-  bash "$here/tests/test_proxmox_sso.sh"
-  bash "$here/tests/test_proxmox_signin_check.sh"
-  bash "$here/tests/test_agent_access_rights.sh"
-  bash "$here/tests/test_iac_access_pools.sh"
-  bash "$here/tests/test_web_shot_modes.sh"
-  bash "$here/tests/test_lab_token.sh"
-  bash "$here/tests/test_opnsense_sso_secret.sh"
-  bash "$here/tests/test_sftp_key_carry.sh"
-  bash "$here/tests/test_prod_lab_root.sh"
-  bash "$here/tests/test_agent_browser.sh"
-  bash "$here/tests/test_argocd_signin_check.sh"
-  bash "$here/tests/test_proxmox_host_workflow.sh"
-  bash "$here/tests/test_inventory_wrapper.sh"
-  bash "$here/tests/test_inventory_wiring.sh"
-  bash "$here/tests/test_secrets_bundle_sealed.sh"
-  bash "$here/tests/test_identity_external_secrets.sh"
-  bash "$here/tests/test_identity_db_move.sh"
-  bash "$here/tests/test_tailnet_stack_args.sh"
-  bash "$here/tests/test_tailnet_stack_args.sh" tailnet-policy
-  bash "$here/tests/test_tailnet_policy_log.sh"
-  bash "$here/tests/test_tailnet_policy_sections.sh"
-  bash "$here/tests/test_tailnet_policy_ledger.sh"
-  bash "$here/tests/test_tailnet_stack_ledger.sh"
-  bash "$here/tests/test_proxmox_host_args.sh"
-  bash "$here/tests/test_opnsense_prod_args.sh"
-  bash "$here/tests/test_opnsense_guard_playbook.sh"
-  bash "$here/tests/test_c1_ansible.sh"
-  bash "$here/tests/test_kubelet_reservations.sh"
-  bash "$here/tests/test_node_probes.sh"
-  bash "$here/tests/test_rebuild_failure_lines.sh"
-  bash "$here/tests/test_observability_deletes.sh"
-  bash "$here/tests/test_signin_check_wrapper.sh"
-  bash "$here/tests/test_opnsense_cert_check.sh"
-  bash "$here/tests/test_jellyfin_plugin_name.sh"
-  bash "$here/tests/test_jellyfin_login_button.sh"
-  bash "$here/tests/test_client_json_check.sh"
-  bash "$here/tests/test_sudoers_session_args.sh"
+}
+
+check_ansible() {
+  collections
+  suite ansible_syntax_all
+  suite ansible_lint_all
+  suite python3 "$here/check-deny-rules.py"
+  suite bash "$here/tests/test_box_apply_baseline.sh"
+  suite python3 -I "$here/check-loop-labels.py" hosts/ansible/roles/agent_box/tasks
+  suite bash "$here/tests/test_loop_labels.sh"
+  suite bash "$here/tests/test_check_realm_otp.sh"
+  suite bash "$here/tests/test_proxmox_sso.sh"
+  suite bash "$here/tests/test_proxmox_signin_check.sh"
+  suite bash "$here/tests/test_agent_access_rights.sh"
+  suite bash "$here/tests/test_iac_access_pools.sh"
+  suite bash "$here/tests/test_web_shot_modes.sh"
+  suite bash "$here/tests/test_lab_token.sh"
+  suite bash "$here/tests/test_opnsense_sso_secret.sh"
+  suite bash "$here/tests/test_sftp_key_carry.sh"
+  suite bash "$here/tests/test_prod_lab_root.sh"
+  suite bash "$here/tests/test_agent_browser.sh"
+  suite bash "$here/tests/test_argocd_signin_check.sh"
+  suite bash "$here/tests/test_proxmox_host_workflow.sh"
+  suite bash "$here/tests/test_inventory_wrapper.sh"
+  suite bash "$here/tests/test_inventory_wiring.sh"
+  suite bash "$here/tests/test_secrets_bundle_sealed.sh"
+  suite bash "$here/tests/test_identity_external_secrets.sh"
+  suite bash "$here/tests/test_identity_db_move.sh"
+  suite bash "$here/tests/test_tailnet_stack_args.sh"
+  suite bash "$here/tests/test_tailnet_stack_args.sh" tailnet-policy
+  suite bash "$here/tests/test_tailnet_policy_log.sh"
+  suite bash "$here/tests/test_tailnet_policy_sections.sh"
+  suite bash "$here/tests/test_tailnet_policy_ledger.sh"
+  suite bash "$here/tests/test_tailnet_stack_ledger.sh"
+  suite bash "$here/tests/test_proxmox_host_args.sh"
+  suite bash "$here/tests/test_opnsense_prod_args.sh"
+  suite bash "$here/tests/test_opnsense_guard_playbook.sh"
+  suite bash "$here/tests/test_c1_ansible.sh"
+  suite bash "$here/tests/test_kubelet_reservations.sh"
+  suite bash "$here/tests/test_node_probes.sh"
+  suite bash "$here/tests/test_rebuild_failure_lines.sh"
+  suite bash "$here/tests/test_observability_deletes.sh"
+  suite bash "$here/tests/test_signin_check_wrapper.sh"
+  suite bash "$here/tests/test_opnsense_cert_check.sh"
+  suite bash "$here/tests/test_jellyfin_plugin_name.sh"
+  suite bash "$here/tests/test_jellyfin_login_button.sh"
+  suite bash "$here/tests/test_client_json_check.sh"
+  suite bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
-  python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml playbooks/proxmox-connector.yml playbooks/proxmox-ksm.yml playbooks/proxmox-ksm-off.yml playbooks/proxmox-restic-box.yml
-  bash "$here/tests/test_check_check_mode.sh"
-  python3 "$here/check-hook-allowlist.py" .
-  bash "$here/tests/test_runner_hook.sh"
-  bash "$here/tests/test_pr_merge_verdict.sh"
-  bash "$here/tests/test_pass_record.sh"
-  bash "$here/tests/test_pr_merge_sweep.sh"
-  bash "$here/tests/test_repo_create.sh"
-  bash "$here/tests/test_checkpoint_note.sh"
-  bash "$here/tests/test_checkpoint_scan.sh"
-  bash "$here/tests/test_pickup_note.sh"
-  bash "$here/tests/test_pickup_scan.sh"
-  bash "$here/tests/test_merge_checked.sh"
-  bash "$here/tests/test_lifeline_nmcli_read.sh"
-  bash "$here/tests/test_lifeline_cleanup.sh"
-  bash "$here/tests/test_box_apply_inventory_vars.sh"
-  bash "$here/tests/test_prod_files_state_age.sh"
-  bash "$here/tests/test_prod_files_lab_ca.sh"
-  bash "$here/tests/test_opnsense_lab_tenant.sh"
-  bash "$here/tests/test_desktop_configure_vars.sh"
-  bash "$here/tests/test_opnsense_app_access.sh"
-  bash "$here/tests/test_opnsense_client_derive.sh"
-  bash "$here/tests/test_opnsense_backup_target.sh"
-  bash "$here/tests/test_opnsense_store_admin.sh"
-  bash "$here/tests/test_opnsense_proxmox_web.sh"
-  bash "$here/tests/test_opnsense_sso.sh"
-  bash "$here/tests/test_opnsense_sso_derive.sh"
+  suite python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml playbooks/proxmox-connector.yml playbooks/proxmox-connector-route.yml playbooks/proxmox-ksm.yml playbooks/proxmox-ksm-off.yml playbooks/proxmox-restic-box.yml
+  suite bash "$here/tests/test_check_check_mode.sh"
+  suite python3 "$here/check-hook-allowlist.py" .
+  suite bash "$here/tests/test_runner_hook.sh"
+  suite bash "$here/tests/test_pr_merge_verdict.sh"
+  suite bash "$here/tests/test_pass_record.sh"
+  suite bash "$here/tests/test_pr_merge_sweep.sh"
+  suite bash "$here/tests/test_repo_create.sh"
+  suite bash "$here/tests/test_checkpoint_note.sh"
+  suite bash "$here/tests/test_checkpoint_scan.sh"
+  suite bash "$here/tests/test_pickup_note.sh"
+  suite bash "$here/tests/test_pickup_scan.sh"
+  suite bash "$here/tests/test_merge_checked.sh"
+  suite bash "$here/tests/test_lifeline_nmcli_read.sh"
+  suite bash "$here/tests/test_lifeline_cleanup.sh"
+  suite bash "$here/tests/test_box_apply_inventory_vars.sh"
+  suite bash "$here/tests/test_prod_files_state_age.sh"
+  suite bash "$here/tests/test_prod_files_lab_ca.sh"
+  suite bash "$here/tests/test_opnsense_lab_tenant.sh"
+  suite bash "$here/tests/test_desktop_configure_vars.sh"
+  suite bash "$here/tests/test_opnsense_app_access.sh"
+  suite bash "$here/tests/test_opnsense_client_derive.sh"
+  suite bash "$here/tests/test_opnsense_backup_target.sh"
+  suite bash "$here/tests/test_opnsense_store_admin.sh"
+  suite bash "$here/tests/test_opnsense_proxmox_web.sh"
+  suite bash "$here/tests/test_opnsense_sso.sh"
+  suite bash "$here/tests/test_opnsense_sso_derive.sh"
 }
 
 check_manifests() {
@@ -471,48 +500,58 @@ check_identity() {
 check_backup() {
   # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository, and
   # the agent box's off-box OPNsense copy against a local restic repository.
-  bash "$here/tests/test_backup.sh"
-  bash "$here/tests/test_backup_azure_cert.sh"
-  bash "$here/tests/test_backup_metrics.sh"
-  bash "$here/tests/test_backup_repo_init.sh"
-  bash "$here/tests/test_opnsense_offbox.sh"
-  bash "$here/tests/test_opnsense_escrow.sh"
-  bash "$here/tests/test_secrets_bundle_offbox.sh"
-  bash "$here/tests/test_secrets_store_offbox.sh"
-  bash "$here/tests/test_secrets_store_restore.sh"
-  bash "$here/tests/test_secrets_store_snapshots.sh"
-  bash "$here/tests/test_dev_secrets_teardown.sh"
-  bash "$here/tests/test_dev_worker_address.sh"
-  bash "$here/tests/test_box_prove.sh"
-  bash "$here/tests/test_proxmox_restic_reader.sh"
-  bash "$here/tests/test_secrets_store_kv.sh"
-  bash "$here/tests/test_secrets_store_kv_openbao.sh"
-  bash "$here/tests/test_secrets_store_wrapper.sh"
-  bash "$here/tests/test_secrets_store_owner.sh"
-  bash "$here/tests/test_openbao_prod.sh"
-  bash "$here/tests/test_rebuild_prod.sh"
-  bash "$here/tests/test_openbao_handover.sh"
-  bash "$here/tests/test_openbao_refresh.sh"
-  bash "$here/tests/test_openbao_measure.sh"
-  bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
-  bash "$here/tests/test_opnsense_backup_keyfile.sh"
-  bash "$here/tests/test_identity_signin.sh"
-  bash "$here/tests/test_jellyfin_signin_check.sh"
-  bash "$here/tests/test_rebuild_dev_stages.sh"
-  bash "$here/tests/test_rebuild_panels.sh"
-  bash "$here/tests/test_rebuild_app_secrets.sh"
-  bash "$here/tests/test_rebuild_preflight.sh"
-  bash "$here/tests/test_agent_access_desktop.sh"
-  bash "$here/tests/test_rebuild_short_log.sh"
-  bash "$here/tests/test_rebuild_l2_report.sh"
-  bash "$here/tests/test_rebuild_box_inventory.sh"
-  bash "$here/tests/test_rebuild_log_pick.sh"
-  bash "$here/tests/test_rebuild_pin.sh"
-  bash "$here/tests/test_rebuild_auto.sh"
-  bash "$here/tests/test_rebuild_diag_vms.sh"
-  bash "$here/tests/test_opnsense_test.sh"
-  bash "$here/tests/test_lab_test.sh"
-  bash "$here/tests/test_notebook_runner.sh"
+  suite bash "$here/tests/test_backup.sh"
+  suite bash "$here/tests/test_restore_pv.sh"
+  suite bash "$here/tests/test_restore_hold.sh"
+  suite bash "$here/tests/test_restore_skip_env.sh"
+  suite bash "$here/tests/test_backup_azure_cert.sh"
+  suite bash "$here/tests/test_backup_metrics.sh"
+  suite bash "$here/tests/test_backup_repo_init.sh"
+  suite bash "$here/tests/test_opnsense_offbox.sh"
+  suite bash "$here/tests/test_opnsense_escrow.sh"
+  suite bash "$here/tests/test_secrets_bundle_offbox.sh"
+  suite bash "$here/tests/test_secrets_store_offbox.sh"
+  suite bash "$here/tests/test_secrets_store_restore.sh"
+  suite bash "$here/tests/test_secrets_store_snapshots.sh"
+  suite bash "$here/tests/test_dev_secrets_teardown.sh"
+  suite bash "$here/tests/test_dev_worker_address.sh"
+  suite bash "$here/tests/test_box_prove.sh"
+  suite bash "$here/tests/test_offbox_manifest.sh"
+  suite bash "$here/tests/test_host_escrow.sh"
+  suite bash "$here/tests/test_proxmox_firewall_box_rule.sh"
+  suite bash "$here/tests/test_proxmox_restic_reader.sh"
+  suite bash "$here/tests/test_secrets_store_kv.sh"
+  suite bash "$here/tests/test_secrets_store_kv_openbao.sh"
+  suite bash "$here/tests/test_secrets_store_wrapper.sh"
+  suite bash "$here/tests/test_secrets_store_owner.sh"
+  suite bash "$here/tests/test_secrets_store_ssh.sh"
+  suite bash "$here/tests/test_openbao_prod.sh"
+  suite bash "$here/tests/test_rebuild_prod.sh"
+  suite bash "$here/tests/test_wait_apps.sh"
+  suite bash "$here/tests/test_rebuild_certs_order.sh"
+  suite bash "$here/tests/test_rebuild_snapshot_jobs.sh"
+  suite bash "$here/tests/test_openbao_handover.sh"
+  suite bash "$here/tests/test_openbao_refresh.sh"
+  suite bash "$here/tests/test_openbao_measure.sh"
+  suite bash "$here/tests/test_opnsense_backup_user_cleanup.sh"
+  suite bash "$here/tests/test_opnsense_backup_keyfile.sh"
+  suite bash "$here/tests/test_identity_signin.sh"
+  suite bash "$here/tests/test_jellyfin_signin_check.sh"
+  suite bash "$here/tests/test_rebuild_dev_stages.sh"
+  suite bash "$here/tests/test_rebuild_panels.sh"
+  suite bash "$here/tests/test_rebuild_app_secrets.sh"
+  suite bash "$here/tests/test_rebuild_preflight.sh"
+  suite bash "$here/tests/test_agent_access_desktop.sh"
+  suite bash "$here/tests/test_rebuild_short_log.sh"
+  suite bash "$here/tests/test_rebuild_l2_report.sh"
+  suite bash "$here/tests/test_rebuild_box_inventory.sh"
+  suite bash "$here/tests/test_rebuild_log_pick.sh"
+  suite bash "$here/tests/test_rebuild_pin.sh"
+  suite bash "$here/tests/test_rebuild_auto.sh"
+  suite bash "$here/tests/test_rebuild_diag_vms.sh"
+  suite bash "$here/tests/test_opnsense_test.sh"
+  suite bash "$here/tests/test_lab_test.sh"
+  suite bash "$here/tests/test_notebook_runner.sh"
 }
 
 check_proxy() {
@@ -534,6 +573,7 @@ check_scripts() {
   # Warnings and errors fail; style notes do not (an agent pick, STD-0005).
   git ls-files -z -- '*.sh' | xargs -0 shellcheck --severity=warning
   echo "scripts: ShellCheck passed on $(git ls-files -- '*.sh' | wc -l) scripts"
+  bash "$here/tests/test_run_shards.sh"
   bash "$here/tests/test_c1_read.sh"
   bash "$here/tests/test_box_apply.sh"
   bash "$here/tests/test_box_user_check_group.sh"
@@ -561,5 +601,10 @@ case "${1:-all}" in
   proxy) check_proxy ;;
   plugin-pin) check_plugin_pin ;;
   all) check_terraform; check_ansible; check_manifests; check_identity; check_scripts; check_backup; check_proxy ;;
-  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|proxy|plugin-pin|all]" >&2; exit 2 ;;
+  *) echo "usage: $0 [terraform|ansible|manifests|identity|scripts|backup|proxy|plugin-pin|all] [K/N]" >&2; exit 2 ;;
 esac
+if (( shard_n > 1 )); then
+  shard_report
+  # A shard that ran nothing means the job has fewer suites than shards: the split is wrong, not green.
+  (( suite_ran > 0 )) || { echo "run.sh: shard $shard_k/$shard_n ran no suite" >&2; exit 1; }
+fi

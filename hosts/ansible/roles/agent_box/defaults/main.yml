@@ -41,11 +41,13 @@ agent_box_wrappers:
   # The lab's secrets store, OpenBao, inside the dev cluster (docs/runbooks/set-up-the-secrets-store.md, D-0058). The `*`
   # on put lets sudo pass the path and key; the value comes on stdin, and the wrapper checks both arguments itself.
   - name: secrets-store
-    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed]
+    args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed,
+           "ssh-ca plan", "ssh-ca apply", "ssh-ca check", "ssh-ca public", "ssh-ca sign-host *"]
   # The same wrapper for the store inside prod's c1 (D-0058): prod's keys folder, settings and inventory only.
   - name: secrets-store-prod
     args: [recovery, status, snapshot, restore, restore-rebuilt, "restore-rebuilt *", clear-hold, "put *", put-apps, compare, reseed,
-           "owner-login owner", "owner-login test", "owner-login check-test", "owner-login remove-test", "owner-login plan"]
+           "owner-login owner", "owner-login test", "owner-login check-test", "owner-login remove-test", "owner-login plan",
+           "ssh-ca plan", "ssh-ca apply", "ssh-ca check", "ssh-ca public", "ssh-ca sign-host *"]
   # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal,
   # seal-copy, refresh, reset-failed-start, drop-box-path and admin-firewall passes the owner's tap id, which the wrapper
   # checks; key prints only the public half.
@@ -65,9 +67,10 @@ agent_box_wrappers:
     args: [run, log]
   # Prod's teardown and rebuild under D-0035 (files/rebuild-prod.sh). check is read-only; the `*` on rebuild passes
   # the owner's tap id and the commit the go names, which the wrapper checks (7 to 40 hex digits, on main); the run
-  # needs dev to have passed at that same commit first.
+  # needs dev to have passed at that same commit first. The `*` on resume passes the same tap id (the stopped run's go) and the
+  # commit; resume carries on a stopped run from its failed stage and destroys nothing (#875).
   - name: rebuild-prod
-    args: [check, "rebuild *", log]
+    args: [check, "rebuild *", "resume *", log]
   # The box's own key, address and backend switch for the off-box sends to the Proxmox host's store (files/dev-worker-address.sh): box-key
   # makes the key once and hands over its public half and the box's address (public data, nothing printed); box-backend-on and -off switch the
   # two sends between Azure and the host's store; box-prove checks, with the box's own ssh config, that the key reaches /box and nothing else
@@ -110,7 +113,7 @@ agent_box_wrappers:
     args: [check, status]
   # The pass ledger the merge sweep reads (D-0042 rule 2) and its stop switch (rule 8). The wrapper checks every argument.
   - name: pass-record
-    args: ["add *", "show *", "halt *", "resume *"]
+    args: ["add *", "show *", "digest-pass *", "halt *", "resume *"]
   # The dev rebuild (hosts/rebuild-k8s.sh), dev VMs 250-257 only.
   - name: rebuild
     # up and rebuild may name the commit to build (`*`); the wrapper takes only 7 to 40 hex digits on main.

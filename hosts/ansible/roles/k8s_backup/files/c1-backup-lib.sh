@@ -73,9 +73,32 @@ restic_ensure_repo() {
 }
 
 # forget + prune with the retention from the env file (agent pick: 7 daily, 4 weekly, 6 monthly).
+# While $BACKUP_STATE/forget-hold exists it forgets nothing: a rebuilt prod's restore writes it on every node, and the checks stage
+# removes it once every restored folder has been proven. Until then the snapshot the restore came from, and the etcd snapshot that
+# said which volumes were bound, are the only good copy, and the retention (the newest of each day, week and month wins) would
+# forget them at the first backup of the rebuilt nodes.
 restic_retention() {
   local tag=$1
+  if [ -e "$BACKUP_STATE/forget-hold" ]; then
+    log "retention skipped: $BACKUP_STATE/forget-hold is set (the restore has not been proven yet); nothing was forgotten"
+    return 0
+  fi
   "$RESTIC" forget --host "$BACKUP_HOST" --tag "$tag" --group-by host,tags \
     --keep-daily "${BACKUP_KEEP_DAILY:-7}" --keep-weekly "${BACKUP_KEEP_WEEKLY:-4}" \
     --keep-monthly "${BACKUP_KEEP_MONTHLY:-6}" --prune
+}
+
+# The volume snapshot a restore takes: <source host> <snapshot ID, or latest>. Prints its full ID. A given ID (or its
+# prefix) must be a volume snapshot of that host, else this fails: restic matches the filters before it takes the ID.
+# Read-only (--no-lock). The rebuild of prod passes the ID of the snapshot it backed up before the teardown, so a later
+# snapshot of rebuilt, empty nodes is never the one that comes back.
+restore_snapshot_id() {
+  local src=$1 snap=$2 sel out
+  if [ "$snap" = latest ]; then sel=(--latest 1); else sel=("$snap"); fi
+  out=$("$RESTIC" --no-lock snapshots --json --host "$src" --tag volumes "${sel[@]}") || return 1
+  python3 -c '
+import json, sys
+snaps = sorted(json.load(sys.stdin) or [], key=lambda s: s["time"])
+print(snaps[-1]["id"] if snaps else "")
+' <<< "$out"
 }

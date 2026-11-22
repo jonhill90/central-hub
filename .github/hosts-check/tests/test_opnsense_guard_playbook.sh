@@ -5,8 +5,9 @@
 #   2. arm, the timer fires (its command's marker is left), then confirm: confirm fails and the snapshot stays; arm then
 #      refuses; clear deletes the snapshot and the marker.
 #   3. confirm with no arm fails.
-#   4. clear while armed is refused; rollback stops the timer and rolls back; clear then works.
+#   4. clear while armed is refused; rollback rolls back and then stops the timer; clear then works.
 #   5. If systemd-run fails, arm fails and deletes the snapshot it took.
+#   6. If qm rollback fails, the timer stays armed and the snapshot stays; the next rollback works and then stops the timer.
 # Usage: .github/hosts-check/tests/test_opnsense_guard_playbook.sh   (needs ansible-playbook)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -24,6 +25,7 @@ case "\$1" in
   listsnapshot) [ -f "$t/snap" ] && echo '\`-> agentguard  2026-11-20 05:00:00  before'; echo '    \`-> current  You are here!' ;;
   snapshot) touch "$t/snap" ;;
   delsnapshot) rm -f "$t/snap" ;;
+  rollback) if [ -f "$t/rb-fail" ]; then exit 1; fi ;;
 esac
 EOF
 cat > "$t/bin/systemctl" <<EOF
@@ -72,4 +74,12 @@ g clear && [ ! -f "$t/snap" ] && ok "4 clear after a rollback" || bad "4 clear"
 touch "$t/sdrun-fail"
 g arm && bad "5 arm passed with no timer" || { [ ! -f "$t/snap" ] && ok "5 no timer: arm fails and deletes its snapshot" || bad "5 snapshot left"; }
 rm -f "$t/sdrun-fail"
+# 6 a rollback whose `qm rollback` fails keeps the timer armed (the automatic rollback still comes) and keeps the snapshot; a later one works
+: > "$t/log"; g arm; touch "$t/rb-fail"
+if g rollback; then bad "6 rollback passed though qm rollback failed"
+elif [ -f "$t/timer" ] && [ -f "$t/snap" ] && ! grep -q "^systemctl stop" "$t/log" ; then ok "6 a failing rollback keeps the timer armed and the snapshot"
+else bad "6 timer=$([ -f "$t/timer" ] && echo armed || echo off) snap=$([ -f "$t/snap" ] && echo yes || echo no) $(tail -3 "$t/out-rollback")"; fi
+rm -f "$t/rb-fail"
+g rollback && [ ! -f "$t/timer" ] && [ -f "$t/snap" ] && ok "6 the next rollback works and then stops the timer" || bad "6 retry $(tail -3 "$t/out-rollback")"
+g clear
 exit "$fail"

@@ -310,7 +310,6 @@
     mode: "0755"
   tags: [users, wrappers]
 
-
 # In check mode on a fresh box the folders above only report "would create", so the steps that
 # write into them are skipped there rather than failing. A check never writes to the box.
 
@@ -908,6 +907,7 @@
     - secrets-store-kv.sh          # SOPS copies: put, compare, reseed (D-0058 rule 8)
     - secrets-store-owner.sh       # the owner's OIDC sign-in to the store's page: set up and proved from the box
     - owner-login-check.py         # its end-to-end proof with the test user
+    - secrets-store-ssh.sh         # SSH certificate sign-in for the lab's Linux boxes (D-0064)
   loop_control:
     label: "{{ agent_box_libexec_dir }}/{{ item }}"
   when: agent_box_secrets_store | length > 0 or agent_box_secrets_store_prod | length > 0
@@ -1458,6 +1458,16 @@
   tags: [wrappers]
 
 # --- Off-box copy of those configurations (pick 222) ----------------------------------------------------
+
+# The off-box send's tools and scripts, with the manifest box-prove and rebuild-prod.sh check them against. Tag wrappers only, so the
+# box's self-apply installs them (the next include carries the controller-only opnsense_offbox tag and is skipped there).
+- name: Install the off-box send's tools and scripts (only when agent_box_opnsense_offbox is set)
+  ansible.builtin.include_tasks:
+    file: offbox_scripts.yml
+    apply:
+      tags: [wrappers]
+  when: agent_box_opnsense_offbox | length > 0
+  tags: [wrappers]
 
 - name: Copy the OPNsense backups off the box (only when agent_box_opnsense_offbox is set)
   ansible.builtin.include_tasks:

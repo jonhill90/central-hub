@@ -47,6 +47,9 @@ case "\$*" in
             'exit \${ONE_RC:-0}' > "\$d/hosts/rebuild-k8s.sh" ;;
   *"rev-parse --quiet --verify "*) a="\${*: -1}"; a="\${a%^\{commit\}}"; [[ $sha == "\$a"* ]] && echo $sha || exit 1 ;;
   *rev-parse*) echo $sha ;;
+  *"cat-file -e"*) exit 0 ;;
+  *"diff --no-renames --name-only"*) cat $t/difffiles 2>/dev/null; exit 0 ;;   # a diff read without --no-renames returns nothing here, so the 19b tests fail
+  *"diff "*) exit 0 ;;
   *"merge-base --is-ancestor "*" origin/main") exit \${NOT_ON_MAIN:-0} ;;
   *"merge-base --is-ancestor "*) echo "floor \$5 \$6" >> $t/floorcalls; exit \${BELOW_FLOOR:-0} ;;
   *" checkout "*) echo "git \${*: -1}" >> $t/gitcalls ;;
@@ -61,7 +64,7 @@ case " \$* " in
   *" apply "*) exit \${TOFU_APPLY_RC:-0} ;;
   *" show "*) cat \${TOFU_SHOW_FILE:-$t/destroy.json}; exit 0 ;;
   *" -destroy "*) for a in "\$@"; do case \$a in -out=*) : > "\${a#-out=}" ;; esac; done; exit 0 ;;
-  *" plan "*) exit \${TOFU_PLAN_RC:-0} ;;
+  *" plan "*) case " \$* " in *"-var-file=$t/keys/prod/tfvars/k8s.tfvars "*) exit \${TOFU_PLAN_RC_MAC:-\${TOFU_PLAN_RC:-0}} ;; *) exit \${TOFU_PLAN_RC:-0} ;; esac ;;
 esac
 EOF
 # ssh: the last argument is the command; each answers as a node would.
@@ -82,6 +85,8 @@ cat > "$t/bin/ssh" <<EOF
 #!/bin/bash
 cmd="\${*: -1}"
 echo "ssh \${*: -2}" >> $t/calls
+# EMPTY_NODES: rebuilt nodes that answer a login and nothing else (no keys, no certificate, no seal key).
+if [ -n "\$EMPTY_NODES" ]; then [ "\$cmd" = true ] && exit 0; case \$cmd in *"test ! -e"*) exit \${TEST_RC:-0} ;; esac; echo "cat: \$cmd: No such file or directory" >&2; exit 1; fi
 case \$cmd in
   true) exit 0 ;;
   *backup.pem.keyid) echo keyid-\${2:-x}; exit 0 ;;
@@ -100,6 +105,7 @@ EOF
 for job in opnsense-backup opnsense-offbox secrets-bundle secrets-bundle-offbox; do
   printf '#!/bin/bash\necho "job %s" >> %s/calls\n' "$job" "$t" > "$t/libexec/$job.sh"
 done
+( cd "$t/libexec" && sha256sum opnsense-offbox.sh secrets-bundle-offbox.sh > backend-files.sha256 )
 cat > "$venv/ansible-inventory" <<'EOF'
 #!/usr/bin/env python3
 import json, os, sys, yaml
@@ -124,11 +130,24 @@ cp "\${2%/}/hosts.yml" $t/seen-inventory.yml
 if [[ "\$*" == *"--tags drill"* && -z "\${DRILL_NOSNAP:-}" ]]; then
   echo '    "2026-11-18T03:00:30Z PASS: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321 of 2026-11-18T03:00:26",'
   echo '    "2026-11-18T03:00:20Z PASS: etcd restore test, revision 202, 201 keys under /, key /registry/namespaces/kube-system present, snapshot c5523412 of 2026-11-18T03:00:17"'
+  case "\${DRILL_PLAN:-ok}" in
+    ok) echo '    "PASS: plan: snapshot 36fe4321aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 4 folders map to 4 claims, no claim has more than one folder"' ;;
+    other) echo '    "PASS: plan: snapshot 99999999aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 4 folders map to 4 claims, no claim has more than one folder"' ;;
+    none) echo '    "FAIL: plan: snapshot 36fe4321: more than one folder for the same claim: openbao/data-openbao-0 <- a b c"' ;;
+  esac
 elif [[ "\$*" == *"--tags drill"* ]]; then
   echo '    "2026-11-18T03:00:30Z PASS: no volume backups recorded on node; nothing to test",'
 fi
 exit \${DRILL_RC:-0}
 EOF
+cat > "$venv/ansible" <<EOF
+#!/bin/bash
+echo "adhoc \$*" >> $t/calls
+echo "cp-a | CHANGED | rc=0 >>"
+echo "cp-a   Ready      control-plane   5m   v1.31.0"
+echo "wk-a   \${NODE_WK_STATE:-Ready}   <none>          5m   v1.31.0"
+EOF
+chmod +x "$venv/ansible"
 chmod +x "$t/bin/"* "$t/libexec/"*.sh "$t/libexec/sops" "$venv/ansible-inventory" "$venv/ansible-playbook"
 sed -e "s|^keys=.*|keys=$t/keys|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^work=.*|work=$t/work|" \
     -e "s|PATH=\$libexec/ansible-venv/bin:/usr/local/bin|PATH=\$libexec/ansible-venv/bin:$t/bin:/usr/local/bin|" \
@@ -137,7 +156,8 @@ sed -e "s|^keys=.*|keys=$t/keys|" -e "s|^libexec=.*|libexec=$t/libexec|" -e "s|^
 grep -q "^keys=$t/keys" "$t/run/rebuild-prod.sh" && grep -q "^work=$t/work" "$t/run/rebuild-prod.sh" &&
   grep -q ":$t/bin:" "$t/run/rebuild-prod.sh" || { echo "FAIL the test could not point the wrapper at its folders"; exit 1; }
 
-run() { : > "$t/calls"; bash "$t/run/rebuild-prod.sh" "$@" > "$t/out" 2>&1; rc=$?; out=$(cat "$t/out"); calls=$(cat "$t/calls"); }
+# rebuild needs --full-teardown (item 4); the tests that expect a teardown pass it here, and block 18 runs the bare form with RAW=1.
+run() { : > "$t/calls"; if [[ ${1:-} == rebuild && -z ${RAW:-} ]]; then set -- rebuild --full-teardown "${@:2}"; fi; bash "$t/run/rebuild-prod.sh" "$@" > "$t/out" 2>&1; rc=$?; out=$(cat "$t/out"); calls=$(cat "$t/calls"); }
 full_stages() { for st in vms cluster storage restore gitops secrets apps gateway checks; do printf '%s\n' "2026-11-18T03:00:00Z $st start" "2026-11-18T03:00:01Z $st end rc=0 1s"; done; }
 ld=$t/work/rebuild-dev/logs
 # dev_log: the dev folder holds this one run (03:00). dev_log_teardown: a teardown-only run, alone or after another run
@@ -152,7 +172,7 @@ destroy() { python3 -c 'import json, sys; print(json.dumps({"resource_changes": 
 inventory() { printf '%s\n' "all:" "  children:" "    proxmox:" "      hosts:" "        pve-a: {ansible_host: 192.0.2.1}" \
   "    k8s_nodes:" "      vars:" "        ansible_user: almalinux" "        ansible_ssh_common_args: -o ProxyJump=root@192.0.2.1" \
   "        ansible_ssh_private_key_file: /Users/someone/.ssh/id" "        k8s_gitops_cluster_labels: {env: prod}" \
-  "        k8s_backup_enabled: true" "        k8s_backup_azure_identity: true" "        k8s_backup_env_file: /Users/someone/.config/central-hub/c1-backup.env" \
+  "        k8s_backup_enabled: true" "        k8s_certs_cert_manager_by_argocd: false" "        k8s_backup_azure_identity: true" "        k8s_backup_env_file: /Users/someone/.config/central-hub/c1-backup.env" \
   "        k8s_identity_values_file: /Users/someone/.config/central-hub/identity.env" "$@" \
   "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}" \
   "        k8s_workers:" "          hosts:" "            wk-a: {ansible_host: 192.0.2.11}" > "$t/keys/prod/inventory-hosts.yml"; }
@@ -162,11 +182,11 @@ seal_copy() { python3 -c 'import base64, json, sys; print(json.dumps({"data": ba
 # 1
 r1=""
 for args in "" "apply" "rebuild" "rebuild notatap" "rebuild cmsg_short" "check extra" "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
-            "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ main" "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123"; do
+            "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ main" "rebuild cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123" "resume" "resume cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ"; do
   # shellcheck disable=SC2086
   run $args; r1+="$rc:${calls:-none} "
 done
-if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "1. usage errors (rebuild with no commit, or one that is not 7 to 40 hex digits, too), nothing run"; else bad "1. $r1"; fi
+if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "1. usage errors (rebuild with no commit, or one that is not 7 to 40 hex digits, too), nothing run"; else bad "1. $r1"; fi
 
 # 2
 run check
@@ -191,7 +211,7 @@ inventory; destroy 200 201; dev_log "$sha" "rebuild: all stages passed"
 # 3, 4
 run check
 seen=$(python3 -c 'import json, sys, yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))' "$t/work/rebuild-prod/inventory/hosts.yml" 2>/dev/null)
-if [[ $rc -eq 0 && $out == *"every check passed; nothing was changed"* && $out == *"no changes with the Mac's tfvars"* &&
+if [[ $rc -eq 0 && $out == *"every check passed; nothing was changed"* && $out == *"no changes with the box's tfvars copy"* &&
       $out == *"destroys only VMs 200 201"* && $out == *"reaches all 2 prod nodes"* && $out == *"routes do not go through a prod node: Proxmox API next hop 192.0.2.254, default via 192.0.2.254"* && $out == *"dev passed every stage at ${sha:0:12}"* &&
       $out != *FAIL* && $calls != *playbook* && $calls != *one-command* && $calls != *job* ]]; then
   ok "3. check passes every line and changes nothing"
@@ -200,21 +220,38 @@ v=$(python3 -c 'import json, sys; d = json.loads(sys.argv[1]); v = d["all"]["chi
 print(v["ansible_ssh_private_key_file"] == k + "/prod-node-key", v["k8s_backup_env_file"] == k + "/c1-backup.env",
       v["k8s_identity_values_file"] == k + "/prod/identity.env", v["k8s_backup_restore_own_env"], v["k8s_backup_restore_source_host"],
       v["k8s_gitops_source_local_path_stable_folders"], v["k8s_backup_azure_seed_dir"] == k + "/prod/backup-certs",
-      v["k8s_gitops_source_openbao_seal_node"], "proxmox" in d["all"]["children"], v["k8s_backup_restore_check_identity"],
-      v["k8s_gitops_source_openbao_admin_address"])' "$seen" "$t/keys" 2>/dev/null)
-if [[ $v == "True True True True wk-a True True wk-a False False 192.0.2.60" && $seen != *ProxyJump* && $seen != */Users/* ]] &&
+      v["k8s_gitops_source_openbao_seal_node"], "proxmox" in d["all"]["children"], v["k8s_backup_restore_check_identity"], v["k8s_certs_cert_manager_by_argocd"], v["k8s_gateway_by_argocd"],
+      v["k8s_gitops_source_openbao_admin_address"],
+      v["k8s_certs_smoke_root_file"].endswith("/lab-root-ca.crt") and not v["k8s_certs_smoke_root_file"].startswith("/root"))' "$seen" "$t/keys" 2>/dev/null)
+if [[ $v == "True True True True wk-a True True wk-a False False True True 192.0.2.60 True" && $seen != *ProxyJump* && $seen != */Users/* ]] &&
    grep -q "^node_ssh_public_key = \"$(cut -d' ' -f1-2 < "$t/keys/prod-node-key.pub")" "$t/work/rebuild-prod/k8s.tfvars"; then
   ok "4. the box's copies: its key, the box's files, prod's own restore, stable folders, the carried certificates"
 else bad "4. [$v]"; fi
 
+# 3b: the off-box scripts against the role's manifest: an old copy, a missing script and a missing manifest each stop the check
+echo old > "$t/libexec/opnsense-offbox.sh"; run check
+[[ $rc -eq 1 && $out == *"FAIL: rebuild-prod: opnsense-offbox.sh is missing or differs"* && $calls != *job* ]] && ok "3b. an old off-box script fails the check" || bad "3b old: $rc $out"
+rm -f "$t/libexec/opnsense-offbox.sh"; run check
+[[ $rc -eq 1 && $out == *"FAIL: rebuild-prod: opnsense-offbox.sh is missing or differs"* ]] && ok "3b. a missing off-box script fails the check" || bad "3b missing: $rc $out"
+printf '#!/bin/bash\necho "job opnsense-offbox" >> %s/calls\n' "$t" > "$t/libexec/opnsense-offbox.sh"; chmod +x "$t/libexec/opnsense-offbox.sh"
+mv "$t/libexec/backend-files.sha256" "$t/keep.sha"; run check
+[[ $rc -eq 1 && $out == *"backend-files.sha256 is missing"* ]] && ok "3b. no manifest fails the check" || bad "3b no manifest: $rc $out"
+mv "$t/keep.sha" "$t/libexec/backend-files.sha256"
+
 # 5
 r5=""
-TOFU_PLAN_RC=2 run check; [[ $rc -eq 1 && $out == *"plans changes with the Mac's tfvars"* ]] && r5+="a"
+TOFU_PLAN_RC=2 run check; [[ $rc -eq 1 && $out == *"plans changes with the box's tfvars copy and with the Mac's tfvars"* ]] && r5+="a"
 destroy 200 201 258; run check; [[ $rc -eq 1 && $out == *"other than prod's node VMs: VM 258"* ]] && r5+="b"; destroy 200 201
-inventory "        k8s_certs_smoke_root_file: /Users/someone/.config/central-hub/lab-ca/root.crt"
-run check; [[ $rc -eq 1 && $out == *"k8s_certs_smoke_root_file still points at the Mac"* ]] && r5+="c"; inventory
+inventory "        k8s_identity_oidc_handoff_file: /Users/someone/.config/central-hub/oidc-handoff"
+run check; [[ $rc -eq 1 && $out == *"k8s_identity_oidc_handoff_file still points at the Mac"* ]] && r5+="c"; inventory
+inventory "        k8s_identity_jellyfin_root_ca_file: $t/keys/nope.crt"
+run check; [[ $rc -eq 1 && $out == *"k8s_identity_jellyfin_root_ca_file is $t/keys/nope.crt, which is not on the box"* ]] && r5+="l"; inventory
+if [[ $(id -u) -eq 0 ]]; then chown 65534 "$t/keys/prod/identity.env"; else chmod 444 "$t/keys/prod/identity.env"; fi
+run check; [[ $rc -eq 1 && $out == *"k8s_identity_values_file is $t/keys/prod/identity.env, which the box's user can't write and chmod"* ]] && r5+="m"
+if [[ $(id -u) -eq 0 ]]; then chown 0 "$t/keys/prod/identity.env"; else chmod 644 "$t/keys/prod/identity.env"; fi
 dev_log 1111111111111111111111111111111111111111 "rebuild: all stages passed"
-run check; [[ $rc -eq 1 && $out == *"ran another commit"* ]] && r5+="d"
+printf '%s\n' hosts/rebuild-k8s.sh > "$t/difffiles"   # a file dev reads changed since that run (block 19b covers the prod-only case)
+run check; [[ $rc -eq 1 && $out == *"ran another commit"* ]] && r5+="d"; rm -f "$t/difffiles"
 dev_log "$sha" "rebuild: stage apps failed"; run check; [[ $rc -eq 1 && $out == *"did not pass every stage"* ]] && r5+="e"
 rm -f "$ld"/*; dev_log_teardown "$sha"; run check; [[ $rc -eq 1 && $out == *"no dev run other than a teardown is logged"* ]] && r5+="i"
 dev_log "$sha" "rebuild: all stages passed"; dev_log_teardown "$sha" 4; run check
@@ -227,12 +264,15 @@ run check; [[ $rc -eq 1 && $out == *"outside 200-249: 301"* ]] && r5+="f"
 sed -i 's/vm_id = 301/vm_id = 201/' "$t/keys/prod/tfvars/k8s.tfvars"
 ROUTE_VIA=192.0.2.11 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"* ]] && r5+="g"
 DEFAULT_VIA=192.0.2.10 run check; [[ $rc -eq 1 && $out == *"route goes through a prod node"*"default via 192.0.2.10"* ]] && r5+="h"
-if [[ $r5 == abcdeijkfgh ]]; then ok "5. check passes a teardown after a full pass, and refuses a plan with changes, VM 258, a Mac path, another dev commit, a failed dev run, a teardown-only dev run alone, VM 301, a route through a node"
+if [[ $r5 == abclmdeijkfgh ]]; then ok "5. check passes a teardown after a full pass, and refuses a plan with changes, VM 258, a Mac path, a jellyfin root or values file the box cannot use, another dev commit, a failed dev run, a teardown-only dev run alone, VM 301, a route through a node"
 else bad "5. [$r5] $out"; fi
 
 # 6
 tap=cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ
+mkdir -p "$t/work/openbao-prod"; echo old > "$t/work/openbao-prod/known_hosts"; echo old > "$t/work/openbao-prod/known_hosts.old"
 run rebuild "$tap" "${sha:0:12}"
+[[ ! -e $t/work/openbao-prod/known_hosts && ! -e $t/work/openbao-prod/known_hosts.old ]] &&
+  ok "6b. a rebuild clears openbao-prod's known hosts (the rebuilt nodes have new host keys)" || bad "6b. openbao-prod's known_hosts is still there after a rebuild"
 order=$(grep -oE '^(playbook [^ ]+ [^ ]+ [^ ]+|ssh [^ ]+ .*(backup.pem|seal-1.key)$|job [a-z-]+|one-command .*|seal-in-memory [0-9]+)' "$t/calls" |
   sed -E 's/^playbook -i [^ ]+ /playbook /; s/^ssh [^ ]+ (sudo -n )?cat .*\/(backup.pem|seal-1.key)$/ssh \2/' | uniq | tr '\n' '|')
 want="playbook playbooks/k8s-backup.yml|ssh backup.pem|ssh seal-1.key|job opnsense-backup|job opnsense-offbox|job secrets-bundle|job secrets-bundle-offbox|one-command $t/work/rebuild-prod --teardown|seal-in-memory 32|"
@@ -240,10 +280,10 @@ stages=$(sed -n 's/^STAGES=//p' "$t/seen-rebuild.env")
 if [[ $rc -eq 0 && $order == "$want" && $calls == *"playbooks/k8s-backup.yml --tags drill -e k8s_backup_drill=true"* &&
       -s $t/keys/prod/backup-certs/wk-a.pem && -s $t/keys/prod/backup-certs/cp-a.pem.keyid &&
       $(stat -c %a "$t/keys/prod/backup-certs/wk-a.pem") == 600 && $out != *"BEGIN PRIVATE KEY"* && $out != *KKKK* &&
-      $stages == '"vms cluster storage openbao-seal restore gitops secrets apps gateway certs identity identity-db ui backup checks"' &&
+      $stages == '"vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks"' && $(cat "$t/seen-rebuild.env") == *'APPS_DEFER="gateway jellyfin"'* && $(cat "$t/seen-rebuild.env") == *"CERTS_SMOKE_LATE=true"* &&
       $(cat "$t/seen-rebuild.env") == *"ENV_NAME=prod"* && $(cat "$t/seen-rebuild.env") == *"TEARDOWN_TARGET=proxmox_virtual_environment_vm.node"* &&
       $(grep -c 'plan .*-destroy -target=proxmox_virtual_environment_vm.node ' "$t/calls") -ge 1 && $(cat "$t/seen-rebuild.env") == *"TOFU_ENV=$t/keys/proxmox-lab.env"* &&
-      $(cat "$t/seen-rebuild.env") == *"k8s-restore.yml -e k8s_backup_enabled=false"* && -e $t/work/state/prod-stable-folders &&
+      $(cat "$t/seen-rebuild.env") == *"k8s-restore.yml -e k8s_backup_enabled=false -e k8s_backup_restore_snapshot=36fe4321aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"* && ! -e $t/work/state/prod-restore-pin && -e $t/work/state/prod-stable-folders &&
       $out == *"owner tap $tap"* && $out == *"restore test passed: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321"*"etcd restore test"*"snapshot c5523412"* && $out == *"PASS: rebuild-prod: prod torn down and built again"* &&
       -z $(ls -d /dev/shm/rebuild-prod-seal.test-* 2>/dev/null) ]]; then
   ok "6. rebuild: the checks before a teardown in order, the certificates kept, then the one command with prod's stages"
@@ -378,6 +418,10 @@ TOFU_INIT_RC=1 TOFU_INIT_TEXT=$'one\nregistry thing\nPermission denied here' run
 if [[ $o12h == *"OpenTofu init failed: 3 output line(s); phrases found: Permission denied,registry"* ]]; then
   ok "12h. the closed list names the phrases found, comma-separated, with the line count"
 else bad "12h. $o12h"; fi
+TOFU_INIT_RC=1 TOFU_INIT_TEXT='Killed 10.9.8.7 secret-token-xyz' run check; o12i=$out
+if [[ $o12i == *"OpenTofu init failed: 1 output line(s); phrases found: Killed"* && $o12i != *secret-token-xyz* && $o12i != *10.9.8.7* ]]; then
+  ok "12i. a one-line failure with a kill or timeout word names the word and never the line"
+else bad "12i. $o12i"; fi
 
 # 12b. The wrapper's PATH reaches `ip` (/usr/sbin on the box, where the route check reads the routing table): on the box the check
 # failed with "no route to the Proxmox API's address" because `ip` was not found.
@@ -393,5 +437,214 @@ if [[ -n $floor && -z $f13a && $r13b -eq 0 && $f13b == "floor $floor $sha" &&
       $r13c -eq 1 && $o13c == *"commit $sha is older than the floor ${floor:0:7}"* && -z $c13c && -z $g13c ]]; then
   ok "13. a commit below the floor is refused before any checkout or run; at or above it the rebuild goes on; check never asks"
 else bad "13. [$floor] [$f13a] $r13b [$f13b] | $r13c $o13c [$c13c] [$g13c]"; fi
+
+# 14. The restore snapshot is pinned and the mapping is checked before a teardown (prod run 4, 2026-11-21: three folders for one
+# claim stopped the restore after the teardown, and a rerun's own backup would have snapshotted the rebuilt, empty nodes).
+logd=$t/work/rebuild-prod/logs
+pinid=36fe4321aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+inventory; dev_log "$sha" "rebuild: all stages passed"; rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+DRILL_PLAN=none run rebuild "$tap" "$sha"; r14a=$rc o14a=$out c14a=$calls
+DRILL_PLAN=other run rebuild "$tap" "$sha"; r14b=$rc o14b=$out c14b=$calls
+if [[ $r14a -eq 1 && $o14a == *"mapping of the volume snapshot (c1-restore-volumes.sh plan) did not pass"* && $c14a != *one-command* && $c14a != *"ssh "*backup.pem* && ! -e $t/work/state/prod-restore-pin &&
+      $r14b -eq 1 && $o14b == *"the drill mapped snapshot 99999999 but its restore test passed on 36fe4321"* && $c14b != *one-command* ]]; then
+  ok "14a. a drill whose mapping of the snapshot fails (more than one folder for a claim), or maps another snapshot than the one tested, destroys nothing"
+else bad "14a. $r14a $o14a | $r14b $o14b"; fi
+rm -f "$logd"/*
+run rebuild "$tap" "$sha"; r14c=$rc o14c=$out
+if [[ $r14c -eq 0 && $o14c == *"the restore's folder mapping on snapshot 36fe4321aaaa gives each claim exactly one folder"* && $o14c == *"the restore snapshot is pinned: 36fe4321aaaa"* &&
+      $o14c == *"the restore pin was cleared"* && ! -e $t/work/state/prod-restore-pin ]]; then
+  ok "14b. a good run pins the full snapshot ID before the teardown, passes it to the restore, and clears the pin when it ends well"
+else bad "14b. $r14c $o14c"; fi
+# A run that stopped after its teardown: the pin stays; the rerun takes no backup and restores the pinned snapshot.
+rm -f "$logd"/*
+ONE_RC=2 run rebuild "$tap" "$sha"; r14d=$rc
+pin_kept=$(head -n 1 "$t/work/state/prod-restore-pin" 2>/dev/null)
+sleep 1; run rebuild "$tap" "$sha"; r14e=$rc o14e=$out c14e=$calls
+if [[ $r14d -eq 2 && $pin_kept == "$pinid" && $r14e -eq 0 && $c14e != *"--tags drill"* && $o14e == *"restore snapshot 36fe4321aaaa is pinned (the last run, "*" stopped after its teardown)"* &&
+      $(cat "$t/seen-rebuild.env") == *"k8s_backup_restore_snapshot=$pinid"* && ! -e $t/work/state/prod-restore-pin ]]; then
+  ok "14c. a failed run keeps the pin; the rerun takes no backup, restores the pinned snapshot and clears the pin when it ends well"
+else bad "14c. $r14d [$pin_kept] $r14e $o14e [$c14e]"; fi
+# The same stop with no pin file (a run from before the pin existed): the rerun refuses without the ID, before any backup.
+rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+torn_log() { # <with the tested-snapshot line: yes|no>
+  printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" > "$logd/run-29990101T000000Z.log"
+  [ "$1" = no ] || echo "PASS: rebuild-prod: every prod node backed up now, and its restore test passed: volume restore test, 4 folders, 1 database dumps, snapshot 36fe4321 of 2026-11-18T03:00:26; etcd restore test, revision 202, 201 keys under /, key /registry/namespaces/kube-system present, snapshot c5523412 of 2026-11-18T03:00:17" >> "$logd/run-29990101T000000Z.log"
+  [ "${SEAL_LINE:-yes}" = no ] || echo "PASS: rebuild-prod: the seal key's SOPS copy equals the seal node's key" >> "$logd/run-29990101T000000Z.log"
+  printf '%s\n' "rebuild-prod: teardown and build start: vms cluster" "FAIL: rebuild-prod: the one command stopped (rc 2); rebuild-prod log names the stage" >> "$logd/run-29990101T000000Z.log"
+}
+torn_log yes
+run rebuild "$tap" "$sha"; r14f=$rc o14f=$out c14f=$calls
+run rebuild "$tap" "$sha" "$pinid"; r14g=$rc o14g=$out c14g=$calls
+if [[ $r14f -eq 1 && $o14f == *"stopped after its teardown"*"Give the full ID of the volume snapshot"* && -z $c14f &&
+      $r14g -eq 0 && $c14g != *"--tags drill"* && $o14g == *"is pinned (the last run, run-29990101T000000Z.log, stopped after its teardown), named by the go"* &&
+      $(cat "$t/seen-rebuild.env") == *"k8s_backup_restore_snapshot=$pinid"* ]]; then
+  ok "14d. after a run that stopped after its teardown, a rebuild with no pin is refused before any backup, and with the full ID it restores that snapshot"
+else bad "14d. $r14f $o14f [$c14f] | $r14g $o14g"; fi
+rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+run rebuild "$tap" "$sha" "$pinid"; r14h=$rc o14h=$out c14h=$calls
+run rebuild "$tap" "$sha" 36fe4321; r14i=$rc o14i=$out
+if [[ $r14h -eq 1 && $o14h == *"only for a run after one that stopped after its teardown"* && -z $c14h && $r14i -eq 2 && $o14i == *"64 hex digits"* ]]; then
+  ok "14e. a snapshot ID is refused when no run stopped after its teardown (prod holds live data), and a short ID is a usage error"
+else bad "14e. $r14h $o14h [$c14h] | $r14i $o14i"; fi
+
+# 14f. With no pin file, the ID given must start with the snapshot the stopped run's own log says it backed up and tested; an older
+# daily snapshot of the same host is refused, and so is a stopped run whose log names none.
+rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+torn_log yes
+older=99999999bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+run rebuild "$tap" "$sha" "$older"; r14j=$rc o14j=$out c14j=$calls
+torn_log no
+run rebuild "$tap" "$sha" "$pinid"; r14k=$rc o14k=$out c14k=$calls
+if [[ $r14j -eq 1 && $o14j == *"is not the snapshot the stopped run (run-29990101T000000Z.log) backed up and tested before its teardown (36fe4321...)"* && -z $c14j &&
+      $r14k -eq 1 && $o14k == *"names no tested volume snapshot, so the ID given cannot be checked"* && -z $c14k ]]; then
+  ok "14f. with no pin file, an ID that is not the snapshot the stopped run tested is refused, and so is a stopped run whose log names none"
+else bad "14f. $r14j $o14j [$c14j] | $r14k $o14k [$c14k]"; fi
+rm -f "$logd"/*
+
+# 15. The plan check uses the tfvars the rebuild applies (the Mac's with the box's node key): VMs a box run built hold the box's key, and
+# the Mac's key made the check fail for ever after run 4 (2026-11-21). VMs built from the Mac still pass on the second try.
+cat > "$t/plan-key.json" <<'J'
+{"resource_changes":[{"address":"proxmox_virtual_environment_vm.node[\"fakehost-zq\"]","type":"proxmox_virtual_environment_vm","name":"node","change":{"actions":["update"],
+"before":{"vm_id":200,"initialization":[{"user_account":[{"keys":["ssh-ed25519 AAAA-MAC-KEY-SECRET"],"username":"x"}]}]},
+"after":{"vm_id":200,"initialization":[{"user_account":[{"keys":["ssh-ed25519 AAAA-BOX-KEY-SECRET"],"username":"x"}]}]}}}]}
+J
+inventory; dev_log "$sha" "rebuild: all stages passed"; rm -f "$logd"/*
+TOFU_PLAN_RC=2 TOFU_PLAN_RC_MAC=0 run check; r15a=$rc o15a=$out
+TOFU_PLAN_RC=2 TOFU_PLAN_RC_MAC=2 TOFU_SHOW_FILE="$t/plan-key.json" run check; r15b=$rc o15b=$out
+if [[ $r15a -eq 0 && $o15a == *"no changes with the Mac's tfvars (the VMs hold the Mac's node key)"* &&
+      $r15b -eq 1 && $o15b == *"differs in: initialization.user_account.keys"* && $o15b != *SECRET* && $o15b != *fakehost-zq* ]]; then
+  ok "15. the plan check tries the box's tfvars copy, then the Mac's, and names a changed attribute down into a block, never a value"
+else bad "15. $r15a $o15a | $r15b $o15b"; fi
+grep -q 'var-file=.*k8s.tfvars' "$t/calls" && ok "15b. the destroy plan reads a tfvars file the check settled on" || bad "15b. no var-file in the destroy plan"
+
+# 16. The whole torn path end to end: a rerun after a run that stopped past its teardown, with the nodes rebuilt and empty (they answer a
+# login and nothing else) and the pin given. Every step before the teardown that reads a node (the sftp keys, the backup certificate,
+# the seal key) must use what the stopped run kept, or note the empty node, and the run must reach the teardown (prod run 5, 2026-11-21,
+# stopped reading the sftp keys). Without the kept files it stops before anything is destroyed.
+keep_sftp() { mkdir -p "$t/keys/prod/backup-sftp"; for n in cp-a wk-a; do
+  printf '%s\n' '-----BEGIN OPENSSH PRIVATE KEY-----' 'AAAA' '-----END OPENSSH PRIVATE KEY-----' > "$t/keys/prod/backup-sftp/$n.key"
+  echo 'ssh-ed25519 AAAAkept x' > "$t/keys/prod/backup-sftp/$n.pub"
+  echo '192.0.2.1 ssh-ed25519 AAAAhost' > "$t/keys/prod/backup-sftp/$n.known_hosts"; done; }
+keep_certs() { mkdir -p "$t/keys/prod/backup-certs"; for n in cp-a wk-a; do
+  printf '%s\n' '-----BEGIN PRIVATE KEY-----' 'AAAA' '-----END PRIVATE KEY-----' '-----BEGIN CERTIFICATE-----' 'BBBB' '-----END CERTIFICATE-----' > "$t/keys/prod/backup-certs/$n.pem"
+  echo keyid-kept > "$t/keys/prod/backup-certs/$n.pem.keyid"; done; }
+torn_reset() { rm -f "$logd"/* "$t/work/state/prod-restore-pin"; rm -rf "$t/keys/prod/backup-sftp" "$t/keys/prod/backup-certs"; torn_log yes
+  touch -d '2 hours ago' "$t/keys/prod/openbao-seal.key.sops.json"; }
+# sftp mode
+inventory "        k8s_backup_sftp: true"
+sed -i '/k8s_backup_azure_identity/d; s/pve-a: {ansible_host: 192.0.2.1}/pve-a: {ansible_host: 192.0.2.1, proxmox_host_mgmt_address: 192.0.2.1}/' "$t/keys/prod/inventory-hosts.yml"
+torn_reset
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16a=$rc o16a=$out c16a=$calls
+torn_reset; keep_sftp
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16b=$rc o16b=$out c16b=$calls
+if [[ $r16a -eq 1 && $o16a == *"could not read node"*"backup ssh file"*"nothing was destroyed"* && $c16a != *one-command* &&
+      $r16b -eq 0 && $o16b == *"node cp-a: the stopped run (run-29990101T000000Z.log) kept its sftp backup key"* &&
+      $o16b == *"the seal node is rebuilt and the node says the seal key file is absent"* && $o16b == *"restore snapshot 36fe4321aaaa is pinned (the last run, "* &&
+      $c16b != *backup-ssh* && $c16b == *one-command* && $c16b != *"--tags drill"* ]]; then
+  ok "16a. torn path, sftp mode, empty nodes: the kept sftp keys stand, the seal key is read as absent, the run reaches the teardown; with none kept it stops before it"
+else bad "16a. $r16a $o16a [$c16a] | $r16b $o16b [$c16b]"; fi
+# azure mode
+inventory; torn_reset
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16c=$rc o16c=$out c16c=$calls
+torn_reset; keep_certs
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16d=$rc o16d=$out c16d=$calls
+if [[ $r16c -eq 1 && $o16c == *"could not read node"*"backup certificate"*"nothing was destroyed"* && $c16c != *one-command* &&
+      $r16d -eq 0 && $o16d == *"node cp-a: the stopped run (run-29990101T000000Z.log) kept its backup certificate"* && $c16d != *azure/backup* && $c16d == *one-command* ]]; then
+  ok "16b. torn path, Azure mode, empty nodes: the kept certificates stand and the run reaches the teardown; with none kept it stops before it"
+else bad "16b. $r16c $o16c [$c16c] | $r16d $o16d [$c16d]"; fi
+# a seal node that answers with a different key is still refused in a torn run
+cp "$t/node.key" "$t/node.key.keep"; printf 'x%.0s' {1..32} > "$t/node.key"
+torn_reset; keep_certs
+run rebuild "$tap" "$sha" "$pinid"; r16e=$rc o16e=$out c16e=$calls
+cp "$t/node.key.keep" "$t/node.key"
+if [[ $r16e -eq 1 && $o16e == *"the seal key's SOPS copy differs from the seal node's key"* && $c16e != *one-command* ]]; then
+  ok "16c. torn path: a seal node that holds a different key is still refused before the teardown"
+else bad "16c. $r16e $o16e [$c16e]"; fi
+# The seal fallback needs all three: the stopped run's compare line, a SOPS file not newer than that log, a clean "absent" from the node.
+inventory; torn_reset; keep_certs; SEAL_LINE=no torn_log yes; touch -d '2 hours ago' "$t/keys/prod/openbao-seal.key.sops.json"
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16f=$rc o16f=$out c16f=$calls
+torn_reset; keep_certs; touch "$t/keys/prod/openbao-seal.key.sops.json"; touch -d '1 hour ago' "$logd/run-29990101T000000Z.log"
+EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16g=$rc o16g=$out c16g=$calls
+torn_reset; keep_certs
+TEST_RC=1 EMPTY_NODES=1 run rebuild "$tap" "$sha" "$pinid"; r16h=$rc o16h=$out c16h=$calls
+if [[ $r16f -eq 1 && $o16f == *"does not show it compared the SOPS copy with the live key"* && $c16f != *one-command* &&
+      $r16g -eq 1 && $o16g == *"is not older than the stopped run's log"* && $c16g != *one-command* &&
+      $r16h -eq 1 && $o16h == *"does not say the file is absent"* && $c16h != *one-command* ]]; then
+  ok "16d. torn path: an unreadable seal key stands only with the stopped run's compare line, a SOPS file older than its log and a clean absent from the node; each missing one refuses"
+else bad "16d. $r16f $o16f | $r16g $o16g | $r16h $o16h"; fi
+rm -f "$logd"/*
+
+# 17. A later run that stopped before its teardown (prod run 5) does not hide the run that stopped after it: the torn state stays, and the
+# rerun still needs the ID. A run that reached its teardown and ended well after that makes the state not torn again.
+rm -f "$logd"/* "$t/work/state/prod-restore-pin"; torn_reset
+printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" "FAIL: rebuild-prod: could not read node cp-a's backup ssh file id_ed25519; nothing was destroyed" > "$logd/run-29990102T000000Z.log"
+run rebuild "$tap" "$sha"; r17a=$rc o17a=$out c17a=$calls
+printf '%s\n' "rebuild-prod: rebuild at central-hub 0123456789ab, owner tap $tap" "rebuild-prod: teardown and build start: vms" "PASS: rebuild-prod: prod torn down and built again at 0123456789ab, data back, backups on" > "$logd/run-29990103T000000Z.log"
+run rebuild "$tap" "$sha" "$pinid"; r17b=$rc o17b=$out
+if [[ $r17a -eq 1 && $o17a == *"stopped after its teardown"*"Give the full ID of the volume snapshot"* && $o17a == *"run-29990101T000000Z.log"* && -z $c17a &&
+      $r17b -eq 1 && $o17b == *"a volume snapshot ID is only for a run after one that stopped after its teardown"* ]]; then
+  ok "17. a later run that stopped before its teardown does not hide the torn state; a later run that ended well clears it"
+else bad "17. $r17a $o17a [$c17a] | $r17b $o17b"; fi
+rm -f "$logd"/*
+
+
+# 18. resume: carry on a stopped rebuild from the first stage with no good end line, on the cluster it built; no teardown, backup or restore.
+resume_logs() { # <stage that failed>
+  rm -f "$logd"/*; torn_log yes
+  printf '%s\n' "rebuild: env prod, stages: x" "2999-01-01T01:00:00Z vms end rc=0 5s" "2999-01-01T01:00:01Z cluster end rc=0 5s" \
+    "2999-01-01T01:00:02Z storage end rc=0 5s" "2999-01-01T01:00:03Z openbao-seal end rc=0 5s" "2999-01-01T01:00:04Z restore end rc=0 5s" \
+    "2999-01-01T01:00:05Z gitops end rc=0 5s" "2999-01-01T01:00:06Z secrets end rc=0 5s" "2999-01-01T01:00:07Z apps end rc=0 5s" \
+    "2999-01-01T01:00:08Z certs end rc=0 5s" "2999-01-01T01:00:09Z $1 end rc=2 5s" > "$logd/rebuild-29990101T010000Z.log"
+  printf '%s\n%s\n' "$pinid" "2999-01-01T00:00:00Z run-29990101T000000Z.log" > "$t/work/state/prod-restore-pin"
+}
+inventory; dev_log "$sha" "rebuild: all stages passed"; rm -f "$logd"/* "$t/work/state/prod-restore-pin"
+run resume "$tap" "$sha"; r18a=$rc o18a=$out c18a=$calls
+resume_logs gateway
+run resume cmsg_01ZZZZZZZZZZZZZZZZZZZZZZZZZZ "$sha"; r18b=$rc o18b=$out c18b=$calls
+NODE_WK_STATE=NotReady run resume "$tap" "$sha"; r18c=$rc o18c=$out c18c=$calls
+mkdir -p "$t/work/openbao-prod"; echo old > "$t/work/openbao-prod/known_hosts"; echo old > "$t/work/openbao-prod/known_hosts.old"
+run resume "$tap" "$sha"; r18d=$rc o18d=$out c18d=$calls
+if [[ $r18a -eq 1 && $o18a == *"resume needs a rebuild that stopped after its teardown"* && $c18a != *one-command* &&
+      $r18b -eq 1 && $o18b == *"not the go the stopped run"* && $c18b != *one-command* &&
+      $r18c -eq 1 && $o18c == *"1 of 2 prod nodes are Ready"* && $c18c != *one-command* &&
+      $r18d -eq 0 && $o18d == *"every stage before gateway has a good end line"*"resuming from gateway: gateway,identity,identity-db,ui,backup,checks"* &&
+      $c18d == *"one-command "*"--only gateway,identity,identity-db,ui,backup,checks"* && $c18d != *"--teardown"* && $c18d != *"--tags drill"* &&
+      $c18d != *"job "* && $c18d != *"tofu destroy"* && $(cat "$t/seen-rebuild.env") == *"k8s_backup_restore_snapshot=$pinid"* &&
+      $o18d == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin &&
+      ! -e $t/work/openbao-prod/known_hosts && ! -e $t/work/openbao-prod/known_hosts.old ]]; then
+  ok "18. resume refuses with no stopped run, another go's tap or a node not Ready; otherwise runs only the stages from the first with no good end line, with no teardown, backup or bundle, clears the pin and openbao-prod's known hosts"
+else bad "18. $r18a $o18a | $r18b $o18b | $r18c $o18c | $r18d $o18d [$c18d]"; fi
+# 18b. After a resumed run that ended well the stop no longer counts; a resume with every stage already good has nothing to run.
+resume_logs gateway
+printf '%s\n' "rebuild-prod: resume at central-hub 0123456789ab, owner tap $tap" "PASS: rebuild-prod: prod torn down and built again at 0123456789ab, data back, backups on" > "$logd/run-29990103T000000Z.log"
+run rebuild "$tap" "$sha" "$pinid"; r18e=$rc o18e=$out
+resume_logs gateway
+printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" "2999-01-01T01:00:11Z identity end rc=0 5s" "2999-01-01T01:00:12Z identity-db end rc=0 5s" \
+  "2999-01-01T01:00:13Z ui end rc=0 5s" "2999-01-01T01:00:14Z backup end rc=0 5s" "2999-01-01T01:00:15Z checks end rc=0 5s" > "$logd/rebuild-29990101T020000Z.log"
+run resume "$tap" "$sha"; r18f=$rc o18f=$out c18f=$calls
+if [[ $r18e -eq 1 && $o18e == *"only for a run after one that stopped after its teardown"* && $r18f -eq 1 && $o18f == *"nothing to resume"* && $c18f != *one-command* ]]; then
+  ok "18b. a resumed run that ended well ends the stop; a resume with every stage already good has nothing to run"
+else bad "18b. $r18e $o18e | $r18f $o18f"; fi
+rm -f "$logd"/*
+
+# 19. Jon's order of 2026-11-22. Item 4: rebuild without --full-teardown refuses at once, before any check or call; resume takes no such flag.
+RAW=1 run rebuild "$tap" "$sha"; r19a=$rc o19a=$out c19a=$calls
+run resume --full-teardown "$tap" "$sha"; r19b=$rc o19b=$out
+if [[ $r19a -eq 2 && $o19a == *"To ship a fix, use resume"* && $c19a == "" && $r19b -eq 2 && $o19b == *"goes with rebuild, not resume"* ]]; then
+  ok "19. rebuild without --full-teardown refuses and runs nothing; resume refuses the flag"
+else bad "19. $r19a $o19a | $r19b $o19b"; fi
+# 19b. Item 1: an older dev pass counts when it is an ancestor and only prod-only files changed since; any other file needs a new dev run.
+oldsha=2222222222222222222222222222222222222222
+dev_log "$oldsha" "rebuild: all stages passed"
+printf '%s\n' hosts/ansible/roles/agent_box/files/rebuild-prod.sh docs/runbooks/x.md .github/hosts-check/tests/test_rebuild_prod.sh > "$t/difffiles"
+run check; r19c=$rc o19c=$out
+printf '%s\n' hosts/ansible/roles/agent_box/files/rebuild-prod.sh hosts/rebuild-k8s.sh > "$t/difffiles"
+run check; r19d=$rc o19d=$out
+if [[ $r19c -eq 0 && $o19c == *"every file changed since it"*"is one dev never reads"* && $r19d -eq 1 && $o19d == *"touch files dev reads: hosts/rebuild-k8s.sh"* ]]; then
+  ok "19b. a dev pass at an older commit stands when only docs, checks and the box's own files changed since; a file dev reads needs a new dev run"
+else bad "19b. $r19c $o19c | $r19d $o19d"; fi
+# 19c. The diff is read with --no-renames: a file moved from a path dev reads into docs/ shows both paths, so the old one stops the gate.
+[[ $(grep -c -- 'diff --no-renames --name-only' "$t/run/rebuild-prod.sh") -eq 1 && $r19d -eq 1 ]] && ok "19c. the scoped dev gate reads the diff with --no-renames, so a move out of a file dev reads still names the old path" || bad "19c. the diff is read without --no-renames"
+rm -f "$t/difffiles"
 
 exit "$fail"

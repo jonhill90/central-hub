@@ -309,6 +309,13 @@ if [ $rc16a = 0 ] && [[ $c16a == *playbooks/proxmox-connector.yml* ]] && grep -q
   ok "16a the connector job runs proxmox-connector.yml and prints the facts that are true"
 else bad "16a rc=$rc16a [$c16a] $(cat "$t/16a.out")"; fi
 
+# 16c connector-route runs proxmox-connector-route.yml
+: > "$t/calls"
+job check connector-route > "$t/16c.out" 2>&1; rc16c=$?
+c16c=$(cat "$t/calls")
+if [ $rc16c = 0 ] && [[ $c16c == *playbooks/proxmox-connector-route.yml* ]]; then ok "16c connector-route runs proxmox-connector-route.yml"
+else bad "16c rc=$rc16c [$c16c] $(cat "$t/16c.out")"; fi
+
 # 16b the memory job runs proxmox-memory.yml and prints only the report lines that match its allowlist: a line with a name, an address
 #     or any extra word is dropped, so nothing private can pass
 python3 - > "$t/out-check.json" <<'PY'
@@ -468,5 +475,93 @@ if [ $rc18a = 0 ] && [[ $c18 == *playbooks/proxmox-ct259-destroy.yml* && $c18 ==
    ! grep -qv -e '--check' "$t/calls"; then
   ok "19 ct259-destroy: the check runs its playbook; apply-recorded with no pass or go only re-checks"
 else bad "19 rc=$rc18a/$rc18b [$c18] [$(cat "$t/calls")] $(cat "$t/18b.out")"; fi
+
+# 22 the firewall job lets the box's backup address reach ssh: the one address from the handoff goes in a vars file (proxmox_firewall_box_ssh_source),
+#    never on a command line or in the output; with no address the job runs as before (the VLAN file only); a bad address stops it before the playbook;
+#    the other jobs are not given the variable
+rm -f "$t/handoff/box-backup-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/22a.out" 2>&1; rc=$?
+if [ $rc = 0 ] && [[ $(cat "$t/calls") == *playbooks/proxmox-firewall.yml* && $(cat "$t/calls") != *box_ssh_source* ]] && [ "$(wc -l < "$t/vars-paths")" = 1 ]; then
+  ok "22a firewall with no box address: only the VLAN file, no rule variable"
+else bad "22a rc=$rc [$(cat "$t/calls")] $(cat "$t/22a.out")"; fi
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/22b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v=={"proxmox_firewall_box_ssh_source":"10.1.30.31"}, v' "$t/vars-seen.json" \
+   && grep -q "vlans.yml" "$t/calls" && ! grep -q "10.1.30.31" "$t/calls" "$t/22b.out" && [ ! -e "$(tail -1 "$t/vars-paths")" ]; then
+  ok "22b firewall: the box address reaches the playbook in a vars file beside the VLAN file, not on the command line or in the output, and the file is gone after"
+else bad "22b rc=$rc [$(cat "$t/calls")] $(cat "$t/22b.out")"; fi
+for v in 10.1.20.5 10.1.30.0 10.1.30.224 '10.1.30.31/32' 'abc'; do
+  printf '%s\n' "$v" > "$t/handoff/box-backup-address"; : > "$t/calls"
+  job check firewall > "$t/22c.out" 2>&1; rc=$?
+  if [ $rc = 1 ] && [ ! -s "$t/calls" ] && ! grep -qF "$v" "$t/22c.out"; then :; else bad "22c address '$v' rc=$rc [$(cat "$t/calls")]"; fi
+done
+ok "22c five bad address shapes stop the firewall job before the playbook, naming no value"
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"
+job check proxy > "$t/22d.out" 2>&1
+! grep -q "box_ssh_source\|@" "$t/calls" && ok "22d the other jobs are not given the variable" || bad "22d $(cat "$t/calls")"
+rm -f "$t/handoff/box-backup-address"
+
+# 23 the firewall job also lets dev's worker reach ssh for its read-only restore: the worker's address from the same handoff as restore-reader's
+#    goes in the same vars file (proxmox_firewall_reader_ssh_source), beside the box's address when there is one; never on a command line or in
+#    the output; a bad shape stops the job before the playbook
+printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/23a.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v=={"proxmox_firewall_reader_ssh_source":"10.1.30.12"}, v' "$t/vars-seen.json" \
+   && ! grep -q "10.1.30.12" "$t/calls" "$t/23a.out" && [ ! -e "$(tail -1 "$t/vars-paths")" ]; then
+  ok "23a firewall with only a dev worker address: the reader rule variable alone, in a vars file, gone after"
+else bad "23a rc=$rc [$(cat "$t/calls")] $(cat "$t/23a.out")"; fi
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/23b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v=={"proxmox_firewall_box_ssh_source":"10.1.30.31","proxmox_firewall_reader_ssh_source":"10.1.30.12"}, v' "$t/vars-seen.json" \
+   && ! grep -q "10.1.30.12\|10.1.30.31" "$t/calls" "$t/23b.out"; then
+  ok "23b firewall with both addresses: both variables in the one vars file"
+else bad "23b rc=$rc [$(cat "$t/calls")] $(cat "$t/23b.out")"; fi
+rm -f "$t/handoff/box-backup-address"
+for v in 10.1.20.5 '10.1.30.12/32' 'abc'; do
+  printf '%s\n' "$v" > "$t/handoff/dev-worker-address"; : > "$t/calls"
+  job check firewall > "$t/23c.out" 2>&1; rc=$?
+  if [ $rc != 0 ] && [ ! -s "$t/calls" ] && ! grep -qF "$v" "$t/23c.out"; then :; else bad "23c address '$v' rc=$rc [$(cat "$t/calls")]"; fi
+done
+ok "23c three bad dev worker address shapes stop the firewall job before the playbook, naming no value"
+rm -f "$t/handoff/dev-worker-address"
+
+# 24 the opnsense-sso apply sets its own way back: guard arm first, the job's apply, then guard confirm; a failed apply rolls the VM back
+#    and does not confirm; a guard that cannot arm stops everything before the job runs. The secret is handed over by the keys user's
+#    wrapper (a stand-in sudo and wrapper here) and never printed.
+cat > "$t/bin/ansible-playbook" <<'STUB'
+#!/bin/sh
+echo "$*" >> "$T/calls"
+case " $* " in
+  *" opnsense_guard_action=arm "*) [ -e "$T/failarm" ] && exit 1 ;;
+  *" playbooks/opnsense-sso.yml "*) case " $* " in *" --check "*) ;; *) [ -e "$T/failsso" ] && exit 1 ;; esac ;;
+esac
+case " $* " in *" --check "*) cat "$T/out-check.json" ;; *) cat "$T/out-apply.json" ;; esac
+exit 0
+STUB
+sed -i "s|\$T|$t|g" "$t/bin/ansible-playbook"
+printf '#!/bin/sh\nshift 3; exec "$@"\n' > "$t/bin/sudo"; chmod +x "$t/bin/sudo"
+s24=$(openssl rand -hex 32)
+printf '#!/bin/sh\necho "OPNSENSE_CLIENT_SECRET=%s"\n' "$s24" > "$t/libexec/opnsense-sso-secret.sh"; chmod +x "$t/libexec/opnsense-sso-secret.sh"
+json "new" "/tmp/a" "write config" "move" none > "$t/out-check.json"; cp "$t/out-check.json" "$t/out-apply.json"
+c24=$(git -C "$t/main.git" rev-parse main)
+h24=$(PATH="$t/bin:$PATH" job check opnsense-sso 2>&1 | sed -n 's/^proxmox-host: check \([0-9a-f]\{12\}\):.*/\1/p')
+job pass opnsense-sso "$c24" "$h24" cmsg_cccccccccccc "$tm" reviewer >/dev/null 2>&1
+job go opnsense-sso "$c24" cmsg_dddddddddddd "$tm" orchestrator >/dev/null 2>&1
+: > "$t/calls"; PATH="$t/bin:$PATH" job apply-recorded opnsense-sso "$h24" > "$t/24a.out" 2>&1; rc=$?
+order=$(grep -o 'opnsense_guard_action=[a-z]*\|playbooks/opnsense-sso.yml' "$t/calls" | tr '\n' ' ')
+if [ $rc = 0 ] && [[ $order == "playbooks/opnsense-sso.yml opnsense_guard_action=arm playbooks/opnsense-sso.yml opnsense_guard_action=confirm " ]] && ! grep -q "$s24" "$t/24a.out" "$t/calls"; then
+  ok "24a opnsense-sso apply: re-check, guard arm, the job, guard confirm; the secret is not printed"
+else bad "24a rc=$rc order=[$order] $(cat "$t/24a.out") [$(cat "$t/calls")]"; fi
+job go opnsense-sso "$c24" cmsg_eeeeeeeeeeee "$tm" orchestrator >/dev/null 2>&1; touch "$t/failsso"; : > "$t/calls"
+PATH="$t/bin:$PATH" job apply-recorded opnsense-sso "$h24" > "$t/24b.out" 2>&1; rc=$?
+if [ $rc != 0 ] && grep -q "opnsense_guard_action=arm" "$t/calls" && grep -q "opnsense_guard_action=rollback" "$t/calls" && ! grep -q "opnsense_guard_action=confirm" "$t/calls" && grep -q "rolled back" "$t/24b.out"; then
+  ok "24b a failed apply rolls the firewall VM back and does not confirm"
+else bad "24b rc=$rc [$(cat "$t/calls")] $(cat "$t/24b.out")"; fi
+rm -f "$t/failsso"; touch "$t/failarm"; job go opnsense-sso "$c24" cmsg_ffffffffffff "$tm" orchestrator >/dev/null 2>&1; : > "$t/calls"
+PATH="$t/bin:$PATH" job apply-recorded opnsense-sso "$h24" > "$t/24c.out" 2>&1; rc=$?
+if [ $rc != 0 ] && ! grep -v -e '--check' "$t/calls" | grep -q "playbooks/opnsense-sso.yml" && grep -q "could not be set" "$t/24c.out"; then
+  ok "24c a guard that cannot arm stops the apply before the job runs"
+else bad "24c rc=$rc [$(cat "$t/calls")] $(cat "$t/24c.out")"; fi
+rm -f "$t/failarm"
 
 exit "$fail"
