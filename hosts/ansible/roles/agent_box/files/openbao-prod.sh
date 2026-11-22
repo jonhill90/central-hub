@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|c1-readonly|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|c1-readonly|adopt|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -31,6 +31,12 @@
 #           holds or the inventory's k8s_control_plane_endpoint. It replaces the file only after the new one reads the nodes and
 #           answers no to listing Secrets and to creating Pods; otherwise the old file stays. Run it after a rebuild (a new cluster
 #           has a new CA and token); nothing is printed but counts and yes or no.
+# adopt     plan step 8a, for the secrets the cluster made for itself (Jellyfin's admin password, Keycloak's database account and first
+#           admin, Grafana's admin, Argo CD's initial admin): from a fixed table in this script, nothing else, it reads each
+#           Secret's key with the box's admin kubeconfig and gives the value on stdin to `secrets-store-prod put-new`, which
+#           writes SOPS then OpenBao and writes nothing when OpenBao already holds the key. The live value is adopted as it is,
+#           so no password changes. It ends by running `secrets-store-prod compare` (the SHA-256 of each SOPS value against
+#           OpenBao's) and passes only if that passes. Only names and results are printed; a value is never printed.
 # handover  playbooks/k8s-openbao-handover.yml with prod's admin AppRole IDs (/etc/agent-keys/prod/openbao-admin-*, made
 #           once by the same rule as secrets-store.sh, never printed).
 # refresh   playbooks/k8s-openbao-refresh.yml, after handover: the store's policies and its admin login's address
@@ -100,11 +106,11 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|c1-readonly|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|c1-readonly|adopt|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | l2-policy | gitops | ca | c1-readonly | handover | admin-firewall-check | secrets-status | jobs-status | prune-status | targets-status | log) [[ $# -eq 1 ]] || usage ;;
+  key | check | l2-policy | gitops | ca | c1-readonly | adopt | handover | admin-firewall-check | secrets-status | jobs-status | prune-status | targets-status | log) [[ $# -eq 1 ]] || usage ;;
   seal | seal-copy | refresh | reset-failed-start | drop-box-path | admin-firewall)
     [[ $# -eq 2 ]] || usage
     tap=$2
@@ -557,6 +563,37 @@ open(out, "w").write(cfg)' "$server" "$ro.part" <<< "$ro_token"$'\n'"$ro_ca" || 
     fi
     mv -- "$ro.part" "$ro"
     echo "PASS: openbao-prod: c1-readonly: $ro made from the live cluster's agent-read token and CA (reads $nodes nodes; list secrets: no; create pods: no)"
+    ;;
+  adopt)
+    # The fixed table: <namespace> <Secret> <key of the Secret> <OpenBao path> <OpenBao key>. Nothing else is read, whatever the arguments.
+    idname=$(ansible-inventory -i "$inventory/" --list | python3 -I -c '
+import json, sys
+hv = json.load(sys.stdin).get("_meta", {}).get("hostvars", {})
+n = next((str(v["k8s_identity_name"]) for v in hv.values() if v.get("k8s_identity_name")), "sso")
+print(n if n.replace("-", "").isalnum() and n == n.lower() else "sso", end="")') || idname=sso
+    table=(
+      "media jellyfin-admin password c1/jellyfin-admin password"
+      "identity $idname-db username c1/identity-db username"
+      "identity $idname-db password c1/identity-db password"
+      "identity $idname-initial-admin username c1/identity-admin username"
+      "identity $idname-initial-admin password c1/identity-admin password"
+      "monitoring kube-prometheus-stack-grafana admin-user c1/grafana-admin username"
+      "monitoring kube-prometheus-stack-grafana admin-password c1/grafana-admin password"
+      "argocd argocd-initial-admin-secret password c1/argocd-admin password"
+    )
+    failed=0
+    for row in "${table[@]}"; do
+      read -r a_ns a_secret a_key a_path a_pkey <<< "$row"
+      # base64 -d turns the Secret's value back; it goes straight to put-new's stdin, never an argument, a variable or the log.
+      if res=$(kc -n "$a_ns" get secret "$a_secret" -o "'jsonpath={.data.$a_key}'" | base64 -d | "$libexec/secrets-store-prod.sh" put-new "$a_path" "$a_pkey" 2>&1); then
+        echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key -> $a_path key $a_pkey: ${res##*: }"
+      else
+        echo "openbao-prod: adopt: $a_ns/$a_secret key $a_key: not adopted (${res##*: })" >&2; failed=1
+      fi
+    done
+    [[ $failed -eq 0 ]] || { echo "FAIL: openbao-prod: adopt: at least one value was not adopted (above); the others stay" >&2; exit 1; }
+    "$libexec/secrets-store-prod.sh" compare || { echo "FAIL: openbao-prod: adopt: compare of SOPS against OpenBao did not pass" >&2; exit 1; }
+    echo "PASS: openbao-prod: adopt: ${#table[@]} values adopted or already held; compare passed (SOPS and OpenBao hashes equal)"
     ;;
   handover)
     mkdir -p "$store_keys"

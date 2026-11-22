@@ -31,6 +31,7 @@
 #      a failed read stops it with an error; a tap or another argument runs nothing.
 #  15. jobs-status lists the Jobs with failed pods and each one's last 30 log lines, scrubbed; get and logs only; a tap runs nothing.
 #  16. prune-status lists the resources Argo CD marks requiresPruning per Application with one get; a tap runs nothing.
+#  20. adopt reads only its fixed table of Secrets and gives each value on stdin to put-new; no value printed; a failed adoption or compare fails it.
 #  19. c1-readonly makes the box's read-only kubeconfig again from Secret agent-read/agent-read-token and proves it before it replaces the old one; any failure leaves the old file.
 #  18. targets-status lists the node-exporter pods, the down targets and the backup times by instance, from get calls only; a tap runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
@@ -590,5 +591,42 @@ if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: c1-readonly:"* && $a_out ==
       $x_rc -eq 2 && -z $x_calls ]]; then
   ok "19. c1-readonly: the live cluster's token and CA in the old file's address; the old file stays when the proof fails, the token is missing, the CA is not one certificate or the Secret is unreadable; no address, nothing written; the token never printed"
 else bad "19. rc=$a_rc $a_out | proof rc=$b_rc $b_out | token rc=$c_rc $c_out | ca rc=$d_rc $d_out | read rc=$e_rc $e_out | addr rc=$f_rc $f_out | extra rc=$x_rc"; fi
+
+# 20: adopt reads only its fixed table of Secrets, gives each value on stdin to secrets-store-prod put-new, never prints a value, fails when a
+# value cannot be adopted or compare fails, and refuses any argument.
+cat > "$venv/ansible" <<EOS
+#!/usr/bin/env python3
+import base64, json, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+vals = {"jellyfin-admin": "jf-secret-Aa11", "sso-db": "db-secret-Bb22", "sso-initial-admin": "kc-secret-Cc33", "kube-prometheus-stack-grafana": "gr-secret-Dd44", "argocd-initial-admin-secret": "ar-secret-Ee55"}
+name = a.split(" secret ")[1].split()[0] if " secret " in a else ""
+miss = open("$t/kube/MISSING").read().split() if __import__("os").path.exists("$t/kube/MISSING") else []
+ok = name in vals and name not in miss
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0 if ok else 1, "stdout": base64.b64encode(vals[name].encode()).decode() if ok else "", "stderr": "" if ok else "not found"}}}]}]}))
+EOS
+chmod +x "$venv/ansible"
+cat > "$t/libexec/secrets-store-prod.sh" <<EOS
+#!/bin/bash
+if [[ \$1 == compare ]]; then echo "secrets-store-prod compare" >> $t/ss_calls; [[ -e $t/kube/CMPFAIL ]] && { echo "FAIL: compare: key differs" >&2; exit 1; }; echo "PASS: compare: 19 keys equal in SOPS and OpenBao"; exit 0; fi
+v=\$(cat); echo "secrets-store-prod \$1 \$2 \$3 value=\$v" >> $t/ss_calls
+echo "secrets-store put-new: kv/\$2 key \$3 written to SOPS, then OpenBao"
+EOS
+chmod +x "$t/libexec/secrets-store-prod.sh"
+: > "$t/ss_calls"; : > "$t/kcalls"; rm -f "$t/kube/MISSING" "$t/kube/CMPFAIL"
+run adopt; a_rc=$rc a_out=$out; a_ss=$(cat "$t/ss_calls"); a_k=$(cat "$t/kcalls")
+echo sso-db > "$t/kube/MISSING"; : > "$t/ss_calls"; run adopt; b_rc=$rc b_out=$out; b_ss=$(cat "$t/ss_calls")
+rm -f "$t/kube/MISSING"; touch "$t/kube/CMPFAIL"; run adopt; c_rc=$rc c_out=$out
+rm -f "$t/kube/CMPFAIL"; run adopt extra; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: adopt: 8 values adopted or already held; compare passed"* &&
+      $a_ss == *"put-new c1/jellyfin-admin password value=jf-secret-Aa11"* && $a_ss == *"put-new c1/identity-db username value=db-secret-Bb22"* &&
+      $a_ss == *"put-new c1/identity-admin password value=kc-secret-Cc33"* && $a_ss == *"put-new c1/grafana-admin username value=gr-secret-Dd44"* &&
+      $a_ss == *"put-new c1/argocd-admin password value=ar-secret-Ee55"* && $(grep -c '^secrets-store-prod put-new' <<< "$a_ss") -eq 8 &&
+      $a_ss == *"secrets-store-prod compare" && $(grep -c ' get secret ' <<< "$a_k") -eq 8 && $(grep -cvE ' get secret (jellyfin-admin|sso-db|sso-initial-admin|kube-prometheus-stack-grafana|argocd-initial-admin-secret) ' <<< "$a_k") -eq 0 &&
+      $a_out != *-secret-* && $b_rc -ne 0 && $b_out == *"FAIL: openbao-prod: adopt: at least one value was not adopted"* && $b_out == *"identity/sso-db key username: not adopted"* &&
+      $b_ss != *"compare" && $b_out != *-secret-* && $c_rc -ne 0 && $c_out == *"compare of SOPS against OpenBao did not pass"* && $c_out != *"PASS: openbao-prod: adopt"* &&
+      $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "20. adopt: only its fixed table is read; each value goes on stdin to put-new and is never printed; a value that cannot be adopted or a failed compare fails it; an argument runs nothing"
+else bad "20. rc=$a_rc $a_out | [$a_ss] | missing rc=$b_rc $b_out | cmp rc=$c_rc $c_out | extra rc=$x_rc"; fi
 
 exit "$fail"
