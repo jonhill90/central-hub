@@ -305,3 +305,18 @@ Set `last-tested` after a clean run, and `status: tested` after two clean runs i
 
 - `rebuild` tears prod down, so it needs `--full-teardown` and refuses without it. A fix goes through `resume <tap id> <commit>`, from the failed stage, or an apply in place; prod is never torn down again to ship a fix.
 - The dev-first check accepts the newest full dev pass at an older commit when that commit is behind the one being run and every file changed since is one dev never reads: `docs/`, any `.md`, `.github/`, the box's `agent_box` role and its limit-approvals file. Any other changed file, such as `hosts/rebuild-k8s.sh`, a playbook or a role dev runs, needs a new full dev run. The prod run from the failed stage is the proof for the rest.
+
+### The steps after the one command (owner's order of 2026-11-22)
+
+Between the `gateway` and `identity` stages of the one command, `rebuild-prod` runs four steps itself (the identity stage waits on the ExternalSecret these fill), splitting the run with `--only`, each logged as a stage in a `rebuild-<time>-post.log` beside the one command's log, so `resume` carries on from the one that failed:
+
+| Stage | Runs | Why |
+|---|---|---|
+| `store-admin` | `openbao-prod admin-firewall <tap id>` | the node firewall rule for the store's admin path (the dev rebuild runs the same play in stage `gateway`) |
+| `store-ca` | `openbao-prod ca` | the rebuild makes a new store CA; its header says to run it again after a rebuild |
+| `identity-values` | `c1-ansible apply identity-values <tap id>` | adds any key the realm needs that the box's `identity.env` lacks (idempotent; it names a key it added) |
+| `store-secrets` | `secrets-store-prod clear-hold` (only with the hold set), `put-apps`, `compare` | the apps' secrets from their SOPS copy into the rebuilt store, then proof that every key is there |
+
+A resume counts a step with no log line at all as done when a later stage of the same run ended well (a run that began before these were stages had them run by hand); a step whose line says it failed never counts. The run's own go is the clearance each step takes. The pin and the carried sftp keys are removed only after the whole run passed. If `clear-hold` sets any earlier snapshot aside, the run stops there with the pin kept, before `put-apps`: whether to restore a snapshot instead is a decision, not a default. The hold is cleared, not restored from a snapshot, because that is the path run by hand after prod run 9 and `restore-rebuilt` has not been run on prod; `clear-hold` keeps the earlier snapshots in a kept folder, and a restore stays a separate decision.
+
+The box's copy of the prod inventory always names the identity role's values file as `<keys>/prod/identity.env`. This is defensive: if the controller's inventory leaves the variable to the role's default (`~/.config/central-hub/identity.env`), that file could differ from the one `put-apps` and `c1-ansible` read. Whether that caused the extra `identity-values` change in prod resumes 2 and 3 (2026-11-22) is unproven.
