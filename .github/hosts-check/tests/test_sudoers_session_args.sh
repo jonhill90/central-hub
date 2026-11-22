@@ -95,6 +95,9 @@ ss = [w for w in d if w["name"] == "opnsense-sso-secret"][0]
 sst = render([ss])
 print("14", [l for l in sst.splitlines() if l.startswith("hostops ")] == ["hostops ALL=(keys) NOPASSWD: /x/opnsense-sso-secret.sh read"],
       not [l for l in sst.splitlines() if l.startswith("sess ")])
+rp = [w for w in d if w["name"] == "rebuild-prod"][0]
+rpt = render([rp])
+print("15", rp["args"] == ["check", "rebuild *", "resume *", "log"], "rebuild-prod.sh resume *" in rpt)
 PY
 )
 check() { # number, text
@@ -115,4 +118,5 @@ check 12 "12. lab-token: the session may status and mint as hostops; only hostop
 check 14 "14. inventory: the session sets, gets, lists, diffs, logs, imports and compares as invops and has no view; keys, hostops and guardops view one exact part each; invops cats the two old copies with two exact commands"
 check 13 "13. secrets-store-prod: the five exact owner-login forms are in the sudoers line, no owner-login *"
 check 14 "14. opnsense-sso-secret: only hostops may run read (as keys); the session has no line for it"
+check 15 "15. rebuild-prod: the session may check, rebuild, resume (tap and commit) and read the log"
 exit "$fail"
