@@ -43,6 +43,11 @@ LOG = "/var/log/box-apply.log"
 KEEP_RUNS = 50
 # On main, outside the role, so adding a line is not itself a limit change. Read from the commit being applied.
 APPROVALS = "hosts/ansible/agent-box-limit-approvals.txt"
+# The reviewer's recorded digest passes (pass-record digest-pass), one JSON line each. Written by user keys through
+# pass-record; root reads it. It replaces the separate approval PR (the owner's order of 2026-11-22 00:10 UTC).
+LEDGER = "/var/lib/agent-box/passes/limits.jsonl"
+# The owner's standing go for box installs: his order that dropped the box-install cards (2026-11-17 06:21:09 UTC).
+STANDING_TAP = "cmsg_01X43rfNYp4H1dL1V2dkfkwN9ubbtsV3Wpcx228ZrApLVh"
 
 run = {"time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "mode": None}
 
@@ -176,12 +181,37 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 REF = re.compile(r"[A-Za-z0-9_.:-]{6,200}")
 
 
+def ledger_entries(base):
+    """The reviewer's recorded digest passes for this baseline, from the pass ledger (`pass-record digest-pass`), as
+    (label, from, to, digest, pass, tap) rows. The standing tap is the owner's go that replaced the approval PR for
+    box installs (2026-11-22). The ledger is written through pass-record, which only the reviewer lane may call for
+    a digest pass; a line that is not well formed is left out."""
+    out = []
+    try:
+        with open(LEDGER) as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return out
+    for n, line in enumerate(lines, 1):
+        try:
+            e = json.loads(line)
+            frm, to, digest, ref = e["from"], e["to"], e["digest"], e["relay_ref"]
+        except (ValueError, KeyError, TypeError):
+            say(f"{LEDGER} line {n} is not a digest pass; left out")
+            continue
+        if e.get("recorder") != "reviewer" or frm != base:
+            continue
+        out.append((f"{LEDGER} line {n}", frm, to, digest, ref, STANDING_TAP))
+    return out
+
+
 def approved_limit_change(rules, repo, base, new):
-    """The approval line on main for the limit change since the baseline, or None. A line counts when its from is
-    the baseline, its to is on main, its digest matches, and its pass and tap are ids (the box can't check either;
-    a tap of "none" never counts). A limit that changed again after to doesn't spoil the line: only to is applied."""
+    """The approval for the limit change since the baseline, or None. It comes from a line on main
+    (`<from> <to> <digest> <pass> <tap>`) or from the reviewer's recorded digest pass in the ledger. A candidate counts
+    when its from is the baseline, its to is on main, its digest matches, and its pass and tap are ids (the box can't
+    check either; a tap of "none" never counts). A limit that changed again after to doesn't spoil it: only to is applied."""
     text = git(repo, "show", f"{new}:{APPROVALS}", check=False).stdout
-    fallback = None
+    cands = []
     for n, line in enumerate(text.splitlines(), 1):
         words = line.split("#", 1)[0].split()
         if not words:
@@ -189,39 +219,42 @@ def approved_limit_change(rules, repo, base, new):
         if len(words) != 5:
             say(f"{APPROVALS} line {n} is not <from> <to> <digest> <pass> <tap>; left out")
             continue
-        frm, to, digest, pass_ref, tap = words
-        if frm != base:
+        if words[0] != base:
             continue
+        cands.append((f"{APPROVALS} line {n}", *words))
+    cands += ledger_entries(base)
+    fallback = None
+    for label, frm, to, digest, pass_ref, tap in cands:
         if not (HEX40.fullmatch(to) and HEX64.fullmatch(digest) and REF.fullmatch(pass_ref) and REF.fullmatch(tap)) \
                 or tap.lower() == "none" or to == base:
-            say(f"{APPROVALS} line {n} is malformed; left out")
+            say(f"{label} is malformed; left out")
             continue
         if git(repo, "merge-base", "--is-ancestor", to, new, check=False).returncode != 0:
-            say(f"{APPROVALS} line {n}: {to[:8]} is not on main; left out")
+            say(f"{label}: {to[:8]} is not on main; left out")
             continue
-        # A limit that changed again after to is not in this line's digest. The apply checks out to itself, never
-        # main, so that later change stays out until its own line, from to, approves it; the line still counts.
+        # A limit that changed again after to is not in this candidate's digest. The apply checks out to itself, never
+        # main, so that later change stays out until its own approval, from to; the candidate still counts.
         after = [f for f in git(repo, "diff", "--name-only", "--no-renames", "-z", to, new).stdout.split("\0") if f]
         later = bool(limit_files(rules, after) + limit_keys(rules, repo, to, new, after))
         changed = [f for f in git(repo, "diff", "--name-only", "--no-renames", "-z", base, to).stdout.split("\0") if f]
         files = hit_files(limit_files(rules, changed) + limit_keys(rules, repo, base, to, changed))
         if not files:
-            say(f"{APPROVALS} line {n}: no limit changed from {base[:8]} to {to[:8]}; left out")
+            say(f"{label}: no limit changed from {base[:8]} to {to[:8]}; left out")
             continue
         if limit_digest(repo, base, to, files) != digest:
-            say(f"{APPROVALS} line {n}: its digest is not the diff of {', '.join(files)}; left out")
+            say(f"{label}: its digest is not the diff of {', '.join(files)}; left out")
             continue
-        ok = {"line": n, "to": to, "digest": digest, "pass": pass_ref, "tap": tap, "files": files}
+        ok = {"line": label, "to": to, "digest": digest, "pass": pass_ref, "tap": tap, "files": files}
         if not later:
             return ok
-        # A line whose to has a later limit change is kept in case no line reaches further. Of two such lines the
-        # one that reaches further wins (the other's to is an ancestor of its to), not the first one met: an old
-        # line that stalled would otherwise shadow every newer one for good.
+        # A candidate whose to has a later limit change is kept in case none reaches further. Of two such the one that
+        # reaches further wins (the other's to is an ancestor of its to), not the first one met: an old one that
+        # stalled would otherwise shadow every newer one for good.
         if fallback is None or git(repo, "merge-base", "--is-ancestor", fallback["to"], to, check=False).returncode == 0:
             fallback = ok
     if fallback is not None:
-        say(f"{APPROVALS} line {fallback['line']}: a limit changed again after {fallback['to'][:8]}; this applies "
-            f"{fallback['to'][:8]} only, and the later change needs its own line from it")
+        say(f"{fallback['line']}: a limit changed again after {fallback['to'][:8]}; this applies "
+            f"{fallback['to'][:8]} only, and the later change needs its own approval from it")
     return fallback
 
 
@@ -523,7 +556,7 @@ def limit_apply(s, rules, repo, base, ok, mode):
     run.update(new=to, approval={k: ok[k] for k in ("line", "digest", "pass", "tap")})
     git(repo, "checkout", "--quiet", "--detach", "--force", to)
     git(repo, "clean", "-ffdxq")
-    say(f"approved limit change, {APPROVALS} line {ok['line']}: {base[:8]} to {to[:8]}, digest {ok['digest'][:12]}, "
+    say(f"approved limit change, {ok['line']}: {base[:8]} to {to[:8]}, digest {ok['digest'][:12]}, "
         f"pass {ok['pass']}, tap {ok['tap']} (the box can't check the pass or the tap): {', '.join(ok['files'])}")
     rc, out = play(s, repo, check=True, limits=True)
     if failures(out) or rc not in (0, 2):
@@ -612,9 +645,11 @@ def main():
     if hits:
         ok = approved_limit_change(rules, repo, base, new)
         if ok is None:
+            digest = limit_digest(repo, base, new, hit_files(hits))
             stop("a limit changed since the baseline and main holds no approval line for it, so this waits "
-                 f"(D-0036 rule 6): {'; '.join(hits)}. To approve exactly this change, a merged line in "
-                 f"{APPROVALS}: {base} {new} {limit_digest(repo, base, new, hit_files(hits))} <pass> <tap>", code=3)
+                 f"(D-0036 rule 6): {'; '.join(hits)}. To approve exactly this change, the reviewer records "
+                 f"`pass-record digest-pass {base} {new} {digest} <ref> <time>`, or a merged line in "
+                 f"{APPROVALS}: {base} {new} {digest} <pass> <tap>", code=3)
         limit_apply(s, rules, repo, base, ok, mode)
         return
     say(f"{len(changed)} file(s) changed since the baseline, none of them a limit")
