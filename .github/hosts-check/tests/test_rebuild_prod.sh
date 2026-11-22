@@ -105,7 +105,7 @@ EOF
 # The post steps (store-admin, store-ca, identity-values, store-secrets) call these three wrappers; each stand-in logs its arguments and
 # fails when its name is in POST_FAIL (a space-separated list of "<wrapper> <first arg>").
 for w in openbao-prod c1-ansible secrets-store-prod; do
-  printf '#!/bin/bash\necho "post %s $*" >> %s/calls\n[[ " ${POST_FAIL:-} " != *" %s $1 "* ]] || exit 1\n' "$w" "$t" "$w" > "$t/libexec/$w.sh"
+  printf '#!/bin/bash\necho "post %s $*" >> %s/calls\n[[ " ${POST_FAIL:-} " != *" %s $1 "* ]] || exit 1\n[[ $1 != clear-hold ]] || echo "secrets-store: rebuild hold removed; ${SETASIDE:-0} earlier snapshot(s) set aside in /kept, not restored; removing them is the owner'"'"'s tap"\n' "$w" "$t" "$w" > "$t/libexec/$w.sh"
 done
 for job in opnsense-backup opnsense-offbox secrets-bundle secrets-bundle-offbox; do
   printf '#!/bin/bash\necho "job %s" >> %s/calls\n' "$job" "$t" > "$t/libexec/$job.sh"
@@ -280,7 +280,7 @@ run rebuild "$tap" "${sha:0:12}"
   ok "6b. a rebuild clears openbao-prod's known hosts (the rebuilt nodes have new host keys)" || bad "6b. openbao-prod's known_hosts is still there after a rebuild"
 order=$(grep -oE '^(playbook [^ ]+ [^ ]+ [^ ]+|ssh [^ ]+ .*(backup.pem|seal-1.key)$|job [a-z-]+|one-command .*|seal-in-memory [0-9]+)' "$t/calls" |
   sed -E 's/^playbook -i [^ ]+ /playbook /; s/^ssh [^ ]+ (sudo -n )?cat .*\/(backup.pem|seal-1.key)$/ssh \2/' | uniq | tr '\n' '|')
-want="playbook playbooks/k8s-backup.yml|ssh backup.pem|ssh seal-1.key|job opnsense-backup|job opnsense-offbox|job secrets-bundle|job secrets-bundle-offbox|one-command $t/work/rebuild-prod --teardown|seal-in-memory 32|"
+want="playbook playbooks/k8s-backup.yml|ssh backup.pem|ssh seal-1.key|job opnsense-backup|job opnsense-offbox|job secrets-bundle|job secrets-bundle-offbox|one-command $t/work/rebuild-prod --only teardown,vms,cluster,storage,openbao-seal,restore,gitops,secrets,apps,certs,gateway|seal-in-memory 32|one-command $t/work/rebuild-prod --only identity,identity-db,ui,backup,checks|seal-in-memory 32|"
 stages=$(sed -n 's/^STAGES=//p' "$t/seen-rebuild.env")
 if [[ $rc -eq 0 && $order == "$want" && $calls == *"playbooks/k8s-backup.yml --tags drill -e k8s_backup_drill=true"* &&
       -s $t/keys/prod/backup-certs/wk-a.pem && -s $t/keys/prod/backup-certs/cp-a.pem.keyid &&
@@ -612,8 +612,8 @@ run resume "$tap" "$sha"; r18d=$rc o18d=$out c18d=$calls
 if [[ $r18a -eq 1 && $o18a == *"resume needs a rebuild that stopped after its teardown"* && $c18a != *one-command* &&
       $r18b -eq 1 && $o18b == *"not the go the stopped run"* && $c18b != *one-command* &&
       $r18c -eq 1 && $o18c == *"1 of 2 prod nodes are Ready"* && $c18c != *one-command* &&
-      $r18d -eq 0 && $o18d == *"every stage before gateway has a good end line"*"resuming from gateway: gateway,identity,identity-db,ui,backup,checks"* &&
-      $c18d == *"one-command "*"--only gateway,identity,identity-db,ui,backup,checks"* && $c18d != *"--teardown"* && $c18d != *"--tags drill"* &&
+      $r18d -eq 0 && $o18d == *"every stage before gateway has a good end line"*"resuming from gateway: gateway,store-admin,store-ca,identity-values,store-secrets,identity,identity-db,ui,backup,checks"* &&
+      $c18d == *"one-command "*"--only gateway"*"post openbao-prod admin-firewall"*"one-command "*"--only identity,identity-db,ui,backup,checks"* && $c18d != *"--teardown"* && $c18d != *"--tags drill"* &&
       $c18d != *"job "* && $c18d != *"tofu destroy"* && $(cat "$t/seen-rebuild.env") == *"k8s_backup_restore_snapshot=$pinid"* &&
       $o18d == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin &&
       ! -e $t/work/openbao-prod/known_hosts && ! -e $t/work/openbao-prod/known_hosts.old ]]; then
@@ -660,32 +660,40 @@ tap=cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ
 resume_logs gateway; date -u > "$t/work/state/secrets-store-prod.rebuilding"
 run resume "$tap" "$sha"; r20a=$rc o20a=$out
 post_calls=$(grep '^post ' "$t/calls" | tr '\n' '|')
+seq20=$(grep -oE '^(post [a-z0-9-]+(\.sh)? [a-z-]+|one-command .*--only [a-z,-]+)' "$t/calls" | sed -E 's/^one-command .*--only /only /' | tr '\n' '|')
 want20="post openbao-prod admin-firewall $tap|post openbao-prod ca|post c1-ansible apply identity-values $tap|post secrets-store-prod clear-hold|post secrets-store-prod put-apps|post secrets-store-prod compare|"
 postlog=$(ls -1 "$t/work/rebuild-prod/logs"/rebuild-*-post.log 2>/dev/null | tail -n 1)
-if [[ $r20a -eq 0 && $post_calls == "$want20" && $(grep -cE ' (store-admin|store-ca|identity-values|store-secrets) end rc=0' "$postlog") -eq 4 &&
+if [[ $r20a -eq 0 && $post_calls == "$want20" && $seq20 == "only gateway|post openbao-prod admin-firewall|post openbao-prod ca|post c1-ansible apply|post secrets-store-prod clear-hold|post secrets-store-prod put-apps|post secrets-store-prod compare|only identity,identity-db,ui,backup,checks|" && $(grep -cE ' (store-admin|store-ca|identity-values|store-secrets) end rc=0' "$postlog") -eq 4 &&
       $o20a == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin ]]; then
-  ok "20. after the one command: admin firewall, store CA, identity values, then the hold cleared, put-apps and compare, each logged as a stage; the pin clears only after them"
-else bad "20. $r20a [$post_calls] [$(cat "$postlog" 2>/dev/null)] $o20a"; fi
+  ok "20. after gateway and before identity: admin firewall, store CA, identity values, then the hold cleared, put-apps and compare, each logged as a stage; the pin clears only after the whole run"
+else bad "20. $r20a [$seq20] [$post_calls] [$(cat "$postlog" 2>/dev/null)] $o20a"; fi
 rm -f "$postlog" "$t/work/state/secrets-store-prod.rebuilding"
 # 20b. A step that fails stops the run: the later steps do not run, the pin stays, the log names the step.
 resume_logs gateway; : > "$t/calls"
 POST_FAIL="openbao-prod ca" run resume "$tap" "$sha"; r20b=$rc o20b=$out c20b=$calls
 if [[ $r20b -ne 0 && $o20b == *"FAIL: rebuild-prod: post step store-ca failed"* && $c20b == *"post openbao-prod admin-firewall"* && $c20b != *"identity-values"* &&
-      $c20b != *"put-apps"* && -e $t/work/state/prod-restore-pin && $o20b != *"PASS: rebuild-prod: prod torn down and built again"* ]]; then
+      $c20b != *"put-apps"* && $c20b != *"--only identity,"* && -e $t/work/state/prod-restore-pin && $o20b != *"PASS: rebuild-prod: prod torn down and built again"* ]]; then
   ok "20b. a post step that fails stops the run before the later steps, keeps the pin and names the step"
 else bad "20b. $r20b $o20b [$c20b]"; fi
 rm -f "$t/work/rebuild-prod/logs"/rebuild-*-post.log
-# 20c. A resume after that carries on from the failed step only: no one command, no step that already ended well.
+# 20c. A resume after that carries on from the failed step only: not the stages or steps before it.
 resume_logs gateway
-printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" "2999-01-01T01:00:11Z identity end rc=0 5s" "2999-01-01T01:00:12Z identity-db end rc=0 5s" \
-  "2999-01-01T01:00:13Z ui end rc=0 5s" "2999-01-01T01:00:14Z backup end rc=0 5s" "2999-01-01T01:00:15Z checks end rc=0 5s" > "$logd/rebuild-29990101T020000Z.log"
+printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" > "$logd/rebuild-29990101T020000Z.log"
 printf '%s\n' "2999-01-01T02:00:00Z store-admin start" "2999-01-01T02:00:01Z store-admin end rc=0 1s" "2999-01-01T02:00:02Z store-ca start" "2999-01-01T02:00:03Z store-ca end rc=1 1s" > "$logd/rebuild-29990101T030000Z-post.log"
 run resume "$tap" "$sha"; r20c=$rc o20c=$out c20c=$calls
-if [[ $r20c -eq 0 && $o20c == *"resuming from store-ca: store-ca,identity-values,store-secrets"* && $c20c != *one-command* && $c20c != *"admin-firewall"* &&
-      $c20c == *"post openbao-prod ca"*"post c1-ansible apply identity-values"*"put-apps"* ]]; then
-  ok "20c. a resume after a failed post step carries on from it: no one command, no step already done"
+if [[ $r20c -eq 0 && $o20c == *"resuming from store-ca: store-ca,identity-values,store-secrets,identity,identity-db,ui,backup,checks"* && $c20c != *"--only gateway"* && $c20c != *"admin-firewall"* &&
+      $c20c == *"post openbao-prod ca"*"post c1-ansible apply identity-values"*"put-apps"*"--only identity,identity-db,ui,backup,checks"* ]]; then
+  ok "20c. a resume after a failed post step carries on from it: not the stages or steps before it, then the identity stage onward"
 else bad "20c. $r20c $o20c [$c20c]"; fi
 rm -f "$logd"/*
+# 20d. clear-hold that sets snapshots aside stops the run before put-apps, with the pin kept (the store may be really fresh and want a restore).
+resume_logs gateway; date -u > "$t/work/state/secrets-store-prod.rebuilding"; : > "$t/calls"
+SETASIDE=2 run resume "$tap" "$sha"; r20d=$rc o20d=$out c20d=$calls
+if [[ $r20d -ne 0 && $o20d == *"clear-hold set aside 2 earlier snapshot(s)"* && $c20d == *"post secrets-store-prod clear-hold"* && $c20d != *"put-apps"* &&
+      $c20d != *"--only identity,"* && -e $t/work/state/prod-restore-pin ]]; then
+  ok "20d. a clear-hold that sets aside snapshots stops the run before put-apps and keeps the pin"
+else bad "20d. $r20d $o20d [$c20d]"; fi
+rm -f "$t/work/state/secrets-store-prod.rebuilding" "$t/work/rebuild-prod/logs"/rebuild-*-post.log "$logd"/*
 
 # 21. The box's copy of the inventory names the identity values file at the box's copy even when the controller's inventory leaves the
 # variable to the role's default, which under this wrapper's HOME is another file than the one put-apps and c1-ansible read.
