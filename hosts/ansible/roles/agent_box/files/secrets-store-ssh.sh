@@ -11,13 +11,14 @@
 #   check       reads all of it back and compares it with what apply writes; prints PASS or FAIL lines
 #   public      writes the two CA public keys (not secrets) to <folder>/user-ca.pub and <folder>/host-ca.pub
 #   sign-host   <host public key file> <names, comma separated> <out file>: signs a box's host key for its names
+# (The wrapper also passes its libexec folder as the sixth argument; this helper does not use it.)
 # Every call uses the admin AppRole (D-0062), so it runs only from the box's /32. No token, ID or secret is printed.
 # Values: the settings' ssh_ca keys (admin_group, principal, user_ttl, host_ttl, zone, redirect) override what the
 # wrapper derives from the inventory (zone, as for owner-login).
 set -euo pipefail
 umask 077
 
-action=${1:-} addr=${2:-}/v1 cacert=${3:-} keys=${4:-} settings=${5:-} libexec=${6:-}
+action=${1:-} addr=${2:-}/v1 cacert=${3:-} keys=${4:-} settings=${5:-}
 shift 6 2>/dev/null || true
 die() { echo "secrets-store ssh-ca $action: $*" >&2; exit 1; }
 [[ -n $cacert && -n $keys && -n $settings ]] || die "called without the wrapper's arguments"
