@@ -63,6 +63,12 @@
   loop_control:
     label: "{{ item }}.<zone>"
 
+- name: No short alias is both live and retired
+  ansible.builtin.assert:
+    that: (opnsense_lab_short_app_names | intersect(opnsense_lab_short_app_names_retired)) | length == 0
+    fail_msg: A name in opnsense_lab_short_app_names is also in opnsense_lab_short_app_names_retired; the retired task would delete it.
+    quiet: true
+
 # Names an app used to have. A rename leaves the old override behind, so each name here has its override removed.
 - name: No Unbound host overrides for retired app short aliases
   oxlorg.opnsense.unbound_host:
