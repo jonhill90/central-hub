@@ -279,6 +279,11 @@ if which == "backup-check":
     print("c1-ansible: backup alias: the host address was %s in the inventory" % ("found" if pve_addr else "NOT found (proxmox_host_mgmt_address on the proxmox group)"))
 v["ansible_ssh_private_key_file"] = key
 v["ansible_ssh_common_args"] = "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=" + known
+# The k8s_certs role's arg spec renders every default, even under tag issue, and k8s_certs_smoke_client defaults to
+# groups['proxmox'] | first, a group this inventory copy drops: `check certs` on the box stopped there (07:02Z 2026-11-22). The
+# same two values rebuild-prod.sh sets: the smoke client is the box itself, and its root file is in the run's own folder (keys owns it).
+v["k8s_certs_smoke_client"] = "localhost"
+v["k8s_certs_smoke_root_file"] = known.rsplit("/", 1)[0] + "/lab-root-ca.crt"
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
 )" "$inv_src" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$keys/prod/identity-theme" "${seed_dir}" "$name" "$work/openbao-prod.json" "$libexec/prod-root-vars.py" || exit 1
