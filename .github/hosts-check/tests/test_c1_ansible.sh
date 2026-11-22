@@ -14,7 +14,8 @@
 #   9. users runs the identity playbook with tags secrets,users, the values file, no realm replace and one fixed user; apply is its
 #      own verb; it never runs the keycloak tag.
 #   8. observability runs its playbook with its fixed tags and no extra variables.
-#   7. gateway and gitops run their own playbook with fixed tags and no extra variables or values file; certs and the install tag are not
+#   7. gateway runs its own playbook with a fixed tag and no extra variables; gitops with fixed tags and only k8s_gitops_source_jellyfin_setup=false
+#      (prod restores its own Jellyfin config), and its CA file for the sign-in is remapped to the box's copy; no values file; certs and the install tag are not
 #      names; apply needs a clearance id for them too.
 #  10. The Proxmox web names (proxmox_cert_names on the proxmox group's hosts or vars) reach the box's copy as a literal
 #      k8s_identity_proxmox_hosts on k8s_nodes, so the identity render has the proxmox client; the group's logins and keys
@@ -117,11 +118,18 @@ run check gitops; g2=$calls
 run apply gateway "$clr"; g3=$calls; g3rc=$rc
 run apply gitops "$clr"; g4=$calls; g4o=$out
 if [[ $g1 == *"playbooks/k8s-gateway.yml --tags gateway --check --diff" && $g1 != *" -e "* &&
-      $g2 == *"playbooks/k8s-gitops.yml --tags source,ui,sso --check --diff" && $g2 != *" -e "* &&
+      $g2 == *"playbooks/k8s-gitops.yml -e k8s_gitops_source_jellyfin_setup=false --tags source,ui,sso --check --diff" &&
       $g3rc -eq 0 && $g3 == *"playbooks/k8s-gateway.yml --tags gateway" && $g3 != *--check* &&
-      $g4 == *"playbooks/k8s-gitops.yml --tags source,ui,sso" && $g4 != *--check* && $g4o == *"clearance $clr"* ]]; then
-  ok "7a. gateway and gitops: own playbook, fixed tags, no extra variables, apply is its own verb"
+      $g4 == *"playbooks/k8s-gitops.yml -e k8s_gitops_source_jellyfin_setup=false --tags source,ui,sso" && $g4 != *--check* && $g4o == *"clearance $clr"* ]]; then
+  ok "7a. gateway: own playbook, fixed tag, no extra variables; gitops: fixed tags and only jellyfin setup off (prod restores its own Jellyfin config); apply is its own verb"
 else bad "7a. [$g1] [$g2] [$g3] [$g4]"; fi
+# 7c: the sign-in's CA file names a path on the controller; the box's copy is <keys>/prod/lab-ca/root.crt (rebuild-prod.sh maps it the same way).
+inventory "all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_gitops_sso: true" "        k8s_gitops_sso_root_ca_file: ~/.config/central-hub/lab-ca/root.crt" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}"
+run check gitops; seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
+if [[ $rc -eq 0 && $seen == *"k8s_gitops_sso_root_ca_file: $t/keys/prod/lab-ca/root.crt"* && $seen != *".config/central-hub"* && $seen == *"k8s_gitops_sso: true"* ]]; then
+  ok "7c. the sign-in's CA file is remapped to the box's copy under <keys>/prod/lab-ca; the sso switch is kept as the inventory has it"
+else bad "7c. $rc [$calls] $out | $seen"; fi
+inventory "${prod_inv[@]}"
 r7=""
 for args in "check certs" "check k8s-certs" "apply certs $clr" "check gitops-install" "apply gateway" "apply gitops badid"; do
   # shellcheck disable=SC2086

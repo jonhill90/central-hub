@@ -32,7 +32,8 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # name -> playbook (under hosts/ansible), and the private file it needs on the box (empty: none) with the variable that names it.
 # gateway: the shared Gateway and its node firewall ports (tag gateway only: not the smoke test, which applies and removes an app).
 # gitops: the GitOps engine's source, web UI route and sign-in settings (tags source, ui, sso only: never install, the pinned
-# upstream install of Argo CD). observability: metrics-server, kube-prometheus-stack, Loki, Alloy and Grafana's route, with every tag the
+# upstream install of Argo CD). It passes k8s_gitops_source_jellyfin_setup=false, because prod is rebuilt from a restore of its own Jellyfin config
+# (with the admin password the config holds), which a fresh admin Secret cannot match, and it maps the sign-in's CA file to <keys>/prod/lab-ca/root.crt. observability: metrics-server, kube-prometheus-stack, Loki, Alloy and Grafana's route, with every tag the
 # role has named, so a tag added later is not run until this line names it. None of them needs a private file on the box: the inventory carries their values. k8s-certs.yml is not
 # a name here: it needs the lab CA's key and the Cloudflare token on the controller, and the box holds neither.
 # clients: makes sure clients `proxmox`, `openbao`, `opnsense` and `central-hub-app` are in the live realm (tags secrets and clients, the role's add-in-place path: files/ensure-client.sh
@@ -68,7 +69,7 @@ declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_v
 # are made as ExternalSecrets on store `openbao` (plan step 8a; put-apps must have written the values first). identity never replaces realm lab on prod: the role's default deletes the realm and
 # imports it again when its code changes, which on prod ends every sign-in and drops enrolled one-time codes. With false
 # the realm is only made when missing; a client is added in place by the role's clients tag.
-declare -A fixed_vars=([identity]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [users]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [clients]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [backup-check]="k8s_backup_env_file=$keys/c1-backup.env")
+declare -A fixed_vars=([identity]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [users]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [clients]="k8s_identity_realm_replace=false k8s_identity_secrets_store=openbao" [backup-check]="k8s_backup_env_file=$keys/c1-backup.env" [gitops]="k8s_gitops_source_jellyfin_setup=false")
 # Tags per name. identity runs every task plus the clients tag, which is off by default. The tag acts only on the clients in
 # k8s_identity_ensure_clients (empty by default), so the wrapper names them: proxmox, the client the realm gained after prod's
 # realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
@@ -139,7 +140,7 @@ install -d -m 700 "$inventory"
 seed_dir=$keys/prod/backup-sftp
 [[ $name != backup-check ]] || seed_dir=$work/state/backup-check-seed
 python3 -I -c "$(cat <<'PY'
-import sys, yaml
+import os, sys, yaml
 src, dst, key, known, themes, sftp_keys, which = sys.argv[1:8]
 def die(m):
     print("c1-ansible: " + m, file=sys.stderr); sys.exit(1)
@@ -204,6 +205,17 @@ def theme(n):
     elif isinstance(n, list):
         for i in n: theme(i)
 theme(d)
+# Argo CD's sign-in trusts the lab root: k8s_gitops_sso_root_ca_file names a path on the controller, and on the box it is the copy
+# the controller's prod-files run puts at <keys>/prod/lab-ca/root.crt, the same file rebuild-prod.sh maps it to. Without the
+# map, `gitops` (tag sso) stops at "The CA file is a certificate" on a path the box does not have.
+def sso_ca(n):
+    if isinstance(n, dict):
+        for k in list(n):
+            if k == "k8s_gitops_sso_root_ca_file" and isinstance(n[k], str) and n[k]: n[k] = os.path.dirname(themes.rstrip("/")) + "/lab-ca/root.crt"
+            else: sso_ca(n[k])
+    elif isinstance(n, list):
+        for i in n: sso_ca(i)
+sso_ca(d)
 def find(n, name):
     if isinstance(n, dict):
         if name in n and isinstance(n[name], dict): return n[name]

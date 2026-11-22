@@ -393,8 +393,7 @@ check_manifests() {
   fi
   # A cluster without ClusterIssuer lab-ca and with names that are not its own (dev: labCaIssuer, loginProbe
   # and jellyfinSetup false and panelCheckSuspended true, from k8s_gitops_source_lab_ca_issuer, _login_probe and _jellyfin_setup): the root passes
-  # jellyfin sso.labRoot.certificate and setup.enabled false and makes no login-probe, and jellyfin then makes no Certificate on lab-ca and no setup CronJob or admin
-  # Secret. c1, which leaves all three true, renders none of these changes, and Ansible passes them only when false (cases.txt).
+  # jellyfin sso.labRoot.certificate and setup.enabled false and makes no login-probe, and jellyfin then makes no Certificate on lab-ca, and a setup CronJob that is suspended, with its admin Secret objects still rendered (the Application does not prune, so a CronJob an earlier render made would keep failing; c1 renders it with suspend false). c1, which leaves all three true, renders none of these changes, and Ansible passes them only when false (cases.txt).
   helm template root hosts/kubernetes/home/c1/root --set zone=example.com --set gatewayAddress=192.0.2.10 \
     --set labCaIssuer=false --set loginProbe=false --set jellyfinSetup=false --set panelCheckSuspended=true > "$work/rendered/root-c1-dev-no-lab-ca.yaml"
   helm template monitoring-extras hosts/kubernetes/home/c1/apps/monitoring-extras --namespace monitoring \
@@ -409,7 +408,10 @@ check_manifests() {
     grep -q 'panelCheck.suspend' "$work/rendered/root-c1.yaml" ||
     ! grep -qE '^  suspend: true$' "$work/rendered/app-c1-monitoring-extras-dev-suspended.yaml" ||
     ! grep -qE '^  suspend: false$' "$work/rendered/app-c1-monitoring-extras.yaml" ||
-    grep -qE 'kind: CronJob|kind: ExternalSecret' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    ! grep -q 'kind: ExternalSecret' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    ! grep -q 'kind: CronJob' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    ! grep -qE '^  suspend: true$' "$work/rendered/app-c1-jellyfin-no-lab-ca.yaml" ||
+    ! grep -qE '^  suspend: false$' "$work/rendered/app-c1-jellyfin.yaml" ||
     grep -q 'setup.enabled' "$work/rendered/root-c1.yaml" ||
     ! grep -q 'kind: CronJob' "$work/rendered/app-c1-jellyfin.yaml" ||
     grep -q 'sso.labRoot.certificate' "$work/rendered/root-c1.yaml" ||
@@ -531,6 +533,8 @@ check_backup() {
   suite bash "$here/tests/test_wait_apps.sh"
   suite bash "$here/tests/test_rebuild_certs_order.sh"
   suite bash "$here/tests/test_rebuild_cronjob_jobs.sh"
+  suite bash "$here/tests/test_rebuild_argocd_signin.sh"
+  suite bash "$here/tests/test_root_gateway_prune.sh"
   suite bash "$here/tests/test_openbao_handover.sh"
   suite bash "$here/tests/test_openbao_refresh.sh"
   suite bash "$here/tests/test_openbao_measure.sh"
