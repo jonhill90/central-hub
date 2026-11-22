@@ -13,7 +13,10 @@
 #  15. certs runs the certs playbook with tag issue only, no values file and no extra variables; the inventory's three controller
 #      paths (Cloudflare token, lab CA chain and key) are remapped to <keys>/prod; it stops while one of the three files is missing,
 #      and when the inventory has issuing or the lab CA off (the role would then delete the issuers); apply needs a clearance id.
-#  16. node-ports runs its one-task playbook with no tags and no extra variables; its output shows nodes as cp-N and wk-N and masks every
+#  16. The k8s_certs role's argument spec renders every default, even under tag issue. Run for real (ansible-playbook, tag that matches no
+#      task, connection local) against the inventory `check certs` builds, it passes: on the box it stopped at groups['proxmox'] | first
+#      (k8s_certs_smoke_client), a group the box's inventory copy drops. A failed play also makes the wrapper return non-zero.
+#  17. node-ports runs its one-task playbook with no tags and no extra variables; its output shows nodes as cp-N and wk-N and masks every
 #      address, in the screen and in the log; the playbook and the task file it includes hold no Helm, kubectl, command, shell or delete task.
 #   5. log prints the run's own lines.
 #   9. users runs the identity playbook with tags secrets,users, the values file, no realm replace and one fixed user; apply is its
@@ -240,7 +243,7 @@ rm -f "$t/keys/prod/identity.env"
 run check users
 if [[ $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "9b. users stops while the values file is missing"; else bad "9b. $rc $out"; fi
 # 15: certs
-certs_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_certs_issue: true" "        k8s_certs_lab_ca: true"
+certs_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_certs_issue: true" "        k8s_certs_lab_ca: true" "        k8s_certs_zone: example.test" "        k8s_certs_acme_email: ops@example.test" "        k8s_certs_gateway_address: 192.0.2.5"
            "        k8s_certs_cloudflare_token_file: ~/.config/central-hub/cf.txt" "        k8s_certs_lab_ca_cert_file: ~/.config/central-hub/lab-ca/chain.crt"
            "        k8s_certs_lab_ca_key_file: ~/.config/central-hub/lab-ca/key" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}")
 inventory "${certs_inv[@]}"
@@ -259,7 +262,22 @@ if [[ $k1rc -ne 0 && $k1o == *"is missing"* &&
       $k5rc -ne 0 && -z $k5 && $k5o == *"never does"* ]]; then
   ok "15. certs: tag issue only, the three files remapped to the box's copies, stops on a missing file or issuing off, apply needs a clearance id"
 else bad "15. $k1rc [$k1o] $k2rc [$k2] $k3rc [$k3] $k4rc $k5rc [$k5o]"; fi
-# 16: node-ports
+
+# 16: the role's argument spec against the inventory the wrapper builds (real ansible-playbook, no stub), and the wrapper's return code on a failed play
+inventory "${certs_inv[@]}"
+run check certs
+cp "$t/seen-inventory.yml" "$t/arg-inv.yml"; mkdir -p "$t/arg-inv"; cp "$t/arg-inv.yml" "$t/arg-inv/hosts.yml"
+printf '%s\n' "- hosts: k8s_control_plane[0]" "  gather_facts: false" "  connection: local" "  roles: [k8s_certs]" > "$t/arg-play.yml"
+argout=$(cd hosts/ansible && ANSIBLE_ROLES_PATH=roles ANSIBLE_HOME="$t/ahome" ansible-playbook -i "$t/arg-inv/" "$t/arg-play.yml" --tags no-such-tag 2>&1); argrc=$?
+cat > "$venv/ansible-playbook" <<S
+#!/bin/bash
+echo "FAILED stub"; exit 2
+S
+run check certs; failrc=$rc
+if [[ $argrc -eq 0 && $argout == *"failed=0"* && $failrc -ne 0 ]]; then
+  ok "16. the k8s_certs argument spec passes against the wrapper's inventory (real ansible); a failed play makes the wrapper return non-zero"
+else bad "16. $argrc [${argout: -600}] failrc=$failrc"; fi
+# 17: node-ports
 np_inv=("all:" "  children:" "    k8s_nodes:" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-zz.lab.example: {ansible_host: 192.0.2.10}"
         "        k8s_workers:" "          hosts:" "            wk-aa.lab.example: {ansible_host: 192.0.2.11}")
 inventory "${np_inv[@]}"
@@ -279,11 +297,11 @@ if [[ $n1rc -eq 0 && $n1 == *"playbooks/k8s-node-ports.yml --check --diff" && $n
       $n1o == *"changed: [cp-1] => (item=9100/tcp)"* && $n1o == *"ok: [wk-1] => (item=9100/tcp)"* && $n1o == *"fatal: [<ip>]: UNREACHABLE (cp-1 and <ip>)"* &&
       $n1o != *"192.0.2."* && $n1o != *"198.51"* && $n1o != *"lab.example"* && $n1log != *"192.0.2."* && $n1log != *"lab.example"* &&
       $n2rc -eq 0 && $n2 == *"playbooks/k8s-node-ports.yml" && $n2 != *--check* && $n3rc -eq 2 ]]; then
-  ok "16. node-ports: its own playbook, no tags or variables; cp-N and wk-N for the nodes, other addresses masked, in the screen and the log; apply needs a clearance id"
-else bad "16. $n1rc [$n1] [$n1o] [$n1log] $n2rc [$n2] $n3rc"; fi
+  ok "17. node-ports: its own playbook, no tags or variables; cp-N and wk-N for the nodes, other addresses masked, in the screen and the log; apply needs a clearance id"
+else bad "17. $n1rc [$n1] [$n1o] [$n1log] $n2rc [$n2] $n3rc"; fi
 code=$(grep -hv '^ *#' "$pb" "$tf")
 if ! grep -qiE 'helm|kubectl|ansible.builtin.(command|shell|raw|script)|delete|state: absent' <<< "$code" && grep -q "ansible.posix.firewalld" "$tf" &&
    [[ $(grep -c "^    - name:\|^  - name:" "$pb") -eq 1 ]]; then
-  ok "16b. the node-ports playbook and its task file hold no Helm, kubectl, command, shell or delete task: one include of the firewalld task file"
-else bad "16b. the node-ports play holds more than the firewalld task"; fi
+  ok "17b. the node-ports playbook and its task file hold no Helm, kubectl, command, shell or delete task: one include of the firewalld task file"
+else bad "17b. the node-ports play holds more than the firewalld task"; fi
 exit "$fail"
