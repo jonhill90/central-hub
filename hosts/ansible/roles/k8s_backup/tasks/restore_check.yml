@@ -23,9 +23,12 @@
     'no restore recorded' not in k8s_backup_restore_check.stderr
   check_mode: false
 
+# The lines are trimmed, and the PASS line loses its timestamp, so each starts with its own word (snapshot, canary, folder, PASS): the
+# rebuild's short log keeps the quoted lines that do (hosts/rebuild-k8s.sh, the `checks` stage), which is how a run's worklog
+# names which canary the check accepted (the restore's own, or the one a later backup recorded).
 - name: restore_check | What is in place
   ansible.builtin.debug:
-    msg: "{{ k8s_backup_restore_check.stdout_lines }}"
+    msg: "{{ k8s_backup_restore_check.stdout_lines | map('trim') | map('regex_replace', '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z ', '') | list }}"
 
 - name: restore_check | The app, its claim and its volume
   delegate_to: "{{ groups['k8s_control_plane'] | first }}"
