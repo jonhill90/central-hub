@@ -14,3 +14,6 @@ argument_specs:
       ssh_ca_trust_principals_dir: {type: str, default: /etc/ssh/auth_principals, description: One file per account.}
       ssh_ca_trust_host_cert_dest: {type: str, default: /etc/ssh/ssh_host_ed25519_key-cert.pub, description: Where the host certificate goes.}
       ssh_ca_trust_remove: {type: bool, default: false, description: Undo the role's files and settings.}
+      ssh_ca_trust_unit: {type: str, default: "ssh on Debian, else sshd", description: The sshd service the role reloads.}
+      ssh_ca_trust_file_owner: {type: str, default: root, description: Owner of the files the role writes.}
+      ssh_ca_trust_file_group: {type: str, default: root, description: Group of the files the role writes.}

@@ -1,0 +1,23 @@
+---
+# Undo (D-0064 rule 12). Order matters: sshd must stop reading the drop-in before the files it names go. A missing
+# RevokedKeys file makes sshd treat every key as revoked, which is a lock-out. So: remove the drop-in, reload sshd now,
+# check it, and only then remove the files. The reload is not left to the end of the play.
+- name: ssh-ca | The drop-in goes first
+  ansible.builtin.file: {path: "{{ ssh_ca_trust_dropin }}", state: absent}
+
+- name: ssh-ca | sshd accepts the configuration without the drop-in
+  ansible.builtin.command: sshd -t
+  changed_when: false
+
+# Directly, not through the handler: nothing may stand between the reload and the removal of the files below.
+- name: ssh-ca | sshd reloads without the drop-in, before any file it names is removed
+  ansible.builtin.command: "systemctl reload {{ ssh_ca_trust_unit }}"  # noqa: command-instead-of-module
+  changed_when: true
+
+- name: ssh-ca | Then the files it named go
+  ansible.builtin.file: {path: "{{ item }}", state: absent}
+  loop:
+    - "{{ ssh_ca_trust_user_ca_dest }}"
+    - "{{ ssh_ca_trust_krl_dest }}"
+    - "{{ ssh_ca_trust_principals_dir }}"
+    - "{{ ssh_ca_trust_host_cert_dest }}"

@@ -9,3 +9,6 @@ ssh_ca_trust_host_cert_dest: /etc/ssh/ssh_host_ed25519_key-cert.pub
 ssh_ca_trust_krl_file: ""
 ssh_ca_trust_host_cert_file: ""
 ssh_ca_trust_remove: false   # true undoes everything this role wrote (D-0064 rule 12)
+ssh_ca_trust_unit: "{{ 'ssh' if ansible_facts.os_family | default('') == 'Debian' else 'sshd' }}"   # the sshd service name
+ssh_ca_trust_file_owner: root   # a test changes these two to run unprivileged
+ssh_ca_trust_file_group: root
