@@ -269,7 +269,10 @@ else bad "5. [$r5] $out"; fi
 
 # 6
 tap=cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ
+mkdir -p "$t/work/openbao-prod"; echo old > "$t/work/openbao-prod/known_hosts"; echo old > "$t/work/openbao-prod/known_hosts.old"
 run rebuild "$tap" "${sha:0:12}"
+[[ ! -e $t/work/openbao-prod/known_hosts && ! -e $t/work/openbao-prod/known_hosts.old ]] &&
+  ok "6b. a rebuild clears openbao-prod's known hosts (the rebuilt nodes have new host keys)" || bad "6b. openbao-prod's known_hosts is still there after a rebuild"
 order=$(grep -oE '^(playbook [^ ]+ [^ ]+ [^ ]+|ssh [^ ]+ .*(backup.pem|seal-1.key)$|job [a-z-]+|one-command .*|seal-in-memory [0-9]+)' "$t/calls" |
   sed -E 's/^playbook -i [^ ]+ /playbook /; s/^ssh [^ ]+ (sudo -n )?cat .*\/(backup.pem|seal-1.key)$/ssh \2/' | uniq | tr '\n' '|')
 want="playbook playbooks/k8s-backup.yml|ssh backup.pem|ssh seal-1.key|job opnsense-backup|job opnsense-offbox|job secrets-bundle|job secrets-bundle-offbox|one-command $t/work/rebuild-prod --teardown|seal-in-memory 32|"
@@ -599,6 +602,7 @@ run resume "$tap" "$sha"; r18a=$rc o18a=$out c18a=$calls
 resume_logs gateway
 run resume cmsg_01ZZZZZZZZZZZZZZZZZZZZZZZZZZ "$sha"; r18b=$rc o18b=$out c18b=$calls
 NODE_WK_STATE=NotReady run resume "$tap" "$sha"; r18c=$rc o18c=$out c18c=$calls
+mkdir -p "$t/work/openbao-prod"; echo old > "$t/work/openbao-prod/known_hosts"; echo old > "$t/work/openbao-prod/known_hosts.old"
 run resume "$tap" "$sha"; r18d=$rc o18d=$out c18d=$calls
 if [[ $r18a -eq 1 && $o18a == *"resume needs a rebuild that stopped after its teardown"* && $c18a != *one-command* &&
       $r18b -eq 1 && $o18b == *"not the go the stopped run"* && $c18b != *one-command* &&
@@ -606,8 +610,9 @@ if [[ $r18a -eq 1 && $o18a == *"resume needs a rebuild that stopped after its te
       $r18d -eq 0 && $o18d == *"every stage before gateway has a good end line"*"resuming from gateway: gateway,identity,identity-db,ui,backup,checks"* &&
       $c18d == *"one-command "*"--only gateway,identity,identity-db,ui,backup,checks"* && $c18d != *"--teardown"* && $c18d != *"--tags drill"* &&
       $c18d != *"job "* && $c18d != *"tofu destroy"* && $(cat "$t/seen-rebuild.env") == *"k8s_backup_restore_snapshot=$pinid"* &&
-      $o18d == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin ]]; then
-  ok "18. resume refuses with no stopped run, another go's tap or a node not Ready; otherwise runs only the stages from the first with no good end line, with no teardown, backup or bundle, and clears the pin"
+      $o18d == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin &&
+      ! -e $t/work/openbao-prod/known_hosts && ! -e $t/work/openbao-prod/known_hosts.old ]]; then
+  ok "18. resume refuses with no stopped run, another go's tap or a node not Ready; otherwise runs only the stages from the first with no good end line, with no teardown, backup or bundle, clears the pin and openbao-prod's known hosts"
 else bad "18. $r18a $o18a | $r18b $o18b | $r18c $o18c | $r18d $o18d [$c18d]"; fi
 # 18b. After a resumed run that ended well the stop no longer counts; a resume with every stage already good has nothing to run.
 resume_logs gateway
