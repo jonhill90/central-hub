@@ -283,22 +283,11 @@ install -d -m 700 "$inventory"
 inv_ok=false
 if [[ -s $pkeys/inventory-hosts.yml && -s $settings ]] && python3 -I -c "$(cat <<'PY'
 import ipaddress, json, os, sys, yaml
-src, dst, key, known, pkeys, keys, certs, settings, repo, sftp_keys = sys.argv[1:11]
+src, dst, key, known, pkeys, keys, certs, settings, repo, sftp_keys, rootvars = sys.argv[1:12]
 def die(m):
     print("FAIL: rebuild-prod: " + m); sys.exit(1)
-s = json.load(open(settings))
-seal, store, cidr = s.get("seal_node") or "", s.get("store_host") or "", s.get("box_cidr") or ""
-if not seal or not store: die("openbao-prod.json needs seal_node and store_host")
-if cidr:
-    try: n = ipaddress.ip_network(cidr, strict=False)
-    except ValueError: die("box_cidr must be one address as a /32")
-    if n.prefixlen != 32 or n.is_loopback: die("box_cidr must be one address as a /32")
-admin = s.get("admin_address") or ""
-if admin:
-    try: a = ipaddress.ip_address(admin)
-    except ValueError: a = None
-    if a is None or a.version != 4 or a.is_loopback: die("admin_address must be one IPv4 address, not loopback")
-    if not cidr: die("admin_address needs box_cidr: only the box's /32 may reach the admin address")
+exec(open(rootvars).read())   # prod-root-vars.py: the root Application's variables, shared with c1-ansible.sh
+seal, store, cidr, admin = read_root_settings(settings, die)
 d = yaml.safe_load(open(src))
 # The Proxmox host's address on VNet mgmt (proxmox_host_mgmt_address, on the proxmox group or its hosts) is read before the group
 # is dropped, so the nodes' sftp alias can name the host with no proxmox group in the box's copy. Only that one address passes,
@@ -323,9 +312,7 @@ pve_addr = pve_address(d)
 DROP = {"ansible_ssh_common_args", "ansible_ssh_extra_args", "ansible_ssh_args", "ansible_ssh_private_key_file",
         "ansible_ssh_host", "ansible_ssh_executable", "ansible_connection", "ansible_ssh_pass", "ansible_password",
         "ansible_private_key_file", "ansible_host_key_checking", "k8s_gateway_smoke_client", "k8s_certs_smoke_client",
-        "k8s_gitops_source_openbao_address", "k8s_gitops_source_openbao_ca_file", "k8s_gitops_source_openbao_measure",
-        "k8s_gitops_source_openbao_in_cluster", "k8s_gitops_source_openbao_seal_node", "k8s_gitops_source_openbao_box_cidr",
-        "k8s_gitops_source_openbao_store_host", "k8s_gitops_source_openbao_admin_address", "k8s_gitops_source_notebook_runner", "k8s_backup_azure_fixed_cert_file"}
+        "k8s_backup_azure_fixed_cert_file"} | ROOT_VARS_DROP
 def walk(n):
     if isinstance(n, dict):
         for k in list(n):
@@ -354,7 +341,6 @@ def hosts(n):
             if k == "hosts" and isinstance(v, dict): names.update(v)
             else: hosts(v)
 hosts(g)
-if seal not in names: die("seal_node is not a k8s_nodes host of the prod inventory")
 v = g.setdefault("vars", {})
 # The private files the Mac's inventory names, each at the box's copy (prod_files.yml and the keys wrapper).
 MAP = {"k8s_control_plane_encryption_key_file": pkeys + "/c1-secrets-encryption.key",
@@ -402,24 +388,17 @@ v["k8s_certs_smoke_client"] = "localhost"
 # keys. The role's default is under /root, which keys can't read: rerun 9 (2026-11-21) stopped there with "Permission denied".
 # Dev's wrapper does the same: a file in the run's own folder, which keys owns. The Mac's value is refused above.
 v["k8s_certs_smoke_root_file"] = known.rsplit("/", 1)[0] + "/lab-root-ca.crt"
-v["k8s_gitops_source_openbao_in_cluster"] = True
+set_root_vars(v, names, seal, store, cidr, admin, die)
 # Argo CD makes cert-manager and the Gateway on a rebuilt cluster, so the certs and gateway stages must not apply the same objects
 # again: dev's inventory sets these true (runbook, "The env's inventory hands every app to Argo CD"). Rerun 7 (2026-11-21) ran
 # the certs stage's own helm install over the cert-manager Argo CD had made and stopped there. Only the switches of the stages
 # that run after apps; the stages that already passed on prod keep the Mac inventory's values.
 for name in ("k8s_certs_cert_manager_by_argocd", "k8s_gateway_by_argocd"):
     v[name] = True
-# The notebook CI runner pod is prod's only (docs/runbooks/run-the-notebook-runner-on-c1.md).
-v["k8s_gitops_source_notebook_runner"] = True
-v["k8s_gitops_source_openbao_seal_node"] = seal
-v["k8s_gitops_source_openbao_store_host"] = store
-if cidr: v["k8s_gitops_source_openbao_box_cidr"] = cidr
-if admin: v["k8s_gitops_source_openbao_admin_address"] = admin
 # The rebuild's own: prod's own snapshot back (k8s-restore.yml, k8s-identity-restore.yml), onto stable folder names
 # so the new claims find the restored folders, the backup certificates carried over, and no throwaway identity copy.
 v["k8s_backup_restore_own_env"] = True
 v["k8s_backup_restore_source_host"] = workers[0]
-v["k8s_gitops_source_local_path_stable_folders"] = True
 v["k8s_backup_azure_seed_dir"] = certs
 # With the Proxmox host as the backup target the rebuilt nodes get their old sftp keys back (carried off the nodes in step 1a)
 # and name the host by the address read above; the host already lets those keys in, and the box holds no key on the host.
@@ -431,7 +410,7 @@ if pve_addr:
 v["k8s_backup_restore_check_identity"] = False
 yaml.safe_dump(d, open(dst, "w"), default_flow_style=False)
 PY
-)" "$pkeys/inventory-hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$pkeys" "$keys" "$certs" "$settings" "$repo" "$sftp_keys"; then
+)" "$pkeys/inventory-hosts.yml" "$inventory/hosts.yml" "$nodekey" "$envdir/known_hosts" "$pkeys" "$keys" "$certs" "$settings" "$repo" "$sftp_keys" "$libexec/prod-root-vars.py"; then
   chmod 600 "$inventory/hosts.yml"
   # Every k8s_nodes host as Ansible sees it: plain ssh with the box's key, labelled env prod, at an address, and no
   # value that still names a file on the Mac. The names of the mapped files must exist on the box.

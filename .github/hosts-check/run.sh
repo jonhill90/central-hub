@@ -535,6 +535,7 @@ check_backup() {
   suite bash "$here/tests/test_rebuild_certs_order.sh"
   suite bash "$here/tests/test_rebuild_cronjob_jobs.sh"
   suite bash "$here/tests/test_rebuild_argocd_signin.sh"
+  suite bash "$here/tests/test_prod_root_vars.sh"
   suite bash "$here/tests/test_root_gateway_prune.sh"
   suite bash "$here/tests/test_openbao_handover.sh"
   suite bash "$here/tests/test_openbao_refresh.sh"
