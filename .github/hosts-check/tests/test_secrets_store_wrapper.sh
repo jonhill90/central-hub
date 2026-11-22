@@ -16,7 +16,7 @@
 #      inventory, or a copy without k8s_gitops_source_openbao_admin_address, every action refuses before any call and
 #      says so; a gateway address in the dev inventory is never used. A prod inventory without one keeps prod's path
 #      from before the admin path: the call goes by the store's name, with no --resolve.
-#   9. put-apps refuses until sops_copies is true and on a missing file or a bad line, before any write; otherwise each
+#   9. (dev also makes jellyfin-admin's password once with put-new, random, value on stdin; prod does not) put-apps refuses until sops_copies is true and on a missing file or a bad line, before any write; otherwise each
 #      <name>=<value> line of the environment's secret-source file goes to the helper as put c1/<name> value, the value
 #      on stdin byte for byte (an = inside it kept), comments and blank lines skipped; then each KEY=value line of the
 #      identity values file as put c1/identity KEY; --prod reads prod's files only, and also puts the DNS-01 token,
@@ -188,11 +188,12 @@ rm -f "$t/keys/prod/cloudflare-dns01-token.txt"; run --prod put-apps; r9h=$rc o9
 printf '  \n' > "$t/keys/prod/cloudflare-dns01-token.txt"; run --prod put-apps; r9i=$rc o9i=$out c9i=$calls
 printf '  cf-token-1\n\n' > "$t/keys/prod/cloudflare-dns01-token.txt"
 rm -f "$t/kv-log"; run --prod put-apps; r9e=$rc o9e=$out log9e=$(cat "$t/kv-log" 2>/dev/null)
+nl=$'\n'; gen9d='\nc1/jellyfin-admin password \[[0-9a-f]{48}\]$'; gen9d=${gen9d/\\n/$nl}
 want9d="c1/ntfy-owner-password value [pw1]"$'\n'"c1/healthchecks-ping-url value [https://hc.invalid/a?b=c]"$'\n'"c1/ntfy-proxmox-token value [tk_last]"
 want9d+=$'\n'"c1/identity GRAFANA_CLIENT_SECRET [g=1]"$'\n'"c1/identity PASSWORD_OWNER [pw-owner]"
 want9e="c1/share-pod-authkey value [prodkey]"$'\n'"c1/identity ARGOCD_CLIENT_SECRET [a1]"$'\n'"c1/cloudflare-api-token value [cf-token-1]"
 if [[ $r9a -ne 0 && $o9a == *"wait for the owner's tap"* && -z $c9a && $r9b -ne 0 && $o9b == *"is missing or empty"* && -z $c9b &&
-      $r9c -ne 0 && $o9c == *"not <name>=<value>"* && -z $c9c && $r9d -eq 0 && $log9d == "$want9d" &&
+      $r9c -ne 0 && $o9c == *"not <name>=<value>"* && -z $c9c && $r9d -eq 0 && ${log9d%"$nl"c1/jellyfin-admin password \[*} == "$want9d" && $log9d =~ $gen9d && $(grep -c "jellyfin-admin" <<< "$log9d") -eq 1 && $log9e != *jellyfin-admin* &&
       $o9d == *"put-apps: 3 values from rebuild-secret-source.env at c1/<name> key value, 2 from identity.env at c1/identity"* &&
       $o9d != *pw1* && $o9d != *tk_last* && $o9d != *pw-owner* && $o9d != *"DNS-01"* &&
       $r9f -ne 0 && $o9f == *"identity.env is missing or empty"* && -z $c9f &&

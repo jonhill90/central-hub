@@ -187,6 +187,8 @@ apps:
     # so Jellyfin's SSO setup skips (apps/jellyfin, files/setup.sh).
     # No setup CronJob on a cluster that restores prod's Jellyfin config (dev, jellyfinSetup false): the config
     # already has prod's admin password, which the fresh admin Secret there can't match.
+    rootParameters:
+      adminSecret.store: appSecretsStore
     switchOffParameters:
       sso.labRoot.certificate: labCaIssuer
       setup.enabled: jellyfinSetup
