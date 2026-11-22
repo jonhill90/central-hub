@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the hosts checks (STD-0005). CI runs the same commands.
 # Usage: .github/hosts-check/run.sh [terraform|ansible|manifests|identity|scripts|backup|proxy|all] [K/N]   (default: all)
-# K/N (backup and ansible only) runs one shard of the job: see the shard note below.
+# K/N (backup, ansible and proxy only) runs one shard of the job: see the shard note below.
 # Needs: python3 with requirements.txt installed; tofu, tflint, kubeconform and helm on PATH, or
 # TOOLS=<dir> holding them (install-tools.sh builds them); for ansible and manifests, the
 # collections in hosts/ansible/requirements.yml (this script installs them when missing); for
@@ -21,19 +21,28 @@ trap 'rm -rf "$work"' EXIT
 # job can be split over N runners. Every suite belongs to exactly one K by its position, so the N shards together run
 # each suite once. The steps that are not test suites (syntax check, lint, python checks) run in shard 1 only. With no
 # K/N everything runs, as before.
-shard_k=1 shard_n=1 suite_i=0 suite_ran=0
+shard_k=1 shard_n=1 suite_i=0 suite_rr=0 suite_ran=0
 if [[ -n ${2:-} ]]; then
   [[ ${2} =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] || { echo "run.sh: the shard is K/N, for example 2/3" >&2; exit 2; }
   shard_k=${BASH_REMATCH[1]} shard_n=${BASH_REMATCH[2]}
   (( shard_k <= shard_n )) || { echo "run.sh: shard $2: K is more than N" >&2; exit 2; }
 fi
+run_suite() {
+  suite_ran=$((suite_ran + 1))
+  # HOSTS_CHECK_LIST=1 prints the suites this shard would run, runs nothing (tests/test_run_shards.sh uses it).
+  if [[ -n ${HOSTS_CHECK_LIST:-} ]]; then echo "suite: $*"; else "$@"; fi
+}
+# suite <command>: spread over the shards in turn (the light suites).
 suite() {
+  suite_i=$((suite_i + 1)) suite_rr=$((suite_rr + 1))
+  if (( (suite_rr - 1) % shard_n + 1 == shard_k )); then run_suite "$@"; fi
+}
+# suite_in <shard> <command>: a heavy suite pinned to one shard (the shard number wraps when there are fewer shards), so
+# the few slow suites do not land together by chance of their position.
+suite_in() {
+  local pin=$1; shift
   suite_i=$((suite_i + 1))
-  if (( (suite_i - 1) % shard_n + 1 == shard_k )); then
-    suite_ran=$((suite_ran + 1))
-    # HOSTS_CHECK_LIST=1 prints the suites this shard would run, runs nothing (tests/test_run_shards.sh uses it).
-    if [[ -n ${HOSTS_CHECK_LIST:-} ]]; then echo "suite: $*"; else "$@"; fi
-  fi
+  if (( (pin - 1) % shard_n + 1 == shard_k )); then run_suite "$@"; fi
 }
 shard_report() { echo "run.sh: shard $shard_k/$shard_n ran $suite_ran of $suite_i test suites"; }
 
@@ -500,8 +509,8 @@ check_identity() {
 check_backup() {
   # The c1 backup and restore-test scripts end to end, against a real etcd and restic repository, and
   # the agent box's off-box OPNsense copy against a local restic repository.
-  suite bash "$here/tests/test_backup.sh"
-  suite bash "$here/tests/test_restore_pv.sh"
+  suite_in 1 bash "$here/tests/test_backup.sh"
+  suite_in 2 bash "$here/tests/test_restore_pv.sh"
   suite bash "$here/tests/test_restore_hold.sh"
   suite bash "$here/tests/test_restore_skip_env.sh"
   suite bash "$here/tests/test_backup_azure_cert.sh"
@@ -551,23 +560,23 @@ check_backup() {
   suite bash "$here/tests/test_rebuild_auto.sh"
   suite bash "$here/tests/test_rebuild_diag_vms.sh"
   suite bash "$here/tests/test_opnsense_test.sh"
-  suite bash "$here/tests/test_lab_test.sh"
+  suite_in 3 bash "$here/tests/test_lab_test.sh"
   suite bash "$here/tests/test_notebook_runner.sh"
 }
 
 check_proxy() {
   # Role proxmox_proxy against a stand-in Proxmox host in a container: the install beside nginx, the move from
   # nginx, its rollbacks, a run killed part-way, an open console across a graceful reload, a host with no nginx.
-  bash "$here/tests/test_proxy.sh"
+  suite_in 1 bash "$here/tests/test_proxy.sh"
   # The Proxmox host as c1's restic target on the same stand-in: a real sftp backup, restore and read-only reader.
-  bash "$here/tests/test_backup_sftp.sh"
+  suite_in 2 bash "$here/tests/test_backup_sftp.sh"
   # The agent box's own backup user on the same stand-in: a real restic backup and restore through its key, and every refusal.
-  bash "$here/tests/test_restic_box.sh"
+  suite_in 2 bash "$here/tests/test_restic_box.sh"
   # The Proxmox host job end to end on the same stand-in (key line, check, refusal, apply), and the lifeline's
   # per-user entry loaded by nft.
   collections
-  bash "$here/tests/test_proxmox_host_job.sh"
-  bash "$here/tests/test_lifeline_uid.sh"
+  suite_in 3 bash "$here/tests/test_proxmox_host_job.sh"
+  suite_in 3 bash "$here/tests/test_lifeline_uid.sh"
 }
 
 check_scripts() {

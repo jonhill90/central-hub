@@ -10,7 +10,7 @@ ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 list() { HOSTS_CHECK_LIST=1 bash "$here/run.sh" "$@" 2>&1 | grep '^suite: ' | sort; }
 
-for spec in "backup 3" "ansible 2" "ansible 3"; do
+for spec in "backup 3" "ansible 2" "ansible 3" "proxy 3"; do
   job=${spec% *} n=${spec#* }
   whole=$(list "$job")
   total=$(grep -c . <<< "$whole")
