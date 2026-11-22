@@ -117,6 +117,13 @@ argument_specs:
         description: Short host name of the prod node whose newest volume snapshot a reader restores. Private.
       k8s_backup_restore_path: {type: str, default: /var/lib/c1-data/local-path, description: The folder a reader restores.}
       k8s_backup_restore_snapshot: {type: str, default: latest, description: A snapshot ID instead of the newest one.}
+      k8s_backup_restore_skip_claims:
+        type: list
+        elements: str
+        default: [openbao/data-openbao-0, openbao/audit-openbao-0, openbao/openbao-snapshots]
+        description: >-
+          Claims (namespace/claim) whose folders a restore of another node's snapshot leaves out.
+          Restoring the own snapshot skips none.
       k8s_backup_restore_check_namespace: {type: str, default: media, description: Namespace of the app-level restore check.}
       k8s_backup_restore_check_deployment: {type: str, default: jellyfin, description: Deployment of the app-level restore check.}
       k8s_backup_restore_check_claim: {type: str, default: jellyfin-config, description: Claim of the app-level restore check.}

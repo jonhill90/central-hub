@@ -188,6 +188,11 @@ if [[ $job == opnsense-sso ]]; then
   sso_args=(-e "opnsense_sso_values_file=$dir/opnsense-sso.env")
 fi
 
+# Every vars file this run makes (rr, bw, fw, iv: each holds a value that must not stay on disk) is added to one list, and one trap removes the
+# whole list when the run ends; a trap per file would replace the one before it.
+vars_files=()
+trap 'rm -f -- ${vars_files[@]+"${vars_files[@]}"}' EXIT
+
 # The restore-reader job lets in the dev worker's address, read from the handoff the keys user's rebuild wrapper writes while dev is up
 # (dev-worker-address.sh; it prints the address only to this capture). No file, no worker: the job stops, since a reader key with no
 # address to work from would be a key that works from nowhere. The address goes to the playbook in a vars file of this user's own,
@@ -198,7 +203,7 @@ if [[ $job == restore-reader ]]; then
   [[ -n $rr_addr ]] || { echo "proxmox-host: no dev worker address (the handoff file is missing: dev has no worker up); restore-reader stops" >&2; exit 1; }
   install -d -m 0700 "$work/state"
   rr_vars=$(mktemp "$work/state/rr-vars.XXXXXX")
-  trap 'rm -f "$rr_vars"' EXIT
+  vars_files+=("$rr_vars")
   # The worker's public key, from the same handoff (one ed25519 line, or nothing: the inventory's own list is used then).
   rr_key=$("$libexec/dev-worker-address.sh" read-key) || exit 1
   RR_ADDR=$rr_addr RR_KEY=$rr_key python3 -I -c 'import json, os, sys
@@ -217,7 +222,7 @@ if [[ $job == box-writer ]]; then
   [[ -n $bw_key && -n $bw_addr ]] || { echo "proxmox-host: no box backup key or address (the handoff files are missing: run dev-worker-address.sh box-key as the keys user); box-writer stops" >&2; exit 1; }
   install -d -m 0700 "$work/state"
   bw_vars=$(mktemp "$work/state/bw-vars.XXXXXX")
-  trap 'rm -f "$bw_vars"' EXIT
+  vars_files+=("$bw_vars")
   BW_KEY=$bw_key BW_ADDR=$bw_addr python3 -I -c 'import json, os, sys; json.dump({"proxmox_restic_box_key": os.environ["BW_KEY"], "proxmox_restic_box_from": os.environ["BW_ADDR"]}, open(sys.argv[1], "w"))' "$bw_vars"
   bw_args=(-e "@$bw_vars")
 fi
@@ -228,6 +233,25 @@ repo=$work/checkout   # this wrapper's own checkout of central-hub
 fw_args=()
 if [[ $job == firewall ]]; then
   fw_args=(-e "@$repo/hosts/ansible/inventories/home/group_vars/all/vlans.yml")
+  # The host's own firewall drops ssh from any source outside its management set, so the box's backup address (the one address its
+  # restic sftp works from, handed over by dev-worker-address.sh box-key) gets one more IN rule, tcp 22 from that address alone. No address
+  # in the handoff: no rule, and the job runs as before. It reaches the playbook in a vars file of this user's own, never on a command line.
+  fw_addr=$("$libexec/dev-worker-address.sh" read-box-address) || exit 1
+  # The same holds for dev's worker, whose read-only restore user (job restore-reader) the host's sshd lets in from that worker's address
+  # alone: its address, from the same handoff as restore-reader's, gets one more IN rule, tcp 22 from that address alone (prod run 6 and dev
+  # run 2, 2026-11-21: with the host firewall on, dev's restore over sftp got "Connection closed" after 20 s). No file: no rule.
+  dw_addr=$("$libexec/dev-worker-address.sh" read) || exit 1
+  if [[ -n $fw_addr || -n $dw_addr ]]; then
+    install -d -m 0700 "$work/state"
+    fw_vars=$(mktemp "$work/state/fw-vars.XXXXXX")
+    vars_files+=("$fw_vars")
+    FW_ADDR=$fw_addr DW_ADDR=$dw_addr python3 -I -c 'import json, os, sys
+v = {}
+if os.environ["FW_ADDR"]: v["proxmox_firewall_box_ssh_source"] = os.environ["FW_ADDR"]
+if os.environ["DW_ADDR"]: v["proxmox_firewall_reader_ssh_source"] = os.environ["DW_ADDR"]
+json.dump(v, open(sys.argv[1], "w"))' "$fw_vars"
+    fw_args+=(-e "@$fw_vars")
+  fi
 fi
 export HOME=$work PATH=$ansible_bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_CONFIG=$repo/hosts/ansible/ansible.cfg ANSIBLE_COLLECTIONS_PATH=$collections ANSIBLE_HOME=$work/ansible-home
@@ -283,7 +307,7 @@ echo "proxmox-host: central-hub ${commit:0:12}, job $job"
 iv_args=()
 case $job in proxy | firewall | connector | sso)
   iv_vars=$(mktemp "$work/state/iv-vars.XXXXXX")
-  trap 'rm -f "$iv_vars"' EXIT
+  vars_files+=("$iv_vars")
   sudo -n -u invops "$libexec/inventory.sh" view proxmox 2> "$logs/view-$stamp.err" \
     | "$ansible_bin/python3" -I -c 'import json, sys, yaml
 allow = yaml.safe_load(open(sys.argv[2]))["entries"]

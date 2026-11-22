@@ -366,7 +366,7 @@ else bad "16b rc=$rc16b [$c16b] $(cat "$t/16b.out")"; fi
 cat > "$t/bin/ansible-playbook" <<EOF
 #!/bin/sh
 echo "\$*" >> "$t/calls"
-for a in "\$@"; do case "\$a" in @*) cat "\${a#@}" > "$t/vars-seen.json"; echo "\${a#@}" >> "$t/vars-paths" ;; esac; done
+for a in "\$@"; do case "\$a" in @*iv-vars*) ;; @*) cat "\${a#@}" > "$t/vars-seen.json"; echo "\${a#@}" >> "$t/vars-paths" ;; esac; done
 case " \$* " in *" --check "*) cat "$t/out-check.json" ;; *) cat "$t/out-apply.json" ;; esac
 EOF
 python3 - > "$t/out-check.json" <<'PY'
@@ -494,40 +494,100 @@ if [ $rc18a = 0 ] && [[ $c18 == *playbooks/proxmox-ct259-destroy.yml* && $c18 ==
   ok "19 ct259-destroy: the check runs its playbook; apply-recorded with no pass or go only re-checks"
 else bad "19 rc=$rc18a/$rc18b [$c18] [$(cat "$t/calls")] $(cat "$t/18b.out")"; fi
 
-# 22 the proxy, firewall, connector and sso jobs take the settable host values from `view proxmox`, as a 0600 vars file that is gone after the run
+# 22 the firewall job lets the box's backup address reach ssh: the one address from the handoff goes in a vars file (proxmox_firewall_box_ssh_source),
+#    never on a command line or in the output; with no address the job runs as before (the VLAN file only); a bad address stops it before the playbook;
+#    the other jobs are not given the variable
+rm -f "$t/handoff/box-backup-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/22a.out" 2>&1; rc=$?
+if [ $rc = 0 ] && [[ $(cat "$t/calls") == *playbooks/proxmox-firewall.yml* && $(cat "$t/calls") != *box_ssh_source* ]] && [ "$(wc -l < "$t/vars-paths")" = 1 ]; then
+  ok "22a firewall with no box address: only the VLAN file, no rule variable"
+else bad "22a rc=$rc [$(cat "$t/calls")] $(cat "$t/22a.out")"; fi
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/22b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v=={"proxmox_firewall_box_ssh_source":"10.1.30.31"}, v' "$t/vars-seen.json" \
+   && grep -q "vlans.yml" "$t/calls" && ! grep -q "10.1.30.31" "$t/calls" "$t/22b.out" && [ ! -e "$(tail -1 "$t/vars-paths")" ]; then
+  ok "22b firewall: the box address reaches the playbook in a vars file beside the VLAN file, not on the command line or in the output, and the file is gone after"
+else bad "22b rc=$rc [$(cat "$t/calls")] $(cat "$t/22b.out")"; fi
+for v in 10.1.20.5 10.1.30.0 10.1.30.224 '10.1.30.31/32' 'abc'; do
+  printf '%s\n' "$v" > "$t/handoff/box-backup-address"; : > "$t/calls"
+  job check firewall > "$t/22c.out" 2>&1; rc=$?
+  if [ $rc = 1 ] && [ ! -s "$t/calls" ] && ! grep -qF "$v" "$t/22c.out"; then :; else bad "22c address '$v' rc=$rc [$(cat "$t/calls")]"; fi
+done
+ok "22c five bad address shapes stop the firewall job before the playbook, naming no value"
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"
+job check proxy > "$t/22d.out" 2>&1
+! grep -q "box_ssh_source\|fw-vars\|rr-vars\|bw-vars" "$t/calls" && ok "22d the other jobs are not given the variable" || bad "22d $(cat "$t/calls")"
+rm -f "$t/handoff/box-backup-address"
+
+# 23 the firewall job also lets dev's worker reach ssh for its read-only restore: the worker's address from the same handoff as restore-reader's
+#    goes in the same vars file (proxmox_firewall_reader_ssh_source), beside the box's address when there is one; never on a command line or in
+#    the output; a bad shape stops the job before the playbook
+printf '10.1.30.12\n' > "$t/handoff/dev-worker-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/23a.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v=={"proxmox_firewall_reader_ssh_source":"10.1.30.12"}, v' "$t/vars-seen.json" \
+   && ! grep -q "10.1.30.12" "$t/calls" "$t/23a.out" && [ ! -e "$(tail -1 "$t/vars-paths")" ]; then
+  ok "23a firewall with only a dev worker address: the reader rule variable alone, in a vars file, gone after"
+else bad "23a rc=$rc [$(cat "$t/calls")] $(cat "$t/23a.out")"; fi
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"; rm -f "$t/vars-paths" "$t/vars-seen.json"
+job check firewall > "$t/23b.out" 2>&1; rc=$?
+if [ $rc = 0 ] && python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1])); assert v=={"proxmox_firewall_box_ssh_source":"10.1.30.31","proxmox_firewall_reader_ssh_source":"10.1.30.12"}, v' "$t/vars-seen.json" \
+   && ! grep -q "10.1.30.12\|10.1.30.31" "$t/calls" "$t/23b.out"; then
+  ok "23b firewall with both addresses: both variables in the one vars file"
+else bad "23b rc=$rc [$(cat "$t/calls")] $(cat "$t/23b.out")"; fi
+rm -f "$t/handoff/box-backup-address"
+for v in 10.1.20.5 '10.1.30.12/32' 'abc'; do
+  printf '%s\n' "$v" > "$t/handoff/dev-worker-address"; : > "$t/calls"
+  job check firewall > "$t/23c.out" 2>&1; rc=$?
+  if [ $rc != 0 ] && [ ! -s "$t/calls" ] && ! grep -qF "$v" "$t/23c.out"; then :; else bad "23c address '$v' rc=$rc [$(cat "$t/calls")]"; fi
+done
+ok "23c three bad dev worker address shapes stop the firewall job before the playbook, naming no value"
+rm -f "$t/handoff/dev-worker-address"
+
+# 24 the proxy, firewall, connector and sso jobs take the settable host values from `view proxmox`, as a 0600 vars file that is gone after the run
 iv_file() { sed -n 's/.* -e @\([^ ]*iv-vars[^ ]*\).*/\1/p' "$t/calls" | head -1; }
 json "new" "/tmp/a" "write config" "move" none > "$t/out-check.json"
 : > "$t/calls"; : > "$t/sudo-calls"
-job check firewall > "$t/22a.out" 2>&1; rc22=$?
+job check firewall > "$t/24a.out" 2>&1; rc24=$?
 ivf=$(iv_file)
-if [ $rc22 = 0 ] && [ -n "$ivf" ] && [ ! -e "$ivf" ] && grep -q -- "-u invops $t/libexec/inventory.sh view proxmox" "$t/sudo-calls"; then
-  ok "22 firewall: asks the inventory wrapper for view proxmox as invops, passes a vars file, deletes it after"
-else bad "22 rc=$rc22 file=[$ivf] sudo=[$(cat "$t/sudo-calls")] $(cat "$t/22a.out")"; fi
+if [ $rc24 = 0 ] && [ -n "$ivf" ] && [ ! -e "$ivf" ] && grep -q -- "-u invops $t/libexec/inventory.sh view proxmox" "$t/sudo-calls"; then
+  ok "24 firewall: asks the inventory wrapper for view proxmox as invops, passes a vars file, deletes it after"
+else bad "24 rc=$rc24 file=[$ivf] sudo=[$(cat "$t/sudo-calls")] $(cat "$t/24a.out")"; fi
 # the file's content and mode, caught while the playbook runs
 cat > "$t/bin/ansible-playbook" <<EOF
 #!/bin/sh
 echo "\$*" >> "$t/calls"
 for a in "\$@"; do case \$a in @*iv-vars*) f=\${a#@}; stat -c %a "\$f" > "$t/iv-mode"; cp "\$f" "$t/iv-copy" ;; esac; done
 case " \$* " in *" --check "*) cat "$t/out-check.json" ;; *) cat "$t/out-apply.json" ;; esac
+exit \$(cat "$t/rc" 2>/dev/null || echo 0)
 EOF
-job check proxy > "$t/22b.out" 2>&1
+job check proxy > "$t/24b.out" 2>&1
 if python3 - "$t/iv-copy" "$(cat "$t/iv-mode" 2>/dev/null)" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert sys.argv[2] == "600", sys.argv[2]
 assert d == {"proxmox_cert_names": ["test-one.example"], "proxmox_firewall_enable": True, "proxmox_firewall_home_lan_cidr": "192.0.2.0/24"}, d
 PY
-then ok "22 the vars file is 0600 and holds the listed names only (no unlisted name, no all.vars)"
-else bad "22 vars file wrong: $(cat "$t/iv-copy" 2>/dev/null) mode=$(cat "$t/iv-mode" 2>/dev/null)"; fi
+then ok "24 the vars file is 0600 and holds the listed names only (no unlisted name, no all.vars)"
+else bad "24 vars file wrong: $(cat "$t/iv-copy" 2>/dev/null) mode=$(cat "$t/iv-mode" 2>/dev/null)"; fi
 # no view, no job; the read-only jobs never ask
 : > "$t/calls"; echo 1 > "$t/view-rc"
-job check proxy > "$t/22c.out" 2>&1; rc22c=$?
+job check proxy > "$t/24c.out" 2>&1; rc24c=$?
 rm -f "$t/view-rc"
-if [ $rc22c = 1 ] && [ ! -s "$t/calls" ] && grep -q "view proxmox gave no usable values" "$t/22c.out"; then
-  ok "22 a failing view stops the job before the playbook, with no silent fallback"
-else bad "22 rc=$rc22c calls=[$(cat "$t/calls")] $(cat "$t/22c.out")"; fi
+if [ $rc24c = 1 ] && [ ! -s "$t/calls" ] && grep -q "view proxmox gave no usable values" "$t/24c.out"; then
+  ok "24 a failing view stops the job before the playbook, with no silent fallback"
+else bad "24 rc=$rc24c calls=[$(cat "$t/calls")] $(cat "$t/24c.out")"; fi
 : > "$t/sudo-calls"
-job check memory > "$t/22d.out" 2>&1
-[ ! -s "$t/sudo-calls" ] && ok "22 the memory job never asks for the view" || bad "22 memory asked: $(cat "$t/sudo-calls")"
+job check memory > "$t/24d.out" 2>&1
+[ ! -s "$t/sudo-calls" ] && ok "24 the memory job never asks for the view" || bad "24 memory asked: $(cat "$t/sudo-calls")"
+
+# 25 one run that makes two vars files (the firewall job: the box address, fw, and the inventory view, iv) leaves neither behind
+printf '10.1.30.31\n' > "$t/handoff/box-backup-address"; : > "$t/calls"
+job check firewall > "$t/25.out" 2>&1; rc25=$?
+made=$(grep -o 'state/[a-z]*-vars\.[A-Za-z0-9]*' "$t/calls" | sed 's|state/\([a-z]*\)-vars.*|\1|' | sort | tr '\n' ' ')
+left=$(find "$t/work/state" -name '*-vars.*' | wc -l)
+if [ $rc25 = 0 ] && [ "$made" = "fw iv " ] && [ "$left" = 0 ]; then
+  ok "25 the firewall run made an fw and an iv vars file and left no vars file behind"
+else bad "25 rc=$rc25 made=[$made] left=$left $(cat "$t/25.out")"; fi
+rm -f "$t/handoff/box-backup-address"
 
 exit "$fail"
