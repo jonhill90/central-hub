@@ -8,6 +8,8 @@
 #   3. Store off with an ExternalSecret of this role's left: the run stops before it makes any Secret.
 #   4. Store off with none left: the role makes the four Secrets as before, and no ExternalSecret.
 #   5. No value from the values file shows in the output or in an ExternalSecret.
+#   6. Store openbao: Grafana is restarted once when grafana-sso's version is new to the role (and not while the Secret
+#      isn't there yet), not again on a run with nothing new, and once more when its data changes, not when only its metadata does.
 # Usage: .github/hosts-check/tests/test_identity_external_secrets.sh   (needs ansible-playbook with community.general)
 set -uo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -38,6 +40,9 @@ if a[:2] == ["get", "externalsecrets"] and "-A" in a:
     for k in st:
         if k.startswith("ExternalSecret/"): print("externalsecret.external-secrets.io/" + k.split("/")[2])
     sys.exit(0)
+if a[0] == "get" and a[1] == "secret" and any(".data" in x for x in a):
+    obj = st.get(f"Secret/{ns}/{a[2]}")
+    print(json.dumps(obj["data"], sort_keys=True) if obj else "", end=""); sys.exit(0)
 if a[0] == "get" and a[1] in ("secret", "externalsecret"):
     kind = "Secret" if a[1] == "secret" else "ExternalSecret"
     obj = st.get(f"{kind}/{ns}/{a[2]}")
@@ -48,6 +53,9 @@ if a[0] in ("create", "apply"):
     obj = json.loads(stdin)
     st[f"{obj['kind']}/{obj['metadata']['namespace']}/{obj['metadata']['name']}"] = obj; save()
     print("applied"); sys.exit(0)
+if a[0] == "annotate":
+    k, v = a[3].split("=", 1)
+    st[f"ExternalSecret/{ns}/{a[2]}"]["metadata"].setdefault("annotations", {})[k] = v; save(); sys.exit(0)
 if a[0] == "delete":
     st.pop(f"Secret/{ns}/{a[2]}", None); save(); sys.exit(0)
 if a[0] in ("wait", "rollout"):
@@ -124,5 +132,17 @@ fresh; run -e k8s_gitops_source_app_secrets_store=openbao
 leaks=$(grep -cE 'gsecret1|asecret1|jsecret1|psecret1|csecret1|pwowner1|TOTPSEEDOWNER1' "$t/out" "$t/state.json" | awk -F: '{s += $2} END {print s}')
 if [[ $rc -eq 0 && $leaks -eq 0 ]]; then ok "5. no value in the output or the ExternalSecrets"
 else bad "5. rc=$rc, $leaks lines hold a value"; fi
+
+# 6
+rs() { grep -c '"args": \["rollout", "restart", "deployment/kube-prometheus-stack-grafana"\]' "$t/log"; }
+setrv() { python3 -I -c 'import json, sys; f = sys.argv[1]; d = json.load(open(f)); d["Secret/monitoring/grafana-sso"] = {"metadata": {"resourceVersion": sys.argv[3]}, "data": {"client-secret": sys.argv[2]}}; json.dump(d, open(f, "w"))' "$t/state.json" "$1" "${2:-1}"; }
+fresh; run -e k8s_gitops_source_app_secrets_store=openbao; n0=$(rs)
+setrv b3JpZw== 11; run -e k8s_gitops_source_app_secrets_store=openbao; n1=$(rs)
+run -e k8s_gitops_source_app_secrets_store=openbao; n2=$(rs)
+setrv b3JpZw== 12; run -e k8s_gitops_source_app_secrets_store=openbao; n3=$(rs)   # metadata only: same data
+setrv bmV3 13; run -e k8s_gitops_source_app_secrets_store=openbao; n4=$(rs)
+if [[ $rc -eq 0 && $n0 -eq 0 && $n1 -eq 1 && $n2 -eq 0 && $n3 -eq 0 && $n4 -eq 1 ]]; then
+  ok "6. openbao: Grafana restarts once per new grafana-sso data, never without one"
+else bad "6. restarts: no secret $n0, new $n1, same $n2, metadata only $n3, data changed $n4, rc=$rc $(tail -n 15 "$t/out")"; fi
 
 exit "$fail"
