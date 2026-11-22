@@ -12,8 +12,10 @@ set -euo pipefail
 umask 077
 conf=${SSH_SIGN_ENV:-$HOME/.config/central-hub/ssh-sign.env}
 [[ -r $conf ]] || { echo "ssh-sign: $conf is missing (BAO_ADDR=https://<store>)" >&2; exit 2; }
-# shellcheck disable=SC1090
-set -a; . "$conf"; set +a
+set -a
+# shellcheck source=/dev/null
+. "$conf"
+set +a
 [[ ${BAO_ADDR:-} =~ ^https://[A-Za-z0-9.-]+$ ]] || { echo "ssh-sign: BAO_ADDR must be https://<store name>" >&2; exit 2; }
 bao=${BAO_BIN:-bao}
 command -v "$bao" >/dev/null || { echo "ssh-sign: the bao command is not on PATH (set BAO_BIN)" >&2; exit 2; }

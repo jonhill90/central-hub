@@ -8,7 +8,12 @@
   block:
     - name: ssh-ca | The role's files go
       ansible.builtin.file: {path: "{{ item }}", state: absent}
-      loop: ["{{ ssh_ca_trust_dropin }}", "{{ ssh_ca_trust_user_ca_dest }}", "{{ ssh_ca_trust_krl_dest }}", "{{ ssh_ca_trust_principals_dir }}", "{{ ssh_ca_trust_host_cert_dest }}"]
+      loop:
+        - "{{ ssh_ca_trust_dropin }}"
+        - "{{ ssh_ca_trust_user_ca_dest }}"
+        - "{{ ssh_ca_trust_krl_dest }}"
+        - "{{ ssh_ca_trust_principals_dir }}"
+        - "{{ ssh_ca_trust_host_cert_dest }}"
       notify: Reload sshd
     - name: ssh-ca | Check sshd after the undo
       ansible.builtin.command: sshd -t

@@ -36,11 +36,11 @@ flowchart LR
 ## Steps
 
 1. **Store.** `secrets-store[-prod] ssh-ca apply`, then `ssh-ca check`. Expect `PASS` lines for both mounts, both CA keys (kept, never replaced), role `admin`, role `hosts`, policy `ssh-sign` and login role `ssh-admin`, and a last line `ssh-ca set-up reads back as written`. Writing the roles and the login role is a change to who can sign in, so it is an access right under D-0042 rule 6: the standing go of D-0061, with the PR or the run's log naming the step and its commit.
-2. **Public keys.** `secrets-store[-prod] ssh-ca public <folder>` writes `user-ca.pub` and `host-ca.pub` (public keys, not secrets) to a folder on the box.
+2. **Public keys.** `secrets-store[-prod] ssh-ca public` writes `user-ca.pub` and `host-ca.pub` (public keys, not secrets) into `ssh-ca/` in the environment's keys folder on the box. It takes no path.
 3. **One box.** `ansible-playbook -i <inventory>/ playbooks/ssh-ca-trust.yml -e ssh_ca_trust_hosts=<box> -e ssh_ca_trust_user_ca_file=<user-ca.pub> --check --diff`, read the diff, then run it without `--check`. The role stops if the box would lose local key logins, checks the drop-in with `sshd -t`, removes it if sshd refuses it, reloads (never restarts), and reads `sshd -T` back. Expect no failed task, then log in again from a new session with the local key.
 4. **Mac.** `hosts/wrappers/mac/ssh-sign.sh`. A browser opens at Keycloak (password and one-time code). It prints the principal `lab-admin` and a one-hour end time. The key lives only in ssh-agent.
 5. **Prove the box.** `ssh <account>@<box>` logs in with the certificate. Then each of: the same key without its certificate is refused; a certificate past its end time is refused; after a serial is added to `hosts/ssh-ca/revoked.txt` and a new list is built and pushed, that certificate is refused (**the step that builds the list from the file is not written yet**; until it is, build it by hand with `ssh-keygen -k -s user-ca.pub` and pass it as `ssh_ca_trust_krl_file`); the local key login still works with OpenBao stopped.
-6. **Host certificates.** `ssh-ca sign-host <box's /etc/ssh/ssh_host_ed25519_key.pub> <names> <out>` for each box, then run the playbook with `-e ssh_ca_trust_host_cert_file=<out>`. Clients trust the host CA with one `@cert-authority <zone pattern> <host-ca.pub>` line in `ssh_known_hosts`.
+6. **Host certificates.** `ssh-ca sign-host <names>` with the box's `/etc/ssh/ssh_host_ed25519_key.pub` on stdin (it writes `ssh-ca/host-<first name>-cert.pub` in the keys folder) for each box, then run the playbook with `-e ssh_ca_trust_host_cert_file=<out>`. Clients trust the host CA with one `@cert-authority <zone pattern> <host-ca.pub>` line in `ssh_known_hosts`.
 
 ## If it fails
 
