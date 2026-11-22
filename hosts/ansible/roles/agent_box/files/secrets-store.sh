@@ -347,10 +347,11 @@ put_apps() {
   # Dev only: a value the apps need and no file holds is made here, once (put-new keeps one already there). Prod's come from
   # `openbao-prod adopt`, the running cluster's own values: a random one made here would not match the data prod restores.
   if [[ $env == dev ]]; then
-    local -a generated=("c1/jellyfin-admin password")
+    # <path> <key> <value: hex for 24 random bytes, or the literal text>
+    local -a generated=("c1/jellyfin-admin password hex" "c1/identity-db username keycloak" "c1/identity-db password hex")
     for spec in "${generated[@]}"; do
-      read -r gpath gkey <<< "$spec"
-      openssl rand -hex 24 | tr -d '\n' | kv put-new "$gpath" "$gkey"
+      read -r gpath gkey gval <<< "$spec"
+      if [[ $gval == hex ]]; then openssl rand -hex 24 | tr -d '\n' | kv put-new "$gpath" "$gkey"; else printf '%s' "$gval" | kv put-new "$gpath" "$gkey"; fi
     done
   fi
   echo "secrets-store: put-apps: $n values from ${src##*/} at c1/<name> key value, $m from ${ident##*/} at c1/identity key <KEY>$([[ -z $token ]] || echo ", and the DNS-01 token at c1/cloudflare-api-token key value"), written to SOPS, then OpenBao"
