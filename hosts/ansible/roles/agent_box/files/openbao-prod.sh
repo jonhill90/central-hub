@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -61,11 +61,15 @@
 #           Names, conditions and log lines only: no Secret is read and no object is changed. No tap.
 # jobs-status  read-only: why a Job failed. Every Job with failed pods in any namespace (namespace, name, owning CronJob, failed and
 #           succeeded counts, start time), and for each of the first 6 the last 30 log lines of its pods (`kubectl logs job/<name>
-#           --all-containers`, then each failed pod by name), scrubbed of secrets by hosts/diag-apps.py. Reads nothing else and
+#           --all-containers`), scrubbed of secrets by hosts/diag-apps.py. Reads nothing else and
 #           changes nothing. No tap.
 # prune-status  read-only: what Argo CD would delete if an Application pruned. For every Application in argocd, each resource its
 #           status marks requiresPruning true (in the cluster, no longer in git): application, group, kind, namespace/name, and each
 #           Application's sync status. Reads one list and changes nothing. No tap.
+# targets-status  read-only: which Prometheus targets are down and which node reports each backup time. The node-exporter pods and the nodes
+#           they run on, every series of `up == 0` (job, namespace, pod, instance, service), and every c1_backup_last_success_timestamp_seconds
+#           series (kind, instance), each from Prometheus's own query API through the API server's service proxy (kubectl get --raw). Labels and
+#           numbers only; changes nothing. No tap.
 # log       the newest run's lines: the action, the commit, the tap id, and the PASS, FAIL, SKIP and play-recap lines.
 # Settings (agent_box_openbao_prod, private, in <work>/openbao-prod.json): seal_node (a k8s_nodes host of the prod inventory,
 # its Kubernetes node name), store_host (the store's name as the box reaches it; secrets-store-prod checks its own address
@@ -91,11 +95,11 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | secrets-status | jobs-status | prune-status | log) [[ $# -eq 1 ]] || usage ;;
+  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | secrets-status | jobs-status | prune-status | targets-status | log) [[ $# -eq 1 ]] || usage ;;
   seal | seal-copy | refresh | reset-failed-start | drop-box-path | admin-firewall)
     [[ $# -eq 2 ]] || usage
     tap=$2
@@ -417,6 +421,61 @@ for a in sorted(items, key=lambda a: a["metadata"]["name"]):
 print("openbao-prod: %d resource(s) marked requiresPruning" % n)
 ' <<< "$apps" || { echo "openbao-prod: the Applications have no readable status" >&2; exit 1; }
     echo "PASS: openbao-prod: prune-status: read, nothing changed"
+    ;;
+  targets-status)
+    # Read-only (kc get only). Prometheus is asked through the API server's service proxy, so nothing is exposed or port-forwarded.
+    prom=/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:9090/proxy/api/v1/query
+    # Node names and addresses are not printed: each node is cp-1, cp-2, wk-1 ... (control planes, then workers, by name), its instance
+    # address is that alias with its port, and any other IPv4 address in the output is masked.
+    nodes_json=$(kc get nodes -o json) || { echo "openbao-prod: could not read the nodes" >&2; exit 1; }
+    amap=$(python3 -I -c '
+import json, sys
+items = json.load(sys.stdin)["items"]
+def role(n): return "cp" if "node-role.kubernetes.io/control-plane" in (n["metadata"].get("labels") or {}) else "wk"
+count, mp, rows = {}, {}, []
+for n in sorted(items, key=lambda n: (role(n) != "cp", n["metadata"]["name"])):
+    r = role(n); count[r] = count.get(r, 0) + 1; alias = "%s-%d" % (r, count[r])
+    mp[n["metadata"]["name"]] = alias
+    for a in n["status"].get("addresses", []):
+        if a.get("type") == "InternalIP": mp[a["address"]] = alias
+    ready = [c["status"] for c in n["status"].get("conditions", []) if c.get("type") == "Ready"]
+    rows.append([alias, "Ready" if ready == ["True"] else "NotReady"])
+print(json.dumps({"map": mp, "rows": rows}))' <<< "$nodes_json") || { echo "openbao-prod: could not read the nodes" >&2; exit 1; }
+    mask() { AMAP="$amap" python3 -I -c '
+import json, os, re, sys
+mp = json.loads(os.environ["AMAP"])["map"]
+text = sys.stdin.read()
+for k in sorted(mp, key=len, reverse=True):
+    text = re.sub(r"(?<![\w.-])" + re.escape(k) + r"(?![\w-]|\.\d)", mp[k], text)
+sys.stdout.write(re.sub(r"(?<![\d.])\d{1,3}(\.\d{1,3}){3}(?![\d.]*\d)", "<ip>", text))'; }
+    echo "openbao-prod: node-exporter pods (namespace, name, ready, phase, node):"
+    # custom-columns, not -o wide: a RESTARTS value such as "2 (3h ago)" holds spaces and would shift the columns.
+    pods=$(kc get pods -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,READY:.status.containerStatuses[0].ready,PHASE:.status.phase,NODE:.spec.nodeName --no-headers) ||
+      { echo "openbao-prod: could not read the pods" >&2; exit 1; }
+    awk '$2 ~ /node-exporter/ {print $1, $2, $3, $4, $5}' <<< "$pods" | mask
+    echo "openbao-prod: nodes:"
+    AMAP="$amap" python3 -I -c 'import json, os
+for r in json.loads(os.environ["AMAP"])["rows"]: print(*r)'
+    q() { # <label> <query>: the series Prometheus returns, as one line of labels each
+      local out
+      out=$(kc get --raw "$prom?query=$2") || { echo "openbao-prod: could not query Prometheus ($1)" >&2; exit 1; }
+      python3 -I -c '
+import json, sys
+r = json.load(sys.stdin)
+if r.get("status") != "success":
+    print("query failed:", str(r.get("error", ""))[:200]); sys.exit(0)
+series = r["data"]["result"]
+for x in sorted(series, key=lambda x: sorted(x["metric"].items())):
+    m = x["metric"]
+    print(" ".join("%s=%s" % (k, m[k]) for k in ("kind", "job", "namespace", "pod", "service", "instance", "node") if k in m), "value=" + str(x["value"][1]))
+print("(%d series)" % len(series))
+' <<< "$out" | mask
+    }
+    echo "openbao-prod: targets that are down (up == 0):"
+    q down 'up%3D%3D0'
+    echo "openbao-prod: backup times by kind and instance (c1_backup_last_success_timestamp_seconds):"
+    q backup 'c1_backup_last_success_timestamp_seconds'
+    echo "PASS: openbao-prod: targets-status: read, nothing changed"
     ;;
   ca)
     mkdir -p "$store_keys"

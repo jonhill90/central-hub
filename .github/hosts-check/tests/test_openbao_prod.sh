@@ -31,6 +31,7 @@
 #      a failed read stops it with an error; a tap or another argument runs nothing.
 #  15. jobs-status lists the Jobs with failed pods and each one's last 30 log lines, scrubbed; get and logs only; a tap runs nothing.
 #  16. prune-status lists the resources Argo CD marks requiresPruning per Application with one get; a tap runs nothing.
+#  18. targets-status lists the node-exporter pods, the down targets and the backup times by instance, from get calls only; a tap runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -500,5 +501,40 @@ if [[ $a_rc -eq 0 && $a_out == *"app gateway: sync=OutOfSync health=Healthy"* &&
       $(wc -l <<< "$a_calls") -eq 1 && $a_calls == *"get applications.argoproj.io -o json"* && $x_rc -eq 2 && -z $x_calls ]]; then
   ok "16. prune-status: lists only the resources Argo CD marks requiresPruning, per Application, with one get; a tap runs nothing"
 else bad "16. rc=$a_rc calls=[$a_calls] | tap rc=$x_rc [$x_calls] | $a_out"; fi
+# 18: targets-status reads the node-exporter pods, what Prometheus says is down, and which instance reports each backup time; get only.
+: > "$t/kcalls"
+cat > "$venv/ansible" <<EOS
+#!/usr/bin/env python3
+import json, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+def res(rows): return json.dumps({"status": "success", "data": {"resultType": "vector", "result": rows}})
+if "get pods" in a:
+    # a pod with restarts: custom-columns keeps one value per column, so the node stays in the last column
+    out = "monitoring kube-prometheus-stack-prometheus-node-exporter-aaaaa true Running cp-a.lab.example\\nmonitoring kube-prometheus-stack-prometheus-node-exporter-bbbbb false Pending wk-a.lab.example\\nmedia jellyfin-x true Running wk-a.lab.example"
+    assert "custom-columns=" in a and "-o wide" not in a, a
+elif "get nodes" in a:
+    node = lambda n, ip, cp: {"metadata": {"name": n, "labels": {"node-role.kubernetes.io/control-plane": ""} if cp else {}}, "status": {"addresses": [{"type": "InternalIP", "address": ip}, {"type": "Hostname", "address": n}], "conditions": [{"type": "Ready", "status": "True"}]}}
+    out = json.dumps({"items": [node("wk-a.lab.example", "10.0.0.2", False), node("cp-a.lab.example", "10.0.0.1", True)]})
+elif "get --raw" in a and "up%3D%3D0" in a: out = res([{"metric": {"job": "node-exporter", "namespace": "monitoring", "pod": "node-exporter-aaaaa", "instance": "10.0.0.1:9100", "node": "cp-a.lab.example"}, "value": [1, "0"]}, {"metric": {"job": "kubelet", "instance": "192.168.9.9:10250"}, "value": [1, "0"]}])
+elif "get --raw" in a: out = res([{"metric": {"kind": "volumes", "instance": "10.0.0.2:9100"}, "value": [1, "1700000000"]}])
+else: out = ""
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0 if out else 1, "stdout": out, "stderr": ""}}}]}]}))
+EOS
+chmod +x "$venv/ansible"
+run targets-status; a_rc=$rc a_out=$out
+a_calls=$(cat "$t/kcalls")
+write_calls=$(grep -cE ' (apply|delete|create|patch|annotate|edit|replace|exec|cp) |get secret|-o yaml' <<< "$a_calls" || true)
+run targets-status "$tap"; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"node-exporter-aaaaa true Running cp-1"* && $a_out == *"node-exporter-bbbbb false Pending wk-1"* && $a_out != *"jellyfin-x"* &&
+      $a_out == *"job=node-exporter namespace=monitoring pod=node-exporter-aaaaa instance=cp-1:9100 node=cp-1 value=0"* && $a_out == *"(2 series)"* &&
+      $a_out == *"job=kubelet instance=<ip>:10250 value=0"* && $a_out == *$'cp-1 Ready\nwk-1 Ready'* &&
+      $a_out == *"kind=volumes instance=wk-1:9100 value=1700000000"* &&
+      $a_out != *"10.0.0."* && $a_out != *"192.168"* && $a_out != *"lab.example"* &&
+      $a_out == *"PASS: openbao-prod: targets-status: read, nothing changed"* && $write_calls -eq 0 &&
+      $(grep -c 'get --raw /api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:9090/proxy/api/v1/query' <<< "$a_calls") -eq 2 &&
+      $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "18. targets-status: the node-exporter pods by node, the down targets and the backup times by instance, from get calls only; a tap runs nothing"
+else bad "18. rc=$a_rc writes=$write_calls calls=[$a_calls] | tap rc=$x_rc [$x_calls] | $a_out"; fi
 
 exit "$fail"
