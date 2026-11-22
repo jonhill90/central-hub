@@ -10,13 +10,16 @@
 #  11. clients runs the identity playbook with tags secrets,clients, the values file, no realm replace and the one fixed client; it
 #      never runs the operator, database or keycloak tags; apply is its own verb and needs a clearance id.
 #  12. backup-status runs its read-only playbook with no tags, no extra variables and no values file, on the box's inventory copy.
+#  15. certs runs the certs playbook with tag issue only, no values file and no extra variables; the inventory's three controller
+#      paths (Cloudflare token, lab CA chain and key) are remapped to <keys>/prod; it stops while one of the three files is missing,
+#      and when the inventory has issuing or the lab CA off (the role would then delete the issuers); apply needs a clearance id.
 #   5. log prints the run's own lines.
 #   9. users runs the identity playbook with tags secrets,users, the values file, no realm replace and one fixed user; apply is its
 #      own verb; it never runs the keycloak tag.
 #   8. observability runs its playbook with its fixed tags and no extra variables.
 #   7. gateway runs its own playbook with a fixed tag and no extra variables; gitops with fixed tags and only k8s_gitops_source_jellyfin_setup=false
-#      (prod restores its own Jellyfin config), and its CA file for the sign-in is remapped to the box's copy; no values file; certs and the install tag are not
-#      names; apply needs a clearance id for them too.
+#      (prod restores its own Jellyfin config), and its CA file for the sign-in is remapped to the box's copy; no values file; the install tag is not
+#      a name; apply needs a clearance id for them too.
 #  10. The Proxmox web names (proxmox_cert_names on the proxmox group's hosts or vars) reach the box's copy as a literal
 #      k8s_identity_proxmox_hosts on k8s_nodes, so the identity render has the proxmox client; the group's logins and keys
 #      still do not, and with no names no such variable is written.
@@ -82,7 +85,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\nclients\ngateway\ngitops\nidentity\nidentity-values\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\ncerts\nclients\ngateway\ngitops\nidentity\nidentity-values\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -149,11 +152,11 @@ if [[ $seen == *"k8s_gitops_source_openbao_in_cluster: true"* && $seen == *"k8s_
 else bad "7d. $rc | $nr $no | $gr | $seen"; fi
 inventory "${prod_inv[@]}"
 r7=""
-for args in "check certs" "check k8s-certs" "apply certs $clr" "check gitops-install" "apply gateway" "apply gitops badid"; do
+for args in "check k8s-certs" "apply certs" "check gitops-install" "apply gateway" "apply gitops badid" "apply certs notanid"; do
   # shellcheck disable=SC2086
   run $args; r7+="$rc:${calls:-none} "
 done
-if [[ $r7 == "2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "7b. certs and install are not names; apply needs a clearance id"; else bad "7b. $r7"; fi
+if [[ $r7 == "2:none 2:none 2:none 2:none 2:none 2:none " ]]; then ok "7b. k8s-certs and install are not names; apply needs a clearance id"; else bad "7b. $r7"; fi
 run check backup-status; b1=$calls; b1rc=$rc
 if [[ $b1rc -eq 0 && $b1 == *"playbooks/k8s-backup-status.yml --check --diff" && $b1 != *" -e "* && $b1 != *--tags* ]]; then
   ok "12. backup-status: its own playbook, no tags, no extra variables"
@@ -234,4 +237,24 @@ else bad "11. [$c1] [$c2] $c3rc"; fi
 rm -f "$t/keys/prod/identity.env"
 run check users
 if [[ $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "9b. users stops while the values file is missing"; else bad "9b. $rc $out"; fi
+# 15: certs
+certs_inv=("all:" "  children:" "    k8s_nodes:" "      vars:" "        k8s_certs_issue: true" "        k8s_certs_lab_ca: true"
+           "        k8s_certs_cloudflare_token_file: ~/.config/central-hub/cf.txt" "        k8s_certs_lab_ca_cert_file: ~/.config/central-hub/lab-ca/chain.crt"
+           "        k8s_certs_lab_ca_key_file: ~/.config/central-hub/lab-ca/key" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-a: {ansible_host: 192.0.2.10}")
+inventory "${certs_inv[@]}"
+run check certs; k1rc=$rc k1o=$out
+mkdir -p "$t/keys/prod/lab-ca"; echo t > "$t/keys/prod/cloudflare-dns01-token.txt"; echo c > "$t/keys/prod/lab-ca/c1-intermediate-chain.crt"; echo k > "$t/keys/prod/lab-ca/c1-intermediate.key"
+run check certs; k2rc=$rc k2=$calls seen=$(cat "$t/seen-inventory.yml" 2>/dev/null)
+run apply certs "$clr"; k3rc=$rc k3=$calls
+run apply certs; k4rc=$rc
+inventory "${certs_inv[@]/k8s_certs_issue: true/k8s_certs_issue: false}"
+run check certs; k5rc=$rc k5=$calls k5o=$out
+if [[ $k1rc -ne 0 && $k1o == *"is missing"* &&
+      $k2rc -eq 0 && $k2 == *"playbooks/k8s-certs.yml --tags issue --check --diff" && $k2 != *" -e "* &&
+      $seen == *"k8s_certs_cloudflare_token_file: $t/keys/prod/cloudflare-dns01-token.txt"* && $seen == *"k8s_certs_lab_ca_cert_file: $t/keys/prod/lab-ca/c1-intermediate-chain.crt"* &&
+      $seen == *"k8s_certs_lab_ca_key_file: $t/keys/prod/lab-ca/c1-intermediate.key"* && $seen != *".config/central-hub"* &&
+      $k3rc -eq 0 && $k3 == *"playbooks/k8s-certs.yml --tags issue" && $k3 != *--check* && $k4rc -eq 2 &&
+      $k5rc -ne 0 && -z $k5 && $k5o == *"never does"* ]]; then
+  ok "15. certs: tag issue only, the three files remapped to the box's copies, stops on a missing file or issuing off, apply needs a clearance id"
+else bad "15. $k1rc [$k1o] $k2rc [$k2] $k3rc [$k3] $k4rc $k5rc [$k5o]"; fi
 exit "$fail"

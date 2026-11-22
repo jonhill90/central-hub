@@ -108,6 +108,11 @@
         or 'ensure CRDs are installed' in k8s_certs_lab_ca_diff.stderr)
       check_mode: false
 
+    - name: lab_ca | What would change
+      ansible.builtin.debug:
+        msg: "{{ k8s_certs_lab_ca_diff.stdout_lines | default([]) | select('match', '^[+-] ') | list }}"
+      when: k8s_certs_lab_ca_diff.rc != 0
+
     - name: lab_ca | Apply the ClusterIssuer
       ansible.builtin.command: kubectl apply -f /root/central-hub/lab-ca.yaml
       when: k8s_certs_lab_ca_diff.rc != 0

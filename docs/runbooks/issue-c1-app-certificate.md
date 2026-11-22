@@ -93,6 +93,10 @@ Set every switch in the filled-in inventory, never with `-e`: a later run withou
 - The challenge fails with a Cloudflare authentication error, or the alert `C1CertificateRenewalOverdue` fires on the phone: the token works only from `request_ip_in`, the home's public address. If the address changed, put the new one in `home.tfvars` and run step 2 again.
 - To undo: set `k8s_certs_issue: false` and run the `issue` tag; it removes the token Secret, the issuers and the Certificate (the issued Secret stays). Set `k8s_gateway_https: false` and run `k8s-gateway.yml --tags gateway` to drop the HTTPS listener.
 
+## Re-issue on prod, from the box
+
+To change the Certificate on a live prod (its usages, a renewal) without a rebuild, run `c1-ansible check certs`, then `c1-ansible apply certs <clearance id>` from the agent box: the `issue` tag only, the same CA and names, a new key ([set-up-the-agent-box.md, The `certs` name](set-up-the-agent-box.md#change-c1-from-the-box)).
+
 ## Afterwards
 
 Set `last-tested`. The token rotates only when someone applies `home/certificates` within 14 days of its expiry, then runs the `issue` tag again ([hosts/terraform/README.md, Rotation](../../hosts/terraform/README.md#rotation)); nothing runs that on a schedule yet.

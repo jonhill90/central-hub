@@ -34,8 +34,14 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # gitops: the GitOps engine's source, web UI route and sign-in settings (tags source, ui, sso only: never install, the pinned
 # upstream install of Argo CD). It passes k8s_gitops_source_jellyfin_setup=false, because prod is rebuilt from a restore of its own Jellyfin config
 # (with the admin password the config holds), which a fresh admin Secret cannot match, and it maps the sign-in's CA file to <keys>/prod/lab-ca/root.crt. It also sets the root Application's own variables (the store's address and seal node, the notebook runner, the stable local-path folders) from the box's store settings, through the file prod's rebuild uses too (prod-root-vars.py), so `check gitops` plans no change to them; it stops when the settings are missing. observability: metrics-server, kube-prometheus-stack, Loki, Alloy and Grafana's route, with every tag the
-# role has named, so a tag added later is not run until this line names it. None of them needs a private file on the box: the inventory carries their values. k8s-certs.yml is not
-# a name here: it needs the lab CA's key and the Cloudflare token on the controller, and the box holds neither.
+# role has named, so a tag added later is not run until this line names it. None of them needs a private file on the box: the inventory carries their values.
+# certs: re-runs only the certificate work on prod (playbooks/k8s-certs.yml, tag issue: the lab CA's intermediate Secret, the ClusterIssuers
+# and the Gateway's wildcard Certificate), in place, with no teardown. It reads three files the controller's prod-files run and prod's rebuild
+# already put on the box (<keys>/prod/cloudflare-dns01-token.txt, <keys>/prod/lab-ca/c1-intermediate-chain.crt and c1-intermediate.key; the
+# inventory's own paths for them are the Mac's and are mapped here, as rebuild-prod.sh maps them), so it uses the same CA and the same
+# names; a changed Certificate makes cert-manager issue again with a new key (rotationPolicy Always). It never installs cert-manager (tag certmanager),
+# never touches the nodes' trust (tag nodetrust) and never deletes: a run with issuing off in the inventory would remove the issuers, so
+# `apply certs` stops before that. `check certs` prints the diff of what would change.
 # clients: makes sure clients `proxmox`, `openbao`, `opnsense` and `central-hub-app` are in the live realm (tags secrets and clients, the role's add-in-place path: files/ensure-client.sh
 # creates a client that is missing and updates one that is there; users, groups and the other clients are not touched, and the realm is
 # never replaced). Unlike `identity` it does not run the operator, database or keycloak tags, so a pending Keycloak or operator version
@@ -62,7 +68,7 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # backup-check: plays playbooks/k8s-backup.yml in check mode only, to prove the sftp alias tasks (the carried key seeds, the host address
 # from the box's copy of the prod inventory) before a prod rebuild; apply is refused, because the wrapper never takes a backup. The seed folder is the one
 # rebuild-prod.sh fills (<keys>/prod/backup-sftp); the env file is the box's own <keys>/c1-backup.env, as in rebuild-prod.sh (the first run's play 3 stopped on the default path under the keys user's home); the host address is read before the proxmox group is dropped, as rebuild-prod.sh does.
-declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml [restore-inspect]=playbooks/k8s-restore-inspect.yml)
+declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml [restore-inspect]=playbooks/k8s-restore-inspect.yml [certs]=playbooks/k8s-certs.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env" [identity-values]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file [identity-values]=k8s_identity_values_file)
 # Fixed extra variables per name. identity, users and clients also set k8s_identity_secrets_store=openbao, so the realm's Secrets
@@ -73,7 +79,7 @@ declare -A fixed_vars=([identity]="k8s_identity_realm_replace=false k8s_identity
 # Tags per name. identity runs every task plus the clients tag, which is off by default. The tag acts only on the clients in
 # k8s_identity_ensure_clients (empty by default), so the wrapper names them: proxmox, the client the realm gained after prod's
 # realm was made. It is added in place, with no realm replace. Name another client here, in its own pull request, to add it.
-declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof" [users]="secrets,users" [clients]="secrets,clients" [identity-values]="always")
+declare -A fixed_tags=([identity]="all,clients" [gateway]="gateway" [gitops]="source,ui,sso" [observability]="metrics_server,metrics,logs,route,proof" [users]="secrets,users" [clients]="secrets,clients" [identity-values]="always" [certs]="issue")
 declare -A fixed_json=([identity]='{"k8s_identity_ensure_clients":["proxmox"]}' [users]='{"k8s_identity_ensure_users":["signin-test"]}' [clients]='{"k8s_identity_ensure_clients":["proxmox","openbao","opnsense","central-hub-app"]}')
 
 usage() { echo "usage: c1-ansible list|check <name>|apply <name> <clearance id>|log" >&2; exit 2; }
@@ -110,6 +116,11 @@ extra=()
 if [[ -n ${needs_file[$name]:-} ]]; then
   [[ -s ${needs_file[$name]} ]] || { echo "c1-ansible: ${needs_file[$name]} is missing; the controller's prod-files run puts it there" >&2; exit 1; }
   extra=(-e "${needs_var[$name]}=${needs_file[$name]}")
+fi
+if [[ $name == certs ]]; then
+  for f in cloudflare-dns01-token.txt lab-ca/c1-intermediate-chain.crt lab-ca/c1-intermediate.key; do
+    [[ -s $keys/prod/$f ]] || { echo "c1-ansible: $keys/prod/$f is missing; the controller's prod-files run puts it there" >&2; exit 1; }
+  done
 fi
 [[ -n ${fixed_vars[$name]:-} ]] && extra+=(-e "${fixed_vars[$name]}")
 [[ -n ${fixed_tags[$name]:-} ]] && extra+=(--tags "${fixed_tags[$name]}")
@@ -218,6 +229,19 @@ def sso_ca(n):
     elif isinstance(n, list):
         for i in n: sso_ca(i)
 sso_ca(d)
+# `certs` reads the Cloudflare token and the lab CA's intermediate (chain and key); the inventory names them on the controller,
+# and on the box they are the copies in <keys>/prod, the same three paths rebuild-prod.sh maps them to.
+CERT_FILES = {"k8s_certs_cloudflare_token_file": "cloudflare-dns01-token.txt",
+              "k8s_certs_lab_ca_cert_file": "lab-ca/c1-intermediate-chain.crt",
+              "k8s_certs_lab_ca_key_file": "lab-ca/c1-intermediate.key"}
+def cert_files(n):
+    if isinstance(n, dict):
+        for k in list(n):
+            if k in CERT_FILES and isinstance(n[k], str) and n[k]: n[k] = os.path.dirname(themes.rstrip("/")) + "/" + CERT_FILES[k]
+            else: cert_files(n[k])
+    elif isinstance(n, list):
+        for i in n: cert_files(i)
+cert_files(d)
 def find(n, name):
     if isinstance(n, dict):
         if name in n and isinstance(n[name], dict): return n[name]
@@ -263,7 +287,7 @@ chmod 600 "$inventory/hosts.yml"
 # Every k8s node: plain ssh to ansible_host with the box's key and nothing else; no host labelled another env than prod.
 ansible-inventory -i "$inventory/" --list | python3 -I -c "$(cat <<'PY'
 import json, os, sys
-nodekey, known = sys.argv[1:3]
+nodekey, known, which = sys.argv[1:4]
 def die(m):
     print("c1-ansible: " + m, file=sys.stderr); sys.exit(1)
 inv = json.load(sys.stdin)
@@ -281,6 +305,11 @@ for h in nodes:
     if any(k in v for k in bad): die("inventory host %s sets ssh host, proxy or extra arguments; refusing" % h)
     if v.get("ansible_ssh_common_args") != want or v.get("ansible_ssh_private_key_file") != nodekey:
         die("inventory host %s has ssh arguments or a key other than the box's own; refusing" % h)
+    if which == "certs":
+        for need in ("k8s_certs_issue", "k8s_certs_lab_ca"):
+            if v.get(need) is not True: die("host %s has %s other than true; `certs` only issues, and with it off the role would remove the issuers and the certificate, which this wrapper never does" % (h, need))
+        for need in ("k8s_certs_cloudflare_token_file", "k8s_certs_lab_ca_cert_file", "k8s_certs_lab_ca_key_file"):
+            if not v.get(need): die("host %s has no %s; the prod inventory must name it (c1-ansible maps it to the box's copy)" % (h, need))
     env = (v.get("k8s_gitops_cluster_labels") or {}).get("env", "prod")
     if env != "prod": die("inventory host %s is labelled env %s, not prod; refusing" % (h, env))
     t = v.get("k8s_identity_theme_dir")
@@ -288,7 +317,7 @@ for h in nodes:
         die("k8s_identity_theme_dir is %s, which holds no login/theme.properties on the box; the controller's prod-files run copies the theme folder there (agent_box_prod_theme_src). Nothing was run, so prod's current theme stays" % t)
 print("c1-ansible: %d prod nodes, plain ssh with the box's key" % len(nodes))
 PY
-)" "$nodekey" "$envdir/known_hosts" || exit 1
+)" "$nodekey" "$envdir/known_hosts" "$name" || exit 1
 
 if [[ $name == backup-check ]]; then
   rm -rf -- "$seed_dir"; install -d -m 700 "$seed_dir"
