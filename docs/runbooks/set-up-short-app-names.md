@@ -58,8 +58,9 @@ A second kind of run, from the agent box: the sixth short name, then called `cen
 | Unbound override (#773) | `opnsense-prod.sh check`, then the reviewer's pass, the standing go and `apply-recorded` | check 282cc9b547f0: 1 changed, 10 skipped, 47 tasks; applied at 09:27 to 09:29 UTC, no rollback |
 | Resolve and open the page | from the box, `getent hosts central-hub-app.<zone>`, then `curl https://central-hub-app.<zone>/` (the name before the rename to `hub`) | the Gateway's address; `200`, certificate verified against the lab CA, page title `Central Hub`; `/api/v1/catalog` `200` |
 | Tailnet split DNS (#785, #788) | `tailnet-stack.sh plan`, the reviewer's pass, the standing go and `apply-recorded` | plan 755385b91b0c: 1 to add; applied at 10:30 UTC; a fresh plan shows 0 to add |
+| Rename to `hub` (#856), applied 2026-11-22 on commit 67d83032 | `opnsense-prod.sh apply-recorded 9fcdf8be6849` and `tailnet-stack.sh apply-recorded 80344700d834`, each on the owner's own go | the tailnet re-plan showed 0 to add, 0 to change, 0 to destroy; from the box, `hub.<zone>` resolved and answered `200` (reported by the orchestrator thread's run) |
 
-Not proven: that a tailnet device resolves the new name through split DNS (now `hub.<zone>`). The box and the agent cloud session do not use split DNS (a query for `grafana.<zone>` to `100.100.100.100` from the cloud session also returned NXDOMAIN), so the check is the owner's Mac or phone opening `https://hub.<zone>/`.
+The old name's override is removed by the role's list `opnsense_lab_short_app_names_retired` (`central-hub-app`), so a rename does not leave the old name answering; add a renamed app's old name there. Not proven: that a tailnet device resolves the new name through split DNS (now `hub.<zone>`). The box and the agent cloud session do not use split DNS (a query for `grafana.<zone>` to `100.100.100.100` from the cloud session also returned NXDOMAIN), so the check is the owner's Mac or phone opening `https://hub.<zone>/`.
 
 ## Before you start
 
