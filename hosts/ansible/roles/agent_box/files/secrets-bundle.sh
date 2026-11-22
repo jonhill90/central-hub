@@ -17,6 +17,7 @@ umask 077
 keys=/etc/agent-keys
 libexec=/usr/local/libexec/agent-box
 dir=$keys/secrets-bundle
+sealed=/etc/agent-keys-inventory-sealed/inventory.sops.json   # the inventory wrapper's SOPS copy (inventory.sh seal); this user can read it and not open it
 settings=$dir/settings.env   # written by the agent_box role; no secret in it
 identity=$dir/age-identity.txt
 out=$dir/bundles
@@ -56,7 +57,12 @@ back=$(mktemp "$dir/.bundle.XXXXXX")
 trap 'rm -f "$tarball" "$back"' EXIT
 
 # Sorted names and fixed owner and times, so the same files always make the same tar.
-tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' -C "$keys" -cf "$tarball" "${srcs[@]}"
+# The inventory's sealed copy goes in as inventory-sealed/inventory.sops.json when it exists; the working copy and its key are never here.
+extra=()
+if [[ -f $sealed ]]; then
+  extra=(-C "$(dirname "$sealed")" --transform='s,^inventory.sops.json$,inventory-sealed/inventory.sops.json,' inventory.sops.json)
+fi
+tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' -C "$keys" -cf "$tarball" "${srcs[@]}" ${extra[@]+"${extra[@]}"}
 
 bundle=$out/bundle-$stamp.sops.json
 "$libexec/sops" encrypt --input-type binary --output-type json \
