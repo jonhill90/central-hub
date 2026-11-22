@@ -137,6 +137,14 @@ out=$(run dev openbao-measure "$t/ok"); check "dev without a key file still skip
 out=$(FAKE_SECRET=yes run prod gitops "$t/ok"); check "prod gitops leaves the lab-ca issuer on" "$out" "AP " "lab_ca_issuer"
 check "prod gitops leaves login-probe on" "$out" "AP " "login_probe"
 check "prod gitops leaves jellyfin setup on" "$out" "AP " "jellyfin_setup"
+# Prod's rebuild restores its own backup (rebuild-prod.sh sets RESTORE_HOOK), Jellyfin config and admin password with it, so its
+# fresh admin Secret can't sign in (prod resume 4, 2026-11-22: 401 every tick): a prod run with a restore also turns the setup off.
+out=$(RESTORE_HOOK=true FAKE_SECRET=yes run prod gitops "$t/ok")
+check "prod gitops with a restore turns jellyfin setup off" "$out" "-e k8s_gitops_source_jellyfin_setup=false" ""
+check "prod gitops with a restore leaves login-probe on" "$out" "AP " "login_probe"
+check "prod gitops with a restore leaves the panel check running" "$out" "AP " "panel_check"
+out=$(RESTORE_HOOK=true run prod gitops "$t/ok")
+check "prod's first gitops with a restore turns it off too" "$out" "-e k8s_gitops_source_jellyfin_setup=false" ""
 check "prod gitops leaves the panel check running" "$out" "AP " "panel_check"
 # The default list stays a default: dev appends the stages only when no --only is given, and the measurement
 # only with a key file, after dev-ca (which makes the https listener it goes through).

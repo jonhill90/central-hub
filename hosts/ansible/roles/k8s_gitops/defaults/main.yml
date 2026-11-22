@@ -66,7 +66,8 @@ k8s_gitops_source_lab_ca_issuer: true
 k8s_gitops_source_login_probe: true
 # Whether Jellyfin's setup CronJob runs, passed to the root chart as `jellyfinSetup` only when false. Dev restores
 # prod's Jellyfin config (with prod's admin password) before the apps start, so the setup Job's own, freshly made
-# admin Secret can't sign in; hosts/rebuild-k8s.sh sets it false on dev. c1 keeps true.
+# admin Secret can't sign in; hosts/rebuild-k8s.sh sets it false on dev and on any run with a RESTORE_HOOK (prod's rebuild), and the
+# box's c1-ansible gitops sets it false for prod. A first-ever c1 with no restore keeps true.
 k8s_gitops_source_jellyfin_setup: true
 # Whether monitoring-extras' panel-check CronJob is suspended, passed to the root chart as `panelCheckSuspended` only
 # when true. A tick inside a dev run failed `checks` on seven panels with no data: Keycloak's has none before the

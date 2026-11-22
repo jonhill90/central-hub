@@ -33,6 +33,7 @@ Stop if any of these is not true.
 ## Steps
 
 1. In the private inventory, set `k8s_gitops_sso: true`. Then run `ansible-playbook -i inventories/home/ playbooks/k8s-gitops.yml --tags sso --check --diff`. From the box, once `c1-ansible list` there prints `gitops`: `c1-ansible check gitops`, then `c1-ansible apply gitops <clearance id>`. The box runs the wrapper's fixed tags (`source,ui,sso`), which can be more than the Mac command above, and reads its own copy of the inventory ([set-up-the-agent-box.md](set-up-the-agent-box.md#change-c1-from-the-box)).
+   On the box, `c1-ansible` maps the inventory's `k8s_gitops_sso_root_ca_file` (a controller path) to its copy `<keys>/prod/lab-ca/root.crt`, as the prod rebuild does; before that map, `c1-ansible check gitops` stopped at `sso | The CA file is a certificate` on a path the box does not have (2026-11-22). It also passes `k8s_gitops_source_jellyfin_setup=false`, because prod is rebuilt from a restore of its own Jellyfin config (see move-jellyfin-to-argo-cd.md).
    expect: the diff adds the keys above and nothing else.
 
 2. Run the same command without `--check`.
