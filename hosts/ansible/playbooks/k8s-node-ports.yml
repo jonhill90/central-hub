@@ -1,0 +1,14 @@
+---
+# Open the ports k8s_node_ports lists (the Kubernetes, Cilium and node-exporter ports) on every node of a running cluster, and nothing
+# else: one firewalld task, in place, no restart, no Helm, no kubectl, no delete. It is what `c1-ansible check|apply node-ports` runs
+# on prod, so a port added to the list (9100/tcp, node-exporter) reaches nodes built before it was, without the cluster playbook.
+#   ansible-playbook -i inventories/home/ playbooks/k8s-node-ports.yml --check --diff
+- name: Open the node ports in the lab zone
+  hosts: k8s_nodes
+  become: true
+  gather_facts: false
+  tasks:
+    - name: The firewalld task of role k8s_node
+      ansible.builtin.include_role:
+        name: k8s_node
+        tasks_from: ports.yml

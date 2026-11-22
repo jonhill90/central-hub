@@ -68,7 +68,11 @@ export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-
 # backup-check: plays playbooks/k8s-backup.yml in check mode only, to prove the sftp alias tasks (the carried key seeds, the host address
 # from the box's copy of the prod inventory) before a prod rebuild; apply is refused, because the wrapper never takes a backup. The seed folder is the one
 # rebuild-prod.sh fills (<keys>/prod/backup-sftp); the env file is the box's own <keys>/c1-backup.env, as in rebuild-prod.sh (the first run's play 3 stopped on the default path under the keys user's home); the host address is read before the proxmox group is dropped, as rebuild-prod.sh does.
-declare -A playbook=([identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml [restore-inspect]=playbooks/k8s-restore-inspect.yml [certs]=playbooks/k8s-certs.yml)
+# node-ports: opens the ports k8s_node_ports lists (Kubernetes, Cilium and node-exporter's 9100/tcp) in the lab zone on every node, in place
+# (playbooks/k8s-node-ports.yml: one firewalld task of role k8s_node, no restart, no Helm, no kubectl, no delete), for nodes built before a port
+# was added to the list. check prints each port per node and whether it would be added; the output of this name shows each node as cp-N or wk-N
+# (control planes first, by name) and masks every IPv4 address, in the screen and in the log.
+declare -A playbook=([node-ports]=playbooks/k8s-node-ports.yml [identity]=playbooks/k8s-identity.yml [gateway]=playbooks/k8s-gateway.yml [gitops]=playbooks/k8s-gitops.yml [observability]=playbooks/k8s-observability.yml [users]=playbooks/k8s-identity.yml [clients]=playbooks/k8s-identity.yml [identity-values]=playbooks/k8s-identity.yml [backup-status]=playbooks/k8s-backup-status.yml [backup-restore-test]=playbooks/k8s-backup-restore-test.yml [backup-check]=playbooks/k8s-backup.yml [restore-inspect]=playbooks/k8s-restore-inspect.yml [certs]=playbooks/k8s-certs.yml)
 declare -A needs_file=([identity]="$keys/prod/identity.env" [users]="$keys/prod/identity.env" [clients]="$keys/prod/identity.env" [identity-values]="$keys/prod/identity.env")
 declare -A needs_var=([identity]=k8s_identity_values_file [users]=k8s_identity_values_file [clients]=k8s_identity_values_file [identity-values]=k8s_identity_values_file)
 # Fixed extra variables per name. identity, users and clients also set k8s_identity_secrets_store=openbao, so the realm's Secrets
@@ -345,5 +349,29 @@ exec > >(tee -a "$log") 2>&1
 echo "c1-ansible: $action $name at central-hub $commit${clearance:+, clearance $clearance}"
 mode=(--check --diff)
 [[ $action == apply ]] && mode=()
-(cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory/" "${playbook[$name]}" "${extra[@]}" "${mode[@]}")
+if [[ $name == node-ports ]]; then
+  amap=$(ansible-inventory -i "$inventory/" --list | python3 -I -c '
+import json, sys
+inv = json.load(sys.stdin); hv = inv["_meta"]["hostvars"]
+def members(g):
+    out = set(inv.get(g, {}).get("hosts", []))
+    for c in inv.get(g, {}).get("children", []): out |= members(c)
+    return out
+cp = members("k8s_control_plane")
+count, mp = {}, {}
+for h in sorted(members("k8s_nodes"), key=lambda h: (h not in cp, h)):
+    r = "cp" if h in cp else "wk"; count[r] = count.get(r, 0) + 1
+    mp[h] = "%s-%d" % (r, count[r])
+    if hv[h].get("ansible_host"): mp[hv[h]["ansible_host"]] = mp[h]
+print(json.dumps(mp))')
+  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory/" "${playbook[$name]}" "${extra[@]}" "${mode[@]}") 2>&1 | AMAP="$amap" python3 -I -c '
+import json, os, re, sys
+mp = json.loads(os.environ["AMAP"])
+for line in sys.stdin:
+    for k in sorted(mp, key=len, reverse=True):
+        line = re.sub(r"(?<![\w.-])" + re.escape(k) + r"(?![\w-]|\.\d)", mp[k], line)
+    sys.stdout.write(re.sub(r"(?<![\d.])\d{1,3}(\.\d{1,3}){3}(?![\d.]*\d)", "<ip>", line))'
+else
+  (cd "$repo/hosts/ansible" && ansible-playbook -i "$inventory/" "${playbook[$name]}" "${extra[@]}" "${mode[@]}")
+fi
 echo "c1-ansible: $action $name done"

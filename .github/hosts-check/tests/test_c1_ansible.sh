@@ -13,6 +13,8 @@
 #  15. certs runs the certs playbook with tag issue only, no values file and no extra variables; the inventory's three controller
 #      paths (Cloudflare token, lab CA chain and key) are remapped to <keys>/prod; it stops while one of the three files is missing,
 #      and when the inventory has issuing or the lab CA off (the role would then delete the issuers); apply needs a clearance id.
+#  16. node-ports runs its one-task playbook with no tags and no extra variables; its output shows nodes as cp-N and wk-N and masks every
+#      address, in the screen and in the log; the playbook and the task file it includes hold no Helm, kubectl, command, shell or delete task.
 #   5. log prints the run's own lines.
 #   9. users runs the identity playbook with tags secrets,users, the values file, no realm replace and one fixed user; apply is its
 #      own verb; it never runs the keycloak tag.
@@ -42,7 +44,7 @@ cat > "$t/bin/git" <<'S'
 #!/bin/bash
 case "$*" in
   *"remote get-url"*) echo https://example.invalid/central-hub.git ;;
-  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status backup-restore-test backup restore-inspect; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
+  clone*) mkdir -p "${@: -1}/.git" "${@: -1}/hosts/ansible/playbooks"; for pb in identity gateway gitops observability certs backup-status backup-restore-test backup restore-inspect node-ports; do : > "${@: -1}/hosts/ansible/playbooks/k8s-$pb.yml"; done ;;
   *rev-parse*) echo abc1234 ;;
 esac
 exit 0
@@ -85,7 +87,7 @@ if [[ $r1 == "2:none 2:none 2:none 2:none 2:none 2:none 2:none 2:none " ]]; then
 
 run list; l=$out
 run check identity
-if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\ncerts\nclients\ngateway\ngitops\nidentity\nidentity-values\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
+if [[ $l == $'backup-check\nbackup-restore-test\nbackup-status\ncerts\nclients\ngateway\ngitops\nidentity\nidentity-values\nnode-ports\nobservability\nrestore-inspect\nusers' && $rc -ne 0 && $out == *"identity.env is missing"* && -z $calls ]]; then ok "2. list; a missing values file stops the run"; else bad "2. $l $rc $out"; fi
 
 echo "X=1" > "$t/keys/prod/identity.env"
 ens='{"k8s_identity_ensure_clients":["proxmox"]}'
@@ -257,4 +259,31 @@ if [[ $k1rc -ne 0 && $k1o == *"is missing"* &&
       $k5rc -ne 0 && -z $k5 && $k5o == *"never does"* ]]; then
   ok "15. certs: tag issue only, the three files remapped to the box's copies, stops on a missing file or issuing off, apply needs a clearance id"
 else bad "15. $k1rc [$k1o] $k2rc [$k2] $k3rc [$k3] $k4rc $k5rc [$k5o]"; fi
+# 16: node-ports
+np_inv=("all:" "  children:" "    k8s_nodes:" "      children:" "        k8s_control_plane:" "          hosts:" "            cp-zz.lab.example: {ansible_host: 192.0.2.10}"
+        "        k8s_workers:" "          hosts:" "            wk-aa.lab.example: {ansible_host: 192.0.2.11}")
+inventory "${np_inv[@]}"
+echo '{"seal_node": "cp-zz.lab.example", "store_host": "bao.invalid"}' > "$t/work/openbao-prod.json"
+cat > "$venv/ansible-playbook" <<S
+#!/bin/bash
+echo "playbook \$*" >> $t/calls
+echo "changed: [cp-zz.lab.example] => (item=9100/tcp)"
+echo "ok: [wk-aa.lab.example] => (item=9100/tcp)"
+echo "fatal: [198.51.100.7]: UNREACHABLE (192.0.2.10 and 192.0.2.110)"
+S
+run check node-ports; n1rc=$rc n1=$calls n1o=$out; n1log=$(cat "$t/work/c1-ansible/logs/"run-*.log)
+run apply node-ports "$clr"; n2rc=$rc n2=$calls
+run apply node-ports; n3rc=$rc
+pb=hosts/ansible/playbooks/k8s-node-ports.yml; tf=hosts/ansible/roles/k8s_node/tasks/ports.yml
+if [[ $n1rc -eq 0 && $n1 == *"playbooks/k8s-node-ports.yml --check --diff" && $n1 != *" -e "* && $n1 != *--tags* &&
+      $n1o == *"changed: [cp-1] => (item=9100/tcp)"* && $n1o == *"ok: [wk-1] => (item=9100/tcp)"* && $n1o == *"fatal: [<ip>]: UNREACHABLE (cp-1 and <ip>)"* &&
+      $n1o != *"192.0.2."* && $n1o != *"198.51"* && $n1o != *"lab.example"* && $n1log != *"192.0.2."* && $n1log != *"lab.example"* &&
+      $n2rc -eq 0 && $n2 == *"playbooks/k8s-node-ports.yml" && $n2 != *--check* && $n3rc -eq 2 ]]; then
+  ok "16. node-ports: its own playbook, no tags or variables; cp-N and wk-N for the nodes, other addresses masked, in the screen and the log; apply needs a clearance id"
+else bad "16. $n1rc [$n1] [$n1o] [$n1log] $n2rc [$n2] $n3rc"; fi
+code=$(grep -hv '^ *#' "$pb" "$tf")
+if ! grep -qiE 'helm|kubectl|ansible.builtin.(command|shell|raw|script)|delete|state: absent' <<< "$code" && grep -q "ansible.posix.firewalld" "$tf" &&
+   [[ $(grep -c "^    - name:\|^  - name:" "$pb") -eq 1 ]]; then
+  ok "16b. the node-ports playbook and its task file hold no Helm, kubectl, command, shell or delete task: one include of the firewalld task file"
+else bad "16b. the node-ports play holds more than the firewalld task"; fi
 exit "$fail"
