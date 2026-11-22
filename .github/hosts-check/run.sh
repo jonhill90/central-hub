@@ -151,6 +151,7 @@ check_ansible() {
   suite bash "$here/tests/test_jellyfin_plugin_name.sh"
   suite bash "$here/tests/test_jellyfin_login_button.sh"
   suite bash "$here/tests/test_client_json_check.sh"
+  suite bash "$here/tests/test_ensure_client_reason.sh"
   suite bash "$here/tests/test_sudoers_session_args.sh"
   # A pipeline job's check run changes nothing (D-0041 rule 4): the playbooks the box's host jobs run.
   suite python3 "$here/check-check-mode.py" . playbooks/proxmox-proxy.yml playbooks/proxmox-memory.yml playbooks/proxmox-connector.yml playbooks/proxmox-connector-route.yml playbooks/proxmox-ksm.yml playbooks/proxmox-ksm-off.yml playbooks/proxmox-restic-box.yml
