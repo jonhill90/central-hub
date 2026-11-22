@@ -3,7 +3,7 @@
 # with the box's own prod node key, so no Mac runs it (docs/runbooks/set-up-the-secrets-store.md, "On prod").
 # It runs as user `keys` through sudo, so the session never sees the node key, the seal key or the admin IDs.
 # Installed by the agent_box role; root owns it.
-#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log
+#   sudo -n -u keys /usr/local/libexec/agent-box/openbao-prod.sh key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|c1-readonly|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log
 # key       makes the box's prod node key once (/etc/agent-keys/prod-node-key, ed25519, never replaced) and prints its
 #           public half. Putting it on prod's nodes gives the agents a root login there, a new access right, so that step
 #           waits for the owner's tap (D-0042 rule 6) and is done once, by a run that already reaches the nodes.
@@ -26,6 +26,11 @@
 #           openbao-store, openbao and the secret-store app's store `openbao`. Argo CD's install is left alone.
 # ca        the CA the box checks prod's store against on its admin path (TLS ends at OpenBao, D-0062): ca.crt of Secret openbao/openbao-tls, a public certificate, written to <keys>/prod/secrets-store-ca.crt
 #           only if it is one PEM certificate. Run it after gitops, and again after a rebuild, which makes a new CA.
+# c1-readonly the box's read-only kubeconfig for c1 (/etc/agent-keys/c1-readonly.kubeconfig, what `c1-read` uses), made again from the
+#           live cluster: the CA and token of Secret agent-read/agent-read-token (app agent-read), the API address the file already
+#           holds or the inventory's k8s_control_plane_endpoint. It replaces the file only after the new one reads the nodes and
+#           answers no to listing Secrets and to creating Pods; otherwise the old file stays. Run it after a rebuild (a new cluster
+#           has a new CA and token); nothing is printed but counts and yes or no.
 # handover  playbooks/k8s-openbao-handover.yml with prod's admin AppRole IDs (/etc/agent-keys/prod/openbao-admin-*, made
 #           once by the same rule as secrets-store.sh, never printed).
 # refresh   playbooks/k8s-openbao-refresh.yml, after handover: the store's policies and its admin login's address
@@ -95,11 +100,11 @@ settings=$work/openbao-prod.json
 export HOME=$work PATH=$libexec/ansible-venv/bin:/usr/local/bin:/usr/bin:/bin
 export ANSIBLE_COLLECTIONS_PATH=$libexec/collections ANSIBLE_HOME=$work/ansible-home
 
-usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log" >&2; exit 2; }
+usage() { echo "usage: openbao-prod key|check|seal <tap id>|seal-copy <tap id>|l2-policy|gitops|ca|c1-readonly|handover|refresh <tap id>|reset-failed-start <tap id>|drop-box-path <tap id>|admin-firewall-check|admin-firewall <tap id>|secrets-status|jobs-status|prune-status|targets-status|log" >&2; exit 2; }
 action=${1:-}
 tap=''
 case $action in
-  key | check | l2-policy | gitops | ca | handover | admin-firewall-check | secrets-status | jobs-status | prune-status | targets-status | log) [[ $# -eq 1 ]] || usage ;;
+  key | check | l2-policy | gitops | ca | c1-readonly | handover | admin-firewall-check | secrets-status | jobs-status | prune-status | targets-status | log) [[ $# -eq 1 ]] || usage ;;
   seal | seal-copy | refresh | reset-failed-start | drop-box-path | admin-firewall)
     [[ $# -eq 2 ]] || usage
     tap=$2
@@ -501,6 +506,57 @@ print(json.dumps({"argv": ["kubectl", "--kubeconfig", "/etc/kubernetes/admin.con
       { echo "openbao-prod: the CA file is written, but ConfigMap openbao/openbao-ca-bundle was not applied" >&2; exit 1; }
     echo "openbao-prod: ca: ConfigMap openbao/openbao-ca-bundle applied (the same certificate)"
     echo "PASS: openbao-prod: ca: the store's CA written to $store_keys/secrets-store-ca.crt ($(openssl x509 -noout -subject -enddate <<< "$pem" | tr '\n' ' '))"
+    ;;
+  c1-readonly)
+    ro=$keys/c1-readonly.kubeconfig
+    # The API's own name: the one the file holds now (a rebuild changes the CA and the token, not the name), else the inventory's.
+    server=$(sed -nE 's#^[[:space:]]*server:[[:space:]]*(https://[A-Za-z0-9.-]+(:[0-9]+)?)[[:space:]]*$#\1#p' "$ro" 2>/dev/null | head -n 1 || true)
+    if [[ -z $server ]]; then
+      ep=$(ansible-inventory -i "$inventory/" --list | python3 -I -c '
+import json, sys
+hv = json.load(sys.stdin).get("_meta", {}).get("hostvars", {})
+print(next((str(v["k8s_control_plane_endpoint"]) for v in hv.values() if v.get("k8s_control_plane_endpoint")), ""), end="")') || ep=''
+      [[ $ep =~ ^[A-Za-z0-9.-]+$ ]] && server=https://$ep:6443
+    fi
+    [[ -n $server ]] || { echo "openbao-prod: no API address: $ro holds none and the inventory has no k8s_control_plane_endpoint; nothing written" >&2; exit 1; }
+    # Secret agent-read/agent-read-token is the one app agent-read makes (docs/runbooks/give-agents-read-access-to-c1.md): its CA and token
+    # are the live cluster's. Each is read by its one key and goes to Python on stdin, never to a command line or the log.
+    ro_token=$(kc -n agent-read get secret agent-read-token -o "'jsonpath={.data.token}'") ||
+      { echo "openbao-prod: could not read Secret agent-read/agent-read-token (is app agent-read Synced?); $ro left as it was" >&2; exit 1; }
+    ro_ca=$(kc -n agent-read get secret agent-read-token -o "'jsonpath={.data.ca\.crt}'") ||
+      { echo "openbao-prod: could not read ca.crt of Secret agent-read/agent-read-token; $ro left as it was" >&2; exit 1; }
+    python3 -I -c '
+import base64, binascii, subprocess, sys
+server, out = sys.argv[1:3]
+tok_b64, ca_b64 = sys.stdin.read().split("\n")[:2]
+def die(m):
+    print("openbao-prod: " + m, file=sys.stderr); sys.exit(1)
+try:
+    token = base64.b64decode(tok_b64, validate=True).decode()
+    ca = base64.b64decode(ca_b64, validate=True).decode()
+except (binascii.Error, UnicodeDecodeError):
+    die("Secret agent-read/agent-read-token does not hold base64 text; nothing written")
+if not token or any(c.isspace() for c in token):
+    die("Secret agent-read/agent-read-token has no token yet (Kubernetes fills it in a moment after it is made); nothing written")
+if ca.count("-----BEGIN ") != 1 or ca.count("-----BEGIN CERTIFICATE-----") != 1 or \
+   subprocess.run(["openssl", "x509", "-noout"], input=ca.encode(), capture_output=True).returncode != 0:
+    die("ca.crt of Secret agent-read/agent-read-token is not one PEM certificate; nothing written")
+cfg = "apiVersion: v1\nkind: Config\nclusters:\n- name: c1\n  cluster:\n    server: %s\n    certificate-authority-data: %s\n" % (server, ca_b64)
+cfg += "users:\n- name: agent-read\n  user:\n    token: %s\ncontexts:\n- name: c1\n  context: {cluster: c1, user: agent-read}\ncurrent-context: c1\n" % token
+open(out, "w").write(cfg)' "$server" "$ro.part" <<< "$ro_token"$'\n'"$ro_ca" || { rm -f -- "$ro.part"; exit 1; }
+    chmod 600 "$ro.part"
+    # Proof before it replaces the old file: it reads the nodes, and it can neither list Secrets nor create Pods. Only a count and yes or no print.
+    k="kubectl --kubeconfig $ro.part --request-timeout=30s"
+    nodes=$($k get nodes --no-headers 2>/dev/null | grep -c . || true)
+    can_secrets=$($k auth can-i list secrets -A 2>/dev/null || true)
+    can_pods=$($k auth can-i create pods -n default 2>/dev/null || true)
+    if [[ $nodes -lt 1 || $can_secrets != no || $can_pods != no ]]; then
+      rm -f -- "$ro.part"
+      echo "openbao-prod: c1-readonly: the new kubeconfig failed its proof (nodes read: $nodes, list secrets: ${can_secrets:-no answer}, create pods: ${can_pods:-no answer}); $ro left as it was" >&2
+      exit 1
+    fi
+    mv -- "$ro.part" "$ro"
+    echo "PASS: openbao-prod: c1-readonly: $ro made from the live cluster's agent-read token and CA (reads $nodes nodes; list secrets: no; create pods: no)"
     ;;
   handover)
     mkdir -p "$store_keys"

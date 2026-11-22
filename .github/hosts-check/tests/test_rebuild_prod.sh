@@ -661,12 +661,12 @@ tap=cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ
 resume_logs gateway; date -u > "$t/work/state/secrets-store-prod.rebuilding"
 run resume "$tap" "$sha"; r20a=$rc o20a=$out
 post_calls=$(grep '^post ' "$t/calls" | tr '\n' '|')
-seq20=$(grep -oE '^(post [a-z0-9-]+(\.sh)? [a-z-]+|one-command .*--only [a-z,-]+)' "$t/calls" | sed -E 's/^one-command .*--only /only /' | tr '\n' '|')
-want20="post openbao-prod admin-firewall $tap|post openbao-prod ca|post c1-ansible apply identity-values $tap|post secrets-store-prod clear-hold|post secrets-store-prod put-apps|post secrets-store-prod compare|"
+seq20=$(grep -oE '^(post [a-z0-9-]+(\.sh)? [a-z0-9-]+|one-command .*--only [a-z,-]+)' "$t/calls" | sed -E 's/^one-command .*--only /only /' | tr '\n' '|')
+want20="post openbao-prod admin-firewall $tap|post openbao-prod ca|post openbao-prod c1-readonly|post c1-ansible apply identity-values $tap|post secrets-store-prod clear-hold|post secrets-store-prod put-apps|post secrets-store-prod compare|"
 postlog=$(ls -1 "$t/work/rebuild-prod/logs"/rebuild-*-post.log 2>/dev/null | tail -n 1)
-if [[ $r20a -eq 0 && $post_calls == "$want20" && $seq20 == "only gateway|post openbao-prod admin-firewall|post openbao-prod ca|post c1-ansible apply|post secrets-store-prod clear-hold|post secrets-store-prod put-apps|post secrets-store-prod compare|only identity,identity-db,ui,backup,backup-drill,checks|" && $(grep -cE ' (store-admin|store-ca|identity-values|store-secrets) end rc=0' "$postlog") -eq 4 &&
+if [[ $r20a -eq 0 && $post_calls == "$want20" && $seq20 == "only gateway|post openbao-prod admin-firewall|post openbao-prod ca|post openbao-prod c1-readonly|post c1-ansible apply|post secrets-store-prod clear-hold|post secrets-store-prod put-apps|post secrets-store-prod compare|only identity,identity-db,ui,backup,backup-drill,checks|" && $(grep -cE ' (store-admin|store-ca|identity-values|store-secrets) end rc=0' "$postlog") -eq 4 &&
       $o20a == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin ]]; then
-  ok "20. after gateway and before identity: admin firewall, store CA, identity values, then the hold cleared, put-apps and compare, each logged as a stage; the pin clears only after the whole run"
+  ok "20. after gateway and before identity: admin firewall, store CA (then the c1-read kubeconfig), identity values, then the hold cleared, put-apps and compare, each logged as a stage; the pin clears only after the whole run"
 else bad "20. $r20a [$seq20] [$post_calls] [$(cat "$postlog" 2>/dev/null)] $o20a"; fi
 rm -f "$postlog" "$t/work/state/secrets-store-prod.rebuilding"
 # 20b. A step that fails stops the run: the later steps do not run, the pin stays, the log names the step.
@@ -676,6 +676,14 @@ if [[ $r20b -ne 0 && $o20b == *"FAIL: rebuild-prod: post step store-ca failed"* 
       $c20b != *"put-apps"* && $c20b != *"--only identity,"* && -e $t/work/state/prod-restore-pin && $o20b != *"PASS: rebuild-prod: prod torn down and built again"* ]]; then
   ok "20b. a post step that fails stops the run before the later steps, keeps the pin and names the step"
 else bad "20b. $r20b $o20b [$c20b]"; fi
+rm -f "$t/work/rebuild-prod/logs"/rebuild-*-post.log
+# 20b2. The box's c1-read kubeconfig failing to be made again only warns: the store-ca step and the run go on.
+resume_logs gateway; : > "$t/calls"
+POST_FAIL="openbao-prod c1-readonly" run resume "$tap" "$sha"; r20b2=$rc o20b2=$out c20b2=$calls
+if [[ $r20b2 -eq 0 && $o20b2 == *"WARN: rebuild-prod: the box's c1-read kubeconfig was not made again"* && $o20b2 != *"post step store-ca failed"* &&
+      $c20b2 == *"post openbao-prod c1-readonly"*"post c1-ansible apply identity-values"* && $o20b2 == *"PASS: rebuild-prod: prod torn down and built again"* ]]; then
+  ok "20b2. the c1-read kubeconfig step failing only warns; the run goes on"
+else bad "20b2. $r20b2 $o20b2 [$c20b2]"; fi
 rm -f "$t/work/rebuild-prod/logs"/rebuild-*-post.log
 # 20c. A resume after that carries on from the failed step only: not the stages or steps before it.
 resume_logs gateway
