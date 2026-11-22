@@ -206,7 +206,9 @@ if [[ $action == rebuild || $action == resume ]]; then
   fi
   if [[ -n $torn ]]; then
     # The nodes are the rebuilt ones: their host keys are new, and the old ones the pre-teardown steps pinned no longer match.
-    rm -f -- "$envdir/known_hosts.old" "$work/c1-ansible/known_hosts"
+    # openbao-prod keeps its own known_hosts the same way (accept-new refuses a changed key): after the rebuild its admin-firewall,
+    # ca, handover and refresh stopped with "REMOTE HOST IDENTIFICATION HAS CHANGED" (prod resume 1, 2026-11-22).
+    rm -f -- "$envdir/known_hosts.old" "$work/c1-ansible/known_hosts" "$work/openbao-prod/known_hosts" "$work/openbao-prod/known_hosts.old"
   fi
 fi
 
@@ -889,7 +891,7 @@ echo "rebuild-prod: the restore snapshot is pinned: ${pin:0:12}${given_pin:+ (fu
 # From here prod's cluster is built with stable folder names, which the box's other prod copies follow (openbao-prod).
 date -u +%FT%TZ > "$work/state/prod-stable-folders"
 # The rebuilt nodes have new host keys: the build starts with no known hosts.
-rm -f -- "$envdir/known_hosts" "$envdir/known_hosts.old" "$work/c1-ansible/known_hosts"
+rm -f -- "$envdir/known_hosts" "$envdir/known_hosts.old" "$work/c1-ansible/known_hosts" "$work/openbao-prod/known_hosts" "$work/openbao-prod/known_hosts.old"
 
 fi
 
