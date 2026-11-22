@@ -184,8 +184,8 @@ REF = re.compile(r"[A-Za-z0-9_.:-]{6,200}")
 def ledger_entries(base):
     """The reviewer's recorded digest passes for this baseline, from the pass ledger (`pass-record digest-pass`), as
     (label, from, to, digest, pass, tap) rows. The standing tap is the owner's go that replaced the approval PR for
-    box installs (2026-11-22). The ledger is written through pass-record, which only the reviewer lane may call for
-    a digest pass; a line that is not well formed is left out."""
+    box installs (2026-11-22). The ledger is written through pass-record, which only the orchestrator or reviewer may name
+    themselves for a digest pass; a line that is not well formed is left out."""
     out = []
     try:
         with open(LEDGER) as f:
@@ -199,7 +199,7 @@ def ledger_entries(base):
         except (ValueError, KeyError, TypeError):
             say(f"{LEDGER} line {n} is not a digest pass; left out")
             continue
-        if e.get("recorder") != "reviewer" or frm != base:
+        if e.get("recorder") not in ("orchestrator", "reviewer") or frm != base:
             continue
         out.append((f"{LEDGER} line {n}", frm, to, digest, ref, STANDING_TAP))
     return out

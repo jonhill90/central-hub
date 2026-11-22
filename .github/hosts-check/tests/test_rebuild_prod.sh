@@ -48,7 +48,8 @@ case "\$*" in
   *"rev-parse --quiet --verify "*) a="\${*: -1}"; a="\${a%^\{commit\}}"; [[ $sha == "\$a"* ]] && echo $sha || exit 1 ;;
   *rev-parse*) echo $sha ;;
   *"cat-file -e"*) exit 0 ;;
-  *"diff --name-only"*) cat $t/difffiles 2>/dev/null; exit 0 ;;
+  *"diff --no-renames --name-only"*) cat $t/difffiles 2>/dev/null; exit 0 ;;   # a diff read without --no-renames returns nothing here, so the 19b tests fail
+  *"diff "*) exit 0 ;;
   *"merge-base --is-ancestor "*" origin/main") exit \${NOT_ON_MAIN:-0} ;;
   *"merge-base --is-ancestor "*) echo "floor \$5 \$6" >> $t/floorcalls; exit \${BELOW_FLOOR:-0} ;;
   *" checkout "*) echo "git \${*: -1}" >> $t/gitcalls ;;
@@ -637,6 +638,8 @@ run check; r19d=$rc o19d=$out
 if [[ $r19c -eq 0 && $o19c == *"every file changed since it"*"is one dev never reads"* && $r19d -eq 1 && $o19d == *"touch files dev reads: hosts/rebuild-k8s.sh"* ]]; then
   ok "19b. a dev pass at an older commit stands when only docs, checks and the box's own files changed since; a file dev reads needs a new dev run"
 else bad "19b. $r19c $o19c | $r19d $o19d"; fi
+# 19c. The diff is read with --no-renames: a file moved from a path dev reads into docs/ shows both paths, so the old one stops the gate.
+[[ $(grep -c -- 'diff --no-renames --name-only' "$t/run/rebuild-prod.sh") -eq 1 && $r19d -eq 1 ]] && ok "19c. the scoped dev gate reads the diff with --no-renames, so a move out of a file dev reads still names the old path" || bad "19c. the diff is read without --no-renames"
 rm -f "$t/difffiles"
 
 exit "$fail"

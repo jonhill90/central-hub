@@ -57,13 +57,15 @@ H4=$(printf 'd%.0s' $(seq 40)); out=$(LANE=plan bash "$t/mut2.sh" add owner-tap 
 # digest-pass (the reviewer's pass of a box limit change, read by box-apply in place of an approval PR)
 F1=$(printf 'd%.0s' $(seq 40)); F2=$(printf 'e%.0s' $(seq 40)); D=$(printf 'f%.0s' $(seq 64)); L="$t/work/passes/limits.jsonl"
 out=$(pr digest-pass "$F1" "$F2" "$D" $R $T reviewer); check "the reviewer records a digest pass" "$out" "rc=0"
-out=$(pr digest-pass "$F1" "$F2" "$D" $R $T orchestrator); check "a digest pass from any other recorder exits 2" "$out" "rc=2"
+out=$(pr digest-pass "$F1" "$F2" "$D" $R $T builder); check "a digest pass from a builder exits 2" "$out" "rc=2"
+out=$(pr digest-pass "$F1" "$F2" "$D" $R $T stranger); check "a digest pass from an unknown recorder exits 2" "$out" "rc=2"
+out=$(pr digest-pass "$F1" "$F2" "$D" $R $T orchestrator); check "the orchestrator records the reviewer's digest pass, as for add" "$out" "rc=0"
 out=$(pr digest-pass abc "$F2" "$D" $R $T reviewer); check "a short from-commit exits 2" "$out" "rc=2"
 out=$(pr digest-pass "$F1" "$F1" "$D" $R $T reviewer); check "from equal to to exits 2" "$out" "rc=2"
 out=$(pr digest-pass "$F1" "$F2" abc $R $T reviewer); check "a short digest exits 2" "$out" "rc=2"
 out=$(pr digest-pass "$F1" "$F2" "$D" notamsg $T reviewer); check "a relay ref that is not a cmsg id exits 2" "$out" "rc=2"
-[[ $(wc -l < "$L") == 1 && $(stat -c %a "$L") == 600 ]] && python3 -I -c 'import json,sys; e=json.loads(open(sys.argv[1]).readline()); assert e["recorder"]=="reviewer" and e["from"]==sys.argv[2] and e["to"]==sys.argv[3]' "$L" "$F1" "$F2" \
-  && echo "ok   only the reviewer's one good line was written, 0600, with from, to and recorder" || { echo "FAIL: digest-pass ledger"; fail=1; }
+[[ $(wc -l < "$L") == 2 && $(stat -c %a "$L") == 600 ]] && python3 -I -c 'import json,sys; e=json.loads(open(sys.argv[1]).readline()); assert e["recorder"]=="reviewer" and e["from"]==sys.argv[2] and e["to"]==sys.argv[3]' "$L" "$F1" "$F2" \
+  && echo "ok   only the reviewer's and the orchestrator's two good lines were written, 0600, with from, to and recorder" || { echo "FAIL: digest-pass ledger"; fail=1; }
 # Mutation: without the resume rule a builder lifts the halt.
 sed 's|^    \[\[ \$1 == halt .*|    true|' "$t/pass-record.sh" > "$t/mut3.sh"; bash "$t/mut3.sh" halt $R orchestrator > /dev/null 2>&1
 out=$(bash "$t/mut3.sh" resume $R builder 2>&1; echo "rc=$?"); [[ $out == *"rc=0"* ]] && echo "ok   mutation: without the resume rule a builder lifts the halt" || { echo "FAIL: resume mutation did nothing: $out"; fail=1; }

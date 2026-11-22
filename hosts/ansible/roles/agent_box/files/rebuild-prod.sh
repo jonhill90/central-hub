@@ -673,7 +673,7 @@ dev_scoped_ok() {
   [[ -n $d ]] || return 1
   git -C "$repo" cat-file -e "$d^{commit}" 2>/dev/null || { dev_scope_why=" (its commit is not in the box's checkout)"; return 1; }
   git -C "$repo" merge-base --is-ancestor "$d" "$commit" || { dev_scope_why=" (that commit is not behind this one)"; return 1; }
-  while IFS= read -r f; do [[ -n $f ]] && ! prod_only_path "$f" && other+="$f "; done < <(git -C "$repo" diff --name-only "$d" "$commit")
+  while IFS= read -r f; do [[ -n $f ]] && ! prod_only_path "$f" && other+="$f "; done < <(git -C "$repo" diff --no-renames --name-only "$d" "$commit")
   if [[ -n $other ]]; then dev_scope_why=" and the changes since it touch files dev reads: ${other% }"; return 1; fi
   dev_scope_note="dev passed every stage at ${d:0:12} (run ${dev_short##*/}); every file changed since it, up to ${commit:0:12}, is one dev never reads, so the prod run from the failed stage is the proof (owner's order of 2026-11-22)"
   return 0

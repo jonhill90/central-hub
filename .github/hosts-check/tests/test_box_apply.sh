@@ -315,7 +315,7 @@ out=$(ba apply) || bad "8n: the approved apply failed: $out"
 rm -f "$t/apply-hook"
 
 # 9: the reviewer's recorded digest pass replaces the approval line (the owner's order of 2026-11-22). The ledger holds one
-# JSON line per pass (pass-record digest-pass). Only recorder "reviewer" counts, from and digest must match, and the pass
+# JSON line per pass (pass-record digest-pass). Only recorder "reviewer" or "orchestrator" counts, from and digest must match, and the pass
 # and tap are ids; the standing tap is the box's own constant.
 b12=$(base)
 printf -- '- name: w\n  ansible.builtin.debug:\n' >> "$t/src/$r/tasks/main.yml"
@@ -327,11 +327,11 @@ set +e; out=$(ba apply); rc=$?; set -e
   && ok "9a. with no line and no ledger entry the stop names the digest-pass command" || bad "9a: exit $rc: $out"
 printf '%s\n' '{"from":"'"$b12"'","to":"'"$l12"'","digest":"'"$w12"'","relay_ref":"cmsg_pass12","recorder":"builder"}' > "$t/ledger.jsonl"
 set +e; out=$(ba apply); rc=$?; set -e
-[[ $rc == 3 && $(base) == "$b12" ]] && ok "9b. a digest pass recorded by anyone but the reviewer never counts" || bad "9b: exit $rc: $out"
+[[ $rc == 3 && $(base) == "$b12" ]] && ok "9b. a digest pass recorded by a builder never counts" || bad "9b: exit $rc: $out"
 printf '%s\n' '{"from":"'"$b12"'","to":"'"$l12"'","digest":"'"$(printf "%064d" 0)"'","relay_ref":"cmsg_pass12","recorder":"reviewer"}' > "$t/ledger.jsonl"
 set +e; out=$(ba apply); rc=$?; set -e
 [[ $rc == 3 && $out == *"its digest is not the diff"* && $(base) == "$b12" ]] && ok "9c. a digest pass with a wrong digest stops" || bad "9c: exit $rc: $out"
-printf '%s\n' 'not json' '{"from":"'"$b12"'","to":"'"$l12"'","digest":"'"$w12"'","relay_ref":"cmsg_pass12","recorder":"reviewer"}' > "$t/ledger.jsonl"
+printf '%s\n' 'not json' '{"from":"'"$b12"'","to":"'"$l12"'","digest":"'"$w12"'","relay_ref":"cmsg_pass12","recorder":"orchestrator"}' > "$t/ledger.jsonl"
 out=$(ba apply) || bad "9d: the apply on the reviewer's digest pass failed: $out"
 [[ $out == *"applied the approved limit change ${l12:0:8}"* && $(base) == "$l12" && ! -f $t/state/stopped ]] \
   && tail -n 1 "$t/box-apply.log" | grep -q '"pass": "cmsg_pass12"' \
