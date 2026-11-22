@@ -102,6 +102,11 @@ a = sys.argv[1:]
 out, src = a[a.index("--output") + 1], a[-1]
 open(out, "wb").write(base64.b64decode(json.load(open(src))["data"]))
 EOF
+# The post steps (store-admin, store-ca, identity-values, store-secrets) call these three wrappers; each stand-in logs its arguments and
+# fails when its name is in POST_FAIL (a space-separated list of "<wrapper> <first arg>").
+for w in openbao-prod c1-ansible secrets-store-prod; do
+  printf '#!/bin/bash\necho "post %s $*" >> %s/calls\n[[ " ${POST_FAIL:-} " != *" %s $1 "* ]] || exit 1\n' "$w" "$t" "$w" > "$t/libexec/$w.sh"
+done
 for job in opnsense-backup opnsense-offbox secrets-bundle secrets-bundle-offbox; do
   printf '#!/bin/bash\necho "job %s" >> %s/calls\n' "$job" "$t" > "$t/libexec/$job.sh"
 done
@@ -620,7 +625,9 @@ printf '%s\n' "rebuild-prod: resume at central-hub 0123456789ab, owner tap $tap"
 run rebuild "$tap" "$sha" "$pinid"; r18e=$rc o18e=$out
 resume_logs gateway
 printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" "2999-01-01T01:00:11Z identity end rc=0 5s" "2999-01-01T01:00:12Z identity-db end rc=0 5s" \
-  "2999-01-01T01:00:13Z ui end rc=0 5s" "2999-01-01T01:00:14Z backup end rc=0 5s" "2999-01-01T01:00:15Z checks end rc=0 5s" > "$logd/rebuild-29990101T020000Z.log"
+  "2999-01-01T01:00:13Z ui end rc=0 5s" "2999-01-01T01:00:14Z backup end rc=0 5s" "2999-01-01T01:00:15Z checks end rc=0 5s" \
+  "2999-01-01T01:00:16Z store-admin end rc=0 5s" "2999-01-01T01:00:17Z store-ca end rc=0 5s" "2999-01-01T01:00:18Z identity-values end rc=0 5s" \
+  "2999-01-01T01:00:19Z store-secrets end rc=0 5s" > "$logd/rebuild-29990101T020000Z.log"
 run resume "$tap" "$sha"; r18f=$rc o18f=$out c18f=$calls
 if [[ $r18e -eq 1 && $o18e == *"only for a run after one that stopped after its teardown"* && $r18f -eq 1 && $o18f == *"nothing to resume"* && $c18f != *one-command* ]]; then
   ok "18b. a resumed run that ended well ends the stop; a resume with every stage already good has nothing to run"
@@ -646,5 +653,38 @@ else bad "19b. $r19c $o19c | $r19d $o19d"; fi
 # 19c. The diff is read with --no-renames: a file moved from a path dev reads into docs/ shows both paths, so the old one stops the gate.
 [[ $(grep -c -- 'diff --no-renames --name-only' "$t/run/rebuild-prod.sh") -eq 1 && $r19d -eq 1 ]] && ok "19c. the scoped dev gate reads the diff with --no-renames, so a move out of a file dev reads still names the old path" || bad "19c. the diff is read without --no-renames"
 rm -f "$t/difffiles"
+
+# 20. The steps a rebuilt prod store needs after the one command run in the wrapper, in order, each a stage a resume can carry on from
+# (owner, 2026-11-22; run by hand with a clearance each after prod run 9).
+tap=cmsg_01ABCDEFGHIJKLMNOPQRSTUVWXYZ
+resume_logs gateway; date -u > "$t/work/state/secrets-store-prod.rebuilding"
+run resume "$tap" "$sha"; r20a=$rc o20a=$out
+post_calls=$(grep '^post ' "$t/calls" | tr '\n' '|')
+want20="post openbao-prod admin-firewall $tap|post openbao-prod ca|post c1-ansible apply identity-values $tap|post secrets-store-prod clear-hold|post secrets-store-prod put-apps|post secrets-store-prod compare|"
+postlog=$(ls -1 "$t/work/rebuild-prod/logs"/rebuild-*-post.log 2>/dev/null | tail -n 1)
+if [[ $r20a -eq 0 && $post_calls == "$want20" && $(grep -cE ' (store-admin|store-ca|identity-values|store-secrets) end rc=0' "$postlog") -eq 4 &&
+      $o20a == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin ]]; then
+  ok "20. after the one command: admin firewall, store CA, identity values, then the hold cleared, put-apps and compare, each logged as a stage; the pin clears only after them"
+else bad "20. $r20a [$post_calls] [$(cat "$postlog" 2>/dev/null)] $o20a"; fi
+rm -f "$postlog" "$t/work/state/secrets-store-prod.rebuilding"
+# 20b. A step that fails stops the run: the later steps do not run, the pin stays, the log names the step.
+resume_logs gateway; : > "$t/calls"
+POST_FAIL="openbao-prod ca" run resume "$tap" "$sha"; r20b=$rc o20b=$out c20b=$calls
+if [[ $r20b -ne 0 && $o20b == *"FAIL: rebuild-prod: post step store-ca failed"* && $c20b == *"post openbao-prod admin-firewall"* && $c20b != *"identity-values"* &&
+      $c20b != *"put-apps"* && -e $t/work/state/prod-restore-pin && $o20b != *"PASS: rebuild-prod: prod torn down and built again"* ]]; then
+  ok "20b. a post step that fails stops the run before the later steps, keeps the pin and names the step"
+else bad "20b. $r20b $o20b [$c20b]"; fi
+rm -f "$t/work/rebuild-prod/logs"/rebuild-*-post.log
+# 20c. A resume after that carries on from the failed step only: no one command, no step that already ended well.
+resume_logs gateway
+printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" "2999-01-01T01:00:11Z identity end rc=0 5s" "2999-01-01T01:00:12Z identity-db end rc=0 5s" \
+  "2999-01-01T01:00:13Z ui end rc=0 5s" "2999-01-01T01:00:14Z backup end rc=0 5s" "2999-01-01T01:00:15Z checks end rc=0 5s" > "$logd/rebuild-29990101T020000Z.log"
+printf '%s\n' "2999-01-01T02:00:00Z store-admin start" "2999-01-01T02:00:01Z store-admin end rc=0 1s" "2999-01-01T02:00:02Z store-ca start" "2999-01-01T02:00:03Z store-ca end rc=1 1s" > "$logd/rebuild-29990101T030000Z-post.log"
+run resume "$tap" "$sha"; r20c=$rc o20c=$out c20c=$calls
+if [[ $r20c -eq 0 && $o20c == *"resuming from store-ca: store-ca,identity-values,store-secrets"* && $c20c != *one-command* && $c20c != *"admin-firewall"* &&
+      $c20c == *"post openbao-prod ca"*"post c1-ansible apply identity-values"*"put-apps"* ]]; then
+  ok "20c. a resume after a failed post step carries on from it: no one command, no step already done"
+else bad "20c. $r20c $o20c [$c20c]"; fi
+rm -f "$logd"/*
 
 exit "$fail"

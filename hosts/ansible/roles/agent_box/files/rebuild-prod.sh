@@ -30,6 +30,14 @@
 #          key, prod's own newest volume snapshot back onto the empty data disk (k8s-restore.yml), Argo CD and every
 #          app, the certificates, sign-in, Keycloak's database back from the same snapshot (k8s-identity-restore.yml),
 #          the Argo CD UI, the backup timers on again with the carried certificates, and the checks.
+#          Then four steps this wrapper runs itself, each logged as a stage (store-admin, store-ca, identity-values, store-secrets), so a
+#          resume carries on from the one that failed (owner, 2026-11-22; they were run by hand, each with a clearance, after prod run 9):
+#            store-admin     openbao-prod admin-firewall <tap id>: the node firewall rule for the store's admin path;
+#            store-ca        openbao-prod ca: the rebuilt store's new CA, written for the box and as ConfigMap openbao-ca-bundle;
+#            identity-values c1-ansible apply identity-values <tap id>: any key the realm needs that the box's identity.env lacks;
+#            store-secrets   secrets-store-prod clear-hold (only when the rebuild hold is set), put-apps, compare.
+#          The run's own tap is the clearance each takes. The hold is cleared, not restored from a snapshot: restore-rebuilt has not been run
+#          on prod, and clear-hold keeps the earlier snapshots in a kept folder. The pin and the carried keys go only after all four passed.
 #          The volume snapshot the restore brings back is always pinned: the snapshot the drill backed up and tested before
 #          the teardown (or the one named by the optional <volume snapshot id>), never "latest". Once the teardown starts,
 #          the box keeps the pin (<state>/prod-restore-pin) until a run ends well. A run that finds the last rebuild
@@ -212,6 +220,9 @@ if [[ $action == rebuild || $action == resume ]]; then
   fi
 fi
 
+# The steps a rebuilt prod store needs after the one command, which this wrapper runs itself, in this order, each logged as a stage so a resume
+# carries on from the one that failed (owner, 2026-11-22: they were run by hand, each with its own clearance, after prod run 9).
+post_stages="store-admin store-ca identity-values store-secrets"
 fails=0
 pass() { echo "PASS: rebuild-prod: $*"; }
 fail() { echo "FAIL: rebuild-prod: $*"; fails=$((fails + 1)); }
@@ -841,7 +852,7 @@ if $resuming; then
   # (a) The stages before the resume point ended well in the one command's own logs since the stopped run's teardown.
   t_stamp=${torn#run-}; t_stamp=${t_stamp%.log}
   resume_stages=''; first_bad=''
-  for st in vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks; do
+  for st in vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks $post_stages; do
     last=''
     for f in $(ls -1 "$envdir"/logs/rebuild-*.log 2>/dev/null | sort); do
       fs=${f##*/rebuild-}; fs=${fs%.log}
@@ -917,12 +928,47 @@ RESTORE_CHECK_HOOK='cd "\$REPO/hosts/ansible" && ansible-playbook -i "\$INVENTOR
 ENV
 chmod 600 "$envdir/rebuild.env"
 rc=0
+post_log="$envdir/logs/rebuild-$(date -u +%Y%m%dT%H%M%SZ)-post.log"
 if $resuming; then
+  k8s_resume='' post_run=''
+  for st in ${resume_stages//,/ }; do
+    case " $post_stages " in *" $st "*) post_run+="$st " ;; *) k8s_resume+="$st," ;; esac
+  done
+  k8s_resume=${k8s_resume%,}
   echo "rebuild-prod: resume start, no teardown: $resume_stages"
-  bash "$repo/hosts/rebuild-k8s.sh" "$envdir" --only "$resume_stages" || rc=$?
+  [[ -z $k8s_resume ]] || bash "$repo/hosts/rebuild-k8s.sh" "$envdir" --only "$k8s_resume" || rc=$?
 else
+  post_run="$post_stages "
   echo "rebuild-prod: teardown and build start: $stages"
   bash "$repo/hosts/rebuild-k8s.sh" "$envdir" --teardown || rc=$?
+fi
+# The steps after the one command: the run's own go (its tap) is the clearance each one takes. Each is idempotent, so a resume runs only
+# the ones with no good end line. The store's rebuild hold is cleared here, and the apps' secrets are put in from their SOPS copy and
+# compared, the path that was run by hand after prod run 9 (restore-rebuilt on prod has not been run: not chosen).
+post_step() { # <stage> <command...>
+  local name=$1 t0 prc=0; shift
+  t0=$(date +%s)
+  echo "$(date -u +%FT%TZ) $name start" >> "$post_log"
+  echo "rebuild-prod: post step $name: $*"
+  "$@" || prc=$?
+  echo "$(date -u +%FT%TZ) $name end rc=$prc $(( $(date +%s) - t0 ))s" >> "$post_log"
+  return "$prc"
+}
+store_secrets() {
+  if [[ -e $work/state/secrets-store-prod.rebuilding ]]; then "$libexec/secrets-store-prod.sh" clear-hold || return 1; fi
+  "$libexec/secrets-store-prod.sh" put-apps || return 1
+  "$libexec/secrets-store-prod.sh" compare
+}
+if [[ $rc -eq 0 ]]; then
+  for st in $post_run; do
+    case $st in
+      store-admin) post_step "$st" "$libexec/openbao-prod.sh" admin-firewall "$tap" || rc=$? ;;
+      store-ca) post_step "$st" "$libexec/openbao-prod.sh" ca || rc=$? ;;
+      identity-values) post_step "$st" "$libexec/c1-ansible.sh" apply identity-values "$tap" || rc=$? ;;
+      store-secrets) post_step "$st" store_secrets || rc=$? ;;
+    esac
+    [[ $rc -eq 0 ]] || { echo "FAIL: rebuild-prod: post step $st failed (rc $rc); the run stopped; resume continues from it"; break; }
+  done
 fi
 if [[ $rc -eq 0 ]]; then
   # The carried sftp private keys have done their job once the rebuilt nodes hold them and the backup stage and checks passed;
