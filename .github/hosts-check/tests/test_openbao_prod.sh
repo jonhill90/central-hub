@@ -616,17 +616,20 @@ chmod +x "$t/libexec/secrets-store-prod.sh"
 : > "$t/ss_calls"; : > "$t/kcalls"; rm -f "$t/kube/MISSING" "$t/kube/CMPFAIL"
 run adopt; a_rc=$rc a_out=$out; a_ss=$(cat "$t/ss_calls"); a_k=$(cat "$t/kcalls")
 echo sso-db > "$t/kube/MISSING"; : > "$t/ss_calls"; run adopt; b_rc=$rc b_out=$out; b_ss=$(cat "$t/ss_calls")
+echo argocd-initial-admin-secret > "$t/kube/MISSING"; : > "$t/ss_calls"; run adopt; g_rc=$rc g_out=$out; g_ss=$(cat "$t/ss_calls")
 rm -f "$t/kube/MISSING"; touch "$t/kube/CMPFAIL"; run adopt; c_rc=$rc c_out=$out
 rm -f "$t/kube/CMPFAIL"; run adopt extra; x_rc=$rc x_calls=$calls
 if [[ $a_rc -eq 0 && $a_out == *"PASS: openbao-prod: adopt: 8 values adopted or already held; compare passed"* &&
       $a_ss == *"put-new c1/jellyfin-admin password value=jf-secret-Aa11"* && $a_ss == *"put-new c1/identity-db username value=db-secret-Bb22"* &&
       $a_ss == *"put-new c1/identity-admin password value=kc-secret-Cc33"* && $a_ss == *"put-new c1/grafana-admin username value=gr-secret-Dd44"* &&
-      $a_ss == *"put-new c1/argocd-admin password value=ar-secret-Ee55"* && $(grep -c '^secrets-store-prod put-new' <<< "$a_ss") -eq 8 &&
-      $a_ss == *"secrets-store-prod compare" && $(grep -c ' get secret ' <<< "$a_k") -eq 8 && $(grep -cvE ' get secret (jellyfin-admin|sso-db|sso-initial-admin|kube-prometheus-stack-grafana|argocd-initial-admin-secret) ' <<< "$a_k") -eq 0 &&
+      $a_ss == *"secrets-store-prod put c1/argocd-admin password value=ar-secret-Ee55"* && $(grep -c '^secrets-store-prod put-new' <<< "$a_ss") -eq 7 && $(grep -c '^secrets-store-prod put ' <<< "$a_ss") -eq 1 &&
+      $a_ss == *"secrets-store-prod compare" && $(grep -c ' get secret ' <<< "$a_k") -eq 9 && $(grep -cvE ' get secret (jellyfin-admin|sso-db|sso-initial-admin|kube-prometheus-stack-grafana|argocd-initial-admin-secret) ' <<< "$a_k") -eq 0 &&
       $a_out != *-secret-* && $b_rc -ne 0 && $b_out == *"FAIL: openbao-prod: adopt: at least one value was not adopted"* && $b_out == *"identity/sso-db key username: not adopted"* &&
       $b_ss != *"compare" && $b_out != *-secret-* && $c_rc -ne 0 && $c_out == *"compare of SOPS against OpenBao did not pass"* && $c_out != *"PASS: openbao-prod: adopt"* &&
+      $g_rc -eq 0 && $g_out == *"argocd/argocd-initial-admin-secret key password: skipped, not in the cluster; c1/argocd-admin key password stays as it was"* &&
+      $g_out == *"PASS: openbao-prod: adopt"* && $g_ss != *"c1/argocd-admin"* && $g_out != *-secret-* &&
       $x_rc -eq 2 && -z $x_calls ]]; then
-  ok "20. adopt: only its fixed table is read; each value goes on stdin to put-new and is never printed; a value that cannot be adopted or a failed compare fails it; an argument runs nothing"
+  ok "20. adopt: only its fixed table is read; each value goes on stdin to put-new and is never printed; a value that cannot be adopted or a failed compare fails it; Argo CD's copy is written again with put and skipped when its Secret is gone; an argument runs nothing"
 else bad "20. rc=$a_rc $a_out | [$a_ss] | missing rc=$b_rc $b_out | cmp rc=$c_rc $c_out | extra rc=$x_rc"; fi
 
 exit "$fail"
