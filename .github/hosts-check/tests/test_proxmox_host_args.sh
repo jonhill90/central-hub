@@ -309,6 +309,13 @@ if [ $rc16a = 0 ] && [[ $c16a == *playbooks/proxmox-connector.yml* ]] && grep -q
   ok "16a the connector job runs proxmox-connector.yml and prints the facts that are true"
 else bad "16a rc=$rc16a [$c16a] $(cat "$t/16a.out")"; fi
 
+# 16c connector-route runs proxmox-connector-route.yml
+: > "$t/calls"
+job check connector-route > "$t/16c.out" 2>&1; rc16c=$?
+c16c=$(cat "$t/calls")
+if [ $rc16c = 0 ] && [[ $c16c == *playbooks/proxmox-connector-route.yml* ]]; then ok "16c connector-route runs proxmox-connector-route.yml"
+else bad "16c rc=$rc16c [$c16c] $(cat "$t/16c.out")"; fi
+
 # 16b the memory job runs proxmox-memory.yml and prints only the report lines that match its allowlist: a line with a name, an address
 #     or any extra word is dropped, so nothing private can pass
 python3 - > "$t/out-check.json" <<'PY'

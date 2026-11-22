@@ -1,0 +1,82 @@
+---
+# Put the lab route back in CT 900, the tailnet connector (the proxmox-host wrapper's job `connector-route`). `check connector` showed the
+# route unit enabled but not active and the prod route leaving by the home LAN interface, so the tailnet carried no traffic into the lab.
+# This installs the same unit the tailnet_connector role installs (same template, so one source), reloads, enables and restarts it, then
+# proves the route to the prod and dev gateways leaves by the management interface. It runs only through `apply-recorded` (a reviewer
+# pass and a go). The unit holds one `ip route replace`, so a second run changes nothing once the unit matches and is active.
+#   sudo -n -u hostops /usr/local/libexec/agent-box/proxmox-host.sh check connector-route
+- name: Lab route in the tailnet connector
+  hosts: proxmox
+  become: false
+  gather_facts: false
+  vars:
+    connector_vmid: 900
+    connector_mgmt_interface: eth1
+    connector_mgmt_vlan: mgmt
+  tasks:
+    - name: connector-route | Read the shared VLAN file
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventories/home/group_vars/all/vlans.yml"
+
+    - name: connector-route | Work out the gateway and the lab range
+      ansible.builtin.set_fact:
+        tailnet_connector_mgmt_interface: "{{ connector_mgmt_interface }}"
+        tailnet_connector_gateway: >-
+          {{ (lab_vlans | selectattr('name', 'equalto', connector_mgmt_vlan) | first).cidr.split('/')[0].rsplit('.', 1)[0] }}.1
+        tailnet_connector_lab_supernet: "{{ (lab_vlans | first).cidr.split('.')[0:2] | join('.') }}.0.0/16"
+
+    - name: connector-route | Render the unit on the host
+      ansible.builtin.template:
+        src: ../roles/tailnet_connector/templates/central-hub-lab-route.service.j2
+        dest: /root/central-hub-lab-route.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: connector-route | Read the unit in CT 900
+      ansible.builtin.command: pct exec {{ connector_vmid | quote }} -- sha256sum /etc/systemd/system/central-hub-lab-route.service
+      register: connector_unit_ct
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: connector-route | Read the rendered unit's checksum
+      ansible.builtin.stat:
+        path: /root/central-hub-lab-route.service
+        checksum_algorithm: sha256
+      register: connector_unit_host
+
+    - name: connector-route | Read whether the unit is active
+      ansible.builtin.command: pct exec {{ connector_vmid | quote }} -- systemctl is-active central-hub-lab-route.service
+      register: connector_unit_active
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: connector-route | Copy the unit into CT 900, enable it and start it
+      ansible.builtin.shell:
+        cmd: |
+          set -eu
+          pct push {{ connector_vmid | quote }} /root/central-hub-lab-route.service /etc/systemd/system/central-hub-lab-route.service --perms 0644
+          pct exec {{ connector_vmid | quote }} -- systemctl daemon-reload
+          pct exec {{ connector_vmid | quote }} -- systemctl enable central-hub-lab-route.service
+          pct exec {{ connector_vmid | quote }} -- systemctl restart central-hub-lab-route.service
+        executable: /bin/bash
+      when: >-
+        connector_unit_ct.rc != 0 or
+        (connector_unit_ct.stdout.split() | first) != (connector_unit_host.stat.checksum | default('')) or
+        connector_unit_active.stdout | trim != 'active'
+      changed_when: true
+
+    - name: connector-route | Prove the route to the prod and dev gateways leaves by the management interface
+      ansible.builtin.shell:
+        cmd: |
+          set -u -o pipefail
+          for gw in 10.1.10.1 10.1.30.1; do
+            pct exec {{ connector_vmid | quote }} -- ip -4 route get "$gw" | grep -q ' via .* dev {{ connector_mgmt_interface | quote }}'
+          done
+        executable: /bin/bash
+      register: connector_route_proof
+      changed_when: false
+      check_mode: false
+      failed_when: "not ansible_check_mode and connector_route_proof.rc != 0"
