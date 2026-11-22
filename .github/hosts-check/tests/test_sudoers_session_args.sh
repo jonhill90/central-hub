@@ -80,7 +80,7 @@ ivt = t.render(agent_box_wrappers=[iv], agent_box_user="sess", agent_box_keys_us
                agent_box_runner_user="run", agent_box_inventory_user="invops", agent_box_keys_dir="/k", agent_box_guard_user="guardops", agent_box_guard_dir="/g")
 isess = [l for l in ivt.splitlines() if l.startswith("sess ALL=")]
 iforms = isess[0].split("NOPASSWD: ")[1].split(", ") if len(isess) == 1 else []
-want = ["/x/inventory.sh " + x for x in ("set *", "get *", "names", "diff", "log", "import prod", "import guard", "import-compare")]
+want = ["/x/inventory.sh " + x for x in ("set *", "get *", "names", "diff", "log", "seal", "import prod", "import guard", "import-compare")]
 ok14a = isess[0].startswith("sess ALL=(invops)") and iforms == want and not any("view" in x for x in iforms) and "run ALL" not in ivt
 callers = {l.split(" ")[0]: l for l in ivt.splitlines() if l.split(" ")[0] in ("keys", "hostops", "guardops")}
 ok14b = (callers.get("keys") == "keys ALL=(invops) NOPASSWD: /x/inventory.sh view k8s_nodes"
@@ -104,6 +104,9 @@ for wname in ("secrets-store", "secrets-store-prod"):
     forms16 = ["/x/%s.sh %s" % (wname, f) for f in ssf]
     ok16 = ok16 and len(wl) == 1 and all(f in wl[0].split(", ") or wl[0].endswith(": " + f) for f in forms16) and "ssh-ca *" not in wl[0] and "ssh-ca sign-host" in wl[0]
 print("16", ok16, not any(" ssh-ca *" in x for x in render([[w for w in d if w["name"] == n][0] for n in ("secrets-store", "secrets-store-prod")]).splitlines()))
+op = [w for w in d if w["name"] == "openbao-prod"][0]
+opl = lines(render([op]), "sess")
+print("17", "secrets-status" in op["args"], len(opl) == 1 and "/x/openbao-prod.sh secrets-status" in opl[0].split(", ") + [opl[0].split(": ")[-1]] and "secrets-status *" not in opl[0])
 print("15", rp["args"] == ["check", "rebuild *", "resume *", "log"], "rebuild-prod.sh resume *" in rpt)
 PY
 )
@@ -126,5 +129,6 @@ check 14 "14. inventory: the session sets, gets, lists, diffs, logs, imports and
 check 13 "13. secrets-store-prod: the five exact owner-login forms are in the sudoers line, no owner-login *"
 check 14 "14. opnsense-sso-secret: only hostops may run read (as keys); the session has no line for it"
 check 16 "16. secrets-store and secrets-store-prod: the five exact ssh-ca forms (plan, apply, check, public, sign-host <names>) are in the session line, no ssh-ca *"
+check 17 "17. openbao-prod: the session may run secrets-status with no argument, so no tap and no wildcard on it"
 check 15 "15. rebuild-prod: the session may check, rebuild, resume (tap and commit) and read the log"
 exit "$fail"

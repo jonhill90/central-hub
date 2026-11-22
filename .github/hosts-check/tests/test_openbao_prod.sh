@@ -26,6 +26,9 @@
 #      for real and logs the tap; admin-firewall with no tap id or a malformed one, or admin-firewall-check with one, runs nothing.
 #  13. refresh <tap id> runs k8s-openbao-refresh.yml with env prod, the admin IDs' files and the CA file, and logs the tap; with
 #      no ID files (no hand-over yet), an admin address but no CA file, no tap id or a malformed one, it runs nothing.
+#  14. secrets-status reads only (kubectl get and logs, never a Secret): it prints the store's Ready condition, the ExternalSecrets,
+#      and for each one not Ready its message and the controller's log lines naming it (at most 20); all Ready prints no log;
+#      a failed read stops it with an error; a tap or another argument runs nothing.
 # Usage: .github/hosts-check/tests/test_openbao_prod.sh   (needs python3 with PyYAML, ssh-keygen, flock)
 set -uo pipefail
 cd "$(dirname "$0")/../../.." || exit 1
@@ -379,5 +382,62 @@ if [[ $i_rc -ne 0 && -z $i_calls && $i_out == *"run openbao-prod handover first"
       $c_rc -ne 0 && -z $c_calls && $c_out == *"run openbao-prod ca first"* ]]; then
   ok "13. refresh <tap id>: the play with env prod, the IDs' files and the CA file, the tap logged; no hand-over yet, an admin address with no CA file, no tap or a bad tap: nothing run"
 else bad "13. noids rc=$i_rc [$i_calls] | run rc=$a_rc [$a_calls] | notap rc=$n_rc [$n_calls] | badtap rc=$m_rc [$m_calls] | noca rc=$c_rc [$c_calls]"; fi
+
+# 14: a stand-in `ansible` that answers get/logs from files in $t/kube2/ and records every kubectl call.
+rm -rf "$t/kube2"; mkdir -p "$t/kube2"; : > "$t/kcalls"
+cat > "$venv/ansible" <<EOF
+#!/usr/bin/env python3
+import json, os, sys
+a = sys.argv[sys.argv.index("-a") + 1]
+open("$t/kcalls", "a").write(a + "\\n")
+d = "$t/kube2/"
+def rd(n):
+    p = d + n
+    return open(p).read() if os.path.exists(p) else None
+rc, out = 0, ""
+if " logs " in a: out = rd("LOGS") or ""
+elif "clustersecretstores" in a: out = rd("CSS-json" if "json" in a else "CSS-wide")
+elif "externalsecrets" in a: out = rd("ES-json" if "json" in a else "ES-wide")
+else: rc = 1
+if out is None: rc, out = 1, ""
+print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": rc, "stdout": out, "stderr": ""}}}]}]}))
+EOF
+chmod +x "$venv/ansible"
+settings '{"seal_node":"wk-a","store_host":"bao.invalid"}'
+inventory "${prod_inv[@]}"
+echo "NAME  AGE  STATUS  READY" > "$t/kube2/CSS-wide"; echo "NAMESPACE NAME STATUS" > "$t/kube2/ES-wide"
+ssjson() { # file, then the ExternalSecret items to write
+  python3 -c 'import json, sys
+c = lambda s, r, m: {"conditions": [{"type": "Ready", "status": s, "reason": r, "message": m}]}
+kind = sys.argv[2]
+if kind == "css":
+    items = [{"metadata": {"name": "openbao"}, "status": c("False", "InvalidProviderConfig", "x509: certificate signed by unknown authority")}]
+elif kind == "bad":
+    items = [{"metadata": {"namespace": "keycloak", "name": "realm-lab-secrets"}, "status": c("False", "SecretSyncedError", "could not get secret data from provider")},
+             {"metadata": {"namespace": "apps", "name": "fine"}, "status": c("True", "SecretSynced", "ok")}]
+else:
+    items = [{"metadata": {"namespace": "apps", "name": "fine"}, "status": c("True", "SecretSynced", "ok")}]
+json.dump({"items": items}, open(sys.argv[1], "w"))' "$@"
+}
+ssjson "$t/kube2/CSS-json" css; ssjson "$t/kube2/ES-json" bad
+{ for i in $(seq 1 25); do echo "{\"msg\":\"reconcile\",\"name\":\"realm-lab-secrets\",\"n\":$i}"; done; echo '{"name":"fine","msg":"synced"}'; } > "$t/kube2/LOGS"
+run secrets-status; a_rc=$rc a_out=$out
+a_calls=$(cat "$t/kcalls")
+log_lines=$(grep -c '"name":"realm-lab-secrets"' <<< "$a_out" || true)
+write_calls=$(grep -cE ' (apply|delete|create|patch|annotate|edit|replace|exec|cp) |get secret|-o yaml' <<< "$a_calls" || true)
+only_read=$(awk '!/ get | logs /{n++} END{print n+0}' <<< "$a_calls")
+ssjson "$t/kube2/ES-json" ready
+: > "$t/kcalls"; run secrets-status; g_rc=$rc g_out=$out g_logs=$(grep -c ' logs ' "$t/kcalls" || true)
+rm "$t/kube2/ES-json"; run secrets-status; f_rc=$rc f_out=$out
+run secrets-status "$tap"; x_rc=$rc x_calls=$calls
+if [[ $a_rc -eq 0 && $a_out == *"store openbao: Ready=False reason=InvalidProviderConfig message=x509: certificate signed by unknown authority"* &&
+      $a_out == *"not Ready: keycloak/realm-lab-secrets: Ready=False reason=SecretSyncedError message=could not get secret data from provider"* &&
+      $a_out != *"not Ready: apps/fine"* && $log_lines -eq 20 && $a_out == *'"n":25}'* && $a_out != *'"n":5}'* && $a_out != *'"name":"fine"'* &&
+      $a_out == *"PASS: openbao-prod: secrets-status: read, nothing changed"* && $write_calls -eq 0 && $only_read -eq 0 &&
+      $g_rc -eq 0 && $g_logs -eq 0 && $g_out != *"not Ready:"* &&
+      $f_rc -ne 0 && $f_out == *"could not read the ExternalSecrets"* && $f_out != *"PASS:"* &&
+      $x_rc -eq 2 && -z $x_calls ]]; then
+  ok "14. secrets-status: the store's condition, the ExternalSecrets, and the last 20 controller lines naming each one not Ready; only get and logs, no Secret read; all Ready reads no log; a failed read stops it; a tap runs nothing"
+else bad "14. rc=$a_rc logs=$log_lines writes=$write_calls nonread=$only_read | allready rc=$g_rc logs=$g_logs | fail rc=$f_rc $f_out | tap rc=$x_rc [$x_calls] | out: $a_out"; fi
 
 exit "$fail"

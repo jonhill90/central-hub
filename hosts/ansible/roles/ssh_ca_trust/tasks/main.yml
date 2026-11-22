@@ -1,0 +1,12 @@
+---
+# A box trusts the lab's SSH user CA (D-0064). It adds files and one sshd drop-in and changes nothing else: no
+# authorized_keys, no AuthorizedKeysFile, PasswordAuthentication or PermitRootLogin setting, so the local keys stay
+# the way in while c1 or OpenBao is down (D-0064 rule 5, D-0037 rule 2). The drop-in is checked with `sshd -t` and
+# removed again if sshd refuses it. sshd is reloaded, never restarted.
+- name: ssh-ca | Undo (D-0064 rule 12)
+  ansible.builtin.include_tasks: undo.yml
+  when: ssh_ca_trust_remove | bool
+
+- name: ssh-ca | Trust the CA
+  ansible.builtin.include_tasks: apply.yml
+  when: not (ssh_ca_trust_remove | bool)
