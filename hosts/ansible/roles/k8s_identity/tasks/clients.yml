@@ -89,12 +89,14 @@
 # with no loop, because a failed loop item is printed in full, and its result holds the JSON, with its secrets.
 - name: clients | Each client was made or updated
   ansible.builtin.assert:
-    that: k8s_identity_client_ensured.results | rejectattr('rc', 'equalto', 0) | list | length == 0
+    that: k8s_identity_client_ensured.results | map(attribute='rc', default='none') | reject('equalto', 0) | list | length == 0
+    # The fixed first words keep the message from rendering empty when every client passed (an empty fail_msg is an error).
     fail_msg: >-
-      {% for r in k8s_identity_client_ensured.results | rejectattr('rc', 'equalto', 0) %}
-      client {{ r.__result.__client }}:
+      clients step failed:
+      {% for r in k8s_identity_client_ensured.results if (r.rc | default('none')) != 0 %}
+      client {{ r.__result.__client | default('?') }}:
       {{ (r.stdout_lines | default([]) | select('match', '^ensure-client: ') | list | first)
-      | default('kubectl exec exited ' ~ r.rc ~ ' without a reason line') }};
+      | default('kubectl exec exited ' ~ (r.rc | default('none')) ~ ' without a reason line') }};
       {% endfor %}
     quiet: true
   when: not ansible_check_mode
