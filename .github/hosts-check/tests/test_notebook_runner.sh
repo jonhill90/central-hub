@@ -36,12 +36,10 @@ check("the app is made only when notebookRunner is true", app is not None and ap
 check("notebookRunner is false in git", rv.get("notebookRunner") is False)
 sys.exit(1 if fails else 0)
 PY
-# openbao-prod sets it in its own inventory copy; rebuild-prod and c1-ansible get it from prod-root-vars.py, which both exec.
-grep -q 'v\["k8s_gitops_source_notebook_runner"\] = True' "$root/hosts/ansible/roles/agent_box/files/openbao-prod.sh" \
-  && ok "openbao-prod sets the switch for prod" || bad "openbao-prod does not set the switch"
+# The switch is set in prod-root-vars.py, which all three wrappers that build prod's root exec.
 grep -q 'v\["k8s_gitops_source_notebook_runner"\] = True' "$root/hosts/ansible/roles/agent_box/files/prod-root-vars.py" \
   && ok "prod-root-vars.py sets the switch for prod" || bad "prod-root-vars.py does not set the switch"
-for w in rebuild-prod c1-ansible; do
+for w in openbao-prod rebuild-prod c1-ansible; do
   grep -q 'prod-root-vars.py' "$root/hosts/ansible/roles/agent_box/files/$w.sh" \
     && ok "$w gets the switch from prod-root-vars.py" || bad "$w does not use prod-root-vars.py"
 done
