@@ -133,6 +133,9 @@ check "dev gitops: the root follows the run's commit" "$out" "-e k8s_gitops_sour
 check "dev gitops: the children follow it too" "$out" "-e k8s_gitops_source_target_revision=$head" ""
 out=$(run dev gitops "$t/ok"); check "dev with no checkout leaves main" "$out" "AP " "source_target_revision"
 out=$(FAKE_SECRET=yes run prod gitops "$t/gitrepo"); check "prod gitops leaves main" "$out" "AP " "source_target_revision"
+# The prod backup stage runs the drill, so the nodes write the backup times `checks` reads; dev refuses it, with nothing run.
+out=$(run prod backup "$t/ok"); check "prod backup runs the drill (the first backup and restore tests, so the times exist)" "$out" "AP playbooks/k8s-backup.yml -e k8s_backup_drill=true" "rc=1"
+out=$(run dev backup "$t/ok"); check "dev backup is refused" "$out" "prod only" "AP "
 out=$(run dev openbao-measure "$t/ok"); check "dev without a key file still skips the measurement" "$out" "openbao-measure skipped" "AP "
 out=$(FAKE_SECRET=yes run prod gitops "$t/ok"); check "prod gitops leaves the lab-ca issuer on" "$out" "AP " "lab_ca_issuer"
 check "prod gitops leaves login-probe on" "$out" "AP " "login_probe"

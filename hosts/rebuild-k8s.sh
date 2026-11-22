@@ -929,7 +929,11 @@ run_stage() {
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.
       [ "$ENV_NAME" = prod ] || { echo "backup timers run on prod only"; return 1; }
-      ap playbooks/k8s-backup.yml ;;
+      # With the drill: back up now and run the restore tests, so the nodes write the times the `checks` stage reads
+      # (c1_backup_last_success_timestamp_seconds, from the textfile folder). Without it the timers are only installed and the
+      # first times come at 02:10, 02:25 and Sunday 04:30: a new timer has no earlier run to catch up on, and the panel check and
+      # C1BackupNotRecorded failed `checks` on prod resume 5 (2026-11-22). It runs the services the timers run, one node at a time.
+      ap playbooks/k8s-backup.yml -e k8s_backup_drill=true ;;
     restore)
       if [ -z "${RESTORE_HOOK:-}" ]; then
         # Dev proves the rebuild with prod's data in it; a skipped restore proves nothing.
