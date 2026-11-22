@@ -686,6 +686,23 @@ if [[ $r20c -eq 0 && $o20c == *"resuming from store-ca: store-ca,identity-values
   ok "20c. a resume after a failed post step carries on from it: not the stages or steps before it, then the identity stage onward"
 else bad "20c. $r20c $o20c [$c20c]"; fi
 rm -f "$logd"/*
+# 20e. A run that began before the post steps were stages (they were run by hand, so no log line) resumes from the first stage that did not end well.
+resume_logs gateway
+printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" "2999-01-01T01:10:00Z identity start" "2999-01-01T01:11:00Z identity end rc=0 60s" > "$logd/rebuild-29990101T020000Z.log"
+run resume "$tap" "$sha"; r20e=$rc o20e=$out c20e=$calls
+if [[ $r20e -eq 0 && $o20e == *"resuming from identity-db: identity-db,ui,backup,checks"* && $o20e == *"post step store-admin has no log line"* && $c20e != *"post "* && $c20e == *"--only identity-db,ui,backup,checks"* ]]; then
+  ok "20e. a post step with no log line counts as done when a later stage of the run ended well"
+else bad "20e. $r20e $o20e [$c20e]"; fi
+rm -f "$logd"/*
+# 20f. A post step whose line says it failed is not counted as done, even when a later stage ended well.
+resume_logs gateway
+printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" "2999-01-01T01:11:00Z identity end rc=0 60s" > "$logd/rebuild-29990101T020000Z.log"
+printf '%s\n' "2999-01-01T02:00:01Z store-admin end rc=1 1s" > "$logd/rebuild-29990101T030000Z-post.log"
+run resume "$tap" "$sha"; r20f=$rc o20f=$out
+if [[ $r20f -ne 0 && $o20f == *"stage store-ca ended well but the stage before it (store-admin) did not"* ]]; then
+  ok "20f. a post step that failed is not counted as done by a later good stage; the logs are out of order and nothing runs"
+else bad "20f. $r20f $o20f"; fi
+rm -f "$logd"/*
 # 20d. clear-hold that sets snapshots aside stops the run before put-apps, with the pin kept (the store may be really fresh and want a restore).
 resume_logs gateway; date -u > "$t/work/state/secrets-store-prod.rebuilding"; : > "$t/calls"
 SETASIDE=2 run resume "$tap" "$sha"; r20d=$rc o20d=$out c20d=$calls

@@ -860,6 +860,7 @@ if $resuming; then
   # (a) The stages before the resume point ended well in the one command's own logs since the stopped run's teardown.
   t_stamp=${torn#run-}; t_stamp=${t_stamp%.log}
   resume_stages=''; first_bad=''
+  declare -A good=()
   for st in $full_seq; do
     last=''
     for f in $(ls -1 "$envdir"/logs/rebuild-*.log 2>/dev/null | sort); do
@@ -868,7 +869,25 @@ if $resuming; then
       l=$(grep -E "^[0-9TZ:-]+ $st end rc=[0-9]+" -- "$f" | tail -n 1 || true)
       [[ -z $l ]] || last=$l
     done
-    if [[ $last =~ ' end rc=0' ]]; then
+    if [[ $last =~ ' end rc=0' ]]; then good[$st]=1; else good[$st]=0; fi
+  done
+  # A post step with no line at all stands as done when a later stage of the same run ended well: a run that began before these steps were
+  # stages had them run by hand (prod, 2026-11-22). A step whose line says it failed (rc not 0) never stands.
+  later_good=0
+  for st in $(printf '%s\n' $full_seq | tac); do
+    if [[ ${good[$st]} == 1 ]]; then later_good=1
+    elif [[ $later_good == 1 && " $post_stages " == *" $st "* ]]; then
+      noline=1
+      for f in $(ls -1 "$envdir"/logs/rebuild-*.log 2>/dev/null | sort); do
+        fs=${f##*/rebuild-}; fs=${fs%.log}
+        [[ $fs < $t_stamp ]] && continue
+        ! grep -qE "^[0-9TZ:-]+ $st end rc=[0-9]+" -- "$f" || noline=0
+      done
+      if [[ $noline == 1 ]]; then good[$st]=1; echo "rebuild-prod: post step $st has no log line and a later stage ended well; counted as done (run by hand)"; fi
+    fi
+  done
+  for st in $full_seq; do
+    if [[ ${good[$st]} == 1 ]]; then
       [[ -z $first_bad ]] || { echo "FAIL: rebuild-prod: stage $st ended well but the stage before it ($first_bad) did not; the run's logs are out of order; nothing was run"; exit 1; }
     else
       [[ -n $first_bad ]] || first_bad=$st
