@@ -159,8 +159,8 @@ appended() { # env, only, key file: the stage list after the block, starting fro
   ENV_NAME=$1 only=$2 OPENBAO_SEAL_KEY_FILE=$3 bash -c 'stages=base; . "$1"; echo "$stages"' _ "$t/append.sh"
 }
 same() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: '$2'"; fail=1; fi; }
-same "a dev run without --only appends dev-ca, identity-keycloak, ssh-ca-proof and panels last" "$(appended dev "" "")" "base dev-ca identity-keycloak ssh-ca-proof panels"
-same "with a key file the measurement goes after dev-ca, the hand-over after it, the apps' secrets, the SSH sign-in proof, then panels last" "$(appended dev "" /k)" "base dev-ca openbao-measure openbao-handover identity-keycloak app-secrets ssh-ca-proof panels"
+same "a dev run without --only appends dev-ca, ui, identity-keycloak, ssh-ca-proof, identity-db and panels last" "$(appended dev "" "")" "base dev-ca ui identity-keycloak ssh-ca-proof identity-db panels"
+same "with a key file ui goes after dev-ca, then the measurement, the hand-over, the apps' secrets, the SSH sign-in proof, identity-db, then panels last" "$(appended dev "" /k)" "base dev-ca ui openbao-measure openbao-handover identity-keycloak app-secrets ssh-ca-proof identity-db panels"
 same "--only appends nothing" "$(appended dev gitops /k)" "base"
 same "prod appends nothing" "$(appended prod "" /k)" "base"
 
@@ -234,4 +234,19 @@ same "the proof's lines reach the short log, unquoted, and only its own stage's"
   "  ssh-ca-proof: ssh-ca: login: dev-admin's Keycloak token gets an OpenBao token: ok
   ssh-ca-proof: opkssh: ssh: the opkssh key logs in as opkproof: ok
   ssh-ca-proof: ssh-ca: PASS (rc 0); opkssh: FAIL (rc 1)"
+# Stages ui and identity-db on dev (item 3 of the 2026-11-22 gate order): dev's ui runs the route tag only (not sso, whose issuer name
+# would be prod's), with the route and https on; another env's ui is as it was; identity-db passes the dev switch on dev only.
+out=$(run dev ui "$t/ok")
+check "dev ui runs the ui tag with the route and https on" "$out" 'AP playbooks/k8s-gitops.yml --tags ui -e {"k8s_gitops_ui_route": true, "k8s_gitops_ui_gateway_https": true}' "sso"
+check "dev ui succeeds" "$out" "rc=0" ""
+out=$(run staging ui "$t/ok")
+check "a non-dev ui is the old command" "$out" "AP playbooks/k8s-gitops.yml --tags ui,sso" "k8s_gitops_ui_route"
+out=$(run dev identity-db "$t/ok")
+check "dev identity-db passes the dev switch" "$out" 'AP playbooks/k8s-identity-restore.yml -e {"k8s_identity_restore_dev": true}' "rc=1"
+out=$(run prod identity-db "$t/ok")
+check "prod identity-db passes no dev switch" "$out" "AP playbooks/k8s-identity-restore.yml" "restore_dev"
+for envname in staging ""; do
+  out=$(run "$envname" identity-db "$t/ok")
+  check "identity-db refuses ENV_NAME='${envname}'" "$out" "rc=1" "AP "
+done
 exit $fail

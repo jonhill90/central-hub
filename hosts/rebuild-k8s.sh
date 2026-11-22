@@ -855,8 +855,13 @@ run_stage() {
     # Prod rebuilt from the agent box only, after identity: prod's Keycloak database back from its dump in the
     # snapshot the restore stage used, so accounts and their one-time-code devices come back as they were.
     identity-db)
-      [ "$ENV_NAME" = prod ] || { echo "the Keycloak database is put back on prod only"; return 1; }
-      ap playbooks/k8s-identity-restore.yml ;;
+      # Dev, after ssh-ca-proof (which needs this run's test users): the same play prod runs, from the snapshot the restore stage used.
+      # It replaces dev's Keycloak database with that dump, so dev's own users are gone afterwards.
+      case "$ENV_NAME" in
+        prod) ap playbooks/k8s-identity-restore.yml ;;
+        dev) ap playbooks/k8s-identity-restore.yml -e '{"k8s_identity_restore_dev": true}' ;;
+        *) echo "the Keycloak database is put back on prod and dev only"; return 1 ;;
+      esac ;;
     # Dev only, and added to a dev run after `checks` (below): a throwaway in-cluster CA and the Gateway's
     # certificate from it, so dev has HTTPS with no prod secret (no Cloudflare token, no lab CA key).
     dev-ca)
@@ -939,7 +944,15 @@ run_stage() {
       hook "$APP_SECRETS_HOOK" ;;
     # Prod: right after the ui and sso tags, Argo CD's own ConfigMap must list the provider the sso tag writes (name Lab sign-in), so a
     # run that passed while the keys were not there, or that something removes later, shows at once (checks asks again).
-    ui) ap playbooks/k8s-gitops.yml --tags ui,sso && { [ "$ENV_NAME" != prod ] || argocd_signin_listed; } ;;
+    # Dev, added after dev-ca (the route needs the Gateway's https listener and the apps-tls Secret, which only dev-ca makes on dev): the
+    # Argo CD routes and the role's proof, which on dev goes to this cluster's own Gateway address (k8s_lab_dns_points_here is false there,
+    # so the names still resolve to prod's). Tag ui only: the sso tag points Argo CD at Keycloak by name, which on dev would be prod's.
+    ui)
+      if [ "$ENV_NAME" = dev ]; then
+        ap playbooks/k8s-gitops.yml --tags ui -e '{"k8s_gitops_ui_route": true, "k8s_gitops_ui_gateway_https": true}'
+      else
+        ap playbooks/k8s-gitops.yml --tags ui,sso && { [ "$ENV_NAME" != prod ] || argocd_signin_listed; }
+      fi ;;
     backup)
       # Backup timers write to the env's restic repository; a dev run must never reach prod's.
       [ "$ENV_NAME" = prod ] || { echo "backup timers run on prod only"; return 1; }
@@ -994,8 +1007,8 @@ stages=${STAGES:-$default_stages}
 # and the admin hand-over after it; the apps' secrets go into SOPS and OpenBao after identity-keycloak. The
 # read-only `panels` stage is last on every full dev run, so its reads come before the end-of-run teardown.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then
-  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca openbao-measure openbao-handover identity-keycloak app-secrets ssh-ca-proof panels"
-  else stages="$stages dev-ca identity-keycloak ssh-ca-proof panels"; fi
+  if [ -n "${OPENBAO_SEAL_KEY_FILE:-}" ]; then stages="$stages dev-ca ui openbao-measure openbao-handover identity-keycloak app-secrets ssh-ca-proof identity-db panels"
+  else stages="$stages dev-ca ui identity-keycloak ssh-ca-proof identity-db panels"; fi
 fi
 # A dev run starts with the memory preflight, after a teardown has freed its VMs and before it makes new ones.
 if [ "$ENV_NAME" = dev ] && [ -z "$only" ]; then stages="preflight $stages"; fi

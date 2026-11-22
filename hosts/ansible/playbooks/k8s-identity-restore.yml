@@ -25,14 +25,18 @@
       RESTORE_DUMP: /var/lib/central-hub-backup/db-dumps/identity_sso-postgres-0.sql
     k8s_identity_restore_bin: /usr/local/libexec/central-hub-backup/c1-restore-identity.sh
   pre_tasks:
-    - name: Only on prod rebuilt from the box, after the restore stage
+    # Dev too, so the dev run proves the play prod runs: the dev rebuild's own stage passes k8s_identity_restore_dev (hosts/rebuild-k8s.sh,
+    # dev only), and the cluster's env label must say dev. The snapshot is the one dev's restore stage used.
+    - name: Only on prod rebuilt from the box, or on a dev rebuild, after the restore stage
       ansible.builtin.assert:
         that:
-          - (k8s_gitops_cluster_labels | default({})).get('env', '') == 'prod'
-          - k8s_backup_restore_own_env | default(false) | bool
+          - >-
+            ((k8s_gitops_cluster_labels | default({})).get('env', '') == 'prod' and (k8s_backup_restore_own_env | default(false) | bool))
+            or ((k8s_gitops_cluster_labels | default({})).get('env', '') == 'dev' and (k8s_identity_restore_dev | default(false) | bool))
         fail_msg: >-
           The database is put back only on prod rebuilt from the agent box (env prod and
-          k8s_backup_restore_own_env, which only its rebuild-prod wrapper sets). Nothing was changed.
+          k8s_backup_restore_own_env, which only its rebuild-prod wrapper sets) or on a dev rebuild (env dev and
+          k8s_identity_restore_dev, which only hosts/rebuild-k8s.sh sets). Nothing was changed.
         quiet: true
 
     - name: The node restored a snapshot (the restore stage's record)
