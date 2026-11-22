@@ -687,4 +687,14 @@ if [[ $r20c -eq 0 && $o20c == *"resuming from store-ca: store-ca,identity-values
 else bad "20c. $r20c $o20c [$c20c]"; fi
 rm -f "$logd"/*
 
+# 21. The box's copy of the inventory names the identity values file at the box's copy even when the controller's inventory leaves the
+# variable to the role's default, which under this wrapper's HOME is another file than the one put-apps and c1-ansible read.
+inventory; sed -i '/k8s_identity_values_file/d' "$t/keys/prod/inventory-hosts.yml"
+run check
+vf21=$(python3 -c 'import json, sys, yaml; d = yaml.safe_load(open(sys.argv[1])); print(d["all"]["children"]["k8s_nodes"]["vars"].get("k8s_identity_values_file"))' "$t/work/rebuild-prod/inventory/hosts.yml" 2>/dev/null)
+if [[ $rc -eq 0 && $vf21 == "$t/keys/prod/identity.env" ]]; then
+  ok "21. an inventory that leaves k8s_identity_values_file to the role's default still gets the box's copy, so the stage and put-apps read one file"
+else bad "21. $rc [$vf21] $out"; fi
+inventory
+
 exit "$fail"

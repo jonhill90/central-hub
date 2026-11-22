@@ -373,6 +373,11 @@ def remap(n):
     elif isinstance(n, list):
         for i in n: remap(i)
 remap(d)
+# The identity role's values file must be the box's copy even when the controller's inventory leaves the variable to the role's default
+# (~/.config/central-hub/identity.env): the remap above only rewrites a value that is set, and the default under this wrapper's HOME is
+# another file than the one put-apps and c1-ansible read (<keys>/prod/identity.env), so the keys the stage added never reached the store
+# (prod resumes 2 and 3, 2026-11-22).
+v["k8s_identity_values_file"] = pkeys + "/identity.env"
 # The plays that restore prod (k8s-restore.yml, k8s-identity-restore.yml) read k8s_gitops_cluster_labels.env in their
 # pre_tasks, where the k8s_gitops role's default (env prod) is not loaded. The Mac's inventory leaves the labels to that
 # default, so with no labels set anywhere the box's copy gets the role's own default labels, which say prod. Labels set

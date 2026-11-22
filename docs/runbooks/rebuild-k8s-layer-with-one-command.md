@@ -316,3 +316,5 @@ After `hosts/rebuild-k8s.sh` ends well, `rebuild-prod` runs four steps itself, e
 | `store-secrets` | `secrets-store-prod clear-hold` (only with the hold set), `put-apps`, `compare` | the apps' secrets from their SOPS copy into the rebuilt store, then proof that every key is there |
 
 The run's own go is the clearance each step takes. The pin and the carried sftp keys are removed only after all four passed. The hold is cleared, not restored from a snapshot, because that is the path run by hand after prod run 9 and `restore-rebuilt` has not been run on prod; `clear-hold` keeps the earlier snapshots in a kept folder, and a restore stays a separate decision.
+
+The box's copy of the prod inventory always names the identity role's values file as `<keys>/prod/identity.env`, even when the controller's inventory leaves that variable to the role's default (`~/.config/central-hub/identity.env`). Without it the identity stage wrote its added keys under the wrapper's own HOME, a different file than `put-apps` and `c1-ansible` read (prod resumes 2 and 3, 2026-11-22; a reading of the code, not yet shown on the box).
