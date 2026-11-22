@@ -281,12 +281,12 @@ run rebuild "$tap" "${sha:0:12}"
   ok "6b. a rebuild clears openbao-prod's known hosts (the rebuilt nodes have new host keys)" || bad "6b. openbao-prod's known_hosts is still there after a rebuild"
 order=$(grep -oE '^(playbook [^ ]+ [^ ]+ [^ ]+|ssh [^ ]+ .*(backup.pem|seal-1.key)$|job [a-z-]+|one-command .*|seal-in-memory [0-9]+)' "$t/calls" |
   sed -E 's/^playbook -i [^ ]+ /playbook /; s/^ssh [^ ]+ (sudo -n )?cat .*\/(backup.pem|seal-1.key)$/ssh \2/' | uniq | tr '\n' '|')
-want="playbook playbooks/k8s-backup.yml|ssh backup.pem|ssh seal-1.key|job opnsense-backup|job opnsense-offbox|job secrets-bundle|job secrets-bundle-offbox|one-command $t/work/rebuild-prod --only teardown,vms,cluster,storage,openbao-seal,restore,gitops,secrets,apps,certs,gateway|seal-in-memory 32|one-command $t/work/rebuild-prod --only identity,identity-db,ui,backup,checks|seal-in-memory 32|"
+want="playbook playbooks/k8s-backup.yml|ssh backup.pem|ssh seal-1.key|job opnsense-backup|job opnsense-offbox|job secrets-bundle|job secrets-bundle-offbox|one-command $t/work/rebuild-prod --only teardown,vms,cluster,storage,openbao-seal,restore,gitops,secrets,apps,certs,gateway|seal-in-memory 32|one-command $t/work/rebuild-prod --only identity,identity-db,ui,backup,backup-drill,checks|seal-in-memory 32|"
 stages=$(sed -n 's/^STAGES=//p' "$t/seen-rebuild.env")
 if [[ $rc -eq 0 && $order == "$want" && $calls == *"playbooks/k8s-backup.yml --tags drill -e k8s_backup_drill=true"* &&
       -s $t/keys/prod/backup-certs/wk-a.pem && -s $t/keys/prod/backup-certs/cp-a.pem.keyid &&
       $(stat -c %a "$t/keys/prod/backup-certs/wk-a.pem") == 600 && $out != *"BEGIN PRIVATE KEY"* && $out != *KKKK* &&
-      $stages == '"vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup checks"' && $(cat "$t/seen-rebuild.env") == *'APPS_DEFER="gateway jellyfin"'* && $(cat "$t/seen-rebuild.env") == *"CERTS_SMOKE_LATE=true"* &&
+      $stages == '"vms cluster storage openbao-seal restore gitops secrets apps certs gateway identity identity-db ui backup backup-drill checks"' && $(cat "$t/seen-rebuild.env") == *'APPS_DEFER="gateway jellyfin"'* && $(cat "$t/seen-rebuild.env") == *"CERTS_SMOKE_LATE=true"* &&
       $(cat "$t/seen-rebuild.env") == *"ENV_NAME=prod"* && $(cat "$t/seen-rebuild.env") == *"TEARDOWN_TARGET=proxmox_virtual_environment_vm.node"* &&
       $(grep -c 'plan .*-destroy -target=proxmox_virtual_environment_vm.node ' "$t/calls") -ge 1 && $(cat "$t/seen-rebuild.env") == *"TOFU_ENV=$t/keys/proxmox-lab.env"* &&
       $(cat "$t/seen-rebuild.env") == *"k8s-restore.yml -e k8s_backup_enabled=false -e k8s_backup_restore_snapshot=36fe4321aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"* && ! -e $t/work/state/prod-restore-pin && -e $t/work/state/prod-stable-folders &&
@@ -613,8 +613,8 @@ run resume "$tap" "$sha"; r18d=$rc o18d=$out c18d=$calls
 if [[ $r18a -eq 1 && $o18a == *"resume needs a rebuild that stopped after its teardown"* && $c18a != *one-command* &&
       $r18b -eq 1 && $o18b == *"not the go the stopped run"* && $c18b != *one-command* &&
       $r18c -eq 1 && $o18c == *"1 of 2 prod nodes are Ready"* && $c18c != *one-command* &&
-      $r18d -eq 0 && $o18d == *"every stage before gateway has a good end line"*"resuming from gateway: gateway,store-admin,store-ca,identity-values,store-secrets,identity,identity-db,ui,backup,checks"* &&
-      $c18d == *"one-command "*"--only gateway"*"post openbao-prod admin-firewall"*"one-command "*"--only identity,identity-db,ui,backup,checks"* && $c18d != *"--teardown"* && $c18d != *"--tags drill"* &&
+      $r18d -eq 0 && $o18d == *"every stage before gateway has a good end line"*"resuming from gateway: gateway,store-admin,store-ca,identity-values,store-secrets,identity,identity-db,ui,backup,backup-drill,checks"* &&
+      $c18d == *"one-command "*"--only gateway"*"post openbao-prod admin-firewall"*"one-command "*"--only identity,identity-db,ui,backup,backup-drill,checks"* && $c18d != *"--teardown"* && $c18d != *"--tags drill"* &&
       $c18d != *"job "* && $c18d != *"tofu destroy"* && $(cat "$t/seen-rebuild.env") == *"k8s_backup_restore_snapshot=$pinid"* &&
       $o18d == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin &&
       ! -e $t/work/openbao-prod/known_hosts && ! -e $t/work/openbao-prod/known_hosts.old ]]; then
@@ -626,7 +626,7 @@ printf '%s\n' "rebuild-prod: resume at central-hub 0123456789ab, owner tap $tap"
 run rebuild "$tap" "$sha" "$pinid"; r18e=$rc o18e=$out
 resume_logs gateway
 printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" "2999-01-01T01:00:11Z identity end rc=0 5s" "2999-01-01T01:00:12Z identity-db end rc=0 5s" \
-  "2999-01-01T01:00:13Z ui end rc=0 5s" "2999-01-01T01:00:14Z backup end rc=0 5s" "2999-01-01T01:00:15Z checks end rc=0 5s" \
+  "2999-01-01T01:00:13Z ui end rc=0 5s" "2999-01-01T01:00:14Z backup end rc=0 5s" "2999-01-01T01:00:14Z backup-drill end rc=0 5s" "2999-01-01T01:00:15Z checks end rc=0 5s" \
   "2999-01-01T01:00:16Z store-admin end rc=0 5s" "2999-01-01T01:00:17Z store-ca end rc=0 5s" "2999-01-01T01:00:18Z identity-values end rc=0 5s" \
   "2999-01-01T01:00:19Z store-secrets end rc=0 5s" > "$logd/rebuild-29990101T020000Z.log"
 run resume "$tap" "$sha"; r18f=$rc o18f=$out c18f=$calls
@@ -664,7 +664,7 @@ post_calls=$(grep '^post ' "$t/calls" | tr '\n' '|')
 seq20=$(grep -oE '^(post [a-z0-9-]+(\.sh)? [a-z-]+|one-command .*--only [a-z,-]+)' "$t/calls" | sed -E 's/^one-command .*--only /only /' | tr '\n' '|')
 want20="post openbao-prod admin-firewall $tap|post openbao-prod ca|post c1-ansible apply identity-values $tap|post secrets-store-prod clear-hold|post secrets-store-prod put-apps|post secrets-store-prod compare|"
 postlog=$(ls -1 "$t/work/rebuild-prod/logs"/rebuild-*-post.log 2>/dev/null | tail -n 1)
-if [[ $r20a -eq 0 && $post_calls == "$want20" && $seq20 == "only gateway|post openbao-prod admin-firewall|post openbao-prod ca|post c1-ansible apply|post secrets-store-prod clear-hold|post secrets-store-prod put-apps|post secrets-store-prod compare|only identity,identity-db,ui,backup,checks|" && $(grep -cE ' (store-admin|store-ca|identity-values|store-secrets) end rc=0' "$postlog") -eq 4 &&
+if [[ $r20a -eq 0 && $post_calls == "$want20" && $seq20 == "only gateway|post openbao-prod admin-firewall|post openbao-prod ca|post c1-ansible apply|post secrets-store-prod clear-hold|post secrets-store-prod put-apps|post secrets-store-prod compare|only identity,identity-db,ui,backup,backup-drill,checks|" && $(grep -cE ' (store-admin|store-ca|identity-values|store-secrets) end rc=0' "$postlog") -eq 4 &&
       $o20a == *"PASS: rebuild-prod: prod torn down and built again"* && ! -e $t/work/state/prod-restore-pin ]]; then
   ok "20. after gateway and before identity: admin firewall, store CA, identity values, then the hold cleared, put-apps and compare, each logged as a stage; the pin clears only after the whole run"
 else bad "20. $r20a [$seq20] [$post_calls] [$(cat "$postlog" 2>/dev/null)] $o20a"; fi
@@ -682,8 +682,8 @@ resume_logs gateway
 printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" > "$logd/rebuild-29990101T020000Z.log"
 printf '%s\n' "2999-01-01T02:00:00Z store-admin start" "2999-01-01T02:00:01Z store-admin end rc=0 1s" "2999-01-01T02:00:02Z store-ca start" "2999-01-01T02:00:03Z store-ca end rc=1 1s" > "$logd/rebuild-29990101T030000Z-post.log"
 run resume "$tap" "$sha"; r20c=$rc o20c=$out c20c=$calls
-if [[ $r20c -eq 0 && $o20c == *"resuming from store-ca: store-ca,identity-values,store-secrets,identity,identity-db,ui,backup,checks"* && $c20c != *"--only gateway"* && $c20c != *"admin-firewall"* &&
-      $c20c == *"post openbao-prod ca"*"post c1-ansible apply identity-values"*"put-apps"*"--only identity,identity-db,ui,backup,checks"* ]]; then
+if [[ $r20c -eq 0 && $o20c == *"resuming from store-ca: store-ca,identity-values,store-secrets,identity,identity-db,ui,backup,backup-drill,checks"* && $c20c != *"--only gateway"* && $c20c != *"admin-firewall"* &&
+      $c20c == *"post openbao-prod ca"*"post c1-ansible apply identity-values"*"put-apps"*"--only identity,identity-db,ui,backup,backup-drill,checks"* ]]; then
   ok "20c. a resume after a failed post step carries on from it: not the stages or steps before it, then the identity stage onward"
 else bad "20c. $r20c $o20c [$c20c]"; fi
 rm -f "$logd"/*
@@ -691,9 +691,21 @@ rm -f "$logd"/*
 resume_logs gateway
 printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" "2999-01-01T01:10:00Z identity start" "2999-01-01T01:11:00Z identity end rc=0 60s" > "$logd/rebuild-29990101T020000Z.log"
 run resume "$tap" "$sha"; r20e=$rc o20e=$out c20e=$calls
-if [[ $r20e -eq 0 && $o20e == *"resuming from identity-db: identity-db,ui,backup,checks"* && $o20e == *"post step store-admin has no log line"* && $c20e != *"post "* && $c20e == *"--only identity-db,ui,backup,checks"* ]]; then
+if [[ $r20e -eq 0 && $o20e == *"resuming from identity-db: identity-db,ui,backup,backup-drill,checks"* && $o20e == *"post step store-admin has no log line"* && $c20e != *"post "* && $c20e == *"--only identity-db,ui,backup,backup-drill,checks"* ]]; then
   ok "20e. a post step with no log line counts as done when a later stage of the run ended well"
 else bad "20e. $r20e $o20e [$c20e]"; fi
+rm -f "$logd"/*
+# 20g. A run whose `backup` ended well and whose `checks` failed (prod resume 5, no drill stage yet) resumes at `backup-drill`, not at `checks`:
+# the stage the drill needs has no good end line, so the first backup and restore tests run before `checks` asks again.
+resume_logs gateway
+printf '%s\n' "2999-01-01T01:00:10Z gateway end rc=0 5s" "2999-01-01T01:00:11Z identity end rc=0 5s" "2999-01-01T01:00:12Z identity-db end rc=0 5s" \
+  "2999-01-01T01:00:13Z ui end rc=0 5s" "2999-01-01T01:00:14Z backup end rc=0 5s" "2999-01-01T01:00:15Z checks end rc=1 5s" \
+  "2999-01-01T01:00:16Z store-admin end rc=0 5s" "2999-01-01T01:00:17Z store-ca end rc=0 5s" "2999-01-01T01:00:18Z identity-values end rc=0 5s" \
+  "2999-01-01T01:00:19Z store-secrets end rc=0 5s" > "$logd/rebuild-29990101T020000Z.log"
+run resume "$tap" "$sha"; r20g=$rc o20g=$out c20g=$calls
+if [[ $r20g -eq 0 && $o20g == *"resuming from backup-drill: backup-drill,checks"* && $c20g == *"--only backup-drill,checks"* && $c20g != *"--teardown"* ]]; then
+  ok "20g. a resume after a failed checks with backup passed starts at backup-drill, so the first backup and restore tests run before checks"
+else bad "20g. $r20g $o20g [$c20g]"; fi
 rm -f "$logd"/*
 # 20f. A post step whose line says it failed is not counted as done, even when a later stage ended well.
 resume_logs gateway
