@@ -422,7 +422,8 @@ check_manifests() {
     ! grep -q 'name: loginProbe' "$work/rendered/gitops-source-argocd-dev.yaml" ||
     ! grep -q 'name: jellyfinSetup' "$work/rendered/gitops-source-argocd-dev.yaml" ||
     ! grep -q 'name: panelCheckSuspended' "$work/rendered/gitops-source-argocd-dev.yaml" ||
-    grep -qE 'labCaIssuer|loginProbe|jellyfinSetup|panelCheckSuspended' "$work/rendered/gitops-source-argocd.yaml"; then
+    ! grep -A1 'name: targetRevision' "$work/rendered/gitops-source-argocd-dev.yaml" | grep -q '0123456789abcdef0123456789abcdef01234567' ||
+    grep -qE 'labCaIssuer|loginProbe|jellyfinSetup|panelCheckSuspended|targetRevision' "$work/rendered/gitops-source-argocd.yaml"; then
     echo "manifests: k8s_gitops should pass labCaIssuer, loginProbe and jellyfinSetup only when they are false, and panelCheckSuspended only when true" >&2
     return 1
   fi

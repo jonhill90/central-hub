@@ -124,6 +124,15 @@ done
 out=$(OPENBAO_SEAL_KEY_FILE=/k run dev gitops "$t/ok")
 check "dev with a key file: both off and the measurement on" "$out" "k8s_gitops_source_login_probe=false" ""
 check "dev with a key file: the measurement still on" "$out" "k8s_gitops_source_openbao_measure=true" ""
+# Dev's Argo CD follows the commit the run is made from: a checkout's full HEAD goes to the root's branch and to every
+# child's targetRevision; no checkout (or prod) leaves `main` as it was.
+git init -q "$t/gitrepo" && git -C "$t/gitrepo" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m x
+head=$(git -C "$t/gitrepo" rev-parse HEAD)
+out=$(run dev gitops "$t/gitrepo")
+check "dev gitops: the root follows the run's commit" "$out" "-e k8s_gitops_source_branch=$head" ""
+check "dev gitops: the children follow it too" "$out" "-e k8s_gitops_source_target_revision=$head" ""
+out=$(run dev gitops "$t/ok"); check "dev with no checkout leaves main" "$out" "AP " "source_target_revision"
+out=$(FAKE_SECRET=yes run prod gitops "$t/gitrepo"); check "prod gitops leaves main" "$out" "AP " "source_target_revision"
 out=$(run dev openbao-measure "$t/ok"); check "dev without a key file still skips the measurement" "$out" "openbao-measure skipped" "AP "
 out=$(FAKE_SECRET=yes run prod gitops "$t/ok"); check "prod gitops leaves the lab-ca issuer on" "$out" "AP " "lab_ca_issuer"
 check "prod gitops leaves login-probe on" "$out" "AP " "login_probe"
