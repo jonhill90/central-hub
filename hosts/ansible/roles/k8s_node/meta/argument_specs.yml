@@ -11,7 +11,7 @@ argument_specs:
       k8s_node_ports:
         type: list
         elements: str
-        default: [6443/tcp, 2379-2380/tcp, 10250/tcp, 10256/tcp, 10257/tcp, 10259/tcp, 8472/udp, 4240/tcp]
+        default: [6443/tcp, 2379-2380/tcp, 10250/tcp, 10256/tcp, 10257/tcp, 10259/tcp, 8472/udp, 4240/tcp, 9100/tcp]
         description: Ports opened in that zone (runbook step 4).
       k8s_node_kubelet_system_reserved_memory:
         type: str

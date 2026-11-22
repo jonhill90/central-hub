@@ -11,7 +11,10 @@ k8s_node_containerd_package: containerd.io-2.3.6-1.el10
 k8s_node_pod_cidr: 10.240.0.0/16
 # The firewalld zone for the lab NIC (runbook step 1 used a "tailnet" zone on tailscale0).
 k8s_node_firewall_zone: lab
-k8s_node_ports: [6443/tcp, 2379-2380/tcp, 10250/tcp, 10256/tcp, 10257/tcp, 10259/tcp, 8472/udp, 4240/tcp]
+# 9100/tcp is node-exporter: Prometheus runs on the worker and scrapes every node's own address, so a control plane without it is a
+# down target (TargetDown) and has no backup times (prod resume 6, 2026-11-22: only the worker's instance reported). The rebuild never
+# runs playbooks/k8s-observability.yml, whose `metrics` tag also opens it, so the node role opens it.
+k8s_node_ports: [6443/tcp, 2379-2380/tcp, 10250/tcp, 10256/tcp, 10257/tcp, 10259/tcp, 8472/udp, 4240/tcp, 9100/tcp]
 
 # Kubelet memory reservations and eviction (the dev worker's loss under Keycloak, 2026-11-18 13:14 and 2026-11-19 06:19 UTC).
 # Without them the kubelet counts the whole VM as room for pods, and the kernel, containerd and the kubelet itself get

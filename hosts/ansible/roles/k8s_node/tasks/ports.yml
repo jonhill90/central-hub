@@ -1,0 +1,11 @@
+---
+# The node's firewalld ports (runbook step 4), the one task playbooks/k8s-node-ports.yml runs alone: it opens each port of
+# k8s_node_ports in the lab zone, permanent and now, and restarts nothing. Included by main.yml as step 4.
+- name: Step 4 | Kubernetes, Cilium and node-exporter ports
+  ansible.posix.firewalld:
+    zone: "{{ k8s_node_firewall_zone }}"
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ k8s_node_ports }}"
