@@ -63,7 +63,7 @@ agent_box_wrappers:
   # (apply starts the nodes' own restore test, which restores into temporary folders only).
   - name: c1-ansible
     args: [list, "check *", "apply *", log]
-  # The three scripted sign-in checks (Jellyfin, Argo CD, Proxmox) against prod with the test user (files/signin-check.sh). It runs as
+  # The four scripted sign-in checks (Jellyfin, Argo CD, Grafana, Proxmox) against prod with the test user (files/signin-check.sh). It runs as
   # the keys user, because the test user's password and seed are lines in identity.env. run makes nothing in any app; it reads
   # signin-check.json, which the controller's prod-files run copies, and prints only the checks' numbered lines.
   - name: signin-check
