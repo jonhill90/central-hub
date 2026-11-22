@@ -50,10 +50,10 @@ agent_box_wrappers:
            "ssh-ca plan", "ssh-ca apply", "ssh-ca check", "ssh-ca public", "ssh-ca sign-host *"]
   # Turns that store on in prod's c1 with the box's own prod node key (files/openbao-prod.sh). The `*` on seal,
   # seal-copy, refresh, reset-failed-start, drop-box-path and admin-firewall passes the owner's tap id, which the wrapper
-  # checks; key prints only the public half. c1-readonly makes the box's own read-only kubeconfig for c1 again from the live cluster. secrets-status, jobs-status, prune-status and targets-status are read-only (conditions and log lines of the store
+  # checks; key prints only the public half. c1-readonly makes the box's own read-only kubeconfig for c1 again from the live cluster; adopt copies the cluster-made secrets' live values into SOPS and OpenBao from a fixed table. secrets-status, jobs-status, prune-status and targets-status are read-only (conditions and log lines of the store
   # and ExternalSecrets; failed Jobs and their pod logs, scrubbed; the resources Argo CD marks requiresPruning).
   - name: openbao-prod
-    args: [key, check, "seal *", "seal-copy *", l2-policy, gitops, ca, c1-readonly, handover, "refresh *", "reset-failed-start *",
+    args: [key, check, "seal *", "seal-copy *", l2-policy, gitops, ca, c1-readonly, adopt, handover, "refresh *", "reset-failed-start *",
            "drop-box-path *", admin-firewall-check, "admin-firewall *", secrets-status, jobs-status, prune-status, targets-status, log]
   # Applies one named Ansible playbook to prod's c1 with the box's own prod node key (files/c1-ansible.sh). check is
   # read-only; the `*` on apply passes the clearance id, which the wrapper checks. The names are identity, gateway, gitops,

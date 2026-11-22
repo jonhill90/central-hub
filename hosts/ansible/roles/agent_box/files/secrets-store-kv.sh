@@ -112,7 +112,7 @@ plain() {
 valid_path() { [[ $1 =~ ^c1(/[a-z0-9][a-z0-9_-]*)+$ ]]; }
 
 case $action in
-  put)
+  put | put-new)
     path=${6:-} key=${7:-}
     valid_path "$path" || die "the path must be c1/<name>[/<name>...], lowercase letters, digits, - and _"
     [[ $key =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]] || die "the key must be letters, digits, _, . and -"
@@ -127,13 +127,23 @@ case $action in
         { rm -f -- "$kvfile.part"; die "sops could not make $kvfile; nothing written"; }
       mv -- "$kvfile.part" "$kvfile"
     fi
+    # put-new writes nothing when OpenBao already holds the key: a value kept there is never replaced by one adopted later.
+    if [[ $action == put-new ]]; then
+      token=$(login) && [[ -n $token ]] || die "the admin AppRole did not sign in ($(why)); nothing written"
+      rc=$(call GET "kv/data/$path" -o "$tmp/current.json" -w '%{http_code}') || true
+      [[ $rc == 200 || $rc == 404 ]] || die "reading kv/$path answered HTTP ${rc:-nothing}; nothing written"
+      if [[ $rc == 200 ]] && python3 -I -c 'import json, sys; sys.exit(0 if sys.argv[2] in ((json.load(open(sys.argv[1]))["data"].get("data")) or {}) else 1)' "$tmp/current.json" "$key"; then
+        echo "secrets-store put-new: kv/$path key $key is in OpenBao already; kept, nothing written"
+        exit 0
+      fi
+    fi
     # 1. SOPS: the value as a JSON string on stdin, into the one key.
     index=$(python3 -I -c 'import json, sys; print("[%s][%s]" % (json.dumps(sys.argv[1]), json.dumps(sys.argv[2])))' "$path" "$key")
     python3 -I -c 'import json, sys; sys.stdout.write(json.dumps(open(sys.argv[1]).read()))' "$tmp/value" |
       "$libexec/sops" set --value-stdin "$kvfile" "$index" ||
       die "the SOPS write failed; OpenBao was not written"
     # 2. OpenBao: read, merge the one key, write back with check-and-set.
-    token=$(login) && [[ -n $token ]] || die "SOPS is written, but the admin AppRole did not sign in ($(why)), so OpenBao is not; run put again"
+    [[ -n $token ]] || token=$(login) && [[ -n $token ]] || die "SOPS is written, but the admin AppRole did not sign in ($(why)), so OpenBao is not; run put again"
     rc=$(call GET "kv/data/$path" -o "$tmp/current.json" -w '%{http_code}') || true
     [[ $rc == 200 || $rc == 404 ]] || die "SOPS is written, but reading kv/$path answered HTTP ${rc:-nothing}, so OpenBao is not; run put again"
     python3 -I -c '
@@ -147,7 +157,7 @@ data[key] = open(val).read()
 json.dump({"options": {"cas": version}, "data": data}, open(out, "w"))' "$tmp/current.json" "$tmp/value" "$key" "$tmp/body.json" "$rc"
     rc=$(call POST "kv/data/$path" --data-binary "@$tmp/body.json" -o /dev/null -w '%{http_code}') || true
     [[ $rc == 200 || $rc == 204 ]] || die "SOPS is written, but OpenBao refused the write (HTTP ${rc:-nothing}); run put again, then compare"
-    echo "secrets-store put: kv/$path key $key written to SOPS, then OpenBao"
+    echo "secrets-store $action: kv/$path key $key written to SOPS, then OpenBao"
     ;;
   compare)
     [[ -e $kvfile ]] || die "no SOPS file ($kvfile): nothing has been written through put"
