@@ -509,9 +509,14 @@ import json, sys
 a = sys.argv[sys.argv.index("-a") + 1]
 open("$t/kcalls", "a").write(a + "\\n")
 def res(rows): return json.dumps({"status": "success", "data": {"resultType": "vector", "result": rows}})
-if "get pods" in a: out = "monitoring kube-prometheus-stack-prometheus-node-exporter-aaaaa 1/1 Running 0 5m 10.0.0.1 cp-a <none> <none>\\nmonitoring kube-prometheus-stack-prometheus-node-exporter-bbbbb 1/1 Running 0 5m 10.0.0.2 wk-a <none> <none>\\nmedia jellyfin-x 1/1 Running 0 5m 10.0.0.3 wk-a <none> <none>"
-elif "get nodes" in a: out = "cp-a Ready control-plane\\nwk-a Ready <none>"
-elif "get --raw" in a and "up%3D%3D0" in a: out = res([{"metric": {"job": "node-exporter", "namespace": "monitoring", "pod": "node-exporter-aaaaa", "instance": "10.0.0.1:9100"}, "value": [1, "0"]}])
+if "get pods" in a:
+    # a pod with restarts: custom-columns keeps one value per column, so the node stays in the last column
+    out = "monitoring kube-prometheus-stack-prometheus-node-exporter-aaaaa true Running cp-a.lab.example\\nmonitoring kube-prometheus-stack-prometheus-node-exporter-bbbbb false Pending wk-a.lab.example\\nmedia jellyfin-x true Running wk-a.lab.example"
+    assert "custom-columns=" in a and "-o wide" not in a, a
+elif "get nodes" in a:
+    node = lambda n, ip, cp: {"metadata": {"name": n, "labels": {"node-role.kubernetes.io/control-plane": ""} if cp else {}}, "status": {"addresses": [{"type": "InternalIP", "address": ip}, {"type": "Hostname", "address": n}], "conditions": [{"type": "Ready", "status": "True"}]}}
+    out = json.dumps({"items": [node("wk-a.lab.example", "10.0.0.2", False), node("cp-a.lab.example", "10.0.0.1", True)]})
+elif "get --raw" in a and "up%3D%3D0" in a: out = res([{"metric": {"job": "node-exporter", "namespace": "monitoring", "pod": "node-exporter-aaaaa", "instance": "10.0.0.1:9100", "node": "cp-a.lab.example"}, "value": [1, "0"]}, {"metric": {"job": "kubelet", "instance": "192.168.9.9:10250"}, "value": [1, "0"]}])
 elif "get --raw" in a: out = res([{"metric": {"kind": "volumes", "instance": "10.0.0.2:9100"}, "value": [1, "1700000000"]}])
 else: out = ""
 print(json.dumps({"plays": [{"tasks": [{"hosts": {"cp-a": {"rc": 0 if out else 1, "stdout": out, "stderr": ""}}}]}]}))
@@ -521,9 +526,11 @@ run targets-status; a_rc=$rc a_out=$out
 a_calls=$(cat "$t/kcalls")
 write_calls=$(grep -cE ' (apply|delete|create|patch|annotate|edit|replace|exec|cp) |get secret|-o yaml' <<< "$a_calls" || true)
 run targets-status "$tap"; x_rc=$rc x_calls=$calls
-if [[ $a_rc -eq 0 && $a_out == *"node-exporter-aaaaa 1/1 Running cp-a"* && $a_out == *"node-exporter-bbbbb 1/1 Running wk-a"* && $a_out != *"jellyfin-x"* &&
-      $a_out == *"job=node-exporter namespace=monitoring pod=node-exporter-aaaaa instance=10.0.0.1:9100 value=0"* && $a_out == *"(1 series)"* &&
-      $a_out == *"kind=volumes instance=10.0.0.2:9100 value=1700000000"* &&
+if [[ $a_rc -eq 0 && $a_out == *"node-exporter-aaaaa true Running cp-1"* && $a_out == *"node-exporter-bbbbb false Pending wk-1"* && $a_out != *"jellyfin-x"* &&
+      $a_out == *"job=node-exporter namespace=monitoring pod=node-exporter-aaaaa instance=cp-1:9100 node=cp-1 value=0"* && $a_out == *"(2 series)"* &&
+      $a_out == *"job=kubelet instance=<ip>:10250 value=0"* && $a_out == *$'cp-1 Ready\nwk-1 Ready'* &&
+      $a_out == *"kind=volumes instance=wk-1:9100 value=1700000000"* &&
+      $a_out != *"10.0.0."* && $a_out != *"192.168"* && $a_out != *"lab.example"* &&
       $a_out == *"PASS: openbao-prod: targets-status: read, nothing changed"* && $write_calls -eq 0 &&
       $(grep -c 'get --raw /api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:9090/proxy/api/v1/query' <<< "$a_calls") -eq 2 &&
       $x_rc -eq 2 && -z $x_calls ]]; then

@@ -425,10 +425,37 @@ print("openbao-prod: %d resource(s) marked requiresPruning" % n)
   targets-status)
     # Read-only (kc get only). Prometheus is asked through the API server's service proxy, so nothing is exposed or port-forwarded.
     prom=/api/v1/namespaces/monitoring/services/kube-prometheus-stack-prometheus:9090/proxy/api/v1/query
-    echo "openbao-prod: node-exporter pods (namespace, name, ready, status, node):"
-    { kc get pods -A -o wide --no-headers || { echo "openbao-prod: could not read the pods" >&2; exit 1; }; } | awk '$2 ~ /node-exporter/ {print $1, $2, $3, $4, $8}'
+    # Node names and addresses are not printed: each node is cp-1, cp-2, wk-1 ... (control planes, then workers, by name), its instance
+    # address is that alias with its port, and any other IPv4 address in the output is masked.
+    nodes_json=$(kc get nodes -o json) || { echo "openbao-prod: could not read the nodes" >&2; exit 1; }
+    amap=$(python3 -I -c '
+import json, sys
+items = json.load(sys.stdin)["items"]
+def role(n): return "cp" if "node-role.kubernetes.io/control-plane" in (n["metadata"].get("labels") or {}) else "wk"
+count, mp, rows = {}, {}, []
+for n in sorted(items, key=lambda n: (role(n) != "cp", n["metadata"]["name"])):
+    r = role(n); count[r] = count.get(r, 0) + 1; alias = "%s-%d" % (r, count[r])
+    mp[n["metadata"]["name"]] = alias
+    for a in n["status"].get("addresses", []):
+        if a.get("type") == "InternalIP": mp[a["address"]] = alias
+    ready = [c["status"] for c in n["status"].get("conditions", []) if c.get("type") == "Ready"]
+    rows.append([alias, "Ready" if ready == ["True"] else "NotReady"])
+print(json.dumps({"map": mp, "rows": rows}))' <<< "$nodes_json") || { echo "openbao-prod: could not read the nodes" >&2; exit 1; }
+    mask() { AMAP="$amap" python3 -I -c '
+import json, os, re, sys
+mp = json.loads(os.environ["AMAP"])["map"]
+text = sys.stdin.read()
+for k in sorted(mp, key=len, reverse=True):
+    text = re.sub(r"(?<![\w.-])" + re.escape(k) + r"(?![\w-]|\.\d)", mp[k], text)
+sys.stdout.write(re.sub(r"(?<![\d.])\d{1,3}(\.\d{1,3}){3}(?![\d.]*\d)", "<ip>", text))'; }
+    echo "openbao-prod: node-exporter pods (namespace, name, ready, phase, node):"
+    # custom-columns, not -o wide: a RESTARTS value such as "2 (3h ago)" holds spaces and would shift the columns.
+    pods=$(kc get pods -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,READY:.status.containerStatuses[0].ready,PHASE:.status.phase,NODE:.spec.nodeName --no-headers) ||
+      { echo "openbao-prod: could not read the pods" >&2; exit 1; }
+    awk '$2 ~ /node-exporter/ {print $1, $2, $3, $4, $5}' <<< "$pods" | mask
     echo "openbao-prod: nodes:"
-    kc get nodes --no-headers | awk '{print $1, $2, $3}' || true
+    AMAP="$amap" python3 -I -c 'import json, os
+for r in json.loads(os.environ["AMAP"])["rows"]: print(*r)'
     q() { # <label> <query>: the series Prometheus returns, as one line of labels each
       local out
       out=$(kc get --raw "$prom?query=$2") || { echo "openbao-prod: could not query Prometheus ($1)" >&2; exit 1; }
@@ -442,7 +469,7 @@ for x in sorted(series, key=lambda x: sorted(x["metric"].items())):
     m = x["metric"]
     print(" ".join("%s=%s" % (k, m[k]) for k in ("kind", "job", "namespace", "pod", "service", "instance", "node") if k in m), "value=" + str(x["value"][1]))
 print("(%d series)" % len(series))
-' <<< "$out"
+' <<< "$out" | mask
     }
     echo "openbao-prod: targets that are down (up == 0):"
     q down 'up%3D%3D0'
